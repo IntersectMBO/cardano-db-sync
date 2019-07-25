@@ -1,0 +1,8 @@
+resolver: lts-13.28
+compiler: ghc-8.6.5
+
+
+packages:
+  - cardano-explorer-core
+  - cardano-explorer-db-node
+  - cardano-explorer
