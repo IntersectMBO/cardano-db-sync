@@ -18,6 +18,11 @@ CREATE DOMAIN txindex AS smallint
 CREATE DOMAIN uinteger AS integer
   CHECK (VALUE >= 0);
 
+-- Schema version number. There should only ever be a single row in this table.
+CREATE TABLE version (
+  number      uinteger
+);
+
 -- There are two kinds of blocks (Main and Epoch Boundary) and we need to store both. This
 -- table stores a single chain. When a chain rewrite occurs, the deletion of the old block(s)
 -- and its replacement with new block(s) should be done in a single transaction.
