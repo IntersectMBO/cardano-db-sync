@@ -1,6 +1,6 @@
 module Explorer.Core
-  ( someFunc
+  ( SchemaVersion (..)
+  , migrateExplorerDB
   ) where
 
-someFunc :: IO ()
-someFunc = putStrLn "someFunc"
+import           Explorer.Core.DB.Schema (SchemaVersion (..), migrateExplorerDB)
