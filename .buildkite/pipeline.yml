@@ -1,0 +1,35 @@
+# The Buildkite pipeline definition.
+# See https://buildkite.com/docs/pipelines for documentation.
+
+steps:
+  - label: Check Hydra evaluation of release.nix
+    commands:
+      - "nix-build -A iohkLib.check-hydra -o check-hydra.sh"
+      - "./check-hydra.sh"
+    agents:
+      system: x86_64-linux
+
+  # This will ensure that the generated Nix code is kept up to date.
+  - label: Check auto-generated Nix
+    commands:
+      - "nix-build -A iohkLib.check-nix-tools -o check-nix-tools.sh"
+      - "./check-nix-tools.sh"
+    agents:
+      system: x86_64-linux
+
+  # TODO: Remove this and define your own build steps.
+  - label: Lint the fuzz
+    commands:
+      - "nix-build -A checks.lint-fuzz -o check-lint-fuzz.sh"
+      - "./check-lint-fuzz.sh"
+    agents:
+      system: x86_64-linux
+
+  # Imperative build steps
+  #- label: Stack build
+  #commands:
+  #- "nix-build .buildkite/default.nix -o stack-rebuild"
+  #- "./stack-rebuild"
+  #agents:
+  #system: x86_64-linux
+  #timeout_in_minutes: 60
