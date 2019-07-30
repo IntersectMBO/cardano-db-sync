@@ -31,16 +31,30 @@ library
 
   exposed-modules:      Explorer.Core
 
-  other-modules:        Explorer.Core.DB.Schema
+  other-modules:        Explorer.Core.DB.PGConfig
+                        Explorer.Core.DB.Migration
+                        Explorer.Core.DB.Migration.Haskell
                         Explorer.Core.DB.Migration.Version
+                        Explorer.Core.DB.Schema
+
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , bytestring
+                      , containers
+                      , conduit
+                      , conduit-extra
+                      , directory
                       , extra
+                      , fast-logger
+                      , filepath
+                      , monad-logger
                       , persistent
                       , persistent-postgresql
                       , persistent-template
+                      , resourcet
+                      , text
                       , time
+                      , transformers
 
 test-suite test
   default-language:     Haskell2010
