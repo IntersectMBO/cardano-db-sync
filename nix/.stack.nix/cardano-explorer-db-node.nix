@@ -16,11 +16,33 @@
       };
     components = {
       "library" = {
-        depends = [ (hsPkgs.base) (hsPkgs.cardano-explorer-core) ];
+        depends = [
+          (hsPkgs.base)
+          (hsPkgs.cardano-explorer-core)
+          (hsPkgs.Cabal)
+          ];
         };
       exes = {
         "cardano-explorer-db-node" = {
-          depends = [ (hsPkgs.base) (hsPkgs.cardano-explorer-db-node) ];
+          depends = [
+            (hsPkgs.base)
+            (hsPkgs.cardano-explorer-db-node)
+            (hsPkgs.cardano-shell)
+            (hsPkgs.optparse-applicative)
+            (hsPkgs.cardano-node)
+            (hsPkgs.ouroboros-consensus)
+            (hsPkgs.cardano-prelude)
+            (hsPkgs.text)
+            (hsPkgs.iohk-monitoring)
+            (hsPkgs.network)
+            (hsPkgs.ouroboros-network)
+            (hsPkgs.io-sim-classes)
+            (hsPkgs.cborg)
+            (hsPkgs.typed-protocols)
+            (hsPkgs.bytestring)
+            (hsPkgs.typed-protocols-cbor)
+            (hsPkgs.serialise)
+            ];
           };
         };
       tests = {
