@@ -32,17 +32,22 @@ library
   exposed-modules:      Explorer.Core
 
   other-modules:        Explorer.Core.DB.Schema
+                        Explorer.Core.DB.Migration.Version
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , bytestring
+                      , extra
                       , persistent
                       , persistent-postgresql
                       , persistent-template
+                      , time
 
 test-suite test
   default-language:     Haskell2010
   type:                 exitcode-stdio-1.0
+  main-is:              test.hs
   hs-source-dirs:       test
+
   ghc-options:          -Wall
                         -Wcompat
                         -fwarn-redundant-constraints
@@ -50,8 +55,9 @@ test-suite test
                         -fwarn-unused-imports
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
-  main-is:              test.hs
+
+  other-modules:        Test.Explorer.Core.DB.Migration
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , cardano-explorer-core
-
+                      , hedgehog

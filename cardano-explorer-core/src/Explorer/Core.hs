@@ -1,6 +1,6 @@
 module Explorer.Core
-  ( SchemaVersion (..)
-  , migrateExplorerDB
+  ( module X
   ) where
 
-import           Explorer.Core.DB.Schema (SchemaVersion (..), migrateExplorerDB)
+import           Explorer.Core.DB.Migration.Version as X
+import           Explorer.Core.DB.Schema as X
