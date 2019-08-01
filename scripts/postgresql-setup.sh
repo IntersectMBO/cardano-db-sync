@@ -8,9 +8,6 @@ IFS=$'\n\t'
 
 progname="$0"
 
-databasename=cexplorer
-databaseuser=cexplorer
-
 PGPASSFILE=config/pgpass
 
 function die {
@@ -23,6 +20,9 @@ function check_pgpass_file {
     echo "Error: PostgeSQL password file ${PGPASSFILE} does not exist."
     exit 1
     fi
+
+	export databasename=$(sed --regexp-extended 's/[^:]*:[^:]*://;s/:.*//' ${PGPASSFILE})
+	export databaseuser=$(sed --regexp-extended 's/[^:]*:[^:]*:[^:]*://;s/:.*//' config/pgpass)
 }
 
 function check_for_psql {
@@ -32,6 +32,7 @@ function check_for_psql {
 
 function check_psql_superuser {
 	user=$(whoami)
+	set +e
 	psql -l > /dev/null 2>&1
 	if test $? -ne 0 ; then
 		echo
@@ -42,15 +43,11 @@ function check_psql_superuser {
 		echo
 		exit 1
 		fi
+	set -e
 }
 
-# If --createdb fails because the default DB setup is not UTF-8, then the following
-# fixes it (but completely destroys any existing databases).
-#       $ sudo su postgres
-#       $ pg_dropcluster --stop 9.X main
-#       $ pg_createcluster --start -e UTF-8 9.X main
-
 function check_psql_user {
+	set +e
 	count=$(psql --dbname=template1 --command='\du' | sed "s/|.*//;s/ //g" | grep -c "${databaseuser}")
 	if test "$count" -lt 1 ; then
 		echo
@@ -61,10 +58,10 @@ function check_psql_user {
 		echo
 		exit 1
 		fi
+	set -e
 }
 
 function check_connect_as_user {
-	# Maybe also use this: http://www.postgresql.org/docs/9.3/static/libpq-pgservice.html
 	psql --no-password --username "${databaseuser}" "${databasename}" --command='\dt' > /dev/null
 	if test $? -ne 0 ; then
 		echo
@@ -87,7 +84,8 @@ function check_connect_as_user {
 }
 
 function check_db_exists {
-	count=$(psql -l | grep -v test_db | grep -c "${databasename}")
+	set +e
+	count=$(psql -l | grep -c "${databasename}")
 	if test "${count}" -ne 1 ; then
 		echo
 		echo "Error : No '${databasename}' database."
@@ -108,18 +106,7 @@ function check_db_exists {
 		echo
 		exit 1
 		fi
-}
-
-function usage_exit {
-	echo
-	echo "Usage:"
-	echo "    $progname --check       - Check database '${databasename}' exists and is set up correctly."
-	echo "    $progname --createdb    - Create '${databasename}' database."
-	echo "    $progname --recreatedb  - Drop and recreate ${databasename} database."
-	echo "    $progname --dropdb      - Drop '${databasename}' database."
-	echo "    $progname --dump-schema - Dump the schema of the '${databasename}' database."
-	echo
-	exit 0
+	set -e
 }
 
 function create_user {
@@ -134,21 +121,47 @@ function drop_db {
 	dropdb --if-exists "${databasename}"
 }
 
-function create_tables {
-	set -e
-	psql "${databasename}" -E --quiet --no-psqlrc \
-		--single-transaction -set ON_ERROR_STOP=on --username cexplorer \
-		--file=schema/byron-schema.sql < /dev/null > /dev/null
+function create_migration {
+	cabal build cardano-explorer-db-node:cardano-explorer-db-manage
+	exe=$(find dist-newstyle -type f -name cardano-explorer-db-manage)
+	"${exe}" create-migration --config config/pgpass --mdir schema/
+}
+
+function run_migrations {
+	for sql in schema/migration-*.sql ; do
+		psql "${databasename}" --quiet --no-psqlrc \
+			--single-transaction -set ON_ERROR_STOP=on \
+			--username "${databaseuser}" \
+			--file="${sql}" < /dev/null > /dev/null
+		done
 }
 
 function dump_schema {
 	pg_dump -s "${databasename}"
 }
 
+function usage_exit {
+	echo
+	echo "Usage:"
+	echo "    $progname --check             - Check database exists and is set up correctly."
+	echo "    $progname --createdb          - Create database."
+	echo "    $progname --dropdb            - Drop database."
+	echo "    $progname --recreatedb        - Drop and recreate database."
+	echo "    $progname --create-user       - Create database user (from config/pgass file)."
+	echo "    $progname --create-migration	- Create a migration (if one is needed)."
+	echo "    $progname --run-migration     - Run all migrations applying as needed."
+	echo "    $progname --dump-schema       - Dump the schema of the database."
+	echo
+	exit 0
+}
+
 # postgresql_version=$(psql -V | head -1 | sed -e "s/.* //;s/\.[0-9]*$//")
+
+set -e
 
 case "${1:-""}" in
 	--check)
+		check_pgpass_file
 		check_for_psql
 		check_psql_superuser
 		check_db_exists
@@ -156,37 +169,57 @@ case "${1:-""}" in
 		check_connect_as_user
 		;;
 	--createdb)
+		check_pgpass_file
 		check_for_psql
 		check_psql_superuser
 		check_psql_user
 		create_db
-        create_tables
+		;;
+	--dropdb)
+		check_pgpass_file
+		check_for_psql
+		check_psql_superuser
+		drop_db
 		;;
 	--recreatedb)
+		check_pgpass_file
 		check_for_psql
 		check_psql_superuser
 		check_psql_user
 		check_db_exists
-		check_pgpass_file
 		check_connect_as_user
 		drop_db
 		create_db
-        create_tables
-		;;
-	--dropdb)
-		check_for_psql
-		check_psql_superuser
-		drop_db
 		;;
 	--create-user)
+		check_pgpass_file
 		check_for_psql
 		check_psql_superuser
 		create_user
 		;;
+	--create-migration)
+		check_pgpass_file
+		check_for_psql
+		check_psql_superuser
+		check_psql_user
+		check_db_exists
+		check_connect_as_user
+		create_migration
+		;;
+	--run-migrations)
+		check_pgpass_file
+		check_for_psql
+		check_psql_superuser
+		check_psql_user
+		check_db_exists
+		check_connect_as_user
+		# Migrations are designed to be idempotent, so can be run repeatedly.
+		run_migrations
+		;;
 	--dump-schema)
+		check_pgpass_file
 		check_db_exists
 		check_psql_user
-		check_pgpass_file
 		dump_schema
 		;;
 	*)
