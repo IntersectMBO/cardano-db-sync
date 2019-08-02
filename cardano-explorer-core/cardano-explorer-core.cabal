@@ -31,7 +31,8 @@ library
 
   exposed-modules:      Explorer.Core
 
-  other-modules:        Explorer.Core.DB.PGConfig
+  other-modules:        Explorer.Core.DB.Insert
+                        Explorer.Core.DB.PGConfig
                         Explorer.Core.DB.Migration
                         Explorer.Core.DB.Migration.Haskell
                         Explorer.Core.DB.Migration.Version
