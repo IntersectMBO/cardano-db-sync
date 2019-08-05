@@ -30,7 +30,7 @@ runCommand :: Command -> IO ()
 runCommand cmd =
   case cmd of
     CreateMigration pgpass mdir -> doCreateMigration pgpass mdir
-    RunMigrations pgpass mdir ldir -> runMigrations pgpass mdir ldir
+    RunMigrations pgpass mdir ldir -> runMigrations False pgpass mdir ldir
 
 doCreateMigration :: PGPassFile -> MigrationDir -> IO ()
 doCreateMigration pgpassfile mdir = do

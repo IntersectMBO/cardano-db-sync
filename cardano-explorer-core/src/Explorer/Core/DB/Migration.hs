@@ -9,7 +9,7 @@ module Explorer.Core.DB.Migration
   ) where
 
 import           Control.Exception (SomeException, bracket, handle)
-import           Control.Monad (forM_)
+import           Control.Monad (forM_, unless)
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Logger (NoLoggingT, runNoLoggingT)
 import           Control.Monad.Trans.Reader (ReaderT, runReaderT)
@@ -50,15 +50,15 @@ newtype LogFileDir
 
 -- | Run the migrations in the provided 'MigrationDir' and write date stamped log file
 -- to 'LogFileDir'.
-runMigrations :: PGPassFile -> MigrationDir -> LogFileDir -> IO ()
-runMigrations pgpassfile migrationDir logfiledir = do
+runMigrations :: Bool -> PGPassFile -> MigrationDir -> LogFileDir -> IO ()
+runMigrations quiet pgpassfile migrationDir logfiledir = do
     pgconfig <- readPGPassFileExit pgpassfile
     logFilename <- genLogFilename logfiledir
     bracket (openFile logFilename AppendMode) hClose $ \logHandle -> do
-      putStrLn "Running:"
+      unless quiet $ putStrLn "Running:"
       scripts <- getMigrationScripts migrationDir
-      forM_ scripts $ applyMigration pgconfig (logFilename, logHandle)
-      putStrLn "Success!"
+      forM_ scripts $ applyMigration quiet pgconfig (logFilename, logHandle)
+      unless quiet $ putStrLn "Success!"
   where
     genLogFilename :: LogFileDir -> IO FilePath
     genLogFilename (LogFileDir logdir) =
@@ -66,8 +66,8 @@ runMigrations pgpassfile migrationDir logfiledir = do
         . formatTime defaultTimeLocale ("migrate-" ++ iso8601DateFormat (Just "%H%M%S") ++ ".log")
         <$> getCurrentTime
 
-applyMigration :: PGConfig -> (FilePath, Handle) -> (MigrationVersion, FilePath) -> IO ()
-applyMigration pgconfig (logFilename, logHandle) (version, script) = do
+applyMigration :: Bool -> PGConfig -> (FilePath, Handle) -> (MigrationVersion, FilePath) -> IO ()
+applyMigration quiet pgconfig (logFilename, logHandle) (version, script) = do
     -- This assumes that the credentials for 'psql' are already sorted out.
     -- One way to achive this is via a 'PGPASSFILE' environment variable
     -- as per the PostgreSQL documentation.
@@ -75,7 +75,6 @@ applyMigration pgconfig (logFilename, logHandle) (version, script) = do
           List.intercalate " "
             [ "psql"
             , BS.unpack (pgcDbname pgconfig)
-            , "--username", BS.unpack (pgcUser pgconfig)
             , "--no-password"
             , "--quiet"
             , "--no-psqlrc"                     -- Ignore the ~/.psqlrc file.
@@ -85,13 +84,13 @@ applyMigration pgconfig (logFilename, logHandle) (version, script) = do
             , "2>&1"                            -- Pipe stderr to stdout.
             ]
     hPutStrLn logHandle $ "Running : " ++ takeFileName script
-    putStr $ "    " ++ takeFileName script ++ " ... "
+    unless quiet $ putStr ("    " ++ takeFileName script ++ " ... ")
     hFlush stdout
     exitCode <- fst <$> handle (errorExit :: SomeException -> IO a)
                         (runResourceT $ sourceCmdWithConsumer command (sinkHandle logHandle))
     case exitCode of
       ExitSuccess -> do
-        putStrLn "ok"
+        unless quiet $ putStrLn "ok"
         runHaskellMigration pgconfig logHandle version
       ExitFailure _ -> errorExit exitCode
   where
