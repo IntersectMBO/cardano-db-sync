@@ -6,3 +6,9 @@ packages:
   - cardano-explorer-core
   - cardano-explorer-db-node
   - cardano-explorer
+
+extra-deps:
+  - hedgehog-1.0
+  - persistent-2.10.0
+  - persistent-postgresql-2.10.0
+  - persistent-template-2.7.2
