@@ -4,8 +4,8 @@
 module Explorer.Core.DB.Insert
   ( insertBlock
   , insertTx
-  , insertTxin
-  , insertTxout
+  , insertTxIn
+  , insertTxOut
 
   -- Export mainly for testing.
   , insertByReturnKeyE
@@ -29,11 +29,11 @@ insertBlock = insertByReturnKeyE
 insertTx :: MonadIO m => Tx -> ReaderT SqlBackend m (Either TxId TxId)
 insertTx = insertByReturnKeyE
 
-insertTxin :: MonadIO m => Txin -> ReaderT SqlBackend m (Either TxinId TxinId)
-insertTxin = insertByReturnKeyE
+insertTxIn :: MonadIO m => TxIn -> ReaderT SqlBackend m (Either TxInId TxInId)
+insertTxIn = insertByReturnKeyE
 
-insertTxout :: MonadIO m => Txout -> ReaderT SqlBackend m (Either TxoutId TxoutId)
-insertTxout = insertByReturnKeyE
+insertTxOut :: MonadIO m => TxOut -> ReaderT SqlBackend m (Either TxOutId TxOutId)
+insertTxOut = insertByReturnKeyE
 
 -- | Insert a record (with a Unique constraing), and return 'Right key' if the record
 -- is inserted and 'Left key' if the record already exists in the DB.
