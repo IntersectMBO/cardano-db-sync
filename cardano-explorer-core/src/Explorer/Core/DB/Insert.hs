@@ -2,7 +2,8 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Explorer.Core.DB.Insert
-  ( insertBlock
+  ( deleteBlock
+  , insertBlock
   , insertTx
   , insertTxIn
   , insertTxOut
@@ -17,11 +18,18 @@ import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Database.Persist.Class (AtLeastOneUniqueKey, Key, PersistEntityBackend,
                     getByValue, insert)
-import           Database.Persist.Sql (SqlBackend)
+import           Database.Persist.Sql (SqlBackend, (==.), delete, selectList)
 import           Database.Persist.Types (entityKey)
 
 import           Explorer.Core.DB.Schema
 
+-- | Delete a block if it exists. Returns 'True' if it did exist and has been
+-- deleted and 'False' if it did not exist.
+deleteBlock :: MonadIO m => Block -> ReaderT SqlBackend m Bool
+deleteBlock block = do
+  keys <- selectList [ BlockHash ==. blockHash block ] []
+  mapM_ (delete. entityKey) keys
+  pure $ not (null keys)
 
 insertBlock :: MonadIO m => Block -> ReaderT SqlBackend m (Either BlockId BlockId)
 insertBlock = insertByReturnKeyE
@@ -35,8 +43,10 @@ insertTxIn = insertByReturnKeyE
 insertTxOut :: MonadIO m => TxOut -> ReaderT SqlBackend m (Either TxOutId TxOutId)
 insertTxOut = insertByReturnKeyE
 
--- | Insert a record (with a Unique constraing), and return 'Right key' if the record
--- is inserted and 'Left key' if the record already exists in the DB.
+-- -----------------------------------------------------------------------------
+
+-- | Insert a record (with a Unique constraint), and return 'Right key' if the
+-- record is inserted and 'Left key' if the record already exists in the DB.
 insertByReturnKeyE
     :: ( AtLeastOneUniqueKey record
        , MonadIO m
