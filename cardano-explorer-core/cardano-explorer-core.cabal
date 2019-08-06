@@ -111,6 +111,8 @@ test-suite test-db
                         -Wincomplete-uni-patterns
 
   build-depends:        base                            >= 4.12         && < 4.13
+                      , bytestring
                       , cardano-explorer-core
+                      , HUnit
                       , tasty
                       , tasty-hunit

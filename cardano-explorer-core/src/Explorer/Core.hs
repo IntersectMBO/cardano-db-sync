@@ -3,6 +3,7 @@ module Explorer.Core
   ) where
 
 import           Explorer.Core.DB.PGConfig as X
+import           Explorer.Core.DB.Insert as X
 import           Explorer.Core.DB.Migration as X
 import           Explorer.Core.DB.Migration.Version as X
-import           Explorer.Core.DB.Schema as X
+import           Explorer.Core.DB.Schema as X (Block (..))

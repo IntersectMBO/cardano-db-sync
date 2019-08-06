@@ -5,6 +5,7 @@ module Explorer.Core.DB.Migration
   , LogFileDir (..)
   , createMigration
   , applyMigration
+  , runDbAction
   , runMigrations
   ) where
 
@@ -159,6 +160,14 @@ createMigration pgpassfile (MigrationDir migdir) = do
         Just x ->
           let (SchemaVersion stage ver date) = entityVal x
           in pure $ MigrationVersion stage ver date
+
+-- Mainly for tests.
+runDbAction :: PGPassFile -> ReaderT SqlBackend (NoLoggingT IO) a -> IO a
+runDbAction pgpassfile action = do
+  pgconfig <- readPGPassFileExit pgpassfile
+  runNoLoggingT .
+    withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
+      runReaderT action backend
 
 --------------------------------------------------------------------------------
 
