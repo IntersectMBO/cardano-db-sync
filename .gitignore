@@ -1,5 +1,2 @@
-# This should never be commited to git.
-config/pgpass
-
 dist-newstyle/
 .stack-work/
