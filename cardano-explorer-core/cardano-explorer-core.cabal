@@ -56,6 +56,8 @@ library
                       , text
                       , time
                       , transformers
+                      -- This is never intended to run on non-POSIX systems.
+                      , unix
 
 executable cardano-explorer-db-manage
   default-language:     Haskell2010
