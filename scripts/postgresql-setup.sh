@@ -22,7 +22,6 @@ function check_pgpass_file {
     fi
 
 	export databasename=$(sed --regexp-extended 's/[^:]*:[^:]*://;s/:.*//' ${PGPASSFILE})
-	export databaseuser=$(sed --regexp-extended 's/[^:]*:[^:]*:[^:]*://;s/:.*//' config/pgpass)
 }
 
 function check_for_psql {
@@ -46,38 +45,11 @@ function check_psql_superuser {
 	set -e
 }
 
-function check_psql_user {
-	set +e
-	count=$(psql --dbname=template1 --command='\du' | sed "s/|.*//;s/ //g" | grep -c "${databaseuser}")
-	if test "$count" -lt 1 ; then
-		echo
-		echo "Error : User '${databaseuser}' does not exist."
-		echo
-		echo "To create a '${databaseuser}' user:"
-		echo "    $progname --create-user"
-		echo
-		exit 1
-		fi
-	set -e
-}
-
 function check_connect_as_user {
-	psql --no-password --username "${databaseuser}" "${databasename}" --command='\dt' > /dev/null
+	psql  "${databasename}" --no-password --command='\dt' > /dev/null
 	if test $? -ne 0 ; then
 		echo
-		echo "Error : Not able to connect as '${databaseuser}' user."
-		echo
-		echo "Make sure the 'pg_hba.conf' file contains:"
-		echo "        local ${databaseuser}  ${databaseuser}           md5"
-		echo
-		echo "above any entry of the form:"
-		echo "        local all       all ..."
-		echo
-		echo "Also make sure the password has been set up with:"
-		echo
-		echo "   ALTER USER \"${databaseuser}\" WITH ENCRYPTED PASSWORD 'xxxxxxxx';"
-		echo
-		echo "and then add the username/password to 'config/pgpass'."
+		echo "Error : Not able to connect as '$(whoami)' user."
 		echo
 		exit 1
 		fi
@@ -109,12 +81,8 @@ function check_db_exists {
 	set -e
 }
 
-function create_user {
-	psql --dbname=template1 --command="CREATE USER ${databaseuser} WITH PASSWORD 'xxxxxxx';"
-}
-
 function create_db {
-	createdb -T template0 --owner="${databaseuser}" --encoding=UTF8 "${databasename}"
+	createdb -T template0 --owner=$(whoami) --encoding=UTF8 "${databasename}"
 }
 
 function drop_db {
@@ -131,7 +99,6 @@ function run_migrations {
 	for sql in schema/migration-*.sql ; do
 		psql "${databasename}" --quiet --no-psqlrc \
 			--single-transaction -set ON_ERROR_STOP=on \
-			--username "${databaseuser}" \
 			--file="${sql}" < /dev/null > /dev/null
 		done
 }
@@ -165,14 +132,12 @@ case "${1:-""}" in
 		check_for_psql
 		check_psql_superuser
 		check_db_exists
-		check_psql_user
 		check_connect_as_user
 		;;
 	--createdb)
 		check_pgpass_file
 		check_for_psql
 		check_psql_superuser
-		check_psql_user
 		create_db
 		;;
 	--dropdb)
@@ -185,7 +150,6 @@ case "${1:-""}" in
 		check_pgpass_file
 		check_for_psql
 		check_psql_superuser
-		check_psql_user
 		check_db_exists
 		check_connect_as_user
 		drop_db
@@ -201,7 +165,6 @@ case "${1:-""}" in
 		check_pgpass_file
 		check_for_psql
 		check_psql_superuser
-		check_psql_user
 		check_db_exists
 		check_connect_as_user
 		create_migration
@@ -210,7 +173,6 @@ case "${1:-""}" in
 		check_pgpass_file
 		check_for_psql
 		check_psql_superuser
-		check_psql_user
 		check_db_exists
 		check_connect_as_user
 		# Migrations are designed to be idempotent, so can be run repeatedly.
@@ -219,7 +181,6 @@ case "${1:-""}" in
 	--dump-schema)
 		check_pgpass_file
 		check_db_exists
-		check_psql_user
 		dump_schema
 		;;
 	*)
