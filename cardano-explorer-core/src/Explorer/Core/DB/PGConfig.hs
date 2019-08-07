@@ -18,6 +18,7 @@ import qualified Data.ByteString.Char8 as BS
 import           Database.Persist.Postgresql (ConnectionString)
 
 import           System.Environment (lookupEnv, setEnv)
+import           System.Posix.User (getEffectiveUserName)
 
 -- | PGConfig as specified by https://www.postgresql.org/docs/11/libpq-pgpass.html
 -- However, this module expects the config data to be on the first line.
@@ -54,22 +55,33 @@ readPGConfigEnv = do
 -- | Read the PostgreSQL configuration from the specified file.
 readPGPassFile :: PGPassFile -> IO (Maybe PGConfig)
 readPGPassFile (PGPassFile fpath) = do
-    either handler extract <$> Exception.try (BS.readFile fpath)
+    ebs <- Exception.try $ BS.readFile fpath
+    case ebs of
+      Left e -> pure $ handler e
+      Right bs -> extract bs
   where
     handler :: IOException -> Maybe a
     handler = const Nothing
 
-    extract :: ByteString -> Maybe PGConfig
+    extract :: ByteString -> IO (Maybe PGConfig)
     extract bs =
       case BS.lines bs of
         (b:_) -> parseConfig b
-        _ -> Nothing
+        _ -> pure Nothing
 
-    parseConfig :: ByteString -> Maybe PGConfig
+    parseConfig :: ByteString -> IO (Maybe PGConfig)
     parseConfig bs =
       case BS.split ':' bs of
-        [h, pt, d, u, pwd] -> Just $ PGConfig h pt d u pwd
-        _ -> Nothing
+        [h, pt, d, u, pwd] -> Just <$> replaceUser (PGConfig h pt d u pwd)
+        _ -> pure Nothing
+
+    replaceUser :: PGConfig -> IO PGConfig
+    replaceUser pgc
+      | pgcUser pgc /= "*" = pure pgc
+      | otherwise = do
+          user <- getEffectiveUserName
+          pure $ pgc { pgcUser = BS.pack user }
+
 
 -- | Read 'PGPassFile' into 'PGConfig'.
 -- If it fails it will raise an error.
