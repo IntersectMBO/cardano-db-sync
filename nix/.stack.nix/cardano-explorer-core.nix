@@ -34,6 +34,7 @@
           (hsPkgs.text)
           (hsPkgs.time)
           (hsPkgs.transformers)
+          (hsPkgs.unix)
           ];
         };
       exes = {
@@ -51,6 +52,16 @@
             (hsPkgs.base)
             (hsPkgs.cardano-explorer-core)
             (hsPkgs.hedgehog)
+            ];
+          };
+        "test-db" = {
+          depends = [
+            (hsPkgs.base)
+            (hsPkgs.bytestring)
+            (hsPkgs.cardano-explorer-core)
+            (hsPkgs.HUnit)
+            (hsPkgs.tasty)
+            (hsPkgs.tasty-hunit)
             ];
           };
         };
