@@ -9,7 +9,7 @@ with pkgs.lib;
   # called "another-package".
   # fixme: automate this in nix-tools/Haskell.nix.
   isIohkSkeleton = package:
-    (hasPrefix "iohk-skeleton" package.identifier.name) ||
+    (hasPrefix "cardano-explorer" package.identifier.name) ||
     (elem package.identifier.name [ "another-package" ]);
 
   # fixme: upstream to iohk-nix
