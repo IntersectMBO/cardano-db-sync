@@ -9,40 +9,55 @@ packages:
 
 extra-deps:
   - bimap-0.4.0
+  - brick-0.47.1
+  - config-ini-0.2.4.0
   - containers-0.5.11.0
+  - data-clist-0.1.2.3
+  - ekg-prometheus-adapter-0.1.0.4
   - esqueleto-3.0.0
-  - hedgehog-1.0
+  - generic-monoid-0.1.0.0
+  - libsystemd-journal-1.4.4
   - persistent-2.10.0
   - persistent-postgresql-2.10.0
   - persistent-template-2.7.2
+  - prometheus-2.1.2
+  - pvss-0.2.0
   - tasty-hedgehog-1.0.0.1
+  - text-zipper-0.10.1
+  - time-units-1.0.0
+  - word-wrap-0.4.1
 
   - git: https://github.com/input-output-hk/cardano-shell
     commit: 2044172cd8856e927860e9b5c731a4343462206e
+
   - git: https://github.com/input-output-hk/cardano-prelude
     commit: 3084f8b8514d93970415e895b241691b80c7b9ee
     subdirs:
       - .
       - test
-  - generic-monoid-0.1.0.0
+
   - git: http://github.com/well-typed/canonical-json
     commit: ddfe3593b80b5ceb88842bb7a6f2268df75d2c2f
+
   - git: https://github.com/input-output-hk/cardano-sl-x509
     commit: ec96c64c665b741c17b4e38f611315bae9b0b054
+
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
     commit: bd31cd2f3922010ddb76bb869f29c4e63bb8001b
     subdirs:
       - contra-tracer
       - iohk-monitoring
-  - time-units-1.0.0
+
   - git: https://github.com/input-output-hk/cardano-node
     commit: 6a4fe879f859fbd92bbe1a2f061f1b929793ccf4
+
   - git: https://github.com/input-output-hk/cardano-base
     commit: 565df9739781db7589c7220a9125ea46a615dd40
     subdirs:
       - binary
       - binary/test
       - cardano-crypto-class
+
   - git: https://github.com/input-output-hk/cardano-ledger
     commit: dedafe9cf1a0077d375c3abe8f21f766a8af565f
     subdirs:
@@ -50,8 +65,9 @@ extra-deps:
       - cardano-ledger/test
       - crypto
       - crypto/test
+
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: acc729b5b497552969bcbb8b66fa40109aea071e
+    commit: da6da94d26e72551e591eabfce99b01c7c70933c
     subdirs:
       - io-sim-classes
       - network-mux
@@ -59,7 +75,3 @@ extra-deps:
       - ouroboros-consensus
       - typed-protocols
       - typed-protocols-cbor
-  - git: https://github.com/input-output-hk/cardano-crypto
-    commit: 3c707936ba0a665375acf5bd240dc4b6eaa6c0bc
-  - base58-bytestring-0.1.0
-  - streaming-binary-0.3.0.1
