@@ -3,7 +3,7 @@
 module Explorer.Core.DB.PGConfig
   ( PGConfig (..)
   , PGPassFile (..)
-  , readPGConfigEnv
+  , readPGPassFileEnv
   , readPGPassFile
   , readPGPassFileExit
   , toConnectionString
@@ -45,12 +45,12 @@ toConnectionString pgc =
 
 -- | Read the PostgreSQL configuration from the file at the location specified by the
 -- '$PGPASSFILE' environment variable.
-readPGConfigEnv :: IO (Maybe PGConfig)
-readPGConfigEnv = do
+readPGPassFileEnv :: IO PGConfig
+readPGPassFileEnv = do
   mpath <- lookupEnv "PGPASSFILE"
   case mpath of
-    Just fp -> readPGPassFile (PGPassFile fp)
-    Nothing -> pure Nothing
+    Just fp -> readPGPassFileExit (PGPassFile fp)
+    Nothing -> error $ "Environment variable 'PGPASSFILE' not set."
 
 -- | Read the PostgreSQL configuration from the specified file.
 readPGPassFile :: PGPassFile -> IO (Maybe PGConfig)

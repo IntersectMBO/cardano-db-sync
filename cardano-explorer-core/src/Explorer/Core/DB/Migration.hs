@@ -51,9 +51,9 @@ newtype LogFileDir
 
 -- | Run the migrations in the provided 'MigrationDir' and write date stamped log file
 -- to 'LogFileDir'.
-runMigrations :: Bool -> PGPassFile -> MigrationDir -> LogFileDir -> IO ()
-runMigrations quiet pgpassfile migrationDir logfiledir = do
-    pgconfig <- readPGPassFileExit pgpassfile
+runMigrations :: Bool -> MigrationDir -> LogFileDir -> IO ()
+runMigrations quiet migrationDir logfiledir = do
+    pgconfig <- readPGPassFileEnv
     logFilename <- genLogFilename logfiledir
     bracket (openFile logFilename AppendMode) hClose $ \logHandle -> do
       unless quiet $ putStrLn "Running:"
@@ -104,9 +104,9 @@ applyMigration quiet pgconfig (logFilename, logHandle) (version, script) = do
 
 -- | Create a database migration (using functionality built into Persistent). If no
 -- migration is needed return 'Nothing' otherwise return the migration as 'Text'.
-createMigration :: PGPassFile -> MigrationDir -> IO (Maybe FilePath)
-createMigration pgpassfile (MigrationDir migdir) = do
-    pgconfig <- readPGPassFileExit pgpassfile
+createMigration :: MigrationDir -> IO (Maybe FilePath)
+createMigration (MigrationDir migdir) = do
+    pgconfig <- readPGPassFileEnv
     mt <- runNoLoggingT .
             withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
               runReaderT create backend
@@ -162,9 +162,9 @@ createMigration pgpassfile (MigrationDir migdir) = do
           in pure $ MigrationVersion stage ver date
 
 -- Mainly for tests.
-runDbAction :: PGPassFile -> ReaderT SqlBackend (NoLoggingT IO) a -> IO a
-runDbAction pgpassfile action = do
-  pgconfig <- readPGPassFileExit pgpassfile
+runDbAction :: ReaderT SqlBackend (NoLoggingT IO) a -> IO a
+runDbAction action = do
+  pgconfig <- readPGPassFileEnv
   runNoLoggingT .
     withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
       runReaderT action backend

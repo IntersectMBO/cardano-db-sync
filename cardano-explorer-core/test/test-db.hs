@@ -25,11 +25,11 @@ tests =
 
 testMigration :: IO ()
 testMigration =
-  runMigrations True (PGPassFile "../config/pgpass") (MigrationDir "../schema") (LogFileDir "..")
+  runMigrations True (MigrationDir "../schema") (LogFileDir "..")
 
 testInsert :: IO ()
 testInsert = do
-  runDbAction (PGPassFile "../config/pgpass") $ do
+  runDbAction $ do
     -- Delete the block if it exists.
     void $ deleteBlock dummyBlock
     -- Insert the same block twice. The first should be successful (resulting
