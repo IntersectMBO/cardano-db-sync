@@ -36,6 +36,7 @@ library
                         Explorer.Core.DB.Migration
                         Explorer.Core.DB.Migration.Haskell
                         Explorer.Core.DB.Migration.Version
+                        Explorer.Core.DB.Query
                         Explorer.Core.DB.Schema
 
 
@@ -45,6 +46,7 @@ library
                       , conduit
                       , conduit-extra
                       , directory
+                      , esqueleto
                       , extra
                       , fast-logger
                       , filepath
