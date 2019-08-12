@@ -3,6 +3,7 @@
     {
       packages = {
         "hedgehog" = (((hackage.hedgehog)."1.0").revisions).default;
+        "esqueleto" = (((hackage.esqueleto)."3.0.0").revisions).default;
         "persistent" = (((hackage.persistent)."2.10.0").revisions).default;
         "persistent-postgresql" = (((hackage.persistent-postgresql)."2.10.0").revisions).default;
         "persistent-template" = (((hackage.persistent-template)."2.7.2").revisions).default;

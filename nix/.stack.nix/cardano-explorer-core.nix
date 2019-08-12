@@ -23,6 +23,7 @@
           (hsPkgs.conduit)
           (hsPkgs.conduit-extra)
           (hsPkgs.directory)
+          (hsPkgs.esqueleto)
           (hsPkgs.extra)
           (hsPkgs.fast-logger)
           (hsPkgs.filepath)
