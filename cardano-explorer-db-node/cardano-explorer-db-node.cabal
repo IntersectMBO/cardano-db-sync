@@ -35,14 +35,33 @@ library
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , cardano-explorer-core
-                      , Cabal
+                      , cardano-ledger
+                      , cardano-binary
+                      , formatting
+                      , cardano-crypto-wrapper
+                      , reflection
+                      , cardano-shell
+                      , optparse-applicative
+                      , cardano-node
+                      , ouroboros-consensus
+                      , cardano-prelude
+                      , text
+                      , iohk-monitoring
+                      , network
+                      , ouroboros-network
+                      , io-sim-classes
+                      , cborg
+                      , typed-protocols
+                      , bytestring
+                      , typed-protocols-cbor
+                      , serialise
 
 executable cardano-explorer-db-node
   default-language:     Haskell2010
   main-is:              cardano-explorer-db-node.hs
   hs-source-dirs:       app
 
-  ghc-options:          -Weverything
+  ghc-options:          -Wall
                         -Wcompat
                         -fwarn-redundant-constraints
                         -fwarn-incomplete-patterns
@@ -50,8 +69,6 @@ executable cardano-explorer-db-node
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
                         -Wno-unsafe
-
-  other-modules:        CLI
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , cardano-explorer-db-node
