@@ -145,7 +145,7 @@ createMigration (MigrationDir migdir) = do
         , "  END IF ;\n"
         , "END ;\n"
         , "$$ LANGUAGE plpgsql ;\n\n"
-        , "SELECT migrate() ; \n\n"
+        , "SELECT migrate() ;\n\n"
         , "DROP FUNCTION migrate() ;\n"
         ]
 
@@ -157,9 +157,11 @@ createMigration (MigrationDir migdir) = do
       res <- selectFirst [] []
       case res of
         Nothing -> error "getSchemaVersion failed!"
-        Just x ->
-          let (SchemaVersion stage ver date) = entityVal x
-          in pure $ MigrationVersion stage ver date
+        Just x -> do
+          -- Only interested in the stage2 version because that is the only stage for
+          -- which Persistent migrations are generated.
+          let (SchemaVersion _ stage2 _) = entityVal x
+          pure $ MigrationVersion 2 stage2 0
 
 -- Mainly for tests.
 runDbAction :: ReaderT SqlBackend (NoLoggingT IO) a -> IO a
