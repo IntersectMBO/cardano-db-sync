@@ -60,13 +60,24 @@ insertFirstTest =
 
 
 blockZero :: Block
-blockZero = Block (mkHash '\0') 0 Nothing 0 Nothing merkelHash 42
+blockZero = Block (mkHash '\0') Nothing 0 Nothing Nothing 42
 
 blockOne :: Block
-blockOne = Block (mkHash '\1') 0 (Just 0) 1 Nothing merkelHash 42
+blockOne = Block (mkHash '\1') (Just 0) 1 Nothing (Just merkelHash) 42
 
 mkHash :: Char -> ByteString
 mkHash = BS.pack . replicate 32
 
 merkelHash :: ByteString
 merkelHash = BS.pack $ replicate 32 'a'
+
+{-
+  Block
+    hash                ByteString          sqltype=hashtype
+    slotNo              Word64 Maybe        sqltype=uinteger
+    blockNo             Word64              sqltype=uinteger
+    previous            BlockId Maybe       sqltype=hashtype
+    merkelRoot          ByteString Maybe    sqltype=hashtype
+    size                Word64              sqltype=uinteger
+    UniqueBlock         hash
+-}
