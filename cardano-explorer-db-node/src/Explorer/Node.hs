@@ -22,17 +22,13 @@ import           Control.Monad.Class.MonadSTM (MonadSTM, TMVar, atomically, read
 import           Control.Monad.Class.MonadThrow (MonadThrow)
 import           Control.Monad.Class.MonadTimer (MonadTimer)
 
-import           Cardano.Binary (Raw, unAnnotated)
+import           Cardano.Binary (Raw)
 
 import           Cardano.BM.Data.Tracer (ToLogObject (toLogObject), Tracer, nullTracer)
 import           Cardano.BM.Trace (Trace, appendName)
 
-import           Cardano.Chain.Common (ChainDifficulty(unChainDifficulty))
-import           Cardano.Chain.Block (ABlockOrBoundary (ABOBBlock, ABOBBoundary), ABlock(ABlock),
-                    ABoundaryBlock(ABoundaryBlock), aHeaderDifficulty, boundaryDifficulty)
 import qualified Cardano.Chain.Genesis as Genesis
 import qualified Cardano.Chain.Update as Update
-
 
 import           Cardano.Crypto (Hash, RequiresNetworkMagic (..), decodeAbstractHash)
 import qualified Cardano.Node.CLI as Node
@@ -56,7 +52,7 @@ import           Data.Functor.Contravariant (contramap)
 import           Data.Reflection (give)
 import qualified Data.Text as Text
 
-import           Formatting (sformat, int, (%))
+import           Explorer.Node.Insert
 
 import           Network.Socket (SockAddr, AddrInfo, SocketType(Stream), Family(AF_UNIX),
                     AddrInfo (AddrInfo), defaultProtocol, SockAddr (SockAddrUnix))
@@ -66,7 +62,7 @@ import           Network.TypedProtocol.Codec.Cbor (DeserialiseFailure)
 import           Network.TypedProtocol.Driver (TraceSendRecv, runPeer)
 
 import           Ouroboros.Consensus.Ledger.Abstract (BlockProtocol)
-import           Ouroboros.Consensus.Ledger.Byron (GenTx, ByronBlockOrEBB(unByronBlockOrEBB))
+import           Ouroboros.Consensus.Ledger.Byron (GenTx, ByronBlockOrEBB (..))
 import           Ouroboros.Consensus.Ledger.Byron.Config (ByronConfig)
 import           Ouroboros.Consensus.Node.ProtocolInfo (NumCoreNodes(NumCoreNodes),
                     pInfoConfig, protocolInfo)
@@ -97,6 +93,7 @@ import           Ouroboros.Network.Protocol.LocalTxSubmission.Codec (codecLocalT
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (LocalTxSubmission)
 
 import           Prelude (String, id)
+
 
 data Peer = Peer SockAddr SockAddr deriving Show
 
@@ -186,6 +183,8 @@ runClient tracer cc = do
 
     gc <- readGenesisConfig cc genHash
 
+    insertGenesisDistribution tracer gc
+
     give (Genesis.configEpochSlots gc)
           $ give (Genesis.gdProtocolMagicId $ Genesis.configGenesisData gc)
           $ runExplorerNodeClient (mkProtocolId gc) tracer'
@@ -220,7 +219,6 @@ cvtRNM =
 runExplorerNodeClient
     :: forall blk cfg.
         (RunNode blk, Node.TraceConstraints blk, blk ~ ByronBlockOrEBB cfg)
-
     => Ouroboros.Consensus.Protocol.Protocol blk -> Tracer IO String -> IO ()
 runExplorerNodeClient ptcl tracer = do
   let
@@ -342,13 +340,6 @@ localTxSubmissionCodec =
     Serialise.encode
     Serialise.decode
 
-
-blockToDifficulty :: ByronBlockOrEBB cfg -> ChainDifficulty
-blockToDifficulty blk =
-  case (unByronBlockOrEBB blk) of
-    ABOBBlock (ABlock header _body _annotation) -> (unAnnotated . aHeaderDifficulty) header
-    ABOBBoundary (ABoundaryBlock _len header _body _annotation) -> boundaryDifficulty header
-
 -- | 'ChainSyncClient' which traces received blocks and ignores when it
 -- receives a request to rollbackwar.  A real wallet client should:
 --
@@ -378,13 +369,14 @@ chainSyncClient = ChainSyncClient $ pure $
     clientStNext :: ClientStNext blk (Point blk) m Void
     clientStNext =
       ClientStNext
-        { recvMsgRollForward = \blk tip -> ChainSyncClient $ do
-            print $ sformat ("applying block at depth " % int) ((unChainDifficulty . blockToDifficulty) blk)
-            print tip
+        { recvMsgRollForward = \blk _tip -> ChainSyncClient $ do
+            -- print tip
+            insertByronBlockOrEBB blk
             pure clientStIdle
         , recvMsgRollBackward = \_point tip -> ChainSyncClient $ do
             print tip
-            -- we are requested to roll backward to point '_point', the core
-            -- node's chain's tip is '_tip'.
+            -- we are requested to roll backward to point 'point', the core
+            -- node's chain's tip is 'tip'.
             pure clientStIdle
         }
+
