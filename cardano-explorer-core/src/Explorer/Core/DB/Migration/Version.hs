@@ -33,13 +33,12 @@ parseMigrationVersionFromFile str =
     _ -> Nothing
 
 nextMigrationVersion :: MigrationVersion -> IO MigrationVersion
-nextMigrationVersion (MigrationVersion stage ver _) = do
+nextMigrationVersion (MigrationVersion _stage ver _date) = do
   -- We can ignore the provided 'stage' and 'date' fields, but we do bump the version number.
   -- All new versions have 'stage == 2' because the stage 2 migrations are the Presistent
   -- generated ones. For the date we use today's date.
-  let nextVersion = if stage /= 2 then 1 else ver + 1
   (y, m, d) <- Time.toGregorian . Time.utctDay <$> Time.getCurrentTime
-  pure $ MigrationVersion 2 (nextVersion) (fromIntegral y * 10000 + m * 100 + d)
+  pure $ MigrationVersion 2 (ver + 1) (fromIntegral y * 10000 + m * 100 + d)
 
 renderMigrationVersion :: MigrationVersion -> String
 renderMigrationVersion mv =
