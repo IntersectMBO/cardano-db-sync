@@ -45,13 +45,12 @@ share [mkPersist sqlSettings, mkMigrate "migrateExplorerDB"] [persistLowerCase|
   -- primary key Haskell type can be used in a type-safe way in the rest
   -- of the schema definition.
   Block
-    hash                ByteString      sqltype=hashtype
-    epochNo             Word64          sqltype=uinteger
-    slotNo              Word64 Maybe    sqltype=uinteger
-    blockNo             Word64          sqltype=uinteger
-    previous            BlockId Maybe   sqltype=hashtype
-    merkelRoot          ByteString      sqltype=hashtype
-    size                Word64          sqltype=uinteger
+    hash                ByteString          sqltype=hashtype
+    slotNo              Word64 Maybe        sqltype=uinteger
+    blockNo             Word64              sqltype=uinteger
+    previous            BlockId Maybe       sqltype=hashtype
+    merkelRoot          ByteString Maybe    sqltype=hashtype
+    size                Word64              sqltype=uinteger
     UniqueBlock         hash
 
   Tx
