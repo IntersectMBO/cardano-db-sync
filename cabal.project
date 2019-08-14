@@ -38,13 +38,13 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/iohk-monitoring-framework
-  tag: bd31cd2f3922010ddb76bb869f29c4e63bb8001b
+  tag: 695374d78ebb9806343b86049eb5e06d1afd52f7
   subdir: contra-tracer
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/iohk-monitoring-framework
-  tag: bd31cd2f3922010ddb76bb869f29c4e63bb8001b
+  tag: 695374d78ebb9806343b86049eb5e06d1afd52f7
   subdir: iohk-monitoring
 
 source-repository-package

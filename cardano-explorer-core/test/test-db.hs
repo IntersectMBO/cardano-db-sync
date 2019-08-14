@@ -31,7 +31,7 @@ migrationTest =
 
 insertZeroTest :: IO ()
 insertZeroTest =
-  runDbAction $ do
+  runDbNoLogging $ do
     -- Delete the blocks if they exist.
     void $ deleteBlock blockOne
     void $ deleteBlock blockZero
@@ -48,7 +48,7 @@ insertZeroTest =
 
 insertFirstTest :: IO ()
 insertFirstTest =
-  runDbAction $ do
+  runDbNoLogging $ do
     -- Delete the block if it exists.
     void $ deleteBlock blockOne
     -- Insert the same block twice. The first should be successful (resulting

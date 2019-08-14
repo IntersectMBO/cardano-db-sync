@@ -37,6 +37,7 @@ library
                         Explorer.Core.DB.Migration.Haskell
                         Explorer.Core.DB.Migration.Version
                         Explorer.Core.DB.Query
+                        Explorer.Core.DB.Run
                         Explorer.Core.DB.Schema
 
 
@@ -45,17 +46,20 @@ library
                       , containers
                       , conduit
                       , conduit-extra
+                      , contra-tracer
                       , directory
                       , esqueleto
                       , extra
                       , fast-logger
                       , filepath
+                      , iohk-monitoring
                       , monad-logger
                       , persistent
                       , persistent-postgresql
                       , persistent-template >= 2.7.0
                       , resourcet
                       , text
+                      , template-haskell
                       , time
                       , transformers
                       -- This is never intended to run on non-POSIX systems.
