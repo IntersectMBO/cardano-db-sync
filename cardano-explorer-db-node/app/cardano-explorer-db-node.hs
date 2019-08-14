@@ -8,14 +8,15 @@ import           Cardano.Shell.Lib (CardanoApplication (..), ApplicationEnvironm
 import qualified Cardano.Shell.Lib as Shell
 import qualified Cardano.Shell.Presets as Shell
 
-import           Explorer.Node (ExplorerNodeParams (..), CLI (..), NodeLayer (..), initializeAllFeatures)
+import           Explorer.Node (ExplorerNodeParams (..), NodeLayer (..), initializeAllFeatures)
 
-import           Options.Applicative (Parser, ParserInfo, execParser, info, fullDesc, progDesc, helper, header)
+import           Options.Applicative (Parser, ParserInfo)
+import qualified Options.Applicative as Opt
 
 main :: IO ()
 main = do
     cardanoEnvironment <- Shell.initializeCardanoEnvironment
-    logConfig <- execParser opts
+    logConfig <- Opt.execParser opts
     (cardanoFeatures, nodeLayer) <- initializeAllFeatures logConfig Shell.mainnetConfiguration cardanoEnvironment
     Shell.runCardanoApplicationWithFeatures Development cardanoFeatures (cardanoApplication nodeLayer)
   where
@@ -26,15 +27,14 @@ main = do
 
 opts :: ParserInfo ExplorerNodeParams
 opts =
-  info (pCommandLine <**> helper)
-    ( fullDesc
-    <> progDesc "Cardano wallet node."
-    <> header "Demo client to run."
+  Opt.info (pCommandLine <**> Opt.helper)
+    ( Opt.fullDesc
+    <> Opt.progDesc "Cardano explorer database node."
     )
 
 pCommandLine :: Parser ExplorerNodeParams
 pCommandLine =
   ExplorerNodeParams
     <$> Shell.loggingParser
-    <*> (CLI <$> Node.parseProtocol <*> Node.parseCommonCLI)
-
+    <*> Node.parseProtocol
+    <*> Node.parseCommonCLI

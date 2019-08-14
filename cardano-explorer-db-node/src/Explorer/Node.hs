@@ -12,7 +12,6 @@
 
 module Explorer.Node
   ( ExplorerNodeParams (..)
-  , CLI (..)
   , NodeLayer (..)
   , initializeAllFeatures
   ) where
@@ -23,7 +22,7 @@ import           Control.Monad.Class.MonadSTM (MonadSTM, TMVar, atomically, read
 import           Control.Monad.Class.MonadThrow (MonadThrow)
 import           Control.Monad.Class.MonadTimer (MonadTimer)
 
-import           Cardano.Binary (unAnnotated)
+import           Cardano.Binary (Raw, unAnnotated)
 
 import           Cardano.BM.Data.Tracer (ToLogObject (toLogObject), Tracer, nullTracer)
 import           Cardano.BM.Trace (Trace, appendName)
@@ -35,8 +34,7 @@ import qualified Cardano.Chain.Genesis as Genesis
 import qualified Cardano.Chain.Update as Update
 
 
-import           Cardano.Crypto (RequiresNetworkMagic(RequiresNoMagic,RequiresMagic),
-                    decodeAbstractHash)
+import           Cardano.Crypto (Hash, RequiresNetworkMagic (..), decodeAbstractHash)
 import qualified Cardano.Node.CLI as Node
 import           Cardano.Prelude hiding (atomically, option, (%))
 import           Cardano.Shell.Configuration.Lib (finaliseCardanoConfiguration)
@@ -71,7 +69,7 @@ import           Ouroboros.Consensus.Ledger.Abstract (BlockProtocol)
 import           Ouroboros.Consensus.Ledger.Byron (GenTx, ByronBlockOrEBB(unByronBlockOrEBB))
 import           Ouroboros.Consensus.Ledger.Byron.Config (ByronConfig)
 import           Ouroboros.Consensus.Node.ProtocolInfo (NumCoreNodes(NumCoreNodes),
-                    ProtocolInfo (ProtocolInfo,pInfoConfig), protocolInfo)
+                    pInfoConfig, protocolInfo)
 import           Ouroboros.Consensus.Node.Run.Abstract (RunNode, nodeDecodeBlock, nodeDecodeGenTx,
                     nodeDecodeHeaderHash, nodeEncodeBlock, nodeEncodeGenTx, nodeEncodeHeaderHash)
 import           Ouroboros.Consensus.NodeId (CoreNodeId (CoreNodeId))
@@ -105,24 +103,20 @@ data Peer = Peer SockAddr SockAddr deriving Show
 -- | The product type of all command line arguments
 data ExplorerNodeParams = ExplorerNodeParams
   { enpLogging :: !LoggingCLIArguments
-  , enpCLI :: !CLI
-  }
-
-data CLI = CLI
-  { cliProtocol :: Node.Protocol
-  , cliCommon :: Node.CommonCLI
+  , cliProtocol :: Node.Protocol
+  , enpCommon :: Node.CommonCLI
   }
 
 newtype NodeLayer = NodeLayer
   { nlRunNode :: forall m. MonadIO m => m ()
   }
 
-type NodeCardanoFeature = CardanoFeatureInit LoggingLayer CLI NodeLayer
+type NodeCardanoFeature = CardanoFeatureInit LoggingLayer ExplorerNodeParams NodeLayer
 
 
 initializeAllFeatures :: ExplorerNodeParams -> PartialCardanoConfiguration -> CardanoEnvironment -> IO ([CardanoFeature], NodeLayer)
 initializeAllFeatures enp partialConfig cardanoEnvironment = do
-  let fcc = finaliseCardanoConfiguration $ Node.mergeConfiguration partialConfig (cliCommon $ enpCLI enp)
+  let fcc = finaliseCardanoConfiguration $ Node.mergeConfiguration partialConfig (enpCommon enp)
   finalConfig <- case fcc of
                   Left err -> throwIO $ ConfigurationError err
                   --TODO: if we're using exceptions for this, then we should use a local
@@ -132,7 +126,7 @@ initializeAllFeatures enp partialConfig cardanoEnvironment = do
                   Right x  -> pure x
 
   (loggingLayer, loggingFeature) <- createLoggingFeature cardanoEnvironment finalConfig (enpLogging enp)
-  (nodeLayer   , nodeFeature)    <- createNodeFeature loggingLayer (enpCLI enp) cardanoEnvironment finalConfig
+  (nodeLayer   , nodeFeature)    <- createNodeFeature loggingLayer enp cardanoEnvironment finalConfig
 
     -- Here we return all the features.
   let allCardanoFeatures :: [CardanoFeature]
@@ -141,14 +135,14 @@ initializeAllFeatures enp partialConfig cardanoEnvironment = do
   pure (allCardanoFeatures, nodeLayer)
 
 
-createNodeFeature :: LoggingLayer -> CLI -> CardanoEnvironment -> CardanoConfiguration -> IO (NodeLayer, CardanoFeature)
-createNodeFeature loggingLayer cli cardanoEnvironment cardanoConfiguration = do
+createNodeFeature :: LoggingLayer -> ExplorerNodeParams -> CardanoEnvironment -> CardanoConfiguration -> IO (NodeLayer, CardanoFeature)
+createNodeFeature loggingLayer enp cardanoEnvironment cardanoConfiguration = do
   -- we parse any additional configuration if there is any
   -- We don't know where the user wants to fetch the additional configuration from, it could be from
   -- the filesystem, so we give him the most flexible/powerful context, @IO@.
 
   -- we construct the layer
-  nodeLayer <- featureInit nodeCardanoFeatureInit cardanoEnvironment loggingLayer cardanoConfiguration cli
+  nodeLayer <- featureInit nodeCardanoFeatureInit cardanoEnvironment loggingLayer cardanoConfiguration enp
 
   -- we construct the cardano feature
   let cardanoFeature = nodeCardanoFeature nodeCardanoFeatureInit nodeLayer
@@ -164,13 +158,13 @@ nodeCardanoFeatureInit =
       , featureCleanup = featureCleanup'
       }
   where
-    featureStart' :: CardanoEnvironment -> LoggingLayer -> CardanoConfiguration -> CLI -> IO NodeLayer
-    featureStart' _ loggingLayer cc cli = do
+    featureStart' :: CardanoEnvironment -> LoggingLayer -> CardanoConfiguration -> ExplorerNodeParams -> IO NodeLayer
+    featureStart' _ loggingLayer cc _enp = do
         let
           tr :: Trace IO Text
-          tr = llAppendName loggingLayer "wallet" (llBasicTrace loggingLayer)
+          tr = llAppendName loggingLayer "explorer-db-node" (llBasicTrace loggingLayer)
           coreClient :: IO ()
-          coreClient = runClient cli tr cc
+          coreClient = runClient tr cc
         pure $ NodeLayer {nlRunNode = liftIO coreClient}
 
     featureCleanup' :: NodeLayer -> IO ()
@@ -184,31 +178,38 @@ nodeCardanoFeature nodeCardanoFeature' nodeLayer =
     , featureShutdown   = liftIO $ (featureCleanup nodeCardanoFeature') nodeLayer
     }
 
-runClient :: CLI -> Trace IO Text -> CardanoConfiguration -> IO ()
-runClient _ tracer cc = do
-  let
-    tracer' = contramap Text.pack . toLogObject $ appendName "SQLDumper" tracer
-    genHash = either (throw . ConfigurationError) id $
-              decodeAbstractHash (coGenesisHash $ ccCore cc)
+runClient :: Trace IO Text -> CardanoConfiguration -> IO ()
+runClient tracer cc = do
+    let tracer' = contramap Text.pack . toLogObject $ appendName "explorer-db-node" tracer
+        genHash = either (throw . ConfigurationError) id $
+                      decodeAbstractHash (coGenesisHash $ ccCore cc)
 
+    gc <- readGenesisConfig cc genHash
+
+    give (Genesis.configEpochSlots gc)
+          $ give (Genesis.gdProtocolMagicId $ Genesis.configGenesisData gc)
+          $ runExplorerNodeClient (mkProtocolId gc) tracer'
+
+
+mkProtocolId :: Genesis.Config -> Protocol (ByronBlockOrEBB ByronConfig)
+mkProtocolId gc =
+  ProtocolRealPBFT gc Nothing
+    (Update.ProtocolVersion 0 2 0)
+    (Update.SoftwareVersion (Update.ApplicationName "cardano-sl") 1)
+    Nothing
+
+
+readGenesisConfig :: CardanoConfiguration -> Hash Raw -> IO Genesis.Config
+readGenesisConfig cc genHash = do
   gcE <- runExceptT $
             Genesis.mkConfigFromFile
               (cvtRNM . coRequiresNetworkMagic $ ccCore cc)
               (coGenesisFile $ ccCore cc)
               genHash
-  let
-    gc :: Genesis.Config
-    gc = case gcE of
-      Left err -> throw err -- TODO: no no no!
-      Right x -> x
-    Genesis.Config{Genesis.configGenesisData} = gc
-    Genesis.GenesisData{Genesis.gdProtocolMagicId} = configGenesisData
-    defSoftVer  = Update.SoftwareVersion (Update.ApplicationName "cardano-sl") 1
-    defProtoVer = Update.ProtocolVersion 0 2 0
-    p :: Protocol (ByronBlockOrEBB ByronConfig)
-    p = ProtocolRealPBFT gc Nothing defProtoVer defSoftVer Nothing
-  give (Genesis.configEpochSlots gc)
-    $ give gdProtocolMagicId $ runWalletClient p tracer'
+  case gcE of
+    Left err -> throw err -- TODO: no no no!
+    Right x -> pure x
+
 
 cvtRNM :: RequireNetworkMagic -> RequiresNetworkMagic
 cvtRNM =
@@ -216,26 +217,17 @@ cvtRNM =
     NoRequireNetworkMagic -> RequiresNoMagic
     RequireNetworkMagic -> RequiresMagic
 
-runWalletClient :: forall blk cfg.
-                   ( RunNode blk
-                   , Node.TraceConstraints blk
-                   , blk ~ ByronBlockOrEBB cfg
-                   )
-                => Ouroboros.Consensus.Protocol.Protocol blk
-                -> Tracer IO String
-                -> IO ()
-runWalletClient ptcl tracer = do
+runExplorerNodeClient
+    :: forall blk cfg.
+        (RunNode blk, Node.TraceConstraints blk, blk ~ ByronBlockOrEBB cfg)
+
+    => Ouroboros.Consensus.Protocol.Protocol blk -> Tracer IO String -> IO ()
+runExplorerNodeClient ptcl tracer = do
   let
-    ProtocolInfo{pInfoConfig} = protocolInfo (NumCoreNodes 7) (CoreNodeId 0) ptcl
+    infoConfig = pInfoConfig $ protocolInfo (NumCoreNodes 7) (CoreNodeId 0) ptcl
 
     path = localSocketFilePath (CoreNodeId 42)
     addr = localSocketAddrInfo path
-
-    chainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync blk (Point blk)) Peer DeserialiseFailure)
-    --chainSyncTracer = contramap show tracer
-    chainSyncTracer = nullTracer
-    localTxSubmissionTracer :: Tracer IO (TraceSendRecv (LocalTxSubmission (GenTx blk) String) Peer DeserialiseFailure)
-    localTxSubmissionTracer = contramap show tracer
 
   print path
   connectTo
@@ -243,11 +235,17 @@ runWalletClient ptcl tracer = do
     Peer
     (localInitiatorNetworkApplication
       (Proxy :: Proxy blk)
-      chainSyncTracer
-      localTxSubmissionTracer
-      pInfoConfig)
+      nullTracer
+      (mkLocalTxSubmissionTracer tracer)
+      infoConfig)
     Nothing
     addr
+
+mkLocalTxSubmissionTracer
+        :: Show (GenTx blk)
+        => Tracer IO String
+        -> Tracer IO (TraceSendRecv (LocalTxSubmission (GenTx blk) String) Peer DeserialiseFailure)
+mkLocalTxSubmissionTracer = contramap show
 
 localSocketFilePath :: CoreNodeId -> FilePath
 localSocketFilePath (CoreNodeId  n) = "node-core-" ++ show n ++ ".socket"
