@@ -5,15 +5,14 @@ module Explorer.Core.DB.Migration
   , LogFileDir (..)
   , createMigration
   , applyMigration
-  , runDbAction
   , runMigrations
   ) where
 
 import           Control.Exception (SomeException, bracket, handle)
 import           Control.Monad (forM_, unless)
 import           Control.Monad.IO.Class (liftIO)
-import           Control.Monad.Logger (NoLoggingT, runNoLoggingT)
-import           Control.Monad.Trans.Reader (ReaderT, runReaderT)
+import           Control.Monad.Logger (NoLoggingT)
+import           Control.Monad.Trans.Reader (ReaderT)
 import           Control.Monad.Trans.Resource (runResourceT)
 
 import           Data.Conduit.Binary (sinkHandle)
@@ -28,12 +27,12 @@ import           Data.Time.Clock (getCurrentTime)
 import           Data.Time.Format (defaultTimeLocale, formatTime, iso8601DateFormat)
 
 import           Database.Persist.Sql (SqlBackend, SqlPersistT, entityVal, getMigration, selectFirst)
-import           Database.Persist.Postgresql (withPostgresqlConn)
 
-import           Explorer.Core.DB.Schema
-import           Explorer.Core.DB.PGConfig
 import           Explorer.Core.DB.Migration.Version
 import           Explorer.Core.DB.Migration.Haskell
+import           Explorer.Core.DB.PGConfig
+import           Explorer.Core.DB.Run
+import           Explorer.Core.DB.Schema
 
 import           System.Directory (listDirectory)
 import           System.Exit (ExitCode (..), exitFailure)
@@ -92,7 +91,7 @@ applyMigration quiet pgconfig (logFilename, logHandle) (version, script) = do
     case exitCode of
       ExitSuccess -> do
         unless quiet $ putStrLn "ok"
-        runHaskellMigration pgconfig logHandle version
+        runHaskellMigration logHandle version
       ExitFailure _ -> errorExit exitCode
   where
     errorExit :: Show e => e -> IO a
@@ -106,10 +105,7 @@ applyMigration quiet pgconfig (logFilename, logHandle) (version, script) = do
 -- migration is needed return 'Nothing' otherwise return the migration as 'Text'.
 createMigration :: MigrationDir -> IO (Maybe FilePath)
 createMigration (MigrationDir migdir) = do
-    pgconfig <- readPGPassFileEnv
-    mt <- runNoLoggingT .
-            withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
-              runReaderT create backend
+    mt <- runDbNoLogging create
     case mt of
       Nothing -> pure Nothing
       Just (ver, mig) -> do
@@ -162,14 +158,6 @@ createMigration (MigrationDir migdir) = do
           -- which Persistent migrations are generated.
           let (SchemaVersion _ stage2 _) = entityVal x
           pure $ MigrationVersion 2 stage2 0
-
--- Mainly for tests.
-runDbAction :: ReaderT SqlBackend (NoLoggingT IO) a -> IO a
-runDbAction action = do
-  pgconfig <- readPGPassFileEnv
-  runNoLoggingT .
-    withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
-      runReaderT action backend
 
 --------------------------------------------------------------------------------
 

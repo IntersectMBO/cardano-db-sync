@@ -6,22 +6,19 @@ module Explorer.Core.DB.Migration.Haskell
   ) where
 
 import           Control.Exception (SomeException, handle)
-import           Control.Monad.Logger (MonadLogger, LoggingT, runLoggingT, defaultLogStr)
-import           Control.Monad.Trans.Reader (ReaderT, runReaderT)
+import           Control.Monad.Logger (MonadLogger)
+import           Control.Monad.Trans.Reader (ReaderT)
 
-import qualified Data.ByteString.Char8 as BS
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 
-import           Database.Persist.Postgresql (withPostgresqlConn)
-import           Database.Persist.Sql (SqlBackend, SqlPersistT)
+import           Database.Persist.Sql (SqlBackend)
 
-import           Explorer.Core.DB.PGConfig
 import           Explorer.Core.DB.Migration.Version
+import           Explorer.Core.DB.Run
 
 import           System.Exit (exitFailure)
 import           System.IO (Handle, hClose, hFlush, hPutStrLn, stdout)
-import           System.Log.FastLogger (fromLogStr)
 
 -- | Run a migration written in Haskell (eg one that cannot easily be done in SQL).
 -- The Haskell migration is paired with an SQL migration and uses the same MigrationVersion
@@ -35,15 +32,15 @@ import           System.Log.FastLogger (fromLogStr)
 --      in the database.
 --   3. 'migration-2-0009-20190731.sql' makes the new column NOT NULL.
 
-runHaskellMigration :: PGConfig -> Handle -> MigrationVersion -> IO ()
-runHaskellMigration pgconf logHandle mversion =
+runHaskellMigration :: Handle -> MigrationVersion -> IO ()
+runHaskellMigration logHandle mversion =
     case Map.lookup mversion migrationMap of
       Nothing -> pure ()
       Just action -> do
         hPutStrLn logHandle $ "Running : migration-" ++ renderMigrationVersion mversion ++ ".hs"
         putStr $ "    migration-" ++ renderMigrationVersion mversion ++ ".hs  ... "
         hFlush stdout
-        handle handler $ runDbAction logHandle pgconf action
+        handle handler $ runDbHandleLogger logHandle action
         putStrLn "ok"
   where
     handler :: SomeException -> IO a
@@ -55,28 +52,15 @@ runHaskellMigration pgconf logHandle mversion =
 
 --------------------------------------------------------------------------------
 
-migrationMap :: MonadLogger m => Map MigrationVersion (SqlPersistT m ())
+migrationMap :: MonadLogger m => Map MigrationVersion (ReaderT SqlBackend m ())
 migrationMap =
   Map.fromList
     [ ( MigrationVersion 2 1 20190731, migration0001 )
     ]
 
-runDbAction :: Handle -> PGConfig -> ReaderT SqlBackend (LoggingT IO) a -> IO a
-runDbAction logHandle pgconf dbAction =
-  runHandlerLoggerT logHandle .
-    withPostgresqlConn (toConnectionString pgconf) $ \backend ->
-      runReaderT dbAction backend
-
-runHandlerLoggerT :: Handle -> LoggingT m a -> m a
-runHandlerLoggerT hdl action =
-    runLoggingT action logOut
-  where
-    logOut loc src level msg =
-      BS.hPutStrLn hdl . fromLogStr $ defaultLogStr loc src level msg
-
 --------------------------------------------------------------------------------
 
-migration0001 :: MonadLogger m => SqlPersistT m ()
+migration0001 :: MonadLogger m => ReaderT SqlBackend m ()
 migration0001 =
   -- Place holder.
   pure ()
