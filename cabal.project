@@ -4,6 +4,48 @@ packages:
   cardano-explorer
 
 
+
+
+package canonical-json
+  tests: False
+
+package cardano-binary
+  tests: False
+
+package cardano-crypto
+  tests: False
+
+package cardano-crypto-class
+  tests: False
+
+package cardano-crypto-wrapper
+  tests: False
+
+package cardano-ledger
+  tests: False
+
+package cardano-node
+  tests: False
+
+package cardano-prelude
+  tests: False
+
+package cardano-shell
+  tests: False
+
+package cardano-sl-x509
+  tests: False
+
+package contra-tracer
+  tests: False
+
+package iohk-monitoring
+  tests: False
+
+package typed-protocols-cbor
+  tests: False
+
+
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-crypto
