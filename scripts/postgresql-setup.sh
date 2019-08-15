@@ -90,17 +90,15 @@ function drop_db {
 }
 
 function create_migration {
-	cabal build cardano-explorer-db-node:cardano-explorer-db-manage
+	cabal build cardano-explorer-core:cardano-explorer-db-manage
 	exe=$(find dist-newstyle -type f -name cardano-explorer-db-manage)
-	"${exe}" create-migration --config config/pgpass --mdir schema/
+	"${exe}" create-migration --mdir schema/
 }
 
 function run_migrations {
-	for sql in schema/migration-*.sql ; do
-		psql "${databasename}" --quiet --no-psqlrc \
-			--single-transaction -set ON_ERROR_STOP=on \
-			--file="${sql}" < /dev/null > /dev/null
-		done
+	cabal build cardano-explorer-core:cardano-explorer-db-manage
+	exe=$(find dist-newstyle -type f -name cardano-explorer-db-manage)
+	"${exe}" run-migrations --mdir schema/ --ldir .
 }
 
 function dump_schema {
@@ -116,7 +114,7 @@ function usage_exit {
 	echo "    $progname --recreatedb        - Drop and recreate database."
 	echo "    $progname --create-user       - Create database user (from config/pgass file)."
 	echo "    $progname --create-migration	- Create a migration (if one is needed)."
-	echo "    $progname --run-migration     - Run all migrations applying as needed."
+	echo "    $progname --run-migrations    - Run all migrations applying as needed."
 	echo "    $progname --dump-schema       - Dump the schema of the database."
 	echo
 	exit 0
