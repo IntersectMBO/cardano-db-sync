@@ -19,12 +19,11 @@ module Explorer.Node
 import           Control.Exception (throw)
 import           Control.Monad.Class.MonadST (MonadST)
 import           Control.Monad.Class.MonadSTM (MonadSTM, TMVar, atomically, readTMVar, newEmptyTMVarM)
-import           Control.Monad.Class.MonadThrow (MonadThrow)
 import           Control.Monad.Class.MonadTimer (MonadTimer)
 
 import           Cardano.Binary (Raw)
 
-import           Cardano.BM.Data.Tracer (ToLogObject (toLogObject), Tracer, nullTracer)
+import           Cardano.BM.Data.Tracer (ToLogObject (toLogObject), nullTracer)
 import           Cardano.BM.Trace (Trace, appendName)
 
 import qualified Cardano.Chain.Genesis as Genesis
@@ -59,7 +58,7 @@ import           Network.Socket (SockAddr, AddrInfo, SocketType(Stream), Family(
 
 import           Network.TypedProtocol.Codec (Codec)
 import           Network.TypedProtocol.Codec.Cbor (DeserialiseFailure)
-import           Network.TypedProtocol.Driver (TraceSendRecv, runPeer)
+import           Network.TypedProtocol.Driver (runPeer)
 
 import           Ouroboros.Consensus.Ledger.Abstract (BlockProtocol)
 import           Ouroboros.Consensus.Ledger.Byron (GenTx, ByronBlockOrEBB (..))
@@ -125,11 +124,7 @@ initializeAllFeatures enp partialConfig cardanoEnvironment = do
   (loggingLayer, loggingFeature) <- createLoggingFeature cardanoEnvironment finalConfig (enpLogging enp)
   (nodeLayer   , nodeFeature)    <- createNodeFeature loggingLayer enp cardanoEnvironment finalConfig
 
-    -- Here we return all the features.
-  let allCardanoFeatures :: [CardanoFeature]
-      allCardanoFeatures = [ loggingFeature, nodeFeature ]
-
-  pure (allCardanoFeatures, nodeLayer)
+  pure ([ loggingFeature, nodeFeature ], nodeLayer)
 
 
 createNodeFeature :: LoggingLayer -> ExplorerNodeParams -> CardanoEnvironment -> CardanoConfiguration -> IO (NodeLayer, CardanoFeature)
@@ -141,11 +136,8 @@ createNodeFeature loggingLayer enp cardanoEnvironment cardanoConfiguration = do
   -- we construct the layer
   nodeLayer <- featureInit nodeCardanoFeatureInit cardanoEnvironment loggingLayer cardanoConfiguration enp
 
-  -- we construct the cardano feature
-  let cardanoFeature = nodeCardanoFeature nodeCardanoFeatureInit nodeLayer
-
-  -- we return both
-  pure (nodeLayer, cardanoFeature)
+  -- Return both
+  pure (nodeLayer, nodeCardanoFeature nodeCardanoFeatureInit nodeLayer)
 
 nodeCardanoFeatureInit :: NodeCardanoFeature
 nodeCardanoFeatureInit =
@@ -156,16 +148,15 @@ nodeCardanoFeatureInit =
       }
   where
     featureStart' :: CardanoEnvironment -> LoggingLayer -> CardanoConfiguration -> ExplorerNodeParams -> IO NodeLayer
-    featureStart' _ loggingLayer cc _enp = do
-        let
-          tr :: Trace IO Text
-          tr = llAppendName loggingLayer "explorer-db-node" (llBasicTrace loggingLayer)
-          coreClient :: IO ()
-          coreClient = runClient tr cc
-        pure $ NodeLayer {nlRunNode = liftIO coreClient}
+    featureStart' _ loggingLayer cc _enp =
+        pure $ NodeLayer { nlRunNode = liftIO $ runClient (mkTracer loggingLayer) cc }
 
     featureCleanup' :: NodeLayer -> IO ()
     featureCleanup' _ = pure ()
+
+    mkTracer :: LoggingLayer -> Trace IO Text
+    mkTracer loggingLayer = llAppendName loggingLayer "explorer-db-node" (llBasicTrace loggingLayer)
+
 
 nodeCardanoFeature :: NodeCardanoFeature -> NodeLayer -> CardanoFeature
 nodeCardanoFeature nodeCardanoFeature' nodeLayer =
@@ -176,18 +167,17 @@ nodeCardanoFeature nodeCardanoFeature' nodeLayer =
     }
 
 runClient :: Trace IO Text -> CardanoConfiguration -> IO ()
-runClient tracer cc = do
-    let tracer' = contramap Text.pack . toLogObject $ appendName "explorer-db-node" tracer
-        genHash = either (throw . ConfigurationError) id $
+runClient trce cc = do
+    let genHash = either (throw . ConfigurationError) id $
                       decodeAbstractHash (coGenesisHash $ ccCore cc)
 
     gc <- readGenesisConfig cc genHash
 
-    insertGenesisDistribution tracer gc
+    insertGenesisDistribution trce gc
 
     give (Genesis.configEpochSlots gc)
           $ give (Genesis.gdProtocolMagicId $ Genesis.configGenesisData gc)
-          $ runExplorerNodeClient (mkProtocolId gc) tracer'
+          $ runExplorerNodeClient (mkProtocolId gc) trce
 
 
 mkProtocolId :: Genesis.Config -> Protocol (ByronBlockOrEBB ByronConfig)
@@ -199,28 +189,28 @@ mkProtocolId gc =
 
 
 readGenesisConfig :: CardanoConfiguration -> Hash Raw -> IO Genesis.Config
-readGenesisConfig cc genHash = do
-  gcE <- runExceptT $
-            Genesis.mkConfigFromFile
-              (cvtRNM . coRequiresNetworkMagic $ ccCore cc)
-              (coGenesisFile $ ccCore cc)
-              genHash
-  case gcE of
-    Left err -> throw err -- TODO: no no no!
-    Right x -> pure x
+readGenesisConfig cc genHash =
+    convert =<< runExceptT (Genesis.mkConfigFromFile (convertRNM . coRequiresNetworkMagic $ ccCore cc)
+                            (coGenesisFile $ ccCore cc) genHash)
+  where
+    convert :: Either Genesis.ConfigurationError Genesis.Config -> IO Genesis.Config
+    convert =
+      \case
+        Left err -> throw err   -- TODO: no no no!
+        Right x -> pure x
 
 
-cvtRNM :: RequireNetworkMagic -> RequiresNetworkMagic
-cvtRNM =
+convertRNM :: RequireNetworkMagic -> RequiresNetworkMagic
+convertRNM =
   \case
     NoRequireNetworkMagic -> RequiresNoMagic
     RequireNetworkMagic -> RequiresMagic
 
 runExplorerNodeClient
     :: forall blk cfg.
-        (RunNode blk, Node.TraceConstraints blk, blk ~ ByronBlockOrEBB cfg)
-    => Ouroboros.Consensus.Protocol.Protocol blk -> Tracer IO String -> IO ()
-runExplorerNodeClient ptcl tracer = do
+        (RunNode blk, blk ~ ByronBlockOrEBB cfg)
+    => Ouroboros.Consensus.Protocol.Protocol blk -> Trace IO Text -> IO ()
+runExplorerNodeClient ptcl trce = do
   let
     infoConfig = pInfoConfig $ protocolInfo (NumCoreNodes 7) (CoreNodeId 0) ptcl
 
@@ -231,19 +221,10 @@ runExplorerNodeClient ptcl tracer = do
   connectTo
     nullTracer
     Peer
-    (localInitiatorNetworkApplication
-      (Proxy :: Proxy blk)
-      nullTracer
-      (mkLocalTxSubmissionTracer tracer)
-      infoConfig)
+    (localInitiatorNetworkApplication (Proxy :: Proxy blk) trce infoConfig)
     Nothing
     addr
 
-mkLocalTxSubmissionTracer
-        :: Show (GenTx blk)
-        => Tracer IO String
-        -> Tracer IO (TraceSendRecv (LocalTxSubmission (GenTx blk) String) Peer DeserialiseFailure)
-mkLocalTxSubmissionTracer = contramap show
 
 localSocketFilePath :: CoreNodeId -> FilePath
 localSocketFilePath (CoreNodeId  n) = "node-core-" ++ show n ++ ".socket"
@@ -252,50 +233,47 @@ localSocketAddrInfo :: FilePath -> AddrInfo
 localSocketAddrInfo socketPath =
   AddrInfo [] AF_UNIX Stream defaultProtocol (SockAddrUnix socketPath) Nothing
 
+
 localInitiatorNetworkApplication
-  :: forall blk m peer cfg.
-     (RunNode blk, MonadST m, MonadThrow m, MonadTimer m, MonadIO m, blk ~ ByronBlockOrEBB cfg)
+  :: forall blk peer cfg.
+     (RunNode blk, blk ~ ByronBlockOrEBB cfg, Show peer)
   -- TODO: the need of a 'Proxy' is an evidence that blk type is not really
   -- needed here.  The wallet client should use some concrete type of block
   -- from 'cardano-chain'.  This should remove the dependency of this module
   -- from 'ouroboros-consensus'.
   => Proxy blk
-  -> Tracer m (TraceSendRecv (ChainSync blk (Point blk)) peer DeserialiseFailure)
-  -- ^ tracer which logs all chain-sync messages send and received by the client
-  -- (see 'Ouroboros.Network.Protocol.ChainSync.Type' in 'ouroboros-network'
-  -- package)
-  -> Tracer m (TraceSendRecv (LocalTxSubmission (Ouroboros.Consensus.Ledger.Byron.GenTx blk) String) peer DeserialiseFailure)
-  -- ^ tracer which logs all local tx submission protocol messages send and
-  -- received by the client (see 'Ouroboros.Network.Protocol.LocalTxSubmission.Type'
-  -- in 'ouroboros-network' package).
+  -> Trace IO Text
   -> Ouroboros.Consensus.Protocol.NodeConfig (BlockProtocol blk)
   -> Versions NodeToClientVersion DictVersion
               (OuroborosApplication 'InitiatorApp peer NodeToClientProtocols
-                                    m BSL.ByteString Void Void)
-localInitiatorNetworkApplication Proxy chainSyncTracer localTxSubmissionTracer pInfoConfig =
+                                    IO BSL.ByteString Void Void)
+localInitiatorNetworkApplication Proxy trce pInfoConfig =
     simpleSingletonVersions
       NodeToClientV_1
       (NodeToClientVersionData { networkMagic = 0 })
       (DictVersion nodeToClientCodecCBORTerm)
+      initialApp
+  where
+    initialApp :: OuroborosApplication 'InitiatorApp peer NodeToClientProtocols IO BSL.ByteString Void Void
+    initialApp =
+      OuroborosInitiatorApplication $ \peer ptcl ->
+        case ptcl of
+          LocalTxSubmissionPtcl -> \channel -> do
+            txv <- newEmptyTMVarM @_ @(GenTx blk)
+            runPeer
+              (contramap (Text.pack . show) . toLogObject $ appendName "explorer-db-local-tx" trce)
+              localTxSubmissionCodec
+              peer
+              channel
+              (localTxSubmissionClientPeer (txSubmissionClient @(GenTx blk) txv))
 
-  $ OuroborosInitiatorApplication $ \peer ptcl -> case ptcl of
-      LocalTxSubmissionPtcl -> \channel -> do
-        txv <- newEmptyTMVarM @_ @(GenTx blk)
-        runPeer
-          localTxSubmissionTracer
-          localTxSubmissionCodec
-          peer
-          channel
-          (localTxSubmissionClientPeer
-              (txSubmissionClient @(GenTx blk) txv))
-
-      ChainSyncWithBlocksPtcl -> \channel ->
-        runPeer
-          chainSyncTracer
-          (localChainSyncCodec @blk pInfoConfig)
-          peer
-          channel
-          (chainSyncClientPeer chainSyncClient)
+          ChainSyncWithBlocksPtcl -> \channel ->
+            runPeer
+              nullTracer -- TODO
+              (localChainSyncCodec @blk pInfoConfig)
+              peer
+              channel
+              (chainSyncClientPeer (chainSyncClient trce))
 
 -- | A 'LocalTxSubmissionClient' that submits transactions reading them from
 -- a 'TMVar'.  A real implementation should use a better synchronisation
@@ -303,12 +281,8 @@ localInitiatorNetworkApplication Proxy chainSyncTracer localTxSubmissionTracer p
 -- 'muxLocalInitiatorNetworkApplication' above and never fills it with a tx.
 --
 txSubmissionClient
-  :: forall tx reject m.
-     ( Monad    m
-     , MonadSTM m
-     )
-  => TMVar m tx
-  -> m (LocalTxSubmissionClient tx reject m Void)
+  :: forall tx reject m. (Monad    m, MonadSTM m)
+  => TMVar m tx -> m (LocalTxSubmissionClient tx reject m Void)
 txSubmissionClient txv = do
     tx <- atomically $ readTMVar txv
     pure $ SendMsgSubmitTx tx $ \mbreject -> do
@@ -320,8 +294,7 @@ txSubmissionClient txv = do
 localChainSyncCodec
   :: forall blk m. (RunNode blk, MonadST m)
   => NodeConfig (BlockProtocol blk)
-  -> Codec (ChainSync blk (Point blk))
-           DeserialiseFailure m BSL.ByteString
+  -> Codec (ChainSync blk (Point blk)) DeserialiseFailure m BSL.ByteString
 localChainSyncCodec pInfoConfig =
     codecChainSync
       (nodeEncodeBlock pInfoConfig)
@@ -331,14 +304,9 @@ localChainSyncCodec pInfoConfig =
 
 localTxSubmissionCodec
   :: (RunNode blk, MonadST m)
-  => Codec (LocalTxSubmission (GenTx blk) String)
-           DeserialiseFailure m BSL.ByteString
+  => Codec (LocalTxSubmission (GenTx blk) String) DeserialiseFailure m BSL.ByteString
 localTxSubmissionCodec =
-  codecLocalTxSubmission
-    nodeEncodeGenTx
-    nodeDecodeGenTx
-    Serialise.encode
-    Serialise.decode
+  codecLocalTxSubmission nodeEncodeGenTx nodeDecodeGenTx Serialise.encode Serialise.decode
 
 -- | 'ChainSyncClient' which traces received blocks and ignores when it
 -- receives a request to rollbackwar.  A real wallet client should:
@@ -350,18 +318,19 @@ localTxSubmissionCodec =
 --
 chainSyncClient
   :: forall blk m cfg. (MonadTimer m, MonadIO m, StandardHash blk, blk ~ ByronBlockOrEBB cfg)
-  => ChainSyncClient blk (Point blk) m Void
-chainSyncClient = ChainSyncClient $ pure $
-    -- Notify the core node about the our latest points at which we are
-    -- synchronised.  This client is not persistent and thus it just
-    -- synchronises from the genesis block.  A real implementation should send
-    -- a list of points up to a point which is k blocks deep.
-    SendMsgFindIntersect
-      [genesisPoint] -- TODO
-      ClientStIntersect
-        { recvMsgIntersectFound    = \_ _ -> ChainSyncClient (pure clientStIdle)
-        , recvMsgIntersectNotFound = \  _ -> ChainSyncClient (pure clientStIdle)
-        }
+  => Trace IO Text -> ChainSyncClient blk (Point blk) m Void
+chainSyncClient trce =
+    ChainSyncClient $ pure $
+      -- Notify the core node about the our latest points at which we are
+      -- synchronised.  This client is not persistent and thus it just
+      -- synchronises from the genesis block.  A real implementation should send
+      -- a list of points up to a point which is k blocks deep.
+      SendMsgFindIntersect
+        [genesisPoint] -- TODO
+        ClientStIntersect
+          { recvMsgIntersectFound    = \_ _ -> ChainSyncClient (pure clientStIdle)
+          , recvMsgIntersectNotFound = \  _ -> ChainSyncClient (pure clientStIdle)
+          }
   where
     clientStIdle :: ClientStIdle blk (Point blk) m Void
     clientStIdle = SendMsgRequestNext clientStNext (pure clientStNext)
@@ -371,7 +340,7 @@ chainSyncClient = ChainSyncClient $ pure $
       ClientStNext
         { recvMsgRollForward = \blk _tip -> ChainSyncClient $ do
             -- print tip
-            insertByronBlockOrEBB blk
+            insertByronBlockOrEBB trce blk
             pure clientStIdle
         , recvMsgRollBackward = \_point tip -> ChainSyncClient $ do
             print tip
