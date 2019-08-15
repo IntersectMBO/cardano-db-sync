@@ -17,6 +17,7 @@ module Explorer.Node.Insert
 
 import           Cardano.Prelude
 
+import           Cardano.BM.Trace (Trace)
 import qualified Cardano.Crypto as Crypto
 
 -- Import all 'cardano-ledger' functions and data types qualified so they do not
@@ -36,8 +37,8 @@ import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..))
 import           System.Exit (exitFailure)
 
 
-insertByronBlockOrEBB :: MonadIO m => ByronBlockOrEBB cfg -> m ()
-insertByronBlockOrEBB blk = do
+insertByronBlockOrEBB :: MonadIO m => Trace IO Text -> ByronBlockOrEBB cfg -> m ()
+insertByronBlockOrEBB _tracer blk = do
   -- liftIO . putTextLn $ sformat ("applying block at depth " % int) ((unChainDifficulty . blockToDifficulty) blk)
   case unByronBlockOrEBB blk of
     Ledger.ABOBBlock ablk -> insertABlock ablk
