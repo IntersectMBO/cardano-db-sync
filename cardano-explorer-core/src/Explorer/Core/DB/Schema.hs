@@ -45,16 +45,16 @@ share [mkPersist sqlSettings, mkMigrate "migrateExplorerDB"] [persistLowerCase|
   -- primary key Haskell type can be used in a type-safe way in the rest
   -- of the schema definition.
   Block
-    hash                ByteString          sqltype=hashtype
+    hash                ByteString          sqltype=hash32type
     slotNo              Word64 Maybe        sqltype=uinteger
     blockNo             Word64              sqltype=uinteger
-    previous            BlockId Maybe       sqltype=hashtype
-    merkelRoot          ByteString Maybe    sqltype=hashtype
+    previous            BlockId Maybe
+    merkelRoot          ByteString Maybe    sqltype=hash32type
     size                Word64              sqltype=uinteger
     UniqueBlock         hash
 
   Tx
-    hash                ByteString      sqltype=hashtype
+    hash                ByteString      sqltype=hash32type
     block               BlockId         -- This type is the primary key for the 'block' table.
     fee                 Word64          sqltype=lovelace
     UniqueTx            hash
@@ -62,14 +62,13 @@ share [mkPersist sqlSettings, mkMigrate "migrateExplorerDB"] [persistLowerCase|
   TxOut
     txId                TxId            -- This type is the primary key for the 'tx' table.
     index               Word16          sqltype=txindex
-    address             ByteString      sqltype=hashtype
+    address             ByteString      sqltype=hash28type
     value               Word64          sqltype=lovelace
     UniqueTxout         txId index      -- The (tx_id, index) pair must be unique.
 
   TxIn
     txId                TxId            -- This type is the primary key for the 'tx' table.
     index               Word16          sqltype=txindex
-    txOutId             TxOutId         -- This type is the primary key for the 'txout' table.
     UniqueTxin          txId index      -- The (tx_id, index) pair must be unique.
 
   |]
