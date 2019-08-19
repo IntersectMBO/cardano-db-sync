@@ -6,6 +6,7 @@ module Explorer.Core.DB.Query
   , queryBlockId
   , queryTxId
   , queryLatestBlocks
+  , queryTxOutValue
   , querySelectCount
   ) where
 
@@ -14,9 +15,11 @@ import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.ByteString.Char8 (ByteString)
+import           Data.Word (Word16, Word64)
 
-import           Database.Esqueleto (From, SqlQuery, (^.), (==.), countRows, desc, entityKey,
-                    from, limit, orderBy, select, unValue, val, where_)
+import           Database.Esqueleto (From, InnerJoin (..), SqlQuery, (^.), (==.), (&&.),
+                    countRows, desc, entityKey, from, limit, on, orderBy, select,
+                    unValue, val, where_)
 import           Database.Persist.Sql (SqlBackend, entityVal)
 
 import           Explorer.Core.DB.Schema
@@ -57,11 +60,21 @@ queryBlockId hash = do
 -- | Get the 'TxId' associated with the given hash.
 queryTxId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe TxId)
 queryTxId hash = do
-  res <- select $ from $ \ blk -> do
-            where_ (blk ^. TxHash ==. val hash)
-            pure blk
+  res <- select $ from $ \ tx -> do
+            where_ (tx ^. TxHash ==. val hash)
+            pure tx
   pure $ fmap entityKey (listToMaybe res)
 
+-- | Give a tx hash, and an index for the specific outut, return the TxOut value.
+queryTxOutValue :: MonadIO m => (ByteString, Word16) -> ReaderT SqlBackend m (Maybe Word64)
+queryTxOutValue (hash, index) = do
+  res <- select $ from $ \ (tx `InnerJoin` txo) -> do
+            on (tx ^. TxId ==. txo ^. TxOutTxId)
+            where_ (txo ^. TxOutIndex ==. val index
+                    &&. tx ^. TxHash ==. val hash
+                    )
+            pure $ txo ^. TxOutValue
+  pure $ fmap unValue (listToMaybe res)
 
 -- | Count the number of rows that match the select with the supplied predicate.
 querySelectCount :: (MonadIO m, From table) => (table -> SqlQuery ()) -> ReaderT SqlBackend m Word
