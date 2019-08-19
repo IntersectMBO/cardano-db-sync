@@ -15,9 +15,7 @@
       buildType = "Simple";
       };
     components = {
-      "library" = {
-        depends = [ (hsPkgs.base) (hsPkgs.cardano-explorer-core) ];
-        };
+      "library" = { depends = [ (hsPkgs.base) (hsPkgs.cardano-explorer-db) ]; };
       exes = {
         "cardano-explorer" = {
           depends = [ (hsPkgs.base) (hsPkgs.cardano-explorer) ];

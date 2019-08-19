@@ -27,8 +27,8 @@
         "cborg" = (((hackage.cborg)."0.2.2.0").revisions).default;
         "canonical-json" = (((hackage.canonical-json)."0.6.0.0").revisions).default;
         } // {
-        cardano-explorer-core = ./cardano-explorer-core.nix;
-        cardano-explorer-db-node = ./cardano-explorer-db-node.nix;
+        cardano-explorer-db = ./cardano-explorer-db.nix;
+        cardano-explorer-node = ./cardano-explorer-node.nix;
         cardano-explorer = ./cardano-explorer.nix;
         cardano-shell = ./cardano-shell.nix;
         cardano-prelude = ./cardano-prelude.nix;

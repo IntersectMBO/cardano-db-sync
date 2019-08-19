@@ -3,7 +3,7 @@
     flags = {};
     package = {
       specVersion = "1.10";
-      identifier = { name = "cardano-explorer-core"; version = "0.1.0.0"; };
+      identifier = { name = "cardano-explorer-db"; version = "0.1.0.0"; };
       license = "Apache-2.0";
       copyright = "(c) 2019 IOHK";
       maintainer = "operations@iohk.io";
@@ -45,7 +45,7 @@
         "cardano-explorer-db-manage" = {
           depends = [
             (hsPkgs.base)
-            (hsPkgs.cardano-explorer-core)
+            (hsPkgs.cardano-explorer-db)
             (hsPkgs.optparse-applicative)
             ];
           };
@@ -54,7 +54,7 @@
         "test" = {
           depends = [
             (hsPkgs.base)
-            (hsPkgs.cardano-explorer-core)
+            (hsPkgs.cardano-explorer-db)
             (hsPkgs.hedgehog)
             ];
           };
@@ -62,7 +62,7 @@
           depends = [
             (hsPkgs.base)
             (hsPkgs.bytestring)
-            (hsPkgs.cardano-explorer-core)
+            (hsPkgs.cardano-explorer-db)
             (hsPkgs.HUnit)
             (hsPkgs.tasty)
             (hsPkgs.tasty-hunit)
@@ -70,4 +70,4 @@
           };
         };
       };
-    } // rec { src = (pkgs.lib).mkDefault ../.././cardano-explorer-core; }
+    } // rec { src = (pkgs.lib).mkDefault ../.././cardano-explorer-db; }

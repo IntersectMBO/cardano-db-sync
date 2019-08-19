@@ -3,7 +3,7 @@
     flags = {};
     package = {
       specVersion = "1.10";
-      identifier = { name = "cardano-explorer-db-node"; version = "0.1.0.0"; };
+      identifier = { name = "cardano-explorer-node"; version = "0.1.0.0"; };
       license = "Apache-2.0";
       copyright = "(c) 2019 IOHK";
       maintainer = "operations@iohk.io";
@@ -21,7 +21,7 @@
           (hsPkgs.bytestring)
           (hsPkgs.cardano-binary)
           (hsPkgs.cardano-crypto-wrapper)
-          (hsPkgs.cardano-explorer-core)
+          (hsPkgs.cardano-explorer-db)
           (hsPkgs.cardano-ledger)
           (hsPkgs.cardano-node)
           (hsPkgs.cardano-prelude)
@@ -49,12 +49,12 @@
           ];
         };
       exes = {
-        "cardano-explorer-db-node" = {
+        "cardano-explorer-node" = {
           depends = [
             (hsPkgs.base)
             (hsPkgs.bytestring)
             (hsPkgs.cardano-crypto-wrapper)
-            (hsPkgs.cardano-explorer-db-node)
+            (hsPkgs.cardano-explorer-node)
             (hsPkgs.cardano-ledger)
             (hsPkgs.cardano-node)
             (hsPkgs.cardano-prelude)
@@ -78,8 +78,8 @@
         };
       tests = {
         "test" = {
-          depends = [ (hsPkgs.base) (hsPkgs.cardano-explorer-db-node) ];
+          depends = [ (hsPkgs.base) (hsPkgs.cardano-explorer-node) ];
           };
         };
       };
-    } // rec { src = (pkgs.lib).mkDefault ../.././cardano-explorer-db-node; }
+    } // rec { src = (pkgs.lib).mkDefault ../.././cardano-explorer-node; }
