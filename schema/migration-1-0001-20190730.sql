@@ -10,8 +10,7 @@ BEGIN
   IF next_version = 1 THEN
     EXECUTE 'CREATE DOMAIN lovelace AS bigint CHECK (VALUE >= 0 AND VALUE <= 45000000000000000);';
     EXECUTE 'CREATE DOMAIN hashtype AS bytea CHECK (octet_length (VALUE) = 32);';
-    -- Limit the txindex type to be equal to the number of outputs in the genesis distribution.
-    EXECUTE 'CREATE DOMAIN txindex AS smallint CHECK (VALUE >= 0 AND VALUE < 14505);';
+    EXECUTE 'CREATE DOMAIN txindex AS smallint CHECK (VALUE >= 0 AND VALUE < 1024);';
     EXECUTE 'CREATE DOMAIN uinteger AS integer CHECK (VALUE >= 0);';
 
     UPDATE "schema_version" SET stage_one = 1;
