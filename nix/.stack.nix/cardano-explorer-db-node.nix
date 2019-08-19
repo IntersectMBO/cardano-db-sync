@@ -29,6 +29,7 @@
           (hsPkgs.cborg)
           (hsPkgs.containers)
           (hsPkgs.cryptonite)
+          (hsPkgs.extra)
           (hsPkgs.formatting)
           (hsPkgs.optparse-applicative)
           (hsPkgs.ouroboros-consensus)
