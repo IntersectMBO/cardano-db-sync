@@ -10,7 +10,7 @@ import qualified Cardano.Shell.Presets as Shell
 
 import           Explorer.Node (ExplorerNodeParams (..), NodeLayer (..), initializeAllFeatures)
 
-import           Options.Applicative (Parser, ParserInfo)
+import           Options.Applicative (Parser, ParserInfo, completer, bashCompleter, help, long, strOption)
 import qualified Options.Applicative as Opt
 
 main :: IO ()
@@ -36,5 +36,9 @@ pCommandLine :: Parser ExplorerNodeParams
 pCommandLine =
   ExplorerNodeParams
     <$> Shell.loggingParser
-    <*> Node.parseProtocol
     <*> Node.parseCommonCLI
+    <*> parseSocketPath
+
+-- TODO, another PR is adding similar to another repo, switch over to it
+parseSocketPath :: Parser FilePath
+parseSocketPath = strOption (long "socket-path" <> help "path to a cardano-node socket" <> completer (bashCompleter "file"))

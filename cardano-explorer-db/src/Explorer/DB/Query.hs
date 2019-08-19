@@ -10,6 +10,7 @@ module Explorer.DB.Query
   , queryTxId
   , queryTxOutValue
   , querySelectCount
+  , listToMaybe
   ) where
 
 

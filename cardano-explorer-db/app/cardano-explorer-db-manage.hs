@@ -74,6 +74,7 @@ pMigrationDir =
   MigrationDir <$> Opt.strOption
     (  Opt.long "mdir"
     <> Opt.help "The directory containing the migrations."
+    <> Opt.completer (Opt.bashCompleter "directory")
     )
 
 pLogFileDir :: Parser LogFileDir
@@ -81,4 +82,5 @@ pLogFileDir =
   LogFileDir <$> Opt.strOption
     (  Opt.long "ldir"
     <> Opt.help "The directory to write the log to."
+    <> Opt.completer (Opt.bashCompleter "directory")
     )

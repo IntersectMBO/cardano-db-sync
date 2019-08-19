@@ -9,7 +9,7 @@
 , crossSystem ? null
 , config ? {}
 # Import IOHK common nix lib
-, iohkLib ? import ./nix/iohk-common.nix { inherit system crossSystem config; }
+, iohkLib ? import ./lib.nix { inherit system crossSystem config; }
 # Use nixpkgs pin from iohkLib
 , pkgs ? iohkLib.pkgs
 }:
@@ -31,6 +31,23 @@ let
     inherit (iohkLib.nix-tools) iohk-extras iohk-module;
   };
 
+  mkConnectScript = { genesisFile, genesisHash, name, ... }:
+  let
+    extraModule = {
+      services.cardano-exporter = {
+        enable = true;
+        inherit genesisFile genesisHash;
+        cluster = name;
+      };
+    };
+    eval = pkgs.lib.evalModules {
+      prefix = [];
+      check = false;
+      modules = [ ./module.nix extraModule ];
+      args = { inherit pkgs; };
+    };
+  in eval.config.services.cardano-exporter.script;
+
 in {
   inherit pkgs iohkLib src haskellPackages;
   inherit (haskellPackages.cardano-explorer.identifier) version;
@@ -43,6 +60,8 @@ in {
 
   tests = util.collectComponents "tests" util.isIohkSkeleton haskellPackages;
   benchmarks = util.collectComponents "benchmarks" util.isIohkSkeleton haskellPackages;
+
+  scripts.exporter = iohkLib.cardanoLib.forEnvironments mkConnectScript;
 
   # This provides a development environment that can be used with nix-shell or
   # lorri. See https://input-output-hk.github.io/haskell.nix/user-guide/development/

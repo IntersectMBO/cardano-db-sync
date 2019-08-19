@@ -7,7 +7,7 @@ import (
   then builtins.trace "using host <iohk_nix>" try.value
   else
     let
-      spec = builtins.fromJSON (builtins.readFile ./iohk-nix-src.json);
+      spec = builtins.fromJSON (builtins.readFile ./nix/iohk-nix-src.json);
       fetchArgs = {
         url = "${spec.url}/archive/${spec.rev or "master"}.tar.gz";
       } // (if spec ? sha256 then { inherit (spec) sha256; } else {});

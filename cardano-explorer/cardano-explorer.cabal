@@ -27,12 +27,44 @@ library
                         -fwarn-unused-imports
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
+                        -Weverything
+                        -- -Wno-unused-matches
 
   exposed-modules:      Explorer.Web
+                      , Explorer.Web.Api
+                      , Explorer.Web.ClientTypes
+                      , Explorer.Web.Error
+                      , Explorer.Web.LegacyApi
+                      , Explorer.Web.Query
+                      , Explorer.Web.Server
+                      , Explorer.Web.TestServer
   -- other-modules:
 
   build-depends:        base                            >= 4.12         && < 4.13
+                      , QuickCheck
+                      , aeson
+                      , base16-bytestring
+                      , bytestring
+                      , cardano-crypto-class
                       , cardano-explorer-db
+                      , cardano-ledger
+                      , constraints
+                      , deepseq
+                      , esqueleto
+                      , formatting
+                      , generics-sop
+                      , hashable
+                      , memory
+                      , monad-logger
+                      , mtl
+                      , persistent
+                      , persistent-postgresql
+                      , servant
+                      , servant-server
+                      , text
+                      , time
+                      , transformers
+                      , warp
 
 executable cardano-explorer
   default-language:    Haskell2010
@@ -51,7 +83,15 @@ executable cardano-explorer
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , cardano-explorer
+                      , Cabal
 
+executable cardano-mock-explorer
+  default-language:    Haskell2010
+  main-is:             mock.hs
+  hs-source-dirs:      app
+  ghc-options:          -Wall
+  build-depends:        base                            >= 4.12         && < 4.13
+                      , cardano-explorer
 
 test-suite test
   default-language:     Haskell2010

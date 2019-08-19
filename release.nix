@@ -24,11 +24,11 @@
 
 # Import IOHK common nix lib
 # TODO: remove line below, and uncomment the next line
-, iohkLib ? import ./nix/iohk-common.nix {}
+, iohkLib ? import ./lib.nix {}
 }:
 
 with (import iohkLib.release-lib) {
-  inherit (import ./nix/iohk-common.nix {}) pkgs;
+  inherit (import ./lib.nix {}) pkgs;
 
   inherit supportedSystems supportedCrossSystems scrubJobs projectArgs;
   packageSet = import cardano-explorer;

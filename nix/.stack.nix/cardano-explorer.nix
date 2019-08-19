@@ -15,9 +15,40 @@
       buildType = "Simple";
       };
     components = {
-      "library" = { depends = [ (hsPkgs.base) (hsPkgs.cardano-explorer-db) ]; };
+      "library" = {
+        depends = [
+          (hsPkgs.base)
+          (hsPkgs.QuickCheck)
+          (hsPkgs.aeson)
+          (hsPkgs.base16-bytestring)
+          (hsPkgs.bytestring)
+          (hsPkgs.cardano-crypto-class)
+          (hsPkgs.cardano-explorer-db)
+          (hsPkgs.cardano-ledger)
+          (hsPkgs.constraints)
+          (hsPkgs.deepseq)
+          (hsPkgs.esqueleto)
+          (hsPkgs.formatting)
+          (hsPkgs.generics-sop)
+          (hsPkgs.hashable)
+          (hsPkgs.memory)
+          (hsPkgs.monad-logger)
+          (hsPkgs.mtl)
+          (hsPkgs.persistent)
+          (hsPkgs.persistent-postgresql)
+          (hsPkgs.servant)
+          (hsPkgs.servant-server)
+          (hsPkgs.text)
+          (hsPkgs.time)
+          (hsPkgs.transformers)
+          (hsPkgs.warp)
+          ];
+        };
       exes = {
         "cardano-explorer" = {
+          depends = [ (hsPkgs.base) (hsPkgs.cardano-explorer) (hsPkgs.Cabal) ];
+          };
+        "cardano-mock-explorer" = {
           depends = [ (hsPkgs.base) (hsPkgs.cardano-explorer) ];
           };
         };
