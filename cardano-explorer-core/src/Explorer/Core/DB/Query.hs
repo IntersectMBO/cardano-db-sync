@@ -4,6 +4,7 @@
 module Explorer.Core.DB.Query
   ( queryBlockCount
   , queryBlockId
+  , queryTxId
   , queryLatestBlocks
   , querySelectCount
   ) where
@@ -44,11 +45,20 @@ queryBlockCount = do
             pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
--- | Count the number of blocks in the Block table.
+-- | Get the 'BlockId' associated with the given hash.
 queryBlockId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe BlockId)
 queryBlockId hash = do
   res <- select $ from $ \ blk -> do
             where_ (blk ^. BlockHash ==. val hash)
+            pure blk
+  pure $ fmap entityKey (listToMaybe res)
+
+
+-- | Get the 'TxId' associated with the given hash.
+queryTxId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe TxId)
+queryTxId hash = do
+  res <- select $ from $ \ blk -> do
+            where_ (blk ^. TxHash ==. val hash)
             pure blk
   pure $ fmap entityKey (listToMaybe res)
 
