@@ -47,6 +47,7 @@ library
                       , cborg
                       , containers
                       , cryptonite
+                      , extra
                       , formatting
                       , optparse-applicative
                       , ouroboros-consensus

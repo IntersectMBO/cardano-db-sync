@@ -26,13 +26,13 @@ import qualified Cardano.Crypto as Crypto
 -- qualified.
 import qualified Cardano.Chain.Block as Ledger
 import qualified Cardano.Chain.Common as Ledger
--- import qualified Cardano.Chain.Common.Lovelace as Ledger
 import qualified Cardano.Chain.Genesis as Ledger
 import qualified Cardano.Chain.Slotting as Ledger
 import qualified Cardano.Chain.UTxO as Ledger
 
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Reader (ReaderT)
+import           Control.Monad.Extra (mapMaybeM)
 
 import           Crypto.Hash (Blake2b_256)
 
@@ -61,10 +61,10 @@ insertABOBBoundary tracer blk = do
       else DB.runDbNoLogging insertAction
 
     logInfo tracer $ Text.concat
-                    [ "insertABOBBoundary "
-                    , textShow hash
-                    , " "
+                    [ "insertABOBBoundary: epoch "
                     , textShow (Ledger.boundaryEpoch $ Ledger.boundaryHeader blk)
+                    , " hash "
+                    , textShow hash
                     ]
   where
     insertAction :: MonadIO m => ReaderT SqlBackend m ()
@@ -132,7 +132,7 @@ insertABlock tracer blk = do
 insertTx :: MonadIO m => Trace IO Text -> DB.BlockId -> Ledger.TxAux -> ReaderT SqlBackend m ()
 insertTx tracer blkId tx = do
     let txHash = Crypto.hash $ Ledger.taTx tx
-        fee = either (panic "insertTx") Ledger.unsafeGetLovelace $ calculateFee (Ledger.taTx tx)
+    fee <- calculateTxFee $ Ledger.taTx tx
     txId <- fmap both $ DB.insertTx $
                             DB.Tx
                               { DB.txHash = unTxHash txHash
@@ -169,14 +169,26 @@ insertTxIn _tracer (Ledger.TxInUtxo txHash inIndex) = do
 
 -- -----------------------------------------------------------------------------
 
--- TODO : Actually calculate fee. Currently returns the sum of the outputs.
-calculateFee :: Ledger.Tx -> Either Ledger.LovelaceError Ledger.Lovelace
-calculateFee tx =
-    output -- input - output
+calculateTxFee :: MonadIO m => Ledger.Tx -> ReaderT SqlBackend m Word64
+calculateTxFee tx = do
+    case output of
+      Left err -> panic $ "calculateTxFee: " <> textShow err
+      Right outval -> do
+        inval <- sum <$> mapMaybeM DB.queryTxOutValue inputs
+        if outval > inval
+          then panic $ "calculateTxFee: " <> textShow (outval, inval)
+          else pure $ inval - outval
   where
-    output :: Either Ledger.LovelaceError Ledger.Lovelace
-    output = Ledger.sumLovelace (map Ledger.txOutValue $ Ledger.txOutputs tx)
-    -- input = lookup all inputs using 'Ledger.txInputs tx'
+    inputs :: [(ByteString, Word16)]
+    inputs = map unpack $ toList (Ledger.txInputs tx)
+
+    unpack :: Ledger.TxIn -> (ByteString, Word16)
+    unpack (Ledger.TxInUtxo txHash index) = (unTxHash txHash, fromIntegral index)
+
+    output :: Either Ledger.LovelaceError Word64
+    output =
+      Ledger.unsafeGetLovelace
+        <$> Ledger.sumLovelace (map Ledger.txOutValue $ Ledger.txOutputs tx)
 
 genesisToHeaderHash :: Ledger.GenesisHash -> Ledger.HeaderHash
 genesisToHeaderHash = coerce
