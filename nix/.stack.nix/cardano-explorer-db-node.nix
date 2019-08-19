@@ -28,6 +28,7 @@
           (hsPkgs.cardano-shell)
           (hsPkgs.cborg)
           (hsPkgs.containers)
+          (hsPkgs.cryptonite)
           (hsPkgs.formatting)
           (hsPkgs.optparse-applicative)
           (hsPkgs.ouroboros-consensus)
