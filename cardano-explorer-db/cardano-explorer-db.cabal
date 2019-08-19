@@ -1,0 +1,126 @@
+cabal-version:          >= 1.10
+
+-- http://haskell.org/cabal/users-guide/
+
+name:                   cardano-explorer-db
+version:                0.1.0.0
+synopsis:               A block explorer for the Cardano chain
+description:            Code for the Cardano Block Explorer that is shared between the
+                        cardano-explorer-db-node and the cardano-explorer web application.
+homepage:               https://github.com/input-output-hk/cardano-explorer
+bug-reports:		    https://github.com/input-output-hk/cardano-explorer/issues
+license:                Apache-2.0
+license-file:           LICENSE
+author:                 IOHK Engineering Team
+maintainer:             operations@iohk.io
+copyright:              (c) 2019 IOHK
+category:               Cryptocurrency
+build-type:             Simple
+extra-source-files:     CHANGELOG.md
+
+library
+  default-language:     Haskell2010
+  hs-source-dirs:       src
+  ghc-options:          -Wall
+                        -Wcompat
+                        -fwarn-redundant-constraints
+                        -fwarn-incomplete-patterns
+                        -fwarn-unused-imports
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+
+  exposed-modules:      Explorer.DB
+
+  other-modules:        Explorer.DB.Insert
+                        Explorer.DB.PGConfig
+                        Explorer.DB.Migration
+                        Explorer.DB.Migration.Haskell
+                        Explorer.DB.Migration.Version
+                        Explorer.DB.Query
+                        Explorer.DB.Run
+                        Explorer.DB.Schema
+
+
+  build-depends:        base                            >= 4.12         && < 4.13
+                      , bytestring
+                      , containers
+                      , conduit
+                      , conduit-extra
+                      , contra-tracer
+                      , directory
+                      , esqueleto
+                      , extra
+                      , fast-logger
+                      , filepath
+                      , iohk-monitoring
+                      , monad-logger
+                      , persistent
+                      , persistent-postgresql
+                      , persistent-template >= 2.7.0
+                      , resourcet
+                      , text
+                      , template-haskell
+                      , time
+                      , transformers
+                      -- This is never intended to run on non-POSIX systems.
+                      , unix
+
+executable cardano-explorer-db-manage
+  default-language:     Haskell2010
+  main-is:              cardano-explorer-db-manage.hs
+  hs-source-dirs:       app
+
+  ghc-options:          -Wall
+                        -Wcompat
+                        -fwarn-redundant-constraints
+                        -fwarn-incomplete-patterns
+                        -fwarn-unused-imports
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+
+  -- other-modules:
+
+  build-depends:        base                            >= 4.12         && < 4.13
+                      , cardano-explorer-db
+                      , optparse-applicative
+
+test-suite test
+  default-language:     Haskell2010
+  type:                 exitcode-stdio-1.0
+  main-is:              test.hs
+  hs-source-dirs:       test
+
+  ghc-options:          -Wall
+                        -Wcompat
+                        -fwarn-redundant-constraints
+                        -fwarn-incomplete-patterns
+                        -fwarn-unused-imports
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+
+  other-modules:        Test.Explorer.DB.Migration
+
+  build-depends:        base                            >= 4.12         && < 4.13
+                      , cardano-explorer-db
+                      , hedgehog
+
+test-suite test-db
+  default-language:     Haskell2010
+  type:                 exitcode-stdio-1.0
+  main-is:              test-db.hs
+  hs-source-dirs:       test
+
+  ghc-options:          -Wall
+                        -Wcompat
+                        -fwarn-redundant-constraints
+                        -fwarn-incomplete-patterns
+                        -fwarn-unused-imports
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+
+  build-depends:        base                            >= 4.12         && < 4.13
+                      , bytestring
+                      , cardano-explorer-db
+                      , HUnit
+                      , tasty
+                      , tasty-hunit

@@ -1,6 +1,6 @@
 packages:
-  cardano-explorer-core
-  cardano-explorer-db-node
+  cardano-explorer-db
+  cardano-explorer-node
   cardano-explorer
 
 
