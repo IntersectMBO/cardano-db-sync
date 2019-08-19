@@ -107,8 +107,8 @@ data Peer = Peer SockAddr SockAddr deriving Show
 -- | The product type of all command line arguments
 data ExplorerNodeParams = ExplorerNodeParams
   { enpLogging :: !LoggingCLIArguments
-  , enpProtocol :: Node.Protocol
   , enpCommon :: Node.CommonCLI
+  , enpSocketPath :: FilePath
   }
 
 newtype NodeLayer = NodeLayer
@@ -142,13 +142,13 @@ createNodeFeature loggingLayer enp cardanoEnvironment cardanoConfiguration = do
   -- the filesystem, so we give him the most flexible/powerful context, @IO@.
 
   -- we construct the layer
-  nodeLayer <- featureInit nodeCardanoFeatureInit cardanoEnvironment loggingLayer cardanoConfiguration enp
+  nodeLayer <- featureInit (nodeCardanoFeatureInit $ enpSocketPath enp) cardanoEnvironment loggingLayer cardanoConfiguration enp
 
   -- Return both
-  pure (nodeLayer, nodeCardanoFeature nodeCardanoFeatureInit nodeLayer)
+  pure (nodeLayer, nodeCardanoFeature (nodeCardanoFeatureInit $ enpSocketPath enp) nodeLayer)
 
-nodeCardanoFeatureInit :: NodeCardanoFeature
-nodeCardanoFeatureInit =
+nodeCardanoFeatureInit :: FilePath -> NodeCardanoFeature
+nodeCardanoFeatureInit socketPath =
     CardanoFeatureInit
       { featureType    = "NodeFeature"
       , featureInit    = featureStart'
@@ -157,7 +157,7 @@ nodeCardanoFeatureInit =
   where
     featureStart' :: CardanoEnvironment -> LoggingLayer -> CardanoConfiguration -> ExplorerNodeParams -> IO NodeLayer
     featureStart' _ loggingLayer cc _enp =
-        pure $ NodeLayer { nlRunNode = liftIO $ runClient (mkTracer loggingLayer) cc }
+        pure $ NodeLayer { nlRunNode = liftIO $ runClient socketPath (mkTracer loggingLayer) cc }
 
     featureCleanup' :: NodeLayer -> IO ()
     featureCleanup' _ = pure ()
@@ -174,8 +174,8 @@ nodeCardanoFeature nodeCardanoFeature' nodeLayer =
     , featureShutdown   = liftIO $ (featureCleanup nodeCardanoFeature') nodeLayer
     }
 
-runClient :: Trace IO Text -> CardanoConfiguration -> IO ()
-runClient trce cc = do
+runClient :: FilePath -> Trace IO Text -> CardanoConfiguration -> IO ()
+runClient socketPath trce cc = do
     let genHash = either (throw . ConfigurationError) id $
                       decodeAbstractHash (coGenesisHash $ ccCore cc)
 
@@ -187,7 +187,7 @@ runClient trce cc = do
 
     give (Genesis.configEpochSlots gc)
           $ give (Genesis.gdProtocolMagicId $ Genesis.configGenesisData gc)
-          $ runExplorerNodeClient (mkProtocolId gc) trce
+          $ runExplorerNodeClient (mkProtocolId gc) trce socketPath
 
 
 mkProtocolId :: Genesis.Config -> Protocol (ByronBlockOrEBB ByronConfig)
@@ -219,26 +219,21 @@ convertRNM =
 runExplorerNodeClient
     :: forall blk cfg.
         (RunNode blk, blk ~ ByronBlockOrEBB cfg)
-    => Ouroboros.Consensus.Protocol.Protocol blk -> Trace IO Text -> IO ()
-runExplorerNodeClient ptcl trce = do
+    => Ouroboros.Consensus.Protocol.Protocol blk -> Trace IO Text -> FilePath -> IO ()
+runExplorerNodeClient ptcl trce socketPath = do
   liftIO $ logInfo trce "Starting node client"
   let
     infoConfig = pInfoConfig $ protocolInfo (NumCoreNodes 7) (CoreNodeId 0) ptcl
 
-    path = localSocketFilePath (CoreNodeId 42)
-    addr = localSocketAddrInfo path
+    addr = localSocketAddrInfo socketPath
 
-  logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> Text.pack (show path)
+  logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> Text.pack (show socketPath)
   connectTo
     nullTracer
     Peer
     (localInitiatorNetworkApplication (Proxy :: Proxy blk) trce infoConfig)
     Nothing
     addr
-
-
-localSocketFilePath :: CoreNodeId -> FilePath
-localSocketFilePath (CoreNodeId  n) = "node-core-" ++ show n ++ ".socket"
 
 localSocketAddrInfo :: FilePath -> AddrInfo
 localSocketAddrInfo socketPath =
