@@ -46,6 +46,7 @@ library
                       , cardano-shell
                       , cborg
                       , containers
+                      , cryptonite
                       , formatting
                       , optparse-applicative
                       , ouroboros-consensus

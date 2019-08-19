@@ -17,7 +17,8 @@ module Explorer.Node.Insert
 
 import           Cardano.Prelude
 
-import           Cardano.BM.Trace (Trace)
+import           Cardano.Binary (Raw)
+import           Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Crypto as Crypto
 
 -- Import all 'cardano-ledger' functions and data types qualified so they do not
@@ -30,75 +31,143 @@ import qualified Cardano.Chain.Genesis as Ledger
 import qualified Cardano.Chain.Slotting as Ledger
 import qualified Cardano.Chain.UTxO as Ledger
 
-import           Explorer.Node.Insert.Genesis as X
+import           Control.Monad.IO.Class (liftIO)
+import           Control.Monad.Trans.Reader (ReaderT)
+
+import           Crypto.Hash (Blake2b_256)
+
+import           Data.Coerce (coerce)
+import qualified Data.ByteArray
+import qualified Data.Text as Text
+
+import           Database.Persist.Sql (SqlBackend)
+
+import qualified Explorer.Core as DB
+import           Explorer.Node.Insert.Genesis
 
 import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..))
 
-import           System.Exit (exitFailure)
-
 
 insertByronBlockOrEBB :: MonadIO m => Trace IO Text -> ByronBlockOrEBB cfg -> m ()
-insertByronBlockOrEBB _tracer blk = do
-  -- liftIO . putTextLn $ sformat ("applying block at depth " % int) ((unChainDifficulty . blockToDifficulty) blk)
-  case unByronBlockOrEBB blk of
-    Ledger.ABOBBlock ablk -> insertABlock ablk
-    Ledger.ABOBBoundary abblk -> insertABOBBoundary abblk
+insertByronBlockOrEBB tracer blk =
+  liftIO $ case unByronBlockOrEBB blk of
+            Ledger.ABOBBlock ablk -> insertABlock tracer ablk
+            Ledger.ABOBBoundary abblk -> insertABOBBoundary tracer abblk
 
-insertABOBBoundary :: MonadIO m => Ledger.ABoundaryBlock ByteString -> m ()
-insertABOBBoundary blk = do
-  putStrLn $ "ABOBBoundary : " ++ show (Ledger.boundaryHashAnnotated blk)
-  putStrLn $ "epochNo      : " ++ show (Ledger.boundaryEpoch $ Ledger.boundaryHeader blk)
-  putStrLn $ ("slotNo       : Nothing" :: Text)
-  putStrLn $ "blockNo      : " ++ show (Ledger.unChainDifficulty . Ledger.boundaryDifficulty $ Ledger.boundaryHeader blk)
-  case Ledger.boundaryPrevHash $ Ledger.boundaryHeader blk of
-    Left gh -> validateGenesisTxs (Ledger.unGenesisHash gh)
-    Right hh -> putStrLn $ "previous     : " ++ show hh
-  putStrLn $ ("merkelRoot   : ????" :: Text)
-  putStrLn $ "size         : " ++ show (Ledger.boundaryBlockLength blk)
+insertABOBBoundary :: Trace IO Text -> Ledger.ABoundaryBlock ByteString -> IO ()
+insertABOBBoundary tracer blk = do
+    if False
+      then DB.runDbIohkLogging tracer insertAction
+      else DB.runDbNoLogging insertAction
 
-  putStrLn ("" :: Text) -- FFS Serokell are idiots!
+    logInfo tracer $ Text.concat
+                    [ "insertABOBBoundary "
+                    , textShow hash
+                    , " "
+                    , textShow (Ledger.boundaryEpoch $ Ledger.boundaryHeader blk)
+                    ]
+  where
+    insertAction :: MonadIO m => ReaderT SqlBackend m ()
+    insertAction = do
+      prevHash <- case Ledger.boundaryPrevHash (Ledger.boundaryHeader blk) of
+                    Left gh -> do
+                      validateGenesisTxs (Ledger.unGenesisHash gh)
+                      pure $ genesisToHeaderHash gh
+                    Right hh -> pure hh
+      pbid <- fromMaybe (panic $ "insertABOBBoundary: queryBlockId failed: " <> textShow prevHash)
+                  <$> DB.queryBlockId (unHeaderHash prevHash)
+      void . DB.insertBlock $
+                DB.Block
+                  { DB.blockHash = unHeaderHash hash
+                  , DB.blockSlotNo = Nothing -- No slotNo for a boundary block
+                  , DB.blockBlockNo = 0
+                  , DB.blockPrevious = Just pbid
+                  , DB.blockMerkelRoot = Nothing -- No merkelRoot for a boundary block
+                  , DB.blockSize = fromIntegral $ Ledger.boundaryBlockLength blk
+                  }
 
-insertABlock :: MonadIO m => Ledger.ABlock ByteString -> m ()
-insertABlock blk = do
-  putStrLn $ "ABlock       : " ++ show (Ledger.blockHashAnnotated blk)
-  let (epoch, slot) = (Ledger.unSlotNumber . Ledger.headerSlot $ Ledger.blockHeader blk) `divMod` 21600
-  putStrLn $ "epochNo      : " ++ show epoch
-  putStrLn $ "slotNo       : " ++ show slot
-  let blockNo = Ledger.unChainDifficulty . Ledger.headerDifficulty $ Ledger.blockHeader blk
-  putStrLn $ "blockNo      : " ++ show blockNo
-  putStrLn $ "previous     : " ++ show (Ledger.headerPrevHash $ Ledger.blockHeader blk)
-  putStrLn $ "merkelRoot   : " ++ show (Ledger.getMerkleRoot . Ledger.txpRoot . Ledger.recoverTxProof . Ledger.bodyTxPayload $ Ledger.blockBody blk)
-  putStrLn $ "size         : " ++ show (Ledger.blockLength blk)
+    hash :: Ledger.HeaderHash
+    hash = Ledger.boundaryHashAnnotated blk
 
-  let txs = blockPayload blk
-  putStrLn $ "tx count     : " ++ show (length txs)
+insertABlock :: Trace IO Text -> Ledger.ABlock ByteString -> IO ()
+insertABlock tracer blk = do
+    if False
+      then DB.runDbIohkLogging tracer insertAction
+      else DB.runDbNoLogging insertAction
 
-  putStrLn ("" :: Text)
+    when False $
+      logInfo tracer $ "insertABlock: " <> textShow hash
+  where
+    insertAction :: MonadIO m => ReaderT SqlBackend m ()
+    insertAction = do
+      pbid <- fromMaybe (panic $ "insertABlock: queryBlockId failed: " <> textShow prevHash)
+                  <$> DB.queryBlockId (unHeaderHash prevHash)
 
-  mapM_ (insertTx blockNo) txs
+      blkId <- fmap both $
+                DB.insertBlock $
+                    DB.Block
+                      { DB.blockHash = unHeaderHash hash
+                      , DB.blockSlotNo = Just (Ledger.unSlotNumber . Ledger.headerSlot $ Ledger.blockHeader blk)
+                      , DB.blockBlockNo = blockNo
+                      , DB.blockPrevious = Just pbid
+                      , DB.blockMerkelRoot = Just $ unCryptoHash merkelRoot
+                      , DB.blockSize = fromIntegral $ Ledger.blockLength blk
+                      }
+
+      mapM_ (insertTx tracer blkId) $ blockPayload blk
+
+    blockNo :: Word64
+    blockNo = Ledger.unChainDifficulty . Ledger.headerDifficulty $ Ledger.blockHeader blk
+
+    prevHash :: Ledger.HeaderHash
+    prevHash = Ledger.headerPrevHash $ Ledger.blockHeader blk
+
+    hash :: Ledger.HeaderHash
+    hash = Ledger.blockHashAnnotated blk
+
+    merkelRoot :: Crypto.AbstractHash Blake2b_256 Raw
+    merkelRoot = Ledger.getMerkleRoot . Ledger.txpRoot . Ledger.recoverTxProof . Ledger.bodyTxPayload $ Ledger.blockBody blk
 
 
-blockPayload :: Ledger.ABlock a -> [Ledger.TxAux]
-blockPayload =
-  Ledger.unTxPayload . Ledger.bodyTxPayload . Ledger.blockBody
-
-insertTx :: MonadIO m => Word64 -> Ledger.TxAux -> m ()
-insertTx blkNo tx = do
+insertTx :: MonadIO m => Trace IO Text -> DB.BlockId -> Ledger.TxAux -> ReaderT SqlBackend m ()
+insertTx tracer blkId tx = do
     let txHash = Crypto.hash $ Ledger.taTx tx
-    putStrLn $ "    Tx      : " ++ show txHash
-    putStrLn $ "    blockNo : " ++ show blkNo
-    putStrLn $ "    inputs  : " ++ show (toList $ Ledger.txInputs (Ledger.taTx  tx))
-    putStrLn $ "    output  : " ++ show (either (panic "insertTx") identity $ calculateFee (Ledger.taTx tx))
-    putStrLn ( "    fee     : ????" :: Text)
+        fee = either (panic "insertTx") Ledger.unsafeGetLovelace $ calculateFee (Ledger.taTx tx)
+    txId <- fmap both $ DB.insertTx $
+                            DB.Tx
+                              { DB.txHash = unTxHash txHash
+                              , DB.txBlock = blkId
+                              , DB.txFee = fee
+                              }
 
-    putStrLn ("" :: Text)
-    mapM_ (insertTxIn txHash) (Ledger.txInputs $ Ledger.taTx tx)
-    zipWithM_ (insertTxOut txHash) [0 ..] (toList . Ledger.txOutputs $ Ledger.taTx tx)
-    putStrLn ("" :: Text)
+    -- Insert outputs for a transaction before inputs in case the inputs for this transaction
+    -- references the output (noit sure this can even happen).
+    zipWithM_ (insertTxOut tracer txId) [0 ..] (toList . Ledger.txOutputs $ Ledger.taTx tx)
+    mapM_ (insertTxIn tracer) (Ledger.txInputs $ Ledger.taTx tx)
 
 
-    when (length (Ledger.txOutputs $ Ledger.taTx tx) > 2 || length (Ledger.txInputs (Ledger.taTx  tx)) > 2) $
-      liftIO exitFailure
+insertTxOut :: MonadIO m => Trace IO Text -> DB.TxId -> Word32 -> Ledger.TxOut -> ReaderT SqlBackend m ()
+insertTxOut _tracer txId index txout = do
+  void . DB.insertTxOut $
+            DB.TxOut
+              { DB.txOutTxId = txId
+              , DB.txOutIndex = fromIntegral index
+              , DB.txOutAddress = unAddressHash (Ledger.addrRoot $ Ledger.txOutAddress txout)
+              , DB.txOutValue = Ledger.unsafeGetLovelace $ Ledger.txOutValue txout
+              }
+
+
+insertTxIn :: MonadIO m => Trace IO Text -> Ledger.TxIn -> ReaderT SqlBackend m ()
+insertTxIn _tracer (Ledger.TxInUtxo txHash inIndex) = do
+  txId <- fromMaybe (panic $ "insertTxIn: queryTxId failed: " <> textShow txHash)
+                <$> DB.queryTxId (unTxHash txHash)
+  void $ DB.insertTxIn $
+            DB.TxIn
+              { DB.txInTxId = txId
+              , DB.txInIndex = fromIntegral inIndex
+              }
+
+-- -----------------------------------------------------------------------------
 
 -- TODO : Actually calculate fee. Currently returns the sum of the outputs.
 calculateFee :: Ledger.Tx -> Either Ledger.LovelaceError Ledger.Lovelace
@@ -109,16 +178,28 @@ calculateFee tx =
     output = Ledger.sumLovelace (map Ledger.txOutValue $ Ledger.txOutputs tx)
     -- input = lookup all inputs using 'Ledger.txInputs tx'
 
-insertTxOut :: MonadIO m => Ledger.TxId -> Word32 -> Ledger.TxOut -> m ()
-insertTxOut txHash index txout = do
-  putStrLn $ "    TxOut     : " ++ show txHash
-  putStrLn $ "      index   : " ++ show index
-  putStrLn $ "      address : " ++ show (Ledger.addrRoot $ Ledger.txOutAddress txout)
-  putStrLn $ "      value   : " ++ show (Ledger.txOutValue txout)
+genesisToHeaderHash :: Ledger.GenesisHash -> Ledger.HeaderHash
+genesisToHeaderHash = coerce
 
-insertTxIn :: MonadIO m => Ledger.TxId -> Ledger.TxIn -> m ()
-insertTxIn txHash (Ledger.TxInUtxo inTxHash inIndex) = do
-  putStrLn $ "    TxIn      : " ++ show txHash
-  putStrLn $ "      input   : " ++ show inTxHash
-  putStrLn $ "      index   : " ++ show inIndex
+blockPayload :: Ledger.ABlock a -> [Ledger.TxAux]
+blockPayload =
+  Ledger.unTxPayload . Ledger.bodyTxPayload . Ledger.blockBody
 
+unHeaderHash :: Ledger.HeaderHash -> ByteString
+unHeaderHash = Data.ByteArray.convert
+
+unAddressHash :: Ledger.AddressHash Ledger.Address' -> ByteString
+unAddressHash = Data.ByteArray.convert
+
+unTxHash :: Crypto.Hash Ledger.Tx -> ByteString
+unTxHash = Data.ByteArray.convert
+
+unCryptoHash :: Crypto.Hash Raw -> ByteString
+unCryptoHash = Data.ByteArray.convert
+
+textShow :: Show a => a -> Text
+textShow = Text.pack . show
+
+both :: Either a a -> a
+both (Left a) = a
+both (Right a) = a
