@@ -143,7 +143,7 @@ insertTx tracer blkId tx = do
     -- Insert outputs for a transaction before inputs in case the inputs for this transaction
     -- references the output (noit sure this can even happen).
     zipWithM_ (insertTxOut tracer txId) [0 ..] (toList . Ledger.txOutputs $ Ledger.taTx tx)
-    mapM_ (insertTxIn tracer) (Ledger.txInputs $ Ledger.taTx tx)
+    mapM_ (insertTxIn tracer txId) (Ledger.txInputs $ Ledger.taTx tx)
 
 
 insertTxOut :: MonadIO m => Trace IO Text -> DB.TxId -> Word32 -> Ledger.TxOut -> ReaderT SqlBackend m ()
@@ -157,14 +157,15 @@ insertTxOut _tracer txId index txout = do
               }
 
 
-insertTxIn :: MonadIO m => Trace IO Text -> Ledger.TxIn -> ReaderT SqlBackend m ()
-insertTxIn _tracer (Ledger.TxInUtxo txHash inIndex) = do
-  txId <- fromMaybe (panic $ "insertTxIn: queryTxId failed: " <> textShow txHash)
+insertTxIn :: MonadIO m => Trace IO Text -> DB.TxId -> Ledger.TxIn -> ReaderT SqlBackend m ()
+insertTxIn _tracer txInId (Ledger.TxInUtxo txHash inIndex) = do
+  txOutId <- fromMaybe (panic $ "insertTxIn: queryTxId failed: " <> textShow txHash)
                 <$> DB.queryTxId (unTxHash txHash)
   void $ DB.insertTxIn $
             DB.TxIn
-              { DB.txInTxId = txId
-              , DB.txInIndex = fromIntegral inIndex
+              { DB.txInTxInId = txInId
+              , DB.txInTxOutId = txOutId
+              , DB.txInTxOutIndex = fromIntegral inIndex
               }
 
 -- -----------------------------------------------------------------------------

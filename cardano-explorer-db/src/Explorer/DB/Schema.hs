@@ -54,22 +54,23 @@ share [mkPersist sqlSettings, mkMigrate "migrateExplorerDB"] [persistLowerCase|
     UniqueBlock         hash
 
   Tx
-    hash                ByteString      sqltype=hash32type
-    block               BlockId         -- This type is the primary key for the 'block' table.
-    fee                 Word64          sqltype=lovelace
+    hash                ByteString          sqltype=hash32type
+    block               BlockId             -- This type is the primary key for the 'block' table.
+    fee                 Word64              sqltype=lovelace
     UniqueTx            hash
 
   TxOut
-    txId                TxId            -- This type is the primary key for the 'tx' table.
-    index               Word16          sqltype=txindex
-    address             ByteString      sqltype=hash28type
-    value               Word64          sqltype=lovelace
-    UniqueTxout         txId index      -- The (tx_id, index) pair must be unique.
+    txId                TxId                -- This type is the primary key for the 'tx' table.
+    index               Word16              sqltype=txindex
+    address             ByteString          sqltype=hash28type
+    value               Word64              sqltype=lovelace
+    UniqueTxout         txId index          -- The (tx_id, index) pair must be unique.
 
   TxIn
-    txId                TxId            -- This type is the primary key for the 'tx' table.
-    index               Word16          sqltype=txindex
-    UniqueTxin          txId index      -- The (tx_id, index) pair must be unique.
+    txInId              TxId                -- The transaction where this is used as an input.
+    txOutId             TxId                -- The transaction where this was created as an output.
+    txOutIndex          Word16              sqltype=txindex
+    UniqueTxin          txOutId txOutIndex
 
   |]
 
