@@ -40,7 +40,7 @@ import           Data.Coerce (coerce)
 import qualified Data.ByteArray
 import qualified Data.Text as Text
 
-import           Database.Persist.Sql (SqlBackend)
+import           Database.Persist.Sql (SqlBackend, transactionSave)
 
 import qualified Explorer.DB as DB
 import           Explorer.Node.Insert.Genesis
@@ -74,6 +74,8 @@ insertABOBBoundary tracer blk = do
                       validateGenesisTxs (Ledger.unGenesisHash gh)
                       pure $ genesisToHeaderHash gh
                     Right hh -> pure hh
+      -- Do a transaction around a block insert.
+      transactionSave
       pbid <- fromMaybe (panic $ "insertABOBBoundary: queryBlockId failed: " <> textShow prevHash)
                   <$> DB.queryBlockId (unHeaderHash prevHash)
       void . DB.insertBlock $
@@ -85,6 +87,7 @@ insertABOBBoundary tracer blk = do
                   , DB.blockMerkelRoot = Nothing -- No merkelRoot for a boundary block
                   , DB.blockSize = fromIntegral $ Ledger.boundaryBlockLength blk
                   }
+      transactionSave
 
     hash :: Ledger.HeaderHash
     hash = Ledger.boundaryHashAnnotated blk
@@ -103,6 +106,8 @@ insertABlock tracer blk = do
       pbid <- fromMaybe (panic $ "insertABlock: queryBlockId failed: " <> textShow prevHash)
                   <$> DB.queryBlockId (unHeaderHash prevHash)
 
+      -- Do a transaction around a block insert.
+      transactionSave
       blkId <- fmap both $
                 DB.insertBlock $
                     DB.Block
@@ -115,6 +120,7 @@ insertABlock tracer blk = do
                       }
 
       mapM_ (insertTx tracer blkId) $ blockPayload blk
+      transactionSave
 
     blockNo :: Word64
     blockNo = Ledger.unChainDifficulty . Ledger.headerDifficulty $ Ledger.blockHeader blk

@@ -288,11 +288,11 @@ localInitiatorNetworkApplication Proxy trce pInfoConfig =
 
 getLatestPoints :: IO [Point (ByronBlockOrEBB cfg)]
 getLatestPoints =
-    -- Drop one (the latest) so that we re-insert/check the latest block. This will
-    -- work around issue where the block was inserted, but the explorer was killed before
-    -- the transactions in the block have been inserted.
+    -- Blocks (and the transactions they contain) are inserted within an SQL transaction.
+    -- That means that all the blocks (including their transactions) returned by the query
+    -- have been completely inserted.
     -- TODO: Get the security parameter (2160) from the config.
-    mapMaybe convert . drop 1 <$> DB.runDbNoLogging (DB.queryLatestBlocks 2160)
+    mapMaybe convert <$> DB.runDbNoLogging (DB.queryLatestBlocks 2160)
   where
     convert :: (Word64, ByteString) -> Maybe (Point (ByronBlockOrEBB cfg))
     convert (slot, hashBlob) =
