@@ -24,12 +24,13 @@ import           Control.Monad.Class.MonadTimer (MonadTimer)
 import           Cardano.Binary (Raw)
 
 import           Cardano.BM.Data.Tracer (ToLogObject (toLogObject), nullTracer)
-import           Cardano.BM.Trace (Trace, appendName)
+import           Cardano.BM.Trace (Trace, appendName, logInfo)
 
 import qualified Cardano.Chain.Genesis as Genesis
 import qualified Cardano.Chain.Update as Update
 
 import           Cardano.Crypto (Hash, RequiresNetworkMagic (..), decodeAbstractHash)
+import           Cardano.Crypto.Hashing (AbstractHash (..))
 import qualified Cardano.Node.CLI as Node
 import           Cardano.Prelude hiding (atomically, option, (%))
 import           Cardano.Shell.Configuration.Lib (finaliseCardanoConfiguration)
@@ -45,12 +46,14 @@ import           Cardano.Shell.Types (CardanoEnvironment, CardanoFeature (..),
                     featureShutdown, featureStart, featureType)
 
 import qualified Codec.Serialise as Serialise
+import           Crypto.Hash (Blake2b_256, digestFromByteString)
 
 import qualified Data.ByteString.Lazy as BSL
 import           Data.Functor.Contravariant (contramap)
 import           Data.Reflection (give)
 import qualified Data.Text as Text
 
+import qualified Explorer.DB as DB
 import           Explorer.Node.Insert
 
 import           Network.Socket (SockAddr, AddrInfo, SocketType(Stream), Family(AF_UNIX),
@@ -69,13 +72,15 @@ import           Ouroboros.Consensus.Node.Run.Abstract (RunNode, nodeDecodeBlock
                     nodeDecodeHeaderHash, nodeEncodeBlock, nodeEncodeGenTx, nodeEncodeHeaderHash)
 import           Ouroboros.Consensus.NodeId (CoreNodeId (CoreNodeId))
 import           Ouroboros.Consensus.Protocol (NodeConfig, Protocol(ProtocolRealPBFT))
-import           Ouroboros.Network.Block (Point, decodePoint, encodePoint, StandardHash, genesisPoint)
+import           Ouroboros.Network.Block (Point (..), SlotNo (..), StandardHash,
+                    decodePoint, encodePoint, genesisPoint)
 import           Ouroboros.Network.Mux (AppType (InitiatorApp),
                     OuroborosApplication (OuroborosInitiatorApplication))
 import           Ouroboros.Network.NodeToClient (NodeToClientProtocols (ChainSyncWithBlocksPtcl,
                     LocalTxSubmissionPtcl), NodeToClientVersion (NodeToClientV_1),
                     NodeToClientVersionData (NodeToClientVersionData), connectTo, networkMagic,
                     nodeToClientCodecCBORTerm)
+import qualified Ouroboros.Network.Point as Point
 import           Ouroboros.Network.Protocol.ChainSync.Client (ChainSyncClient (ChainSyncClient),
                     ClientStIdle (SendMsgFindIntersect, SendMsgRequestNext),
                     ClientStIntersect (ClientStIntersect), ClientStNext (ClientStNext),
@@ -94,12 +99,15 @@ import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (LocalTxSubmi
 import           Prelude (String, id)
 
 
+
+
+
 data Peer = Peer SockAddr SockAddr deriving Show
 
 -- | The product type of all command line arguments
 data ExplorerNodeParams = ExplorerNodeParams
   { enpLogging :: !LoggingCLIArguments
-  , cliProtocol :: Node.Protocol
+  , enpProtocol :: Node.Protocol
   , enpCommon :: Node.CommonCLI
   }
 
@@ -211,6 +219,7 @@ runExplorerNodeClient
         (RunNode blk, blk ~ ByronBlockOrEBB cfg)
     => Ouroboros.Consensus.Protocol.Protocol blk -> Trace IO Text -> IO ()
 runExplorerNodeClient ptcl trce = do
+  liftIO $ logInfo trce "Starting node client"
   let
     infoConfig = pInfoConfig $ protocolInfo (NumCoreNodes 7) (CoreNodeId 0) ptcl
 
@@ -267,13 +276,31 @@ localInitiatorNetworkApplication Proxy trce pInfoConfig =
               channel
               (localTxSubmissionClientPeer (txSubmissionClient @(GenTx blk) txv))
 
-          ChainSyncWithBlocksPtcl -> \channel ->
+          ChainSyncWithBlocksPtcl -> \channel -> do
+            liftIO $ logInfo trce "Starting chainSyncClient"
+            latestPoints <- liftIO getLatestPoints
             runPeer
               nullTracer -- TODO
               (localChainSyncCodec @blk pInfoConfig)
               peer
               channel
-              (chainSyncClientPeer (chainSyncClient trce))
+              (chainSyncClientPeer (chainSyncClient trce latestPoints))
+
+getLatestPoints :: IO [Point (ByronBlockOrEBB cfg)]
+getLatestPoints =
+    -- Drop one (the latest) so that we re-insert/check the latest block. This will
+    -- work around issue where the block was inserted, but the explorer was killed before
+    -- the transactions in the block have been inserted.
+    -- TODO: Get the security parameter (2160) from the config.
+    mapMaybe convert . drop 1 <$> DB.runDbNoLogging (DB.queryLatestBlocks 2160)
+  where
+    convert :: (Word64, ByteString) -> Maybe (Point (ByronBlockOrEBB cfg))
+    convert (slot, hashBlob) =
+      fmap (Point . Point.block (SlotNo slot)) (convertHashBlob hashBlob)
+
+    -- in Maybe because the bytestring may not be the right size.
+    convertHashBlob :: ByteString -> Maybe (AbstractHash Blake2b_256 a)
+    convertHashBlob = fmap AbstractHash . digestFromByteString
 
 -- | A 'LocalTxSubmissionClient' that submits transactions reading them from
 -- a 'TMVar'.  A real implementation should use a better synchronisation
@@ -281,7 +308,7 @@ localInitiatorNetworkApplication Proxy trce pInfoConfig =
 -- 'muxLocalInitiatorNetworkApplication' above and never fills it with a tx.
 --
 txSubmissionClient
-  :: forall tx reject m. (Monad    m, MonadSTM m)
+  :: forall tx reject m. (Monad m, MonadSTM m)
   => TMVar m tx -> m (LocalTxSubmissionClient tx reject m Void)
 txSubmissionClient txv = do
     tx <- atomically $ readTMVar txv
@@ -318,15 +345,15 @@ localTxSubmissionCodec =
 --
 chainSyncClient
   :: forall blk m cfg. (MonadTimer m, MonadIO m, StandardHash blk, blk ~ ByronBlockOrEBB cfg)
-  => Trace IO Text -> ChainSyncClient blk (Point blk) m Void
-chainSyncClient trce =
+  => Trace IO Text -> [Point blk] -> ChainSyncClient blk (Point blk) m Void
+chainSyncClient trce latestPoints =
     ChainSyncClient $ pure $
       -- Notify the core node about the our latest points at which we are
       -- synchronised.  This client is not persistent and thus it just
       -- synchronises from the genesis block.  A real implementation should send
       -- a list of points up to a point which is k blocks deep.
       SendMsgFindIntersect
-        [genesisPoint] -- TODO
+        (if null latestPoints then [genesisPoint] else latestPoints)
         ClientStIntersect
           { recvMsgIntersectFound    = \_ _ -> ChainSyncClient (pure clientStIdle)
           , recvMsgIntersectNotFound = \  _ -> ChainSyncClient (pure clientStIdle)
@@ -348,4 +375,3 @@ chainSyncClient trce =
             -- node's chain's tip is 'tip'.
             pure clientStIdle
         }
-
