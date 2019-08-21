@@ -17,6 +17,9 @@ extra-deps:
   - esqueleto-3.0.0
   - generic-monoid-0.1.0.0
   - libsystemd-journal-1.4.4
+  - persistent-2.10.0
+  - persistent-postgresql-2.10.0
+  - persistent-template-2.7.2
   - prometheus-2.1.2
   - pvss-0.2.0
   - tasty-hedgehog-1.0.0.1
@@ -72,12 +75,3 @@ extra-deps:
       - ouroboros-consensus
       - typed-protocols
       - typed-protocols-cbor
-
-  # Keep this until this is merged https://github.com/yesodweb/persistent/pull/950
-  # and a new version is released.
-  - git: https://github.com/input-output-hk/persistent
-    commit: c85c1b3eabd81251beb0e358257a9e97c0e3c888
-    subdirs:
-      - persistent
-      - persistent-postgresql
-      - persistent-template
