@@ -34,7 +34,7 @@ import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import           Data.Text (Text)
 
-import           Database.Persist.Sql (SqlBackend)
+import           Database.Persist.Sql (SqlBackend, withTransaction)
 
 import qualified Explorer.DB as DB
 
@@ -53,23 +53,23 @@ insertGenesisDistribution tracer cfg = do
     logInfo tracer $ "Initial genesis distribution populated."
   where
     insertAction :: MonadIO m => ReaderT SqlBackend m ()
-    insertAction = do
-      -- Insert an 'artificial' Genesis block.
-      bid <- fmap both . DB.insertBlock
-                          $ DB.Block
-                              { DB.blockHash = genesisHash
-                              , DB.blockSlotNo = Nothing
-                              , DB.blockBlockNo = 0
-                              , DB.blockPrevious = Nothing
-                              , DB.blockMerkelRoot = Nothing
-                              , DB.blockSize = 0
-                              }
+    insertAction =
+      withTransaction $ do
+        -- Insert an 'artificial' Genesis block.
+        bid <- fmap both . DB.insertBlock
+                            $ DB.Block
+                                { DB.blockHash = genesisHash
+                                , DB.blockSlotNo = Nothing
+                                , DB.blockBlockNo = 0
+                                , DB.blockPrevious = Nothing
+                                , DB.blockMerkelRoot = Nothing
+                                , DB.blockSize = 0
+                                }
 
-      mapM_ (insertTxOuts bid) $ genesisTxos cfg
+        mapM_ (insertTxOuts bid) $ genesisTxos cfg
 
     genesisHash :: ByteString
     genesisHash = unAbstractHash (Ledger.unGenesisHash $ Ledger.configGenesisHash cfg)
-
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
 validateGenesisTxs :: MonadIO m => Crypto.Hash Raw -> m ()

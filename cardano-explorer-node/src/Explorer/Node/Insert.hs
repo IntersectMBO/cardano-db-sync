@@ -40,13 +40,12 @@ import           Data.Coerce (coerce)
 import qualified Data.ByteArray
 import qualified Data.Text as Text
 
-import           Database.Persist.Sql (SqlBackend, transactionSave)
+import           Database.Persist.Sql (SqlBackend, withTransaction)
 
 import qualified Explorer.DB as DB
 import           Explorer.Node.Insert.Genesis
 
 import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..))
-
 
 insertByronBlockOrEBB :: MonadIO m => Trace IO Text -> ByronBlockOrEBB cfg -> m ()
 insertByronBlockOrEBB tracer blk =
@@ -75,19 +74,19 @@ insertABOBBoundary tracer blk = do
                       pure $ genesisToHeaderHash gh
                     Right hh -> pure hh
       -- Do a transaction around a block insert.
-      when False transactionSave
-      pbid <- fromMaybe (panic $ "insertABOBBoundary: queryBlockId failed: " <> textShow prevHash)
-                  <$> DB.queryBlockId (unHeaderHash prevHash)
-      void . DB.insertBlock $
-                DB.Block
-                  { DB.blockHash = unHeaderHash hash
-                  , DB.blockSlotNo = Nothing -- No slotNo for a boundary block
-                  , DB.blockBlockNo = 0
-                  , DB.blockPrevious = Just pbid
-                  , DB.blockMerkelRoot = Nothing -- No merkelRoot for a boundary block
-                  , DB.blockSize = fromIntegral $ Ledger.boundaryBlockLength blk
-                  }
-      when False transactionSave
+      withTransaction $ do
+        pbid <- fromMaybe (panic $ "insertABOBBoundary: queryBlockId failed: " <> textShow prevHash)
+                    <$> DB.queryBlockId (unHeaderHash prevHash)
+        void . DB.insertBlock $
+                  DB.Block
+                    { DB.blockHash = unHeaderHash hash
+                    , DB.blockSlotNo = Nothing -- No slotNo for a boundary block
+                    , DB.blockBlockNo = 0
+                    , DB.blockPrevious = Just pbid
+                    , DB.blockMerkelRoot = Nothing -- No merkelRoot for a boundary block
+                    , DB.blockSize = fromIntegral $ Ledger.boundaryBlockLength blk
+                    }
+
 
     hash :: Ledger.HeaderHash
     hash = Ledger.boundaryHashAnnotated blk
@@ -107,20 +106,19 @@ insertABlock tracer blk = do
                   <$> DB.queryBlockId (unHeaderHash prevHash)
 
       -- Do a transaction around a block insert.
-      when False transactionSave
-      blkId <- fmap both $
-                DB.insertBlock $
-                    DB.Block
-                      { DB.blockHash = unHeaderHash hash
-                      , DB.blockSlotNo = Just (Ledger.unSlotNumber . Ledger.headerSlot $ Ledger.blockHeader blk)
-                      , DB.blockBlockNo = blockNo
-                      , DB.blockPrevious = Just pbid
-                      , DB.blockMerkelRoot = Just $ unCryptoHash merkelRoot
-                      , DB.blockSize = fromIntegral $ Ledger.blockLength blk
-                      }
+      withTransaction $ do
+        blkId <- fmap both $
+                  DB.insertBlock $
+                      DB.Block
+                        { DB.blockHash = unHeaderHash hash
+                        , DB.blockSlotNo = Just (Ledger.unSlotNumber . Ledger.headerSlot $ Ledger.blockHeader blk)
+                        , DB.blockBlockNo = blockNo
+                        , DB.blockPrevious = Just pbid
+                        , DB.blockMerkelRoot = Just $ unCryptoHash merkelRoot
+                        , DB.blockSize = fromIntegral $ Ledger.blockLength blk
+                        }
 
-      mapM_ (insertTx tracer blkId) $ blockPayload blk
-      when False transactionSave
+        mapM_ (insertTx tracer blkId) $ blockPayload blk
 
     blockNo :: Word64
     blockNo = Ledger.unChainDifficulty . Ledger.headerDifficulty $ Ledger.blockHeader blk

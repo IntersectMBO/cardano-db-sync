@@ -171,3 +171,25 @@ source-repository-package
   location: https://github.com/input-output-hk/ouroboros-network
   tag: da6da94d26e72551e591eabfce99b01c7c70933c
   subdir: typed-protocols-cbor
+
+
+-- Keep these until this is merged https://github.com/yesodweb/persistent/pull/950
+-- and a new version is released.
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/persistent
+  tag: c85c1b3eabd81251beb0e358257a9e97c0e3c888
+  subdir: persistent
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/persistent
+  tag: c85c1b3eabd81251beb0e358257a9e97c0e3c888
+  subdir: persistent-postgresql
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/persistent
+  tag: c85c1b3eabd81251beb0e358257a9e97c0e3c888
+  subdir: persistent-template
