@@ -96,19 +96,11 @@ insertTxOuts blkId (address, value) = do
               , DB.txOutValue = Ledger.unsafeGetLovelace value
               }
 
+-- -----------------------------------------------------------------------------
 
-txHashOfAddress :: Ledger.Address -> Crypto.Hash Ledger.Tx
-txHashOfAddress = coerce . Crypto.hash
-
-unTxHash :: Crypto.Hash Ledger.Tx -> ByteString
-unTxHash = Data.ByteArray.convert
-
--- Put this here until this function goes in cardano-ledger.
-unAddressHash :: Ledger.AddressHash Ledger.Address' -> ByteString
-unAddressHash = Data.ByteArray.convert
-
-unAbstractHash :: Crypto.Hash Raw -> ByteString
-unAbstractHash = Data.ByteArray.convert
+both :: Either a a -> a
+both (Left a) = a
+both (Right a) = a
 
 genesisTxos :: Ledger.Config -> [(Ledger.Address, Ledger.Lovelace)]
 genesisTxos config =
@@ -126,6 +118,15 @@ genesisTxos config =
     nonAvvmBalances =
       Map.toList $ Ledger.unGenesisNonAvvmBalances (Ledger.configNonAvvmBalances config)
 
-both :: Either a a -> a
-both (Left a) = a
-both (Right a) = a
+txHashOfAddress :: Ledger.Address -> Crypto.Hash Ledger.Tx
+txHashOfAddress = coerce . Crypto.hash
+
+unAbstractHash :: Crypto.Hash Raw -> ByteString
+unAbstractHash = Data.ByteArray.convert
+
+-- Put this here until this function goes in cardano-ledger.
+unAddressHash :: Ledger.AddressHash Ledger.Address' -> ByteString
+unAddressHash = Data.ByteArray.convert
+
+unTxHash :: Crypto.Hash Ledger.Tx -> ByteString
+unTxHash = Data.ByteArray.convert

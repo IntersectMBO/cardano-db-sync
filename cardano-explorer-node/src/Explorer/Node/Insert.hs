@@ -97,38 +97,25 @@ insertABlock tracer blk = do
       else DB.runDbNoLogging insertAction
 
     when False $
-      logInfo tracer $ "insertABlock: " <> textShow hash
+      logInfo tracer $ "insertABlock: " <> textShow (blockHash blk)
   where
     insertAction :: MonadIO m => ReaderT SqlBackend m ()
     insertAction = do
-      pbid <- fromMaybe (panic $ "insertABlock: queryBlockId failed: " <> textShow prevHash)
-                  <$> DB.queryBlockId (unHeaderHash prevHash)
+      pbid <- fromMaybe (panic $ "insertABlock: queryBlockId failed: " <> textShow (blockPreviousHash blk))
+                  <$> DB.queryBlockId (unHeaderHash $ blockPreviousHash blk)
 
       blkId <- fmap both $
                 DB.insertBlock $
                     DB.Block
-                      { DB.blockHash = unHeaderHash hash
-                      , DB.blockSlotNo = Just (Ledger.unSlotNumber . Ledger.headerSlot $ Ledger.blockHeader blk)
-                      , DB.blockBlockNo = blockNo
+                      { DB.blockHash = unHeaderHash $ blockHash blk
+                      , DB.blockSlotNo = Just $ slotNumber blk
+                      , DB.blockBlockNo = blockNumber blk
                       , DB.blockPrevious = Just pbid
-                      , DB.blockMerkelRoot = Just $ unCryptoHash merkelRoot
+                      , DB.blockMerkelRoot = Just $ unCryptoHash (blockMerkelRoot blk)
                       , DB.blockSize = fromIntegral $ Ledger.blockLength blk
                       }
 
       mapM_ (insertTx tracer blkId) $ blockPayload blk
-
-    blockNo :: Word64
-    blockNo = Ledger.unChainDifficulty . Ledger.headerDifficulty $ Ledger.blockHeader blk
-
-    prevHash :: Ledger.HeaderHash
-    prevHash = Ledger.headerPrevHash $ Ledger.blockHeader blk
-
-    hash :: Ledger.HeaderHash
-    hash = Ledger.blockHashAnnotated blk
-
-    merkelRoot :: Crypto.AbstractHash Blake2b_256 Raw
-    merkelRoot = Ledger.getMerkleRoot . Ledger.txpRoot . Ledger.recoverTxProof . Ledger.bodyTxPayload $ Ledger.blockBody blk
-
 
 insertTx :: MonadIO m => Trace IO Text -> DB.BlockId -> Ledger.TxAux -> ReaderT SqlBackend m ()
 insertTx tracer blkId tx = do
@@ -192,28 +179,49 @@ calculateTxFee tx = do
       Ledger.unsafeGetLovelace
         <$> Ledger.sumLovelace (map Ledger.txOutValue $ Ledger.txOutputs tx)
 
-genesisToHeaderHash :: Ledger.GenesisHash -> Ledger.HeaderHash
-genesisToHeaderHash = coerce
+-- -----------------------------------------------------------------------------
+
+blockHash :: Ledger.ABlock ByteString -> Ledger.HeaderHash
+blockHash = Ledger.blockHashAnnotated
+
+blockMerkelRoot :: Ledger.ABlock ByteString -> Crypto.AbstractHash Blake2b_256 Raw
+blockMerkelRoot =
+  Ledger.getMerkleRoot . Ledger.txpRoot . Ledger.recoverTxProof
+    . Ledger.bodyTxPayload . Ledger.blockBody
+
+blockNumber :: Ledger.ABlock ByteString -> Word64
+blockNumber =
+  Ledger.unChainDifficulty . Ledger.headerDifficulty . Ledger.blockHeader
 
 blockPayload :: Ledger.ABlock a -> [Ledger.TxAux]
 blockPayload =
   Ledger.unTxPayload . Ledger.bodyTxPayload . Ledger.blockBody
 
-unHeaderHash :: Ledger.HeaderHash -> ByteString
-unHeaderHash = Data.ByteArray.convert
+blockPreviousHash :: Ledger.ABlock a -> Ledger.HeaderHash
+blockPreviousHash = Ledger.headerPrevHash . Ledger.blockHeader
+
+both :: Either a a -> a
+both (Left a) = a
+both (Right a) = a
+
+genesisToHeaderHash :: Ledger.GenesisHash -> Ledger.HeaderHash
+genesisToHeaderHash = coerce
+
+slotNumber :: Ledger.ABlock ByteString -> Word64
+slotNumber =
+  Ledger.unSlotNumber . Ledger.headerSlot . Ledger.blockHeader
+
+textShow :: Show a => a -> Text
+textShow = Text.pack . show
 
 unAddressHash :: Ledger.AddressHash Ledger.Address' -> ByteString
 unAddressHash = Data.ByteArray.convert
+
+unHeaderHash :: Ledger.HeaderHash -> ByteString
+unHeaderHash = Data.ByteArray.convert
 
 unTxHash :: Crypto.Hash Ledger.Tx -> ByteString
 unTxHash = Data.ByteArray.convert
 
 unCryptoHash :: Crypto.Hash Raw -> ByteString
 unCryptoHash = Data.ByteArray.convert
-
-textShow :: Show a => a -> Text
-textShow = Text.pack . show
-
-both :: Either a a -> a
-both (Left a) = a
-both (Right a) = a
