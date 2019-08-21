@@ -11,6 +11,9 @@
         "esqueleto" = (((hackage.esqueleto)."3.0.0").revisions).default;
         "generic-monoid" = (((hackage.generic-monoid)."0.1.0.0").revisions).default;
         "libsystemd-journal" = (((hackage.libsystemd-journal)."1.4.4").revisions).default;
+        "persistent" = (((hackage.persistent)."2.10.0").revisions).default;
+        "persistent-postgresql" = (((hackage.persistent-postgresql)."2.10.0").revisions).default;
+        "persistent-template" = (((hackage.persistent-template)."2.7.2").revisions).default;
         "prometheus" = (((hackage.prometheus)."2.1.2").revisions).default;
         "pvss" = (((hackage.pvss)."0.2.0").revisions).default;
         "tasty-hedgehog" = (((hackage.tasty-hedgehog)."1.0.0.1").revisions).default;
@@ -48,9 +51,6 @@
         ouroboros-consensus = ./ouroboros-consensus.nix;
         typed-protocols = ./typed-protocols.nix;
         typed-protocols-cbor = ./typed-protocols-cbor.nix;
-        persistent = ./persistent.nix;
-        persistent-postgresql = ./persistent-postgresql.nix;
-        persistent-template = ./persistent-template.nix;
         cardano-crypto = ./cardano-crypto.nix;
         };
       compiler.version = "8.6.5";
