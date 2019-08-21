@@ -34,7 +34,7 @@ import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import           Data.Text (Text)
 
-import           Database.Persist.Sql (SqlBackend, withTransaction)
+import           Database.Persist.Sql (SqlBackend)
 
 import qualified Explorer.DB as DB
 
@@ -53,8 +53,7 @@ insertGenesisDistribution tracer cfg = do
     logInfo tracer $ "Initial genesis distribution populated."
   where
     insertAction :: MonadIO m => ReaderT SqlBackend m ()
-    insertAction =
-      withTransaction $ do
+    insertAction = do
         -- Insert an 'artificial' Genesis block.
         bid <- fmap both . DB.insertBlock
                             $ DB.Block

@@ -15,7 +15,7 @@ import           Cardano.BM.Trace (Trace)
 
 import           Control.Monad.Logger (LogLevel (..), LogSource, LoggingT, NoLoggingT,
                     defaultLogStr, runLoggingT, runNoLoggingT, runStdoutLoggingT)
-import           Control.Monad.Trans.Reader (ReaderT, runReaderT)
+import           Control.Monad.Trans.Reader (ReaderT)
 import           Control.Tracer (traceWith)
 
 import qualified Data.ByteString.Char8 as BS
@@ -23,7 +23,7 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import           Data.Text (Text)
 
 import           Database.Persist.Postgresql (withPostgresqlConn)
-import           Database.Persist.Sql (SqlBackend)
+import           Database.Persist.Sql (SqlBackend, runSqlConn)
 
 import           Explorer.DB.PGConfig
 
@@ -39,7 +39,9 @@ runDbHandleLogger logHandle dbAction = do
     pgconf <- readPGPassFileEnv
     runHandleLoggerT .
       withPostgresqlConn (toConnectionString pgconf) $ \backend ->
-        runReaderT dbAction backend
+        -- The 'runSqlConn' function starts a transaction, runs the 'dbAction'
+        -- and then commits the transaction.
+        runSqlConn dbAction backend
   where
     runHandleLoggerT :: LoggingT m a -> m a
     runHandleLoggerT action =
@@ -56,7 +58,7 @@ runDbIohkLogging tracer dbAction = do
     pgconf <- readPGPassFileEnv
     runIohkLogging .
       withPostgresqlConn (toConnectionString pgconf) $ \backend ->
-        runReaderT dbAction backend
+        runSqlConn dbAction backend
   where
     runIohkLogging :: LoggingT m a -> m a
     runIohkLogging action =
@@ -84,7 +86,7 @@ runDbNoLogging action = do
   pgconfig <- readPGPassFileEnv
   runNoLoggingT .
     withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
-      runReaderT action backend
+      runSqlConn action backend
 
 -- | Run a DB action with stdout logging. Mainly for debugging.
 runDbStdoutLogging :: ReaderT SqlBackend (LoggingT IO) b -> IO b
@@ -92,4 +94,4 @@ runDbStdoutLogging action = do
   pgconfig <- readPGPassFileEnv
   runStdoutLoggingT .
     withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
-      runReaderT action backend
+      runSqlConn action backend
