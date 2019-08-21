@@ -75,7 +75,7 @@ insertABOBBoundary tracer blk = do
                       pure $ genesisToHeaderHash gh
                     Right hh -> pure hh
       -- Do a transaction around a block insert.
-      transactionSave
+      when False transactionSave
       pbid <- fromMaybe (panic $ "insertABOBBoundary: queryBlockId failed: " <> textShow prevHash)
                   <$> DB.queryBlockId (unHeaderHash prevHash)
       void . DB.insertBlock $
@@ -87,7 +87,7 @@ insertABOBBoundary tracer blk = do
                   , DB.blockMerkelRoot = Nothing -- No merkelRoot for a boundary block
                   , DB.blockSize = fromIntegral $ Ledger.boundaryBlockLength blk
                   }
-      transactionSave
+      when False transactionSave
 
     hash :: Ledger.HeaderHash
     hash = Ledger.boundaryHashAnnotated blk
@@ -107,7 +107,7 @@ insertABlock tracer blk = do
                   <$> DB.queryBlockId (unHeaderHash prevHash)
 
       -- Do a transaction around a block insert.
-      transactionSave
+      when False transactionSave
       blkId <- fmap both $
                 DB.insertBlock $
                     DB.Block
@@ -120,7 +120,7 @@ insertABlock tracer blk = do
                       }
 
       mapM_ (insertTx tracer blkId) $ blockPayload blk
-      transactionSave
+      when False transactionSave
 
     blockNo :: Word64
     blockNo = Ledger.unChainDifficulty . Ledger.headerDifficulty $ Ledger.blockHeader blk
