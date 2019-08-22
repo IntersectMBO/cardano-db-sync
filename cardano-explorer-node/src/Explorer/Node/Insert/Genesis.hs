@@ -11,8 +11,8 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Explorer.Node.Insert.Genesis
-  ( insertGenesisDistribution
-  , validateGenesisTxs
+  ( insertValidateGenesisDistribution
+  , validateGenesisDistribution
   ) where
 
 import           Cardano.Prelude
@@ -33,6 +33,7 @@ import qualified Data.ByteArray
 import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import           Data.Text (Text)
+import qualified Data.Text as Text
 
 import           Database.Persist.Sql (SqlBackend)
 
@@ -41,8 +42,8 @@ import qualified Explorer.DB as DB
 
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.
-insertGenesisDistribution :: Trace IO Text -> Ledger.Config -> IO ()
-insertGenesisDistribution tracer cfg = do
+insertValidateGenesisDistribution :: Trace IO Text -> Ledger.Config -> IO ()
+insertValidateGenesisDistribution tracer cfg = do
     -- TODO: This is idempotent, but probably better to check if its already been done
     -- and validate if it has.
     -- This is how logging is turned on and off.
@@ -57,7 +58,7 @@ insertGenesisDistribution tracer cfg = do
         -- Insert an 'artificial' Genesis block.
         bid <- fmap both . DB.insertBlock
                             $ DB.Block
-                                { DB.blockHash = genesisHash
+                                { DB.blockHash = configGenesisHash cfg
                                 , DB.blockSlotNo = Nothing
                                 , DB.blockBlockNo = 0
                                 , DB.blockPrevious = Nothing
@@ -67,14 +68,34 @@ insertGenesisDistribution tracer cfg = do
 
         mapM_ (insertTxOuts bid) $ genesisTxos cfg
 
-    genesisHash :: ByteString
-    genesisHash = unAbstractHash (Ledger.unGenesisHash $ Ledger.configGenesisHash cfg)
-
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
-validateGenesisTxs :: MonadIO m => Crypto.Hash Raw -> m ()
-validateGenesisTxs _gh =
-  -- TODO: Need to write a query and then check the result of the query.
-  pure ()
+validateGenesisDistribution :: Trace IO Text -> Ledger.Config -> IO ()
+validateGenesisDistribution tracer cfg =
+    if False
+      then DB.runDbIohkLogging tracer validateAction
+      else DB.runDbNoLogging validateAction
+  where
+    validateAction :: MonadIO m => ReaderT SqlBackend m ()
+    validateAction = do
+      mbid <- DB.queryBlockId $ configGenesisHash cfg
+      case mbid of
+        Nothing -> panic $ "validateGenesisDistribution: Not able to find genesis hash: "
+                            <> textShow (configGenesisHash cfg)
+        Just bid -> validateGenesisBlock bid
+
+    -- Not really a block, but all the genesis distribution need to be associated with
+    -- an pseudo block.
+    validateGenesisBlock :: MonadIO m => DB.BlockId -> ReaderT SqlBackend m ()
+    validateGenesisBlock bid = do
+      txCount <- DB.queryBlockTxCount bid
+      let expectedTxCount = fromIntegral $length (genesisTxos cfg)
+      when (txCount /= expectedTxCount) $
+        panic $ Text.concat
+                [ "validateGenesisDistribution: Expected initial block to have "
+                , textShow expectedTxCount
+                , " but got "
+                , textShow txCount
+                ]
 
 -- -----------------------------------------------------------------------------
 
@@ -102,6 +123,10 @@ both :: Either a a -> a
 both (Left a) = a
 both (Right a) = a
 
+configGenesisHash :: Ledger.Config -> ByteString
+configGenesisHash =
+  unAbstractHash . Ledger.unGenesisHash . Ledger.configGenesisHash
+
 genesisTxos :: Ledger.Config -> [(Ledger.Address, Ledger.Lovelace)]
 genesisTxos config =
     avvmBalances <> nonAvvmBalances
@@ -117,6 +142,9 @@ genesisTxos config =
     nonAvvmBalances :: [(Ledger.Address, Ledger.Lovelace)]
     nonAvvmBalances =
       Map.toList $ Ledger.unGenesisNonAvvmBalances (Ledger.configNonAvvmBalances config)
+
+textShow :: Show a => a -> Text
+textShow = Text.pack . show
 
 txHashOfAddress :: Ledger.Address -> Crypto.Hash Ledger.Tx
 txHashOfAddress = coerce . Crypto.hash
