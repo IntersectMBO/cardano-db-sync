@@ -1,9 +1,9 @@
 import           Hedgehog.Main (defaultMain)
 
-import qualified Test.Explorer.DB.Migration
+import qualified Test.Property.Explorer.DB.Migration
 
 main :: IO ()
 main =
   defaultMain
-    [ Test.Explorer.DB.Migration.tests
+    [ Test.Property.Explorer.DB.Migration.tests
     ]

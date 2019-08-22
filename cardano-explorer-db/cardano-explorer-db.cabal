@@ -98,7 +98,7 @@ test-suite test
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
 
-  other-modules:        Test.Explorer.DB.Migration
+  other-modules:        Test.Property.Explorer.DB.Migration
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , cardano-explorer-db
@@ -109,6 +109,10 @@ test-suite test-db
   type:                 exitcode-stdio-1.0
   main-is:              test-db.hs
   hs-source-dirs:       test
+
+  other-modules:        Test.IO.Explorer.DB.Insert
+                        Test.IO.Explorer.DB.Migration
+                        Test.IO.Explorer.DB.TotalSupply
 
   ghc-options:          -Wall
                         -Wcompat
