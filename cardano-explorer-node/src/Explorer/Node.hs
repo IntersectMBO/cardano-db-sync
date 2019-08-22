@@ -181,7 +181,9 @@ runClient trce cc = do
 
     gc <- readGenesisConfig cc genHash
 
-    insertGenesisDistribution trce gc
+    -- If the DB is empty it will be inserted, otherwise it will be validated (to make
+    -- sure we are on the right chain).
+    insertValidateGenesisDistribution trce gc
 
     give (Genesis.configEpochSlots gc)
           $ give (Genesis.gdProtocolMagicId $ Genesis.configGenesisData gc)
@@ -226,7 +228,7 @@ runExplorerNodeClient ptcl trce = do
     path = localSocketFilePath (CoreNodeId 42)
     addr = localSocketAddrInfo path
 
-  print path
+  logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> Text.pack (show path)
   connectTo
     nullTracer
     Peer

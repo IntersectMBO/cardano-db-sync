@@ -4,6 +4,7 @@
 module Explorer.DB.Query
   ( queryBlock
   , queryBlockCount
+  , queryBlockTxCount
   , queryBlockId
   , queryLatestBlocks
   , queryTxId
@@ -54,6 +55,14 @@ queryBlockId hash = do
             pure $ blk ^. BlockId
   pure $ fmap unValue (listToMaybe res)
 
+-- | Get the number of transactions in the specified block.
+queryBlockTxCount :: MonadIO m => BlockId -> ReaderT SqlBackend m Word64
+queryBlockTxCount blkId = do
+  res <- select . from $ \ tx -> do
+            where_ (tx ^. TxBlock ==. val blkId)
+            pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
+
 -- | Get the last N blocks.
 -- This assumes that the block are inserted into the datebase from oldest to
 -- newest which is not exlicitly enforced, but should arise automatically
@@ -83,13 +92,15 @@ queryTxId hash = do
 -- | Give a tx hash, and an index for the specific outut, return the TxOut value.
 queryTxOutValue :: MonadIO m => (ByteString, Word16) -> ReaderT SqlBackend m (Maybe Word64)
 queryTxOutValue (hash, index) = do
-  res <- select . from $ \ (tx `InnerJoin` txo) -> do
-            on (tx ^. TxId ==. txo ^. TxOutTxId)
-            where_ (txo ^. TxOutIndex ==. val index
-                    &&. tx ^. TxHash ==. val hash
-                    )
-            pure $ txo ^. TxOutValue
+  res <- select . from $ \ (tx `InnerJoin` txOut) -> do
+            on (tx ^. TxId ==. txOut ^. TxOutTxId)
+            where_ (txOut ^. TxOutIndex ==. val index
+                     &&. tx ^. TxHash ==. val hash
+                     )
+            pure $ txOut ^. TxOutValue
   pure $ fmap unValue (listToMaybe res)
+
+
 
 -- | Count the number of rows that match the select with the supplied predicate.
 querySelectCount :: (MonadIO m, From table) => (table -> SqlQuery ()) -> ReaderT SqlBackend m Word

@@ -12,7 +12,7 @@
 
 module Explorer.Node.Insert
   ( insertByronBlockOrEBB
-  , insertGenesisDistribution
+  , insertValidateGenesisDistribution
   ) where
 
 import           Cardano.Prelude
@@ -68,11 +68,9 @@ insertABOBBoundary tracer blk = do
   where
     insertAction :: MonadIO m => ReaderT SqlBackend m ()
     insertAction = do
-      prevHash <- case Ledger.boundaryPrevHash (Ledger.boundaryHeader blk) of
-                    Left gh -> do
-                      validateGenesisTxs (Ledger.unGenesisHash gh)
-                      pure $ genesisToHeaderHash gh
-                    Right hh -> pure hh
+      let prevHash = case Ledger.boundaryPrevHash (Ledger.boundaryHeader blk) of
+                        Left gh -> genesisToHeaderHash gh
+                        Right hh -> hh
       -- Do a transaction around a block insert.
       pbid <- fromMaybe (panic $ "insertABOBBoundary: queryBlockId failed: " <> textShow prevHash)
                   <$> DB.queryBlockId (unHeaderHash prevHash)
@@ -85,7 +83,6 @@ insertABOBBoundary tracer blk = do
                   , DB.blockMerkelRoot = Nothing -- No merkelRoot for a boundary block
                   , DB.blockSize = fromIntegral $ Ledger.boundaryBlockLength blk
                   }
-
 
     hash :: Ledger.HeaderHash
     hash = Ledger.boundaryHashAnnotated blk
@@ -168,6 +165,7 @@ calculateTxFee tx = do
           then panic $ "calculateTxFee: " <> textShow (outval, inval)
           else pure $ inval - outval
   where
+    -- [(Hash of tx, index within tx)]
     inputs :: [(ByteString, Word16)]
     inputs = map unpack $ toList (Ledger.txInputs tx)
 
