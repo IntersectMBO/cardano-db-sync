@@ -4,9 +4,11 @@
 module Explorer.DB.Query
   ( queryBlock
   , queryBlockCount
-  , queryBlockTxCount
   , queryBlockId
+  , queryBlockTxCount
   , queryLatestBlocks
+  , querySelectCount
+  , queryTotalSupply
   , queryTxId
   , queryTxOutValue
   , querySelectCount
@@ -21,10 +23,10 @@ import           Data.ByteString.Char8 (ByteString)
 import           Data.Maybe (catMaybes)
 import           Data.Word (Word16, Word64)
 
-import           Database.Esqueleto (From, InnerJoin (..), SqlQuery, Value,
-                    (^.), (==.), (&&.),
-                    countRows, desc, entityKey, entityVal, from, limit, on, orderBy, select,
-                    unValue, val, where_)
+import           Database.Esqueleto (From, InnerJoin (..), LeftOuterJoin (..), SqlQuery, Value,
+                    (^.), (?.), (==.), (&&.),
+                    countRows, desc, entityKey, entityVal, from, just, limit, nothing, on, orderBy,
+                    select, sum_, unValue, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
 import           Explorer.DB.Schema
@@ -96,8 +98,8 @@ queryTxOutValue (hash, index) = do
   res <- select . from $ \ (tx `InnerJoin` txOut) -> do
             on (tx ^. TxId ==. txOut ^. TxOutTxId)
             where_ (txOut ^. TxOutIndex ==. val index
-                     &&. tx ^. TxHash ==. val hash
-                     )
+                    &&. tx ^. TxHash ==. val hash
+                    )
             pure $ txOut ^. TxOutValue
   pure $ fmap unValue (listToMaybe res)
 
@@ -110,6 +112,24 @@ querySelectCount predicate = do
             predicate x
             pure countRows
   pure $ maybe 0 unValue (listToMaybe xs)
+
+-- | Get the current total supply of Lovelace.
+queryTotalSupply :: MonadIO m => ReaderT SqlBackend m Word64
+queryTotalSupply = do
+    res <- select . from $ \ (txOut `LeftOuterJoin` txIn) -> do
+              -- On a 'LeftOuterJoin', the 'txIn' values may be NULL.
+              on (just (txOut ^. TxOutTxId) ==. txIn ?. TxInTxOutId)
+              where_ (txIn ?. TxInTxOutIndex ==. nothing)
+              pure $ sum_ (txOut ^. TxOutValue)
+    pure $ unWibble (listToMaybe res)
+  where
+    -- Unfortunately the 'sum_' operation above returns a 'PersistRational' so we need
+    -- to unWibble it.
+    unWibble :: Maybe (Value (Maybe Double)) -> Word64
+    unWibble mvm =
+      case fmap unValue mvm of
+        Just (Just x) -> floor x
+        _ -> 0
 
 -- -----------------------------------------------------------------------------
 
