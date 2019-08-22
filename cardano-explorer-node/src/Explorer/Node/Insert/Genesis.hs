@@ -68,6 +68,9 @@ insertValidateGenesisDistribution tracer cfg = do
 
         mapM_ (insertTxOuts bid) $ genesisTxos cfg
 
+        supply <- DB.queryTotalSupply
+        liftIO $ logInfo tracer ("Total genesis supply of lovelace: " <> textShow supply)
+
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
 validateGenesisDistribution :: Trace IO Text -> Ledger.Config -> IO ()
 validateGenesisDistribution tracer cfg =
@@ -96,6 +99,17 @@ validateGenesisDistribution tracer cfg =
                 , " but got "
                 , textShow txCount
                 ]
+      totalSupply <- DB.queryTotalSupply
+      case configGenesisSupply cfg of
+        Left err -> panic $ "validateGenesisDistribution: " <> textShow err
+        Right expectedSupply ->
+          when (expectedSupply /= totalSupply) $
+            panic $ Text.concat
+                    [ "validateGenesisDistribution: Expected total supply to be "
+                    , textShow expectedSupply
+                    , " but got "
+                    , textShow totalSupply
+                    ]
 
 -- -----------------------------------------------------------------------------
 
@@ -126,6 +140,10 @@ both (Right a) = a
 configGenesisHash :: Ledger.Config -> ByteString
 configGenesisHash =
   unAbstractHash . Ledger.unGenesisHash . Ledger.configGenesisHash
+
+configGenesisSupply :: Ledger.Config -> Either Ledger.LovelaceError Word64
+configGenesisSupply =
+  fmap Ledger.unsafeGetLovelace . Ledger.sumLovelace . map snd . genesisTxos
 
 genesisTxos :: Ledger.Config -> [(Ledger.Address, Ledger.Lovelace)]
 genesisTxos config =

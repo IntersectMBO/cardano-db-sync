@@ -83,6 +83,10 @@ insertABOBBoundary tracer blk = do
                   , DB.blockMerkelRoot = Nothing -- No merkelRoot for a boundary block
                   , DB.blockSize = fromIntegral $ Ledger.boundaryBlockLength blk
                   }
+      supply <- DB.queryTotalSupply
+      liftIO $ logInfo tracer ("Total supply in lovelace " <> textShow supply)
+      when (supply == 0 || supply > 31112484745000000) $
+        panic "Total supply is screwed up."
 
     hash :: Ledger.HeaderHash
     hash = Ledger.boundaryHashAnnotated blk
