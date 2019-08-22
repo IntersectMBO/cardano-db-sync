@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Test.Explorer.DB.Migration
+module Test.Property.Explorer.DB.Migration
   ( genMigrationVersion
   , tests
   ) where
