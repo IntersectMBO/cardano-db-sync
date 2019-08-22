@@ -2,7 +2,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Explorer.DB.Query
-  ( queryBlockCount
+  ( queryBlock
+  , queryBlockCount
   , queryBlockId
   , queryLatestBlocks
   , queryTxId
@@ -20,7 +21,7 @@ import           Data.Word (Word16, Word64)
 
 import           Database.Esqueleto (From, InnerJoin (..), SqlQuery, Value,
                     (^.), (==.), (&&.),
-                    countRows, desc, entityKey, from, limit, on, orderBy, select,
+                    countRows, desc, entityKey, entityVal, from, limit, on, orderBy, select,
                     unValue, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
@@ -29,6 +30,14 @@ import           Explorer.DB.Schema
 -- If you squint, these Esqueleto queries almost look like SQL queries.
 
 
+
+-- | Get the 'Block' associated with the given hash.
+queryBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe Block)
+queryBlock hash = do
+  res <- select . from $ \ blk -> do
+            where_ (blk ^. BlockHash ==. val hash)
+            pure blk
+  pure $ fmap entityVal (listToMaybe res)
 
 -- | Count the number of blocks in the Block table.
 queryBlockCount :: (MonadIO m, From Block) => ReaderT SqlBackend m Word
@@ -42,8 +51,8 @@ queryBlockId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe BlockId)
 queryBlockId hash = do
   res <- select . from $ \ blk -> do
             where_ (blk ^. BlockHash ==. val hash)
-            pure blk
-  pure $ fmap entityKey (listToMaybe res)
+            pure $ blk ^. BlockId
+  pure $ fmap unValue (listToMaybe res)
 
 -- | Get the last N blocks.
 -- This assumes that the block are inserted into the datebase from oldest to

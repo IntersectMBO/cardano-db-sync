@@ -8,6 +8,7 @@ module Explorer.DB
   , TxOut (..)
   ) where
 
+import           Explorer.DB.Delete as X
 import           Explorer.DB.Insert as X
 import           Explorer.DB.Migration as X
 import           Explorer.DB.Migration.Version as X

@@ -2,8 +2,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Explorer.DB.Insert
-  ( deleteBlock
-  , insertBlock
+  ( insertBlock
   , insertTx
   , insertTxIn
   , insertTxOut
@@ -18,19 +17,11 @@ import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Database.Persist.Class (AtLeastOneUniqueKey, Key, PersistEntityBackend,
                     getByValue, insert)
-import           Database.Persist.Sql (SqlBackend, (==.), delete, selectList)
+import           Database.Persist.Sql (SqlBackend)
 import           Database.Persist.Types (entityKey)
 
 import           Explorer.DB.Schema
 
-
--- | Delete a block if it exists. Returns 'True' if it did exist and has been
--- deleted and 'False' if it did not exist.
-deleteBlock :: MonadIO m => Block -> ReaderT SqlBackend m Bool
-deleteBlock block = do
-  keys <- selectList [ BlockHash ==. blockHash block ] []
-  mapM_ (delete. entityKey) keys
-  pure $ not (null keys)
 
 insertBlock :: MonadIO m => Block -> ReaderT SqlBackend m (Either BlockId BlockId)
 insertBlock = insertByReturnKeyE
