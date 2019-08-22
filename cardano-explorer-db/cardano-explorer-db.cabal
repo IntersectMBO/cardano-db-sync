@@ -31,7 +31,8 @@ library
 
   exposed-modules:      Explorer.DB
 
-  other-modules:        Explorer.DB.Insert
+  other-modules:        Explorer.DB.Delete
+                        Explorer.DB.Insert
                         Explorer.DB.PGConfig
                         Explorer.DB.Migration
                         Explorer.DB.Migration.Haskell
