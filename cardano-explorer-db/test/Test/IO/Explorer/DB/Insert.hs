@@ -8,11 +8,10 @@ import           Control.Monad.IO.Class (liftIO)
 
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
-import           Data.Either (isLeft, isRight)
 
 import           Explorer.DB
 
-import           Test.HUnit.Base (assertBool, assertEqual, assertString)
+import           Test.HUnit.Base (assertBool)
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (testCase)
 
@@ -31,13 +30,9 @@ insertZeroTest =
     void $ deleteBlock blockZero
     -- Insert the same block twice. The first should be successful (resulting
     -- in a 'Right') and the second should return the same value in a 'Left'.
+    bid0 <- insertBlock blockZero
     bid1 <- insertBlock blockZero
-    liftIO $ assertBool "Should be Right" (isRight bid1)
-    bid2 <- insertBlock blockZero
-    liftIO $ assertBool "Should be Left" (isLeft bid2)
-    liftIO $ case (bid1, bid2) of
-                (Right a, Left b) -> assertEqual (show a ++ " /= " ++ show b) a b
-                _ -> assertString ("This is wrong: " ++ show (bid1, bid2))
+    liftIO $ assertBool (show bid0 ++ " /= " ++ show bid1) (bid0 == bid1)
 
 
 insertFirstTest :: IO ()
@@ -45,11 +40,10 @@ insertFirstTest =
   runDbNoLogging $ do
     -- Delete the block if it exists.
     void $ deleteBlock blockOne
-    -- Insert the same block twice. The first should be successful (resulting
-    -- in a 'Right') and the second should return the same value in a 'Left'.
-    bid1 <- queryBlockId (blockHash blockZero)
-    bid2 <- insertBlock $ blockOne { blockPrevious = bid1 }
-    liftIO $ assertBool "Should be Right" (isRight bid2)
+    -- Insert the same block twice.
+    bid0 <- insertBlock blockZero
+    bid1 <- insertBlock $ blockOne { blockPrevious = Just bid0 }
+    liftIO $ assertBool (show bid0 ++ " == " ++ show bid1) (bid0 /= bid1)
 
 
 blockZero :: Block

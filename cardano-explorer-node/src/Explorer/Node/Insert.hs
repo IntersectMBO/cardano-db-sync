@@ -108,8 +108,7 @@ insertABlock tracer blk = do
       pbid <- fromMaybe (panic $ "insertABlock: queryBlockId failed: " <> textShow (blockPreviousHash blk))
                   <$> DB.queryBlockId (unHeaderHash $ blockPreviousHash blk)
 
-      blkId <- fmap both $
-                DB.insertBlock $
+      blkId <- DB.insertBlock $
                     DB.Block
                       { DB.blockHash = unHeaderHash $ blockHash blk
                       , DB.blockSlotNo = Just $ slotNumber blk
@@ -125,12 +124,12 @@ insertTx :: MonadIO m => Trace IO Text -> DB.BlockId -> Ledger.TxAux -> ReaderT 
 insertTx tracer blkId tx = do
     let txHash = Crypto.hash $ Ledger.taTx tx
     fee <- calculateTxFee $ Ledger.taTx tx
-    txId <- fmap both $ DB.insertTx $
-                            DB.Tx
-                              { DB.txHash = unTxHash txHash
-                              , DB.txBlock = blkId
-                              , DB.txFee = fee
-                              }
+    txId <- DB.insertTx $
+                DB.Tx
+                  { DB.txHash = unTxHash txHash
+                  , DB.txBlock = blkId
+                  , DB.txFee = fee
+                  }
 
     -- Insert outputs for a transaction before inputs in case the inputs for this transaction
     -- references the output (noit sure this can even happen).
@@ -207,10 +206,6 @@ blockPayload =
 
 blockPreviousHash :: Ledger.ABlock a -> Ledger.HeaderHash
 blockPreviousHash = Ledger.headerPrevHash . Ledger.blockHeader
-
-both :: Either a a -> a
-both (Left a) = a
-both (Right a) = a
 
 genesisToHeaderHash :: Ledger.GenesisHash -> Ledger.HeaderHash
 genesisToHeaderHash = coerce
