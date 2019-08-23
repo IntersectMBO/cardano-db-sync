@@ -84,7 +84,10 @@ insertABOBBoundary tracer blk = do
                   , DB.blockSize = fromIntegral $ Ledger.boundaryBlockLength blk
                   }
       supply <- DB.queryTotalSupply
-      liftIO $ logInfo tracer ("Total supply in lovelace " <> textShow supply)
+      liftIO $ logInfo tracer $ Text.concat
+                    [ "Epoch ", textShow (boundaryEpochNumber blk)
+                    , " : total supply in lovelace ", textShow supply
+                    ]
       when (supply == 0 || supply > 31112484745000000) $
         panic "Total supply is screwed up."
 
@@ -190,6 +193,9 @@ blockMerkelRoot :: Ledger.ABlock ByteString -> Crypto.AbstractHash Blake2b_256 R
 blockMerkelRoot =
   Ledger.getMerkleRoot . Ledger.txpRoot . Ledger.recoverTxProof
     . Ledger.bodyTxPayload . Ledger.blockBody
+
+boundaryEpochNumber :: Ledger.ABoundaryBlock ByteString -> Word64
+boundaryEpochNumber = Ledger.boundaryEpoch . Ledger.boundaryHeader
 
 blockNumber :: Ledger.ABlock ByteString -> Word64
 blockNumber =

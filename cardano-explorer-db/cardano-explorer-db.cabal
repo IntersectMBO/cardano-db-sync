@@ -127,5 +127,7 @@ test-suite test-db
                       , bytestring
                       , cardano-explorer-db
                       , HUnit
+                      , persistent
                       , tasty
                       , tasty-hunit
+                      , transformers

@@ -23,9 +23,9 @@ import           Data.ByteString.Char8 (ByteString)
 import           Data.Maybe (catMaybes)
 import           Data.Word (Word16, Word64)
 
-import           Database.Esqueleto (From, InnerJoin (..), LeftOuterJoin (..), SqlQuery, Value,
-                    (^.), (?.), (==.), (&&.),
-                    countRows, desc, entityKey, entityVal, from, just, limit, nothing, on, orderBy,
+import           Database.Esqueleto (Entity (..), From, InnerJoin (..), SqlExpr, SqlQuery, Value,
+                    (^.), (==.), (&&.),
+                    countRows, desc, entityKey, entityVal, from, limit, notExists, on, orderBy,
                     select, sum_, unValue, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
@@ -44,9 +44,11 @@ queryBlock hash = do
   pure $ fmap entityVal (listToMaybe res)
 
 -- | Count the number of blocks in the Block table.
-queryBlockCount :: (MonadIO m, From Block) => ReaderT SqlBackend m Word
+queryBlockCount :: MonadIO m => ReaderT SqlBackend m Word
 queryBlockCount = do
-  res <- select . from $ \ (_ :: Block) ->
+  res <- select . from $ \ blk -> do
+            -- Stupid where_ condition to force evaluation of a 'From' constraint.
+            where_ (blk ^. BlockBlockNo ==. blk ^.BlockBlockNo)
             pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
@@ -116,13 +118,12 @@ querySelectCount predicate = do
 -- | Get the current total supply of Lovelace.
 queryTotalSupply :: MonadIO m => ReaderT SqlBackend m Word64
 queryTotalSupply = do
-    res <- select . from $ \ (txOut `LeftOuterJoin` txIn) -> do
-              -- On a 'LeftOuterJoin', the 'txIn' values may be NULL.
-              on (just (txOut ^. TxOutTxId) ==. txIn ?. TxInTxOutId)
-              where_ (txIn ?. TxInTxOutIndex ==. nothing)
-              pure $ sum_ (txOut ^. TxOutValue)
+    res <- select . from $ \ txOut -> do
+                txOutUnspent txOut
+                pure $ sum_ (txOut ^. TxOutValue)
     pure $ unWibble (listToMaybe res)
   where
+
     -- Unfortunately the 'sum_' operation above returns a 'PersistRational' so we need
     -- to unWibble it.
     unWibble :: Maybe (Value (Maybe Double)) -> Word64
@@ -130,6 +131,17 @@ queryTotalSupply = do
       case fmap unValue mvm of
         Just (Just x) -> floor x
         _ -> 0
+
+-- -----------------------------------------------------------------------------
+-- SqlQuery predicates
+
+-- A predicate that filters out spent 'TxOut' entries.
+txOutUnspent :: SqlExpr (Entity TxOut) -> SqlQuery ()
+txOutUnspent txOut =
+  where_ $ notExists $ from $ \ txIn -> do
+      where_ (txOut ^. TxOutTxId ==. txIn ^. TxInTxOutId
+              &&. txOut ^. TxOutIndex ==. txIn ^. TxInTxOutIndex
+              )
 
 -- -----------------------------------------------------------------------------
 

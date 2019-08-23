@@ -64,8 +64,10 @@
             (hsPkgs.bytestring)
             (hsPkgs.cardano-explorer-db)
             (hsPkgs.HUnit)
+            (hsPkgs.persistent)
             (hsPkgs.tasty)
             (hsPkgs.tasty-hunit)
+            (hsPkgs.transformers)
             ];
           };
         };

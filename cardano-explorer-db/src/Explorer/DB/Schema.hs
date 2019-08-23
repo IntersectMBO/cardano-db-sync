@@ -17,8 +17,8 @@ module Explorer.DB.Schema where
 import Data.ByteString.Char8 (ByteString)
 import Data.Word (Word16, Word64)
 
-import Database.Persist.TH (mkMigrate, mkPersist, onlyUniqueP, persistLowerCase, requireUniquesP, share, sqlSettings)
-
+import Database.Persist.TH (mkDeleteCascade, mkMigrate, mkPersist, onlyUniqueP, persistLowerCase,
+            requireUniquesP, share, sqlSettings)
 
 -- In the schema definition we need to match Haskell types with with the
 -- custom type defined in PostgreSQL (via 'DOMAIN' statements). For the
@@ -28,7 +28,12 @@ import Database.Persist.TH (mkMigrate, mkPersist, onlyUniqueP, persistLowerCase,
 -- We use camelCase here in the Haskell schema definition and 'persistLowerCase'
 -- specifies that all the table and column names are converted to lower snake case.
 
-share [mkPersist sqlSettings, mkMigrate "migrateExplorerDB"] [persistLowerCase|
+share
+  [ mkPersist sqlSettings
+  , mkDeleteCascade sqlSettings
+  , mkMigrate "migrateExplorerDB"
+  ]
+  [persistLowerCase|
 
   -- Schema versioning has three stages to best allow handling of schema migrations.
   --    Stage 1: Set up PostgreSQL data types (using SQL 'DOMAIN' statements).
