@@ -2,7 +2,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Explorer.DB.Query
-  ( queryBlock
+  ( LookupFail (..)
+  , listToMaybe
+  , queryBlock
   , queryBlockCount
   , queryBlockId
   , queryBlockTxCount
@@ -11,7 +13,7 @@ module Explorer.DB.Query
   , queryTotalSupply
   , queryTxId
   , queryTxOutValue
-  , listToMaybe
+  , renderLookupFail
   ) where
 
 
@@ -28,6 +30,7 @@ import           Database.Esqueleto (Entity (..), From, InnerJoin (..), SqlExpr,
                     select, sum_, unValue, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
+import           Explorer.DB.Error
 import           Explorer.DB.Schema
 
 -- If you squint, these Esqueleto queries almost look like SQL queries.
@@ -35,12 +38,12 @@ import           Explorer.DB.Schema
 
 
 -- | Get the 'Block' associated with the given hash.
-queryBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe Block)
+queryBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail Block)
 queryBlock hash = do
   res <- select . from $ \ blk -> do
             where_ (blk ^. BlockHash ==. val hash)
             pure blk
-  pure $ fmap entityVal (listToMaybe res)
+  pure $ maybeToEither (DbLookupBlockHash hash) entityVal (listToMaybe res)
 
 -- | Count the number of blocks in the Block table.
 queryBlockCount :: MonadIO m => ReaderT SqlBackend m Word
@@ -52,12 +55,12 @@ queryBlockCount = do
   pure $ maybe 0 unValue (listToMaybe res)
 
 -- | Get the 'BlockId' associated with the given hash.
-queryBlockId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe BlockId)
+queryBlockId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail BlockId)
 queryBlockId hash = do
   res <- select . from $ \ blk -> do
             where_ (blk ^. BlockHash ==. val hash)
             pure $ blk ^. BlockId
-  pure $ fmap unValue (listToMaybe res)
+  pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
 
 -- | Get the number of transactions in the specified block.
 queryBlockTxCount :: MonadIO m => BlockId -> ReaderT SqlBackend m Word64
@@ -86,15 +89,16 @@ queryLatestBlocks limitCount = do
         (Just a, b) -> Just (a, b)
 
 -- | Get the 'TxId' associated with the given hash.
-queryTxId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe TxId)
+queryTxId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail TxId)
 queryTxId hash = do
   res <- select . from $ \ tx -> do
             where_ (tx ^. TxHash ==. val hash)
             pure tx
-  pure $ fmap entityKey (listToMaybe res)
+  pure $ maybeToEither (DbLookupTxHash hash) entityKey (listToMaybe res)
 
--- | Give a tx hash, and an index for the specific outut, return the TxOut value.
-queryTxOutValue :: MonadIO m => (ByteString, Word16) -> ReaderT SqlBackend m (Maybe Word64)
+-- | Give a (tx hash, index) pair, return the TxOut value.
+-- It can return 0 if the output does not exist.
+queryTxOutValue :: MonadIO m => (ByteString, Word16) -> ReaderT SqlBackend m Word64
 queryTxOutValue (hash, index) = do
   res <- select . from $ \ (tx `InnerJoin` txOut) -> do
             on (tx ^. TxId ==. txOut ^. TxOutTxId)
@@ -102,8 +106,7 @@ queryTxOutValue (hash, index) = do
                     &&. tx ^. TxHash ==. val hash
                     )
             pure $ txOut ^. TxOutValue
-  pure $ fmap unValue (listToMaybe res)
-
+  pure $ maybe 0 unValue (listToMaybe res)
 
 
 -- | Count the number of rows that match the select with the supplied predicate.
@@ -147,3 +150,7 @@ txOutUnspent txOut =
 listToMaybe :: [a] -> Maybe a
 listToMaybe [] = Nothing
 listToMaybe (a:_) = Just a
+
+maybeToEither :: e -> (a -> b) -> Maybe a -> Either e b
+maybeToEither e f =
+  maybe (Left e) (Right . f)

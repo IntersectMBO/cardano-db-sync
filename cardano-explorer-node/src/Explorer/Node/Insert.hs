@@ -32,7 +32,6 @@ import qualified Cardano.Chain.UTxO as Ledger
 
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Reader (ReaderT)
-import           Control.Monad.Extra (mapMaybeM)
 
 import           Crypto.Hash (Blake2b_256)
 
@@ -72,7 +71,7 @@ insertABOBBoundary tracer blk = do
                         Left gh -> genesisToHeaderHash gh
                         Right hh -> hh
       -- Do a transaction around a block insert.
-      pbid <- fromMaybe (panic $ "insertABOBBoundary: queryBlockId failed: " <> textShow prevHash)
+      pbid <- leftPanic "insertABOBBoundary: "
                   <$> DB.queryBlockId (unHeaderHash prevHash)
       void . DB.insertBlock $
                 DB.Block
@@ -88,8 +87,6 @@ insertABOBBoundary tracer blk = do
                     [ "Epoch ", textShow (boundaryEpochNumber blk)
                     , " : total supply in lovelace ", textShow supply
                     ]
-      when (supply == 0 || supply > 31112484745000000) $
-        panic "Total supply is screwed up."
 
     hash :: Ledger.HeaderHash
     hash = Ledger.boundaryHashAnnotated blk
@@ -105,7 +102,7 @@ insertABlock tracer blk = do
   where
     insertAction :: MonadIO m => ReaderT SqlBackend m ()
     insertAction = do
-      pbid <- fromMaybe (panic $ "insertABlock: queryBlockId failed: " <> textShow (blockPreviousHash blk))
+      pbid <- panic "insertABlock: "
                   <$> DB.queryBlockId (unHeaderHash $ blockPreviousHash blk)
 
       blkId <- DB.insertBlock $
@@ -150,7 +147,7 @@ insertTxOut _tracer txId index txout = do
 
 insertTxIn :: MonadIO m => Trace IO Text -> DB.TxId -> Ledger.TxIn -> ReaderT SqlBackend m ()
 insertTxIn _tracer txInId (Ledger.TxInUtxo txHash inIndex) = do
-  txOutId <- fromMaybe (panic $ "insertTxIn: queryTxId failed: " <> textShow txHash)
+  txOutId <- leftPanic "insertTxIn: "
                 <$> DB.queryTxId (unTxHash txHash)
   void $ DB.insertTxIn $
             DB.TxIn
@@ -166,7 +163,7 @@ calculateTxFee tx = do
     case output of
       Left err -> panic $ "calculateTxFee: " <> textShow err
       Right outval -> do
-        inval <- sum <$> mapMaybeM DB.queryTxOutValue inputs
+        inval <- sum <$> mapM DB.queryTxOutValue inputs
         if outval > inval
           then panic $ "calculateTxFee: " <> textShow (outval, inval)
           else pure $ inval - outval
@@ -228,3 +225,9 @@ unTxHash = Data.ByteArray.convert
 
 unCryptoHash :: Crypto.Hash Raw -> ByteString
 unCryptoHash = Data.ByteArray.convert
+
+leftPanic :: Text -> Either DB.LookupFail a -> a
+leftPanic msg =
+  \case
+    Left err -> panic $ msg <> DB.renderLookupFail err
+    Right val -> val
