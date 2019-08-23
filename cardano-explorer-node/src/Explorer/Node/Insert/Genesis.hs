@@ -17,7 +17,6 @@ module Explorer.Node.Insert.Genesis
 
 import           Cardano.Prelude
 
-import           Cardano.Binary (Raw)
 import qualified Cardano.Crypto as Crypto
 
 import           Cardano.BM.Trace (Trace, logInfo)
@@ -29,7 +28,6 @@ import           Control.Monad (void)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import qualified Data.ByteArray
 import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import           Data.Text (Text)
@@ -38,7 +36,7 @@ import qualified Data.Text as Text
 import           Database.Persist.Sql (SqlBackend)
 
 import qualified Explorer.DB as DB
-
+import           Explorer.Node.Util
 
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.
@@ -157,18 +155,5 @@ genesisTxos config =
     nonAvvmBalances =
       Map.toList $ Ledger.unGenesisNonAvvmBalances (Ledger.configNonAvvmBalances config)
 
-textShow :: Show a => a -> Text
-textShow = Text.pack . show
-
 txHashOfAddress :: Ledger.Address -> Crypto.Hash Ledger.Tx
 txHashOfAddress = coerce . Crypto.hash
-
-unAbstractHash :: Crypto.Hash Raw -> ByteString
-unAbstractHash = Data.ByteArray.convert
-
--- Put this here until this function goes in cardano-ledger.
-unAddressHash :: Ledger.AddressHash Ledger.Address' -> ByteString
-unAddressHash = Data.ByteArray.convert
-
-unTxHash :: Crypto.Hash Ledger.Tx -> ByteString
-unTxHash = Data.ByteArray.convert

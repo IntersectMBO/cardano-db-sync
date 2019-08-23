@@ -17,7 +17,6 @@ module Explorer.Node.Insert
 
 import           Cardano.Prelude
 
-import           Cardano.Binary (Raw)
 import           Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Crypto as Crypto
 
@@ -26,23 +25,18 @@ import qualified Cardano.Crypto as Crypto
 -- qualified.
 import qualified Cardano.Chain.Block as Ledger
 import qualified Cardano.Chain.Common as Ledger
-import qualified Cardano.Chain.Genesis as Ledger
-import qualified Cardano.Chain.Slotting as Ledger
 import qualified Cardano.Chain.UTxO as Ledger
 
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Crypto.Hash (Blake2b_256)
-
-import           Data.Coerce (coerce)
-import qualified Data.ByteArray
 import qualified Data.Text as Text
 
 import           Database.Persist.Sql (SqlBackend)
 
 import qualified Explorer.DB as DB
 import           Explorer.Node.Insert.Genesis
+import           Explorer.Node.Util
 
 import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..))
 
@@ -179,55 +173,3 @@ calculateTxFee tx = do
     output =
       Ledger.unsafeGetLovelace
         <$> Ledger.sumLovelace (map Ledger.txOutValue $ Ledger.txOutputs tx)
-
--- -----------------------------------------------------------------------------
-
-blockHash :: Ledger.ABlock ByteString -> Ledger.HeaderHash
-blockHash = Ledger.blockHashAnnotated
-
-blockMerkelRoot :: Ledger.ABlock ByteString -> Crypto.AbstractHash Blake2b_256 Raw
-blockMerkelRoot =
-  Ledger.getMerkleRoot . Ledger.txpRoot . Ledger.recoverTxProof
-    . Ledger.bodyTxPayload . Ledger.blockBody
-
-boundaryEpochNumber :: Ledger.ABoundaryBlock ByteString -> Word64
-boundaryEpochNumber = Ledger.boundaryEpoch . Ledger.boundaryHeader
-
-blockNumber :: Ledger.ABlock ByteString -> Word64
-blockNumber =
-  Ledger.unChainDifficulty . Ledger.headerDifficulty . Ledger.blockHeader
-
-blockPayload :: Ledger.ABlock a -> [Ledger.TxAux]
-blockPayload =
-  Ledger.unTxPayload . Ledger.bodyTxPayload . Ledger.blockBody
-
-blockPreviousHash :: Ledger.ABlock a -> Ledger.HeaderHash
-blockPreviousHash = Ledger.headerPrevHash . Ledger.blockHeader
-
-genesisToHeaderHash :: Ledger.GenesisHash -> Ledger.HeaderHash
-genesisToHeaderHash = coerce
-
-slotNumber :: Ledger.ABlock ByteString -> Word64
-slotNumber =
-  Ledger.unSlotNumber . Ledger.headerSlot . Ledger.blockHeader
-
-textShow :: Show a => a -> Text
-textShow = Text.pack . show
-
-unAddressHash :: Ledger.AddressHash Ledger.Address' -> ByteString
-unAddressHash = Data.ByteArray.convert
-
-unHeaderHash :: Ledger.HeaderHash -> ByteString
-unHeaderHash = Data.ByteArray.convert
-
-unTxHash :: Crypto.Hash Ledger.Tx -> ByteString
-unTxHash = Data.ByteArray.convert
-
-unCryptoHash :: Crypto.Hash Raw -> ByteString
-unCryptoHash = Data.ByteArray.convert
-
-leftPanic :: Text -> Either DB.LookupFail a -> a
-leftPanic msg =
-  \case
-    Left err -> panic $ msg <> DB.renderLookupFail err
-    Right val -> val

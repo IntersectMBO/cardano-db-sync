@@ -34,6 +34,7 @@ library
 
   other-modules:        Explorer.Node.Insert
                         Explorer.Node.Insert.Genesis
+                        Explorer.Node.Util
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , bytestring
