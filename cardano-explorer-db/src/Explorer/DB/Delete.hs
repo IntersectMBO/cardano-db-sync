@@ -1,8 +1,6 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeFamilies #-}
-
 module Explorer.DB.Delete
   ( deleteBlock
+  , deleteBlockId
   ) where
 
 
@@ -20,5 +18,13 @@ import           Explorer.DB.Schema
 deleteBlock :: MonadIO m => Block -> ReaderT SqlBackend m Bool
 deleteBlock block = do
   keys <- selectList [ BlockHash ==. blockHash block ] []
-  mapM_ (delete. entityKey) keys
+  mapM_ (delete . entityKey) keys
+  pure $ not (null keys)
+
+-- | Delete a block if it exists. Returns 'True' if it did exist and has been
+-- deleted and 'False' if it did not exist.
+deleteBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m Bool
+deleteBlockId blkId = do
+  keys <- selectList [ BlockId ==. blkId ] []
+  mapM_ (delete . entityKey) keys
   pure $ not (null keys)
