@@ -8,7 +8,7 @@ module Explorer.DB.Insert
   , insertTxOut
 
   -- Export mainly for testing.
-  , insertByReturnKeyE
+  , insertByReturnKey
   ) where
 
 
@@ -23,30 +23,30 @@ import           Database.Persist.Types (entityKey)
 import           Explorer.DB.Schema
 
 
-insertBlock :: MonadIO m => Block -> ReaderT SqlBackend m (Either BlockId BlockId)
-insertBlock = insertByReturnKeyE
+insertBlock :: MonadIO m => Block -> ReaderT SqlBackend m BlockId
+insertBlock = insertByReturnKey
 
-insertTx :: MonadIO m => Tx -> ReaderT SqlBackend m (Either TxId TxId)
-insertTx = insertByReturnKeyE
+insertTx :: MonadIO m => Tx -> ReaderT SqlBackend m TxId
+insertTx = insertByReturnKey
 
-insertTxIn :: MonadIO m => TxIn -> ReaderT SqlBackend m (Either TxInId TxInId)
-insertTxIn = insertByReturnKeyE
+insertTxIn :: MonadIO m => TxIn -> ReaderT SqlBackend m TxInId
+insertTxIn = insertByReturnKey
 
-insertTxOut :: MonadIO m => TxOut -> ReaderT SqlBackend m (Either TxOutId TxOutId)
-insertTxOut = insertByReturnKeyE
+insertTxOut :: MonadIO m => TxOut -> ReaderT SqlBackend m TxOutId
+insertTxOut = insertByReturnKey
 
 -- -----------------------------------------------------------------------------
 
 -- | Insert a record (with a Unique constraint), and return 'Right key' if the
 -- record is inserted and 'Left key' if the record already exists in the DB.
-insertByReturnKeyE
+insertByReturnKey
     :: ( AtLeastOneUniqueKey record
        , MonadIO m
        , PersistEntityBackend record ~ SqlBackend
        )
-    => record -> ReaderT SqlBackend m (Either (Key record) (Key record))
-insertByReturnKeyE value = do
+    => record -> ReaderT SqlBackend m (Key record)
+insertByReturnKey value = do
   res <- getByValue value
   case res of
-    Nothing -> Right <$> insert value
-    Just r -> pure $ Left (entityKey r)
+    Nothing -> insert value
+    Just r -> pure $ entityKey r

@@ -36,18 +36,18 @@ initialSupplyTest =
     deleteAllBlocksCascade
 
     -- Set up initial supply.
-    bid0 <- both <$> insertBlock (mkBlock 0)
-    (tx0Ids :: [TxId]) <- mapM (fmap2 both insertTx) $ mkTxs bid0 4
-    _ <- mapM (fmap2 both insertTxOut) $ map (mkTxOut bid0) tx0Ids
+    bid0 <- insertBlock (mkBlock 0)
+    (tx0Ids :: [TxId]) <- mapM insertTx $ mkTxs bid0 4
+    _ <- mapM insertTxOut $ map (mkTxOut bid0) tx0Ids
     count <- queryBlockCount
     assertBool "Block count should be 1" (count == 1)
     supply0 <- queryTotalSupply
     assertBool "Total supply should not be > 0" (supply0 > 0)
 
     -- Spend from the Utxo set.
-    bid1 <- both <$> insertBlock (mkBlock 1)
-    tx1Id <- both <$> insertTx (Tx (mkTxHash bid1 1) bid1 500000000)
-    _ <- both <$> insertTxIn (TxIn tx1Id (head tx0Ids) 0)
+    bid1 <- insertBlock (mkBlock 1)
+    tx1Id <- insertTx (Tx (mkTxHash bid1 1) bid1 500000000)
+    _ <- insertTxIn (TxIn tx1Id (head tx0Ids) 0)
     _ <- insertTxOut $ TxOut tx1Id 0 (mkAddressHash bid1 tx1Id) 500000000
     supply1 <- queryTotalSupply
     assertBool ("Total supply should be < " ++ show supply0) (supply1 < supply0)
@@ -84,10 +84,6 @@ mkAddressHash :: BlockId -> TxId -> ByteString
 mkAddressHash blkId txId =
   BS.pack (take 28 $ printf "tx out #%d, tx #%d" (unBlockId blkId) (unTxId txId) ++ replicate 28 ' ')
 
-both :: Either a a -> a
-both (Left a) = a
-both (Right a) = a
-
 -- Surely there is a better way!
 unBlockId :: BlockId -> Word64
 unBlockId = fromIntegral . unSqlBackendKey . unBlockKey
@@ -99,6 +95,3 @@ deleteAllBlocksCascade :: MonadIO m => ReaderT SqlBackend m ()
 deleteAllBlocksCascade = do
   (keys :: [BlockId]) <- selectKeysList [] []
   mapM_ deleteCascade keys
-
-fmap2 :: (Functor f, Functor g) => (a -> b) -> f (g a) -> f (g b)
-fmap2 = fmap . fmap

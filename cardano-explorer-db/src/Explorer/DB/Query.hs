@@ -11,7 +11,6 @@ module Explorer.DB.Query
   , queryTotalSupply
   , queryTxId
   , queryTxOutValue
-  , querySelectCount
   , listToMaybe
   ) where
 
