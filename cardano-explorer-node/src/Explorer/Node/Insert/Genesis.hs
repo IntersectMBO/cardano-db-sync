@@ -82,9 +82,9 @@ validateGenesisDistribution tracer cfg =
     validateAction = do
       mbid <- DB.queryBlockId $ configGenesisHash cfg
       case mbid of
-        Nothing -> panic $ "validateGenesisDistribution: Not able to find genesis hash: "
-                            <> textShow (configGenesisHash cfg)
-        Just bid -> validateGenesisBlock bid
+        Left err -> panic $ "validateGenesisDistribution: Not able to find genesis "
+                            <> DB.renderLookupFail err
+        Right bid -> validateGenesisBlock bid
 
     -- Not really a block, but all the genesis distribution need to be associated with
     -- an pseudo block.

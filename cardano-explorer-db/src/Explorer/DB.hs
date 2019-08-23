@@ -9,6 +9,7 @@ module Explorer.DB
   ) where
 
 import           Explorer.DB.Delete as X
+import           Explorer.DB.Error as X
 import           Explorer.DB.Insert as X
 import           Explorer.DB.Migration as X
 import           Explorer.DB.Migration.Version as X

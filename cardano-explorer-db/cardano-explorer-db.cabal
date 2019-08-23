@@ -32,6 +32,7 @@ library
   exposed-modules:      Explorer.DB
 
   other-modules:        Explorer.DB.Delete
+                        Explorer.DB.Error
                         Explorer.DB.Insert
                         Explorer.DB.PGConfig
                         Explorer.DB.Migration
@@ -43,6 +44,7 @@ library
 
 
   build-depends:        base                            >= 4.12         && < 4.13
+                      , base16-bytestring
                       , bytestring
                       , containers
                       , conduit
