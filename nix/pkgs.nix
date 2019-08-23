@@ -36,7 +36,7 @@ let
 
       # setup a psql server for the tests
       {
-        packages.cardano-explorer-core.components.tests.test-db = {
+        packages.cardano-explorer-db.components.tests.test-db = {
           build-tools = [ pkgs.postgresql ];
           preCheck = ''
             echo pre-check
