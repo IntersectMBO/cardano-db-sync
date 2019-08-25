@@ -35,8 +35,10 @@ library
   other-modules:        Explorer.Node.Insert
                         Explorer.Node.Insert.Genesis
                         Explorer.Node.Util
+                        Explorer.Node.Rollback
 
   build-depends:        base                            >= 4.12         && < 4.13
+                      , base16-bytestring
                       , bytestring
                       , cardano-binary
                       , cardano-crypto-wrapper

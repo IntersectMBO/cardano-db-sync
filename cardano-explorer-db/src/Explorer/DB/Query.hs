@@ -7,8 +7,10 @@ module Explorer.DB.Query
   , queryBlock
   , queryBlockCount
   , queryBlockId
+  , queryBlockIdAndHash
   , queryBlockTxCount
   , queryLatestBlocks
+  , queryLatestSlotNo
   , querySelectCount
   , queryTotalSupply
   , queryTxId
@@ -21,12 +23,12 @@ import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.ByteString.Char8 (ByteString)
-import           Data.Maybe (catMaybes)
+import           Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import           Data.Word (Word16, Word64)
 
-import           Database.Esqueleto (Entity (..), From, InnerJoin (..), SqlExpr, SqlQuery, Value,
+import           Database.Esqueleto (Entity (..), From, InnerJoin (..), PersistField, SqlExpr, SqlQuery, Value,
                     (^.), (==.), (&&.),
-                    countRows, desc, entityKey, entityVal, from, limit, notExists, on, orderBy,
+                    countRows, desc, entityKey, entityVal, from, limit, not_, notExists, nothing, on, orderBy,
                     select, sum_, unValue, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
@@ -62,6 +64,14 @@ queryBlockId hash = do
             pure $ blk ^. BlockId
   pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
 
+-- | Get the 'BlockId' and 'Block' associated with the given hash.
+queryBlockIdAndHash :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail (BlockId, Block))
+queryBlockIdAndHash hash = do
+  res <- select . from $ \ blk -> do
+            where_ (blk ^. BlockHash ==. val hash)
+            pure $ blk
+  pure $ maybeToEither (DbLookupBlockHash hash) entityPair (listToMaybe res)
+
 -- | Get the number of transactions in the specified block.
 queryBlockTxCount :: MonadIO m => BlockId -> ReaderT SqlBackend m Word64
 queryBlockTxCount blkId = do
@@ -88,6 +98,41 @@ queryLatestBlocks limitCount = do
         (Nothing, _ ) -> Nothing
         (Just a, b) -> Just (a, b)
 
+-- | Count the number of rows that match the select with the supplied predicate.
+querySelectCount :: (MonadIO m, From table) => (table -> SqlQuery ()) -> ReaderT SqlBackend m Word
+querySelectCount predicate = do
+  xs <- select . from $ \x -> do
+            predicate x
+            pure countRows
+  pure $ maybe 0 unValue (listToMaybe xs)
+
+-- | Get the latest slot number
+queryLatestSlotNo :: MonadIO m => ReaderT SqlBackend m Word64
+queryLatestSlotNo = do
+  res <- select . from $ \ blk -> do
+            where_ (isJust $ blk ^. BlockSlotNo)
+            orderBy [desc (blk ^. BlockId)]
+            limit 1
+            pure (blk ^. BlockSlotNo)
+  pure $ fromMaybe 0 (listToMaybe $ mapMaybe unValue res)
+
+-- | Get the current total supply of Lovelace.
+queryTotalSupply :: MonadIO m => ReaderT SqlBackend m Word64
+queryTotalSupply = do
+    res <- select . from $ \ txOut -> do
+                txOutUnspent txOut
+                pure $ sum_ (txOut ^. TxOutValue)
+    pure $ unWibble (listToMaybe res)
+  where
+
+    -- Unfortunately the 'sum_' operation above returns a 'PersistRational' so we need
+    -- to unWibble it.
+    unWibble :: Maybe (Value (Maybe Double)) -> Word64
+    unWibble mvm =
+      case fmap unValue mvm of
+        Just (Just x) -> floor x
+        _ -> 0
+
 -- | Get the 'TxId' associated with the given hash.
 queryTxId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail TxId)
 queryTxId hash = do
@@ -108,34 +153,12 @@ queryTxOutValue (hash, index) = do
             pure $ txOut ^. TxOutValue
   pure $ maybe 0 unValue (listToMaybe res)
 
-
--- | Count the number of rows that match the select with the supplied predicate.
-querySelectCount :: (MonadIO m, From table) => (table -> SqlQuery ()) -> ReaderT SqlBackend m Word
-querySelectCount predicate = do
-  xs <- select . from $ \x -> do
-            predicate x
-            pure countRows
-  pure $ maybe 0 unValue (listToMaybe xs)
-
--- | Get the current total supply of Lovelace.
-queryTotalSupply :: MonadIO m => ReaderT SqlBackend m Word64
-queryTotalSupply = do
-    res <- select . from $ \ txOut -> do
-                txOutUnspent txOut
-                pure $ sum_ (txOut ^. TxOutValue)
-    pure $ unWibble (listToMaybe res)
-  where
-
-    -- Unfortunately the 'sum_' operation above returns a 'PersistRational' so we need
-    -- to unWibble it.
-    unWibble :: Maybe (Value (Maybe Double)) -> Word64
-    unWibble mvm =
-      case fmap unValue mvm of
-        Just (Just x) -> floor x
-        _ -> 0
-
 -- -----------------------------------------------------------------------------
 -- SqlQuery predicates
+
+-- Filter out 'Nothing' from a 'Maybe a'.
+isJust :: PersistField a => SqlExpr (Value (Maybe a)) -> SqlExpr (Value Bool)
+isJust x = not_ (x ==. nothing)
 
 -- A predicate that filters out spent 'TxOut' entries.
 txOutUnspent :: SqlExpr (Entity TxOut) -> SqlQuery ()
@@ -154,3 +177,7 @@ listToMaybe (a:_) = Just a
 maybeToEither :: e -> (a -> b) -> Maybe a -> Either e b
 maybeToEither e f =
   maybe (Left e) (Right . f)
+
+entityPair :: Entity a -> (Key a, a)
+entityPair e =
+  (entityKey e, entityVal e)
