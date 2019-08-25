@@ -55,6 +55,7 @@ import qualified Data.Text as Text
 
 import qualified Explorer.DB as DB
 import           Explorer.Node.Insert
+import           Explorer.Node.Rollback
 
 import           Network.Socket (SockAddr, AddrInfo, SocketType(Stream), Family(AF_UNIX),
                     AddrInfo (AddrInfo), defaultProtocol, SockAddr (SockAddrUnix))
@@ -72,7 +73,7 @@ import           Ouroboros.Consensus.Node.Run.Abstract (RunNode, nodeDecodeBlock
                     nodeDecodeHeaderHash, nodeEncodeBlock, nodeEncodeGenTx, nodeEncodeHeaderHash)
 import           Ouroboros.Consensus.NodeId (CoreNodeId (CoreNodeId))
 import           Ouroboros.Consensus.Protocol (NodeConfig, Protocol(ProtocolRealPBFT))
-import           Ouroboros.Network.Block (Point (..), SlotNo (..), StandardHash,
+import           Ouroboros.Network.Block (Point (..), SlotNo (..),
                     decodePoint, encodePoint, genesisPoint)
 import           Ouroboros.Network.Mux (AppType (InitiatorApp),
                     OuroborosApplication (OuroborosInitiatorApplication))
@@ -341,7 +342,7 @@ localTxSubmissionCodec =
 --    rollback, see 'clientStNext' below.
 --
 chainSyncClient
-  :: forall blk m cfg. (MonadTimer m, MonadIO m, StandardHash blk, blk ~ ByronBlockOrEBB cfg)
+  :: forall blk m cfg. (MonadTimer m, MonadIO m, blk ~ ByronBlockOrEBB cfg)
   => Trace IO Text -> [Point blk] -> ChainSyncClient blk (Point blk) m Void
 chainSyncClient trce latestPoints =
     ChainSyncClient $ pure $
@@ -362,13 +363,12 @@ chainSyncClient trce latestPoints =
     clientStNext :: ClientStNext blk (Point blk) m Void
     clientStNext =
       ClientStNext
-        { recvMsgRollForward = \blk _tip -> ChainSyncClient $ do
-            -- print tip
+        { recvMsgRollForward = \ blk _tip -> ChainSyncClient $ do
             insertByronBlockOrEBB trce blk
             pure clientStIdle
-        , recvMsgRollBackward = \_point tip -> ChainSyncClient $ do
-            print tip
+        , recvMsgRollBackward = \ point _tip -> ChainSyncClient $ do
             -- we are requested to roll backward to point 'point', the core
             -- node's chain's tip is 'tip'.
+            liftIO $ rollbackToPoint trce point
             pure clientStIdle
         }

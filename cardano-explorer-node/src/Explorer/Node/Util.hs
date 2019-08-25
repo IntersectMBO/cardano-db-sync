@@ -1,5 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Explorer.Node.Util
   ( blockHash
@@ -10,6 +12,8 @@ module Explorer.Node.Util
   , boundaryEpochNumber
   , genesisToHeaderHash
   , leftPanic
+  , pointToSlotHash
+  , renderAbstractHash
   , slotNumber
   , textShow
   , unAbstractHash
@@ -35,11 +39,19 @@ import qualified Cardano.Chain.UTxO as Ledger
 
 import           Crypto.Hash (Blake2b_256)
 
-import           Data.Coerce (coerce)
+import           Data.ByteArray (ByteArrayAccess)
 import qualified Data.ByteArray
+import qualified Data.ByteString.Base16 as Base16
+import           Data.Coerce (coerce)
 import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 
 import qualified Explorer.DB as DB
+
+import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..))
+import           Ouroboros.Network.Point (WithOrigin (..))
+import qualified Ouroboros.Network.Point as Point
+import           Ouroboros.Network.Block (Point (..), SlotNo (..))
 
 
 blockHash :: Ledger.ABlock ByteString -> Ledger.HeaderHash
@@ -66,6 +78,17 @@ blockPreviousHash = Ledger.headerPrevHash . Ledger.blockHeader
 
 genesisToHeaderHash :: Ledger.GenesisHash -> Ledger.HeaderHash
 genesisToHeaderHash = coerce
+
+-- | Convert from Ouroboros 'Point' to `Ledger' types.
+pointToSlotHash :: Point (ByronBlockOrEBB cfg) -> Maybe (Ledger.SlotNumber, Ledger.HeaderHash)
+pointToSlotHash (Point x) =
+  case x of
+    Origin -> Nothing
+    At blk -> Just (Ledger.SlotNumber . unSlotNo $ Point.blockPointSlot blk, coerce $ Point.blockPointHash blk)
+
+renderAbstractHash :: ByteArrayAccess bin => bin -> Text
+renderAbstractHash =
+  Text.decodeUtf8 . Base16.encode . Data.ByteArray.convert
 
 slotNumber :: Ledger.ABlock ByteString -> Word64
 slotNumber =

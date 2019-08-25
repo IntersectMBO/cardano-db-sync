@@ -78,8 +78,8 @@ insertABOBBoundary tracer blk = do
                   }
       supply <- DB.queryTotalSupply
       liftIO $ logInfo tracer $ Text.concat
-                    [ "Epoch ", textShow (boundaryEpochNumber blk)
-                    , " : total supply in lovelace ", textShow supply
+                    [ "Total supply at start of epoch ", textShow (boundaryEpochNumber blk)
+                    , " is ", textShow supply, " lovelace"
                     ]
 
     hash :: Ledger.HeaderHash
@@ -96,7 +96,7 @@ insertABlock tracer blk = do
   where
     insertAction :: MonadIO m => ReaderT SqlBackend m ()
     insertAction = do
-      pbid <- panic "insertABlock: "
+      pbid <- leftPanic "insertABlock: "
                   <$> DB.queryBlockId (unHeaderHash $ blockPreviousHash blk)
 
       blkId <- DB.insertBlock $
