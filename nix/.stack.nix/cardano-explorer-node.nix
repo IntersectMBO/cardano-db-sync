@@ -18,6 +18,7 @@
       "library" = {
         depends = [
           (hsPkgs.base)
+          (hsPkgs.base16-bytestring)
           (hsPkgs.bytestring)
           (hsPkgs.cardano-binary)
           (hsPkgs.cardano-crypto-wrapper)
