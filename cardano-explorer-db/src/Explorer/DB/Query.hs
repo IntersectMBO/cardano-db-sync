@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Explorer.DB.Query
@@ -9,11 +10,16 @@ module Explorer.DB.Query
   , queryBlockId
   , queryBlockIdAndHash
   , queryBlockTxCount
+  , queryLatestBlockId
   , queryLatestBlocks
   , queryLatestSlotNo
+  , queryPreviousBlockId
   , querySelectCount
   , queryTotalSupply
+  , queryTxCount
   , queryTxId
+  , queryTxInCount
+  , queryTxOutCount
   , queryTxOutValue
   , renderLookupFail
   ) where
@@ -80,6 +86,16 @@ queryBlockTxCount blkId = do
             pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
+-- | Get 'BlockId' of the latest block.
+queryLatestBlockId :: MonadIO m => ReaderT SqlBackend m (Maybe BlockId)
+queryLatestBlockId = do
+  res <- select $ from $ \ blk -> do
+                orderBy [desc (blk ^. BlockId)]
+                limit $ 1
+                pure $ (blk ^. BlockId)
+  pure $ fmap unValue (listToMaybe res)
+
+
 -- | Get the last N blocks.
 -- This assumes that the block are inserted into the datebase from oldest to
 -- newest which is not exlicitly enforced, but should arise automatically
@@ -97,6 +113,13 @@ queryLatestBlocks limitCount = do
       case (unValue va, unValue vb) of
         (Nothing, _ ) -> Nothing
         (Just a, b) -> Just (a, b)
+
+queryPreviousBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe BlockId)
+queryPreviousBlockId blkId = do
+  res <- select $ from $ \ blk -> do
+                where_ (blk ^. BlockId ==. val blkId)
+                pure $ (blk ^. BlockPrevious)
+  pure $ maybe Nothing unValue (listToMaybe res)
 
 -- | Count the number of rows that match the select with the supplied predicate.
 querySelectCount :: (MonadIO m, From table) => (table -> SqlQuery ()) -> ReaderT SqlBackend m Word
@@ -133,6 +156,16 @@ queryTotalSupply = do
         Just (Just x) -> floor x
         _ -> 0
 
+-- | Count the number of transactions in the Tx table.
+queryTxCount :: MonadIO m => ReaderT SqlBackend m Word
+queryTxCount = do
+  res <- select . from $ \ tx -> do
+            -- Stupid where_ condition to force evaluation of a 'From' constraint.
+            where_ (tx ^. TxId ==. tx ^.TxId)
+            pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
+
+
 -- | Get the 'TxId' associated with the given hash.
 queryTxId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail TxId)
 queryTxId hash = do
@@ -140,6 +173,24 @@ queryTxId hash = do
             where_ (tx ^. TxHash ==. val hash)
             pure tx
   pure $ maybeToEither (DbLookupTxHash hash) entityKey (listToMaybe res)
+
+-- | Count the number of transactions in the Tx table.
+queryTxInCount :: MonadIO m => ReaderT SqlBackend m Word
+queryTxInCount = do
+  res <- select . from $ \ txi -> do
+            -- Stupid where_ condition to force evaluation of a 'From' constraint.
+            where_ (txi ^. TxInId ==. txi ^.TxInId)
+            pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
+
+-- | Count the number of transaction outputs in the TxOut table.
+queryTxOutCount :: MonadIO m => ReaderT SqlBackend m Word
+queryTxOutCount = do
+  res <- select . from $ \ txo -> do
+            -- Stupid where_ condition to force evaluation of a 'From' constraint.
+            where_ (txo ^. TxOutId ==. txo ^.TxOutId)
+            pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
 
 -- | Give a (tx hash, index) pair, return the TxOut value.
 -- It can return 0 if the output does not exist.
