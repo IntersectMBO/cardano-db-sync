@@ -64,7 +64,6 @@ insertABOBBoundary tracer blk = do
       let prevHash = case Ledger.boundaryPrevHash (Ledger.boundaryHeader blk) of
                         Left gh -> genesisToHeaderHash gh
                         Right hh -> hh
-      -- Do a transaction around a block insert.
       pbid <- leftPanic "insertABOBBoundary: "
                   <$> DB.queryBlockId (unHeaderHash prevHash)
       void . DB.insertBlock $

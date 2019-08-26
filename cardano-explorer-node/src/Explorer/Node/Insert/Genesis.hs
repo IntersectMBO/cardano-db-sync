@@ -42,8 +42,6 @@ import           Explorer.Node.Util
 -- If these transactions are already in the DB, they are validated.
 insertValidateGenesisDistribution :: Trace IO Text -> Ledger.Config -> IO ()
 insertValidateGenesisDistribution tracer cfg = do
-    -- TODO: This is idempotent, but probably better to check if its already been done
-    -- and validate if it has.
     -- This is how logging is turned on and off.
     -- The logging is incredibly verbose and probably only useful for debugging.
     if False
@@ -54,7 +52,8 @@ insertValidateGenesisDistribution tracer cfg = do
   where
     insertAction :: MonadIO m => ReaderT SqlBackend m ()
     insertAction = do
-        -- Insert an 'artificial' Genesis block.
+        -- Insert an 'artificial' Genesis block. We need this block to attach
+        -- the genesis distribution transactions to.
         bid <- DB.insertBlock $
                   DB.Block
                     { DB.blockHash = configGenesisHash cfg
