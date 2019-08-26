@@ -115,6 +115,7 @@ test-suite test-db
 
   other-modules:        Test.IO.Explorer.DB.Insert
                         Test.IO.Explorer.DB.Migration
+                        Test.IO.Explorer.DB.Rollback
                         Test.IO.Explorer.DB.TotalSupply
 
   ghc-options:          -Wall

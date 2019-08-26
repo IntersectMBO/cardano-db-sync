@@ -26,8 +26,8 @@ insertZeroTest :: IO ()
 insertZeroTest =
   runDbNoLogging $ do
     -- Delete the blocks if they exist.
-    void $ deleteBlock blockOne
-    void $ deleteBlock blockZero
+    void $ deleteCascadeBlock blockOne
+    void $ deleteCascadeBlock blockZero
     -- Insert the same block twice. The first should be successful (resulting
     -- in a 'Right') and the second should return the same value in a 'Left'.
     bid0 <- insertBlock blockZero
@@ -39,7 +39,7 @@ insertFirstTest :: IO ()
 insertFirstTest =
   runDbNoLogging $ do
     -- Delete the block if it exists.
-    void $ deleteBlock blockOne
+    void $ deleteCascadeBlock blockOne
     -- Insert the same block twice.
     bid0 <- insertBlock blockZero
     bid1 <- insertBlock $ blockOne { blockPrevious = Just bid0 }

@@ -16,6 +16,7 @@ import           Data.Word (Word16)
 
 data LookupFail
   = DbLookupBlockHash !ByteString
+  | DbLookupMessage !Text
   | DbLookupTxHash !ByteString
   | DbLookupTxOutPair !ByteString !Word16
 
@@ -23,6 +24,7 @@ renderLookupFail :: LookupFail -> Text
 renderLookupFail lf =
   case lf of
     DbLookupBlockHash h -> "block hash " <> base16encode h
+    DbLookupMessage txt -> txt
     DbLookupTxHash h -> "tx hash " <> base16encode h
     DbLookupTxOutPair h i ->
         Text.concat [ "tx out pair (", base16encode h, ", ", textShow i, ")" ]

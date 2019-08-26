@@ -40,4 +40,4 @@ rollbackToPoint trce point =
                 unless (Just (Ledger.unSlotNumber slot) == DB.blockSlotNo blk) $
                   panic $ "rollbackToPoint: slot mismatch " <> textShow (slot, DB.blockSlotNo blk)
                 -- This will be a cascading delete.
-                void $ DB.deleteBlockId blkId
+                void $ DB.deleteCascadeBlockId blkId
