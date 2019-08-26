@@ -49,7 +49,8 @@ insertValidateGenesisDistribution tracer cfg = do
     if False
       then DB.runDbIohkLogging tracer insertAction
       else DB.runDbNoLogging insertAction
-    logInfo tracer $ "Initial genesis distribution populated."
+    logInfo tracer $ "Initial genesis distribution populated. Hash "
+                    <> renderAbstractHash (configGenesisHash cfg)
   where
     insertAction :: MonadIO m => ReaderT SqlBackend m ()
     insertAction = do

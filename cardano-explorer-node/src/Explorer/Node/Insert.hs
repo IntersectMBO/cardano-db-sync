@@ -56,7 +56,7 @@ insertABOBBoundary tracer blk = do
                     [ "insertABOBBoundary: epoch "
                     , textShow (Ledger.boundaryEpoch $ Ledger.boundaryHeader blk)
                     , " hash "
-                    , textShow hash
+                    , renderAbstractHash hash
                     ]
   where
     insertAction :: MonadIO m => ReaderT SqlBackend m ()
@@ -92,7 +92,7 @@ insertABlock tracer blk = do
       else DB.runDbNoLogging insertAction
 
     when False $
-      logInfo tracer $ "insertABlock: " <> textShow (blockHash blk)
+      logInfo tracer $ "insertABlock: " <> renderAbstractHash (blockHash blk)
   where
     insertAction :: MonadIO m => ReaderT SqlBackend m ()
     insertAction = do
