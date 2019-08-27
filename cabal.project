@@ -4,6 +4,11 @@ packages:
   cardano-explorer
 
 
+package cardano-explorer-db
+  ghc-options: -Wall -Werror -fwarn-redundant-constraints
+
+package cardano-explorer-node
+  ghc-options: -Wall -Werror -fwarn-redundant-constraints
 
 
 package canonical-json
