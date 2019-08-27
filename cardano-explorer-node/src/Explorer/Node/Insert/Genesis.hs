@@ -12,7 +12,6 @@
 
 module Explorer.Node.Insert.Genesis
   ( insertValidateGenesisDistribution
-  , validateGenesisDistribution
   ) where
 
 import           Cardano.Prelude
@@ -47,67 +46,58 @@ insertValidateGenesisDistribution tracer cfg = do
     if False
       then DB.runDbIohkLogging tracer insertAction
       else DB.runDbNoLogging insertAction
-    logInfo tracer $ "Initial genesis distribution populated. Hash "
-                    <> renderAbstractHash (configGenesisHash cfg)
   where
     insertAction :: MonadIO m => ReaderT SqlBackend m ()
     insertAction = do
-        -- Insert an 'artificial' Genesis block. We need this block to attach
-        -- the genesis distribution transactions to.
-        bid <- DB.insertBlock $
-                  DB.Block
-                    { DB.blockHash = configGenesisHash cfg
-                    , DB.blockSlotNo = Nothing
-                    , DB.blockBlockNo = 0
-                    , DB.blockPrevious = Nothing
-                    , DB.blockMerkelRoot = Nothing
-                    , DB.blockSize = 0
-                    }
-
-        mapM_ (insertTxOuts bid) $ genesisTxos cfg
+        mbid <- DB.queryBlockId $ configGenesisHash cfg
+        case mbid of
+          Right bid -> validateGenesisDistribution tracer cfg bid
+          Left _ -> do
+            -- Insert an 'artificial' Genesis block. We need this block to attach
+            -- the genesis distribution transactions to.
+            -- It would be nice to not need this artificial block, but that would
+            -- require plumbing the Genesis.Config into 'insertByronBlockOrEBB'
+            -- which would be a pain in the neck.
+            bid <- DB.insertBlock $
+                      DB.Block
+                        { DB.blockHash = configGenesisHash cfg
+                        , DB.blockSlotNo = Nothing
+                        , DB.blockBlockNo = 0
+                        , DB.blockPrevious = Nothing
+                        , DB.blockMerkelRoot = Nothing
+                        , DB.blockSize = 0
+                        }
+            mapM_ (insertTxOuts bid) $ genesisTxos cfg
+            liftIO . logInfo tracer $ "Initial genesis distribution populated. Hash "
+                            <> renderAbstractHash (configGenesisHash cfg)
 
         supply <- DB.queryTotalSupply
         liftIO $ logInfo tracer ("Total genesis supply of lovelace: " <> textShow supply)
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
-validateGenesisDistribution :: Trace IO Text -> Ledger.Config -> IO ()
-validateGenesisDistribution tracer cfg =
-    if False
-      then DB.runDbIohkLogging tracer validateAction
-      else DB.runDbNoLogging validateAction
-  where
-    validateAction :: MonadIO m => ReaderT SqlBackend m ()
-    validateAction = do
-      mbid <- DB.queryBlockId $ configGenesisHash cfg
-      case mbid of
-        Left err -> panic $ "validateGenesisDistribution: Not able to find genesis "
-                            <> DB.renderLookupFail err
-        Right bid -> validateGenesisBlock bid
-
-    -- Not really a block, but all the genesis distribution need to be associated with
-    -- an pseudo block.
-    validateGenesisBlock :: MonadIO m => DB.BlockId -> ReaderT SqlBackend m ()
-    validateGenesisBlock bid = do
-      txCount <- DB.queryBlockTxCount bid
-      let expectedTxCount = fromIntegral $length (genesisTxos cfg)
-      when (txCount /= expectedTxCount) $
+validateGenesisDistribution :: MonadIO m => Trace IO Text -> Ledger.Config -> DB.BlockId -> ReaderT SqlBackend m ()
+validateGenesisDistribution tracer cfg bid = do
+  txCount <- DB.queryBlockTxCount bid
+  let expectedTxCount = fromIntegral $length (genesisTxos cfg)
+  when (txCount /= expectedTxCount) $
+    panic $ Text.concat
+            [ "validateGenesisDistribution: Expected initial block to have "
+            , textShow expectedTxCount
+            , " but got "
+            , textShow txCount
+            ]
+  totalSupply <- DB.queryGenesisSupply
+  case configGenesisSupply cfg of
+    Left err -> panic $ "validateGenesisDistribution: " <> textShow err
+    Right expectedSupply ->
+      when (expectedSupply /= totalSupply) $
         panic $ Text.concat
-                [ "validateGenesisDistribution: Expected initial block to have "
-                , textShow expectedTxCount
+                [ "validateGenesisDistribution: Expected total supply to be "
+                , textShow expectedSupply
                 , " but got "
-                , textShow txCount
+                , textShow totalSupply
                 ]
-      totalSupply <- DB.queryTotalSupply
-      case configGenesisSupply cfg of
-        Left err -> panic $ "validateGenesisDistribution: " <> textShow err
-        Right expectedSupply ->
-          when (expectedSupply /= totalSupply) $
-            panic $ Text.concat
-                    [ "validateGenesisDistribution: Expected total supply to be "
-                    , textShow expectedSupply
-                    , " but got "
-                    , textShow totalSupply
-                    ]
+  liftIO $ logInfo tracer "Initial genesis distribution present and correct"
 
 -- -----------------------------------------------------------------------------
 
