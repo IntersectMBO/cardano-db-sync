@@ -41,6 +41,7 @@ library
                         Explorer.DB.Query
                         Explorer.DB.Run
                         Explorer.DB.Schema
+                        Explorer.DB.Types
 
 
   build-depends:        base                            >= 4.12         && < 4.13

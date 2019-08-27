@@ -30,6 +30,7 @@ import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.ByteString.Char8 (ByteString)
+import           Data.Fixed (Micro)
 import           Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import           Data.Word (Word16, Word64)
 
@@ -41,6 +42,7 @@ import           Database.Persist.Sql (SqlBackend)
 
 import           Explorer.DB.Error
 import           Explorer.DB.Schema
+import           Explorer.DB.Types
 
 -- If you squint, these Esqueleto queries almost look like SQL queries.
 
@@ -88,13 +90,13 @@ queryBlockTxCount blkId = do
   pure $ maybe 0 unValue (listToMaybe res)
 
 -- | Return the total Genesis coin supply.
-queryGenesisSupply :: MonadIO m => ReaderT SqlBackend m Word64
+queryGenesisSupply :: MonadIO m => ReaderT SqlBackend m Ada
 queryGenesisSupply = do
     res <- select . from $ \ (txOut `InnerJoin` tx) -> do
                 on (tx ^. TxId ==. txOut ^. TxOutTxId)
                 where_ (tx ^. TxBlock ==. val (BlockKey 1))
                 pure $ sum_ (txOut ^. TxOutValue)
-    pure $ unValueSum (listToMaybe res)
+    pure $ unValueSumAda (listToMaybe res)
 
 -- | Get 'BlockId' of the latest block.
 queryLatestBlockId :: MonadIO m => ReaderT SqlBackend m (Maybe BlockId)
@@ -150,12 +152,12 @@ queryLatestSlotNo = do
   pure $ fromMaybe 0 (listToMaybe $ mapMaybe unValue res)
 
 -- | Get the current total supply of Lovelace.
-queryTotalSupply :: MonadIO m => ReaderT SqlBackend m Word64
+queryTotalSupply :: MonadIO m => ReaderT SqlBackend m Ada
 queryTotalSupply = do
     res <- select . from $ \ txOut -> do
                 txOutUnspent txOut
                 pure $ sum_ (txOut ^. TxOutValue)
-    pure $ unValueSum (listToMaybe res)
+    pure $ unValueSumAda (listToMaybe res)
 
 -- | Count the number of transactions in the Tx table.
 queryTxCount :: MonadIO m => ReaderT SqlBackend m Word
@@ -222,11 +224,11 @@ txOutUnspent txOut =
 
 -- Unfortunately the 'sum_' operation above returns a 'PersistRational' so we need
 -- to un-wibble it.
-unValueSum :: Maybe (Value (Maybe Double)) -> Word64
-unValueSum mvm =
+unValueSumAda :: Maybe (Value (Maybe Micro)) -> Ada
+unValueSumAda mvm =
   case fmap unValue mvm of
-    Just (Just x) -> floor x
-    _ -> 0
+    Just (Just x) -> lovelaceToAda x
+    _ -> Ada 0
 
 -- -----------------------------------------------------------------------------
 
