@@ -2,6 +2,7 @@
   extras = hackage:
     {
       packages = {
+        "binary" = (((hackage.binary)."0.8.7.0").revisions).default;
         "bimap" = (((hackage.bimap)."0.4.0").revisions).default;
         "brick" = (((hackage.brick)."0.47.1").revisions).default;
         "config-ini" = (((hackage.config-ini)."0.2.4.0").revisions).default;
