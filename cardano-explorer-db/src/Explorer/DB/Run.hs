@@ -3,7 +3,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Explorer.DB.Run
-  ( runDbHandleLogger
+  ( getBackendGhci
+  , ghciDebugQuery
+  , runDbHandleLogger
   , runDbIohkLogging
   , runDbNoLogging
   , runDbStdoutLogging
@@ -17,19 +19,26 @@ import           Control.Monad.Logger (LogLevel (..), LogSource, LoggingT, NoLog
                     defaultLogStr, runLoggingT, runNoLoggingT, runStdoutLoggingT)
 import           Control.Monad.Trans.Reader (ReaderT)
 import           Control.Tracer (traceWith)
+import           Control.Monad.IO.Class      (liftIO)
 
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import           Data.Text (Text)
+import qualified Data.Text.Lazy.IO as LT
+import qualified Data.Text.Lazy.Builder as LT
 
-import           Database.Persist.Postgresql (withPostgresqlConn)
+import           Database.Persist.Postgresql (withPostgresqlConn, openSimpleConn)
+import           Database.PostgreSQL.Simple (connectPostgreSQL)
 import           Database.Persist.Sql (SqlBackend, runSqlConn)
+
+import           Database.Esqueleto
+import           Database.Esqueleto.Internal.Sql
 
 import           Explorer.DB.PGConfig
 
 import           Language.Haskell.TH.Syntax (Loc)
 
-import           System.IO (Handle)
+import           System.IO (Handle, stdout)
 import           System.Log.FastLogger (LogStr, fromLogStr)
 
 
@@ -95,3 +104,41 @@ runDbStdoutLogging action = do
   runStdoutLoggingT .
     withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
       runSqlConn action backend
+
+-- from Control.Monad.Logger, wasnt exported
+defaultOutput :: Handle
+              -> Loc
+              -> LogSource
+              -> LogLevel
+              -> LogStr
+              -> IO ()
+defaultOutput h loc src level msg =
+    BS.hPutStr h ls
+  where
+    ls = defaultLogStrBS loc src level msg
+
+defaultLogStrBS :: Loc
+                -> LogSource
+                -> LogLevel
+                -> LogStr
+                -> BS.ByteString
+defaultLogStrBS a b c d =
+    toBS $ defaultLogStr a b c d
+  where
+    toBS = fromLogStr
+
+getBackendGhci :: IO SqlBackend
+getBackendGhci = do
+  pgconfig <- readPGPassFileEnv
+  connection <- connectPostgreSQL (toConnectionString pgconfig)
+  openSimpleConn (\loc source level str -> defaultOutput stdout loc source level str) connection
+
+ghciDebugQuery :: SqlSelect a r => SqlQuery a -> IO ()
+ghciDebugQuery query = do
+  pgconfig <- readPGPassFileEnv
+  runStdoutLoggingT . withPostgresqlConn (toConnectionString pgconfig) $ \backend -> do
+    let
+      (sql,params) = toRawSql SELECT (backend, initialIdentState) query
+    liftIO $ do
+      LT.putStr $ LT.toLazyText sql
+      print params
