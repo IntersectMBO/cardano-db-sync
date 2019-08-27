@@ -4,8 +4,10 @@ module Explorer.Web.Server (runServer) where
 
 import           Explorer.DB                 (blockBlockNo, blockHash,
                                               blockSize, blockSlotNo,
-                                              readPGPassFileEnv,
-                                              toConnectionString)
+                                              readPGPassFileEnv
+                                              , queryTotalSupply
+                                              , Ada(unAda)
+                                              , toConnectionString)
 import           Explorer.Web.Api            (ExplorerApi, explorerApi)
 import           Explorer.Web.ClientTypes    (CAda (CAda), CAddress (CAddress), CAddressSummary (CAddressSummary, caAddress, caBalance, caTxList, caTxNum, caType),
                                               CAddressType (CPubKeyAddress),
@@ -109,7 +111,8 @@ runQuery backend query = liftIO $ runSqlConn query backend
 
 totalAda :: SqlBackend -> Handler (Either ExplorerError CAda)
 totalAda backend = do
-  pure $ Right $ CAda 123.456789
+  supply <- runQuery backend queryTotalSupply
+  pure $ Right $ CAda $ unAda supply
 
 testDumpBlockRange :: SqlBackend -> CHash -> CHash -> Handler (Either ExplorerError CBlockRange)
 testDumpBlockRange backend start _ = do
