@@ -35,6 +35,7 @@
           (hsPkgs.persistent)
           (hsPkgs.persistent-postgresql)
           (hsPkgs.persistent-template)
+          (hsPkgs.postgresql-simple)
           (hsPkgs.resourcet)
           (hsPkgs.scientific)
           (hsPkgs.text)

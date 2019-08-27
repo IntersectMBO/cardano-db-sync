@@ -1,20 +1,35 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Explorer.Web.TestServer where
+module Explorer.Web.TestServer (runMockServer) where
 
 import           Cardano.Chain.Slotting   (EpochNumber (EpochNumber))
 import           Data.Time                (defaultTimeLocale, parseTimeOrError)
 import           Data.Time.Clock.POSIX    (POSIXTime, utcTimeToPOSIXSeconds)
-import           Data.Word
-import           Explorer.DB              (Ada(Ada))
-import           Explorer.Web.Api
-import           Explorer.Web.ClientTypes
+import           Data.Word                (Word16)
+import           Explorer.Web.Api         (ExplorerApi, explorerApi)
+import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSummary (CAddressSummary, caAddress, caBalance, caTxList, caTxNum, caType),
+                                              CAddressType (CPubKeyAddress),
+                                              CAddressesFilter (AllAddresses, NonRedeemedAddresses, RedeemedAddresses),
+                                              CBlockEntry (CBlockEntry, cbeBlkHash, cbeBlkHeight, cbeBlockLead, cbeEpoch, cbeFees, cbeSize, cbeSlot, cbeTimeIssued, cbeTotalSent, cbeTxNum),
+                                              CBlockRange (CBlockRange, cbrBlocks, cbrTransactions),
+                                              CBlockSummary (CBlockSummary, cbsEntry, cbsMerkleRoot, cbsNextHash, cbsPrevHash),
+                                              CGenesisAddressInfo (CGenesisAddressInfo, cgaiCardanoAddress, cgaiGenesisAmount, cgaiIsRedeemed),
+                                              CGenesisSummary (CGenesisSummary, cgsNonRedeemedAmountTotal, cgsNumNotRedeemed, cgsNumRedeemed, cgsNumTotal, cgsRedeemedAmountTotal),
+                                              CHash (CHash),
+                                              CTxBrief (CTxBrief, ctbId, ctbInputSum, ctbInputs, ctbOutputSum, ctbOutputs, ctbTimeIssued),
+                                              CTxEntry (CTxEntry, cteAmount, cteId, cteTimeIssued),
+                                              CTxHash, CTxHash (CTxHash),
+                                              CTxSummary (CTxSummary, ctsBlockEpoch, ctsBlockHash, ctsBlockHeight, ctsBlockSlot, ctsBlockTimeIssued, ctsFees, ctsId, ctsInputs, ctsOutputs, ctsRelayedBy, ctsTotalInput, ctsTotalOutput, ctsTxTimeIssued),
+                                              CUtxo (CUtxo, cuAddress, cuCoins, cuId, cuOutIndex),
+                                              mkCCoin)
 import           Explorer.Web.Error       (ExplorerError (Internal))
-import           Explorer.Web.LegacyApi
+import           Explorer.Web.LegacyApi   (TxsStats, ExplorerApiRecord(_genesisSummary, _genesisAddressInfo, _genesisPagesTotal, _epochPages, _epochSlots, _statsTxs, _txsSummary, _addressSummary, _addressUtxoBulk, _blocksSummary, _blocksTxs, _txsLast, _dumpBlockRange, _blocksPages, _blocksPagesTotal, _totalAda, ExplorerApiRecord), PageNumber)
 import           Network.Wai.Handler.Warp (run)
-import           Servant
+import           Servant                  (Handler, Server, Application, serve)
 import           Servant.API.Generic      (toServant)
-import           Servant.Server.Generic
+import           Servant.Server.Generic   (AsServerT)
+
+import           Explorer.DB (Ada(Ada))
 
 runMockServer :: IO ()
 runMockServer = do
