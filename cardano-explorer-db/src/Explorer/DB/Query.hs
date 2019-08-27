@@ -10,6 +10,7 @@ module Explorer.DB.Query
   , queryBlockId
   , queryBlockIdAndHash
   , queryBlockTxCount
+  , queryGenesisSupply
   , queryLatestBlockId
   , queryLatestBlocks
   , queryLatestSlotNo
@@ -86,6 +87,15 @@ queryBlockTxCount blkId = do
             pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
+-- | Return the total Genesis coin supply.
+queryGenesisSupply :: MonadIO m => ReaderT SqlBackend m Word64
+queryGenesisSupply = do
+    res <- select . from $ \ (txOut `InnerJoin` tx) -> do
+                on (tx ^. TxId ==. txOut ^. TxOutTxId)
+                where_ (tx ^. TxBlock ==. val (BlockKey 1))
+                pure $ sum_ (txOut ^. TxOutValue)
+    pure $ unValueSum (listToMaybe res)
+
 -- | Get 'BlockId' of the latest block.
 queryLatestBlockId :: MonadIO m => ReaderT SqlBackend m (Maybe BlockId)
 queryLatestBlockId = do
@@ -145,16 +155,7 @@ queryTotalSupply = do
     res <- select . from $ \ txOut -> do
                 txOutUnspent txOut
                 pure $ sum_ (txOut ^. TxOutValue)
-    pure $ unWibble (listToMaybe res)
-  where
-
-    -- Unfortunately the 'sum_' operation above returns a 'PersistRational' so we need
-    -- to unWibble it.
-    unWibble :: Maybe (Value (Maybe Double)) -> Word64
-    unWibble mvm =
-      case fmap unValue mvm of
-        Just (Just x) -> floor x
-        _ -> 0
+    pure $ unValueSum (listToMaybe res)
 
 -- | Count the number of transactions in the Tx table.
 queryTxCount :: MonadIO m => ReaderT SqlBackend m Word
@@ -218,6 +219,14 @@ txOutUnspent txOut =
       where_ (txOut ^. TxOutTxId ==. txIn ^. TxInTxOutId
               &&. txOut ^. TxOutIndex ==. txIn ^. TxInTxOutIndex
               )
+
+-- Unfortunately the 'sum_' operation above returns a 'PersistRational' so we need
+-- to un-wibble it.
+unValueSum :: Maybe (Value (Maybe Double)) -> Word64
+unValueSum mvm =
+  case fmap unValue mvm of
+    Just (Just x) -> floor x
+    _ -> 0
 
 -- -----------------------------------------------------------------------------
 

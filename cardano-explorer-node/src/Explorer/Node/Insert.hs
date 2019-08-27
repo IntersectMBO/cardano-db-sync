@@ -56,7 +56,7 @@ insertABOBBoundary tracer blk = do
                     [ "insertABOBBoundary: epoch "
                     , textShow (Ledger.boundaryEpoch $ Ledger.boundaryHeader blk)
                     , " hash "
-                    , renderAbstractHash hash
+                    , renderAbstractHash (Ledger.boundaryHashAnnotated blk)
                     ]
   where
     insertAction :: MonadIO m => ReaderT SqlBackend m ()
@@ -68,7 +68,7 @@ insertABOBBoundary tracer blk = do
                   <$> DB.queryBlockId (unHeaderHash prevHash)
       void . DB.insertBlock $
                 DB.Block
-                  { DB.blockHash = unHeaderHash hash
+                  { DB.blockHash = unHeaderHash $ Ledger.boundaryHashAnnotated blk
                   , DB.blockSlotNo = Nothing -- No slotNo for a boundary block
                   , DB.blockBlockNo = 0
                   , DB.blockPrevious = Just pbid
@@ -81,8 +81,6 @@ insertABOBBoundary tracer blk = do
                     , " is ", textShow supply, " lovelace"
                     ]
 
-    hash :: Ledger.HeaderHash
-    hash = Ledger.boundaryHashAnnotated blk
 
 insertABlock :: Trace IO Text -> Ledger.ABlock ByteString -> IO ()
 insertABlock tracer blk = do
