@@ -78,7 +78,7 @@ insertABOBBoundary tracer blk = do
       supply <- DB.queryTotalSupply
       liftIO $ logInfo tracer $ Text.concat
                     [ "Total supply at start of epoch ", textShow (boundaryEpochNumber blk)
-                    , " is ", textShow supply, " lovelace"
+                    , " is ", DB.renderAda supply, " ada"
                     ]
 
 

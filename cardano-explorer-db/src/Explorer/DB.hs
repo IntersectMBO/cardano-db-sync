@@ -17,3 +17,4 @@ import           Explorer.DB.PGConfig as X
 import           Explorer.DB.Query as X
 import           Explorer.DB.Run as X
 import           Explorer.DB.Schema as X
+import           Explorer.DB.Types as X

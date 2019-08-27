@@ -42,7 +42,7 @@ initialSupplyTest =
     count <- queryBlockCount
     assertBool "Block count should be 1" (count == 1)
     supply0 <- queryTotalSupply
-    assertBool "Total supply should not be > 0" (supply0 > 0)
+    assertBool "Total supply should not be > 0" (supply0 > Ada 0)
 
     -- Spend from the Utxo set.
     bid1 <- insertBlock (mkBlock 1)

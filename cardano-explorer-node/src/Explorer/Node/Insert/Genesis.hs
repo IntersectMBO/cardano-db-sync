@@ -72,7 +72,7 @@ insertValidateGenesisDistribution tracer cfg = do
                             <> renderAbstractHash (configGenesisHash cfg)
 
         supply <- DB.queryTotalSupply
-        liftIO $ logInfo tracer ("Total genesis supply of lovelace: " <> textShow supply)
+        liftIO $ logInfo tracer ("Total genesis supply of ada: " <> DB.renderAda supply)
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
 validateGenesisDistribution :: MonadIO m => Trace IO Text -> Ledger.Config -> DB.BlockId -> ReaderT SqlBackend m ()
@@ -90,7 +90,7 @@ validateGenesisDistribution tracer cfg bid = do
   case configGenesisSupply cfg of
     Left err -> panic $ "validateGenesisDistribution: " <> textShow err
     Right expectedSupply ->
-      when (expectedSupply /= totalSupply) $
+      when (DB.word64ToAda expectedSupply /= totalSupply) $
         panic $ Text.concat
                 [ "validateGenesisDistribution: Expected total supply to be "
                 , textShow expectedSupply
