@@ -31,7 +31,6 @@ module Explorer.Web.ClientTypes
        , CGenesisAddressInfo (..)
        , CAddressesFilter (..)
        , CCoin(..)
-       , CAda (..)
        , CByteString (..)
        , toCHash
        , mkCCoin
@@ -107,14 +106,6 @@ mkCCoin :: Integer -> CCoin
 mkCCoin = CCoin . T.pack . show
 
 --instance NFData CCoin
-
-
-newtype CAda = CAda
-    { getAda :: Micro
-    } deriving (Generic)
-
-instance Show CAda where
-    show (CAda ada) = showFixed True ada
 
 -- | List of block entries is returned from "get latest N blocks" endpoint
 data CBlockEntry = CBlockEntry
@@ -284,10 +275,3 @@ deriveToJSON defaultOptions ''CUtxo
 
 instance ToJSON CByteString where
     toJSON (CByteString bs) = (toJSON . show . B16.encode) bs
-
-instance ToJSON CAda where
-    -- https://github.com/bos/aeson/issues/227#issuecomment-245400284
-    toEncoding (CAda ada) =
-        showFixed True ada & -- convert Micro to String chopping off trailing zeros
-        BS.string8 &         -- convert String to ByteString using Latin1 encoding
-        unsafeToEncoding     -- convert ByteString to Aeson's Encoding

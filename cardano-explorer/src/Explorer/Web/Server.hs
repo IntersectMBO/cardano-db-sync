@@ -6,10 +6,10 @@ import           Explorer.DB                 (blockBlockNo, blockHash,
                                               blockSize, blockSlotNo,
                                               readPGPassFileEnv
                                               , queryTotalSupply
-                                              , Ada(unAda)
+                                              , Ada
                                               , toConnectionString)
 import           Explorer.Web.Api            (ExplorerApi, explorerApi)
-import           Explorer.Web.ClientTypes    (CAda (CAda), CAddress (CAddress), CAddressSummary (CAddressSummary, caAddress, caBalance, caTxList, caTxNum, caType),
+import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSummary (CAddressSummary, caAddress, caBalance, caTxList, caTxNum, caType),
                                               CAddressType (CPubKeyAddress),
                                               CAddressesFilter (AllAddresses, NonRedeemedAddresses, RedeemedAddresses),
                                               CBlockEntry (CBlockEntry, cbeBlkHash, cbeBlkHeight, cbeBlockLead, cbeEpoch, cbeFees, cbeSize, cbeSlot, cbeTimeIssued, cbeTotalSent, cbeTxNum),
@@ -109,10 +109,8 @@ cTxEntry = CTxEntry
 runQuery :: SqlBackend -> ReaderT SqlBackend IO a -> Handler a
 runQuery backend query = liftIO $ runSqlConn query backend
 
-totalAda :: SqlBackend -> Handler (Either ExplorerError CAda)
-totalAda backend = do
-  supply <- runQuery backend queryTotalSupply
-  pure $ Right $ CAda $ unAda supply
+totalAda :: SqlBackend -> Handler (Either ExplorerError Ada)
+totalAda backend = Right <$> runQuery backend queryTotalSupply
 
 testDumpBlockRange :: SqlBackend -> CHash -> CHash -> Handler (Either ExplorerError CBlockRange)
 testDumpBlockRange backend start _ = do
