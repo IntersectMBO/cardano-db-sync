@@ -4,16 +4,17 @@ module Test.IO.Explorer.DB.Insert
   ) where
 
 import           Control.Monad (void)
-import           Control.Monad.IO.Class (liftIO)
 
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
 
 import           Explorer.DB
 
-import           Test.HUnit.Base (assertBool)
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (testCase)
+
+import           Test.IO.Explorer.DB.Util
+
 
 tests :: TestTree
 tests =
@@ -32,7 +33,7 @@ insertZeroTest =
     -- in a 'Right') and the second should return the same value in a 'Left'.
     bid0 <- insertBlock blockZero
     bid1 <- insertBlock blockZero
-    liftIO $ assertBool (show bid0 ++ " /= " ++ show bid1) (bid0 == bid1)
+    assertBool (show bid0 ++ " /= " ++ show bid1) (bid0 == bid1)
 
 
 insertFirstTest :: IO ()
@@ -43,17 +44,15 @@ insertFirstTest =
     -- Insert the same block twice.
     bid0 <- insertBlock blockZero
     bid1 <- insertBlock $ blockOne { blockPrevious = Just bid0 }
-    liftIO $ assertBool (show bid0 ++ " == " ++ show bid1) (bid0 /= bid1)
+    assertBool (show bid0 ++ " == " ++ show bid1) (bid0 /= bid1)
 
 
 blockZero :: Block
 blockZero = Block (mkHash '\0') Nothing 0 Nothing Nothing 42
 
 blockOne :: Block
-blockOne = Block (mkHash '\1') (Just 0) 1 Nothing (Just merkelHash) 42
+blockOne = Block (mkHash '\1') (Just 0) 1 Nothing (Just $ mkMerkelRoot 1) 42
 
 mkHash :: Char -> ByteString
 mkHash = BS.pack . replicate 32
 
-merkelHash :: ByteString
-merkelHash = BS.pack $ replicate 32 'a'

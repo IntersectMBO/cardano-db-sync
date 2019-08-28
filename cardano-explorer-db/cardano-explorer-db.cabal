@@ -123,6 +123,7 @@ test-suite test-db
                         Test.IO.Explorer.DB.Migration
                         Test.IO.Explorer.DB.Rollback
                         Test.IO.Explorer.DB.TotalSupply
+                        Test.IO.Explorer.DB.Util
 
   ghc-options:          -Wall
                         -Wcompat
