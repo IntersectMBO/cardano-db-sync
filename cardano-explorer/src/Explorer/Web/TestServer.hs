@@ -6,6 +6,7 @@ import           Cardano.Chain.Slotting   (EpochNumber (EpochNumber))
 import           Data.Time                (defaultTimeLocale, parseTimeOrError)
 import           Data.Time.Clock.POSIX    (POSIXTime, utcTimeToPOSIXSeconds)
 import           Data.Word
+import           Explorer.DB              (Ada(Ada))
 import           Explorer.Web.Api
 import           Explorer.Web.ClientTypes
 import           Explorer.Web.Error       (ExplorerError (Internal))
@@ -69,8 +70,8 @@ cTxEntry = CTxEntry
     , cteAmount     = mkCCoin 33333
     }
 
-testTotalAda :: Handler (Either ExplorerError CAda)
-testTotalAda = pure $ Right $ CAda 123.456789
+testTotalAda :: Handler (Either ExplorerError Ada)
+testTotalAda = pure $ Right $ Ada 123.456789
 
 testDumpBlockRange :: CHash -> CHash -> Handler (Either ExplorerError CBlockRange)
 testDumpBlockRange start _ = do
