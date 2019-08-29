@@ -72,6 +72,7 @@
             (hsPkgs.persistent)
             (hsPkgs.tasty)
             (hsPkgs.tasty-hunit)
+            (hsPkgs.text)
             (hsPkgs.transformers)
             ];
           };
