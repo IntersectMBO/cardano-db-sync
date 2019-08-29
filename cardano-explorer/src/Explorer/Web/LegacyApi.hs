@@ -20,8 +20,9 @@ import           Servant.API              ((:>), Capture, FromHttpApiData, Get,
                                            Summary)
 import           Servant.API.Generic      ((:-))
 
+import           Explorer.DB              (Ada)
 import           Cardano.Chain.Slotting   (EpochNumber (EpochNumber))
-import           Explorer.Web.ClientTypes (CAda, CAddress, CAddressSummary,
+import           Explorer.Web.ClientTypes (CAddress, CAddressSummary,
                                            CAddressesFilter, CBlockEntry,
                                            CBlockRange, CBlockSummary,
                                            CGenesisAddressInfo, CGenesisSummary,
@@ -44,7 +45,7 @@ data ExplorerApiRecord route = ExplorerApiRecord
     _totalAda :: route
         :- "supply"
         :> "ada"
-        :> ExRes Get CAda
+        :> ExRes Get Ada
 
   , _blocksPages :: route
         :- Summary "Get the list of blocks, contained in pages."

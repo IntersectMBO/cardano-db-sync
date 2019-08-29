@@ -36,9 +36,12 @@ in {
   };
   config = lib.mkMerge [
     (lib.mkIf cfg.enable {
-      users.users.cexplorer = {
-        createHome = true;
-        home = "/var/lib/cexplorer";
+      users = {
+        users.cexplorer = {
+          createHome = true;
+          home = "/var/lib/cexplorer";
+        };
+        groups.cexplorer = {};
       };
       services.postgresql = {
         enable = true;

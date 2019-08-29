@@ -44,7 +44,8 @@ library
                         Explorer.DB.Types
 
 
-  build-depends:        base                            >= 4.12         && < 4.13
+  build-depends:        aeson
+                      , base                            >= 4.12         && < 4.13
                       , base16-bytestring
                       , bytestring
                       , containers
