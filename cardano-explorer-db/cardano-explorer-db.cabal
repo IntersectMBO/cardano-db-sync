@@ -140,4 +140,5 @@ test-suite test-db
                       , persistent
                       , tasty
                       , tasty-hunit
+                      , text
                       , transformers

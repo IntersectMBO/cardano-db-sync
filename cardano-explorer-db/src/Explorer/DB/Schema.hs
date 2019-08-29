@@ -15,6 +15,7 @@
 module Explorer.DB.Schema where
 
 import Data.ByteString.Char8 (ByteString)
+import Data.Text (Text)
 import Data.Word (Word16, Word64)
 
 import Database.Persist.TH (mkDeleteCascade, mkMigrate, mkPersist, onlyUniqueP, persistLowerCase,
@@ -67,7 +68,7 @@ share
   TxOut
     txId                TxId                -- This type is the primary key for the 'tx' table.
     index               Word16              sqltype=txindex
-    address             ByteString          sqltype=hash28type
+    address             Text
     value               Word64              sqltype=lovelace
     UniqueTxout         txId index          -- The (tx_id, index) pair must be unique.
 
