@@ -20,6 +20,8 @@ import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
+import           Data.Text (Text)
+import qualified Data.Text as Text
 import           Data.Word (Word64)
 
 import           Database.Persist.Sql (SqlBackend, deleteCascade, selectKeysList, unSqlBackendKey)
@@ -38,9 +40,9 @@ deleteAllBlocksCascade = do
   (keys :: [BlockId]) <- selectKeysList [] []
   mapM_ deleteCascade keys
 
-mkAddressHash :: BlockId -> TxId -> ByteString
+mkAddressHash :: BlockId -> TxId -> Text
 mkAddressHash blkId txId =
-  BS.pack (take 28 $ printf "tx out #%d, tx #%d" (unBlockId blkId) (unTxId txId) ++ replicate 28 ' ')
+  Text.pack (take 28 $ printf "tx out #%d, tx #%d" (unBlockId blkId) (unTxId txId) ++ replicate 28 ' ')
 
 mkBlock :: Word64 -> Block
 mkBlock blk =

@@ -31,6 +31,7 @@ import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 
 import           Database.Persist.Sql (SqlBackend)
 
@@ -131,7 +132,7 @@ insertTxOut _tracer txId index txout = do
             DB.TxOut
               { DB.txOutTxId = txId
               , DB.txOutIndex = fromIntegral index
-              , DB.txOutAddress = unAddressHash (Ledger.addrRoot $ Ledger.txOutAddress txout)
+              , DB.txOutAddress = Text.decodeUtf8 $ Ledger.addrToBase58 (Ledger.txOutAddress txout)
               , DB.txOutValue = Ledger.unsafeGetLovelace $ Ledger.txOutValue txout
               }
 

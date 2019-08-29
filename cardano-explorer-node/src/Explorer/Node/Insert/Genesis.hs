@@ -31,6 +31,7 @@ import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import           Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 
 import           Database.Persist.Sql (SqlBackend)
 
@@ -115,7 +116,7 @@ insertTxOuts blkId (address, value) = do
             DB.TxOut
               { DB.txOutTxId = txId
               , DB.txOutIndex = 0
-              , DB.txOutAddress = unAddressHash $ Ledger.addrRoot address
+              , DB.txOutAddress = Text.decodeUtf8 $ Ledger.addrToBase58 address
               , DB.txOutValue = Ledger.unsafeGetLovelace value
               }
 
