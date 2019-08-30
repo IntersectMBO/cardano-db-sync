@@ -11,6 +11,7 @@
 module Explorer.Web.LegacyApi
        ( ExplorerApiRecord(..)
        , TxsStats
+       , PageNumber
        ) where
 
 import           Data.Word                (Word16, Word64)
@@ -31,7 +32,7 @@ import           Explorer.Web.ClientTypes (CAddress, CAddressSummary,
 import           Explorer.Web.Error       (ExplorerError)
 --import           Pos.Util.Servant (DQueryParam, ModifiesApiRes (..), VerbMod)
 
-type PageNumber = Integer
+type PageNumber = Word
 
 -- | Shortcut for common api result types.
 type ExRes verb a = verb '[JSON] (Either ExplorerError a)
@@ -68,7 +69,7 @@ data ExplorerApiRecord route = ExplorerApiRecord
         :> "blocks"
         :> "pages"
         :> "total"
-        :> QueryParam "pageSize" Word
+        :> QueryParam "pageSize" PageNumber
         :> ExRes Get PageNumber
 
   , _blocksSummary :: route
