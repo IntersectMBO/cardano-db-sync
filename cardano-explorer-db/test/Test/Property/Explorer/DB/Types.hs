@@ -7,7 +7,7 @@ module Test.Property.Explorer.DB.Types
 
 import           Cardano.Chain.Common (maxLovelaceVal)
 
-import           Data.Aeson (fromJSON, toJSON)
+import qualified Data.Aeson as Aeson
 import           Data.Word (Word64)
 
 import           Explorer.DB
@@ -22,7 +22,7 @@ prop_roundtrip_Ada_via_JSON :: Property
 prop_roundtrip_Ada_via_JSON =
   H.withTests 5000 . H.property $ do
     mv <- H.forAll genAda
-    H.tripping mv toJSON fromJSON
+    H.tripping mv Aeson.encode Aeson.eitherDecode
 
 -- -----------------------------------------------------------------------------
 
