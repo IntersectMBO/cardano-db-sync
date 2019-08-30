@@ -23,6 +23,9 @@ module Explorer.DB.Query
   , queryTxOutCount
   , queryTxOutValue
   , renderLookupFail
+  , unValueSumAda
+  , maybeToEither
+  , entityPair
   ) where
 
 
