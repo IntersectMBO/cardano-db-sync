@@ -36,6 +36,7 @@
           (hsPkgs.persistent-postgresql)
           (hsPkgs.persistent-template)
           (hsPkgs.resourcet)
+          (hsPkgs.scientific)
           (hsPkgs.text)
           (hsPkgs.template-haskell)
           (hsPkgs.time)
@@ -56,7 +57,9 @@
         "test" = {
           depends = [
             (hsPkgs.base)
+            (hsPkgs.aeson)
             (hsPkgs.cardano-explorer-db)
+            (hsPkgs.cardano-ledger)
             (hsPkgs.hedgehog)
             ];
           };
