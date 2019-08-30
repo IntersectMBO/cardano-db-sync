@@ -87,9 +87,9 @@ testDumpBlockRange start _ = do
     (_, Left err) -> pure $ Left err
 
 testBlocksPages
-    :: Maybe Word
-    -> Maybe Word
-    -> Handler (Either ExplorerError (Integer, [CBlockEntry]))
+    :: Maybe PageNumber
+    -> Maybe PageNumber
+    -> Handler (Either ExplorerError (PageNumber, [CBlockEntry]))
 testBlocksPages _ _  = pure $ Right (1, [CBlockEntry
     { cbeEpoch      = 37294
     , cbeSlot       = 10
@@ -104,8 +104,8 @@ testBlocksPages _ _  = pure $ Right (1, [CBlockEntry
     }])
 
 testBlocksPagesTotal
-    :: Maybe Word
-    -> Handler (Either ExplorerError Integer)
+    :: Maybe PageNumber
+    -> Handler (Either ExplorerError PageNumber)
 testBlocksPagesTotal _ = pure $ Right 10
 
 testBlocksSummary
@@ -239,9 +239,9 @@ testGenesisSummary = pure $ Right CGenesisSummary
     }
 
 testGenesisPagesTotal
-    :: Maybe Word
+    :: Maybe PageNumber
     -> Maybe CAddressesFilter
-    -> Handler (Either ExplorerError Integer)
+    -> Handler (Either ExplorerError PageNumber)
 -- number of redeemed addresses pages
 testGenesisPagesTotal _ (Just RedeemedAddresses)    = pure $ Right 1
 -- number of non redeemed addresses pages
