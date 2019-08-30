@@ -12,7 +12,7 @@ module Explorer.DB.Types
 
 
 import           Data.Aeson.Encoding (unsafeToEncoding)
-import           Data.Aeson.Types (ToJSON (toEncoding, toJSON), Value(String, Number))
+import           Data.Aeson.Types (ToJSON (..))
 import qualified Data.ByteString.Builder as BS (string8)
 import           Data.Fixed (Micro, showFixed)
 import           Data.Text (Text)
