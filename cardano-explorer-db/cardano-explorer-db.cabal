@@ -63,6 +63,7 @@ library
                       , persistent-postgresql
                       , persistent-template >= 2.7.0
                       , resourcet
+                      , scientific
                       , text
                       , template-haskell
                       , time
@@ -104,9 +105,12 @@ test-suite test
                         -Wincomplete-uni-patterns
 
   other-modules:        Test.Property.Explorer.DB.Migration
+                        Test.Property.Explorer.DB.Types
 
   build-depends:        base                            >= 4.12         && < 4.13
+                      , aeson
                       , cardano-explorer-db
+                      , cardano-ledger
                       , hedgehog
 
 test-suite test-db
