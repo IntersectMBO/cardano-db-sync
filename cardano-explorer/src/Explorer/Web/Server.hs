@@ -7,7 +7,8 @@ import           Explorer.DB                 (blockBlockNo, blockHash,
                                               readPGPassFileEnv
                                               , queryTotalSupply
                                               , Ada
-                                              , toConnectionString)
+                                              , toConnectionString
+                                              , queryBlockCount)
 import           Explorer.Web.Api            (ExplorerApi, explorerApi)
 import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSummary (CAddressSummary, caAddress, caBalance, caTxList, caTxNum, caType),
                                               CAddressType (CPubKeyAddress),
@@ -25,7 +26,7 @@ import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSumma
                                               CUtxo (CUtxo, cuAddress, cuCoins, cuId, cuOutIndex),
                                               mkCCoin)
 import           Explorer.Web.Error          (ExplorerError (Internal))
-import           Explorer.Web.LegacyApi      (ExplorerApiRecord (..), TxsStats)
+import           Explorer.Web.LegacyApi      (ExplorerApiRecord (..), TxsStats, PageNumber)
 import           Explorer.Web.Query          (queryBlockSummary)
 
 import           Cardano.Chain.Slotting      (EpochNumber (EpochNumber))
@@ -33,6 +34,7 @@ import           Cardano.Chain.Slotting      (EpochNumber (EpochNumber))
 import           Control.Monad.IO.Class      (liftIO)
 import           Control.Monad.Logger        (runStdoutLoggingT)
 import           Control.Monad.Trans.Reader  (ReaderT)
+import           Data.Maybe (fromMaybe)
 import qualified Data.ByteString.Base16      as B16
 import qualified Data.ByteString.Char8       as SB8
 import qualified Data.Text                   as T
@@ -65,7 +67,7 @@ explorerHandlers backend = toServant (ExplorerApiRecord
   { _totalAda           = totalAda backend
   , _dumpBlockRange     = testDumpBlockRange backend
   , _blocksPages        = testBlocksPages backend
-  , _blocksPagesTotal   = testBlocksPagesTotal backend
+  , _blocksPagesTotal   = getBlocksPagesTotal backend
   , _blocksSummary      = blocksSummary backend
   , _blocksTxs          = testBlocksTxs backend
   , _txsLast            = testTxsLast backend
@@ -126,9 +128,9 @@ testDumpBlockRange backend start _ = do
     (_, Left err) -> pure $ Left err
 
 testBlocksPages
-    :: SqlBackend -> Maybe Word
+    :: SqlBackend -> Maybe PageNumber
     -> Maybe Word
-    -> Handler (Either ExplorerError (Integer, [CBlockEntry]))
+    -> Handler (Either ExplorerError (PageNumber, [CBlockEntry]))
 testBlocksPages backend _ _  = pure $ Right (1, [CBlockEntry
     { cbeEpoch      = 37294
     , cbeSlot       = 10
@@ -142,10 +144,35 @@ testBlocksPages backend _ _  = pure $ Right (1, [CBlockEntry
     , cbeFees       = mkCCoin 0
     }])
 
-testBlocksPagesTotal
+divRoundUp :: Integral a => a -> a -> a
+divRoundUp a b = (a + b - 1) `div` b
+
+defaultPageSize :: Word
+defaultPageSize = 10
+
+toPageSize :: Maybe Word -> Word
+toPageSize = fromMaybe defaultPageSize
+
+-- | A pure calculation of the page number.
+-- Get total pages from the blocks. And we want the page
+-- with the example, the page size 10,
+-- to start with 10 + 1 == 11, not with 10 since with
+-- 10 we'll have an empty page.
+-- Could also be `((blocksTotal - 1) `div` pageSizeInt) + 1`.
+roundToBlockPage :: Word -> Word
+roundToBlockPage blocksTotal = divRoundUp blocksTotal defaultPageSize
+
+getBlocksPagesTotal
     :: SqlBackend -> Maybe Word
-    -> Handler (Either ExplorerError Integer)
-testBlocksPagesTotal backend _ = pure $ Right 10
+    -> Handler (Either ExplorerError Word)
+getBlocksPagesTotal backend mPageSize = do
+  blocksTotal <- runQuery backend queryBlockCount
+  liftIO $ print blocksTotal
+  let pageSize = toPageSize mPageSize
+  case (blocksTotal < 1, pageSize < 1) of
+    (True, _) -> pure $ Left $ Internal "There are currently no block to display."
+    (_, True) -> pure $ Left $ Internal "Page size must be greater than 1 if you want to display blocks."
+    _ -> pure $ Right $ roundToBlockPage blocksTotal
 
 blocksSummary
     :: SqlBackend -> CHash
@@ -292,9 +319,9 @@ testGenesisSummary backend = pure $ Right CGenesisSummary
     }
 
 testGenesisPagesTotal
-    :: SqlBackend -> Maybe Word
+    :: SqlBackend -> Maybe PageNumber
     -> Maybe CAddressesFilter
-    -> Handler (Either ExplorerError Integer)
+    -> Handler (Either ExplorerError PageNumber)
 -- number of redeemed addresses pages
 testGenesisPagesTotal backend _ (Just RedeemedAddresses)    = pure $ Right 1
 -- number of non redeemed addresses pages
