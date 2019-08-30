@@ -13,7 +13,7 @@ module Explorer.DB.Types
 
 
 import           Data.Aeson.Encoding (unsafeToEncoding)
-import           Data.Aeson.Types (FromJSON (..), ToJSON (..), Value (..), (.:))
+import           Data.Aeson.Types (FromJSON (..), ToJSON (..))
 import qualified Data.Aeson.Types as Aeson
 import qualified Data.ByteString.Builder as BS (string8)
 import           Data.Fixed (Micro, showFixed)
@@ -29,10 +29,8 @@ newtype Ada = Ada
   } deriving (Eq, Ord, Generic)
 
 instance FromJSON Ada where
-  parseJSON val =
-    case val of
-      Object obj -> scientificToAda <$> obj .: "unAda"
-      _other -> Aeson.typeMismatch "Ada" val
+  parseJSON =
+    Aeson.withScientific "Ada" (pure . scientificToAda)
 
 instance ToJSON Ada where
     --toJSON (Ada ada) = Data.Aeson.Types.Number $ fromRational $ toRational ada
@@ -41,6 +39,9 @@ instance ToJSON Ada where
         unsafeToEncoding $   -- convert ByteString to Aeson's Encoding
         BS.string8 $         -- convert String to ByteString using Latin1 encoding
         showFixed True ada   -- convert Micro to String chopping off trailing zeros
+
+    toJSON = error "Ada.toJSON not supported due to numeric issues. Use toEncoding instead."
+
 
 instance Show Ada where
     show (Ada ada) = showFixed True ada
