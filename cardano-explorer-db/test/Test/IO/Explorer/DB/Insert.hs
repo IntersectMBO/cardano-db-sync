@@ -27,12 +27,13 @@ insertZeroTest :: IO ()
 insertZeroTest =
   runDbNoLogging $ do
     -- Delete the blocks if they exist.
-    void $ deleteCascadeBlock blockOne
-    void $ deleteCascadeBlock blockZero
+    slid <- insertSlotLeader testSlotLeader
+    void $ deleteCascadeBlock (blockOne slid)
+    void $ deleteCascadeBlock (blockZero slid)
     -- Insert the same block twice. The first should be successful (resulting
     -- in a 'Right') and the second should return the same value in a 'Left'.
-    bid0 <- insertBlock blockZero
-    bid1 <- insertBlock blockZero
+    bid0 <- insertBlock (blockZero slid)
+    bid1 <- insertBlock (blockZero slid)
     assertBool (show bid0 ++ " /= " ++ show bid1) (bid0 == bid1)
 
 
@@ -40,18 +41,21 @@ insertFirstTest :: IO ()
 insertFirstTest =
   runDbNoLogging $ do
     -- Delete the block if it exists.
-    void $ deleteCascadeBlock blockOne
+    slid <- insertSlotLeader testSlotLeader
+    void $ deleteCascadeBlock (blockOne slid)
     -- Insert the same block twice.
-    bid0 <- insertBlock blockZero
-    bid1 <- insertBlock $ blockOne { blockPrevious = Just bid0 }
+    bid0 <- insertBlock (blockZero slid)
+    bid1 <- insertBlock $ (\b -> b { blockPrevious = Just bid0 }) (blockOne slid)
     assertBool (show bid0 ++ " == " ++ show bid1) (bid0 /= bid1)
 
 
-blockZero :: Block
-blockZero = Block (mkHash '\0') Nothing 0 Nothing Nothing 42
+blockZero :: SlotLeaderId -> Block
+blockZero slid =
+  Block (mkHash '\0') Nothing 0 Nothing Nothing slid 42
 
-blockOne :: Block
-blockOne = Block (mkHash '\1') (Just 0) 1 Nothing (Just $ mkMerkelRoot 1) 42
+blockOne :: SlotLeaderId -> Block
+blockOne slid =
+  Block (mkHash '\1') (Just 0) 1 Nothing (Just $ mkMerkelRoot 1) slid 42
 
 mkHash :: Char -> ByteString
 mkHash = BS.pack . replicate 32

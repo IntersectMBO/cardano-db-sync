@@ -141,4 +141,5 @@ test-suite test-db
                       , tasty
                       , tasty-hunit
                       , text
+                      , time
                       , transformers

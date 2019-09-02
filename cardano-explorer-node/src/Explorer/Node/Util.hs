@@ -12,8 +12,10 @@ module Explorer.Node.Util
   , boundaryEpochNumber
   , genesisToHeaderHash
   , leftPanic
+  , mkSlotLeader
   , pointToSlotHash
   , renderAbstractHash
+  , slotLeaderHash
   , slotNumber
   , textShow
   , unAbstractHash
@@ -42,6 +44,7 @@ import           Crypto.Hash (Blake2b_256)
 import           Data.ByteArray (ByteArrayAccess)
 import qualified Data.ByteArray
 import qualified Data.ByteString.Base16 as Base16
+import qualified Data.ByteString.Char8 as BS
 import           Data.Coerce (coerce)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -79,6 +82,13 @@ blockPreviousHash = Ledger.headerPrevHash . Ledger.blockHeader
 genesisToHeaderHash :: Ledger.GenesisHash -> Ledger.HeaderHash
 genesisToHeaderHash = coerce
 
+mkSlotLeader :: Ledger.ABlock ByteString -> DB.SlotLeader
+mkSlotLeader blk =
+  let slHash = slotLeaderHash blk
+      slName = "SlotLeader-" <> Text.decodeUtf8 (Base16.encode $ BS.take 8 slHash)
+  in DB.SlotLeader slHash slName
+
+
 -- | Convert from Ouroboros 'Point' to `Ledger' types.
 pointToSlotHash :: Point (ByronBlockOrEBB cfg) -> Maybe (Ledger.SlotNumber, Ledger.HeaderHash)
 pointToSlotHash (Point x) =
@@ -89,6 +99,10 @@ pointToSlotHash (Point x) =
 renderAbstractHash :: ByteArrayAccess bin => bin -> Text
 renderAbstractHash =
   Text.decodeUtf8 . Base16.encode . Data.ByteArray.convert
+
+slotLeaderHash :: Ledger.ABlock ByteString -> ByteString
+slotLeaderHash =
+  Data.ByteArray.convert . Ledger.addressHash . Ledger.headerGenesisKey . Ledger.blockHeader
 
 slotNumber :: Ledger.ABlock ByteString -> Word64
 slotNumber =

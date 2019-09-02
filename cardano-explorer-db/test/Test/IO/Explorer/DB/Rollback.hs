@@ -88,8 +88,10 @@ createAndInsertBlocks blockCount =
         => (Word64, Maybe BlockId, Maybe Block, Maybe TxId)
         -> ReaderT SqlBackend m (Word64, Maybe BlockId, Maybe Block, Maybe TxId)
     createAndInsert (indx, mPrevId, mPrevBlock, mTxOutId) = do
+        slid <- insertSlotLeader testSlotLeader
         let newBlock = Block (mkBlockHash indx) (Just indx) indx mPrevId
-                        (maybe Nothing (const $ Just (mkMerkelRoot indx)) mPrevBlock) 42
+                        (maybe Nothing (const $ Just (mkMerkelRoot indx)) mPrevBlock)
+                        slid 42
         blkId <- insertBlock newBlock
         newMTxOutId <- if indx /= 0
                       then pure mTxOutId

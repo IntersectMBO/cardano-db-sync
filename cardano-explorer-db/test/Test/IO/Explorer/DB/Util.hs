@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Test.IO.Explorer.DB.Util
@@ -10,6 +11,7 @@ module Test.IO.Explorer.DB.Util
   , mkTxHash
   , mkTxs
   , mkTxOut
+  , testSlotLeader
   , unBlockId
   , unTxId
   ) where
@@ -44,9 +46,9 @@ mkAddressHash :: BlockId -> TxId -> Text
 mkAddressHash blkId txId =
   Text.pack (take 28 $ printf "tx out #%d, tx #%d" (unBlockId blkId) (unTxId txId) ++ replicate 28 ' ')
 
-mkBlock :: Word64 -> Block
-mkBlock blk =
-  Block (mkBlockHash blk) Nothing 0 Nothing Nothing 42
+mkBlock :: Word64 -> SlotLeaderId -> Block
+mkBlock blk slid =
+  Block (mkBlockHash blk) Nothing 0 Nothing Nothing slid 42
 
 mkBlockHash :: Word64 -> ByteString
 mkBlockHash blkId =
@@ -65,6 +67,10 @@ mkTxs blkId count =
     take (fromIntegral count) $ map create [ 0 .. ]
   where
     create w = Tx (mkTxHash blkId w) blkId 1
+
+testSlotLeader :: SlotLeader
+testSlotLeader =
+  SlotLeader (BS.pack . take 28 $ "test slot leader" ++ replicate 28 ' ') "Dummy test slot leader"
 
 mkTxOut :: BlockId -> TxId -> TxOut
 mkTxOut blkId txId =

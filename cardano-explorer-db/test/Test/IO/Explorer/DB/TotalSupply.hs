@@ -25,7 +25,8 @@ initialSupplyTest =
     deleteAllBlocksCascade
 
     -- Set up initial supply.
-    bid0 <- insertBlock (mkBlock 0)
+    slid <- insertSlotLeader testSlotLeader
+    bid0 <- insertBlock (mkBlock 0 slid)
     (tx0Ids :: [TxId]) <- mapM insertTx $ mkTxs bid0 4
     _ <- mapM insertTxOut $ map (mkTxOut bid0) tx0Ids
     count <- queryBlockCount
@@ -34,7 +35,7 @@ initialSupplyTest =
     assertBool "Total supply should not be > 0" (supply0 > Ada 0)
 
     -- Spend from the Utxo set.
-    bid1 <- insertBlock (mkBlock 1)
+    bid1 <- insertBlock (mkBlock 1 slid)
     tx1Id <- insertTx (Tx (mkTxHash bid1 1) bid1 500000000)
     _ <- insertTxIn (TxIn tx1Id (head tx0Ids) 0)
     _ <- insertTxOut $ TxOut tx1Id 0 (mkAddressHash bid1 tx1Id) 500000000

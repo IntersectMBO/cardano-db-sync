@@ -27,6 +27,7 @@ import           Control.Monad (void)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
+import qualified Data.ByteString.Char8 as BS
 import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import           Data.Text (Text)
@@ -54,11 +55,12 @@ insertValidateGenesisDistribution tracer cfg = do
         case mbid of
           Right bid -> validateGenesisDistribution tracer cfg bid
           Left _ -> do
-            -- Insert an 'artificial' Genesis block. We need this block to attach
-            -- the genesis distribution transactions to.
+            -- Insert an 'artificial' Genesis block (with a genesis specific slot leader). We
+            -- need this block to attach the genesis distribution transactions to.
             -- It would be nice to not need this artificial block, but that would
             -- require plumbing the Genesis.Config into 'insertByronBlockOrEBB'
             -- which would be a pain in the neck.
+            slid <- DB.insertSlotLeader $ DB.SlotLeader (genesisHashSlotLeader cfg) "Genesis slot leader"
             bid <- DB.insertBlock $
                       DB.Block
                         { DB.blockHash = configGenesisHash cfg
@@ -66,6 +68,7 @@ insertValidateGenesisDistribution tracer cfg = do
                         , DB.blockBlockNo = 0
                         , DB.blockPrevious = Nothing
                         , DB.blockMerkelRoot = Nothing
+                        , DB.blockSlotLeader = slid
                         , DB.blockSize = 0
                         }
             mapM_ (insertTxOuts bid) $ genesisTxos cfg
@@ -125,6 +128,11 @@ insertTxOuts blkId (address, value) = do
 configGenesisHash :: Ledger.Config -> ByteString
 configGenesisHash =
   unAbstractHash . Ledger.unGenesisHash . Ledger.configGenesisHash
+
+genesisHashSlotLeader :: Ledger.Config -> ByteString
+genesisHashSlotLeader =
+  BS.take 28 . configGenesisHash
+
 
 configGenesisSupply :: Ledger.Config -> Either Ledger.LovelaceError Word64
 configGenesisSupply =
