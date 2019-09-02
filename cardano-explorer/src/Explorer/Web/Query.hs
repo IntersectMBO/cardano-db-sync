@@ -1,27 +1,31 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Explorer.Web.Query where
+module Explorer.Web.Query
+  ( queryBlockHash
+  , queryBlockSummary
+  , queryNextBlock
+  , queryOneBlock
+  , queryTxSummary
+  , queryTx
+  ) where
 
-import           Database.Esqueleto
-import           Database.Persist.Sql       (SqlBackend)
+import           Database.Esqueleto ((^.), val, (==.), where_, from, unValue, select, Value, InnerJoin(InnerJoin), sum_, on, (&&.), in_, subList_select, countRows)
+import           Database.Persist.Sql       (SqlBackend, entityVal)
 
-import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Reader
 import           Data.ByteString (ByteString)
-import           Data.Word (Word16, Word64)
+import           Data.Word (Word64)
 import           Data.Text (Text)
+import           Control.Monad.IO.Class (MonadIO)
+import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Explorer.DB
+import           Explorer.DB (Block, BlockId, Key, blockPrevious, listToMaybe, EntityField(BlockHash, BlockPrevious, BlockId, TxHash, TxOutValue, TxOutAddress, TxInTxInId, TxOutIndex, TxInTxOutIndex, TxOutTxId, TxInTxOutId, TxBlock, TxFee, TxBlock, TxId), entityPair, Tx, TxOut, Ada, LookupFail(DbLookupTxHash), maybeToEither, unValueSumAda, txBlock)
 
-queryOneBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe (Block, Key Block))
+queryOneBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe (Key Block, Block))
 queryOneBlock blkHash = do
   rows <- select . from $ \blk -> do
     where_ $ blk ^. BlockHash ==. val blkHash
     pure blk
-  let
-    both :: Entity Block -> (Block, Key Block)
-    both e = (entityVal e, entityKey e)
-  pure $ fmap both (listToMaybe rows)
+  pure $ fmap entityPair (listToMaybe rows)
 
 queryBlockById :: MonadIO m => Key Block -> ReaderT SqlBackend m (Maybe Block)
 queryBlockById blockid = do
@@ -55,7 +59,7 @@ queryBlockSummary :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe (Blo
 queryBlockSummary blkHash = do
   maybeBlock <- queryOneBlock blkHash
   case maybeBlock of
-    Just (blk, blkid) -> do
+    Just (blkid, blk) -> do
       tx_count <- queryTxCountInBlock blkid
       fees <- queryTotalFeeInBlock blkid
       total_out <- queryTotalOutputCoinInBlock blkid

@@ -8,7 +8,7 @@ module Explorer.Web.Error
        ( ExplorerError (..)
        ) where
 
-import           Control.Exception
+import           Control.Exception (Exception)
 import           Data.Aeson.TH        (defaultOptions, deriveToJSON)
 import           Data.Text            (Text)
 import           Formatting           (bprint, stext, (%))
