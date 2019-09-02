@@ -8,6 +8,7 @@ import           Cardano.Shell.Lib (CardanoApplication (..), ApplicationEnvironm
 import qualified Cardano.Shell.Lib as Shell
 import qualified Cardano.Shell.Presets as Shell
 
+import           Explorer.DB (MigrationDir (..))
 import           Explorer.Node (ExplorerNodeParams (..), NodeLayer (..), initializeAllFeatures)
 
 import           Options.Applicative (Parser, ParserInfo, completer, bashCompleter, help, long, strOption)
@@ -38,7 +39,16 @@ pCommandLine =
     <$> Shell.loggingParser
     <*> Node.parseCommonCLI
     <*> parseSocketPath
+    <*> pMigrationDir
 
 -- TODO, another PR is adding similar to another repo, switch over to it
 parseSocketPath :: Parser FilePath
 parseSocketPath = strOption (long "socket-path" <> help "path to a cardano-node socket" <> completer (bashCompleter "file"))
+
+pMigrationDir :: Parser MigrationDir
+pMigrationDir =
+  MigrationDir <$> Opt.strOption
+    (  Opt.long "schema-dir"
+    <> Opt.help "The directory containing the migrations."
+    <> Opt.completer (Opt.bashCompleter "directory")
+    )

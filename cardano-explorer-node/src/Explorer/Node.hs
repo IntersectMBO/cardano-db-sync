@@ -53,6 +53,8 @@ import           Data.Functor.Contravariant (contramap)
 import           Data.Reflection (give)
 import qualified Data.Text as Text
 
+
+import           Explorer.DB (LogFileDir (..), MigrationDir)
 import qualified Explorer.DB as DB
 import           Explorer.Node.Insert
 import           Explorer.Node.Rollback
@@ -110,6 +112,7 @@ data ExplorerNodeParams = ExplorerNodeParams
   { enpLogging :: !LoggingCLIArguments
   , enpCommon :: Node.CommonCLI
   , enpSocketPath :: FilePath
+  , enpMigrationDir :: MigrationDir
   }
 
 newtype NodeLayer = NodeLayer
@@ -121,6 +124,7 @@ type NodeCardanoFeature = CardanoFeatureInit LoggingLayer ExplorerNodeParams Nod
 
 initializeAllFeatures :: ExplorerNodeParams -> PartialCardanoConfiguration -> CardanoEnvironment -> IO ([CardanoFeature], NodeLayer)
 initializeAllFeatures enp partialConfig cardanoEnvironment = do
+  DB.runMigrations True (enpMigrationDir enp) (LogFileDir "/tmp")
   let fcc = finaliseCardanoConfiguration $ Node.mergeConfiguration partialConfig (enpCommon enp)
   finalConfig <- case fcc of
                   Left err -> throwIO $ ConfigurationError err
