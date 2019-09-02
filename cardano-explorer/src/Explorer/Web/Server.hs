@@ -31,8 +31,8 @@ import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSumma
                                               CUtxo (CUtxo, cuAddress, cuCoins, cuId, cuOutIndex),
                                               mkCCoin, adaToCCoin)
 import           Explorer.Web.Error          (ExplorerError (Internal))
-import           Explorer.Web.LegacyApi      (ExplorerApiRecord (..), TxsStats, PageNumber)
-import           Explorer.Web.Query          (queryBlockSummary, queryTx, queryTxSummary)
+import           Explorer.Web.Query          (queryBlockSummary, queryTxSummary)
+import           Explorer.Web.LegacyApi      (ExplorerApiRecord (_genesisSummary, _genesisAddressInfo, _genesisPagesTotal, _epochPages, _epochSlots, _statsTxs, _txsSummary, _addressSummary, _addressUtxoBulk, _blocksSummary, _blocksTxs, _txsLast, _dumpBlockRange, _totalAda, _blocksPages, _blocksPagesTotal, ExplorerApiRecord), TxsStats, PageNumber)
 
 import           Cardano.Chain.Slotting      (EpochNumber (EpochNumber))
 
@@ -43,7 +43,6 @@ import           Data.Maybe (fromMaybe)
 import qualified Data.ByteString.Base16      as B16
 import qualified Data.ByteString.Char8       as SB8
 import qualified Data.Text                   as T
-import           Data.ByteString (ByteString)
 import           Data.Time                   (defaultTimeLocale,
                                               parseTimeOrError)
 import           Data.Time.Clock.POSIX       (POSIXTime, utcTimeToPOSIXSeconds)
@@ -137,7 +136,7 @@ testBlocksPages
     :: SqlBackend -> Maybe PageNumber
     -> Maybe Word
     -> Handler (Either ExplorerError (PageNumber, [CBlockEntry]))
-testBlocksPages backend _ _  = pure $ Right (1, [CBlockEntry
+testBlocksPages _backend _ _  = pure $ Right (1, [CBlockEntry
     { cbeEpoch      = 37294
     , cbeSlot       = 10
     , cbeBlkHeight  = 1564738
@@ -220,10 +219,10 @@ testBlocksTxs
     -> Maybe Word
     -> Maybe Word
     -> Handler (Either ExplorerError [CTxBrief])
-testBlocksTxs backend _ _ _ = pure $ Right [cTxBrief]
+testBlocksTxs _backend _ _ _ = pure $ Right [cTxBrief]
 
 testTxsLast :: SqlBackend -> Handler (Either ExplorerError [CTxEntry])
-testTxsLast backend = pure $ Right [cTxEntry]
+testTxsLast _backend = pure $ Right [cTxEntry]
 
 testTxsSummary
     :: SqlBackend -> CTxHash
@@ -262,6 +261,7 @@ testTxsSummary backend (CTxHash (CHash cTxHash)) = do
                           , ctsOutputs         = map convertTxOut outputs
                           }
                       Nothing -> pure $ Left $ Internal "cant find slot# of block"
+              _ -> pure $ Left $ Internal "cant parse hash"
 
 sampleAddressSummary :: CAddressSummary
 sampleAddressSummary = CAddressSummary
@@ -275,12 +275,12 @@ sampleAddressSummary = CAddressSummary
 testAddressSummary
     :: SqlBackend -> CAddress
     -> Handler (Either ExplorerError CAddressSummary)
-testAddressSummary backend _  = pure $ Right sampleAddressSummary
+testAddressSummary _backend _  = pure $ Right sampleAddressSummary
 
 testAddressUtxoBulk
     :: SqlBackend -> [CAddress]
     -> Handler (Either ExplorerError [CUtxo])
-testAddressUtxoBulk backend _  = pure $ Right [CUtxo
+testAddressUtxoBulk _backend _  = pure $ Right [CUtxo
     { cuId = CTxHash $ CHash "8aac4a6b18fafa2783071c66519332157ce96c67e88fc0cc3cb04ba0342d12a1"
     , cuOutIndex = 0
     , cuAddress = CAddress "19F6U1Go5B4KakVoCZfzCtqNAWhUBprxVzL3JsGu74TEwQnXPvAKPUbvG8o4Qe5RaY8Z7WKLfxmNFwBqPV1NQ2hRpKkdEN"
@@ -292,13 +292,13 @@ testEpochSlotSearch
     -> Word16
     -> Handler (Either ExplorerError [CBlockEntry])
 -- `?epoch=1&slot=1` returns an empty list
-testEpochSlotSearch backend (EpochNumber 1) 1 =
+testEpochSlotSearch _backend (EpochNumber 1) 1 =
     pure $ Right []
 -- `?epoch=1&slot=2` returns an error
-testEpochSlotSearch backend (EpochNumber 1) 2 =
+testEpochSlotSearch _backend (EpochNumber 1) 2 =
     pure $ Left $ Internal "Error while searching epoch/slot"
 -- all others returns a simple result
-testEpochSlotSearch backend _ _ = pure $ Right [CBlockEntry
+testEpochSlotSearch _backend _ _ = pure $ Right [CBlockEntry
     { cbeEpoch      = 37294
     , cbeSlot       = 10
     , cbeBlkHeight  = 1564738
@@ -315,7 +315,7 @@ testEpochPageSearch
     :: SqlBackend -> EpochNumber
     -> Maybe Int
     -> Handler (Either ExplorerError (Int, [CBlockEntry]))
-testEpochPageSearch backend _ _ = pure $ Right (1, [CBlockEntry
+testEpochPageSearch _backend _ _ = pure $ Right (1, [CBlockEntry
     { cbeEpoch      = 37294
     , cbeSlot       = 10
     , cbeBlkHeight  = 1564738
@@ -330,7 +330,7 @@ testEpochPageSearch backend _ _ = pure $ Right (1, [CBlockEntry
 
 testGenesisSummary
     :: SqlBackend -> Handler (Either ExplorerError CGenesisSummary)
-testGenesisSummary backend = pure $ Right CGenesisSummary
+testGenesisSummary _backend = pure $ Right CGenesisSummary
     { cgsNumTotal       = 4
     , cgsNumRedeemed    = 3
     , cgsNumNotRedeemed = 1
@@ -343,11 +343,11 @@ testGenesisPagesTotal
     -> Maybe CAddressesFilter
     -> Handler (Either ExplorerError PageNumber)
 -- number of redeemed addresses pages
-testGenesisPagesTotal backend _ (Just RedeemedAddresses)    = pure $ Right 1
+testGenesisPagesTotal _backend _ (Just RedeemedAddresses)    = pure $ Right 1
 -- number of non redeemed addresses pages
-testGenesisPagesTotal backend _ (Just NonRedeemedAddresses) = pure $ Right 1
+testGenesisPagesTotal _backend _ (Just NonRedeemedAddresses) = pure $ Right 1
 -- number of all redeem addresses pages
-testGenesisPagesTotal backend _ _                           = pure $ Right 2
+testGenesisPagesTotal _backend _ _                           = pure $ Right 2
 
 -- mock CGenesisAddressInfo
 gAddressInfoA :: CGenesisAddressInfo
@@ -379,19 +379,19 @@ testGenesisAddressInfo
     -> Maybe CAddressesFilter
     -> Handler (Either ExplorerError [CGenesisAddressInfo])
 -- filter redeemed addresses
-testGenesisAddressInfo backend _ _ (Just RedeemedAddresses)    = pure $ Right [ gAddressInfoA ]
+testGenesisAddressInfo _backend _ _ (Just RedeemedAddresses)    = pure $ Right [ gAddressInfoA ]
 -- filter non-redeemed addresses
-testGenesisAddressInfo backend _ _ (Just NonRedeemedAddresses) = pure $ Right [ gAddressInfoB, gAddressInfoC ]
+testGenesisAddressInfo _backend _ _ (Just NonRedeemedAddresses) = pure $ Right [ gAddressInfoB, gAddressInfoC ]
 -- all addresses (w/o filtering) - page 1
-testGenesisAddressInfo backend (Just 1) _ (Just AllAddresses)  = pure $ Right [ gAddressInfoA, gAddressInfoB ]
-testGenesisAddressInfo backend (Just 1) _ Nothing              = pure $ Right [ gAddressInfoA, gAddressInfoB ]
+testGenesisAddressInfo _backend (Just 1) _ (Just AllAddresses)  = pure $ Right [ gAddressInfoA, gAddressInfoB ]
+testGenesisAddressInfo _backend (Just 1) _ Nothing              = pure $ Right [ gAddressInfoA, gAddressInfoB ]
 -- all addresses (w/o filtering) - page 2
-testGenesisAddressInfo backend (Just 2) _ (Just AllAddresses)  = pure $ Right [ gAddressInfoC ]
-testGenesisAddressInfo backend (Just 2) _ Nothing              = pure $ Right [ gAddressInfoC ]
+testGenesisAddressInfo _backend (Just 2) _ (Just AllAddresses)  = pure $ Right [ gAddressInfoC ]
+testGenesisAddressInfo _backend (Just 2) _ Nothing              = pure $ Right [ gAddressInfoC ]
 -- all others requests will ended up with an error
-testGenesisAddressInfo backend _ _ _ =  pure $ Left $ Internal "Error while pagening genesis addresses"
+testGenesisAddressInfo _backend _ _ _ =  pure $ Left $ Internal "Error while pagening genesis addresses"
 
 testStatsTxs
     :: SqlBackend -> Maybe Word
     -> Handler (Either ExplorerError TxsStats)
-testStatsTxs backend _ = pure $ Right (1, [(cTxId, 200)])
+testStatsTxs _backend _ = pure $ Right (1, [(cTxId, 200)])

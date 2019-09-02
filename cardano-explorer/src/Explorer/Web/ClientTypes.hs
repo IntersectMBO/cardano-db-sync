@@ -1,6 +1,3 @@
--- for `instance ToString ByteString`
-{-# OPTIONS_GHC -fno-warn-orphans #-}
-
 {-# LANGUAGE AllowAmbiguousTypes        #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -8,6 +5,7 @@
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TypeApplications           #-}
+{-# OPTIONS_GHC -Wno-error=partial-fields #-}
 
 -- | Types that arise in the API: mostly simplified representations
 -- of the core types which are easier to serialize.
@@ -41,7 +39,7 @@ import           Control.Monad.Error.Class (throwError)
 import           Data.ByteString           (ByteString)
 import qualified Data.ByteString.Base16    as B16
 import qualified Data.ByteString.Char8     as SB8
-import           Data.Fixed                (Micro, showFixed)
+import           Data.Fixed (showFixed)
 import           Data.Text                 (Text)
 import qualified Data.Text                 as T
 import qualified Data.Text.Encoding        as T
@@ -53,12 +51,10 @@ import           Servant.API               (FromHttpApiData (parseUrlPiece))
 import           Cardano.Crypto.Hash.Class (Hash (getHash))
 
 import           Control.DeepSeq           (NFData)
-import           Data.Aeson.Encoding       (unsafeToEncoding)
 import           Data.Aeson.TH             (defaultOptions, deriveJSON,
                                             deriveToJSON)
-import           Data.Aeson.Types          (ToJSON (toEncoding, toJSON))
+import           Data.Aeson.Types          (ToJSON (toJSON))
 import qualified Data.Aeson as Aeson
-import qualified Data.ByteString.Builder   as BS (string8)
 import           Data.Hashable             (Hashable)
 import           Data.Word                 (Word16, Word64)
 
