@@ -57,6 +57,7 @@
             (hsPkgs.base)
             (hsPkgs.bytestring)
             (hsPkgs.cardano-crypto-wrapper)
+            (hsPkgs.cardano-explorer-db)
             (hsPkgs.cardano-explorer-node)
             (hsPkgs.cardano-ledger)
             (hsPkgs.cardano-node)
