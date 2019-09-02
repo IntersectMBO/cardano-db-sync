@@ -3,6 +3,7 @@
 
 module Explorer.DB.Insert
   ( insertBlock
+  , insertSlotLeader
   , insertTx
   , insertTxIn
   , insertTxOut
@@ -25,6 +26,9 @@ import           Explorer.DB.Schema
 
 insertBlock :: MonadIO m => Block -> ReaderT SqlBackend m BlockId
 insertBlock = insertByReturnKey
+
+insertSlotLeader :: MonadIO m => SlotLeader -> ReaderT SqlBackend m SlotLeaderId
+insertSlotLeader = insertByReturnKey
 
 insertTx :: MonadIO m => Tx -> ReaderT SqlBackend m TxId
 insertTx = insertByReturnKey

@@ -15,10 +15,7 @@ module Explorer.Node.Insert
   , insertValidateGenesisDistribution
   ) where
 
-import           Cardano.Prelude
-
 import           Cardano.BM.Trace (Trace, logInfo)
-import qualified Cardano.Crypto as Crypto
 
 -- Import all 'cardano-ledger' functions and data types qualified so they do not
 -- clash with the Explorer DB functions and data types which are also imported
@@ -27,9 +24,14 @@ import qualified Cardano.Chain.Block as Ledger
 import qualified Cardano.Chain.Common as Ledger
 import qualified Cardano.Chain.UTxO as Ledger
 
+import qualified Cardano.Crypto as Crypto
+
+import           Cardano.Prelude
+
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
+import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
@@ -67,6 +69,7 @@ insertABOBBoundary tracer blk = do
                         Right hh -> hh
       pbid <- leftPanic "insertABOBBoundary: "
                   <$> DB.queryBlockId (unHeaderHash prevHash)
+      slid <- DB.insertSlotLeader $ DB.SlotLeader (BS.replicate 28 '\0') "Epoch boundary slot leader"
       void . DB.insertBlock $
                 DB.Block
                   { DB.blockHash = unHeaderHash $ Ledger.boundaryHashAnnotated blk
@@ -74,6 +77,7 @@ insertABOBBoundary tracer blk = do
                   , DB.blockBlockNo = 0
                   , DB.blockPrevious = Just pbid
                   , DB.blockMerkelRoot = Nothing -- No merkelRoot for a boundary block
+                  , DB.blockSlotLeader = slid
                   , DB.blockSize = fromIntegral $ Ledger.boundaryBlockLength blk
                   }
       supply <- DB.queryTotalSupply
@@ -81,7 +85,6 @@ insertABOBBoundary tracer blk = do
                     [ "Total supply at start of epoch ", textShow (boundaryEpochNumber blk)
                     , " is ", DB.renderAda supply, " ada"
                     ]
-
 
 insertABlock :: Trace IO Text -> Ledger.ABlock ByteString -> IO ()
 insertABlock tracer blk = do
@@ -97,6 +100,7 @@ insertABlock tracer blk = do
       pbid <- leftPanic "insertABlock: "
                   <$> DB.queryBlockId (unHeaderHash $ blockPreviousHash blk)
 
+      slid <- DB.insertSlotLeader $ mkSlotLeader blk
       blkId <- DB.insertBlock $
                     DB.Block
                       { DB.blockHash = unHeaderHash $ blockHash blk
@@ -104,6 +108,7 @@ insertABlock tracer blk = do
                       , DB.blockBlockNo = blockNumber blk
                       , DB.blockPrevious = Just pbid
                       , DB.blockMerkelRoot = Just $ unCryptoHash (blockMerkelRoot blk)
+                      , DB.blockSlotLeader = slid
                       , DB.blockSize = fromIntegral $ Ledger.blockLength blk
                       }
 

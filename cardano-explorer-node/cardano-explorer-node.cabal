@@ -41,6 +41,7 @@ library
                       , base16-bytestring
                       , bytestring
                       , cardano-binary
+                      , cardano-crypto
                       , cardano-crypto-wrapper
                       , cardano-explorer-db
                       , cardano-ledger
@@ -65,6 +66,7 @@ library
                       , typed-protocols
                       , reflection
                       , serialise
+                      , time
                       , transformers
                       , typed-protocols-cbor
 

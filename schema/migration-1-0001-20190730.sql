@@ -15,9 +15,8 @@ BEGIN
     -- Blocks, transactions and merkel roots use a 32 byte hash.
     EXECUTE 'CREATE DOMAIN hash32type AS bytea CHECK (octet_length (VALUE) = 32);';
 
-    -- Drop this view if because this migration changes types of columns the view
-    -- referred to. We can recreate the view later in the migration schedule.
-    EXECUTE 'DROP VIEW IF EXISTS utxo;';
+    -- Addresses use a 28 byte hash (as do StakeholdIds).
+    EXECUTE 'CREATE DOMAIN hash28type AS bytea CHECK (octet_length (VALUE) = 28);';
 
     UPDATE "schema_version" SET stage_one = 1;
     RAISE NOTICE 'DB has been migrated to stage_one version %', next_version;
