@@ -21,6 +21,7 @@
           (hsPkgs.base16-bytestring)
           (hsPkgs.bytestring)
           (hsPkgs.cardano-binary)
+          (hsPkgs.cardano-crypto)
           (hsPkgs.cardano-crypto-wrapper)
           (hsPkgs.cardano-explorer-db)
           (hsPkgs.cardano-ledger)
@@ -45,6 +46,7 @@
           (hsPkgs.typed-protocols)
           (hsPkgs.reflection)
           (hsPkgs.serialise)
+          (hsPkgs.time)
           (hsPkgs.transformers)
           (hsPkgs.typed-protocols-cbor)
           ];
