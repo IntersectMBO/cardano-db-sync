@@ -87,6 +87,7 @@ executable cardano-explorer-node
   build-depends:        base                            >= 4.12         && < 4.13
                       , bytestring
                       , cardano-crypto-wrapper
+                      , cardano-explorer-db
                       , cardano-explorer-node
                       , cardano-ledger
                       , cardano-node
