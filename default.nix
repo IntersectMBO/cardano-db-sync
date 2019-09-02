@@ -12,6 +12,7 @@
 , iohkLib ? import ./lib.nix { inherit system crossSystem config; }
 # Use nixpkgs pin from iohkLib
 , pkgs ? iohkLib.pkgs
+, customConfig ? {}
 }:
 
 let
@@ -43,7 +44,7 @@ let
     eval = pkgs.lib.evalModules {
       prefix = [];
       check = false;
-      modules = [ ./module.nix extraModule ];
+      modules = [ ./module.nix extraModule customConfig ];
       args = { inherit pkgs; };
     };
   in eval.config.services.cardano-exporter.script;

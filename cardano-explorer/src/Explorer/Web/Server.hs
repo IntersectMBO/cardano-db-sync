@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 module Explorer.Web.Server (runServer) where
 
@@ -8,7 +9,10 @@ import           Explorer.DB                 (blockBlockNo, blockHash,
                                               , queryTotalSupply
                                               , Ada
                                               , toConnectionString
-                                              , queryBlockCount)
+                                              , blockMerkelRoot
+                                              , queryBlockCount
+                                              , txHash, txOutAddress, txOutValue, txFee
+                                              , TxOut(TxOut))
 import           Explorer.Web.Api            (ExplorerApi, explorerApi)
 import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSummary (CAddressSummary, caAddress, caBalance, caTxList, caTxNum, caType),
                                               CAddressType (CPubKeyAddress),
@@ -18,16 +22,17 @@ import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSumma
                                               CBlockSummary (CBlockSummary, cbsEntry, cbsMerkleRoot, cbsNextHash, cbsPrevHash),
                                               CGenesisAddressInfo (CGenesisAddressInfo, cgaiCardanoAddress, cgaiGenesisAmount, cgaiIsRedeemed),
                                               CGenesisSummary (CGenesisSummary, cgsNonRedeemedAmountTotal, cgsNumNotRedeemed, cgsNumRedeemed, cgsNumTotal, cgsRedeemedAmountTotal),
-                                              CHash (CHash),
-                                              CTxBrief (CTxBrief, ctbId, ctbInputSum, ctbInputs, ctbOutputSum, ctbOutputs, ctbTimeIssued),
+                                              CHash (CHash)
+                                              , CCoin
+                                              , CTxBrief (CTxBrief, ctbId, ctbInputSum, ctbInputs, ctbOutputSum, ctbOutputs, ctbTimeIssued),
                                               CTxEntry (CTxEntry, cteAmount, cteId, cteTimeIssued),
                                               CTxHash, CTxHash (CTxHash),
                                               CTxSummary (CTxSummary, ctsBlockEpoch, ctsBlockHash, ctsBlockHeight, ctsBlockSlot, ctsBlockTimeIssued, ctsFees, ctsId, ctsInputs, ctsOutputs, ctsRelayedBy, ctsTotalInput, ctsTotalOutput, ctsTxTimeIssued),
                                               CUtxo (CUtxo, cuAddress, cuCoins, cuId, cuOutIndex),
-                                              mkCCoin)
+                                              mkCCoin, adaToCCoin)
 import           Explorer.Web.Error          (ExplorerError (Internal))
 import           Explorer.Web.LegacyApi      (ExplorerApiRecord (..), TxsStats, PageNumber)
-import           Explorer.Web.Query          (queryBlockSummary)
+import           Explorer.Web.Query          (queryBlockSummary, queryTx, queryTxSummary)
 
 import           Cardano.Chain.Slotting      (EpochNumber (EpochNumber))
 
@@ -38,10 +43,11 @@ import           Data.Maybe (fromMaybe)
 import qualified Data.ByteString.Base16      as B16
 import qualified Data.ByteString.Char8       as SB8
 import qualified Data.Text                   as T
+import           Data.ByteString (ByteString)
 import           Data.Time                   (defaultTimeLocale,
                                               parseTimeOrError)
 import           Data.Time.Clock.POSIX       (POSIXTime, utcTimeToPOSIXSeconds)
-import           Data.Word                   (Word16)
+import           Data.Word                   (Word16, Word64)
 import           Network.Wai.Handler.Warp    (run)
 import           Servant                     (Application, Handler, Server,
                                               serve)
@@ -183,9 +189,9 @@ blocksSummary backend (CHash blkHashTxt) =
                 liftIO $ print blob
                 mBlk <- runQuery backend (queryBlockSummary blob)
                 pure $ case mBlk of
-                  Just (blk, Just prevHash, nextHash) ->
-                    case blockSlotNo blk of
-                      Just slotno -> do
+                  Just (blk, Just prevHash, nextHash, tx_count, fees, total_out) ->
+                    case (blockSlotNo blk, blockMerkelRoot blk) of
+                      (Just slotno, Just mroot) -> do
                         let
                           (epoch, slot) = divMod slotno 21600 -- TODO, get it from the config
                         Right $ CBlockSummary
@@ -195,17 +201,17 @@ blocksSummary backend (CHash blkHashTxt) =
                              , cbeBlkHeight = fromIntegral $ blockBlockNo blk
                              , cbeBlkHash = CHash $ T.pack $ SB8.unpack $ B16.encode $ blockHash blk
                              , cbeTimeIssued = Nothing
-                             , cbeTxNum = 0
-                             , cbeTotalSent = mkCCoin 0
+                             , cbeTxNum = tx_count
+                             , cbeTotalSent = adaToCCoin total_out
                              , cbeSize = blockSize blk
                              , cbeBlockLead = Nothing
-                             , cbeFees = mkCCoin 0
+                             , cbeFees = adaToCCoin fees
                              }
                           , cbsPrevHash = CHash $ T.pack $ SB8.unpack $ B16.encode prevHash
                           , cbsNextHash = fmap (CHash . T.pack . SB8.unpack . B16.encode) nextHash
-                          , cbsMerkleRoot = CHash ""
+                          , cbsMerkleRoot = CHash $ T.pack $ SB8.unpack $ B16.encode mroot
                           }
-                      Nothing -> Left $ Internal "slot missing"
+                      (_,_) -> Left $ Internal "internal error 1"
                   _ -> Left $ Internal "No block found"
               _ -> pure $ Left $ Internal "imposible!"
 
@@ -222,26 +228,40 @@ testTxsLast backend = pure $ Right [cTxEntry]
 testTxsSummary
     :: SqlBackend -> CTxHash
     -> Handler (Either ExplorerError CTxSummary)
-testTxsSummary backend _       = pure $ Right CTxSummary
-    { ctsId              = CTxHash $ CHash "8aac4a6b18fafa2783071c66519332157ce96c67e88fc0cc3cb04ba0342d12a1"
-    , ctsTxTimeIssued    = Just posixTime
-    , ctsBlockTimeIssued = Nothing
-    , ctsBlockHeight     = Just 13
-    , ctsBlockEpoch      = Just 0
-    , ctsBlockSlot       = Just 13
-    , ctsBlockHash       = Just $ CHash "a9dea19829e80d9064cd0c33dccf5369638e43c62a090848342037e296120a35"
-    , ctsRelayedBy       = Nothing
-    , ctsTotalInput      = mkCCoin 33333
-    , ctsTotalOutput     = mkCCoin 33333
-    , ctsFees            = mkCCoin 0
-    , ctsInputs          =  [ Just (CAddress "19HxN7PseAPT93RftAh7bBmbnJU5gtH6QzvUyZXnbz9Y1UtYwPDdiCGkB2gwvC8CjBUtHXBij9j9Qb6JYgHPi6LtevDcFQ", mkCCoin 97)
-                            , Nothing
-                            , Just (CAddress "LaVWPVaMHxNVtqJ1uvVZ8FyQmeRam5avHE1Uv9iwRivCKTN83CUW", mkCCoin 3333)
-                            ]
-    , ctsOutputs         =  [ (CAddress "19F6U1Go5B4KakVoCZfzCtqNAWhUBprxVzL3JsGu74TEwQnXPvAKPUbvG8o4Qe5RaY8Z7WKLfxmNFwBqPV1NQ2hRpKkdEN", mkCCoin 94)
-                            , (CAddress "1feqWtoyaxFyvKQFWo46vHSc7urynGaRELQE62T74Y3RBs8", mkCCoin 3)
-                            ]
-    }
+testTxsSummary backend (CTxHash (CHash cTxHash)) = do
+  let
+    convertTxOut :: TxOut -> (CAddress, CCoin)
+    -- TODO, convert txOutAddress to base58
+    convertTxOut TxOut{txOutAddress,txOutValue} = (CAddress $ T.pack $ show txOutAddress, mkCCoin $ fromIntegral txOutValue)
+    convertInput :: (T.Text, Word64) -> Maybe (CAddress, CCoin)
+    convertInput (addr, coin) = Just (CAddress $ addr, mkCCoin $ fromIntegral coin)
+  case B16.decode (SB8.pack (T.unpack cTxHash)) of
+              (blob, "") -> do
+                liftIO $ print blob
+                mTxblk <- runQuery backend $ queryTxSummary blob
+                case mTxblk of
+                  Nothing -> pure $ Left $ Internal "tx not found" -- TODO, give the same error as before?
+                  Just (tx, blk, inputs, outputs) -> do
+                    case blockSlotNo blk of
+                      Just slotno -> do
+                        let
+                          (epoch, slot) = divMod slotno 21600 -- TODO, get it from the config
+                        pure $ Right CTxSummary
+                          { ctsId              = CTxHash $ CHash $ T.pack $ SB8.unpack $ B16.encode $ txHash tx
+                          , ctsTxTimeIssued    = Just posixTime
+                          , ctsBlockTimeIssued = Nothing
+                          , ctsBlockHeight     = Just $ fromIntegral $ blockBlockNo blk
+                          , ctsBlockEpoch      = Just epoch
+                          , ctsBlockSlot       = Just $ fromIntegral slot
+                          , ctsBlockHash       = Just $ CHash $ T.pack $ SB8.unpack $ B16.encode $ blockHash blk
+                          , ctsRelayedBy       = Nothing
+                          , ctsTotalInput      = (mkCCoin . sum . map (\(_addr,coin) -> fromIntegral  coin)) inputs
+                          , ctsTotalOutput     = (mkCCoin . sum . map (fromIntegral . txOutValue)) outputs
+                          , ctsFees            = mkCCoin $ fromIntegral $ txFee tx
+                          , ctsInputs          = map convertInput inputs
+                          , ctsOutputs         = map convertTxOut outputs
+                          }
+                      Nothing -> pure $ Left $ Internal "cant find slot# of block"
 
 sampleAddressSummary :: CAddressSummary
 sampleAddressSummary = CAddressSummary

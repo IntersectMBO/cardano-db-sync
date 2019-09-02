@@ -12,7 +12,7 @@ in (self.haskellPackages.shellFor {
       echo "old explorer:"
       ${self.pkgs.jq}/bin/jq < /tmp/compare-remote "$2"
       ${self.pkgs.jq}/bin/jq < /tmp/compare-local "$2"
-      ${self.pkgs.haskellPackages.aeson-diff}/bin/json-diff /tmp/compare-remote /tmp/compare-local
+      ${self.pkgs.haskellPackages.aeson-diff}/bin/json-diff /tmp/compare-remote /tmp/compare-local | jq .
     }
   '';
 })
