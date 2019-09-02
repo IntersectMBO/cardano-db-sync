@@ -34,6 +34,7 @@ module Explorer.Web.ClientTypes
        , CByteString (..)
        , toCHash
        , mkCCoin
+       , adaToCCoin
        ) where
 
 import           Control.Monad.Error.Class (throwError)
@@ -56,10 +57,12 @@ import           Data.Aeson.Encoding       (unsafeToEncoding)
 import           Data.Aeson.TH             (defaultOptions, deriveJSON,
                                             deriveToJSON)
 import           Data.Aeson.Types          (ToJSON (toEncoding, toJSON))
+import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Builder   as BS (string8)
-import           Data.Function             ((&))
 import           Data.Hashable             (Hashable)
 import           Data.Word                 (Word16, Word64)
+
+import           Explorer.DB (Ada(Ada))
 
 -------------------------------------------------------------------------------------
 -- Hash types
@@ -102,8 +105,14 @@ newtype CCoin = CCoin
     { unCoin :: Text
     } deriving (Show, Generic, Eq)
 
+instance ToJSON CCoin where
+  toJSON (CCoin coin) = Aeson.object [ ("getCoin", Aeson.String coin) ]
+
 mkCCoin :: Integer -> CCoin
 mkCCoin = CCoin . T.pack . show
+
+adaToCCoin :: Ada -> CCoin
+adaToCCoin (Ada ada) = CCoin $ T.pack $ showFixed True $ ada * 1000000
 
 --instance NFData CCoin
 
@@ -259,7 +268,6 @@ deriveJSON defaultOptions ''CHash
 deriveJSON defaultOptions ''CAddress
 deriveJSON defaultOptions ''CTxHash
 
-deriveToJSON defaultOptions ''CCoin
 deriveToJSON defaultOptions ''CBlockEntry
 deriveToJSON defaultOptions ''CTxEntry
 deriveToJSON defaultOptions ''CTxBrief
