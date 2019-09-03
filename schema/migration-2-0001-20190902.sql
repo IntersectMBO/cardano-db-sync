@@ -8,7 +8,7 @@ BEGIN
   IF next_version = 1 THEN
     EXECUTE 'CREATe TABLE "slot_leader"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash" hash28type NOT NULL,"desciption" VARCHAR NOT NULL)' ;
     EXECUTE 'ALTER TABLE "slot_leader" ADD CONSTRAINT "unique_slot_leader" UNIQUE("hash")' ;
-    EXECUTE 'CREATe TABLE "block"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash" hash32type NOT NULL,"slot_no" uinteger NULL,"block_no" uinteger NOT NULL,"previous" INT8 NULL,"merkel_root" hash32type NULL,"slot_leader" INT8 NOT NULL,"size" uinteger NOT NULL)' ;
+    EXECUTE 'CREATe TABLE "block"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash" hash32type NOT NULL,"slot_no" uinteger NULL,"block_no" uinteger,"previous" INT8 NULL,"merkel_root" hash32type NULL,"slot_leader" INT8 NOT NULL,"size" uinteger NOT NULL)' ;
     EXECUTE 'ALTER TABLE "block" ADD CONSTRAINT "unique_block" UNIQUE("hash")' ;
     EXECUTE 'ALTER TABLE "block" ADD CONSTRAINT "block_previous_fkey" FOREIGN KEY("previous") REFERENCES "block"("id")' ;
     EXECUTE 'ALTER TABLE "block" ADD CONSTRAINT "block_slot_leader_fkey" FOREIGN KEY("slot_leader") REFERENCES "slot_leader"("id")' ;

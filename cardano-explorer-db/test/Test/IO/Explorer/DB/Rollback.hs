@@ -89,7 +89,7 @@ createAndInsertBlocks blockCount =
         -> ReaderT SqlBackend m (Word64, Maybe BlockId, Maybe Block, Maybe TxId)
     createAndInsert (indx, mPrevId, mPrevBlock, mTxOutId) = do
         slid <- insertSlotLeader testSlotLeader
-        let newBlock = Block (mkBlockHash indx) (Just indx) indx mPrevId
+        let newBlock = Block (mkBlockHash indx) (Just indx) (Just indx) mPrevId
                         (maybe Nothing (const $ Just (mkMerkelRoot indx)) mPrevBlock)
                         slid 42
         blkId <- insertBlock newBlock

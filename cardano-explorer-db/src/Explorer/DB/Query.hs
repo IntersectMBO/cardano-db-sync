@@ -62,9 +62,7 @@ queryBlock hash = do
 -- | Count the number of blocks in the Block table.
 queryBlockCount :: MonadIO m => ReaderT SqlBackend m Word
 queryBlockCount = do
-  res <- select . from $ \ blk -> do
-            -- Stupid where_ condition to force evaluation of a 'From' constraint.
-            where_ (blk ^. BlockBlockNo ==. blk ^.BlockBlockNo)
+  res <- select . from $ \ (_ :: SqlExpr (Entity Block)) -> do
             pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
@@ -165,9 +163,7 @@ queryTotalSupply = do
 -- | Count the number of transactions in the Tx table.
 queryTxCount :: MonadIO m => ReaderT SqlBackend m Word
 queryTxCount = do
-  res <- select . from $ \ tx -> do
-            -- Stupid where_ condition to force evaluation of a 'From' constraint.
-            where_ (tx ^. TxId ==. tx ^.TxId)
+  res <- select . from $ \ (_ :: SqlExpr (Entity Tx)) -> do
             pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
@@ -183,18 +179,14 @@ queryTxId hash = do
 -- | Count the number of transactions in the Tx table.
 queryTxInCount :: MonadIO m => ReaderT SqlBackend m Word
 queryTxInCount = do
-  res <- select . from $ \ txi -> do
-            -- Stupid where_ condition to force evaluation of a 'From' constraint.
-            where_ (txi ^. TxInId ==. txi ^.TxInId)
+  res <- select . from $ \ (_ :: SqlExpr (Entity TxIn)) -> do
             pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
 -- | Count the number of transaction outputs in the TxOut table.
 queryTxOutCount :: MonadIO m => ReaderT SqlBackend m Word
 queryTxOutCount = do
-  res <- select . from $ \ txo -> do
-            -- Stupid where_ condition to force evaluation of a 'From' constraint.
-            where_ (txo ^. TxOutId ==. txo ^.TxOutId)
+  res <- select . from $ \ (_ :: SqlExpr (Entity TxOut)) -> do
             pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 

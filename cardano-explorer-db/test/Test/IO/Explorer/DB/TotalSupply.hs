@@ -30,7 +30,7 @@ initialSupplyTest =
     (tx0Ids :: [TxId]) <- mapM insertTx $ mkTxs bid0 4
     _ <- mapM insertTxOut $ map (mkTxOut bid0) tx0Ids
     count <- queryBlockCount
-    assertBool "Block count should be 1" (count == 1)
+    assertBool ("Block count should be 1, got " ++ show count) (count == 1)
     supply0 <- queryTotalSupply
     assertBool "Total supply should not be > 0" (supply0 > Ada 0)
 
