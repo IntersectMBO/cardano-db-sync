@@ -76,7 +76,7 @@ insertValidateGenesisDistribution tracer cfg = do
                             <> renderAbstractHash (configGenesisHash cfg)
 
         supply <- DB.queryTotalSupply
-        liftIO $ logInfo tracer ("Total genesis supply of ada: " <> DB.renderAda supply)
+        liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
 validateGenesisDistribution :: MonadIO m => Trace IO Text -> Ledger.Config -> DB.BlockId -> ReaderT SqlBackend m ()
