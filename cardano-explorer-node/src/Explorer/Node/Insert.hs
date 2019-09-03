@@ -74,7 +74,7 @@ insertABOBBoundary tracer blk = do
                 DB.Block
                   { DB.blockHash = unHeaderHash $ Ledger.boundaryHashAnnotated blk
                   , DB.blockSlotNo = Nothing -- No slotNo for a boundary block
-                  , DB.blockBlockNo = 0
+                  , DB.blockBlockNo = Nothing
                   , DB.blockPrevious = Just pbid
                   , DB.blockMerkelRoot = Nothing -- No merkelRoot for a boundary block
                   , DB.blockSlotLeader = slid
@@ -105,7 +105,7 @@ insertABlock tracer blk = do
                     DB.Block
                       { DB.blockHash = unHeaderHash $ blockHash blk
                       , DB.blockSlotNo = Just $ slotNumber blk
-                      , DB.blockBlockNo = blockNumber blk
+                      , DB.blockBlockNo = Just $ blockNumber blk
                       , DB.blockPrevious = Just pbid
                       , DB.blockMerkelRoot = Just $ unCryptoHash (blockMerkelRoot blk)
                       , DB.blockSlotLeader = slid

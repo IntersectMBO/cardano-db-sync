@@ -58,7 +58,7 @@ share
   Block
     hash                ByteString          sqltype=hash32type
     slotNo              Word64 Maybe        sqltype=uinteger
-    blockNo             Word64              sqltype=uinteger
+    blockNo             Word64 Maybe        sqltype=uinteger
     previous            BlockId Maybe
     merkelRoot          ByteString Maybe    sqltype=hash32type
     slotLeader          SlotLeaderId

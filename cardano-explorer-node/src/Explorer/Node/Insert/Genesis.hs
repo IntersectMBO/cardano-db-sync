@@ -65,7 +65,7 @@ insertValidateGenesisDistribution tracer cfg = do
                       DB.Block
                         { DB.blockHash = configGenesisHash cfg
                         , DB.blockSlotNo = Nothing
-                        , DB.blockBlockNo = 0
+                        , DB.blockBlockNo = Nothing
                         , DB.blockPrevious = Nothing
                         , DB.blockMerkelRoot = Nothing
                         , DB.blockSlotLeader = slid
