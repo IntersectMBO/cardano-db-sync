@@ -9,6 +9,25 @@ The new cardano-explorer consists of three components:
 * `cardano-explorer` which serves data from the PostgreSQL database via HTTP.
 
 
+## Architecture
+
+The explorer is written in a highly modular fashion to allow it to be as flexible as possible.
+
+The `cardano-explorer-node` connects to a locally running `cardano-node` (ie one connected to other
+nodes in the Cardano network over the internet with TCP/IP) using a Unix domain socket, retrieves
+blocks and stores parts of each block in a local PostgreSQL database. The database does not store
+things like cryptographic signatures but does store enough information to follow the chain of
+blocks and look at the transactions within blocks.
+
+The PostgreSQL database is designed to be accessed in a read-only fashion from other applications.
+The database schema is highly normalised which helps prevent data inconsistencies (specifically
+the use of foreign keys from one table to another). More user friendly database queries can be
+implemented using [Postgres Views][PostgresView] to implement joins between tables.
+
+The `cardano-explorer` is a client than serves data from the PostgreSQL database as JSON via a
+HTTP REST API.
+
+
 ## Schema Management
 
 Schema management for the Cardano Explorer database is a little more complicated than we would like,
@@ -37,3 +56,4 @@ order them in the correct order for applying to the database.
 
 
 [Persistent]: https://hackage.haskell.org/package/persistent
+[PostgresView]: https://www.postgresql.org/docs/current/sql-createview.html
