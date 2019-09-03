@@ -83,7 +83,7 @@ insertABOBBoundary tracer blk = do
       supply <- DB.queryTotalSupply
       liftIO $ logInfo tracer $ Text.concat
                     [ "Total supply at start of epoch ", textShow (boundaryEpochNumber blk)
-                    , " is ", DB.renderAda supply, " ada"
+                    , " is ", DB.renderAda supply, " Ada"
                     ]
 
 insertABlock :: Trace IO Text -> Ledger.ABlock ByteString -> IO ()
