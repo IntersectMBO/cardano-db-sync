@@ -14,6 +14,7 @@ module Explorer.DB.Query
   , queryLatestBlockId
   , queryLatestBlocks
   , queryLatestSlotNo
+  , queryMeta
   , queryPreviousBlockId
   , querySelectCount
   , queryTotalSupply
@@ -151,6 +152,15 @@ queryLatestSlotNo = do
             limit 1
             pure (blk ^. BlockSlotNo)
   pure $ fromMaybe 0 (listToMaybe $ mapMaybe unValue res)
+
+queryMeta :: MonadIO m => ReaderT SqlBackend m (Either LookupFail Meta)
+queryMeta = do
+  res <- select . from $ \ (meta :: SqlExpr (Entity Meta)) -> do
+            pure meta
+  pure $ case res of
+            [] -> Left DbMetaEmpty
+            [m] -> Right $ entityVal m
+            _ -> Left DbMetaMultipleRows
 
 -- | Get the current total supply of Lovelace.
 queryTotalSupply :: MonadIO m => ReaderT SqlBackend m Ada

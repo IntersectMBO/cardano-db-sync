@@ -10,6 +10,7 @@ module Explorer.Node.Util
   , blockPayload
   , blockPreviousHash
   , boundaryEpochNumber
+  , configSlotDuration
   , genesisToHeaderHash
   , leftPanic
   , mkSlotLeader
@@ -37,6 +38,7 @@ import qualified Cardano.Chain.Block as Ledger
 import qualified Cardano.Chain.Common as Ledger
 import qualified Cardano.Chain.Genesis as Ledger
 import qualified Cardano.Chain.Slotting as Ledger
+import qualified Cardano.Chain.Update as Ledger
 import qualified Cardano.Chain.UTxO as Ledger
 
 import           Crypto.Hash (Blake2b_256)
@@ -78,6 +80,10 @@ blockPayload =
 
 blockPreviousHash :: Ledger.ABlock a -> Ledger.HeaderHash
 blockPreviousHash = Ledger.headerPrevHash . Ledger.blockHeader
+
+configSlotDuration :: Ledger.Config -> Word64
+configSlotDuration =
+  fromIntegral . Ledger.ppSlotDuration . Ledger.gdProtocolParameters . Ledger.configGenesisData
 
 genesisToHeaderHash :: Ledger.GenesisHash -> Ledger.HeaderHash
 genesisToHeaderHash = coerce

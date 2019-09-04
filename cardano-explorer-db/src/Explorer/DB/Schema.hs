@@ -16,6 +16,7 @@ module Explorer.DB.Schema where
 
 import Data.ByteString.Char8 (ByteString)
 import Data.Text (Text)
+import Data.Time.Clock (UTCTime)
 import Data.Word (Word16, Word64)
 
 import Database.Persist.TH (mkDeleteCascade, mkMigrate, mkPersist, onlyUniqueP, persistLowerCase,
@@ -84,5 +85,12 @@ share
     txOutIndex          Word16              sqltype=txindex
     UniqueTxin          txOutId txOutIndex
 
+  -- A table containing metadat about the chain. There will probably only ever be one
+  -- row in this table.
+  Meta
+    protocolConst       Word64              -- The block security parameter.
+    slotDuration        Word64              -- Slot duration in milliseconds.
+    startTime           UTCTime             -- System start time used to calculate slot time stamps.
+    UniqueMeta          startTime
   |]
 
