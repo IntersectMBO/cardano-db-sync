@@ -55,6 +55,10 @@ insertValidateGenesisDistribution tracer cfg = do
         case mbid of
           Right bid -> validateGenesisDistribution tracer cfg bid
           Left _ -> do
+            void $ DB.insertMeta $ DB.Meta
+                                    (Ledger.unBlockCount $ Ledger.configK cfg)
+                                    (configSlotDuration cfg)
+                                    (Ledger.configStartTime cfg)
             -- Insert an 'artificial' Genesis block (with a genesis specific slot leader). We
             -- need this block to attach the genesis distribution transactions to.
             -- It would be nice to not need this artificial block, but that would
@@ -81,6 +85,28 @@ insertValidateGenesisDistribution tracer cfg = do
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
 validateGenesisDistribution :: MonadIO m => Trace IO Text -> Ledger.Config -> DB.BlockId -> ReaderT SqlBackend m ()
 validateGenesisDistribution tracer cfg bid = do
+  meta <- leftPanic "validateGenesisDistribution: " <$> DB.queryMeta
+  when (DB.metaProtocolConst meta /= Ledger.unBlockCount (Ledger.configK cfg)) $
+    panic $ Text.concat
+            [ "Mismatch protocol constant. Config value "
+            , textShow (Ledger.unBlockCount $ Ledger.configK cfg)
+            , " does not match DB value of ", textShow (DB.metaProtocolConst meta)
+            ]
+
+  when (DB.metaSlotDuration meta /= configSlotDuration cfg) $
+    panic $ Text.concat
+            [ "Mismatch slot duration time. Config value "
+            , textShow (configSlotDuration cfg)
+            , " does not match DB value of ", textShow (configSlotDuration cfg)
+            ]
+
+  when (DB.metaStartTime meta /= Ledger.configStartTime cfg) $
+    panic $ Text.concat
+            [ "Mismatch chain start time. Config value "
+            , textShow (Ledger.configStartTime cfg)
+            , " does not match DB value of ", textShow (Ledger.configStartTime cfg)
+            ]
+
   txCount <- DB.queryBlockTxCount bid
   let expectedTxCount = fromIntegral $length (genesisTxos cfg)
   when (txCount /= expectedTxCount) $

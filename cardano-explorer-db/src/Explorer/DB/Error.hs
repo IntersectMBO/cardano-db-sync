@@ -19,6 +19,8 @@ data LookupFail
   | DbLookupMessage !Text
   | DbLookupTxHash !ByteString
   | DbLookupTxOutPair !ByteString !Word16
+  | DbMetaEmpty
+  | DbMetaMultipleRows
 
 renderLookupFail :: LookupFail -> Text
 renderLookupFail lf =
@@ -28,7 +30,8 @@ renderLookupFail lf =
     DbLookupTxHash h -> "tx hash " <> base16encode h
     DbLookupTxOutPair h i ->
         Text.concat [ "tx out pair (", base16encode h, ", ", textShow i, ")" ]
-
+    DbMetaEmpty -> "Meta table is empty"
+    DbMetaMultipleRows -> "Multiple rows in Meta table which should only contain one"
 
 base16encode :: ByteString -> Text
 base16encode = Text.decodeUtf8 . Base16.encode

@@ -22,6 +22,8 @@ BEGIN
     EXECUTE 'ALTER TABLE "tx_in" ADD CONSTRAINT "unique_txin" UNIQUE("tx_out_id","tx_out_index")' ;
     EXECUTE 'ALTER TABLE "tx_in" ADD CONSTRAINT "tx_in_tx_in_id_fkey" FOREIGN KEY("tx_in_id") REFERENCES "tx"("id")' ;
     EXECUTE 'ALTER TABLE "tx_in" ADD CONSTRAINT "tx_in_tx_out_id_fkey" FOREIGN KEY("tx_out_id") REFERENCES "tx"("id")' ;
+    EXECUTE 'CREATe TABLE "meta"("id" SERIAL8  PRIMARY KEY UNIQUE,"protocol_const" INT8 NOT NULL,"slot_duration" INT8 NOT NULL,"start_time" TIMESTAMP WITH TIME ZONE NOT NULL)' ;
+    EXECUTE 'ALTER TABLE "meta" ADD CONSTRAINT "unique_meta" UNIQUE("start_time")' ;
     -- Hand written SQL statements can be added here.
     UPDATE schema_version SET stage_two = 1 ;
     RAISE NOTICE 'DB has been migrated to stage_two version %', next_version ;
