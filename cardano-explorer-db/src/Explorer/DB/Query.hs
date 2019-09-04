@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -17,6 +18,7 @@ module Explorer.DB.Query
   , queryMeta
   , queryPreviousBlockId
   , querySelectCount
+  , querySlotTime
   , queryTotalSupply
   , queryTxCount
   , queryTxId
@@ -31,11 +33,13 @@ module Explorer.DB.Query
 
 
 import           Control.Monad.IO.Class (MonadIO)
+import           Control.Monad.Trans.Except (ExceptT (..), runExceptT)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Fixed (Micro)
 import           Data.Maybe (catMaybes, fromMaybe, mapMaybe)
+import           Data.Time.Clock (UTCTime, addUTCTime)
 import           Data.Word (Word16, Word64)
 
 import           Database.Esqueleto (Entity (..), From, InnerJoin (..), PersistField, SqlExpr, SqlQuery, Value,
@@ -128,6 +132,7 @@ queryLatestBlocks limitCount = do
         (Nothing, _ ) -> Nothing
         (Just a, b) -> Just (a, b)
 
+-- | Given a 'BlockId' return the 'BlockId' of the previous block.
 queryPreviousBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe BlockId)
 queryPreviousBlockId blkId = do
   res <- select $ from $ \ blk -> do
@@ -153,6 +158,7 @@ queryLatestSlotNo = do
             pure (blk ^. BlockSlotNo)
   pure $ fromMaybe 0 (listToMaybe $ mapMaybe unValue res)
 
+-- | Get the network metadata.
 queryMeta :: MonadIO m => ReaderT SqlBackend m (Either LookupFail Meta)
 queryMeta = do
   res <- select . from $ \ (meta :: SqlExpr (Entity Meta)) -> do
@@ -161,6 +167,19 @@ queryMeta = do
             [] -> Left DbMetaEmpty
             [m] -> Right $ entityVal m
             _ -> Left DbMetaMultipleRows
+
+-- | Calculate the slot time for a given slot number. The example here was written
+-- as an example, but it would be hoped that this value would be cached in the
+-- application or calculated in a VIEW.
+querySlotTime :: MonadIO m => Word64 -> ReaderT SqlBackend m (Either LookupFail UTCTime)
+querySlotTime slotNo = do
+  runExceptT $ do
+    meta <- ExceptT queryMeta
+    pure $ addUTCTime
+            -- Slot duration is in milliseconds.
+            (0.001 * fromIntegral (slotNo * metaSlotDuration meta))
+            (metaStartTime meta)
+
 
 -- | Get the current total supply of Lovelace.
 queryTotalSupply :: MonadIO m => ReaderT SqlBackend m Ada
