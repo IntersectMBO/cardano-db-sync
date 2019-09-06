@@ -3,16 +3,19 @@
 
 module Explorer.Web.Server (runServer) where
 
-import           Explorer.DB                 (blockBlockNo, blockHash,
-                                              blockSize, blockSlotNo,
-                                              readPGPassFileEnv
-                                              , queryTotalSupply
-                                              , Ada
-                                              , toConnectionString
-                                              , blockMerkelRoot
-                                              , queryBlockCount
-                                              , txHash, txOutAddress, txOutValue, txFee
-                                              , TxOut(TxOut))
+import           Explorer.DB                 (blockBlockNo, blockHash
+                                             , blockSize, blockSlotNo
+                                             , blockMerkelRoot
+                                             , readPGPassFileEnv
+                                             , queryTotalSupply
+                                             , Ada
+                                             , toConnectionString
+                                             , blockMerkelRoot
+                                             , queryBlockCount
+                                             , queryMeta
+                                             , Meta(metaStartTime, metaSlotDuration, Meta)
+                                             , txHash, txOutAddress, txOutValue, txFee
+                                             , TxOut(TxOut))
 import           Explorer.Web.Api            (ExplorerApi, explorerApi)
 import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSummary (CAddressSummary, caAddress, caBalance, caTxList, caTxNum, caType),
                                               CAddressType (CPubKeyAddress),
@@ -31,22 +34,24 @@ import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSumma
                                               CUtxo (CUtxo, cuAddress, cuCoins, cuId, cuOutIndex),
                                               mkCCoin, adaToCCoin)
 import           Explorer.Web.Error          (ExplorerError (Internal))
-import           Explorer.Web.Query          (queryBlockSummary, queryTxSummary)
+import           Explorer.Web.Query          (queryBlockSummary, queryTxSummary, queryBlockTxs, TxWithInputsOutputs(txwTx, txwInputs, txwOutputs, TxWithInputsOutputs))
 import           Explorer.Web.LegacyApi      (ExplorerApiRecord (_genesisSummary, _genesisAddressInfo, _genesisPagesTotal, _epochPages, _epochSlots, _statsTxs, _txsSummary, _addressSummary, _addressUtxoBulk, _blocksSummary, _blocksTxs, _txsLast, _dumpBlockRange, _totalAda, _blocksPages, _blocksPagesTotal, ExplorerApiRecord), TxsStats, PageNumber)
 
 import           Cardano.Chain.Slotting      (EpochNumber (EpochNumber))
 
-import           Control.Monad.IO.Class      (liftIO)
+import           Control.Monad.IO.Class      (liftIO, MonadIO)
 import           Control.Monad.Logger        (runStdoutLoggingT)
 import           Control.Monad.Trans.Reader  (ReaderT)
+import           Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
 import           Data.Maybe (fromMaybe)
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16      as B16
 import qualified Data.ByteString.Char8       as SB8
 import qualified Data.Text                   as T
-import           Data.Time                   (defaultTimeLocale,
-                                              parseTimeOrError)
+import           Data.Time                   (defaultTimeLocale, addUTCTime, parseTimeOrError)
 import           Data.Time.Clock.POSIX       (POSIXTime, utcTimeToPOSIXSeconds)
 import           Data.Word                   (Word16, Word64)
+import           Data.Int (Int64)
 import           Network.Wai.Handler.Warp    (run)
 import           Servant                     (Application, Handler, Server,
                                               serve)
@@ -55,6 +60,12 @@ import           Servant.Server.Generic      (AsServerT)
 
 import           Database.Persist.Postgresql (withPostgresqlConn)
 import           Database.Persist.Sql        (SqlBackend, runSqlConn)
+
+-- TODO, get this from the config somehow
+k :: Word64
+k = 2160
+
+epochLenght = k * 10
 
 runServer :: IO ()
 runServer = do
@@ -74,8 +85,8 @@ explorerHandlers backend = toServant (ExplorerApiRecord
   , _blocksPages        = testBlocksPages backend
   , _blocksPagesTotal   = getBlocksPagesTotal backend
   , _blocksSummary      = blocksSummary backend
-  , _blocksTxs          = testBlocksTxs backend
-  , _txsLast            = testTxsLast backend
+  , _blocksTxs          = getBlockTxs backend
+  , _txsLast            = getLastTxs backend
   , _txsSummary         = testTxsSummary backend
   , _addressSummary     = testAddressSummary backend
   , _addressUtxoBulk    = testAddressUtxoBulk backend
@@ -96,16 +107,6 @@ cTxId = CTxHash $ CHash "b29fa17156275a8589857376bfaeeef47f1846f82ea492a808e5c61
 posixTime :: POSIXTime
 posixTime = utcTimeToPOSIXSeconds (parseTimeOrError True defaultTimeLocale "%F" "2017-12-03")
 
-cTxBrief :: CTxBrief
-cTxBrief = CTxBrief
-    { ctbId         = cTxId
-    , ctbTimeIssued = Just posixTime
-    , ctbInputs     = [Just (CAddress "1fi9sA3pRt8bKVibdun57iyWG9VsWZscgQigSik6RHoF5Mv", mkCCoin 33333), Nothing]
-    , ctbOutputs    = [(CAddress "1fSCHaQhy6L7Rfjn9xR2Y5H7ZKkzKLMXKYLyZvwWVffQwkQ", mkCCoin 33333)]
-    , ctbInputSum   = mkCCoin 33333
-    , ctbOutputSum  = mkCCoin 33333
-    }
-
 cTxEntry :: CTxEntry
 cTxEntry = CTxEntry
     { cteId         = cTxId
@@ -113,7 +114,7 @@ cTxEntry = CTxEntry
     , cteAmount     = mkCCoin 33333
     }
 
-runQuery :: SqlBackend -> ReaderT SqlBackend IO a -> Handler a
+runQuery :: MonadIO m => SqlBackend -> ReaderT SqlBackend IO a -> m a
 runQuery backend query = liftIO $ runSqlConn query backend
 
 totalAda :: SqlBackend -> Handler (Either ExplorerError Ada)
@@ -179,90 +180,117 @@ getBlocksPagesTotal backend mPageSize = do
     (_, True) -> pure $ Left $ Internal "Page size must be greater than 1 if you want to display blocks."
     _ -> pure $ Right $ roundToBlockPage blocksTotal
 
+hexToBytestring :: T.Text -> ExceptT ExplorerError Handler BS.ByteString
+hexToBytestring text = do
+  case B16.decode (SB8.pack (T.unpack text)) of
+    (blob, "") -> pure blob
+    _ -> throwE $ Internal "cant parse hex"
+
+bytestringToText :: BS.ByteString -> T.Text
+bytestringToText = T.pack . SB8.unpack . B16.encode
+
 blocksSummary
     :: SqlBackend -> CHash
     -> Handler (Either ExplorerError CBlockSummary)
-blocksSummary backend (CHash blkHashTxt) =
-  case B16.decode (SB8.pack (T.unpack blkHashTxt)) of
-              (blob, "") -> do
-                liftIO $ print blob
-                mBlk <- runQuery backend (queryBlockSummary blob)
-                pure $ case mBlk of
-                  Just (blk, Just prevHash, nextHash, tx_count, fees, total_out) ->
-                    case (blockSlotNo blk, blockMerkelRoot blk) of
-                      (Just slotno, Just mroot) -> do
-                        let
-                          (epoch, slot) = divMod slotno 21600 -- TODO, get it from the config
-                        Right $ CBlockSummary
-                          { cbsEntry = CBlockEntry
-                             { cbeEpoch = epoch
-                             , cbeSlot = fromIntegral slot
-                             -- Use '0' for EBBs.
-                             , cbeBlkHeight = maybe 0 fromIntegral $ blockBlockNo blk
-                             , cbeBlkHash = CHash $ T.pack $ SB8.unpack $ B16.encode $ blockHash blk
-                             , cbeTimeIssued = Nothing
-                             , cbeTxNum = tx_count
-                             , cbeTotalSent = adaToCCoin total_out
-                             , cbeSize = blockSize blk
-                             , cbeBlockLead = Nothing
-                             , cbeFees = adaToCCoin fees
-                             }
-                          , cbsPrevHash = CHash $ T.pack $ SB8.unpack $ B16.encode prevHash
-                          , cbsNextHash = fmap (CHash . T.pack . SB8.unpack . B16.encode) nextHash
-                          , cbsMerkleRoot = CHash $ T.pack $ SB8.unpack $ B16.encode mroot
-                          }
-                      (_,_) -> Left $ Internal "internal error 1"
-                  _ -> Left $ Internal "No block found"
-              _ -> pure $ Left $ Internal "imposible!"
+blocksSummary backend (CHash blkHashTxt) = runExceptT $ do
+  blkHash <- hexToBytestring blkHashTxt
+  liftIO $ print blkHash
+  mBlk <- runQuery backend (queryBlockSummary blkHash)
+  case mBlk of
+    Just (blk, Just prevHash, nextHash, txCount, fees, totalOut) ->
+      case blockSlotNo blk of
+        Just slotno -> do
+          let
+            (epoch, slot) = divMod slotno epochLenght
+          pure $ CBlockSummary
+            { cbsEntry = CBlockEntry
+               { cbeEpoch = epoch
+               , cbeSlot = fromIntegral slot
+               -- Use '0' for EBBs.
+               , cbeBlkHeight = maybe 0 fromIntegral $ blockBlockNo blk
+               , cbeBlkHash = (CHash . bytestringToText . blockHash) blk
+               , cbeTimeIssued = Nothing
+               , cbeTxNum = txCount
+               , cbeTotalSent = adaToCCoin totalOut
+               , cbeSize = blockSize blk
+               , cbeBlockLead = Nothing
+               , cbeFees = adaToCCoin fees
+               }
+            , cbsPrevHash = (CHash . bytestringToText) prevHash
+            , cbsNextHash = fmap (CHash . bytestringToText) nextHash
+            , cbsMerkleRoot = CHash $ maybe "" bytestringToText (blockMerkelRoot blk)
+            }
+        Nothing -> throwE $ Internal "slot missing"
+    _ -> throwE $ Internal "No block found"
 
-testBlocksTxs
+convertTxOut :: TxOut -> (CAddress, CCoin)
+convertTxOut TxOut{txOutAddress,txOutValue} = (CAddress txOutAddress, mkCCoin $ fromIntegral txOutValue)
+
+convertInput :: (T.Text, Word64) -> Maybe (CAddress, CCoin)
+convertInput (addr, coin) = Just (CAddress $ addr, mkCCoin $ fromIntegral coin)
+
+getBlockTxs
     :: SqlBackend -> CHash
-    -> Maybe Word
-    -> Maybe Word
+    -> Maybe Int64
+    -> Maybe Int64
     -> Handler (Either ExplorerError [CTxBrief])
-testBlocksTxs _backend _ _ _ = pure $ Right [cTxBrief]
+getBlockTxs backend (CHash blkHashTxt) mLimit mOffset = runExceptT $ do
+  let
+    limit = fromMaybe 10 mLimit
+    offset = fromMaybe 0 mOffset
+  blkHash <- hexToBytestring blkHashTxt
+  (txList, eMeta, mSlot) <- runQuery backend $ do
+    (txList, slot) <- queryBlockTxs blkHash limit offset
+    meta <- queryMeta
+    pure (txList, meta, slot)
+  case eMeta of
+    Left _err -> throwE $ Internal "error reading metadata"
+    Right (Meta{metaSlotDuration,metaStartTime}) -> do
+      let
+        txToTxBrief :: TxWithInputsOutputs -> CTxBrief
+        txToTxBrief TxWithInputsOutputs{txwTx,txwInputs,txwOutputs} = CTxBrief
+          { ctbId = (CTxHash . CHash . bytestringToText . txHash) txwTx
+          , ctbTimeIssued = (\slot -> utcTimeToPOSIXSeconds $ (0.001 * fromIntegral (slot * metaSlotDuration)) `addUTCTime` metaStartTime) <$> mSlot
+          , ctbInputs = map convertInput txwInputs
+          , ctbOutputs = map convertTxOut txwOutputs
+          , ctbInputSum = (mkCCoin . sum . map (\(_addr,coin) -> fromIntegral  coin)) txwInputs
+          , ctbOutputSum = (mkCCoin . sum . map (fromIntegral . txOutValue)) txwOutputs
+          }
+      pure $ map txToTxBrief txList
 
-testTxsLast :: SqlBackend -> Handler (Either ExplorerError [CTxEntry])
-testTxsLast _backend = pure $ Right [cTxEntry]
+getLastTxs :: SqlBackend -> Handler (Either ExplorerError [CTxEntry])
+getLastTxs _backend = pure $ Right [cTxEntry]
 
 testTxsSummary
     :: SqlBackend -> CTxHash
     -> Handler (Either ExplorerError CTxSummary)
-testTxsSummary backend (CTxHash (CHash cTxHash)) = do
-  let
-    convertTxOut :: TxOut -> (CAddress, CCoin)
-    -- TODO, convert txOutAddress to base58
-    convertTxOut TxOut{txOutAddress,txOutValue} = (CAddress $ T.pack $ show txOutAddress, mkCCoin $ fromIntegral txOutValue)
-    convertInput :: (T.Text, Word64) -> Maybe (CAddress, CCoin)
-    convertInput (addr, coin) = Just (CAddress $ addr, mkCCoin $ fromIntegral coin)
-  case B16.decode (SB8.pack (T.unpack cTxHash)) of
-              (blob, "") -> do
-                liftIO $ print blob
-                mTxblk <- runQuery backend $ queryTxSummary blob
-                case mTxblk of
-                  Nothing -> pure $ Left $ Internal "tx not found" -- TODO, give the same error as before?
-                  Just (tx, blk, inputs, outputs) -> do
-                    case blockSlotNo blk of
-                      Just slotno -> do
-                        let
-                          (epoch, slot) = divMod slotno 21600 -- TODO, get it from the config
-                        pure $ Right CTxSummary
-                          { ctsId              = CTxHash $ CHash $ T.pack $ SB8.unpack $ B16.encode $ txHash tx
-                          , ctsTxTimeIssued    = Just posixTime
-                          , ctsBlockTimeIssued = Nothing
-                          , ctsBlockHeight     = fromIntegral <$> blockBlockNo blk
-                          , ctsBlockEpoch      = Just epoch
-                          , ctsBlockSlot       = Just $ fromIntegral slot
-                          , ctsBlockHash       = Just $ CHash $ T.pack $ SB8.unpack $ B16.encode $ blockHash blk
-                          , ctsRelayedBy       = Nothing
-                          , ctsTotalInput      = (mkCCoin . sum . map (\(_addr,coin) -> fromIntegral  coin)) inputs
-                          , ctsTotalOutput     = (mkCCoin . sum . map (fromIntegral . txOutValue)) outputs
-                          , ctsFees            = mkCCoin $ fromIntegral $ txFee tx
-                          , ctsInputs          = map convertInput inputs
-                          , ctsOutputs         = map convertTxOut outputs
-                          }
-                      Nothing -> pure $ Left $ Internal "cant find slot# of block"
-              _ -> pure $ Left $ Internal "cant parse hash"
+testTxsSummary backend (CTxHash (CHash cTxHash)) = runExceptT $ do
+  blob <- hexToBytestring cTxHash
+  liftIO $ print blob
+  mTxblk <- runQuery backend $ queryTxSummary blob
+  case mTxblk of
+    Nothing -> throwE $ Internal "tx not found" -- TODO, give the same error as before?
+    Just (tx, blk, inputs, outputs) -> do
+      case blockSlotNo blk of
+        Just slotno -> do
+          let
+            (epoch, slot) = divMod slotno epochLenght
+          pure $ CTxSummary
+            { ctsId              = (CTxHash . CHash . bytestringToText . txHash) tx
+            , ctsTxTimeIssued    = Just posixTime
+            , ctsBlockTimeIssued = Nothing
+            , ctsBlockHeight     = fromIntegral <$> blockBlockNo blk
+            , ctsBlockEpoch      = Just epoch
+            , ctsBlockSlot       = Just $ fromIntegral slot
+            , ctsBlockHash       = (Just . CHash . bytestringToText . blockHash) blk
+            , ctsRelayedBy       = Nothing
+            , ctsTotalInput      = (mkCCoin . sum . map (\(_addr,coin) -> fromIntegral  coin)) inputs
+            , ctsTotalOutput     = (mkCCoin . sum . map (fromIntegral . txOutValue)) outputs
+            , ctsFees            = mkCCoin $ fromIntegral $ txFee tx
+            , ctsInputs          = map convertInput inputs
+            , ctsOutputs         = map convertTxOut outputs
+            }
+        Nothing -> throwE $ Internal "cant find slot# of block"
 
 sampleAddressSummary :: CAddressSummary
 sampleAddressSummary = CAddressSummary
