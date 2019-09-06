@@ -16,6 +16,7 @@ module Explorer.Web.LegacyApi
        ) where
 
 import           Data.Word                (Word16, Word64)
+import           Data.Int (Int64)
 import           GHC.Generics             (Generic)
 import           Servant.API              ((:>), Capture, FromHttpApiData, Get,
                                            JSON, Post, QueryParam, ReqBody,
@@ -85,8 +86,8 @@ data ExplorerApiRecord route = ExplorerApiRecord
         :> "blocks"
         :> "txs"
         :> Capture "hash" CHash
-        :> QueryParam "limit" Word
-        :> QueryParam "offset" Word
+        :> QueryParam "limit" Int64
+        :> QueryParam "offset" Int64
         :> ExRes Get [CTxBrief]
 
   , _txsLast :: route

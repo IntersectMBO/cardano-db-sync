@@ -6,6 +6,7 @@ import           Cardano.Chain.Slotting   (EpochNumber (EpochNumber))
 import           Data.Time                (defaultTimeLocale, parseTimeOrError)
 import           Data.Time.Clock.POSIX    (POSIXTime, utcTimeToPOSIXSeconds)
 import           Data.Word                (Word16)
+import           Data.Int (Int64)
 import           Explorer.Web.Api         (ExplorerApi, explorerApi)
 import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSummary (CAddressSummary, caAddress, caBalance, caTxList, caTxNum, caType),
                                               CAddressType (CPubKeyAddress),
@@ -146,8 +147,8 @@ testBlocksSummary _ = pure $ Right CBlockSummary
 
 testBlocksTxs
     :: CHash
-    -> Maybe Word
-    -> Maybe Word
+    -> Maybe Int64
+    -> Maybe Int64
     -> Handler (Either ExplorerError [CTxBrief])
 testBlocksTxs _ _ _ = pure $ Right [cTxBrief]
 
