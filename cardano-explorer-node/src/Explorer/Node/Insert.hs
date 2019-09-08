@@ -15,7 +15,7 @@ module Explorer.Node.Insert
   , insertValidateGenesisDistribution
   ) where
 
-import           Cardano.BM.Trace (Trace, logInfo)
+import           Cardano.BM.Trace (Trace, logDebug, logInfo)
 
 -- Import all 'cardano-ledger' functions and data types qualified so they do not
 -- clash with the Explorer DB functions and data types which are also imported
@@ -51,6 +51,8 @@ insertByronBlockOrEBB tracer blk =
 
 insertABOBBoundary :: Trace IO Text -> Ledger.ABoundaryBlock ByteString -> IO ()
 insertABOBBoundary tracer blk = do
+    -- Setting this to True will log all 'Persistent' operations which is great
+    -- for debugging, but otherwise *way* too chatty.
     if False
       then DB.runDbIohkLogging tracer insertAction
       else DB.runDbNoLogging insertAction
@@ -88,12 +90,16 @@ insertABOBBoundary tracer blk = do
 
 insertABlock :: Trace IO Text -> Ledger.ABlock ByteString -> IO ()
 insertABlock tracer blk = do
+    -- Setting this to True will log all 'Persistent' operations which is great
+    -- for debug, but otherwise *way* too chatty.
     if False
       then DB.runDbIohkLogging tracer insertAction
       else DB.runDbNoLogging insertAction
 
-    when False $
-      logInfo tracer $ "insertABlock: " <> renderAbstractHash (blockHash blk)
+    logDebug tracer $ mconcat
+                    [ "insertABlock: slot ", textShow (slotNumber blk)
+                    , ", hash ", renderAbstractHash (blockHash blk)
+                    ]
   where
     insertAction :: MonadIO m => ReaderT SqlBackend m ()
     insertAction = do
