@@ -43,8 +43,8 @@ import           Explorer.Node.Util
 -- If these transactions are already in the DB, they are validated.
 insertValidateGenesisDistribution :: Trace IO Text -> Ledger.Config -> IO ()
 insertValidateGenesisDistribution tracer cfg = do
-    -- This is how logging is turned on and off.
-    -- The logging is incredibly verbose and probably only useful for debugging.
+    -- Setting this to True will log all 'Persistent' operations which is great
+    -- for debugging, but otherwise *way* too chatty.
     if False
       then DB.runDbIohkLogging tracer insertAction
       else DB.runDbNoLogging insertAction
