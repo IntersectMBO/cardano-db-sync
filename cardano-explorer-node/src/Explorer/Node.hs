@@ -18,7 +18,7 @@ module Explorer.Node
 
 import           Control.Exception (throw)
 import           Control.Monad.Class.MonadST (MonadST)
-import           Control.Monad.Class.MonadSTM (MonadSTM, TMVar, atomically, readTMVar, newEmptyTMVarM)
+import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, StrictTMVar, atomically, readTMVar, newEmptyTMVarM)
 import           Control.Monad.Class.MonadTimer (MonadTimer)
 
 import           Cardano.Binary (Raw)
@@ -31,17 +31,18 @@ import qualified Cardano.Chain.Update as Update
 
 import           Cardano.Crypto (Hash, RequiresNetworkMagic (..), decodeAbstractHash)
 import           Cardano.Crypto.Hashing (AbstractHash (..))
-import qualified Cardano.Node.CLI as Node
-import           Cardano.Prelude hiding (atomically, option, (%))
-import           Cardano.Shell.Configuration.Lib (finaliseCardanoConfiguration)
-import           Cardano.Shell.Constants.PartialTypes (PartialCardanoConfiguration)
-import           Cardano.Shell.Constants.Types (CardanoConfiguration(..),
-                    coRequiresNetworkMagic, ccCore, coGenesisFile,
-                    RequireNetworkMagic(NoRequireNetworkMagic,RequireNetworkMagic), coGenesisHash)
-import           Cardano.Shell.Features.Logging (LoggingLayer, LoggingCLIArguments,
+import           Cardano.Config.CommonCLI (CommonCLI)
+import qualified Cardano.Config.CommonCLI as Config
+import qualified Cardano.Config.Partial as Config
+import           Cardano.Config.Logging (LoggingLayer, LoggingCLIArguments,
                     createLoggingFeature, llAppendName, llBasicTrace)
+import           Cardano.Config.Partial (PartialCardanoConfiguration)
+import           Cardano.Config.Types (CardanoConfiguration, CardanoEnvironment, 
+                                       coRequiresNetworkMagic, ccCore, coGenesisFile,
+                                       RequireNetworkMagic(NoRequireNetworkMagic,RequireNetworkMagic), coGenesisHash)
+import           Cardano.Prelude hiding (atomically, option, (%))
 import           Cardano.Shell.Lib (GeneralException (ConfigurationError))
-import           Cardano.Shell.Types (CardanoEnvironment, CardanoFeature (..),
+import           Cardano.Shell.Types (CardanoFeature (..),
                     CardanoFeatureInit (..), featureCleanup, featureInit,
                     featureShutdown, featureStart, featureType)
 
@@ -94,7 +95,7 @@ import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
 
 import           Ouroboros.Network.Protocol.Handshake.Version (DictVersion(DictVersion), Versions,
                     simpleSingletonVersions)
-import           Ouroboros.Network.Protocol.LocalTxSubmission.Client (LocalTxSubmissionClient (SendMsgSubmitTx),
+import           Ouroboros.Network.Protocol.LocalTxSubmission.Client (LocalTxSubmissionClient (..), LocalTxClientStIdle (SendMsgSubmitTx),
                     localTxSubmissionClientPeer)
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Codec (codecLocalTxSubmission)
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (LocalTxSubmission)
@@ -110,7 +111,7 @@ data Peer = Peer SockAddr SockAddr deriving Show
 -- | The product type of all command line arguments
 data ExplorerNodeParams = ExplorerNodeParams
   { enpLogging :: !LoggingCLIArguments
-  , enpCommon :: Node.CommonCLI
+  , enpCommon :: CommonCLI
   , enpSocketPath :: FilePath
   , enpMigrationDir :: MigrationDir
   }
@@ -119,13 +120,13 @@ newtype NodeLayer = NodeLayer
   { nlRunNode :: forall m. MonadIO m => m ()
   }
 
-type NodeCardanoFeature = CardanoFeatureInit LoggingLayer ExplorerNodeParams NodeLayer
+type NodeCardanoFeature = CardanoFeatureInit CardanoEnvironment LoggingLayer CardanoConfiguration ExplorerNodeParams NodeLayer
 
 
 initializeAllFeatures :: ExplorerNodeParams -> PartialCardanoConfiguration -> CardanoEnvironment -> IO ([CardanoFeature], NodeLayer)
 initializeAllFeatures enp partialConfig cardanoEnvironment = do
   DB.runMigrations True (enpMigrationDir enp) (LogFileDir "/tmp")
-  let fcc = finaliseCardanoConfiguration $ Node.mergeConfiguration partialConfig (enpCommon enp)
+  let fcc = Config.finaliseCardanoConfiguration $ Config.mergeConfiguration partialConfig (enpCommon enp)
   finalConfig <- case fcc of
                   Left err -> throwIO $ ConfigurationError err
                   --TODO: if we're using exceptions for this, then we should use a local
@@ -203,6 +204,11 @@ mkProtocolId gc =
     Nothing
 
 
+data GenesisConfigurationError = GenesisConfigurationError Genesis.ConfigurationError
+  deriving (Show, Typeable)
+
+instance Exception GenesisConfigurationError
+
 readGenesisConfig :: CardanoConfiguration -> Hash Raw -> IO Genesis.Config
 readGenesisConfig cc genHash =
     convert =<< runExceptT (Genesis.mkConfigFromFile (convertRNM . coRequiresNetworkMagic $ ccCore cc)
@@ -211,7 +217,7 @@ readGenesisConfig cc genHash =
     convert :: Either Genesis.ConfigurationError Genesis.Config -> IO Genesis.Config
     convert =
       \case
-        Left err -> throw err   -- TODO: no no no!
+        Left err -> throw (GenesisConfigurationError err)   -- TODO: no no no!
         Right x -> pure x
 
 
@@ -305,20 +311,24 @@ getLatestPoints =
     convertHashBlob = fmap AbstractHash . digestFromByteString
 
 -- | A 'LocalTxSubmissionClient' that submits transactions reading them from
--- a 'TMVar'.  A real implementation should use a better synchronisation
+-- a 'StrictTMVar'.  A real implementation should use a better synchronisation
 -- primitive.  This demo creates and empty 'TMVar' in
 -- 'muxLocalInitiatorNetworkApplication' above and never fills it with a tx.
 --
 txSubmissionClient
   :: forall tx reject m. (Monad m, MonadSTM m)
-  => TMVar m tx -> m (LocalTxSubmissionClient tx reject m Void)
-txSubmissionClient txv = do
-    tx <- atomically $ readTMVar txv
-    pure $ SendMsgSubmitTx tx $ \mbreject -> do
-      case mbreject of
-        Nothing -> return ()
-        Just _r -> return ()
-      txSubmissionClient txv
+  => StrictTMVar m tx -> LocalTxSubmissionClient tx reject m Void
+txSubmissionClient txv = LocalTxSubmissionClient $
+    atomically (readTMVar txv) >>= pure . client
+  where
+    client :: tx -> LocalTxClientStIdle tx reject m Void
+    client tx =
+      SendMsgSubmitTx tx $ \mbreject -> do
+        case mbreject of
+          Nothing -> return ()
+          Just _r -> return ()
+        tx' <- atomically $ readTMVar txv
+        pure $ client tx'
 
 localChainSyncCodec
   :: forall blk m. (RunNode blk, MonadST m)
