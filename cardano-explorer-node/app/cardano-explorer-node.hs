@@ -1,12 +1,13 @@
 
-import qualified Cardano.Node.CLI as Node
+import qualified Cardano.Config.CommonCLI as Config
 
 import           Cardano.Prelude
 
-import qualified Cardano.Shell.Features.Logging as Shell
-import           Cardano.Shell.Lib (CardanoApplication (..), ApplicationEnvironment (..))
+import qualified Cardano.Config.Presets as Config
+import qualified Cardano.Common.Parsers as Config
+import           Cardano.Config.Types (CardanoEnvironment(NoEnvironment))
+import           Cardano.Shell.Types (CardanoApplication (..))
 import qualified Cardano.Shell.Lib as Shell
-import qualified Cardano.Shell.Presets as Shell
 
 import           Explorer.DB (MigrationDir (..))
 import           Explorer.Node (ExplorerNodeParams (..), NodeLayer (..), initializeAllFeatures)
@@ -16,10 +17,9 @@ import qualified Options.Applicative as Opt
 
 main :: IO ()
 main = do
-    cardanoEnvironment <- Shell.initializeCardanoEnvironment
     logConfig <- Opt.execParser opts
-    (cardanoFeatures, nodeLayer) <- initializeAllFeatures logConfig Shell.mainnetConfiguration cardanoEnvironment
-    Shell.runCardanoApplicationWithFeatures Development cardanoFeatures (cardanoApplication nodeLayer)
+    (cardanoFeatures, nodeLayer) <- initializeAllFeatures logConfig Config.mainnetConfiguration NoEnvironment
+    Shell.runCardanoApplicationWithFeatures cardanoFeatures (cardanoApplication nodeLayer)
   where
     cardanoApplication :: NodeLayer -> CardanoApplication
     cardanoApplication layer = CardanoApplication $ (nlRunNode layer)
@@ -36,8 +36,8 @@ opts =
 pCommandLine :: Parser ExplorerNodeParams
 pCommandLine =
   ExplorerNodeParams
-    <$> Shell.loggingParser
-    <*> Node.parseCommonCLI
+    <$> Config.loggingParser
+    <*> Config.parseCommonCLI
     <*> parseSocketPath
     <*> pMigrationDir
 
