@@ -1,4 +1,4 @@
-resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/4c48d34fd60991bb1b9168d293cfe31a975d858e/snapshot.yaml
+resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/b83730dccab14111d62144b048084eec7900d091/snapshot.yaml
 compiler: ghc-8.6.5
 
 
@@ -33,10 +33,10 @@ extra-deps:
   - word-wrap-0.4.1
 
   - git: https://github.com/input-output-hk/cardano-shell
-    commit: 2044172cd8856e927860e9b5c731a4343462206e
+    commit: 6d74f0f6675ed0b20166f9e162545309ba72944c
 
   - git: https://github.com/input-output-hk/cardano-prelude
-    commit: 4c48d34fd60991bb1b9168d293cfe31a975d858e
+    commit: b83730dccab14111d62144b048084eec7900d091
     subdirs:
       - .
       - test
@@ -48,23 +48,26 @@ extra-deps:
     commit: ec96c64c665b741c17b4e38f611315bae9b0b054
 
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: 4ad81798402ce05655b37b31b0b67f444a2f0b91
+    commit: e22be186e0b1018260ed7c5166871f82a869b94d
     subdirs:
       - contra-tracer
       - iohk-monitoring
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: 6a4fe879f859fbd92bbe1a2f061f1b929793ccf4
+    commit: a250fba145b361df323685d6e6fd78a69cfb195b
+    subdirs:
+      - cardano-config
+      - cardano-node
 
   - git: https://github.com/input-output-hk/cardano-base
-    commit: 565df9739781db7589c7220a9125ea46a615dd40
+    commit: 31aafc8d5c090c4443a12d588c923badac929843
     subdirs:
       - binary
       - binary/test
       - cardano-crypto-class
 
   - git: https://github.com/input-output-hk/cardano-ledger
-    commit: dedafe9cf1a0077d375c3abe8f21f766a8af565f
+    commit: 22363162ee08039ec6158c24a0882c9357e9e35e
     subdirs:
       - cardano-ledger
       - cardano-ledger/test
@@ -72,7 +75,7 @@ extra-deps:
       - crypto/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: da6da94d26e72551e591eabfce99b01c7c70933c
+    commit: 7a6c4071003bfd3d9829972c21bf43709447c626
     subdirs:
       - io-sim-classes
       - network-mux
