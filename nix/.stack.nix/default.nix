@@ -38,6 +38,7 @@
         cardano-sl-x509 = ./cardano-sl-x509.nix;
         contra-tracer = ./contra-tracer.nix;
         iohk-monitoring = ./iohk-monitoring.nix;
+        cardano-config = ./cardano-config.nix;
         cardano-node = ./cardano-node.nix;
         cardano-binary = ./cardano-binary.nix;
         cardano-binary-test = ./cardano-binary-test.nix;

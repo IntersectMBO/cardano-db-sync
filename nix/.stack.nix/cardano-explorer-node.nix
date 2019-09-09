@@ -21,6 +21,7 @@
           (hsPkgs.base16-bytestring)
           (hsPkgs.bytestring)
           (hsPkgs.cardano-binary)
+          (hsPkgs.cardano-config)
           (hsPkgs.cardano-crypto)
           (hsPkgs.cardano-crypto-wrapper)
           (hsPkgs.cardano-explorer-db)
@@ -56,6 +57,7 @@
           depends = [
             (hsPkgs.base)
             (hsPkgs.bytestring)
+            (hsPkgs.cardano-config)
             (hsPkgs.cardano-crypto-wrapper)
             (hsPkgs.cardano-explorer-db)
             (hsPkgs.cardano-explorer-node)

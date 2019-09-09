@@ -25,41 +25,22 @@
           (hsPkgs.cardano-prelude)
           (hsPkgs.concurrency)
           (hsPkgs.containers)
-          (hsPkgs.contravariant)
-          (hsPkgs.dhall)
           (hsPkgs.directory)
           (hsPkgs.formatting)
-          (hsPkgs.iohk-monitoring)
-          (hsPkgs.optparse-applicative)
           (hsPkgs.process)
           (hsPkgs.QuickCheck)
           (hsPkgs.safe-exceptions)
-          (hsPkgs.stm)
           (hsPkgs.async)
           (hsPkgs.text)
           (hsPkgs.transformers)
-          (hsPkgs.generic-monoid)
           ] ++ (pkgs.lib).optional (system.isWindows) (hsPkgs.Win32);
         };
       exes = {
-        "cardano-shell-exe" = {
-          depends = [
-            (hsPkgs.base)
-            (hsPkgs.cardano-shell)
-            (hsPkgs.cardano-prelude)
-            (hsPkgs.optparse-applicative)
-            (hsPkgs.safe-exceptions)
-            (hsPkgs.stm)
-            (hsPkgs.iohk-monitoring)
-            ];
-          };
         "node-ipc" = {
           depends = [
             (hsPkgs.base)
             (hsPkgs.cardano-shell)
             (hsPkgs.cardano-prelude)
-            (hsPkgs.optparse-applicative)
-            (hsPkgs.safe-exceptions)
             ];
           };
         "daedalus-ipc" = {
@@ -67,25 +48,6 @@
             (hsPkgs.base)
             (hsPkgs.cardano-shell)
             (hsPkgs.cardano-prelude)
-            (hsPkgs.optparse-applicative)
-            (hsPkgs.safe-exceptions)
-            (hsPkgs.iohk-monitoring)
-            ];
-          };
-        "cardano-launcher" = {
-          depends = [
-            (hsPkgs.base)
-            (hsPkgs.cardano-shell)
-            (hsPkgs.cardano-prelude)
-            (hsPkgs.cardano-sl-x509)
-            (hsPkgs.async)
-            (hsPkgs.process)
-            (hsPkgs.turtle)
-            (hsPkgs.directory)
-            (hsPkgs.filepath)
-            (hsPkgs.formatting)
-            (hsPkgs.safe-exceptions)
-            (hsPkgs.optparse-applicative)
             ];
           };
         };
@@ -96,18 +58,11 @@
             (hsPkgs.base)
             (hsPkgs.cardano-shell)
             (hsPkgs.cardano-prelude)
-            (hsPkgs.dhall)
-            (hsPkgs.safe-exceptions)
             (hsPkgs.process)
             (hsPkgs.QuickCheck)
             (hsPkgs.quickcheck-state-machine)
             (hsPkgs.tree-diff)
-            (hsPkgs.pretty-show)
             (hsPkgs.hspec)
-            (hsPkgs.hspec-contrib)
-            (hsPkgs.concurrency)
-            (hsPkgs.dejafu)
-            (hsPkgs.hunit-dejafu)
             ];
           build-tools = [
             (hsPkgs.buildPackages.cardano-shell or (pkgs.buildPackages.cardano-shell))
@@ -118,7 +73,7 @@
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/cardano-shell";
-      rev = "2044172cd8856e927860e9b5c731a4343462206e";
-      sha256 = "1ij6cpj7lg26ka90dg5q5n0976kqy2np912zdk4w4hwl9vqy4z4j";
+      rev = "6d74f0f6675ed0b20166f9e162545309ba72944c";
+      sha256 = "026ckw2hx9amcbi6mwwfcxai95dch15gza3gvm052615hsknfp6i";
       });
     }
