@@ -19,30 +19,31 @@ module Explorer.Node
 
 import           Control.Exception (throw)
 import           Control.Monad.Class.MonadST (MonadST)
-import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, StrictTMVar, atomically, readTMVar, newEmptyTMVarM)
+import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, StrictTMVar,
+                    atomically, newEmptyTMVarM, readTMVar)
 import           Control.Monad.Class.MonadTimer (MonadTimer)
 
 import           Cardano.Binary (Raw)
 
-import           Cardano.BM.Data.Tracer (ToLogObject (toLogObject), nullTracer)
+import           Cardano.BM.Data.Tracer (ToLogObject (..), nullTracer)
 import           Cardano.BM.Trace (Trace, appendName, logInfo)
 
 import qualified Cardano.Chain.Genesis as Genesis
 import qualified Cardano.Chain.Update as Update
 
-import           Cardano.Crypto (Hash, RequiresNetworkMagic (..), decodeAbstractHash)
-import           Cardano.Crypto.Hashing (AbstractHash (..))
 import           Cardano.Config.CommonCLI (CommonCLI (..))
 import qualified Cardano.Config.CommonCLI as Config
-import qualified Cardano.Config.Partial as Config
-import qualified Cardano.Config.Presets as Config
-
-import           Cardano.Config.Types (CardanoEnvironment(NoEnvironment))
-
 import           Cardano.Config.Logging (LoggingLayer, LoggingCLIArguments,
                     createLoggingFeature, llAppendName, llBasicTrace)
-import           Cardano.Config.Types (CardanoConfiguration, RequireNetworkMagic (..),
-                                       coGenesisHash, coRequiresNetworkMagic, ccCore, coGenesisFile)
+import qualified Cardano.Config.Partial as Config
+import qualified Cardano.Config.Presets as Config
+import           Cardano.Config.Types (CardanoConfiguration, CardanoEnvironment (..),
+                    RequireNetworkMagic (..),
+                    coGenesisHash, coRequiresNetworkMagic, ccCore, coGenesisFile)
+
+import           Cardano.Crypto (Hash, RequiresNetworkMagic (..), decodeAbstractHash)
+import           Cardano.Crypto.Hashing (AbstractHash (..))
+
 import           Cardano.Prelude hiding (atomically, option, (%))
 import           Cardano.Shell.Lib (GeneralException (ConfigurationError))
 import           Cardano.Shell.Types (CardanoFeature (..),
@@ -64,8 +65,8 @@ import qualified Explorer.DB as DB
 import           Explorer.Node.Insert
 import           Explorer.Node.Rollback
 
-import           Network.Socket (SockAddr, AddrInfo, SocketType(Stream), Family(AF_UNIX),
-                    AddrInfo (AddrInfo), defaultProtocol, SockAddr (SockAddrUnix))
+import           Network.Socket (AddrInfo (..), Family (..), SockAddr (..), SocketType (..),
+                    defaultProtocol)
 
 import           Network.TypedProtocol.Codec (Codec)
 import           Network.TypedProtocol.Codec.Cbor (DeserialiseFailure)
@@ -74,40 +75,34 @@ import           Network.TypedProtocol.Driver (runPeer)
 import           Ouroboros.Consensus.Ledger.Abstract (BlockProtocol)
 import           Ouroboros.Consensus.Ledger.Byron (GenTx, ByronBlockOrEBB (..))
 import           Ouroboros.Consensus.Ledger.Byron.Config (ByronConfig)
-import           Ouroboros.Consensus.Node.ProtocolInfo (NumCoreNodes(NumCoreNodes),
+import           Ouroboros.Consensus.Node.ProtocolInfo (NumCoreNodes (..),
                     pInfoConfig, protocolInfo)
 import           Ouroboros.Consensus.Node.Run.Abstract (RunNode, nodeDecodeBlock, nodeDecodeGenTx,
                     nodeDecodeHeaderHash, nodeEncodeBlock, nodeEncodeGenTx, nodeEncodeHeaderHash)
-import           Ouroboros.Consensus.NodeId (CoreNodeId (CoreNodeId))
-import           Ouroboros.Consensus.Protocol (NodeConfig, Protocol(ProtocolRealPBFT))
+import           Ouroboros.Consensus.NodeId (CoreNodeId (..))
+import           Ouroboros.Consensus.Protocol (NodeConfig, Protocol (..))
 import           Ouroboros.Network.Block (Point (..), SlotNo (..),
                     decodePoint, encodePoint, genesisPoint)
-import           Ouroboros.Network.Mux (AppType (InitiatorApp),
-                    OuroborosApplication (OuroborosInitiatorApplication))
-import           Ouroboros.Network.NodeToClient (NodeToClientProtocols (ChainSyncWithBlocksPtcl,
-                    LocalTxSubmissionPtcl), NodeToClientVersion (NodeToClientV_1),
-                    NodeToClientVersionData (NodeToClientVersionData), connectTo, networkMagic,
-                    nodeToClientCodecCBORTerm)
+import           Ouroboros.Network.Mux (AppType (..), OuroborosApplication (..))
+import           Ouroboros.Network.NodeToClient (NodeToClientProtocols (..),
+                    NodeToClientVersion (..), NodeToClientVersionData (..),
+                    connectTo, networkMagic, nodeToClientCodecCBORTerm)
 import qualified Ouroboros.Network.Point as Point
-import           Ouroboros.Network.Protocol.ChainSync.Client (ChainSyncClient (ChainSyncClient),
-                    ClientStIdle (SendMsgFindIntersect, SendMsgRequestNext),
-                    ClientStIntersect (ClientStIntersect), ClientStNext (ClientStNext),
+import           Ouroboros.Network.Protocol.ChainSync.Client (ChainSyncClient (..),
+                    ClientStIdle (..), ClientStIntersect (..), ClientStNext (..),
                     chainSyncClientPeer, recvMsgIntersectFound, recvMsgIntersectNotFound,
                     recvMsgRollBackward, recvMsgRollForward)
 import           Ouroboros.Network.Protocol.ChainSync.Codec (codecChainSync)
 import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
 
-import           Ouroboros.Network.Protocol.Handshake.Version (DictVersion(DictVersion), Versions,
+import           Ouroboros.Network.Protocol.Handshake.Version (DictVersion (..), Versions,
                     simpleSingletonVersions)
-import           Ouroboros.Network.Protocol.LocalTxSubmission.Client (LocalTxSubmissionClient (..), LocalTxClientStIdle (SendMsgSubmitTx),
-                    localTxSubmissionClientPeer)
+import           Ouroboros.Network.Protocol.LocalTxSubmission.Client (LocalTxSubmissionClient (..),
+                    LocalTxClientStIdle (..), localTxSubmissionClientPeer)
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Codec (codecLocalTxSubmission)
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (LocalTxSubmission)
 
 import           Prelude (String, id)
-
-
-
 
 
 data Peer = Peer SockAddr SockAddr deriving Show
@@ -128,7 +123,8 @@ newtype NodeLayer = NodeLayer
   { nlRunNode :: forall m. MonadIO m => m ()
   }
 
-type NodeCardanoFeature = CardanoFeatureInit CardanoEnvironment LoggingLayer CardanoConfiguration ExplorerNodeParams NodeLayer
+type NodeCardanoFeature
+  = CardanoFeatureInit CardanoEnvironment LoggingLayer CardanoConfiguration ExplorerNodeParams NodeLayer
 
 
 initializeAllFeatures :: ExplorerNodeParams -> IO ([CardanoFeature], NodeLayer)
@@ -281,7 +277,7 @@ localInitiatorNetworkApplication
   -- from 'ouroboros-consensus'.
   => Proxy blk
   -> Trace IO Text
-  -> Ouroboros.Consensus.Protocol.NodeConfig (BlockProtocol blk)
+  -> NodeConfig (BlockProtocol blk)
   -> Versions NodeToClientVersion DictVersion
               (OuroborosApplication 'InitiatorApp peer NodeToClientProtocols
                                     IO BSL.ByteString Void Void)
