@@ -13,6 +13,7 @@
 module Explorer.Node
   ( ExplorerNodeParams (..)
   , NodeLayer (..)
+  , SocketPath (..)
   , initializeAllFeatures
   ) where
 
@@ -31,15 +32,17 @@ import qualified Cardano.Chain.Update as Update
 
 import           Cardano.Crypto (Hash, RequiresNetworkMagic (..), decodeAbstractHash)
 import           Cardano.Crypto.Hashing (AbstractHash (..))
-import           Cardano.Config.CommonCLI (CommonCLI)
+import           Cardano.Config.CommonCLI (CommonCLI (..))
 import qualified Cardano.Config.CommonCLI as Config
 import qualified Cardano.Config.Partial as Config
+import qualified Cardano.Config.Presets as Config
+
+import           Cardano.Config.Types (CardanoEnvironment(NoEnvironment))
+
 import           Cardano.Config.Logging (LoggingLayer, LoggingCLIArguments,
                     createLoggingFeature, llAppendName, llBasicTrace)
-import           Cardano.Config.Partial (PartialCardanoConfiguration)
-import           Cardano.Config.Types (CardanoConfiguration, CardanoEnvironment, 
-                                       coRequiresNetworkMagic, ccCore, coGenesisFile,
-                                       RequireNetworkMagic(NoRequireNetworkMagic,RequireNetworkMagic), coGenesisHash)
+import           Cardano.Config.Types (CardanoConfiguration, RequireNetworkMagic (..),
+                                       coGenesisHash, coRequiresNetworkMagic, ccCore, coGenesisFile)
 import           Cardano.Prelude hiding (atomically, option, (%))
 import           Cardano.Shell.Lib (GeneralException (ConfigurationError))
 import           Cardano.Shell.Types (CardanoFeature (..),
@@ -52,6 +55,7 @@ import           Crypto.Hash (Blake2b_256, digestFromByteString)
 import qualified Data.ByteString.Lazy as BSL
 import           Data.Functor.Contravariant (contramap)
 import           Data.Reflection (give)
+import           Data.Text (Text)
 import qualified Data.Text as Text
 
 
@@ -111,9 +115,13 @@ data Peer = Peer SockAddr SockAddr deriving Show
 -- | The product type of all command line arguments
 data ExplorerNodeParams = ExplorerNodeParams
   { enpLogging :: !LoggingCLIArguments
-  , enpCommon :: CommonCLI
-  , enpSocketPath :: FilePath
-  , enpMigrationDir :: MigrationDir
+  , enpGenesisHash :: !Text
+  , enpSocketPath :: !SocketPath
+  , enpMigrationDir :: !MigrationDir
+  }
+
+newtype SocketPath = SocketPath
+  { unSocketPath :: FilePath
   }
 
 newtype NodeLayer = NodeLayer
@@ -123,10 +131,10 @@ newtype NodeLayer = NodeLayer
 type NodeCardanoFeature = CardanoFeatureInit CardanoEnvironment LoggingLayer CardanoConfiguration ExplorerNodeParams NodeLayer
 
 
-initializeAllFeatures :: ExplorerNodeParams -> PartialCardanoConfiguration -> CardanoEnvironment -> IO ([CardanoFeature], NodeLayer)
-initializeAllFeatures enp partialConfig cardanoEnvironment = do
+initializeAllFeatures :: ExplorerNodeParams -> IO ([CardanoFeature], NodeLayer)
+initializeAllFeatures enp = do
   DB.runMigrations True (enpMigrationDir enp) (LogFileDir "/tmp")
-  let fcc = Config.finaliseCardanoConfiguration $ Config.mergeConfiguration partialConfig (enpCommon enp)
+  let fcc = Config.finaliseCardanoConfiguration $ Config.mergeConfiguration Config.mainnetConfiguration (commonCli enp)
   finalConfig <- case fcc of
                   Left err -> throwIO $ ConfigurationError err
                   --TODO: if we're using exceptions for this, then we should use a local
@@ -135,26 +143,39 @@ initializeAllFeatures enp partialConfig cardanoEnvironment = do
                   -- It would also require catching at the top level and printing.
                   Right x  -> pure x
 
-  (loggingLayer, loggingFeature) <- createLoggingFeature cardanoEnvironment finalConfig (enpLogging enp)
-  (nodeLayer   , nodeFeature)    <- createNodeFeature loggingLayer enp cardanoEnvironment finalConfig
+  (loggingLayer, loggingFeature) <- createLoggingFeature NoEnvironment finalConfig (enpLogging enp)
+  (nodeLayer   , nodeFeature)    <- createNodeFeature loggingLayer enp finalConfig
 
   pure ([ loggingFeature, nodeFeature ], nodeLayer)
 
+-- This is a bit of a pain in the neck but is needed for using cardano-cli.
+commonCli :: ExplorerNodeParams -> CommonCLI
+commonCli enp =
+  CommonCLI
+    { Config.cliSocketPath = Last $ Just (unSocketPath $ enpSocketPath enp)
+    , Config.cliGenesisFile = Last Nothing
+    , Config.cliGenesisHash = Last Nothing
+    , Config.cliStaticKeySigningKeyFile = Last Nothing
+    , Config.cliStaticKeyDlgCertFile = Last Nothing
+    , Config.cliPBftSigThd = Last Nothing
+    , Config.cliRequiresNetworkMagic = Last Nothing
+    , Config.cliDBPath = Last Nothing
+    }
 
-createNodeFeature :: LoggingLayer -> ExplorerNodeParams -> CardanoEnvironment -> CardanoConfiguration -> IO (NodeLayer, CardanoFeature)
-createNodeFeature loggingLayer enp cardanoEnvironment cardanoConfiguration = do
+createNodeFeature :: LoggingLayer -> ExplorerNodeParams -> CardanoConfiguration -> IO (NodeLayer, CardanoFeature)
+createNodeFeature loggingLayer enp cardanoConfiguration = do
   -- we parse any additional configuration if there is any
   -- We don't know where the user wants to fetch the additional configuration from, it could be from
   -- the filesystem, so we give him the most flexible/powerful context, @IO@.
 
   -- we construct the layer
-  nodeLayer <- featureInit (nodeCardanoFeatureInit $ enpSocketPath enp) cardanoEnvironment loggingLayer cardanoConfiguration enp
+  nodeLayer <- featureInit (nodeCardanoFeatureInit $ enpSocketPath enp) NoEnvironment loggingLayer cardanoConfiguration enp
 
   -- Return both
   pure (nodeLayer, nodeCardanoFeature (nodeCardanoFeatureInit $ enpSocketPath enp) nodeLayer)
 
-nodeCardanoFeatureInit :: FilePath -> NodeCardanoFeature
-nodeCardanoFeatureInit socketPath =
+nodeCardanoFeatureInit :: SocketPath -> NodeCardanoFeature
+nodeCardanoFeatureInit (SocketPath socketPath) =
     CardanoFeatureInit
       { featureType    = "NodeFeature"
       , featureInit    = featureStart'
