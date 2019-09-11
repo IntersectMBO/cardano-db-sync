@@ -33,7 +33,7 @@ extra-deps:
   - word-wrap-0.4.1
 
   - git: https://github.com/input-output-hk/cardano-shell
-    commit: 6d74f0f6675ed0b20166f9e162545309ba72944c
+    commit: 5ef0ab914031db561d75dbc1cfc74969a7fcd049
 
   - git: https://github.com/input-output-hk/cardano-prelude
     commit: b83730dccab14111d62144b048084eec7900d091
@@ -45,7 +45,7 @@ extra-deps:
     commit: ddfe3593b80b5ceb88842bb7a6f2268df75d2c2f
 
   - git: https://github.com/input-output-hk/cardano-sl-x509
-    commit: ec96c64c665b741c17b4e38f611315bae9b0b054
+    commit: 43a036c5bbe68ca2e9cbe611eab7982e2348fe49
 
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
     commit: e22be186e0b1018260ed7c5166871f82a869b94d
@@ -54,7 +54,7 @@ extra-deps:
       - iohk-monitoring
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: a250fba145b361df323685d6e6fd78a69cfb195b
+    commit: f4608724f24a923543c0b5f00c1833f76028888c
     subdirs:
       - cardano-config
       - cardano-node
