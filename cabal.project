@@ -59,7 +59,7 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-shell
-  tag: 6d74f0f6675ed0b20166f9e162545309ba72944c
+  tag: 5ef0ab914031db561d75dbc1cfc74969a7fcd049
 
 source-repository-package
   type: git
@@ -80,7 +80,7 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-sl-x509
-  tag: ec96c64c665b741c17b4e38f611315bae9b0b054
+  tag: 43a036c5bbe68ca2e9cbe611eab7982e2348fe49
 
 source-repository-package
   type: git
@@ -97,13 +97,13 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: a250fba145b361df323685d6e6fd78a69cfb195b
+  tag: f4608724f24a923543c0b5f00c1833f76028888c
   subdir: cardano-node
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: a250fba145b361df323685d6e6fd78a69cfb195b
+  tag: f4608724f24a923543c0b5f00c1833f76028888c
   subdir: cardano-config
 
 source-repository-package
