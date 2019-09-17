@@ -28,8 +28,8 @@ import           Data.Time.Format (defaultTimeLocale, formatTime, iso8601DateFor
 
 import           Database.Persist.Sql (SqlBackend, SqlPersistT, entityVal, getMigration, selectFirst)
 
-import           Explorer.DB.Migration.Version
 import           Explorer.DB.Migration.Haskell
+import           Explorer.DB.Migration.Version
 import           Explorer.DB.PGConfig
 import           Explorer.DB.Run
 import           Explorer.DB.Schema
@@ -77,6 +77,8 @@ applyMigration quiet pgconfig (logFilename, logHandle) (version, script) = do
             , BS.unpack (pgcDbname pgconfig)
             , "--no-password"
             , "--quiet"
+            , "--username=" <> BS.unpack (pgcUser pgconfig)
+            , "--host=" <> BS.unpack (pgcHost pgconfig)
             , "--no-psqlrc"                     -- Ignore the ~/.psqlrc file.
             , "--single-transaction"            -- Run the file as a transaction.
             , "--set ON_ERROR_STOP=on"          -- Exit with non-zero on error.
