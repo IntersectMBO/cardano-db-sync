@@ -62,6 +62,8 @@
           (hsPkgs.template-haskell)
           (hsPkgs.text)
           (hsPkgs.time)
+          (hsPkgs.transformers)
+          (hsPkgs.transformers-except)
           (hsPkgs.typed-protocols)
           (hsPkgs.typed-protocols-cbor)
           (hsPkgs.utf8-string)
@@ -145,6 +147,8 @@
             (hsPkgs.safe-exceptions)
             (hsPkgs.text)
             (hsPkgs.time)
+            (hsPkgs.transformers-except)
+            (hsPkgs.transformers)
             ];
           };
         "chairman" = {
@@ -181,8 +185,8 @@
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/cardano-node";
-      rev = "f4608724f24a923543c0b5f00c1833f76028888c";
-      sha256 = "093rcbkls3jpas3q7dh8nnafgm5w564mns3jbsmr8rlix67sq3xz";
+      rev = "ba7a6930437ced1f795ea4df0678b6e22a36e628";
+      sha256 = "0as1nh4qd4944dacrncijcs7yir95r1ypyxsxbwvl3aq9zcz2zq9";
       });
     postUnpack = "sourceRoot+=/cardano-node; echo source root reset to \$sourceRoot";
     }

@@ -54,6 +54,7 @@
             (hsPkgs.cryptonite)
             (hsPkgs.formatting)
             (hsPkgs.ghc-heap)
+            (hsPkgs.ghc-prim)
             (hsPkgs.hedgehog)
             (hsPkgs.hspec)
             (hsPkgs.pretty-show)
@@ -69,7 +70,7 @@
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/cardano-prelude";
-      rev = "b83730dccab14111d62144b048084eec7900d091";
-      sha256 = "00vnsl521bc2qbv4v3j00afprx8d58n8gfgcbhs2xpp8dywrfa5i";
+      rev = "d6eda836896e8fa591fb4fff141064191d7e2a76";
+      sha256 = "15iniqz4a1c2r1zpm2xh7shk5v0v84s79k308bmipvl4ggby2fbk";
       });
     }
