@@ -1,7 +1,7 @@
 { lib, pkgs, config, ... }:
 
 let
-  self = import ./. { };
+  self = import ../.. { };
   cfg = config.services.cardano-exporter;
   socketdir = "/var/run/postgresql";
   port = 5432;
@@ -15,9 +15,6 @@ in {
         internal = true;
         type = lib.types.package;
       };
-      genesisFile = lib.mkOption {
-        type = lib.types.path;
-      };
       genesisHash = lib.mkOption {
         type = lib.types.str;
       };
@@ -30,7 +27,8 @@ in {
         default = null;
       };
       socketPath = lib.mkOption {
-        type = lib.types.path;
+        type = lib.types.nullOr lib.types.path;
+        default = null;
       };
     };
   };
@@ -88,24 +86,28 @@ in {
         script = pkgs.writeScript "cardano-exporter-${cfg.cluster}" ''
           #!${pkgs.stdenv.shell}
 
+          ${if (cfg.socketPath == null) then ''if [ -z "$CARDANO_NODE_SOCKET_PATH" ]
+          then
+            echo "You must set \$CARDANO_NODE_SOCKET_PATH"
+            exit 1
+          fi'' else "export CARDANO_NODE_SOCKET_PATH=${cfg.socketPath}"}
+
           export PATH=${lib.makeBinPath [ self.cardano-explorer-node self.haskellPackages.cardano-explorer-db.components.exes.cardano-explorer-db-manage pkgs.postgresql ]}:$PATH
 
           export PGPASSFILE=${pgpass}
 
-          mkdir log-dir
+          mkdir -p log-dir
 
-          cardano-explorer-db-manage run-migrations --mdir ${./schema} --ldir log-dir
-
-          exec cardano-explorer-node --log-config ${./log-configuration.yaml} \
-            --genesis-file ${cfg.genesisFile} \
+          exec cardano-explorer-node --log-config ${../../log-configuration.yaml} \
             --genesis-hash ${cfg.genesisHash} \
-            --socket-path ${cfg.socketPath}
+            --socket-path $CARDANO_NODE_SOCKET_PATH \
+            --schema-dir ${../../schema}
         '';
       };
     })
     (lib.mkIf (cfg.environment != null) {
       services.cardano-exporter = {
-        inherit (cfg.environment) genesisFile genesisHash;
+        inherit (cfg.environment) genesisHash;
       };
     })
   ];
