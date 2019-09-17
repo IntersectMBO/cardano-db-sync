@@ -6,7 +6,7 @@ let
   socketdir = "/var/run/postgresql";
   port = 5432;
   user = "cexplorer";
-  pgpass = builtins.toFile "pgpass" "${socketdir}:${toString port}:${user}:*:*";
+  pgpass = builtins.toFile "pgpass" "${socketdir}:${toString port}:${user}:${user}:*";
 in {
   options = {
     services.cardano-exporter = {
@@ -94,7 +94,10 @@ in {
 
           export PATH=${lib.makeBinPath [ self.cardano-explorer-node self.haskellPackages.cardano-explorer-db.components.exes.cardano-explorer-db-manage pkgs.postgresql ]}:$PATH
 
-          export PGPASSFILE=${pgpass}
+          cp ${pgpass} ./pgpass
+          chmod 0600 ./pgpass
+          export PGPASSFILE=$(pwd)/pgpass
+          echo $PGPASSFILE
 
           mkdir -p log-dir
 
