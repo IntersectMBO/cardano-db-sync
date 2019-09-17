@@ -357,6 +357,8 @@ localChainSyncCodec pInfoConfig =
       (nodeDecodeBlock pInfoConfig)
       (encodePoint (nodeEncodeHeaderHash (Proxy @blk)))
       (decodePoint (nodeDecodeHeaderHash (Proxy @blk)))
+      (encodePoint (nodeEncodeHeaderHash (Proxy @blk)))
+      (decodePoint (nodeDecodeHeaderHash (Proxy @blk)))
 
 localTxSubmissionCodec
   :: (RunNode blk, MonadST m)
