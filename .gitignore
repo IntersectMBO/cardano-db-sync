@@ -2,3 +2,6 @@ dist-newstyle/
 .stack-work/
 dist
 *.swp
+log-dir
+result*
+launch_*
