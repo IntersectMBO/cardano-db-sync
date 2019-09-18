@@ -10,9 +10,9 @@ BEGIN
 
     -- Hand written SQL to insert the epoch_no field.
     -- Update all non-EBBs.
-	UPDATE block SET epoch_no = div (slot_no, 21600) WHERE slot_no IS NOT NULL ;
+    UPDATE block SET epoch_no = div (slot_no, 21600) WHERE slot_no IS NOT NULL ;
 
-	-- Update EBBs.
+    -- Update EBBs.
     UPDATE block SET epoch_no =
       CASE WHEN previous_block.epoch_no IS NULL
         THEN 0
@@ -20,6 +20,9 @@ BEGIN
         END
       FROM block AS previous_block
       WHERE block.previous = previous_block.id AND block.epoch_no IS NULL ;
+
+    -- Update the initial EBB.
+    UPDATE block SET epoch_no = 0 where block.previous = 1 ;
     --
 
     UPDATE schema_version SET stage_two = 2 ;
