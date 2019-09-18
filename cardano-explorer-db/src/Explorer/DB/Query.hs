@@ -11,6 +11,7 @@ module Explorer.DB.Query
   , queryBlockId
   , queryBlockIdAndHash
   , queryBlockTxCount
+  , queryEpochNo
   , queryGenesisSupply
   , queryLatestBlockId
   , queryLatestBlocks
@@ -30,6 +31,7 @@ module Explorer.DB.Query
   , unValueSumAda
   , maybeToEither
   , entityPair
+  , unBlockId
   ) where
 
 
@@ -47,7 +49,7 @@ import           Data.Word (Word16, Word64)
 import           Database.Esqueleto (Entity (..), From, InnerJoin (..), PersistField, SqlExpr, SqlQuery, Value,
                     (^.), (==.), (&&.),
                     countRows, desc, entityKey, entityVal, from, limit, not_, notExists, nothing, on, orderBy,
-                    select, sum_, unValue, val, where_)
+                    select, sum_, unValue, unSqlBackendKey, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
 import           Explorer.DB.Error
@@ -96,6 +98,15 @@ queryBlockTxCount blkId = do
             where_ (tx ^. TxBlock ==. val blkId)
             pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
+
+-- | Get the Epoch number for a given block. Returns '0' for the genesis block
+-- even though the DB entry for the genesis block is 'NULL'.
+queryEpochNo :: MonadIO m => BlockId -> ReaderT SqlBackend m (Either LookupFail (Maybe Word64))
+queryEpochNo blkId = do
+  res <- select . from $ \ blk -> do
+            where_ (blk ^. BlockId ==. val blkId)
+            pure $ blk ^. BlockEpochNo
+  pure $ maybeToEither (DbLookupBlockId $ unBlockId blkId) unValue (listToMaybe res)
 
 -- | Return the total Genesis coin supply.
 queryGenesisSupply :: MonadIO m => ReaderT SqlBackend m Ada
@@ -270,6 +281,10 @@ unValueSumAda mvm =
 
 -- -----------------------------------------------------------------------------
 
+entityPair :: Entity a -> (Key a, a)
+entityPair e =
+  (entityKey e, entityVal e)
+
 listToMaybe :: [a] -> Maybe a
 listToMaybe [] = Nothing
 listToMaybe (a:_) = Just a
@@ -278,6 +293,5 @@ maybeToEither :: e -> (a -> b) -> Maybe a -> Either e b
 maybeToEither e f =
   maybe (Left e) (Right . f)
 
-entityPair :: Entity a -> (Key a, a)
-entityPair e =
-  (entityKey e, entityVal e)
+unBlockId :: BlockId -> Word64
+unBlockId = fromIntegral . unSqlBackendKey . unBlockKey

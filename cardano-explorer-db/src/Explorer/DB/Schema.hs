@@ -56,8 +56,11 @@ share
   -- of which is (for instance for this table) 'BlockId'. This specific
   -- primary key Haskell type can be used in a type-safe way in the rest
   -- of the schema definition.
+  -- All NULL-able fields other than 'epochNo' are NULL for EBBs, whereas 'epochNo' is
+  -- only NULL for the genesis block.
   Block
     hash                ByteString          sqltype=hash32type
+    epochNo             Word64 Maybe        sqltype=uinteger
     slotNo              Word64 Maybe        sqltype=uinteger
     blockNo             Word64 Maybe        sqltype=uinteger
     previous            BlockId Maybe
