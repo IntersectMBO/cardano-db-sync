@@ -77,7 +77,7 @@ insertABOBBoundary tracer blk = do
       void . DB.insertBlock $
                 DB.Block
                   { DB.blockHash = unHeaderHash $ Ledger.boundaryHashAnnotated blk
-                  , DB.blockEpochNo = fmap (+1) mle
+                  , DB.blockEpochNo = Just $ maybe 0 (+1) mle
                   , DB.blockSlotNo = Nothing -- No slotNo for a boundary block
                   , DB.blockBlockNo = Nothing
                   , DB.blockPrevious = Just pbid
@@ -115,7 +115,7 @@ insertABlock tracer blk = do
       blkId <- DB.insertBlock $
                     DB.Block
                       { DB.blockHash = unHeaderHash $ blockHash blk
-                      , DB.blockEpochNo = Just $ slotNumber blk `mod` slotsPerEpoch
+                      , DB.blockEpochNo = Just $ slotNumber blk `div` slotsPerEpoch
                       , DB.blockSlotNo = Just $ slotNumber blk
                       , DB.blockBlockNo = Just $ blockNumber blk
                       , DB.blockPrevious = Just pbid
