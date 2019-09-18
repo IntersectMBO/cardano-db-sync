@@ -68,6 +68,7 @@ insertValidateGenesisDistribution tracer cfg = do
             bid <- DB.insertBlock $
                       DB.Block
                         { DB.blockHash = configGenesisHash cfg
+                        , DB.blockEpochNo = Nothing
                         , DB.blockSlotNo = Nothing
                         , DB.blockBlockNo = Nothing
                         , DB.blockPrevious = Nothing

@@ -71,10 +71,13 @@ insertABOBBoundary tracer blk = do
                         Right hh -> hh
       pbid <- leftPanic "insertABOBBoundary: "
                   <$> DB.queryBlockId (unHeaderHash prevHash)
+      mle <- leftPanic "insertABOBBoundary: "
+                  <$> DB.queryEpochNo pbid
       slid <- DB.insertSlotLeader $ DB.SlotLeader (BS.replicate 28 '\0') "Epoch boundary slot leader"
       void . DB.insertBlock $
                 DB.Block
                   { DB.blockHash = unHeaderHash $ Ledger.boundaryHashAnnotated blk
+                  , DB.blockEpochNo = fmap (+1) mle
                   , DB.blockSlotNo = Nothing -- No slotNo for a boundary block
                   , DB.blockBlockNo = Nothing
                   , DB.blockPrevious = Just pbid
@@ -105,11 +108,14 @@ insertABlock tracer blk = do
     insertAction = do
       pbid <- leftPanic "insertABlock: "
                   <$> DB.queryBlockId (unHeaderHash $ blockPreviousHash blk)
+      slotsPerEpoch
+            <- leftPanic "insertABlock: " <$> (fmap (\m -> 10 * DB.metaProtocolConst m) <$> DB.queryMeta)
 
       slid <- DB.insertSlotLeader $ mkSlotLeader blk
       blkId <- DB.insertBlock $
                     DB.Block
                       { DB.blockHash = unHeaderHash $ blockHash blk
+                      , DB.blockEpochNo = Just $ slotNumber blk `mod` slotsPerEpoch
                       , DB.blockSlotNo = Just $ slotNumber blk
                       , DB.blockBlockNo = Just $ blockNumber blk
                       , DB.blockPrevious = Just pbid

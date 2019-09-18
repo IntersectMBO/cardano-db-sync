@@ -48,7 +48,7 @@ mkAddressHash blkId txId =
 
 mkBlock :: Word64 -> SlotLeaderId -> Block
 mkBlock blk slid =
-  Block (mkBlockHash blk) Nothing Nothing Nothing Nothing slid 42
+  Block (mkBlockHash blk) (Just 0) Nothing Nothing Nothing Nothing slid 42
 
 mkBlockHash :: Word64 -> ByteString
 mkBlockHash blkId =
@@ -75,9 +75,6 @@ testSlotLeader =
 mkTxOut :: BlockId -> TxId -> TxOut
 mkTxOut blkId txId =
   TxOut txId 0 (mkAddressHash blkId txId) 1000000000
-
-unBlockId :: BlockId -> Word64
-unBlockId = fromIntegral . unSqlBackendKey . unBlockKey
 
 unTxId :: TxId -> Word64
 unTxId = fromIntegral . unSqlBackendKey . unTxKey
