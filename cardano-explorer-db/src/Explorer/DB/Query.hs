@@ -13,6 +13,7 @@ module Explorer.DB.Query
   , queryBlockTxCount
   , queryEpochNo
   , queryGenesisSupply
+  , queryLatestBlock
   , queryLatestBlockId
   , queryLatestBlocks
   , queryLatestSlotNo
@@ -126,6 +127,14 @@ queryLatestBlockId = do
                 pure $ (blk ^. BlockId)
   pure $ fmap unValue (listToMaybe res)
 
+-- | Get the latest block.
+queryLatestBlock :: MonadIO m => ReaderT SqlBackend m (Maybe Block)
+queryLatestBlock = do
+  res <- select $ from $ \ blk -> do
+                orderBy [desc (blk ^. BlockId)]
+                limit 1
+                pure $ blk
+  pure $ fmap entityVal (listToMaybe res)
 
 -- | Get the last N blocks.
 -- This assumes that the block are inserted into the datebase from oldest to
