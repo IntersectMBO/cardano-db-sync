@@ -304,12 +304,26 @@ localInitiatorNetworkApplication Proxy trce pInfoConfig =
           ChainSyncWithBlocksPtcl -> \channel -> do
             liftIO $ logInfo trce "Starting chainSyncClient"
             latestPoints <- liftIO getLatestPoints
+            liftIO $ logDbState trce
             runPeer
               nullTracer -- TODO
               (localChainSyncCodec @blk pInfoConfig)
               peer
               channel
               (chainSyncClientPeer (chainSyncClient trce latestPoints))
+
+
+logDbState :: Trace IO Text -> IO ()
+logDbState trce = do
+  mblk <- DB.runDbNoLogging DB.queryLatestBlock
+  case mblk of
+    Nothing -> logInfo trce "Explorer DB is empty"
+    Just block ->
+        logInfo trce $ Text.concat
+                [ "Explorer DB tip is at slot "
+                , maybe "-1 (genesis)" (Text.pack . show) (DB.blockSlotNo block)
+                ]
+
 
 getLatestPoints :: IO [Point (ByronBlockOrEBB cfg)]
 getLatestPoints =
