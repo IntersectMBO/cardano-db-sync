@@ -39,7 +39,7 @@ import qualified Cardano.Config.Partial as Config
 import qualified Cardano.Config.Presets as Config
 import           Cardano.Config.Types (CardanoConfiguration, CardanoEnvironment (..),
                     RequireNetworkMagic (..),
-                    coGenesisHash, coRequiresNetworkMagic, ccCore, coGenesisFile)
+                    coRequiresNetworkMagic, ccCore, coGenesisFile)
 
 import           Cardano.Crypto (Hash, RequiresNetworkMagic (..), decodeAbstractHash)
 import           Cardano.Crypto.Hashing (AbstractHash (..))
@@ -165,13 +165,13 @@ createNodeFeature loggingLayer enp cardanoConfiguration = do
   -- the filesystem, so we give him the most flexible/powerful context, @IO@.
 
   -- we construct the layer
-  nodeLayer <- featureInit (nodeCardanoFeatureInit $ enpSocketPath enp) NoEnvironment loggingLayer cardanoConfiguration enp
+  nodeLayer <- featureInit nodeCardanoFeatureInit NoEnvironment loggingLayer cardanoConfiguration enp
 
   -- Return both
-  pure (nodeLayer, nodeCardanoFeature (nodeCardanoFeatureInit $ enpSocketPath enp) nodeLayer)
+  pure (nodeLayer, nodeCardanoFeature nodeCardanoFeatureInit nodeLayer)
 
-nodeCardanoFeatureInit :: SocketPath -> NodeCardanoFeature
-nodeCardanoFeatureInit (SocketPath socketPath) =
+nodeCardanoFeatureInit :: NodeCardanoFeature
+nodeCardanoFeatureInit =
     CardanoFeatureInit
       { featureType    = "NodeFeature"
       , featureInit    = featureStart'
@@ -179,8 +179,8 @@ nodeCardanoFeatureInit (SocketPath socketPath) =
       }
   where
     featureStart' :: CardanoEnvironment -> LoggingLayer -> CardanoConfiguration -> ExplorerNodeParams -> IO NodeLayer
-    featureStart' _ loggingLayer cc _enp =
-        pure $ NodeLayer { nlRunNode = liftIO $ runClient socketPath (mkTracer loggingLayer) cc }
+    featureStart' _ loggingLayer cc enp =
+        pure $ NodeLayer { nlRunNode = liftIO $ runClient enp (mkTracer loggingLayer) cc }
 
     featureCleanup' :: NodeLayer -> IO ()
     featureCleanup' _ = pure ()
@@ -197,10 +197,10 @@ nodeCardanoFeature nodeCardanoFeature' nodeLayer =
     , featureShutdown   = liftIO $ (featureCleanup nodeCardanoFeature') nodeLayer
     }
 
-runClient :: FilePath -> Trace IO Text -> CardanoConfiguration -> IO ()
-runClient socketPath trce cc = do
+runClient :: ExplorerNodeParams -> Trace IO Text -> CardanoConfiguration -> IO ()
+runClient enp trce cc = do
     let genHash = either (throw . ConfigurationError) id $
-                      decodeAbstractHash (coGenesisHash $ ccCore cc)
+                      decodeAbstractHash (enpGenesisHash enp)
 
     gc <- readGenesisConfig cc genHash
 
@@ -210,7 +210,7 @@ runClient socketPath trce cc = do
 
     give (Genesis.configEpochSlots gc)
           $ give (Genesis.gdProtocolMagicId $ Genesis.configGenesisData gc)
-          $ runExplorerNodeClient (mkProtocolId gc) trce socketPath
+          $ runExplorerNodeClient (mkProtocolId gc) trce (unSocketPath $ enpSocketPath enp)
 
 
 mkProtocolId :: Genesis.Config -> Protocol (ByronBlockOrEBB ByronConfig)
