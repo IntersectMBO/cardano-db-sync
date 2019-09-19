@@ -18,6 +18,9 @@ in {
       genesisHash = lib.mkOption {
         type = lib.types.str;
       };
+      genesisFile = lib.mkOption {
+        type = lib.types.path;
+      };
       cluster = lib.mkOption {
         type = lib.types.str;
         description = "cluster name, inserted into the names of derivations to aid in debug";
@@ -103,6 +106,7 @@ in {
 
           exec cardano-explorer-node --log-config ${../../log-configuration.yaml} \
             --genesis-hash ${cfg.genesisHash} \
+            --genesis-file ${cfg.genesisFile} \
             --socket-path $CARDANO_NODE_SOCKET_PATH \
             --schema-dir ${../../schema}
         '';
@@ -110,7 +114,7 @@ in {
     })
     (lib.mkIf (cfg.environment != null) {
       services.cardano-exporter = {
-        inherit (cfg.environment) genesisHash;
+        inherit (cfg.environment) genesisFile genesisHash;
       };
     })
   ];
