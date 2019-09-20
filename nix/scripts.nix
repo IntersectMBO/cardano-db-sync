@@ -8,6 +8,7 @@ let
         enable = true;
         inherit (envConfig) genesisFile genesisHash;
         cluster = envConfig.name;
+        postgres.user = "*";
       };
     };
     systemdCompat.options = {

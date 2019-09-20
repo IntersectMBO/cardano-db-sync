@@ -3,10 +3,7 @@
 let
   self = import ../.. { };
   cfg = config.services.cardano-exporter;
-  socketdir = "/var/run/postgresql";
-  port = 5432;
-  user = "cexplorer";
-  pgpass = builtins.toFile "pgpass" "${socketdir}:${toString port}:${user}:${user}:*";
+  pgpass = builtins.toFile "pgpass" "${cfg.postgres.socketdir}:${toString cfg.postgres.port}:${cfg.postgres.database}:${cfg.postgres.user}:*";
 in {
   options = {
     services.cardano-exporter = {
@@ -32,6 +29,28 @@ in {
       socketPath = lib.mkOption {
         type = lib.types.nullOr lib.types.path;
         default = null;
+      };
+      postgres = {
+        socketdir = lib.mkOption {
+          type = lib.types.str;
+          default = "/var/run/postgresql";
+          description = "the path to the postgresql socket";
+        };
+        port = lib.mkOption {
+          type = lib.types.int;
+          default = 5432;
+          description = "the postgresql port";
+        };
+        database = lib.mkOption {
+          type = lib.types.str;
+          default = "cexplorer";
+          description = "the postgresql database to use";
+        };
+        user = lib.mkOption {
+          type = lib.types.str;
+          default = "cexplorer";
+          description = "the postgresql user to use";
+        };
       };
     };
   };
