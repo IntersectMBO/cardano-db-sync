@@ -9,8 +9,8 @@ import qualified Cardano.Shell.Lib as Shell
 import qualified Data.Text as Text
 
 import           Explorer.DB (MigrationDir (..))
-import           Explorer.Node (ExplorerNodeParams (..), NodeLayer (..), SocketPath (..),
-                    initializeAllFeatures)
+import           Explorer.Node (ExplorerNodeParams (..), GenesisFile (..), NodeLayer (..),
+                    SocketPath (..), initializeAllFeatures)
 
 import           Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative as Opt
@@ -38,13 +38,24 @@ pCommandLine =
   ExplorerNodeParams
     <$> Config.loggingParser
     <*> pGenesisHash
+    <*> pGenesisFile
     <*> pSocketPath
     <*> pMigrationDir
+
+pGenesisFile :: Parser GenesisFile
+pGenesisFile =
+  GenesisFile <$> Opt.strOption
+    ( Opt.long "genesis-file"
+    <> Opt.help "Path to the genesis JSON file"
+    <> Opt.completer (Opt.bashCompleter "file")
+    <> Opt.metavar "FILEPATH"
+    )
 
 pGenesisHash :: Parser Text
 pGenesisHash =
   Text.pack <$> Opt.strOption
     ( Opt.long "genesis-hash"
+    <> Opt.help "The hash of the genesis data"
     <> Opt.metavar "GENESIS-HASH"
     )
 
@@ -61,7 +72,7 @@ pSocketPath :: Parser SocketPath
 pSocketPath =
   SocketPath <$> Opt.strOption
     ( Opt.long "socket-path"
-    <> Opt.help "path to a cardano-node socket"
+    <> Opt.help "Path to a cardano-node socket"
     <> Opt.completer (Opt.bashCompleter "file")
     <> Opt.metavar "FILEPATH"
     )

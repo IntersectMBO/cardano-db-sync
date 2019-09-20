@@ -12,6 +12,7 @@
 
 module Explorer.Node
   ( ExplorerNodeParams (..)
+  , GenesisFile (..)
   , NodeLayer (..)
   , SocketPath (..)
   , initializeAllFeatures
@@ -22,8 +23,6 @@ import           Control.Monad.Class.MonadST (MonadST)
 import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, StrictTMVar,
                     atomically, newEmptyTMVarM, readTMVar)
 import           Control.Monad.Class.MonadTimer (MonadTimer)
-
-import           Cardano.Binary (Raw)
 
 import           Cardano.BM.Data.Tracer (ToLogObject (..), nullTracer)
 import           Cardano.BM.Trace (Trace, appendName, logInfo)
@@ -39,9 +38,9 @@ import qualified Cardano.Config.Partial as Config
 import qualified Cardano.Config.Presets as Config
 import           Cardano.Config.Types (CardanoConfiguration, CardanoEnvironment (..),
                     RequireNetworkMagic (..),
-                    coGenesisHash, coRequiresNetworkMagic, ccCore, coGenesisFile)
+                    coRequiresNetworkMagic, ccCore)
 
-import           Cardano.Crypto (Hash, RequiresNetworkMagic (..), decodeAbstractHash)
+import           Cardano.Crypto (RequiresNetworkMagic (..), decodeAbstractHash)
 import           Cardano.Crypto.Hashing (AbstractHash (..))
 
 import           Cardano.Prelude hiding (atomically, option, (%))
@@ -102,7 +101,7 @@ import           Ouroboros.Network.Protocol.LocalTxSubmission.Client (LocalTxSub
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Codec (codecLocalTxSubmission)
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (LocalTxSubmission)
 
-import           Prelude (String, id)
+import           Prelude (String)
 
 
 data Peer = Peer SockAddr SockAddr deriving Show
@@ -111,8 +110,13 @@ data Peer = Peer SockAddr SockAddr deriving Show
 data ExplorerNodeParams = ExplorerNodeParams
   { enpLogging :: !LoggingCLIArguments
   , enpGenesisHash :: !Text
+  , enpGenesisFile :: !GenesisFile
   , enpSocketPath :: !SocketPath
   , enpMigrationDir :: !MigrationDir
+  }
+
+newtype GenesisFile = GenesisFile
+  { unGenesisFile :: FilePath
   }
 
 newtype SocketPath = SocketPath
@@ -165,13 +169,13 @@ createNodeFeature loggingLayer enp cardanoConfiguration = do
   -- the filesystem, so we give him the most flexible/powerful context, @IO@.
 
   -- we construct the layer
-  nodeLayer <- featureInit (nodeCardanoFeatureInit $ enpSocketPath enp) NoEnvironment loggingLayer cardanoConfiguration enp
+  nodeLayer <- featureInit nodeCardanoFeatureInit NoEnvironment loggingLayer cardanoConfiguration enp
 
   -- Return both
-  pure (nodeLayer, nodeCardanoFeature (nodeCardanoFeatureInit $ enpSocketPath enp) nodeLayer)
+  pure (nodeLayer, nodeCardanoFeature nodeCardanoFeatureInit nodeLayer)
 
-nodeCardanoFeatureInit :: SocketPath -> NodeCardanoFeature
-nodeCardanoFeatureInit (SocketPath socketPath) =
+nodeCardanoFeatureInit :: NodeCardanoFeature
+nodeCardanoFeatureInit =
     CardanoFeatureInit
       { featureType    = "NodeFeature"
       , featureInit    = featureStart'
@@ -179,8 +183,8 @@ nodeCardanoFeatureInit (SocketPath socketPath) =
       }
   where
     featureStart' :: CardanoEnvironment -> LoggingLayer -> CardanoConfiguration -> ExplorerNodeParams -> IO NodeLayer
-    featureStart' _ loggingLayer cc _enp =
-        pure $ NodeLayer { nlRunNode = liftIO $ runClient socketPath (mkTracer loggingLayer) cc }
+    featureStart' _ loggingLayer cc enp =
+        pure $ NodeLayer { nlRunNode = liftIO $ runClient enp (mkTracer loggingLayer) cc }
 
     featureCleanup' :: NodeLayer -> IO ()
     featureCleanup' _ = pure ()
@@ -197,12 +201,9 @@ nodeCardanoFeature nodeCardanoFeature' nodeLayer =
     , featureShutdown   = liftIO $ (featureCleanup nodeCardanoFeature') nodeLayer
     }
 
-runClient :: FilePath -> Trace IO Text -> CardanoConfiguration -> IO ()
-runClient socketPath trce cc = do
-    let genHash = either (throw . ConfigurationError) id $
-                      decodeAbstractHash (coGenesisHash $ ccCore cc)
-
-    gc <- readGenesisConfig cc genHash
+runClient :: ExplorerNodeParams -> Trace IO Text -> CardanoConfiguration -> IO ()
+runClient enp trce cc = do
+    gc <- readGenesisConfig enp cc
 
     -- If the DB is empty it will be inserted, otherwise it will be validated (to make
     -- sure we are on the right chain).
@@ -210,7 +211,7 @@ runClient socketPath trce cc = do
 
     give (Genesis.configEpochSlots gc)
           $ give (Genesis.gdProtocolMagicId $ Genesis.configGenesisData gc)
-          $ runExplorerNodeClient (mkProtocolId gc) trce socketPath
+          $ runExplorerNodeClient (mkProtocolId gc) trce (unSocketPath $ enpSocketPath enp)
 
 
 mkProtocolId :: Genesis.Config -> Protocol (ByronBlockOrEBB ByronConfig)
@@ -226,10 +227,11 @@ data GenesisConfigurationError = GenesisConfigurationError Genesis.Configuration
 
 instance Exception GenesisConfigurationError
 
-readGenesisConfig :: CardanoConfiguration -> Hash Raw -> IO Genesis.Config
-readGenesisConfig cc genHash =
+readGenesisConfig :: ExplorerNodeParams -> CardanoConfiguration -> IO Genesis.Config
+readGenesisConfig enp cc = do
+    genHash <- either (throw . ConfigurationError) pure $ decodeAbstractHash (enpGenesisHash enp)
     convert =<< runExceptT (Genesis.mkConfigFromFile (convertRNM . coRequiresNetworkMagic $ ccCore cc)
-                            (coGenesisFile $ ccCore cc) genHash)
+                            (unGenesisFile $ enpGenesisFile enp) genHash)
   where
     convert :: Either Genesis.ConfigurationError Genesis.Config -> IO Genesis.Config
     convert =
@@ -304,12 +306,26 @@ localInitiatorNetworkApplication Proxy trce pInfoConfig =
           ChainSyncWithBlocksPtcl -> \channel -> do
             liftIO $ logInfo trce "Starting chainSyncClient"
             latestPoints <- liftIO getLatestPoints
+            liftIO $ logDbState trce
             runPeer
               nullTracer -- TODO
               (localChainSyncCodec @blk pInfoConfig)
               peer
               channel
               (chainSyncClientPeer (chainSyncClient trce latestPoints))
+
+
+logDbState :: Trace IO Text -> IO ()
+logDbState trce = do
+  mblk <- DB.runDbNoLogging DB.queryLatestBlock
+  case mblk of
+    Nothing -> logInfo trce "Explorer DB is empty"
+    Just block ->
+        logInfo trce $ Text.concat
+                [ "Explorer DB tip is at slot "
+                , maybe "-1 (genesis)" (Text.pack . show) (DB.blockSlotNo block)
+                ]
+
 
 getLatestPoints :: IO [Point (ByronBlockOrEBB cfg)]
 getLatestPoints =

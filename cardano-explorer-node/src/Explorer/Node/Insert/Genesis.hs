@@ -55,6 +55,9 @@ insertValidateGenesisDistribution tracer cfg = do
         case mbid of
           Right bid -> validateGenesisDistribution tracer cfg bid
           Left _ -> do
+            count <- DB.queryBlockCount
+            when (count > 0) $
+              panic "insertValidateGenesisDistribution: Genesis data mismatch."
             void $ DB.insertMeta $ DB.Meta
                                     (Ledger.unBlockCount $ Ledger.configK cfg)
                                     (configSlotDuration cfg)
