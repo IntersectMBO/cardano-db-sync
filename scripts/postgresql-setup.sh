@@ -89,14 +89,19 @@ function drop_db {
 	dropdb --if-exists "${databasename}"
 }
 
+function list_views {
+	psql "${databasename}" \
+		--command="select table_name from information_schema.views where table_catalog = 'cexplorer' and table_schema = 'public' ;"
+}
+
 function create_migration {
-	cabal build cardano-explorer-core:cardano-explorer-db-manage
+	cabal build cardano-explorer-db:cardano-explorer-db-manage
 	exe=$(find dist-newstyle -type f -name cardano-explorer-db-manage)
 	"${exe}" create-migration --mdir schema/
 }
 
 function run_migrations {
-	cabal build cardano-explorer-core:cardano-explorer-db-manage
+	cabal build cardano-explorer-db:cardano-explorer-db-manage
 	exe=$(find dist-newstyle -type f -name cardano-explorer-db-manage)
 	"${exe}" run-migrations --mdir schema/ --ldir .
 }
@@ -111,6 +116,7 @@ function usage_exit {
 	echo "    $progname --check             - Check database exists and is set up correctly."
 	echo "    $progname --createdb          - Create database."
 	echo "    $progname --dropdb            - Drop database."
+	echo "    $progname --list-views        - List the currently definied views."
 	echo "    $progname --recreatedb        - Drop and recreate database."
 	echo "    $progname --create-user       - Create database user (from config/pgass file)."
 	echo "    $progname --create-migration	- Create a migration (if one is needed)."
@@ -143,6 +149,14 @@ case "${1:-""}" in
 		check_for_psql
 		check_psql_superuser
 		drop_db
+		;;
+	--list-views)
+		check_pgpass_file
+		check_for_psql
+		check_psql_superuser
+		check_db_exists
+		check_connect_as_user
+		list_views
 		;;
 	--recreatedb)
 		check_pgpass_file
