@@ -1,4 +1,4 @@
-resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/d6eda836896e8fa591fb4fff141064191d7e2a76/snapshot.yaml
+resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/3b2d07ccf4f4ad2c1d1ddefe49b8c138c54854fd/snapshot.yaml
 compiler: ghc-8.6.5
 
 
@@ -35,10 +35,10 @@ extra-deps:
   - transformers-except-0.1.1
 
   - git: https://github.com/input-output-hk/cardano-shell
-    commit: 18906dd8c109380c4b1fa20ed35100e48135aac3
+    commit: e2d57038b52c46d790bc41423e83462fe9eaa8c9
 
   - git: https://github.com/input-output-hk/cardano-prelude
-    commit: d6eda836896e8fa591fb4fff141064191d7e2a76
+    commit: 3b2d07ccf4f4ad2c1d1ddefe49b8c138c54854fd
     subdirs:
       - .
       - test
@@ -50,26 +50,31 @@ extra-deps:
     commit: 43a036c5bbe68ca2e9cbe611eab7982e2348fe49
 
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: e22be186e0b1018260ed7c5166871f82a869b94d
+    commit: 1ebe57df3a76a8ae4e3b5a31a9b85132f71534fc
     subdirs:
       - contra-tracer
       - iohk-monitoring
+      - plugins/backend-aggregation
+      - plugins/backend-editor
+      - plugins/backend-ekg
+      - plugins/backend-monitoring
+      - plugins/scribe-systemd
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: ba7a6930437ced1f795ea4df0678b6e22a36e628
+    commit: bbdc33dfca84873b82ea1c0f1364e0386e39e350
     subdirs:
       - cardano-config
       - cardano-node
 
   - git: https://github.com/input-output-hk/cardano-base
-    commit: 0e26a4f00324100b4c34f2a9c7606ae03e94d7a2
+    commit: 1c9e91cc8cc1deecdd7696d0f7b0b74b8984aa93
     subdirs:
       - binary
       - binary/test
       - cardano-crypto-class
 
   - git: https://github.com/input-output-hk/cardano-ledger
-    commit: db1c822f1847e40eb340152b95ab3138a10f92df
+    commit: 4f678e6ed621a4b063c9ea432f88896544ae25ee
     subdirs:
       - cardano-ledger
       - cardano-ledger/test
@@ -77,7 +82,7 @@ extra-deps:
       - crypto/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: 4e8b88224d35801ebfb782e9759c96ad18de01b5
+    commit: 2e2e577e4ec6d141c73ae9c50ccd3fc4f993f13e
     subdirs:
       - io-sim-classes
       - network-mux
