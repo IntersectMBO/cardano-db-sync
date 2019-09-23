@@ -40,6 +40,11 @@
         cardano-sl-x509 = ./cardano-sl-x509.nix;
         contra-tracer = ./contra-tracer.nix;
         iohk-monitoring = ./iohk-monitoring.nix;
+        lobemo-backend-aggregation = ./lobemo-backend-aggregation.nix;
+        lobemo-backend-editor = ./lobemo-backend-editor.nix;
+        lobemo-backend-ekg = ./lobemo-backend-ekg.nix;
+        lobemo-backend-monitoring = ./lobemo-backend-monitoring.nix;
+        lobemo-scribe-systemd = ./lobemo-scribe-systemd.nix;
         cardano-config = ./cardano-config.nix;
         cardano-node = ./cardano-node.nix;
         cardano-binary = ./cardano-binary.nix;
