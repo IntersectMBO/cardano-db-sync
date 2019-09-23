@@ -53,7 +53,7 @@ import qualified Data.Text.Encoding as Text
 
 import qualified Explorer.DB as DB
 
-import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..))
+import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..), ByronHash (..))
 import           Ouroboros.Network.Point (WithOrigin (..))
 import qualified Ouroboros.Network.Point as Point
 import           Ouroboros.Network.Block (Point (..), SlotNo (..))
@@ -100,7 +100,7 @@ pointToSlotHash :: Point (ByronBlockOrEBB cfg) -> Maybe (Ledger.SlotNumber, Ledg
 pointToSlotHash (Point x) =
   case x of
     Origin -> Nothing
-    At blk -> Just (Ledger.SlotNumber . unSlotNo $ Point.blockPointSlot blk, coerce $ Point.blockPointHash blk)
+    At blk -> Just (Ledger.SlotNumber . unSlotNo $ Point.blockPointSlot blk, unByronHash $ Point.blockPointHash blk)
 
 renderAbstractHash :: ByteArrayAccess bin => bin -> Text
 renderAbstractHash =
