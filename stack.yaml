@@ -35,7 +35,7 @@ extra-deps:
   - transformers-except-0.1.1
 
   - git: https://github.com/input-output-hk/cardano-shell
-    commit: e2d57038b52c46d790bc41423e83462fe9eaa8c9
+    commit: 812a36b8d6714cf76ca3576bdac903bedd88a72b
 
   - git: https://github.com/input-output-hk/cardano-prelude
     commit: 3b2d07ccf4f4ad2c1d1ddefe49b8c138c54854fd
@@ -61,7 +61,7 @@ extra-deps:
       - plugins/scribe-systemd
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: bbdc33dfca84873b82ea1c0f1364e0386e39e350
+    commit: eb3654f11ff79956a201e10f4afb985bae143bbd
     subdirs:
       - cardano-config
       - cardano-node
@@ -74,7 +74,7 @@ extra-deps:
       - cardano-crypto-class
 
   - git: https://github.com/input-output-hk/cardano-ledger
-    commit: 4f678e6ed621a4b063c9ea432f88896544ae25ee
+    commit: 344aa563be42f6a2682f5b7ff1e4978e4d75359a
     subdirs:
       - cardano-ledger
       - cardano-ledger/test
@@ -82,7 +82,7 @@ extra-deps:
       - crypto/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: 2e2e577e4ec6d141c73ae9c50ccd3fc4f993f13e
+    commit: e8dc8316b21cf6adff6a926e91caff22e208392c
     subdirs:
       - io-sim-classes
       - network-mux

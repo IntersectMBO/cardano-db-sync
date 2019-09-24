@@ -3,6 +3,7 @@
 import           Cardano.Prelude
 
 import qualified Cardano.Common.Parsers as Config
+import           Cardano.Config.CommonCLI (parseCommonCLIAdvanced)
 import           Cardano.Shell.Types (CardanoApplication (..))
 import qualified Cardano.Shell.Lib as Shell
 
@@ -41,6 +42,7 @@ pCommandLine =
     <*> pGenesisFile
     <*> pSocketPath
     <*> pMigrationDir
+    <*> parseCommonCLIAdvanced
 
 pGenesisFile :: Parser GenesisFile
 pGenesisFile =
