@@ -12,9 +12,11 @@ import           Explorer.DB                 (blockBlockNo, blockHash
                                              , toConnectionString
                                              , blockMerkelRoot
                                              , queryBlockCount
+                                             , queryLatestBlockId
                                              , queryMeta
                                              , Meta(metaStartTime, metaSlotDuration, Meta)
                                              , txHash, txOutAddress, txOutValue, txFee
+                                             , txOutIndex
                                              , TxOut(TxOut))
 import           Explorer.Web.Api            (ExplorerApi, explorerApi)
 import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSummary (CAddressSummary, caAddress, caBalance, caTxList, caTxNum, caType),
@@ -34,7 +36,9 @@ import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSumma
                                               CUtxo (CUtxo, cuAddress, cuCoins, cuId, cuOutIndex),
                                               mkCCoin, adaToCCoin)
 import           Explorer.Web.Error          (ExplorerError (Internal))
-import           Explorer.Web.Query          (queryBlockSummary, queryTxSummary, queryBlockTxs, TxWithInputsOutputs(txwTx, txwInputs, txwOutputs, TxWithInputsOutputs))
+import           Explorer.Web.Query          (queryBlockSummary, queryTxSummary, queryBlockTxs, TxWithInputsOutputs(txwTx, txwInputs, txwOutputs, TxWithInputsOutputs), queryBlockIdFromHeight, queryUtxoSnapshot)
+import           Explorer.Web.API1 (ExplorerApi1Record(ExplorerApi1Record,_utxoHeight, _utxoHash), V1Utxo(V1Utxo))
+import qualified Explorer.Web.API1 as API1
 import           Explorer.Web.LegacyApi      (ExplorerApiRecord (_genesisSummary, _genesisAddressInfo, _genesisPagesTotal, _epochPages, _epochSlots, _statsTxs, _txsSummary, _addressSummary, _addressUtxoBulk, _blocksSummary, _blocksTxs, _txsLast, _dumpBlockRange, _totalAda, _blocksPages, _blocksPagesTotal, ExplorerApiRecord), TxsStats, PageNumber)
 
 import           Cardano.Chain.Slotting      (EpochNumber (EpochNumber))
@@ -42,21 +46,22 @@ import           Cardano.Chain.Slotting      (EpochNumber (EpochNumber))
 import           Control.Monad.IO.Class      (liftIO, MonadIO)
 import           Control.Monad.Logger        (runStdoutLoggingT)
 import           Control.Monad.Trans.Reader  (ReaderT)
-import           Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
+import           Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, throwE)
 import           Data.Maybe (fromMaybe)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16      as B16
 import qualified Data.ByteString.Char8       as SB8
 import qualified Data.Text                   as T
+import           Data.Text.Encoding (decodeUtf8)
 import           Data.Time                   (defaultTimeLocale, addUTCTime, parseTimeOrError)
 import           Data.Time.Clock.POSIX       (POSIXTime, utcTimeToPOSIXSeconds)
 import           Data.Word                   (Word16, Word64)
 import           Data.Int (Int64)
 import           Network.Wai.Handler.Warp    (run)
-import           Servant                     (Application, Handler, Server,
-                                              serve)
+import           Servant                     (Application, Handler, Server, serve)
 import           Servant.API.Generic         (toServant)
 import           Servant.Server.Generic      (AsServerT)
+import           Servant.API ((:<|>)((:<|>)))
 
 import           Database.Persist.Postgresql (withPostgresqlConn)
 import           Database.Persist.Sql        (SqlBackend, runSqlConn)
@@ -79,24 +84,30 @@ explorerApp :: SqlBackend -> Application
 explorerApp backend = serve explorerApi (explorerHandlers backend)
 
 explorerHandlers :: SqlBackend -> Server ExplorerApi
-explorerHandlers backend = toServant (ExplorerApiRecord
-  { _totalAda           = totalAda backend
-  , _dumpBlockRange     = testDumpBlockRange backend
-  , _blocksPages        = testBlocksPages backend
-  , _blocksPagesTotal   = getBlocksPagesTotal backend
-  , _blocksSummary      = blocksSummary backend
-  , _blocksTxs          = getBlockTxs backend
-  , _txsLast            = getLastTxs backend
-  , _txsSummary         = testTxsSummary backend
-  , _addressSummary     = testAddressSummary backend
-  , _addressUtxoBulk    = testAddressUtxoBulk backend
-  , _epochPages         = testEpochPageSearch backend
-  , _epochSlots         = testEpochSlotSearch backend
-  , _genesisSummary     = testGenesisSummary backend
-  , _genesisPagesTotal  = testGenesisPagesTotal backend
-  , _genesisAddressInfo = testGenesisAddressInfo backend
-  , _statsTxs           = testStatsTxs backend
-  } :: ExplorerApiRecord (AsServerT Handler))
+explorerHandlers backend = (toServant oldHandlers) :<|> (toServant newHandlers)
+  where
+    oldHandlers = ExplorerApiRecord
+      { _totalAda           = totalAda backend
+      , _dumpBlockRange     = testDumpBlockRange backend
+      , _blocksPages        = testBlocksPages backend
+      , _blocksPagesTotal   = getBlocksPagesTotal backend
+      , _blocksSummary      = blocksSummary backend
+      , _blocksTxs          = getBlockTxs backend
+      , _txsLast            = getLastTxs backend
+      , _txsSummary         = testTxsSummary backend
+      , _addressSummary     = testAddressSummary backend
+      , _addressUtxoBulk    = testAddressUtxoBulk backend
+      , _epochPages         = testEpochPageSearch backend
+      , _epochSlots         = testEpochSlotSearch backend
+      , _genesisSummary     = testGenesisSummary backend
+      , _genesisPagesTotal  = testGenesisPagesTotal backend
+      , _genesisAddressInfo = testGenesisAddressInfo backend
+      , _statsTxs           = testStatsTxs backend
+      } :: ExplorerApiRecord (AsServerT Handler)
+    newHandlers = ExplorerApi1Record
+      { _utxoHeight         = getUtxoSnapshotHeight backend
+      , _utxoHash           = getUtxoSnapshotHash
+      } :: ExplorerApi1Record (AsServerT Handler)
 
 --------------------------------------------------------------------------------
 -- sample data --
@@ -184,10 +195,7 @@ hexToBytestring :: T.Text -> ExceptT ExplorerError Handler BS.ByteString
 hexToBytestring text = do
   case B16.decode (SB8.pack (T.unpack text)) of
     (blob, "") -> pure blob
-    _ -> throwE $ Internal "cant parse hex"
-
-bytestringToText :: BS.ByteString -> T.Text
-bytestringToText = T.pack . SB8.unpack . B16.encode
+    (_partial, remain) -> throwE $ Internal $ "cant parse " <> (decodeUtf8 remain) <> " as hex"
 
 blocksSummary
     :: SqlBackend -> CHash
@@ -208,7 +216,7 @@ blocksSummary backend (CHash blkHashTxt) = runExceptT $ do
                , cbeSlot = fromIntegral slot
                -- Use '0' for EBBs.
                , cbeBlkHeight = maybe 0 fromIntegral $ blockBlockNo blk
-               , cbeBlkHash = (CHash . bytestringToText . blockHash) blk
+               , cbeBlkHash = (CHash . decodeUtf8 . blockHash) blk
                , cbeTimeIssued = Nothing
                , cbeTxNum = txCount
                , cbeTotalSent = adaToCCoin totalOut
@@ -216,9 +224,9 @@ blocksSummary backend (CHash blkHashTxt) = runExceptT $ do
                , cbeBlockLead = Nothing
                , cbeFees = adaToCCoin fees
                }
-            , cbsPrevHash = (CHash . bytestringToText) prevHash
-            , cbsNextHash = fmap (CHash . bytestringToText) nextHash
-            , cbsMerkleRoot = CHash $ maybe "" bytestringToText (blockMerkelRoot blk)
+            , cbsPrevHash = (CHash . decodeUtf8) prevHash
+            , cbsNextHash = fmap (CHash . decodeUtf8) nextHash
+            , cbsMerkleRoot = CHash $ maybe "" decodeUtf8 (blockMerkelRoot blk)
             }
         Nothing -> throwE $ Internal "slot missing"
     _ -> throwE $ Internal "No block found"
@@ -249,7 +257,7 @@ getBlockTxs backend (CHash blkHashTxt) mLimit mOffset = runExceptT $ do
       let
         txToTxBrief :: TxWithInputsOutputs -> CTxBrief
         txToTxBrief TxWithInputsOutputs{txwTx,txwInputs,txwOutputs} = CTxBrief
-          { ctbId = (CTxHash . CHash . bytestringToText . txHash) txwTx
+          { ctbId = (CTxHash . CHash . decodeUtf8 . txHash) txwTx
           , ctbTimeIssued = (\slot -> utcTimeToPOSIXSeconds $ (0.001 * fromIntegral (slot * metaSlotDuration)) `addUTCTime` metaStartTime) <$> mSlot
           , ctbInputs = map convertInput txwInputs
           , ctbOutputs = map convertTxOut txwOutputs
@@ -276,13 +284,13 @@ testTxsSummary backend (CTxHash (CHash cTxHash)) = runExceptT $ do
           let
             (epoch, slot) = divMod slotno epochLenght
           pure $ CTxSummary
-            { ctsId              = (CTxHash . CHash . bytestringToText . txHash) tx
+            { ctsId              = (CTxHash . CHash . decodeUtf8 . txHash) tx
             , ctsTxTimeIssued    = Just posixTime
             , ctsBlockTimeIssued = Nothing
             , ctsBlockHeight     = fromIntegral <$> blockBlockNo blk
             , ctsBlockEpoch      = Just epoch
             , ctsBlockSlot       = Just $ fromIntegral slot
-            , ctsBlockHash       = (Just . CHash . bytestringToText . blockHash) blk
+            , ctsBlockHash       = (Just . CHash . decodeUtf8 . blockHash) blk
             , ctsRelayedBy       = Nothing
             , ctsTotalInput      = (mkCCoin . sum . map (\(_addr,coin) -> fromIntegral  coin)) inputs
             , ctsTotalOutput     = (mkCCoin . sum . map (fromIntegral . txOutValue)) outputs
@@ -424,3 +432,29 @@ testStatsTxs
     :: SqlBackend -> Maybe Word
     -> Handler (Either ExplorerError TxsStats)
 testStatsTxs _backend _ = pure $ Right (1, [(cTxId, 200)])
+
+getUtxoSnapshotHeight :: SqlBackend -> Maybe Word64 -> Handler (Either ExplorerError [V1Utxo])
+getUtxoSnapshotHeight backend mHeight = runExceptT $ do
+  liftIO $ putStrLn "getting snapshot by height"
+  outputs <- ExceptT <$> runQuery backend $ do
+    mBlkid <- case mHeight of
+      Just height -> queryBlockIdFromHeight height
+      Nothing -> queryLatestBlockId
+    case mBlkid of
+      Just blkid -> Right <$> queryUtxoSnapshot blkid
+      Nothing -> pure $ Left $ Internal "block not found at given height"
+  let
+    convertRow :: (TxOut, BS.ByteString) -> V1Utxo
+    convertRow (txout, txhash) = V1Utxo
+      { API1.cuId = (CTxHash . CHash . decodeUtf8) txhash
+      , API1.cuOutIndex = txOutIndex txout
+      , API1.cuAddress = (CAddress . txOutAddress) txout
+      , API1.cuCoins = (mkCCoin . fromIntegral . txOutValue) txout
+      }
+  pure $ map convertRow outputs
+
+getUtxoSnapshotHash :: Maybe CHash -> Handler (Either ExplorerError [V1Utxo])
+getUtxoSnapshotHash _ = runExceptT $ do
+  liftIO $ putStrLn "getting snapshot by hash"
+  -- queryBlockId
+  pure []

@@ -101,7 +101,7 @@ import           Ouroboros.Network.Protocol.LocalTxSubmission.Client (LocalTxSub
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Codec (codecLocalTxSubmission)
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (LocalTxSubmission)
 
-import           Prelude (String)
+import           Prelude (String, id)
 
 
 data Peer = Peer SockAddr SockAddr deriving Show
@@ -133,7 +133,7 @@ type NodeCardanoFeature
 
 initializeAllFeatures :: ExplorerNodeParams -> IO ([CardanoFeature], NodeLayer)
 initializeAllFeatures enp = do
-  DB.runMigrations True (enpMigrationDir enp) (LogFileDir "/tmp")
+  DB.runMigrations id True (enpMigrationDir enp) (LogFileDir "/tmp")
   let fcc = Config.finaliseCardanoConfiguration $ Config.mergeConfiguration Config.mainnetConfiguration (commonCli enp)
   finalConfig <- case fcc of
                   Left err -> throwIO $ ConfigurationError err
