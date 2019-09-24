@@ -9,6 +9,7 @@ module Explorer.DB.Run
   , runDbIohkLogging
   , runDbNoLogging
   , runDbStdoutLogging
+  , runIohkLogging
   ) where
 
 import           Cardano.BM.Data.LogItem (LogObject (..), LOContent (..), PrivacyAnnotation (..), mkLOMeta)
@@ -65,28 +66,28 @@ runDbHandleLogger logHandle dbAction = do
 runDbIohkLogging :: Trace IO Text -> ReaderT SqlBackend (LoggingT IO) b -> IO b
 runDbIohkLogging tracer dbAction = do
     pgconf <- readPGPassFileEnv
-    runIohkLogging .
+    (runIohkLogging tracer) .
       withPostgresqlConn (toConnectionString pgconf) $ \backend ->
         runSqlConn dbAction backend
-  where
-    runIohkLogging :: LoggingT m a -> m a
-    runIohkLogging action =
-      runLoggingT action toIohkLog
 
-    toIohkLog :: Loc -> LogSource -> LogLevel -> LogStr -> IO ()
-    toIohkLog _loc _src level msg = do
-      meta <- mkLOMeta (toIohkSeverity level) Public
-      traceWith tracer $ LogObject "explorer-db" meta (LogStructured (LBS.fromStrict $ fromLogStr msg))
+runIohkLogging :: Trace IO Text -> LoggingT m a -> m a
+runIohkLogging tracer action =
+  runLoggingT action (toIohkLog tracer)
+
+toIohkLog :: Trace IO Text -> Loc -> LogSource -> LogLevel -> LogStr -> IO ()
+toIohkLog tracer _loc _src level msg = do
+  meta <- mkLOMeta (toIohkSeverity level) Public
+  traceWith tracer $ LogObject "explorer-db" meta (LogStructured (LBS.fromStrict $ fromLogStr msg))
 
 
-    toIohkSeverity :: LogLevel -> Severity
-    toIohkSeverity =
-      \case
-        LevelDebug -> Debug
-        LevelInfo -> Info
-        LevelWarn -> Warning
-        LevelError -> Error
-        LevelOther _ -> Error
+toIohkSeverity :: LogLevel -> Severity
+toIohkSeverity =
+  \case
+    LevelDebug -> Debug
+    LevelInfo -> Info
+    LevelWarn -> Warning
+    LevelError -> Error
+    LevelOther _ -> Error
 
 
 -- | Run a DB action without any logging. Mainly for tests.

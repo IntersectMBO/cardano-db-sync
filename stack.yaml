@@ -4,6 +4,7 @@ compiler: ghc-8.6.5
 
 packages:
   - cardano-explorer-db
+  - cardano-explorer-db/test
   - cardano-explorer-node
   - cardano-explorer
 

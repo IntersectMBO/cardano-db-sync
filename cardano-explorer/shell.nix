@@ -1,10 +1,9 @@
 let
   self = import ../. {};
-in (self.haskellPackages.shellFor {
+in self.haskellPackages.shellFor {
   name = "cardano-explorer";
   packages = ps: [ ps.cardano-explorer ];
   buildInputs = with self.pkgs.haskellPackages; [ hlint stylish-haskell ghcid ];
-}).overrideAttrs (old: {
   shellHook = ''
     compare_api() {
       curl http://localhost:8100/api/$1 -o /tmp/compare-local
@@ -15,4 +14,4 @@ in (self.haskellPackages.shellFor {
       ${self.pkgs.haskellPackages.aeson-diff}/bin/json-diff /tmp/compare-remote /tmp/compare-local | jq .
     }
   '';
-})
+}
