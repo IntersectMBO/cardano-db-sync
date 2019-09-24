@@ -53,7 +53,22 @@
           };
         };
       tests = {
-        "test" = { depends = [ (hsPkgs.base) (hsPkgs.cardano-explorer) ]; };
+        "test" = {
+          depends = [
+            (hsPkgs.base)
+            (hsPkgs.bytestring)
+            (hsPkgs.cardano-explorer)
+            (hsPkgs.cardano-explorer-db)
+            (hsPkgs.cardano-explorer-db-test)
+            (hsPkgs.containers)
+            (hsPkgs.monad-logger)
+            (hsPkgs.persistent-postgresql)
+            (hsPkgs.tasty)
+            (hsPkgs.tasty-hunit)
+            (hsPkgs.text)
+            (hsPkgs.transformers)
+            ];
+          };
         };
       };
     } // rec { src = (pkgs.lib).mkDefault ../.././cardano-explorer; }

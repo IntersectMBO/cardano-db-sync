@@ -19,4 +19,4 @@ tests =
 -- If they fail the file path of the log file (in /tmp) will be printed.
 migrationTest :: IO ()
 migrationTest =
-  runMigrations True (MigrationDir "../schema") (LogFileDir "/tmp")
+  runMigrations id True (MigrationDir "../schema") (LogFileDir "/tmp")

@@ -5,7 +5,7 @@ module Explorer.Web.TestServer (runMockServer) where
 import           Cardano.Chain.Slotting   (EpochNumber (EpochNumber))
 import           Data.Time                (defaultTimeLocale, parseTimeOrError)
 import           Data.Time.Clock.POSIX    (POSIXTime, utcTimeToPOSIXSeconds)
-import           Data.Word                (Word16)
+import           Data.Word                (Word16, Word64)
 import           Data.Int (Int64)
 import           Explorer.Web.Api         (ExplorerApi, explorerApi)
 import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSummary (CAddressSummary, caAddress, caBalance, caTxList, caTxNum, caType),
@@ -25,8 +25,9 @@ import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSumma
                                               mkCCoin)
 import           Explorer.Web.Error       (ExplorerError (Internal))
 import           Explorer.Web.LegacyApi   (TxsStats, ExplorerApiRecord(_genesisSummary, _genesisAddressInfo, _genesisPagesTotal, _epochPages, _epochSlots, _statsTxs, _txsSummary, _addressSummary, _addressUtxoBulk, _blocksSummary, _blocksTxs, _txsLast, _dumpBlockRange, _blocksPages, _blocksPagesTotal, _totalAda, ExplorerApiRecord), PageNumber)
+import           Explorer.Web.API1 (ExplorerApi1Record(ExplorerApi1Record,_utxoHeight, _utxoHash), V1Utxo)
 import           Network.Wai.Handler.Warp (run)
-import           Servant                  (Handler, Server, Application, serve)
+import           Servant                  (Handler, Server, Application, serve, (:<|>)((:<|>)))
 import           Servant.API.Generic      (toServant)
 import           Servant.Server.Generic   (AsServerT)
 
@@ -41,24 +42,30 @@ explorerApp :: Application
 explorerApp = serve explorerApi explorerHandlers
 
 explorerHandlers :: Server ExplorerApi
-explorerHandlers = toServant (ExplorerApiRecord
-  { _totalAda           = testTotalAda
-  , _dumpBlockRange     = testDumpBlockRange
-  , _blocksPages        = testBlocksPages
-  , _blocksPagesTotal   = testBlocksPagesTotal
-  , _blocksSummary      = testBlocksSummary
-  , _blocksTxs          = testBlocksTxs
-  , _txsLast            = testTxsLast
-  , _txsSummary         = testTxsSummary
-  , _addressSummary     = testAddressSummary
-  , _addressUtxoBulk    = testAddressUtxoBulk
-  , _epochPages         = testEpochPageSearch
-  , _epochSlots         = testEpochSlotSearch
-  , _genesisSummary     = testGenesisSummary
-  , _genesisPagesTotal  = testGenesisPagesTotal
-  , _genesisAddressInfo = testGenesisAddressInfo
-  , _statsTxs           = testStatsTxs
-  } :: ExplorerApiRecord (AsServerT Handler))
+explorerHandlers = toServant oldHandlers :<|> toServant newHandlers
+  where
+    oldHandlers = ExplorerApiRecord
+      { _totalAda           = testTotalAda
+      , _dumpBlockRange     = testDumpBlockRange
+      , _blocksPages        = testBlocksPages
+      , _blocksPagesTotal   = testBlocksPagesTotal
+      , _blocksSummary      = testBlocksSummary
+      , _blocksTxs          = testBlocksTxs
+      , _txsLast            = testTxsLast
+      , _txsSummary         = testTxsSummary
+      , _addressSummary     = testAddressSummary
+      , _addressUtxoBulk    = testAddressUtxoBulk
+      , _epochPages         = testEpochPageSearch
+      , _epochSlots         = testEpochSlotSearch
+      , _genesisSummary     = testGenesisSummary
+      , _genesisPagesTotal  = testGenesisPagesTotal
+      , _genesisAddressInfo = testGenesisAddressInfo
+      , _statsTxs           = testStatsTxs
+      } :: ExplorerApiRecord (AsServerT Handler)
+    newHandlers = ExplorerApi1Record
+      { _utxoHeight         = getUtxoSnapshotHeight
+      , _utxoHash           = getUtxoSnapshotHash
+      } :: ExplorerApi1Record (AsServerT Handler)
 
 --------------------------------------------------------------------------------
 -- sample data --
@@ -311,3 +318,9 @@ testStatsTxs
     :: Maybe Word
     -> Handler (Either ExplorerError TxsStats)
 testStatsTxs _ = pure $ Right (1, [(cTxId, 200)])
+
+getUtxoSnapshotHeight :: Maybe Word64 -> Handler (Either ExplorerError [V1Utxo])
+getUtxoSnapshotHeight _ = pure $ Right []
+
+getUtxoSnapshotHash :: Maybe CHash -> Handler (Either ExplorerError [V1Utxo])
+getUtxoSnapshotHash _ = pure $ Right []

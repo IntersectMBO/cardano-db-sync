@@ -180,6 +180,7 @@ queryLatestSlotNo = do
             pure (blk ^. BlockSlotNo)
   pure $ fromMaybe 0 (listToMaybe $ mapMaybe unValue res)
 
+{-# INLINABLE queryMeta #-}
 -- | Get the network metadata.
 queryMeta :: MonadIO m => ReaderT SqlBackend m (Either LookupFail Meta)
 queryMeta = do
