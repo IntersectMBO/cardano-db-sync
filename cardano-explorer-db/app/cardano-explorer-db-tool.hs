@@ -1,6 +1,8 @@
 
 import           Data.Monoid ((<>))
+import           Data.Word (Word64)
 
+import           Explorer.App
 import           Explorer.DB
 
 import           Options.Applicative (Parser, ParserInfo, ParserPrefs)
@@ -25,12 +27,16 @@ main = do
 data Command
   = CreateMigration MigrationDir
   | RunMigrations MigrationDir LogFileDir
+  | UtxoSetAtBlock Word64
+  | Validate Word
 
 runCommand :: Command -> IO ()
 runCommand cmd =
   case cmd of
     CreateMigration mdir -> doCreateMigration mdir
     RunMigrations mdir ldir -> runMigrations id False mdir ldir
+    UtxoSetAtBlock blkid -> utxoSetAtBlock blkid
+    Validate count -> runValidation count
 
 doCreateMigration :: MigrationDir -> IO ()
 doCreateMigration mdir = do
@@ -60,6 +66,14 @@ pCommand =
         ( Opt.info pRunMigrations
           $ Opt.progDesc "Run the database migrations (which are idempotent)."
           )
+    <> Opt.command "utxo-set"
+        ( Opt.info pUtxoSetAtBlock
+          $ Opt.progDesc "Get UTxO set at specified BlockNo."
+          )
+    <> Opt.command "validate"
+        ( Opt.info pValidate
+          $ Opt.progDesc "Run validation checks against the database."
+          )
     )
   where
     pCreateMigration :: Parser Command
@@ -68,6 +82,20 @@ pCommand =
     pRunMigrations :: Parser Command
     pRunMigrations =
       RunMigrations <$> pMigrationDir <*> pLogFileDir
+
+    pUtxoSetAtBlock :: Parser Command
+    pUtxoSetAtBlock =
+      UtxoSetAtBlock . read <$> Opt.strOption
+        (  Opt.long "block-no"
+        <> Opt.help "The BlockNo."
+        )
+
+    pValidate :: Parser Command
+    pValidate =
+      Validate . read <$> Opt.strOption
+        (  Opt.long "count"
+        <> Opt.help "The number of validations to run."
+        )
 
 pMigrationDir :: Parser MigrationDir
 pMigrationDir =
@@ -84,3 +112,4 @@ pLogFileDir =
     <> Opt.help "The directory to write the log to."
     <> Opt.completer (Opt.bashCompleter "directory")
     )
+
