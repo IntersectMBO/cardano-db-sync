@@ -50,7 +50,7 @@ import           Cardano.Shell.Types (CardanoFeature (..),
                     featureShutdown, featureStart, featureType)
 
 import qualified Codec.Serialise as Serialise
-import           Crypto.Hash (Blake2b_256, digestFromByteString)
+import           Crypto.Hash (digestFromByteString)
 
 import qualified Data.ByteString.Lazy as BSL
 import           Data.Functor.Contravariant (contramap)
@@ -72,7 +72,7 @@ import           Network.TypedProtocol.Codec.Cbor (DeserialiseFailure)
 import           Network.TypedProtocol.Driver (runPeer)
 
 import           Ouroboros.Consensus.Ledger.Abstract (BlockProtocol)
-import           Ouroboros.Consensus.Ledger.Byron (GenTx, ByronBlockOrEBB (..))
+import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..), ByronHash (..), GenTx)
 import           Ouroboros.Consensus.Ledger.Byron.Config (ByronConfig)
 import           Ouroboros.Consensus.Node.ProtocolInfo (NumCoreNodes (..),
                     pInfoConfig, protocolInfo)
@@ -134,7 +134,7 @@ type NodeCardanoFeature
 initializeAllFeatures :: ExplorerNodeParams -> IO ([CardanoFeature], NodeLayer)
 initializeAllFeatures enp = do
   DB.runMigrations id True (enpMigrationDir enp) (LogFileDir "/tmp")
-  let fcc = Config.finaliseCardanoConfiguration $ Config.mergeConfiguration Config.mainnetConfiguration (commonCli enp)
+  let fcc = Config.finaliseCardanoConfiguration $ Config.mergeConfiguration Config.mainnetConfiguration commonCli
   finalConfig <- case fcc of
                   Left err -> throwIO $ ConfigurationError err
                   --TODO: if we're using exceptions for this, then we should use a local
@@ -149,10 +149,10 @@ initializeAllFeatures enp = do
   pure ([ loggingFeature, nodeFeature ], nodeLayer)
 
 -- This is a bit of a pain in the neck but is needed for using cardano-cli.
-commonCli :: ExplorerNodeParams -> CommonCLI
-commonCli enp =
+commonCli ::CommonCLI
+commonCli =
   CommonCLI
-    { Config.cliSocketPath = Last $ Just (unSocketPath $ enpSocketPath enp)
+    { Config.cliSocketDir = Last Nothing
     , Config.cliGenesisFile = Last Nothing
     , Config.cliGenesisHash = Last Nothing
     , Config.cliStaticKeySigningKeyFile = Last Nothing
@@ -340,8 +340,8 @@ getLatestPoints =
       fmap (Point . Point.block (SlotNo slot)) (convertHashBlob hashBlob)
 
     -- in Maybe because the bytestring may not be the right size.
-    convertHashBlob :: ByteString -> Maybe (AbstractHash Blake2b_256 a)
-    convertHashBlob = fmap AbstractHash . digestFromByteString
+    convertHashBlob :: ByteString -> Maybe ByronHash
+    convertHashBlob = fmap (ByronHash . AbstractHash) . digestFromByteString
 
 -- | A 'LocalTxSubmissionClient' that submits transactions reading them from
 -- a 'StrictTMVar'.  A real implementation should use a better synchronisation
