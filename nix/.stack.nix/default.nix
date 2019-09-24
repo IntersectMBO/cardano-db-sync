@@ -30,6 +30,7 @@
         "canonical-json" = (((hackage.canonical-json)."0.6.0.0").revisions).default;
         } // {
         cardano-explorer-db = ./cardano-explorer-db.nix;
+        cardano-explorer-db-test = ./cardano-explorer-db-test.nix;
         cardano-explorer-node = ./cardano-explorer-node.nix;
         cardano-explorer = ./cardano-explorer.nix;
         cardano-shell = ./cardano-shell.nix;

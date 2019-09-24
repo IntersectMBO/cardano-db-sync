@@ -41,6 +41,7 @@ in {
 
   cardano-sl-core = haskellPackages.cardano-explorer-db.components.library;
   cardano-explorer-node = haskellPackages.cardano-explorer-node.components.exes.cardano-explorer-node;
+  cardano-explorer-db-manage = haskellPackages.cardano-explorer-db.components.exes.cardano-explorer-db-manage;
 
   tests = util.collectComponents "tests" util.isIohkSkeleton haskellPackages;
   benchmarks = util.collectComponents "benchmarks" util.isIohkSkeleton haskellPackages;

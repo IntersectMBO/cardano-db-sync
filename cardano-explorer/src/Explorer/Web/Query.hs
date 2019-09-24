@@ -8,10 +8,12 @@ module Explorer.Web.Query
   , queryTxSummary
   , queryTx
   , queryBlockTxs
+  , queryUtxoSnapshot
+  , queryBlockIdFromHeight
   , TxWithInputsOutputs(txwTx, txwInputs, txwOutputs, TxWithInputsOutputs)
   ) where
 
-import           Database.Esqueleto ((^.), val, valList, (==.), where_, from, unValue, select, Value, InnerJoin(InnerJoin), sum_, on, (&&.), in_, subList_select, limit, offset)
+import           Database.Esqueleto ((^.), val, valList, (==.), where_, from, unValue, select, Value, InnerJoin(InnerJoin), sum_, on, (&&.), in_, subList_select, limit, offset, LeftOuterJoin(LeftOuterJoin), (>.), (||.), (<=.), isNothing)
 import           Database.Persist.Sql       (SqlBackend, entityVal, entityKey, Entity)
 
 import           Data.ByteString (ByteString)
@@ -22,7 +24,7 @@ import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Explorer.DB (Block, BlockId, blockPrevious, listToMaybe
-                            , EntityField(BlockHash, BlockPrevious, BlockId, TxHash, TxOutValue, TxOutAddress, TxInTxInId, TxOutIndex, TxInTxOutIndex, TxOutTxId, TxInTxOutId, TxBlock, TxFee, TxBlock, TxId, BlockSlotNo)
+                            , EntityField(BlockHash, BlockPrevious, BlockId, TxHash, TxOutValue, TxOutAddress, TxInTxInId, TxOutIndex, TxInTxOutIndex, TxOutTxId, TxInTxOutId, TxBlock, TxFee, TxBlock, TxId, BlockSlotNo, BlockBlockNo)
                             , TxId
                             , entityPair, Tx, TxOut, Ada, LookupFail(DbLookupTxHash), maybeToEither, unValueSumAda, txBlock, querySelectCount, txOutTxId)
 
@@ -112,6 +114,30 @@ queryTotalOutputCoinInBlock blockid = do
           pure $ sum_ (tx_out ^. TxOutValue)
   pure $ unValueSumAda $ listToMaybe res
 
+queryUtxoSnapshot :: MonadIO m => BlockId -> ReaderT SqlBackend m [(TxOut, ByteString)]
+queryUtxoSnapshot blkid = do
+    -- tx1 refers to the tx of the input spending this output (if it is ever spent)
+    -- tx2 refers to the tx of the output
+    outputs <- select . from $ \(txout `LeftOuterJoin` txin `LeftOuterJoin` tx1 `LeftOuterJoin` blk `LeftOuterJoin` tx2) -> do
+      on $ txout ^. TxOutTxId ==. tx2 ^. TxId
+      on $ tx1 ^. TxBlock ==. blk ^. BlockId
+      on $ txin ^. TxInTxInId ==. tx1 ^. TxId
+      on $ (txout ^. TxOutTxId ==. txin ^. TxInTxOutId) &&. (txout ^. TxOutIndex ==. txin ^. TxInTxOutIndex)
+      where_ $ (txout ^. TxOutTxId `in_` txLessEqual) &&. ((isNothing $ blk ^. BlockBlockNo) ||. (blk ^. BlockId >. val blkid))
+      pure (txout, tx2 ^. TxHash)
+    pure $ map convertResult outputs
+  where
+    -- every block made before or at the snapshot time
+    blockLessEqual = subList_select . from $ \blk -> do
+      where_ $ blk ^. BlockId <=. val blkid
+      pure $ blk ^. BlockId
+    -- every tx made before or at the snapshot time
+    txLessEqual = subList_select . from $ \tx -> do
+      where_ $ tx ^. TxBlock `in_` blockLessEqual
+      pure $ tx ^. TxId
+    convertResult :: (Entity TxOut, Value ByteString) -> (TxOut, ByteString)
+    convertResult (out, hash) = (entityVal out, unValue hash)
+
 queryGetInputOutputs :: MonadIO m => TxId -> ReaderT SqlBackend m [(Text, Word64)]
 queryGetInputOutputs txid = do
   rows <- select . from $ \(txin `InnerJoin` txout) -> do
@@ -138,29 +164,34 @@ data TxWithInputsOutputs = TxWithInputsOutputs
 
 queryBlockTxs :: MonadIO m => ByteString -> Int64 -> Int64 -> ReaderT SqlBackend m ([ TxWithInputsOutputs ], Maybe Word64)
 queryBlockTxs blkHash limitNum offsetNum = do
-  let
+    maybeSlotNo <- select . from $ \blk -> do
+      where_ (blk ^. BlockHash ==. val blkHash)
+      pure $ blk ^. BlockSlotNo
+    res <- select . from $ \tx -> do
+      where_ (tx ^. TxBlock `in_` blockid)
+      limit limitNum
+      offset offsetNum
+      pure tx
+    let txids = map entityKey res
+    --inputs <- select . from $ \txin -> do
+    --  where_ (txin ^. TxInTxInId `in_` valList txids)
+    --  pure txin
+    outputs <- select . from $ \txout -> do
+      where_ (txout ^. TxOutTxId `in_` valList txids)
+      pure txout
+    case (listToMaybe $ map unValue maybeSlotNo) of
+      Just (Just slot) -> do
+        txs <- mapM (txToTxWith outputs) res
+        pure (txs, Just slot)
+      _ -> do
+        txs <- mapM (txToTxWith outputs) res
+        pure (txs, Nothing)
+  where
     blockid = subList_select . from $ \blk -> do
       where_ (blk ^. BlockHash ==. val blkHash)
       pure $ blk ^. BlockId
-  maybeSlotNo <- select . from $ \blk -> do
-    where_ (blk ^. BlockHash ==. val blkHash)
-    pure $ blk ^. BlockSlotNo
-  res <- select . from $ \tx -> do
-    where_ (tx ^. TxBlock `in_` blockid)
-    limit limitNum
-    offset offsetNum
-    pure tx
-  let
-    txids = map entityKey res
-  --inputs <- select . from $ \txin -> do
-  --  where_ (txin ^. TxInTxInId `in_` valList txids)
-  --  pure txin
-  outputs <- select . from $ \txout -> do
-    where_ (txout ^. TxOutTxId `in_` valList txids)
-    pure txout
-  let
-    txToTxWith :: MonadIO m => Entity Tx -> ReaderT SqlBackend m TxWithInputsOutputs
-    txToTxWith tx = do
+    txToTxWith :: MonadIO m => [Entity TxOut] -> Entity Tx -> ReaderT SqlBackend m TxWithInputsOutputs
+    txToTxWith outputs tx = do
       -- TODO, use the commented out inputs query above?
       inputs <- queryGetInputOutputs (entityKey tx)
       pure $ TxWithInputsOutputs
@@ -169,10 +200,10 @@ queryBlockTxs blkHash limitNum offsetNum = do
         , txwInputs = inputs
         , txwOutputs = filter (\txout -> (txOutTxId txout) == (entityKey tx)) (map entityVal outputs)
         }
-  case (listToMaybe $ map unValue maybeSlotNo) of
-    Just (Just slot) -> do
-      txs <- mapM txToTxWith res
-      pure (txs, Just slot)
-    _ -> do
-      txs <- mapM txToTxWith res
-      pure (txs, Nothing)
+
+queryBlockIdFromHeight :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe BlockId)
+queryBlockIdFromHeight height = do
+  res <- select . from $ \blk -> do
+    where_ (blk ^. BlockBlockNo ==. val (Just height))
+    pure $ blk ^. BlockId
+  pure $ fmap unValue $ listToMaybe res

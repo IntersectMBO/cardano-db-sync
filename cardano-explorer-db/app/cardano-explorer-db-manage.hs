@@ -30,7 +30,7 @@ runCommand :: Command -> IO ()
 runCommand cmd =
   case cmd of
     CreateMigration mdir -> doCreateMigration mdir
-    RunMigrations mdir ldir -> runMigrations False mdir ldir
+    RunMigrations mdir ldir -> runMigrations id False mdir ldir
 
 doCreateMigration :: MigrationDir -> IO ()
 doCreateMigration mdir = do
