@@ -72,9 +72,9 @@ library
                       -- This is never intended to run on non-POSIX systems.
                       , unix
 
-executable cardano-explorer-db-manage
+executable cardano-explorer-db-tool
   default-language:     Haskell2010
-  main-is:              cardano-explorer-db-manage.hs
+  main-is:              cardano-explorer-db-tool.hs
   hs-source-dirs:       app
 
   ghc-options:          -Wall
