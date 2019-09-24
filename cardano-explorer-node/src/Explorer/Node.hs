@@ -38,6 +38,7 @@ import qualified Cardano.Config.Partial as Config
 import qualified Cardano.Config.Presets as Config
 import           Cardano.Config.Types (CardanoConfiguration, CardanoEnvironment (..),
                     RequireNetworkMagic (..),
+                    ConfigError,
                     coRequiresNetworkMagic, ccCore)
 
 import           Cardano.Crypto (RequiresNetworkMagic (..), decodeAbstractHash)
@@ -113,6 +114,7 @@ data ExplorerNodeParams = ExplorerNodeParams
   , enpGenesisFile :: !GenesisFile
   , enpSocketPath :: !SocketPath
   , enpMigrationDir :: !MigrationDir
+  , enpCommonCLIAdvanced :: !Config.CommonCLIAdvanced
   }
 
 newtype GenesisFile = GenesisFile
@@ -134,9 +136,9 @@ type NodeCardanoFeature
 initializeAllFeatures :: ExplorerNodeParams -> IO ([CardanoFeature], NodeLayer)
 initializeAllFeatures enp = do
   DB.runMigrations id True (enpMigrationDir enp) (LogFileDir "/tmp")
-  let fcc = Config.finaliseCardanoConfiguration $ Config.mergeConfiguration Config.mainnetConfiguration commonCli
+  let fcc = Config.finaliseCardanoConfiguration $ Config.mergeConfiguration Config.mainnetConfiguration commonCli (enpCommonCLIAdvanced enp)
   finalConfig <- case fcc of
-                  Left err -> throwIO $ ConfigurationError err
+                  Left err -> throwIO err
                   --TODO: if we're using exceptions for this, then we should use a local
                   -- excption type, local to this app, that enumerates all the ones we
                   -- are reporting, and has proper formatting of the result.
@@ -157,8 +159,6 @@ commonCli =
     , Config.cliGenesisHash = Last Nothing
     , Config.cliStaticKeySigningKeyFile = Last Nothing
     , Config.cliStaticKeyDlgCertFile = Last Nothing
-    , Config.cliPBftSigThd = Last Nothing
-    , Config.cliRequiresNetworkMagic = Last Nothing
     , Config.cliDBPath = Last Nothing
     }
 

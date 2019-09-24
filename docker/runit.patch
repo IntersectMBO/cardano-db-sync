@@ -1,0 +1,61 @@
+diff -ru admin-orig/runit-2.1.2/src/runit.c admin/runit-2.1.2/src/runit.c
+--- admin-orig/src/runit.c	2014-08-10 15:22:35.000000000 -0300
++++ admin/src/runit.c	2019-06-30 23:21:45.947391610 -0300
+@@ -299,6 +299,11 @@
+   strerr_warn2(INFO, "sending KILL signal to all processes...", 0);
+   kill(-1, SIGKILL);
+ 
++  strerr_warn2(INFO, "syncing...", 0);
++  //sync();
++  strerr_warn2(INFO, "exiting...", 0);
++  _exit(0);
++
+   pid =fork();
+   switch (pid) {
+   case  0:
+@@ -309,27 +314,27 @@
+     reboot_system(RB_AUTOBOOT);
+   }
+   else {
+-#ifdef RB_POWER_OFF
++#  ifdef RB_POWER_OFF
+     strerr_warn2(INFO, "power off...", 0);
+     sync();
+     reboot_system(RB_POWER_OFF);
+     sleep(2);
+-#endif
+-#ifdef RB_HALT_SYSTEM
++#  endif // RB_POWER_OFF
++#  ifdef RB_HALT_SYSTEM
+     strerr_warn2(INFO, "system halt.", 0);
+     sync();
+     reboot_system(RB_HALT_SYSTEM);
+-#else
+-#ifdef RB_HALT
++#  else // RB_HALT_SYSTEM
++#    ifdef RB_HALT
+     strerr_warn2(INFO, "system halt.", 0);
+     sync();
+     reboot_system(RB_HALT);
+-#else
++#    else // RB_HALT
+     strerr_warn2(INFO, "system reboot.", 0);
+     sync();
+     reboot_system(RB_AUTOBOOT);
+-#endif
+-#endif
++#    endif // RB_HALT
++#  endif // RB_HALT_SYSTEM
+   }
+   if (pid == 0) _exit(0);
+   break;
+@@ -337,7 +342,7 @@
+   sig_unblock(sig_child);
+   while (wait_pid(0, pid) == -1);
+   }
+-#endif
++#endif // RB_AUTOBOOT
+ 
+   for (;;) sig_pause();
+   /* not reached */
+Only in admin/runit-2.1.2/src: .runit.c.swp

@@ -38,6 +38,7 @@
           (hsPkgs.constraints)
           (hsPkgs.containers)
           (hsPkgs.cryptonite)
+          (hsPkgs.deepseq)
           (hsPkgs.directory)
           (hsPkgs.filepath)
           (hsPkgs.fingertree)
@@ -149,6 +150,7 @@
             (hsPkgs.tasty-hunit)
             (hsPkgs.tasty-quickcheck)
             (hsPkgs.temporary)
+            (hsPkgs.text)
             (hsPkgs.time)
             (hsPkgs.transformers)
             (hsPkgs.tree-diff)
@@ -159,8 +161,8 @@
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/ouroboros-network";
-      rev = "2e2e577e4ec6d141c73ae9c50ccd3fc4f993f13e";
-      sha256 = "0wfsafc28qxiqa0glnilwwig3iciy05p05c4yrfjl8f78629ig2a";
+      rev = "e8dc8316b21cf6adff6a926e91caff22e208392c";
+      sha256 = "0ib1gqvk0qg8hjrylndki96zs4dfzxffrq1cjzl9c68jggbv0357";
       });
     postUnpack = "sourceRoot+=/ouroboros-consensus; echo source root reset to \$sourceRoot";
     }

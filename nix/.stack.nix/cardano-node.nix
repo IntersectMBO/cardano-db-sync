@@ -108,6 +108,28 @@
             then [ (hsPkgs.Win32) ]
             else [ (hsPkgs.unix) ]);
           };
+        "trace-acceptor" = {
+          depends = [
+            (hsPkgs.base)
+            (hsPkgs.cardano-config)
+            (hsPkgs.cardano-node)
+            (hsPkgs.cardano-prelude)
+            (hsPkgs.cardano-shell)
+            (hsPkgs.contra-tracer)
+            (hsPkgs.io-sim-classes)
+            (hsPkgs.iohk-monitoring)
+            (hsPkgs.ouroboros-network)
+            (hsPkgs.ouroboros-consensus)
+            (hsPkgs.typed-protocols)
+            (hsPkgs.typed-protocols-cbor)
+            (hsPkgs.bytestring)
+            (hsPkgs.iproute)
+            (hsPkgs.network)
+            (hsPkgs.optparse-applicative)
+            (hsPkgs.serialise)
+            (hsPkgs.text)
+            ];
+          };
         "wallet-client" = {
           depends = [
             (hsPkgs.base)
@@ -185,8 +207,8 @@
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/cardano-node";
-      rev = "bbdc33dfca84873b82ea1c0f1364e0386e39e350";
-      sha256 = "11v9na2awdgdzm95qc17aiy7z218sxsvmmwfzjhpmlx56cmn1k0p";
+      rev = "eb3654f11ff79956a201e10f4afb985bae143bbd";
+      sha256 = "19bjpfgh8ys505z950likgsyr2wvpw0wpxsmbzlwxq8skw0wdkxv";
       });
     postUnpack = "sourceRoot+=/cardano-node; echo source root reset to \$sourceRoot";
     }
