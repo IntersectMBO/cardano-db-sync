@@ -28,6 +28,7 @@ module Explorer.DB.Query
   , queryTxInCount
   , queryTxOutCount
   , queryTxOutValue
+  , queryUtxoAtBlockId
   , renderLookupFail
   , unValueSumAda
   , maybeToEither
@@ -47,10 +48,12 @@ import           Data.Time.Clock (UTCTime, addUTCTime)
 import           Data.Time.Clock.POSIX (POSIXTime, utcTimeToPOSIXSeconds)
 import           Data.Word (Word16, Word64)
 
-import           Database.Esqueleto (Entity (..), From, InnerJoin (..), PersistField, SqlExpr, SqlQuery, Value,
-                    (^.), (==.), (&&.),
-                    countRows, desc, entityKey, entityVal, from, limit, not_, notExists, nothing, on, orderBy,
-                    select, sum_, unValue, unSqlBackendKey, val, where_)
+import           Database.Esqueleto (Entity (..), From, InnerJoin (..), LeftOuterJoin (..),
+                    PersistField, SqlExpr, SqlQuery, Value, ValueList,
+                    (^.), (==.), (<=.), (&&.), (||.), (>.),
+                    countRows, desc, entityKey, entityVal, from, in_, isNothing, limit, not_,
+                    notExists, nothing, on, orderBy,
+                    select, subList_select, sum_, unValue, unSqlBackendKey, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
 import           Explorer.DB.Error
@@ -266,6 +269,35 @@ queryTxOutValue (hash, index) = do
             pure $ txOut ^. TxOutValue
   pure $ maybe 0 unValue (listToMaybe res)
 
+-- | Get the UTxO set after the specified block bas been applied to the chain.
+queryUtxoAtBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m [(TxOut, ByteString)]
+queryUtxoAtBlockId blkid = do
+    -- tx1 refers to the tx of the input spending this output (if it is ever spent)
+    -- tx2 refers to the tx of the output
+    outputs <- select . from $ \(txout `LeftOuterJoin` txin `LeftOuterJoin` tx1 `LeftOuterJoin` blk `LeftOuterJoin` tx2) -> do
+      on $ txout ^. TxOutTxId ==. tx2 ^. TxId
+      on $ tx1 ^. TxBlock ==. blk ^. BlockId
+      on $ txin ^. TxInTxInId ==. tx1 ^. TxId
+      on $ (txout ^. TxOutTxId ==. txin ^. TxInTxOutId) &&. (txout ^. TxOutIndex ==. txin ^. TxInTxOutIndex)
+      where_ $ (txout ^. TxOutTxId `in_` txLessEqual) &&. ((isNothing $ blk ^. BlockBlockNo) ||. (blk ^. BlockId >. val blkid))
+      pure (txout, tx2 ^. TxHash)
+    pure $ map convertResult outputs
+  where
+    -- every block made before or at the snapshot time
+    blockLessEqual :: SqlExpr (ValueList BlockId)
+    blockLessEqual = subList_select . from $ \blk -> do
+      where_ $ blk ^. BlockId <=. val blkid
+      pure $ blk ^. BlockId
+
+    -- every tx made before or at the snapshot time
+    txLessEqual :: SqlExpr (ValueList TxId)
+    txLessEqual = subList_select . from $ \tx -> do
+      where_ $ tx ^. TxBlock `in_` blockLessEqual
+      pure $ tx ^. TxId
+
+    convertResult :: (Entity TxOut, Value ByteString) -> (TxOut, ByteString)
+    convertResult (out, hash) = (entityVal out, unValue hash)
+
 -- -----------------------------------------------------------------------------
 -- SqlQuery predicates
 
@@ -273,7 +305,8 @@ queryTxOutValue (hash, index) = do
 isJust :: PersistField a => SqlExpr (Value (Maybe a)) -> SqlExpr (Value Bool)
 isJust x = not_ (x ==. nothing)
 
--- A predicate that filters out spent 'TxOut' entries.
+-- A predicate that filters out spent 'TxOut' entries at the current chain tip
+-- to provide the current tip Utxo set.
 txOutUnspent :: SqlExpr (Entity TxOut) -> SqlQuery ()
 txOutUnspent txOut =
   where_ $ notExists $ from $ \ txIn -> do
