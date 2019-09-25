@@ -12,6 +12,7 @@ module Explorer.DB.Query
   , queryBlockIdAndHash
   , queryBlockTxCount
   , queryEpochNo
+  , queryFeesUpToBlock
   , queryGenesisSupply
   , queryLatestBlock
   , queryLatestBlockId
@@ -111,6 +112,15 @@ queryEpochNo blkId = do
             where_ (blk ^. BlockId ==. val blkId)
             pure $ blk ^. BlockEpochNo
   pure $ maybeToEither (DbLookupBlockId $ unBlockId blkId) unValue (listToMaybe res)
+
+-- | Get the fees paid in all block from genesis up to and including the specified block.
+queryFeesUpToBlock :: MonadIO m => BlockId -> ReaderT SqlBackend m Ada
+queryFeesUpToBlock blkId = do
+    res <- select . from $ \ (tx `InnerJoin` blk) -> do
+                on (tx ^. TxBlock ==. blk ^. BlockId)
+                where_ (tx ^. TxBlock <=. val blkId)
+                pure $ sum_ (tx ^. TxFee)
+    pure $ unValueSumAda (listToMaybe res)
 
 -- | Return the total Genesis coin supply.
 queryGenesisSupply :: MonadIO m => ReaderT SqlBackend m Ada
