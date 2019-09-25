@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -26,7 +27,7 @@ import           GHC.Generics (Generic)
 
 newtype Ada = Ada
   { unAda :: Micro
-  } deriving (Eq, Ord, Generic)
+  } deriving (Eq, Num, Ord, Generic)
 
 instance FromJSON Ada where
   parseJSON =
