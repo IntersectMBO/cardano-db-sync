@@ -20,13 +20,14 @@
           (hsPkgs.base)
           (hsPkgs.cardano-shell)
           (hsPkgs.cardano-prelude)
-          (hsPkgs.generic-monoid)
           (hsPkgs.iohk-monitoring)
           (hsPkgs.lobemo-backend-aggregation)
           (hsPkgs.lobemo-backend-editor)
           (hsPkgs.lobemo-backend-ekg)
           (hsPkgs.lobemo-backend-monitoring)
           (hsPkgs.lobemo-scribe-systemd)
+          (hsPkgs.ouroboros-consensus)
+          (hsPkgs.generic-monoid)
           (hsPkgs.optparse-applicative)
           (hsPkgs.safe-exceptions)
           (hsPkgs.stm)
@@ -36,8 +37,8 @@
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/cardano-node";
-      rev = "bbdc33dfca84873b82ea1c0f1364e0386e39e350";
-      sha256 = "11v9na2awdgdzm95qc17aiy7z218sxsvmmwfzjhpmlx56cmn1k0p";
+      rev = "eb3654f11ff79956a201e10f4afb985bae143bbd";
+      sha256 = "19bjpfgh8ys505z950likgsyr2wvpw0wpxsmbzlwxq8skw0wdkxv";
       });
     postUnpack = "sourceRoot+=/cardano-config; echo source root reset to \$sourceRoot";
     }

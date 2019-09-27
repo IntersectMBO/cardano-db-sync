@@ -33,7 +33,7 @@ in {
       postgres = {
         socketdir = lib.mkOption {
           type = lib.types.str;
-          default = "/var/run/postgresql";
+          default = "/run/postgresql";
           description = "the path to the postgresql socket";
         };
         port = lib.mkOption {
@@ -80,13 +80,15 @@ in {
           min_wal_size = 1GB
           max_wal_size = 2GB
         '';
-        initialScript = pkgs.writeText "explorerPythonAPI-initScript" ''
-          create role cexplorer with createdb login password ''';
-          alter user cexplorer with superuser;
-          create database cexplorer with owner cexplorer;
-          \connect cexplorer
-          ALTER SCHEMA public   OWNER TO cexplorer;
-        '';
+        ensureDatabases = [ "cexplorer" ];
+        ensureUsers = [
+          {
+            name = "cexplorer";
+            ensurePermissions = {
+              "DATABASE cexplorer" = "ALL PRIVILEGES";
+            };
+          }
+        ];
         identMap = ''
           explorer-users root cexplorer
           explorer-users cexplorer cexplorer
