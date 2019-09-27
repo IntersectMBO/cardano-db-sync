@@ -38,7 +38,6 @@ import qualified Cardano.Config.Partial as Config
 import qualified Cardano.Config.Presets as Config
 import           Cardano.Config.Types (CardanoConfiguration, CardanoEnvironment (..),
                     RequireNetworkMagic (..),
-                    ConfigError,
                     coRequiresNetworkMagic, ccCore)
 
 import           Cardano.Crypto (RequiresNetworkMagic (..), decodeAbstractHash)

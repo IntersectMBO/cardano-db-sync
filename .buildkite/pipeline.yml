@@ -33,3 +33,8 @@ steps:
   #agents:
   #system: x86_64-linux
   #timeout_in_minutes: 60
+
+  - label: 'stack-cabal-sync'
+    command: 'nix-shell --run .buildkite/stack-cabal-sync.sh .buildkite/stack-cabal-sync.nix'
+    agents:
+      system: x86_64-linux
