@@ -80,8 +80,9 @@ import           Ouroboros.Consensus.Node.Run.Abstract (RunNode, nodeDecodeBlock
                     nodeDecodeHeaderHash, nodeEncodeBlock, nodeEncodeGenTx, nodeEncodeHeaderHash)
 import           Ouroboros.Consensus.NodeId (CoreNodeId (..))
 import           Ouroboros.Consensus.Protocol (NodeConfig, Protocol (..))
-import           Ouroboros.Network.Block (Point (..), SlotNo (..),
-                    decodePoint, encodePoint, genesisPoint)
+import           Ouroboros.Network.Block (Point (..), SlotNo (..), Tip,
+                    decodePoint, encodePoint, genesisPoint,
+                    encodeTip, decodeTip)
 import           Ouroboros.Network.Mux (AppType (..), OuroborosApplication (..))
 import           Ouroboros.Network.NodeToClient (NodeToClientProtocols (..),
                     NodeToClientVersion (..), NodeToClientVersionData (..),
@@ -258,6 +259,8 @@ runExplorerNodeClient ptcl trce socketPath = do
 
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> Text.pack (show socketPath)
   connectTo
+    -- TODO: these tracers should be configurable for debugging purposes.
+    nullTracer
     nullTracer
     Peer
     (localInitiatorNetworkApplication (Proxy :: Proxy blk) trce infoConfig)
@@ -365,15 +368,15 @@ txSubmissionClient txv = LocalTxSubmissionClient $
 localChainSyncCodec
   :: forall blk m. (RunNode blk, MonadST m)
   => NodeConfig (BlockProtocol blk)
-  -> Codec (ChainSync blk (Point blk)) DeserialiseFailure m BSL.ByteString
+  -> Codec (ChainSync blk (Tip blk)) DeserialiseFailure m BSL.ByteString
 localChainSyncCodec pInfoConfig =
     codecChainSync
       (nodeEncodeBlock pInfoConfig)
       (nodeDecodeBlock pInfoConfig)
       (encodePoint (nodeEncodeHeaderHash (Proxy @blk)))
       (decodePoint (nodeDecodeHeaderHash (Proxy @blk)))
-      (encodePoint (nodeEncodeHeaderHash (Proxy @blk)))
-      (decodePoint (nodeDecodeHeaderHash (Proxy @blk)))
+      (encodeTip   (nodeEncodeHeaderHash (Proxy @blk)))
+      (decodeTip   (nodeDecodeHeaderHash (Proxy @blk)))
 
 localTxSubmissionCodec
   :: (RunNode blk, MonadST m)
@@ -391,7 +394,7 @@ localTxSubmissionCodec =
 --
 chainSyncClient
   :: forall blk m cfg. (MonadTimer m, MonadIO m, blk ~ ByronBlockOrEBB cfg)
-  => Trace IO Text -> [Point blk] -> ChainSyncClient blk (Point blk) m Void
+  => Trace IO Text -> [Point blk] -> ChainSyncClient blk (Tip blk) m Void
 chainSyncClient trce latestPoints =
     ChainSyncClient $ pure $
       -- Notify the core node about the our latest points at which we are
@@ -405,10 +408,10 @@ chainSyncClient trce latestPoints =
           , recvMsgIntersectNotFound = \  _ -> ChainSyncClient (pure clientStIdle)
           }
   where
-    clientStIdle :: ClientStIdle blk (Point blk) m Void
+    clientStIdle :: ClientStIdle blk (Tip blk) m Void
     clientStIdle = SendMsgRequestNext clientStNext (pure clientStNext)
 
-    clientStNext :: ClientStNext blk (Point blk) m Void
+    clientStNext :: ClientStNext blk (Tip blk) m Void
     clientStNext =
       ClientStNext
         { recvMsgRollForward = \ blk _tip -> ChainSyncClient $ do
