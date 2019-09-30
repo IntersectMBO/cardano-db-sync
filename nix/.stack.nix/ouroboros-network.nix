@@ -23,6 +23,7 @@
           (hsPkgs.typed-protocols-cbor)
           (hsPkgs.io-sim-classes)
           (hsPkgs.contra-tracer)
+          (hsPkgs.cardano-prelude)
           (hsPkgs.async)
           (hsPkgs.binary)
           (hsPkgs.bytestring)
@@ -71,6 +72,7 @@
             (hsPkgs.binary)
             (hsPkgs.bytestring)
             (hsPkgs.cardano-binary)
+            (hsPkgs.cardano-prelude)
             (hsPkgs.cborg)
             (hsPkgs.containers)
             (hsPkgs.contra-tracer)
@@ -105,6 +107,7 @@
             (hsPkgs.base)
             (hsPkgs.bytestring)
             (hsPkgs.cardano-binary)
+            (hsPkgs.cardano-prelude)
             (hsPkgs.cborg)
             (hsPkgs.containers)
             (hsPkgs.contra-tracer)
@@ -129,8 +132,8 @@
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/ouroboros-network";
-      rev = "e8dc8316b21cf6adff6a926e91caff22e208392c";
-      sha256 = "0ib1gqvk0qg8hjrylndki96zs4dfzxffrq1cjzl9c68jggbv0357";
+      rev = "e7a13e34d45f17e4d03a2c96a9c3469e0c6f2739";
+      sha256 = "0m80nqyg5rf7y8q7dnvdlpgs0k67dfjgi9kwqxidkr5k0f6jr50n";
       });
     postUnpack = "sourceRoot+=/ouroboros-network; echo source root reset to \$sourceRoot";
     }

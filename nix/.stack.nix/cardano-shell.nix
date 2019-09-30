@@ -43,13 +43,6 @@
             (hsPkgs.cardano-prelude)
             ];
           };
-        "daedalus-ipc" = {
-          depends = [
-            (hsPkgs.base)
-            (hsPkgs.cardano-shell)
-            (hsPkgs.cardano-prelude)
-            ];
-          };
         };
       tests = {
         "cardano-shell-test" = {
@@ -65,16 +58,14 @@
             (hsPkgs.tree-diff)
             (hsPkgs.hspec)
             ];
-          build-tools = [
-            (hsPkgs.buildPackages.cardano-shell or (pkgs.buildPackages.cardano-shell))
-            ];
           };
         };
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/cardano-shell";
-      rev = "812a36b8d6714cf76ca3576bdac903bedd88a72b";
-      sha256 = "0qqw8dx2bcbj0mbciyh0jja915li0yimc42a0bjpfp5v3cq5i7cn";
+      rev = "8b8437fa2c0cd7e0c1f0ee94ae1565dbcf5617d0";
+      sha256 = "18mq0cq5miy6ls60nfp7crh6l72qgdcvv4fsqfcwiv4sqwc5k3mg";
       });
+    postUnpack = "sourceRoot+=/cardano-shell; echo source root reset to \$sourceRoot";
     }
