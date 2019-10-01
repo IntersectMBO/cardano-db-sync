@@ -26,11 +26,12 @@ rollbackToPoint trce point =
     Nothing -> pure ()
     Just (slot, hash) -> do
       DB.runDbNoLogging $ do
-        (blkId, blk) <- leftPanic "rollbackToPoint: " <$> DB.queryBlockIdAndHash (unHeaderHash hash)
-        case DB.blockSlotNo blk of
-          Nothing -> liftIO $ logInfo trce "Rollback to an EBB??????"
-          Just bSlot -> do
-            if bSlot <= Ledger.unSlotNumber slot
+        blk <- leftPanic "rollbackToPoint: " <$> DB.queryMainBlock (unHeaderHash hash)
+        case (DB.blockSlotNo blk, DB.blockBlockNo blk) of
+          (Nothing, _) -> panic "rollbackToPoint: slot number is Nothing"
+          (_, Nothing) -> panic "rollbackToPoint: block number is Nothing"
+          (Just slotNo, Just blkNo) -> do
+            if slotNo <= Ledger.unSlotNumber slot
               then liftIO $ logInfo trce "No rollback required"
               else do
                 liftIO . logInfo trce $ Text.concat
@@ -38,6 +39,6 @@ rollbackToPoint trce point =
                             , ", hash ", renderAbstractHash hash
                             ]
                 unless (Just (Ledger.unSlotNumber slot) == DB.blockSlotNo blk) $
-                  panic $ "rollbackToPoint: slot mismatch " <> textShow (slot, DB.blockSlotNo blk)
+                  panic $ "rollbackToPoint: slot mismatch " <> textShow (slotNo, blkNo)
                 -- This will be a cascading delete.
-                void $ DB.deleteCascadeBlockId blkId
+                void $ DB.deleteCascadeBlockNo blkNo
