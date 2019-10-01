@@ -42,11 +42,12 @@ import           Explorer.Node.Insert.Genesis
 import           Explorer.Node.Util
 
 import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..))
+import           Ouroboros.Network.Block (BlockNo (..))
 
-insertByronBlockOrEBB :: MonadIO m => Trace IO Text -> ByronBlockOrEBB cfg -> m ()
-insertByronBlockOrEBB tracer blk =
+insertByronBlockOrEBB :: MonadIO m => Trace IO Text -> ByronBlockOrEBB cfg -> BlockNo -> m ()
+insertByronBlockOrEBB tracer blk tipBlockNo =
   liftIO $ case unByronBlockOrEBB blk of
-            Ledger.ABOBBlock ablk -> insertABlock tracer ablk
+            Ledger.ABOBBlock ablk -> insertABlock tracer ablk tipBlockNo
             Ledger.ABOBBoundary abblk -> insertABOBBoundary tracer abblk
 
 insertABOBBoundary :: Trace IO Text -> Ledger.ABoundaryBlock ByteString -> IO ()
@@ -91,19 +92,25 @@ insertABOBBoundary tracer blk = do
                     , " is ", DB.renderAda supply, " Ada"
                     ]
 
-insertABlock :: Trace IO Text -> Ledger.ABlock ByteString -> IO ()
-insertABlock tracer blk = do
+insertABlock :: Trace IO Text -> Ledger.ABlock ByteString -> BlockNo -> IO ()
+insertABlock tracer blk (BlockNo tipBlockNo) = do
     -- Setting this to True will log all 'Persistent' operations which is great
     -- for debug, but otherwise *way* too chatty.
     if False
       then DB.runDbIohkLogging tracer insertAction
       else DB.runDbNoLogging insertAction
 
-    logDebug tracer $ mconcat
-                    [ "insertABlock: slot ", textShow (slotNumber blk)
+    logger tracer $ mconcat
+                    [ "insertABlock: slot ", textShow (blockNumber blk)
                     , ", hash ", renderAbstractHash (blockHash blk)
                     ]
   where
+    logger :: Trace IO a -> a -> IO ()
+    logger =
+      if tipBlockNo - blockNumber blk < 100
+        then logInfo
+        else logDebug
+
     insertAction :: MonadIO m => ReaderT SqlBackend m ()
     insertAction = do
       pbid <- leftPanic "insertABlock: "
