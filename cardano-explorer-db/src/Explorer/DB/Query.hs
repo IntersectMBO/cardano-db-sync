@@ -9,16 +9,18 @@ module Explorer.DB.Query
   , queryBlock
   , queryBlockCount
   , queryBlockId
-  , queryBlockIdAndHash
+  , queryMainBlock
   , queryBlockTxCount
   , queryEpochNo
+  , queryFeesUpToBlockNo
   , queryGenesisSupply
   , queryLatestBlock
   , queryLatestBlockId
+  , queryLatestBlockNo
   , queryLatestBlocks
   , queryLatestSlotNo
   , queryMeta
-  , queryPreviousBlockId
+  , queryPreviousBlockNo
   , querySelectCount
   , querySlotPosixTime
   , querySlotUtcTime
@@ -28,6 +30,7 @@ module Explorer.DB.Query
   , queryTxInCount
   , queryTxOutCount
   , queryTxOutValue
+  , queryUtxoAtBlockNo
   , renderLookupFail
   , unValueSumAda
   , maybeToEither
@@ -42,15 +45,17 @@ import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Fixed (Micro)
-import           Data.Maybe (catMaybes, fromMaybe, mapMaybe)
+import           Data.Maybe (catMaybes, fromMaybe)
 import           Data.Time.Clock (UTCTime, addUTCTime)
 import           Data.Time.Clock.POSIX (POSIXTime, utcTimeToPOSIXSeconds)
 import           Data.Word (Word16, Word64)
 
-import           Database.Esqueleto (Entity (..), From, InnerJoin (..), PersistField, SqlExpr, SqlQuery, Value,
-                    (^.), (==.), (&&.),
-                    countRows, desc, entityKey, entityVal, from, limit, not_, notExists, nothing, on, orderBy,
-                    select, sum_, unValue, unSqlBackendKey, val, where_)
+import           Database.Esqueleto (Entity (..), From, InnerJoin (..), LeftOuterJoin (..),
+                    PersistField, SqlExpr, SqlQuery, Value, ValueList,
+                    (^.), (==.), (<=.), (&&.), (||.), (>.),
+                    countRows, desc, entityKey, entityVal, from, in_, isNothing, just,
+                    limit, not_, notExists, on, orderBy,
+                    select, subList_select, sum_, unValue, unSqlBackendKey, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
 import           Explorer.DB.Error
@@ -69,6 +74,7 @@ queryBlock hash = do
             pure blk
   pure $ maybeToEither (DbLookupBlockHash hash) entityVal (listToMaybe res)
 
+
 -- | Count the number of blocks in the Block table.
 queryBlockCount :: MonadIO m => ReaderT SqlBackend m Word
 queryBlockCount = do
@@ -84,13 +90,22 @@ queryBlockId hash = do
             pure $ blk ^. BlockId
   pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
 
--- | Get the 'BlockId' and 'Block' associated with the given hash.
-queryBlockIdAndHash :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail (BlockId, Block))
-queryBlockIdAndHash hash = do
-  res <- select . from $ \ blk -> do
-            where_ (blk ^. BlockHash ==. val hash)
-            pure $ blk
-  pure $ maybeToEither (DbLookupBlockHash hash) entityPair (listToMaybe res)
+-- | Get the latest 'Block' associated with the given hash, skipping any EBBs.
+queryMainBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail Block)
+queryMainBlock hash = do
+    res <- select . from $ \ blk -> do
+              where_ (blk ^. BlockHash ==. val hash)
+              pure $ blk ^. BlockId
+    maybe (pure $ Left (DbLookupBlockHash hash)) queryMainBlockId (unValue <$> listToMaybe res)
+  where
+    queryMainBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m (Either LookupFail Block)
+    queryMainBlockId blkid = do
+      res <- select . from $ \ blk -> do
+              where_ $ (isJust (blk ^. BlockBlockNo) &&. blk ^. BlockId <=. val blkid)
+              orderBy [desc (blk ^. BlockId)]
+              limit 1
+              pure blk
+      pure $ maybeToEither (DbLookupBlockId $ unBlockId blkid) entityVal (listToMaybe res)
 
 -- | Get the number of transactions in the specified block.
 queryBlockTxCount :: MonadIO m => BlockId -> ReaderT SqlBackend m Word64
@@ -109,6 +124,22 @@ queryEpochNo blkId = do
             pure $ blk ^. BlockEpochNo
   pure $ maybeToEither (DbLookupBlockId $ unBlockId blkId) unValue (listToMaybe res)
 
+-- | Get the fees paid in all block from genesis up to and including the specified block.
+queryFeesUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
+queryFeesUpToBlockNo blkNo = do
+    eblkId <- select . from $ \blk -> do
+                where_ (blk ^. BlockBlockNo ==. just (val blkNo))
+                pure (blk ^. BlockId)
+    maybe (pure 0) queryFeesUpToBlockId $ fmap unValue (listToMaybe eblkId)
+  where
+    queryFeesUpToBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m Ada
+    queryFeesUpToBlockId blkId = do
+      res <- select . from $ \ (tx `InnerJoin` blk) -> do
+                on (tx ^. TxBlock ==. blk ^. BlockId)
+                where_ (tx ^. TxBlock <=. val blkId)
+                pure $ sum_ (tx ^. TxFee)
+      pure $ unValueSumAda (listToMaybe res)
+
 -- | Return the total Genesis coin supply.
 queryGenesisSupply :: MonadIO m => ReaderT SqlBackend m Ada
 queryGenesisSupply = do
@@ -126,6 +157,16 @@ queryLatestBlockId = do
                 limit $ 1
                 pure $ (blk ^. BlockId)
   pure $ fmap unValue (listToMaybe res)
+
+-- | Get the 'BlockNo' of the latest block.
+queryLatestBlockNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
+queryLatestBlockNo = do
+  res <- select $ from $ \ blk -> do
+                where_ $ (isJust $ blk ^. BlockBlockNo)
+                orderBy [desc (blk ^. BlockBlockNo)]
+                limit 1
+                pure $ blk ^. BlockBlockNo
+  pure $ headMaybe (catMaybes $ map unValue res)
 
 -- | Get the latest block.
 queryLatestBlock :: MonadIO m => ReaderT SqlBackend m (Maybe Block)
@@ -155,11 +196,12 @@ queryLatestBlocks limitCount = do
         (Just a, b) -> Just (a, b)
 
 -- | Given a 'BlockId' return the 'BlockId' of the previous block.
-queryPreviousBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe BlockId)
-queryPreviousBlockId blkId = do
-  res <- select $ from $ \ blk -> do
-                where_ (blk ^. BlockId ==. val blkId)
-                pure $ (blk ^. BlockPrevious)
+queryPreviousBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Word64)
+queryPreviousBlockNo blkNo = do
+  res <- select $ from $ \ (blk `InnerJoin` pblk) -> do
+                on (blk ^. BlockPrevious ==. just (pblk ^. BlockId))
+                where_ (blk ^. BlockBlockNo ==. just (val blkNo))
+                pure $ (pblk ^. BlockBlockNo)
   pure $ maybe Nothing unValue (listToMaybe res)
 
 -- | Count the number of rows that match the select with the supplied predicate.
@@ -174,11 +216,11 @@ querySelectCount predicate = do
 queryLatestSlotNo :: MonadIO m => ReaderT SqlBackend m Word64
 queryLatestSlotNo = do
   res <- select . from $ \ blk -> do
-            where_ (isJust $ blk ^. BlockSlotNo)
-            orderBy [desc (blk ^. BlockId)]
+            where_ $ (isJust $ blk ^. BlockSlotNo)
+            orderBy [desc (blk ^. BlockSlotNo)]
             limit 1
-            pure (blk ^. BlockSlotNo)
-  pure $ fromMaybe 0 (listToMaybe $ mapMaybe unValue res)
+            pure $ blk ^. BlockSlotNo
+  pure $ fromMaybe 0 (listToMaybe . catMaybes $ map unValue res)
 
 {-# INLINABLE queryMeta #-}
 -- | Get the network metadata.
@@ -266,14 +308,41 @@ queryTxOutValue (hash, index) = do
             pure $ txOut ^. TxOutValue
   pure $ maybe 0 unValue (listToMaybe res)
 
+-- | Get the UTxO set after the specified 'BlockId' has been applied to the chain.
+-- Not exported because 'BlockId' to 'BlockHash' relationship may not be the same
+-- across machines.
+queryUtxoAtBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m [(TxOut, ByteString)]
+queryUtxoAtBlockId blkid = do
+    -- tx1 refers to the tx of the input spending this output (if it is ever spent)
+    -- tx2 refers to the tx of the output
+    outputs <- select . from $ \(txout `LeftOuterJoin` txin `LeftOuterJoin` tx1 `LeftOuterJoin` blk `LeftOuterJoin` tx2) -> do
+      on $ txout ^. TxOutTxId ==. tx2 ^. TxId
+      on $ tx1 ^. TxBlock ==. blk ^. BlockId
+      on $ txin ^. TxInTxInId ==. tx1 ^. TxId
+      on $ (txout ^. TxOutTxId ==. txin ^. TxInTxOutId) &&. (txout ^. TxOutIndex ==. txin ^. TxInTxOutIndex)
+      where_ $ (txout ^. TxOutTxId `in_` txLessEqual blkid) &&. ((isNothing $ blk ^. BlockBlockNo) ||. (blk ^. BlockId >. val blkid))
+      pure (txout, tx2 ^. TxHash)
+    pure $ map convertResult outputs
+  where
+    convertResult :: (Entity TxOut, Value ByteString) -> (TxOut, ByteString)
+    convertResult (out, hash) = (entityVal out, unValue hash)
+
+queryUtxoAtBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m [(TxOut, ByteString)]
+queryUtxoAtBlockNo blkNo = do
+  eblkId <- select . from $ \blk -> do
+                where_ (blk ^. BlockBlockNo ==. just (val blkNo))
+                pure (blk ^. BlockId)
+  maybe (pure []) queryUtxoAtBlockId $ fmap unValue (listToMaybe eblkId)
+
 -- -----------------------------------------------------------------------------
 -- SqlQuery predicates
 
 -- Filter out 'Nothing' from a 'Maybe a'.
 isJust :: PersistField a => SqlExpr (Value (Maybe a)) -> SqlExpr (Value Bool)
-isJust x = not_ (x ==. nothing)
+isJust = not_ . isNothing
 
--- A predicate that filters out spent 'TxOut' entries.
+-- A predicate that filters out spent 'TxOut' entries at the current chain tip
+-- to provide the current tip Utxo set.
 txOutUnspent :: SqlExpr (Entity TxOut) -> SqlQuery ()
 txOutUnspent txOut =
   where_ $ notExists $ from $ \ txIn -> do
@@ -281,6 +350,20 @@ txOutUnspent txOut =
               &&. txOut ^. TxOutIndex ==. txIn ^. TxInTxOutIndex
               )
 
+-- every tx made before or at the snapshot time
+txLessEqual :: BlockId -> SqlExpr (ValueList TxId)
+txLessEqual blkid =
+    subList_select . from $ \tx -> do
+      where_ $ tx ^. TxBlock `in_` blockLessEqual
+      pure $ tx ^. TxId
+  where
+    -- every block made before or at the snapshot time
+    blockLessEqual :: SqlExpr (ValueList BlockId)
+    blockLessEqual = subList_select . from $ \blk -> do
+      where_ $ blk ^. BlockId <=. val blkid
+      pure $ blk ^. BlockId
+
+-- | Get the UTxO set after the specified 'BlockNo' has been applied to the chain.
 -- Unfortunately the 'sum_' operation above returns a 'PersistRational' so we need
 -- to un-wibble it.
 unValueSumAda :: Maybe (Value (Maybe Micro)) -> Ada
@@ -294,6 +377,10 @@ unValueSumAda mvm =
 entityPair :: Entity a -> (Key a, a)
 entityPair e =
   (entityKey e, entityVal e)
+
+headMaybe :: [a] -> Maybe a
+headMaybe [] = Nothing
+headMaybe (x:_) = Just x
 
 listToMaybe :: [a] -> Maybe a
 listToMaybe [] = Nothing
