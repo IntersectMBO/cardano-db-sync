@@ -92,9 +92,12 @@ executable cardano-explorer-db-tool
   build-depends:        base                            >= 4.12         && < 4.13
                       , ansi-terminal
                       , cardano-explorer-db
+                      , cardano-ledger
+                      , containers
                       , optparse-applicative
                       , persistent
                       , random
+                      , text
 
 test-suite test
   default-language:     Haskell2010

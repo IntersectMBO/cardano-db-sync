@@ -86,8 +86,8 @@ pCommand =
     pUtxoSetAtBlock :: Parser Command
     pUtxoSetAtBlock =
       UtxoSetAtBlock . read <$> Opt.strOption
-        (  Opt.long "block-no"
-        <> Opt.help "The BlockNo."
+        (  Opt.long "slot-no"
+        <> Opt.help "The SlotNo."
         )
 
     pValidate :: Parser Command
