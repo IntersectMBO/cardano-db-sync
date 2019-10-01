@@ -319,14 +319,22 @@ localInitiatorNetworkApplication Proxy trce pInfoConfig =
 
 logDbState :: Trace IO Text -> IO ()
 logDbState trce = do
-  mblk <- DB.runDbNoLogging DB.queryLatestBlock
-  case mblk of
-    Nothing -> logInfo trce "Explorer DB is empty"
-    Just block ->
-        logInfo trce $ Text.concat
-                [ "Explorer DB tip is at slot "
-                , maybe "-1 (genesis)" (Text.pack . show) (DB.blockSlotNo block)
-                ]
+    mblk <- DB.runDbNoLogging DB.queryLatestBlock
+    case mblk of
+      Nothing -> logInfo trce "Explorer DB is empty"
+      Just block ->
+          logInfo trce $ Text.concat
+                  [ "Explorer DB tip is at "
+                  , Text.pack (showTip block)
+                  ]
+  where
+    showTip :: DB.Block -> String
+    showTip blk =
+      case (DB.blockBlockNo blk, DB.blockSlotNo blk) of
+        (Just blkNo, Just slotNo) -> "block " ++ show blkNo ++ ", slot " ++ show slotNo
+        (Just blkNo, Nothing) -> "block " ++ show blkNo
+        (Nothing, Just slotNo) -> "slot " ++ show slotNo
+        (Nothing, Nothing) -> "-1 (genesis)"
 
 
 getLatestPoints :: IO [Point (ByronBlockOrEBB cfg)]
