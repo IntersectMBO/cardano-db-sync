@@ -13,6 +13,7 @@ module Explorer.DB.Query
   , queryBlockTxCount
   , queryEpochNo
   , queryFeesUpToBlockNo
+  , queryFeesUpToSlotNo
   , queryGenesisSupply
   , queryLatestBlock
   , queryLatestBlockId
@@ -128,18 +129,21 @@ queryEpochNo blkId = do
 -- | Get the fees paid in all block from genesis up to and including the specified block.
 queryFeesUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
 queryFeesUpToBlockNo blkNo = do
-    eblkId <- select . from $ \blk -> do
-                where_ (blk ^. BlockBlockNo ==. just (val blkNo))
-                pure (blk ^. BlockId)
-    maybe (pure 0) queryFeesUpToBlockId $ fmap unValue (listToMaybe eblkId)
-  where
-    queryFeesUpToBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m Ada
-    queryFeesUpToBlockId blkId = do
-      res <- select . from $ \ (tx `InnerJoin` blk) -> do
-                on (tx ^. TxBlock ==. blk ^. BlockId)
-                where_ (tx ^. TxBlock <=. val blkId)
-                pure $ sum_ (tx ^. TxFee)
-      pure $ unValueSumAda (listToMaybe res)
+  res <- select . from $ \ (tx `InnerJoin` blk) -> do
+            on (tx ^. TxBlock ==. blk ^. BlockId)
+            where_ (isJust $ blk ^. BlockBlockNo)
+            where_ (blk ^. BlockBlockNo <=. just (val blkNo))
+            pure $ sum_ (tx ^. TxFee)
+  pure $ unValueSumAda (listToMaybe res)
+
+queryFeesUpToSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
+queryFeesUpToSlotNo slotNo = do
+  res <- select . from $ \ (tx `InnerJoin` blk) -> do
+            on (tx ^. TxBlock ==. blk ^. BlockId)
+            where_ (isJust $ blk ^. BlockSlotNo)
+            where_ (blk ^. BlockSlotNo <=. just (val slotNo))
+            pure $ sum_ (tx ^. TxFee)
+  pure $ unValueSumAda (listToMaybe res)
 
 -- | Return the total Genesis coin supply.
 queryGenesisSupply :: MonadIO m => ReaderT SqlBackend m Ada
