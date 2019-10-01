@@ -80,7 +80,7 @@ import           Ouroboros.Consensus.Node.Run.Abstract (RunNode, nodeDecodeBlock
                     nodeDecodeHeaderHash, nodeEncodeBlock, nodeEncodeGenTx, nodeEncodeHeaderHash)
 import           Ouroboros.Consensus.NodeId (CoreNodeId (..))
 import           Ouroboros.Consensus.Protocol (NodeConfig, Protocol (..))
-import           Ouroboros.Network.Block (Point (..), SlotNo (..), Tip,
+import           Ouroboros.Network.Block (Point (..), SlotNo (..), Tip (..),
                     decodePoint, encodePoint, genesisPoint,
                     encodeTip, decodeTip)
 import           Ouroboros.Network.Mux (AppType (..), OuroborosApplication (..))
@@ -414,8 +414,8 @@ chainSyncClient trce latestPoints =
     clientStNext :: ClientStNext blk (Tip blk) m Void
     clientStNext =
       ClientStNext
-        { recvMsgRollForward = \ blk _tip -> ChainSyncClient $ do
-            insertByronBlockOrEBB trce blk
+        { recvMsgRollForward = \ blk tip -> ChainSyncClient $ do
+            insertByronBlockOrEBB trce blk (tipBlockNo tip)
             pure clientStIdle
         , recvMsgRollBackward = \ point _tip -> ChainSyncClient $ do
             -- we are requested to roll backward to point 'point', the core
