@@ -31,6 +31,7 @@ module Explorer.DB.Query
   , queryTxOutCount
   , queryTxOutValue
   , queryUtxoAtBlockNo
+  , queryUtxoAtSlotNo
   , renderLookupFail
   , unValueSumAda
   , maybeToEither
@@ -331,6 +332,13 @@ queryUtxoAtBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m [(TxOut, ByteS
 queryUtxoAtBlockNo blkNo = do
   eblkId <- select . from $ \blk -> do
                 where_ (blk ^. BlockBlockNo ==. just (val blkNo))
+                pure (blk ^. BlockId)
+  maybe (pure []) queryUtxoAtBlockId $ fmap unValue (listToMaybe eblkId)
+
+queryUtxoAtSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m [(TxOut, ByteString)]
+queryUtxoAtSlotNo slotNo = do
+  eblkId <- select . from $ \blk -> do
+                where_ (blk ^. BlockSlotNo ==. just (val slotNo))
                 pure (blk ^. BlockId)
   maybe (pure []) queryUtxoAtBlockId $ fmap unValue (listToMaybe eblkId)
 
