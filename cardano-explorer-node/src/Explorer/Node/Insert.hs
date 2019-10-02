@@ -101,7 +101,8 @@ insertABlock tracer blk (BlockNo tipBlockNo) = do
       else DB.runDbNoLogging insertAction
 
     logger tracer $ mconcat
-                    [ "insertABlock: slot ", textShow (blockNumber blk)
+                    [ "insertABlock: slot ", textShow (slotNumber blk)
+                    , ", block ", textShow (blockNumber blk)
                     , ", hash ", renderAbstractHash (blockHash blk)
                     ]
   where
