@@ -116,7 +116,7 @@ in {
             exit 1
           fi'' else "export CARDANO_NODE_SOCKET_PATH=${cfg.socketPath}"}
 
-          export PATH=${lib.makeBinPath [ self.cardano-explorer-node self.haskellPackages.cardano-explorer-db.components.exes.cardano-explorer-db-manage pkgs.postgresql ]}:$PATH
+          export PATH=${lib.makeBinPath [ self.cardano-explorer-node self.haskellPackages.cardano-explorer-db.components.exes.cardano-explorer-db-tool pkgs.postgresql ]}:$PATH
 
           cp ${pgpass} ./pgpass
           chmod 0600 ./pgpass
