@@ -80,7 +80,7 @@ import           Ouroboros.Consensus.Node.Run.Abstract (RunNode, nodeDecodeBlock
                     nodeDecodeHeaderHash, nodeEncodeBlock, nodeEncodeGenTx, nodeEncodeHeaderHash)
 import           Ouroboros.Consensus.NodeId (CoreNodeId (..))
 import           Ouroboros.Consensus.Protocol (NodeConfig, Protocol (..))
-import           Ouroboros.Network.Block (Point (..), SlotNo (..), Tip,
+import           Ouroboros.Network.Block (Point (..), SlotNo (..), Tip (..),
                     decodePoint, encodePoint, genesisPoint,
                     encodeTip, decodeTip)
 import           Ouroboros.Network.Mux (AppType (..), OuroborosApplication (..))
@@ -319,14 +319,22 @@ localInitiatorNetworkApplication Proxy trce pInfoConfig =
 
 logDbState :: Trace IO Text -> IO ()
 logDbState trce = do
-  mblk <- DB.runDbNoLogging DB.queryLatestBlock
-  case mblk of
-    Nothing -> logInfo trce "Explorer DB is empty"
-    Just block ->
-        logInfo trce $ Text.concat
-                [ "Explorer DB tip is at slot "
-                , maybe "-1 (genesis)" (Text.pack . show) (DB.blockSlotNo block)
-                ]
+    mblk <- DB.runDbNoLogging DB.queryLatestBlock
+    case mblk of
+      Nothing -> logInfo trce "Explorer DB is empty"
+      Just block ->
+          logInfo trce $ Text.concat
+                  [ "Explorer DB tip is at "
+                  , Text.pack (showTip block)
+                  ]
+  where
+    showTip :: DB.Block -> String
+    showTip blk =
+      case (DB.blockBlockNo blk, DB.blockSlotNo blk) of
+        (Just blkNo, Just slotNo) -> "block " ++ show blkNo ++ ", slot " ++ show slotNo
+        (Just blkNo, Nothing) -> "block " ++ show blkNo
+        (Nothing, Just slotNo) -> "slot " ++ show slotNo
+        (Nothing, Nothing) -> "-1 (genesis)"
 
 
 getLatestPoints :: IO [Point (ByronBlockOrEBB cfg)]
@@ -414,8 +422,8 @@ chainSyncClient trce latestPoints =
     clientStNext :: ClientStNext blk (Tip blk) m Void
     clientStNext =
       ClientStNext
-        { recvMsgRollForward = \ blk _tip -> ChainSyncClient $ do
-            insertByronBlockOrEBB trce blk
+        { recvMsgRollForward = \ blk tip -> ChainSyncClient $ do
+            insertByronBlockOrEBB trce blk (tipBlockNo tip)
             pure clientStIdle
         , recvMsgRollBackward = \ point _tip -> ChainSyncClient $ do
             -- we are requested to roll backward to point 'point', the core
