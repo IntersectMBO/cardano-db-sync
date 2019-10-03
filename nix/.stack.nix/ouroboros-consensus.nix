@@ -1,6 +1,6 @@
 { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
   {
-    flags = {};
+    flags = { checktvarinvariant = false; };
     package = {
       specVersion = "1.10";
       identifier = { name = "ouroboros-consensus"; version = "0.1.0.0"; };
@@ -25,7 +25,6 @@
           (hsPkgs.io-sim-classes)
           (hsPkgs.contra-tracer)
           (hsPkgs.cardano-ledger-test)
-          (hsPkgs.base16-bytestring)
           (hsPkgs.bifunctors)
           (hsPkgs.bimap)
           (hsPkgs.bytestring)
@@ -88,6 +87,8 @@
         "test-consensus" = {
           depends = [
             (hsPkgs.base)
+            (hsPkgs.base16-bytestring)
+            (hsPkgs.bytestring)
             (hsPkgs.cardano-binary)
             (hsPkgs.cardano-crypto-class)
             (hsPkgs.cardano-crypto-wrapper)
@@ -103,6 +104,7 @@
             (hsPkgs.containers)
             (hsPkgs.contra-tracer)
             (hsPkgs.cryptonite)
+            (hsPkgs.deepseq)
             (hsPkgs.fgl)
             (hsPkgs.fingertree)
             (hsPkgs.generics-sop)
@@ -133,12 +135,14 @@
             (hsPkgs.ouroboros-consensus)
             (hsPkgs.io-sim-classes)
             (hsPkgs.io-sim)
+            (hsPkgs.base16-bytestring)
             (hsPkgs.bifunctors)
             (hsPkgs.binary)
             (hsPkgs.bytestring)
             (hsPkgs.cereal)
             (hsPkgs.containers)
             (hsPkgs.contra-tracer)
+            (hsPkgs.deepseq)
             (hsPkgs.directory)
             (hsPkgs.fingertree)
             (hsPkgs.generics-sop)
@@ -164,8 +168,8 @@
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/ouroboros-network";
-      rev = "e7a13e34d45f17e4d03a2c96a9c3469e0c6f2739";
-      sha256 = "0m80nqyg5rf7y8q7dnvdlpgs0k67dfjgi9kwqxidkr5k0f6jr50n";
+      rev = "6cbde599eba87edf983c620fd8a9ed4015c9b50a";
+      sha256 = "0pqhradp9g5vcyrsh7ywy0wdzy8j8i6gdphscslfaa2sk5ai1n45";
       });
     postUnpack = "sourceRoot+=/ouroboros-consensus; echo source root reset to \$sourceRoot";
     }
