@@ -207,8 +207,8 @@
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/cardano-node";
-      rev = "157044336447cf028964855d0d1765c181a09c2b";
-      sha256 = "0x00rb1ky36p6vfcxi9zpfciwkbjhlgv85qdx2x4sl49dd084mgg";
+      rev = "e961e3740dc8abfa48ccbed54ba2d2d3c8893258";
+      sha256 = "10ky5i8liks85k6wniqaidhj1nbg2djlwpyxwf54jl6iwi7ka22b";
       });
     postUnpack = "sourceRoot+=/cardano-node; echo source root reset to \$sourceRoot";
     }

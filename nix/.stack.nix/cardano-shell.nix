@@ -64,8 +64,8 @@
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/cardano-shell";
-      rev = "8b8437fa2c0cd7e0c1f0ee94ae1565dbcf5617d0";
-      sha256 = "18mq0cq5miy6ls60nfp7crh6l72qgdcvv4fsqfcwiv4sqwc5k3mg";
+      rev = "036ff2b45e27a2b47b56f43bee988fbdd1d1d073";
+      sha256 = "1p2jl25r2nkaszpa8hf2n231jjkfw8p41vk38jwbk80j7vbbmila";
       });
     postUnpack = "sourceRoot+=/cardano-shell; echo source root reset to \$sourceRoot";
     }
