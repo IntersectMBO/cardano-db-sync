@@ -56,7 +56,7 @@ let
       # TODO: Add your project executables to this list
       [
         jobs.native.cardano-explorer.x86_64-linux
-        jobs.native.cardano-explorer-db-manage.x86_64-linux
+        jobs.native.cardano-explorer-db-tool.x86_64-linux
         jobs.native.cardano-explorer-node.x86_64-linux
         jobs.native.cardano-sl-core.x86_64-linux
       ]

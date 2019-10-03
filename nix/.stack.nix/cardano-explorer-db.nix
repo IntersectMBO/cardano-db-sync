@@ -46,11 +46,17 @@
           ];
         };
       exes = {
-        "cardano-explorer-db-manage" = {
+        "cardano-explorer-db-tool" = {
           depends = [
             (hsPkgs.base)
+            (hsPkgs.ansi-terminal)
             (hsPkgs.cardano-explorer-db)
+            (hsPkgs.cardano-ledger)
+            (hsPkgs.containers)
             (hsPkgs.optparse-applicative)
+            (hsPkgs.persistent)
+            (hsPkgs.random)
+            (hsPkgs.text)
             ];
           };
         };

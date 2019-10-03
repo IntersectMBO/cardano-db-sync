@@ -4,10 +4,10 @@ let
 in runCommand "usage" {
   buildInputs = [
     self.cardano-explorer-node
-    self.haskellPackages.cardano-explorer-db.components.exes.cardano-explorer-db-manage
+    self.haskellPackages.cardano-explorer-db.components.exes.cardano-explorer-db-tool
   ];
   shellHook = ''
-    for EXE in cardano-explorer-node cardano-explorer-db-manage; do
+    for EXE in cardano-explorer-node cardano-explorer-db-tool; do
       source <($EXE --bash-completion-script `type -p $EXE`)
     done
   '';
