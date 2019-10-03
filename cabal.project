@@ -60,17 +60,17 @@ source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-shell
   subdir: cardano-shell
-  tag: 8b8437fa2c0cd7e0c1f0ee94ae1565dbcf5617d0
+  tag: 036ff2b45e27a2b47b56f43bee988fbdd1d1d073
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-prelude
-  tag: 96e8dcb29dc3c29eee99c0d020152fad6071af6d
+  tag: b9bf62f2bab90539809bee13620fe7d29b35928d
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-prelude
-  tag: 96e8dcb29dc3c29eee99c0d020152fad6071af6d
+  tag: b9bf62f2bab90539809bee13620fe7d29b35928d
   subdir: test
 
 source-repository-package
@@ -128,89 +128,89 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: 157044336447cf028964855d0d1765c181a09c2b
+  tag: e961e3740dc8abfa48ccbed54ba2d2d3c8893258
   subdir: cardano-node
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: 157044336447cf028964855d0d1765c181a09c2b
+  tag: e961e3740dc8abfa48ccbed54ba2d2d3c8893258
   subdir: cardano-config
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-base
-  tag: ccbc085f1ebdde706feb7955fdebb33260dc5e32
+  tag: bb262f466d659d94ed6e5500c2dc101f7c2c6b1e
   subdir: binary
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-base
-  tag: ccbc085f1ebdde706feb7955fdebb33260dc5e32
+  tag: bb262f466d659d94ed6e5500c2dc101f7c2c6b1e
   subdir: binary/test
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-base
-  tag: ccbc085f1ebdde706feb7955fdebb33260dc5e32
+  tag: bb262f466d659d94ed6e5500c2dc101f7c2c6b1e
   subdir: cardano-crypto-class
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-ledger
-  tag: 025792e51aea9c0078bdb595f8715ad3baf2b97a
+  tag: edfbc26b34faae0d1f3e007a3ae21dd9716ca8f3
   subdir: cardano-ledger
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-ledger
-  tag: 025792e51aea9c0078bdb595f8715ad3baf2b97a
+  tag: edfbc26b34faae0d1f3e007a3ae21dd9716ca8f3
   subdir: cardano-ledger/test
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-ledger
-  tag: 025792e51aea9c0078bdb595f8715ad3baf2b97a
+  tag: edfbc26b34faae0d1f3e007a3ae21dd9716ca8f3
   subdir: crypto
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-ledger
-  tag: 025792e51aea9c0078bdb595f8715ad3baf2b97a
+  tag: edfbc26b34faae0d1f3e007a3ae21dd9716ca8f3
   subdir: crypto/test
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/ouroboros-network
-  tag: e7a13e34d45f17e4d03a2c96a9c3469e0c6f2739
+  tag: 6cbde599eba87edf983c620fd8a9ed4015c9b50a
   subdir: io-sim-classes
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/ouroboros-network
-  tag: e7a13e34d45f17e4d03a2c96a9c3469e0c6f2739
+  tag: 6cbde599eba87edf983c620fd8a9ed4015c9b50a
   subdir: network-mux
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/ouroboros-network
-  tag: e7a13e34d45f17e4d03a2c96a9c3469e0c6f2739
+  tag: 6cbde599eba87edf983c620fd8a9ed4015c9b50a
   subdir: ouroboros-network
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/ouroboros-network
-  tag: e7a13e34d45f17e4d03a2c96a9c3469e0c6f2739
+  tag: 6cbde599eba87edf983c620fd8a9ed4015c9b50a
   subdir: ouroboros-consensus
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/ouroboros-network
-  tag: e7a13e34d45f17e4d03a2c96a9c3469e0c6f2739
+  tag: 6cbde599eba87edf983c620fd8a9ed4015c9b50a
   subdir: typed-protocols
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/ouroboros-network
-  tag: e7a13e34d45f17e4d03a2c96a9c3469e0c6f2739
+  tag: 6cbde599eba87edf983c620fd8a9ed4015c9b50a
   subdir: typed-protocols-cbor
