@@ -59,6 +59,7 @@ let
       {
         packages.cardano-explorer.src = src + "/cardano-explorer";
         # packages.another-package = src + /another-package;
+        packages.ekg.components.library.enableSeparateDataOutput = true;
       }
 
       # setup a psql server for the tests

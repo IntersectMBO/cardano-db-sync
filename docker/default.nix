@@ -1,6 +1,14 @@
 { forDockerFile ? false }:
 
 let
+  rawNixpkgs = builtins.fetchTarball "https://github.com/nixos/nixpkgs/archive/d484f2b7fc0834a068e8ace851faa449a03963f5.tar.gz";
+  helperPkgs = import rawNixpkgs { config = {}; overlays = []; };
+  patchedNixpkgs = helperPkgs.runCommand "nixpkgs-patched" { patches = [ ./nixpkgs.patch ]; } ''
+    cp -r ${rawNixpkgs} $out
+    chmod -R +w $out
+    cd $out
+    patchPhase
+  '';
   overlay = self: super: {
     deroot = self.runCommandCC "deroot" {} ''
       mkdir -pv $out/bin/
@@ -8,11 +16,12 @@ let
     '';
   };
 in
-with import <nixpkgs> { overlays = [ overlay ]; };
+with import patchedNixpkgs { overlays = [ overlay ]; };
 
 let
   secrets = import ./secrets.nix;
   iohkLib = import ../lib.nix { };
+  self = import ../. {};
   targetEnv = iohkLib.cardanoLib.environments.mainnet;
   iohk-ops-src = fetchFromGitHub {
     owner = "input-output-hk";
@@ -23,8 +32,8 @@ let
   cardano-node-src = fetchFromGitHub {
     owner = "input-output-hk";
     repo = "cardano-node";
-    rev = "eb3654f11ff79956a201e10f4afb985bae143bbd";
-    sha256 = "19bjpfgh8ys505z950likgsyr2wvpw0wpxsmbzlwxq8skw0wdkxv";
+    rev = "b475810273bbf158632bb273575df398ecbed240";
+    sha256 = "1f7xphv7na7qbzdm1z27aqsdkxn6zgl2hqkkyznv3nhhr311267b";
   };
   customQueries = {
     cexplorerBlockCount = {
@@ -39,14 +48,44 @@ let
       ];
     };
   };
+  oauth_configuration = let
+    secrets = import ./secrets.nix;
+  in {
+    services.oauth2_proxy = {
+      inherit (secrets) redirectURL;
+      cookie.secure = false;
+    };
+    services.monitoring-services = {
+      grafanaCreds = {
+        inherit (secrets) user;
+        password = "admin";
+      };
+      oauth = {
+        enable = true;
+        inherit (secrets) clientID clientSecret emailDomain;
+        cookie.secret = "fake";
+      };
+    };
+  };
+  noauth_configuration = {
+    services.monitoring-services = {
+      oauth.enable = false;
+      grafanaCreds = {
+        user = "admin";
+        password = "admin";
+      };
+    };
+  };
   configuration = { config, ... }: {
     imports = [
       (iohk-ops-src + "/modules/monitoring-services.nix")
       ../nix/nixos/cardano-exporter-service.nix
       (cardano-node-src + "/nix/nixos")
+      (if builtins.pathExists ./secrets.nix then oauth_configuration else noauth_configuration)
     ];
     services.cardano-node = {
       environment = "mainnet";
+      topology = iohkLib.cardanoLib.mkEdgeTopology { edgeHost = iohkLib.cardanoLib.environments.mainnet.edgeHost; edgePort = 7777; };
       enable = true;
     };
     services.cardano-exporter = {
@@ -54,10 +93,6 @@ let
       inherit (targetEnv) genesisFile genesisHash;
       cluster = "mainnet";
       socketPath = "/run/cardano-node/node-core-0.socket";
-    };
-    services.oauth2_proxy = {
-      redirectURL = "http://localhost.earthtools.ca/oauth2/callback";
-      cookie.secure = false;
     };
     services.postgresql = {
       enable = true;
@@ -75,10 +110,32 @@ let
         (builtins.toFile "queries.yaml" (builtins.toJSON customQueries))
       ];
     };
+    services.nginx = {
+      virtualHosts.${config.services.monitoring-services.webhost} = {
+        default = true;
+        locations."/api/".extraConfig = ''
+          proxy_pass http://localhost:8100/api/;
+          proxy_set_header Host $host;
+          proxy_set_header REMOTE_ADDR $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+        '';
+      };
+    };
     services.prometheus.scrapeConfigs = [
       {
+        job_name = "exporter";
+        scrape_interval = "10s";
+        metrics_path = "/";
+        static_configs = [
+          {
+            targets = [ "localhost:8080" ];
+          }
+        ];
+      }
+      {
         job_name = "postgres";
-        scrape_interval = "60s";
+        scrape_interval = "10s";
         metrics_path = "/metrics";
         static_configs = [
           {
@@ -94,18 +151,8 @@ let
       enableWireguard = false;
       metrics = true;
       logging = false;
-      oauth = {
-        enable = true;
-        emailDomain = "iohk.io";
-        inherit (secrets) clientID clientSecret;
-        cookie.secret = "fake";
-      };
       webhost = "localhost.earthtools.ca";
       grafanaAutoLogin = true;
-      grafanaCreds = {
-        user = "michael.bishop@iohk.io";
-        password = "hunter2";
-      };
       monitoredNodes = {
       };
     };
@@ -119,7 +166,7 @@ let
       };
     };
   };
-  eval = import <nixpkgs/nixos> { inherit configuration; };
+  eval = import "${patchedNixpkgs}/nixos" { inherit configuration; };
   patchedRunit = runit.overrideAttrs (old: {
     patches = old.patches ++ [ ./runit.patch ];
   });
@@ -302,6 +349,10 @@ let
     chmod u+x /etc/runit/stopit
     kill -cont 1
   '';
+  web-api = mkService "web-api" ''
+    export PGPASSFILE=${eval.config.services.cardano-exporter.pgpass}
+    ${self.cardano-explorer}/bin/cardano-explorer
+  '';
   wrapService = name: mkService name ''
     exec ${eval.config.systemd.services.${name}.runner}
   '';
@@ -312,15 +363,15 @@ let
       #(wrapService "prometheus-blackbox-exporter")
       #(wrapService "prometheus-node-exporter")
       #sleeper
+      web-api
       (wrapService "postgresql")
       (wrapService "prometheus")
-      (wrapService "oauth2_proxy")
       (wrapService "nginx")
       (wrapService "grafana")
       (wrapService "cardano-explorer-node")
       (wrapService "cardano-node")
       (wrapService "prometheus-postgres-exporter")
-    ];
+    ] ++ (lib.optional (builtins.pathExists ./secrets.nix) (wrapService "oauth2_proxy"));
   };
   dockerFileBinaries = buildEnv {
     name = "binaries";
@@ -361,7 +412,7 @@ let
     #!${pkgs.stdenv.shell}
     set -e
     docker load < ${image}
-    docker run --rm -i -p 80:80 --tty --cap-add SYS_PTRACE --name test-image docker-image:test-image
+    docker run --rm -i -p 80:80 --tty --cap-add SYS_PTRACE --name test-image --volume explorer-mainnet:/var/ docker-image:test-image
   '';
 in {
   inherit image helper configFiles;

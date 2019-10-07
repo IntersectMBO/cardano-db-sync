@@ -19,23 +19,6 @@ index 7bba4dacddc..4ede5edb6da 100644
  
              if test -e "${cfg.dataDir}/.first_startup"; then
                ${optionalString (cfg.initialScript != null) ''
-diff --git a/nixos/modules/services/monitoring/prometheus/default.nix b/nixos/modules/services/monitoring/prometheus/default.nix
-index 191c0bff9c8..23bab951ecd 100644
---- a/nixos/modules/services/monitoring/prometheus/default.nix
-+++ b/nixos/modules/services/monitoring/prometheus/default.nix
-@@ -608,10 +608,10 @@ in {
-     systemd.services.prometheus = {
-       wantedBy = [ "multi-user.target" ];
-       after    = [ "network.target" ];
--      serviceConfig = {
--        ExecStart = "${cfg.package}/bin/prometheus" +
-+      script = "exec ${cfg.package}/bin/prometheus" +
-           optionalString (length cmdlineArgs != 0) (" \\\n  " +
-             concatStringsSep " \\\n  " cmdlineArgs);
-+      serviceConfig = {
-         User = "prometheus";
-         Restart  = "always";
-         WorkingDirectory = workingDir;
 diff --git a/nixos/modules/services/monitoring/prometheus/exporters/postgres.nix b/nixos/modules/services/monitoring/prometheus/exporters/postgres.nix
 index 1ece73a1159..681c017e9a1 100644
 --- a/nixos/modules/services/monitoring/prometheus/exporters/postgres.nix
@@ -79,7 +62,7 @@ index bb03f7fc9e4..e1bb652ec0d 100644
        };
      };
 diff --git a/nixos/modules/testing/service-runner.nix b/nixos/modules/testing/service-runner.nix
-index 17d5e337690..44bd795ab34 100644
+index 17d5e337690..a6f67e418df 100644
 --- a/nixos/modules/testing/service-runner.nix
 +++ b/nixos/modules/testing/service-runner.nix
 @@ -4,7 +4,10 @@ with lib;
@@ -105,14 +88,19 @@ index 17d5e337690..44bd795ab34 100644
        # Run the ExecStartPre program.  FIXME: this could be a list.
        my $preStart = '${service.serviceConfig.ExecStartPre or ""}';
        if ($preStart ne "") {
-@@ -56,7 +63,9 @@ let
+@@ -56,9 +63,12 @@ let
        };
  
        # Run the ExecStart program.
 -      my $cmd = '${service.serviceConfig.ExecStart}';
+-      print STDERR "running ExecStart: $cmd\n";
+-      my $mainPid = run $cmd;
 +      my $cmd = <<'END_MESSAGE';
 +      ${dropRoot}${service.serviceConfig.ExecStart}
-+      END_MESSAGE;
-       print STDERR "running ExecStart: $cmd\n";
-       my $mainPid = run $cmd;
++      END_MESSAGE
++      ($goodcmd = $cmd) =~ s/\\\n/ /g;
++      print STDERR "running ExecStart: $goodcmd\n";
++      my $mainPid = run $goodcmd;
        $ENV{'MAINPID'} = $mainPid;
+ 
+       # Catch SIGINT, propagate to the main program.
