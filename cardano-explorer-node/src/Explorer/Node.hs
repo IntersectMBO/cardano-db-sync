@@ -315,7 +315,7 @@ localInitiatorNetworkApplication Proxy trce pInfoConfig =
             liftIO $ logDbState trce
             actionQueue <- newDbActionQueue
             (metrics, server) <- registerMetricsServer
-            dbThread <- async $ runDbThread trce actionQueue
+            dbThread <- async $ runDbThread trce metrics actionQueue
             ret <- runPipelinedPeer
                     nullTracer (localChainSyncCodec @blk pInfoConfig) peer channel
                     (chainSyncClientPeerPipelined (chainSyncClient trce metrics latestPoints currentTip actionQueue))

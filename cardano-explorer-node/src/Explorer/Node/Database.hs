@@ -17,13 +17,18 @@ import qualified Control.Concurrent.STM as STM
 import           Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as TBQ
 
+import qualified Explorer.DB as DB
 import           Explorer.Node.Insert
+import           Explorer.Node.Metrics
 import           Explorer.Node.Rollback
 import           Explorer.Node.Util
 
 import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..))
 import           Ouroboros.Consensus.Ledger.Byron.Config (ByronConfig)
 import           Ouroboros.Network.Block (BlockNo (..), Point (..))
+
+import qualified System.Metrics.Prometheus.Metric.Gauge as Gauge
+
 
 data NextState
   = Continue
@@ -48,8 +53,8 @@ writeDbActionQueue :: DbActionQueue -> DbAction -> STM ()
 writeDbActionQueue (DbActionQueue q) = TBQ.writeTBQueue q
 
 
-runDbThread :: Trace IO Text -> DbActionQueue -> IO ()
-runDbThread trce queue = do
+runDbThread :: Trace IO Text -> Metrics -> DbActionQueue -> IO ()
+runDbThread trce metrics queue = do
     logInfo trce "Running DB thread"
     loop
     logInfo trce "Shutting down DB thread"
@@ -58,6 +63,10 @@ runDbThread trce queue = do
       xs <- blockingFlushDbActionQueue queue
       logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
       nextState <- runActions trce xs
+      mBlkNo <-  DB.runDbNoLogging DB.queryLatestBlockNo
+      case mBlkNo of
+        Nothing -> pure ()
+        Just blkNo -> Gauge.set (fromIntegral blkNo) $ mDbHeight metrics
       case nextState of
         Continue -> loop
         Done -> pure ()
