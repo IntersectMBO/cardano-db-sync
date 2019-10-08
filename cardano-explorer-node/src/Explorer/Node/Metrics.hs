@@ -16,7 +16,8 @@ import           System.Metrics.Prometheus.Http.Scrape (serveHttpTextMetricsT)
 
 
 data Metrics = Metrics
-  { mNodeHeight :: !Gauge
+  { mDbHeight :: !Gauge
+  , mNodeHeight :: !Gauge
   , mQueuePre :: !Gauge
   , mQueuePost :: !Gauge
   , mQueuePostWrite :: !Gauge
@@ -33,7 +34,8 @@ registerMetricsServer =
 makeMetrics :: RegistryT IO Metrics
 makeMetrics =
   Metrics
-    <$> registerGauge "remote_tip_height" mempty
+    <$> registerGauge "db_block_height" mempty
+    <*> registerGauge "remote_tip_height" mempty
     <*> registerGauge "action_queue_length_pre" mempty
     <*> registerGauge "action_queue_length_post" mempty
     <*> registerGauge "action_queue_length_post_write" mempty
