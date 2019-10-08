@@ -11,7 +11,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Explorer.Node.Insert
-  ( insertByronBlockOrEBB
+  ( insertByronBlockOrEbbList
   , insertValidateGenesisDistribution
   ) where
 
@@ -44,63 +44,77 @@ import           Explorer.Node.Util
 import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..))
 import           Ouroboros.Network.Block (BlockNo (..))
 
-insertByronBlockOrEBB :: MonadIO m => Trace IO Text -> ByronBlockOrEBB cfg -> BlockNo -> m ()
-insertByronBlockOrEBB tracer blk tipBlockNo =
-  liftIO $ case unByronBlockOrEBB blk of
-            Ledger.ABOBBlock ablk -> insertABlock tracer ablk tipBlockNo
-            Ledger.ABOBBoundary abblk -> insertABOBBoundary tracer abblk
+insertByronBlockOrEbbList :: Trace IO Text -> [(ByronBlockOrEBB cfg, BlockNo)] -> IO ()
+insertByronBlockOrEbbList tracer blks = do
+  -- Setting this to True will log all 'Persistent' operations which is great
+  -- for debugging, but otherwise *way* too chatty.
+  if False
+    then DB.runDbIohkLogging tracer $ mapM_ (insertByronBlockOrEbb tracer) blks
+    else DB.runDbNoLogging $ mapM_ (insertByronBlockOrEbb tracer) blks
 
-insertABOBBoundary :: Trace IO Text -> Ledger.ABoundaryBlock ByteString -> IO ()
+insertByronBlockOrEbb :: MonadIO m => Trace IO Text -> (ByronBlockOrEBB cfg, BlockNo) -> ReaderT SqlBackend m ()
+insertByronBlockOrEbb tracer (blk, tipBlockNo) =
+  case unByronBlockOrEBB blk of
+    Ledger.ABOBBlock ablk -> insertABlock tracer ablk tipBlockNo
+    Ledger.ABOBBoundary abblk -> insertABOBBoundary tracer abblk
+
+insertABOBBoundary :: MonadIO m => Trace IO Text -> Ledger.ABoundaryBlock ByteString -> ReaderT SqlBackend m ()
 insertABOBBoundary tracer blk = do
-    -- Setting this to True will log all 'Persistent' operations which is great
-    -- for debugging, but otherwise *way* too chatty.
-    if False
-      then DB.runDbIohkLogging tracer insertAction
-      else DB.runDbNoLogging insertAction
+  let prevHash = case Ledger.boundaryPrevHash (Ledger.boundaryHeader blk) of
+                    Left gh -> genesisToHeaderHash gh
+                    Right hh -> hh
+  pbid <- leftPanic "insertABOBBoundary: "
+              <$> DB.queryBlockId (unHeaderHash prevHash)
+  mle <- leftPanic "insertABOBBoundary: "
+              <$> DB.queryEpochNo pbid
+  slid <- DB.insertSlotLeader $ DB.SlotLeader (BS.replicate 28 '\0') "Epoch boundary slot leader"
+  void . DB.insertBlock $
+            DB.Block
+              { DB.blockHash = unHeaderHash $ Ledger.boundaryHashAnnotated blk
+              , DB.blockEpochNo = Just $ maybe 0 (+1) mle
+              , DB.blockSlotNo = Nothing -- No slotNo for a boundary block
+              , DB.blockBlockNo = Nothing
+              , DB.blockPrevious = Just pbid
+              , DB.blockMerkelRoot = Nothing -- No merkelRoot for a boundary block
+              , DB.blockSlotLeader = slid
+              , DB.blockSize = fromIntegral $ Ledger.boundaryBlockLength blk
+              }
+  supply <- DB.queryTotalSupply
+  liftIO $ do
+      logInfo tracer $ Text.concat
+                [ "Total supply at start of epoch ", textShow (boundaryEpochNumber blk)
+                , " is ", DB.renderAda supply, " Ada"
+                ]
+      logInfo tracer $ Text.concat
+                  [ "insertABOBBoundary: epoch "
+                  , textShow (Ledger.boundaryEpoch $ Ledger.boundaryHeader blk)
+                  , " hash "
+                  , renderAbstractHash (Ledger.boundaryHashAnnotated blk)
+                  ]
 
-    logInfo tracer $ Text.concat
-                    [ "insertABOBBoundary: epoch "
-                    , textShow (Ledger.boundaryEpoch $ Ledger.boundaryHeader blk)
-                    , " hash "
-                    , renderAbstractHash (Ledger.boundaryHashAnnotated blk)
-                    ]
-  where
-    insertAction :: MonadIO m => ReaderT SqlBackend m ()
-    insertAction = do
-      let prevHash = case Ledger.boundaryPrevHash (Ledger.boundaryHeader blk) of
-                        Left gh -> genesisToHeaderHash gh
-                        Right hh -> hh
-      pbid <- leftPanic "insertABOBBoundary: "
-                  <$> DB.queryBlockId (unHeaderHash prevHash)
-      mle <- leftPanic "insertABOBBoundary: "
-                  <$> DB.queryEpochNo pbid
-      slid <- DB.insertSlotLeader $ DB.SlotLeader (BS.replicate 28 '\0') "Epoch boundary slot leader"
-      void . DB.insertBlock $
-                DB.Block
-                  { DB.blockHash = unHeaderHash $ Ledger.boundaryHashAnnotated blk
-                  , DB.blockEpochNo = Just $ maybe 0 (+1) mle
-                  , DB.blockSlotNo = Nothing -- No slotNo for a boundary block
-                  , DB.blockBlockNo = Nothing
-                  , DB.blockPrevious = Just pbid
-                  , DB.blockMerkelRoot = Nothing -- No merkelRoot for a boundary block
-                  , DB.blockSlotLeader = slid
-                  , DB.blockSize = fromIntegral $ Ledger.boundaryBlockLength blk
-                  }
-      supply <- DB.queryTotalSupply
-      liftIO $ logInfo tracer $ Text.concat
-                    [ "Total supply at start of epoch ", textShow (boundaryEpochNumber blk)
-                    , " is ", DB.renderAda supply, " Ada"
-                    ]
-
-insertABlock :: Trace IO Text -> Ledger.ABlock ByteString -> BlockNo -> IO ()
+insertABlock :: MonadIO m => Trace IO Text -> Ledger.ABlock ByteString -> BlockNo -> ReaderT SqlBackend m ()
 insertABlock tracer blk (BlockNo tipBlockNo) = do
-    -- Setting this to True will log all 'Persistent' operations which is great
-    -- for debug, but otherwise *way* too chatty.
-    if False
-      then DB.runDbIohkLogging tracer insertAction
-      else DB.runDbNoLogging insertAction
+    pbid <- leftPanic "insertABlock: "
+                <$> DB.queryBlockId (unHeaderHash $ blockPreviousHash blk)
+    slotsPerEpoch
+          <- leftPanic "insertABlock: " <$> (fmap (\m -> 10 * DB.metaProtocolConst m) <$> DB.queryMeta)
 
-    logger tracer $ mconcat
+    slid <- DB.insertSlotLeader $ mkSlotLeader blk
+    blkId <- DB.insertBlock $
+                  DB.Block
+                    { DB.blockHash = unHeaderHash $ blockHash blk
+                    , DB.blockEpochNo = Just $ slotNumber blk `div` slotsPerEpoch
+                    , DB.blockSlotNo = Just $ slotNumber blk
+                    , DB.blockBlockNo = Just $ blockNumber blk
+                    , DB.blockPrevious = Just pbid
+                    , DB.blockMerkelRoot = Just $ unCryptoHash (blockMerkelRoot blk)
+                    , DB.blockSlotLeader = slid
+                    , DB.blockSize = fromIntegral $ Ledger.blockLength blk
+                    }
+
+    mapM_ (insertTx tracer blkId) $ blockPayload blk
+
+    liftIO $ logger tracer $ mconcat
                     [ "insertABlock: slot ", textShow (slotNumber blk)
                     , ", block ", textShow (blockNumber blk)
                     , ", hash ", renderAbstractHash (blockHash blk)
@@ -108,47 +122,25 @@ insertABlock tracer blk (BlockNo tipBlockNo) = do
   where
     logger :: Trace IO a -> a -> IO ()
     logger =
-      if tipBlockNo - blockNumber blk < 100
+      if tipBlockNo - blockNumber blk < 20
         then logInfo
         else logDebug
 
-    insertAction :: MonadIO m => ReaderT SqlBackend m ()
-    insertAction = do
-      pbid <- leftPanic "insertABlock: "
-                  <$> DB.queryBlockId (unHeaderHash $ blockPreviousHash blk)
-      slotsPerEpoch
-            <- leftPanic "insertABlock: " <$> (fmap (\m -> 10 * DB.metaProtocolConst m) <$> DB.queryMeta)
-
-      slid <- DB.insertSlotLeader $ mkSlotLeader blk
-      blkId <- DB.insertBlock $
-                    DB.Block
-                      { DB.blockHash = unHeaderHash $ blockHash blk
-                      , DB.blockEpochNo = Just $ slotNumber blk `div` slotsPerEpoch
-                      , DB.blockSlotNo = Just $ slotNumber blk
-                      , DB.blockBlockNo = Just $ blockNumber blk
-                      , DB.blockPrevious = Just pbid
-                      , DB.blockMerkelRoot = Just $ unCryptoHash (blockMerkelRoot blk)
-                      , DB.blockSlotLeader = slid
-                      , DB.blockSize = fromIntegral $ Ledger.blockLength blk
-                      }
-
-      mapM_ (insertTx tracer blkId) $ blockPayload blk
-
 insertTx :: MonadIO m => Trace IO Text -> DB.BlockId -> Ledger.TxAux -> ReaderT SqlBackend m ()
 insertTx tracer blkId tx = do
-    let txHash = Crypto.hash $ Ledger.taTx tx
-    fee <- calculateTxFee $ Ledger.taTx tx
-    txId <- DB.insertTx $
-                DB.Tx
-                  { DB.txHash = unTxHash txHash
-                  , DB.txBlock = blkId
-                  , DB.txFee = fee
-                  }
+  let txHash = Crypto.hash $ Ledger.taTx tx
+  fee <- calculateTxFee $ Ledger.taTx tx
+  txId <- DB.insertTx $
+              DB.Tx
+                { DB.txHash = unTxHash txHash
+                , DB.txBlock = blkId
+                , DB.txFee = fee
+                }
 
-    -- Insert outputs for a transaction before inputs in case the inputs for this transaction
-    -- references the output (noit sure this can even happen).
-    zipWithM_ (insertTxOut tracer txId) [0 ..] (toList . Ledger.txOutputs $ Ledger.taTx tx)
-    mapM_ (insertTxIn tracer txId) (Ledger.txInputs $ Ledger.taTx tx)
+  -- Insert outputs for a transaction before inputs in case the inputs for this transaction
+  -- references the output (noit sure this can even happen).
+  zipWithM_ (insertTxOut tracer txId) [0 ..] (toList . Ledger.txOutputs $ Ledger.taTx tx)
+  mapM_ (insertTxIn tracer txId) (Ledger.txInputs $ Ledger.taTx tx)
 
 
 insertTxOut :: MonadIO m => Trace IO Text -> DB.TxId -> Word32 -> Ledger.TxOut -> ReaderT SqlBackend m ()
