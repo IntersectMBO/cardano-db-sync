@@ -1,0 +1,3 @@
+[
+ ./cardano-exporter-service.nix
+]
