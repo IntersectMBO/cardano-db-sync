@@ -43,7 +43,7 @@ import           Cardano.Config.Types (CardanoConfiguration, CardanoEnvironment 
 import           Cardano.Crypto (RequiresNetworkMagic (..), decodeAbstractHash)
 import           Cardano.Crypto.Hashing (AbstractHash (..))
 
-import           Cardano.Prelude hiding (atomically, option, (%))
+import           Cardano.Prelude hiding (atomically, option, (%), Nat)
 import           Cardano.Shell.Lib (GeneralException (ConfigurationError))
 import           Cardano.Shell.Types (CardanoFeature (..),
                     CardanoFeatureInit (..), featureCleanup, featureInit,
@@ -61,18 +61,20 @@ import qualified Data.Text as Text
 
 import           Explorer.DB (LogFileDir (..), MigrationDir)
 import qualified Explorer.DB as DB
+import           Explorer.Node.Database
 import           Explorer.Node.Insert
-import           Explorer.Node.Rollback
+import           Explorer.Node.Metrics
 
 import           Network.Socket (AddrInfo (..), Family (..), SockAddr (..), SocketType (..),
                     defaultProtocol)
 
 import           Network.TypedProtocol.Codec (Codec)
 import           Network.TypedProtocol.Codec.Cbor (DeserialiseFailure)
-import           Network.TypedProtocol.Driver (runPeer)
+import           Network.TypedProtocol.Driver (runPeer, runPipelinedPeer)
+import           Network.TypedProtocol.Pipelined (Nat(Zero, Succ))
 
 import           Ouroboros.Consensus.Ledger.Abstract (BlockProtocol)
-import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..), ByronHash (..), GenTx)
+import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..), ByronHash (..), GenTx, ByronGiven)
 import           Ouroboros.Consensus.Ledger.Byron.Config (ByronConfig)
 import           Ouroboros.Consensus.Node.ProtocolInfo (NumCoreNodes (..),
                     pInfoConfig, protocolInfo)
@@ -80,18 +82,20 @@ import           Ouroboros.Consensus.Node.Run.Abstract (RunNode, nodeDecodeBlock
                     nodeDecodeHeaderHash, nodeEncodeBlock, nodeEncodeGenTx, nodeEncodeHeaderHash)
 import           Ouroboros.Consensus.NodeId (CoreNodeId (..))
 import           Ouroboros.Consensus.Protocol (NodeConfig, Protocol (..))
-import           Ouroboros.Network.Block (Point (..), SlotNo (..), Tip (..),
-                    decodePoint, encodePoint, genesisPoint,
+import           Ouroboros.Network.Block (Point (..), SlotNo (..), Tip (tipBlockNo),
+                    decodePoint, encodePoint, genesisPoint, genesisBlockNo, blockNo,
+                    BlockNo(unBlockNo, BlockNo),
                     encodeTip, decodeTip)
 import           Ouroboros.Network.Mux (AppType (..), OuroborosApplication (..))
 import           Ouroboros.Network.NodeToClient (NodeToClientProtocols (..),
                     NodeToClientVersion (..), NodeToClientVersionData (..),
                     connectTo, networkMagic, nodeToClientCodecCBORTerm)
 import qualified Ouroboros.Network.Point as Point
-import           Ouroboros.Network.Protocol.ChainSync.Client (ChainSyncClient (..),
-                    ClientStIdle (..), ClientStIntersect (..), ClientStNext (..),
-                    chainSyncClientPeer, recvMsgIntersectFound, recvMsgIntersectNotFound,
+import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined (ChainSyncClientPipelined (..),
+                    ClientPipelinedStIdle (..), ClientPipelinedStIntersect (..), ClientStNext (..),
+                    chainSyncClientPeerPipelined, recvMsgIntersectFound, recvMsgIntersectNotFound,
                     recvMsgRollBackward, recvMsgRollForward)
+import           Ouroboros.Network.Protocol.ChainSync.PipelineDecision (pipelineDecisionLowHighMark, PipelineDecision(Collect, Request, Pipeline, CollectOrPipeline), runPipelineDecision, MkPipelineDecision)
 import           Ouroboros.Network.Protocol.ChainSync.Codec (codecChainSync)
 import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
 
@@ -102,8 +106,10 @@ import           Ouroboros.Network.Protocol.LocalTxSubmission.Client (LocalTxSub
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Codec (codecLocalTxSubmission)
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (LocalTxSubmission)
 
-import           Prelude (String, id)
+import           Prelude (String)
+import qualified Prelude
 
+import qualified System.Metrics.Prometheus.Metric.Gauge as Gauge
 
 data Peer = Peer SockAddr SockAddr deriving Show
 
@@ -132,10 +138,9 @@ newtype NodeLayer = NodeLayer
 type NodeCardanoFeature
   = CardanoFeatureInit CardanoEnvironment LoggingLayer CardanoConfiguration ExplorerNodeParams NodeLayer
 
-
 initializeAllFeatures :: ExplorerNodeParams -> IO ([CardanoFeature], NodeLayer)
 initializeAllFeatures enp = do
-  DB.runMigrations id True (enpMigrationDir enp) (LogFileDir "/tmp")
+  DB.runMigrations Prelude.id True (enpMigrationDir enp) (LogFileDir "/tmp")
   let fcc = Config.finaliseCardanoConfiguration $ Config.mergeConfiguration Config.mainnetConfiguration commonCli (enpCommonCLIAdvanced enp)
   finalConfig <- case fcc of
                   Left err -> throwIO err
@@ -248,7 +253,7 @@ convertRNM =
 
 runExplorerNodeClient
     :: forall blk cfg.
-        (RunNode blk, blk ~ ByronBlockOrEBB cfg)
+        (RunNode blk, blk ~ ByronBlockOrEBB cfg, ByronGiven, cfg ~ ByronConfig)
     => Ouroboros.Consensus.Protocol.Protocol blk -> Trace IO Text -> FilePath -> IO ()
 runExplorerNodeClient ptcl trce socketPath = do
   liftIO $ logInfo trce "Starting node client"
@@ -274,7 +279,7 @@ localSocketAddrInfo socketPath =
 
 localInitiatorNetworkApplication
   :: forall blk peer cfg.
-     (RunNode blk, blk ~ ByronBlockOrEBB cfg, Show peer)
+     (RunNode blk, blk ~ ByronBlockOrEBB cfg, Show peer, ByronGiven, cfg ~ ByronConfig)
   -- TODO: the need of a 'Proxy' is an evidence that blk type is not really
   -- needed here.  The wallet client should use some concrete type of block
   -- from 'cardano-chain'.  This should remove the dependency of this module
@@ -300,21 +305,25 @@ localInitiatorNetworkApplication Proxy trce pInfoConfig =
             txv <- newEmptyTMVarM @_ @(GenTx blk)
             runPeer
               (contramap (Text.pack . show) . toLogObject $ appendName "explorer-db-local-tx" trce)
-              localTxSubmissionCodec
-              peer
-              channel
+              localTxSubmissionCodec peer channel
               (localTxSubmissionClientPeer (txSubmissionClient @(GenTx blk) txv))
 
           ChainSyncWithBlocksPtcl -> \channel -> do
             liftIO $ logInfo trce "Starting chainSyncClient"
             latestPoints <- liftIO getLatestPoints
+            currentTip <- liftIO getCurrentTipBlockNo
             liftIO $ logDbState trce
-            runPeer
-              nullTracer -- TODO
-              (localChainSyncCodec @blk pInfoConfig)
-              peer
-              channel
-              (chainSyncClientPeer (chainSyncClient trce latestPoints))
+            actionQueue <- newDbActionQueue
+            (metrics, server) <- registerMetricsServer
+            dbThread <- async $ runDbThread trce metrics actionQueue
+            ret <- runPipelinedPeer
+                    nullTracer (localChainSyncCodec @blk pInfoConfig) peer channel
+                    (chainSyncClientPeerPipelined (chainSyncClient trce metrics latestPoints currentTip actionQueue))
+            atomically $
+              writeDbActionQueue actionQueue DbFinish
+            wait dbThread
+            cancel server
+            pure ret
 
 
 logDbState :: Trace IO Text -> IO ()
@@ -334,7 +343,7 @@ logDbState trce = do
         (Just blkNo, Just slotNo) -> "block " ++ show blkNo ++ ", slot " ++ show slotNo
         (Just blkNo, Nothing) -> "block " ++ show blkNo
         (Nothing, Just slotNo) -> "slot " ++ show slotNo
-        (Nothing, Nothing) -> "-1 (genesis)"
+        (Nothing, Nothing) -> "empty (genesis)"
 
 
 getLatestPoints :: IO [Point (ByronBlockOrEBB cfg)]
@@ -352,6 +361,19 @@ getLatestPoints =
     -- in Maybe because the bytestring may not be the right size.
     convertHashBlob :: ByteString -> Maybe ByronHash
     convertHashBlob = fmap (ByronHash . AbstractHash) . digestFromByteString
+
+getCurrentTipBlockNo :: IO BlockNo
+getCurrentTipBlockNo = do
+    maybeTip <- DB.runDbNoLogging DB.queryLatestBlock
+    case maybeTip of
+      Just tip -> pure $ convert tip
+      Nothing -> pure genesisBlockNo
+  where
+    convert :: DB.Block -> BlockNo
+    convert blk =
+      case DB.blockSlotNo blk of
+        Just slot -> BlockNo slot
+        Nothing -> genesisBlockNo
 
 -- | A 'LocalTxSubmissionClient' that submits transactions reading them from
 -- a 'StrictTMVar'.  A real implementation should use a better synchronisation
@@ -401,33 +423,59 @@ localTxSubmissionCodec =
 --    rollback, see 'clientStNext' below.
 --
 chainSyncClient
-  :: forall blk m cfg. (MonadTimer m, MonadIO m, blk ~ ByronBlockOrEBB cfg)
-  => Trace IO Text -> [Point blk] -> ChainSyncClient blk (Tip blk) m Void
-chainSyncClient trce latestPoints =
-    ChainSyncClient $ pure $
+  :: forall blk m cfg. (MonadTimer m, MonadIO m, blk ~ ByronBlockOrEBB cfg, ByronGiven, cfg ~ ByronConfig)
+  => Trace IO Text -> Metrics -> [Point blk] -> BlockNo -> DbActionQueue -> ChainSyncClientPipelined blk (Tip blk) m Void
+chainSyncClient _trce metrics latestPoints currentTip actionQueue =
+    ChainSyncClientPipelined $ pure $
       -- Notify the core node about the our latest points at which we are
       -- synchronised.  This client is not persistent and thus it just
       -- synchronises from the genesis block.  A real implementation should send
       -- a list of points up to a point which is k blocks deep.
       SendMsgFindIntersect
         (if null latestPoints then [genesisPoint] else latestPoints)
-        ClientStIntersect
-          { recvMsgIntersectFound    = \_ _ -> ChainSyncClient (pure clientStIdle)
-          , recvMsgIntersectNotFound = \  _ -> ChainSyncClient (pure clientStIdle)
+        ClientPipelinedStIntersect
+          { recvMsgIntersectFound    = \_hdr tip -> pure $ go policy Zero currentTip (tipBlockNo tip)
+          , recvMsgIntersectNotFound = \  tip -> pure $ go policy Zero currentTip (tipBlockNo tip)
           }
   where
-    clientStIdle :: ClientStIdle blk (Tip blk) m Void
-    clientStIdle = SendMsgRequestNext clientStNext (pure clientStNext)
+    policy = pipelineDecisionLowHighMark 1000 10000
 
-    clientStNext :: ClientStNext blk (Tip blk) m Void
-    clientStNext =
+    go :: MkPipelineDecision -> Nat n -> BlockNo -> BlockNo -> ClientPipelinedStIdle n (ByronBlockOrEBB cfg) (Tip blk) m a
+    go mkPipelineDecision n clientTip serverTip =
+      case (n, runPipelineDecision mkPipelineDecision n clientTip serverTip) of
+        (_Zero, (Request, mkPipelineDecision')) ->
+            SendMsgRequestNext clientStNext (pure clientStNext)
+          where
+            clientStNext = mkClientStNext $ \clientBlockNo newServerTip -> go mkPipelineDecision' n clientBlockNo (tipBlockNo newServerTip)
+        (_, (Pipeline, mkPipelineDecision')) ->
+          SendMsgRequestNextPipelined
+            (go mkPipelineDecision' (Succ n) clientTip serverTip)
+        (Succ n', (CollectOrPipeline, mkPipelineDecision')) ->
+          CollectResponse
+            (Just $ SendMsgRequestNextPipelined $ go mkPipelineDecision' (Succ n) clientTip serverTip)
+            (mkClientStNext $ \clientBlockNo newServerTip -> go mkPipelineDecision' n' clientBlockNo (tipBlockNo newServerTip))
+        (Succ n', (Collect, mkPipelineDecision')) ->
+          CollectResponse
+            Nothing
+            (mkClientStNext $ \clientBlockNo newServerTip -> go mkPipelineDecision' n' clientBlockNo (tipBlockNo newServerTip))
+
+    mkClientStNext :: (BlockNo -> Tip blk -> ClientPipelinedStIdle n (ByronBlockOrEBB ByronConfig) (Tip blk) m a)
+                    -> ClientStNext n (ByronBlockOrEBB ByronConfig) (Tip (ByronBlockOrEBB ByronConfig)) m a
+    mkClientStNext finish =
       ClientStNext
-        { recvMsgRollForward = \ blk tip -> ChainSyncClient $ do
-            insertByronBlockOrEBB trce blk (tipBlockNo tip)
-            pure clientStIdle
-        , recvMsgRollBackward = \ point _tip -> ChainSyncClient $ do
-            -- we are requested to roll backward to point 'point', the core
-            -- node's chain's tip is 'tip'.
-            liftIO $ rollbackToPoint trce point
-            pure clientStIdle
+        { recvMsgRollForward = \blk tip -> do
+            liftIO $ do
+              Gauge.set (fromIntegral . unBlockNo $ tipBlockNo tip) $ mNodeHeight metrics
+              newSize <- atomically $ do
+                writeDbActionQueue actionQueue $ DbApplyBlock blk (tipBlockNo tip)
+                lengthDbActionQueue actionQueue
+              Gauge.set (fromIntegral newSize) $ mQueuePostWrite metrics
+            pure $ finish (blockNo blk) tip
+        , recvMsgRollBackward = \point tip -> do
+            newTip <- liftIO $ do
+              atomically $ writeDbActionQueue actionQueue (DbRollBackToPoint point)
+              -- This will get the current tip rather than what we roll back to
+              -- but will only be incorrect for a short time span.
+              getCurrentTipBlockNo
+            pure $ finish newTip tip
         }
