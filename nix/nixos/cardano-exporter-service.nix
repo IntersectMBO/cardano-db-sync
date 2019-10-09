@@ -30,6 +30,9 @@ in {
         type = lib.types.nullOr lib.types.path;
         default = null;
       };
+      pgpass = lib.mkOption {
+        type = lib.types.path;
+      };
       postgres = {
         socketdir = lib.mkOption {
           type = lib.types.str;
@@ -53,6 +56,13 @@ in {
         };
       };
     };
+    services.cardano-explorer-api = {
+      enable = lib.mkEnableOption "enable the cardano-explorer web api";
+      script = lib.mkOption {
+        internal = true;
+        type = lib.types.package;
+      };
+    };
   };
   config = lib.mkMerge [
     (lib.mkIf cfg.enable {
@@ -60,6 +70,7 @@ in {
         users.cexplorer = {
           createHome = true;
           home = "/var/lib/cexplorer";
+          group = "cexplorer";
         };
         groups.cexplorer = {};
       };
@@ -107,6 +118,7 @@ in {
         wantedBy = [ "multi-user.target" ];
       };
       services.cardano-exporter = {
+        inherit pgpass;
         script = pkgs.writeScript "cardano-exporter-${cfg.cluster}" ''
           #!${pkgs.stdenv.shell}
 
@@ -118,7 +130,7 @@ in {
 
           export PATH=${lib.makeBinPath [ self.cardano-explorer-node self.haskellPackages.cardano-explorer-db.components.exes.cardano-explorer-db-tool pkgs.postgresql ]}:$PATH
 
-          cp ${pgpass} ./pgpass
+          cp ${cfg.pgpass} ./pgpass
           chmod 0600 ./pgpass
           export PGPASSFILE=$(pwd)/pgpass
           echo $PGPASSFILE
@@ -136,6 +148,19 @@ in {
     (lib.mkIf (cfg.environment != null) {
       services.cardano-exporter = {
         inherit (cfg.environment) genesisFile genesisHash;
+      };
+    })
+    (lib.mkIf config.services.cardano-explorer-api.enable {
+      services.cardano-explorer-api.script = pkgs.writeShellScript "cardano-explorer-api" ''
+        export PGPASSFILE=${config.services.cardano-exporter.pgpass}
+        ${self.cardano-explorer}/bin/cardano-explorer
+      '';
+      systemd.services.cardano-explorer = {
+        wantedBy = [ "multi-user.target" ];
+        serviceConfig = {
+          ExecStart = config.services.cardano-explorer-api.script;
+          User = "cexplorer";
+        };
       };
     })
   ];
