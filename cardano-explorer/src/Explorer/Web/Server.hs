@@ -213,7 +213,7 @@ blocksSummary backend (CHash blkHashTxt) = runExceptT $ do
   liftIO $ print (blkHashTxt, blkHash)
   mBlk <- runQuery backend $ queryBlockSummary blkHash
   case mBlk of
-    Just (blk, prevHash, nextHash, txCount, fees, totalOut) ->
+    Just (blk, prevHash, nextHash, txCount, fees, totalOut, slh) ->
       case blockSlotNo blk of
         Just slotno -> do
           let (epoch, slot) = slotno `divMod` slotsPerEpoch
@@ -228,7 +228,7 @@ blocksSummary backend (CHash blkHashTxt) = runExceptT $ do
                , cbeTxNum = txCount
                , cbeTotalSent = adaToCCoin totalOut
                , cbeSize = blockSize blk
-               , cbeBlockLead = Nothing
+               , cbeBlockLead = Just $ bsBase16Text slh
                , cbeFees = adaToCCoin fees
                }
             , cbsPrevHash = CHash $ bsBase16Text prevHash

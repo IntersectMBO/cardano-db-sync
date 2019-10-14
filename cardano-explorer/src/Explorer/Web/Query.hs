@@ -4,7 +4,6 @@ module Explorer.Web.Query
   ( queryBlockHash
   , queryBlockSummary
   , queryNextBlock
-  , queryOneBlock
   , queryTxSummary
   , queryTx
   , queryBlockTxs
@@ -24,16 +23,20 @@ import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Explorer.DB (Block, BlockId, blockPrevious, listToMaybe
-                            , EntityField(BlockHash, BlockPrevious, BlockId, TxHash, TxOutValue, TxOutAddress, TxInTxInId, TxOutIndex, TxInTxOutIndex, TxOutTxId, TxInTxOutId, TxBlock, TxFee, TxBlock, TxId, BlockSlotNo, BlockBlockNo)
+                            , EntityField(BlockHash, BlockPrevious, BlockId, TxHash, TxOutValue, TxOutAddress, TxInTxInId, TxOutIndex, TxInTxOutIndex, TxOutTxId, TxInTxOutId, TxBlock, TxFee, TxBlock, TxId, BlockSlotNo, BlockBlockNo, SlotLeaderId, SlotLeaderHash, BlockSlotLeader)
                             , TxId
                             , entityPair, Tx, TxOut, Ada, LookupFail(DbLookupTxHash), maybeToEither, unValueSumAda, txBlock, querySelectCount, txOutTxId)
 
-queryOneBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe (BlockId, Block))
-queryOneBlock blkHash = do
-  rows <- select . from $ \blk -> do
-    where_ $ blk ^. BlockHash ==. val blkHash
-    pure blk
-  pure $ fmap entityPair (listToMaybe rows)
+queryBlockByHash :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe (BlockId, Block, ByteString))
+queryBlockByHash blkHash = do
+    rows <- select . from $ \ (blk `InnerJoin` sl)-> do
+              on (blk ^. BlockSlotLeader ==. sl ^. SlotLeaderId)
+              where_ $ blk ^. BlockHash ==. val blkHash
+              pure (blk, sl ^. SlotLeaderHash)
+    pure $ fmap convert (listToMaybe rows)
+  where
+    convert :: (Entity Block, Value ByteString) -> (BlockId, Block, ByteString)
+    convert (eb, sh) = (entityKey eb, entityVal eb, unValue sh)
 
 queryBlockById :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe Block)
 queryBlockById blockid = do
@@ -63,16 +66,16 @@ queryNextBlock blkid = do
     pure $ blk2 ^. BlockHash
   pure (unValue <$> listToMaybe rows)
 
-queryCountTxInBlock :: MonadIO m => BlockId -> ReaderT SqlBackend m Word
-queryCountTxInBlock blkid =
+queryBlockTxInCount :: MonadIO m => BlockId -> ReaderT SqlBackend m Word
+queryBlockTxInCount blkid =
   querySelectCount $ \tx -> where_ (tx ^. TxBlock ==. val blkid)
 
-queryBlockSummary :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe (Block, ByteString, Maybe ByteString, Word, Ada, Ada))
+queryBlockSummary :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe (Block, ByteString, Maybe ByteString, Word, Ada, Ada, ByteString))
 queryBlockSummary blkHash = do
-  maybeBlock <- queryOneBlock blkHash
+  maybeBlock <- queryBlockByHash blkHash
   case maybeBlock of
-    Just (blkid, blk) -> do
-      txCount <- queryCountTxInBlock blkid
+    Just (blkid, blk, slh) -> do
+      txCount <- queryBlockTxInCount blkid
       fees <- queryTotalFeeInBlock blkid
       totalOut <- queryTotalOutputCoinInBlock blkid
       case blockPrevious blk of
@@ -81,7 +84,7 @@ queryBlockSummary blkHash = do
           nextHash <- queryNextBlock blkid
           case mPrevHash of
             Nothing -> pure Nothing
-            Just previousHash -> pure $ Just (blk, previousHash, nextHash, txCount, fees, totalOut)
+            Just previousHash -> pure $ Just (blk, previousHash, nextHash, txCount, fees, totalOut, slh)
         Nothing -> pure Nothing
     Nothing -> pure Nothing
 
@@ -102,7 +105,7 @@ queryTxSummary txhash = do
 queryTotalFeeInBlock :: MonadIO m => BlockId -> ReaderT SqlBackend m Ada
 queryTotalFeeInBlock blockid = do
   res <- select . from $ \ tx -> do
-          where_ (tx ^. TxBlock ==. val blockid )
+          where_ (tx ^. TxBlock ==. val blockid)
           pure $ sum_ (tx ^. TxFee)
   pure $ unValueSumAda $ listToMaybe res
 
@@ -114,7 +117,7 @@ queryTotalOutputCoinInBlock blockid = do
     pure $ unValueSumAda (listToMaybe res)
   where
     subQuery = subList_select . from $ \ tx -> do
-        where_ (tx ^. TxBlock ==. val blockid )
+        where_ (tx ^. TxBlock ==. val blockid)
         pure $ tx ^. TxId
 
 queryUtxoSnapshot :: MonadIO m => BlockId -> ReaderT SqlBackend m [(TxOut, ByteString)]
