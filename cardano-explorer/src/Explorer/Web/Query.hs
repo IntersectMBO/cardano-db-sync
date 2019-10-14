@@ -19,24 +19,14 @@ import           Data.ByteString (ByteString)
 import           Data.Word (Word64)
 import           Data.Int (Int64)
 import           Data.Text (Text)
+import           Data.Time.Clock.POSIX (POSIXTime)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Explorer.DB (Block, BlockId, blockPrevious, listToMaybe
+import           Explorer.DB (Block, BlockId, blockPrevious, listToMaybe, blockSlotNo, querySlotPosixTime
                             , EntityField(BlockHash, BlockPrevious, BlockId, TxHash, TxOutValue, TxOutAddress, TxInTxInId, TxOutIndex, TxInTxOutIndex, TxOutTxId, TxInTxOutId, TxBlock, TxFee, TxBlock, TxId, BlockSlotNo, BlockBlockNo, SlotLeaderId, SlotLeaderHash, BlockSlotLeader)
                             , TxId
                             , entityPair, Tx, TxOut, Ada, LookupFail(DbLookupTxHash), maybeToEither, unValueSumAda, txBlock, querySelectCount, txOutTxId)
-
-queryBlockByHash :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe (BlockId, Block, ByteString))
-queryBlockByHash blkHash = do
-    rows <- select . from $ \ (blk `InnerJoin` sl)-> do
-              on (blk ^. BlockSlotLeader ==. sl ^. SlotLeaderId)
-              where_ $ blk ^. BlockHash ==. val blkHash
-              pure (blk, sl ^. SlotLeaderHash)
-    pure $ fmap convert (listToMaybe rows)
-  where
-    convert :: (Entity Block, Value ByteString) -> (BlockId, Block, ByteString)
-    convert (eb, sh) = (entityKey eb, entityVal eb, unValue sh)
 
 queryBlockById :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe Block)
 queryBlockById blockid = do
@@ -70,7 +60,18 @@ queryBlockTxInCount :: MonadIO m => BlockId -> ReaderT SqlBackend m Word
 queryBlockTxInCount blkid =
   querySelectCount $ \tx -> where_ (tx ^. TxBlock ==. val blkid)
 
-queryBlockSummary :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe (Block, ByteString, Maybe ByteString, Word, Ada, Ada, ByteString))
+queryBlockByHash :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe (BlockId, Block, ByteString))
+queryBlockByHash blkHash = do
+    rows <- select . from $ \ (blk `InnerJoin` sl)-> do
+              on (blk ^. BlockSlotLeader ==. sl ^. SlotLeaderId)
+              where_ $ blk ^. BlockHash ==. val blkHash
+              pure (blk, sl ^. SlotLeaderHash)
+    pure $ fmap convert (listToMaybe rows)
+  where
+    convert :: (Entity Block, Value ByteString) -> (BlockId, Block, ByteString)
+    convert (eb, vsh) = (entityKey eb, entityVal eb, unValue vsh)
+
+queryBlockSummary :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe (Block, ByteString, Maybe ByteString, Word, Ada, Ada, ByteString, Maybe POSIXTime))
 queryBlockSummary blkHash = do
   maybeBlock <- queryBlockByHash blkHash
   case maybeBlock of
@@ -78,15 +79,20 @@ queryBlockSummary blkHash = do
       txCount <- queryBlockTxInCount blkid
       fees <- queryTotalFeeInBlock blkid
       totalOut <- queryTotalOutputCoinInBlock blkid
+      timestamp <- maybe (pure Nothing) querySlotTimeSeconds $ blockSlotNo blk
       case blockPrevious blk of
         Just prevblkid -> do
           mPrevHash <- queryBlockHash prevblkid
           nextHash <- queryNextBlock blkid
           case mPrevHash of
             Nothing -> pure Nothing
-            Just previousHash -> pure $ Just (blk, previousHash, nextHash, txCount, fees, totalOut, slh)
+            Just previousHash -> pure $ Just (blk, previousHash, nextHash, txCount, fees, totalOut, slh, timestamp)
         Nothing -> pure Nothing
     Nothing -> pure Nothing
+
+querySlotTimeSeconds :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe POSIXTime)
+querySlotTimeSeconds slotNo =
+  either (const Nothing) Just <$> querySlotPosixTime slotNo
 
 queryTxSummary :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe (Tx, Block, [(Text, Word64)], [TxOut]))
 queryTxSummary txhash = do
