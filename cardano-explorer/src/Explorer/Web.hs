@@ -1,4 +1,5 @@
-module Explorer.Web (someFunc) where
+module Explorer.Web
+  ( runServer
+  ) where
 
-someFunc :: IO ()
-someFunc = putStrLn "someFunc"
+import Explorer.Web.Server (runServer)
