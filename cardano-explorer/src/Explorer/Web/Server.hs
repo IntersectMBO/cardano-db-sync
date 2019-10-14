@@ -48,11 +48,11 @@ import           Control.Monad.Logger        (runStdoutLoggingT)
 import           Control.Monad.Trans.Reader  (ReaderT)
 import           Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, throwE)
 import           Data.Maybe (fromMaybe)
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Base16      as B16
-import qualified Data.ByteString.Char8       as SB8
-import qualified Data.Text                   as T
-import           Data.Text.Encoding (decodeUtf8)
+import           Data.ByteString (ByteString)
+import qualified Data.ByteString.Base16 as Base16
+import           Data.Text (Text)
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 import           Data.Time                   (defaultTimeLocale, addUTCTime, parseTimeOrError)
 import           Data.Time.Clock.POSIX       (POSIXTime, utcTimeToPOSIXSeconds)
 import           Data.Word                   (Word16, Word64)
@@ -70,11 +70,12 @@ import           Database.Persist.Sql        (SqlBackend, runSqlConn)
 k :: Word64
 k = 2160
 
-epochLenght = k * 10
+slotsPerEpoch :: Word64
+slotsPerEpoch = k * 10
 
 runServer :: IO ()
 runServer = do
-  putStrLn "running full server on http://localhost:8100/"
+  putStrLn "Running full server on http://localhost:8100/"
   pgconfig <- readPGPassFileEnv
   runStdoutLoggingT .
     withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
@@ -191,32 +192,38 @@ getBlocksPagesTotal backend mPageSize = do
     (_, True) -> pure $ Left $ Internal "Page size must be greater than 1 if you want to display blocks."
     _ -> pure $ Right $ roundToBlockPage blocksTotal
 
-hexToBytestring :: T.Text -> ExceptT ExplorerError Handler BS.ByteString
+hexToBytestring :: Text -> ExceptT ExplorerError Handler ByteString
 hexToBytestring text = do
-  case B16.decode (SB8.pack (T.unpack text)) of
+  case Base16.decode (Text.encodeUtf8 text) of
     (blob, "") -> pure blob
-    (_partial, remain) -> throwE $ Internal $ "cant parse " <> (decodeUtf8 remain) <> " as hex"
+    (_partial, remain) -> throwE $ Internal $ "cant parse " <> Text.decodeUtf8 remain <> " as hex"
+
+-- | bsBase16Text : Convert a raw ByteString to Base16 and then encode it as Text.
+bsBase16Text :: ByteString -> Text
+bsBase16Text bs =
+  case Text.decodeUtf8' (Base16.encode bs) of
+    Left _ -> Text.pack $ "UTF-8 decode failed for " ++ show bs
+    Right txt -> txt
 
 blocksSummary
     :: SqlBackend -> CHash
     -> Handler (Either ExplorerError CBlockSummary)
 blocksSummary backend (CHash blkHashTxt) = runExceptT $ do
   blkHash <- hexToBytestring blkHashTxt
-  liftIO $ print blkHash
-  mBlk <- runQuery backend (queryBlockSummary blkHash)
+  liftIO $ print (blkHashTxt, blkHash)
+  mBlk <- runQuery backend $ queryBlockSummary blkHash
   case mBlk of
-    Just (blk, Just prevHash, nextHash, txCount, fees, totalOut) ->
+    Just (blk, prevHash, nextHash, txCount, fees, totalOut) ->
       case blockSlotNo blk of
         Just slotno -> do
-          let
-            (epoch, slot) = divMod slotno epochLenght
+          let (epoch, slot) = slotno `divMod` slotsPerEpoch
           pure $ CBlockSummary
             { cbsEntry = CBlockEntry
                { cbeEpoch = epoch
                , cbeSlot = fromIntegral slot
                -- Use '0' for EBBs.
                , cbeBlkHeight = maybe 0 fromIntegral $ blockBlockNo blk
-               , cbeBlkHash = (CHash . decodeUtf8 . blockHash) blk
+               , cbeBlkHash = CHash . bsBase16Text $ blockHash blk
                , cbeTimeIssued = Nothing
                , cbeTxNum = txCount
                , cbeTotalSent = adaToCCoin totalOut
@@ -224,9 +231,9 @@ blocksSummary backend (CHash blkHashTxt) = runExceptT $ do
                , cbeBlockLead = Nothing
                , cbeFees = adaToCCoin fees
                }
-            , cbsPrevHash = (CHash . decodeUtf8) prevHash
-            , cbsNextHash = fmap (CHash . decodeUtf8) nextHash
-            , cbsMerkleRoot = CHash $ maybe "" decodeUtf8 (blockMerkelRoot blk)
+            , cbsPrevHash = CHash $ bsBase16Text prevHash
+            , cbsNextHash = fmap (CHash . bsBase16Text) nextHash
+            , cbsMerkleRoot = CHash $ maybe "" bsBase16Text (blockMerkelRoot blk)
             }
         Nothing -> throwE $ Internal "slot missing"
     _ -> throwE $ Internal "No block found"
@@ -234,7 +241,7 @@ blocksSummary backend (CHash blkHashTxt) = runExceptT $ do
 convertTxOut :: TxOut -> (CAddress, CCoin)
 convertTxOut TxOut{txOutAddress,txOutValue} = (CAddress txOutAddress, mkCCoin $ fromIntegral txOutValue)
 
-convertInput :: (T.Text, Word64) -> Maybe (CAddress, CCoin)
+convertInput :: (Text, Word64) -> Maybe (CAddress, CCoin)
 convertInput (addr, coin) = Just (CAddress $ addr, mkCCoin $ fromIntegral coin)
 
 getBlockTxs
@@ -257,7 +264,7 @@ getBlockTxs backend (CHash blkHashTxt) mLimit mOffset = runExceptT $ do
       let
         txToTxBrief :: TxWithInputsOutputs -> CTxBrief
         txToTxBrief TxWithInputsOutputs{txwTx,txwInputs,txwOutputs} = CTxBrief
-          { ctbId = (CTxHash . CHash . decodeUtf8 . B16.encode . txHash) txwTx
+          { ctbId = (CTxHash . CHash . Text.decodeUtf8 . Base16.encode . txHash) txwTx
           , ctbTimeIssued = (\slot -> utcTimeToPOSIXSeconds $ (0.001 * fromIntegral (slot * metaSlotDuration)) `addUTCTime` metaStartTime) <$> mSlot
           , ctbInputs = map convertInput txwInputs
           , ctbOutputs = map convertTxOut txwOutputs
@@ -281,16 +288,15 @@ testTxsSummary backend (CTxHash (CHash cTxHash)) = runExceptT $ do
     Just (tx, blk, inputs, outputs) -> do
       case blockSlotNo blk of
         Just slotno -> do
-          let
-            (epoch, slot) = divMod slotno epochLenght
+          let (epoch, slot) = slotno `divMod` slotsPerEpoch
           pure $ CTxSummary
-            { ctsId              = (CTxHash . CHash . decodeUtf8 . txHash) tx
+            { ctsId              = (CTxHash . CHash . Text.decodeUtf8 . txHash) tx
             , ctsTxTimeIssued    = Just posixTime
             , ctsBlockTimeIssued = Nothing
             , ctsBlockHeight     = fromIntegral <$> blockBlockNo blk
             , ctsBlockEpoch      = Just epoch
             , ctsBlockSlot       = Just $ fromIntegral slot
-            , ctsBlockHash       = (Just . CHash . decodeUtf8 . blockHash) blk
+            , ctsBlockHash       = (Just . CHash . Text.decodeUtf8 . blockHash) blk
             , ctsRelayedBy       = Nothing
             , ctsTotalInput      = (mkCCoin . sum . map (\(_addr,coin) -> fromIntegral  coin)) inputs
             , ctsTotalOutput     = (mkCCoin . sum . map (fromIntegral . txOutValue)) outputs
@@ -444,9 +450,9 @@ getUtxoSnapshotHeight backend mHeight = runExceptT $ do
       Just blkid -> Right <$> queryUtxoSnapshot blkid
       Nothing -> pure $ Left $ Internal "block not found at given height"
   let
-    convertRow :: (TxOut, BS.ByteString) -> V1Utxo
+    convertRow :: (TxOut, ByteString) -> V1Utxo
     convertRow (txout, txhash) = V1Utxo
-      { API1.cuId = (CTxHash . CHash . decodeUtf8) txhash
+      { API1.cuId = (CTxHash . CHash . Text.decodeUtf8) txhash
       , API1.cuOutIndex = txOutIndex txout
       , API1.cuAddress = (CAddress . txOutAddress) txout
       , API1.cuCoins = (mkCCoin . fromIntegral . txOutValue) txout
