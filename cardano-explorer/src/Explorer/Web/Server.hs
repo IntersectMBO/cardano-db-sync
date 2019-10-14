@@ -257,7 +257,7 @@ getBlockTxs backend (CHash blkHashTxt) mLimit mOffset = runExceptT $ do
       let
         txToTxBrief :: TxWithInputsOutputs -> CTxBrief
         txToTxBrief TxWithInputsOutputs{txwTx,txwInputs,txwOutputs} = CTxBrief
-          { ctbId = (CTxHash . CHash . decodeUtf8 . txHash) txwTx
+          { ctbId = (CTxHash . CHash . decodeUtf8 . B16.encode . txHash) txwTx
           , ctbTimeIssued = (\slot -> utcTimeToPOSIXSeconds $ (0.001 * fromIntegral (slot * metaSlotDuration)) `addUTCTime` metaStartTime) <$> mSlot
           , ctbInputs = map convertInput txwInputs
           , ctbOutputs = map convertTxOut txwOutputs
