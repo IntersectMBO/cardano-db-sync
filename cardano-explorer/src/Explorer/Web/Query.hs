@@ -10,7 +10,7 @@ module Explorer.Web.Query
   , queryBlockTxs
   , queryUtxoSnapshot
   , queryBlockIdFromHeight
-  , TxWithInputsOutputs(txwTx, txwInputs, txwOutputs, TxWithInputsOutputs)
+  , TxWithInputsOutputs (txwTx, txwInputs, txwOutputs, TxWithInputsOutputs)
   ) where
 
 import           Database.Esqueleto ((^.), val, valList, (==.), where_, from, unValue, select, Value, InnerJoin(InnerJoin), sum_, on, (&&.), in_, subList_select, limit, offset, LeftOuterJoin(LeftOuterJoin), (>.), (||.), (<=.), isNothing)
@@ -64,21 +64,24 @@ queryNextBlock blkid = do
   pure (unValue <$> listToMaybe rows)
 
 queryCountTxInBlock :: MonadIO m => BlockId -> ReaderT SqlBackend m Word
-queryCountTxInBlock blkid = querySelectCount $ \tx -> where_ (tx ^. TxBlock ==. val blkid)
+queryCountTxInBlock blkid =
+  querySelectCount $ \tx -> where_ (tx ^. TxBlock ==. val blkid)
 
-queryBlockSummary :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe (Block, Maybe ByteString, Maybe ByteString, Word, Ada, Ada))
+queryBlockSummary :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe (Block, ByteString, Maybe ByteString, Word, Ada, Ada))
 queryBlockSummary blkHash = do
   maybeBlock <- queryOneBlock blkHash
   case maybeBlock of
     Just (blkid, blk) -> do
-      tx_count <- queryCountTxInBlock blkid
+      txCount <- queryCountTxInBlock blkid
       fees <- queryTotalFeeInBlock blkid
-      total_out <- queryTotalOutputCoinInBlock blkid
+      totalOut <- queryTotalOutputCoinInBlock blkid
       case blockPrevious blk of
         Just prevblkid -> do
-          previousHash <- queryBlockHash prevblkid
+          mPrevHash <- queryBlockHash prevblkid
           nextHash <- queryNextBlock blkid
-          pure $ Just (blk, previousHash, nextHash, tx_count, fees, total_out)
+          case mPrevHash of
+            Nothing -> pure Nothing
+            Just previousHash -> pure $ Just (blk, previousHash, nextHash, txCount, fees, totalOut)
         Nothing -> pure Nothing
     Nothing -> pure Nothing
 
