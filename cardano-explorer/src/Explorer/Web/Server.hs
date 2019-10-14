@@ -8,13 +8,12 @@ import           Explorer.DB                 (blockBlockNo, blockHash
                                              , blockMerkelRoot
                                              , readPGPassFileEnv
                                              , queryTotalSupply
+                                             , querySlotPosixTime
                                              , Ada
                                              , toConnectionString
                                              , blockMerkelRoot
                                              , queryBlockCount
                                              , queryLatestBlockId
-                                             , queryMeta
-                                             , Meta(metaStartTime, metaSlotDuration, Meta)
                                              , txHash, txOutAddress, txOutValue, txFee
                                              , txOutIndex
                                              , TxOut(TxOut))
@@ -36,7 +35,7 @@ import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSumma
                                               CUtxo (CUtxo, cuAddress, cuCoins, cuId, cuOutIndex),
                                               mkCCoin, adaToCCoin)
 import           Explorer.Web.Error          (ExplorerError (Internal))
-import           Explorer.Web.Query          (queryBlockSummary, queryTxSummary, queryBlockTxs, TxWithInputsOutputs(txwTx, txwInputs, txwOutputs, TxWithInputsOutputs), queryBlockIdFromHeight, queryUtxoSnapshot)
+import           Explorer.Web.Query          (queryBlockSummary, queryTxSummary, queryBlockTxs, TxWithInputsOutputs(txwTx, txwInputs, txwOutputs), queryBlockIdFromHeight, queryUtxoSnapshot)
 import           Explorer.Web.API1 (ExplorerApi1Record(ExplorerApi1Record,_utxoHeight, _utxoHash), V1Utxo(V1Utxo))
 import qualified Explorer.Web.API1 as API1
 import           Explorer.Web.LegacyApi      (ExplorerApiRecord (_genesisSummary, _genesisAddressInfo, _genesisPagesTotal, _epochPages, _epochSlots, _statsTxs, _txsSummary, _addressSummary, _addressUtxoBulk, _blocksSummary, _blocksTxs, _txsLast, _dumpBlockRange, _totalAda, _blocksPages, _blocksPagesTotal, ExplorerApiRecord), TxsStats, PageNumber)
@@ -53,8 +52,7 @@ import qualified Data.ByteString.Base16 as Base16
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-import           Data.Time                   (defaultTimeLocale, addUTCTime, parseTimeOrError)
-import           Data.Time.Clock.POSIX       (POSIXTime, utcTimeToPOSIXSeconds)
+import           Data.Time.Clock.POSIX       (POSIXTime)
 import           Data.Word                   (Word16, Word64)
 import           Data.Int (Int64)
 import           Network.Wai.Handler.Warp    (run)
@@ -116,13 +114,10 @@ explorerHandlers backend = (toServant oldHandlers) :<|> (toServant newHandlers)
 cTxId :: CTxHash
 cTxId = CTxHash $ CHash "b29fa17156275a8589857376bfaeeef47f1846f82ea492a808e5c6155b450e02"
 
-posixTime :: POSIXTime
-posixTime = utcTimeToPOSIXSeconds (parseTimeOrError True defaultTimeLocale "%F" "2017-12-03")
-
 cTxEntry :: CTxEntry
 cTxEntry = CTxEntry
     { cteId         = cTxId
-    , cteTimeIssued = Just posixTime
+    , cteTimeIssued = Nothing
     , cteAmount     = mkCCoin 33333
     }
 
@@ -154,7 +149,7 @@ testBlocksPages _backend _ _  = pure $ Right (1, [CBlockEntry
     , cbeSlot       = 10
     , cbeBlkHeight  = 1564738
     , cbeBlkHash    = CHash "75aa93bfa1bf8e6aa913bc5fa64479ab4ffc1373a25c8176b61fa1ab9cbae35d"
-    , cbeTimeIssued = Just posixTime
+    , cbeTimeIssued = Nothing
     , cbeTxNum      = 0
     , cbeTotalSent  = mkCCoin 0
     , cbeSize       = 390
@@ -249,29 +244,35 @@ getBlockTxs
     -> Maybe Int64
     -> Maybe Int64
     -> Handler (Either ExplorerError [CTxBrief])
-getBlockTxs backend (CHash blkHashTxt) mLimit mOffset = runExceptT $ do
-  let
+getBlockTxs backend (CHash blkHashTxt) mLimit mOffset =
+    runExceptT $ do
+      blkHash <- hexToBytestring blkHashTxt
+      (txList, mtimestamp) <- runQuery backend $ do
+                            (txList, slot) <- queryBlockTxs blkHash limit offset
+                            mtimestamp <- maybe (pure Nothing ) querySlotTimeSeconds slot
+                            pure (txList, mtimestamp)
+      if null txList
+        then throwE $ Internal "No block found"
+        else pure $ map (txToTxBrief mtimestamp) txList
+  where
     limit = fromMaybe 10 mLimit
     offset = fromMaybe 0 mOffset
-  blkHash <- hexToBytestring blkHashTxt
-  (txList, eMeta, mSlot) <- runQuery backend $ do
-    (txList, slot) <- queryBlockTxs blkHash limit offset
-    meta <- queryMeta
-    pure (txList, meta, slot)
-  case eMeta of
-    Left _err -> throwE $ Internal "error reading metadata"
-    Right (Meta{metaSlotDuration,metaStartTime}) -> do
-      let
-        txToTxBrief :: TxWithInputsOutputs -> CTxBrief
-        txToTxBrief TxWithInputsOutputs{txwTx,txwInputs,txwOutputs} = CTxBrief
-          { ctbId = (CTxHash . CHash . Text.decodeUtf8 . Base16.encode . txHash) txwTx
-          , ctbTimeIssued = (\slot -> utcTimeToPOSIXSeconds $ (0.001 * fromIntegral (slot * metaSlotDuration)) `addUTCTime` metaStartTime) <$> mSlot
-          , ctbInputs = map convertInput txwInputs
-          , ctbOutputs = map convertTxOut txwOutputs
-          , ctbInputSum = (mkCCoin . sum . map (\(_addr,coin) -> fromIntegral  coin)) txwInputs
-          , ctbOutputSum = (mkCCoin . sum . map (fromIntegral . txOutValue)) txwOutputs
-          }
-      pure $ map txToTxBrief txList
+
+    txToTxBrief :: Maybe POSIXTime -> TxWithInputsOutputs -> CTxBrief
+    txToTxBrief mtimestamp tio =
+      CTxBrief
+        { ctbId = CTxHash . CHash . Text.decodeUtf8 . Base16.encode . txHash $ txwTx tio
+        , ctbTimeIssued = mtimestamp
+        , ctbInputs = map convertInput $ txwInputs tio
+        , ctbOutputs = map convertTxOut $ txwOutputs tio
+        , ctbInputSum = (mkCCoin . sum . map (\(_addr,coin) -> fromIntegral  coin)) $ txwInputs tio
+        , ctbOutputSum = (mkCCoin . sum . map (fromIntegral . txOutValue)) $ txwOutputs tio
+        }
+
+querySlotTimeSeconds :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe POSIXTime)
+querySlotTimeSeconds slotNo =
+  either (const Nothing) Just <$> querySlotPosixTime slotNo
+
 
 getLastTxs :: SqlBackend -> Handler (Either ExplorerError [CTxEntry])
 getLastTxs _backend = pure $ Right [cTxEntry]
@@ -291,7 +292,7 @@ testTxsSummary backend (CTxHash (CHash cTxHash)) = runExceptT $ do
           let (epoch, slot) = slotno `divMod` slotsPerEpoch
           pure $ CTxSummary
             { ctsId              = (CTxHash . CHash . Text.decodeUtf8 . txHash) tx
-            , ctsTxTimeIssued    = Just posixTime
+            , ctsTxTimeIssued    = Nothing
             , ctsBlockTimeIssued = Nothing
             , ctsBlockHeight     = fromIntegral <$> blockBlockNo blk
             , ctsBlockEpoch      = Just epoch
@@ -346,7 +347,7 @@ testEpochSlotSearch _backend _ _ = pure $ Right [CBlockEntry
     , cbeSlot       = 10
     , cbeBlkHeight  = 1564738
     , cbeBlkHash    = CHash "75aa93bfa1bf8e6aa913bc5fa64479ab4ffc1373a25c8176b61fa1ab9cbae35d"
-    , cbeTimeIssued = Just posixTime
+    , cbeTimeIssued = Nothing
     , cbeTxNum      = 0
     , cbeTotalSent  = mkCCoin 0
     , cbeSize       = 390
@@ -363,7 +364,7 @@ testEpochPageSearch _backend _ _ = pure $ Right (1, [CBlockEntry
     , cbeSlot       = 10
     , cbeBlkHeight  = 1564738
     , cbeBlkHash    = CHash "75aa93bfa1bf8e6aa913bc5fa64479ab4ffc1373a25c8176b61fa1ab9cbae35d"
-    , cbeTimeIssued = Just posixTime
+    , cbeTimeIssued = Nothing
     , cbeTxNum      = 0
     , cbeTotalSent  = mkCCoin 0
     , cbeSize       = 390
