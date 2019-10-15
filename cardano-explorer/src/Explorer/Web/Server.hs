@@ -112,7 +112,7 @@ explorerHandlers backend = (toServant oldHandlers) :<|> (toServant newHandlers)
 -- sample data --
 --------------------------------------------------------------------------------
 cTxId :: CTxHash
-cTxId = CTxHash $ CHash "b29fa17156275a8589857376bfaeeef47f1846f82ea492a808e5c6155b450e02"
+cTxId = CTxHash $ CHash "not-implemented-yet"
 
 cTxEntry :: CTxEntry
 cTxEntry = CTxEntry
@@ -148,7 +148,7 @@ testBlocksPages _backend _ _  = pure $ Right (1, [CBlockEntry
     { cbeEpoch      = 37294
     , cbeSlot       = 10
     , cbeBlkHeight  = 1564738
-    , cbeBlkHash    = CHash "75aa93bfa1bf8e6aa913bc5fa64479ab4ffc1373a25c8176b61fa1ab9cbae35d"
+    , cbeBlkHash    = CHash "not-implemented-yet"
     , cbeTimeIssued = Nothing
     , cbeTxNum      = 0
     , cbeTotalSent  = mkCCoin 0
@@ -309,7 +309,7 @@ testTxsSummary backend (CTxHash (CHash cTxHash)) = runExceptT $ do
 
 sampleAddressSummary :: CAddressSummary
 sampleAddressSummary = CAddressSummary
-    { caAddress = CAddress "1fi9sA3pRt8bKVibdun57iyWG9VsWZscgQigSik6RHoF5Mv"
+    { caAddress = CAddress "not-implemented-yet"
     , caType    = CPubKeyAddress
     , caTxNum   = 0
     , caBalance = mkCCoin 0
@@ -325,9 +325,9 @@ testAddressUtxoBulk
     :: SqlBackend -> [CAddress]
     -> Handler (Either ExplorerError [CUtxo])
 testAddressUtxoBulk _backend _  = pure $ Right [CUtxo
-    { cuId = CTxHash $ CHash "8aac4a6b18fafa2783071c66519332157ce96c67e88fc0cc3cb04ba0342d12a1"
+    { cuId = CTxHash $ CHash "not-implemented-yet"
     , cuOutIndex = 0
-    , cuAddress = CAddress "19F6U1Go5B4KakVoCZfzCtqNAWhUBprxVzL3JsGu74TEwQnXPvAKPUbvG8o4Qe5RaY8Z7WKLfxmNFwBqPV1NQ2hRpKkdEN"
+    , cuAddress = CAddress "not-implemented-yet"
     , cuCoins = mkCCoin 3
     }]
 
@@ -346,7 +346,7 @@ testEpochSlotSearch _backend _ _ = pure $ Right [CBlockEntry
     { cbeEpoch      = 37294
     , cbeSlot       = 10
     , cbeBlkHeight  = 1564738
-    , cbeBlkHash    = CHash "75aa93bfa1bf8e6aa913bc5fa64479ab4ffc1373a25c8176b61fa1ab9cbae35d"
+    , cbeBlkHash    = CHash "not-implemented-yet"
     , cbeTimeIssued = Nothing
     , cbeTxNum      = 0
     , cbeTotalSent  = mkCCoin 0
@@ -363,7 +363,7 @@ testEpochPageSearch _backend _ _ = pure $ Right (1, [CBlockEntry
     { cbeEpoch      = 37294
     , cbeSlot       = 10
     , cbeBlkHeight  = 1564738
-    , cbeBlkHash    = CHash "75aa93bfa1bf8e6aa913bc5fa64479ab4ffc1373a25c8176b61fa1ab9cbae35d"
+    , cbeBlkHash    = CHash "not-implemented-yet"
     , cbeTimeIssued = Nothing
     , cbeTxNum      = 0
     , cbeTotalSent  = mkCCoin 0
@@ -396,7 +396,7 @@ testGenesisPagesTotal _backend _ _                           = pure $ Right 2
 -- mock CGenesisAddressInfo
 gAddressInfoA :: CGenesisAddressInfo
 gAddressInfoA = CGenesisAddressInfo
-    { cgaiCardanoAddress   = CAddress "3mfaPhQ8ewtmyi7tvcxo1TXhGh5piePbjkqgz49Jo2wpV9"
+    { cgaiCardanoAddress   = CAddress "not-implemented-yet"
     , cgaiGenesisAmount    = mkCCoin 2225295000000
     , cgaiIsRedeemed       = True
     }
@@ -404,7 +404,7 @@ gAddressInfoA = CGenesisAddressInfo
 -- mock another CGenesisAddressInfo
 gAddressInfoB :: CGenesisAddressInfo
 gAddressInfoB = CGenesisAddressInfo
-    { cgaiCardanoAddress   = CAddress "3meLwrCDE4C7RofEdkZbUuR75ep3EcTmZv9ebcdjfMtv5H"
+    { cgaiCardanoAddress   = CAddress "not-implemented-yet"
     , cgaiGenesisAmount    = mkCCoin 15000000
     , cgaiIsRedeemed       = False
     }
@@ -412,7 +412,7 @@ gAddressInfoB = CGenesisAddressInfo
 -- mock another CGenesisAddressInfo
 gAddressInfoC :: CGenesisAddressInfo
 gAddressInfoC = CGenesisAddressInfo
-    { cgaiCardanoAddress   = CAddress "LaVWbkFegK1TUNHMc3Fads2cG6ivPb2gJUxXBxNtumLtbG"
+    { cgaiCardanoAddress   = CAddress "not-implemented-yet"
     , cgaiGenesisAmount    = mkCCoin 333000000
     , cgaiIsRedeemed       = False
     }
