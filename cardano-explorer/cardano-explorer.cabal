@@ -69,6 +69,7 @@ library
                       , text
                       , time
                       , transformers
+                      , transformers-except
                       , warp
 
 executable cardano-explorer
@@ -90,6 +91,31 @@ executable cardano-explorer
   build-depends:        base                            >= 4.12         && < 4.13
                       , cardano-explorer
                       , Cabal
+
+executable cardano-webapi-compare
+  default-language:    Haskell2010
+  main-is:             cardano-webapi-compare.hs
+  hs-source-dirs:      app
+
+  ghc-options:          -Wall
+                        -Werror
+                        -Wcompat
+                        -fwarn-redundant-constraints
+                        -fwarn-incomplete-patterns
+                        -fwarn-unused-imports
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+
+  -- other-modules:
+
+  build-depends:        base                            >= 4.12         && < 4.13
+                      , async
+                      , cardano-explorer
+                      , Diff
+                      , bytestring
+                      , http-conduit
+                      , text
+                      , text-ansi
 
 executable cardano-mock-explorer
   default-language:    Haskell2010
