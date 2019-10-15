@@ -141,7 +141,7 @@ type NodeCardanoFeature
 initializeAllFeatures :: ExplorerNodeParams -> IO ([CardanoFeature], NodeLayer)
 initializeAllFeatures enp = do
   DB.runMigrations Prelude.id True (enpMigrationDir enp) (LogFileDir "/tmp")
-  let fcc = Config.finaliseCardanoConfiguration $ Config.mergeConfiguration Config.mainnetConfiguration commonCli (enpCommonCLIAdvanced enp)
+  let fcc = Config.mkCardanoConfiguration $ Config.mergeConfiguration Config.mainnetConfiguration commonCli (enpCommonCLIAdvanced enp)
   finalConfig <- case fcc of
                   Left err -> throwIO err
                   --TODO: if we're using exceptions for this, then we should use a local
