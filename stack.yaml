@@ -33,6 +33,7 @@ extra-deps:
   - time-units-1.0.0
   - word-wrap-0.4.1
   - transformers-except-0.1.1
+  - text-ansi-0.1.0
 
   - git: https://github.com/input-output-hk/cardano-shell
     commit: 036ff2b45e27a2b47b56f43bee988fbdd1d1d073
