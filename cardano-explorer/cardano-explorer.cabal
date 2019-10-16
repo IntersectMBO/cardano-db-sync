@@ -33,6 +33,7 @@ library
                         -Wno-unsafe
                         -Wno-implicit-prelude
                         -Wno-all-missed-specialisations
+                        -Wno-missing-import-lists
 
   exposed-modules:      Explorer.Web
                       , Explorer.Web.Api
@@ -42,6 +43,7 @@ library
                       , Explorer.Web.API1
                       , Explorer.Web.Query
                       , Explorer.Web.Server
+                      , Explorer.Web.Server.Util
                       , Explorer.Web.TestServer
   -- other-modules:
 
