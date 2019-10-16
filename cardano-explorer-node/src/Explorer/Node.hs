@@ -339,10 +339,10 @@ logDbState trce = do
   where
     showTip :: DB.Block -> String
     showTip blk =
-      case (DB.blockBlockNo blk, DB.blockSlotNo blk) of
-        (Just blkNo, Just slotNo) -> "block " ++ show blkNo ++ ", slot " ++ show slotNo
-        (Just blkNo, Nothing) -> "block " ++ show blkNo
-        (Nothing, Just slotNo) -> "slot " ++ show slotNo
+      case (DB.blockSlotNo blk, DB.blockBlockNo blk) of
+        (Just slotNo, Just blkNo) -> "slot " ++ show slotNo ++ ", block " ++ show blkNo
+        (Just slotNo, Nothing) -> "slot " ++ show slotNo
+        (Nothing, Just blkNo) -> "block " ++ show blkNo
         (Nothing, Nothing) -> "empty (genesis)"
 
 
