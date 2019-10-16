@@ -38,7 +38,8 @@ import           Explorer.Web.Error          (ExplorerError (Internal))
 import           Explorer.Web.Query          (queryBlockSummary, queryTxSummary, queryBlockTxs, TxWithInputsOutputs(txwTx, txwInputs, txwOutputs), queryBlockIdFromHeight, queryUtxoSnapshot)
 import           Explorer.Web.API1 (ExplorerApi1Record(ExplorerApi1Record,_utxoHeight, _utxoHash), V1Utxo(V1Utxo))
 import qualified Explorer.Web.API1 as API1
-import           Explorer.Web.LegacyApi      (ExplorerApiRecord (_genesisSummary, _genesisAddressInfo, _genesisPagesTotal, _epochPages, _epochSlots, _statsTxs, _txsSummary, _addressSummary, _addressUtxoBulk, _blocksSummary, _blocksTxs, _txsLast, _dumpBlockRange, _totalAda, _blocksPages, _blocksPagesTotal, ExplorerApiRecord), TxsStats, PageNumber)
+import           Explorer.Web.LegacyApi (ExplorerApiRecord (..), TxsStats, PageNumber)
+import           Explorer.Web.Server.Util
 
 import           Cardano.Chain.Slotting      (EpochNumber (EpochNumber))
 
@@ -50,7 +51,6 @@ import           Data.Maybe (fromMaybe)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Base16 as Base16
 import           Data.Text (Text)
-import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import           Data.Time.Clock.POSIX       (POSIXTime)
 import           Data.Word                   (Word16, Word64)
@@ -62,14 +62,8 @@ import           Servant.Server.Generic      (AsServerT)
 import           Servant.API ((:<|>)((:<|>)))
 
 import           Database.Persist.Postgresql (withPostgresqlConn)
-import           Database.Persist.Sql        (SqlBackend, runSqlConn)
+import           Database.Persist.Sql (SqlBackend)
 
--- TODO, get this from the config somehow
-k :: Word64
-k = 2160
-
-slotsPerEpoch :: Word64
-slotsPerEpoch = k * 10
 
 runServer :: IO ()
 runServer = do
@@ -120,9 +114,6 @@ cTxEntry = CTxEntry
     , cteTimeIssued = Nothing
     , cteAmount     = mkCCoin 33333
     }
-
-runQuery :: MonadIO m => SqlBackend -> ReaderT SqlBackend IO a -> m a
-runQuery backend query = liftIO $ runSqlConn query backend
 
 totalAda :: SqlBackend -> Handler (Either ExplorerError Ada)
 totalAda backend = Right <$> runQuery backend queryTotalSupply
@@ -193,13 +184,6 @@ hexToBytestring text = do
     (blob, "") -> pure blob
     (_partial, remain) -> throwE $ Internal $ "cant parse " <> Text.decodeUtf8 remain <> " as hex"
 
--- | bsBase16Text : Convert a raw ByteString to Base16 and then encode it as Text.
-bsBase16Text :: ByteString -> Text
-bsBase16Text bs =
-  case Text.decodeUtf8' (Base16.encode bs) of
-    Left _ -> Text.pack $ "UTF-8 decode failed for " ++ show bs
-    Right txt -> txt
-
 blocksSummary
     :: SqlBackend -> CHash
     -> Handler (Either ExplorerError CBlockSummary)
@@ -218,17 +202,17 @@ blocksSummary backend (CHash blkHashTxt) = runExceptT $ do
                , cbeSlot = fromIntegral slot
                -- Use '0' for EBBs.
                , cbeBlkHeight = maybe 0 fromIntegral $ blockBlockNo blk
-               , cbeBlkHash = CHash . bsBase16Text $ blockHash blk
+               , cbeBlkHash = CHash . bsBase16Encode $ blockHash blk
                , cbeTimeIssued = mts
                , cbeTxNum = txCount
                , cbeTotalSent = adaToCCoin totalOut
                , cbeSize = blockSize blk
-               , cbeBlockLead = Just $ bsBase16Text slh
+               , cbeBlockLead = Just $ bsBase16Encode slh
                , cbeFees = adaToCCoin fees
                }
-            , cbsPrevHash = CHash $ bsBase16Text prevHash
-            , cbsNextHash = fmap (CHash . bsBase16Text) nextHash
-            , cbsMerkleRoot = CHash $ maybe "" bsBase16Text (blockMerkelRoot blk)
+            , cbsPrevHash = CHash $ bsBase16Encode prevHash
+            , cbsNextHash = fmap (CHash . bsBase16Encode) nextHash
+            , cbsMerkleRoot = CHash $ maybe "" bsBase16Encode (blockMerkelRoot blk)
             }
         Nothing -> throwE $ Internal "slot missing"
     _ -> throwE $ Internal "No block found"
@@ -249,7 +233,7 @@ getBlockTxs backend (CHash blkHashTxt) mLimit mOffset =
       blkHash <- hexToBytestring blkHashTxt
       (txList, mtimestamp) <- runQuery backend $ do
                             (txList, slot) <- queryBlockTxs blkHash limit offset
-                            mtimestamp <- maybe (pure Nothing ) querySlotTimeSeconds slot
+                            mtimestamp <- maybe (pure Nothing) querySlotTimeSeconds slot
                             pure (txList, mtimestamp)
       if null txList
         then throwE $ Internal "No block found"

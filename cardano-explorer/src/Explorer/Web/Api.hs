@@ -1,7 +1,10 @@
 {-# LANGUAGE DataKinds     #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Explorer.Web.Api (explorerApi, ExplorerApi) where
+module Explorer.Web.Api
+  ( ExplorerApi
+  , explorerApi
+  ) where
 
 import           Explorer.Web.LegacyApi (ExplorerApiRecord)
 import           Explorer.Web.API1 (ExplorerApi1Record)

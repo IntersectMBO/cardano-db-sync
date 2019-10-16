@@ -3,9 +3,9 @@
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE TemplateHaskell            #-}
 
-module Explorer.Web.API1 
-  ( ExplorerApi1Record(ExplorerApi1Record,_utxoHeight, _utxoHash)
-  , V1Utxo(V1Utxo, cuId,cuOutIndex,cuAddress,cuCoins)
+module Explorer.Web.API1
+  ( ExplorerApi1Record (..)
+  , V1Utxo (..)
   ) where
 
 import           GHC.Generics             (Generic)
