@@ -40,6 +40,7 @@ module Explorer.DB.Query
   , maybeToEither
   , renderLookupFail
   , slotPosixTime
+  , slotUtcTime
   , unValueSumAda
   , unBlockId
   , unValue2
@@ -260,10 +261,7 @@ querySlotUtcTime :: MonadIO m => Word64 -> ReaderT SqlBackend m (Either LookupFa
 querySlotUtcTime slotNo =
   runExceptT $ do
     meta <- ExceptT queryMeta
-    pure $ addUTCTime
-            -- Slot duration is in milliseconds.
-            (0.001 * fromIntegral (slotNo * metaSlotDuration meta))
-            (metaStartTime meta)
+    pure $ slotUtcTime meta slotNo
 
 -- | Get the current total supply of Lovelace.
 queryTotalSupply :: MonadIO m => ReaderT SqlBackend m Ada
@@ -405,10 +403,14 @@ maybeToEither e f =
   maybe (Left e) (Right . f)
 
 slotPosixTime :: Meta -> Word64 -> POSIXTime
-slotPosixTime meta slotNo =
-  utcTimeToPOSIXSeconds $
-    -- Slot duration is in milliseconds.
-    addUTCTime (0.001 * fromIntegral (slotNo * metaSlotDuration meta)) (metaStartTime meta)
+slotPosixTime meta =
+  utcTimeToPOSIXSeconds . slotUtcTime meta
+
+slotUtcTime :: Meta -> Word64 -> UTCTime
+slotUtcTime meta slotNo =
+  -- Slot duration is in milliseconds.
+  addUTCTime (0.001 * fromIntegral (slotNo * metaSlotDuration meta)) (metaStartTime meta)
+
 
 unBlockId :: BlockId -> Word64
 unBlockId = fromIntegral . unSqlBackendKey . unBlockKey

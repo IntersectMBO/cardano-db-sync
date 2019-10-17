@@ -67,6 +67,7 @@ share
     merkelRoot          ByteString Maybe    sqltype=hash32type
     slotLeader          SlotLeaderId
     size                Word64              sqltype=uinteger
+    time                UTCTime Maybe       sqltype=timestamp
     UniqueBlock         hash
 
   Tx
