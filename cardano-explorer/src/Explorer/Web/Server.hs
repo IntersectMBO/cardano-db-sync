@@ -3,43 +3,23 @@
 
 module Explorer.Web.Server (runServer) where
 
-import           Explorer.DB                 (blockBlockNo, blockHash
-                                             , blockSize, blockSlotNo
-                                             , blockMerkelRoot
-                                             , readPGPassFileEnv
-                                             , queryTotalSupply
-                                             , querySlotPosixTime
-                                             , Ada
-                                             , toConnectionString
-                                             , blockMerkelRoot
-                                             , queryBlockCount
-                                             , queryLatestBlockId
-                                             , txHash, txOutAddress, txOutValue, txFee
-                                             , txOutIndex
-                                             , TxOut(TxOut))
+import           Explorer.DB (Ada, Block (..), Tx (..), TxOut (..),
+                    queryBlockCount, queryLatestBlockId, querySlotPosixTime, queryTotalSupply,
+                    readPGPassFileEnv, toConnectionString)
 import           Explorer.Web.Api            (ExplorerApi, explorerApi)
-import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSummary (CAddressSummary, caAddress, caBalance, caTxList, caTxNum, caType),
-                                              CAddressType (CPubKeyAddress),
-                                              CAddressesFilter (AllAddresses, NonRedeemedAddresses, RedeemedAddresses),
-                                              CBlockEntry (CBlockEntry, cbeBlkHash, cbeBlkHeight, cbeBlockLead, cbeEpoch, cbeFees, cbeSize, cbeSlot, cbeTimeIssued, cbeTotalSent, cbeTxNum),
-                                              CBlockRange (CBlockRange, cbrBlocks, cbrTransactions),
-                                              CBlockSummary (CBlockSummary, cbsEntry, cbsMerkleRoot, cbsNextHash, cbsPrevHash),
-                                              CGenesisAddressInfo (CGenesisAddressInfo, cgaiCardanoAddress, cgaiGenesisAmount, cgaiIsRedeemed),
-                                              CGenesisSummary (CGenesisSummary, cgsNonRedeemedAmountTotal, cgsNumNotRedeemed, cgsNumRedeemed, cgsNumTotal, cgsRedeemedAmountTotal),
-                                              CHash (CHash)
-                                              , CCoin
-                                              , CTxBrief (CTxBrief, ctbId, ctbInputSum, ctbInputs, ctbOutputSum, ctbOutputs, ctbTimeIssued),
-                                              CTxEntry (CTxEntry, cteAmount, cteId, cteTimeIssued),
-                                              CTxHash, CTxHash (CTxHash),
-                                              CTxSummary (CTxSummary, ctsBlockEpoch, ctsBlockHash, ctsBlockHeight, ctsBlockSlot, ctsBlockTimeIssued, ctsFees, ctsId, ctsInputs, ctsOutputs, ctsRelayedBy, ctsTotalInput, ctsTotalOutput, ctsTxTimeIssued),
-                                              CUtxo (CUtxo, cuAddress, cuCoins, cuId, cuOutIndex),
-                                              mkCCoin, adaToCCoin)
-import           Explorer.Web.Error          (ExplorerError (Internal))
-import           Explorer.Web.Query          (queryBlockSummary, queryTxSummary, queryBlockTxs, TxWithInputsOutputs(txwTx, txwInputs, txwOutputs), queryBlockIdFromHeight, queryUtxoSnapshot)
-import           Explorer.Web.API1 (ExplorerApi1Record(ExplorerApi1Record,_utxoHeight, _utxoHash), V1Utxo(V1Utxo))
+import           Explorer.Web.ClientTypes (CAddress (..), CAddressSummary (..), CAddressType (..),
+                    CAddressesFilter (..), CBlockEntry (..), CBlockRange (..), CBlockSummary (..),
+                    CGenesisAddressInfo (..), CGenesisSummary (..), CHash (CHash), CCoin,
+                    CTxBrief (..), CTxHash, CTxHash (..), CTxSummary (..), CUtxo (..),
+                    mkCCoin, adaToCCoin)
+import           Explorer.Web.Error (ExplorerError (..))
+import           Explorer.Web.Query (TxWithInputsOutputs (..), queryBlockSummary, queryTxSummary,
+                    queryBlockTxs, queryBlockIdFromHeight, queryUtxoSnapshot)
+import           Explorer.Web.API1 (ExplorerApi1Record (..), V1Utxo (..))
 import qualified Explorer.Web.API1 as API1
 import           Explorer.Web.LegacyApi (ExplorerApiRecord (..), TxsStats, PageNumber)
 import           Explorer.Web.Server.Util
+import           Explorer.Web.Server.TxLast
 
 import           Cardano.Chain.Slotting      (EpochNumber (EpochNumber))
 
@@ -107,13 +87,6 @@ explorerHandlers backend = (toServant oldHandlers) :<|> (toServant newHandlers)
 --------------------------------------------------------------------------------
 cTxId :: CTxHash
 cTxId = CTxHash $ CHash "not-implemented-yet"
-
-cTxEntry :: CTxEntry
-cTxEntry = CTxEntry
-    { cteId         = cTxId
-    , cteTimeIssued = Nothing
-    , cteAmount     = mkCCoin 33333
-    }
 
 totalAda :: SqlBackend -> Handler (Either ExplorerError Ada)
 totalAda backend = Right <$> runQuery backend queryTotalSupply
@@ -258,9 +231,6 @@ querySlotTimeSeconds slotNo =
   either (const Nothing) Just <$> querySlotPosixTime slotNo
 
 
-getLastTxs :: SqlBackend -> Handler (Either ExplorerError [CTxEntry])
-getLastTxs _backend = pure $ Right [cTxEntry]
-
 testTxsSummary
     :: SqlBackend -> CTxHash
     -> Handler (Either ExplorerError CTxSummary)
@@ -308,12 +278,10 @@ testAddressSummary _backend _  = pure $ Right sampleAddressSummary
 testAddressUtxoBulk
     :: SqlBackend -> [CAddress]
     -> Handler (Either ExplorerError [CUtxo])
-testAddressUtxoBulk _backend _  = pure $ Right [CUtxo
-    { cuId = CTxHash $ CHash "not-implemented-yet"
-    , cuOutIndex = 0
-    , cuAddress = CAddress "not-implemented-yet"
-    , cuCoins = mkCCoin 3
-    }]
+testAddressUtxoBulk _backend _  =
+    pure $ Right
+            [CUtxo (CTxHash $ CHash "not-implemented-yet") 0 (CAddress "not-implemented-yet") (mkCCoin 3)
+            ]
 
 testEpochSlotSearch
     :: SqlBackend -> EpochNumber
