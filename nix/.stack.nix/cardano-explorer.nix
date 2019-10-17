@@ -41,12 +41,25 @@
           (hsPkgs.text)
           (hsPkgs.time)
           (hsPkgs.transformers)
+          (hsPkgs.transformers-except)
           (hsPkgs.warp)
           ];
         };
       exes = {
         "cardano-explorer" = {
           depends = [ (hsPkgs.base) (hsPkgs.cardano-explorer) (hsPkgs.Cabal) ];
+          };
+        "cardano-webapi-compare" = {
+          depends = [
+            (hsPkgs.base)
+            (hsPkgs.async)
+            (hsPkgs.cardano-explorer)
+            (hsPkgs.Diff)
+            (hsPkgs.bytestring)
+            (hsPkgs.http-conduit)
+            (hsPkgs.text)
+            (hsPkgs.text-ansi)
+            ];
           };
         "cardano-mock-explorer" = {
           depends = [ (hsPkgs.base) (hsPkgs.cardano-explorer) ];
