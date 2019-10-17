@@ -91,7 +91,7 @@ createAndInsertBlocks blockCount =
         slid <- insertSlotLeader testSlotLeader
         let newBlock = Block (mkBlockHash indx) (Just 0) (Just indx) (Just indx) mPrevId
                         (maybe Nothing (const $ Just (mkMerkelRoot indx)) mPrevBlock)
-                        slid 42
+                        slid 42 Nothing
         blkId <- insertBlock newBlock
         newMTxOutId <- if indx /= 0
                       then pure mTxOutId

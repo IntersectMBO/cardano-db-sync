@@ -78,6 +78,7 @@ insertValidateGenesisDistribution tracer cfg = do
                         , DB.blockMerkelRoot = Nothing
                         , DB.blockSlotLeader = slid
                         , DB.blockSize = 0
+                        , DB.blockTime = Nothing
                         }
             mapM_ (insertTxOuts bid) $ genesisTxos cfg
             liftIO . logInfo tracer $ "Initial genesis distribution populated. Hash "
