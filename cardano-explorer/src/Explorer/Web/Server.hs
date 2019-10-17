@@ -9,8 +9,8 @@ import           Explorer.DB (Ada, Block (..), Tx (..), TxOut (..),
 import           Explorer.Web.Api            (ExplorerApi, explorerApi)
 import           Explorer.Web.ClientTypes (CAddress (..), CAddressSummary (..), CAddressType (..),
                     CAddressesFilter (..), CBlockEntry (..), CBlockRange (..), CBlockSummary (..),
-                    CGenesisAddressInfo (..), CGenesisSummary (..), CHash (CHash), CCoin,
-                    CTxBrief (..), CTxHash, CTxHash (..), CTxSummary (..), CUtxo (..),
+                    CGenesisAddressInfo (..), CHash (CHash), CCoin,
+                    CTxBrief (..), CTxHash (..), CTxSummary (..), CUtxo (..),
                     mkCCoin, adaToCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
 import           Explorer.Web.Query (TxWithInputsOutputs (..), queryBlockSummary, queryTxSummary,
@@ -18,8 +18,10 @@ import           Explorer.Web.Query (TxWithInputsOutputs (..), queryBlockSummary
 import           Explorer.Web.API1 (ExplorerApi1Record (..), V1Utxo (..))
 import qualified Explorer.Web.API1 as API1
 import           Explorer.Web.LegacyApi (ExplorerApiRecord (..), TxsStats, PageNumber)
-import           Explorer.Web.Server.Util
+
+import           Explorer.Web.Server.GenesisSummary
 import           Explorer.Web.Server.TxLast
+import           Explorer.Web.Server.Util
 
 import           Cardano.Chain.Slotting      (EpochNumber (EpochNumber))
 
@@ -72,7 +74,7 @@ explorerHandlers backend = (toServant oldHandlers) :<|> (toServant newHandlers)
       , _addressUtxoBulk    = testAddressUtxoBulk backend
       , _epochPages         = testEpochPageSearch backend
       , _epochSlots         = testEpochSlotSearch backend
-      , _genesisSummary     = testGenesisSummary backend
+      , _genesisSummary     = genesisSummary backend
       , _genesisPagesTotal  = testGenesisPagesTotal backend
       , _genesisAddressInfo = testGenesisAddressInfo backend
       , _statsTxs           = testStatsTxs backend
@@ -323,16 +325,6 @@ testEpochPageSearch _backend _ _ = pure $ Right (1, [CBlockEntry
     , cbeBlockLead  = Nothing
     , cbeFees       = mkCCoin 0
     }])
-
-testGenesisSummary
-    :: SqlBackend -> Handler (Either ExplorerError CGenesisSummary)
-testGenesisSummary _backend = pure $ Right CGenesisSummary
-    { cgsNumTotal       = 4
-    , cgsNumRedeemed    = 3
-    , cgsNumNotRedeemed = 1
-    , cgsRedeemedAmountTotal    = mkCCoin 300000000
-    , cgsNonRedeemedAmountTotal = mkCCoin 100000000
-    }
 
 testGenesisPagesTotal
     :: SqlBackend -> Maybe PageNumber
