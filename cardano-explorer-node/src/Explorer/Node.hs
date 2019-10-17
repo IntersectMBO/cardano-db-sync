@@ -65,8 +65,7 @@ import           Explorer.Node.Database
 import           Explorer.Node.Insert
 import           Explorer.Node.Metrics
 
-import           Network.Socket (AddrInfo (..), Family (..), SockAddr (..), SocketType (..),
-                    defaultProtocol)
+import           Network.Socket (SockAddr (..))
 
 import           Network.TypedProtocol.Codec (Codec)
 import           Network.TypedProtocol.Codec.Cbor (DeserialiseFailure)
@@ -81,15 +80,13 @@ import           Ouroboros.Consensus.Node.ProtocolInfo (NumCoreNodes (..),
 import           Ouroboros.Consensus.Node.Run.Abstract (RunNode, nodeDecodeBlock, nodeDecodeGenTx,
                     nodeDecodeHeaderHash, nodeEncodeBlock, nodeEncodeGenTx, nodeEncodeHeaderHash)
 import           Ouroboros.Consensus.NodeId (CoreNodeId (..))
-import           Ouroboros.Consensus.Protocol (NodeConfig, Protocol (..))
+import           Ouroboros.Consensus.Protocol (NodeConfig, Protocol (..), protocolNetworkMagic)
 import           Ouroboros.Network.Block (Point (..), SlotNo (..), Tip (tipBlockNo),
                     decodePoint, encodePoint, genesisPoint, genesisBlockNo, blockNo,
                     BlockNo(unBlockNo, BlockNo),
                     encodeTip, decodeTip)
 import           Ouroboros.Network.Mux (AppType (..), OuroborosApplication (..))
-import           Ouroboros.Network.NodeToClient (NodeToClientProtocols (..),
-                    NodeToClientVersion (..), NodeToClientVersionData (..),
-                    connectTo, networkMagic, nodeToClientCodecCBORTerm)
+import           Ouroboros.Network.NodeToClient
 import qualified Ouroboros.Network.Point as Point
 import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined (ChainSyncClientPipelined (..),
                     ClientPipelinedStIdle (..), ClientPipelinedStIntersect (..), ClientStNext (..),
@@ -99,8 +96,6 @@ import           Ouroboros.Network.Protocol.ChainSync.PipelineDecision (pipeline
 import           Ouroboros.Network.Protocol.ChainSync.Codec (codecChainSync)
 import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
 
-import           Ouroboros.Network.Protocol.Handshake.Version (DictVersion (..), Versions,
-                    simpleSingletonVersions)
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Client (LocalTxSubmissionClient (..),
                     LocalTxClientStIdle (..), localTxSubmissionClientPeer)
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Codec (codecLocalTxSubmission)
@@ -260,22 +255,23 @@ runExplorerNodeClient ptcl trce socketPath = do
   let
     infoConfig = pInfoConfig $ protocolInfo (NumCoreNodes 7) (CoreNodeId 0) ptcl
 
-    addr = localSocketAddrInfo socketPath
-
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> Text.pack (show socketPath)
-  connectTo
+  connTable <- newConnectionTable
+  ncSubscriptionWorker_V1
     -- TODO: these tracers should be configurable for debugging purposes.
     nullTracer
     nullTracer
+    nullTracer
     Peer
-    (localInitiatorNetworkApplication (Proxy :: Proxy blk) trce infoConfig)
-    Nothing
-    addr
-
-localSocketAddrInfo :: FilePath -> AddrInfo
-localSocketAddrInfo socketPath =
-  AddrInfo [] AF_UNIX Stream defaultProtocol (SockAddrUnix socketPath) Nothing
-
+    connTable
+    (LocalAddresses Nothing Nothing (Just $ SockAddrUnix socketPath))
+    (const Nothing)
+    IPSubscriptionTarget
+      { ispIps     = [SockAddrUnix socketPath]
+      , ispValency = 1
+      }
+    (NodeToClientVersionData { networkMagic = protocolNetworkMagic infoConfig })
+    (localInitiatorNetworkApplication trce infoConfig)
 
 localInitiatorNetworkApplication
   :: forall blk peer cfg.
@@ -284,21 +280,10 @@ localInitiatorNetworkApplication
   -- needed here.  The wallet client should use some concrete type of block
   -- from 'cardano-chain'.  This should remove the dependency of this module
   -- from 'ouroboros-consensus'.
-  => Proxy blk
-  -> Trace IO Text
+  => Trace IO Text
   -> NodeConfig (BlockProtocol blk)
-  -> Versions NodeToClientVersion DictVersion
-              (OuroborosApplication 'InitiatorApp peer NodeToClientProtocols
-                                    IO BSL.ByteString Void Void)
-localInitiatorNetworkApplication Proxy trce pInfoConfig =
-    simpleSingletonVersions
-      NodeToClientV_1
-      (NodeToClientVersionData { networkMagic = 0 })
-      (DictVersion nodeToClientCodecCBORTerm)
-      initialApp
-  where
-    initialApp :: OuroborosApplication 'InitiatorApp peer NodeToClientProtocols IO BSL.ByteString Void Void
-    initialApp =
+  -> OuroborosApplication 'InitiatorApp peer NodeToClientProtocols IO BSL.ByteString Void Void
+localInitiatorNetworkApplication trce pInfoConfig =
       OuroborosInitiatorApplication $ \peer ptcl ->
         case ptcl of
           LocalTxSubmissionPtcl -> \channel -> do
