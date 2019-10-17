@@ -5,7 +5,6 @@
 
 module Explorer.DB.Query
   ( LookupFail (..)
-  , listToMaybe
   , queryBlock
   , queryBlockCount
   , queryBlockId
@@ -33,11 +32,18 @@ module Explorer.DB.Query
   , queryTxOutValue
   , queryUtxoAtBlockNo
   , queryUtxoAtSlotNo
-  , renderLookupFail
-  , unValueSumAda
-  , maybeToEither
+
   , entityPair
+  , listToMaybe
+  , headMaybe
+  , isJust
+  , maybeToEither
+  , renderLookupFail
+  , slotPosixTime
+  , unValueSumAda
   , unBlockId
+  , unValue2
+  , unValue3
   ) where
 
 
@@ -245,11 +251,7 @@ querySlotPosixTime :: MonadIO m => Word64 -> ReaderT SqlBackend m (Either Lookup
 querySlotPosixTime slotNo =
   runExceptT $ do
     meta <- ExceptT queryMeta
-    pure . utcTimeToPOSIXSeconds $
-            addUTCTime
-              -- Slot duration is in milliseconds.
-              (0.001 * fromIntegral (slotNo * metaSlotDuration meta))
-              (metaStartTime meta)
+    pure $ slotPosixTime meta slotNo
 
 -- | Calculate the slot time (as UTCTime) for a given slot number. The example here was
 -- written as an example, but it would be hoped that this value would be cached in the
@@ -402,5 +404,17 @@ maybeToEither :: e -> (a -> b) -> Maybe a -> Either e b
 maybeToEither e f =
   maybe (Left e) (Right . f)
 
+slotPosixTime :: Meta -> Word64 -> POSIXTime
+slotPosixTime meta slotNo =
+  utcTimeToPOSIXSeconds $
+    -- Slot duration is in milliseconds.
+    addUTCTime (0.001 * fromIntegral (slotNo * metaSlotDuration meta)) (metaStartTime meta)
+
 unBlockId :: BlockId -> Word64
 unBlockId = fromIntegral . unSqlBackendKey . unBlockKey
+
+unValue2 :: (Value a, Value b) -> (a, b)
+unValue2 (a, b) = (unValue a, unValue b)
+
+unValue3 :: (Value a, Value b, Value c) -> (a, b, c)
+unValue3 (a, b, c) = (unValue a, unValue b, unValue c)
