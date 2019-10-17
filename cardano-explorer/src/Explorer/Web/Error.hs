@@ -5,24 +5,34 @@
 -- | Types describing runtime errors related to Explorer
 
 module Explorer.Web.Error
-       ( ExplorerError (..)
-       ) where
+  ( ExplorerError (..)
+  ) where
 
-import           Control.Exception (Exception)
-import           Data.Aeson.TH        (defaultOptions, deriveToJSON)
-import           Data.Text            (Text)
-import           Formatting           (bprint, stext, (%))
+import           Data.Aeson (ToJSON (..), Value (..))
+import           Data.Text (Text)
+
+import           Explorer.DB (LookupFail (..), renderLookupFail)
+
+import           Formatting (bprint, stext, (%))
+import           Formatting.Buildable (Buildable)
+
 import qualified Formatting.Buildable
-import           GHC.Generics         (Generic)
 
-newtype ExplorerError =
-    -- | Some internal error.
-    Internal Text
-    deriving (Show, Generic)
+import           GHC.Generics (Generic)
 
-instance Exception ExplorerError
+data ExplorerError
+  = Internal Text  -- Stupid error constructor from the old code base.
+  | EELookupFail !LookupFail
+  deriving (Generic)
 
-instance Formatting.Buildable.Buildable ExplorerError where
-    build (Internal msg) = bprint ("Internal explorer error ("%stext%")") msg
+instance Buildable ExplorerError where
+  build ee =
+    case ee of
+      Internal msg -> bprint ("Internal explorer error ("%stext%")") msg
+      EELookupFail err -> bprint stext $ renderLookupFail err
 
-deriveToJSON defaultOptions ''ExplorerError
+instance ToJSON ExplorerError where
+  toJSON ee =
+    case ee of
+      Internal msg -> String msg
+      EELookupFail err -> String $ renderLookupFail err

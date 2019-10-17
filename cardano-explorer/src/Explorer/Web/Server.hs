@@ -3,42 +3,23 @@
 
 module Explorer.Web.Server (runServer) where
 
-import           Explorer.DB                 (blockBlockNo, blockHash
-                                             , blockSize, blockSlotNo
-                                             , blockMerkelRoot
-                                             , readPGPassFileEnv
-                                             , queryTotalSupply
-                                             , querySlotPosixTime
-                                             , Ada
-                                             , toConnectionString
-                                             , blockMerkelRoot
-                                             , queryBlockCount
-                                             , queryLatestBlockId
-                                             , txHash, txOutAddress, txOutValue, txFee
-                                             , txOutIndex
-                                             , TxOut(TxOut))
+import           Explorer.DB (Ada, Block (..), Tx (..), TxOut (..),
+                    queryBlockCount, queryLatestBlockId, querySlotPosixTime, queryTotalSupply,
+                    readPGPassFileEnv, toConnectionString)
 import           Explorer.Web.Api            (ExplorerApi, explorerApi)
-import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSummary (CAddressSummary, caAddress, caBalance, caTxList, caTxNum, caType),
-                                              CAddressType (CPubKeyAddress),
-                                              CAddressesFilter (AllAddresses, NonRedeemedAddresses, RedeemedAddresses),
-                                              CBlockEntry (CBlockEntry, cbeBlkHash, cbeBlkHeight, cbeBlockLead, cbeEpoch, cbeFees, cbeSize, cbeSlot, cbeTimeIssued, cbeTotalSent, cbeTxNum),
-                                              CBlockRange (CBlockRange, cbrBlocks, cbrTransactions),
-                                              CBlockSummary (CBlockSummary, cbsEntry, cbsMerkleRoot, cbsNextHash, cbsPrevHash),
-                                              CGenesisAddressInfo (CGenesisAddressInfo, cgaiCardanoAddress, cgaiGenesisAmount, cgaiIsRedeemed),
-                                              CGenesisSummary (CGenesisSummary, cgsNonRedeemedAmountTotal, cgsNumNotRedeemed, cgsNumRedeemed, cgsNumTotal, cgsRedeemedAmountTotal),
-                                              CHash (CHash)
-                                              , CCoin
-                                              , CTxBrief (CTxBrief, ctbId, ctbInputSum, ctbInputs, ctbOutputSum, ctbOutputs, ctbTimeIssued),
-                                              CTxEntry (CTxEntry, cteAmount, cteId, cteTimeIssued),
-                                              CTxHash, CTxHash (CTxHash),
-                                              CTxSummary (CTxSummary, ctsBlockEpoch, ctsBlockHash, ctsBlockHeight, ctsBlockSlot, ctsBlockTimeIssued, ctsFees, ctsId, ctsInputs, ctsOutputs, ctsRelayedBy, ctsTotalInput, ctsTotalOutput, ctsTxTimeIssued),
-                                              CUtxo (CUtxo, cuAddress, cuCoins, cuId, cuOutIndex),
-                                              mkCCoin, adaToCCoin)
-import           Explorer.Web.Error          (ExplorerError (Internal))
-import           Explorer.Web.Query          (queryBlockSummary, queryTxSummary, queryBlockTxs, TxWithInputsOutputs(txwTx, txwInputs, txwOutputs), queryBlockIdFromHeight, queryUtxoSnapshot)
-import           Explorer.Web.API1 (ExplorerApi1Record(ExplorerApi1Record,_utxoHeight, _utxoHash), V1Utxo(V1Utxo))
+import           Explorer.Web.ClientTypes (CAddress (..), CAddressSummary (..), CAddressType (..),
+                    CAddressesFilter (..), CBlockEntry (..), CBlockRange (..), CBlockSummary (..),
+                    CGenesisAddressInfo (..), CGenesisSummary (..), CHash (CHash), CCoin,
+                    CTxBrief (..), CTxHash, CTxHash (..), CTxSummary (..), CUtxo (..),
+                    mkCCoin, adaToCCoin)
+import           Explorer.Web.Error (ExplorerError (..))
+import           Explorer.Web.Query (TxWithInputsOutputs (..), queryBlockSummary, queryTxSummary,
+                    queryBlockTxs, queryBlockIdFromHeight, queryUtxoSnapshot)
+import           Explorer.Web.API1 (ExplorerApi1Record (..), V1Utxo (..))
 import qualified Explorer.Web.API1 as API1
-import           Explorer.Web.LegacyApi      (ExplorerApiRecord (_genesisSummary, _genesisAddressInfo, _genesisPagesTotal, _epochPages, _epochSlots, _statsTxs, _txsSummary, _addressSummary, _addressUtxoBulk, _blocksSummary, _blocksTxs, _txsLast, _dumpBlockRange, _totalAda, _blocksPages, _blocksPagesTotal, ExplorerApiRecord), TxsStats, PageNumber)
+import           Explorer.Web.LegacyApi (ExplorerApiRecord (..), TxsStats, PageNumber)
+import           Explorer.Web.Server.Util
+import           Explorer.Web.Server.TxLast
 
 import           Cardano.Chain.Slotting      (EpochNumber (EpochNumber))
 
@@ -50,7 +31,6 @@ import           Data.Maybe (fromMaybe)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Base16 as Base16
 import           Data.Text (Text)
-import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import           Data.Time.Clock.POSIX       (POSIXTime)
 import           Data.Word                   (Word16, Word64)
@@ -62,14 +42,8 @@ import           Servant.Server.Generic      (AsServerT)
 import           Servant.API ((:<|>)((:<|>)))
 
 import           Database.Persist.Postgresql (withPostgresqlConn)
-import           Database.Persist.Sql        (SqlBackend, runSqlConn)
+import           Database.Persist.Sql (SqlBackend)
 
--- TODO, get this from the config somehow
-k :: Word64
-k = 2160
-
-slotsPerEpoch :: Word64
-slotsPerEpoch = k * 10
 
 runServer :: IO ()
 runServer = do
@@ -113,16 +87,6 @@ explorerHandlers backend = (toServant oldHandlers) :<|> (toServant newHandlers)
 --------------------------------------------------------------------------------
 cTxId :: CTxHash
 cTxId = CTxHash $ CHash "not-implemented-yet"
-
-cTxEntry :: CTxEntry
-cTxEntry = CTxEntry
-    { cteId         = cTxId
-    , cteTimeIssued = Nothing
-    , cteAmount     = mkCCoin 33333
-    }
-
-runQuery :: MonadIO m => SqlBackend -> ReaderT SqlBackend IO a -> m a
-runQuery backend query = liftIO $ runSqlConn query backend
 
 totalAda :: SqlBackend -> Handler (Either ExplorerError Ada)
 totalAda backend = Right <$> runQuery backend queryTotalSupply
@@ -193,13 +157,6 @@ hexToBytestring text = do
     (blob, "") -> pure blob
     (_partial, remain) -> throwE $ Internal $ "cant parse " <> Text.decodeUtf8 remain <> " as hex"
 
--- | bsBase16Text : Convert a raw ByteString to Base16 and then encode it as Text.
-bsBase16Text :: ByteString -> Text
-bsBase16Text bs =
-  case Text.decodeUtf8' (Base16.encode bs) of
-    Left _ -> Text.pack $ "UTF-8 decode failed for " ++ show bs
-    Right txt -> txt
-
 blocksSummary
     :: SqlBackend -> CHash
     -> Handler (Either ExplorerError CBlockSummary)
@@ -218,17 +175,17 @@ blocksSummary backend (CHash blkHashTxt) = runExceptT $ do
                , cbeSlot = fromIntegral slot
                -- Use '0' for EBBs.
                , cbeBlkHeight = maybe 0 fromIntegral $ blockBlockNo blk
-               , cbeBlkHash = CHash . bsBase16Text $ blockHash blk
+               , cbeBlkHash = CHash . bsBase16Encode $ blockHash blk
                , cbeTimeIssued = mts
                , cbeTxNum = txCount
                , cbeTotalSent = adaToCCoin totalOut
                , cbeSize = blockSize blk
-               , cbeBlockLead = Just $ bsBase16Text slh
+               , cbeBlockLead = Just $ bsBase16Encode slh
                , cbeFees = adaToCCoin fees
                }
-            , cbsPrevHash = CHash $ bsBase16Text prevHash
-            , cbsNextHash = fmap (CHash . bsBase16Text) nextHash
-            , cbsMerkleRoot = CHash $ maybe "" bsBase16Text (blockMerkelRoot blk)
+            , cbsPrevHash = CHash $ bsBase16Encode prevHash
+            , cbsNextHash = fmap (CHash . bsBase16Encode) nextHash
+            , cbsMerkleRoot = CHash $ maybe "" bsBase16Encode (blockMerkelRoot blk)
             }
         Nothing -> throwE $ Internal "slot missing"
     _ -> throwE $ Internal "No block found"
@@ -249,7 +206,7 @@ getBlockTxs backend (CHash blkHashTxt) mLimit mOffset =
       blkHash <- hexToBytestring blkHashTxt
       (txList, mtimestamp) <- runQuery backend $ do
                             (txList, slot) <- queryBlockTxs blkHash limit offset
-                            mtimestamp <- maybe (pure Nothing ) querySlotTimeSeconds slot
+                            mtimestamp <- maybe (pure Nothing) querySlotTimeSeconds slot
                             pure (txList, mtimestamp)
       if null txList
         then throwE $ Internal "No block found"
@@ -273,9 +230,6 @@ querySlotTimeSeconds :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe POSIX
 querySlotTimeSeconds slotNo =
   either (const Nothing) Just <$> querySlotPosixTime slotNo
 
-
-getLastTxs :: SqlBackend -> Handler (Either ExplorerError [CTxEntry])
-getLastTxs _backend = pure $ Right [cTxEntry]
 
 testTxsSummary
     :: SqlBackend -> CTxHash
@@ -324,12 +278,10 @@ testAddressSummary _backend _  = pure $ Right sampleAddressSummary
 testAddressUtxoBulk
     :: SqlBackend -> [CAddress]
     -> Handler (Either ExplorerError [CUtxo])
-testAddressUtxoBulk _backend _  = pure $ Right [CUtxo
-    { cuId = CTxHash $ CHash "not-implemented-yet"
-    , cuOutIndex = 0
-    , cuAddress = CAddress "not-implemented-yet"
-    , cuCoins = mkCCoin 3
-    }]
+testAddressUtxoBulk _backend _  =
+    pure $ Right
+            [CUtxo (CTxHash $ CHash "not-implemented-yet") 0 (CAddress "not-implemented-yet") (mkCCoin 3)
+            ]
 
 testEpochSlotSearch
     :: SqlBackend -> EpochNumber
