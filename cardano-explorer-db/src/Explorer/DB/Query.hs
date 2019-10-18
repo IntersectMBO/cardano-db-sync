@@ -34,6 +34,7 @@ module Explorer.DB.Query
   , queryUtxoAtSlotNo
 
   , entityPair
+  , epochUtcTime
   , listToMaybe
   , headMaybe
   , isJust
@@ -389,6 +390,11 @@ unValueSumAda mvm =
 entityPair :: Entity a -> (Key a, a)
 entityPair e =
   (entityKey e, entityVal e)
+
+epochUtcTime :: Meta -> Word64 -> UTCTime
+epochUtcTime meta epochNo =
+  -- Slot duration is in milliseconds.
+  addUTCTime (21.6 * fromIntegral (epochNo * metaSlotDuration meta)) (metaStartTime meta)
 
 headMaybe :: [a] -> Maybe a
 headMaybe [] = Nothing

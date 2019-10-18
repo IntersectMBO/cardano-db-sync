@@ -4,6 +4,7 @@
 module Test.IO.Explorer.DB.Util
   ( assertBool
   , deleteAllBlocksCascade
+  , dummyUTCTime
   , mkAddressHash
   , mkBlock
   , mkBlockHash
@@ -24,6 +25,8 @@ import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
 import           Data.Text (Text)
 import qualified Data.Text as Text
+import           Data.Time.Calendar (Day (..))
+import           Data.Time.Clock (UTCTime (..))
 import           Data.Word (Word64)
 
 import           Database.Persist.Sql (SqlBackend, deleteCascade, selectKeysList, unSqlBackendKey)
@@ -42,13 +45,16 @@ deleteAllBlocksCascade = do
   (keys :: [BlockId]) <- selectKeysList [] []
   mapM_ deleteCascade keys
 
+dummyUTCTime :: UTCTime
+dummyUTCTime = UTCTime (ModifiedJulianDay 0) 0
+
 mkAddressHash :: BlockId -> TxId -> Text
 mkAddressHash blkId txId =
   Text.pack (take 28 $ printf "tx out #%d, tx #%d" (unBlockId blkId) (unTxId txId) ++ replicate 28 ' ')
 
 mkBlock :: Word64 -> SlotLeaderId -> Block
 mkBlock blk slid =
-  Block (mkBlockHash blk) (Just 0) Nothing Nothing Nothing Nothing slid 42 Nothing
+  Block (mkBlockHash blk) (Just 0) Nothing Nothing Nothing Nothing slid 42 dummyUTCTime
 
 mkBlockHash :: Word64 -> ByteString
 mkBlockHash blkId =
