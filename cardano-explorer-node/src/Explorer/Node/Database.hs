@@ -61,7 +61,8 @@ runDbThread trce metrics queue = do
   where
     loop = do
       xs <- blockingFlushDbActionQueue queue
-      logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
+      when (length xs > 1) $ do
+        logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
       nextState <- runActions trce xs
       mBlkNo <-  DB.runDbNoLogging DB.queryLatestBlockNo
       case mBlkNo of
