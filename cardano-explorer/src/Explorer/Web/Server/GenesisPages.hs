@@ -6,7 +6,7 @@ import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Database.Esqueleto (InnerJoin (..), Value,
-                    (^.), (==.), count, from, on, select, unValue, val, where_)
+                    (^.), (==.), countRows, from, on, select, unValue, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
 import           Explorer.DB (EntityField (..), listToMaybe, txOutSpent, txOutUnspent)
@@ -39,7 +39,7 @@ queryGenesisAddressCount pageSize = do
             on (blk ^. BlockId ==. tx ^. TxBlock)
             -- Only the initial genesis block has a size of 0.
             where_ (blk ^. BlockSize ==. val 0)
-            pure (count (tx ^. TxFee))
+            pure countRows
   pure $ maybe 0 (dividePageSize pageSize) (listToMaybe res)
 
 queryRedeemedGenesisAddressCount :: MonadIO m => Word -> ReaderT SqlBackend m Word
@@ -50,7 +50,7 @@ queryRedeemedGenesisAddressCount pageSize = do
             txOutSpent txOut
             -- Only the initial genesis block has a size of 0.
             where_ (blk ^. BlockSize ==. val 0)
-            pure (count (tx ^. TxFee))
+            pure countRows
   pure $ maybe 0 (dividePageSize pageSize) (listToMaybe res)
 
 queryUnRedeemedGenesisAddressCount :: MonadIO m => Word -> ReaderT SqlBackend m Word
@@ -61,7 +61,7 @@ queryUnRedeemedGenesisAddressCount pageSize = do
             txOutUnspent txOut
             -- Only the initial genesis block has a size of 0.
             where_ (blk ^. BlockSize ==. val 0)
-            pure (count (tx ^. TxFee))
+            pure countRows
   pure $ maybe 0 (dividePageSize pageSize) (listToMaybe res)
 
 
