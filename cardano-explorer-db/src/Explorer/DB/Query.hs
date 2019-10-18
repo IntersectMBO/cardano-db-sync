@@ -42,6 +42,8 @@ module Explorer.DB.Query
   , renderLookupFail
   , slotPosixTime
   , slotUtcTime
+  , txOutUnspent
+  , txOutSpent
   , unValueSumAda
   , unBlockId
   , unValue2
@@ -63,7 +65,7 @@ import           Data.Word (Word16, Word64)
 import           Database.Esqueleto (Entity (..), From, InnerJoin (..), LeftOuterJoin (..),
                     PersistField, SqlExpr, SqlQuery, Value, ValueList,
                     (^.), (==.), (<=.), (&&.), (||.), (>.),
-                    countRows, desc, entityKey, entityVal, from, in_, isNothing, just,
+                    countRows, desc, entityKey, entityVal, from, exists, in_, isNothing, just,
                     limit, not_, notExists, on, orderBy,
                     select, subList_select, sum_, unValue, unSqlBackendKey, val, where_)
 import           Database.Persist.Sql (SqlBackend)
@@ -354,11 +356,20 @@ queryUtxoAtSlotNo slotNo = do
 isJust :: PersistField a => SqlExpr (Value (Maybe a)) -> SqlExpr (Value Bool)
 isJust = not_ . isNothing
 
--- A predicate that filters out spent 'TxOut' entries at the current chain tip
--- to provide the current tip Utxo set.
+-- A predicate that filters out unspent 'TxOut' entries.
+{-# INLINABLE txOutSpent #-}
+txOutSpent :: SqlExpr (Entity TxOut) -> SqlQuery ()
+txOutSpent txOut =
+  where_ . exists . from $ \ txIn -> do
+      where_ (txOut ^. TxOutTxId ==. txIn ^. TxInTxOutId
+              &&. txOut ^. TxOutIndex ==. txIn ^. TxInTxOutIndex
+              )
+
+-- A predicate that filters out spent 'TxOut' entries.
+{-# INLINABLE txOutUnspent #-}
 txOutUnspent :: SqlExpr (Entity TxOut) -> SqlQuery ()
 txOutUnspent txOut =
-  where_ $ notExists $ from $ \ txIn -> do
+  where_ . notExists . from $ \ txIn -> do
       where_ (txOut ^. TxOutTxId ==. txIn ^. TxInTxOutId
               &&. txOut ^. TxOutIndex ==. txIn ^. TxInTxOutIndex
               )
