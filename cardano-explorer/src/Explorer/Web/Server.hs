@@ -4,7 +4,7 @@
 module Explorer.Web.Server (runServer) where
 
 import           Explorer.DB (Ada, Block (..), Tx (..), TxOut (..),
-                    queryBlockCount, queryLatestBlockId, querySlotPosixTime, queryTotalSupply,
+                    queryLatestBlockId, querySlotPosixTime, queryTotalSupply,
                     readPGPassFileEnv, toConnectionString)
 import           Explorer.Web.Api            (ExplorerApi, explorerApi)
 import           Explorer.Web.ClientTypes (CAddress (..), CAddressSummary (..), CAddressType (..),
@@ -19,6 +19,7 @@ import           Explorer.Web.API1 (ExplorerApi1Record (..), V1Utxo (..))
 import qualified Explorer.Web.API1 as API1
 import           Explorer.Web.LegacyApi (ExplorerApiRecord (..), TxsStats, PageNumber)
 
+import           Explorer.Web.Server.BlockPages
 import           Explorer.Web.Server.GenesisPages
 import           Explorer.Web.Server.GenesisSummary
 import           Explorer.Web.Server.TxLast
@@ -66,7 +67,7 @@ explorerHandlers backend = (toServant oldHandlers) :<|> (toServant newHandlers)
       { _totalAda           = totalAda backend
       , _dumpBlockRange     = testDumpBlockRange backend
       , _blocksPages        = testBlocksPages backend
-      , _blocksPagesTotal   = getBlocksPagesTotal backend
+      , _blocksPagesTotal   = blockPages backend
       , _blocksSummary      = blocksSummary backend
       , _blocksTxs          = getBlockTxs backend
       , _txsLast            = getLastTxs backend
@@ -124,18 +125,6 @@ testBlocksPages _backend _ _  = pure $ Right (1, [CBlockEntry
     , cbeFees       = mkCCoin 0
     }])
 
-
-getBlocksPagesTotal
-    :: SqlBackend -> Maybe Word
-    -> Handler (Either ExplorerError Word)
-getBlocksPagesTotal backend mPageSize = do
-  blocksTotal <- runQuery backend queryBlockCount
-  liftIO $ print blocksTotal
-  let pageSize = toPageSize mPageSize
-  case (blocksTotal < 1, pageSize < 1) of
-    (True, _) -> pure $ Left $ Internal "There are currently no block to display."
-    (_, True) -> pure $ Left $ Internal "Page size must be greater than 1 if you want to display blocks."
-    _ -> pure $ Right $ roundToBlockPage blocksTotal
 
 hexToBytestring :: Text -> ExceptT ExplorerError Handler ByteString
 hexToBytestring text = do
