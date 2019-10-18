@@ -43,6 +43,7 @@ library
                       , Explorer.Web.API1
                       , Explorer.Web.Query
                       , Explorer.Web.Server
+                      , Explorer.Web.Server.GenesisPages
                       , Explorer.Web.Server.GenesisSummary
                       , Explorer.Web.Server.TxLast
                       , Explorer.Web.Server.Util

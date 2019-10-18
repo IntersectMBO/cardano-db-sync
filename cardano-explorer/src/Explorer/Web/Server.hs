@@ -19,6 +19,7 @@ import           Explorer.Web.API1 (ExplorerApi1Record (..), V1Utxo (..))
 import qualified Explorer.Web.API1 as API1
 import           Explorer.Web.LegacyApi (ExplorerApiRecord (..), TxsStats, PageNumber)
 
+import           Explorer.Web.Server.GenesisPages
 import           Explorer.Web.Server.GenesisSummary
 import           Explorer.Web.Server.TxLast
 import           Explorer.Web.Server.Util
@@ -75,7 +76,7 @@ explorerHandlers backend = (toServant oldHandlers) :<|> (toServant newHandlers)
       , _epochPages         = testEpochPageSearch backend
       , _epochSlots         = testEpochSlotSearch backend
       , _genesisSummary     = genesisSummary backend
-      , _genesisPagesTotal  = testGenesisPagesTotal backend
+      , _genesisPagesTotal  = genesisPages backend
       , _genesisAddressInfo = testGenesisAddressInfo backend
       , _statsTxs           = testStatsTxs backend
       } :: ExplorerApiRecord (AsServerT Handler)
@@ -123,23 +124,6 @@ testBlocksPages _backend _ _  = pure $ Right (1, [CBlockEntry
     , cbeFees       = mkCCoin 0
     }])
 
-divRoundUp :: Integral a => a -> a -> a
-divRoundUp a b = (a + b - 1) `div` b
-
-defaultPageSize :: Word
-defaultPageSize = 10
-
-toPageSize :: Maybe Word -> Word
-toPageSize = fromMaybe defaultPageSize
-
--- | A pure calculation of the page number.
--- Get total pages from the blocks. And we want the page
--- with the example, the page size 10,
--- to start with 10 + 1 == 11, not with 10 since with
--- 10 we'll have an empty page.
--- Could also be `((blocksTotal - 1) `div` pageSizeInt) + 1`.
-roundToBlockPage :: Word -> Word
-roundToBlockPage blocksTotal = divRoundUp blocksTotal defaultPageSize
 
 getBlocksPagesTotal
     :: SqlBackend -> Maybe Word
@@ -325,17 +309,6 @@ testEpochPageSearch _backend _ _ = pure $ Right (1, [CBlockEntry
     , cbeBlockLead  = Nothing
     , cbeFees       = mkCCoin 0
     }])
-
-testGenesisPagesTotal
-    :: SqlBackend -> Maybe PageNumber
-    -> Maybe CAddressesFilter
-    -> Handler (Either ExplorerError PageNumber)
--- number of redeemed addresses pages
-testGenesisPagesTotal _backend _ (Just RedeemedAddresses)    = pure $ Right 1
--- number of non redeemed addresses pages
-testGenesisPagesTotal _backend _ (Just NonRedeemedAddresses) = pure $ Right 1
--- number of all redeem addresses pages
-testGenesisPagesTotal _backend _ _                           = pure $ Right 2
 
 -- mock CGenesisAddressInfo
 gAddressInfoA :: CGenesisAddressInfo
