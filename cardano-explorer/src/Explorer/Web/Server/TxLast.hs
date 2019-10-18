@@ -12,13 +12,12 @@ import           Data.ByteString.Char8 (ByteString)
 import           Data.Fixed (Fixed (..), Uni)
 import           Data.Word (Word64)
 
-import           Database.Esqueleto (InnerJoin(..), Value,
+import           Database.Esqueleto (Entity, InnerJoin(..), SqlExpr, Value,
                     (^.), (==.),
-                    desc, from, limit, on, orderBy, select, sum_, val, where_, unValue)
+                    desc, from, limit, on, orderBy, select, sub_select, sum_, where_, unValue)
 import           Database.Persist.Sql (SqlBackend)
 
-import           Explorer.DB (EntityField (..), Meta, TxId, isJust, listToMaybe, queryMeta,
-                    slotPosixTime)
+import           Explorer.DB (EntityField (..), Meta, Tx, isJust, queryMeta, slotPosixTime)
 import           Explorer.Web.ClientTypes (CHash (..), CTxEntry (..), CTxHash (..), mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
 import           Explorer.Web.Server.Util
@@ -42,26 +41,25 @@ queryCTxEntry meta = do
                 where_ (isJust $ blk ^. BlockSlotNo)
                 orderBy [desc (blk ^. BlockSlotNo)]
                 limit 20
-                pure (blk ^. BlockSlotNo, tx ^. TxHash, tx ^. TxId)
-    mapM (queryTxOutputs meta) $ map convert txRows
+                pure (blk ^. BlockSlotNo, tx ^. TxHash, txOutValue tx)
+    pure $ map convert txRows
   where
-    convert :: (Value (Maybe Word64), Value ByteString, Value TxId) -> (Maybe Word64, ByteString, TxId)
-    convert (a, b, c) = (unValue a, unValue b, unValue c)
+    convert :: (Value (Maybe Word64), Value ByteString, Value (Maybe Uni)) -> CTxEntry
+    convert (vslot, vhash, vtotal) =
+      CTxEntry
+        { cteId = CTxHash . CHash $ bsBase16Encode (unValue vhash)
+        , cteTimeIssued = fmap (slotPosixTime meta) (unValue vslot)
+        , cteAmount = mkCCoin (unTotal vtotal)
+        }
 
--- TODO : It should be possible to do this as part of the above in a single qeuery.
-queryTxOutputs :: MonadIO m => Meta -> (Maybe Word64, ByteString, TxId) -> ReaderT SqlBackend m CTxEntry
-queryTxOutputs meta (mSlotNo, hash, txid) = do
-    total <- select . from $ \ txOut -> do
-                where_ (txOut ^. TxOutTxId ==. val txid)
-                pure $ sum_ (txOut ^. TxOutValue)
-    pure $ CTxEntry
-            { cteId = CTxHash $ CHash (bsBase16Encode hash)
-            , cteTimeIssued = fmap (slotPosixTime meta) mSlotNo
-            , cteAmount = mkCCoin (unTotal $ listToMaybe total)
-            }
+txOutValue :: SqlExpr (Entity Tx) -> SqlExpr (Value (Maybe Uni))
+txOutValue tx =
+  sub_select . from $ \ txOut -> do
+    where_ (txOut ^. TxOutTxId ==. tx ^. TxId)
+    pure $ sum_ (txOut ^. TxOutValue)
 
-unTotal :: Maybe (Value (Maybe Uni)) -> Integer
+unTotal :: Value (Maybe Uni) -> Integer
 unTotal mvi =
-  case fmap unValue mvi of
-    Just (Just (MkFixed x)) -> x
+  case unValue mvi of
+    Just (MkFixed x) -> x
     _ -> 0

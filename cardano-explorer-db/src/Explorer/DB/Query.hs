@@ -34,12 +34,14 @@ module Explorer.DB.Query
   , queryUtxoAtSlotNo
 
   , entityPair
+  , epochUtcTime
   , listToMaybe
   , headMaybe
   , isJust
   , maybeToEither
   , renderLookupFail
   , slotPosixTime
+  , slotUtcTime
   , unValueSumAda
   , unBlockId
   , unValue2
@@ -260,10 +262,7 @@ querySlotUtcTime :: MonadIO m => Word64 -> ReaderT SqlBackend m (Either LookupFa
 querySlotUtcTime slotNo =
   runExceptT $ do
     meta <- ExceptT queryMeta
-    pure $ addUTCTime
-            -- Slot duration is in milliseconds.
-            (0.001 * fromIntegral (slotNo * metaSlotDuration meta))
-            (metaStartTime meta)
+    pure $ slotUtcTime meta slotNo
 
 -- | Get the current total supply of Lovelace.
 queryTotalSupply :: MonadIO m => ReaderT SqlBackend m Ada
@@ -392,6 +391,11 @@ entityPair :: Entity a -> (Key a, a)
 entityPair e =
   (entityKey e, entityVal e)
 
+epochUtcTime :: Meta -> Word64 -> UTCTime
+epochUtcTime meta epochNo =
+  -- Slot duration is in milliseconds.
+  addUTCTime (21.6 * fromIntegral (epochNo * metaSlotDuration meta)) (metaStartTime meta)
+
 headMaybe :: [a] -> Maybe a
 headMaybe [] = Nothing
 headMaybe (x:_) = Just x
@@ -405,10 +409,14 @@ maybeToEither e f =
   maybe (Left e) (Right . f)
 
 slotPosixTime :: Meta -> Word64 -> POSIXTime
-slotPosixTime meta slotNo =
-  utcTimeToPOSIXSeconds $
-    -- Slot duration is in milliseconds.
-    addUTCTime (0.001 * fromIntegral (slotNo * metaSlotDuration meta)) (metaStartTime meta)
+slotPosixTime meta =
+  utcTimeToPOSIXSeconds . slotUtcTime meta
+
+slotUtcTime :: Meta -> Word64 -> UTCTime
+slotUtcTime meta slotNo =
+  -- Slot duration is in milliseconds.
+  addUTCTime (0.001 * fromIntegral (slotNo * metaSlotDuration meta)) (metaStartTime meta)
+
 
 unBlockId :: BlockId -> Word64
 unBlockId = fromIntegral . unSqlBackendKey . unBlockKey
