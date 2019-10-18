@@ -10,14 +10,15 @@ import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Fixed (Fixed (..), Uni)
-import           Data.Word (Word64)
+import           Data.Time.Clock (UTCTime)
+import           Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 
 import           Database.Esqueleto (Entity, InnerJoin(..), SqlExpr, Value,
                     (^.), (==.),
                     desc, from, limit, on, orderBy, select, sub_select, sum_, where_, unValue)
 import           Database.Persist.Sql (SqlBackend)
 
-import           Explorer.DB (EntityField (..), Meta, Tx, isJust, queryMeta, slotPosixTime)
+import           Explorer.DB (EntityField (..), Tx, isJust)
 import           Explorer.Web.ClientTypes (CHash (..), CTxEntry (..), CTxHash (..), mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
 import           Explorer.Web.Server.Util
@@ -27,28 +28,24 @@ import           Servant (Handler)
 
 getLastTxs :: SqlBackend -> Handler (Either ExplorerError [CTxEntry])
 getLastTxs backend =
-  runQuery backend $ do
-    emeta <- queryMeta
-    case emeta of
-      Left err -> pure $ Left (EELookupFail err)
-      Right meta -> Right <$> queryCTxEntry meta
+  runQuery backend $ Right <$> queryCTxEntry
 
 
-queryCTxEntry :: MonadIO m => Meta -> ReaderT SqlBackend m [CTxEntry]
-queryCTxEntry meta = do
+queryCTxEntry :: MonadIO m => ReaderT SqlBackend m [CTxEntry]
+queryCTxEntry = do
     txRows <- select . from $ \ (blk `InnerJoin` tx) -> do
                 on (blk ^. BlockId ==. tx ^. TxBlock)
                 where_ (isJust $ blk ^. BlockSlotNo)
                 orderBy [desc (blk ^. BlockSlotNo)]
                 limit 20
-                pure (blk ^. BlockSlotNo, tx ^. TxHash, txOutValue tx)
+                pure (blk ^. BlockTime, tx ^. TxHash, txOutValue tx)
     pure $ map convert txRows
   where
-    convert :: (Value (Maybe Word64), Value ByteString, Value (Maybe Uni)) -> CTxEntry
-    convert (vslot, vhash, vtotal) =
+    convert :: (Value UTCTime, Value ByteString, Value (Maybe Uni)) -> CTxEntry
+    convert (vtime, vhash, vtotal) =
       CTxEntry
         { cteId = CTxHash . CHash $ bsBase16Encode (unValue vhash)
-        , cteTimeIssued = fmap (slotPosixTime meta) (unValue vslot)
+        , cteTimeIssued = Just $ utcTimeToPOSIXSeconds (unValue vtime)
         , cteAmount = mkCCoin (unTotal vtotal)
         }
 
