@@ -7,7 +7,7 @@ module Explorer.Web.Server.BlockPages
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Database.Esqueleto ((^.), count, from, select, unValue, where_)
+import           Database.Esqueleto ((^.), countRows, from, select, unValue, where_)
 import           Database.Persist.Sql (SqlBackend)
 
 import           Explorer.DB (EntityField (..), isJust, listToMaybe)
@@ -35,5 +35,5 @@ queryMainBlockCount :: MonadIO m => ReaderT SqlBackend m Word
 queryMainBlockCount = do
   res <- select . from $ \ blk -> do
             where_ (isJust $ blk ^. BlockBlockNo)
-            pure (count (blk ^. BlockBlockNo))
+            pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
