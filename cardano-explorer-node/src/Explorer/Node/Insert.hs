@@ -63,6 +63,7 @@ insertABOBBoundary tracer blk = do
   let prevHash = case Ledger.boundaryPrevHash (Ledger.boundaryHeader blk) of
                     Left gh -> genesisToHeaderHash gh
                     Right hh -> hh
+  meta <- leftPanic "insertABOBBoundary: " <$> DB.queryMeta
   pbid <- leftPanic "insertABOBBoundary: "
               <$> DB.queryBlockId (unHeaderHash prevHash)
   mle <- leftPanic "insertABOBBoundary: "
@@ -78,7 +79,7 @@ insertABOBBoundary tracer blk = do
               , DB.blockMerkelRoot = Nothing -- No merkelRoot for a boundary block
               , DB.blockSlotLeader = slid
               , DB.blockSize = fromIntegral $ Ledger.boundaryBlockLength blk
-              , DB.blockTime = Nothing
+              , DB.blockTime = DB.epochUtcTime meta (maybe 0 (+1) mle)
               }
   supply <- DB.queryTotalSupply
   liftIO $ do
@@ -111,7 +112,7 @@ insertABlock tracer blk (BlockNo tipBlockNo) = do
                     , DB.blockMerkelRoot = Just $ unCryptoHash (blockMerkelRoot blk)
                     , DB.blockSlotLeader = slid
                     , DB.blockSize = fromIntegral $ Ledger.blockLength blk
-                    , DB.blockTime = Just $ DB.slotUtcTime meta (slotNumber blk)
+                    , DB.blockTime = DB.slotUtcTime meta (slotNumber blk)
                     }
 
     mapM_ (insertTx tracer blkId) $ blockPayload blk
