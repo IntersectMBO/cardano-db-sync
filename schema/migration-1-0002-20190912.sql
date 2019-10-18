@@ -13,7 +13,7 @@ BEGIN
 	    from information_schema.views
         where table_catalog = 'cexplorer' and table_schema = 'public'
     loop
-      execute format ('drop view %s ;', vname) ;
+      execute format ('drop view if exists %s cascade ;', vname) ;
       raise notice 'Dropping view : %', vname ;
     end loop ;
 end $$ ;

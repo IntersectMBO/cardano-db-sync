@@ -50,6 +50,8 @@ package iohk-monitoring
 package typed-protocols-cbor
   tests: False
 
+package lobemo-backend-monitoring
+  tests: False
 
 source-repository-package
   type: git

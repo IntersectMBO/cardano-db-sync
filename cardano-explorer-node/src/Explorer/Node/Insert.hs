@@ -63,6 +63,7 @@ insertABOBBoundary tracer blk = do
   let prevHash = case Ledger.boundaryPrevHash (Ledger.boundaryHeader blk) of
                     Left gh -> genesisToHeaderHash gh
                     Right hh -> hh
+  meta <- leftPanic "insertABOBBoundary: " <$> DB.queryMeta
   pbid <- leftPanic "insertABOBBoundary: "
               <$> DB.queryBlockId (unHeaderHash prevHash)
   mle <- leftPanic "insertABOBBoundary: "
@@ -78,6 +79,7 @@ insertABOBBoundary tracer blk = do
               , DB.blockMerkelRoot = Nothing -- No merkelRoot for a boundary block
               , DB.blockSlotLeader = slid
               , DB.blockSize = fromIntegral $ Ledger.boundaryBlockLength blk
+              , DB.blockTime = DB.epochUtcTime meta (maybe 0 (+1) mle)
               }
   supply <- DB.queryTotalSupply
   liftIO $ do
@@ -94,10 +96,10 @@ insertABOBBoundary tracer blk = do
 
 insertABlock :: MonadIO m => Trace IO Text -> Ledger.ABlock ByteString -> BlockNo -> ReaderT SqlBackend m ()
 insertABlock tracer blk (BlockNo tipBlockNo) = do
-    pbid <- leftPanic "insertABlock: "
-                <$> DB.queryBlockId (unHeaderHash $ blockPreviousHash blk)
-    slotsPerEpoch
-          <- leftPanic "insertABlock: " <$> (fmap (\m -> 10 * DB.metaProtocolConst m) <$> DB.queryMeta)
+    meta <- leftPanic "insertABlock: " <$> DB.queryMeta
+    pbid <- leftPanic "insertABlock: " <$> DB.queryBlockId (unHeaderHash $ blockPreviousHash blk)
+
+    let slotsPerEpoch = 10 * DB.metaProtocolConst meta
 
     slid <- DB.insertSlotLeader $ mkSlotLeader blk
     blkId <- DB.insertBlock $
@@ -110,6 +112,7 @@ insertABlock tracer blk (BlockNo tipBlockNo) = do
                     , DB.blockMerkelRoot = Just $ unCryptoHash (blockMerkelRoot blk)
                     , DB.blockSlotLeader = slid
                     , DB.blockSize = fromIntegral $ Ledger.blockLength blk
+                    , DB.blockTime = DB.slotUtcTime meta (slotNumber blk)
                     }
 
     mapM_ (insertTx tracer blkId) $ blockPayload blk
