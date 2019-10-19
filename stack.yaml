@@ -46,9 +46,6 @@ extra-deps:
       - .
       - test
 
-  - git: http://github.com/well-typed/canonical-json
-    commit: ddfe3593b80b5ceb88842bb7a6f2268df75d2c2f
-
   - git: https://github.com/input-output-hk/cardano-sl-x509
     commit: 43a036c5bbe68ca2e9cbe611eab7982e2348fe49
 
