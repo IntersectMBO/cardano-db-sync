@@ -42,8 +42,9 @@ module Explorer.DB.Query
   , renderLookupFail
   , slotPosixTime
   , slotUtcTime
-  , txOutUnspent
-  , txOutSpent
+  , txOutSpentB
+  , txOutSpentP
+  , txOutUnspentP
   , unValueSumAda
   , unBlockId
   , unValue2
@@ -270,7 +271,7 @@ querySlotUtcTime slotNo =
 queryTotalSupply :: MonadIO m => ReaderT SqlBackend m Ada
 queryTotalSupply = do
     res <- select . from $ \ txOut -> do
-                txOutUnspent txOut
+                txOutUnspentP txOut
                 pure $ sum_ (txOut ^. TxOutValue)
     pure $ unValueSumAda (listToMaybe res)
 
@@ -356,23 +357,32 @@ queryUtxoAtSlotNo slotNo = do
 isJust :: PersistField a => SqlExpr (Value (Maybe a)) -> SqlExpr (Value Bool)
 isJust = not_ . isNothing
 
+-- Returns True if the TxOut has been spent.
+{-# INLINABLE txOutSpentB #-}
+txOutSpentB :: SqlExpr (Entity TxOut) -> SqlExpr (Value Bool)
+txOutSpentB txOut =
+  exists . from $ \ txIn ->
+    where_ (txOut ^. TxOutTxId ==. txIn ^. TxInTxOutId
+            &&. txOut ^. TxOutIndex ==. txIn ^. TxInTxOutIndex
+            )
+
 -- A predicate that filters out unspent 'TxOut' entries.
-{-# INLINABLE txOutSpent #-}
-txOutSpent :: SqlExpr (Entity TxOut) -> SqlQuery ()
-txOutSpent txOut =
+{-# INLINABLE txOutSpentP #-}
+txOutSpentP :: SqlExpr (Entity TxOut) -> SqlQuery ()
+txOutSpentP txOut =
   where_ . exists . from $ \ txIn -> do
-      where_ (txOut ^. TxOutTxId ==. txIn ^. TxInTxOutId
-              &&. txOut ^. TxOutIndex ==. txIn ^. TxInTxOutIndex
-              )
+    where_ (txOut ^. TxOutTxId ==. txIn ^. TxInTxOutId
+            &&. txOut ^. TxOutIndex ==. txIn ^. TxInTxOutIndex
+            )
 
 -- A predicate that filters out spent 'TxOut' entries.
-{-# INLINABLE txOutUnspent #-}
-txOutUnspent :: SqlExpr (Entity TxOut) -> SqlQuery ()
-txOutUnspent txOut =
+{-# INLINABLE txOutUnspentP #-}
+txOutUnspentP :: SqlExpr (Entity TxOut) -> SqlQuery ()
+txOutUnspentP txOut =
   where_ . notExists . from $ \ txIn -> do
-      where_ (txOut ^. TxOutTxId ==. txIn ^. TxInTxOutId
-              &&. txOut ^. TxOutIndex ==. txIn ^. TxInTxOutIndex
-              )
+    where_ (txOut ^. TxOutTxId ==. txIn ^. TxInTxOutId
+            &&. txOut ^. TxOutIndex ==. txIn ^. TxInTxOutIndex
+            )
 
 -- every tx made before or at the snapshot time
 txLessEqual :: BlockId -> SqlExpr (ValueList TxId)

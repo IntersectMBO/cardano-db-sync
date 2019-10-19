@@ -15,7 +15,7 @@ import           Database.Esqueleto (InnerJoin (..), Value,
                     val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
-import           Explorer.DB (EntityField (..), listToMaybe, txOutSpent)
+import           Explorer.DB (EntityField (..), listToMaybe, txOutSpentP)
 
 import           Explorer.Web.ClientTypes (CGenesisSummary (..), mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
@@ -52,7 +52,7 @@ queryGenesisRedeemed = do
     res <- select . from $ \ (blk `InnerJoin` tx `InnerJoin` txOut) -> do
               on (tx ^. TxId ==. txOut ^. TxOutTxId)
               on (blk ^. BlockId ==. tx ^. TxBlock)
-              txOutSpent txOut
+              txOutSpentP txOut
               -- Only the initial genesis block has a size of 0.
               where_ (blk ^. BlockSize ==. val 0)
               pure (countRows, sum_ (txOut ^. TxOutValue))
