@@ -9,7 +9,7 @@ import           Database.Esqueleto (InnerJoin (..), Value,
                     (^.), (==.), countRows, from, on, select, unValue, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
-import           Explorer.DB (EntityField (..), listToMaybe, txOutSpent, txOutUnspent)
+import           Explorer.DB (EntityField (..), listToMaybe, txOutSpentP, txOutUnspentP)
 
 import           Explorer.Web.ClientTypes (CAddressesFilter (..))
 import           Explorer.Web.Error (ExplorerError (..))
@@ -47,7 +47,7 @@ queryRedeemedGenesisAddressCount pageSize = do
   res <- select . from $ \ (blk `InnerJoin` tx `InnerJoin` txOut) -> do
             on (tx ^. TxId ==. txOut ^. TxOutTxId)
             on (blk ^. BlockId ==. tx ^. TxBlock)
-            txOutSpent txOut
+            txOutSpentP txOut
             -- Only the initial genesis block has a size of 0.
             where_ (blk ^. BlockSize ==. val 0)
             pure countRows
@@ -58,7 +58,7 @@ queryUnRedeemedGenesisAddressCount pageSize = do
   res <- select . from $ \ (blk `InnerJoin` tx `InnerJoin` txOut) -> do
             on (tx ^. TxId ==. txOut ^. TxOutTxId)
             on (blk ^. BlockId ==. tx ^. TxBlock)
-            txOutUnspent txOut
+            txOutUnspentP txOut
             -- Only the initial genesis block has a size of 0.
             where_ (blk ^. BlockSize ==. val 0)
             pure countRows
