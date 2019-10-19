@@ -25,6 +25,7 @@ import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSumma
                                               mkCCoin)
 import           Explorer.Web.Error       (ExplorerError (Internal))
 import           Explorer.Web.LegacyApi   (TxsStats, ExplorerApiRecord(_genesisSummary, _genesisAddressInfo, _genesisPagesTotal, _epochPages, _epochSlots, _statsTxs, _txsSummary, _addressSummary, _addressUtxoBulk, _blocksSummary, _blocksTxs, _txsLast, _dumpBlockRange, _blocksPages, _blocksPagesTotal, _totalAda, ExplorerApiRecord), PageNumber)
+import           Explorer.Web.Server.Types (PageNo (..), PageSize (..))
 import           Explorer.Web.API1 (ExplorerApi1Record(ExplorerApi1Record,_utxoHeight, _utxoHash), V1Utxo)
 import           Network.Wai.Handler.Warp (run)
 import           Servant                  (Handler, Server, Application, serve, (:<|>)((:<|>)))
@@ -110,8 +111,8 @@ testDumpBlockRange start _ = do
     (_, Left err) -> pure $ Left err
 
 testBlocksPages
-    :: Maybe PageNumber
-    -> Maybe PageNumber
+    :: Maybe PageNo
+    -> Maybe PageSize
     -> Handler (Either ExplorerError (PageNumber, [CBlockEntry]))
 testBlocksPages _ _  = pure $ Right (1, [CBlockEntry
     { cbeEpoch      = 37294
@@ -127,7 +128,7 @@ testBlocksPages _ _  = pure $ Right (1, [CBlockEntry
     }])
 
 testBlocksPagesTotal
-    :: Maybe PageNumber
+    :: Maybe PageSize
     -> Handler (Either ExplorerError PageNumber)
 testBlocksPagesTotal _ = pure $ Right 10
 
@@ -262,7 +263,7 @@ testGenesisSummary = pure $ Right CGenesisSummary
     }
 
 testGenesisPagesTotal
-    :: Maybe PageNumber
+    :: Maybe PageSize
     -> Maybe CAddressesFilter
     -> Handler (Either ExplorerError PageNumber)
 -- number of redeemed addresses pages
@@ -297,8 +298,8 @@ gAddressInfoC = CGenesisAddressInfo
     }
 
 testGenesisAddressInfo
-    :: Maybe Word
-    -> Maybe Word
+    :: Maybe PageNo
+    -> Maybe PageSize
     -> Maybe CAddressesFilter
     -> Handler (Either ExplorerError [CGenesisAddressInfo])
 -- filter redeemed addresses
@@ -306,16 +307,16 @@ testGenesisAddressInfo _ _ (Just RedeemedAddresses)    = pure $ Right [ gAddress
 -- filter non-redeemed addresses
 testGenesisAddressInfo _ _ (Just NonRedeemedAddresses) = pure $ Right [ gAddressInfoB, gAddressInfoC ]
 -- all addresses (w/o filtering) - page 1
-testGenesisAddressInfo (Just 1) _ (Just AllAddresses)  = pure $ Right [ gAddressInfoA, gAddressInfoB ]
-testGenesisAddressInfo (Just 1) _ Nothing              = pure $ Right [ gAddressInfoA, gAddressInfoB ]
+testGenesisAddressInfo (Just (PageNo 1)) _ (Just AllAddresses)  = pure $ Right [ gAddressInfoA, gAddressInfoB ]
+testGenesisAddressInfo (Just (PageNo 1)) _ Nothing              = pure $ Right [ gAddressInfoA, gAddressInfoB ]
 -- all addresses (w/o filtering) - page 2
-testGenesisAddressInfo (Just 2) _ (Just AllAddresses)  = pure $ Right [ gAddressInfoC ]
-testGenesisAddressInfo (Just 2) _ Nothing              = pure $ Right [ gAddressInfoC ]
+testGenesisAddressInfo (Just (PageNo 2)) _ (Just AllAddresses)  = pure $ Right [ gAddressInfoC ]
+testGenesisAddressInfo (Just (PageNo 2)) _ Nothing              = pure $ Right [ gAddressInfoC ]
 -- all others requests will ended up with an error
 testGenesisAddressInfo _ _ _ =  pure $ Left $ Internal "Error while pagening genesis addresses"
 
 testStatsTxs
-    :: Maybe Word
+    :: Maybe PageNo
     -> Handler (Either ExplorerError TxsStats)
 testStatsTxs _ = pure $ Right (1, [(cTxId, 200)])
 

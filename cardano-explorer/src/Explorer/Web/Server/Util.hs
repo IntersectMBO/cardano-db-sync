@@ -6,7 +6,6 @@ module Explorer.Web.Server.Util
   , defaultPageSize
   , divRoundUp
   , k
-  , roundToBlockPage
   , runQuery
   , slotsPerEpoch
   , textBase16Decode
@@ -31,6 +30,7 @@ import           Data.Word (Word64)
 import           Database.Persist.Sql (SqlBackend, runSqlConn)
 
 import           Explorer.Web.Error (ExplorerError (..))
+import           Explorer.Web.Server.Types (PageSize (..))
 
 -- | bsBase16Encode : Convert a raw ByteString to Base16 and then encode it as Text.
 bsBase16Encode :: ByteString -> Text
@@ -46,8 +46,8 @@ decodeTextAddress txt =
     $ fromCBORTextAddress txt
 
 
-defaultPageSize :: Word
-defaultPageSize = 10
+defaultPageSize :: PageSize
+defaultPageSize = PageSize 10
 
 divRoundUp :: Integral a => a -> a -> a
 divRoundUp a b = (a + b - 1) `div` b
@@ -55,15 +55,6 @@ divRoundUp a b = (a + b - 1) `div` b
 -- TODO, get this from the config somehow
 k :: Word64
 k = 2160
-
--- | A pure calculation of the page number.
--- Get total pages from the blocks. And we want the page
--- with the example, the page size 10,
--- to start with 10 + 1 == 11, not with 10 since with
--- 10 we'll have an empty page.
--- Could also be `((blocksTotal - 1) `div` pageSizeInt) + 1`.
-roundToBlockPage :: Word -> Word
-roundToBlockPage blocksTotal = divRoundUp blocksTotal defaultPageSize
 
 runQuery :: MonadIO m => SqlBackend -> ReaderT SqlBackend IO a -> m a
 runQuery backend query =
@@ -81,5 +72,5 @@ textBase16Decode text = do
 textShow :: Show a => a -> Text
 textShow = Text.pack . show
 
-toPageSize :: Maybe Word -> Word
+toPageSize :: Maybe PageSize -> PageSize
 toPageSize = fromMaybe defaultPageSize
