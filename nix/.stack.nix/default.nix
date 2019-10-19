@@ -37,7 +37,6 @@
         cardano-shell = ./cardano-shell.nix;
         cardano-prelude = ./cardano-prelude.nix;
         cardano-prelude-test = ./cardano-prelude-test.nix;
-        canonical-json = ./canonical-json.nix;
         cardano-sl-x509 = ./cardano-sl-x509.nix;
         contra-tracer = ./contra-tracer.nix;
         iohk-monitoring = ./iohk-monitoring.nix;
