@@ -10,7 +10,7 @@ import           Test.Tasty.HUnit (testCase)
 
 import           Explorer.DB
 import           Explorer.Web.Query
-import           Test.IO.Explorer.DB.Util (testSlotLeader, assertBool, mkBlockHash)
+import           Test.IO.Explorer.DB.Util (assertBool, dummyUTCTime, mkBlockHash, testSlotLeader)
 
 import           Control.Monad.IO.Class (liftIO, MonadIO)
 import           Control.Monad.Logger
@@ -165,14 +165,14 @@ deriving instance Ord TxOut
 
 blockZero :: SlotLeaderId -> Block
 blockZero slid =
-  Block (mkHash '\0') Nothing Nothing Nothing Nothing Nothing slid 0
+  Block (mkHash '\0') Nothing Nothing Nothing Nothing Nothing slid 0 dummyUTCTime
 
 mkHash :: Char -> ByteString
 mkHash = BS.pack . replicate 32
 
 mkBlock :: Word64 -> SlotLeaderId -> BlockId -> Block
 mkBlock blk slid previous =
-  Block (mkBlockHash blk) Nothing Nothing (Just blk) (Just previous) Nothing slid 0
+  Block (mkBlockHash blk) Nothing Nothing (Just blk) (Just previous) Nothing slid 0 dummyUTCTime
 
 -- TODO, make a `mkTxHash`, so the tx hashes dont claim `block #0`
 mkTx :: Word64 -> BlockId -> Tx
