@@ -32,6 +32,7 @@ import           Explorer.Web.ClientTypes (CAddress, CAddressSummary,
                                            CHash, CTxBrief, CTxEntry, CTxHash,
                                            CTxSummary, CUtxo)
 import           Explorer.Web.Error       (ExplorerError)
+import           Explorer.Web.Server.Types (PageNo (..), PageSize (..))
 --import           Pos.Util.Servant (DQueryParam, ModifiesApiRes (..), VerbMod)
 
 type PageNumber = Word
@@ -54,8 +55,8 @@ data ExplorerApiRecord route = ExplorerApiRecord
         :- Summary "Get the list of blocks, contained in pages."
         :> "blocks"
         :> "pages"
-        :> QueryParam "page" Word
-        :> QueryParam "pageSize" Word
+        :> QueryParam "page" PageNo
+        :> QueryParam "pageSize" PageSize
         :> ExRes Get (PageNumber, [CBlockEntry])
 
   , _dumpBlockRange :: route
@@ -71,7 +72,7 @@ data ExplorerApiRecord route = ExplorerApiRecord
         :> "blocks"
         :> "pages"
         :> "total"
-        :> QueryParam "pageSize" PageNumber
+        :> QueryParam "pageSize" PageSize
         :> ExRes Get PageNumber
 
   , _blocksSummary :: route
@@ -142,22 +143,22 @@ data ExplorerApiRecord route = ExplorerApiRecord
         :> "address"
         :> "pages"
         :> "total"
-        :> QueryParam "pageSize" Word
+        :> QueryParam "pageSize" PageSize
         :> QueryParam "filter" CAddressesFilter
         :> ExRes Get PageNumber
 
   , _genesisAddressInfo :: route
         :- "genesis"
         :> "address"
-        :> QueryParam "page" Word
-        :> QueryParam "pageSize" Word
+        :> QueryParam "page" PageNo
+        :> QueryParam "pageSize" PageSize
         :> QueryParam "filter" CAddressesFilter
         :> ExRes Get [CGenesisAddressInfo]
 
   , _statsTxs :: route
         :- "stats"
         :> "txs"
-        :> QueryParam "page" Word
+        :> QueryParam "page" PageNo
         :> ExRes Get TxsStats
   }
   deriving (Generic)

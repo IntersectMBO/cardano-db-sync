@@ -18,6 +18,7 @@ import           Explorer.Web.Query (TxWithInputsOutputs (..), queryBlockSummary
 import           Explorer.Web.API1 (ExplorerApi1Record (..), V1Utxo (..))
 import qualified Explorer.Web.API1 as API1
 import           Explorer.Web.LegacyApi (ExplorerApiRecord (..), TxsStats, PageNumber)
+import           Explorer.Web.Server.Types (PageNo (..), PageSize (..))
 
 import           Explorer.Web.Server.BlockPages
 import           Explorer.Web.Server.GenesisPages
@@ -109,8 +110,8 @@ testDumpBlockRange backend start _ = do
     (_, Left err) -> pure $ Left err
 
 testBlocksPages
-    :: SqlBackend -> Maybe PageNumber
-    -> Maybe Word
+    :: SqlBackend -> Maybe PageNo
+    -> Maybe PageSize
     -> Handler (Either ExplorerError (PageNumber, [CBlockEntry]))
 testBlocksPages _backend _ _  = pure $ Right (1, [CBlockEntry
     { cbeEpoch      = 37294
@@ -324,8 +325,8 @@ gAddressInfoC = CGenesisAddressInfo
     }
 
 testGenesisAddressInfo
-    :: SqlBackend -> Maybe Word
-    -> Maybe Word
+    :: SqlBackend -> Maybe PageNo
+    -> Maybe PageSize
     -> Maybe CAddressesFilter
     -> Handler (Either ExplorerError [CGenesisAddressInfo])
 -- filter redeemed addresses
@@ -333,16 +334,16 @@ testGenesisAddressInfo _backend _ _ (Just RedeemedAddresses)    = pure $ Right [
 -- filter non-redeemed addresses
 testGenesisAddressInfo _backend _ _ (Just NonRedeemedAddresses) = pure $ Right [ gAddressInfoB, gAddressInfoC ]
 -- all addresses (w/o filtering) - page 1
-testGenesisAddressInfo _backend (Just 1) _ (Just AllAddresses)  = pure $ Right [ gAddressInfoA, gAddressInfoB ]
-testGenesisAddressInfo _backend (Just 1) _ Nothing              = pure $ Right [ gAddressInfoA, gAddressInfoB ]
+testGenesisAddressInfo _backend (Just (PageNo 1)) _ (Just AllAddresses)  = pure $ Right [ gAddressInfoA, gAddressInfoB ]
+testGenesisAddressInfo _backend (Just (PageNo 1)) _ Nothing              = pure $ Right [ gAddressInfoA, gAddressInfoB ]
 -- all addresses (w/o filtering) - page 2
-testGenesisAddressInfo _backend (Just 2) _ (Just AllAddresses)  = pure $ Right [ gAddressInfoC ]
-testGenesisAddressInfo _backend (Just 2) _ Nothing              = pure $ Right [ gAddressInfoC ]
+testGenesisAddressInfo _backend (Just (PageNo 2)) _ (Just AllAddresses)  = pure $ Right [ gAddressInfoC ]
+testGenesisAddressInfo _backend (Just (PageNo 2)) _ Nothing              = pure $ Right [ gAddressInfoC ]
 -- all others requests will ended up with an error
 testGenesisAddressInfo _backend _ _ _ =  pure $ Left $ Internal "Error while pagening genesis addresses"
 
 testStatsTxs
-    :: SqlBackend -> Maybe Word
+    :: SqlBackend -> Maybe PageNo
     -> Handler (Either ExplorerError TxsStats)
 testStatsTxs _backend _ = pure $ Right (1, [(cTxId, 200)])
 
