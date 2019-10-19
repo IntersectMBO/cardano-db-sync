@@ -11,11 +11,11 @@ import           Control.Monad.Trans.Reader (ReaderT)
 import           Data.Fixed (Fixed (..), Uni)
 
 import           Database.Esqueleto (InnerJoin (..), Value,
-                    (^.), (==.), count, from, on, select, sum_, unValue,
+                    (^.), (==.), countRows, from, on, select, sum_, unValue,
                     val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
-import           Explorer.DB (EntityField (..), listToMaybe, txOutSpent)
+import           Explorer.DB (EntityField (..), listToMaybe, txOutSpentP)
 
 import           Explorer.Web.ClientTypes (CGenesisSummary (..), mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
@@ -44,7 +44,7 @@ queryInitialGenesis = do
               on (blk ^. BlockId ==. tx ^. TxBlock)
               -- Only the initial genesis block has a size of 0.
               where_ (blk ^. BlockSize ==. val 0)
-              pure (count (tx ^. TxFee), sum_ (txOut ^. TxOutValue))
+              pure (countRows, sum_ (txOut ^. TxOutValue))
     pure $ maybe (0, 0) convertPair (listToMaybe res)
 
 queryGenesisRedeemed :: MonadIO m => ReaderT SqlBackend m (Word, Integer)
@@ -52,10 +52,10 @@ queryGenesisRedeemed = do
     res <- select . from $ \ (blk `InnerJoin` tx `InnerJoin` txOut) -> do
               on (tx ^. TxId ==. txOut ^. TxOutTxId)
               on (blk ^. BlockId ==. tx ^. TxBlock)
-              txOutSpent txOut
+              txOutSpentP txOut
               -- Only the initial genesis block has a size of 0.
               where_ (blk ^. BlockSize ==. val 0)
-              pure (count (tx ^. TxFee), sum_ (txOut ^. TxOutValue))
+              pure (countRows, sum_ (txOut ^. TxOutValue))
     pure $ maybe (0, 0) convertPair (listToMaybe res)
 
 convertPair :: (Value Word, Value (Maybe Uni)) -> (Word, Integer)
