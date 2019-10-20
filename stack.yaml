@@ -82,7 +82,7 @@ extra-deps:
       - crypto/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: d3e71facd53da4a2c72e4947f551ddeac45fba41
+    commit: e3a2401aa324afe1287c89d827a92f2e784a3da0
     subdirs:
       - io-sim-classes
       - network-mux
