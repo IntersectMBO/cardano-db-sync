@@ -36,7 +36,7 @@ extra-deps:
   - text-ansi-0.1.0
 
   - git: https://github.com/input-output-hk/cardano-shell
-    commit: 036ff2b45e27a2b47b56f43bee988fbdd1d1d073
+    commit: 8abae427c44f0b447117f78e2c1f5006dac2edf8
     subdirs:
       - cardano-shell
 
@@ -50,7 +50,7 @@ extra-deps:
     commit: 43a036c5bbe68ca2e9cbe611eab7982e2348fe49
 
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: 1ebe57df3a76a8ae4e3b5a31a9b85132f71534fc
+    commit: ba6e4eaf61903d2bd4d745215bae29d35a58d0b6
     subdirs:
       - contra-tracer
       - iohk-monitoring
@@ -61,20 +61,20 @@ extra-deps:
       - plugins/scribe-systemd
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: 8128dceddbb9074f5b25ca01728613cac4360298
+    commit: e1189d45bf3384aa6e6ba4f1ed829ca97d08b563
     subdirs:
       - cardano-config
       - cardano-node
 
   - git: https://github.com/input-output-hk/cardano-base
-    commit: 64bb761664c9ca8a52a0023dc1a92c9b5b884497
+    commit: 5c575d46afbfe333de0ccba70b084db8302abf42
     subdirs:
       - binary
       - binary/test
       - cardano-crypto-class
 
   - git: https://github.com/input-output-hk/cardano-ledger
-    commit: a1de5b52c32255464564a6c5a8a9e474086e3875
+    commit: 8854e56b68ab3b73ed2fd445d8c1db7d34b7c7f2
     subdirs:
       - cardano-ledger
       - cardano-ledger/test
@@ -82,7 +82,7 @@ extra-deps:
       - crypto/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: e3a2401aa324afe1287c89d827a92f2e784a3da0
+    commit: d3e71facd53da4a2c72e4947f551ddeac45fba41
     subdirs:
       - io-sim-classes
       - network-mux
