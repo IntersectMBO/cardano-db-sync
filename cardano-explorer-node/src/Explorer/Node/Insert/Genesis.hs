@@ -177,7 +177,7 @@ genesisTxos config =
   where
     avvmBalances :: [(Ledger.Address, Ledger.Lovelace)]
     avvmBalances =
-      first (Ledger.makeRedeemAddress networkMagic)
+      first (Ledger.makeRedeemAddress networkMagic . Crypto.fromCompactRedeemVerificationKey)
         <$> Map.toList (Ledger.unGenesisAvvmBalances $ Ledger.configAvvmDistr config)
 
     networkMagic :: Ledger.NetworkMagic
