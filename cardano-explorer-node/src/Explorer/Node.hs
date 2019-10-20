@@ -150,7 +150,7 @@ initializeAllFeatures enp = do
                   -- It would also require catching at the top level and printing.
                   Right x  -> pure x
 
-  (loggingLayer, loggingFeature) <- createLoggingFeature NoEnvironment finalConfig (enpLogging enp)
+  (loggingLayer, loggingFeature) <- createLoggingFeature NoEnvironment finalConfig
   (nodeLayer   , nodeFeature)    <- createNodeFeature loggingLayer enp finalConfig
 
   pure ([ loggingFeature, nodeFeature ], nodeLayer)
