@@ -8,8 +8,7 @@ import           Explorer.DB (Ada, Block (..), Tx (..), TxOut (..),
                     readPGPassFileEnv, toConnectionString)
 import           Explorer.Web.Api            (ExplorerApi, explorerApi)
 import           Explorer.Web.ClientTypes (CAddress (..), CAddressSummary (..), CAddressType (..),
-                    CAddressesFilter (..), CBlockEntry (..), CBlockRange (..), CBlockSummary (..),
-                    CGenesisAddressInfo (..), CHash (CHash), CCoin,
+                    CBlockEntry (..), CBlockRange (..), CBlockSummary (..), CHash (..), CCoin,
                     CTxBrief (..), CTxHash (..), CTxSummary (..), CUtxo (..),
                     mkCCoin, adaToCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
@@ -21,6 +20,7 @@ import           Explorer.Web.LegacyApi (ExplorerApiRecord (..), TxsStats, PageN
 import           Explorer.Web.Server.Types (PageNo (..), PageSize (..))
 
 import           Explorer.Web.Server.BlockPages
+import           Explorer.Web.Server.GenesisAddress
 import           Explorer.Web.Server.GenesisPages
 import           Explorer.Web.Server.GenesisSummary
 import           Explorer.Web.Server.TxLast
@@ -79,7 +79,7 @@ explorerHandlers backend = (toServant oldHandlers) :<|> (toServant newHandlers)
       , _epochSlots         = testEpochSlotSearch backend
       , _genesisSummary     = genesisSummary backend
       , _genesisPagesTotal  = genesisPages backend
-      , _genesisAddressInfo = testGenesisAddressInfo backend
+      , _genesisAddressInfo = genesisAddressInfo backend
       , _statsTxs           = testStatsTxs backend
       } :: ExplorerApiRecord (AsServerT Handler)
     newHandlers = ExplorerApi1Record
@@ -299,48 +299,6 @@ testEpochPageSearch _backend _ _ = pure $ Right (1, [CBlockEntry
     , cbeBlockLead  = Nothing
     , cbeFees       = mkCCoin 0
     }])
-
--- mock CGenesisAddressInfo
-gAddressInfoA :: CGenesisAddressInfo
-gAddressInfoA = CGenesisAddressInfo
-    { cgaiCardanoAddress   = CAddress "not-implemented-yet"
-    , cgaiGenesisAmount    = mkCCoin 2225295000000
-    , cgaiIsRedeemed       = True
-    }
-
--- mock another CGenesisAddressInfo
-gAddressInfoB :: CGenesisAddressInfo
-gAddressInfoB = CGenesisAddressInfo
-    { cgaiCardanoAddress   = CAddress "not-implemented-yet"
-    , cgaiGenesisAmount    = mkCCoin 15000000
-    , cgaiIsRedeemed       = False
-    }
-
--- mock another CGenesisAddressInfo
-gAddressInfoC :: CGenesisAddressInfo
-gAddressInfoC = CGenesisAddressInfo
-    { cgaiCardanoAddress   = CAddress "not-implemented-yet"
-    , cgaiGenesisAmount    = mkCCoin 333000000
-    , cgaiIsRedeemed       = False
-    }
-
-testGenesisAddressInfo
-    :: SqlBackend -> Maybe PageNo
-    -> Maybe PageSize
-    -> Maybe CAddressesFilter
-    -> Handler (Either ExplorerError [CGenesisAddressInfo])
--- filter redeemed addresses
-testGenesisAddressInfo _backend _ _ (Just RedeemedAddresses)    = pure $ Right [ gAddressInfoA ]
--- filter non-redeemed addresses
-testGenesisAddressInfo _backend _ _ (Just NonRedeemedAddresses) = pure $ Right [ gAddressInfoB, gAddressInfoC ]
--- all addresses (w/o filtering) - page 1
-testGenesisAddressInfo _backend (Just (PageNo 1)) _ (Just AllAddresses)  = pure $ Right [ gAddressInfoA, gAddressInfoB ]
-testGenesisAddressInfo _backend (Just (PageNo 1)) _ Nothing              = pure $ Right [ gAddressInfoA, gAddressInfoB ]
--- all addresses (w/o filtering) - page 2
-testGenesisAddressInfo _backend (Just (PageNo 2)) _ (Just AllAddresses)  = pure $ Right [ gAddressInfoC ]
-testGenesisAddressInfo _backend (Just (PageNo 2)) _ Nothing              = pure $ Right [ gAddressInfoC ]
--- all others requests will ended up with an error
-testGenesisAddressInfo _backend _ _ _ =  pure $ Left $ Internal "Error while pagening genesis addresses"
 
 testStatsTxs
     :: SqlBackend -> Maybe PageNo
