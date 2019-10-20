@@ -18,28 +18,40 @@
       "library" = {
         depends = [
           (hsPkgs.base)
-          (hsPkgs.cardano-shell)
+          (hsPkgs.aeson)
+          (hsPkgs.async)
+          (hsPkgs.bytestring)
+          (hsPkgs.cardano-crypto-wrapper)
+          (hsPkgs.cardano-ledger)
           (hsPkgs.cardano-prelude)
+          (hsPkgs.cardano-prelude-test)
+          (hsPkgs.cardano-shell)
+          (hsPkgs.cborg)
+          (hsPkgs.contra-tracer)
+          (hsPkgs.generic-monoid)
           (hsPkgs.iohk-monitoring)
           (hsPkgs.lobemo-backend-aggregation)
           (hsPkgs.lobemo-backend-editor)
           (hsPkgs.lobemo-backend-ekg)
           (hsPkgs.lobemo-backend-monitoring)
           (hsPkgs.lobemo-scribe-systemd)
-          (hsPkgs.ouroboros-consensus)
-          (hsPkgs.async)
-          (hsPkgs.generic-monoid)
+          (hsPkgs.network)
           (hsPkgs.optparse-applicative)
+          (hsPkgs.ouroboros-consensus)
+          (hsPkgs.ouroboros-network)
+          (hsPkgs.iproute)
           (hsPkgs.safe-exceptions)
+          (hsPkgs.string-conv)
           (hsPkgs.stm)
+          (hsPkgs.text)
           ];
         };
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/cardano-node";
-      rev = "8128dceddbb9074f5b25ca01728613cac4360298";
-      sha256 = "16fj9wjq6c21152fj14y5jxsiymp49dp4x67pzvqhsb7yyb819p9";
+      rev = "e1189d45bf3384aa6e6ba4f1ed829ca97d08b563";
+      sha256 = "0rn867c3wla8hbfjcafgilyrd620mkfn2n9y8rkmjywjnv2vygnp";
       });
     postUnpack = "sourceRoot+=/cardano-config; echo source root reset to \$sourceRoot";
     }
