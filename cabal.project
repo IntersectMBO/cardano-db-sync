@@ -1,5 +1,6 @@
 packages:
   cardano-explorer-db
+  cardano-explorer-db/test
   cardano-explorer-node
   cardano-explorer
 

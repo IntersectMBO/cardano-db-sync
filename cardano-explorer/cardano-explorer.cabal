@@ -44,6 +44,7 @@ library
                       , Explorer.Web.Query
                       , Explorer.Web.Server
                       , Explorer.Web.Server.BlockPages
+                      , Explorer.Web.Server.GenesisAddress
                       , Explorer.Web.Server.GenesisPages
                       , Explorer.Web.Server.GenesisSummary
                       , Explorer.Web.Server.TxLast
