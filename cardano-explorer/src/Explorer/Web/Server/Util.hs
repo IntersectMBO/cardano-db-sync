@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Explorer.Web.Server.Util
-  ( bsBase16Encode
+  ( blockPosixTime
+  , bsBase16Encode
   , decodeTextAddress
   , defaultPageSize
   , divRoundUp
@@ -25,12 +26,18 @@ import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
+import           Data.Time.Clock.POSIX (POSIXTime, utcTimeToPOSIXSeconds)
 import           Data.Word (Word64)
 
 import           Database.Persist.Sql (SqlBackend, runSqlConn)
 
+import           Explorer.DB (Block (..))
 import           Explorer.Web.Error (ExplorerError (..))
 import           Explorer.Web.Server.Types (PageSize (..))
+
+
+blockPosixTime :: Block -> POSIXTime
+blockPosixTime = utcTimeToPOSIXSeconds . blockTime
 
 -- | bsBase16Encode : Convert a raw ByteString to Base16 and then encode it as Text.
 bsBase16Encode :: ByteString -> Text

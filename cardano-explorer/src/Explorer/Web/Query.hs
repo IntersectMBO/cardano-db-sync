@@ -4,8 +4,6 @@ module Explorer.Web.Query
   ( queryBlockHash
   , queryBlockSummary
   , queryNextBlock
-  , queryTxSummary
-  , queryTx
   , queryBlockTxs
   , queryUtxoSnapshot
   , queryBlockIdFromHeight
@@ -23,24 +21,10 @@ import           Data.Time.Clock.POSIX (POSIXTime)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Explorer.DB (Block, BlockId, blockPrevious, listToMaybe, blockSlotNo, querySlotPosixTime
+import           Explorer.DB (Block, BlockId, blockPrevious, blockSlotNo, listToMaybe, querySlotPosixTime
                             , EntityField(BlockHash, BlockPrevious, BlockId, TxHash, TxOutValue, TxOutAddress, TxInTxInId, TxOutIndex, TxInTxOutIndex, TxOutTxId, TxInTxOutId, TxBlock, TxFee, TxBlock, TxId, BlockSlotNo, BlockBlockNo, SlotLeaderId, SlotLeaderHash, BlockSlotLeader)
                             , TxId
-                            , entityPair, Tx, TxOut, Ada, LookupFail(DbLookupTxHash), maybeToEither, unValueSumAda, txBlock, querySelectCount, txOutTxId)
-
-queryBlockById :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe Block)
-queryBlockById blockid = do
-  rows <- select . from $ \blk -> do
-      where_ $ blk ^. BlockId ==. val blockid
-      pure blk
-  pure $ fmap entityVal (listToMaybe rows)
-
-queryOutputsByTxId :: MonadIO m => TxId -> ReaderT SqlBackend m [TxOut]
-queryOutputsByTxId txid = do
-  rows <- select . from $ \txout -> do
-    where_ $ txout ^. TxOutTxId ==. val txid
-    pure txout
-  pure $ map entityVal rows
+                            , Tx, TxOut, Ada, unValueSumAda, querySelectCount, txOutTxId)
 
 queryBlockHash :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe ByteString)
 queryBlockHash blkid = do
@@ -93,20 +77,6 @@ queryBlockSummary blkHash = do
 querySlotTimeSeconds :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe POSIXTime)
 querySlotTimeSeconds slotNo =
   either (const Nothing) Just <$> querySlotPosixTime slotNo
-
-queryTxSummary :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe (Tx, Block, [(Text, Word64)], [TxOut]))
-queryTxSummary txhash = do
-  eTx <- queryTx txhash
-  case eTx of
-    Right (txid, tx) -> do
-      mBlock <- queryBlockById (txBlock tx)
-      case mBlock of
-        Just block -> do
-          inputs <- queryGetInputOutputs txid
-          outputs <- queryOutputsByTxId txid
-          pure $ Just (tx, block, inputs, outputs)
-        Nothing -> pure Nothing
-    Left _ -> pure Nothing -- TODO
 
 queryTotalFeeInBlock :: MonadIO m => BlockId -> ReaderT SqlBackend m Ada
 queryTotalFeeInBlock blockid = do
@@ -164,13 +134,6 @@ queryGetInputOutputs txid = do
     unvalues :: (Value Text, Value Word64) -> (Text, Word64)
     unvalues (a,b) = (unValue a, unValue b)
   pure $ map unvalues rows
-
-queryTx :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail (TxId, Tx))
-queryTx hash = do
-  res <- select . from $ \ tx -> do
-            where_ (tx ^. TxHash ==. val hash)
-            pure tx
-  pure $ maybeToEither (DbLookupTxHash hash) entityPair (listToMaybe res)
 
 data TxWithInputsOutputs = TxWithInputsOutputs
   { txwTx :: Tx
