@@ -9,10 +9,10 @@ import           Explorer.DB (Ada, Block (..), Tx (..), TxOut (..),
 import           Explorer.Web.Api            (ExplorerApi, explorerApi)
 import           Explorer.Web.ClientTypes (CAddress (..), CAddressSummary (..), CAddressType (..),
                     CBlockEntry (..), CBlockRange (..), CBlockSummary (..), CHash (..), CCoin,
-                    CTxBrief (..), CTxHash (..), CTxSummary (..), CUtxo (..),
+                    CTxBrief (..), CTxHash (..), CUtxo (..),
                     mkCCoin, adaToCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
-import           Explorer.Web.Query (TxWithInputsOutputs (..), queryBlockSummary, queryTxSummary,
+import           Explorer.Web.Query (TxWithInputsOutputs (..), queryBlockSummary,
                     queryBlockTxs, queryBlockIdFromHeight, queryUtxoSnapshot)
 import           Explorer.Web.API1 (ExplorerApi1Record (..), V1Utxo (..))
 import qualified Explorer.Web.API1 as API1
@@ -24,6 +24,7 @@ import           Explorer.Web.Server.GenesisAddress
 import           Explorer.Web.Server.GenesisPages
 import           Explorer.Web.Server.GenesisSummary
 import           Explorer.Web.Server.TxLast
+import           Explorer.Web.Server.TxsSummary
 import           Explorer.Web.Server.Util
 
 import           Cardano.Chain.Slotting      (EpochNumber (EpochNumber))
@@ -31,7 +32,8 @@ import           Cardano.Chain.Slotting      (EpochNumber (EpochNumber))
 import           Control.Monad.IO.Class      (liftIO, MonadIO)
 import           Control.Monad.Logger        (runStdoutLoggingT)
 import           Control.Monad.Trans.Reader  (ReaderT)
-import           Control.Monad.Trans.Except (ExceptT(ExceptT), runExceptT, throwE)
+import           Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
+-- import           Control.Monad.Trans.Except.Extra (hoistEither)
 import           Data.Maybe (fromMaybe)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Base16 as Base16
@@ -72,7 +74,7 @@ explorerHandlers backend = (toServant oldHandlers) :<|> (toServant newHandlers)
       , _blocksSummary      = blocksSummary backend
       , _blocksTxs          = getBlockTxs backend
       , _txsLast            = getLastTxs backend
-      , _txsSummary         = testTxsSummary backend
+      , _txsSummary         = txsSummary backend
       , _addressSummary     = testAddressSummary backend
       , _addressUtxoBulk    = testAddressUtxoBulk backend
       , _epochPages         = testEpochPageSearch backend
@@ -99,7 +101,7 @@ totalAda backend = Right <$> runQuery backend queryTotalSupply
 testDumpBlockRange :: SqlBackend -> CHash -> CHash -> Handler (Either ExplorerError CBlockRange)
 testDumpBlockRange backend start _ = do
   edummyBlock <- blocksSummary backend start
-  edummyTx <- testTxsSummary backend cTxId
+  edummyTx <- txsSummary backend cTxId
   case (edummyBlock,edummyTx) of
     (Right dummyBlock, Right dummyTx) ->
       pure $ Right $ CBlockRange
@@ -207,35 +209,6 @@ querySlotTimeSeconds slotNo =
   either (const Nothing) Just <$> querySlotPosixTime slotNo
 
 
-testTxsSummary
-    :: SqlBackend -> CTxHash
-    -> Handler (Either ExplorerError CTxSummary)
-testTxsSummary backend (CTxHash (CHash cTxHash)) = runExceptT $ do
-  blob <- hexToBytestring cTxHash
-  liftIO $ print blob
-  mTxblk <- runQuery backend $ queryTxSummary blob
-  case mTxblk of
-    Nothing -> throwE $ Internal "tx not found" -- TODO, give the same error as before?
-    Just (tx, blk, inputs, outputs) -> do
-      case blockSlotNo blk of
-        Just slotno -> do
-          let (epoch, slot) = slotno `divMod` slotsPerEpoch
-          pure $ CTxSummary
-            { ctsId              = (CTxHash . CHash . Text.decodeUtf8 . txHash) tx
-            , ctsTxTimeIssued    = Nothing
-            , ctsBlockTimeIssued = Nothing
-            , ctsBlockHeight     = fromIntegral <$> blockBlockNo blk
-            , ctsBlockEpoch      = Just epoch
-            , ctsBlockSlot       = Just $ fromIntegral slot
-            , ctsBlockHash       = (Just . CHash . Text.decodeUtf8 . blockHash) blk
-            , ctsRelayedBy       = Nothing
-            , ctsTotalInput      = (mkCCoin . sum . map (\(_addr,coin) -> fromIntegral  coin)) inputs
-            , ctsTotalOutput     = (mkCCoin . sum . map (fromIntegral . txOutValue)) outputs
-            , ctsFees            = mkCCoin $ fromIntegral $ txFee tx
-            , ctsInputs          = map convertInput inputs
-            , ctsOutputs         = map convertTxOut outputs
-            }
-        Nothing -> throwE $ Internal "cant find slot# of block"
 
 sampleAddressSummary :: CAddressSummary
 sampleAddressSummary = CAddressSummary
