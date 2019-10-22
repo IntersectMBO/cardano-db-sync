@@ -34,6 +34,7 @@ extra-deps:
   - word-wrap-0.4.1
   - transformers-except-0.1.1
   - text-ansi-0.1.0
+  - Diff-0.4.0
 
   - git: https://github.com/input-output-hk/cardano-shell
     commit: 8abae427c44f0b447117f78e2c1f5006dac2edf8
