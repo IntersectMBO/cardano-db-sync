@@ -20,6 +20,7 @@ import           Explorer.Web.LegacyApi (ExplorerApiRecord (..), TxsStats, PageN
 import           Explorer.Web.Server.Types (PageNo (..), PageSize (..))
 
 import           Explorer.Web.Server.BlockPages
+import           Explorer.Web.Server.EpochSlot
 import           Explorer.Web.Server.GenesisAddress
 import           Explorer.Web.Server.GenesisPages
 import           Explorer.Web.Server.GenesisSummary
@@ -27,7 +28,7 @@ import           Explorer.Web.Server.TxLast
 import           Explorer.Web.Server.TxsSummary
 import           Explorer.Web.Server.Util
 
-import           Cardano.Chain.Slotting      (EpochNumber (EpochNumber))
+import           Cardano.Chain.Slotting (EpochNumber (..))
 
 import           Control.Monad.IO.Class      (liftIO, MonadIO)
 import           Control.Monad.Logger        (runStdoutLoggingT)
@@ -40,7 +41,7 @@ import qualified Data.ByteString.Base16 as Base16
 import           Data.Text (Text)
 import qualified Data.Text.Encoding as Text
 import           Data.Time.Clock.POSIX       (POSIXTime)
-import           Data.Word                   (Word16, Word64)
+import           Data.Word                   (Word64)
 import           Data.Int (Int64)
 import           Network.Wai.Handler.Warp    (run)
 import           Servant                     (Application, Handler, Server, serve)
@@ -78,7 +79,7 @@ explorerHandlers backend = (toServant oldHandlers) :<|> (toServant newHandlers)
       , _addressSummary     = testAddressSummary backend
       , _addressUtxoBulk    = testAddressUtxoBulk backend
       , _epochPages         = testEpochPageSearch backend
-      , _epochSlots         = testEpochSlotSearch backend
+      , _epochSlots         = epochSlot backend
       , _genesisSummary     = genesisSummary backend
       , _genesisPagesTotal  = genesisPages backend
       , _genesisAddressInfo = genesisAddressInfo backend
@@ -231,30 +232,6 @@ testAddressUtxoBulk _backend _  =
     pure $ Right
             [CUtxo (CTxHash $ CHash "not-implemented-yet") 0 (CAddress "not-implemented-yet") (mkCCoin 3)
             ]
-
-testEpochSlotSearch
-    :: SqlBackend -> EpochNumber
-    -> Word16
-    -> Handler (Either ExplorerError [CBlockEntry])
--- `?epoch=1&slot=1` returns an empty list
-testEpochSlotSearch _backend (EpochNumber 1) 1 =
-    pure $ Right []
--- `?epoch=1&slot=2` returns an error
-testEpochSlotSearch _backend (EpochNumber 1) 2 =
-    pure $ Left $ Internal "Error while searching epoch/slot"
--- all others returns a simple result
-testEpochSlotSearch _backend _ _ = pure $ Right [CBlockEntry
-    { cbeEpoch      = 37294
-    , cbeSlot       = 10
-    , cbeBlkHeight  = 1564738
-    , cbeBlkHash    = CHash "not-implemented-yet"
-    , cbeTimeIssued = Nothing
-    , cbeTxNum      = 0
-    , cbeTotalSent  = mkCCoin 0
-    , cbeSize       = 390
-    , cbeBlockLead  = Nothing
-    , cbeFees       = mkCCoin 0
-    }]
 
 testEpochPageSearch
     :: SqlBackend -> EpochNumber

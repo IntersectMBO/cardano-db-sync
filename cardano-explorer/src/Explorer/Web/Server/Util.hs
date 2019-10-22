@@ -12,6 +12,7 @@ module Explorer.Web.Server.Util
   , textBase16Decode
   , textShow
   , toPageSize
+  , unflattenSlotNo
   ) where
 
 import           Cardano.Chain.Common (Address, fromCBORTextAddress)
@@ -27,7 +28,7 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import           Data.Time.Clock.POSIX (POSIXTime, utcTimeToPOSIXSeconds)
-import           Data.Word (Word64)
+import           Data.Word (Word16, Word64)
 
 import           Database.Persist.Sql (SqlBackend, runSqlConn)
 
@@ -81,3 +82,6 @@ textShow = Text.pack . show
 
 toPageSize :: Maybe PageSize -> PageSize
 toPageSize = fromMaybe defaultPageSize
+
+unflattenSlotNo :: Word64 -> Word16
+unflattenSlotNo w = fromIntegral (w `mod` slotsPerEpoch)
