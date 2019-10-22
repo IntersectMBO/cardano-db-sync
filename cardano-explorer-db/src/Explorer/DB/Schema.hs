@@ -94,7 +94,9 @@ share
   Meta
     protocolConst       Word64              -- The block security parameter.
     slotDuration        Word64              -- Slot duration in milliseconds.
-    startTime           UTCTime             -- System start time used to calculate slot time stamps.
+                                            -- System start time used to calculate slot time stamps.
+                                            -- Use 'sqltype' here to force timestamp without time zone.
+    startTime           UTCTime             sqltype=timestamp
     UniqueMeta          startTime
   |]
 
