@@ -3,23 +3,23 @@
 
 module Explorer.Web.Server (runServer) where
 
-import           Explorer.DB (Ada, Block (..), Tx (..), TxOut (..),
-                    queryLatestBlockId, querySlotPosixTime, queryTotalSupply,
+import           Explorer.DB (Ada, Block (..), TxOut (..),
+                    queryLatestBlockId, queryTotalSupply,
                     readPGPassFileEnv, toConnectionString)
 import           Explorer.Web.Api            (ExplorerApi, explorerApi)
 import           Explorer.Web.ClientTypes (CAddress (..), CAddressSummary (..), CAddressType (..),
-                    CBlockEntry (..), CBlockRange (..), CBlockSummary (..), CHash (..), CCoin,
-                    CTxBrief (..), CTxHash (..), CUtxo (..),
+                    CBlockEntry (..), CBlockRange (..), CBlockSummary (..), CHash (..),
+                    CTxHash (..), CUtxo (..),
                     mkCCoin, adaToCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
-import           Explorer.Web.Query (TxWithInputsOutputs (..), queryBlockSummary,
-                    queryBlockTxs, queryBlockIdFromHeight, queryUtxoSnapshot)
+import           Explorer.Web.Query (queryBlockSummary, queryBlockIdFromHeight, queryUtxoSnapshot)
 import           Explorer.Web.API1 (ExplorerApi1Record (..), V1Utxo (..))
 import qualified Explorer.Web.API1 as API1
 import           Explorer.Web.LegacyApi (ExplorerApiRecord (..), TxsStats, PageNumber)
 import           Explorer.Web.Server.Types (PageNo (..), PageSize (..))
 
 import           Explorer.Web.Server.BlockPages
+import           Explorer.Web.Server.BlocksTxs
 import           Explorer.Web.Server.EpochSlot
 import           Explorer.Web.Server.GenesisAddress
 import           Explorer.Web.Server.GenesisPages
@@ -30,19 +30,14 @@ import           Explorer.Web.Server.Util
 
 import           Cardano.Chain.Slotting (EpochNumber (..))
 
-import           Control.Monad.IO.Class      (liftIO, MonadIO)
+import           Control.Monad.IO.Class      (liftIO)
 import           Control.Monad.Logger        (runStdoutLoggingT)
-import           Control.Monad.Trans.Reader  (ReaderT)
 import           Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
--- import           Control.Monad.Trans.Except.Extra (hoistEither)
-import           Data.Maybe (fromMaybe)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Base16 as Base16
 import           Data.Text (Text)
 import qualified Data.Text.Encoding as Text
-import           Data.Time.Clock.POSIX       (POSIXTime)
 import           Data.Word                   (Word64)
-import           Data.Int (Int64)
 import           Network.Wai.Handler.Warp    (run)
 import           Servant                     (Application, Handler, Server, serve)
 import           Servant.API.Generic         (toServant)
@@ -73,7 +68,7 @@ explorerHandlers backend = (toServant oldHandlers) :<|> (toServant newHandlers)
       , _blocksPages        = testBlocksPages backend
       , _blocksPagesTotal   = blockPages backend
       , _blocksSummary      = blocksSummary backend
-      , _blocksTxs          = getBlockTxs backend
+      , _blocksTxs          = blocksTxs backend
       , _txsLast            = getLastTxs backend
       , _txsSummary         = txsSummary backend
       , _addressSummary     = testAddressSummary backend
@@ -168,48 +163,6 @@ blocksSummary backend (CHash blkHashTxt) = runExceptT $ do
             }
         Nothing -> throwE $ Internal "slot missing"
     _ -> throwE $ Internal "No block found"
-
-convertTxOut :: TxOut -> (CAddress, CCoin)
-convertTxOut TxOut{txOutAddress,txOutValue} = (CAddress txOutAddress, mkCCoin $ fromIntegral txOutValue)
-
-convertInput :: (Text, Word64) -> Maybe (CAddress, CCoin)
-convertInput (addr, coin) = Just (CAddress $ addr, mkCCoin $ fromIntegral coin)
-
-getBlockTxs
-    :: SqlBackend -> CHash
-    -> Maybe Int64
-    -> Maybe Int64
-    -> Handler (Either ExplorerError [CTxBrief])
-getBlockTxs backend (CHash blkHashTxt) mLimit mOffset =
-    runExceptT $ do
-      blkHash <- hexToBytestring blkHashTxt
-      (txList, mtimestamp) <- runQuery backend $ do
-                            (txList, slot) <- queryBlockTxs blkHash limit offset
-                            mtimestamp <- maybe (pure Nothing) querySlotTimeSeconds slot
-                            pure (txList, mtimestamp)
-      if null txList
-        then throwE $ Internal "No block found"
-        else pure $ map (txToTxBrief mtimestamp) txList
-  where
-    limit = fromMaybe 10 mLimit
-    offset = fromMaybe 0 mOffset
-
-    txToTxBrief :: Maybe POSIXTime -> TxWithInputsOutputs -> CTxBrief
-    txToTxBrief mtimestamp tio =
-      CTxBrief
-        { ctbId = CTxHash . CHash . Text.decodeUtf8 . Base16.encode . txHash $ txwTx tio
-        , ctbTimeIssued = mtimestamp
-        , ctbInputs = map convertInput $ txwInputs tio
-        , ctbOutputs = map convertTxOut $ txwOutputs tio
-        , ctbInputSum = (mkCCoin . sum . map (\(_addr,coin) -> fromIntegral  coin)) $ txwInputs tio
-        , ctbOutputSum = (mkCCoin . sum . map (fromIntegral . txOutValue)) $ txwOutputs tio
-        }
-
-querySlotTimeSeconds :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe POSIXTime)
-querySlotTimeSeconds slotNo =
-  either (const Nothing) Just <$> querySlotPosixTime slotNo
-
-
 
 sampleAddressSummary :: CAddressSummary
 sampleAddressSummary = CAddressSummary
