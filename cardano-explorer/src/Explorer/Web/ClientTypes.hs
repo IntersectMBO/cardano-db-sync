@@ -33,13 +33,14 @@ module Explorer.Web.ClientTypes
        , toCHash
        , mkCCoin
        , adaToCCoin
+       , sumCCoin
        ) where
 
 import           Control.Monad.Error.Class (throwError)
 import           Data.ByteString           (ByteString)
 import qualified Data.ByteString.Base16    as B16
 import qualified Data.ByteString.Char8     as SB8
-import           Data.Fixed (showFixed)
+import           Data.Fixed (Fixed (..))
 import           Data.Text                 (Text)
 import qualified Data.Text                 as T
 import qualified Data.Text.Encoding        as T
@@ -98,17 +99,20 @@ newtype CTxHash = CTxHash CHash
 -------------------------------------------------------------------------------------
 
 newtype CCoin = CCoin
-    { unCoin :: Text
+    { unCCoin :: Integer
     } deriving (Show, Generic, Eq)
 
 instance ToJSON CCoin where
-  toJSON (CCoin coin) = Aeson.object [ ("getCoin", Aeson.String coin) ]
+  toJSON (CCoin coin) = Aeson.object [ ("getCoin", Aeson.String (T.pack $ show coin)) ]
 
 mkCCoin :: Integer -> CCoin
-mkCCoin = CCoin . T.pack . show
+mkCCoin = CCoin
 
 adaToCCoin :: Ada -> CCoin
-adaToCCoin (Ada ada) = CCoin $ T.pack $ showFixed True $ ada * 1000000
+adaToCCoin (Ada (MkFixed ada)) = CCoin $ ada * 1000000
+
+sumCCoin :: [CCoin] -> CCoin
+sumCCoin = mkCCoin . sum . map unCCoin
 
 --instance NFData CCoin
 
@@ -151,9 +155,7 @@ data CBlockSummary = CBlockSummary
 
 data CAddressType
     = CPubKeyAddress
-    | CScriptAddress
     | CRedeemAddress
-    | CUnknownAddress
     deriving (Show, Generic)
 
 data CAddressSummary = CAddressSummary
@@ -161,6 +163,9 @@ data CAddressSummary = CAddressSummary
     , caType    :: !CAddressType
     , caTxNum   :: !Word
     , caBalance :: !CCoin
+    , caTotalInput :: !CCoin
+    , caTotalOutput :: !CCoin
+    , caTotalFee :: !CCoin
     , caTxList  :: ![CTxBrief]
     } deriving (Show, Generic)
 
@@ -171,6 +176,7 @@ data CTxBrief = CTxBrief
     , ctbOutputs    :: ![(CAddress, CCoin)]
     , ctbInputSum   :: !CCoin
     , ctbOutputSum  :: !CCoin
+    , ctbFees       :: !CCoin
     } deriving (Show, Generic)
 
 data CUtxo = CUtxo
@@ -178,12 +184,7 @@ data CUtxo = CUtxo
     , cuOutIndex :: !Int
     , cuAddress  :: !CAddress
     , cuCoins    :: !CCoin
-    }
-    | CUtxoUnknown
-    { cuTag  :: !Int
-      , cuBs :: !CByteString
-    }
-    deriving (Show, Generic)
+    } deriving (Show, Generic)
 
 newtype CNetworkAddress = CNetworkAddress Text
     deriving (Show, Generic)

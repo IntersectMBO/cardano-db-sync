@@ -8,7 +8,7 @@ import           Data.Time.Clock.POSIX    (POSIXTime, utcTimeToPOSIXSeconds)
 import           Data.Word                (Word16, Word64)
 import           Data.Int (Int64)
 import           Explorer.Web.Api         (ExplorerApi, explorerApi)
-import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSummary (CAddressSummary, caAddress, caBalance, caTxList, caTxNum, caType),
+import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSummary (..),
                                               CAddressType (CPubKeyAddress),
                                               CAddressesFilter (AllAddresses, NonRedeemedAddresses, RedeemedAddresses),
                                               CBlockEntry (CBlockEntry, cbeBlkHash, cbeBlkHeight, cbeBlockLead, cbeEpoch, cbeFees, cbeSize, cbeSlot, cbeTimeIssued, cbeTotalSent, cbeTxNum),
@@ -17,7 +17,7 @@ import           Explorer.Web.ClientTypes    (CAddress (CAddress), CAddressSumma
                                               CGenesisAddressInfo (CGenesisAddressInfo, cgaiCardanoAddress, cgaiGenesisAmount, cgaiIsRedeemed),
                                               CGenesisSummary (CGenesisSummary, cgsNonRedeemedAmountTotal, cgsNumNotRedeemed, cgsNumRedeemed, cgsNumTotal, cgsRedeemedAmountTotal),
                                               CHash (CHash),
-                                              CTxBrief (CTxBrief, ctbId, ctbInputSum, ctbInputs, ctbOutputSum, ctbOutputs, ctbTimeIssued),
+                                              CTxBrief (..),
                                               CTxEntry (CTxEntry, cteAmount, cteId, cteTimeIssued),
                                               CTxHash, CTxHash (CTxHash),
                                               CTxSummary (CTxSummary, ctsBlockEpoch, ctsBlockHash, ctsBlockHeight, ctsBlockSlot, ctsBlockTimeIssued, ctsFees, ctsId, ctsInputs, ctsOutputs, ctsRelayedBy, ctsTotalInput, ctsTotalOutput, ctsTxTimeIssued),
@@ -85,6 +85,7 @@ cTxBrief = CTxBrief
     , ctbOutputs    = [(CAddress "1fSCHaQhy6L7Rfjn9xR2Y5H7ZKkzKLMXKYLyZvwWVffQwkQ", mkCCoin 33333)]
     , ctbInputSum   = mkCCoin 33333
     , ctbOutputSum  = mkCCoin 33333
+    , ctbFees       = mkCCoin 0
     }
 
 cTxEntry :: CTxEntry
@@ -193,6 +194,9 @@ sampleAddressSummary = CAddressSummary
     , caType    = CPubKeyAddress
     , caTxNum   = 0
     , caBalance = mkCCoin 0
+    , caTotalInput = mkCCoin 0
+    , caTotalOutput = mkCCoin 0
+    , caTotalFee = mkCCoin 0
     , caTxList  = []
     }
 
