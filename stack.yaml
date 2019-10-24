@@ -61,7 +61,7 @@ extra-deps:
       - plugins/scribe-systemd
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: 1907ff06c259906a5eb6d25d919f0ba2f282ed70
+    commit: d92e1d426af872346ff73a173446796de810353f
     subdirs:
       - cardano-config
       - cardano-node
@@ -82,7 +82,7 @@ extra-deps:
       - crypto/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: 5144b4494602fcdeb3bbcb926eb2ea2f530ccb94
+    commit: b7d3ef6c68169e5ce4396b26085a9cebc500f615
     subdirs:
       - io-sim-classes
       - network-mux
