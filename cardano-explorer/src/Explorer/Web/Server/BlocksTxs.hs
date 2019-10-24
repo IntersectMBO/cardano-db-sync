@@ -80,13 +80,16 @@ queryCTxBrief txOutIds (txId, txhash, utctime) = do
                   where_ (txOut ^. TxOutTxId `in_` valList txOutIds)
                   pure (txOut ^. TxOutAddress, txOut ^. TxOutValue)
     let outputs = map convert outrows
+        inSum = sum $ map snd inputs
+        outSum = sum $ map snd outputs
     pure $ CTxBrief
             { ctbId = CTxHash . CHash $ bsBase16Encode txhash
             , ctbTimeIssued = Just $ utcTimeToPOSIXSeconds utctime
             , ctbInputs = map (Just . fmap (mkCCoin . fromIntegral)) inputs
             , ctbOutputs = map (fmap (mkCCoin . fromIntegral)) outputs
-            , ctbInputSum = mkCCoin . fromIntegral . sum $ map snd inputs
-            , ctbOutputSum = mkCCoin . fromIntegral . sum $ map snd outputs
+            , ctbInputSum = mkCCoin $ fromIntegral inSum
+            , ctbOutputSum = mkCCoin $ fromIntegral outSum
+            , ctbFees = mkCCoin $ fromIntegral (if inSum == 0 then 0 else inSum - outSum)
             }
   where
     convert :: (Value Text, Value Word64) -> (CAddress, Word64)
