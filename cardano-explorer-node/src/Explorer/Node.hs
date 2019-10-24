@@ -78,9 +78,9 @@ import           Ouroboros.Consensus.Ledger.Byron.Config (ByronConfig)
 import           Ouroboros.Consensus.Node.ProtocolInfo (NumCoreNodes (..),
                     pInfoConfig, protocolInfo)
 import           Ouroboros.Consensus.Node.Run.Abstract (RunNode, nodeDecodeBlock, nodeDecodeGenTx,
-                    nodeDecodeHeaderHash, nodeEncodeBlock, nodeEncodeGenTx, nodeEncodeHeaderHash)
+                    nodeDecodeHeaderHash, nodeEncodeBlock, nodeEncodeGenTx, nodeEncodeHeaderHash, nodeNetworkMagic)
 import           Ouroboros.Consensus.NodeId (CoreNodeId (..))
-import           Ouroboros.Consensus.Protocol (NodeConfig, Protocol (..), protocolNetworkMagic)
+import           Ouroboros.Consensus.Protocol (NodeConfig, Protocol (..))
 import           Ouroboros.Network.Block (Point (..), SlotNo (..), Tip (tipBlockNo),
                     decodePoint, encodePoint, genesisPoint, genesisBlockNo, blockNo,
                     BlockNo(unBlockNo, BlockNo),
@@ -270,7 +270,7 @@ runExplorerNodeClient ptcl trce socketPath = do
       { ispIps     = [SockAddrUnix socketPath]
       , ispValency = 1
       }
-    (NodeToClientVersionData { networkMagic = protocolNetworkMagic infoConfig })
+    (NodeToClientVersionData { networkMagic = nodeNetworkMagic (Proxy @blk) infoConfig })
     (localInitiatorNetworkApplication trce infoConfig)
 
 localInitiatorNetworkApplication
