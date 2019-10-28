@@ -131,11 +131,12 @@ insertABlock tracer blk (BlockNo tipBlockNo) = do
 insertTx :: MonadIO m => Trace IO Text -> DB.BlockId -> Ledger.TxAux -> ReaderT SqlBackend m ()
 insertTx tracer blkId tx = do
   let txHash = Crypto.hash $ Ledger.taTx tx
-  fee <- calculateTxFee $ Ledger.taTx tx
+  (outval, fee) <- calculateTxFee $ Ledger.taTx tx
   txId <- DB.insertTx $
               DB.Tx
                 { DB.txHash = unTxHash txHash
                 , DB.txBlock = blkId
+                , DB.txOutSum = outval
                 , DB.txFee = fee
                 }
 
@@ -169,7 +170,7 @@ insertTxIn _tracer txInId (Ledger.TxInUtxo txHash inIndex) = do
 
 -- -----------------------------------------------------------------------------
 
-calculateTxFee :: MonadIO m => Ledger.Tx -> ReaderT SqlBackend m Word64
+calculateTxFee :: MonadIO m => Ledger.Tx -> ReaderT SqlBackend m (Word64, Word64)
 calculateTxFee tx = do
     case output of
       Left err -> panic $ "calculateTxFee: " <> textShow err
@@ -177,7 +178,7 @@ calculateTxFee tx = do
         inval <- sum <$> mapM DB.queryTxOutValue inputs
         if outval > inval
           then panic $ "calculateTxFee: " <> textShow (outval, inval)
-          else pure $ inval - outval
+          else pure (outval, inval - outval)
   where
     -- [(Hash of tx, index within tx)]
     inputs :: [(ByteString, Word16)]
