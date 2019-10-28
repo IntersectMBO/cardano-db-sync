@@ -146,6 +146,7 @@ insertTxOuts blkId (address, value) = do
             DB.Tx
               { DB.txHash = unTxHash $ txHashOfAddress address
               , DB.txBlock = blkId
+              , DB.txOutSum = Ledger.unsafeGetLovelace value
               , DB.txFee = 0
               }
   void . DB.insertTxOut $
