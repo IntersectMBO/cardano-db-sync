@@ -43,7 +43,7 @@ library
                       , Explorer.Web.API1
                       , Explorer.Web.Query
                       , Explorer.Web.Server
-                      , Explorer.Web.Server.BlockPages
+                      , Explorer.Web.Server.BlockPagesTotal
                       , Explorer.Web.Server.BlocksTxs
                       , Explorer.Web.Server.EpochSlot
                       , Explorer.Web.Server.GenesisAddress

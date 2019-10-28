@@ -18,7 +18,7 @@ import qualified Explorer.Web.API1 as API1
 import           Explorer.Web.LegacyApi (ExplorerApiRecord (..), TxsStats, PageNumber)
 import           Explorer.Web.Server.Types (PageNo (..), PageSize (..))
 
-import           Explorer.Web.Server.BlockPages
+import           Explorer.Web.Server.BlockPagesTotal
 import           Explorer.Web.Server.BlocksTxs
 import           Explorer.Web.Server.EpochSlot
 import           Explorer.Web.Server.GenesisAddress
@@ -66,7 +66,7 @@ explorerHandlers backend = (toServant oldHandlers) :<|> (toServant newHandlers)
       { _totalAda           = totalAda backend
       , _dumpBlockRange     = testDumpBlockRange backend
       , _blocksPages        = testBlocksPages backend
-      , _blocksPagesTotal   = blockPages backend
+      , _blocksPagesTotal   = blockPagesTotal backend
       , _blocksSummary      = blocksSummary backend
       , _blocksTxs          = blocksTxs backend
       , _txsLast            = getLastTxs backend
