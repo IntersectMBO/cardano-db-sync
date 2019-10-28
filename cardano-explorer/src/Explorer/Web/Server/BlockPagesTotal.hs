@@ -1,7 +1,7 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Explorer.Web.Server.BlockPages
-  ( blockPages
+module Explorer.Web.Server.BlockPagesTotal
+  ( blockPagesTotal
   ) where
 
 import           Control.Monad.IO.Class (MonadIO)
@@ -20,10 +20,10 @@ import           Explorer.Web.Server.Types (PageSize (..))
 import           Servant (Handler)
 
 
-blockPages
+blockPagesTotal
     :: SqlBackend -> Maybe PageSize
     -> Handler (Either ExplorerError PageNumber)
-blockPages backend mPageSize =
+blockPagesTotal backend mPageSize =
     runQuery backend $ do
       blockCount <- queryMainBlockCount
       if | blockCount < 1 -> pure $ Left (Internal "There are currently no block to display.")
