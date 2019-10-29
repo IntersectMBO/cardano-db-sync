@@ -11,6 +11,7 @@ import           Control.Monad.Trans.Except (runExceptT, throwE)
 import           Control.Monad.Trans.Except.Extra (hoistEither)
 
 import           Data.ByteString (ByteString)
+import           Data.Maybe (listToMaybe)
 import           Data.Text (Text)
 import           Data.Word (Word64)
 
@@ -20,7 +21,7 @@ import           Database.Persist.Sql (SqlBackend)
 
 import           Explorer.DB (Block (..), BlockId, EntityField (..), LookupFail (..), Tx (..),
                     TxId, TxOut (..),
-                    listToMaybe, entityPair, maybeToEither, unValue2)
+                    entityPair, maybeToEither, unValue2)
 
 import           Explorer.Web.ClientTypes (CAddress (..),
                     CHash (..), CCoin, CTxHash (..), CTxSummary (..), mkCCoin)

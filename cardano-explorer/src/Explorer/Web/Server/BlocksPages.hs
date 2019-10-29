@@ -18,7 +18,7 @@ import           Database.Esqueleto (Entity (..), InnerJoin (..), Value (..),
                     asc, desc, from, limit, offset, on, orderBy, select, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
-import           Explorer.DB (Block (..), EntityField (..), isJust, listToMaybe, queryBlockHeight, unValue2)
+import           Explorer.DB (Block (..), EntityField (..), isJust, queryBlockHeight, unValue2)
 
 import           Explorer.Web.ClientTypes (CBlockEntry (..), CHash (..), mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))

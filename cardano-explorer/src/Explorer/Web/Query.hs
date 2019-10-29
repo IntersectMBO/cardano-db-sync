@@ -14,12 +14,13 @@ import           Database.Esqueleto (InnerJoin (..), LeftOuterJoin (..), Value, 
 import           Database.Persist.Sql (Entity (..), SqlBackend)
 
 import           Data.ByteString (ByteString)
+import           Data.Maybe (listToMaybe)
 import           Data.Word (Word64)
 import           Data.Time.Clock.POSIX (POSIXTime)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Explorer.DB (Block, BlockId, blockPrevious, blockSlotNo, listToMaybe, querySlotPosixTime
+import           Explorer.DB (Block, BlockId, blockPrevious, blockSlotNo, querySlotPosixTime
                             , EntityField (..)
                             , TxId
                             , TxOut, Ada, unValueSumAda, querySelectCount)
