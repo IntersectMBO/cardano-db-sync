@@ -7,6 +7,7 @@ module Explorer.DB.Query
   ( LookupFail (..)
   , queryBlock
   , queryBlockCount
+  , queryBlockHeight
   , queryBlockId
   , queryMainBlock
   , queryBlockTxCount
@@ -50,6 +51,7 @@ module Explorer.DB.Query
   ) where
 
 
+import           Control.Monad (join)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Except (ExceptT (..), runExceptT)
 import           Control.Monad.Trans.Reader (ReaderT)
@@ -100,6 +102,16 @@ queryBlockId hash = do
             where_ (blk ^. BlockHash ==. val hash)
             pure $ blk ^. BlockId
   pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
+
+-- | Get the current block height.
+queryBlockHeight :: MonadIO m => ReaderT SqlBackend m Word64
+queryBlockHeight = do
+  res <- select . from $ \ blk -> do
+          where_ (isJust $ blk ^. BlockBlockNo)
+          orderBy [desc (blk ^. BlockBlockNo)]
+          limit 1
+          pure (blk ^. BlockBlockNo)
+  pure $ fromMaybe 0 (join $ unValue <$> listToMaybe res)
 
 -- | Get the latest 'Block' associated with the given hash, skipping any EBBs.
 queryMainBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail Block)
