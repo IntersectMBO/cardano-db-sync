@@ -35,8 +35,6 @@ module Explorer.DB.Query
 
   , entityPair
   , epochUtcTime
-  , listToMaybe
-  , headMaybe
   , isJust
   , maybeToEither
   , renderLookupFail
@@ -58,7 +56,7 @@ import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Fixed (Micro)
-import           Data.Maybe (catMaybes, fromMaybe)
+import           Data.Maybe (catMaybes, fromMaybe, listToMaybe)
 import           Data.Time.Clock (UTCTime, addUTCTime)
 import           Data.Time.Clock.POSIX (POSIXTime, utcTimeToPOSIXSeconds)
 import           Data.Word (Word16, Word64)
@@ -182,7 +180,7 @@ queryLatestBlockNo = do
                 orderBy [desc (blk ^. BlockBlockNo)]
                 limit 1
                 pure $ blk ^. BlockBlockNo
-  pure $ headMaybe (catMaybes $ map unValue res)
+  pure $ listToMaybe (catMaybes $ map unValue res)
 
 -- | Get the latest block.
 queryLatestBlock :: MonadIO m => ReaderT SqlBackend m (Maybe Block)
@@ -416,14 +414,6 @@ epochUtcTime :: Meta -> Word64 -> UTCTime
 epochUtcTime meta epochNo =
   -- Slot duration is in milliseconds.
   addUTCTime (21.6 * fromIntegral (epochNo * metaSlotDuration meta)) (metaStartTime meta)
-
-headMaybe :: [a] -> Maybe a
-headMaybe [] = Nothing
-headMaybe (x:_) = Just x
-
-listToMaybe :: [a] -> Maybe a
-listToMaybe [] = Nothing
-listToMaybe (a:_) = Just a
 
 maybeToEither :: e -> (a -> b) -> Maybe a -> Either e b
 maybeToEither e f =

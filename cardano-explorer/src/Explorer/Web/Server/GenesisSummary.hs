@@ -9,13 +9,14 @@ import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.Fixed (Fixed (..), Uni)
+import           Data.Maybe (listToMaybe)
 
 import           Database.Esqueleto (InnerJoin (..), Value,
                     (^.), (==.), countRows, from, on, select, sum_, unValue,
                     val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
-import           Explorer.DB (EntityField (..), listToMaybe, txOutSpentP)
+import           Explorer.DB (EntityField (..), txOutSpentP)
 
 import           Explorer.Web.ClientTypes (CGenesisSummary (..), mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
