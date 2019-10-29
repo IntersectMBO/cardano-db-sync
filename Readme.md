@@ -30,10 +30,11 @@ HTTP REST API.
 
 ## Further Reading
 
+* [BuildingRunning][BuildingRunning]: Building and running the explorer node and webapi.
 * [SchemaManagement][Schema Management]: How the database schema is managed and modified.
 * [Validation][Validation]: Explanation of validation done by the explorer and assumptions made.
 
-
+[BuildingRunning]
 [PostgresView]: https://www.postgresql.org/docs/current/sql-createview.html
 [Schema Management]: doc/schema-management.md
 [Validation]: doc/validation.md
