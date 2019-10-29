@@ -4,13 +4,12 @@ module Explorer.Web.Server.BlocksPages
   ( blocksPages
   ) where
 
-import           Control.Monad (join)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.List as List
-import           Data.Maybe (catMaybes, fromMaybe)
+import           Data.Maybe (fromMaybe)
 import           Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import           Data.Word (Word64)
 
@@ -19,7 +18,7 @@ import           Database.Esqueleto (Entity (..), InnerJoin (..), Value (..),
                     asc, desc, from, limit, offset, on, orderBy, select, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
-import           Explorer.DB (Block (..), EntityField (..), isJust, listToMaybe, unValue2)
+import           Explorer.DB (Block (..), EntityField (..), isJust, listToMaybe, queryBlockHeight, unValue2)
 
 import           Explorer.Web.ClientTypes (CBlockEntry (..), CHash (..), mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
@@ -80,11 +79,22 @@ createCBlockEntry
     => Maybe Word -> [(Entity Block, Value ByteString)]
     -> ReaderT SqlBackend m (PageNumber, [CBlockEntry])
 createCBlockEntry mPageNo xs = do
-    pageNo <- queryBlockPageCount
-    let blockHeight = maximum . (0 :) . catMaybes $ map (blockBlockNo . entityVal . fst) xs
-        pageEntries = maybe (calculatePageEntries blockHeight) (const 10) mPageNo
-    ys <- mapM queryCBlockEntry $ List.take (fromIntegral pageEntries) xs
-    pure (pageNo, ys)
+    blockHeight <- queryBlockHeight
+    let pageEntries = maybe (calculatePageEntries blockHeight) (const 10) mPageNo
+    ys <- mapM queryCBlockEntry $ List.take pageEntries xs
+    pure (toPageNo blockHeight, ys)
+  where
+    toPageNo :: Word64 -> PageNumber
+    toPageNo x =
+      case fromIntegral x `divMod` 10 of
+        (y, 0) -> y
+        (y, _) -> y + 1
+
+    calculatePageEntries :: Word64 -> Int
+    calculatePageEntries blockHeight =
+      case blockHeight `mod` 10 of
+        0 -> 10
+        y -> fromIntegral y
 
 queryCBlockEntry
     :: MonadIO m
@@ -111,21 +121,3 @@ queryCBlockEntry (Entity blkId block, Value slHash) = do
         , cbeBlockLead = Just $ bsBase16Encode slHash
         , cbeFees = mkCCoin $ fromIntegral (sum $ map snd xs)
         }
-
-queryBlockPageCount :: MonadIO m => ReaderT SqlBackend m PageNumber
-queryBlockPageCount = do
-  res <- select . from $ \ blk -> do
-          where_ (isJust $ blk ^. BlockBlockNo)
-          orderBy [desc (blk ^. BlockBlockNo)]
-          limit 1
-          pure (blk ^. BlockBlockNo)
-  case join (unValue <$> listToMaybe res) of
-    Nothing -> pure 1
-    Just bh -> pure $ 1 + fromIntegral (bh `div` 10)
-
--- Special page calculation to match the old explorer webapi.
-calculatePageEntries :: Word64 -> Word64
-calculatePageEntries blockHeight =
-  case blockHeight `mod` 10 of
-    0 -> 10
-    x -> x
