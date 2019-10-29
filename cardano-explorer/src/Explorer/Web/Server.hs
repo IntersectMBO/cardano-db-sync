@@ -15,10 +15,11 @@ import           Explorer.Web.Error (ExplorerError (..))
 import           Explorer.Web.Query (queryBlockSummary, queryBlockIdFromHeight, queryUtxoSnapshot)
 import           Explorer.Web.API1 (ExplorerApi1Record (..), V1Utxo (..))
 import qualified Explorer.Web.API1 as API1
-import           Explorer.Web.LegacyApi (ExplorerApiRecord (..), TxsStats, PageNumber)
-import           Explorer.Web.Server.Types (PageNo (..), PageSize (..))
+import           Explorer.Web.LegacyApi (ExplorerApiRecord (..), TxsStats)
+import           Explorer.Web.Server.Types (PageNo (..))
 
 import           Explorer.Web.Server.BlockPagesTotal
+import           Explorer.Web.Server.BlocksPages
 import           Explorer.Web.Server.BlocksTxs
 import           Explorer.Web.Server.EpochSlot
 import           Explorer.Web.Server.GenesisAddress
@@ -65,7 +66,7 @@ explorerHandlers backend = (toServant oldHandlers) :<|> (toServant newHandlers)
     oldHandlers = ExplorerApiRecord
       { _totalAda           = totalAda backend
       , _dumpBlockRange     = testDumpBlockRange backend
-      , _blocksPages        = testBlocksPages backend
+      , _blocksPages        = blocksPages backend
       , _blocksPagesTotal   = blockPagesTotal backend
       , _blocksSummary      = blocksSummary backend
       , _blocksTxs          = blocksTxs backend
@@ -106,23 +107,6 @@ testDumpBlockRange backend start _ = do
         }
     (Left err, _) -> pure $ Left err
     (_, Left err) -> pure $ Left err
-
-testBlocksPages
-    :: SqlBackend -> Maybe PageNo
-    -> Maybe PageSize
-    -> Handler (Either ExplorerError (PageNumber, [CBlockEntry]))
-testBlocksPages _backend _ _  = pure $ Right (1, [CBlockEntry
-    { cbeEpoch      = 37294
-    , cbeSlot       = 10
-    , cbeBlkHeight  = 1564738
-    , cbeBlkHash    = CHash "not-implemented-yet"
-    , cbeTimeIssued = Nothing
-    , cbeTxNum      = 0
-    , cbeTotalSent  = mkCCoin 0
-    , cbeSize       = 390
-    , cbeBlockLead  = Nothing
-    , cbeFees       = mkCCoin 0
-    }])
 
 
 hexToBytestring :: Text -> ExceptT ExplorerError Handler ByteString
