@@ -44,6 +44,7 @@ library
                       , Explorer.Web.Query
                       , Explorer.Web.Server
                       , Explorer.Web.Server.BlockPagesTotal
+                      , Explorer.Web.Server.BlocksPages
                       , Explorer.Web.Server.BlocksTxs
                       , Explorer.Web.Server.EpochSlot
                       , Explorer.Web.Server.GenesisAddress
