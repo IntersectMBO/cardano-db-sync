@@ -7,6 +7,7 @@ module Explorer.DB.Query
   ( LookupFail (..)
   , queryBlock
   , queryBlockCount
+  , queryBlockHeight
   , queryBlockId
   , queryMainBlock
   , queryBlockTxCount
@@ -35,8 +36,6 @@ module Explorer.DB.Query
 
   , entityPair
   , epochUtcTime
-  , listToMaybe
-  , headMaybe
   , isJust
   , maybeToEither
   , renderLookupFail
@@ -52,13 +51,14 @@ module Explorer.DB.Query
   ) where
 
 
+import           Control.Monad (join)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Except (ExceptT (..), runExceptT)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Fixed (Micro)
-import           Data.Maybe (catMaybes, fromMaybe)
+import           Data.Maybe (catMaybes, fromMaybe, listToMaybe)
 import           Data.Time.Clock (UTCTime, addUTCTime)
 import           Data.Time.Clock.POSIX (POSIXTime, utcTimeToPOSIXSeconds)
 import           Data.Word (Word16, Word64)
@@ -102,6 +102,16 @@ queryBlockId hash = do
             where_ (blk ^. BlockHash ==. val hash)
             pure $ blk ^. BlockId
   pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
+
+-- | Get the current block height.
+queryBlockHeight :: MonadIO m => ReaderT SqlBackend m Word64
+queryBlockHeight = do
+  res <- select . from $ \ blk -> do
+          where_ (isJust $ blk ^. BlockBlockNo)
+          orderBy [desc (blk ^. BlockBlockNo)]
+          limit 1
+          pure (blk ^. BlockBlockNo)
+  pure $ fromMaybe 0 (join $ unValue <$> listToMaybe res)
 
 -- | Get the latest 'Block' associated with the given hash, skipping any EBBs.
 queryMainBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail Block)
@@ -182,7 +192,7 @@ queryLatestBlockNo = do
                 orderBy [desc (blk ^. BlockBlockNo)]
                 limit 1
                 pure $ blk ^. BlockBlockNo
-  pure $ headMaybe (catMaybes $ map unValue res)
+  pure $ listToMaybe (catMaybes $ map unValue res)
 
 -- | Get the latest block.
 queryLatestBlock :: MonadIO m => ReaderT SqlBackend m (Maybe Block)
@@ -416,14 +426,6 @@ epochUtcTime :: Meta -> Word64 -> UTCTime
 epochUtcTime meta epochNo =
   -- Slot duration is in milliseconds.
   addUTCTime (21.6 * fromIntegral (epochNo * metaSlotDuration meta)) (metaStartTime meta)
-
-headMaybe :: [a] -> Maybe a
-headMaybe [] = Nothing
-headMaybe (x:_) = Just x
-
-listToMaybe :: [a] -> Maybe a
-listToMaybe [] = Nothing
-listToMaybe (a:_) = Just a
 
 maybeToEither :: e -> (a -> b) -> Maybe a -> Either e b
 maybeToEither e f =

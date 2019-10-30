@@ -50,6 +50,7 @@ library
                       , Explorer.Web.Server.GenesisAddress
                       , Explorer.Web.Server.GenesisPages
                       , Explorer.Web.Server.GenesisSummary
+                      , Explorer.Web.Server.StatsTxs
                       , Explorer.Web.Server.TxLast
                       , Explorer.Web.Server.TxsSummary
                       , Explorer.Web.Server.Util
@@ -68,6 +69,7 @@ library
                       , constraints
                       , deepseq
                       , esqueleto
+                      , extra
                       , formatting
                       , generics-sop
                       , hashable

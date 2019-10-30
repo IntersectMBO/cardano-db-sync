@@ -1,12 +1,12 @@
 # Building and Running the Explorer
 
-The explorer is built and tested to run on Linux. It may run on Mac OS X or WIndows but that is
+The explorer is built and tested to run on Linux. It may run on Mac OS X or Windows but that is
 unsupported.
 
-Running the explorer will require Nix and and either mutliple terminals or a multi terminal
+Running the explorer will require Nix and and either multiple terminals or a multi terminal
 emulator like GNU Screen or TMux.
 
-The Explorer is designed to work with a locally running Cardano Node. Curently the node also
+The Explorer is designed to work with a locally running Cardano Node. Currently the node also
 needs a locally running Byron proxy. The three git repositories need to be checked out so that
 they are all at the same level. eg:
 
@@ -41,7 +41,7 @@ cd cardano-explorer
 nix-build -A cardano-explorer-node -o mainnet-node-local
 scripts/postgresql-setup.sh --createdb
 PGPASSFILE=config/pgpass explorer-node/bin/cardano-explorer-node \
-    --log-config ../cardano-node/log-configuration.yaml \
+    --log-config ../cardano-node/configuration/log-configuration.yaml \
     --genesis-file ../cardano-node/mainnet-genesis.json \
     --genesis-hash 5f20df933584822601f9e3f8c024eb5eb252fe8cefb24d1317dc3d432e940ebb \
     --socket-path ../cardano-node/state-node-mainnet/socket/node-core-0.socket \

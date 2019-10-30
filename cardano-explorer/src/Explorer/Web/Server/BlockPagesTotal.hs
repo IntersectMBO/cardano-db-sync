@@ -7,10 +7,12 @@ module Explorer.Web.Server.BlockPagesTotal
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
+import           Data.Maybe (listToMaybe)
+
 import           Database.Esqueleto ((^.), countRows, from, select, unValue, where_)
 import           Database.Persist.Sql (SqlBackend)
 
-import           Explorer.DB (EntityField (..), isJust, listToMaybe)
+import           Explorer.DB (EntityField (..), isJust)
 
 import           Explorer.Web.Error (ExplorerError (..))
 import           Explorer.Web.LegacyApi (PageNumber)
