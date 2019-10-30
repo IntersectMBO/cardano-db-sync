@@ -28,6 +28,7 @@
           (hsPkgs.constraints)
           (hsPkgs.deepseq)
           (hsPkgs.esqueleto)
+          (hsPkgs.extra)
           (hsPkgs.formatting)
           (hsPkgs.generics-sop)
           (hsPkgs.hashable)

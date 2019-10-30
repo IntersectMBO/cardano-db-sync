@@ -5,11 +5,12 @@ module Explorer.Web.Server.GenesisPages
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
+import           Data.Maybe (listToMaybe)
 import           Database.Esqueleto (InnerJoin (..), Value,
                     (^.), (==.), countRows, from, on, select, unValue, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
-import           Explorer.DB (EntityField (..), listToMaybe, txOutSpentP, txOutUnspentP)
+import           Explorer.DB (EntityField (..), txOutSpentP, txOutUnspentP)
 
 import           Explorer.Web.ClientTypes (CAddressesFilter (..))
 import           Explorer.Web.Error (ExplorerError (..))

@@ -72,7 +72,7 @@ mkTxs :: BlockId -> Word -> [Tx]
 mkTxs blkId count =
     take (fromIntegral count) $ map create [ 0 .. ]
   where
-    create w = Tx (mkTxHash blkId w) blkId 2 1
+    create w = Tx (mkTxHash blkId w) blkId 2 1 12
 
 testSlotLeader :: SlotLeader
 testSlotLeader =
