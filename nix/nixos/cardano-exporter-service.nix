@@ -138,6 +138,11 @@ in {
 
           mkdir -p log-dir
 
+          # work around a bug in cardano-node
+          mkdir -p configuration
+          cp -f ${../../log-configuration.yaml} configuration/log-configuration.yaml
+          # end of work-around
+
           exec cardano-explorer-node --log-config ${../../log-configuration.yaml} \
             --genesis-hash ${cfg.genesisHash} \
             --genesis-file ${cfg.genesisFile} \
