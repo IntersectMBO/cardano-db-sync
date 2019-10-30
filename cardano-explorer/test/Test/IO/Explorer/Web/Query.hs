@@ -176,7 +176,7 @@ mkBlock blk slid previous =
 
 -- TODO, make a `mkTxHash`, so the tx hashes dont claim `block #0`
 mkTx :: Word64 -> BlockId -> Tx
-mkTx txnum block = Tx (mkBlockHash txnum) block 0 0
+mkTx txnum block = Tx (mkBlockHash txnum) block 0 0 12
 
 mkOut :: TxId -> Word16 -> Text -> Word64 -> TxOut
 mkOut txid index addr value = TxOut txid index addr value
