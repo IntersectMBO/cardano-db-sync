@@ -15,8 +15,7 @@ import           Explorer.Web.Error (ExplorerError (..))
 import           Explorer.Web.Query (queryBlockSummary, queryBlockIdFromHeight, queryUtxoSnapshot)
 import           Explorer.Web.API1 (ExplorerApi1Record (..), V1Utxo (..))
 import qualified Explorer.Web.API1 as API1
-import           Explorer.Web.LegacyApi (ExplorerApiRecord (..), TxsStats)
-import           Explorer.Web.Server.Types (PageNo (..))
+import           Explorer.Web.LegacyApi (ExplorerApiRecord (..))
 
 import           Explorer.Web.Server.BlockPagesTotal
 import           Explorer.Web.Server.BlocksPages
@@ -25,6 +24,7 @@ import           Explorer.Web.Server.EpochSlot
 import           Explorer.Web.Server.GenesisAddress
 import           Explorer.Web.Server.GenesisPages
 import           Explorer.Web.Server.GenesisSummary
+import           Explorer.Web.Server.StatsTxs
 import           Explorer.Web.Server.TxLast
 import           Explorer.Web.Server.TxsSummary
 import           Explorer.Web.Server.Util
@@ -79,7 +79,7 @@ explorerHandlers backend = (toServant oldHandlers) :<|> (toServant newHandlers)
       , _genesisSummary     = genesisSummary backend
       , _genesisPagesTotal  = genesisPages backend
       , _genesisAddressInfo = genesisAddressInfo backend
-      , _statsTxs           = testStatsTxs backend
+      , _statsTxs           = statsTxs backend
       } :: ExplorerApiRecord (AsServerT Handler)
     newHandlers = ExplorerApi1Record
       { _utxoHeight         = getUtxoSnapshotHeight backend
@@ -186,11 +186,6 @@ testEpochPageSearch _backend _ _ = pure $ Right (1, [CBlockEntry
     , cbeBlockLead  = Nothing
     , cbeFees       = mkCCoin 0
     }])
-
-testStatsTxs
-    :: SqlBackend -> Maybe PageNo
-    -> Handler (Either ExplorerError TxsStats)
-testStatsTxs _backend _ = pure $ Right (1, [(cTxId, 200)])
 
 getUtxoSnapshotHeight :: SqlBackend -> Maybe Word64 -> Handler (Either ExplorerError [V1Utxo])
 getUtxoSnapshotHeight backend mHeight = runExceptT $ do
