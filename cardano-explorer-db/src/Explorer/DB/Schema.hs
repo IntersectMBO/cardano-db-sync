@@ -75,6 +75,7 @@ share
     block               BlockId             -- This type is the primary key for the 'block' table.
     outSum              Word64              sqltype=lovelace
     fee                 Word64              sqltype=lovelace
+    size                Word64              sqltype=uinteger
     UniqueTx            hash
 
   TxOut

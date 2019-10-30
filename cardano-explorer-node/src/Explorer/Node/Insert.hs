@@ -14,6 +14,7 @@ module Explorer.Node.Insert
   , insertValidateGenesisDistribution
   ) where
 
+import           Cardano.Binary (serialize')
 import           Cardano.BM.Trace (Trace, logDebug, logInfo)
 
 -- Import all 'cardano-ledger' functions and data types qualified so they do not
@@ -138,6 +139,9 @@ insertTx tracer blkId tx = do
                 , DB.txBlock = blkId
                 , DB.txOutSum = outval
                 , DB.txFee = fee
+                -- Would be really nice to have a way to get the transaction size
+                -- without re-serializing it.
+                , DB.txSize = fromIntegral $ BS.length (serialize' $ Ledger.taTx tx)
                 }
 
   -- Insert outputs for a transaction before inputs in case the inputs for this transaction
