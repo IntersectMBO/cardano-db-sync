@@ -36,7 +36,7 @@ initialSupplyTest =
 
     -- Spend from the Utxo set.
     bid1 <- insertBlock (mkBlock 1 slid)
-    tx1Id <- insertTx (Tx (mkTxHash bid1 1) bid1 500000000 100)
+    tx1Id <- insertTx (Tx (mkTxHash bid1 1) bid1 500000000 100 123)
     _ <- insertTxIn (TxIn tx1Id (head tx0Ids) 0)
     _ <- insertTxOut $ TxOut tx1Id 0 (mkAddressHash bid1 tx1Id) 500000000
     supply1 <- queryTotalSupply
