@@ -237,7 +237,7 @@ testEpochSlotSearch _ _ = pure $ Right [CBlockEntry
 
 testEpochPageSearch
     :: EpochNumber
-    -> Maybe Int
+    -> Maybe PageNo
     -> Handler (Either ExplorerError (Int, [CBlockEntry]))
 testEpochPageSearch _ _ = pure $ Right (1, [CBlockEntry
     { cbeEpoch      = 37294

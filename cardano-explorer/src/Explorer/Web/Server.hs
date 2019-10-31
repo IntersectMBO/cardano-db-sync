@@ -20,6 +20,7 @@ import           Explorer.Web.LegacyApi (ExplorerApiRecord (..))
 import           Explorer.Web.Server.BlockPagesTotal
 import           Explorer.Web.Server.BlocksPages
 import           Explorer.Web.Server.BlocksTxs
+import           Explorer.Web.Server.EpochPage
 import           Explorer.Web.Server.EpochSlot
 import           Explorer.Web.Server.GenesisAddress
 import           Explorer.Web.Server.GenesisPages
@@ -28,8 +29,6 @@ import           Explorer.Web.Server.StatsTxs
 import           Explorer.Web.Server.TxLast
 import           Explorer.Web.Server.TxsSummary
 import           Explorer.Web.Server.Util
-
-import           Cardano.Chain.Slotting (EpochNumber (..))
 
 import           Control.Monad.IO.Class      (liftIO)
 import           Control.Monad.Logger        (runStdoutLoggingT)
@@ -74,7 +73,7 @@ explorerHandlers backend = (toServant oldHandlers) :<|> (toServant newHandlers)
       , _txsSummary         = txsSummary backend
       , _addressSummary     = testAddressSummary backend
       , _addressUtxoBulk    = testAddressUtxoBulk backend
-      , _epochPages         = testEpochPageSearch backend
+      , _epochPages         = epochPage backend
       , _epochSlots         = epochSlot backend
       , _genesisSummary     = genesisSummary backend
       , _genesisPagesTotal  = genesisPages backend
@@ -169,23 +168,6 @@ testAddressUtxoBulk _backend _  =
     pure $ Right
             [CUtxo (CTxHash $ CHash "not-implemented-yet") 0 (CAddress "not-implemented-yet") (mkCCoin 3)
             ]
-
-testEpochPageSearch
-    :: SqlBackend -> EpochNumber
-    -> Maybe Int
-    -> Handler (Either ExplorerError (Int, [CBlockEntry]))
-testEpochPageSearch _backend _ _ = pure $ Right (1, [CBlockEntry
-    { cbeEpoch      = 37294
-    , cbeSlot       = 10
-    , cbeBlkHeight  = 1564738
-    , cbeBlkHash    = CHash "not-implemented-yet"
-    , cbeTimeIssued = Nothing
-    , cbeTxNum      = 0
-    , cbeTotalSent  = mkCCoin 0
-    , cbeSize       = 390
-    , cbeBlockLead  = Nothing
-    , cbeFees       = mkCCoin 0
-    }])
 
 getUtxoSnapshotHeight :: SqlBackend -> Maybe Word64 -> Handler (Either ExplorerError [V1Utxo])
 getUtxoSnapshotHeight backend mHeight = runExceptT $ do
