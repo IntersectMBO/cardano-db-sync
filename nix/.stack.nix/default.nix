@@ -23,13 +23,13 @@
         "word-wrap" = (((hackage.word-wrap)."0.4.1").revisions).default;
         "transformers-except" = (((hackage.transformers-except)."0.1.1").revisions).default;
         "text-ansi" = (((hackage.text-ansi)."0.1.0").revisions).default;
+        "Diff" = (((hackage.Diff)."0.4.0").revisions).default;
         "base58-bytestring" = (((hackage.base58-bytestring)."0.1.0").revisions).default;
         "hedgehog" = (((hackage.hedgehog)."1.0").revisions).default;
         "micro-recursion-schemes" = (((hackage.micro-recursion-schemes)."5.0.2.2").revisions).default;
         "streaming-binary" = (((hackage.streaming-binary)."0.3.0.1").revisions).default;
         "cborg" = (((hackage.cborg)."0.2.2.0").revisions).default;
         "canonical-json" = (((hackage.canonical-json)."0.6.0.0").revisions).default;
-        } // {
         cardano-explorer-db = ./cardano-explorer-db.nix;
         cardano-explorer-db-test = ./cardano-explorer-db-test.nix;
         cardano-explorer-node = ./cardano-explorer-node.nix;
@@ -66,5 +66,23 @@
       compiler.nix-name = "ghc865";
       };
   resolver = "lts-13.26";
+  modules = [
+    ({ lib, ... }:
+      { packages = {}; })
+    {
+      packages = {
+        "cardano-explorer-node" = {
+          package = {
+            ghcOptions = "-Wall -Werror -fwarn-redundant-constraints";
+            };
+          };
+        "cardano-explorer-db" = {
+          package = {
+            ghcOptions = "-Wall -Werror -fwarn-redundant-constraints";
+            };
+          };
+        };
+      }
+    ];
   compiler = "ghc-8.6.5";
   }

@@ -1,4 +1,43 @@
-{ system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
+let
+  buildDepError = pkg:
+    builtins.throw ''
+      The Haskell package set does not contain the package: ${pkg} (build dependency).
+      
+      If you are using Stackage, make sure that you are using a snapshot that contains the package. Otherwise you may need to update the Hackage snapshot you are using, usually by updating haskell.nix.
+      '';
+  sysDepError = pkg:
+    builtins.throw ''
+      The Nixpkgs package set does not contain the package: ${pkg} (system dependency).
+      
+      You may need to augment the system package mapping in haskell.nix so that it can be found.
+      '';
+  pkgConfDepError = pkg:
+    builtins.throw ''
+      The pkg-conf packages does not contain the package: ${pkg} (pkg-conf dependency).
+      
+      You may need to augment the pkg-conf package mapping in haskell.nix so that it can be found.
+      '';
+  exeDepError = pkg:
+    builtins.throw ''
+      The local executable components do not include the component: ${pkg} (executable dependency).
+      '';
+  legacyExeDepError = pkg:
+    builtins.throw ''
+      The Haskell package set does not contain the package: ${pkg} (executable dependency).
+      
+      If you are using Stackage, make sure that you are using a snapshot that contains the package. Otherwise you may need to update the Hackage snapshot you are using, usually by updating haskell.nix.
+      '';
+  buildToolDepError = pkg:
+    builtins.throw ''
+      Neither the Haskell package set or the Nixpkgs package set contain the package: ${pkg} (build tool dependency).
+      
+      If this is a system dependency:
+      You may need to augment the system package mapping in haskell.nix so that it can be found.
+      
+      If this is a Haskell dependency:
+      If you are using Stackage, make sure that you are using a snapshot that contains the package. Otherwise you may need to update the Hackage snapshot you are using, usually by updating haskell.nix.
+      '';
+in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
   {
     flags = {};
     package = {
@@ -13,38 +52,40 @@
       synopsis = "A block explorer for the Cardano chain";
       description = "Code for the Cardano Block Explorer that is shared between the\ncardano-explorer-db-node and the cardano-explorer web application.";
       buildType = "Simple";
+      isLocal = true;
       };
     components = {
       "library" = {
         depends = [
-          (hsPkgs.aeson)
-          (hsPkgs.base)
-          (hsPkgs.base16-bytestring)
-          (hsPkgs.bytestring)
-          (hsPkgs.cardano-explorer-db)
-          (hsPkgs.conduit)
-          (hsPkgs.conduit-extra)
-          (hsPkgs.containers)
-          (hsPkgs.contra-tracer)
-          (hsPkgs.directory)
-          (hsPkgs.esqueleto)
-          (hsPkgs.extra)
-          (hsPkgs.fast-logger)
-          (hsPkgs.filepath)
-          (hsPkgs.iohk-monitoring)
-          (hsPkgs.monad-logger)
-          (hsPkgs.persistent)
-          (hsPkgs.persistent-postgresql)
-          (hsPkgs.persistent-template)
-          (hsPkgs.postgresql-simple)
-          (hsPkgs.resourcet)
-          (hsPkgs.scientific)
-          (hsPkgs.text)
-          (hsPkgs.template-haskell)
-          (hsPkgs.time)
-          (hsPkgs.transformers)
-          (hsPkgs.unix)
+          (hsPkgs."aeson" or (buildDepError "aeson"))
+          (hsPkgs."base" or (buildDepError "base"))
+          (hsPkgs."base16-bytestring" or (buildDepError "base16-bytestring"))
+          (hsPkgs."bytestring" or (buildDepError "bytestring"))
+          (hsPkgs."cardano-explorer-db" or (buildDepError "cardano-explorer-db"))
+          (hsPkgs."conduit" or (buildDepError "conduit"))
+          (hsPkgs."conduit-extra" or (buildDepError "conduit-extra"))
+          (hsPkgs."containers" or (buildDepError "containers"))
+          (hsPkgs."contra-tracer" or (buildDepError "contra-tracer"))
+          (hsPkgs."directory" or (buildDepError "directory"))
+          (hsPkgs."esqueleto" or (buildDepError "esqueleto"))
+          (hsPkgs."extra" or (buildDepError "extra"))
+          (hsPkgs."fast-logger" or (buildDepError "fast-logger"))
+          (hsPkgs."filepath" or (buildDepError "filepath"))
+          (hsPkgs."iohk-monitoring" or (buildDepError "iohk-monitoring"))
+          (hsPkgs."monad-logger" or (buildDepError "monad-logger"))
+          (hsPkgs."persistent" or (buildDepError "persistent"))
+          (hsPkgs."persistent-postgresql" or (buildDepError "persistent-postgresql"))
+          (hsPkgs."persistent-template" or (buildDepError "persistent-template"))
+          (hsPkgs."postgresql-simple" or (buildDepError "postgresql-simple"))
+          (hsPkgs."resourcet" or (buildDepError "resourcet"))
+          (hsPkgs."scientific" or (buildDepError "scientific"))
+          (hsPkgs."text" or (buildDepError "text"))
+          (hsPkgs."template-haskell" or (buildDepError "template-haskell"))
+          (hsPkgs."time" or (buildDepError "time"))
+          (hsPkgs."transformers" or (buildDepError "transformers"))
+          (hsPkgs."unix" or (buildDepError "unix"))
           ];
+        buildable = true;
         };
       };
     } // rec { src = (pkgs.lib).mkDefault ../.././cardano-explorer-db/test; }
