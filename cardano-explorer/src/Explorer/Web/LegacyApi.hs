@@ -123,7 +123,7 @@ data ExplorerApiRecord route = ExplorerApiRecord
         :- Summary "Get epoch pages, all the paged slots in the epoch."
         :> "epochs"
         :> Capture "epoch" EpochNumber
-        :> QueryParam "page" Int
+        :> QueryParam "page" PageNo
         :> ExRes Get (Int, [CBlockEntry])
 
   , _epochSlots :: route
