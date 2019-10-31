@@ -54,7 +54,7 @@ mkAddressHash blkId txId =
 
 mkBlock :: Word64 -> SlotLeaderId -> Block
 mkBlock blk slid =
-  Block (mkBlockHash blk) (Just 0) Nothing Nothing Nothing Nothing slid 42 dummyUTCTime
+  Block (mkBlockHash blk) (Just 0) Nothing Nothing Nothing Nothing slid 42 dummyUTCTime 0
 
 mkBlockHash :: Word64 -> ByteString
 mkBlockHash blkId =
