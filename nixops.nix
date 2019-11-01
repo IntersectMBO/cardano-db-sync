@@ -1,19 +1,10 @@
 let
+  sources = ./nix/sources.nix;
   commonLib = import ./lib.nix {};
   accessKeyId = "cardano-deployer";
   inherit (commonLib) pkgs;
-  cardano-node = pkgs.fetchFromGitHub {
-    owner = "input-output-hk";
-    repo = "cardano-node";
-    rev = "b9a9cb686a662bca7cff40cda96f5dc0b93a00a5";
-    sha256 = "1n923na0bg6bp9pzmds029f88l1dx0dm5f32bb5mbvpr8qmd474w";
-  };
-  byron-proxy = pkgs.fetchFromGitHub {
-    owner = "input-output-hk";
-    repo = "cardano-byron-proxy";
-    rev = "53cd7427200ddd74bc8f3c77159451fa6e88e8a0";
-    sha256 = "0p5ps7bivhbqfsdl75j9sga1pii1y5as1jis2ldwllapz1afdyid";
-  };
+  cardano-node = sources.cardano-node-nixops;
+  byron-proxy = sources.byron-proxy;
   self = import ./. {};
   mkHost = { genesisFile, genesisHash, name, ... }@env: {
     name = "explorer-${name}";

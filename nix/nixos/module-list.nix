@@ -1,3 +1,3 @@
 [
- ./cardano-exporter-service.nix
+  ./cardano-exporter-service.nix
 ]

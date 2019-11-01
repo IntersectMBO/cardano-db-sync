@@ -7,7 +7,7 @@ let
 in {
   options = {
     services.cardano-exporter = {
-      enable = lib.mkEnableOption "enable the cardano-explorer exporter";
+      enable = lib.mkEnableOption "cardano-explorer exporter";
       script = lib.mkOption {
         internal = true;
         type = lib.types.package;
@@ -116,6 +116,7 @@ in {
           WorkingDirectory = "/var/lib/cexplorer";
         };
         wantedBy = [ "multi-user.target" ];
+        after = [ "postgresql.service" ];
       };
       services.cardano-exporter = {
         inherit pgpass;
@@ -157,6 +158,14 @@ in {
       '';
       systemd.services.cardano-explorer = {
         wantedBy = [ "multi-user.target" ];
+        requires = [ "postgresql.service" ];
+        preStart = ''
+          for x in {1..10}; do
+            nc -z localhost ${toString cfg.postgres.port} && break
+            echo loop $x: waiting for postgresql 2 sec...
+            sleep 2
+          done
+        '';
         serviceConfig = {
           ExecStart = config.services.cardano-explorer-api.script;
           User = "cexplorer";
