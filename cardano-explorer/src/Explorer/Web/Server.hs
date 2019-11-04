@@ -154,6 +154,9 @@ sampleAddressSummary = CAddressSummary
     , caTxNum   = 0
     , caBalance = mkCCoin 0
     , caTxList  = []
+    , caTotalInput = mkCCoin 0
+    , caTotalOutput = mkCCoin 0
+    , caTotalFee = mkCCoin 0
     }
 
 testAddressSummary
