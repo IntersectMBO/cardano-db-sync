@@ -6,7 +6,7 @@ DECLARE
 BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
   IF next_version = 7 THEN
-    EXECUTE 'ALTER TABLE "block" ADD COLUMN "tx_count" uinteger' NOT NULL ;
+    EXECUTE 'ALTER TABLE "block" ADD COLUMN "tx_count" uinteger NOT NULL' ;
     -- -------------------------------------------------------------------------
     -- It would be possible to write a schema migration here that calculates
     -- and inserts values in this column, but the run time of that migration
