@@ -7,9 +7,8 @@ import           Explorer.DB (Ada, Block (..), TxOut (..),
                     queryLatestBlockId, queryTotalSupply,
                     readPGPassFileEnv, toConnectionString)
 import           Explorer.Web.Api            (ExplorerApi, explorerApi)
-import           Explorer.Web.ClientTypes (CAddress (..), CAddressSummary (..), CAddressType (..),
-                    CBlockEntry (..), CBlockRange (..), CBlockSummary (..), CHash (..),
-                    CTxHash (..), CUtxo (..),
+import           Explorer.Web.ClientTypes (CAddress (..), CBlockEntry (..), CBlockRange (..),
+                    CBlockSummary (..), CHash (..), CTxHash, CTxHash (..), CUtxo (..),
                     mkCCoin, adaToCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
 import           Explorer.Web.Query (queryBlockSummary, queryBlockIdFromHeight, queryUtxoSnapshot)
@@ -17,6 +16,7 @@ import           Explorer.Web.API1 (ExplorerApi1Record (..), V1Utxo (..))
 import qualified Explorer.Web.API1 as API1
 import           Explorer.Web.LegacyApi (ExplorerApiRecord (..))
 
+import           Explorer.Web.Server.AddressSummary
 import           Explorer.Web.Server.BlockPagesTotal
 import           Explorer.Web.Server.BlocksPages
 import           Explorer.Web.Server.BlocksTxs
@@ -71,7 +71,7 @@ explorerHandlers backend = (toServant oldHandlers) :<|> (toServant newHandlers)
       , _blocksTxs          = blocksTxs backend
       , _txsLast            = getLastTxs backend
       , _txsSummary         = txsSummary backend
-      , _addressSummary     = testAddressSummary backend
+      , _addressSummary     = addressSummary backend
       , _addressUtxoBulk    = testAddressUtxoBulk backend
       , _epochPages         = epochPage backend
       , _epochSlots         = epochSlot backend
@@ -146,23 +146,6 @@ blocksSummary backend (CHash blkHashTxt) = runExceptT $ do
             }
         Nothing -> throwE $ Internal "slot missing"
     _ -> throwE $ Internal "No block found"
-
-sampleAddressSummary :: CAddressSummary
-sampleAddressSummary = CAddressSummary
-    { caAddress = CAddress "not-implemented-yet"
-    , caType    = CPubKeyAddress
-    , caTxNum   = 0
-    , caBalance = mkCCoin 0
-    , caTxList  = []
-    , caTotalInput = mkCCoin 0
-    , caTotalOutput = mkCCoin 0
-    , caTotalFee = mkCCoin 0
-    }
-
-testAddressSummary
-    :: SqlBackend -> CAddress
-    -> Handler (Either ExplorerError CAddressSummary)
-testAddressSummary _backend _  = pure $ Right sampleAddressSummary
 
 testAddressUtxoBulk
     :: SqlBackend -> [CAddress]
