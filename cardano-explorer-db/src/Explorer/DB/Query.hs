@@ -37,6 +37,7 @@ module Explorer.DB.Query
   , entityPair
   , epochUtcTime
   , isJust
+  , listToMaybe
   , maybeToEither
   , renderLookupFail
   , slotPosixTime
@@ -44,10 +45,10 @@ module Explorer.DB.Query
   , txOutSpentB
   , txOutSpentP
   , txOutUnspentP
-  , unValueSumAda
   , unBlockId
   , unValue2
   , unValue3
+  , unValueSumAda
   ) where
 
 

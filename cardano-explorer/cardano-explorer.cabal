@@ -43,6 +43,7 @@ library
                       , Explorer.Web.API1
                       , Explorer.Web.Query
                       , Explorer.Web.Server
+                      , Explorer.Web.Server.AddressSummary
                       , Explorer.Web.Server.BlockPagesTotal
                       , Explorer.Web.Server.BlocksPages
                       , Explorer.Web.Server.BlocksTxs
@@ -67,7 +68,6 @@ library
                       , cardano-crypto-class
                       , cardano-explorer-db
                       , cardano-ledger
-                      , constraints
                       , deepseq
                       , esqueleto
                       , extra
