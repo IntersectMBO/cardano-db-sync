@@ -52,6 +52,7 @@ library
                       , Explorer.Web.Server.GenesisAddress
                       , Explorer.Web.Server.GenesisPages
                       , Explorer.Web.Server.GenesisSummary
+                      , Explorer.Web.Server.RedeemSummary
                       , Explorer.Web.Server.StatsTxs
                       , Explorer.Web.Server.TxLast
                       , Explorer.Web.Server.TxsSummary

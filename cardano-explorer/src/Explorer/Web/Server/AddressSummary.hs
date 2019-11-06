@@ -28,6 +28,7 @@ import           Explorer.DB (EntityField (..), TxId, unValue3)
 import           Explorer.Web.ClientTypes (CAddress (..), CAddressSummary (..), CAddressType (..),
                     CCoin (..), CHash (..), CTxBrief (..), CTxHash (..), mkCCoin, sumCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
+import           Explorer.Web.Server.RedeemSummary (queryRedeemSummary)
 import           Explorer.Web.Server.Util (bsBase16Encode, decodeTextAddress, runQuery)
 
 import           Servant (Handler)
@@ -104,61 +105,6 @@ queryAddressSummary addr = do
 
     isTargetAddress :: (CAddress, a) -> Bool
     isTargetAddress (CAddress tst, _) = tst == addr
-
--- -------------------------------------------------------------------------------------------------
-
--- | Redeem addresses are sufficiently different to warrant their own query.
-queryRedeemSummary :: MonadIO m => Text -> ReaderT SqlBackend m (Either ExplorerError CAddressSummary)
-queryRedeemSummary addrTxt = do
-    -- Find the initial value assigned to this address at Genesis
-    rows <- select . from $ \ txOut -> do
-              where_ (txOut ^. TxOutAddress ==. val addrTxt)
-              pure (txOut ^. TxOutValue)
-    case rows of
-      [] -> pure $ Left (Internal "queryRedeemSummary: Address not found")
-      [value] -> Right <$> queryRedeemed (unValue value)
-      _ -> pure $ Left (Internal "queryRedeemSummary: More than one entry")
-  where
-    queryRedeemed :: MonadIO m => Word64 -> ReaderT SqlBackend m CAddressSummary
-    queryRedeemed value = do
-      -- Query to see if the Genesis value has been spent.
-      -- Will return [] if unspent and otherwise a single row.
-      outrows <- select . from $ \ (blk `InnerJoin` tx `InnerJoin` txIn `InnerJoin` txOut) -> do
-                    on (txIn ^. TxInTxOutId ==. txOut ^. TxOutTxId
-                        &&. txIn ^. TxInTxOutIndex ==. txOut ^. TxOutIndex)
-                    on (tx ^. TxId ==. txIn ^. TxInTxInId)
-                    on (blk ^. BlockId ==. tx ^. TxBlock)
-                    where_ (txOut ^. TxOutAddress ==. val addrTxt)
-                    pure (tx ^. TxId, tx ^. TxHash, blk ^. BlockTime)
-      case outrows of
-        [] -> pure $ convertUnspent value
-        _ -> convertSpent <$> mapM (queryCTxBrief . unValue3) outrows
-
-    convertUnspent :: Word64 -> CAddressSummary
-    convertUnspent balance =
-      CAddressSummary
-        { caAddress = CAddress addrTxt
-        , caType = CRedeemAddress
-        , caTxNum = 0
-        , caBalance = mkCCoin $ fromIntegral balance
-        , caTotalInput = mkCCoin 0
-        , caTotalOutput = mkCCoin 0
-        , caTotalFee = mkCCoin 0
-        , caTxList = []
-        }
-
-    convertSpent :: [CTxBrief] -> CAddressSummary
-    convertSpent txs =
-      CAddressSummary
-        { caAddress = CAddress addrTxt
-        , caType = CRedeemAddress
-        , caTxNum = fromIntegral $ length txs
-        , caBalance = mkCCoin 0
-        , caTotalInput = mkCCoin 0
-        , caTotalOutput = mkCCoin 0
-        , caTotalFee = mkCCoin 0
-        , caTxList = txs
-        }
 
 -- -------------------------------------------------------------------------------------------------
 
