@@ -38,7 +38,7 @@ nix-build -A scripts.mainnet.node -o mainnet-node-local --arg customConfig '{ us
 ```
 git clone https://github.com/input-output-hk/cardano-explorer
 cd cardano-explorer
-nix-build -A cardano-explorer-node -o mainnet-node-local
+nix-build -A cardano-explorer-node -o explorer-node
 scripts/postgresql-setup.sh --createdb
 PGPASSFILE=config/pgpass explorer-node/bin/cardano-explorer-node \
     --log-config ../cardano-node/configuration/log-configuration.yaml \
