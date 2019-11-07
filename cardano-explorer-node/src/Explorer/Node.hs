@@ -32,11 +32,11 @@ import qualified Cardano.Chain.Update as Update
 
 import           Cardano.Config.CommonCLI (CommonCLI (..))
 import qualified Cardano.Config.CommonCLI as Config
-import           Cardano.Config.Logging (LoggingLayer, LoggingCLIArguments,
+import           Cardano.Config.Logging (LoggingLayer, LoggingCLIArguments (..),
                     createLoggingFeature, llAppendName, llBasicTrace)
 import qualified Cardano.Config.Partial as Config
 import qualified Cardano.Config.Presets as Config
-import           Cardano.Config.Types (CardanoConfiguration, CardanoEnvironment (..),
+import           Cardano.Config.Types (CardanoConfiguration (..), CardanoEnvironment (..),
                     RequireNetworkMagic (..),
                     coRequiresNetworkMagic, ccCore)
 
@@ -143,7 +143,9 @@ initializeAllFeatures enp = do
                   -- excption type, local to this app, that enumerates all the ones we
                   -- are reporting, and has proper formatting of the result.
                   -- It would also require catching at the top level and printing.
-                  Right x  -> pure x
+                  Right x  -> let params = enpLogging enp
+                              in pure $ x { ccLogConfig = logConfigFile params
+                                          , ccLogMetrics = captureMetrics params }
 
   (loggingLayer, loggingFeature) <- createLoggingFeature NoEnvironment finalConfig
   (nodeLayer   , nodeFeature)    <- createNodeFeature loggingLayer enp finalConfig
