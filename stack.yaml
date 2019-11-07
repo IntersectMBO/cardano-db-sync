@@ -51,7 +51,7 @@ extra-deps:
     commit: 43a036c5bbe68ca2e9cbe611eab7982e2348fe49
 
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: ba6e4eaf61903d2bd4d745215bae29d35a58d0b6
+    commit: bea0e079fc32ed316ce352d17d14199a680e3f6c
     subdirs:
       - contra-tracer
       - iohk-monitoring
@@ -62,7 +62,7 @@ extra-deps:
       - plugins/scribe-systemd
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: d92e1d426af872346ff73a173446796de810353f
+    commit: c8c498de0129d54f264fd8b7a92a7d0b5677f662
     subdirs:
       - cardano-config
       - cardano-node

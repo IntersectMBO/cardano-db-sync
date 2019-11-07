@@ -1,5 +1,5 @@
 # global filter; messages must have at least this severity to pass:
-minSeverity: Debug
+minSeverity: Info
 
 # global file rotation settings:
 rotation:
@@ -70,6 +70,20 @@ options:
     '#messagecounters.ekgview':
       subtrace: NoTrace
     '#messagecounters.switchboard':
+      subtrace: NoTrace
+    '#messagecounters.katip':
+      subtrace: NoTrace
+    '#messagecounters.monitoring':
+      subtrace: NoTrace
+    'cardano.#messagecounters.aggregation':
+      subtrace: NoTrace
+    'cardano.#messagecounters.ekgview':
+      subtrace: NoTrace
+    'cardano.#messagecounters.switchboard':
+      subtrace: NoTrace
+    'cardano.#messagecounters.katip':
+      subtrace: NoTrace
+    'cardano.#messagecounters.monitoring':
       subtrace: NoTrace
   mapBackends:
     cardano.epoch-validation.benchmark:
