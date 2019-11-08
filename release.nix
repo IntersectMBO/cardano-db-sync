@@ -47,21 +47,21 @@ let
     native = mapTestOn (packagePlatforms project);
     #"${mingwW64.config}" = mapTestOnCross mingwW64 (packagePlatformsCross project);
   }
-  // {
-    # This aggregate job is what IOHK Hydra uses to update
-    # the CI status in GitHub.
-    required = mkRequiredJob (
-      collectTests jobs.native.tests ++
-      collectTests jobs.native.benchmarks ++
-      # TODO: Add your project executables to this list
-      [
-        jobs.native.cardano-explorer.x86_64-linux
-        jobs.native.cardano-explorer-db-tool.x86_64-linux
-        jobs.native.cardano-explorer-node.x86_64-linux
-        jobs.native.cardano-sl-core.x86_64-linux
-      ]
-    );
-  }
+  // (
+  # This aggregate job is what IOHK Hydra uses to update
+  # the CI status in GitHub.
+  mkRequiredJob (
+    collectTests jobs.native.tests ++
+    collectTests jobs.native.benchmarks ++
+    # TODO: Add your project executables to this list
+    [
+      jobs.native.cardano-explorer.x86_64-linux
+      jobs.native.cardano-explorer-db-tool.x86_64-linux
+      jobs.native.cardano-explorer-node.x86_64-linux
+      jobs.native.cardano-sl-core.x86_64-linux
+    ]
+  ))
+
   # Build the shell derivation in Hydra so that all its dependencies
   # are cached.
   // mapTestOn (packagePlatforms { inherit (project) shell; });
