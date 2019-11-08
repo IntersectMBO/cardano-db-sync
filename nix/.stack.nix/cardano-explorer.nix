@@ -65,7 +65,6 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."cardano-crypto-class" or (buildDepError "cardano-crypto-class"))
           (hsPkgs."cardano-explorer-db" or (buildDepError "cardano-explorer-db"))
           (hsPkgs."cardano-ledger" or (buildDepError "cardano-ledger"))
-          (hsPkgs."constraints" or (buildDepError "constraints"))
           (hsPkgs."deepseq" or (buildDepError "deepseq"))
           (hsPkgs."esqueleto" or (buildDepError "esqueleto"))
           (hsPkgs."extra" or (buildDepError "extra"))
