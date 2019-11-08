@@ -90,7 +90,8 @@ let
     services.cardano-node = {
       inherit environment;
       topology = iohkLib.cardanoLib.mkEdgeTopology {
-        inherit (targetEnv) edgeHost edgeNodes edgePort;
+        inherit (targetEnv) edgeHost edgeNodes;
+        edgePort = 7777;
       };
       enable = true;
     };
