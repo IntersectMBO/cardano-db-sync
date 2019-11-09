@@ -165,14 +165,14 @@ deriving instance Ord TxOut
 
 blockZero :: SlotLeaderId -> Block
 blockZero slid =
-  Block (mkHash '\0') Nothing Nothing Nothing Nothing Nothing slid 0 dummyUTCTime
+  Block (mkHash '\0') Nothing Nothing Nothing Nothing Nothing slid 0 dummyUTCTime 0
 
 mkHash :: Char -> ByteString
 mkHash = BS.pack . replicate 32
 
 mkBlock :: Word64 -> SlotLeaderId -> BlockId -> Block
 mkBlock blk slid previous =
-  Block (mkBlockHash blk) Nothing Nothing (Just blk) (Just previous) Nothing slid 0 dummyUTCTime
+  Block (mkBlockHash blk) Nothing Nothing (Just blk) (Just previous) Nothing slid 0 dummyUTCTime 0
 
 -- TODO, make a `mkTxHash`, so the tx hashes dont claim `block #0`
 mkTx :: Word64 -> BlockId -> Tx

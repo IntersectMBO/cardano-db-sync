@@ -81,9 +81,11 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."ouroboros-network" or (buildDepError "ouroboros-network"))
           (hsPkgs."iproute" or (buildDepError "iproute"))
           (hsPkgs."safe-exceptions" or (buildDepError "safe-exceptions"))
+          (hsPkgs."scientific" or (buildDepError "scientific"))
           (hsPkgs."string-conv" or (buildDepError "string-conv"))
           (hsPkgs."stm" or (buildDepError "stm"))
           (hsPkgs."text" or (buildDepError "text"))
+          (hsPkgs."yaml" or (buildDepError "yaml"))
           ];
         buildable = true;
         };
@@ -91,8 +93,8 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/cardano-node";
-      rev = "d92e1d426af872346ff73a173446796de810353f";
-      sha256 = "1pp3hv4wzqb5arpxf5brfhra3mq4vgyipygy1c324bngw61id6xv";
+      rev = "c8c498de0129d54f264fd8b7a92a7d0b5677f662";
+      sha256 = "0ggbss2z9zpvnys4kbcq9x4a2hgvkqvvfawlcsr6imamdp0v3fhr";
       });
     postUnpack = "sourceRoot+=/cardano-config; echo source root reset to \$sourceRoot";
     }

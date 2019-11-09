@@ -78,6 +78,7 @@ insertValidateGenesisDistribution tracer cfg = do
                         , DB.blockSlotLeader = slid
                         , DB.blockSize = 0
                         , DB.blockTime = Ledger.configStartTime cfg
+                        , DB.blockTxCount = 0
                         }
             mapM_ (insertTxOuts bid) $ genesisTxos cfg
             liftIO . logInfo tracer $ "Initial genesis distribution populated. Hash "

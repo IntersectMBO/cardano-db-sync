@@ -2,8 +2,8 @@
 
 import           Cardano.Prelude
 
-import qualified Cardano.Common.Parsers as Config
 import           Cardano.Config.CommonCLI (parseCommonCLIAdvanced)
+import           Cardano.Config.Logging (LoggingCLIArguments (..))
 import           Cardano.Shell.Types (CardanoApplication (..))
 import qualified Cardano.Shell.Lib as Shell
 
@@ -37,7 +37,7 @@ opts =
 pCommandLine :: Parser ExplorerNodeParams
 pCommandLine =
   ExplorerNodeParams
-    <$> Config.loggingParser
+    <$> pLoggingCLIArguments
     <*> pGenesisHash
     <*> pGenesisFile
     <*> pSocketPath
@@ -78,3 +78,16 @@ pSocketPath =
     <> Opt.completer (Opt.bashCompleter "file")
     <> Opt.metavar "FILEPATH"
     )
+
+
+pLoggingCLIArguments :: Parser LoggingCLIArguments
+pLoggingCLIArguments =
+    construct <$> Opt.strOption
+      ( Opt.long "log-config"
+      <> Opt.help "Configuration file for logging"
+      <> Opt.completer (Opt.bashCompleter "file")
+      <> Opt.metavar "FILEPATH"
+      )
+  where
+    construct :: FilePath -> LoggingCLIArguments
+    construct fpath = LoggingCLIArguments (Just fpath) False

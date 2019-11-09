@@ -80,6 +80,7 @@ insertABOBBoundary tracer blk = do
               , DB.blockSlotLeader = slid
               , DB.blockSize = fromIntegral $ Ledger.boundaryBlockLength blk
               , DB.blockTime = DB.epochUtcTime meta (maybe 0 (+1) mle)
+              , DB.blockTxCount = 0
               }
   supply <- DB.queryTotalSupply
   liftIO $ do
@@ -113,6 +114,7 @@ insertABlock tracer blk (BlockNo tipBlockNo) = do
                     , DB.blockSlotLeader = slid
                     , DB.blockSize = fromIntegral $ Ledger.blockLength blk
                     , DB.blockTime = DB.slotUtcTime meta (slotNumber blk)
+                    , DB.blockTxCount = fromIntegral $ length (blockPayload blk)
                     }
 
     mapM_ (insertTx tracer blkId) $ blockPayload blk
