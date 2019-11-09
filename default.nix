@@ -16,7 +16,11 @@
 }:
 
 let
-  haskell = pkgs.callPackage iohkLib.nix-tools.haskell {};
+  sources = import ./nix/sources.nix;
+  haskell_nix = pkgs.fetchgit (builtins.removeAttrs (builtins.fromJSON (builtins.readFile "${sources.iohk-nix}/pins/haskell-nix.json")) [ "date" ]);
+  haskell = pkgs.callPackage haskell_nix {
+    hackageSourceJSON = ./nix/hackage-nix.json;
+  };
   src = iohkLib.cleanSourceHaskell ./.;
   util = pkgs.callPackage ./nix/util.nix {};
 
