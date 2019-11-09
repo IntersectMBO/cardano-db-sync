@@ -419,33 +419,35 @@ let
       [ patchedRunit stop eval.config.services.postgresql.package deroot ];
   };
 
+  contents = [
+    patchedRunit
+    configFiles
+    coreutils
+    bashInteractive
+    sudo
+    linux-pam
+    nettools
+    lsof
+    iana_etc
+    stop
+    strace
+    procps
+    cacert.out
+    eval.config.services.postgresql.package
+    gnugrep
+    less
+    curl
+    utillinux
+    deroot
+    passwd
+  ];
+
   image = dockerTools.buildLayeredImage {
     name = "docker-image";
     tag = environment;
     maxLayers = 100;
-    contents = [
-      patchedRunit
-      configFiles
-      coreutils
-      bashInteractive
-      sudo
-      linux-pam
-      nettools
-      lsof
-      iana_etc
-      stop
-      strace
-      procps
-      cacert.out
-      eval.config.services.postgresql.package
-      gnugrep
-      less
-      curl
-      utillinux
-      deroot
-      passwd
-    ];
     config = { Cmd = [ startRunit ]; };
+    inherit contents;
   };
 
   helper = writeScript "helper" ''
@@ -454,8 +456,12 @@ let
     docker load < ${image}
     docker run --rm -t -i -p 81:80 --tty --cap-add SYS_PTRACE --name test-image --volume explorer-${environment}:/var/ docker-image:${environment}
   '';
+  hydraJob = runCommand "hydra-docker-check" { inherit contents startRunit; preferLocalBuild = true; } ''
+    touch $out
+    echo all docker inputs built successfully
+  '';
 in {
-  inherit image helper configFiles;
+  inherit image helper configFiles hydraJob;
   inherit users userToPasswd lib passwd userToUseradd dockerFileSetup
     dockerFileBinaries;
 
