@@ -43,14 +43,14 @@ let
 
   inherit (systems.examples) mingwW64 musl64;
   inherit (import ./nix/nixos/tests { }) chairmansCluster;
-  inherit (import ./docker { }) dockerImageJob;
+  inherit (import ./docker { }) hydraJob;
 
   jobs = {
     native = mapTestOn (packagePlatforms project);
     #"${mingwW64.config}" = mapTestOnCross mingwW64 (packagePlatformsCross project);
 
     chairmansCluster = chairmansCluster.x86_64-linux;
-    inherit dockerImageJob;
+    docker-inputs = hydraJob;
   }
   // (
   # This aggregate job is what IOHK Hydra uses to update
@@ -65,7 +65,7 @@ let
       jobs.native.cardano-explorer-node.x86_64-linux
       jobs.native.cardano-sl-core.x86_64-linux
       jobs.chairmansCluster
-      jobs.dockerImageJob
+      jobs.docker-inputs
     ]
   ))
 
