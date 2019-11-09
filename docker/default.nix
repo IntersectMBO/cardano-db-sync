@@ -1,4 +1,6 @@
-{ forDockerFile ? false }:
+{ forDockerFile ? false
+, environment ? "testnet"
+}:
 
 let
   sources = import ../nix/sources.nix;
@@ -28,10 +30,9 @@ let
   iohkLib = import ../lib.nix { };
   self = import ../. { };
   iohk-ops-src = sources.iohk-ops;
-  cardano-node-src = sources.cardano-node-docker;
+  cardano-node-src = sources.cardano-node;
 
   inherit (iohkLib.cardanoLib) environments;
-  environment = "mainnet";
   targetEnv = environments.${environment};
 
   customQueries = {
