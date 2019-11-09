@@ -89,6 +89,7 @@ let
     ];
 
     services.cardano-node = {
+      extraOptions = [ "+RTS" "-N3" "-RTS" ];
       inherit environment;
       topology = iohkLib.cardanoLib.mkEdgeTopology {
         inherit (targetEnv) edgeHost edgeNodes;
@@ -451,7 +452,7 @@ let
     #!${pkgs.stdenv.shell}
     set -e
     docker load < ${image}
-    docker run --rm -t -i -p 80:80 --tty --cap-add SYS_PTRACE --name test-image --volume explorer-${environment}:/var/ docker-image:${environment}
+    docker run --rm -t -i -p 81:80 --tty --cap-add SYS_PTRACE --name test-image --volume explorer-${environment}:/var/ docker-image:${environment}
   '';
 in {
   inherit image helper configFiles;
