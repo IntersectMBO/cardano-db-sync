@@ -14,7 +14,7 @@ import           Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 
 import           Database.Esqueleto (Entity, InnerJoin(..), SqlExpr, Value,
                     (^.), (==.),
-                    desc, from, limit, on, orderBy, select, sub_select, sum_, where_, unValue)
+                    desc, from, limit, on, orderBy, select, subSelectUnsafe, sum_, where_, unValue)
 import           Database.Persist.Sql (SqlBackend)
 
 import           Explorer.DB (EntityField (..), Tx, isJust)
@@ -50,7 +50,8 @@ queryCTxEntry = do
 
 txOutValue :: SqlExpr (Entity Tx) -> SqlExpr (Value (Maybe Uni))
 txOutValue tx =
-  sub_select . from $ \ txOut -> do
+  -- This actually is safe.
+  subSelectUnsafe . from $ \ txOut -> do
     where_ (txOut ^. TxOutTxId ==. tx ^. TxId)
     pure $ sum_ (txOut ^. TxOutValue)
 

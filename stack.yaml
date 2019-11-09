@@ -20,12 +20,12 @@ extra-deps:
   - containers-0.5.11.0
   - data-clist-0.1.2.3
   - ekg-prometheus-adapter-0.1.0.4
-  - esqueleto-3.0.0
+  - esqueleto-3.2.2
   - generic-monoid-0.1.0.0
   - libsystemd-journal-1.4.4
-  - persistent-2.10.0
-  - persistent-postgresql-2.10.0
-  - persistent-template-2.7.2
+  - persistent-2.10.4
+  - persistent-postgresql-2.10.1
+  - persistent-template-2.7.3
   - prometheus-2.1.2
   - pvss-0.2.0
   - tasty-hedgehog-1.0.0.1
@@ -35,6 +35,7 @@ extra-deps:
   - transformers-except-0.1.1
   - text-ansi-0.1.0
   - Diff-0.4.0
+  - katip-0.8.3.0
 
   - git: https://github.com/input-output-hk/cardano-shell
     commit: 8abae427c44f0b447117f78e2c1f5006dac2edf8
@@ -51,7 +52,7 @@ extra-deps:
     commit: 43a036c5bbe68ca2e9cbe611eab7982e2348fe49
 
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: ba6e4eaf61903d2bd4d745215bae29d35a58d0b6
+    commit: bea0e079fc32ed316ce352d17d14199a680e3f6c
     subdirs:
       - contra-tracer
       - iohk-monitoring
@@ -62,7 +63,7 @@ extra-deps:
       - plugins/scribe-systemd
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: d92e1d426af872346ff73a173446796de810353f
+    commit: c8c498de0129d54f264fd8b7a92a7d0b5677f662
     subdirs:
       - cardano-config
       - cardano-node

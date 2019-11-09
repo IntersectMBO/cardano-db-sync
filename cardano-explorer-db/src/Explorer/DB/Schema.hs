@@ -68,6 +68,7 @@ share
     slotLeader          SlotLeaderId
     size                Word64              sqltype=uinteger
     time                UTCTime             sqltype=timestamp
+    txCount             Word64              sqltype=uinteger
     UniqueBlock         hash
 
   Tx
