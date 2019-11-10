@@ -4,6 +4,8 @@ packages:
   cardano-explorer-node
   cardano-explorer
 
+constraints:
+  brick >= 0.47 && < 0.50
 
 package cardano-explorer-db
   ghc-options: -Wall -Werror -fwarn-redundant-constraints
