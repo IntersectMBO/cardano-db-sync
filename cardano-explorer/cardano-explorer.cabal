@@ -69,6 +69,7 @@ library
                       , cardano-crypto-class
                       , cardano-explorer-db
                       , cardano-ledger
+                      , containers
                       , deepseq
                       , esqueleto
                       , extra
