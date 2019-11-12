@@ -144,6 +144,7 @@ in {
           # end of work-around
 
           exec cardano-explorer-node --log-config ${../../log-configuration.yaml} \
+            --network ${cfg.cluster} \
             --genesis-hash ${cfg.genesisHash} \
             --genesis-file ${cfg.genesisFile} \
             --socket-path $CARDANO_NODE_SOCKET_PATH \
