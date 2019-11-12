@@ -115,6 +115,7 @@ data ExplorerNodeParams = ExplorerNodeParams
   , enpGenesisFile :: !GenesisFile
   , enpSocketPath :: !SocketPath
   , enpMigrationDir :: !MigrationDir
+  , enpNetworkName :: !Text
   , enpCommonCLIAdvanced :: !Config.CommonCLIAdvanced
   }
 
@@ -209,7 +210,7 @@ runClient enp trce cc = do
 
     -- If the DB is empty it will be inserted, otherwise it will be validated (to make
     -- sure we are on the right chain).
-    insertValidateGenesisDistribution trce gc
+    insertValidateGenesisDistribution trce (enpNetworkName enp) gc
 
     give (Genesis.configEpochSlots gc)
           $ give (Genesis.gdProtocolMagicId $ Genesis.configGenesisData gc)

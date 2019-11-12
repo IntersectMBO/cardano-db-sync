@@ -33,15 +33,16 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
-import           Database.Persist.Sql (SqlBackend)
+import           Database.Persist.Class (updateWhere)
+import           Database.Persist.Sql (SqlBackend, (=.), (==.))
 
 import qualified Explorer.DB as DB
 import           Explorer.Node.Util
 
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.
-insertValidateGenesisDistribution :: Trace IO Text -> Ledger.Config -> IO ()
-insertValidateGenesisDistribution tracer cfg = do
+insertValidateGenesisDistribution :: Trace IO Text -> Text -> Ledger.Config -> IO ()
+insertValidateGenesisDistribution tracer networkName cfg = do
     -- Setting this to True will log all 'Persistent' operations which is great
     -- for debugging, but otherwise *way* too chatty.
     if False
@@ -52,7 +53,7 @@ insertValidateGenesisDistribution tracer cfg = do
     insertAction = do
         mbid <- DB.queryBlockId $ configGenesisHash cfg
         case mbid of
-          Right bid -> validateGenesisDistribution tracer cfg bid
+          Right bid -> validateGenesisDistribution tracer networkName cfg bid
           Left _ -> do
             count <- DB.queryBlockCount
             when (count > 0) $
@@ -61,6 +62,7 @@ insertValidateGenesisDistribution tracer cfg = do
                                     (Ledger.unBlockCount $ Ledger.configK cfg)
                                     (configSlotDuration cfg)
                                     (Ledger.configStartTime cfg)
+                                    (Just networkName)
             -- Insert an 'artificial' Genesis block (with a genesis specific slot leader). We
             -- need this block to attach the genesis distribution transactions to.
             -- It would be nice to not need this artificial block, but that would
@@ -88,9 +90,10 @@ insertValidateGenesisDistribution tracer cfg = do
             liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
-validateGenesisDistribution :: MonadIO m => Trace IO Text -> Ledger.Config -> DB.BlockId -> ReaderT SqlBackend m ()
-validateGenesisDistribution tracer cfg bid = do
+validateGenesisDistribution :: MonadIO m => Trace IO Text -> Text -> Ledger.Config -> DB.BlockId -> ReaderT SqlBackend m ()
+validateGenesisDistribution tracer networkName cfg bid = do
   meta <- leftPanic "validateGenesisDistribution: " <$> DB.queryMeta
+
   when (DB.metaProtocolConst meta /= Ledger.unBlockCount (Ledger.configK cfg)) $
     panic $ Text.concat
             [ "Mismatch protocol constant. Config value "
@@ -111,6 +114,20 @@ validateGenesisDistribution tracer cfg bid = do
             , textShow (Ledger.configStartTime cfg)
             , " does not match DB value of ", textShow (Ledger.configStartTime cfg)
             ]
+
+  case DB.metaNetworkName meta of
+    Nothing -> updateWhere
+                [DB.MetaStartTime ==. Ledger.configStartTime cfg]
+                [DB.MetaNetworkName =. Just networkName]
+    Just name ->
+      when (name /= networkName) $
+        panic $ Text.concat
+            [ "validateGenesisDistribution: Provided network name "
+            , networkName
+            , " does not match DB value "
+            , name
+            ]
+
 
   txCount <- DB.queryBlockTxCount bid
   let expectedTxCount = fromIntegral $length (genesisTxos cfg)

@@ -1,5 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes        #-}
 {-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RankNTypes                 #-}
@@ -20,9 +21,12 @@ module Explorer.Web.ClientTypes
        , CBlockSummary (..)
        , CAddressType (..)
        , CAddressSummary (..)
+       , CAddressBalanceError (..)
        , CTxBrief (..)
        , CUtxo  (..)
        , CNetworkAddress (..)
+       , CNetwork (..)
+       , CAddressBalance (..)
        , CTxSummary (..)
        , CBlockRange (..)
        , CGenesisSummary (..)
@@ -59,7 +63,7 @@ import qualified Data.Aeson as Aeson
 import           Data.Hashable             (Hashable)
 import           Data.Word                 (Word16, Word64)
 
-import           Explorer.DB (Ada(Ada))
+import           Explorer.DB (Ada (..))
 
 -------------------------------------------------------------------------------------
 -- Hash types
@@ -92,6 +96,10 @@ newtype CAddress = CAddress Text
 
 -- | Client transaction id
 newtype CTxHash = CTxHash CHash
+    deriving (Show, Eq, Generic, Buildable, Hashable, NFData)
+
+-- | The network, eg "mainnet", "testnet" etc
+newtype CNetwork = CNetwork Text
     deriving (Show, Eq, Generic, Buildable, Hashable, NFData)
 
 -------------------------------------------------------------------------------------
@@ -225,6 +233,38 @@ data CAddressesFilter
     | AllAddresses
     deriving (Show, Generic)
 
+-- This is not part of the original explorer and we need to match the http-bridge's
+-- generated JSON, so we need a data type using standard data types and need a custom
+-- hand rolled ToJSON instance.
+data CAddressBalance = CAddressBalance
+    { cuaAddress :: !Text
+    , cuaTxHash :: !Text
+    , cuaIndex :: !Word16
+    , cuaCoin :: !Word64
+    } deriving (Show)
+
+-- | Basically an 'Either' used in place of an 'Either' to avoid overlapping
+-- instances.
+data CAddressBalanceError
+    = CABError !Text
+    | CABValue ![CAddressBalance]
+    deriving (Show)
+
+instance ToJSON CAddressBalance where
+    toJSON cua =
+      Aeson.object
+        [ ( "address", toJSON (cuaAddress cua) )
+        , ( "txid", toJSON (cuaTxHash cua) )
+        , ( "index", toJSON (cuaIndex cua) )
+        , ( "coin", toJSON (cuaCoin cua) )
+        ]
+
+instance ToJSON CAddressBalanceError where
+    toJSON cab =
+      case cab of
+        CABError err -> Aeson.String err
+        CABValue val -> toJSON val
+
 --------------------------------------------------------------------------------
 -- FromHttpApiData instances
 --------------------------------------------------------------------------------
@@ -242,6 +282,9 @@ instance FromHttpApiData CAddress where
 
 instance FromHttpApiData CTxHash where
     parseUrlPiece = pure . CTxHash . CHash
+
+instance FromHttpApiData CNetwork where
+    parseUrlPiece = pure . CNetwork
 
 instance FromHttpApiData CAddressesFilter where
     parseUrlPiece "all" = pure AllAddresses

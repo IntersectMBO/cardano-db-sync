@@ -25,7 +25,7 @@ main = do
     cardanoApplication :: NodeLayer -> CardanoApplication
     cardanoApplication = CardanoApplication . nlRunNode
 
-
+-- -------------------------------------------------------------------------------------------------
 
 opts :: ParserInfo ExplorerNodeParams
 opts =
@@ -42,6 +42,7 @@ pCommandLine =
     <*> pGenesisFile
     <*> pSocketPath
     <*> pMigrationDir
+    <*> pNetwork
     <*> parseCommonCLIAdvanced
 
 pGenesisFile :: Parser GenesisFile
@@ -70,6 +71,13 @@ pMigrationDir =
     <> Opt.metavar "FILEPATH"
     )
 
+pNetwork :: Parser Text
+pNetwork =
+  Text.pack <$> Opt.strOption
+    ( Opt.long "network"
+    <> Opt.help "The network name eg mainnet/testnet/staging etc"
+    <> Opt.metavar "NAME"
+    )
 pSocketPath :: Parser SocketPath
 pSocketPath =
   SocketPath <$> Opt.strOption
