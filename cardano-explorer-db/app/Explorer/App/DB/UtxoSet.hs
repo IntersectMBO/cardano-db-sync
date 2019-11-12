@@ -4,9 +4,9 @@ module Explorer.App.DB.UtxoSet
   ) where
 
 import           Cardano.Chain.Common (fromCBORTextAddress, isRedeemAddress)
-import           Control.Monad (when)
 
 import           Data.Word (Word64)
+import           Data.Time.Clock (UTCTime)
 
 import           Explorer.DB
 
@@ -16,47 +16,52 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 
+import           System.Exit (exitSuccess)
 import           System.IO (IOMode (..), withFile)
 
 utxoSetAtBlock :: Word64 -> IO ()
 utxoSetAtBlock slotNo = do
-  (genesisSupply, utxoSet, fees) <-
+  (genesisSupply, utxoSet, fees, eUtcTime) <-
         -- Run the following queries in a single transaction.
         runDbNoLogging $ do
-            (,,) <$> queryGenesisSupply
+            (,,,) <$> queryGenesisSupply
                     <*> queryUtxoAtSlotNo slotNo
                     <*> queryFeesUpToSlotNo slotNo
+                    <*> querySlotUtcTime slotNo
 
   let supply = utxoSetSum utxoSet
   let aggregated = aggregateUtxos utxoSet
   let (accept, reject) = partitionUtxos aggregated
 
-  putStrLn $ unlines
-      [ "\nGenesis supply: " ++ show genesisSupply ++ " Ada"
-      , "\nAt slot number " ++ show slotNo ++ ":"
-      , "   Supply: " ++ show supply ++ " Ada"
-      , "   Fees: " ++ show fees ++ " Ada"
-      , "   Supply + fees == genesis supply: " ++ show (fees + supply == genesisSupply)
-      , "\nFrom database:"
-      , "  Utxo entries: " ++ show (length utxoSet)
-      , "  Utxo supply : " ++ show (utxoSetSum utxoSet) ++ " Ada"
-      , "\nAfter aggregation:"
-      , "  Utxo entries: " ++ show (length aggregated)
-      , "  Utxo supply : " ++ show (sum $ map snd aggregated) ++ " Lovelace"
-      , "\nAfter paritioning:"
-      , "  Accepted Utxo entries: " ++ show (length accept)
-      , "  Rejected Utxo entries: " ++ show (length reject)
-      , "  Accepted Utxo supply: " ++ show (sum $ map snd accept) ++ " Lovelace"
-      , "  Rejected Utxo supply: " ++ show (sum $ map snd reject) ++ " Lovelace"
-      , "  Accepted + rejected == totalSupply: "
-            ++ show (sum (map snd accept) + sum (map snd reject) == sum (map snd aggregated))
-      ]
+  if length aggregated == 0
+    then reportSlotDate slotNo eUtcTime
+    else do
+      putStr $ unlines
+        [ "\nGenesis supply: " ++ show genesisSupply ++ " Ada"
+        , "\nAt slot number " ++ show slotNo ++ ":"
+        , "   Date: " ++ either (const "unknown") show eUtcTime
+        , "   Supply: " ++ show supply ++ " Ada"
+        , "   Fees: " ++ show fees ++ " Ada"
+        , "   Supply + fees == genesis supply: " ++ show (fees + supply == genesisSupply)
+        , "\nFrom database:"
+        , "  Utxo entries: " ++ show (length utxoSet)
+        , "  Utxo supply : " ++ show (utxoSetSum utxoSet) ++ " Ada"
+        , "\nAfter aggregation:"
+        , "  Utxo entries: " ++ show (length aggregated)
+        , "  Utxo supply : " ++ show (sum $ map snd aggregated) ++ " Lovelace"
+        , "\nAfter paritioning:"
+        , "  Accepted Utxo entries: " ++ show (length accept)
+        , "  Rejected Utxo entries: " ++ show (length reject)
+        , "  Accepted Utxo supply: " ++ show (sum $ map snd accept) ++ " Lovelace"
+        , "  Rejected Utxo supply: " ++ show (sum $ map snd reject) ++ " Lovelace"
+        , "  Accepted + rejected == totalSupply: "
+              ++ show (sum (map snd accept) + sum (map snd reject) == sum (map snd aggregated))
+        , ""
+        ]
 
-  when (length aggregated > 0) $ do
-    writeUtxos ("utxo-accept-" ++ show slotNo ++ ".json") accept
-    writeUtxos ("utxo-reject-" ++ show slotNo ++ ".json") reject
-
-  putStrLn ""
+      writeUtxos ("utxo-accept-" ++ show slotNo ++ ".json") accept
+      writeUtxos ("utxo-reject-" ++ show slotNo ++ ".json") reject
+      putStrLn ""
 
 -- -----------------------------------------------------------------------------
 
@@ -81,6 +86,13 @@ partitionUtxos =
     accept :: (Text, a) -> Bool
     accept (addr, _) =
       Text.length addr <= 180 && isNotRedeemTextAddress addr
+
+reportSlotDate :: Word64 -> Either a UTCTime -> IO ()
+reportSlotDate slotNo eUtcTime = do
+  case eUtcTime of
+    Left _ -> putStrLn "\nDatabase not initialized or not accessible"
+    Right time -> putStrLn $ "\nSlot number " ++ show slotNo ++ " will occur at " ++ show time ++ ".\n"
+  exitSuccess
 
 showUtxo :: (Text, Word64) -> Text
 showUtxo (addr, value) =

@@ -98,6 +98,7 @@ executable cardano-explorer-db-tool
                       , persistent
                       , random
                       , text
+                      , time
 
 test-suite test
   default-language:     Haskell2010
