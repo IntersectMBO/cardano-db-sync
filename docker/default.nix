@@ -29,7 +29,6 @@ let
   secrets = import ./secrets.nix;
   iohkLib = import ../lib.nix { };
   self = import ../. { };
-  iohk-ops-src = sources.iohk-ops;
   cardano-node-src = sources.cardano-node;
 
   inherit (iohkLib.cardanoLib) environments;
@@ -79,7 +78,7 @@ let
 
   configuration = { config, ... }: {
     imports = [
-      (iohk-ops-src + "/modules/monitoring-services.nix")
+      (sources.ops-lib + "/modules/monitoring-services.nix")
       ../nix/nixos/cardano-exporter-service.nix
       (cardano-node-src + "/nix/nixos")
       (if builtins.pathExists ./secrets.nix then
@@ -100,7 +99,6 @@ let
 
     services.cardano-exporter = {
       enable = true;
-      inherit (targetEnv) genesisFile genesisHash;
       cluster = environment;
       socketPath = "/run/cardano-node/node-core-0.socket";
     };
@@ -139,6 +137,12 @@ let
 
     services.prometheus.scrapeConfigs = [
       {
+        job_name = "cardano-node";
+        scrape_interval = "10s";
+        metrics_path = "/metrics";
+        static_configs = [{ targets = [ "localhost:12798" ]; }];
+      }
+      {
         job_name = "exporter";
         scrape_interval = "10s";
         metrics_path = "/";
@@ -160,9 +164,10 @@ let
       enableWireguard = false;
       metrics = true;
       logging = false;
-      webhost = "localhost.earthtools.ca";
+      webhost = "localhost";
       grafanaAutoLogin = true;
       monitoredNodes = { };
+      applicationDashboards = ../monitoring;
     };
 
     systemd.services = {
