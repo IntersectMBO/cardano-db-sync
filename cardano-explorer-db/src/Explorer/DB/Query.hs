@@ -21,6 +21,7 @@ module Explorer.DB.Query
   , queryLatestBlocks
   , queryLatestSlotNo
   , queryMeta
+  , queryNetworkName
   , queryPreviousBlockNo
   , querySelectCount
   , querySlotPosixTime
@@ -60,6 +61,7 @@ import           Control.Monad.Trans.Reader (ReaderT)
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Fixed (Micro)
 import           Data.Maybe (catMaybes, fromMaybe, listToMaybe)
+import           Data.Text (Text)
 import           Data.Time.Clock (UTCTime, addUTCTime)
 import           Data.Time.Clock.POSIX (POSIXTime, utcTimeToPOSIXSeconds)
 import           Data.Word (Word16, Word64)
@@ -259,6 +261,14 @@ queryMeta = do
             [] -> Left DbMetaEmpty
             [m] -> Right $ entityVal m
             _ -> Left DbMetaMultipleRows
+
+-- | Get the network name from the Meta table.
+queryNetworkName :: MonadIO m => ReaderT SqlBackend m (Maybe Text)
+queryNetworkName = do
+  res <- select . from $ \ meta -> do
+            pure (meta ^. MetaNetworkName)
+  pure $ join (unValue <$> listToMaybe res)
+
 
 -- | Calculate the slot time (as UTCTime) for a given slot number. The example here was
 -- written as an example, but it would be hoped that this value would be cached in the
