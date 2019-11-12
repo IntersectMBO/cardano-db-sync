@@ -14,6 +14,8 @@ import           Explorer.Web.Error (ExplorerError (..))
 import           Explorer.Web.Query (queryBlockSummary, queryBlockIdFromHeight, queryUtxoSnapshot)
 import           Explorer.Web.API1 (ExplorerApi1Record (..), V1Utxo (..))
 import qualified Explorer.Web.API1 as API1
+import           Explorer.Web.HttpBridge (HttpBridgeApi (..))
+import           Explorer.Web.HttpBridge.AddressBalance
 import           Explorer.Web.LegacyApi (ExplorerApiRecord (..))
 
 import           Explorer.Web.Server.AddressSummary
@@ -60,7 +62,10 @@ explorerApp :: SqlBackend -> Application
 explorerApp backend = serve explorerApi (explorerHandlers backend)
 
 explorerHandlers :: SqlBackend -> Server ExplorerApi
-explorerHandlers backend = (toServant oldHandlers) :<|> (toServant newHandlers)
+explorerHandlers backend =
+    toServant oldHandlers
+      :<|> toServant newHandlers
+      :<|> toServant httpBridgeHandlers
   where
     oldHandlers = ExplorerApiRecord
       { _totalAda           = totalAda backend
@@ -80,10 +85,15 @@ explorerHandlers backend = (toServant oldHandlers) :<|> (toServant newHandlers)
       , _genesisAddressInfo = genesisAddressInfo backend
       , _statsTxs           = statsTxs backend
       } :: ExplorerApiRecord (AsServerT Handler)
+
     newHandlers = ExplorerApi1Record
       { _utxoHeight         = getUtxoSnapshotHeight backend
       , _utxoHash           = getUtxoSnapshotHash
       } :: ExplorerApi1Record (AsServerT Handler)
+
+    httpBridgeHandlers = HttpBridgeApi
+      { _addressBalance        = addressBalance backend
+      } :: HttpBridgeApi (AsServerT Handler)
 
 --------------------------------------------------------------------------------
 -- sample data --
