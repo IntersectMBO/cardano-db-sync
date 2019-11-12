@@ -100,6 +100,7 @@ share
                                             -- System start time used to calculate slot time stamps.
                                             -- Use 'sqltype' here to force timestamp without time zone.
     startTime           UTCTime             sqltype=timestamp
+    networkName         Text Maybe
     UniqueMeta          startTime
   |]
 
