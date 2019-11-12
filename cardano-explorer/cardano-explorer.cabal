@@ -41,6 +41,8 @@ library
                       , Explorer.Web.Error
                       , Explorer.Web.LegacyApi
                       , Explorer.Web.API1
+                      , Explorer.Web.HttpBridge
+                      , Explorer.Web.HttpBridge.AddressBalance
                       , Explorer.Web.Query
                       , Explorer.Web.Server
                       , Explorer.Web.Server.AddressSummary
@@ -56,8 +58,8 @@ library
                       , Explorer.Web.Server.StatsTxs
                       , Explorer.Web.Server.TxLast
                       , Explorer.Web.Server.TxsSummary
-                      , Explorer.Web.Server.Util
                       , Explorer.Web.Server.Types
+                      , Explorer.Web.Server.Util
                       , Explorer.Web.TestServer
   -- other-modules:
 

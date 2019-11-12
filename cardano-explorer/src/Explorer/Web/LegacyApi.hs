@@ -33,7 +33,6 @@ import           Explorer.Web.ClientTypes (CAddress, CAddressSummary,
                                            CTxSummary, CUtxo)
 import           Explorer.Web.Error       (ExplorerError)
 import           Explorer.Web.Server.Types (PageNo (..), PageSize (..))
---import           Pos.Util.Servant (DQueryParam, ModifiesApiRes (..), VerbMod)
 
 type PageNumber = Word
 
@@ -160,6 +159,7 @@ data ExplorerApiRecord route = ExplorerApiRecord
         :> "txs"
         :> QueryParam "page" PageNo
         :> ExRes Get TxsStats
+
   }
   deriving (Generic)
 
