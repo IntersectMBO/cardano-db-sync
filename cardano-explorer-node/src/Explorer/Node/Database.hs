@@ -10,7 +10,7 @@ module Explorer.Node.Database
   , writeDbActionQueue
   ) where
 
-import           Cardano.BM.Trace (Trace, logDebug, logInfo)
+import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo)
 import           Cardano.Prelude
 
 import qualified Control.Concurrent.STM as STM
@@ -18,6 +18,7 @@ import           Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as TBQ
 
 import qualified Explorer.DB as DB
+import           Explorer.Node.Error
 import           Explorer.Node.Insert
 import           Explorer.Node.Metrics
 import           Explorer.Node.Rollback
@@ -63,22 +64,23 @@ runDbThread trce metrics queue = do
       xs <- blockingFlushDbActionQueue queue
       when (length xs > 1) $ do
         logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
-      nextState <- runActions trce xs
+      eNextState <- runExceptT $ runActions trce xs
       mBlkNo <-  DB.runDbNoLogging DB.queryLatestBlockNo
       case mBlkNo of
         Nothing -> pure ()
         Just blkNo -> Gauge.set (fromIntegral blkNo) $ mDbHeight metrics
-      case nextState of
-        Continue -> loop
-        Done -> pure ()
+      case eNextState of
+        Left err -> logError trce $ renderExplorerNodeError err
+        Right Continue -> loop
+        Right Done -> pure ()
 
 -- | Run the list of 'DbAction's. Block are applied in a single set (as a transaction)
 -- and other operations are applied one-by-one.
-runActions :: Trace IO Text -> [DbAction] -> IO NextState
+runActions :: Trace IO Text -> [DbAction] -> ExceptT ExplorerNodeError IO NextState
 runActions trce =
     dbAction Continue
   where
-    dbAction :: NextState -> [DbAction] -> IO NextState
+    dbAction :: NextState -> [DbAction] -> ExceptT ExplorerNodeError IO NextState
     dbAction next [] = pure next
     dbAction Done _ = pure Done
     dbAction Continue xs =
