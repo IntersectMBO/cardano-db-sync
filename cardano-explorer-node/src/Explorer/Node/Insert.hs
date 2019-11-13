@@ -17,7 +17,7 @@ module Explorer.Node.Insert
 import           Cardano.Binary (serialize')
 import           Cardano.BM.Trace (Trace, logDebug, logInfo)
 
-import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, left, newExceptT,
+import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, newExceptT,
                     runExceptT)
 
 -- Import all 'cardano-ledger' functions and data types qualified so they do not
@@ -160,12 +160,10 @@ insertTx
     => Trace IO Text -> DB.BlockId -> Ledger.TxAux
     -> ExceptT ExplorerNodeError (ReaderT SqlBackend m) ()
 insertTx tracer blkId tx = do
-  let txHash = Crypto.hash $ Ledger.taTx tx
-  valFee <- newExceptT $ calculateTxFee (Ledger.taTx tx)
-
-  txId <- lift . DB.insertTx $
+    valFee <- firstExceptT annotateTx $ newExceptT (calculateTxFee $ Ledger.taTx tx)
+    txId <- lift . DB.insertTx $
               DB.Tx
-                { DB.txHash = unTxHash txHash
+                { DB.txHash = unTxHash $ Crypto.hash (Ledger.taTx tx)
                 , DB.txBlock = blkId
                 , DB.txOutSum = vfValue valFee
                 , DB.txFee = vfFee valFee
@@ -182,7 +180,7 @@ insertTx tracer blkId tx = do
     annotateTx :: ExplorerNodeError -> ExplorerNodeError
     annotateTx ee =
       case ee of
-        ENEInvariant loc ei -> ENEInvariant loc (annotateInvariantTx tx ei)
+        ENEInvariant loc ei -> ENEInvariant loc (annotateInvariantTx (Ledger.taTx tx) ei)
         _other -> ee
 
 insertTxOut
@@ -219,14 +217,10 @@ calculateTxFee tx =
     runExceptT $ do
       outval <- firstExceptT (\e -> ENEError $ "calculateTxFee: " <> textShow e) $ hoistEither output
       when (null inputs) $
-        explorerError "calculateFee: List of inputs is zero."
-      inval <- sum <$> lift (mapM DB.queryTxOutValue inputs)
+        explorerError "calculateTxFee: List of transaction inputs is zero."
+      inval <- sum <$> mapMExceptT (liftLookupFail "calculateTxFee" . DB.queryTxOutValue) inputs
       if inval < outval
-        then left . ENEInvariant $
-                mconcat
-                  [ "calculateFee: input value ", textShow inval
-                  , " < output value ", textShow outval
-                  ]
+        then explorerInvariant "calculateTxFee" $ EInvInOut inval outval
         else pure $ ValueFee outval (inval - outval)
   where
     -- [(Hash of tx, index within tx)]
@@ -240,6 +234,13 @@ calculateTxFee tx =
     output =
       Ledger.unsafeGetLovelace
         <$> Ledger.sumLovelace (map Ledger.txOutValue $ Ledger.txOutputs tx)
+
+-- | An 'ExceptT' version of 'mapM' which will 'left' the first 'Left' it finds.
+mapMExceptT :: Monad m => (a -> ExceptT e m b) -> [a] -> ExceptT e m [b]
+mapMExceptT action xs =
+  case xs of
+    [] -> pure []
+    (y:ys) -> (:) <$> action y <*> mapMExceptT action ys
 
 -- | An 'ExceptT' version of 'mapM_' which will 'left' the first 'Left' it finds.
 mapMVExceptT :: Monad m => (a -> ExceptT e m ()) -> [a] -> ExceptT e m ()
