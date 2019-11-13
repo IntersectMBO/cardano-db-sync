@@ -25,7 +25,7 @@ import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, StrictTMVar,
 import           Control.Monad.Class.MonadTimer (MonadTimer)
 
 import           Cardano.BM.Data.Tracer (ToLogObject (..), nullTracer)
-import           Cardano.BM.Trace (Trace, appendName, logInfo)
+import           Cardano.BM.Trace (Trace, appendName, logError, logInfo)
 
 import qualified Cardano.Chain.Genesis as Genesis
 import qualified Cardano.Chain.Update as Update
@@ -62,6 +62,7 @@ import qualified Data.Text as Text
 import           Explorer.DB (LogFileDir (..), MigrationDir)
 import qualified Explorer.DB as DB
 import           Explorer.Node.Database
+import           Explorer.Node.Error
 import           Explorer.Node.Insert
 import           Explorer.Node.Metrics
 
@@ -210,7 +211,10 @@ runClient enp trce cc = do
 
     -- If the DB is empty it will be inserted, otherwise it will be validated (to make
     -- sure we are on the right chain).
-    insertValidateGenesisDistribution trce (enpNetworkName enp) gc
+    res <- insertValidateGenesisDistribution trce (enpNetworkName enp) gc
+    case res of
+      Left err -> logError trce $ renderExplorerNodeError err
+      Right () -> pure ()
 
     give (Genesis.configEpochSlots gc)
           $ give (Genesis.gdProtocolMagicId $ Genesis.configGenesisData gc)

@@ -33,6 +33,7 @@ library
   exposed-modules:      Explorer.Node
 
   other-modules:        Explorer.Node.Database
+                        Explorer.Node.Error
                         Explorer.Node.Insert
                         Explorer.Node.Insert.Genesis
                         Explorer.Node.Metrics
@@ -72,6 +73,7 @@ library
                       , text
                       , time
                       , transformers
+                      , transformers-except
                       , typed-protocols
                       , typed-protocols-cbor
 

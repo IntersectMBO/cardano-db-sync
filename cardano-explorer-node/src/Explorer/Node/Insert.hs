@@ -17,6 +17,9 @@ module Explorer.Node.Insert
 import           Cardano.Binary (serialize')
 import           Cardano.BM.Trace (Trace, logDebug, logInfo)
 
+import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, left, newExceptT,
+                    runExceptT)
+
 -- Import all 'cardano-ledger' functions and data types qualified so they do not
 -- clash with the Explorer DB functions and data types which are also imported
 -- qualified.
@@ -38,38 +41,55 @@ import qualified Data.Text.Encoding as Text
 import           Database.Persist.Sql (SqlBackend)
 
 import qualified Explorer.DB as DB
+import           Explorer.Node.Error
 import           Explorer.Node.Insert.Genesis
 import           Explorer.Node.Util
 
 import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..))
 import           Ouroboros.Network.Block (BlockNo (..))
 
-insertByronBlockOrEbbList :: Trace IO Text -> [(ByronBlockOrEBB cfg, BlockNo)] -> IO ()
+-- Trivial local data type for use in place of a tuple.
+data ValueFee = ValueFee
+  { vfValue :: !Word64
+  , vfFee :: !Word64
+  }
+
+
+insertByronBlockOrEbbList
+    :: Trace IO Text -> [(ByronBlockOrEBB cfg, BlockNo)] -> ExceptT ExplorerNodeError IO ()
 insertByronBlockOrEbbList tracer blks = do
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise *way* too chatty.
-  if False
-    then DB.runDbIohkLogging tracer $ mapM_ (insertByronBlockOrEbb tracer) blks
-    else DB.runDbNoLogging $ mapM_ (insertByronBlockOrEbb tracer) blks
+  newExceptT $
+    if False
+      then DB.runDbIohkLogging tracer action
+      else DB.runDbNoLogging action
+  where
+    action :: MonadIO m => ReaderT SqlBackend m (Either ExplorerNodeError ())
+    action = runExceptT $ mapMVExceptT (insertByronBlockOrEbb tracer) blks
 
-insertByronBlockOrEbb :: MonadIO m => Trace IO Text -> (ByronBlockOrEBB cfg, BlockNo) -> ReaderT SqlBackend m ()
+insertByronBlockOrEbb
+    :: MonadIO m
+    => Trace IO Text -> (ByronBlockOrEBB cfg, BlockNo)
+    -> ExceptT ExplorerNodeError (ReaderT SqlBackend m) ()
 insertByronBlockOrEbb tracer (blk, tipBlockNo) =
   case unByronBlockOrEBB blk of
     Ledger.ABOBBlock ablk -> insertABlock tracer ablk tipBlockNo
     Ledger.ABOBBoundary abblk -> insertABOBBoundary tracer abblk
 
-insertABOBBoundary :: MonadIO m => Trace IO Text -> Ledger.ABoundaryBlock ByteString -> ReaderT SqlBackend m ()
+insertABOBBoundary
+    :: MonadIO m
+    => Trace IO Text -> Ledger.ABoundaryBlock ByteString
+    -> ExceptT ExplorerNodeError (ReaderT SqlBackend m) ()
 insertABOBBoundary tracer blk = do
   let prevHash = case Ledger.boundaryPrevHash (Ledger.boundaryHeader blk) of
                     Left gh -> genesisToHeaderHash gh
                     Right hh -> hh
-  meta <- leftPanic "insertABOBBoundary: " <$> DB.queryMeta
-  pbid <- leftPanic "insertABOBBoundary: "
-              <$> DB.queryBlockId (unHeaderHash prevHash)
-  mle <- leftPanic "insertABOBBoundary: "
-              <$> DB.queryEpochNo pbid
-  slid <- DB.insertSlotLeader $ DB.SlotLeader (BS.replicate 28 '\0') "Epoch boundary slot leader"
-  void . DB.insertBlock $
+  meta <- liftLookupFail "insertABOBBoundary" $ DB.queryMeta
+  pbid <- liftLookupFail "insertABOBBoundary" $ DB.queryBlockId (unHeaderHash prevHash)
+  mle <- liftLookupFail "insertABOBBoundary: " $ DB.queryEpochNo pbid
+  slid <- lift . DB.insertSlotLeader $ DB.SlotLeader (BS.replicate 28 '\0') "Epoch boundary slot leader"
+  void . lift . DB.insertBlock $
             DB.Block
               { DB.blockHash = unHeaderHash $ Ledger.boundaryHashAnnotated blk
               , DB.blockEpochNo = Just $ maybe 0 (+1) mle
@@ -82,7 +102,7 @@ insertABOBBoundary tracer blk = do
               , DB.blockTime = DB.epochUtcTime meta (maybe 0 (+1) mle)
               , DB.blockTxCount = 0
               }
-  supply <- DB.queryTotalSupply
+  supply <- lift DB.queryTotalSupply
   liftIO $ do
       logInfo tracer $ Text.concat
                 [ "Total supply at start of epoch ", textShow (boundaryEpochNumber blk)
@@ -95,15 +115,18 @@ insertABOBBoundary tracer blk = do
                   , renderAbstractHash (Ledger.boundaryHashAnnotated blk)
                   ]
 
-insertABlock :: MonadIO m => Trace IO Text -> Ledger.ABlock ByteString -> BlockNo -> ReaderT SqlBackend m ()
+insertABlock
+    :: MonadIO m
+    => Trace IO Text -> Ledger.ABlock ByteString -> BlockNo
+    -> ExceptT ExplorerNodeError (ReaderT SqlBackend m) ()
 insertABlock tracer blk (BlockNo tipBlockNo) = do
-    meta <- leftPanic "insertABlock: " <$> DB.queryMeta
-    pbid <- leftPanic "insertABlock: " <$> DB.queryBlockId (unHeaderHash $ blockPreviousHash blk)
+    meta <- liftLookupFail "insertABlock" $ DB.queryMeta
+    pbid <- liftLookupFail "insertABlock" $ DB.queryBlockId (unHeaderHash $ blockPreviousHash blk)
 
     let slotsPerEpoch = 10 * DB.metaProtocolConst meta
 
-    slid <- DB.insertSlotLeader $ mkSlotLeader blk
-    blkId <- DB.insertBlock $
+    slid <- lift . DB.insertSlotLeader $ mkSlotLeader blk
+    blkId <- lift . DB.insertBlock $
                   DB.Block
                     { DB.blockHash = unHeaderHash $ blockHash blk
                     , DB.blockEpochNo = Just $ slotNumber blk `div` slotsPerEpoch
@@ -117,7 +140,7 @@ insertABlock tracer blk (BlockNo tipBlockNo) = do
                     , DB.blockTxCount = fromIntegral $ length (blockPayload blk)
                     }
 
-    mapM_ (insertTx tracer blkId) $ blockPayload blk
+    mapMVExceptT (insertTx tracer blkId) $ blockPayload blk
 
     liftIO $ logger tracer $ mconcat
                     [ "insertABlock: slot ", textShow (slotNumber blk)
@@ -131,28 +154,41 @@ insertABlock tracer blk (BlockNo tipBlockNo) = do
         then logInfo
         else logDebug
 
-insertTx :: MonadIO m => Trace IO Text -> DB.BlockId -> Ledger.TxAux -> ReaderT SqlBackend m ()
+
+insertTx
+    :: MonadIO m
+    => Trace IO Text -> DB.BlockId -> Ledger.TxAux
+    -> ExceptT ExplorerNodeError (ReaderT SqlBackend m) ()
 insertTx tracer blkId tx = do
   let txHash = Crypto.hash $ Ledger.taTx tx
-  (outval, fee) <- calculateTxFee $ Ledger.taTx tx
-  txId <- DB.insertTx $
+  valFee <- newExceptT $ calculateTxFee (Ledger.taTx tx)
+
+  txId <- lift . DB.insertTx $
               DB.Tx
                 { DB.txHash = unTxHash txHash
                 , DB.txBlock = blkId
-                , DB.txOutSum = outval
-                , DB.txFee = fee
+                , DB.txOutSum = vfValue valFee
+                , DB.txFee = vfFee valFee
                 -- Would be really nice to have a way to get the transaction size
                 -- without re-serializing it.
                 , DB.txSize = fromIntegral $ BS.length (serialize' $ Ledger.taTx tx)
                 }
 
-  -- Insert outputs for a transaction before inputs in case the inputs for this transaction
-  -- references the output (noit sure this can even happen).
-  zipWithM_ (insertTxOut tracer txId) [0 ..] (toList . Ledger.txOutputs $ Ledger.taTx tx)
-  mapM_ (insertTxIn tracer txId) (Ledger.txInputs $ Ledger.taTx tx)
+    -- Insert outputs for a transaction before inputs in case the inputs for this transaction
+    -- references the output (not sure this can even happen).
+    lift $ zipWithM_ (insertTxOut tracer txId) [0 ..] (toList . Ledger.txOutputs $ Ledger.taTx tx)
+    mapMVExceptT (insertTxIn tracer txId) (toList . Ledger.txInputs $ Ledger.taTx tx)
+  where
+    annotateTx :: ExplorerNodeError -> ExplorerNodeError
+    annotateTx ee =
+      case ee of
+        ENEInvariant loc ei -> ENEInvariant loc (annotateInvariantTx tx ei)
+        _other -> ee
 
-
-insertTxOut :: MonadIO m => Trace IO Text -> DB.TxId -> Word32 -> Ledger.TxOut -> ReaderT SqlBackend m ()
+insertTxOut
+    :: MonadIO m
+    => Trace IO Text -> DB.TxId -> Word32 -> Ledger.TxOut
+    -> ReaderT SqlBackend m ()
 insertTxOut _tracer txId index txout = do
   void . DB.insertTxOut $
             DB.TxOut
@@ -163,11 +199,13 @@ insertTxOut _tracer txId index txout = do
               }
 
 
-insertTxIn :: MonadIO m => Trace IO Text -> DB.TxId -> Ledger.TxIn -> ReaderT SqlBackend m ()
+insertTxIn
+    :: MonadIO m
+    => Trace IO Text -> DB.TxId -> Ledger.TxIn
+    -> ExceptT ExplorerNodeError (ReaderT SqlBackend m) ()
 insertTxIn _tracer txInId (Ledger.TxInUtxo txHash inIndex) = do
-  txOutId <- leftPanic "insertTxIn: "
-                <$> DB.queryTxId (unTxHash txHash)
-  void $ DB.insertTxIn $
+  txOutId <- liftLookupFail "insertTxIn" $ DB.queryTxId (unTxHash txHash)
+  void . lift . DB.insertTxIn $
             DB.TxIn
               { DB.txInTxInId = txInId
               , DB.txInTxOutId = txOutId
@@ -176,15 +214,20 @@ insertTxIn _tracer txInId (Ledger.TxInUtxo txHash inIndex) = do
 
 -- -----------------------------------------------------------------------------
 
-calculateTxFee :: MonadIO m => Ledger.Tx -> ReaderT SqlBackend m (Word64, Word64)
-calculateTxFee tx = do
-    case output of
-      Left err -> panic $ "calculateTxFee: " <> textShow err
-      Right outval -> do
-        inval <- sum <$> mapM DB.queryTxOutValue inputs
-        if outval > inval
-          then panic $ "calculateTxFee: " <> textShow (outval, inval)
-          else pure (outval, inval - outval)
+calculateTxFee :: MonadIO m => Ledger.Tx -> ReaderT SqlBackend m (Either ExplorerNodeError ValueFee)
+calculateTxFee tx =
+    runExceptT $ do
+      outval <- firstExceptT (\e -> ENEError $ "calculateTxFee: " <> textShow e) $ hoistEither output
+      when (null inputs) $
+        explorerError "calculateFee: List of inputs is zero."
+      inval <- sum <$> lift (mapM DB.queryTxOutValue inputs)
+      if inval < outval
+        then left . ENEInvariant $
+                mconcat
+                  [ "calculateFee: input value ", textShow inval
+                  , " < output value ", textShow outval
+                  ]
+        else pure $ ValueFee outval (inval - outval)
   where
     -- [(Hash of tx, index within tx)]
     inputs :: [(ByteString, Word16)]
@@ -197,3 +240,11 @@ calculateTxFee tx = do
     output =
       Ledger.unsafeGetLovelace
         <$> Ledger.sumLovelace (map Ledger.txOutValue $ Ledger.txOutputs tx)
+
+-- | An 'ExceptT' version of 'mapM_' which will 'left' the first 'Left' it finds.
+mapMVExceptT :: Monad m => (a -> ExceptT e m ()) -> [a] -> ExceptT e m ()
+mapMVExceptT action xs =
+  case xs of
+    [] -> pure ()
+    (y:ys) -> action y >> mapMVExceptT action ys
+
