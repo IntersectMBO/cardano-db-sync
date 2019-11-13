@@ -18,15 +18,12 @@ module Explorer.Node
   , initializeAllFeatures
   ) where
 
-import           Control.Exception (throw)
-import           Control.Monad.Class.MonadST (MonadST)
-import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, StrictTMVar,
-                    atomically, newEmptyTMVarM, readTMVar)
-import           Control.Monad.Class.MonadTimer (MonadTimer)
+import           Cardano.Binary (unAnnotated)
 
 import           Cardano.BM.Data.Tracer (ToLogObject (..), nullTracer)
 import           Cardano.BM.Trace (Trace, appendName, logError, logInfo)
 
+import qualified Cardano.Chain.Genesis as Ledger
 import qualified Cardano.Chain.Genesis as Genesis
 import qualified Cardano.Chain.Update as Update
 
@@ -42,6 +39,7 @@ import           Cardano.Config.Types (CardanoConfiguration (..), CardanoEnviron
 
 import           Cardano.Crypto (RequiresNetworkMagic (..), decodeAbstractHash)
 import           Cardano.Crypto.Hashing (AbstractHash (..))
+import qualified Cardano.Crypto as Crypto
 
 import           Cardano.Prelude hiding (atomically, option, (%), Nat)
 import           Cardano.Shell.Lib (GeneralException (ConfigurationError))
@@ -50,6 +48,13 @@ import           Cardano.Shell.Types (CardanoFeature (..),
                     featureShutdown, featureStart, featureType)
 
 import qualified Codec.Serialise as Serialise
+
+import           Control.Exception (throw)
+import           Control.Monad.Class.MonadST (MonadST)
+import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, StrictTMVar,
+                    atomically, newEmptyTMVarM, readTMVar)
+import           Control.Monad.Class.MonadTimer (MonadTimer)
+
 import           Crypto.Hash (digestFromByteString)
 
 import qualified Data.ByteString.Lazy as BSL
@@ -65,6 +70,7 @@ import           Explorer.Node.Database
 import           Explorer.Node.Error
 import           Explorer.Node.Insert
 import           Explorer.Node.Metrics
+import           Explorer.Node.Util
 
 import           Network.Socket (SockAddr (..))
 
@@ -208,6 +214,8 @@ nodeCardanoFeature nodeCardanoFeature' nodeLayer =
 runClient :: ExplorerNodeParams -> Trace IO Text -> CardanoConfiguration -> IO ()
 runClient enp trce cc = do
     gc <- readGenesisConfig enp cc
+
+    logProtocolMagic trce $ Ledger.configProtocolMagic gc
 
     -- If the DB is empty it will be inserted, otherwise it will be validated (to make
     -- sure we are on the right chain).
@@ -471,3 +479,10 @@ chainSyncClient _trce metrics latestPoints currentTip actionQueue =
               getCurrentTipBlockNo
             pure $ finish newTip tip
         }
+
+logProtocolMagic :: Trace IO Text -> Crypto.ProtocolMagic -> IO ()
+logProtocolMagic tracer pm =
+  liftIO . logInfo tracer $ mconcat
+    [ "NetworkMagic: ", textShow (Crypto.getRequiresNetworkMagic pm), " "
+    , textShow (Crypto.unProtocolMagicId . unAnnotated $ Crypto.getAProtocolMagicId pm)
+    ]
