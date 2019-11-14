@@ -65,7 +65,6 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."cardano-prelude" or (buildDepError "cardano-prelude"))
           (hsPkgs."concurrency" or (buildDepError "concurrency"))
           (hsPkgs."containers" or (buildDepError "containers"))
-          (hsPkgs."directory" or (buildDepError "directory"))
           (hsPkgs."formatting" or (buildDepError "formatting"))
           (hsPkgs."process" or (buildDepError "process"))
           (hsPkgs."QuickCheck" or (buildDepError "QuickCheck"))
@@ -93,8 +92,6 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             (hsPkgs."base" or (buildDepError "base"))
             (hsPkgs."cardano-shell" or (buildDepError "cardano-shell"))
             (hsPkgs."cardano-prelude" or (buildDepError "cardano-prelude"))
-            (hsPkgs."process" or (buildDepError "process"))
-            (hsPkgs."yaml" or (buildDepError "yaml"))
             (hsPkgs."QuickCheck" or (buildDepError "QuickCheck"))
             (hsPkgs."quickcheck-state-machine" or (buildDepError "quickcheck-state-machine"))
             (hsPkgs."tree-diff" or (buildDepError "tree-diff"))
@@ -107,8 +104,8 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/cardano-shell";
-      rev = "8abae427c44f0b447117f78e2c1f5006dac2edf8";
-      sha256 = "1j4nnsiagvv1yqfr4h9ailnnd7iw62vim1w7bc0sb5blngfjgvjr";
+      rev = "9fdc7088f1d16e67bb4ca043e4541427345213fc";
+      sha256 = "1hy6bsy1aw57szjwjprra71r2aal7wb63v95bc4dwkjwzf775k3v";
       });
     postUnpack = "sourceRoot+=/cardano-shell; echo source root reset to \$sourceRoot";
     }

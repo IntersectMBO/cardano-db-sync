@@ -93,8 +93,8 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/cardano-node";
-      rev = "c8c498de0129d54f264fd8b7a92a7d0b5677f662";
-      sha256 = "0ggbss2z9zpvnys4kbcq9x4a2hgvkqvvfawlcsr6imamdp0v3fhr";
+      rev = "8031fab0c3066e0b82a5927c935c085b13591dbd";
+      sha256 = "0k5rf5w7r337g0gsdwkiapm7gr1ga19zq3dcghsd2w9cysrbjykp";
       });
     postUnpack = "sourceRoot+=/cardano-config; echo source root reset to \$sourceRoot";
     }
