@@ -297,22 +297,23 @@ localInitiatorNetworkApplication trce pInfoConfig =
               localTxSubmissionCodec peer channel
               (localTxSubmissionClientPeer (txSubmissionClient @(GenTx blk) txv))
 
-          ChainSyncWithBlocksPtcl -> \channel -> do
-            liftIO $ logInfo trce "Starting chainSyncClient"
-            latestPoints <- liftIO getLatestPoints
-            currentTip <- liftIO getCurrentTipBlockNo
-            liftIO $ logDbState trce
-            actionQueue <- newDbActionQueue
-            (metrics, server) <- registerMetricsServer
-            dbThread <- async $ runDbThread trce metrics actionQueue
-            ret <- runPipelinedPeer
-                    nullTracer (localChainSyncCodec @blk pInfoConfig) peer channel
-                    (chainSyncClientPeerPipelined (chainSyncClient trce metrics latestPoints currentTip actionQueue))
-            atomically $
-              writeDbActionQueue actionQueue DbFinish
-            wait dbThread
-            cancel server
-            pure ret
+          ChainSyncWithBlocksPtcl -> \channel ->
+            liftIO . logException trce $ do
+              logInfo trce "Starting chainSyncClient"
+              latestPoints <- getLatestPoints
+              currentTip <- getCurrentTipBlockNo
+              logDbState trce
+              actionQueue <- newDbActionQueue
+              (metrics, server) <- registerMetricsServer
+              dbThread <- async $ runDbThread trce metrics actionQueue
+              ret <- runPipelinedPeer
+                      nullTracer (localChainSyncCodec @blk pInfoConfig) peer channel
+                      (chainSyncClientPeerPipelined (chainSyncClient trce metrics latestPoints currentTip actionQueue))
+              atomically $
+                writeDbActionQueue actionQueue DbFinish
+              wait dbThread
+              cancel server
+              pure ret
 
 
 logDbState :: Trace IO Text -> IO ()
@@ -414,7 +415,7 @@ localTxSubmissionCodec =
 chainSyncClient
   :: forall blk m cfg. (MonadTimer m, MonadIO m, blk ~ ByronBlockOrEBB cfg, ByronGiven, cfg ~ ByronConfig)
   => Trace IO Text -> Metrics -> [Point blk] -> BlockNo -> DbActionQueue -> ChainSyncClientPipelined blk (Tip blk) m Void
-chainSyncClient _trce metrics latestPoints currentTip actionQueue =
+chainSyncClient trce metrics latestPoints currentTip actionQueue =
     ChainSyncClientPipelined $ pure $
       -- Notify the core node about the our latest points at which we are
       -- synchronised.  This client is not persistent and thus it just
@@ -452,22 +453,37 @@ chainSyncClient _trce metrics latestPoints currentTip actionQueue =
                     -> ClientStNext n (ByronBlockOrEBB ByronConfig) (Tip (ByronBlockOrEBB ByronConfig)) m a
     mkClientStNext finish =
       ClientStNext
-        { recvMsgRollForward = \blk tip -> do
-            liftIO $ do
-              Gauge.set (fromIntegral . unBlockNo $ tipBlockNo tip) $ mNodeHeight metrics
-              newSize <- atomically $ do
-                writeDbActionQueue actionQueue $ DbApplyBlock blk (tipBlockNo tip)
-                lengthDbActionQueue actionQueue
-              Gauge.set (fromIntegral newSize) $ mQueuePostWrite metrics
-            pure $ finish (blockNo blk) tip
+        { recvMsgRollForward = \blk tip ->
+            liftIO .
+              logException trce $ do
+                Gauge.set (fromIntegral . unBlockNo $ tipBlockNo tip) $ mNodeHeight metrics
+                newSize <- atomically $ do
+                  writeDbActionQueue actionQueue $ DbApplyBlock blk (tipBlockNo tip)
+                  lengthDbActionQueue actionQueue
+                Gauge.set (fromIntegral newSize) $ mQueuePostWrite metrics
+                pure $ finish (blockNo blk) tip
         , recvMsgRollBackward = \point tip -> do
-            newTip <- liftIO $ do
-              atomically $ writeDbActionQueue actionQueue (DbRollBackToPoint point)
-              -- This will get the current tip rather than what we roll back to
-              -- but will only be incorrect for a short time span.
-              getCurrentTipBlockNo
-            pure $ finish newTip tip
+            liftIO .
+              logException trce $ do
+                -- This will get the current tip rather than what we roll back to
+                -- but will only be incorrect for a short time span.
+                atomically $ writeDbActionQueue actionQueue (DbRollBackToPoint point)
+                newTip <- getCurrentTipBlockNo
+                pure $ finish newTip tip
         }
+
+-- | ouroboros-network catches 'SomeException' and if a 'nullTracer' is passed into that
+-- code, the caught exception will not be logged. Therefore wrap all explorer code that
+-- is called from network with an exception logger so at least the exception will be
+-- logged (instead of silently swallowed) and then rethrown.
+logException :: Trace IO Text -> IO a -> IO a
+logException tracer action =
+    action `catch` logger
+  where
+    logger :: SomeException -> IO a
+    logger e = do
+      logError tracer $ textShow e
+      throwIO e
 
 logProtocolMagic :: Trace IO Text -> Crypto.ProtocolMagic -> IO ()
 logProtocolMagic tracer pm =
