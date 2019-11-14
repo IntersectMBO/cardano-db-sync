@@ -18,15 +18,12 @@ module Explorer.Node
   , initializeAllFeatures
   ) where
 
-import           Control.Exception (throw)
-import           Control.Monad.Class.MonadST (MonadST)
-import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, StrictTMVar,
-                    atomically, newEmptyTMVarM, readTMVar)
-import           Control.Monad.Class.MonadTimer (MonadTimer)
+import           Cardano.Binary (unAnnotated)
 
 import           Cardano.BM.Data.Tracer (ToLogObject (..), nullTracer)
-import           Cardano.BM.Trace (Trace, appendName, logInfo)
+import           Cardano.BM.Trace (Trace, appendName, logError, logInfo)
 
+import qualified Cardano.Chain.Genesis as Ledger
 import qualified Cardano.Chain.Genesis as Genesis
 import qualified Cardano.Chain.Update as Update
 
@@ -42,6 +39,7 @@ import           Cardano.Config.Types (CardanoConfiguration (..), CardanoEnviron
 
 import           Cardano.Crypto (RequiresNetworkMagic (..), decodeAbstractHash)
 import           Cardano.Crypto.Hashing (AbstractHash (..))
+import qualified Cardano.Crypto as Crypto
 
 import           Cardano.Prelude hiding (atomically, option, (%), Nat)
 import           Cardano.Shell.Lib (GeneralException (ConfigurationError))
@@ -50,6 +48,12 @@ import           Cardano.Shell.Types (CardanoFeature (..),
                     featureShutdown, featureStart, featureType)
 
 import qualified Codec.Serialise as Serialise
+
+import           Control.Monad.Class.MonadST (MonadST)
+import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, StrictTMVar,
+                    atomically, newEmptyTMVarM, readTMVar)
+import           Control.Monad.Class.MonadTimer (MonadTimer)
+
 import           Crypto.Hash (digestFromByteString)
 
 import qualified Data.ByteString.Lazy as BSL
@@ -58,12 +62,13 @@ import           Data.Reflection (give)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 
-
 import           Explorer.DB (LogFileDir (..), MigrationDir)
 import qualified Explorer.DB as DB
 import           Explorer.Node.Database
+import           Explorer.Node.Error
 import           Explorer.Node.Insert
 import           Explorer.Node.Metrics
+import           Explorer.Node.Util
 
 import           Network.Socket (SockAddr (..))
 
@@ -92,7 +97,8 @@ import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined (ChainSync
                     ClientPipelinedStIdle (..), ClientPipelinedStIntersect (..), ClientStNext (..),
                     chainSyncClientPeerPipelined, recvMsgIntersectFound, recvMsgIntersectNotFound,
                     recvMsgRollBackward, recvMsgRollForward)
-import           Ouroboros.Network.Protocol.ChainSync.PipelineDecision (pipelineDecisionLowHighMark, PipelineDecision(Collect, Request, Pipeline, CollectOrPipeline), runPipelineDecision, MkPipelineDecision)
+import           Ouroboros.Network.Protocol.ChainSync.PipelineDecision (pipelineDecisionLowHighMark,
+                        PipelineDecision (..), runPipelineDecision, MkPipelineDecision)
 import           Ouroboros.Network.Protocol.ChainSync.Codec (codecChainSync)
 import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
 
@@ -139,11 +145,7 @@ initializeAllFeatures enp = do
   DB.runMigrations Prelude.id True (enpMigrationDir enp) (LogFileDir "/tmp")
   let fcc = Config.mkCardanoConfiguration $ Config.mergeConfiguration Config.mainnetConfiguration commonCli (enpCommonCLIAdvanced enp)
   finalConfig <- case fcc of
-                  Left err -> throwIO err
-                  --TODO: if we're using exceptions for this, then we should use a local
-                  -- excption type, local to this app, that enumerates all the ones we
-                  -- are reporting, and has proper formatting of the result.
-                  -- It would also require catching at the top level and printing.
+                  Left err -> panic $ show err
                   Right x  -> let params = enpLogging enp
                               in pure $ x { ccLogConfig = logConfigFile params
                                           , ccLogMetrics = captureMetrics params }
@@ -207,10 +209,14 @@ nodeCardanoFeature nodeCardanoFeature' nodeLayer =
 runClient :: ExplorerNodeParams -> Trace IO Text -> CardanoConfiguration -> IO ()
 runClient enp trce cc = do
     gc <- readGenesisConfig enp cc
+    logProtocolMagic trce $ Ledger.configProtocolMagic gc
 
     -- If the DB is empty it will be inserted, otherwise it will be validated (to make
     -- sure we are on the right chain).
-    insertValidateGenesisDistribution trce (enpNetworkName enp) gc
+    res <- insertValidateGenesisDistribution trce (enpNetworkName enp) gc
+    case res of
+      Left err -> logError trce $ renderExplorerNodeError err
+      Right () -> pure ()
 
     give (Genesis.configEpochSlots gc)
           $ give (Genesis.gdProtocolMagicId $ Genesis.configGenesisData gc)
@@ -225,21 +231,16 @@ mkProtocolId gc =
     Nothing
 
 
-data GenesisConfigurationError = GenesisConfigurationError Genesis.ConfigurationError
-  deriving (Show, Typeable)
-
-instance Exception GenesisConfigurationError
-
 readGenesisConfig :: ExplorerNodeParams -> CardanoConfiguration -> IO Genesis.Config
 readGenesisConfig enp cc = do
-    genHash <- either (throw . ConfigurationError) pure $ decodeAbstractHash (enpGenesisHash enp)
+    genHash <- either (throwIO . ConfigurationError) pure $ decodeAbstractHash (enpGenesisHash enp)
     convert =<< runExceptT (Genesis.mkConfigFromFile (convertRNM . coRequiresNetworkMagic $ ccCore cc)
                             (unGenesisFile $ enpGenesisFile enp) genHash)
   where
     convert :: Either Genesis.ConfigurationError Genesis.Config -> IO Genesis.Config
     convert =
       \case
-        Left err -> throw (GenesisConfigurationError err)   -- TODO: no no no!
+        Left err -> panic $ show err
         Right x -> pure x
 
 
@@ -296,22 +297,23 @@ localInitiatorNetworkApplication trce pInfoConfig =
               localTxSubmissionCodec peer channel
               (localTxSubmissionClientPeer (txSubmissionClient @(GenTx blk) txv))
 
-          ChainSyncWithBlocksPtcl -> \channel -> do
-            liftIO $ logInfo trce "Starting chainSyncClient"
-            latestPoints <- liftIO getLatestPoints
-            currentTip <- liftIO getCurrentTipBlockNo
-            liftIO $ logDbState trce
-            actionQueue <- newDbActionQueue
-            (metrics, server) <- registerMetricsServer
-            dbThread <- async $ runDbThread trce metrics actionQueue
-            ret <- runPipelinedPeer
-                    nullTracer (localChainSyncCodec @blk pInfoConfig) peer channel
-                    (chainSyncClientPeerPipelined (chainSyncClient trce metrics latestPoints currentTip actionQueue))
-            atomically $
-              writeDbActionQueue actionQueue DbFinish
-            wait dbThread
-            cancel server
-            pure ret
+          ChainSyncWithBlocksPtcl -> \channel ->
+            liftIO . logException trce $ do
+              logInfo trce "Starting chainSyncClient"
+              latestPoints <- getLatestPoints
+              currentTip <- getCurrentTipBlockNo
+              logDbState trce
+              actionQueue <- newDbActionQueue
+              (metrics, server) <- registerMetricsServer
+              dbThread <- async $ runDbThread trce metrics actionQueue
+              ret <- runPipelinedPeer
+                      nullTracer (localChainSyncCodec @blk pInfoConfig) peer channel
+                      (chainSyncClientPeerPipelined (chainSyncClient trce metrics latestPoints currentTip actionQueue))
+              atomically $
+                writeDbActionQueue actionQueue DbFinish
+              wait dbThread
+              cancel server
+              pure ret
 
 
 logDbState :: Trace IO Text -> IO ()
@@ -413,7 +415,7 @@ localTxSubmissionCodec =
 chainSyncClient
   :: forall blk m cfg. (MonadTimer m, MonadIO m, blk ~ ByronBlockOrEBB cfg, ByronGiven, cfg ~ ByronConfig)
   => Trace IO Text -> Metrics -> [Point blk] -> BlockNo -> DbActionQueue -> ChainSyncClientPipelined blk (Tip blk) m Void
-chainSyncClient _trce metrics latestPoints currentTip actionQueue =
+chainSyncClient trce metrics latestPoints currentTip actionQueue =
     ChainSyncClientPipelined $ pure $
       -- Notify the core node about the our latest points at which we are
       -- synchronised.  This client is not persistent and thus it just
@@ -451,19 +453,41 @@ chainSyncClient _trce metrics latestPoints currentTip actionQueue =
                     -> ClientStNext n (ByronBlockOrEBB ByronConfig) (Tip (ByronBlockOrEBB ByronConfig)) m a
     mkClientStNext finish =
       ClientStNext
-        { recvMsgRollForward = \blk tip -> do
-            liftIO $ do
-              Gauge.set (fromIntegral . unBlockNo $ tipBlockNo tip) $ mNodeHeight metrics
-              newSize <- atomically $ do
-                writeDbActionQueue actionQueue $ DbApplyBlock blk (tipBlockNo tip)
-                lengthDbActionQueue actionQueue
-              Gauge.set (fromIntegral newSize) $ mQueuePostWrite metrics
-            pure $ finish (blockNo blk) tip
+        { recvMsgRollForward = \blk tip ->
+            liftIO .
+              logException trce $ do
+                Gauge.set (fromIntegral . unBlockNo $ tipBlockNo tip) $ mNodeHeight metrics
+                newSize <- atomically $ do
+                  writeDbActionQueue actionQueue $ DbApplyBlock blk (tipBlockNo tip)
+                  lengthDbActionQueue actionQueue
+                Gauge.set (fromIntegral newSize) $ mQueuePostWrite metrics
+                pure $ finish (blockNo blk) tip
         , recvMsgRollBackward = \point tip -> do
-            newTip <- liftIO $ do
-              atomically $ writeDbActionQueue actionQueue (DbRollBackToPoint point)
-              -- This will get the current tip rather than what we roll back to
-              -- but will only be incorrect for a short time span.
-              getCurrentTipBlockNo
-            pure $ finish newTip tip
+            liftIO .
+              logException trce $ do
+                -- This will get the current tip rather than what we roll back to
+                -- but will only be incorrect for a short time span.
+                atomically $ writeDbActionQueue actionQueue (DbRollBackToPoint point)
+                newTip <- getCurrentTipBlockNo
+                pure $ finish newTip tip
         }
+
+-- | ouroboros-network catches 'SomeException' and if a 'nullTracer' is passed into that
+-- code, the caught exception will not be logged. Therefore wrap all explorer code that
+-- is called from network with an exception logger so at least the exception will be
+-- logged (instead of silently swallowed) and then rethrown.
+logException :: Trace IO Text -> IO a -> IO a
+logException tracer action =
+    action `catch` logger
+  where
+    logger :: SomeException -> IO a
+    logger e = do
+      logError tracer $ textShow e
+      throwIO e
+
+logProtocolMagic :: Trace IO Text -> Crypto.ProtocolMagic -> IO ()
+logProtocolMagic tracer pm =
+  liftIO . logInfo tracer $ mconcat
+    [ "NetworkMagic: ", textShow (Crypto.getRequiresNetworkMagic pm), " "
+    , textShow (Crypto.unProtocolMagicId . unAnnotated $ Crypto.getAProtocolMagicId pm)
+    ]

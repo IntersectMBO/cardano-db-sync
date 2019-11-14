@@ -24,6 +24,7 @@ import qualified Cardano.Chain.UTxO as Ledger
 
 import           Control.Monad (void)
 import           Control.Monad.IO.Class (MonadIO)
+import           Control.Monad.Trans.Except.Extra (runExceptT)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import qualified Data.ByteString.Char8 as BS
@@ -37,11 +38,14 @@ import           Database.Persist.Class (updateWhere)
 import           Database.Persist.Sql (SqlBackend, (=.), (==.))
 
 import qualified Explorer.DB as DB
+import           Explorer.Node.Error
 import           Explorer.Node.Util
 
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.
-insertValidateGenesisDistribution :: Trace IO Text -> Text -> Ledger.Config -> IO ()
+insertValidateGenesisDistribution
+    :: Trace IO Text -> Text -> Ledger.Config
+    -> IO (Either ExplorerNodeError ())
 insertValidateGenesisDistribution tracer networkName cfg = do
     -- Setting this to True will log all 'Persistent' operations which is great
     -- for debugging, but otherwise *way* too chatty.
@@ -49,16 +53,17 @@ insertValidateGenesisDistribution tracer networkName cfg = do
       then DB.runDbIohkLogging tracer insertAction
       else DB.runDbNoLogging insertAction
   where
-    insertAction :: MonadIO m => ReaderT SqlBackend m ()
+    insertAction :: MonadIO m => ReaderT SqlBackend m (Either ExplorerNodeError ())
     insertAction = do
-        mbid <- DB.queryBlockId $ configGenesisHash cfg
-        case mbid of
-          Right bid -> validateGenesisDistribution tracer networkName cfg bid
-          Left _ -> do
-            count <- DB.queryBlockCount
+      ebid <- DB.queryBlockId (configGenesisHash cfg)
+      case ebid of
+        Right bid -> validateGenesisDistribution tracer networkName cfg bid
+        Left _ ->
+          runExceptT $ do
+            count <- lift DB.queryBlockCount
             when (count > 0) $
-              panic "insertValidateGenesisDistribution: Genesis data mismatch."
-            void $ DB.insertMeta $ DB.Meta
+              explorerError "insertValidateGenesisDistribution: Genesis data mismatch."
+            void . lift $ DB.insertMeta $ DB.Meta
                                     (Ledger.unBlockCount $ Ledger.configK cfg)
                                     (configSlotDuration cfg)
                                     (Ledger.configStartTime cfg)
@@ -68,8 +73,8 @@ insertValidateGenesisDistribution tracer networkName cfg = do
             -- It would be nice to not need this artificial block, but that would
             -- require plumbing the Genesis.Config into 'insertByronBlockOrEBB'
             -- which would be a pain in the neck.
-            slid <- DB.insertSlotLeader $ DB.SlotLeader (genesisHashSlotLeader cfg) "Genesis slot leader"
-            bid <- DB.insertBlock $
+            slid <- lift . DB.insertSlotLeader $ DB.SlotLeader (genesisHashSlotLeader cfg) "Genesis slot leader"
+            bid <- lift . DB.insertBlock $
                       DB.Block
                         { DB.blockHash = configGenesisHash cfg
                         , DB.blockEpochNo = Nothing
@@ -82,77 +87,80 @@ insertValidateGenesisDistribution tracer networkName cfg = do
                         , DB.blockTime = Ledger.configStartTime cfg
                         , DB.blockTxCount = 0
                         }
-            mapM_ (insertTxOuts bid) $ genesisTxos cfg
+            lift $ mapM_ (insertTxOuts bid) $ genesisTxos cfg
             liftIO . logInfo tracer $ "Initial genesis distribution populated. Hash "
                             <> renderAbstractHash (configGenesisHash cfg)
 
-            supply <- DB.queryTotalSupply
+            supply <- lift $ DB.queryTotalSupply
             liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
-validateGenesisDistribution :: MonadIO m => Trace IO Text -> Text -> Ledger.Config -> DB.BlockId -> ReaderT SqlBackend m ()
-validateGenesisDistribution tracer networkName cfg bid = do
-  meta <- leftPanic "validateGenesisDistribution: " <$> DB.queryMeta
+validateGenesisDistribution
+    :: MonadIO m
+    => Trace IO Text -> Text -> Ledger.Config -> DB.BlockId
+    -> ReaderT SqlBackend m (Either ExplorerNodeError ())
+validateGenesisDistribution tracer networkName cfg bid =
+  runExceptT $ do
+    meta <- liftLookupFail "validateGenesisDistribution" $ DB.queryMeta
 
-  when (DB.metaProtocolConst meta /= Ledger.unBlockCount (Ledger.configK cfg)) $
-    panic $ Text.concat
+    when (DB.metaProtocolConst meta /= Ledger.unBlockCount (Ledger.configK cfg)) $
+      explorerError $ Text.concat
             [ "Mismatch protocol constant. Config value "
             , textShow (Ledger.unBlockCount $ Ledger.configK cfg)
             , " does not match DB value of ", textShow (DB.metaProtocolConst meta)
             ]
 
-  when (DB.metaSlotDuration meta /= configSlotDuration cfg) $
-    panic $ Text.concat
+    when (DB.metaSlotDuration meta /= configSlotDuration cfg) $
+      explorerError $ Text.concat
             [ "Mismatch slot duration time. Config value "
             , textShow (configSlotDuration cfg)
             , " does not match DB value of ", textShow (configSlotDuration cfg)
             ]
 
-  when (DB.metaStartTime meta /= Ledger.configStartTime cfg) $
-    panic $ Text.concat
+    when (DB.metaStartTime meta /= Ledger.configStartTime cfg) $
+      explorerError $ Text.concat
             [ "Mismatch chain start time. Config value "
             , textShow (Ledger.configStartTime cfg)
             , " does not match DB value of ", textShow (Ledger.configStartTime cfg)
             ]
 
-  case DB.metaNetworkName meta of
-    Nothing -> updateWhere
-                [DB.MetaStartTime ==. Ledger.configStartTime cfg]
-                [DB.MetaNetworkName =. Just networkName]
-    Just name ->
-      when (name /= networkName) $
-        panic $ Text.concat
-            [ "validateGenesisDistribution: Provided network name "
-            , networkName
-            , " does not match DB value "
-            , name
-            ]
+    case DB.metaNetworkName meta of
+      Nothing -> lift $ updateWhere
+                  [DB.MetaStartTime ==. Ledger.configStartTime cfg]
+                  [DB.MetaNetworkName =. Just networkName]
+      Just name ->
+        when (name /= networkName) $
+          explorerError $ Text.concat
+              [ "validateGenesisDistribution: Provided network name "
+              , networkName
+              , " does not match DB value "
+              , name
+              ]
 
-
-  txCount <- DB.queryBlockTxCount bid
-  let expectedTxCount = fromIntegral $length (genesisTxos cfg)
-  when (txCount /= expectedTxCount) $
-    panic $ Text.concat
-            [ "validateGenesisDistribution: Expected initial block to have "
-            , textShow expectedTxCount
-            , " but got "
-            , textShow txCount
-            ]
-  totalSupply <- DB.queryGenesisSupply
-  case configGenesisSupply cfg of
-    Left err -> panic $ "validateGenesisDistribution: " <> textShow err
-    Right expectedSupply ->
-      when (DB.word64ToAda expectedSupply /= totalSupply) $
-        panic $ Text.concat
+    txCount <- lift $ DB.queryBlockTxCount bid
+    let expectedTxCount = fromIntegral $length (genesisTxos cfg)
+    when (txCount /= expectedTxCount) $
+      explorerError $ Text.concat
+              [ "validateGenesisDistribution: Expected initial block to have "
+              , textShow expectedTxCount
+              , " but got "
+              , textShow txCount
+              ]
+    totalSupply <- lift DB.queryGenesisSupply
+    case configGenesisSupply cfg of
+      Left err -> explorerError $ "validateGenesisDistribution: " <> textShow err
+      Right expectedSupply ->
+        when (DB.word64ToAda expectedSupply /= totalSupply) $
+          explorerError  $ Text.concat
                 [ "validateGenesisDistribution: Expected total supply to be "
                 , textShow expectedSupply
                 , " but got "
                 , textShow totalSupply
                 ]
-  supply <- DB.queryGenesisSupply
-  liftIO $ do
-    logInfo tracer "Initial genesis distribution present and correct"
-    logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
+    supply <- lift DB.queryGenesisSupply
+    liftIO $ do
+      logInfo tracer "Initial genesis distribution present and correct"
+      logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
 
 -- -----------------------------------------------------------------------------
 
