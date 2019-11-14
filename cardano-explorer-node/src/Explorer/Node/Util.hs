@@ -12,7 +12,6 @@ module Explorer.Node.Util
   , boundaryEpochNumber
   , configSlotDuration
   , genesisToHeaderHash
-  , leftPanic
   , mkSlotLeader
   , pointToSlotHash
   , renderAbstractHash
@@ -131,9 +130,3 @@ unTxHash = Data.ByteArray.convert
 
 unCryptoHash :: Crypto.Hash Raw -> ByteString
 unCryptoHash = Data.ByteArray.convert
-
-leftPanic :: Text -> Either DB.LookupFail a -> a
-leftPanic msg =
-  \case
-    Left err -> panic $ msg <> DB.renderLookupFail err
-    Right val -> val
