@@ -77,7 +77,7 @@ runIohkLogging tracer action =
 toIohkLog :: Trace IO Text -> Loc -> LogSource -> LogLevel -> LogStr -> IO ()
 toIohkLog tracer _loc _src level msg = do
   meta <- mkLOMeta (toIohkSeverity level) Public
-  traceWith tracer $ LogObject "explorer-db" meta (LogStructured (LBS.fromStrict $ fromLogStr msg))
+  traceWith tracer $ LogObject ["explorer-db"] meta (LogStructured . LBS.fromStrict $ fromLogStr msg)
 
 
 toIohkSeverity :: LogLevel -> Severity
