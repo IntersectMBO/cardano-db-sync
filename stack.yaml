@@ -1,4 +1,4 @@
-resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/599d27a05597f96b9bfffa7920806fa638dcea10/snapshot.yaml
+resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/dc40b2e60cee4e808ffaa275926ade74a6c987d1/snapshot.yaml
 compiler: ghc-8.6.5
 
 
@@ -38,12 +38,12 @@ extra-deps:
   - katip-0.8.3.0
 
   - git: https://github.com/input-output-hk/cardano-shell
-    commit: 8abae427c44f0b447117f78e2c1f5006dac2edf8
+    commit: 9fdc7088f1d16e67bb4ca043e4541427345213fc
     subdirs:
       - cardano-shell
 
   - git: https://github.com/input-output-hk/cardano-prelude
-    commit: ad19158c7599bc5d50fe7cb0111a1488a139a381
+    commit: dc40b2e60cee4e808ffaa275926ade74a6c987d1
     subdirs:
       - .
       - test
@@ -63,7 +63,7 @@ extra-deps:
       - plugins/scribe-systemd
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: c8c498de0129d54f264fd8b7a92a7d0b5677f662
+    commit: 8031fab0c3066e0b82a5927c935c085b13591dbd
     subdirs:
       - cardano-config
       - cardano-node
