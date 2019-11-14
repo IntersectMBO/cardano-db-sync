@@ -42,7 +42,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     flags = {};
     package = {
       specVersion = "1.10";
-      identifier = { name = "cardano-node"; version = "3.0.1.87"; };
+      identifier = { name = "cardano-node"; version = "1.0.0"; };
       license = "Apache-2.0";
       copyright = "";
       maintainer = "operations@iohk.io";
@@ -81,6 +81,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."file-embed" or (buildDepError "file-embed"))
           (hsPkgs."filepath" or (buildDepError "filepath"))
           (hsPkgs."formatting" or (buildDepError "formatting"))
+          (hsPkgs."hostname" or (buildDepError "hostname"))
           (hsPkgs."io-sim-classes" or (buildDepError "io-sim-classes"))
           (hsPkgs."iohk-monitoring" or (buildDepError "iohk-monitoring"))
           (hsPkgs."iproute" or (buildDepError "iproute"))
@@ -260,8 +261,8 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/cardano-node";
-      rev = "8031fab0c3066e0b82a5927c935c085b13591dbd";
-      sha256 = "0k5rf5w7r337g0gsdwkiapm7gr1ga19zq3dcghsd2w9cysrbjykp";
+      rev = "70e78983cb3960af203a50f8c588af5e1833eaf1";
+      sha256 = "03k1m9bqzai5zq49334rar3fd1d82z044a1xnkyivibij1j05bwc";
       });
     postUnpack = "sourceRoot+=/cardano-node; echo source root reset to \$sourceRoot";
     }

@@ -1,4 +1,4 @@
-resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/dc40b2e60cee4e808ffaa275926ade74a6c987d1/snapshot.yaml
+resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/3c40edcf5bdba8721d3430d0aaaeea8770ce9bec/snapshot.yaml
 compiler: ghc-8.6.5
 
 
@@ -43,7 +43,7 @@ extra-deps:
       - cardano-shell
 
   - git: https://github.com/input-output-hk/cardano-prelude
-    commit: dc40b2e60cee4e808ffaa275926ade74a6c987d1
+    commit: 3c40edcf5bdba8721d3430d0aaaeea8770ce9bec
     subdirs:
       - .
       - test
@@ -52,7 +52,7 @@ extra-deps:
     commit: 43a036c5bbe68ca2e9cbe611eab7982e2348fe49
 
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: bea0e079fc32ed316ce352d17d14199a680e3f6c
+    commit: b4268cedecbbe2a35437effc17a8af10abda8ea8
     subdirs:
       - contra-tracer
       - iohk-monitoring
@@ -63,7 +63,7 @@ extra-deps:
       - plugins/scribe-systemd
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: 8031fab0c3066e0b82a5927c935c085b13591dbd
+    commit: 70e78983cb3960af203a50f8c588af5e1833eaf1
     subdirs:
       - cardano-config
       - cardano-node
