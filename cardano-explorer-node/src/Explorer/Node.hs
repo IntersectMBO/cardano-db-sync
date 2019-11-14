@@ -49,7 +49,6 @@ import           Cardano.Shell.Types (CardanoFeature (..),
 
 import qualified Codec.Serialise as Serialise
 
-import           Control.Exception (throw)
 import           Control.Monad.Class.MonadST (MonadST)
 import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, StrictTMVar,
                     atomically, newEmptyTMVarM, readTMVar)
@@ -62,7 +61,6 @@ import           Data.Functor.Contravariant (contramap)
 import           Data.Reflection (give)
 import           Data.Text (Text)
 import qualified Data.Text as Text
-
 
 import           Explorer.DB (LogFileDir (..), MigrationDir)
 import qualified Explorer.DB as DB
@@ -99,7 +97,8 @@ import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined (ChainSync
                     ClientPipelinedStIdle (..), ClientPipelinedStIntersect (..), ClientStNext (..),
                     chainSyncClientPeerPipelined, recvMsgIntersectFound, recvMsgIntersectNotFound,
                     recvMsgRollBackward, recvMsgRollForward)
-import           Ouroboros.Network.Protocol.ChainSync.PipelineDecision (pipelineDecisionLowHighMark, PipelineDecision(Collect, Request, Pipeline, CollectOrPipeline), runPipelineDecision, MkPipelineDecision)
+import           Ouroboros.Network.Protocol.ChainSync.PipelineDecision (pipelineDecisionLowHighMark,
+                        PipelineDecision (..), runPipelineDecision, MkPipelineDecision)
 import           Ouroboros.Network.Protocol.ChainSync.Codec (codecChainSync)
 import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
 
@@ -146,11 +145,7 @@ initializeAllFeatures enp = do
   DB.runMigrations Prelude.id True (enpMigrationDir enp) (LogFileDir "/tmp")
   let fcc = Config.mkCardanoConfiguration $ Config.mergeConfiguration Config.mainnetConfiguration commonCli (enpCommonCLIAdvanced enp)
   finalConfig <- case fcc of
-                  Left err -> throwIO err
-                  --TODO: if we're using exceptions for this, then we should use a local
-                  -- excption type, local to this app, that enumerates all the ones we
-                  -- are reporting, and has proper formatting of the result.
-                  -- It would also require catching at the top level and printing.
+                  Left err -> panic $ show err
                   Right x  -> let params = enpLogging enp
                               in pure $ x { ccLogConfig = logConfigFile params
                                           , ccLogMetrics = captureMetrics params }
@@ -214,7 +209,6 @@ nodeCardanoFeature nodeCardanoFeature' nodeLayer =
 runClient :: ExplorerNodeParams -> Trace IO Text -> CardanoConfiguration -> IO ()
 runClient enp trce cc = do
     gc <- readGenesisConfig enp cc
-
     logProtocolMagic trce $ Ledger.configProtocolMagic gc
 
     -- If the DB is empty it will be inserted, otherwise it will be validated (to make
@@ -237,21 +231,16 @@ mkProtocolId gc =
     Nothing
 
 
-data GenesisConfigurationError = GenesisConfigurationError Genesis.ConfigurationError
-  deriving (Show, Typeable)
-
-instance Exception GenesisConfigurationError
-
 readGenesisConfig :: ExplorerNodeParams -> CardanoConfiguration -> IO Genesis.Config
 readGenesisConfig enp cc = do
-    genHash <- either (throw . ConfigurationError) pure $ decodeAbstractHash (enpGenesisHash enp)
+    genHash <- either (throwIO . ConfigurationError) pure $ decodeAbstractHash (enpGenesisHash enp)
     convert =<< runExceptT (Genesis.mkConfigFromFile (convertRNM . coRequiresNetworkMagic $ ccCore cc)
                             (unGenesisFile $ enpGenesisFile enp) genHash)
   where
     convert :: Either Genesis.ConfigurationError Genesis.Config -> IO Genesis.Config
     convert =
       \case
-        Left err -> throw (GenesisConfigurationError err)   -- TODO: no no no!
+        Left err -> panic $ show err
         Right x -> pure x
 
 
