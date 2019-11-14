@@ -90,6 +90,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."text" or (buildDepError "text"))
           (hsPkgs."time" or (buildDepError "time"))
           (hsPkgs."transformers" or (buildDepError "transformers"))
+          (hsPkgs."transformers-except" or (buildDepError "transformers-except"))
           (hsPkgs."typed-protocols" or (buildDepError "typed-protocols"))
           (hsPkgs."typed-protocols-cbor" or (buildDepError "typed-protocols-cbor"))
           ];
