@@ -1,4 +1,4 @@
-module Explorer.Web.Server.GenesisPages
+module Explorer.Web.Api.Legacy.GenesisPages
   ( genesisPages
   ) where
 
@@ -14,9 +14,9 @@ import           Explorer.DB (EntityField (..), txOutSpentP, txOutUnspentP)
 
 import           Explorer.Web.ClientTypes (CAddressesFilter (..))
 import           Explorer.Web.Error (ExplorerError (..))
-import           Explorer.Web.LegacyApi (PageNumber)
-import           Explorer.Web.Server.Util (divRoundUp, runQuery, toPageSize)
-import           Explorer.Web.Server.Types (PageSize (..))
+import           Explorer.Web.Api.Legacy (PageNumber)
+import           Explorer.Web.Api.Legacy.Util (divRoundUp, runQuery, toPageSize)
+import           Explorer.Web.Api.Legacy.Types (PageSize (..))
 
 import           Servant (Handler)
 

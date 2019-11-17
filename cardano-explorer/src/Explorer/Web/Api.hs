@@ -8,9 +8,9 @@ module Explorer.Web.Api
 
 import           Data.Proxy (Proxy (..))
 
-import           Explorer.Web.LegacyApi (ExplorerApiRecord)
-import           Explorer.Web.API1 (ExplorerApi1Record)
-import           Explorer.Web.HttpBridge (HttpBridgeApi)
+import           Explorer.Web.Api.HttpBridge (HttpBridgeApi)
+import           Explorer.Web.Api.Legacy (ExplorerApiRecord)
+import           Explorer.Web.Api.V1 (ExplorerApi1Record)
 
 import           Servant.API ((:>), (:<|>))
 import           Servant.API.Generic (ToServantApi)

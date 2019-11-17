@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE StandaloneDeriving #-}
-module Explorer.Web.Server.Types
+module Explorer.Web.Api.Legacy.Types
   ( PageNo (..)
   , PageSize (..)
   ) where
