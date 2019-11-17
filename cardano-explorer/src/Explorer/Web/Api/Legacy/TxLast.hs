@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Explorer.Web.Server.TxLast
+module Explorer.Web.Api.Legacy.TxLast
   ( getLastTxs
   ) where
 
@@ -20,7 +20,7 @@ import           Database.Persist.Sql (SqlBackend)
 import           Explorer.DB (EntityField (..), Tx, isJust)
 import           Explorer.Web.ClientTypes (CHash (..), CTxEntry (..), CTxHash (..), mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
-import           Explorer.Web.Server.Util
+import           Explorer.Web.Api.Legacy.Util
 
 import           Servant (Handler)
 

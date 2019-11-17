@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
-module Explorer.Web.Server.TxsSummary
+module Explorer.Web.Api.Legacy.TxsSummary
   ( txsSummary
   ) where
 
@@ -26,7 +26,7 @@ import           Explorer.DB (Block (..), BlockId, EntityField (..), LookupFail 
 import           Explorer.Web.ClientTypes (CAddress (..),
                     CHash (..), CCoin, CTxHash (..), CTxSummary (..), mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
-import           Explorer.Web.Server.Util
+import           Explorer.Web.Api.Legacy.Util
 
 import           Servant (Handler)
 -- import           Data.Time.Clock.POSIX (POSIXTime, utcTimeToPOSIXSeconds)

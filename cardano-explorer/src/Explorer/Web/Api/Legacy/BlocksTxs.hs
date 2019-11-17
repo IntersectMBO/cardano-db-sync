@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 
-module Explorer.Web.Server.BlocksTxs
+module Explorer.Web.Api.Legacy.BlocksTxs
   ( blocksTxs
   ) where
 
@@ -27,7 +27,7 @@ import           Explorer.DB (EntityField (..), TxId, unValue3)
 import           Explorer.Web.ClientTypes (CAddress (..), CHash (..), CTxBrief (..), CTxHash (..),
                     mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
-import           Explorer.Web.Server.Util (bsBase16Encode, runQuery, textBase16Decode)
+import           Explorer.Web.Api.Legacy.Util (bsBase16Encode, runQuery, textBase16Decode)
 
 import           Servant (Handler)
 

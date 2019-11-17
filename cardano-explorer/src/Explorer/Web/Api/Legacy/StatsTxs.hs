@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
-module Explorer.Web.Server.StatsTxs
+module Explorer.Web.Api.Legacy.StatsTxs
   ( statsTxs
   ) where
 
@@ -21,9 +21,9 @@ import           Explorer.DB (BlockId, EntityField (..), isJust, queryBlockHeigh
 
 import           Explorer.Web.Error (ExplorerError (..))
 import           Explorer.Web.ClientTypes (CHash (..), CTxHash (..))
-import           Explorer.Web.LegacyApi (PageNumber, TxsStats)
-import           Explorer.Web.Server.Types (PageNo (..))
-import           Explorer.Web.Server.Util (bsBase16Encode, runQuery)
+import           Explorer.Web.Api.Legacy (PageNumber, TxsStats)
+import           Explorer.Web.Api.Legacy.Types (PageNo (..))
+import           Explorer.Web.Api.Legacy.Util (bsBase16Encode, runQuery)
 
 import           Servant (Handler)
 

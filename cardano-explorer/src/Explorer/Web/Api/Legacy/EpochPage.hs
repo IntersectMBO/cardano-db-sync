@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NamedFieldPuns #-}
-module Explorer.Web.Server.EpochPage
+module Explorer.Web.Api.Legacy.EpochPage
   ( epochPage
   ) where
 
@@ -27,8 +27,8 @@ import           Explorer.DB (Block (..), EntityField (..))
 
 import           Explorer.Web.ClientTypes (CBlockEntry (..), CHash (..), mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
-import           Explorer.Web.Server.Types (PageNo (..))
-import           Explorer.Web.Server.Util (bsBase16Encode, divRoundUp, runQuery,
+import           Explorer.Web.Api.Legacy.Types (PageNo (..))
+import           Explorer.Web.Api.Legacy.Util (bsBase16Encode, divRoundUp, runQuery,
                     slotsPerEpoch, textShow)
 
 import           Servant (Handler)

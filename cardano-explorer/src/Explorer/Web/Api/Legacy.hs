@@ -9,7 +9,7 @@
 
 -- | Type-level specification of Explorer API (via Servant).
 
-module Explorer.Web.LegacyApi
+module Explorer.Web.Api.Legacy
        ( ExplorerApiRecord(..)
        , TxsStats
        , PageNumber
@@ -32,7 +32,7 @@ import           Explorer.Web.ClientTypes (CAddress, CAddressSummary,
                                            CHash, CTxBrief, CTxEntry, CTxHash,
                                            CTxSummary, CUtxo)
 import           Explorer.Web.Error       (ExplorerError)
-import           Explorer.Web.Server.Types (PageNo (..), PageSize (..))
+import           Explorer.Web.Api.Legacy.Types (PageNo (..), PageSize (..))
 
 type PageNumber = Word
 
@@ -160,6 +160,17 @@ data ExplorerApiRecord route = ExplorerApiRecord
         :> QueryParam "page" PageNo
         :> ExRes Get TxsStats
 
+{-
+  -- Although this is a new endpoint its return type is a type already used here
+  -- in the legacy API.
+  , _blockAddress
+        :: route
+        :- "block"
+        :> QueryParam "block" CHash
+        :> "address"
+        :> QueryParam "address" CAddress
+        :> Get '[JSON] (Either ExplorerError CAddressSummary)
+-}
   }
   deriving (Generic)
 
