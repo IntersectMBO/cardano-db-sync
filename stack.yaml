@@ -36,9 +36,11 @@ extra-deps:
   - text-ansi-0.1.0
   - Diff-0.4.0
   - katip-0.8.3.0
+  - moo-1.2
+  - gray-code-0.3.1
 
   - git: https://github.com/input-output-hk/cardano-shell
-    commit: 9fdc7088f1d16e67bb4ca043e4541427345213fc
+    commit: f700afeb24163332dc00306508ca410b7873521d
     subdirs:
       - cardano-shell
 
@@ -52,7 +54,7 @@ extra-deps:
     commit: 43a036c5bbe68ca2e9cbe611eab7982e2348fe49
 
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: b4268cedecbbe2a35437effc17a8af10abda8ea8
+    commit: 4956b32f039579a0e7e4fd10793f65b4c77d9044
     subdirs:
       - contra-tracer
       - iohk-monitoring
@@ -63,7 +65,7 @@ extra-deps:
       - plugins/scribe-systemd
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: 70e78983cb3960af203a50f8c588af5e1833eaf1
+    commit: 321622eab73438e5e2580d76cf4a414112e900f8
     subdirs:
       - cardano-config
       - cardano-node
@@ -75,8 +77,18 @@ extra-deps:
       - binary/test
       - cardano-crypto-class
 
+  - git: https://github.com/input-output-hk/goblins
+    commit: 26d35ad52fe9ade3391532dbfeb2f416f07650bc
+
+  - git: https://github.com/input-output-hk/cardano-ledger-specs
+    commit: 11b674a10e76ab266a37225d82955fd8b1f80e27
+    subdirs:
+      - byron/semantics/executable-spec
+      - byron/ledger/executable-spec
+      - byron/chain/executable-spec
+
   - git: https://github.com/input-output-hk/cardano-ledger
-    commit: 8854e56b68ab3b73ed2fd445d8c1db7d34b7c7f2
+    commit: 52ffa26e6d5a204345ddc3e375b17cf1c96d3412
     subdirs:
       - cardano-ledger
       - cardano-ledger/test
