@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Explorer.Web.Server.Util
+module Explorer.Web.Api.Legacy.Util
   ( blockPosixTime
   , bsBase16Encode
   , decodeTextAddress
@@ -34,7 +34,7 @@ import           Database.Persist.Sql (SqlBackend, runSqlConn)
 
 import           Explorer.DB (Block (..))
 import           Explorer.Web.Error (ExplorerError (..))
-import           Explorer.Web.Server.Types (PageSize (..))
+import           Explorer.Web.Api.Legacy.Types (PageSize (..))
 
 
 blockPosixTime :: Block -> POSIXTime

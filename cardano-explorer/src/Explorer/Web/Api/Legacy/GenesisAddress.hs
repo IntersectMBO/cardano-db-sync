@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Explorer.Web.Server.GenesisAddress
+module Explorer.Web.Api.Legacy.GenesisAddress
   ( genesisAddressInfo
   ) where
 
@@ -20,8 +20,8 @@ import           Explorer.DB (EntityField (..), txOutSpentB, txOutSpentP, txOutU
 import           Explorer.Web.ClientTypes (CAddress (..), CAddressesFilter (..),
                     CGenesisAddressInfo (..), mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
-import           Explorer.Web.Server.Types (PageNo (..), PageSize (..))
-import           Explorer.Web.Server.Util (runQuery, toPageSize)
+import           Explorer.Web.Api.Legacy.Types (PageNo (..), PageSize (..))
+import           Explorer.Web.Api.Legacy.Util (runQuery, toPageSize)
 
 import           Servant (Handler)
 

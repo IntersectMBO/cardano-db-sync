@@ -1,6 +1,6 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Explorer.Web.Server.BlockPagesTotal
+module Explorer.Web.Api.Legacy.BlockPagesTotal
   ( blockPagesTotal
   ) where
 
@@ -15,9 +15,9 @@ import           Database.Persist.Sql (SqlBackend)
 import           Explorer.DB (EntityField (..), isJust)
 
 import           Explorer.Web.Error (ExplorerError (..))
-import           Explorer.Web.LegacyApi (PageNumber)
-import           Explorer.Web.Server.Util (divRoundUp, runQuery, toPageSize)
-import           Explorer.Web.Server.Types (PageSize (..))
+import           Explorer.Web.Api.Legacy (PageNumber)
+import           Explorer.Web.Api.Legacy.Util (divRoundUp, runQuery, toPageSize)
+import           Explorer.Web.Api.Legacy.Types (PageSize (..))
 
 import           Servant (Handler)
 

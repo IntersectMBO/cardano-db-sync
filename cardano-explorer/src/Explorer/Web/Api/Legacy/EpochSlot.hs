@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Explorer.Web.Server.EpochSlot
+module Explorer.Web.Api.Legacy.EpochSlot
   ( epochSlot
   ) where
 
@@ -21,7 +21,7 @@ import           Database.Persist.Sql (SqlBackend)
 import           Explorer.DB (BlockId, Block (..), EntityField (..))
 import           Explorer.Web.ClientTypes (CBlockEntry (..), CHash (..), mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
-import           Explorer.Web.Server.Util
+import           Explorer.Web.Api.Legacy.Util
 
 import           Servant (Handler)
 

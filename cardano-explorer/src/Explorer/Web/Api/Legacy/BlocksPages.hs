@@ -1,6 +1,6 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Explorer.Web.Server.BlocksPages
+module Explorer.Web.Api.Legacy.BlocksPages
   ( blocksPages
   ) where
 
@@ -22,9 +22,9 @@ import           Explorer.DB (Block (..), EntityField (..), isJust, queryBlockHe
 
 import           Explorer.Web.ClientTypes (CBlockEntry (..), CHash (..), mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
-import           Explorer.Web.LegacyApi (PageNumber)
-import           Explorer.Web.Server.Util (bsBase16Encode, runQuery, slotsPerEpoch)
-import           Explorer.Web.Server.Types (PageNo (..), PageSize (..))
+import           Explorer.Web.Api.Legacy (PageNumber)
+import           Explorer.Web.Api.Legacy.Util (bsBase16Encode, runQuery, slotsPerEpoch)
+import           Explorer.Web.Api.Legacy.Types (PageNo (..), PageSize (..))
 
 import           Servant (Handler)
 

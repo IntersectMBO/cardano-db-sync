@@ -12,25 +12,26 @@ import           Explorer.Web.ClientTypes (CAddress (..), CBlockEntry (..), CBlo
                     mkCCoin, adaToCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
 import           Explorer.Web.Query (queryBlockSummary, queryBlockIdFromHeight, queryUtxoSnapshot)
-import           Explorer.Web.API1 (ExplorerApi1Record (..), V1Utxo (..))
-import qualified Explorer.Web.API1 as API1
-import           Explorer.Web.HttpBridge (HttpBridgeApi (..))
-import           Explorer.Web.HttpBridge.AddressBalance
-import           Explorer.Web.LegacyApi (ExplorerApiRecord (..))
+import           Explorer.Web.Api.V1 (ExplorerApi1Record (..), V1Utxo (..))
+import qualified Explorer.Web.Api.V1 as API1
+import           Explorer.Web.Api.HttpBridge (HttpBridgeApi (..))
+import           Explorer.Web.Api.HttpBridge.AddressBalance
+import           Explorer.Web.Api.Legacy (ExplorerApiRecord (..))
 
-import           Explorer.Web.Server.AddressSummary
-import           Explorer.Web.Server.BlockPagesTotal
-import           Explorer.Web.Server.BlocksPages
-import           Explorer.Web.Server.BlocksTxs
-import           Explorer.Web.Server.EpochPage
-import           Explorer.Web.Server.EpochSlot
-import           Explorer.Web.Server.GenesisAddress
-import           Explorer.Web.Server.GenesisPages
-import           Explorer.Web.Server.GenesisSummary
-import           Explorer.Web.Server.StatsTxs
-import           Explorer.Web.Server.TxLast
-import           Explorer.Web.Server.TxsSummary
-import           Explorer.Web.Server.Util
+import           Explorer.Web.Api.Legacy.AddressSummary
+import           Explorer.Web.Api.Legacy.BlockAddress
+import           Explorer.Web.Api.Legacy.BlockPagesTotal
+import           Explorer.Web.Api.Legacy.BlocksPages
+import           Explorer.Web.Api.Legacy.BlocksTxs
+import           Explorer.Web.Api.Legacy.EpochPage
+import           Explorer.Web.Api.Legacy.EpochSlot
+import           Explorer.Web.Api.Legacy.GenesisAddress
+import           Explorer.Web.Api.Legacy.GenesisPages
+import           Explorer.Web.Api.Legacy.GenesisSummary
+import           Explorer.Web.Api.Legacy.StatsTxs
+import           Explorer.Web.Api.Legacy.TxLast
+import           Explorer.Web.Api.Legacy.TxsSummary
+import           Explorer.Web.Api.Legacy.Util
 
 import           Control.Monad.IO.Class      (liftIO)
 import           Control.Monad.Logger        (runStdoutLoggingT)
@@ -84,6 +85,7 @@ explorerHandlers backend =
       , _genesisPagesTotal  = genesisPages backend
       , _genesisAddressInfo = genesisAddressInfo backend
       , _statsTxs           = statsTxs backend
+      , _blockAddress       = blockAddress backend
       } :: ExplorerApiRecord (AsServerT Handler)
 
     newHandlers = ExplorerApi1Record

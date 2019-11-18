@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Explorer.Web.Server.RedeemSummary
+module Explorer.Web.Api.Legacy.RedeemSummary
   ( queryRedeemSummary
   ) where
 
@@ -23,7 +23,7 @@ import           Explorer.DB (EntityField (..), unValue3)
 import           Explorer.Web.ClientTypes (CAddress (..), CAddressSummary (..), CAddressType (..),
                     CCoin, CHash (..), CTxBrief (..), CTxHash (..), mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
-import           Explorer.Web.Server.Util (bsBase16Encode)
+import           Explorer.Web.Api.Legacy.Util (bsBase16Encode)
 
 -- Example redeem addresses:
 --    /api/addresses/summary/Ae2tdPwUPEZAAvxJ9nQ1nx88X9Jq6dskyG9uFUWG69wC6TJ7DKNCp6QCEM2 (unspent)
