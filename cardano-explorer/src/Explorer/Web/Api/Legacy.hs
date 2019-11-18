@@ -160,17 +160,16 @@ data ExplorerApiRecord route = ExplorerApiRecord
         :> QueryParam "page" PageNo
         :> ExRes Get TxsStats
 
-{-
   -- Although this is a new endpoint its return type is a type already used here
   -- in the legacy API.
   , _blockAddress
         :: route
         :- "block"
-        :> QueryParam "block" CHash
+        :> Capture "block" CHash
         :> "address"
-        :> QueryParam "address" CAddress
+        :> Capture "address" CAddress
         :> Get '[JSON] (Either ExplorerError CAddressSummary)
--}
+
   }
   deriving (Generic)
 

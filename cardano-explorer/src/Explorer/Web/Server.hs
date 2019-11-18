@@ -19,6 +19,7 @@ import           Explorer.Web.Api.HttpBridge.AddressBalance
 import           Explorer.Web.Api.Legacy (ExplorerApiRecord (..))
 
 import           Explorer.Web.Api.Legacy.AddressSummary
+import           Explorer.Web.Api.Legacy.BlockAddress
 import           Explorer.Web.Api.Legacy.BlockPagesTotal
 import           Explorer.Web.Api.Legacy.BlocksPages
 import           Explorer.Web.Api.Legacy.BlocksTxs
@@ -84,6 +85,7 @@ explorerHandlers backend =
       , _genesisPagesTotal  = genesisPages backend
       , _genesisAddressInfo = genesisAddressInfo backend
       , _statsTxs           = statsTxs backend
+      , _blockAddress       = blockAddress backend
       } :: ExplorerApiRecord (AsServerT Handler)
 
     newHandlers = ExplorerApi1Record

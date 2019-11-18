@@ -47,6 +47,7 @@ library
                       , Explorer.Web.Query
                       , Explorer.Web.Server
                       , Explorer.Web.Api.Legacy.AddressSummary
+                      , Explorer.Web.Api.Legacy.BlockAddress
                       , Explorer.Web.Api.Legacy.BlockPagesTotal
                       , Explorer.Web.Api.Legacy.BlocksPages
                       , Explorer.Web.Api.Legacy.BlocksTxs
