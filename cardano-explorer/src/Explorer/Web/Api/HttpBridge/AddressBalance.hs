@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Explorer.Web.HttpBridge.AddressBalance
+module Explorer.Web.Api.HttpBridge.AddressBalance
   ( addressBalance
   ) where
 
@@ -19,7 +19,7 @@ import           Database.Persist.Sql (SqlBackend)
 import           Explorer.DB (EntityField (..), txOutUnspentP, queryNetworkName)
 import           Explorer.Web.ClientTypes (CAddress (..), CNetwork (..), CAddressBalance (..),
                     CAddressBalanceError (..))
-import           Explorer.Web.Server.Util (bsBase16Encode, decodeTextAddress, runQuery)
+import           Explorer.Web.Api.Legacy.Util (bsBase16Encode, decodeTextAddress, runQuery)
 
 import           Servant (Handler)
 

@@ -2,7 +2,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 
-module Explorer.Web.HttpBridge
+module Explorer.Web.Api.HttpBridge
   ( HttpBridgeApi (..)
   ) where
 

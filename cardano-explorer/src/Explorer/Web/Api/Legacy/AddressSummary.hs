@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Explorer.Web.Server.AddressSummary
+module Explorer.Web.Api.Legacy.AddressSummary
   ( addressSummary
   ) where
 
@@ -30,8 +30,8 @@ import           Explorer.DB (EntityField (..), TxId, unValue3)
 import           Explorer.Web.ClientTypes (CAddress (..), CAddressSummary (..), CAddressType (..),
                     CCoin (..), CHash (..), CTxBrief (..), CTxHash (..), mkCCoin, sumCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
-import           Explorer.Web.Server.RedeemSummary (queryRedeemSummary)
-import           Explorer.Web.Server.Util (bsBase16Encode, decodeTextAddress, runQuery)
+import           Explorer.Web.Api.Legacy.RedeemSummary (queryRedeemSummary)
+import           Explorer.Web.Api.Legacy.Util (bsBase16Encode, decodeTextAddress, runQuery)
 
 import           Servant (Handler)
 

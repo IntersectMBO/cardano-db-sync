@@ -39,27 +39,29 @@ library
                       , Explorer.Web.Api
                       , Explorer.Web.ClientTypes
                       , Explorer.Web.Error
-                      , Explorer.Web.LegacyApi
-                      , Explorer.Web.API1
-                      , Explorer.Web.HttpBridge
-                      , Explorer.Web.HttpBridge.AddressBalance
+                      , Explorer.Web.Api.Legacy
+                      , Explorer.Web.Api.V1
+                      , Explorer.Web.Api.V1.Types
+                      , Explorer.Web.Api.HttpBridge
+                      , Explorer.Web.Api.HttpBridge.AddressBalance
                       , Explorer.Web.Query
                       , Explorer.Web.Server
-                      , Explorer.Web.Server.AddressSummary
-                      , Explorer.Web.Server.BlockPagesTotal
-                      , Explorer.Web.Server.BlocksPages
-                      , Explorer.Web.Server.BlocksTxs
-                      , Explorer.Web.Server.EpochPage
-                      , Explorer.Web.Server.EpochSlot
-                      , Explorer.Web.Server.GenesisAddress
-                      , Explorer.Web.Server.GenesisPages
-                      , Explorer.Web.Server.GenesisSummary
-                      , Explorer.Web.Server.RedeemSummary
-                      , Explorer.Web.Server.StatsTxs
-                      , Explorer.Web.Server.TxLast
-                      , Explorer.Web.Server.TxsSummary
-                      , Explorer.Web.Server.Types
-                      , Explorer.Web.Server.Util
+                      , Explorer.Web.Api.Legacy.AddressSummary
+                      , Explorer.Web.Api.Legacy.BlockAddress
+                      , Explorer.Web.Api.Legacy.BlockPagesTotal
+                      , Explorer.Web.Api.Legacy.BlocksPages
+                      , Explorer.Web.Api.Legacy.BlocksTxs
+                      , Explorer.Web.Api.Legacy.EpochPage
+                      , Explorer.Web.Api.Legacy.EpochSlot
+                      , Explorer.Web.Api.Legacy.GenesisAddress
+                      , Explorer.Web.Api.Legacy.GenesisPages
+                      , Explorer.Web.Api.Legacy.GenesisSummary
+                      , Explorer.Web.Api.Legacy.RedeemSummary
+                      , Explorer.Web.Api.Legacy.StatsTxs
+                      , Explorer.Web.Api.Legacy.TxLast
+                      , Explorer.Web.Api.Legacy.TxsSummary
+                      , Explorer.Web.Api.Legacy.Types
+                      , Explorer.Web.Api.Legacy.Util
                       , Explorer.Web.TestServer
   -- other-modules:
 

@@ -298,7 +298,7 @@ localInitiatorNetworkApplication trce pInfoConfig =
               (localTxSubmissionClientPeer (txSubmissionClient @(GenTx blk) txv))
 
           ChainSyncWithBlocksPtcl -> \channel ->
-            liftIO . logException trce $ do
+            liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
               logInfo trce "Starting chainSyncClient"
               latestPoints <- getLatestPoints
               currentTip <- getCurrentTipBlockNo
@@ -455,7 +455,7 @@ chainSyncClient trce metrics latestPoints currentTip actionQueue =
       ClientStNext
         { recvMsgRollForward = \blk tip ->
             liftIO .
-              logException trce $ do
+              logException trce "recvMsgRollForward: " $ do
                 Gauge.set (fromIntegral . unBlockNo $ tipBlockNo tip) $ mNodeHeight metrics
                 newSize <- atomically $ do
                   writeDbActionQueue actionQueue $ DbApplyBlock blk (tipBlockNo tip)
@@ -464,7 +464,7 @@ chainSyncClient trce metrics latestPoints currentTip actionQueue =
                 pure $ finish (blockNo blk) tip
         , recvMsgRollBackward = \point tip -> do
             liftIO .
-              logException trce $ do
+              logException trce "recvMsgRollBackward: " $ do
                 -- This will get the current tip rather than what we roll back to
                 -- but will only be incorrect for a short time span.
                 atomically $ writeDbActionQueue actionQueue (DbRollBackToPoint point)
@@ -476,13 +476,13 @@ chainSyncClient trce metrics latestPoints currentTip actionQueue =
 -- code, the caught exception will not be logged. Therefore wrap all explorer code that
 -- is called from network with an exception logger so at least the exception will be
 -- logged (instead of silently swallowed) and then rethrown.
-logException :: Trace IO Text -> IO a -> IO a
-logException tracer action =
+logException :: Trace IO Text -> Text -> IO a -> IO a
+logException tracer txt action =
     action `catch` logger
   where
     logger :: SomeException -> IO a
     logger e = do
-      logError tracer $ textShow e
+      logError tracer $ txt <> textShow e
       throwIO e
 
 logProtocolMagic :: Trace IO Text -> Crypto.ProtocolMagic -> IO ()

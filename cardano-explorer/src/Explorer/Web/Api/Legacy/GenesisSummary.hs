@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Explorer.Web.Server.GenesisSummary
+module Explorer.Web.Api.Legacy.GenesisSummary
   ( genesisSummary
   ) where
 
@@ -20,7 +20,7 @@ import           Explorer.DB (EntityField (..), txOutSpentP)
 
 import           Explorer.Web.ClientTypes (CGenesisSummary (..), mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
-import           Explorer.Web.Server.Util (runQuery)
+import           Explorer.Web.Api.Legacy.Util (runQuery)
 
 import           Servant (Handler)
 
