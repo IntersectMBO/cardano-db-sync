@@ -1,22 +1,11 @@
 { lib, pkgs, config, ... }:
 let
-  self = import ../.. { };
   cfg = config.services.cardano-graphql;
   sources = import ../../nix/sources.nix;
 in {
   options = {
     services.cardano-graphql = {
       enable = lib.mkEnableOption "cardano-explorer graphql service";
-
-      # To do: remove this option once the repo is public
-      localRepoPath = lib.mkOption {
-        type = lib.types.str;
-        default = "/var/lib/repo/cardano-graphql";
-        description = ''
-          The local repo path to the cardano-graphql private repository.
-          The branch checked out should be `nix-build`.
-        '';
-      };
 
       dbUser = lib.mkOption {
         type = lib.types.str;
@@ -45,7 +34,7 @@ in {
     };
   };
   config = let
-    frontendBaseSrc = cfg.localRepoPath;
+    frontendBaseSrc = sources.cardano-graphql;
     frontendBaseAttr = import frontendBaseSrc;
     frontend = frontendBaseAttr.cardano-graphql;
     hasuraBaseUri = cfg.hasuraProtocol + "://" + cfg.hasuraIp + ":" + (toString cfg.enginePort) + "/";
