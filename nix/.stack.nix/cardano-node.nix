@@ -228,6 +228,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             (hsPkgs."async" or (buildDepError "async"))
             (hsPkgs."bytestring" or (buildDepError "bytestring"))
             (hsPkgs."cardano-config" or (buildDepError "cardano-config"))
+            (hsPkgs."cardano-prelude" or (buildDepError "cardano-prelude"))
             (hsPkgs."containers" or (buildDepError "containers"))
             (hsPkgs."contra-tracer" or (buildDepError "contra-tracer"))
             (hsPkgs."cardano-node" or (buildDepError "cardano-node"))
@@ -261,8 +262,8 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/cardano-node";
-      rev = "70e78983cb3960af203a50f8c588af5e1833eaf1";
-      sha256 = "03k1m9bqzai5zq49334rar3fd1d82z044a1xnkyivibij1j05bwc";
+      rev = "3fa095c7caf2e47dcf0ab3e0612d4a457c54515d";
+      sha256 = "01q0mn7bhk04dsxsxiwg8zx5llv6fqw3sjr5mgpyqarinwpxb5ss";
       });
     postUnpack = "sourceRoot+=/cardano-node; echo source root reset to \$sourceRoot";
     }

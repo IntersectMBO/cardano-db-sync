@@ -38,6 +38,7 @@ extra-deps:
   - katip-0.8.3.0
   - moo-1.2
   - gray-code-0.3.1
+  - Unique-0.4.7.6
 
   - git: https://github.com/input-output-hk/cardano-shell
     commit: 4d26bcefc0edcd99154c85170ef028775c6dd1e0
