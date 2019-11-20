@@ -31,7 +31,7 @@ import qualified Cardano.Chain.Genesis as Ledger
 import qualified Cardano.Chain.Genesis as Genesis
 import qualified Cardano.Chain.Update as Update
 
-import           Cardano.Crypto (RequiresNetworkMagic (..), decodeAbstractHash)
+import           Cardano.Crypto (decodeAbstractHash)
 import           Cardano.Crypto.Hashing (AbstractHash (..))
 import qualified Cardano.Crypto as Crypto
 
@@ -108,8 +108,6 @@ data Peer = Peer SockAddr SockAddr deriving Show
 -- | The product type of all command line arguments
 data ExplorerNodeParams = ExplorerNodeParams
   { enpConfigFile :: !ConfigFile
-  , enpNetworkName :: !NetworkName
-  , enpGenesisHash :: !GenesisHash
   , enpGenesisFile :: !GenesisFile
   , enpSocketPath :: !SocketPath
   , enpMigrationDir :: !MigrationDir
@@ -123,16 +121,8 @@ newtype GenesisFile = GenesisFile
   { unGenesisFile :: FilePath
   }
 
-newtype GenesisHash = GenesisHash
-  { unGenesisHash :: Text
-  }
-
 newtype SocketPath = SocketPath
   { unSocketPath :: FilePath
-  }
-
-newtype NetworkName = NetworkName
-  { unNetworkName :: Text
   }
 
 
@@ -140,16 +130,16 @@ runExplorer :: ExplorerNodeParams -> IO ()
 runExplorer enp = do
     DB.runMigrations Prelude.id True (enpMigrationDir enp) (LogFileDir "/tmp")
 
-    cfg <- readExplorerNodeConfig (unConfigFile $ enpConfigFile enp)
+    enc <- readExplorerNodeConfig (unConfigFile $ enpConfigFile enp)
 
-    trce <- mkTracer cfg
+    trce <- mkTracer enc
 
-    gc <- readGenesisConfig enp (encRequiresNetworkMagic cfg)
+    gc <- readGenesisConfig enp enc
     logProtocolMagic trce $ Ledger.configProtocolMagic gc
 
     -- If the DB is empty it will be inserted, otherwise it will be validated (to make
     -- sure we are on the right chain).
-    res <- insertValidateGenesisDistribution trce (unNetworkName $ enpNetworkName enp) gc
+    res <- insertValidateGenesisDistribution trce (unNetworkName $ encNetworkName enc) gc
     case res of
       Left err -> logError trce $ renderExplorerNodeError err
       Right () -> pure ()
@@ -169,11 +159,11 @@ mkNodeConfig gc =
   pInfoConfig . protocolInfo $ ProtocolRealPBFT gc Nothing (Update.ProtocolVersion 0 2 0)
       (Update.SoftwareVersion (Update.ApplicationName "cardano-sl") 1) Nothing
 
-readGenesisConfig :: ExplorerNodeParams -> RequiresNetworkMagic -> IO Genesis.Config
-readGenesisConfig enp rnm = do
+readGenesisConfig :: ExplorerNodeParams -> ExplorerNodeConfig -> IO Genesis.Config
+readGenesisConfig enp enc = do
     genHash <- either (throwIO . ConfigurationError) pure $
-                decodeAbstractHash (unGenesisHash $ enpGenesisHash enp)
-    convert =<< runExceptT (Genesis.mkConfigFromFile rnm
+                decodeAbstractHash (unGenesisHash $ encGenesisHash enc)
+    convert =<< runExceptT (Genesis.mkConfigFromFile (encRequiresNetworkMagic enc)
                             (unGenesisFile $ enpGenesisFile enp) genHash)
   where
     convert :: Either Genesis.ConfigurationError Genesis.Config -> IO Genesis.Config
