@@ -2,11 +2,9 @@
 
 import           Cardano.Prelude
 
-import qualified Data.Text as Text
-
 import           Explorer.DB (MigrationDir (..))
 import           Explorer.Node (ConfigFile (..), ExplorerNodeParams (..), GenesisFile (..),
-                    GenesisHash (..), NetworkName (..), SocketPath (..), runExplorer)
+                    SocketPath (..), runExplorer)
 
 import           Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative as Opt
@@ -28,8 +26,6 @@ pCommandLine :: Parser ExplorerNodeParams
 pCommandLine =
   ExplorerNodeParams
     <$> pConfigFile
-    <*> pNetwork
-    <*> pGenesisHash
     <*> pGenesisFile
     <*> pSocketPath
     <*> pMigrationDir
@@ -52,14 +48,6 @@ pGenesisFile =
     <> Opt.metavar "FILEPATH"
     )
 
-pGenesisHash :: Parser GenesisHash
-pGenesisHash =
-  GenesisHash . Text.pack <$> Opt.strOption
-    ( Opt.long "genesis-hash"
-    <> Opt.help "The hash of the genesis data"
-    <> Opt.metavar "GENESIS-HASH"
-    )
-
 pMigrationDir :: Parser MigrationDir
 pMigrationDir =
   MigrationDir <$> Opt.strOption
@@ -69,13 +57,6 @@ pMigrationDir =
     <> Opt.metavar "FILEPATH"
     )
 
-pNetwork :: Parser NetworkName
-pNetwork =
-  NetworkName . Text.pack <$> Opt.strOption
-    ( Opt.long "network"
-    <> Opt.help "The network name eg mainnet/testnet/staging etc"
-    <> Opt.metavar "NAME"
-    )
 pSocketPath :: Parser SocketPath
 pSocketPath =
   SocketPath <$> Opt.strOption

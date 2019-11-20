@@ -5,7 +5,9 @@
 
 module Explorer.Node.Config
   ( ExplorerNodeConfig
+  , GenesisHash (..)
   , GenExplorerNodeConfig (..)
+  , NetworkName (..)
   , readExplorerNodeConfig
   ) where
 
@@ -25,21 +27,33 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Yaml as Yaml
 
+import           Explorer.Node.Util
+
 type ExplorerNodeConfig = GenExplorerNodeConfig Logging.Configuration
 
 data GenExplorerNodeConfig a = GenExplorerNodeConfig
-  { encLoggingConfig :: a
-  , encGenesisHash :: !Text
+  { encNetworkName :: !NetworkName
+  , encLoggingConfig :: !a
+  , encGenesisHash :: !GenesisHash
   , encEnableLogging :: !Bool
   , encEnableMetrics :: !Bool
   , encRequiresNetworkMagic :: !RequiresNetworkMagic
   }
 
+newtype GenesisHash = GenesisHash
+  { unGenesisHash :: Text
+  }
+
+newtype NetworkName = NetworkName
+  { unNetworkName :: Text
+  }
+
+
 readExplorerNodeConfig :: FilePath -> IO ExplorerNodeConfig
 readExplorerNodeConfig fp = do
     res <- Yaml.decodeEither' <$> readLoggingConfig
     case res of
-      Left _ -> panic "readExplorerNodeConfig: Error parsing config"
+      Left err -> panic $ "readExplorerNodeConfig: Error parsing config: " <> textShow err
       Right icr -> convertLogging icr
   where
     readLoggingConfig :: IO ByteString
@@ -61,8 +75,9 @@ instance FromJSON (GenExplorerNodeConfig Logging.Representation) where
 parseGenExplorerNodeConfig :: Object -> Parser (GenExplorerNodeConfig Logging.Representation)
 parseGenExplorerNodeConfig o =
   GenExplorerNodeConfig
-    <$> parseJSON (Object o)
-    <*> o .: "GenesisHash"
+    <$> fmap NetworkName (o .: "NetworkName")
+    <*> parseJSON (Object o)
+    <*> fmap GenesisHash (o .: "GenesisHash")
     <*> o .: "EnableLogging"
     <*> o .: "EnableLogMetrics"
     <*> o .: "RequiresNetworkMagic"
