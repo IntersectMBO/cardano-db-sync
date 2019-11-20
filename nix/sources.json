@@ -11,6 +11,18 @@
         "url": "https://github.com/input-output-hk/cardano-byron-proxy/archive/53cd7427200ddd74bc8f3c77159451fa6e88e8a0.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
+    "cardano-graphql": {
+        "branch": "nix-build",
+        "description": "GraphQL API for Cardano",
+        "homepage": "",
+        "owner": "input-output-hk",
+        "repo": "cardano-graphql",
+        "rev": "7c00bbe152af5e25819997d37b15fc543d29cef4",
+        "sha256": "1z9b1xzhzpybpyyvwmfz3x9y1zgj8czrrprw2i9kaan6rybj6m34",
+        "type": "tarball",
+        "url": "https://github.com/input-output-hk/cardano-graphql/archive/7c00bbe152af5e25819997d37b15fc543d29cef4.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
     "cardano-node": {
         "branch": "master",
         "description": null,

@@ -1,6 +1,5 @@
 { lib, pkgs, config, ... }:
 let
-  self = import ../.. { };
   cfg = config.services.graphql-engine;
   sources = import ../../nix/sources.nix;
 
