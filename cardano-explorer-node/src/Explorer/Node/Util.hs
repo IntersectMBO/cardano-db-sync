@@ -52,7 +52,7 @@ import qualified Data.Text.Encoding as Text
 
 import qualified Explorer.DB as DB
 
-import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..), ByronHash (..))
+import           Ouroboros.Consensus.Ledger.Byron (ByronBlock, ByronHash (..))
 import           Ouroboros.Network.Point (WithOrigin (..))
 import qualified Ouroboros.Network.Point as Point
 import           Ouroboros.Network.Block (Point (..), SlotNo (..))
@@ -95,7 +95,7 @@ mkSlotLeader blk =
 
 
 -- | Convert from Ouroboros 'Point' to `Ledger' types.
-pointToSlotHash :: Point (ByronBlockOrEBB cfg) -> Maybe (Ledger.SlotNumber, Ledger.HeaderHash)
+pointToSlotHash :: Point ByronBlock -> Maybe (Ledger.SlotNumber, Ledger.HeaderHash)
 pointToSlotHash (Point x) =
   case x of
     Origin -> Nothing

@@ -23,11 +23,11 @@ import qualified Explorer.DB as DB
 import           Explorer.Node.Error
 import           Explorer.Node.Util
 
-import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..))
+import           Ouroboros.Consensus.Ledger.Byron (ByronBlock)
 import           Ouroboros.Network.Block (Point)
 
 
-rollbackToPoint :: Trace IO Text -> Point (ByronBlockOrEBB cfg) -> ExceptT ExplorerNodeError IO ()
+rollbackToPoint :: Trace IO Text -> Point ByronBlock -> ExceptT ExplorerNodeError IO ()
 rollbackToPoint trce point =
   case pointToSlotHash point of
     Nothing -> pure ()

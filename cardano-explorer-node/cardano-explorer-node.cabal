@@ -67,7 +67,6 @@ library
                       , ouroboros-network
                       , persistent
                       , prometheus
-                      , reflection
                       , serialise
                       , stm
                       , text
@@ -109,7 +108,6 @@ executable cardano-explorer-node
                       , network
                       , optparse-applicative
                       , ouroboros-network
-                      , reflection
                       , serialise
                       , text
                       , typed-protocols
