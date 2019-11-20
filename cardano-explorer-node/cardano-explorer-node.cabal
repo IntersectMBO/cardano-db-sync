@@ -32,7 +32,8 @@ library
 
   exposed-modules:      Explorer.Node
 
-  other-modules:        Explorer.Node.Database
+  other-modules:        Explorer.Node.Config
+                        Explorer.Node.Database
                         Explorer.Node.Error
                         Explorer.Node.Insert
                         Explorer.Node.Insert.Genesis
@@ -41,15 +42,14 @@ library
                         Explorer.Node.Rollback
 
   build-depends:        base                            >= 4.12         && < 4.13
+                      , aeson
                       , base16-bytestring
                       , bytestring
                       , cardano-binary
-                      , cardano-config
                       , cardano-crypto
                       , cardano-crypto-wrapper
                       , cardano-explorer-db
                       , cardano-ledger
-                      , cardano-node
                       , cardano-prelude
                       , cardano-shell
                       , cborg
@@ -76,6 +76,7 @@ library
                       , transformers-except
                       , typed-protocols
                       , typed-protocols-cbor
+                      , yaml
 
 executable cardano-explorer-node
   default-language:     Haskell2010
@@ -93,12 +94,10 @@ executable cardano-explorer-node
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , bytestring
-                      , cardano-config
                       , cardano-crypto-wrapper
                       , cardano-explorer-db
                       , cardano-explorer-node
                       , cardano-ledger
-                      , cardano-node
                       , cardano-prelude
                       , cardano-binary
                       , cborg
