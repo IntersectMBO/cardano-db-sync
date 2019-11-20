@@ -50,7 +50,6 @@ import           Crypto.Hash (digestFromByteString)
 
 import qualified Data.ByteString.Lazy as BSL
 import           Data.Functor.Contravariant (contramap)
-import           Data.Reflection (give)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 
@@ -71,18 +70,12 @@ import           Network.TypedProtocol.Driver (runPeer, runPipelinedPeer)
 import           Network.TypedProtocol.Pipelined (Nat(Zero, Succ))
 
 import           Ouroboros.Consensus.Ledger.Abstract (BlockProtocol)
-import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..), ByronHash (..), GenTx, ByronGiven)
-import           Ouroboros.Consensus.Ledger.Byron.Config (ByronConfig)
-import           Ouroboros.Consensus.Node.ProtocolInfo (NumCoreNodes (..),
-                    pInfoConfig, protocolInfo)
+import           Ouroboros.Consensus.Ledger.Byron (ByronBlock (..), ByronHash (..), GenTx)
+import           Ouroboros.Consensus.Node.ProtocolInfo (pInfoConfig, protocolInfo)
 import           Ouroboros.Consensus.Node.Run.Abstract (RunNode, nodeDecodeBlock, nodeDecodeGenTx,
                     nodeDecodeHeaderHash, nodeEncodeBlock, nodeEncodeGenTx, nodeEncodeHeaderHash, nodeNetworkMagic)
-import           Ouroboros.Consensus.NodeId (CoreNodeId (..))
+import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
 import           Ouroboros.Consensus.Protocol (NodeConfig, Protocol (..))
-import           Ouroboros.Consensus.Protocol.ExtNodeConfig (ExtNodeConfig)
-import           Ouroboros.Consensus.Protocol.WithEBBs (WithEBBs)
-import           Ouroboros.Consensus.Protocol.PBFT (PBft)
-import           Ouroboros.Consensus.Protocol.PBFT.Crypto (PBftCardanoCrypto)
 
 import           Ouroboros.Network.Block (Point (..), SlotNo (..), Tip (tipBlockNo),
                     decodePoint, encodePoint, genesisPoint, genesisBlockNo, blockNo,
@@ -161,9 +154,7 @@ runExplorer enp = do
       Left err -> logError trce $ renderExplorerNodeError err
       Right () -> pure ()
 
-    give (Genesis.configEpochSlots gc)
-      $ give (Genesis.gdProtocolMagicId $ Genesis.configGenesisData gc)
-      $ runExplorerNodeClient (mkNodeConfig gc) trce (enpSocketPath enp)
+    runExplorerNodeClient (mkNodeConfig gc) trce (enpSocketPath enp)
 
 
 mkTracer :: ExplorerNodeConfig -> IO (Trace IO Text)
@@ -173,10 +164,9 @@ mkTracer enc =
     else liftIO $ Logging.setupTrace (Right $ encLoggingConfig enc) "explorer-db-node"
 
 
-mkNodeConfig :: Genesis.Config -> NodeConfig (WithEBBs (ExtNodeConfig ByronConfig (PBft PBftCardanoCrypto)))
+mkNodeConfig :: Genesis.Config -> NodeConfig (BlockProtocol ByronBlock)
 mkNodeConfig gc =
-  pInfoConfig $ protocolInfo (NumCoreNodes 7) (CoreNodeId 0) $
-    ProtocolRealPBFT gc Nothing (Update.ProtocolVersion 0 2 0)
+  pInfoConfig . protocolInfo $ ProtocolRealPBFT gc Nothing (Update.ProtocolVersion 0 2 0)
       (Update.SoftwareVersion (Update.ApplicationName "cardano-sl") 1) Nothing
 
 readGenesisConfig :: ExplorerNodeParams -> RequiresNetworkMagic -> IO Genesis.Config
@@ -193,37 +183,39 @@ readGenesisConfig enp rnm = do
         Right x -> pure x
 
 runExplorerNodeClient
-    :: forall blk cfg.
-        (RunNode blk, blk ~ ByronBlockOrEBB cfg, ByronGiven, cfg ~ ByronConfig)
+    :: forall blk.
+        (blk ~ ByronBlock)
     => NodeConfig (BlockProtocol blk) -> Trace IO Text -> SocketPath -> IO ()
 runExplorerNodeClient nodeConfig trce (SocketPath socketPath) = do
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   connTable <- newConnectionTable
+  peerStates <- newPeerStatesVar
   ncSubscriptionWorker_V1
     -- TODO: these tracers should be configurable for debugging purposes.
     nullTracer
     nullTracer
     nullTracer
+    nullTracer
     Peer
     connTable
+    peerStates
     (LocalAddresses Nothing Nothing (Just $ SockAddrUnix socketPath))
     (const Nothing)
-    IPSubscriptionTarget
-      { ispIps     = [SockAddrUnix socketPath]
-      , ispValency = 1
-      }
+    (networkErrorPolicies <> consensusErrorPolicy)
+    IPSubscriptionTarget { ispIps = [SockAddrUnix socketPath], ispValency = 1 }
     (NodeToClientVersionData { networkMagic = nodeNetworkMagic (Proxy @blk) nodeConfig })
     (localInitiatorNetworkApplication trce nodeConfig)
 
+
 localInitiatorNetworkApplication
-  :: forall blk peer cfg.
-     (RunNode blk, blk ~ ByronBlockOrEBB cfg, Show peer, ByronGiven, cfg ~ ByronConfig)
+  :: forall blk peer.
+     (blk ~ ByronBlock, Show peer)
   -- TODO: the need of a 'Proxy' is an evidence that blk type is not really
   -- needed here.  The wallet client should use some concrete type of block
   -- from 'cardano-chain'.  This should remove the dependency of this module
   -- from 'ouroboros-consensus'.
   => Trace IO Text
-  -> NodeConfig (BlockProtocol blk)
+  -> NodeConfig (BlockProtocol ByronBlock)
   -> OuroborosApplication 'InitiatorApp peer NodeToClientProtocols IO BSL.ByteString Void Void
 localInitiatorNetworkApplication trce pInfoConfig =
       OuroborosInitiatorApplication $ \peer ptcl ->
@@ -274,7 +266,7 @@ logDbState trce = do
         (Nothing, Nothing) -> "empty (genesis)"
 
 
-getLatestPoints :: IO [Point (ByronBlockOrEBB cfg)]
+getLatestPoints :: IO [Point ByronBlock]
 getLatestPoints =
     -- Blocks (and the transactions they contain) are inserted within an SQL transaction.
     -- That means that all the blocks (including their transactions) returned by the query
@@ -282,7 +274,7 @@ getLatestPoints =
     -- TODO: Get the security parameter (2160) from the config.
     mapMaybe convert <$> DB.runDbNoLogging (DB.queryLatestBlocks 2160)
   where
-    convert :: (Word64, ByteString) -> Maybe (Point (ByronBlockOrEBB cfg))
+    convert :: (Word64, ByteString) -> Maybe (Point ByronBlock)
     convert (slot, hashBlob) =
       fmap (Point . Point.block (SlotNo slot)) (convertHashBlob hashBlob)
 
@@ -351,7 +343,7 @@ localTxSubmissionCodec =
 --    rollback, see 'clientStNext' below.
 --
 chainSyncClient
-  :: forall blk m cfg. (MonadTimer m, MonadIO m, blk ~ ByronBlockOrEBB cfg, ByronGiven, cfg ~ ByronConfig)
+  :: forall blk m. (MonadTimer m, MonadIO m, blk ~ ByronBlock)
   => Trace IO Text -> Metrics -> [Point blk] -> BlockNo -> DbActionQueue -> ChainSyncClientPipelined blk (Tip blk) m Void
 chainSyncClient trce metrics latestPoints currentTip actionQueue =
     ChainSyncClientPipelined $ pure $
@@ -368,7 +360,7 @@ chainSyncClient trce metrics latestPoints currentTip actionQueue =
   where
     policy = pipelineDecisionLowHighMark 1000 10000
 
-    go :: MkPipelineDecision -> Nat n -> BlockNo -> BlockNo -> ClientPipelinedStIdle n (ByronBlockOrEBB cfg) (Tip blk) m a
+    go :: MkPipelineDecision -> Nat n -> BlockNo -> BlockNo -> ClientPipelinedStIdle n ByronBlock (Tip blk) m a
     go mkPipelineDecision n clientTip serverTip =
       case (n, runPipelineDecision mkPipelineDecision n clientTip serverTip) of
         (_Zero, (Request, mkPipelineDecision')) ->
@@ -387,8 +379,8 @@ chainSyncClient trce metrics latestPoints currentTip actionQueue =
             Nothing
             (mkClientStNext $ \clientBlockNo newServerTip -> go mkPipelineDecision' n' clientBlockNo (tipBlockNo newServerTip))
 
-    mkClientStNext :: (BlockNo -> Tip blk -> ClientPipelinedStIdle n (ByronBlockOrEBB ByronConfig) (Tip blk) m a)
-                    -> ClientStNext n (ByronBlockOrEBB ByronConfig) (Tip (ByronBlockOrEBB ByronConfig)) m a
+    mkClientStNext :: (BlockNo -> Tip blk -> ClientPipelinedStIdle n ByronBlock (Tip blk) m a)
+                    -> ClientStNext n ByronBlock (Tip ByronBlock) m a
     mkClientStNext finish =
       ClientStNext
         { recvMsgRollForward = \blk tip ->

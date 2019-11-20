@@ -24,8 +24,7 @@ import           Explorer.Node.Metrics
 import           Explorer.Node.Rollback
 import           Explorer.Node.Util
 
-import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..))
-import           Ouroboros.Consensus.Ledger.Byron.Config (ByronConfig)
+import           Ouroboros.Consensus.Ledger.Byron (ByronBlock (..))
 import           Ouroboros.Network.Block (BlockNo (..), Point (..))
 
 import qualified System.Metrics.Prometheus.Metric.Gauge as Gauge
@@ -36,8 +35,8 @@ data NextState
   | Done
 
 data DbAction
-  = DbApplyBlock !(ByronBlockOrEBB ByronConfig) !BlockNo
-  | DbRollBackToPoint !(Point (ByronBlockOrEBB ByronConfig))
+  = DbApplyBlock !ByronBlock !BlockNo
+  | DbRollBackToPoint !(Point ByronBlock)
   | DbFinish
 
 newtype DbActionQueue = DbActionQueue
@@ -91,7 +90,7 @@ runActions trce =
             rollbackToPoint trce pt
             dbAction Continue ys
         (ys, zs) -> do
-          insertByronBlockOrEbbList trce ys
+          insertByronBlockList trce ys
           if null zs
             then pure Continue
             else dbAction Continue zs
@@ -108,7 +107,7 @@ blockingFlushDbActionQueue (DbActionQueue queue) = do
     pure $ x : xs
 
 -- | Split the DbAction list into a prefix containing blocks to apply and a postfix.
-spanDbApply :: [DbAction] -> ([(ByronBlockOrEBB ByronConfig, BlockNo)], [DbAction])
+spanDbApply :: [DbAction] -> ([(ByronBlock, BlockNo)], [DbAction])
 spanDbApply lst =
   case lst of
     (DbApplyBlock b n:xs) -> let (ys, zs) = spanDbApply xs in ((b, n):ys, zs)
