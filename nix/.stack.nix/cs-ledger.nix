@@ -47,7 +47,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
       copyright = "";
       maintainer = "formal.methods@iohk.io";
       author = "IOHK Formal Methods Team";
-      homepage = "https://github.com/input-output-hk/cardano-chain";
+      homepage = "https://github.com/input-output-hk/cardano-legder-specs";
       url = "";
       synopsis = "Executable specification of Cardano ledger";
       description = "";
@@ -112,8 +112,8 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/cardano-ledger-specs";
-      rev = "11b674a10e76ab266a37225d82955fd8b1f80e27";
-      sha256 = "1x33w8psg4bpai4cx56y8h50mxblri8j58vj3vic57wfrh7634cb";
+      rev = "c1f9d85f50a6e71b2376618cb57656a1b7192ef1";
+      sha256 = "0waghgbr5f3x3fm2x1yx0ayrkmx1n0rah0mpgkjbbla9bhqpf5fg";
       });
     postUnpack = "sourceRoot+=/byron/ledger/executable-spec; echo source root reset to \$sourceRoot";
     }
