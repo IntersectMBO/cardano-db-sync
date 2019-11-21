@@ -42,14 +42,14 @@ let
   collectTests = ds: filter (d: elem d.system testsSupportedSystems) (collect isDerivation ds);
 
   inherit (systems.examples) mingwW64 musl64;
-  inherit (import ./nix/nixos/tests { }) chairmansCluster;
+  #inherit (import ./nix/nixos/tests { }) chairmansCluster;
   inherit (import ./docker { }) hydraJob;
 
   jobs = {
     native = mapTestOn (packagePlatforms project);
     #"${mingwW64.config}" = mapTestOnCross mingwW64 (packagePlatformsCross project);
 
-    chairmansCluster = chairmansCluster.x86_64-linux;
+    #chairmansCluster = chairmansCluster.x86_64-linux;
     docker-inputs = hydraJob;
   }
   // (
@@ -58,13 +58,13 @@ let
   mkRequiredJob (
     collectTests jobs.native.tests ++
     collectTests jobs.native.benchmarks ++
-    # TODO: Add your project executables to this list
     [
       jobs.native.cardano-explorer.x86_64-linux
       jobs.native.cardano-explorer-db-tool.x86_64-linux
       jobs.native.cardano-explorer-node.x86_64-linux
       jobs.native.cardano-sl-core.x86_64-linux
-      jobs.chairmansCluster
+      # TODO: fix chairman cluster once configs stabilize
+      #jobs.chairmansCluster
       jobs.docker-inputs
     ]
   ))
