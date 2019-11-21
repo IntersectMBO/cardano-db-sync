@@ -39,6 +39,7 @@ extra-deps:
   - moo-1.2
   - gray-code-0.3.1
   - Unique-0.4.7.6
+  - statistics-linreg-0.3
 
   - git: https://github.com/input-output-hk/cardano-shell
     commit: f700afeb24163332dc00306508ca410b7873521d

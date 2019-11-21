@@ -28,6 +28,7 @@
         "moo" = (((hackage.moo)."1.2").revisions).default;
         "gray-code" = (((hackage.gray-code)."0.3.1").revisions).default;
         "Unique" = (((hackage.Unique)."0.4.7.6").revisions).default;
+        "statistics-linreg" = (((hackage.statistics-linreg)."0.3").revisions).default;
         "base58-bytestring" = (((hackage.base58-bytestring)."0.1.0").revisions).default;
         "hedgehog" = (((hackage.hedgehog)."1.0").revisions).default;
         "micro-recursion-schemes" = (((hackage.micro-recursion-schemes)."5.0.2.2").revisions).default;
