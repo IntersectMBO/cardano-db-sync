@@ -40,6 +40,7 @@ library
                         Explorer.Node.Metrics
                         Explorer.Node.Util
                         Explorer.Node.Rollback
+                        Explorer.Node.Tracing.ToObjectOrphans
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , aeson
@@ -54,6 +55,7 @@ library
                       , cardano-shell
                       , cborg
                       , containers
+                      , contra-tracer
                       , cryptonite
                       , extra
                       , formatting
