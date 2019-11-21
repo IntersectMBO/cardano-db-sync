@@ -2,8 +2,15 @@
 
 let
   self = import ../.. { };
+  localLib = import ../../lib.nix {};
   cfg = config.services.cardano-exporter;
   pgpass = builtins.toFile "pgpass" "${cfg.postgres.socketdir}:${toString cfg.postgres.port}:${cfg.postgres.database}:${cfg.postgres.user}:*";
+  envConfig = cfg.environment;
+  explorerConfig = {
+    inherit (envConfig.nodeConfig) RequiresNetworkMagic GenesisHash;
+    NetworkName = cfg.cluster;
+  } // cfg.logConfig;
+  configFile = __toFile "config.json" (__toJSON explorerConfig);
 in {
   options = {
     services.cardano-exporter = {
@@ -12,19 +19,17 @@ in {
         internal = true;
         type = lib.types.package;
       };
-      genesisHash = lib.mkOption {
-        type = lib.types.str;
-      };
-      genesisFile = lib.mkOption {
-        type = lib.types.path;
-      };
       cluster = lib.mkOption {
-        type = lib.types.str;
-        description = "cluster name, inserted into the names of derivations to aid in debug";
+        type = lib.types.nullOr lib.types.str;
+        description = "cluster name";
       };
       environment = lib.mkOption {
         type = lib.types.nullOr lib.types.attrs;
         default = null;
+      };
+      logConfig = lib.mkOption {
+        type = lib.types.attrs;
+        default = localLib.cardanoLib.defaultExplorerLogConfig;
       };
       socketPath = lib.mkOption {
         type = lib.types.nullOr lib.types.path;
@@ -65,6 +70,9 @@ in {
     };
   };
   config = lib.mkMerge [
+    (lib.mkIf (cfg.cluster != null) {
+      services.cardano-exporter.environment = localLib.cardanoLib.environments.${cfg.cluster};
+    })
     (lib.mkIf cfg.enable {
       users = {
         users.cexplorer = {
@@ -120,7 +128,7 @@ in {
       };
       services.cardano-exporter = {
         inherit pgpass;
-        script = pkgs.writeScript "cardano-exporter-${cfg.cluster}" ''
+        script = pkgs.writeScript "cardano-exporter-${explorerConfig.NetworkName}" ''
           #!${pkgs.stdenv.shell}
 
           ${if (cfg.socketPath == null) then ''if [ -z "$CARDANO_NODE_SOCKET_PATH" ]
@@ -139,16 +147,11 @@ in {
           mkdir -p log-dir
 
           exec cardano-explorer-node \
-			--config config/explorer-mainnet-config.yaml \
-            --genesis-file ${cfg.genesisFile} \
+            --config ${configFile} \
+            --genesis-file ${envConfig.genesisFile} \
             --socket-path $CARDANO_NODE_SOCKET_PATH \
             --schema-dir ${../../schema}
         '';
-      };
-    })
-    (lib.mkIf (cfg.environment != null) {
-      services.cardano-exporter = {
-        inherit (cfg.environment) genesisFile genesisHash;
       };
     })
     (lib.mkIf config.services.cardano-explorer-api.enable {

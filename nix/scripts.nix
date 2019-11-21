@@ -6,7 +6,7 @@ let
     extraModule = {
       services.cardano-exporter = {
         enable = true;
-        inherit (envConfig) genesisFile genesisHash;
+        environment = envConfig;
         cluster = envConfig.name;
         postgres.user = "*";
       };

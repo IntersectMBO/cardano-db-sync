@@ -46,4 +46,4 @@ EXPOSE 8100
 # monitoring interface
 EXPOSE 80
 
-CMD runit
+ENTRYPOINT [ "/nix/var/nix/profiles/per-user/cardano/profile/bin/runit" ]
