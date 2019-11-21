@@ -70,6 +70,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."cardano-shell" or (buildDepError "cardano-shell"))
           (hsPkgs."cborg" or (buildDepError "cborg"))
           (hsPkgs."containers" or (buildDepError "containers"))
+          (hsPkgs."contra-tracer" or (buildDepError "contra-tracer"))
           (hsPkgs."cryptonite" or (buildDepError "cryptonite"))
           (hsPkgs."extra" or (buildDepError "extra"))
           (hsPkgs."formatting" or (buildDepError "formatting"))

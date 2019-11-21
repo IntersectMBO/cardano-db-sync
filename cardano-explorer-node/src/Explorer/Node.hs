@@ -22,6 +22,8 @@ module Explorer.Node
 
 import           Cardano.Binary (unAnnotated)
 
+import           Control.Tracer (Tracer)
+
 import qualified Cardano.BM.Setup as Logging
 import           Cardano.BM.Data.Tracer (ToLogObject (..), nullTracer)
 import           Cardano.BM.Trace (Trace, appendName, logError, logInfo)
@@ -61,6 +63,7 @@ import           Explorer.Node.Error
 import           Explorer.Node.Insert
 import           Explorer.Node.Metrics
 import           Explorer.Node.Util
+import           Explorer.Node.Tracing.ToObjectOrphans ()
 
 import           Network.Socket (SockAddr (..))
 
@@ -185,7 +188,7 @@ runExplorerNodeClient nodeConfig trce (SocketPath socketPath) = do
     nullTracer
     nullTracer
     nullTracer
-    nullTracer
+    errorPolicyTracer
     Peer
     connTable
     peerStates
@@ -195,6 +198,9 @@ runExplorerNodeClient nodeConfig trce (SocketPath socketPath) = do
     IPSubscriptionTarget { ispIps = [SockAddrUnix socketPath], ispValency = 1 }
     (NodeToClientVersionData { networkMagic = nodeNetworkMagic (Proxy @blk) nodeConfig })
     (localInitiatorNetworkApplication trce nodeConfig)
+  where
+    errorPolicyTracer :: Tracer IO (WithAddr SockAddr ErrorPolicyTrace)
+    errorPolicyTracer = toLogObject $ appendName "ErrorPolicy" trce
 
 
 localInitiatorNetworkApplication
