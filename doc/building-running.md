@@ -41,9 +41,8 @@ cd cardano-explorer
 nix-build -A cardano-explorer-node -o explorer-node
 scripts/postgresql-setup.sh --createdb
 PGPASSFILE=config/pgpass explorer-node/bin/cardano-explorer-node \
-    --log-config ../cardano-node/configuration/log-configuration.yaml \
+    --config config/explorer-mainnet-config.yaml \
     --genesis-file ../cardano-node/mainnet-genesis.json \
-    --genesis-hash 5f20df933584822601f9e3f8c024eb5eb252fe8cefb24d1317dc3d432e940ebb \
     --socket-path ../cardano-node/state-node-mainnet/socket/node-core-0.socket \
     --schema-dir schema/
 ```
