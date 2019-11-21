@@ -1,5 +1,7 @@
-# Revision history for cardano-explorer-db-node
+# Revision history for cardano-explorer-node
 
-## 0.1.0.0 -- YYYY-mm-dd
+## 1.0.0 -- November 2019
 
-* First version. Released on an unsuspecting world.
+* First release of new explorer based on new Cardano node.
+* Syncs chain data from a local node into a PostgreSQL DB.
+* Compatible with new Cardano node for Byron era.
