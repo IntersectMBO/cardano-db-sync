@@ -42,7 +42,7 @@ extra-deps:
   - statistics-linreg-0.3
 
   - git: https://github.com/input-output-hk/cardano-shell
-    commit: f700afeb24163332dc00306508ca410b7873521d
+    commit: 4d26bcefc0edcd99154c85170ef028775c6dd1e0
     subdirs:
       - cardano-shell
 
@@ -67,7 +67,7 @@ extra-deps:
       - plugins/scribe-systemd
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: c561ee0571bd2b075dc717f28f47952d432ea932
+    commit: 4cf223d84dd6d117de624a9c2bea8239013a6e98
     subdirs:
       - cardano-config
       - cardano-node
@@ -90,7 +90,7 @@ extra-deps:
       - byron/chain/executable-spec
 
   - git: https://github.com/input-output-hk/cardano-ledger
-    commit: 52ffa26e6d5a204345ddc3e375b17cf1c96d3412
+    commit: dbdb643722e431e4d232345a0eafdc7bdeab7b60
     subdirs:
       - cardano-ledger
       - cardano-ledger/test
@@ -98,7 +98,7 @@ extra-deps:
       - crypto/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: 72866f3e08adad890e2b29303c01bd047c692b0f
+    commit: 5941c192b64f39d1ab276e0a747a0e47fb52cef8
     subdirs:
       - io-sim-classes
       - network-mux
