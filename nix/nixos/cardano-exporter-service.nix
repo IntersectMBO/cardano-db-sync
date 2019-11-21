@@ -138,14 +138,8 @@ in {
 
           mkdir -p log-dir
 
-          # work around a bug in cardano-node
-          mkdir -p configuration
-          cp -f ${../../log-configuration.yaml} configuration/log-configuration.yaml
-          # end of work-around
-
-          exec cardano-explorer-node --log-config ${../../log-configuration.yaml} \
-            --network ${cfg.cluster} \
-            --genesis-hash ${cfg.genesisHash} \
+          exec cardano-explorer-node \
+			--config config/explorer-mainnet-config.yaml \
             --genesis-file ${cfg.genesisFile} \
             --socket-path $CARDANO_NODE_SOCKET_PATH \
             --schema-dir ${../../schema}

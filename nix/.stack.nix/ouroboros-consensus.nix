@@ -64,7 +64,6 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."typed-protocols-cbor" or (buildDepError "typed-protocols-cbor"))
           (hsPkgs."io-sim-classes" or (buildDepError "io-sim-classes"))
           (hsPkgs."contra-tracer" or (buildDepError "contra-tracer"))
-          (hsPkgs."cardano-ledger-test" or (buildDepError "cardano-ledger-test"))
           (hsPkgs."bifunctors" or (buildDepError "bifunctors"))
           (hsPkgs."bimap" or (buildDepError "bimap"))
           (hsPkgs."bytestring" or (buildDepError "bytestring"))
@@ -74,7 +73,6 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."cardano-ledger" or (buildDepError "cardano-ledger"))
           (hsPkgs."cardano-prelude" or (buildDepError "cardano-prelude"))
           (hsPkgs."cborg" or (buildDepError "cborg"))
-          (hsPkgs."constraints" or (buildDepError "constraints"))
           (hsPkgs."containers" or (buildDepError "containers"))
           (hsPkgs."cryptonite" or (buildDepError "cryptonite"))
           (hsPkgs."deepseq" or (buildDepError "deepseq"))
@@ -82,12 +80,10 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."filepath" or (buildDepError "filepath"))
           (hsPkgs."fingertree" or (buildDepError "fingertree"))
           (hsPkgs."formatting" or (buildDepError "formatting"))
-          (hsPkgs."memory" or (buildDepError "memory"))
           (hsPkgs."mmorph" or (buildDepError "mmorph"))
           (hsPkgs."mtl" or (buildDepError "mtl"))
           (hsPkgs."network" or (buildDepError "network"))
           (hsPkgs."pipes" or (buildDepError "pipes"))
-          (hsPkgs."reflection" or (buildDepError "reflection"))
           (hsPkgs."serialise" or (buildDepError "serialise"))
           (hsPkgs."stm" or (buildDepError "stm"))
           (hsPkgs."text" or (buildDepError "text"))
@@ -96,7 +92,10 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."vector" or (buildDepError "vector"))
           ] ++ (if system.isWindows
           then [ (hsPkgs."Win32" or (buildDepError "Win32")) ]
-          else [ (hsPkgs."unix" or (buildDepError "unix")) ]);
+          else [
+            (hsPkgs."unix" or (buildDepError "unix"))
+            (hsPkgs."unix-bytestring" or (buildDepError "unix-bytestring"))
+            ]);
         buildable = true;
         };
       exes = {
@@ -116,11 +115,23 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             (hsPkgs."ouroboros-consensus" or (buildDepError "ouroboros-consensus"))
             (hsPkgs."path" or (buildDepError "path"))
             (hsPkgs."path-io" or (buildDepError "path-io"))
-            (hsPkgs."reflection" or (buildDepError "reflection"))
             (hsPkgs."resourcet" or (buildDepError "resourcet"))
             (hsPkgs."streaming" or (buildDepError "streaming"))
             (hsPkgs."text" or (buildDepError "text"))
             (hsPkgs."time" or (buildDepError "time"))
+            ];
+          buildable = true;
+          };
+        "analyse-db" = {
+          depends = [
+            (hsPkgs."base" or (buildDepError "base"))
+            (hsPkgs."cardano-binary" or (buildDepError "cardano-binary"))
+            (hsPkgs."cardano-crypto-wrapper" or (buildDepError "cardano-crypto-wrapper"))
+            (hsPkgs."cardano-ledger" or (buildDepError "cardano-ledger"))
+            (hsPkgs."mtl" or (buildDepError "mtl"))
+            (hsPkgs."optparse-applicative" or (buildDepError "optparse-applicative"))
+            (hsPkgs."ouroboros-consensus" or (buildDepError "ouroboros-consensus"))
+            (hsPkgs."ouroboros-network" or (buildDepError "ouroboros-network"))
             ];
           buildable = true;
           };
@@ -158,7 +169,6 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             (hsPkgs."QuickCheck" or (buildDepError "QuickCheck"))
             (hsPkgs."quickcheck-state-machine" or (buildDepError "quickcheck-state-machine"))
             (hsPkgs."random" or (buildDepError "random"))
-            (hsPkgs."reflection" or (buildDepError "reflection"))
             (hsPkgs."serialise" or (buildDepError "serialise"))
             (hsPkgs."tasty" or (buildDepError "tasty"))
             (hsPkgs."tasty-hunit" or (buildDepError "tasty-hunit"))
@@ -199,7 +209,6 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             (hsPkgs."QuickCheck" or (buildDepError "QuickCheck"))
             (hsPkgs."quickcheck-state-machine" or (buildDepError "quickcheck-state-machine"))
             (hsPkgs."random" or (buildDepError "random"))
-            (hsPkgs."reflection" or (buildDepError "reflection"))
             (hsPkgs."serialise" or (buildDepError "serialise"))
             (hsPkgs."tasty" or (buildDepError "tasty"))
             (hsPkgs."tasty-hunit" or (buildDepError "tasty-hunit"))
@@ -217,8 +226,8 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/ouroboros-network";
-      rev = "b7d3ef6c68169e5ce4396b26085a9cebc500f615";
-      sha256 = "14ls4vanz2skqq2yhkgvpgx877wwy0dkddxrf7p2x4kgcvxp2561";
+      rev = "fc164b5a3cbcd239a5803b5d3925205d29837a7c";
+      sha256 = "0pddd2dh5sk8b26ad3jgn7b38s0f629nmjhsqn2mrf1zdkmk7xqh";
       });
     postUnpack = "sourceRoot+=/ouroboros-consensus; echo source root reset to \$sourceRoot";
     }

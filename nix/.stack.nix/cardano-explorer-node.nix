@@ -58,15 +58,14 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
       "library" = {
         depends = [
           (hsPkgs."base" or (buildDepError "base"))
+          (hsPkgs."aeson" or (buildDepError "aeson"))
           (hsPkgs."base16-bytestring" or (buildDepError "base16-bytestring"))
           (hsPkgs."bytestring" or (buildDepError "bytestring"))
           (hsPkgs."cardano-binary" or (buildDepError "cardano-binary"))
-          (hsPkgs."cardano-config" or (buildDepError "cardano-config"))
           (hsPkgs."cardano-crypto" or (buildDepError "cardano-crypto"))
           (hsPkgs."cardano-crypto-wrapper" or (buildDepError "cardano-crypto-wrapper"))
           (hsPkgs."cardano-explorer-db" or (buildDepError "cardano-explorer-db"))
           (hsPkgs."cardano-ledger" or (buildDepError "cardano-ledger"))
-          (hsPkgs."cardano-node" or (buildDepError "cardano-node"))
           (hsPkgs."cardano-prelude" or (buildDepError "cardano-prelude"))
           (hsPkgs."cardano-shell" or (buildDepError "cardano-shell"))
           (hsPkgs."cborg" or (buildDepError "cborg"))
@@ -84,7 +83,6 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."ouroboros-network" or (buildDepError "ouroboros-network"))
           (hsPkgs."persistent" or (buildDepError "persistent"))
           (hsPkgs."prometheus" or (buildDepError "prometheus"))
-          (hsPkgs."reflection" or (buildDepError "reflection"))
           (hsPkgs."serialise" or (buildDepError "serialise"))
           (hsPkgs."stm" or (buildDepError "stm"))
           (hsPkgs."text" or (buildDepError "text"))
@@ -93,6 +91,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."transformers-except" or (buildDepError "transformers-except"))
           (hsPkgs."typed-protocols" or (buildDepError "typed-protocols"))
           (hsPkgs."typed-protocols-cbor" or (buildDepError "typed-protocols-cbor"))
+          (hsPkgs."yaml" or (buildDepError "yaml"))
           ];
         buildable = true;
         };
@@ -101,12 +100,10 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           depends = [
             (hsPkgs."base" or (buildDepError "base"))
             (hsPkgs."bytestring" or (buildDepError "bytestring"))
-            (hsPkgs."cardano-config" or (buildDepError "cardano-config"))
             (hsPkgs."cardano-crypto-wrapper" or (buildDepError "cardano-crypto-wrapper"))
             (hsPkgs."cardano-explorer-db" or (buildDepError "cardano-explorer-db"))
             (hsPkgs."cardano-explorer-node" or (buildDepError "cardano-explorer-node"))
             (hsPkgs."cardano-ledger" or (buildDepError "cardano-ledger"))
-            (hsPkgs."cardano-node" or (buildDepError "cardano-node"))
             (hsPkgs."cardano-prelude" or (buildDepError "cardano-prelude"))
             (hsPkgs."cardano-binary" or (buildDepError "cardano-binary"))
             (hsPkgs."cborg" or (buildDepError "cborg"))
@@ -118,7 +115,6 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             (hsPkgs."network" or (buildDepError "network"))
             (hsPkgs."optparse-applicative" or (buildDepError "optparse-applicative"))
             (hsPkgs."ouroboros-network" or (buildDepError "ouroboros-network"))
-            (hsPkgs."reflection" or (buildDepError "reflection"))
             (hsPkgs."serialise" or (buildDepError "serialise"))
             (hsPkgs."text" or (buildDepError "text"))
             (hsPkgs."typed-protocols" or (buildDepError "typed-protocols"))
