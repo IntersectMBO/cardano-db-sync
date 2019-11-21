@@ -264,6 +264,8 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
       url = "https://github.com/input-output-hk/cardano-node";
       rev = "d402dd42874ae0acbbfb4c42ffb2a773370f1f3d";
       sha256 = "1ksl6yqm8s485bxdahxmzcs0k6f7dy7s461hqgc6bclcdkjs1vsl";
+      rev = "c561ee0571bd2b075dc717f28f47952d432ea932";
+      sha256 = "0m31qx63s1qrzzgc08r289vvb8rlpkmxsch6wfzp69pq92lb156c";
       });
     postUnpack = "sourceRoot+=/cardano-node; echo source root reset to \$sourceRoot";
     }
