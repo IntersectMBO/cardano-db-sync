@@ -10,7 +10,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Explorer.Node.Insert
-  ( insertByronBlockOrEbbList
+  ( insertByronBlockList
   , insertValidateGenesisDistribution
   ) where
 
@@ -45,7 +45,7 @@ import           Explorer.Node.Error
 import           Explorer.Node.Insert.Genesis
 import           Explorer.Node.Util
 
-import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..))
+import           Ouroboros.Consensus.Ledger.Byron (ByronBlock (..))
 import           Ouroboros.Network.Block (BlockNo (..))
 
 -- Trivial local data type for use in place of a tuple.
@@ -55,9 +55,9 @@ data ValueFee = ValueFee
   }
 
 
-insertByronBlockOrEbbList
-    :: Trace IO Text -> [(ByronBlockOrEBB cfg, BlockNo)] -> ExceptT ExplorerNodeError IO ()
-insertByronBlockOrEbbList tracer blks = do
+insertByronBlockList
+    :: Trace IO Text -> [(ByronBlock, BlockNo)] -> ExceptT ExplorerNodeError IO ()
+insertByronBlockList tracer blks = do
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise *way* too chatty.
   newExceptT $
@@ -66,14 +66,14 @@ insertByronBlockOrEbbList tracer blks = do
       else DB.runDbNoLogging action
   where
     action :: MonadIO m => ReaderT SqlBackend m (Either ExplorerNodeError ())
-    action = runExceptT $ mapMVExceptT (insertByronBlockOrEbb tracer) blks
+    action = runExceptT $ mapMVExceptT (insertByronBlock tracer) blks
 
-insertByronBlockOrEbb
+insertByronBlock
     :: MonadIO m
-    => Trace IO Text -> (ByronBlockOrEBB cfg, BlockNo)
+    => Trace IO Text -> (ByronBlock, BlockNo)
     -> ExceptT ExplorerNodeError (ReaderT SqlBackend m) ()
-insertByronBlockOrEbb tracer (blk, tipBlockNo) =
-  case unByronBlockOrEBB blk of
+insertByronBlock tracer (blk, tipBlockNo) =
+  case byronBlockRaw blk of
     Ledger.ABOBBlock ablk -> insertABlock tracer ablk tipBlockNo
     Ledger.ABOBBoundary abblk -> insertABOBBoundary tracer abblk
 

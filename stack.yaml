@@ -36,9 +36,12 @@ extra-deps:
   - text-ansi-0.1.0
   - Diff-0.4.0
   - katip-0.8.3.0
+  - moo-1.2
+  - gray-code-0.3.1
+  - Unique-0.4.7.6
 
   - git: https://github.com/input-output-hk/cardano-shell
-    commit: 9fdc7088f1d16e67bb4ca043e4541427345213fc
+    commit: 4d26bcefc0edcd99154c85170ef028775c6dd1e0
     subdirs:
       - cardano-shell
 
@@ -52,7 +55,7 @@ extra-deps:
     commit: 43a036c5bbe68ca2e9cbe611eab7982e2348fe49
 
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: b4268cedecbbe2a35437effc17a8af10abda8ea8
+    commit: 4956b32f039579a0e7e4fd10793f65b4c77d9044
     subdirs:
       - contra-tracer
       - iohk-monitoring
@@ -63,20 +66,30 @@ extra-deps:
       - plugins/scribe-systemd
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: 70e78983cb3960af203a50f8c588af5e1833eaf1
+    commit: 3fa095c7caf2e47dcf0ab3e0612d4a457c54515d
     subdirs:
       - cardano-config
       - cardano-node
 
   - git: https://github.com/input-output-hk/cardano-base
-    commit: 5c575d46afbfe333de0ccba70b084db8302abf42
+    commit: 057d8a9a3e751f88fc7677df5713c5ecc47a37c4
     subdirs:
       - binary
       - binary/test
       - cardano-crypto-class
 
+  - git: https://github.com/input-output-hk/goblins
+    commit: 26d35ad52fe9ade3391532dbfeb2f416f07650bc
+
+  - git: https://github.com/input-output-hk/cardano-ledger-specs
+    commit: 11b674a10e76ab266a37225d82955fd8b1f80e27
+    subdirs:
+      - byron/semantics/executable-spec
+      - byron/ledger/executable-spec
+      - byron/chain/executable-spec
+
   - git: https://github.com/input-output-hk/cardano-ledger
-    commit: 8854e56b68ab3b73ed2fd445d8c1db7d34b7c7f2
+    commit: dbdb643722e431e4d232345a0eafdc7bdeab7b60
     subdirs:
       - cardano-ledger
       - cardano-ledger/test
@@ -84,7 +97,7 @@ extra-deps:
       - crypto/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: b7d3ef6c68169e5ce4396b26085a9cebc500f615
+    commit: fc164b5a3cbcd239a5803b5d3925205d29837a7c
     subdirs:
       - io-sim-classes
       - network-mux

@@ -11,41 +11,32 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Explorer.Node
-  ( ExplorerNodeParams (..)
+  ( ConfigFile (..)
+  , ExplorerNodeParams (..)
   , GenesisFile (..)
-  , NodeLayer (..)
+  , GenesisHash (..)
+  , NetworkName (..)
   , SocketPath (..)
-  , initializeAllFeatures
+  , runExplorer
   ) where
 
 import           Cardano.Binary (unAnnotated)
 
+import qualified Cardano.BM.Setup as Logging
 import           Cardano.BM.Data.Tracer (ToLogObject (..), nullTracer)
 import           Cardano.BM.Trace (Trace, appendName, logError, logInfo)
+import qualified Cardano.BM.Trace as Logging
 
 import qualified Cardano.Chain.Genesis as Ledger
 import qualified Cardano.Chain.Genesis as Genesis
 import qualified Cardano.Chain.Update as Update
 
-import           Cardano.Config.CommonCLI (CommonCLI (..))
-import qualified Cardano.Config.CommonCLI as Config
-import           Cardano.Config.Logging (LoggingLayer, LoggingCLIArguments (..),
-                    createLoggingFeature, llAppendName, llBasicTrace)
-import qualified Cardano.Config.Partial as Config
-import qualified Cardano.Config.Presets as Config
-import           Cardano.Config.Types (CardanoConfiguration (..), CardanoEnvironment (..),
-                    RequireNetworkMagic (..),
-                    coRequiresNetworkMagic, ccCore)
-
-import           Cardano.Crypto (RequiresNetworkMagic (..), decodeAbstractHash)
+import           Cardano.Crypto (decodeAbstractHash)
 import           Cardano.Crypto.Hashing (AbstractHash (..))
 import qualified Cardano.Crypto as Crypto
 
 import           Cardano.Prelude hiding (atomically, option, (%), Nat)
 import           Cardano.Shell.Lib (GeneralException (ConfigurationError))
-import           Cardano.Shell.Types (CardanoFeature (..),
-                    CardanoFeatureInit (..), featureCleanup, featureInit,
-                    featureShutdown, featureStart, featureType)
 
 import qualified Codec.Serialise as Serialise
 
@@ -53,17 +44,18 @@ import           Control.Monad.Class.MonadST (MonadST)
 import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, StrictTMVar,
                     atomically, newEmptyTMVarM, readTMVar)
 import           Control.Monad.Class.MonadTimer (MonadTimer)
+import           Control.Monad.IO.Class (liftIO)
 
 import           Crypto.Hash (digestFromByteString)
 
 import qualified Data.ByteString.Lazy as BSL
 import           Data.Functor.Contravariant (contramap)
-import           Data.Reflection (give)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 
 import           Explorer.DB (LogFileDir (..), MigrationDir)
 import qualified Explorer.DB as DB
+import           Explorer.Node.Config
 import           Explorer.Node.Database
 import           Explorer.Node.Error
 import           Explorer.Node.Insert
@@ -78,14 +70,13 @@ import           Network.TypedProtocol.Driver (runPeer, runPipelinedPeer)
 import           Network.TypedProtocol.Pipelined (Nat(Zero, Succ))
 
 import           Ouroboros.Consensus.Ledger.Abstract (BlockProtocol)
-import           Ouroboros.Consensus.Ledger.Byron (ByronBlockOrEBB (..), ByronHash (..), GenTx, ByronGiven)
-import           Ouroboros.Consensus.Ledger.Byron.Config (ByronConfig)
-import           Ouroboros.Consensus.Node.ProtocolInfo (NumCoreNodes (..),
-                    pInfoConfig, protocolInfo)
+import           Ouroboros.Consensus.Ledger.Byron (ByronBlock (..), ByronHash (..), GenTx)
+import           Ouroboros.Consensus.Node.ProtocolInfo (pInfoConfig, protocolInfo)
 import           Ouroboros.Consensus.Node.Run.Abstract (RunNode, nodeDecodeBlock, nodeDecodeGenTx,
                     nodeDecodeHeaderHash, nodeEncodeBlock, nodeEncodeGenTx, nodeEncodeHeaderHash, nodeNetworkMagic)
-import           Ouroboros.Consensus.NodeId (CoreNodeId (..))
+import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
 import           Ouroboros.Consensus.Protocol (NodeConfig, Protocol (..))
+
 import           Ouroboros.Network.Block (Point (..), SlotNo (..), Tip (tipBlockNo),
                     decodePoint, encodePoint, genesisPoint, genesisBlockNo, blockNo,
                     BlockNo(unBlockNo, BlockNo),
@@ -116,13 +107,14 @@ data Peer = Peer SockAddr SockAddr deriving Show
 
 -- | The product type of all command line arguments
 data ExplorerNodeParams = ExplorerNodeParams
-  { enpLogging :: !LoggingCLIArguments
-  , enpGenesisHash :: !Text
+  { enpConfigFile :: !ConfigFile
   , enpGenesisFile :: !GenesisFile
   , enpSocketPath :: !SocketPath
   , enpMigrationDir :: !MigrationDir
-  , enpNetworkName :: !Text
-  , enpCommonCLIAdvanced :: !Config.CommonCLIAdvanced
+  }
+
+newtype ConfigFile = ConfigFile
+  { unConfigFile :: FilePath
   }
 
 newtype GenesisFile = GenesisFile
@@ -133,108 +125,45 @@ newtype SocketPath = SocketPath
   { unSocketPath :: FilePath
   }
 
-newtype NodeLayer = NodeLayer
-  { nlRunNode :: forall m. MonadIO m => m ()
-  }
 
-type NodeCardanoFeature
-  = CardanoFeatureInit CardanoEnvironment LoggingLayer CardanoConfiguration ExplorerNodeParams NodeLayer
+runExplorer :: ExplorerNodeParams -> IO ()
+runExplorer enp = do
+    DB.runMigrations Prelude.id True (enpMigrationDir enp) (LogFileDir "/tmp")
 
-initializeAllFeatures :: ExplorerNodeParams -> IO ([CardanoFeature], NodeLayer)
-initializeAllFeatures enp = do
-  DB.runMigrations Prelude.id True (enpMigrationDir enp) (LogFileDir "/tmp")
-  let fcc = Config.mkCardanoConfiguration $ Config.mergeConfiguration Config.mainnetConfiguration commonCli (enpCommonCLIAdvanced enp)
-  finalConfig <- case fcc of
-                  Left err -> panic $ show err
-                  Right x  -> let params = enpLogging enp
-                              in pure $ x { ccLogConfig = logConfigFile params
-                                          , ccLogMetrics = captureMetrics params }
+    enc <- readExplorerNodeConfig (unConfigFile $ enpConfigFile enp)
 
-  (loggingLayer, loggingFeature) <- createLoggingFeature NoEnvironment finalConfig
-  (nodeLayer   , nodeFeature)    <- createNodeFeature loggingLayer enp finalConfig
+    trce <- mkTracer enc
 
-  pure ([ loggingFeature, nodeFeature ], nodeLayer)
-
--- This is a bit of a pain in the neck but is needed for using cardano-cli.
-commonCli ::CommonCLI
-commonCli =
-  CommonCLI
-    { Config.cliSocketDir = Last Nothing
-    , Config.cliGenesisFile = Last Nothing
-    , Config.cliGenesisHash = Last Nothing
-    , Config.cliStaticKeySigningKeyFile = Last Nothing
-    , Config.cliStaticKeyDlgCertFile = Last Nothing
-    , Config.cliDBPath = Last Nothing
-    }
-
-createNodeFeature :: LoggingLayer -> ExplorerNodeParams -> CardanoConfiguration -> IO (NodeLayer, CardanoFeature)
-createNodeFeature loggingLayer enp cardanoConfiguration = do
-  -- we parse any additional configuration if there is any
-  -- We don't know where the user wants to fetch the additional configuration from, it could be from
-  -- the filesystem, so we give him the most flexible/powerful context, @IO@.
-
-  -- we construct the layer
-  nodeLayer <- featureInit nodeCardanoFeatureInit NoEnvironment loggingLayer cardanoConfiguration enp
-
-  -- Return both
-  pure (nodeLayer, nodeCardanoFeature nodeCardanoFeatureInit nodeLayer)
-
-nodeCardanoFeatureInit :: NodeCardanoFeature
-nodeCardanoFeatureInit =
-    CardanoFeatureInit
-      { featureType    = "NodeFeature"
-      , featureInit    = featureStart'
-      , featureCleanup = featureCleanup'
-      }
-  where
-    featureStart' :: CardanoEnvironment -> LoggingLayer -> CardanoConfiguration -> ExplorerNodeParams -> IO NodeLayer
-    featureStart' _ loggingLayer cc enp =
-        pure $ NodeLayer { nlRunNode = liftIO $ runClient enp (mkTracer loggingLayer) cc }
-
-    featureCleanup' :: NodeLayer -> IO ()
-    featureCleanup' _ = pure ()
-
-    mkTracer :: LoggingLayer -> Trace IO Text
-    mkTracer loggingLayer = llAppendName loggingLayer "explorer-db-node" (llBasicTrace loggingLayer)
-
-
-nodeCardanoFeature :: NodeCardanoFeature -> NodeLayer -> CardanoFeature
-nodeCardanoFeature nodeCardanoFeature' nodeLayer =
-  CardanoFeature
-    { featureName       = featureType nodeCardanoFeature'
-    , featureStart      = pure ()
-    , featureShutdown   = liftIO $ (featureCleanup nodeCardanoFeature') nodeLayer
-    }
-
-runClient :: ExplorerNodeParams -> Trace IO Text -> CardanoConfiguration -> IO ()
-runClient enp trce cc = do
-    gc <- readGenesisConfig enp cc
+    gc <- readGenesisConfig enp enc
     logProtocolMagic trce $ Ledger.configProtocolMagic gc
 
     -- If the DB is empty it will be inserted, otherwise it will be validated (to make
     -- sure we are on the right chain).
-    res <- insertValidateGenesisDistribution trce (enpNetworkName enp) gc
+    res <- insertValidateGenesisDistribution trce (unNetworkName $ encNetworkName enc) gc
     case res of
       Left err -> logError trce $ renderExplorerNodeError err
       Right () -> pure ()
 
-    give (Genesis.configEpochSlots gc)
-          $ give (Genesis.gdProtocolMagicId $ Genesis.configGenesisData gc)
-          $ runExplorerNodeClient (mkProtocolId gc) trce (unSocketPath $ enpSocketPath enp)
+    runExplorerNodeClient (mkNodeConfig gc) trce (enpSocketPath enp)
 
 
-mkProtocolId :: Genesis.Config -> Protocol (ByronBlockOrEBB ByronConfig)
-mkProtocolId gc =
-  ProtocolRealPBFT gc Nothing
-    (Update.ProtocolVersion 0 2 0)
-    (Update.SoftwareVersion (Update.ApplicationName "cardano-sl") 1)
-    Nothing
+mkTracer :: ExplorerNodeConfig -> IO (Trace IO Text)
+mkTracer enc =
+  if not (encEnableLogging enc)
+    then pure Logging.nullTracer
+    else liftIO $ Logging.setupTrace (Right $ encLoggingConfig enc) "explorer-db-node"
 
 
-readGenesisConfig :: ExplorerNodeParams -> CardanoConfiguration -> IO Genesis.Config
-readGenesisConfig enp cc = do
-    genHash <- either (throwIO . ConfigurationError) pure $ decodeAbstractHash (enpGenesisHash enp)
-    convert =<< runExceptT (Genesis.mkConfigFromFile (convertRNM . coRequiresNetworkMagic $ ccCore cc)
+mkNodeConfig :: Genesis.Config -> NodeConfig (BlockProtocol ByronBlock)
+mkNodeConfig gc =
+  pInfoConfig . protocolInfo $ ProtocolRealPBFT gc Nothing (Update.ProtocolVersion 0 2 0)
+      (Update.SoftwareVersion (Update.ApplicationName "cardano-sl") 1) Nothing
+
+readGenesisConfig :: ExplorerNodeParams -> ExplorerNodeConfig -> IO Genesis.Config
+readGenesisConfig enp enc = do
+    genHash <- either (throwIO . ConfigurationError) pure $
+                decodeAbstractHash (unGenesisHash $ encGenesisHash enc)
+    convert =<< runExceptT (Genesis.mkConfigFromFile (encRequiresNetworkMagic enc)
                             (unGenesisFile $ enpGenesisFile enp) genHash)
   where
     convert :: Either Genesis.ConfigurationError Genesis.Config -> IO Genesis.Config
@@ -243,49 +172,40 @@ readGenesisConfig enp cc = do
         Left err -> panic $ show err
         Right x -> pure x
 
-
-convertRNM :: RequireNetworkMagic -> RequiresNetworkMagic
-convertRNM =
-  \case
-    NoRequireNetworkMagic -> RequiresNoMagic
-    RequireNetworkMagic -> RequiresMagic
-
 runExplorerNodeClient
-    :: forall blk cfg.
-        (RunNode blk, blk ~ ByronBlockOrEBB cfg, ByronGiven, cfg ~ ByronConfig)
-    => Ouroboros.Consensus.Protocol.Protocol blk -> Trace IO Text -> FilePath -> IO ()
-runExplorerNodeClient ptcl trce socketPath = do
-  liftIO $ logInfo trce "Starting node client"
-  let
-    infoConfig = pInfoConfig $ protocolInfo (NumCoreNodes 7) (CoreNodeId 0) ptcl
-
-  logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> Text.pack (show socketPath)
+    :: forall blk.
+        (blk ~ ByronBlock)
+    => NodeConfig (BlockProtocol blk) -> Trace IO Text -> SocketPath -> IO ()
+runExplorerNodeClient nodeConfig trce (SocketPath socketPath) = do
+  logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   connTable <- newConnectionTable
+  peerStates <- newPeerStatesVar
   ncSubscriptionWorker_V1
     -- TODO: these tracers should be configurable for debugging purposes.
     nullTracer
     nullTracer
     nullTracer
+    nullTracer
     Peer
     connTable
+    peerStates
     (LocalAddresses Nothing Nothing (Just $ SockAddrUnix socketPath))
     (const Nothing)
-    IPSubscriptionTarget
-      { ispIps     = [SockAddrUnix socketPath]
-      , ispValency = 1
-      }
-    (NodeToClientVersionData { networkMagic = nodeNetworkMagic (Proxy @blk) infoConfig })
-    (localInitiatorNetworkApplication trce infoConfig)
+    (networkErrorPolicies <> consensusErrorPolicy)
+    IPSubscriptionTarget { ispIps = [SockAddrUnix socketPath], ispValency = 1 }
+    (NodeToClientVersionData { networkMagic = nodeNetworkMagic (Proxy @blk) nodeConfig })
+    (localInitiatorNetworkApplication trce nodeConfig)
+
 
 localInitiatorNetworkApplication
-  :: forall blk peer cfg.
-     (RunNode blk, blk ~ ByronBlockOrEBB cfg, Show peer, ByronGiven, cfg ~ ByronConfig)
+  :: forall blk peer.
+     (blk ~ ByronBlock, Show peer)
   -- TODO: the need of a 'Proxy' is an evidence that blk type is not really
   -- needed here.  The wallet client should use some concrete type of block
   -- from 'cardano-chain'.  This should remove the dependency of this module
   -- from 'ouroboros-consensus'.
   => Trace IO Text
-  -> NodeConfig (BlockProtocol blk)
+  -> NodeConfig (BlockProtocol ByronBlock)
   -> OuroborosApplication 'InitiatorApp peer NodeToClientProtocols IO BSL.ByteString Void Void
 localInitiatorNetworkApplication trce pInfoConfig =
       OuroborosInitiatorApplication $ \peer ptcl ->
@@ -336,7 +256,7 @@ logDbState trce = do
         (Nothing, Nothing) -> "empty (genesis)"
 
 
-getLatestPoints :: IO [Point (ByronBlockOrEBB cfg)]
+getLatestPoints :: IO [Point ByronBlock]
 getLatestPoints =
     -- Blocks (and the transactions they contain) are inserted within an SQL transaction.
     -- That means that all the blocks (including their transactions) returned by the query
@@ -344,7 +264,7 @@ getLatestPoints =
     -- TODO: Get the security parameter (2160) from the config.
     mapMaybe convert <$> DB.runDbNoLogging (DB.queryLatestBlocks 2160)
   where
-    convert :: (Word64, ByteString) -> Maybe (Point (ByronBlockOrEBB cfg))
+    convert :: (Word64, ByteString) -> Maybe (Point ByronBlock)
     convert (slot, hashBlob) =
       fmap (Point . Point.block (SlotNo slot)) (convertHashBlob hashBlob)
 
@@ -413,7 +333,7 @@ localTxSubmissionCodec =
 --    rollback, see 'clientStNext' below.
 --
 chainSyncClient
-  :: forall blk m cfg. (MonadTimer m, MonadIO m, blk ~ ByronBlockOrEBB cfg, ByronGiven, cfg ~ ByronConfig)
+  :: forall blk m. (MonadTimer m, MonadIO m, blk ~ ByronBlock)
   => Trace IO Text -> Metrics -> [Point blk] -> BlockNo -> DbActionQueue -> ChainSyncClientPipelined blk (Tip blk) m Void
 chainSyncClient trce metrics latestPoints currentTip actionQueue =
     ChainSyncClientPipelined $ pure $
@@ -430,7 +350,7 @@ chainSyncClient trce metrics latestPoints currentTip actionQueue =
   where
     policy = pipelineDecisionLowHighMark 1000 10000
 
-    go :: MkPipelineDecision -> Nat n -> BlockNo -> BlockNo -> ClientPipelinedStIdle n (ByronBlockOrEBB cfg) (Tip blk) m a
+    go :: MkPipelineDecision -> Nat n -> BlockNo -> BlockNo -> ClientPipelinedStIdle n ByronBlock (Tip blk) m a
     go mkPipelineDecision n clientTip serverTip =
       case (n, runPipelineDecision mkPipelineDecision n clientTip serverTip) of
         (_Zero, (Request, mkPipelineDecision')) ->
@@ -449,8 +369,8 @@ chainSyncClient trce metrics latestPoints currentTip actionQueue =
             Nothing
             (mkClientStNext $ \clientBlockNo newServerTip -> go mkPipelineDecision' n' clientBlockNo (tipBlockNo newServerTip))
 
-    mkClientStNext :: (BlockNo -> Tip blk -> ClientPipelinedStIdle n (ByronBlockOrEBB ByronConfig) (Tip blk) m a)
-                    -> ClientStNext n (ByronBlockOrEBB ByronConfig) (Tip (ByronBlockOrEBB ByronConfig)) m a
+    mkClientStNext :: (BlockNo -> Tip blk -> ClientPipelinedStIdle n ByronBlock (Tip blk) m a)
+                    -> ClientStNext n ByronBlock (Tip ByronBlock) m a
     mkClientStNext finish =
       ClientStNext
         { recvMsgRollForward = \blk tip ->
