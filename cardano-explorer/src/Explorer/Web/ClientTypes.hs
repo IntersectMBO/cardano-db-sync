@@ -20,6 +20,7 @@ module Explorer.Web.ClientTypes
        , CTxEntry (..)
        , CBlockSummary (..)
        , CAddressType (..)
+       , CTxAddressBrief (..)
        , CAddressSummary (..)
        , CAddressBalanceError (..)
        , CTxBrief (..)
@@ -187,6 +188,13 @@ data CTxBrief = CTxBrief
     , ctbFees       :: !CCoin
     } deriving (Show, Generic)
 
+data CTxAddressBrief = CTxAddressBrief
+    { ctaAddress :: !CAddress
+    , ctaAmount :: !CCoin
+    , ctaTxHash :: !CTxHash
+    , ctaTxIndex :: !Word
+    } deriving (Show, Generic)
+
 data CUtxo = CUtxo
     { cuId       :: !CTxHash
     , cuOutIndex :: !Int
@@ -209,8 +217,8 @@ data CTxSummary = CTxSummary
     , ctsTotalInput      :: !CCoin
     , ctsTotalOutput     :: !CCoin
     , ctsFees            :: !CCoin
-    , ctsInputs          :: ![Maybe (CAddress, CCoin)]
-    , ctsOutputs         :: ![(CAddress, CCoin)]
+    , ctsInputs          :: ![CTxAddressBrief]
+    , ctsOutputs         :: ![CTxAddressBrief]
     } deriving (Show, Generic)
 
 data CGenesisSummary = CGenesisSummary
@@ -317,6 +325,7 @@ deriveToJSON defaultOptions ''CBlockSummary
 deriveToJSON defaultOptions ''CNetworkAddress
 deriveToJSON defaultOptions ''CBlockRange
 deriveToJSON defaultOptions ''CTxSummary
+deriveToJSON defaultOptions ''CTxAddressBrief
 deriveToJSON defaultOptions ''CGenesisSummary
 deriveToJSON defaultOptions ''CGenesisAddressInfo
 deriveToJSON defaultOptions ''CUtxo

@@ -7,24 +7,23 @@ module Explorer.Web.Api.Legacy.TxsSummary
 
 import           Control.Monad.IO.Class      (MonadIO)
 import           Control.Monad.Trans.Reader  (ReaderT)
-import           Control.Monad.Trans.Except (runExceptT, throwE)
-import           Control.Monad.Trans.Except.Extra (hoistEither)
+import           Control.Monad.Trans.Except (runExceptT)
+import           Control.Monad.Trans.Except.Extra (hoistEither, left)
 
 import           Data.ByteString (ByteString)
 import           Data.Maybe (listToMaybe)
 import           Data.Text (Text)
-import           Data.Word (Word64)
+import           Data.Word (Word16, Word64)
 
-import           Database.Esqueleto (InnerJoin (..), (^.), (==.), (&&.),
+import           Database.Esqueleto (InnerJoin (..), Value (..), (^.), (==.), (&&.),
                     entityVal, from, on, select, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
 import           Explorer.DB (Block (..), BlockId, EntityField (..), LookupFail (..), Tx (..),
-                    TxId, TxOut (..),
-                    entityPair, maybeToEither, unValue2)
+                    TxId, entityPair, maybeToEither)
 
-import           Explorer.Web.ClientTypes (CAddress (..),
-                    CHash (..), CCoin, CTxHash (..), CTxSummary (..), mkCCoin)
+import           Explorer.Web.ClientTypes (CAddress (..), CCoin (..), CHash (..),
+                    CTxAddressBrief (..), CTxHash (..), CTxSummary (..), mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
 import           Explorer.Web.Api.Legacy.Util
 
@@ -41,34 +40,35 @@ import           Servant (Handler)
 txsSummary
     :: SqlBackend -> CTxHash
     -> Handler (Either ExplorerError CTxSummary)
-txsSummary backend (CTxHash (CHash hash)) =
+txsSummary backend (CTxHash (CHash hashTxt)) =
   runExceptT $ do
-    blob <- hoistEither $ textBase16Decode hash
-    mTxblk <- runQuery backend $ queryTxSummary blob
+    txhash <- hoistEither $ textBase16Decode hashTxt
+    mTxblk <- runQuery backend $ queryTxSummary txhash
     case mTxblk of
-      Nothing -> throwE $ Internal "tx not found" -- TODO, give the same error as before?
+      Nothing -> left $ Internal "tx not found" -- TODO, give the same error as before?
       Just (tx, blk, inputs, outputs) -> do
         case blockSlotNo blk of
           Just slotno -> do
             let (epoch, slot) = slotno `divMod` slotsPerEpoch
             pure $ CTxSummary
               { ctsId              = CTxHash . CHash . bsBase16Encode $ txHash tx
-              , ctsTxTimeIssued    = Nothing
+              -- Tx timestamp is the same as block timestamp.
+              , ctsTxTimeIssued    = Just $ blockPosixTime blk
               , ctsBlockTimeIssued = Just $ blockPosixTime blk
               , ctsBlockHeight     = fromIntegral <$> blockBlockNo blk
               , ctsBlockEpoch      = Just epoch
               , ctsBlockSlot       = Just $ fromIntegral slot
-              , ctsBlockHash       = Just . CHash . bsBase16Encode $ blockHash blk
+              , ctsBlockHash       = Just . CHash $ bsBase16Encode (blockHash blk)
               , ctsRelayedBy       = Nothing
-              , ctsTotalInput      = (mkCCoin . sum . map (\(_addr,coin) -> fromIntegral  coin)) inputs
-              , ctsTotalOutput     = (mkCCoin . sum . map (fromIntegral . txOutValue)) outputs
-              , ctsFees            = mkCCoin $ fromIntegral $ txFee tx
-              , ctsInputs          = map convertInput inputs
-              , ctsOutputs         = map convertTxOut outputs
+              , ctsTotalInput      = mkCCoin . sum $ map (unCCoin . ctaAmount) inputs
+              , ctsTotalOutput     = mkCCoin . sum $ map (unCCoin . ctaAmount) outputs
+              , ctsFees            = mkCCoin $ fromIntegral (txFee tx)
+              , ctsInputs          = inputs
+              , ctsOutputs         = outputs
               }
-          Nothing -> throwE $ Internal "cant find slot# of block"
+          Nothing -> left $ Internal "cant find slot# of block"
 
-queryTxSummary :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe (Tx, Block, [(Text, Word64)], [TxOut]))
+queryTxSummary :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe (Tx, Block, [CTxAddressBrief], [CTxAddressBrief]))
 queryTxSummary txhash = do
   eTx <- queryTx txhash
   case eTx of
@@ -76,15 +76,12 @@ queryTxSummary txhash = do
       mBlock <- queryBlockById (txBlock tx)
       case mBlock of
         Just block -> do
-          inputs <- queryGetInputOutputs txid
-          outputs <- queryOutputsByTxId txid
+          inputs <- queryTxInputs txid
+          outputs <- queryTxOutputs txid
           pure $ Just (tx, block, inputs, outputs)
         Nothing -> pure Nothing
     Left _ -> pure Nothing -- TODO
 
-
--- queryInputBlockTime :: TxId -> ReaderT SqlBackend m (Maybe POSIXTime)
--- queryInputBlockTime txid
 
 queryTx :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail (TxId, Tx))
 queryTx hash = do
@@ -93,12 +90,22 @@ queryTx hash = do
             pure tx
   pure $ maybeToEither (DbLookupTxHash hash) entityPair (listToMaybe res)
 
-queryOutputsByTxId :: MonadIO m => TxId -> ReaderT SqlBackend m [TxOut]
-queryOutputsByTxId txid = do
-  rows <- select . from $ \txout -> do
-    where_ $ txout ^. TxOutTxId ==. val txid
-    pure txout
-  pure $ map entityVal rows
+queryTxOutputs :: MonadIO m => TxId -> ReaderT SqlBackend m [CTxAddressBrief]
+queryTxOutputs txid = do
+    rows <- select . from $ \ (tx `InnerJoin` txOut) -> do
+              on (tx ^. TxId ==. txOut ^. TxOutTxId)
+              where_ (txOut ^. TxOutTxId ==. val txid)
+              pure (txOut ^. TxOutAddress, txOut ^. TxOutValue, tx ^. TxHash, txOut ^. TxOutIndex)
+    pure $ map convert rows
+  where
+    convert :: (Value Text, Value Word64, Value ByteString, Value Word16) -> CTxAddressBrief
+    convert (Value addr, Value amount, Value txhash, Value index) =
+      CTxAddressBrief
+        { ctaAddress = CAddress addr
+        , ctaAmount = mkCCoin $ fromIntegral amount
+        , ctaTxHash = CTxHash $ CHash (bsBase16Encode txhash)
+        , ctaTxIndex = fromIntegral index
+        }
 
 queryBlockById :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe Block)
 queryBlockById blockid = do
@@ -107,18 +114,20 @@ queryBlockById blockid = do
       pure blk
   pure $ fmap entityVal (listToMaybe rows)
 
-queryGetInputOutputs :: MonadIO m => TxId -> ReaderT SqlBackend m [(Text, Word64)]
-queryGetInputOutputs txid = do
-  rows <- select . from $ \(txin `InnerJoin` txout) -> do
-    on ((txin ^. TxInTxOutId ==. txout ^. TxOutTxId) &&. (txin ^. TxInTxOutIndex ==. txout ^. TxOutIndex))
-    where_ $ txin ^. TxInTxInId ==. val txid
-    pure (txout ^. TxOutAddress, txout ^. TxOutValue)
-  pure $ map unValue2 rows
-
-
-
-convertTxOut :: TxOut -> (CAddress, CCoin)
-convertTxOut TxOut{txOutAddress,txOutValue} = (CAddress txOutAddress, mkCCoin $ fromIntegral txOutValue)
-
-convertInput :: (Text, Word64) -> Maybe (CAddress, CCoin)
-convertInput (addr, coin) = Just (CAddress $ addr, mkCCoin $ fromIntegral coin)
+queryTxInputs :: MonadIO m => TxId -> ReaderT SqlBackend m [CTxAddressBrief]
+queryTxInputs txid = do
+    rows <- select . from $ \(txIn `InnerJoin` txOut  `InnerJoin` tx) -> do
+              on (tx ^. TxId ==. txOut ^. TxOutTxId)
+              on ((txIn ^. TxInTxOutId ==. txOut ^. TxOutTxId) &&. (txIn ^. TxInTxOutIndex ==. txOut ^. TxOutIndex))
+              where_ (txIn ^. TxInTxInId ==. val txid)
+              pure (txOut ^. TxOutAddress, txOut ^. TxOutValue, tx ^. TxHash, txOut ^. TxOutIndex)
+    pure $ map convert rows
+  where
+    convert :: (Value Text, Value Word64, Value ByteString, Value Word16) -> CTxAddressBrief
+    convert (Value addr, Value amount, Value txhash, Value index) =
+      CTxAddressBrief
+        { ctaAddress = CAddress addr
+        , ctaAmount = mkCCoin $ fromIntegral amount
+        , ctaTxHash = CTxHash $ CHash (bsBase16Encode txhash)
+        , ctaTxIndex = fromIntegral index
+        }
