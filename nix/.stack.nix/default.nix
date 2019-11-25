@@ -50,8 +50,6 @@
         lobemo-backend-ekg = ./lobemo-backend-ekg.nix;
         lobemo-backend-monitoring = ./lobemo-backend-monitoring.nix;
         lobemo-scribe-systemd = ./lobemo-scribe-systemd.nix;
-        cardano-config = ./cardano-config.nix;
-        cardano-node = ./cardano-node.nix;
         cardano-binary = ./cardano-binary.nix;
         cardano-binary-test = ./cardano-binary-test.nix;
         cardano-crypto-class = ./cardano-crypto-class.nix;

@@ -1,26 +1,14 @@
 {
-    "byron-proxy": {
-        "branch": "master",
-        "description": "A bydirectional proxy between the Shelly and Byron versions of the Cardano network",
-        "homepage": null,
-        "owner": "input-output-hk",
-        "repo": "cardano-byron-proxy",
-        "rev": "53cd7427200ddd74bc8f3c77159451fa6e88e8a0",
-        "sha256": "0p5ps7bivhbqfsdl75j9sga1pii1y5as1jis2ldwllapz1afdyid",
-        "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-byron-proxy/archive/53cd7427200ddd74bc8f3c77159451fa6e88e8a0.tar.gz",
-        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
-    },
     "cardano-graphql": {
         "branch": "nix-build",
         "description": "GraphQL API for Cardano",
         "homepage": "",
         "owner": "input-output-hk",
         "repo": "cardano-graphql",
-        "rev": "7c00bbe152af5e25819997d37b15fc543d29cef4",
-        "sha256": "1z9b1xzhzpybpyyvwmfz3x9y1zgj8czrrprw2i9kaan6rybj6m34",
+        "rev": "dd29c9a84a15fc36288edaf3a44be6da952e9010",
+        "sha256": "1pm3zp1fs9iqvpnx6b9vdjnq0db2az8i8185vy5pyjjq8xp83mfx",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-graphql/archive/7c00bbe152af5e25819997d37b15fc543d29cef4.tar.gz",
+        "url": "https://github.com/input-output-hk/cardano-graphql/archive/dd29c9a84a15fc36288edaf3a44be6da952e9010.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "cardano-node": {
@@ -29,22 +17,10 @@
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "cardano-node",
-        "rev": "d402dd42874ae0acbbfb4c42ffb2a773370f1f3d",
-        "sha256": "1ksl6yqm8s485bxdahxmzcs0k6f7dy7s461hqgc6bclcdkjs1vsl",
+        "rev": "4cf223d84dd6d117de624a9c2bea8239013a6e98",
+        "sha256": "01kirj9b4pmy5ykl55lglb2mg9gg6sgwfvbcfppl24vhn1mq666d",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-node/archive/d402dd42874ae0acbbfb4c42ffb2a773370f1f3d.tar.gz",
-        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
-    },
-    "cardano-node-nixops": {
-        "branch": "master",
-        "description": null,
-        "homepage": null,
-        "owner": "input-output-hk",
-        "repo": "cardano-node",
-        "rev": "b9a9cb686a662bca7cff40cda96f5dc0b93a00a5",
-        "sha256": "1n923na0bg6bp9pzmds029f88l1dx0dm5f32bb5mbvpr8qmd474w",
-        "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-node/archive/b9a9cb686a662bca7cff40cda96f5dc0b93a00a5.tar.gz",
+        "url": "https://github.com/input-output-hk/cardano-node/archive/4cf223d84dd6d117de624a9c2bea8239013a6e98.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "gitignore": {
@@ -65,10 +41,10 @@
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "iohk-nix",
-        "rev": "f854c957a65295639d2062867552b65c7dc227a6",
-        "sha256": "1jl07ng2nx6lgj9rrqzl242r263505llzzxb592fn81h0dq6jx1r",
+        "rev": "5318a521c0004d7ceb9609ae8b2e5babd6c4d332",
+        "sha256": "145gc3x6yn41f5s845nv6m05n42irlpdkgq8s9nz7q2ah94ph9a6",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/iohk-nix/archive/f854c957a65295639d2062867552b65c7dc227a6.tar.gz",
+        "url": "https://github.com/input-output-hk/iohk-nix/archive/5318a521c0004d7ceb9609ae8b2e5babd6c4d332.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "niv": {
@@ -93,18 +69,6 @@
         "sha256": "00dhkkmar3ynfkx9x0h7hzjpcqvwsfmgz3j0xj80156kbw7zq4bb",
         "type": "tarball",
         "url": "https://github.com/NixOS/nixpkgs-channels/archive/9bbad4c6254513fa62684da57886c4f988a92092.tar.gz",
-        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
-    },
-    "nixpkgs-hasura-attr": {
-        "branch": "hasura_graphql-engine",
-        "description": "Nix Packages collection",
-        "homepage": null,
-        "owner": "input-output-hk",
-        "repo": "nixpkgs",
-        "rev": "7008719046b97416a1119523267cdb8095b8cbda",
-        "sha256": "1s170az1fc88q5wy04lacad3dmazzgxsj3q53g3n1gdgard1k5ch",
-        "type": "tarball",
-        "url": "https://github.com/input-output-hk/nixpkgs/archive/7008719046b97416a1119523267cdb8095b8cbda.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "nixpkgs-hasura-base": {
