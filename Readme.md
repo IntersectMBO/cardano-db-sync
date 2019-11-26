@@ -34,7 +34,7 @@ HTTP REST API.
 * [SchemaManagement][Schema Management]: How the database schema is managed and modified.
 * [Validation][Validation]: Explanation of validation done by the explorer and assumptions made.
 
-[BuildingRunning]
+[BuildingRunning]: doc/building-running.md
 [PostgresView]: https://www.postgresql.org/docs/current/sql-createview.html
 [Schema Management]: doc/schema-management.md
 [Validation]: doc/validation.md
