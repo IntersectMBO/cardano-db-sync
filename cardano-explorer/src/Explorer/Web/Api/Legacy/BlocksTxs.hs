@@ -15,7 +15,7 @@ import           Data.Maybe (fromMaybe)
 import           Data.Time.Clock (UTCTime)
 import           Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import           Data.Text (Text)
-import           Data.Word (Word64)
+import           Data.Word (Word16, Word64)
 
 
 import           Database.Esqueleto (InnerJoin (..), Value (..), (^.), (==.), (&&.),
@@ -24,10 +24,11 @@ import           Database.Persist.Sql (SqlBackend)
 
 import           Explorer.DB (EntityField (..), TxId, unValue3)
 
-import           Explorer.Web.ClientTypes (CAddress (..), CHash (..), CTxBrief (..), CTxHash (..),
-                    mkCCoin)
+import           Explorer.Web.Api.Legacy.Util (bsBase16Encode, genesisDistributionTxHash,
+                    runQuery, textBase16Decode)
+import           Explorer.Web.ClientTypes (CAddress (..), CCoin (..), CHash (..),
+                    CTxAddressBrief (..), CTxBrief (..), CTxHash (..), mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
-import           Explorer.Web.Api.Legacy.Util (bsBase16Encode, runQuery, textBase16Decode)
 
 import           Servant (Handler)
 
@@ -35,6 +36,7 @@ import           Servant (Handler)
 --
 --  /api/blocks/txs/not-valid
 --  /api/blocks/txs/d30117e2e488cb3f496a47305eee3c8ea01e83e9e91e2719f1677de07f902e9a
+--  /api/blocks/txs/c25f5468195e95dc6e7acbc0f0da794113b0edbfe1f998e10c85e2a1ec679e83
 --  /api/blocks/txs/e22e8771de60d44820c72b10114a7aee7cf98e3b188936e8601f9a12637edf63
 
 
@@ -70,27 +72,56 @@ queryBlockByHash blkHash limitNum offsetNum  = do
 
 queryCTxBrief :: MonadIO m => [TxId] -> (TxId, ByteString, UTCTime) -> ReaderT SqlBackend m CTxBrief
 queryCTxBrief txOutIds (txId, txhash, utctime) = do
-    inrows <- select . from $ \(txIn `InnerJoin` txOut) -> do
+    inrows <- select . from $ \(tx `InnerJoin` txIn `InnerJoin` txOut `InnerJoin` txInTx) -> do
+                on (txInTx ^. TxId ==. txIn ^. TxInTxOutId)
                 on (txIn ^. TxInTxOutId ==. txOut ^. TxOutTxId
                     &&. txIn ^. TxInTxOutIndex ==. txOut ^. TxOutIndex)
+                on (tx ^. TxId ==. txIn ^. TxInTxOutId)
                 where_ (txIn ^. TxInTxInId ==. val txId)
-                pure (txOut ^. TxOutAddress, txOut ^. TxOutValue)
-    let inputs = map convert inrows
-    outrows <- select . from $ \txOut -> do
+                -- A Tx with a size of zero is a transaction to create a Geneisis Distribution output.
+                pure (txOut ^. TxOutAddress, txOut ^. TxOutValue, txInTx ^. TxHash, txOut ^. TxOutIndex, tx ^. TxSize ==. val 0)
+    let inputs = map convertIn inrows
+    outrows <- select . from $ \(tx `InnerJoin` txOut) -> do
+                  on (tx ^. TxId ==. txOut ^. TxOutTxId)
                   where_ (txOut ^. TxOutTxId `in_` valList txOutIds)
-                  pure (txOut ^. TxOutAddress, txOut ^. TxOutValue)
-    let outputs = map convert outrows
-        inSum = sum $ map snd inputs
-        outSum = sum $ map snd outputs
+                  pure (txOut ^. TxOutAddress, txOut ^. TxOutValue, tx ^. TxHash, txOut ^. TxOutIndex)
+    let outputs = map convertOut outrows
+        inSum = sum $ map (unCCoin . ctaAmount) inputs
+        outSum = sum $ map (unCCoin . ctaAmount) outputs
     pure $ CTxBrief
-            { ctbId = CTxHash . CHash $ bsBase16Encode txhash
+            { ctbId = CTxHash $ CHash (bsBase16Encode txhash)
             , ctbTimeIssued = Just $ utcTimeToPOSIXSeconds utctime
-            , ctbInputs = map (Just . fmap (mkCCoin . fromIntegral)) inputs
-            , ctbOutputs = map (fmap (mkCCoin . fromIntegral)) outputs
-            , ctbInputSum = mkCCoin $ fromIntegral inSum
-            , ctbOutputSum = mkCCoin $ fromIntegral outSum
-            , ctbFees = mkCCoin $ fromIntegral (if inSum == 0 then 0 else inSum - outSum)
+            , ctbInputs = inputs
+            , ctbOutputs = outputs
+            , ctbInputSum = mkCCoin inSum
+            , ctbOutputSum = mkCCoin outSum
+            -- Only redeem address have zero input and zero fees.
+            , ctbFees = mkCCoin $ if inSum == 0 then 0 else inSum - outSum
             }
   where
-    convert :: (Value Text, Value Word64) -> (CAddress, Word64)
-    convert (Value addr, Value coin) = (CAddress addr, coin)
+    convertIn :: (Value Text, Value Word64, Value ByteString, Value Word16, Value Bool) -> CTxAddressBrief
+    convertIn (Value addr, Value coin, Value txh, Value index, Value isGenesisTx) =
+      if isGenesisTx
+        then
+          CTxAddressBrief
+            { ctaAddress = CAddress addr
+            , ctaAmount = mkCCoin $ fromIntegral coin
+            , ctaTxHash = genesisDistributionTxHash
+            , ctaTxIndex = 0
+            }
+        else
+          CTxAddressBrief
+            { ctaAddress = CAddress addr
+            , ctaAmount = mkCCoin $ fromIntegral coin
+            , ctaTxHash = CTxHash $ CHash (bsBase16Encode txh)
+            , ctaTxIndex = fromIntegral index
+            }
+
+    convertOut :: (Value Text, Value Word64, Value ByteString, Value Word16) -> CTxAddressBrief
+    convertOut (Value addr, Value coin, Value txh, Value index) =
+      CTxAddressBrief
+        { ctaAddress = CAddress addr
+        , ctaAmount = mkCCoin $ fromIntegral coin
+        , ctaTxHash = CTxHash $ CHash (bsBase16Encode txh)
+        , ctaTxIndex = fromIntegral index
+        }
