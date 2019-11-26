@@ -65,7 +65,7 @@ select
   next_block."hash" as "nextBlockId",
   slot_leader."description" as "createdBy",
   block.size as size,
-	block.tx_count as "transactionCount",
+	block.tx_count as "transactionsCount",
   -- Even though we have epochNo defined in the Slot view,
   -- this is written by the node-client and makes identification
   -- of EBBs simpler, as EBBs don't have a slot_no
