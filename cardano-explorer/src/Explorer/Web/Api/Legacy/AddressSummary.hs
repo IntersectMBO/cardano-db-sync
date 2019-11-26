@@ -13,14 +13,10 @@ import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.List as List
-import           Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
 import           Data.List.Extra (groupOn)
-import           Data.Maybe
 import           Data.Text (Text)
 import           Data.Time.Clock (UTCTime)
-import           Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
-import           Data.Word (Word64)
+import           Data.Word (Word16, Word64)
 
 import           Database.Esqueleto (InnerJoin (..), Value (..),
                     (^.), (==.), (&&.), distinct, from, in_, on, select, val, valList, where_)
@@ -28,10 +24,12 @@ import           Database.Persist.Sql (SqlBackend)
 
 import           Explorer.DB (EntityField (..), TxId, unValue3)
 import           Explorer.Web.ClientTypes (CAddress (..), CAddressSummary (..), CAddressType (..),
-                    CCoin (..), CHash (..), CTxBrief (..), CTxHash (..), mkCCoin, sumCCoin)
+                    CCoin (..), CHash (..), CTxAddressBrief (..), CTxBrief (..), CTxHash (..),
+                    mkCCoin, sumCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
 import           Explorer.Web.Api.Legacy.RedeemSummary (queryRedeemSummary)
-import           Explorer.Web.Api.Legacy.Util (bsBase16Encode, decodeTextAddress, runQuery)
+import           Explorer.Web.Api.Legacy.Util (bsBase16Encode, collapseTxGroup, decodeTextAddress,
+                    genesisDistributionTxHash, runQuery, zipTxBrief)
 
 import           Servant (Handler)
 
@@ -90,8 +88,8 @@ queryAddressSummary addr = do
   where
     cAddressSummary :: [CTxBrief] -> [CTxBrief] -> CAddressSummary
     cAddressSummary itxs otxs =
-      let insum = sumCCoin . map snd $ filter isTargetAddress (concatMap ctbOutputs itxs)
-          outsum = sumCCoin . map snd . filter isTargetAddress $ catMaybes (concatMap ctbInputs otxs)
+      let insum = sumCCoin . map ctaAmount $ filter isTargetAddress (concatMap ctbOutputs itxs)
+          outsum = sumCCoin . map ctaAmount $ filter isTargetAddress (concatMap ctbInputs otxs)
           txs = List.sortOn ctbTimeIssued (itxs ++ otxs)
           fees = sumCCoin $ map ctbFees txs
       in
@@ -106,8 +104,8 @@ queryAddressSummary addr = do
         , caTxList = txs
         }
 
-    isTargetAddress :: (CAddress, a) -> Bool
-    isTargetAddress (CAddress tst, _) = tst == addr
+    isTargetAddress :: CTxAddressBrief -> Bool
+    isTargetAddress (CTxAddressBrief (CAddress tst) _ _ _) = tst == addr
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -117,69 +115,57 @@ queryCTxBriefs xs = do
   let txids = map fst3 xs
   zipTxBrief xs <$> queryTxInputs txids <*> queryTxOutputs txids
 
-queryTxInputs :: MonadIO m => [TxId] -> ReaderT SqlBackend m [(TxId, [(CAddress, Word64)])]
+queryTxInputs :: MonadIO m => [TxId] -> ReaderT SqlBackend m [(TxId, [CTxAddressBrief])]
 queryTxInputs txids = do
-    rows <- select . distinct . from $ \(tx `InnerJoin` txIn `InnerJoin` txOut) -> do
-                on (txIn ^. TxInTxOutId ==. txOut ^. TxOutTxId
-                    &&. txIn ^. TxInTxOutIndex ==. txOut ^. TxOutIndex)
-                on (tx ^. TxId ==. txIn ^. TxInTxInId)
-                where_ (txIn ^. TxInTxInId `in_` valList txids)
-                pure (tx ^. TxId, txOut ^. TxOutAddress, txOut ^. TxOutValue)
-    case groupOn fst (map convert rows) of
-      [] -> pure []
-      xs -> pure $ map collapseTxGroup xs
+    rows <- select . distinct . from $ \(tx `InnerJoin` txIn `InnerJoin` txOut `InnerJoin` txInTx) -> do
+              on (txInTx ^. TxId ==. txIn ^. TxInTxOutId)
+              on (txIn ^. TxInTxOutId ==. txOut ^. TxOutTxId
+                  &&. txIn ^. TxInTxOutIndex ==. txOut ^. TxOutIndex)
+              on (tx ^. TxId ==. txIn ^. TxInTxInId)
+              where_ (txIn ^. TxInTxInId `in_` valList txids)
+              pure (tx ^. TxId, txOut ^. TxOutAddress, txOut ^. TxOutValue, txInTx ^. TxHash, txOut ^. TxOutIndex, txInTx ^. TxSize ==. val 0)
+    pure $ map collapseTxGroup (groupOn fst $ map convert rows)
   where
-    convert :: (Value TxId, Value Text, Value Word64) -> (TxId, (CAddress, Word64))
-    convert (Value txid, Value addr, Value coin) = (txid, (CAddress addr, coin))
+    convert :: (Value TxId, Value Text, Value Word64, Value ByteString, Value Word16, Value Bool) -> (TxId, CTxAddressBrief)
+    convert (Value txid, Value addr, Value coin, Value txh, Value index, Value isGenesisTx) =
+      ( txid
+      , if isGenesisTx
+          then
+            CTxAddressBrief
+              { ctaAddress = CAddress addr
+              , ctaAmount = mkCCoin $ fromIntegral coin
+              , ctaTxHash = genesisDistributionTxHash
+              , ctaTxIndex = 0
+              }
+          else
+            CTxAddressBrief
+              { ctaAddress = CAddress addr
+              , ctaAmount = mkCCoin $ fromIntegral coin
+              , ctaTxHash = CTxHash $ CHash (bsBase16Encode txh)
+              , ctaTxIndex = fromIntegral index
+              }
+      )
 
-queryTxOutputs :: MonadIO m => [TxId] -> ReaderT SqlBackend m [(TxId, [(CAddress, Word64)])]
+queryTxOutputs :: MonadIO m => [TxId] -> ReaderT SqlBackend m [(TxId, [CTxAddressBrief])]
 queryTxOutputs txids = do
     rows <- select . from $ \ (tx `InnerJoin` txOut) -> do
-                on (tx ^. TxId ==. txOut ^. TxOutTxId)
-                where_ (tx ^. TxId `in_` valList txids)
-                pure (tx ^. TxId, txOut ^. TxOutAddress, txOut ^. TxOutValue)
-    case groupOn fst (map convert rows) of
-      [] -> pure []
-      xs -> pure $ map collapseTxGroup xs
+              on (tx ^. TxId ==. txOut ^. TxOutTxId)
+              where_ (tx ^. TxId `in_` valList txids)
+              pure (tx ^. TxId, txOut ^. TxOutAddress, txOut ^. TxOutValue, tx ^. TxHash, txOut ^. TxOutIndex)
+    pure $ map collapseTxGroup (groupOn fst $ map convert rows)
   where
-    convert :: (Value TxId, Value Text, Value Word64) -> (TxId, (CAddress, Word64))
-    convert (Value txid, Value addr, Value coin) = (txid, (CAddress addr, coin))
+    convert :: (Value TxId, Value Text, Value Word64, Value ByteString, Value Word16) -> (TxId, CTxAddressBrief)
+    convert (Value txid, Value addr, Value coin, Value txhash, Value index) =
+      ( txid
+      , CTxAddressBrief
+          { ctaAddress = CAddress addr
+          , ctaAmount = mkCCoin $ fromIntegral coin
+          , ctaTxHash = CTxHash . CHash $ bsBase16Encode txhash
+          , ctaTxIndex = fromIntegral index
+          }
+      )
 
 -- -------------------------------------------------------------------------------------------------
-
-collapseTxGroup :: [(TxId, (CAddress, Word64))] -> (TxId, [(CAddress, Word64)])
-collapseTxGroup xs =
-  case xs of
-    [] -> error "collapseTxGroup: groupOn produced [] on non-empty list (impossible)"
-    (x:_) -> (fst x, map snd xs)
-
-zipTxBrief :: [(TxId, ByteString, UTCTime)] -> [(TxId, [(CAddress, Word64)])] -> [(TxId, [(CAddress, Word64)])] -> [CTxBrief]
-zipTxBrief xs ins outs =
-    mapMaybe build $ map fst3 xs
-  where
-    idMap :: Map TxId (ByteString, UTCTime)
-    idMap = Map.fromList $ map (\(a, b, c) -> (a, (b, c))) xs
-
-    inMap, outMap :: Map TxId [(CAddress, Word64)]
-    inMap = Map.fromList ins
-    outMap = Map.fromList outs
-
-    build :: TxId -> Maybe CTxBrief
-    build txid = do
-      (hash, time) <- Map.lookup txid idMap
-      inputs <- Map.lookup txid inMap
-      outputs <- Map.lookup txid outMap
-      inSum <- Just $ sum (map snd inputs)
-      outSum <- Just $ sum (map snd outputs)
-      pure $ CTxBrief
-              { ctbId = CTxHash . CHash $ bsBase16Encode hash
-              , ctbTimeIssued = Just $ utcTimeToPOSIXSeconds time
-              , ctbInputs = map (Just . fmap (mkCCoin . fromIntegral)) inputs
-              , ctbOutputs = map (fmap (mkCCoin . fromIntegral)) outputs
-              , ctbInputSum = mkCCoin $ fromIntegral inSum
-              , ctbOutputSum = mkCCoin $ fromIntegral outSum
-              , ctbFees = mkCCoin $ fromIntegral (inSum - outSum)
-              }
 
 fst3 :: (a, b, c) -> a
 fst3 (a, _, _) = a
