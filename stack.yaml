@@ -66,12 +66,6 @@ extra-deps:
       - plugins/backend-monitoring
       - plugins/scribe-systemd
 
-  - git: https://github.com/input-output-hk/cardano-node
-    commit: 4cf223d84dd6d117de624a9c2bea8239013a6e98
-    subdirs:
-      - cardano-config
-      - cardano-node
-
   - git: https://github.com/input-output-hk/cardano-base
     commit: 057d8a9a3e751f88fc7677df5713c5ecc47a37c4
     subdirs:
