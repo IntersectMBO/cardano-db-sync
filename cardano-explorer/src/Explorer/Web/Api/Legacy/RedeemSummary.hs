@@ -20,10 +20,10 @@ import           Database.Persist.Sql (SqlBackend)
 
 import           Explorer.DB (EntityField (..), unValue3)
 
+import           Explorer.Web.Api.Legacy.Util (bsBase16Encode, genesisDistributionTxHash)
 import           Explorer.Web.ClientTypes (CAddress (..), CAddressSummary (..), CAddressType (..),
-                    CCoin, CHash (..), CTxBrief (..), CTxHash (..), mkCCoin)
+                    CCoin, CHash (..), CTxAddressBrief (..), CTxBrief (..), CTxHash (..), mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
-import           Explorer.Web.Api.Legacy.Util (bsBase16Encode)
 
 -- Example redeem addresses:
 --    /api/addresses/summary/Ae2tdPwUPEZAAvxJ9nQ1nx88X9Jq6dskyG9uFUWG69wC6TJ7DKNCp6QCEM2 (unspent)
@@ -85,8 +85,22 @@ queryRedeemSummary addrTxt = do
             [ CTxBrief
                 { ctbId = CTxHash . CHash $ bsBase16Encode txhash
                 , ctbTimeIssued = Just $ utcTimeToPOSIXSeconds utctime
-                , ctbInputs = [Just (CAddress addrTxt, outval)]
-                , ctbOutputs = [(CAddress outAddr, outval)]
+                , ctbInputs =
+                    [ CTxAddressBrief
+                        { ctaAddress = CAddress addrTxt
+                        , ctaAmount = outval
+                        , ctaTxHash = genesisDistributionTxHash
+                        , ctaTxIndex = 0
+                        }
+                    ]
+                , ctbOutputs =
+                    [ CTxAddressBrief
+                        { ctaAddress = CAddress outAddr
+                        , ctaAmount = outval
+                        , ctaTxHash = CTxHash $ CHash (bsBase16Encode txhash)
+                        , ctaTxIndex = 0
+                        }
+                    ]
                 , ctbInputSum = outval
                 , ctbOutputSum = outval
                 , ctbFees = mkCCoin 0

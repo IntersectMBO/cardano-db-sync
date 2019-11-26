@@ -181,8 +181,8 @@ data CAddressSummary = CAddressSummary
 data CTxBrief = CTxBrief
     { ctbId         :: !CTxHash
     , ctbTimeIssued :: !(Maybe POSIXTime)
-    , ctbInputs     :: ![Maybe (CAddress, CCoin)]
-    , ctbOutputs    :: ![(CAddress, CCoin)]
+    , ctbInputs     :: ![CTxAddressBrief]
+    , ctbOutputs    :: ![CTxAddressBrief]
     , ctbInputSum   :: !CCoin
     , ctbOutputSum  :: !CCoin
     , ctbFees       :: !CCoin
