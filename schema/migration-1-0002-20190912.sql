@@ -9,9 +9,9 @@ DECLARE vname text;
 
 BEGIN
   for vname in
-      select table_name
+      select '"' || table_name || '"'
 	    from information_schema.views
-        where table_catalog = 'cexplorer' and table_schema = 'public'
+        where table_catalog like '%explorer' and table_schema = 'public'
     loop
       execute format ('drop view if exists %s cascade ;', vname) ;
       raise notice 'Dropping view : %', vname ;
