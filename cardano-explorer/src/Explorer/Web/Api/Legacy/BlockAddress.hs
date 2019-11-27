@@ -26,9 +26,10 @@ import           Database.Persist.Sql (SqlBackend)
 
 import           Explorer.DB (EntityField (..), TxId, unValue3)
 import           Explorer.Web.ClientTypes (CAddress (..), CAddressSummary (..), CAddressType (..),
-                    CCoin (..), CHash (..), CTxAddressBrief (..), CTxBrief (..), CTxHash (..),
-                    mkCCoin, sumCCoin)
+                    CCoin (..), CChainTip (..), CHash (..), CTxAddressBrief (..), CTxBrief (..),
+                    CTxHash (..), mkCCoin, sumCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
+import           Explorer.Web.Query (queryChainTip)
 import           Explorer.Web.Api.Legacy.Util (bsBase16Encode, collapseTxGroup, decodeTextAddress,
                     runQuery, textBase16Decode, zipTxBrief)
 
@@ -53,15 +54,16 @@ blockAddress backend (CHash blkHashTxt) (CAddress addrTxt) =
     addr <- hoistEither $ decodeTextAddress addrTxt
     blkHash <- hoistEither $ textBase16Decode blkHashTxt
     newExceptT .
-      runQuery backend $
+      runQuery backend $ do
+        chainTip <- queryChainTip
         if isRedeemAddress addr
-          then queryRedeemSummary blkHash addrTxt
-          else Right <$> queryAddressSummary blkHash addrTxt
+          then queryRedeemSummary chainTip blkHash addrTxt
+          else Right <$> queryAddressSummary chainTip blkHash addrTxt
 
 -- -------------------------------------------------------------------------------------------------
 
-queryRedeemSummary :: MonadIO m => ByteString -> Text -> ReaderT SqlBackend m (Either ExplorerError CAddressSummary)
-queryRedeemSummary blkHash addrTxt = do
+queryRedeemSummary :: MonadIO m => CChainTip -> ByteString -> Text -> ReaderT SqlBackend m (Either ExplorerError CAddressSummary)
+queryRedeemSummary chainTip blkHash addrTxt = do
     -- Find the initial value assigned to this address at Genesis
     rows <- select . from $ \ txOut -> do
               where_ (txOut ^. TxOutAddress ==. val addrTxt)
@@ -91,6 +93,7 @@ queryRedeemSummary blkHash addrTxt = do
       CAddressSummary
         { caAddress = CAddress addrTxt
         , caType = CRedeemAddress
+        , caChainTip = chainTip
         , caTxNum = 0
         , caBalance = balance
         , caTotalInput = mkCCoin 0
@@ -104,6 +107,7 @@ queryRedeemSummary blkHash addrTxt = do
       CAddressSummary
         { caAddress = CAddress addrTxt
         , caType = CRedeemAddress
+        , caChainTip = chainTip
         , caTxNum = 1
         , caBalance = mkCCoin 0
         , caTotalInput = outval
@@ -138,8 +142,8 @@ queryRedeemSummary blkHash addrTxt = do
 
 -- -------------------------------------------------------------------------------------------------
 
-queryAddressSummary :: MonadIO m => ByteString -> Text -> ReaderT SqlBackend m CAddressSummary
-queryAddressSummary blkHash addr = do
+queryAddressSummary :: MonadIO m => CChainTip -> ByteString -> Text -> ReaderT SqlBackend m CAddressSummary
+queryAddressSummary chainTip blkHash addr = do
     inrows <- select . from $ \ (blk `InnerJoin` tx `InnerJoin` txOut) -> do
                 on (tx ^. TxId ==. txOut ^. TxOutTxId)
                 on (blk ^. BlockId ==. tx ^. TxBlock)
@@ -170,6 +174,7 @@ queryAddressSummary blkHash addr = do
       CAddressSummary
         { caAddress = CAddress addr
         , caType = CPubKeyAddress
+        , caChainTip = chainTip
         , caTxNum = fromIntegral $ length txs
         , caBalance = mkCCoin $ unCCoin insum - unCCoin outsum
         , caTotalInput = insum

@@ -23,13 +23,15 @@ import           Database.Esqueleto (InnerJoin (..), Value (..),
 import           Database.Persist.Sql (SqlBackend)
 
 import           Explorer.DB (EntityField (..), TxId, unValue3)
-import           Explorer.Web.ClientTypes (CAddress (..), CAddressSummary (..), CAddressType (..),
-                    CCoin (..), CHash (..), CTxAddressBrief (..), CTxBrief (..), CTxHash (..),
-                    mkCCoin, sumCCoin)
-import           Explorer.Web.Error (ExplorerError (..))
+
 import           Explorer.Web.Api.Legacy.RedeemSummary (queryRedeemSummary)
 import           Explorer.Web.Api.Legacy.Util (bsBase16Encode, collapseTxGroup, decodeTextAddress,
                     genesisDistributionTxHash, runQuery, zipTxBrief)
+import           Explorer.Web.ClientTypes (CAddress (..), CAddressSummary (..), CAddressType (..),
+                    CChainTip (..), CCoin (..), CHash (..), CTxAddressBrief (..), CTxBrief (..),
+                    CTxHash (..), mkCCoin, sumCCoin)
+import           Explorer.Web.Error (ExplorerError (..))
+import           Explorer.Web.Query (queryChainTip)
 
 import           Servant (Handler)
 
@@ -59,15 +61,16 @@ addressSummary backend (CAddress addrTxt) =
     runExceptT $ do
       addr <- hoistEither $ decodeTextAddress addrTxt
       newExceptT .
-        runQuery backend $
+        runQuery backend $ do
+          chainTip <- queryChainTip
           if isRedeemAddress addr
-            then queryRedeemSummary addrTxt
-            else Right <$> queryAddressSummary addrTxt
+            then queryRedeemSummary chainTip addrTxt
+            else Right <$> queryAddressSummary chainTip addrTxt
 
 -- -------------------------------------------------------------------------------------------------
 
-queryAddressSummary :: MonadIO m => Text -> ReaderT SqlBackend m CAddressSummary
-queryAddressSummary addr = do
+queryAddressSummary :: MonadIO m => CChainTip -> Text -> ReaderT SqlBackend m CAddressSummary
+queryAddressSummary chainTip addr = do
     inrows <- select . from $ \ (blk `InnerJoin` tx `InnerJoin` txOut) -> do
                 on (tx ^. TxId ==. txOut ^. TxOutTxId)
                 on (blk ^. BlockId ==. tx ^. TxBlock)
@@ -96,6 +99,7 @@ queryAddressSummary addr = do
       CAddressSummary
         { caAddress = CAddress addr
         , caType = CPubKeyAddress
+        , caChainTip = chainTip
         , caTxNum = fromIntegral $ length txs
         , caBalance = mkCCoin $ unCCoin insum - unCCoin outsum
         , caTotalInput = insum
