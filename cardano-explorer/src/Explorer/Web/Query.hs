@@ -1,29 +1,36 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Explorer.Web.Query
   ( queryBlockHash
   , queryBlockSummary
+  , queryChainTip
   , queryNextBlock
   , queryUtxoSnapshot
   , queryBlockIdFromHeight
   ) where
 
-import           Database.Esqueleto (InnerJoin (..), LeftOuterJoin (..), Value, ValueList, SqlExpr,
-                    (^.), (==.), (&&.), (>.), (||.), (<=.),
-                    from, in_, isNothing, on, select, subList_select, sum_, unValue, val, where_)
-import           Database.Persist.Sql (Entity (..), SqlBackend)
-
-import           Data.ByteString (ByteString)
-import           Data.Maybe (listToMaybe)
-import           Data.Word (Word64)
-import           Data.Time.Clock.POSIX (POSIXTime)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Explorer.DB (Block, BlockId, blockPrevious, blockSlotNo, querySlotPosixTime
-                            , EntityField (..)
-                            , TxId
-                            , TxOut, Ada, unValueSumAda, querySelectCount)
+import           Data.ByteString (ByteString)
+import           Data.Maybe (listToMaybe)
+import           Data.Time.Clock.POSIX (POSIXTime)
+import           Data.Word (Word64)
+
+import           Database.Esqueleto (InnerJoin (..), LeftOuterJoin (..), Value (..), ValueList,
+                    SqlExpr, (^.), (==.), (&&.), (>.), (||.), (<=.),
+                    desc, from, in_, isNothing, limit, on, orderBy, select, subList_select, sum_,
+                    unValue, val, where_)
+import           Database.Persist.Sql (Entity (..), SqlBackend)
+
+import           Explorer.DB (Ada, Block, BlockId, EntityField (..), TxId, TxOut,
+                    blockPrevious, blockSlotNo, isJust, querySlotPosixTime,
+                    querySelectCount, unValueSumAda)
+
+
+import           Explorer.Web.ClientTypes (CChainTip (..), CHash (..))
+import           Explorer.Web.Api.Legacy.Util (bsBase16Encode)
 
 queryBlockHash :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe ByteString)
 queryBlockHash blkid = do
@@ -31,6 +38,26 @@ queryBlockHash blkid = do
     where_ $ blk ^. BlockId ==. val blkid
     pure $ blk ^. BlockHash
   pure (unValue <$> listToMaybe rows)
+
+queryChainTip :: MonadIO m => ReaderT SqlBackend m CChainTip
+queryChainTip = do
+    rows <- select . from $ \ blk -> do
+              where_ (isJust (blk ^. BlockBlockNo))
+              orderBy [desc (blk ^. BlockBlockNo)]
+              limit 1
+              pure (blk ^. BlockBlockNo, blk ^. BlockSlotNo, blk ^. BlockHash)
+    pure $ maybe defTip convert (listToMaybe rows)
+  where
+    convert :: (Value (Maybe Word64), Value (Maybe Word64), Value ByteString) -> CChainTip
+    convert (Value mBlkNo, Value mSlotNo, Value blkHash) =
+      CChainTip
+        { ctBlockNo = maybe 0 fromIntegral mBlkNo
+        , ctSlotNo = maybe 0 fromIntegral mSlotNo
+        , ctBlockHash = CHash (bsBase16Encode blkHash)
+        }
+
+    defTip :: CChainTip
+    defTip = CChainTip 0 0 (CHash "unknown")
 
 queryNextBlock :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe ByteString)
 queryNextBlock blkid = do
