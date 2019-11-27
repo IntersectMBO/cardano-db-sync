@@ -20,6 +20,7 @@ module Explorer.Web.ClientTypes
        , CTxEntry (..)
        , CBlockSummary (..)
        , CAddressType (..)
+       , CChainTip (..)
        , CTxAddressBrief (..)
        , CAddressSummary (..)
        , CAddressBalanceError (..)
@@ -170,12 +171,19 @@ data CAddressType
 data CAddressSummary = CAddressSummary
     { caAddress :: !CAddress
     , caType    :: !CAddressType
+    , caChainTip :: !CChainTip
     , caTxNum   :: !Word
     , caBalance :: !CCoin
     , caTotalInput :: !CCoin
     , caTotalOutput :: !CCoin
     , caTotalFee :: !CCoin
     , caTxList  :: ![CTxBrief]
+    } deriving (Show, Generic)
+
+data CChainTip = CChainTip
+    { ctBlockNo :: !Word
+    , ctSlotNo :: !Word
+    , ctBlockHash :: !CHash
     } deriving (Show, Generic)
 
 data CTxBrief = CTxBrief
@@ -324,6 +332,7 @@ deriveToJSON defaultOptions ''CAddressSummary
 deriveToJSON defaultOptions ''CBlockSummary
 deriveToJSON defaultOptions ''CNetworkAddress
 deriveToJSON defaultOptions ''CBlockRange
+deriveToJSON defaultOptions ''CChainTip
 deriveToJSON defaultOptions ''CTxSummary
 deriveToJSON defaultOptions ''CTxAddressBrief
 deriveToJSON defaultOptions ''CGenesisSummary

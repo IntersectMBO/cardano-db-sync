@@ -22,7 +22,8 @@ import           Explorer.DB (EntityField (..), unValue3)
 
 import           Explorer.Web.Api.Legacy.Util (bsBase16Encode, genesisDistributionTxHash)
 import           Explorer.Web.ClientTypes (CAddress (..), CAddressSummary (..), CAddressType (..),
-                    CCoin, CHash (..), CTxAddressBrief (..), CTxBrief (..), CTxHash (..), mkCCoin)
+                    CCoin, CChainTip (..), CHash (..), CTxAddressBrief (..), CTxBrief (..),
+                    CTxHash (..), mkCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
 
 -- Example redeem addresses:
@@ -33,8 +34,8 @@ import           Explorer.Web.Error (ExplorerError (..))
 
 
 -- | Redeem addresses are sufficiently different to warrant their own query.
-queryRedeemSummary :: MonadIO m => Text -> ReaderT SqlBackend m (Either ExplorerError CAddressSummary)
-queryRedeemSummary addrTxt = do
+queryRedeemSummary :: MonadIO m => CChainTip -> Text -> ReaderT SqlBackend m (Either ExplorerError CAddressSummary)
+queryRedeemSummary chainTip addrTxt = do
     -- Find the initial value assigned to this address at Genesis
     rows <- select . from $ \ txOut -> do
               where_ (txOut ^. TxOutAddress ==. val addrTxt)
@@ -63,6 +64,7 @@ queryRedeemSummary addrTxt = do
       CAddressSummary
         { caAddress = CAddress addrTxt
         , caType = CRedeemAddress
+        , caChainTip = chainTip
         , caTxNum = 0
         , caBalance = balance
         , caTotalInput = mkCCoin 0
@@ -76,6 +78,7 @@ queryRedeemSummary addrTxt = do
       CAddressSummary
         { caAddress = CAddress addrTxt
         , caType = CRedeemAddress
+        , caChainTip = chainTip
         , caTxNum = 1
         , caBalance = mkCCoin 0
         , caTotalInput = outval
