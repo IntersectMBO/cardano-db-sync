@@ -25,7 +25,7 @@ in {
       };
       environment = lib.mkOption {
         type = lib.types.nullOr lib.types.attrs;
-        default = null;
+        default = localLib.cardanoLib.environments.${cfg.cluster};
       };
       logConfig = lib.mkOption {
         type = lib.types.attrs;
@@ -70,9 +70,6 @@ in {
     };
   };
   config = lib.mkMerge [
-    (lib.mkIf (cfg.cluster != null) {
-      services.cardano-exporter.environment = localLib.cardanoLib.environments.${cfg.cluster};
-    })
     (lib.mkIf cfg.enable {
       users = {
         users.cexplorer = {
