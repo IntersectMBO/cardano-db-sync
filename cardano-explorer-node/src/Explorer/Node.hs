@@ -54,6 +54,7 @@ import qualified Data.ByteString.Lazy as BSL
 import           Data.Functor.Contravariant (contramap)
 import           Data.Text (Text)
 import qualified Data.Text as Text
+import           Data.Void (Void)
 
 import           Explorer.DB (LogFileDir (..), MigrationDir)
 import qualified Explorer.DB as DB
@@ -147,7 +148,7 @@ runExplorer enp = do
       Left err -> logError trce $ renderExplorerNodeError err
       Right () -> pure ()
 
-    runExplorerNodeClient (mkNodeConfig gc) trce (enpSocketPath enp)
+    void $ runExplorerNodeClient (mkNodeConfig gc) trce (enpSocketPath enp)
 
 
 mkTracer :: ExplorerNodeConfig -> IO (Trace IO Text)
@@ -178,24 +179,28 @@ readGenesisConfig enp enc = do
 runExplorerNodeClient
     :: forall blk.
         (blk ~ ByronBlock)
-    => NodeConfig (BlockProtocol blk) -> Trace IO Text -> SocketPath -> IO ()
+    => NodeConfig (BlockProtocol blk) -> Trace IO Text -> SocketPath -> IO Void
 runExplorerNodeClient nodeConfig trce (SocketPath socketPath) = do
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
-  connTable <- newConnectionTable
-  peerStates <- newPeerStatesVar
+  networkState <- newNetworkMutableState
   ncSubscriptionWorker_V1
     -- TODO: these tracers should be configurable for debugging purposes.
-    nullTracer
-    nullTracer
-    nullTracer
-    errorPolicyTracer
-    Peer
-    connTable
-    peerStates
-    (LocalAddresses Nothing Nothing (Just $ SockAddrUnix socketPath))
-    (const Nothing)
-    (networkErrorPolicies <> consensusErrorPolicy)
-    IPSubscriptionTarget { ispIps = [SockAddrUnix socketPath], ispValency = 1 }
+    NetworkIPSubscriptionTracers {
+        nistMuxTracer = nullTracer,
+        nistHandshakeTracer = nullTracer,
+        nistErrorPolicyTracer = errorPolicyTracer,
+        nistSubscriptionTracer = nullTracer
+        -- TODO subscription tracer should not be 'nullTracer' by default
+      }
+    networkState
+    SubscriptionParams {
+        spLocalAddresses = LocalAddresses Nothing Nothing (Just $ SockAddrUnix socketPath),
+        spConnectionAttemptDelay = const Nothing,
+        spErrorPolicies = networkErrorPolicies <> consensusErrorPolicy,
+        spSubscriptionTarget = IPSubscriptionTarget
+          { ispIps = [SockAddrUnix socketPath]
+          , ispValency = 1 }
+        }
     (NodeToClientVersionData { networkMagic = nodeNetworkMagic (Proxy @blk) nodeConfig })
     (localInitiatorNetworkApplication trce nodeConfig)
   where
