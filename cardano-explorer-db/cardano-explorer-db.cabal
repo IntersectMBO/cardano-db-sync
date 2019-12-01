@@ -116,6 +116,7 @@ test-suite test
 
   other-modules:        Test.Property.Explorer.DB.Migration
                         Test.Property.Explorer.DB.Types
+                        Test.Property.Upstream
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , aeson
