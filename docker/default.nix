@@ -217,6 +217,10 @@ let
     chmod u+x /etc/runit/stopit
     kill -cont 1
   '';
+  ctrlaltdel = mkScript "/etc/runit/" "ctrlaltdel" ''
+    #!${stdenv.shell}
+    chmod u+x /etc/runit/stopit
+  '';
 
   one = mkScript "/etc/runit/" "1" ''
     mkdir /root /tmp
@@ -402,6 +406,7 @@ let
       one
       two
       three
+      ctrlaltdel
       #(wrapService "prometheus-blackbox-exporter")
       #(wrapService "prometheus-node-exporter")
       #sleeper

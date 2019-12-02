@@ -59,3 +59,31 @@ diff -ru admin-orig/runit-2.1.2/src/runit.c admin/runit-2.1.2/src/runit.c
    for (;;) sig_pause();
    /* not reached */
 Only in admin/runit-2.1.2/src: .runit.c.swp
+diff -ur runit-2.1.2-old/src/runit.c runit-2.1.2/src/runit.c
+--- runit-2.1.2-old/src/runit.c	2019-12-02 18:36:02.982346238 -0400
++++ runit-2.1.2/src/runit.c	2019-12-02 18:46:24.483615039 -0400
+@@ -66,6 +66,7 @@
+   sig_block(sig_hangup);
+   sig_block(sig_int);
+   sig_catch(sig_int, sig_int_handler);
++  sig_catch(sig_term, sig_int_handler);
+   sig_block(sig_pipe);
+   sig_block(sig_term);
+ 
+@@ -145,6 +146,7 @@
+       sig_unblock(sig_child);
+       sig_unblock(sig_cont);
+       sig_unblock(sig_int);
++      sig_unblock(sig_term);
+ #ifdef IOPAUSE_POLL
+       poll(&x, 1, 14000);
+ #else
+@@ -156,6 +158,7 @@
+       sig_block(sig_cont);
+       sig_block(sig_child);
+       sig_block(sig_int);
++      sig_block(sig_term);
+       
+       while (read(selfpipe[0], &ch, 1) == 1) {}
+       while ((child =wait_nohang(&wstat)) > 0)
+Only in runit-2.1.2-old/src: .runit.c.swp
