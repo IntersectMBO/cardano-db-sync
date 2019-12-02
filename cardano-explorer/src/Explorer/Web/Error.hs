@@ -6,6 +6,7 @@
 
 module Explorer.Web.Error
   ( ExplorerError (..)
+  , renderExplorerError
   ) where
 
 import           Data.Aeson (ToJSON (..), Value (..))
@@ -30,6 +31,13 @@ instance Buildable ExplorerError where
     case ee of
       Internal msg -> bprint ("Internal explorer error ("%stext%")") msg
       EELookupFail err -> bprint stext $ renderLookupFail err
+
+renderExplorerError :: ExplorerError -> Text
+renderExplorerError ee =
+  case ee of
+      Internal msg -> mconcat [ "Internal explorer error: ", msg ]
+      EELookupFail err -> renderLookupFail err
+
 
 instance ToJSON ExplorerError where
   toJSON ee =

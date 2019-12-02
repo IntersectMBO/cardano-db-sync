@@ -138,6 +138,41 @@ executable cardano-webapi-compare
                       , text
                       , text-ansi
 
+executable cardano-webapi-validate
+  default-language:    Haskell2010
+  main-is:             cardano-webapi-validate.hs
+  hs-source-dirs:      app
+
+  ghc-options:          -Wall
+                        -Werror
+                        -Wcompat
+                        -fwarn-redundant-constraints
+                        -fwarn-incomplete-patterns
+                        -fwarn-unused-imports
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+
+  other-modules:        Explorer.Web.Random
+                        Explorer.Web.Validate
+
+  build-depends:        base                            >= 4.12         && < 4.13
+                      , async
+                      , bytestring
+                      , cardano-explorer
+                      , cardano-explorer-db
+                      , cardano-ledger
+                      , esqueleto
+                      , http-conduit
+                      , monad-logger
+                      , optparse-applicative
+                      , persistent
+                      , persistent-postgresql
+                      , random
+                      , text
+                      , text-ansi
+                      , time
+                      , transformers
+
 executable cardano-mock-explorer
   default-language:    Haskell2010
   main-is:             mock.hs

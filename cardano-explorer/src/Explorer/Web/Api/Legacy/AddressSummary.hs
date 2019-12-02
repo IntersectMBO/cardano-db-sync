@@ -3,9 +3,12 @@
 
 module Explorer.Web.Api.Legacy.AddressSummary
   ( addressSummary
+
+  -- For testing.
+  , queryAddressSummary
   ) where
 
-import           Cardano.Chain.Common (isRedeemAddress)
+import           Cardano.Chain.Common (Address, isRedeemAddress)
 
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Except.Extra (hoistEither, runExceptT, newExceptT)
@@ -58,19 +61,21 @@ addressSummary
     :: SqlBackend -> CAddress
     -> Handler (Either ExplorerError CAddressSummary)
 addressSummary backend (CAddress addrTxt) =
-    runExceptT $ do
-      addr <- hoistEither $ decodeTextAddress addrTxt
-      newExceptT .
-        runQuery backend $ do
-          chainTip <- queryChainTip
-          if isRedeemAddress addr
-            then queryRedeemSummary chainTip addrTxt
-            else Right <$> queryAddressSummary chainTip addrTxt
+  runExceptT $ do
+    addr <- hoistEither $ decodeTextAddress addrTxt
+    newExceptT . runQuery backend $ queryAddressSummary addrTxt addr
 
 -- -------------------------------------------------------------------------------------------------
 
-queryAddressSummary :: MonadIO m => CChainTip -> Text -> ReaderT SqlBackend m CAddressSummary
-queryAddressSummary chainTip addr = do
+queryAddressSummary :: MonadIO m => Text -> Address -> ReaderT SqlBackend m (Either ExplorerError CAddressSummary)
+queryAddressSummary addrTxt addr = do
+  chainTip <- queryChainTip
+  if isRedeemAddress addr
+    then queryRedeemSummary chainTip addrTxt
+    else Right <$> queryNonRedeemSummary chainTip addrTxt
+
+queryNonRedeemSummary :: MonadIO m => CChainTip -> Text -> ReaderT SqlBackend m CAddressSummary
+queryNonRedeemSummary chainTip addr = do
     inrows <- select . from $ \ (blk `InnerJoin` tx `InnerJoin` txOut) -> do
                 on (tx ^. TxId ==. txOut ^. TxOutTxId)
                 on (blk ^. BlockId ==. tx ^. TxBlock)
@@ -138,7 +143,7 @@ queryTxInputs txids = do
             CTxAddressBrief
               { ctaAddress = CAddress addr
               , ctaAmount = mkCCoin $ fromIntegral coin
-              , ctaTxHash = genesisDistributionTxHash
+              , ctaTxHash = if True then genesisDistributionTxHash else CTxHash (CHash "queryTxInputs Genesis")
               , ctaTxIndex = 0
               }
           else
