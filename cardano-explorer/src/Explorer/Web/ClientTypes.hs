@@ -93,7 +93,8 @@ newtype CHash = CHash Text
   deriving (Show, Eq, Generic, Buildable, Hashable, NFData)
 
 -- | Client address. The address from Cardano
-newtype CAddress = CAddress Text
+newtype CAddress
+    = CAddress { unCAddress :: Text }
     deriving (Show, Eq, Generic, Buildable, Hashable, NFData)
 
 -- | Client transaction id
