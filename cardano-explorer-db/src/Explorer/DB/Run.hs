@@ -30,7 +30,7 @@ import qualified Data.Text.Lazy.Builder as LT
 
 import           Database.Persist.Postgresql (withPostgresqlConn, openSimpleConn)
 import           Database.PostgreSQL.Simple (connectPostgreSQL)
-import           Database.Persist.Sql (SqlBackend, runSqlConn)
+import           Database.Persist.Sql (SqlBackend, IsolationLevel (..), runSqlConnWithIsolation)
 
 import           Database.Esqueleto
 import           Database.Esqueleto.Internal.Sql
@@ -49,9 +49,9 @@ runDbHandleLogger logHandle dbAction = do
     pgconf <- readPGPassFileEnv
     runHandleLoggerT .
       withPostgresqlConn (toConnectionString pgconf) $ \backend ->
-        -- The 'runSqlConn' function starts a transaction, runs the 'dbAction'
+        -- The 'runSqlConnWithIsolation' function starts a transaction, runs the 'dbAction'
         -- and then commits the transaction.
-        runSqlConn dbAction backend
+        runSqlConnWithIsolation dbAction backend Serializable
   where
     runHandleLoggerT :: LoggingT m a -> m a
     runHandleLoggerT action =
@@ -68,7 +68,7 @@ runDbIohkLogging tracer dbAction = do
     pgconf <- readPGPassFileEnv
     (runIohkLogging tracer) .
       withPostgresqlConn (toConnectionString pgconf) $ \backend ->
-        runSqlConn dbAction backend
+        runSqlConnWithIsolation dbAction backend Serializable
 
 runIohkLogging :: Trace IO Text -> LoggingT m a -> m a
 runIohkLogging tracer action =
@@ -96,7 +96,7 @@ runDbNoLogging action = do
   pgconfig <- readPGPassFileEnv
   runNoLoggingT .
     withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
-      runSqlConn action backend
+      runSqlConnWithIsolation action backend Serializable
 
 -- | Run a DB action with stdout logging. Mainly for debugging.
 runDbStdoutLogging :: ReaderT SqlBackend (LoggingT IO) b -> IO b
@@ -104,7 +104,7 @@ runDbStdoutLogging action = do
   pgconfig <- readPGPassFileEnv
   runStdoutLoggingT .
     withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
-      runSqlConn action backend
+      runSqlConnWithIsolation action backend Serializable
 
 -- from Control.Monad.Logger, wasnt exported
 defaultOutput :: Handle

@@ -37,7 +37,7 @@ import           Data.Time.Clock (UTCTime)
 import           Data.Time.Clock.POSIX (POSIXTime, utcTimeToPOSIXSeconds)
 import           Data.Word (Word16, Word64)
 
-import           Database.Persist.Sql (SqlBackend, runSqlConn)
+import           Database.Persist.Sql (IsolationLevel (..), SqlBackend, runSqlConnWithIsolation)
 
 import           Explorer.DB (Block (..), TxId)
 
@@ -86,7 +86,7 @@ k = 2160
 
 runQuery :: MonadIO m => SqlBackend -> ReaderT SqlBackend IO a -> m a
 runQuery backend query =
-  liftIO $ runSqlConn query backend
+  liftIO $ runSqlConnWithIsolation query backend Serializable
 
 slotsPerEpoch :: Word64
 slotsPerEpoch = k * 10
