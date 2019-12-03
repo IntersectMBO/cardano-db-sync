@@ -4,6 +4,7 @@ module Explorer.Web.Validate
   ( runValidation
   ) where
 
+import           Control.Monad (when)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Logger (runNoLoggingT)
 
@@ -72,6 +73,8 @@ reportAddressSummary addrSum = do
               else green (textShow balance)
     , ""
     ]
+  when (unCCoin (caBalance addrSum) < 0) $
+    exitFailure
 
 handleLookupFail :: MonadIO m => Either LookupFail a -> m a
 handleLookupFail ela =
