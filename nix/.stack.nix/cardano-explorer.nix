@@ -127,11 +127,13 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             (hsPkgs."cardano-explorer-db-test" or (buildDepError "cardano-explorer-db-test"))
             (hsPkgs."containers" or (buildDepError "containers"))
             (hsPkgs."monad-logger" or (buildDepError "monad-logger"))
+            (hsPkgs."persistent" or (buildDepError "persistent"))
             (hsPkgs."persistent-postgresql" or (buildDepError "persistent-postgresql"))
             (hsPkgs."tasty" or (buildDepError "tasty"))
             (hsPkgs."tasty-hunit" or (buildDepError "tasty-hunit"))
             (hsPkgs."text" or (buildDepError "text"))
             (hsPkgs."transformers" or (buildDepError "transformers"))
+            (hsPkgs."unliftio-core" or (buildDepError "unliftio-core"))
             ];
           buildable = true;
           };
