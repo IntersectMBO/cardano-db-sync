@@ -109,6 +109,28 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             ];
           buildable = true;
           };
+        "cardano-webapi-validate" = {
+          depends = [
+            (hsPkgs."base" or (buildDepError "base"))
+            (hsPkgs."async" or (buildDepError "async"))
+            (hsPkgs."bytestring" or (buildDepError "bytestring"))
+            (hsPkgs."cardano-explorer" or (buildDepError "cardano-explorer"))
+            (hsPkgs."cardano-explorer-db" or (buildDepError "cardano-explorer-db"))
+            (hsPkgs."cardano-ledger" or (buildDepError "cardano-ledger"))
+            (hsPkgs."esqueleto" or (buildDepError "esqueleto"))
+            (hsPkgs."http-conduit" or (buildDepError "http-conduit"))
+            (hsPkgs."monad-logger" or (buildDepError "monad-logger"))
+            (hsPkgs."optparse-applicative" or (buildDepError "optparse-applicative"))
+            (hsPkgs."persistent" or (buildDepError "persistent"))
+            (hsPkgs."persistent-postgresql" or (buildDepError "persistent-postgresql"))
+            (hsPkgs."random" or (buildDepError "random"))
+            (hsPkgs."text" or (buildDepError "text"))
+            (hsPkgs."text-ansi" or (buildDepError "text-ansi"))
+            (hsPkgs."time" or (buildDepError "time"))
+            (hsPkgs."transformers" or (buildDepError "transformers"))
+            ];
+          buildable = true;
+          };
         "cardano-mock-explorer" = {
           depends = [
             (hsPkgs."base" or (buildDepError "base"))
