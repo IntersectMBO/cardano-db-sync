@@ -1,27 +1,34 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# OPTIONS_GHC -Wno-error=orphans #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Test.IO.Explorer.Web.Query where
 
-import           Test.Tasty (TestTree, testGroup)
-import           Test.Tasty.HUnit (testCase)
+import           Control.Monad.IO.Class (MonadIO, liftIO)
+import           Control.Monad.IO.Unlift (MonadUnliftIO)
+import           Control.Monad.Logger (LoggingT, runLoggingT, runStdoutLoggingT)
+import           Control.Monad.Trans.Reader (ReaderT, runReaderT)
 
-import           Explorer.DB
-import           Explorer.Web.Query
-import           Test.IO.Explorer.DB.Util (assertBool, dummyUTCTime, mkBlockHash, testSlotLeader)
-
-import           Control.Monad.IO.Class (liftIO, MonadIO)
-import           Control.Monad.Logger
-import           Control.Monad.Trans.Reader
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
 import           Data.Set (fromList, empty)
 import           Data.Text (Text)
 import           Data.Text.Encoding (decodeUtf8)
 import           Data.Word (Word16, Word64)
-import           Database.Persist.Postgresql
+import           Database.Persist.Sql (PersistValue, IsolationLevel (..), SqlBackend,
+                    runSqlConnWithIsolation)
+import           Database.Persist.Postgresql (rawExecute, withPostgresqlConn)
+
+import           Explorer.DB
+import           Explorer.Web.Query
+
+import           Test.IO.Explorer.DB.Util (assertBool, dummyUTCTime, mkBlockHash, testSlotLeader)
+
+import           Test.Tasty (TestTree, testGroup)
+import           Test.Tasty.HUnit (testCase)
+
 
 tests :: TestTree
 tests =
@@ -64,9 +71,10 @@ dropAndRemakeDbThenTest action = do
   print pgconfig
   loggingMode . withPostgresqlConn (toConnectionString pgconfig) $ action
 
+
 testEmptyUtxo :: IO ()
 testEmptyUtxo = do
-  dropAndRemakeDbThenTest $ \backend -> flip runSqlConn backend $ do
+  dropAndRemakeDbThenTest $ \backend -> runSqlAction backend $ do
     slid <- insertSlotLeader testSlotLeader
     bid0 <- insertBlock (blockZero slid)
     snapshot <- queryUtxoSnapshot bid0
@@ -76,19 +84,17 @@ testEmptyUtxo = do
 testCase1 :: IO ()
 testCase1 = do
   dropAndRemakeDbThenTest $ \backend -> do
-    let
-      g = flip runSqlConn backend
-    (slid, bid0) <- g $ do
+    (slid, bid0) <- runSqlAction backend $ do
       slid <- insertSlotLeader testSlotLeader
       bid0 <- insertBlock $ blockZero slid
       pure (slid, bid0)
 
-    snapshot00 <- g $ do
+    snapshot00 <- runSqlAction backend $ do
       snapshot00 <- fromList <$> queryUtxoSnapshot bid0
       assertBool "utxo must be empty when no outputs exist" (snapshot00 == empty)
       pure snapshot00
 
-    (bid1, expected1, out1, tx0, tx0id) <- g $ do
+    (bid1, expected1, out1, tx0, tx0id) <- runSqlAction backend $ do
       bid1 <- insertBlock $ mkBlock 1 slid bid0
       let tx0 = mkTx 0 bid1
       tx0id <- insertTx tx0
@@ -102,7 +108,7 @@ testCase1 = do
       mapM_ insertTxOut [ out0, out1 ]
       pure (bid1, expected1, out1, tx0, tx0id)
 
-    snapshot10 <- g $ do
+    snapshot10 <- runSqlAction backend $ do
       snapshot01 <- fromList <$> queryUtxoSnapshot bid0
       assertBool "snapshot at point 0 must not change when inserting new blocks" (snapshot00 == snapshot01)
       snapshot10 <- fromList <$> queryUtxoSnapshot bid1
@@ -112,7 +118,7 @@ testCase1 = do
       assertBool "snapshot at point 1 should be expected value" (snapshot10 == expected1)
       pure snapshot10
 
-    (bid2, tx1, out2, expected2) <- g $ do
+    (bid2, tx1, out2, expected2) <- runSqlAction backend $ do
       bid2 <- insertBlock $ mkBlock 2 slid bid1
       let tx1 = mkTx 1 bid2
       tx1id <- insertTx tx1
@@ -126,7 +132,7 @@ testCase1 = do
       _ <- insertTxOut out2
       pure (bid2, tx1, out2, expected2)
 
-    (snapshot20) <- g $ do
+    (snapshot20) <- runSqlAction backend $ do
       snapshot02 <- fromList <$> queryUtxoSnapshot bid0
       snapshot11 <- fromList <$> queryUtxoSnapshot bid1
       snapshot20 <- fromList <$> queryUtxoSnapshot bid2
@@ -135,7 +141,7 @@ testCase1 = do
       assertBool "snapshot at point 2 should be expected value" (snapshot20 == expected2)
       pure (snapshot20)
 
-    (bid3, expected3) <- g $ do
+    (bid3, expected3) <- runSqlAction backend $ do
       bid3 <- insertBlock $ mkBlock 3 slid bid2
       let tx2 = mkTx 2 bid3
       tx2id <- insertTx tx2
@@ -149,7 +155,7 @@ testCase1 = do
       _ <- insertTxOut out3
       pure (bid3, expected3)
 
-    g $ do
+    runSqlAction backend $ do
       snapshot03 <- fromList <$> queryUtxoSnapshot bid0
       snapshot12 <- fromList <$> queryUtxoSnapshot bid1
       snapshot21 <- fromList <$> queryUtxoSnapshot bid2
@@ -162,6 +168,10 @@ testCase1 = do
 deriving instance Show TxOut
 deriving instance Eq TxOut
 deriving instance Ord TxOut
+
+runSqlAction :: MonadUnliftIO m => SqlBackend -> ReaderT SqlBackend m a -> m a
+runSqlAction backend action =
+  runSqlConnWithIsolation action backend Serializable
 
 blockZero :: SlotLeaderId -> Block
 blockZero slid =
