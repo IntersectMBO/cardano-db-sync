@@ -392,7 +392,7 @@ let
 
   web-api = mkService "web-api" ''
     export PGPASSFILE=${eval.config.services.cardano-exporter.pgpass}
-    ${self.cardano-explorer}/bin/cardano-explorer
+    ${self.cardano-explorer-webapi}/bin/cardano-explorer-webapi
   '';
 
   wrapService = name:

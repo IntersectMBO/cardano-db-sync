@@ -144,6 +144,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           depends = [
             (hsPkgs."base" or (buildDepError "base"))
             (hsPkgs."bytestring" or (buildDepError "bytestring"))
+            (hsPkgs."cardano-explorer-webapi" or (buildDepError "cardano-explorer-webapi"))
             (hsPkgs."cardano-explorer-db" or (buildDepError "cardano-explorer-db"))
             (hsPkgs."cardano-explorer-db-test" or (buildDepError "cardano-explorer-db-test"))
             (hsPkgs."containers" or (buildDepError "containers"))
