@@ -2,7 +2,7 @@ cabal-version:          >= 1.10
 
 -- http://haskell.org/cabal/users-guide/
 
-name:                   cardano-explorer
+name:                   cardano-explorer-webapi
 version:                1.0.0
 synopsis:               A Block Explorer for the Cardano network
 description:
@@ -93,9 +93,9 @@ library
                       , transformers-except
                       , warp
 
-executable cardano-explorer
+executable cardano-explorer-webapi
   default-language:    Haskell2010
-  main-is:             cardano-explorer.hs
+  main-is:             cardano-explorer-webapi.hs
   hs-source-dirs:      app
 
   ghc-options:          -Wall
@@ -110,7 +110,7 @@ executable cardano-explorer
   -- other-modules:
 
   build-depends:        base                            >= 4.12         && < 4.13
-                      , cardano-explorer
+                      , cardano-explorer-webapi
                       , Cabal
 
 executable cardano-webapi-compare
@@ -131,7 +131,7 @@ executable cardano-webapi-compare
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , async
-                      , cardano-explorer
+                      , cardano-explorer-webapi
                       , Diff
                       , bytestring
                       , http-conduit
@@ -158,8 +158,8 @@ executable cardano-webapi-validate
   build-depends:        base                            >= 4.12         && < 4.13
                       , async
                       , bytestring
-                      , cardano-explorer
                       , cardano-explorer-db
+                      , cardano-explorer-webapi
                       , cardano-ledger
                       , esqueleto
                       , http-conduit
@@ -180,7 +180,7 @@ executable cardano-mock-explorer
   ghc-options:          -Wall
                         -Werror
   build-depends:        base                            >= 4.12         && < 4.13
-                      , cardano-explorer
+                      , cardano-explorer-webapi
 
 test-suite test
   default-language:     Haskell2010
@@ -201,7 +201,7 @@ test-suite test
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , bytestring
-                      , cardano-explorer
+                      , cardano-explorer-webapi
                       , cardano-explorer-db
                       , cardano-explorer-db-test
                       , containers

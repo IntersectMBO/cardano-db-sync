@@ -38,10 +38,10 @@ let
 
 in {
   inherit pkgs iohkLib src haskellPackages;
-  inherit (haskellPackages.cardano-explorer.identifier) version;
+  inherit (haskellPackages.cardano-explorer-webapi.identifier) version;
 
   # Grab the executable component of our package.
-  inherit (haskellPackages.cardano-explorer.components.exes) cardano-explorer;
+  inherit (haskellPackages.cardano-explorer-webapi.components.exes) cardano-explorer-webapi;
 
   cardano-sl-core = haskellPackages.cardano-explorer-db.components.library;
   cardano-explorer-node = haskellPackages.cardano-explorer-node.components.exes.cardano-explorer-node;
@@ -60,7 +60,7 @@ in {
     name = "iohk-skeleton-shell";
     # TODO: List all local packages in the project.
     packages = ps: with ps; [
-      cardano-explorer
+      cardano-explorer-webapi
     ];
     # These programs will be available inside the nix-shell.
     buildInputs =

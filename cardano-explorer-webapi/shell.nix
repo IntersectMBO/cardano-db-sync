@@ -1,8 +1,8 @@
 let
   self = import ../. {};
 in self.haskellPackages.shellFor {
-  name = "cardano-explorer";
-  packages = ps: [ ps.cardano-explorer ];
+  name = "cardano-explorer-webapi";
+  packages = ps: [ ps.cardano-explorer-webapi ];
   buildInputs = with self.pkgs.haskellPackages; [ hlint stylish-haskell ghcid ];
   shellHook = ''
     compare_api() {

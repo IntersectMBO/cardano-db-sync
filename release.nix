@@ -59,7 +59,7 @@ let
     collectTests jobs.native.tests ++
     collectTests jobs.native.benchmarks ++
     [
-      jobs.native.cardano-explorer.x86_64-linux
+      jobs.native.cardano-explorer-webapi.x86_64-linux
       jobs.native.cardano-explorer-db-tool.x86_64-linux
       jobs.native.cardano-explorer-node.x86_64-linux
       jobs.native.cardano-sl-core.x86_64-linux

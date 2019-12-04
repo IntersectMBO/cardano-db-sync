@@ -102,6 +102,10 @@ let
       socketPath = "/run/cardano-node/node-core-0.socket";
     };
 
+    services.cardano-explorer-webapi = {
+      enable = true;
+    };
+
     services.postgresql = {
       enable = true;
       authentication = lib.mkBefore ''
@@ -390,11 +394,6 @@ let
     kill -cont 1
   '';
 
-  web-api = mkService "web-api" ''
-    export PGPASSFILE=${eval.config.services.cardano-exporter.pgpass}
-    ${self.cardano-explorer}/bin/cardano-explorer
-  '';
-
   wrapService = name:
     mkService name ''
       exec ${eval.config.systemd.services.${name}.runner}
@@ -410,12 +409,12 @@ let
       #(wrapService "prometheus-blackbox-exporter")
       #(wrapService "prometheus-node-exporter")
       #sleeper
-      web-api
       (wrapService "postgresql")
       (wrapService "prometheus")
       (wrapService "nginx")
       (wrapService "grafana")
       (wrapService "cardano-explorer-node")
+      (wrapService "cardano-explorer-webapi")
       (wrapService "cardano-node")
       (wrapService "prometheus-postgres-exporter")
     ] ++ (lib.optional (builtins.pathExists ./secrets.nix)
