@@ -57,7 +57,7 @@ let
     modules = [
       # Add source filtering to local packages
       {
-        packages.cardano-explorer.src = src + "/cardano-explorer";
+        packages.cardano-explorer-webapi.src = src + "/cardano-explorer-webapi";
         # packages.another-package = src + /another-package;
         packages.ekg.components.library.enableSeparateDataOutput = true;
       }
@@ -69,7 +69,7 @@ let
             build-tools = [ pkgs.postgresql ];
             inherit preCheck;
           };
-          cardano-explorer.components.tests.test = {
+          cardano-explorer-webapi.components.tests.test = {
             build-tools = [ pkgs.postgresql ];
             inherit preCheck;
           };

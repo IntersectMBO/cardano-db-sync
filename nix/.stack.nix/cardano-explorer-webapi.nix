@@ -42,7 +42,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     flags = {};
     package = {
       specVersion = "1.10";
-      identifier = { name = "cardano-explorer"; version = "1.0.0"; };
+      identifier = { name = "cardano-explorer-webapi"; version = "1.0.0"; };
       license = "Apache-2.0";
       copyright = "(c) 2019 IOHK";
       maintainer = "operations@iohk.io";
@@ -88,10 +88,10 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
         buildable = true;
         };
       exes = {
-        "cardano-explorer" = {
+        "cardano-explorer-webapi" = {
           depends = [
             (hsPkgs."base" or (buildDepError "base"))
-            (hsPkgs."cardano-explorer" or (buildDepError "cardano-explorer"))
+            (hsPkgs."cardano-explorer-webapi" or (buildDepError "cardano-explorer-webapi"))
             (hsPkgs."Cabal" or (buildDepError "Cabal"))
             ];
           buildable = true;
@@ -100,7 +100,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           depends = [
             (hsPkgs."base" or (buildDepError "base"))
             (hsPkgs."async" or (buildDepError "async"))
-            (hsPkgs."cardano-explorer" or (buildDepError "cardano-explorer"))
+            (hsPkgs."cardano-explorer-webapi" or (buildDepError "cardano-explorer-webapi"))
             (hsPkgs."Diff" or (buildDepError "Diff"))
             (hsPkgs."bytestring" or (buildDepError "bytestring"))
             (hsPkgs."http-conduit" or (buildDepError "http-conduit"))
@@ -114,8 +114,8 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             (hsPkgs."base" or (buildDepError "base"))
             (hsPkgs."async" or (buildDepError "async"))
             (hsPkgs."bytestring" or (buildDepError "bytestring"))
-            (hsPkgs."cardano-explorer" or (buildDepError "cardano-explorer"))
             (hsPkgs."cardano-explorer-db" or (buildDepError "cardano-explorer-db"))
+            (hsPkgs."cardano-explorer-webapi" or (buildDepError "cardano-explorer-webapi"))
             (hsPkgs."cardano-ledger" or (buildDepError "cardano-ledger"))
             (hsPkgs."esqueleto" or (buildDepError "esqueleto"))
             (hsPkgs."http-conduit" or (buildDepError "http-conduit"))
@@ -134,7 +134,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
         "cardano-mock-explorer" = {
           depends = [
             (hsPkgs."base" or (buildDepError "base"))
-            (hsPkgs."cardano-explorer" or (buildDepError "cardano-explorer"))
+            (hsPkgs."cardano-explorer-webapi" or (buildDepError "cardano-explorer-webapi"))
             ];
           buildable = true;
           };
@@ -144,7 +144,6 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           depends = [
             (hsPkgs."base" or (buildDepError "base"))
             (hsPkgs."bytestring" or (buildDepError "bytestring"))
-            (hsPkgs."cardano-explorer" or (buildDepError "cardano-explorer"))
             (hsPkgs."cardano-explorer-db" or (buildDepError "cardano-explorer-db"))
             (hsPkgs."cardano-explorer-db-test" or (buildDepError "cardano-explorer-db-test"))
             (hsPkgs."containers" or (buildDepError "containers"))
@@ -161,4 +160,4 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           };
         };
       };
-    } // rec { src = (pkgs.lib).mkDefault ../.././cardano-explorer; }
+    } // rec { src = (pkgs.lib).mkDefault ../.././cardano-explorer-webapi; }
