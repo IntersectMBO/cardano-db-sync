@@ -61,7 +61,7 @@ in {
         };
       };
     };
-    services.cardano-explorer-api = {
+    services.cardano-explorer-webapi = {
       enable = lib.mkEnableOption "enable the cardano-explorer web api";
       script = lib.mkOption {
         internal = true;
@@ -151,12 +151,12 @@ in {
         '';
       };
     })
-    (lib.mkIf config.services.cardano-explorer-api.enable {
-      services.cardano-explorer-api.script = pkgs.writeShellScript "cardano-explorer-api" ''
+    (lib.mkIf config.services.cardano-explorer-webapi.enable {
+      services.cardano-explorer-webapi.script = pkgs.writeShellScript "cardano-explorer-webapi" ''
         export PGPASSFILE=${config.services.cardano-exporter.pgpass}
-        ${self.cardano-explorer}/bin/cardano-explorer
+        ${self.cardano-explorer-webapi}/bin/cardano-explorer-webapi
       '';
-      systemd.services.cardano-explorer = {
+      systemd.services.cardano-explorer-webapi = {
         wantedBy = [ "multi-user.target" ];
         requires = [ "postgresql.service" ];
         preStart = ''
@@ -167,7 +167,7 @@ in {
           done
         '';
         serviceConfig = {
-          ExecStart = config.services.cardano-explorer-api.script;
+          ExecStart = config.services.cardano-explorer-webapi.script;
           User = "cexplorer";
         };
       };
