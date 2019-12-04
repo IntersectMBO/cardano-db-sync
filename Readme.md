@@ -24,7 +24,7 @@ The database schema is highly normalised which helps prevent data inconsistencie
 with the use of foreign keys from one table to another). More user friendly database queries can be
 implemented using [Postgres Views][PostgresView] to implement joins between tables.
 
-The `cardano-explorer` is a client than serves data from the PostgreSQL database as JSON via a
+The `cardano-explorer-webapi` is a client than serves data from the PostgreSQL database as JSON via a
 HTTP REST API.
 
 
