@@ -1,0 +1,108 @@
+cabal-version:          >= 1.10
+
+-- http://haskell.org/cabal/users-guide/
+
+name:                   cardano-tx-submit
+version:                1.0.0
+synopsis:               A web server that allows transactions to be POSTed to the cardano chain
+description:
+homepage:               https://github.com/input-output-hk/cardano-explorer
+bug-reports:            https://github.com/input-output-hk/cardano-explorer/issues
+license:                Apache-2.0
+license-file:           LICENSE
+author:                 IOHK Engineering Team
+maintainer:             operations@iohk.io
+copyright:              (c) 2019 IOHK
+category:               Language
+build-type:             Simple
+extra-source-files:     CHANGELOG.md
+
+library
+  default-language:     Haskell2010
+  hs-source-dirs:       src
+  ghc-options:          -Wall
+                        -Werror
+                        -Wcompat
+                        -fwarn-redundant-constraints
+                        -fwarn-incomplete-patterns
+                        -fwarn-unused-imports
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+                        -Weverything
+                        -Wno-safe
+                        -Wno-unsafe
+                        -Wno-implicit-prelude
+                        -Wno-all-missed-specialisations
+                        -Wno-missing-import-lists
+
+  exposed-modules:      Cardano.TxSubmit
+
+  other-modules:        Cardano.TxSubmit.Node
+                      , Cardano.TxSubmit.Tx
+                      , Cardano.TxSubmit.Web
+
+  build-depends:        base                            >= 4.12         && < 4.13
+                      , QuickCheck
+                      , aeson
+                      , base16-bytestring
+                      , bytestring
+                      , cardano-crypto-class
+                      , cardano-explorer-db
+                      , cardano-ledger
+                      , containers
+                      , deepseq
+                      , esqueleto
+                      , extra
+                      , formatting
+                      , generics-sop
+                      , hashable
+                      , memory
+                      , monad-logger
+                      , mtl
+                      , persistent
+                      , persistent-postgresql
+                      , servant
+                      , servant-server
+                      , text
+                      , time
+                      , transformers
+                      , transformers-except
+                      , warp
+
+executable cardano-tx-submit-webapi
+  default-language:    Haskell2010
+  main-is:             cardano-tx-submit-webapi.hs
+  hs-source-dirs:      app
+
+  ghc-options:          -Wall
+                        -Werror
+                        -Wcompat
+                        -fwarn-redundant-constraints
+                        -fwarn-incomplete-patterns
+                        -fwarn-unused-imports
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+
+  -- other-modules:
+
+  build-depends:        base                            >= 4.12         && < 4.13
+                      , cardano-tx-submit
+
+test-suite test
+  default-language:     Haskell2010
+  type:                 exitcode-stdio-1.0
+  main-is:              test.hs
+  hs-source-dirs:       test
+
+  -- other-modules:        Test.IO.Explorer.Web.Query
+
+  ghc-options:          -Wall
+                        -Werror
+                        -Wcompat
+                        -fwarn-redundant-constraints
+                        -fwarn-incomplete-patterns
+                        -fwarn-unused-imports
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+
+  build-depends:        base                            >= 4.12         && < 4.13

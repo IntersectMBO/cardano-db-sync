@@ -7,11 +7,13 @@ packages:
   - cardano-explorer-db/test
   - cardano-explorer-node
   - cardano-explorer-webapi
+  - cardano-tx-submit
 
 ghc-options:
   cardano-explorer-db:          -Wall -Werror -fwarn-redundant-constraints
   cardano-explorer-node:        -Wall -Werror -fwarn-redundant-constraints
   cardano-explorer-webapi:      -Wall -Werror -fwarn-redundant-constraints
+  cardano-tx-submit:            -Wall -Werror -fwarn-redundant-constraints
 
 extra-deps:
   - binary-0.8.7.0

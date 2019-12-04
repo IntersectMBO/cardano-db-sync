@@ -3,6 +3,7 @@ packages:
   cardano-explorer-db/test
   cardano-explorer-node
   cardano-explorer-webapi
+  cardano-tx-submit
 
 constraints:
   brick >= 0.47 && < 0.50
@@ -14,6 +15,9 @@ package cardano-explorer-node
   ghc-options: -Wall -Werror -fwarn-redundant-constraints
 
 package cardano-explorer-webapi
+  ghc-options: -Wall -Werror -fwarn-redundant-constraints
+
+package cardano-tx-submit
   ghc-options: -Wall -Werror -fwarn-redundant-constraints
 
 package cardano-binary
