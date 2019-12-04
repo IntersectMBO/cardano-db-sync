@@ -1,6 +1,6 @@
 status = [
-  "buildkite/cardano-explorer",
-  "ci/hydra:Cardano:cardano-explorer:required",
+  "buildkite/cardano-explorer-webapi",
+  "ci/hydra:Cardano:cardano-explorer-webapi:required",
 ]
 timeout_sec = 7200
 required_approvals = 1
