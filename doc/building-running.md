@@ -50,6 +50,6 @@ PGPASSFILE=config/pgpass explorer-node/bin/cardano-explorer-node \
 ### Set up and run the explorer webapi
 In the same `cardano-explorer` directory but a new terminal:
 ```
-nix-build -A cardano-explorer -o explorer-webapi
-PGPASSFILE=config/pgpass ./explorer-webapi/bin/cardano-explorer
+nix-build -A cardano-explorer-webapi -o explorer-webapi
+PGPASSFILE=config/pgpass ./explorer-webapi/bin/cardano-explorer-webapi
 ```
