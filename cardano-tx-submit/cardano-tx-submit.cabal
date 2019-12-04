@@ -39,6 +39,7 @@ library
 
   other-modules:        Cardano.TxSubmit.Node
                       , Cardano.TxSubmit.Tx
+                      , Cardano.TxSubmit.Types
                       , Cardano.TxSubmit.Web
 
   build-depends:        base                            >= 4.12         && < 4.13
