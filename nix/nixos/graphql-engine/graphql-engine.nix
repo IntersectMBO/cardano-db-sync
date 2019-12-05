@@ -2,7 +2,7 @@
 , asn1-types, async, attoparsec, attoparsec-iso8601, auto-update
 , base, base64-bytestring, byteorder, bytestring, case-insensitive
 , ci-info, containers, cryptonite, data-has, ekg-core, ekg-json
-, fast-logger, fetchgit, file-embed, filepath, graphql-parser
+, fast-logger, fetchFromGitHub, file-embed, filepath, graphql-parser
 , hashable, hspec, http-client, http-client-tls, http-types
 , insert-ordered-containers, jose, lens, list-t, mime-types
 , monad-control, monad-time, monad-validate, mtl, mustache, network
@@ -19,11 +19,11 @@
 mkDerivation {
   pname = "graphql-engine";
   version = "1.0.0";
-  src = fetchgit {
-    url = "https://github.com/hasura/graphql-engine";
-    sha256 = "0kxgp1fgg0982r79qla6vgxy42clby6cz9q5v443h6zf6ci4wv47";
-    rev = "7664f1a528eda8c63f7f9c3e57202c8613a22935";
-    fetchSubmodules = true;
+  src = fetchFromGitHub {
+    owner = "hasura";
+    repo = "graphql-engine";
+    sha256 = "1g4xj9yx7i6nn5w23n0b0g3xsmgczza8rpggkcgs47v7wkp0ny6a";
+    rev = "e43be51dc6a57242f12816ce677733c9e8569909";
   };
   postUnpack = "sourceRoot+=/server; echo source root reset to $sourceRoot";
   isLibrary = true;
