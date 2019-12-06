@@ -30,7 +30,6 @@ module Explorer.Web.ClientTypes
        , CNetwork (..)
        , CAddressBalance (..)
        , CTxSummary (..)
-       , CBlockRange (..)
        , CGenesisSummary (..)
        , CGenesisAddressInfo (..)
        , CAddressesFilter (..)
@@ -150,11 +149,6 @@ data CTxEntry = CTxEntry
     , cteAmount     :: !CCoin
     } deriving (Show, Generic)
 
-
-data CBlockRange = CBlockRange
-    { cbrBlocks       :: [CBlockSummary]
-    , cbrTransactions :: [CTxSummary]
-    } deriving (Show, Generic)
 
 -- | Data displayed on block summary page
 data CBlockSummary = CBlockSummary
@@ -332,7 +326,6 @@ deriveToJSON defaultOptions ''CAddressType
 deriveToJSON defaultOptions ''CAddressSummary
 deriveToJSON defaultOptions ''CBlockSummary
 deriveToJSON defaultOptions ''CNetworkAddress
-deriveToJSON defaultOptions ''CBlockRange
 deriveToJSON defaultOptions ''CChainTip
 deriveToJSON defaultOptions ''CTxSummary
 deriveToJSON defaultOptions ''CTxAddressBrief

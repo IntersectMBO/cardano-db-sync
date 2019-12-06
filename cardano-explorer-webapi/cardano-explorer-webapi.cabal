@@ -40,8 +40,6 @@ library
                       , Explorer.Web.ClientTypes
                       , Explorer.Web.Error
                       , Explorer.Web.Api.Legacy
-                      , Explorer.Web.Api.V1
-                      , Explorer.Web.Api.V1.Types
                       , Explorer.Web.Api.HttpBridge
                       , Explorer.Web.Api.HttpBridge.AddressBalance
                       , Explorer.Web.Query
@@ -62,7 +60,7 @@ library
                       , Explorer.Web.Api.Legacy.TxsSummary
                       , Explorer.Web.Api.Legacy.Types
                       , Explorer.Web.Api.Legacy.Util
-                      , Explorer.Web.TestServer
+
   -- other-modules:
 
   build-depends:        base                            >= 4.12         && < 4.13
@@ -172,44 +170,3 @@ executable cardano-webapi-validate
                       , text-ansi
                       , time
                       , transformers
-
-executable cardano-mock-explorer
-  default-language:    Haskell2010
-  main-is:             mock.hs
-  hs-source-dirs:      app
-  ghc-options:          -Wall
-                        -Werror
-  build-depends:        base                            >= 4.12         && < 4.13
-                      , cardano-explorer-webapi
-
-test-suite test
-  default-language:     Haskell2010
-  type:                 exitcode-stdio-1.0
-  main-is:              test.hs
-  hs-source-dirs:       test
-
-  other-modules:        Test.IO.Explorer.Web.Query
-
-  ghc-options:          -Wall
-                        -Werror
-                        -Wcompat
-                        -fwarn-redundant-constraints
-                        -fwarn-incomplete-patterns
-                        -fwarn-unused-imports
-                        -Wincomplete-record-updates
-                        -Wincomplete-uni-patterns
-
-  build-depends:        base                            >= 4.12         && < 4.13
-                      , bytestring
-                      , cardano-explorer-webapi
-                      , cardano-explorer-db
-                      , cardano-explorer-db-test
-                      , containers
-                      , monad-logger
-                      , persistent
-                      , persistent-postgresql
-                      , tasty
-                      , tasty-hunit
-                      , text
-                      , transformers
-                      , unliftio-core
