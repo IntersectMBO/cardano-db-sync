@@ -69,10 +69,6 @@ let
             build-tools = [ pkgs.postgresql ];
             inherit preCheck;
           };
-          cardano-explorer-webapi.components.tests.test = {
-            build-tools = [ pkgs.postgresql ];
-            inherit preCheck;
-          };
         };
       }
 

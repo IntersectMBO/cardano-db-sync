@@ -6,8 +6,6 @@ module Explorer.Web.Query
   , queryBlockSummary
   , queryChainTip
   , queryNextBlock
-  , queryUtxoSnapshot
-  , queryBlockIdFromHeight
   ) where
 
 import           Control.Monad.IO.Class (MonadIO)
@@ -18,13 +16,12 @@ import           Data.Maybe (listToMaybe)
 import           Data.Time.Clock.POSIX (POSIXTime)
 import           Data.Word (Word64)
 
-import           Database.Esqueleto (InnerJoin (..), LeftOuterJoin (..), Value (..), ValueList,
-                    SqlExpr, (^.), (==.), (&&.), (>.), (||.), (<=.),
-                    desc, from, in_, isNothing, limit, on, orderBy, select, subList_select, sum_,
+import           Database.Esqueleto (InnerJoin (..), Value (..), (^.), (==.),
+                    desc, from, in_, limit, on, orderBy, select, subList_select, sum_,
                     unValue, val, where_)
 import           Database.Persist.Sql (Entity (..), SqlBackend)
 
-import           Explorer.DB (Ada, Block, BlockId, EntityField (..), TxId, TxOut,
+import           Explorer.DB (Ada, Block, BlockId, EntityField (..),
                     blockPrevious, blockSlotNo, isJust, querySlotPosixTime,
                     querySelectCount, unValueSumAda)
 
@@ -121,38 +118,3 @@ queryTotalOutputCoinInBlock blockid = do
     subQuery = subList_select . from $ \ tx -> do
         where_ (tx ^. TxBlock ==. val blockid)
         pure $ tx ^. TxId
-
-queryUtxoSnapshot :: MonadIO m => BlockId -> ReaderT SqlBackend m [(TxOut, ByteString)]
-queryUtxoSnapshot blkid = do
-    -- tx1 refers to the tx of the input spending this output (if it is ever spent)
-    -- tx2 refers to the tx of the output
-    outputs <- select . from $ \(txout `LeftOuterJoin` txin `LeftOuterJoin` tx1 `LeftOuterJoin` blk `LeftOuterJoin` tx2) -> do
-      on $ txout ^. TxOutTxId ==. tx2 ^. TxId
-      on $ tx1 ^. TxBlock ==. blk ^. BlockId
-      on $ txin ^. TxInTxInId ==. tx1 ^. TxId
-      on $ (txout ^. TxOutTxId ==. txin ^. TxInTxOutId) &&. (txout ^. TxOutIndex ==. txin ^. TxInTxOutIndex)
-      where_ $ (txout ^. TxOutTxId `in_` txLessEqual) &&. (isNothing (blk ^. BlockBlockNo) ||. (blk ^. BlockId >. val blkid))
-      pure (txout, tx2 ^. TxHash)
-    pure $ map convertResult outputs
-  where
-    -- every block made before or at the snapshot time
-    blockLessEqual :: SqlExpr (ValueList BlockId)
-    blockLessEqual =
-      subList_select . from $ \blk -> do
-        where_ $ blk ^. BlockId <=. val blkid
-        pure $ blk ^. BlockId
-    -- every tx made before or at the snapshot time
-    txLessEqual :: SqlExpr (ValueList TxId)
-    txLessEqual =
-      subList_select . from $ \tx -> do
-        where_ $ tx ^. TxBlock `in_` blockLessEqual
-        pure $ tx ^. TxId
-    convertResult :: (Entity TxOut, Value ByteString) -> (TxOut, ByteString)
-    convertResult (out, hash) = (entityVal out, unValue hash)
-
-queryBlockIdFromHeight :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe BlockId)
-queryBlockIdFromHeight height = do
-  res <- select . from $ \blk -> do
-    where_ (blk ^. BlockBlockNo ==. val (Just height))
-    pure $ blk ^. BlockId
-  pure $ fmap unValue $ listToMaybe res

@@ -3,17 +3,13 @@
 
 module Explorer.Web.Server (runServer) where
 
-import           Explorer.DB (Ada, Block (..), TxOut (..),
-                    queryLatestBlockId, queryTotalSupply,
-                    readPGPassFileEnv, toConnectionString)
-import           Explorer.Web.Api            (ExplorerApi, explorerApi)
-import           Explorer.Web.ClientTypes (CAddress (..), CBlockEntry (..), CBlockRange (..),
-                    CBlockSummary (..), CHash (..), CTxHash, CTxHash (..), CUtxo (..),
-                    mkCCoin, adaToCCoin)
+import           Explorer.DB (Ada, Block (..),
+                    queryTotalSupply, readPGPassFileEnv, toConnectionString)
+import           Explorer.Web.Api (ExplorerApi, explorerApi)
+import           Explorer.Web.ClientTypes (CBlockEntry (..),  CBlockSummary (..), CHash (..),
+                    adaToCCoin)
 import           Explorer.Web.Error (ExplorerError (..))
-import           Explorer.Web.Query (queryBlockSummary, queryBlockIdFromHeight, queryUtxoSnapshot)
-import           Explorer.Web.Api.V1 (ExplorerApi1Record (..), V1Utxo (..))
-import qualified Explorer.Web.Api.V1 as API1
+import           Explorer.Web.Query (queryBlockSummary)
 import           Explorer.Web.Api.HttpBridge (HttpBridgeApi (..))
 import           Explorer.Web.Api.HttpBridge.AddressBalance
 import           Explorer.Web.Api.Legacy (ExplorerApiRecord (..))
@@ -33,14 +29,14 @@ import           Explorer.Web.Api.Legacy.TxLast
 import           Explorer.Web.Api.Legacy.TxsSummary
 import           Explorer.Web.Api.Legacy.Util
 
-import           Control.Monad.IO.Class      (liftIO)
-import           Control.Monad.Logger        (runStdoutLoggingT)
+import           Control.Monad.IO.Class (liftIO)
+import           Control.Monad.Logger (runStdoutLoggingT)
 import           Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Base16 as Base16
 import           Data.Text (Text)
 import qualified Data.Text.Encoding as Text
-import           Data.Word                   (Word64)
+
 import           Network.Wai.Handler.Warp    (run)
 import           Servant                     (Application, Handler, Server, serve)
 import           Servant.API.Generic         (toServant)
@@ -65,12 +61,10 @@ explorerApp backend = serve explorerApi (explorerHandlers backend)
 explorerHandlers :: SqlBackend -> Server ExplorerApi
 explorerHandlers backend =
     toServant oldHandlers
-      :<|> toServant newHandlers
       :<|> toServant httpBridgeHandlers
   where
     oldHandlers = ExplorerApiRecord
       { _totalAda           = totalAda backend
-      , _dumpBlockRange     = testDumpBlockRange backend
       , _blocksPages        = blocksPages backend
       , _blocksPagesTotal   = blockPagesTotal backend
       , _blocksSummary      = blocksSummary backend
@@ -78,7 +72,6 @@ explorerHandlers backend =
       , _txsLast            = getLastTxs backend
       , _txsSummary         = txsSummary backend
       , _addressSummary     = addressSummary backend
-      , _addressUtxoBulk    = testAddressUtxoBulk backend
       , _epochPages         = epochPage backend
       , _epochSlots         = epochSlot backend
       , _genesisSummary     = genesisSummary backend
@@ -88,11 +81,6 @@ explorerHandlers backend =
       , _blockAddress       = blockAddress backend
       } :: ExplorerApiRecord (AsServerT Handler)
 
-    newHandlers = ExplorerApi1Record
-      { _utxoHeight         = getUtxoSnapshotHeight backend
-      , _utxoHash           = getUtxoSnapshotHash
-      } :: ExplorerApi1Record (AsServerT Handler)
-
     httpBridgeHandlers = HttpBridgeApi
       { _addressBalance        = addressBalance backend
       } :: HttpBridgeApi (AsServerT Handler)
@@ -100,25 +88,9 @@ explorerHandlers backend =
 --------------------------------------------------------------------------------
 -- sample data --
 --------------------------------------------------------------------------------
-cTxId :: CTxHash
-cTxId = CTxHash $ CHash "not-implemented-yet"
 
 totalAda :: SqlBackend -> Handler (Either ExplorerError Ada)
 totalAda backend = Right <$> runQuery backend queryTotalSupply
-
-testDumpBlockRange :: SqlBackend -> CHash -> CHash -> Handler (Either ExplorerError CBlockRange)
-testDumpBlockRange backend start _ = do
-  edummyBlock <- blocksSummary backend start
-  edummyTx <- txsSummary backend cTxId
-  case (edummyBlock,edummyTx) of
-    (Right dummyBlock, Right dummyTx) ->
-      pure $ Right $ CBlockRange
-        { cbrBlocks = [ dummyBlock ]
-        , cbrTransactions = [ dummyTx ]
-        }
-    (Left err, _) -> pure $ Left err
-    (_, Left err) -> pure $ Left err
-
 
 hexToBytestring :: Text -> ExceptT ExplorerError Handler ByteString
 hexToBytestring text = do
@@ -158,37 +130,3 @@ blocksSummary backend (CHash blkHashTxt) = runExceptT $ do
             }
         Nothing -> throwE $ Internal "slot missing"
     _ -> throwE $ Internal "No block found"
-
-testAddressUtxoBulk
-    :: SqlBackend -> [CAddress]
-    -> Handler (Either ExplorerError [CUtxo])
-testAddressUtxoBulk _backend _  =
-    pure $ Right
-            [CUtxo (CTxHash $ CHash "not-implemented-yet") 0 (CAddress "not-implemented-yet") (mkCCoin 3)
-            ]
-
-getUtxoSnapshotHeight :: SqlBackend -> Maybe Word64 -> Handler (Either ExplorerError [V1Utxo])
-getUtxoSnapshotHeight backend mHeight = runExceptT $ do
-  liftIO $ putStrLn "getting snapshot by height"
-  outputs <- ExceptT <$> runQuery backend $ do
-    mBlkid <- case mHeight of
-      Just height -> queryBlockIdFromHeight height
-      Nothing -> queryLatestBlockId
-    case mBlkid of
-      Just blkid -> Right <$> queryUtxoSnapshot blkid
-      Nothing -> pure $ Left $ Internal "block not found at given height"
-  let
-    convertRow :: (TxOut, ByteString) -> V1Utxo
-    convertRow (txout, txhash) = V1Utxo
-      { API1.cuId = (CTxHash . CHash . Text.decodeUtf8) txhash
-      , API1.cuOutIndex = txOutIndex txout
-      , API1.cuAddress = (CAddress . txOutAddress) txout
-      , API1.cuCoins = (mkCCoin . fromIntegral . txOutValue) txout
-      }
-  pure $ map convertRow outputs
-
-getUtxoSnapshotHash :: Maybe CHash -> Handler (Either ExplorerError [V1Utxo])
-getUtxoSnapshotHash _ = runExceptT $ do
-  liftIO $ putStrLn "getting snapshot by hash"
-  -- queryBlockId
-  pure []

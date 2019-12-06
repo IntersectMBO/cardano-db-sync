@@ -15,24 +15,24 @@ module Explorer.Web.Api.Legacy
        , PageNumber
        ) where
 
-import           Data.Word                (Word16, Word64)
-import           Data.Int (Int64)
-import           GHC.Generics             (Generic)
-import           Servant.API              ((:>), Capture, FromHttpApiData, Get,
-                                           JSON, Post, QueryParam, ReqBody,
-                                           Summary)
-import           Servant.API.Generic      ((:-))
+import           Cardano.Chain.Slotting (EpochNumber (EpochNumber))
 
-import           Explorer.DB              (Ada)
-import           Cardano.Chain.Slotting   (EpochNumber (EpochNumber))
-import           Explorer.Web.ClientTypes (CAddress, CAddressSummary,
-                                           CAddressesFilter, CBlockEntry,
-                                           CBlockRange, CBlockSummary,
-                                           CGenesisAddressInfo, CGenesisSummary,
-                                           CHash, CTxBrief, CTxEntry, CTxHash,
-                                           CTxSummary, CUtxo)
-import           Explorer.Web.Error       (ExplorerError)
+import           Data.Word (Word16, Word64)
+import           Data.Int (Int64)
+
+import           Explorer.DB (Ada)
+
 import           Explorer.Web.Api.Legacy.Types (PageNo (..), PageSize (..))
+import           Explorer.Web.ClientTypes (CAddress, CAddressSummary, CAddressesFilter, CBlockEntry,
+                    CBlockSummary, CGenesisAddressInfo, CGenesisSummary,
+                    CHash, CTxBrief, CTxEntry, CTxHash, CTxSummary)
+import           Explorer.Web.Error (ExplorerError)
+
+import           GHC.Generics (Generic)
+
+import           Servant.API (Capture, FromHttpApiData, Get, JSON, QueryParam, Summary, (:>))
+import           Servant.API.Generic ((:-))
+
 
 type PageNumber = Word
 
@@ -57,14 +57,6 @@ data ExplorerApiRecord route = ExplorerApiRecord
         :> QueryParam "page" PageNo
         :> QueryParam "pageSize" PageSize
         :> ExRes Get (PageNumber, [CBlockEntry])
-
-  , _dumpBlockRange :: route
-        :- Summary "Dump a range of blocks, including all tx in those blocks"
-        :> "blocks"
-        :> "range"
-        :> Capture "start" CHash
-        :> Capture "stop" CHash
-        :> ExRes Get CBlockRange
 
   , _blocksPagesTotal :: route
         :- Summary "Get the list of total pages."
@@ -109,14 +101,6 @@ data ExplorerApiRecord route = ExplorerApiRecord
         :> "summary"
         :> Capture "address" CAddress
         :> ExRes Get CAddressSummary
-
-  , _addressUtxoBulk :: route
-        :- Summary "Get summary information about multiple addresses."
-        :> "bulk"
-        :> "addresses"
-        :> "utxo"
-        :> ReqBody '[JSON] [CAddress]
-        :> ExRes Post [CUtxo]
 
   , _epochPages :: route
         :- Summary "Get epoch pages, all the paged slots in the epoch."
