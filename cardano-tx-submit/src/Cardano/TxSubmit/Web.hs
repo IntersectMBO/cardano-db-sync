@@ -2,6 +2,7 @@ module Cardano.TxSubmit.Web
   ( runTxSubmitServer
   ) where
 
+import           Cardano.TxSubmit.Tx
 import           Cardano.TxSubmit.Types
 
 import           Data.Proxy (Proxy (..))
@@ -14,19 +15,19 @@ import qualified Servant as Servant
 import           Servant.API.Generic (toServant)
 import           Servant.Server.Generic (AsServerT)
 
-runTxSubmitServer :: TxSubmitPort -> IO ()
-runTxSubmitServer (TxSubmitPort port) = do
+runTxSubmitServer :: TxSubmitVar (Maybe String) -> TxSubmitPort -> IO ()
+runTxSubmitServer tsv (TxSubmitPort port) = do
   putStrLn $ "Running full server on http://localhost:" ++ show port ++ "/"
-  Warp.run port txSubmitApp
+  Warp.run port (txSubmitApp tsv)
 
-txSubmitApp :: Application
-txSubmitApp =
+txSubmitApp :: TxSubmitVar (Maybe String) -> Application
+txSubmitApp tsv =
     Servant.serve (Proxy :: Proxy TxSubmitApi) (toServant handlers)
   where
     handlers :: TxSubmitApiRecord (AsServerT Handler)
     handlers = TxSubmitApiRecord
-      { _txSubmitPost = txSubmitPost
+      { _txSubmitPost = txSubmitPost tsv
       }
 
-txSubmitPost :: Handler (Either TxSubmitError Bool)
+txSubmitPost :: TxSubmitVar (Maybe String) -> Handler (Either TxSubmitError Bool)
 txSubmitPost = undefined

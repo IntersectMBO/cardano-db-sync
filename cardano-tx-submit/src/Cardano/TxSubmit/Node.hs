@@ -39,6 +39,7 @@ import           Cardano.TxSubmit.Config
 import           Cardano.TxSubmit.Tracing.ToObjectOrphans ()
 import           Cardano.TxSubmit.Metrics
 import           Cardano.TxSubmit.Tx
+import           Cardano.TxSubmit.Types
 
 import           Cardano.Prelude hiding (atomically, option, (%), Nat)
 import           Cardano.Shell.Lib (GeneralException (ConfigurationError))
@@ -93,6 +94,7 @@ data TxSubmitNodeParams = TxSubmitNodeParams
   { tspConfigFile :: !ConfigFile
   , tspGenesisFile :: !GenesisFile
   , tspSocketPath :: !SocketPath
+  , tspWebPort :: !TxSubmitPort
   }
 
 newtype ConfigFile = ConfigFile
