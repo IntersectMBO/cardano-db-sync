@@ -27,7 +27,7 @@ data TxSubmitError
 instance ToJSON TxSubmitError where
   toJSON _ = String "ToJSON TxSubmitError"
 
--- | Servant API which provides access to explorer
+-- | Servant API which provides access to tx submission webapi
 type TxSubmitApi
     = "api" :> ToServantApi TxSubmitApiRecord
 

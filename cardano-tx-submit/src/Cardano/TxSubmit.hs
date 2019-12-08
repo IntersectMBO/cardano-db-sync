@@ -2,6 +2,7 @@ module Cardano.TxSubmit
   ( module X
   ) where
 
+import Cardano.TxSubmit.Config as X
 import Cardano.TxSubmit.Node as X
 import Cardano.TxSubmit.Tx as X
 import Cardano.TxSubmit.Types as X

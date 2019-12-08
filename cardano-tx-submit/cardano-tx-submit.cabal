@@ -37,38 +37,53 @@ library
 
   exposed-modules:      Cardano.TxSubmit
 
-  other-modules:        Cardano.TxSubmit.Node
+  other-modules:        Cardano.TxSubmit.Config
+                      , Cardano.TxSubmit.Metrics
+                      , Cardano.TxSubmit.Node
+                      , Cardano.TxSubmit.Tracing.ToObjectOrphans
                       , Cardano.TxSubmit.Tx
                       , Cardano.TxSubmit.Types
                       , Cardano.TxSubmit.Web
 
   build-depends:        base                            >= 4.12         && < 4.13
-                      , QuickCheck
                       , aeson
                       , base16-bytestring
                       , bytestring
+                      , cardano-binary
                       , cardano-crypto-class
+                      , cardano-crypto-wrapper
                       , cardano-explorer-db
+                      , cardano-prelude
                       , cardano-ledger
+                      , cardano-shell
                       , containers
+                      , contra-tracer
+                      , cryptonite
                       , deepseq
-                      , esqueleto
                       , extra
                       , formatting
                       , generics-sop
                       , hashable
+                      , iohk-monitoring
+                      , io-sim-classes
                       , memory
                       , monad-logger
                       , mtl
-                      , persistent
-                      , persistent-postgresql
+                      , network
+                      , ouroboros-consensus
+                      , ouroboros-network
+                      , prometheus
+                      , serialise
                       , servant
                       , servant-server
                       , text
                       , time
                       , transformers
                       , transformers-except
+                      , typed-protocols
+                      , typed-protocols-cbor
                       , warp
+                      , yaml
 
 executable cardano-tx-submit-webapi
   default-language:    Haskell2010
