@@ -37,10 +37,11 @@ import qualified Data.ByteString.Base16 as Base16
 import           Data.Text (Text)
 import qualified Data.Text.Encoding as Text
 
-import           Network.Wai.Handler.Warp    (run)
-import           Servant                     (Application, Handler, Server, serve)
-import           Servant.API.Generic         (toServant)
-import           Servant.Server.Generic      (AsServerT)
+import qualified Network.Wai.Handler.Warp as Warp
+import           Servant (Application, Handler, Server)
+import qualified Servant as Servant
+import           Servant.API.Generic (toServant)
+import           Servant.Server.Generic (AsServerT)
 import           Servant.API ((:<|>)((:<|>)))
 
 import           Database.Persist.Postgresql (withPostgresqlConn)
@@ -53,10 +54,10 @@ runServer = do
   pgconfig <- readPGPassFileEnv
   runStdoutLoggingT .
     withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
-      liftIO $ run 8100 (explorerApp backend)
+      liftIO $ Warp.run 8100 (explorerApp backend)
 
 explorerApp :: SqlBackend -> Application
-explorerApp backend = serve explorerApi (explorerHandlers backend)
+explorerApp backend = Servant.serve explorerApi (explorerHandlers backend)
 
 explorerHandlers :: SqlBackend -> Server ExplorerApi
 explorerHandlers backend =
