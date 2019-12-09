@@ -23,7 +23,7 @@ they are all at the same level. eg:
 git clone https://github.com/input-output-hk/cardano-byron-proxy
 cd cardano-byron-proxy
 nix-build -A scripts.mainnet.proxy -o mainnet-byron-proxy
-./mainnet-byron-prox
+./mainnet-byron-proxy
 ```
 
 ### Set up and run a local node that connects to the byron proxy
