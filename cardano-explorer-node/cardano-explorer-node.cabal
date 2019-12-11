@@ -3,7 +3,7 @@ cabal-version:          >= 1.10
 -- http://haskell.org/cabal/users-guide/
 
 name:                   cardano-explorer-node
-version:                1.0.0
+version:                1.1.0
 synopsis:               The DB node for the Cardano Block Explorer
 description:            A Cardano node that follows the Cardano chain and inserts data from the
                         chain into a PostgresQL database.
