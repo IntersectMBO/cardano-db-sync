@@ -13,4 +13,4 @@ else let
   # Note that this repo is using the iohk-nix nixpkgs by default
   # A niv nixpkgs pin can override this with the following line:
   #iohkNix = import sources.iohk-nix ({ nixpkgsOverride = sources.nixpkgs; } // args);
-in iohkNix
+in iohkNix // { inherit sources; }
