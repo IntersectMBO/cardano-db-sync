@@ -1,5 +1,9 @@
 # Revision history for cardano-explorer-node
 
+## 1.1.0 -- December 2019
+
+* Updated to latest network library version and simpler API
+
 ## 1.0.0 -- November 2019
 
 * First release of new explorer based on new Cardano node.
