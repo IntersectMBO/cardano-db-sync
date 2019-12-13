@@ -56,9 +56,9 @@ txSubmitPost tsv trce tx = do
   case decodeByronTx tx of
     Left err -> pure $ TxSubmitDecodeFail err
     Right tx1 -> do
-      resp <- liftIO $ submitTx tsv tx1
-      liftIO $ logInfo trce (textShow resp)
-      case resp of
+      mresp <- liftIO $ submitTx tsv tx1
+      liftIO $ logInfo trce (maybe "Success" (\r -> "Error: " <> textShow r) mresp)
+      case mresp of
         Nothing -> pure TxSubmitOk
                     -- FFS, why is there not a way of pretty printing this????
         Just r -> pure $ TxSubmitFail (textShow r)
