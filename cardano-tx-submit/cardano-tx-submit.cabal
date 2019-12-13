@@ -43,6 +43,7 @@ library
                       , Cardano.TxSubmit.Tracing.ToObjectOrphans
                       , Cardano.TxSubmit.Tx
                       , Cardano.TxSubmit.Types
+                      , Cardano.TxSubmit.Util
                       , Cardano.TxSubmit.Web
 
   build-depends:        base                            >= 4.12         && < 4.13

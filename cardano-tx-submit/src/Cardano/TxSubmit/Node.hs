@@ -1,7 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -23,16 +22,13 @@ import           Cardano.Binary (unAnnotated)
 
 import           Control.Tracer (Tracer)
 
-import qualified Cardano.BM.Setup as Logging
 import           Cardano.BM.Data.Tracer (ToLogObject (..), nullTracer)
-import           Cardano.BM.Trace (Trace, appendName, logError, logInfo)
-import qualified Cardano.BM.Trace as Logging
+import           Cardano.BM.Trace (Trace, appendName, logInfo)
 
 import qualified Cardano.Chain.Genesis as Ledger
 import qualified Cardano.Chain.Genesis as Genesis
 import qualified Cardano.Chain.Update as Update
 
-import           Cardano.Crypto (decodeAbstractHash)
 import qualified Cardano.Crypto as Crypto
 
 import           Cardano.TxSubmit.Config
@@ -40,18 +36,16 @@ import           Cardano.TxSubmit.Tracing.ToObjectOrphans ()
 import           Cardano.TxSubmit.Metrics
 import           Cardano.TxSubmit.Tx
 import           Cardano.TxSubmit.Types
+import           Cardano.TxSubmit.Util
 
 import           Cardano.Prelude hiding (atomically, option, (%), Nat)
-import           Cardano.Shell.Lib (GeneralException (ConfigurationError))
-
-import qualified Codec.Serialise as Serialise
 
 import           Control.Concurrent (threadDelay)
 import           Control.Monad (forever)
 import           Control.Monad.Class.MonadST (MonadST)
 import           Control.Monad.IO.Class (liftIO)
 
-import qualified Data.ByteString.Lazy as BSL
+import qualified Data.ByteString.Lazy.Char8 as LBS
 import           Data.Functor.Contravariant (contramap)
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -66,9 +60,10 @@ import           Network.TypedProtocol.Driver (runPeer)
 
 import           Ouroboros.Consensus.Ledger.Abstract (BlockProtocol)
 import           Ouroboros.Consensus.Ledger.Byron (ByronBlock (..), GenTx)
+import           Ouroboros.Consensus.Mempool.API (ApplyTxErr)
 import           Ouroboros.Consensus.Node.ProtocolInfo (pInfoConfig, protocolInfo)
-import           Ouroboros.Consensus.Node.Run.Abstract (RunNode, nodeDecodeGenTx,
-                    nodeEncodeGenTx, nodeNetworkMagic)
+import           Ouroboros.Consensus.Node.Run.Abstract (RunNode, nodeDecodeGenTx, nodeEncodeGenTx,
+                    nodeEncodeApplyTxError, nodeDecodeApplyTxError, nodeNetworkMagic)
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
 import           Ouroboros.Consensus.Protocol (NodeConfig, Protocol (..))
 
@@ -81,9 +76,8 @@ import           Ouroboros.Network.NodeToClient (ErrorPolicyTrace (..), IPSubscr
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Client (LocalTxSubmissionClient (..),
                     LocalTxClientStIdle (..), localTxSubmissionClientPeer)
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Codec (codecLocalTxSubmission)
-import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (LocalTxSubmission)
 
-import           Prelude (String)
+import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (LocalTxSubmission)
 
 import qualified System.Metrics.Prometheus.Metric.Gauge as Gauge
 
@@ -110,20 +104,12 @@ newtype SocketPath = SocketPath
   }
 
 
-runTxSubmitNode :: TxSubmitVar (Maybe String) -> TxSubmitNodeParams -> IO ()
-runTxSubmitNode tsv enp = do
-  enc <- readTxSubmitNodeConfig (unConfigFile $ tspConfigFile enp)
-  trce <- mkTracer enc
-  gc <- readGenesisConfig enp enc
-  logProtocolMagic trce $ Ledger.configProtocolMagic gc
-  void $ runTxSubmitNodeClient tsv (mkNodeConfig gc) trce (tspSocketPath enp)
-
-
-mkTracer :: TxSubmitNodeConfig -> IO (Trace IO Text)
-mkTracer enc =
-  if not (tscEnableLogging enc)
-    then pure Logging.nullTracer
-    else liftIO $ Logging.setupTrace (Right $ tscLoggingConfig enc) "cardano-tx-submit"
+runTxSubmitNode :: TxSubmitVar -> Trace IO Text -> Genesis.Config -> SocketPath -> IO ()
+runTxSubmitNode tsv trce gc socket = do
+  logInfo trce "Running tx-submit node"
+  logException trce "tx-submit-node." $ do
+    logProtocolMagic trce $ Ledger.configProtocolMagic gc
+    void $ runTxSubmitNodeClient tsv (mkNodeConfig gc) trce socket
 
 
 mkNodeConfig :: Genesis.Config -> NodeConfig (BlockProtocol ByronBlock)
@@ -131,22 +117,9 @@ mkNodeConfig gc =
   pInfoConfig . protocolInfo $ ProtocolRealPBFT gc Nothing (Update.ProtocolVersion 0 2 0)
       (Update.SoftwareVersion (Update.ApplicationName "cardano-sl") 1) Nothing
 
-readGenesisConfig :: TxSubmitNodeParams -> TxSubmitNodeConfig -> IO Genesis.Config
-readGenesisConfig enp enc = do
-    genHash <- either (throwIO . ConfigurationError) pure $
-                decodeAbstractHash (unGenesisHash $ tscGenesisHash enc)
-    convert =<< runExceptT (Genesis.mkConfigFromFile (tscRequiresNetworkMagic enc)
-                            (unGenesisFile $ tspGenesisFile enp) genHash)
-  where
-    convert :: Either Genesis.ConfigurationError Genesis.Config -> IO Genesis.Config
-    convert =
-      \case
-        Left err -> panic $ show err
-        Right x -> pure x
-
 runTxSubmitNodeClient
   :: forall blk. (blk ~ ByronBlock)
-  => TxSubmitVar (Maybe String) -> NodeConfig (BlockProtocol blk)
+  => TxSubmitVar -> NodeConfig (BlockProtocol blk)
   -> Trace IO Text -> SocketPath
   -> IO Void
 runTxSubmitNodeClient tsv nodeConfig trce (SocketPath socketPath) = do
@@ -180,8 +153,8 @@ localInitiatorNetworkApplication
   :: forall peer.
      (Show peer)
   => Trace IO Text
-  -> TxSubmitVar (Maybe String)
-  -> OuroborosApplication 'InitiatorApp peer NodeToClientProtocols IO BSL.ByteString Void Void
+  -> TxSubmitVar
+  -> OuroborosApplication 'InitiatorApp peer NodeToClientProtocols IO LBS.ByteString Void Void
 localInitiatorNetworkApplication trce tsv =
   OuroborosInitiatorApplication $ \peer ptcl ->
     case ptcl of
@@ -199,7 +172,7 @@ localInitiatorNetworkApplication trce tsv =
           pure ret
 
 -- | This should be provided by ouroboros-network.
-nullChainSyncWithBlocksPtcl :: Channel IO BSL.ByteString -> IO Void
+nullChainSyncWithBlocksPtcl :: Channel IO LBS.ByteString -> IO Void
 nullChainSyncWithBlocksPtcl =
   const . forever $ threadDelay (1000 * 1000 * 1000)
 
@@ -209,13 +182,13 @@ nullChainSyncWithBlocksPtcl =
 -- 'muxLocalInitiatorNetworkApplication' above and never fills it with a tx.
 --
 txSubmissionClient
-  :: TxSubmitVar (Maybe String) -> TxSubmitMetrics
-  -> LocalTxSubmissionClient (GenTx ByronBlock) String IO Void
+  :: TxSubmitVar -> TxSubmitMetrics
+  -> LocalTxSubmissionClient (GenTx ByronBlock) (ApplyTxErr ByronBlock) IO Void
 txSubmissionClient tsv metrics =
     LocalTxSubmissionClient $
       readTxSubmit tsv >>= pure . loop
   where
-    loop :: GenTx ByronBlock -> LocalTxClientStIdle (GenTx ByronBlock) String IO Void
+    loop :: GenTx ByronBlock -> LocalTxClientStIdle (GenTx ByronBlock) (ApplyTxErr ByronBlock) IO Void
     loop tx =
       SendMsgSubmitTx tx $ \mbreject -> do
         case mbreject of
@@ -226,23 +199,14 @@ txSubmissionClient tsv metrics =
         pure $ loop nextTx
 
 localTxSubmissionCodec
-  :: (RunNode blk, MonadST m)
-  => Codec (LocalTxSubmission (GenTx blk) String) DeserialiseFailure m BSL.ByteString
+  :: forall m blk . (RunNode blk, MonadST m)
+  => Codec (LocalTxSubmission (GenTx blk) (ApplyTxErr blk)) DeserialiseFailure m LBS.ByteString
 localTxSubmissionCodec =
-  codecLocalTxSubmission nodeEncodeGenTx nodeDecodeGenTx Serialise.encode Serialise.decode
-
--- | ouroboros-network catches 'SomeException' and if a 'nullTracer' is passed into that
--- code, the caught exception will not be logged. Therefore wrap all tx submission code that
--- is called from network with an exception logger so at least the exception will be
--- logged (instead of silently swallowed) and then rethrown.
-logException :: Trace IO Text -> Text -> IO a -> IO a
-logException tracer txt action =
-    action `catch` logger
-  where
-    logger :: SomeException -> IO a
-    logger e = do
-      logError tracer $ txt <> textShow e
-      throwIO e
+  codecLocalTxSubmission
+    nodeEncodeGenTx
+    nodeDecodeGenTx
+    (nodeEncodeApplyTxError (Proxy @blk))
+    (nodeDecodeApplyTxError (Proxy @blk))
 
 logProtocolMagic :: Trace IO Text -> Crypto.ProtocolMagic -> IO ()
 logProtocolMagic tracer pm =
@@ -250,6 +214,3 @@ logProtocolMagic tracer pm =
     [ "NetworkMagic: ", textShow (Crypto.getRequiresNetworkMagic pm), " "
     , textShow (Crypto.unProtocolMagicId . unAnnotated $ Crypto.getAProtocolMagicId pm)
     ]
-
-textShow :: Show a => a -> Text
-textShow = Text.pack . show

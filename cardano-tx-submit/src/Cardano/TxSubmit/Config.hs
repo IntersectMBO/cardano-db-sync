@@ -18,6 +18,8 @@ import           Cardano.Crypto (RequiresNetworkMagic (..))
 
 import           Cardano.Prelude
 
+import           Cardano.TxSubmit.Util
+
 import           Data.Aeson (FromJSON (..), Object, Value (..), (.:))
 import           Data.Aeson.Types (Parser)
 import qualified Data.Aeson as Aeson
@@ -72,6 +74,3 @@ parseGenTxSubmitNodeConfig o =
     <*> o .: "EnableLogging"
     <*> o .: "EnableLogMetrics"
     <*> o .: "RequiresNetworkMagic"
-
-textShow :: Show a => a -> Text
-textShow = Text.pack . show
