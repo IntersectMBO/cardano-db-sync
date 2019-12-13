@@ -53,3 +53,13 @@ In the same `cardano-explorer` directory but a new terminal:
 nix-build -A cardano-explorer-webapi -o explorer-webapi
 PGPASSFILE=config/pgpass ./explorer-webapi/bin/cardano-explorer-webapi
 ```
+
+### Set up and run the transaction submission webapi
+In the same `cardano-explorer` direction but in a new terminal:
+```
+cabal run cardano-tx-submit-webapi -- \
+    --config config/tx-submit-mainnet-config.yaml \
+    --genesis-file ../cardano-node/mainnet-genesis.json \
+    --socket-path ../cardano-node/state-node-mainnet/socket/node-core-0.socket \
+    --port 8101
+```

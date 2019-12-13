@@ -6,7 +6,9 @@ The new cardano-explorer consists of three components:
   following two components. In particular, it defines the database schema.
 * `cardano-explorer-node` which acts as a Cardano node, following the chain and inserting
   date from the chain into a PostgreSQL database.
-* `cardano-explorer` which serves data from the PostgreSQL database via HTTP.
+* `cardano-explorer-webapi` which serves data from the PostgreSQL database via HTTP.
+* `cardano-tx-submit-webapi` allows submission of pre-formed transmissions via a HTTP POST
+  operation.
 
 
 ## Architecture
