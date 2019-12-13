@@ -39,6 +39,7 @@
         cardano-explorer-db-test = ./cardano-explorer-db-test.nix;
         cardano-explorer-node = ./cardano-explorer-node.nix;
         cardano-explorer-webapi = ./cardano-explorer-webapi.nix;
+        cardano-tx-submit = ./cardano-tx-submit.nix;
         cardano-shell = ./cardano-shell.nix;
         cardano-prelude = ./cardano-prelude.nix;
         cardano-prelude-test = ./cardano-prelude-test.nix;
@@ -78,6 +79,11 @@
       { packages = {}; })
     {
       packages = {
+        "cardano-tx-submit" = {
+          package = {
+            ghcOptions = "-Wall -Werror -fwarn-redundant-constraints";
+            };
+          };
         "cardano-explorer-webapi" = {
           package = {
             ghcOptions = "-Wall -Werror -fwarn-redundant-constraints";

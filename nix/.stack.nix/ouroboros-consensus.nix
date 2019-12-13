@@ -82,6 +82,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."filepath" or (buildDepError "filepath"))
           (hsPkgs."fingertree" or (buildDepError "fingertree"))
           (hsPkgs."formatting" or (buildDepError "formatting"))
+          (hsPkgs."hashable" or (buildDepError "hashable"))
           (hsPkgs."memory" or (buildDepError "memory"))
           (hsPkgs."mmorph" or (buildDepError "mmorph"))
           (hsPkgs."mtl" or (buildDepError "mtl"))
@@ -158,6 +159,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             (hsPkgs."ouroboros-consensus" or (buildDepError "ouroboros-consensus"))
             (hsPkgs."io-sim-classes" or (buildDepError "io-sim-classes"))
             (hsPkgs."io-sim" or (buildDepError "io-sim"))
+            (hsPkgs."binary-search" or (buildDepError "binary-search"))
             (hsPkgs."cborg" or (buildDepError "cborg"))
             (hsPkgs."containers" or (buildDepError "containers"))
             (hsPkgs."contra-tracer" or (buildDepError "contra-tracer"))
@@ -174,6 +176,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             (hsPkgs."random" or (buildDepError "random"))
             (hsPkgs."serialise" or (buildDepError "serialise"))
             (hsPkgs."tasty" or (buildDepError "tasty"))
+            (hsPkgs."tasty-golden" or (buildDepError "tasty-golden"))
             (hsPkgs."tasty-hunit" or (buildDepError "tasty-hunit"))
             (hsPkgs."tasty-quickcheck" or (buildDepError "tasty-quickcheck"))
             (hsPkgs."text" or (buildDepError "text"))
@@ -229,8 +232,8 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/ouroboros-network";
-      rev = "52677b3c8f2a98d974590b7688281116aaa68ff7";
-      sha256 = "1kkc54knyd07vqi28nmfn6l7f7sf3grcgi7vl252qshd2k5axdgn";
+      rev = "189e9b88be58edece3c16f7929c4afabe1af461d";
+      sha256 = "1zbv2q4dgd8nyc7r8plk022j3vn95p7s93aywprv1qbrdk97k6l0";
       });
     postUnpack = "sourceRoot+=/ouroboros-consensus; echo source root reset to \$sourceRoot";
     }
