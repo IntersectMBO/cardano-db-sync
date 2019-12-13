@@ -86,7 +86,11 @@ import           Ouroboros.Network.Block (Point (..), SlotNo (..), Tip (tipBlock
                     BlockNo(unBlockNo, BlockNo),
                     encodeTip, decodeTip)
 import           Ouroboros.Network.Mux (AppType (..), OuroborosApplication (..))
-import           Ouroboros.Network.NodeToClient
+import           Ouroboros.Network.NodeToClient (ErrorPolicyTrace (..), IPSubscriptionTarget (..),
+                    LocalAddresses (..), NodeToClientProtocols (..), NetworkIPSubscriptionTracers (..),
+                    NodeToClientVersionData (..), SubscriptionParams (..), WithAddr (..),
+                    ncSubscriptionWorker_V1, networkErrorPolicies, newNetworkMutableState)
+
 import qualified Ouroboros.Network.Point as Point
 import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined (ChainSyncClientPipelined (..),
                     ClientPipelinedStIdle (..), ClientPipelinedStIntersect (..), ClientStNext (..),

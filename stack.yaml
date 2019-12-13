@@ -7,11 +7,13 @@ packages:
   - cardano-explorer-db/test
   - cardano-explorer-node
   - cardano-explorer-webapi
+  - cardano-tx-submit
 
 ghc-options:
   cardano-explorer-db:          -Wall -Werror -fwarn-redundant-constraints
   cardano-explorer-node:        -Wall -Werror -fwarn-redundant-constraints
   cardano-explorer-webapi:      -Wall -Werror -fwarn-redundant-constraints
+  cardano-tx-submit:            -Wall -Werror -fwarn-redundant-constraints
 
 extra-deps:
   - binary-0.8.7.0
@@ -93,7 +95,7 @@ extra-deps:
       - crypto/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: 52677b3c8f2a98d974590b7688281116aaa68ff7
+    commit: 189e9b88be58edece3c16f7929c4afabe1af461d
     subdirs:
       - io-sim-classes
       - network-mux
