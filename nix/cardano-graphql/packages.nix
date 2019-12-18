@@ -30,7 +30,7 @@
 
       yarn run build
 
-      cp -r /build/''${sourceRoot}/deps/cardano-graphql/dist $out
+      cp -r ../deps/cardano-graphql/dist $out
 
       mkdir -p $out/bin
       cat <<EOF > $out/bin/cardano-graphql
