@@ -42,6 +42,7 @@ in {
 
   # Grab the executable component of our package.
   inherit (haskellPackages.cardano-explorer-webapi.components.exes) cardano-explorer-webapi;
+  inherit (haskellPackages.cardano-tx-submit.components.exes) cardano-tx-submit-webapi;
 
   cardano-sl-core = haskellPackages.cardano-explorer-db.components.library;
   cardano-explorer-node = haskellPackages.cardano-explorer-node.components.exes.cardano-explorer-node;

@@ -106,6 +106,8 @@ let
       enable = true;
     };
 
+    services.cardano-tx-submit-webapi.enable = true;
+
     services.postgresql = {
       enable = true;
       authentication = lib.mkBefore ''
@@ -128,6 +130,13 @@ let
     services.nginx = {
       virtualHosts.${config.services.monitoring-services.webhost} = {
         default = true;
+        locations."/api/submit/tx".extraConfig = ''
+          proxy_pass http://localhost:${toString config.services.cardano-tx-submit-webapi.port};
+          proxy_set_header Host $host;
+          proxy_set_header REMOTE_ADDR $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+        '';
         locations."/api/".extraConfig = ''
           proxy_pass http://localhost:8100/api/;
           proxy_set_header Host $host;
@@ -416,6 +425,7 @@ let
       (wrapService "cardano-explorer-node")
       (wrapService "cardano-explorer-webapi")
       (wrapService "cardano-node")
+      (wrapService "cardano-tx-submit-webapi")
       (wrapService "prometheus-postgres-exporter")
     ] ++ (lib.optional (builtins.pathExists ./secrets.nix)
       (wrapService "oauth2_proxy"));

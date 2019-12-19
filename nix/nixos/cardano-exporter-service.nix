@@ -68,6 +68,17 @@ in {
         type = lib.types.package;
       };
     };
+    services.cardano-tx-submit-webapi = {
+      enable = lib.mkEnableOption "enable the cardano-explorer tx submitter api";
+      script = lib.mkOption {
+        internal = true;
+        type = lib.types.package;
+      };
+      port = lib.mkOption {
+        type = lib.types.port;
+        default = 8101;
+      };
+    };
   };
   config = lib.mkMerge [
     (lib.mkIf cfg.enable {
@@ -159,6 +170,7 @@ in {
       systemd.services.cardano-explorer-webapi = {
         wantedBy = [ "multi-user.target" ];
         requires = [ "postgresql.service" ];
+        path = [ pkgs.netcat ];
         preStart = ''
           for x in {1..10}; do
             nc -z localhost ${toString cfg.postgres.port} && break
@@ -170,6 +182,28 @@ in {
           ExecStart = config.services.cardano-explorer-webapi.script;
           User = "cexplorer";
         };
+      };
+    })
+    (lib.mkIf config.services.cardano-tx-submit-webapi.enable {
+      services.cardano-tx-submit-webapi.script = pkgs.writeShellScript "cardano-tx-submit-webapi" ''
+        ${if (cfg.socketPath == null) then ''if [ -z "$CARDANO_NODE_SOCKET_PATH" ]
+        then
+          echo "You must set \$CARDANO_NODE_SOCKET_PATH"
+          exit 1
+        fi'' else "export CARDANO_NODE_SOCKET_PATH=${cfg.socketPath}"}
+        exec ${self.cardano-tx-submit-webapi}/bin/cardano-tx-submit-webapi --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+              --genesis-file ${envConfig.genesisFile} \
+              --port ${toString config.services.cardano-tx-submit-webapi.port} \
+              --config ${../../config/tx-submit-mainnet-config.yaml}
+      '';
+      systemd.services.cardano-tx-submit-webapi = {
+        serviceConfig = {
+          ExecStart = config.services.cardano-tx-submit-webapi.script;
+          User = "cexplorer";
+          WorkingDirectory = "/var/lib/cexplorer";
+        };
+        wantedBy = [ "multi-user.target" ];
+        after = [ "postgresql.service" "cardano-explorer-node.service" ];
       };
     })
   ];
