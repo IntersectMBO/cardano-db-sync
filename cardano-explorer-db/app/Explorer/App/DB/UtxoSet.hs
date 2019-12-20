@@ -3,7 +3,7 @@ module Explorer.App.DB.UtxoSet
   ( utxoSetAtBlock
   ) where
 
-import           Cardano.Chain.Common (fromCBORTextAddress, isRedeemAddress)
+import           Cardano.Chain.Common (decodeAddressBase58, isRedeemAddress)
 
 import           Data.Word (Word64)
 import           Data.Time.Clock (UTCTime)
@@ -74,7 +74,7 @@ aggregateUtxos xs =
 
 isNotRedeemTextAddress :: Text -> Bool
 isNotRedeemTextAddress addr =
-  case fromCBORTextAddress addr of
+  case decodeAddressBase58 addr of
     Left e -> error $ "isNotRedeemTextAddress: cannot decode " ++ show addr ++ ": " ++ show e
     Right a -> not $ isRedeemAddress a
 
