@@ -1,5 +1,10 @@
 # Revision history for cardano-explorer-node
 
+## 1.2.0 -- December 2019
+
+* Update to latest version of cardano-ledger, ouroboros-network,
+  ouroboros-consensus, iohk-monitoring-framework, and cardano-shell libs.
+
 ## 1.1.0 -- December 2019
 
 * Updated to latest network library version and simpler API
