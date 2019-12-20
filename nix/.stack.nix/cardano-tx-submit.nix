@@ -42,7 +42,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     flags = {};
     package = {
       specVersion = "1.10";
-      identifier = { name = "cardano-tx-submit"; version = "1.0.0"; };
+      identifier = { name = "cardano-tx-submit"; version = "1.2.0"; };
       license = "Apache-2.0";
       copyright = "(c) 2019 IOHK";
       maintainer = "operations@iohk.io";

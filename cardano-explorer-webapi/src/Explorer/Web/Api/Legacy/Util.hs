@@ -18,7 +18,7 @@ module Explorer.Web.Api.Legacy.Util
   , zipTxBrief
   ) where
 
-import           Cardano.Chain.Common (Address, fromCBORTextAddress)
+import           Cardano.Chain.Common (Address, decodeAddressBase58)
 
 import           Control.Monad.IO.Class (liftIO, MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
@@ -64,7 +64,7 @@ collapseTxGroup xs =
 decodeTextAddress :: Text -> Either ExplorerError Address
 decodeTextAddress txt =
   first (const . Internal $ "Unable to decode address " <> txt <> ".")
-    $ fromCBORTextAddress txt
+    $ decodeAddressBase58 txt
 
 
 defaultPageSize :: PageSize

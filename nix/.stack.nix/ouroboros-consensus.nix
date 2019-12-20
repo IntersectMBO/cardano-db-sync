@@ -73,12 +73,14 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."cardano-crypto-wrapper" or (buildDepError "cardano-crypto-wrapper"))
           (hsPkgs."cardano-ledger" or (buildDepError "cardano-ledger"))
           (hsPkgs."cardano-prelude" or (buildDepError "cardano-prelude"))
+          (hsPkgs."cardano-slotting" or (buildDepError "cardano-slotting"))
           (hsPkgs."cborg" or (buildDepError "cborg"))
           (hsPkgs."containers" or (buildDepError "containers"))
           (hsPkgs."cryptonite" or (buildDepError "cryptonite"))
           (hsPkgs."deepseq" or (buildDepError "deepseq"))
           (hsPkgs."digest" or (buildDepError "digest"))
           (hsPkgs."directory" or (buildDepError "directory"))
+          (hsPkgs."filelock" or (buildDepError "filelock"))
           (hsPkgs."filepath" or (buildDepError "filepath"))
           (hsPkgs."fingertree" or (buildDepError "fingertree"))
           (hsPkgs."formatting" or (buildDepError "formatting"))
@@ -89,6 +91,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."network" or (buildDepError "network"))
           (hsPkgs."serialise" or (buildDepError "serialise"))
           (hsPkgs."stm" or (buildDepError "stm"))
+          (hsPkgs."streaming" or (buildDepError "streaming"))
           (hsPkgs."text" or (buildDepError "text"))
           (hsPkgs."time" or (buildDepError "time"))
           (hsPkgs."transformers" or (buildDepError "transformers"))
@@ -165,7 +168,9 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             (hsPkgs."contra-tracer" or (buildDepError "contra-tracer"))
             (hsPkgs."cryptonite" or (buildDepError "cryptonite"))
             (hsPkgs."deepseq" or (buildDepError "deepseq"))
+            (hsPkgs."directory" or (buildDepError "directory"))
             (hsPkgs."fgl" or (buildDepError "fgl"))
+            (hsPkgs."filepath" or (buildDepError "filepath"))
             (hsPkgs."fingertree" or (buildDepError "fingertree"))
             (hsPkgs."generics-sop" or (buildDepError "generics-sop"))
             (hsPkgs."graphviz" or (buildDepError "graphviz"))
@@ -179,6 +184,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             (hsPkgs."tasty-golden" or (buildDepError "tasty-golden"))
             (hsPkgs."tasty-hunit" or (buildDepError "tasty-hunit"))
             (hsPkgs."tasty-quickcheck" or (buildDepError "tasty-quickcheck"))
+            (hsPkgs."temporary" or (buildDepError "temporary"))
             (hsPkgs."text" or (buildDepError "text"))
             (hsPkgs."time" or (buildDepError "time"))
             (hsPkgs."tree-diff" or (buildDepError "tree-diff"))
@@ -232,8 +238,8 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/ouroboros-network";
-      rev = "189e9b88be58edece3c16f7929c4afabe1af461d";
-      sha256 = "1zbv2q4dgd8nyc7r8plk022j3vn95p7s93aywprv1qbrdk97k6l0";
+      rev = "cc5b89ae36da2c2584c3a633b8d75344e2e5e734";
+      sha256 = "083by550rr3n31b2cwhrqnqlr8x6n1k19arrj3q9mz3mbl4al4wx";
       });
     postUnpack = "sourceRoot+=/ouroboros-consensus; echo source root reset to \$sourceRoot";
     }

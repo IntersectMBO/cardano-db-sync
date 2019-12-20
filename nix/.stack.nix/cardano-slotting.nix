@@ -42,15 +42,15 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     flags = { development = false; };
     package = {
       specVersion = "1.10";
-      identifier = { name = "cardano-crypto-test"; version = "1.3.0"; };
-      license = "MIT";
-      copyright = "2018 IOHK";
-      maintainer = "operations@iohk.io";
-      author = "IOHK";
+      identifier = { name = "cardano-slotting"; version = "0.1.0.0"; };
+      license = "NONE";
+      copyright = "IOHK";
+      maintainer = "formal.methods@iohk.io";
+      author = "IOHK Formal Methods Team";
       homepage = "";
       url = "";
-      synopsis = "Test helpers from cardano-crypto exposed to other packages";
-      description = "Test helpers from cardano-crypto exposed to other packages";
+      synopsis = "Key slotting types for cardano libraries";
+      description = "";
       buildType = "Simple";
       isLocal = true;
       };
@@ -58,25 +58,23 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
       "library" = {
         depends = [
           (hsPkgs."base" or (buildDepError "base"))
-          (hsPkgs."bytestring" or (buildDepError "bytestring"))
-          (hsPkgs."cardano-binary" or (buildDepError "cardano-binary"))
-          (hsPkgs."cardano-binary-test" or (buildDepError "cardano-binary-test"))
-          (hsPkgs."cardano-crypto" or (buildDepError "cardano-crypto"))
-          (hsPkgs."cardano-crypto-wrapper" or (buildDepError "cardano-crypto-wrapper"))
           (hsPkgs."cardano-prelude" or (buildDepError "cardano-prelude"))
-          (hsPkgs."cardano-prelude-test" or (buildDepError "cardano-prelude-test"))
-          (hsPkgs."cryptonite" or (buildDepError "cryptonite"))
-          (hsPkgs."hedgehog" or (buildDepError "hedgehog"))
-          (hsPkgs."memory" or (buildDepError "memory"))
+          (hsPkgs."cardano-binary" or (buildDepError "cardano-binary"))
+          (hsPkgs."cborg" or (buildDepError "cborg"))
+          (hsPkgs."containers" or (buildDepError "containers"))
+          (hsPkgs."mmorph" or (buildDepError "mmorph"))
+          (hsPkgs."mtl" or (buildDepError "mtl"))
+          (hsPkgs."serialise" or (buildDepError "serialise"))
+          (hsPkgs."transformers" or (buildDepError "transformers"))
           ];
         buildable = true;
         };
       };
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
-      url = "https://github.com/input-output-hk/cardano-ledger";
-      rev = "a773ba71eb9a6fb91dda2cdf6c41b2280f2acf7d";
-      sha256 = "0gbh82r9zd7k61hbj96vmh7jd2lrj4xg0hz1058qs7yraf5pjif2";
+      url = "https://github.com/input-output-hk/cardano-base";
+      rev = "80deee31f8d9422b8e090e55b17e1a714153180b";
+      sha256 = "0jzv074hc8kq0r0k47bw8hvziyi16mfyv5gcyngd1d0mbrc0j2k1";
       });
-    postUnpack = "sourceRoot+=/crypto/test; echo source root reset to \$sourceRoot";
+    postUnpack = "sourceRoot+=/slotting; echo source root reset to \$sourceRoot";
     }

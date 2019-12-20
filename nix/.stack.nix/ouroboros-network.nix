@@ -68,6 +68,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."bytestring" or (buildDepError "bytestring"))
           (hsPkgs."cardano-binary" or (buildDepError "cardano-binary"))
           (hsPkgs."cardano-prelude" or (buildDepError "cardano-prelude"))
+          (hsPkgs."cardano-slotting" or (buildDepError "cardano-slotting"))
           (hsPkgs."cborg" or (buildDepError "cborg"))
           (hsPkgs."containers" or (buildDepError "containers"))
           (hsPkgs."dns" or (buildDepError "dns"))
@@ -75,6 +76,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."fingertree" or (buildDepError "fingertree"))
           (hsPkgs."iproute" or (buildDepError "iproute"))
           (hsPkgs."network" or (buildDepError "network"))
+          (hsPkgs."psqueues" or (buildDepError "psqueues"))
           (hsPkgs."serialise" or (buildDepError "serialise"))
           (hsPkgs."stm" or (buildDepError "stm"))
           (hsPkgs."time" or (buildDepError "time"))
@@ -116,6 +118,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             (hsPkgs."bytestring" or (buildDepError "bytestring"))
             (hsPkgs."cardano-binary" or (buildDepError "cardano-binary"))
             (hsPkgs."cardano-prelude" or (buildDepError "cardano-prelude"))
+            (hsPkgs."cardano-slotting" or (buildDepError "cardano-slotting"))
             (hsPkgs."cborg" or (buildDepError "cborg"))
             (hsPkgs."containers" or (buildDepError "containers"))
             (hsPkgs."contra-tracer" or (buildDepError "contra-tracer"))
@@ -129,6 +132,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             (hsPkgs."mtl" or (buildDepError "mtl"))
             (hsPkgs."network-mux" or (buildDepError "network-mux"))
             (hsPkgs."network" or (buildDepError "network"))
+            (hsPkgs."psqueues" or (buildDepError "psqueues"))
             (hsPkgs."ouroboros-network-testing" or (buildDepError "ouroboros-network-testing"))
             (hsPkgs."pipes" or (buildDepError "pipes"))
             (hsPkgs."process" or (buildDepError "process"))
@@ -152,6 +156,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             (hsPkgs."bytestring" or (buildDepError "bytestring"))
             (hsPkgs."cardano-binary" or (buildDepError "cardano-binary"))
             (hsPkgs."cardano-prelude" or (buildDepError "cardano-prelude"))
+            (hsPkgs."cardano-slotting" or (buildDepError "cardano-slotting"))
             (hsPkgs."cborg" or (buildDepError "cborg"))
             (hsPkgs."containers" or (buildDepError "containers"))
             (hsPkgs."contra-tracer" or (buildDepError "contra-tracer"))
@@ -177,8 +182,8 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/ouroboros-network";
-      rev = "189e9b88be58edece3c16f7929c4afabe1af461d";
-      sha256 = "1zbv2q4dgd8nyc7r8plk022j3vn95p7s93aywprv1qbrdk97k6l0";
+      rev = "cc5b89ae36da2c2584c3a633b8d75344e2e5e734";
+      sha256 = "083by550rr3n31b2cwhrqnqlr8x6n1k19arrj3q9mz3mbl4al4wx";
       });
     postUnpack = "sourceRoot+=/ouroboros-network; echo source root reset to \$sourceRoot";
     }

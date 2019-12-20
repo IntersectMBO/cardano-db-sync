@@ -1,5 +1,9 @@
 # Revision history for cardano-explorer-webapi
 
+## 1.2.0 -- December 2019
+
+* Update dependencies to latest versions.
+
 ## 1.1.0 -- December 2019
 
 * Renamed from cardano-explorer to cardano-explorer-webapi (#193).
