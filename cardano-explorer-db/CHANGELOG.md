@@ -1,5 +1,9 @@
 # Revision history for cardano-explorer-db
 
+## 1.2.0 -- December 2019
+
+* Update dependencies to latest versions.
+
 ## 1.1.0 -- December 2019
 
 * Added SQL views for benefit of GraphQL frontend (#172)
