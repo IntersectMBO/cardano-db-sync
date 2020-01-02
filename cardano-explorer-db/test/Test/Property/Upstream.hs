@@ -8,7 +8,7 @@ module Test.Property.Upstream
 -- Test things that come from upstream packages that have at any stage gone wrong
 -- or for which
 
-import           Cardano.Chain.Common (fromCBORTextAddress, isRedeemAddress)
+import           Cardano.Chain.Common (decodeAddressBase58, isRedeemAddress)
 
 import           Hedgehog (Property, (===), discover)
 import qualified Hedgehog as H
@@ -24,7 +24,7 @@ prop_isRedeemAddress =
                         , "Ae2tdPwUPEZMB92JqgxAEWfXJo6Ex7wWLoS7REmh81Ue6GgsNrDNs3MeQKA"
                         , "Ae2tdPwUPEZ43NhMYvw1bkcGnEzdDbm9QTWiRux6Xpy8sorgfSJfazneEsP"
                         ]
-    fmap isRedeemAddress (fromCBORTextAddress addr) === Right True
+    fmap isRedeemAddress (decodeAddressBase58 addr) === Right True
 
 -- -----------------------------------------------------------------------------
 
