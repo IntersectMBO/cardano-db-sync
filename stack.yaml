@@ -1,4 +1,4 @@
-resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/7099318744ddd10b76e50eae73f005efd2c7195c/snapshot.yaml
+resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/00487726c4bc21b4744e59d913334ebfeac7d68e/snapshot.yaml
 compiler: ghc-8.6.5
 
 
@@ -50,7 +50,7 @@ extra-deps:
       - cardano-shell
 
   - git: https://github.com/input-output-hk/cardano-prelude
-    commit: 7099318744ddd10b76e50eae73f005efd2c7195c
+    commit: 00487726c4bc21b4744e59d913334ebfeac7d68e
     subdirs:
       - .
       - test
@@ -59,7 +59,7 @@ extra-deps:
     commit: 43a036c5bbe68ca2e9cbe611eab7982e2348fe49
 
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: 156391afaafca6b00d027fb9c03e1bd7a1f03003
+    commit: dbd932704fa4520bc24e45b2c00407c5f437c12a
     subdirs:
       - contra-tracer
       - iohk-monitoring
@@ -97,7 +97,7 @@ extra-deps:
       - crypto/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: cc5b89ae36da2c2584c3a633b8d75344e2e5e734
+    commit: f6b5713182aa712b7b4ed4c57de49fd620c6f5d6
     subdirs:
       - io-sim-classes
       - network-mux
