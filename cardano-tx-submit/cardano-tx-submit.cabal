@@ -3,7 +3,7 @@ cabal-version:          >= 1.10
 -- http://haskell.org/cabal/users-guide/
 
 name:                   cardano-tx-submit
-version:                1.2.0
+version:                1.2.1
 synopsis:               A web server that allows transactions to be POSTed to the cardano chain
 description:
 homepage:               https://github.com/input-output-hk/cardano-explorer
