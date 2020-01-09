@@ -1,0 +1,687 @@
+swagger: '2.0'
+schemes: ["https"]
+host: localhost
+basePath: /
+info:
+  title: Cardano Explorer API
+  version: 1.0.0
+  license:
+    name: Apache-2.0
+    url: https://github.com/input-output-hk/cardano-explorer/blob/master/cardano-explorer-webapi/LICENSE
+  description: |
+    <p align="right"><img style="position: relative; top: -10em; margin-bottom: -12em;" width="20%" src="https://cardanodocs.com/img/cardano.png"></img></p>
+
+consumes: ["application/json"]
+produces: ["application/json"]
+
+x-tagGroups: []
+
+definitions:
+  CAddress: &CAddress
+    type: object
+    additionalProperties: false
+    required:
+      - unCAddress
+    properties:
+      unCAddress: &unCAddress
+        type: string
+        format: base58
+        example: Ae2tdPwUPEZK72eZZqulakkhaUfTCcoaGepvQP718aYBczw5uZmp47h1k14
+
+  CAddressFilter: &CAddressFilter
+    type: string
+    enum:
+      - redeemed
+      - notredeemed
+      - all
+
+  CAddressType: &CAddressType
+    type: string
+    enum:
+      - CPubKeyAddress
+      - CRedeemAddress
+
+  CCoin: &CCoin
+    type: object
+    additionalProperties: false
+    required:
+      - getCoin
+    properties:
+      getCoin:
+        type: integer
+        minimum: 0
+
+  CHash: &CHash
+    type: string
+    format: base16
+    minLength: 64
+    maxLength: 64
+    pattern: "^[0-9a-f]{64}$"
+    example: 3c89f7d9ff6c06468e32fd916d153b033264f780e11fca7750cb85f56d4f31d0
+
+  CNetworkAddress: &CNetworkAddress
+    type: string
+
+  CTxHash: &CTxHash
+    oneOf:
+      - *CHash
+      - type: string
+        enum:
+          - Genesis Distribution
+
+  POSIXTime: &POSIXTime
+    type: integer
+    format: POSIX
+
+  Bool: &Bool
+    type: boolean
+
+  Word16: &Word16
+    type: integer
+    minimum: 0
+    maximum: 65535
+
+  Word64: &Word64
+    type: integer
+    minimum: 0
+
+  CAddressBalance: &CAddressBalance
+    type: object
+    additionalProperties: false
+    required:
+      - address
+      - txid
+      - index
+      - coin
+    properties:
+      address: *CAddress
+      txid: *CTxHash
+      index: *Word16
+      coin: *CCoin
+
+  CAda: &CAda
+    type: number
+    minimum: 0
+
+  CBlockEntry: &CBlockEntry
+    type: object
+    additionalProperties: false
+    required:
+      - cbeEpoch
+      - cbeSlot
+      - cbeBlkHeight
+      - cbeBlkHash
+      - cbeTxNum
+      - cbeTotalSent
+      - cbeSize
+      - cbeFees
+    properties:
+      cbeEpoch: *Word64
+      cbeSlot: *Word16
+      cbeBlkHeight: *Word64
+      cbeBlkHash: *CHash
+      cbeTimeIssued: *POSIXTime
+      cbeTxNum: *Word64
+      cbeTotalSent: *CCoin
+      cbeSize: *Word64
+      cbeBlockLead: *CHash
+      cbeFees: *CCoin
+
+  CBlockSummary: &CBlockSummary
+    type: object
+    additionalProperties: false
+    required:
+      - cbsEntry
+      - cbsPrevHash
+      - cbsMerkleRoot
+    properties:
+      cbsEntry: *CBlockEntry
+      cbsPrevHash: *CHash
+      cbsNextHash: *CHash
+      cbsMerkleRoot: *CHash
+
+  CChainTip: &CChainTip
+    type: object
+    # additionalProperties: false
+    # required:
+    #   - ctBlockNo
+    #   - ctSlotNo
+    #   - ctBlockHash
+    properties:
+      ctBlockNo: *Word64
+      ctSlotNo: *Word64
+      ctBlockHash: *CHash
+
+  CTxAddressBrief: &CTxAddressBrief
+    type: object
+    additionalProperties: false
+    required:
+      - ctaAddress
+      - ctaAmount
+      - ctaTxHash
+      - ctaTxIndex
+    properties:
+      ctaAddress: *CAddress
+      ctaAmount: *CCoin
+      ctaTxHash: *CTxHash
+      ctaTxIndex: *Word64
+
+  CTxBrief: &CTxBrief
+    type: object
+    additionalProperties: false
+    required:
+      - ctbId
+      - ctbInputs
+      - ctbOutputs
+      - ctbInputSum
+      - ctbOutputSum
+      - ctbFees
+    properties:
+      ctbId: *CHash
+      ctbTimeIssued: *POSIXTime
+      ctbInputs:
+        type: array
+        items: *CTxAddressBrief
+      ctbOutputs:
+        type: array
+        items: *CTxAddressBrief
+      ctbInputSum: *CCoin
+      ctbOutputSum: *CCoin
+      ctbFees: *CCoin
+
+  CTxEntry: &CTxEntry
+    type: object
+    additionalProperties: false
+    required:
+      - cteId
+      - cteAmount
+    properties:
+      cteId: *CTxHash
+      cteTimeIssued: *POSIXTime
+      cteAmount: *CCoin
+
+  CUtxo: &CUtxo
+    type: object
+    additionalProperties: false
+    required:
+      - cuId
+      - cuOutIndex
+      - cuAddress
+      - cuCoins
+    properties:
+      cuId: *CTxHash
+      cuOutIndex: *Word64
+      cuAddress: *CAddress
+      cuCoins: *CCoin
+
+  CTxSummary: &CTxSummary
+    type: object
+    additionalProperties: false
+    required:
+      - ctsId
+      - ctsTotalInput
+      - ctsTotalOutput
+      - ctsFees
+      - ctsInputs
+      - ctsOutputs
+    properties:
+      ctsId: *CTxHash
+      ctsTxTimeIssued: *POSIXTime
+      ctsBlockTimeIssued: *POSIXTime
+      ctsBlockHeight: *Word64
+      ctsBlockEpoch: *Word64
+      ctsBlockSlot: *Word16
+      ctsBlockHash: *CHash
+      ctsRelayedBy: *CNetworkAddress
+      ctsTotalInput: *CCoin
+      ctsTotalOutput: *CCoin
+      ctsFees: *CCoin
+      ctsInputs:
+        type: array
+        items: *CTxAddressBrief
+      ctsOutputs:
+        type: array
+        items: *CTxAddressBrief
+
+  CAddressSummary: &CAddressSummary
+    type: object
+    additionalProperties: false
+    required:
+      - caAddress
+      - caType
+      - caChainTip
+      - caTxNum
+      - caBalance
+      - caTotalInput
+      - caTotalOutput
+      - caTotalFee
+      - caTxList
+    properties:
+      caAddress: *CAddress
+      caType: *CAddressType
+      caChainTip: *CChainTip
+      caTxNum: *Word64
+      caBalance: *CCoin
+      caTotalInput: *CCoin
+      caTotalOutput: *CCoin
+      caTotalFee: *CCoin
+      caTxList:
+        type: array
+        items: *CTxBrief
+
+  CBlockEntries: &CBlockEntries
+    type: array
+    items: *CBlockEntry
+
+  CGenesisAddressInfo: &CGenesisAddressInfo
+    type: object
+    additionalProperties: false
+    required:
+      - cgaiCardanoAddress
+      - cgaiGenesisAmount
+      - cgaiIsRedeemed
+    properties:
+      cgaiCardanoAddress: *CAddress
+      cgaiGenesisAmount: *CCoin
+      cgaiIsRedeemed: *Bool
+
+  CGenesisSummary: &CGenesisSummary
+    type: object
+    additionalProperties: False
+    required:
+      - cgsNumTotal
+      - cgsNumRedeemed
+      - cgsNumNotRedeemed
+      - cgsRedeemedAmountTotal
+      - cgsNonRedeemedAmountTotal
+    properties:
+      cgsNumTotal: *Word64
+      cgsNumRedeemed: *Word64
+      cgsNumNotRedeemed: *Word64
+      cgsRedeemedAmountTotal: *CCoin
+      cgsNonRedeemedAmountTotal: *CCoin
+
+  TxsStats: &TxsStats
+    type: array
+    items:
+      type: array
+      minItems: 2
+      maxItems: 2
+      items:
+        example: ["test", 42]
+        oneOf:
+          - *CTxHash
+          - *Word64
+
+  PageNumber: &PageNumber
+    type: integer
+    minimum: 0
+
+  PagedCBlockEntries: &PagedCBlockEntries
+    type: array
+    minItems: 2
+    maxItems: 2
+    description: First item is a page number, second item is an array.
+    example:
+      - 1
+      - - cbeEpoch: 14
+          cbeSlot: 42
+          cbeBlkHeight: 1337
+          cbeBlkHash: 935e2ca795c898eed1c8635e0489259344f951757f6ec0043962e899091e3690
+          cbeTimeIssued: 1535691511
+          cbeTxNum: 0
+          cbeTotalSent:
+            getCoin: 0
+          cbeSize: 634
+          cbeBlockLead: 6c9e14978b9d6629b8703f4f25e9df6ed4814b930b8403b0d45350ea
+          cbeFees:
+            getCoin: 0
+    items:
+      oneOf:
+        - *CBlockEntries
+        - *PageNumber
+
+  PagedTxsStats: &PagedTxsStats
+    type: array
+    minItems: 2
+    maxItems: 2
+    description: |
+      First item is a page number, second item is an array of 2-tuples where for each 2-tuple:
+
+      - The first element is a transaction hash.
+      - The second element is the size of that transaction in `bytes`.
+    example:
+      - 1
+      - - - f5261fbbb4c96e22eb2ff83f3f1b06ecfd91b4793d18292f5f06a85b37fddd84
+          - 216
+        - - 330fd742c16151f82ebe0d6ded589f7210e81c703c8d20177abe432b34a39287
+          - 300
+    items:
+      oneOf:
+        - *TxsStats
+        - *PageNumber
+
+x-param-address: &param-address
+  in: path
+  name: address
+  required: true
+  <<: *unCAddress
+
+x-param-addressFilter: &param-addressFilter
+  in: query
+  name: filter
+  required: false
+  <<: *CAddressFilter
+
+x-param-blockHash: &param-blockHash
+  in: path
+  name: blockHash
+  required: true
+  <<: *CHash
+
+x-param-epochNumber: &param-epochNumber
+  in: path
+  name: epoch
+  required: true
+  <<: *Word64
+
+x-param-limit: &param-limit
+  in: query
+  name: limit
+  type: integer
+  minimum: 0
+
+x-param-offset: &param-offset
+  in: query
+  name: offset
+  type: integer
+  minimum: 0
+
+x-param-pageNo: &param-pageNo
+  in: query
+  name: page
+  required: true
+  type: number
+  minimum: 1
+
+x-param-pageSize: &param-pageSize
+  in: query
+  name: pageSize
+  required: true
+  type: number
+  minimum: 1
+
+x-param-network: &param-network
+  in: path
+  name: network
+  required: true
+  type: string
+  enum:
+    - mainnet
+    - testnet
+
+x-param-slotNumber: &param-slotNumber
+  in: path
+  name: slot
+  required: true
+  <<: *Word16
+
+x-param-txId: &param-txId
+  in: path
+  name: txId
+  required: true
+  <<: *CHash
+
+
+x-response200: &response200
+  type: object
+  required:
+    - Right
+
+
+paths:
+  /{network}/utxos/{address}:
+    get:
+      operationId: getAddressBalance
+      tags: ["HttpBridge"]
+      summary: address balance
+      description: Get current balance of provided address.
+      parameters:
+        - *param-network
+        - *param-address
+      responses:
+        200:
+          description: Ok
+          schema:
+            <<: *response200
+            <<: { "properties": { "Right": *CAddressBalance } }
+
+  /api/blocks/pages:
+    get:
+      operationId: _blocksPages
+      tags: ["Blocks"]
+      summary: list blocks
+      description: Get the list of blocks, contained in pages.
+      parameters:
+        - *param-pageNo
+        - *param-pageSize
+      responses:
+        200:
+          description: Ok
+          schema:
+            <<: *response200
+            <<: { "properties": { "Right": *PagedCBlockEntries } }
+
+  /api/blocks/pages/total:
+    get:
+      operationId: _blocksPagesTotal
+      tags: ["Blocks"]
+      summary: get total pages
+      description: Get the list of total pages.
+      parameters:
+        - *param-pageSize
+      responses:
+        200:
+          description: Ok
+          schema:
+            <<: *response200
+            <<: { "properties": { "Right": *PageNumber } }
+
+  /api/blocks/summary/{blockHash}:
+    get:
+      operationId: _blocksSummary
+      tags: ["Blocks"]
+      summary: get summary
+      description: Get block's summary information.
+      parameters:
+        - *param-blockHash
+      responses:
+        200:
+          description: Ok
+          schema:
+            <<: *response200
+            <<: { "properties": { "Right": *CBlockSummary } }
+
+  /api/blocks/txs/{blockHash}:
+    get:
+      operationId: _blocksTxs
+      tags: ["Blocks"]
+      summary: list transactions
+      description: Get brief information about transactions.
+      parameters:
+        - *param-blockHash
+        - *param-limit
+        - *param-offset
+      responses:
+        200:
+          description: Ok
+          schema:
+            <<: *response200
+            <<:
+              properties:
+                Right:
+                  type: array
+                  items: *CTxBrief
+
+  /api/txs/last:
+    get:
+      operationId: _txsLast
+      tags: ["Transactions"]
+      summary: get last N
+      description: Get information about the N latest transactions.
+      responses:
+        200:
+          description: Ok
+          schema:
+            <<: *response200
+            <<: { "properties": { "Right": *CTxEntry } }
+
+  /api/txs/summary/{txId}:
+    get:
+      operationId: _txsSummary
+      tags: ["Transactions"]
+      summary: get summary
+      description: Get summary information about a transaction
+      parameters:
+          - *param-txId
+      responses:
+        200:
+          description: Ok
+          schema:
+            <<: *response200
+            <<: { "properties": { "Right": *CTxSummary } }
+
+  /api/stats/txs:
+    get:
+      operationId: _statsTxs
+      tags: ["Transactions"]
+      summary: txs stats
+      parameters:
+        - *param-pageNo
+      responses:
+        200:
+          description: Ok
+          schema:
+            <<: *response200
+            <<: { "properties": { "Right": *PagedTxsStats } }
+
+  /api/addresses/summary/{address}:
+    get:
+      operationId: _addressSummary
+      tags: ["Addresses"]
+      summary: get summary
+      description: Get summary information about an address
+      parameters:
+        - *param-address
+      responses:
+        200:
+          description: Ok
+          schema:
+            <<: *response200
+            <<: { "properties": { "Right": *CAddressSummary } }
+
+  /api/block/{blockHash}/address/{address}:
+    get:
+      operationId: _blockAddress
+      tags: ["Addresses"]
+      summary: get address
+      parameters:
+        - *param-address
+        - *param-blockHash
+      responses:
+        200:
+          description: Ok
+          schema:
+            <<: *response200
+            <<: { "properties": { "Right": *CAddressSummary } }
+
+  /api/epochs/{epoch}:
+    get:
+      operationId: _epochPages
+      tags: ["Epochs"]
+      summary: get epoch
+      description: Get epoch pages, all the paged slots in the epoch.
+      parameters:
+        - *param-epochNumber
+        - *param-pageNo
+      responses:
+        200:
+          description: Ok
+          schema:
+            <<: *response200
+            <<: { "properties": { "Right": *PagedCBlockEntries } }
+
+  /api/epochs/{epoch}/{slot}:
+    get:
+      operationId: _epochSlots
+      tags: ["Epochs"]
+      summary: get slot
+      description: Get the slot information in an epoch.
+      parameters:
+        - *param-epochNumber
+        - *param-slotNumber
+      responses:
+        200:
+          description: Ok
+          schema:
+            <<: *response200
+            <<: { "properties": { "Right": *CBlockEntries } }
+
+  /api/genesis/summary:
+    get:
+      operationId: _genesisSummary
+      tags: ["Genesis"]
+      summary: get summary
+      description: Get information about the genesis block.
+      responses:
+        200:
+          description: Ok
+          schema:
+            <<: *response200
+            <<: { "properties": { "Right": *CGenesisSummary } }
+
+  /api/genesis/address/pages/total:
+    get:
+      operationId: _genesisPagesTotal
+      tags: ["Genesis"]
+      summary: get total pages
+      parameters:
+        - *param-pageSize
+        - *param-addressFilter
+      responses:
+        200:
+          description: Ok
+          schema:
+            <<: *response200
+            <<: { "properties": { "Right": *PageNumber } }
+
+  /api/genesis/address:
+    get:
+      operationId: _genesisAddressInfo
+      tags: ["Genesis"]
+      summary: get address info
+      parameters:
+        - *param-pageNo
+        - *param-pageSize
+        - *param-addressFilter
+      responses:
+        200:
+          description: Ok
+          schema:
+            <<: *response200
+            <<: { "properties": { "Right": *CGenesisAddressInfo } }
+
+  /api/supply/ada:
+    get:
+      operationId: _totalAda
+      tags: ["Genesis"]
+      summary: ada supply
+      description: Get the total supply of Ada.
+      responses:
+        200:
+          description: Ok
+          schema:
+            <<: *response200
+            <<: { "properties": { "Right": *CAda } }
+
+
