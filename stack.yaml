@@ -89,7 +89,7 @@ extra-deps:
       - byron/chain/executable-spec
 
   - git: https://github.com/input-output-hk/cardano-ledger
-    commit: d1b4f6520692d7478d81b050385e0a9b71a0c62b
+    commit: b3c8c599e96339d41c5058fbd8af8ca6bf32145e
     subdirs:
       - cardano-ledger
       - cardano-ledger/test
