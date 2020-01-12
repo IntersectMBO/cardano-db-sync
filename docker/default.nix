@@ -79,13 +79,12 @@ let
   configuration = { config, ... }: {
     imports = [
       (sources.ops-lib + "/modules/monitoring-services.nix")
-      ../nix/nixos/cardano-exporter-service.nix
       (cardano-node-src + "/nix/nixos")
       (if builtins.pathExists ./secrets.nix then
         oauth_configuration
       else
         noauth_configuration)
-    ];
+    ] ++ (import ../nix/nixos/module-list.nix);
 
     services.cardano-node = {
       extraArgs = [ "+RTS" "-N3" "-RTS" ];
@@ -96,17 +95,11 @@ let
       enable = true;
     };
 
-    services.cardano-exporter = {
+    services.cardano-explorer = {
       enable = true;
       cluster = environment;
       socketPath = "/run/cardano-node/node-core-0.socket";
     };
-
-    services.cardano-explorer-webapi = {
-      enable = true;
-    };
-
-    services.cardano-tx-submit-webapi.enable = true;
 
     services.postgresql = {
       enable = true;
