@@ -150,8 +150,10 @@ executable cardano-webapi-validate
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
 
-  other-modules:        Explorer.Web.Random
-                        Explorer.Web.Validate
+  other-modules:        Explorer.Web.Validate
+                        Explorer.Web.Validate.Address
+                        Explorer.Web.Validate.ErrorHandling
+                        Explorer.Web.Validate.Random
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , async

@@ -1,8 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Explorer.Web.Random
+module Explorer.Web.Validate.Random
   ( queryRandomAddress
+  , queryRandomBlockHash
   , queryRandomRedeemAddress
   ) where
 
@@ -18,7 +19,9 @@ import           Database.Esqueleto (Entity (..), InnerJoin (..), Value (..), Sq
 import           Database.Persist.Sql (SqlBackend)
 
 import           Explorer.DB (BlockId, EntityField (..), LookupFail (..), Key (..),
-                    TxOut (..), TxOutId, maybeToEither)
+                    TxOut (..), TxOutId, isJust, maybeToEither)
+
+import           Explorer.Web.Api.Legacy.Util (bsBase16Encode)
 
 import           System.Random (randomRIO)
 
@@ -39,6 +42,23 @@ queryRandomAddress = do
   where
     errMsg :: LookupFail
     errMsg = DbLookupMessage "queryRandomAddress: Lookup address by index failed"
+
+queryRandomBlockHash :: MonadIO m => ReaderT SqlBackend m (Either LookupFail Text)
+queryRandomBlockHash = do
+    res <- select . from $ \ blk -> do
+              where_ (isJust (blk ^. BlockBlockNo))
+              pure countRows
+    case listToMaybe res of
+      Nothing -> pure $ Left (DbLookupMessage "queryRandomBlockHash: Empty Block table")
+      Just (Value blkCount) -> do
+        blkid <- liftIO $ randomRIO (1, blkCount - 1)
+        res1 <- select . from $ \ blk -> do
+                  where_ (blk ^. BlockId ==. val (mkBlockId blkid))
+                  pure (blk ^. BlockHash)
+        pure $ maybeToEither errMsg (bsBase16Encode . unValue) (listToMaybe res1)
+  where
+    errMsg :: LookupFail
+    errMsg = DbLookupMessage "queryRandomBlockHash: Lookup block by index failed"
 
 queryRandomRedeemAddress :: MonadIO m => ReaderT SqlBackend m (Either LookupFail Text)
 queryRandomRedeemAddress = do
