@@ -59,7 +59,7 @@ extra-deps:
     commit: 43a036c5bbe68ca2e9cbe611eab7982e2348fe49
 
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: dbd932704fa4520bc24e45b2c00407c5f437c12a
+    commit: d5eb7ee92f0974aed5ac4a57a9bf5697ec065b7d
     subdirs:
       - contra-tracer
       - iohk-monitoring
@@ -71,7 +71,7 @@ extra-deps:
       - tracer-transformers
 
   - git: https://github.com/input-output-hk/cardano-base
-    commit: 80deee31f8d9422b8e090e55b17e1a714153180b
+    commit: 53d773907edea2fdcf65cebeb81ab5e47eeab805
     subdirs:
       - binary
       - binary/test
@@ -97,7 +97,7 @@ extra-deps:
       - crypto/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: 408f3a3fc8be601075ee2bacdb7b7b9ebac9d2c2
+    commit: e0eba52e8e7c81d3f002c8d36a3e5f6ed30bb216
     subdirs:
       - io-sim-classes
       - network-mux
