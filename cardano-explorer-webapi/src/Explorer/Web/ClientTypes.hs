@@ -108,6 +108,7 @@ newtype CNetwork = CNetwork Text
 -- Composite types
 -------------------------------------------------------------------------------------
 
+-- | CCoin denominated in Lovelace (for compatibility with the old explorer-webapi).
 newtype CCoin = CCoin
     { unCCoin :: Integer
     } deriving (Show, Generic, Eq)
@@ -119,12 +120,10 @@ mkCCoin :: Integer -> CCoin
 mkCCoin = CCoin
 
 adaToCCoin :: Ada -> CCoin
-adaToCCoin (Ada (MkFixed ada)) = CCoin $ ada * 1000000
+adaToCCoin (Ada (MkFixed ll)) = CCoin ll
 
 sumCCoin :: [CCoin] -> CCoin
 sumCCoin = mkCCoin . sum . map unCCoin
-
---instance NFData CCoin
 
 -- | List of block entries is returned from "get latest N blocks" endpoint
 data CBlockEntry = CBlockEntry
@@ -136,11 +135,9 @@ data CBlockEntry = CBlockEntry
     , cbeTxNum      :: !Word
     , cbeTotalSent  :: !CCoin
     , cbeSize       :: !Word64
-    , cbeBlockLead  :: !(Maybe Text) -- todo (ks): Maybe CAddress?
+    , cbeBlockLead  :: !(Maybe Text)
     , cbeFees       :: !CCoin
     } deriving (Show, Generic, Eq)
-
---instance NFData CBlockEntry
 
 -- | List of tx entries is returned from "get latest N transactions" endpoint
 data CTxEntry = CTxEntry
