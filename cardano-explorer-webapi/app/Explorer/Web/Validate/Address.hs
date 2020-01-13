@@ -5,8 +5,8 @@ module Explorer.Web.Validate.Address
   , validateRedeemAddressSummary
   ) where
 
-import           Control.Monad (when)
-
+import           Data.Text (Text)
+import qualified Data.Text as Text
 import           Data.Text.ANSI (green, red)
 import qualified Data.Text.IO as Text
 
@@ -27,7 +27,9 @@ validateAddressSummary backend = do
                 addrTxt <- handleLookupFail =<< queryRandomAddress
                 addr <- handleExplorerError $ decodeTextAddress addrTxt
                 handleExplorerError =<< queryAddressSummary addrTxt addr
-  reportAddressSummary addrSum
+  if unCCoin (caBalance addrSum) >= 0
+    then reportAddressSummaryOk addrSum
+    else reportAddressSummaryFail addrSum
 
 -- | Validate that all redeem address have a balance >= 0.
 validateRedeemAddressSummary :: SqlBackend -> IO ()
@@ -36,10 +38,21 @@ validateRedeemAddressSummary backend = do
                 addrTxt <- handleLookupFail =<< queryRandomRedeemAddress
                 addr <- handleExplorerError $ decodeTextAddress addrTxt
                 handleExplorerError =<< queryAddressSummary addrTxt addr
-  reportAddressSummary addrSum
+  if unCCoin (caBalance addrSum) >= 0
+    then reportAddressSummaryOk addrSum
+    else reportAddressSummaryFail addrSum
 
-reportAddressSummary :: CAddressSummary -> IO ()
-reportAddressSummary addrSum = do
+reportAddressSummaryOk :: CAddressSummary -> IO ()
+reportAddressSummaryOk addrSum = do
+  mapM_ Text.putStr
+    [ "  Balance for " , shortenAddress (unCAddress $ caAddress addrSum)
+    , " (", textShow (caType addrSum), ") is non-negative: "
+    ]
+  Text.putStrLn $ green "ok"
+
+reportAddressSummaryFail :: CAddressSummary -> IO ()
+reportAddressSummaryFail addrSum = do
+  Text.putStrLn $ "  Address balance is negative: "
   mapM_ Text.putStrLn
     [ "Address: " <> unCAddress (caAddress addrSum)
     , "  type: " <> textShow (caType addrSum)
@@ -51,5 +64,9 @@ reportAddressSummary addrSum = do
               else green (textShow balance)
     , ""
     ]
-  when (unCCoin (caBalance addrSum) < 0) $
-    exitFailure
+  exitFailure
+
+
+shortenAddress :: Text -> Text
+shortenAddress addr =
+  mconcat [Text.take 10 addr, "...", Text.drop (Text.length addr - 10) addr]
