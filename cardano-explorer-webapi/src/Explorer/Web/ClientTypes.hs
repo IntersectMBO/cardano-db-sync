@@ -38,6 +38,7 @@ module Explorer.Web.ClientTypes
        , toCHash
        , mkCCoin
        , adaToCCoin
+       , cCoinToAda
        , sumCCoin
        ) where
 
@@ -121,6 +122,10 @@ mkCCoin = CCoin
 
 adaToCCoin :: Ada -> CCoin
 adaToCCoin (Ada (MkFixed ll)) = CCoin ll
+
+cCoinToAda :: CCoin -> Ada
+cCoinToAda (CCoin ll) = Ada (MkFixed ll)
+
 
 sumCCoin :: [CCoin] -> CCoin
 sumCCoin = mkCCoin . sum . map unCCoin
