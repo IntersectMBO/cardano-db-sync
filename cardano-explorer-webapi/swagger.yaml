@@ -18,15 +18,10 @@ x-tagGroups: []
 
 definitions:
   CAddress: &CAddress
-    type: object
+    type: string
     additionalProperties: false
-    required:
-      - unCAddress
-    properties:
-      unCAddress: &unCAddress
-        type: string
-        format: base58
-        example: Ae2tdPwUPEZK72eZZqulakkhaUfTCcoaGepvQP718aYBczw5uZmp47h1k14
+    format: base58
+    example: Ae2tdPwUPEZK72eZZqulakkhaUfTCcoaGepvQP718aYBczw5uZmp47h1k14
 
   CAddressFilter: &CAddressFilter
     type: string
