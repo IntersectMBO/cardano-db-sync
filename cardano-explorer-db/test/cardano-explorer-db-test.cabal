@@ -27,7 +27,8 @@ library
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
 
-  exposed-modules:      Test.IO.Explorer.DB.Util
+  exposed-modules:      Test.Property.Explorer.DB.Types
+                        Test.IO.Explorer.DB.Util
 
 
   build-depends:        aeson
@@ -35,6 +36,7 @@ library
                       , base16-bytestring
                       , bytestring
                       , cardano-explorer-db
+                      , cardano-ledger
                       , conduit
                       , conduit-extra
                       , containers
@@ -44,6 +46,7 @@ library
                       , extra
                       , fast-logger
                       , filepath
+                      , hedgehog
                       , iohk-monitoring
                       , monad-logger
                       , persistent
