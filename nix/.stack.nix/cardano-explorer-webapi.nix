@@ -132,5 +132,18 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           buildable = true;
           };
         };
+      tests = {
+        "test" = {
+          depends = [
+            (hsPkgs."base" or (buildDepError "base"))
+            (hsPkgs."aeson" or (buildDepError "aeson"))
+            (hsPkgs."cardano-explorer-db-test" or (buildDepError "cardano-explorer-db-test"))
+            (hsPkgs."cardano-explorer-webapi" or (buildDepError "cardano-explorer-webapi"))
+            (hsPkgs."cardano-ledger" or (buildDepError "cardano-ledger"))
+            (hsPkgs."hedgehog" or (buildDepError "hedgehog"))
+            ];
+          buildable = true;
+          };
+        };
       };
     } // rec { src = (pkgs.lib).mkDefault ../.././cardano-explorer-webapi; }
