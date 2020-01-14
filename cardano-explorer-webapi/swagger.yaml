@@ -360,7 +360,7 @@ x-param-address: &param-address
   in: path
   name: address
   required: true
-  <<: *unCAddress
+  <<: *CAddress
 
 x-param-addressFilter: &param-addressFilter
   in: query
