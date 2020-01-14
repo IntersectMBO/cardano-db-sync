@@ -17,7 +17,7 @@ import           Explorer.DB (readPGPassFileEnv, toConnectionString)
 
 import           Explorer.Web.Api.Legacy.Util (textShow)
 import           Explorer.Web.Validate.Address (validateAddressSummary, validateRedeemAddressSummary)
-
+import           Explorer.Web.Validate.GenesisAddress (validateGenesisAddressPaging)
 
 runValidation :: Word -> IO ()
 runValidation count = do
@@ -31,7 +31,7 @@ runValidation count = do
     loop backend n
       | n > count = pure ()
       | otherwise = do
-          Text.putStrLn $ yellow ("Test #" <> textShow n <> "\n")
+          Text.putStrLn $ yellow ("Test #" <> textShow n <> ":")
           validate backend
           loop backend (n + 1)
 
@@ -39,3 +39,5 @@ validate :: SqlBackend -> IO ()
 validate backend = do
   validateRedeemAddressSummary backend
   validateAddressSummary backend
+  validateGenesisAddressPaging backend
+  putStrLn ""

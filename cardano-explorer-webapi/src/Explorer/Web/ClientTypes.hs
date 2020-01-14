@@ -97,6 +97,9 @@ newtype CAddress
     = CAddress { unCAddress :: Text }
     deriving (Show, Eq, Generic, Buildable, Hashable, NFData)
 
+instance ToJSON CAddress where
+    toJSON (CAddress txt) = Aeson.String txt
+
 -- | Client transaction id
 newtype CTxHash = CTxHash CHash
     deriving (Show, Eq, Generic, Buildable, Hashable, NFData)
@@ -318,7 +321,6 @@ instance Show CByteString where
     show (CByteString bs) = (show . B16.encode) bs
 
 deriveJSON defaultOptions ''CHash
-deriveJSON defaultOptions ''CAddress
 deriveJSON defaultOptions ''CTxHash
 
 deriveToJSON defaultOptions ''CBlockEntry
