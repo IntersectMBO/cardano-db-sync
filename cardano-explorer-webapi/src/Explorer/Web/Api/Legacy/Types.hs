@@ -8,10 +8,14 @@ module Explorer.Web.Api.Legacy.Types
 import           Servant.API (FromHttpApiData)
 
 
-newtype PageNo = PageNo { unPageNo :: Word }
+newtype PageNo = PageNo
+  { unPageNo :: Word
+  } deriving Show
 
 deriving instance FromHttpApiData PageNo
 
-newtype PageSize = PageSize { unPageSize :: Word }
+newtype PageSize = PageSize
+  { unPageSize :: Word
+  } deriving Show
 
 deriving instance FromHttpApiData PageSize

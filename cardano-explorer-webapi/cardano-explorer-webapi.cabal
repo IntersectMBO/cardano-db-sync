@@ -176,6 +176,7 @@ executable cardano-webapi-validate
   other-modules:        Explorer.Web.Validate
                         Explorer.Web.Validate.Address
                         Explorer.Web.Validate.ErrorHandling
+                        Explorer.Web.Validate.GenesisAddress
                         Explorer.Web.Validate.Random
 
   build-depends:        base                            >= 4.12         && < 4.13
