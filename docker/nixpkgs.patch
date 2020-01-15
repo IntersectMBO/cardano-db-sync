@@ -62,7 +62,7 @@ index bb03f7fc9e4..e1bb652ec0d 100644
        };
      };
 diff --git a/nixos/modules/testing/service-runner.nix b/nixos/modules/testing/service-runner.nix
-index 17d5e337690..a6f67e418df 100644
+index 17d5e337690..02ee82d8ca7 100644
 --- a/nixos/modules/testing/service-runner.nix
 +++ b/nixos/modules/testing/service-runner.nix
 @@ -4,7 +4,10 @@ with lib;
@@ -104,3 +104,11 @@ index 17d5e337690..a6f67e418df 100644
        $ENV{'MAINPID'} = $mainPid;
  
        # Catch SIGINT, propagate to the main program.
+@@ -67,6 +77,7 @@ let
+           kill 'INT', $mainPid;
+       };
+       $SIG{'INT'} = \&intHandler;
++      $SIG{'TERM'} = \&intHandler;
+       $SIG{'QUIT'} = \&intHandler;
+ 
+       # Run the ExecStartPost program.
