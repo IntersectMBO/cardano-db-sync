@@ -381,6 +381,7 @@ let
   two = mkScript "/etc/runit/" "2" ''
     echo two
 
+    ln -s /etc/service /service
     runsvdir -P /etc/service
   '';
 

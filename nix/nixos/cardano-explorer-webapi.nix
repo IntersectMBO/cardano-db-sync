@@ -43,7 +43,7 @@ in {
       pgpass = builtins.toFile "pgpass" "${cfg.postgres.socketdir}:${toString cfg.postgres.port}:${cfg.postgres.database}:${cfg.postgres.user}:*";
       script = pkgs.writeShellScript "cardano-explorer-webapi" ''
         export PGPASSFILE=${cfg.pgpass}
-        ${self.cardano-explorer-webapi}/bin/cardano-explorer-webapi
+        exec ${self.cardano-explorer-webapi}/bin/cardano-explorer-webapi
       '';
     };
     systemd.services.cardano-explorer-webapi = {
