@@ -6,6 +6,9 @@ module Explorer.Web
   , CAddressSummary (..)
   , CCoin (..)
   , CGenesisAddressInfo (..)
+  , CHash (..)
+  , CTxBrief (..)
+  , CTxHash (..)
   , queryAddressSummary
   , queryAllGenesisAddresses
   , queryChainTip
@@ -16,6 +19,6 @@ import Explorer.Web.Api.Legacy.AddressSummary (queryAddressSummary)
 import Explorer.Web.Api.Legacy.GenesisAddress (queryAllGenesisAddresses)
 import Explorer.Web.Api.Legacy.Util (runQuery)
 import Explorer.Web.ClientTypes (CAddress (..), CAddressSummary (..), CCoin (..),
-        CGenesisAddressInfo (..))
+        CGenesisAddressInfo (..), CHash (..), CTxBrief (..), CTxHash (..))
 import Explorer.Web.Query (queryChainTip)
 import Explorer.Web.Server (runServer)
