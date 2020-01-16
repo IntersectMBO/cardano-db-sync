@@ -175,6 +175,7 @@ executable cardano-webapi-validate
 
   other-modules:        Explorer.Web.Validate
                         Explorer.Web.Validate.Address
+                        Explorer.Web.Validate.BlocksTxs
                         Explorer.Web.Validate.ErrorHandling
                         Explorer.Web.Validate.GenesisAddress
                         Explorer.Web.Validate.Random
