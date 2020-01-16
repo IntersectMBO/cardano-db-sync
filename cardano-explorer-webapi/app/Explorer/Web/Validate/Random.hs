@@ -10,18 +10,17 @@ module Explorer.Web.Validate.Random
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
+import           Data.ByteString.Char8 (ByteString)
 import           Data.Maybe (listToMaybe)
 import           Data.Text (Text)
 
 import           Database.Esqueleto (Entity (..), InnerJoin (..), Value (..), SqlExpr,
-                    (^.), (==.),
-                    countRows, from, on, select, val, where_)
+                    (^.), (==.), (>.),
+                    asc, countRows, from, offset, on, orderBy, select, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
 import           Explorer.DB (BlockId, EntityField (..), LookupFail (..), Key (..),
-                    TxOut (..), TxOutId, isJust, maybeToEither)
-
-import           Explorer.Web.Api.Legacy.Util (bsBase16Encode)
+                    TxOut (..), TxOutId, maybeToEither)
 
 import           System.Random (randomRIO)
 
@@ -43,19 +42,24 @@ queryRandomAddress = do
     errMsg :: LookupFail
     errMsg = DbLookupMessage "queryRandomAddress: Lookup address by index failed"
 
-queryRandomBlockHash :: MonadIO m => ReaderT SqlBackend m (Either LookupFail Text)
+queryRandomBlockHash :: MonadIO m => ReaderT SqlBackend m (Either LookupFail ByteString)
 queryRandomBlockHash = do
     res <- select . from $ \ blk -> do
-              where_ (isJust (blk ^. BlockBlockNo))
+              where_ (blk ^. BlockTxCount >. val 0)
               pure countRows
     case listToMaybe res of
       Nothing -> pure $ Left (DbLookupMessage "queryRandomBlockHash: Empty Block table")
       Just (Value blkCount) -> do
         blkid <- liftIO $ randomRIO (1, blkCount - 1)
         res1 <- select . from $ \ blk -> do
-                  where_ (blk ^. BlockId ==. val (mkBlockId blkid))
+                  where_ (blk ^. BlockTxCount >. val 0)
+                  if False
+                    then do
+                        orderBy [asc (blk ^. BlockId)]
+                        offset blkid
+                    else pure ()
                   pure (blk ^. BlockHash)
-        pure $ maybeToEither errMsg (bsBase16Encode . unValue) (listToMaybe res1)
+        pure $ maybeToEither errMsg unValue (listToMaybe res1)
   where
     errMsg :: LookupFail
     errMsg = DbLookupMessage "queryRandomBlockHash: Lookup block by index failed"

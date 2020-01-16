@@ -194,14 +194,14 @@ data CTxBrief = CTxBrief
     , ctbInputSum   :: !CCoin
     , ctbOutputSum  :: !CCoin
     , ctbFees       :: !CCoin
-    } deriving (Show, Generic)
+    } deriving (Eq, Generic, Show)
 
 data CTxAddressBrief = CTxAddressBrief
     { ctaAddress :: !CAddress
     , ctaAmount :: !CCoin
     , ctaTxHash :: !CTxHash
     , ctaTxIndex :: !Word
-    } deriving (Show, Generic)
+    } deriving (Eq, Generic, Show)
 
 data CUtxo = CUtxo
     { cuId       :: !CTxHash
