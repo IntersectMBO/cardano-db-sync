@@ -79,13 +79,12 @@ let
   configuration = { config, ... }: {
     imports = [
       (sources.ops-lib + "/modules/monitoring-services.nix")
-      ../nix/nixos/cardano-exporter-service.nix
       (cardano-node-src + "/nix/nixos")
       (if builtins.pathExists ./secrets.nix then
         oauth_configuration
       else
         noauth_configuration)
-    ];
+    ] ++ (import ../nix/nixos/module-list.nix);
 
     services.cardano-node = {
       extraArgs = [ "+RTS" "-N3" "-RTS" ];
@@ -96,14 +95,10 @@ let
       enable = true;
     };
 
-    services.cardano-exporter = {
+    services.cardano-explorer = {
       enable = true;
       cluster = environment;
       socketPath = "/run/cardano-node/node-core-0.socket";
-    };
-
-    services.cardano-explorer-webapi = {
-      enable = true;
     };
 
     services.postgresql = {
@@ -128,6 +123,13 @@ let
     services.nginx = {
       virtualHosts.${config.services.monitoring-services.webhost} = {
         default = true;
+        locations."/api/submit/tx".extraConfig = ''
+          proxy_pass http://localhost:${toString config.services.cardano-tx-submit-webapi.port};
+          proxy_set_header Host $host;
+          proxy_set_header REMOTE_ADDR $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+        '';
         locations."/api/".extraConfig = ''
           proxy_pass http://localhost:8100/api/;
           proxy_set_header Host $host;
@@ -379,6 +381,7 @@ let
   two = mkScript "/etc/runit/" "2" ''
     echo two
 
+    ln -s /etc/service /service
     runsvdir -P /etc/service
   '';
 
@@ -416,6 +419,7 @@ let
       (wrapService "cardano-explorer-node")
       (wrapService "cardano-explorer-webapi")
       (wrapService "cardano-node")
+      (wrapService "cardano-tx-submit-webapi")
       (wrapService "prometheus-postgres-exporter")
     ] ++ (lib.optional (builtins.pathExists ./secrets.nix)
       (wrapService "oauth2_proxy"));
