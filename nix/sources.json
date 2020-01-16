@@ -12,15 +12,15 @@
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "cardano-node": {
-        "branch": "jlotoski/cardano-node-issue-461",
+        "branch": "master",
         "description": null,
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "cardano-node",
-        "rev": "639b236f76d3626cd97d241483da7ddeddc38943",
-        "sha256": "1hr12jdy8naw2xv26l9q7jyzhv1zqcc4gdm2qhmaq51aqjsnnlcx",
+        "rev": "6b7de20aa19a3f91ae7cf548ce694c931c8797ed",
+        "sha256": "1h5f1zpdcvc44k1x60h4pc5n4kgsp4iii0mqs3bm7fair2gmgk38",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/cardano-node/archive/639b236f76d3626cd97d241483da7ddeddc38943.tar.gz",
+        "url": "https://github.com/input-output-hk/cardano-node/archive/6b7de20aa19a3f91ae7cf548ce694c931c8797ed.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "gitignore": {
@@ -36,15 +36,15 @@
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "iohk-nix": {
-        "branch": "tx-submit-config",
+        "branch": "master",
         "description": "nix scripts shared across projects",
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "iohk-nix",
-        "rev": "e5c0aa686d9805a87e6f6c6917da9c1868a5ae57",
-        "sha256": "0sd2nafg2rpd64085gp59y2dbs07blm7vnnkh8252jmlpyqf352j",
+        "rev": "75a17d94a203631293e634cb0690b8a582bf44e3",
+        "sha256": "0m55slpr55fycw5190c3c12q0zhqybfikgqallcl9wakldk5728n",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/iohk-nix/archive/e5c0aa686d9805a87e6f6c6917da9c1868a5ae57.tar.gz",
+        "url": "https://github.com/input-output-hk/iohk-nix/archive/75a17d94a203631293e634cb0690b8a582bf44e3.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "niv": {
