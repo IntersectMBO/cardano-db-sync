@@ -1,5 +1,10 @@
 # Revision history for cardano-tx-submit
 
+## 1.2.2 -- January 2020
+
+* Update dependencies to latest versions.
+* Service added to docker files.
+
 ## 1.2.1 -- January 2020
 
 * Update dependencies to latest versions.

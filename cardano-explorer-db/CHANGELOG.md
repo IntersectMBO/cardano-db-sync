@@ -1,5 +1,10 @@
 # Revision history for cardano-explorer-db
 
+## 1.2.2 -- January 2020
+
+* Update dependencies to latest versions.
+* Allow building with latest version of persistent library.
+
 ## 1.2.1 -- January 2020
 
 * Update dependencies to latest versions.
