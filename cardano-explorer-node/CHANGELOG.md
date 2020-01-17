@@ -1,5 +1,9 @@
 # Revision history for cardano-explorer-node
 
+## 1.2.2 -- January 2020
+
+* Update dependencies to latest versions.
+
 ## 1.2.1 -- January 2020
 
 * Update dependencies to latest versions.
