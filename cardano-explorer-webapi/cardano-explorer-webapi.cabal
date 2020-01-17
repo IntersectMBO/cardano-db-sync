@@ -192,6 +192,7 @@ executable cardano-webapi-validate
                       , optparse-applicative
                       , persistent
                       , persistent-postgresql
+                      , pretty-show
                       , random
                       , text
                       , text-ansi

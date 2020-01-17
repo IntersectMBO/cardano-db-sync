@@ -95,7 +95,7 @@ newtype CHash = CHash Text
 -- | Client address. The address from Cardano
 newtype CAddress
     = CAddress { unCAddress :: Text }
-    deriving (Show, Eq, Generic, Buildable, Hashable, NFData)
+    deriving (Show, Eq, Generic, Ord, Buildable, Hashable, NFData)
 
 instance ToJSON CAddress where
     toJSON (CAddress txt) = Aeson.String txt

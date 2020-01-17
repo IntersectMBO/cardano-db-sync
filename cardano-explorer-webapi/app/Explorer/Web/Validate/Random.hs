@@ -16,7 +16,7 @@ import           Data.Text (Text)
 
 import           Database.Esqueleto (Entity (..), InnerJoin (..), Value (..), SqlExpr,
                     (^.), (==.), (>.),
-                    asc, countRows, from, offset, on, orderBy, select, val, where_)
+                    asc, countRows, from, limit, offset, on, orderBy, select, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
 import           Explorer.DB (BlockId, EntityField (..), LookupFail (..), Key (..),
@@ -53,11 +53,9 @@ queryRandomBlockHash = do
         blkid <- liftIO $ randomRIO (1, blkCount - 1)
         res1 <- select . from $ \ blk -> do
                   where_ (blk ^. BlockTxCount >. val 0)
-                  if False
-                    then do
-                        orderBy [asc (blk ^. BlockId)]
-                        offset blkid
-                    else pure ()
+                  orderBy [asc (blk ^. BlockId)]
+                  offset blkid
+                  limit 1
                   pure (blk ^. BlockHash)
         pure $ maybeToEither errMsg unValue (listToMaybe res1)
   where
