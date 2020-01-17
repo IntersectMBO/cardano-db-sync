@@ -1,5 +1,15 @@
 # Revision history for cardano-explorer-webapi
 
+## 1.2.2 -- January 2020
+
+* Swagger docs https://input-output-hk.github.io/cardano-explorer/
+* Fix /api/blocks/txs/{blkHash} endpoint (#195)
+* Fix Ada/Lovelace denomination bug (#197)
+* Fix JSON rendering for addresses to match old API
+* Add validation for genesis address paging (#219)
+* Add additional tests (#222, #227)
+* Update dependencies to latest versions.
+
 ## 1.2.1 -- January 2020
 
 * Update dependencies to latest versions.
