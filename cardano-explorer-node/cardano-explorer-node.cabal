@@ -35,11 +35,13 @@ library
   other-modules:        Explorer.Node.Config
                         Explorer.Node.Database
                         Explorer.Node.Error
-                        Explorer.Node.Insert
-                        Explorer.Node.Insert.Genesis
+                        Explorer.Node.Genesis
                         Explorer.Node.Metrics
+                        Explorer.Node.Plugin
+                        Explorer.Node.Plugin.Default
+                        Explorer.Node.Plugin.Default.Insert
+                        Explorer.Node.Plugin.Default.Rollback
                         Explorer.Node.Util
-                        Explorer.Node.Rollback
                         Explorer.Node.Tracing.ToObjectOrphans
 
   build-depends:        base                            >= 4.12         && < 4.13

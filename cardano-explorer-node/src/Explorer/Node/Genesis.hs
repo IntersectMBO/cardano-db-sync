@@ -9,7 +9,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Explorer.Node.Insert.Genesis
+module Explorer.Node.Genesis
   ( insertValidateGenesisDistribution
   ) where
 

@@ -1,22 +1,20 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Explorer.Node.Insert
-  ( insertByronBlockList
-  , insertValidateGenesisDistribution
+module Explorer.Node.Plugin.Default.Insert
+  ( insertByronBlock
   ) where
 
 import           Cardano.Binary (serialize')
 import           Cardano.BM.Trace (Trace, logDebug, logInfo)
 
+import           Control.Monad.Logger (NoLoggingT)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, newExceptT,
                     runExceptT)
 
@@ -42,7 +40,6 @@ import           Database.Persist.Sql (SqlBackend)
 
 import qualified Explorer.DB as DB
 import           Explorer.Node.Error
-import           Explorer.Node.Insert.Genesis
 import           Explorer.Node.Util
 
 import           Ouroboros.Consensus.Ledger.Byron (ByronBlock (..))
@@ -54,28 +51,14 @@ data ValueFee = ValueFee
   , vfFee :: !Word64
   }
 
-
-insertByronBlockList
-    :: Trace IO Text -> [(ByronBlock, BlockNo)] -> ExceptT ExplorerNodeError IO ()
-insertByronBlockList tracer blks = do
-  -- Setting this to True will log all 'Persistent' operations which is great
-  -- for debugging, but otherwise *way* too chatty.
-  newExceptT $
-    if False
-      then DB.runDbIohkLogging tracer action
-      else DB.runDbNoLogging action
-  where
-    action :: MonadIO m => ReaderT SqlBackend m (Either ExplorerNodeError ())
-    action = runExceptT $ mapMVExceptT (insertByronBlock tracer) blks
-
 insertByronBlock
-    :: MonadIO m
-    => Trace IO Text -> (ByronBlock, BlockNo)
-    -> ExceptT ExplorerNodeError (ReaderT SqlBackend m) ()
-insertByronBlock tracer (blk, tipBlockNo) =
-  case byronBlockRaw blk of
-    Ledger.ABOBBlock ablk -> insertABlock tracer ablk tipBlockNo
-    Ledger.ABOBBoundary abblk -> insertABOBBoundary tracer abblk
+    :: Trace IO Text -> ByronBlock -> BlockNo
+    -> ReaderT SqlBackend (NoLoggingT IO) (Either ExplorerNodeError ())
+insertByronBlock tracer blk tipBlockNo =
+  runExceptT $
+    case byronBlockRaw blk of
+      Ledger.ABOBBlock ablk -> insertABlock tracer ablk tipBlockNo
+      Ledger.ABOBBoundary abblk -> insertABOBBoundary tracer abblk
 
 insertABOBBoundary
     :: MonadIO m
@@ -85,7 +68,7 @@ insertABOBBoundary tracer blk = do
   let prevHash = case Ledger.boundaryPrevHash (Ledger.boundaryHeader blk) of
                     Left gh -> genesisToHeaderHash gh
                     Right hh -> hh
-  meta <- liftLookupFail "insertABOBBoundary" $ DB.queryMeta
+  meta <- liftLookupFail "insertABOBBoundary" DB.queryMeta
   pbid <- liftLookupFail "insertABOBBoundary" $ DB.queryBlockId (unHeaderHash prevHash)
   mle <- liftLookupFail "insertABOBBoundary: " $ DB.queryEpochNo pbid
   slid <- lift . DB.insertSlotLeader $ DB.SlotLeader (BS.replicate 28 '\0') "Epoch boundary slot leader"
@@ -120,7 +103,7 @@ insertABlock
     => Trace IO Text -> Ledger.ABlock ByteString -> BlockNo
     -> ExceptT ExplorerNodeError (ReaderT SqlBackend m) ()
 insertABlock tracer blk (BlockNo tipBlockNo) = do
-    meta <- liftLookupFail "insertABlock" $ DB.queryMeta
+    meta <- liftLookupFail "insertABlock" DB.queryMeta
     pbid <- liftLookupFail "insertABlock" $ DB.queryBlockId (unHeaderHash $ blockPreviousHash blk)
 
     let slotsPerEpoch = 10 * DB.metaProtocolConst meta
@@ -187,7 +170,7 @@ insertTxOut
     :: MonadIO m
     => Trace IO Text -> DB.TxId -> Word32 -> Ledger.TxOut
     -> ReaderT SqlBackend m ()
-insertTxOut _tracer txId index txout = do
+insertTxOut _tracer txId index txout =
   void . DB.insertTxOut $
             DB.TxOut
               { DB.txOutTxId = txId
@@ -248,4 +231,3 @@ mapMVExceptT action xs =
   case xs of
     [] -> pure ()
     (y:ys) -> action y >> mapMVExceptT action ys
-
