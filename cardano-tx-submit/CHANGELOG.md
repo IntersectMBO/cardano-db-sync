@@ -1,5 +1,10 @@
 # Revision history for cardano-tx-submit
 
+## 1.2.? -- ?
+
+* Require content-type `application/cbor` for posted transaction.
+* Add more specific error message when posted transaction is hex encoded.
+
 ## 1.2.2 -- January 2020
 
 * Update dependencies to latest versions.
