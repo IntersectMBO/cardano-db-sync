@@ -18,6 +18,7 @@ import           Control.Monad.IO.Class (liftIO)
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
+import qualified Data.Char as Char
 import           Data.Proxy (Proxy (..))
 import           Data.Text (Text)
 
@@ -54,7 +55,10 @@ txSubmitPost
 txSubmitPost tsv trce tx = do
   liftIO $ logInfo trce ("txSubmitPost: tx is " <> textShow (BS.length tx) <> " bytes")
   case decodeByronTx tx of
-    Left err -> pure $ TxSubmitDecodeFail err
+    Left err ->
+      pure $ if BS.all Char.isHexDigit tx
+                then TxSubmitDecodeHex
+                else TxSubmitDecodeFail err
     Right tx1 -> do
       mresp <- liftIO $ submitTx tsv tx1
       liftIO $ logInfo trce (maybe "Success" (\r -> "Error: " <> textShow r) mresp)

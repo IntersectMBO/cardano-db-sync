@@ -28,6 +28,7 @@ newtype TxSubmitPort
 
 data TxSubmitStatus
   = TxSubmitOk
+  | TxSubmitDecodeHex
   | TxSubmitDecodeFail DecoderError
   | TxSubmitFail Text
   deriving Eq
@@ -46,7 +47,8 @@ convertJson st =
     failMsg =
       case st of
         TxSubmitOk -> "No error"
-        TxSubmitDecodeFail err -> sformat ("Decoding provided ByetString failed: " % build) err
+        TxSubmitDecodeHex -> "Provided data was hex encoded and this webapi expects raw binary"
+        TxSubmitDecodeFail err -> sformat ("Decoding provided ByteString failed: " % build) err
         TxSubmitFail err -> err
 
 -- | Servant API which provides access to tx submission webapi
