@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators #-}
 module Cardano.TxSubmit.Types
@@ -14,13 +15,16 @@ import           Cardano.Binary (DecoderError)
 import           Data.Aeson (ToJSON (..), Value (..))
 import qualified Data.Aeson as Aeson
 import           Data.ByteString.Char8 (ByteString)
+import qualified Data.ByteString.Lazy.Char8 as LBS
 import           Data.Text (Text)
 
-import           Formatting ((%), build, sformat)
+import           Formatting (build, sformat)
 
 import           GHC.Generics (Generic)
 
-import           Servant (JSON, OctetStream, Post, ReqBody, (:>))
+import           Network.HTTP.Media ((//))
+
+import           Servant (Accept (..), JSON, MimeRender (..), MimeUnrender (..), Post, ReqBody, (:>))
 import           Servant.API.Generic (ToServantApi, (:-))
 
 newtype TxSubmitPort
@@ -48,7 +52,7 @@ convertJson st =
       case st of
         TxSubmitOk -> "No error"
         TxSubmitDecodeHex -> "Provided data was hex encoded and this webapi expects raw binary"
-        TxSubmitDecodeFail err -> sformat ("Decoding provided ByteString failed: " % build) err
+        TxSubmitDecodeFail err -> sformat build err
         TxSubmitFail err -> err
 
 -- | Servant API which provides access to tx submission webapi
@@ -60,6 +64,25 @@ data TxSubmitApiRecord route = TxSubmitApiRecord
   { _txSubmitPost :: route
         :- "submit"
         :> "tx"
-        :> ReqBody '[OctetStream] ByteString
+        :> ReqBody '[CBORStream] ByteString
         :> Post '[JSON] TxSubmitStatus
   } deriving (Generic)
+
+
+
+data CBORStream
+
+instance Accept CBORStream where
+  contentType _ = "application" // "cbor"
+
+instance MimeRender CBORStream ByteString where
+    mimeRender _ = LBS.fromStrict
+
+instance MimeRender CBORStream LBS.ByteString where
+    mimeRender _ = id
+
+instance MimeUnrender CBORStream ByteString where
+    mimeUnrender _ = Right . LBS.toStrict
+
+instance MimeUnrender CBORStream LBS.ByteString where
+    mimeUnrender _ = Right . id

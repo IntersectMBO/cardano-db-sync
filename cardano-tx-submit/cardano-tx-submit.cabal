@@ -66,6 +66,7 @@ library
                       , formatting
                       , generics-sop
                       , hashable
+                      , http-media
                       , iohk-monitoring
                       , io-sim-classes
                       , memory

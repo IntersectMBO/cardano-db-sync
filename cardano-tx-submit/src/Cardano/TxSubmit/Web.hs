@@ -53,10 +53,11 @@ txSubmitPost
     :: TxSubmitVar -> Trace IO Text -> ByteString
     -> Handler TxSubmitStatus
 txSubmitPost tsv trce tx = do
-  liftIO $ logInfo trce ("txSubmitPost: tx is " <> textShow (BS.length tx) <> " bytes")
+  liftIO $ logInfo trce ("txSubmitPost: received " <> textShow (BS.length tx) <> " bytes")
   case decodeByronTx tx of
-    Left err ->
-      pure $ if BS.all Char.isHexDigit tx
+    Left err -> do
+      liftIO $ logInfo trce ("txSubmitPost: Decoding of transaction failed: " <> textShow err)
+      pure $ if BS.all isHexOrWhitespace tx
                 then TxSubmitDecodeHex
                 else TxSubmitDecodeFail err
     Right tx1 -> do
@@ -71,3 +72,6 @@ decodeByronTx :: ByteString -> Either DecoderError (GenTx ByronBlock)
 decodeByronTx =
   Binary.decodeFullDecoder "Cardano.TxSubmit.Web.decodeByronTx" Byron.decodeByronGenTx
     . LBS.fromStrict
+
+isHexOrWhitespace :: Char -> Bool
+isHexOrWhitespace c = Char.isHexDigit c || Char.isSpace c
