@@ -104,5 +104,20 @@ share
     startTime           UTCTime             sqltype=timestamp
     networkName         Text Maybe
     UniqueMeta          startTime
+
+
+  -- The following are tables used my specific 'plugins' to the regular explorer-db-node
+  -- functionality. In the regular explorer-db-node these tables will be empty.
+
+  -- The Epoch table is an aggregation of data in the 'Block' table, but is kept in this form
+  -- because having it as a 'VIEW' is incredibly slow and inefficient.
+  Epoch
+    outSum              Word64              sqltype=uinteger
+    txCount             Word64              sqltype=uinteger
+    no                  Word64              sqltype=uinteger
+    startTime           UTCTime             sqltype=timestamp
+    endTime             UTCTime             sqltype=timestamp
+    UniqueEpoch         no
+
   |]
 

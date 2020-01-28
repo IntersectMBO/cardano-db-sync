@@ -472,9 +472,9 @@ entityPair e =
   (entityKey e, entityVal e)
 
 epochUtcTime :: Meta -> Word64 -> UTCTime
-epochUtcTime meta epochNo =
+epochUtcTime meta epochNum =
   -- Slot duration is in milliseconds.
-  addUTCTime (21.6 * fromIntegral (epochNo * metaSlotDuration meta)) (metaStartTime meta)
+  addUTCTime (21.6 * fromIntegral (epochNum * metaSlotDuration meta)) (metaStartTime meta)
 
 maybeToEither :: e -> (a -> b) -> Maybe a -> Either e b
 maybeToEither e f =

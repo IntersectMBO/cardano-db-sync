@@ -94,22 +94,6 @@ from
 inner join block
   on block.id = tx.block;
 
-create view "Epoch" as
-select
-  cast(sum(tx_out.value) as bigint) as output,
-  count(distinct tx.hash) as "transactionsCount",
-  block.epoch_no as "number",
-  min(block.time) as "startedAt",
-  max(block.time) as "lastBlockTime"
-from block
-join tx
-  on tx.block = block.id
-join tx_out
-  on tx_out.tx_id = tx.id
-where epoch_no is not null
-group by block.epoch_no
-order by block.epoch_no;
-
 -- This function plays really nicely with Hasura,
 -- and allows us to query the utxo set at any block height
 -- https://docs.hasura.io/1.0/graphql/manual/queries/custom-functions.html
