@@ -125,11 +125,14 @@ insertABlock tracer blk (BlockNo tipBlockNo) = do
 
     mapMVExceptT (insertTx tracer blkId) $ blockPayload blk
 
-    liftIO $ logger tracer $ mconcat
-                    [ "insertABlock: slot ", textShow (slotNumber blk)
-                    , ", block ", textShow (blockNumber blk)
-                    , ", hash ", renderAbstractHash (blockHash blk)
-                    ]
+    liftIO $ do
+      when (slotNumber blk > 0 && slotNumber blk `mod` 20 == 0) $
+        logger tracer $ "insertABlock: continuing epoch " <> textShow (slotNumber blk `div` slotsPerEpoch)
+      logger tracer $ mconcat
+        [ "insertABlock: slot ", textShow (slotNumber blk)
+        , ", block ", textShow (blockNumber blk)
+        , ", hash ", renderAbstractHash (blockHash blk)
+        ]
   where
     logger :: Trace IO a -> a -> IO ()
     logger =
