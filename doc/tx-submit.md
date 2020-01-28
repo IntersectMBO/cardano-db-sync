@@ -28,6 +28,6 @@ For the fail case, the `"status"` field will contain `"fail"` and the `"errMsg"`
 more information.
 
 
-[BuildDoc]: https://github.com/input-output-hk/cardano-explorer/blob/master/doc/building.md
+[BuildDoc]: https://github.com/input-output-hk/cardano-explorer/blob/master/doc/building-running.md
 [NodeRepo]: https://github.com/input-output-hk/cardano-node
 [JS-Wasm]: https://github.com/input-output-hk/js-cardano-wasm
