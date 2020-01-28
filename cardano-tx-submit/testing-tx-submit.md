@@ -67,7 +67,7 @@ The following instructions are for generating a testnet and testing tx-submissio
 * Submit the transaction to the webapi:
     ```
     cardano-explorer $ curl -X POST \
-        --header "Content-Type:application/octet-stream" \
+        --header "Content-Type:application/cbor" \
         --data-binary @transaction.bin http://localhost:8101/api/submit/tx
     ```
   which returns a status as a chunk of JSON.
