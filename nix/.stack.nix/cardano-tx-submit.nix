@@ -77,6 +77,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."formatting" or (buildDepError "formatting"))
           (hsPkgs."generics-sop" or (buildDepError "generics-sop"))
           (hsPkgs."hashable" or (buildDepError "hashable"))
+          (hsPkgs."http-media" or (buildDepError "http-media"))
           (hsPkgs."iohk-monitoring" or (buildDepError "iohk-monitoring"))
           (hsPkgs."io-sim-classes" or (buildDepError "io-sim-classes"))
           (hsPkgs."memory" or (buildDepError "memory"))

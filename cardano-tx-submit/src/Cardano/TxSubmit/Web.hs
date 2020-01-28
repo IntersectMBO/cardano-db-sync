@@ -18,6 +18,7 @@ import           Control.Monad.IO.Class (liftIO)
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
+import qualified Data.Char as Char
 import           Data.Proxy (Proxy (..))
 import           Data.Text (Text)
 
@@ -52,9 +53,13 @@ txSubmitPost
     :: TxSubmitVar -> Trace IO Text -> ByteString
     -> Handler TxSubmitStatus
 txSubmitPost tsv trce tx = do
-  liftIO $ logInfo trce ("txSubmitPost: tx is " <> textShow (BS.length tx) <> " bytes")
+  liftIO $ logInfo trce ("txSubmitPost: received " <> textShow (BS.length tx) <> " bytes")
   case decodeByronTx tx of
-    Left err -> pure $ TxSubmitDecodeFail err
+    Left err -> do
+      liftIO $ logInfo trce ("txSubmitPost: Decoding of transaction failed: " <> textShow err)
+      pure $ if BS.all isHexOrWhitespace tx
+                then TxSubmitDecodeHex
+                else TxSubmitDecodeFail err
     Right tx1 -> do
       mresp <- liftIO $ submitTx tsv tx1
       liftIO $ logInfo trce (maybe "Success" (\r -> "Error: " <> textShow r) mresp)
@@ -67,3 +72,6 @@ decodeByronTx :: ByteString -> Either DecoderError (GenTx ByronBlock)
 decodeByronTx =
   Binary.decodeFullDecoder "Cardano.TxSubmit.Web.decodeByronTx" Byron.decodeByronGenTx
     . LBS.fromStrict
+
+isHexOrWhitespace :: Char -> Bool
+isHexOrWhitespace c = Char.isHexDigit c || Char.isSpace c
