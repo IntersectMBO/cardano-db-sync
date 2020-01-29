@@ -17,6 +17,7 @@ they are all at the same level. eg:
 ├── cardano-explorer
 ├── cardano-node
 ```
+To setup and run explorer for testnet replace **mainnet** with **testnet** in all examples below.
 
 ### Set up and run the byron proxy
 ```
@@ -42,7 +43,7 @@ nix-build -A cardano-explorer-node -o explorer-node
 scripts/postgresql-setup.sh --createdb
 PGPASSFILE=config/pgpass explorer-node/bin/cardano-explorer-node \
     --config config/explorer-mainnet-config.yaml \
-    --genesis-file ../cardano-node/mainnet-genesis.json \
+    --genesis-file ../cardano-node/configuration/mainnet-genesis.json \
     --socket-path ../cardano-node/state-node-mainnet/socket/node-core-0.socket \
     --schema-dir schema/
 ```
@@ -59,7 +60,7 @@ In the same `cardano-explorer` direction but in a new terminal:
 ```
 cabal run cardano-tx-submit-webapi -- \
     --config config/tx-submit-mainnet-config.yaml \
-    --genesis-file ../cardano-node/mainnet-genesis.json \
+    --genesis-file ../cardano-node/configuration/mainnet-genesis.json \
     --socket-path ../cardano-node/state-node-mainnet/socket/node-core-0.socket \
     --port 8101
 ```
