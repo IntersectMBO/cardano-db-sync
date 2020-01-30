@@ -64,6 +64,7 @@ let
         cookie.secret = "fake";
       };
     };
+    services.prometheus.alertmanagers = lib.mkForce [];
   };
 
   noauth_configuration = {
@@ -74,6 +75,7 @@ let
         password = "admin";
       };
     };
+    services.prometheus.alertmanagers = lib.mkForce [];
   };
 
   configuration = { config, ... }: {
@@ -211,7 +213,7 @@ let
       name = name;
       text = ''
         #!${stdenv.shell}
-        exec > /var/log/${name}.log
+        exec
         ${text}
       '';
       executable = true;
