@@ -42,7 +42,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     flags = {};
     package = {
       specVersion = "2.0";
-      identifier = { name = "lobemo-backend-ekg"; version = "0.1.0.0"; };
+      identifier = { name = "lobemo-backend-ekg"; version = "0.1.0.1"; };
       license = "Apache-2.0";
       copyright = "2019 IOHK";
       maintainer = "operations@iohk.io";
@@ -61,16 +61,16 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."iohk-monitoring" or (buildDepError "iohk-monitoring"))
           (hsPkgs."aeson" or (buildDepError "aeson"))
           (hsPkgs."async" or (buildDepError "async"))
+          (hsPkgs."bytestring" or (buildDepError "bytestring"))
           (hsPkgs."ekg" or (buildDepError "ekg"))
           (hsPkgs."ekg-core" or (buildDepError "ekg-core"))
-          (hsPkgs."ekg-prometheus-adapter" or (buildDepError "ekg-prometheus-adapter"))
-          (hsPkgs."prometheus" or (buildDepError "prometheus"))
           (hsPkgs."safe-exceptions" or (buildDepError "safe-exceptions"))
+          (hsPkgs."snap-core" or (buildDepError "snap-core"))
+          (hsPkgs."snap-server" or (buildDepError "snap-server"))
           (hsPkgs."stm" or (buildDepError "stm"))
           (hsPkgs."text" or (buildDepError "text"))
           (hsPkgs."time" or (buildDepError "time"))
           (hsPkgs."unordered-containers" or (buildDepError "unordered-containers"))
-          (hsPkgs."warp" or (buildDepError "warp"))
           ];
         buildable = true;
         };
@@ -78,8 +78,8 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/iohk-monitoring-framework";
-      rev = "ffbb4897928f3e7e4df78fe0b8b48d406a89b7ef";
-      sha256 = "08xxrgbfcksqmn4hf0dz2w93n3gvbpd6l6rxqyw27cbw85wcsf1a";
+      rev = "dd30455144e11efb435619383ba84ce02aee720d";
+      sha256 = "1g08bg99fvss99kg27l7pmxm7lh60573xln8l8x2rzvwfvfgk2i5";
       });
     postUnpack = "sourceRoot+=/plugins/backend-ekg; echo source root reset to \$sourceRoot";
     }

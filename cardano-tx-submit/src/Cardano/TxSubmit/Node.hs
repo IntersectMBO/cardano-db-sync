@@ -151,12 +151,11 @@ runTxSubmitNodeClient tsv nodeConfig trce (SocketPath socketPath) = do
 
 localInitiatorNetworkApplication
   :: forall peer.
-     (Show peer)
-  => Trace IO Text
+     Trace IO Text
   -> TxSubmitVar
   -> OuroborosApplication 'InitiatorApp peer NodeToClientProtocols IO LBS.ByteString Void Void
 localInitiatorNetworkApplication trce tsv =
-  OuroborosInitiatorApplication $ \peer ptcl ->
+  OuroborosInitiatorApplication $ \_peer ptcl ->
     case ptcl of
       ChainSyncWithBlocksPtcl ->
         nullChainSyncWithBlocksPtcl
@@ -166,7 +165,7 @@ localInitiatorNetworkApplication trce tsv =
           (metrics, server) <- registerMetricsServer
           ret <- runPeer
                     (contramap (Text.pack . show) . toLogObject $ appendName "cardano-tx-submit" trce)
-                    localTxSubmissionCodec peer channel
+                    localTxSubmissionCodec channel
                     (localTxSubmissionClientPeer (txSubmissionClient tsv metrics))
           cancel server
           pure ret

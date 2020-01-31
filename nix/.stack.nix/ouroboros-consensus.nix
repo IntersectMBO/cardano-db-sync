@@ -72,11 +72,14 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."cardano-crypto-class" or (buildDepError "cardano-crypto-class"))
           (hsPkgs."cardano-crypto-wrapper" or (buildDepError "cardano-crypto-wrapper"))
           (hsPkgs."cardano-ledger" or (buildDepError "cardano-ledger"))
+          (hsPkgs."cardano-ledger-test" or (buildDepError "cardano-ledger-test"))
           (hsPkgs."cardano-prelude" or (buildDepError "cardano-prelude"))
           (hsPkgs."cardano-slotting" or (buildDepError "cardano-slotting"))
           (hsPkgs."cborg" or (buildDepError "cborg"))
           (hsPkgs."containers" or (buildDepError "containers"))
           (hsPkgs."cryptonite" or (buildDepError "cryptonite"))
+          (hsPkgs."cs-blockchain" or (buildDepError "cs-blockchain"))
+          (hsPkgs."cs-ledger" or (buildDepError "cs-ledger"))
           (hsPkgs."deepseq" or (buildDepError "deepseq"))
           (hsPkgs."digest" or (buildDepError "digest"))
           (hsPkgs."directory" or (buildDepError "directory"))
@@ -91,6 +94,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."network" or (buildDepError "network"))
           (hsPkgs."psqueues" or (buildDepError "psqueues"))
           (hsPkgs."serialise" or (buildDepError "serialise"))
+          (hsPkgs."small-steps" or (buildDepError "small-steps"))
           (hsPkgs."stm" or (buildDepError "stm"))
           (hsPkgs."streaming" or (buildDepError "streaming"))
           (hsPkgs."text" or (buildDepError "text"))
@@ -152,17 +156,23 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             (hsPkgs."bytestring" or (buildDepError "bytestring"))
             (hsPkgs."cardano-binary" or (buildDepError "cardano-binary"))
             (hsPkgs."cardano-crypto-class" or (buildDepError "cardano-crypto-class"))
-            (hsPkgs."cardano-crypto-wrapper" or (buildDepError "cardano-crypto-wrapper"))
             (hsPkgs."cardano-crypto-test" or (buildDepError "cardano-crypto-test"))
+            (hsPkgs."cardano-crypto-wrapper" or (buildDepError "cardano-crypto-wrapper"))
             (hsPkgs."cardano-ledger" or (buildDepError "cardano-ledger"))
             (hsPkgs."cardano-ledger-test" or (buildDepError "cardano-ledger-test"))
             (hsPkgs."cardano-prelude" or (buildDepError "cardano-prelude"))
+            (hsPkgs."cardano-slotting" or (buildDepError "cardano-slotting"))
             (hsPkgs."typed-protocols" or (buildDepError "typed-protocols"))
             (hsPkgs."network-mux" or (buildDepError "network-mux"))
             (hsPkgs."ouroboros-network" or (buildDepError "ouroboros-network"))
             (hsPkgs."ouroboros-consensus" or (buildDepError "ouroboros-consensus"))
             (hsPkgs."io-sim-classes" or (buildDepError "io-sim-classes"))
             (hsPkgs."io-sim" or (buildDepError "io-sim"))
+            (hsPkgs."cs-blockchain" or (buildDepError "cs-blockchain"))
+            (hsPkgs."cs-ledger" or (buildDepError "cs-ledger"))
+            (hsPkgs."small-steps" or (buildDepError "small-steps"))
+            (hsPkgs."hedgehog" or (buildDepError "hedgehog"))
+            (hsPkgs."hedgehog-quickcheck" or (buildDepError "hedgehog-quickcheck"))
             (hsPkgs."binary-search" or (buildDepError "binary-search"))
             (hsPkgs."cborg" or (buildDepError "cborg"))
             (hsPkgs."containers" or (buildDepError "containers"))
@@ -188,6 +198,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             (hsPkgs."temporary" or (buildDepError "temporary"))
             (hsPkgs."text" or (buildDepError "text"))
             (hsPkgs."time" or (buildDepError "time"))
+            (hsPkgs."transformers" or (buildDepError "transformers"))
             (hsPkgs."tree-diff" or (buildDepError "tree-diff"))
             ];
           buildable = true;
@@ -239,8 +250,8 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/ouroboros-network";
-      rev = "c6a3ed91f02f819b0e1be97e3a40644b08d2be3d";
-      sha256 = "07481shz3klyh5734jc7bg31qi82g3ppsgvdd9x92b3809jwdi7b";
+      rev = "398004e1403367cc2a25c639eb6349d473e51b2d";
+      sha256 = "1x940w0sma3mhl4hfd937sp25hdl3migkl8zsyl92p59468218i9";
       });
     postUnpack = "sourceRoot+=/ouroboros-consensus; echo source root reset to \$sourceRoot";
     }
