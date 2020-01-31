@@ -85,6 +85,30 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           ];
         buildable = true;
         };
+      sublibs = {
+        "ouroboros-protocol-tests" = {
+          depends = [
+            (hsPkgs."base" or (buildDepError "base"))
+            (hsPkgs."bytestring" or (buildDepError "bytestring"))
+            (hsPkgs."cborg" or (buildDepError "cborg"))
+            (hsPkgs."containers" or (buildDepError "containers"))
+            (hsPkgs."pipes" or (buildDepError "pipes"))
+            (hsPkgs."QuickCheck" or (buildDepError "QuickCheck"))
+            (hsPkgs."serialise" or (buildDepError "serialise"))
+            (hsPkgs."tasty" or (buildDepError "tasty"))
+            (hsPkgs."tasty-quickcheck" or (buildDepError "tasty-quickcheck"))
+            (hsPkgs."text" or (buildDepError "text"))
+            (hsPkgs."cardano-prelude" or (buildDepError "cardano-prelude"))
+            (hsPkgs."contra-tracer" or (buildDepError "contra-tracer"))
+            (hsPkgs."io-sim" or (buildDepError "io-sim"))
+            (hsPkgs."io-sim-classes" or (buildDepError "io-sim-classes"))
+            (hsPkgs."typed-protocols" or (buildDepError "typed-protocols"))
+            (hsPkgs."typed-protocols-cbor" or (buildDepError "typed-protocols-cbor"))
+            (hsPkgs."ouroboros-network" or (buildDepError "ouroboros-network"))
+            ];
+          buildable = true;
+          };
+        };
       exes = {
         "demo-chain-sync" = {
           depends = [
@@ -147,10 +171,12 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             (hsPkgs."time" or (buildDepError "time"))
             (hsPkgs."typed-protocols-cbor" or (buildDepError "typed-protocols-cbor"))
             (hsPkgs."typed-protocols" or (buildDepError "typed-protocols"))
+            (hsPkgs."ouroboros-network" or (buildDepError "ouroboros-network"))
+            (hsPkgs."ouroboros-protocol-tests" or (buildDepError "ouroboros-protocol-tests"))
             ];
           buildable = true;
           };
-        "cddl" = {
+        "test-cddl" = {
           depends = [
             (hsPkgs."base" or (buildDepError "base"))
             (hsPkgs."bytestring" or (buildDepError "bytestring"))
@@ -174,6 +200,8 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
             (hsPkgs."text" or (buildDepError "text"))
             (hsPkgs."typed-protocols-cbor" or (buildDepError "typed-protocols-cbor"))
             (hsPkgs."typed-protocols" or (buildDepError "typed-protocols"))
+            (hsPkgs."ouroboros-network" or (buildDepError "ouroboros-network"))
+            (hsPkgs."ouroboros-protocol-tests" or (buildDepError "ouroboros-protocol-tests"))
             ];
           buildable = if !flags.cddl then false else true;
           };
@@ -182,8 +210,8 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/ouroboros-network";
-      rev = "c6a3ed91f02f819b0e1be97e3a40644b08d2be3d";
-      sha256 = "07481shz3klyh5734jc7bg31qi82g3ppsgvdd9x92b3809jwdi7b";
+      rev = "398004e1403367cc2a25c639eb6349d473e51b2d";
+      sha256 = "1x940w0sma3mhl4hfd937sp25hdl3migkl8zsyl92p59468218i9";
       });
     postUnpack = "sourceRoot+=/ouroboros-network; echo source root reset to \$sourceRoot";
     }

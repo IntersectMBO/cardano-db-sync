@@ -12,6 +12,7 @@
         "esqueleto" = (((hackage.esqueleto)."3.2.2").revisions).default;
         "generic-monoid" = (((hackage.generic-monoid)."0.1.0.0").revisions).default;
         "libsystemd-journal" = (((hackage.libsystemd-journal)."1.4.4").revisions).default;
+        "network" = (((hackage.network)."3.1.0.1").revisions).default;
         "persistent" = (((hackage.persistent)."2.10.4").revisions).default;
         "persistent-postgresql" = (((hackage.persistent-postgresql)."2.10.1").revisions).default;
         "persistent-template" = (((hackage.persistent-template)."2.7.3").revisions).default;
