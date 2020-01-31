@@ -214,7 +214,7 @@ runExplorerNodeClient nodeConfig trce (SocketPath socketPath) = do
 
 localInitiatorNetworkApplication
   :: forall blk peer.
-     (blk ~ ByronBlock, Show peer)
+     (blk ~ ByronBlock)
   -- TODO: the need of a 'Proxy' is an evidence that blk type is not really
   -- needed here.  The wallet client should use some concrete type of block
   -- from 'cardano-chain'.  This should remove the dependency of this module
@@ -223,13 +223,13 @@ localInitiatorNetworkApplication
   -> NodeConfig (BlockProtocol ByronBlock)
   -> OuroborosApplication 'InitiatorApp peer NodeToClientProtocols IO BSL.ByteString Void Void
 localInitiatorNetworkApplication trce pInfoConfig =
-      OuroborosInitiatorApplication $ \peer ptcl ->
+      OuroborosInitiatorApplication $ \_peer ptcl ->
         case ptcl of
           LocalTxSubmissionPtcl -> \channel -> do
             txv <- newEmptyTMVarM @_ @(GenTx blk)
             runPeer
               (contramap (Text.pack . show) . toLogObject $ appendName "explorer-db-local-tx" trce)
-              localTxSubmissionCodec peer channel
+              localTxSubmissionCodec channel
               (localTxSubmissionClientPeer (txSubmissionClient @(GenTx blk) txv))
 
           ChainSyncWithBlocksPtcl -> \channel ->
@@ -242,7 +242,7 @@ localInitiatorNetworkApplication trce pInfoConfig =
               (metrics, server) <- registerMetricsServer
               dbThread <- async $ runDbThread trce metrics actionQueue
               ret <- runPipelinedPeer
-                      nullTracer (localChainSyncCodec @blk pInfoConfig) peer channel
+                      nullTracer (localChainSyncCodec @blk pInfoConfig) channel
                       (chainSyncClientPeerPipelined (chainSyncClient trce metrics latestPoints currentTip actionQueue))
               atomically $
                 writeDbActionQueue actionQueue DbFinish

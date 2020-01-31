@@ -26,6 +26,7 @@ extra-deps:
   - esqueleto-3.2.2
   - generic-monoid-0.1.0.0
   - libsystemd-journal-1.4.4
+  - network-3.1.0.1
   - persistent-2.10.4
   - persistent-postgresql-2.10.1
   - persistent-template-2.7.3
@@ -59,7 +60,7 @@ extra-deps:
     commit: 43a036c5bbe68ca2e9cbe611eab7982e2348fe49
 
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: ffbb4897928f3e7e4df78fe0b8b48d406a89b7ef
+    commit: dd30455144e11efb435619383ba84ce02aee720d
     subdirs:
       - contra-tracer
       - iohk-monitoring
@@ -71,7 +72,7 @@ extra-deps:
       - tracer-transformers
 
   - git: https://github.com/input-output-hk/cardano-base
-    commit: 0fcb3a306e96ce36fca75d62792c55ab1de871ea
+    commit: eed4fc484366214831576eef0c7fe90d1d08c78b
     subdirs:
       - binary
       - binary/test
@@ -82,7 +83,7 @@ extra-deps:
     commit: 26d35ad52fe9ade3391532dbfeb2f416f07650bc
 
   - git: https://github.com/input-output-hk/cardano-ledger-specs
-    commit: 2aa807f4a4b6fd0ae0a511289586a2c2d18b56fb
+    commit: f27e8b66a393f0b7da1893889dcea07da0fe4dec
     subdirs:
       - byron/semantics/executable-spec
       - byron/ledger/executable-spec
@@ -97,7 +98,7 @@ extra-deps:
       - crypto/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: c6a3ed91f02f819b0e1be97e3a40644b08d2be3d
+    commit: 398004e1403367cc2a25c639eb6349d473e51b2d
     subdirs:
       - io-sim-classes
       - network-mux
