@@ -26,6 +26,7 @@ import qualified Network.Wai.Handler.Warp as Warp
 
 import           Ouroboros.Consensus.Ledger.Byron (GenTx, ByronBlock)
 import qualified Ouroboros.Consensus.Ledger.Byron as Byron
+import qualified Cardano.Chain.UTxO as Ledger
 
 import           Servant (Application, Handler)
 import qualified Servant as Servant
@@ -69,9 +70,24 @@ txSubmitPost tsv trce tx = do
         Just r -> pure $ TxSubmitFail (textShow r)
 
 decodeByronTx :: ByteString -> Either DecoderError (GenTx ByronBlock)
-decodeByronTx =
-  Binary.decodeFullDecoder "Cardano.TxSubmit.Web.decodeByronTx" Byron.decodeByronGenTx
-    . LBS.fromStrict
+decodeByronTx bs =
+    toGenTx <$> fromCborTxAux bs
+  where
+    toGenTx :: Ledger.ATxAux ByteString -> GenTx ByronBlock
+    toGenTx tx = Byron.ByronTx (Byron.byronIdTx tx) tx
+
+--TODO: remove this local definition of this function as soon as the updated
+-- ledger lib with Byron.fromCborTxAux is available
+fromCborTxAux :: ByteString ->  Either DecoderError (Ledger.ATxAux ByteString)
+fromCborTxAux bs =
+    fmap (annotationBytes lbs)
+      $ Binary.decodeFullDecoder "Cardano.Chain.UTxO.TxAux.fromCborTxAux"
+                                 Binary.fromCBOR lbs
+  where
+    lbs = LBS.fromStrict bs
+
+    annotationBytes :: Functor f => LBS.ByteString -> f Binary.ByteSpan -> f ByteString
+    annotationBytes bytes = fmap (LBS.toStrict . Binary.slice bytes)
 
 isHexOrWhitespace :: Char -> Bool
 isHexOrWhitespace c = Char.isHexDigit c || Char.isSpace c
