@@ -39,7 +39,7 @@ in {
       then
         echo "You must set \$CARDANO_NODE_SOCKET_PATH"
         exit 1
-      fi'' else "export CARDANO_NODE_SOCKET_PATH=${cfg.socketPath}"}
+      fi'' else "export \"CARDANO_NODE_SOCKET_PATH=${cfg.socketPath}\""}
       exec ${self.cardano-tx-submit-webapi}/bin/cardano-tx-submit-webapi --socket-path "$CARDANO_NODE_SOCKET_PATH" \
             --genesis-file ${envConfig.genesisFile} \
             --port ${toString config.services.cardano-tx-submit-webapi.port} \

@@ -1,5 +1,6 @@
 { forDockerFile ? false
 , environment ? "testnet"
+, logLocal ? false
 }:
 
 let
@@ -100,7 +101,7 @@ let
     services.cardano-explorer = {
       enable = true;
       cluster = environment;
-      socketPath = "/run/cardano-node/node-core-0.socket";
+      socketPath = "/run/cardano-node/node-core-CoreNodeId 0.socket";
     };
 
     services.postgresql = {
@@ -181,8 +182,8 @@ let
       cardano-explorer-node = {
         serviceConfig.PermissionsStartOnly = "true";
         preStart = ''
-          chgrp cexplorer ${config.services.cardano-exporter.socketPath}
-          chmod g+w ${config.services.cardano-exporter.socketPath}
+          chgrp cexplorer "${config.services.cardano-exporter.socketPath}"
+          chmod g+w "${config.services.cardano-exporter.socketPath}"
         '';
       };
     };
@@ -213,7 +214,7 @@ let
       name = name;
       text = ''
         #!${stdenv.shell}
-        exec
+        exec${lib.optionalString logLocal " > /var/log/${name}.log"}
         ${text}
       '';
       executable = true;
