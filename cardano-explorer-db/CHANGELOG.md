@@ -1,6 +1,6 @@
 # Revision history for cardano-explorer-db
 
-## 1.2.3 -- January 2020
+## 1.3.0 -- January 2020
 
 * Update dependencies to latest versions.
 
