@@ -89,7 +89,7 @@ in {
         then
           echo "You must set \$CARDANO_NODE_SOCKET_PATH"
           exit 1
-        fi'' else "export CARDANO_NODE_SOCKET_PATH=${cfg.socketPath}"}
+        fi'' else "export CARDANO_NODE_SOCKET_PATH=\"${cfg.socketPath}\""}
 
         export PATH=${lib.makeBinPath [ self.cardano-explorer-node self.haskellPackages.cardano-explorer-db.components.exes.cardano-explorer-db-tool pkgs.postgresql ]}:$PATH
 
@@ -103,7 +103,7 @@ in {
         exec cardano-explorer-node \
           --config ${configFile} \
           --genesis-file ${envConfig.genesisFile} \
-          --socket-path $CARDANO_NODE_SOCKET_PATH \
+          --socket-path "$CARDANO_NODE_SOCKET_PATH" \
           --schema-dir ${../../schema}
       '';
     };
