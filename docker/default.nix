@@ -157,6 +157,12 @@ let
         static_configs = [{ targets = [ "localhost:8080" ]; }];
       }
       {
+        job_name = "tx";
+        scrape_interval = "10s";
+        metrics_path = "/";
+        static_configs = [{ targets = [ "localhost:8081" ]; }];
+      }
+      {
         job_name = "postgres";
         scrape_interval = "10s";
         metrics_path = "/metrics";

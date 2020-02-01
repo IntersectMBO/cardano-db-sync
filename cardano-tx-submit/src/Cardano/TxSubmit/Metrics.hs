@@ -24,7 +24,7 @@ registerMetricsServer =
   runRegistryT $ do
     metrics <- makeMetrics
     registry <- RegistryT ask
-    server <- liftIO . async $ runReaderT (unRegistryT $ serveHttpTextMetricsT 8080 []) registry
+    server <- liftIO . async $ runReaderT (unRegistryT $ serveHttpTextMetricsT 8081 []) registry
     pure (metrics, server)
 
 makeMetrics :: RegistryT IO TxSubmitMetrics
