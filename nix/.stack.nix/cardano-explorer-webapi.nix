@@ -42,7 +42,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     flags = {};
     package = {
       specVersion = "1.10";
-      identifier = { name = "cardano-explorer-webapi"; version = "1.2.2"; };
+      identifier = { name = "cardano-explorer-webapi"; version = "1.2.3"; };
       license = "Apache-2.0";
       copyright = "(c) 2019 IOHK";
       maintainer = "operations@iohk.io";
