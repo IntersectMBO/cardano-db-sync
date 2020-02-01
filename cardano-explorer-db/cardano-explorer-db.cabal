@@ -3,7 +3,7 @@ cabal-version:          >= 1.10
 -- http://haskell.org/cabal/users-guide/
 
 name:                   cardano-explorer-db
-version:                1.2.2
+version:                1.2.3
 synopsis:               A block explorer for the Cardano chain
 description:            Code for the Cardano Block Explorer that is shared between the
                         cardano-explorer-db-node and the cardano-explorer web application.

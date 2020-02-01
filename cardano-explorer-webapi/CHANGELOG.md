@@ -1,5 +1,11 @@
 # Revision history for cardano-explorer-webapi
 
+## 1.2.3 -- January 2020
+
+* Update dependencies to latest versions.
+* Docker image: log all runit services to stdout
+* Initial documentation on how to use build and run the components in docker
+
 ## 1.2.2 -- January 2020
 
 * Swagger docs https://input-output-hk.github.io/cardano-explorer/
