@@ -1,5 +1,11 @@
 # Revision history for cardano-explorer-node
 
+## 1.3.0 -- January 2020
+
+* Update dependencies to latest versions.
+* Docker image: log all runit services to stdout
+* Initial documentation on how to use build and run the components in docker
+
 ## 1.2.2 -- January 2020
 
 * Update dependencies to latest versions.
