@@ -79,8 +79,8 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
     } // {
     src = (pkgs.lib).mkDefault (pkgs.fetchgit {
       url = "https://github.com/input-output-hk/cardano-base";
-      rev = "eed4fc484366214831576eef0c7fe90d1d08c78b";
-      sha256 = "0h9vbs2bsx6pvb300vl66znwpkqn169pmvsl4pv8mn0sz8iw4pk6";
+      rev = "965b8b143632faea16680a195e6de57091382700";
+      sha256 = "0x3cy5xa9mqdqnavs45assmmcrzw07qcwsv95capqwa6awz1plhh";
       });
     postUnpack = "sourceRoot+=/binary/test; echo source root reset to \$sourceRoot";
     }
