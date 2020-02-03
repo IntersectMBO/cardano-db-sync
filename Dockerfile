@@ -1,6 +1,7 @@
 FROM ubuntu:18.04
 
-ARG environment=testnet
+ARG environment=all
+ENV ENVIRONMENT=mainnet
 
 RUN apt-get update
 RUN apt-get install -y sudo bzip2 curl git xz-utils
@@ -29,7 +30,14 @@ RUN nix-build docker -A dockerFileSetup -o initial-setup
 USER root
 RUN ./initial-setup && rm initial-setup
 
-RUN nix-build -Q docker -A configFiles -o /etc/cardano-cfg --arg forDockerFile true --argstr environment ${environment}
+RUN set -e ; if [ ${environment} = all ]; then \
+    for env in mainnet testnet staging; do \
+      nix-build -Q docker -A configFiles -o /etc/cardano-${env} --arg forDockerFile true --argstr environment ${env}; \
+    done; \
+    ln -sv /etc/cardano-mainnet /etc/cardano-cfg; \
+  else \
+    nix-build -Q docker -A configFiles -o /etc/cardano-cfg --arg forDockerFile true --argstr environment ${environment}; \
+  fi
 
 RUN ln -sv /etc/cardano-cfg/etc/runit /etc/runit && \
     ln -sv /etc/cardano-cfg/etc/service /etc/service && \
@@ -38,7 +46,7 @@ RUN ln -sv /etc/cardano-cfg/etc/runit /etc/runit && \
     ln -sv /etc/cardano-cfg/etc/pam.d/sudo /etc/pam.d/sudo && \
     ln -sv /nix/var/nix/profiles/per-user/cardano/profile/bin/deroot /bin/deroot
 
-RUN nix-env -iA dockerFileBinaries -f docker -I nixpkgs=docker/nixpkgs --profile /nix/var/nix/profiles/per-user/cardano/profile --argstr environment ${environment}
+RUN nix-env -iA dockerFileBinaries -f docker -I nixpkgs=docker/nixpkgs --profile /nix/var/nix/profiles/per-user/cardano/profile
 
 RUN cat /etc/sudoers | grep -v secure_path > /etc/sudoers.tmp && mv /etc/sudoers.tmp /etc/sudoers && chmod 440 /etc/sudoers
 

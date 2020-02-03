@@ -1,5 +1,5 @@
 to build against mainnet:
-`docker build --build-arg environment=mainnet  -t cardano-explorer-mainnet .`
+`time docker build --build-arg environment=mainnet  -t cardano-explorer-mainnet .`
 
 when the build is done, the last few lines of output should look similar to:
 ```
@@ -30,3 +30,13 @@ $ curl http://localhost/api/supply/ada
 ```
 
 http://localhost/api/submit/tx is the tx submission endpoint
+
+
+to build an image that can target multiple clusters:
+`time docker build --build-arg environment=all  -t cardano-explorer-all .`
+
+then to select a cluster, use one of the following:
+```
+docker run --rm -i -t -p 81:80 --name explorer-mainnet --volume explorer-mainnet:/var -e ENVIRONMENT=mainnet cardano-explorer-all:latest
+docker run --rm -i -t -p 81:80 --name explorer-testnet --volume explorer-testnet:/var -e ENVIRONMENT=testnet cardano-explorer-all:latest
+```
