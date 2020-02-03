@@ -101,7 +101,7 @@ let
     services.cardano-explorer = {
       enable = true;
       cluster = environment;
-      socketPath = "/run/cardano-node/node-core-CoreNodeId 0.socket";
+      socketPath = "/run/cardano-node/node-core-0.socket";
     };
 
     services.postgresql = {
