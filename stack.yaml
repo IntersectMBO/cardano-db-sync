@@ -72,7 +72,7 @@ extra-deps:
       - tracer-transformers
 
   - git: https://github.com/input-output-hk/cardano-base
-    commit: eed4fc484366214831576eef0c7fe90d1d08c78b
+    commit: 965b8b143632faea16680a195e6de57091382700
     subdirs:
       - binary
       - binary/test
@@ -98,7 +98,7 @@ extra-deps:
       - crypto/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: 398004e1403367cc2a25c639eb6349d473e51b2d
+    commit: a43961c1133b9e1b0826f3d4d1bc5b93819037d6
     subdirs:
       - io-sim-classes
       - network-mux
