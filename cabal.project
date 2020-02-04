@@ -50,6 +50,18 @@ package contra-tracer
 package iohk-monitoring
   tests: False
 
+package network-mux
+  tests: False
+
+package io-sim
+  tests: False
+
+package test-protocols
+  tests: False
+
+package typed-protocols
+  tests: False
+
 package typed-protocols-cbor
   tests: False
 
