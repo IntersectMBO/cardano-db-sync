@@ -14,6 +14,7 @@ import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo)
 import qualified Cardano.Chain.Block as Ledger
 import           Cardano.Prelude
 
+import           Control.Concurrent (threadDelay)
 import qualified Control.Concurrent.STM as STM
 import           Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as TBQ
@@ -84,7 +85,9 @@ runActions trce actions = do
     nextState <- checkDbState trce actions
     if nextState /= Done
       then dbAction Continue actions
-      else pure Continue
+      else do
+        liftIO $ threadDelay (10 * 1000 * 1000)
+        pure Continue
   where
     dbAction :: NextState -> [DbAction] -> ExceptT ExplorerNodeError IO NextState
     dbAction next [] = pure next

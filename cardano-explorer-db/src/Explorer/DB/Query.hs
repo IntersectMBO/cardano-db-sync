@@ -12,6 +12,7 @@ module Explorer.DB.Query
   , queryBlockNo
   , queryMainBlock
   , queryBlockTxCount
+  , queryCheckPoints
   , queryEpochNo
   , queryFeesUpToBlockNo
   , queryFeesUpToSlotNo
@@ -55,6 +56,7 @@ module Explorer.DB.Query
 
 
 import           Control.Monad (join)
+import           Control.Monad.Extra (mapMaybeM)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Except (ExceptT (..), runExceptT)
 import           Control.Monad.Trans.Reader (ReaderT)
@@ -149,6 +151,33 @@ queryBlockTxCount blkId = do
             where_ (tx ^. TxBlock ==. val blkId)
             pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
+
+queryCheckPoints :: MonadIO m => Word64 -> ReaderT SqlBackend m [(Word64, ByteString)]
+queryCheckPoints limitCount = do
+    latest <- select $ from $ \ blk -> do
+                where_ $ (isJust $ blk ^. BlockSlotNo)
+                orderBy [desc (blk ^. BlockId)]
+                limit 1
+                pure $ (blk ^. BlockSlotNo)
+    case join (unValue <$> listToMaybe latest) of
+      Nothing -> pure []
+      Just slotNo -> mapMaybeM querySpacing (calcSpacing slotNo)
+  where
+    querySpacing :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe (Word64, ByteString))
+    querySpacing blkNo = do
+       rows <- select $ from $ \ blk -> do
+                  where_ $ (blk ^. BlockSlotNo ==. just (val blkNo))
+                  pure $ (blk ^. BlockSlotNo, blk ^. BlockHash)
+       pure $ join (convert <$> listToMaybe rows)
+
+    convert :: (Value (Maybe Word64), Value ByteString) -> Maybe (Word64, ByteString)
+    convert (va, vb) =
+      case (unValue va, unValue vb) of
+        (Nothing, _ ) -> Nothing
+        (Just a, b) -> Just (a, b)
+
+    calcSpacing :: Word64 -> [Word64]
+    calcSpacing end = [ end, end - end `div` limitCount .. 1 ]
 
 -- | Get the Epoch number for a given block. Returns '0' for the genesis block
 -- even though the DB entry for the genesis block is 'NULL'.

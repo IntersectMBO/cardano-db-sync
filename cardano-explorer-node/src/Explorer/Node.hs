@@ -276,8 +276,7 @@ getLatestPoints =
     -- Blocks (and the transactions they contain) are inserted within an SQL transaction.
     -- That means that all the blocks (including their transactions) returned by the query
     -- have been completely inserted.
-    -- TODO: Get the security parameter (2160) from the config.
-    mapMaybe convert <$> DB.runDbNoLogging (DB.queryLatestBlocks 2160)
+    mapMaybe convert <$> DB.runDbNoLogging (DB.queryCheckPoints 200)
   where
     convert :: (Word64, ByteString) -> Maybe (Point ByronBlock)
     convert (slot, hashBlob) =
