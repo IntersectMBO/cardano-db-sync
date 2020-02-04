@@ -54,7 +54,7 @@ lengthDbActionQueue :: DbActionQueue -> STM Natural
 lengthDbActionQueue (DbActionQueue q) = STM.lengthTBQueue q
 
 newDbActionQueue :: IO DbActionQueue
-newDbActionQueue = DbActionQueue <$> TBQ.newTBQueueIO 2000
+newDbActionQueue = DbActionQueue <$> TBQ.newTBQueueIO 20000
 
 writeDbActionQueue :: DbActionQueue -> DbAction -> STM ()
 writeDbActionQueue (DbActionQueue q) = TBQ.writeTBQueue q
@@ -88,7 +88,7 @@ runActions trce plugin actions = do
     if nextState /= Done
       then dbAction Continue actions
       else do
-        liftIO $ threadDelay (10 * 1000 * 1000)
+        liftIO $ threadDelay (2 * 1000 * 1000)
         pure Continue
   where
     dbAction :: NextState -> [DbAction] -> ExceptT ExplorerNodeError IO NextState
