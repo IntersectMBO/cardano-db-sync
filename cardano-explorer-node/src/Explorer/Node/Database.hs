@@ -11,11 +11,15 @@ module Explorer.Node.Database
   ) where
 
 import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo)
+import qualified Cardano.Chain.Block as Ledger
 import           Cardano.Prelude
 
+import           Control.Concurrent (threadDelay)
 import qualified Control.Concurrent.STM as STM
 import           Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as TBQ
+
+import           Control.Monad.Trans.Except.Extra (left, runExceptT)
 
 import qualified Explorer.DB as DB
 import           Explorer.Node.Error
@@ -33,6 +37,7 @@ import qualified System.Metrics.Prometheus.Metric.Gauge as Gauge
 data NextState
   = Continue
   | Done
+  deriving Eq
 
 data DbAction
   = DbApplyBlock !ByronBlock !BlockNo
@@ -76,8 +81,13 @@ runDbThread trce metrics queue = do
 -- | Run the list of 'DbAction's. Block are applied in a single set (as a transaction)
 -- and other operations are applied one-by-one.
 runActions :: Trace IO Text -> [DbAction] -> ExceptT ExplorerNodeError IO NextState
-runActions trce =
-    dbAction Continue
+runActions trce actions = do
+    nextState <- checkDbState trce actions
+    if nextState /= Done
+      then dbAction Continue actions
+      else do
+        liftIO $ threadDelay (10 * 1000 * 1000)
+        pure Continue
   where
     dbAction :: NextState -> [DbAction] -> ExceptT ExplorerNodeError IO NextState
     dbAction next [] = pure next
@@ -94,6 +104,41 @@ runActions trce =
           if null zs
             then pure Continue
             else dbAction Continue zs
+
+checkDbState :: Trace IO Text -> [DbAction] -> ExceptT ExplorerNodeError IO NextState
+checkDbState trce xs =
+    case filter isMainBlockApply (reverse xs) of
+      [] -> pure Continue
+      (DbApplyBlock blk _blkNo : _) -> validateBlock blk
+      _ -> pure Continue
+  where
+    validateBlock :: ByronBlock -> ExceptT ExplorerNodeError IO NextState
+    validateBlock bblk = do
+      case byronBlockRaw bblk of
+        Ledger.ABOBBoundary _ -> left $ ENEError "checkDbState got a boundary block"
+        Ledger.ABOBBlock chBlk -> do
+          mDbBlk <- liftIO $ DB.runDbNoLogging $ DB.queryBlockNo (blockNumber chBlk)
+          case mDbBlk of
+            Nothing -> pure Continue
+            Just dbBlk -> do
+              when (DB.blockHash dbBlk /= blockHash chBlk) $ do
+                liftIO $ logInfo trce (textShow chBlk)
+                -- liftIO $ logInfo trce (textShow dbBlk)
+                left $ ENEBlockMismatch (blockNumber chBlk) (DB.blockHash dbBlk) (blockHash chBlk)
+
+              liftIO . logInfo trce $
+                mconcat [ "checkDbState: Block no ", textShow (blockNumber chBlk), " present" ]
+              pure Done -- Block already exists, so we are done.
+
+    isMainBlockApply :: DbAction -> Bool
+    isMainBlockApply dba =
+      case dba of
+        DbApplyBlock blk _ ->
+          case byronBlockRaw blk of
+            Ledger.ABOBBlock _ -> True
+            Ledger.ABOBBoundary _ -> False
+        DbRollBackToPoint _ -> False
+        DbFinish -> False
 
 -- | Block if the queue is empty and if its not read/flush everything.
 -- Need this because `flushTBQueue` never blocks and we want to block until

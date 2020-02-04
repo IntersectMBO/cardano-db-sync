@@ -58,8 +58,8 @@ import qualified Ouroboros.Network.Point as Point
 import           Ouroboros.Network.Block (Point (..), SlotNo (..))
 
 
-blockHash :: Ledger.ABlock ByteString -> Ledger.HeaderHash
-blockHash = Ledger.blockHashAnnotated
+blockHash :: Ledger.ABlock ByteString -> ByteString
+blockHash = unHeaderHash . Ledger.blockHashAnnotated
 
 blockMerkelRoot :: Ledger.ABlock ByteString -> Crypto.AbstractHash Blake2b_256 Raw
 blockMerkelRoot =

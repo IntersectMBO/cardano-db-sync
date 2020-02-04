@@ -5,6 +5,7 @@ module Explorer.Node.Error
   ( ExplorerInvariant (..)
   , ExplorerNodeError (..)
   , annotateInvariantTx
+  , bsBase16Encode
   , explorerError
   , explorerInvariant
   , liftLookupFail
@@ -35,6 +36,7 @@ data ExplorerNodeError
   = ENELookup !Text !LookupFail
   | ENEError !Text
   | ENEInvariant !Text !ExplorerInvariant
+  | ENEBlockMismatch !Word64 !ByteString !ByteString
 
 
 annotateInvariantTx :: Ledger.Tx -> ExplorerInvariant -> ExplorerInvariant
@@ -65,13 +67,17 @@ renderExplorerInvariant ei =
         , "\n", textShow tx
         ]
 
-
 renderExplorerNodeError :: ExplorerNodeError -> Text
 renderExplorerNodeError ede =
   case ede of
     ENELookup loc lf -> mconcat [ "DB lookup fail in ", loc, ": ", renderLookupFail lf ]
     ENEError t -> "Error: " <> t
     ENEInvariant loc i -> mconcat [ loc, ": " <> renderExplorerInvariant i ]
+    ENEBlockMismatch blkNo hashDb hashBlk ->
+      mconcat
+        [ "Block mismatch for block number ", textShow blkNo, ", db has "
+        , bsBase16Encode hashDb, " but chain provided ", bsBase16Encode hashBlk
+        ]
 
 -- Lifted from cardano-explorer/src/Explorer/Web/Server/Util.hs
 -- Probably should be in cardano-explorer-db

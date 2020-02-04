@@ -42,7 +42,8 @@ rollbackToPoint trce point =
           (_, Nothing) -> explorerError "rollbackToPoint: block number is Nothing"
           (Just slotNo, Just blkNo) -> do
             if slotNo <= Ledger.unSlotNumber slot
-              then liftIO $ logInfo trce "No rollback required"
+              then liftIO . logInfo trce $ mconcat
+                            [ "No rollback required: chain tip slot is ", textShow slotNo ]
               else do
                 liftIO . logInfo trce $ Text.concat
                             [ "Rollbacking to slot ", textShow (Ledger.unSlotNumber slot)

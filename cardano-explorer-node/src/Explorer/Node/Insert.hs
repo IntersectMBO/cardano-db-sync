@@ -128,7 +128,7 @@ insertABlock tracer blk (BlockNo tipBlockNo) = do
     slid <- lift . DB.insertSlotLeader $ mkSlotLeader blk
     blkId <- lift . DB.insertBlock $
                   DB.Block
-                    { DB.blockHash = unHeaderHash $ blockHash blk
+                    { DB.blockHash = blockHash blk
                     , DB.blockEpochNo = Just $ slotNumber blk `div` slotsPerEpoch
                     , DB.blockSlotNo = Just $ slotNumber blk
                     , DB.blockBlockNo = Just $ blockNumber blk

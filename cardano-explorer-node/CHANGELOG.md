@@ -1,5 +1,9 @@
 # Revision history for cardano-explorer-node
 
+## 1.? -- ? 2020
+
+* Improve chain sync behavior when database chain is ahead of node.
+
 ## 1.3.0 -- January 2020
 
 * Update dependencies to latest versions.
