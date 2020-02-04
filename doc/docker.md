@@ -33,7 +33,7 @@ http://localhost/api/submit/tx is the tx submission endpoint
 
 
 to build an image that can target multiple clusters:
-`time docker build --build-arg environment=all  -t cardano-explorer-all .`
+`time docker build --build-arg environment=all -t cardano-explorer-all .`
 
 then to select a cluster, use one of the following:
 ```

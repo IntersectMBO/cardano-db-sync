@@ -24,7 +24,6 @@ RUN chown cardano -R /home/cardano
 WORKDIR /home/cardano/cardano-explorer
 USER cardano
 
-
 RUN nix-build docker -A dockerFileSetup -o initial-setup
 
 USER root
@@ -32,7 +31,7 @@ RUN ./initial-setup && rm initial-setup
 
 RUN set -e ; if [ ${environment} = all ]; then \
     for env in mainnet testnet staging; do \
-      nix-build -Q docker -A configFiles -o /etc/cardano-${env} --arg forDockerFile true --argstr environment ${env}; \
+      nix build -f docker configFiles -o /etc/cardano-${env} --arg forDockerFile true --argstr environment ${env}; \
     done; \
     ln -sv /etc/cardano-mainnet /etc/cardano-cfg; \
   else \
