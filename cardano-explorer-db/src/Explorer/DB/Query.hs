@@ -177,7 +177,10 @@ queryCheckPoints limitCount = do
         (Just a, b) -> Just (a, b)
 
     calcSpacing :: Word64 -> [Word64]
-    calcSpacing end = [ end, end - end `div` limitCount .. 1 ]
+    calcSpacing end =
+      if end > 2 * limitCount
+        then [ end, end - end `div` limitCount .. 1 ]
+        else [ end, end - 2 .. 1 ]
 
 -- | Get the Epoch number for a given block. Returns '0' for the genesis block
 -- even though the DB entry for the genesis block is 'NULL'.
