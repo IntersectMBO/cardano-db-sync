@@ -9,6 +9,7 @@ module Explorer.DB.Query
   , queryBlockCount
   , queryBlockHeight
   , queryBlockId
+  , queryBlockNo
   , queryMainBlock
   , queryBlockTxCount
   , queryEpochNo
@@ -105,6 +106,14 @@ queryBlockId hash = do
             where_ (blk ^. BlockHash ==. val hash)
             pure $ blk ^. BlockId
   pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
+
+queryBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Block)
+queryBlockNo blkNo = do
+  res <- select . from $ \ blk -> do
+            where_ (blk ^. BlockBlockNo ==. just (val blkNo))
+            pure blk
+  pure $ fmap entityVal (listToMaybe res)
+
 
 -- | Get the current block height.
 queryBlockHeight :: MonadIO m => ReaderT SqlBackend m Word64
