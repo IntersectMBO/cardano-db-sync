@@ -33,11 +33,15 @@ import           Ouroboros.Consensus.Ledger.Byron (ByronBlock)
 -- That is why the following data type does not have a Semigroup/Monoid instances.
 
 data ExplorerNodePlugin = ExplorerNodePlugin
-  { -- Called for each block recieved from the network.
+  { -- A function run each time the application starts. Can be used to do a one time update/setup
+    -- of a table.
+    plugOnStartup
+        :: [Trace IO Text -> IO (Either ExplorerNodeError ())]
+    -- Called for each block recieved from the network.
     -- This will not be called for the original genesis block, but will be called for
     -- all subsequent blocks.
     -- Blocks (including epoch boundary blocks) are called in sequence from the oldest to the newest.
-    plugInsertBlock
+  , plugInsertBlock
         :: [Trace IO Text -> ByronBlock -> BlockNo -> ReaderT SqlBackend (NoLoggingT IO) (Either ExplorerNodeError ())]
 
     -- Rollback to the specified SlotNumber/HeaderHash.

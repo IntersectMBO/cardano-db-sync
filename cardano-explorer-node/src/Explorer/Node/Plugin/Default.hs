@@ -11,6 +11,7 @@ import           Explorer.Node.Plugin.Default.Insert (insertByronBlock)
 defExplorerNodePlugin :: ExplorerNodePlugin
 defExplorerNodePlugin =
   ExplorerNodePlugin
-    { plugInsertBlock = [insertByronBlock]
+    { plugOnStartup = []
+    , plugInsertBlock = [insertByronBlock]
     , plugRollbackBlock = [rollbackToPoint]
     }

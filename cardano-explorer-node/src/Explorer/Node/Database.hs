@@ -147,8 +147,8 @@ runRollbacks
     -> ExplorerNodePlugin
     -> Point ByronBlock
     -> ExceptT ExplorerNodeError IO ()
-runRollbacks trce (ExplorerNodePlugin _ rollbackActions) point =
-    newExceptT $ foldM rollback (Right ()) rollbackActions
+runRollbacks trce plugin point =
+    newExceptT $ foldM rollback (Right ()) $ plugRollbackBlock plugin
   where
     rollback prevResult action =
       case prevResult of
@@ -160,7 +160,7 @@ insertBlockList
     -> ExplorerNodePlugin
     -> [(ByronBlock, BlockNo)]
     -> ExceptT ExplorerNodeError IO ()
-insertBlockList trce  (ExplorerNodePlugin insertActions _) blks =
+insertBlockList trce plugin blks =
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise is *way* too chatty.
   newExceptT
@@ -174,7 +174,7 @@ insertBlockList trce  (ExplorerNodePlugin insertActions _) blks =
     insertBlock prevResult (blk, blkNo) =
       case prevResult of
         Left e -> pure $ Left e
-        Right () -> foldM (insertAction (blk, blkNo)) (Right ()) insertActions
+        Right () -> foldM (insertAction (blk, blkNo)) (Right ()) $ plugInsertBlock plugin
 
     insertAction (blk, blkNo) prevResult action =
       case prevResult of
