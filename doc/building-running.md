@@ -1,3 +1,5 @@
+**Validated: 2020/02/06**
+
 # Building and Running the Explorer
 
 The explorer is built and tested to run on Linux. It may run on Mac OS X or Windows but that is
@@ -44,7 +46,7 @@ scripts/postgresql-setup.sh --createdb
 PGPASSFILE=config/pgpass explorer-node/bin/cardano-explorer-node \
     --config config/explorer-mainnet-config.yaml \
     --genesis-file ../cardano-node/configuration/mainnet-genesis.json \
-    --socket-path ../cardano-node/state-node-mainnet/socket/node-core-0.socket \
+    --socket-path ../cardano-node/state-node-mainnet/socket \
     --schema-dir schema/
 ```
 
@@ -56,11 +58,24 @@ PGPASSFILE=config/pgpass ./explorer-webapi/bin/cardano-explorer-webapi
 ```
 
 ### Set up and run the transaction submission webapi
+
+Make sure you have:
+- `cabal` 3.0 or higher (`cabal --version` to see currently installed version)
+- `ghc` 8.6.5 or higher (`ghc --version`)
+
+You may also need the following native libraries
+```
+sudo apt install libsystemd-dev
+sudo apt-get install libz-dev
+sudo apt-get install libpq-dev
+sudo apt install libssl-dev
+```
+
 In the same `cardano-explorer` direction but in a new terminal:
 ```
 cabal run cardano-tx-submit-webapi -- \
     --config config/tx-submit-mainnet-config.yaml \
     --genesis-file ../cardano-node/configuration/mainnet-genesis.json \
-    --socket-path ../cardano-node/state-node-mainnet/socket/node-core-0.socket \
+    --socket-path ../cardano-node/state-node-mainnet/socket \
     --port 8101
 ```
