@@ -1,6 +1,7 @@
 resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/00487726c4bc21b4744e59d913334ebfeac7d68e/snapshot.yaml
 compiler: ghc-8.6.5
 
+allow-newer: true
 
 packages:
   - cardano-explorer-db
@@ -27,9 +28,9 @@ extra-deps:
   - generic-monoid-0.1.0.0
   - libsystemd-journal-1.4.4
   - network-3.1.0.1
-  - persistent-2.10.4
-  - persistent-postgresql-2.10.1
-  - persistent-template-2.7.3
+  - persistent-2.10.5.1
+  - persistent-postgresql-2.10.1.2
+  - persistent-template-2.8.2.3
   - prometheus-2.1.2
   - pvss-0.2.0
   - tasty-hedgehog-1.0.0.1
@@ -44,6 +45,12 @@ extra-deps:
   - gray-code-0.3.1
   - Unique-0.4.7.6
   - statistics-linreg-0.3
+  - socks-0.6.1
+  - servant-0.17
+  - servant-server-0.17
+  - connection-0.3.1
+  - http-api-data-0.4.1.1
+  - time-compat-1.9.2.2
 
   - git: https://github.com/input-output-hk/cardano-shell
     commit: bc3563c952d9f3635e1c76749b86b0a24f7e4b83
@@ -100,6 +107,7 @@ extra-deps:
   - git: https://github.com/input-output-hk/ouroboros-network
     commit: a43961c1133b9e1b0826f3d4d1bc5b93819037d6
     subdirs:
+      - io-sim
       - io-sim-classes
       - network-mux
       - ouroboros-network
