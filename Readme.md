@@ -1,6 +1,6 @@
 # Cardano Explorer
 
-The new cardano-explorer consists of three components:
+The new cardano-explorer consists of a set of components:
 
 * `cardano-explorer-db` which defines common data types and functions that are shared by the
   following two components. In particular, it defines the database schema.

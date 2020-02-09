@@ -13,10 +13,13 @@
 module Explorer.Node
   ( ConfigFile (..)
   , ExplorerNodeParams (..)
+  , ExplorerNodePlugin (..)
   , GenesisFile (..)
   , GenesisHash (..)
   , NetworkName (..)
   , SocketPath (..)
+
+  , defExplorerNodePlugin
   , runExplorer
   ) where
 
@@ -61,8 +64,10 @@ import qualified Explorer.DB as DB
 import           Explorer.Node.Config
 import           Explorer.Node.Database
 import           Explorer.Node.Error
-import           Explorer.Node.Insert
+import           Explorer.Node.Genesis
 import           Explorer.Node.Metrics
+import           Explorer.Node.Plugin (ExplorerNodePlugin (..))
+import           Explorer.Node.Plugin.Default (defExplorerNodePlugin)
 import           Explorer.Node.Util
 import           Explorer.Node.Tracing.ToObjectOrphans ()
 
@@ -134,8 +139,8 @@ newtype SocketPath = SocketPath
   }
 
 
-runExplorer :: ExplorerNodeParams -> IO ()
-runExplorer enp = do
+runExplorer :: ExplorerNodePlugin -> ExplorerNodeParams -> IO ()
+runExplorer plugin enp = do
     DB.runMigrations Prelude.id True (enpMigrationDir enp) (LogFileDir "/tmp")
 
     enc <- readExplorerNodeConfig (unConfigFile $ enpConfigFile enp)
@@ -152,7 +157,7 @@ runExplorer enp = do
       Left err -> logError trce $ renderExplorerNodeError err
       Right () -> pure ()
 
-    void $ runExplorerNodeClient (mkNodeConfig gc) trce (enpSocketPath enp)
+    void $ runExplorerNodeClient trce plugin (mkNodeConfig gc) (enpSocketPath enp)
 
 
 mkTracer :: ExplorerNodeConfig -> IO (Trace IO Text)
@@ -183,8 +188,9 @@ readGenesisConfig enp enc = do
 runExplorerNodeClient
     :: forall blk.
         (blk ~ ByronBlock)
-    => NodeConfig (BlockProtocol blk) -> Trace IO Text -> SocketPath -> IO Void
-runExplorerNodeClient nodeConfig trce (SocketPath socketPath) = do
+    => Trace IO Text -> ExplorerNodePlugin -> NodeConfig (BlockProtocol blk) -> SocketPath
+    -> IO Void
+runExplorerNodeClient trce plugin nodeConfig (SocketPath socketPath) = do
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   networkState <- newNetworkMutableState
   ncSubscriptionWorker_V1
@@ -206,7 +212,7 @@ runExplorerNodeClient nodeConfig trce (SocketPath socketPath) = do
           , ispValency = 1 }
         }
     (NodeToClientVersionData { networkMagic = nodeNetworkMagic (Proxy @blk) nodeConfig })
-    (localInitiatorNetworkApplication trce nodeConfig)
+    (localInitiatorNetworkApplication trce plugin nodeConfig)
   where
     errorPolicyTracer :: Tracer IO (WithAddr SockAddr ErrorPolicyTrace)
     errorPolicyTracer = toLogObject $ appendName "ErrorPolicy" trce
@@ -220,10 +226,11 @@ localInitiatorNetworkApplication
   -- from 'cardano-chain'.  This should remove the dependency of this module
   -- from 'ouroboros-consensus'.
   => Trace IO Text
+  -> ExplorerNodePlugin
   -> NodeConfig (BlockProtocol ByronBlock)
   -> OuroborosApplication 'InitiatorApp peer NodeToClientProtocols IO BSL.ByteString Void Void
-localInitiatorNetworkApplication trce pInfoConfig =
-      OuroborosInitiatorApplication $ \_peer ptcl ->
+localInitiatorNetworkApplication trce plugin pInfoConfig =
+      OuroborosInitiatorApplication $ \ _peer ptcl ->
         case ptcl of
           LocalTxSubmissionPtcl -> \channel -> do
             txv <- newEmptyTMVarM @_ @(GenTx blk)
@@ -240,7 +247,7 @@ localInitiatorNetworkApplication trce pInfoConfig =
               logDbState trce
               actionQueue <- newDbActionQueue
               (metrics, server) <- registerMetricsServer
-              dbThread <- async $ runDbThread trce metrics actionQueue
+              dbThread <- async $ runDbThread trce plugin metrics actionQueue
               ret <- runPipelinedPeer
                       nullTracer (localChainSyncCodec @blk pInfoConfig) channel
                       (chainSyncClientPeerPipelined (chainSyncClient trce metrics latestPoints currentTip actionQueue))

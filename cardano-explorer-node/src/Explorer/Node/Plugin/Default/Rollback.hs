@@ -1,6 +1,6 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Explorer.Node.Rollback
+module Explorer.Node.Plugin.Default.Rollback
   ( rollbackToPoint
   ) where
 
@@ -12,7 +12,7 @@ import qualified Cardano.Chain.Block as Ledger
 import qualified Cardano.Chain.Slotting as Ledger
 
 import           Control.Monad.IO.Class (MonadIO)
-import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
+import           Control.Monad.Trans.Except.Extra (runExceptT)
 
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -27,12 +27,12 @@ import           Ouroboros.Consensus.Ledger.Byron (ByronBlock)
 import           Ouroboros.Network.Block (Point)
 
 
-rollbackToPoint :: Trace IO Text -> Point ByronBlock -> ExceptT ExplorerNodeError IO ()
+rollbackToPoint :: Trace IO Text -> Point ByronBlock -> IO (Either ExplorerNodeError ())
 rollbackToPoint trce point =
   case pointToSlotHash point of
-    Nothing -> pure ()
+    Nothing -> pure $ Right ()
     Just (slot, hash) ->
-      newExceptT . DB.runDbNoLogging $ runExceptT (action slot hash)
+      DB.runDbNoLogging $ runExceptT (action slot hash)
   where
     action :: MonadIO m => Ledger.SlotNumber -> Ledger.HeaderHash -> ExceptT ExplorerNodeError (ReaderT SqlBackend m) ()
     action slot hash = do

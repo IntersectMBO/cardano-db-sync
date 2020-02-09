@@ -2,6 +2,7 @@ packages:
   cardano-explorer-db
   cardano-explorer-db/test
   cardano-explorer-node
+  cardano-extended-db-node
   cardano-explorer-webapi
   cardano-tx-submit
 

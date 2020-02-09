@@ -2,8 +2,8 @@ cabal-version:          >= 1.10
 
 -- http://haskell.org/cabal/users-guide/
 
-name:                   cardano-explorer-node
-version:                1.3.0
+name:                   cardano-extended-db-node
+version:                1.0.0
 synopsis:               The DB node for the Cardano Block Explorer
 description:            A Cardano node that follows the Cardano chain and inserts data from the
                         chain into a PostgresQL database.
@@ -30,19 +30,7 @@ library
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
 
-  exposed-modules:      Explorer.Node
-
-  other-modules:        Explorer.Node.Config
-                        Explorer.Node.Database
-                        Explorer.Node.Error
-                        Explorer.Node.Genesis
-                        Explorer.Node.Metrics
-                        Explorer.Node.Plugin
-                        Explorer.Node.Plugin.Default
-                        Explorer.Node.Plugin.Default.Insert
-                        Explorer.Node.Plugin.Default.Rollback
-                        Explorer.Node.Util
-                        Explorer.Node.Tracing.ToObjectOrphans
+  exposed-modules:      Explorer.Plugin.Extended
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , aeson
@@ -52,38 +40,27 @@ library
                       , cardano-crypto
                       , cardano-crypto-wrapper
                       , cardano-explorer-db
-                      , cardano-ledger
-                      , cardano-prelude
-                      , cardano-shell
-                      , cborg
+                      , cardano-explorer-node
                       , containers
                       , contra-tracer
                       , cryptonite
                       , extra
-                      , formatting
-                      , io-sim-classes
-                      , iohk-monitoring
                       , memory
                       , monad-logger
-                      , optparse-applicative
                       , network
                       , ouroboros-consensus
                       , ouroboros-network
                       , persistent
                       , prometheus
                       , serialise
-                      , stm
                       , text
                       , time
                       , transformers
                       , transformers-except
-                      , typed-protocols
-                      , typed-protocols-cbor
-                      , yaml
 
-executable cardano-explorer-node
+executable cardano-extended-db-node
   default-language:     Haskell2010
-  main-is:              cardano-explorer-node.hs
+  main-is:              cardano-extended-db-node.hs
   hs-source-dirs:       app
 
   ghc-options:          -Wall
@@ -97,39 +74,10 @@ executable cardano-explorer-node
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , bytestring
-                      , cardano-crypto-wrapper
                       , cardano-explorer-db
                       , cardano-explorer-node
-                      , cardano-ledger
+                      , cardano-extended-db-node
                       , cardano-prelude
-                      , cardano-binary
-                      , cborg
-                      , formatting
-                      , cardano-shell
-                      , ouroboros-consensus
-                      , io-sim-classes
-                      , iohk-monitoring
-                      , network
                       , optparse-applicative
                       , ouroboros-network
-                      , serialise
                       , text
-                      , typed-protocols
-                      , typed-protocols-cbor
-
-test-suite test
-  default-language:     Haskell2010
-  type:                 exitcode-stdio-1.0
-  main-is:              test.hs
-  hs-source-dirs:       test
-
-  ghc-options:          -Wall
-                        -Wcompat
-                        -fwarn-redundant-constraints
-                        -fwarn-incomplete-patterns
-                        -fwarn-unused-imports
-                        -Wincomplete-record-updates
-                        -Wincomplete-uni-patterns
-
-  build-depends:        base                            >= 4.12         && < 4.13
-                      , cardano-explorer-node

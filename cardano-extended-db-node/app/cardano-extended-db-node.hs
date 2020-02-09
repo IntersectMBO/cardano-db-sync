@@ -4,14 +4,15 @@ import           Cardano.Prelude
 
 import           Explorer.DB (MigrationDir (..))
 import           Explorer.Node (ConfigFile (..), ExplorerNodeParams (..), GenesisFile (..),
-                    SocketPath (..), defExplorerNodePlugin, runExplorer)
+                    SocketPath (..), runExplorer)
+import           Explorer.Plugin.Extended (extendedExplorerNodePlugin)
 
 import           Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative as Opt
 
 main :: IO ()
 main = do
-  runExplorer defExplorerNodePlugin =<< Opt.execParser opts
+  runExplorer extendedExplorerNodePlugin =<< Opt.execParser opts
 
 -- -------------------------------------------------------------------------------------------------
 

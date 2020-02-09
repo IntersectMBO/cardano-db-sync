@@ -20,7 +20,6 @@ module Explorer.DB.Query
   , queryLatestBlock
   , queryLatestBlockId
   , queryLatestBlockNo
-  , queryLatestBlocks
   , queryLatestSlotNo
   , queryMeta
   , queryNetworkName
@@ -177,7 +176,10 @@ queryCheckPoints limitCount = do
         (Just a, b) -> Just (a, b)
 
     calcSpacing :: Word64 -> [Word64]
-    calcSpacing end = [ end, end - end `div` limitCount .. 1 ]
+    calcSpacing end =
+      if end > 2 * limitCount
+        then [ end, end - end `div` limitCount .. 1 ]
+        else [ end, end - 2 .. 1 ]
 
 -- | Get the Epoch number for a given block. Returns '0' for the genesis block
 -- even though the DB entry for the genesis block is 'NULL'.
@@ -243,24 +245,6 @@ queryLatestBlock = do
                 limit 1
                 pure $ blk
   pure $ fmap entityVal (listToMaybe res)
-
--- | Get the last N blocks.
--- This assumes that the block are inserted into the datebase from oldest to
--- newest which is not exlicitly enforced, but should arise automatically
--- from the way blocks are retrieved and inserted into the database.
-queryLatestBlocks :: MonadIO m => Int -> ReaderT SqlBackend m [(Word64, ByteString)]
-queryLatestBlocks limitCount = do
-    eblks <- select $ from $ \ blk -> do
-                orderBy [desc (blk ^. BlockId)]
-                limit $ fromIntegral limitCount
-                pure $ (blk ^. BlockSlotNo, blk ^. BlockHash)
-    pure $ catMaybes (map convert eblks)
-  where
-    convert :: (Value (Maybe Word64), Value ByteString) -> Maybe (Word64, ByteString)
-    convert (va, vb) =
-      case (unValue va, unValue vb) of
-        (Nothing, _ ) -> Nothing
-        (Just a, b) -> Just (a, b)
 
 -- | Given a 'BlockId' return the 'BlockId' of the previous block.
 queryPreviousBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Word64)
@@ -472,9 +456,9 @@ entityPair e =
   (entityKey e, entityVal e)
 
 epochUtcTime :: Meta -> Word64 -> UTCTime
-epochUtcTime meta epochNo =
+epochUtcTime meta epochNum =
   -- Slot duration is in milliseconds.
-  addUTCTime (21.6 * fromIntegral (epochNo * metaSlotDuration meta)) (metaStartTime meta)
+  addUTCTime (21.6 * fromIntegral (epochNum * metaSlotDuration meta)) (metaStartTime meta)
 
 maybeToEither :: e -> (a -> b) -> Maybe a -> Either e b
 maybeToEither e f =

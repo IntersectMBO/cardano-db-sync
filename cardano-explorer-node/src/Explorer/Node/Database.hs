@@ -19,13 +19,15 @@ import qualified Control.Concurrent.STM as STM
 import           Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as TBQ
 
-import           Control.Monad.Trans.Except.Extra (left, runExceptT)
+import           Control.Monad.Logger (NoLoggingT)
+import           Control.Monad.Trans.Except.Extra (left, newExceptT, runExceptT)
+
+import           Database.Persist.Sql (SqlBackend)
 
 import qualified Explorer.DB as DB
 import           Explorer.Node.Error
-import           Explorer.Node.Insert
 import           Explorer.Node.Metrics
-import           Explorer.Node.Rollback
+import           Explorer.Node.Plugin
 import           Explorer.Node.Util
 
 import           Ouroboros.Consensus.Ledger.Byron (ByronBlock (..))
@@ -52,14 +54,14 @@ lengthDbActionQueue :: DbActionQueue -> STM Natural
 lengthDbActionQueue (DbActionQueue q) = STM.lengthTBQueue q
 
 newDbActionQueue :: IO DbActionQueue
-newDbActionQueue = DbActionQueue <$> TBQ.newTBQueueIO 2000
+newDbActionQueue = DbActionQueue <$> TBQ.newTBQueueIO 20000
 
 writeDbActionQueue :: DbActionQueue -> DbAction -> STM ()
 writeDbActionQueue (DbActionQueue q) = TBQ.writeTBQueue q
 
 
-runDbThread :: Trace IO Text -> Metrics -> DbActionQueue -> IO ()
-runDbThread trce metrics queue = do
+runDbThread :: Trace IO Text -> ExplorerNodePlugin -> Metrics -> DbActionQueue -> IO ()
+runDbThread trce plugin metrics queue = do
     logInfo trce "Running DB thread"
     loop
     logInfo trce "Shutting down DB thread"
@@ -68,7 +70,7 @@ runDbThread trce metrics queue = do
       xs <- blockingFlushDbActionQueue queue
       when (length xs > 1) $ do
         logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
-      eNextState <- runExceptT $ runActions trce xs
+      eNextState <- runExceptT $ runActions trce plugin xs
       mBlkNo <-  DB.runDbNoLogging DB.queryLatestBlockNo
       case mBlkNo of
         Nothing -> pure ()
@@ -80,13 +82,13 @@ runDbThread trce metrics queue = do
 
 -- | Run the list of 'DbAction's. Block are applied in a single set (as a transaction)
 -- and other operations are applied one-by-one.
-runActions :: Trace IO Text -> [DbAction] -> ExceptT ExplorerNodeError IO NextState
-runActions trce actions = do
+runActions :: Trace IO Text -> ExplorerNodePlugin -> [DbAction] -> ExceptT ExplorerNodeError IO NextState
+runActions trce plugin actions = do
     nextState <- checkDbState trce actions
     if nextState /= Done
       then dbAction Continue actions
       else do
-        liftIO $ threadDelay (10 * 1000 * 1000)
+        liftIO $ threadDelay (2 * 1000 * 1000)
         pure Continue
   where
     dbAction :: NextState -> [DbAction] -> ExceptT ExplorerNodeError IO NextState
@@ -97,10 +99,10 @@ runActions trce actions = do
         ([], DbFinish:_) -> do
             pure Done
         ([], DbRollBackToPoint pt:ys) -> do
-            rollbackToPoint trce pt
+            runRollbacks trce plugin pt
             dbAction Continue ys
         (ys, zs) -> do
-          insertByronBlockList trce ys
+          insertBlockList trce plugin ys
           if null zs
             then pure Continue
             else dbAction Continue zs
@@ -139,6 +141,45 @@ checkDbState trce xs =
             Ledger.ABOBBoundary _ -> False
         DbRollBackToPoint _ -> False
         DbFinish -> False
+
+runRollbacks
+    :: Trace IO Text
+    -> ExplorerNodePlugin
+    -> Point ByronBlock
+    -> ExceptT ExplorerNodeError IO ()
+runRollbacks trce plugin point =
+    newExceptT $ foldM rollback (Right ()) $ plugRollbackBlock plugin
+  where
+    rollback prevResult action =
+      case prevResult of
+        Left e -> pure $ Left e
+        Right () -> action trce point
+
+insertBlockList
+    :: Trace IO Text
+    -> ExplorerNodePlugin
+    -> [(ByronBlock, BlockNo)]
+    -> ExceptT ExplorerNodeError IO ()
+insertBlockList trce plugin blks =
+  -- Setting this to True will log all 'Persistent' operations which is great
+  -- for debugging, but otherwise is *way* too chatty.
+  newExceptT
+    . DB.runDbNoLogging
+    $ foldM insertBlock (Right ()) blks
+  where
+    insertBlock
+        :: Either ExplorerNodeError ()
+        -> (ByronBlock, BlockNo)
+        -> ReaderT SqlBackend (NoLoggingT IO) (Either ExplorerNodeError ())
+    insertBlock prevResult (blk, blkNo) =
+      case prevResult of
+        Left e -> pure $ Left e
+        Right () -> foldM (insertAction (blk, blkNo)) (Right ()) $ plugInsertBlock plugin
+
+    insertAction (blk, blkNo) prevResult action =
+      case prevResult of
+        Left e -> pure $ Left e
+        Right () -> action trce blk blkNo
 
 -- | Block if the queue is empty and if its not read/flush everything.
 -- Need this because `flushTBQueue` never blocks and we want to block until
