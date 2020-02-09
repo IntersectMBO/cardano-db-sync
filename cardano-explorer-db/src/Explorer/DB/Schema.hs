@@ -21,8 +21,9 @@ import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import Data.Word (Word16, Word64)
 
-import Database.Persist.TH (mkDeleteCascade, mkMigrate, mkPersist, onlyUniqueP, persistLowerCase,
-            requireUniquesP, share, sqlSettings)
+-- Do not use explicit imports from this module as the imports can change
+-- from version to version due to changes to the TH code in Persistent.
+import Database.Persist.TH
 
 -- In the schema definition we need to match Haskell types with with the
 -- custom type defined in PostgreSQL (via 'DOMAIN' statements). For the
