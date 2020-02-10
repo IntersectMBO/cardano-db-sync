@@ -5,11 +5,11 @@
 module Explorer.DB.Run
   ( getBackendGhci
   , ghciDebugQuery
+  , runDbAction
   , runDbHandleLogger
   , runDbIohkLogging
   , runDbNoLogging
   , runDbStdoutLogging
-  , runIohkLogging
   ) where
 
 import           Cardano.BM.Data.LogItem (LogObject (..), LOContent (..), PrivacyAnnotation (..), mkLOMeta)
@@ -20,7 +20,7 @@ import           Control.Monad.Logger (LogLevel (..), LogSource, LoggingT, NoLog
                     defaultLogStr, runLoggingT, runNoLoggingT, runStdoutLoggingT)
 import           Control.Monad.Trans.Reader (ReaderT)
 import           Control.Tracer (traceWith)
-import           Control.Monad.IO.Class      (liftIO)
+import           Control.Monad.IO.Class (liftIO)
 
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
@@ -42,7 +42,6 @@ import           Language.Haskell.TH.Syntax (Loc)
 import           System.IO (Handle, stdout)
 import           System.Log.FastLogger (LogStr, fromLogStr)
 
-
 -- | Run a DB action logging via the provided Handle.
 runDbHandleLogger :: Handle -> ReaderT SqlBackend (LoggingT IO) a -> IO a
 runDbHandleLogger logHandle dbAction = do
@@ -61,34 +60,50 @@ runDbHandleLogger logHandle dbAction = do
     logOut loc src level msg =
       BS.hPutStrLn logHandle . fromLogStr $ defaultLogStr loc src level msg
 
+runDbAction :: Maybe (Trace IO Text) -> ReaderT SqlBackend (LoggingT IO) a -> IO a
+runDbAction mLogging dbAction = do
+    pgconf <- readPGPassFileEnv
+    case mLogging of
+      Nothing ->
+        runSilentLoggingT .
+          withPostgresqlConn (toConnectionString pgconf) $ \backend ->
+            runSqlConnWithIsolation dbAction backend Serializable
+      Just tracer ->
+        runIohkLogging tracer .
+          withPostgresqlConn (toConnectionString pgconf) $ \backend ->
+            runSqlConnWithIsolation dbAction backend Serializable
+  where
+    runSilentLoggingT :: LoggingT m a -> m a
+    runSilentLoggingT action = runLoggingT action silentLog
+
+    silentLog :: Monad m => Loc -> LogSource -> LogLevel -> LogStr -> m ()
+    silentLog _loc _src _level _msg = pure ()
 
 -- | Run a DB action logging via iohk-monitoring-framework.
 runDbIohkLogging :: Trace IO Text -> ReaderT SqlBackend (LoggingT IO) b -> IO b
 runDbIohkLogging tracer dbAction = do
     pgconf <- readPGPassFileEnv
-    (runIohkLogging tracer) .
+    runIohkLogging tracer .
       withPostgresqlConn (toConnectionString pgconf) $ \backend ->
         runSqlConnWithIsolation dbAction backend Serializable
 
 runIohkLogging :: Trace IO Text -> LoggingT m a -> m a
 runIohkLogging tracer action =
-  runLoggingT action (toIohkLog tracer)
+    runLoggingT action toIohkLog
+  where
+    toIohkLog :: Loc -> LogSource -> LogLevel -> LogStr -> IO ()
+    toIohkLog _loc _src level msg = do
+      meta <- mkLOMeta (toIohkSeverity level) Public
+      traceWith tracer $ LogObject ["explorer-db"] meta (LogStructured . LBS.fromStrict $ fromLogStr msg)
 
-toIohkLog :: Trace IO Text -> Loc -> LogSource -> LogLevel -> LogStr -> IO ()
-toIohkLog tracer _loc _src level msg = do
-  meta <- mkLOMeta (toIohkSeverity level) Public
-  traceWith tracer $ LogObject ["explorer-db"] meta (LogStructured . LBS.fromStrict $ fromLogStr msg)
-
-
-toIohkSeverity :: LogLevel -> Severity
-toIohkSeverity =
-  \case
-    LevelDebug -> Debug
-    LevelInfo -> Info
-    LevelWarn -> Warning
-    LevelError -> Error
-    LevelOther _ -> Error
-
+    toIohkSeverity :: LogLevel -> Severity
+    toIohkSeverity =
+      \case
+        LevelDebug -> Debug
+        LevelInfo -> Info
+        LevelWarn -> Warning
+        LevelError -> Error
+        LevelOther _ -> Error
 
 -- | Run a DB action without any logging. Mainly for tests.
 runDbNoLogging :: ReaderT SqlBackend (NoLoggingT IO) a -> IO a
