@@ -63,6 +63,8 @@ library
                       , formatting
                       , io-sim-classes
                       , iohk-monitoring
+                      , lifted-base
+                      , monad-control
                       , memory
                       , monad-logger
                       , optparse-applicative

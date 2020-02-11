@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -12,6 +13,8 @@ module Explorer.Node.Util
   , boundaryEpochNumber
   , configSlotDuration
   , genesisToHeaderHash
+  , liftedLogException
+  , logException
   , mkSlotLeader
   , pointToSlotHash
   , renderAbstractHash
@@ -25,9 +28,10 @@ module Explorer.Node.Util
   , unTxHash
   ) where
 
-import           Cardano.Prelude
+import           Cardano.Prelude hiding (catch)
 
 import           Cardano.Binary (Raw)
+import           Cardano.BM.Trace (Trace, logError)
 import qualified Cardano.Crypto as Crypto
 
 -- Import all 'cardano-ledger' functions and data types qualified so they do not
@@ -39,6 +43,10 @@ import qualified Cardano.Chain.Genesis as Ledger
 import qualified Cardano.Chain.Slotting as Ledger
 import qualified Cardano.Chain.Update as Ledger
 import qualified Cardano.Chain.UTxO as Ledger
+
+import           Control.Exception.Lifted (SomeException, catch)
+import           Control.Monad.IO.Class (MonadIO, liftIO)
+import           Control.Monad.Trans.Control (MonadBaseControl)
 
 import           Crypto.Hash (Blake2b_256)
 
@@ -86,6 +94,31 @@ configSlotDuration =
 
 genesisToHeaderHash :: Ledger.GenesisHash -> Ledger.HeaderHash
 genesisToHeaderHash = coerce
+
+-- | Needed when debugging disappearing exceptions.
+liftedLogException :: (MonadBaseControl IO m, MonadIO m) => Trace IO Text -> Text -> m a -> m a
+liftedLogException tracer txt action =
+    action `catch` logger
+  where
+    logger :: MonadIO m => SomeException -> m a
+    logger e =
+      liftIO $ do
+        putStrLn $ "Caught exception: txt " ++ show e
+        logError tracer $ txt <> textShow e
+        throwIO e
+
+-- | ouroboros-network catches 'SomeException' and if a 'nullTracer' is passed into that
+-- code, the caught exception will not be logged. Therefore wrap all explorer code that
+-- is called from network with an exception logger so at least the exception will be
+-- logged (instead of silently swallowed) and then rethrown.
+logException :: Trace IO Text -> Text -> IO a -> IO a
+logException tracer txt action =
+    action `catch` logger
+  where
+    logger :: SomeException -> IO a
+    logger e = do
+      logError tracer $ txt <> textShow e
+      throwIO e
 
 mkSlotLeader :: Ledger.ABlock ByteString -> DB.SlotLeader
 mkSlotLeader blk =

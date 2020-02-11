@@ -413,19 +413,6 @@ chainSyncClient trce metrics latestPoints currentTip actionQueue =
                 pure $ finish newTip tip
         }
 
--- | ouroboros-network catches 'SomeException' and if a 'nullTracer' is passed into that
--- code, the caught exception will not be logged. Therefore wrap all explorer code that
--- is called from network with an exception logger so at least the exception will be
--- logged (instead of silently swallowed) and then rethrown.
-logException :: Trace IO Text -> Text -> IO a -> IO a
-logException tracer txt action =
-    action `catch` logger
-  where
-    logger :: SomeException -> IO a
-    logger e = do
-      logError tracer $ txt <> textShow e
-      throwIO e
-
 logProtocolMagic :: Trace IO Text -> Crypto.ProtocolMagic -> IO ()
 logProtocolMagic tracer pm =
   liftIO . logInfo tracer $ mconcat
