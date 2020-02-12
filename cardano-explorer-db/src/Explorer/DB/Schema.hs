@@ -112,8 +112,13 @@ share
 
   -- The Epoch table is an aggregation of data in the 'Block' table, but is kept in this form
   -- because having it as a 'VIEW' is incredibly slow and inefficient.
+
+  -- The 'outsum' type in the PostgreSQL world is 'bigint >= 0' so it will error out if an
+  -- overflow (sum of tx outputs in an epoch) is detected. 'maxBound :: Int` is big enough to
+  -- hold 204 times the total Lovelace distribution. The chance of that much being transacted
+  -- in a single epoch is relatively low.
   Epoch
-    outSum              Word64              sqltype=uinteger
+    outSum              Word64              sqltype=outsum
     txCount             Word64              sqltype=uinteger
     no                  Word64              sqltype=uinteger
     startTime           UTCTime             sqltype=timestamp

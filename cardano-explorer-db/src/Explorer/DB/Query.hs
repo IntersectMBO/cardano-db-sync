@@ -368,16 +368,16 @@ queryUtxoAtBlockId blkid = do
     -- tx1 refers to the tx of the input spending this output (if it is ever spent)
     -- tx2 refers to the tx of the output
     outputs <- select . from $ \(txout `LeftOuterJoin` txin `LeftOuterJoin` tx1 `LeftOuterJoin` blk `LeftOuterJoin` tx2) -> do
-      on $ txout ^. TxOutTxId ==. tx2 ^. TxId
-      on $ tx1 ^. TxBlock ==. blk ^. BlockId
-      on $ txin ^. TxInTxInId ==. tx1 ^. TxId
-      on $ (txout ^. TxOutTxId ==. txin ^. TxInTxOutId) &&. (txout ^. TxOutIndex ==. txin ^. TxInTxOutIndex)
-      where_ $ (txout ^. TxOutTxId `in_` txLessEqual blkid) &&. ((isNothing $ blk ^. BlockBlockNo) ||. (blk ^. BlockId >. val blkid))
-      pure (txout, tx2 ^. TxHash)
-    pure $ map convertResult outputs
+                  on $ txout ^. TxOutTxId ==. tx2 ^. TxId
+                  on $ tx1 ^. TxBlock ==. blk ^. BlockId
+                  on $ txin ^. TxInTxInId ==. tx1 ^. TxId
+                  on $ (txout ^. TxOutTxId ==. txin ^. TxInTxOutId) &&. (txout ^. TxOutIndex ==. txin ^. TxInTxOutIndex)
+                  where_ $ (txout ^. TxOutTxId `in_` txLessEqual blkid) &&. ((isNothing $ blk ^. BlockBlockNo) ||. (blk ^. BlockId >. val blkid))
+                  pure (txout, tx2 ^. TxHash)
+    pure $ map convert outputs
   where
-    convertResult :: (Entity TxOut, Value ByteString) -> (TxOut, ByteString)
-    convertResult (out, hash) = (entityVal out, unValue hash)
+    convert :: (Entity TxOut, Value ByteString) -> (TxOut, ByteString)
+    convert (out, hash) = (entityVal out, unValue hash)
 
 queryUtxoAtBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m [(TxOut, ByteString)]
 queryUtxoAtBlockNo blkNo = do
