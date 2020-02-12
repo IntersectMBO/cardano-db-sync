@@ -157,6 +157,7 @@ runExplorer plugin enp = do
       Left err -> logError trce $ renderExplorerNodeError err
       Right () -> pure ()
 
+    runDbStartup trce plugin
     void $ runExplorerNodeClient trce plugin (mkNodeConfig gc) (enpSocketPath enp)
 
 
@@ -230,32 +231,33 @@ localInitiatorNetworkApplication
   -> NodeConfig (BlockProtocol ByronBlock)
   -> OuroborosApplication 'InitiatorApp peer NodeToClientProtocols IO BSL.ByteString Void Void
 localInitiatorNetworkApplication trce plugin pInfoConfig =
-      OuroborosInitiatorApplication $ \ _peer ptcl ->
-        case ptcl of
-          LocalTxSubmissionPtcl -> \channel -> do
-            txv <- newEmptyTMVarM @_ @(GenTx blk)
-            runPeer
-              (contramap (Text.pack . show) . toLogObject $ appendName "explorer-db-local-tx" trce)
-              localTxSubmissionCodec channel
-              (localTxSubmissionClientPeer (txSubmissionClient @(GenTx blk) txv))
+    OuroborosInitiatorApplication $ \ _peer ptcl ->
+      case ptcl of
+        LocalTxSubmissionPtcl -> \channel -> do
+          txv <- newEmptyTMVarM @_ @(GenTx blk)
+          runPeer
+            (contramap (Text.pack . show) . toLogObject $ appendName "explorer-db-local-tx" trce)
+            localTxSubmissionCodec channel
+            (localTxSubmissionClientPeer (txSubmissionClient @(GenTx blk) txv))
 
-          ChainSyncWithBlocksPtcl -> \channel ->
-            liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
-              logInfo trce "Starting chainSyncClient"
-              latestPoints <- getLatestPoints
-              currentTip <- getCurrentTipBlockNo
-              logDbState trce
-              actionQueue <- newDbActionQueue
-              (metrics, server) <- registerMetricsServer
-              dbThread <- async $ runDbThread trce plugin metrics actionQueue
-              ret <- runPipelinedPeer
-                      nullTracer (localChainSyncCodec @blk pInfoConfig) channel
-                      (chainSyncClientPeerPipelined (chainSyncClient trce metrics latestPoints currentTip actionQueue))
-              atomically $
-                writeDbActionQueue actionQueue DbFinish
-              wait dbThread
-              cancel server
-              pure ret
+        ChainSyncWithBlocksPtcl -> \channel ->
+          liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
+            logInfo trce "Starting chainSyncClient"
+            latestPoints <- getLatestPoints
+            currentTip <- getCurrentTipBlockNo
+            logDbState trce
+            actionQueue <- newDbActionQueue
+            (metrics, server) <- registerMetricsServer
+            dbAsync <- async $ runDbThread trce plugin metrics actionQueue
+            ret <- runPipelinedPeer
+                    nullTracer (localChainSyncCodec @blk pInfoConfig) channel
+                    (chainSyncClientPeerPipelined (chainSyncClient trce metrics latestPoints currentTip actionQueue))
+            wait dbAsync
+            atomically $
+              writeDbActionQueue actionQueue DbFinish
+            cancel server
+            pure ret
+
 
 
 logDbState :: Trace IO Text -> IO ()

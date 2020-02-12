@@ -6,7 +6,7 @@ import           Cardano.BM.Trace (Trace)
 
 import           Cardano.Prelude
 
-import           Control.Monad.Logger (NoLoggingT)
+import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Database.Persist.Sql (SqlBackend)
@@ -36,13 +36,13 @@ data ExplorerNodePlugin = ExplorerNodePlugin
   { -- A function run each time the application starts. Can be used to do a one time update/setup
     -- of a table.
     plugOnStartup
-        :: [Trace IO Text -> IO (Either ExplorerNodeError ())]
+        :: [Trace IO Text -> ReaderT SqlBackend (LoggingT IO) ()]
     -- Called for each block recieved from the network.
     -- This will not be called for the original genesis block, but will be called for
     -- all subsequent blocks.
     -- Blocks (including epoch boundary blocks) are called in sequence from the oldest to the newest.
   , plugInsertBlock
-        :: [Trace IO Text -> ByronBlock -> BlockNo -> ReaderT SqlBackend (NoLoggingT IO) (Either ExplorerNodeError ())]
+        :: [Trace IO Text -> ByronBlock -> BlockNo -> ReaderT SqlBackend (LoggingT IO) (Either ExplorerNodeError ())]
 
     -- Rollback to the specified SlotNumber/HeaderHash.
   , plugRollbackBlock

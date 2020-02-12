@@ -14,7 +14,7 @@ module Explorer.Node.Plugin.Default.Insert
 import           Cardano.Binary (serialize')
 import           Cardano.BM.Trace (Trace, logDebug, logInfo)
 
-import           Control.Monad.Logger (NoLoggingT)
+import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, newExceptT,
                     runExceptT)
 
@@ -53,8 +53,8 @@ data ValueFee = ValueFee
 
 insertByronBlock
     :: Trace IO Text -> ByronBlock -> BlockNo
-    -> ReaderT SqlBackend (NoLoggingT IO) (Either ExplorerNodeError ())
-insertByronBlock tracer blk tipBlockNo =
+    -> ReaderT SqlBackend (LoggingT IO) (Either ExplorerNodeError ())
+insertByronBlock tracer blk tipBlockNo = do
   runExceptT $
     case byronBlockRaw blk of
       Ledger.ABOBBlock ablk -> insertABlock tracer ablk tipBlockNo

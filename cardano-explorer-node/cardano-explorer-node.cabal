@@ -31,6 +31,7 @@ library
                         -Wincomplete-uni-patterns
 
   exposed-modules:      Explorer.Node
+                        Explorer.Node.Plugin.Epoch
 
   other-modules:        Explorer.Node.Config
                         Explorer.Node.Database
@@ -59,6 +60,7 @@ library
                       , containers
                       , contra-tracer
                       , cryptonite
+                      , esqueleto
                       , extra
                       , formatting
                       , io-sim-classes

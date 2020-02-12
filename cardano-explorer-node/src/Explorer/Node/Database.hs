@@ -6,6 +6,7 @@ module Explorer.Node.Database
   , DbActionQueue (..)
   , lengthDbActionQueue
   , newDbActionQueue
+  , runDbStartup
   , runDbThread
   , writeDbActionQueue
   ) where
@@ -14,12 +15,11 @@ import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo)
 import qualified Cardano.Chain.Block as Ledger
 import           Cardano.Prelude
 
-import           Control.Concurrent (threadDelay)
 import qualified Control.Concurrent.STM as STM
 import           Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as TBQ
 
-import           Control.Monad.Logger (NoLoggingT)
+import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Except.Extra (left, newExceptT, runExceptT)
 
 import           Database.Persist.Sql (SqlBackend)
@@ -54,16 +54,21 @@ lengthDbActionQueue :: DbActionQueue -> STM Natural
 lengthDbActionQueue (DbActionQueue q) = STM.lengthTBQueue q
 
 newDbActionQueue :: IO DbActionQueue
-newDbActionQueue = DbActionQueue <$> TBQ.newTBQueueIO 20000
+newDbActionQueue = DbActionQueue <$> TBQ.newTBQueueIO 2000
 
 writeDbActionQueue :: DbActionQueue -> DbAction -> STM ()
 writeDbActionQueue (DbActionQueue q) = TBQ.writeTBQueue q
 
 
+runDbStartup :: Trace IO Text -> ExplorerNodePlugin -> IO ()
+runDbStartup trce plugin =
+  DB.runDbAction (Just trce) $
+    mapM_ (\action -> action trce) $ plugOnStartup plugin
+
 runDbThread :: Trace IO Text -> ExplorerNodePlugin -> Metrics -> DbActionQueue -> IO ()
 runDbThread trce plugin metrics queue = do
     logInfo trce "Running DB thread"
-    loop
+    logException trce "runDBThread: " loop
     logInfo trce "Shutting down DB thread"
   where
     loop = do
@@ -71,7 +76,7 @@ runDbThread trce plugin metrics queue = do
       when (length xs > 1) $ do
         logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
       eNextState <- runExceptT $ runActions trce plugin xs
-      mBlkNo <-  DB.runDbNoLogging DB.queryLatestBlockNo
+      mBlkNo <-  DB.runDbAction (Just trce) DB.queryLatestBlockNo
       case mBlkNo of
         Nothing -> pure ()
         Just blkNo -> Gauge.set (fromIntegral blkNo) $ mDbHeight metrics
@@ -87,9 +92,7 @@ runActions trce plugin actions = do
     nextState <- checkDbState trce actions
     if nextState /= Done
       then dbAction Continue actions
-      else do
-        liftIO $ threadDelay (2 * 1000 * 1000)
-        pure Continue
+      else pure Continue
   where
     dbAction :: NextState -> [DbAction] -> ExceptT ExplorerNodeError IO NextState
     dbAction next [] = pure next
@@ -119,7 +122,7 @@ checkDbState trce xs =
       case byronBlockRaw bblk of
         Ledger.ABOBBoundary _ -> left $ ENEError "checkDbState got a boundary block"
         Ledger.ABOBBlock chBlk -> do
-          mDbBlk <- liftIO $ DB.runDbNoLogging $ DB.queryBlockNo (blockNumber chBlk)
+          mDbBlk <- liftIO $ DB.runDbAction (Just trce) $ DB.queryBlockNo (blockNumber chBlk)
           case mDbBlk of
             Nothing -> pure Continue
             Just dbBlk -> do
@@ -164,18 +167,23 @@ insertBlockList trce plugin blks =
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise is *way* too chatty.
   newExceptT
-    . DB.runDbNoLogging
+    . DB.runDbAction (Just trce)
     $ foldM insertBlock (Right ()) blks
   where
     insertBlock
         :: Either ExplorerNodeError ()
         -> (ByronBlock, BlockNo)
-        -> ReaderT SqlBackend (NoLoggingT IO) (Either ExplorerNodeError ())
+        -> ReaderT SqlBackend (LoggingT IO) (Either ExplorerNodeError ())
     insertBlock prevResult (blk, blkNo) =
       case prevResult of
         Left e -> pure $ Left e
         Right () -> foldM (insertAction (blk, blkNo)) (Right ()) $ plugInsertBlock plugin
 
+    insertAction
+        :: (ByronBlock, BlockNo)
+        -> Either ExplorerNodeError ()
+        -> (Trace IO Text -> ByronBlock -> BlockNo -> ReaderT SqlBackend (LoggingT IO) (Either ExplorerNodeError ()))
+        -> ReaderT SqlBackend (LoggingT IO) (Either ExplorerNodeError ())
     insertAction (blk, blkNo) prevResult action =
       case prevResult of
         Left e -> pure $ Left e
