@@ -37,7 +37,7 @@ data ExplorerNodeError
   | ENEError !Text
   | ENEInvariant !Text !ExplorerInvariant
   | ENEBlockMismatch !Word64 !ByteString !ByteString
-
+  | ENEEpochLookup Word64
 
 annotateInvariantTx :: Ledger.Tx -> ExplorerInvariant -> ExplorerInvariant
 annotateInvariantTx tx ei =
@@ -78,6 +78,7 @@ renderExplorerNodeError ede =
         [ "Block mismatch for block number ", textShow blkNo, ", db has "
         , bsBase16Encode hashDb, " but chain provided ", bsBase16Encode hashBlk
         ]
+    ENEEpochLookup e -> mconcat ["Unable to query epoch number ", textShow e]
 
 -- Lifted from cardano-explorer/src/Explorer/Web/Server/Util.hs
 -- Probably should be in cardano-explorer-db

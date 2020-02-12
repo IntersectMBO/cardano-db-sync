@@ -157,6 +157,7 @@ runExplorer plugin enp = do
       Left err -> logError trce $ renderExplorerNodeError err
       Right () -> pure ()
 
+    runDbStartup trce plugin
     void $ runExplorerNodeClient trce plugin (mkNodeConfig gc) (enpSocketPath enp)
 
 
@@ -228,35 +229,34 @@ localInitiatorNetworkApplication
   => Trace IO Text
   -> ExplorerNodePlugin
   -> NodeConfig (BlockProtocol ByronBlock)
-  -> OuroborosApplication 'InitiatorApp peer NodeToClientProtocols IO BSL.ByteString Void Void
+  -> OuroborosApplication 'InitiatorApp peer NodeToClientProtocols IO BSL.ByteString () Void
 localInitiatorNetworkApplication trce plugin pInfoConfig =
-      OuroborosInitiatorApplication $ \ _peer ptcl ->
-        case ptcl of
-          LocalTxSubmissionPtcl -> \channel -> do
-            txv <- newEmptyTMVarM @_ @(GenTx blk)
-            runPeer
-              (contramap (Text.pack . show) . toLogObject $ appendName "explorer-db-local-tx" trce)
-              localTxSubmissionCodec channel
-              (localTxSubmissionClientPeer (txSubmissionClient @(GenTx blk) txv))
+    OuroborosInitiatorApplication $ \ _peer ptcl ->
+      case ptcl of
+        LocalTxSubmissionPtcl -> \channel -> do
+          txv <- newEmptyTMVarM @_ @(GenTx blk)
+          runPeer
+            (contramap (Text.pack . show) . toLogObject $ appendName "explorer-db-local-tx" trce)
+            localTxSubmissionCodec channel
+            (localTxSubmissionClientPeer (txSubmissionClient @(GenTx blk) txv))
 
-          ChainSyncWithBlocksPtcl -> \channel ->
-            liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
-              logInfo trce "Starting chainSyncClient"
-              latestPoints <- getLatestPoints
-              currentTip <- getCurrentTipBlockNo
-              logDbState trce
-              actionQueue <- newDbActionQueue
-              (metrics, server) <- registerMetricsServer
-              dbThread <- async $ runDbThread trce plugin metrics actionQueue
-              ret <- runPipelinedPeer
-                      nullTracer (localChainSyncCodec @blk pInfoConfig) channel
-                      (chainSyncClientPeerPipelined (chainSyncClient trce metrics latestPoints currentTip actionQueue))
-              atomically $
-                writeDbActionQueue actionQueue DbFinish
-              wait dbThread
-              cancel server
-              pure ret
-
+        ChainSyncWithBlocksPtcl -> \channel ->
+          liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
+            logInfo trce "Starting chainSyncClient"
+            latestPoints <- getLatestPoints
+            currentTip <- getCurrentTipBlockNo
+            logDbState trce
+            actionQueue <- newDbActionQueue
+            (metrics, server) <- registerMetricsServer
+            race_
+              (runDbThread trce plugin metrics actionQueue)
+              (runPipelinedPeer
+                    nullTracer (localChainSyncCodec @blk pInfoConfig) channel
+                    (chainSyncClientPeerPipelined (chainSyncClient trce metrics latestPoints currentTip actionQueue))
+                  )
+            atomically $
+              writeDbActionQueue actionQueue DbFinish
+            cancel server
 
 logDbState :: Trace IO Text -> IO ()
 logDbState trce = do
@@ -313,11 +313,11 @@ getCurrentTipBlockNo = do
 --
 txSubmissionClient
   :: forall tx reject m. (Monad m, MonadSTM m)
-  => StrictTMVar m tx -> LocalTxSubmissionClient tx reject m Void
+  => StrictTMVar m tx -> LocalTxSubmissionClient tx reject m ()
 txSubmissionClient txv = LocalTxSubmissionClient $
     atomically (readTMVar txv) >>= pure . client
   where
-    client :: tx -> LocalTxClientStIdle tx reject m Void
+    client :: tx -> LocalTxClientStIdle tx reject m ()
     client tx =
       SendMsgSubmitTx tx $ \mbreject -> do
         case mbreject of
@@ -355,7 +355,7 @@ localTxSubmissionCodec =
 --
 chainSyncClient
   :: forall blk m. (MonadTimer m, MonadIO m, blk ~ ByronBlock)
-  => Trace IO Text -> Metrics -> [Point blk] -> BlockNo -> DbActionQueue -> ChainSyncClientPipelined blk (Tip blk) m Void
+  => Trace IO Text -> Metrics -> [Point blk] -> BlockNo -> DbActionQueue -> ChainSyncClientPipelined blk (Tip blk) m ()
 chainSyncClient trce metrics latestPoints currentTip actionQueue =
     ChainSyncClientPipelined $ pure $
       -- Notify the core node about the our latest points at which we are
@@ -412,19 +412,6 @@ chainSyncClient trce metrics latestPoints currentTip actionQueue =
                 newTip <- getCurrentTipBlockNo
                 pure $ finish newTip tip
         }
-
--- | ouroboros-network catches 'SomeException' and if a 'nullTracer' is passed into that
--- code, the caught exception will not be logged. Therefore wrap all explorer code that
--- is called from network with an exception logger so at least the exception will be
--- logged (instead of silently swallowed) and then rethrown.
-logException :: Trace IO Text -> Text -> IO a -> IO a
-logException tracer txt action =
-    action `catch` logger
-  where
-    logger :: SomeException -> IO a
-    logger e = do
-      logError tracer $ txt <> textShow e
-      throwIO e
 
 logProtocolMagic :: Trace IO Text -> Crypto.ProtocolMagic -> IO ()
 logProtocolMagic tracer pm =

@@ -4,13 +4,20 @@ module Explorer.Plugin.Extended
 
 
 import           Explorer.Node (ExplorerNodePlugin (..), defExplorerNodePlugin)
+import           Explorer.Node.Plugin.Epoch (epochPluginOnStartup, epochPluginInsertBlock,
+                    epochPluginRollbackBlock)
 
 extendedExplorerNodePlugin :: ExplorerNodePlugin
 extendedExplorerNodePlugin =
   defExplorerNodePlugin
-    { plugInsertBlock =
+    { plugOnStartup =
+        plugOnStartup defExplorerNodePlugin
+          ++ [epochPluginOnStartup]
+    , plugInsertBlock =
         plugInsertBlock defExplorerNodePlugin
+          ++ [epochPluginInsertBlock]
     , plugRollbackBlock =
         plugRollbackBlock defExplorerNodePlugin
+          ++ [epochPluginRollbackBlock]
     }
 
