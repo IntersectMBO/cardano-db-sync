@@ -248,17 +248,15 @@ localInitiatorNetworkApplication trce plugin pInfoConfig =
             logDbState trce
             actionQueue <- newDbActionQueue
             (metrics, server) <- registerMetricsServer
-            dbAsync <- async $ runDbThread trce plugin metrics actionQueue
-            ret <- runPipelinedPeer
+            race_
+              (runDbThread trce plugin metrics actionQueue)
+              (runPipelinedPeer
                     nullTracer (localChainSyncCodec @blk pInfoConfig) channel
                     (chainSyncClientPeerPipelined (chainSyncClient trce metrics latestPoints currentTip actionQueue))
-            wait dbAsync
+                  )
             atomically $
               writeDbActionQueue actionQueue DbFinish
             cancel server
-            pure ret
-
-
 
 logDbState :: Trace IO Text -> IO ()
 logDbState trce = do
