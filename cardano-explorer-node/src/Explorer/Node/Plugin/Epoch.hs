@@ -43,24 +43,6 @@ epochPluginOnStartup trce = do
     liftIO . logInfo trce $ "epochPluginOnStartup: Checking"
     maybe (pure ()) (updatePastEpochs trce) =<< queryLatestBlockEpochNo
 
-
-updatePastEpochs :: MonadIO m => Trace IO Text -> Word64 -> ReaderT SqlBackend m ()
-updatePastEpochs trce maxEpochNum =
-    loop =<< fromMaybe 0 <$> queryLatestEpochNo
-  where
-    loop :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
-    loop currentEpoch
-      | currentEpoch >= maxEpochNum = pure ()
-      | otherwise = do
-          transactionSaveWithIsolation Serializable
-          liftIO . logInfo trce $ "epochPluginOnStartup: Inserting epoch table for epoch " <> textShow currentEpoch
-          either (liftIO . reportError) (const $ loop (currentEpoch + 1)) =<< updateEpochNum currentEpoch
-
-    reportError :: ExplorerNodeError -> IO ()
-    reportError err =
-      logError trce $ "epochPluginOnStartup: " <> renderExplorerNodeError err
-
-
 epochPluginInsertBlock :: Trace IO Text -> ByronBlock -> BlockNo -> ReaderT SqlBackend (LoggingT IO) (Either ExplorerNodeError ())
 epochPluginInsertBlock trce rawBlk tipBlkNo =
     case byronBlockRaw rawBlk of
@@ -121,6 +103,23 @@ epochPluginRollbackBlock trce point =
 -- -------------------------------------------------------------------------------------------------
 
 type ValMay a = Value (Maybe a)
+
+updatePastEpochs :: MonadIO m => Trace IO Text -> Word64 -> ReaderT SqlBackend m ()
+updatePastEpochs trce maxEpochNum =
+    loop =<< fromMaybe 0 <$> queryLatestEpochNo
+  where
+    loop :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
+    loop currentEpoch
+      | currentEpoch >= maxEpochNum = pure ()
+      | otherwise = do
+          transactionSaveWithIsolation Serializable
+          liftIO . logInfo trce $ "epochPluginOnStartup: Inserting epoch table for epoch " <> textShow currentEpoch
+          either (liftIO . reportError) (const $ loop (currentEpoch + 1)) =<< updateEpochNum currentEpoch
+
+    reportError :: ExplorerNodeError -> IO ()
+    reportError err =
+      logError trce $ "epochPluginOnStartup: " <> renderExplorerNodeError err
+
 
 updateEpochNum :: MonadIO m => Word64 -> ReaderT SqlBackend m (Either ExplorerNodeError ())
 updateEpochNum epochNum = do

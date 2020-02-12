@@ -229,7 +229,7 @@ localInitiatorNetworkApplication
   => Trace IO Text
   -> ExplorerNodePlugin
   -> NodeConfig (BlockProtocol ByronBlock)
-  -> OuroborosApplication 'InitiatorApp peer NodeToClientProtocols IO BSL.ByteString Void Void
+  -> OuroborosApplication 'InitiatorApp peer NodeToClientProtocols IO BSL.ByteString () Void
 localInitiatorNetworkApplication trce plugin pInfoConfig =
     OuroborosInitiatorApplication $ \ _peer ptcl ->
       case ptcl of
@@ -315,11 +315,11 @@ getCurrentTipBlockNo = do
 --
 txSubmissionClient
   :: forall tx reject m. (Monad m, MonadSTM m)
-  => StrictTMVar m tx -> LocalTxSubmissionClient tx reject m Void
+  => StrictTMVar m tx -> LocalTxSubmissionClient tx reject m ()
 txSubmissionClient txv = LocalTxSubmissionClient $
     atomically (readTMVar txv) >>= pure . client
   where
-    client :: tx -> LocalTxClientStIdle tx reject m Void
+    client :: tx -> LocalTxClientStIdle tx reject m ()
     client tx =
       SendMsgSubmitTx tx $ \mbreject -> do
         case mbreject of
@@ -357,7 +357,7 @@ localTxSubmissionCodec =
 --
 chainSyncClient
   :: forall blk m. (MonadTimer m, MonadIO m, blk ~ ByronBlock)
-  => Trace IO Text -> Metrics -> [Point blk] -> BlockNo -> DbActionQueue -> ChainSyncClientPipelined blk (Tip blk) m Void
+  => Trace IO Text -> Metrics -> [Point blk] -> BlockNo -> DbActionQueue -> ChainSyncClientPipelined blk (Tip blk) m ()
 chainSyncClient trce metrics latestPoints currentTip actionQueue =
     ChainSyncClientPipelined $ pure $
       -- Notify the core node about the our latest points at which we are
