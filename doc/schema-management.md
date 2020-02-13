@@ -23,6 +23,16 @@ where the `1` denotes "stage 1" of the SQL migration, the `0000` is the migratio
 last number is the date. Listing the directory containing the schema and sorting the list will
 order them in the correct order for applying to the database.
 
+## Creating a Migration
+
+Whenever the Haskell schema definition in `Explorer.DB.Schema` is updated, a schema migration can
+be generated using the command:
+```
+cabal run cardano-explorer-db-tool -- create-migration --mdir schema/
+```
+which will only generate a migration if one is needed. It is usually best to run the test suite
+(`cabal test cardano-explorer db` which tests the migrations) first and then generate the migration.
+
 
 
 [Persistent]: https://hackage.haskell.org/package/persistent

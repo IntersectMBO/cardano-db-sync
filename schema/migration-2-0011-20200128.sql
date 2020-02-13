@@ -6,7 +6,7 @@ DECLARE
 BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
   IF next_version = 11 THEN
-    EXECUTE 'CREATe TABLE "epoch"("id" SERIAL8  PRIMARY KEY UNIQUE,"out_sum" outsum NOT NULL,"tx_count" numeric(32,0) NOT NULL,"no" uinteger NOT NULL,"start_time" timestamp NOT NULL,"end_time" timestamp NOT NULL)' ;
+    EXECUTE 'CREATe TABLE "epoch"("id" SERIAL8  PRIMARY KEY UNIQUE,"out_sum" outsum NOT NULL,"tx_count" uinteger NOT NULL,"no" uinteger NOT NULL,"start_time" timestamp NOT NULL,"end_time" timestamp NOT NULL)' ;
     EXECUTE 'ALTER TABLE "epoch" ADD CONSTRAINT "unique_epoch" UNIQUE("no")' ;
     -- Hand written SQL statements can be added here.
     UPDATE schema_version SET stage_two = 11 ;
