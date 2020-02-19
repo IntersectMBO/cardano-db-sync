@@ -1,4 +1,4 @@
-**Validated: 2020/02/06**
+**Validated: 2020/02/19**
 
 # Building and Running the Explorer
 
@@ -46,7 +46,7 @@ scripts/postgresql-setup.sh --createdb
 PGPASSFILE=config/pgpass explorer-node/bin/cardano-explorer-node \
     --config config/explorer-mainnet-config.yaml \
     --genesis-file ../cardano-node/configuration/mainnet-genesis.json \
-    --socket-path ../cardano-node/state-node-mainnet/socket \
+    --socket-path ../cardano-node/state-node-mainnet/node.socket \
     --schema-dir schema/
 ```
 
@@ -71,11 +71,11 @@ sudo apt-get install libpq-dev
 sudo apt install libssl-dev
 ```
 
-In the same `cardano-explorer` direction but in a new terminal:
+In the same `cardano-explorer` directory but in a new terminal:
 ```
 cabal run cardano-tx-submit-webapi -- \
     --config config/tx-submit-mainnet-config.yaml \
     --genesis-file ../cardano-node/configuration/mainnet-genesis.json \
-    --socket-path ../cardano-node/state-node-mainnet/socket \
+    --socket-path ../cardano-node/state-node-mainnet/node.socket \
     --port 8101
 ```
