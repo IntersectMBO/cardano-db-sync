@@ -302,8 +302,8 @@ getCurrentTipBlockNo = do
   where
     convert :: DB.Block -> BlockNo
     convert blk =
-      case DB.blockSlotNo blk of
-        Just slot -> BlockNo slot
+      case DB.blockBlockNo blk of
+        Just blockno -> BlockNo blockno
         Nothing -> genesisBlockNo
 
 -- | A 'LocalTxSubmissionClient' that submits transactions reading them from
