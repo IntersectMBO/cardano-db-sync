@@ -73,8 +73,6 @@ import           Explorer.Node.Tracing.ToObjectOrphans ()
 
 import           Network.Socket (SockAddr (..))
 
-import           Network.TypedProtocol.Codec (Codec)
-import           Network.TypedProtocol.Codec.Cbor (DeserialiseFailure)
 import           Network.TypedProtocol.Driver (runPeer, runPipelinedPeer)
 import           Network.TypedProtocol.Pipelined (Nat(Zero, Succ))
 
@@ -86,10 +84,14 @@ import           Ouroboros.Consensus.Node.Run.Abstract (RunNode, nodeDecodeBlock
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
 import           Ouroboros.Consensus.Protocol (NodeConfig, Protocol (..))
 
-import           Ouroboros.Network.Block (Point (..), SlotNo (..), Tip (tipBlockNo),
-                    decodePoint, encodePoint, genesisPoint, genesisBlockNo, blockNo,
+import           Ouroboros.Network.Point (WithOrigin (..), withOrigin, fromWithOrigin)
+import           Ouroboros.Network.Block (Point (..), SlotNo (..),
+                    Tip, getTipBlockNo,
+                    decodePoint, encodePoint, genesisPoint, blockNo,
                     BlockNo(unBlockNo, BlockNo),
-                    encodeTip, decodeTip)
+                    encodeTip, decodeTip,
+                    wrapCBORinCBOR, unwrapCBORinCBOR)
+import           Ouroboros.Network.Codec (Codec, DeserialiseFailure)
 import           Ouroboros.Network.Mux (AppType (..), OuroborosApplication (..))
 import           Ouroboros.Network.NodeToClient (ErrorPolicyTrace (..), IPSubscriptionTarget (..),
                     LocalAddresses (..), NodeToClientProtocols (..), NetworkIPSubscriptionTracers (..),
@@ -293,18 +295,18 @@ getLatestPoints =
     convertHashBlob :: ByteString -> Maybe ByronHash
     convertHashBlob = fmap (ByronHash . AbstractHash) . digestFromByteString
 
-getCurrentTipBlockNo :: IO BlockNo
+getCurrentTipBlockNo :: IO (WithOrigin BlockNo)
 getCurrentTipBlockNo = do
     maybeTip <- DB.runDbNoLogging DB.queryLatestBlock
     case maybeTip of
       Just tip -> pure $ convert tip
-      Nothing -> pure genesisBlockNo
+      Nothing -> pure Origin
   where
-    convert :: DB.Block -> BlockNo
+    convert :: DB.Block -> WithOrigin BlockNo
     convert blk =
       case DB.blockBlockNo blk of
-        Just blockno -> BlockNo blockno
-        Nothing -> genesisBlockNo
+        Just blockno -> At (BlockNo blockno)
+        Nothing -> Origin
 
 -- | A 'LocalTxSubmissionClient' that submits transactions reading them from
 -- a 'StrictTMVar'.  A real implementation should use a better synchronisation
@@ -332,8 +334,8 @@ localChainSyncCodec
   -> Codec (ChainSync blk (Tip blk)) DeserialiseFailure m BSL.ByteString
 localChainSyncCodec pInfoConfig =
     codecChainSync
-      (nodeEncodeBlock pInfoConfig)
-      (nodeDecodeBlock pInfoConfig)
+      (wrapCBORinCBOR   (nodeEncodeBlock pInfoConfig))
+      (unwrapCBORinCBOR (nodeDecodeBlock pInfoConfig))
       (encodePoint (nodeEncodeHeaderHash (Proxy @blk)))
       (decodePoint (nodeDecodeHeaderHash (Proxy @blk)))
       (encodeTip   (nodeEncodeHeaderHash (Proxy @blk)))
@@ -355,7 +357,7 @@ localTxSubmissionCodec =
 --
 chainSyncClient
   :: forall blk m. (MonadTimer m, MonadIO m, blk ~ ByronBlock)
-  => Trace IO Text -> Metrics -> [Point blk] -> BlockNo -> DbActionQueue -> ChainSyncClientPipelined blk (Tip blk) m ()
+  => Trace IO Text -> Metrics -> [Point blk] -> WithOrigin BlockNo -> DbActionQueue -> ChainSyncClientPipelined blk (Tip blk) m ()
 chainSyncClient trce metrics latestPoints currentTip actionQueue =
     ChainSyncClientPipelined $ pure $
       -- Notify the core node about the our latest points at which we are
@@ -365,44 +367,45 @@ chainSyncClient trce metrics latestPoints currentTip actionQueue =
       SendMsgFindIntersect
         (if null latestPoints then [genesisPoint] else latestPoints)
         ClientPipelinedStIntersect
-          { recvMsgIntersectFound    = \_hdr tip -> pure $ go policy Zero currentTip (tipBlockNo tip)
-          , recvMsgIntersectNotFound = \  tip -> pure $ go policy Zero currentTip (tipBlockNo tip)
+          { recvMsgIntersectFound    = \_hdr tip -> pure $ go policy Zero currentTip (getTipBlockNo tip)
+          , recvMsgIntersectNotFound = \  tip -> pure $ go policy Zero currentTip (getTipBlockNo tip)
           }
   where
     policy = pipelineDecisionLowHighMark 1000 10000
 
-    go :: MkPipelineDecision -> Nat n -> BlockNo -> BlockNo -> ClientPipelinedStIdle n ByronBlock (Tip blk) m a
+    go :: MkPipelineDecision -> Nat n -> WithOrigin BlockNo -> WithOrigin BlockNo -> ClientPipelinedStIdle n ByronBlock (Tip blk) m a
     go mkPipelineDecision n clientTip serverTip =
       case (n, runPipelineDecision mkPipelineDecision n clientTip serverTip) of
         (_Zero, (Request, mkPipelineDecision')) ->
             SendMsgRequestNext clientStNext (pure clientStNext)
           where
-            clientStNext = mkClientStNext $ \clientBlockNo newServerTip -> go mkPipelineDecision' n clientBlockNo (tipBlockNo newServerTip)
+            clientStNext = mkClientStNext $ \clientBlockNo newServerTip -> go mkPipelineDecision' n clientBlockNo (getTipBlockNo newServerTip)
         (_, (Pipeline, mkPipelineDecision')) ->
           SendMsgRequestNextPipelined
             (go mkPipelineDecision' (Succ n) clientTip serverTip)
         (Succ n', (CollectOrPipeline, mkPipelineDecision')) ->
           CollectResponse
             (Just $ SendMsgRequestNextPipelined $ go mkPipelineDecision' (Succ n) clientTip serverTip)
-            (mkClientStNext $ \clientBlockNo newServerTip -> go mkPipelineDecision' n' clientBlockNo (tipBlockNo newServerTip))
+            (mkClientStNext $ \clientBlockNo newServerTip -> go mkPipelineDecision' n' clientBlockNo (getTipBlockNo newServerTip))
         (Succ n', (Collect, mkPipelineDecision')) ->
           CollectResponse
             Nothing
-            (mkClientStNext $ \clientBlockNo newServerTip -> go mkPipelineDecision' n' clientBlockNo (tipBlockNo newServerTip))
+            (mkClientStNext $ \clientBlockNo newServerTip -> go mkPipelineDecision' n' clientBlockNo (getTipBlockNo newServerTip))
 
-    mkClientStNext :: (BlockNo -> Tip blk -> ClientPipelinedStIdle n ByronBlock (Tip blk) m a)
+    mkClientStNext :: (WithOrigin BlockNo -> Tip blk -> ClientPipelinedStIdle n ByronBlock (Tip blk) m a)
                     -> ClientStNext n ByronBlock (Tip ByronBlock) m a
     mkClientStNext finish =
       ClientStNext
         { recvMsgRollForward = \blk tip ->
             liftIO .
               logException trce "recvMsgRollForward: " $ do
-                Gauge.set (fromIntegral . unBlockNo $ tipBlockNo tip) $ mNodeHeight metrics
+                Gauge.set (withOrigin 0 (fromIntegral . unBlockNo) (getTipBlockNo tip))
+                          (mNodeHeight metrics)
                 newSize <- atomically $ do
-                  writeDbActionQueue actionQueue $ DbApplyBlock blk (tipBlockNo tip)
+                  writeDbActionQueue actionQueue $ DbApplyBlock blk (fromWithOrigin 0 (getTipBlockNo tip))
                   lengthDbActionQueue actionQueue
                 Gauge.set (fromIntegral newSize) $ mQueuePostWrite metrics
-                pure $ finish (blockNo blk) tip
+                pure $ finish (At (blockNo blk)) tip
         , recvMsgRollBackward = \point tip -> do
             liftIO .
               logException trce "recvMsgRollBackward: " $ do

@@ -23,8 +23,8 @@ import           Control.Tracer (traceWith)
 import           Control.Monad.IO.Class (liftIO)
 
 import qualified Data.ByteString.Char8 as BS
-import qualified Data.ByteString.Lazy.Char8 as LBS
 import           Data.Text (Text)
+import qualified Data.Text.Encoding as T
 import qualified Data.Text.Lazy.IO as LT
 import qualified Data.Text.Lazy.Builder as LT
 
@@ -94,7 +94,9 @@ runIohkLogging tracer action =
     toIohkLog :: Loc -> LogSource -> LogLevel -> LogStr -> IO ()
     toIohkLog _loc _src level msg = do
       meta <- mkLOMeta (toIohkSeverity level) Public
-      traceWith tracer $ LogObject ["explorer-db"] meta (LogStructured . LBS.fromStrict $ fromLogStr msg)
+      traceWith tracer $
+        LogObject ["explorer-db"] meta
+                  (LogMessage . T.decodeLatin1 $ fromLogStr msg)
 
     toIohkSeverity :: LogLevel -> Severity
     toIohkSeverity =
