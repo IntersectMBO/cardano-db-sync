@@ -13,7 +13,7 @@ import           Database.Persist.Sql (SqlBackend)
 
 import           Explorer.Node.Error
 
-import           Ouroboros.Network.Block (BlockNo (..), Point (..))
+import           Ouroboros.Network.Block (Point (..), Tip)
 import           Ouroboros.Consensus.Ledger.Byron (ByronBlock)
 
 
@@ -42,7 +42,7 @@ data ExplorerNodePlugin = ExplorerNodePlugin
     -- all subsequent blocks.
     -- Blocks (including epoch boundary blocks) are called in sequence from the oldest to the newest.
   , plugInsertBlock
-        :: [Trace IO Text -> ByronBlock -> BlockNo -> ReaderT SqlBackend (LoggingT IO) (Either ExplorerNodeError ())]
+        :: [Trace IO Text -> ByronBlock -> Tip ByronBlock -> ReaderT SqlBackend (LoggingT IO) (Either ExplorerNodeError ())]
 
     -- Rollback to the specified SlotNumber/HeaderHash.
   , plugRollbackBlock

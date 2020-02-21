@@ -31,7 +31,7 @@ import           Explorer.Node.Plugin
 import           Explorer.Node.Util
 
 import           Ouroboros.Consensus.Ledger.Byron (ByronBlock (..))
-import           Ouroboros.Network.Block (BlockNo (..), Point (..))
+import           Ouroboros.Network.Block (Point (..), Tip)
 
 import qualified System.Metrics.Prometheus.Metric.Gauge as Gauge
 
@@ -42,7 +42,7 @@ data NextState
   deriving Eq
 
 data DbAction
-  = DbApplyBlock !ByronBlock !BlockNo
+  = DbApplyBlock !ByronBlock !(Tip ByronBlock)
   | DbRollBackToPoint !(Point ByronBlock)
   | DbFinish
 
@@ -114,7 +114,7 @@ checkDbState :: Trace IO Text -> [DbAction] -> ExceptT ExplorerNodeError IO Next
 checkDbState trce xs =
     case filter isMainBlockApply (reverse xs) of
       [] -> pure Continue
-      (DbApplyBlock blk _blkNo : _) -> validateBlock blk
+      (DbApplyBlock blk _tip : _) -> validateBlock blk
       _ -> pure Continue
   where
     validateBlock :: ByronBlock -> ExceptT ExplorerNodeError IO NextState
@@ -138,7 +138,7 @@ checkDbState trce xs =
     isMainBlockApply :: DbAction -> Bool
     isMainBlockApply dba =
       case dba of
-        DbApplyBlock blk _ ->
+        DbApplyBlock blk _tip ->
           case byronBlockRaw blk of
             Ledger.ABOBBlock _ -> True
             Ledger.ABOBBoundary _ -> False
@@ -161,7 +161,7 @@ runRollbacks trce plugin point =
 insertBlockList
     :: Trace IO Text
     -> ExplorerNodePlugin
-    -> [(ByronBlock, BlockNo)]
+    -> [(ByronBlock, Tip ByronBlock)]
     -> ExceptT ExplorerNodeError IO ()
 insertBlockList trce plugin blks =
   -- Setting this to True will log all 'Persistent' operations which is great
@@ -172,7 +172,7 @@ insertBlockList trce plugin blks =
   where
     insertBlock
         :: Either ExplorerNodeError ()
-        -> (ByronBlock, BlockNo)
+        -> (ByronBlock, Tip ByronBlock)
         -> ReaderT SqlBackend (LoggingT IO) (Either ExplorerNodeError ())
     insertBlock prevResult (blk, blkNo) =
       case prevResult of
@@ -180,9 +180,9 @@ insertBlockList trce plugin blks =
         Right () -> foldM (insertAction (blk, blkNo)) (Right ()) $ plugInsertBlock plugin
 
     insertAction
-        :: (ByronBlock, BlockNo)
+        :: (ByronBlock, Tip ByronBlock)
         -> Either ExplorerNodeError ()
-        -> (Trace IO Text -> ByronBlock -> BlockNo -> ReaderT SqlBackend (LoggingT IO) (Either ExplorerNodeError ()))
+        -> (Trace IO Text -> ByronBlock -> Tip ByronBlock -> ReaderT SqlBackend (LoggingT IO) (Either ExplorerNodeError ()))
         -> ReaderT SqlBackend (LoggingT IO) (Either ExplorerNodeError ())
     insertAction (blk, blkNo) prevResult action =
       case prevResult of
@@ -201,8 +201,8 @@ blockingFlushDbActionQueue (DbActionQueue queue) = do
     pure $ x : xs
 
 -- | Split the DbAction list into a prefix containing blocks to apply and a postfix.
-spanDbApply :: [DbAction] -> ([(ByronBlock, BlockNo)], [DbAction])
+spanDbApply :: [DbAction] -> ([(ByronBlock, Tip ByronBlock)], [DbAction])
 spanDbApply lst =
   case lst of
-    (DbApplyBlock b n:xs) -> let (ys, zs) = spanDbApply xs in ((b, n):ys, zs)
+    (DbApplyBlock b t:xs) -> let (ys, zs) = spanDbApply xs in ((b, t):ys, zs)
     xs -> ([], xs)

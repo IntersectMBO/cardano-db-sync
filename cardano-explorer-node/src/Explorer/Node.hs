@@ -84,7 +84,7 @@ import           Ouroboros.Consensus.Node.Run.Abstract (RunNode, nodeDecodeBlock
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
 import           Ouroboros.Consensus.Protocol (NodeConfig, Protocol (..))
 
-import           Ouroboros.Network.Point (WithOrigin (..), withOrigin, fromWithOrigin)
+import           Ouroboros.Network.Point (WithOrigin (..), withOrigin)
 import           Ouroboros.Network.Block (Point (..), SlotNo (..),
                     Tip, getTipBlockNo,
                     decodePoint, encodePoint, genesisPoint, blockNo,
@@ -402,7 +402,7 @@ chainSyncClient trce metrics latestPoints currentTip actionQueue =
                 Gauge.set (withOrigin 0 (fromIntegral . unBlockNo) (getTipBlockNo tip))
                           (mNodeHeight metrics)
                 newSize <- atomically $ do
-                  writeDbActionQueue actionQueue $ DbApplyBlock blk (fromWithOrigin 0 (getTipBlockNo tip))
+                  writeDbActionQueue actionQueue $ DbApplyBlock blk tip
                   lengthDbActionQueue actionQueue
                 Gauge.set (fromIntegral newSize) $ mQueuePostWrite metrics
                 pure $ finish (At (blockNo blk)) tip

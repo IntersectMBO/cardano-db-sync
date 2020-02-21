@@ -36,15 +36,16 @@ import           Explorer.Node.Error
 import           Explorer.Node.Util
 
 import           Ouroboros.Consensus.Ledger.Byron (ByronBlock (..))
-import           Ouroboros.Network.Block (BlockNo (..), Point)
+import           Ouroboros.Network.Block (BlockNo (..), Point, Tip, getTipBlockNo)
+import           Ouroboros.Network.Point (withOrigin)
 
 epochPluginOnStartup :: Trace IO Text -> ReaderT SqlBackend (LoggingT IO) ()
 epochPluginOnStartup trce = do
     liftIO . logInfo trce $ "epochPluginOnStartup: Checking"
     maybe (pure ()) (updatePastEpochs trce) =<< queryLatestBlockEpochNo
 
-epochPluginInsertBlock :: Trace IO Text -> ByronBlock -> BlockNo -> ReaderT SqlBackend (LoggingT IO) (Either ExplorerNodeError ())
-epochPluginInsertBlock trce rawBlk tipBlkNo =
+epochPluginInsertBlock :: Trace IO Text -> ByronBlock -> Tip ByronBlock -> ReaderT SqlBackend (LoggingT IO) (Either ExplorerNodeError ())
+epochPluginInsertBlock trce rawBlk tip =
     case byronBlockRaw rawBlk of
       Ledger.ABOBBoundary bblk -> do
         -- Commit the current transaction and start a new one.
@@ -60,7 +61,7 @@ epochPluginInsertBlock trce rawBlk tipBlkNo =
           else pure $ Right ()
 
       Ledger.ABOBBlock blk -> do
-        if blockNumber blk > unBlockNo tipBlkNo - 10
+        if blockNumber blk > withOrigin 0 unBlockNo (getTipBlockNo tip) - 10
           then do
             eMeta <- DB.queryMeta
             case eMeta of

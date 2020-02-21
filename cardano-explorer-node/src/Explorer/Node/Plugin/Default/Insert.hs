@@ -43,7 +43,8 @@ import           Explorer.Node.Error
 import           Explorer.Node.Util
 
 import           Ouroboros.Consensus.Ledger.Byron (ByronBlock (..))
-import           Ouroboros.Network.Block (BlockNo (..))
+import           Ouroboros.Network.Block (BlockNo (..), Tip, getTipBlockNo)
+import           Ouroboros.Network.Point (withOrigin)
 
 -- Trivial local data type for use in place of a tuple.
 data ValueFee = ValueFee
@@ -52,12 +53,12 @@ data ValueFee = ValueFee
   }
 
 insertByronBlock
-    :: Trace IO Text -> ByronBlock -> BlockNo
+    :: Trace IO Text -> ByronBlock -> Tip ByronBlock
     -> ReaderT SqlBackend (LoggingT IO) (Either ExplorerNodeError ())
-insertByronBlock tracer blk tipBlockNo = do
+insertByronBlock tracer blk tip = do
   runExceptT $
     case byronBlockRaw blk of
-      Ledger.ABOBBlock ablk -> insertABlock tracer ablk tipBlockNo
+      Ledger.ABOBBlock ablk -> insertABlock tracer ablk tip
       Ledger.ABOBBoundary abblk -> insertABOBBoundary tracer abblk
 
 insertABOBBoundary
@@ -100,9 +101,9 @@ insertABOBBoundary tracer blk = do
 
 insertABlock
     :: MonadIO m
-    => Trace IO Text -> Ledger.ABlock ByteString -> BlockNo
+    => Trace IO Text -> Ledger.ABlock ByteString -> Tip ByronBlock
     -> ExceptT ExplorerNodeError (ReaderT SqlBackend m) ()
-insertABlock tracer blk (BlockNo tipBlockNo) = do
+insertABlock tracer blk tip = do
     meta <- liftLookupFail "insertABlock" DB.queryMeta
     pbid <- liftLookupFail "insertABlock" $ DB.queryBlockId (unHeaderHash $ blockPreviousHash blk)
 
@@ -136,7 +137,7 @@ insertABlock tracer blk (BlockNo tipBlockNo) = do
   where
     logger :: Trace IO a -> a -> IO ()
     logger =
-      if tipBlockNo - blockNumber blk < 20
+      if withOrigin 0 unBlockNo (getTipBlockNo tip) - blockNumber blk < 20
         then logInfo
         else logDebug
 
