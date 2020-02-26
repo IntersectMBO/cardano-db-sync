@@ -3,8 +3,6 @@ packages:
   cardano-explorer-db/test
   cardano-explorer-node
   cardano-extended-db-node
-  cardano-explorer-webapi
-  cardano-tx-submit
 
 constraints:
   brick >= 0.47 && < 0.50
