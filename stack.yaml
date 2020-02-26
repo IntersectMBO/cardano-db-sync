@@ -1,4 +1,4 @@
-resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/fa7a16291d3e93b068d9b13620fc81c88b5600f0/snapshot.yaml
+resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/57fcc83702b91e0a7aecdb32c99ab1d8c1c444d0/snapshot.yaml
 compiler: ghc-8.6.5
 
 allow-newer: true
@@ -33,7 +33,7 @@ extra-deps:
   - persistent-template-2.8.2.3
   - prometheus-2.1.2
   - pvss-0.2.0
-  - tasty-hedgehog-1.0.0.1
+  - tasty-hedgehog-1.0.0.2
   - text-zipper-0.10.1
   - time-units-1.0.0
   - word-wrap-0.4.1
@@ -58,7 +58,7 @@ extra-deps:
       - cardano-shell
 
   - git: https://github.com/input-output-hk/cardano-prelude
-    commit: fa7a16291d3e93b068d9b13620fc81c88b5600f0
+    commit: 57fcc83702b91e0a7aecdb32c99ab1d8c1c444d0
     subdirs:
       - .
       - test
@@ -79,7 +79,7 @@ extra-deps:
       - tracer-transformers
 
   - git: https://github.com/input-output-hk/cardano-base
-    commit: 3c2791584d3f43aa18e9cc13c490239b4c3dcbd2
+    commit: a7b403c1762a6a122a691df816c26563b7e547f8
     subdirs:
       - binary
       - binary/test
@@ -97,7 +97,7 @@ extra-deps:
       - byron/chain/executable-spec
 
   - git: https://github.com/input-output-hk/cardano-ledger
-    commit: 86f0cb4705f46307e4c89e7ef4c90142882cce54
+    commit: 172b49ff1b6456851f10ae18f920fbfa733be0b0
     subdirs:
       - cardano-ledger
       - cardano-ledger/test
