@@ -60,7 +60,7 @@ import qualified Data.Text.Encoding as Text
 
 import qualified Cardano.Db as DB
 
-import           Ouroboros.Consensus.Ledger.Byron (ByronBlock, ByronHash (..))
+import           Ouroboros.Consensus.Byron.Ledger (ByronBlock, ByronHash (..))
 import           Ouroboros.Network.Point (WithOrigin (..))
 import qualified Ouroboros.Network.Point as Point
 import           Ouroboros.Network.Block (Point (..), SlotNo (..))

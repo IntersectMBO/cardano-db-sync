@@ -35,7 +35,7 @@ import qualified Cardano.Db as DB
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Util
 
-import           Ouroboros.Consensus.Ledger.Byron (ByronBlock (..))
+import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import           Ouroboros.Network.Block (BlockNo (..), Point, Tip, getTipBlockNo)
 import           Ouroboros.Network.Point (withOrigin)
 

@@ -14,7 +14,7 @@ import           Database.Persist.Sql (SqlBackend)
 import           Cardano.DbSync.Error
 
 import           Ouroboros.Network.Block (Point (..), Tip)
-import           Ouroboros.Consensus.Ledger.Byron (ByronBlock)
+import           Ouroboros.Consensus.Byron.Ledger (ByronBlock)
 
 
 -- | This plugin system allows access to the database to be extended by running one or more

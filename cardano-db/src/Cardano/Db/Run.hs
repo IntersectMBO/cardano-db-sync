@@ -95,8 +95,10 @@ runIohkLogging tracer action =
     toIohkLog _loc _src level msg = do
       meta <- mkLOMeta (toIohkSeverity level) Public
       traceWith tracer $
-        LogObject ["db-sync"] meta
-                  (LogMessage . T.decodeLatin1 $ fromLogStr msg)
+        (name, LogObject name meta (LogMessage . T.decodeLatin1 $ fromLogStr msg))
+
+    name :: Text
+    name = "db-sync"
 
     toIohkSeverity :: LogLevel -> Severity
     toIohkSeverity =
