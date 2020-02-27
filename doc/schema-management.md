@@ -1,7 +1,7 @@
 # Schema Management
 
-Schema management for the Cardano Explorer database is a little more complicated than we would like,
-but the scheme chosen allows for easy development, evolution and management of the database.
+Schema management for the Cardano PostgreSQL database is a little more complicated than we would
+like, but the scheme chosen allows for easy development, evolution and management of the database.
 
 The database schema is defined in three stages, each stage consisting of one or more SQL migrations.
 The stages are:
@@ -25,13 +25,13 @@ order them in the correct order for applying to the database.
 
 ## Creating a Migration
 
-Whenever the Haskell schema definition in `Explorer.DB.Schema` is updated, a schema migration can
+Whenever the Haskell schema definition in `Cardano.Db.Schema` is updated, a schema migration can
 be generated using the command:
 ```
-cabal run cardano-explorer-db-tool -- create-migration --mdir schema/
+cabal run cardano-db-sync-db-tool -- create-migration --mdir schema/
 ```
 which will only generate a migration if one is needed. It is usually best to run the test suite
-(`cabal test cardano-explorer db` which tests the migrations) first and then generate the migration.
+(`cabal test cardano-db-sync db` which tests the migrations) first and then generate the migration.
 
 
 

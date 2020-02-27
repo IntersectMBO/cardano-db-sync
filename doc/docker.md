@@ -1,5 +1,5 @@
 to build against mainnet:
-`time docker build --build-arg environment=mainnet  -t cardano-explorer-mainnet .`
+`time docker build --build-arg environment=mainnet  -t cardano-db-sync-mainnet .`
 
 when the build is done, the last few lines of output should look similar to:
 ```
@@ -12,14 +12,14 @@ Step 25/25 : ENTRYPOINT [ "/nix/var/nix/profiles/per-user/cardano/profile/bin/ru
 Removing intermediate container bfb064b25056
  ---> 20605fdffcdc
 Successfully built 20605fdffcdc
-Successfully tagged cardano-explorer-mainnet:latest
+Successfully tagged cardano-db-sync-mainnet:latest
 
 real    34m26.889s
 user    0m2.095s
 sys     0m3.377s
 ```
 
-you can then start the container with: `docker run --rm -t -i -p 80:80 --name test-image --volume explorer-mainnet:/var cardano-explorer-mainnet:latest`
+you can then start the container with: `docker run --rm -t -i -p 80:80 --name test-image --volume explorer-mainnet:/var cardano-db-sync-mainnet:latest`
 
 http://localhost/grafana/login and login as admin/admin to view the performance metrics and sync state
 
@@ -33,10 +33,10 @@ http://localhost/api/submit/tx is the tx submission endpoint
 
 
 to build an image that can target multiple clusters:
-`time docker build --build-arg environment=all -t cardano-explorer-all .`
+`time docker build --build-arg environment=all -t cardano-db-sync-all .`
 
 then to select a cluster, use one of the following:
 ```
-docker run --rm -i -t -p 81:80 --name explorer-mainnet --volume explorer-mainnet:/var -e ENVIRONMENT=mainnet cardano-explorer-all:latest
-docker run --rm -i -t -p 81:80 --name explorer-testnet --volume explorer-testnet:/var -e ENVIRONMENT=testnet cardano-explorer-all:latest
+docker run --rm -i -t -p 81:80 --name explorer-mainnet --volume explorer-mainnet:/var -e ENVIRONMENT=mainnet cardano-db-sync-all:latest
+docker run --rm -i -t -p 81:80 --name explorer-testnet --volume explorer-testnet:/var -e ENVIRONMENT=testnet cardano-db-sync-all:latest
 ```

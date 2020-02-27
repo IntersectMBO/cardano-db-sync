@@ -1,8 +1,8 @@
 packages:
-  cardano-explorer-db
-  cardano-explorer-db/test
-  cardano-explorer-node
-  cardano-extended-db-node
+  cardano-db
+  cardano-db/test
+  cardano-db-sync
+  cardano-db-sync-extended
 
 constraints:
   brick >= 0.47 && < 0.50
@@ -10,7 +10,7 @@ constraints:
 package cardano-explorer-db
   ghc-options: -Wall -Werror -fwarn-redundant-constraints
 
-package cardano-explorer-node
+package cardano-db-sync
   ghc-options: -Wall -Werror -fwarn-redundant-constraints
 
 package cardano-explorer-webapi
@@ -83,6 +83,12 @@ package non-integer
   tests: False
 
 package delegation
+  tests: False
+
+package ouroboros-network-framework
+  tests: False
+
+package cardano-ledger
   tests: False
 
 source-repository-package
