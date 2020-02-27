@@ -1,8 +1,8 @@
 # Validation
 
-This document will detail what validation and consistency checks the explorer does and does
+This document will detail what validation and consistency checks the db-sync-node does and does
 not do, and what assumptions it makes. It will also note what validation is done every time
-the explorer is restarted and what validation is only done when new data arrives from the
+the db-sync-node is restarted and what validation is only done when new data arrives from the
 node.
 
 The data stored in the database is designed to be an accurate but incomplete (eg cryptographic
@@ -12,15 +12,15 @@ state or any state of the blockchain in the past can be reconstructed with an SQ
 
 ## Assumptions
 
-The explorer connects to a locally running Cardano node and fully trusts the information that node
-provides. This means the explorer can omit validation of the cryptographic signatures on blocks,
-transactions etc because the explorer can assume these were checked by the locally running node
+The db-sync-node connects to a locally running Cardano node and fully trusts the information that node
+provides. This means the db-sync-node can omit validation of the cryptographic signatures on blocks,
+transactions etc because the db-sync-node can assume these were checked by the locally running node
 which is providing blockchain data.
 
 
 ## Genesis Validation
 
-When the explorer is started for the first time it reads the same JSON Genesis configuration as
+When the db-sync-node is started for the first time it reads the same JSON Genesis configuration as
 used by the Cardano node, validates the hash, extracts the Genesis Distribution and inserts the
 Genesis Distribution into the database and prints the total supply at Genesis (in Ada) to the logs.
 The Genesis Distribution generates a set of transaction output for which there are no transaction
@@ -36,7 +36,7 @@ Initial genesis distribution populated. Hash 5f20df933584822601f9e3f8c024eb5eb25
 Total genesis supply of Ada: 31112484745.000000
 ```
 
-Each time the explorer is started, it again reads the JSON Genesis configuration, checks its hash,
+Each time the db-sync-node is started, it again reads the JSON Genesis configuration, checks its hash,
 validates that the Genesis Distribution is correct and again prints the total of the Genesis supply.
 For main net:
 ```
@@ -65,7 +65,7 @@ Transaction validation is only done when transactions are added to the database.
 contain an index into the `Block` table specifying the block in which the transaction was included.
 Each transaction included in a block (ie specifically ignoring the Genesis Distribution
 transactions) have one or more inputs and one or more outputs. Transactions are validated in the
-explorer by checking that all the transaction inputs exist and that the value of the inputs
+db-sync node by checking that all the transaction inputs exist and that the value of the inputs
 is greater than or equal to the value of the transaction outputs. As a by product of this validation
 the fees associated with the transaction are recorded in the database.
 
