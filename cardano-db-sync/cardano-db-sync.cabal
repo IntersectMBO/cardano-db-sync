@@ -56,6 +56,7 @@ library
                       , cardano-ledger
                       , cardano-prelude
                       , cardano-shell
+                      , cardano-slotting
                       , cborg
                       , containers
                       , contra-tracer
@@ -72,6 +73,8 @@ library
                       , optparse-applicative
                       , network
                       , ouroboros-consensus
+                      , ouroboros-consensus-byron
+                      , ouroboros-consensus-cardano
                       , ouroboros-network
                       , ouroboros-network-framework
                       , persistent

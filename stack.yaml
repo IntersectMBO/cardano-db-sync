@@ -1,4 +1,4 @@
-resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/57fcc83702b91e0a7aecdb32c99ab1d8c1c444d0/snapshot.yaml
+resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/2440fd0dc3d5ba109c4f16a87d98dc80a66d1b8e/snapshot.yaml
 compiler: ghc-8.6.5
 
 allow-newer: true
@@ -57,7 +57,7 @@ extra-deps:
       - cardano-shell
 
   - git: https://github.com/input-output-hk/cardano-prelude
-    commit: 57fcc83702b91e0a7aecdb32c99ab1d8c1c444d0
+    commit: 2440fd0dc3d5ba109c4f16a87d98dc80a66d1b8e
     subdirs:
       - .
       - test
@@ -66,7 +66,7 @@ extra-deps:
     commit: 43a036c5bbe68ca2e9cbe611eab7982e2348fe49
 
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: 49b347d892d82dce23eb692722649cd8a1149406
+    commit: 53388e73eb4421df3896deedd51056a3aa880b3b
     subdirs:
       - contra-tracer
       - iohk-monitoring
@@ -104,13 +104,16 @@ extra-deps:
       - crypto/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: 5f77e24c2263560ad58b9ba092c8cfed174675ae
+    commit: 36861a97272de1e4de448925dd9bb9c0fddd80f6
     subdirs:
       - io-sim
       - io-sim-classes
       - network-mux
       - ouroboros-network
       - ouroboros-consensus
+      - ouroboros-consensus-byron
+      - ouroboros-consensus-cardano
+      - ouroboros-consensus/ouroboros-consensus-mock
       - typed-protocols
       - ouroboros-network-framework
       - typed-protocols-examples

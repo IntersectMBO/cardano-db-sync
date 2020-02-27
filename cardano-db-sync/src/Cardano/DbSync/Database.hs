@@ -30,7 +30,7 @@ import           Cardano.DbSync.Metrics
 import           Cardano.DbSync.Plugin
 import           Cardano.DbSync.Util
 
-import           Ouroboros.Consensus.Ledger.Byron (ByronBlock (..))
+import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import           Ouroboros.Network.Block (Point (..), Tip)
 
 import qualified System.Metrics.Prometheus.Metric.Gauge as Gauge
