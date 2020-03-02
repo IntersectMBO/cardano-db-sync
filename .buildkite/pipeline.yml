@@ -1,0 +1,26 @@
+steps:
+  - label: hydra-eval-errors
+    command: 'nix-build ./nix -A iohkNix.hydraEvalErrors && ./result/bin/hydra-eval-errors.py'
+    agents:
+      system: x86_64-linux
+
+  - label: 'check-cabal-project'
+    command: 'nix-build ./nix -A iohkNix.checkCabalProject -o check-cabal-project.sh && ./check-cabal-project.sh'
+    agents:
+      system: x86_64-linux
+
+  - label: 'stack-cabal-sync'
+    command: 'nix-shell ./nix -A iohkNix.stack-cabal-sync-shell --run .buildkite/stack-cabal-sync.sh'
+    agents:
+      system: x86_64-linux
+
+# FIXME: commented until Docker/CI issues are resolved.
+#
+#  - label: 'Docker Image'
+#    command:
+#      - "nix-build .buildkite/docker-build-push.nix --argstr dockerHubRepoName inputoutput/cardano-db-sync -o docker-build-push"
+#      - "./docker-build-push"
+#    agents:
+#      system: x86_64-linux
+#    soft_fail:
+#      - exit_status: '*'
