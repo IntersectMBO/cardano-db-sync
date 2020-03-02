@@ -31,7 +31,7 @@ with hostPkgs.lib;
 let
   image = impureCreated dbSyncPackages.dockerImage;
 
-  # Override Docker image, setting its creation date to the current time rather than the unix epoch.
+  # Override Docker image, setting its creation date to the current time rather than the UNIX epoch.
   impureCreated = image: image.overrideAttrs (oldAttrs: { created = "now"; }) // { inherit (image) version; };
 
 in
