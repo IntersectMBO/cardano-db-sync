@@ -19,77 +19,22 @@ package cardano-explorer-webapi
 package cardano-tx-submit
   ghc-options: -Wall -Werror -fwarn-redundant-constraints
 
-package cardano-binary
-  tests: False
+-- ---------------------------------------------------------
+-- Disable all tests by default
 
-package cardano-crypto
-  tests: False
+tests: False
 
-package cardano-crypto-class
-  tests: False
+test-show-details: direct
 
-package cardano-crypto-wrapper
-  tests: False
+-- Then enable specific tests in this repo
 
-package cardano-ledger
-  tests: False
+package cardano-db
+  tests: True
 
-package cardano-prelude
-  tests: False
+package cardano-db-sync
+  tests: True
 
-package cardano-shell
-  tests: False
-
-package cardano-sl-x509
-  tests: False
-
-package contra-tracer
-  tests: False
-
-package iohk-monitoring
-  tests: False
-
-package network-mux
-  tests: False
-
-package io-sim
-  tests: False
-
-package test-protocols
-  tests: False
-
-package typed-protocols
-  tests: False
-
-package typed-protocols-examples
-  tests: False
-
-package lobemo-backend-monitoring
-  tests: False
-
-package goblins
-  tests: False
-
-package small-steps
-  tests: False
-
-package cs-ledger
-  tests: False
-
-package cs-blockchain
-  tests: False
-
-package non-integer
-  tests: False
-
-package delegation
-  tests: False
-
-package ouroboros-network-framework
-  tests: False
-
-package cardano-ledger
-  tests: False
+-- ---------------------------------------------------------
 
 source-repository-package
   type: git
