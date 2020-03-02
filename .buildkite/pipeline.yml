@@ -14,13 +14,11 @@ steps:
     agents:
       system: x86_64-linux
 
-# FIXME: commented until Docker/CI issues are resolved.
-#
-#  - label: 'Docker Image'
-#    command:
-#      - "nix-build .buildkite/docker-build-push.nix --argstr dockerHubRepoName inputoutput/cardano-db-sync -o docker-build-push"
-#      - "./docker-build-push"
-#    agents:
-#      system: x86_64-linux
-#    soft_fail:
-#      - exit_status: '*'
+  - label: 'Docker Image'
+    command:
+      - "nix-build .buildkite/docker-build-push.nix --argstr dockerHubRepoName inputoutput/cardano-db-sync -o docker-build-push"
+      - "./docker-build-push"
+    agents:
+      system: x86_64-linux
+    soft_fail:
+      - exit_status: '*'
