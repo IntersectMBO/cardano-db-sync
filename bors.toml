@@ -1,0 +1,8 @@
+status = [
+  "buildkite/cardano-db-sync",
+  "ci/hydra:Cardano:cardano-db-sync:required",
+]
+timeout_sec = 7200
+required_approvals = 1
+block_labels = [ "WIP", "DO NOT MERGE" ]
+delete_merged_branches = true
