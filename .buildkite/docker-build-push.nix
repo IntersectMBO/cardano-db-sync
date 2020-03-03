@@ -29,7 +29,7 @@ with hostPkgs;
 with hostPkgs.lib;
 
 let
-  image = impureCreated dbSyncPackages.dockerImage;
+  images = mapAttrs (key: image: impureCreated image) { inherit (restPackages.dockerImages) dbSync; };
 
   # Override Docker image, setting its creation date to the current time rather than the UNIX epoch.
   impureCreated = image: image.overrideAttrs (oldAttrs: { created = "now"; }) // { inherit (image) version; };
@@ -50,24 +50,32 @@ in
     fullrepo="${dockerHubRepoName}"
     ''}
 
-    branch="''${BUILDKITE_BRANCH:-}"
-    tag="''${BUILDKITE_TAG:-}"
-    tagged="$fullrepo:$tag"
-    gitrev="${image.imageTag}"
-    echo "Loading $fullrepo:$gitrev"
-    docker load -i ${image}
-    echo "Pushing $fullrepo:$gitrev"
-    docker push "$fullrepo:$gitrev"
-    if [[ "$branch" = master ]]; then
-      echo "Tagging as master"
-      docker tag $fullrepo:$gitrev $fullrepo:$branch
-      echo "Pushing $fullrepo:$branch"
-      docker push "$fullrepo:$branch"
-    fi
-    if [[ "$tag" ]]; then
-      echo "Tagging as $tag"
-      docker tag $fullrepo:$gitrev $fullrepo:$tag
-      echo "Pushing $fullrepo:$tag"
-      docker push "$fullrepo:$tag"
-    fi
+    ${concatMapStringsSep "\n" (image: ''
+      branch="''${BUILDKITE_BRANCH:-}"
+      tag="''${BUILDKITE_TAG:-}"
+      tagged="$fullrepo:$tag"
+      gitrev="${image.imageTag}"
+      echo "Images before loading"
+      docker images
+      echo "System prune"
+      docker system prune -a -f
+      echo "Loading $fullrepo:$gitrev"
+      docker -D load -i ${image}
+      docker images
+      echo "Pushing $fullrepo:$gitrev"
+      docker push "$fullrepo:$gitrev"
+      if [[ "$branch" = master ]]; then
+        echo "Tagging as master"
+        docker tag $fullrepo:$gitrev $fullrepo:$branch
+        echo "Pushing $fullrepo:$branch"
+        docker push "$fullrepo:$branch"
+      fi
+      if [[ "$tag" ]]; then
+        echo "Tagging as $tag"
+        docker tag $fullrepo:$gitrev $fullrepo:$tag
+        echo "Pushing $fullrepo:$tag"
+        docker push "$fullrepo:$tag"
+      fi
+
+    '') (builtins.attrValues images)}
   ''

@@ -14,11 +14,9 @@ steps:
     agents:
       system: x86_64-linux
 
-  - label: 'Docker Image'
+  - label: 'cardano-db-sync Docker image'
     command:
       - "nix-build .buildkite/docker-build-push.nix --argstr dockerHubRepoName inputoutput/cardano-db-sync -o docker-build-push"
       - "./docker-build-push"
     agents:
       system: x86_64-linux
-    soft_fail:
-      - exit_status: '*'
