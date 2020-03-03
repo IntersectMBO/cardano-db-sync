@@ -29,7 +29,7 @@ with hostPkgs;
 with hostPkgs.lib;
 
 let
-  images = mapAttrs (key: image: impureCreated image) { inherit (restPackages.dockerImages) dbSync; };
+  images = mapAttrs (key: image: impureCreated image) { inherit (dbSyncPackages.dockerImages) dbSync; };
 
   # Override Docker image, setting its creation date to the current time rather than the UNIX epoch.
   impureCreated = image: image.overrideAttrs (oldAttrs: { created = "now"; }) // { inherit (image) version; };

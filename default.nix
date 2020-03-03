@@ -28,7 +28,7 @@ let
   #  inherit pkgs;
   #};
 
-  dockerImage = let
+  dockerImages = let
     stateDir = "/data";
     defaultConfig = rec {
       _file = toString ./default.nix;
@@ -44,7 +44,7 @@ let
   self = {
     inherit haskellPackages
       scripts
-      dockerImage
+      dockerImages
       #nixosTests
     ;
 
