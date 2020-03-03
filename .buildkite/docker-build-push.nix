@@ -55,13 +55,8 @@ in
       tag="''${BUILDKITE_TAG:-}"
       tagged="$fullrepo:$tag"
       gitrev="${image.imageTag}"
-      echo "Images before loading"
-      docker images
-      echo "System prune"
-      docker system prune -a -f
       echo "Loading $fullrepo:$gitrev"
-      docker -D load -i ${image}
-      docker images
+      docker load -i ${image}
       echo "Pushing $fullrepo:$gitrev"
       docker push "$fullrepo:$gitrev"
       if [[ "$branch" = master ]]; then
@@ -76,6 +71,8 @@ in
         echo "Pushing $fullrepo:$tag"
         docker push "$fullrepo:$tag"
       fi
+      echo "Cleaning up with docker system prune"
+      docker system prune -f
 
     '') (builtins.attrValues images)}
   ''
