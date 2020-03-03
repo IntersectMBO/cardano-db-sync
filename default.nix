@@ -21,14 +21,17 @@ let
     # the Haskell.nix package set, reduced to local packages.
     (selectProjectPackages cardanoDbSyncHaskellPackages);
 
-  scripts = callPackage ./nix/scripts.nix { inherit customConfig; };
+  scripts = callPackage ./nix/scripts.nix {
+    inherit customConfig;
+    syncPackages = self;
+  };
 
   # NixOS tests
   #nixosTests = import ./nix/nixos/tests {
   #  inherit pkgs;
   #};
 
-  dockerImage = let
+  dockerImages = let
     stateDir = "/data";
     defaultConfig = rec {
       _file = toString ./default.nix;
@@ -38,13 +41,15 @@ let
   in pkgs.callPackage ./nix/docker.nix {
     inherit (self) cardano-db-sync;
     inherit (self) cardano-db-sync-extended;
-    scripts = callPackage ./nix/scripts.nix { customConfig = customConfig'; };
+    scripts = scripts.override {
+      customConfig = customConfig';
+    };
   };
 
   self = {
     inherit haskellPackages
       scripts
-      dockerImage
+      dockerImages
       #nixosTests
     ;
 

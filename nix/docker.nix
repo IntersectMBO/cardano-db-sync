@@ -76,18 +76,18 @@ let
     ];
   };
 
-  dbSyncWithoutConfig = dockerTools.buildImage {
-    name = "db-sync-without-config";
-    fromImage = baseImage;
-    contents = [
-      cardano-db-sync
-    ];
-  };
+  mkDbSyncDockerImage = inputs: let
+    dbSyncWithoutConfig = dockerTools.buildImage {
+      name = "db-sync-without-config";
+      fromImage = baseImage;
+      contents = [
+        inputs.drv
+      ];
+    };
 
-  dbSyncDockerImage = let
     clusterStatements = lib.concatStringsSep "\n" (lib.mapAttrsToList (_: value: value) (commonLib.forEnvironments (env: ''
       elif [[ "$NETWORK" == "${env.name}" ]]; then
-        ${if (env ? nodeConfig) then "exec ${scripts.${env.name}.db-sync}"
+        ${if (env ? nodeConfig) then "exec ${scripts.${env.name}.${inputs.scriptKey}}"
         else "echo db-sync not supported on ${env.name} ; exit 1"}
     '')));
     entry-point = writeScriptBin "entry-point" ''
@@ -96,7 +96,7 @@ let
       mkdir -m 1777 tmp
       if [[ -d /config ]]; then
         export PGPASSFILE=/config/pgpass
-         exec ${cardano-db-sync}/bin/cardano-db-sync \
+         exec ${inputs.binary} \
            --socket-path /data/node.socket \
            --genesis-file /config/genesis.json \
            --config /data/config.yaml \
@@ -118,7 +118,19 @@ let
     };
   };
 
+
+  normalImage = mkDbSyncDockerImage {
+    drv = cardano-db-sync;
+    binary = "${cardano-db-sync}/bin/cardano-db-sync";
+    scriptKey = "db-sync";
+  };
+
+  extendedImage = mkDbSyncDockerImage {
+    drv = cardano-db-sync-extended;
+    binary = "${cardano-db-sync-extended}/bin/cardano-db-sync-extended";
+    scriptKey = "db-sync-extended";
+  };
 in {
-  dbSync = dbSyncDockerImage;
-  #dbSyncExtended = dbSyncExtendedDockerImage;
+  dbSync = normalImage;
+  dbSyncExtended = extendedImage;
 }
