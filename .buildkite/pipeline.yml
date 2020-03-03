@@ -16,7 +16,14 @@ steps:
 
   - label: 'cardano-db-sync Docker image'
     command:
-      - "nix-build .buildkite/docker-build-push.nix --argstr dockerHubRepoName inputoutput/cardano-db-sync -o docker-build-push"
+      - "nix-build .buildkite/docker-build-push-dbSync.nix --argstr dockerHubRepoName inputoutput/cardano-db-sync -o docker-build-push"
+      - "./docker-build-push"
+    agents:
+      system: x86_64-linux
+
+  - label: 'cardano-db-sync-extended Docker image'
+    comman:
+      - "nix-build .buildkite/docker-build-push-dbSyncExtended.nix --argstr dockerHubRepoName inputoutput/cardano-db-sync-extended -o docker-build-push"
       - "./docker-build-push"
     agents:
       system: x86_64-linux
