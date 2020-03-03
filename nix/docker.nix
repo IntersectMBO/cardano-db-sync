@@ -3,8 +3,8 @@
 #
 # To build and load into the Docker engine:
 #
-#   docker load -i $(nix-build -A dockerImage.dbSync --no-out-link)
-#   docker load -i $(nix-build -A dockerImage.dbSyncExtended --no-out-link)
+#   docker load -i $(nix-build -A dockerImages.dbSync --no-out-link)
+#   docker load -i $(nix-build -A dockerImages.dbSyncExtended --no-out-link)
 #
 #  cardano-db-sync and cardano-db-sync-extended are interchangeable in the following:
 #
@@ -118,7 +118,40 @@ let
     };
   };
 
+  dbSyncExtendedDockerImage = let
+    clusterStatements = lib.concatStringsSep "\n" (lib.mapAttrsToList (_: value: value) (commonLib.forEnvironments (env: ''
+      elif [[ "$NETWORK" == "${env.name}" ]]; then
+        ${if (env ? nodeConfig) then "exec ${scripts.${env.name}.db-sync-extended}"
+        else "echo db-sync-extended not supported on ${env.name} ; exit 1"}
+    '')));
+    entry-point = writeScriptBin "entry-point" ''
+      #!${runtimeShell}
+      # set up /tmp (override with TMPDIR variable)
+      mkdir -m 1777 tmp
+      if [[ -d /config ]]; then
+        export PGPASSFILE=/config/pgpass
+         exec ${cardano-db-sync-extended}/bin/cardano-db-sync \
+           --socket-path /data/node.socket \
+           --genesis-file /config/genesis.json \
+           --config /data/config.yaml \
+           --schema-dir ${../schema}
+      ${clusterStatements}
+      else
+        echo "Please set a NETWORK environment variable to one of: mainnet/testnet"
+        echo "Or mount a /config volume containing: config.yaml, genesis.json, pgpass"
+      fi
+    '';
+  in dockerTools.buildImage {
+    name = "${dbSyncExtendedRepoName}";
+    fromImage = dbSyncWithoutConfig;
+    tag = "${gitrev}";
+    created = "now";   # Set creation date to build time. Breaks reproducibility
+    contents = [ entry-point ];
+    config = {
+      EntryPoint = [ "${entry-point}/bin/entry-point" ];
+    };
+  };
 in {
   dbSync = dbSyncDockerImage;
-  #dbSyncExtended = dbSyncExtendedDockerImage;
+  dbSyncExtended = dbSyncExtendedDockerImage;
 }
