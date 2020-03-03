@@ -34,6 +34,7 @@
 , cardano-db-sync
 , cardano-db-sync-extended
 , scripts
+, extendedScripts
 
 # Get the current commit
 , gitrev ? iohkNix.commitIdFromGitRepoOrZero ../.git
@@ -54,7 +55,6 @@
 , lib
 
 , dbSyncRepoName ? "inputoutput/cardano-db-sync"
-, dbSyncExtendedRepoName ? "inputoutput/cardano-db-sync-extended"
 }:
 
 let
@@ -76,18 +76,19 @@ let
     ];
   };
 
-  mkDbSyncDockerImage = inputs: let
-    dbSyncWithoutConfig = dockerTools.buildImage {
-      name = "db-sync-without-config";
-      fromImage = baseImage;
-      contents = [
-        inputs.drv
-      ];
-    };
-
-    clusterStatements = lib.concatStringsSep "\n" (lib.mapAttrsToList (_: value: value) (commonLib.forEnvironments (env: ''
+  dbSyncDockerImage = let
+    clusterStatements = lib.concatStringsSep "\n" (lib.mapAttrsToList (_: value: value) (commonLib.forEnvironments (env: let
+      dbSyncScript = scripts.${env.name}.db-sync;
+      dbSyncExtendedScript = extendedScripts.${env.name}.db-sync;
+    in ''
+      if [[ ! -z "''${EXTENDED}" ]] && [[ "''${EXTENDED}" == true ]]
+      then
+        DBSYNC=${dbSyncExtendedScript}
+      else
+        DBSYNC=${dbSyncScript}
+      fi
       elif [[ "$NETWORK" == "${env.name}" ]]; then
-        ${if (env ? nodeConfig) then "exec ${scripts.${env.name}.${inputs.scriptKey}}"
+        ${if (env ? nodeConfig) then "exec $DBSYNC"
         else "echo db-sync not supported on ${env.name} ; exit 1"}
     '')));
     entry-point = writeScriptBin "entry-point" ''
@@ -95,8 +96,14 @@ let
       # set up /tmp (override with TMPDIR variable)
       mkdir -m 1777 tmp
       if [[ -d /config ]]; then
+        if [[ ! -z "''${EXTENDED}" ]] && [[ "''${EXTENDED}" == true ]]
+        then
+          DBSYNC=${cardano-db-sync-extended}/bin/cardano-db-sync-extended
+        else
+          DBSYNC=${cardano-db-sync}/bin/cardano-db-sync
+        fi
         export PGPASSFILE=/config/pgpass
-         exec ${inputs.binary} \
+         exec $DBSYNC \
            --socket-path /data/node.socket \
            --genesis-file /config/genesis.json \
            --config /data/config.yaml \
@@ -109,7 +116,7 @@ let
     '';
   in dockerTools.buildImage {
     name = "${dbSyncRepoName}";
-    fromImage = dbSyncWithoutConfig;
+    fromImage = baseImage;
     tag = "${gitrev}";
     created = "now";   # Set creation date to build time. Breaks reproducibility
     contents = [ entry-point ];
@@ -117,20 +124,4 @@ let
       EntryPoint = [ "${entry-point}/bin/entry-point" ];
     };
   };
-
-
-  normalImage = mkDbSyncDockerImage {
-    drv = cardano-db-sync;
-    binary = "${cardano-db-sync}/bin/cardano-db-sync";
-    scriptKey = "db-sync";
-  };
-
-  extendedImage = mkDbSyncDockerImage {
-    drv = cardano-db-sync-extended;
-    binary = "${cardano-db-sync-extended}/bin/cardano-db-sync-extended";
-    scriptKey = "db-sync-extended";
-  };
-in {
-  dbSync = normalImage;
-  dbSyncExtended = extendedImage;
-}
+in dbSyncDockerImage
