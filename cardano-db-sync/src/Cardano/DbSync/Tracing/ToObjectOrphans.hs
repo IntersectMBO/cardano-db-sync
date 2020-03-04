@@ -6,44 +6,30 @@
 
 module Cardano.DbSync.Tracing.ToObjectOrphans () where
 
-import           Data.Text
+import qualified Codec.CBOR.Term as CBOR
+
+import           Data.Text (Text, pack)
 import           Data.Aeson ((.=))
+import           Data.Functor.Identity (Identity (..))
 
 import           Cardano.BM.Data.LogItem
-import           Cardano.BM.Data.Severity
 import           Cardano.BM.Data.Tracer
 import           Cardano.BM.Tracing
 
+import           Cardano.Tracing.ToObjectOrphans ()
+
 import           Control.Monad.IO.Class (MonadIO)
 
-import qualified Network.Socket as Socket
-import           Ouroboros.Network.NodeToClient
-                   (WithAddr(..), ErrorPolicyTrace(..))
 
-instance DefinePrivacyAnnotation (WithAddr Socket.SockAddr ErrorPolicyTrace)
-instance DefineSeverity (WithAddr Socket.SockAddr ErrorPolicyTrace) where
-  defineSeverity (WithAddr _ ev) = case ev of
-    ErrorPolicySuspendPeer {} -> Warning -- peer misbehaved
-    ErrorPolicySuspendConsumer {} -> Notice -- peer temporarily not useful
-    ErrorPolicyLocalNodeError {} -> Error
-    ErrorPolicyResumePeer {} -> Debug
-    ErrorPolicyKeepSuspended {} -> Debug
-    ErrorPolicyResumeConsumer {} -> Debug
-    ErrorPolicyResumeProducer {} -> Debug
-    ErrorPolicyUnhandledApplicationException {} -> Error
-    ErrorPolicyUnhandledConnectionException {} -> Error
-    ErrorPolicyAcceptException {} -> Error
+import           Network.Mux (WithMuxBearer (..))
 
+import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
+import           Ouroboros.Network.Block (Tip)
+import           Ouroboros.Network.NodeToClient (ConnectionId, Handshake, LocalAddress,
+                    NodeToClientVersion, TraceSendRecv)
+import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
+import           Ouroboros.Network.Subscription (SubscriptionTrace (..))
 
--- transform @ErrorPolicyTrace@
-instance Transformable Text IO (WithAddr Socket.SockAddr ErrorPolicyTrace) where
-  trTransformer = defaultTextTransformer
-
-instance ToObject (WithAddr Socket.SockAddr ErrorPolicyTrace) where
-  toObject _verb (WithAddr addr ev) =
-    mkObject [ "kind" .= ("ErrorPolicyTrace" :: String)
-             , "address" .= show addr
-             , "event" .= show ev ]
 
 defaultTextTransformer
   :: ( MonadIO m
@@ -61,3 +47,72 @@ defaultTextTransformer TextualRepresentation _verb tr =
     traceWith tr (mempty, LogObject mempty meta (LogMessage $ pack $ show s))
 defaultTextTransformer _ verb tr =
   trStructured verb tr
+
+instance DefinePrivacyAnnotation (Identity (SubscriptionTrace LocalAddress))
+
+instance DefineSeverity (Identity (SubscriptionTrace LocalAddress)) where
+  defineSeverity (Identity ev) = case ev of
+    SubscriptionTraceConnectStart {} -> Info
+    SubscriptionTraceConnectEnd {} -> Info
+    SubscriptionTraceConnectException {} -> Error
+    SubscriptionTraceSocketAllocationException {} -> Error
+    SubscriptionTraceTryConnectToPeer {} -> Info
+    SubscriptionTraceSkippingPeer {} -> Info
+    SubscriptionTraceSubscriptionRunning -> Debug
+    SubscriptionTraceSubscriptionWaiting {} -> Debug
+    SubscriptionTraceSubscriptionFailed -> Warning
+    SubscriptionTraceSubscriptionWaitingNewConnection {} -> Debug
+    SubscriptionTraceStart {} -> Debug
+    SubscriptionTraceRestart {} -> Debug
+    SubscriptionTraceConnectionExist {} -> Info
+    SubscriptionTraceUnsupportedRemoteAddr {} -> Warning
+    SubscriptionTraceMissingLocalAddress -> Warning
+    SubscriptionTraceApplicationException {} -> Error
+    SubscriptionTraceAllocateSocket {} -> Debug
+    SubscriptionTraceCloseSocket {} -> Debug
+
+instance Transformable Text IO (Identity (SubscriptionTrace LocalAddress)) where
+  trTransformer = defaultTextTransformer
+
+instance ToObject (Identity (SubscriptionTrace LocalAddress)) where
+  toObject _verb (Identity ev) =
+    mkObject [ "kind" .= ("SubscriptionTrace" :: String)
+             , "event" .= show ev
+             ]
+
+instance DefinePrivacyAnnotation (WithMuxBearer
+                             (ConnectionId LocalAddress)
+                             (TraceSendRecv (Handshake NodeToClientVersion CBOR.Term)))
+
+instance DefineSeverity (WithMuxBearer
+                             (ConnectionId LocalAddress)
+                             (TraceSendRecv (Handshake NodeToClientVersion CBOR.Term)))
+
+instance Transformable Text IO (WithMuxBearer
+                             (ConnectionId LocalAddress)
+                             (TraceSendRecv (Handshake NodeToClientVersion CBOR.Term))) where
+  trTransformer = defaultTextTransformer
+
+
+instance Transformable Text IO (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock))) where
+  trTransformer = defaultTextTransformer
+
+
+instance DefinePrivacyAnnotation (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock)))
+
+instance DefineSeverity (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock)))
+
+instance ToObject (WithMuxBearer
+                             (ConnectionId LocalAddress)
+                             (TraceSendRecv (Handshake NodeToClientVersion CBOR.Term))) where
+  toObject _verb (WithMuxBearer b ev) =
+    mkObject [ "kind" .= ("MuxTrace" :: String)
+             , "bearer" .= show b
+             , "event" .= show ev
+             ]
+
+instance ToObject (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock))) where
+  toObject _verb msg =
+    mkObject [ "kind" .= ("TraceSendRecv" :: String)
+             , "event" .= show msg
+             ]
