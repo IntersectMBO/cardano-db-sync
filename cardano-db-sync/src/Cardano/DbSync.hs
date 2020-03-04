@@ -200,6 +200,7 @@ runDbSyncNodeNodeClient
 runDbSyncNodeNodeClient iocp trce plugin nodeConfig (SocketPath socketPath) = do
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   networkState <- newNetworkMutableState
+  txv <- newEmptyTMVarM @_ @(GenTx blk)
   ncSubscriptionWorker_V1
     (localSnocket iocp socketPath)
     -- TODO: these tracers should be configurable for debugging purposes.
@@ -218,7 +219,7 @@ runDbSyncNodeNodeClient iocp trce plugin nodeConfig (SocketPath socketPath) = do
         }
 
     (NodeToClientVersionData { networkMagic = nodeNetworkMagic (Proxy @blk) nodeConfig })
-    (localInitiatorNetworkApplication trce plugin nodeConfig)
+    (localInitiatorNetworkApplication trce plugin nodeConfig txv)
   where
     errorPolicyTracer :: Tracer IO (WithAddr SockAddr ErrorPolicyTrace)
     errorPolicyTracer = toLogObject $ appendName "ErrorPolicy" trce
@@ -234,12 +235,12 @@ localInitiatorNetworkApplication
   => Trace IO Text
   -> DbSyncNodePlugin
   -> TopLevelConfig ByronBlock
+  -> StrictTMVar m tx
   -> OuroborosApplication 'InitiatorApp peer NodeToClientProtocols IO BSL.ByteString () Void
-localInitiatorNetworkApplication trce plugin pInfoConfig =
+localInitiatorNetworkApplication trce plugin pInfoConfig txv =
     OuroborosInitiatorApplication $ \ _peer ptcl ->
       case ptcl of
         LocalTxSubmissionPtcl -> \channel -> do
-          txv <- newEmptyTMVarM @_ @(GenTx blk)
           runPeer
             (contramap (Text.pack . show) . toLogObject $ appendName "db-sync-local-tx" trce)
             localTxSubmissionCodec channel
