@@ -75,7 +75,7 @@ import           Cardano.DbSync.Tracing.ToObjectOrphans ()
 
 import           Network.Socket (SockAddr (..))
 
-import           Network.TypedProtocol.Driver (runPeer, runPipelinedPeer)
+import           Ouroboros.Network.Driver.Simple (runPeer, runPipelinedPeer)
 import           Network.TypedProtocol.Pipelined (Nat(Zero, Succ))
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..), ByronHash (..), GenTx)
