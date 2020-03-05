@@ -59,6 +59,9 @@
 , writeScriptBin
 , runtimeShell
 , lib
+, libidn
+, libpqxx
+, postgresql
 
 , dbSyncRepoName ? "inputoutput/cardano-db-sync"
 }:
@@ -77,12 +80,15 @@ let
       iana-etc          # IANA protocol and port number assignments
       iproute           # Utilities for controlling TCP/IP networking
       iputils           # Useful utilities for Linux networking
+      libidn            # Library for internationalized domain names
+      libpqxx           # A C++ library to access PostgreSQL databases
+      postgresql        # A powerful, open source object-relational database system
       socat             # Utility for bidirectional data transfer
       utillinux         # System utilities for Linux
     ];
   };
 
-  # Layer of tools which aren't going to change much between versions.
+  # The applications, without configuration, for which the target container is being built
   dockerWithoutConfig = dockerTools.buildImage {
     name = "docker-without-config";
     fromImage = baseImage;
