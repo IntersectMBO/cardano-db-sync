@@ -3,8 +3,7 @@
 #
 # To build and load into the Docker engine:
 #
-#   docker load -i $(nix-build -A dockerImage.dbSync --no-out-link)
-#   docker load -i $(nix-build -A dockerImage.dbSyncExtended --no-out-link)
+#   docker load -i $(nix-build -A dockerImage --no-out-link)
 #
 #  cardano-db-sync and cardano-db-sync-extended are interchangeable in the following:
 #
@@ -14,7 +13,14 @@
 #      -v $PATH_TO/node.socket:/data/node.socket \
 #      -v $PATH_TO/pgpass:/config/pgpass \
 #      -e NETWORK=mainnet|testnet \
-#      inputoutput/cardano-db-sync:<TAG>
+#
+#  To launch the extended service:
+#
+#    docker run \
+#      -v $PATH_TO/node.socket:/data/node.socket \
+#      -v $PATH_TO/pgpass:/config/pgpass \
+#      -e NETWORK=mainnet|testnet \
+#      -e EXTENDED=true
 #
 #  To launch with custom config, mount a dir containing config.yaml, genesis.json,
 #  and pgpass into /config
@@ -76,19 +82,30 @@ let
     ];
   };
 
+  # Layer of tools which aren't going to change much between versions.
+  dockerWithoutConfig = dockerTools.buildImage {
+    name = "docker-without-config";
+    fromImage = baseImage;
+    contents = [
+      cardano-db-sync
+      cardano-db-sync-extended
+    ];
+  };
+
   dbSyncDockerImage = let
     clusterStatements = lib.concatStringsSep "\n" (lib.mapAttrsToList (_: value: value) (commonLib.forEnvironments (env: let
       dbSyncScript = scripts.${env.name}.db-sync;
       dbSyncExtendedScript = extendedScripts.${env.name}.db-sync;
     in ''
-      if [[ ! -z "''${EXTENDED}" ]] && [[ "''${EXTENDED}" == true ]]
-      then
-        DBSYNC=${dbSyncExtendedScript}
-      else
-        DBSYNC=${dbSyncScript}
-      fi
-      elif [[ "$NETWORK" == "${env.name}" ]]; then
-        ${if (env ? nodeConfig) then "exec $DBSYNC"
+        elif [[ "$NETWORK" == "${env.name}" ]]; then
+        ${if (env ? nodeConfig) then ''
+            if [[ ! -z "''${EXTENDED}" ]] && [[ "''${EXTENDED}" == true ]]
+            then
+              exec ${dbSyncExtendedScript}
+            else
+              exec ${dbSyncScript}
+            fi
+        ''
         else "echo db-sync not supported on ${env.name} ; exit 1"}
     '')));
     entry-point = writeScriptBin "entry-point" ''
@@ -115,9 +132,9 @@ let
       fi
     '';
   in dockerTools.buildImage {
-    name = "${dbSyncRepoName}";
-    fromImage = baseImage;
-    tag = "${gitrev}";
+    name = dbSyncRepoName;
+    fromImage = dockerWithoutConfig;
+    tag = gitrev;
     created = "now";   # Set creation date to build time. Breaks reproducibility
     contents = [ entry-point ];
     config = {

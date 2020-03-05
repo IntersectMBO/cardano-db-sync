@@ -38,7 +38,6 @@ let
     dockerImage = let
       stateDir = "/data";
       defaultConfig = rec {
-        _file = toString ./default.nix;
         services.cardano-db-sync.socketPath = lib.mkDefault (stateDir + "/node.socket");
       };
       customConfig'' = mkMerge [ defaultConfig customConfig' ];
@@ -67,7 +66,7 @@ let
 
     checks = recurseIntoAttrs {
       # `checks.tests` collect results of executing the tests:
-      tests = collectChecks haskellPackages;
+      tests = collectChecks self.haskellPackages;
     };
 
     shell = import ./shell.nix {
