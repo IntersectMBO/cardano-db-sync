@@ -218,7 +218,7 @@ runDbSyncNodeNodeClient iocp trce plugin nodeConfig (SocketPath socketPath) = do
     ClientSubscriptionParams {
         cspAddress = Snocket.localAddressFromPath socketPath,
         cspConnectionAttemptDelay = Nothing,
-        cspErrorPolicies = networkErrorPolicies <> consensusErrorPolicy
+        cspErrorPolicies = networkErrorPolicies <> consensusErrorPolicy (Proxy @blk)
         }
 
     (NodeToClientVersionData { networkMagic = nodeNetworkMagic (Proxy @blk) nodeConfig })

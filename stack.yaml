@@ -54,7 +54,7 @@ extra-deps:
   - time-compat-1.9.2.2
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: a627affd6ea2586f07882a9d6297229cb83819d8
+    commit: 1695053e34e0036fe831075e297fd6cba3a22461
     subdirs:
       - cardano-config
 
@@ -110,7 +110,7 @@ extra-deps:
       - crypto/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: 685aff740212b45b7fe5eec4b469eea71b209385
+    commit: f21908eecc539a0cef9307b8ec1a5e5c61da860f
     subdirs:
       - io-sim
       - io-sim-classes
