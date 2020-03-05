@@ -1,4 +1,4 @@
-# This script will load nix-built docker images of cardano-db-sync applications
+# This script will load nix-built docker image of cardano-db-sync applications
 # into the Docker daemon (must be running), and then push to the Docker Hub.
 # Credentials for the hub must already be installed with # "docker login".
 #
@@ -32,7 +32,7 @@ let
   image = impureCreated dbSyncPackages.dockerImage;
 
   # Override Docker image, setting its creation date to the current time rather than the unix epoch.
-  impureCreated = image: image.overrideAttrs (oldAttrs: { created = "now"; }) // { inherit (image) version; };
+  impureCreated = image: image // { inherit (image) version; };
 
 in
   writeScript "docker-build-push" ''
@@ -42,32 +42,33 @@ in
 
     export PATH=${lib.makeBinPath [ docker gnused ]}
 
-    ${if dockerHubRepoName == null then ''
-    reponame=cardano-db-sync
-    username="$(docker info | sed '/Username:/!d;s/.* //')"
-    fullrepo="$username/$reponame"
-    '' else ''
     fullrepo="${dockerHubRepoName}"
-    ''}
 
-    branch="''${BUILDKITE_BRANCH:-}"
-    tag="''${BUILDKITE_TAG:-}"
-    tagged="$fullrepo:$tag"
-    gitrev="${image.imageTag}"
-    echo "Loading $fullrepo:$gitrev"
-    docker load -i ${image}
-    echo "Pushing $fullrepo:$gitrev"
-    docker push "$fullrepo:$gitrev"
-    if [[ "$branch" = master ]]; then
-      echo "Tagging as master"
-      docker tag $fullrepo:$gitrev $fullrepo:$branch
-      echo "Pushing $fullrepo:$branch"
-      docker push "$fullrepo:$branch"
-    fi
-    if [[ "$tag" ]]; then
-      echo "Tagging as $tag"
-      docker tag $fullrepo:$gitrev $fullrepo:$tag
-      echo "Pushing $fullrepo:$tag"
-      docker push "$fullrepo:$tag"
-    fi
+    echo '~~~ Pushing docker images'
+
+    ${concatMapStringsSep "\n" (image: ''
+      branch="''${BUILDKITE_BRANCH:-}"
+      tag="''${BUILDKITE_TAG:-}"
+      tagged="$fullrepo:$tag"
+      gitrev="${image.imageTag}"
+      echo "Loading $fullrepo:$gitrev"
+      docker load -i ${image}
+      echo "Pushing $fullrepo:$gitrev"
+      docker push "$fullrepo:$gitrev"
+      if [[ "$branch" = master ]]; then
+        echo "Tagging as master"
+        docker tag $fullrepo:$gitrev $fullrepo:$branch
+        echo "Pushing $fullrepo:$branch"
+        docker push "$fullrepo:$branch"
+      fi
+      if [[ "$tag" ]]; then
+        echo "Tagging as $tag"
+        docker tag $fullrepo:$gitrev $fullrepo:$tag
+        echo "Pushing $fullrepo:$tag"
+        docker push "$fullrepo:$tag"
+      fi
+      echo "Cleaning up with docker system prune"
+      docker system prune -f
+    '') [ image ]}
+
   ''

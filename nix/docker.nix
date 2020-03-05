@@ -3,8 +3,7 @@
 #
 # To build and load into the Docker engine:
 #
-#   docker load -i $(nix-build -A dockerImage.dbSync --no-out-link)
-#   docker load -i $(nix-build -A dockerImage.dbSyncExtended --no-out-link)
+#   docker load -i $(nix-build -A dockerImage --no-out-link)
 #
 #  cardano-db-sync and cardano-db-sync-extended are interchangeable in the following:
 #
@@ -14,7 +13,14 @@
 #      -v $PATH_TO/node.socket:/data/node.socket \
 #      -v $PATH_TO/pgpass:/config/pgpass \
 #      -e NETWORK=mainnet|testnet \
-#      inputoutput/cardano-db-sync:<TAG>
+#
+#  To launch the extended service:
+#
+#    docker run \
+#      -v $PATH_TO/node.socket:/data/node.socket \
+#      -v $PATH_TO/pgpass:/config/pgpass \
+#      -e NETWORK=mainnet|testnet \
+#      -e EXTENDED=true
 #
 #  To launch with custom config, mount a dir containing config.yaml, genesis.json,
 #  and pgpass into /config
@@ -34,6 +40,7 @@
 , cardano-db-sync
 , cardano-db-sync-extended
 , scripts
+, extendedScripts
 
 # Get the current commit
 , gitrev ? iohkNix.commitIdFromGitRepoOrZero ../.git
@@ -52,9 +59,11 @@
 , writeScriptBin
 , runtimeShell
 , lib
+, libidn
+, libpqxx
+, postgresql
 
 , dbSyncRepoName ? "inputoutput/cardano-db-sync"
-, dbSyncExtendedRepoName ? "inputoutput/cardano-db-sync-extended"
 }:
 
 let
@@ -71,23 +80,38 @@ let
       iana-etc          # IANA protocol and port number assignments
       iproute           # Utilities for controlling TCP/IP networking
       iputils           # Useful utilities for Linux networking
+      libidn            # Library for internationalized domain names
+      libpqxx           # A C++ library to access PostgreSQL databases
+      postgresql        # A powerful, open source object-relational database system
       socat             # Utility for bidirectional data transfer
       utillinux         # System utilities for Linux
     ];
   };
 
-  dbSyncWithoutConfig = dockerTools.buildImage {
-    name = "db-sync-without-config";
+  # The applications, without configuration, for which the target container is being built
+  dockerWithoutConfig = dockerTools.buildImage {
+    name = "docker-without-config";
     fromImage = baseImage;
     contents = [
       cardano-db-sync
+      cardano-db-sync-extended
     ];
   };
 
   dbSyncDockerImage = let
-    clusterStatements = lib.concatStringsSep "\n" (lib.mapAttrsToList (_: value: value) (commonLib.forEnvironments (env: ''
-      elif [[ "$NETWORK" == "${env.name}" ]]; then
-        ${if (env ? nodeConfig) then "exec ${scripts.${env.name}.db-sync}"
+    clusterStatements = lib.concatStringsSep "\n" (lib.mapAttrsToList (_: value: value) (commonLib.forEnvironments (env: let
+      dbSyncScript = scripts.${env.name}.db-sync;
+      dbSyncExtendedScript = extendedScripts.${env.name}.db-sync;
+    in ''
+        elif [[ "$NETWORK" == "${env.name}" ]]; then
+        ${if (env ? nodeConfig) then ''
+            if [[ ! -z "''${EXTENDED}" ]] && [[ "''${EXTENDED}" == true ]]
+            then
+              exec ${dbSyncExtendedScript}
+            else
+              exec ${dbSyncScript}
+            fi
+        ''
         else "echo db-sync not supported on ${env.name} ; exit 1"}
     '')));
     entry-point = writeScriptBin "entry-point" ''
@@ -95,8 +119,14 @@ let
       # set up /tmp (override with TMPDIR variable)
       mkdir -m 1777 tmp
       if [[ -d /config ]]; then
+        if [[ ! -z "''${EXTENDED}" ]] && [[ "''${EXTENDED}" == true ]]
+        then
+          DBSYNC=${cardano-db-sync-extended}/bin/cardano-db-sync-extended
+        else
+          DBSYNC=${cardano-db-sync}/bin/cardano-db-sync
+        fi
         export PGPASSFILE=/config/pgpass
-         exec ${cardano-db-sync}/bin/cardano-db-sync \
+         exec $DBSYNC \
            --socket-path /data/node.socket \
            --genesis-file /config/genesis.json \
            --config /data/config.yaml \
@@ -108,17 +138,13 @@ let
       fi
     '';
   in dockerTools.buildImage {
-    name = "${dbSyncRepoName}";
-    fromImage = dbSyncWithoutConfig;
-    tag = "${gitrev}";
+    name = dbSyncRepoName;
+    fromImage = dockerWithoutConfig;
+    tag = gitrev;
     created = "now";   # Set creation date to build time. Breaks reproducibility
     contents = [ entry-point ];
     config = {
       EntryPoint = [ "${entry-point}/bin/entry-point" ];
     };
   };
-
-in {
-  dbSync = dbSyncDockerImage;
-  #dbSyncExtended = dbSyncExtendedDockerImage;
-}
+in dbSyncDockerImage

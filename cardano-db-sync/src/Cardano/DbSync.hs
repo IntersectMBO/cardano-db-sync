@@ -28,7 +28,7 @@ import           Cardano.Binary (unAnnotated)
 import           Control.Tracer (Tracer)
 
 import qualified Cardano.BM.Setup as Logging
-import           Cardano.BM.Data.Tracer (ToLogObject (..), nullTracer)
+import           Cardano.BM.Data.Tracer (ToLogObject (..))
 import           Cardano.BM.Trace (Trace, appendName, logError, logInfo)
 import qualified Cardano.BM.Trace as Logging
 
@@ -45,6 +45,7 @@ import           Cardano.Shell.Lib (GeneralException (ConfigurationError))
 
 import           Cardano.Slotting.Slot (WithOrigin (..))
 
+import qualified Codec.CBOR.Term as CBOR
 import qualified Codec.Serialise as Serialise
 
 import           Control.Monad.Class.MonadST (MonadST)
@@ -74,8 +75,9 @@ import           Cardano.DbSync.Util
 import           Cardano.DbSync.Tracing.ToObjectOrphans ()
 
 import           Network.Socket (SockAddr (..))
+import           Network.Mux (MuxTrace, WithMuxBearer)
 
-import           Network.TypedProtocol.Driver (runPeer, runPipelinedPeer)
+import           Ouroboros.Network.Driver.Simple (runPipelinedPeer)
 import           Network.TypedProtocol.Pipelined (Nat(Zero, Succ))
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..), ByronHash (..), GenTx)
@@ -92,13 +94,14 @@ import           Ouroboros.Network.Block (BlockNo (..), Point (..), SlotNo (..),
                     decodePoint, encodePoint, genesisPoint, getTipBlockNo,
                     blockNo, encodeTip, decodeTip, wrapCBORinCBOR, unwrapCBORinCBOR)
 import           Ouroboros.Network.Codec (Codec (..), DeserialiseFailure)
-import           Ouroboros.Network.Mux (AppType (..), OuroborosApplication (..))
+import           Ouroboros.Network.Mux (AppType (..), MuxPeer (..), OuroborosApplication,
+                   RunMiniProtocol (..))
 
 import           Ouroboros.Network.NodeToClient (AssociateWithIOCP, ClientSubscriptionParams (..),
-                    ErrorPolicyTrace (..), NetworkSubscriptionTracers (..), NodeToClientProtocols (..),
-                    NodeToClientVersionData (..), WithAddr (..),
-                    ncSubscriptionWorker_V1, networkErrorPolicies, newNetworkMutableState,
-                    withIOManager, localSnocket)
+                    ConnectionId, ErrorPolicyTrace (..), Handshake, LocalAddress,
+                    NetworkSubscriptionTracers (..), NodeToClientVersion, NodeToClientVersionData (..),
+                    TraceSendRecv, WithAddr (..), nodeToClientProtocols, ncSubscriptionWorker_V1,
+                    networkErrorPolicies, newNetworkMutableState, withIOManager, localSnocket)
 
 import qualified Ouroboros.Network.Point as Point
 import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined (ChainSyncClientPipelined (..),
@@ -115,6 +118,7 @@ import           Ouroboros.Network.Protocol.LocalTxSubmission.Client (LocalTxSub
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Codec (codecLocalTxSubmission)
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (LocalTxSubmission)
 import qualified Ouroboros.Network.Snocket as Snocket
+import           Ouroboros.Network.Subscription (SubscriptionTrace)
 
 import           Prelude (String)
 import qualified Prelude
@@ -200,15 +204,15 @@ runDbSyncNodeNodeClient
 runDbSyncNodeNodeClient iocp trce plugin nodeConfig (SocketPath socketPath) = do
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   networkState <- newNetworkMutableState
+  txv <- newEmptyTMVarM @_ @(GenTx blk)
   ncSubscriptionWorker_V1
     (localSnocket iocp socketPath)
     -- TODO: these tracers should be configurable for debugging purposes.
     NetworkSubscriptionTracers {
-        nsMuxTracer = nullTracer,
-        nsHandshakeTracer = nullTracer,
+        nsMuxTracer = muxTracer,
+        nsHandshakeTracer = handshakeTracer,
         nsErrorPolicyTracer = errorPolicyTracer,
-        nsSubscriptionTracer = nullTracer
-         -- TODO subscription tracer should not be 'nullTracer' by default
+        nsSubscriptionTracer = subscriptionTracer
         }
     networkState
     ClientSubscriptionParams {
@@ -218,14 +222,22 @@ runDbSyncNodeNodeClient iocp trce plugin nodeConfig (SocketPath socketPath) = do
         }
 
     (NodeToClientVersionData { networkMagic = nodeNetworkMagic (Proxy @blk) nodeConfig })
-    (localInitiatorNetworkApplication trce plugin nodeConfig)
+    (localInitiatorNetworkApplication trce plugin nodeConfig txv)
   where
     errorPolicyTracer :: Tracer IO (WithAddr SockAddr ErrorPolicyTrace)
     errorPolicyTracer = toLogObject $ appendName "ErrorPolicy" trce
+    muxTracer :: Show peer => Tracer IO (WithMuxBearer peer MuxTrace)
+    muxTracer = toLogObject $ appendName "Mux" trce
+    subscriptionTracer :: Tracer IO (Identity (SubscriptionTrace LocalAddress))
+    subscriptionTracer = toLogObject $ appendName "Subscription" trce
+    handshakeTracer :: Tracer IO (WithMuxBearer
+                          (ConnectionId LocalAddress)
+                          (TraceSendRecv (Handshake NodeToClientVersion CBOR.Term)))
+    handshakeTracer = toLogObject $ appendName "Handshake" trce
 
 
 localInitiatorNetworkApplication
-  :: forall blk peer.
+  :: forall blk.
      (blk ~ ByronBlock)
   -- TODO: the need of a 'Proxy' is an evidence that blk type is not really
   -- needed here.  The wallet client should use some concrete type of block
@@ -234,34 +246,37 @@ localInitiatorNetworkApplication
   => Trace IO Text
   -> DbSyncNodePlugin
   -> TopLevelConfig ByronBlock
-  -> OuroborosApplication 'InitiatorApp peer NodeToClientProtocols IO BSL.ByteString () Void
-localInitiatorNetworkApplication trce plugin pInfoConfig =
-    OuroborosInitiatorApplication $ \ _peer ptcl ->
-      case ptcl of
-        LocalTxSubmissionPtcl -> \channel -> do
-          txv <- newEmptyTMVarM @_ @(GenTx blk)
-          runPeer
-            (contramap (Text.pack . show) . toLogObject $ appendName "db-sync-local-tx" trce)
-            localTxSubmissionCodec channel
-            (localTxSubmissionClientPeer (txSubmissionClient @(GenTx blk) txv))
-
-        ChainSyncWithBlocksPtcl -> \channel ->
-          liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
-            logInfo trce "Starting chainSyncClient"
-            latestPoints <- getLatestPoints
-            currentTip <- getCurrentTipBlockNo
-            logDbState trce
-            actionQueue <- newDbActionQueue
-            (metrics, server) <- registerMetricsServer
-            race_
-              (runDbThread trce plugin metrics actionQueue)
-              (runPipelinedPeer
-                    nullTracer (localChainSyncCodec @blk pInfoConfig) channel
-                    (chainSyncClientPeerPipelined (chainSyncClient trce metrics latestPoints currentTip actionQueue))
-                  )
-            atomically $
-              writeDbActionQueue actionQueue DbFinish
-            cancel server
+  -> StrictTMVar IO (GenTx blk)
+  -> ConnectionId LocalAddress
+  -> OuroborosApplication 'InitiatorApp BSL.ByteString IO () Void
+localInitiatorNetworkApplication trce plugin pInfoConfig txv _ =
+    nodeToClientProtocols
+      -- local chain sync protocol
+      (InitiatorProtocolOnly $ MuxPeerRaw $ \channel ->
+        liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
+          logInfo trce "Starting chainSyncClient"
+          latestPoints <- getLatestPoints
+          currentTip <- getCurrentTipBlockNo
+          logDbState trce
+          actionQueue <- newDbActionQueue
+          (metrics, server) <- registerMetricsServer
+          race_
+            (runDbThread trce plugin metrics actionQueue)
+            (runPipelinedPeer
+                  localChainSyncTracer (localChainSyncCodec @blk pInfoConfig) channel
+                  (chainSyncClientPeerPipelined (chainSyncClient trce metrics latestPoints currentTip actionQueue))
+                )
+          atomically $
+            writeDbActionQueue actionQueue DbFinish
+          cancel server)
+      -- local tx submission
+      (InitiatorProtocolOnly $ MuxPeer
+        (contramap (Text.pack . show) . toLogObject $ appendName "db-sync-local-tx" trce)
+        localTxSubmissionCodec
+        (localTxSubmissionClientPeer (txSubmissionClient txv)))
+  where
+    localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock)))
+    localChainSyncTracer = toLogObject $ appendName "ChainSync" trce
 
 logDbState :: Trace IO Text -> IO ()
 logDbState trce = do

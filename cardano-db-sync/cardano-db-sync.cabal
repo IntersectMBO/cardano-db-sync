@@ -50,6 +50,7 @@ library
                       , base16-bytestring
                       , bytestring
                       , cardano-binary
+                      , cardano-config
                       , cardano-crypto
                       , cardano-crypto-wrapper
                       , cardano-db
@@ -70,6 +71,7 @@ library
                       , monad-control
                       , memory
                       , monad-logger
+                      , network-mux
                       , optparse-applicative
                       , network
                       , ouroboros-consensus

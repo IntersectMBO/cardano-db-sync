@@ -16,42 +16,47 @@
 }:
 with pkgs; with commonLib;
 let
-
-  haskellPackages = recRecurseIntoAttrs
-    # the Haskell.nix package set, reduced to local packages.
-    (selectProjectPackages cardanoDbSyncHaskellPackages);
-
-  scripts = callPackage ./nix/scripts.nix { inherit customConfig; };
-
-  # NixOS tests
-  #nixosTests = import ./nix/nixos/tests {
-  #  inherit pkgs;
-  #};
-
-  dockerImage = let
-    stateDir = "/data";
-    defaultConfig = rec {
-      _file = toString ./default.nix;
-      services.cardano-db-sync.socketPath = stateDir + "/node.socket";
-    };
-    customConfig' = defaultConfig // customConfig;
-  in pkgs.callPackage ./nix/docker.nix {
-    inherit (self) cardano-db-sync;
-    inherit (self) cardano-db-sync-extended;
-    scripts = callPackage ./nix/scripts.nix { customConfig = customConfig'; };
+  customConfig' = if customConfig ? services then customConfig else {
+    services.cardano-db-sync = customConfig;
   };
 
-  self = {
-    inherit haskellPackages
-      scripts
-      dockerImage
-      #nixosTests
-    ;
+  packages = self: {
+    haskellPackages = recRecurseIntoAttrs
+      # the Haskell.nix package set, reduced to local packages.
+      (selectProjectPackages cardanoDbSyncHaskellPackages);
+
+    # NixOS tests
+    #nixosTests = import ./nix/nixos/tests {
+    #  inherit pkgs;
+    #};
+
+    scripts = self.callPackage ./nix/scripts.nix {
+      customConfig = customConfig';
+      syncPackages = self;
+    };
+
+    dockerImage = let
+      stateDir = "/data";
+      defaultConfig = rec {
+        services.cardano-db-sync.socketPath = lib.mkDefault (stateDir + "/node.socket");
+      };
+      customConfig'' = mkMerge [ defaultConfig customConfig' ];
+    in self.callPackage ./nix/docker.nix {
+      scripts = self.scripts.override {
+        customConfig = customConfig'';
+      };
+      extendedScripts = self.scripts.override {
+        customConfig = mkMerge [
+          customConfig''
+          { services.cardano-db-sync.extended = true; }
+        ];
+      };
+    };
 
     # Grab the executable component of our package.
-    inherit (haskellPackages.cardano-db-sync.components.exes)
+    inherit (self.haskellPackages.cardano-db-sync.components.exes)
       cardano-db-sync;
-    inherit (haskellPackages.cardano-db-sync-extended.components.exes)
+    inherit (self.haskellPackages.cardano-db-sync-extended.components.exes)
       cardano-db-sync-extended;
 
     # `tests` are the test suites which have been built.
@@ -61,7 +66,7 @@ let
 
     checks = recurseIntoAttrs {
       # `checks.tests` collect results of executing the tests:
-      tests = collectChecks haskellPackages;
+      tests = collectChecks self.haskellPackages;
     };
 
     shell = import ./shell.nix {
@@ -69,4 +74,4 @@ let
       withHoogle = true;
     };
 };
-in self
+in pkgs.lib.makeScope pkgs.newScope packages

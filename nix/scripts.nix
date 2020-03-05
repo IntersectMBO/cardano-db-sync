@@ -1,31 +1,27 @@
-{ pkgs, lib, iohkNix, customConfig }:
+{ pkgs, lib, iohkNix, customConfig, syncPackages }:
 let
   mkStartScripts = envConfig: let
-    extraModule = {
-      services.cardano-db-sync = {
-        enable = true;
-        postgres.user = "*";
-        environment = envConfig;
-        cluster = envConfig.name;
-      };
-      services.cardano-db-sync-extended = {
-        enable = true;
-        environment = envConfig;
-        network = envConfig.name;
-      };
-    };
     systemdCompat.options = {
       systemd.services = lib.mkOption {};
       services.postgresql = lib.mkOption {};
       users = lib.mkOption {};
     };
-    eval = lib.evalModules {
+    eval = let
+      extra = {
+        internal.syncPackages = syncPackages;
+        services.cardano-db-sync = {
+          enable = true;
+          postgres.user = "*";
+          environment = envConfig;
+          cluster = envConfig.name;
+        };
+      };
+    in lib.evalModules {
       prefix = [];
-      modules = import nixos/module-list.nix ++ [ systemdCompat extraModule customConfig ];
+      modules = import nixos/module-list.nix ++ [ systemdCompat customConfig extra ];
       args = { inherit pkgs; };
     };
   in {
     db-sync = eval.config.services.cardano-db-sync.script;
-    db-sync-extended = eval.config.services.cardano-db-sync-extended.script;
   };
 in iohkNix.cardanoLib.forEnvironments mkStartScripts
