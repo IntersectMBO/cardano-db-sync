@@ -72,6 +72,7 @@ executable cardano-db-sync-extended
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
                         -Wno-unsafe
+                        -threaded
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , bytestring
