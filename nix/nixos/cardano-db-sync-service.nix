@@ -100,7 +100,6 @@ in {
         export PGPASSFILE=$(pwd)/pgpass
 
         mkdir -p log-dir
-        export PGPASSFILE=${cfg.pgpass}
         exec ${exec} \
           --config ${configFile} \
           --genesis-file ${envConfig.genesisFile} \
