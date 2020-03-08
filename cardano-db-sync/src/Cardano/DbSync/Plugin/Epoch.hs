@@ -11,7 +11,7 @@ import           Cardano.BM.Trace (Trace, logError, logInfo)
 import qualified Cardano.Chain.Block as Ledger
 import qualified Cardano.Chain.Slotting as Ledger
 
-import           Control.Monad (join, void)
+import           Control.Monad (join, void, when)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Reader (ReaderT)
@@ -139,7 +139,8 @@ updateEpochNum epochNum = do
       case eEpoch of
         Left err -> pure $ Left err
         Right epoch -> do
-          void $ DB.insertEpoch epoch
+          when (epochTxCount epoch > 0) .
+            void $ DB.insertEpoch epoch
           pure $ Right ()
 
 -- -------------------------------------------------------------------------------------------------
@@ -164,15 +165,32 @@ queryEpochEntry epochNum = do
               pure $ (sum_ (tx ^. TxOutSum), count (tx ^. TxOutSum), min_ (blk ^. BlockTime), max_ (blk ^. BlockTime))
     case listToMaybe res of
       Nothing -> pure $ Left (ENEEpochLookup epochNum)
-      Just x -> pure $ convert x
+      Just x -> convert x
   where
-    convert :: (ValMay Rational, Value Word64, ValMay UTCTime, ValMay UTCTime) -> Either DbSyncNodeError Epoch
+    convert :: MonadIO m
+            => (ValMay Rational, Value Word64, ValMay UTCTime, ValMay UTCTime)
+            -> ReaderT SqlBackend m (Either DbSyncNodeError Epoch)
     convert tuple =
       case tuple of
         (Value (Just outSum), Value txCount, Value (Just start), Value (Just end)) ->
-            Right $ Epoch (fromIntegral $ numerator outSum) txCount epochNum start end
-        _other -> Left $ ENEEpochLookup epochNum
+            pure (Right $ Epoch (fromIntegral $ numerator outSum) txCount epochNum start end)
+        _otherwise -> queryEmptyEpoch
 
+    queryEmptyEpoch :: MonadIO m => ReaderT SqlBackend m (Either DbSyncNodeError Epoch)
+    queryEmptyEpoch = do
+      res <- select . from $ \ blk -> do
+              where_ (blk ^. BlockEpochNo ==. just (val epochNum))
+              pure (count (blk ^. BlockId), min_ (blk ^. BlockTime), max_ (blk ^. BlockTime))
+      case listToMaybe res of
+        Nothing -> pure $ Left (ENEEpochLookup epochNum)
+        Just x -> pure $ convert2 x
+
+    convert2 :: (Value Word64, ValMay UTCTime, ValMay UTCTime) -> Either DbSyncNodeError Epoch
+    convert2 tuple =
+      case tuple of
+        (Value blkCount, Value (Just start), Value (Just end)) | blkCount > 0 ->
+            Right (Epoch 0 0 epochNum start end)
+        _otherwise -> Left (ENEEpochLookup epochNum)
 
 -- | Get the epoch number of the most recent epoch in the Block table.
 queryLatestBlockEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
