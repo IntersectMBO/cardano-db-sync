@@ -20,10 +20,7 @@ rotation:
 
 # these backends are initialized:
 setupBackends:
-  - AggregationBK
   - KatipBK
-  # - EditorBK
-  # - EKGViewBK
 
 # if not indicated otherwise, then messages are passed to these backends:
 defaultBackends:
@@ -52,11 +49,6 @@ options:
   cfokey:
     value: "Release-1.0.0"
   mapSubtrace:
-    benchmark:
-      contents:
-        - GhcRtsStats
-        - MonotonicClock
-      subtrace: ObservableTrace
     '#ekgview':
       contents:
       - - tag: Contains
@@ -76,29 +68,8 @@ options:
       # Change the `subtrace` value to `Neutral` in order to log
       # `UTxO`-related messages during epoch validation.
       subtrace: NoTrace
-    '#messagecounters.aggregation':
-      subtrace: NoTrace
-    '#messagecounters.ekgview':
-      subtrace: NoTrace
-    '#messagecounters.switchboard':
-      subtrace: NoTrace
-    '#messagecounters.katip':
-      subtrace: NoTrace
-    '#messagecounters.monitoring':
-      subtrace: NoTrace
-    'cardano.#messagecounters.aggregation':
-      subtrace: NoTrace
-    'cardano.#messagecounters.ekgview':
-      subtrace: NoTrace
-    'cardano.#messagecounters.switchboard':
-      subtrace: NoTrace
-    'cardano.#messagecounters.katip':
-      subtrace: NoTrace
-    'cardano.#messagecounters.monitoring':
-      subtrace: NoTrace
-  mapBackends:
-    cardano.epoch-validation.benchmark:
-      - AggregationBK
-    '#aggregation.cardano.epoch-validation.benchmark':
-      - EKGViewBK
+  mapSeverity:
+    db-sync-node.Subscription: Error
+    db-sync-node.Mux: Error
+    db-sybnc-node: Info
 
