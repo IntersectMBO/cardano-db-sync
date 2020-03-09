@@ -3,7 +3,8 @@
 #
 # To build and load into the Docker engine:
 #
-#   docker load -i $(nix-build -A dockerImage --no-out-link)
+#   docker load -i $(nix-build -A dockerImage.dbSync --no-out-link)
+#   docker load -i $(nix-build -A dockerImage.dbSyncExtended --no-out-link)
 #
 #  cardano-db-sync and cardano-db-sync-extended are interchangeable in the following:
 #
@@ -13,14 +14,7 @@
 #      -v $PATH_TO/node.socket:/data/node.socket \
 #      -v $PATH_TO/pgpass:/config/pgpass \
 #      -e NETWORK=mainnet|testnet \
-#
-#  To launch the extended service:
-#
-#    docker run \
-#      -v $PATH_TO/node.socket:/data/node.socket \
-#      -v $PATH_TO/pgpass:/config/pgpass \
-#      -e NETWORK=mainnet|testnet \
-#      -e EXTENDED=true
+#      inputoutput/cardano-db-sync:<TAG>
 #
 #  To launch with custom config, mount a dir containing config.yaml, genesis.json,
 #  and pgpass into /config
@@ -64,6 +58,7 @@
 , postgresql
 
 , dbSyncRepoName ? "inputoutput/cardano-db-sync"
+, dbSyncExtendedRepoName ? "inputoutput/cardano-db-sync-extended"
 }:
 
 let
@@ -99,37 +94,22 @@ let
   };
 
   dbSyncDockerImage = let
-    clusterStatements = lib.concatStringsSep "\n" (lib.mapAttrsToList (_: value: value) (commonLib.forEnvironments (env: let
-      dbSyncScript = scripts.${env.name}.db-sync;
-      dbSyncExtendedScript = extendedScripts.${env.name}.db-sync;
-    in ''
-        elif [[ "$NETWORK" == "${env.name}" ]]; then
-        ${if (env ? nodeConfig) then ''
-            if [[ ! -z "''${EXTENDED}" ]] && [[ "''${EXTENDED}" == true ]]
-            then
-              exec ${dbSyncExtendedScript}
-            else
-              exec ${dbSyncScript}
-            fi
-        ''
-        else "echo db-sync not supported on ${env.name} ; exit 1"}
+    clusterStatements = lib.concatStringsSep "\n" (lib.mapAttrsToList (_: value: value) (commonLib.forEnvironments (env: ''
+      elif [[ "$NETWORK" == "${env.name}" ]]; then
+        ${if (env ? nodeConfig) then "exec ${scripts.${env.name}.db-sync}"
+        else "echo cardano-db-sync not supported on ${env.name} ; exit 1"}
     '')));
     entry-point = writeScriptBin "entry-point" ''
       #!${runtimeShell}
       # set up /tmp (override with TMPDIR variable)
       mkdir -m 1777 tmp
       if [[ -d /config ]]; then
-        if [[ ! -z "''${EXTENDED}" ]] && [[ "''${EXTENDED}" == true ]]
-        then
-          DBSYNC=${cardano-db-sync-extended}/bin/cardano-db-sync-extended
-        else
-          DBSYNC=${cardano-db-sync}/bin/cardano-db-sync
-        fi
         export PGPASSFILE=/config/pgpass
-         exec $DBSYNC \
+         exec ${cardano-db-sync}/bin/cardano-db-sync \
+         exec ${cardano-db-sync}/bin/cardano-db-sync \
            --socket-path /data/node.socket \
            --genesis-file /config/genesis.json \
-           --config /data/config.yaml \
+           --config /config/config.yaml \
            --schema-dir ${../schema}
       ${clusterStatements}
       else
@@ -147,4 +127,40 @@ let
       EntryPoint = [ "${entry-point}/bin/entry-point" ];
     };
   };
-in dbSyncDockerImage
+  dbSyncExtendedDockerImage = let
+    clusterStatements = lib.concatStringsSep "\n" (lib.mapAttrsToList (_: value: value) (commonLib.forEnvironments (env: ''
+       elif [[ "$NETWORK" == "${env.name}" ]]; then
+         ${if (env ? nodeConfig) then "exec ${extendedScripts.${env.name}.db-sync}"
+         else "echo cardano-db-sync-extended not supported on ${env.name} ; exit 1"}
+    '')));
+    entry-point = writeScriptBin "entry-point" ''
+      #!${runtimeShell}
+      # set up /tmp (override with TMPDIR variable)
+      mkdir -m 1777 tmp
+      if [[ -d /config ]]; then
+        export PGPASSFILE=/config/pgpass
+        exec ${cardano-db-sync-extended}/bin/cardano-db-sync-extended \
+          --socket-path /data/node.socket \
+          --genesis-file /config/genesis.json \
+          --config /config/config.yaml \
+          --schema-dir ${../schema}
+      ${clusterStatements}
+      else
+        echo "Please set a NETWORK environment variable to one of: mainnet/testnet"
+        echo "Or mount a /config volume containing: config.yaml, genesis.json, pgpass"
+      fi
+    '';
+  in dockerTools.buildImage {
+    name = dbSyncExtendedRepoName;
+    fromImage = dockerWithoutConfig;
+    tag = gitrev;
+    created = "now";   # Set creation date to build time. Breaks reproducibility
+    contents = [ entry-point ];
+    config = {
+      EntryPoint = [ "${entry-point}/bin/entry-point" ];
+    };
+  };
+in {
+  dbSync = dbSyncDockerImage;
+  dbSyncExtended = dbSyncExtendedDockerImage;
+}
