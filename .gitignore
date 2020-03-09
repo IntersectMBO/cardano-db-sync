@@ -6,3 +6,7 @@ log-dir
 result*
 launch_*
 cabal.project.local
+
+### Docker ###
+config/docker
+tmp
