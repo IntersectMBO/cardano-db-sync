@@ -99,7 +99,8 @@ import           Ouroboros.Network.Mux (AppType (..), MuxPeer (..), OuroborosApp
 
 import           Ouroboros.Network.NodeToClient (AssociateWithIOCP, ClientSubscriptionParams (..),
                     ConnectionId, ErrorPolicyTrace (..), Handshake, LocalAddress,
-                    NetworkSubscriptionTracers (..), NodeToClientVersion, NodeToClientVersionData (..),
+                    NetworkSubscriptionTracers (..), NodeToClientProtocols (..),
+                    NodeToClientVersion, NodeToClientVersionData (..),
                     TraceSendRecv, WithAddr (..), nodeToClientProtocols, ncSubscriptionWorker_V1,
                     networkErrorPolicies, newNetworkMutableState, withIOManager, localSnocket)
 
@@ -250,30 +251,33 @@ localInitiatorNetworkApplication
   -> ConnectionId LocalAddress
   -> OuroborosApplication 'InitiatorApp BSL.ByteString IO () Void
 localInitiatorNetworkApplication trce plugin pInfoConfig txv _ =
-    nodeToClientProtocols
-      -- local chain sync protocol
-      (InitiatorProtocolOnly $ MuxPeerRaw $ \channel ->
-        liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
-          logInfo trce "Starting chainSyncClient"
-          latestPoints <- getLatestPoints
-          currentTip <- getCurrentTipBlockNo
-          logDbState trce
-          actionQueue <- newDbActionQueue
-          (metrics, server) <- registerMetricsServer
-          race_
-            (runDbThread trce plugin metrics actionQueue)
-            (runPipelinedPeer
-                  localChainSyncTracer (localChainSyncCodec @blk pInfoConfig) channel
-                  (chainSyncClientPeerPipelined (chainSyncClient trce metrics latestPoints currentTip actionQueue))
-                )
-          atomically $
-            writeDbActionQueue actionQueue DbFinish
-          cancel server)
-      -- local tx submission
-      (InitiatorProtocolOnly $ MuxPeer
-        (contramap (Text.pack . show) . toLogObject $ appendName "db-sync-local-tx" trce)
-        localTxSubmissionCodec
-        (localTxSubmissionClientPeer (txSubmissionClient txv)))
+    nodeToClientProtocols NodeToClientProtocols
+      { localChainSyncProtocol =
+          -- local chain sync protocol
+          (InitiatorProtocolOnly $ MuxPeerRaw $ \channel ->
+            liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
+              logInfo trce "Starting chainSyncClient"
+              latestPoints <- getLatestPoints
+              currentTip <- getCurrentTipBlockNo
+              logDbState trce
+              actionQueue <- newDbActionQueue
+              (metrics, server) <- registerMetricsServer
+              race_
+                (runDbThread trce plugin metrics actionQueue)
+                (runPipelinedPeer
+                      localChainSyncTracer (localChainSyncCodec @blk pInfoConfig) channel
+                      (chainSyncClientPeerPipelined (chainSyncClient trce metrics latestPoints currentTip actionQueue))
+                    )
+              atomically $
+                writeDbActionQueue actionQueue DbFinish
+              cancel server)
+        , localTxSubmissionProtocol =
+            -- local tx submission
+            (InitiatorProtocolOnly $ MuxPeer
+              (contramap (Text.pack . show) . toLogObject $ appendName "db-sync-local-tx" trce)
+              localTxSubmissionCodec
+              (localTxSubmissionClientPeer (txSubmissionClient txv)))
+        }
   where
     localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock)))
     localChainSyncTracer = toLogObject $ appendName "ChainSync" trce
