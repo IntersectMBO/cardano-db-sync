@@ -127,8 +127,13 @@ insertABlock tracer blk tip = do
     mapMVExceptT (insertTx tracer blkId) $ blockPayload blk
 
     liftIO $ do
-      when (slotNumber blk > 0 && slotNumber blk `mod` 20 == 0) $
-        logger tracer $ "insertABlock: continuing epoch " <> textShow (slotNumber blk `div` slotsPerEpoch)
+      when (slotNumber blk > 0 && slotNumber blk `mod` 20 == 0) $ do
+        let (epoch, slotWithin) = slotNumber blk `divMod` slotsPerEpoch
+        logger tracer $
+          mconcat
+            [ "insertABlock: continuing epoch ", textShow epoch
+            , " (slot ", textShow slotWithin, ")"
+            ]
       logger tracer $ mconcat
         [ "insertABlock: slot ", textShow (slotNumber blk)
         , ", block ", textShow (blockNumber blk)
