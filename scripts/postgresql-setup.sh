@@ -95,15 +95,16 @@ function list_views {
 }
 
 function create_migration {
-	cabal build cardano-explorer-db:cardano-explorer-db-manage
-	exe=$(find dist-newstyle -type f -name cardano-explorer-db-manage)
-	"${exe}" create-migration --mdir schema/
+	echo "To create a migration:"
+	echo "cabal run create-migration --mdir schema/"
+	exit 0
 }
 
 function run_migrations {
-	cabal build cardano-explorer-db:cardano-explorer-db-manage
-	exe=$(find dist-newstyle -type f -name cardano-explorer-db-manage)
-	"${exe}" run-migrations --mdir schema/ --ldir .
+	echo "To run migrations:"
+	echo "cabal run cardano-db-tool run-migrations --mdir schema/ --ldir ."
+	echo "You probably do not need to do this."
+	exit 0
 }
 
 function dump_schema {
@@ -119,7 +120,7 @@ function usage_exit {
 	echo "    $progname --list-views        - List the currently definied views."
 	echo "    $progname --recreatedb        - Drop and recreate database."
 	echo "    $progname --create-user       - Create database user (from config/pgass file)."
-	echo "    $progname --create-migration	- Create a migration (if one is needed)."
+	echo "    $progname --create-migration  - Create a migration (if one is needed)."
 	echo "    $progname --run-migrations    - Run all migrations applying as needed."
 	echo "    $progname --dump-schema       - Dump the schema of the database."
 	echo
@@ -166,6 +167,9 @@ case "${1:-""}" in
 		check_connect_as_user
 		drop_db
 		create_db
+		echo "The database ${databasename} has been dropped and recreated."
+		echo "The tables will be recreated when the application is run."
+		exit 0
 		;;
 	--create-user)
 		check_pgpass_file
@@ -174,20 +178,9 @@ case "${1:-""}" in
 		create_user
 		;;
 	--create-migration)
-		check_pgpass_file
-		check_for_psql
-		check_psql_superuser
-		check_db_exists
-		check_connect_as_user
 		create_migration
 		;;
 	--run-migrations)
-		check_pgpass_file
-		check_for_psql
-		check_psql_superuser
-		check_db_exists
-		check_connect_as_user
-		# Migrations are designed to be idempotent, so can be run repeatedly.
 		run_migrations
 		;;
 	--dump-schema)
