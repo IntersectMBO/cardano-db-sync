@@ -225,7 +225,7 @@ runDbSyncNodeNodeClient iocp trce plugin nodeConfig (SocketPath socketPath) = do
     (NodeToClientVersionData { networkMagic = nodeNetworkMagic (Proxy @blk) nodeConfig })
     (localInitiatorNetworkApplication trce plugin nodeConfig txv)
   where
-    errorPolicyTracer :: Tracer IO (WithAddr SockAddr ErrorPolicyTrace)
+    errorPolicyTracer :: Tracer IO (WithAddr LocalAddress ErrorPolicyTrace)
     errorPolicyTracer = toLogObject $ appendName "ErrorPolicy" trce
     muxTracer :: Show peer => Tracer IO (WithMuxBearer peer MuxTrace)
     muxTracer = toLogObject $ appendName "Mux" trce
