@@ -6,8 +6,6 @@
 
 module Cardano.DbSync.Tracing.ToObjectOrphans () where
 
-import qualified Codec.CBOR.Term as CBOR
-
 import           Data.Text (Text, pack)
 import           Data.Aeson ((.=))
 import           Data.Functor.Identity (Identity (..))
@@ -20,13 +18,10 @@ import           Cardano.Tracing.ToObjectOrphans ()
 
 import           Control.Monad.IO.Class (MonadIO)
 
-
-import           Network.Mux (WithMuxBearer (..))
-
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import           Ouroboros.Network.Block (Tip)
-import           Ouroboros.Network.NodeToClient (ConnectionId, Handshake, LocalAddress,
-                    NodeToClientVersion, TraceSendRecv)
+import           Ouroboros.Network.Codec (AnyMessage)
+import           Ouroboros.Network.NodeToClient (LocalAddress, TraceSendRecv)
 import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
 import           Ouroboros.Network.Subscription (SubscriptionTrace (..))
 
@@ -80,38 +75,14 @@ instance ToObject (Identity (SubscriptionTrace LocalAddress)) where
              , "event" .= show ev
              ]
 
-instance DefinePrivacyAnnotation (WithMuxBearer
-                             (ConnectionId LocalAddress)
-                             (TraceSendRecv (Handshake NodeToClientVersion CBOR.Term)))
-
-instance DefineSeverity (WithMuxBearer
-                             (ConnectionId LocalAddress)
-                             (TraceSendRecv (Handshake NodeToClientVersion CBOR.Term)))
-
-instance Transformable Text IO (WithMuxBearer
-                             (ConnectionId LocalAddress)
-                             (TraceSendRecv (Handshake NodeToClientVersion CBOR.Term))) where
-  trTransformer = defaultTextTransformer
-
-
 instance Transformable Text IO (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock))) where
   trTransformer = defaultTextTransformer
-
 
 instance DefinePrivacyAnnotation (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock)))
 
 instance DefineSeverity (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock)))
 
-instance ToObject (WithMuxBearer
-                             (ConnectionId LocalAddress)
-                             (TraceSendRecv (Handshake NodeToClientVersion CBOR.Term))) where
-  toObject _verb (WithMuxBearer b ev) =
-    mkObject [ "kind" .= ("MuxTrace" :: String)
-             , "bearer" .= show b
-             , "event" .= show ev
-             ]
-
-instance ToObject (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock))) where
+instance ToObject (AnyMessage (ChainSync ByronBlock (Tip ByronBlock))) where
   toObject _verb msg =
     mkObject [ "kind" .= ("TraceSendRecv" :: String)
              , "event" .= show msg

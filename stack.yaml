@@ -1,4 +1,4 @@
-resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/3893f21db1665e7bab9e8c6504c547fc7c28f98c/snapshot.yaml
+resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/fe76ec64f6b45259cc407a6d840dad79ee6063b6/snapshot.yaml
 compiler: ghc-8.6.5
 
 allow-newer: true
@@ -54,7 +54,7 @@ extra-deps:
   - time-compat-1.9.2.2
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: df71c429494bb0aa330f720250bc5a12b2579a48
+    commit: 64c2778c61245dcda13eaf16a2e0738dfacb7a16
     subdirs:
       - cardano-config
 
@@ -64,7 +64,7 @@ extra-deps:
       - cardano-shell
 
   - git: https://github.com/input-output-hk/cardano-prelude
-    commit: 3893f21db1665e7bab9e8c6504c547fc7c28f98c
+    commit: fe76ec64f6b45259cc407a6d840dad79ee6063b6
     subdirs:
       - .
       - test
@@ -73,7 +73,7 @@ extra-deps:
     commit: 43a036c5bbe68ca2e9cbe611eab7982e2348fe49
 
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: 25628ac03d574f3889771b44af07521c88dd8bf9
+    commit: 3e45d5dd4942c295f0ea4bfed7c407b914b15447
     subdirs:
       - contra-tracer
       - iohk-monitoring
@@ -95,14 +95,14 @@ extra-deps:
     commit: 26d35ad52fe9ade3391532dbfeb2f416f07650bc
 
   - git: https://github.com/input-output-hk/cardano-ledger-specs
-    commit: 9dd7a20af22b8e8837aa1525d827da5c986d6136
+    commit: 647cd71e3c4630488e71596f5e9c26fee598b541
     subdirs:
       - byron/semantics/executable-spec
       - byron/ledger/executable-spec
       - byron/chain/executable-spec
 
   - git: https://github.com/input-output-hk/cardano-ledger
-    commit: b39e54d109c9f66883418cd7aaf989a7ca565daf
+    commit: 1368966fd6d806d8eb65cd1ba193548c402355f6
     subdirs:
       - cardano-ledger
       - cardano-ledger/test
@@ -110,7 +110,7 @@ extra-deps:
       - crypto/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: 6e0651d812ea02718e2896bef30c931b1bb1e0b9
+    commit: a85bd4751ca5c81c0507482848358980814e9ca3
     subdirs:
       - io-sim
       - io-sim-classes
