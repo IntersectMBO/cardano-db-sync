@@ -6,17 +6,14 @@
 
 module Cardano.DbSync.Tracing.ToObjectOrphans () where
 
-import           Data.Text (Text, pack)
+import           Data.Text (Text)
 import           Data.Aeson ((.=))
 import           Data.Functor.Identity (Identity (..))
 
-import           Cardano.BM.Data.LogItem
 import           Cardano.BM.Data.Tracer
 import           Cardano.BM.Tracing
 
-import           Cardano.Tracing.ToObjectOrphans ()
-
-import           Control.Monad.IO.Class (MonadIO)
+import           Cardano.Tracing.ToObjectOrphans (defaultTextTransformer)
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import           Ouroboros.Network.Block (Tip)
@@ -26,27 +23,10 @@ import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
 import           Ouroboros.Network.Subscription (SubscriptionTrace (..))
 
 
-defaultTextTransformer
-  :: ( MonadIO m
-     , DefinePrivacyAnnotation b
-     , DefineSeverity b
-     , Show b
-     , ToObject b)
-  => TracingFormatting
-  -> TracingVerbosity
-  -> Trace m Text
-  -> Tracer m b
-defaultTextTransformer TextualRepresentation _verb tr =
-  Tracer $ \s -> do
-    meta <- mkLOMeta (defineSeverity s) (definePrivacyAnnotation s)
-    traceWith tr (mempty, LogObject mempty meta (LogMessage $ pack $ show s))
-defaultTextTransformer _ verb tr =
-  trStructured verb tr
+instance HasPrivacyAnnotation (Identity (SubscriptionTrace LocalAddress))
 
-instance DefinePrivacyAnnotation (Identity (SubscriptionTrace LocalAddress))
-
-instance DefineSeverity (Identity (SubscriptionTrace LocalAddress)) where
-  defineSeverity (Identity ev) = case ev of
+instance HasSeverityAnnotation (Identity (SubscriptionTrace LocalAddress)) where
+  getSeverityAnnotation (Identity ev) = case ev of
     SubscriptionTraceConnectStart {} -> Info
     SubscriptionTraceConnectEnd {} -> Info
     SubscriptionTraceConnectException {} -> Error
@@ -78,9 +58,9 @@ instance ToObject (Identity (SubscriptionTrace LocalAddress)) where
 instance Transformable Text IO (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock))) where
   trTransformer = defaultTextTransformer
 
-instance DefinePrivacyAnnotation (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock)))
+instance HasPrivacyAnnotation (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock)))
 
-instance DefineSeverity (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock)))
+instance HasSeverityAnnotation (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock)))
 
 instance ToObject (AnyMessage (ChainSync ByronBlock (Tip ByronBlock))) where
   toObject _verb msg =
