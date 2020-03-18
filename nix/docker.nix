@@ -129,7 +129,7 @@ let
          exec $DBSYNC \
            --socket-path /data/node.socket \
            --genesis-file /config/genesis.json \
-           --config /data/config.yaml \
+           --config /config/config.yaml \
            --schema-dir ${../schema}
       ${clusterStatements}
       else
