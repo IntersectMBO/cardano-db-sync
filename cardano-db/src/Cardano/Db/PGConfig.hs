@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Db.PGConfig
   ( PGConfig (..)
@@ -79,8 +80,12 @@ readPGPassFile (PGPassFile fpath) = do
     replaceUser pgc
       | pgcUser pgc /= "*" = pure pgc
       | otherwise = do
-          user <- getEffectiveUserName
-          pure $ pgc { pgcUser = BS.pack user }
+          euser <- Exception.try getEffectiveUserName
+          case euser of
+            Left (_ :: IOException) ->
+              error "readPGPassFile: User in pgpass file was specified as '*' but getEffectiveUserName failed."
+            Right user ->
+              pure $ pgc { pgcUser = BS.pack user }
 
 
 -- | Read 'PGPassFile' into 'PGConfig'.
