@@ -1,5 +1,7 @@
 # Revision history for cardano-db-sync-extended
 
-## ? -- ? 2020
+## 1.4.0 -- March 2020
 
-* First release of the cardano-db-sync-extended
+* New component to support SQL DB backend for cardano-graphql
+* Based on cardano-db-sync plugin mechanism
+* Extra "epoch" DB table with incrementally maintained view

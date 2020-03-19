@@ -1,8 +1,16 @@
 # Revision history for cardano-db-sync node
 
-## 1.? -- ? 2020
+## 1.4 -- March 2020
 
+* Renamed from cardano-explorer-node to cardano-db-sync.
+* Source repository renamed to cardano-db-sync.
 * Improve chain sync behavior when database chain is ahead of node.
+* New plugin system to allow application-specific variations (e.g. caching)
+* Improve exception handling and reporting.
+* Improved documentation.
+* Update dependencies to latest versions.
+* Use threaded RTS to avoid potential IPC problems on OSX.
+* Better default logging verbosity configuration.
 
 ## 1.3.0 -- January 2020
 

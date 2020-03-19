@@ -69,9 +69,6 @@ extra-deps:
       - .
       - test
 
-  - git: https://github.com/input-output-hk/cardano-sl-x509
-    commit: 43a036c5bbe68ca2e9cbe611eab7982e2348fe49
-
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
     commit: 3e45d5dd4942c295f0ea4bfed7c407b914b15447
     subdirs:

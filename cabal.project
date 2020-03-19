@@ -65,12 +65,6 @@ source-repository-package
 
 source-repository-package
   type: git
-  location: https://github.com/input-output-hk/cardano-sl-x509
-  tag: 43a036c5bbe68ca2e9cbe611eab7982e2348fe49
-  --sha256: 1aw7ns8lv51fjf45k8yzils2j7a6bqzy8hn65kb3z0dn1qsm8x88
-
-source-repository-package
-  type: git
   location: https://github.com/input-output-hk/iohk-monitoring-framework
   tag: 3e45d5dd4942c295f0ea4bfed7c407b914b15447
   --sha256: 0vik0qqw0p5xdrl2r84fz8jhmlzcx0b3cxpvb434ldb8xnlx8q8i
