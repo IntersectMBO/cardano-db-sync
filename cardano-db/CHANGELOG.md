@@ -1,5 +1,12 @@
 # Revision history for cardano-db
 
+## 1.4.0 -- March 2020
+
+* Renamed from cardano-explorer-db to cardano-db
+* Source repository renamed to cardano-db-sync
+* Extra "epoch" table used by cardano-db-sync-extended
+* Update dependencies to latest versions.
+
 ## 1.3.0 -- January 2020
 
 * Update dependencies to latest versions.
