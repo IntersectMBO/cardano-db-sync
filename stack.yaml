@@ -54,7 +54,7 @@ extra-deps:
   - time-compat-1.9.2.2
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: 64c2778c61245dcda13eaf16a2e0738dfacb7a16
+    commit: dc45a3e1a0e8d01c1f11e544e2db4cfaa1fb43ba
     subdirs:
       - cardano-config
 
