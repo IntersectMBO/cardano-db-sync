@@ -58,6 +58,11 @@ in {
         description = "the user to run as";
       };
       postgres = {
+        generatePGPASS = lib.mkOption {
+          type = lib.types.bool;
+          default = true;
+          description = "generate pgpass";
+        };
         socketdir = lib.mkOption {
           type = lib.types.str;
           default = "/run/postgresql";
@@ -95,9 +100,11 @@ in {
         fi'' else "export CARDANO_NODE_SOCKET_PATH=\"${cfg.socketPath}\""}
         export PATH=${lib.makeBinPath [ pkgs.postgresql ]}:$PATH
 
+        ${lib.optionalString cfg.postgres.generatePGPASS ''
         cp ${cfg.pgpass} ./pgpass
         chmod 0600 ./pgpass
         export PGPASSFILE=$(pwd)/pgpass
+        ''}
 
         mkdir -p log-dir
         exec ${exec} \

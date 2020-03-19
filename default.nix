@@ -38,7 +38,10 @@ let
     dockerImage = let
       stateDir = "/data";
       defaultConfig = rec {
-        services.cardano-db-sync.socketPath = lib.mkDefault (stateDir + "/node.socket");
+        services.cardano-db-sync = {
+          socketPath = lib.mkDefault (stateDir + "/node.socket");
+          postgres.generatePGPASS = false;
+        };
       };
       customConfig'' = mkMerge [ defaultConfig customConfig' ];
     in self.callPackage ./nix/docker.nix {
@@ -48,7 +51,10 @@ let
       extendedScripts = self.scripts.override {
         customConfig = mkMerge [
           customConfig''
-          { services.cardano-db-sync.extended = true; }
+          { services.cardano-db-sync = {
+              extended = true;
+            };
+          }
         ];
       };
     };
