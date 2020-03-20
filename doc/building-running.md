@@ -44,7 +44,7 @@ cd cardano-db-sync
 nix-build -A cardano-db-sync -o db-sync-node
 scripts/postgresql-setup.sh --createdb
 PGPASSFILE=config/pgpass db-sync-node/bin/cardano-db-sync \
-    --config config/explorer-mainnet-config.yaml \
+    --config config/mainnet-config.yaml \
     --genesis-file ../cardano-node/configuration/mainnet-genesis.json \
     --socket-path ../cardano-node/state-node-mainnet/node.socket \
     --schema-dir schema/
