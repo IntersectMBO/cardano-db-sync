@@ -17,6 +17,7 @@ module Cardano.Db.Query
   , queryFeesUpToBlockNo
   , queryFeesUpToSlotNo
   , queryGenesisSupply
+  , queryIsFullySynced
   , queryLatestBlock
   , queryLatestBlockId
   , queryLatestBlockNo
@@ -56,7 +57,7 @@ module Cardano.Db.Query
 
 import           Control.Monad (join)
 import           Control.Monad.Extra (mapMaybeM)
-import           Control.Monad.IO.Class (MonadIO)
+import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Except (ExceptT (..), runExceptT)
 import           Control.Monad.Trans.Reader (ReaderT)
 
@@ -64,7 +65,7 @@ import           Data.ByteString.Char8 (ByteString)
 import           Data.Fixed (Micro)
 import           Data.Maybe (catMaybes, fromMaybe, listToMaybe)
 import           Data.Text (Text)
-import           Data.Time.Clock (UTCTime, addUTCTime)
+import           Data.Time.Clock (UTCTime, addUTCTime, diffUTCTime, getCurrentTime)
 import           Data.Time.Clock.POSIX (POSIXTime, utcTimeToPOSIXSeconds)
 import           Data.Word (Word16, Word64)
 
@@ -217,6 +218,23 @@ queryGenesisSupply = do
                 where_ (tx ^. TxBlock ==. val (BlockKey 1))
                 pure $ sum_ (txOut ^. TxOutValue)
     pure $ unValueSumAda (listToMaybe res)
+
+queryIsFullySynced :: MonadIO m => ReaderT SqlBackend m Bool
+queryIsFullySynced = do
+  emeta <- queryMeta
+  mLatestBlockTime <- fmap blockTime <$> queryLatestBlock
+  case (emeta, mLatestBlockTime) of
+    (Left _, _) -> pure False
+    (_, Nothing) -> pure False
+    (Right meta, Just latestBlockTime)  -> do
+      -- This assumes that the local clock is correct.
+      -- This is a a valid assumption as db-sync is connected to a locally running
+      -- node and the node needs to have a correct local clock to validate transactions.
+      currentTime <- liftIO getCurrentTime
+      let psec = diffUTCTime currentTime latestBlockTime
+      -- SLot durection is in microseconds, and the difference from current time to
+      -- latest block time is in pico seconds.
+      pure $ psec < fromIntegral (2 * fromIntegral (metaSlotDuration meta) * 1000000 :: Integer)
 
 -- | Get 'BlockId' of the latest block.
 queryLatestBlockId :: MonadIO m => ReaderT SqlBackend m (Maybe BlockId)
