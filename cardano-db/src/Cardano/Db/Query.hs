@@ -64,6 +64,7 @@ import           Control.Monad.Trans.Reader (ReaderT)
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Fixed (Micro)
 import           Data.Maybe (catMaybes, fromMaybe, listToMaybe)
+import           Data.Ratio ((%))
 import           Data.Text (Text)
 import           Data.Time.Clock (UTCTime, addUTCTime, diffUTCTime, getCurrentTime)
 import           Data.Time.Clock.POSIX (POSIXTime, utcTimeToPOSIXSeconds)
@@ -232,9 +233,9 @@ queryIsFullySynced = do
       -- node and the node needs to have a correct local clock to validate transactions.
       currentTime <- liftIO getCurrentTime
       let psec = diffUTCTime currentTime latestBlockTime
-      -- SLot durection is in microseconds, and the difference from current time to
+      -- Slot duration is in microseconds, and the difference from current time to
       -- latest block time is in pico seconds.
-      pure $ psec < fromIntegral (2 * fromIntegral (metaSlotDuration meta) * 1000000 :: Integer)
+      pure $ psec < fromRational (2 * fromIntegral (metaSlotDuration meta) % 1000)
 
 -- | Get 'BlockId' of the latest block.
 queryLatestBlockId :: MonadIO m => ReaderT SqlBackend m (Maybe BlockId)
