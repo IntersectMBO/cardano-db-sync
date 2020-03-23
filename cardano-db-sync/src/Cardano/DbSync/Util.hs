@@ -12,6 +12,7 @@ module Cardano.DbSync.Util
   , blockPreviousHash
   , boundaryEpochNumber
   , configSlotDuration
+  , epochNumber
   , genesisToHeaderHash
   , liftedLogException
   , logException
@@ -91,6 +92,10 @@ blockPreviousHash = Ledger.headerPrevHash . Ledger.blockHeader
 configSlotDuration :: Ledger.Config -> Word64
 configSlotDuration =
   fromIntegral . Ledger.ppSlotDuration . Ledger.gdProtocolParameters . Ledger.configGenesisData
+
+epochNumber :: Ledger.ABlock ByteString -> Word64 -> Word64
+epochNumber blk slotsPerEpoch =
+  slotNumber blk `div` slotsPerEpoch
 
 genesisToHeaderHash :: Ledger.GenesisHash -> Ledger.HeaderHash
 genesisToHeaderHash = coerce

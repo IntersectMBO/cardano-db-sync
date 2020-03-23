@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.DbSync.Plugin.Epoch
@@ -11,11 +12,12 @@ import           Cardano.BM.Trace (Trace, logError, logInfo)
 import qualified Cardano.Chain.Block as Ledger
 import qualified Cardano.Chain.Slotting as Ledger
 
-import           Control.Monad (join, void, when)
+import           Control.Monad (join, void)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Reader (ReaderT)
 
+import           Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import           Data.Maybe (fromMaybe)
 import           Data.Ratio (numerator)
 import           Data.Text (Text)
@@ -39,92 +41,97 @@ import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import           Ouroboros.Network.Block (BlockNo (..), Point, Tip, getTipBlockNo)
 import           Ouroboros.Network.Point (withOrigin)
 
+import           System.IO.Unsafe (unsafePerformIO)
+
 epochPluginOnStartup :: Trace IO Text -> ReaderT SqlBackend (LoggingT IO) ()
 epochPluginOnStartup trce = do
     liftIO . logInfo trce $ "epochPluginOnStartup: Checking"
-    maybe (pure ()) (updatePastEpochs trce) =<< queryLatestBlockEpochNo
+    eMeta <- DB.queryMeta
+    case eMeta of
+      Left err ->
+        liftIO . logError trce $ "epochPluginInsertBlock: " <> renderDbSyncNodeError (ENELookup "epochPluginInsertBlock" err)
+      Right meta ->
+        liftIO $ writeIORef slotsPerEpochVar (10 * DB.metaProtocolConst meta)
+    maybe (pure ()) (insertPastEpochs trce) =<< queryLatestBlockEpochNo
 
 epochPluginInsertBlock :: Trace IO Text -> ByronBlock -> Tip ByronBlock -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
 epochPluginInsertBlock trce rawBlk tip =
+  if False
+  then pure $ Right ()
+  else
     case byronBlockRaw rawBlk of
-      Ledger.ABOBBoundary bblk -> do
-        -- Commit the current transaction and start a new one.
-        transactionSaveWithIsolation Serializable
-        let newEpoch = Ledger.boundaryEpoch (Ledger.boundaryHeader bblk)
-        if newEpoch >= 1
-          then do
-            res <- updateEpochNum (newEpoch - 1) -- Update the last epoch.
-            liftIO . logInfo trce $ "epochPluginInsertBlock: Epoch table updated for epoch " <> textShow (newEpoch - 1)
-            -- Commit the transaction again after the epoch table has been updated.
-            transactionSaveWithIsolation Serializable
-            pure res
-          else pure $ Right ()
+      Ledger.ABOBBoundary _ ->
+        -- For the OBFT era there are no boundary blocks so we ignore them even in
+        -- the Ouroboros Classic era.
+        pure $ Right ()
 
       Ledger.ABOBBlock blk -> do
-        if blockNumber blk > withOrigin 0 unBlockNo (getTipBlockNo tip) - 10
-          then do
-            eMeta <- DB.queryMeta
-            case eMeta of
-              Left err -> do
-                logErr $ Left (ENELookup "epochPluginInsertBlock" err)
-              Right meta -> do
-                let slotsPerEpoch = 10 * DB.metaProtocolConst meta
-                updateEpochNum (slotNumber blk `div` slotsPerEpoch)
-          else pure $ Right ()
-  where
-    logErr :: MonadIO m => Either DbSyncNodeError () -> ReaderT SqlBackend m (Either DbSyncNodeError ())
-    logErr res = do
-      case res of
-        Left err -> liftIO . logError trce $ "epochPluginInsertBlock: " <> renderDbSyncNodeError err
-        Right () -> pure ()
-      pure res
+        mLatestCachedEpoch <- liftIO $ readIORef latestCachedEpochVar
+        slotsPerEpoch <- liftIO $ readIORef slotsPerEpochVar
+        let epochNum = epochNumber blk slotsPerEpoch
+            latestCachedEpoch = fromMaybe epochNum mLatestCachedEpoch
+
+        -- Tip here is the tip block of the local node, not the tip of the chain.
+        if  | blockNumber blk > withOrigin 0 unBlockNo (getTipBlockNo tip) - 10 -> do
+                -- Following the chain quite closely.
+                updateEpochNum epochNum trce
+            | epochNum == 1 && mLatestCachedEpoch == Nothing ->
+                updateEpochNum 0 trce
+            | epochNum > latestCachedEpoch + 1 ->
+                updateEpochNum (latestCachedEpoch + 1) trce
+            | otherwise -> pure $ Right ()
 
 epochPluginRollbackBlock :: Trace IO Text -> Point ByronBlock -> IO (Either DbSyncNodeError ())
-epochPluginRollbackBlock trce point =
+epochPluginRollbackBlock _trce point =
     case pointToSlotHash point of
       Nothing -> pure $ Right ()
       Just (slot, _hash) -> DB.runDbAction Nothing $ action (Ledger.unSlotNumber slot)
   where
     action :: MonadIO m => Word64 -> ReaderT SqlBackend m (Either DbSyncNodeError ())
     action slot = do
-      eMeta <- DB.queryMeta
-      case eMeta of
-        Left err -> do
-          let left = ENELookup "epochPluginInsertBlock" err
-          liftIO . logError trce $ "epochPluginInsertBlock: " <> renderDbSyncNodeError left
-          pure $ Left left
-        Right meta -> do
-          let slotsPerEpoch = 10 * DB.metaProtocolConst meta
-          -- Simply delete all epoch rows from the rollback epoch forward.
-          -- The Epoch table will be repopulated in roll forward.
-          delete . from $ \ epoch ->
-            where_ (epoch ^. EpochNo >=. val (slot `div` slotsPerEpoch))
-          pure $ Right ()
+      slotsPerEpoch <- liftIO $ readIORef slotsPerEpochVar
+      delete . from $ \ epoch ->
+        where_ (epoch ^. EpochNo >=. val (slot `div` slotsPerEpoch))
+      transactionSaveWithIsolation Serializable
+      pure $ Right ()
 
 -- -------------------------------------------------------------------------------------------------
 
 type ValMay a = Value (Maybe a)
 
-updatePastEpochs :: MonadIO m => Trace IO Text -> Word64 -> ReaderT SqlBackend m ()
-updatePastEpochs trce maxEpochNum =
-    loop =<< fromMaybe 0 <$> queryLatestEpochNo
+{-# NOINLINE slotsPerEpochVar #-}
+slotsPerEpochVar :: IORef Word64
+slotsPerEpochVar = unsafePerformIO $ newIORef 1 -- Gets updated later.
+
+{-# NOINLINE latestCachedEpochVar #-}
+latestCachedEpochVar :: IORef (Maybe Word64)
+latestCachedEpochVar = unsafePerformIO $ newIORef Nothing -- Gets updated later.
+
+insertPastEpochs :: MonadIO m => Trace IO Text -> Word64 -> ReaderT SqlBackend m ()
+insertPastEpochs trce maxEpochNum =
+    maybe (loop 0) (liftIO . writeIORef latestCachedEpochVar . Just) =<< queryLatestEpochNo
   where
     loop :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
     loop currentEpoch
-      | currentEpoch >= maxEpochNum = pure ()
+      | currentEpoch >= maxEpochNum =
+          liftIO $ writeIORef latestCachedEpochVar (Just currentEpoch)
       | otherwise = do
           transactionSaveWithIsolation Serializable
           liftIO . logInfo trce $ "epochPluginOnStartup: Inserting epoch table for epoch " <> textShow currentEpoch
-          either (liftIO . reportError) (const $ loop (currentEpoch + 1)) =<< updateEpochNum currentEpoch
+          either (liftIO . reportError) (const $ loop (currentEpoch + 1)) =<< updateEpochNum currentEpoch trce
 
     reportError :: DbSyncNodeError -> IO ()
     reportError err =
       logError trce $ "epochPluginOnStartup: " <> renderDbSyncNodeError err
 
 
-updateEpochNum :: MonadIO m => Word64 -> ReaderT SqlBackend m (Either DbSyncNodeError ())
-updateEpochNum epochNum = do
-    maybe insertEpoch updateEpoch =<< queryEpochId epochNum
+updateEpochNum :: MonadIO m => Word64 -> Trace IO Text -> ReaderT SqlBackend m (Either DbSyncNodeError ())
+updateEpochNum epochNum trce = do
+    mid <- queryEpochId epochNum
+    res <- maybe insertEpoch updateEpoch mid
+    transactionSaveWithIsolation Serializable
+    liftIO $ writeIORef latestCachedEpochVar (Just epochNum)
+    pure res
   where
     updateEpoch :: MonadIO m => EpochId -> ReaderT SqlBackend m (Either DbSyncNodeError ())
     updateEpoch epochId = do
@@ -136,11 +143,11 @@ updateEpochNum epochNum = do
     insertEpoch :: MonadIO m => ReaderT SqlBackend m (Either DbSyncNodeError ())
     insertEpoch = do
       eEpoch <- queryEpochEntry epochNum
+      liftIO . logInfo trce $ "epochPluginInsertBlock: Inserting row in epoch table for epoch " <> textShow epochNum
       case eEpoch of
         Left err -> pure $ Left err
         Right epoch -> do
-          when (epochTxCount epoch > 0) .
-            void $ DB.insertEpoch epoch
+          void $ DB.insertEpoch epoch
           pure $ Right ()
 
 -- -------------------------------------------------------------------------------------------------
@@ -164,7 +171,7 @@ queryEpochEntry epochNum = do
               where_ (blk ^. BlockEpochNo ==. just (val epochNum))
               pure $ (sum_ (tx ^. TxOutSum), count (tx ^. TxOutSum), min_ (blk ^. BlockTime), max_ (blk ^. BlockTime))
     case listToMaybe res of
-      Nothing -> pure $ Left (ENEEpochLookup epochNum)
+      Nothing -> queryEmptyEpoch
       Just x -> convert x
   where
     convert :: MonadIO m
@@ -210,4 +217,3 @@ queryLatestEpochNo = do
             limit 1
             pure $ (epoch ^. EpochNo)
   pure $ unValue <$> listToMaybe res
-
