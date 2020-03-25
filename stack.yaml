@@ -1,4 +1,4 @@
-resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/fe76ec64f6b45259cc407a6d840dad79ee6063b6/snapshot.yaml
+resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/3ac22a2fda11ca7131a011a9ea48fcbfdc26d6b3/snapshot.yaml
 compiler: ghc-8.6.5
 
 allow-newer: true
@@ -54,7 +54,7 @@ extra-deps:
   - time-compat-1.9.2.2
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: dc45a3e1a0e8d01c1f11e544e2db4cfaa1fb43ba
+    commit: b5b0a293a890af48070d0ea5df97dd48dc0551e7
     subdirs:
       - cardano-config
 
@@ -64,7 +64,7 @@ extra-deps:
       - cardano-shell
 
   - git: https://github.com/input-output-hk/cardano-prelude
-    commit: fe76ec64f6b45259cc407a6d840dad79ee6063b6
+    commit: 3ac22a2fda11ca7131a011a9ea48fcbfdc26d6b3
     subdirs:
       - .
       - test
@@ -81,7 +81,7 @@ extra-deps:
       - tracer-transformers
 
   - git: https://github.com/input-output-hk/cardano-base
-    commit: f869bee9b08ba1044b1476737c9d65083e1c6c7f
+    commit: 1222078176fe74d5ce17f2a8343c6588233a49a3
     subdirs:
       - binary
       - binary/test
@@ -92,14 +92,17 @@ extra-deps:
     commit: 26d35ad52fe9ade3391532dbfeb2f416f07650bc
 
   - git: https://github.com/input-output-hk/cardano-ledger-specs
-    commit: 647cd71e3c4630488e71596f5e9c26fee598b541
+    commit: 28b4381461252b523473972c85b003301a5deadc
     subdirs:
       - byron/semantics/executable-spec
       - byron/ledger/executable-spec
       - byron/chain/executable-spec
+      - shelley/chain-and-ledger/dependencies/non-integer
+      - shelley/chain-and-ledger/executable-spec
+      - shelley/chain-and-ledger/executable-spec/test
 
   - git: https://github.com/input-output-hk/cardano-ledger
-    commit: 1368966fd6d806d8eb65cd1ba193548c402355f6
+    commit: 22e89a5f7cc2b02192b1eb420d74530eb2d6cb82
     subdirs:
       - cardano-ledger
       - cardano-ledger/test
@@ -107,14 +110,16 @@ extra-deps:
       - crypto/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: a85bd4751ca5c81c0507482848358980814e9ca3
+    commit: e71aa72adc7e876cda4ff19b5cc0900167fa9804
     subdirs:
       - io-sim
       - io-sim-classes
       - network-mux
+      - Win32-network
       - ouroboros-network
       - ouroboros-consensus
       - ouroboros-consensus-byron
+      - ouroboros-consensus-shelley
       - ouroboros-consensus-cardano
       - ouroboros-consensus/ouroboros-consensus-mock
       - ouroboros-consensus/ouroboros-consensus-test-infra
