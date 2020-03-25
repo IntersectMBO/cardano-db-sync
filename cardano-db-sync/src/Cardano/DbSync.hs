@@ -97,7 +97,7 @@ import           Ouroboros.Network.Codec (Codec (..), DeserialiseFailure)
 import           Ouroboros.Network.Mux (AppType (..), MuxPeer (..), OuroborosApplication,
                    RunMiniProtocol (..))
 
-import           Ouroboros.Network.NodeToClient (AssociateWithIOCP, ClientSubscriptionParams (..),
+import           Ouroboros.Network.NodeToClient (IOManager, ClientSubscriptionParams (..),
                     ConnectionId, ErrorPolicyTrace (..), Handshake, LocalAddress,
                     NetworkSubscriptionTracers (..), NodeToClientProtocols (..),
                     NodeToClientVersion, NodeToClientVersionData (..),
@@ -151,7 +151,7 @@ newtype SocketPath = SocketPath
 
 runDbSyncNode :: DbSyncNodePlugin -> DbSyncNodeParams -> IO ()
 runDbSyncNode plugin enp =
-  withIOManager $ \ iocp -> do
+  withIOManager $ \ iomgr -> do
     DB.runMigrations Prelude.id True (enpMigrationDir enp) (LogFileDir "/tmp")
 
     enc <- readDbSyncNodeConfig (unConfigFile $ enpConfigFile enp)
@@ -169,7 +169,7 @@ runDbSyncNode plugin enp =
       Right () -> pure ()
 
     runDbStartup trce plugin
-    void $ runDbSyncNodeNodeClient iocp trce plugin (mkConsensusConfig gc) (enpSocketPath enp)
+    void $ runDbSyncNodeNodeClient iomgr trce plugin (mkConsensusConfig gc) (enpSocketPath enp)
 
 
 mkTracer :: DbSyncNodeConfig -> IO (Trace IO Text)
@@ -200,14 +200,14 @@ readGenesisConfig enp enc = do
 runDbSyncNodeNodeClient
     :: forall blk.
         (blk ~ ByronBlock)
-    => AssociateWithIOCP -> Trace IO Text -> DbSyncNodePlugin -> TopLevelConfig ByronBlock -> SocketPath
+    => IOManager -> Trace IO Text -> DbSyncNodePlugin -> TopLevelConfig ByronBlock -> SocketPath
     -> IO Void
-runDbSyncNodeNodeClient iocp trce plugin nodeConfig (SocketPath socketPath) = do
+runDbSyncNodeNodeClient iomgr trce plugin nodeConfig (SocketPath socketPath) = do
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   networkState <- newNetworkMutableState
   txv <- newEmptyTMVarM @_ @(GenTx blk)
   ncSubscriptionWorker_V1
-    (localSnocket iocp socketPath)
+    (localSnocket iomgr socketPath)
     -- TODO: these tracers should be configurable for debugging purposes.
     NetworkSubscriptionTracers {
         nsMuxTracer = muxTracer,
