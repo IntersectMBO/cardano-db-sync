@@ -86,18 +86,14 @@ insertABOBBoundary tracer blk = do
               , DB.blockTime = DB.epochUtcTime meta (maybe 0 (+1) mle)
               , DB.blockTxCount = 0
               }
-  supply <- lift DB.queryTotalSupply
-  liftIO $ do
-      logInfo tracer $ Text.concat
-                [ "Total supply at start of epoch ", textShow (boundaryEpochNumber blk)
-                , " is ", DB.renderAda supply, " Ada"
-                ]
-      logInfo tracer $ Text.concat
-                  [ "insertABOBBoundary: epoch "
-                  , textShow (Ledger.boundaryEpoch $ Ledger.boundaryHeader blk)
-                  , " hash "
-                  , renderAbstractHash (Ledger.boundaryHashAnnotated blk)
-                  ]
+
+  liftIO . logInfo tracer $
+        Text.concat
+          [ "insertABOBBoundary: epoch "
+          , textShow (Ledger.boundaryEpoch $ Ledger.boundaryHeader blk)
+          , " hash "
+          , renderAbstractHash (Ledger.boundaryHashAnnotated blk)
+          ]
 
 insertABlock
     :: MonadIO m
@@ -127,9 +123,10 @@ insertABlock tracer blk tip = do
     mapMVExceptT (insertTx tracer blkId) $ blockPayload blk
 
     liftIO $ do
-      when (slotNumber blk > 0 && slotNumber blk `mod` 20 == 0) $ do
-        let (epoch, slotWithin) = slotNumber blk `divMod` slotsPerEpoch
-        logger tracer $
+      let followingClosely = withOrigin 0 unBlockNo (getTipBlockNo tip) - blockNumber blk < 20
+          (epoch, slotWithin) = slotNumber blk `divMod` slotsPerEpoch
+      when (followingClosely && slotWithin /= 0 && slotNumber blk > 0 && slotNumber blk `mod` 20 == 0) $ do
+        logInfo tracer $
           mconcat
             [ "insertABlock: continuing epoch ", textShow epoch
             , " (slot ", textShow slotWithin, ")"
@@ -141,10 +138,10 @@ insertABlock tracer blk tip = do
         ]
   where
     logger :: Trace IO a -> a -> IO ()
-    logger =
-      if withOrigin 0 unBlockNo (getTipBlockNo tip) - blockNumber blk < 20
-        then logInfo
-        else logDebug
+    logger
+      | withOrigin 0 unBlockNo (getTipBlockNo tip) - blockNumber blk < 20 = logInfo
+      | slotNumber blk `mod` 5000 == 0 = logInfo
+      | otherwise = logDebug
 
 
 insertTx

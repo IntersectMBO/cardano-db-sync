@@ -19,6 +19,7 @@ module Cardano.Db.Query
   , queryGenesisSupply
   , queryIsFullySynced
   , queryLatestBlock
+  , queryLatestEpochNo
   , queryLatestBlockId
   , queryLatestBlockNo
   , queryLatestSlotNo
@@ -73,7 +74,7 @@ import           Data.Word (Word16, Word64)
 import           Database.Esqueleto (Entity (..), From, InnerJoin (..), LeftOuterJoin (..),
                     PersistField, SqlExpr, SqlQuery, Value, ValueList,
                     (^.), (==.), (<=.), (&&.), (||.), (>.),
-                    countRows, desc, entityKey, entityVal, from, exists, in_, isNothing, just,
+                    asc, countRows, desc, entityKey, entityVal, from, exists, in_, isNothing, just,
                     limit, not_, notExists, on, orderBy,
                     select, subList_select, sum_, unValue, unSqlBackendKey, val, where_)
 import           Database.Persist.Sql (SqlBackend)
@@ -265,10 +266,19 @@ queryLatestBlock = do
                 pure $ blk
   pure $ fmap entityVal (listToMaybe res)
 
+queryLatestEpochNo :: MonadIO m => ReaderT SqlBackend m Word64
+queryLatestEpochNo = do
+  res <- select . from $ \ blk -> do
+            where_ $ (isJust $ blk ^. BlockSlotNo)
+            orderBy [asc (blk ^. BlockEpochNo)]
+            limit 1
+            pure (blk ^. BlockEpochNo)
+  pure $ fromMaybe 0 (listToMaybe . catMaybes $ map unValue res)
+
 -- | Given a 'BlockId' return the 'BlockId' of the previous block.
 queryPreviousBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Word64)
 queryPreviousBlockNo blkNo = do
-  res <- select $ from $ \ (blk `InnerJoin` pblk) -> do
+  res <- select . from $ \ (blk `InnerJoin` pblk) -> do
                 on (blk ^. BlockPrevious ==. just (pblk ^. BlockId))
                 where_ (blk ^. BlockBlockNo ==. just (val blkNo))
                 pure $ (pblk ^. BlockBlockNo)
