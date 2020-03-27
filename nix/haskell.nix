@@ -41,6 +41,18 @@ let
     EOF
   '';
 
+  postCheck = ''
+    echo post-check
+    DBNAME=nixbld
+    NAME=db_schema.sql
+    rm $out
+    mkdir -p $out/nix-support
+    echo "Dumping schema to db_schema.sql"
+    pg_dump -h /tmp -s $DBNAME > $out/$NAME
+    echo "Adding to build products..."
+    echo "file binary-dist $out/$NAME" > $out/nix-support/hydra-build-products
+  '';
+
   # This creates the Haskell package set.
   # https://input-output-hk.github.io/haskell.nix/user-guide/projects/
   pkgSet = haskell-nix.cabalProject {
@@ -70,6 +82,7 @@ let
         packages.cardano-db.components.tests.test-db = {
           build-tools = [ postgresql ];
           inherit preCheck;
+          inherit postCheck;
         };
       }
       {
