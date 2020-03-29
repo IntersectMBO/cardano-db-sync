@@ -5,7 +5,7 @@
 The cardano-db-sync node is built and tested to run on Linux. It may run on Mac OS X or Windows but
 that is unsupported.
 
-Running the db sync node will require Nix and and either multiple terminals or a multi terminal
+Running the db sync node will require Nix and either multiple terminals or a multi terminal
 emulator like GNU Screen or TMux.
 
 The db sync node is designed to work with a locally running Cardano Node. The two git repositories need to be checked out so that
