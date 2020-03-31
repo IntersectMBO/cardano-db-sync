@@ -8,4 +8,4 @@ import           Cardano.Db.App.Validate.TotalSupply (validateTotalSupplyDecreas
 runValidation :: Word -> IO ()
 runValidation count = do
   validateTotalSupplyDecreasing count
-  validateEpochTable (10 * count)
+  validateEpochTable

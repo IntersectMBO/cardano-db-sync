@@ -21,6 +21,7 @@ module Cardano.Db.Query
   , queryGenesisSupply
   , queryIsFullySynced
   , queryLatestBlock
+  , queryLatestCachedEpochNo
   , queryLatestEpochNo
   , queryLatestBlockId
   , queryLatestBlockNo
@@ -320,6 +321,14 @@ queryLatestBlock = do
                 limit 1
                 pure $ blk
   pure $ fmap entityVal (listToMaybe res)
+
+queryLatestCachedEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
+queryLatestCachedEpochNo = do
+  res <- select . from $ \ epoch -> do
+            orderBy [desc (epoch ^. EpochNo)]
+            limit 1
+            pure (epoch ^. EpochNo)
+  pure $ unValue <$> listToMaybe res
 
 queryLatestEpochNo :: MonadIO m => ReaderT SqlBackend m Word64
 queryLatestEpochNo = do
