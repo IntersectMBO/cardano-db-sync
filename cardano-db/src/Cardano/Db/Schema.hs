@@ -125,6 +125,7 @@ share
     startTime           UTCTime             sqltype=timestamp
     endTime             UTCTime             sqltype=timestamp
     UniqueEpoch         no
+    deriving Eq
     deriving Show
 
   |]

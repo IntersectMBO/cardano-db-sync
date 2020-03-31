@@ -88,6 +88,9 @@ executable cardano-db-tool
   other-modules:        Cardano.Db.App
                         Cardano.Db.App.UtxoSet
                         Cardano.Db.App.Validation
+                        Cardano.Db.App.Validate.EpochTable
+                        Cardano.Db.App.Validate.TotalSupply
+                        Cardano.Db.App.Validate.Util
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , ansi-terminal
