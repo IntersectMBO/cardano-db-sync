@@ -120,10 +120,12 @@ share
   Epoch
     outSum              Word64              sqltype=outsum
     txCount             Word64              sqltype=uinteger
+    blkCount            Word64              sqltype=uinteger
     no                  Word64              sqltype=uinteger
     startTime           UTCTime             sqltype=timestamp
     endTime             UTCTime             sqltype=timestamp
     UniqueEpoch         no
+    deriving Eq
     deriving Show
 
   |]

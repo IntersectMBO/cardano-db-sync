@@ -12,7 +12,9 @@ module Cardano.Db.Query
   , queryBlockNo
   , queryMainBlock
   , queryBlockTxCount
+  , queryCalcEpochEntry
   , queryCheckPoints
+  , queryEpochEntry
   , queryEpochNo
   , queryFeesUpToBlockNo
   , queryFeesUpToSlotNo
@@ -65,17 +67,17 @@ import           Control.Monad.Trans.Reader (ReaderT)
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Fixed (Micro)
 import           Data.Maybe (catMaybes, fromMaybe, listToMaybe)
-import           Data.Ratio ((%))
+import           Data.Ratio ((%), numerator)
 import           Data.Text (Text)
 import           Data.Time.Clock (UTCTime, addUTCTime, diffUTCTime, getCurrentTime)
 import           Data.Time.Clock.POSIX (POSIXTime, utcTimeToPOSIXSeconds)
 import           Data.Word (Word16, Word64)
 
 import           Database.Esqueleto (Entity (..), From, InnerJoin (..), LeftOuterJoin (..),
-                    PersistField, SqlExpr, SqlQuery, Value, ValueList,
+                    PersistField, SqlExpr, SqlQuery, Value (..), ValueList,
                     (^.), (==.), (<=.), (&&.), (||.), (>.),
-                    asc, countRows, desc, entityKey, entityVal, from, exists, in_, isNothing, just,
-                    limit, not_, notExists, on, orderBy,
+                    count, countRows, desc, entityKey, entityVal, from, exists,
+                    in_, isNothing, just, limit, max_, min_, not_, notExists, on, orderBy,
                     select, subList_select, sum_, unValue, unSqlBackendKey, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
@@ -86,6 +88,7 @@ import           Cardano.Db.Types
 -- If you squint, these Esqueleto queries almost look like SQL queries.
 
 
+type ValMay a = Value (Maybe a)
 
 -- | Get the 'Block' associated with the given hash.
 queryBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail Block)
@@ -154,6 +157,51 @@ queryBlockTxCount blkId = do
             pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
+-- | Calculate the Epoch table entry for the specified epoch.
+-- When syncing the chain or filling an empty table, this is called at each epoch boundary to
+-- calculate the Epcoh entry for the last epoch.
+-- When following the chain, this is called for each new block of the current epoch.
+queryCalcEpochEntry :: MonadIO m => Word64 -> ReaderT SqlBackend m (Either LookupFail Epoch)
+queryCalcEpochEntry epochNum = do
+    res <- select . from $ \ (tx `InnerJoin` blk) -> do
+              on (tx ^. TxBlock ==. blk ^. BlockId)
+              where_ (blk ^. BlockEpochNo ==. just (val epochNum))
+              pure $ (sum_ (tx ^. TxOutSum), count (tx ^. TxOutSum), min_ (blk ^. BlockTime), max_ (blk ^. BlockTime))
+    blks <- select . from $ \ blk -> do
+              where_ (isJust $ blk ^. BlockSlotNo)
+              where_ (blk ^. BlockEpochNo ==. just (val epochNum))
+              pure countRows
+    let blkCount = maybe 0 unValue $ listToMaybe blks
+    case listToMaybe res of
+      Nothing -> queryEmptyEpoch blkCount
+      Just x -> convert blkCount x
+  where
+    convert :: MonadIO m
+            => Word64 -> (ValMay Rational, Value Word64, ValMay UTCTime, ValMay UTCTime)
+            -> ReaderT SqlBackend m (Either LookupFail Epoch)
+    convert blkCount tuple =
+      case tuple of
+        (Value (Just outSum), Value txCount, Value (Just start), Value (Just end)) ->
+            pure (Right $ Epoch (fromIntegral $ numerator outSum) txCount blkCount epochNum start end)
+        _otherwise -> queryEmptyEpoch blkCount
+
+    queryEmptyEpoch :: MonadIO m => Word64 -> ReaderT SqlBackend m (Either LookupFail Epoch)
+    queryEmptyEpoch blkCount = do
+      res <- select . from $ \ blk -> do
+              where_ (isJust $ blk ^. BlockSlotNo)
+              where_ (blk ^. BlockEpochNo ==. just (val epochNum))
+              pure (min_ (blk ^. BlockTime), max_ (blk ^. BlockTime))
+      case listToMaybe res of
+        Nothing -> pure $ Left (DbLookupEpochNo epochNum)
+        Just x -> pure $ convert2 blkCount x
+
+    convert2 :: Word64 -> (ValMay UTCTime, ValMay UTCTime) -> Either LookupFail Epoch
+    convert2 blkCount tuple =
+      case tuple of
+        (Value (Just start), Value (Just end)) ->
+            Right (Epoch 0 0 blkCount epochNum start end)
+        _otherwise -> Left (DbLookupEpochNo epochNum)
+
 queryCheckPoints :: MonadIO m => Word64 -> ReaderT SqlBackend m [(Word64, ByteString)]
 queryCheckPoints limitCount = do
     latest <- select $ from $ \ blk -> do
@@ -183,6 +231,13 @@ queryCheckPoints limitCount = do
       if end > 2 * limitCount
         then [ end, end - end `div` limitCount .. 1 ]
         else [ end, end - 2 .. 1 ]
+
+queryEpochEntry :: MonadIO m => Word64 -> ReaderT SqlBackend m (Either LookupFail Epoch)
+queryEpochEntry epochNum = do
+    res <- select . from $ \ epoch -> do
+              where_ (epoch ^. EpochNo ==. val epochNum)
+              pure epoch
+    pure $ maybeToEither (DbLookupEpochNo epochNum) entityVal (listToMaybe res)
 
 -- | Get the Epoch number for a given block. Returns '0' for the genesis block
 -- even though the DB entry for the genesis block is 'NULL'.
@@ -270,7 +325,7 @@ queryLatestEpochNo :: MonadIO m => ReaderT SqlBackend m Word64
 queryLatestEpochNo = do
   res <- select . from $ \ blk -> do
             where_ $ (isJust $ blk ^. BlockSlotNo)
-            orderBy [asc (blk ^. BlockEpochNo)]
+            orderBy [desc (blk ^. BlockEpochNo)]
             limit 1
             pure (blk ^. BlockEpochNo)
   pure $ fromMaybe 0 (listToMaybe . catMaybes $ map unValue res)

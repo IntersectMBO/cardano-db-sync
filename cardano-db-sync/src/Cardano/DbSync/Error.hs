@@ -37,7 +37,6 @@ data DbSyncNodeError
   | ENEError !Text
   | ENEInvariant !Text !DbSyncInvariant
   | ENEBlockMismatch !Word64 !ByteString !ByteString
-  | ENEEpochLookup Word64
 
 annotateInvariantTx :: Ledger.Tx -> DbSyncInvariant -> DbSyncInvariant
 annotateInvariantTx tx ei =
@@ -78,7 +77,6 @@ renderDbSyncNodeError ede =
         [ "Block mismatch for block number ", textShow blkNo, ", db has "
         , bsBase16Encode hashDb, " but chain provided ", bsBase16Encode hashBlk
         ]
-    ENEEpochLookup e -> mconcat ["Unable to query epoch number ", textShow e]
 
 bsBase16Encode :: ByteString -> Text
 bsBase16Encode bs =

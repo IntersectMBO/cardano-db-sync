@@ -6,6 +6,7 @@ packages:
 
 constraints:
     brick >= 0.47 && < 0.50
+  , dns < 4.0
   , unliftio-core < 0.2.0.0
 
 package cardano-explorer-db
