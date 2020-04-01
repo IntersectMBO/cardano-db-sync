@@ -84,12 +84,14 @@ epochPluginInsertBlock trce rawBlk _tip =
       let epochNum = epochNumber blk slotsPerEpoch
           lastCachedEpoch = fromMaybe 0 mLatestCachedEpoch
 
-      if  | epochNum == chainTipEpoch ->
+      if  | epochNum == chainTipEpoch && lastCachedEpoch == chainTipEpoch ->
               -- Following the chain quite closely.
               updateEpochNum epochNum trce
           | epochNum > 0 && mLatestCachedEpoch == Nothing ->
               updateEpochNum 0 trce
           | epochNum >= lastCachedEpoch + 2 ->
+              updateEpochNum (lastCachedEpoch + 1) trce
+          | epochNum == chainTipEpoch && lastCachedEpoch < chainTipEpoch ->
               updateEpochNum (lastCachedEpoch + 1) trce
           | otherwise ->
               pure $ Right ()
