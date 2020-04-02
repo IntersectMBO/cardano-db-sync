@@ -5,7 +5,8 @@ let
   self = config.internal.syncPackages;
   envConfig = cfg.environment;
   explorerConfig = {
-    inherit (envConfig.nodeConfig) RequiresNetworkMagic GenesisHash;
+    inherit (envConfig.nodeConfig) RequiresNetworkMagic;
+    GenesisHash = envConfig.genesisHash;
     NetworkName = cfg.cluster;
   } // cfg.logConfig;
   configFile = __toFile "config.json" (__toJSON explorerConfig);
