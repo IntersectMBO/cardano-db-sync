@@ -6,7 +6,7 @@ The cardano-db-sync node is built and tested to run on Linux. It may run on Mac 
 that is unsupported.
 
 Running the db sync node will require Nix and either multiple terminals or a multi terminal
-emulator like GNU Screen or TMux.
+emulator like GNU Screen or TMux. Setup [IOHK binary cache](https://github.com/input-output-hk/iohk-nix/blob/master/docs/nix.md) to avoid several hours of build time.
 
 The db sync node is designed to work with a locally running Cardano Node. The two git repositories need to be checked out so that
 they are both at the same level. eg:
