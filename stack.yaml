@@ -16,6 +16,10 @@ ghc-options:
   cardano-db-sync-extended: -Wall -Werror -fwarn-redundant-constraints
 
 extra-deps:
+
+  - git: https://github.com/input-output-hk/cardano-crypto
+    commit: 2547ad1e80aeabca2899951601079408becbc92c
+
   - binary-0.8.7.0
   - bimap-0.4.0
   - brick-0.47.1
