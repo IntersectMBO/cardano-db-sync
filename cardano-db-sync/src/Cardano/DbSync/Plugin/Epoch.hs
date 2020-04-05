@@ -93,6 +93,10 @@ epochPluginInsertBlock trce rawBlk _tip =
               updateEpochNum (lastCachedEpoch + 1) trce
           | epochNum == chainTipEpoch && lastCachedEpoch < chainTipEpoch ->
               updateEpochNum (lastCachedEpoch + 1) trce
+          | epochNum > chainTipEpoch ->
+              -- Must just have started a new epoch, so call this which will
+              -- update chainTipEpoch.
+              updateEpochNum epochNum trce
           | otherwise ->
               pure $ Right ()
 
