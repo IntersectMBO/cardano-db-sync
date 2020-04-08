@@ -4,9 +4,9 @@ module Cardano.DbSync.Plugin.Default.Rollback
   ( rollbackToPoint
   ) where
 
-import           Cardano.BM.Trace (Trace, logInfo)
-
 import           Cardano.Prelude
+
+import           Cardano.BM.Trace (Trace, logInfo)
 
 import qualified Cardano.Chain.Block as Ledger
 import qualified Cardano.Chain.Slotting as Ledger
