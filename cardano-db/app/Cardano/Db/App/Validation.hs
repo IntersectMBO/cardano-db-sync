@@ -6,8 +6,8 @@ import           Cardano.Db.App.Validate.EpochTable (validateEpochTable)
 import           Cardano.Db.App.Validate.TotalSupply (validateTotalSupplyDecreasing)
 import           Cardano.Db.App.Validate.BlockTxs (validateEpochBlockTxs)
 
-runValidation :: Word -> IO ()
-runValidation count = do
-  validateTotalSupplyDecreasing count
+runValidation :: IO ()
+runValidation = do
+  validateTotalSupplyDecreasing
   validateEpochTable
   validateEpochBlockTxs

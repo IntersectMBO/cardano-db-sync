@@ -28,7 +28,7 @@ data Command
   = CreateMigration MigrationDir
   | RunMigrations MigrationDir LogFileDir
   | UtxoSetAtBlock Word64
-  | Validate Word
+  | Validate
 
 runCommand :: Command -> IO ()
 runCommand cmd =
@@ -36,7 +36,7 @@ runCommand cmd =
     CreateMigration mdir -> doCreateMigration mdir
     RunMigrations mdir ldir -> runMigrations id False mdir ldir
     UtxoSetAtBlock blkid -> utxoSetAtBlock blkid
-    Validate count -> runValidation count
+    Validate -> runValidation
 
 doCreateMigration :: MigrationDir -> IO ()
 doCreateMigration mdir = do
@@ -71,7 +71,7 @@ pCommand =
           $ Opt.progDesc "Get UTxO set at specified BlockNo."
           )
     <> Opt.command "validate"
-        ( Opt.info pValidate
+        ( Opt.info (pure Validate)
           $ Opt.progDesc "Run validation checks against the database."
           )
     )
@@ -88,13 +88,6 @@ pCommand =
       UtxoSetAtBlock . read <$> Opt.strOption
         (  Opt.long "slot-no"
         <> Opt.help "The SlotNo."
-        )
-
-    pValidate :: Parser Command
-    pValidate =
-      Validate . read <$> Opt.strOption
-        (  Opt.long "count"
-        <> Opt.help "The number of validations to run."
         )
 
 pMigrationDir :: Parser MigrationDir
