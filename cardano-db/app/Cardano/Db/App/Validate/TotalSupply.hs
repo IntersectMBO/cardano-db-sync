@@ -4,8 +4,6 @@ module Cardano.Db.App.Validate.TotalSupply
 
 import           Cardano.Db.App.Validate.Util
 
-import           Control.Monad (replicateM_)
-
 import           Data.Word (Word64)
 
 import           Cardano.Db
@@ -15,9 +13,8 @@ import           System.Random (randomRIO)
 
 -- | Validate that the total supply is decreasing.
 -- This is only true for the Byron error where transaction fees are burnt.
-validateTotalSupplyDecreasing :: Word -> IO ()
-validateTotalSupplyDecreasing count =
-  replicateM_ (fromIntegral count) $ do
+validateTotalSupplyDecreasing :: IO ()
+validateTotalSupplyDecreasing = do
     test <- genTestParameters
 
     putStrF $ "Total supply plus fees at block " ++ show (testFirstBlockNo test)
