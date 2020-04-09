@@ -33,7 +33,8 @@ implemented using [Postgres Views][PostgresView] to implement joins between tabl
 * [Validation][Validation]: Explanation of validation done by the db-sync node and assumptions made.
 
 [BuildingRunning]: doc/building-running.md
-[PostgresView]: https://www.postgresql.org/docs/current/sql-createview.html
-[Schema Management]: doc/schema-management.md
-[Validation]: doc/validation.md
 [DB Schema]: https://hydra.iohk.io/job/Cardano/cardano-db-sync/native.haskellPackages.cardano-db.checks.test-db.x86_64-linux/latest/download/1
+[ExampleQueries]: doc/building-running.md
+[PostgresView]: https://www.postgresql.org/docs/current/sql-createview.html
+[Schema Management]: doc/interesting-queries.md
+[Validation]: doc/validation.md
