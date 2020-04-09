@@ -18,6 +18,7 @@ module Cardano.DbSync.Util
   , logException
   , mkSlotLeader
   , pointToSlotHash
+  , renderBAHash
   , renderAbstractHash
   , slotLeaderHash
   , slotNumber
@@ -139,13 +140,17 @@ pointToSlotHash (Point x) =
     Origin -> Nothing
     At blk -> Just (Ledger.SlotNumber . unSlotNo $ Point.blockPointSlot blk, unByronHash $ Point.blockPointHash blk)
 
-renderAbstractHash :: ByteArrayAccess bin => bin -> Text
-renderAbstractHash =
+renderBAHash :: ByteArrayAccess bin => bin -> Text
+renderBAHash =
   Text.decodeUtf8 . Base16.encode . Data.ByteArray.convert
+
+renderAbstractHash :: Crypto.AbstractHash algo a -> Text
+renderAbstractHash =
+  Text.decodeUtf8 . Base16.encode . Crypto.abstractHashToBytes
 
 slotLeaderHash :: Ledger.ABlock ByteString -> ByteString
 slotLeaderHash =
-  Data.ByteArray.convert . Ledger.addressHash . Ledger.headerGenesisKey . Ledger.blockHeader
+  Crypto.abstractHashToBytes . Ledger.addressHash . Ledger.headerGenesisKey . Ledger.blockHeader
 
 slotNumber :: Ledger.ABlock ByteString -> Word64
 slotNumber =
@@ -155,16 +160,16 @@ textShow :: Show a => a -> Text
 textShow = Text.pack . show
 
 unAbstractHash :: Crypto.Hash Raw -> ByteString
-unAbstractHash = Data.ByteArray.convert
+unAbstractHash = Crypto.abstractHashToBytes
 
 unAddressHash :: Ledger.AddressHash Ledger.Address' -> ByteString
-unAddressHash = Data.ByteArray.convert
+unAddressHash = Crypto.abstractHashToBytes
 
 unHeaderHash :: Ledger.HeaderHash -> ByteString
-unHeaderHash = Data.ByteArray.convert
+unHeaderHash = Crypto.abstractHashToBytes
 
 unTxHash :: Crypto.Hash Ledger.Tx -> ByteString
-unTxHash = Data.ByteArray.convert
+unTxHash = Crypto.abstractHashToBytes
 
 unCryptoHash :: Crypto.Hash Raw -> ByteString
-unCryptoHash = Data.ByteArray.convert
+unCryptoHash = Crypto.abstractHashToBytes

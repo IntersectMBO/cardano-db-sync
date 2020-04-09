@@ -37,7 +37,7 @@ import qualified Cardano.Chain.Genesis as Genesis
 import qualified Cardano.Chain.Update as Update
 
 import           Cardano.Crypto (decodeAbstractHash)
-import           Cardano.Crypto.Hashing (AbstractHash (..))
+import           Cardano.Crypto.Hashing (abstractHashFromDigest)
 import qualified Cardano.Crypto as Crypto
 
 import           Cardano.Prelude hiding (atomically, option, (%), Nat)
@@ -315,7 +315,7 @@ getLatestPoints =
 
     -- in Maybe because the bytestring may not be the right size.
     convertHashBlob :: ByteString -> Maybe ByronHash
-    convertHashBlob = fmap (ByronHash . AbstractHash) . digestFromByteString
+    convertHashBlob = fmap (ByronHash . abstractHashFromDigest) . digestFromByteString
 
 getCurrentTipBlockNo :: IO (WithOrigin BlockNo)
 getCurrentTipBlockNo = do

@@ -134,7 +134,7 @@ insertABlock tracer blk tip = do
       logger tracer $ mconcat
         [ "insertABlock: slot ", textShow (slotNumber blk)
         , ", block ", textShow (blockNumber blk)
-        , ", hash ", renderAbstractHash (blockHash blk)
+        , ", hash ", renderBAHash (blockHash blk)
         ]
   where
     logger :: Trace IO a -> a -> IO ()
