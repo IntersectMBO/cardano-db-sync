@@ -89,7 +89,7 @@ insertValidateGenesisDistribution tracer networkName cfg = do
                         }
             lift $ mapM_ (insertTxOuts bid) $ genesisTxos cfg
             liftIO . logInfo tracer $ "Initial genesis distribution populated. Hash "
-                            <> renderAbstractHash (configGenesisHash cfg)
+                            <> renderByteArray (configGenesisHash cfg)
 
             supply <- lift $ DB.queryTotalSupply
             liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
