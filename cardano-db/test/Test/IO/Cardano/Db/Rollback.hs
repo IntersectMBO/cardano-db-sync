@@ -45,9 +45,9 @@ rollbackTest =
     beforeTxInCount <- queryTxInCount
     assertBool ("TxIn count before rollback is " ++ show beforeTxInCount ++ " but should be 1.") $ beforeTxInCount == 1
     -- Rollback a set of blocks.
-    Just blkId <- queryLatestBlockNo
-    Just pBlkNo <- queryWalkChain 5 blkId
-    void $ deleteCascadeBlockNo pBlkNo
+    latestSlotNo <- queryLatestSlotNo
+    Just pSlotNo <- queryWalkChain 5 latestSlotNo
+    void $ deleteCascadeSlotNo pSlotNo
     -- Assert the expected final state.
     afterBlocks <- queryBlockCount
     assertBool ("Block count after rollback is " ++ show afterBlocks ++ " but should be 10") $ afterBlocks == 4
@@ -64,7 +64,7 @@ queryWalkChain :: MonadIO m => Int -> Word64 -> ReaderT SqlBackend m (Maybe Word
 queryWalkChain count blkNo
   | count <= 0 = pure $ Just blkNo
   | otherwise = do
-      mpBlkNo <- queryPreviousBlockNo blkNo
+      mpBlkNo <- queryPreviousSlotNo blkNo
       case mpBlkNo of
         Nothing -> pure Nothing
         Just pBlkNo -> queryWalkChain (count - 1) pBlkNo
