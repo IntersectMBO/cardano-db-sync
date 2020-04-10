@@ -37,19 +37,17 @@ rollbackToPoint trce point =
     action :: MonadIO m => Ledger.SlotNumber -> Ledger.HeaderHash -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     action slot hash = do
         blk <- liftLookupFail "rollbackToPoint" $ DB.queryMainBlock (unHeaderHash hash)
-        case (DB.blockSlotNo blk, DB.blockBlockNo blk) of
-          (Nothing, _) -> dbSyncNodeError "rollbackToPoint: slot number is Nothing"
-          (_, Nothing) -> dbSyncNodeError "rollbackToPoint: block number is Nothing"
-          (Just slotNo, Just blkNo) -> do
+        case DB.blockSlotNo blk of
+          Nothing -> dbSyncNodeError "rollbackToPoint: slot number is Nothing"
+          Just slotNo -> do
             if slotNo <= Ledger.unSlotNumber slot
               then liftIO . logInfo trce $ mconcat
-                            [ "No rollback required: chain tip slot is ", textShow slotNo ]
+                            [ "No rollback required: db tip slot is ", textShow slotNo
+                            , " ledger tip slot is ", textShow (Ledger.unSlotNumber slot)
+                            ]
               else do
                 liftIO . logInfo trce $ Text.concat
                             [ "Rollbacking to slot ", textShow (Ledger.unSlotNumber slot)
                             , ", hash ", renderAbstractHash hash
                             ]
-                unless (Just (Ledger.unSlotNumber slot) == DB.blockSlotNo blk) $
-                  dbSyncNodeError ("rollbackToPoint: slot mismatch " <> textShow (slotNo, blkNo))
-                -- This will be a cascading delete.
-                void . lift $ DB.deleteCascadeBlockNo blkNo
+                void . lift $ DB.deleteCascadeSlotNo slotNo

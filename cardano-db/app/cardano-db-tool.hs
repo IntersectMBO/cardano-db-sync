@@ -26,6 +26,7 @@ main = do
 
 data Command
   = CreateMigration MigrationDir
+  | Rollback Word64
   | RunMigrations MigrationDir LogFileDir
   | UtxoSetAtBlock Word64
   | Validate
@@ -34,6 +35,7 @@ runCommand :: Command -> IO ()
 runCommand cmd =
   case cmd of
     CreateMigration mdir -> doCreateMigration mdir
+    Rollback slotNo -> runRollback slotNo
     RunMigrations mdir ldir -> runMigrations id False mdir ldir
     UtxoSetAtBlock blkid -> utxoSetAtBlock blkid
     Validate -> runValidation
@@ -44,6 +46,10 @@ doCreateMigration mdir = do
   case mfp of
     Nothing -> putStrLn "No migration needed."
     Just fp -> putStrLn $ "New migration '" ++ fp ++ "' created."
+
+runRollback :: Word64 -> IO ()
+runRollback slotNo =
+  print =<< runDbNoLogging (deleteCascadeSlotNo slotNo)
 
 -- -----------------------------------------------------------------------------
 
@@ -62,6 +68,10 @@ pCommand =
         ( Opt.info pCreateMigration
           $ Opt.progDesc "Create a database migration (only really used by devs)."
           )
+    <> Opt.command "rollback"
+        ( Opt.info pRollback
+          $ Opt.progDesc "Rollback the database to the block with the provided slot number."
+          )
     <> Opt.command "run-migrations"
         ( Opt.info pRunMigrations
           $ Opt.progDesc "Run the database migrations (which are idempotent)."
@@ -79,9 +89,17 @@ pCommand =
     pCreateMigration :: Parser Command
     pCreateMigration =
       CreateMigration <$> pMigrationDir
+
     pRunMigrations :: Parser Command
     pRunMigrations =
       RunMigrations <$> pMigrationDir <*> pLogFileDir
+
+    pRollback :: Parser Command
+    pRollback =
+      Rollback . read <$> Opt.strOption
+        (  Opt.long "slot"
+        <> Opt.help "The slot number to roll back to."
+        )
 
     pUtxoSetAtBlock :: Parser Command
     pUtxoSetAtBlock =
@@ -105,4 +123,3 @@ pLogFileDir =
     <> Opt.help "The directory to write the log to."
     <> Opt.completer (Opt.bashCompleter "directory")
     )
-

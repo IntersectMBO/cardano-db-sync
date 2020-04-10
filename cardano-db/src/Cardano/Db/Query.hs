@@ -28,7 +28,7 @@ module Cardano.Db.Query
   , queryLatestSlotNo
   , queryMeta
   , queryNetworkName
-  , queryPreviousBlockNo
+  , queryPreviousSlotNo
   , querySelectCount
   , querySlotPosixTime
   , querySlotUtcTime
@@ -339,13 +339,13 @@ queryLatestEpochNo = do
             pure (blk ^. BlockEpochNo)
   pure $ fromMaybe 0 (listToMaybe . catMaybes $ map unValue res)
 
--- | Given a 'BlockId' return the 'BlockId' of the previous block.
-queryPreviousBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Word64)
-queryPreviousBlockNo blkNo = do
+-- | Given a 'SlotNo' return the 'SlotNo' of the previous block.
+queryPreviousSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Word64)
+queryPreviousSlotNo slotNo = do
   res <- select . from $ \ (blk `InnerJoin` pblk) -> do
                 on (blk ^. BlockPrevious ==. just (pblk ^. BlockId))
-                where_ (blk ^. BlockBlockNo ==. just (val blkNo))
-                pure $ (pblk ^. BlockBlockNo)
+                where_ (blk ^. BlockSlotNo ==. just (val slotNo))
+                pure $ (pblk ^. BlockSlotNo)
   pure $ maybe Nothing unValue (listToMaybe res)
 
 -- | Count the number of rows that match the select with the supplied predicate.

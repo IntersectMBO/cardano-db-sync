@@ -6,6 +6,7 @@ import           Cardano.Db.App.Validate.Util
 
 import           Cardano.Db hiding (queryBlockTxCount)
 
+import           Control.Monad (forM_, when)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
@@ -30,6 +31,12 @@ validateEpochBlockTxs = do
 
 -- -----------------------------------------------------------------------------
 
+data ValidateError = ValidateError
+  { veBlockNo :: !Word64
+  , veTxCountActual :: !Word64
+  , veTxCountExpected :: !Word64
+  }
+
 validateLatestBlockTxs :: Word64 -> IO ()
 validateLatestBlockTxs latestEpoch = do
   validateBlockTxs latestEpoch
@@ -37,23 +44,26 @@ validateLatestBlockTxs latestEpoch = do
 
 validateBlockTxs :: Word64 -> IO ()
 validateBlockTxs epoch = do
-  putStrF $ "All txs for blocks in epoch " ++ show epoch
+  putStrF $ "All transactions for blocks in epoch " ++ show epoch
                 ++ " are present: "
   blks <- runDbNoLogging $ queryEpochBlockNumbers epoch
   results <- mapM validateBlockCount blks
-  case listToMaybe (lefts results) of
-    Nothing ->
-      putStrLn $ greenText "ok"
-    Just (txCountExpected, txCountActual) ->
-      putStrLn $ redText ("Failed: expected tx count of " ++ show txCountExpected
-                            ++ " but got " ++ show txCountActual)
+  case lefts results of
+    [] -> putStrLn $ greenText "ok"
+    xs -> do
+      when (length xs > 1) $ putStrLn ""
+      forM_ xs $ \ ve ->
+        putStrLn $ redText ("Failed on block no " ++ show (veBlockNo ve)
+                            ++ ": expected tx count of " ++ show (veTxCountExpected ve)
+                            ++ " but got " ++ show (veTxCountActual ve)
+                            )
 
-validateBlockCount :: (Word64, Word64) -> IO (Either (Word64, Word64) ())
+validateBlockCount :: (Word64, Word64) -> IO (Either ValidateError ())
 validateBlockCount (blockNo, txCountExpected) = do
   txCountActual <- runDbNoLogging $ queryBlockTxCount blockNo
   pure $ if txCountActual == txCountExpected
           then Right ()
-          else Left (txCountExpected, txCountActual)
+          else Left $ ValidateError blockNo txCountActual txCountExpected
 
 -- This queries by BlockNo, the one in Cardano.Db.Query queries by BlockId.
 queryBlockTxCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
