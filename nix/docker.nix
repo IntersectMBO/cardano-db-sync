@@ -10,25 +10,27 @@
 #  To launch with provided mainnet or testnet configuration
 #
 #    docker run \
-#      -v $PATH_TO/node.socket:/data/node.socket \
-#      -v $PATH_TO/pgpass:/config/pgpass \
+#      -v $PATH_TO/node-ipc:/node-ipc \
+#      -v $PATH_TO/pgpass:/configuration/pgpass \
 #      -e NETWORK=mainnet|testnet \
 #
 #  To launch the extended service:
 #
 #    docker run \
-#      -v $PATH_TO/node.socket:/data/node.socket \
-#      -v $PATH_TO/pgpass:/config/pgpass \
+#      -v $PATH_TO/node-ipc:/node-ipc \
+#      -v $PATH_TO/pgpass:/configuration/pgpass \
 #      -e NETWORK=mainnet|testnet \
 #      -e EXTENDED=true
 #
-#  To launch with custom config, mount a dir containing config.yaml, genesis.json,
-#  and pgpass into /config
+#  To launch with custom configuration, mount a dir containing configuration.yaml, genesis.json,
+#  and pgpass into /configuration
 #
 #    docker run \
-#      -v $PATH_TO/node.socket:/data/node.socket \
-#      -v $PATH_TO/config:/config \
+#      -v $PATH_TO/node-ipc:/node-ipc \
+#      -v $PATH_TO/configuration:/configuration \
 #      inputoutput/cardano-db-sync:<TAG>
+#
+#  See the docker-compose.yml for demonstration of using Docker secrets instead of mounting a pgpass
 #
 ############################################################################
 
@@ -125,21 +127,21 @@ let
       POSTGRES_DB=''${POSTGRES_DB:-$(< ''${SECRET_DIR}/postgres_db)}
       POSTGRES_USER=''${POSTGRES_USER:-$(< ''${SECRET_DIR}/postgres_user)}
       POSTGRES_PASSWORD=''${POSTGRES_PASSWORD:-$(< ''${SECRET_DIR}/postgres_password)}
-      echo "''${POSTGRES_HOST}:''${POSTGRES_PORT}:''${POSTGRES_DB}:''${POSTGRES_USER}:''${POSTGRES_PASSWORD}" > /config/pgpass
-      chmod 0600 /config/pgpass
+      echo "''${POSTGRES_HOST}:''${POSTGRES_PORT}:''${POSTGRES_DB}:''${POSTGRES_USER}:''${POSTGRES_PASSWORD}" > /configuration/pgpass
+      chmod 0600 /configuration/pgpass
     '';
     entry-point = writeScriptBin "entry-point" ''
       #!${runtimeShell}
-      mkdir -p /config
-      if [ ! -f /config/pgpass ]
+      mkdir -p /configuration
+      if [ ! -f /configuration/pgpass ]
       then
         ${genPgPass} /run/secrets
       fi
-      export PGPASSFILE=/config/pgpass
+      export PGPASSFILE=/configuration/pgpass
       # set up /tmp (override with TMPDIR variable)
       mkdir -p -m 1777 tmp
-      if [[ -f /config/config.yaml ]]; then
-        echo "Connecting to network specified in config.yaml"
+      if [[ -f /configuration/configuration.yaml ]]; then
+        echo "Connecting to network specified in configuration.yaml"
         if [[ ! -z "''${EXTENDED}" ]] && [[ "''${EXTENDED}" == true ]]
         then
           DBSYNC=${cardano-db-sync-extended}/bin/cardano-db-sync-extended
@@ -147,14 +149,14 @@ let
           DBSYNC=${cardano-db-sync}/bin/cardano-db-sync
         fi
          exec $DBSYNC \
-           --socket-path /data/node.socket \
-           --genesis-file /config/genesis.json \
-           --config /config/config.yaml \
+           --socket-path /node-ipc/node.socket \
+           --genesis-file /configuration/genesis.json \
+           --config /configuration/configuration.yaml \
            --schema-dir ${../schema}
       ${clusterStatements}
       else
         echo "Please set a NETWORK environment variable to one of: mainnet/testnet"
-        echo "Or mount a /config volume containing: config.yaml, genesis.json, pgpass"
+        echo "Or mount a /configuration volume containing: configuration.yaml, genesis.json, pgpass"
       fi
     '';
   in dockerTools.buildImage {

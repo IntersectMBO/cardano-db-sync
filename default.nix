@@ -36,10 +36,9 @@ let
     };
 
     dockerImage = let
-      stateDir = "/data";
       defaultConfig = rec {
         services.cardano-db-sync = {
-          socketPath = lib.mkDefault (stateDir + "/node.socket");
+          socketPath = lib.mkDefault ("/node-ipc/node.socket");
           postgres.generatePGPASS = false;
         };
       };
