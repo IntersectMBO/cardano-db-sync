@@ -41,6 +41,7 @@ library
                         Cardano.DbSync.Plugin
                         Cardano.DbSync.Plugin.Default
                         Cardano.DbSync.Plugin.Default.Insert
+                        Cardano.DbSync.Plugin.Default.InsertShelley
                         Cardano.DbSync.Plugin.Default.Rollback
                         Cardano.DbSync.Util
                         Cardano.DbSync.Tracing.ToObjectOrphans
@@ -76,6 +77,8 @@ library
                       , network
                       , ouroboros-consensus
                       , ouroboros-consensus-byron
+                      , ouroboros-consensus-shelley
+                      , shelley-spec-ledger
                       , ouroboros-consensus-cardano
                       , ouroboros-network
                       , ouroboros-network-framework
