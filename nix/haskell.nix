@@ -56,15 +56,24 @@ let
   # This creates the Haskell package set.
   # https://input-output-hk.github.io/haskell.nix/user-guide/projects/
   pkgSet = haskell-nix.cabalProject {
-    src = haskell-nix.haskellLib.cleanGit { src = ../.; };
+    src = haskell-nix.haskellLib.cleanGit {
+      src = ../.;
+      name = "cardano-db-sync";
+    };
     ghc = buildPackages.haskell-nix.compiler.${compiler};
     modules = [
       # Add source filtering to local packages
       {
-        packages.cardano-db-sync.src = haskell-nix.haskellLib.cleanGit
-          { src = ../.; subDir = "cardano-db-sync"; };
-        packages.cardano-db-sync-extneded.src = haskell-nix.haskellLib.cleanGit
-          { src = ../.; subDir = "cardano-db-sync-extended"; };
+        packages.cardano-db-sync.src = haskell-nix.haskellLib.cleanGit {
+          src = ../.;
+          subDir = "cardano-db-sync";
+          name = "cardano-db-sync";
+        };
+        packages.cardano-db-sync-extneded.src = haskell-nix.haskellLib.cleanGit {
+          src = ../.;
+          subDir = "cardano-db-sync-extended";
+          name = "cardano-db-sync";
+        };
       }
       {
         # Packages we wish to ignore version bounds of.
