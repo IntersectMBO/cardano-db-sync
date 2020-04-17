@@ -6,12 +6,14 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbSync.Plugin.Default.InsertShelley
   ( insertShelleyBlock
   ) where
 
 import           Cardano.Prelude
+import           Cardano.Binary (serialize')
 
 import           Cardano.BM.Trace (Trace, logDebug, logInfo)
 
@@ -23,6 +25,7 @@ import qualified Cardano.Crypto as Crypto
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
+import           Data.Sequence (Seq (..))
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Text.Encoding as Text
@@ -31,27 +34,29 @@ import           Database.Persist.Sql (SqlBackend)
 
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Error
-import           Cardano.DbSync.Util (textShow, renderByteArray)
+import           Cardano.DbSync.Util (textShow, renderByteArray, addrToBase58)
 
 import qualified Shelley.Spec.Ledger.BlockChain as SL
-import           Shelley.Spec.Ledger.Tx as SL
+import           Shelley.Spec.Ledger.Tx
+import           Shelley.Spec.Ledger.Coin
+
 
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock (..), Crypto)
 import           Ouroboros.Network.Block (BlockNo (..), Tip, SlotNo (..), getTipBlockNo)
 import           Ouroboros.Network.Point (withOrigin)
 
 
-mkSlotLeader :: Crypto c => SL.Block c -> DB.SlotLeader
+mkSlotLeader :: Crypto crypto => SL.Block crypto -> DB.SlotLeader
 mkSlotLeader blk =
   let slHash = Crypto.abstractHashToBytes . Crypto.hash . SL.bheaderVk . SL.bhbody . SL.bheader $ blk
       slName = "SlotLeader-" <> Text.decodeUtf8 (Base16.encode $ BS.take 8 slHash)
   in DB.SlotLeader slHash slName
 
 insertShelleyBlock
-    :: Crypto c
+    :: Crypto crypto
     => Trace IO Text
-    -> ShelleyBlock c
-    -> Tip (ShelleyBlock c)
+    -> ShelleyBlock crypto
+    -> Tip (ShelleyBlock crypto)
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
 insertShelleyBlock tracer blk tip = do
   runExceptT $ do
@@ -59,8 +64,8 @@ insertShelleyBlock tracer blk tip = do
     insertAShelleyBlock tracer block tip
 
 insertAShelleyBlock
-    :: (Crypto c, MonadIO m)
-    => Trace IO Text -> SL.Block c -> Tip (ShelleyBlock c)
+    :: forall crypto m. (Crypto crypto, MonadIO m)
+    => Trace IO Text -> SL.Block crypto -> Tip (ShelleyBlock crypto)
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertAShelleyBlock tracer blk tip = do
     meta <- liftLookupFail "insertABlock" DB.queryMeta
@@ -76,14 +81,14 @@ insertAShelleyBlock tracer blk tip = do
     let blockHeaderSize :: Int
         blockHeaderSize = SL.bHeaderSize . SL.bheader $ blk
 
-    let getTxInternalUnsafe :: SL.TxSeq c -> Seq (SL.Tx c)
-        getTxInternalUnsafe (SL.TxSeq txSeq) = txSeq
+    let getTxSequence :: SL.TxSeq crypto -> Seq (Tx crypto)
+        getTxSequence (SL.TxSeq txSeq) = txSeq
 
     let txsCount :: Int
-        txsCount = length . getTxInternalUnsafe . SL.bbody $ blk
+        txsCount = length . getTxSequence . SL.bbody $ blk
 
     slid <- lift . DB.insertSlotLeader $ mkSlotLeader blk
-    _blkId <- lift . DB.insertBlock $
+    blkId <- lift . DB.insertBlock $
                   DB.Block
                     { DB.blockHash       = blockHash
                     , DB.blockEpochNo    = Just $ slotNumber `div` slotsPerEpoch
@@ -98,8 +103,10 @@ insertAShelleyBlock tracer blk tip = do
                     , DB.blockTxCount    = fromIntegral txsCount
                     }
 
-    -- TODO(KS): Insert the transaction is MISSING!
-    --mapMVExceptT (insertTx tracer blkId) $ blockPayload blk
+    -- Insert the transaction
+    _ <-    mapMExceptT
+                (\tx -> insertTx tracer blkId tx)
+                (toList . getTxSequence . SL.bbody $ blk)
 
     liftIO $ do
       let followingClosely = withOrigin 0 unBlockNo (getTipBlockNo tip) - blockNumber < 20
@@ -128,4 +135,103 @@ insertAShelleyBlock tracer blk tip = do
       | withOrigin 0 unBlockNo (getTipBlockNo tip) - blockNumber < 20 = logInfo
       | slotNumber `mod` 5000 == 0 = logInfo
       | otherwise = logDebug
+
+-- Transactions!
+
+
+insertTx
+    :: (Crypto crypto, MonadIO m)
+    => Trace IO Text -> DB.BlockId -> Tx crypto
+    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+insertTx tracer blkId tx = do
+    let txFee = calculateTxFee tx
+    --let txHash =
+
+    txId <- lift . DB.insertTx $
+              DB.Tx
+                { DB.txHash = Crypto.abstractHashToBytes . Crypto.hash $ tx
+                , DB.txBlock = blkId
+                , DB.txOutSum = vfValue txFee
+                , DB.txFee = vfFee txFee
+                -- Would be really nice to have a way to get the transaction size
+                -- without re-serializing it.
+                -- TODO(KS): This seems hacky and prone to error!
+                , DB.txSize = fromIntegral $ BS.length (serialize' tx)
+                }
+
+    -- Insert outputs for a transaction before inputs in case the inputs for this transaction
+    -- references the output (not sure this can even happen).
+    lift $ zipWithM_ (insertTxOut tracer txId) [0 ..] (toList . _outputs . _body $ tx)
+
+    mapMVExceptT (insertTxIn tracer txId) (toList . _inputs . _body $ tx)
+
+
+insertTxOut
+    :: (Crypto crypto, MonadIO m)
+    => Trace IO Text
+    -> DB.TxId
+    -> Word32
+    -> TxOut crypto
+    -> ReaderT SqlBackend m ()
+insertTxOut _tracer txId index (TxOut txOutAddress txOutValue) =
+  void . DB.insertTxOut $
+            DB.TxOut
+              { DB.txOutTxId = txId
+              , DB.txOutIndex = fromIntegral index
+              , DB.txOutAddress = Text.decodeUtf8 $ addrToBase58 txOutAddress
+              , DB.txOutValue = fromIntegral txOutValue
+              }
+
+
+insertTxIn
+    :: (Crypto crypto, MonadIO m)
+    => Trace IO Text -> DB.TxId -> TxIn crypto
+    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+insertTxIn _tracer txInId (TxIn (TxId txId) inIndex) = do
+  txOutId <- liftLookupFail "insertTxIn" $ DB.queryTxId (Crypto.abstractHashToBytes $ Crypto.hash txId)
+  void . lift . DB.insertTxIn $
+            DB.TxIn
+              { DB.txInTxInId = txInId
+              , DB.txInTxOutId = txOutId
+              , DB.txInTxOutIndex = fromIntegral inIndex
+              }
+
+-- -----------------------------------------------------------------------------
+
+-- Trivial local data type for use in place of a tuple.
+data ValueFee = ValueFee
+  { vfValue :: !Word64
+  , vfFee :: !Word64
+  }
+
+calculateTxFee :: Tx crypto -> ValueFee
+calculateTxFee tx =
+    let fee :: Coin
+        fee = _txfee $ _body tx
+
+        coinFromTxOut :: TxOut crypto -> Coin
+        coinFromTxOut (TxOut _ coin) = coin
+
+        sumCoins :: Foldable f => f Coin -> Coin
+        sumCoins coins = foldr (+) 0 coins
+
+        txOutTotal :: Coin
+        txOutTotal = sumCoins $ map coinFromTxOut (_outputs $ _body tx)
+    in
+        ValueFee (fromIntegral txOutTotal) (fromIntegral fee)
+
+-- | An 'ExceptT' version of 'mapM' which will 'left' the first 'Left' it finds.
+mapMExceptT :: Monad m => (a -> ExceptT e m b) -> [a] -> ExceptT e m [b]
+mapMExceptT action xs =
+  case xs of
+    [] -> pure []
+    (y:ys) -> (:) <$> action y <*> mapMExceptT action ys
+
+-- | An 'ExceptT' version of 'mapM_' which will 'left' the first 'Left' it finds.
+mapMVExceptT :: Monad m => (a -> ExceptT e m ()) -> [a] -> ExceptT e m ()
+mapMVExceptT action xs =
+  case xs of
+    [] -> pure ()
+    (y:ys) -> action y >> mapMVExceptT action ys
+
 
