@@ -28,11 +28,13 @@ module Cardano.DbSync.Util
   , unCryptoHash
   , unHeaderHash
   , unTxHash
+  -- * General util functions
+  , addrToBase58
   ) where
 
 import           Cardano.Prelude hiding (catch)
 
-import           Cardano.Binary (Raw)
+import           Cardano.Binary (Raw, serialize')
 import           Cardano.BM.Trace (Trace, logError)
 import qualified Cardano.Crypto as Crypto
 
@@ -46,12 +48,16 @@ import qualified Cardano.Chain.Slotting as Ledger
 import qualified Cardano.Chain.Update as Ledger
 import qualified Cardano.Chain.UTxO as Ledger
 
+import           Shelley.Spec.Ledger.TxData
+import           Ouroboros.Consensus.Shelley.Ledger (Crypto)
+
 import           Control.Exception.Lifted (SomeException, catch)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 
 import           Crypto.Hash (Blake2b_256)
 
+import           Data.ByteString.Base58 (bitcoinAlphabet, encodeBase58)
 import           Data.ByteArray (ByteArrayAccess)
 import qualified Data.ByteArray
 import qualified Data.ByteString.Base16 as Base16
@@ -67,6 +73,11 @@ import           Ouroboros.Network.Point (WithOrigin (..))
 import qualified Ouroboros.Network.Point as Point
 import           Ouroboros.Network.Block (Point (..), SlotNo (..))
 
+
+
+-- | Currently we use Bitcoin alphabet for representing addresses in base58
+addrToBase58 :: Crypto crypto => Addr crypto -> ByteString
+addrToBase58 = encodeBase58 bitcoinAlphabet . serialize'
 
 blockHash :: Ledger.ABlock ByteString -> ByteString
 blockHash = unHeaderHash . Ledger.blockHashAnnotated
