@@ -39,3 +39,32 @@ PGPASSFILE=config/pgpass db-sync-node/bin/cardano-db-sync \
     --socket-path ../cardano-node/state-node-mainnet/node.socket \
     --schema-dir schema/
 ```
+
+### Exploring the created database
+
+Presuming the database was created from the currently logged-in user:
+```
+psql -d cexplorer
+```
+
+To show all tables:
+```
+\dt
+```
+
+To show details about specific table:
+```
+\d+ TABLE_NAME
+```
+For example:
+```
+\d+ block
+```
+
+Dumping the schema:
+```
+pg_dump -c -s --no-owner cexplorer > cexplorer.sql
+```
+
+
+

@@ -38,6 +38,7 @@ import           Cardano.DbSync.Util (textShow, renderByteArray, addrToBase58)
 
 import qualified Shelley.Spec.Ledger.BlockChain as SL
 import           Shelley.Spec.Ledger.Tx
+import           Shelley.Spec.Ledger.TxData
 import           Shelley.Spec.Ledger.Coin
 
 
@@ -136,17 +137,41 @@ insertAShelleyBlock tracer blk tip = do
       | slotNumber `mod` 5000 == 0 = logInfo
       | otherwise = logDebug
 
+
+-- Get all pool certificates from a sequence of certificates of a tx.
+getAllPoolCertificates :: forall crypto. Seq (DCert crypto) -> Maybe [PoolMetaData]
+getAllPoolCertificates certs = do
+
+    -- Convert to lists, easier to move around.
+    let certsList :: [DCert crypto]
+        certsList = toList certs
+
+    -- poolCertificates :: [PoolParams crypto]
+    poolCertificates <- traverse (getPoolRegCertificate <=< getPoolCertificate) certsList
+
+    -- Easier to read then to cram in one line
+    traverse _poolMD poolCertificates
+
+  where
+
+    getPoolCertificate :: DCert crypto -> Maybe (PoolCert crypto)
+    getPoolCertificate (DCertPool dCert) = Just dCert
+    getPoolCertificate _                 = Nothing
+
+    getPoolRegCertificate :: PoolCert crypto -> Maybe (PoolParams crypto)
+    getPoolRegCertificate (RegPool pp)   = Just pp
+    getPoolRegCertificate _              = Nothing
+
 -- Transactions!
 
-
 insertTx
-    :: (Crypto crypto, MonadIO m)
+    :: forall crypto m. (Crypto crypto, MonadIO m)
     => Trace IO Text -> DB.BlockId -> Tx crypto
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertTx tracer blkId tx = do
     let txFee = calculateTxFee tx
-    --let txHash =
 
+    -- Insert transaction and get txId from the DB.
     txId <- lift . DB.insertTx $
               DB.Tx
                 { DB.txHash = Crypto.abstractHashToBytes . Crypto.hash $ tx
@@ -163,7 +188,19 @@ insertTx tracer blkId tx = do
     -- references the output (not sure this can even happen).
     lift $ zipWithM_ (insertTxOut tracer txId) [0 ..] (toList . _outputs . _body $ tx)
 
+    -- Insert the transaction inputs.
     mapMVExceptT (insertTxIn tracer txId) (toList . _inputs . _body $ tx)
+
+    let certificates :: Seq (DCert crypto)
+        certificates = _certs . _body $ tx
+
+    let poolCertificates :: [PoolMetaData]
+        poolCertificates =  case (getAllPoolCertificates certificates) of
+                                Nothing     -> []
+                                Just certs  -> certs
+
+    -- Finally, insert the pool certificates.
+    insertPoolCertificates tracer poolCertificates
 
 
 insertTxOut
@@ -195,6 +232,12 @@ insertTxIn _tracer txInId (TxIn (TxId txId) inIndex) = do
               , DB.txInTxOutId = txOutId
               , DB.txInTxOutIndex = fromIntegral inIndex
               }
+
+insertPoolCertificates
+    :: forall m. --(MonadIO m)
+    Trace IO Text -> [PoolMetaData]
+    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+insertPoolCertificates = panic "Now it's time to panic!"
 
 -- -----------------------------------------------------------------------------
 
