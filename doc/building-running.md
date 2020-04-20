@@ -71,3 +71,30 @@ PGPASSFILE=config/pgpass-testnet ./cardano-db-sync-extended-exe \
     --genesis-file ../cardano-node/configuration/mainnet-ci/testnet-genesis.json \
     --socket-path ../cardano-node/state-node-testnet/node.socket --schema-dir schema/
 ```
+
+### Exploring the created database
+
+Presuming the database was created from the currently logged-in user:
+```
+psql -d cexplorer
+```
+
+To show all tables:
+```
+\dt
+```
+
+To show details about specific table:
+```
+\d+ TABLE_NAME
+```
+For example:
+```
+\d+ block
+```
+
+Dumping the schema:
+```
+pg_dump -c -s --no-owner cexplorer > cexplorer.sql
+```
+
