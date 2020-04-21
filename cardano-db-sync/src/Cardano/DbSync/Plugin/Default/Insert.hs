@@ -25,7 +25,7 @@ import qualified Cardano.Chain.Block as Ledger
 import qualified Cardano.Chain.Common as Ledger
 import qualified Cardano.Chain.UTxO as Ledger
 
-import qualified Cardano.Crypto as Crypto
+import qualified Cardano.Crypto as Crypto (serializeCborHash)
 
 import           Cardano.Prelude
 
@@ -152,7 +152,7 @@ insertTx tracer blkId tx = do
     valFee <- firstExceptT annotateTx $ newExceptT (calculateTxFee $ Ledger.taTx tx)
     txId <- lift . DB.insertTx $
               DB.Tx
-                { DB.txHash = unTxHash $ Crypto.hash (Ledger.taTx tx)
+                { DB.txHash = unTxHash $ Crypto.serializeCborHash (Ledger.taTx tx)
                 , DB.txBlock = blkId
                 , DB.txOutSum = vfValue valFee
                 , DB.txFee = vfFee valFee

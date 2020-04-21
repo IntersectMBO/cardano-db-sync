@@ -14,7 +14,7 @@ module Cardano.DbSync.Error
   ) where
 
 import qualified Cardano.Chain.UTxO as Ledger
-import qualified Cardano.Crypto as Crypto
+import qualified Cardano.Crypto as Crypto (serializeCborHash)
 
 import           Cardano.Prelude
 
@@ -61,7 +61,7 @@ renderDbSyncInvariant ei =
       mconcat [ "input value ", textShow inval, " < output value ", textShow outval ]
     EInvTxInOut tx inval outval ->
       mconcat
-        [ "tx ", bsBase16Encode (unTxHash $ Crypto.hash tx)
+        [ "tx ", bsBase16Encode (unTxHash $ Crypto.serializeCborHash tx)
         , " : input value ", textShow inval, " < output value ", textShow outval
         , "\n", textShow tx
         ]

@@ -45,10 +45,9 @@ import           Cardano.Shell.Lib (GeneralException (ConfigurationError))
 
 import           Cardano.Slotting.Slot (WithOrigin (..))
 
-import qualified Codec.CBOR.Term as CBOR
-import qualified Codec.Serialise as Serialise
+import           Cardano.TracingOrphanInstances.Network ()
 
-import           Control.Monad.Class.MonadST (MonadST)
+import qualified Codec.CBOR.Term as CBOR
 import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, StrictTMVar,
                     atomically, newEmptyTMVarM, readTMVar)
 import           Control.Monad.Class.MonadTimer (MonadTimer)
@@ -81,43 +80,45 @@ import           Ouroboros.Network.Driver.Simple (runPipelinedPeer)
 import           Network.TypedProtocol.Pipelined (Nat(Zero, Succ))
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..), ByronHash (..), GenTx)
+import           Ouroboros.Consensus.Byron.Ledger.NetworkProtocolVersion (
+                    ByronNodeToClientVersion(..) )
 import           Ouroboros.Consensus.Cardano (Protocol (..), protocolInfo)
-import           Ouroboros.Consensus.Config (TopLevelConfig)
+import           Ouroboros.Consensus.Config (TopLevelConfig, configBlock)
+import           Ouroboros.Consensus.Network.NodeToClient (clientCodecs,
+                    cChainSyncCodec, cStateQueryCodec, cTxSubmissionCodec)
+
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
+import           Ouroboros.Consensus.Node.NetworkProtocolVersion (
+                    nodeToClientProtocolVersion , supportedNodeToClientVersions)
 import           Ouroboros.Consensus.Node.ProtocolInfo (pInfoConfig)
-import           Ouroboros.Consensus.Node.Run (RunNode, nodeDecodeBlock, nodeDecodeGenTx,
-                    nodeDecodeHeaderHash, nodeEncodeBlock, nodeEncodeGenTx, nodeEncodeHeaderHash,
-                    nodeNetworkMagic)
+import           Ouroboros.Consensus.Node.Run (nodeNetworkMagic)
 
-import           Ouroboros.Network.Point (withOrigin)
 import           Ouroboros.Network.Block (BlockNo (..), Point (..), SlotNo (..), Tip,
-                    decodePoint, encodePoint, genesisPoint, getTipBlockNo,
-                    blockNo, encodeTip, decodeTip, wrapCBORinCBOR, unwrapCBORinCBOR)
-import           Ouroboros.Network.Codec (Codec (..), DeserialiseFailure)
+                    genesisPoint, getTipBlockNo,
+                    blockNo)
 import           Ouroboros.Network.Mux (AppType (..), MuxPeer (..), OuroborosApplication,
-                   RunMiniProtocol (..))
-
+                    RunMiniProtocol (..))
 import           Ouroboros.Network.NodeToClient (IOManager, ClientSubscriptionParams (..),
                     ConnectionId, ErrorPolicyTrace (..), Handshake, LocalAddress,
                     NetworkSubscriptionTracers (..), NodeToClientProtocols (..),
-                    NodeToClientVersion, NodeToClientVersionData (..),
-                    TraceSendRecv, WithAddr (..), nodeToClientProtocols, ncSubscriptionWorker_V1,
-                    networkErrorPolicies, newNetworkMutableState, withIOManager, localSnocket)
+                    NodeToClientVersion (..) , NodeToClientVersionData (..),
+                    TraceSendRecv, WithAddr (..), ncSubscriptionWorker,
+                    networkErrorPolicies, newNetworkMutableState, withIOManager, localSnocket,
+                    localStateQueryPeerNull, versionedNodeToClientProtocols)
 
 import qualified Ouroboros.Network.Point as Point
+import           Ouroboros.Network.Point (withOrigin)
+
 import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined (ChainSyncClientPipelined (..),
                     ClientPipelinedStIdle (..), ClientPipelinedStIntersect (..), ClientStNext (..),
                     chainSyncClientPeerPipelined, recvMsgIntersectFound, recvMsgIntersectNotFound,
                     recvMsgRollBackward, recvMsgRollForward)
 import           Ouroboros.Network.Protocol.ChainSync.PipelineDecision (pipelineDecisionLowHighMark,
                         PipelineDecision (..), runPipelineDecision, MkPipelineDecision)
-import           Ouroboros.Network.Protocol.ChainSync.Codec (codecChainSync)
 import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
-
+import           Ouroboros.Network.Protocol.Handshake.Version (DictVersion, Versions, foldMapVersions)
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Client (LocalTxSubmissionClient (..),
                     LocalTxClientStIdle (..), localTxSubmissionClientPeer)
-import           Ouroboros.Network.Protocol.LocalTxSubmission.Codec (codecLocalTxSubmission)
-import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (LocalTxSubmission)
 import qualified Ouroboros.Network.Snocket as Snocket
 import           Ouroboros.Network.Subscription (SubscriptionTrace)
 
@@ -200,13 +201,13 @@ readGenesisConfig enp enc = do
 runDbSyncNodeNodeClient
     :: forall blk.
         (blk ~ ByronBlock)
-    => IOManager -> Trace IO Text -> DbSyncNodePlugin -> TopLevelConfig ByronBlock -> SocketPath
+    => IOManager -> Trace IO Text -> DbSyncNodePlugin -> TopLevelConfig blk -> SocketPath
     -> IO Void
-runDbSyncNodeNodeClient iomgr trce plugin nodeConfig (SocketPath socketPath) = do
+runDbSyncNodeNodeClient iomgr trce plugin topLevelConfig (SocketPath socketPath) = do
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   networkState <- newNetworkMutableState
   txv <- newEmptyTMVarM @_ @(GenTx blk)
-  ncSubscriptionWorker_V1
+  ncSubscriptionWorker
     (localSnocket iomgr socketPath)
     -- TODO: these tracers should be configurable for debugging purposes.
     NetworkSubscriptionTracers {
@@ -221,9 +222,7 @@ runDbSyncNodeNodeClient iomgr trce plugin nodeConfig (SocketPath socketPath) = d
         cspConnectionAttemptDelay = Nothing,
         cspErrorPolicies = networkErrorPolicies <> consensusErrorPolicy (Proxy @blk)
         }
-
-    (NodeToClientVersionData { networkMagic = nodeNetworkMagic (Proxy @blk) nodeConfig })
-    (localInitiatorNetworkApplication trce plugin nodeConfig txv)
+    (dbSyncVersions txv)
   where
     errorPolicyTracer :: Tracer IO (WithAddr LocalAddress ErrorPolicyTrace)
     errorPolicyTracer = toLogObject $ appendName "ErrorPolicy" trce
@@ -236,51 +235,74 @@ runDbSyncNodeNodeClient iomgr trce plugin nodeConfig (SocketPath socketPath) = d
                           (TraceSendRecv (Handshake NodeToClientVersion CBOR.Term)))
     handshakeTracer = toLogObject $ appendName "Handshake" trce
 
+    dbSyncVersions
+        :: StrictTMVar IO (GenTx ByronBlock)
+        -> Versions
+             NodeToClientVersion
+             DictVersion
+             (ConnectionId LocalAddress
+                 -> OuroborosApplication 'InitiatorApp BSL.ByteString IO () Void)
+    dbSyncVersions txv = foldMapVersions
+        (\v ->
+          versionedNodeToClientProtocols
+            (nodeToClientProtocolVersion (Proxy @blk) v)
+            (NodeToClientVersionData { networkMagic = nodeNetworkMagic (Proxy @blk) topLevelConfig })
+            (dbSyncProtocols v trce plugin topLevelConfig txv)
+        )
+        (supportedNodeToClientVersions (Proxy @blk))
 
-localInitiatorNetworkApplication
-  :: forall blk.
-     (blk ~ ByronBlock)
-  -- TODO: the need of a 'Proxy' is an evidence that blk type is not really
-  -- needed here.  The wallet client should use some concrete type of block
-  -- from 'cardano-chain'.  This should remove the dependency of this module
-  -- from 'ouroboros-consensus'.
-  => Trace IO Text
+dbSyncProtocols
+  :: ByronNodeToClientVersion
+  -> Trace IO Text
   -> DbSyncNodePlugin
   -> TopLevelConfig ByronBlock
-  -> StrictTMVar IO (GenTx blk)
-  -> ConnectionId LocalAddress
-  -> OuroborosApplication 'InitiatorApp BSL.ByteString IO () Void
-localInitiatorNetworkApplication trce plugin pInfoConfig txv _ =
-    nodeToClientProtocols NodeToClientProtocols
-      { localChainSyncProtocol =
-          -- local chain sync protocol
-          (InitiatorProtocolOnly $ MuxPeerRaw $ \channel ->
-            liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
-              logInfo trce "Starting chainSyncClient"
-              latestPoints <- getLatestPoints
-              currentTip <- getCurrentTipBlockNo
-              logDbState trce
-              actionQueue <- newDbActionQueue
-              (metrics, server) <- registerMetricsServer
-              race_
-                (runDbThread trce plugin metrics actionQueue)
-                (runPipelinedPeer
-                      localChainSyncTracer (localChainSyncCodec @blk pInfoConfig) channel
-                      (chainSyncClientPeerPipelined (chainSyncClient trce metrics latestPoints currentTip actionQueue))
-                    )
-              atomically $
-                writeDbActionQueue actionQueue DbFinish
-              cancel server)
-        , localTxSubmissionProtocol =
-            -- local tx submission
-            (InitiatorProtocolOnly $ MuxPeer
-              (contramap (Text.pack . show) . toLogObject $ appendName "db-sync-local-tx" trce)
-              localTxSubmissionCodec
-              (localTxSubmissionClientPeer (txSubmissionClient txv)))
+  -> StrictTMVar IO (GenTx ByronBlock)
+  -> NodeToClientProtocols 'InitiatorApp BSL.ByteString IO () Void
+dbSyncProtocols byronVersion trce plugin topLevelConfig txv =
+    NodeToClientProtocols {
+          localChainSyncProtocol = localChainSyncProtocol
+        , localTxSubmissionProtocol = localTxSubmissionProtocol
+        , localStateQueryProtocol = dummyLocalQueryProtocol
         }
   where
     localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock)))
     localChainSyncTracer = toLogObject $ appendName "ChainSync" trce
+
+    codecs = clientCodecs (configBlock topLevelConfig) byronVersion
+
+    localChainSyncProtocol :: RunMiniProtocol 'InitiatorApp BSL.ByteString IO () Void
+    localChainSyncProtocol = InitiatorProtocolOnly $ MuxPeerRaw $ \channel ->
+      liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
+        logInfo trce "Starting chainSyncClient"
+        latestPoints <- getLatestPoints
+        currentTip <- getCurrentTipBlockNo
+        logDbState trce
+        actionQueue <- newDbActionQueue
+        (metrics, server) <- registerMetricsServer
+        race_
+            (runDbThread trce plugin metrics actionQueue)
+            (runPipelinedPeer
+                localChainSyncTracer
+                (cChainSyncCodec codecs)
+                channel
+                (chainSyncClientPeerPipelined
+                    $ chainSyncClient trce metrics latestPoints currentTip actionQueue)
+            )
+        atomically $ writeDbActionQueue actionQueue DbFinish
+        cancel server
+
+    localTxSubmissionProtocol :: RunMiniProtocol 'InitiatorApp BSL.ByteString IO () Void
+    localTxSubmissionProtocol = InitiatorProtocolOnly $ MuxPeer
+        (contramap (Text.pack . show) . toLogObject $ appendName "db-sync-local-tx" trce)
+        (cTxSubmissionCodec codecs)
+        (localTxSubmissionClientPeer (txSubmissionClient txv))
+
+    dummyLocalQueryProtocol :: RunMiniProtocol 'InitiatorApp BSL.ByteString IO () Void
+    dummyLocalQueryProtocol = InitiatorProtocolOnly $ MuxPeer
+        Logging.nullTracer
+        (cStateQueryCodec codecs)
+        localStateQueryPeerNull
+
 
 logDbState :: Trace IO Text -> IO ()
 logDbState trce = do
@@ -349,25 +371,6 @@ txSubmissionClient txv = LocalTxSubmissionClient $
           Just _r -> return ()
         tx' <- atomically $ readTMVar txv
         pure $ client tx'
-
-localChainSyncCodec
-  :: forall blk m. (blk ~ ByronBlock, MonadST m)
-  => TopLevelConfig ByronBlock
-  -> Codec (ChainSync blk (Tip blk)) DeserialiseFailure m BSL.ByteString
-localChainSyncCodec pInfoConfig =
-    codecChainSync
-      (wrapCBORinCBOR $ nodeEncodeBlock pInfoConfig)
-      (unwrapCBORinCBOR $ nodeDecodeBlock pInfoConfig)
-      (encodePoint (nodeEncodeHeaderHash (Proxy @blk)))
-      (decodePoint (nodeDecodeHeaderHash (Proxy @blk)))
-      (encodeTip   (nodeEncodeHeaderHash (Proxy @blk)))
-      (decodeTip   (nodeDecodeHeaderHash (Proxy @blk)))
-
-localTxSubmissionCodec
-  :: (RunNode blk, MonadST m)
-  => Codec (LocalTxSubmission (GenTx blk) String) DeserialiseFailure m BSL.ByteString
-localTxSubmissionCodec =
-  codecLocalTxSubmission nodeEncodeGenTx nodeDecodeGenTx Serialise.encode Serialise.decode
 
 -- | 'ChainSyncClient' which traces received blocks and ignores when it
 -- receives a request to rollbackwar.  A real wallet client should:

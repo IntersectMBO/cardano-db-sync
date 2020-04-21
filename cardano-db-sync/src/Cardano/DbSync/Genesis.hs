@@ -15,7 +15,7 @@ module Cardano.DbSync.Genesis
 
 import           Cardano.Prelude
 
-import qualified Cardano.Crypto as Crypto
+import qualified Cardano.Crypto as Crypto (Hash, fromCompactRedeemVerificationKey, serializeCborHash)
 
 import           Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Chain.Common as Ledger
@@ -216,4 +216,4 @@ genesisTxos config =
       Map.toList $ Ledger.unGenesisNonAvvmBalances (Ledger.configNonAvvmBalances config)
 
 txHashOfAddress :: Ledger.Address -> Crypto.Hash Ledger.Tx
-txHashOfAddress = coerce . Crypto.hash
+txHashOfAddress = coerce . Crypto.serializeCborHash
