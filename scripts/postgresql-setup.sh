@@ -8,7 +8,6 @@ IFS=$'\n\t'
 
 progname="$0"
 
-PGPASSFILE=config/pgpass
 
 function die {
 	echo "$1"
@@ -16,12 +15,22 @@ function die {
 }
 
 function check_pgpass_file {
+  if test -z ${PGPASSFILE+x} ; then
+	echo "Error: The PGPASSFILE env var should be set to the location of the pgpass file."
+	echo
+	echo "Eg for mainnet:"
+	echo "export PGPASSFILE=$(pwd)/config/pgpass"
+	echo
+	exit 1
+	fi
+
   if test ! -f "${PGPASSFILE}" ; then
     echo "Error: PostgeSQL password file ${PGPASSFILE} does not exist."
     exit 1
     fi
 
-	export databasename=$(sed --regexp-extended 's/[^:]*:[^:]*://;s/:.*//' ${PGPASSFILE})
+  databasename=$(sed --regexp-extended 's/[^:]*:[^:]*://;s/:.*//' "${PGPASSFILE}")
+  export databasename
 }
 
 function check_for_psql {
@@ -30,7 +39,7 @@ function check_for_psql {
 }
 
 function check_psql_superuser {
-	user=$(whoami)
+	user="$(whoami)"
 	set +e
 	psql -l > /dev/null 2>&1
 	if test $? -ne 0 ; then
@@ -67,7 +76,7 @@ function check_db_exists {
 		echo
 		exit 1
 		fi
-	count=$(psql -l | grep -v "${databasename}-tests" | grep ${databasename} | sed 's/[^|]*|[^|]*| //;s/ .*//' | grep -c UTF8)
+	count=$(psql -l | grep -v "${databasename}-tests" | grep "${databasename}" | sed 's/[^|]*|[^|]*| //;s/ .*//' | grep -c UTF8)
 	if test "${count}" -ne 1 ; then
 		echo
 		echo "Error : '${databasename}' database exists, but is not UTF8."
@@ -82,7 +91,7 @@ function check_db_exists {
 }
 
 function create_db {
-	createdb -T template0 --owner=$(whoami) --encoding=UTF8 "${databasename}"
+	createdb -T template0 --owner="$(whoami)" --encoding=UTF8 "${databasename}"
 }
 
 function drop_db {
