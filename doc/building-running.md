@@ -43,3 +43,31 @@ PGPASSFILE=config/pgpass db-sync-node/bin/cardano-db-sync \
     --socket-path ../cardano-node/state-node-mainnet/node.socket \
     --schema-dir schema/
 ```
+
+### Run two chains with a single PostgreSQL instance
+
+By running two `cardano-node`s and using two databases within a singe PostgresSQL instance it is
+possible to sync two (or more chains).
+
+The two nodes might be run in separate terminals using:
+```
+nix-build -A scripts.mainnet.node -o mainnet-node-remote && ./mainnet-node-remote
+```
+and
+```
+nix-build -A scripts.testnet.node -o testnet-node-remote && ./testnet-node-remote
+```
+and then the two `db-sync` process run as:
+```
+PGPASSFILE=config/pgpass ./cardano-db-sync-extended-exe \
+    --config config/mainnet-config.yaml \
+    --genesis-file ../cardano-node/mainnet-genesis.json \
+    --socket-path ../cardano-node/state-node-mainnet/node.socket --schema-dir schema/
+```
+and
+```
+PGPASSFILE=config/pgpass-testnet ./cardano-db-sync-extended-exe \
+    --config config/testnet-config.yaml \
+    --genesis-file ../cardano-node/configuration/mainnet-ci/testnet-genesis.json \
+    --socket-path ../cardano-node/state-node-testnet/node.socket --schema-dir schema/
+```
