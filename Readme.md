@@ -9,6 +9,9 @@ The cardano-db-sync component consists of a set of components:
 * `cardano-db-sync-extended` is a relatively simple extension to `cardano-db-sync` which maintains
   an extra table containing epoch data.
 
+The two versions `cardano-db-sync` and `cardano-db-sync-extended` are fully compatible and use
+identical database schema. The only difference is that the extended version maintains an `Epoch`
+table. The non-extended version will still create this table but will not maintain it.
 
 ## Architecture
 
