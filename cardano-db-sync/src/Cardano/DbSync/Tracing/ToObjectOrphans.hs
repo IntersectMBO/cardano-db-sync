@@ -11,17 +11,17 @@ import           Data.Aeson ((.=))
 
 import           Cardano.BM.Data.Tracer
 
-import           Cardano.Tracing.ToObjectOrphans (defaultTextTransformer)
-
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock)
 import           Ouroboros.Network.Block (Tip)
 import           Ouroboros.Network.Codec (AnyMessage)
 import           Ouroboros.Network.NodeToClient (TraceSendRecv)
 import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
 
+import           Cardano.TracingOrphanInstances.Network ()
 
+instance HasTextFormatter (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock)))
 instance Transformable Text IO (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock))) where
-  trTransformer = defaultTextTransformer
+  trTransformer = trStructuredText
 
 instance ToObject (AnyMessage (ChainSync ByronBlock (Tip ByronBlock))) where
   toObject _verb msg =
