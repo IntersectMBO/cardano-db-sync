@@ -128,5 +128,13 @@ share
     deriving Eq
     deriving Show
 
+  -- The bit of the pool data on the chain.
+  -- This doesn't leave the internal database.
+  PoolOnData
+    txId                TxId                -- This type is the primary key for the 'tx' table.
+    poolUrl             Text
+    poolHash            ByteString          sqltype=hash32type
+    UniquePoolOnData    poolHash
+
   |]
 

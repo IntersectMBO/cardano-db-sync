@@ -200,7 +200,7 @@ insertTx tracer blkId tx = do
                                 Just certs  -> certs
 
     -- Finally, insert the pool certificates.
-    insertPoolCertificates tracer poolCertificates
+    insertPoolOnData tracer txId poolCertificates
 
 
 insertTxOut
@@ -233,11 +233,18 @@ insertTxIn _tracer txInId (TxIn (TxId txId) inIndex) = do
               , DB.txInTxOutIndex = fromIntegral inIndex
               }
 
-insertPoolCertificates
-    :: forall m. --(MonadIO m)
-    Trace IO Text -> [PoolMetaData]
+-- |This is inserting all the pool metadata for a @Tx@.
+insertPoolOnData
+    :: forall m. (MonadIO m)
+    => Trace IO Text -> DB.TxId -> [PoolMetaData]
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertPoolCertificates = panic "Now it's time to panic!"
+insertPoolOnData _tracer txId poolMetaData =
+    void . lift $ forM poolMetaData $ \poolMetadata' -> DB.insertPoolOnData $
+            DB.PoolOnData
+              { DB.poolOnDataTxId = txId
+              , DB.poolOnDataPoolUrl = show $ _poolMDUrl poolMetadata'
+              , DB.poolOnDataPoolHash = _poolMDHash poolMetadata'
+              }
 
 -- -----------------------------------------------------------------------------
 

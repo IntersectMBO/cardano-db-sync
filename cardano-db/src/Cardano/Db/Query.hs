@@ -35,6 +35,7 @@ module Cardano.Db.Query
   , queryTotalSupply
   , queryTxCount
   , queryTxId
+  , queryPoolOnData
   , queryTxInCount
   , queryTxOutCount
   , queryTxOutValue
@@ -425,6 +426,14 @@ queryTxId hash = do
   res <- select . from $ \ tx -> do
             where_ (tx ^. TxHash ==. val hash)
             pure tx
+  pure $ maybeToEither (DbLookupTxHash hash) entityKey (listToMaybe res)
+
+-- | Get the 'TxId' associated with the given hash.
+queryPoolOnData :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail PoolOnDataId)
+queryPoolOnData hash = do
+  res <- select . from $ \ poolOnData -> do
+            where_ (poolOnData ^. PoolOnDataPoolHash ==. val hash)
+            pure poolOnData
   pure $ maybeToEither (DbLookupTxHash hash) entityKey (listToMaybe res)
 
 -- | Count the number of transactions in the Tx table.
