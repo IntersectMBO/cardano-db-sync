@@ -153,6 +153,8 @@ test-suite test-db
   build-depends:        base                            >= 4.12         && < 4.13
                       , bytestring
                       , cardano-db
+                      , directory
+                      , filepath
                       , HUnit
                       , persistent
                       , tasty
