@@ -56,6 +56,7 @@ extra-deps:
   - connection-0.3.1
   - http-api-data-0.4.1.1
   - time-compat-1.9.2.2
+  - quiet-0.2
 
   - git: https://github.com/input-output-hk/cardano-node
     commit: bffd717f466f787b38e497d5d73bb58b76b47166
@@ -99,7 +100,7 @@ extra-deps:
   - git: https://github.com/input-output-hk/cardano-ledger-specs
     commit: b0f4b024962eb834af55151697c8da72b6df4df8
     subdirs:
-      - byron/semantics/executable-spec
+      - semantics/executable-spec
       - byron/ledger/executable-spec
       - byron/chain/executable-spec
       - shelley/chain-and-ledger/dependencies/non-integer
