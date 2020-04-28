@@ -9,7 +9,7 @@ module Cardano.Db.Insert
   , insertTx
   , insertTxIn
   , insertTxOut
-
+  , insertPoolOnData
   -- Export mainly for testing.
   , insertByReturnKey
   ) where
@@ -46,6 +46,12 @@ insertTxIn = insertByReturnKey
 
 insertTxOut :: MonadIO m => TxOut -> ReaderT SqlBackend m TxOutId
 insertTxOut = insertByReturnKey
+
+insertPoolOnData
+    :: MonadIO m
+    => PoolOnData
+    -> ReaderT SqlBackend m PoolOnDataId
+insertPoolOnData = insertByReturnKey
 
 -- -----------------------------------------------------------------------------
 
