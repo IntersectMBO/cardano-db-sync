@@ -1,5 +1,12 @@
 # Revision history for cardano-db
 
+## 1.5.0 -- April 2020
+
+* Added library API for query to determine if the DB is fully in sync (#36)
+* Export the generated DB schema as documentation (#43)
+* Update dependencies to latest versions (#39, #78)
+
+
 ## 1.4.0 -- March 2020
 
 * Renamed from cardano-explorer-db to cardano-db

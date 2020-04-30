@@ -1,6 +1,19 @@
 # Revision history for cardano-db-sync node
 
-## 1.4 -- March 2020
+## 1.5.0 -- April 2020
+
+* Fix a bug related to block rollback (#61)
+* Fix handling of OBFT epochs without transactions (#40)
+* Add a block count column to the "epoch" cache table (#42, #46, #51)
+* Add validation test for the epoch cache table (#42, #46, #51)
+* Add an "Epoch" convenience VIEW to the DB schema (#31)
+* Add index to the TransactionInput view (#67)
+* Add support for multiple chains in a single database (#76, #77)
+* Update dependencies to latest versions (#39, #55, #78)
+* Improve README (#32, #38, #57, #58)
+* Improve example docker config (#59)
+
+## 1.4.0 -- March 2020
 
 * Renamed from cardano-explorer-node to cardano-db-sync.
 * Source repository renamed to cardano-db-sync.
