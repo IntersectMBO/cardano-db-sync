@@ -49,10 +49,6 @@ in
     echo "Loading $fullrepo:$gitrev"
     docker load -i ${image}
 
-    # An image is built on each commit
-    echo "Pushing $fullrepo:$gitrev"
-    docker push "$fullrepo:$gitrev"
-
     # If a release event, apply two tags to the image
     # e.g. "1.0.0" AND "latest"
     if [[ "$event" = release ]]; then
@@ -68,10 +64,8 @@ in
       docker tag $fullrepo:$version $fullrepo:latest
       echo "Pushing $fullrepo:latest"
       docker push "$fullrepo:latest"
-    fi
-
     # Every commit to master needs to be tagged with master
-    if [[ "$branch" = master ]]; then
+    elif [[ "$branch" = master ]]; then
       echo "Tagging as master"
       docker tag $fullrepo:$gitrev $fullrepo:$branch
       echo "Pushing $fullrepo:$branch"
