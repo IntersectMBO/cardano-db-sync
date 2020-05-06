@@ -86,6 +86,13 @@ insertValidateGenesisDistribution tracer networkName cfg = do
                         , DB.blockSize = 0
                         , DB.blockTime = Ledger.configStartTime cfg
                         , DB.blockTxCount = 0
+                        -- TODO(KS): For now for Byron
+                        , DB.blockBlockIssuer = Nothing
+                        , DB.blockVrfKey = Nothing
+                        , DB.blockNonceVrf = Nothing
+                        , DB.blockLeaderVrf = Nothing
+                        , DB.blockOpCert = Nothing
+                        , DB.blockProtoVersion = Nothing
                         }
             lift $ mapM_ (insertTxOuts bid) $ genesisTxos cfg
             liftIO . logInfo tracer $ "Initial genesis distribution populated. Hash "

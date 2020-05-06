@@ -72,6 +72,13 @@ share
     size                Word64              sqltype=uinteger
     time                UTCTime             sqltype=timestamp
     txCount             Word64              sqltype=uinteger
+    -- Shelley specific
+    blockIssuer         ByteString Maybe    sqltype=hash32type
+    vrfKey              ByteString Maybe    sqltype=hash32type
+    nonceVrf            ByteString Maybe    sqltype=hash32type
+    leaderVrf           ByteString Maybe    sqltype=hash32type
+    opCert              ByteString Maybe    sqltype=hash32type
+    protoVersion        ByteString Maybe    sqltype=hash32type
     UniqueBlock         hash
 
   Tx
@@ -136,6 +143,109 @@ share
     poolUrl             Text
     poolHash            ByteString          sqltype=hash32type
     UniquePoolOnData    poolHash
+
+  ------------------------------------------------------------
+  -- Shelley bits
+  ------------------------------------------------------------
+
+  CentralFunds
+    epochNo             Word64
+    treasury            Word64              sqltype=lovelace
+    reserves            Word64              sqltype=lovelace
+    UniqueCentralFunds  epochNo
+
+  Reward
+    rewardAddress       ByteString          sqltype=staking_addr_hash
+    instantaneous       Bool
+    poolId              ByteString          sqltype=hash32type
+    epochNo             Word64
+    reward              Word64              sqltype=lovelace
+    UniqueReward        rewardAddress poolId epochNo instantaneous
+
+  Delegation
+    rewardsAddress      ByteString          sqltype=staking_addr_hash
+    poolId              ByteString          sqltype=hash32type
+    slotNo              Word64
+    amount              Word64              sqltype=lovelace
+    inTx                TxId
+    UniqueDelegation    rewardsAddress poolId inTx
+
+  StakeKeyRegistration
+    stakekeyAddress     ByteString          sqltype=staking_addr_hash
+    slotNo              Word64
+    inTx                TxId
+    UniqueStakeKeyRegistration stakekeyAddress inTx
+
+  StakeKeyDeregistration
+    stakekeyAddress     ByteString          sqltype=staking_addr_hash
+    slotNo              Word64
+    inTx                TxId
+    UniqueStakeKeyDeregistration stakekeyAddress inTx
+
+  ScriptRegistration
+    scriptAddress       ByteString          sqltype=script_hash
+    slotNo              Word64
+    inTx                TxId
+    UniqueScriptRegistration scriptAddress inTx
+
+  ScriptDeregistration
+    scriptAddress       ByteString          sqltype=script_hash
+    slotNo              Word64
+    inTx                TxId
+    UniqueScriptDeregistration scriptAddress inTx
+
+  ParameterUpdate
+    epochNo             Word64
+    minFee              Word64
+    maxFee              Word64
+    maxBlockSize        Word64
+    maxTxSize           Word64
+    maxBhSize           Word64
+    keyDeposit          Word64              sqltype=lovelace
+    keyDepositRefund    Word64              sqltype=interval
+    keyDepositDecay     Word64              sqltype=rational
+    poolDeposit         Word64              sqltype=lovelace
+    poolDepositRefund   Word64              sqltype=interval
+    poolDepositDecay    Word64              sqltype=rational
+    maxEpoch            Word64
+    nOptimal            Word64
+    influence           Word64              sqltype=rational
+    monetaryExpandRate  Word64              sqltype=interval
+    treasuryGrowthRate  Word64              sqltype=interval
+    activeSlotCoeff     Word64              sqltype=interval
+    decentralisation    Word64              sqltype=interval
+    entropy             ByteString          sqltype=nonce
+    protocolVersion     ByteString          sqltype=protocol_version
+    UniqueParameterUpdate epochNo
+
+  -- TODO(KS): What to do with owners?
+  PoolParams
+    poolId              ByteString          sqltype=hash32type
+    tickerId            ByteString          sqltype=ticker
+    pledge              Word64              sqltype=lovelace
+    rewardAddress       ByteString          sqltype=staking_addr_hash
+    poolUrl             ByteString          sqltype=url
+    metadataHash        ByteString          sqltype=hash32type
+    margin              ByteString          sqltype=percentage
+    fixedCost           Word64
+    registered          Word64
+    UniquePoolParams    poolId registered
+
+  PoolRetired
+    poolId              ByteString          sqltype=hash32type
+    retired             Word64
+    UniquePoolRetired   poolId retired
+
+  PoolRetiring
+    poolId              ByteString          sqltype=hash32type
+    announced           Word64
+    retiring            Word64
+
+  Stake
+    stakekeyAddress     ByteString          sqltype=staking_addr_hash
+    slotNo              Word64
+    stake               Word64              sqltype=lovelace
+    UniqueStake         stakekeyAddress stake
 
   |]
 

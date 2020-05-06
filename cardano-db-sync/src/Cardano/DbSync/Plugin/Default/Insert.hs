@@ -85,6 +85,13 @@ insertABOBBoundary tracer blk = do
               , DB.blockSize = fromIntegral $ Ledger.boundaryBlockLength blk
               , DB.blockTime = DB.epochUtcTime meta (maybe 0 (+1) mle)
               , DB.blockTxCount = 0
+              -- TODO(KS): For now for Byron
+              , DB.blockBlockIssuer = Nothing
+              , DB.blockVrfKey = Nothing
+              , DB.blockNonceVrf = Nothing
+              , DB.blockLeaderVrf = Nothing
+              , DB.blockOpCert = Nothing
+              , DB.blockProtoVersion = Nothing
               }
 
   liftIO . logInfo tracer $
@@ -118,6 +125,13 @@ insertABlock tracer blk tip = do
                     , DB.blockSize = fromIntegral $ Ledger.blockLength blk
                     , DB.blockTime = DB.slotUtcTime meta (slotNumber blk)
                     , DB.blockTxCount = fromIntegral $ length (blockPayload blk)
+                    -- TODO(KS): For now for Byron
+                    , DB.blockBlockIssuer = Nothing
+                    , DB.blockVrfKey = Nothing
+                    , DB.blockNonceVrf = Nothing
+                    , DB.blockLeaderVrf = Nothing
+                    , DB.blockOpCert = Nothing
+                    , DB.blockProtoVersion = Nothing
                     }
 
     mapMVExceptT (insertTx tracer blkId) $ zip (blockPayload blk) [ 0 .. ]
