@@ -44,7 +44,8 @@ library
                         Cardano.DbSync.Plugin.Default.Rollback
                         Cardano.DbSync.Util
                         Cardano.DbSync.Tracing.ToObjectOrphans
-
+                        ApiTest
+                        
   build-depends:        base                            >= 4.12         && < 4.13
                       , aeson
                       , base16-bytestring
