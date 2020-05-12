@@ -1,5 +1,8 @@
 # Revision history for cardano-db
 
+## vNext
+* Removes SQL Views required by Cardano GraphQL, as they are now managed by the application directly (#92)
+
 ## 1.5.0 -- April 2020
 
 * Added library API for query to determine if the DB is fully in sync (#36)
