@@ -25,7 +25,7 @@ import qualified Cardano.Crypto as Crypto
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Data.Sequence (Seq (..))
+import           Data.Sequence.Strict (StrictSeq (..))
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Text.Encoding as Text
@@ -40,6 +40,7 @@ import qualified Shelley.Spec.Ledger.BlockChain as SL
 import           Shelley.Spec.Ledger.Tx
 import           Shelley.Spec.Ledger.TxData
 import           Shelley.Spec.Ledger.Coin
+import           Shelley.Spec.Ledger.BaseTypes (strictMaybeToMaybe)
 
 
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock (..), Crypto)
@@ -49,7 +50,7 @@ import           Ouroboros.Network.Point (withOrigin)
 
 mkSlotLeader :: Crypto crypto => SL.Block crypto -> DB.SlotLeader
 mkSlotLeader blk =
-  let slHash = Crypto.abstractHashToBytes . Crypto.hash . SL.bheaderVk . SL.bhbody . SL.bheader $ blk
+  let slHash = Crypto.abstractHashToBytes . Crypto.serializeCborHash . SL.bheaderVk . SL.bhbody . SL.bheader $ blk
       slName = "SlotLeader-" <> Text.decodeUtf8 (Base16.encode $ BS.take 8 slHash)
   in DB.SlotLeader slHash slName
 
@@ -77,12 +78,12 @@ insertAShelleyBlock tracer blk tip = do
     let slotsPerEpoch = 10 * DB.metaProtocolConst meta
 
     let blockHash :: ByteString
-        blockHash = Crypto.abstractHashToBytes . Crypto.hash . SL.bhash . SL.bhbody . SL.bheader $ blk
+        blockHash = Crypto.abstractHashToBytes . Crypto.serializeCborHash . SL.bhash . SL.bhbody . SL.bheader $ blk
 
     let blockHeaderSize :: Int
         blockHeaderSize = SL.bHeaderSize . SL.bheader $ blk
 
-    let getTxSequence :: SL.TxSeq crypto -> Seq (Tx crypto)
+    let getTxSequence :: SL.TxSeq crypto -> StrictSeq (Tx crypto)
         getTxSequence (SL.TxSeq txSeq) = txSeq
 
     let txsCount :: Int
@@ -102,6 +103,13 @@ insertAShelleyBlock tracer blk tip = do
                     , DB.blockSize       = fromIntegral blockHeaderSize
                     , DB.blockTime       = DB.slotUtcTime meta slotNumber
                     , DB.blockTxCount    = fromIntegral txsCount
+                    -- Shelley specific
+                    , DB.blockBlockIssuer = Nothing
+                    , DB.blockVrfKey = Nothing
+                    , DB.blockNonceVrf = Nothing
+                    , DB.blockLeaderVrf = Nothing
+                    , DB.blockOpCert = Nothing
+                    , DB.blockProtoVersion = Nothing
                     }
 
     -- Insert the transaction
@@ -139,7 +147,7 @@ insertAShelleyBlock tracer blk tip = do
 
 
 -- Get all pool certificates from a sequence of certificates of a tx.
-getAllPoolCertificates :: forall crypto. Seq (DCert crypto) -> Maybe [PoolMetaData]
+getAllPoolCertificates :: forall crypto. StrictSeq (DCert crypto) -> Maybe [PoolMetaData]
 getAllPoolCertificates certs = do
 
     -- Convert to lists, easier to move around.
@@ -150,7 +158,7 @@ getAllPoolCertificates certs = do
     poolCertificates <- traverse (getPoolRegCertificate <=< getPoolCertificate) certsList
 
     -- Easier to read then to cram in one line
-    traverse _poolMD poolCertificates
+    strictMaybeToMaybe $ traverse _poolMD poolCertificates
 
   where
 
@@ -174,7 +182,7 @@ insertTx tracer blkId tx = do
     -- Insert transaction and get txId from the DB.
     txId <- lift . DB.insertTx $
               DB.Tx
-                { DB.txHash = Crypto.abstractHashToBytes . Crypto.hash $ tx
+                { DB.txHash = Crypto.abstractHashToBytes . Crypto.serializeCborHash $ tx
                 , DB.txBlock = blkId
                 , DB.txOutSum = vfValue txFee
                 , DB.txFee = vfFee txFee
@@ -191,7 +199,7 @@ insertTx tracer blkId tx = do
     -- Insert the transaction inputs.
     mapMVExceptT (insertTxIn tracer txId) (toList . _inputs . _body $ tx)
 
-    let certificates :: Seq (DCert crypto)
+    let certificates :: StrictSeq (DCert crypto)
         certificates = _certs . _body $ tx
 
     let poolCertificates :: [PoolMetaData]
@@ -225,7 +233,7 @@ insertTxIn
     => Trace IO Text -> DB.TxId -> TxIn crypto
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertTxIn _tracer txInId (TxIn (TxId txId) inIndex) = do
-  txOutId <- liftLookupFail "insertTxIn" $ DB.queryTxId (Crypto.abstractHashToBytes $ Crypto.hash txId)
+  txOutId <- liftLookupFail "insertTxIn" $ DB.queryTxId (Crypto.abstractHashToBytes $ Crypto.serializeCborHash txId)
   void . lift . DB.insertTxIn $
             DB.TxIn
               { DB.txInTxInId = txInId
@@ -247,7 +255,7 @@ data ValueFee = ValueFee
   , vfFee :: !Word64
   }
 
-calculateTxFee :: Tx crypto -> ValueFee
+calculateTxFee :: Crypto crypto => Tx crypto -> ValueFee
 calculateTxFee tx =
     let fee :: Coin
         fee = _txfee $ _body tx
