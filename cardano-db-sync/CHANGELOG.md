@@ -1,5 +1,9 @@
 # Revision history for cardano-db-sync node
 
+## 2.0.0 -- April 2020
+
+* Schema change to removes SQL views previously used by by Cardano GraphQL (#92)
+
 ## 1.5.0 -- April 2020
 
 * Fix a bug related to block rollback (#61)
