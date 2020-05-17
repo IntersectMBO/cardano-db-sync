@@ -172,6 +172,7 @@ insertTxOuts blkId (address, value) = do
             DB.Tx
               { DB.txHash = unTxHash $ txHashOfAddress address
               , DB.txBlock = blkId
+              , DB.txBlockIndex = 0
               , DB.txOutSum = Ledger.unsafeGetLovelace value
               , DB.txFee = 0
               , DB.txSize = 0 -- Genesis distribution address to not have a size.

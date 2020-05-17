@@ -77,6 +77,7 @@ share
   Tx
     hash                ByteString          sqltype=hash32type
     block               BlockId             -- This type is the primary key for the 'block' table.
+    blockIndex          Word64              sqltype=uinteger  -- The index of this transaction within the block.
     outSum              Word64              sqltype=lovelace
     fee                 Word64              sqltype=lovelace
     size                Word64              sqltype=uinteger
