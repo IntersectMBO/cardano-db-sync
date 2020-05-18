@@ -66,7 +66,7 @@ function check_connect_as_user {
 
 function check_db_exists {
 	set +e
-	count=$(psql -l | grep -v "${databasename}-tests" | grep -c "${databasename}")
+	count=$(psql -l | grep -c "${databasename} ")
 	if test "${count}" -lt 1 ; then
 		echo
 		echo "Error : No '${databasename}' database."
@@ -76,7 +76,7 @@ function check_db_exists {
 		echo
 		exit 1
 		fi
-	count=$(psql -l | grep -v "${databasename}-tests" | grep "${databasename}" | cut -d \| -f 3 | grep -c UTF8)
+	count=$(psql -l | grep "${databasename} " | cut -d \| -f 3 | grep -c UTF8)
 	if test "${count}" -ne 1 ; then
 		echo
 		echo "Error : '${databasename}' database exists, but is not UTF8."
