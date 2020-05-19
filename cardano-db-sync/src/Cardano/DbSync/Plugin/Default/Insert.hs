@@ -120,16 +120,16 @@ insertABlock tracer blk tip = do
                     , DB.blockTxCount = fromIntegral $ length (blockPayload blk)
                     }
 
-    mapMVExceptT (insertTx tracer blkId) $ blockPayload blk
+    mapMVExceptT (insertTx tracer blkId) $ zip (blockPayload blk) [ 0 .. ]
 
     liftIO $ do
       let followingClosely = withOrigin 0 unBlockNo (getTipBlockNo tip) - blockNumber blk < 20
-          (epoch, slotWithin) = slotNumber blk `divMod` slotsPerEpoch
-      when (followingClosely && slotWithin /= 0 && slotNumber blk > 0 && slotNumber blk `mod` 20 == 0) $ do
+          (epoch, slotWithinEpoch) = slotNumber blk `divMod` slotsPerEpoch
+      when (followingClosely && slotWithinEpoch /= 0 && slotNumber blk > 0 && slotNumber blk `mod` 20 == 0) $ do
         logInfo tracer $
           mconcat
             [ "insertABlock: continuing epoch ", textShow epoch
-            , " (slot ", textShow slotWithin, ")"
+            , " (slot ", textShow slotWithinEpoch, ")"
             ]
       logger tracer $ mconcat
         [ "insertABlock: slot ", textShow (slotNumber blk)
@@ -146,14 +146,15 @@ insertABlock tracer blk tip = do
 
 insertTx
     :: MonadIO m
-    => Trace IO Text -> DB.BlockId -> Ledger.TxAux
+    => Trace IO Text -> DB.BlockId -> (Ledger.TxAux, Word64)
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertTx tracer blkId tx = do
+insertTx tracer blkId (tx, blockIndex) = do
     valFee <- firstExceptT annotateTx $ newExceptT (calculateTxFee $ Ledger.taTx tx)
     txId <- lift . DB.insertTx $
               DB.Tx
                 { DB.txHash = unTxHash $ Crypto.serializeCborHash (Ledger.taTx tx)
                 , DB.txBlock = blkId
+                , DB.txBlockIndex = blockIndex
                 , DB.txOutSum = vfValue valFee
                 , DB.txFee = vfFee valFee
                 -- Would be really nice to have a way to get the transaction size

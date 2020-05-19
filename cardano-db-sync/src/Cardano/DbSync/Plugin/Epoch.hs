@@ -36,7 +36,8 @@ import           Cardano.DbSync.Error
 import           Cardano.DbSync.Util
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
-import           Ouroboros.Network.Block (Point, Tip)
+import           Ouroboros.Network.Block (BlockNo (..), Point, Tip, getTipBlockNo)
+import           Ouroboros.Network.Point (withOrigin)
 
 import           System.IO.Unsafe (unsafePerformIO)
 
@@ -70,7 +71,7 @@ epochPluginOnStartup trce = do
     updateChainTipEpochVar trce
 
 epochPluginInsertBlock :: Trace IO Text -> ByronBlock -> Tip ByronBlock -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-epochPluginInsertBlock trce rawBlk _tip =
+epochPluginInsertBlock trce rawBlk tip =
   case byronBlockRaw rawBlk of
     Ledger.ABOBBoundary _ ->
       -- For the OBFT era there are no boundary blocks so we ignore them even in
@@ -84,9 +85,14 @@ epochPluginInsertBlock trce rawBlk _tip =
       let epochNum = epochNumber blk slotsPerEpoch
           lastCachedEpoch = fromMaybe 0 mLatestCachedEpoch
 
+
+
       if  | epochNum == chainTipEpoch && lastCachedEpoch == chainTipEpoch ->
-              -- Following the chain quite closely.
-              updateEpochNum epochNum trce
+              if withOrigin 0 unBlockNo (getTipBlockNo tip) - blockNumber blk < 15
+                then -- Following the chain very closely.
+                     updateEpochNum epochNum trce
+                else pure $ Right ()
+
           | epochNum > 0 && mLatestCachedEpoch == Nothing ->
               updateEpochNum 0 trce
           | epochNum >= lastCachedEpoch + 2 ->
