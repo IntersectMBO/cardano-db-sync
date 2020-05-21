@@ -1,8 +1,11 @@
 # Revision history for cardano-db
 
-## 2.0.0 -- April 2020
+## 2.0.0 -- May 2020
 
+* Note that this release requires the database to be dropped and recreated
 * Schema change to removes SQL views previously used by by Cardano GraphQL (#92)
+* Add a column to the Tx table to record the order of txs within a block (#94)
+* Flatten the DB schema migrations
 
 ## 1.5.0 -- April 2020
 

@@ -1,8 +1,10 @@
 # Revision history for cardano-db-sync-extended
 
-## 2.0.0 -- April 2020
+## 2.0.0 -- May 2020
 
-* Schema change to removes SQL views previously used by by Cardano GraphQL (#92)
+* Note that this release requires the database to be dropped and recreated
+* Schema changes, see cardano-db 2.0.0 CHANGELOG.md
+* Be more conservative on when the Epoch table is updated to improve sync speed
 
 ## 1.5.0 -- April 2020
 
