@@ -24,11 +24,10 @@ import qualified System.Random as Random
 
 validateEpochBlockTxs :: IO ()
 validateEpochBlockTxs = do
-  fullySynced <- runDbNoLogging queryIsFullySynced
   mLatestEpoch <- runDbNoLogging queryLatestCachedEpochNo
   case mLatestEpoch of
     Nothing -> putStrLn "Epoch table is empty"
-    Just latest -> validateLatestBlockTxs fullySynced latest
+    Just latest -> validateLatestBlockTxs latest
 
 -- -----------------------------------------------------------------------------
 
@@ -38,15 +37,10 @@ data ValidateError = ValidateError
   , veTxCountExpected :: !Word64
   }
 
-validateLatestBlockTxs :: Bool -> Word64 -> IO ()
-validateLatestBlockTxs fullySynced latestEpoch = do
-  if not fullySynced
-    then putStrLn "Not fully synced so not running BlockTx validation"
-    else do
-      -- This validation seems to be quite DB intensive, so only run it
-      -- when the DB is fully synced.
-      validateBlockTxs latestEpoch
-      validateBlockTxs =<< Random.randomRIO (0, latestEpoch - 1)
+validateLatestBlockTxs :: Word64 -> IO ()
+validateLatestBlockTxs latestEpoch = do
+  validateBlockTxs latestEpoch
+  validateBlockTxs =<< Random.randomRIO (0, latestEpoch - 1)
 
 validateBlockTxs :: Word64 -> IO ()
 validateBlockTxs epoch = do
