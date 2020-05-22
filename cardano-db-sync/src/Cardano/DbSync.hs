@@ -79,6 +79,7 @@ import           Network.Mux (MuxTrace, WithMuxBearer)
 import           Ouroboros.Network.Driver.Simple (runPipelinedPeer)
 import           Network.TypedProtocol.Pipelined (Nat(Zero, Succ))
 
+import           Ouroboros.Consensus.Block.Abstract (getCodecConfig)
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..), ByronHash (..), GenTx)
 import           Ouroboros.Consensus.Byron.Ledger.NetworkProtocolVersion (
                     ByronNodeToClientVersion(..) )
@@ -119,6 +120,7 @@ import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
 import           Ouroboros.Network.Protocol.Handshake.Version (DictVersion, Versions, foldMapVersions)
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Client (LocalTxSubmissionClient (..),
                     LocalTxClientStIdle (..), localTxSubmissionClientPeer)
+import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
 import qualified Ouroboros.Network.Snocket as Snocket
 import           Ouroboros.Network.Subscription (SubscriptionTrace)
 
@@ -246,7 +248,7 @@ runDbSyncNodeNodeClient iomgr trce plugin topLevelConfig (SocketPath socketPath)
         (\v ->
           versionedNodeToClientProtocols
             (nodeToClientProtocolVersion (Proxy @blk) v)
-            (NodeToClientVersionData { networkMagic = nodeNetworkMagic (Proxy @blk) topLevelConfig })
+            (NodeToClientVersionData { networkMagic = nodeNetworkMagic topLevelConfig })
             (dbSyncProtocols v trce plugin topLevelConfig txv)
         )
         (supportedNodeToClientVersions (Proxy @blk))
@@ -268,7 +270,7 @@ dbSyncProtocols byronVersion trce plugin topLevelConfig txv =
     localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock)))
     localChainSyncTracer = toLogObject $ appendName "ChainSync" trce
 
-    codecs = clientCodecs (configBlock topLevelConfig) byronVersion
+    codecs = clientCodecs (getCodecConfig $ configBlock topLevelConfig) byronVersion
 
     localChainSyncProtocol :: RunMiniProtocol 'InitiatorApp BSL.ByteString IO () Void
     localChainSyncProtocol = InitiatorProtocolOnly $ MuxPeerRaw $ \channel ->
@@ -367,8 +369,8 @@ txSubmissionClient txv = LocalTxSubmissionClient $
     client tx =
       SendMsgSubmitTx tx $ \mbreject -> do
         case mbreject of
-          Nothing -> return ()
-          Just _r -> return ()
+          SubmitSuccess -> return ()
+          SubmitFail _r -> return ()
         tx' <- atomically $ readTMVar txv
         pure $ client tx'
 
