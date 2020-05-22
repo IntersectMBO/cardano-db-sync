@@ -41,8 +41,11 @@ library
                         Cardano.DbSync.Plugin
                         Cardano.DbSync.Plugin.Default
                         Cardano.DbSync.Plugin.Default.Insert
-                        Cardano.DbSync.Plugin.Default.InsertShelley
                         Cardano.DbSync.Plugin.Default.Rollback
+
+                        Cardano.DbSync.Plugin.Shelley.Insert
+                        Cardano.DbSync.Plugin.Shelley.Rollback
+
                         Cardano.DbSync.Util
                         Cardano.DbSync.Tracing.ToObjectOrphans
 
@@ -54,6 +57,7 @@ library
                       , cardano-binary
                       , cardano-config
                       , cardano-crypto
+                      , cardano-crypto-class
                       , cardano-crypto-wrapper
                       , cardano-db
                       , cardano-ledger

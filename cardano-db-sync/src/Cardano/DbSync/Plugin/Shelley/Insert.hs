@@ -8,7 +8,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Cardano.DbSync.Plugin.Default.InsertShelley
+module Cardano.DbSync.Plugin.Shelley.Insert
   ( insertShelleyBlock
   ) where
 
@@ -97,25 +97,25 @@ insertAShelleyBlock tracer blk tip = do
                     , DB.blockSlotNo     = Just $ slotNumber
                     , DB.blockBlockNo    = Just $ blockNumber
                     , DB.blockPrevious   = Just pbid
-                    , DB.blockMerkelRoot = Nothing -- Not sure how to translate this.
-                    -- Just $ unCryptoHash (blockMerkelRoot blk)
+                    , DB.blockMerkelRoot = Nothing -- This doesn't exist in Byron?
                     , DB.blockSlotLeader = slid
                     , DB.blockSize       = fromIntegral blockHeaderSize
                     , DB.blockTime       = DB.slotUtcTime meta slotNumber
                     , DB.blockTxCount    = fromIntegral txsCount
                     -- Shelley specific
-                    , DB.blockBlockIssuer = Nothing
+                    , DB.blockBlockIssuer = Just . Crypto.abstractHashToBytes . Crypto.serializeCborHash . SL.bheaderVk . SL.bhbody . SL.bheader $ blk
                     , DB.blockVrfKey = Nothing
-                    , DB.blockNonceVrf = Nothing
-                    , DB.blockLeaderVrf = Nothing
-                    , DB.blockOpCert = Nothing
-                    , DB.blockProtoVersion = Nothing
+                    --Just . Crypto.abstractHashToBytes . Crypto.serializeCborHash . SL.bheaderVrfVk . SL.bhbody . SL.bheader $ blk
+                    , DB.blockNonceVrf = Just . Crypto.abstractHashToBytes . Crypto.serializeCborHash . SL.bheaderEta . SL.bhbody . SL.bheader $ blk
+                    , DB.blockLeaderVrf = Just . Crypto.abstractHashToBytes . Crypto.serializeCborHash . SL.bheaderL . SL.bhbody . SL.bheader $ blk
+                    , DB.blockOpCert = Just . Crypto.abstractHashToBytes . Crypto.serializeCborHash . SL.bheaderOCert . SL.bhbody . SL.bheader $ blk
+                    , DB.blockProtoVersion = Just . Crypto.abstractHashToBytes . Crypto.serializeCborHash . SL.bprotver . SL.bhbody . SL.bheader $ blk
                     }
 
     -- Insert the transaction
     _ <-    mapMExceptT
                 (\tx -> insertTx tracer blkId tx)
-                (toList . getTxSequence . SL.bbody $ blk)
+                (zip (toList . getTxSequence . SL.bbody $ blk) [0..])
 
     liftIO $ do
       let followingClosely = withOrigin 0 unBlockNo (getTipBlockNo tip) - blockNumber < 20
@@ -174,9 +174,9 @@ getAllPoolCertificates certs = do
 
 insertTx
     :: forall crypto m. (Crypto crypto, MonadIO m)
-    => Trace IO Text -> DB.BlockId -> Tx crypto
+    => Trace IO Text -> DB.BlockId -> (Tx crypto, Word64)
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertTx tracer blkId tx = do
+insertTx tracer blkId (tx, blockIndex) = do
     let txFee = calculateTxFee tx
 
     -- Insert transaction and get txId from the DB.
@@ -184,6 +184,7 @@ insertTx tracer blkId tx = do
               DB.Tx
                 { DB.txHash = Crypto.abstractHashToBytes . Crypto.serializeCborHash $ tx
                 , DB.txBlock = blkId
+                , DB.txBlockIndex = blockIndex
                 , DB.txOutSum = vfValue txFee
                 , DB.txFee = vfFee txFee
                 -- Would be really nice to have a way to get the transaction size
@@ -208,7 +209,7 @@ insertTx tracer blkId tx = do
                                 Just certs  -> certs
 
     -- Finally, insert the pool certificates.
-    insertPoolCertificates tracer poolCertificates
+    insertPoolCertificates tracer txId poolCertificates
 
 
 insertTxOut
@@ -242,12 +243,18 @@ insertTxIn _tracer txInId (TxIn (TxId txId) inIndex) = do
               }
 
 insertPoolCertificates
-    :: forall m. --(MonadIO m)
-    Trace IO Text -> [PoolMetaData]
+    :: forall m. (MonadIO m)
+    => Trace IO Text -> DB.TxId -> [PoolMetaData]
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertPoolCertificates = panic "Now it's time to panic!"
+insertPoolCertificates _tracer txId poolMetaDatas = do
+  void . lift $ forM poolMetaDatas $ \poolMetaData -> DB.insertPoolOnData $
+            DB.PoolOnData
+              { DB.poolOnDataTxId = txId
+              , DB.poolOnDataPoolUrl = show $ _poolMDUrl poolMetaData
+              , DB.poolOnDataPoolHash = _poolMDHash poolMetaData
+              }
 
--- -----------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 
 -- Trivial local data type for use in place of a tuple.
 data ValueFee = ValueFee
