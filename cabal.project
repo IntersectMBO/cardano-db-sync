@@ -1,3 +1,5 @@
+index-state: 2020-04-01T00:00:00Z
+
 packages:
   cardano-db
   cardano-db/test
