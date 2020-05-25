@@ -1,9 +1,12 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Cardano.DbSync.Database
   ( DbAction (..)
   , DbActionQueue (..)
+  , MkDbAction (..)
   , lengthDbActionQueue
   , newDbActionQueue
   , runDbStartup
@@ -31,19 +34,38 @@ import           Cardano.DbSync.Plugin
 import           Cardano.DbSync.Util
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
+import qualified Ouroboros.Consensus.Shelley.Protocol as Shelley
+import qualified Ouroboros.Consensus.Shelley.Ledger as Shelley
 import           Ouroboros.Network.Block (Point (..), Tip)
 
 import qualified System.Metrics.Prometheus.Metric.Gauge as Gauge
 
+type ShelleyBlock = Shelley.ShelleyBlock Shelley.TPraosStandardCrypto
 
 data NextState
   = Continue
   | Done
   deriving Eq
 
+
+class MkDbAction blk where
+  mkDbApply :: blk -> Tip blk -> DbAction
+  mkDbRollback :: Point blk -> DbAction
+
+instance MkDbAction ByronBlock where
+  mkDbApply blk tip = DbApplyByronBlock blk tip
+  mkDbRollback point = DbRollBackToByronPoint point
+
+instance MkDbAction ShelleyBlock where
+  mkDbApply = panic "mkDbApply ShelleyBlock not yet implemented"
+  mkDbRollback = panic "mkDbRollback ShelleyBlock not yet implemented"
+
+
 data DbAction
-  = DbApplyBlock !ByronBlock !(Tip ByronBlock)
-  | DbRollBackToPoint !(Point ByronBlock)
+  = DbApplyByronBlock !ByronBlock !(Tip ByronBlock)
+  | DbApplyShelleyBlock !ShelleyBlock !(Tip ShelleyBlock)
+  | DbRollBackToByronPoint !(Point ByronBlock)
+  | DbRollBackToShelleyPoint !(Point ShelleyBlock)
   | DbFinish
 
 newtype DbActionQueue = DbActionQueue
@@ -101,7 +123,7 @@ runActions trce plugin actions = do
       case spanDbApply xs of
         ([], DbFinish:_) -> do
             pure Done
-        ([], DbRollBackToPoint pt:ys) -> do
+        ([], DbRollBackToByronPoint pt:ys) -> do
             runRollbacks trce plugin pt
             dbAction Continue ys
         (ys, zs) -> do
@@ -114,7 +136,7 @@ checkDbState :: Trace IO Text -> [DbAction] -> ExceptT DbSyncNodeError IO NextSt
 checkDbState trce xs =
     case filter isMainBlockApply (reverse xs) of
       [] -> pure Continue
-      (DbApplyBlock blk _tip : _) -> validateBlock blk
+      (DbApplyByronBlock blk _tip : _) -> validateBlock blk
       _ -> pure Continue
   where
     validateBlock :: ByronBlock -> ExceptT DbSyncNodeError IO NextState
@@ -138,11 +160,13 @@ checkDbState trce xs =
     isMainBlockApply :: DbAction -> Bool
     isMainBlockApply dba =
       case dba of
-        DbApplyBlock blk _tip ->
+        DbApplyByronBlock blk _tip ->
           case byronBlockRaw blk of
             Ledger.ABOBBlock _ -> True
             Ledger.ABOBBoundary _ -> False
-        DbRollBackToPoint _ -> False
+        DbApplyShelleyBlock {} -> True
+        DbRollBackToByronPoint {} -> False
+        DbRollBackToShelleyPoint {} -> False
         DbFinish -> False
 
 runRollbacks
@@ -204,5 +228,5 @@ blockingFlushDbActionQueue (DbActionQueue queue) = do
 spanDbApply :: [DbAction] -> ([(ByronBlock, Tip ByronBlock)], [DbAction])
 spanDbApply lst =
   case lst of
-    (DbApplyBlock b t:xs) -> let (ys, zs) = spanDbApply xs in ((b, t):ys, zs)
+    (DbApplyByronBlock b t:xs) -> let (ys, zs) = spanDbApply xs in ((b, t):ys, zs)
     xs -> ([], xs)
