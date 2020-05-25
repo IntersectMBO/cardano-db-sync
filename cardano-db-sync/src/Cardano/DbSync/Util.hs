@@ -48,7 +48,7 @@ import qualified Cardano.Chain.Slotting as Ledger
 import qualified Cardano.Chain.Update as Ledger
 import qualified Cardano.Chain.UTxO as Ledger
 
-import           Shelley.Spec.Ledger.TxData
+import           Shelley.Spec.Ledger.Address
 import           Ouroboros.Consensus.Shelley.Ledger (Crypto)
 
 import           Control.Exception.Lifted (SomeException, catch)

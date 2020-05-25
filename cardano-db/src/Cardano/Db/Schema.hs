@@ -136,6 +136,7 @@ share
     deriving Eq
     deriving Show
 
+  -- Pool Online Data. The online data from the pool that is stored in the actual blockchain.
   -- The bit of the pool data on the chain.
   -- This doesn't leave the internal database.
   PoolOnData
