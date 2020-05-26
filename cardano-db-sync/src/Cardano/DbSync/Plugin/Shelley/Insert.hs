@@ -48,12 +48,6 @@ import           Ouroboros.Network.Block (BlockNo (..), Tip, SlotNo (..), getTip
 import           Ouroboros.Network.Point (withOrigin)
 
 
-mkSlotLeader :: Crypto crypto => SL.Block crypto -> DB.SlotLeader
-mkSlotLeader blk =
-  let slHash = Crypto.abstractHashToBytes . Crypto.serializeCborHash . SL.bheaderVk . SL.bhbody . SL.bheader $ blk
-      slName = "SlotLeader-" <> Text.decodeUtf8 (Base16.encode $ BS.take 8 slHash)
-  in DB.SlotLeader slHash slName
-
 insertShelleyBlock
     :: Crypto crypto
     => Trace IO Text
@@ -76,18 +70,6 @@ insertAShelleyBlock tracer blk tip = do
     pbid <- liftLookupFail "insertABlock" $ DB.queryBlockId blockId
 
     let slotsPerEpoch = 10 * DB.metaProtocolConst meta
-
-    let blockHash :: ByteString
-        blockHash = Crypto.abstractHashToBytes . Crypto.serializeCborHash . SL.bhash . SL.bhbody . SL.bheader $ blk
-
-    let blockHeaderSize :: Int
-        blockHeaderSize = SL.bHeaderSize . SL.bheader $ blk
-
-    let getTxSequence :: SL.TxSeq crypto -> StrictSeq (Tx crypto)
-        getTxSequence (SL.TxSeq txSeq) = txSeq
-
-    let txsCount :: Int
-        txsCount = length . getTxSequence . SL.bbody $ blk
 
     slid <- lift . DB.insertSlotLeader $ mkSlotLeader blk
     blkId <- lift . DB.insertBlock $
@@ -132,6 +114,18 @@ insertAShelleyBlock tracer blk tip = do
         , ", hash ", renderByteArray blockHash
         ]
   where
+
+    blockHash :: ByteString
+    blockHash = Crypto.abstractHashToBytes . Crypto.serializeCborHash . SL.bhash . SL.bhbody . SL.bheader $ blk
+
+    blockHeaderSize :: Int
+    blockHeaderSize = SL.bHeaderSize . SL.bheader $ blk
+
+    getTxSequence :: SL.TxSeq crypto -> StrictSeq (Tx crypto)
+    getTxSequence (SL.TxSeq txSeq) = txSeq
+
+    txsCount :: Int
+    txsCount = length . getTxSequence . SL.bbody $ blk
 
     slotNumber :: Word64
     slotNumber = unSlotNo . SL.bheaderSlotNo . SL.bhbody . SL.bheader $ blk
@@ -277,6 +271,12 @@ calculateTxFee tx =
         txOutTotal = sumCoins $ map coinFromTxOut (_outputs $ _body tx)
     in
         ValueFee (fromIntegral txOutTotal) (fromIntegral fee)
+
+mkSlotLeader :: Crypto crypto => SL.Block crypto -> DB.SlotLeader
+mkSlotLeader blk =
+  let slHash = Crypto.abstractHashToBytes . Crypto.serializeCborHash . SL.bheaderVk . SL.bhbody . SL.bheader $ blk
+      slName = "SlotLeader-" <> Text.decodeUtf8 (Base16.encode $ BS.take 8 slHash)
+  in DB.SlotLeader slHash slName
 
 -- | An 'ExceptT' version of 'mapM' which will 'left' the first 'Left' it finds.
 mapMExceptT :: Monad m => (a -> ExceptT e m b) -> [a] -> ExceptT e m [b]
