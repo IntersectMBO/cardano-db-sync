@@ -79,33 +79,29 @@ import           Network.Mux (MuxTrace, WithMuxBearer)
 import           Ouroboros.Network.Driver.Simple (runPipelinedPeer)
 import           Network.TypedProtocol.Pipelined (Nat(Zero, Succ))
 
-import           Ouroboros.Consensus.Block.Abstract (getCodecConfig)
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..), ByronHash (..), GenTx)
 import           Ouroboros.Consensus.Byron.Ledger.NetworkProtocolVersion (
                     ByronNodeToClientVersion(..) )
 import           Ouroboros.Consensus.Cardano (Protocol (..), protocolInfo)
-import           Ouroboros.Consensus.Config (TopLevelConfig, configBlock)
-import           Ouroboros.Consensus.Network.NodeToClient (clientCodecs,
+import           Ouroboros.Consensus.Config (TopLevelConfig)
+import           Ouroboros.Consensus.Network.NodeToClient ( ClientCodecs,
                     cChainSyncCodec, cStateQueryCodec, cTxSubmissionCodec)
 
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
-import           Ouroboros.Consensus.Node.NetworkProtocolVersion (
-                    nodeToClientProtocolVersion , supportedNodeToClientVersions)
 import           Ouroboros.Consensus.Node.ProtocolInfo (pInfoConfig)
-import           Ouroboros.Consensus.Node.Run (nodeNetworkMagic)
 
 import           Ouroboros.Network.Block (BlockNo (..), Point (..), SlotNo (..), Tip,
                     genesisPoint, getTipBlockNo,
                     blockNo)
-import           Ouroboros.Network.Mux (AppType (..), MuxPeer (..), OuroborosApplication,
+import           Ouroboros.Network.Mux (AppType (..), MuxPeer (..),
                     RunMiniProtocol (..))
 import           Ouroboros.Network.NodeToClient (IOManager, ClientSubscriptionParams (..),
                     ConnectionId, ErrorPolicyTrace (..), Handshake, LocalAddress,
                     NetworkSubscriptionTracers (..), NodeToClientProtocols (..),
-                    NodeToClientVersion (..) , NodeToClientVersionData (..),
-                    TraceSendRecv, WithAddr (..), ncSubscriptionWorker,
-                    networkErrorPolicies, newNetworkMutableState, withIOManager, localSnocket,
-                    localStateQueryPeerNull, versionedNodeToClientProtocols)
+                    NodeToClientVersion (..) ,
+                    TraceSendRecv, WithAddr (..),
+                    networkErrorPolicies, withIOManager, localSnocket,
+                    localStateQueryPeerNull)
 
 import qualified Ouroboros.Network.Point as Point
 import           Ouroboros.Network.Point (withOrigin)
@@ -117,12 +113,13 @@ import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined (ChainSync
 import           Ouroboros.Network.Protocol.ChainSync.PipelineDecision (pipelineDecisionLowHighMark,
                         PipelineDecision (..), runPipelineDecision, MkPipelineDecision)
 import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
-import           Ouroboros.Network.Protocol.Handshake.Version (DictVersion, Versions, foldMapVersions)
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Client (LocalTxSubmissionClient (..),
                     LocalTxClientStIdle (..), localTxSubmissionClientPeer)
 import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
 import qualified Ouroboros.Network.Snocket as Snocket
 import           Ouroboros.Network.Subscription (SubscriptionTrace)
+
+import           Cardano.Client.Subscription (subscribe)
 
 import           Prelude (String)
 import qualified Prelude
@@ -181,7 +178,6 @@ mkTracer enc =
     then pure Logging.nullTracer
     else liftIO $ Logging.setupTrace (Right $ encLoggingConfig enc) "db-sync-node"
 
-
 mkConsensusConfig :: Genesis.Config -> TopLevelConfig ByronBlock
 mkConsensusConfig gc =
   pInfoConfig . protocolInfo $ ProtocolRealPBFT gc Nothing (Update.ProtocolVersion 0 2 0)
@@ -207,60 +203,50 @@ runDbSyncNodeNodeClient
     -> IO Void
 runDbSyncNodeNodeClient iomgr trce plugin topLevelConfig (SocketPath socketPath) = do
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
-  networkState <- newNetworkMutableState
   txv <- newEmptyTMVarM @_ @(GenTx blk)
-  ncSubscriptionWorker
+  subscribe
     (localSnocket iomgr socketPath)
-    -- TODO: these tracers should be configurable for debugging purposes.
-    NetworkSubscriptionTracers {
+    topLevelConfig
+    networkSubscriptionTracers
+    clientSubscriptionParams
+    (dbSyncProtocols trce plugin txv)
+  where
+    clientSubscriptionParams = ClientSubscriptionParams {
+        cspAddress = Snocket.localAddressFromPath socketPath,
+        cspConnectionAttemptDelay = Nothing,
+        cspErrorPolicies = networkErrorPolicies <> consensusErrorPolicy (Proxy @blk)
+        }
+
+    networkSubscriptionTracers = NetworkSubscriptionTracers {
         nsMuxTracer = muxTracer,
         nsHandshakeTracer = handshakeTracer,
         nsErrorPolicyTracer = errorPolicyTracer,
         nsSubscriptionTracer = subscriptionTracer
         }
-    networkState
-    ClientSubscriptionParams {
-        cspAddress = Snocket.localAddressFromPath socketPath,
-        cspConnectionAttemptDelay = Nothing,
-        cspErrorPolicies = networkErrorPolicies <> consensusErrorPolicy (Proxy @blk)
-        }
-    (dbSyncVersions txv)
-  where
+
     errorPolicyTracer :: Tracer IO (WithAddr LocalAddress ErrorPolicyTrace)
     errorPolicyTracer = toLogObject $ appendName "ErrorPolicy" trce
+
     muxTracer :: Show peer => Tracer IO (WithMuxBearer peer MuxTrace)
     muxTracer = toLogObject $ appendName "Mux" trce
+
     subscriptionTracer :: Tracer IO (Identity (SubscriptionTrace LocalAddress))
     subscriptionTracer = toLogObject $ appendName "Subscription" trce
+
     handshakeTracer :: Tracer IO (WithMuxBearer
                           (ConnectionId LocalAddress)
                           (TraceSendRecv (Handshake NodeToClientVersion CBOR.Term)))
     handshakeTracer = toLogObject $ appendName "Handshake" trce
 
-    dbSyncVersions
-        :: StrictTMVar IO (GenTx ByronBlock)
-        -> Versions
-             NodeToClientVersion
-             DictVersion
-             (ConnectionId LocalAddress
-                 -> OuroborosApplication 'InitiatorApp BSL.ByteString IO () Void)
-    dbSyncVersions txv = foldMapVersions
-        (\v ->
-          versionedNodeToClientProtocols
-            (nodeToClientProtocolVersion (Proxy @blk) v)
-            (NodeToClientVersionData { networkMagic = nodeNetworkMagic topLevelConfig })
-            (dbSyncProtocols v trce plugin topLevelConfig txv)
-        )
-        (supportedNodeToClientVersions (Proxy @blk))
-
 dbSyncProtocols
-  :: ByronNodeToClientVersion
-  -> Trace IO Text
+  :: Trace IO Text
   -> DbSyncNodePlugin
-  -> TopLevelConfig ByronBlock
   -> StrictTMVar IO (GenTx ByronBlock)
+  -> ByronNodeToClientVersion
+  -> Ouroboros.Consensus.Network.NodeToClient.ClientCodecs ByronBlock IO
   -> NodeToClientProtocols 'InitiatorApp BSL.ByteString IO () Void
-dbSyncProtocols byronVersion trce plugin topLevelConfig txv =
+
+dbSyncProtocols trce plugin txv _byronVersion codecs =
     NodeToClientProtocols {
           localChainSyncProtocol = localChainSyncProtocol
         , localTxSubmissionProtocol = localTxSubmissionProtocol
@@ -269,8 +255,6 @@ dbSyncProtocols byronVersion trce plugin topLevelConfig txv =
   where
     localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock)))
     localChainSyncTracer = toLogObject $ appendName "ChainSync" trce
-
-    codecs = clientCodecs (getCodecConfig $ configBlock topLevelConfig) byronVersion
 
     localChainSyncProtocol :: RunMiniProtocol 'InitiatorApp BSL.ByteString IO () Void
     localChainSyncProtocol = InitiatorProtocolOnly $ MuxPeerRaw $ \channel ->
@@ -304,7 +288,6 @@ dbSyncProtocols byronVersion trce plugin topLevelConfig txv =
         Logging.nullTracer
         (cStateQueryCodec codecs)
         localStateQueryPeerNull
-
 
 logDbState :: Trace IO Text -> IO ()
 logDbState trce = do

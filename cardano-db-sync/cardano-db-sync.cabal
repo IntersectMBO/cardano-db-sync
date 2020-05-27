@@ -50,6 +50,7 @@ library
                       , base16-bytestring
                       , bytestring
                       , cardano-binary
+                      , cardano-client
                       , cardano-config
                       , cardano-crypto
                       , cardano-crypto-wrapper

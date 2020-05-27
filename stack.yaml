@@ -133,6 +133,7 @@ extra-deps:
       - ouroboros-network-framework
       - ouroboros-network-testing
       - typed-protocols-examples
+      - cardano-client
 
 nix:
   pure: true
