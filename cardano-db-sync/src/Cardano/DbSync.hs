@@ -45,8 +45,6 @@ import           Cardano.Shell.Lib (GeneralException (ConfigurationError))
 
 import           Cardano.Slotting.Slot (WithOrigin (..))
 
-import           Cardano.TracingOrphanInstances.Network ()
-
 import qualified Codec.CBOR.Term as CBOR
 import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, StrictTMVar,
                     atomically, newEmptyTMVarM, readTMVar)
@@ -80,11 +78,9 @@ import           Ouroboros.Network.Driver.Simple (runPipelinedPeer)
 import           Network.TypedProtocol.Pipelined (Nat(Zero, Succ))
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..), ByronHash (..), GenTx)
-import           Ouroboros.Consensus.Byron.Ledger.NetworkProtocolVersion (
-                    ByronNodeToClientVersion(..) )
 import           Ouroboros.Consensus.Cardano (Protocol (..), protocolInfo)
 import           Ouroboros.Consensus.Config (TopLevelConfig)
-import           Ouroboros.Consensus.Network.NodeToClient ( ClientCodecs,
+import           Ouroboros.Consensus.Network.NodeToClient (ClientCodecs,
                     cChainSyncCodec, cStateQueryCodec, cTxSubmissionCodec)
 
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
@@ -209,7 +205,7 @@ runDbSyncNodeNodeClient iomgr trce plugin topLevelConfig (SocketPath socketPath)
     topLevelConfig
     networkSubscriptionTracers
     clientSubscriptionParams
-    (dbSyncProtocols trce plugin txv)
+    (const $ dbSyncProtocols trce plugin txv)
   where
     clientSubscriptionParams = ClientSubscriptionParams {
         cspAddress = Snocket.localAddressFromPath socketPath,
@@ -242,11 +238,10 @@ dbSyncProtocols
   :: Trace IO Text
   -> DbSyncNodePlugin
   -> StrictTMVar IO (GenTx ByronBlock)
-  -> ByronNodeToClientVersion
-  -> Ouroboros.Consensus.Network.NodeToClient.ClientCodecs ByronBlock IO
+  -> ClientCodecs ByronBlock IO
+  -> ConnectionId LocalAddress
   -> NodeToClientProtocols 'InitiatorApp BSL.ByteString IO () Void
-
-dbSyncProtocols trce plugin txv _byronVersion codecs =
+dbSyncProtocols trce plugin txv codecs _connectionId  =
     NodeToClientProtocols {
           localChainSyncProtocol = localChainSyncProtocol
         , localTxSubmissionProtocol = localTxSubmissionProtocol
