@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE FlexibleContexts      #-}
@@ -20,6 +21,7 @@ import           Cardano.BM.Tracing
 
 import           Data.Aeson (ToJSON(..), Value (..), (.=))
 import           Data.Text (Text)
+import qualified Data.Text as Text
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock)
 import           Ouroboros.Consensus.Util.Condense (Condense, condense)
@@ -53,6 +55,8 @@ import           Ouroboros.Network.TxSubmission.Inbound
 import           Ouroboros.Network.TxSubmission.Outbound
                    (TraceTxSubmissionOutbound (..))
 
+import           Prelude (String, show)
+
 import qualified Network.Socket as Socket (SockAddr)
 import           Network.Mux (WithMuxBearer (..), MuxTrace (..))
 
@@ -71,7 +75,7 @@ showPoint verb pt =
   trim = case verb of
     MinimalVerbosity -> take 7
     NormalVerbosity -> take 7
-    MaximalVerbosity -> id
+    MaximalVerbosity -> identity
 
 
 
@@ -269,7 +273,7 @@ instance HasSeverityAnnotation (Identity (SubscriptionTrace LocalAddress)) where
 instance Transformable Text IO (Identity (SubscriptionTrace LocalAddress)) where
   trTransformer = trStructuredText
 instance HasTextFormatter (Identity (SubscriptionTrace LocalAddress)) where
-  formatText _ = pack . show . toList
+  formatText _ = Text.pack . show . toList
 
 
 instance ToObject (Identity (SubscriptionTrace LocalAddress)) where
@@ -313,70 +317,70 @@ instance HasSeverityAnnotation (WithMuxBearer peer MuxTrace) where
 instance Transformable Text IO NtN.HandshakeTr where
   trTransformer = trStructuredText
 instance HasTextFormatter NtN.HandshakeTr where
-  formatText _ = pack . show . toList
+  formatText _ = Text.pack . show . toList
 
 
 instance Transformable Text IO NtC.HandshakeTr where
   trTransformer = trStructuredText
 instance HasTextFormatter NtC.HandshakeTr where
-  formatText _ = pack . show . toList
+  formatText _ = Text.pack . show . toList
 
 
 instance Transformable Text IO NtN.AcceptConnectionsPolicyTrace where
   trTransformer = trStructuredText
 instance HasTextFormatter NtN.AcceptConnectionsPolicyTrace where
-  formatText _ = pack . show . toList
+  formatText _ = Text.pack . show . toList
 
 
 instance Show peer
       => Transformable Text IO [TraceLabelPeer peer (FetchDecision [Point header])] where
   trTransformer = trStructuredText
 instance HasTextFormatter [TraceLabelPeer peer (FetchDecision [Point header])] where
-  formatText _ = pack . show . toList
+  formatText _ = Text.pack . show . toList
 
 
 instance (Show peer, HasPrivacyAnnotation a, HasSeverityAnnotation a, ToObject a)
       => Transformable Text IO (TraceLabelPeer peer a) where
   trTransformer = trStructuredText
 instance HasTextFormatter (TraceLabelPeer peer a) where
-  formatText _ = pack . show . toList
+  formatText _ = Text.pack . show . toList
 
 
 instance Transformable Text IO (TraceTxSubmissionInbound txid tx) where
   trTransformer = trStructuredText
 instance HasTextFormatter (TraceTxSubmissionInbound txid tx) where
-  formatText _ = pack . show . toList
+  formatText _ = Text.pack . show . toList
 
 
 instance (Show tx, Show txid)
       => Transformable Text IO (TraceTxSubmissionOutbound txid tx) where
   trTransformer = trStructuredText
 instance HasTextFormatter (TraceTxSubmissionOutbound txid tx) where
-  formatText _ = pack . show . toList
+  formatText _ = Text.pack . show . toList
 
 
 instance Show addr => Transformable Text IO (WithAddr addr ErrorPolicyTrace) where
   trTransformer = trStructuredText
 instance HasTextFormatter (WithAddr addr ErrorPolicyTrace) where
-  formatText _ = pack . show . toList
+  formatText _ = Text.pack . show . toList
 
 
 instance Transformable Text IO (WithDomainName (SubscriptionTrace Socket.SockAddr)) where
   trTransformer = trStructuredText
 instance HasTextFormatter (WithDomainName (SubscriptionTrace Socket.SockAddr)) where
-  formatText _ = pack . show . toList
+  formatText _ = Text.pack . show . toList
 
 
 instance Transformable Text IO (WithDomainName DnsTrace) where
   trTransformer = trStructuredText
 instance HasTextFormatter (WithDomainName DnsTrace) where
-  formatText _ = pack . show . toList
+  formatText _ = Text.pack . show . toList
 
 
 instance Transformable Text IO (WithIPList (SubscriptionTrace Socket.SockAddr)) where
   trTransformer = trStructuredText
 instance HasTextFormatter (WithIPList (SubscriptionTrace Socket.SockAddr)) where
-  formatText _ = pack . show . toList
+  formatText _ = Text.pack . show . toList
 
 
 instance (Show peer)
@@ -385,8 +389,8 @@ instance (Show peer)
 instance (Show peer)
       => HasTextFormatter (WithMuxBearer peer MuxTrace) where
   formatText (WithMuxBearer peer ev) = \_o ->
-    "Bearer on " <> pack (show peer)
-   <> " event: " <> pack (show ev)
+    "Bearer on " <> Text.pack (show peer)
+   <> " event: " <> Text.pack (show ev)
 
 
 --
@@ -404,12 +408,12 @@ instance ( Condense (HeaderHash blk)
   toObject _verb (AnyMessage (MsgBlock blk)) =
     mkObject
       [ "kind" .= String "MsgBlock"
-      , "blkid" .= String (pack . condense $ blockHash blk)
+      , "blkid" .= String (Text.pack . condense $ blockHash blk)
       , "txids" .= toJSON (presentTx <$> extractTxs blk)
       ]
    where
      presentTx :: GenTx blk -> Value
-     presentTx =  String . pack . condense . txId
+     presentTx =  String . Text.pack . condense . txId
   toObject _v (AnyMessage MsgRequestRange{}) =
     mkObject [ "kind" .= String "MsgRequestRange" ]
   toObject _v (AnyMessage MsgStartBatch{}) =
@@ -425,10 +429,10 @@ instance ( Condense (HeaderHash blk)
 instance ToObject (FetchDecision [Point header]) where
   toObject _verb (Left decline) =
     mkObject [ "kind" .= String "FetchDecision declined"
-             , "declined" .= String (pack $ show $ decline) ]
+             , "declined" .= String (Text.pack $ show $ decline) ]
   toObject _verb (Right results) =
     mkObject [ "kind" .= String "FetchDecision results"
-             , "length" .= String (pack $ show $ length results) ]
+             , "length" .= String (Text.pack $ show $ length results) ]
 
 
 instance ToObject NtC.HandshakeTr where
@@ -462,12 +466,12 @@ instance (Show txid, Show tx)
   toObject _verb (AnyMessage (MsgRequestTxs txids)) =
     mkObject
       [ "kind" .= String "MsgRequestTxs"
-      , "txIds" .= String (pack $ show txids)
+      , "txIds" .= String (Text.pack $ show txids)
       ]
   toObject _verb (AnyMessage (MsgReplyTxs txs)) =
     mkObject
       [ "kind" .= String "MsgReplyTxs"
-      , "txs" .= String (pack $ show txs)
+      , "txs" .= String (Text.pack $ show txs)
       ]
   toObject _verb (AnyMessage (MsgRequestTxIds _ _ _)) =
     mkObject
@@ -549,7 +553,7 @@ instance (Show txid, Show tx)
   toObject MaximalVerbosity (TraceTxSubmissionOutboundRecvMsgRequestTxs txids) =
     mkObject
       [ "kind" .= String "TraceTxSubmissionOutboundRecvMsgRequestTxs"
-      , "txIds" .= String (pack $ show txids)
+      , "txIds" .= String (Text.pack $ show txids)
       ]
   toObject _verb (TraceTxSubmissionOutboundRecvMsgRequestTxs _txids) =
     mkObject
@@ -558,7 +562,7 @@ instance (Show txid, Show tx)
   toObject MaximalVerbosity (TraceTxSubmissionOutboundSendMsgReplyTxs txs) =
     mkObject
       [ "kind" .= String "TraceTxSubmissionOutboundSendMsgReplyTxs"
-      , "txs" .= String (pack $ show txs)
+      , "txs" .= String (Text.pack $ show txs)
       ]
   toObject _verb (TraceTxSubmissionOutboundSendMsgReplyTxs _txs) =
     mkObject
