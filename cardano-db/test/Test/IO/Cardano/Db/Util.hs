@@ -11,6 +11,7 @@ module Test.IO.Cardano.Db.Util
   , mkMerkelRoot
   , mkTxHash
   , mkTxs
+  , mkTxIn
   , mkTxOut
   , testSlotLeader
   , unBlockId
@@ -77,6 +78,12 @@ mkTxs blkId count =
 testSlotLeader :: SlotLeader
 testSlotLeader =
   SlotLeader (BS.pack . take 28 $ "test slot leader" ++ replicate 28 ' ') "Dummy test slot leader"
+
+-- TODO(KS): Maybe it would be wise to differentiate @TxId@ from input and output with types?
+-- This is the one situation where you don't want to be one off.
+mkTxIn :: TxId -> TxId -> TxIn
+mkTxIn txInId txOutId =
+  TxIn txInId 0 txOutId 0
 
 mkTxOut :: BlockId -> TxId -> TxOut
 mkTxOut blkId txId =

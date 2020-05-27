@@ -92,6 +92,7 @@ share
 
   TxIn
     txInId              TxId                -- The transaction where this is used as an input.
+    txIndex             Word16              sqltype=txindex -- Index within the Tx
     txOutId             TxId                -- The transaction where this was created as an output.
     txOutIndex          Word16              sqltype=txindex
     UniqueTxin          txOutId txOutIndex

@@ -105,7 +105,7 @@ createAndInsertBlocks blockCount =
                 -- they are associcated with are deleted.
 
                 txId <- head <$> mapM insertTx (mkTxs blkId 8)
-                void $ insertTxIn (TxIn txId txOutId 0)
+                void $ insertTxIn (mkTxIn txId txOutId)
                 void $ insertTxOut (mkTxOut blkId txId)
             _ -> pure ()
         pure (indx + 1, Just blkId, Just newBlock, newMTxOutId)
