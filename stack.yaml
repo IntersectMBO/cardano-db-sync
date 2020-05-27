@@ -1,4 +1,4 @@
-resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/594f587bfab626a405ac532112cc0b942ad3efdb/snapshot.yaml
+resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/e0257be9d745a04f85ab8287a48a9c193acafec8/snapshot.yaml
 compiler: ghc-8.6.5
 
 allow-newer: true
@@ -58,24 +58,19 @@ extra-deps:
   - time-compat-1.9.2.2
   - quiet-0.2
 
-  - git: https://github.com/input-output-hk/cardano-node
-    commit: c1b0ab82ad237dac2c8c22d4089744046a2a1452
-    subdirs:
-      - cardano-config
-
   - git: https://github.com/input-output-hk/cardano-shell
     commit: 601bb4324c258e3c8cbd2d532e5696fd09e2582e
     subdirs:
       - cardano-shell
 
   - git: https://github.com/input-output-hk/cardano-prelude
-    commit: 594f587bfab626a405ac532112cc0b942ad3efdb
+    commit: e0257be9d745a04f85ab8287a48a9c193acafec8
     subdirs:
       - .
       - test
 
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: 20309d5aa56b0ae5fd982465297a1d87aa5658a1
+    commit: 71df15f7b888d2671f619cc632080aaaaca48087
     subdirs:
       - contra-tracer
       - iohk-monitoring
@@ -87,7 +82,7 @@ extra-deps:
       - tracer-transformers
 
   - git: https://github.com/input-output-hk/cardano-base
-    commit: 9b82346b78e212fcd3e795faf9dd7f3266ab7297
+    commit: 8061c5dd00f7aad134b18a4e6818879641f8589f
     subdirs:
       - binary
       - binary/test
@@ -98,7 +93,7 @@ extra-deps:
     commit: 26d35ad52fe9ade3391532dbfeb2f416f07650bc
 
   - git: https://github.com/input-output-hk/cardano-ledger-specs
-    commit: b687fa55369f480cb134c007e534662bef961cea
+    commit: 37ea0bb59ff2cc7f6690240f8c4d55e15cd30f2c
     subdirs:
       - semantics/executable-spec
       - byron/ledger/executable-spec
@@ -116,7 +111,7 @@ extra-deps:
       - crypto/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: 9d9754c9ddcfff82b27c371a545aa4680d86d996
+    commit: ef38818aa434aaafb82bc7ae4d1fee11523c3ad8
     subdirs:
       - io-sim
       - io-sim-classes
