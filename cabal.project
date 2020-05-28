@@ -345,3 +345,10 @@ source-repository-package
   tag: ef38818aa434aaafb82bc7ae4d1fee11523c3ad8
   --sha256: 04ldvkqwy48fh974761q2asmcn163awsrbk9xfy4hm67n4hafkjb
   subdir: typed-protocols-examples
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/cardano-node
+  tag: 4b71fc82fa523c51579efbc83f58e3cb850360ad
+  --sha256: 11970azsz93dmlpg2qy1igijsq1r188skny6b1iw6djymq4r969j
+  subdir: cardano-config
