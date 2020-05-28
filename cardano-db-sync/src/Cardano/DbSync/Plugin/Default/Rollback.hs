@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Cardano.DbSync.Plugin.Default.Rollback
   ( rollbackToPoint
+  , unsafeRollback
   ) where
 
 import           Cardano.Prelude
@@ -24,7 +25,7 @@ import           Cardano.DbSync.Error
 import           Cardano.DbSync.Util
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock)
-import           Ouroboros.Network.Block (Point)
+import           Ouroboros.Network.Block (Point, SlotNo (..))
 
 
 rollbackToPoint :: Trace IO Text -> Point ByronBlock -> IO (Either DbSyncNodeError ())
@@ -51,3 +52,9 @@ rollbackToPoint trce point =
                             , ", hash ", renderAbstractHash hash
                             ]
                 void . lift $ DB.deleteCascadeSlotNo slotNo
+
+-- For testing and debugging.
+unsafeRollback :: Trace IO Text -> SlotNo -> IO (Either DbSyncNodeError ())
+unsafeRollback trce (SlotNo slotNo) = do
+  logInfo trce $ "Forced rollback to slot " <> textShow slotNo
+  Right <$> DB.runDbNoLogging (void $ DB.deleteCascadeSlotNo slotNo)

@@ -68,6 +68,7 @@ import           Cardano.DbSync.Genesis
 import           Cardano.DbSync.Metrics
 import           Cardano.DbSync.Plugin (DbSyncNodePlugin (..))
 import           Cardano.DbSync.Plugin.Default (defDbSyncNodePlugin)
+import           Cardano.DbSync.Plugin.Default.Rollback (unsafeRollback)
 import           Cardano.DbSync.Util
 import           Cardano.DbSync.Tracing.ToObjectOrphans ()
 
@@ -130,6 +131,7 @@ data DbSyncNodeParams = DbSyncNodeParams
   , enpGenesisFile :: !GenesisFile
   , enpSocketPath :: !SocketPath
   , enpMigrationDir :: !MigrationDir
+  , enpMaybeRollback :: !(Maybe SlotNo)
   }
 
 newtype ConfigFile = ConfigFile
@@ -153,6 +155,11 @@ runDbSyncNode plugin enp =
     enc <- readDbSyncNodeConfig (unConfigFile $ enpConfigFile enp)
 
     trce <- mkTracer enc
+
+    -- For testing and debugging.
+    case enpMaybeRollback enp of
+      Just slotNo -> void $ unsafeRollback trce slotNo
+      Nothing -> pure ()
 
     gc <- readGenesisConfig enp enc
     logProtocolMagic trce $ Ledger.configProtocolMagic gc
