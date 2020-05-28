@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Cardano.DbSync.Plugin.Default.Rollback
   ( rollbackToPoint
+  , unsafeRollback
   ) where
 
 import           Cardano.Prelude
@@ -51,3 +52,8 @@ rollbackToPoint trce point =
                             , ", hash ", renderAbstractHash hash
                             ]
                 void . lift $ DB.deleteCascadeSlotNo slotNo
+
+-- For testing and debugging.
+unsafeRollback :: Trace IO Text -> Word64 -> IO (Either DbSyncNodeError ())
+unsafeRollback _trce slotNo =
+  Right <$> DB.runDbNoLogging (void $ DB.deleteCascadeSlotNo slotNo)
