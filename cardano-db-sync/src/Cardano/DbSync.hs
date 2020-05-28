@@ -131,6 +131,7 @@ data DbSyncNodeParams = DbSyncNodeParams
   , enpGenesisFile :: !GenesisFile
   , enpSocketPath :: !SocketPath
   , enpMigrationDir :: !MigrationDir
+  , enpMaybeRollback :: !(Maybe SlotNo)
   }
 
 newtype ConfigFile = ConfigFile
@@ -156,8 +157,9 @@ runDbSyncNode plugin enp =
     trce <- mkTracer enc
 
     -- For testing and debugging.
-    when False $
-      void $ unsafeRollback trce 4212000
+    case enpMaybeRollback enp of
+      Just slotNo -> void $ unsafeRollback trce slotNo
+      Nothing -> pure ()
 
     gc <- readGenesisConfig enp enc
     logProtocolMagic trce $ Ledger.configProtocolMagic gc

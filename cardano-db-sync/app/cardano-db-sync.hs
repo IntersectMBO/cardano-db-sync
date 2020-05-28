@@ -9,6 +9,9 @@ import           Cardano.DbSync (ConfigFile (..), DbSyncNodeParams (..), Genesis
 import           Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative as Opt
 
+import           Ouroboros.Network.Block (SlotNo (..))
+
+
 main :: IO ()
 main = do
   runDbSyncNode defDbSyncNodePlugin =<< Opt.execParser opts
@@ -29,6 +32,7 @@ pCommandLine =
     <*> pGenesisFile
     <*> pSocketPath
     <*> pMigrationDir
+    <*> optional pSlotNo
 
 pConfigFile :: Parser ConfigFile
 pConfigFile =
@@ -64,4 +68,12 @@ pSocketPath =
     <> Opt.help "Path to a cardano-node socket"
     <> Opt.completer (Opt.bashCompleter "file")
     <> Opt.metavar "FILEPATH"
+    )
+
+pSlotNo :: Parser SlotNo
+pSlotNo =
+  SlotNo <$> Opt.option Opt.auto
+    (  Opt.long "rollback-to-slot"
+    <> Opt.help "Force a rollback to the specified slot (mainly for testing and debugging)."
+    <> Opt.metavar "WORD"
     )
