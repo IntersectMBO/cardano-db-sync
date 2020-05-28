@@ -34,28 +34,9 @@ library
   exposed-modules:      Cardano.DbSync.Plugin.Extended
 
   build-depends:        base                            >= 4.12         && < 4.13
-                      , aeson
-                      , base16-bytestring
-                      , bytestring
-                      , cardano-binary
-                      , cardano-crypto
-                      , cardano-crypto-wrapper
                       , cardano-db
                       , cardano-db-sync
-                      , containers
-                      , contra-tracer
-                      , cryptonite
-                      , extra
-                      , memory
-                      , monad-logger
-                      , network
-                      , ouroboros-consensus
-                      , ouroboros-network
-                      , persistent
-                      , prometheus
-                      , serialise
                       , text
-                      , time
                       , transformers
                       , transformers-except
 
@@ -82,4 +63,3 @@ executable cardano-db-sync-extended
                       , cardano-prelude
                       , optparse-applicative
                       , ouroboros-network
-                      , text

@@ -13,7 +13,8 @@ module Cardano.DbSync.Error
   , renderDbSyncNodeError
   ) where
 
-import qualified Cardano.Chain.UTxO as Ledger
+import qualified Cardano.Chain.Genesis as Byron
+import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
 
 import           Cardano.Prelude
@@ -30,29 +31,30 @@ import           Cardano.DbSync.Util
 
 data DbSyncInvariant
   = EInvInOut !Word64 !Word64
-  | EInvTxInOut !Ledger.Tx !Word64 !Word64
+  | EInvTxInOut !Byron.Tx !Word64 !Word64
 
 data DbSyncNodeError
-  = ENELookup !Text !LookupFail
-  | ENEError !Text
-  | ENEInvariant !Text !DbSyncInvariant
-  | ENEBlockMismatch !Word64 !ByteString !ByteString
+  = NELookup !Text !LookupFail
+  | NEError !Text
+  | NEInvariant !Text !DbSyncInvariant
+  | NEBlockMismatch !Word64 !ByteString !ByteString
+  | BEByronConfig !Byron.ConfigurationError
 
-annotateInvariantTx :: Ledger.Tx -> DbSyncInvariant -> DbSyncInvariant
+annotateInvariantTx :: Byron.Tx -> DbSyncInvariant -> DbSyncInvariant
 annotateInvariantTx tx ei =
   case ei of
     EInvInOut inval outval -> EInvTxInOut tx inval outval
     _other -> ei
 
 dbSyncNodeError :: Monad m => Text -> ExceptT DbSyncNodeError m a
-dbSyncNodeError = left . ENEError
+dbSyncNodeError = left . NEError
 
 dbSyncInvariant :: Monad m => Text -> DbSyncInvariant -> ExceptT DbSyncNodeError m a
-dbSyncInvariant loc = left . ENEInvariant loc
+dbSyncInvariant loc = left . NEInvariant loc
 
 liftLookupFail :: Monad m => Text -> m (Either LookupFail a) -> ExceptT DbSyncNodeError m a
 liftLookupFail loc =
-  firstExceptT (ENELookup loc) . newExceptT
+  firstExceptT (NELookup loc) . newExceptT
 
 renderDbSyncInvariant :: DbSyncInvariant -> Text
 renderDbSyncInvariant ei =
@@ -67,16 +69,17 @@ renderDbSyncInvariant ei =
         ]
 
 renderDbSyncNodeError :: DbSyncNodeError -> Text
-renderDbSyncNodeError ede =
-  case ede of
-    ENELookup loc lf -> mconcat [ "DB lookup fail in ", loc, ": ", renderLookupFail lf ]
-    ENEError t -> "Error: " <> t
-    ENEInvariant loc i -> mconcat [ loc, ": " <> renderDbSyncInvariant i ]
-    ENEBlockMismatch blkNo hashDb hashBlk ->
+renderDbSyncNodeError ne =
+  case ne of
+    NELookup loc lf -> mconcat [ "DB lookup fail in ", loc, ": ", renderLookupFail lf ]
+    NEError t -> "Error: " <> t
+    NEInvariant loc i -> mconcat [ loc, ": " <> renderDbSyncInvariant i ]
+    NEBlockMismatch blkNo hashDb hashBlk ->
       mconcat
         [ "Block mismatch for block number ", textShow blkNo, ", db has "
         , bsBase16Encode hashDb, " but chain provided ", bsBase16Encode hashBlk
         ]
+    BEByronConfig ce -> textShow ce
 
 bsBase16Encode :: ByteString -> Text
 bsBase16Encode bs =

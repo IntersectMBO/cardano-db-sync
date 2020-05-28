@@ -35,15 +35,18 @@ library
 
   other-modules:        Cardano.DbSync.Config
                         Cardano.DbSync.Database
+                        Cardano.DbSync.Era
+                        Cardano.DbSync.Era.Byron.Genesis
                         Cardano.DbSync.Error
-                        Cardano.DbSync.Genesis
                         Cardano.DbSync.Metrics
+                        Cardano.DbSync.Orphans
                         Cardano.DbSync.Plugin
                         Cardano.DbSync.Plugin.Default
                         Cardano.DbSync.Plugin.Default.Insert
                         Cardano.DbSync.Plugin.Default.Rollback
-                        Cardano.DbSync.Util
                         Cardano.DbSync.Tracing.ToObjectOrphans
+                        Cardano.DbSync.Types
+                        Cardano.DbSync.Util
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , aeson
@@ -109,22 +112,8 @@ executable cardano-db-sync
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , bytestring
-                      , cardano-crypto-wrapper
                       , cardano-db
                       , cardano-db-sync
-                      , cardano-ledger
                       , cardano-prelude
-                      , cardano-binary
-                      , cborg
-                      , formatting
-                      , cardano-shell
-                      , ouroboros-consensus
-                      , io-sim-classes
-                      , iohk-monitoring
-                      , network
                       , optparse-applicative
                       , ouroboros-network
-                      , ouroboros-network-framework
-                      , serialise
-                      , text
-                      , typed-protocols

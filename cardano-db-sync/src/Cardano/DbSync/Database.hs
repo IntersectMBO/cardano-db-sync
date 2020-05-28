@@ -142,7 +142,7 @@ checkDbState trce xs =
     validateBlock :: ByronBlock -> ExceptT DbSyncNodeError IO NextState
     validateBlock bblk = do
       case byronBlockRaw bblk of
-        Ledger.ABOBBoundary _ -> left $ ENEError "checkDbState got a boundary block"
+        Ledger.ABOBBoundary _ -> left $ NEError "checkDbState got a boundary block"
         Ledger.ABOBBlock chBlk -> do
           mDbBlk <- liftIO $ DB.runDbAction (Just trce) $ DB.queryBlockNo (blockNumber chBlk)
           case mDbBlk of
@@ -151,7 +151,7 @@ checkDbState trce xs =
               when (DB.blockHash dbBlk /= blockHash chBlk) $ do
                 liftIO $ logInfo trce (textShow chBlk)
                 -- liftIO $ logInfo trce (textShow dbBlk)
-                left $ ENEBlockMismatch (blockNumber chBlk) (DB.blockHash dbBlk) (blockHash chBlk)
+                left $ NEBlockMismatch (blockNumber chBlk) (DB.blockHash dbBlk) (blockHash chBlk)
 
               liftIO . logInfo trce $
                 mconcat [ "checkDbState: Block no ", textShow (blockNumber chBlk), " present" ]
