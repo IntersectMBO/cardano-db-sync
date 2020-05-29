@@ -58,6 +58,11 @@ extra-deps:
   - time-compat-1.9.2.2
   - quiet-0.2
 
+  - git: https://github.com/input-output-hk/cardano-node
+    commit: 4b71fc82fa523c51579efbc83f58e3cb850360ad
+    subdirs:
+      - cardano-config
+
   - git: https://github.com/input-output-hk/cardano-shell
     commit: 601bb4324c258e3c8cbd2d532e5696fd09e2582e
     subdirs:
