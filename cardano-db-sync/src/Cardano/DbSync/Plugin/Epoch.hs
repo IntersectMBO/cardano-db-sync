@@ -57,7 +57,7 @@ epochPluginOnStartup trce = do
     eMeta <- DB.queryMeta
     case eMeta of
       Left err ->
-        liftIO . logError trce $ "epochPluginInsertBlock: " <> renderDbSyncNodeError (ENELookup "epochPluginInsertBlock" err)
+        liftIO . logError trce $ "epochPluginInsertBlock: " <> renderDbSyncNodeError (NELookup "epochPluginInsertBlock" err)
       Right meta ->
         liftIO $ atomicWriteIORef slotsPerEpochVar (10 * DB.metaProtocolConst meta)
     mlbe <- queryLatestEpochNo
@@ -148,7 +148,7 @@ updateEpochNum epochNum trce = do
     updateEpoch epochId = do
       eEpoch <- DB.queryCalcEpochEntry epochNum
       case eEpoch of
-        Left err -> pure $ Left (ENELookup "updateEpochNum.updateEpoch" err)
+        Left err -> pure $ Left (NELookup "updateEpochNum.updateEpoch" err)
         Right epoch -> Right <$> replace epochId epoch
 
     insertEpoch :: MonadIO m => ReaderT SqlBackend m (Either DbSyncNodeError ())
@@ -156,7 +156,7 @@ updateEpochNum epochNum trce = do
       eEpoch <- DB.queryCalcEpochEntry epochNum
       liftIO . logInfo trce $ "epochPluginInsertBlock: Inserting row in epoch table for epoch " <> textShow epochNum
       case eEpoch of
-        Left err -> pure $ Left (ENELookup "updateEpochNum.insertEpoch" err)
+        Left err -> pure $ Left (NELookup "updateEpochNum.insertEpoch" err)
         Right epoch -> do
           void $ DB.insertEpoch epoch
           pure $ Right ()

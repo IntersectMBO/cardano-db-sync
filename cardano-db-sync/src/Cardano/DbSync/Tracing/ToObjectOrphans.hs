@@ -10,21 +10,29 @@ import           Data.Text (Text)
 import           Data.Aeson ((.=))
 
 import           Cardano.BM.Data.Tracer
+import           Cardano.TracingOrphanInstances.Network ()
 
-import           Ouroboros.Consensus.Byron.Ledger (ByronBlock)
-import           Ouroboros.Network.Block (Tip)
+import           Ouroboros.Consensus.Byron.Ledger.Block (ByronBlock)
+
+import           Ouroboros.Network.Block (Tip, StandardHash)
 import           Ouroboros.Network.Codec (AnyMessage)
 import           Ouroboros.Network.NodeToClient (TraceSendRecv)
 import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
 
-import           Cardano.TracingOrphanInstances.Network ()
 
-instance HasTextFormatter (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock)))
-instance Transformable Text IO (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock))) where
-  trTransformer = trStructuredText
+instance HasTextFormatter (TraceSendRecv (ChainSync tip (Tip blk)))
 
-instance ToObject (AnyMessage (ChainSync ByronBlock (Tip ByronBlock))) where
+instance (StandardHash blk, Show blk) => ToObject (AnyMessage (ChainSync blk (Tip blk))) where
   toObject _verb msg =
     mkObject [ "kind" .= ("TraceSendRecv" :: String)
              , "event" .= show msg
              ]
+
+instance ToObject ByronBlock where
+  toObject _verb msg =
+    mkObject [ "kind" .= ("ByronBlock" :: String)
+             , "event" .= show msg
+             ]
+
+instance (StandardHash blk, Show blk) => Transformable Text IO (TraceSendRecv (ChainSync blk (Tip blk))) where
+  trTransformer = trStructuredText

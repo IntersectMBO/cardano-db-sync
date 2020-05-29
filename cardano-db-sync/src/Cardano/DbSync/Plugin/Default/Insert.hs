@@ -170,7 +170,7 @@ insertTx tracer blkId (tx, blockIndex) = do
     annotateTx :: DbSyncNodeError -> DbSyncNodeError
     annotateTx ee =
       case ee of
-        ENEInvariant loc ei -> ENEInvariant loc (annotateInvariantTx (Ledger.taTx tx) ei)
+        NEInvariant loc ei -> NEInvariant loc (annotateInvariantTx (Ledger.taTx tx) ei)
         _other -> ee
 
 insertTxOut
@@ -205,7 +205,7 @@ insertTxIn _tracer txInId (Ledger.TxInUtxo txHash inIndex) = do
 calculateTxFee :: MonadIO m => Ledger.Tx -> ReaderT SqlBackend m (Either DbSyncNodeError ValueFee)
 calculateTxFee tx =
     runExceptT $ do
-      outval <- firstExceptT (\e -> ENEError $ "calculateTxFee: " <> textShow e) $ hoistEither output
+      outval <- firstExceptT (\e -> NEError $ "calculateTxFee: " <> textShow e) $ hoistEither output
       when (null inputs) $
         dbSyncNodeError "calculateTxFee: List of transaction inputs is zero."
       inval <- sum <$> mapMExceptT (liftLookupFail "calculateTxFee" . DB.queryTxOutValue) inputs

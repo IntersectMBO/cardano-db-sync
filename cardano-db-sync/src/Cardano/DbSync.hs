@@ -29,19 +29,30 @@ import           Control.Tracer (Tracer)
 
 import qualified Cardano.BM.Setup as Logging
 import           Cardano.BM.Data.Tracer (ToLogObject (..))
-import           Cardano.BM.Trace (Trace, appendName, logError, logInfo)
+import           Cardano.BM.Trace (Trace, appendName, logInfo)
 import qualified Cardano.BM.Trace as Logging
 
 import qualified Cardano.Chain.Genesis as Ledger
-import qualified Cardano.Chain.Genesis as Genesis
-import qualified Cardano.Chain.Update as Update
-
-import           Cardano.Crypto (decodeAbstractHash)
-import           Cardano.Crypto.Hashing (abstractHashFromDigest)
+import           Cardano.Client.Subscription (subscribe)
 import qualified Cardano.Crypto as Crypto
 
+import           Cardano.Db (LogFileDir (..))
+import qualified Cardano.Db as DB
+import           Cardano.DbSync.Config
+import           Cardano.DbSync.Database
+import           Cardano.DbSync.Era
+import           Cardano.DbSync.Error
+import qualified Cardano.DbSync.Era.Byron.Genesis as Byron
+import           Cardano.DbSync.Metrics
+import           Cardano.DbSync.Orphans ()
+import           Cardano.DbSync.Plugin (DbSyncNodePlugin (..))
+import           Cardano.DbSync.Plugin.Default (defDbSyncNodePlugin)
+import           Cardano.DbSync.Plugin.Default.Rollback (unsafeRollback)
+import           Cardano.DbSync.Tracing.ToObjectOrphans ()
+import           Cardano.DbSync.Types
+import           Cardano.DbSync.Util
+
 import           Cardano.Prelude hiding (atomically, option, (%), Nat)
-import           Cardano.Shell.Lib (GeneralException (ConfigurationError))
 
 import           Cardano.Slotting.Slot (WithOrigin (..))
 
@@ -50,8 +61,7 @@ import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, StrictTMVar,
                     atomically, newEmptyTMVarM, readTMVar)
 import           Control.Monad.Class.MonadTimer (MonadTimer)
 import           Control.Monad.IO.Class (liftIO)
-
-import           Crypto.Hash (digestFromByteString)
+import           Control.Monad.Trans.Except.Exit (orDie)
 
 import qualified Data.ByteString.Lazy as BSL
 import           Data.Functor.Contravariant (contramap)
@@ -59,46 +69,30 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Void (Void)
 
-import           Cardano.Db (LogFileDir (..), MigrationDir)
-import qualified Cardano.Db as DB
-import           Cardano.DbSync.Config
-import           Cardano.DbSync.Database
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.Genesis
-import           Cardano.DbSync.Metrics
-import           Cardano.DbSync.Plugin (DbSyncNodePlugin (..))
-import           Cardano.DbSync.Plugin.Default (defDbSyncNodePlugin)
-import           Cardano.DbSync.Plugin.Default.Rollback (unsafeRollback)
-import           Cardano.DbSync.Util
-import           Cardano.DbSync.Tracing.ToObjectOrphans ()
-
 import           Network.Socket (SockAddr (..))
 import           Network.Mux (MuxTrace, WithMuxBearer)
 
 import           Ouroboros.Network.Driver.Simple (runPipelinedPeer)
 import           Network.TypedProtocol.Pipelined (Nat(Zero, Succ))
 
-import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..), ByronHash (..), GenTx)
-import           Ouroboros.Consensus.Cardano (Protocol (..), protocolInfo)
+import           Ouroboros.Consensus.Byron.Ledger (GenTx)
 import           Ouroboros.Consensus.Config (TopLevelConfig)
+import           Ouroboros.Consensus.HardFork.Combinator.Unary (FromRawHash (..))
 import           Ouroboros.Consensus.Network.NodeToClient (ClientCodecs,
                     cChainSyncCodec, cStateQueryCodec, cTxSubmissionCodec)
-
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
-import           Ouroboros.Consensus.Node.ProtocolInfo (pInfoConfig)
+import           Ouroboros.Consensus.Node.NetworkProtocolVersion (NodeToClientVersion)
+import           Ouroboros.Consensus.Node.Run (RunNode)
+import qualified Ouroboros.Network.NodeToClient.Version as Network
 
-import           Ouroboros.Network.Block (BlockNo (..), Point (..), SlotNo (..), Tip,
-                    genesisPoint, getTipBlockNo,
-                    blockNo)
-import           Ouroboros.Network.Mux (AppType (..), MuxPeer (..),
-                    RunMiniProtocol (..))
+import           Ouroboros.Network.Block (BlockNo (..), HeaderHash, Point (..), SlotNo (..),
+                    Tip, genesisPoint, getTipBlockNo, blockNo)
+import           Ouroboros.Network.Mux (AppType (..), MuxPeer (..),  RunMiniProtocol (..))
 import           Ouroboros.Network.NodeToClient (IOManager, ClientSubscriptionParams (..),
                     ConnectionId, ErrorPolicyTrace (..), Handshake, LocalAddress,
                     NetworkSubscriptionTracers (..), NodeToClientProtocols (..),
-                    NodeToClientVersion (..) ,
                     TraceSendRecv, WithAddr (..),
-                    networkErrorPolicies, withIOManager, localSnocket,
-                    localStateQueryPeerNull)
+                    networkErrorPolicies, withIOManager, localSnocket, localStateQueryPeerNull)
 
 import qualified Ouroboros.Network.Point as Point
 import           Ouroboros.Network.Point (withOrigin)
@@ -116,35 +110,12 @@ import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult
 import qualified Ouroboros.Network.Snocket as Snocket
 import           Ouroboros.Network.Subscription (SubscriptionTrace)
 
-import           Cardano.Client.Subscription (subscribe)
-
 import           Prelude (String)
 import qualified Prelude
 
 import qualified System.Metrics.Prometheus.Metric.Gauge as Gauge
 
 data Peer = Peer SockAddr SockAddr deriving Show
-
--- | The product type of all command line arguments
-data DbSyncNodeParams = DbSyncNodeParams
-  { enpConfigFile :: !ConfigFile
-  , enpGenesisFile :: !GenesisFile
-  , enpSocketPath :: !SocketPath
-  , enpMigrationDir :: !MigrationDir
-  , enpMaybeRollback :: !(Maybe SlotNo)
-  }
-
-newtype ConfigFile = ConfigFile
-  { unConfigFile :: FilePath
-  }
-
-newtype GenesisFile = GenesisFile
-  { unGenesisFile :: FilePath
-  }
-
-newtype SocketPath = SocketPath
-  { unSocketPath :: FilePath
-  }
 
 
 runDbSyncNode :: DbSyncNodePlugin -> DbSyncNodeParams -> IO ()
@@ -154,65 +125,41 @@ runDbSyncNode plugin enp =
 
     enc <- readDbSyncNodeConfig (unConfigFile $ enpConfigFile enp)
 
-    trce <- mkTracer enc
+    trce <- if not (encEnableLogging enc)
+              then pure Logging.nullTracer
+              else liftIO $ Logging.setupTrace (Right $ encLoggingConfig enc) "db-sync-node"
 
     -- For testing and debugging.
     case enpMaybeRollback enp of
       Just slotNo -> void $ unsafeRollback trce slotNo
       Nothing -> pure ()
 
-    gc <- readGenesisConfig enp enc
-    logProtocolMagic trce $ Ledger.configProtocolMagic gc
+    orDie renderDbSyncNodeError $ do
+      gc <- readByronGenesisConfig enp enc
+      logProtocolMagic trce $ Ledger.configProtocolMagic gc
 
-    -- If the DB is empty it will be inserted, otherwise it will be validated (to make
-    -- sure we are on the right chain).
-    res <- insertValidateGenesisDistribution trce (unNetworkName $ encNetworkName enc) gc
-    case res of
-      Left err -> logError trce $ renderDbSyncNodeError err
-      Right () -> pure ()
+      -- If the DB is empty it will be inserted, otherwise it will be validated (to make
+      -- sure we are on the right chain).
+      Byron.insertValidateGenesisDistribution trce (unNetworkName $ encNetworkName enc) gc
 
-    runDbStartup trce plugin
-    void $ runDbSyncNodeNodeClient iomgr trce plugin (mkConsensusConfig gc) (enpSocketPath enp)
+      liftIO $ runDbStartup trce plugin
+      liftIO $ runDbSyncNodeNodeClient iomgr trce plugin (mkByronConsensusConfig gc) (enpSocketPath enp)
 
-
-mkTracer :: DbSyncNodeConfig -> IO (Trace IO Text)
-mkTracer enc =
-  if not (encEnableLogging enc)
-    then pure Logging.nullTracer
-    else liftIO $ Logging.setupTrace (Right $ encLoggingConfig enc) "db-sync-node"
-
-mkConsensusConfig :: Genesis.Config -> TopLevelConfig ByronBlock
-mkConsensusConfig gc =
-  pInfoConfig . protocolInfo $ ProtocolRealPBFT gc Nothing (Update.ProtocolVersion 0 2 0)
-      (Update.SoftwareVersion (Update.ApplicationName "cardano-sl") 1) Nothing
-
-readGenesisConfig :: DbSyncNodeParams -> DbSyncNodeConfig -> IO Genesis.Config
-readGenesisConfig enp enc = do
-    genHash <- either (throwIO . ConfigurationError) pure $
-                decodeAbstractHash (unGenesisHash $ encGenesisHash enc)
-    convert =<< runExceptT (Genesis.mkConfigFromFile (encRequiresNetworkMagic enc)
-                            (unGenesisFile $ enpGenesisFile enp) genHash)
-  where
-    convert :: Either Genesis.ConfigurationError Genesis.Config -> IO Genesis.Config
-    convert =
-      \case
-        Left err -> panic $ show err
-        Right x -> pure x
+-- -------------------------------------------------------------------------------------------------
 
 runDbSyncNodeNodeClient
-    :: forall blk.
-        (blk ~ ByronBlock)
+    :: forall blk. (FromRawHash blk, MkDbAction blk, RunNode blk, Show blk)
     => IOManager -> Trace IO Text -> DbSyncNodePlugin -> TopLevelConfig blk -> SocketPath
-    -> IO Void
+    -> IO ()
 runDbSyncNodeNodeClient iomgr trce plugin topLevelConfig (SocketPath socketPath) = do
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   txv <- newEmptyTMVarM @_ @(GenTx blk)
-  subscribe
+  void $ subscribe
     (localSnocket iomgr socketPath)
     topLevelConfig
     networkSubscriptionTracers
     clientSubscriptionParams
-    (const $ dbSyncProtocols trce plugin txv)
+    (dbSyncProtocols trce plugin topLevelConfig txv)
   where
     clientSubscriptionParams = ClientSubscriptionParams {
         cspAddress = Snocket.localAddressFromPath socketPath,
@@ -238,24 +185,27 @@ runDbSyncNodeNodeClient iomgr trce plugin topLevelConfig (SocketPath socketPath)
 
     handshakeTracer :: Tracer IO (WithMuxBearer
                           (ConnectionId LocalAddress)
-                          (TraceSendRecv (Handshake NodeToClientVersion CBOR.Term)))
+                          (TraceSendRecv (Handshake Network.NodeToClientVersion CBOR.Term)))
     handshakeTracer = toLogObject $ appendName "Handshake" trce
 
 dbSyncProtocols
-  :: Trace IO Text
+  :: forall blk. (FromRawHash blk, MkDbAction blk, RunNode blk, Show blk)
+  => Trace IO Text
   -> DbSyncNodePlugin
-  -> StrictTMVar IO (GenTx ByronBlock)
-  -> ClientCodecs ByronBlock IO
+  -> TopLevelConfig blk
+  -> StrictTMVar IO (GenTx blk)
+  -> NodeToClientVersion blk
+  -> ClientCodecs blk IO
   -> ConnectionId LocalAddress
   -> NodeToClientProtocols 'InitiatorApp BSL.ByteString IO () Void
-dbSyncProtocols trce plugin txv codecs _connectionId  =
+dbSyncProtocols trce plugin _topLevelConfig txv _version codecs _connectionId =
     NodeToClientProtocols {
           localChainSyncProtocol = localChainSyncProtocol
         , localTxSubmissionProtocol = localTxSubmissionProtocol
         , localStateQueryProtocol = dummyLocalQueryProtocol
         }
   where
-    localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync ByronBlock (Tip ByronBlock)))
+    localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync blk (Tip blk)))
     localChainSyncTracer = toLogObject $ appendName "ChainSync" trce
 
     localChainSyncProtocol :: RunMiniProtocol 'InitiatorApp BSL.ByteString IO () Void
@@ -311,20 +261,20 @@ logDbState trce = do
         (Nothing, Nothing) -> "empty (genesis)"
 
 
-getLatestPoints :: IO [Point ByronBlock]
+getLatestPoints :: forall blk. FromRawHash blk => IO [Point blk]
 getLatestPoints =
     -- Blocks (and the transactions they contain) are inserted within an SQL transaction.
     -- That means that all the blocks (including their transactions) returned by the query
     -- have been completely inserted.
     mapMaybe convert <$> DB.runDbNoLogging (DB.queryCheckPoints 200)
   where
-    convert :: (Word64, ByteString) -> Maybe (Point ByronBlock)
+    convert :: (Word64, ByteString) -> Maybe (Point blk)
     convert (slot, hashBlob) =
       fmap (Point . Point.block (SlotNo slot)) (convertHashBlob hashBlob)
 
     -- in Maybe because the bytestring may not be the right size.
-    convertHashBlob :: ByteString -> Maybe ByronHash
-    convertHashBlob = fmap (ByronHash . abstractHashFromDigest) . digestFromByteString
+    convertHashBlob :: ByteString -> Maybe (HeaderHash blk)
+    convertHashBlob = Just . fromRawHash (Proxy @blk)
 
 getCurrentTipBlockNo :: IO (WithOrigin BlockNo)
 getCurrentTipBlockNo = do
@@ -368,7 +318,7 @@ txSubmissionClient txv = LocalTxSubmissionClient $
 --    rollback, see 'clientStNext' below.
 --
 chainSyncClient
-  :: forall blk m. (MonadTimer m, MonadIO m, blk ~ ByronBlock)
+  :: forall blk m. (MonadTimer m, MonadIO m, RunNode blk, MkDbAction blk)
   => Trace IO Text -> Metrics -> [Point blk] -> WithOrigin BlockNo -> DbActionQueue -> ChainSyncClientPipelined blk (Tip blk) m ()
 chainSyncClient trce metrics latestPoints currentTip actionQueue =
     ChainSyncClientPipelined $ pure $
@@ -385,7 +335,8 @@ chainSyncClient trce metrics latestPoints currentTip actionQueue =
   where
     policy = pipelineDecisionLowHighMark 1000 10000
 
-    go :: MkPipelineDecision -> Nat n -> WithOrigin BlockNo -> WithOrigin BlockNo -> ClientPipelinedStIdle n ByronBlock (Tip blk) m a
+    go :: MkPipelineDecision -> Nat n -> WithOrigin BlockNo -> WithOrigin BlockNo
+        -> ClientPipelinedStIdle n blk (Tip blk) m ()
     go mkPipelineDecision n clientTip serverTip =
       case (n, runPipelineDecision mkPipelineDecision n clientTip serverTip) of
         (_Zero, (Request, mkPipelineDecision')) ->
@@ -404,8 +355,8 @@ chainSyncClient trce metrics latestPoints currentTip actionQueue =
             Nothing
             (mkClientStNext $ \clientBlockNo newServerTip -> go mkPipelineDecision' n' clientBlockNo (getTipBlockNo newServerTip))
 
-    mkClientStNext :: (WithOrigin BlockNo -> Tip blk -> ClientPipelinedStIdle n ByronBlock (Tip blk) m a)
-                    -> ClientStNext n ByronBlock (Tip ByronBlock) m a
+    mkClientStNext :: (WithOrigin BlockNo -> Tip blk -> ClientPipelinedStIdle n blk (Tip blk) m a)
+                    -> ClientStNext n blk (Tip blk) m a
     mkClientStNext finish =
       ClientStNext
         { recvMsgRollForward = \blk tip ->
@@ -414,7 +365,7 @@ chainSyncClient trce metrics latestPoints currentTip actionQueue =
                 Gauge.set (withOrigin 0 (fromIntegral . unBlockNo) (getTipBlockNo tip))
                           (mNodeHeight metrics)
                 newSize <- atomically $ do
-                  writeDbActionQueue actionQueue $ DbApplyBlock blk tip
+                  writeDbActionQueue actionQueue $ mkDbApply blk tip
                   lengthDbActionQueue actionQueue
                 Gauge.set (fromIntegral newSize) $ mQueuePostWrite metrics
                 pure $ finish (At (blockNo blk)) tip
@@ -423,12 +374,12 @@ chainSyncClient trce metrics latestPoints currentTip actionQueue =
               logException trce "recvMsgRollBackward: " $ do
                 -- This will get the current tip rather than what we roll back to
                 -- but will only be incorrect for a short time span.
-                atomically $ writeDbActionQueue actionQueue (DbRollBackToPoint point)
+                atomically $ writeDbActionQueue actionQueue $ mkDbRollback point
                 newTip <- getCurrentTipBlockNo
                 pure $ finish newTip tip
         }
 
-logProtocolMagic :: Trace IO Text -> Crypto.ProtocolMagic -> IO ()
+logProtocolMagic :: Trace IO Text -> Crypto.ProtocolMagic -> ExceptT DbSyncNodeError IO ()
 logProtocolMagic tracer pm =
   liftIO . logInfo tracer $ mconcat
     [ "NetworkMagic: ", textShow (Crypto.getRequiresNetworkMagic pm), " "

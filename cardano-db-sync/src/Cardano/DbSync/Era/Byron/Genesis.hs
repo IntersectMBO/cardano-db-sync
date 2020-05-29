@@ -9,7 +9,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Cardano.DbSync.Genesis
+module Cardano.DbSync.Era.Byron.Genesis
   ( insertValidateGenesisDistribution
   ) where
 
@@ -24,7 +24,7 @@ import qualified Cardano.Chain.UTxO as Ledger
 
 import           Control.Monad (void)
 import           Control.Monad.IO.Class (MonadIO)
-import           Control.Monad.Trans.Except.Extra (runExceptT)
+import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import qualified Data.ByteString.Char8 as BS
@@ -45,13 +45,13 @@ import           Cardano.DbSync.Util
 -- If these transactions are already in the DB, they are validated.
 insertValidateGenesisDistribution
     :: Trace IO Text -> Text -> Ledger.Config
-    -> IO (Either DbSyncNodeError ())
+    -> ExceptT DbSyncNodeError IO ()
 insertValidateGenesisDistribution tracer networkName cfg = do
     -- Setting this to True will log all 'Persistent' operations which is great
     -- for debugging, but otherwise *way* too chatty.
     if False
-      then DB.runDbIohkLogging tracer insertAction
-      else DB.runDbNoLogging insertAction
+      then newExceptT $ DB.runDbIohkLogging tracer insertAction
+      else newExceptT $ DB.runDbNoLogging insertAction
   where
     insertAction :: MonadIO m => ReaderT SqlBackend m (Either DbSyncNodeError ())
     insertAction = do
