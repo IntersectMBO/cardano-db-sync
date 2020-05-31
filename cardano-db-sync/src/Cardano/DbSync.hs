@@ -32,7 +32,6 @@ import           Cardano.BM.Data.Tracer (ToLogObject (..))
 import           Cardano.BM.Trace (Trace, appendName, logInfo)
 import qualified Cardano.BM.Trace as Logging
 
-import qualified Cardano.Chain.Genesis as Ledger
 import           Cardano.Client.Subscription (subscribe)
 import qualified Cardano.Crypto as Crypto
 
@@ -42,7 +41,6 @@ import           Cardano.DbSync.Config
 import           Cardano.DbSync.Database
 import           Cardano.DbSync.Era
 import           Cardano.DbSync.Error
-import qualified Cardano.DbSync.Era.Byron.Genesis as Byron
 import           Cardano.DbSync.Metrics
 import           Cardano.DbSync.Orphans ()
 import           Cardano.DbSync.Plugin (DbSyncNodePlugin (..))
@@ -135,15 +133,21 @@ runDbSyncNode plugin enp =
       Nothing -> pure ()
 
     orDie renderDbSyncNodeError $ do
-      gc <- readByronGenesisConfig enp enc
-      logProtocolMagic trce $ Ledger.configProtocolMagic gc
+      genCfg <- readGenesisConfig enp enc
+      logProtocolMagic trce $ genesisProtocolMagic genCfg
 
       -- If the DB is empty it will be inserted, otherwise it will be validated (to make
       -- sure we are on the right chain).
-      Byron.insertValidateGenesisDistribution trce (unNetworkName $ encNetworkName enc) gc
+      insertValidateGenesisDist trce (encNetworkName enc) genCfg
 
-      liftIO $ runDbStartup trce plugin
-      liftIO $ runDbSyncNodeNodeClient iomgr trce plugin (mkByronConsensusConfig gc) (enpSocketPath enp)
+      liftIO $ do
+        -- Must run plugin startup after the genesis distribution has been inserted/validate.
+        runDbStartup trce plugin
+        case genCfg of
+          GenesisByron bCfg ->
+            runDbSyncNodeNodeClient iomgr trce plugin (mkByronConsensusConfig bCfg) (enpSocketPath enp)
+          GenesisShelley sCfg ->
+            runDbSyncNodeNodeClient iomgr trce plugin (mkShelleyConsensusConfig sCfg) (enpSocketPath enp)
 
 -- -------------------------------------------------------------------------------------------------
 

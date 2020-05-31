@@ -9,27 +9,22 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Cardano.DbSync.Era.Byron.Genesis
+module Cardano.DbSync.Era.Shelley.Genesis
   ( insertValidateGenesisDist
   ) where
 
 import           Cardano.Prelude
 
-import qualified Cardano.Crypto as Crypto (Hash, fromCompactRedeemVerificationKey, serializeCborHash)
-
+import qualified Cardano.Binary as Binary
 import           Cardano.BM.Trace (Trace, logInfo)
-import qualified Cardano.Chain.Common as Byron
-import qualified Cardano.Chain.Genesis as Byron
-import qualified Cardano.Chain.UTxO as Byron
-import qualified Cardano.DbSync.Era.Byron.Util as Byron
 
 import           Control.Monad (void)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
 import           Control.Monad.Trans.Reader (ReaderT)
 
+import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
-import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -41,11 +36,22 @@ import           Database.Persist.Sql (SqlBackend, (=.), (==.))
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Util
+-- import qualified Cardano.DbSync.Era.Shelley.Util as Shelley
+
+import qualified Ouroboros.Consensus.BlockchainTime.WallClock.Types as Shelley
+import qualified Ouroboros.Consensus.Config.SecurityParam as Shelley
+import qualified Ouroboros.Consensus.Shelley.Genesis as Shelley
+import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
+import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
+
+import qualified Shelley.Spec.Ledger.Address as Shelley
+import qualified Shelley.Spec.Ledger.Coin as Shelley
+
 
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.
 insertValidateGenesisDist
-    :: Trace IO Text -> Text -> Byron.Config
+    :: Trace IO Text -> Text -> ShelleyGenesis TPraosStandardCrypto
     -> ExceptT DbSyncNodeError IO ()
 insertValidateGenesisDist tracer networkName cfg = do
     -- Setting this to True will log all 'Persistent' operations which is great
@@ -63,11 +69,11 @@ insertValidateGenesisDist tracer networkName cfg = do
           runExceptT $ do
             count <- lift DB.queryBlockCount
             when (count > 0) $
-              dbSyncNodeError "insertValidateGenesisDist: Genesis data mismatch."
+              dbSyncNodeError "Shelley.insertValidateGenesisDist: Genesis data mismatch."
             void . lift $ DB.insertMeta $ DB.Meta
-                                    (Byron.unBlockCount $ Byron.configK cfg)
-                                    (Byron.configSlotDuration cfg)
-                                    (Byron.configStartTime cfg)
+                                    (protocolConstant cfg)
+                                    (configSlotDuration cfg)
+                                    (Shelley.getSystemStart $ Shelley.sgSystemStart cfg)
                                     (Just networkName)
             -- Insert an 'artificial' Genesis block (with a genesis specific slot leader). We
             -- need this block to attach the genesis distribution transactions to.
@@ -85,12 +91,12 @@ insertValidateGenesisDist tracer networkName cfg = do
                         , DB.blockMerkelRoot = Nothing
                         , DB.blockSlotLeader = slid
                         , DB.blockSize = 0
-                        , DB.blockTime = Byron.configStartTime cfg
+                        , DB.blockTime = Shelley.getSystemStart (Shelley.sgSystemStart cfg)
                         , DB.blockTxCount = 0
                         }
             lift $ mapM_ (insertTxOuts bid) $ genesisTxos cfg
             liftIO . logInfo tracer $ "Initial genesis distribution populated. Hash "
-                            <> Byron.renderByteArray (configGenesisHash cfg)
+                            <> renderByteArray (configGenesisHash cfg)
 
             supply <- lift $ DB.queryTotalSupply
             liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
@@ -98,41 +104,41 @@ insertValidateGenesisDist tracer networkName cfg = do
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
 validateGenesisDistribution
     :: MonadIO m
-    => Trace IO Text -> Text -> Byron.Config -> DB.BlockId
+    => Trace IO Text -> Text -> ShelleyGenesis TPraosStandardCrypto -> DB.BlockId
     -> ReaderT SqlBackend m (Either DbSyncNodeError ())
 validateGenesisDistribution tracer networkName cfg bid =
   runExceptT $ do
-    meta <- liftLookupFail "validateGenesisDistribution" $ DB.queryMeta
+    meta <- liftLookupFail "Shelley.validateGenesisDistribution" $ DB.queryMeta
 
-    when (DB.metaProtocolConst meta /= Byron.unBlockCount (Byron.configK cfg)) $
+    when (DB.metaProtocolConst meta /= protocolConstant cfg) $
       dbSyncNodeError $ Text.concat
-            [ "Mismatch protocol constant. Config value "
-            , textShow (Byron.unBlockCount $ Byron.configK cfg)
+            [ "Shelley: Mismatch protocol constant. Config value "
+            , textShow (protocolConstant cfg)
             , " does not match DB value of ", textShow (DB.metaProtocolConst meta)
             ]
 
-    when (DB.metaSlotDuration meta /= Byron.configSlotDuration cfg) $
+    when (DB.metaSlotDuration meta /= configSlotDuration cfg) $
       dbSyncNodeError $ Text.concat
-            [ "Mismatch slot duration time. Config value "
-            , textShow (Byron.configSlotDuration cfg)
-            , " does not match DB value of ", textShow (DB.metaSlotDuration meta)
+            [ "Shelley: Mismatch slot duration time. Config value "
+            , textShow (configSlotDuration cfg)
+            , " does not match DB value of ", textShow (configSlotDuration cfg)
             ]
 
-    when (DB.metaStartTime meta /= Byron.configStartTime cfg) $
+    when (DB.metaStartTime meta /= Shelley.getSystemStart (Shelley.sgSystemStart cfg)) $
       dbSyncNodeError $ Text.concat
-            [ "Mismatch chain start time. Config value "
-            , textShow (Byron.configStartTime cfg)
-            , " does not match DB value of ", textShow (Byron.configStartTime cfg)
+            [ "Shelley: Mismatch chain start time. Config value "
+            , textShow (Shelley.sgSystemStart cfg)
+            , " does not match DB value of ", textShow (Shelley.sgSystemStart cfg)
             ]
 
     case DB.metaNetworkName meta of
       Nothing -> lift $ updateWhere
-                  [DB.MetaStartTime ==. Byron.configStartTime cfg]
+                  [DB.MetaStartTime ==. Shelley.getSystemStart (Shelley.sgSystemStart cfg)]
                   [DB.MetaNetworkName =. Just networkName]
       Just name ->
         when (name /= networkName) $
           dbSyncNodeError $ Text.concat
-              [ "validateGenesisDistribution: Provided network name "
+              [ "Shelley.validateGenesisDistribution: Provided network name "
               , networkName
               , " does not match DB value "
               , name
@@ -142,22 +148,20 @@ validateGenesisDistribution tracer networkName cfg bid =
     let expectedTxCount = fromIntegral $length (genesisTxos cfg)
     when (txCount /= expectedTxCount) $
       dbSyncNodeError $ Text.concat
-              [ "validateGenesisDistribution: Expected initial block to have "
+              [ "Shelley.validateGenesisDistribution: Expected initial block to have "
               , textShow expectedTxCount
               , " but got "
               , textShow txCount
               ]
     totalSupply <- lift DB.queryGenesisSupply
-    case configGenesisSupply cfg of
-      Left err -> dbSyncNodeError $ "validateGenesisDistribution: " <> textShow err
-      Right expectedSupply ->
-        when (DB.word64ToAda expectedSupply /= totalSupply) $
-          dbSyncNodeError  $ Text.concat
-                [ "validateGenesisDistribution: Expected total supply to be "
-                , textShow expectedSupply
-                , " but got "
-                , textShow totalSupply
-                ]
+    let expectedSupply = configGenesisSupply cfg
+    when (expectedSupply /= totalSupply) $
+      dbSyncNodeError  $ Text.concat
+         [ "validateGenesisDistribution: Expected total supply to be "
+         , textShow expectedSupply
+         , " but got "
+         , textShow totalSupply
+         ]
     supply <- lift DB.queryGenesisSupply
     liftIO $ do
       logInfo tracer "Initial genesis distribution present and correct"
@@ -165,16 +169,16 @@ validateGenesisDistribution tracer networkName cfg bid =
 
 -- -----------------------------------------------------------------------------
 
-insertTxOuts :: MonadIO m => DB.BlockId -> (Byron.Address, Byron.Lovelace) -> ReaderT SqlBackend m ()
+insertTxOuts :: MonadIO m => DB.BlockId -> (Shelley.Addr TPraosStandardCrypto, Shelley.Coin) -> ReaderT SqlBackend m ()
 insertTxOuts blkId (address, value) = do
   -- Each address/value pair of the initial coin distribution comes from an artifical transaction
   -- with a hash generated by hashing the address.
   txId <- DB.insertTx $
             DB.Tx
-              { DB.txHash = Byron.unTxHash $ txHashOfAddress address
+              { DB.txHash = txHashOfAddress address
               , DB.txBlock = blkId
               , DB.txBlockIndex = 0
-              , DB.txOutSum = Byron.unsafeGetLovelace value
+              , DB.txOutSum = unCoin value
               , DB.txFee = 0
               , DB.txSize = 0 -- Genesis distribution address to not have a size.
               }
@@ -182,40 +186,39 @@ insertTxOuts blkId (address, value) = do
             DB.TxOut
               { DB.txOutTxId = txId
               , DB.txOutIndex = 0
-              , DB.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 address
-              , DB.txOutValue = Byron.unsafeGetLovelace value
+              , DB.txOutAddress = Text.decodeUtf8 $ Base16.encode (Binary.serialize' address)
+              , DB.txOutValue = unCoin value
               }
 
 -- -----------------------------------------------------------------------------
 
-configGenesisHash :: Byron.Config -> ByteString
-configGenesisHash =
-  Byron.unAbstractHash . Byron.unGenesisHash . Byron.configGenesisHash
+configGenesisHash :: ShelleyGenesis TPraosStandardCrypto -> ByteString
+configGenesisHash = const "Hash of genesis configuration"
 
-genesisHashSlotLeader :: Byron.Config -> ByteString
-genesisHashSlotLeader =
-  BS.take 28 . configGenesisHash
+genesisHashSlotLeader :: ShelleyGenesis TPraosStandardCrypto -> ByteString
+genesisHashSlotLeader = BS.take 28 . configGenesisHash
 
-
-configGenesisSupply :: Byron.Config -> Either Byron.LovelaceError Word64
+configGenesisSupply :: ShelleyGenesis TPraosStandardCrypto -> DB.Ada
 configGenesisSupply =
-  fmap Byron.unsafeGetLovelace . Byron.sumLovelace . map snd . genesisTxos
+  DB.word64ToAda . fromIntegral . sum . map (unCoin . snd) . genesisTxos
 
-genesisTxos :: Byron.Config -> [(Byron.Address, Byron.Lovelace)]
-genesisTxos config =
-    avvmBalances <> nonAvvmBalances
-  where
-    avvmBalances :: [(Byron.Address, Byron.Lovelace)]
-    avvmBalances =
-      first (Byron.makeRedeemAddress networkMagic . Crypto.fromCompactRedeemVerificationKey)
-        <$> Map.toList (Byron.unGenesisAvvmBalances $ Byron.configAvvmDistr config)
+genesisTxos :: ShelleyGenesis TPraosStandardCrypto -> [(Shelley.Addr TPraosStandardCrypto, Shelley.Coin)]
+genesisTxos = Map.toList . Shelley.sgInitialFunds
 
-    networkMagic :: Byron.NetworkMagic
-    networkMagic = Byron.makeNetworkMagic (Byron.configProtocolMagic config)
+protocolConstant :: ShelleyGenesis TPraosStandardCrypto -> Word64
+protocolConstant = Shelley.maxRollbacks . Shelley.sgSecurityParam
 
-    nonAvvmBalances :: [(Byron.Address, Byron.Lovelace)]
-    nonAvvmBalances =
-      Map.toList $ Byron.unGenesisNonAvvmBalances (Byron.configNonAvvmBalances config)
+renderByteArray :: ByteString -> Text
+renderByteArray = Text.decodeUtf8 . Base16.encode
 
-txHashOfAddress :: Byron.Address -> Crypto.Hash Byron.Tx
-txHashOfAddress = coerce . Crypto.serializeCborHash
+txHashOfAddress :: Shelley.Addr TPraosStandardCrypto -> ByteString
+txHashOfAddress = Shelley.serialiseAddr
+
+unCoin :: Shelley.Coin -> Word64
+unCoin (Shelley.Coin c) = fromIntegral c
+
+-- | The genesis data is a NominalDiffTime (in picoseconds) and we need
+-- it as milliseconds.
+configSlotDuration :: ShelleyGenesis TPraosStandardCrypto -> Word64
+configSlotDuration sg =
+  floor $ 1e-6 * Shelley.getSlotLength (Shelley.sgSlotLength sg)

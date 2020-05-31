@@ -16,6 +16,7 @@ module Cardano.DbSync.Database
 
 import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo)
 import qualified Cardano.Chain.Block as Ledger
+import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import           Cardano.Prelude
 
 import qualified Control.Concurrent.STM as STM
@@ -25,13 +26,13 @@ import qualified Control.Concurrent.STM.TBQueue as TBQ
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Except.Extra (left, newExceptT, runExceptT)
 
-import           Database.Persist.Sql (SqlBackend)
-
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Metrics
 import           Cardano.DbSync.Plugin
 import           Cardano.DbSync.Util
+
+import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import qualified Ouroboros.Consensus.Shelley.Protocol as Shelley
@@ -81,6 +82,17 @@ newDbActionQueue = DbActionQueue <$> TBQ.newTBQueueIO 2000
 writeDbActionQueue :: DbActionQueue -> DbAction -> STM ()
 writeDbActionQueue (DbActionQueue q) = TBQ.writeTBQueue q
 
+-- | Block if the queue is empty and if its not read/flush everything.
+-- Need this because `flushTBQueue` never blocks and we want to block until
+-- there is one item or more.
+-- Use this instead of STM.check to make sure it blocks if the queue is empty.
+blockingFlushDbActionQueue :: DbActionQueue -> IO [DbAction]
+blockingFlushDbActionQueue (DbActionQueue queue) = do
+  STM.atomically $ do
+    x <- TBQ.readTBQueue queue
+    xs <- TBQ.flushTBQueue queue
+    pure $ x : xs
+
 
 runDbStartup :: Trace IO Text -> DbSyncNodePlugin -> IO ()
 runDbStartup trce plugin =
@@ -126,6 +138,8 @@ runActions trce plugin actions = do
         ([], DbRollBackToByronPoint pt:ys) -> do
             runRollbacks trce plugin pt
             dbAction Continue ys
+        ([], DbRollBackToShelleyPoint _pt:_ys) ->
+            panic "runActions for ShelleyPoint not yet implemented"
         (ys, zs) -> do
           insertBlockList trce plugin ys
           if null zs
@@ -137,6 +151,7 @@ checkDbState trce xs =
     case filter isMainBlockApply (reverse xs) of
       [] -> pure Continue
       (DbApplyByronBlock blk _tip : _) -> validateBlock blk
+      (DbApplyShelleyBlock _blk _tip : _) -> panic "checkDbState for ShelleyBlock not yet implemented"
       _ -> pure Continue
   where
     validateBlock :: ByronBlock -> ExceptT DbSyncNodeError IO NextState
@@ -144,17 +159,17 @@ checkDbState trce xs =
       case byronBlockRaw bblk of
         Ledger.ABOBBoundary _ -> left $ NEError "checkDbState got a boundary block"
         Ledger.ABOBBlock chBlk -> do
-          mDbBlk <- liftIO $ DB.runDbAction (Just trce) $ DB.queryBlockNo (blockNumber chBlk)
+          mDbBlk <- liftIO $ DB.runDbAction (Just trce) $ DB.queryBlockNo (Byron.blockNumber chBlk)
           case mDbBlk of
             Nothing -> pure Continue
             Just dbBlk -> do
-              when (DB.blockHash dbBlk /= blockHash chBlk) $ do
+              when (DB.blockHash dbBlk /= Byron.blockHash chBlk) $ do
                 liftIO $ logInfo trce (textShow chBlk)
                 -- liftIO $ logInfo trce (textShow dbBlk)
-                left $ NEBlockMismatch (blockNumber chBlk) (DB.blockHash dbBlk) (blockHash chBlk)
+                left $ NEBlockMismatch (Byron.blockNumber chBlk) (DB.blockHash dbBlk) (Byron.blockHash chBlk)
 
               liftIO . logInfo trce $
-                mconcat [ "checkDbState: Block no ", textShow (blockNumber chBlk), " present" ]
+                mconcat [ "checkDbState: Block no ", textShow (Byron.blockNumber chBlk), " present" ]
               pure Done -- Block already exists, so we are done.
 
     isMainBlockApply :: DbAction -> Bool
@@ -175,12 +190,9 @@ runRollbacks
     -> Point ByronBlock
     -> ExceptT DbSyncNodeError IO ()
 runRollbacks trce plugin point =
-    newExceptT $ foldM rollback (Right ()) $ plugRollbackBlock plugin
-  where
-    rollback prevResult action =
-      case prevResult of
-        Left e -> pure $ Left e
-        Right () -> action trce point
+  newExceptT
+    . traverseMEither (\ f -> f trce point)
+    $ plugRollbackBlock plugin
 
 insertBlockList
     :: Trace IO Text
@@ -192,37 +204,14 @@ insertBlockList trce plugin blks =
   -- for debugging, but otherwise is *way* too chatty.
   newExceptT
     . DB.runDbAction (Just trce)
-    $ foldM insertBlock (Right ()) blks
+    $ traverseMEither insertBlock blks
   where
     insertBlock
-        :: Either DbSyncNodeError ()
-        -> (ByronBlock, Tip ByronBlock)
-        -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-    insertBlock prevResult (blk, blkNo) =
-      case prevResult of
-        Left e -> pure $ Left e
-        Right () -> foldM (insertAction (blk, blkNo)) (Right ()) $ plugInsertBlock plugin
-
-    insertAction
         :: (ByronBlock, Tip ByronBlock)
-        -> Either DbSyncNodeError ()
-        -> (Trace IO Text -> ByronBlock -> Tip ByronBlock -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ()))
         -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-    insertAction (blk, blkNo) prevResult action =
-      case prevResult of
-        Left e -> pure $ Left e
-        Right () -> action trce blk blkNo
+    insertBlock (blk, blkNo) =
+      traverseMEither (\ f -> f trce blk blkNo) $ plugInsertBlock plugin
 
--- | Block if the queue is empty and if its not read/flush everything.
--- Need this because `flushTBQueue` never blocks and we want to block until
--- there is one item or more.
--- Use this instead of STM.check to make sure it blocks if the queue is empty.
-blockingFlushDbActionQueue :: DbActionQueue -> IO [DbAction]
-blockingFlushDbActionQueue (DbActionQueue queue) = do
-  STM.atomically $ do
-    x <- TBQ.readTBQueue queue
-    xs <- TBQ.flushTBQueue queue
-    pure $ x : xs
 
 -- | Split the DbAction list into a prefix containing blocks to apply and a postfix.
 spanDbApply :: [DbAction] -> ([(ByronBlock, Tip ByronBlock)], [DbAction])

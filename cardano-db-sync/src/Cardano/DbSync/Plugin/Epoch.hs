@@ -33,6 +33,7 @@ import           Database.Persist.Sql (IsolationLevel (Serializable), SqlBackend
 import           Cardano.Db (EpochId, EntityField (..), listToMaybe)
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Error
+import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import           Cardano.DbSync.Util
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
@@ -82,13 +83,13 @@ epochPluginInsertBlock trce rawBlk tip =
       slotsPerEpoch <- liftIO $ readIORef slotsPerEpochVar
       mLatestCachedEpoch <- liftIO $ readIORef latestCachedEpochVar
       chainTipEpoch <- liftIO $ readIORef latestChainTipEpochVar
-      let epochNum = epochNumber blk slotsPerEpoch
+      let epochNum = Byron.epochNumber blk slotsPerEpoch
           lastCachedEpoch = fromMaybe 0 mLatestCachedEpoch
 
 
 
       if  | epochNum == chainTipEpoch && lastCachedEpoch == chainTipEpoch ->
-              if withOrigin 0 unBlockNo (getTipBlockNo tip) - blockNumber blk < 15
+              if withOrigin 0 unBlockNo (getTipBlockNo tip) - Byron.blockNumber blk < 15
                 then -- Following the chain very closely.
                      updateEpochNum epochNum trce
                 else pure $ Right ()
@@ -108,7 +109,7 @@ epochPluginInsertBlock trce rawBlk tip =
 
 epochPluginRollbackBlock :: Trace IO Text -> Point ByronBlock -> IO (Either DbSyncNodeError ())
 epochPluginRollbackBlock _trce point =
-    case pointToSlotHash point of
+    case Byron.pointToSlotHash point of
       Nothing -> pure $ Right ()
       Just (slot, _hash) -> DB.runDbAction Nothing $ action (Ledger.unSlotNumber slot)
   where

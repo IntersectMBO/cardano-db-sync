@@ -37,6 +37,8 @@ library
                         Cardano.DbSync.Database
                         Cardano.DbSync.Era
                         Cardano.DbSync.Era.Byron.Genesis
+                        Cardano.DbSync.Era.Byron.Util
+                        Cardano.DbSync.Era.Shelley.Genesis
                         Cardano.DbSync.Error
                         Cardano.DbSync.Metrics
                         Cardano.DbSync.Orphans
@@ -87,6 +89,7 @@ library
                       , persistent
                       , prometheus
                       , serialise
+                      , shelley-spec-ledger
                       , stm
                       , text
                       , time

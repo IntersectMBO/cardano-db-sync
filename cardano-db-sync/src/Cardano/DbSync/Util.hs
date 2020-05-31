@@ -5,101 +5,31 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.DbSync.Util
-  ( blockHash
-  , blockMerkelRoot
-  , blockNumber
-  , blockPayload
-  , blockPreviousHash
-  , boundaryEpochNumber
-  , configSlotDuration
-  , epochNumber
-  , genesisToHeaderHash
-  , liftedLogException
+  ( liftedLogException
   , logException
-  , mkSlotLeader
-  , pointToSlotHash
-  , renderByteArray
-  , renderAbstractHash
-  , slotLeaderHash
-  , slotNumber
   , textShow
-  , unAbstractHash
-  , unAddressHash
-  , unCryptoHash
-  , unHeaderHash
-  , unTxHash
+  , traverseMEither
   ) where
 
 import           Cardano.Prelude hiding (catch)
 
-import           Cardano.Binary (Raw)
 import           Cardano.BM.Trace (Trace, logError)
-import qualified Cardano.Crypto as Crypto
-
--- Import all 'cardano-ledger' functions and data types qualified so they do not
--- clash with the Cardano.Db functions and data types which are also imported
--- qualified.
-import qualified Cardano.Chain.Block as Ledger
-import qualified Cardano.Chain.Common as Ledger
-import qualified Cardano.Chain.Genesis as Ledger
-import qualified Cardano.Chain.Slotting as Ledger
-import qualified Cardano.Chain.Update as Ledger
-import qualified Cardano.Chain.UTxO as Ledger
 
 import           Control.Exception.Lifted (SomeException, catch)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 
-import           Crypto.Hash (Blake2b_256)
-
-import           Data.ByteArray (ByteArrayAccess)
-import qualified Data.ByteArray
-import qualified Data.ByteString.Base16 as Base16
-import qualified Data.ByteString.Char8 as BS
-import           Data.Coerce (coerce)
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
 
-import qualified Cardano.Db as DB
+-- | Run a function of type `a -> m (Either e ())` over a list and return
+-- the first `e` or `()`.
+traverseMEither :: Monad m => (a -> m (Either e ())) -> [a] -> m (Either e ())
+traverseMEither action xs = do
+  case xs of
+    [] -> pure $ Right ()
+    (y:ys) ->
+      action y >>= either (pure . Left) (const $ traverseMEither action ys)
 
-import           Ouroboros.Consensus.Byron.Ledger (ByronBlock, ByronHash (..))
-import           Ouroboros.Network.Point (WithOrigin (..))
-import qualified Ouroboros.Network.Point as Point
-import           Ouroboros.Network.Block (Point (..), SlotNo (..))
-
-
-blockHash :: Ledger.ABlock ByteString -> ByteString
-blockHash = unHeaderHash . Ledger.blockHashAnnotated
-
-blockMerkelRoot :: Ledger.ABlock ByteString -> Crypto.AbstractHash Blake2b_256 Raw
-blockMerkelRoot =
-  Ledger.getMerkleRoot . Ledger.txpRoot . Ledger.recoverTxProof
-    . Ledger.bodyTxPayload . Ledger.blockBody
-
-boundaryEpochNumber :: Ledger.ABoundaryBlock ByteString -> Word64
-boundaryEpochNumber = Ledger.boundaryEpoch . Ledger.boundaryHeader
-
-blockNumber :: Ledger.ABlock ByteString -> Word64
-blockNumber =
-  Ledger.unChainDifficulty . Ledger.headerDifficulty . Ledger.blockHeader
-
-blockPayload :: Ledger.ABlock a -> [Ledger.TxAux]
-blockPayload =
-  Ledger.unTxPayload . Ledger.bodyTxPayload . Ledger.blockBody
-
-blockPreviousHash :: Ledger.ABlock a -> Ledger.HeaderHash
-blockPreviousHash = Ledger.headerPrevHash . Ledger.blockHeader
-
-configSlotDuration :: Ledger.Config -> Word64
-configSlotDuration =
-  fromIntegral . Ledger.ppSlotDuration . Ledger.gdProtocolParameters . Ledger.configGenesisData
-
-epochNumber :: Ledger.ABlock ByteString -> Word64 -> Word64
-epochNumber blk slotsPerEpoch =
-  slotNumber blk `div` slotsPerEpoch
-
-genesisToHeaderHash :: Ledger.GenesisHash -> Ledger.HeaderHash
-genesisToHeaderHash = coerce
 
 -- | Needed when debugging disappearing exceptions.
 liftedLogException :: (MonadBaseControl IO m, MonadIO m) => Trace IO Text -> Text -> m a -> m a
@@ -126,50 +56,5 @@ logException tracer txt action =
       logError tracer $ txt <> textShow e
       throwIO e
 
-mkSlotLeader :: Ledger.ABlock ByteString -> DB.SlotLeader
-mkSlotLeader blk =
-  let slHash = slotLeaderHash blk
-      slName = "SlotLeader-" <> Text.decodeUtf8 (Base16.encode $ BS.take 8 slHash)
-  in DB.SlotLeader slHash slName
-
-
--- | Convert from Ouroboros 'Point' to `Ledger' types.
-pointToSlotHash :: Point ByronBlock -> Maybe (Ledger.SlotNumber, Ledger.HeaderHash)
-pointToSlotHash (Point x) =
-  case x of
-    Origin -> Nothing
-    At blk -> Just (Ledger.SlotNumber . unSlotNo $ Point.blockPointSlot blk, unByronHash $ Point.blockPointHash blk)
-
-renderByteArray :: ByteArrayAccess bin => bin -> Text
-renderByteArray =
-  Text.decodeUtf8 . Base16.encode . Data.ByteArray.convert
-
-renderAbstractHash :: Crypto.AbstractHash algo a -> Text
-renderAbstractHash =
-    Text.decodeUtf8 . Base16.encode . Crypto.abstractHashToBytes
-
-slotLeaderHash :: Ledger.ABlock ByteString -> ByteString
-slotLeaderHash =
-  Crypto.abstractHashToBytes . Ledger.addressHash . Ledger.headerGenesisKey . Ledger.blockHeader
-
-slotNumber :: Ledger.ABlock ByteString -> Word64
-slotNumber =
-  Ledger.unSlotNumber . Ledger.headerSlot . Ledger.blockHeader
-
 textShow :: Show a => a -> Text
 textShow = Text.pack . show
-
-unAbstractHash :: Crypto.Hash Raw -> ByteString
-unAbstractHash = Crypto.abstractHashToBytes
-
-unAddressHash :: Ledger.AddressHash Ledger.Address' -> ByteString
-unAddressHash = Crypto.abstractHashToBytes
-
-unHeaderHash :: Ledger.HeaderHash -> ByteString
-unHeaderHash = Crypto.abstractHashToBytes
-
-unTxHash :: Crypto.Hash Ledger.Tx -> ByteString
-unTxHash = Crypto.abstractHashToBytes
-
-unCryptoHash :: Crypto.Hash Raw -> ByteString
-unCryptoHash = Crypto.abstractHashToBytes
