@@ -27,6 +27,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
 import           Cardano.Db (LookupFail (..), renderLookupFail)
+import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import           Cardano.DbSync.Util
 
 data DbSyncInvariant
@@ -38,7 +39,8 @@ data DbSyncNodeError
   | NEError !Text
   | NEInvariant !Text !DbSyncInvariant
   | NEBlockMismatch !Word64 !ByteString !ByteString
-  | BEByronConfig !Byron.ConfigurationError
+  | NEByronConfig !FilePath !Byron.ConfigurationError
+  | NEShelleyConfig !FilePath !Text
 
 annotateInvariantTx :: Byron.Tx -> DbSyncInvariant -> DbSyncInvariant
 annotateInvariantTx tx ei =
@@ -63,7 +65,7 @@ renderDbSyncInvariant ei =
       mconcat [ "input value ", textShow inval, " < output value ", textShow outval ]
     EInvTxInOut tx inval outval ->
       mconcat
-        [ "tx ", bsBase16Encode (unTxHash $ Crypto.serializeCborHash tx)
+        [ "tx ", bsBase16Encode (Byron.unTxHash $ Crypto.serializeCborHash tx)
         , " : input value ", textShow inval, " < output value ", textShow outval
         , "\n", textShow tx
         ]
@@ -79,7 +81,14 @@ renderDbSyncNodeError ne =
         [ "Block mismatch for block number ", textShow blkNo, ", db has "
         , bsBase16Encode hashDb, " but chain provided ", bsBase16Encode hashBlk
         ]
-    BEByronConfig ce -> textShow ce
+    NEByronConfig fp ce ->
+      mconcat
+        [ "Failed reading Byron genesis file ", textShow fp, ": ", textShow ce
+        ]
+    NEShelleyConfig fp txt ->
+      mconcat
+        [ "Failed reading Shelley genesis file ", textShow fp, ": ", txt
+        ]
 
 bsBase16Encode :: ByteString -> Text
 bsBase16Encode bs =
