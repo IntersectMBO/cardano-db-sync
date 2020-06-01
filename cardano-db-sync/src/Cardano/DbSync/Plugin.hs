@@ -12,9 +12,7 @@ import           Control.Monad.Trans.Reader (ReaderT)
 import           Database.Persist.Sql (SqlBackend)
 
 import           Cardano.DbSync.Error
-
-import           Ouroboros.Network.Block (Point (..), Tip)
-import           Ouroboros.Consensus.Byron.Ledger (ByronBlock)
+import           Cardano.DbSync.Types
 
 
 -- | This plugin system allows access to the database to be extended by running one or more
@@ -42,9 +40,9 @@ data DbSyncNodePlugin = DbSyncNodePlugin
     -- all subsequent blocks.
     -- Blocks (including epoch boundary blocks) are called in sequence from the oldest to the newest.
   , plugInsertBlock
-        :: [Trace IO Text -> ByronBlock -> Tip ByronBlock -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())]
+        :: [Trace IO Text -> CardanoBlockTip -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())]
 
     -- Rollback to the specified SlotNumber/HeaderHash.
   , plugRollbackBlock
-        :: [Trace IO Text -> Point ByronBlock -> IO (Either DbSyncNodeError ())]
+        :: [Trace IO Text -> CardanoPoint -> IO (Either DbSyncNodeError ())]
   }

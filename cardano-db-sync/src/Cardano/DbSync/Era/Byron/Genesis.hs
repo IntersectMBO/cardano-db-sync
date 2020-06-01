@@ -15,13 +15,16 @@ module Cardano.DbSync.Era.Byron.Genesis
 
 import           Cardano.Prelude
 
-import qualified Cardano.Crypto as Crypto (Hash, fromCompactRedeemVerificationKey, serializeCborHash)
-
 import           Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Chain.UTxO as Byron
+import qualified Cardano.Crypto as Crypto (Hash, fromCompactRedeemVerificationKey, serializeCborHash)
+
+import qualified Cardano.Db as DB
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
+import           Cardano.DbSync.Error
+import           Cardano.DbSync.Util
 
 import           Control.Monad (void)
 import           Control.Monad.IO.Class (MonadIO)
@@ -37,10 +40,6 @@ import qualified Data.Text.Encoding as Text
 
 import           Database.Persist.Class (updateWhere)
 import           Database.Persist.Sql (SqlBackend, (=.), (==.))
-
-import qualified Cardano.Db as DB
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.Util
 
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.
@@ -90,7 +89,7 @@ insertValidateGenesisDist tracer networkName cfg = do
                         }
             lift $ mapM_ (insertTxOuts bid) $ genesisTxos cfg
             liftIO . logInfo tracer $ "Initial genesis distribution populated. Hash "
-                            <> Byron.renderByteArray (configGenesisHash cfg)
+                            <> renderByteArray (configGenesisHash cfg)
 
             supply <- lift $ DB.queryTotalSupply
             liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
