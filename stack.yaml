@@ -128,10 +128,8 @@ extra-deps:
       - ouroboros-consensus-shelley
       - ouroboros-consensus-cardano
       - ouroboros-consensus/ouroboros-consensus-mock
-      - ouroboros-consensus/ouroboros-consensus-test-infra
       - typed-protocols
       - ouroboros-network-framework
-      - ouroboros-network-testing
       - typed-protocols-examples
       - cardano-client
 
