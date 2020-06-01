@@ -38,6 +38,9 @@ package cardano-db
 package cardano-db-sync
   tests: True
 
+package ouroboros-consensus-cardano
+  tests: False
+
 -- ---------------------------------------------------------
 
 source-repository-package
@@ -274,13 +277,6 @@ source-repository-package
   location: https://github.com/input-output-hk/ouroboros-network
   tag: ef38818aa434aaafb82bc7ae4d1fee11523c3ad8
   --sha256: 04ldvkqwy48fh974761q2asmcn163awsrbk9xfy4hm67n4hafkjb
-  subdir: ouroboros-network-testing
-
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/ouroboros-network
-  tag: ef38818aa434aaafb82bc7ae4d1fee11523c3ad8
-  --sha256: 04ldvkqwy48fh974761q2asmcn163awsrbk9xfy4hm67n4hafkjb
   subdir: Win32-network
 
 source-repository-package
@@ -289,20 +285,6 @@ source-repository-package
   tag: ef38818aa434aaafb82bc7ae4d1fee11523c3ad8
   --sha256: 04ldvkqwy48fh974761q2asmcn163awsrbk9xfy4hm67n4hafkjb
   subdir: ouroboros-consensus
-
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/ouroboros-network
-  tag: ef38818aa434aaafb82bc7ae4d1fee11523c3ad8
-  --sha256: 04ldvkqwy48fh974761q2asmcn163awsrbk9xfy4hm67n4hafkjb
-  subdir: ouroboros-consensus/ouroboros-consensus-mock
-
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/ouroboros-network
-  tag: ef38818aa434aaafb82bc7ae4d1fee11523c3ad8
-  --sha256: 04ldvkqwy48fh974761q2asmcn163awsrbk9xfy4hm67n4hafkjb
-  subdir: ouroboros-consensus/ouroboros-consensus-test-infra
 
 source-repository-package
   type: git
@@ -345,6 +327,27 @@ source-repository-package
   tag: ef38818aa434aaafb82bc7ae4d1fee11523c3ad8
   --sha256: 04ldvkqwy48fh974761q2asmcn163awsrbk9xfy4hm67n4hafkjb
   subdir: typed-protocols-examples
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/ouroboros-network
+  tag: ef38818aa434aaafb82bc7ae4d1fee11523c3ad8
+  --sha256: 04ldvkqwy48fh974761q2asmcn163awsrbk9xfy4hm67n4hafkjb
+  subdir: ouroboros-network-testing
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/ouroboros-network
+  tag: ef38818aa434aaafb82bc7ae4d1fee11523c3ad8
+  --sha256: 04ldvkqwy48fh974761q2asmcn163awsrbk9xfy4hm67n4hafkjb
+  subdir: ouroboros-consensus/ouroboros-consensus-mock
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/ouroboros-network
+  tag: ef38818aa434aaafb82bc7ae4d1fee11523c3ad8
+  --sha256: 04ldvkqwy48fh974761q2asmcn163awsrbk9xfy4hm67n4hafkjb
+  subdir: ouroboros-consensus/ouroboros-consensus-test-infra
 
 source-repository-package
   type: git
