@@ -166,7 +166,7 @@ insertTx tracer blkId tx blockIndex = do
     -- Insert outputs for a transaction before inputs in case the inputs for this transaction
     -- references the output (not sure this can even happen).
     lift $ zipWithM_ (insertTxOut tracer txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
-    void $ zipWithM_ (insertTxIn tracer txId) [0 ..] (toList . Byron.txInputs $ Byron.taTx tx)
+    mapMVExceptT (insertTxIn tracer txId) (toList . Byron.txInputs $ Byron.taTx tx)
   where
     annotateTx :: DbSyncNodeError -> DbSyncNodeError
     annotateTx ee =
@@ -176,7 +176,7 @@ insertTx tracer blkId tx blockIndex = do
 
 insertTxOut
     :: MonadIO m
-    => Trace IO Text -> DB.TxId -> Word16 -> Byron.TxOut
+    => Trace IO Text -> DB.TxId -> Word32 -> Byron.TxOut
     -> ReaderT SqlBackend m ()
 insertTxOut _tracer txId index txout =
   void . DB.insertTxOut $
@@ -190,14 +190,13 @@ insertTxOut _tracer txId index txout =
 
 insertTxIn
     :: MonadIO m
-    => Trace IO Text -> DB.TxId -> Word16 -> Byron.TxIn
+    => Trace IO Text -> DB.TxId -> Byron.TxIn
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertTxIn _tracer txInId txInIndex (Byron.TxInUtxo txHash inIndex) = do
+insertTxIn _tracer txInId (Byron.TxInUtxo txHash inIndex) = do
   txOutId <- liftLookupFail "insertTxIn" $ DB.queryTxId (Byron.unTxHash txHash)
   void . lift . DB.insertTxIn $
             DB.TxIn
               { DB.txInTxInId = txInId
-              , DB.txInTxIndex = txInIndex
               , DB.txInTxOutId = txOutId
               , DB.txInTxOutIndex = fromIntegral inIndex
               }
@@ -234,3 +233,9 @@ mapMExceptT action xs =
     [] -> pure []
     (y:ys) -> (:) <$> action y <*> mapMExceptT action ys
 
+-- | An 'ExceptT' version of 'mapM_' which will 'left' the first 'Left' it finds.
+mapMVExceptT :: Monad m => (a -> ExceptT e m ()) -> [a] -> ExceptT e m ()
+mapMVExceptT action xs =
+  case xs of
+    [] -> pure ()
+    (y:ys) -> action y >> mapMVExceptT action ys
