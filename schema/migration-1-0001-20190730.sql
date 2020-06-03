@@ -16,7 +16,7 @@ BEGIN
     EXECUTE 'CREATE DOMAIN hash32type AS bytea CHECK (octet_length (VALUE) = 32);';
 
     -- Addresses use a 28 byte hash (as do StakeholdIds).
-    EXECUTE 'CREATE DOMAIN hash28type AS bytea CHECK (octet_length (VALUE) = 28);';
+    EXECUTE 'CREATE DOMAIN hash28type AS bytea ;' ; -- dunno! CHECK (octet_length (VALUE) = 32);';
 
     UPDATE "schema_version" SET stage_one = 1;
     RAISE NOTICE 'DB has been migrated to stage_one version %', next_version;
