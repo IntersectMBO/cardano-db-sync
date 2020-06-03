@@ -46,7 +46,6 @@ import           Ouroboros.Consensus.Config (TopLevelConfig)
 import           Ouroboros.Consensus.HardFork.Combinator.Unary (FromRawHash (..))
 import           Ouroboros.Consensus.Node.ProtocolInfo (pInfoConfig)
 import qualified Ouroboros.Consensus.Shelley.Genesis as Shelley
-import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..), protocolInfoShelley)
 import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
 
@@ -64,7 +63,7 @@ class FromRawHash blk => MkConsensusConfig cfg blk where
 instance MkConsensusConfig Byron.Config ByronBlock where
   mkConsensusConfig = mkByronConsensusConfig
 
-instance MkConsensusConfig (ShelleyGenesis TPraosStandardCrypto) (ShelleyBlock TPraosStandardCrypto) where
+instance MkConsensusConfig (ShelleyGenesis TPraosStandardCrypto) ShelleyBlock where
   mkConsensusConfig = mkShelleyConsensusConfig
 
 
@@ -93,7 +92,7 @@ mkByronConsensusConfig bgc =
 
 mkShelleyConsensusConfig
         :: ShelleyGenesis TPraosStandardCrypto
-        -> TopLevelConfig (ShelleyBlock TPraosStandardCrypto)
+        -> TopLevelConfig ShelleyBlock
 mkShelleyConsensusConfig sgc =
   -- Can use Nothing for the last field because that field will be dropped
   -- by 'pInfoConfig' anyway.

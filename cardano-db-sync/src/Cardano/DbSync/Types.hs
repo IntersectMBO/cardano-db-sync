@@ -1,13 +1,41 @@
 module Cardano.DbSync.Types
-  ( ConfigFile (..)
+  ( CardanoBlockTip (..)
+  , CardanoPoint (..)
+  , ConfigFile (..)
   , DbSyncNodeParams (..)
   , GenesisFile (..)
+  , ShelleyBlock
+  , ShelleyHash
+  , ShelleyTx
+  , ShelleyTxId
+  , ShelleyTxIn
+  , ShelleyTxOut
+  , ShelleyTxSeq
   , SocketPath (..)
   ) where
 
-import Cardano.Db (MigrationDir (..))
+import           Cardano.Db (MigrationDir (..))
 
-import Ouroboros.Network.Block (SlotNo (..))
+import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
+import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
+import qualified Ouroboros.Consensus.Shelley.Protocol as Shelley
+import           Ouroboros.Network.Block (Point (..), SlotNo (..), Tip)
+
+import qualified Shelley.Spec.Ledger.BlockChain as Shelley
+import qualified Shelley.Spec.Ledger.Tx as Shelley
+
+
+data CardanoBlockTip
+  = ByronBlockTip !ByronBlock !(Tip ByronBlock)
+  | ShelleyBlockTip !ShelleyBlock !(Tip ShelleyBlock)
+
+data CardanoPoint
+  = ByronPoint !(Point ByronBlock)
+  | ShelleyPoint !(Point ShelleyBlock)
+
+newtype ConfigFile = ConfigFile
+  { unConfigFile :: FilePath
+  }
 
 -- | The product type of all command line arguments
 data DbSyncNodeParams = DbSyncNodeParams
@@ -18,13 +46,17 @@ data DbSyncNodeParams = DbSyncNodeParams
   , enpMaybeRollback :: !(Maybe SlotNo)
   }
 
-newtype ConfigFile = ConfigFile
-  { unConfigFile :: FilePath
-  }
-
 newtype GenesisFile = GenesisFile
   { unGenesisFile :: FilePath
   }
+
+type ShelleyBlock = Shelley.ShelleyBlock Shelley.TPraosStandardCrypto
+type ShelleyHash = Shelley.ShelleyHash Shelley.TPraosStandardCrypto
+type ShelleyTx = Shelley.Tx Shelley.TPraosStandardCrypto
+type ShelleyTxId = Shelley.TxId Shelley.TPraosStandardCrypto
+type ShelleyTxIn = Shelley.TxIn Shelley.TPraosStandardCrypto
+type ShelleyTxOut = Shelley.TxOut Shelley.TPraosStandardCrypto
+type ShelleyTxSeq = Shelley.TxSeq Shelley.TPraosStandardCrypto
 
 newtype SocketPath = SocketPath
   { unSocketPath :: FilePath

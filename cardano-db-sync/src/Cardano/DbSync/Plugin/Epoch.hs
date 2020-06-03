@@ -9,8 +9,7 @@ module Cardano.DbSync.Plugin.Epoch
 
 import           Cardano.BM.Trace (Trace, logError, logInfo)
 
-import qualified Cardano.Chain.Block as Ledger
-import qualified Cardano.Chain.Slotting as Ledger
+import qualified Cardano.Chain.Block as Byron
 
 import           Control.Monad (void)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
@@ -23,8 +22,8 @@ import           Data.Text (Text)
 import           Data.Time.Clock (diffUTCTime, getCurrentTime)
 import           Data.Word (Word64)
 
-import           Database.Esqueleto (Value (..), (^.), (==.), (>=.),
-                    delete, desc, from, limit, orderBy, select, val, where_)
+import           Database.Esqueleto (Value (..), (^.), (==.),
+                    desc, from, limit, orderBy, select, val, where_)
 
 import           Database.Persist.Class (replace)
 import           Database.Persist.Sql (IsolationLevel (Serializable), SqlBackend,
@@ -34,11 +33,12 @@ import           Cardano.Db (EpochId, EntityField (..), listToMaybe)
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Error
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
+import qualified Cardano.DbSync.Era.Shelley.Util as Shelley
+import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
-import           Ouroboros.Network.Block (BlockNo (..), Point, Tip, getTipBlockNo)
-import           Ouroboros.Network.Point (withOrigin)
+import           Ouroboros.Network.Block (BlockNo (..))
 
 import           System.IO.Unsafe (unsafePerformIO)
 
@@ -71,55 +71,57 @@ epochPluginOnStartup trce = do
 
     updateChainTipEpochVar trce
 
-epochPluginInsertBlock :: Trace IO Text -> ByronBlock -> Tip ByronBlock -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-epochPluginInsertBlock trce rawBlk tip =
-  case byronBlockRaw rawBlk of
-    Ledger.ABOBBoundary _ ->
-      -- For the OBFT era there are no boundary blocks so we ignore them even in
-      -- the Ouroboros Classic era.
-      pure $ Right ()
+epochPluginInsertBlock :: Trace IO Text -> CardanoBlockTip -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
+epochPluginInsertBlock trce blkTip = do
+  slotsPerEpoch <- liftIO $ readIORef slotsPerEpochVar
+  case blkTip of
+    ByronBlockTip bblk tip ->
+      case byronBlockRaw bblk of
+        Byron.ABOBBoundary _ ->
+          -- For the OBFT era there are no boundary blocks so we ignore them even in
+          -- the Ouroboros Classic era.
+          pure $ Right ()
 
-    Ledger.ABOBBlock blk -> do
-      slotsPerEpoch <- liftIO $ readIORef slotsPerEpochVar
-      mLatestCachedEpoch <- liftIO $ readIORef latestCachedEpochVar
-      chainTipEpoch <- liftIO $ readIORef latestChainTipEpochVar
-      let epochNum = Byron.epochNumber blk slotsPerEpoch
-          lastCachedEpoch = fromMaybe 0 mLatestCachedEpoch
+        Byron.ABOBBlock blk ->
+          insertBlock trce (Byron.epochNumber blk slotsPerEpoch, Byron.blockNumber blk) (tipBlockNo tip)
+    ShelleyBlockTip sblk tip ->
+      insertBlock trce (Shelley.epochNumber sblk slotsPerEpoch, Shelley.blockNumber sblk) (tipBlockNo tip)
 
+-- Nothing to be done here.
+-- Rollback will take place in the Default plugin and the epoch table will be recalculated.
+epochPluginRollbackBlock :: Trace IO Text -> CardanoPoint -> IO (Either DbSyncNodeError ())
+epochPluginRollbackBlock _ _ = pure $ Right ()
 
+-- -------------------------------------------------------------------------------------------------
 
-      if  | epochNum == chainTipEpoch && lastCachedEpoch == chainTipEpoch ->
-              if withOrigin 0 unBlockNo (getTipBlockNo tip) - Byron.blockNumber blk < 15
-                then -- Following the chain very closely.
-                     updateEpochNum epochNum trce
-                else pure $ Right ()
+insertBlock
+    :: Trace IO Text
+    -> (Word64, Word64)
+    -> BlockNo
+    -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
+insertBlock trce (epochNum, blockNo) tipNo = do
+  mLatestCachedEpoch <- liftIO (readIORef latestCachedEpochVar)
+  chainTipEpoch <- liftIO $ readIORef latestChainTipEpochVar
+  let lastCachedEpoch = fromMaybe 0 mLatestCachedEpoch
 
-          | epochNum > 0 && mLatestCachedEpoch == Nothing ->
-              updateEpochNum 0 trce
-          | epochNum >= lastCachedEpoch + 2 ->
-              updateEpochNum (lastCachedEpoch + 1) trce
-          | epochNum == chainTipEpoch && lastCachedEpoch < chainTipEpoch ->
-              updateEpochNum (lastCachedEpoch + 1) trce
-          | epochNum > chainTipEpoch ->
-              -- Must just have started a new epoch, so call this which will
-              -- update chainTipEpoch.
-              updateEpochNum epochNum trce
-          | otherwise ->
-              pure $ Right ()
+  if  | epochNum == chainTipEpoch && lastCachedEpoch == chainTipEpoch ->
+          if unBlockNo tipNo - blockNo < 15
+            then -- Following the chain very closely.
+                 updateEpochNum epochNum trce
+            else pure $ Right ()
 
-epochPluginRollbackBlock :: Trace IO Text -> Point ByronBlock -> IO (Either DbSyncNodeError ())
-epochPluginRollbackBlock _trce point =
-    case Byron.pointToSlotHash point of
-      Nothing -> pure $ Right ()
-      Just (slot, _hash) -> DB.runDbAction Nothing $ action (Ledger.unSlotNumber slot)
-  where
-    action :: MonadIO m => Word64 -> ReaderT SqlBackend m (Either DbSyncNodeError ())
-    action slot = do
-      slotsPerEpoch <- liftIO $ readIORef slotsPerEpochVar
-      delete . from $ \ epoch ->
-        where_ (epoch ^. EpochNo >=. val (slot `div` slotsPerEpoch))
-      transactionSaveWithIsolation Serializable
-      pure $ Right ()
+      | epochNum > 0 && mLatestCachedEpoch == Nothing ->
+          updateEpochNum 0 trce
+      | epochNum >= lastCachedEpoch + 2 ->
+          updateEpochNum (lastCachedEpoch + 1) trce
+      | epochNum == chainTipEpoch && lastCachedEpoch < chainTipEpoch ->
+          updateEpochNum (lastCachedEpoch + 1) trce
+      | epochNum > chainTipEpoch ->
+          -- Must just have started a new epoch, so call this which will
+          -- update chainTipEpoch.
+          updateEpochNum epochNum trce
+      | otherwise ->
+          pure $ Right ()
 
 -- -------------------------------------------------------------------------------------------------
 

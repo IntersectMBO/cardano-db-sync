@@ -7,7 +7,9 @@
 module Cardano.DbSync.Util
   ( liftedLogException
   , logException
+  , renderByteArray
   , textShow
+  , tipBlockNo
   , traverseMEither
   ) where
 
@@ -19,7 +21,21 @@ import           Control.Exception.Lifted (SomeException, catch)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 
+import           Data.ByteArray (ByteArrayAccess)
+import qualified Data.ByteArray
+import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+
+import           Ouroboros.Network.Block (BlockNo (..), Tip, getTipBlockNo)
+import           Ouroboros.Network.Point (withOrigin)
+
+
+textShow :: Show a => a -> Text
+textShow = Text.pack . show
+
+tipBlockNo :: Tip blk -> BlockNo
+tipBlockNo tip = withOrigin (BlockNo 0) identity (getTipBlockNo tip)
 
 -- | Run a function of type `a -> m (Either e ())` over a list and return
 -- the first `e` or `()`.
@@ -56,5 +72,6 @@ logException tracer txt action =
       logError tracer $ txt <> textShow e
       throwIO e
 
-textShow :: Show a => a -> Text
-textShow = Text.pack . show
+renderByteArray :: ByteArrayAccess bin => bin -> Text
+renderByteArray =
+  Text.decodeUtf8 . Base16.encode . Data.ByteArray.convert

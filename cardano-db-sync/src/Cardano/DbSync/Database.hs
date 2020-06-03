@@ -19,79 +19,28 @@ import qualified Cardano.Chain.Block as Ledger
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import           Cardano.Prelude
 
-import qualified Control.Concurrent.STM as STM
-import           Control.Concurrent.STM.TBQueue (TBQueue)
-import qualified Control.Concurrent.STM.TBQueue as TBQ
-
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Except.Extra (left, newExceptT, runExceptT)
 
 import qualified Cardano.Db as DB
+import           Cardano.DbSync.DbAction
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Metrics
 import           Cardano.DbSync.Plugin
+import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
 import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
-import qualified Ouroboros.Consensus.Shelley.Protocol as Shelley
-import qualified Ouroboros.Consensus.Shelley.Ledger as Shelley
-import           Ouroboros.Network.Block (Point (..), Tip)
 
 import qualified System.Metrics.Prometheus.Metric.Gauge as Gauge
 
-type ShelleyBlock = Shelley.ShelleyBlock Shelley.TPraosStandardCrypto
 
 data NextState
   = Continue
   | Done
   deriving Eq
-
-
-class MkDbAction blk where
-  mkDbApply :: blk -> Tip blk -> DbAction
-  mkDbRollback :: Point blk -> DbAction
-
-instance MkDbAction ByronBlock where
-  mkDbApply blk tip = DbApplyByronBlock blk tip
-  mkDbRollback point = DbRollBackToByronPoint point
-
-instance MkDbAction ShelleyBlock where
-  mkDbApply = panic "mkDbApply ShelleyBlock not yet implemented"
-  mkDbRollback = panic "mkDbRollback ShelleyBlock not yet implemented"
-
-
-data DbAction
-  = DbApplyByronBlock !ByronBlock !(Tip ByronBlock)
-  | DbApplyShelleyBlock !ShelleyBlock !(Tip ShelleyBlock)
-  | DbRollBackToByronPoint !(Point ByronBlock)
-  | DbRollBackToShelleyPoint !(Point ShelleyBlock)
-  | DbFinish
-
-newtype DbActionQueue = DbActionQueue
-  { dbActQueue :: TBQueue DbAction
-  }
-
-lengthDbActionQueue :: DbActionQueue -> STM Natural
-lengthDbActionQueue (DbActionQueue q) = STM.lengthTBQueue q
-
-newDbActionQueue :: IO DbActionQueue
-newDbActionQueue = DbActionQueue <$> TBQ.newTBQueueIO 2000
-
-writeDbActionQueue :: DbActionQueue -> DbAction -> STM ()
-writeDbActionQueue (DbActionQueue q) = TBQ.writeTBQueue q
-
--- | Block if the queue is empty and if its not read/flush everything.
--- Need this because `flushTBQueue` never blocks and we want to block until
--- there is one item or more.
--- Use this instead of STM.check to make sure it blocks if the queue is empty.
-blockingFlushDbActionQueue :: DbActionQueue -> IO [DbAction]
-blockingFlushDbActionQueue (DbActionQueue queue) = do
-  STM.atomically $ do
-    x <- TBQ.readTBQueue queue
-    xs <- TBQ.flushTBQueue queue
-    pure $ x : xs
 
 
 runDbStartup :: Trace IO Text -> DbSyncNodePlugin -> IO ()
@@ -135,11 +84,9 @@ runActions trce plugin actions = do
       case spanDbApply xs of
         ([], DbFinish:_) -> do
             pure Done
-        ([], DbRollBackToByronPoint pt:ys) -> do
+        ([], DbRollBackToPoint pt:ys) -> do
             runRollbacks trce plugin pt
             dbAction Continue ys
-        ([], DbRollBackToShelleyPoint _pt:_ys) ->
-            panic "runActions for ShelleyPoint not yet implemented"
         (ys, zs) -> do
           insertBlockList trce plugin ys
           if null zs
@@ -150,44 +97,47 @@ checkDbState :: Trace IO Text -> [DbAction] -> ExceptT DbSyncNodeError IO NextSt
 checkDbState trce xs =
     case filter isMainBlockApply (reverse xs) of
       [] -> pure Continue
-      (DbApplyByronBlock blk _tip : _) -> validateBlock blk
-      (DbApplyShelleyBlock _blk _tip : _) -> panic "checkDbState for ShelleyBlock not yet implemented"
+      (DbApplyBlock blktip : _) -> validateBlock blktip
       _ -> pure Continue
   where
-    validateBlock :: ByronBlock -> ExceptT DbSyncNodeError IO NextState
-    validateBlock bblk = do
-      case byronBlockRaw bblk of
-        Ledger.ABOBBoundary _ -> left $ NEError "checkDbState got a boundary block"
-        Ledger.ABOBBlock chBlk -> do
-          mDbBlk <- liftIO $ DB.runDbAction (Just trce) $ DB.queryBlockNo (Byron.blockNumber chBlk)
-          case mDbBlk of
-            Nothing -> pure Continue
-            Just dbBlk -> do
-              when (DB.blockHash dbBlk /= Byron.blockHash chBlk) $ do
-                liftIO $ logInfo trce (textShow chBlk)
-                -- liftIO $ logInfo trce (textShow dbBlk)
-                left $ NEBlockMismatch (Byron.blockNumber chBlk) (DB.blockHash dbBlk) (Byron.blockHash chBlk)
+    validateBlock :: CardanoBlockTip -> ExceptT DbSyncNodeError IO NextState
+    validateBlock cblk = do
+      case cblk of
+        ByronBlockTip bblk _ ->
+          case byronBlockRaw bblk of
+            Ledger.ABOBBoundary _ -> left $ NEError "checkDbState got a boundary block"
+            Ledger.ABOBBlock chBlk -> do
+              mDbBlk <- liftIO $ DB.runDbAction (Just trce) $ DB.queryBlockNo (Byron.blockNumber chBlk)
+              case mDbBlk of
+                Nothing -> pure Continue
+                Just dbBlk -> do
+                  when (DB.blockHash dbBlk /= Byron.blockHash chBlk) $ do
+                    liftIO $ logInfo trce (textShow chBlk)
+                    -- liftIO $ logInfo trce (textShow dbBlk)
+                    left $ NEBlockMismatch (Byron.blockNumber chBlk) (DB.blockHash dbBlk) (Byron.blockHash chBlk)
 
-              liftIO . logInfo trce $
-                mconcat [ "checkDbState: Block no ", textShow (Byron.blockNumber chBlk), " present" ]
-              pure Done -- Block already exists, so we are done.
+                  liftIO . logInfo trce $
+                    mconcat [ "checkDbState: Block no ", textShow (Byron.blockNumber chBlk), " present" ]
+                  pure Done -- Block already exists, so we are done.
+
+        ShelleyBlockTip {} ->
+          panic "checkDbState for ShelleyBlock not yet implemented"
 
     isMainBlockApply :: DbAction -> Bool
     isMainBlockApply dba =
       case dba of
-        DbApplyByronBlock blk _tip ->
+        DbApplyBlock (ByronBlockTip blk _tip) ->
           case byronBlockRaw blk of
             Ledger.ABOBBlock _ -> True
             Ledger.ABOBBoundary _ -> False
-        DbApplyShelleyBlock {} -> True
-        DbRollBackToByronPoint {} -> False
-        DbRollBackToShelleyPoint {} -> False
+        DbApplyBlock (ShelleyBlockTip {}) -> False -- Should not matter.
+        DbRollBackToPoint {} -> False
         DbFinish -> False
 
 runRollbacks
     :: Trace IO Text
     -> DbSyncNodePlugin
-    -> Point ByronBlock
+    -> CardanoPoint
     -> ExceptT DbSyncNodeError IO ()
 runRollbacks trce plugin point =
   newExceptT
@@ -197,7 +147,7 @@ runRollbacks trce plugin point =
 insertBlockList
     :: Trace IO Text
     -> DbSyncNodePlugin
-    -> [(ByronBlock, Tip ByronBlock)]
+    -> [CardanoBlockTip]
     -> ExceptT DbSyncNodeError IO ()
 insertBlockList trce plugin blks =
   -- Setting this to True will log all 'Persistent' operations which is great
@@ -207,15 +157,14 @@ insertBlockList trce plugin blks =
     $ traverseMEither insertBlock blks
   where
     insertBlock
-        :: (ByronBlock, Tip ByronBlock)
+        :: CardanoBlockTip
         -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-    insertBlock (blk, blkNo) =
-      traverseMEither (\ f -> f trce blk blkNo) $ plugInsertBlock plugin
-
+    insertBlock blkTip =
+      traverseMEither (\ f -> f trce blkTip) $ plugInsertBlock plugin
 
 -- | Split the DbAction list into a prefix containing blocks to apply and a postfix.
-spanDbApply :: [DbAction] -> ([(ByronBlock, Tip ByronBlock)], [DbAction])
+spanDbApply :: [DbAction] -> ([CardanoBlockTip], [DbAction])
 spanDbApply lst =
   case lst of
-    (DbApplyByronBlock b t:xs) -> let (ys, zs) = spanDbApply xs in ((b, t):ys, zs)
+    (DbApplyBlock bt:xs) -> let (ys, zs) = spanDbApply xs in (bt:ys, zs)
     xs -> ([], xs)

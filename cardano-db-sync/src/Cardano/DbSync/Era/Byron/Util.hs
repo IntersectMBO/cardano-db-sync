@@ -14,15 +14,11 @@ module Cardano.DbSync.Era.Byron.Util
   , configSlotDuration
   , epochNumber
   , genesisToHeaderHash
-  , liftedLogException
-  , logException
   , mkSlotLeader
   , pointToSlotHash
-  , renderByteArray
   , renderAbstractHash
   , slotLeaderHash
   , slotNumber
-  , textShow
   , unAbstractHash
   , unAddressHash
   , unCryptoHash
@@ -33,7 +29,6 @@ module Cardano.DbSync.Era.Byron.Util
 import           Cardano.Prelude hiding (catch)
 
 import           Cardano.Binary (Raw)
-import           Cardano.BM.Trace (Trace, logError)
 import qualified Cardano.Crypto as Crypto
 
 -- Import all 'cardano-ledger' functions and data types qualified so they do not
@@ -46,18 +41,11 @@ import qualified Cardano.Chain.Slotting as Byron
 import qualified Cardano.Chain.Update as Byron
 import qualified Cardano.Chain.UTxO as Byron
 
-import           Control.Exception.Lifted (SomeException, catch)
-import           Control.Monad.IO.Class (MonadIO, liftIO)
-import           Control.Monad.Trans.Control (MonadBaseControl)
-
 import           Crypto.Hash (Blake2b_256)
 
-import           Data.ByteArray (ByteArrayAccess)
-import qualified Data.ByteArray
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
 import           Data.Coerce (coerce)
-import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
 import qualified Cardano.Db as DB
@@ -101,31 +89,6 @@ epochNumber blk slotsPerEpoch =
 genesisToHeaderHash :: Byron.GenesisHash -> Byron.HeaderHash
 genesisToHeaderHash = coerce
 
--- | Needed when debugging disappearing exceptions.
-liftedLogException :: (MonadBaseControl IO m, MonadIO m) => Trace IO Text -> Text -> m a -> m a
-liftedLogException tracer txt action =
-    action `catch` logger
-  where
-    logger :: MonadIO m => SomeException -> m a
-    logger e =
-      liftIO $ do
-        putStrLn $ "Caught exception: txt " ++ show e
-        logError tracer $ txt <> textShow e
-        throwIO e
-
--- | ouroboros-network catches 'SomeException' and if a 'nullTracer' is passed into that
--- code, the caught exception will not be logged. Therefore wrap all cardano-db-sync code that
--- is called from network with an exception logger so at least the exception will be
--- logged (instead of silently swallowed) and then rethrown.
-logException :: Trace IO Text -> Text -> IO a -> IO a
-logException tracer txt action =
-    action `catch` logger
-  where
-    logger :: SomeException -> IO a
-    logger e = do
-      logError tracer $ txt <> textShow e
-      throwIO e
-
 mkSlotLeader :: Byron.ABlock ByteString -> DB.SlotLeader
 mkSlotLeader blk =
   let slHash = slotLeaderHash blk
@@ -140,10 +103,6 @@ pointToSlotHash (Point x) =
     Origin -> Nothing
     At blk -> Just (Byron.SlotNumber . unSlotNo $ Point.blockPointSlot blk, unByronHash $ Point.blockPointHash blk)
 
-renderByteArray :: ByteArrayAccess bin => bin -> Text
-renderByteArray =
-  Text.decodeUtf8 . Base16.encode . Data.ByteArray.convert
-
 renderAbstractHash :: Crypto.AbstractHash algo a -> Text
 renderAbstractHash =
     Text.decodeUtf8 . Base16.encode . Crypto.abstractHashToBytes
@@ -155,9 +114,6 @@ slotLeaderHash =
 slotNumber :: Byron.ABlock ByteString -> Word64
 slotNumber =
   Byron.unSlotNumber . Byron.headerSlot . Byron.blockHeader
-
-textShow :: Show a => a -> Text
-textShow = Text.pack . show
 
 unAbstractHash :: Crypto.Hash Raw -> ByteString
 unAbstractHash = Crypto.abstractHashToBytes
