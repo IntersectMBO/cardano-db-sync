@@ -34,7 +34,7 @@ data DbSyncNodePlugin = DbSyncNodePlugin
   { -- A function run each time the application starts. Can be used to do a one time update/setup
     -- of a table.
     plugOnStartup
-        :: [Trace IO Text -> ReaderT SqlBackend (LoggingT IO) ()]
+        :: [Trace IO Text -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())]
     -- Called for each block recieved from the network.
     -- This will not be called for the original genesis block, but will be called for
     -- all subsequent blocks.

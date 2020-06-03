@@ -32,6 +32,7 @@ library
 
   exposed-modules:      Cardano.DbSync
                         Cardano.DbSync.Plugin.Epoch
+                        Cardano.DbSync.Error
 
   other-modules:        Cardano.DbSync.Config
                         Cardano.DbSync.Database
@@ -41,7 +42,6 @@ library
                         Cardano.DbSync.Era.Byron.Util
                         Cardano.DbSync.Era.Shelley.Genesis
                         Cardano.DbSync.Era.Shelley.Util
-                        Cardano.DbSync.Error
                         Cardano.DbSync.Metrics
                         Cardano.DbSync.Plugin
                         Cardano.DbSync.Plugin.Default
@@ -128,3 +128,40 @@ executable cardano-db-sync
                       , cardano-prelude
                       , optparse-applicative
                       , ouroboros-network
+
+test-suite test
+  default-language:     Haskell2010
+  type:                 exitcode-stdio-1.0
+  main-is:              Test.hs
+  hs-source-dirs:       test
+
+  ghc-options:          -Wall
+                        -Wcompat
+                        -fwarn-redundant-constraints
+                        -fwarn-incomplete-patterns
+                        -fwarn-unused-imports
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+
+  other-modules:        Test.IO.Cardano.DbSync.BlockSync
+
+  build-depends:        base                            >= 4.12         && < 4.13
+                      , cardano-prelude
+                      , aeson
+                      , cardano-db
+                      , cardano-db-sync
+                      , cardano-ledger
+                      , directory
+                      , filepath
+                      , iohk-monitoring
+                      , monad-logger
+                      , persistent
+                      , ouroboros-consensus-byron
+                      , ouroboros-network
+                      , hedgehog
+                      , tasty
+                      , tasty-hunit
+                      , tasty-hedgehog
+                      , text
+                      , transformers
+
