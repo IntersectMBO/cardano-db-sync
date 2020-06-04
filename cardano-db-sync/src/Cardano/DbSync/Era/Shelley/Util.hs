@@ -21,6 +21,7 @@ module Cardano.DbSync.Era.Shelley.Util
   , txOutputSum
   , unCoin
   , unHeaderHash
+  , unTxHash
   ) where
 
 import           Cardano.Prelude
@@ -44,6 +45,7 @@ import qualified Ouroboros.Network.Point as Point
 import           Shelley.Spec.Ledger.Coin (Coin (..))
 import qualified Shelley.Spec.Ledger.BlockChain as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
+import qualified Shelley.Spec.Ledger.UTxO as Shelley
 
 
 blockHash :: ShelleyBlock -> ByteString
@@ -104,8 +106,8 @@ slotNumber =
 txFee :: ShelleyTx -> Word64
 txFee = unCoin . Shelley._txfee . Shelley._body
 
-txHash :: ShelleyTxId -> ByteString
-txHash (Shelley.TxId txid) = Crypto.getHash txid
+txHash :: ShelleyTx -> ByteString
+txHash = Crypto.getHash . Shelley.hashTxBody . Shelley._body
 
 txInputList :: ShelleyTx -> [ShelleyTxIn]
 txInputList = toList . Shelley._inputs . Shelley._body
@@ -127,6 +129,9 @@ unCoin (Coin c) = fromIntegral c
 
 unHeaderHash :: ShelleyHash -> ByteString
 unHeaderHash = Crypto.getHash . Shelley.unHashHeader . Shelley.unShelleyHash
+
+unTxHash :: ShelleyTxId -> ByteString
+unTxHash (Shelley.TxId txid) = Crypto.getHash txid
 
 -- -------------------------------------------------------------------------------------------------
 -- Internal

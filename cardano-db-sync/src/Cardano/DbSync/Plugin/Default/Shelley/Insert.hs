@@ -136,7 +136,7 @@ insertTxIn
     => Trace IO Text -> DB.TxId -> ShelleyTxIn
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertTxIn _tracer txInId (Shelley.TxIn txId index) = do
-  txOutId <- liftLookupFail "insertTxIn" $ DB.queryTxId (Shelley.txHash txId)
+  txOutId <- liftLookupFail "insertTxIn" $ DB.queryTxId (Shelley.unTxHash txId)
   void . lift . DB.insertTxIn $
             DB.TxIn
               { DB.txInTxInId = txInId
