@@ -59,7 +59,7 @@ insertShelleyBlock tracer blk tip = do
                     , DB.blockSlotNo = Just $ Shelley.slotNumber blk
                     , DB.blockBlockNo = Just $ Shelley.blockNumber blk
                     , DB.blockPrevious  = Just pbid
-                    , DB.blockMerkelRoot = Nothing -- Do Shelley block even have one?
+                    , DB.blockMerkelRoot = Nothing -- Shelley blocks do not have one.
                     , DB.blockSlotLeader = slid
                     , DB.blockSize = Shelley.blockSize blk
                     , DB.blockTime = DB.slotUtcTime meta (Shelley.slotNumber blk)
@@ -74,11 +74,11 @@ insertShelleyBlock tracer blk tip = do
       when (followingClosely && slotWithin /= 0 && Shelley.slotNumber blk > 0 && Shelley.slotNumber blk  `mod` 20 == 0) $ do
         logInfo tracer $
           mconcat
-            [ "insertABlock: continuing epoch ", textShow epoch
+            [ "insertShelleyBlock: continuing epoch ", textShow epoch
             , " (slot ", textShow slotWithin, ")"
             ]
       logger tracer $ mconcat
-        [ "insertABlock: slot ", textShow (Shelley.slotNumber blk)
+        [ "insertShelleyBlock: slot ", textShow (Shelley.slotNumber blk)
         , ", block ", textShow (Shelley.blockNumber blk)
         , ", hash ", renderByteArray (Shelley.blockHash blk)
         ]

@@ -4,6 +4,7 @@ module Cardano.DbSync.Types
   , ConfigFile (..)
   , DbSyncNodeParams (..)
   , GenesisFile (..)
+  , ShelleyAddress
   , ShelleyBlock
   , ShelleyHash
   , ShelleyTx
@@ -21,6 +22,7 @@ import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
 import qualified Ouroboros.Consensus.Shelley.Protocol as Shelley
 import           Ouroboros.Network.Block (Point (..), SlotNo (..), Tip)
 
+import qualified Shelley.Spec.Ledger.Address as Shelley
 import qualified Shelley.Spec.Ledger.BlockChain as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 
@@ -50,6 +52,7 @@ newtype GenesisFile = GenesisFile
   { unGenesisFile :: FilePath
   }
 
+type ShelleyAddress = Shelley.Addr Shelley.TPraosStandardCrypto
 type ShelleyBlock = Shelley.ShelleyBlock Shelley.TPraosStandardCrypto
 type ShelleyHash = Shelley.ShelleyHash Shelley.TPraosStandardCrypto
 type ShelleyTx = Shelley.Tx Shelley.TPraosStandardCrypto
