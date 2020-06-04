@@ -109,28 +109,26 @@ insertBlock
 insertBlock trce (epochNum, blockNo) tipNo = do
 
   mLatestCachedEpoch <- liftIO (readIORef latestCachedEpochVar)
-  chainTipEpoch <- liftIO $ readIORef latestChainTipEpochVar
+  _chainTipEpoch <- liftIO $ readIORef latestChainTipEpochVar
 
-  let blockDiff = unBlockNo tipNo - blockNo
+  let _blockDiff = unBlockNo tipNo - blockNo
 
   let updateEpochAction :: UpdateEpochCmd
-      updateEpochAction = updateEpochNumLogic epochNum mLatestCachedEpoch chainTipEpoch blockDiff
+      updateEpochAction = updateEpochNumLogic epochNum mLatestCachedEpoch
 
   -- Convert commands into actions.
   case updateEpochAction of
-    UpdateEpoch epochNum' -> do
-        -- For debugging! TO BE REMOVED!
-        liftIO . logInfo trce $ "UpdateEpoch!"
-        liftIO . logInfo trce $ "    epochNum = " <> (show epochNum :: Text)
-        liftIO . logInfo trce $ "    mLatestCachedEpoch = " <> (show mLatestCachedEpoch :: Text)
-        liftIO . logInfo trce $ "    chainTipEpoch = " <> (show chainTipEpoch :: Text)
-        liftIO . logInfo trce $ "    blockDiff = " <> (show blockDiff :: Text)
+    UpdateEpoch epochNum' ->
+        updateEpochNumDefault epochNum' trce
+    UpdateEpochs historyEpochNum' epochNum' -> do
+        _ <- updateEpochNumDefault historyEpochNum' trce
         updateEpochNumDefault epochNum' trce
     DoNotUpdate -> pure $ Right ()
 
 -- |Commands for separating the intructions from it's effect.
 data UpdateEpochCmd
   = UpdateEpoch Word64
+  | UpdateEpochs Word64 Word64
   | DoNotUpdate
   deriving (Eq, Show)
 
@@ -138,42 +136,35 @@ data UpdateEpochCmd
 updateEpochNumLogic
   :: Word64
   -> Maybe Word64
-  -> Word64
-  -> Word64
   -> UpdateEpochCmd
-updateEpochNumLogic epochNum mLatestCachedEpoch chainTipEpoch blockDiff = do
+updateEpochNumLogic dbEpochNum mNetworkEpochNum = do
 
-      let lastCachedEpoch = fromMaybe 0 mLatestCachedEpoch
+      let networkEpochNum = fromMaybe 0 mNetworkEpochNum
 
-      if  | epochNum == chainTipEpoch && lastCachedEpoch == chainTipEpoch ->
-              -- Following the chain very closely.
-              if blockDiff < 15
-                then UpdateEpoch epochNum
-                else DoNotUpdate
-
-          | epochNum > 0 && mLatestCachedEpoch == Nothing ->
+      if  | dbEpochNum > 0 && mNetworkEpochNum == Nothing ->
               -- There is no cache of the epoch.
               UpdateEpoch 0
 
-          | epochNum >= lastCachedEpoch + 2 ->
-              -- The diff for the cached and current epoch is >= 2.
-              UpdateEpoch (lastCachedEpoch + 1)
+          | dbEpochNum > networkEpochNum ->
+              -- Following the chain very closely.
+              -- This inserts the new epoch number and updates the old epoch,
+              -- since we have metadata associated with it that we need to update
+              -- at the end of each epoch.
+              UpdateEpochs networkEpochNum (networkEpochNum + 1)
 
-          | epochNum == chainTipEpoch && lastCachedEpoch < chainTipEpoch ->
-              UpdateEpoch (lastCachedEpoch + 1)
+          | dbEpochNum == networkEpochNum ->
+              -- The latest epoch is updated as soon as the new epoch arrives.
+              DoNotUpdate
 
-          | epochNum > chainTipEpoch ->
-              -- This can hit the second condition and the third one.
-              -- It's very weird that this is here.
-              UpdateEpoch epochNum
+          | dbEpochNum < networkEpochNum ->
+              -- The case where there is a rollback or something weird happening.
+              DoNotUpdate
 
           | otherwise ->
               -- I really don't see what could hit this one.
               DoNotUpdate
 
-
-
--- -------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------
 
 {-# NOINLINE slotsPerEpochVar #-}
 slotsPerEpochVar :: IORef Word64

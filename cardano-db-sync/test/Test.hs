@@ -4,7 +4,7 @@ import           Data.Maybe (isNothing)
 
 import           Test.Tasty (defaultMain, testGroup)
 
-import qualified Test.IO.Cardano.DbSync.BlockSync
+import qualified Test.IO.Cardano.DbSync.EpochSync
 
 import           System.Environment (lookupEnv, setEnv)
 import           System.Directory (getCurrentDirectory)
@@ -20,6 +20,6 @@ main = do
 
   defaultMain $
     testGroup "BlockSync"
-      [ Test.IO.Cardano.DbSync.BlockSync.tests
+      [ Test.IO.Cardano.DbSync.EpochSync.tests
       ]
 
