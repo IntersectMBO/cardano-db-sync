@@ -8,8 +8,8 @@ module Cardano.DbSync.Era
   , MkConsensusConfig (..)
   , genesisProtocolMagic
   , insertValidateGenesisDist
-  , mkByronConsensusConfig
-  , mkShelleyConsensusConfig
+  , mkByronTopLevelConfig
+  , mkShelleyTopLevelConfig
   , readByronGenesisConfig
   , readGenesisConfig
   , readShelleyGenesisConfig
@@ -28,7 +28,6 @@ import           Cardano.DbSync.Config
 import qualified Cardano.DbSync.Era.Byron.Genesis as Byron
 import qualified Cardano.DbSync.Era.Shelley.Genesis as Shelley
 import           Cardano.DbSync.Error
-import           Cardano.DbSync.Orphans ()
 import           Cardano.DbSync.Types
 
 import           Cardano.Config.Shelley.Orphans ()
@@ -40,11 +39,11 @@ import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, ne
 import qualified Data.Aeson as Aeson
 import qualified Data.Text as Text
 
+import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
 import           Ouroboros.Consensus.Byron.Ledger.Block (ByronBlock)
-import           Ouroboros.Consensus.Cardano (Protocol (..), protocolInfo)
+import           Ouroboros.Consensus.Cardano (protocolInfoByron)
 import           Ouroboros.Consensus.Config (TopLevelConfig)
-import           Ouroboros.Consensus.HardFork.Combinator.Unary (FromRawHash (..))
-import           Ouroboros.Consensus.Node.ProtocolInfo (pInfoConfig)
+import           Ouroboros.Consensus.Node (ProtocolInfo (..), pInfoConfig)
 import qualified Ouroboros.Consensus.Shelley.Genesis as Shelley
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..), protocolInfoShelley)
 import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
@@ -57,14 +56,14 @@ data GenesisEra
   | GenesisShelley !(ShelleyGenesis TPraosStandardCrypto)
 
 
-class FromRawHash blk => MkConsensusConfig cfg blk where
+class ConvertRawHash blk => MkConsensusConfig cfg blk where
   mkConsensusConfig :: cfg -> TopLevelConfig blk
 
 instance MkConsensusConfig Byron.Config ByronBlock where
-  mkConsensusConfig = mkByronConsensusConfig
+  mkConsensusConfig = mkByronTopLevelConfig
 
 instance MkConsensusConfig (ShelleyGenesis TPraosStandardCrypto) ShelleyBlock where
-  mkConsensusConfig = mkShelleyConsensusConfig
+  mkConsensusConfig = mkShelleyTopLevelConfig
 
 
 genesisProtocolMagic :: GenesisEra -> ProtocolMagic
@@ -85,18 +84,24 @@ insertValidateGenesisDist trce nname genCfg =
 
 -- -----------------------------------------------------------------------------
 
-mkByronConsensusConfig :: Byron.Config -> TopLevelConfig ByronBlock
-mkByronConsensusConfig bgc =
-  pInfoConfig . protocolInfo $ ProtocolRealPBFT bgc Nothing (Byron.ProtocolVersion 0 2 0)
-      (Byron.SoftwareVersion (Byron.ApplicationName "cardano-sl") 1) Nothing
+mkByronTopLevelConfig :: Byron.Config -> TopLevelConfig ByronBlock
+mkByronTopLevelConfig bgc =
+    pInfoConfig byronInfo
+  where
+    byronInfo :: ProtocolInfo IO ByronBlock
+    byronInfo =
+      protocolInfoByron bgc Nothing (Byron.ProtocolVersion 0 2 0)
+        (Byron.SoftwareVersion (Byron.ApplicationName "cardano-sl") 1) Nothing
 
-mkShelleyConsensusConfig
-        :: ShelleyGenesis TPraosStandardCrypto
-        -> TopLevelConfig ShelleyBlock
-mkShelleyConsensusConfig sgc =
-  -- Can use Nothing for the last field because that field will be dropped
-  -- by 'pInfoConfig' anyway.
-  pInfoConfig $ protocolInfoShelley sgc (ProtVer 0 0) Nothing
+
+mkShelleyTopLevelConfig :: ShelleyGenesis TPraosStandardCrypto -> TopLevelConfig ShelleyBlock
+mkShelleyTopLevelConfig sgc =
+    pInfoConfig shelleyInfo
+  where
+    -- Can use Nothing for the last field because that field will be dropped
+    -- by 'pInfoConfig' anyway.
+    shelleyInfo :: ProtocolInfo IO ShelleyBlock
+    shelleyInfo = protocolInfoShelley sgc (ProtVer 0 0) Nothing
 
 mkShelleyProtocolMagic :: ShelleyGenesis TPraosStandardCrypto -> ProtocolMagic
 mkShelleyProtocolMagic sg =

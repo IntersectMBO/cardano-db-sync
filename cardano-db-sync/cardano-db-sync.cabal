@@ -43,7 +43,6 @@ library
                         Cardano.DbSync.Era.Shelley.Util
                         Cardano.DbSync.Error
                         Cardano.DbSync.Metrics
-                        Cardano.DbSync.Orphans
                         Cardano.DbSync.Plugin
                         Cardano.DbSync.Plugin.Default
                         Cardano.DbSync.Plugin.Default.Insert
