@@ -42,7 +42,6 @@ import           Cardano.DbSync.Database
 import           Cardano.DbSync.Era
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Metrics
-import           Cardano.DbSync.Orphans ()
 import           Cardano.DbSync.Plugin (DbSyncNodePlugin (..))
 import           Cardano.DbSync.Plugin.Default (defDbSyncNodePlugin)
 import           Cardano.DbSync.Plugin.Default.Rollback (unsafeRollback)
@@ -69,13 +68,14 @@ import           Data.Void (Void)
 
 import           Network.Socket (SockAddr (..))
 import           Network.Mux (MuxTrace, WithMuxBearer)
+import           Network.Mux.Types (MuxMode (..))
 
 import           Ouroboros.Network.Driver.Simple (runPipelinedPeer)
 import           Network.TypedProtocol.Pipelined (Nat(Zero, Succ))
 
+import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
 import           Ouroboros.Consensus.Byron.Ledger (GenTx)
 import           Ouroboros.Consensus.Config (TopLevelConfig)
-import           Ouroboros.Consensus.HardFork.Combinator.Unary (FromRawHash (..))
 import           Ouroboros.Consensus.Network.NodeToClient (ClientCodecs,
                     cChainSyncCodec, cStateQueryCodec, cTxSubmissionCodec)
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
@@ -85,7 +85,7 @@ import qualified Ouroboros.Network.NodeToClient.Version as Network
 
 import           Ouroboros.Network.Block (BlockNo (..), HeaderHash, Point (..), SlotNo (..),
                     Tip, genesisPoint, getTipBlockNo, blockNo)
-import           Ouroboros.Network.Mux (AppType (..), MuxPeer (..),  RunMiniProtocol (..))
+import           Ouroboros.Network.Mux (MuxPeer (..),  RunMiniProtocol (..))
 import           Ouroboros.Network.NodeToClient (IOManager, ClientSubscriptionParams (..),
                     ConnectionId, ErrorPolicyTrace (..), Handshake, LocalAddress,
                     NetworkSubscriptionTracers (..), NodeToClientProtocols (..),
@@ -119,7 +119,7 @@ data Peer = Peer SockAddr SockAddr deriving Show
 runDbSyncNode :: DbSyncNodePlugin -> DbSyncNodeParams -> IO ()
 runDbSyncNode plugin enp =
   withIOManager $ \ iomgr -> do
-    DB.runMigrations Prelude.id True (enpMigrationDir enp) (LogFileDir "/tmp")
+    DB.runMigrations Prelude.id True (enpMigrationDir enp) (Just $ LogFileDir "/tmp")
 
     enc <- readDbSyncNodeConfig (unConfigFile $ enpConfigFile enp)
 
@@ -145,14 +145,14 @@ runDbSyncNode plugin enp =
         runDbStartup trce plugin
         case genCfg of
           GenesisByron bCfg ->
-            runDbSyncNodeNodeClient iomgr trce plugin (mkByronConsensusConfig bCfg) (enpSocketPath enp)
+            runDbSyncNodeNodeClient iomgr trce plugin (mkByronTopLevelConfig bCfg) (enpSocketPath enp)
           GenesisShelley sCfg ->
-            runDbSyncNodeNodeClient iomgr trce plugin (mkShelleyConsensusConfig sCfg) (enpSocketPath enp)
+            runDbSyncNodeNodeClient iomgr trce plugin (mkShelleyTopLevelConfig sCfg) (enpSocketPath enp)
 
 -- -------------------------------------------------------------------------------------------------
 
 runDbSyncNodeNodeClient
-    :: forall blk. (FromRawHash blk, MkDbAction blk, RunNode blk, Show blk)
+    :: forall blk. (MkDbAction blk, RunNode blk)
     => IOManager -> Trace IO Text -> DbSyncNodePlugin -> TopLevelConfig blk -> SocketPath
     -> IO ()
 runDbSyncNodeNodeClient iomgr trce plugin topLevelConfig (SocketPath socketPath) = do
@@ -193,7 +193,7 @@ runDbSyncNodeNodeClient iomgr trce plugin topLevelConfig (SocketPath socketPath)
     handshakeTracer = toLogObject $ appendName "Handshake" trce
 
 dbSyncProtocols
-  :: forall blk. (FromRawHash blk, MkDbAction blk, RunNode blk, Show blk)
+  :: forall blk. (MkDbAction blk, RunNode blk)
   => Trace IO Text
   -> DbSyncNodePlugin
   -> TopLevelConfig blk
@@ -201,7 +201,7 @@ dbSyncProtocols
   -> NodeToClientVersion blk
   -> ClientCodecs blk IO
   -> ConnectionId LocalAddress
-  -> NodeToClientProtocols 'InitiatorApp BSL.ByteString IO () Void
+  -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
 dbSyncProtocols trce plugin _topLevelConfig txv _version codecs _connectionId =
     NodeToClientProtocols {
           localChainSyncProtocol = localChainSyncProtocol
@@ -212,7 +212,7 @@ dbSyncProtocols trce plugin _topLevelConfig txv _version codecs _connectionId =
     localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync blk (Tip blk)))
     localChainSyncTracer = toLogObject $ appendName "ChainSync" trce
 
-    localChainSyncProtocol :: RunMiniProtocol 'InitiatorApp BSL.ByteString IO () Void
+    localChainSyncProtocol :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
     localChainSyncProtocol = InitiatorProtocolOnly $ MuxPeerRaw $ \channel ->
       liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
         logInfo trce "Starting chainSyncClient"
@@ -233,13 +233,13 @@ dbSyncProtocols trce plugin _topLevelConfig txv _version codecs _connectionId =
         atomically $ writeDbActionQueue actionQueue DbFinish
         cancel server
 
-    localTxSubmissionProtocol :: RunMiniProtocol 'InitiatorApp BSL.ByteString IO () Void
+    localTxSubmissionProtocol :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
     localTxSubmissionProtocol = InitiatorProtocolOnly $ MuxPeer
         (contramap (Text.pack . show) . toLogObject $ appendName "db-sync-local-tx" trce)
         (cTxSubmissionCodec codecs)
         (localTxSubmissionClientPeer (txSubmissionClient txv))
 
-    dummyLocalQueryProtocol :: RunMiniProtocol 'InitiatorApp BSL.ByteString IO () Void
+    dummyLocalQueryProtocol :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
     dummyLocalQueryProtocol = InitiatorProtocolOnly $ MuxPeer
         Logging.nullTracer
         (cStateQueryCodec codecs)
@@ -265,7 +265,7 @@ logDbState trce = do
         (Nothing, Nothing) -> "empty (genesis)"
 
 
-getLatestPoints :: forall blk. FromRawHash blk => IO [Point blk]
+getLatestPoints :: forall blk. ConvertRawHash blk => IO [Point blk]
 getLatestPoints =
     -- Blocks (and the transactions they contain) are inserted within an SQL transaction.
     -- That means that all the blocks (including their transactions) returned by the query
