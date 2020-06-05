@@ -109,12 +109,12 @@ insertBlock
 insertBlock trce (epochNum, blockNo) tipNo = do
 
   mLatestCachedEpoch <- liftIO (readIORef latestCachedEpochVar)
-  _chainTipEpoch <- liftIO $ readIORef latestChainTipEpochVar
+  chainTipEpoch <- liftIO $ readIORef latestChainTipEpochVar
 
   let _blockDiff = unBlockNo tipNo - blockNo
 
   let updateEpochAction :: UpdateEpochCmd
-      updateEpochAction = updateEpochNumLogic epochNum mLatestCachedEpoch
+      updateEpochAction = updateEpochNumLogic epochNum mLatestCachedEpoch chainTipEpoch
 
   -- Convert commands into actions.
   case updateEpochAction of
@@ -136,27 +136,36 @@ data UpdateEpochCmd
 updateEpochNumLogic
   :: Word64
   -> Maybe Word64
+  -> Word64
   -> UpdateEpochCmd
-updateEpochNumLogic dbEpochNum mNetworkEpochNum = do
+updateEpochNumLogic networkEpochNum mDbEpochNum networkEpochTipNum = do
 
-      let networkEpochNum = fromMaybe 0 mNetworkEpochNum
+      let dbEpochNum = fromMaybe 0 mDbEpochNum
 
-      if  | dbEpochNum > 0 && mNetworkEpochNum == Nothing ->
+      if  | networkEpochNum > 0 && mDbEpochNum == Nothing ->
               -- There is no cache of the epoch.
               UpdateEpoch 0
 
-          | dbEpochNum > networkEpochNum ->
-              -- Following the chain very closely.
+          | networkEpochNum > dbEpochNum ->
               -- This inserts the new epoch number and updates the old epoch,
               -- since we have metadata associated with it that we need to update
               -- at the end of each epoch.
-              UpdateEpochs networkEpochNum (networkEpochNum + 1)
+              UpdateEpochs dbEpochNum (dbEpochNum + 1)
 
-          | dbEpochNum == networkEpochNum ->
+          | networkEpochNum == dbEpochNum && dbEpochNum == networkEpochTipNum ->
+              -- Following the chain very closely.
+              -- We are at the latest and current epoch, we are following it very
+              -- closely and updating it every block.
+              -- This is acceptable here, since the time it takes to insert a epoch
+              -- is marginal compared to the syncing and insertion of a block.
+              UpdateEpoch dbEpochNum
+
+          | networkEpochNum == dbEpochNum && dbEpochNum /= networkEpochTipNum ->
               -- The latest epoch is updated as soon as the new epoch arrives.
+              -- We are not at the tip so we don't have to follow the epoch closely.
               DoNotUpdate
 
-          | dbEpochNum < networkEpochNum ->
+          | networkEpochNum < dbEpochNum ->
               -- The case where there is a rollback or something weird happening.
               DoNotUpdate
 
