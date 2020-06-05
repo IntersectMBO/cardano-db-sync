@@ -1,9 +1,11 @@
 
-import           Data.Monoid ((<>))
-import           Data.Word (Word64)
-
 import           Cardano.Db.App
 import           Cardano.Db
+
+import           Control.Applicative (optional)
+
+import           Data.Monoid ((<>))
+import           Data.Word (Word64)
 
 import           Options.Applicative (Parser, ParserInfo, ParserPrefs)
 import qualified Options.Applicative as Opt
@@ -27,7 +29,7 @@ main = do
 data Command
   = CreateMigration MigrationDir
   | Rollback Word64
-  | RunMigrations MigrationDir LogFileDir
+  | RunMigrations MigrationDir (Maybe LogFileDir)
   | UtxoSetAtBlock Word64
   | Validate
 
@@ -36,7 +38,7 @@ runCommand cmd =
   case cmd of
     CreateMigration mdir -> doCreateMigration mdir
     Rollback slotNo -> runRollback slotNo
-    RunMigrations mdir ldir -> runMigrations id False mdir ldir
+    RunMigrations mdir mldir -> runMigrations id False mdir mldir
     UtxoSetAtBlock blkid -> utxoSetAtBlock blkid
     Validate -> runValidation
 
@@ -92,7 +94,7 @@ pCommand =
 
     pRunMigrations :: Parser Command
     pRunMigrations =
-      RunMigrations <$> pMigrationDir <*> pLogFileDir
+      RunMigrations <$> pMigrationDir <*> optional pLogFileDir
 
     pRollback :: Parser Command
     pRollback =

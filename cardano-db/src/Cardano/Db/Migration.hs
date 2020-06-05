@@ -50,15 +50,21 @@ newtype LogFileDir
 
 -- | Run the migrations in the provided 'MigrationDir' and write date stamped log file
 -- to 'LogFileDir'.
-runMigrations :: (PGConfig -> PGConfig) -> Bool -> MigrationDir -> LogFileDir -> IO ()
-runMigrations cfgOverride quiet migrationDir logfiledir = do
+runMigrations :: (PGConfig -> PGConfig) -> Bool -> MigrationDir -> Maybe LogFileDir -> IO ()
+runMigrations cfgOverride quiet migrationDir mLogfiledir = do
     pgconfig <- cfgOverride <$> readPGPassFileEnv
-    logFilename <- genLogFilename logfiledir
-    bracket (openFile logFilename AppendMode) hClose $ \logHandle -> do
-      unless quiet $ putStrLn "Running:"
-      scripts <- getMigrationScripts migrationDir
-      forM_ scripts $ applyMigration quiet pgconfig (logFilename, logHandle)
-      unless quiet $ putStrLn "Success!"
+    scripts <- getMigrationScripts migrationDir
+    case mLogfiledir of
+      Nothing -> do
+        putStrLn "Running:"
+        forM_ scripts $ applyMigration quiet pgconfig Nothing stdout
+        putStrLn "Success!"
+      Just logfiledir -> do
+        logFilename <- genLogFilename logfiledir
+        bracket (openFile logFilename AppendMode) hClose $ \logHandle -> do
+          unless quiet $ putStrLn "Running:"
+          forM_ scripts $ applyMigration quiet pgconfig (Just logFilename) logHandle
+          unless quiet $ putStrLn "Success!"
   where
     genLogFilename :: LogFileDir -> IO FilePath
     genLogFilename (LogFileDir logdir) =
@@ -66,8 +72,8 @@ runMigrations cfgOverride quiet migrationDir logfiledir = do
         . formatTime defaultTimeLocale ("migrate-" ++ iso8601DateFormat (Just "%H%M%S") ++ ".log")
         <$> getCurrentTime
 
-applyMigration :: Bool -> PGConfig -> (FilePath, Handle) -> (MigrationVersion, FilePath) -> IO ()
-applyMigration quiet pgconfig (logFilename, logHandle) (version, script) = do
+applyMigration :: Bool -> PGConfig -> Maybe FilePath -> Handle -> (MigrationVersion, FilePath) -> IO ()
+applyMigration quiet pgconfig mLogFilename logHandle (version, script) = do
     -- This assumes that the credentials for 'psql' are already sorted out.
     -- One way to achive this is via a 'PGPASSFILE' environment variable
     -- as per the PostgreSQL documentation.
@@ -100,7 +106,9 @@ applyMigration quiet pgconfig (logFilename, logHandle) (version, script) = do
     errorExit e = do
         print e
         hPrint logHandle e
-        putStrLn $ "\nErrors in file: " ++ logFilename ++ "\n"
+        case mLogFilename of
+          Nothing -> pure ()
+          Just logFilename -> putStrLn $ "\nErrors in file: " ++ logFilename ++ "\n"
         exitFailure
 
 -- | Create a database migration (using functionality built into Persistent). If no
