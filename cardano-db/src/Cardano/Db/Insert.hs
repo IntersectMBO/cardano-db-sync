@@ -17,6 +17,7 @@ module Cardano.Db.Insert
   , insertStakeAddress
   , insertStakeRegistration
   , insertTx
+  , insertTxBody
   , insertTxIn
   , insertTxOut
   , insertWithdrawal
@@ -58,6 +59,7 @@ insertPoolHash = insertByReturnKey "PoolHash"
 insertPoolMetaData :: (MonadBaseControl IO m, MonadIO m) => PoolMetaData -> ReaderT SqlBackend m PoolMetaDataId
 insertPoolMetaData = insertByReturnKey "PoolMetaData"
 
+
 insertPoolOwner :: (MonadBaseControl IO m, MonadIO m) => PoolOwner -> ReaderT SqlBackend m PoolOwnerId
 insertPoolOwner = insertByReturnKey "PoolOwner"
 
@@ -84,6 +86,9 @@ insertStakeRegistration = insertByReturnKey "StakeRegistration"
 
 insertTx :: (MonadBaseControl IO m, MonadIO m) => Tx -> ReaderT SqlBackend m TxId
 insertTx = insertByReturnKey "Tx"
+
+insertTxBody :: (MonadBaseControl IO m, MonadIO m) => TxBody -> ReaderT SqlBackend m TxBodyId
+insertTxBody = insertByReturnKey "TxBody"
 
 insertTxIn :: (MonadBaseControl IO m, MonadIO m) => TxIn -> ReaderT SqlBackend m TxInId
 insertTxIn = insertByReturnKey "TxIn"

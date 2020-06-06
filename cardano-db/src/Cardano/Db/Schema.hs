@@ -91,6 +91,11 @@ share
     size                Word64              sqltype=uinteger
     UniqueTx            hash
 
+  TxBody
+    hash                ByteString          sqltype=hash32type
+    body                ByteString          sqltype=bytea
+    UniqueTxBody        hash
+
   TxOut
     txId                TxId                -- This type is the primary key for the 'tx' table.
     index               Word16              sqltype=txindex
