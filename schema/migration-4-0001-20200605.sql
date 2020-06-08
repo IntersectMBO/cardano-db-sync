@@ -17,11 +17,10 @@
 CREATE FUNCTION migrate() RETURNS void AS $$
 
 BEGIN
-  EXECUTE 'create table tx_body (id serial8 primary key unique, 
-                                 hash hash32type not null, 
+  EXECUTE 'create table if not exists tx_body (id serial8 primary key unique, 
+                                 hash hash32type not null unique, 
                                  body bytea not null)';
-  EXECUTE 'CREATE INDEX idx_tx_body_hash ON tx_body(hash);';
-  EXECUTE 'ALTER TABLE "tx_body" ADD CONSTRAINT "unique_tx_body" UNIQUE("hash")' ;
+  EXECUTE 'CREATE INDEX if not exists idx_tx_body_hash ON tx_body(hash);';
 END;
 
 $$ LANGUAGE plpgsql;
