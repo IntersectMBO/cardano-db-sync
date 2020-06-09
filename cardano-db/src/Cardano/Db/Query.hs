@@ -568,6 +568,9 @@ maybeToEither :: e -> (a -> b) -> Maybe a -> Either e b
 maybeToEither e f =
   maybe (Left e) (Right . f)
 
+-- metaSlotsPerEpoch :: Meta -> Word64
+-- metaSlotsPerEpoch meta = 10 * metaProtocolConst meta
+
 slotPosixTime :: Meta -> Word64 -> POSIXTime
 slotPosixTime meta =
   utcTimeToPOSIXSeconds . slotUtcTime meta
