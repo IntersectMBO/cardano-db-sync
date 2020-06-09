@@ -84,7 +84,7 @@ insertABOBBoundary tracer blk = do
               , DB.blockMerkelRoot = Nothing -- No merkelRoot for a boundary block
               , DB.blockSlotLeader = slid
               , DB.blockSize = fromIntegral $ Byron.boundaryBlockLength blk
-              , DB.blockTime = DB.epochUtcTime meta (maybe 0 (+1) mle)
+              , DB.blockTime = DB.epochUtcStartTime meta (maybe 0 (+1) mle)
               , DB.blockTxCount = 0
               }
 
