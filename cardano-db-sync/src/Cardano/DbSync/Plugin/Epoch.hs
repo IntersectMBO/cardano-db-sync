@@ -146,19 +146,27 @@ updateEpochNumLogic networkEpochNum mDbEpochNum networkEpochTipNum = do
               -- There is no cache of the epoch.
               UpdateEpoch 0
 
-          | networkEpochNum > dbEpochNum ->
-              -- This inserts the new epoch number and updates the old epoch,
-              -- since we have metadata associated with it that we need to update
-              -- at the end of each epoch.
+          | networkEpochNum == (dbEpochNum + 1) && networkEpochNum == networkEpochTipNum ->
+              -- Following the chain very closely.
+              -- We are at the next to latest epoch, we are following it very
+              -- closely and updating it every block.
+              -- This is acceptable here, since the time it takes to insert a epoch
+              -- is marginal compared to the syncing and insertion of a block.
               UpdateEpochs dbEpochNum (dbEpochNum + 1)
 
-          | networkEpochNum == dbEpochNum && dbEpochNum == networkEpochTipNum ->
+          | networkEpochNum == dbEpochNum && networkEpochNum == networkEpochTipNum ->
               -- Following the chain very closely.
               -- We are at the latest and current epoch, we are following it very
               -- closely and updating it every block.
               -- This is acceptable here, since the time it takes to insert a epoch
               -- is marginal compared to the syncing and insertion of a block.
-              UpdateEpoch dbEpochNum
+              UpdateEpochs (dbEpochNum - 1) dbEpochNum
+
+          | networkEpochNum > (dbEpochNum + 1) ->
+              -- This inserts the new epoch number when there is a space of at least one block,
+              -- since we have metadata associated with it that we need to update
+              -- at the end of each epoch.
+              UpdateEpoch (dbEpochNum + 1)
 
           | networkEpochNum == dbEpochNum && dbEpochNum /= networkEpochTipNum ->
               -- The latest epoch is updated as soon as the new epoch arrives.

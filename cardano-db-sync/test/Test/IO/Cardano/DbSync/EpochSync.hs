@@ -57,8 +57,8 @@ prop_noCachedEpoch =
 prop_diffFromCachedEpochMoreThanTwo :: Property
 prop_diffFromCachedEpochMoreThanTwo =
   withTests testCaseNumber $ property $ do
-    cachedEpoch <- forAll $ Gen.word64 (Range.linear 0 100_000)
-    epochNum <- forAll $ Gen.word64 (Range.linear (cachedEpoch + 2) 100_002)
+    cachedEpoch <- forAll $ Gen.word64 (Range.linear 1 100_000)
+    epochNum <- forAll $ Gen.word64 (Range.linear (cachedEpoch + 2) 100_003)
 
     -- The assumption is that the tip is larger then the current epoch.
     tipEpochNum <- forAll . Gen.filter (> epochNum) $ Gen.word64 (Range.linear (cachedEpoch + 2) 100_000)
@@ -68,12 +68,12 @@ prop_diffFromCachedEpochMoreThanTwo =
     assert $ epochNum >= cachedEpoch + 2
 
     -- Update the next epoch since we have no cache from the DB.
-    updateEpochNumLogic epochNum mLatestCachedEpoch tipEpochNum === UpdateEpochs cachedEpoch (cachedEpoch + 1)
+    updateEpochNumLogic epochNum mLatestCachedEpoch tipEpochNum === UpdateEpoch (cachedEpoch + 1)
 
 prop_followChainClosely :: Property
 prop_followChainClosely =
   withTests 100_000 $ property $ do
-    cachedEpoch <- forAll $ Gen.word64 (Range.linear 0 100_000)
+    cachedEpoch <- forAll $ Gen.word64 (Range.linear 1 100_000)
 
     -- The assumption is that the tip is equal to the current epoch.
     let epochNum = cachedEpoch
@@ -81,8 +81,8 @@ prop_followChainClosely =
 
     let mLatestCachedEpoch = Just cachedEpoch
 
-    -- Update the next epoch since we have no cache from the DB.
-    updateEpochNumLogic epochNum mLatestCachedEpoch tipEpochNum === UpdateEpoch epochNum
+    -- Update the current epoch and the one before. The case where we are at the tip.
+    updateEpochNumLogic epochNum mLatestCachedEpoch tipEpochNum === UpdateEpochs (epochNum - 1) epochNum
 
 prop_syncedChainDBOutOfDate :: Property
 prop_syncedChainDBOutOfDate =
@@ -95,6 +95,6 @@ prop_syncedChainDBOutOfDate =
 
     let mLatestCachedEpoch = Just cachedEpoch
 
-    -- Do not update, the
+    -- Do not update
     updateEpochNumLogic epochNum mLatestCachedEpoch tipEpochNum === DoNotUpdate
 
