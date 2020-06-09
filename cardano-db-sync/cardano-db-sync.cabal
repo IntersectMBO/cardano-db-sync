@@ -30,8 +30,10 @@ library
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
 
-  exposed-modules:      Cardano.DbSync
+  exposed-modules:
+                        Cardano.DbSync
                         Cardano.DbSync.Plugin.Epoch
+                        Cardano.DbSync.Plugin.TxBody
 
   other-modules:        Cardano.DbSync.Config
                         Cardano.DbSync.Database
