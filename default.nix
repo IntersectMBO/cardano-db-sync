@@ -61,6 +61,8 @@ let
     # Grab the executable component of our package.
     inherit (self.haskellPackages.cardano-db-sync.components.exes)
       cardano-db-sync;
+    inherit (self.haskellPackages.cardano-db-sync.components.exes)
+      cardano-tx-body;
     inherit (self.haskellPackages.cardano-db-sync-extended.components.exes)
       cardano-db-sync-extended;
 

@@ -69,6 +69,11 @@ let
           subDir = "cardano-db-sync";
           name = "cardano-db-sync";
         };
+        packages.cardano-tx-body.src = haskell-nix.haskellLib.cleanGit {
+          src = ../.;
+          subDir = "cardano-db-sync";
+          name = "cardano-tx-body";
+        };
         packages.cardano-db-sync-extneded.src = haskell-nix.haskellLib.cleanGit {
           src = ../.;
           subDir = "cardano-db-sync-extended";
@@ -84,6 +89,7 @@ let
         # split data output for ekg to reduce closure size
         packages.ekg.components.library.enableSeparateDataOutput = true;
         packages.cardano-db-sync.configureFlags = [ "--ghc-option=-Wall" "--ghc-option=-Werror" ];
+        packages.cardano-tx-body.configureFlags = [ "--ghc-option=-Wall" "--ghc-option=-Werror" ];
         packages.cardano-db-sync-extended.configureFlags = [ "--ghc-option=-Wall" "--ghc-option=-Werror" ];
         enableLibraryProfiling = profiling;
       }
@@ -96,6 +102,10 @@ let
       }
       {
         packages.cardano-db-sync.components.exes.cardano-db-sync = {
+          # todo, this shrinks the docker image by ~100mb
+          #dontStrip = false;
+        };
+        packages.cardano-tx-body.components.exes.cardano-tx-body = {
           # todo, this shrinks the docker image by ~100mb
           #dontStrip = false;
         };
