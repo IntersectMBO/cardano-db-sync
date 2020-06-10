@@ -132,3 +132,40 @@ executable cardano-db-sync
                       , cardano-slotting
                       , optparse-applicative
                       , ouroboros-network
+
+executable cardano-tx-body
+  default-language:     Haskell2010
+  main-is:              cardano-tx-body.hs
+  hs-source-dirs:       app
+
+  ghc-options:          -Wall
+                        -Wcompat
+                        -fwarn-redundant-constraints
+                        -fwarn-incomplete-patterns
+                        -fwarn-unused-imports
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+                        -Wno-unsafe
+                        -threaded
+
+  build-depends:        base                            >= 4.12         && < 4.13
+                      , bytestring
+                      , cardano-crypto-wrapper
+                      , cardano-db
+                      , cardano-db-sync
+                      , cardano-ledger
+                      , cardano-prelude
+                      , cardano-binary
+                      , cborg
+                      , formatting
+                      , cardano-shell
+                      , ouroboros-consensus
+                      , io-sim-classes
+                      , iohk-monitoring
+                      , network
+                      , optparse-applicative
+                      , ouroboros-network
+                      , ouroboros-network-framework
+                      , serialise
+                      , text
+                      , typed-protocols
