@@ -373,8 +373,9 @@ chainSyncClient trce metrics latestPoints currentTip actionQueue =
                   lengthDbActionQueue actionQueue
                 Gauge.set (fromIntegral newSize) $ mQueuePostWrite metrics
                 pure $ finish (At (blockNo blk)) tip
-        , recvMsgRollBackward = \point tip -> do
-            liftIO .
+        , recvMsgRollBackward = \point tip ->
+            liftIO $ do
+              logInfo trce $ "recvMsgRollBackward: " <> textShow (point, tip)
               logException trce "recvMsgRollBackward: " $ do
                 -- This will get the current tip rather than what we roll back to
                 -- but will only be incorrect for a short time span.
