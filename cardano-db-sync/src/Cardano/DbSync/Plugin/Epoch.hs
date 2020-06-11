@@ -210,6 +210,7 @@ updateEpochNumDefault epochNum trce = do
     updateEpoch :: MonadIO m => EpochId -> ReaderT SqlBackend m (Either DbSyncNodeError ())
     updateEpoch epochId = do
       eEpoch <- DB.queryCalcEpochEntry epochNum
+      liftIO . logInfo trce $ "epochPluginInsertBlock: Updating row in epoch table for epoch " <> textShow epochNum
       case eEpoch of
         Left err -> pure $ Left (NELookup "updateEpochNum.updateEpoch" err)
         Right epoch -> Right <$> replace epochId epoch
