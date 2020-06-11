@@ -16,7 +16,6 @@ let
 
     packages = ps: with ps; [
        ps.cardano-db-sync
-       ps.cardano-tx-body
        ps.cardano-db-sync-extended
     ];
 
