@@ -7,10 +7,10 @@ import           Cardano.DbSync (ConfigFile (..), DbSyncNodeParams (..), Genesis
                     SocketPath (..), runDbSyncNode)
 import           Cardano.DbSync.Plugin.Extended (extendedDbSyncNodePlugin)
 
+import           Cardano.Slotting.Slot (SlotNo (..))
+
 import           Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative as Opt
-
-import           Ouroboros.Network.Block (SlotNo (..))
 
 
 main :: IO ()

@@ -51,7 +51,7 @@ import           Cardano.DbSync.Util
 
 import           Cardano.Prelude hiding (atomically, option, (%), Nat)
 
-import           Cardano.Slotting.Slot (WithOrigin (..))
+import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
 
 import qualified Codec.CBOR.Term as CBOR
 import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, StrictTMVar,
@@ -83,7 +83,7 @@ import           Ouroboros.Consensus.Node.NetworkProtocolVersion (NodeToClientVe
 import           Ouroboros.Consensus.Node.Run (RunNode)
 import qualified Ouroboros.Network.NodeToClient.Version as Network
 
-import           Ouroboros.Network.Block (BlockNo (..), HeaderHash, Point (..), SlotNo (..),
+import           Ouroboros.Network.Block (BlockNo (..), HeaderHash, Point (..),
                     Tip, genesisPoint, getTipBlockNo, blockNo)
 import           Ouroboros.Network.Mux (MuxPeer (..),  RunMiniProtocol (..))
 import           Ouroboros.Network.NodeToClient (IOManager, ClientSubscriptionParams (..),

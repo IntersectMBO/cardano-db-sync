@@ -9,7 +9,7 @@ import           Cardano.Prelude
 import           Cardano.BM.Trace (Trace, logInfo)
 
 import qualified Cardano.Chain.Block as Byron
-import qualified Cardano.Chain.Slotting as Byron
+import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Except.Extra (runExceptT)
@@ -35,20 +35,20 @@ rollbackToPoint trce point =
       Just (slot, hash) ->
           DB.runDbNoLogging $ runExceptT (action slot hash)
   where
-    action :: MonadIO m => Byron.SlotNumber -> Byron.HeaderHash -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    action :: MonadIO m => SlotNo -> Byron.HeaderHash -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     action slot hash = do
         blk <- liftLookupFail "rollbackToPoint" $ DB.queryMainBlock (Byron.unHeaderHash hash)
         case DB.blockSlotNo blk of
           Nothing -> dbSyncNodeError "rollbackToPoint: slot number is Nothing"
           Just slotNo -> do
-            if slotNo <= Byron.unSlotNumber slot
+            if slotNo <= unSlotNo slot
               then liftIO . logInfo trce $ mconcat
                             [ "Byron: No rollback required: db tip slot is ", textShow slotNo
-                            , " ledger tip slot is ", textShow (Byron.unSlotNumber slot)
+                            , " ledger tip slot is ", textShow (unSlotNo slot)
                             ]
               else do
                 liftIO . logInfo trce $ Text.concat
-                            [ "Rollbacking to slot ", textShow (Byron.unSlotNumber slot)
+                            [ "Rollbacking to slot ", textShow (unSlotNo slot)
                             , ", hash ", Byron.renderAbstractHash hash
                             ]
                 void . lift $ DB.deleteCascadeSlotNo slotNo

@@ -17,10 +17,12 @@ module Cardano.DbSync.Types
 
 import           Cardano.Db (MigrationDir (..))
 
+import           Cardano.Slotting.Slot (SlotNo (..))
+
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
 import qualified Ouroboros.Consensus.Shelley.Protocol as Shelley
-import           Ouroboros.Network.Block (Point (..), SlotNo (..), Tip)
+import           Ouroboros.Network.Block (Point (..), Tip)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import qualified Shelley.Spec.Ledger.BlockChain as Shelley

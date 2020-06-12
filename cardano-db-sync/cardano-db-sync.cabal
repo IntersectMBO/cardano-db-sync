@@ -126,5 +126,6 @@ executable cardano-db-sync
                       , cardano-db
                       , cardano-db-sync
                       , cardano-prelude
+                      , cardano-slotting
                       , optparse-applicative
                       , ouroboros-network
