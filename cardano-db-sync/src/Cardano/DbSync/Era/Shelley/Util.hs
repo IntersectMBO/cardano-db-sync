@@ -26,8 +26,8 @@ module Cardano.DbSync.Era.Shelley.Util
 
 import           Cardano.Prelude
 
-import           Cardano.Chain.Slotting (SlotNumber (..))
 import qualified Cardano.Crypto.Hash as Crypto
+import           Cardano.Slotting.Slot (SlotNo (..))
 
 import qualified Cardano.Db as Db
 import           Cardano.DbSync.Types
@@ -38,7 +38,7 @@ import           Data.Sequence.Strict (StrictSeq (..))
 import qualified Data.Text.Encoding as Text
 
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
-import           Ouroboros.Network.Block (BlockNo (..), Point (..), SlotNo (..))
+import           Ouroboros.Network.Block (BlockNo (..), Point (..))
 import           Ouroboros.Network.Point (WithOrigin (..))
 import qualified Ouroboros.Network.Point as Point
 
@@ -89,11 +89,11 @@ mkSlotLeader blk =
                 $ Shelley.shelleyBlockHeaderHash blk
 
 -- | Convert from Ouroboros 'Point' to `Shelley' types.
-pointToSlotHash :: Point ShelleyBlock -> Maybe (SlotNumber, ShelleyHash)
+pointToSlotHash :: Point ShelleyBlock -> Maybe (SlotNo, ShelleyHash)
 pointToSlotHash (Point x) =
   case x of
     Origin -> Nothing
-    At blk -> Just (SlotNumber . unSlotNo $ Point.blockPointSlot blk, Point.blockPointHash blk)
+    At blk -> Just (Point.blockPointSlot blk, Point.blockPointHash blk)
 
 renderHash :: ShelleyHash -> Text
 renderHash = Text.decodeUtf8 . unHeaderHash

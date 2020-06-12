@@ -18,7 +18,7 @@ import qualified Cardano.DbSync.Plugin.Default.Shelley.Rollback as Shelley
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
-import           Ouroboros.Network.Block (SlotNo (..))
+import           Cardano.Slotting.Slot (SlotNo (..))
 
 
 rollbackToPoint :: Trace IO Text -> CardanoPoint -> IO (Either DbSyncNodeError ())

@@ -37,9 +37,11 @@ import qualified Cardano.Crypto as Crypto
 import qualified Cardano.Chain.Block as Byron
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.Genesis as Byron
-import qualified Cardano.Chain.Slotting as Byron
+import qualified Cardano.Chain.Slotting as ByronInsanity
 import qualified Cardano.Chain.Update as Byron
 import qualified Cardano.Chain.UTxO as Byron
+
+import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Crypto.Hash (Blake2b_256)
 
@@ -53,7 +55,7 @@ import qualified Cardano.Db as DB
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock, ByronHash (..))
 import           Ouroboros.Network.Point (WithOrigin (..))
 import qualified Ouroboros.Network.Point as Point
-import           Ouroboros.Network.Block (Point (..), SlotNo (..))
+import           Ouroboros.Network.Block (Point (..))
 
 
 blockHash :: Byron.ABlock ByteString -> ByteString
@@ -97,11 +99,11 @@ mkSlotLeader blk =
 
 
 -- | Convert from Ouroboros 'Point' to `Byron' types.
-pointToSlotHash :: Point ByronBlock -> Maybe (Byron.SlotNumber, Byron.HeaderHash)
+pointToSlotHash :: Point ByronBlock -> Maybe (SlotNo, Byron.HeaderHash)
 pointToSlotHash (Point x) =
   case x of
     Origin -> Nothing
-    At blk -> Just (Byron.SlotNumber . unSlotNo $ Point.blockPointSlot blk, unByronHash $ Point.blockPointHash blk)
+    At blk -> Just (Point.blockPointSlot blk, unByronHash $ Point.blockPointHash blk)
 
 renderAbstractHash :: Crypto.AbstractHash algo a -> Text
 renderAbstractHash =
@@ -113,7 +115,7 @@ slotLeaderHash =
 
 slotNumber :: Byron.ABlock ByteString -> Word64
 slotNumber =
-  Byron.unSlotNumber . Byron.headerSlot . Byron.blockHeader
+  ByronInsanity.unSlotNumber . Byron.headerSlot . Byron.blockHeader
 
 unAbstractHash :: Crypto.Hash Raw -> ByteString
 unAbstractHash = Crypto.abstractHashToBytes
