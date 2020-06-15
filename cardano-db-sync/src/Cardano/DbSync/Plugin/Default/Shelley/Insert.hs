@@ -49,7 +49,7 @@ insertShelleyBlock tracer blk tip = do
 
     pbid <- liftLookupFail "insertABlock" $ DB.queryBlockId (Shelley.blockPrevHash blk)
 
-    let slotsPerEpoch = 10 * DB.metaProtocolConst meta
+    let slotsPerEpoch = DB.metaSlotsPerEpoch meta
 
     slid <- lift . DB.insertSlotLeader $ Shelley.mkSlotLeader blk
     blkId <- lift . DB.insertBlock $

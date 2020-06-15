@@ -104,6 +104,7 @@ share
                                             -- System start time used to calculate slot time stamps.
                                             -- Use 'sqltype' here to force timestamp without time zone.
     startTime           UTCTime             sqltype=timestamp
+    slotsPerEpoch       Word64              -- Number of slots per epoch.
     networkName         Text Maybe
     UniqueMeta          startTime
 
