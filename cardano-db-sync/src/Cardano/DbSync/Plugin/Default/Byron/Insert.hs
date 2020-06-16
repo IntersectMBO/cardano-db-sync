@@ -15,6 +15,7 @@ import           Cardano.Binary (serialize')
 import           Cardano.BM.Trace (Trace, logDebug, logInfo)
 
 import           Control.Monad.Logger (LoggingT)
+import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, newExceptT,
                     runExceptT)
 
@@ -63,7 +64,7 @@ insertByronBlock tracer blk tip = do
       Byron.ABOBBoundary abblk -> insertABOBBoundary tracer abblk
 
 insertABOBBoundary
-    :: MonadIO m
+    :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> Byron.ABoundaryBlock ByteString
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertABOBBoundary tracer blk = do
@@ -86,6 +87,13 @@ insertABOBBoundary tracer blk = do
               , DB.blockSize = fromIntegral $ Byron.boundaryBlockLength blk
               , DB.blockTime = DB.epochUtcStartTime meta (maybe 0 (+1) mle)
               , DB.blockTxCount = 0
+
+              -- Shelley specific
+              , DB.blockVrfKey = Nothing
+              , DB.blockNonceVrf = Nothing
+              , DB.blockLeaderVrf = Nothing
+              , DB.blockOpCert = Nothing
+              , DB.blockProtoVersion = Nothing
               }
 
   liftIO . logInfo tracer $
@@ -97,7 +105,7 @@ insertABOBBoundary tracer blk = do
           ]
 
 insertABlock
-    :: MonadIO m
+    :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> Byron.ABlock ByteString -> Tip ByronBlock
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertABlock tracer blk tip = do
@@ -119,6 +127,13 @@ insertABlock tracer blk tip = do
                     , DB.blockSize = fromIntegral $ Byron.blockLength blk
                     , DB.blockTime = DB.slotUtcTime meta (Byron.slotNumber blk)
                     , DB.blockTxCount = fromIntegral $ length (Byron.blockPayload blk)
+
+                    -- Shelley specific
+                    , DB.blockVrfKey = Nothing
+                    , DB.blockNonceVrf = Nothing
+                    , DB.blockLeaderVrf = Nothing
+                    , DB.blockOpCert = Nothing
+                    , DB.blockProtoVersion = Nothing
                     }
 
     zipWithM_ (insertTx tracer blkId) (Byron.blockPayload blk) [ 0 .. ]
@@ -146,7 +161,7 @@ insertABlock tracer blk tip = do
 
 
 insertTx
-    :: MonadIO m
+    :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.BlockId -> Byron.TxAux -> Word64
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertTx tracer blkId tx blockIndex = do
@@ -175,7 +190,7 @@ insertTx tracer blkId tx blockIndex = do
         _other -> ee
 
 insertTxOut
-    :: MonadIO m
+    :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Word32 -> Byron.TxOut
     -> ReaderT SqlBackend m ()
 insertTxOut _tracer txId index txout =
@@ -189,7 +204,7 @@ insertTxOut _tracer txId index txout =
 
 
 insertTxIn
-    :: MonadIO m
+    :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Byron.TxIn
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertTxIn _tracer txInId (Byron.TxInUtxo txHash inIndex) = do
@@ -203,7 +218,7 @@ insertTxIn _tracer txInId (Byron.TxInUtxo txHash inIndex) = do
 
 -- -----------------------------------------------------------------------------
 
-calculateTxFee :: MonadIO m => Byron.Tx -> ReaderT SqlBackend m (Either DbSyncNodeError ValueFee)
+calculateTxFee :: (MonadBaseControl IO m, MonadIO m) => Byron.Tx -> ReaderT SqlBackend m (Either DbSyncNodeError ValueFee)
 calculateTxFee tx =
     runExceptT $ do
       outval <- firstExceptT (\e -> NEError $ "calculateTxFee: " <> textShow e) $ hoistEither output

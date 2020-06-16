@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -14,6 +15,7 @@ import qualified Cardano.Chain.Block as Byron
 import           Control.Monad (void)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Logger (LoggingT)
+import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.IORef (IORef, atomicWriteIORef, newIORef, readIORef)
@@ -137,7 +139,7 @@ latestCachedEpochVar = unsafePerformIO $ newIORef Nothing -- Gets updated later.
 latestChainTipEpochVar :: IORef Word64
 latestChainTipEpochVar = unsafePerformIO $ newIORef 0 -- Gets updated later.
 
-updateEpochNum :: MonadIO m => Word64 -> Trace IO Text -> ReaderT SqlBackend m (Either DbSyncNodeError ())
+updateEpochNum :: (MonadBaseControl IO m, MonadIO m) => Word64 -> Trace IO Text -> ReaderT SqlBackend m (Either DbSyncNodeError ())
 updateEpochNum epochNum trce = do
     transactionSaveWithIsolation Serializable
     mid <- queryEpochId epochNum
@@ -154,7 +156,7 @@ updateEpochNum epochNum trce = do
         Left err -> pure $ Left (NELookup "updateEpochNum.updateEpoch" err)
         Right epoch -> Right <$> replace epochId epoch
 
-    insertEpoch :: MonadIO m => ReaderT SqlBackend m (Either DbSyncNodeError ())
+    insertEpoch :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either DbSyncNodeError ())
     insertEpoch = do
       eEpoch <- DB.queryCalcEpochEntry epochNum
       liftIO . logInfo trce $ "epochPluginInsertBlock: Inserting row in epoch table for epoch " <> textShow epochNum
