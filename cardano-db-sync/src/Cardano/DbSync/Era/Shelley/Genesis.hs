@@ -18,6 +18,7 @@ import           Cardano.Prelude
 import qualified Cardano.Binary as Binary
 import           Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Crypto.Hash.Class as Crypto
+import           Cardano.Slotting.Slot (EpochSize (..))
 
 import           Control.Monad (void)
 import           Control.Monad.IO.Class (MonadIO)
@@ -83,6 +84,7 @@ insertValidateGenesisDist tracer networkName cfg = do
                     (protocolConstant cfg)
                     (configSlotDuration cfg)
                     (configStartTime cfg)
+                    (configSlotsPerEpoch cfg)
                     (Just networkName)
             -- Insert an 'artificial' Genesis block (with a genesis specific slot leader). We
             -- need this block to attach the genesis distribution transactions to.
@@ -138,6 +140,13 @@ validateGenesisDistribution tracer networkName cfg bid =
             [ "Shelley: Mismatch chain start time. Config value "
             , textShow (configStartTime cfg)
             , " does not match DB value of ", textShow (DB.metaStartTime meta)
+            ]
+
+    when (DB.metaSlotsPerEpoch meta /= configSlotsPerEpoch cfg) $
+      dbSyncNodeError $ Text.concat
+            [ "Shelley: Mismatch in slots per epoch. Config value "
+            , textShow (configSlotsPerEpoch cfg)
+            , " does not match DB value of ", textShow (DB.metaSlotsPerEpoch meta)
             ]
 
     case DB.metaNetworkName meta of
@@ -233,6 +242,9 @@ unCoin (Shelley.Coin c) = fromIntegral c
 configSlotDuration :: ShelleyGenesis TPraosStandardCrypto -> Word64
 configSlotDuration sg =
   floor $ 1000 * Shelley.getSlotLength (Shelley.sgSlotLength sg)
+
+configSlotsPerEpoch :: ShelleyGenesis TPraosStandardCrypto -> Word64
+configSlotsPerEpoch sg = unEpochSize (Shelley.sgEpochLength sg)
 
 configStartTime :: ShelleyGenesis TPraosStandardCrypto -> UTCTime
 configStartTime = roundToMillseconds . Shelley.getSystemStart . Shelley.sgSystemStart

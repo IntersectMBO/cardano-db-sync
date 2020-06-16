@@ -67,6 +67,7 @@ insertValidateGenesisDist tracer networkName cfg = do
                                     (Byron.unBlockCount $ Byron.configK cfg)
                                     (Byron.configSlotDuration cfg)
                                     (Byron.configStartTime cfg)
+                                    (10 * Byron.unBlockCount (Byron.configK cfg))
                                     (Just networkName)
             -- Insert an 'artificial' Genesis block (with a genesis specific slot leader). We
             -- need this block to attach the genesis distribution transactions to.

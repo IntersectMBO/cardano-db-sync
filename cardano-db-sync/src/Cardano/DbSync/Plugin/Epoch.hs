@@ -60,7 +60,7 @@ epochPluginOnStartup trce = do
       Left err ->
         liftIO . logError trce $ "epochPluginInsertBlock: " <> renderDbSyncNodeError (NELookup "epochPluginInsertBlock" err)
       Right meta ->
-        liftIO $ atomicWriteIORef slotsPerEpochVar (10 * DB.metaProtocolConst meta)
+        liftIO $ atomicWriteIORef slotsPerEpochVar (DB.metaSlotsPerEpoch meta)
     mlbe <- queryLatestEpochNo
     case mlbe of
       Nothing ->
