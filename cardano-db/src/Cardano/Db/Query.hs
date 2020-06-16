@@ -10,6 +10,7 @@ module Cardano.Db.Query
   , queryBlockHeight
   , queryBlockId
   , queryBlockNo
+  , queryBlockNosWithSlotNoGreater
   , queryMainBlock
   , queryBlockTxCount
   , queryCalcEpochEntry
@@ -86,6 +87,8 @@ import           Cardano.Db.Error
 import           Cardano.Db.Schema
 import           Cardano.Db.Types
 
+import           Ouroboros.Network.Block (BlockNo (..))
+
 -- If you squint, these Esqueleto queries almost look like SQL queries.
 
 
@@ -122,6 +125,16 @@ queryBlockNo blkNo = do
             pure blk
   pure $ fmap entityVal (listToMaybe res)
 
+queryBlockNosWithSlotNoGreater :: MonadIO m => Word64 -> ReaderT SqlBackend m [BlockNo]
+queryBlockNosWithSlotNoGreater slotNo = do
+  res <- select . from $ \ blk -> do
+            -- Want all BlockNos where the block satisfies this predicate.
+            where_ (blk ^. BlockSlotNo >. just (val slotNo))
+            -- Return them in descending order so we can delete the highest numbered
+            -- ones first.
+            orderBy [desc (blk ^. BlockBlockNo)]
+            pure (blk ^. BlockBlockNo)
+  pure $ catMaybes (map (fmap BlockNo . unValue) res)
 
 -- | Get the current block height.
 queryBlockHeight :: MonadIO m => ReaderT SqlBackend m Word64
@@ -145,7 +158,7 @@ queryMainBlock hash = do
     queryMainBlockId blkid = do
       res <- select . from $ \ blk -> do
               where_ $ (isJust (blk ^. BlockBlockNo) &&. blk ^. BlockId <=. val blkid)
-              orderBy [desc (blk ^. BlockId)]
+              orderBy [desc (blk ^. BlockSlotNo)]
               limit 1
               pure blk
       pure $ maybeToEither (DbLookupBlockId $ unBlockId blkid) entityVal (listToMaybe res)
@@ -213,7 +226,7 @@ queryCheckPoints :: MonadIO m => Word64 -> ReaderT SqlBackend m [(Word64, ByteSt
 queryCheckPoints limitCount = do
     latest <- select $ from $ \ blk -> do
                 where_ $ (isJust $ blk ^. BlockSlotNo)
-                orderBy [desc (blk ^. BlockId)]
+                orderBy [desc (blk ^. BlockSlotNo)]
                 limit 1
                 pure $ (blk ^. BlockSlotNo)
     case join (unValue <$> listToMaybe latest) of
@@ -304,7 +317,7 @@ queryIsFullySynced = do
 queryLatestBlockId :: MonadIO m => ReaderT SqlBackend m (Maybe BlockId)
 queryLatestBlockId = do
   res <- select $ from $ \ blk -> do
-                orderBy [desc (blk ^. BlockId)]
+                orderBy [desc (blk ^. BlockSlotNo)]
                 limit $ 1
                 pure $ (blk ^. BlockId)
   pure $ fmap unValue (listToMaybe res)
@@ -323,7 +336,7 @@ queryLatestBlockNo = do
 queryLatestBlock :: MonadIO m => ReaderT SqlBackend m (Maybe Block)
 queryLatestBlock = do
   res <- select $ from $ \ blk -> do
-                orderBy [desc (blk ^. BlockId)]
+                orderBy [desc (blk ^. BlockSlotNo)]
                 limit 1
                 pure $ blk
   pure $ fmap entityVal (listToMaybe res)

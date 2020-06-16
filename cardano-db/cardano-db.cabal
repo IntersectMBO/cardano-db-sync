@@ -59,6 +59,7 @@ library
                       , filepath
                       , iohk-monitoring
                       , monad-logger
+                      , ouroboros-network
                       , persistent
                       , persistent-postgresql
                       , persistent-template >= 2.7.0
