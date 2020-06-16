@@ -96,7 +96,7 @@ pointToSlotHash (Point x) =
     At blk -> Just (Point.blockPointSlot blk, Point.blockPointHash blk)
 
 renderHash :: ShelleyHash -> Text
-renderHash = Text.decodeUtf8 . unHeaderHash
+renderHash = Text.decodeUtf8 . Base16.encode . unHeaderHash
 
 slotNumber :: ShelleyBlock -> Word64
 slotNumber =
