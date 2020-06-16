@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Test.IO.Cardano.Db.Rollback
@@ -6,6 +7,7 @@ module Test.IO.Cardano.Db.Rollback
 
 import           Control.Monad (void)
 import           Control.Monad.IO.Class (MonadIO)
+import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.Word (Word64)
@@ -60,7 +62,7 @@ rollbackTest =
 
 -- -----------------------------------------------------------------------------
 
-queryWalkChain :: MonadIO m => Int -> Word64 -> ReaderT SqlBackend m (Maybe Word64)
+queryWalkChain :: (MonadBaseControl IO m, MonadIO m) => Int -> Word64 -> ReaderT SqlBackend m (Maybe Word64)
 queryWalkChain count blkNo
   | count <= 0 = pure $ Just blkNo
   | otherwise = do
@@ -70,12 +72,12 @@ queryWalkChain count blkNo
         Just pBlkNo -> queryWalkChain (count - 1) pBlkNo
 
 
-createAndInsertBlocks :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
+createAndInsertBlocks :: (MonadBaseControl IO m, MonadIO m) => Word64 -> ReaderT SqlBackend m ()
 createAndInsertBlocks blockCount =
     void $ loop (0, Nothing, Nothing, Nothing)
   where
     loop
-        :: MonadIO m
+        :: (MonadBaseControl IO m, MonadIO m)
         => (Word64, Maybe BlockId, Maybe Block, Maybe TxId)
         -> ReaderT SqlBackend m (Word64, Maybe BlockId, Maybe Block, Maybe TxId)
     loop (indx, mPrevId, mPrevBlock, mOutId) =
@@ -84,7 +86,7 @@ createAndInsertBlocks blockCount =
         else pure (0, Nothing, Nothing, Nothing)
 
     createAndInsert
-        :: MonadIO m
+        :: (MonadBaseControl IO m, MonadIO m)
         => (Word64, Maybe BlockId, Maybe Block, Maybe TxId)
         -> ReaderT SqlBackend m (Word64, Maybe BlockId, Maybe Block, Maybe TxId)
     createAndInsert (indx, mPrevId, mPrevBlock, mTxOutId) = do
@@ -92,6 +94,7 @@ createAndInsertBlocks blockCount =
         let newBlock = Block (mkBlockHash indx) (Just 0) (Just indx) (Just indx) mPrevId
                         (maybe Nothing (const $ Just (mkMerkelRoot indx)) mPrevBlock)
                         slid 42 dummyUTCTime 0
+                        Nothing Nothing Nothing Nothing Nothing
         blkId <- insertBlock newBlock
         newMTxOutId <- if indx /= 0
                       then pure mTxOutId

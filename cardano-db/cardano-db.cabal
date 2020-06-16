@@ -41,6 +41,7 @@ library
                         Cardano.Db.Query
                         Cardano.Db.Run
                         Cardano.Db.Schema
+                        Cardano.Db.Schema.Types
                         Cardano.Db.Types
 
 
@@ -58,12 +59,15 @@ library
                       , fast-logger
                       , filepath
                       , iohk-monitoring
+                      , lifted-base
+                      , monad-control
                       , monad-logger
                       , ouroboros-network
                       , persistent
                       , persistent-postgresql
                       , persistent-template >= 2.7.0
                       , postgresql-simple
+                      , quiet
                       , resourcet
                       , scientific
                       , text
@@ -157,6 +161,7 @@ test-suite test-db
                       , directory
                       , filepath
                       , HUnit
+                      , monad-control
                       , persistent
                       , tasty
                       , tasty-hunit

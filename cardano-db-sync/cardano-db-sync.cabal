@@ -50,6 +50,7 @@ library
                         Cardano.DbSync.Plugin.Default.Byron.Insert
                         Cardano.DbSync.Plugin.Default.Byron.Rollback
                         Cardano.DbSync.Plugin.Default.Shelley.Insert
+                        Cardano.DbSync.Plugin.Default.Shelley.Query
                         Cardano.DbSync.Plugin.Default.Shelley.Rollback
                         Cardano.DbSync.Tracing.ToObjectOrphans
                         Cardano.DbSync.Types
