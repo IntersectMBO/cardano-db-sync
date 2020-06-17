@@ -67,11 +67,19 @@ share
     slotNo              Word64 Maybe        sqltype=uinteger
     blockNo             Word64 Maybe        sqltype=uinteger
     previous            BlockId Maybe
+    -- Shelley does not have a Merkel Root, but Byrin does.
+    -- Once we are well into the Shelley era, this column can be dropped.
     merkelRoot          ByteString Maybe    sqltype=hash32type
     slotLeader          SlotLeaderId
     size                Word64              sqltype=uinteger
     time                UTCTime             sqltype=timestamp
     txCount             Word64              sqltype=uinteger
+    -- Shelley specific
+    vrfKey              ByteString Maybe    sqltype=hash32type
+    nonceVrf            ByteString Maybe    sqltype=hash32type
+    leaderVrf           ByteString Maybe    sqltype=hash32type
+    opCert              ByteString Maybe    sqltype=hash32type
+    protoVersion        ByteString Maybe    sqltype=hash32type
     UniqueBlock         hash
 
   Tx
@@ -96,7 +104,7 @@ share
     txOutIndex          Word16              sqltype=txindex
     UniqueTxin          txOutId txOutIndex
 
-  -- A table containing metadat about the chain. There will probably only ever be one
+  -- A table containing metadata about the chain. There will probably only ever be one
   -- row in this table.
   Meta
     protocolConst       Word64              -- The block security parameter.
@@ -130,5 +138,127 @@ share
     deriving Eq
     deriving Show
 
-  |]
+  -- -----------------------------------------------------------------------------------------------
+  -- Shelley bits
 
+  StakeAddress          -- Can be an address of a script hash
+    hash                ByteString          sqltype=addr33type
+    UniqueStakeAddress  hash
+
+  -- -----------------------------------------------------------------------------------------------
+  -- A Pool can have more than one owner, so we have a PoolOwner table that references this one.
+
+  PoolMetaData
+    url                 Text
+    hash                ByteString          sqltype=hash32type
+    txId                TxId
+    UniquePoolMetaData  url
+
+  Pool
+    hash                ByteString          sqltype=hash32type
+    pledge              Word64              -- This really should be sqltype=lovelace See https://github.com/input-output-hk/cardano-ledger-specs/issues/1551
+    rewardAddrId        StakeAddressId
+    meta                PoolMetaDataId Maybe
+    margin              Double              -- sqltype=percentage????
+    fixedCost           Word64
+    registeredTxId      TxId                -- Slot number in which the pool was registered.
+    UniquePool          hash registeredTxId
+
+  PoolOwner
+    hash                ByteString          sqltype=hash32type
+    poolId              PoolId
+    UniquePoolOwner     hash
+
+  PoolRetire
+    poolId              PoolId
+    announcedTxId       TxId                -- Slot number in which the pool announced it was retiring.
+    retiringEpoch       Word64              -- Epoch number in which the pool will retire.
+    UniquePoolRetiring  poolId
+
+  -- -----------------------------------------------------------------------------------------------
+
+  CentralFunds
+    epochNo             Word64
+    treasury            Word64              sqltype=lovelace
+    reserves            Word64              sqltype=lovelace
+    UniqueCentralFunds  epochNo
+
+    -- The reward earned in the epoch by delegating to the specified pool.
+    -- This design allows rewards to be discriminated based on how they are earned.
+  Reward
+    addrId              StakeAddressId
+    instantaneous       Bool
+    poolId              PoolId
+    epochNo             Word64
+    reward              Word64              sqltype=lovelace
+    UniqueReward        addrId poolId epochNo instantaneous
+
+  Delegation
+    addrId              StakeAddressId
+    poolId              PoolId
+    slotNo              Word64
+    amount              Word64              sqltype=lovelace
+    txId                TxId
+    UniqueDelegation    addrId poolId txId
+
+  -- When was a staking key registered
+  StakeKeyRegistration
+    addrId              StakeAddressId
+    slotNo              Word64
+    txId                TxId
+    UniqueStakeKeyRegistration addrId txId
+
+  -- When was a staking key deregistered
+  StakeKeyDeregistration
+    addrId              StakeAddressId
+    slotNo              Word64
+    txId                TxId
+    UniqueStakeKeyDeregistration addrId txId
+
+  -- When was a script registered
+  ScriptRegistration
+    addrId              StakeAddressId
+    slotNo              Word64
+    txId                TxId
+    UniqueScriptRegistration addrId txId
+
+  -- When was a script deregistered
+  ScriptDeregistration
+    addrId              StakeAddressId
+    slotNo              Word64
+    txId                TxId
+    UniqueScriptDeregistration addrId txId
+
+  -- -----------------------------------------------------------------------------------------------
+
+  Stake
+    addrId              StakeAddressId
+    slotNo              Word64
+    stake               Word64              sqltype=lovelace
+    UniqueStake         addrId stake
+
+  -- -----------------------------------------------------------------------------------------------
+  -- Table to hold parameter updates.
+
+  ParamUpdate
+    epochNo             Word64
+    minFee              Word64
+    maxFee              Word64
+    maxBlockSize        Word64
+    maxTxSize           Word64
+    maxBhSize           Word64
+    keyDeposit          Word64              sqltype=lovelace
+    poolDeposit         Word64              sqltype=lovelace
+    maxEpoch            Word64
+    nOptimal            Word64
+    influence           Double              -- sqltype=rational
+    monetaryExpandRate  Word64              sqltype=interval
+    treasuryGrowthRate  Word64              sqltype=interval
+    activeSlotCoeff     Word64              sqltype=interval
+    decentralisation    Word64              sqltype=interval
+    entropy             ByteString          sqltype=hash32type
+    protocolVersion     ByteString          -- sqltype=protocol_version????
+    minCoin             Word64              sqltype=lovelace
+    UniqueParamUpdate   epochNo
+
+  |]
