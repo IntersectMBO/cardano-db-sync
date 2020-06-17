@@ -19,11 +19,11 @@ BEGIN
     EXECUTE 'CREATe TABLE "pool_meta_data"("id" SERIAL8  PRIMARY KEY UNIQUE,"url" VARCHAR NOT NULL,"hash" hash32type NOT NULL,"tx_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "pool_meta_data" ADD CONSTRAINT "unique_pool_meta_data" UNIQUE("url")' ;
     EXECUTE 'ALTER TABLE "pool_meta_data" ADD CONSTRAINT "pool_meta_data_tx_id_fkey" FOREIGN KEY("tx_id") REFERENCES "tx"("id")' ;
-    EXECUTE 'CREATe TABLE "pool"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash" hash32type NOT NULL,"pledge" INT8 NOT NULL,"reward_addr_id" INT8 NOT NULL,"meta" INT8 NULL,"margin" DOUBLE PRECISION NOT NULL,"fixed_cost" INT8 NOT NULL,"registered" INT8 NOT NULL)' ;
-    EXECUTE 'ALTER TABLE "pool" ADD CONSTRAINT "unique_pool" UNIQUE("hash","registered")' ;
+    EXECUTE 'CREATe TABLE "pool"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash" hash32type NOT NULL,"pledge" INT8 NOT NULL,"reward_addr_id" INT8 NOT NULL,"meta" INT8 NULL,"margin" DOUBLE PRECISION NOT NULL,"fixed_cost" INT8 NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
+    EXECUTE 'ALTER TABLE "pool" ADD CONSTRAINT "unique_pool" UNIQUE("hash","registered_tx_id")' ;
     EXECUTE 'ALTER TABLE "pool" ADD CONSTRAINT "pool_reward_addr_id_fkey" FOREIGN KEY("reward_addr_id") REFERENCES "stake_address"("id")' ;
     EXECUTE 'ALTER TABLE "pool" ADD CONSTRAINT "pool_meta_fkey" FOREIGN KEY("meta") REFERENCES "pool_meta_data"("id")' ;
-    EXECUTE 'ALTER TABLE "pool" ADD CONSTRAINT "pool_registered_fkey" FOREIGN KEY("registered") REFERENCES "tx"("id")' ;
+    EXECUTE 'ALTER TABLE "pool" ADD CONSTRAINT "pool_registered_tx_id_fkey" FOREIGN KEY("registered_tx_id") REFERENCES "tx"("id")' ;
     EXECUTE 'CREATe TABLE "pool_owner"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash" hash32type NOT NULL,"pool_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "pool_owner" ADD CONSTRAINT "unique_pool_owner" UNIQUE("hash")' ;
     EXECUTE 'ALTER TABLE "pool_owner" ADD CONSTRAINT "pool_owner_pool_id_fkey" FOREIGN KEY("pool_id") REFERENCES "pool"("id")' ;

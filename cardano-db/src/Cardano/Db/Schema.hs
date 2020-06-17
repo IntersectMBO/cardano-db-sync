@@ -170,8 +170,8 @@ share
     meta                PoolMetaDataId Maybe
     margin              Double              -- sqltype=percentage????
     fixedCost           Word64
-    registered          TxId                -- Slot number in which the pool was registered.
-    UniquePool          hash registered
+    registeredTxId      TxId                -- Slot number in which the pool was registered.
+    UniquePool          hash registeredTxId
 
   PoolOwner
     hash                ByteString          sqltype=hash32type
