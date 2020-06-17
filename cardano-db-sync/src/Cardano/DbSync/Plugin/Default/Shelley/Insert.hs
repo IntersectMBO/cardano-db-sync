@@ -190,7 +190,7 @@ insertPoolRegister tracer params txId = do
                 , DB.poolMeta = mdId
                 , DB.poolMargin = fromRational $ Shelley.intervalValue (Shelley._poolMargin params)
                 , DB.poolFixedCost = Shelley.unCoin (Shelley._poolCost params)
-                , DB.poolRegistered = txId
+                , DB.poolRegisteredTxId = txId
                 }
 
   mapM_ (insertPoolOwner poolId) $ toList (Shelley._poolOwners params)
