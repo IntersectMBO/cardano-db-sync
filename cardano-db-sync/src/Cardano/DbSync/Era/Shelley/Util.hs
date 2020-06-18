@@ -15,12 +15,14 @@ module Cardano.DbSync.Era.Shelley.Util
   , renderHash
   , rewardAccountHash
   , slotNumber
+  , stakingCredHash
   , txFee
   , txHash
   , txInputList
   , txOutputList
   , txOutputSum
   , txPoolCertificates
+  , txDelegationCerts
   , unCoin
   , unHeaderHash
   , unKeyHashBS
@@ -120,6 +122,14 @@ slotNumber :: ShelleyBlock -> Word64
 slotNumber =
   unSlotNo . Shelley.bheaderSlotNo . Shelley.bhbody . Shelley.bheader . Shelley.shelleyBlockRaw
 
+stakingCredHash :: ShelleyStakingCred -> ByteString
+stakingCredHash cred =
+  case cred of
+    Shelley.ScriptHashObj sh -> Crypto.getHash $ unScriptHash sh
+    Shelley.KeyHashObj kh -> unKeyHashBS kh
+  where
+    unScriptHash :: Shelley.ScriptHash crypto -> Shelley.Hash crypto (Shelley.Script crypto)
+    unScriptHash (Shelley.ScriptHash x) = x
 
 txFee :: ShelleyTx -> Word64
 txFee = unCoin . Shelley._txfee . Shelley._body
@@ -132,15 +142,22 @@ txInputList = toList . Shelley._inputs . Shelley._body
 
 txPoolCertificates :: ShelleyTxBody -> [ShelleyPoolCert]
 txPoolCertificates txBody =
-    mapMaybe extractPoolCertificate certsList
+    mapMaybe extractPoolCertificate $ toList (Shelley._certs txBody)
   where
-    certsList :: [ShelleyDCert]
-    certsList = toList (Shelley._certs txBody)
-
     extractPoolCertificate :: ShelleyDCert -> Maybe ShelleyPoolCert
     extractPoolCertificate dcert =
       case dcert of
         Shelley.DCertPool pcert -> Just pcert
+        _otherwise -> Nothing
+
+txDelegationCerts :: ShelleyTxBody -> [ShelleyDelegCert]
+txDelegationCerts txBody =
+    mapMaybe extractDelegationCerts $ toList (Shelley._certs txBody)
+  where
+    extractDelegationCerts :: ShelleyDCert -> Maybe ShelleyDelegCert
+    extractDelegationCerts dcert =
+      case dcert of
+        Shelley.DCertDeleg pcert -> Just pcert
         _otherwise -> Nothing
 
 -- Outputs are ordered, so provide them as such with indices.
