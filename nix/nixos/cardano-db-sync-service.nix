@@ -6,7 +6,11 @@ let
   envConfig = cfg.environment;
   explorerConfig = {
     NetworkName = cfg.cluster;
-  } // cfg.logConfig;
+  } // (lib.optionalAttrs (envConfig.nodeConfig ? RequiresNetworkMagic) {
+    inherit (envConfig.nodeConfig) RequiresNetworkMagic;
+  }) // (lib.optionalAttrs (envConfig ? genesisHash) {
+    GenesisHash = envConfig.genesisHash;
+  }) // cfg.logConfig;
   configFile = __toFile "config.json" (__toJSON explorerConfig);
 in {
   options = {
