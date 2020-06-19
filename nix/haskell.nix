@@ -60,7 +60,7 @@ let
       src = ../.;
       name = "cardano-db-sync";
     };
-    ghc = buildPackages.haskell-nix.compiler.${compiler};
+    compiler-nix-name = compiler;
     modules = [
       # Add source filtering to local packages
       {
