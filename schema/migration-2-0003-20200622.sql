@@ -30,10 +30,10 @@ BEGIN
     EXECUTE 'ALTER TABLE "pool_retire" ADD CONSTRAINT "pool_retire_announced_tx_id_fkey" FOREIGN KEY("announced_tx_id") REFERENCES "tx"("id")' ;
     EXECUTE 'CREATe TABLE "central_funds"("id" SERIAL8  PRIMARY KEY UNIQUE,"epoch_no" INT8 NOT NULL,"treasury" lovelace NOT NULL,"reserves" lovelace NOT NULL)' ;
     EXECUTE 'ALTER TABLE "central_funds" ADD CONSTRAINT "unique_central_funds" UNIQUE("epoch_no")' ;
-    EXECUTE 'CREATe TABLE "reward"("id" SERIAL8  PRIMARY KEY UNIQUE,"addr_id" INT8 NOT NULL,"instantaneous" BOOLEAN NOT NULL,"pool_id" INT8 NOT NULL,"epoch_no" INT8 NOT NULL,"reward" lovelace NOT NULL)' ;
-    EXECUTE 'ALTER TABLE "reward" ADD CONSTRAINT "unique_reward" UNIQUE("addr_id","pool_id","epoch_no","instantaneous")' ;
+    EXECUTE 'CREATe TABLE "reward"("id" SERIAL8  PRIMARY KEY UNIQUE,"addr_id" INT8 NOT NULL,"instantaneous" BOOLEAN NOT NULL,"reward" lovelace NOT NULL,"tx_id" INT8 NOT NULL)' ;
+    EXECUTE 'ALTER TABLE "reward" ADD CONSTRAINT "unique_reward" UNIQUE("addr_id","tx_id","instantaneous")' ;
     EXECUTE 'ALTER TABLE "reward" ADD CONSTRAINT "reward_addr_id_fkey" FOREIGN KEY("addr_id") REFERENCES "stake_address"("id")' ;
-    EXECUTE 'ALTER TABLE "reward" ADD CONSTRAINT "reward_pool_id_fkey" FOREIGN KEY("pool_id") REFERENCES "pool"("id")' ;
+    EXECUTE 'ALTER TABLE "reward" ADD CONSTRAINT "reward_tx_id_fkey" FOREIGN KEY("tx_id") REFERENCES "tx"("id")' ;
     EXECUTE 'CREATe TABLE "delegation"("id" SERIAL8  PRIMARY KEY UNIQUE,"addr_id" INT8 NOT NULL,"pool_id" INT8 NOT NULL,"tx_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "delegation" ADD CONSTRAINT "unique_delegation" UNIQUE("addr_id","pool_id","tx_id")' ;
     EXECUTE 'ALTER TABLE "delegation" ADD CONSTRAINT "delegation_addr_id_fkey" FOREIGN KEY("addr_id") REFERENCES "stake_address"("id")' ;

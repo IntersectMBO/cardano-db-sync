@@ -187,11 +187,11 @@ share
     -- This design allows rewards to be discriminated based on how they are earned.
   Reward
     addrId              StakeAddressId
+    -- poolId             PoolId -- Can't get this from on chain data. Should we look it up?
     instantaneous       Bool
-    poolId              PoolId
-    epochNo             Word64
     reward              Word64              sqltype=lovelace
-    UniqueReward        addrId poolId epochNo instantaneous
+    txId                TxId
+    UniqueReward        addrId txId instantaneous
 
   Delegation
     addrId              StakeAddressId

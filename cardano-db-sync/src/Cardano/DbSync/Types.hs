@@ -10,6 +10,7 @@ module Cardano.DbSync.Types
   , ShelleyDCert
   , ShelleyDelegCert
   , ShelleyHash
+  , ShelleyMIRCert
   , ShelleyPoolCert
   , ShelleyPoolParams
   , ShelleyRewardAccount
@@ -72,6 +73,7 @@ type ShelleyBlock = Shelley.ShelleyBlock Shelley.TPraosStandardCrypto
 type ShelleyDCert = Shelley.DCert Shelley.TPraosStandardCrypto
 type ShelleyDelegCert = Shelley.DelegCert Shelley.TPraosStandardCrypto
 type ShelleyHash = Shelley.ShelleyHash Shelley.TPraosStandardCrypto
+type ShelleyMIRCert = Shelley.MIRCert Shelley.TPraosStandardCrypto
 type ShelleyPoolCert = Shelley.PoolCert Shelley.TPraosStandardCrypto
 type ShelleyPoolParams = Shelley.PoolParams Shelley.TPraosStandardCrypto
 type ShelleyRewardAccount = Shelley.RewardAcnt Shelley.TPraosStandardCrypto
