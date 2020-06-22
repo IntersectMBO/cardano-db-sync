@@ -36,6 +36,7 @@ import           Cardano.Slotting.Slot (EpochNo (..))
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Lazy.Char8 as LBS
+import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 
 import           Ouroboros.Network.Block (BlockNo (..), Tip)
@@ -43,6 +44,7 @@ import           Ouroboros.Network.Block (BlockNo (..), Tip)
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import           Shelley.Spec.Ledger.BaseTypes (strictMaybeToMaybe)
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
+import qualified Shelley.Spec.Ledger.Coin as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxData as Shelley
 
@@ -130,6 +132,7 @@ insertTx tracer blkId blockIndex tx = do
 
     mapM_ (insertPoolCert tracer txId) (Shelley.txPoolCertificates $ Shelley._body tx)
     mapM_ (insertDelegCert tracer txId) (Shelley.txDelegationCerts $ Shelley._body tx)
+    mapM_ (insertMirCert tracer txId) (Shelley.txMirCertificates $ Shelley._body tx)
 
 
 insertTxOut
@@ -244,7 +247,7 @@ insertStakeAddress
 insertStakeAddress stakeAddr =
   lift . DB.insertStakeAddress $
     DB.StakeAddress
-      { DB.stakeAddressHash = fixStakingAddr stakeAddr -- TODO: Drop 1 byte to reduce the length to 32.
+      { DB.stakeAddressHash = fixStakingAddr stakeAddr -- TODO: is fixStakingAddr the right approach?
       }
 
 insertPoolOwner
@@ -302,6 +305,43 @@ insertDelegation _tracer txId cred poolkh = do
       , DB.delegationTxId = txId
       }
 
+insertMirCert
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DB.TxId -> ShelleyMIRCert
+    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+insertMirCert tracer txId mcert = do
+    case Shelley.mirPot mcert of
+      Shelley.ReservesMIR ->
+        mapM_ insertMirReserves $ Map.toList (Shelley.mirRewards mcert)
+      Shelley.TreasuryMIR ->
+        mapM_ insertMirTreasury $ Map.toList (Shelley.mirRewards mcert)
+  where
+    insertMirReserves
+        :: (MonadBaseControl IO m, MonadIO m)
+        => (ShelleyStakingCred, Shelley.Coin)
+        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    insertMirReserves (cred, coin) = do
+      liftIO $ logInfo tracer "insertMirReserves"
+      addrId <- firstExceptT (NELookup "insertMirReserves")
+                    . newExceptT
+                    $ queryStakeAddress (fixStakingAddr $ Shelley.stakingCredHash cred)
+      void . lift . DB.insertReward $
+        DB.Reward
+          { DB.rewardAddrId = addrId
+          , DB.rewardTxId = txId
+          , DB.rewardInstantaneous = True
+          , DB.rewardReward = Shelley.unCoin coin
+          }
+
+    insertMirTreasury
+        :: MonadIO m -- (MonadBaseControl IO m, MonadIO m)
+        => (ShelleyStakingCred, Shelley.Coin)
+        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    insertMirTreasury _ = do
+      liftIO $ logInfo tracer "insertMirTreasury"
+      panic "insertMirReserves"
+
+-- -------------------------------------------------------------------------------------------------
 
 -- | StakeAddress values in the PoolParam are 33 bytes long while addresses in
 -- ShelleyStakingCred are 32 bytes long. We therefore test the length of the ByteString

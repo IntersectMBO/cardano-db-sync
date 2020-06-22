@@ -21,6 +21,7 @@ module Cardano.DbSync.Era.Shelley.Util
   , txInputList
   , txOutputList
   , txOutputSum
+  , txMirCertificates
   , txPoolCertificates
   , txDelegationCerts
   , unCoin
@@ -131,6 +132,16 @@ stakingCredHash cred =
     unScriptHash :: Shelley.ScriptHash crypto -> Shelley.Hash crypto (Shelley.Script crypto)
     unScriptHash (Shelley.ScriptHash x) = x
 
+txDelegationCerts :: ShelleyTxBody -> [ShelleyDelegCert]
+txDelegationCerts txBody =
+    mapMaybe extractDelegationCerts $ toList (Shelley._certs txBody)
+  where
+    extractDelegationCerts :: ShelleyDCert -> Maybe ShelleyDelegCert
+    extractDelegationCerts dcert =
+      case dcert of
+        Shelley.DCertDeleg pcert -> Just pcert
+        _otherwise -> Nothing
+
 txFee :: ShelleyTx -> Word64
 txFee = unCoin . Shelley._txfee . Shelley._body
 
@@ -140,6 +151,16 @@ txHash = Crypto.getHash . Shelley.hashTxBody . Shelley._body
 txInputList :: ShelleyTx -> [ShelleyTxIn]
 txInputList = toList . Shelley._inputs . Shelley._body
 
+txMirCertificates :: ShelleyTxBody -> [ShelleyMIRCert]
+txMirCertificates txBody =
+    mapMaybe extractMirCert $ toList (Shelley._certs txBody)
+  where
+    extractMirCert :: ShelleyDCert -> Maybe ShelleyMIRCert
+    extractMirCert dcert =
+      case dcert of
+        Shelley.DCertMir mcert -> Just mcert
+        _otherwise -> Nothing
+
 txPoolCertificates :: ShelleyTxBody -> [ShelleyPoolCert]
 txPoolCertificates txBody =
     mapMaybe extractPoolCertificate $ toList (Shelley._certs txBody)
@@ -148,16 +169,6 @@ txPoolCertificates txBody =
     extractPoolCertificate dcert =
       case dcert of
         Shelley.DCertPool pcert -> Just pcert
-        _otherwise -> Nothing
-
-txDelegationCerts :: ShelleyTxBody -> [ShelleyDelegCert]
-txDelegationCerts txBody =
-    mapMaybe extractDelegationCerts $ toList (Shelley._certs txBody)
-  where
-    extractDelegationCerts :: ShelleyDCert -> Maybe ShelleyDelegCert
-    extractDelegationCerts dcert =
-      case dcert of
-        Shelley.DCertDeleg pcert -> Just pcert
         _otherwise -> Nothing
 
 -- Outputs are ordered, so provide them as such with indices.
