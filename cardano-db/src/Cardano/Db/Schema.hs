@@ -196,44 +196,26 @@ share
   Delegation
     addrId              StakeAddressId
     poolId              PoolId
-    slotNo              Word64
-    amount              Word64              sqltype=lovelace
     txId                TxId
     UniqueDelegation    addrId poolId txId
 
-  -- When was a staking key registered
-  StakeKeyRegistration
+  -- When was a staking key/script registered
+  StakeRegistration
     addrId              StakeAddressId
-    slotNo              Word64
     txId                TxId
-    UniqueStakeKeyRegistration addrId txId
+    UniqueStakeRegistration addrId txId
 
-  -- When was a staking key deregistered
-  StakeKeyDeregistration
+  -- When was a staking key/script deregistered
+  StakeDeregistration
     addrId              StakeAddressId
-    slotNo              Word64
     txId                TxId
-    UniqueStakeKeyDeregistration addrId txId
-
-  -- When was a script registered
-  ScriptRegistration
-    addrId              StakeAddressId
-    slotNo              Word64
-    txId                TxId
-    UniqueScriptRegistration addrId txId
-
-  -- When was a script deregistered
-  ScriptDeregistration
-    addrId              StakeAddressId
-    slotNo              Word64
-    txId                TxId
-    UniqueScriptDeregistration addrId txId
+    UniqueStakeDeregistration addrId txId
 
   -- -----------------------------------------------------------------------------------------------
 
   Stake
     addrId              StakeAddressId
-    slotNo              Word64
+    txId                TxId
     stake               Word64              sqltype=lovelace
     UniqueStake         addrId stake
 

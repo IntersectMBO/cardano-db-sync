@@ -33,6 +33,7 @@ import           Cardano.DbSync.Util
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
+import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Text.Encoding as Text
@@ -128,6 +129,7 @@ insertTx tracer blkId blockIndex tx = do
     mapM_ (insertTxIn tracer txId) (Shelley.txInputList tx)
 
     mapM_ (insertPoolCert tracer txId) (Shelley.txPoolCertificates $ Shelley._body tx)
+    mapM_ (insertDelegCert tracer txId) (Shelley.txDelegationCerts $ Shelley._body tx)
 
 
 insertTxOut
@@ -162,18 +164,29 @@ insertPoolCert
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertPoolCert tracer txId pCert =
   case pCert of
-    Shelley.RegPool pParams -> insertPoolRegister tracer pParams txId
-    Shelley.RetirePool keyHash epochNum -> insertPoolRetire keyHash txId epochNum
+    Shelley.RegPool pParams -> insertPoolRegister tracer txId pParams
+    Shelley.RetirePool keyHash epochNum -> insertPoolRetire txId epochNum keyHash
+
+insertDelegCert
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DB.TxId -> ShelleyDelegCert
+    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+insertDelegCert tracer txId dCert =
+  case dCert of
+    Shelley.RegKey cred -> insertStakeRegistration tracer txId cred
+    Shelley.DeRegKey cred -> insertStakeDeregistration tracer txId cred
+    Shelley.Delegate (Shelley.Delegation cred poolkh) -> insertDelegation tracer txId cred poolkh
+
 
 insertPoolRegister
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> ShelleyPoolParams -> DB.TxId
+    => Trace IO Text -> DB.TxId -> ShelleyPoolParams
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertPoolRegister tracer params txId = do
+insertPoolRegister tracer txId params = do
   mdId <- case strictMaybeToMaybe $ Shelley._poolMD params of
             Just md -> Just <$> insertMetaData txId md
             Nothing -> pure Nothing
-  rewardId <- insertStakeAddress $ Shelley._poolRAcnt params
+  rewardId <- insertStakeAddress $ Shelley.serialiseRewardAcnt (Shelley._poolRAcnt params)
 
   when (Shelley.unCoin (Shelley._poolPledge params) > maxLovelace) $
     liftIO . logError tracer $
@@ -200,9 +213,9 @@ maxLovelace = 45000000000000000
 
 insertPoolRetire
     :: (MonadBaseControl IO m, MonadIO m)
-    => ShelleyStakePoolKeyHash -> DB.TxId -> EpochNo
+    => DB.TxId -> EpochNo ->  ShelleyStakePoolKeyHash
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertPoolRetire keyHash txId epochNum = do
+insertPoolRetire txId epochNum keyHash = do
   poolId <- firstExceptT (NELookup "insertPoolRetire") . newExceptT $ queryStakePoolKeyHash keyHash
   void . lift . DB.insertPoolRetire $
     DB.PoolRetire
@@ -226,12 +239,12 @@ insertMetaData txId md =
 
 insertStakeAddress
     :: (MonadBaseControl IO m, MonadIO m)
-    => ShelleyRewardAccount
+    => ByteString
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) DB.StakeAddressId
-insertStakeAddress rewardAccount =
+insertStakeAddress stakeAddr =
   lift . DB.insertStakeAddress $
     DB.StakeAddress
-      { DB.stakeAddressHash = Shelley.serialiseRewardAcnt rewardAccount -- TODO: This is not the hash
+      { DB.stakeAddressHash = fixStakingAddr stakeAddr -- TODO: Drop 1 byte to reduce the length to 32.
       }
 
 insertPoolOwner
@@ -244,3 +257,59 @@ insertPoolOwner poolId skh =
       { DB.poolOwnerHash = Shelley.unKeyHashBS skh
       , DB.poolOwnerPoolId = poolId
       }
+
+insertStakeRegistration
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DB.TxId -> ShelleyStakingCred
+    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+insertStakeRegistration _tracer txId cred = do
+  scId <- insertStakeAddress $ Shelley.stakingCredHash cred
+  void . lift . DB.insertStakeRegistration $
+    DB.StakeRegistration
+      { DB.stakeRegistrationAddrId = scId
+      , DB.stakeRegistrationTxId = txId
+      }
+
+insertStakeDeregistration
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DB.TxId -> ShelleyStakingCred
+    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+insertStakeDeregistration _tracer txId cred = do
+  scId <- firstExceptT (NELookup "insertStakeDeregistration")
+            . newExceptT
+            $ queryStakeAddress (fixStakingAddr $ Shelley.stakingCredHash cred)
+  void . lift . DB.insertStakeRegistration $
+    DB.StakeRegistration
+      { DB.stakeRegistrationAddrId = scId
+      , DB.stakeRegistrationTxId = txId
+      }
+
+insertDelegation
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DB.TxId -> ShelleyStakingCred -> ShelleyStakePoolKeyHash
+    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+insertDelegation _tracer txId cred poolkh = do
+  addrId <- firstExceptT (NELookup "insertDelegation")
+                . newExceptT
+                $ queryStakeAddress (fixStakingAddr $ Shelley.stakingCredHash cred)
+  poolId <- firstExceptT (NELookup "insertDelegation")
+                . newExceptT
+                $ queryStakePoolKeyHash poolkh
+  void . lift . DB.insertDelegation $
+    DB.Delegation
+      { DB.delegationAddrId = addrId
+      , DB.delegationPoolId = poolId
+      , DB.delegationTxId = txId
+      }
+
+
+-- | StakeAddress values in the PoolParam are 33 bytes long while addresses in
+-- ShelleyStakingCred are 32 bytes long. We therefore test the length of the ByteString
+-- and drop the first byte if the length is 33 bytes in length.
+-- This leading byte contains the network id and something that discriminates between
+-- a KeyHash or a ScriptHash. It will need to be handled at some point.
+fixStakingAddr :: ByteString -> ByteString
+fixStakingAddr bs =
+  if BS.length bs == 33
+    then BS.tail bs
+    else bs

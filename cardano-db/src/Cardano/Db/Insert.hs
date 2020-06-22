@@ -3,6 +3,7 @@
 
 module Cardano.Db.Insert
   ( insertBlock
+  , insertDelegation
   , insertEpoch
   , insertMeta
   , insertPool
@@ -11,6 +12,7 @@ module Cardano.Db.Insert
   , insertPoolRetire
   , insertSlotLeader
   , insertStakeAddress
+  , insertStakeRegistration
   , insertTx
   , insertTxIn
   , insertTxOut
@@ -37,6 +39,9 @@ import           Cardano.Db.Schema
 insertBlock :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
 insertBlock = insertByReturnKey "Block"
 
+insertDelegation :: (MonadBaseControl IO m, MonadIO m) => Delegation -> ReaderT SqlBackend m DelegationId
+insertDelegation = insertByReturnKey "Delegation"
+
 insertEpoch :: (MonadBaseControl IO m, MonadIO m) => Epoch -> ReaderT SqlBackend m EpochId
 insertEpoch = insertByReturnKey "Epoch"
 
@@ -60,6 +65,9 @@ insertSlotLeader = insertByReturnKey "SlotLeader"
 
 insertStakeAddress :: (MonadBaseControl IO m, MonadIO m) => StakeAddress -> ReaderT SqlBackend m StakeAddressId
 insertStakeAddress = insertByReturnKey "StakeAddress"
+
+insertStakeRegistration :: (MonadBaseControl IO m, MonadIO m) => StakeRegistration -> ReaderT SqlBackend m StakeRegistrationId
+insertStakeRegistration = insertByReturnKey "StakeRegistration"
 
 insertTx :: (MonadBaseControl IO m, MonadIO m) => Tx -> ReaderT SqlBackend m TxId
 insertTx = insertByReturnKey "Tx"
