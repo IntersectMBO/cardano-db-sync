@@ -133,6 +133,7 @@ insertTx tracer blkId blockIndex tx = do
     mapM_ (insertPoolCert tracer txId) (Shelley.txPoolCertificates $ Shelley._body tx)
     mapM_ (insertDelegCert tracer txId) (Shelley.txDelegationCerts $ Shelley._body tx)
     mapM_ (insertMirCert tracer txId) (Shelley.txMirCertificates $ Shelley._body tx)
+    mapM_ (insertWithdrawals tracer txId) (Map.toList . Shelley.unWdrl . Shelley._wdrls $ Shelley._body tx)
 
 
 insertTxOut
@@ -321,7 +322,6 @@ insertMirCert tracer txId mcert = do
         => (ShelleyStakingCred, Shelley.Coin)
         -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     insertMirReserves (cred, coin) = do
-      liftIO $ logInfo tracer "insertMirReserves"
       addrId <- firstExceptT (NELookup "insertMirReserves")
                     . newExceptT
                     $ queryStakeAddress (fixStakingAddr $ Shelley.stakingCredHash cred)
@@ -329,8 +329,7 @@ insertMirCert tracer txId mcert = do
         DB.Reward
           { DB.rewardAddrId = addrId
           , DB.rewardTxId = txId
-          , DB.rewardInstantaneous = True
-          , DB.rewardReward = Shelley.unCoin coin
+          , DB.rewardAmount = Shelley.unCoin coin
           }
 
     insertMirTreasury
@@ -340,6 +339,21 @@ insertMirCert tracer txId mcert = do
     insertMirTreasury _ = do
       liftIO $ logInfo tracer "insertMirTreasury"
       panic "insertMirReserves"
+
+insertWithdrawals
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DB.TxId -> (ShelleyRewardAccount, Shelley.Coin)
+    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+insertWithdrawals _tracer txId (account, coin) = do
+  addrId <- firstExceptT (NELookup "insertWithdrawals")
+                . newExceptT
+                $ queryStakeAddress (fixStakingAddr $ Shelley.serialiseRewardAcnt account) -- FIXME: fixStakingAddr
+  void . lift . DB.insertWithdrawal $
+    DB.Withdrawal
+      { DB.withdrawalAddrId = addrId
+      , DB.withdrawalTxId = txId
+      , DB.withdrawalAmount = Shelley.unCoin coin
+      }
 
 -- -------------------------------------------------------------------------------------------------
 
