@@ -188,10 +188,16 @@ share
   Reward
     addrId              StakeAddressId
     -- poolId             PoolId -- Can't get this from on chain data. Should we look it up?
-    instantaneous       Bool
-    reward              Word64              sqltype=lovelace
+    amount              Word64              sqltype=lovelace
     txId                TxId
-    UniqueReward        addrId txId instantaneous
+    UniqueReward        addrId txId
+
+  Withdrawal
+    addrId              StakeAddressId
+    -- poolId             PoolId -- Can't get this from on chain data. Should we look it up?
+    amount              Word64              sqltype=lovelace
+    txId                TxId
+    UniqueWithdrawal    addrId txId
 
   Delegation
     addrId              StakeAddressId
