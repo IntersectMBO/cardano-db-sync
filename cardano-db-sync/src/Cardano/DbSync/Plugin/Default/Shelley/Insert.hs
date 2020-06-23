@@ -205,7 +205,7 @@ insertPoolRegister tracer txId params = do
                 , DB.poolPledge = Shelley.unCoin $ Shelley._poolPledge params
                 , DB.poolRewardAddrId = rewardId
                 , DB.poolMeta = mdId
-                , DB.poolMargin = fromRational $ Shelley.intervalValue (Shelley._poolMargin params)
+                , DB.poolMargin = realToFrac $ Shelley.intervalValue (Shelley._poolMargin params)
                 , DB.poolFixedCost = Shelley.unCoin (Shelley._poolCost params)
                 , DB.poolRegisteredTxId = txId
                 }

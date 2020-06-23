@@ -79,7 +79,7 @@ import           Ouroboros.Consensus.Config (TopLevelConfig)
 import           Ouroboros.Consensus.Network.NodeToClient (ClientCodecs,
                     cChainSyncCodec, cStateQueryCodec, cTxSubmissionCodec)
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
-import           Ouroboros.Consensus.Node.NetworkProtocolVersion (NodeToClientVersion)
+import           Ouroboros.Consensus.Node.NetworkProtocolVersion (BlockNodeToClientVersion)
 import           Ouroboros.Consensus.Node.Run (RunNode)
 import qualified Ouroboros.Network.NodeToClient.Version as Network
 
@@ -168,7 +168,7 @@ runDbSyncNodeNodeClient iomgr trce plugin topLevelConfig (SocketPath socketPath)
     clientSubscriptionParams = ClientSubscriptionParams {
         cspAddress = Snocket.localAddressFromPath socketPath,
         cspConnectionAttemptDelay = Nothing,
-        cspErrorPolicies = networkErrorPolicies <> consensusErrorPolicy (Proxy @blk)
+        cspErrorPolicies = networkErrorPolicies <> consensusErrorPolicy
         }
 
     networkSubscriptionTracers = NetworkSubscriptionTracers {
@@ -198,7 +198,7 @@ dbSyncProtocols
   -> DbSyncNodePlugin
   -> TopLevelConfig blk
   -> StrictTMVar IO (GenTx blk)
-  -> NodeToClientVersion blk
+  -> BlockNodeToClientVersion blk
   -> ClientCodecs blk IO
   -> ConnectionId LocalAddress
   -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
@@ -232,6 +232,10 @@ dbSyncProtocols trce plugin _topLevelConfig txv _version codecs _connectionId =
             )
         atomically $ writeDbActionQueue actionQueue DbFinish
         cancel server
+        -- We should return leftover bytes returned by 'runPipelinedPeer', but
+        -- client application do not care about them (it's only important if one
+        -- would like to restart a protocol on the same mux and thus bearer).
+        pure ((), Nothing)
 
     localTxSubmissionProtocol :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
     localTxSubmissionProtocol = InitiatorProtocolOnly $ MuxPeer

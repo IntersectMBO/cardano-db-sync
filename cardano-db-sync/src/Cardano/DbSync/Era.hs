@@ -44,11 +44,11 @@ import           Ouroboros.Consensus.Byron.Ledger.Block (ByronBlock)
 import           Ouroboros.Consensus.Cardano (protocolInfoByron)
 import           Ouroboros.Consensus.Config (TopLevelConfig)
 import           Ouroboros.Consensus.Node (ProtocolInfo (..), pInfoConfig)
-import qualified Ouroboros.Consensus.Shelley.Genesis as Shelley
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..), protocolInfoShelley)
 import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
 
 import           Shelley.Spec.Ledger.BaseTypes (Network (..))
+import qualified Shelley.Spec.Ledger.Genesis as Shelley
 import           Shelley.Spec.Ledger.PParams (ProtVer (..))
 
 data GenesisEra
@@ -101,7 +101,8 @@ mkShelleyTopLevelConfig sgc =
     -- Can use Nothing for the last field because that field will be dropped
     -- by 'pInfoConfig' anyway.
     shelleyInfo :: ProtocolInfo IO ShelleyBlock
-    shelleyInfo = protocolInfoShelley sgc (ProtVer 0 0) Nothing
+    -- TODO: IS @'maxMajorPV' = 0@ THIS RIGHT?
+    shelleyInfo = protocolInfoShelley sgc 2 (ProtVer 2 0) Nothing
 
 mkShelleyProtocolMagic :: ShelleyGenesis TPraosStandardCrypto -> ProtocolMagic
 mkShelleyProtocolMagic sg =
