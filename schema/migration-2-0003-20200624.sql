@@ -6,7 +6,7 @@ DECLARE
 BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
   IF next_version = 3 THEN
-    EXECUTE 'ALTER TABLE "slot_leader" ALTER COLUMN "hash" TYPE hash34type' ;
+    EXECUTE 'ALTER TABLE "slot_leader" ALTER COLUMN "hash" TYPE hash32type' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "vrf_key" hash32type NULL' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "nonce_vrf" hash32type NULL' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "leader_vrf" hash32type NULL' ;

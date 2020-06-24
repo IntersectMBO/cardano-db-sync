@@ -51,7 +51,7 @@ share
     stageThree Int
 
   SlotLeader
-    hash                ByteString          sqltype=hash34type
+    hash                ByteString          sqltype=hash32type
     description         Text                -- Description of the Slots leader.
     UniqueSlotLeader    hash
 
