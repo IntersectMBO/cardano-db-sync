@@ -222,7 +222,7 @@ configGenesisHash :: ShelleyGenesis TPraosStandardCrypto -> ByteString
 configGenesisHash _ = Shelley.fakeGenesisHash
 
 genesisHashSlotLeader :: ShelleyGenesis TPraosStandardCrypto -> ByteString
-genesisHashSlotLeader cfg = "SL" <> configGenesisHash cfg
+genesisHashSlotLeader = configGenesisHash
 
 configGenesisSupply :: ShelleyGenesis TPraosStandardCrypto -> DB.Ada
 configGenesisSupply =

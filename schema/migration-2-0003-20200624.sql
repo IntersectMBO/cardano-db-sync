@@ -6,7 +6,7 @@ DECLARE
 BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
   IF next_version = 3 THEN
-    EXECUTE 'ALTER TABLE "slot_leader" ALTER COLUMN "hash" TYPE hash34type' ;
+    EXECUTE 'ALTER TABLE "slot_leader" ALTER COLUMN "hash" TYPE hash32type' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "vrf_key" hash32type NULL' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "nonce_vrf" hash32type NULL' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "leader_vrf" hash32type NULL' ;
@@ -29,6 +29,9 @@ BEGIN
     EXECUTE 'ALTER TABLE "pool_retire" ADD CONSTRAINT "unique_pool_retiring" UNIQUE("pool_id")' ;
     EXECUTE 'ALTER TABLE "pool_retire" ADD CONSTRAINT "pool_retire_pool_id_fkey" FOREIGN KEY("pool_id") REFERENCES "pool"("id")' ;
     EXECUTE 'ALTER TABLE "pool_retire" ADD CONSTRAINT "pool_retire_announced_tx_id_fkey" FOREIGN KEY("announced_tx_id") REFERENCES "tx"("id")' ;
+    EXECUTE 'CREATe TABLE "pool_relay"("id" SERIAL8  PRIMARY KEY UNIQUE,"pool_id" INT8 NOT NULL,"ipv4" VARCHAR NULL,"ipv6" VARCHAR NULL,"dns_name" VARCHAR NULL,"dns_srv_name" VARCHAR NULL,"port" INT4 NULL)' ;
+    EXECUTE 'ALTER TABLE "pool_relay" ADD CONSTRAINT "unique_pool_relay" UNIQUE("pool_id","ipv4","ipv6","dns_name")' ;
+    EXECUTE 'ALTER TABLE "pool_relay" ADD CONSTRAINT "pool_relay_pool_id_fkey" FOREIGN KEY("pool_id") REFERENCES "pool"("id")' ;
     EXECUTE 'CREATe TABLE "central_funds"("id" SERIAL8  PRIMARY KEY UNIQUE,"epoch_no" INT8 NOT NULL,"treasury" lovelace NOT NULL,"reserves" lovelace NOT NULL)' ;
     EXECUTE 'ALTER TABLE "central_funds" ADD CONSTRAINT "unique_central_funds" UNIQUE("epoch_no")' ;
     EXECUTE 'CREATe TABLE "reward"("id" SERIAL8  PRIMARY KEY UNIQUE,"addr_id" INT8 NOT NULL,"amount" lovelace NOT NULL,"tx_id" INT8 NOT NULL)' ;

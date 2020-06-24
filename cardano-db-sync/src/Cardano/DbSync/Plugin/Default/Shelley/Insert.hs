@@ -213,6 +213,7 @@ insertPoolRegister tracer txId params = do
                 }
 
   mapM_ (insertPoolOwner poolId) $ toList (Shelley._poolOwners params)
+  mapM_ (insertPoolRelay poolId) $ toList (Shelley._poolRelays params)
 
 maxLovelace :: Word64
 maxLovelace = 45000000000000000
@@ -356,6 +357,41 @@ insertWithdrawals _tracer txId (account, coin) = do
       , DB.withdrawalTxId = txId
       , DB.withdrawalAmount = Shelley.unCoin coin
       }
+
+insertPoolRelay
+    :: (MonadBaseControl IO m, MonadIO m)
+    => DB.PoolId -> Shelley.StakePoolRelay
+    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+insertPoolRelay poolId relay =
+  void . lift . DB.insertPoolRelay $
+    case relay of
+      Shelley.SingleHostAddr mPort mIpv4 mIpv6 ->
+        DB.PoolRelay
+          { DB.poolRelayPoolId = poolId
+          , DB.poolRelayIpv4 = textShow <$> Shelley.strictMaybeToMaybe mIpv4
+          , DB.poolRelayIpv6 = textShow <$> Shelley.strictMaybeToMaybe mIpv6
+          , DB.poolRelayDnsName = Nothing
+          , DB.poolRelayDnsSrvName = Nothing
+          , DB.poolRelayPort = Shelley.portToWord16 <$> Shelley.strictMaybeToMaybe mPort
+          }
+      Shelley.SingleHostName mPort name ->
+        DB.PoolRelay -- | An @A@ or @AAAA@ DNS record
+          { DB.poolRelayPoolId = poolId
+          , DB.poolRelayIpv4 = Nothing
+          , DB.poolRelayIpv6 = Nothing
+          , DB.poolRelayDnsName = Just (Shelley.dnsToText name)
+          , DB.poolRelayDnsSrvName = Nothing
+          , DB.poolRelayPort = Shelley.portToWord16 <$> Shelley.strictMaybeToMaybe mPort
+          }
+      Shelley.MultiHostName name ->
+        DB.PoolRelay -- | A @SRV@ DNS record
+          { DB.poolRelayPoolId = poolId
+          , DB.poolRelayIpv4 = Nothing
+          , DB.poolRelayIpv6 = Nothing
+          , DB.poolRelayDnsName = Nothing
+          , DB.poolRelayDnsSrvName = Just (Shelley.dnsToText name)
+          , DB.poolRelayPort = Nothing
+          }
 
 -- -------------------------------------------------------------------------------------------------
 

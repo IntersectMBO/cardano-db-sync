@@ -1,5 +1,6 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Cardano.DbSync.Era.Shelley.Util
   ( blockHash
@@ -33,7 +34,6 @@ module Cardano.DbSync.Era.Shelley.Util
 
 import           Cardano.Prelude
 
-import qualified Cardano.Binary as Binary
 import qualified Cardano.Crypto.Hash as Crypto
 import           Cardano.Slotting.Slot (SlotNo (..))
 import qualified Cardano.Crypto.DSIGN as DSIGN
@@ -62,6 +62,7 @@ import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxData as Shelley
 import qualified Shelley.Spec.Ledger.UTxO as Shelley
 
+
 blockHash :: ShelleyBlock -> ByteString
 blockHash = unHeaderHash . Shelley.shelleyBlockHeaderHash
 
@@ -79,7 +80,7 @@ blockSize :: ShelleyBlock -> Word64
 blockSize = fromIntegral . Shelley.bBodySize . Shelley.bbody . Shelley.shelleyBlockRaw
 
 blockTxCount :: ShelleyBlock -> Word64
-blockTxCount = fromIntegral . length . getTxInternalUnsafe . Shelley.bbody . Shelley.shelleyBlockRaw
+blockTxCount = fromIntegral . length . unTxSeq . Shelley.bbody . Shelley.shelleyBlockRaw
 
 blockTxs :: ShelleyBlock -> [ShelleyTx]
 blockTxs =
@@ -122,7 +123,7 @@ rewardAccountHash ra =
 
 slotLeaderHash :: ShelleyBlock -> ByteString
 slotLeaderHash =
-  Binary.serialize' . Shelley.bheaderVk . Shelley.bhbody . Shelley.bheader . Shelley.shelleyBlockRaw
+  DSIGN.rawSerialiseVerKeyDSIGN . unVKey . Shelley.bheaderVk . Shelley.bhbody . Shelley.bheader . Shelley.shelleyBlockRaw
 
 slotNumber :: ShelleyBlock -> Word64
 slotNumber =
@@ -203,8 +204,8 @@ unKeyHashBS kh = Crypto.getHash $ unKeyHash kh
 unTxHash :: ShelleyTxId -> ByteString
 unTxHash (Shelley.TxId txid) = Crypto.getHash txid
 
--- -------------------------------------------------------------------------------------------------
--- Internal
+unTxSeq :: Shelley.Crypto c => Shelley.TxSeq c -> StrictSeq (Shelley.Tx c)
+unTxSeq (Shelley.TxSeq txSeq) = txSeq
 
-getTxInternalUnsafe :: Shelley.Crypto c => Shelley.TxSeq c -> StrictSeq (Shelley.Tx c)
-getTxInternalUnsafe (Shelley.TxSeq txSeq) = txSeq
+unVKey :: Shelley.VKey kd crypto -> DSIGN.VerKeyDSIGN (Shelley.DSIGN crypto)
+unVKey (Shelley.VKey a) = a

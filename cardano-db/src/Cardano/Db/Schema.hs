@@ -51,7 +51,7 @@ share
     stageThree Int
 
   SlotLeader
-    hash                ByteString          sqltype=hash34type
+    hash                ByteString          sqltype=hash32type
     description         Text                -- Description of the Slots leader.
     UniqueSlotLeader    hash
 
@@ -174,6 +174,19 @@ share
     announcedTxId       TxId                -- Slot number in which the pool announced it was retiring.
     retiringEpoch       Word64              -- Epoch number in which the pool will retire.
     UniquePoolRetiring  poolId
+
+  PoolRelay
+    poolId              PoolId
+    ipv4                Text Maybe
+    ipv6                Text Maybe
+    dnsName             Text Maybe
+    dnsSrvName          Text Maybe
+    port                Word16 Maybe
+    -- Usually NULLables are not allowed in a uniqueness constraint. The semantics of how NULL
+    -- interacts with those constraints is non-trivial:  two NULL values are not considered equal
+    -- for the purposes of an uniqueness constraint.
+    -- Use of "!force" attribute on the end of the line disables this check.
+    UniquePoolRelay     poolId ipv4 ipv6 dnsName !force
 
   -- -----------------------------------------------------------------------------------------------
 

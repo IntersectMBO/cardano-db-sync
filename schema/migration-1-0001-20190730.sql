@@ -18,9 +18,6 @@ BEGIN
     -- Addresses use a 28 byte hash (as do StakeholdIds).
     EXECUTE 'CREATE DOMAIN hash28type AS bytea CHECK (octet_length (VALUE) = 28);';
 
-    -- Addresses use a 28 byte hash (as do StakeholdIds).
-    EXECUTE 'CREATE DOMAIN hash34type AS bytea CHECK (octet_length (VALUE) = 34);';
-
     -- Stake addresses???
     EXECUTE 'CREATE DOMAIN addr28type AS bytea CHECK (octet_length (VALUE) = 28);';
 
