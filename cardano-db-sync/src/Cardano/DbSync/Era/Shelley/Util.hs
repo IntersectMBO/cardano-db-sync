@@ -14,6 +14,7 @@ module Cardano.DbSync.Era.Shelley.Util
   , pointToSlotHash
   , renderHash
   , rewardAccountHash
+  , slotLeaderHash
   , slotNumber
   , stakingCredHash
   , txFee
@@ -91,11 +92,11 @@ epochNumber :: ShelleyBlock -> Word64 -> Word64
 epochNumber blk slotsPerEpoch = slotNumber blk `div` slotsPerEpoch
 
 fakeGenesisHash :: ByteString
-fakeGenesisHash = BS.take 32 (" G e n e s i s - H a s h " <> BS.replicate 32 ' ')
+fakeGenesisHash = BS.take 32 ("GenesisHash " <> BS.replicate 32 '\0')
 
 mkSlotLeader :: ShelleyBlock -> Db.SlotLeader
 mkSlotLeader blk =
-  let slHash = Binary.serialize' . Shelley.bheaderVk . Shelley.bhbody $ Shelley.bheader (Shelley.shelleyBlockRaw blk)
+  let slHash = slotLeaderHash blk
       slName = "SlotLeader-" <> Text.decodeUtf8 (Base16.encode $ BS.take 8 slHash)
   in Db.SlotLeader slHash slName
 
@@ -118,6 +119,10 @@ rewardAccountHash ra =
   where
     unScriptHash :: Shelley.ScriptHash crypto -> Shelley.Hash crypto (Shelley.Script crypto)
     unScriptHash (Shelley.ScriptHash x) = x
+
+slotLeaderHash :: ShelleyBlock -> ByteString
+slotLeaderHash =
+  Binary.serialize' . Shelley.bheaderVk . Shelley.bhbody . Shelley.bheader . Shelley.shelleyBlockRaw
 
 slotNumber :: ShelleyBlock -> Word64
 slotNumber =

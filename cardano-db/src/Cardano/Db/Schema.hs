@@ -51,7 +51,7 @@ share
     stageThree Int
 
   SlotLeader
-    hash                ByteString          sqltype=hash28type
+    hash                ByteString          sqltype=hash34type
     description         Text                -- Description of the Slots leader.
     UniqueSlotLeader    hash
 
@@ -142,7 +142,7 @@ share
   -- Shelley bits
 
   StakeAddress          -- Can be an address of a script hash
-    hash                ByteString          sqltype=addr33type
+    hash                ByteString          sqltype=addr28type
     UniqueStakeAddress  hash
 
   -- -----------------------------------------------------------------------------------------------
@@ -155,7 +155,7 @@ share
     UniquePoolMetaData  url
 
   Pool
-    hash                ByteString          sqltype=hash32type
+    hash                ByteString          sqltype=hash28type
     pledge              Word64              -- This really should be sqltype=lovelace See https://github.com/input-output-hk/cardano-ledger-specs/issues/1551
     rewardAddrId        StakeAddressId
     meta                PoolMetaDataId Maybe
@@ -165,7 +165,7 @@ share
     UniquePool          hash registeredTxId
 
   PoolOwner
-    hash                ByteString          sqltype=hash32type
+    hash                ByteString          sqltype=hash28type
     poolId              PoolId
     UniquePoolOwner     hash
 

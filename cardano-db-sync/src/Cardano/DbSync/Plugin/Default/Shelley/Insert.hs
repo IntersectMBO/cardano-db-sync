@@ -60,6 +60,8 @@ insertShelleyBlock tracer blk tip = do
 
     let slotsPerEpoch = DB.metaSlotsPerEpoch meta
 
+    -- liftIO . logInfo tracer $ "insertShelleyBlock " <> textShow (BS.length $ Shelley.blockHash blk)
+
     slid <- lift . DB.insertSlotLeader $ Shelley.mkSlotLeader blk
     blkId <- lift . DB.insertBlock $
                   DB.Block
@@ -357,13 +359,13 @@ insertWithdrawals _tracer txId (account, coin) = do
 
 -- -------------------------------------------------------------------------------------------------
 
--- | StakeAddress values in the PoolParam are 33 bytes long while addresses in
--- ShelleyStakingCred are 32 bytes long. We therefore test the length of the ByteString
--- and drop the first byte if the length is 33 bytes in length.
+-- | StakeAddress values in the PoolParam are 29 bytes long while addresses in
+-- ShelleyStakingCred are 28 bytes long. We therefore test the length of the ByteString
+-- and drop the first byte if the length is 29 bytes in length.
 -- This leading byte contains the network id and something that discriminates between
 -- a KeyHash or a ScriptHash. It will need to be handled at some point.
 fixStakingAddr :: ByteString -> ByteString
 fixStakingAddr bs =
-  if BS.length bs == 33
+  if BS.length bs == 29
     then BS.tail bs
     else bs
