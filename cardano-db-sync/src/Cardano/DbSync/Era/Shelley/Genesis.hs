@@ -43,16 +43,16 @@ import           Cardano.DbSync.Error
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
-import qualified Ouroboros.Consensus.BlockchainTime.WallClock.Types as Shelley
-import qualified Ouroboros.Consensus.Config.SecurityParam as Shelley
-import qualified Ouroboros.Consensus.Shelley.Genesis as Shelley
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
+import           Ouroboros.Consensus.BlockchainTime.WallClock.Types
+                  (mkSlotLength, slotLengthToMillisec)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import qualified Shelley.Spec.Ledger.Coin as Shelley
 import qualified Shelley.Spec.Ledger.Credential as Shelley
-import           Shelley.Spec.Ledger.Crypto (HASH)
+import           Shelley.Spec.Ledger.Crypto (ADDRHASH, HASH)
+import qualified Shelley.Spec.Ledger.Genesis as Shelley
 import qualified Shelley.Spec.Ledger.Keys as Shelley
 import qualified Shelley.Spec.Ledger.Scripts as Shelley
 import qualified Shelley.Spec.Ledger.TxData as Shelley
@@ -240,7 +240,7 @@ genesisTxoAssocList :: ShelleyGenesis TPraosStandardCrypto -> [(ShelleyAddress, 
 genesisTxoAssocList = Map.toList . Shelley.sgInitialFunds
 
 protocolConstant :: ShelleyGenesis TPraosStandardCrypto -> Word64
-protocolConstant = Shelley.maxRollbacks . Shelley.sgSecurityParam
+protocolConstant = Shelley.sgSecurityParam
 
 unCoin :: Shelley.Coin -> Word64
 unCoin (Shelley.Coin c) = fromIntegral c
@@ -248,14 +248,14 @@ unCoin (Shelley.Coin c) = fromIntegral c
 -- | The genesis data is a NominalDiffTime (in picoseconds) and we need
 -- it as milliseconds.
 configSlotDuration :: ShelleyGenesis TPraosStandardCrypto -> Word64
-configSlotDuration sg =
-  floor $ 1000 * Shelley.getSlotLength (Shelley.sgSlotLength sg)
+configSlotDuration =
+  fromIntegral . slotLengthToMillisec . mkSlotLength . sgSlotLength
 
 configSlotsPerEpoch :: ShelleyGenesis TPraosStandardCrypto -> Word64
 configSlotsPerEpoch sg = unEpochSize (Shelley.sgEpochLength sg)
 
 configStartTime :: ShelleyGenesis TPraosStandardCrypto -> UTCTime
-configStartTime = roundToMillseconds . Shelley.getSystemStart . Shelley.sgSystemStart
+configStartTime = roundToMillseconds . Shelley.sgSystemStart
 
 roundToMillseconds :: UTCTime -> UTCTime
 roundToMillseconds (UTCTime day picoSecs) =
@@ -280,16 +280,28 @@ genesisUtxOs sg =
 initialFundsPseudoTxIn :: ShelleyAddress -> ShelleyTxIn
 initialFundsPseudoTxIn addr =
     case addr of
-      Shelley.Addr _networkId (Shelley.KeyHashObj    (Shelley.KeyHash    h)) _sref -> pseudoTxIn h
-      Shelley.Addr _networkId (Shelley.ScriptHashObj (Shelley.ScriptHash h)) _sref -> pseudoTxIn h
+      Shelley.Addr _networkId (Shelley.KeyHashObj    (Shelley.KeyHash    h)) _sref ->
+        pseudoTxInAddr h
+      Shelley.Addr _networkId (Shelley.ScriptHashObj (Shelley.ScriptHash h)) _sref ->
+        pseudoTxInHash h
       Shelley.AddrBootstrap byronAddr ->
         panic $ "Unsupported Byron address in the genesis UTxO: " <> show byronAddr
   where
-    pseudoTxIn :: Crypto.Hash (HASH TPraosStandardCrypto) a -> ShelleyTxIn
-    pseudoTxIn h = Shelley.TxIn (pseudoTxId h) 0
+    pseudoTxInAddr :: Crypto.Hash (ADDRHASH TPraosStandardCrypto) a -> ShelleyTxIn
+    pseudoTxInAddr h = Shelley.TxIn (pseudoTxIdAddr h) 0
 
-    pseudoTxId :: Crypto.Hash (HASH TPraosStandardCrypto) a -> ShelleyTxId
-    pseudoTxId = Shelley.TxId . castHash
+    pseudoTxIdAddr :: Crypto.Hash (ADDRHASH TPraosStandardCrypto) a -> ShelleyTxId
+    pseudoTxIdAddr = Shelley.TxId . castAddr
+
+    --TODO: move this to the hash API module
+    castAddr :: Crypto.Hash (ADDRHASH TPraosStandardCrypto) a -> Crypto.Hash (HASH TPraosStandardCrypto) b
+    castAddr (Crypto.UnsafeHash h) = Crypto.UnsafeHash h
+
+    pseudoTxInHash :: Crypto.Hash (HASH TPraosStandardCrypto) a -> ShelleyTxIn
+    pseudoTxInHash h = Shelley.TxIn (pseudoTxIdHash h) 0
+
+    pseudoTxIdHash :: Crypto.Hash (HASH TPraosStandardCrypto) a -> ShelleyTxId
+    pseudoTxIdHash = Shelley.TxId . castHash
 
     --TODO: move this to the hash API module
     castHash :: Crypto.Hash (HASH TPraosStandardCrypto) a -> Crypto.Hash (HASH TPraosStandardCrypto) b

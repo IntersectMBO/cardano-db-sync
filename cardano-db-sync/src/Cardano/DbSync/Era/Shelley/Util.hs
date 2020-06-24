@@ -189,7 +189,7 @@ unCoin (Coin c) = fromIntegral c
 unHeaderHash :: ShelleyHash -> ByteString
 unHeaderHash = Crypto.getHash . Shelley.unHashHeader . Shelley.unShelleyHash
 
-unKeyHash :: Shelley.KeyHash d crypto -> Shelley.Hash crypto (DSIGN.VerKeyDSIGN (Shelley.DSIGN crypto))
+unKeyHash :: Shelley.KeyHash d crypto -> Crypto.Hash (Shelley.ADDRHASH crypto) (DSIGN.VerKeyDSIGN (Shelley.DSIGN crypto))
 unKeyHash (Shelley.KeyHash x) = x
 
 unKeyHashBS :: Shelley.KeyHash d crypto -> ByteString
