@@ -51,14 +51,14 @@ insertFirstTest =
 
 blockZero :: SlotLeaderId -> Block
 blockZero slid =
-  Block (mkHash '\0') (Just 0) Nothing Nothing Nothing Nothing slid 42 dummyUTCTime 0
+  Block (mkHash32 '\0') (Just 0) Nothing Nothing Nothing Nothing slid 42 dummyUTCTime 0
     Nothing Nothing Nothing Nothing Nothing
 
 blockOne :: SlotLeaderId -> Block
 blockOne slid =
-  Block (mkHash '\1') (Just 0) (Just 0) (Just 1) Nothing (Just $ mkMerkelRoot 1) slid 42 dummyUTCTime 0
+  Block (mkHash32 '\1') (Just 0) (Just 0) (Just 1) Nothing (Just $ mkMerkelRoot 1) slid 42 dummyUTCTime 0
     Nothing Nothing Nothing Nothing Nothing
 
-mkHash :: Char -> ByteString
-mkHash = BS.pack . replicate 32
+mkHash32 :: Char -> ByteString
+mkHash32 = BS.pack . replicate 32
 

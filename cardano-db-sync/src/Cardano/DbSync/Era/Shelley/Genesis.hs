@@ -17,7 +17,6 @@ import           Cardano.Prelude
 
 import qualified Cardano.Binary as Binary
 import           Cardano.BM.Trace (Trace, logInfo)
-import qualified Cardano.Crypto.Hash.Class as Crypto
 import           Cardano.Slotting.Slot (EpochSize (..))
 
 import           Control.Monad (void)
@@ -27,7 +26,6 @@ import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import qualified Data.ByteString.Base16 as Base16
-import qualified Data.ByteString.Char8 as BS
 import qualified Data.Map.Strict as Map
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -48,14 +46,10 @@ import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types
                   (mkSlotLength, slotLengthToMillisec)
 
-import qualified Shelley.Spec.Ledger.Address as Shelley
 import qualified Shelley.Spec.Ledger.Coin as Shelley
-import qualified Shelley.Spec.Ledger.Credential as Shelley
-import           Shelley.Spec.Ledger.Crypto (ADDRHASH, HASH)
 import qualified Shelley.Spec.Ledger.Genesis as Shelley
-import qualified Shelley.Spec.Ledger.Keys as Shelley
-import qualified Shelley.Spec.Ledger.Scripts as Shelley
 import qualified Shelley.Spec.Ledger.TxData as Shelley
+import qualified Shelley.Spec.Ledger.UTxO as Shelley
 
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.
@@ -68,7 +62,6 @@ insertValidateGenesisDist tracer networkName cfg = do
     if False
       then newExceptT $ DB.runDbIohkLogging tracer insertAction
       else newExceptT $ DB.runDbNoLogging insertAction
-    -- liftIO $ panic ("We want to stop here: " <> textShow (length $ genesisUtxOs cfg))
   where
     insertAction :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either DbSyncNodeError ())
     insertAction = do
@@ -77,6 +70,7 @@ insertValidateGenesisDist tracer networkName cfg = do
         Right bid -> validateGenesisDistribution tracer networkName cfg bid
         Left _ ->
           runExceptT $ do
+            liftIO $ logInfo tracer "Inserting Genesis distribution"
             count <- lift DB.queryBlockCount
             when (count > 0) $
               dbSyncNodeError "Shelley.insertValidateGenesisDist: Genesis data mismatch."
@@ -127,6 +121,7 @@ validateGenesisDistribution
     -> ReaderT SqlBackend m (Either DbSyncNodeError ())
 validateGenesisDistribution tracer networkName cfg bid =
   runExceptT $ do
+    liftIO $ logInfo tracer "Validating Genesis distribution"
     meta <- liftLookupFail "Shelley.validateGenesisDistribution" $ DB.queryMeta
 
     when (DB.metaProtocolConst meta /= protocolConstant cfg) $
@@ -227,7 +222,7 @@ configGenesisHash :: ShelleyGenesis TPraosStandardCrypto -> ByteString
 configGenesisHash _ = Shelley.fakeGenesisHash
 
 genesisHashSlotLeader :: ShelleyGenesis TPraosStandardCrypto -> ByteString
-genesisHashSlotLeader = BS.take 32 . configGenesisHash
+genesisHashSlotLeader cfg = "SL" <> configGenesisHash cfg
 
 configGenesisSupply :: ShelleyGenesis TPraosStandardCrypto -> DB.Ada
 configGenesisSupply =
@@ -237,7 +232,19 @@ genesisTxos :: ShelleyGenesis TPraosStandardCrypto -> [ShelleyTxOut]
 genesisTxos = map (uncurry Shelley.TxOut) . genesisTxoAssocList
 
 genesisTxoAssocList :: ShelleyGenesis TPraosStandardCrypto -> [(ShelleyAddress, Shelley.Coin)]
-genesisTxoAssocList = Map.toList . Shelley.sgInitialFunds
+genesisTxoAssocList =
+    map (unTxOut . snd) . genesisUtxOs
+  where
+    unTxOut :: ShelleyTxOut -> (ShelleyAddress, Shelley.Coin)
+    unTxOut (Shelley.TxOut addr amount) = (addr, amount)
+
+genesisUtxOs :: ShelleyGenesis TPraosStandardCrypto -> [(ShelleyTxIn, ShelleyTxOut)]
+genesisUtxOs =
+    Map.toList . unUTxO . Shelley.genesisUtxO
+  where
+    -- Sigh!
+    unUTxO :: Shelley.UTxO TPraosStandardCrypto -> Map ShelleyTxIn ShelleyTxOut
+    unUTxO (Shelley.UTxO m) = m
 
 protocolConstant :: ShelleyGenesis TPraosStandardCrypto -> Word64
 protocolConstant = Shelley.sgSecurityParam
@@ -263,47 +270,3 @@ roundToMillseconds (UTCTime day picoSecs) =
   where
     picoSeconds :: Integer
     picoSeconds = Time.diffTimeToPicoseconds picoSecs
-
-
-
--- -----------------------------------------------------------------------------
--- All this should be provided by a lower level library
-
-genesisUtxOs :: ShelleyGenesis TPraosStandardCrypto -> [(ShelleyTxIn, ShelleyTxOut)]
-genesisUtxOs sg =
-  [ (txIn, txOut)
-  | (addr, amount) <- Map.toList (sgInitialFunds sg)
-  , let txIn  = initialFundsPseudoTxIn addr
-        txOut = Shelley.TxOut addr amount
-  ]
-
-initialFundsPseudoTxIn :: ShelleyAddress -> ShelleyTxIn
-initialFundsPseudoTxIn addr =
-    case addr of
-      Shelley.Addr _networkId (Shelley.KeyHashObj    (Shelley.KeyHash    h)) _sref ->
-        pseudoTxInAddr h
-      Shelley.Addr _networkId (Shelley.ScriptHashObj (Shelley.ScriptHash h)) _sref ->
-        pseudoTxInHash h
-      Shelley.AddrBootstrap byronAddr ->
-        panic $ "Unsupported Byron address in the genesis UTxO: " <> show byronAddr
-  where
-    pseudoTxInAddr :: Crypto.Hash (ADDRHASH TPraosStandardCrypto) a -> ShelleyTxIn
-    pseudoTxInAddr h = Shelley.TxIn (pseudoTxIdAddr h) 0
-
-    pseudoTxIdAddr :: Crypto.Hash (ADDRHASH TPraosStandardCrypto) a -> ShelleyTxId
-    pseudoTxIdAddr = Shelley.TxId . castAddr
-
-    --TODO: move this to the hash API module
-    castAddr :: Crypto.Hash (ADDRHASH TPraosStandardCrypto) a -> Crypto.Hash (HASH TPraosStandardCrypto) b
-    castAddr (Crypto.UnsafeHash h) = Crypto.UnsafeHash h
-
-    pseudoTxInHash :: Crypto.Hash (HASH TPraosStandardCrypto) a -> ShelleyTxIn
-    pseudoTxInHash h = Shelley.TxIn (pseudoTxIdHash h) 0
-
-    pseudoTxIdHash :: Crypto.Hash (HASH TPraosStandardCrypto) a -> ShelleyTxId
-    pseudoTxIdHash = Shelley.TxId . castHash
-
-    --TODO: move this to the hash API module
-    castHash :: Crypto.Hash (HASH TPraosStandardCrypto) a -> Crypto.Hash (HASH TPraosStandardCrypto) b
-    castHash (Crypto.UnsafeHash h) = Crypto.UnsafeHash h
-
