@@ -366,7 +366,7 @@ insertPoolRelay poolId relay =
   void . lift . DB.insertPoolRelay $
     case relay of
       Shelley.SingleHostAddr mPort mIpv4 mIpv6 ->
-        DB.PoolRelay
+        DB.PoolRelay -- An IPv4 and/or IPv6 address
           { DB.poolRelayPoolId = poolId
           , DB.poolRelayIpv4 = textShow <$> Shelley.strictMaybeToMaybe mIpv4
           , DB.poolRelayIpv6 = textShow <$> Shelley.strictMaybeToMaybe mIpv6
@@ -375,7 +375,7 @@ insertPoolRelay poolId relay =
           , DB.poolRelayPort = Shelley.portToWord16 <$> Shelley.strictMaybeToMaybe mPort
           }
       Shelley.SingleHostName mPort name ->
-        DB.PoolRelay -- | An @A@ or @AAAA@ DNS record
+        DB.PoolRelay -- An A or AAAA DNS record
           { DB.poolRelayPoolId = poolId
           , DB.poolRelayIpv4 = Nothing
           , DB.poolRelayIpv6 = Nothing
@@ -384,7 +384,7 @@ insertPoolRelay poolId relay =
           , DB.poolRelayPort = Shelley.portToWord16 <$> Shelley.strictMaybeToMaybe mPort
           }
       Shelley.MultiHostName name ->
-        DB.PoolRelay -- | A @SRV@ DNS record
+        DB.PoolRelay -- An SRV DNS record
           { DB.poolRelayPoolId = poolId
           , DB.poolRelayIpv4 = Nothing
           , DB.poolRelayIpv6 = Nothing
