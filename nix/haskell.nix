@@ -74,10 +74,10 @@ let
           subDir = "cardano-db-sync";
           name = "cardano-tx-body";
         };
-        packages.cardano-db-sync-extneded.src = haskell-nix.haskellLib.cleanGit {
+        packages.cardano-db-sync-extended.src = haskell-nix.haskellLib.cleanGit {
           src = ../.;
           subDir = "cardano-db-sync-extended";
-          name = "cardano-db-sync";
+          name = "cardano-db-sync-extended";
         };
       }
       {
