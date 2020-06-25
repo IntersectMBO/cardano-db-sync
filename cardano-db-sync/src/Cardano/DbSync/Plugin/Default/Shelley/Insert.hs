@@ -87,16 +87,10 @@ insertShelleyBlock tracer blk tip = do
     zipWithM_ (insertTx tracer blkId) [0 .. ] (Shelley.blockTxs blk)
 
     liftIO $ do
-      let followingClosely = unBlockNo (tipBlockNo tip) - Shelley.blockNumber blk < 20
-          (epoch, slotWithin) = Shelley.slotNumber blk `divMod` slotsPerEpoch
-      when (followingClosely && slotWithin /= 0 && Shelley.slotNumber blk > 0 && Shelley.slotNumber blk  `mod` 20 == 0) $ do
-        logInfo tracer $
-          mconcat
-            [ "insertShelleyBlock: continuing epoch ", textShow epoch
-            , " (slot ", textShow slotWithin, ")"
-            ]
+      let epoch = Shelley.slotNumber blk `div` slotsPerEpoch
       logger tracer $ mconcat
-        [ "insertShelleyBlock: slot ", textShow (Shelley.slotNumber blk)
+        [ "insertShelleyBlock: epoch ", textShow epoch
+        , ", slot ", textShow (Shelley.slotNumber blk)
         , ", block ", textShow (Shelley.blockNumber blk)
         , ", hash ", renderByteArray (Shelley.blockHash blk)
         ]
@@ -339,9 +333,8 @@ insertMirCert tracer txId mcert = do
         :: MonadIO m -- (MonadBaseControl IO m, MonadIO m)
         => (ShelleyStakingCred, Shelley.Coin)
         -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-    insertMirTreasury _ = do
-      liftIO $ logInfo tracer "insertMirTreasury"
-      panic "insertMirReserves"
+    insertMirTreasury _ =
+      liftIO $ logError tracer "insertMirTreasury: Not handled yet"
 
 insertWithdrawals
     :: (MonadBaseControl IO m, MonadIO m)
