@@ -6,6 +6,7 @@ module Cardano.DbSync.Plugin.Extended
 import           Cardano.DbSync (DbSyncNodePlugin (..), defDbSyncNodePlugin)
 import           Cardano.DbSync.Plugin.Epoch (epochPluginOnStartup, epochPluginInsertBlock,
                     epochPluginRollbackBlock)
+import           Cardano.DbSync.Plugin.TxBody (insertTxBody)
 
 extendedDbSyncNodePlugin :: DbSyncNodePlugin
 extendedDbSyncNodePlugin =
@@ -15,7 +16,7 @@ extendedDbSyncNodePlugin =
           ++ [epochPluginOnStartup]
     , plugInsertBlock =
         plugInsertBlock defDbSyncNodePlugin
-          ++ [epochPluginInsertBlock]
+          ++ [epochPluginInsertBlock, insertTxBody]
     , plugRollbackBlock =
         plugRollbackBlock defDbSyncNodePlugin
           ++ [epochPluginRollbackBlock]
