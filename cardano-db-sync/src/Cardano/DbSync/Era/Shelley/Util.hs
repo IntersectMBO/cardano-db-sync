@@ -132,11 +132,8 @@ slotNumber =
 stakingCredHash :: ShelleyStakingCred -> ByteString
 stakingCredHash cred =
   case cred of
-    Shelley.ScriptHashObj sh -> Crypto.getHash $ unScriptHash sh
+    Shelley.ScriptHashObj (Shelley.ScriptHash sh) -> Crypto.getHash sh
     Shelley.KeyHashObj kh -> unKeyHashBS kh
-  where
-    unScriptHash :: Shelley.ScriptHash crypto -> Shelley.Hash crypto (Shelley.Script crypto)
-    unScriptHash (Shelley.ScriptHash x) = x
 
 txDelegationCerts :: ShelleyTxBody -> [ShelleyDelegCert]
 txDelegationCerts txBody =
