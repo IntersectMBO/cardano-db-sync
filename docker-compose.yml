@@ -17,18 +17,28 @@ services:
     ports:
       - 5432:5432
     restart: on-failure
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"
 
   cardano-node:
-    image: inputoutput/cardano-node:master
+    image: inputoutput/cardano-node:latest
     environment:
       - NETWORK=${NETWORK}
     volumes:
       - node-db:/data/db
       - node-ipc:/ipc
     restart: on-failure
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"
 
   cardano-db-sync:
-    image: inputoutput/cardano-db-sync:master
+    image: inputoutput/cardano-db-sync:latest
     environment:
       - NETWORK=${NETWORK}
       - POSTGRES_HOST=postgres
@@ -43,6 +53,11 @@ services:
     volumes:
       - node-ipc:/node-ipc
     restart: on-failure
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"
 
 secrets:
   postgres_db:
