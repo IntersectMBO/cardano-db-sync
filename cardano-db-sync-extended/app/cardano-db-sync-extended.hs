@@ -23,7 +23,7 @@ opts :: ParserInfo DbSyncNodeParams
 opts =
   Opt.info (pCommandLine <**> Opt.helper)
     ( Opt.fullDesc
-    <> Opt.progDesc "Extended Cardano POstgreSQL sync node."
+    <> Opt.progDesc "Extended Cardano PostgreSQL sync node."
     )
 
 pCommandLine :: Parser DbSyncNodeParams
