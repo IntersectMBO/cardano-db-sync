@@ -3,11 +3,11 @@
 
 module Cardano.DbSync.Plugin.TxBody
   ( defDbSyncTxBodyPlugin
+  , insertTxBody
   )
 where
 import           Cardano.Binary                 ( serialize' )
 import           Cardano.BM.Trace               ( Trace
-                                                , logInfo
                                                 )
 
 import           Control.Monad.Logger           ( LoggingT )
@@ -39,7 +39,7 @@ insertTxBody
   -> ByronBlock
   -> Tip ByronBlock
   -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-insertTxBody tracer blk _ = runExceptT $ case byronBlockRaw blk of
+insertTxBody _ blk _ = runExceptT $ case byronBlockRaw blk of
   Ledger.ABOBBlock ablk -> insertBlock ablk
   _                     -> return ()
  where
@@ -47,13 +47,7 @@ insertTxBody tracer blk _ = runExceptT $ case byronBlockRaw blk of
     :: MonadIO m
     => Ledger.ABlock ByteString
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-  insertBlock ablk = do
-    liftIO . logInfo tracer $ mconcat
-      [ "doing transactions for ABlock "
-      , textShow (blockNumber ablk)
-      , ", hash "
-      , renderByteArray (blockHash ablk)
-      ]
+  insertBlock ablk =
     mapM_ insertTx $ blockPayload ablk
 
   insertTx
