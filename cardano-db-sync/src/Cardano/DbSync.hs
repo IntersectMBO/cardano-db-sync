@@ -18,6 +18,7 @@ module Cardano.DbSync
   , GenesisHash (..)
   , NetworkName (..)
   , SocketPath (..)
+  , DB.MigrationDir (..)
 
   , defDbSyncNodePlugin
   , runDbSyncNode
