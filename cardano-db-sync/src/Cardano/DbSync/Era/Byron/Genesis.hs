@@ -32,7 +32,6 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import qualified Data.ByteString.Char8 as BS
 import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import           Data.Text (Text)
@@ -61,6 +60,7 @@ insertValidateGenesisDist tracer networkName cfg = do
         Right bid -> validateGenesisDistribution tracer networkName cfg bid
         Left _ ->
           runExceptT $ do
+            liftIO $ logInfo tracer "Inserting Genesis distribution"
             count <- lift DB.queryBlockCount
             when (count > 0) $
               dbSyncNodeError "insertValidateGenesisDist: Genesis data mismatch."
@@ -201,8 +201,7 @@ configGenesisHash =
   Byron.unAbstractHash . Byron.unGenesisHash . Byron.configGenesisHash
 
 genesisHashSlotLeader :: Byron.Config -> ByteString
-genesisHashSlotLeader =
-  BS.take 28 . configGenesisHash
+genesisHashSlotLeader = configGenesisHash
 
 
 configGenesisSupply :: Byron.Config -> Either Byron.LovelaceError Word64

@@ -111,6 +111,8 @@ import           Ouroboros.Network.Subscription (SubscriptionTrace)
 import           Prelude (String)
 import qualified Prelude
 
+import qualified Shelley.Spec.Ledger.Genesis as Shelley
+
 import qualified System.Metrics.Prometheus.Metric.Gauge as Gauge
 
 data Peer = Peer SockAddr SockAddr deriving Show
@@ -145,17 +147,19 @@ runDbSyncNode plugin enp =
         runDbStartup trce plugin
         case genCfg of
           GenesisByron bCfg ->
-            runDbSyncNodeNodeClient iomgr trce plugin (mkByronTopLevelConfig bCfg) (enpSocketPath enp)
+            runDbSyncNodeNodeClient ByronEnv
+                iomgr trce plugin (mkByronTopLevelConfig bCfg) (enpSocketPath enp)
           GenesisShelley sCfg ->
-            runDbSyncNodeNodeClient iomgr trce plugin (mkShelleyTopLevelConfig sCfg) (enpSocketPath enp)
+            runDbSyncNodeNodeClient (ShelleyEnv $ Shelley.sgNetworkId sCfg)
+                iomgr trce plugin (mkShelleyTopLevelConfig sCfg) (enpSocketPath enp)
 
 -- -------------------------------------------------------------------------------------------------
 
 runDbSyncNodeNodeClient
     :: forall blk. (MkDbAction blk, RunNode blk)
-    => IOManager -> Trace IO Text -> DbSyncNodePlugin -> TopLevelConfig blk -> SocketPath
+    => DbSyncEnv -> IOManager -> Trace IO Text -> DbSyncNodePlugin -> TopLevelConfig blk -> SocketPath
     -> IO ()
-runDbSyncNodeNodeClient iomgr trce plugin topLevelConfig (SocketPath socketPath) = do
+runDbSyncNodeNodeClient env iomgr trce plugin topLevelConfig (SocketPath socketPath) = do
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   txv <- newEmptyTMVarM @_ @(GenTx blk)
   void $ subscribe
@@ -163,7 +167,7 @@ runDbSyncNodeNodeClient iomgr trce plugin topLevelConfig (SocketPath socketPath)
     topLevelConfig
     networkSubscriptionTracers
     clientSubscriptionParams
-    (dbSyncProtocols trce plugin topLevelConfig txv)
+    (dbSyncProtocols trce env plugin topLevelConfig txv)
   where
     clientSubscriptionParams = ClientSubscriptionParams {
         cspAddress = Snocket.localAddressFromPath socketPath,
@@ -195,6 +199,7 @@ runDbSyncNodeNodeClient iomgr trce plugin topLevelConfig (SocketPath socketPath)
 dbSyncProtocols
   :: forall blk. (MkDbAction blk, RunNode blk)
   => Trace IO Text
+  -> DbSyncEnv
   -> DbSyncNodePlugin
   -> TopLevelConfig blk
   -> StrictTMVar IO (GenTx blk)
@@ -202,7 +207,7 @@ dbSyncProtocols
   -> ClientCodecs blk IO
   -> ConnectionId LocalAddress
   -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols trce plugin _topLevelConfig txv _version codecs _connectionId =
+dbSyncProtocols trce env plugin _topLevelConfig txv _version codecs _connectionId =
     NodeToClientProtocols {
           localChainSyncProtocol = localChainSyncProtocol
         , localTxSubmissionProtocol = localTxSubmissionProtocol
@@ -222,7 +227,7 @@ dbSyncProtocols trce plugin _topLevelConfig txv _version codecs _connectionId =
         actionQueue <- newDbActionQueue
         (metrics, server) <- registerMetricsServer
         race_
-            (runDbThread trce plugin metrics actionQueue)
+            (runDbThread trce env plugin metrics actionQueue)
             (runPipelinedPeer
                 localChainSyncTracer
                 (cChainSyncCodec codecs)

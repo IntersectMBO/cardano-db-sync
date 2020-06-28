@@ -48,8 +48,8 @@ runDbStartup trce plugin =
   DB.runDbAction (Just trce) $
     mapM_ (\action -> action trce) $ plugOnStartup plugin
 
-runDbThread :: Trace IO Text -> DbSyncNodePlugin -> Metrics -> DbActionQueue -> IO ()
-runDbThread trce plugin metrics queue = do
+runDbThread :: Trace IO Text -> DbSyncEnv -> DbSyncNodePlugin -> Metrics -> DbActionQueue -> IO ()
+runDbThread trce env plugin metrics queue = do
     logInfo trce "Running DB thread"
     logException trce "runDBThread: " loop
     logInfo trce "Shutting down DB thread"
@@ -58,7 +58,7 @@ runDbThread trce plugin metrics queue = do
       xs <- blockingFlushDbActionQueue queue
       when (length xs > 1) $ do
         logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
-      eNextState <- runExceptT $ runActions trce plugin xs
+      eNextState <- runExceptT $ runActions trce env plugin xs
       mBlkNo <-  DB.runDbAction (Just trce) DB.queryLatestBlockNo
       case mBlkNo of
         Nothing -> pure ()
@@ -70,8 +70,8 @@ runDbThread trce plugin metrics queue = do
 
 -- | Run the list of 'DbAction's. Block are applied in a single set (as a transaction)
 -- and other operations are applied one-by-one.
-runActions :: Trace IO Text -> DbSyncNodePlugin -> [DbAction] -> ExceptT DbSyncNodeError IO NextState
-runActions trce plugin actions = do
+runActions :: Trace IO Text -> DbSyncEnv -> DbSyncNodePlugin -> [DbAction] -> ExceptT DbSyncNodeError IO NextState
+runActions trce env plugin actions = do
     nextState <- checkDbState trce actions
     if nextState /= Done
       then dbAction Continue actions
@@ -88,7 +88,7 @@ runActions trce plugin actions = do
             runRollbacks trce plugin pt
             dbAction Continue ys
         (ys, zs) -> do
-          insertBlockList trce plugin ys
+          insertBlockList trce env plugin ys
           if null zs
             then pure Continue
             else dbAction Continue zs
@@ -146,10 +146,11 @@ runRollbacks trce plugin point =
 
 insertBlockList
     :: Trace IO Text
+    -> DbSyncEnv
     -> DbSyncNodePlugin
     -> [CardanoBlockTip]
     -> ExceptT DbSyncNodeError IO ()
-insertBlockList trce plugin blks =
+insertBlockList trce env plugin blks =
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise is *way* too chatty.
   newExceptT
@@ -160,7 +161,7 @@ insertBlockList trce plugin blks =
         :: CardanoBlockTip
         -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
     insertBlock blkTip =
-      traverseMEither (\ f -> f trce blkTip) $ plugInsertBlock plugin
+      traverseMEither (\ f -> f trce env blkTip) $ plugInsertBlock plugin
 
 -- | Split the DbAction list into a prefix containing blocks to apply and a postfix.
 spanDbApply :: [DbAction] -> ([CardanoBlockTip], [DbAction])

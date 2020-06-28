@@ -27,11 +27,11 @@ import           Cardano.DbSync.Types
 
 
 insertCardanoBlock
-    :: Trace IO Text -> CardanoBlockTip
+    :: Trace IO Text -> DbSyncEnv -> CardanoBlockTip
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-insertCardanoBlock tracer blkTip = do
+insertCardanoBlock tracer env blkTip = do
   case blkTip of
     ByronBlockTip blk tip ->
       Byron.insertByronBlock tracer blk tip
     ShelleyBlockTip blk tip ->
-      Shelley.insertShelleyBlock tracer blk tip
+      Shelley.insertShelleyBlock tracer env blk tip

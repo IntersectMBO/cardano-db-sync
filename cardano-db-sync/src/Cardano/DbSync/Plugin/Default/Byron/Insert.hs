@@ -74,7 +74,7 @@ insertABOBBoundary tracer blk = do
   meta <- liftLookupFail "insertABOBBoundary" DB.queryMeta
   pbid <- liftLookupFail "insertABOBBoundary" $ DB.queryBlockId (Byron.unHeaderHash prevHash)
   mle <- liftLookupFail "insertABOBBoundary: " $ DB.queryEpochNo pbid
-  slid <- lift . DB.insertSlotLeader $ DB.SlotLeader (BS.replicate 28 '\0') "Epoch boundary slot leader"
+  slid <- lift . DB.insertSlotLeader $ DB.SlotLeader (BS.replicate 32 '\0') "Epoch boundary slot leader"
   void . lift . DB.insertBlock $
             DB.Block
               { DB.blockHash = Byron.unHeaderHash $ Byron.boundaryHashAnnotated blk
