@@ -14,7 +14,6 @@ module Cardano.DbSync.Era.Shelley.Util
   , mkSlotLeader
   , pointToSlotHash
   , renderHash
-  , rewardAccountHash
   , slotLeaderHash
   , slotNumber
   , stakingCredHash
@@ -54,10 +53,9 @@ import qualified Ouroboros.Network.Point as Point
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import           Shelley.Spec.Ledger.Coin (Coin (..))
 import qualified Shelley.Spec.Ledger.Crypto as Shelley
+import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.BlockChain as Shelley
-import qualified Shelley.Spec.Ledger.Credential as Shelley
 import qualified Shelley.Spec.Ledger.Keys as Shelley
-import qualified Shelley.Spec.Ledger.Scripts as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxData as Shelley
 import qualified Shelley.Spec.Ledger.UTxO as Shelley
@@ -92,6 +90,7 @@ blockTxs =
 epochNumber :: ShelleyBlock -> Word64 -> Word64
 epochNumber blk slotsPerEpoch = slotNumber blk `div` slotsPerEpoch
 
+-- | This is both the Genesis Hash and the hash of the previous block.
 fakeGenesisHash :: ByteString
 fakeGenesisHash = BS.take 32 ("GenesisHash " <> BS.replicate 32 '\0')
 
@@ -112,15 +111,6 @@ pointToSlotHash (Point x) =
 renderHash :: ShelleyHash -> Text
 renderHash = Text.decodeUtf8 . Base16.encode . unHeaderHash
 
-rewardAccountHash :: ShelleyRewardAccount -> ByteString
-rewardAccountHash ra =
-  case Shelley.getRwdCred ra of
-    Shelley.ScriptHashObj sh -> Crypto.getHash $ unScriptHash sh
-    Shelley.KeyHashObj kh -> unKeyHashBS kh
-  where
-    unScriptHash :: Shelley.ScriptHash crypto -> Shelley.Hash crypto (Shelley.Script crypto)
-    unScriptHash (Shelley.ScriptHash x) = x
-
 slotLeaderHash :: ShelleyBlock -> ByteString
 slotLeaderHash =
   DSIGN.rawSerialiseVerKeyDSIGN . unVKey . Shelley.bheaderVk . Shelley.bhbody . Shelley.bheader . Shelley.shelleyBlockRaw
@@ -129,11 +119,14 @@ slotNumber :: ShelleyBlock -> Word64
 slotNumber =
   unSlotNo . Shelley.bheaderSlotNo . Shelley.bhbody . Shelley.bheader . Shelley.shelleyBlockRaw
 
-stakingCredHash :: ShelleyStakingCred -> ByteString
-stakingCredHash cred =
-  case cred of
-    Shelley.ScriptHashObj (Shelley.ScriptHash sh) -> Crypto.getHash sh
-    Shelley.KeyHashObj kh -> unKeyHashBS kh
+stakingCredHash :: DbSyncEnv -> ShelleyStakingCred -> ByteString
+stakingCredHash env cred =
+  let network =
+        case env of
+          ByronEnv -> Shelley.Mainnet -- Should not happen
+          ShelleyEnv nw -> nw
+  in Shelley.serialiseRewardAcnt $ Shelley.RewardAcnt network cred
+
 
 txDelegationCerts :: ShelleyTxBody -> [ShelleyDelegCert]
 txDelegationCerts txBody =

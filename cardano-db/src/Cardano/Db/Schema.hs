@@ -142,7 +142,7 @@ share
   -- Shelley bits
 
   StakeAddress          -- Can be an address of a script hash
-    hash                ByteString          sqltype=addr28type
+    hash                ByteString          sqltype=addr29type
     UniqueStakeAddress  hash
 
   -- -----------------------------------------------------------------------------------------------
@@ -232,7 +232,7 @@ share
 
   -- -----------------------------------------------------------------------------------------------
 
-  Stake
+  Stake                 -- To be obtained from ledger state.
     addrId              StakeAddressId
     txId                TxId
     stake               Word64              sqltype=lovelace

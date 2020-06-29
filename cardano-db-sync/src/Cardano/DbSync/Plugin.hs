@@ -40,7 +40,7 @@ data DbSyncNodePlugin = DbSyncNodePlugin
     -- all subsequent blocks.
     -- Blocks (including epoch boundary blocks) are called in sequence from the oldest to the newest.
   , plugInsertBlock
-        :: [Trace IO Text -> CardanoBlockTip -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())]
+        :: [Trace IO Text -> DbSyncEnv -> CardanoBlockTip -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())]
 
     -- Rollback to the specified SlotNumber/HeaderHash.
   , plugRollbackBlock

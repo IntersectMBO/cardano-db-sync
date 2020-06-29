@@ -73,8 +73,8 @@ epochPluginOnStartup trce = do
 
     updateChainTipEpochVar trce
 
-epochPluginInsertBlock :: Trace IO Text -> CardanoBlockTip -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-epochPluginInsertBlock trce blkTip = do
+epochPluginInsertBlock :: Trace IO Text -> DbSyncEnv -> CardanoBlockTip -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
+epochPluginInsertBlock trce _env blkTip = do
   slotsPerEpoch <- liftIO $ readIORef slotsPerEpochVar
   case blkTip of
     ByronBlockTip bblk tip ->

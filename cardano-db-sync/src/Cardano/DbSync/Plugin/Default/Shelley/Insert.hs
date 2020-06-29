@@ -33,7 +33,6 @@ import           Cardano.DbSync.Util
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
-import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
@@ -50,17 +49,14 @@ import qualified Shelley.Spec.Ledger.TxData as Shelley
 
 
 insertShelleyBlock
-    :: Trace IO Text -> ShelleyBlock -> Tip ShelleyBlock
+    :: Trace IO Text -> DbSyncEnv -> ShelleyBlock -> Tip ShelleyBlock
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-insertShelleyBlock tracer blk tip = do
+insertShelleyBlock tracer env blk tip = do
   runExceptT $ do
     meta <- liftLookupFail "insertShelleyBlock" DB.queryMeta
-
     pbid <- liftLookupFail "insertShelleyBlock" $ DB.queryBlockId (Shelley.blockPrevHash blk)
 
     let slotsPerEpoch = DB.metaSlotsPerEpoch meta
-
-    -- liftIO . logInfo tracer $ "insertShelleyBlock " <> textShow (BS.length $ Shelley.blockHash blk)
 
     slid <- lift . DB.insertSlotLeader $ Shelley.mkSlotLeader blk
     blkId <- lift . DB.insertBlock $
@@ -84,7 +80,7 @@ insertShelleyBlock tracer blk tip = do
                     , DB.blockProtoVersion = Nothing
                     }
 
-    zipWithM_ (insertTx tracer blkId) [0 .. ] (Shelley.blockTxs blk)
+    zipWithM_ (insertTx tracer env blkId) [0 .. ] (Shelley.blockTxs blk)
 
     liftIO $ do
       let epoch = Shelley.slotNumber blk `div` slotsPerEpoch
@@ -105,9 +101,9 @@ insertShelleyBlock tracer blk tip = do
 
 insertTx
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.BlockId -> Word64 -> ShelleyTx
+    => Trace IO Text -> DbSyncEnv -> DB.BlockId -> Word64 -> ShelleyTx
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertTx tracer blkId blockIndex tx = do
+insertTx tracer env blkId blockIndex tx = do
     -- Insert transaction and get txId from the DB.
     txId <- lift . DB.insertTx $
               DB.Tx
@@ -127,8 +123,8 @@ insertTx tracer blkId blockIndex tx = do
     mapM_ (insertTxIn tracer txId) (Shelley.txInputList tx)
 
     mapM_ (insertPoolCert tracer txId) (Shelley.txPoolCertificates $ Shelley._body tx)
-    mapM_ (insertDelegCert tracer txId) (Shelley.txDelegationCerts $ Shelley._body tx)
-    mapM_ (insertMirCert tracer txId) (Shelley.txMirCertificates $ Shelley._body tx)
+    mapM_ (insertDelegCert tracer env txId) (Shelley.txDelegationCerts $ Shelley._body tx)
+    mapM_ (insertMirCert tracer env txId) (Shelley.txMirCertificates $ Shelley._body tx)
     mapM_ (insertWithdrawals tracer txId) (Map.toList . Shelley.unWdrl . Shelley._wdrls $ Shelley._body tx)
 
 
@@ -169,13 +165,13 @@ insertPoolCert tracer txId pCert =
 
 insertDelegCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> ShelleyDelegCert
+    => Trace IO Text -> DbSyncEnv -> DB.TxId -> ShelleyDelegCert
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertDelegCert tracer txId dCert =
+insertDelegCert tracer env txId dCert =
   case dCert of
-    Shelley.RegKey cred -> insertStakeRegistration tracer txId cred
-    Shelley.DeRegKey cred -> insertStakeDeregistration tracer txId cred
-    Shelley.Delegate (Shelley.Delegation cred poolkh) -> insertDelegation tracer txId cred poolkh
+    Shelley.RegKey cred -> insertStakeRegistration tracer env txId cred
+    Shelley.DeRegKey cred -> insertStakeDeregistration tracer env txId cred
+    Shelley.Delegate (Shelley.Delegation cred poolkh) -> insertDelegation tracer env txId cred poolkh
 
 
 insertPoolRegister
@@ -245,7 +241,7 @@ insertStakeAddress
 insertStakeAddress stakeAddr =
   lift . DB.insertStakeAddress $
     DB.StakeAddress
-      { DB.stakeAddressHash = fixStakingAddr stakeAddr -- TODO: is fixStakingAddr the right approach?
+      { DB.stakeAddressHash = stakeAddr
       }
 
 insertPoolOwner
@@ -261,10 +257,10 @@ insertPoolOwner poolId skh =
 
 insertStakeRegistration
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> ShelleyStakingCred
+    => Trace IO Text -> DbSyncEnv -> DB.TxId -> ShelleyStakingCred
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertStakeRegistration _tracer txId cred = do
-  scId <- insertStakeAddress $ Shelley.stakingCredHash cred
+insertStakeRegistration _tracer env txId cred = do
+  scId <- insertStakeAddress $ Shelley.stakingCredHash env cred
   void . lift . DB.insertStakeRegistration $
     DB.StakeRegistration
       { DB.stakeRegistrationAddrId = scId
@@ -273,12 +269,12 @@ insertStakeRegistration _tracer txId cred = do
 
 insertStakeDeregistration
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> ShelleyStakingCred
+    => Trace IO Text -> DbSyncEnv -> DB.TxId -> ShelleyStakingCred
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertStakeDeregistration _tracer txId cred = do
+insertStakeDeregistration _tracer env txId cred = do
   scId <- firstExceptT (NELookup "insertStakeDeregistration")
             . newExceptT
-            $ queryStakeAddress (fixStakingAddr $ Shelley.stakingCredHash cred)
+            $ queryStakeAddress (Shelley.stakingCredHash env cred)
   void . lift . DB.insertStakeRegistration $
     DB.StakeRegistration
       { DB.stakeRegistrationAddrId = scId
@@ -287,12 +283,12 @@ insertStakeDeregistration _tracer txId cred = do
 
 insertDelegation
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> ShelleyStakingCred -> ShelleyStakePoolKeyHash
+    => Trace IO Text -> DbSyncEnv -> DB.TxId -> ShelleyStakingCred -> ShelleyStakePoolKeyHash
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertDelegation _tracer txId cred poolkh = do
+insertDelegation _tracer env txId cred poolkh = do
   addrId <- firstExceptT (NELookup "insertDelegation")
                 . newExceptT
-                $ queryStakeAddress (fixStakingAddr $ Shelley.stakingCredHash cred)
+                $ queryStakeAddress (Shelley.stakingCredHash env cred)
   poolId <- firstExceptT (NELookup "insertDelegation")
                 . newExceptT
                 $ queryStakePoolKeyHash poolkh
@@ -305,9 +301,9 @@ insertDelegation _tracer txId cred poolkh = do
 
 insertMirCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> ShelleyMIRCert
+    => Trace IO Text -> DbSyncEnv -> DB.TxId -> ShelleyMIRCert
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertMirCert tracer txId mcert = do
+insertMirCert tracer env txId mcert = do
     case Shelley.mirPot mcert of
       Shelley.ReservesMIR ->
         mapM_ insertMirReserves $ Map.toList (Shelley.mirRewards mcert)
@@ -321,7 +317,7 @@ insertMirCert tracer txId mcert = do
     insertMirReserves (cred, coin) = do
       addrId <- firstExceptT (NELookup "insertMirReserves")
                     . newExceptT
-                    $ queryStakeAddress (fixStakingAddr $ Shelley.stakingCredHash cred)
+                    $ queryStakeAddress (Shelley.stakingCredHash env cred)
       void . lift . DB.insertReward $
         DB.Reward
           { DB.rewardAddrId = addrId
@@ -343,7 +339,7 @@ insertWithdrawals
 insertWithdrawals _tracer txId (account, coin) = do
   addrId <- firstExceptT (NELookup "insertWithdrawals")
                 . newExceptT
-                $ queryStakeAddress (fixStakingAddr $ Shelley.serialiseRewardAcnt account) -- FIXME: fixStakingAddr
+                $ queryStakeAddress (Shelley.serialiseRewardAcnt account)
   void . lift . DB.insertWithdrawal $
     DB.Withdrawal
       { DB.withdrawalAddrId = addrId
@@ -385,16 +381,3 @@ insertPoolRelay poolId relay =
           , DB.poolRelayDnsSrvName = Just (Shelley.dnsToText name)
           , DB.poolRelayPort = Nothing
           }
-
--- -------------------------------------------------------------------------------------------------
-
--- | StakeAddress values in the PoolParam are 29 bytes long while addresses in
--- ShelleyStakingCred are 28 bytes long. We therefore test the length of the ByteString
--- and drop the first byte if the length is 29 bytes in length.
--- This leading byte contains the network id and something that discriminates between
--- a KeyHash or a ScriptHash. It will need to be handled at some point.
-fixStakingAddr :: ByteString -> ByteString
-fixStakingAddr bs =
-  if BS.length bs == 29
-    then BS.tail bs
-    else bs

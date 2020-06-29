@@ -3,6 +3,7 @@ module Cardano.DbSync.Types
   ( CardanoBlockTip (..)
   , CardanoPoint (..)
   , ConfigFile (..)
+  , DbSyncEnv (..)
   , DbSyncNodeParams (..)
   , GenesisFile (..)
   , ShelleyAddress
@@ -37,6 +38,7 @@ import qualified Ouroboros.Consensus.Shelley.Protocol as Shelley
 import           Ouroboros.Network.Block (Point (..), Tip)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
+import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.BlockChain as Shelley
 import qualified Shelley.Spec.Ledger.Credential as Shelley
 import qualified Shelley.Spec.Ledger.Keys as Shelley
@@ -63,6 +65,10 @@ data DbSyncNodeParams = DbSyncNodeParams
   , enpMigrationDir :: !MigrationDir
   , enpMaybeRollback :: !(Maybe SlotNo)
   }
+
+data DbSyncEnv
+  = ByronEnv
+  | ShelleyEnv !Shelley.Network
 
 newtype GenesisFile = GenesisFile
   { unGenesisFile :: FilePath

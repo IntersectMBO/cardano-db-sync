@@ -30,6 +30,7 @@ import           Cardano.Prelude hiding (catch)
 
 import           Cardano.Binary (Raw)
 import qualified Cardano.Crypto as Crypto
+import qualified Cardano.Crypto.Wallet as Crypto
 
 -- Import all 'cardano-ledger' functions and data types qualified so they do not
 -- clash with the Cardano.Db functions and data types which are also imported
@@ -47,6 +48,7 @@ import           Crypto.Hash (Blake2b_256)
 
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Lazy.Char8 as LBS
 import           Data.Coerce (coerce)
 import qualified Data.Text.Encoding as Text
 
@@ -111,7 +113,8 @@ renderAbstractHash =
 
 slotLeaderHash :: Byron.ABlock ByteString -> ByteString
 slotLeaderHash =
-  Crypto.abstractHashToBytes . Byron.addressHash . Byron.headerGenesisKey . Byron.blockHeader
+    Crypto.abstractHashToBytes . Crypto.hashRaw .LBS.fromStrict . Crypto.xpubPublicKey
+        . Crypto.unVerificationKey . Byron.headerGenesisKey . Byron.blockHeader
 
 slotNumber :: Byron.ABlock ByteString -> Word64
 slotNumber =
