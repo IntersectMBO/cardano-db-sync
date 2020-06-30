@@ -102,8 +102,6 @@ insertValidateGenesisDist tracer networkName cfg = do
 
                         -- Shelley specific
                         , DB.blockVrfKey = Nothing
-                        , DB.blockNonceVrf = Nothing
-                        , DB.blockLeaderVrf = Nothing
                         , DB.blockOpCert = Nothing
                         , DB.blockProtoVersion = Nothing
                         }

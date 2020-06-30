@@ -94,7 +94,7 @@ createAndInsertBlocks blockCount =
         let newBlock = Block (mkBlockHash indx) (Just 0) (Just indx) (Just indx) mPrevId
                         (maybe Nothing (const $ Just (mkMerkelRoot indx)) mPrevBlock)
                         slid 42 dummyUTCTime 0
-                        Nothing Nothing Nothing Nothing Nothing
+                        Nothing Nothing Nothing
         blkId <- insertBlock newBlock
         newMTxOutId <- if indx /= 0
                       then pure mTxOutId
