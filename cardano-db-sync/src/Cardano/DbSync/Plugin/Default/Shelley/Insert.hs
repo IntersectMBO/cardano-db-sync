@@ -73,11 +73,9 @@ insertShelleyBlock tracer env blk tip = do
                     , DB.blockTxCount = Shelley.blockTxCount blk
 
                     -- Shelley specific
-                    , DB.blockVrfKey = Nothing
-                    , DB.blockNonceVrf = Nothing
-                    , DB.blockLeaderVrf = Nothing
-                    , DB.blockOpCert = Nothing
-                    , DB.blockProtoVersion = Nothing
+                    , DB.blockVrfKey = Just $ Shelley.blockVrfKey (Shelley.blockBody blk)
+                    , DB.blockOpCert = Just $ Shelley.blockOpCert (Shelley.blockBody blk)
+                    , DB.blockProtoVersion = Just $ Shelley.blockProtoVersion (Shelley.blockBody blk)
                     }
 
     zipWithM_ (insertTx tracer env blkId) [0 .. ] (Shelley.blockTxs blk)

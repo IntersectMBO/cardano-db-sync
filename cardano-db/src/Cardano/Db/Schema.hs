@@ -76,10 +76,8 @@ share
     txCount             Word64              sqltype=uinteger
     -- Shelley specific
     vrfKey              ByteString Maybe    sqltype=hash32type
-    nonceVrf            ByteString Maybe    sqltype=hash32type
-    leaderVrf           ByteString Maybe    sqltype=hash32type
     opCert              ByteString Maybe    sqltype=hash32type
-    protoVersion        ByteString Maybe    sqltype=hash32type
+    protoVersion        Text Maybe
     UniqueBlock         hash
 
   Tx

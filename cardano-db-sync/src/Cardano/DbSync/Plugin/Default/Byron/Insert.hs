@@ -90,8 +90,6 @@ insertABOBBoundary tracer blk = do
 
               -- Shelley specific
               , DB.blockVrfKey = Nothing
-              , DB.blockNonceVrf = Nothing
-              , DB.blockLeaderVrf = Nothing
               , DB.blockOpCert = Nothing
               , DB.blockProtoVersion = Nothing
               }
@@ -130,8 +128,6 @@ insertABlock tracer blk tip = do
 
                     -- Shelley specific
                     , DB.blockVrfKey = Nothing
-                    , DB.blockNonceVrf = Nothing
-                    , DB.blockLeaderVrf = Nothing
                     , DB.blockOpCert = Nothing
                     , DB.blockProtoVersion = Nothing
                     }
