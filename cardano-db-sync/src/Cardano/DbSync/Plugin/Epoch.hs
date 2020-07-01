@@ -11,6 +11,7 @@ module Cardano.DbSync.Plugin.Epoch
 import           Cardano.BM.Trace (Trace, logError, logInfo)
 
 import qualified Cardano.Chain.Block as Byron
+import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Control.Monad (void)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
@@ -20,8 +21,8 @@ import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.IORef (IORef, atomicWriteIORef, newIORef, readIORef)
 import           Data.Maybe (fromMaybe)
-import           Data.Text (Text)
 import           Data.Time.Clock (diffUTCTime, getCurrentTime)
+import           Data.Text (Text)
 import           Data.Word (Word64)
 
 import           Database.Esqueleto (Value (..), (^.), (==.),
@@ -40,7 +41,6 @@ import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
-import           Ouroboros.Network.Block (BlockNo (..))
 
 import           System.IO.Unsafe (unsafePerformIO)
 
@@ -71,13 +71,11 @@ epochPluginOnStartup trce = do
         let backOne = if lbe == 0 then 0 else lbe - 1
         liftIO $ atomicWriteIORef latestCachedEpochVar (Just backOne)
 
-    updateChainTipEpochVar trce
-
 epochPluginInsertBlock :: Trace IO Text -> DbSyncEnv -> CardanoBlockTip -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
 epochPluginInsertBlock trce _env blkTip = do
   slotsPerEpoch <- liftIO $ readIORef slotsPerEpochVar
   case blkTip of
-    ByronBlockTip bblk tip ->
+    ByronBlockTip bblk _tip ->
       case byronBlockRaw bblk of
         Byron.ABOBBoundary _ ->
           -- For the OBFT era there are no boundary blocks so we ignore them even in
@@ -85,9 +83,9 @@ epochPluginInsertBlock trce _env blkTip = do
           pure $ Right ()
 
         Byron.ABOBBlock blk ->
-          insertBlock trce (Byron.epochNumber blk slotsPerEpoch, Byron.blockNumber blk) (tipBlockNo tip)
-    ShelleyBlockTip sblk tip ->
-      insertBlock trce (Shelley.epochNumber sblk slotsPerEpoch, Shelley.blockNumber sblk) (tipBlockNo tip)
+          insertBlock trce (Byron.epochNumber blk slotsPerEpoch) (SlotNo $ Byron.slotNumber blk)
+    ShelleyBlockTip sblk _tip ->
+      insertBlock trce (Shelley.epochNumber sblk slotsPerEpoch) (SlotNo $ Shelley.slotNumber sblk)
 
 -- Nothing to be done here.
 -- Rollback will take place in the Default plugin and the epoch table will be recalculated.
@@ -98,29 +96,22 @@ epochPluginRollbackBlock _ _ = pure $ Right ()
 
 insertBlock
     :: Trace IO Text
-    -> (Word64, Word64)
-    -> BlockNo
+    -> Word64 -> SlotNo
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-insertBlock trce (epochNum, blockNo) tipNo = do
-  mLatestCachedEpoch <- liftIO (readIORef latestCachedEpochVar)
-  chainTipEpoch <- liftIO $ readIORef latestChainTipEpochVar
+insertBlock trce epochNum tipSlot = do
+  mLatestCachedEpoch <- liftIO $ readIORef latestCachedEpochVar
   let lastCachedEpoch = fromMaybe 0 mLatestCachedEpoch
+  estTipSlot <- queryEstimatedTipSlotNo trce
 
-  if  | epochNum == chainTipEpoch && lastCachedEpoch == chainTipEpoch ->
-          if unBlockNo tipNo - blockNo < 15
-            then -- Following the chain very closely.
-                 updateEpochNum epochNum trce
-            else pure $ Right ()
+  -- These cases are listed from the least likey to occur to the most
+  -- likley to keep the logic sane.
 
-      | epochNum > 0 && mLatestCachedEpoch == Nothing ->
+  if  | epochNum > 0 && mLatestCachedEpoch == Nothing ->
           updateEpochNum 0 trce
       | epochNum >= lastCachedEpoch + 2 ->
           updateEpochNum (lastCachedEpoch + 1) trce
-      | epochNum == chainTipEpoch && lastCachedEpoch < chainTipEpoch ->
-          updateEpochNum (lastCachedEpoch + 1) trce
-      | epochNum > chainTipEpoch ->
-          -- Must just have started a new epoch, so call this which will
-          -- update chainTipEpoch.
+      | unSlotNo estTipSlot - unSlotNo tipSlot < 50 ->
+          -- Following the chain very closely.
           updateEpochNum epochNum trce
       | otherwise ->
           pure $ Right ()
@@ -135,10 +126,6 @@ slotsPerEpochVar = unsafePerformIO $ newIORef 1 -- Gets updated later.
 latestCachedEpochVar :: IORef (Maybe Word64)
 latestCachedEpochVar = unsafePerformIO $ newIORef Nothing -- Gets updated later.
 
-{-# NOINLINE latestChainTipEpochVar #-}
-latestChainTipEpochVar :: IORef Word64
-latestChainTipEpochVar = unsafePerformIO $ newIORef 0 -- Gets updated later.
-
 updateEpochNum :: (MonadBaseControl IO m, MonadIO m) => Word64 -> Trace IO Text -> ReaderT SqlBackend m (Either DbSyncNodeError ())
 updateEpochNum epochNum trce = do
     transactionSaveWithIsolation Serializable
@@ -146,7 +133,6 @@ updateEpochNum epochNum trce = do
     res <- maybe insertEpoch updateEpoch mid
     transactionSaveWithIsolation Serializable
     liftIO $ atomicWriteIORef latestCachedEpochVar (Just epochNum)
-    updateChainTipEpochVar trce
     pure res
   where
     updateEpoch :: MonadIO m => EpochId -> ReaderT SqlBackend m (Either DbSyncNodeError ())
@@ -185,16 +171,17 @@ queryLatestEpochNo = do
             pure $ (epoch ^. EpochNo)
   pure $ unValue <$> listToMaybe res
 
-
-updateChainTipEpochVar :: MonadIO m => Trace IO Text -> ReaderT SqlBackend m ()
-updateChainTipEpochVar _trce = do
+queryEstimatedTipSlotNo :: MonadIO m => Trace IO Text -> ReaderT SqlBackend m SlotNo
+queryEstimatedTipSlotNo _trce = do
   eMeta <- DB.queryMeta
   liftIO $ do
-    currentTime <- getCurrentTime
     case eMeta of
-      Left _ -> do
-        atomicWriteIORef latestChainTipEpochVar 0
-      Right meta -> do
-        let epoch = diffUTCTime currentTime (DB.metaStartTime meta)
-                    / (0.001 * fromIntegral (DB.metaSlotDuration meta * DB.metaSlotsPerEpoch meta))
-        atomicWriteIORef latestChainTipEpochVar $ floor epoch
+      Left _ -> pure (SlotNo 0)
+      Right meta -> SlotNo <$> liftIO (calcSlotNo meta)
+  where
+    calcSlotNo :: DB.Meta -> IO Word64
+    calcSlotNo meta = do
+      currentTime <- getCurrentTime
+      pure $ floor (diffUTCTime currentTime (DB.metaStartTime meta)
+                    / (0.001 * fromIntegral (DB.metaSlotDuration meta)))
+
