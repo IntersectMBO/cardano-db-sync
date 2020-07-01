@@ -570,8 +570,8 @@ entityPair e =
 epochUtcStartTime :: Meta -> Word64 -> UTCTime
 epochUtcStartTime meta epochNum =
   -- Slot duration is in milliseconds.
-  addUTCTime (21.6 * fromIntegral (epochNum * metaSlotDuration meta)) (metaStartTime meta)
-
+  addUTCTime (0.001 * fromIntegral (metaSlotsPerEpoch meta * epochNum * metaSlotDuration meta))
+                (metaStartTime meta)
 
 epochUtcEndTime :: Meta -> Word64 -> UTCTime
 epochUtcEndTime meta epochNum =

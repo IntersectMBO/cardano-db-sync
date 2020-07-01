@@ -196,5 +196,5 @@ updateChainTipEpochVar _trce = do
         atomicWriteIORef latestChainTipEpochVar 0
       Right meta -> do
         let epoch = diffUTCTime currentTime (DB.metaStartTime meta)
-                    / (0.01 * fromIntegral (DB.metaSlotDuration meta * DB.metaProtocolConst meta))
+                    / (0.001 * fromIntegral (DB.metaSlotDuration meta * DB.metaSlotsPerEpoch meta))
         atomicWriteIORef latestChainTipEpochVar $ floor epoch
