@@ -182,6 +182,7 @@ insertTxOuts blkId (address, value) = do
               , DB.txBlockIndex = 0
               , DB.txOutSum = Byron.unsafeGetLovelace value
               , DB.txFee = 0
+              , DB.txDeposit = 0
               , DB.txSize = 0 -- Genesis distribution address to not have a size.
               }
   void . DB.insertTxOut $

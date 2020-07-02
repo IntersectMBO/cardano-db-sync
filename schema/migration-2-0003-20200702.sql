@@ -10,6 +10,7 @@ BEGIN
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "vrf_key" hash32type NULL' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "op_cert" hash32type NULL' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "proto_version" VARCHAR NULL' ;
+    EXECUTE 'ALTER TABLE "tx" ADD COLUMN "deposit" INT8 NOT NULL' ;
     EXECUTE 'CREATe TABLE "stake_address"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash" addr29type NOT NULL)' ;
     EXECUTE 'ALTER TABLE "stake_address" ADD CONSTRAINT "unique_stake_address" UNIQUE("hash")' ;
     EXECUTE 'CREATe TABLE "pool_meta_data"("id" SERIAL8  PRIMARY KEY UNIQUE,"url" VARCHAR NOT NULL,"hash" hash32type NOT NULL,"tx_id" INT8 NOT NULL)' ;

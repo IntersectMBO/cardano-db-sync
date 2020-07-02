@@ -17,6 +17,7 @@
 module Cardano.Db.Schema where
 
 import Data.ByteString.Char8 (ByteString)
+import Data.Int (Int64)
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import Data.Word (Word16, Word64)
@@ -86,6 +87,7 @@ share
     blockIndex          Word64              sqltype=uinteger  -- The index of this transaction within the block.
     outSum              Word64              sqltype=lovelace
     fee                 Word64              sqltype=lovelace
+    deposit             Int64
     size                Word64              sqltype=uinteger
     UniqueTx            hash
 

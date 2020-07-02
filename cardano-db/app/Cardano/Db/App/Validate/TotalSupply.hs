@@ -17,14 +17,16 @@ validateTotalSupplyDecreasing :: IO ()
 validateTotalSupplyDecreasing = do
     test <- genTestParameters
 
-    putStrF $ "Total supply plus fees at block " ++ show (testFirstBlockNo test)
+    putStrF $ "Total supply + fees + deposit at block " ++ show (testFirstBlockNo test)
             ++ " is same as genesis supply: "
-    (fee1, supply1) <- runDbNoLogging $ do
-                        (,) <$> queryFeesUpToBlockNo (testFirstBlockNo test)
-                            <*> fmap2 utxoSetSum queryUtxoAtBlockNo (testFirstBlockNo test)
-    if genesisSupply test == supply1 + fee1
+    (fee1, depost1, supply1)
+                    <- runDbNoLogging $ do
+                        (,,) <$> queryFeesUpToBlockNo (testFirstBlockNo test)
+                              <*> queryDepositUpToBlockNo (testFirstBlockNo test)
+                              <*> fmap2 utxoSetSum queryUtxoAtBlockNo (testFirstBlockNo test)
+    if genesisSupply test == supply1 + fee1 + depost1
       then putStrLn $ greenText "ok"
-      else error $ redText (show (genesisSupply test) ++ " /= " ++ show (supply1 + fee1))
+      else error $ redText (show (genesisSupply test) ++ " /= " ++ show (supply1 + fee1 + depost1))
 
     putStrF $ "Validate total supply decreasing from block " ++ show (testFirstBlockNo test)
             ++ " to block " ++ show (testSecondBlockNo test) ++ ": "

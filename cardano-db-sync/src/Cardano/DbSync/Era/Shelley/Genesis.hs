@@ -198,6 +198,7 @@ insertTxOuts blkId (Shelley.TxIn txInId _, txOut) = do
               , DB.txBlockIndex = 0
               , DB.txOutSum = unCoin (txOutCoin txOut)
               , DB.txFee = 0
+              , DB.txDeposit = 0
               , DB.txSize = 0 -- Genesis distribution address to not have a size.
               }
   void . DB.insertTxOut $
