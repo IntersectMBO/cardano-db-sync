@@ -1,5 +1,13 @@
 # Revision history for cardano-db-sync node
 
+## 2.1.0 -- July 2020
+
+* Note that this release requires the database to be dropped and recreated
+* Schema changes, see cardano-db 2.1.0 CHANGELOG.md
+* Add handling of Shelley era blocks to the existing handling of Byron era blocks
+* Shelley is still not fully supported
+* Fix/improve the rollback handling logic
+
 ## 2.0.0 -- May 2020
 
 * Note that this release requires the database to be dropped and recreated
