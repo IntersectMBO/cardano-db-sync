@@ -1,5 +1,13 @@
 # Revision history for cardano-db
 
+## 2.1.0 -- July 2020
+
+* Note that this release requires the database to be dropped and recreated
+* The database schema has been accepted to accept the superset of Byron and Shelley
+  era information
+* Shelley is still not fully supported
+* Remove last hard coded values for slots per epoch
+
 ## 2.0.0 -- May 2020
 
 * Note that this release requires the database to be dropped and recreated

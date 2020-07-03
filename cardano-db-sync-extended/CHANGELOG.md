@@ -1,5 +1,12 @@
 # Revision history for cardano-db-sync-extended
 
+## 2.1.0 -- July 2020
+
+* Note that this release requires the database to be dropped and recreated
+* Schema changes, see cardano-db 2.1.0 CHANGELOG.md
+* Shelley is still not fully supported
+* Fix updating of Epoch table
+
 ## 2.0.0 -- May 2020
 
 * Note that this release requires the database to be dropped and recreated
