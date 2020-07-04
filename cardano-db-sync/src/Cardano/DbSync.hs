@@ -75,11 +75,11 @@ import           Network.TypedProtocol.Pipelined (Nat(Zero, Succ))
 
 import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
 import           Ouroboros.Consensus.Byron.Ledger (GenTx)
-import           Ouroboros.Consensus.Config (TopLevelConfig)
+import           Ouroboros.Consensus.Config (TopLevelConfig, configBlock, configCodec)
+import           Ouroboros.Consensus.Config.SupportsNode
 import           Ouroboros.Consensus.Network.NodeToClient (ClientCodecs,
                     cChainSyncCodec, cStateQueryCodec, cTxSubmissionCodec)
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
-import           Ouroboros.Consensus.Node.NetworkProtocolVersion (BlockNodeToClientVersion)
 import           Ouroboros.Consensus.Node.Run (RunNode)
 import qualified Ouroboros.Network.NodeToClient.Version as Network
 
@@ -164,7 +164,8 @@ runDbSyncNodeNodeClient env iomgr trce plugin topLevelConfig (SocketPath socketP
   txv <- newEmptyTMVarM @_ @(GenTx blk)
   void $ subscribe
     (localSnocket iomgr socketPath)
-    topLevelConfig
+    (configCodec topLevelConfig)
+    (getNetworkMagic $ configBlock topLevelConfig)
     networkSubscriptionTracers
     clientSubscriptionParams
     (dbSyncProtocols trce env plugin topLevelConfig txv)
@@ -203,7 +204,7 @@ dbSyncProtocols
   -> DbSyncNodePlugin
   -> TopLevelConfig blk
   -> StrictTMVar IO (GenTx blk)
-  -> BlockNodeToClientVersion blk
+  -> Network.NodeToClientVersion
   -> ClientCodecs blk IO
   -> ConnectionId LocalAddress
   -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
