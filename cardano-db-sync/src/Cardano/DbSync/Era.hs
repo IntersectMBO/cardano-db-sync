@@ -48,6 +48,7 @@ import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..), protocol
 import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
 
 import           Shelley.Spec.Ledger.BaseTypes (Network (..))
+import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.Genesis as Shelley
 import           Shelley.Spec.Ledger.PParams (ProtVer (..))
 
@@ -102,7 +103,7 @@ mkShelleyTopLevelConfig sgc =
     -- by 'pInfoConfig' anyway.
     shelleyInfo :: ProtocolInfo IO ShelleyBlock
     -- TODO: IS @'maxMajorPV' = 0@ THIS RIGHT?
-    shelleyInfo = protocolInfoShelley sgc 2 (ProtVer 2 0) Nothing
+    shelleyInfo = protocolInfoShelley sgc Shelley.NeutralNonce 2 (ProtVer 2 0) Nothing
 
 mkShelleyProtocolMagic :: ShelleyGenesis TPraosStandardCrypto -> ProtocolMagic
 mkShelleyProtocolMagic sg =
