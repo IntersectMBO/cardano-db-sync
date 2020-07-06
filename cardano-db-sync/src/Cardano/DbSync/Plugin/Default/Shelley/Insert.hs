@@ -193,15 +193,16 @@ insertPoolRegister tracer txId params = do
         , " > maxLovelace. See https://github.com/input-output-hk/cardano-ledger-specs/issues/1551"
         ]
 
-  poolId <- lift . DB.insertPool $
-              DB.Pool
-                { DB.poolHash = Shelley.unKeyHashBS (Shelley._poolPubKey params)
-                , DB.poolPledge = Shelley.unCoin $ Shelley._poolPledge params
-                , DB.poolRewardAddrId = rewardId
-                , DB.poolMeta = mdId
-                , DB.poolMargin = realToFrac $ Shelley.intervalValue (Shelley._poolMargin params)
-                , DB.poolFixedCost = Shelley.unCoin (Shelley._poolCost params)
-                , DB.poolRegisteredTxId = txId
+  poolId <- lift . DB.insertPoolHash $ DB.PoolHash (Shelley.unKeyHashBS $ Shelley._poolPubKey params)
+  void . lift . DB.insertPoolUpdate $
+              DB.PoolUpdate
+                { DB.poolUpdateHashId = poolId
+                , DB.poolUpdatePledge = Shelley.unCoin $ Shelley._poolPledge params
+                , DB.poolUpdateRewardAddrId = rewardId
+                , DB.poolUpdateMeta = mdId
+                , DB.poolUpdateMargin = realToFrac $ Shelley.intervalValue (Shelley._poolMargin params)
+                , DB.poolUpdateFixedCost = Shelley.unCoin (Shelley._poolCost params)
+                , DB.poolUpdateRegisteredTxId = txId
                 }
 
   mapM_ (insertPoolOwner poolId) $ toList (Shelley._poolOwners params)
@@ -248,7 +249,7 @@ insertStakeAddress stakeAddr =
 
 insertPoolOwner
     :: (MonadBaseControl IO m, MonadIO m)
-    => DB.PoolId -> ShelleyStakingKeyHash
+    => DB.PoolHashId -> ShelleyStakingKeyHash
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertPoolOwner poolId skh =
   void . lift . DB.insertPoolOwner $
@@ -351,7 +352,7 @@ insertWithdrawals _tracer txId (account, coin) = do
 
 insertPoolRelay
     :: (MonadBaseControl IO m, MonadIO m)
-    => DB.PoolId -> Shelley.StakePoolRelay
+    => DB.PoolHashId -> Shelley.StakePoolRelay
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRelay poolId relay =
   void . lift . DB.insertPoolRelay $
