@@ -154,29 +154,33 @@ share
     txId                TxId
     UniquePoolMetaData  url
 
-  Pool
+  PoolHash
     hash                ByteString          sqltype=hash28type
+    UniquePoolHash      hash
+
+  PoolUpdate
+    hashId              PoolHashId
     pledge              Word64              -- This really should be sqltype=lovelace See https://github.com/input-output-hk/cardano-ledger-specs/issues/1551
     rewardAddrId        StakeAddressId
     meta                PoolMetaDataId Maybe
     margin              Double              -- sqltype=percentage????
     fixedCost           Word64
     registeredTxId      TxId                -- Slot number in which the pool was registered.
-    UniquePool          hash registeredTxId
+    UniquePoolUpdate    hashId registeredTxId
 
   PoolOwner
     hash                ByteString          sqltype=hash28type
-    poolId              PoolId
+    poolId              PoolHashId
     UniquePoolOwner     hash
 
   PoolRetire
-    poolId              PoolId
+    poolId              PoolHashId
     announcedTxId       TxId                -- Slot number in which the pool announced it was retiring.
     retiringEpoch       Word64              -- Epoch number in which the pool will retire.
     UniquePoolRetiring  poolId
 
   PoolRelay
-    poolId              PoolId
+    poolId              PoolHashId
     ipv4                Text Maybe
     ipv6                Text Maybe
     dnsName             Text Maybe
@@ -214,7 +218,7 @@ share
 
   Delegation
     addrId              StakeAddressId
-    poolId              PoolId
+    poolId              PoolHashId
     txId                TxId
     UniqueDelegation    addrId poolId txId
 

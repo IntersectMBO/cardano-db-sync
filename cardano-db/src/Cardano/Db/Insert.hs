@@ -6,11 +6,12 @@ module Cardano.Db.Insert
   , insertDelegation
   , insertEpoch
   , insertMeta
-  , insertPool
+  , insertPoolHash
   , insertPoolMetaData
   , insertPoolOwner
   , insertPoolRelay
   , insertPoolRetire
+  , insertPoolUpdate
   , insertReward
   , insertSlotLeader
   , insertStakeAddress
@@ -51,8 +52,8 @@ insertEpoch = insertByReturnKey "Epoch"
 insertMeta :: (MonadBaseControl IO m, MonadIO m) => Meta -> ReaderT SqlBackend m MetaId
 insertMeta = insertByReturnKey "Meta"
 
-insertPool :: (MonadBaseControl IO m, MonadIO m) => Pool -> ReaderT SqlBackend m PoolId
-insertPool = insertByReturnKey "Pool"
+insertPoolHash :: (MonadBaseControl IO m, MonadIO m) => PoolHash -> ReaderT SqlBackend m PoolHashId
+insertPoolHash = insertByReturnKey "PoolHash"
 
 insertPoolMetaData :: (MonadBaseControl IO m, MonadIO m) => PoolMetaData -> ReaderT SqlBackend m PoolMetaDataId
 insertPoolMetaData = insertByReturnKey "PoolMetaData"
@@ -65,6 +66,9 @@ insertPoolRelay = insertByReturnKey "PoolRelay"
 
 insertPoolRetire :: (MonadBaseControl IO m, MonadIO m) => PoolRetire -> ReaderT SqlBackend m PoolRetireId
 insertPoolRetire = insertByReturnKey "PoolRetire"
+
+insertPoolUpdate :: (MonadBaseControl IO m, MonadIO m) => PoolUpdate -> ReaderT SqlBackend m PoolUpdateId
+insertPoolUpdate = insertByReturnKey "PoolUpdate"
 
 insertReward :: (MonadBaseControl IO m, MonadIO m) => Reward -> ReaderT SqlBackend m RewardId
 insertReward = insertByReturnKey "Reward"
