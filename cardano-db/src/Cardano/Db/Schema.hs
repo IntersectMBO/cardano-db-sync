@@ -151,8 +151,8 @@ share
   PoolMetaData
     url                 Text
     hash                ByteString          sqltype=hash32type
-    txId                TxId
-    UniquePoolMetaData  url
+    registeredTxId      TxId                -- Only used for rollback.
+    UniquePoolMetaData  url hash
 
   PoolHash
     hash                ByteString          sqltype=hash28type
@@ -174,13 +174,13 @@ share
     UniquePoolOwner     hash
 
   PoolRetire
-    poolId              PoolHashId
+    updateId            PoolUpdateId
     announcedTxId       TxId                -- Slot number in which the pool announced it was retiring.
     retiringEpoch       Word64              -- Epoch number in which the pool will retire.
-    UniquePoolRetiring  poolId
+    UniquePoolRetiring  updateId
 
   PoolRelay
-    poolId              PoolHashId
+    updateId            PoolUpdateId
     ipv4                Text Maybe
     ipv6                Text Maybe
     dnsName             Text Maybe
@@ -190,7 +190,7 @@ share
     -- interacts with those constraints is non-trivial:  two NULL values are not considered equal
     -- for the purposes of an uniqueness constraint.
     -- Use of "!force" attribute on the end of the line disables this check.
-    UniquePoolRelay     poolId ipv4 ipv6 dnsName !force
+    UniquePoolRelay     updateId ipv4 ipv6 dnsName !force
 
   -- -----------------------------------------------------------------------------------------------
 
@@ -218,9 +218,9 @@ share
 
   Delegation
     addrId              StakeAddressId
-    poolId              PoolHashId
+    updateId            PoolUpdateId
     txId                TxId
-    UniqueDelegation    addrId poolId txId
+    UniqueDelegation    addrId updateId txId
 
   -- When was a staking key/script registered
   StakeRegistration

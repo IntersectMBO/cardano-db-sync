@@ -24,7 +24,7 @@ import           Data.Maybe (listToMaybe)
 import           Data.Word (Word64)
 
 import           Database.Esqueleto (InnerJoin (..), Value (..),  (^.), (==.),
-                    from, on, select, val, where_)
+                    desc, from, on, orderBy, select, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
 import qualified Shelley.Spec.Ledger.TxData as Shelley
@@ -37,12 +37,15 @@ queryStakeAddress addr = do
             pure (saddr ^. StakeAddressId)
   pure $ maybeToEither (DbLookupMessage "StakeAddress") unValue (listToMaybe res)
 
-queryStakePoolKeyHash :: MonadIO m => ShelleyStakePoolKeyHash -> ReaderT SqlBackend m (Either LookupFail PoolHashId)
+queryStakePoolKeyHash :: MonadIO m => ShelleyStakePoolKeyHash -> ReaderT SqlBackend m (Either LookupFail PoolUpdateId)
 queryStakePoolKeyHash kh = do
-  res <- select . from $ \ (pool `InnerJoin` poolHash) -> do
-            on (pool ^. PoolUpdateHashId ==. poolHash ^. PoolHashId)
+  res <- select . from $ \ (poolUpdate `InnerJoin` poolHash `InnerJoin` tx `InnerJoin` blk) -> do
+            on (blk ^. BlockId ==. tx ^. TxBlock)
+            on (tx ^. TxId ==. poolUpdate ^. PoolUpdateRegisteredTxId)
+            on (poolUpdate ^. PoolUpdateHashId ==. poolHash ^. PoolHashId)
             where_ (poolHash ^. PoolHashHash ==. val (unKeyHashBS kh))
-            pure (poolHash ^. PoolHashId)
+            orderBy [desc (blk ^. BlockSlotNo)]
+            pure (poolUpdate ^. PoolUpdateId)
   pure $ maybeToEither (DbLookupMessage "StakePoolKeyHash") unValue (listToMaybe res)
 
 queryTxInputSum :: MonadIO m => [ShelleyTxIn] -> ReaderT SqlBackend m Word64

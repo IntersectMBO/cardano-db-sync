@@ -193,20 +193,20 @@ insertPoolRegister tracer txId params = do
         , " > maxLovelace. See https://github.com/input-output-hk/cardano-ledger-specs/issues/1551"
         ]
 
-  poolId <- lift . DB.insertPoolHash $ DB.PoolHash (Shelley.unKeyHashBS $ Shelley._poolPubKey params)
-  void . lift . DB.insertPoolUpdate $
-              DB.PoolUpdate
-                { DB.poolUpdateHashId = poolId
-                , DB.poolUpdatePledge = Shelley.unCoin $ Shelley._poolPledge params
-                , DB.poolUpdateRewardAddrId = rewardId
-                , DB.poolUpdateMeta = mdId
-                , DB.poolUpdateMargin = realToFrac $ Shelley.intervalValue (Shelley._poolMargin params)
-                , DB.poolUpdateFixedCost = Shelley.unCoin (Shelley._poolCost params)
-                , DB.poolUpdateRegisteredTxId = txId
-                }
+  poolHashId <- lift . DB.insertPoolHash $ DB.PoolHash (Shelley.unKeyHashBS $ Shelley._poolPubKey params)
+  poolUpdateId <- lift . DB.insertPoolUpdate $
+                    DB.PoolUpdate
+                      { DB.poolUpdateHashId = poolHashId
+                      , DB.poolUpdatePledge = Shelley.unCoin $ Shelley._poolPledge params
+                      , DB.poolUpdateRewardAddrId = rewardId
+                      , DB.poolUpdateMeta = mdId
+                      , DB.poolUpdateMargin = realToFrac $ Shelley.intervalValue (Shelley._poolMargin params)
+                      , DB.poolUpdateFixedCost = Shelley.unCoin (Shelley._poolCost params)
+                      , DB.poolUpdateRegisteredTxId = txId
+                      }
 
-  mapM_ (insertPoolOwner poolId) $ toList (Shelley._poolOwners params)
-  mapM_ (insertPoolRelay poolId) $ toList (Shelley._poolRelays params)
+  mapM_ (insertPoolOwner poolHashId) $ toList (Shelley._poolOwners params)
+  mapM_ (insertPoolRelay poolUpdateId) $ toList (Shelley._poolRelays params)
 
 maxLovelace :: Word64
 maxLovelace = 45000000000000000
@@ -216,10 +216,10 @@ insertPoolRetire
     => DB.TxId -> EpochNo ->  ShelleyStakePoolKeyHash
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRetire txId epochNum keyHash = do
-  poolId <- firstExceptT (NELookup "insertPoolRetire") . newExceptT $ queryStakePoolKeyHash keyHash
+  updateId <- firstExceptT (NELookup "insertPoolRetire") . newExceptT $ queryStakePoolKeyHash keyHash
   void . lift . DB.insertPoolRetire $
     DB.PoolRetire
-      { DB.poolRetirePoolId = poolId
+      { DB.poolRetireUpdateId = updateId
       , DB.poolRetireAnnouncedTxId = txId
       , DB.poolRetireRetiringEpoch = unEpochNo epochNum
       }
@@ -234,7 +234,7 @@ insertMetaData txId md =
     DB.PoolMetaData
       { DB.poolMetaDataUrl = Shelley.urlToText (Shelley._poolMDUrl md)
       , DB.poolMetaDataHash = Shelley._poolMDHash md
-      , DB.poolMetaDataTxId = txId
+      , DB.poolMetaDataRegisteredTxId = txId
       }
 
 insertStakeAddress
@@ -292,13 +292,13 @@ insertDelegation _tracer env txId cred poolkh = do
   addrId <- firstExceptT (NELookup "insertDelegation")
                 . newExceptT
                 $ queryStakeAddress (Shelley.stakingCredHash env cred)
-  poolId <- firstExceptT (NELookup "insertDelegation")
+  updateId <- firstExceptT (NELookup "insertDelegation")
                 . newExceptT
                 $ queryStakePoolKeyHash poolkh
   void . lift . DB.insertDelegation $
     DB.Delegation
       { DB.delegationAddrId = addrId
-      , DB.delegationPoolId = poolId
+      , DB.delegationUpdateId = updateId
       , DB.delegationTxId = txId
       }
 
@@ -352,14 +352,14 @@ insertWithdrawals _tracer txId (account, coin) = do
 
 insertPoolRelay
     :: (MonadBaseControl IO m, MonadIO m)
-    => DB.PoolHashId -> Shelley.StakePoolRelay
+    => DB.PoolUpdateId -> Shelley.StakePoolRelay
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertPoolRelay poolId relay =
+insertPoolRelay updateId relay =
   void . lift . DB.insertPoolRelay $
     case relay of
       Shelley.SingleHostAddr mPort mIpv4 mIpv6 ->
         DB.PoolRelay -- An IPv4 and/or IPv6 address
-          { DB.poolRelayPoolId = poolId
+          { DB.poolRelayUpdateId = updateId
           , DB.poolRelayIpv4 = textShow <$> Shelley.strictMaybeToMaybe mIpv4
           , DB.poolRelayIpv6 = textShow <$> Shelley.strictMaybeToMaybe mIpv6
           , DB.poolRelayDnsName = Nothing
@@ -368,7 +368,7 @@ insertPoolRelay poolId relay =
           }
       Shelley.SingleHostName mPort name ->
         DB.PoolRelay -- An A or AAAA DNS record
-          { DB.poolRelayPoolId = poolId
+          { DB.poolRelayUpdateId = updateId
           , DB.poolRelayIpv4 = Nothing
           , DB.poolRelayIpv6 = Nothing
           , DB.poolRelayDnsName = Just (Shelley.dnsToText name)
@@ -377,7 +377,7 @@ insertPoolRelay poolId relay =
           }
       Shelley.MultiHostName name ->
         DB.PoolRelay -- An SRV DNS record
-          { DB.poolRelayPoolId = poolId
+          { DB.poolRelayUpdateId = updateId
           , DB.poolRelayIpv4 = Nothing
           , DB.poolRelayIpv6 = Nothing
           , DB.poolRelayDnsName = Nothing
