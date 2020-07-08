@@ -38,6 +38,7 @@ package cardano-db
 package cardano-db-sync
   tests: True
 
+-- This is need because Nix is doing something crazy.
 package ouroboros-consensus-cardano
   tests: False
 
