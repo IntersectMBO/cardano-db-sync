@@ -59,12 +59,12 @@ extra-deps:
     commit: 2547ad1e80aeabca2899951601079408becbc92c
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: 1e0f1a27ff5f6e1a4108b42137c95675b33ffa74
+    commit: c51d08d015c16d179b148f7ccd596cffa9b8384b
     subdirs:
       - cardano-config
 
   - git: https://github.com/input-output-hk/cardano-shell
-    commit: 5257fc818ef7df60986834310432e197aac90711
+    commit: b3231f7f3b8b6d07fef08f8cc41aa804524f94c2
     subdirs:
       - cardano-shell
 
@@ -87,36 +87,34 @@ extra-deps:
       - tracer-transformers
 
   - git: https://github.com/input-output-hk/cardano-base
-    commit: 5c6db42be8ed83463f89e6257d8eb94ca4df8ca9
+    commit: c454b6e791ee2fe84508b4d5ed2c4dedafb7dce4
     subdirs:
       - binary
       - binary/test
       - cardano-crypto-class
+      - cardano-crypto-praos
       - slotting
 
   - git: https://github.com/input-output-hk/goblins
     commit: 26d35ad52fe9ade3391532dbfeb2f416f07650bc
 
   - git: https://github.com/input-output-hk/cardano-ledger-specs
-    commit: e8fd37b21773e36f1e48ecf6f72dc3df5ceb1392
+    commit: 4e65f6e3f966659b69865fd6bcfe9caf3008b820
     subdirs:
-      - semantics/executable-spec
-      - byron/ledger/executable-spec
+      - byron/crypto
+      - byron/crypto/test
       - byron/chain/executable-spec
+      - byron/ledger/executable-spec
+      - byron/ledger/impl
+      - byron/ledger/impl/test
+      - semantics/executable-spec
+      - semantics/small-steps-test
       - shelley/chain-and-ledger/dependencies/non-integer
       - shelley/chain-and-ledger/executable-spec
       - shelley/chain-and-ledger/executable-spec/test
 
-  - git: https://github.com/input-output-hk/cardano-ledger
-    commit: d309449e6c303a9f0dcc8dcf172df6f0b3195ed5
-    subdirs:
-      - cardano-ledger
-      - cardano-ledger/test
-      - crypto
-      - crypto/test
-
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: d237a780c558e7a2c601cc041fd7808e5c810b3d
+    commit: fc548489331cf6a5fab148b1b121e3bf6a6b184f
     subdirs:
       - io-sim
       - io-sim-classes
@@ -133,6 +131,13 @@ extra-deps:
       - typed-protocols-examples
       - cardano-client
 
+flags:
+  # Bundle VRF crypto in libsodium and do not rely on an external fork to have it.
+  # This still requires the host system to have the 'standard' libsodium installed.
+  cardano-crypto-praos:
+    external-libsodium-vrf: false
+
+
 nix:
   pure: true
   packages: [ zlib.dev, zlib.out
@@ -142,4 +147,3 @@ nix:
             , systemd.dev
             , postgresql
             ]
-

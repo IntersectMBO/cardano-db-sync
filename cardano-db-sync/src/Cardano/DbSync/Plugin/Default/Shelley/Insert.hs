@@ -140,7 +140,7 @@ insertTxOut _tracer txId (index, Shelley.TxOut addr value) =
               { DB.txOutTxId = txId
               , DB.txOutIndex = index
               , DB.txOutAddress = Text.decodeUtf8 $ Base16.encode (Shelley.serialiseAddr addr)
-              , DB.txOutValue = fromIntegral value
+              , DB.txOutValue = Shelley.unCoin value
               }
 
 insertTxIn
