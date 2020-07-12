@@ -71,15 +71,16 @@ import           Network.Mux.Types (MuxMode (..))
 import           Ouroboros.Network.Driver.Simple (runPipelinedPeer)
 import           Network.TypedProtocol.Pipelined (Nat(Zero, Succ))
 
-import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
-import           Ouroboros.Consensus.Config (TopLevelConfig, configBlock, configCodec)
-import           Ouroboros.Consensus.Config.SupportsNode
+import           Ouroboros.Consensus.Block.Abstract (CodecConfig, ConvertRawHash (..))
+import           Ouroboros.Consensus.Byron.Ledger.Config (mkByronCodecConfig)
+import           Ouroboros.Consensus.Byron.Node ()
 import           Ouroboros.Consensus.Network.NodeToClient (ClientCodecs,
                     cChainSyncCodec, cStateQueryCodec, cTxSubmissionCodec)
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
 import           Ouroboros.Consensus.Node.Run (RunNode)
-import qualified Ouroboros.Network.NodeToClient.Version as Network
 
+import           Ouroboros.Network.Magic (NetworkMagic)
+import qualified Ouroboros.Network.NodeToClient.Version as Network
 import           Ouroboros.Network.Block (BlockNo (..), HeaderHash, Point (..),
                     Tip, genesisPoint, getTipBlockNo, blockNo)
 import           Ouroboros.Network.Mux (MuxPeer (..),  RunMiniProtocol (..))
@@ -88,6 +89,7 @@ import           Ouroboros.Network.NodeToClient (IOManager, ClientSubscriptionPa
                     NetworkSubscriptionTracers (..), NodeToClientProtocols (..),
                     TraceSendRecv, WithAddr (..), localSnocket, localStateQueryPeerNull,
                     localTxSubmissionPeerNull, networkErrorPolicies, withIOManager)
+import           Ouroboros.Consensus.Shelley.Ledger.Config (CodecConfig (ShelleyCodecConfig))
 
 import qualified Ouroboros.Network.Point as Point
 import           Ouroboros.Network.Point (withOrigin)
@@ -139,29 +141,34 @@ runDbSyncNode plugin enp =
       liftIO $ do
         -- Must run plugin startup after the genesis distribution has been inserted/validate.
         runDbStartup trce plugin
+        let networkMagic = genesisNetworkMagic genCfg
         case genCfg of
           GenesisByron bCfg ->
             runDbSyncNodeNodeClient ByronEnv
-                iomgr trce plugin (mkByronTopLevelConfig bCfg) (enpSocketPath enp)
+                iomgr trce plugin (mkByronCodecConfig bCfg) networkMagic (enpSocketPath enp)
           GenesisShelley sCfg ->
             runDbSyncNodeNodeClient (ShelleyEnv $ Shelley.sgNetworkId sCfg)
-                iomgr trce plugin (mkShelleyTopLevelConfig sCfg) (enpSocketPath enp)
+                iomgr trce plugin shelleyCodecConfig networkMagic (enpSocketPath enp)
+
+
+shelleyCodecConfig :: CodecConfig ShelleyBlock
+shelleyCodecConfig = ShelleyCodecConfig
 
 -- -------------------------------------------------------------------------------------------------
 
 runDbSyncNodeNodeClient
     :: forall blk. (MkDbAction blk, RunNode blk)
-    => DbSyncEnv -> IOManager -> Trace IO Text -> DbSyncNodePlugin -> TopLevelConfig blk -> SocketPath
+    => DbSyncEnv -> IOManager -> Trace IO Text -> DbSyncNodePlugin -> CodecConfig blk-> NetworkMagic -> SocketPath
     -> IO ()
-runDbSyncNodeNodeClient env iomgr trce plugin topLevelConfig (SocketPath socketPath) = do
+runDbSyncNodeNodeClient env iomgr trce plugin codecConfig magic (SocketPath socketPath) = do
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   void $ subscribe
     (localSnocket iomgr socketPath)
-    (configCodec topLevelConfig)
-    (getNetworkMagic $ configBlock topLevelConfig)
+    codecConfig
+    magic
     networkSubscriptionTracers
     clientSubscriptionParams
-    (dbSyncProtocols trce env plugin topLevelConfig)
+    (dbSyncProtocols trce env plugin)
   where
     clientSubscriptionParams = ClientSubscriptionParams {
         cspAddress = Snocket.localAddressFromPath socketPath,
@@ -195,12 +202,11 @@ dbSyncProtocols
   => Trace IO Text
   -> DbSyncEnv
   -> DbSyncNodePlugin
-  -> TopLevelConfig blk
   -> Network.NodeToClientVersion
   -> ClientCodecs blk IO
   -> ConnectionId LocalAddress
   -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols trce env plugin _topLevelConfig _version codecs _connectionId =
+dbSyncProtocols trce env plugin _version codecs _connectionId =
     NodeToClientProtocols {
           localChainSyncProtocol = localChainSyncProtocol
         , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -242,7 +248,8 @@ dbSyncProtocols trce env plugin _topLevelConfig _version codecs _connectionId =
         localTxSubmissionPeerNull
 
     dummyLocalQueryProtocol :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
-    dummyLocalQueryProtocol = InitiatorProtocolOnly $ MuxPeer
+    dummyLocalQueryProtocol =
+      InitiatorProtocolOnly $ MuxPeer
         Logging.nullTracer
         (cStateQueryCodec codecs)
         localStateQueryPeerNull
