@@ -54,14 +54,12 @@ import           Cardano.Prelude hiding (atomically, option, (%), Nat)
 import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
 
 import qualified Codec.CBOR.Term as CBOR
-import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, StrictTMVar,
-                    atomically, newEmptyTMVarM, readTMVar)
+import           Control.Monad.Class.MonadSTM.Strict (atomically)
 import           Control.Monad.Class.MonadTimer (MonadTimer)
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Except.Exit (orDie)
 
 import qualified Data.ByteString.Lazy as BSL
-import           Data.Functor.Contravariant (contramap)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Void (Void)
@@ -74,7 +72,6 @@ import           Ouroboros.Network.Driver.Simple (runPipelinedPeer)
 import           Network.TypedProtocol.Pipelined (Nat(Zero, Succ))
 
 import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
-import           Ouroboros.Consensus.Byron.Ledger (GenTx)
 import           Ouroboros.Consensus.Config (TopLevelConfig, configBlock, configCodec)
 import           Ouroboros.Consensus.Config.SupportsNode
 import           Ouroboros.Consensus.Network.NodeToClient (ClientCodecs,
@@ -89,8 +86,8 @@ import           Ouroboros.Network.Mux (MuxPeer (..),  RunMiniProtocol (..))
 import           Ouroboros.Network.NodeToClient (IOManager, ClientSubscriptionParams (..),
                     ConnectionId, ErrorPolicyTrace (..), Handshake, LocalAddress,
                     NetworkSubscriptionTracers (..), NodeToClientProtocols (..),
-                    TraceSendRecv, WithAddr (..),
-                    networkErrorPolicies, withIOManager, localSnocket, localStateQueryPeerNull)
+                    TraceSendRecv, WithAddr (..), localSnocket, localStateQueryPeerNull,
+                    localTxSubmissionPeerNull, networkErrorPolicies, withIOManager)
 
 import qualified Ouroboros.Network.Point as Point
 import           Ouroboros.Network.Point (withOrigin)
@@ -102,9 +99,6 @@ import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined (ChainSync
 import           Ouroboros.Network.Protocol.ChainSync.PipelineDecision (pipelineDecisionLowHighMark,
                         PipelineDecision (..), runPipelineDecision, MkPipelineDecision)
 import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
-import           Ouroboros.Network.Protocol.LocalTxSubmission.Client (LocalTxSubmissionClient (..),
-                    LocalTxClientStIdle (..), localTxSubmissionClientPeer)
-import           Ouroboros.Network.Protocol.LocalTxSubmission.Type (SubmitResult (..))
 import qualified Ouroboros.Network.Snocket as Snocket
 import           Ouroboros.Network.Subscription (SubscriptionTrace)
 
@@ -161,14 +155,13 @@ runDbSyncNodeNodeClient
     -> IO ()
 runDbSyncNodeNodeClient env iomgr trce plugin topLevelConfig (SocketPath socketPath) = do
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
-  txv <- newEmptyTMVarM @_ @(GenTx blk)
   void $ subscribe
     (localSnocket iomgr socketPath)
     (configCodec topLevelConfig)
     (getNetworkMagic $ configBlock topLevelConfig)
     networkSubscriptionTracers
     clientSubscriptionParams
-    (dbSyncProtocols trce env plugin topLevelConfig txv)
+    (dbSyncProtocols trce env plugin topLevelConfig)
   where
     clientSubscriptionParams = ClientSubscriptionParams {
         cspAddress = Snocket.localAddressFromPath socketPath,
@@ -203,15 +196,14 @@ dbSyncProtocols
   -> DbSyncEnv
   -> DbSyncNodePlugin
   -> TopLevelConfig blk
-  -> StrictTMVar IO (GenTx blk)
   -> Network.NodeToClientVersion
   -> ClientCodecs blk IO
   -> ConnectionId LocalAddress
   -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols trce env plugin _topLevelConfig txv _version codecs _connectionId =
+dbSyncProtocols trce env plugin _topLevelConfig _version codecs _connectionId =
     NodeToClientProtocols {
           localChainSyncProtocol = localChainSyncProtocol
-        , localTxSubmissionProtocol = localTxSubmissionProtocol
+        , localTxSubmissionProtocol = dummylocalTxSubmit
         , localStateQueryProtocol = dummyLocalQueryProtocol
         }
   where
@@ -243,11 +235,11 @@ dbSyncProtocols trce env plugin _topLevelConfig txv _version codecs _connectionI
         -- would like to restart a protocol on the same mux and thus bearer).
         pure ((), Nothing)
 
-    localTxSubmissionProtocol :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
-    localTxSubmissionProtocol = InitiatorProtocolOnly $ MuxPeer
-        (contramap (Text.pack . show) . toLogObject $ appendName "db-sync-local-tx" trce)
+    dummylocalTxSubmit :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
+    dummylocalTxSubmit = InitiatorProtocolOnly $ MuxPeer
+        Logging.nullTracer
         (cTxSubmissionCodec codecs)
-        (localTxSubmissionClientPeer (txSubmissionClient txv))
+        localTxSubmissionPeerNull
 
     dummyLocalQueryProtocol :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
     dummyLocalQueryProtocol = InitiatorProtocolOnly $ MuxPeer
@@ -302,26 +294,6 @@ getCurrentTipBlockNo = do
       case DB.blockBlockNo blk of
         Just blockno -> At (BlockNo blockno)
         Nothing -> Origin
-
--- | A 'LocalTxSubmissionClient' that submits transactions reading them from
--- a 'StrictTMVar'.  A real implementation should use a better synchronisation
--- primitive.  This demo creates and empty 'TMVar' in
--- 'muxLocalInitiatorNetworkApplication' above and never fills it with a tx.
---
-txSubmissionClient
-  :: forall tx reject m. (Monad m, MonadSTM m)
-  => StrictTMVar m tx -> LocalTxSubmissionClient tx reject m ()
-txSubmissionClient txv = LocalTxSubmissionClient $
-    atomically (readTMVar txv) >>= pure . client
-  where
-    client :: tx -> LocalTxClientStIdle tx reject m ()
-    client tx =
-      SendMsgSubmitTx tx $ \mbreject -> do
-        case mbreject of
-          SubmitSuccess -> return ()
-          SubmitFail _r -> return ()
-        tx' <- atomically $ readTMVar txv
-        pure $ client tx'
 
 -- | 'ChainSyncClient' which traces received blocks and ignores when it
 -- receives a request to rollbackwar.  A real wallet client should:
