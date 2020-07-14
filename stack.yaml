@@ -87,7 +87,7 @@ extra-deps:
       - tracer-transformers
 
   - git: https://github.com/input-output-hk/cardano-base
-    commit: c454b6e791ee2fe84508b4d5ed2c4dedafb7dce4
+    commit: 5e0b8bc8c7862be12da6989440f8644ba7c1e1cf
     subdirs:
       - binary
       - binary/test
@@ -99,7 +99,7 @@ extra-deps:
     commit: 26d35ad52fe9ade3391532dbfeb2f416f07650bc
 
   - git: https://github.com/input-output-hk/cardano-ledger-specs
-    commit: 4e65f6e3f966659b69865fd6bcfe9caf3008b820
+    commit: 12b13f390d64df6af6054b0d33bb3767756da041
     subdirs:
       - byron/crypto
       - byron/crypto/test
@@ -114,7 +114,7 @@ extra-deps:
       - shelley/chain-and-ledger/executable-spec/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: 11e5609e01f4703870e88b2712e2c14da0338b65
+    commit: 90638814e7da6d44a92071a40dce982a70b566bf
     subdirs:
       - io-sim
       - io-sim-classes
