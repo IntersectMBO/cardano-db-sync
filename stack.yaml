@@ -9,6 +9,12 @@ packages:
   - cardano-db-sync
   - cardano-db-sync-extended
 
+flags:
+  # Bundle VRF crypto in libsodium and do not rely on an external fork to have it.
+  # This still requires the host system to have the 'standard' libsodium installed.
+  cardano-crypto-praos:
+    external-libsodium-vrf: false
+
 ghc-options:
   cardano-db:               -Wall -Werror -fwarn-redundant-constraints
   cardano-db-test:          -Wall -Werror -fwarn-redundant-constraints
@@ -55,18 +61,13 @@ extra-deps:
   - time-compat-1.9.2.2
   - quiet-0.2
 
-  - git: https://github.com/input-output-hk/cardano-crypto
-    commit: 2547ad1e80aeabca2899951601079408becbc92c
-
-  - git: https://github.com/input-output-hk/cardano-node
-    commit: 8c72fc00cb75b7e7a2c9423ba50c639f6236c88b
-    subdirs:
-      - cardano-config
-
   - git: https://github.com/input-output-hk/cardano-shell
     commit: b3231f7f3b8b6d07fef08f8cc41aa804524f94c2
     subdirs:
       - cardano-shell
+
+  - git: https://github.com/input-output-hk/cardano-crypto
+    commit: 2547ad1e80aeabca2899951601079408becbc92c
 
   - git: https://github.com/input-output-hk/cardano-prelude
     commit: 316c854d1d3089f480708ad5cd5ecf8a74423ddd
@@ -90,9 +91,9 @@ extra-deps:
     commit: 5e0b8bc8c7862be12da6989440f8644ba7c1e1cf
     subdirs:
       - binary
+      - cardano-crypto-praos
       - binary/test
       - cardano-crypto-class
-      - cardano-crypto-praos
       - slotting
 
   - git: https://github.com/input-output-hk/goblins
@@ -108,7 +109,6 @@ extra-deps:
       - byron/ledger/impl
       - byron/ledger/impl/test
       - semantics/executable-spec
-      - semantics/small-steps-test
       - shelley/chain-and-ledger/dependencies/non-integer
       - shelley/chain-and-ledger/executable-spec
       - shelley/chain-and-ledger/executable-spec/test
@@ -116,20 +116,28 @@ extra-deps:
   - git: https://github.com/input-output-hk/ouroboros-network
     commit: 90638814e7da6d44a92071a40dce982a70b566bf
     subdirs:
+      - cardano-client
       - io-sim
       - io-sim-classes
       - network-mux
-      - Win32-network
       - ouroboros-network
+      - ouroboros-network-framework
+      - Win32-network
       - ouroboros-consensus
       - ouroboros-consensus-byron
+      - ouroboros-consensus-byronspec
       - ouroboros-consensus-shelley
       - ouroboros-consensus-cardano
-      - ouroboros-consensus/ouroboros-consensus-mock
       - typed-protocols
-      - ouroboros-network-framework
       - typed-protocols-examples
-      - cardano-client
+      - ouroboros-network-testing
+      - ouroboros-consensus/ouroboros-consensus-mock
+      - ouroboros-consensus/ouroboros-consensus-test-infra
+
+  - git: https://github.com/input-output-hk/cardano-node
+    commit: 8c72fc00cb75b7e7a2c9423ba50c639f6236c88b
+    subdirs:
+      - cardano-config
 
 flags:
   # Bundle VRF crypto in libsodium and do not rely on an external fork to have it.

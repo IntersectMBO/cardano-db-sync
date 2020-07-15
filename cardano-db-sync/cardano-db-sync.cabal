@@ -31,30 +31,38 @@ library
                         -Wincomplete-uni-patterns
 
   exposed-modules:      Cardano.DbSync
-                        Cardano.DbSync.Plugin.Epoch
-
-  other-modules:        Cardano.DbSync.Config
-                        Cardano.DbSync.Database
-                        Cardano.DbSync.DbAction
-                        Cardano.DbSync.Era
-                        Cardano.DbSync.Era.Byron.Genesis
-                        Cardano.DbSync.Era.Byron.Util
-                        Cardano.DbSync.Era.Shelley.Genesis
-                        Cardano.DbSync.Era.Shelley.Util
+                        Cardano.DbSync.Types
                         Cardano.DbSync.Error
+                        Cardano.DbSync.Util
+                        Cardano.DbSync.Era
+                        Cardano.DbSync.Era.Byron.Util
+                        Cardano.DbSync.Era.Shelley.Util
+
+                        Cardano.DbSync.Plugin.Epoch
+                        Cardano.DbSync.Config
+                        Cardano.DbSync.Database
+
+                        Cardano.DbSync.DbAction
+
                         Cardano.DbSync.Metrics
                         Cardano.DbSync.Plugin
                         Cardano.DbSync.Plugin.Default
-                        Cardano.DbSync.Plugin.Default.Insert
+
                         Cardano.DbSync.Plugin.Default.Rollback
+
+                        Cardano.DbSync.Tracing.ToObjectOrphans
+
+  other-modules:        Cardano.DbSync.Era.Byron.Genesis
+                        Cardano.DbSync.Era.Shelley.Genesis
+
+                        Cardano.DbSync.Plugin.Default.Insert
+                        
                         Cardano.DbSync.Plugin.Default.Byron.Insert
                         Cardano.DbSync.Plugin.Default.Byron.Rollback
                         Cardano.DbSync.Plugin.Default.Shelley.Insert
                         Cardano.DbSync.Plugin.Default.Shelley.Query
                         Cardano.DbSync.Plugin.Default.Shelley.Rollback
-                        Cardano.DbSync.Tracing.ToObjectOrphans
-                        Cardano.DbSync.Types
-                        Cardano.DbSync.Util
+                        
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , aeson
