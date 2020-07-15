@@ -28,8 +28,6 @@ import qualified Cardano.DbSync.Era.Shelley.Genesis as Shelley
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Types
 
-import           Cardano.Config.Shelley.Orphans ()
-
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, newExceptT, runExceptT)

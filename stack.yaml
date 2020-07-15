@@ -59,7 +59,7 @@ extra-deps:
     commit: 2547ad1e80aeabca2899951601079408becbc92c
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: 8c72fc00cb75b7e7a2c9423ba50c639f6236c88b
+    commit: a8faa35e55f9a96986cfef86d08b83050cabb659
     subdirs:
       - cardano-config
 
