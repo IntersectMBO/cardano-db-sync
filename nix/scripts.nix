@@ -1,4 +1,4 @@
-{ pkgs, lib, iohkNix, customConfig, syncPackages }:
+{ pkgs, lib, iohkNix, customConfig }:
 let
   mkStartScripts = envConfig: let
     systemdCompat.options = {
@@ -8,7 +8,7 @@ let
     };
     eval = let
       extra = {
-        internal.syncPackages = syncPackages;
+        internal.syncPackages = pkgs;
         services.cardano-db-sync = {
           enable = true;
           postgres.user = "*";
