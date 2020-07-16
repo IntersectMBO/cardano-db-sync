@@ -150,6 +150,8 @@ runDbSyncNode plugin enp =
           GenesisShelley sCfg ->
             runDbSyncNodeNodeClient (ShelleyEnv $ Shelley.sgNetworkId sCfg)
                 iomgr trce plugin shelleyCodecConfig networkMagic (enpSocketPath enp)
+          GenesisCardano _bCfg _sCfg ->
+            panic "Cardano.DbSync.runDbSyncNode: GenesisCardano"
 
 
 shelleyCodecConfig :: CodecConfig ShelleyBlock

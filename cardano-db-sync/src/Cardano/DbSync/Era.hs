@@ -5,7 +5,6 @@
 
 module Cardano.DbSync.Era
   ( GenesisEra (..)
-  , genesisEnv
   , genesisNetworkMagic
   , genesisProtocolMagic
   , insertValidateGenesisDist
@@ -26,13 +25,11 @@ import           Cardano.DbSync.Config
 import qualified Cardano.DbSync.Era.Byron.Genesis as Byron
 import qualified Cardano.DbSync.Era.Shelley.Genesis as Shelley
 import           Cardano.DbSync.Error
-import           Cardano.DbSync.Types
 
 import           Cardano.Config.Shelley.Orphans ()
 
-import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Except (ExceptT)
-import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, newExceptT, runExceptT)
+import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, newExceptT)
 
 import qualified Data.Aeson as Aeson
 import qualified Data.Text as Text
@@ -47,27 +44,25 @@ import qualified Shelley.Spec.Ledger.Genesis as Shelley
 data GenesisEra
   = GenesisByron !Byron.Config
   | GenesisShelley !(ShelleyGenesis TPraosStandardCrypto)
-  -- | GenesisCardano !Byron.Config !(ShelleyGenesis TPraosStandardCrypto)
+  | GenesisCardano !Byron.Config !(ShelleyGenesis TPraosStandardCrypto)
 
-
-genesisEnv :: GenesisEra -> DbSyncEnv
-genesisEnv ge =
-  case ge of
-    GenesisByron _ -> ByronEnv
-    GenesisShelley sCfg -> ShelleyEnv $ Shelley.sgNetworkId sCfg
 
 genesisNetworkMagic :: GenesisEra -> NetworkMagic
 genesisNetworkMagic ge =
   case ge of
     GenesisByron bg ->
       NetworkMagic $ unProtocolMagicId (Byron.configProtocolMagicId bg)
-    GenesisShelley sg -> NetworkMagic $ Shelley.sgNetworkMagic sg
+    GenesisShelley sg ->
+      NetworkMagic $ Shelley.sgNetworkMagic sg
+    GenesisCardano _bg sg ->
+      NetworkMagic $ Shelley.sgNetworkMagic sg
 
 genesisProtocolMagic :: GenesisEra -> ProtocolMagic
 genesisProtocolMagic ge =
     case ge of
       GenesisByron bg -> Byron.configProtocolMagic bg
       GenesisShelley sg -> mkShelleyProtocolMagic sg
+      GenesisCardano _ sg -> mkShelleyProtocolMagic sg
   where
     mkShelleyProtocolMagic :: ShelleyGenesis TPraosStandardCrypto -> ProtocolMagic
     mkShelleyProtocolMagic sg =
@@ -88,18 +83,23 @@ insertValidateGenesisDist trce nname genCfg =
       Byron.insertValidateGenesisDist trce (unNetworkName nname) bCfg
     GenesisShelley sCfg ->
       Shelley.insertValidateGenesisDist trce (unNetworkName nname) sCfg
+    GenesisCardano bCfg sCfg -> do
+      Byron.insertValidateGenesisDist trce (unNetworkName nname) bCfg
+      Shelley.insertValidateGenesisDist trce (unNetworkName nname) sCfg
 
 -- -----------------------------------------------------------------------------
 
 readGenesisConfig
         :: DbSyncNodeConfig
         -> ExceptT DbSyncNodeError IO GenesisEra
-readGenesisConfig enc = do
-  res <- liftIO $ runExceptT (readByronGenesisConfig enc)
-  case res of
-    Right gb -> pure $ GenesisByron gb
-    Left _ -> GenesisShelley <$> readShelleyGenesisConfig enc
-
+readGenesisConfig enc =
+  case encProtocol enc of
+    DbSyncProtocolByron ->
+      GenesisByron <$> readByronGenesisConfig enc
+    DbSyncProtocolShelley ->
+      GenesisShelley <$> readShelleyGenesisConfig enc
+    DbSyncProtocolCardano ->
+      GenesisCardano <$> readByronGenesisConfig enc <*> readShelleyGenesisConfig enc
 
 readByronGenesisConfig
         :: DbSyncNodeConfig
