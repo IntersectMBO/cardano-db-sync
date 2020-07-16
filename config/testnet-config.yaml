@@ -2,9 +2,18 @@
 
 NetworkName: testnet
 RequiresNetworkMagic: RequiresMagic
-GenesisHash: 96fceff972c2c06bd3bb5243c39215333be6d56aaf4823073dca31afe5038471
 EnableLogMetrics: False
 EnableLogging: True
+
+Protocol: Byron
+
+RequiresNetworkMagic: RequiresMagic
+
+ByronGenesisFile: ../cardano-node/configuration/defaults/byron-testnet/genesis.json
+ByronGenesisHash: 96fceff972c2c06bd3bb5243c39215333be6d56aaf4823073dca31afe5038471
+
+ShelleyGenesisFile: not/applicable
+ShelleyGenesisHash: not/applicable
 
 # ------------------------------------------------------------------------------
 # Logging configuration follows.

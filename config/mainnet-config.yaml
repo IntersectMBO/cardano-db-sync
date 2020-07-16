@@ -1,10 +1,18 @@
 # Explorer DB Node configuration
 
 NetworkName: mainnet
-RequiresNetworkMagic: RequiresNoMagic
-GenesisHash: 5f20df933584822601f9e3f8c024eb5eb252fe8cefb24d1317dc3d432e940ebb
 EnableLogMetrics: False
 EnableLogging: True
+
+Protocol: Byron
+
+RequiresNetworkMagic: RequiresNoMagic
+
+ByronGenesisFile: ../cardano-node/mainnet-genesis.json
+ByronGenesisHash: 5f20df933584822601f9e3f8c024eb5eb252fe8cefb24d1317dc3d432e940ebb
+
+ShelleyGenesisFile: not/applicable
+ShelleyGenesisHash: not/applicable
 
 # ------------------------------------------------------------------------------
 # Logging configuration follows.
