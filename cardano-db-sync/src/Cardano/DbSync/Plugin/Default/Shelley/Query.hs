@@ -54,4 +54,4 @@ queryTxInputSum txins =
   where
     queryTxInputValue :: MonadIO m => ShelleyTxIn -> ReaderT SqlBackend m Word64
     queryTxInputValue (Shelley.TxIn (Shelley.TxId hash) index) =
-      fromRight 0 <$> queryTxOutValue (Crypto.getHash hash, fromIntegral index)
+      fromRight 0 <$> queryTxOutValue (Crypto.hashToBytes hash, fromIntegral index)

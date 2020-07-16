@@ -24,8 +24,6 @@ module Cardano.DbSync
   , runDbSyncNode
   ) where
 
-import           Cardano.Binary (unAnnotated)
-
 import           Control.Tracer (Tracer)
 
 import qualified Cardano.BM.Setup as Logging
@@ -133,7 +131,7 @@ runDbSyncNode plugin enp =
 
     orDie renderDbSyncNodeError $ do
       genCfg <- readGenesisConfig enc
-      logProtocolMagic trce $ genesisProtocolMagic genCfg
+      logProtocolMagicId trce $ genesisProtocolMagicId genCfg
 
       -- If the DB is empty it will be inserted, otherwise it will be validated (to make
       -- sure we are on the right chain).
@@ -375,9 +373,8 @@ chainSyncClient trce metrics latestPoints currentTip actionQueue =
                 pure $ finish newTip tip
         }
 
-logProtocolMagic :: Trace IO Text -> Crypto.ProtocolMagic -> ExceptT DbSyncNodeError IO ()
-logProtocolMagic tracer pm =
+logProtocolMagicId :: Trace IO Text -> Crypto.ProtocolMagicId -> ExceptT DbSyncNodeError IO ()
+logProtocolMagicId tracer pm =
   liftIO . logInfo tracer $ mconcat
-    [ "NetworkMagic: ", textShow (Crypto.getRequiresNetworkMagic pm), " "
-    , textShow (Crypto.unProtocolMagicId . unAnnotated $ Crypto.getAProtocolMagicId pm)
+    [ "NetworkMagic: ", textShow (Crypto.unProtocolMagicId pm)
     ]

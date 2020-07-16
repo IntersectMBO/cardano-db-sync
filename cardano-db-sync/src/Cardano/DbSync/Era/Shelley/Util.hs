@@ -29,7 +29,6 @@ module Cardano.DbSync.Era.Shelley.Util
   , txMirCertificates
   , txPoolCertificates
   , txDelegationCerts
-  , unCoin
   , unHeaderHash
   , unKeyHashBS
   , unTxHash
@@ -83,7 +82,7 @@ blockPrevHash :: ShelleyBlock -> ByteString
 blockPrevHash blk =
   case Shelley.bheaderPrev (Shelley.bhbody . Shelley.bheader $ Shelley.shelleyBlockRaw blk) of
     Shelley.GenesisHash -> fakeGenesisHash
-    Shelley.BlockHash h -> Crypto.getHash $ Shelley.unHashHeader h
+    Shelley.BlockHash h -> Crypto.hashToBytes $ Shelley.unHashHeader h
 
 blockProtoVersion :: Shelley.BHBody TPraosStandardCrypto -> Text
 blockProtoVersion = Text.pack . show . Shelley.bprotver
@@ -161,10 +160,10 @@ txDelegationCerts txBody =
         _otherwise -> Nothing
 
 txFee :: ShelleyTx -> Word64
-txFee = unCoin . Shelley._txfee . Shelley._body
+txFee = fromIntegral . unCoin . Shelley._txfee . Shelley._body
 
 txHash :: ShelleyTx -> ByteString
-txHash = Crypto.getHash . Shelley.hashTxBody . Shelley._body
+txHash = Crypto.hashToBytes . Shelley.hashTxBody . Shelley._body
 
 txInputList :: ShelleyTx -> [ShelleyTxIn]
 txInputList = toList . Shelley._inputs . Shelley._body
@@ -199,22 +198,19 @@ txOutputSum tx =
     foldl' (+) 0 $ map outValue (Shelley._outputs $ Shelley._body tx)
   where
     outValue :: ShelleyTxOut -> Word64
-    outValue (Shelley.TxOut _ coin) = unCoin coin
-
-unCoin :: Coin -> Word64
-unCoin (Coin c) = fromIntegral c
+    outValue (Shelley.TxOut _ coin) = fromIntegral $ unCoin coin
 
 unHeaderHash :: ShelleyHash -> ByteString
-unHeaderHash = Crypto.getHash . Shelley.unHashHeader . Shelley.unShelleyHash
+unHeaderHash = Crypto.hashToBytes . Shelley.unHashHeader . Shelley.unShelleyHash
 
 unKeyHash :: Shelley.KeyHash d crypto -> Crypto.Hash (Shelley.ADDRHASH crypto) (DSIGN.VerKeyDSIGN (Shelley.DSIGN crypto))
 unKeyHash (Shelley.KeyHash x) = x
 
 unKeyHashBS :: Shelley.KeyHash d crypto -> ByteString
-unKeyHashBS kh = Crypto.getHash $ unKeyHash kh
+unKeyHashBS kh = Crypto.hashToBytes $ unKeyHash kh
 
 unTxHash :: ShelleyTxId -> ByteString
-unTxHash (Shelley.TxId txid) = Crypto.getHash txid
+unTxHash (Shelley.TxId txid) = Crypto.hashToBytes txid
 
 unTxSeq :: Shelley.Crypto c => Shelley.TxSeq c -> StrictSeq (Shelley.Tx c)
 unTxSeq (Shelley.TxSeq txSeq) = txSeq

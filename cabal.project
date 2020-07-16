@@ -7,9 +7,7 @@ packages:
   cardano-db-sync-extended
 
 constraints:
-    brick >= 0.47 && < 0.50
-  , dns < 4.0
-  , unliftio-core < 0.2.0.0
+    splitmix < 0.1
 
 package cardano-explorer-db
   ghc-options: -Wall -Werror -fwarn-redundant-constraints
@@ -17,10 +15,7 @@ package cardano-explorer-db
 package cardano-db-sync
   ghc-options: -Wall -Werror -fwarn-redundant-constraints
 
-package cardano-explorer-webapi
-  ghc-options: -Wall -Werror -fwarn-redundant-constraints
-
-package cardano-tx-submit
+package cardano-db-sync-extended
   ghc-options: -Wall -Werror -fwarn-redundant-constraints
 
 -- ---------------------------------------------------------

@@ -140,7 +140,7 @@ insertTxOut _tracer txId (index, Shelley.TxOut addr value) =
               { DB.txOutTxId = txId
               , DB.txOutIndex = index
               , DB.txOutAddress = Text.decodeUtf8 $ Base16.encode (Shelley.serialiseAddr addr)
-              , DB.txOutValue = Shelley.unCoin value
+              , DB.txOutValue = fromIntegral $ Shelley.unCoin value
               }
 
 insertTxIn
@@ -186,7 +186,7 @@ insertPoolRegister tracer txId params = do
             Nothing -> pure Nothing
   rewardId <- insertStakeAddress $ Shelley.serialiseRewardAcnt (Shelley._poolRAcnt params)
 
-  when (Shelley.unCoin (Shelley._poolPledge params) > maxLovelace) $
+  when (fromIntegral (Shelley.unCoin $ Shelley._poolPledge params) > maxLovelace) $
     liftIO . logError tracer $
       mconcat
         [ "Bad pledge amount: ", textShow (Shelley.unCoin $ Shelley._poolPledge params)
@@ -197,11 +197,11 @@ insertPoolRegister tracer txId params = do
   poolUpdateId <- lift . DB.insertPoolUpdate $
                     DB.PoolUpdate
                       { DB.poolUpdateHashId = poolHashId
-                      , DB.poolUpdatePledge = Shelley.unCoin $ Shelley._poolPledge params
+                      , DB.poolUpdatePledge = fromIntegral $ Shelley.unCoin (Shelley._poolPledge params)
                       , DB.poolUpdateRewardAddrId = rewardId
                       , DB.poolUpdateMeta = mdId
                       , DB.poolUpdateMargin = realToFrac $ Shelley.intervalValue (Shelley._poolMargin params)
-                      , DB.poolUpdateFixedCost = Shelley.unCoin (Shelley._poolCost params)
+                      , DB.poolUpdateFixedCost = fromIntegral $ Shelley.unCoin (Shelley._poolCost params)
                       , DB.poolUpdateRegisteredTxId = txId
                       }
 
@@ -325,7 +325,7 @@ insertMirCert tracer env txId mcert = do
         DB.Reward
           { DB.rewardAddrId = addrId
           , DB.rewardTxId = txId
-          , DB.rewardAmount = Shelley.unCoin coin
+          , DB.rewardAmount = fromIntegral $ Shelley.unCoin coin
           }
 
     insertMirTreasury
@@ -347,7 +347,7 @@ insertWithdrawals _tracer txId (account, coin) = do
     DB.Withdrawal
       { DB.withdrawalAddrId = addrId
       , DB.withdrawalTxId = txId
-      , DB.withdrawalAmount = Shelley.unCoin coin
+      , DB.withdrawalAmount = fromIntegral $ Shelley.unCoin coin
       }
 
 insertPoolRelay

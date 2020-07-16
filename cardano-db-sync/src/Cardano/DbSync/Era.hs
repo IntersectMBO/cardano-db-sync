@@ -6,20 +6,18 @@
 module Cardano.DbSync.Era
   ( GenesisEra (..)
   , genesisNetworkMagic
-  , genesisProtocolMagic
+  , genesisProtocolMagicId
   , insertValidateGenesisDist
   , readByronGenesisConfig
   , readGenesisConfig
   , readShelleyGenesisConfig
   ) where
 
-import           Cardano.Binary (Annotated (..))
 import           Cardano.BM.Data.Trace (Trace)
 
 import qualified Cardano.Chain.Genesis as Byron
 import           Cardano.Crypto (decodeAbstractHash)
-import           Cardano.Crypto.ProtocolMagic (AProtocolMagic (..), ProtocolMagic,
-                    ProtocolMagicId (..), RequiresNetworkMagic (..))
+import           Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 
 import           Cardano.DbSync.Config
 import qualified Cardano.DbSync.Era.Byron.Genesis as Byron
@@ -36,7 +34,6 @@ import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
 import           Ouroboros.Network.Magic (NetworkMagic (..))
 
-import           Shelley.Spec.Ledger.BaseTypes (Network (..))
 import qualified Shelley.Spec.Ledger.Genesis as Shelley
 
 data GenesisEra
@@ -55,22 +52,15 @@ genesisNetworkMagic ge =
     GenesisCardano _bg sg ->
       NetworkMagic $ Shelley.sgNetworkMagic sg
 
-genesisProtocolMagic :: GenesisEra -> ProtocolMagic
-genesisProtocolMagic ge =
+genesisProtocolMagicId :: GenesisEra -> ProtocolMagicId
+genesisProtocolMagicId ge =
     case ge of
-      GenesisByron bg -> Byron.configProtocolMagic bg
-      GenesisShelley sg -> mkShelleyProtocolMagic sg
-      GenesisCardano _ sg -> mkShelleyProtocolMagic sg
+      GenesisByron bg -> Byron.configProtocolMagicId bg
+      GenesisShelley sg -> shelleyProtocolMagicId sg
+      GenesisCardano _ sg -> shelleyProtocolMagicId sg
   where
-    mkShelleyProtocolMagic :: ShelleyGenesis TPraosStandardCrypto -> ProtocolMagic
-    mkShelleyProtocolMagic sg =
-      AProtocolMagic
-        { getAProtocolMagicId = Annotated (Shelley.sgProtocolMagicId sg) ()
-        , getRequiresNetworkMagic =
-            if Shelley.sgNetworkId sg == Mainnet
-              then RequiresNoMagic
-              else RequiresMagic
-        }
+    shelleyProtocolMagicId :: ShelleyGenesis TPraosStandardCrypto -> ProtocolMagicId
+    shelleyProtocolMagicId sg = ProtocolMagicId (Shelley.sgNetworkMagic sg)
 
 insertValidateGenesisDist
         :: Trace IO Text.Text -> NetworkName -> GenesisEra
