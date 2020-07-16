@@ -132,7 +132,7 @@ runDbSyncNode plugin enp =
       Nothing -> pure ()
 
     orDie renderDbSyncNodeError $ do
-      genCfg <- readGenesisConfig enp enc
+      genCfg <- readGenesisConfig enc
       logProtocolMagic trce $ genesisProtocolMagic genCfg
 
       -- If the DB is empty it will be inserted, otherwise it will be validated (to make

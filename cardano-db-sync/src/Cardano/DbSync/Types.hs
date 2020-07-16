@@ -5,7 +5,6 @@ module Cardano.DbSync.Types
   , ConfigFile (..)
   , DbSyncEnv (..)
   , DbSyncNodeParams (..)
-  , GenesisFile (..)
   , ShelleyAddress
   , ShelleyBlock
   , ShelleyDCert
@@ -60,7 +59,6 @@ newtype ConfigFile = ConfigFile
 -- | The product type of all command line arguments
 data DbSyncNodeParams = DbSyncNodeParams
   { enpConfigFile :: !ConfigFile
-  , enpGenesisFile :: !GenesisFile
   , enpSocketPath :: !SocketPath
   , enpMigrationDir :: !MigrationDir
   , enpMaybeRollback :: !(Maybe SlotNo)
@@ -69,10 +67,6 @@ data DbSyncNodeParams = DbSyncNodeParams
 data DbSyncEnv
   = ByronEnv
   | ShelleyEnv !Shelley.Network
-
-newtype GenesisFile = GenesisFile
-  { unGenesisFile :: FilePath
-  }
 
 type ShelleyAddress = Shelley.Addr Shelley.TPraosStandardCrypto
 type ShelleyBlock = Shelley.ShelleyBlock Shelley.TPraosStandardCrypto

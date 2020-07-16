@@ -4,7 +4,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.DbSync.Config
-  ( DbSyncNodeConfig
+  ( DbSyncProtocol (..)
+  , DbSyncNodeConfig
+  , GenesisFile (..)
   , GenesisHash (..)
   , GenDbSyncNodeConfig (..)
   , NetworkName (..)
@@ -20,7 +22,7 @@ import           Cardano.Crypto (RequiresNetworkMagic (..))
 import           Cardano.Prelude
 
 import           Data.Aeson (FromJSON (..), Object, Value (..), (.:))
-import           Data.Aeson.Types (Parser)
+import           Data.Aeson.Types (Parser, typeMismatch)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Char8 as BS
 import           Data.Text (Text)
@@ -29,15 +31,28 @@ import qualified Data.Yaml as Yaml
 
 import           Cardano.DbSync.Util
 
+data DbSyncProtocol
+  = DbSyncProtocolByron
+  | DbSyncProtocolShelley
+  | DbSyncProtocolCardano
+
 type DbSyncNodeConfig = GenDbSyncNodeConfig Logging.Configuration
 
 data GenDbSyncNodeConfig a = GenDbSyncNodeConfig
   { encNetworkName :: !NetworkName
   , encLoggingConfig :: !a
-  , encGenesisHash :: !GenesisHash
+  , encProtocol :: !DbSyncProtocol
+  , encByronGenesisFile :: !GenesisFile
+  , encByronGenesisHash :: !GenesisHash
+  , encShelleyGenesisFile :: !GenesisFile
+  , encShelleyGenesisHash :: !GenesisHash
   , encEnableLogging :: !Bool
   , encEnableMetrics :: !Bool
   , encRequiresNetworkMagic :: !RequiresNetworkMagic
+  }
+
+newtype GenesisFile = GenesisFile
+  { unGenesisFile :: FilePath
   }
 
 newtype GenesisHash = GenesisHash
@@ -77,7 +92,19 @@ parseGenDbSyncNodeConfig o =
   GenDbSyncNodeConfig
     <$> fmap NetworkName (o .: "NetworkName")
     <*> parseJSON (Object o)
-    <*> fmap GenesisHash (o .: "GenesisHash")
+    <*> o .: "Protocol"
+    <*> fmap GenesisFile (o .: "ByronGenesisFile")
+    <*> fmap GenesisHash (o .: "ByronGenesisHash")
+    <*> fmap GenesisFile (o .: "ShelleyGenesisFile")
+    <*> fmap GenesisHash (o .: "ShelleyGenesisHash")
     <*> o .: "EnableLogging"
     <*> o .: "EnableLogMetrics"
     <*> o .: "RequiresNetworkMagic"
+
+instance FromJSON DbSyncProtocol where
+  parseJSON o =
+    case o of
+      String "Byron" -> pure DbSyncProtocolByron
+      String "Shelley" -> pure DbSyncProtocolShelley
+      String "Cardano" -> pure DbSyncProtocolCardano
+      x -> typeMismatch "Protocol" x

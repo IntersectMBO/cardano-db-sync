@@ -92,29 +92,29 @@ insertValidateGenesisDist trce nname genCfg =
 -- -----------------------------------------------------------------------------
 
 readGenesisConfig
-        :: DbSyncNodeParams -> DbSyncNodeConfig
+        :: DbSyncNodeConfig
         -> ExceptT DbSyncNodeError IO GenesisEra
-readGenesisConfig enp enc = do
-  res <- liftIO $ runExceptT (readByronGenesisConfig enp enc)
+readGenesisConfig enc = do
+  res <- liftIO $ runExceptT (readByronGenesisConfig enc)
   case res of
     Right gb -> pure $ GenesisByron gb
-    Left _ -> GenesisShelley <$> readShelleyGenesisConfig enp enc
+    Left _ -> GenesisShelley <$> readShelleyGenesisConfig enc
 
 
 readByronGenesisConfig
-        :: DbSyncNodeParams -> DbSyncNodeConfig
+        :: DbSyncNodeConfig
         -> ExceptT DbSyncNodeError IO Byron.Config
-readByronGenesisConfig enp enc = do
-  let file = unGenesisFile $ enpGenesisFile enp
+readByronGenesisConfig enc = do
+  let file = unGenesisFile $ encByronGenesisFile enc
   genHash <- firstExceptT NEError
-                . hoistEither $ decodeAbstractHash (unGenesisHash $ encGenesisHash enc)
+                . hoistEither $ decodeAbstractHash (unGenesisHash $ encByronGenesisHash enc)
   firstExceptT (NEByronConfig file)
                 $ Byron.mkConfigFromFile (encRequiresNetworkMagic enc) file genHash
 
 readShelleyGenesisConfig
-        :: DbSyncNodeParams -> DbSyncNodeConfig
+        :: DbSyncNodeConfig
         -> ExceptT DbSyncNodeError IO (ShelleyGenesis TPraosStandardCrypto)
-readShelleyGenesisConfig enp _enc = do
-  let file = unGenesisFile $ enpGenesisFile enp
+readShelleyGenesisConfig enc = do
+  let file = unGenesisFile $ encShelleyGenesisFile enc
   firstExceptT (NEShelleyConfig file . Text.pack)
     . newExceptT $ Aeson.eitherDecodeFileStrict' file
