@@ -76,7 +76,7 @@ extra-deps:
       - test
 
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: efa4b5ecd7f0a13124616b12679cd42517cd905a
+    commit: df2696ad022f35a510a5295723e073ddd3c41532
     subdirs:
       - contra-tracer
       - iohk-monitoring
@@ -88,7 +88,7 @@ extra-deps:
       - tracer-transformers
 
   - git: https://github.com/input-output-hk/cardano-base
-    commit: 5e0b8bc8c7862be12da6989440f8644ba7c1e1cf
+    commit: 7d795c3040ea7785812efa1c97864bbb41b15d3e
     subdirs:
       - binary
       - cardano-crypto-praos
@@ -100,7 +100,7 @@ extra-deps:
     commit: 26d35ad52fe9ade3391532dbfeb2f416f07650bc
 
   - git: https://github.com/input-output-hk/cardano-ledger-specs
-    commit: 12b13f390d64df6af6054b0d33bb3767756da041
+    commit: 550a70b9ff83c9e9ddbcb7f7b49ee93161bb29ed
     subdirs:
       - byron/crypto
       - byron/crypto/test
@@ -114,7 +114,7 @@ extra-deps:
       - shelley/chain-and-ledger/executable-spec/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: 90638814e7da6d44a92071a40dce982a70b566bf
+    commit: 17d5199fd4415a0258c22982a099744adbfd2489
     subdirs:
       - cardano-client
       - io-sim
@@ -135,7 +135,7 @@ extra-deps:
       - ouroboros-consensus/ouroboros-consensus-test-infra
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: 8c72fc00cb75b7e7a2c9423ba50c639f6236c88b
+    commit: 1eeecee0e6f2e1892a375959fe778347165855b3
     subdirs:
       - cardano-config
 

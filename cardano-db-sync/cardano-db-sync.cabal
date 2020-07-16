@@ -56,13 +56,12 @@ library
                         Cardano.DbSync.Era.Shelley.Genesis
 
                         Cardano.DbSync.Plugin.Default.Insert
-                        
+
                         Cardano.DbSync.Plugin.Default.Byron.Insert
                         Cardano.DbSync.Plugin.Default.Byron.Rollback
                         Cardano.DbSync.Plugin.Default.Shelley.Insert
                         Cardano.DbSync.Plugin.Default.Shelley.Query
                         Cardano.DbSync.Plugin.Default.Shelley.Rollback
-                        
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , aeson
