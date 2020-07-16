@@ -132,7 +132,7 @@ runDbSyncNode plugin enp =
       Nothing -> pure ()
 
     orDie renderDbSyncNodeError $ do
-      genCfg <- readGenesisConfig enp enc
+      genCfg <- readGenesisConfig enc
       logProtocolMagic trce $ genesisProtocolMagic genCfg
 
       -- If the DB is empty it will be inserted, otherwise it will be validated (to make
@@ -150,6 +150,8 @@ runDbSyncNode plugin enp =
           GenesisShelley sCfg ->
             runDbSyncNodeNodeClient (ShelleyEnv $ Shelley.sgNetworkId sCfg)
                 iomgr trce plugin shelleyCodecConfig networkMagic (enpSocketPath enp)
+          GenesisCardano _bCfg _sCfg ->
+            panic "Cardano.DbSync.runDbSyncNode: GenesisCardano"
 
 
 shelleyCodecConfig :: CodecConfig ShelleyBlock

@@ -3,8 +3,8 @@
 import           Cardano.Prelude
 
 import           Cardano.Db (MigrationDir (..))
-import           Cardano.DbSync (ConfigFile (..), DbSyncNodeParams (..), GenesisFile (..),
-                    SocketPath (..), runDbSyncNode)
+import           Cardano.DbSync (ConfigFile (..), DbSyncNodeParams (..), SocketPath (..),
+                    runDbSyncNode)
 import           Cardano.DbSync.Plugin.Extended (extendedDbSyncNodePlugin)
 
 import           Cardano.Slotting.Slot (SlotNo (..))
@@ -30,7 +30,6 @@ pCommandLine :: Parser DbSyncNodeParams
 pCommandLine =
   DbSyncNodeParams
     <$> pConfigFile
-    <*> pGenesisFile
     <*> pSocketPath
     <*> pMigrationDir
     <*> optional pSlotNo
@@ -40,15 +39,6 @@ pConfigFile =
   ConfigFile <$> Opt.strOption
     ( Opt.long "config"
     <> Opt.help "Path to the db-sync node config file"
-    <> Opt.completer (Opt.bashCompleter "file")
-    <> Opt.metavar "FILEPATH"
-    )
-
-pGenesisFile :: Parser GenesisFile
-pGenesisFile =
-  GenesisFile <$> Opt.strOption
-    ( Opt.long "genesis-file"
-    <> Opt.help "Path to the genesis JSON file"
     <> Opt.completer (Opt.bashCompleter "file")
     <> Opt.metavar "FILEPATH"
     )

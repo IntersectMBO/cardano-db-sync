@@ -39,7 +39,6 @@ nix-build -A cardano-db-sync -o db-sync-node
 scripts/postgresql-setup.sh --createdb
 PGPASSFILE=config/pgpass db-sync-node/bin/cardano-db-sync \
     --config config/mainnet-config.yaml \
-    --genesis-file ../cardano-node/configuration/mainnet-genesis.json \
     --socket-path ../cardano-node/state-node-mainnet/node.socket \
     --schema-dir schema/
 ```
@@ -61,13 +60,11 @@ and then the two `db-sync` process run as:
 ```
 PGPASSFILE=config/pgpass ./cardano-db-sync-extended-exe \
     --config config/mainnet-config.yaml \
-    --genesis-file ../cardano-node/mainnet-genesis.json \
     --socket-path ../cardano-node/state-node-mainnet/node.socket --schema-dir schema/
 ```
 and
 ```
 PGPASSFILE=config/pgpass-testnet ./cardano-db-sync-extended-exe \
     --config config/testnet-config.yaml \
-    --genesis-file ../cardano-node/configuration/mainnet-ci/testnet-genesis.json \
     --socket-path ../cardano-node/state-node-testnet/node.socket --schema-dir schema/
 ```
