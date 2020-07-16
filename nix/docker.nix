@@ -5,32 +5,29 @@
 #
 #   docker load -i $(nix-build -A dockerImage --no-out-link)
 #
-#  cardano-db-sync and cardano-db-sync-extended are interchangeable in the following:
-#
-#  To launch with provided mainnet or testnet configuration
+# To launch with pre-loaded configuration, using the NETWORK env.
 #
 #    docker run \
 #      -v $PATH_TO/node-ipc:/node-ipc \
 #      -v $PATH_TO/pgpass:/configuration/pgpass \
 #      -e NETWORK=mainnet|testnet \
 #
-#  To launch the extended service:
+# Provide an (almost*) complete command otherwise:
 #
-#    docker run \
-#      -v $PATH_TO/node-ipc:/node-ipc \
-#      -v $PATH_TO/pgpass:/configuration/pgpass \
-#      -e NETWORK=mainnet|testnet \
-#      -e EXTENDED=true
+#   docker run \
+#     -v $PWD/config/mainnet-config:/configuration/configuration.yaml
+#     -v $PWD/node-ipc:/node-ipc \
+#     -v $PWD/config/pgpass:/pgpass \
+#     -e PGPASSFILE=/pgpass
+#     inputoutput/cardano-db-sync run \
+#      --config /configuration/configuration.yaml \
+#      --socket-path /node-ipc/node.socket \
 #
-#  To launch with custom configuration, mount a dir containing configuration.yaml, genesis.json,
-#  and pgpass into /configuration
+#   * --schema-dir is set within the script
 #
-#    docker run \
-#      -v $PATH_TO/node-ipc:/node-ipc \
-#      -v $PATH_TO/configuration:/configuration \
-#      inputoutput/cardano-db-sync:<TAG>
-#
+#  To launch the extended service include -e EXTENDED=true
 #  See the docker-compose.yml for demonstration of using Docker secrets instead of mounting a pgpass
+#
 #
 ############################################################################
 
@@ -140,7 +137,7 @@ let
       export PGPASSFILE=/configuration/pgpass
       # set up /tmp (override with TMPDIR variable)
       mkdir -p -m 1777 tmp
-      if [[ -f /configuration/configuration.yaml ]]; then
+      if [[ -z "$NETWORK" ]]; then
         echo "Connecting to network specified in configuration.yaml"
         if [[ ! -z "''${EXTENDED}" ]] && [[ "''${EXTENDED}" == true ]]
         then
@@ -149,14 +146,10 @@ let
           DBSYNC=${cardano-db-sync}/bin/cardano-db-sync
         fi
          exec $DBSYNC \
-           --socket-path /node-ipc/node.socket \
-           --genesis-file /configuration/genesis.json \
-           --config /configuration/configuration.yaml \
-           --schema-dir ${../schema}
+           --schema-dir ${../schema} $@
       ${clusterStatements}
       else
-        echo "Please set a NETWORK environment variable to one of: mainnet/testnet"
-        echo "Or mount a /configuration volume containing: configuration.yaml, genesis.json, pgpass"
+        echo "Managed configuration for network "$NETWORK" does not exist"
       fi
     '';
   in dockerTools.buildImage {
