@@ -28,6 +28,11 @@ The database schema is highly normalised which helps prevent data inconsistencie
 with the use of foreign keys from one table to another). More user friendly database queries can be
 implemented using [Postgres Views][PostgresView] to implement joins between tables.
 
+## Troubleshooting
+
+If you have any issues with this project, consult the [troubleshooting][troubleshooting] page for
+possible solutions.
+
 ## Further Reading
 
 * [BuildingRunning][BuildingRunning]: Building and running the db-sync node.
@@ -42,3 +47,4 @@ implemented using [Postgres Views][PostgresView] to implement joins between tabl
 [PostgresView]: https://www.postgresql.org/docs/current/sql-createview.html
 [Schema Management]: doc/interesting-queries.md
 [Validation]: doc/validation.md
+[PostgresView]: doc/troubleshooting.md
