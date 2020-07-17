@@ -48,7 +48,7 @@ let
       scripts = scripts.override {
         customConfig = customConfig'';
       };
-      extendedScripts = self.scripts.override {
+      extendedScripts = scripts.override {
         customConfig = mkMerge [
           customConfig''
           { services.cardano-db-sync = {
@@ -66,7 +66,7 @@ let
 
     checks = recurseIntoAttrs {
       # `checks.tests` collect results of executing the tests:
-      tests = collectChecks self.haskellPackages;
+      tests = collectChecks haskellPackages;
     };
 
     shell = import ./shell.nix {
