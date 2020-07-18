@@ -100,7 +100,7 @@ extra-deps:
     commit: 26d35ad52fe9ade3391532dbfeb2f416f07650bc
 
   - git: https://github.com/input-output-hk/cardano-ledger-specs
-    commit: 550a70b9ff83c9e9ddbcb7f7b49ee93161bb29ed
+    commit: 9dc2eab127849ad7b7cada13c6681dda540a88fe
     subdirs:
       - byron/crypto
       - byron/crypto/test
@@ -114,7 +114,7 @@ extra-deps:
       - shelley/chain-and-ledger/executable-spec/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: 17d5199fd4415a0258c22982a099744adbfd2489
+    commit: fb473dca5880893d6070db2e2efc80d483ca930d
     subdirs:
       - cardano-client
       - io-sim
@@ -135,7 +135,7 @@ extra-deps:
       - ouroboros-consensus/ouroboros-consensus-test-infra
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: 1eeecee0e6f2e1892a375959fe778347165855b3
+    commit: e28c1d37832af9c4ec50bb5c64aa83c37dc4aa89
     subdirs:
       - cardano-config
 
