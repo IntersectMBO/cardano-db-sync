@@ -54,19 +54,17 @@ library
 
   other-modules:        Cardano.DbSync.Era.Byron.Genesis
                         Cardano.DbSync.Era.Shelley.Genesis
-
-                        Cardano.DbSync.Plugin.Default.Insert
-
                         Cardano.DbSync.Plugin.Default.Byron.Insert
-                        Cardano.DbSync.Plugin.Default.Byron.Rollback
+                        Cardano.DbSync.Plugin.Default.Insert
                         Cardano.DbSync.Plugin.Default.Shelley.Insert
                         Cardano.DbSync.Plugin.Default.Shelley.Query
-                        Cardano.DbSync.Plugin.Default.Shelley.Rollback
+                        Cardano.DbSync.StateQuery
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , aeson
                       , base16-bytestring
                       , bytestring
+                      , cardano-api
                       , cardano-binary
                       , cardano-client
                       , cardano-config

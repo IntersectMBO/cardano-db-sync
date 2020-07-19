@@ -38,8 +38,7 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
-import           Database.Persist.Class (updateWhere)
-import           Database.Persist.Sql (SqlBackend, (=.), (==.))
+import           Database.Persist.Sql (SqlBackend)
 
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.
@@ -60,16 +59,16 @@ insertValidateGenesisDist tracer networkName cfg = do
         Right bid -> validateGenesisDistribution tracer networkName cfg bid
         Left _ ->
           runExceptT $ do
-            liftIO $ logInfo tracer "Inserting Genesis distribution"
+            liftIO $ logInfo tracer "Inserting Byron Genesis distribution"
             count <- lift DB.queryBlockCount
             when (count > 0) $
               dbSyncNodeError "insertValidateGenesisDist: Genesis data mismatch."
-            void . lift $ DB.insertMeta $ DB.Meta
-                                    (Byron.unBlockCount $ Byron.configK cfg)
-                                    (Byron.configSlotDuration cfg)
-                                    (Byron.configStartTime cfg)
-                                    (10 * Byron.unBlockCount (Byron.configK cfg))
-                                    (Just networkName)
+            void . lift $ DB.insertMeta $
+                            DB.Meta
+                              { DB.metaStartTime = Byron.configStartTime cfg
+                              , DB.metaNetworkName = networkName
+                              }
+
             -- Insert an 'artificial' Genesis block (with a genesis specific slot leader). We
             -- need this block to attach the genesis distribution transactions to.
             -- It would be nice to not need this artificial block, but that would
@@ -110,38 +109,19 @@ validateGenesisDistribution tracer networkName cfg bid =
   runExceptT $ do
     meta <- liftLookupFail "validateGenesisDistribution" $ DB.queryMeta
 
-    when (DB.metaProtocolConst meta /= Byron.unBlockCount (Byron.configK cfg)) $
-      dbSyncNodeError $ Text.concat
-            [ "Mismatch protocol constant. Config value "
-            , textShow (Byron.unBlockCount $ Byron.configK cfg)
-            , " does not match DB value of ", textShow (DB.metaProtocolConst meta)
-            ]
-
-    when (DB.metaSlotDuration meta /= Byron.configSlotDuration cfg) $
-      dbSyncNodeError $ Text.concat
-            [ "Mismatch slot duration time. Config value "
-            , textShow (Byron.configSlotDuration cfg)
-            , " does not match DB value of ", textShow (DB.metaSlotDuration meta)
-            ]
-
     when (DB.metaStartTime meta /= Byron.configStartTime cfg) $
       dbSyncNodeError $ Text.concat
             [ "Mismatch chain start time. Config value "
             , textShow (Byron.configStartTime cfg)
-            , " does not match DB value of ", textShow (Byron.configStartTime cfg)
+            , " does not match DB value of ", textShow (DB.metaStartTime meta)
             ]
 
-    case DB.metaNetworkName meta of
-      Nothing -> lift $ updateWhere
-                  [DB.MetaStartTime ==. Byron.configStartTime cfg]
-                  [DB.MetaNetworkName =. Just networkName]
-      Just name ->
-        when (name /= networkName) $
+    when (DB.metaNetworkName meta /= networkName) $
           dbSyncNodeError $ Text.concat
               [ "validateGenesisDistribution: Provided network name "
               , networkName
               , " does not match DB value "
-              , name
+              , DB.metaNetworkName meta
               ]
 
     txCount <- lift $ DB.queryBlockTxCount bid

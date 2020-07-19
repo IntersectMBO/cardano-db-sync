@@ -17,6 +17,7 @@ module Cardano.DbSync.Era.Shelley.Util
   , fakeGenesisHash
   , mkSlotLeader
   , pointToSlotHash
+  , renderAddress
   , renderHash
   , slotLeaderHash
   , slotNumber
@@ -43,6 +44,7 @@ import qualified Cardano.Crypto.KES.Class as KES
 import qualified Cardano.Crypto.VRF.Class as VRF
 
 import qualified Cardano.Db as Db
+import           Cardano.DbSync.Config
 import           Cardano.DbSync.Types
 
 import qualified Data.ByteString.Base16 as Base16
@@ -71,14 +73,14 @@ import qualified Shelley.Spec.Ledger.UTxO as Shelley
 blockBody :: Shelley.ShelleyBlock TPraosStandardCrypto -> Shelley.BHBody TPraosStandardCrypto
 blockBody = Shelley.bhbody . Shelley.bheader . Shelley.shelleyBlockRaw
 
-blockHash :: ShelleyBlock -> ByteString
+blockHash :: Shelley.ShelleyBlock TPraosStandardCrypto -> ByteString
 blockHash = unHeaderHash . Shelley.shelleyBlockHeaderHash
 
-blockNumber :: ShelleyBlock -> Word64
+blockNumber :: Shelley.ShelleyBlock TPraosStandardCrypto -> Word64
 blockNumber =
   unBlockNo . Shelley.bheaderBlockNo . blockBody
 
-blockPrevHash :: ShelleyBlock -> ByteString
+blockPrevHash :: Shelley.ShelleyBlock TPraosStandardCrypto -> ByteString
 blockPrevHash blk =
   case Shelley.bheaderPrev (Shelley.bhbody . Shelley.bheader $ Shelley.shelleyBlockRaw blk) of
     Shelley.GenesisHash -> fakeGenesisHash
@@ -87,13 +89,13 @@ blockPrevHash blk =
 blockProtoVersion :: Shelley.BHBody TPraosStandardCrypto -> Text
 blockProtoVersion = Text.pack . show . Shelley.bprotver
 
-blockSize :: ShelleyBlock -> Word64
+blockSize :: Shelley.ShelleyBlock TPraosStandardCrypto -> Word64
 blockSize = fromIntegral . Shelley.bBodySize . Shelley.bbody . Shelley.shelleyBlockRaw
 
-blockTxCount :: ShelleyBlock -> Word64
+blockTxCount :: Shelley.ShelleyBlock TPraosStandardCrypto -> Word64
 blockTxCount = fromIntegral . length . unTxSeq . Shelley.bbody . Shelley.shelleyBlockRaw
 
-blockTxs :: ShelleyBlock -> [ShelleyTx]
+blockTxs :: Shelley.ShelleyBlock TPraosStandardCrypto -> [ShelleyTx]
 blockTxs =
     txList . Shelley.bbody . Shelley.shelleyBlockRaw
   where
@@ -109,14 +111,14 @@ blockOpCert = KES.rawSerialiseVerKeyKES . Shelley.ocertVkHot . Shelley.bheaderOC
 blockVrfKey :: Shelley.BHBody TPraosStandardCrypto -> ByteString
 blockVrfKey = VRF.rawSerialiseVerKeyVRF . Shelley.bheaderVrfVk
 
-epochNumber :: ShelleyBlock -> Word64 -> Word64
+epochNumber :: Shelley.ShelleyBlock TPraosStandardCrypto -> Word64 -> Word64
 epochNumber blk slotsPerEpoch = slotNumber blk `div` slotsPerEpoch
 
 -- | This is both the Genesis Hash and the hash of the previous block.
 fakeGenesisHash :: ByteString
 fakeGenesisHash = BS.take 32 ("GenesisHash " <> BS.replicate 32 '\0')
 
-mkSlotLeader :: ShelleyBlock -> Db.SlotLeader
+mkSlotLeader :: Shelley.ShelleyBlock TPraosStandardCrypto -> Db.SlotLeader
 mkSlotLeader blk =
   let slHash = slotLeaderHash blk
       slName = "SlotLeader-" <> Text.decodeUtf8 (Base16.encode $ BS.take 8 slHash)
@@ -124,28 +126,32 @@ mkSlotLeader blk =
 
 
 -- | Convert from Ouroboros 'Point' to `Shelley' types.
-pointToSlotHash :: Point ShelleyBlock -> Maybe (SlotNo, ShelleyHash)
+pointToSlotHash :: Point (Shelley.ShelleyBlock TPraosStandardCrypto) -> Maybe (SlotNo, ShelleyHash)
 pointToSlotHash (Point x) =
   case x of
     Origin -> Nothing
     At blk -> Just (Point.blockPointSlot blk, Point.blockPointHash blk)
 
+renderAddress :: Shelley.Addr TPraosStandardCrypto -> Text
+renderAddress = Text.decodeUtf8 . Base16.encode . Shelley.serialiseAddr
+
 renderHash :: ShelleyHash -> Text
 renderHash = Text.decodeUtf8 . Base16.encode . unHeaderHash
 
-slotLeaderHash :: ShelleyBlock -> ByteString
+slotLeaderHash :: Shelley.ShelleyBlock TPraosStandardCrypto -> ByteString
 slotLeaderHash =
   DSIGN.rawSerialiseVerKeyDSIGN . unVKey . Shelley.bheaderVk . blockBody
 
-slotNumber :: ShelleyBlock -> Word64
+slotNumber :: Shelley.ShelleyBlock TPraosStandardCrypto -> Word64
 slotNumber = unSlotNo . Shelley.bheaderSlotNo . blockBody
 
 stakingCredHash :: DbSyncEnv -> ShelleyStakingCred -> ByteString
 stakingCredHash env cred =
   let network =
-        case env of
-          ByronEnv -> Shelley.Mainnet -- Should not happen
-          ShelleyEnv nw -> nw
+        case envProtocol env of
+          DbSyncProtocolByron -> Shelley.Mainnet -- Should not happen
+          DbSyncProtocolShelley -> envNetwork env
+          DbSyncProtocolCardano -> envNetwork env
   in Shelley.serialiseRewardAcnt $ Shelley.RewardAcnt network cred
 
 
@@ -207,7 +213,7 @@ unKeyHash :: Shelley.KeyHash d crypto -> Crypto.Hash (Shelley.ADDRHASH crypto) (
 unKeyHash (Shelley.KeyHash x) = x
 
 unKeyHashBS :: Shelley.KeyHash d crypto -> ByteString
-unKeyHashBS kh = Crypto.hashToBytes $ unKeyHash kh
+unKeyHashBS = Crypto.hashToBytes . unKeyHash
 
 unTxHash :: ShelleyTxId -> ByteString
 unTxHash (Shelley.TxId txid) = Crypto.hashToBytes txid

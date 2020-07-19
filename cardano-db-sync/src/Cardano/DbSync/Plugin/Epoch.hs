@@ -8,10 +8,10 @@ module Cardano.DbSync.Plugin.Epoch
   , epochPluginRollbackBlock
   ) where
 
-import           Cardano.BM.Trace (Trace, logError, logInfo)
+import           Cardano.BM.Trace (Trace, logInfo)
 
 import qualified Cardano.Chain.Block as Byron
-import           Cardano.Slotting.Slot (SlotNo (..))
+import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..))
 
 import           Control.Monad (void)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
@@ -21,7 +21,6 @@ import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.IORef (IORef, atomicWriteIORef, newIORef, readIORef)
 import           Data.Maybe (fromMaybe)
-import           Data.Time.Clock (diffUTCTime, getCurrentTime)
 import           Data.Text (Text)
 import           Data.Word (Word64)
 
@@ -35,8 +34,6 @@ import           Database.Persist.Sql (IsolationLevel (Serializable), SqlBackend
 import           Cardano.Db (EpochId, EntityField (..), listToMaybe)
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Error
-import qualified Cardano.DbSync.Era.Byron.Util as Byron
-import qualified Cardano.DbSync.Era.Shelley.Util as Shelley
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
@@ -57,12 +54,6 @@ import           System.IO.Unsafe (unsafePerformIO)
 epochPluginOnStartup :: Trace IO Text -> ReaderT SqlBackend (LoggingT IO) ()
 epochPluginOnStartup trce = do
     liftIO . logInfo trce $ "epochPluginOnStartup: Checking"
-    eMeta <- DB.queryMeta
-    case eMeta of
-      Left err ->
-        liftIO . logError trce $ "epochPluginInsertBlock: " <> renderDbSyncNodeError (NELookup "epochPluginInsertBlock" err)
-      Right meta ->
-        liftIO $ atomicWriteIORef slotsPerEpochVar (DB.metaSlotsPerEpoch meta)
     mlbe <- queryLatestEpochNo
     case mlbe of
       Nothing ->
@@ -71,37 +62,36 @@ epochPluginOnStartup trce = do
         let backOne = if lbe == 0 then 0 else lbe - 1
         liftIO $ atomicWriteIORef latestCachedEpochVar (Just backOne)
 
-epochPluginInsertBlock :: Trace IO Text -> DbSyncEnv -> CardanoBlockTip -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
+epochPluginInsertBlock :: Trace IO Text -> DbSyncEnv -> BlockDetails -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
 epochPluginInsertBlock trce _env blkTip = do
-  slotsPerEpoch <- liftIO $ readIORef slotsPerEpochVar
   case blkTip of
-    ByronBlockTip bblk _tip ->
+    ByronBlockDetails bblk details ->
       case byronBlockRaw bblk of
-        Byron.ABOBBoundary _ ->
+        Byron.ABOBBoundary {} ->
           -- For the OBFT era there are no boundary blocks so we ignore them even in
           -- the Ouroboros Classic era.
           pure $ Right ()
 
-        Byron.ABOBBlock blk ->
-          insertBlock trce (Byron.epochNumber blk slotsPerEpoch) (SlotNo $ Byron.slotNumber blk)
-    ShelleyBlockTip sblk _tip ->
-      insertBlock trce (Shelley.epochNumber sblk slotsPerEpoch) (SlotNo $ Shelley.slotNumber sblk)
+        Byron.ABOBBlock _blk ->
+          insertBlock trce details
+    ShelleyBlockDetails _sblk details ->
+      insertBlock trce details
 
 -- Nothing to be done here.
 -- Rollback will take place in the Default plugin and the epoch table will be recalculated.
-epochPluginRollbackBlock :: Trace IO Text -> CardanoPoint -> IO (Either DbSyncNodeError ())
+epochPluginRollbackBlock :: Trace IO Text -> SlotNo -> IO (Either DbSyncNodeError ())
 epochPluginRollbackBlock _ _ = pure $ Right ()
 
 -- -------------------------------------------------------------------------------------------------
 
 insertBlock
-    :: Trace IO Text
-    -> Word64 -> SlotNo
+    :: Trace IO Text -> SlotDetails
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-insertBlock trce epochNum tipSlot = do
+insertBlock trce details = do
   mLatestCachedEpoch <- liftIO $ readIORef latestCachedEpochVar
   let lastCachedEpoch = fromMaybe 0 mLatestCachedEpoch
-  estTipSlot <- queryEstimatedTipSlotNo trce
+      epochNum = unEpochNo (sdEpochNo details)
+  synced <- liftIO $ DB.isFullySynced (sdTime details)
 
   -- These cases are listed from the least likey to occur to the most
   -- likley to keep the logic sane.
@@ -110,17 +100,13 @@ insertBlock trce epochNum tipSlot = do
           updateEpochNum 0 trce
       | epochNum >= lastCachedEpoch + 2 ->
           updateEpochNum (lastCachedEpoch + 1) trce
-      | unSlotNo estTipSlot - unSlotNo tipSlot < 50 ->
+      | synced ->
           -- Following the chain very closely.
           updateEpochNum epochNum trce
       | otherwise ->
           pure $ Right ()
 
 -- -------------------------------------------------------------------------------------------------
-
-{-# NOINLINE slotsPerEpochVar #-}
-slotsPerEpochVar :: IORef Word64
-slotsPerEpochVar = unsafePerformIO $ newIORef 1 -- Gets updated later.
 
 {-# NOINLINE latestCachedEpochVar #-}
 latestCachedEpochVar :: IORef (Maybe Word64)
@@ -145,7 +131,7 @@ updateEpochNum epochNum trce = do
     insertEpoch :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either DbSyncNodeError ())
     insertEpoch = do
       eEpoch <- DB.queryCalcEpochEntry epochNum
-      liftIO . logInfo trce $ "epochPluginInsertBlock: Inserting row in epoch table for epoch " <> textShow epochNum
+      liftIO . logInfo trce $ "epochPluginInsertBlock: epoch " <> textShow epochNum
       case eEpoch of
         Left err -> pure $ Left (NELookup "updateEpochNum.insertEpoch" err)
         Right epoch -> do
@@ -158,7 +144,7 @@ updateEpochNum epochNum trce = do
 queryEpochId :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe EpochId)
 queryEpochId epochNum = do
   res <- select . from $ \ epoch -> do
-            where_ (epoch ^. EpochNo ==. val epochNum)
+            where_ (epoch ^. DB.EpochNo ==. val epochNum)
             pure $ (epoch ^. EpochId)
   pure $ unValue <$> (listToMaybe res)
 
@@ -166,22 +152,7 @@ queryEpochId epochNum = do
 queryLatestEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
 queryLatestEpochNo = do
   res <- select . from $ \ epoch -> do
-            orderBy [desc (epoch ^. EpochNo)]
+            orderBy [desc (epoch ^. DB.EpochNo)]
             limit 1
-            pure $ (epoch ^. EpochNo)
+            pure $ (epoch ^. DB.EpochNo)
   pure $ unValue <$> listToMaybe res
-
-queryEstimatedTipSlotNo :: MonadIO m => Trace IO Text -> ReaderT SqlBackend m SlotNo
-queryEstimatedTipSlotNo _trce = do
-  eMeta <- DB.queryMeta
-  liftIO $ do
-    case eMeta of
-      Left _ -> pure (SlotNo 0)
-      Right meta -> SlotNo <$> liftIO (calcSlotNo meta)
-  where
-    calcSlotNo :: DB.Meta -> IO Word64
-    calcSlotNo meta = do
-      currentTime <- getCurrentTime
-      pure $ floor (diffUTCTime currentTime (DB.metaStartTime meta)
-                    / (0.001 * fromIntegral (DB.metaSlotDuration meta)))
-

@@ -5,7 +5,8 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.DbSync.Util
-  ( liftedLogException
+  ( genericBlockSlotNo
+  , liftedLogException
   , logException
   , renderByteArray
   , textShow
@@ -17,6 +18,8 @@ import           Cardano.Prelude hiding (catch)
 
 import           Cardano.BM.Trace (Trace, logError)
 
+import           Cardano.Slotting.Slot (SlotNo (..))
+
 import           Control.Exception.Lifted (SomeException, catch)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
@@ -27,9 +30,24 @@ import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
+import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
+import           Ouroboros.Consensus.Cardano.Block (CardanoEras, HardForkBlock (..))
+import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
+import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
+
 import           Ouroboros.Network.Block (BlockNo (..), Tip, getTipBlockNo)
 import           Ouroboros.Network.Point (withOrigin)
 
+import qualified Shelley.Spec.Ledger.BlockChain as Shelley
+
+
+genericBlockSlotNo
+    :: HardForkBlock (CardanoEras TPraosStandardCrypto) -> SlotNo
+genericBlockSlotNo blk =
+  case blk of
+    BlockByron (ByronBlock _bblk slot _hash) -> slot
+    BlockShelley sblk -> Shelley.bheaderSlotNo $
+                            Shelley.bhbody (Shelley.bheader $ Shelley.shelleyBlockRaw sblk)
 
 textShow :: Show a => a -> Text
 textShow = Text.pack . show

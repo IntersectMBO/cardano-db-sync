@@ -31,14 +31,15 @@ import           Cardano.DbSync.Plugin.Default.Shelley.Query
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
-import           Cardano.Slotting.Slot (EpochNo (..))
+import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
 
-import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
-import qualified Data.Text.Encoding as Text
 
-import           Ouroboros.Network.Block (BlockNo (..), Tip)
+import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
+import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
+
+-- import           Ouroboros.Network.Block (BlockNo (..))
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import           Shelley.Spec.Ledger.BaseTypes (strictMaybeToMaybe)
@@ -49,27 +50,24 @@ import qualified Shelley.Spec.Ledger.TxData as Shelley
 
 
 insertShelleyBlock
-    :: Trace IO Text -> DbSyncEnv -> ShelleyBlock -> Tip ShelleyBlock
+    :: Trace IO Text -> DbSyncEnv -> ShelleyBlock TPraosStandardCrypto -> SlotDetails
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-insertShelleyBlock tracer env blk tip = do
+insertShelleyBlock tracer env blk details = do
   runExceptT $ do
-    meta <- liftLookupFail "insertShelleyBlock" DB.queryMeta
     pbid <- liftLookupFail "insertShelleyBlock" $ DB.queryBlockId (Shelley.blockPrevHash blk)
-
-    let slotsPerEpoch = DB.metaSlotsPerEpoch meta
 
     slid <- lift . DB.insertSlotLeader $ Shelley.mkSlotLeader blk
     blkId <- lift . DB.insertBlock $
                   DB.Block
                     { DB.blockHash = Shelley.blockHash blk
-                    , DB.blockEpochNo = Just $ Shelley.slotNumber blk `div` slotsPerEpoch
+                    , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
                     , DB.blockSlotNo = Just $ Shelley.slotNumber blk
                     , DB.blockBlockNo = Just $ Shelley.blockNumber blk
                     , DB.blockPrevious  = Just pbid
                     , DB.blockMerkelRoot = Nothing -- Shelley blocks do not have one.
                     , DB.blockSlotLeader = slid
                     , DB.blockSize = Shelley.blockSize blk
-                    , DB.blockTime = DB.slotUtcTime meta (Shelley.slotNumber blk)
+                    , DB.blockTime = sdTime details
                     , DB.blockTxCount = Shelley.blockTxCount blk
 
                     -- Shelley specific
@@ -81,17 +79,28 @@ insertShelleyBlock tracer env blk tip = do
     zipWithM_ (insertTx tracer env blkId) [0 .. ] (Shelley.blockTxs blk)
 
     liftIO $ do
-      let epoch = Shelley.slotNumber blk `div` slotsPerEpoch
-      logger tracer $ mconcat
-        [ "insertShelleyBlock: epoch ", textShow epoch
+      let epoch = unEpochNo (sdEpochNo details)
+          slotWithinEpoch = unSlotInEpoch (sdSlotInEpoch details)
+      followingClosely <- DB.isFullySynced (sdTime details)
+
+      when (followingClosely && slotWithinEpoch /= 0 && Shelley.slotNumber blk `mod` 20 == 0) $ do
+        logInfo tracer $
+          mconcat
+            [ "insertShelleyBlock: continuing epoch ", textShow epoch
+            , " (slot ", textShow slotWithinEpoch , "/"
+            , textShow (unEpochSize $ sdEpochSize details), ")"
+            ]
+      logger followingClosely tracer $ mconcat
+        [ "insertShelleyBlock: epoch ", textShow (unEpochNo $ sdEpochNo details)
         , ", slot ", textShow (Shelley.slotNumber blk)
         , ", block ", textShow (Shelley.blockNumber blk)
         , ", hash ", renderByteArray (Shelley.blockHash blk)
         ]
+
   where
-    logger :: Trace IO a -> a -> IO ()
-    logger
-      | unBlockNo (tipBlockNo tip) - Shelley.blockNumber blk < 20 = logInfo
+    logger :: Bool -> Trace IO a -> a -> IO ()
+    logger followingClosely
+      | followingClosely = logInfo
       | Shelley.slotNumber blk `mod` 5000 == 0 = logInfo
       | otherwise = logDebug
 
@@ -139,7 +148,7 @@ insertTxOut _tracer txId (index, Shelley.TxOut addr value) =
             DB.TxOut
               { DB.txOutTxId = txId
               , DB.txOutIndex = index
-              , DB.txOutAddress = Text.decodeUtf8 $ Base16.encode (Shelley.serialiseAddr addr)
+              , DB.txOutAddress = Shelley.renderAddress addr
               , DB.txOutValue = fromIntegral $ Shelley.unCoin value
               }
 

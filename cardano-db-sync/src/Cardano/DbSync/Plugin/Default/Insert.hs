@@ -8,11 +8,10 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.DbSync.Plugin.Default.Insert
-  ( insertCardanoBlock
+  ( insertDefaultBlock
   ) where
 
 import           Cardano.Prelude
-
 import           Cardano.BM.Trace (Trace)
 
 import           Control.Monad.Logger (LoggingT)
@@ -26,12 +25,12 @@ import qualified Cardano.DbSync.Plugin.Default.Shelley.Insert as Shelley
 import           Cardano.DbSync.Types
 
 
-insertCardanoBlock
-    :: Trace IO Text -> DbSyncEnv -> CardanoBlockTip
+insertDefaultBlock
+    :: Trace IO Text -> DbSyncEnv -> BlockDetails
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-insertCardanoBlock tracer env blkTip = do
+insertDefaultBlock tracer env blkTip = do
   case blkTip of
-    ByronBlockTip blk tip ->
-      Byron.insertByronBlock tracer blk tip
-    ShelleyBlockTip blk tip ->
-      Shelley.insertShelleyBlock tracer env blk tip
+    ByronBlockDetails blk details ->
+      Byron.insertByronBlock tracer blk details
+    ShelleyBlockDetails blk details ->
+      Shelley.insertShelleyBlock tracer env blk details
