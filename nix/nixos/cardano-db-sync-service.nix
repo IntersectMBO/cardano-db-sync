@@ -17,7 +17,7 @@ in {
     internal = lib.mkOption {
       type = lib.types.attrs;
       internal = true;
-      default = { syncPackages = import ../../. {}; };
+      default = { syncPackages = import ../. {}; };
     };
     services.cardano-db-sync = {
       enable = lib.mkEnableOption "enable the cardano-db-sync service";
@@ -37,7 +37,7 @@ in {
       };
       environment = lib.mkOption {
         type = lib.types.nullOr lib.types.attrs;
-        default = pkgs.iohkNix.cardanoLib.environments.${cfg.cluster};
+        default = self.iohkNix.cardanoLib.environments.${cfg.cluster};
       };
       cluster = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
@@ -45,7 +45,7 @@ in {
       };
       logConfig = lib.mkOption {
         type = lib.types.attrs;
-        default = pkgs.iohkNix.cardanoLib.defaultExplorerLogConfig;
+        default = self.iohkNix.cardanoLib.defaultExplorerLogConfig;
       };
       socketPath = lib.mkOption {
         type = lib.types.nullOr lib.types.path;

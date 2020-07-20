@@ -20,20 +20,21 @@ let
     services.cardano-db-sync = customConfig;
   };
 
-  packages = self: {
-    haskellPackages = recRecurseIntoAttrs
+  haskellPackages = recRecurseIntoAttrs
       # the Haskell.nix package set, reduced to local packages.
       (selectProjectPackages cardanoDbSyncHaskellPackages);
+
+  scripts = callPackage ./nix/scripts.nix {
+    customConfig = customConfig';
+  };
+
+  packages = {
+    inherit haskellPackages cardano-db-sync cardano-db-sync-extended scripts;
 
     # NixOS tests
     #nixosTests = import ./nix/nixos/tests {
     #  inherit pkgs;
     #};
-
-    scripts = self.callPackage ./nix/scripts.nix {
-      customConfig = customConfig';
-      syncPackages = self;
-    };
 
     dockerImage = let
       defaultConfig = rec {
@@ -43,11 +44,11 @@ let
         };
       };
       customConfig'' = mkMerge [ defaultConfig customConfig' ];
-    in self.callPackage ./nix/docker.nix {
-      scripts = self.scripts.override {
+    in callPackage ./nix/docker.nix {
+      scripts = scripts.override {
         customConfig = customConfig'';
       };
-      extendedScripts = self.scripts.override {
+      extendedScripts = scripts.override {
         customConfig = mkMerge [
           customConfig''
           { services.cardano-db-sync = {
@@ -58,12 +59,6 @@ let
       };
     };
 
-    # Grab the executable component of our package.
-    inherit (self.haskellPackages.cardano-db-sync.components.exes)
-      cardano-db-sync;
-    inherit (self.haskellPackages.cardano-db-sync-extended.components.exes)
-      cardano-db-sync-extended;
-
     # `tests` are the test suites which have been built.
     tests = collectComponents' "tests" haskellPackages;
     # `benchmarks` (only built, not run).
@@ -71,7 +66,7 @@ let
 
     checks = recurseIntoAttrs {
       # `checks.tests` collect results of executing the tests:
-      tests = collectChecks self.haskellPackages;
+      tests = collectChecks haskellPackages;
     };
 
     shell = import ./shell.nix {
@@ -79,4 +74,4 @@ let
       withHoogle = true;
     };
 };
-in pkgs.lib.makeScope pkgs.newScope packages
+in packages
