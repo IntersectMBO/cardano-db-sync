@@ -47,6 +47,8 @@ import qualified Cardano.Db as Db
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Types
 
+import qualified Cardano.Api.Typed as Api
+
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
 import           Data.Sequence.Strict (StrictSeq (..))
@@ -133,7 +135,12 @@ pointToSlotHash (Point x) =
     At blk -> Just (Point.blockPointSlot blk, Point.blockPointHash blk)
 
 renderAddress :: Shelley.Addr TPraosStandardCrypto -> Text
-renderAddress = Text.decodeUtf8 . Base16.encode . Shelley.serialiseAddr
+renderAddress addr =
+  case addr of
+    Shelley.Addr nw pcred sref ->
+      Api.serialiseAddress (Api.ShelleyAddress nw pcred sref)
+    Shelley.AddrBootstrap (Shelley.BootstrapAddress baddr) ->
+      Api.serialiseAddress (Api.ByronAddress baddr :: Api.Address Api.Byron)
 
 renderHash :: ShelleyHash -> Text
 renderHash = Text.decodeUtf8 . Base16.encode . unHeaderHash

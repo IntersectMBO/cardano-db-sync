@@ -39,8 +39,6 @@ import qualified Data.Map.Strict as Map
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
 
--- import           Ouroboros.Network.Block (BlockNo (..))
-
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import           Shelley.Spec.Ledger.BaseTypes (strictMaybeToMaybe)
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley

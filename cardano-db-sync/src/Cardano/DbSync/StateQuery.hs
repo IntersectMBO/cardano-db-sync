@@ -135,25 +135,6 @@ localStateQueryHandler (StateQueryTMVar reqVar) =
 
 -- -------------------------------------------------------------------------------------------------
 
-{-
-
--- This is what I would like to write, but can't because types do not exist or are not exported
-
-querySlotDetails :: SystemStart -> SlotNo -> Qry (UTCTime, EpochNo, SlotsRemainingInEpoch)
-querySlotDetails start absSlot = do
-  relSlot <- QAbsToRelSlot absSlot
-  relTime <- QRelSlotToTime relSlot
-  utcTime <- relToUTCTime start <$> QRelToAbsTime relTime
-  epochSlot <- QRelSlotToEpoch relSlot
-  absEpoch  <- QRelToAbsEpoch epochSlot
-  epochSize <- QEpochSize absEpoch
-  slotInEpoch <- snd <$> QRelSlotToEpoch relSlot
-  pure $ SlotDetails utcTime  absEpoch (SlotInEpoch slotsInEpoch)
-            (SlotsRemainingInEpoch $ unEpochSize epochSize - unsafeCoerce slotInEpoch)
-
--- Instead I have the following
--}
-
 querySlotDetails :: SystemStart -> SlotNo -> Qry SlotDetails
 querySlotDetails start absSlot = do
   relSlot <- QAbsToRelSlot absSlot
