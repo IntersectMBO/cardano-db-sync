@@ -4,14 +4,7 @@ let
   cfg = config.services.cardano-db-sync;
   self = config.internal.syncPackages;
   envConfig = cfg.environment;
-  explorerConfig = {
-    NetworkName = cfg.cluster;
-  } // (lib.optionalAttrs (envConfig.nodeConfig ? RequiresNetworkMagic) {
-    inherit (envConfig.nodeConfig) RequiresNetworkMagic;
-  }) // (lib.optionalAttrs (envConfig ? genesisHash) {
-    GenesisHash = envConfig.genesisHash;
-  }) // cfg.logConfig;
-  configFile = __toFile "config.json" (__toJSON explorerConfig);
+  configFile = __toFile "config.json" (__toJSON (cfg.explorerConfig // cfg.logConfig));
 in {
   options = {
     internal = lib.mkOption {
@@ -42,6 +35,10 @@ in {
       cluster = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         description = "cluster name";
+      };
+      explorerConfig = lib.mkOption {
+        type = lib.types.attrs;
+        default = cfg.environment.explorerConfig;
       };
       logConfig = lib.mkOption {
         type = lib.types.attrs;
