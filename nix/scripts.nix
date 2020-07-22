@@ -1,5 +1,7 @@
 { pkgs, lib, iohkNix, customConfig }:
 let
+  blacklistedEnvs = [ "selfnode" "shelley_selfnode" "latency-tests" "mainnet-ci" ];
+  environments = lib.filterAttrs (k: v: (!builtins.elem k blacklistedEnvs)) iohkNix.cardanoLib.environments;
   mkStartScripts = envConfig: let
     systemdCompat.options = {
       systemd.services = lib.mkOption {};
@@ -24,4 +26,4 @@ let
   in {
     db-sync = eval.config.services.cardano-db-sync.script;
   };
-in iohkNix.cardanoLib.forEnvironments mkStartScripts
+in iohkNix.cardanoLib.forEnvironmentsCustom mkStartScripts environments // { inherit environments; }

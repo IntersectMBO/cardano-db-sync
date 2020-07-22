@@ -99,7 +99,7 @@ let
   };
 
   dbSyncDockerImage = let
-    clusterStatements = lib.concatStringsSep "\n" (lib.mapAttrsToList (_: value: value) (commonLib.forEnvironments (env: let
+    clusterStatements = lib.concatStringsSep "\n" (lib.mapAttrsToList (_: value: value) (commonLib.forEnvironmentsCustom (env: let
       dbSyncScript = scripts.${env.name}.db-sync;
       dbSyncExtendedScript = extendedScripts.${env.name}.db-sync;
     in ''
@@ -115,7 +115,7 @@ let
             echo "Cleaning up"
         ''
         else "echo db-sync not supported on ${env.name} ; exit 1"}
-    '')));
+    '') scripts.environments));
     genPgPass = writeScript "gen-pgpass" ''
       #!${runtimeShell}
       SECRET_DIR=$1
