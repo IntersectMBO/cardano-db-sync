@@ -156,7 +156,6 @@ share
 
   PoolUpdate
     hashId              PoolHashId
-    pubKey              ByteString          sqltype=hash28type
     vrfKey              ByteString          sqltype=hash32type
     pledge              Word64              -- This really should be sqltype=lovelace See https://github.com/input-output-hk/cardano-ledger-specs/issues/1551
     rewardAddrId        StakeAddressId

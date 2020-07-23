@@ -207,7 +207,6 @@ insertPoolRegister tracer txId params = do
   poolUpdateId <- lift . DB.insertPoolUpdate $
                     DB.PoolUpdate
                       { DB.poolUpdateHashId = poolHashId
-                      , DB.poolUpdatePubKey = Shelley.unKeyHashBS (Shelley._poolPubKey params)
                       , DB.poolUpdateVrfKey = Crypto.hashToBytes (Shelley._poolVrf params)
                       , DB.poolUpdatePledge = fromIntegral $ Shelley.unCoin (Shelley._poolPledge params)
                       , DB.poolUpdateRewardAddrId = rewardId
