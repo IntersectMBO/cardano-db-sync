@@ -61,3 +61,4 @@ library
                       , transformers
                       -- This is never intended to run on non-POSIX systems.
                       , unix
+                      , wide-word

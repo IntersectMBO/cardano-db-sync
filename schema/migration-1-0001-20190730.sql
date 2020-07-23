@@ -21,6 +21,10 @@ BEGIN
     -- Stake addresses are a 28 byte hash prepended with a byte describing the address.
     EXECUTE 'CREATE DOMAIN addr29type AS bytea CHECK (octet_length (VALUE) = 29);';
 
+    -- 'maxBound :: Word128' as a decimal has 39 digits, so we only need to check that it
+    -- is positive.
+    EXECUTE 'CREATE DOMAIN word128type AS numeric (38, 0) CHECK (VALUE >= 0);';
+
     UPDATE "schema_version" SET stage_one = 1;
     RAISE NOTICE 'DB has been migrated to stage_one version %', next_version;
   END IF;

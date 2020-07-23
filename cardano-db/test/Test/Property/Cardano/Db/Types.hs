@@ -9,6 +9,9 @@ import           Cardano.Chain.Common (maxLovelaceVal)
 
 import qualified Data.Aeson as Aeson
 import           Data.Word (Word64)
+import           Data.WideWord.Word128 (Word128 (..))
+
+import           Database.Persist.Class (PersistField (..))
 
 import           Cardano.Db
 
@@ -24,6 +27,12 @@ prop_roundtrip_Ada_via_JSON =
     mv <- H.forAll genAda
     H.tripping mv Aeson.encode Aeson.eitherDecode
 
+prop_roundtrip_Word128_PersistField :: Property
+prop_roundtrip_Word128_PersistField =
+  H.withTests 5000 . H.property $ do
+    w128 <- H.forAll genWord128
+    H.tripping w128 toPersistValue fromPersistValue
+
 -- -----------------------------------------------------------------------------
 
 genAda :: Gen Ada
@@ -37,6 +46,17 @@ genAda =
         , Gen.word64 (Range.linear 0 5000)           -- Small values
         , Gen.word64 (Range.linear (maxLovelaceVal - 5000) maxLovelaceVal) -- Near max.
         ]
+
+genWord128 :: Gen Word128
+genWord128 = Word128 <$> genWord64 <*> genWord64
+
+genWord64 :: Gen Word64
+genWord64 =
+  Gen.choice
+    [ Gen.word64 Range.constantBounded
+    , Gen.word64 (Range.linear 0 5000)           -- Small values
+    , Gen.word64 (Range.linear (maxBound - 5000) maxBound) -- Near max.
+    ]
 
 -- -----------------------------------------------------------------------------
 
