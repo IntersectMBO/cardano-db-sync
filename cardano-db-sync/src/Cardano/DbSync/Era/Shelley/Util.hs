@@ -13,6 +13,7 @@ module Cardano.DbSync.Era.Shelley.Util
   , blockTxs
   , blockOpCert
   , blockVrfKey
+  , blockVrfKeyToPoolHash
   , epochNumber
   , fakeGenesisHash
   , mkSlotLeader
@@ -113,6 +114,10 @@ blockOpCert = KES.rawSerialiseVerKeyKES . Shelley.ocertVkHot . Shelley.bheaderOC
 blockVrfKey :: Shelley.BHBody TPraosStandardCrypto -> ByteString
 blockVrfKey = VRF.rawSerialiseVerKeyVRF . Shelley.bheaderVrfVk
 
+blockVrfKeyToPoolHash :: Shelley.ShelleyBlock TPraosStandardCrypto -> ByteString
+blockVrfKeyToPoolHash =
+ Crypto.digest (Proxy :: Proxy Crypto.Blake2b_224) . slotLeaderHash
+
 epochNumber :: Shelley.ShelleyBlock TPraosStandardCrypto -> Word64 -> Word64
 epochNumber blk slotsPerEpoch = slotNumber blk `div` slotsPerEpoch
 
@@ -120,11 +125,14 @@ epochNumber blk slotsPerEpoch = slotNumber blk `div` slotsPerEpoch
 fakeGenesisHash :: ByteString
 fakeGenesisHash = BS.take 32 ("GenesisHash " <> BS.replicate 32 '\0')
 
-mkSlotLeader :: Shelley.ShelleyBlock TPraosStandardCrypto -> Db.SlotLeader
-mkSlotLeader blk =
+mkSlotLeader :: Shelley.ShelleyBlock TPraosStandardCrypto -> Maybe Db.PoolHashId -> Db.SlotLeader
+mkSlotLeader blk mPoolId =
   let slHash = slotLeaderHash blk
-      slName = "SlotLeader-" <> Text.decodeUtf8 (Base16.encode $ BS.take 8 slHash)
-  in Db.SlotLeader slHash slName
+      short = Text.decodeUtf8 (Base16.encode $ BS.take 8 slHash)
+      slName = case mPoolId of
+                Nothing -> "ShelleyGenesis-" <> short
+                Just _ -> "Pool-" <> short
+  in Db.SlotLeader slHash mPoolId slName
 
 
 -- | Convert from Ouroboros 'Point' to `Shelley' types.

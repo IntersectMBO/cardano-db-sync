@@ -77,7 +77,7 @@ mkTxs blkId count =
 
 testSlotLeader :: SlotLeader
 testSlotLeader =
-  SlotLeader (BS.pack . take 32 $ "test slot leader" ++ replicate 32 ' ') "Dummy test slot leader"
+  SlotLeader (BS.pack . take 32 $ "test slot leader" ++ replicate 32 ' ') Nothing "Dummy test slot leader"
 
 mkTxOut :: BlockId -> TxId -> TxOut
 mkTxOut blkId txId =

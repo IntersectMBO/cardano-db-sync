@@ -96,8 +96,9 @@ genesisToHeaderHash = coerce
 mkSlotLeader :: Byron.ABlock ByteString -> DB.SlotLeader
 mkSlotLeader blk =
   let slHash = slotLeaderHash blk
-      slName = "SlotLeader-" <> Text.decodeUtf8 (Base16.encode $ BS.take 8 slHash)
-  in DB.SlotLeader slHash slName
+      slName = "ByronGenesis-" <> Text.decodeUtf8 (Base16.encode $ BS.take 8 slHash)
+  -- On Byrom poolHashId will always be Nothing.
+  in DB.SlotLeader slHash Nothing slName
 
 
 -- | Convert from Ouroboros 'Point' to `Byron' types.

@@ -24,6 +24,8 @@ import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Database.Persist.Sql (SqlBackend)
 
+import qualified Cardano.Crypto.Hash as Crypto
+
 import qualified Cardano.Db as DB
 import qualified Cardano.DbSync.Era.Shelley.Util as Shelley
 import           Cardano.DbSync.Error
@@ -53,8 +55,9 @@ insertShelleyBlock
 insertShelleyBlock tracer env blk details = do
   runExceptT $ do
     pbid <- liftLookupFail "insertShelleyBlock" $ DB.queryBlockId (Shelley.blockPrevHash blk)
+    mPhid <- lift $ queryPoolHashId (Shelley.blockVrfKeyToPoolHash blk)
 
-    slid <- lift . DB.insertSlotLeader $ Shelley.mkSlotLeader blk
+    slid <- lift . DB.insertSlotLeader $ Shelley.mkSlotLeader blk mPhid
     blkId <- lift . DB.insertBlock $
                   DB.Block
                     { DB.blockHash = Shelley.blockHash blk
@@ -81,7 +84,7 @@ insertShelleyBlock tracer env blk details = do
           slotWithinEpoch = unSlotInEpoch (sdSlotInEpoch details)
       followingClosely <- DB.isFullySynced (sdTime details)
 
-      when (followingClosely && slotWithinEpoch /= 0 && Shelley.slotNumber blk `mod` 20 == 0) $ do
+      when (followingClosely && slotWithinEpoch /= 0 && Shelley.slotNumber blk `mod` 200 == 0) $ do
         logInfo tracer $
           mconcat
             [ "insertShelleyBlock: continuing epoch ", textShow epoch
@@ -204,6 +207,8 @@ insertPoolRegister tracer txId params = do
   poolUpdateId <- lift . DB.insertPoolUpdate $
                     DB.PoolUpdate
                       { DB.poolUpdateHashId = poolHashId
+                      , DB.poolUpdatePubKey = Shelley.unKeyHashBS (Shelley._poolPubKey params)
+                      , DB.poolUpdateVrfKey = Crypto.hashToBytes (Shelley._poolVrf params)
                       , DB.poolUpdatePledge = fromIntegral $ Shelley.unCoin (Shelley._poolPledge params)
                       , DB.poolUpdateRewardAddrId = rewardId
                       , DB.poolUpdateMeta = mdId

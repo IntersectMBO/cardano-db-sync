@@ -51,8 +51,13 @@ share
     stageTwo Int
     stageThree Int
 
+  PoolHash
+    hash                ByteString          sqltype=hash28type
+    UniquePoolHash      hash
+
   SlotLeader
     hash                ByteString          sqltype=hash32type
+    poolHashId          PoolHashId Maybe    -- This will be non-null when a block is mined by a pool.
     description         Text                -- Description of the Slots leader.
     UniqueSlotLeader    hash
 
@@ -149,12 +154,10 @@ share
     registeredTxId      TxId                -- Only used for rollback.
     UniquePoolMetaData  url hash
 
-  PoolHash
-    hash                ByteString          sqltype=hash28type
-    UniquePoolHash      hash
-
   PoolUpdate
     hashId              PoolHashId
+    pubKey              ByteString          sqltype=hash28type
+    vrfKey              ByteString          sqltype=hash32type
     pledge              Word64              -- This really should be sqltype=lovelace See https://github.com/input-output-hk/cardano-ledger-specs/issues/1551
     rewardAddrId        StakeAddressId
     meta                PoolMetaDataId Maybe
@@ -199,14 +202,14 @@ share
     -- This design allows rewards to be discriminated based on how they are earned.
   Reward
     addrId              StakeAddressId
-    -- poolId             PoolId -- Can't get this from on chain data. Should we look it up?
+    -- poolId              PoolHashId
     amount              Word64              sqltype=lovelace
     txId                TxId
     UniqueReward        addrId txId
 
   Withdrawal
     addrId              StakeAddressId
-    -- poolId             PoolId -- Can't get this from on chain data. Should we look it up?
+    -- poolId              PoolHashId
     amount              Word64              sqltype=lovelace
     txId                TxId
     UniqueWithdrawal    addrId txId

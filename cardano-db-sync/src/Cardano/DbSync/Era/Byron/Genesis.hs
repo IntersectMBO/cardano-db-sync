@@ -74,7 +74,12 @@ insertValidateGenesisDist tracer networkName cfg = do
             -- It would be nice to not need this artificial block, but that would
             -- require plumbing the Genesis.Config into 'insertByronBlockOrEBB'
             -- which would be a pain in the neck.
-            slid <- lift . DB.insertSlotLeader $ DB.SlotLeader (genesisHashSlotLeader cfg) "Genesis slot leader"
+            slid <- lift . DB.insertSlotLeader $
+                            DB.SlotLeader
+                              { DB.slotLeaderHash = genesisHashSlotLeader cfg
+                              , DB.slotLeaderPoolHashId = Nothing
+                              , DB.slotLeaderDescription = "Genesis slot leader"
+                              }
             bid <- lift . DB.insertBlock $
                       DB.Block
                         { DB.blockHash = configGenesisHash cfg

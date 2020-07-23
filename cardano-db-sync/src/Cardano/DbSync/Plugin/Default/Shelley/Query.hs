@@ -4,7 +4,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.DbSync.Plugin.Default.Shelley.Query
-  ( queryStakeAddress
+  ( queryPoolHashId
+  , queryStakeAddress
   , queryStakePoolKeyHash
   , queryTxInputSum
   ) where
@@ -29,6 +30,12 @@ import           Database.Persist.Sql (SqlBackend)
 
 import qualified Shelley.Spec.Ledger.TxData as Shelley
 
+queryPoolHashId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe PoolHashId)
+queryPoolHashId hash = do
+  res <- select . from $ \ phash -> do
+            where_ (phash ^. PoolHashHash ==. val hash)
+            pure (phash ^. PoolHashId)
+  pure $ unValue <$> listToMaybe res
 
 queryStakeAddress :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail StakeAddressId)
 queryStakeAddress addr = do
