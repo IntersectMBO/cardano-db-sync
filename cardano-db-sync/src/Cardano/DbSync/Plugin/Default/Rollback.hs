@@ -1,7 +1,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Cardano.DbSync.Plugin.Default.Rollback
-  ( rollbackToPoint
+  ( rollbackToSlot
   , unsafeRollback
   ) where
 
@@ -9,25 +9,39 @@ import           Cardano.Prelude
 
 import           Cardano.BM.Trace (Trace, logInfo)
 
-import           Data.Text (Text)
-
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Error
-import qualified Cardano.DbSync.Plugin.Default.Byron.Rollback as Byron
-import qualified Cardano.DbSync.Plugin.Default.Shelley.Rollback as Shelley
-import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
+import           Data.Text (Text)
 
-rollbackToPoint :: Trace IO Text -> CardanoPoint -> IO (Either DbSyncNodeError ())
-rollbackToPoint trce cpnt =
-  case cpnt of
-    ByronPoint point ->
-      Byron.rollbackToPoint trce point
-    ShelleyPoint point ->
-      Shelley.rollbackToPoint trce point
+import           Database.Persist.Sql (SqlBackend)
+
+import           Ouroboros.Network.Block (BlockNo (..))
+
+-- Rollbacks are done in an Era generic way based just on the SlotNo we are
+-- rolling back to.
+rollbackToSlot :: Trace IO Text -> SlotNo -> IO (Either DbSyncNodeError ())
+rollbackToSlot trce slotNo =
+    DB.runDbNoLogging $ runExceptT (action slotNo)
+  where
+    action :: MonadIO m => SlotNo -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    action (SlotNo slot) = do
+        mHash <- lift $ DB.querySlotHash slot
+        liftIO . logInfo trce $
+            mconcat
+              [ "Rolling back to slot ", textShow slot, ", hash "
+              , maybe (if slot == 0 then "genesis" else "unknown") renderByteArray mHash
+              ]
+        xs <- lift $ DB.queryBlockNosWithSlotNoGreater slot
+        liftIO . logInfo trce $
+            mconcat
+              [ "Deleting blocks numbered: ", textShow (map unBlockNo xs)
+              ]
+        mapM_ (void . lift . DB.deleteCascadeBlockNo) xs
+
 
 -- For testing and debugging.
 unsafeRollback :: Trace IO Text -> SlotNo -> IO (Either DbSyncNodeError ())

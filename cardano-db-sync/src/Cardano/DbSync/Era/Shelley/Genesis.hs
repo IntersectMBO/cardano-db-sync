@@ -17,7 +17,6 @@ import           Cardano.Prelude
 
 import qualified Cardano.Binary as Binary
 import           Cardano.BM.Trace (Trace, logInfo)
-import           Cardano.Slotting.Slot (EpochSize (..))
 
 import           Control.Monad (void)
 import           Control.Monad.IO.Class (MonadIO)
@@ -43,8 +42,6 @@ import           Cardano.DbSync.Util
 
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
-import           Ouroboros.Consensus.BlockchainTime.WallClock.Types
-                  (mkSlotLength, slotLengthToMillisec)
 
 import qualified Shelley.Spec.Ledger.Coin as Shelley
 import qualified Shelley.Spec.Ledger.Genesis as Shelley
@@ -70,47 +67,54 @@ insertValidateGenesisDist tracer networkName cfg = do
         Right bid -> validateGenesisDistribution tracer networkName cfg bid
         Left _ ->
           runExceptT $ do
-            liftIO $ logInfo tracer "Inserting Genesis distribution"
-            count <- lift DB.queryBlockCount
-            when (count > 0) $
-              dbSyncNodeError "Shelley.insertValidateGenesisDist: Genesis data mismatch."
-            void . lift . DB.insertMeta
-                $ DB.Meta
-                    (protocolConstant cfg)
-                    (configSlotDuration cfg)
-                    (configStartTime cfg)
-                    (configSlotsPerEpoch cfg)
-                    (Just networkName)
-            -- Insert an 'artificial' Genesis block (with a genesis specific slot leader). We
-            -- need this block to attach the genesis distribution transactions to.
-            -- It would be nice to not need this artificial block, but that would
-            -- require plumbing the Genesis.Config into 'insertByronBlockOrEBB'
-            -- which would be a pain in the neck.
-            slid <- lift . DB.insertSlotLeader $ DB.SlotLeader (genesisHashSlotLeader cfg) "Genesis slot leader"
-            bid <- lift . DB.insertBlock $
-                      DB.Block
-                        { DB.blockHash = configGenesisHash cfg
-                        , DB.blockEpochNo = Nothing
-                        , DB.blockSlotNo = Nothing
-                        , DB.blockBlockNo = Nothing
-                        , DB.blockPrevious = Nothing
-                        , DB.blockMerkelRoot = Nothing
-                        , DB.blockSlotLeader = slid
-                        , DB.blockSize = 0
-                        , DB.blockTime = configStartTime cfg
-                        , DB.blockTxCount = 0
+            liftIO $ logInfo tracer "Inserting Shelley Genesis distribution"
+            emeta <- lift DB.queryMeta
+            case emeta of
+              Right _ -> pure () -- Metadata from Byron era already exists. TODO Validate metadata.
+              Left _ -> do
+                count <- lift DB.queryBlockCount
+                when (count > 0) $
+                  dbSyncNodeError $ "Shelley.insertValidateGenesisDist: Genesis data mismatch. count " <> textShow count
+                void . lift $ DB.insertMeta $
+                            DB.Meta
+                              { DB.metaStartTime = configStartTime cfg
+                              , DB.metaNetworkName = networkName
+                              }
+                -- Insert an 'artificial' Genesis block (with a genesis specific slot leader). We
+                -- need this block to attach the genesis distribution transactions to.
+                -- It would be nice to not need this artificial block, but that would
+                -- require plumbing the Genesis.Config into 'insertByronBlockOrEBB'
+                -- which would be a pain in the neck.
+                slid <- lift . DB.insertSlotLeader $
+                                DB.SlotLeader
+                                  { DB.slotLeaderHash = genesisHashSlotLeader cfg
+                                  , DB.slotLeaderPoolHashId = Nothing
+                                  , DB.slotLeaderDescription = "Shelley Genesis slot leader"
+                                  }
+                bid <- lift . DB.insertBlock $
+                          DB.Block
+                            { DB.blockHash = configGenesisHash cfg
+                            , DB.blockEpochNo = Nothing
+                            , DB.blockSlotNo = Nothing
+                            , DB.blockBlockNo = Nothing
+                            , DB.blockPrevious = Nothing
+                            , DB.blockMerkelRoot = Nothing
+                            , DB.blockSlotLeader = slid
+                            , DB.blockSize = 0
+                            , DB.blockTime = configStartTime cfg
+                            , DB.blockTxCount = 0
 
-                        -- Shelley specific
-                        , DB.blockVrfKey = Nothing
-                        , DB.blockOpCert = Nothing
-                        , DB.blockProtoVersion = Nothing
-                        }
-            lift $ mapM_ (insertTxOuts bid) $ genesisUtxOs cfg
-            liftIO . logInfo tracer $ "Initial genesis distribution populated. Hash "
-                            <> renderByteArray (configGenesisHash cfg)
+                            -- Shelley specific
+                            , DB.blockVrfKey = Nothing
+                            , DB.blockOpCert = Nothing
+                            , DB.blockProtoVersion = Nothing
+                            }
+                lift $ mapM_ (insertTxOuts bid) $ genesisUtxOs cfg
+                liftIO . logInfo tracer $ "Initial genesis distribution populated. Hash "
+                                <> renderByteArray (configGenesisHash cfg)
 
-            supply <- lift $ DB.queryTotalSupply
-            liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
+                supply <- lift $ DB.queryTotalSupply
+                liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
 validateGenesisDistribution
@@ -122,20 +126,6 @@ validateGenesisDistribution tracer networkName cfg bid =
     liftIO $ logInfo tracer "Validating Genesis distribution"
     meta <- liftLookupFail "Shelley.validateGenesisDistribution" $ DB.queryMeta
 
-    when (DB.metaProtocolConst meta /= protocolConstant cfg) $
-      dbSyncNodeError $ Text.concat
-            [ "Shelley: Mismatch protocol constant. Config value "
-            , textShow (protocolConstant cfg)
-            , " does not match DB value of ", textShow (DB.metaProtocolConst meta)
-            ]
-
-    when (DB.metaSlotDuration meta /= configSlotDuration cfg) $
-      dbSyncNodeError $ Text.concat
-            [ "Shelley: Mismatch slot duration time. Config value "
-            , textShow (configSlotDuration cfg)
-            , " does not match DB value of ", textShow (DB.metaSlotDuration meta)
-            ]
-
     when (DB.metaStartTime meta /= configStartTime cfg) $
       dbSyncNodeError $ Text.concat
             [ "Shelley: Mismatch chain start time. Config value "
@@ -143,24 +133,13 @@ validateGenesisDistribution tracer networkName cfg bid =
             , " does not match DB value of ", textShow (DB.metaStartTime meta)
             ]
 
-    when (DB.metaSlotsPerEpoch meta /= configSlotsPerEpoch cfg) $
+    when (DB.metaNetworkName meta /= networkName) $
       dbSyncNodeError $ Text.concat
-            [ "Shelley: Mismatch in slots per epoch. Config value "
-            , textShow (configSlotsPerEpoch cfg)
-            , " does not match DB value of ", textShow (DB.metaSlotsPerEpoch meta)
+            [ "Shelley.validateGenesisDistribution: Provided network name "
+            , networkName
+            , " does not match DB value "
+            , DB.metaNetworkName meta
             ]
-
-    case DB.metaNetworkName meta of
-      Nothing ->
-        dbSyncNodeError $ "Shelley.validateGenesisDistribution: Missing network name"
-      Just name ->
-        when (name /= networkName) $
-          dbSyncNodeError $ Text.concat
-              [ "Shelley.validateGenesisDistribution: Provided network name "
-              , networkName
-              , " does not match DB value "
-              , name
-              ]
 
     txCount <- lift $ DB.queryBlockTxCount bid
     let expectedTxCount = fromIntegral $length (genesisTxos cfg)
@@ -196,7 +175,7 @@ insertTxOuts blkId (Shelley.TxIn txInId _, txOut) = do
               { DB.txHash = Shelley.unTxHash txInId
               , DB.txBlock = blkId
               , DB.txBlockIndex = 0
-              , DB.txOutSum = unCoin (txOutCoin txOut)
+              , DB.txOutSum = fromIntegral $ Shelley.unCoin (txOutCoin txOut)
               , DB.txFee = 0
               , DB.txDeposit = 0
               , DB.txSize = 0 -- Genesis distribution address to not have a size.
@@ -206,7 +185,7 @@ insertTxOuts blkId (Shelley.TxIn txInId _, txOut) = do
               { DB.txOutTxId = txId
               , DB.txOutIndex = 0
               , DB.txOutAddress = Text.decodeUtf8 $ Base16.encode (Binary.serialize' $ txOutAddress txOut)
-              , DB.txOutValue = unCoin (txOutCoin txOut)
+              , DB.txOutValue = fromIntegral $ Shelley.unCoin (txOutCoin txOut)
               }
   where
     txOutAddress :: ShelleyTxOut -> ShelleyAddress
@@ -225,7 +204,7 @@ genesisHashSlotLeader = configGenesisHash
 
 configGenesisSupply :: ShelleyGenesis TPraosStandardCrypto -> DB.Ada
 configGenesisSupply =
-  DB.word64ToAda . fromIntegral . sum . map (unCoin . snd) . genesisTxoAssocList
+  DB.word64ToAda . fromIntegral . sum . map (Shelley.unCoin . snd) . genesisTxoAssocList
 
 genesisTxos :: ShelleyGenesis TPraosStandardCrypto -> [ShelleyTxOut]
 genesisTxos = map (uncurry Shelley.TxOut) . genesisTxoAssocList
@@ -244,21 +223,6 @@ genesisUtxOs =
     -- Sigh!
     unUTxO :: Shelley.UTxO TPraosStandardCrypto -> Map ShelleyTxIn ShelleyTxOut
     unUTxO (Shelley.UTxO m) = m
-
-protocolConstant :: ShelleyGenesis TPraosStandardCrypto -> Word64
-protocolConstant = Shelley.sgSecurityParam
-
-unCoin :: Shelley.Coin -> Word64
-unCoin (Shelley.Coin c) = fromIntegral c
-
--- | The genesis data is a NominalDiffTime (in picoseconds) and we need
--- it as milliseconds.
-configSlotDuration :: ShelleyGenesis TPraosStandardCrypto -> Word64
-configSlotDuration =
-  fromIntegral . slotLengthToMillisec . mkSlotLength . sgSlotLength
-
-configSlotsPerEpoch :: ShelleyGenesis TPraosStandardCrypto -> Word64
-configSlotsPerEpoch sg = unEpochSize (Shelley.sgEpochLength sg)
 
 configStartTime :: ShelleyGenesis TPraosStandardCrypto -> UTCTime
 configStartTime = roundToMillseconds . Shelley.sgSystemStart

@@ -41,6 +41,7 @@ data DbSyncNodeError
   | NEBlockMismatch !Word64 !ByteString !ByteString
   | NEByronConfig !FilePath !Byron.ConfigurationError
   | NEShelleyConfig !FilePath !Text
+  | NECardanoConfig !Text
 
 annotateInvariantTx :: Byron.Tx -> DbSyncInvariant -> DbSyncInvariant
 annotateInvariantTx tx ei =
@@ -88,6 +89,11 @@ renderDbSyncNodeError ne =
     NEShelleyConfig fp txt ->
       mconcat
         [ "Failed reading Shelley genesis file ", textShow fp, ": ", txt
+        ]
+    NECardanoConfig err ->
+      mconcat
+        [ "With Cardano protocol, Byron/Shelley config mismatch:\n"
+        , "   ", err
         ]
 
 bsBase16Encode :: ByteString -> Text

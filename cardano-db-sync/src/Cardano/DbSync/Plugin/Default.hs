@@ -1,12 +1,12 @@
 module Cardano.DbSync.Plugin.Default
   ( defDbSyncNodePlugin
-  , insertCardanoBlock
-  , rollbackToPoint
+  , insertDefaultBlock
+  , rollbackToSlot
   ) where
 
 import           Cardano.DbSync.Plugin
-import           Cardano.DbSync.Plugin.Default.Rollback (rollbackToPoint)
-import           Cardano.DbSync.Plugin.Default.Insert (insertCardanoBlock)
+import           Cardano.DbSync.Plugin.Default.Rollback (rollbackToSlot)
+import           Cardano.DbSync.Plugin.Default.Insert (insertDefaultBlock)
 
 -- | The default DbSyncNodePlugin.
 -- Does exactly what the cardano-db-sync node did before the plugin system was added.
@@ -15,6 +15,6 @@ defDbSyncNodePlugin :: DbSyncNodePlugin
 defDbSyncNodePlugin =
   DbSyncNodePlugin
     { plugOnStartup = []
-    , plugInsertBlock = [insertCardanoBlock]
-    , plugRollbackBlock = [rollbackToPoint]
+    , plugInsertBlock = [insertDefaultBlock]
+    , plugRollbackBlock = [rollbackToSlot]
     }

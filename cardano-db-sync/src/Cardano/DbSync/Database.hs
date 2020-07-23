@@ -18,6 +18,7 @@ import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo)
 import qualified Cardano.Chain.Block as Ledger
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import           Cardano.Prelude
+import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Except.Extra (left, newExceptT, runExceptT)
@@ -100,10 +101,10 @@ checkDbState trce xs =
       (DbApplyBlock blktip : _) -> validateBlock blktip
       _ -> pure Continue
   where
-    validateBlock :: CardanoBlockTip -> ExceptT DbSyncNodeError IO NextState
+    validateBlock :: BlockDetails -> ExceptT DbSyncNodeError IO NextState
     validateBlock cblk = do
       case cblk of
-        ByronBlockTip bblk _ ->
+        ByronBlockDetails bblk _details ->
           case byronBlockRaw bblk of
             Ledger.ABOBBoundary _ -> left $ NEError "checkDbState got a boundary block"
             Ledger.ABOBBlock chBlk -> do
@@ -120,24 +121,24 @@ checkDbState trce xs =
                     mconcat [ "checkDbState: Block no ", textShow (Byron.blockNumber chBlk), " present" ]
                   pure Done -- Block already exists, so we are done.
 
-        ShelleyBlockTip {} ->
+        ShelleyBlockDetails {} ->
           panic "checkDbState for ShelleyBlock not yet implemented"
 
     isMainBlockApply :: DbAction -> Bool
     isMainBlockApply dba =
       case dba of
-        DbApplyBlock (ByronBlockTip blk _tip) ->
+        DbApplyBlock (ByronBlockDetails blk _details) ->
           case byronBlockRaw blk of
             Ledger.ABOBBlock _ -> True
             Ledger.ABOBBoundary _ -> False
-        DbApplyBlock (ShelleyBlockTip {}) -> False -- Should not matter.
+        DbApplyBlock (ShelleyBlockDetails {}) -> False -- Should not matter.
         DbRollBackToPoint {} -> False
         DbFinish -> False
 
 runRollbacks
     :: Trace IO Text
     -> DbSyncNodePlugin
-    -> CardanoPoint
+    -> SlotNo
     -> ExceptT DbSyncNodeError IO ()
 runRollbacks trce plugin point =
   newExceptT
@@ -148,7 +149,7 @@ insertBlockList
     :: Trace IO Text
     -> DbSyncEnv
     -> DbSyncNodePlugin
-    -> [CardanoBlockTip]
+    -> [BlockDetails]
     -> ExceptT DbSyncNodeError IO ()
 insertBlockList trce env plugin blks =
   -- Setting this to True will log all 'Persistent' operations which is great
@@ -158,13 +159,13 @@ insertBlockList trce env plugin blks =
     $ traverseMEither insertBlock blks
   where
     insertBlock
-        :: CardanoBlockTip
+        :: BlockDetails
         -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
     insertBlock blkTip =
       traverseMEither (\ f -> f trce env blkTip) $ plugInsertBlock plugin
 
 -- | Split the DbAction list into a prefix containing blocks to apply and a postfix.
-spanDbApply :: [DbAction] -> ([CardanoBlockTip], [DbAction])
+spanDbApply :: [DbAction] -> ([BlockDetails], [DbAction])
 spanDbApply lst =
   case lst of
     (DbApplyBlock bt:xs) -> let (ys, zs) = spanDbApply xs in (bt:ys, zs)

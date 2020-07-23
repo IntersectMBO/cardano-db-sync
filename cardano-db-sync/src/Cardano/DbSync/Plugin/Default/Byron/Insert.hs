@@ -28,7 +28,11 @@ import qualified Cardano.Chain.UTxO as Byron
 
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
 
+import           Cardano.DbSync.Types
+
 import           Cardano.Prelude
+
+import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
 
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Reader (ReaderT)
@@ -45,8 +49,6 @@ import           Cardano.DbSync.Error
 import           Cardano.DbSync.Util
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
-import           Ouroboros.Network.Block (BlockNo (..), Tip, getTipBlockNo)
-import           Ouroboros.Network.Point (withOrigin)
 
 -- Trivial local data type for use in place of a tuple.
 data ValueFee = ValueFee
@@ -55,37 +57,40 @@ data ValueFee = ValueFee
   }
 
 insertByronBlock
-    :: Trace IO Text -> ByronBlock -> Tip ByronBlock
+    :: Trace IO Text -> ByronBlock -> SlotDetails
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-insertByronBlock tracer blk tip = do
+insertByronBlock tracer blk details = do
   runExceptT $
     case byronBlockRaw blk of
-      Byron.ABOBBlock ablk -> insertABlock tracer ablk tip
-      Byron.ABOBBoundary abblk -> insertABOBBoundary tracer abblk
+      Byron.ABOBBlock ablk -> insertABlock tracer ablk details
+      Byron.ABOBBoundary abblk -> insertABOBBoundary tracer abblk details
 
 insertABOBBoundary
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Byron.ABoundaryBlock ByteString
+    => Trace IO Text -> Byron.ABoundaryBlock ByteString -> SlotDetails
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertABOBBoundary tracer blk = do
+insertABOBBoundary tracer blk details = do
   let prevHash = case Byron.boundaryPrevHash (Byron.boundaryHeader blk) of
                     Left gh -> Byron.genesisToHeaderHash gh
                     Right hh -> hh
-  meta <- liftLookupFail "insertABOBBoundary" DB.queryMeta
   pbid <- liftLookupFail "insertABOBBoundary" $ DB.queryBlockId (Byron.unHeaderHash prevHash)
-  mle <- liftLookupFail "insertABOBBoundary: " $ DB.queryEpochNo pbid
-  slid <- lift . DB.insertSlotLeader $ DB.SlotLeader (BS.replicate 32 '\0') "Epoch boundary slot leader"
+  slid <- lift . DB.insertSlotLeader $
+                  DB.SlotLeader
+                    { DB.slotLeaderHash = BS.replicate 32 '\0'
+                    , DB.slotLeaderPoolHashId = Nothing
+                    , DB.slotLeaderDescription = "Epoch boundary slot leader"
+                    }
   void . lift . DB.insertBlock $
             DB.Block
               { DB.blockHash = Byron.unHeaderHash $ Byron.boundaryHashAnnotated blk
-              , DB.blockEpochNo = Just $ maybe 0 (+1) mle
+              , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
               , DB.blockSlotNo = Nothing -- No slotNo for a boundary block
               , DB.blockBlockNo = Nothing
               , DB.blockPrevious = Just pbid
               , DB.blockMerkelRoot = Nothing -- No merkelRoot for a boundary block
               , DB.blockSlotLeader = slid
               , DB.blockSize = fromIntegral $ Byron.boundaryBlockLength blk
-              , DB.blockTime = DB.epochUtcStartTime meta (maybe 0 (+1) mle)
+              , DB.blockTime = sdTime details
               , DB.blockTxCount = 0
 
               -- Shelley specific
@@ -104,26 +109,22 @@ insertABOBBoundary tracer blk = do
 
 insertABlock
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Byron.ABlock ByteString -> Tip ByronBlock
+    => Trace IO Text -> Byron.ABlock ByteString -> SlotDetails
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertABlock tracer blk tip = do
-    meta <- liftLookupFail "insertABlock" DB.queryMeta
+insertABlock tracer blk details = do
     pbid <- liftLookupFail "insertABlock" $ DB.queryBlockId (Byron.unHeaderHash $ Byron.blockPreviousHash blk)
-
-    let slotsPerEpoch = 10 * DB.metaProtocolConst meta
-
     slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
     blkId <- lift . DB.insertBlock $
                   DB.Block
                     { DB.blockHash = Byron.blockHash blk
-                    , DB.blockEpochNo = Just $ Byron.slotNumber blk `div` slotsPerEpoch
+                    , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
                     , DB.blockSlotNo = Just $ Byron.slotNumber blk
                     , DB.blockBlockNo = Just $ Byron.blockNumber blk
                     , DB.blockPrevious = Just pbid
                     , DB.blockMerkelRoot = Just $ Byron.unCryptoHash (Byron.blockMerkelRoot blk)
                     , DB.blockSlotLeader = slid
                     , DB.blockSize = fromIntegral $ Byron.blockLength blk
-                    , DB.blockTime = DB.slotUtcTime meta (Byron.slotNumber blk)
+                    , DB.blockTime = sdTime details
                     , DB.blockTxCount = fromIntegral $ length (Byron.blockPayload blk)
 
                     -- Shelley specific
@@ -135,23 +136,26 @@ insertABlock tracer blk tip = do
     zipWithM_ (insertTx tracer blkId) (Byron.blockPayload blk) [ 0 .. ]
 
     liftIO $ do
-      let followingClosely = withOrigin 0 unBlockNo (getTipBlockNo tip) - Byron.blockNumber blk < 20
-          (epoch, slotWithinEpoch) = Byron.slotNumber blk `divMod` slotsPerEpoch
-      when (followingClosely && slotWithinEpoch /= 0 && Byron.slotNumber blk > 0 && Byron.slotNumber blk `mod` 20 == 0) $ do
+      let epoch = unEpochNo (sdEpochNo details)
+          slotWithinEpoch = unSlotInEpoch (sdSlotInEpoch details)
+      followingClosely <- DB.isFullySynced (sdTime details)
+
+      when (followingClosely && slotWithinEpoch /= 0 && Byron.slotNumber blk `mod` 20 == 0) $ do
         logInfo tracer $
           mconcat
-            [ "insertABlock: continuing epoch ", textShow epoch
-            , " (slot ", textShow slotWithinEpoch, ")"
+            [ "insertByronBlock: continuing epoch ", textShow epoch
+            , " (slot ", textShow slotWithinEpoch , "/"
+            , textShow (unEpochSize $ sdEpochSize details), ")"
             ]
-      logger tracer $ mconcat
-        [ "insertABlock: slot ", textShow (Byron.slotNumber blk)
+      logger followingClosely tracer $ mconcat
+        [ "insertByronBlock: slot ", textShow (Byron.slotNumber blk)
         , ", block ", textShow (Byron.blockNumber blk)
         , ", hash ", renderByteArray (Byron.blockHash blk)
         ]
   where
-    logger :: Trace IO a -> a -> IO ()
-    logger
-      | withOrigin 0 unBlockNo (getTipBlockNo tip) - Byron.blockNumber blk < 20 = logInfo
+    logger :: Bool -> Trace IO a -> a -> IO ()
+    logger followingClosely
+      | followingClosely = logInfo
       | Byron.slotNumber blk `mod` 5000 == 0 = logInfo
       | otherwise = logDebug
 

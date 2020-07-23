@@ -32,7 +32,7 @@ module Cardano.Db.Query
   , queryNetworkName
   , queryPreviousSlotNo
   , querySelectCount
-  , querySlotPosixTime
+  , querySlotHash
   , querySlotUtcTime
   , queryTotalSupply
   , queryTxCount
@@ -45,12 +45,11 @@ module Cardano.Db.Query
 
   , entityPair
   , epochUtcStartTime
+  , isFullySynced
   , isJust
   , listToMaybe
   , maybeToEither
   , renderLookupFail
-  , slotPosixTime
-  , slotUtcTime
   , txOutSpentB
   , txOutSpentP
   , txOutUnspentP
@@ -64,16 +63,14 @@ module Cardano.Db.Query
 import           Control.Monad (join)
 import           Control.Monad.Extra (mapMaybeM)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
-import           Control.Monad.Trans.Except (ExceptT (..), runExceptT)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Fixed (Micro)
 import           Data.Maybe (catMaybes, fromMaybe, listToMaybe)
-import           Data.Ratio ((%), numerator)
+import           Data.Ratio (numerator)
 import           Data.Text (Text)
-import           Data.Time.Clock (UTCTime, addUTCTime, diffUTCTime, getCurrentTime)
-import           Data.Time.Clock.POSIX (POSIXTime, utcTimeToPOSIXSeconds)
+import           Data.Time.Clock (UTCTime, diffUTCTime, getCurrentTime)
 import           Data.Word (Word16, Word64)
 
 import           Database.Esqueleto (Entity (..), From, InnerJoin (..), LeftOuterJoin (..),
@@ -309,20 +306,8 @@ queryGenesisSupply = do
 
 queryIsFullySynced :: MonadIO m => ReaderT SqlBackend m Bool
 queryIsFullySynced = do
-  emeta <- queryMeta
   mLatestBlockTime <- fmap blockTime <$> queryLatestBlock
-  case (emeta, mLatestBlockTime) of
-    (Left _, _) -> pure False
-    (_, Nothing) -> pure False
-    (Right meta, Just latestBlockTime)  -> do
-      -- This assumes that the local clock is correct.
-      -- This is a a valid assumption as db-sync is connected to a locally running
-      -- node and the node needs to have a correct local clock to validate transactions.
-      currentTime <- liftIO getCurrentTime
-      let psec = diffUTCTime currentTime latestBlockTime
-      -- Slot duration is in microseconds, and the difference from current time to
-      -- latest block time is in pico seconds.
-      pure $ psec < fromRational (2 * fromIntegral (metaSlotDuration meta) % 1000)
+  maybe (pure False) (liftIO . isFullySynced) mLatestBlockTime
 
 -- | Get 'BlockId' of the latest block.
 queryLatestBlockId :: MonadIO m => ReaderT SqlBackend m (Maybe BlockId)
@@ -369,6 +354,16 @@ queryLatestEpochNo = do
             pure (blk ^. BlockEpochNo)
   pure $ fromMaybe 0 (listToMaybe . catMaybes $ map unValue res)
 
+-- | Get the latest slot number
+queryLatestSlotNo :: MonadIO m => ReaderT SqlBackend m Word64
+queryLatestSlotNo = do
+  res <- select . from $ \ blk -> do
+            where_ $ (isJust $ blk ^. BlockSlotNo)
+            orderBy [desc (blk ^. BlockSlotNo)]
+            limit 1
+            pure $ blk ^. BlockSlotNo
+  pure $ fromMaybe 0 (listToMaybe . catMaybes $ map unValue res)
+
 -- | Given a 'SlotNo' return the 'SlotNo' of the previous block.
 queryPreviousSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Word64)
 queryPreviousSlotNo slotNo = do
@@ -386,15 +381,12 @@ querySelectCount predicate = do
             pure countRows
   pure $ maybe 0 unValue (listToMaybe xs)
 
--- | Get the latest slot number
-queryLatestSlotNo :: MonadIO m => ReaderT SqlBackend m Word64
-queryLatestSlotNo = do
+querySlotHash :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe ByteString)
+querySlotHash slotNo = do
   res <- select . from $ \ blk -> do
-            where_ $ (isJust $ blk ^. BlockSlotNo)
-            orderBy [desc (blk ^. BlockSlotNo)]
-            limit 1
-            pure $ blk ^. BlockSlotNo
-  pure $ fromMaybe 0 (listToMaybe . catMaybes $ map unValue res)
+            where_ (blk ^. BlockSlotNo ==. just (val slotNo))
+            pure (blk ^. BlockHash)
+  pure $ unValue <$> (listToMaybe res)
 
 {-# INLINABLE queryMeta #-}
 -- | Get the network metadata.
@@ -412,26 +404,16 @@ queryNetworkName :: MonadIO m => ReaderT SqlBackend m (Maybe Text)
 queryNetworkName = do
   res <- select . from $ \ meta -> do
             pure (meta ^. MetaNetworkName)
-  pure $ join (unValue <$> listToMaybe res)
+  pure $ unValue <$> listToMaybe res
 
-
--- | Calculate the slot time (as UTCTime) for a given slot number. The example here was
--- written as an example, but it would be hoped that this value would be cached in the
--- application or calculated in a VIEW.
-querySlotPosixTime :: MonadIO m => Word64 -> ReaderT SqlBackend m (Either LookupFail POSIXTime)
-querySlotPosixTime slotNo =
-  runExceptT $ do
-    meta <- ExceptT queryMeta
-    pure $ slotPosixTime meta slotNo
-
--- | Calculate the slot time (as UTCTime) for a given slot number. The example here was
--- written as an example, but it would be hoped that this value would be cached in the
--- application or calculated in a VIEW.
+-- | Calculate the slot time (as UTCTime) for a given slot number.
+-- This will fail if the slot is empty.
 querySlotUtcTime :: MonadIO m => Word64 -> ReaderT SqlBackend m (Either LookupFail UTCTime)
-querySlotUtcTime slotNo =
-  runExceptT $ do
-    meta <- ExceptT queryMeta
-    pure $ slotUtcTime meta slotNo
+querySlotUtcTime slotNo = do
+    le <- select . from $ \ blk -> do
+            where_ (blk ^. BlockSlotNo ==. just (val slotNo))
+            pure (blk ^. BlockTime)
+    pure $ maybe (Left $ DbLookupSlotNo slotNo) (Right . unValue) (listToMaybe le)
 
 -- | Get the current total supply of Lovelace.
 queryTotalSupply :: MonadIO m => ReaderT SqlBackend m Ada
@@ -578,29 +560,33 @@ entityPair :: Entity a -> (Key a, a)
 entityPair e =
   (entityKey e, entityVal e)
 
+{-# DEPRECATED epochUtcStartTime "Slot duration is no longer a constant." #-}
 epochUtcStartTime :: Meta -> Word64 -> UTCTime
-epochUtcStartTime meta epochNum =
+epochUtcStartTime _meta _slotNo = error "epochUtcStartTime"
   -- Slot duration is in milliseconds.
-  addUTCTime (0.001 * fromIntegral (metaSlotsPerEpoch meta * epochNum * metaSlotDuration meta))
-                (metaStartTime meta)
+  -- addUTCTime (0.001 * fromIntegral (metaSlotsPerEpoch meta * epochNum * metaSlotDuration meta))
+  --               (metaStartTime meta)
 
+{-# DEPRECATED epochUtcEndTime "Slot duration is no longer a constant." #-}
 epochUtcEndTime :: Meta -> Word64 -> UTCTime
-epochUtcEndTime meta epochNum =
-  addUTCTime (negate . fromIntegral $ metaSlotDuration meta) (epochUtcStartTime meta (epochNum + 1))
+epochUtcEndTime _meta _slotNo = error "epochUtcEndTime"
+  -- addUTCTime (negate . fromIntegral $ metaSlotDuration meta) (epochUtcStartTime meta (epochNum + 1))
+
+-- Compare the provided time with the current time and return True if the provided time
+-- is within 120 seconds of the current time.
+isFullySynced :: UTCTime -> IO Bool
+isFullySynced slotTime = do
+  -- This assumes that the local clock is correct.
+  -- This is a valid assumption as db-sync is connected to a locally running node
+  -- and the node needs to have a correct local clock to validate transactions.
+  currentTime <- getCurrentTime
+  -- diffUTCTime returns seconds.
+  let sec = ceiling (diffUTCTime currentTime slotTime) :: Int
+  pure $ abs sec < 120
 
 maybeToEither :: e -> (a -> b) -> Maybe a -> Either e b
 maybeToEither e f =
   maybe (Left e) (Right . f)
-
-slotPosixTime :: Meta -> Word64 -> POSIXTime
-slotPosixTime meta =
-  utcTimeToPOSIXSeconds . slotUtcTime meta
-
-slotUtcTime :: Meta -> Word64 -> UTCTime
-slotUtcTime meta slotNo =
-  -- Slot duration is in milliseconds.
-  addUTCTime (0.001 * fromIntegral (slotNo * metaSlotDuration meta)) (metaStartTime meta)
-
 
 unBlockId :: BlockId -> Word64
 unBlockId = fromIntegral . unSqlBackendKey . unBlockKey

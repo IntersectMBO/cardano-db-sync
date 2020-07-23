@@ -21,6 +21,7 @@ data LookupFail
   | DbLookupTxHash !ByteString
   | DbLookupTxOutPair !ByteString !Word16
   | DbLookupEpochNo !Word64
+  | DbLookupSlotNo !Word64
   | DbMetaEmpty
   | DbMetaMultipleRows
   deriving (Eq, Show)
@@ -36,6 +37,8 @@ renderLookupFail lf =
         Text.concat [ "tx out pair (", base16encode h, ", ", textShow i, ")" ]
     DbLookupEpochNo e ->
         Text.concat [ "epoch number ", textShow e ]
+    DbLookupSlotNo s ->
+        Text.concat [ "slot number ", textShow s ]
     DbMetaEmpty -> "Meta table is empty"
     DbMetaMultipleRows -> "Multiple rows in Meta table which should only contain one"
 

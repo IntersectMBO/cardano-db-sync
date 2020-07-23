@@ -5,6 +5,7 @@
 
 module Cardano.DbSync.Era
   ( GenesisEra (..)
+  , genesisConfigToEnv
   , genesisNetworkMagic
   , genesisProtocolMagicId
   , insertValidateGenesisDist
@@ -23,6 +24,8 @@ import           Cardano.DbSync.Config
 import qualified Cardano.DbSync.Era.Byron.Genesis as Byron
 import qualified Cardano.DbSync.Era.Shelley.Genesis as Shelley
 import           Cardano.DbSync.Error
+import           Cardano.DbSync.Types
+import           Cardano.DbSync.Util
 
 import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, newExceptT)
@@ -30,10 +33,12 @@ import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, ne
 import qualified Data.Aeson as Aeson
 import qualified Data.Text as Text
 
+import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
 import           Ouroboros.Network.Magic (NetworkMagic (..))
 
+import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.Genesis as Shelley
 
 data GenesisEra
@@ -76,6 +81,50 @@ insertValidateGenesisDist trce nname genCfg =
       Shelley.insertValidateGenesisDist trce (unNetworkName nname) sCfg
 
 -- -----------------------------------------------------------------------------
+
+genesisConfigToEnv :: GenesisEra -> Either DbSyncNodeError DbSyncEnv
+genesisConfigToEnv genCfg =
+    case genCfg of
+      GenesisByron bCfg ->
+        Right $ DbSyncEnv
+                  { envProtocol = DbSyncProtocolByron
+                  , envNetwork = byronProtocolMagicIdToShelleyNetwok (Byron.configProtocolMagicId bCfg)
+                  , envNetworkMagic = NetworkMagic $ (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+                  , envSystemStart = SystemStart (Byron.gdStartTime $ Byron.configGenesisData bCfg)
+                  }
+      GenesisShelley sCfg ->
+        Right $ DbSyncEnv
+                  { envProtocol = DbSyncProtocolShelley
+                  , envNetwork = Shelley.sgNetworkId sCfg
+                  , envNetworkMagic = NetworkMagic (Shelley.sgNetworkMagic sCfg)
+                  , envSystemStart = SystemStart $ Shelley.sgSystemStart sCfg
+                  }
+      GenesisCardano bCfg sCfg
+        | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic sCfg ->
+            Left . NECardanoConfig $
+              mconcat
+                [ "ProtocolMagcId ", textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+                , " /= ", textShow (Shelley.sgNetworkMagic sCfg)
+                ]
+        | Byron.gdStartTime (Byron.configGenesisData bCfg) /= Shelley.sgSystemStart sCfg ->
+            Left . NECardanoConfig $
+              mconcat
+                [ "SystemStart ", textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
+                , " /= ", textShow (Shelley.sgSystemStart sCfg)
+                ]
+        | otherwise ->
+            Right $ DbSyncEnv
+                  { envProtocol = DbSyncProtocolCardano
+                  , envNetwork = Shelley.sgNetworkId sCfg
+                  , envNetworkMagic = NetworkMagic (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+                  , envSystemStart = SystemStart (Byron.gdStartTime $ Byron.configGenesisData bCfg)
+                  }
+  where
+    byronProtocolMagicIdToShelleyNetwok :: ProtocolMagicId -> Shelley.Network
+    byronProtocolMagicIdToShelleyNetwok pmid =
+      if pmid == Byron.mainnetProtocolMagicId
+        then Shelley.Mainnet
+        else Shelley.Testnet
 
 readGenesisConfig
         :: DbSyncNodeConfig
