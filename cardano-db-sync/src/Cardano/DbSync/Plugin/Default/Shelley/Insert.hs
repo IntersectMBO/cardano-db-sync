@@ -15,6 +15,8 @@ import           Cardano.Prelude
 
 import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo)
 
+import           Cardano.Db (DbWord64 (..))
+
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT, runExceptT)
 
@@ -208,7 +210,7 @@ insertPoolRegister tracer txId params = do
                     DB.PoolUpdate
                       { DB.poolUpdateHashId = poolHashId
                       , DB.poolUpdateVrfKey = Crypto.hashToBytes (Shelley._poolVrf params)
-                      , DB.poolUpdatePledge = fromIntegral $ Shelley.unCoin (Shelley._poolPledge params)
+                      , DB.poolUpdatePledge = DbWord64 $ fromIntegral (Shelley.unCoin $ Shelley._poolPledge params)
                       , DB.poolUpdateRewardAddrId = rewardId
                       , DB.poolUpdateMeta = mdId
                       , DB.poolUpdateMargin = realToFrac $ Shelley.intervalValue (Shelley._poolMargin params)

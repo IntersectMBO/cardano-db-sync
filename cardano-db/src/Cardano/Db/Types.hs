@@ -6,6 +6,7 @@
 
 module Cardano.Db.Types
   ( Ada (..)
+  , DbWord64 (..)
   , lovelaceToAda
   , renderAda
   , scientificToAda
@@ -43,9 +44,11 @@ instance ToJSON Ada where
 
     toJSON = error "Ada.toJSON not supported due to numeric issues. Use toEncoding instead."
 
-
 instance Show Ada where
     show (Ada ada) = showFixed True ada
+
+-- Newtype wrapper around Word64 so we can hand define a PersistentField instance.
+newtype DbWord64 = DbWord64 { unDbWord64 :: Word64 }
 
 lovelaceToAda :: Micro -> Ada
 lovelaceToAda ll =

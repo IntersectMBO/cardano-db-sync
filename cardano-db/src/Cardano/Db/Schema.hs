@@ -17,6 +17,7 @@
 module Cardano.Db.Schema where
 
 import Cardano.Db.Schema.Orphans ()
+import Cardano.Db.Types (DbWord64)
 
 import Data.ByteString.Char8 (ByteString)
 import Data.Int (Int64)
@@ -82,7 +83,7 @@ share
     slotLeader          SlotLeaderId
     size                Word64              sqltype=uinteger
     time                UTCTime             sqltype=timestamp
-    txCount             Word64              sqltype=uinteger
+    txCount             Word64
     -- Shelley specific
     vrfKey              ByteString Maybe    sqltype=hash32type
     opCert              ByteString Maybe    sqltype=hash32type
@@ -91,11 +92,11 @@ share
 
   Tx
     hash                ByteString          sqltype=hash32type
-    block               BlockId             -- This type is the primary key for the 'block' table.
-    blockIndex          Word64              sqltype=uinteger  -- The index of this transaction within the block.
+    block               BlockId                                 -- This type is the primary key for the 'block' table.
+    blockIndex          Word64              sqltype=uinteger    -- The index of this transaction within the block.
     outSum              Word64              sqltype=lovelace
     fee                 Word64              sqltype=lovelace
-    deposit             Int64
+    deposit             Int64                                   -- Needs to allow negaitve values.
     size                Word64              sqltype=uinteger
     UniqueTx            hash
 
@@ -131,7 +132,7 @@ share
   -- hold 204 times the total Lovelace distribution. The chance of that much being transacted
   -- in a single epoch is relatively low.
   Epoch
-    outSum              Word128             sqltype=word128
+    outSum              Word128             sqltype=word128type
     txCount             Word64              sqltype=uinteger
     blkCount            Word64              sqltype=uinteger
     no                  Word64              sqltype=uinteger
@@ -160,12 +161,12 @@ share
   PoolUpdate
     hashId              PoolHashId
     vrfKey              ByteString          sqltype=hash32type
-    pledge              Word64              -- This really should be sqltype=lovelace See https://github.com/input-output-hk/cardano-ledger-specs/issues/1551
+    pledge              DbWord64            sqltype=word64type
     rewardAddrId        StakeAddressId
     meta                PoolMetaDataId Maybe
-    margin              Double              -- sqltype=percentage????
-    fixedCost           Word64
-    registeredTxId      TxId                -- Slot number in which the pool was registered.
+    margin              Double                                  -- sqltype=percentage????
+    fixedCost           Word64              sqltype=lovelace
+    registeredTxId      TxId                                    -- Slot number in which the pool was registered.
     UniquePoolUpdate    hashId registeredTxId
 
   PoolOwner
@@ -175,8 +176,8 @@ share
 
   PoolRetire
     updateId            PoolUpdateId
-    announcedTxId       TxId                -- Slot number in which the pool announced it was retiring.
-    retiringEpoch       Word64              -- Epoch number in which the pool will retire.
+    announcedTxId       TxId                                    -- Slot number in which the pool announced it was retiring.
+    retiringEpoch       Word64              sqltype=uinteger    -- Epoch number in which the pool will retire.
     UniquePoolRetiring  updateId
 
   PoolRelay
@@ -246,16 +247,16 @@ share
   -- Table to hold parameter updates.
 
   ParamUpdate
-    epochNo             Word64
-    minFee              Word64
-    maxFee              Word64
-    maxBlockSize        Word64
-    maxTxSize           Word64
-    maxBhSize           Word64
+    epochNo             Word64              sqltype=uinteger
+    minFee              Word64              sqltype=uinteger
+    maxFee              Word64              sqltype=uinteger
+    maxBlockSize        Word64              sqltype=uinteger
+    maxTxSize           Word64              sqltype=uinteger
+    maxBhSize           Word64              sqltype=uinteger
     keyDeposit          Word64              sqltype=lovelace
     poolDeposit         Word64              sqltype=lovelace
-    maxEpoch            Word64
-    nOptimal            Word64
+    maxEpoch            Word64              sqltype=uinteger
+    nOptimal            Word64              sqltype=uinteger
     influence           Double              -- sqltype=rational
     monetaryExpandRate  Word64              sqltype=interval
     treasuryGrowthRate  Word64              sqltype=interval
