@@ -1,5 +1,11 @@
 # Revision history for cardano-db-sync node
 
+## 3.0.0 -- July 2020
+
+* Note that this release requires the database to be dropped and recreated.
+  It requires cardano-node 1.16 or later.
+* Add support for the cardano-node in Cardano mode (#186, #188, #196)
+
 ## 2.1.0 -- July 2020
 
 * Note that this release requires the database to be dropped and recreated

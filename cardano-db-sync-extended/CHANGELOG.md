@@ -1,5 +1,11 @@
 # Revision history for cardano-db-sync-extended
 
+## 3.0.0 -- July 2020
+
+* Note that this release requires the database to be dropped and recreated.
+  It requires cardano-node 1.16 or later.
+* Fix to support very large values of per-epoch aggregate tc outputs (#201)
+
 ## 2.1.0 -- July 2020
 
 * Note that this release requires the database to be dropped and recreated

@@ -1,10 +1,17 @@
 # Revision history for cardano-db
 
+## 3.0.0 -- July 2020
+
+* Note that this release requires the database to be dropped and recreated
+* Further Shelley schema additions and changes (#173, #174, #199)
+* Fix to support very large values of per-epoch aggregate tc outputs (#201)
+* Support Word64 column types properly (#203)
+
 ## 2.1.0 -- July 2020
 
 * Note that this release requires the database to be dropped and recreated
-* The database schema has been accepted to accept the superset of Byron and Shelley
-  era information
+* The database schema has been adjusted to accept the superset of Byron and
+  Shelley era information
 * Shelley is still not fully supported
 * Remove last hard coded values for slots per epoch
 
