@@ -25,6 +25,10 @@ BEGIN
     -- is positive.
     EXECUTE 'CREATE DOMAIN word128type AS numeric (38, 0) CHECK (VALUE >= 0);';
 
+    -- 'maxBound :: Word64' as a decimal has 20 digits but not all 20 digit values are less than
+    -- 'maxBound :: Word64'.
+    EXECUTE 'CREATE DOMAIN word64type AS numeric (20, 0) CHECK (VALUE >= 0 AND VALUE <= 18446744073709551615);';
+
     UPDATE "schema_version" SET stage_one = 1;
     RAISE NOTICE 'DB has been migrated to stage_one version %', next_version;
   END IF;
