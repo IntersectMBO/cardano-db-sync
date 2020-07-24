@@ -67,11 +67,11 @@ import           Shelley.Spec.Ledger.Coin (Coin (..))
 import qualified Shelley.Spec.Ledger.Crypto as Shelley
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.BlockChain as Shelley
+import qualified Shelley.Spec.Ledger.Hashing as Shelley
 import qualified Shelley.Spec.Ledger.Keys as Shelley
 import qualified Shelley.Spec.Ledger.OCert as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxData as Shelley
-import qualified Shelley.Spec.Ledger.UTxO as Shelley
 
 blockBody :: Shelley.ShelleyBlock TPraosStandardCrypto -> Shelley.BHBody TPraosStandardCrypto
 blockBody = Shelley.bhbody . Shelley.bheader . Shelley.shelleyBlockRaw
@@ -184,7 +184,7 @@ txFee :: ShelleyTx -> Word64
 txFee = fromIntegral . unCoin . Shelley._txfee . Shelley._body
 
 txHash :: ShelleyTx -> ByteString
-txHash = Crypto.hashToBytes . Shelley.hashTxBody . Shelley._body
+txHash = Crypto.hashToBytes . Shelley.hashAnnotated . Shelley._body
 
 txInputList :: ShelleyTx -> [ShelleyTxIn]
 txInputList = toList . Shelley._inputs . Shelley._body
