@@ -16,11 +16,14 @@
 
 module Cardano.Db.Schema where
 
+import Cardano.Db.Schema.Orphans ()
+
 import Data.ByteString.Char8 (ByteString)
 import Data.Int (Int64)
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import Data.Word (Word16, Word64)
+import Data.WideWord.Word128 (Word128)
 
 -- Do not use explicit imports from this module as the imports can change
 -- from version to version due to changes to the TH code in Persistent.
@@ -128,7 +131,7 @@ share
   -- hold 204 times the total Lovelace distribution. The chance of that much being transacted
   -- in a single epoch is relatively low.
   Epoch
-    outSum              Word64              sqltype=outsum
+    outSum              Word128             sqltype=word128
     txCount             Word64              sqltype=uinteger
     blkCount            Word64              sqltype=uinteger
     no                  Word64              sqltype=uinteger
