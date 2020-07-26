@@ -81,7 +81,7 @@ testSlotLeader =
 
 mkTxOut :: BlockId -> TxId -> TxOut
 mkTxOut blkId txId =
-  TxOut txId 0 (mkAddressHash blkId txId) 1000000000
+  TxOut txId 0 (mkAddressHash blkId txId) Nothing 1000000000
 
 unTxId :: TxId -> Word64
 unTxId = fromIntegral . unSqlBackendKey . unTxKey

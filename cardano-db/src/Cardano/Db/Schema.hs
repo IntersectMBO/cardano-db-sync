@@ -104,6 +104,7 @@ share
     txId                TxId                -- This type is the primary key for the 'tx' table.
     index               Word16              sqltype=txindex
     address             Text
+    paymentCred         ByteString Maybe    sqltype=hash28type
     value               Word64              sqltype=lovelace
     UniqueTxout         txId index          -- The (tx_id, index) pair must be unique.
 
