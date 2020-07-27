@@ -65,7 +65,7 @@ insertShelleyBlock tracer env blk details = do
                     { DB.blockHash = Shelley.blockHash blk
                     , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
                     , DB.blockSlotNo = Just $ Shelley.slotNumber blk
-                    , DB.blockEpochSlotNo = Just $ unSlotInEpoch (sdSlotInEpoch details)
+                    , DB.blockEpochSlotNo = Just $ unEpochSlot (sdEpochSlot details)
                     , DB.blockBlockNo = Just $ Shelley.blockNumber blk
                     , DB.blockPrevious  = Just pbid
                     , DB.blockMerkelRoot = Nothing -- Shelley blocks do not have one.
@@ -84,7 +84,7 @@ insertShelleyBlock tracer env blk details = do
 
     liftIO $ do
       let epoch = unEpochNo (sdEpochNo details)
-          slotWithinEpoch = unSlotInEpoch (sdSlotInEpoch details)
+          slotWithinEpoch = unEpochSlot (sdEpochSlot details)
       followingClosely <- DB.isFullySynced (sdTime details)
 
       when (followingClosely && slotWithinEpoch /= 0 && Shelley.slotNumber blk `mod` 200 == 0) $ do

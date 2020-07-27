@@ -23,7 +23,7 @@ module Cardano.DbSync.Types
   , ShelleyTxOut
   , ShelleyTxSeq
   , SlotDetails (..)
-  , SlotInEpoch (..)
+  , EpochSlot (..)
   , SocketPath (..)
   ) where
 
@@ -99,12 +99,12 @@ type ShelleyTxSeq = Shelley.TxSeq Shelley.TPraosStandardCrypto
 data SlotDetails = SlotDetails
   { sdTime :: !UTCTime
   , sdEpochNo :: !EpochNo
-  , sdSlotInEpoch :: !SlotInEpoch
+  , sdEpochSlot :: !EpochSlot
   , sdEpochSize :: !EpochSize
   } deriving (Eq, Show)
 
-newtype SlotInEpoch = SlotInEpoch
-  { unSlotInEpoch :: Word64
+newtype EpochSlot = EpochSlot
+  { unEpochSlot :: Word64
   } deriving (Eq, Show)
 
 newtype SocketPath = SocketPath

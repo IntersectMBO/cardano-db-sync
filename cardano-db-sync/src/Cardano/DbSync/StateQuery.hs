@@ -142,7 +142,7 @@ querySlotDetails start absSlot = do
   utcTime <- relToUTCTime start <$> QRelToAbsTime relTime
   (absEpoch, slotInEpoch)  <- slotToEpoch' absSlot
   epochSize <- QEpochSize absEpoch
-  pure $ SlotDetails utcTime absEpoch (SlotInEpoch slotInEpoch) epochSize
+  pure $ SlotDetails utcTime absEpoch (EpochSlot slotInEpoch) epochSize
 
 relToUTCTime :: SystemStart -> RelativeTime -> UTCTime
 relToUTCTime (SystemStart start) (RelativeTime rel) = addUTCTime rel start
