@@ -120,7 +120,7 @@ insertABlock tracer blk details = do
                     { DB.blockHash = Byron.blockHash blk
                     , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
                     , DB.blockSlotNo = Just $ Byron.slotNumber blk
-                    , DB.blockEpochSlotNo = Just $ unSlotInEpoch (sdSlotInEpoch details)
+                    , DB.blockEpochSlotNo = Just $ unEpochSlot (sdEpochSlot details)
                     , DB.blockBlockNo = Just $ Byron.blockNumber blk
                     , DB.blockPrevious = Just pbid
                     , DB.blockMerkelRoot = Just $ Byron.unCryptoHash (Byron.blockMerkelRoot blk)
@@ -139,7 +139,7 @@ insertABlock tracer blk details = do
 
     liftIO $ do
       let epoch = unEpochNo (sdEpochNo details)
-          slotWithinEpoch = unSlotInEpoch (sdSlotInEpoch details)
+          slotWithinEpoch = unEpochSlot (sdEpochSlot details)
       followingClosely <- DB.isFullySynced (sdTime details)
 
       when (followingClosely && slotWithinEpoch /= 0 && Byron.slotNumber blk `mod` 20 == 0) $ do
