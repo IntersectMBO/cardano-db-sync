@@ -15,7 +15,6 @@ module Cardano.DbSync.Era.Shelley.Genesis
 
 import           Cardano.Prelude
 
-import qualified Cardano.Binary as Binary
 import           Cardano.BM.Trace (Trace, logInfo)
 
 import           Control.Monad (void)
@@ -24,11 +23,9 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Map.Strict as Map
 import           Data.Text (Text)
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
 import           Data.Time.Clock (UTCTime (..))
 import qualified Data.Time.Clock as Time
 
@@ -184,7 +181,8 @@ insertTxOuts blkId (Shelley.TxIn txInId _, txOut) = do
             DB.TxOut
               { DB.txOutTxId = txId
               , DB.txOutIndex = 0
-              , DB.txOutAddress = Text.decodeUtf8 $ Base16.encode (Binary.serialize' $ txOutAddress txOut)
+              , DB.txOutAddress = Shelley.renderAddress (txOutAddress txOut)
+              , DB.txOutPaymentCred = Shelley.maybePaymentCred (txOutAddress txOut)
               , DB.txOutValue = fromIntegral $ Shelley.unCoin (txOutCoin txOut)
               }
   where

@@ -200,6 +200,7 @@ insertTxOut _tracer txId index txout =
               { DB.txOutTxId = txId
               , DB.txOutIndex = fromIntegral index
               , DB.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
+              , DB.txOutPaymentCred = Nothing -- Byron does not have a payment credential.
               , DB.txOutValue = Byron.unsafeGetLovelace $ Byron.txOutValue txout
               }
 

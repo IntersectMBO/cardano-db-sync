@@ -38,6 +38,6 @@ initialSupplyTest =
     bid1 <- insertBlock (mkBlock 1 slid)
     tx1Id <- insertTx (Tx (mkTxHash bid1 1) bid1 0 500000000 100 0 123)
     _ <- insertTxIn (TxIn tx1Id (head tx0Ids) 0)
-    _ <- insertTxOut $ TxOut tx1Id 0 (mkAddressHash bid1 tx1Id) 500000000
+    _ <- insertTxOut $ TxOut tx1Id 0 (mkAddressHash bid1 tx1Id) Nothing 500000000
     supply1 <- queryTotalSupply
     assertBool ("Total supply should be < " ++ show supply0) (supply1 < supply0)
