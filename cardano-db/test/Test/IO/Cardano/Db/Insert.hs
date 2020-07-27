@@ -51,13 +51,42 @@ insertFirstTest =
 
 blockZero :: SlotLeaderId -> Block
 blockZero slid =
-  Block (mkHash32 '\0') (Just 0) Nothing Nothing Nothing Nothing slid 42 dummyUTCTime 0
-    Nothing Nothing Nothing
+  Block
+    { blockHash = mkHash32 '\0'
+    , blockEpochNo = Just 0
+    , blockSlotNo = Just 0
+    , blockEpochSlotNo = Just 0
+    , blockBlockNo = Just 0
+    , blockPrevious = Nothing
+    , blockMerkelRoot = Nothing
+    , blockSlotLeader = slid
+    , blockSize = 42
+    , blockTime = dummyUTCTime
+    , blockTxCount = 0
+    , blockVrfKey = Nothing
+    , blockOpCert = Nothing
+    , blockProtoVersion = Nothing
+    }
+
 
 blockOne :: SlotLeaderId -> Block
 blockOne slid =
-  Block (mkHash32 '\1') (Just 0) (Just 0) (Just 1) Nothing (Just $ mkMerkelRoot 1) slid 42 dummyUTCTime 0
-    Nothing Nothing Nothing
+  Block
+    { blockHash = mkHash32 '\1'
+    , blockEpochNo = Just 0
+    , blockSlotNo = Just 1
+    , blockEpochSlotNo = Just 1
+    , blockBlockNo = Just 1
+    , blockPrevious = Nothing
+    , blockMerkelRoot = Just $ mkMerkelRoot 1
+    , blockSlotLeader = slid
+    , blockSize = 42
+    , blockTime = dummyUTCTime
+    , blockTxCount = 0
+    , blockVrfKey = Nothing
+    , blockOpCert = Nothing
+    , blockProtoVersion = Nothing
+    }
 
 mkHash32 :: Char -> ByteString
 mkHash32 = BS.pack . replicate 32

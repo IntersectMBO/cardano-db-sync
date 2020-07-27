@@ -10,6 +10,7 @@ BEGIN
     EXECUTE 'ALTER TABLE "pool_hash" ADD CONSTRAINT "unique_pool_hash" UNIQUE("hash")' ;
     EXECUTE 'ALTER TABLE "slot_leader" ALTER COLUMN "hash" TYPE hash32type' ;
     EXECUTE 'ALTER TABLE "slot_leader" ADD COLUMN "pool_hash_id" INT8 NULL' ;
+    EXECUTE 'ALTER TABLE "block" ADD COLUMN "epoch_slot_no" uinteger NULL' ;
     EXECUTE 'ALTER TABLE "block" ALTER COLUMN "tx_count" TYPE INT8' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "vrf_key" hash32type NULL' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "op_cert" hash32type NULL' ;

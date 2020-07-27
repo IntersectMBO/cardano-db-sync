@@ -65,6 +65,7 @@ insertShelleyBlock tracer env blk details = do
                     { DB.blockHash = Shelley.blockHash blk
                     , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
                     , DB.blockSlotNo = Just $ Shelley.slotNumber blk
+                    , DB.blockEpochSlotNo = Just $ unSlotInEpoch (sdSlotInEpoch details)
                     , DB.blockBlockNo = Just $ Shelley.blockNumber blk
                     , DB.blockPrevious  = Just pbid
                     , DB.blockMerkelRoot = Nothing -- Shelley blocks do not have one.

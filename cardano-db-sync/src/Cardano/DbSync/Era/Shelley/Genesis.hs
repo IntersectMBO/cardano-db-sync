@@ -93,6 +93,7 @@ insertValidateGenesisDist tracer networkName cfg = do
                             { DB.blockHash = configGenesisHash cfg
                             , DB.blockEpochNo = Nothing
                             , DB.blockSlotNo = Nothing
+                            , DB.blockEpochSlotNo = Nothing
                             , DB.blockBlockNo = Nothing
                             , DB.blockPrevious = Nothing
                             , DB.blockMerkelRoot = Nothing

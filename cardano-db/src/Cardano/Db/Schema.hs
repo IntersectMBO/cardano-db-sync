@@ -75,6 +75,7 @@ share
     hash                ByteString          sqltype=hash32type
     epochNo             Word64 Maybe        sqltype=uinteger
     slotNo              Word64 Maybe        sqltype=uinteger
+    epochSlotNo         Word64 Maybe        sqltype=uinteger
     blockNo             Word64 Maybe        sqltype=uinteger
     previous            BlockId Maybe
     -- Shelley does not have a Merkel Root, but Byrin does.
