@@ -3,7 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Cardano.DbSync.Plugin.Default.Shelley.Query
+module Cardano.DbSync.Era.Shelley.Query
   ( queryPoolHashId
   , queryStakeAddress
   , queryStakePoolKeyHash

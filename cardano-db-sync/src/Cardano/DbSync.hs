@@ -44,7 +44,7 @@ import           Cardano.DbSync.Error
 import           Cardano.DbSync.Metrics
 import           Cardano.DbSync.Plugin (DbSyncNodePlugin (..))
 import           Cardano.DbSync.Plugin.Default (defDbSyncNodePlugin)
-import           Cardano.DbSync.Plugin.Default.Rollback (unsafeRollback)
+import           Cardano.DbSync.Rollback (unsafeRollback)
 import           Cardano.DbSync.StateQuery (StateQueryTMVar, getSlotDetails,
                     localStateQueryHandler, newStateQueryTMVar)
 import           Cardano.DbSync.Tracing.ToObjectOrphans ()

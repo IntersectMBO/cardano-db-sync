@@ -7,7 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Cardano.DbSync.Plugin.Default.Byron.Insert
+module Cardano.DbSync.Era.Byron.Insert
   ( insertByronBlock
   ) where
 
