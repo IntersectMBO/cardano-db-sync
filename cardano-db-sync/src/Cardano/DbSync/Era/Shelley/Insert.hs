@@ -7,7 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Cardano.DbSync.Plugin.Default.Shelley.Insert
+module Cardano.DbSync.Era.Shelley.Insert
   ( insertShelleyBlock
   ) where
 
@@ -31,7 +31,7 @@ import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Db as DB
 import qualified Cardano.DbSync.Era.Shelley.Util as Shelley
 import           Cardano.DbSync.Error
-import           Cardano.DbSync.Plugin.Default.Shelley.Query
+import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 

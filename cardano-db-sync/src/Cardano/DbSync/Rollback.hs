@@ -1,6 +1,6 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Cardano.DbSync.Plugin.Default.Rollback
+module Cardano.DbSync.Rollback
   ( rollbackToSlot
   , unsafeRollback
   ) where

@@ -38,26 +38,23 @@ library
                         Cardano.DbSync.Era.Byron.Util
                         Cardano.DbSync.Era.Shelley.Util
 
-                        Cardano.DbSync.Plugin.Epoch
                         Cardano.DbSync.Config
                         Cardano.DbSync.Database
-
                         Cardano.DbSync.DbAction
-
                         Cardano.DbSync.Metrics
                         Cardano.DbSync.Plugin
                         Cardano.DbSync.Plugin.Default
+                        Cardano.DbSync.Plugin.Epoch
 
-                        Cardano.DbSync.Plugin.Default.Rollback
+                        Cardano.DbSync.Rollback
 
                         Cardano.DbSync.Tracing.ToObjectOrphans
 
   other-modules:        Cardano.DbSync.Era.Byron.Genesis
+                        Cardano.DbSync.Era.Byron.Insert
                         Cardano.DbSync.Era.Shelley.Genesis
-                        Cardano.DbSync.Plugin.Default.Byron.Insert
-                        Cardano.DbSync.Plugin.Default.Insert
-                        Cardano.DbSync.Plugin.Default.Shelley.Insert
-                        Cardano.DbSync.Plugin.Default.Shelley.Query
+                        Cardano.DbSync.Era.Shelley.Insert
+                        Cardano.DbSync.Era.Shelley.Query
                         Cardano.DbSync.StateQuery
 
   build-depends:        base                            >= 4.12         && < 4.13
