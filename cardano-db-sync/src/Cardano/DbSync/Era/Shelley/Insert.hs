@@ -326,7 +326,7 @@ insertMirCert
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DbSyncEnv -> DB.TxId -> ShelleyMIRCert
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertMirCert tracer env txId mcert = do
+insertMirCert _tracer env txId mcert = do
     case Shelley.mirPot mcert of
       Shelley.ReservesMIR ->
         mapM_ insertMirReserves $ Map.toList (Shelley.mirRewards mcert)
@@ -341,19 +341,27 @@ insertMirCert tracer env txId mcert = do
       addrId <- firstExceptT (NELookup "insertMirReserves")
                     . newExceptT
                     $ queryStakeAddress (Shelley.stakingCredHash env cred)
-      void . lift . DB.insertReward $
-        DB.Reward
-          { DB.rewardAddrId = addrId
-          , DB.rewardTxId = txId
-          , DB.rewardAmount = fromIntegral $ Shelley.unCoin coin
+      void . lift . DB.insertReserve $
+        DB.Reserve
+          { DB.reserveAddrId = addrId
+          , DB.reserveTxId = txId
+          , DB.reserveAmount = fromIntegral $ Shelley.unCoin coin
           }
 
     insertMirTreasury
-        :: MonadIO m -- (MonadBaseControl IO m, MonadIO m)
+        :: (MonadBaseControl IO m, MonadIO m)
         => (ShelleyStakingCred, Shelley.Coin)
         -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-    insertMirTreasury _ =
-      liftIO $ logError tracer "insertMirTreasury: Not handled yet"
+    insertMirTreasury (cred, coin) = do
+      addrId <- firstExceptT (NELookup "insertMirTreasury")
+                    . newExceptT
+                    $ queryStakeAddress (Shelley.stakingCredHash env cred)
+      void . lift . DB.insertTreasury $
+        DB.Treasury
+          { DB.treasuryAddrId = addrId
+          , DB.treasuryTxId = txId
+          , DB.treasuryAmount = fromIntegral $ Shelley.unCoin coin
+          }
 
 insertWithdrawals
     :: (MonadBaseControl IO m, MonadIO m)

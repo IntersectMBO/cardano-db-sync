@@ -43,8 +43,14 @@ BEGIN
     EXECUTE 'CREATe TABLE "pool_relay"("id" SERIAL8  PRIMARY KEY UNIQUE,"update_id" INT8 NOT NULL,"ipv4" VARCHAR NULL,"ipv6" VARCHAR NULL,"dns_name" VARCHAR NULL,"dns_srv_name" VARCHAR NULL,"port" INT4 NULL)' ;
     EXECUTE 'ALTER TABLE "pool_relay" ADD CONSTRAINT "unique_pool_relay" UNIQUE("update_id","ipv4","ipv6","dns_name")' ;
     EXECUTE 'ALTER TABLE "pool_relay" ADD CONSTRAINT "pool_relay_update_id_fkey" FOREIGN KEY("update_id") REFERENCES "pool_update"("id")' ;
-    EXECUTE 'CREATe TABLE "central_funds"("id" SERIAL8  PRIMARY KEY UNIQUE,"epoch_no" INT8 NOT NULL,"treasury" lovelace NOT NULL,"reserves" lovelace NOT NULL)' ;
-    EXECUTE 'ALTER TABLE "central_funds" ADD CONSTRAINT "unique_central_funds" UNIQUE("epoch_no")' ;
+    EXECUTE 'CREATe TABLE "reserve"("id" SERIAL8  PRIMARY KEY UNIQUE,"addr_id" INT8 NOT NULL,"amount" lovelace NOT NULL,"tx_id" INT8 NOT NULL)' ;
+    EXECUTE 'ALTER TABLE "reserve" ADD CONSTRAINT "unique_reserves" UNIQUE("addr_id","tx_id")' ;
+    EXECUTE 'ALTER TABLE "reserve" ADD CONSTRAINT "reserve_addr_id_fkey" FOREIGN KEY("addr_id") REFERENCES "stake_address"("id")' ;
+    EXECUTE 'ALTER TABLE "reserve" ADD CONSTRAINT "reserve_tx_id_fkey" FOREIGN KEY("tx_id") REFERENCES "tx"("id")' ;
+    EXECUTE 'CREATe TABLE "treasury"("id" SERIAL8  PRIMARY KEY UNIQUE,"addr_id" INT8 NOT NULL,"amount" lovelace NOT NULL,"tx_id" INT8 NOT NULL)' ;
+    EXECUTE 'ALTER TABLE "treasury" ADD CONSTRAINT "unique_treasury" UNIQUE("addr_id","tx_id")' ;
+    EXECUTE 'ALTER TABLE "treasury" ADD CONSTRAINT "treasury_addr_id_fkey" FOREIGN KEY("addr_id") REFERENCES "stake_address"("id")' ;
+    EXECUTE 'ALTER TABLE "treasury" ADD CONSTRAINT "treasury_tx_id_fkey" FOREIGN KEY("tx_id") REFERENCES "tx"("id")' ;
     EXECUTE 'CREATe TABLE "reward"("id" SERIAL8  PRIMARY KEY UNIQUE,"addr_id" INT8 NOT NULL,"amount" lovelace NOT NULL,"tx_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "reward" ADD CONSTRAINT "unique_reward" UNIQUE("addr_id","tx_id")' ;
     EXECUTE 'ALTER TABLE "reward" ADD CONSTRAINT "reward_addr_id_fkey" FOREIGN KEY("addr_id") REFERENCES "stake_address"("id")' ;

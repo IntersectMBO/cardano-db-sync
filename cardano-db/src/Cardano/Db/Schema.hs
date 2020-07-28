@@ -197,11 +197,19 @@ share
 
   -- -----------------------------------------------------------------------------------------------
 
-  CentralFunds
-    epochNo             Word64
-    treasury            Word64              sqltype=lovelace
-    reserves            Word64              sqltype=lovelace
-    UniqueCentralFunds  epochNo
+  Reserve
+    addrId              StakeAddressId
+    -- poolId              PoolHashId
+    amount              Word64              sqltype=lovelace
+    txId                TxId
+    UniqueReserves      addrId txId
+
+  Treasury
+    addrId              StakeAddressId
+    -- poolId              PoolHashId
+    amount              Word64              sqltype=lovelace
+    txId                TxId
+    UniqueTreasury      addrId txId
 
     -- The reward earned in the epoch by delegating to the specified pool.
     -- This design allows rewards to be discriminated based on how they are earned.
