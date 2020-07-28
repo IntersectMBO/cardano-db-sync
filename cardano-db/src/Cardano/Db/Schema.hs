@@ -250,23 +250,26 @@ share
 
   ParamUpdate
     epochNo             Word64              sqltype=uinteger
-    minFee              Word64              sqltype=uinteger
-    maxFee              Word64              sqltype=uinteger
-    maxBlockSize        Word64              sqltype=uinteger
-    maxTxSize           Word64              sqltype=uinteger
-    maxBhSize           Word64              sqltype=uinteger
-    keyDeposit          Word64              sqltype=lovelace
-    poolDeposit         Word64              sqltype=lovelace
-    maxEpoch            Word64              sqltype=uinteger
-    nOptimal            Word64              sqltype=uinteger
-    influence           Double              -- sqltype=rational
-    monetaryExpandRate  Word64              sqltype=interval
-    treasuryGrowthRate  Word64              sqltype=interval
-    activeSlotCoeff     Word64              sqltype=interval
-    decentralisation    Word64              sqltype=interval
-    entropy             ByteString          sqltype=hash32type
-    protocolVersion     ByteString          -- sqltype=protocol_version????
-    minCoin             Word64              sqltype=lovelace
-    UniqueParamUpdate   epochNo
+    key                 ByteString          sqltype=hash28type
+    minFeeA             Word64 Maybe        sqltype=uinteger
+    minFeeB             Word64 Maybe        sqltype=uinteger
+    maxBlockSize        Word64 Maybe        sqltype=uinteger
+    maxTxSize           Word64 Maybe        sqltype=uinteger
+    maxBhSize           Word64 Maybe        sqltype=uinteger
+    keyDeposit          Word64 Maybe        sqltype=lovelace
+    poolDeposit         Word64 Maybe        sqltype=lovelace
+    maxEpoch            Word64 Maybe        sqltype=uinteger
+    nOptimal            Word64 Maybe        sqltype=uinteger
+    influence           Double Maybe        -- sqltype=rational
+    monetaryExpandRate  Double Maybe        -- sqltype=interval
+    treasuryGrowthRate  Double Maybe        -- sqltype=interval
+    activeSlotCoeff     Double Maybe        -- sqltype=interval
+    entropy             ByteString Maybe    sqltype=hash32type
+    protocolVersion     Text Maybe
+    minUTxOValue        Word64 Maybe        sqltype=lovelace
+    minPoolCost         Word64 Maybe        sqltype=lovelace
+
+    registeredTxId      TxId                -- Slot number in which update registered.
+    UniqueParamUpdate   key registeredTxId
 
   |]

@@ -70,8 +70,9 @@ BEGIN
     EXECUTE 'ALTER TABLE "stake" ADD CONSTRAINT "unique_stake" UNIQUE("addr_id","stake")' ;
     EXECUTE 'ALTER TABLE "stake" ADD CONSTRAINT "stake_addr_id_fkey" FOREIGN KEY("addr_id") REFERENCES "stake_address"("id")' ;
     EXECUTE 'ALTER TABLE "stake" ADD CONSTRAINT "stake_tx_id_fkey" FOREIGN KEY("tx_id") REFERENCES "tx"("id")' ;
-    EXECUTE 'CREATe TABLE "param_update"("id" SERIAL8  PRIMARY KEY UNIQUE,"epoch_no" uinteger NOT NULL,"min_fee" uinteger NOT NULL,"max_fee" uinteger NOT NULL,"max_block_size" uinteger NOT NULL,"max_tx_size" uinteger NOT NULL,"max_bh_size" uinteger NOT NULL,"key_deposit" lovelace NOT NULL,"pool_deposit" lovelace NOT NULL,"max_epoch" uinteger NOT NULL,"n_optimal" uinteger NOT NULL,"influence" DOUBLE PRECISION NOT NULL,"monetary_expand_rate" interval NOT NULL,"treasury_growth_rate" interval NOT NULL,"active_slot_coeff" interval NOT NULL,"decentralisation" interval NOT NULL,"entropy" hash32type NOT NULL,"protocol_version" BYTEA NOT NULL,"min_coin" lovelace NOT NULL)' ;
-    EXECUTE 'ALTER TABLE "param_update" ADD CONSTRAINT "unique_param_update" UNIQUE("epoch_no")' ;
+    EXECUTE 'CREATe TABLE "param_update"("id" SERIAL8  PRIMARY KEY UNIQUE,"epoch_no" uinteger NOT NULL,"key" hash28type NOT NULL,"min_fee_a" uinteger NULL,"min_fee_b" uinteger NULL,"max_block_size" uinteger NULL,"max_tx_size" uinteger NULL,"max_bh_size" uinteger NULL,"key_deposit" lovelace NULL,"pool_deposit" lovelace NULL,"max_epoch" uinteger NULL,"n_optimal" uinteger NULL,"influence" DOUBLE PRECISION NULL,"monetary_expand_rate" DOUBLE PRECISION NULL,"treasury_growth_rate" DOUBLE PRECISION NULL,"active_slot_coeff" DOUBLE PRECISION NULL,"entropy" hash32type NULL,"protocol_version" VARCHAR NULL,"min_u_tx_o_value" lovelace NULL,"min_pool_cost" lovelace NULL,"registered_tx_id" INT8 NOT NULL)' ;
+    EXECUTE 'ALTER TABLE "param_update" ADD CONSTRAINT "unique_param_update" UNIQUE("key","registered_tx_id")' ;
+    EXECUTE 'ALTER TABLE "param_update" ADD CONSTRAINT "param_update_registered_tx_id_fkey" FOREIGN KEY("registered_tx_id") REFERENCES "tx"("id")' ;
     -- Hand written SQL statements can be added here.
     UPDATE schema_version SET stage_two = 3 ;
     RAISE NOTICE 'DB has been migrated to stage_two version %', next_version ;

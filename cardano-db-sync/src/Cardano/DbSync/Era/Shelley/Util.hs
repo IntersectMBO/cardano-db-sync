@@ -18,6 +18,7 @@ module Cardano.DbSync.Era.Shelley.Util
   , fakeGenesisHash
   , maybePaymentCred
   , mkSlotLeader
+  , nonceToBytes
   , pointToSlotHash
   , renderAddress
   , renderHash
@@ -26,13 +27,16 @@ module Cardano.DbSync.Era.Shelley.Util
   , stakingCredHash
   , txFee
   , txHash
+  , txDelegationCerts
   , txInputList
   , txOutputList
   , txOutputSum
   , txMirCertificates
+  , txParamUpdate
   , txPoolCertificates
-  , txDelegationCerts
+  , txWithdrawals
   , unHeaderHash
+  , unitIntervalToDouble
   , unKeyHashBS
   , unTxHash
   ) where
@@ -55,6 +59,7 @@ import qualified Data.Binary.Put as Binary
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
+import qualified Data.Map.Strict as Map
 import           Data.Sequence.Strict (StrictSeq (..))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -73,6 +78,7 @@ import qualified Shelley.Spec.Ledger.BlockChain as Shelley
 import qualified Shelley.Spec.Ledger.Hashing as Shelley
 import qualified Shelley.Spec.Ledger.Keys as Shelley
 import qualified Shelley.Spec.Ledger.OCert as Shelley
+import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxData as Shelley
 
@@ -146,6 +152,12 @@ mkSlotLeader blk mPoolId =
   in Db.SlotLeader slHash mPoolId slName
 
 
+nonceToBytes :: Shelley.Nonce -> ByteString
+nonceToBytes nonce =
+  case nonce of
+    Shelley.Nonce hash -> Crypto.hashToBytes hash
+    Shelley.NeutralNonce -> BS.replicate 28 '\0'
+
 -- | Convert from Ouroboros 'Point' to `Shelley' types.
 pointToSlotHash :: Point (Shelley.ShelleyBlock TPraosStandardCrypto) -> Maybe (SlotNo, ShelleyHash)
 pointToSlotHash (Point x) =
@@ -181,9 +193,9 @@ stakingCredHash env cred =
   in Shelley.serialiseRewardAcnt $ Shelley.RewardAcnt network cred
 
 
-txDelegationCerts :: ShelleyTxBody -> [ShelleyDelegCert]
-txDelegationCerts txBody =
-    mapMaybe extractDelegationCerts $ toList (Shelley._certs txBody)
+txDelegationCerts :: ShelleyTx -> [ShelleyDelegCert]
+txDelegationCerts tx =
+    mapMaybe extractDelegationCerts $ toList (Shelley._certs $ Shelley._body tx)
   where
     extractDelegationCerts :: ShelleyDCert -> Maybe ShelleyDelegCert
     extractDelegationCerts dcert =
@@ -200,9 +212,9 @@ txHash = Crypto.hashToBytes . Shelley.hashAnnotated . Shelley._body
 txInputList :: ShelleyTx -> [ShelleyTxIn]
 txInputList = toList . Shelley._inputs . Shelley._body
 
-txMirCertificates :: ShelleyTxBody -> [ShelleyMIRCert]
-txMirCertificates txBody =
-    mapMaybe extractMirCert $ toList (Shelley._certs txBody)
+txMirCertificates :: ShelleyTx -> [ShelleyMIRCert]
+txMirCertificates tx =
+    mapMaybe extractMirCert $ toList (Shelley._certs $ Shelley._body tx)
   where
     extractMirCert :: ShelleyDCert -> Maybe ShelleyMIRCert
     extractMirCert dcert =
@@ -210,9 +222,12 @@ txMirCertificates txBody =
         Shelley.DCertMir mcert -> Just mcert
         _otherwise -> Nothing
 
-txPoolCertificates :: ShelleyTxBody -> [ShelleyPoolCert]
-txPoolCertificates txBody =
-    mapMaybe extractPoolCertificate $ toList (Shelley._certs txBody)
+txParamUpdate :: ShelleyTx -> Maybe (Shelley.Update TPraosStandardCrypto)
+txParamUpdate = Shelley.strictMaybeToMaybe . Shelley._txUpdate . Shelley._body
+
+txPoolCertificates :: ShelleyTx -> [ShelleyPoolCert]
+txPoolCertificates tx =
+    mapMaybe extractPoolCertificate $ toList (Shelley._certs $ Shelley._body tx)
   where
     extractPoolCertificate :: ShelleyDCert -> Maybe ShelleyPoolCert
     extractPoolCertificate dcert =
@@ -232,8 +247,14 @@ txOutputSum tx =
     outValue :: ShelleyTxOut -> Word64
     outValue (Shelley.TxOut _ coin) = fromIntegral $ unCoin coin
 
+txWithdrawals :: ShelleyTx -> [(Shelley.RewardAcnt TPraosStandardCrypto, Coin)]
+txWithdrawals = Map.toList . Shelley.unWdrl . Shelley._wdrls . Shelley._body
+
 unHeaderHash :: ShelleyHash -> ByteString
 unHeaderHash = Crypto.hashToBytes . Shelley.unHashHeader . Shelley.unShelleyHash
+
+unitIntervalToDouble :: Shelley.UnitInterval -> Double
+unitIntervalToDouble = fromRational . Shelley.unitIntervalToRational
 
 unKeyHash :: Shelley.KeyHash d crypto -> Crypto.Hash (Shelley.ADDRHASH crypto) (DSIGN.VerKeyDSIGN (Shelley.DSIGN crypto))
 unKeyHash (Shelley.KeyHash x) = x
