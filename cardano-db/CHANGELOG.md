@@ -1,5 +1,15 @@
 # Revision history for cardano-db
 
+## 3.1.0 -- July 2020
+
+* Add a `payment_cred` column to the tx_out table for the benefit of wallet
+  implementations (#208)
+* Add a `slot_in_epoch` column to the block table. Slot numbers become more
+  complicated to calculate once there are multiple eras with different slot
+  lengths, so we now store it instead. (#214)
+* Support for storing the on-chain parameter update proposals (#217)
+* MIR certs now go into their own table(s) rather than the reward table (#218)
+
 ## 3.0.0 -- July 2020
 
 * Note that this release requires the database to be dropped and recreated
