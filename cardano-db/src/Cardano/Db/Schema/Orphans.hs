@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -13,6 +14,8 @@ import qualified Data.Text as Text
 import Database.Persist.Class (PersistField (..))
 import Database.Persist.Types (PersistValue (..))
 
+import Shelley.Spec.Ledger.PParams (ProtVer (..))
+
 instance PersistField DbWord64 where
   toPersistValue = PersistText . Text.pack . show . unDbWord64
   fromPersistValue (PersistText bs) = Right $ DbWord64 (read $ Text.unpack bs)
@@ -25,3 +28,11 @@ instance PersistField Word128 where
   fromPersistValue x =
     Left $ mconcat [ "Failed to parse Haskell type Word128: ", Text.pack (show x) ]
 
+instance PersistField ProtVer where
+  toPersistValue = PersistText . Text.pack . show
+  fromPersistValue (PersistText txt) = Right $ read $ Text.unpack txt
+  fromPersistValue x =
+    Left $ mconcat [ "Failed to parse Haskell type ProtVer: ", Text.pack (show x) ]
+
+-- Projectile vomit here.
+deriving instance Read ProtVer
