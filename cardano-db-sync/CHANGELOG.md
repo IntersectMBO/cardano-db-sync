@@ -1,5 +1,9 @@
 # Revision history for cardano-db-sync node
 
+## 3.1.0 -- July 2020
+
+* * Updates to support the schema additions, see cardano-db 2.0.0 CHANGELOG.md
+
 ## 3.0.0 -- July 2020
 
 * Note that this release requires the database to be dropped and recreated.

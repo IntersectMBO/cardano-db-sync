@@ -1,5 +1,9 @@
 # Revision history for cardano-db-sync-extended
 
+## 3.1.0 -- July 2020
+
+* Schema additions in the base db-sync, see cardano-db 2.0.0 CHANGELOG.md
+
 ## 3.0.0 -- July 2020
 
 * Note that this release requires the database to be dropped and recreated.
