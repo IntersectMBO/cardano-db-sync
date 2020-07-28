@@ -13,10 +13,11 @@ module Cardano.Db.Insert
   , insertPoolRelay
   , insertPoolRetire
   , insertPoolUpdate
-  , insertReward
+  , insertReserve
   , insertSlotLeader
   , insertStakeAddress
   , insertStakeRegistration
+  , insertTreasury
   , insertTx
   , insertTxIn
   , insertTxOut
@@ -74,8 +75,8 @@ insertPoolRetire = insertByReturnKey "PoolRetire"
 insertPoolUpdate :: (MonadBaseControl IO m, MonadIO m) => PoolUpdate -> ReaderT SqlBackend m PoolUpdateId
 insertPoolUpdate = insertByReturnKey "PoolUpdate"
 
-insertReward :: (MonadBaseControl IO m, MonadIO m) => Reward -> ReaderT SqlBackend m RewardId
-insertReward = insertByReturnKey "Reward"
+insertReserve :: (MonadBaseControl IO m, MonadIO m) => Reserve -> ReaderT SqlBackend m ReserveId
+insertReserve = insertByReturnKey "Reserve"
 
 insertSlotLeader :: (MonadBaseControl IO m, MonadIO m) => SlotLeader -> ReaderT SqlBackend m SlotLeaderId
 insertSlotLeader = insertByReturnKey "SlotLeader"
@@ -85,6 +86,9 @@ insertStakeAddress = insertByReturnKey "StakeAddress"
 
 insertStakeRegistration :: (MonadBaseControl IO m, MonadIO m) => StakeRegistration -> ReaderT SqlBackend m StakeRegistrationId
 insertStakeRegistration = insertByReturnKey "StakeRegistration"
+
+insertTreasury :: (MonadBaseControl IO m, MonadIO m) => Treasury -> ReaderT SqlBackend m TreasuryId
+insertTreasury = insertByReturnKey "Treasury"
 
 insertTx :: (MonadBaseControl IO m, MonadIO m) => Tx -> ReaderT SqlBackend m TxId
 insertTx = insertByReturnKey "Tx"
