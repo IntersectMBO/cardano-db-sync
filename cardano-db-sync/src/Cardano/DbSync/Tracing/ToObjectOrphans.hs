@@ -10,7 +10,7 @@ import           Data.Text (Text)
 import           Data.Aeson ((.=))
 
 import           Cardano.BM.Data.Tracer
-import           Cardano.TracingOrphanInstances.Network ()
+import           Cardano.Tracing.OrphanInstances.Network ()
 
 import           Ouroboros.Consensus.Byron.Ledger.Block (ByronBlock)
 

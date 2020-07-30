@@ -135,7 +135,7 @@ extra-deps:
       - ouroboros-consensus/ouroboros-consensus-test-infra
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: 3258fdbb2ce8c56ca175401630aa71d75a4d6ab2
+    commit: d7a524dbfec3afc81ad478f237eb64bf40c66932
     subdirs:
       - cardano-config
 
