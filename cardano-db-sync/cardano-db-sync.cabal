@@ -65,12 +65,12 @@ library
                       , cardano-api
                       , cardano-binary
                       , cardano-client
-                      , cardano-config
                       , cardano-crypto
                       , cardano-crypto-class
                       , cardano-crypto-wrapper
                       , cardano-db
                       , cardano-ledger
+                      , cardano-node
                       , cardano-prelude
                       , cardano-shell
                       , cardano-slotting

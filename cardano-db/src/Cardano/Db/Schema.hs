@@ -204,22 +204,6 @@ share
     txId                TxId
     UniqueReserves      addrId txId
 
-  Treasury
-    addrId              StakeAddressId
-    -- poolId              PoolHashId
-    amount              Word64              sqltype=lovelace
-    txId                TxId
-    UniqueTreasury      addrId txId
-
-    -- The reward earned in the epoch by delegating to the specified pool.
-    -- This design allows rewards to be discriminated based on how they are earned.
-  Reward
-    addrId              StakeAddressId
-    -- poolId              PoolHashId
-    amount              Word64              sqltype=lovelace
-    txId                TxId
-    UniqueReward        addrId txId
-
   Withdrawal
     addrId              StakeAddressId
     -- poolId              PoolHashId
@@ -245,13 +229,36 @@ share
     txId                TxId
     UniqueStakeDeregistration addrId txId
 
-  -- -----------------------------------------------------------------------------------------------
+  TxMetadata
+    key                 DbWord64            sqltype=word64type
+    json                Text                sqltype=jsonb
+    txId                TxId
+    UniqueTxMetadata    key txId
 
-  Stake                 -- To be obtained from ledger state.
+  -- -----------------------------------------------------------------------------------------------
+  -- Reward, Stake and Treasury need to be obtained from the ledger state.
+
+    -- The reward earned in the epoch by delegating to the specified pool.
+    -- This design allows rewards to be discriminated based on how they are earned.
+  Reward
+    addrId              StakeAddressId
+    -- poolId              PoolHashId
+    amount              Word64              sqltype=lovelace
+    txId                TxId
+    UniqueReward        addrId txId
+
+  Stake
     addrId              StakeAddressId
     txId                TxId
     stake               Word64              sqltype=lovelace
     UniqueStake         addrId stake
+
+  Treasury
+    addrId              StakeAddressId
+    -- poolId              PoolHashId
+    amount              Word64              sqltype=lovelace
+    txId                TxId
+    UniqueTreasury      addrId txId
 
   -- -----------------------------------------------------------------------------------------------
   -- Table to hold parameter updates.

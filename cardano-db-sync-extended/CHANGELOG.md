@@ -1,5 +1,10 @@
 # Revision history for cardano-db-sync-extended
 
+## 3.2.0 -- ???
+
+* Note that this release requires the database to be dropped and recreated.
+* Add and populate 'tx_metadata' table.
+
 ## 3.1.0 -- July 2020
 
 * Schema additions in the base db-sync, see cardano-db 2.0.0 CHANGELOG.md

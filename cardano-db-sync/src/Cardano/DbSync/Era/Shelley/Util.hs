@@ -29,6 +29,7 @@ module Cardano.DbSync.Era.Shelley.Util
   , txHash
   , txDelegationCerts
   , txInputList
+  , txMetadata
   , txOutputList
   , txOutputSum
   , txMirCertificates
@@ -77,6 +78,7 @@ import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.BlockChain as Shelley
 import qualified Shelley.Spec.Ledger.Hashing as Shelley
 import qualified Shelley.Spec.Ledger.Keys as Shelley
+import qualified Shelley.Spec.Ledger.MetaData as Shelley
 import qualified Shelley.Spec.Ledger.OCert as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
@@ -211,6 +213,9 @@ txHash = Crypto.hashToBytes . Shelley.hashAnnotated . Shelley._body
 
 txInputList :: ShelleyTx -> [ShelleyTxIn]
 txInputList = toList . Shelley._inputs . Shelley._body
+
+txMetadata :: ShelleyTx -> Maybe Shelley.MetaData
+txMetadata = Shelley.strictMaybeToMaybe . Shelley._metadata
 
 txMirCertificates :: ShelleyTx -> [ShelleyMIRCert]
 txMirCertificates tx =
