@@ -8,11 +8,11 @@ Protocol: Cardano
 
 RequiresNetworkMagic: RequiresNoMagic
 
-ByronGenesisFile: ../cardano-node/mainnet-genesis.json
+ByronGenesisFile: config/mainnet-byron-genesis.json
 ByronGenesisHash: 5f20df933584822601f9e3f8c024eb5eb252fe8cefb24d1317dc3d432e940ebb
 
 # Shelley genesis is not actully used but to specify Protocol Cardano, we need to sepcify one.
-ShelleyGenesisFile: ../cardano-node/configuration/cardano/shelley-preliminary-genesis.json
+ShelleyGenesisFile: config/mainnet-shelley-genesis.json
 ShelleyGenesisHash: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 # ------------------------------------------------------------------------------
