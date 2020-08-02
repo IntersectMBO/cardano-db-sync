@@ -1,5 +1,10 @@
 # Revision history for cardano-db
 
+## 3.2.0 -- ???
+
+* Note that this release requires the database to be dropped and recreated.
+* Add and populate 'tx_metadata' table.
+
 ## 3.1.0 -- July 2020
 
 * Add a `payment_cred` column to the tx_out table for the benefit of wallet

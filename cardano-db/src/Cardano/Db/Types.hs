@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -26,6 +27,8 @@ import           Data.Word (Word64)
 
 import           GHC.Generics (Generic)
 
+import           Quiet (Quiet (..))
+
 newtype Ada = Ada
   { unAda :: Micro
   } deriving (Eq, Num, Ord, Generic)
@@ -48,7 +51,11 @@ instance Show Ada where
     show (Ada ada) = showFixed True ada
 
 -- Newtype wrapper around Word64 so we can hand define a PersistentField instance.
-newtype DbWord64 = DbWord64 { unDbWord64 :: Word64 }
+newtype DbWord64
+  = DbWord64 { unDbWord64 :: Word64 }
+  deriving (Eq, Generic)
+  deriving (Read, Show) via (Quiet DbWord64)
+
 
 lovelaceToAda :: Micro -> Ada
 lovelaceToAda ll =
@@ -64,4 +71,3 @@ scientificToAda s =
 word64ToAda :: Word64 -> Ada
 word64ToAda w =
   Ada (fromIntegral w / 1000000)
-

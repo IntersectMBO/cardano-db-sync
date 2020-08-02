@@ -20,6 +20,7 @@ module Cardano.Db.Insert
   , insertTreasury
   , insertTx
   , insertTxIn
+  , insertTxMetadata
   , insertTxOut
   , insertWithdrawal
 
@@ -95,6 +96,9 @@ insertTx = insertByReturnKey "Tx"
 
 insertTxIn :: (MonadBaseControl IO m, MonadIO m) => TxIn -> ReaderT SqlBackend m TxInId
 insertTxIn = insertByReturnKey "TxIn"
+
+insertTxMetadata :: (MonadBaseControl IO m, MonadIO m) => TxMetadata -> ReaderT SqlBackend m TxMetadataId
+insertTxMetadata = insertByReturnKey "TxMetadata"
 
 insertTxOut :: (MonadBaseControl IO m, MonadIO m) => TxOut -> ReaderT SqlBackend m TxOutId
 insertTxOut = insertByReturnKey "TxOut"

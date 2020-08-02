@@ -24,7 +24,7 @@ import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Database.Persist.Sql (SqlBackend)
+import           Cardano.Api.MetaData (jsonFromMetadataValue)
 
 import qualified Cardano.Crypto.Hash as Crypto
 
@@ -37,8 +37,12 @@ import           Cardano.DbSync.Util
 
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
 
+import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
+import qualified Data.Text.Encoding as Text
+
+import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
@@ -48,6 +52,7 @@ import           Shelley.Spec.Ledger.BaseTypes (strictMaybeToMaybe)
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.Coin as Shelley
 import qualified Shelley.Spec.Ledger.Keys as Shelley
+import qualified Shelley.Spec.Ledger.MetaData as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxData as Shelley
@@ -137,6 +142,10 @@ insertTx tracer env blkId blockIndex tx = do
 
     -- Insert the transaction inputs.
     mapM_ (insertTxIn tracer txId) (Shelley.txInputList tx)
+
+    case Shelley.txMetadata tx of
+      Nothing -> pure ()
+      Just md -> insertTxMetadata tracer txId md
 
     mapM_ (insertPoolCert tracer txId) $ Shelley.txPoolCertificates tx
     mapM_ (insertDelegCert tracer env txId) $ Shelley.txDelegationCerts tx
@@ -413,7 +422,6 @@ insertPoolRelay updateId relay =
           , DB.poolRelayPort = Nothing
           }
 
-
 insertParamUpdate
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Shelley.Update TPraosStandardCrypto
@@ -448,4 +456,23 @@ insertParamUpdate _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap) 
           , DB.paramUpdateMinUTxOValue = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._minUTxOValue pmap)
           , DB.paramUpdateMinPoolCost = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._minPoolCost pmap)
           , DB.paramUpdateRegisteredTxId = txId
+          }
+
+insertTxMetadata
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DB.TxId -> Shelley.MetaData
+    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+insertTxMetadata _tracer txId (Shelley.MetaData mdmap) =
+    mapM_ insert $ Map.toList mdmap
+  where
+    insert
+        :: (MonadBaseControl IO m, MonadIO m)
+        => (Word64, Shelley.MetaDatum)
+        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    insert (key, md) =
+      void . lift . DB.insertTxMetadata $
+        DB.TxMetadata
+          { DB.txMetadataKey = DbWord64 key
+          , DB.txMetadataJson = Text.decodeUtf8 . LBS.toStrict $ Aeson.encode (jsonFromMetadataValue md)
+          , DB.txMetadataTxId = txId
           }
