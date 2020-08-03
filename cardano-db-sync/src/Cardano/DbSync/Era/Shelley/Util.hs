@@ -19,7 +19,6 @@ module Cardano.DbSync.Era.Shelley.Util
   , maybePaymentCred
   , mkSlotLeader
   , nonceToBytes
-  , pointToSlotHash
   , renderAddress
   , renderHash
   , slotLeaderHash
@@ -65,9 +64,7 @@ import qualified Data.Text.Encoding as Text
 
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
 import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
-import           Ouroboros.Network.Block (BlockNo (..), Point (..))
-import           Ouroboros.Network.Point (WithOrigin (..))
-import qualified Ouroboros.Network.Point as Point
+import           Ouroboros.Network.Block (BlockNo (..))
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import           Shelley.Spec.Ledger.Coin (Coin (..))
@@ -114,9 +111,6 @@ blockTxs =
     txList :: ShelleyTxSeq -> [ShelleyTx]
     txList (Shelley.TxSeq txSeq) = toList txSeq
 
--- blockLeaderVrf :: Shelley.BHBody TPraosStandardCrypto -> ByteString
--- blockLeaderVrf = _ . Shelley.bheaderL
-
 blockOpCert :: Shelley.BHBody TPraosStandardCrypto -> ByteString
 blockOpCert = KES.rawSerialiseVerKeyKES . Shelley.ocertVkHot . Shelley.bheaderOCert
 
@@ -157,13 +151,6 @@ nonceToBytes nonce =
   case nonce of
     Shelley.Nonce hash -> Crypto.hashToBytes hash
     Shelley.NeutralNonce -> BS.replicate 28 '\0'
-
--- | Convert from Ouroboros 'Point' to `Shelley' types.
-pointToSlotHash :: Point (Shelley.ShelleyBlock TPraosStandardCrypto) -> Maybe (SlotNo, ShelleyHash)
-pointToSlotHash (Point x) =
-  case x of
-    Origin -> Nothing
-    At blk -> Just (Point.blockPointSlot blk, Point.blockPointHash blk)
 
 renderAddress :: Shelley.Addr TPraosStandardCrypto -> Text
 renderAddress addr =
