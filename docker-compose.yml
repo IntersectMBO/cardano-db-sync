@@ -24,9 +24,9 @@ services:
         max-file: "10"
 
   cardano-node:
-    image: inputoutput/cardano-node:latest
+    image: inputoutput/cardano-node:1.18.0
     environment:
-      - NETWORK=${NETWORK}
+      - NETWORK=${NETWORK:-mainnet}
     volumes:
       - node-db:/data/db
       - node-ipc:/ipc
@@ -38,9 +38,9 @@ services:
         max-file: "10"
 
   cardano-db-sync:
-    image: inputoutput/cardano-db-sync:latest
+    image: inputoutput/cardano-db-sync:3.1.0
     environment:
-      - NETWORK=${NETWORK}
+      - NETWORK=${NETWORK:-mainnet}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
     depends_on:
