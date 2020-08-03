@@ -162,6 +162,7 @@ share
 
   PoolUpdate
     hashId              PoolHashId
+    certIndex           Word16
     vrfKey              ByteString          sqltype=hash32type
     pledge              DbWord64            sqltype=word64type
     rewardAddrId        StakeAddressId
@@ -178,6 +179,7 @@ share
 
   PoolRetire
     updateId            PoolUpdateId
+    certIndex           Word16
     announcedTxId       TxId                                    -- Slot number in which the pool announced it was retiring.
     retiringEpoch       Word64              sqltype=uinteger    -- Epoch number in which the pool will retire.
     UniquePoolRetiring  updateId
@@ -199,6 +201,7 @@ share
 
   Reserve
     addrId              StakeAddressId
+    certIndex           Word16
     -- poolId              PoolHashId
     amount              Word64              sqltype=lovelace
     txId                TxId
@@ -213,6 +216,7 @@ share
 
   Delegation
     addrId              StakeAddressId
+    certIndex           Word16
     updateId            PoolUpdateId
     txId                TxId
     UniqueDelegation    addrId updateId txId
@@ -220,12 +224,14 @@ share
   -- When was a staking key/script registered
   StakeRegistration
     addrId              StakeAddressId
+    certIndex           Word16
     txId                TxId
     UniqueStakeRegistration addrId txId
 
   -- When was a staking key/script deregistered
   StakeDeregistration
     addrId              StakeAddressId
+    certIndex           Word16
     txId                TxId
     UniqueStakeDeregistration addrId txId
 
@@ -242,6 +248,7 @@ share
     -- This design allows rewards to be discriminated based on how they are earned.
   Reward
     addrId              StakeAddressId
+    certIndex           Word16
     -- poolId              PoolHashId
     amount              Word64              sqltype=lovelace
     txId                TxId
@@ -255,6 +262,7 @@ share
 
   Treasury
     addrId              StakeAddressId
+    certIndex           Word16
     -- poolId              PoolHashId
     amount              Word64              sqltype=lovelace
     txId                TxId
