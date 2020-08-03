@@ -27,14 +27,12 @@ module Cardano.DbSync.Era.Shelley.Util
   , stakingCredHash
   , txFee
   , txHash
-  , txDelegationCerts
+  , txCertificates
   , txInputList
   , txMetadata
   , txOutputList
   , txOutputSum
-  , txMirCertificates
   , txParamUpdate
-  , txPoolCertificates
   , txWithdrawals
   , unHeaderHash
   , unitIntervalToDouble
@@ -195,15 +193,9 @@ stakingCredHash env cred =
   in Shelley.serialiseRewardAcnt $ Shelley.RewardAcnt network cred
 
 
-txDelegationCerts :: ShelleyTx -> [ShelleyDelegCert]
-txDelegationCerts tx =
-    mapMaybe extractDelegationCerts $ toList (Shelley._certs $ Shelley._body tx)
-  where
-    extractDelegationCerts :: ShelleyDCert -> Maybe ShelleyDelegCert
-    extractDelegationCerts dcert =
-      case dcert of
-        Shelley.DCertDeleg pcert -> Just pcert
-        _otherwise -> Nothing
+txCertificates :: ShelleyTx -> [(Word16, ShelleyDCert)]
+txCertificates tx =
+    zip [0 ..] (toList . Shelley._certs $ Shelley._body tx)
 
 txFee :: ShelleyTx -> Word64
 txFee = fromIntegral . unCoin . Shelley._txfee . Shelley._body
@@ -217,28 +209,8 @@ txInputList = toList . Shelley._inputs . Shelley._body
 txMetadata :: ShelleyTx -> Maybe Shelley.MetaData
 txMetadata = Shelley.strictMaybeToMaybe . Shelley._metadata
 
-txMirCertificates :: ShelleyTx -> [ShelleyMIRCert]
-txMirCertificates tx =
-    mapMaybe extractMirCert $ toList (Shelley._certs $ Shelley._body tx)
-  where
-    extractMirCert :: ShelleyDCert -> Maybe ShelleyMIRCert
-    extractMirCert dcert =
-      case dcert of
-        Shelley.DCertMir mcert -> Just mcert
-        _otherwise -> Nothing
-
 txParamUpdate :: ShelleyTx -> Maybe (Shelley.Update TPraosStandardCrypto)
 txParamUpdate = Shelley.strictMaybeToMaybe . Shelley._txUpdate . Shelley._body
-
-txPoolCertificates :: ShelleyTx -> [ShelleyPoolCert]
-txPoolCertificates tx =
-    mapMaybe extractPoolCertificate $ toList (Shelley._certs $ Shelley._body tx)
-  where
-    extractPoolCertificate :: ShelleyDCert -> Maybe ShelleyPoolCert
-    extractPoolCertificate dcert =
-      case dcert of
-        Shelley.DCertPool pcert -> Just pcert
-        _otherwise -> Nothing
 
 -- Outputs are ordered, so provide them as such with indices.
 txOutputList :: ShelleyTx -> [(Word16, ShelleyTxOut)]

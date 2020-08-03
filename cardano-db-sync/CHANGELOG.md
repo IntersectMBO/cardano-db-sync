@@ -4,6 +4,9 @@
 
 * Note that this release requires the database to be dropped and recreated.
 * Add and populate 'tx_metadata' table.
+* Insert stake deregistrations into correct table. Previously deregistrations were
+  inserted into the registration table.
+* For all transaction certificates, add index within the transaction (#230).
 
 ## 3.1.0 -- July 2020
 

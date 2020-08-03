@@ -72,4 +72,15 @@ cexplorer=# select pg_size_pretty (pg_database_size ('cexplorer'));
 (1 row)
 ```
 
+### Current valid pools
+In general the database is operated on in an append only manner. The means that when there is a
+pool registration, followed by a degreistration followed by a second registration, all three
+events will be recorded. To get the latest pool registrations:
+two stake pool
+```
+cexplorer=# select * from pool_update where not exists
+             (select update_id from pool_retire where update_id = pool_update.id) ;
+```
+
+
 [Query.hs]: https://github.com/input-output-hk/cardano-db-sync/blob/master/cardano-db/src/Cardano/Db/Query.hs
