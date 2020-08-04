@@ -61,11 +61,6 @@ extra-deps:
   - time-compat-1.9.2.2
   - quiet-0.2
 
-  - git: https://github.com/input-output-hk/cardano-shell
-    commit: b3231f7f3b8b6d07fef08f8cc41aa804524f94c2
-    subdirs:
-      - cardano-shell
-
   - git: https://github.com/input-output-hk/cardano-crypto
     commit: 2547ad1e80aeabca2899951601079408becbc92c
 
