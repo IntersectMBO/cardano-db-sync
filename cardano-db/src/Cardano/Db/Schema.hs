@@ -78,7 +78,7 @@ share
     epochSlotNo         Word64 Maybe        sqltype=uinteger
     blockNo             Word64 Maybe        sqltype=uinteger
     previous            BlockId Maybe
-    -- Shelley does not have a Merkel Root, but Byrin does.
+    -- Shelley does not have a Merkel Root, but Byron does.
     -- Once we are well into the Shelley era, this column can be dropped.
     merkelRoot          ByteString Maybe    sqltype=hash32type
     slotLeader          SlotLeaderId

@@ -62,7 +62,9 @@ newStateQueryTMVar :: IO (StateQueryTMVar blk result)
 newStateQueryTMVar = StateQueryTMVar <$> newEmptyTMVarIO
 
 
--- Incredibly naive. Runs a query to get a new history interpreter each time it is called.
+-- Get the requested slot details using a history interpreter stashed in an IORef.
+-- If the history interpreter does not exist, get one.
+-- If the existing history interpreter returns an error, get a new one and try again.
 getSlotDetails
     :: Trace IO Text -> DbSyncEnv
     -> StateQueryTMVar (HardForkBlock (CardanoEras TPraosStandardCrypto)) (Interpreter (CardanoEras TPraosStandardCrypto))
