@@ -72,7 +72,6 @@ library
                       , cardano-ledger
                       , cardano-node
                       , cardano-prelude
-                      , cardano-shell
                       , cardano-slotting
                       , cborg
                       , containers
