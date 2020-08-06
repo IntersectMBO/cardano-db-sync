@@ -147,7 +147,28 @@ insertTx tracer env blkId blockIndex tx = do
       Nothing -> pure ()
       Just md -> insertTxMetadata tracer txId md
 
-    mapM_ (insertCertificate tracer env txId) $ Shelley.txCertificates tx
+    -- even though certs come in order and have their index, we still need
+    -- to be careful about the order we insert them into the database.
+    -- DCert_mir, for instance, when written to the db will want to refer
+    -- to a stake address that may only be created by a DCert_regkey that
+    -- happens in the same transaction but with a higher index.
+    -- Therefore we always insert Shelley.DCertDeleg (for DCert_regkey, et al)
+    -- first.
+    -- Question for IOHK: why would this ever happen? it appears that it
+    -- does in https://github.com/input-output-hk/cardano-db-sync/issues/237.
+    let  certOrdering :: (Word16, ShelleyDCert) -> Int
+         certOrdering (_, cert) = 
+                      case cert of
+                        Shelley.DCertPool (Shelley.RegPool _) -> 0
+                        Shelley.DCertPool (Shelley.RetirePool _ _) -> 1
+                        Shelley.DCertDeleg (Shelley.RegKey _) -> 2
+                        Shelley.DCertDeleg (Shelley.DeRegKey _) -> 3
+                        Shelley.DCertDeleg (Shelley.Delegate _) -> 4
+                        Shelley.DCertMir _ -> 5
+                        Shelley.DCertGenesis _ -> 6
+
+    mapM_ (insertCertificate tracer env txId) $ sortOn certOrdering
+                                              $ Shelley.txCertificates tx
     mapM_ (insertWithdrawals tracer txId) $ Shelley.txWithdrawals tx
 
     case Shelley.txParamUpdate tx of
