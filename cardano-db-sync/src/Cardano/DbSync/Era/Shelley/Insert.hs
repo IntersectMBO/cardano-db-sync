@@ -364,9 +364,7 @@ insertMirCert _tracer env txId idx mcert = do
         => (ShelleyStakingCred, Shelley.Coin)
         -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     insertMirReserves (cred, coin) = do
-      addrId <- firstExceptT (NELookup "insertMirReserves")
-                    . newExceptT
-                    $ queryStakeAddress (Shelley.stakingCredHash env cred)
+      addrId <- insertStakeAddress $ Shelley.stakingCredHash env cred
       void . lift . DB.insertReserve $
         DB.Reserve
           { DB.reserveAddrId = addrId
@@ -380,9 +378,7 @@ insertMirCert _tracer env txId idx mcert = do
         => (ShelleyStakingCred, Shelley.Coin)
         -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     insertMirTreasury (cred, coin) = do
-      addrId <- firstExceptT (NELookup "insertMirTreasury")
-                    . newExceptT
-                    $ queryStakeAddress (Shelley.stakingCredHash env cred)
+      addrId <- insertStakeAddress $ Shelley.stakingCredHash env cred
       void . lift . DB.insertTreasury $
         DB.Treasury
           { DB.treasuryAddrId = addrId

@@ -7,6 +7,8 @@
 * Insert stake deregistrations into correct table. Previously deregistrations were
   inserted into the registration table.
 * For all transaction certificates, add index within the transaction (#230).
+* Fix certificate ordering issues that resulted in an abort if a MIR certificate was
+  found whose output was a stake address that was inserted later in the same tx (#237).
 
 ## 3.1.0 -- July 2020
 
