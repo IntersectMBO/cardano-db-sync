@@ -73,13 +73,20 @@ cexplorer=# select pg_size_pretty (pg_database_size ('cexplorer'));
 ```
 
 ### Current valid pools
-In general the database is operated on in an append only manner. The means that when there is a
-pool registration, followed by a degreistration followed by a second registration, all three
-events will be recorded. To get the latest pool registrations:
-two stake pool
+In general the database is operated on in an append only manner. Pool certificates can
+be updated so that later certificates override earlier ones. In addition pools can
+retire. Therefore to get the latest pool registration for every pool that is still
+valid:
 ```
-cexplorer=# select * from pool_update where not exists
-             (select update_id from pool_retire where update_id = pool_update.id) ;
+cexplorer=# select * from pool_update
+              where registered_tx_id in (select max(registered_tx_id) from pool_update group by reward_addr_id)
+              and not exists (select update_id from pool_retire where update_id = pool_update.id) ;
+```
+To include the pool hash in the query output:
+```
+cexplorer=# select * from pool_update inner join pool_hash on pool_update.hash_id = pool_hash.id
+              where registered_tx_id in (select max(registered_tx_id) from pool_update group by reward_addr_id)
+              and not exists (select update_id from pool_retire where update_id = pool_update.id) ;
 ```
 
 

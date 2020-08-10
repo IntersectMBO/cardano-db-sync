@@ -224,7 +224,7 @@ insertPoolRegister tracer txId idx params = do
   mdId <- case strictMaybeToMaybe $ Shelley._poolMD params of
             Just md -> Just <$> insertMetaData txId md
             Nothing -> pure Nothing
-  rewardId <- insertStakeAddress $ Shelley.serialiseRewardAcnt (Shelley._poolRAcnt params)
+  rewardId <- insertStakeAddress txId $ Shelley.serialiseRewardAcnt (Shelley._poolRAcnt params)
 
   when (fromIntegral (Shelley.unCoin $ Shelley._poolPledge params) > maxLovelace) $
     liftIO . logError tracer $
@@ -282,12 +282,13 @@ insertMetaData txId md =
 
 insertStakeAddress
     :: (MonadBaseControl IO m, MonadIO m)
-    => ByteString
+    => DB.TxId -> ByteString
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) DB.StakeAddressId
-insertStakeAddress stakeAddr =
+insertStakeAddress txId stakeAddr =
   lift . DB.insertStakeAddress $
     DB.StakeAddress
       { DB.stakeAddressHash = stakeAddr
+      , DB.stakeAddressRegisteredTxId = txId
       }
 
 insertPoolOwner
@@ -306,7 +307,7 @@ insertStakeRegistration
     => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> ShelleyStakingCred
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertStakeRegistration _tracer env txId idx cred = do
-  scId <- insertStakeAddress $ Shelley.stakingCredHash env cred
+  scId <- insertStakeAddress txId $ Shelley.stakingCredHash env cred
   void . lift . DB.insertStakeRegistration $
     DB.StakeRegistration
       { DB.stakeRegistrationAddrId = scId
@@ -364,9 +365,7 @@ insertMirCert _tracer env txId idx mcert = do
         => (ShelleyStakingCred, Shelley.Coin)
         -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     insertMirReserves (cred, coin) = do
-      addrId <- firstExceptT (NELookup "insertMirReserves")
-                    . newExceptT
-                    $ queryStakeAddress (Shelley.stakingCredHash env cred)
+      addrId <- insertStakeAddress txId $ Shelley.stakingCredHash env cred
       void . lift . DB.insertReserve $
         DB.Reserve
           { DB.reserveAddrId = addrId
@@ -380,9 +379,7 @@ insertMirCert _tracer env txId idx mcert = do
         => (ShelleyStakingCred, Shelley.Coin)
         -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     insertMirTreasury (cred, coin) = do
-      addrId <- firstExceptT (NELookup "insertMirTreasury")
-                    . newExceptT
-                    $ queryStakeAddress (Shelley.stakingCredHash env cred)
+      addrId <- insertStakeAddress txId $ Shelley.stakingCredHash env cred
       void . lift . DB.insertTreasury $
         DB.Treasury
           { DB.treasuryAddrId = addrId

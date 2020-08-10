@@ -149,6 +149,7 @@ share
 
   StakeAddress          -- Can be an address of a script hash
     hash                ByteString          sqltype=addr29type
+    registeredTxId      TxId                -- Only used for rollback.
     UniqueStakeAddress  hash
 
   -- -----------------------------------------------------------------------------------------------
