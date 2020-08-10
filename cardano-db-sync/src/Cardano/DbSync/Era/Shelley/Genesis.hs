@@ -23,6 +23,12 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
 import           Control.Monad.Trans.Reader (ReaderT)
 
+import qualified Cardano.Db as DB
+import qualified Cardano.DbSync.Era.Shelley.Util as Shelley
+import           Cardano.DbSync.Error
+import           Cardano.DbSync.Types
+import           Cardano.DbSync.Util
+
 import qualified Data.Map.Strict as Map
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -31,15 +37,10 @@ import qualified Data.Time.Clock as Time
 
 import           Database.Persist.Sql (SqlBackend)
 
-import qualified Cardano.Db as DB
-import qualified Cardano.DbSync.Era.Shelley.Util as Shelley
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.Types
-import           Cardano.DbSync.Util
-
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
 
+import qualified Shelley.Spec.Ledger.Address as Shelley
 import qualified Shelley.Spec.Ledger.Coin as Shelley
 import qualified Shelley.Spec.Ledger.Genesis as Shelley
 import qualified Shelley.Spec.Ledger.TxData as Shelley
@@ -183,6 +184,7 @@ insertTxOuts blkId (Shelley.TxIn txInId _, txOut) = do
               { DB.txOutTxId = txId
               , DB.txOutIndex = 0
               , DB.txOutAddress = Shelley.renderAddress (txOutAddress txOut)
+              , DB.txOutAddressRaw = Shelley.serialiseAddr (txOutAddress txOut)
               , DB.txOutPaymentCred = Shelley.maybePaymentCred (txOutAddress txOut)
               , DB.txOutValue = fromIntegral $ Shelley.unCoin (txOutCoin txOut)
               }

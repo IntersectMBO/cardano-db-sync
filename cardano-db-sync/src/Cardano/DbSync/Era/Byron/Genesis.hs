@@ -15,6 +15,7 @@ module Cardano.DbSync.Era.Byron.Genesis
 
 import           Cardano.Prelude
 
+import qualified Cardano.Binary as Binary
 import           Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.Genesis as Byron
@@ -176,6 +177,7 @@ insertTxOuts blkId (address, value) = do
               { DB.txOutTxId = txId
               , DB.txOutIndex = 0
               , DB.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 address
+              , DB.txOutAddressRaw = Binary.serialize' address
               , DB.txOutPaymentCred = Nothing
               , DB.txOutValue = Byron.unsafeGetLovelace value
               }

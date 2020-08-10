@@ -15,7 +15,6 @@ module Cardano.DbSync.Era.Byron.Util
   , epochNumber
   , genesisToHeaderHash
   , mkSlotLeader
-  , pointToSlotHash
   , renderAbstractHash
   , slotLeaderHash
   , slotNumber
@@ -42,8 +41,6 @@ import qualified Cardano.Chain.Slotting as ByronInsanity
 import qualified Cardano.Chain.Update as Byron
 import qualified Cardano.Chain.UTxO as Byron
 
-import           Cardano.Slotting.Slot (SlotNo (..))
-
 import           Crypto.Hash (Blake2b_256)
 
 import qualified Data.ByteString.Base16 as Base16
@@ -53,11 +50,6 @@ import           Data.Coerce (coerce)
 import qualified Data.Text.Encoding as Text
 
 import qualified Cardano.Db as DB
-
-import           Ouroboros.Consensus.Byron.Ledger (ByronBlock, ByronHash (..))
-import           Ouroboros.Network.Point (WithOrigin (..))
-import qualified Ouroboros.Network.Point as Point
-import           Ouroboros.Network.Block (Point (..))
 
 
 blockHash :: Byron.ABlock ByteString -> ByteString
@@ -99,14 +91,6 @@ mkSlotLeader blk =
       slName = "ByronGenesis-" <> Text.decodeUtf8 (Base16.encode $ BS.take 8 slHash)
   -- On Byrom poolHashId will always be Nothing.
   in DB.SlotLeader slHash Nothing slName
-
-
--- | Convert from Ouroboros 'Point' to `Byron' types.
-pointToSlotHash :: Point ByronBlock -> Maybe (SlotNo, Byron.HeaderHash)
-pointToSlotHash (Point x) =
-  case x of
-    Origin -> Nothing
-    At blk -> Just (Point.blockPointSlot blk, unByronHash $ Point.blockPointHash blk)
 
 renderAbstractHash :: Crypto.AbstractHash algo a -> Text
 renderAbstractHash =

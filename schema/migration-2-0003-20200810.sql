@@ -16,14 +16,15 @@ BEGIN
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "op_cert" hash32type NULL' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "proto_version" VARCHAR NULL' ;
     EXECUTE 'ALTER TABLE "tx" ADD COLUMN "deposit" INT8 NOT NULL' ;
+    EXECUTE 'ALTER TABLE "tx_out" ADD COLUMN "address_raw" BYTEA NOT NULL' ;
     EXECUTE 'ALTER TABLE "tx_out" ADD COLUMN "payment_cred" hash28type NULL' ;
     EXECUTE 'ALTER TABLE "meta" ALTER COLUMN "network_name" SET NOT NULL' ;
     EXECUTE 'ALTER TABLE "meta" DROP COLUMN "protocol_const"' ;
     EXECUTE 'ALTER TABLE "meta" DROP COLUMN "slot_duration"' ;
     EXECUTE 'ALTER TABLE "meta" DROP COLUMN "slots_per_epoch"' ;
     EXECUTE 'ALTER TABLE "epoch" ALTER COLUMN "out_sum" TYPE word128type' ;
-    EXECUTE 'CREATe TABLE "stake_address"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash" addr29type NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
-    EXECUTE 'ALTER TABLE "stake_address" ADD CONSTRAINT "unique_stake_address" UNIQUE("hash")' ;
+    EXECUTE 'CREATe TABLE "stake_address"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash_raw" addr29type NOT NULL,"view" VARCHAR NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
+    EXECUTE 'ALTER TABLE "stake_address" ADD CONSTRAINT "unique_stake_address" UNIQUE("hash_raw")' ;
     EXECUTE 'ALTER TABLE "stake_address" ADD CONSTRAINT "stake_address_registered_tx_id_fkey" FOREIGN KEY("registered_tx_id") REFERENCES "tx"("id")' ;
     EXECUTE 'CREATe TABLE "pool_meta_data"("id" SERIAL8  PRIMARY KEY UNIQUE,"url" VARCHAR NOT NULL,"hash" hash32type NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "pool_meta_data" ADD CONSTRAINT "unique_pool_meta_data" UNIQUE("url","hash")' ;

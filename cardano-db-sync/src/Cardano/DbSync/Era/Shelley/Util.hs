@@ -3,7 +3,8 @@
 {-# LANGUAGE RankNTypes #-}
 
 module Cardano.DbSync.Era.Shelley.Util
-  ( blockBody
+  ( annotateStakingCred
+  , blockBody
   , blockHash
   , blockNumber
   , blockPrevHash
@@ -19,9 +20,9 @@ module Cardano.DbSync.Era.Shelley.Util
   , maybePaymentCred
   , mkSlotLeader
   , nonceToBytes
-  , pointToSlotHash
   , renderAddress
   , renderHash
+  , renderRewardAcnt
   , slotLeaderHash
   , slotNumber
   , stakingCredHash
@@ -65,9 +66,7 @@ import qualified Data.Text.Encoding as Text
 
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
 import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
-import           Ouroboros.Network.Block (BlockNo (..), Point (..))
-import           Ouroboros.Network.Point (WithOrigin (..))
-import qualified Ouroboros.Network.Point as Point
+import           Ouroboros.Network.Block (BlockNo (..))
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import           Shelley.Spec.Ledger.Coin (Coin (..))
@@ -81,6 +80,15 @@ import qualified Shelley.Spec.Ledger.OCert as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxData as Shelley
+
+annotateStakingCred :: DbSyncEnv -> ShelleyStakingCred -> Shelley.RewardAcnt TPraosStandardCrypto
+annotateStakingCred env cred =
+  let network =
+        case envProtocol env of
+          DbSyncProtocolByron -> Shelley.Mainnet -- Should not happen
+          DbSyncProtocolShelley -> envNetwork env
+          DbSyncProtocolCardano -> envNetwork env
+  in Shelley.RewardAcnt network cred
 
 blockBody :: Shelley.ShelleyBlock TPraosStandardCrypto -> Shelley.BHBody TPraosStandardCrypto
 blockBody = Shelley.bhbody . Shelley.bheader . Shelley.shelleyBlockRaw
@@ -113,9 +121,6 @@ blockTxs =
   where
     txList :: ShelleyTxSeq -> [ShelleyTx]
     txList (Shelley.TxSeq txSeq) = toList txSeq
-
--- blockLeaderVrf :: Shelley.BHBody TPraosStandardCrypto -> ByteString
--- blockLeaderVrf = _ . Shelley.bheaderL
 
 blockOpCert :: Shelley.BHBody TPraosStandardCrypto -> ByteString
 blockOpCert = KES.rawSerialiseVerKeyKES . Shelley.ocertVkHot . Shelley.bheaderOCert
@@ -158,13 +163,6 @@ nonceToBytes nonce =
     Shelley.Nonce hash -> Crypto.hashToBytes hash
     Shelley.NeutralNonce -> BS.replicate 28 '\0'
 
--- | Convert from Ouroboros 'Point' to `Shelley' types.
-pointToSlotHash :: Point (Shelley.ShelleyBlock TPraosStandardCrypto) -> Maybe (SlotNo, ShelleyHash)
-pointToSlotHash (Point x) =
-  case x of
-    Origin -> Nothing
-    At blk -> Just (Point.blockPointSlot blk, Point.blockPointHash blk)
-
 renderAddress :: Shelley.Addr TPraosStandardCrypto -> Text
 renderAddress addr =
   case addr of
@@ -176,6 +174,9 @@ renderAddress addr =
 renderHash :: ShelleyHash -> Text
 renderHash = Text.decodeUtf8 . Base16.encode . unHeaderHash
 
+renderRewardAcnt :: Shelley.RewardAcnt TPraosStandardCrypto -> Text
+renderRewardAcnt (Shelley.RewardAcnt nw cred) = Api.serialiseAddress (Api.StakeAddress nw cred)
+
 slotLeaderHash :: Shelley.ShelleyBlock TPraosStandardCrypto -> ByteString
 slotLeaderHash =
   DSIGN.rawSerialiseVerKeyDSIGN . unVKey . Shelley.bheaderVk . blockBody
@@ -184,14 +185,7 @@ slotNumber :: Shelley.ShelleyBlock TPraosStandardCrypto -> Word64
 slotNumber = unSlotNo . Shelley.bheaderSlotNo . blockBody
 
 stakingCredHash :: DbSyncEnv -> ShelleyStakingCred -> ByteString
-stakingCredHash env cred =
-  let network =
-        case envProtocol env of
-          DbSyncProtocolByron -> Shelley.Mainnet -- Should not happen
-          DbSyncProtocolShelley -> envNetwork env
-          DbSyncProtocolCardano -> envNetwork env
-  in Shelley.serialiseRewardAcnt $ Shelley.RewardAcnt network cred
-
+stakingCredHash env = Shelley.serialiseRewardAcnt . annotateStakingCred env
 
 txCertificates :: ShelleyTx -> [(Word16, ShelleyDCert)]
 txCertificates tx =
