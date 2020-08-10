@@ -3,7 +3,8 @@
 {-# LANGUAGE RankNTypes #-}
 
 module Cardano.DbSync.Era.Shelley.Util
-  ( blockBody
+  ( annotateStakingCred
+  , blockBody
   , blockHash
   , blockNumber
   , blockPrevHash
@@ -21,6 +22,7 @@ module Cardano.DbSync.Era.Shelley.Util
   , nonceToBytes
   , renderAddress
   , renderHash
+  , renderRewardAcnt
   , slotLeaderHash
   , slotNumber
   , stakingCredHash
@@ -78,6 +80,15 @@ import qualified Shelley.Spec.Ledger.OCert as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxData as Shelley
+
+annotateStakingCred :: DbSyncEnv -> ShelleyStakingCred -> Shelley.RewardAcnt TPraosStandardCrypto
+annotateStakingCred env cred =
+  let network =
+        case envProtocol env of
+          DbSyncProtocolByron -> Shelley.Mainnet -- Should not happen
+          DbSyncProtocolShelley -> envNetwork env
+          DbSyncProtocolCardano -> envNetwork env
+  in Shelley.RewardAcnt network cred
 
 blockBody :: Shelley.ShelleyBlock TPraosStandardCrypto -> Shelley.BHBody TPraosStandardCrypto
 blockBody = Shelley.bhbody . Shelley.bheader . Shelley.shelleyBlockRaw
@@ -163,6 +174,9 @@ renderAddress addr =
 renderHash :: ShelleyHash -> Text
 renderHash = Text.decodeUtf8 . Base16.encode . unHeaderHash
 
+renderRewardAcnt :: Shelley.RewardAcnt TPraosStandardCrypto -> Text
+renderRewardAcnt (Shelley.RewardAcnt nw cred) = Api.serialiseAddress (Api.StakeAddress nw cred)
+
 slotLeaderHash :: Shelley.ShelleyBlock TPraosStandardCrypto -> ByteString
 slotLeaderHash =
   DSIGN.rawSerialiseVerKeyDSIGN . unVKey . Shelley.bheaderVk . blockBody
@@ -171,14 +185,7 @@ slotNumber :: Shelley.ShelleyBlock TPraosStandardCrypto -> Word64
 slotNumber = unSlotNo . Shelley.bheaderSlotNo . blockBody
 
 stakingCredHash :: DbSyncEnv -> ShelleyStakingCred -> ByteString
-stakingCredHash env cred =
-  let network =
-        case envProtocol env of
-          DbSyncProtocolByron -> Shelley.Mainnet -- Should not happen
-          DbSyncProtocolShelley -> envNetwork env
-          DbSyncProtocolCardano -> envNetwork env
-  in Shelley.serialiseRewardAcnt $ Shelley.RewardAcnt network cred
-
+stakingCredHash env = Shelley.serialiseRewardAcnt . annotateStakingCred env
 
 txCertificates :: ShelleyTx -> [(Word16, ShelleyDCert)]
 txCertificates tx =

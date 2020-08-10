@@ -149,9 +149,10 @@ share
   -- Shelley bits
 
   StakeAddress          -- Can be an address of a script hash
-    hash                ByteString          sqltype=addr29type
+    hashRaw             ByteString          sqltype=addr29type
+    view                Text
     registeredTxId      TxId                -- Only used for rollback.
-    UniqueStakeAddress  hash
+    UniqueStakeAddress  hashRaw
 
   -- -----------------------------------------------------------------------------------------------
   -- A Pool can have more than one owner, so we have a PoolOwner table that references this one.

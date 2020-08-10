@@ -40,7 +40,7 @@ queryPoolHashId hash = do
 queryStakeAddress :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail StakeAddressId)
 queryStakeAddress addr = do
   res <- select . from $ \ saddr -> do
-            where_ (saddr ^. StakeAddressHash ==. val addr)
+            where_ (saddr ^. StakeAddressHashRaw ==. val addr)
             pure (saddr ^. StakeAddressId)
   pure $ maybeToEither (DbLookupMessage "StakeAddress") unValue (listToMaybe res)
 
