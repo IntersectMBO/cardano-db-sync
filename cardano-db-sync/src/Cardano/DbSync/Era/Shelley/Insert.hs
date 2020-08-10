@@ -164,6 +164,7 @@ insertTxOut _tracer txId (index, Shelley.TxOut addr value) =
               { DB.txOutTxId = txId
               , DB.txOutIndex = index
               , DB.txOutAddress = Shelley.renderAddress addr
+              , DB.txOutAddressRaw = Shelley.serialiseAddr addr
               , DB.txOutPaymentCred = Shelley.maybePaymentCred addr
               , DB.txOutValue = fromIntegral $ Shelley.unCoin value
               }

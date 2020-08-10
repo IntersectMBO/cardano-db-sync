@@ -6,6 +6,9 @@ module Test.IO.Cardano.Db.TotalSupply
 
 import           Cardano.Db
 
+import qualified Data.ByteString.Char8 as BS
+import qualified Data.Text as Text
+
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (testCase)
 
@@ -38,6 +41,7 @@ initialSupplyTest =
     bid1 <- insertBlock (mkBlock 1 slid)
     tx1Id <- insertTx (Tx (mkTxHash bid1 1) bid1 0 500000000 100 0 123)
     _ <- insertTxIn (TxIn tx1Id (head tx0Ids) 0)
-    _ <- insertTxOut $ TxOut tx1Id 0 (mkAddressHash bid1 tx1Id) Nothing 500000000
+    let addr = mkAddressHash bid1 tx1Id
+    _ <- insertTxOut $ TxOut tx1Id 0 (Text.pack addr) (BS.pack addr) Nothing 500000000
     supply1 <- queryTotalSupply
     assertBool ("Total supply should be < " ++ show supply0) (supply1 < supply0)

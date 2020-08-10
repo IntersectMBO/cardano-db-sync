@@ -16,6 +16,7 @@ BEGIN
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "op_cert" hash32type NULL' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "proto_version" VARCHAR NULL' ;
     EXECUTE 'ALTER TABLE "tx" ADD COLUMN "deposit" INT8 NOT NULL' ;
+    EXECUTE 'ALTER TABLE "tx_out" ADD COLUMN "address_raw" BYTEA NOT NULL' ;
     EXECUTE 'ALTER TABLE "tx_out" ADD COLUMN "payment_cred" hash28type NULL' ;
     EXECUTE 'ALTER TABLE "meta" ALTER COLUMN "network_name" SET NOT NULL' ;
     EXECUTE 'ALTER TABLE "meta" DROP COLUMN "protocol_const"' ;

@@ -19,6 +19,8 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, newExceptT,
                     runExceptT)
 
+import qualified Cardano.Binary as Binary
+
 -- Import all 'cardano-ledger' functions and data types qualified so they do not
 -- clash with the Cardano.Db functions and data types which are also imported
 -- qualified.
@@ -202,6 +204,7 @@ insertTxOut _tracer txId index txout =
               { DB.txOutTxId = txId
               , DB.txOutIndex = fromIntegral index
               , DB.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
+              , DB.txOutAddressRaw = Binary.serialize' (Byron.txOutAddress txout)
               , DB.txOutPaymentCred = Nothing -- Byron does not have a payment credential.
               , DB.txOutValue = Byron.unsafeGetLovelace $ Byron.txOutValue txout
               }

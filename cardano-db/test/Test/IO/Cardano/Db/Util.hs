@@ -23,7 +23,6 @@ import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
-import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Time.Calendar (Day (..))
 import           Data.Time.Clock (UTCTime (..))
@@ -48,9 +47,9 @@ deleteAllBlocksCascade = do
 dummyUTCTime :: UTCTime
 dummyUTCTime = UTCTime (ModifiedJulianDay 0) 0
 
-mkAddressHash :: BlockId -> TxId -> Text
+mkAddressHash :: BlockId -> TxId -> String
 mkAddressHash blkId txId =
-  Text.pack (take 28 $ printf "tx out #%d, tx #%d" (unBlockId blkId) (unTxId txId) ++ replicate 28 ' ')
+  take 28 $ printf "tx out #%d, tx #%d" (unBlockId blkId) (unTxId txId) ++ replicate 28 ' '
 
 mkBlock :: Word64 -> SlotLeaderId -> Block
 mkBlock blk slid =
@@ -81,7 +80,8 @@ testSlotLeader =
 
 mkTxOut :: BlockId -> TxId -> TxOut
 mkTxOut blkId txId =
-  TxOut txId 0 (mkAddressHash blkId txId) Nothing 1000000000
+  let addr = mkAddressHash blkId txId in
+  TxOut txId 0 (Text.pack addr) (BS.pack addr) Nothing 1000000000
 
 unTxId :: TxId -> Word64
 unTxId = fromIntegral . unSqlBackendKey . unTxKey
