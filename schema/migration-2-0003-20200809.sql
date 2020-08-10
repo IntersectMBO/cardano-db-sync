@@ -22,8 +22,9 @@ BEGIN
     EXECUTE 'ALTER TABLE "meta" DROP COLUMN "slot_duration"' ;
     EXECUTE 'ALTER TABLE "meta" DROP COLUMN "slots_per_epoch"' ;
     EXECUTE 'ALTER TABLE "epoch" ALTER COLUMN "out_sum" TYPE word128type' ;
-    EXECUTE 'CREATe TABLE "stake_address"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash" addr29type NOT NULL)' ;
+    EXECUTE 'CREATe TABLE "stake_address"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash" addr29type NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "stake_address" ADD CONSTRAINT "unique_stake_address" UNIQUE("hash")' ;
+    EXECUTE 'ALTER TABLE "stake_address" ADD CONSTRAINT "stake_address_registered_tx_id_fkey" FOREIGN KEY("registered_tx_id") REFERENCES "tx"("id")' ;
     EXECUTE 'CREATe TABLE "pool_meta_data"("id" SERIAL8  PRIMARY KEY UNIQUE,"url" VARCHAR NOT NULL,"hash" hash32type NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "pool_meta_data" ADD CONSTRAINT "unique_pool_meta_data" UNIQUE("url","hash")' ;
     EXECUTE 'ALTER TABLE "pool_meta_data" ADD CONSTRAINT "pool_meta_data_registered_tx_id_fkey" FOREIGN KEY("registered_tx_id") REFERENCES "tx"("id")' ;

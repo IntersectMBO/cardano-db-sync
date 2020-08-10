@@ -9,6 +9,7 @@
 * For all transaction certificates, add index within the transaction (#230).
 * Fix certificate ordering issues that resulted in an abort if a MIR certificate was
   found whose output was a stake address that was inserted later in the same tx (#237).
+* Make sure stake_address registrations are correctly handled on rollbacks (#238).
 
 ## 3.1.0 -- July 2020
 
