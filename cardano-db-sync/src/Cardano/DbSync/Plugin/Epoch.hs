@@ -22,6 +22,7 @@ import           Control.Monad.Trans.Reader (ReaderT)
 import           Data.IORef (IORef, atomicWriteIORef, newIORef, readIORef)
 import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
+import qualified Data.Time.Clock as Time
 import           Data.Word (Word64)
 
 import           Database.Esqueleto (Value (..), (^.), (==.),
@@ -123,20 +124,23 @@ updateEpochNum epochNum trce = do
   where
     updateEpoch :: MonadIO m => EpochId -> ReaderT SqlBackend m (Either DbSyncNodeError ())
     updateEpoch epochId = do
-      eEpoch <- DB.queryCalcEpochEntry epochNum
-      case eEpoch of
-        Left err -> pure $ Left (NELookup "updateEpochNum.updateEpoch" err)
-        Right epoch -> Right <$> replace epochId epoch
+      mEpoch <- DB.queryCalcEpochEntry epochNum
+      epoch <- maybe (liftIO calcEpochFromHistory) pure mEpoch
+      Right <$> replace epochId epoch
 
     insertEpoch :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either DbSyncNodeError ())
     insertEpoch = do
-      eEpoch <- DB.queryCalcEpochEntry epochNum
+      mEpoch <- DB.queryCalcEpochEntry epochNum
       liftIO . logInfo trce $ "epochPluginInsertBlock: epoch " <> textShow epochNum
-      case eEpoch of
-        Left err -> pure $ Left (NELookup "updateEpochNum.insertEpoch" err)
-        Right epoch -> do
-          void $ DB.insertEpoch epoch
-          pure $ Right ()
+      epoch <- maybe (liftIO calcEpochFromHistory) pure mEpoch
+      void $ DB.insertEpoch epoch
+      pure $ Right ()
+
+    -- Really do not think this can happen but this is better than an error.
+    calcEpochFromHistory :: IO DB.Epoch
+    calcEpochFromHistory = do
+      now <- Time.getCurrentTime
+      pure $ DB.Epoch 0 0 0 epochNum now now
 
 -- -------------------------------------------------------------------------------------------------
 
