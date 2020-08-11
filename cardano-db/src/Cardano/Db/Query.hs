@@ -44,7 +44,6 @@ module Cardano.Db.Query
   , queryUtxoAtSlotNo
 
   , entityPair
-  , epochUtcStartTime
   , isFullySynced
   , isJust
   , listToMaybe
@@ -89,8 +88,6 @@ import           Ouroboros.Network.Block (BlockNo (..))
 
 -- If you squint, these Esqueleto queries almost look like SQL queries.
 
-
-type ValMay a = Value (Maybe a)
 
 -- | Get the 'Block' associated with the given hash.
 queryBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail Block)
@@ -173,52 +170,34 @@ queryBlockTxCount blkId = do
 -- When syncing the chain or filling an empty table, this is called at each epoch boundary to
 -- calculate the Epcoh entry for the last epoch.
 -- When following the chain, this is called for each new block of the current epoch.
-queryCalcEpochEntry :: MonadIO m => Word64 -> ReaderT SqlBackend m (Either LookupFail Epoch)
+queryCalcEpochEntry :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Epoch)
 queryCalcEpochEntry epochNum = do
-    res <- select . from $ \ (tx `InnerJoin` blk) -> do
+    blkRes <- select . from $ \ blk -> do
+              where_ (blk ^. BlockEpochNo ==. just (val epochNum))
+              pure $ (countRows, min_ (blk ^. BlockTime), max_ (blk ^. BlockTime))
+    txRes <- select . from $ \ (tx `InnerJoin` blk) -> do
               on (tx ^. TxBlock ==. blk ^. BlockId)
               where_ (blk ^. BlockEpochNo ==. just (val epochNum))
-              pure $ (sum_ (tx ^. TxOutSum), count (tx ^. TxOutSum), min_ (blk ^. BlockTime), max_ (blk ^. BlockTime))
-    blks <- select . from $ \ blk -> do
-              where_ (isJust $ blk ^. BlockSlotNo)
-              where_ (blk ^. BlockEpochNo ==. just (val epochNum))
-              pure countRows
-    let blkCount = maybe 0 unValue $ listToMaybe blks
-    case listToMaybe res of
-      Nothing -> queryEpochZeroTx blkCount
-      Just x -> convert blkCount x
+              pure $ (sum_ (tx ^. TxOutSum), count (tx ^. TxOutSum))
+    case (listToMaybe blkRes, listToMaybe txRes) of
+      (Just blk, Just tx) -> pure $ convertAll (unValue3 blk) (unValue2 tx)
+      (Just blk, Nothing) -> pure $ convertBlk (unValue3 blk)
+      _otherwise -> pure Nothing
   where
-    convert :: MonadIO m
-            => Word64 -> (ValMay Rational, Value Word64, ValMay UTCTime, ValMay UTCTime)
-            -> ReaderT SqlBackend m (Either LookupFail Epoch)
-    convert blkCount tuple =
-      case tuple of
-        (Value (Just outSum), Value txCount, Value (Just start), Value (Just end)) ->
-            pure (Right $ Epoch (fromIntegral $ numerator outSum) txCount blkCount epochNum start end)
-        _otherwise -> queryEpochZeroTx blkCount
+    convertAll
+        :: (Word64, Maybe UTCTime, Maybe UTCTime) -> (Maybe Rational, Word64)
+        -> Maybe Epoch
+    convertAll (blkCount, b, c) (d, txCount) =
+      case (b, c, d) of
+        (Just start, Just end, Just outSum) ->
+          Just $ Epoch (fromIntegral $ numerator outSum) txCount blkCount epochNum start end
+        _otherwise -> Nothing
 
-    queryEpochZeroTx :: MonadIO m => Word64 -> ReaderT SqlBackend m (Either LookupFail Epoch)
-    queryEpochZeroTx blkCount = do
-      res <- select . from $ \ blk -> do
-              where_ (isJust $ blk ^. BlockSlotNo)
-              where_ (blk ^. BlockEpochNo ==. just (val epochNum))
-              pure (min_ (blk ^. BlockTime), max_ (blk ^. BlockTime))
-      case listToMaybe res of
-        Nothing -> fmap mkZeroBlockEpoch <$> queryMeta
-        Just x -> convert2 blkCount x
-
-    convert2 :: MonadIO m => Word64 -> (ValMay UTCTime, ValMay UTCTime) -> ReaderT SqlBackend m (Either LookupFail Epoch)
-    convert2 blkCount tuple =
-      case tuple of
-        (Value (Just start), Value (Just end)) ->
-            pure $ Right (Epoch 0 0 blkCount epochNum start end)
-        _otherwise -> fmap mkZeroBlockEpoch <$> queryMeta
-
-    mkZeroBlockEpoch :: Meta -> Epoch
-    mkZeroBlockEpoch meta =
-      Epoch 0 0 0 epochNum
-        (epochUtcStartTime meta epochNum)
-        (epochUtcEndTime meta (epochNum + 1))
+    convertBlk :: (Word64, Maybe UTCTime, Maybe UTCTime) -> Maybe Epoch
+    convertBlk (blkCount, b, c) =
+      case (b, c) of
+        (Just start, Just end) -> Just (Epoch 0 0 blkCount epochNum start end)
+        _otherwise -> Nothing
 
 queryCheckPoints :: MonadIO m => Word64 -> ReaderT SqlBackend m [(Word64, ByteString)]
 queryCheckPoints limitCount = do
@@ -559,18 +538,6 @@ unValueSumAda mvm =
 entityPair :: Entity a -> (Key a, a)
 entityPair e =
   (entityKey e, entityVal e)
-
-{-# DEPRECATED epochUtcStartTime "Slot duration is no longer a constant." #-}
-epochUtcStartTime :: Meta -> Word64 -> UTCTime
-epochUtcStartTime _meta _slotNo = error "epochUtcStartTime"
-  -- Slot duration is in milliseconds.
-  -- addUTCTime (0.001 * fromIntegral (metaSlotsPerEpoch meta * epochNum * metaSlotDuration meta))
-  --               (metaStartTime meta)
-
-{-# DEPRECATED epochUtcEndTime "Slot duration is no longer a constant." #-}
-epochUtcEndTime :: Meta -> Word64 -> UTCTime
-epochUtcEndTime _meta _slotNo = error "epochUtcEndTime"
-  -- addUTCTime (negate . fromIntegral $ metaSlotDuration meta) (epochUtcStartTime meta (epochNum + 1))
 
 -- Compare the provided time with the current time and return True if the provided time
 -- is within 120 seconds of the current time.

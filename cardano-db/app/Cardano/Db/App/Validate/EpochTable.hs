@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Cardano.Db.App.Validate.EpochTable
   ( validateEpochTable
   ) where
@@ -28,7 +29,8 @@ validate lastEpoch = do
       | current > lastEpoch = putStrLn $ greenText "ok"
       | otherwise = do
           -- Recalculate the epoch entry
-          recalc <- runDbNoLogging $ queryCalcEpochEntry current
+          recalc <- maybe (Left $ DbLookupMessage "validate") Right
+                      <$> runDbNoLogging (queryCalcEpochEntry current)
           -- Get the table entry
           value <- runDbNoLogging $ queryEpochEntry current
 
@@ -46,3 +48,4 @@ getStableEpochCount = do
     Nothing -> pure Nothing
     Just 0 -> pure Nothing
     Just latest -> pure $ Just (latest - 1)
+
