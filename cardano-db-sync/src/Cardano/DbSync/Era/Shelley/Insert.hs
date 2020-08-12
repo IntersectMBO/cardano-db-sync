@@ -259,10 +259,10 @@ insertPoolRetire
     => DB.TxId -> EpochNo -> Word16 -> ShelleyStakePoolKeyHash
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRetire txId epochNum idx keyHash = do
-  updateId <- firstExceptT (NELookup "insertPoolRetire") . newExceptT $ queryStakePoolKeyHash keyHash
+  poolId <- firstExceptT (NELookup "insertPoolRetire") . newExceptT $ queryStakePoolKeyHash keyHash
   void . lift . DB.insertPoolRetire $
     DB.PoolRetire
-      { DB.poolRetireUpdateId = updateId
+      { DB.poolRetireHashId = poolId
       , DB.poolRetireCertIndex = idx
       , DB.poolRetireAnnouncedTxId = txId
       , DB.poolRetireRetiringEpoch = unEpochNo epochNum
@@ -340,14 +340,14 @@ insertDelegation _tracer env txId idx cred poolkh = do
   addrId <- firstExceptT (NELookup "insertDelegation")
                 . newExceptT
                 $ queryStakeAddress (Shelley.stakingCredHash env cred)
-  updateId <- firstExceptT (NELookup "insertDelegation")
+  poolId <- firstExceptT (NELookup "insertDelegation")
                 . newExceptT
                 $ queryStakePoolKeyHash poolkh
   void . lift . DB.insertDelegation $
     DB.Delegation
       { DB.delegationAddrId = addrId
       , DB.delegationCertIndex = idx
-      , DB.delegationUpdateId = updateId
+      , DB.delegationPoolId = poolId
       , DB.delegationTxId = txId
       }
 

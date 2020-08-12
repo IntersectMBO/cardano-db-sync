@@ -44,7 +44,7 @@ queryStakeAddress addr = do
             pure (saddr ^. StakeAddressId)
   pure $ maybeToEither (DbLookupMessage "StakeAddress") unValue (listToMaybe res)
 
-queryStakePoolKeyHash :: MonadIO m => ShelleyStakePoolKeyHash -> ReaderT SqlBackend m (Either LookupFail PoolUpdateId)
+queryStakePoolKeyHash :: MonadIO m => ShelleyStakePoolKeyHash -> ReaderT SqlBackend m (Either LookupFail PoolHashId)
 queryStakePoolKeyHash kh = do
   res <- select . from $ \ (poolUpdate `InnerJoin` poolHash `InnerJoin` tx `InnerJoin` blk) -> do
             on (blk ^. BlockId ==. tx ^. TxBlock)
@@ -52,7 +52,7 @@ queryStakePoolKeyHash kh = do
             on (poolUpdate ^. PoolUpdateHashId ==. poolHash ^. PoolHashId)
             where_ (poolHash ^. PoolHashHash ==. val (unKeyHashBS kh))
             orderBy [desc (blk ^. BlockSlotNo)]
-            pure (poolUpdate ^. PoolUpdateId)
+            pure (poolHash ^. PoolHashId)
   pure $ maybeToEither (DbLookupMessage "StakePoolKeyHash") unValue (listToMaybe res)
 
 queryTxInputSum :: MonadIO m => [ShelleyTxIn] -> ReaderT SqlBackend m Word64
