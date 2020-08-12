@@ -1,6 +1,6 @@
 # Revision history for cardano-db-sync node
 
-## 3.2.0 -- ???
+## 4.0.0
 
 * Note that this release requires the database to be dropped and recreated.
 * Add and populate 'tx_metadata' table.
@@ -10,6 +10,10 @@
 * Fix certificate ordering issues that resulted in an abort if a MIR certificate was
   found whose output was a stake address that was inserted later in the same tx (#237).
 * Make sure stake_address registrations are correctly handled on rollbacks (#238).
+* In 'tx_out' table, store the raw as well as rendered version of 'address' (#223).
+* In 'stake_address' table, store the raw as well as rendered version (#224).
+* Fix epoch start and end times in epoch table (#242).
+* Make 'delegation' and 'pool_retire' tables reference 'pool_hash' table instead of 'pool_update.
 
 ## 3.1.0 -- July 2020
 

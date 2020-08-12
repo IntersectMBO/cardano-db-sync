@@ -1,9 +1,15 @@
 # Revision history for cardano-db
 
-## 3.2.0 -- ???
+## 4.0.0
 
 * Note that this release requires the database to be dropped and recreated.
 * Add and populate 'tx_metadata' table.
+* For all transaction certificates, add index within the transaction (#230).
+* In 'tx_out' table, store the raw as well as rendered version of 'address' (#223).
+* In 'stake_address' table, store the raw as well as rendered version (#224).
+* Fix epoch start and end times in epoch table (#242).
+* Make 'delegation' and 'pool_retire' tables reference 'pool_hash' table instead of 'pool_update.
+* Add database indices on 'tx_out' and 'pool_update'.
 
 ## 3.1.0 -- July 2020
 
