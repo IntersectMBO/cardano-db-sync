@@ -181,11 +181,11 @@ share
     UniquePoolOwner     hash
 
   PoolRetire
-    updateId            PoolUpdateId
+    hashId              PoolHashId
     certIndex           Word16
     announcedTxId       TxId                                    -- Slot number in which the pool announced it was retiring.
     retiringEpoch       Word64              sqltype=uinteger    -- Epoch number in which the pool will retire.
-    UniquePoolRetiring  updateId
+    UniquePoolRetiring  hashId
 
   PoolRelay
     updateId            PoolUpdateId
@@ -220,9 +220,9 @@ share
   Delegation
     addrId              StakeAddressId
     certIndex           Word16
-    updateId            PoolUpdateId
+    poolId              PoolHashId
     txId                TxId
-    UniqueDelegation    addrId updateId txId
+    UniqueDelegation    addrId poolId txId
 
   -- When was a staking key/script registered
   StakeRegistration
