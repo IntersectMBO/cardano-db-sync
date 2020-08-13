@@ -9,8 +9,11 @@ BEGIN
 
     -- helpful in case anyone is looking for a utxo by a payment credential.
 
-    CREATE INDEX idx_tx_out
+    CREATE INDEX idx_tx_out_payment_cred
     ON tx_out(payment_cred);
+
+    CREATE INDEX idx_pool_update_hash_id
+    ON pool_update(hash_id);
 
     -- -------------------------------------------------------------------------
 
