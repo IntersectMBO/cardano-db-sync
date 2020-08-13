@@ -1,6 +1,6 @@
 # Revision history for cardano-db-sync node
 
-## 3.2.0 -- ???
+## 4.0.0 -- August 2020
 
 * Note that this release requires the database to be dropped and recreated.
 * Add and populate 'tx_metadata' table.
