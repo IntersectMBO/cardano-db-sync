@@ -39,7 +39,7 @@ runCommand cmd =
     CreateMigration mdir -> doCreateMigration mdir
     Rollback slotNo -> runRollback slotNo
     RunMigrations mdir mldir -> runMigrations id False mdir mldir
-    UtxoSetAtBlock blkid -> utxoSetAtBlock blkid
+    UtxoSetAtBlock blkid -> utxoSetAtSlot blkid
     Validate -> runValidation
 
 doCreateMigration :: MigrationDir -> IO ()
