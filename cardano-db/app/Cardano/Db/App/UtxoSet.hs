@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Cardano.Db.App.UtxoSet
-  ( utxoSetAtBlock
+  ( utxoSetAtSlot
   ) where
 
 import           Cardano.Chain.Common (decodeAddressBase58, isRedeemAddress)
@@ -19,8 +19,8 @@ import qualified Data.Text.IO as Text
 import           System.Exit (exitSuccess)
 import           System.IO (IOMode (..), withFile)
 
-utxoSetAtBlock :: Word64 -> IO ()
-utxoSetAtBlock slotNo = do
+utxoSetAtSlot :: Word64 -> IO ()
+utxoSetAtSlot slotNo = do
   (genesisSupply, utxoSet, fees, eUtcTime) <-
         -- Run the following queries in a single transaction.
         runDbNoLogging $ do
@@ -72,11 +72,12 @@ aggregateUtxos xs =
     . Map.fromListWith (+)
     $ map (\(x, _) -> (txOutAddress x, txOutValue x)) xs
 
-isNotRedeemTextAddress :: Text -> Bool
-isNotRedeemTextAddress addr =
+isRedeemTextAddress :: Text -> Bool
+isRedeemTextAddress addr =
+  -- Only Byron has redeem addresses and only Byron uses Base58 encoding.
   case decodeAddressBase58 addr of
-    Left e -> error $ "isNotRedeemTextAddress: cannot decode " ++ show addr ++ ": " ++ show e
-    Right a -> not $ isRedeemAddress a
+    Right a -> isRedeemAddress a
+    Left _ -> False
 
 partitionUtxos :: [(Text, Word64)] -> ([(Text, Word64)], [(Text, Word64)])
 partitionUtxos =
@@ -85,7 +86,7 @@ partitionUtxos =
     -- Accept addresses that for which this predicate is True.
     accept :: (Text, a) -> Bool
     accept (addr, _) =
-      Text.length addr <= 180 && isNotRedeemTextAddress addr
+      Text.length addr <= 180 && not (isRedeemTextAddress addr)
 
 reportSlotDate :: Word64 -> Either a UTCTime -> IO ()
 reportSlotDate slotNo eUtcTime = do
