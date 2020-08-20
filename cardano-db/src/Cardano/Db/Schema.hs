@@ -178,7 +178,7 @@ share
   PoolOwner
     hash                ByteString          sqltype=hash28type
     poolHashId          PoolHashId
-    UniquePoolOwner     hash
+    UniquePoolOwner     hash poolHashId
 
   PoolRetire
     hashId              PoolHashId
