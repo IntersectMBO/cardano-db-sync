@@ -1,5 +1,10 @@
 # Revision history for cardano-db-sync node
 
+## 5.0.0 (unreleased)
+
+* Note that this release requires the database to be dropped and recreated.
+* Correct uniqueness constraint on PoolOwner (#251).
+
 ## 4.0.0
 
 * Note that this release requires the database to be dropped and recreated.
