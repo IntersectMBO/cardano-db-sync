@@ -5,13 +5,12 @@ module Cardano.Db.Delete
   ) where
 
 
-import           Control.Monad.IO.Class (MonadIO)
+import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.Word (Word64)
 
-import           Database.Persist.Sql (SqlBackend, (==.), deleteCascade, selectList)
-import           Database.Persist.Types (entityKey)
+import           Database.Persist.Sql (SqlBackend, (==.), deleteCascade, selectKeysList)
 
 import           Cardano.Db.Schema
 
@@ -22,23 +21,24 @@ import           Ouroboros.Network.Block (BlockNo (..))
 -- deleted and 'False' if it did not exist.
 deleteCascadeBlock :: MonadIO m => Block -> ReaderT SqlBackend m Bool
 deleteCascadeBlock block = do
-  keys <- selectList [ BlockHash ==. blockHash block ] []
-  mapM_ (deleteCascade . entityKey) keys
+  keys <- selectKeysList [ BlockHash ==. blockHash block ] []
+  mapM_ deleteCascade keys
   pure $ not (null keys)
 
 -- | Delete a block if it exists. Returns 'True' if it did exist and has been
 -- deleted and 'False' if it did not exist.
 deleteCascadeBlockNo :: MonadIO m => BlockNo -> ReaderT SqlBackend m Bool
 deleteCascadeBlockNo (BlockNo blockNo) = do
-  keys <- selectList [ BlockBlockNo ==. Just blockNo ] []
-  mapM_ (deleteCascade . entityKey) keys
+  keys <- selectKeysList [ BlockBlockNo ==. Just blockNo ] []
+  mapM_ deleteCascade keys
   pure $ not (null keys)
 
 -- | Delete a block if it exists. Returns 'True' if it did exist and has been
 -- deleted and 'False' if it did not exist.
 deleteCascadeSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Bool
 deleteCascadeSlotNo slotNo = do
-  keys <- selectList [ BlockSlotNo ==. Just slotNo ] []
-  mapM_ (deleteCascade . entityKey) keys
+  keys <- selectKeysList [ BlockSlotNo ==. Just slotNo ] []
+  liftIO $ print keys
+  mapM_ deleteCascade keys
   pure $ not (null keys)
 

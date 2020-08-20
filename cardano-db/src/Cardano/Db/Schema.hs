@@ -177,8 +177,8 @@ share
 
   PoolOwner
     hash                ByteString          sqltype=hash28type
-    poolId              PoolHashId
-    UniquePoolOwner     hash
+    poolHashId          PoolHashId
+    UniquePoolOwner     hash poolHashId
 
   PoolRetire
     hashId              PoolHashId
@@ -220,9 +220,9 @@ share
   Delegation
     addrId              StakeAddressId
     certIndex           Word16
-    poolId              PoolHashId
+    poolHashId          PoolHashId
     txId                TxId
-    UniqueDelegation    addrId poolId txId
+    UniqueDelegation    addrId poolHashId txId
 
   -- When was a staking key/script registered
   StakeRegistration

@@ -297,11 +297,11 @@ insertPoolOwner
     :: (MonadBaseControl IO m, MonadIO m)
     => DB.PoolHashId -> ShelleyStakingKeyHash
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertPoolOwner poolId skh =
+insertPoolOwner poolHashId skh =
   void . lift . DB.insertPoolOwner $
     DB.PoolOwner
       { DB.poolOwnerHash = Shelley.unKeyHashBS skh
-      , DB.poolOwnerPoolId = poolId
+      , DB.poolOwnerPoolHashId = poolHashId
       }
 
 insertStakeRegistration
@@ -340,14 +340,14 @@ insertDelegation _tracer env txId idx cred poolkh = do
   addrId <- firstExceptT (NELookup "insertDelegation")
                 . newExceptT
                 $ queryStakeAddress (Shelley.stakingCredHash env cred)
-  poolId <- firstExceptT (NELookup "insertDelegation")
-                . newExceptT
-                $ queryStakePoolKeyHash poolkh
+  poolHashId <- firstExceptT (NELookup "insertDelegation")
+                  . newExceptT
+                  $ queryStakePoolKeyHash poolkh
   void . lift . DB.insertDelegation $
     DB.Delegation
       { DB.delegationAddrId = addrId
       , DB.delegationCertIndex = idx
-      , DB.delegationPoolId = poolId
+      , DB.delegationPoolHashId = poolHashId
       , DB.delegationTxId = txId
       }
 
