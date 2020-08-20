@@ -1,0 +1,39 @@
+module Cardano.Db.App.Validate.PoolOwner
+  ( validateAllPoolsHaveOwners
+  ) where
+
+import           Cardano.Db.App.Validate.Util
+
+import           Cardano.Db
+
+import           Control.Monad.IO.Class (MonadIO)
+import           Control.Monad.Trans.Reader (ReaderT)
+
+import           Data.Maybe (fromMaybe)
+
+import           Database.Esqueleto (Value (..), (^.), (==.),
+                    countRows, from, notExists, select, unValue, where_)
+
+import           Database.Persist.Sql (SqlBackend)
+
+
+validateAllPoolsHaveOwners :: IO ()
+validateAllPoolsHaveOwners = do
+  putStrF $ "All pools have owners :"
+  count <- runDbNoLogging queryPoolsWithoutOwners
+  if count == 0
+    then putStrLn $ greenText "ok"
+    else putStrLn $ redText ("Failed, " ++ show count ++ " pools are without owners.")
+
+-- -----------------------------------------------------------------------------
+
+-- select * from pool_hash
+--  where not exists (select * from pool_owner where pool_owner.pool_id = pool_hash.id) ;
+
+queryPoolsWithoutOwners :: MonadIO m => ReaderT SqlBackend m Int
+queryPoolsWithoutOwners = do
+    res <- select . from $ \ phash -> do
+              where_ . notExists . from $ \ powner -> do
+                where_ (phash ^. PoolHashId ==. powner ^. PoolOwnerPoolHashId)
+              pure countRows
+    pure $ fromMaybe 0 (unValue <$> listToMaybe res)

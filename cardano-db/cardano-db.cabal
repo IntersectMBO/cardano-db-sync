@@ -98,6 +98,7 @@ executable cardano-db-tool
                         Cardano.Db.App.Validation
                         Cardano.Db.App.Validate.BlockTxs
                         Cardano.Db.App.Validate.EpochTable
+                        Cardano.Db.App.Validate.PoolOwner
                         Cardano.Db.App.Validate.TotalSupply
                         Cardano.Db.App.Validate.Util
 
