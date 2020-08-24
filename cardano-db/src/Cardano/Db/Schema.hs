@@ -285,11 +285,11 @@ share
     keyDeposit          Word64 Maybe        sqltype=lovelace
     poolDeposit         Word64 Maybe        sqltype=lovelace
     maxEpoch            Word64 Maybe        sqltype=uinteger
-    nOptimal            Word64 Maybe        sqltype=uinteger
+    optimalPoolCount    Word64 Maybe        sqltype=uinteger
     influence           Double Maybe        -- sqltype=rational
     monetaryExpandRate  Double Maybe        -- sqltype=interval
     treasuryGrowthRate  Double Maybe        -- sqltype=interval
-    activeSlotCoeff     Double Maybe        -- sqltype=interval
+    decentralisation    Double Maybe        -- sqltype=interval
     entropy             ByteString Maybe    sqltype=hash32type
     protocolVersion     Text Maybe
     minUTxOValue        Word64 Maybe        sqltype=lovelace
