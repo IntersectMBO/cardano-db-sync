@@ -121,10 +121,11 @@ insertTx
     => Trace IO Text -> DbSyncEnv -> DB.BlockId -> Word64 -> ShelleyTx
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertTx tracer env blkId blockIndex tx = do
-    -- Insert transaction and get txId from the DB.
-    let outSum = Shelley.txOutputSum tx
-        fees = Shelley.txFee tx
+    let fees = Shelley.txFee tx
+        outSum = Shelley.txOutputSum tx
+        withdrawalSum = Shelley.txWithdrawalSum tx
     inSum <- lift $ queryTxInputSum (Shelley.txInputList tx)
+    -- Insert transaction and get txId from the DB.
     txId <- lift . DB.insertTx $
               DB.Tx
                 { DB.txHash = Shelley.txHash tx
@@ -132,7 +133,7 @@ insertTx tracer env blkId blockIndex tx = do
                 , DB.txBlockIndex = blockIndex
                 , DB.txOutSum = outSum
                 , DB.txFee = fees
-                , DB.txDeposit = fromIntegral inSum - fromIntegral (outSum + fees)
+                , DB.txDeposit = fromIntegral inSum - fromIntegral (outSum + fees) - fromIntegral withdrawalSum
                 , DB.txSize = fromIntegral $ LBS.length (Shelley.txFullBytes tx)
                 }
 
