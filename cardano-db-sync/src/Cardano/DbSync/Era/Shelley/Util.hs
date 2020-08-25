@@ -35,6 +35,7 @@ module Cardano.DbSync.Era.Shelley.Util
   , txOutputSum
   , txParamUpdate
   , txWithdrawals
+  , txWithdrawalSum
   , unHeaderHash
   , unitIntervalToDouble
   , unKeyHashBS
@@ -220,6 +221,11 @@ txOutputSum tx =
 
 txWithdrawals :: ShelleyTx -> [(Shelley.RewardAcnt TPraosStandardCrypto, Coin)]
 txWithdrawals = Map.toList . Shelley.unWdrl . Shelley._wdrls . Shelley._body
+
+txWithdrawalSum :: ShelleyTx -> Word64
+txWithdrawalSum =
+  fromIntegral . sum . map (unCoin . snd) . Map.toList . Shelley.unWdrl
+    . Shelley._wdrls . Shelley._body
 
 unHeaderHash :: ShelleyHash -> ByteString
 unHeaderHash = Crypto.hashToBytes . Shelley.unHashHeader . Shelley.unShelleyHash

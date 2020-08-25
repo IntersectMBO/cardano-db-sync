@@ -5,7 +5,7 @@ module Cardano.Db.Delete
   ) where
 
 
-import           Control.Monad.IO.Class (MonadIO, liftIO)
+import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.Word (Word64)
@@ -38,7 +38,6 @@ deleteCascadeBlockNo (BlockNo blockNo) = do
 deleteCascadeSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Bool
 deleteCascadeSlotNo slotNo = do
   keys <- selectKeysList [ BlockSlotNo ==. Just slotNo ] []
-  liftIO $ print keys
   mapM_ deleteCascade keys
   pure $ not (null keys)
 

@@ -7,6 +7,7 @@ module Cardano.Db.Schema.Orphans where
 
 import Cardano.Db.Types (DbWord64 (..))
 
+import Data.Ratio (denominator, numerator)
 import Data.WideWord.Word128 (Word128)
 
 import qualified Data.Text as Text
@@ -25,6 +26,10 @@ instance PersistField DbWord64 where
 instance PersistField Word128 where
   toPersistValue = PersistText . Text.pack . show
   fromPersistValue (PersistText bs) = Right $ read (Text.unpack bs)
+  fromPersistValue x@(PersistRational r) =
+    if denominator r == 1
+      then Right $ fromIntegral (numerator r)
+      else Left $ mconcat [ "Failed to parse Haskell type Word128: ", Text.pack (show x) ]
   fromPersistValue x =
     Left $ mconcat [ "Failed to parse Haskell type Word128: ", Text.pack (show x) ]
 
