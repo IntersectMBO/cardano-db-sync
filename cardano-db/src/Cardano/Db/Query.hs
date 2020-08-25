@@ -22,6 +22,7 @@ module Cardano.Db.Query
   , queryFeesUpToSlotNo
   , queryGenesisSupply
   , queryIsFullySynced
+  , queryLastByronBlockNo
   , queryLatestBlock
   , queryLatestCachedEpochNo
   , queryLatestEpochNo
@@ -287,6 +288,16 @@ queryIsFullySynced :: MonadIO m => ReaderT SqlBackend m Bool
 queryIsFullySynced = do
   mLatestBlockTime <- fmap blockTime <$> queryLatestBlock
   maybe (pure False) (liftIO . isFullySynced) mLatestBlockTime
+
+-- | Get the BlockNo of the last Block in the Byron Era.
+queryLastByronBlockNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
+queryLastByronBlockNo = do
+  res <- select $ from $ \ blk -> do
+                where_ (isJust $ blk ^. BlockMerkelRoot)
+                orderBy [desc (blk ^. BlockBlockNo)]
+                limit 1
+                pure (blk ^. BlockBlockNo)
+  pure $ join (fmap unValue $ listToMaybe res)
 
 -- | Get 'BlockId' of the latest block.
 queryLatestBlockId :: MonadIO m => ReaderT SqlBackend m (Maybe BlockId)
