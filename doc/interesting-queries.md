@@ -14,10 +14,11 @@ they exist, the names of those queries will be included in parentheses.
 ### Chain meta data (`queryMeta`)
 ```
 cexplorer=# select * from meta ;
- id | protocol_const | slot_duration |     start_time      | network_name
-----+----------------+---------------+---------------------+--------------
-  1 |           2160 |         20000 | 2017-09-23 21:44:51 | mainnet
+ id |     start_time      | network_name
+----+---------------------+--------------
+  1 | 2017-09-23 21:44:51 | mainnet
 (1 row)
+
 ```
 
 ### Current total supply of Ada (`queryTotalSupply`)
@@ -38,18 +39,6 @@ cexplorer=# select sum (value) / 1000000 as current_supply from tx_out as tx_out
 ----------------------
  31112120630.27526800
 
-```
-
-### Estimate current tip slot number based on chain metadata
-
-Note: The slot duration is in milliseconds.
-
-```
-cexplorer=# select extract (epoch from (select now() - start_time from meta)) * 1000 /
-              slot_duration as est_tip_slot_no from meta ;
- est_tip_slot_no
------------------
- 4011091.0228046
 ```
 
 ### Slot number of the most recent block (`queryLatestSlotNo`)
@@ -80,13 +69,14 @@ valid:
 ```
 cexplorer=# select * from pool_update
               where registered_tx_id in (select max(registered_tx_id) from pool_update group by reward_addr_id)
-              and not exists (select update_id from pool_retire where update_id = pool_update.id) ;
+              and not exists (select * from pool_retire where pool_retire.hash_id = pool_update.id);
+
 ```
 To include the pool hash in the query output:
 ```
 cexplorer=# select * from pool_update inner join pool_hash on pool_update.hash_id = pool_hash.id
               where registered_tx_id in (select max(registered_tx_id) from pool_update group by reward_addr_id)
-              and not exists (select update_id from pool_retire where update_id = pool_update.id) ;
+              and not exists (select * from pool_retire where pool_retire.hash_id = pool_update.id);
 ```
 
 
