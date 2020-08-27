@@ -133,7 +133,7 @@ insertTx tracer env blkId blockIndex tx = do
                 , DB.txBlockIndex = blockIndex
                 , DB.txOutSum = outSum
                 , DB.txFee = fees
-                , DB.txDeposit = fromIntegral inSum - fromIntegral (outSum + fees) - fromIntegral withdrawalSum
+                , DB.txDeposit = fromIntegral (inSum + withdrawalSum) - fromIntegral (outSum + fees)
                 , DB.txSize = fromIntegral $ LBS.length (Shelley.txFullBytes tx)
                 }
 
