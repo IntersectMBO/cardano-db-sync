@@ -19,7 +19,7 @@ import           Database.Persist.Sql (SqlBackend)
 
 validateAllPoolsHaveOwners :: IO ()
 validateAllPoolsHaveOwners = do
-  putStrF $ "All pools have owners :"
+  putStrF $ "All pools have owners : "
   count <- runDbNoLogging queryPoolsWithoutOwners
   if count == 0
     then putStrLn $ greenText "ok"
@@ -28,7 +28,7 @@ validateAllPoolsHaveOwners = do
 -- -----------------------------------------------------------------------------
 
 -- select * from pool_hash
---  where not exists (select * from pool_owner where pool_owner.pool_id = pool_hash.id) ;
+--  where not exists (select * from pool_owner where pool_owner.pool_hash_id = pool_hash.id) ;
 
 queryPoolsWithoutOwners :: MonadIO m => ReaderT SqlBackend m Int
 queryPoolsWithoutOwners = do

@@ -10,6 +10,7 @@ import           Data.Time.Clock (UTCTime)
 
 import           Cardano.Db
 
+import           Data.ByteString.Char8 (ByteString)
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import           Data.Text (Text)
@@ -21,13 +22,7 @@ import           System.IO (IOMode (..), withFile)
 
 utxoSetAtSlot :: Word64 -> IO ()
 utxoSetAtSlot slotNo = do
-  (genesisSupply, utxoSet, fees, eUtcTime) <-
-        -- Run the following queries in a single transaction.
-        runDbNoLogging $ do
-            (,,,) <$> queryGenesisSupply
-                    <*> queryUtxoAtSlotNo slotNo
-                    <*> queryFeesUpToSlotNo slotNo
-                    <*> querySlotUtcTime slotNo
+  (genesisSupply, utxoSet, fees, eUtcTime) <- queryAtSlot slotNo
 
   let supply = utxoSetSum utxoSet
   let aggregated = aggregateUtxos utxoSet
@@ -87,6 +82,15 @@ partitionUtxos =
     accept :: (Text, a) -> Bool
     accept (addr, _) =
       Text.length addr <= 180 && not (isRedeemTextAddress addr)
+
+queryAtSlot :: Word64 -> IO (Ada, [(TxOut, ByteString)], Ada, Either LookupFail UTCTime)
+queryAtSlot slotNo =
+  -- Run the following queries in a single transaction.
+  runDbNoLogging $ do
+    (,,,) <$> queryGenesisSupply
+            <*> queryUtxoAtSlotNo slotNo
+            <*> queryFeesUpToSlotNo slotNo
+             <*> querySlotUtcTime slotNo
 
 reportSlotDate :: Word64 -> Either a UTCTime -> IO ()
 reportSlotDate slotNo eUtcTime = do
