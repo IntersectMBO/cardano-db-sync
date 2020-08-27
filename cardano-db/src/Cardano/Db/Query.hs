@@ -231,11 +231,11 @@ queryCheckPoints limitCount = do
         else [ end, end - 2 .. 1 ]
 
 queryDepositUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
-queryDepositUpToBlockNo slotNo = do
+queryDepositUpToBlockNo blkNo = do
   res <- select . from $ \ (tx `InnerJoin` blk) -> do
             on (tx ^. TxBlock ==. blk ^. BlockId)
-            where_ (isJust $ blk ^. BlockSlotNo)
-            where_ (blk ^. BlockSlotNo <=. just (val slotNo))
+            where_ (isJust $ blk ^. BlockBlockNo)
+            where_ (blk ^. BlockBlockNo <=. just (val blkNo))
             pure $ sum_ (tx ^. TxDeposit)
   pure $ unValueSumAda (listToMaybe res)
 
