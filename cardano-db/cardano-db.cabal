@@ -103,6 +103,7 @@ executable cardano-db-tool
                         Cardano.Db.App.Validate.Util
 
   build-depends:        base                            >= 4.12         && < 4.13
+                      , bytestring
                       , ansi-terminal
                       , cardano-db
                       , cardano-ledger

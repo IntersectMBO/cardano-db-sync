@@ -43,6 +43,7 @@ module Cardano.Db.Query
   , queryTxOutValue
   , queryUtxoAtBlockNo
   , queryUtxoAtSlotNo
+  , queryWithdrawalsUpToBlockNo
 
   , entityPair
   , isFullySynced
@@ -231,14 +232,12 @@ queryCheckPoints limitCount = do
         else [ end, end - 2 .. 1 ]
 
 queryDepositUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
-queryDepositUpToBlockNo slotNo = do
+queryDepositUpToBlockNo blkNo = do
   res <- select . from $ \ (tx `InnerJoin` blk) -> do
             on (tx ^. TxBlock ==. blk ^. BlockId)
-            where_ (isJust $ blk ^. BlockSlotNo)
-            where_ (blk ^. BlockSlotNo <=. just (val slotNo))
+            where_ (blk ^. BlockBlockNo <=. just (val blkNo))
             pure $ sum_ (tx ^. TxDeposit)
   pure $ unValueSumAda (listToMaybe res)
-
 
 queryEpochEntry :: MonadIO m => Word64 -> ReaderT SqlBackend m (Either LookupFail Epoch)
 queryEpochEntry epochNum = do
@@ -261,7 +260,6 @@ queryFeesUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
 queryFeesUpToBlockNo blkNo = do
   res <- select . from $ \ (tx `InnerJoin` blk) -> do
             on (tx ^. TxBlock ==. blk ^. BlockId)
-            where_ (isJust $ blk ^. BlockBlockNo)
             where_ (blk ^. BlockBlockNo <=. just (val blkNo))
             pure $ sum_ (tx ^. TxFee)
   pure $ unValueSumAda (listToMaybe res)
@@ -487,6 +485,15 @@ queryUtxoAtSlotNo slotNo = do
                 where_ (blk ^. BlockSlotNo ==. just (val slotNo))
                 pure (blk ^. BlockId)
   maybe (pure []) queryUtxoAtBlockId $ fmap unValue (listToMaybe eblkId)
+
+queryWithdrawalsUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
+queryWithdrawalsUpToBlockNo blkNo = do
+  res <- select . from $ \ (tx `InnerJoin` blk `InnerJoin` withDraw) -> do
+            on (tx ^. TxId ==. withDraw ^. WithdrawalTxId)
+            on (tx ^. TxBlock ==. blk ^. BlockId)
+            where_ (blk ^. BlockBlockNo <=. just (val blkNo))
+            pure $ sum_ (withDraw ^. WithdrawalAmount)
+  pure $ unValueSumAda (listToMaybe res)
 
 -- -----------------------------------------------------------------------------
 -- SqlQuery predicates

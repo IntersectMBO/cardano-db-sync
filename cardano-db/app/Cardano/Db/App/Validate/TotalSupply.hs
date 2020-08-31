@@ -1,3 +1,4 @@
+{-# LANGUAGE StrictData #-}
 module Cardano.Db.App.Validate.TotalSupply
   ( validateTotalSupplyDecreasing
   ) where
@@ -17,30 +18,28 @@ validateTotalSupplyDecreasing :: IO ()
 validateTotalSupplyDecreasing = do
     test <- genTestParameters
 
-    putStrF $ "Total supply + fees + deposit at block " ++ show (testFirstBlockNo test)
+    putStrF $ "Total supply + fees + deposit - withdrawals at block " ++ show (testBlockNo test)
             ++ " is same as genesis supply: "
-    (fee1, depost1, supply1)
-                    <- runDbNoLogging $ do
-                        (,,) <$> queryFeesUpToBlockNo (testFirstBlockNo test)
-                              <*> queryDepositUpToBlockNo (testFirstBlockNo test)
-                              <*> fmap2 utxoSetSum queryUtxoAtBlockNo (testFirstBlockNo test)
-    if genesisSupply test == supply1 + fee1 + depost1
-      then putStrLn $ greenText "ok"
-      else error $ redText (show (genesisSupply test) ++ " /= " ++ show (supply1 + fee1 + depost1))
 
-    putStrF $ "Validate total supply decreasing from block " ++ show (testFirstBlockNo test)
-            ++ " to block " ++ show (testSecondBlockNo test) ++ ": "
+    accounting <- queryInitialSupply (testBlockNo test)
 
-    supply2 <- runDbNoLogging $ fmap2 utxoSetSum queryUtxoAtBlockNo (testSecondBlockNo test)
-    if supply1 >= supply2
+    let total = accSupply accounting + accFees accounting + accDeposit accounting - accWithdrawals accounting
+
+    if genesisSupply test == total
       then putStrLn $ greenText "ok"
-      else error $ redText (show supply1 ++ " < " ++ show supply2)
+      else error $ redText (show (genesisSupply test) ++ " /= " ++ show total)
 
 -- -----------------------------------------------------------------------------
 
+data Accounting = Accounting
+  { accFees :: Ada
+  , accDeposit :: Ada
+  , accWithdrawals :: Ada
+  , accSupply :: Ada
+  }
+
 data TestParams = TestParams
-  { testFirstBlockNo :: Word64
-  , testSecondBlockNo :: Word64
+  { testBlockNo :: Word64
   , genesisSupply :: Ada
   }
 
@@ -49,8 +48,18 @@ genTestParameters = do
   mlatest <- runDbNoLogging queryLatestBlockNo
   case mlatest of
     Nothing -> error "Cardano.Db.App.Validation: Empty database"
-    Just latest -> do
-      block1 <- randomRIO (1, latest - 1)
-      TestParams block1
-          <$> randomRIO (block1, latest)
+    Just latest ->
+      TestParams
+          <$> randomRIO (1, latest - 1)
           <*> runDbNoLogging queryGenesisSupply
+
+
+queryInitialSupply :: Word64 -> IO Accounting
+queryInitialSupply blkNo =
+  -- Run all queries in a single transaction.
+  runDbNoLogging $
+    Accounting
+      <$> queryFeesUpToBlockNo blkNo
+      <*> queryDepositUpToBlockNo blkNo
+      <*> queryWithdrawalsUpToBlockNo blkNo
+      <*> fmap2 utxoSetSum queryUtxoAtBlockNo blkNo
