@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 module Cardano.DbSync.Types
   ( BlockDetails (..)
+  , CardanoBlock
   , ConfigFile (..)
   , DbSyncEnv (..)
   , DbSyncNodeParams (..)
@@ -37,6 +38,7 @@ import           Data.Word (Word64)
 
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart)
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
+import qualified Ouroboros.Consensus.Cardano.Block as Cardano
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
 import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
 import qualified Ouroboros.Consensus.Shelley.Protocol as Shelley
@@ -51,11 +53,12 @@ import qualified Shelley.Spec.Ledger.Keys as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxData as Shelley
 
-
 -- No longer contains a Tip value because the Tip value was useless.
 data BlockDetails
   = ByronBlockDetails !ByronBlock !SlotDetails
   | ShelleyBlockDetails !(Shelley.ShelleyBlock TPraosStandardCrypto) !SlotDetails
+
+type CardanoBlock = Cardano.HardForkBlock (Cardano.CardanoEras Shelley.TPraosStandardCrypto)
 
 newtype ConfigFile = ConfigFile
   { unConfigFile :: FilePath
@@ -77,7 +80,6 @@ data DbSyncEnv = DbSyncEnv
   }
 
 type ShelleyAddress = Shelley.Addr Shelley.TPraosStandardCrypto
--- type ShelleyBlock = Shelley.ShelleyBlock Shelley.TPraosStandardCrypto
 type ShelleyDCert = Shelley.DCert Shelley.TPraosStandardCrypto
 type ShelleyDelegCert = Shelley.DelegCert Shelley.TPraosStandardCrypto
 type ShelleyHash = Shelley.ShelleyHash Shelley.TPraosStandardCrypto

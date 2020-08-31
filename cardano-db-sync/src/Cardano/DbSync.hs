@@ -76,14 +76,12 @@ import           Network.TypedProtocol.Pipelined (Nat(Zero, Succ))
 import           Ouroboros.Consensus.Block.Abstract (CodecConfig, ConvertRawHash (..))
 import           Ouroboros.Consensus.Byron.Ledger.Config (mkByronCodecConfig)
 import           Ouroboros.Consensus.Byron.Node ()
-import           Ouroboros.Consensus.Cardano.Block (CardanoBlock, CardanoEras, CodecConfig (..),
-                    HardForkBlock (..))
+import           Ouroboros.Consensus.Cardano.Block (CardanoEras, CodecConfig (..))
 import           Ouroboros.Consensus.Cardano.Node ()
 import           Ouroboros.Consensus.HardFork.History.Qry (Interpreter)
 import           Ouroboros.Consensus.Network.NodeToClient (ClientCodecs,
                     cChainSyncCodec, cStateQueryCodec, cTxSubmissionCodec)
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
-import           Ouroboros.Consensus.Node.Run (RunNode)
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import           Ouroboros.Consensus.Shelley.Ledger.Config (CodecConfig (ShelleyCodecConfig))
 import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
@@ -160,15 +158,14 @@ runDbSyncNode plugin enp =
     shelleyCodecConfig :: CodecConfig (ShelleyBlock TPraosStandardCrypto)
     shelleyCodecConfig = ShelleyCodecConfig
 
-    cardanoCodecConfig :: Byron.Config -> CodecConfig (CardanoBlock TPraosStandardCrypto)
+    cardanoCodecConfig :: Byron.Config -> CodecConfig CardanoBlock
     cardanoCodecConfig cfg = CardanoCodecConfig (mkByronCodecConfig cfg) shelleyCodecConfig
 
 -- -------------------------------------------------------------------------------------------------
 
 runDbSyncNodeNodeClient
-    :: forall blk. (blk ~ HardForkBlock (CardanoEras TPraosStandardCrypto))
-    => DbSyncEnv -> IOManager -> Trace IO Text -> DbSyncNodePlugin
-    -> CodecConfig blk-> SocketPath
+    :: DbSyncEnv -> IOManager -> Trace IO Text -> DbSyncNodePlugin
+    -> CodecConfig CardanoBlock -> SocketPath
     -> IO ()
 runDbSyncNodeNodeClient env iomgr trce plugin codecConfig (SocketPath socketPath) = do
   queryVar <- newStateQueryTMVar
@@ -209,13 +206,12 @@ runDbSyncNodeNodeClient env iomgr trce plugin codecConfig (SocketPath socketPath
     handshakeTracer = toLogObject $ appendName "Handshake" trce
 
 dbSyncProtocols
-    :: forall blk. (blk ~ HardForkBlock (CardanoEras TPraosStandardCrypto))
-    => Trace IO Text
+    :: Trace IO Text
     -> DbSyncEnv
     -> DbSyncNodePlugin
-    -> StateQueryTMVar blk (Interpreter (CardanoEras TPraosStandardCrypto))
+    -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras TPraosStandardCrypto))
     -> Network.NodeToClientVersion
-    -> ClientCodecs blk IO
+    -> ClientCodecs CardanoBlock IO
     -> ConnectionId LocalAddress
     -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
 dbSyncProtocols trce env plugin queryVar _version codecs _connectionId =
@@ -225,7 +221,7 @@ dbSyncProtocols trce env plugin queryVar _version codecs _connectionId =
         , localStateQueryProtocol = localStateQuery
         }
   where
-    localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync blk (Tip blk)))
+    localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync CardanoBlock (Tip CardanoBlock)))
     localChainSyncTracer = toLogObject $ appendName "ChainSync" trce
 
     localChainSyncProtocol :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
@@ -287,20 +283,20 @@ logDbState trce = do
         (Nothing, Nothing) -> "genesis"
 
 
-getLatestPoints :: forall blk. ConvertRawHash blk => IO [Point blk]
+getLatestPoints :: IO [Point CardanoBlock]
 getLatestPoints =
     -- Blocks (and the transactions they contain) are inserted within an SQL transaction.
     -- That means that all the blocks (including their transactions) returned by the query
     -- have been completely inserted.
     mapMaybe convert <$> DB.runDbNoLogging (DB.queryCheckPoints 200)
   where
-    convert :: (Word64, ByteString) -> Maybe (Point blk)
+    convert :: (Word64, ByteString) -> Maybe (Point CardanoBlock)
     convert (slot, hashBlob) =
       fmap (Point . Point.block (SlotNo slot)) (convertHashBlob hashBlob)
 
     -- in Maybe because the bytestring may not be the right size.
-    convertHashBlob :: ByteString -> Maybe (HeaderHash blk)
-    convertHashBlob = Just . fromRawHash (Proxy @blk)
+    convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
+    convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)
 
 getCurrentTipBlockNo :: IO (WithOrigin BlockNo)
 getCurrentTipBlockNo = do
@@ -324,11 +320,10 @@ getCurrentTipBlockNo = do
 --    rollback, see 'clientStNext' below.
 --
 chainSyncClient
-    :: forall blk. (RunNode blk, blk ~ HardForkBlock (CardanoEras TPraosStandardCrypto))
-    => Trace IO Text -> DbSyncEnv
-    -> StateQueryTMVar blk (Interpreter (CardanoEras TPraosStandardCrypto))
-    -> Metrics -> [Point blk] -> WithOrigin BlockNo -> DbActionQueue
-    -> ChainSyncClientPipelined blk (Tip blk) IO ()
+    :: Trace IO Text -> DbSyncEnv
+    -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras TPraosStandardCrypto))
+    -> Metrics -> [Point CardanoBlock] -> WithOrigin BlockNo -> DbActionQueue
+    -> ChainSyncClientPipelined CardanoBlock (Tip CardanoBlock) IO ()
 chainSyncClient trce env queryVar metrics latestPoints currentTip actionQueue =
     ChainSyncClientPipelined $ pure $
       -- Notify the core node about the our latest points at which we are
@@ -345,7 +340,7 @@ chainSyncClient trce env queryVar metrics latestPoints currentTip actionQueue =
     policy = pipelineDecisionLowHighMark 1000 10000
 
     go :: MkPipelineDecision -> Nat n -> WithOrigin BlockNo -> WithOrigin BlockNo
-        -> ClientPipelinedStIdle n blk (Tip blk) IO ()
+        -> ClientPipelinedStIdle n CardanoBlock (Tip CardanoBlock) IO ()
     go mkPipelineDecision n clientTip serverTip =
       case (n, runPipelineDecision mkPipelineDecision n clientTip serverTip) of
         (_Zero, (Request, mkPipelineDecision')) ->
@@ -364,8 +359,8 @@ chainSyncClient trce env queryVar metrics latestPoints currentTip actionQueue =
             Nothing
             (mkClientStNext $ \clientBlockNo newServerTip -> go mkPipelineDecision' n' clientBlockNo (getTipBlockNo newServerTip))
 
-    mkClientStNext :: (WithOrigin BlockNo -> Tip blk -> ClientPipelinedStIdle n blk (Tip blk) IO a)
-                    -> ClientStNext n blk (Tip blk) IO a
+    mkClientStNext :: (WithOrigin BlockNo -> Tip CardanoBlock -> ClientPipelinedStIdle n CardanoBlock (Tip CardanoBlock) IO a)
+                    -> ClientStNext n CardanoBlock (Tip CardanoBlock) IO a
     mkClientStNext finish =
       ClientStNext
         { recvMsgRollForward = \blk tip ->
