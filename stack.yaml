@@ -1,4 +1,4 @@
-resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/316c854d1d3089f480708ad5cd5ecf8a74423ddd/snapshot.yaml
+resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/0c5b0a6619fadf22f4d62a12154e181a6d035c1c/snapshot.yaml
 compiler: ghc-8.6.5
 
 allow-newer: true
@@ -65,13 +65,13 @@ extra-deps:
     commit: 2547ad1e80aeabca2899951601079408becbc92c
 
   - git: https://github.com/input-output-hk/cardano-prelude
-    commit: 316c854d1d3089f480708ad5cd5ecf8a74423ddd
+    commit: 0c5b0a6619fadf22f4d62a12154e181a6d035c1c
     subdirs:
       - .
       - test
 
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: efa4b5ecd7f0a13124616b12679cd42517cd905a
+    commit: 8f2086aff6b315b41a39b727f860c3477205ed8a
     subdirs:
       - contra-tracer
       - iohk-monitoring
@@ -83,7 +83,7 @@ extra-deps:
       - tracer-transformers
 
   - git: https://github.com/input-output-hk/cardano-base
-    commit: 7d795c3040ea7785812efa1c97864bbb41b15d3e
+    commit: 13f44ad35d2762dbf98b3d3be56b7ba2adf515f4
     subdirs:
       - binary
       - cardano-crypto-praos
@@ -92,10 +92,10 @@ extra-deps:
       - slotting
 
   - git: https://github.com/input-output-hk/goblins
-    commit: 26d35ad52fe9ade3391532dbfeb2f416f07650bc
+    commit: cde90a2b27f79187ca8310b6549331e59595e7ba
 
   - git: https://github.com/input-output-hk/cardano-ledger-specs
-    commit: 183a70c001587d9b1977541deae28c3e44713907
+    commit: 74188f62ff743c690bdf287f7fa18eaa2ee354d4
     subdirs:
       - byron/crypto
       - byron/crypto/test
@@ -109,7 +109,7 @@ extra-deps:
       - shelley/chain-and-ledger/executable-spec/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: ec74d1c463b6d18bdca2b714abe730c1d237cc32
+    commit: f0eb6e439e7c0121476ded5e88d2f638e8aa36ac
     subdirs:
       - cardano-client
       - io-sim
@@ -130,7 +130,7 @@ extra-deps:
       - ouroboros-consensus/ouroboros-consensus-test-infra
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: d7a524dbfec3afc81ad478f237eb64bf40c66932
+    commit: 42dba1b1a3d8a0dccaeab473372c0f8929eff4df
     subdirs:
       - cardano-config
 
