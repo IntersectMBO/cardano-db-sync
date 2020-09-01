@@ -145,12 +145,6 @@ runDbSyncNode plugin enp =
         runDbStartup trce plugin
 
         case genCfg of
-          GenesisByron _bCfg ->
-            -- runDbSyncNodeNodeClient genesisEnv iomgr trce plugin (mkByronCodecConfig bCfg) (enpSocketPath enp)
-            panic "runDbSyncNode: Cannot support a pure Byron network. The node needs to run 'Protocol: Cardano'."
-          GenesisShelley _sCfg ->
-            -- runDbSyncNodeNodeClient genesisEnv iomgr trce plugin shelleyCodecConfig (enpSocketPath enp)
-            panic "runDbSyncNode: Cannot support a pure Shelley network. The node needs to run 'Protocol: Cardano'."
           GenesisCardano bCfg _sCfg ->
             runDbSyncNodeNodeClient genesisEnv
                 iomgr trce plugin (cardanoCodecConfig bCfg) (enpSocketPath enp)

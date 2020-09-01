@@ -38,30 +38,22 @@ import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
 import           Ouroboros.Network.Magic (NetworkMagic (..))
 
-import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.Genesis as Shelley
 
+-- Usually only one constructor, but may have two when we are preparing for a HFC event.
 data GenesisEra
-  = GenesisByron !Byron.Config
-  | GenesisShelley !(ShelleyGenesis TPraosStandardCrypto)
-  | GenesisCardano !Byron.Config !(ShelleyGenesis TPraosStandardCrypto)
+  = GenesisCardano !Byron.Config !(ShelleyGenesis TPraosStandardCrypto)
 
 
 genesisNetworkMagic :: GenesisEra -> NetworkMagic
 genesisNetworkMagic ge =
   case ge of
-    GenesisByron bg ->
-      NetworkMagic $ unProtocolMagicId (Byron.configProtocolMagicId bg)
-    GenesisShelley sg ->
-      NetworkMagic $ Shelley.sgNetworkMagic sg
     GenesisCardano _bg sg ->
       NetworkMagic $ Shelley.sgNetworkMagic sg
 
 genesisProtocolMagicId :: GenesisEra -> ProtocolMagicId
 genesisProtocolMagicId ge =
     case ge of
-      GenesisByron bg -> Byron.configProtocolMagicId bg
-      GenesisShelley sg -> shelleyProtocolMagicId sg
       GenesisCardano _ sg -> shelleyProtocolMagicId sg
   where
     shelleyProtocolMagicId :: ShelleyGenesis TPraosStandardCrypto -> ProtocolMagicId
@@ -72,10 +64,6 @@ insertValidateGenesisDist
         -> ExceptT DbSyncNodeError IO ()
 insertValidateGenesisDist trce nname genCfg =
   case genCfg of
-    GenesisByron bCfg ->
-      Byron.insertValidateGenesisDist trce (unNetworkName nname) bCfg
-    GenesisShelley sCfg ->
-      Shelley.insertValidateGenesisDist trce (unNetworkName nname) sCfg
     GenesisCardano bCfg sCfg -> do
       Byron.insertValidateGenesisDist trce (unNetworkName nname) bCfg
       Shelley.insertValidateGenesisDist trce (unNetworkName nname) sCfg
@@ -85,20 +73,6 @@ insertValidateGenesisDist trce nname genCfg =
 genesisConfigToEnv :: GenesisEra -> Either DbSyncNodeError DbSyncEnv
 genesisConfigToEnv genCfg =
     case genCfg of
-      GenesisByron bCfg ->
-        Right $ DbSyncEnv
-                  { envProtocol = DbSyncProtocolByron
-                  , envNetwork = byronProtocolMagicIdToShelleyNetwok (Byron.configProtocolMagicId bCfg)
-                  , envNetworkMagic = NetworkMagic $ (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
-                  , envSystemStart = SystemStart (Byron.gdStartTime $ Byron.configGenesisData bCfg)
-                  }
-      GenesisShelley sCfg ->
-        Right $ DbSyncEnv
-                  { envProtocol = DbSyncProtocolShelley
-                  , envNetwork = Shelley.sgNetworkId sCfg
-                  , envNetworkMagic = NetworkMagic (Shelley.sgNetworkMagic sCfg)
-                  , envSystemStart = SystemStart $ Shelley.sgSystemStart sCfg
-                  }
       GenesisCardano bCfg sCfg
         | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic sCfg ->
             Left . NECardanoConfig $
@@ -119,22 +93,12 @@ genesisConfigToEnv genCfg =
                   , envNetworkMagic = NetworkMagic (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
                   , envSystemStart = SystemStart (Byron.gdStartTime $ Byron.configGenesisData bCfg)
                   }
-  where
-    byronProtocolMagicIdToShelleyNetwok :: ProtocolMagicId -> Shelley.Network
-    byronProtocolMagicIdToShelleyNetwok pmid =
-      if pmid == Byron.mainnetProtocolMagicId
-        then Shelley.Mainnet
-        else Shelley.Testnet
 
 readGenesisConfig
         :: DbSyncNodeConfig
         -> ExceptT DbSyncNodeError IO GenesisEra
 readGenesisConfig enc =
   case encProtocol enc of
-    DbSyncProtocolByron ->
-      GenesisByron <$> readByronGenesisConfig enc
-    DbSyncProtocolShelley ->
-      GenesisShelley <$> readShelleyGenesisConfig enc
     DbSyncProtocolCardano ->
       GenesisCardano <$> readByronGenesisConfig enc <*> readShelleyGenesisConfig enc
 
