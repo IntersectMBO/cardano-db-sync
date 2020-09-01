@@ -36,8 +36,8 @@ import           Ouroboros.Consensus.Cardano.Block (CardanoEras, Query (..))
 import           Ouroboros.Consensus.Cardano.Node ()
 import           Ouroboros.Consensus.HardFork.Combinator.Basics (HardForkBlock (..))
 import           Ouroboros.Consensus.HardFork.Combinator.Ledger.Query (QueryHardFork (GetInterpreter))
-import           Ouroboros.Consensus.HardFork.History.Qry (Qry (..), Interpreter, interpretQuery, slotToEpoch')
-import           Ouroboros.Consensus.HardFork.History.Summary (PastHorizonException)
+import           Ouroboros.Consensus.HardFork.History.Qry (PastHorizonException, Expr (..), Qry, Interpreter,
+                    interpretQuery, qryFromExpr, slotToEpoch')
 import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
 
 import           Ouroboros.Network.Block (Point (..))
@@ -139,11 +139,11 @@ localStateQueryHandler (StateQueryTMVar reqVar) =
 
 querySlotDetails :: SystemStart -> SlotNo -> Qry SlotDetails
 querySlotDetails start absSlot = do
-  relSlot <- QAbsToRelSlot absSlot
-  relTime <- QRelSlotToTime relSlot
-  utcTime <- relToUTCTime start <$> QRelToAbsTime relTime
-  (absEpoch, slotInEpoch)  <- slotToEpoch' absSlot
-  epochSize <- QEpochSize absEpoch
+  relSlot <- qryFromExpr $ EAbsToRelSlot (ELit absSlot)
+  relTime <- qryFromExpr $ ERelSlotToTime (ELit relSlot)
+  utcTime <- relToUTCTime start <$> qryFromExpr (ERelToAbsTime $ ELit relTime)
+  (absEpoch, slotInEpoch) <- slotToEpoch' absSlot
+  epochSize <- qryFromExpr $ EEpochSize (ELit  absEpoch)
   pure $ SlotDetails utcTime absEpoch (EpochSlot slotInEpoch) epochSize
 
 relToUTCTime :: SystemStart -> RelativeTime -> UTCTime
