@@ -14,10 +14,11 @@ they exist, the names of those queries will be included in parentheses.
 ### Chain meta data (`queryMeta`)
 ```
 cexplorer=# select * from meta ;
- id | protocol_const | slot_duration |     start_time      | network_name
-----+----------------+---------------+---------------------+--------------
-  1 |           2160 |         20000 | 2017-09-23 21:44:51 | mainnet
+ id |     start_time      | network_name
+----+---------------------+--------------
+  1 | 2017-09-23 21:44:51 | mainnet
 (1 row)
+
 ```
 
 ### Current total supply of Ada (`queryTotalSupply`)
@@ -38,18 +39,6 @@ cexplorer=# select sum (value) / 1000000 as current_supply from tx_out as tx_out
 ----------------------
  31112120630.27526800
 
-```
-
-### Estimate current tip slot number based on chain metadata
-
-Note: The slot duration is in milliseconds.
-
-```
-cexplorer=# select extract (epoch from (select now() - start_time from meta)) * 1000 /
-              slot_duration as est_tip_slot_no from meta ;
- est_tip_slot_no
------------------
- 4011091.0228046
 ```
 
 ### Slot number of the most recent block (`queryLatestSlotNo`)
@@ -80,14 +69,62 @@ valid:
 ```
 cexplorer=# select * from pool_update
               where registered_tx_id in (select max(registered_tx_id) from pool_update group by reward_addr_id)
-              and not exists (select update_id from pool_retire where update_id = pool_update.id) ;
+              and not exists (select * from pool_retire where pool_retire.hash_id = pool_update.id);
+
 ```
 To include the pool hash in the query output:
 ```
 cexplorer=# select * from pool_update inner join pool_hash on pool_update.hash_id = pool_hash.id
               where registered_tx_id in (select max(registered_tx_id) from pool_update group by reward_addr_id)
-              and not exists (select update_id from pool_retire where update_id = pool_update.id) ;
+              and not exists (select * from pool_retire where pool_retire.hash_id = pool_update.id);
 ```
+
+### Transaction fee for specified transaction hash:
+```
+cexplorer=# select tx.id, tx.fee from tx
+              where tx.hash = '\xf9c0997afc8159dbe0568eadf0823112e0cc29cd097c8dc939ff44c372388bc0' ;
+   id    |  fee
+---------+--------
+ 1000000 | 172433
+
+```
+
+### Transaction outputs for specified transaction hash:
+```
+cexplorer=# select tx_out.* from tx_out inner join tx on tx_out.tx_id = tx.id
+              where tx.hash = '\xf9c0997afc8159dbe0568eadf0823112e0cc29cd097c8dc939ff44c372388bc0' ;
+   id    |  tx_id  | index |         address         |    value     |        address_raw        | payment_cred
+---------+---------+-------+-------------------------+--------------+---------------------------+--------------
+ 2205593 | 1000000 |     1 | DdzFFzCqrh...u6v9fWDrML | 149693067531 | \x82d8185842...1a20a42e6f |
+ 2205592 | 1000000 |     0 | DdzFFzCqrh...DoV2nEACWf |   8991998000 | \x82d8185842...1a150033dc |
+
+```
+
+### Transaction inputs for specified transaction hash:
+```
+cexplorer=# select tx_out.* from tx_out
+              inner join tx_in on tx_out.tx_id = tx_in.tx_out_id
+              inner join tx on tx.id = tx_in.tx_in_id and tx_in.tx_out_index = tx_out.index
+              where tx.hash = '\xf9c0997afc8159dbe0568eadf0823112e0cc29cd097c8dc939ff44c372388bc0' ;
+   id    | tx_id  | index |        address          |    value     |        address_raw        | payment_cred
+---------+--------+-------+-------------------------+--------------+---------------------------+--------------
+ 2195714 | 996126 |     4 | DdzFFzCqrh...dtq1FQQSCN | 158685237964 | \x82d8185842...1a330b42df |
+```
+
+### Transaction withdrawals for specified transaction hash:
+Withdrawals are a feature of some transactions of the Shelley era and later.
+
+```
+cexplorer=# select withdrawal.* from withdrawal
+              inner join tx on withdrawal.tx_id = tx.id
+              where tx.hash = '\x0b8c5be678209bb051a02904dd18896a929f9aca8aecd48850939a590175f7e8' ;
+  id   | addr_id |  amount   |  tx_id
+-------+---------+-----------+---------
+ 27684 |   30399 | 154619825 | 2788211
+```
+
+
+
 
 
 [Query.hs]: https://github.com/input-output-hk/cardano-db-sync/blob/master/cardano-db/src/Cardano/Db/Query.hs
