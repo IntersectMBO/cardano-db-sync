@@ -79,5 +79,52 @@ cexplorer=# select * from pool_update inner join pool_hash on pool_update.hash_i
               and not exists (select * from pool_retire where pool_retire.hash_id = pool_update.id);
 ```
 
+### Transaction fee for specified transaction hash:
+```
+cexplorer=# select tx.id, tx.fee from tx
+              where tx.hash = '\xf9c0997afc8159dbe0568eadf0823112e0cc29cd097c8dc939ff44c372388bc0' ;
+   id    |  fee
+---------+--------
+ 1000000 | 172433
+
+```
+
+### Transaction outputs for specified transaction hash:
+```
+cexplorer=# select tx_out.* from tx_out inner join tx on tx_out.tx_id = tx.id
+              where tx.hash = '\xf9c0997afc8159dbe0568eadf0823112e0cc29cd097c8dc939ff44c372388bc0' ;
+   id    |  tx_id  | index |         address         |    value     |        address_raw        | payment_cred
+---------+---------+-------+-------------------------+--------------+---------------------------+--------------
+ 2205593 | 1000000 |     1 | DdzFFzCqrh...u6v9fWDrML | 149693067531 | \x82d8185842...1a20a42e6f |
+ 2205592 | 1000000 |     0 | DdzFFzCqrh...DoV2nEACWf |   8991998000 | \x82d8185842...1a150033dc |
+
+```
+
+### Transaction inputs for specified transaction hash:
+```
+cexplorer=# select tx_out.* from tx_out
+              inner join tx_in on tx_out.tx_id = tx_in.tx_out_id
+              inner join tx on tx.id = tx_in.tx_in_id and tx_in.tx_out_index = tx_out.index
+              where tx.hash = '\xf9c0997afc8159dbe0568eadf0823112e0cc29cd097c8dc939ff44c372388bc0' ;
+   id    | tx_id  | index |        address          |    value     |        address_raw        | payment_cred
+---------+--------+-------+-------------------------+--------------+---------------------------+--------------
+ 2195714 | 996126 |     4 | DdzFFzCqrh...dtq1FQQSCN | 158685237964 | \x82d8185842...1a330b42df |
+```
+
+### Transaction withdrawals for specified transaction hash:
+Withdrawals are a feature of some transactions of the Shelley era and later.
+
+```
+cexplorer=# select withdrawal.* from withdrawal
+              inner join tx on withdrawal.tx_id = tx.id
+              where tx.hash = '\x0b8c5be678209bb051a02904dd18896a929f9aca8aecd48850939a590175f7e8' ;
+  id   | addr_id |  amount   |  tx_id
+-------+---------+-----------+---------
+ 27684 |   30399 | 154619825 | 2788211
+```
+
+
+
+
 
 [Query.hs]: https://github.com/input-output-hk/cardano-db-sync/blob/master/cardano-db/src/Cardano/Db/Query.hs
