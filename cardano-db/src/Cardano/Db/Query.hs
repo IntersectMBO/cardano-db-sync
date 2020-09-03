@@ -321,6 +321,7 @@ queryLatestBlockNo = do
 queryLatestBlock :: MonadIO m => ReaderT SqlBackend m (Maybe Block)
 queryLatestBlock = do
   res <- select $ from $ \ blk -> do
+                where_ (isJust $ blk ^. BlockSlotNo)
                 orderBy [desc (blk ^. BlockSlotNo)]
                 limit 1
                 pure $ blk
