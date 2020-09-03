@@ -140,7 +140,7 @@ updateEpochNum epochNum trce = do
     calcEpochFromHistory :: IO DB.Epoch
     calcEpochFromHistory = do
       now <- Time.getCurrentTime
-      pure $ DB.Epoch 0 0 0 epochNum now now
+      pure $ DB.Epoch 0 0 0 0 epochNum now now
 
 -- -------------------------------------------------------------------------------------------------
 
