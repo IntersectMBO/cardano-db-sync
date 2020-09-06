@@ -23,7 +23,7 @@ import           Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as TBQ
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
-import           Ouroboros.Consensus.Cardano.Block (CardanoBlock, HardForkBlock (..))
+import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
 import           Ouroboros.Network.Block (Point (..), pointSlot)
@@ -52,7 +52,7 @@ instance MkDbAction (ShelleyBlock TPraosStandardCrypto) where
   mkDbApply blk details = DbApplyBlock (ShelleyBlockDetails blk details)
   mkDbRollback point = DbRollBackToPoint (toRollbackSlot point)
 
-instance MkDbAction (CardanoBlock TPraosStandardCrypto) where
+instance MkDbAction CardanoBlock where
   mkDbApply cblk details = do
     case cblk of
       BlockByron blk -> DbApplyBlock (ByronBlockDetails blk details)

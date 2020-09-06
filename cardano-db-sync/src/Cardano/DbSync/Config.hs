@@ -31,10 +31,9 @@ import qualified Data.Yaml as Yaml
 
 import           Cardano.DbSync.Util
 
+-- May have other constructors when we are preparing for a HFC event.
 data DbSyncProtocol
-  = DbSyncProtocolByron
-  | DbSyncProtocolShelley
-  | DbSyncProtocolCardano
+  = DbSyncProtocolCardano
 
 type DbSyncNodeConfig = GenDbSyncNodeConfig Logging.Configuration
 
@@ -104,7 +103,5 @@ parseGenDbSyncNodeConfig o =
 instance FromJSON DbSyncProtocol where
   parseJSON o =
     case o of
-      String "Byron" -> pure DbSyncProtocolByron
-      String "Shelley" -> pure DbSyncProtocolShelley
       String "Cardano" -> pure DbSyncProtocolCardano
       x -> typeMismatch "Protocol" x

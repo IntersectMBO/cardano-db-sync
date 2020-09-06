@@ -86,8 +86,6 @@ annotateStakingCred :: DbSyncEnv -> ShelleyStakingCred -> Shelley.RewardAcnt TPr
 annotateStakingCred env cred =
   let network =
         case envProtocol env of
-          DbSyncProtocolByron -> Shelley.Mainnet -- Should not happen
-          DbSyncProtocolShelley -> envNetwork env
           DbSyncProtocolCardano -> envNetwork env
   in Shelley.RewardAcnt network cred
 
