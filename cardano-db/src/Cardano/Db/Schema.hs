@@ -136,6 +136,7 @@ share
   -- in a single epoch is relatively low.
   Epoch
     outSum              Word128             sqltype=word128type
+    fees                Word64              sqltype=lovelace
     txCount             Word64              sqltype=uinteger
     blkCount            Word64              sqltype=uinteger
     no                  Word64              sqltype=uinteger
@@ -178,6 +179,7 @@ share
   PoolOwner
     hash                ByteString          sqltype=hash28type
     poolHashId          PoolHashId
+    registeredTxId      TxId                                    -- Slot number in which the owner was registered.
     UniquePoolOwner     hash poolHashId
 
   PoolRetire

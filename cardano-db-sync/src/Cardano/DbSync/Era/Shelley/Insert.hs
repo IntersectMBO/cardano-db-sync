@@ -249,7 +249,7 @@ insertPoolRegister tracer txId idx params = do
                       , DB.poolUpdateRegisteredTxId = txId
                       }
 
-  mapM_ (insertPoolOwner poolHashId) $ toList (Shelley._poolOwners params)
+  mapM_ (insertPoolOwner poolHashId txId) $ toList (Shelley._poolOwners params)
   mapM_ (insertPoolRelay poolUpdateId) $ toList (Shelley._poolRelays params)
 
 maxLovelace :: Word64
@@ -296,13 +296,14 @@ insertStakeAddress txId rewardAddr =
 
 insertPoolOwner
     :: (MonadBaseControl IO m, MonadIO m)
-    => DB.PoolHashId -> ShelleyStakingKeyHash
+    => DB.PoolHashId -> DB.TxId -> ShelleyStakingKeyHash
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertPoolOwner poolHashId skh =
+insertPoolOwner poolHashId txId skh =
   void . lift . DB.insertPoolOwner $
     DB.PoolOwner
       { DB.poolOwnerHash = Shelley.unKeyHashBS skh
       , DB.poolOwnerPoolHashId = poolHashId
+      , DB.poolOwnerRegisteredTxId = txId
       }
 
 insertStakeRegistration

@@ -180,25 +180,26 @@ queryCalcEpochEntry epochNum = do
     txRes <- select . from $ \ (tx `InnerJoin` blk) -> do
               on (tx ^. TxBlock ==. blk ^. BlockId)
               where_ (blk ^. BlockEpochNo ==. just (val epochNum))
-              pure $ (sum_ (tx ^. TxOutSum), count (tx ^. TxOutSum))
+              pure $ (sum_ (tx ^. TxOutSum), sum_ (tx ^. TxFee), count (tx ^. TxOutSum))
     case (listToMaybe blkRes, listToMaybe txRes) of
-      (Just blk, Just tx) -> pure $ convertAll (unValue3 blk) (unValue2 tx)
+      (Just blk, Just tx) -> pure $ convertAll (unValue3 blk) (unValue3 tx)
       (Just blk, Nothing) -> pure $ convertBlk (unValue3 blk)
       _otherwise -> pure Nothing
   where
     convertAll
-        :: (Word64, Maybe UTCTime, Maybe UTCTime) -> (Maybe Rational, Word64)
+        :: (Word64, Maybe UTCTime, Maybe UTCTime) -> (Maybe Rational, Maybe Rational, Word64)
         -> Maybe Epoch
-    convertAll (blkCount, b, c) (d, txCount) =
-      case (b, c, d) of
-        (Just start, Just end, Just outSum) ->
-          Just $ Epoch (fromIntegral $ numerator outSum) txCount blkCount epochNum start end
+    convertAll (blkCount, b, c) (d, e, txCount) =
+      case (b, c, d, e) of
+        (Just start, Just end, Just outSum, Just fees) ->
+          Just $ Epoch (fromIntegral $ numerator outSum) (fromIntegral $ numerator fees)
+                        txCount blkCount epochNum start end
         _otherwise -> Nothing
 
     convertBlk :: (Word64, Maybe UTCTime, Maybe UTCTime) -> Maybe Epoch
     convertBlk (blkCount, b, c) =
       case (b, c) of
-        (Just start, Just end) -> Just (Epoch 0 0 blkCount epochNum start end)
+        (Just start, Just end) -> Just (Epoch 0 0 0 blkCount epochNum start end)
         _otherwise -> Nothing
 
 queryCheckPoints :: MonadIO m => Word64 -> ReaderT SqlBackend m [(Word64, ByteString)]
@@ -320,6 +321,7 @@ queryLatestBlockNo = do
 queryLatestBlock :: MonadIO m => ReaderT SqlBackend m (Maybe Block)
 queryLatestBlock = do
   res <- select $ from $ \ blk -> do
+                where_ (isJust $ blk ^. BlockSlotNo)
                 orderBy [desc (blk ^. BlockSlotNo)]
                 limit 1
                 pure $ blk
