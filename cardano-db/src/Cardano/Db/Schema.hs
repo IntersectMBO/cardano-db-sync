@@ -179,6 +179,7 @@ share
   PoolOwner
     hash                ByteString          sqltype=hash28type
     poolHashId          PoolHashId
+    registeredTxId      TxId                                    -- Slot number in which the owner was registered.
     UniquePoolOwner     hash poolHashId
 
   PoolRetire
