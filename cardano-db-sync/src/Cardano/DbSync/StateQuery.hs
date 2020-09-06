@@ -137,15 +137,18 @@ localStateQueryHandler (StateQueryTMVar reqVar) =
 
 -- -------------------------------------------------------------------------------------------------
 
+-- TODO: Switch back to the old version of this when this is fixed:
+-- https://github.com/input-output-hk/cardano-db-sync/issues/276
 querySlotDetails :: SystemStart -> SlotNo -> Qry SlotDetails
 querySlotDetails start absSlot = do
-  relSlot <- qryFromExpr $ EAbsToRelSlot (ELit absSlot)
-  relTime <- qryFromExpr $ ERelSlotToTime (ELit relSlot)
-  utcTime <- relToUTCTime start <$> qryFromExpr (ERelToAbsTime $ ELit relTime)
+  absTime <- qryFromExpr $
+                ELet (EAbsToRelSlot (ELit absSlot)) $ \ relSlot ->
+                ELet (ERelSlotToTime (EVar relSlot)) $ \ relTime ->
+                ELet (ERelToAbsTime (EVar relTime)) $ \ absTime ->
+                EVar absTime
   (absEpoch, slotInEpoch) <- slotToEpoch' absSlot
-  epochSize <- qryFromExpr $ EEpochSize (ELit  absEpoch)
-  pure $ SlotDetails utcTime absEpoch (EpochSlot slotInEpoch) epochSize
+  epochSize <- qryFromExpr $ EEpochSize (ELit absEpoch)
+  pure $ SlotDetails (relToUTCTime start absTime) absEpoch (EpochSlot slotInEpoch) epochSize
 
 relToUTCTime :: SystemStart -> RelativeTime -> UTCTime
 relToUTCTime (SystemStart start) (RelativeTime rel) = addUTCTime rel start
-
