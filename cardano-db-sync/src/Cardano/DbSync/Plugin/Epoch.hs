@@ -8,12 +8,12 @@ module Cardano.DbSync.Plugin.Epoch
   , epochPluginRollbackBlock
   ) where
 
-import           Cardano.BM.Trace (Trace, logInfo)
+import           Cardano.BM.Trace (Trace, logError, logInfo)
 
 import qualified Cardano.Chain.Block as Byron
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..))
 
-import           Control.Monad (void)
+import           Control.Monad (void, when)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Control (MonadBaseControl)
@@ -75,8 +75,13 @@ epochPluginInsertBlock trce _env blkTip = do
 
         Byron.ABOBBlock _blk ->
           insertBlock trce details
-    ShelleyBlockDetails _sblk details ->
+    ShelleyBlockDetails _sblk details -> do
+      currentTime <- liftIO Time.getCurrentTime
+      when (sdTime details > currentTime) $
+        liftIO . logError trce $ mconcat
+          [ "Slot time '", textShow (sdTime details) ,  "' is in the future" ]
       insertBlock trce details
+
 
 -- Nothing to be done here.
 -- Rollback will take place in the Default plugin and the epoch table will be recalculated.
