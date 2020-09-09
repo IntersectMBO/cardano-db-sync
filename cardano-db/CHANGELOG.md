@@ -4,6 +4,11 @@
 
 * Note that this release requires the database to be dropped and recreated.
 * Correct uniqueness constraint on PoolOwner (#251).
+* Resurrect the 'cardano-db-tool validate' functionality.
+* Rename (correct and clarify) column names in ParamUpdate table.
+* Fix calculation of 'deposit' field of Tx table (#249).
+* Add a 'fees' column to the 'Epoch' table (#275).
+* Add a 'registeredTxId' column to PoolOwner table (#281)
 
 ## 4.0.0
 
