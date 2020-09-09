@@ -21,13 +21,14 @@ cexplorer=# select * from meta ;
 
 ```
 
-### Current total supply of Ada (`queryTotalSupply`)
+### Current total on-chain supply of Ada (`queryTotalSupply`)
 
 Note: 1 ADA == 1,000,000 Lovelace
 
-This just queries the UTxO set for unspent transaction outputs.
+This just queries the UTxO set for unspent transaction outputs. It does not include staking rewards
+that have have not yet been withdrawn. Before being withdrawn rewards exist in ledger state and not
+on-chain.
 
-Currently (as of 2020/04/10) this should be the initial genesis supply minus transaction fees so far.
 ```
 cexplorer=# select sum (value) / 1000000 as current_supply from tx_out as tx_outer where
               not exists
