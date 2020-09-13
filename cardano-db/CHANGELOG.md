@@ -1,6 +1,6 @@
 # Revision history for cardano-db
 
-## 5.0.0 (unreleased)
+## 5.0.0
 
 * Note that this release requires the database to be dropped and recreated.
 * Correct uniqueness constraint on PoolOwner (#251).

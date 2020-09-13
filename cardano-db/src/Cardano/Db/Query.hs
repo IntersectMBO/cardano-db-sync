@@ -405,7 +405,9 @@ querySlotUtcTime slotNo = do
             pure (blk ^. BlockTime)
     pure $ maybe (Left $ DbLookupSlotNo slotNo) (Right . unValue) (listToMaybe le)
 
--- | Get the current total supply of Lovelace.
+-- | Get the current total supply of Lovelace. This only returns the on-chain supply which
+-- does not include staking rewards that have not yet been withdrawn. Before wihdrawal
+-- rewards are part of the ledger state and hence not on chain.
 queryTotalSupply :: MonadIO m => ReaderT SqlBackend m Ada
 queryTotalSupply = do
     res <- select . from $ \ txOut -> do
