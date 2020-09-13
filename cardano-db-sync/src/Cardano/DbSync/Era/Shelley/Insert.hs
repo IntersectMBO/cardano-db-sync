@@ -44,8 +44,7 @@ import qualified Data.Text.Encoding as Text
 
 import           Database.Persist.Sql (SqlBackend)
 
-import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
-import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
+import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import           Shelley.Spec.Ledger.BaseTypes (strictMaybeToMaybe)
@@ -58,7 +57,7 @@ import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxData as Shelley
 
 insertShelleyBlock
-    :: Trace IO Text -> DbSyncEnv -> ShelleyBlock TPraosStandardCrypto -> SlotDetails
+    :: Trace IO Text -> DbSyncEnv -> ShelleyBlock -> SlotDetails
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
 insertShelleyBlock tracer env blk details = do
   runExceptT $ do
@@ -284,7 +283,7 @@ insertMetaData txId md =
 
 insertStakeAddress
     :: (MonadBaseControl IO m, MonadIO m)
-    => DB.TxId -> Shelley.RewardAcnt TPraosStandardCrypto
+    => DB.TxId -> Shelley.RewardAcnt StandardShelley
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) DB.StakeAddressId
 insertStakeAddress txId rewardAddr =
   lift . DB.insertStakeAddress $
@@ -308,7 +307,7 @@ insertPoolOwner poolHashId txId skh =
 
 insertStakeRegistration
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> Word16 -> Shelley.RewardAcnt TPraosStandardCrypto
+    => Trace IO Text -> DB.TxId -> Word16 -> Shelley.RewardAcnt StandardShelley
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertStakeRegistration _tracer txId idx rewardAccount = do
   scId <- insertStakeAddress txId rewardAccount
@@ -444,14 +443,14 @@ insertPoolRelay updateId relay =
 
 insertParamUpdate
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> Shelley.Update TPraosStandardCrypto
+    => Trace IO Text -> DB.TxId -> Shelley.Update StandardShelley
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertParamUpdate _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap) (EpochNo epoch)) =
     mapM_ insert $ Map.toList umap
   where
     insert
       :: forall r m. (MonadBaseControl IO m, MonadIO m)
-      => (Shelley.KeyHash r TPraosStandardCrypto, Shelley.PParams' Shelley.StrictMaybe)
+      => (Shelley.KeyHash r StandardShelley, Shelley.PParams' Shelley.StrictMaybe)
       -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     insert (key, pmap) =
       void . lift . DB.insertParamUpdate $

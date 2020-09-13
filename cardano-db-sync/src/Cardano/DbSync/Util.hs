@@ -33,7 +33,7 @@ import qualified Data.Text.Encoding as Text
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import           Ouroboros.Consensus.Cardano.Block (CardanoEras, HardForkBlock (..))
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
-import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
+import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
 
 import           Ouroboros.Network.Block (BlockNo (..), Tip, getTipBlockNo)
 import           Ouroboros.Network.Point (withOrigin)
@@ -42,7 +42,7 @@ import qualified Shelley.Spec.Ledger.BlockChain as Shelley
 
 
 genericBlockSlotNo
-    :: HardForkBlock (CardanoEras TPraosStandardCrypto) -> SlotNo
+    :: HardForkBlock (CardanoEras StandardCrypto) -> SlotNo
 genericBlockSlotNo blk =
   case blk of
     BlockByron (ByronBlock _bblk slot _hash) -> slot

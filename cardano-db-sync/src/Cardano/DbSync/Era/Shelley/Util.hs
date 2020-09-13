@@ -44,8 +44,9 @@ module Cardano.DbSync.Era.Shelley.Util
 
 import           Cardano.Prelude
 
+import qualified Cardano.Api.Typed as Api
+
 import qualified Cardano.Crypto.Hash as Crypto
-import           Cardano.Slotting.Slot (SlotNo (..))
 import qualified Cardano.Crypto.DSIGN as DSIGN
 import qualified Cardano.Crypto.KES.Class as KES
 import qualified Cardano.Crypto.VRF.Class as VRF
@@ -54,7 +55,10 @@ import qualified Cardano.Db as Db
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Types
 
-import qualified Cardano.Api.Typed as Api
+import qualified Cardano.Ledger.Crypto as Shelley
+import qualified Cardano.Ledger.Era as ShelleyEra
+
+import           Cardano.Slotting.Slot (SlotNo (..))
 
 import qualified Data.Binary.Put as Binary
 import qualified Data.ByteString.Base16 as Base16
@@ -65,13 +69,12 @@ import           Data.Sequence.Strict (StrictSeq (..))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
-import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
-import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
+import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
+import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley, StandardShelley)
 import           Ouroboros.Network.Block (BlockNo (..))
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import           Shelley.Spec.Ledger.Coin (Coin (..))
-import qualified Shelley.Spec.Ledger.Crypto as Shelley
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.BlockChain as Shelley
 import qualified Shelley.Spec.Ledger.Hashing as Shelley
@@ -82,63 +85,62 @@ import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxData as Shelley
 
-annotateStakingCred :: DbSyncEnv -> ShelleyStakingCred -> Shelley.RewardAcnt TPraosStandardCrypto
+annotateStakingCred :: DbSyncEnv -> ShelleyStakingCred -> Shelley.RewardAcnt StandardShelley
 annotateStakingCred env cred =
   let network =
         case envProtocol env of
           DbSyncProtocolCardano -> envNetwork env
   in Shelley.RewardAcnt network cred
 
-blockBody :: Shelley.ShelleyBlock TPraosStandardCrypto -> Shelley.BHBody TPraosStandardCrypto
-blockBody = Shelley.bhbody . Shelley.bheader . Shelley.shelleyBlockRaw
+blockBody :: ShelleyBlock -> Shelley.BHBody StandardShelley
+blockBody = Shelley.bhbody . Shelley.bheader . Consensus.shelleyBlockRaw
 
-blockHash :: Shelley.ShelleyBlock TPraosStandardCrypto -> ByteString
-blockHash = unHeaderHash . Shelley.shelleyBlockHeaderHash
+blockHash :: ShelleyBlock -> ByteString
+blockHash = unHeaderHash . Consensus.shelleyBlockHeaderHash
 
-blockNumber :: Shelley.ShelleyBlock TPraosStandardCrypto -> Word64
-blockNumber =
-  unBlockNo . Shelley.bheaderBlockNo . blockBody
+blockNumber :: ShelleyBlock -> Word64
+blockNumber = unBlockNo . Shelley.bheaderBlockNo . blockBody
 
-blockPrevHash :: Shelley.ShelleyBlock TPraosStandardCrypto -> ByteString
+blockPrevHash :: ShelleyBlock -> ByteString
 blockPrevHash blk =
-  case Shelley.bheaderPrev (Shelley.bhbody . Shelley.bheader $ Shelley.shelleyBlockRaw blk) of
+  case Shelley.bheaderPrev (Shelley.bhbody . Shelley.bheader $ Consensus.shelleyBlockRaw blk) of
     Shelley.GenesisHash -> fakeGenesisHash
     Shelley.BlockHash h -> Crypto.hashToBytes $ Shelley.unHashHeader h
 
-blockProtoVersion :: Shelley.BHBody TPraosStandardCrypto -> Text
+blockProtoVersion :: Shelley.BHBody StandardShelley -> Text
 blockProtoVersion = Text.pack . show . Shelley.bprotver
 
-blockSize :: Shelley.ShelleyBlock TPraosStandardCrypto -> Word64
-blockSize = fromIntegral . Shelley.bBodySize . Shelley.bbody . Shelley.shelleyBlockRaw
+blockSize :: ShelleyBlock -> Word64
+blockSize = fromIntegral . Shelley.bBodySize . Shelley.bbody . Consensus.shelleyBlockRaw
 
-blockTxCount :: Shelley.ShelleyBlock TPraosStandardCrypto -> Word64
-blockTxCount = fromIntegral . length . unTxSeq . Shelley.bbody . Shelley.shelleyBlockRaw
+blockTxCount :: ShelleyBlock -> Word64
+blockTxCount = fromIntegral . length . unTxSeq . Shelley.bbody . Consensus.shelleyBlockRaw
 
-blockTxs :: Shelley.ShelleyBlock TPraosStandardCrypto -> [ShelleyTx]
+blockTxs :: Consensus.ShelleyBlock StandardShelley -> [ShelleyTx]
 blockTxs =
-    txList . Shelley.bbody . Shelley.shelleyBlockRaw
+    txList . Shelley.bbody . Consensus.shelleyBlockRaw
   where
     txList :: ShelleyTxSeq -> [ShelleyTx]
     txList (Shelley.TxSeq txSeq) = toList txSeq
 
-blockOpCert :: Shelley.BHBody TPraosStandardCrypto -> ByteString
+blockOpCert :: Shelley.BHBody StandardShelley -> ByteString
 blockOpCert = KES.rawSerialiseVerKeyKES . Shelley.ocertVkHot . Shelley.bheaderOCert
 
-blockVrfKey :: Shelley.BHBody TPraosStandardCrypto -> ByteString
+blockVrfKey :: Shelley.BHBody StandardShelley -> ByteString
 blockVrfKey = VRF.rawSerialiseVerKeyVRF . Shelley.bheaderVrfVk
 
-blockVrfKeyToPoolHash :: Shelley.ShelleyBlock TPraosStandardCrypto -> ByteString
+blockVrfKeyToPoolHash :: ShelleyBlock -> ByteString
 blockVrfKeyToPoolHash =
  Crypto.digest (Proxy :: Proxy Crypto.Blake2b_224) . slotLeaderHash
 
-epochNumber :: Shelley.ShelleyBlock TPraosStandardCrypto -> Word64 -> Word64
+epochNumber :: ShelleyBlock -> Word64 -> Word64
 epochNumber blk slotsPerEpoch = slotNumber blk `div` slotsPerEpoch
 
 -- | This is both the Genesis Hash and the hash of the previous block.
 fakeGenesisHash :: ByteString
 fakeGenesisHash = BS.take 32 ("GenesisHash " <> BS.replicate 32 '\0')
 
-maybePaymentCred :: Shelley.Addr TPraosStandardCrypto -> Maybe ByteString
+maybePaymentCred :: Shelley.Addr StandardShelley -> Maybe ByteString
 maybePaymentCred addr =
   case addr of
     Shelley.Addr _nw pcred _sref ->
@@ -146,7 +148,7 @@ maybePaymentCred addr =
     Shelley.AddrBootstrap {} ->
       Nothing
 
-mkSlotLeader :: Shelley.ShelleyBlock TPraosStandardCrypto -> Maybe Db.PoolHashId -> Db.SlotLeader
+mkSlotLeader :: ShelleyBlock -> Maybe Db.PoolHashId -> Db.SlotLeader
 mkSlotLeader blk mPoolId =
   let slHash = slotLeaderHash blk
       short = Text.decodeUtf8 (Base16.encode $ BS.take 8 slHash)
@@ -162,31 +164,32 @@ nonceToBytes nonce =
     Shelley.Nonce hash -> Crypto.hashToBytes hash
     Shelley.NeutralNonce -> BS.replicate 28 '\0'
 
-renderAddress :: Shelley.Addr TPraosStandardCrypto -> Text
+renderAddress :: Shelley.Addr StandardShelley -> Text
 renderAddress addr =
-  case addr of
-    Shelley.Addr nw pcred sref ->
-      Api.serialiseAddress (Api.ShelleyAddress nw pcred sref)
-    Shelley.AddrBootstrap (Shelley.BootstrapAddress baddr) ->
-      Api.serialiseAddress (Api.ByronAddress baddr :: Api.Address Api.Byron)
+    case addr of
+      Shelley.Addr nw pcred sref ->
+        Api.serialiseAddress (Api.ShelleyAddress nw pcred sref)
+      Shelley.AddrBootstrap (Shelley.BootstrapAddress baddr) ->
+        Api.serialiseAddress (Api.ByronAddress baddr :: Api.Address Api.Byron)
 
 renderHash :: ShelleyHash -> Text
 renderHash = Text.decodeUtf8 . Base16.encode . unHeaderHash
 
-renderRewardAcnt :: Shelley.RewardAcnt TPraosStandardCrypto -> Text
-renderRewardAcnt (Shelley.RewardAcnt nw cred) = Api.serialiseAddress (Api.StakeAddress nw cred)
+renderRewardAcnt :: Shelley.RewardAcnt StandardShelley -> Text
+renderRewardAcnt (Shelley.RewardAcnt nw cred) =
+    Api.serialiseAddress (Api.StakeAddress nw cred)
 
-slotLeaderHash :: Shelley.ShelleyBlock TPraosStandardCrypto -> ByteString
+slotLeaderHash :: ShelleyBlock -> ByteString
 slotLeaderHash =
-  DSIGN.rawSerialiseVerKeyDSIGN . unVKey . Shelley.bheaderVk . blockBody
+  DSIGN.rawSerialiseVerKeyDSIGN . Shelley.unVKey . Shelley.bheaderVk . blockBody
 
-slotNumber :: Shelley.ShelleyBlock TPraosStandardCrypto -> Word64
+slotNumber :: ShelleyBlock -> Word64
 slotNumber = unSlotNo . Shelley.bheaderSlotNo . blockBody
 
 stakingCredHash :: DbSyncEnv -> ShelleyStakingCred -> ByteString
 stakingCredHash env = Shelley.serialiseRewardAcnt . annotateStakingCred env
 
-txCertificates :: ShelleyTx -> [(Word16, ShelleyDCert)]
+txCertificates :: Shelley.Tx StandardShelley-> [(Word16, ShelleyDCert)]
 txCertificates tx =
     zip [0 ..] (toList . Shelley._certs $ Shelley._body tx)
 
@@ -202,7 +205,7 @@ txInputList = toList . Shelley._inputs . Shelley._body
 txMetadata :: ShelleyTx -> Maybe Shelley.MetaData
 txMetadata = Shelley.strictMaybeToMaybe . Shelley._metadata
 
-txParamUpdate :: ShelleyTx -> Maybe (Shelley.Update TPraosStandardCrypto)
+txParamUpdate :: ShelleyTx -> Maybe (Shelley.Update StandardShelley)
 txParamUpdate = Shelley.strictMaybeToMaybe . Shelley._txUpdate . Shelley._body
 
 -- Outputs are ordered, so provide them as such with indices.
@@ -217,7 +220,7 @@ txOutputSum tx =
     outValue :: ShelleyTxOut -> Word64
     outValue (Shelley.TxOut _ coin) = fromIntegral $ unCoin coin
 
-txWithdrawals :: ShelleyTx -> [(Shelley.RewardAcnt TPraosStandardCrypto, Coin)]
+txWithdrawals :: ShelleyTx -> [(Shelley.RewardAcnt StandardShelley, Coin)]
 txWithdrawals = Map.toList . Shelley.unWdrl . Shelley._wdrls . Shelley._body
 
 txWithdrawalSum :: ShelleyTx -> Word64
@@ -226,12 +229,16 @@ txWithdrawalSum =
     . Shelley._wdrls . Shelley._body
 
 unHeaderHash :: ShelleyHash -> ByteString
-unHeaderHash = Crypto.hashToBytes . Shelley.unHashHeader . Shelley.unShelleyHash
+unHeaderHash = Crypto.hashToBytes . Shelley.unHashHeader . Consensus.unShelleyHash
 
 unitIntervalToDouble :: Shelley.UnitInterval -> Double
 unitIntervalToDouble = fromRational . Shelley.unitIntervalToRational
 
-unKeyHash :: Shelley.KeyHash d crypto -> Crypto.Hash (Shelley.ADDRHASH crypto) (DSIGN.VerKeyDSIGN (Shelley.DSIGN crypto))
+unKeyHash :: Shelley.KeyHash disc era
+                   -> Crypto.Hash
+                        (Shelley.ADDRHASH (ShelleyEra.Crypto era))
+                        (DSIGN.VerKeyDSIGN (Shelley.DSIGN (ShelleyEra.Crypto era)))
+
 unKeyHash (Shelley.KeyHash x) = x
 
 unKeyHashBS :: Shelley.KeyHash d crypto -> ByteString
@@ -240,8 +247,5 @@ unKeyHashBS = Crypto.hashToBytes . unKeyHash
 unTxHash :: ShelleyTxId -> ByteString
 unTxHash (Shelley.TxId txid) = Crypto.hashToBytes txid
 
-unTxSeq :: Shelley.Crypto c => Shelley.TxSeq c -> StrictSeq (Shelley.Tx c)
+unTxSeq :: ShelleyTxSeq-> StrictSeq ShelleyTx
 unTxSeq (Shelley.TxSeq txSeq) = txSeq
-
-unVKey :: Shelley.VKey kd crypto -> DSIGN.VerKeyDSIGN (Shelley.DSIGN crypto)
-unVKey (Shelley.VKey a) = a

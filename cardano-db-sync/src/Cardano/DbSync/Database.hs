@@ -6,8 +6,9 @@
 module Cardano.DbSync.Database
   ( DbAction (..)
   , DbActionQueue (..)
-  , MkDbAction (..)
   , lengthDbActionQueue
+  , mkDbApply
+  , mkDbRollback
   , newDbActionQueue
   , runDbStartup
   , runDbThread

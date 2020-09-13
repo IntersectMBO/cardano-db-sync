@@ -38,7 +38,7 @@ import qualified Data.Time.Clock as Time
 import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
-import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
+import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import qualified Shelley.Spec.Ledger.Coin as Shelley
@@ -49,7 +49,7 @@ import qualified Shelley.Spec.Ledger.UTxO as Shelley
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.
 insertValidateGenesisDist
-    :: Trace IO Text -> Text -> ShelleyGenesis TPraosStandardCrypto
+    :: Trace IO Text -> Text -> ShelleyGenesis StandardShelley
     -> ExceptT DbSyncNodeError IO ()
 insertValidateGenesisDist tracer networkName cfg = do
     -- Setting this to True will log all 'Persistent' operations which is great
@@ -118,7 +118,7 @@ insertValidateGenesisDist tracer networkName cfg = do
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
 validateGenesisDistribution
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Text -> ShelleyGenesis TPraosStandardCrypto -> DB.BlockId
+    => Trace IO Text -> Text -> ShelleyGenesis StandardShelley -> DB.BlockId
     -> ReaderT SqlBackend m (Either DbSyncNodeError ())
 validateGenesisDistribution tracer networkName cfg bid =
   runExceptT $ do
@@ -197,35 +197,35 @@ insertTxOuts blkId (Shelley.TxIn txInId _, txOut) = do
 
 -- -----------------------------------------------------------------------------
 
-configGenesisHash :: ShelleyGenesis TPraosStandardCrypto -> ByteString
+configGenesisHash :: ShelleyGenesis StandardShelley -> ByteString
 configGenesisHash _ = Shelley.fakeGenesisHash
 
-genesisHashSlotLeader :: ShelleyGenesis TPraosStandardCrypto -> ByteString
+genesisHashSlotLeader :: ShelleyGenesis StandardShelley -> ByteString
 genesisHashSlotLeader = configGenesisHash
 
-configGenesisSupply :: ShelleyGenesis TPraosStandardCrypto -> DB.Ada
+configGenesisSupply :: ShelleyGenesis StandardShelley -> DB.Ada
 configGenesisSupply =
   DB.word64ToAda . fromIntegral . sum . map (Shelley.unCoin . snd) . genesisTxoAssocList
 
-genesisTxos :: ShelleyGenesis TPraosStandardCrypto -> [ShelleyTxOut]
+genesisTxos :: ShelleyGenesis StandardShelley -> [ShelleyTxOut]
 genesisTxos = map (uncurry Shelley.TxOut) . genesisTxoAssocList
 
-genesisTxoAssocList :: ShelleyGenesis TPraosStandardCrypto -> [(ShelleyAddress, Shelley.Coin)]
+genesisTxoAssocList :: ShelleyGenesis StandardShelley -> [(ShelleyAddress, Shelley.Coin)]
 genesisTxoAssocList =
     map (unTxOut . snd) . genesisUtxOs
   where
     unTxOut :: ShelleyTxOut -> (ShelleyAddress, Shelley.Coin)
     unTxOut (Shelley.TxOut addr amount) = (addr, amount)
 
-genesisUtxOs :: ShelleyGenesis TPraosStandardCrypto -> [(ShelleyTxIn, ShelleyTxOut)]
+genesisUtxOs :: ShelleyGenesis StandardShelley -> [(ShelleyTxIn, ShelleyTxOut)]
 genesisUtxOs =
     Map.toList . unUTxO . Shelley.genesisUtxO
   where
     -- Sigh!
-    unUTxO :: Shelley.UTxO TPraosStandardCrypto -> Map ShelleyTxIn ShelleyTxOut
+    unUTxO :: Shelley.UTxO StandardShelley -> Map ShelleyTxIn ShelleyTxOut
     unUTxO (Shelley.UTxO m) = m
 
-configStartTime :: ShelleyGenesis TPraosStandardCrypto -> UTCTime
+configStartTime :: ShelleyGenesis StandardShelley -> UTCTime
 configStartTime = roundToMillseconds . Shelley.sgSystemStart
 
 roundToMillseconds :: UTCTime -> UTCTime
