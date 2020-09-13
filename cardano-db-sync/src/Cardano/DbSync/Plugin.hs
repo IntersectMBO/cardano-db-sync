@@ -13,6 +13,7 @@ import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Database.Persist.Sql (SqlBackend)
 
+import           Cardano.DbSync.Config.Types
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Types
 

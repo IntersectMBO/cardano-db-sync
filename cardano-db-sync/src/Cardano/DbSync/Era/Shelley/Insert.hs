@@ -31,6 +31,7 @@ import           Cardano.Api.MetaData (jsonFromMetadataValue)
 import qualified Cardano.Crypto.Hash as Crypto
 
 import qualified Cardano.Db as DB
+import           Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Shelley.Util as Shelley
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Era.Shelley.Query

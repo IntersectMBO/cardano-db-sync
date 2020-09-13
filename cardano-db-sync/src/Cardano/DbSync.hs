@@ -15,7 +15,6 @@ module Cardano.DbSync
   , DbSyncNodeParams (..)
   , DbSyncNodePlugin (..)
   , GenesisFile (..)
-  , GenesisHash (..)
   , NetworkName (..)
   , SocketPath (..)
   , DB.MigrationDir (..)
@@ -131,7 +130,7 @@ runDbSyncNode plugin enp =
       Nothing -> pure ()
 
     orDie renderDbSyncNodeError $ do
-      genCfg <- readGenesisConfig enc
+      genCfg <- readCardanoGenesisConfig enc
       genesisEnv <- hoistEither $ genesisConfigToEnv genCfg
       logProtocolMagicId trce $ genesisProtocolMagicId genCfg
 
@@ -148,11 +147,8 @@ runDbSyncNode plugin enp =
             runDbSyncNodeNodeClient genesisEnv
                 iomgr trce plugin (cardanoCodecConfig bCfg) (enpSocketPath enp)
   where
-    shelleyCodecConfig :: CodecConfig ShelleyBlock
-    shelleyCodecConfig = ShelleyCodecConfig
-
     cardanoCodecConfig :: Byron.Config -> CodecConfig CardanoBlock
-    cardanoCodecConfig cfg = CardanoCodecConfig (mkByronCodecConfig cfg) shelleyCodecConfig
+    cardanoCodecConfig cfg = CardanoCodecConfig (mkByronCodecConfig cfg) ShelleyCodecConfig
 
 -- -------------------------------------------------------------------------------------------------
 

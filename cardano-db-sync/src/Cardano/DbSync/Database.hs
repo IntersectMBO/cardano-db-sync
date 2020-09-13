@@ -25,6 +25,7 @@ import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Except.Extra (left, newExceptT, runExceptT)
 
 import qualified Cardano.Db as DB
+import           Cardano.DbSync.Config
 import           Cardano.DbSync.DbAction
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Metrics

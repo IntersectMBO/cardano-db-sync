@@ -44,15 +44,8 @@ mkDbApply cblk details =
       BlockByron blk -> DbApplyBlock (ByronBlockDetails blk details)
       BlockShelley blk -> DbApplyBlock (ShelleyBlockDetails blk details)
 
-{-
-  where
-    convert :: Consensus.ShelleyBlock (ShelleyEra StandardShelley) -> Consensus.ShelleyBlock StandardShelley
-    convert (Consensus.ShelleyBlock b h) = Consensus.ShelleyBlock (_ b) (_ h)
--}
-
 mkDbRollback :: Point blk -> DbAction
 mkDbRollback point = DbRollBackToPoint (toRollbackSlot point)
-
 
 
 -- The Point data type is probably really convenient in the libraries where it is defined

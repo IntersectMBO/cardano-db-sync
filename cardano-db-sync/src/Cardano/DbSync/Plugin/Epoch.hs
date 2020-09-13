@@ -11,6 +11,7 @@ module Cardano.DbSync.Plugin.Epoch
 import           Cardano.BM.Trace (Trace, logError, logInfo)
 
 import qualified Cardano.Chain.Block as Byron
+import           Cardano.DbSync.Config.Types
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..))
 
 import           Control.Monad (void, when)

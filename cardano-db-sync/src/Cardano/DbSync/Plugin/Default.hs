@@ -8,18 +8,19 @@ module Cardano.DbSync.Plugin.Default
 import           Cardano.Prelude
 import           Cardano.BM.Trace (Trace)
 
+import           Cardano.DbSync.Config
+import           Cardano.DbSync.Error
+import qualified Cardano.DbSync.Era.Byron.Insert as Byron
+import qualified Cardano.DbSync.Era.Shelley.Insert as Shelley
 import           Cardano.DbSync.Plugin
 import           Cardano.DbSync.Rollback (rollbackToSlot)
+import           Cardano.DbSync.Types
 
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Database.Persist.Sql (SqlBackend)
 
-import           Cardano.DbSync.Error
-import qualified Cardano.DbSync.Era.Byron.Insert as Byron
-import qualified Cardano.DbSync.Era.Shelley.Insert as Shelley
-import           Cardano.DbSync.Types
 
 
 -- | The default DbSyncNodePlugin.
