@@ -38,7 +38,7 @@ import           Ouroboros.Consensus.HardFork.Combinator.Basics (HardForkBlock (
 import           Ouroboros.Consensus.HardFork.Combinator.Ledger.Query (QueryHardFork (GetInterpreter))
 import           Ouroboros.Consensus.HardFork.History.Qry (PastHorizonException, Expr (..), Qry, Interpreter,
                     interpretQuery, qryFromExpr, slotToEpoch')
-import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
+import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
 
 import           Ouroboros.Network.Block (Point (..))
 import           Ouroboros.Network.Protocol.LocalStateQuery.Client (ClientStQuerying (..),
@@ -67,8 +67,8 @@ newStateQueryTMVar = StateQueryTMVar <$> newEmptyTMVarIO
 -- If the existing history interpreter returns an error, get a new one and try again.
 getSlotDetails
     :: Trace IO Text -> DbSyncEnv
-    -> StateQueryTMVar (HardForkBlock (CardanoEras TPraosStandardCrypto)) (Interpreter (CardanoEras TPraosStandardCrypto))
-    -> Point (HardForkBlock (CardanoEras TPraosStandardCrypto)) -> SlotNo
+    -> StateQueryTMVar (HardForkBlock (CardanoEras StandardCrypto)) (Interpreter (CardanoEras StandardCrypto))
+    -> Point (HardForkBlock (CardanoEras StandardCrypto)) -> SlotNo
     -> IO SlotDetails
 getSlotDetails tracer env queryVar point slot = do
     einterp1 <- maybe (getHistoryInterpreter tracer queryVar point) pure =<< readIORef historyInterpVar
@@ -80,21 +80,21 @@ getSlotDetails tracer env queryVar point slot = do
           Right sd -> pure sd
           Left err -> panic $ "getSlotDetails: " <> textShow err
   where
-    evalSlotDetails :: Interpreter (CardanoEras TPraosStandardCrypto) -> Either PastHorizonException SlotDetails
+    evalSlotDetails :: Interpreter (CardanoEras StandardCrypto) -> Either PastHorizonException SlotDetails
     evalSlotDetails interp =
       interpretQuery interp (querySlotDetails (envSystemStart env) slot)
 
 -- -------------------------------------------------------------------------------------------------
 
 {-# NOINLINE historyInterpVar #-}
-historyInterpVar :: IORef (Maybe (Interpreter (CardanoEras TPraosStandardCrypto)))
+historyInterpVar :: IORef (Maybe (Interpreter (CardanoEras StandardCrypto)))
 historyInterpVar = unsafePerformIO $ newIORef Nothing
 
 getHistoryInterpreter
     :: Trace IO Text
-    -> StateQueryTMVar (HardForkBlock (CardanoEras TPraosStandardCrypto)) (Interpreter (CardanoEras TPraosStandardCrypto))
-    -> Point (HardForkBlock (CardanoEras TPraosStandardCrypto))
-    -> IO (Interpreter (CardanoEras TPraosStandardCrypto))
+    -> StateQueryTMVar (HardForkBlock (CardanoEras StandardCrypto)) (Interpreter (CardanoEras StandardCrypto))
+    -> Point (HardForkBlock (CardanoEras StandardCrypto))
+    -> IO (Interpreter (CardanoEras StandardCrypto))
 getHistoryInterpreter tracer queryVar point = do
   respVar <- newEmptyTMVarIO
   atomically $ putTMVar (unStateQueryTMVar queryVar) (point, QueryHardFork GetInterpreter, respVar)

@@ -82,9 +82,8 @@ import           Ouroboros.Consensus.HardFork.History.Qry (Interpreter)
 import           Ouroboros.Consensus.Network.NodeToClient (ClientCodecs,
                     cChainSyncCodec, cStateQueryCodec, cTxSubmissionCodec)
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
-import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import           Ouroboros.Consensus.Shelley.Ledger.Config (CodecConfig (ShelleyCodecConfig))
-import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
+import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
 
 import qualified Ouroboros.Network.NodeToClient.Version as Network
 import           Ouroboros.Network.Block (BlockNo (..), HeaderHash, Point (..),
@@ -149,7 +148,7 @@ runDbSyncNode plugin enp =
             runDbSyncNodeNodeClient genesisEnv
                 iomgr trce plugin (cardanoCodecConfig bCfg) (enpSocketPath enp)
   where
-    shelleyCodecConfig :: CodecConfig (ShelleyBlock TPraosStandardCrypto)
+    shelleyCodecConfig :: CodecConfig ShelleyBlock
     shelleyCodecConfig = ShelleyCodecConfig
 
     cardanoCodecConfig :: Byron.Config -> CodecConfig CardanoBlock
@@ -203,7 +202,7 @@ dbSyncProtocols
     :: Trace IO Text
     -> DbSyncEnv
     -> DbSyncNodePlugin
-    -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras TPraosStandardCrypto))
+    -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
     -> Network.NodeToClientVersion
     -> ClientCodecs CardanoBlock IO
     -> ConnectionId LocalAddress
@@ -315,7 +314,7 @@ getCurrentTipBlockNo = do
 --
 chainSyncClient
     :: Trace IO Text -> DbSyncEnv
-    -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras TPraosStandardCrypto))
+    -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
     -> Metrics -> [Point CardanoBlock] -> WithOrigin BlockNo -> DbActionQueue
     -> ChainSyncClientPipelined CardanoBlock (Tip CardanoBlock) IO ()
 chainSyncClient trce env queryVar metrics latestPoints currentTip actionQueue =

@@ -6,6 +6,8 @@ module Cardano.DbSync.Types
   , DbSyncEnv (..)
   , DbSyncNodeParams (..)
   , ShelleyAddress
+  , ShelleyBlock
+  , ShelleyCredentialStaking
   , ShelleyDCert
   , ShelleyDelegCert
   , ShelleyHash
@@ -38,10 +40,9 @@ import           Data.Word (Word64)
 
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart)
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
-import qualified Ouroboros.Consensus.Cardano.Block as Cardano
+import qualified Ouroboros.Consensus.Cardano.Block as Consensus
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
-import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
-import qualified Ouroboros.Consensus.Shelley.Protocol as Shelley
+import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto, StandardShelley)
 
 import           Ouroboros.Network.Magic (NetworkMagic (..))
 
@@ -56,9 +57,9 @@ import qualified Shelley.Spec.Ledger.TxData as Shelley
 -- No longer contains a Tip value because the Tip value was useless.
 data BlockDetails
   = ByronBlockDetails !ByronBlock !SlotDetails
-  | ShelleyBlockDetails !(Shelley.ShelleyBlock TPraosStandardCrypto) !SlotDetails
+  | ShelleyBlockDetails !(Shelley.ShelleyBlock StandardShelley) !SlotDetails
 
-type CardanoBlock = Cardano.HardForkBlock (Cardano.CardanoEras Shelley.TPraosStandardCrypto)
+type CardanoBlock = Consensus.CardanoBlock StandardCrypto
 
 newtype ConfigFile = ConfigFile
   { unConfigFile :: FilePath
@@ -79,24 +80,27 @@ data DbSyncEnv = DbSyncEnv
   , envSystemStart :: !SystemStart
   }
 
-type ShelleyAddress = Shelley.Addr Shelley.TPraosStandardCrypto
-type ShelleyDCert = Shelley.DCert Shelley.TPraosStandardCrypto
-type ShelleyDelegCert = Shelley.DelegCert Shelley.TPraosStandardCrypto
-type ShelleyHash = Shelley.ShelleyHash Shelley.TPraosStandardCrypto
-type ShelleyMIRCert = Shelley.MIRCert Shelley.TPraosStandardCrypto
-type ShelleyPoolCert = Shelley.PoolCert Shelley.TPraosStandardCrypto
-type ShelleyPoolParams = Shelley.PoolParams Shelley.TPraosStandardCrypto
-type ShelleyRewardAccount = Shelley.RewardAcnt Shelley.TPraosStandardCrypto
-type ShelleyStakeCreds = Shelley.StakeCreds Shelley.TPraosStandardCrypto
-type ShelleyStakingCred = Shelley.StakeCredential Shelley.TPraosStandardCrypto
-type ShelleyStakingKeyHash = Shelley.KeyHash 'Shelley.Staking Shelley.TPraosStandardCrypto
-type ShelleyStakePoolKeyHash = Shelley.KeyHash 'Shelley.StakePool Shelley.TPraosStandardCrypto
-type ShelleyTx = Shelley.Tx Shelley.TPraosStandardCrypto
-type ShelleyTxBody = Shelley.TxBody Shelley.TPraosStandardCrypto
-type ShelleyTxId = Shelley.TxId Shelley.TPraosStandardCrypto
-type ShelleyTxIn = Shelley.TxIn Shelley.TPraosStandardCrypto
-type ShelleyTxOut = Shelley.TxOut Shelley.TPraosStandardCrypto
-type ShelleyTxSeq = Shelley.TxSeq Shelley.TPraosStandardCrypto
+type ShelleyAddress = Shelley.Addr StandardShelley
+type ShelleyBlock = Shelley.ShelleyBlock StandardShelley
+type ShelleyCredentialStaking = Shelley.Credential 'Shelley.Staking StandardShelley
+type ShelleyDelegCert = Shelley.DelegCert StandardShelley
+type ShelleyHash = Shelley.ShelleyHash StandardShelley
+type ShelleyMIRCert = Shelley.MIRCert StandardShelley
+type ShelleyPoolCert = Shelley.PoolCert StandardShelley
+type ShelleyPoolParams = Shelley.PoolParams StandardShelley
+type ShelleyRewardAccount = Shelley.RewardAcnt StandardShelley
+type ShelleyStakeCreds = Shelley.StakeCreds StandardShelley
+type ShelleyStakingCred = Shelley.StakeCredential StandardShelley
+type ShelleyStakingKeyHash = Shelley.KeyHash 'Shelley.Staking StandardShelley
+type ShelleyStakePoolKeyHash = Shelley.KeyHash 'Shelley.StakePool StandardShelley
+
+type ShelleyDCert = Shelley.DCert StandardShelley
+type ShelleyTx = Shelley.Tx StandardShelley
+type ShelleyTxBody = Shelley.TxBody StandardShelley
+type ShelleyTxId = Shelley.TxId StandardShelley
+type ShelleyTxIn = Shelley.TxIn StandardShelley
+type ShelleyTxOut = Shelley.TxOut StandardShelley
+type ShelleyTxSeq = Shelley.TxSeq StandardShelley
 
 data SlotDetails = SlotDetails
   { sdTime :: !UTCTime
@@ -112,3 +116,4 @@ newtype EpochSlot = EpochSlot
 newtype SocketPath = SocketPath
   { unSocketPath :: FilePath
   }
+

@@ -35,14 +35,14 @@ import qualified Data.Text as Text
 
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
-import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
+import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 import           Ouroboros.Network.Magic (NetworkMagic (..))
 
 import qualified Shelley.Spec.Ledger.Genesis as Shelley
 
 -- Usually only one constructor, but may have two when we are preparing for a HFC event.
 data GenesisEra
-  = GenesisCardano !Byron.Config !(ShelleyGenesis TPraosStandardCrypto)
+  = GenesisCardano !Byron.Config !(ShelleyGenesis StandardShelley)
 
 
 genesisNetworkMagic :: GenesisEra -> NetworkMagic
@@ -56,7 +56,7 @@ genesisProtocolMagicId ge =
     case ge of
       GenesisCardano _ sg -> shelleyProtocolMagicId sg
   where
-    shelleyProtocolMagicId :: ShelleyGenesis TPraosStandardCrypto -> ProtocolMagicId
+    shelleyProtocolMagicId :: ShelleyGenesis StandardShelley -> ProtocolMagicId
     shelleyProtocolMagicId sg = ProtocolMagicId (Shelley.sgNetworkMagic sg)
 
 insertValidateGenesisDist
@@ -114,7 +114,7 @@ readByronGenesisConfig enc = do
 
 readShelleyGenesisConfig
         :: DbSyncNodeConfig
-        -> ExceptT DbSyncNodeError IO (ShelleyGenesis TPraosStandardCrypto)
+        -> ExceptT DbSyncNodeError IO (ShelleyGenesis StandardShelley)
 readShelleyGenesisConfig enc = do
   let file = unGenesisFile $ encShelleyGenesisFile enc
   firstExceptT (NEShelleyConfig file . Text.pack)

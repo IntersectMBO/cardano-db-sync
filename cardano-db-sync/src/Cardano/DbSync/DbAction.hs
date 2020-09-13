@@ -6,9 +6,10 @@
 module Cardano.DbSync.DbAction
   ( DbAction (..)
   , DbActionQueue (..)
-  , MkDbAction (..)
   , blockingFlushDbActionQueue
   , lengthDbActionQueue
+  , mkDbApply
+  , mkDbRollback
   , newDbActionQueue
   , writeDbActionQueue
   ) where
@@ -22,10 +23,7 @@ import qualified Control.Concurrent.STM as STM
 import           Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as TBQ
 
-import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
-import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
-import           Ouroboros.Consensus.Shelley.Protocol (TPraosStandardCrypto)
 import           Ouroboros.Network.Block (Point (..), pointSlot)
 
 
@@ -39,27 +37,22 @@ newtype DbActionQueue = DbActionQueue
   { dbActQueue :: TBQueue DbAction
   }
 
-class MkDbAction blk where
-  mkDbApply :: blk -> SlotDetails -> DbAction
-  mkDbRollback :: Point blk -> DbAction
 
-
-instance MkDbAction ByronBlock where
-  mkDbApply blk details = DbApplyBlock (ByronBlockDetails blk details)
-  mkDbRollback point = DbRollBackToPoint (toRollbackSlot point)
-
-instance MkDbAction (ShelleyBlock TPraosStandardCrypto) where
-  mkDbApply blk details = DbApplyBlock (ShelleyBlockDetails blk details)
-  mkDbRollback point = DbRollBackToPoint (toRollbackSlot point)
-
-instance MkDbAction CardanoBlock where
-  mkDbApply cblk details = do
+mkDbApply :: CardanoBlock -> SlotDetails -> DbAction
+mkDbApply cblk details =
     case cblk of
       BlockByron blk -> DbApplyBlock (ByronBlockDetails blk details)
       BlockShelley blk -> DbApplyBlock (ShelleyBlockDetails blk details)
 
-  mkDbRollback point =
-      DbRollBackToPoint (toRollbackSlot point)
+{-
+  where
+    convert :: Consensus.ShelleyBlock (ShelleyEra StandardShelley) -> Consensus.ShelleyBlock StandardShelley
+    convert (Consensus.ShelleyBlock b h) = Consensus.ShelleyBlock (_ b) (_ h)
+-}
+
+mkDbRollback :: Point blk -> DbAction
+mkDbRollback point = DbRollBackToPoint (toRollbackSlot point)
+
 
 
 -- The Point data type is probably really convenient in the libraries where it is defined
