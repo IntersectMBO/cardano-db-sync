@@ -6,6 +6,7 @@
 
 module Cardano.DbSync.Config.Cardano
   ( GenesisConfig (..)
+  , cardanoLedgerConfig
   , genesisConfigToEnv
   , genesisProtocolMagicId
   , mkTopLevelConfig
@@ -31,6 +32,7 @@ import           Ouroboros.Consensus.Cardano (Nonce (..), Protocol (..))
 import qualified Ouroboros.Consensus.Cardano as Consensus
 import           Ouroboros.Consensus.Cardano.CanHardFork (TriggerHardFork (..))
 import           Ouroboros.Consensus.Config (TopLevelConfig (..))
+import           Ouroboros.Consensus.Ledger.Basics (LedgerConfig)
 import           Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
@@ -86,6 +88,9 @@ readCardanoGenesisConfig enc =
       GenesisCardano <$> readByronGenesisConfig enc <*> readShelleyGenesisConfig enc
 
 -- -------------------------------------------------------------------------------------------------
+
+cardanoLedgerConfig :: GenesisConfig -> LedgerConfig CardanoBlock
+cardanoLedgerConfig = topLevelConfigLedger . mkTopLevelConfig
 
 mkTopLevelConfig :: GenesisConfig -> TopLevelConfig CardanoBlock
 mkTopLevelConfig = Consensus.pInfoConfig . mkProtocolInfoCardano

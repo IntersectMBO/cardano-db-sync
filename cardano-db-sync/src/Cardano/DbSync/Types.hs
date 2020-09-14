@@ -47,7 +47,7 @@ import qualified Shelley.Spec.Ledger.TxData as Shelley
 -- No longer contains a Tip value because the Tip value was useless.
 data BlockDetails
   = ByronBlockDetails !ByronBlock !SlotDetails
-  | ShelleyBlockDetails !ShelleyBlock !SlotDetails
+  | ShelleyBlockDetails !(Shelley.ShelleyBlock StandardShelley) !SlotDetails
 
 type ShelleyAddress = Shelley.Addr StandardShelley
 type ShelleyBlock = Shelley.ShelleyBlock StandardShelley

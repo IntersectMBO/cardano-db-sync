@@ -15,6 +15,7 @@ module Cardano.DbSync.Config
   , NetworkName (..)
   , ShelleyConfig (..)
   , SocketPath (..)
+  , cardanoLedgerConfig
   , genesisConfigToEnv
   , genesisProtocolMagicId
   , readDbSyncNodeConfig
