@@ -226,13 +226,13 @@ dbSyncProtocols trce env plugin queryVar ledgerVar _version codecs _connectionId
         actionQueue <- newDbActionQueue
         (metrics, server) <- registerMetricsServer
         race_
-            (runDbThread trce env plugin metrics actionQueue)
+            (runDbThread trce env plugin metrics actionQueue ledgerVar)
             (runPipelinedPeer
                 localChainSyncTracer
                 (cChainSyncCodec codecs)
                 channel
                 (chainSyncClientPeerPipelined
-                    $ chainSyncClient trce env queryVar ledgerVar metrics latestPoints currentTip actionQueue)
+                    $ chainSyncClient trce env queryVar metrics latestPoints currentTip actionQueue)
             )
         atomically $ writeDbActionQueue actionQueue DbFinish
         cancel server
@@ -314,9 +314,9 @@ getCurrentTipBlockNo = do
 chainSyncClient
     :: Trace IO Text -> DbSyncEnv
     -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
-    -> LedgerStateVar -> Metrics -> [Point CardanoBlock] -> WithOrigin BlockNo -> DbActionQueue
+    -> Metrics -> [Point CardanoBlock] -> WithOrigin BlockNo -> DbActionQueue
     -> ChainSyncClientPipelined CardanoBlock (Tip CardanoBlock) IO ()
-chainSyncClient trce env queryVar ledgerVar metrics latestPoints currentTip actionQueue =
+chainSyncClient trce env queryVar metrics latestPoints currentTip actionQueue =
     ChainSyncClientPipelined $ pure $
       -- Notify the core node about the our latest points at which we are
       -- synchronised.  This client is not persistent and thus it just
@@ -358,8 +358,7 @@ chainSyncClient trce env queryVar ledgerVar metrics latestPoints currentTip acti
         { recvMsgRollForward = \blk tip ->
               logException trce "recvMsgRollForward: " $ do
                 Gauge.set (withOrigin 0 (fromIntegral . unBlockNo) (getTipBlockNo tip)) (mNodeHeight metrics)
-                details <- getSlotDetails trce env queryVar (getTipPoint tip) (genericBlockSlotNo blk)
-                _newState <- applyBlockChecked ledgerVar blk
+                details <- getSlotDetails trce env queryVar (getTipPoint tip) (cardanoBlockSlotNo blk)
                 newSize <- atomically $ do
                             writeDbActionQueue actionQueue $ mkDbApply blk details
                             lengthDbActionQueue actionQueue

@@ -30,7 +30,7 @@ import           Cardano.Prelude
 import           Control.Concurrent.STM.TMVar (TMVar, newEmptyTMVarIO, putTMVar, takeTMVar)
 
 import           Data.IORef (IORef, newIORef, readIORef, writeIORef)
-import           Data.Time.Clock (UTCTime, addUTCTime)
+import           Data.Time.Clock (UTCTime, getCurrentTime, addUTCTime)
 
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (RelativeTime (..), SystemStart (..))
 import           Ouroboros.Consensus.Cardano.Block (CardanoEras, Query (..))
@@ -74,16 +74,21 @@ getSlotDetails
 getSlotDetails tracer env queryVar point slot = do
     einterp1 <- maybe (getHistoryInterpreter tracer queryVar point) pure =<< readIORef historyInterpVar
     case evalSlotDetails einterp1 of
-      Right sd -> pure sd
+      Right sd -> insertCurrentTime sd
       Left _ -> do
         einterp2 <- getHistoryInterpreter tracer queryVar point
         case evalSlotDetails einterp2 of
-          Right sd -> pure sd
           Left err -> panic $ "getSlotDetails: " <> textShow err
+          Right sd -> insertCurrentTime sd
   where
     evalSlotDetails :: Interpreter (CardanoEras StandardCrypto) -> Either PastHorizonException SlotDetails
     evalSlotDetails interp =
       interpretQuery interp (querySlotDetails (envSystemStart env) slot)
+
+    insertCurrentTime :: SlotDetails -> IO SlotDetails
+    insertCurrentTime sd = do
+      time <- getCurrentTime
+      pure $ sd { sdCurrentTime = time }
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -149,7 +154,9 @@ querySlotDetails start absSlot = do
                 EVar absTime
   (absEpoch, slotInEpoch) <- slotToEpoch' absSlot
   epochSize <- qryFromExpr $ EEpochSize (ELit absEpoch)
-  pure $ SlotDetails (relToUTCTime start absTime) absEpoch (EpochSlot slotInEpoch) epochSize
+  let time = relToUTCTime start absTime
+  -- Set sdCurrentTime below and over write that above.
+  pure $ SlotDetails time time absEpoch (EpochSlot slotInEpoch) epochSize
 
 relToUTCTime :: SystemStart -> RelativeTime -> UTCTime
 relToUTCTime (SystemStart start) (RelativeTime rel) = addUTCTime rel start

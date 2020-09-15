@@ -93,7 +93,7 @@ insertABOBBoundary tracer blk details = do
               , DB.blockMerkelRoot = Nothing -- No merkelRoot for a boundary block
               , DB.blockSlotLeader = slid
               , DB.blockSize = fromIntegral $ Byron.boundaryBlockLength blk
-              , DB.blockTime = sdTime details
+              , DB.blockTime = sdSlotTime details
               , DB.blockTxCount = 0
 
               -- Shelley specific
@@ -128,7 +128,7 @@ insertABlock tracer blk details = do
                     , DB.blockMerkelRoot = Just $ Byron.unCryptoHash (Byron.blockMerkelRoot blk)
                     , DB.blockSlotLeader = slid
                     , DB.blockSize = fromIntegral $ Byron.blockLength blk
-                    , DB.blockTime = sdTime details
+                    , DB.blockTime = sdSlotTime details
                     , DB.blockTxCount = fromIntegral $ length (Byron.blockPayload blk)
 
                     -- Shelley specific
@@ -142,7 +142,7 @@ insertABlock tracer blk details = do
     liftIO $ do
       let epoch = unEpochNo (sdEpochNo details)
           slotWithinEpoch = unEpochSlot (sdEpochSlot details)
-      followingClosely <- DB.isFullySynced (sdTime details)
+      followingClosely <- DB.isFullySynced (sdSlotTime details)
 
       when (followingClosely && slotWithinEpoch /= 0 && Byron.slotNumber blk `mod` 20 == 0) $ do
         logInfo tracer $

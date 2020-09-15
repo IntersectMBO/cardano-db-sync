@@ -50,6 +50,7 @@ import qualified Data.Text.Encoding.Error as Text
 
 import           Database.Persist.Sql (SqlBackend)
 
+import           Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
@@ -62,10 +63,11 @@ import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxData as Shelley
 
+
 insertShelleyBlock
-    :: Trace IO Text -> DbSyncEnv -> ShelleyBlock -> SlotDetails
+    :: Trace IO Text -> DbSyncEnv -> ShelleyBlock -> LedgerState CardanoBlock -> SlotDetails
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-insertShelleyBlock tracer env blk details = do
+insertShelleyBlock tracer env blk _ledger details = do
   runExceptT $ do
     pbid <- liftLookupFail "insertShelleyBlock" $ DB.queryBlockId (Shelley.blockPrevHash blk)
     mPhid <- lift $ queryPoolHashId (Shelley.blockVrfKeyToPoolHash blk)
@@ -82,7 +84,7 @@ insertShelleyBlock tracer env blk details = do
                     , DB.blockMerkelRoot = Nothing -- Shelley blocks do not have one.
                     , DB.blockSlotLeader = slid
                     , DB.blockSize = Shelley.blockSize blk
-                    , DB.blockTime = sdTime details
+                    , DB.blockTime = sdSlotTime details
                     , DB.blockTxCount = Shelley.blockTxCount blk
 
                     -- Shelley specific
@@ -96,7 +98,7 @@ insertShelleyBlock tracer env blk details = do
     liftIO $ do
       let epoch = unEpochNo (sdEpochNo details)
           slotWithinEpoch = unEpochSlot (sdEpochSlot details)
-      followingClosely <- DB.isFullySynced (sdTime details)
+      followingClosely <- DB.isFullySynced (sdSlotTime details)
 
       when (followingClosely && slotWithinEpoch /= 0 && Shelley.slotNumber blk `mod` 200 == 0) $ do
         logInfo tracer $

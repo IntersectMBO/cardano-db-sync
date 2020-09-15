@@ -23,7 +23,6 @@ import qualified Control.Concurrent.STM as STM
 import           Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as TBQ
 
-import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import           Ouroboros.Network.Block (Point (..), pointSlot)
 
 
@@ -40,9 +39,7 @@ newtype DbActionQueue = DbActionQueue
 
 mkDbApply :: CardanoBlock -> SlotDetails -> DbAction
 mkDbApply cblk details =
-    case cblk of
-      BlockByron blk -> DbApplyBlock (ByronBlockDetails blk details)
-      BlockShelley blk -> DbApplyBlock (ShelleyBlockDetails blk details)
+  DbApplyBlock (BlockDetails cblk details)
 
 mkDbRollback :: Point blk -> DbAction
 mkDbRollback point = DbRollBackToPoint (toRollbackSlot point)

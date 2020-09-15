@@ -6,6 +6,7 @@ import           Cardano.BM.Trace (Trace)
 
 import           Cardano.Prelude
 
+import           Cardano.DbSync.LedgerState
 import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Control.Monad.Logger (LoggingT)
@@ -43,7 +44,7 @@ data DbSyncNodePlugin = DbSyncNodePlugin
     -- all subsequent blocks.
     -- Blocks (including epoch boundary blocks) are called in sequence from the oldest to the newest.
   , plugInsertBlock
-        :: [Trace IO Text -> DbSyncEnv -> BlockDetails -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())]
+        :: [Trace IO Text -> DbSyncEnv -> LedgerStateVar -> BlockDetails -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())]
 
     -- Rollback to the specified absolute SlotNo.
   , plugRollbackBlock

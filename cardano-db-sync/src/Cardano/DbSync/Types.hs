@@ -3,6 +3,7 @@ module Cardano.DbSync.Types
   ( BlockDetails (..)
   , CardanoBlock
   , CardanoProtocol
+  , EpochSlot (..)
   , ShelleyAddress
   , ShelleyBlock
   , ShelleyDCert
@@ -23,7 +24,7 @@ module Cardano.DbSync.Types
   , ShelleyTxOut
   , ShelleyTxSeq
   , SlotDetails (..)
-  , EpochSlot (..)
+  , SyncState (..)
   ) where
 
 import           Cardano.DbSync.Config.Types (CardanoBlock, CardanoProtocol)
@@ -33,7 +34,6 @@ import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
 import           Data.Time.Clock (UTCTime)
 import           Data.Word (Word64)
 
-import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
 import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 
@@ -44,10 +44,15 @@ import qualified Shelley.Spec.Ledger.Keys as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxData as Shelley
 
--- No longer contains a Tip value because the Tip value was useless.
-data BlockDetails
-  = ByronBlockDetails !ByronBlock !SlotDetails
-  | ShelleyBlockDetails !(Shelley.ShelleyBlock StandardShelley) !SlotDetails
+
+data BlockDetails = BlockDetails
+  { bdBlock :: !CardanoBlock
+  , bdSlot :: !SlotDetails
+  }
+
+newtype EpochSlot = EpochSlot
+  { unEpochSlot :: Word64
+  } deriving (Eq, Show)
 
 type ShelleyAddress = Shelley.Addr StandardShelley
 type ShelleyBlock = Shelley.ShelleyBlock StandardShelley
@@ -70,12 +75,14 @@ type ShelleyTxOut = Shelley.TxOut StandardShelley
 type ShelleyTxSeq = Shelley.TxSeq StandardShelley
 
 data SlotDetails = SlotDetails
-  { sdTime :: !UTCTime
+  { sdSlotTime :: !UTCTime
+  , sdCurrentTime :: !UTCTime
   , sdEpochNo :: !EpochNo
   , sdEpochSlot :: !EpochSlot
   , sdEpochSize :: !EpochSize
   } deriving (Eq, Show)
 
-newtype EpochSlot = EpochSlot
-  { unEpochSlot :: Word64
-  } deriving (Eq, Show)
+data SyncState
+  = SyncLagging         -- Local tip is lagging the global chain tip.
+  | SyncFollowing       -- Local tip is following global chain tip.
+  deriving (Eq, Show)

@@ -36,15 +36,17 @@ import           Database.Persist.Sql (IsolationLevel (Serializable), SqlBackend
 import           Cardano.Db (EpochId, EntityField (..), listToMaybe)
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Error
+import           Cardano.DbSync.LedgerState
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
+import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (BlockByron, BlockShelley))
 
 import           System.IO.Unsafe (unsafePerformIO)
 
 -- Populating the Epoch table has two mode:
---  * Syncing: when the node is far behind the chain tip and is just updating the DB. In this
+--  * SyncLagging: when the node is far behind the chain tip and is just updating the DB. In this
 --    mode, the row for an epoch is only calculated and inserted when at the end of the epoch.
 --  * Following: When the node is at or close to the chain tip, the row for a given epoch is
 --    updated on each new block.
@@ -64,10 +66,12 @@ epochPluginOnStartup trce = do
         let backOne = if lbe == 0 then 0 else lbe - 1
         liftIO $ atomicWriteIORef latestCachedEpochVar (Just backOne)
 
-epochPluginInsertBlock :: Trace IO Text -> DbSyncEnv -> BlockDetails -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-epochPluginInsertBlock trce _env blkTip = do
-  case blkTip of
-    ByronBlockDetails bblk details ->
+epochPluginInsertBlock
+    :: Trace IO Text -> DbSyncEnv -> LedgerStateVar -> BlockDetails
+    -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
+epochPluginInsertBlock trce _env _ledgerState (BlockDetails cblk details) = do
+  case cblk of
+    BlockByron bblk ->
       case byronBlockRaw bblk of
         Byron.ABOBBoundary {} ->
           -- For the OBFT era there are no boundary blocks so we ignore them even in
@@ -76,11 +80,10 @@ epochPluginInsertBlock trce _env blkTip = do
 
         Byron.ABOBBlock _blk ->
           insertBlock trce details
-    ShelleyBlockDetails _sblk details -> do
-      currentTime <- liftIO Time.getCurrentTime
-      when (sdTime details > currentTime) $
+    BlockShelley _sblk -> do
+      when (sdSlotTime details > sdCurrentTime details) $
         liftIO . logError trce $ mconcat
-          [ "Slot time '", textShow (sdTime details) ,  "' is in the future" ]
+          [ "Slot time '", textShow (sdSlotTime details) ,  "' is in the future" ]
       insertBlock trce details
 
 
@@ -98,7 +101,7 @@ insertBlock trce details = do
   mLatestCachedEpoch <- liftIO $ readIORef latestCachedEpochVar
   let lastCachedEpoch = fromMaybe 0 mLatestCachedEpoch
       epochNum = unEpochNo (sdEpochNo details)
-  synced <- liftIO $ DB.isFullySynced (sdTime details)
+  synced <- liftIO $ DB.isFullySynced (sdSlotTime details)
 
   -- These cases are listed from the least likey to occur to the most
   -- likley to keep the logic sane.

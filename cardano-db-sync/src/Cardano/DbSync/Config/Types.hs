@@ -18,6 +18,7 @@ module Cardano.DbSync.Config.Types
   , GenesisHashShelley (..)
   , GenesisHashByron (..)
   , GenDbSyncNodeConfig (..)
+  , LedgerStateDir (..)
   , LogFileDir (..)
   , NetworkName (..)
   , SocketPath (..)
@@ -104,6 +105,10 @@ newtype GenesisHashByron = GenesisHashByron
 newtype GenesisHashShelley = GenesisHashShelley
   { unGenesisHashShelley :: Crypto.Hash Crypto.Blake2b_256 ByteString
   } deriving newtype (Eq, Show)
+
+newtype LedgerStateDir = LedgerStateDir
+  {  unLedgerStateDir :: FilePath
+  }
 
 newtype LogFileDir
   = LogFileDir FilePath
