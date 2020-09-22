@@ -1,5 +1,10 @@
 # Revision history for cardano-db-sync node
 
+## 5.0.1
+
+* Update dependencies.
+* Temporary workaround for Unicode NUL character issue (#297).
+
 ## 5.0.0
 
 * Note that this release requires the database to be dropped and recreated.

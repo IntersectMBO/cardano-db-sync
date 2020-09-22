@@ -1,5 +1,9 @@
 # Revision history for cardano-db
 
+## 5.0.1
+
+* Update dependencies.
+
 ## 5.0.0
 
 * Note that this release requires the database to be dropped and recreated.
