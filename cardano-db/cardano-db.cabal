@@ -50,6 +50,7 @@ library
                       , base                            >= 4.12         && < 4.13
                       , base16-bytestring
                       , bytestring
+                      , cardano-slotting
                       , containers
                       , conduit
                       , conduit-extra
@@ -107,6 +108,7 @@ executable cardano-db-tool
                       , ansi-terminal
                       , cardano-db
                       , cardano-ledger
+                      , cardano-slotting
                       , containers
                       , esqueleto
                       , optparse-applicative
@@ -165,6 +167,7 @@ test-suite test-db
   build-depends:        base                            >= 4.12         && < 4.13
                       , bytestring
                       , cardano-db
+                      , cardano-slotting
                       , directory
                       , filepath
                       , HUnit
