@@ -127,8 +127,8 @@ mkProtocolCardano ge =
           Nothing                                       -- Maybe (TPraosLeaderCredentials StandardShelley)
 
           -- Hard fork parameters
-          (Just 180)                                    -- Maybe lower bound on first Shelley epoch
-          (TriggerHardForkAtEpoch 2)                    -- TriggerHardFork default
+          (Just 206)                                    -- Maybe lower bound on first Shelley epoch (correct for mainnet)
+          (TriggerHardForkAtVersion 2)                  -- Trigger HF at Shelley.
 
   where
     shelleyPraosNonce :: ShelleyConfig -> Nonce

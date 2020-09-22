@@ -48,7 +48,8 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Error as Text
 
-import           Database.Persist.Sql (SqlBackend)
+import           Database.Persist.Sql (IsolationLevel (Serializable), SqlBackend,
+                    transactionSaveWithIsolation)
 
 import           Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
@@ -98,7 +99,7 @@ insertShelleyBlock tracer env blk _ledger details = do
     liftIO $ do
       let epoch = unEpochNo (sdEpochNo details)
           slotWithinEpoch = unEpochSlot (sdEpochSlot details)
-      followingClosely <- DB.isFullySynced (sdSlotTime details)
+          followingClosely = getSyncStatus details == SyncFollowing
 
       when (followingClosely && slotWithinEpoch /= 0 && Shelley.slotNumber blk `mod` 200 == 0) $ do
         logInfo tracer $
@@ -114,11 +115,15 @@ insertShelleyBlock tracer env blk _ledger details = do
         , ", hash ", renderByteArray (Shelley.blockHash blk)
         ]
 
+    when (getSyncStatus details == SyncFollowing) $
+      -- Serializiing things during syncing can drastically slow down full sync
+      -- times (ie 10x or more).
+      lift $ transactionSaveWithIsolation Serializable
   where
     logger :: Bool -> Trace IO a -> a -> IO ()
     logger followingClosely
       | followingClosely = logInfo
-      | Shelley.slotNumber blk `mod` 5000 == 0 = logInfo
+      | Shelley.slotNumber blk `mod` 100000 == 0 = logInfo
       | otherwise = logDebug
 
 -- -----------------------------------------------------------------------------

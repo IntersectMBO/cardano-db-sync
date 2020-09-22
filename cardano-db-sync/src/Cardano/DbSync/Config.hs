@@ -12,6 +12,7 @@ module Cardano.DbSync.Config
   , GenesisConfig (..)
   , GenesisFile (..)
   , GenDbSyncNodeConfig (..)
+  , LedgerStateDir (..)
   , NetworkName (..)
   , ShelleyConfig (..)
   , SocketPath (..)

@@ -43,7 +43,8 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
-import           Database.Persist.Sql (SqlBackend)
+import           Database.Persist.Sql (IsolationLevel (Serializable), SqlBackend,
+                    transactionSaveWithIsolation)
 
 import qualified Cardano.Db as DB
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
@@ -62,10 +63,16 @@ insertByronBlock
     :: Trace IO Text -> ByronBlock -> SlotDetails
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
 insertByronBlock tracer blk details = do
-  runExceptT $
-    case byronBlockRaw blk of
-      Byron.ABOBBlock ablk -> insertABlock tracer ablk details
-      Byron.ABOBBoundary abblk -> insertABOBBoundary tracer abblk details
+  res <- runExceptT $
+            case byronBlockRaw blk of
+              Byron.ABOBBlock ablk -> insertABlock tracer ablk details
+              Byron.ABOBBoundary abblk -> insertABOBBoundary tracer abblk details
+  -- Serializiing things during syncing can drastically slow down full sync
+  -- times (ie 10x or more).
+  when (getSyncStatus details == SyncFollowing) $
+    transactionSaveWithIsolation Serializable
+  pure res
+
 
 insertABOBBoundary
     :: (MonadBaseControl IO m, MonadIO m)
@@ -142,7 +149,7 @@ insertABlock tracer blk details = do
     liftIO $ do
       let epoch = unEpochNo (sdEpochNo details)
           slotWithinEpoch = unEpochSlot (sdEpochSlot details)
-      followingClosely <- DB.isFullySynced (sdSlotTime details)
+          followingClosely = getSyncStatus details == SyncFollowing
 
       when (followingClosely && slotWithinEpoch /= 0 && Byron.slotNumber blk `mod` 20 == 0) $ do
         logInfo tracer $

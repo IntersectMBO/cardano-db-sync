@@ -1,4 +1,5 @@
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Cardano.DbSync.Plugin.Default
   ( defDbSyncNodePlugin
   , insertDefaultBlock
@@ -10,7 +11,6 @@ import           Cardano.Prelude
 import           Cardano.BM.Trace (Trace)
 
 import           Cardano.DbSync.Config
-import           Cardano.DbSync.Config.Types
 import           Cardano.DbSync.Error
 import qualified Cardano.DbSync.Era.Byron.Insert as Byron
 import qualified Cardano.DbSync.Era.Shelley.Insert as Shelley
@@ -45,11 +45,16 @@ defDbSyncNodePlugin =
 insertDefaultBlock
     :: Trace IO Text -> DbSyncEnv -> LedgerStateVar -> BlockDetails
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-insertDefaultBlock tracer env ledgerState (BlockDetails cblk details) = do
-  newLedger <- liftIO $ applyBlock ledgerState cblk
-  liftIO $ saveLedgerState (LedgerStateDir "ledger-state") newLedger (isSyncedWithinSeconds details 60)
-  case cblk of
-    BlockByron blk ->
-      Byron.insertByronBlock tracer blk details
-    BlockShelley blk ->
-      Shelley.insertShelleyBlock tracer env blk (clsState newLedger) details
+insertDefaultBlock tracer env ledgerStateVar (BlockDetails cblk details) = do
+  -- Calculate the new ledger state to pass to the DB insert functions but do not yet
+  -- update ledgerStateVar.
+  newLedgerState <- liftIO $ applyBlock ledgerStateVar cblk
+  res <- case cblk of
+            BlockByron blk ->
+              Byron.insertByronBlock tracer blk details
+            BlockShelley blk ->
+              Shelley.insertShelleyBlock tracer env blk (clsState newLedgerState) details
+  -- Now we update it in ledgerStateVar and (possibly) store it to disk.
+  liftIO $ saveLedgerState (LedgerStateDir "ledger-state") ledgerStateVar
+                newLedgerState (isSyncedWithinSeconds details 60)
+  pure res

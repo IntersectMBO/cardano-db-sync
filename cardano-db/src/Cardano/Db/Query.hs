@@ -10,7 +10,6 @@ module Cardano.Db.Query
   , queryBlockHeight
   , queryBlockId
   , queryBlockNo
-  , queryBlockNosWithSlotNoGreater
   , queryMainBlock
   , queryBlockTxCount
   , queryCalcEpochEntry
@@ -21,7 +20,6 @@ module Cardano.Db.Query
   , queryFeesUpToBlockNo
   , queryFeesUpToSlotNo
   , queryGenesisSupply
-  , queryIsFullySynced
   , queryLastByronBlockNo
   , queryLatestBlock
   , queryLatestCachedEpochNo
@@ -34,6 +32,7 @@ module Cardano.Db.Query
   , queryPreviousSlotNo
   , querySelectCount
   , querySlotHash
+  , querySlotNosGreaterThan
   , querySlotUtcTime
   , queryTotalSupply
   , queryTxCount
@@ -46,7 +45,6 @@ module Cardano.Db.Query
   , queryWithdrawalsUpToBlockNo
 
   , entityPair
-  , isFullySynced
   , isJust
   , listToMaybe
   , maybeToEither
@@ -61,9 +59,11 @@ module Cardano.Db.Query
   ) where
 
 
+import           Cardano.Slotting.Slot (SlotNo (..))
+
 import           Control.Monad (join)
 import           Control.Monad.Extra (mapMaybeM)
-import           Control.Monad.IO.Class (MonadIO, liftIO)
+import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.ByteString.Char8 (ByteString)
@@ -71,7 +71,7 @@ import           Data.Fixed (Micro)
 import           Data.Maybe (catMaybes, fromMaybe, listToMaybe)
 import           Data.Ratio (numerator)
 import           Data.Text (Text)
-import           Data.Time.Clock (UTCTime, diffUTCTime, getCurrentTime)
+import           Data.Time.Clock (UTCTime)
 import           Data.Word (Word16, Word64)
 
 import           Database.Esqueleto (Entity (..), From, InnerJoin (..), LeftOuterJoin (..),
@@ -86,7 +86,6 @@ import           Cardano.Db.Error
 import           Cardano.Db.Schema
 import           Cardano.Db.Types
 
-import           Ouroboros.Network.Block (BlockNo (..))
 
 -- If you squint, these Esqueleto queries almost look like SQL queries.
 
@@ -121,17 +120,6 @@ queryBlockNo blkNo = do
             where_ (blk ^. BlockBlockNo ==. just (val blkNo))
             pure blk
   pure $ fmap entityVal (listToMaybe res)
-
-queryBlockNosWithSlotNoGreater :: MonadIO m => Word64 -> ReaderT SqlBackend m [BlockNo]
-queryBlockNosWithSlotNoGreater slotNo = do
-  res <- select . from $ \ blk -> do
-            -- Want all BlockNos where the block satisfies this predicate.
-            where_ (blk ^. BlockSlotNo >. just (val slotNo))
-            -- Return them in descending order so we can delete the highest numbered
-            -- ones first.
-            orderBy [desc (blk ^. BlockBlockNo)]
-            pure (blk ^. BlockBlockNo)
-  pure $ catMaybes (map (fmap BlockNo . unValue) res)
 
 -- | Get the current block height.
 queryBlockHeight :: MonadIO m => ReaderT SqlBackend m Word64
@@ -207,11 +195,11 @@ queryCheckPoints limitCount = do
     latest <- select $ from $ \ blk -> do
                 where_ $ (isJust $ blk ^. BlockSlotNo)
                 orderBy [desc (blk ^. BlockSlotNo)]
-                limit 1
+                limit (fromIntegral limitCount)
                 pure $ (blk ^. BlockSlotNo)
-    case join (unValue <$> listToMaybe latest) of
-      Nothing -> pure []
-      Just slotNo -> mapMaybeM querySpacing (calcSpacing slotNo)
+    case catMaybes (map unValue latest) of
+      [] -> pure []
+      xs -> mapMaybeM querySpacing xs
   where
     querySpacing :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe (Word64, ByteString))
     querySpacing blkNo = do
@@ -225,12 +213,13 @@ queryCheckPoints limitCount = do
       case (unValue va, unValue vb) of
         (Nothing, _ ) -> Nothing
         (Just a, b) -> Just (a, b)
-
+{-
     calcSpacing :: Word64 -> [Word64]
     calcSpacing end =
       if end > 2 * limitCount
         then [ end, end - end `div` limitCount .. 1 ]
         else [ end, end - 2 .. 1 ]
+-}
 
 queryDepositUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
 queryDepositUpToBlockNo blkNo = do
@@ -282,11 +271,6 @@ queryGenesisSupply = do
                 where_ (tx ^. TxBlock ==. val (BlockKey 1))
                 pure $ sum_ (txOut ^. TxOutValue)
     pure $ unValueSumAda (listToMaybe res)
-
-queryIsFullySynced :: MonadIO m => ReaderT SqlBackend m Bool
-queryIsFullySynced = do
-  mLatestBlockTime <- fmap blockTime <$> queryLatestBlock
-  maybe (pure False) (liftIO . isFullySynced) mLatestBlockTime
 
 -- | Get the BlockNo of the last Block in the Byron Era.
 queryLastByronBlockNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
@@ -371,12 +355,12 @@ querySelectCount predicate = do
             pure countRows
   pure $ maybe 0 unValue (listToMaybe xs)
 
-querySlotHash :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe ByteString)
+querySlotHash :: MonadIO m => SlotNo -> ReaderT SqlBackend m (Maybe (SlotNo, ByteString))
 querySlotHash slotNo = do
   res <- select . from $ \ blk -> do
-            where_ (blk ^. BlockSlotNo ==. just (val slotNo))
+            where_ (blk ^. BlockSlotNo ==. just (val $ unSlotNo slotNo))
             pure (blk ^. BlockHash)
-  pure $ unValue <$> (listToMaybe res)
+  pure $ (\vh -> (slotNo, unValue vh)) <$> listToMaybe res
 
 {-# INLINABLE queryMeta #-}
 -- | Get the network metadata.
@@ -395,6 +379,18 @@ queryNetworkName = do
   res <- select . from $ \ meta -> do
             pure (meta ^. MetaNetworkName)
   pure $ unValue <$> listToMaybe res
+
+querySlotNosGreaterThan :: MonadIO m => Word64 -> ReaderT SqlBackend m [SlotNo]
+querySlotNosGreaterThan slotNo = do
+  res <- select . from $ \ blk -> do
+            -- Want all BlockNos where the block satisfies this predicate.
+            where_ (blk ^. BlockSlotNo >. just (val slotNo))
+            -- Return them in descending order so we can delete the highest numbered
+            -- ones first.
+            orderBy [desc (blk ^. BlockSlotNo)]
+            pure (blk ^. BlockSlotNo)
+  pure $ catMaybes (map (fmap SlotNo . unValue) res)
+
 
 -- | Calculate the slot time (as UTCTime) for a given slot number.
 -- This will fail if the slot is empty.
@@ -560,18 +556,6 @@ unValueSumAda mvm =
 entityPair :: Entity a -> (Key a, a)
 entityPair e =
   (entityKey e, entityVal e)
-
--- Compare the provided time with the current time and return True if the provided time
--- is within 120 seconds of the current time.
-isFullySynced :: UTCTime -> IO Bool
-isFullySynced slotTime = do
-  -- This assumes that the local clock is correct.
-  -- This is a valid assumption as db-sync is connected to a locally running node
-  -- and the node needs to have a correct local clock to validate transactions.
-  currentTime <- getCurrentTime
-  -- diffUTCTime returns seconds.
-  let sec = ceiling (diffUTCTime currentTime slotTime) :: Int
-  pure $ abs sec < 120
 
 maybeToEither :: e -> (a -> b) -> Maybe a -> Either e b
 maybeToEither e f =

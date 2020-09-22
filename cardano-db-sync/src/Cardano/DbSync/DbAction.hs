@@ -11,6 +11,7 @@ module Cardano.DbSync.DbAction
   , mkDbApply
   , mkDbRollback
   , newDbActionQueue
+  , toRollbackSlot
   , writeDbActionQueue
   ) where
 
@@ -41,8 +42,8 @@ mkDbApply :: CardanoBlock -> SlotDetails -> DbAction
 mkDbApply cblk details =
   DbApplyBlock (BlockDetails cblk details)
 
-mkDbRollback :: Point blk -> DbAction
-mkDbRollback point = DbRollBackToPoint (toRollbackSlot point)
+mkDbRollback :: SlotNo -> DbAction
+mkDbRollback = DbRollBackToPoint
 
 
 -- The Point data type is probably really convenient in the libraries where it is defined

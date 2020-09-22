@@ -6,11 +6,13 @@
 
 module Cardano.DbSync.Util
   ( cardanoBlockSlotNo
-  , isFullySynced
+  , fmap3
+  , getSyncStatus
   , isSyncedWithinSeconds
   , liftedLogException
   , logException
   , renderByteArray
+  , renderSlotList
   , textShow
   , tipBlockNo
   , traverseMEither
@@ -31,6 +33,7 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Data.ByteArray (ByteArrayAccess)
 import qualified Data.ByteArray
 import qualified Data.ByteString.Base16 as Base16
+import qualified Data.List as List
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import           Data.Time (diffUTCTime)
@@ -52,15 +55,17 @@ cardanoBlockSlotNo blk =
     BlockShelley sblk -> Shelley.bheaderSlotNo $
                             Shelley.bhbody (Shelley.bheader $ Shelley.shelleyBlockRaw sblk)
 
+fmap3 :: (Functor f, Functor g, Functor h) => (a -> b) -> f (g (h a)) -> f (g (h b))
+fmap3 = fmap . fmap . fmap
 
-isFullySynced :: SlotDetails -> SyncState
-isFullySynced sd = isSyncedWithinSeconds sd 120
+getSyncStatus :: SlotDetails -> SyncState
+getSyncStatus sd = isSyncedWithinSeconds sd 120
 
 isSyncedWithinSeconds :: SlotDetails -> Word -> SyncState
 isSyncedWithinSeconds sd target =
   -- diffUTCTime returns seconds.
-  let secDiff = ceiling (diffUTCTime (sdCurrentTime sd) (sdSlotTime sd))
-  in if abs secDiff <= target
+  let secDiff = ceiling (diffUTCTime (sdCurrentTime sd) (sdSlotTime sd)) :: Int
+  in if fromIntegral (abs secDiff) <= target
         then SyncFollowing
         else SyncLagging
 
@@ -109,3 +114,9 @@ logException tracer txt action =
 renderByteArray :: ByteArrayAccess bin => bin -> Text
 renderByteArray =
   Text.decodeUtf8 . Base16.encode . Data.ByteArray.convert
+
+renderSlotList :: [SlotNo] -> Text
+renderSlotList xs
+  | length xs < 10 = textShow (map unSlotNo xs)
+  | otherwise =
+      mconcat [ "[", textShow (unSlotNo $ List.head xs), "..", textShow (unSlotNo $ List.last xs), "]" ]

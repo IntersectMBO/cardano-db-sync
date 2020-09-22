@@ -4,11 +4,10 @@ module Cardano.Db.Delete
   , deleteCascadeSlotNo
   ) where
 
+import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
-
-import           Data.Word (Word64)
 
 import           Database.Persist.Sql (SqlBackend, (==.), deleteCascade, selectKeysList)
 
@@ -35,8 +34,8 @@ deleteCascadeBlockNo (BlockNo blockNo) = do
 
 -- | Delete a block if it exists. Returns 'True' if it did exist and has been
 -- deleted and 'False' if it did not exist.
-deleteCascadeSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Bool
-deleteCascadeSlotNo slotNo = do
+deleteCascadeSlotNo :: MonadIO m => SlotNo -> ReaderT SqlBackend m Bool
+deleteCascadeSlotNo (SlotNo slotNo) = do
   keys <- selectKeysList [ BlockSlotNo ==. Just slotNo ] []
   mapM_ deleteCascade keys
   pure $ not (null keys)

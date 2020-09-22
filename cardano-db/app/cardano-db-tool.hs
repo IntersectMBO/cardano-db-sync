@@ -2,6 +2,8 @@
 import           Cardano.Db.App
 import           Cardano.Db
 
+import           Cardano.Slotting.Slot (SlotNo (..))
+
 import           Control.Applicative (optional)
 
 import           Data.Monoid ((<>))
@@ -28,7 +30,7 @@ main = do
 
 data Command
   = CreateMigration MigrationDir
-  | Rollback Word64
+  | Rollback SlotNo
   | RunMigrations MigrationDir (Maybe LogFileDir)
   | UtxoSetAtBlock Word64
   | Validate
@@ -49,7 +51,7 @@ doCreateMigration mdir = do
     Nothing -> putStrLn "No migration needed."
     Just fp -> putStrLn $ "New migration '" ++ fp ++ "' created."
 
-runRollback :: Word64 -> IO ()
+runRollback :: SlotNo -> IO ()
 runRollback slotNo =
   print =<< runDbNoLogging (deleteCascadeSlotNo slotNo)
 
@@ -98,7 +100,7 @@ pCommand =
 
     pRollback :: Parser Command
     pRollback =
-      Rollback . read <$> Opt.strOption
+      Rollback . SlotNo . read <$> Opt.strOption
         (  Opt.long "slot"
         <> Opt.help "The slot number to roll back to."
         )

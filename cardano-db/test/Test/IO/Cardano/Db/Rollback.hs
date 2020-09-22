@@ -5,6 +5,8 @@ module Test.IO.Cardano.Db.Rollback
   ( tests
   ) where
 
+import           Cardano.Slotting.Slot (SlotNo (..))
+
 import           Control.Monad (void)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
@@ -49,7 +51,7 @@ rollbackTest =
     -- Rollback a set of blocks.
     latestSlotNo <- queryLatestSlotNo
     Just pSlotNo <- queryWalkChain 5 latestSlotNo
-    void $ deleteCascadeSlotNo pSlotNo
+    void $ deleteCascadeSlotNo (SlotNo pSlotNo)
     -- Assert the expected final state.
     afterBlocks <- queryBlockCount
     assertBool ("Block count after rollback is " ++ show afterBlocks ++ " but should be 10") $ afterBlocks == 4

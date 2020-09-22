@@ -8,7 +8,9 @@ module Cardano.DbSync.LedgerState
   , LedgerStateVar (..)
   , applyBlock
   , initLedgerStateVar
+  , listLedgerStateSlotNos
   , loadLedgerState
+  , readLedgerState
   , saveLedgerState
   ) where
 
@@ -24,7 +26,7 @@ import           Cardano.Prelude
 
 import           Cardano.Slotting.Slot (SlotNo (..), fromWithOrigin)
 
-import           Control.Concurrent.STM.TMVar (TMVar, newTMVarIO, putTMVar, takeTMVar)
+import           Control.Concurrent.STM.TVar (TVar, newTVarIO, writeTVar, readTVar)
 import           Control.Exception (IOException, handle)
 import qualified Control.Exception as Exception
 import           Control.Monad.Extra (firstJustM)
@@ -34,7 +36,7 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import           Data.Either (partitionEithers)
 import qualified Data.List as List
 
-import           Ouroboros.Consensus.Block (CodecConfig, blockNo, blockPrevHash)
+import           Ouroboros.Consensus.Block (CodecConfig, blockSlot, blockPrevHash)
 import           Ouroboros.Consensus.Byron.Ledger (initByronLedgerState)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Config (TopLevelConfig (..))
@@ -53,7 +55,12 @@ data CardanoLedgerState = CardanoLedgerState
   }
 
 newtype LedgerStateVar = LedgerStateVar
-  { unLedgerStateVar :: TMVar CardanoLedgerState
+  { unLedgerStateVar :: TVar CardanoLedgerState
+  }
+
+data LedgerStateFile = LedgerStateFile -- Internal use only.
+  { lsfSlotNo :: !Word64
+  , lsfFilePath :: !FilePath
   }
 
 initLedgerStateVar :: GenesisConfig -> IO LedgerStateVar
@@ -62,7 +69,7 @@ initLedgerStateVar genesisConfig = do
     case genesisConfig of
       GenesisCardano byronConfig _ -> do
         let topConfig = mkTopLevelConfig genesisConfig
-        newTMVarIO $
+        newTVarIO $
           CardanoLedgerState
             { clsState = HardForkLedgerState $ initHardForkState (initByronLedgerState byronConfig Nothing)
             , clsConfig = topLevelConfigLedger topConfig
@@ -78,76 +85,131 @@ applyBlock (LedgerStateVar stateVar) blk =
   -- be any contention on this variable, so putting everything inside 'atomically'
   -- is fine.
   atomically $ do
-    oldState <- takeTMVar stateVar
+    oldState <- readTVar stateVar
     if ledgerTipHash (clsState oldState) == blockPrevHash blk
       then do
         let !newState = oldState { clsState = tickThenReapply (clsConfig oldState) blk (clsState oldState) }
-        putTMVar stateVar newState
+        writeTVar stateVar newState
         pure newState
-      else panic $ "applyBlock: Hash mismatch for block no " <> textShow (blockNo blk)
+      else panic $ mconcat
+             [ "applyBlock: Hash mismatch when applying block with slot no ", textShow (blockSlot blk), "\n"
+             , "applyBlock: ", textShow (ledgerTipHash $ clsState oldState), " / = ", textShow (blockPrevHash blk)
+             ]
 
-
-saveLedgerState :: LedgerStateDir -> CardanoLedgerState -> SyncState -> IO ()
-saveLedgerState (LedgerStateDir stateDir) ledger synced
-    -- If following, save every state.
-    | synced == SyncFollowing = saveState
-    -- Always save SlotNo 0.
-    | slot == SlotNo 0 = saveState
-    | otherwise = pure ()
+saveLedgerState :: LedgerStateDir -> LedgerStateVar -> CardanoLedgerState -> SyncState -> IO ()
+saveLedgerState lsd@(LedgerStateDir stateDir) (LedgerStateVar stateVar) ledger synced = do
+  atomically $ writeTVar stateVar ledger
+  case synced of
+    SyncFollowing -> saveState                      -- If following, save every state.
+    SyncLagging
+      | unSlotNo slot == 0 -> pure ()               -- Genesis and firs EBB are weird so do not store them.
+      | unSlotNo slot `mod` 10000 == 0 -> saveState -- Only save state ocassionally.
+      | otherwise -> pure ()
   where
     filename :: FilePath
-    filename = stateDir </> show slot ++ ".lstate"
+    filename = stateDir </> show (unSlotNo slot) ++ ".lstate"
 
     slot :: SlotNo
     slot = fromWithOrigin (SlotNo 0) (ledgerTipSlot $ clsState ledger)
 
     saveState :: IO ()
-    saveState =
+    saveState = do
       -- Encode and write lazily.
       LBS.writeFile filename $
         Serialize.serializeEncoding (encodeDisk (clsCodec ledger) $ clsState ledger)
+      cleanupLedgerStateFiles lsd slot
 
-loadLedgerState :: LedgerStateDir -> CardanoLedgerState -> SlotNo -> IO (Maybe CardanoLedgerState)
-loadLedgerState (LedgerStateDir stateDir) ledger slotNo = do
-    files <- List.sort . filter isLedgerStateFile <$> listDirectory stateDir
-    let (delete, keep) = partitionEithers $ map keepFile files
+loadLedgerState :: LedgerStateDir -> LedgerStateVar -> SlotNo -> IO ()
+loadLedgerState stateDir (LedgerStateVar stateVar) slotNo = do
+  -- Read current state to get the LedgerConfig and CodecConfig.
+  lstate <- readLedgerState (LedgerStateVar stateVar)
+  -- Load the state
+  mState <- loadState stateDir lstate slotNo
+  case mState of
+    Nothing -> pure ()
+    Just st -> atomically $ writeTVar stateVar st
+
+-- -------------------------------------------------------------------------------------------------
+
+-- Find the ledger state files and keep the 4 most recent.
+cleanupLedgerStateFiles :: LedgerStateDir -> SlotNo -> IO ()
+cleanupLedgerStateFiles stateDir slotNo = do
+    files <- listLedgerStateFilesOrdered stateDir
+    let (invalid, valid) = partitionEithers $ map keepFile files
     -- Remove invalid (ie SlotNo >= current) ledger state files (occurs on rollback).
-    mapM_ safeRemoveFile delete
-    -- Want the highest numbered snapshot.
-    firstJustM loadFile $ List.reverse keep
+    mapM_ safeRemoveFile invalid
+    -- Remove all but 8 most recent state files.
+    mapM_ safeRemoveFile $ map lsfFilePath (List.drop 8 valid)
   where
     -- Left files are deleted, Right files are kept.
-    keepFile :: FilePath ->  Either FilePath FilePath
-    keepFile fp =
-      case readMaybe (dropExtension fp) of
-        Nothing -> Left fp
-        Just w -> if SlotNo w <= slotNo
-                    then Right fp
-                    else Left fp
+    keepFile :: LedgerStateFile ->  Either FilePath LedgerStateFile
+    keepFile lsf@(LedgerStateFile w fp) =
+      if SlotNo w <= slotNo
+        then Right lsf
+        else Left fp
 
-    isLedgerStateFile :: FilePath -> Bool
-    isLedgerStateFile fp = takeExtension fp == ".lstate"
+loadState :: LedgerStateDir -> CardanoLedgerState -> SlotNo -> IO (Maybe CardanoLedgerState)
+loadState stateDir ledger slotNo = do
+    files <- listLedgerStateFilesOrdered stateDir
+    let (invalid, valid) = partitionEithers $ map keepFile files
+    -- Remove invalid (ie SlotNo >= current) ledger state files (occurs on rollback).
+    mapM_ safeRemoveFile invalid
+    -- Want the highest numbered snapshot.
+    firstJustM loadFile valid
+  where
+    -- Left files are deleted, Right files are kept.
+    keepFile :: LedgerStateFile ->  Either FilePath LedgerStateFile
+    keepFile lsf@(LedgerStateFile w fp) =
+      if SlotNo w <= slotNo
+        then Right lsf
+        else Left fp
 
-    loadFile :: FilePath -> IO (Maybe CardanoLedgerState)
-    loadFile fp = do
-      mst <- safeReadFile (stateDir </> fp)
+    loadFile :: LedgerStateFile -> IO (Maybe CardanoLedgerState)
+    loadFile lsf = do
+      mst <- safeReadFile (lsfFilePath lsf)
       case mst of
         Nothing -> pure Nothing
         Just st -> pure . Just $ ledger { clsState = st }
 
     safeReadFile :: FilePath -> IO (Maybe (LedgerState CardanoBlock))
     safeReadFile fp = do
-      mbs <- Exception.try $ BS.readFile (stateDir </> fp)
+      mbs <- Exception.try $ BS.readFile fp
       case mbs of
         Left (_ :: IOException) -> pure Nothing
         Right bs -> pure $ decode bs
-
-    -- | Remove given file path and ignore any IOEXceptions.
-    safeRemoveFile :: FilePath -> IO ()
-    safeRemoveFile fp = handle (\(_ :: IOException) -> pure ()) $ removeFile (stateDir </> fp)
 
     decode :: ByteString -> Maybe (LedgerState CardanoBlock)
     decode =
       either (const Nothing) Just
         . Serialize.decodeFullDecoder "Ledger state file" (decodeDisk (clsCodec ledger))
         . LBS.fromStrict
+
+-- Get a list of the ledger state files order most recent
+listLedgerStateFilesOrdered :: LedgerStateDir -> IO [LedgerStateFile]
+listLedgerStateFilesOrdered (LedgerStateDir stateDir) = do
+    files <- filter isLedgerStateFile <$> listDirectory stateDir
+    pure . List.sortBy revSlotNoOrder $ map extractIndex files
+  where
+    isLedgerStateFile :: FilePath -> Bool
+    isLedgerStateFile fp = takeExtension fp == ".lstate"
+
+    extractIndex :: FilePath -> LedgerStateFile
+    extractIndex fp =
+      case readMaybe (dropExtension fp) of
+        Nothing -> LedgerStateFile 0 fp -- Should never happen.
+        Just w -> LedgerStateFile w (stateDir </> fp)
+
+    revSlotNoOrder :: LedgerStateFile -> LedgerStateFile -> Ordering
+    revSlotNoOrder a b = compare (lsfSlotNo b) (lsfSlotNo a)
+
+listLedgerStateSlotNos :: LedgerStateDir -> IO [SlotNo]
+listLedgerStateSlotNos = fmap3 (SlotNo . lsfSlotNo) listLedgerStateFilesOrdered
+
+readLedgerState :: LedgerStateVar -> IO CardanoLedgerState
+readLedgerState (LedgerStateVar stateVar) =
+  atomically $ readTVar stateVar
+
+-- | Remove given file path and ignore any IOEXceptions.
+safeRemoveFile :: FilePath -> IO ()
+safeRemoveFile fp = handle (\(_ :: IOException) -> pure ()) $ removeFile fp
+

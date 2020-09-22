@@ -101,7 +101,6 @@ insertBlock trce details = do
   mLatestCachedEpoch <- liftIO $ readIORef latestCachedEpochVar
   let lastCachedEpoch = fromMaybe 0 mLatestCachedEpoch
       epochNum = unEpochNo (sdEpochNo details)
-  synced <- liftIO $ DB.isFullySynced (sdSlotTime details)
 
   -- These cases are listed from the least likey to occur to the most
   -- likley to keep the logic sane.
@@ -110,7 +109,7 @@ insertBlock trce details = do
           updateEpochNum 0 trce
       | epochNum >= lastCachedEpoch + 2 ->
           updateEpochNum (lastCachedEpoch + 1) trce
-      | synced ->
+      | getSyncStatus details == SyncFollowing ->
           -- Following the chain very closely.
           updateEpochNum epochNum trce
       | otherwise ->
@@ -127,7 +126,6 @@ updateEpochNum epochNum trce = do
     transactionSaveWithIsolation Serializable
     mid <- queryEpochId epochNum
     res <- maybe insertEpoch updateEpoch mid
-    transactionSaveWithIsolation Serializable
     liftIO $ atomicWriteIORef latestCachedEpochVar (Just epochNum)
     pure res
   where
