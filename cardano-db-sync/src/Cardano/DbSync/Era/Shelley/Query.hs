@@ -28,7 +28,7 @@ import           Database.Esqueleto (InnerJoin (..), Value (..),  (^.), (==.),
                     desc, from, on, orderBy, select, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
-import qualified Shelley.Spec.Ledger.TxData as Shelley
+import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 queryPoolHashId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe PoolHashId)
 queryPoolHashId hash = do

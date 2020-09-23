@@ -59,6 +59,7 @@ library
                         Cardano.DbSync.Era.Shelley.Genesis
                         Cardano.DbSync.Era.Shelley.Insert
                         Cardano.DbSync.Era.Shelley.Query
+                        Cardano.DbSync.Era.Shelley.Metadata
                         Cardano.DbSync.LedgerState
                         Cardano.DbSync.StateQuery
 
@@ -113,6 +114,7 @@ library
                       , transformers
                       , transformers-except
                       , typed-protocols
+                      , vector
                       , yaml
 
 executable cardano-db-sync
