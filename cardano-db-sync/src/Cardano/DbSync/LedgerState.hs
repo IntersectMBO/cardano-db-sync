@@ -43,7 +43,7 @@ import           Ouroboros.Consensus.Config (TopLevelConfig (..))
 import           Ouroboros.Consensus.Ledger.Abstract (LedgerConfig, ledgerTipHash, ledgerTipSlot, tickThenReapply)
 import           Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import           Ouroboros.Consensus.HardFork.Combinator.State.Infra (initHardForkState)
-import           Ouroboros.Consensus.Storage.ChainDB.Serialisation (DecodeDisk (..), EncodeDisk (..))
+import           Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), EncodeDisk (..))
 
 import           System.Directory (listDirectory, removeFile)
 import           System.FilePath ((</>), dropExtension, takeExtension)

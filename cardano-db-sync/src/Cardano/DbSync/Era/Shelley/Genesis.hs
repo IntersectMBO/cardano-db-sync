@@ -43,7 +43,7 @@ import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import qualified Shelley.Spec.Ledger.Coin as Shelley
 import qualified Shelley.Spec.Ledger.Genesis as Shelley
-import qualified Shelley.Spec.Ledger.TxData as Shelley
+import qualified Shelley.Spec.Ledger.TxBody as Shelley
 import qualified Shelley.Spec.Ledger.UTxO as Shelley
 
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.

@@ -26,12 +26,13 @@ import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Cardano.Api.MetaData (jsonFromMetadataValue)
+import           Cardano.Api.MetaData (TxMetadataValue (..))
 
 import qualified Cardano.Crypto.Hash as Crypto
 
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Config.Types
+import           Cardano.DbSync.Era.Shelley.Metadata
 import qualified Cardano.DbSync.Era.Shelley.Util as Shelley
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Era.Shelley.Query
@@ -55,14 +56,14 @@ import           Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..
 import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
-import           Shelley.Spec.Ledger.BaseTypes (strictMaybeToMaybe)
+import           Shelley.Spec.Ledger.BaseTypes (StrictMaybe, strictMaybeToMaybe)
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.Coin as Shelley
 import qualified Shelley.Spec.Ledger.Keys as Shelley
 import qualified Shelley.Spec.Ledger.MetaData as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
-import qualified Shelley.Spec.Ledger.TxData as Shelley
+import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 
 insertShelleyBlock
@@ -462,8 +463,8 @@ insertParamUpdate _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap) 
     mapM_ insert $ Map.toList umap
   where
     insert
-      :: forall r m. (MonadBaseControl IO m, MonadIO m)
-      => (Shelley.KeyHash r StandardShelley, Shelley.PParams' Shelley.StrictMaybe)
+      :: forall era r m. (MonadBaseControl IO m, MonadIO m)
+      => (Shelley.KeyHash r StandardShelley, Shelley.PParams' StrictMaybe era)
       -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     insert (key, pmap) =
       void . lift . DB.insertParamUpdate $
@@ -494,15 +495,15 @@ insertTxMetadata
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Shelley.MetaData
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertTxMetadata tracer txId (Shelley.MetaData mdmap) =
-    mapM_ insert $ Map.toList mdmap
+insertTxMetadata tracer txId metadata =
+    mapM_ insert $ Map.toList (fromShelleyMetaData metadata)
   where
     insert
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Word64, Shelley.MetaDatum)
+        => (Word64, TxMetadataValue)
         -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     insert (key, md) = do
-      let jsonbs = LBS.toStrict $ Aeson.encode (jsonFromMetadataValue md)
+      let jsonbs = LBS.toStrict $ Aeson.encode (metadataValueToJsonNoSchema md)
       ejson <- liftIO $ safeDecodeUtf8 jsonbs
       case ejson of
         Left err ->

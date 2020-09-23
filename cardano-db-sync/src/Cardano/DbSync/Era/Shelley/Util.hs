@@ -83,7 +83,7 @@ import qualified Shelley.Spec.Ledger.MetaData as Shelley
 import qualified Shelley.Spec.Ledger.OCert as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
-import qualified Shelley.Spec.Ledger.TxData as Shelley
+import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 annotateStakingCred :: DbSyncEnv -> ShelleyStakingCred -> Shelley.RewardAcnt StandardShelley
 annotateStakingCred env cred =
