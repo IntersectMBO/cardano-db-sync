@@ -49,8 +49,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Error as Text
 
-import           Database.Persist.Sql (IsolationLevel (Serializable), SqlBackend,
-                    transactionSaveWithIsolation)
+import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
@@ -119,7 +118,7 @@ insertShelleyBlock tracer env blk _ledger details = do
     when (getSyncStatus details == SyncFollowing) $
       -- Serializiing things during syncing can drastically slow down full sync
       -- times (ie 10x or more).
-      lift $ transactionSaveWithIsolation Serializable
+      lift DB.transactionCommit
   where
     logger :: Bool -> Trace IO a -> a -> IO ()
     logger followingClosely

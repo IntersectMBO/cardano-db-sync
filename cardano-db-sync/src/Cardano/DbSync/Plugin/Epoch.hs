@@ -30,8 +30,7 @@ import           Database.Esqueleto (Value (..), (^.), (==.),
                     desc, from, limit, orderBy, select, val, where_)
 
 import           Database.Persist.Class (replace)
-import           Database.Persist.Sql (IsolationLevel (Serializable), SqlBackend,
-                    transactionSaveWithIsolation)
+import           Database.Persist.Sql (SqlBackend)
 
 import           Cardano.Db (EpochId, EntityField (..), listToMaybe)
 import qualified Cardano.Db as DB
@@ -123,7 +122,7 @@ latestCachedEpochVar = unsafePerformIO $ newIORef Nothing -- Gets updated later.
 
 updateEpochNum :: (MonadBaseControl IO m, MonadIO m) => Word64 -> Trace IO Text -> ReaderT SqlBackend m (Either DbSyncNodeError ())
 updateEpochNum epochNum trce = do
-    transactionSaveWithIsolation Serializable
+    DB.transactionCommit
     mid <- queryEpochId epochNum
     res <- maybe insertEpoch updateEpoch mid
     liftIO $ atomicWriteIORef latestCachedEpochVar (Just epochNum)
