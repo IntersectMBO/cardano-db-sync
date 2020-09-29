@@ -23,6 +23,6 @@ insertValidateGenesisDist
         -> ExceptT DbSyncNodeError IO ()
 insertValidateGenesisDist trce nname genCfg =
   case genCfg of
-    GenesisCardano bCfg sCfg -> do
+    GenesisCardano _ bCfg sCfg -> do
       Byron.insertValidateGenesisDist trce (unNetworkName nname) bCfg
       Shelley.insertValidateGenesisDist trce (unNetworkName nname) (scConfig sCfg)

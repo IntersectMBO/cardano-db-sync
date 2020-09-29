@@ -12,27 +12,31 @@ module Cardano.DbSync.Config.Types
   , ConfigFile (..)
   , DbSyncEnv (..)
   , DbSyncNodeParams (..)
-  , DbSyncNodeConfig
   , DbSyncProtocol (..)
   , GenesisFile (..)
   , GenesisHashShelley (..)
   , GenesisHashByron (..)
-  , GenDbSyncNodeConfig (..)
+  , DbSyncNodeConfig (..)
+  , DbSyncPreConfig (..)
   , LedgerStateDir (..)
   , LogFileDir (..)
   , NetworkName (..)
+  , NodeConfigFile (..)
   , SocketPath (..)
+  , adjustGenesisFile
   ) where
 
 import qualified Cardano.BM.Configuration as Logging
 import qualified Cardano.BM.Data.Configuration as Logging
+
+import qualified Cardano.Chain.Update as Byron
 
 import           Cardano.Crypto (RequiresNetworkMagic (..))
 import qualified Cardano.Crypto.Hash as Crypto
 
 import           Cardano.Db (MigrationDir (..))
 
-import           Cardano.Slotting.Slot (SlotNo (..))
+import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..))
 
 import           Cardano.Prelude
 
@@ -44,6 +48,7 @@ import           Data.Text (Text)
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import qualified Ouroboros.Consensus.Cardano.Block as Cardano
+import qualified Ouroboros.Consensus.Cardano.CanHardFork as Shelley
 import qualified Ouroboros.Consensus.HardFork.Combinator.Basics as Cardano
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
 import qualified Ouroboros.Consensus.Shelley.Protocol as Shelley
@@ -80,25 +85,43 @@ data DbSyncNodeParams = DbSyncNodeParams
 -- May have other constructors when we are preparing for a HFC event.
 data DbSyncProtocol
   = DbSyncProtocolCardano
+  deriving Show
 
-type DbSyncNodeConfig = GenDbSyncNodeConfig Logging.Configuration
+data DbSyncNodeConfig = DbSyncNodeConfig
+  { dncNetworkName :: !NetworkName
+  , dncLoggingConfig :: !Logging.Configuration
+  , dncNodeConfigFile :: !NodeConfigFile
+  , dncProtocol :: !DbSyncProtocol
+  , dncRequiresNetworkMagic :: !RequiresNetworkMagic
+  , dncEnableLogging :: !Bool
+  , dncEnableMetrics :: !Bool
+  , dncByronGenesisFile :: !GenesisFile
+  , dncByronGenesisHash :: !GenesisHashByron
+  , dncShelleyGenesisFile :: !GenesisFile
+  , dncShelleyGenesisHash :: !GenesisHashShelley
+  , dncByronSoftwareVersion :: !Byron.SoftwareVersion
+  , dncByronProtocolVersion :: !Byron.ProtocolVersion
 
-data GenDbSyncNodeConfig a = GenDbSyncNodeConfig
-  { encNetworkName :: !NetworkName
-  , encLoggingConfig :: !a
-  , encProtocol :: !DbSyncProtocol
-  , encByronGenesisFile :: !GenesisFile
-  , encByronGenesisHash :: !GenesisHashByron
-  , encShelleyGenesisFile :: !GenesisFile
-  , encShelleyGenesisHash :: !GenesisHashShelley
-  , encEnableLogging :: !Bool
-  , encEnableMetrics :: !Bool
-  , encRequiresNetworkMagic :: !RequiresNetworkMagic
+  , dncShelleyHardFork :: !Shelley.TriggerHardFork
+  , dncShelleyHardForkNotBeforeEpoch :: !(Maybe EpochNo)
+  , dncShelleyMaxProtocolVersion :: !Natural
+  }
+
+
+data DbSyncPreConfig = DbSyncPreConfig
+  { pcNetworkName :: !NetworkName
+  , pcLoggingConfig :: !Logging.Representation
+  , pcNodeConfigFile :: !NodeConfigFile
+  , pcEnableLogging :: !Bool
+  , pcEnableMetrics :: !Bool
   }
 
 newtype GenesisFile = GenesisFile
   { unGenesisFile :: FilePath
-  }
+  } deriving Show
+
+adjustGenesisFile :: (FilePath -> FilePath) -> GenesisFile -> GenesisFile
+adjustGenesisFile f (GenesisFile p) = GenesisFile (f p)
 
 newtype GenesisHashByron = GenesisHashByron
   { unGenesisHashByron :: Text
@@ -110,38 +133,37 @@ newtype GenesisHashShelley = GenesisHashShelley
 
 newtype LedgerStateDir = LedgerStateDir
   {  unLedgerStateDir :: FilePath
-  }
+  } deriving Show
 
 newtype LogFileDir
   = LogFileDir FilePath
 
 newtype NetworkName = NetworkName
   { unNetworkName :: Text
-  }
+  } deriving Show
+
+newtype NodeConfigFile = NodeConfigFile
+  { unNodeConfigFile :: FilePath
+  } deriving Show
 
 newtype SocketPath = SocketPath
   { unSocketPath :: FilePath
-  }
+  } deriving Show
 
 -- -------------------------------------------------------------------------------------------------
 
-instance FromJSON (GenDbSyncNodeConfig Logging.Representation) where
+instance FromJSON DbSyncPreConfig where
   parseJSON o =
     Aeson.withObject "top-level" parseGenDbSyncNodeConfig o
 
-parseGenDbSyncNodeConfig :: Object -> Parser (GenDbSyncNodeConfig Logging.Representation)
+parseGenDbSyncNodeConfig :: Object -> Parser DbSyncPreConfig
 parseGenDbSyncNodeConfig o =
-  GenDbSyncNodeConfig
+  DbSyncPreConfig
     <$> fmap NetworkName (o .: "NetworkName")
     <*> parseJSON (Object o)
-    <*> o .: "Protocol"
-    <*> fmap GenesisFile (o .: "ByronGenesisFile")
-    <*> fmap GenesisHashByron (o .: "ByronGenesisHash")
-    <*> fmap GenesisFile (o .: "ShelleyGenesisFile")
-    <*> fmap GenesisHashShelley (o .: "ShelleyGenesisHash")
+    <*> fmap NodeConfigFile (o .: "NodeConfigFile")
     <*> o .: "EnableLogging"
     <*> o .: "EnableLogMetrics"
-    <*> o .: "RequiresNetworkMagic"
 
 instance FromJSON DbSyncProtocol where
   parseJSON o =

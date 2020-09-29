@@ -41,7 +41,7 @@ readShelleyGenesisConfig
     :: DbSyncNodeConfig
     -> ExceptT DbSyncNodeError IO ShelleyConfig
 readShelleyGenesisConfig enc = do
-  let file = unGenesisFile $ encShelleyGenesisFile enc
+  let file = unGenesisFile $ dncShelleyGenesisFile enc
   firstExceptT (NEShelleyConfig file . renderShelleyGenesisError)
     $ readGenesis (GenesisFile file) Nothing
 
