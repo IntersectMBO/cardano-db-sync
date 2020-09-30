@@ -13,6 +13,7 @@ module Cardano.DbSync.Util
   , logException
   , renderByteArray
   , renderSlotList
+  , textPrettyShow
   , textShow
   , tipBlockNo
   , traverseMEither
@@ -37,6 +38,8 @@ import qualified Data.List as List
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import           Data.Time (diffUTCTime)
+
+import           Text.Show.Pretty (ppShow)
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
@@ -68,6 +71,9 @@ isSyncedWithinSeconds sd target =
   in if fromIntegral (abs secDiff) <= target
         then SyncFollowing
         else SyncLagging
+
+textPrettyShow :: Show a => a -> Text
+textPrettyShow = Text.pack . ppShow
 
 textShow :: Show a => a -> Text
 textShow = Text.pack . show

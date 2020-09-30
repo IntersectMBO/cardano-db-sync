@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -38,7 +39,7 @@ module Cardano.DbSync.Era.Shelley.Util
   , txWithdrawalSum
   , unHeaderHash
   , unitIntervalToDouble
-  , unKeyHashBS
+  , unKeyHash
   , unTxHash
   ) where
 
@@ -55,9 +56,6 @@ import qualified Cardano.Db as Db
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Types
 
-import qualified Cardano.Ledger.Crypto as Shelley
-import qualified Cardano.Ledger.Era as ShelleyEra
-
 import           Cardano.Slotting.Slot (SlotNo (..))
 
 import qualified Data.Binary.Put as Binary
@@ -70,7 +68,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
-import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley, StandardShelley)
+import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 import           Ouroboros.Network.Block (BlockNo (..))
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
@@ -157,7 +155,6 @@ mkSlotLeader blk mPoolId =
                 Just _ -> "Pool-" <> short
   in Db.SlotLeader slHash mPoolId slName
 
-
 nonceToBytes :: Shelley.Nonce -> ByteString
 nonceToBytes nonce =
   case nonce of
@@ -215,7 +212,7 @@ txOutputList tx =
 
 txOutputSum :: ShelleyTx -> Word64
 txOutputSum tx =
-    foldl' (+) 0 $ map outValue (Shelley._outputs $ Shelley._body tx)
+    sum $ map outValue (Shelley._outputs $ Shelley._body tx)
   where
     outValue :: ShelleyTxOut -> Word64
     outValue (Shelley.TxOut _ coin) = fromIntegral $ unCoin coin
@@ -234,15 +231,8 @@ unHeaderHash = Crypto.hashToBytes . Shelley.unHashHeader . Consensus.unShelleyHa
 unitIntervalToDouble :: Shelley.UnitInterval -> Double
 unitIntervalToDouble = fromRational . Shelley.unitIntervalToRational
 
-unKeyHash :: Shelley.KeyHash disc era
-                   -> Crypto.Hash
-                        (Shelley.ADDRHASH (ShelleyEra.Crypto era))
-                        (DSIGN.VerKeyDSIGN (Shelley.DSIGN (ShelleyEra.Crypto era)))
-
-unKeyHash (Shelley.KeyHash x) = x
-
-unKeyHashBS :: Shelley.KeyHash d crypto -> ByteString
-unKeyHashBS = Crypto.hashToBytes . unKeyHash
+unKeyHash :: Shelley.KeyHash d era -> ByteString
+unKeyHash (Shelley.KeyHash kh) = Crypto.hashToBytes kh
 
 unTxHash :: ShelleyTxId -> ByteString
 unTxHash (Shelley.TxId txid) = Crypto.hashToBytes txid

@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -39,11 +40,17 @@ import qualified Data.List as List
 import           Ouroboros.Consensus.Block (CodecConfig, blockSlot, blockPrevHash)
 import           Ouroboros.Consensus.Byron.Ledger (initByronLedgerState)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
+import           Ouroboros.Consensus.Cardano.Block (LedgerState (LedgerStateByron, LedgerStateShelley))
 import           Ouroboros.Consensus.Config (TopLevelConfig (..))
-import           Ouroboros.Consensus.Ledger.Abstract (LedgerConfig, ledgerTipHash, ledgerTipSlot, tickThenReapply)
+import           Ouroboros.Consensus.Ledger.Abstract (LedgerConfig, ledgerTipHash, ledgerTipSlot, tickThenApply, tickThenReapply)
 import           Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import           Ouroboros.Consensus.HardFork.Combinator.State.Infra (initHardForkState)
+import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
+import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 import           Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), EncodeDisk (..))
+
+import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
+import qualified Shelley.Spec.Ledger.LedgerState as Shelley
 
 import           System.Directory (listDirectory, removeFile)
 import           System.FilePath ((</>), dropExtension, takeExtension)
@@ -79,22 +86,34 @@ initLedgerStateVar genesisConfig = do
 -- The function 'tickThenReapply' does zero validation, so add minimal validation ('blockPrevHash'
 -- matches the tip hash of the 'LedgerState'). This was originally for debugging but the check is
 -- cheap enough to keep.
-applyBlock :: LedgerStateVar -> CardanoBlock -> IO CardanoLedgerState
+applyBlock :: LedgerStateVar -> CardanoBlock -> IO (CardanoLedgerState, Maybe (Shelley.RewardUpdate StandardShelley))
 applyBlock (LedgerStateVar stateVar) blk =
-  -- 'LedgerStateVar' is just being used as a mutable variable. There should not ever
-  -- be any contention on this variable, so putting everything inside 'atomically'
-  -- is fine.
-  atomically $ do
-    oldState <- readTVar stateVar
-    if ledgerTipHash (clsState oldState) == blockPrevHash blk
-      then do
-        let !newState = oldState { clsState = tickThenReapply (clsConfig oldState) blk (clsState oldState) }
-        writeTVar stateVar newState
-        pure newState
-      else panic $ mconcat
-             [ "applyBlock: Hash mismatch when applying block with slot no ", textShow (blockSlot blk), "\n"
-             , "applyBlock: ", textShow (ledgerTipHash $ clsState oldState), " / = ", textShow (blockPrevHash blk)
-             ]
+    -- 'LedgerStateVar' is just being used as a mutable variable. There should not ever
+    -- be any contention on this variable, so putting everything inside 'atomically'
+    -- is fine.
+    atomically $ do
+      oldState <- readTVar stateVar
+      if ledgerTipHash (clsState oldState) == blockPrevHash blk
+        then do
+          let !newState = oldState { clsState = applyBlk (clsConfig oldState) blk (clsState oldState) }
+          writeTVar stateVar newState
+          let mRewards = case (ledgerRewardUpdate (clsState newState), ledgerRewardUpdate (clsState oldState)) of
+                          (Nothing, Just r) -> Just r
+                          _otherwise -> Nothing
+          pure $ (newState, mRewards)
+        else panic $ mconcat
+               [ "applyBlock: Hash mismatch when applying block with slot no ", textShow (blockSlot blk), "\n"
+               , "applyBlock: ", textShow (ledgerTipHash $ clsState oldState), " /= ", textShow (blockPrevHash blk)
+               ]
+  where
+    applyBlk :: LedgerConfig CardanoBlock -> CardanoBlock -> LedgerState CardanoBlock -> LedgerState CardanoBlock
+    applyBlk cfg block lsb =
+      -- Set to False to get better error messages from Consensus (but slower block application).
+      if True
+        then tickThenReapply cfg block lsb
+        else case runExcept $ tickThenApply cfg block lsb of
+                Left err -> panic $ textShow err
+                Right result -> result
 
 saveLedgerState :: LedgerStateDir -> LedgerStateVar -> CardanoLedgerState -> SyncState -> IO ()
 saveLedgerState lsd@(LedgerStateDir stateDir) (LedgerStateVar stateVar) ledger synced = do
@@ -102,7 +121,7 @@ saveLedgerState lsd@(LedgerStateDir stateDir) (LedgerStateVar stateVar) ledger s
   case synced of
     SyncFollowing -> saveState                      -- If following, save every state.
     SyncLagging
-      | unSlotNo slot == 0 -> pure ()               -- Genesis and firs EBB are weird so do not store them.
+      | unSlotNo slot == 0 -> pure ()               -- Genesis and the first EBB are weird so do not store them.
       | unSlotNo slot `mod` 10000 == 0 -> saveState -- Only save state ocassionally.
       | otherwise -> pure ()
   where
@@ -213,3 +232,10 @@ readLedgerState (LedgerStateVar stateVar) =
 safeRemoveFile :: FilePath -> IO ()
 safeRemoveFile fp = handle (\(_ :: IOException) -> pure ()) $ removeFile fp
 
+ledgerRewardUpdate :: LedgerState CardanoBlock -> Maybe (Shelley.RewardUpdate StandardShelley)
+ledgerRewardUpdate cls =
+  case cls of
+    LedgerStateByron _ -> Nothing
+    LedgerStateShelley sls -> Shelley.strictMaybeToMaybe . Shelley.nesRu
+                                $ Consensus.shelleyLedgerState sls
+    _otherwise -> panic "ledgerRewardUpdate: Bad pattern match (should be complete)"

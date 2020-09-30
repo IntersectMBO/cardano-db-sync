@@ -97,6 +97,7 @@ library
                       , monad-logger
                       , network-mux
                       , optparse-applicative
+                      , pretty-show
                       , network
                       , ouroboros-consensus
                       , ouroboros-consensus-byron

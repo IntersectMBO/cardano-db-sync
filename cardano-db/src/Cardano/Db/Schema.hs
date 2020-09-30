@@ -249,15 +249,14 @@ share
   -- -----------------------------------------------------------------------------------------------
   -- Reward, Stake and Treasury need to be obtained from the ledger state.
 
-    -- The reward earned in the epoch by delegating to the specified pool.
-    -- This design allows rewards to be discriminated based on how they are earned.
+    -- The reward for each stake address and. This is not a balance, but a reward amount and the
+    -- epoch in which the reward was earned.
   Reward
     addrId              StakeAddressId
-    certIndex           Word16
-    -- poolId              PoolHashId
     amount              Word64              sqltype=lovelace
-    txId                TxId
-    UniqueReward        addrId txId
+    epochNo             Word64
+    blockId             BlockId
+    UniqueReward        addrId blockId
 
   Stake
     addrId              StakeAddressId

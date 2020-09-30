@@ -14,7 +14,8 @@ module Cardano.DbSync.Era.Shelley.Query
 import qualified Cardano.Crypto.Hash as Crypto
 import           Cardano.Db
 import           Cardano.DbSync.Types
-import           Cardano.DbSync.Era.Shelley.Util (unKeyHashBS)
+import           Cardano.DbSync.Era.Shelley.Util (unKeyHash)
+import           Cardano.DbSync.Util
 
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
@@ -42,7 +43,7 @@ queryStakeAddress addr = do
   res <- select . from $ \ saddr -> do
             where_ (saddr ^. StakeAddressHashRaw ==. val addr)
             pure (saddr ^. StakeAddressId)
-  pure $ maybeToEither (DbLookupMessage "StakeAddress") unValue (listToMaybe res)
+  pure $ maybeToEither (DbLookupMessage $ "StakeAddress " <> renderByteArray addr) unValue (listToMaybe res)
 
 queryStakePoolKeyHash :: MonadIO m => ShelleyStakePoolKeyHash -> ReaderT SqlBackend m (Either LookupFail PoolHashId)
 queryStakePoolKeyHash kh = do
@@ -50,7 +51,7 @@ queryStakePoolKeyHash kh = do
             on (blk ^. BlockId ==. tx ^. TxBlock)
             on (tx ^. TxId ==. poolUpdate ^. PoolUpdateRegisteredTxId)
             on (poolUpdate ^. PoolUpdateHashId ==. poolHash ^. PoolHashId)
-            where_ (poolHash ^. PoolHashHash ==. val (unKeyHashBS kh))
+            where_ (poolHash ^. PoolHashHash ==. val (unKeyHash kh))
             orderBy [desc (blk ^. BlockSlotNo)]
             pure (poolHash ^. PoolHashId)
   pure $ maybeToEither (DbLookupMessage "StakePoolKeyHash") unValue (listToMaybe res)
