@@ -130,6 +130,8 @@ mkProtocolCardano ge =
           (Just 206)                                    -- Maybe lower bound on first Shelley epoch (correct for mainnet)
           (TriggerHardForkAtVersion 2)                  -- Trigger HF at Shelley.
 
+          (TriggerHardForkAtVersion 3)                  -- Value stolen from cardano-node.
+
   where
     shelleyPraosNonce :: ShelleyConfig -> Nonce
     shelleyPraosNonce sCfg = Nonce (Crypto.castHash . unGenesisHashShelley $ scGenesisHash sCfg)
