@@ -49,8 +49,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Error as Text
 
-import           Database.Persist.Sql (IsolationLevel (Serializable), SqlBackend,
-                    transactionSaveWithIsolation)
+import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
@@ -59,7 +58,9 @@ import qualified Shelley.Spec.Ledger.Address as Shelley
 import           Shelley.Spec.Ledger.BaseTypes (StrictMaybe, strictMaybeToMaybe)
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.Coin as Shelley
+import qualified Shelley.Spec.Ledger.Credential as Shelley
 import qualified Shelley.Spec.Ledger.Keys as Shelley
+import qualified Shelley.Spec.Ledger.LedgerState as Shelley
 import qualified Shelley.Spec.Ledger.MetaData as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
@@ -67,9 +68,10 @@ import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 
 insertShelleyBlock
-    :: Trace IO Text -> DbSyncEnv -> ShelleyBlock -> LedgerState CardanoBlock -> SlotDetails
+    :: Trace IO Text -> DbSyncEnv -> ShelleyBlock -> LedgerState ShelleyBlock
+    -> Maybe (Shelley.RewardUpdate StandardShelley) -> SlotDetails
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-insertShelleyBlock tracer env blk _ledger details = do
+insertShelleyBlock tracer env blk _ledgerState mRewards details = do
   runExceptT $ do
     pbid <- liftLookupFail "insertShelleyBlock" $ DB.queryBlockId (Shelley.blockPrevHash blk)
     mPhid <- lift $ queryPoolHashId (Shelley.blockVrfKeyToPoolHash blk)
@@ -116,10 +118,17 @@ insertShelleyBlock tracer env blk _ledger details = do
         , ", hash ", renderByteArray (Shelley.blockHash blk)
         ]
 
+    case mRewards of
+      Nothing -> pure ()
+      Just rewards -> do
+        -- The slot
+        let rEpoch = unEpochNo (sdEpochNo details) - 2
+        insertRewards tracer env blkId rEpoch rewards
+
     when (getSyncStatus details == SyncFollowing) $
       -- Serializiing things during syncing can drastically slow down full sync
       -- times (ie 10x or more).
-      lift $ transactionSaveWithIsolation Serializable
+      lift DB.transactionCommit
   where
     logger :: Bool -> Trace IO a -> a -> IO ()
     logger followingClosely
@@ -248,7 +257,7 @@ insertPoolRegister tracer txId idx params = do
         , " > maxLovelace. See https://github.com/input-output-hk/cardano-ledger-specs/issues/1551"
         ]
 
-  poolHashId <- lift . DB.insertPoolHash $ DB.PoolHash (Shelley.unKeyHashBS $ Shelley._poolPubKey params)
+  poolHashId <- lift . DB.insertPoolHash $ DB.PoolHash (Shelley.unKeyHash $ Shelley._poolPubKey params)
   poolUpdateId <- lift . DB.insertPoolUpdate $
                     DB.PoolUpdate
                       { DB.poolUpdateHashId = poolHashId
@@ -314,7 +323,7 @@ insertPoolOwner
 insertPoolOwner poolHashId txId skh =
   void . lift . DB.insertPoolOwner $
     DB.PoolOwner
-      { DB.poolOwnerHash = Shelley.unKeyHashBS skh
+      { DB.poolOwnerHash = Shelley.unKeyHash skh
       , DB.poolOwnerPoolHashId = poolHashId
       , DB.poolOwnerRegisteredTxId = txId
       }
@@ -470,7 +479,7 @@ insertParamUpdate _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap) 
       void . lift . DB.insertParamUpdate $
         DB.ParamUpdate
           { DB.paramUpdateEpochNo = epoch
-          , DB.paramUpdateKey = Shelley.unKeyHashBS key
+          , DB.paramUpdateKey = Shelley.unKeyHash key
           , DB.paramUpdateMinFeeA = fromIntegral <$> strictMaybeToMaybe (Shelley._minfeeA pmap)
           , DB.paramUpdateMinFeeB = fromIntegral <$> strictMaybeToMaybe (Shelley._minfeeB pmap)
           , DB.paramUpdateMaxBlockSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxBBSize pmap)
@@ -531,3 +540,26 @@ safeDecodeUtf8 bs
 
 containsUnicodeNul :: Text -> Bool
 containsUnicodeNul = Text.isInfixOf "\\u000"
+
+insertRewards
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DbSyncEnv -> DB.BlockId -> Word64 -> Shelley.RewardUpdate StandardShelley
+    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+insertRewards _tracer env blkId epoch rewards =
+    mapM_ insertOneReward $ Map.toList (Shelley.rs rewards)
+  where
+    insertOneReward
+        :: (MonadBaseControl IO m, MonadIO m)
+        => (Shelley.Credential 'Shelley.Staking StandardShelley, Shelley.Coin)
+        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    insertOneReward (saddr, coin) = do
+      saId <- firstExceptT (NELookup "insertReward")
+                . newExceptT
+                $ queryStakeAddress (Shelley.stakingCredHash env saddr)
+      void . lift . DB.insertReward $
+        DB.Reward
+          { DB.rewardAddrId = saId
+          , DB.rewardAmount = fromIntegral (Shelley.unCoin coin)
+          , DB.rewardEpochNo = epoch
+          , DB.rewardBlockId = blkId
+          }

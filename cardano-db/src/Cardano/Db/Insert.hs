@@ -14,6 +14,7 @@ module Cardano.Db.Insert
   , insertPoolRetire
   , insertPoolUpdate
   , insertReserve
+  , insertReward
   , insertSlotLeader
   , insertStakeAddress
   , insertStakeDeregistration
@@ -79,6 +80,9 @@ insertPoolUpdate = insertByReturnKey "PoolUpdate"
 
 insertReserve :: (MonadBaseControl IO m, MonadIO m) => Reserve -> ReaderT SqlBackend m ReserveId
 insertReserve = insertByReturnKey "Reserve"
+
+insertReward :: (MonadBaseControl IO m, MonadIO m) => Reward -> ReaderT SqlBackend m RewardId
+insertReward = insertByReturnKey "Reward"
 
 insertSlotLeader :: (MonadBaseControl IO m, MonadIO m) => SlotLeader -> ReaderT SqlBackend m SlotLeaderId
 insertSlotLeader = insertByReturnKey "SlotLeader"

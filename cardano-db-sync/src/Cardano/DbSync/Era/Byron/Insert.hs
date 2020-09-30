@@ -43,8 +43,7 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
-import           Database.Persist.Sql (IsolationLevel (Serializable), SqlBackend,
-                    transactionSaveWithIsolation)
+import           Database.Persist.Sql (SqlBackend)
 
 import qualified Cardano.Db as DB
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
@@ -70,7 +69,7 @@ insertByronBlock tracer blk details = do
   -- Serializiing things during syncing can drastically slow down full sync
   -- times (ie 10x or more).
   when (getSyncStatus details == SyncFollowing) $
-    transactionSaveWithIsolation Serializable
+    DB.transactionCommit
   pure res
 
 
