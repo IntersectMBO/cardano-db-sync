@@ -153,7 +153,7 @@ share
     hashRaw             ByteString          sqltype=addr29type
     view                Text
     registeredTxId      TxId                -- Only used for rollback.
-    UniqueStakeAddress  hashRaw
+    UniqueStakeAddress  hashRaw registeredTxId
 
   -- -----------------------------------------------------------------------------------------------
   -- A Pool can have more than one owner, so we have a PoolOwner table that references this one.
@@ -180,14 +180,14 @@ share
     hash                ByteString          sqltype=hash28type
     poolHashId          PoolHashId
     registeredTxId      TxId                                    -- Slot number in which the owner was registered.
-    UniquePoolOwner     hash poolHashId
+    UniquePoolOwner     hash poolHashId registeredTxId
 
   PoolRetire
     hashId              PoolHashId
     certIndex           Word16
     announcedTxId       TxId                                    -- Slot number in which the pool announced it was retiring.
     retiringEpoch       Word64              sqltype=uinteger    -- Epoch number in which the pool will retire.
-    UniquePoolRetiring  hashId
+    UniquePoolRetiring  hashId announcedTxId
 
   PoolRelay
     updateId            PoolUpdateId
