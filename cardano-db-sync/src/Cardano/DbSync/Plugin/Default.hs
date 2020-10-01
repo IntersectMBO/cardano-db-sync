@@ -57,6 +57,6 @@ insertDefaultBlock tracer env ledgerStateVar (BlockDetails cblk details) = do
             -- Should never happen.
             _otherwise -> panic "insertDefaultBlock: Era mismatch on block and ledger state"
   -- Now we update it in ledgerStateVar and (possibly) store it to disk.
-  liftIO $ saveLedgerState (LedgerStateDir "ledger-state") ledgerStateVar
+  liftIO $ saveLedgerState (envLedgerStateDir env) ledgerStateVar
                 newLedgerState (isSyncedWithinSeconds details 60)
   pure res
