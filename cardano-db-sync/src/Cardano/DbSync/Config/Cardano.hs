@@ -47,8 +47,8 @@ import qualified Shelley.Spec.Ledger.PParams as Shelley
 data GenesisConfig
   = GenesisCardano !Byron.Config !ShelleyConfig
 
-genesisConfigToEnv :: GenesisConfig -> Either DbSyncNodeError DbSyncEnv
-genesisConfigToEnv genCfg =
+genesisConfigToEnv :: DbSyncNodeParams -> GenesisConfig -> Either DbSyncNodeError DbSyncEnv
+genesisConfigToEnv enp genCfg =
     case genCfg of
       GenesisCardano bCfg sCfg
         | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= sgNetworkMagic (scConfig sCfg) ->
@@ -69,6 +69,7 @@ genesisConfigToEnv genCfg =
                   , envNetwork = sgNetworkId (scConfig sCfg)
                   , envNetworkMagic = NetworkMagic (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
                   , envSystemStart = SystemStart (Byron.gdStartTime $ Byron.configGenesisData bCfg)
+                  , envLedgerStateDir = enpLedgerStateDir enp
                   }
 
 genesisProtocolMagicId :: GenesisConfig -> ProtocolMagicId

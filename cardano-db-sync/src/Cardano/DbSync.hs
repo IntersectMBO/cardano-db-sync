@@ -15,6 +15,7 @@ module Cardano.DbSync
   , DbSyncNodeParams (..)
   , DbSyncNodePlugin (..)
   , GenesisFile (..)
+  , LedgerStateDir (..)
   , NetworkName (..)
   , SocketPath (..)
   , DB.MigrationDir (..)
@@ -112,6 +113,7 @@ import           Ouroboros.Network.Subscription (SubscriptionTrace)
 import           Prelude (String)
 import qualified Prelude
 
+import           System.Directory (createDirectoryIfMissing)
 import qualified System.Metrics.Prometheus.Metric.Gauge as Gauge
 
 
@@ -121,6 +123,8 @@ runDbSyncNode plugin enp =
     DB.runMigrations Prelude.id True (enpMigrationDir enp) (Just $ LogFileDir "/tmp")
 
     enc <- readDbSyncNodeConfig (unConfigFile $ enpConfigFile enp)
+
+    createDirectoryIfMissing True (unLedgerStateDir $ enpLedgerStateDir enp)
 
     trce <- if not (encEnableLogging enc)
               then pure Logging.nullTracer
@@ -133,7 +137,7 @@ runDbSyncNode plugin enp =
 
     orDie renderDbSyncNodeError $ do
       genCfg <- readCardanoGenesisConfig enc
-      genesisEnv <- hoistEither $ genesisConfigToEnv genCfg
+      genesisEnv <- hoistEither $ genesisConfigToEnv enp genCfg
       logProtocolMagicId trce $ genesisProtocolMagicId genCfg
 
       -- If the DB is empty it will be inserted, otherwise it will be validated (to make
@@ -221,7 +225,7 @@ dbSyncProtocols trce env plugin queryVar ledgerVar _version codecs _connectionId
     localChainSyncProtocol = InitiatorProtocolOnly $ MuxPeerRaw $ \channel ->
       liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
         logInfo trce "Starting chainSyncClient"
-        latestPoints <- getLatestPoints
+        latestPoints <- getLatestPoints (envLedgerStateDir env)
         currentTip <- getCurrentTipBlockNo
         logDbState trce
         actionQueue <- newDbActionQueue
@@ -276,8 +280,8 @@ logDbState trce = do
         (Nothing, Nothing) -> "genesis"
 
 
-getLatestPoints :: IO [Point CardanoBlock]
-getLatestPoints = do
+getLatestPoints :: LedgerStateDir -> IO [Point CardanoBlock]
+getLatestPoints ledgerStateDir = do
     xs <- listLedgerStateSlotNos ledgerStateDir
     ys <- catMaybes <$> DB.runDbNoLogging (mapM DB.querySlotHash xs)
     pure $ mapMaybe convert ys
@@ -369,7 +373,7 @@ chainSyncClient trce env queryVar ledgerVar metrics latestPoints currentTip acti
                 -- but will only be incorrect for a short time span.
                 let slot = toRollbackSlot point
                 atomically $ writeDbActionQueue actionQueue (mkDbRollback slot)
-                loadLedgerState ledgerStateDir ledgerVar slot
+                loadLedgerState (envLedgerStateDir env) ledgerVar slot
                 newTip <- getCurrentTipBlockNo
                 pure $ finish newTip tip
         }
@@ -379,7 +383,3 @@ logProtocolMagicId tracer pm =
   liftIO . logInfo tracer $ mconcat
     [ "NetworkMagic: ", textShow (Crypto.unProtocolMagicId pm)
     ]
-
--- TODO: This should be read from the command line.
-ledgerStateDir :: LedgerStateDir
-ledgerStateDir = LedgerStateDir "ledger-state"
