@@ -30,6 +30,8 @@ import Data.WideWord.Word128 (Word128)
 -- from version to version due to changes to the TH code in Persistent.
 import Database.Persist.TH
 
+import Shelley.Spec.Ledger.PParams (ProtVer (..))
+
 -- In the schema definition we need to match Haskell types with with the
 -- custom type defined in PostgreSQL (via 'DOMAIN' statements). For the
 -- time being the Haskell types will be simple Haskell types like
@@ -273,9 +275,9 @@ share
     UniqueTreasury      addrId txId
 
   -- -----------------------------------------------------------------------------------------------
-  -- Table to hold parameter updates.
+  -- Table to hold parameter update proposals.
 
-  ParamUpdate
+  ParamProposal
     epochNo             Word64              sqltype=uinteger
     key                 ByteString          sqltype=hash28type
     minFeeA             Word64 Maybe        sqltype=uinteger
@@ -292,11 +294,11 @@ share
     treasuryGrowthRate  Double Maybe        -- sqltype=interval
     decentralisation    Double Maybe        -- sqltype=interval
     entropy             ByteString Maybe    sqltype=hash32type
-    protocolVersion     Text Maybe
-    minUTxOValue        Word64 Maybe        sqltype=lovelace
+    protocolVersion     ProtVer Maybe
+    minUtxoValue        Word64 Maybe        sqltype=lovelace
     minPoolCost         Word64 Maybe        sqltype=lovelace
 
     registeredTxId      TxId                -- Slot number in which update registered.
-    UniqueParamUpdate   key registeredTxId
+    UniqueParamProposal key registeredTxId
 
   |]

@@ -173,9 +173,9 @@ insertTx tracer env blkId blockIndex tx = do
     mapM_ (insertCertificate tracer env txId) $ Shelley.txCertificates tx
     mapM_ (insertWithdrawals tracer txId) $ Shelley.txWithdrawals tx
 
-    case Shelley.txParamUpdate tx of
+    case Shelley.txParamProposal tx of
       Nothing -> pure ()
-      Just pu -> insertParamUpdate tracer txId pu
+      Just pu -> insertParamProposal tracer txId pu
 
 insertTxOut
     :: (MonadBaseControl IO m, MonadIO m)
@@ -464,11 +464,11 @@ insertPoolRelay updateId relay =
           , DB.poolRelayPort = Nothing
           }
 
-insertParamUpdate
+insertParamProposal
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Shelley.Update StandardShelley
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertParamUpdate _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap) (EpochNo epoch)) =
+insertParamProposal _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap) (EpochNo epoch)) =
     mapM_ insert $ Map.toList umap
   where
     insert
@@ -476,28 +476,28 @@ insertParamUpdate _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap) 
       => (Shelley.KeyHash r StandardShelley, Shelley.PParams' StrictMaybe era)
       -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     insert (key, pmap) =
-      void . lift . DB.insertParamUpdate $
-        DB.ParamUpdate
-          { DB.paramUpdateEpochNo = epoch
-          , DB.paramUpdateKey = Shelley.unKeyHash key
-          , DB.paramUpdateMinFeeA = fromIntegral <$> strictMaybeToMaybe (Shelley._minfeeA pmap)
-          , DB.paramUpdateMinFeeB = fromIntegral <$> strictMaybeToMaybe (Shelley._minfeeB pmap)
-          , DB.paramUpdateMaxBlockSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxBBSize pmap)
-          , DB.paramUpdateMaxTxSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxTxSize pmap)
-          , DB.paramUpdateMaxBhSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxBHSize pmap)
-          , DB.paramUpdateKeyDeposit = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._keyDeposit pmap)
-          , DB.paramUpdatePoolDeposit = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._poolDeposit pmap)
-          , DB.paramUpdateMaxEpoch = unEpochNo <$> strictMaybeToMaybe (Shelley._eMax pmap)
-          , DB.paramUpdateOptimalPoolCount = fromIntegral <$> strictMaybeToMaybe (Shelley._nOpt pmap)
-          , DB.paramUpdateInfluence = fromRational <$> strictMaybeToMaybe (Shelley._a0 pmap)
-          , DB.paramUpdateMonetaryExpandRate = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._rho pmap)
-          , DB.paramUpdateTreasuryGrowthRate = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._tau pmap)
-          , DB.paramUpdateDecentralisation = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._d pmap)
-          , DB.paramUpdateEntropy = Shelley.nonceToBytes <$> strictMaybeToMaybe (Shelley._extraEntropy pmap)
-          , DB.paramUpdateProtocolVersion = textShow <$> strictMaybeToMaybe (Shelley._protocolVersion pmap)
-          , DB.paramUpdateMinUTxOValue = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._minUTxOValue pmap)
-          , DB.paramUpdateMinPoolCost = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._minPoolCost pmap)
-          , DB.paramUpdateRegisteredTxId = txId
+      void . lift . DB.insertParamProposal $
+        DB.ParamProposal
+          { DB.paramProposalEpochNo = epoch
+          , DB.paramProposalKey = Shelley.unKeyHash key
+          , DB.paramProposalMinFeeA = fromIntegral <$> strictMaybeToMaybe (Shelley._minfeeA pmap)
+          , DB.paramProposalMinFeeB = fromIntegral <$> strictMaybeToMaybe (Shelley._minfeeB pmap)
+          , DB.paramProposalMaxBlockSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxBBSize pmap)
+          , DB.paramProposalMaxTxSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxTxSize pmap)
+          , DB.paramProposalMaxBhSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxBHSize pmap)
+          , DB.paramProposalKeyDeposit = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._keyDeposit pmap)
+          , DB.paramProposalPoolDeposit = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._poolDeposit pmap)
+          , DB.paramProposalMaxEpoch = unEpochNo <$> strictMaybeToMaybe (Shelley._eMax pmap)
+          , DB.paramProposalOptimalPoolCount = fromIntegral <$> strictMaybeToMaybe (Shelley._nOpt pmap)
+          , DB.paramProposalInfluence = fromRational <$> strictMaybeToMaybe (Shelley._a0 pmap)
+          , DB.paramProposalMonetaryExpandRate = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._rho pmap)
+          , DB.paramProposalTreasuryGrowthRate = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._tau pmap)
+          , DB.paramProposalDecentralisation = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._d pmap)
+          , DB.paramProposalEntropy = join (Shelley.nonceToBytes <$> strictMaybeToMaybe (Shelley._extraEntropy pmap))
+          , DB.paramProposalProtocolVersion = strictMaybeToMaybe (Shelley._protocolVersion pmap)
+          , DB.paramProposalMinUtxoValue = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._minUTxOValue pmap)
+          , DB.paramProposalMinPoolCost = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._minPoolCost pmap)
+          , DB.paramProposalRegisteredTxId = txId
           }
 
 insertTxMetadata
