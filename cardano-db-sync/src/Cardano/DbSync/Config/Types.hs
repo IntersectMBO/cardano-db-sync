@@ -65,12 +65,14 @@ data DbSyncEnv = DbSyncEnv
   , envNetwork :: !Shelley.Network
   , envNetworkMagic :: !NetworkMagic
   , envSystemStart :: !SystemStart
+  , envLedgerStateDir :: !LedgerStateDir
   }
 
 -- | The product type of all command line arguments
 data DbSyncNodeParams = DbSyncNodeParams
   { enpConfigFile :: !ConfigFile
   , enpSocketPath :: !SocketPath
+  , enpLedgerStateDir :: !LedgerStateDir
   , enpMigrationDir :: !MigrationDir
   , enpMaybeRollback :: !(Maybe SlotNo)
   }

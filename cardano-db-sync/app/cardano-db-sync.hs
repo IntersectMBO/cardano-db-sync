@@ -3,8 +3,8 @@
 import           Cardano.Prelude
 
 import           Cardano.Db (MigrationDir (..))
-import           Cardano.DbSync (ConfigFile (..), DbSyncNodeParams (..), SocketPath (..),
-                    defDbSyncNodePlugin, runDbSyncNode)
+import           Cardano.DbSync (ConfigFile (..), DbSyncNodeParams (..), LedgerStateDir (..),
+                    SocketPath (..), defDbSyncNodePlugin, runDbSyncNode)
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
@@ -30,6 +30,7 @@ pCommandLine =
   DbSyncNodeParams
     <$> pConfigFile
     <*> pSocketPath
+    <*> pLedgerStateDir
     <*> pMigrationDir
     <*> optional pSlotNo
 
@@ -39,6 +40,15 @@ pConfigFile =
     ( Opt.long "config"
     <> Opt.help "Path to the db-sync node config file"
     <> Opt.completer (Opt.bashCompleter "file")
+    <> Opt.metavar "FILEPATH"
+    )
+
+pLedgerStateDir :: Parser LedgerStateDir
+pLedgerStateDir =
+  LedgerStateDir <$> Opt.strOption
+    (  Opt.long "state-dir"
+    <> Opt.help "The directory for persistung ledger state."
+    <> Opt.completer (Opt.bashCompleter "directory")
     <> Opt.metavar "FILEPATH"
     )
 
