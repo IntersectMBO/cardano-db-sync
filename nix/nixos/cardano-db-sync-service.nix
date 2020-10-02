@@ -4,7 +4,7 @@ let
   cfg = config.services.cardano-db-sync;
   self = config.internal.syncPackages;
   envConfig = cfg.environment;
-  configFile = __toFile "config.json" (__toJSON (cfg.explorerConfig // cfg.logConfig));
+  configFile = __toFile "db-sync-config.json" (__toJSON (cfg.explorerConfig // cfg.logConfig));
 in {
   options = {
     internal = lib.mkOption {
@@ -47,6 +47,10 @@ in {
       socketPath = lib.mkOption {
         type = lib.types.nullOr lib.types.path;
         default = null;
+      };
+      stateDir = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = "/var/lib/${cfg.user}";
       };
       package = lib.mkOption {
         type = lib.types.package;
@@ -110,7 +114,8 @@ in {
         exec ${exec} \
           --config ${configFile} \
           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-          --schema-dir ${../../schema}
+          --schema-dir ${../../schema} \
+          --state-dir ${cfg.stateDir}
       '';
     };
     users = {
@@ -133,9 +138,11 @@ in {
         done
       '';
       serviceConfig = {
-        ExecStart = cfg.script;
-        User = cfg.postgres.user;
-        WorkingDirectory = "/var/lib/${cfg.user}";
+        ExecStart        = cfg.script;
+        User             = cfg.postgres.user;
+        WorkingDirectory = cfg.stateDir;
+        RuntimeDirectory = cfg.stateDir;
+        StateDirectory   = cfg.stateDir;
       };
     };
   };
