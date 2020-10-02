@@ -74,7 +74,7 @@ initLedgerStateVar :: GenesisConfig -> IO LedgerStateVar
 initLedgerStateVar genesisConfig = do
   LedgerStateVar <$>
     case genesisConfig of
-      GenesisCardano byronConfig _ -> do
+      GenesisCardano _ byronConfig _ -> do
         let topConfig = mkTopLevelConfig genesisConfig
         newTVarIO $
           CardanoLedgerState

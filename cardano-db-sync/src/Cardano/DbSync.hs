@@ -122,13 +122,13 @@ runDbSyncNode plugin enp =
   withIOManager $ \ iomgr -> do
     DB.runMigrations Prelude.id True (enpMigrationDir enp) (Just $ LogFileDir "/tmp")
 
-    enc <- readDbSyncNodeConfig (unConfigFile $ enpConfigFile enp)
+    enc <- readDbSyncNodeConfig (enpConfigFile enp)
 
     createDirectoryIfMissing True (unLedgerStateDir $ enpLedgerStateDir enp)
 
-    trce <- if not (encEnableLogging enc)
+    trce <- if not (dncEnableLogging enc)
               then pure Logging.nullTracer
-              else liftIO $ Logging.setupTrace (Right $ encLoggingConfig enc) "db-sync-node"
+              else liftIO $ Logging.setupTrace (Right $ dncLoggingConfig enc) "db-sync-node"
 
     -- For testing and debugging.
     case enpMaybeRollback enp of
@@ -142,14 +142,14 @@ runDbSyncNode plugin enp =
 
       -- If the DB is empty it will be inserted, otherwise it will be validated (to make
       -- sure we are on the right chain).
-      insertValidateGenesisDist trce (encNetworkName enc) genCfg
+      insertValidateGenesisDist trce (dncNetworkName enc) genCfg
 
       liftIO $ do
         -- Must run plugin startup after the genesis distribution has been inserted/validate.
         runDbStartup trce plugin
 
         case genCfg of
-          GenesisCardano bCfg _sCfg -> do
+          GenesisCardano _ bCfg _sCfg -> do
             ledgerVar <- initLedgerStateVar genCfg
             runDbSyncNodeNodeClient genesisEnv ledgerVar
                 iomgr trce plugin (cardanoCodecConfig bCfg) (enpSocketPath enp)

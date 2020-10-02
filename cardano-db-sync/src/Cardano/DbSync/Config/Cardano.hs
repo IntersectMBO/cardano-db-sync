@@ -29,8 +29,8 @@ import           Control.Monad.Trans.Except (ExceptT)
 
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Cardano (Nonce (..), Protocol (..))
-import qualified Ouroboros.Consensus.Cardano as Consensus
 import           Ouroboros.Consensus.Cardano.CanHardFork (TriggerHardFork (..))
+import qualified Ouroboros.Consensus.Cardano as Consensus
 import           Ouroboros.Consensus.Config (TopLevelConfig (..))
 import           Ouroboros.Consensus.Ledger.Basics (LedgerConfig)
 import           Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
@@ -45,12 +45,12 @@ import qualified Shelley.Spec.Ledger.PParams as Shelley
 
 -- Usually only one constructor, but may have two when we are preparing for a HFC event.
 data GenesisConfig
-  = GenesisCardano !Byron.Config !ShelleyConfig
+  = GenesisCardano !DbSyncNodeConfig !Byron.Config !ShelleyConfig
 
 genesisConfigToEnv :: DbSyncNodeParams -> GenesisConfig -> Either DbSyncNodeError DbSyncEnv
 genesisConfigToEnv enp genCfg =
     case genCfg of
-      GenesisCardano bCfg sCfg
+      GenesisCardano _ bCfg sCfg
         | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= sgNetworkMagic (scConfig sCfg) ->
             Left . NECardanoConfig $
               mconcat
@@ -75,7 +75,7 @@ genesisConfigToEnv enp genCfg =
 genesisProtocolMagicId :: GenesisConfig -> ProtocolMagicId
 genesisProtocolMagicId ge =
     case ge of
-      GenesisCardano _bCfg sCfg -> shelleyProtocolMagicId (scConfig sCfg)
+      GenesisCardano _cfg _bCfg sCfg -> shelleyProtocolMagicId (scConfig sCfg)
   where
     shelleyProtocolMagicId :: ShelleyGenesis StandardShelley -> ProtocolMagicId
     shelleyProtocolMagicId sCfg = ProtocolMagicId (sgNetworkMagic sCfg)
@@ -84,9 +84,9 @@ readCardanoGenesisConfig
         :: DbSyncNodeConfig
         -> ExceptT DbSyncNodeError IO GenesisConfig
 readCardanoGenesisConfig enc =
-  case encProtocol enc of
+  case dncProtocol enc of
     DbSyncProtocolCardano ->
-      GenesisCardano <$> readByronGenesisConfig enc <*> readShelleyGenesisConfig enc
+      GenesisCardano enc <$> readByronGenesisConfig enc <*> readShelleyGenesisConfig enc
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -108,31 +108,33 @@ mkProtocolInfoCardano = Consensus.protocolInfo . mkProtocolCardano
 mkProtocolCardano :: GenesisConfig -> Protocol m CardanoBlock CardanoProtocol
 mkProtocolCardano ge =
     case ge of
-      GenesisCardano byronGenesis shelleyGenesis ->
+      GenesisCardano dnc byronGenesis shelleyGenesis ->
         ProtocolCardano
           -- Byron parameters
           byronGenesis
-          Nothing                                       -- Maybe PBftSignatureThreshold
-          (Byron.ProtocolVersion 2 0 0)                 -- Update.ProtocolVersion
-          (Byron.SoftwareVersion                        -- Update.SoftwareVersion
-            (Byron.ApplicationName "cardano-sl")
-            1
-            )
-          Nothing                                       -- Maybe ByronLeaderCredentials
+          Nothing                                   -- Maybe PBftSignatureThreshold
+          (dncByronProtocolVersion dnc)
+          (dncByronSoftwareVersion dnc)
+          Nothing                                   -- Maybe ByronLeaderCredentials
 
           -- Shelley parameters
           (scConfig shelleyGenesis)
           (shelleyPraosNonce shelleyGenesis)
-          (Shelley.ProtVer 2 0)
-          (Consensus.MaxMajorProtVer 1)
-          Nothing                                       -- Maybe (TPraosLeaderCredentials StandardShelley)
+          (shelleyProtVer dnc)
+          (Consensus.MaxMajorProtVer $ dncShelleyMaxProtocolVersion dnc)
+          Nothing                                   -- Maybe (TPraosLeaderCredentials StandardShelley)
 
           -- Hard fork parameters
-          (Just 206)                                    -- Maybe lower bound on first Shelley epoch (correct for mainnet)
-          (TriggerHardForkAtVersion 2)                  -- Trigger HF at Shelley.
+          (dncShelleyHardForkNotBeforeEpoch dnc)
+          (dncShelleyHardFork dnc)
 
-          (TriggerHardForkAtVersion 3)                  -- Value stolen from cardano-node.
+          (TriggerHardForkAtVersion 3)              -- Value stolen from cardano-node.
 
   where
     shelleyPraosNonce :: ShelleyConfig -> Nonce
     shelleyPraosNonce sCfg = Nonce (Crypto.castHash . unGenesisHashShelley $ scGenesisHash sCfg)
+
+    shelleyProtVer :: DbSyncNodeConfig -> Shelley.ProtVer
+    shelleyProtVer dnc =
+      let bver = dncByronProtocolVersion dnc in
+      Shelley.ProtVer (fromIntegral $ Byron.pvMajor bver) (fromIntegral $ Byron.pvMinor bver)

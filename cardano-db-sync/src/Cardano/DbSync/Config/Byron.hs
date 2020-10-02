@@ -20,9 +20,9 @@ readByronGenesisConfig
         :: DbSyncNodeConfig
         -> ExceptT DbSyncNodeError IO Byron.Config
 readByronGenesisConfig enc = do
-  let file = unGenesisFile $ encByronGenesisFile enc
+  let file = unGenesisFile $ dncByronGenesisFile enc
   genHash <- firstExceptT NEError
                 . hoistEither
-                $ decodeAbstractHash (unGenesisHashByron $ encByronGenesisHash enc)
+                $ decodeAbstractHash (unGenesisHashByron $ dncByronGenesisHash enc)
   firstExceptT (NEByronConfig file)
-                $ Byron.mkConfigFromFile (encRequiresNetworkMagic enc) file genHash
+                $ Byron.mkConfigFromFile (dncRequiresNetworkMagic enc) file genHash
