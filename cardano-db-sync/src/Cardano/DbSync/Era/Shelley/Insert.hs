@@ -19,6 +19,7 @@ import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo, logWarnin
 
 import           Cardano.Db (DbWord64 (..))
 
+import           Control.Monad.Extra (whenJust)
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT, runExceptT)
 
@@ -36,6 +37,7 @@ import           Cardano.DbSync.Era.Shelley.Metadata
 import qualified Cardano.DbSync.Era.Shelley.Util as Shelley
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Era.Shelley.Query
+import           Cardano.DbSync.LedgerState
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
@@ -51,7 +53,6 @@ import qualified Data.Text.Encoding.Error as Text
 
 import           Database.Persist.Sql (SqlBackend)
 
-import           Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
@@ -68,10 +69,9 @@ import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 
 insertShelleyBlock
-    :: Trace IO Text -> DbSyncEnv -> ShelleyBlock -> LedgerState ShelleyBlock
-    -> Maybe (Shelley.RewardUpdate StandardShelley) -> SlotDetails
+    :: Trace IO Text -> DbSyncEnv -> ShelleyBlock -> LedgerStateSnapshot -> SlotDetails
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-insertShelleyBlock tracer env blk _ledgerState mRewards details = do
+insertShelleyBlock tracer env blk lStateSnap details = do
   runExceptT $ do
     pbid <- liftLookupFail "insertShelleyBlock" $ DB.queryBlockId (Shelley.blockPrevHash blk)
     mPhid <- lift $ queryPoolHashId (Shelley.blockVrfKeyToPoolHash blk)
@@ -118,12 +118,12 @@ insertShelleyBlock tracer env blk _ledgerState mRewards details = do
         , ", hash ", renderByteArray (Shelley.blockHash blk)
         ]
 
-    case mRewards of
-      Nothing -> pure ()
-      Just rewards -> do
-        -- The slot
-        let rEpoch = unEpochNo (sdEpochNo details) - 2
-        insertRewards tracer env blkId rEpoch rewards
+    whenJust (lssRewardUpdate lStateSnap) $ \ rewards ->
+      -- Subtract 2 from the epoch to calculate when the epoch in which the reward was earned.
+      insertRewards tracer env blkId (sdEpochNo details - 2) rewards
+
+    whenJust (lssParamUpdate lStateSnap) $ \ params ->
+      insertEpochParam tracer blkId (sdEpochNo details) params
 
     when (getSyncStatus details == SyncFollowing) $
       -- Serializiing things during syncing can drastically slow down full sync
@@ -543,9 +543,9 @@ containsUnicodeNul = Text.isInfixOf "\\u000"
 
 insertRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.BlockId -> Word64 -> Shelley.RewardUpdate StandardShelley
+    => Trace IO Text -> DbSyncEnv -> DB.BlockId -> EpochNo -> Shelley.RewardUpdate StandardShelley
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertRewards _tracer env blkId epoch rewards =
+insertRewards _tracer env blkId (EpochNo epoch) rewards =
     mapM_ insertOneReward $ Map.toList (Shelley.rs rewards)
   where
     insertOneReward
@@ -563,3 +563,31 @@ insertRewards _tracer env blkId epoch rewards =
           , DB.rewardEpochNo = epoch
           , DB.rewardBlockId = blkId
           }
+
+insertEpochParam
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DB.BlockId -> EpochNo -> Shelley.PParams StandardShelley
+    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+insertEpochParam _tracer blkId (EpochNo epoch) params =
+  void . lift . DB.insertEpochParam $
+    DB.EpochParam
+      { DB.epochParamEpochNo = epoch
+      , DB.epochParamMinFeeA = fromIntegral (Shelley._minfeeA params)
+      , DB.epochParamMinFeeB = fromIntegral (Shelley._minfeeB params)
+      , DB.epochParamMaxBlockSize = fromIntegral (Shelley._maxBBSize params)
+      , DB.epochParamMaxTxSize = fromIntegral (Shelley._maxTxSize params)
+      , DB.epochParamMaxBhSize = fromIntegral (Shelley._maxBHSize params)
+      , DB.epochParamKeyDeposit = fromIntegral $ Shelley.unCoin (Shelley._keyDeposit params)
+      , DB.epochParamPoolDeposit = fromIntegral $ Shelley.unCoin (Shelley._poolDeposit params)
+      , DB.epochParamMaxEpoch = unEpochNo (Shelley._eMax params)
+      , DB.epochParamOptimalPoolCount = fromIntegral (Shelley._nOpt params)
+      , DB.epochParamInfluence = fromRational (Shelley._a0 params)
+      , DB.epochParamMonetaryExpandRate = Shelley.unitIntervalToDouble (Shelley._rho params)
+      , DB.epochParamTreasuryGrowthRate = Shelley.unitIntervalToDouble (Shelley._tau params)
+      , DB.epochParamDecentralisation = Shelley.unitIntervalToDouble (Shelley._d params)
+      , DB.epochParamEntropy = Shelley.nonceToBytes $ Shelley._extraEntropy params
+      , DB.epochParamProtocolVersion = Shelley._protocolVersion params
+      , DB.epochParamMinUtxoValue = fromIntegral $ Shelley.unCoin (Shelley._minUTxOValue params)
+      , DB.epochParamMinPoolCost = fromIntegral $ Shelley.unCoin (Shelley._minPoolCost params)
+      , DB.epochParamBlockId = blkId
+      }

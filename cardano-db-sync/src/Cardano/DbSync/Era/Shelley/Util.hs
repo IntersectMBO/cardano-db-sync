@@ -155,11 +155,11 @@ mkSlotLeader blk mPoolId =
                 Just _ -> "Pool-" <> short
   in Db.SlotLeader slHash mPoolId slName
 
-nonceToBytes :: Shelley.Nonce -> ByteString
+nonceToBytes :: Shelley.Nonce -> Maybe ByteString
 nonceToBytes nonce =
   case nonce of
-    Shelley.Nonce hash -> Crypto.hashToBytes hash
-    Shelley.NeutralNonce -> BS.replicate 28 '\0'
+    Shelley.Nonce hash -> Just $ Crypto.hashToBytes hash
+    Shelley.NeutralNonce -> Nothing
 
 renderAddress :: Shelley.Addr StandardShelley -> Text
 renderAddress addr =

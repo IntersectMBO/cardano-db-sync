@@ -275,7 +275,7 @@ share
     UniqueTreasury      addrId txId
 
   -- -----------------------------------------------------------------------------------------------
-  -- Table to hold parameter update proposals.
+  -- Update parameter proposals.
 
   ParamProposal
     epochNo             Word64              sqltype=uinteger
@@ -300,5 +300,28 @@ share
 
     registeredTxId      TxId                -- Slot number in which update registered.
     UniqueParamProposal key registeredTxId
+
+  EpochParam
+    epochNo             Word64              sqltype=uinteger
+    minFeeA             Word64              sqltype=uinteger
+    minFeeB             Word64              sqltype=uinteger
+    maxBlockSize        Word64              sqltype=uinteger
+    maxTxSize           Word64              sqltype=uinteger
+    maxBhSize           Word64              sqltype=uinteger
+    keyDeposit          Word64              sqltype=lovelace
+    poolDeposit         Word64              sqltype=lovelace
+    maxEpoch            Word64              sqltype=uinteger
+    optimalPoolCount    Word64              sqltype=uinteger
+    influence           Double              -- sqltype=rational
+    monetaryExpandRate  Double              -- sqltype=interval
+    treasuryGrowthRate  Double              -- sqltype=interval
+    decentralisation    Double              -- sqltype=interval
+    entropy             ByteString Maybe    sqltype=hash32type
+    protocolVersion     ProtVer
+    minUtxoValue        Word64              sqltype=lovelace
+    minPoolCost         Word64              sqltype=lovelace
+
+    blockId             BlockId             -- The first block where these parameters are valid.
+    UniqueEpochParam    epochNo blockId
 
   |]

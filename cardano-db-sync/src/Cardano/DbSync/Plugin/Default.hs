@@ -25,8 +25,7 @@ import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Database.Persist.Sql (SqlBackend)
 
-import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (BlockByron, BlockShelley),
-                    LedgerState (LedgerStateByron, LedgerStateShelley))
+import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (BlockByron, BlockShelley))
 
 
 -- | The default DbSyncNodePlugin.
@@ -48,15 +47,13 @@ insertDefaultBlock
 insertDefaultBlock tracer env ledgerStateVar (BlockDetails cblk details) = do
   -- Calculate the new ledger state to pass to the DB insert functions but do not yet
   -- update ledgerStateVar.
-  (newLedgerState, mRewards) <- liftIO $ applyBlock ledgerStateVar cblk
-  res <- case (cblk, clsState newLedgerState) of
-            (BlockByron blk, LedgerStateByron _st) ->
+  lStateSnap <- liftIO $ applyBlock ledgerStateVar cblk
+  res <- case cblk of
+            BlockByron blk ->
               Byron.insertByronBlock tracer blk details
-            (BlockShelley blk, LedgerStateShelley lstate) ->
-              Shelley.insertShelleyBlock tracer env blk lstate mRewards details
-            -- Should never happen.
-            _otherwise -> panic "insertDefaultBlock: Era mismatch on block and ledger state"
+            BlockShelley blk ->
+              Shelley.insertShelleyBlock tracer env blk lStateSnap details
   -- Now we update it in ledgerStateVar and (possibly) store it to disk.
   liftIO $ saveLedgerState (envLedgerStateDir env) ledgerStateVar
-                newLedgerState (isSyncedWithinSeconds details 60)
+                (lssState lStateSnap) (isSyncedWithinSeconds details 60)
   pure res

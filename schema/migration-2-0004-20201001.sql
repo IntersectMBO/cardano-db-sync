@@ -6,7 +6,6 @@ DECLARE
 BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
   IF next_version = 4 THEN
-    EXECUTE 'ALTER TABLE "slot_leader" ADD CONSTRAINT "slot_leader_pool_hash_id_fkey" FOREIGN KEY("pool_hash_id") REFERENCES "pool_hash"("id")' ;
     EXECUTE 'ALTER TABLE "stake_address" DROP CONSTRAINT "unique_stake_address"' ;
     EXECUTE 'ALTER TABLE "stake_address" ADD CONSTRAINT "unique_stake_address" UNIQUE("hash_raw","registered_tx_id")' ;
     EXECUTE 'ALTER TABLE "pool_owner" DROP CONSTRAINT "unique_pool_owner"' ;
