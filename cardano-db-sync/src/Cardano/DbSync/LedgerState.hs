@@ -6,6 +6,7 @@
 
 module Cardano.DbSync.LedgerState
   ( CardanoLedgerState (..)
+  , LedgerStateSnapshot (..)
   , LedgerStateVar (..)
   , applyBlock
   , initLedgerStateVar
@@ -25,7 +26,8 @@ import           Cardano.DbSync.Util
 
 import           Cardano.Prelude
 
-import           Cardano.Slotting.Slot (SlotNo (..), fromWithOrigin)
+import           Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
+import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), fromWithOrigin)
 
 import           Control.Concurrent.STM.TVar (TVar, newTVarIO, writeTVar, readTVar)
 import           Control.Exception (IOException, handle)
@@ -37,13 +39,15 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import           Data.Either (partitionEithers)
 import qualified Data.List as List
 
-import           Ouroboros.Consensus.Block (CodecConfig, blockSlot, blockPrevHash)
+import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockSlot, blockPrevHash)
 import           Ouroboros.Consensus.Byron.Ledger (initByronLedgerState)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Cardano.Block (LedgerState (LedgerStateByron, LedgerStateShelley))
 import           Ouroboros.Consensus.Config (TopLevelConfig (..))
-import           Ouroboros.Consensus.Ledger.Abstract (LedgerConfig, ledgerTipHash, ledgerTipSlot, tickThenApply, tickThenReapply)
+import           Ouroboros.Consensus.Ledger.Abstract (LedgerConfig, ledgerTipHash, ledgerTipSlot,
+                    tickThenApply, tickThenReapply)
 import           Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
+import           Ouroboros.Consensus.HardFork.Combinator.State (epochInfoLedger)
 import           Ouroboros.Consensus.HardFork.Combinator.State.Infra (initHardForkState)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
@@ -51,6 +55,7 @@ import           Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), Enc
 
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley
+import qualified Shelley.Spec.Ledger.PParams as Shelley
 
 import           System.Directory (listDirectory, removeFile)
 import           System.FilePath ((</>), dropExtension, takeExtension)
@@ -70,6 +75,12 @@ data LedgerStateFile = LedgerStateFile -- Internal use only.
   , lsfFilePath :: !FilePath
   }
 
+data LedgerStateSnapshot = LedgerStateSnapshot
+  { lssState :: !CardanoLedgerState
+  , lssRewardUpdate :: !(Maybe (Shelley.RewardUpdate StandardShelley))
+  , lssParamUpdate :: !(Maybe (Shelley.PParams StandardShelley))
+  }
+
 initLedgerStateVar :: GenesisConfig -> IO LedgerStateVar
 initLedgerStateVar genesisConfig = do
   LedgerStateVar <$>
@@ -86,7 +97,7 @@ initLedgerStateVar genesisConfig = do
 -- The function 'tickThenReapply' does zero validation, so add minimal validation ('blockPrevHash'
 -- matches the tip hash of the 'LedgerState'). This was originally for debugging but the check is
 -- cheap enough to keep.
-applyBlock :: LedgerStateVar -> CardanoBlock -> IO (CardanoLedgerState, Maybe (Shelley.RewardUpdate StandardShelley))
+applyBlock :: LedgerStateVar -> CardanoBlock -> IO LedgerStateSnapshot
 applyBlock (LedgerStateVar stateVar) blk =
     -- 'LedgerStateVar' is just being used as a mutable variable. There should not ever
     -- be any contention on this variable, so putting everything inside 'atomically'
@@ -97,10 +108,20 @@ applyBlock (LedgerStateVar stateVar) blk =
         then do
           let !newState = oldState { clsState = applyBlk (clsConfig oldState) blk (clsState oldState) }
           writeTVar stateVar newState
-          let mRewards = case (ledgerRewardUpdate (clsState newState), ledgerRewardUpdate (clsState oldState)) of
-                          (Nothing, Just r) -> Just r
-                          _otherwise -> Nothing
-          pure $ (newState, mRewards)
+          let mRewards =
+                  case (ledgerRewardUpdate (clsState newState), ledgerRewardUpdate (clsState oldState)) of
+                    (Nothing, Just r) -> Just r
+                    _otherwise -> Nothing
+              mParams =
+                  if ledgerEpochNo newState == ledgerEpochNo oldState + 1
+                    then ledgerEpochProtocolParams (clsState newState)
+                    else Nothing
+
+          pure $ LedgerStateSnapshot
+                    { lssState = newState
+                    , lssRewardUpdate = mRewards
+                    , lssParamUpdate = mParams
+                    }
         else panic $ mconcat
                [ "applyBlock: Hash mismatch when applying block with slot no ", textShow (blockSlot blk), "\n"
                , "applyBlock: ", textShow (ledgerTipHash $ clsState oldState), " /= ", textShow (blockPrevHash blk)
@@ -232,10 +253,24 @@ readLedgerState (LedgerStateVar stateVar) =
 safeRemoveFile :: FilePath -> IO ()
 safeRemoveFile fp = handle (\(_ :: IOException) -> pure ()) $ removeFile fp
 
+ledgerEpochNo :: CardanoLedgerState -> EpochNo
+ledgerEpochNo cls =
+    case ledgerTipSlot (clsState cls) of
+      Origin -> 0 -- An empty chain is in epoch 0
+      NotOrigin slot -> runIdentity $ epochInfoEpoch epochInfo slot
+  where
+    epochInfo :: EpochInfo Identity
+    epochInfo = epochInfoLedger (clsConfig cls) $ hardForkLedgerStatePerEra (clsState cls)
+
+ledgerEpochProtocolParams :: LedgerState CardanoBlock -> Maybe (Shelley.PParams StandardShelley)
+ledgerEpochProtocolParams lsc =
+  case lsc of
+    LedgerStateByron _ -> Nothing
+    LedgerStateShelley sls -> Just $ Shelley.esPp (Shelley.nesEs $ Consensus.shelleyLedgerState sls)
+
 ledgerRewardUpdate :: LedgerState CardanoBlock -> Maybe (Shelley.RewardUpdate StandardShelley)
-ledgerRewardUpdate cls =
-  case cls of
+ledgerRewardUpdate lsc =
+  case lsc of
     LedgerStateByron _ -> Nothing
     LedgerStateShelley sls -> Shelley.strictMaybeToMaybe . Shelley.nesRu
                                 $ Consensus.shelleyLedgerState sls
-    _otherwise -> panic "ledgerRewardUpdate: Bad pattern match (should be complete)"

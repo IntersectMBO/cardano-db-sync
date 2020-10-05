@@ -34,7 +34,7 @@ module Cardano.DbSync.Era.Shelley.Util
   , txMetadata
   , txOutputList
   , txOutputSum
-  , txParamUpdate
+  , txParamProposal
   , txWithdrawals
   , txWithdrawalSum
   , unHeaderHash
@@ -155,11 +155,11 @@ mkSlotLeader blk mPoolId =
                 Just _ -> "Pool-" <> short
   in Db.SlotLeader slHash mPoolId slName
 
-nonceToBytes :: Shelley.Nonce -> ByteString
+nonceToBytes :: Shelley.Nonce -> Maybe ByteString
 nonceToBytes nonce =
   case nonce of
-    Shelley.Nonce hash -> Crypto.hashToBytes hash
-    Shelley.NeutralNonce -> BS.replicate 28 '\0'
+    Shelley.Nonce hash -> Just $ Crypto.hashToBytes hash
+    Shelley.NeutralNonce -> Nothing
 
 renderAddress :: Shelley.Addr StandardShelley -> Text
 renderAddress addr =
@@ -202,8 +202,10 @@ txInputList = toList . Shelley._inputs . Shelley._body
 txMetadata :: ShelleyTx -> Maybe Shelley.MetaData
 txMetadata = Shelley.strictMaybeToMaybe . Shelley._metadata
 
-txParamUpdate :: ShelleyTx -> Maybe (Shelley.Update StandardShelley)
-txParamUpdate = Shelley.strictMaybeToMaybe . Shelley._txUpdate . Shelley._body
+-- Regardless of the type name, this is actually a parameter update *proposal*
+-- rather than the update itself.
+txParamProposal :: ShelleyTx -> Maybe (Shelley.Update StandardShelley)
+txParamProposal = Shelley.strictMaybeToMaybe . Shelley._txUpdate . Shelley._body
 
 -- Outputs are ordered, so provide them as such with indices.
 txOutputList :: ShelleyTx -> [(Word16, ShelleyTxOut)]

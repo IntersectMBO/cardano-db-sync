@@ -19,6 +19,7 @@ import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo, logWarnin
 
 import           Cardano.Db (DbWord64 (..))
 
+import           Control.Monad.Extra (whenJust)
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT, runExceptT)
 
@@ -36,6 +37,7 @@ import           Cardano.DbSync.Era.Shelley.Metadata
 import qualified Cardano.DbSync.Era.Shelley.Util as Shelley
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Era.Shelley.Query
+import           Cardano.DbSync.LedgerState
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
@@ -51,7 +53,6 @@ import qualified Data.Text.Encoding.Error as Text
 
 import           Database.Persist.Sql (SqlBackend)
 
-import           Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
@@ -68,10 +69,9 @@ import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 
 insertShelleyBlock
-    :: Trace IO Text -> DbSyncEnv -> ShelleyBlock -> LedgerState ShelleyBlock
-    -> Maybe (Shelley.RewardUpdate StandardShelley) -> SlotDetails
+    :: Trace IO Text -> DbSyncEnv -> ShelleyBlock -> LedgerStateSnapshot -> SlotDetails
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-insertShelleyBlock tracer env blk _ledgerState mRewards details = do
+insertShelleyBlock tracer env blk lStateSnap details = do
   runExceptT $ do
     pbid <- liftLookupFail "insertShelleyBlock" $ DB.queryBlockId (Shelley.blockPrevHash blk)
     mPhid <- lift $ queryPoolHashId (Shelley.blockVrfKeyToPoolHash blk)
@@ -118,12 +118,12 @@ insertShelleyBlock tracer env blk _ledgerState mRewards details = do
         , ", hash ", renderByteArray (Shelley.blockHash blk)
         ]
 
-    case mRewards of
-      Nothing -> pure ()
-      Just rewards -> do
-        -- The slot
-        let rEpoch = unEpochNo (sdEpochNo details) - 2
-        insertRewards tracer env blkId rEpoch rewards
+    whenJust (lssRewardUpdate lStateSnap) $ \ rewards ->
+      -- Subtract 2 from the epoch to calculate when the epoch in which the reward was earned.
+      insertRewards tracer env blkId (sdEpochNo details - 2) rewards
+
+    whenJust (lssParamUpdate lStateSnap) $ \ params ->
+      insertEpochParam tracer blkId (sdEpochNo details) params
 
     when (getSyncStatus details == SyncFollowing) $
       -- Serializiing things during syncing can drastically slow down full sync
@@ -173,9 +173,9 @@ insertTx tracer env blkId blockIndex tx = do
     mapM_ (insertCertificate tracer env txId) $ Shelley.txCertificates tx
     mapM_ (insertWithdrawals tracer txId) $ Shelley.txWithdrawals tx
 
-    case Shelley.txParamUpdate tx of
+    case Shelley.txParamProposal tx of
       Nothing -> pure ()
-      Just pu -> insertParamUpdate tracer txId pu
+      Just pu -> insertParamProposal tracer txId pu
 
 insertTxOut
     :: (MonadBaseControl IO m, MonadIO m)
@@ -464,11 +464,11 @@ insertPoolRelay updateId relay =
           , DB.poolRelayPort = Nothing
           }
 
-insertParamUpdate
+insertParamProposal
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Shelley.Update StandardShelley
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertParamUpdate _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap) (EpochNo epoch)) =
+insertParamProposal _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap) (EpochNo epoch)) =
     mapM_ insert $ Map.toList umap
   where
     insert
@@ -476,28 +476,28 @@ insertParamUpdate _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap) 
       => (Shelley.KeyHash r StandardShelley, Shelley.PParams' StrictMaybe era)
       -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     insert (key, pmap) =
-      void . lift . DB.insertParamUpdate $
-        DB.ParamUpdate
-          { DB.paramUpdateEpochNo = epoch
-          , DB.paramUpdateKey = Shelley.unKeyHash key
-          , DB.paramUpdateMinFeeA = fromIntegral <$> strictMaybeToMaybe (Shelley._minfeeA pmap)
-          , DB.paramUpdateMinFeeB = fromIntegral <$> strictMaybeToMaybe (Shelley._minfeeB pmap)
-          , DB.paramUpdateMaxBlockSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxBBSize pmap)
-          , DB.paramUpdateMaxTxSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxTxSize pmap)
-          , DB.paramUpdateMaxBhSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxBHSize pmap)
-          , DB.paramUpdateKeyDeposit = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._keyDeposit pmap)
-          , DB.paramUpdatePoolDeposit = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._poolDeposit pmap)
-          , DB.paramUpdateMaxEpoch = unEpochNo <$> strictMaybeToMaybe (Shelley._eMax pmap)
-          , DB.paramUpdateOptimalPoolCount = fromIntegral <$> strictMaybeToMaybe (Shelley._nOpt pmap)
-          , DB.paramUpdateInfluence = fromRational <$> strictMaybeToMaybe (Shelley._a0 pmap)
-          , DB.paramUpdateMonetaryExpandRate = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._rho pmap)
-          , DB.paramUpdateTreasuryGrowthRate = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._tau pmap)
-          , DB.paramUpdateDecentralisation = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._d pmap)
-          , DB.paramUpdateEntropy = Shelley.nonceToBytes <$> strictMaybeToMaybe (Shelley._extraEntropy pmap)
-          , DB.paramUpdateProtocolVersion = textShow <$> strictMaybeToMaybe (Shelley._protocolVersion pmap)
-          , DB.paramUpdateMinUTxOValue = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._minUTxOValue pmap)
-          , DB.paramUpdateMinPoolCost = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._minPoolCost pmap)
-          , DB.paramUpdateRegisteredTxId = txId
+      void . lift . DB.insertParamProposal $
+        DB.ParamProposal
+          { DB.paramProposalEpochNo = epoch
+          , DB.paramProposalKey = Shelley.unKeyHash key
+          , DB.paramProposalMinFeeA = fromIntegral <$> strictMaybeToMaybe (Shelley._minfeeA pmap)
+          , DB.paramProposalMinFeeB = fromIntegral <$> strictMaybeToMaybe (Shelley._minfeeB pmap)
+          , DB.paramProposalMaxBlockSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxBBSize pmap)
+          , DB.paramProposalMaxTxSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxTxSize pmap)
+          , DB.paramProposalMaxBhSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxBHSize pmap)
+          , DB.paramProposalKeyDeposit = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._keyDeposit pmap)
+          , DB.paramProposalPoolDeposit = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._poolDeposit pmap)
+          , DB.paramProposalMaxEpoch = unEpochNo <$> strictMaybeToMaybe (Shelley._eMax pmap)
+          , DB.paramProposalOptimalPoolCount = fromIntegral <$> strictMaybeToMaybe (Shelley._nOpt pmap)
+          , DB.paramProposalInfluence = fromRational <$> strictMaybeToMaybe (Shelley._a0 pmap)
+          , DB.paramProposalMonetaryExpandRate = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._rho pmap)
+          , DB.paramProposalTreasuryGrowthRate = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._tau pmap)
+          , DB.paramProposalDecentralisation = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._d pmap)
+          , DB.paramProposalEntropy = join (Shelley.nonceToBytes <$> strictMaybeToMaybe (Shelley._extraEntropy pmap))
+          , DB.paramProposalProtocolVersion = strictMaybeToMaybe (Shelley._protocolVersion pmap)
+          , DB.paramProposalMinUtxoValue = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._minUTxOValue pmap)
+          , DB.paramProposalMinPoolCost = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._minPoolCost pmap)
+          , DB.paramProposalRegisteredTxId = txId
           }
 
 insertTxMetadata
@@ -543,9 +543,9 @@ containsUnicodeNul = Text.isInfixOf "\\u000"
 
 insertRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.BlockId -> Word64 -> Shelley.RewardUpdate StandardShelley
+    => Trace IO Text -> DbSyncEnv -> DB.BlockId -> EpochNo -> Shelley.RewardUpdate StandardShelley
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertRewards _tracer env blkId epoch rewards =
+insertRewards _tracer env blkId (EpochNo epoch) rewards =
     mapM_ insertOneReward $ Map.toList (Shelley.rs rewards)
   where
     insertOneReward
@@ -563,3 +563,31 @@ insertRewards _tracer env blkId epoch rewards =
           , DB.rewardEpochNo = epoch
           , DB.rewardBlockId = blkId
           }
+
+insertEpochParam
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DB.BlockId -> EpochNo -> Shelley.PParams StandardShelley
+    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+insertEpochParam _tracer blkId (EpochNo epoch) params =
+  void . lift . DB.insertEpochParam $
+    DB.EpochParam
+      { DB.epochParamEpochNo = epoch
+      , DB.epochParamMinFeeA = fromIntegral (Shelley._minfeeA params)
+      , DB.epochParamMinFeeB = fromIntegral (Shelley._minfeeB params)
+      , DB.epochParamMaxBlockSize = fromIntegral (Shelley._maxBBSize params)
+      , DB.epochParamMaxTxSize = fromIntegral (Shelley._maxTxSize params)
+      , DB.epochParamMaxBhSize = fromIntegral (Shelley._maxBHSize params)
+      , DB.epochParamKeyDeposit = fromIntegral $ Shelley.unCoin (Shelley._keyDeposit params)
+      , DB.epochParamPoolDeposit = fromIntegral $ Shelley.unCoin (Shelley._poolDeposit params)
+      , DB.epochParamMaxEpoch = unEpochNo (Shelley._eMax params)
+      , DB.epochParamOptimalPoolCount = fromIntegral (Shelley._nOpt params)
+      , DB.epochParamInfluence = fromRational (Shelley._a0 params)
+      , DB.epochParamMonetaryExpandRate = Shelley.unitIntervalToDouble (Shelley._rho params)
+      , DB.epochParamTreasuryGrowthRate = Shelley.unitIntervalToDouble (Shelley._tau params)
+      , DB.epochParamDecentralisation = Shelley.unitIntervalToDouble (Shelley._d params)
+      , DB.epochParamEntropy = Shelley.nonceToBytes $ Shelley._extraEntropy params
+      , DB.epochParamProtocolVersion = Shelley._protocolVersion params
+      , DB.epochParamMinUtxoValue = fromIntegral $ Shelley.unCoin (Shelley._minUTxOValue params)
+      , DB.epochParamMinPoolCost = fromIntegral $ Shelley.unCoin (Shelley._minPoolCost params)
+      , DB.epochParamBlockId = blkId
+      }

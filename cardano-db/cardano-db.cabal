@@ -142,6 +142,7 @@ test-suite test
                       , cardano-ledger
                       , persistent
                       , hedgehog
+                      , shelley-spec-ledger
                       , wide-word
 
 test-suite test-db
