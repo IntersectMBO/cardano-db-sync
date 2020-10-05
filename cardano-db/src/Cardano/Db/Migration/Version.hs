@@ -14,7 +14,7 @@ import qualified Data.Time.Calendar as Time
 import qualified Data.Time.Clock as Time
 
 import           Text.Printf (printf)
-
+import           Text.Read (readMaybe)
 
 data MigrationVersion = MigrationVersion
   { mvStage :: Int
@@ -55,11 +55,3 @@ renderMigrationVersionFile mv =
     , renderMigrationVersion mv
     , ".sql"
     ]
-
--- -----------------------------------------------------------------------------
-
-readMaybe :: Read a => String -> Maybe a
-readMaybe str =
-  case reads str of
-    [(a, "")] -> Just a
-    _ -> Nothing

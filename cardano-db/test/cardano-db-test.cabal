@@ -55,6 +55,7 @@ library
                       , postgresql-simple
                       , resourcet
                       , scientific
+                      , shelley-spec-ledger
                       , text
                       , template-haskell
                       , time
