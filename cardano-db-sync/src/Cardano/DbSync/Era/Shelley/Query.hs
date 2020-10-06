@@ -6,6 +6,7 @@
 module Cardano.DbSync.Era.Shelley.Query
   ( queryPoolHashId
   , queryStakeAddress
+  , queryStakeAddressAndPool
   , queryStakePoolKeyHash
   , queryTxInputSum
   ) where
@@ -25,7 +26,7 @@ import           Data.Either (fromRight)
 import           Data.Maybe (listToMaybe)
 import           Data.Word (Word64)
 
-import           Database.Esqueleto (InnerJoin (..), Value (..),  (^.), (==.),
+import           Database.Esqueleto (InnerJoin (..), Value (..),  (^.), (==.), (<=.),
                     desc, from, on, orderBy, select, val, where_)
 import           Database.Persist.Sql (SqlBackend)
 
@@ -44,6 +45,31 @@ queryStakeAddress addr = do
             where_ (saddr ^. StakeAddressHashRaw ==. val addr)
             pure (saddr ^. StakeAddressId)
   pure $ maybeToEither (DbLookupMessage $ "StakeAddress " <> renderByteArray addr) unValue (listToMaybe res)
+
+-- Get the stake address id and the pool hash id the stake address is delegated to in the specified
+-- epoch. This is called when populating the reward table. Most rewards are the result of a
+-- delegation which is caught in the first query below. However, if a reward address is specified
+-- as the reward address for a pool, then no explicit delegation is needed. The second part of the
+-- query catches this situation.
+queryStakeAddressAndPool :: MonadIO m => Word64 -> ByteString -> ReaderT SqlBackend m (Either LookupFail (StakeAddressId, PoolHashId))
+queryStakeAddressAndPool epoch addr = do
+    res <- select . from $ \ (saddr `InnerJoin` dlg) -> do
+            on (saddr ^. StakeAddressId ==. dlg ^. DelegationAddrId)
+            where_ (saddr ^. StakeAddressHashRaw ==. val addr)
+            where_ (dlg ^. DelegationActiveEpochNo <=. val epoch)
+            orderBy [desc (dlg ^. DelegationActiveEpochNo)]
+            pure (saddr ^. StakeAddressId, dlg ^. DelegationPoolHashId)
+    maybe queryPool (pure . Right . unValue2) (listToMaybe res)
+  where
+    queryPool :: MonadIO m => ReaderT SqlBackend m (Either LookupFail (StakeAddressId, PoolHashId))
+    queryPool = do
+      res <- select . from $ \ (saddr `InnerJoin` pu) -> do
+                on (saddr ^. StakeAddressId ==. pu ^. PoolUpdateRewardAddrId)
+                where_ (saddr ^. StakeAddressHashRaw ==. val addr)
+                where_ (pu ^. PoolUpdateActiveEpochNo <=. val epoch)
+                orderBy [desc (pu ^. PoolUpdateActiveEpochNo)]
+                pure (saddr ^. StakeAddressId, pu ^. PoolUpdateHashId)
+      pure $ maybeToEither (DbLookupMessage $ "StakeAddressAndPool " <> renderByteArray addr) unValue2 (listToMaybe res)
 
 queryStakePoolKeyHash :: MonadIO m => ShelleyStakePoolKeyHash -> ReaderT SqlBackend m (Either LookupFail PoolHashId)
 queryStakePoolKeyHash kh = do

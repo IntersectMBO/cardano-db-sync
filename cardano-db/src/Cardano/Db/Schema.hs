@@ -172,6 +172,7 @@ share
     vrfKey              ByteString          sqltype=hash32type
     pledge              DbWord64            sqltype=word64type
     rewardAddrId        StakeAddressId
+    activeEpochNo       Word64
     meta                PoolMetaDataId Maybe
     margin              Double                                  -- sqltype=percentage????
     fixedCost           Word64              sqltype=lovelace
@@ -225,6 +226,7 @@ share
     addrId              StakeAddressId
     certIndex           Word16
     poolHashId          PoolHashId
+    activeEpochNo       Word64
     txId                TxId
     UniqueDelegation    addrId poolHashId txId
 
@@ -257,6 +259,7 @@ share
     addrId              StakeAddressId
     amount              Word64              sqltype=lovelace
     epochNo             Word64
+    poolId              PoolHashId
     blockId             BlockId
     UniqueReward        addrId blockId
 
