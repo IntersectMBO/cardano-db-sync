@@ -97,7 +97,7 @@ insertShelleyBlock tracer env blk lStateSnap details = do
                     , DB.blockProtoVersion = Just $ Shelley.blockProtoVersion (Shelley.blockBody blk)
                     }
 
-    zipWithM_ (insertTx tracer env blkId) [0 .. ] (Shelley.blockTxs blk)
+    zipWithM_ (insertTx tracer env blkId (sdEpochNo details)) [0 .. ] (Shelley.blockTxs blk)
 
     liftIO $ do
       let epoch = unEpochNo (sdEpochNo details)
@@ -140,9 +140,9 @@ insertShelleyBlock tracer env blk lStateSnap details = do
 
 insertTx
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.BlockId -> Word64 -> ShelleyTx
+    => Trace IO Text -> DbSyncEnv -> DB.BlockId -> EpochNo -> Word64 -> ShelleyTx
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertTx tracer env blkId blockIndex tx = do
+insertTx tracer env blkId epochNo blockIndex tx = do
     let fees = Shelley.txFee tx
         outSum = Shelley.txOutputSum tx
         withdrawalSum = Shelley.txWithdrawalSum tx
@@ -170,7 +170,7 @@ insertTx tracer env blkId blockIndex tx = do
       Nothing -> pure ()
       Just md -> insertTxMetadata tracer txId md
 
-    mapM_ (insertCertificate tracer env txId) $ Shelley.txCertificates tx
+    mapM_ (insertCertificate tracer env txId epochNo) $ Shelley.txCertificates tx
     mapM_ (insertWithdrawals tracer txId) $ Shelley.txWithdrawals tx
 
     case Shelley.txParamProposal tx of
@@ -207,44 +207,44 @@ insertTxIn _tracer txInId (Shelley.TxIn txId index) = do
 
 insertCertificate
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.TxId -> (Word16, ShelleyDCert)
+    => Trace IO Text -> DbSyncEnv -> DB.TxId -> EpochNo -> (Word16, ShelleyDCert)
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertCertificate tracer env txId (idx, cert) =
+insertCertificate tracer env txId epochNo (idx, cert) =
   case cert of
-    Shelley.DCertDeleg deleg -> insertDelegCert tracer env txId idx deleg
-    Shelley.DCertPool pool -> insertPoolCert tracer txId idx pool
+    Shelley.DCertDeleg deleg -> insertDelegCert tracer env txId idx epochNo deleg
+    Shelley.DCertPool pool -> insertPoolCert tracer epochNo txId idx pool
     Shelley.DCertMir mir -> insertMirCert tracer env txId idx mir
     Shelley.DCertGenesis _gen -> do
         -- TODO : Low priority
-        liftIO $ logError tracer "insertCertificate: Unhandled DCertGenesis certificate"
+        liftIO $ logWarning tracer "insertCertificate: Unhandled DCertGenesis certificate"
         pure ()
 
 
 insertPoolCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> Word16 -> ShelleyPoolCert
+    => Trace IO Text -> EpochNo -> DB.TxId -> Word16 -> ShelleyPoolCert
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertPoolCert tracer txId idx pCert =
+insertPoolCert tracer epoch txId idx pCert =
   case pCert of
-    Shelley.RegPool pParams -> insertPoolRegister tracer txId idx pParams
+    Shelley.RegPool pParams -> insertPoolRegister tracer epoch txId idx pParams
     Shelley.RetirePool keyHash epochNum -> insertPoolRetire txId epochNum idx keyHash
 
 insertDelegCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> ShelleyDelegCert
+    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> EpochNo -> ShelleyDelegCert
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertDelegCert tracer env txId idx dCert =
+insertDelegCert tracer env txId idx epochNo dCert =
   case dCert of
     Shelley.RegKey cred -> insertStakeRegistration tracer txId idx $ Shelley.annotateStakingCred env cred
     Shelley.DeRegKey cred -> insertStakeDeregistration tracer env txId idx cred
-    Shelley.Delegate (Shelley.Delegation cred poolkh) -> insertDelegation tracer env txId idx cred poolkh
+    Shelley.Delegate (Shelley.Delegation cred poolkh) -> insertDelegation tracer env txId idx epochNo cred poolkh
 
 
 insertPoolRegister
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> Word16 -> ShelleyPoolParams
+    => Trace IO Text -> EpochNo -> DB.TxId -> Word16 -> ShelleyPoolParams
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertPoolRegister tracer txId idx params = do
+insertPoolRegister tracer (EpochNo epoch) txId idx params = do
   mdId <- case strictMaybeToMaybe $ Shelley._poolMD params of
             Just md -> Just <$> insertMetaData txId md
             Nothing -> pure Nothing
@@ -265,6 +265,7 @@ insertPoolRegister tracer txId idx params = do
                       , DB.poolUpdateVrfKey = Crypto.hashToBytes (Shelley._poolVrf params)
                       , DB.poolUpdatePledge = DbWord64 $ fromIntegral (Shelley.unCoin $ Shelley._poolPledge params)
                       , DB.poolUpdateRewardAddrId = rewardId
+                      , DB.poolUpdateActiveEpochNo = epoch + 2
                       , DB.poolUpdateMeta = mdId
                       , DB.poolUpdateMargin = realToFrac $ Shelley.intervalValue (Shelley._poolMargin params)
                       , DB.poolUpdateFixedCost = fromIntegral $ Shelley.unCoin (Shelley._poolCost params)
@@ -358,9 +359,10 @@ insertStakeDeregistration _tracer env txId idx cred = do
 
 insertDelegation
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> ShelleyStakingCred -> ShelleyStakePoolKeyHash
+    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> EpochNo
+    -> ShelleyStakingCred -> ShelleyStakePoolKeyHash
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertDelegation _tracer env txId idx cred poolkh = do
+insertDelegation _tracer env txId idx (EpochNo epoch) cred poolkh = do
   addrId <- firstExceptT (NELookup "insertDelegation")
                 . newExceptT
                 $ queryStakeAddress (Shelley.stakingCredHash env cred)
@@ -372,6 +374,7 @@ insertDelegation _tracer env txId idx cred poolkh = do
       { DB.delegationAddrId = addrId
       , DB.delegationCertIndex = idx
       , DB.delegationPoolHashId = poolHashId
+      , DB.delegationActiveEpochNo = epoch + 2 -- The first epoch where this delegation is valid.
       , DB.delegationTxId = txId
       }
 
@@ -545,7 +548,7 @@ insertRewards
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DbSyncEnv -> DB.BlockId -> EpochNo -> Shelley.RewardUpdate StandardShelley
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertRewards _tracer env blkId (EpochNo epoch) rewards =
+insertRewards _tracer env blkId epoch rewards =
     mapM_ insertOneReward $ Map.toList (Shelley.rs rewards)
   where
     insertOneReward
@@ -553,14 +556,16 @@ insertRewards _tracer env blkId (EpochNo epoch) rewards =
         => (Shelley.Credential 'Shelley.Staking StandardShelley, Shelley.Coin)
         -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     insertOneReward (saddr, coin) = do
-      saId <- firstExceptT (NELookup "insertReward")
-                . newExceptT
-                $ queryStakeAddress (Shelley.stakingCredHash env saddr)
+      (saId, poolId) <- firstExceptT (NELookup "insertReward")
+                          . newExceptT
+                          $ queryStakeAddressAndPool (unEpochNo epoch)
+                                (Shelley.stakingCredHash env saddr)
       void . lift . DB.insertReward $
         DB.Reward
           { DB.rewardAddrId = saId
           , DB.rewardAmount = fromIntegral (Shelley.unCoin coin)
-          , DB.rewardEpochNo = epoch
+          , DB.rewardEpochNo = unEpochNo epoch
+          , DB.rewardPoolId = poolId
           , DB.rewardBlockId = blkId
           }
 
