@@ -64,14 +64,14 @@ coalesceConfig pcfg ncfg adjust = do
   pure $ DbSyncNodeConfig
           { dncNetworkName = pcNetworkName pcfg
           , dncLoggingConfig = lc
-          , dncNodeConfigFile = pcNodeConfigFile pcfg
+          , dncNodeConfigFile = adjustNodeConfigFilePath adjust (pcNodeConfigFile pcfg)
           , dncProtocol = ncProtocol ncfg
           , dncRequiresNetworkMagic = ncRequiresNetworkMagic ncfg
           , dncEnableLogging = pcEnableLogging pcfg
           , dncEnableMetrics = pcEnableMetrics pcfg
-          , dncByronGenesisFile = adjustGenesisFile adjust (ncByronGenesisFile ncfg)
+          , dncByronGenesisFile = adjustGenesisFilePath adjust (ncByronGenesisFile ncfg)
           , dncByronGenesisHash = ncByronGenesisHash ncfg
-          , dncShelleyGenesisFile = adjustGenesisFile adjust (ncShelleyGenesisFile ncfg)
+          , dncShelleyGenesisFile = adjustGenesisFilePath adjust (ncShelleyGenesisFile ncfg)
           , dncShelleyGenesisHash = ncShelleyGenesisHash ncfg
           , dncByronSoftwareVersion = ncByronSotfwareVersion ncfg
           , dncByronProtocolVersion = ncByronProtocolVersion ncfg
