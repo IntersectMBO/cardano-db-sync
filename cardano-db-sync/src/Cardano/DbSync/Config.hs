@@ -41,8 +41,8 @@ import           System.FilePath (takeDirectory, (</>))
 
 readDbSyncNodeConfig :: ConfigFile -> IO DbSyncNodeConfig
 readDbSyncNodeConfig (ConfigFile fp) = do
-    pcfg <- parseDbSyncPreConfig <$> readByteString fp "DbSync"
-    ncfg <- parseNodeConfig <$> readByteString (getNodeConfigFile pcfg) "node"
+    pcfg <- adjustNodeFilePath . parseDbSyncPreConfig <$> readByteString fp "DbSync"
+    ncfg <- parseNodeConfig <$> readByteString (pcNodeConfigFilePath pcfg) "node"
     coalesceConfig pcfg ncfg (mkAdjustPath pcfg)
   where
     parseDbSyncPreConfig :: ByteString -> DbSyncPreConfig
@@ -51,27 +51,26 @@ readDbSyncNodeConfig (ConfigFile fp) = do
       Left err -> panic $ "readDbSyncNodeConfig: Error parsing config: " <> textShow err
       Right res -> res
 
-    getNodeConfigFile :: DbSyncPreConfig -> FilePath
-    getNodeConfigFile enc =
-      case pcNodeConfigFile enc of
-        NodeConfigFile ncfp -> ncfp
+    adjustNodeFilePath :: DbSyncPreConfig -> DbSyncPreConfig
+    adjustNodeFilePath cfg =
+      cfg { pcNodeConfigFile = adjustNodeConfigFilePath (takeDirectory fp </>) (pcNodeConfigFile cfg) }
 
 coalesceConfig
     :: DbSyncPreConfig -> NodeConfig -> (FilePath -> FilePath)
     -> IO DbSyncNodeConfig
-coalesceConfig pcfg ncfg adjust = do
+coalesceConfig pcfg ncfg adjustGenesisPath = do
   lc <- Logging.setupFromRepresentation $ pcLoggingConfig pcfg
   pure $ DbSyncNodeConfig
           { dncNetworkName = pcNetworkName pcfg
           , dncLoggingConfig = lc
-          , dncNodeConfigFile = adjustNodeConfigFilePath adjust (pcNodeConfigFile pcfg)
+          , dncNodeConfigFile = pcNodeConfigFile pcfg
           , dncProtocol = ncProtocol ncfg
           , dncRequiresNetworkMagic = ncRequiresNetworkMagic ncfg
           , dncEnableLogging = pcEnableLogging pcfg
           , dncEnableMetrics = pcEnableMetrics pcfg
-          , dncByronGenesisFile = adjustGenesisFilePath adjust (ncByronGenesisFile ncfg)
+          , dncByronGenesisFile = adjustGenesisFilePath adjustGenesisPath (ncByronGenesisFile ncfg)
           , dncByronGenesisHash = ncByronGenesisHash ncfg
-          , dncShelleyGenesisFile = adjustGenesisFilePath adjust (ncShelleyGenesisFile ncfg)
+          , dncShelleyGenesisFile = adjustGenesisFilePath adjustGenesisPath (ncShelleyGenesisFile ncfg)
           , dncShelleyGenesisHash = ncShelleyGenesisHash ncfg
           , dncByronSoftwareVersion = ncByronSotfwareVersion ncfg
           , dncByronProtocolVersion = ncByronProtocolVersion ncfg
@@ -81,7 +80,7 @@ coalesceConfig pcfg ncfg adjust = do
           }
 
 mkAdjustPath :: DbSyncPreConfig -> (FilePath -> FilePath)
-mkAdjustPath cfg fp = takeDirectory (unNodeConfigFile $ pcNodeConfigFile cfg) </> fp
+mkAdjustPath cfg fp = takeDirectory (pcNodeConfigFilePath cfg) </> fp
 
 readByteString :: FilePath -> Text -> IO ByteString
 readByteString fp cfgType =

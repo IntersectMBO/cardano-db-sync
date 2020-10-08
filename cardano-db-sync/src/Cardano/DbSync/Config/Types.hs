@@ -25,6 +25,7 @@ module Cardano.DbSync.Config.Types
   , SocketPath (..)
   , adjustGenesisFilePath
   , adjustNodeConfigFilePath
+  , pcNodeConfigFilePath
   ) where
 
 import qualified Cardano.BM.Configuration as Logging
@@ -153,6 +154,9 @@ adjustGenesisFilePath f (GenesisFile p) = GenesisFile (f p)
 
 adjustNodeConfigFilePath :: (FilePath -> FilePath) -> NodeConfigFile -> NodeConfigFile
 adjustNodeConfigFilePath f (NodeConfigFile p) = NodeConfigFile (f p)
+
+pcNodeConfigFilePath :: DbSyncPreConfig -> FilePath
+pcNodeConfigFilePath = unNodeConfigFile . pcNodeConfigFile
 
 -- -------------------------------------------------------------------------------------------------
 
