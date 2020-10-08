@@ -8,7 +8,8 @@ EnableLogging: True
 # The config file for the node we are connecting to. If this is not the correct
 # config, it will likely lead to db-sync throwing up weird error messages from
 # the consensus layer.
-NodeConfigFile: ../cardano-node/configuration/cardano/mainnet-config.json
+# The path to the node config file is relative to this config file.
+NodeConfigFile: ../../cardano-node/configuration/cardano/mainnet-config.json
 
 # ------------------------------------------------------------------------------
 # Logging configuration follows.

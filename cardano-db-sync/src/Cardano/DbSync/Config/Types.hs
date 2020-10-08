@@ -23,7 +23,8 @@ module Cardano.DbSync.Config.Types
   , NetworkName (..)
   , NodeConfigFile (..)
   , SocketPath (..)
-  , adjustGenesisFile
+  , adjustGenesisFilePath
+  , adjustNodeConfigFilePath
   ) where
 
 import qualified Cardano.BM.Configuration as Logging
@@ -120,9 +121,6 @@ newtype GenesisFile = GenesisFile
   { unGenesisFile :: FilePath
   } deriving Show
 
-adjustGenesisFile :: (FilePath -> FilePath) -> GenesisFile -> GenesisFile
-adjustGenesisFile f (GenesisFile p) = GenesisFile (f p)
-
 newtype GenesisHashByron = GenesisHashByron
   { unGenesisHashByron :: Text
   } deriving newtype (Eq, Show)
@@ -149,6 +147,12 @@ newtype NodeConfigFile = NodeConfigFile
 newtype SocketPath = SocketPath
   { unSocketPath :: FilePath
   } deriving Show
+
+adjustGenesisFilePath :: (FilePath -> FilePath) -> GenesisFile -> GenesisFile
+adjustGenesisFilePath f (GenesisFile p) = GenesisFile (f p)
+
+adjustNodeConfigFilePath :: (FilePath -> FilePath) -> NodeConfigFile -> NodeConfigFile
+adjustNodeConfigFilePath f (NodeConfigFile p) = NodeConfigFile (f p)
 
 -- -------------------------------------------------------------------------------------------------
 
