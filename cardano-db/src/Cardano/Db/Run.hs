@@ -94,7 +94,7 @@ runIohkLogging tracer action =
     toIohkLog :: Loc -> LogSource -> LogLevel -> LogStr -> IO ()
     toIohkLog _loc _src level msg = do
       meta <- mkLOMeta (toIohkSeverity level) Public
-      traceWith tracer $
+      traceWith tracer
         (name, LogObject name meta (LogMessage . T.decodeLatin1 $ fromLogStr msg))
 
     name :: Text
@@ -151,7 +151,7 @@ getBackendGhci :: IO SqlBackend
 getBackendGhci = do
   pgconfig <- readPGPassFileEnv
   connection <- connectPostgreSQL (toConnectionString pgconfig)
-  openSimpleConn (\loc source level str -> defaultOutput stdout loc source level str) connection
+  openSimpleConn (defaultOutput stdout) connection
 
 ghciDebugQuery :: SqlSelect a r => SqlQuery a -> IO ()
 ghciDebugQuery query = do

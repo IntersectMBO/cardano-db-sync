@@ -112,7 +112,7 @@ insertValidateGenesisDist tracer networkName cfg = do
                 liftIO . logInfo tracer $ "Initial genesis distribution populated. Hash "
                                 <> renderByteArray (configGenesisHash cfg)
 
-                supply <- lift $ DB.queryTotalSupply
+                supply <- lift DB.queryTotalSupply
                 liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
@@ -123,7 +123,7 @@ validateGenesisDistribution
 validateGenesisDistribution tracer networkName cfg bid =
   runExceptT $ do
     liftIO $ logInfo tracer "Validating Genesis distribution"
-    meta <- liftLookupFail "Shelley.validateGenesisDistribution" $ DB.queryMeta
+    meta <- liftLookupFail "Shelley.validateGenesisDistribution" DB.queryMeta
 
     when (DB.metaStartTime meta /= configStartTime cfg) $
       dbSyncNodeError $ Text.concat

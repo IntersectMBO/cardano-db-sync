@@ -94,7 +94,7 @@ createAndInsertBlocks blockCount =
     createAndInsert (indx, mPrevId, mPrevBlock, mTxOutId) = do
         slid <- insertSlotLeader testSlotLeader
         let newBlock = Block (mkBlockHash indx) (Just 0) (Just indx) (Just indx) (Just indx) mPrevId
-                        (maybe Nothing (const $ Just (mkMerkelRoot indx)) mPrevBlock)
+                        (const (Just (mkMerkelRoot indx)) =<< mPrevBlock)
                         slid 42 dummyUTCTime 0
                         Nothing Nothing Nothing
         blkId <- insertBlock newBlock

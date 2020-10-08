@@ -38,7 +38,7 @@ rollbackToSlot trce slotNo =
             mconcat
               [ "Deleting slots numbered: ", renderSlotList xs
               ]
-        mapM_ (void . lift . DB.deleteCascadeSlotNo) xs
+        mapM_ (lift . DB.deleteCascadeSlotNo) xs
 
 
 -- For testing and debugging.

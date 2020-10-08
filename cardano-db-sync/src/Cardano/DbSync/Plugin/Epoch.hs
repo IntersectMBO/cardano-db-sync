@@ -21,7 +21,7 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.IORef (IORef, atomicWriteIORef, newIORef, readIORef)
-import           Data.Maybe (fromMaybe)
+import           Data.Maybe (fromMaybe, isNothing)
 import           Data.Text (Text)
 import qualified Data.Time.Clock as Time
 import           Data.Word (Word64)
@@ -104,7 +104,7 @@ insertBlock trce details = do
   -- These cases are listed from the least likey to occur to the most
   -- likley to keep the logic sane.
 
-  if  | epochNum > 0 && mLatestCachedEpoch == Nothing ->
+  if  | epochNum > 0 && isNothing mLatestCachedEpoch ->
           updateEpochNum 0 trce
       | epochNum >= lastCachedEpoch + 2 ->
           updateEpochNum (lastCachedEpoch + 1) trce
@@ -155,8 +155,8 @@ queryEpochId :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe EpochId)
 queryEpochId epochNum = do
   res <- select . from $ \ epoch -> do
             where_ (epoch ^. DB.EpochNo ==. val epochNum)
-            pure $ (epoch ^. EpochId)
-  pure $ unValue <$> (listToMaybe res)
+            pure (epoch ^. EpochId)
+  pure $ unValue <$> listToMaybe res
 
 -- | Get the epoch number of the most recent epoch in the Epoch table.
 queryLatestEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
@@ -164,5 +164,5 @@ queryLatestEpochNo = do
   res <- select . from $ \ epoch -> do
             orderBy [desc (epoch ^. DB.EpochNo)]
             limit 1
-            pure $ (epoch ^. DB.EpochNo)
+            pure (epoch ^. DB.EpochNo)
   pure $ unValue <$> listToMaybe res

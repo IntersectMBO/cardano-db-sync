@@ -8,7 +8,7 @@ module Cardano.Db.Migration
   , runMigrations
   ) where
 
-import           Control.Exception (SomeException, bracket, handle)
+import           Control.Exception (SomeException, handle)
 import           Control.Monad (forM_, unless)
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Logger (NoLoggingT)
@@ -37,8 +37,7 @@ import           Cardano.Db.Schema
 import           System.Directory (listDirectory)
 import           System.Exit (ExitCode (..), exitFailure)
 import           System.FilePath ((</>), takeFileName)
-import           System.IO (Handle, IOMode (AppendMode), hClose, hFlush, hPrint, hPutStrLn,
-                    openFile, stdout)
+import           System.IO (Handle, IOMode (AppendMode), hFlush, hPrint, hPutStrLn, stdout, withFile)
 
 
 
@@ -61,7 +60,7 @@ runMigrations cfgOverride quiet migrationDir mLogfiledir = do
         putStrLn "Success!"
       Just logfiledir -> do
         logFilename <- genLogFilename logfiledir
-        bracket (openFile logFilename AppendMode) hClose $ \logHandle -> do
+        withFile logFilename AppendMode $ \logHandle -> do
           unless quiet $ putStrLn "Running:"
           forM_ scripts $ applyMigration quiet pgconfig (Just logFilename) logHandle
           unless quiet $ putStrLn "Success!"
@@ -78,7 +77,7 @@ applyMigration quiet pgconfig mLogFilename logHandle (version, script) = do
     -- One way to achive this is via a 'PGPASSFILE' environment variable
     -- as per the PostgreSQL documentation.
     let command =
-          List.intercalate " "
+          List.unwords
             [ "psql"
             , BS.unpack (pgcDbname pgconfig)
             , "--no-password"

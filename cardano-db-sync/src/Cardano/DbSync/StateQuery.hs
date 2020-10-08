@@ -1,13 +1,10 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.DbSync.StateQuery
@@ -43,8 +40,8 @@ import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
 
 import           Ouroboros.Network.Block (Point (..))
 import           Ouroboros.Network.Protocol.LocalStateQuery.Client (ClientStQuerying (..),
-                    ClientStAcquired (..), ClientStAcquiring (..), ClientStIdle (..))
-import           Ouroboros.Network.Protocol.LocalStateQuery.Client (LocalStateQueryClient (..))
+                    ClientStAcquired (..), ClientStAcquiring (..), ClientStIdle (..),
+                    LocalStateQueryClient (..))
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as StateQuery
 import           Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 
@@ -109,7 +106,7 @@ getHistoryInterpreter tracer queryVar point = do
     Left err ->
       panic $ "getHistoryInterpreter: " <> textShow err
     Right interp -> do
-      logInfo tracer $ "getHistoryInterpreter: acquired"
+      logInfo tracer "getHistoryInterpreter: acquired"
       writeIORef historyInterpVar $ Just interp
       pure interp
 

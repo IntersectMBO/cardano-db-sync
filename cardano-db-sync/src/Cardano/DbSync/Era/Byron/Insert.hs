@@ -68,7 +68,7 @@ insertByronBlock tracer blk details = do
               Byron.ABOBBoundary abblk -> insertABOBBoundary tracer abblk details
   -- Serializiing things during syncing can drastically slow down full sync
   -- times (ie 10x or more).
-  when (getSyncStatus details == SyncFollowing) $
+  when (getSyncStatus details == SyncFollowing)
     DB.transactionCommit
   pure res
 
