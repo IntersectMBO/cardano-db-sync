@@ -60,6 +60,7 @@ import           Shelley.Spec.Ledger.BaseTypes (StrictMaybe, strictMaybeToMaybe)
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.Coin as Shelley
 import qualified Shelley.Spec.Ledger.Credential as Shelley
+import qualified Shelley.Spec.Ledger.EpochBoundary as Shelley
 import qualified Shelley.Spec.Ledger.Keys as Shelley
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley
 import qualified Shelley.Spec.Ledger.MetaData as Shelley
@@ -118,12 +119,11 @@ insertShelleyBlock tracer env blk lStateSnap details = do
         , ", hash ", renderByteArray (Shelley.blockHash blk)
         ]
 
-    whenJust (lssRewardUpdate lStateSnap) $ \ rewards ->
+    whenJust (lssEpochUpdate lStateSnap) $ \ esum -> do
       -- Subtract 2 from the epoch to calculate when the epoch in which the reward was earned.
-      insertRewards tracer env blkId (sdEpochNo details - 2) rewards
-
-    whenJust (lssParamUpdate lStateSnap) $ \ params ->
-      insertEpochParam tracer blkId (sdEpochNo details) params
+      insertRewards tracer env blkId (sdEpochNo details - 2) (esRewardUpdate esum)
+      insertEpochParam tracer blkId (sdEpochNo details) (esParamUpdate esum)
+      insertEpochStake tracer env blkId (sdEpochNo details) (esStakeUpdate esum)
 
     when (getSyncStatus details == SyncFollowing) $
       -- Serializiing things during syncing can drastically slow down full sync
@@ -496,7 +496,7 @@ insertParamProposal _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap
           , DB.paramProposalMonetaryExpandRate = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._rho pmap)
           , DB.paramProposalTreasuryGrowthRate = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._tau pmap)
           , DB.paramProposalDecentralisation = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._d pmap)
-          , DB.paramProposalEntropy = join (Shelley.nonceToBytes <$> strictMaybeToMaybe (Shelley._extraEntropy pmap))
+          , DB.paramProposalEntropy = Shelley.nonceToBytes =<< strictMaybeToMaybe (Shelley._extraEntropy pmap)
           , DB.paramProposalProtocolVersion = strictMaybeToMaybe (Shelley._protocolVersion pmap)
           , DB.paramProposalMinUtxoValue = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._minUTxOValue pmap)
           , DB.paramProposalMinPoolCost = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._minPoolCost pmap)
@@ -596,3 +596,28 @@ insertEpochParam _tracer blkId (EpochNo epoch) params =
       , DB.epochParamMinPoolCost = fromIntegral $ Shelley.unCoin (Shelley._minPoolCost params)
       , DB.epochParamBlockId = blkId
       }
+
+insertEpochStake
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DbSyncEnv -> DB.BlockId -> EpochNo -> Shelley.Stake StandardShelley
+    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+insertEpochStake _tracer env blkId (EpochNo epoch) smap =
+    mapM_ insert $ Map.toList (Shelley.unStake smap)
+  where
+    insert
+        :: (MonadBaseControl IO m, MonadIO m)
+        => (Shelley.Credential 'Shelley.Staking StandardShelley, Shelley.Coin)
+        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    insert (saddr, coin) = do
+      (saId, poolId) <- firstExceptT (NELookup "insertEpochStake")
+                          . newExceptT
+                          $ queryStakeAddressAndPool epoch
+                                (Shelley.stakingCredHash env saddr)
+      void . lift . DB.insertEpochStake $
+        DB.EpochStake
+          { DB.epochStakeAddrId = saId
+          , DB.epochStakePoolId = poolId
+          , DB.epochStakeAmount = fromIntegral $ Shelley.unCoin coin
+          , DB.epochStakeEpochNo = epoch + 1 -- The epoch where this delegation becomes valid.
+          , DB.epochStakeBlockId = blkId
+          }

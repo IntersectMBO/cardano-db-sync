@@ -6,6 +6,7 @@
 
 module Cardano.DbSync.LedgerState
   ( CardanoLedgerState (..)
+  , EpochUpdate (..)
   , LedgerStateSnapshot (..)
   , LedgerStateVar (..)
   , applyBlock
@@ -29,7 +30,7 @@ import           Cardano.Prelude
 import           Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), fromWithOrigin)
 
-import           Control.Concurrent.STM.TVar (TVar, newTVarIO, writeTVar, readTVar)
+import           Control.Concurrent.STM.TVar (TVar, newTVarIO, writeTVar, readTVar, readTVarIO)
 import           Control.Exception (IOException, handle)
 import qualified Control.Exception as Exception
 import           Control.Monad.Extra (firstJustM)
@@ -54,6 +55,7 @@ import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 import           Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), EncodeDisk (..))
 
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
+import qualified Shelley.Spec.Ledger.EpochBoundary as Shelley
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 
@@ -64,6 +66,12 @@ data CardanoLedgerState = CardanoLedgerState
   { clsState :: !(LedgerState CardanoBlock)
   , clsConfig :: !(LedgerConfig CardanoBlock)
   , clsCodec :: !(CodecConfig CardanoBlock)
+  }
+
+data EpochUpdate = EpochUpdate
+  { esParamUpdate :: !(Shelley.PParams StandardShelley)
+  , esRewardUpdate :: !(Shelley.RewardUpdate StandardShelley)
+  , esStakeUpdate :: !(Shelley.Stake StandardShelley)
   }
 
 newtype LedgerStateVar = LedgerStateVar
@@ -77,9 +85,9 @@ data LedgerStateFile = LedgerStateFile -- Internal use only.
 
 data LedgerStateSnapshot = LedgerStateSnapshot
   { lssState :: !CardanoLedgerState
-  , lssRewardUpdate :: !(Maybe (Shelley.RewardUpdate StandardShelley))
-  , lssParamUpdate :: !(Maybe (Shelley.PParams StandardShelley))
+  , lssEpochUpdate :: !(Maybe EpochUpdate) -- Only Just for a single block at the epoch boundary
   }
+
 
 initLedgerStateVar :: GenesisConfig -> IO LedgerStateVar
 initLedgerStateVar genesisConfig = do
@@ -108,19 +116,12 @@ applyBlock (LedgerStateVar stateVar) blk =
         then do
           let !newState = oldState { clsState = applyBlk (clsConfig oldState) blk (clsState oldState) }
           writeTVar stateVar newState
-          let mRewards =
-                  case (ledgerRewardUpdate (clsState newState), ledgerRewardUpdate (clsState oldState)) of
-                    (Nothing, Just r) -> Just r
-                    _otherwise -> Nothing
-              mParams =
-                  if ledgerEpochNo newState == ledgerEpochNo oldState + 1
-                    then ledgerEpochProtocolParams (clsState newState)
-                    else Nothing
-
           pure $ LedgerStateSnapshot
                     { lssState = newState
-                    , lssRewardUpdate = mRewards
-                    , lssParamUpdate = mParams
+                    , lssEpochUpdate =
+                        if ledgerEpochNo newState == ledgerEpochNo oldState + 1
+                          then Just $ ledgerEpochUpdate (clsState newState) (ledgerRewardUpdate $ clsState oldState)
+                          else Nothing
                     }
         else panic $ mconcat
                [ "applyBlock: Hash mismatch when applying block with slot no ", textShow (blockSlot blk), "\n"
@@ -179,7 +180,7 @@ cleanupLedgerStateFiles stateDir slotNo = do
     -- Remove invalid (ie SlotNo >= current) ledger state files (occurs on rollback).
     mapM_ safeRemoveFile invalid
     -- Remove all but 8 most recent state files.
-    mapM_ safeRemoveFile $ map lsfFilePath (List.drop 8 valid)
+    mapM_ (safeRemoveFile . lsfFilePath) (List.drop 8 valid)
   where
     -- Left files are deleted, Right files are kept.
     keepFile :: LedgerStateFile ->  Either FilePath LedgerStateFile
@@ -246,8 +247,7 @@ listLedgerStateSlotNos :: LedgerStateDir -> IO [SlotNo]
 listLedgerStateSlotNos = fmap3 (SlotNo . lsfSlotNo) listLedgerStateFilesOrdered
 
 readLedgerState :: LedgerStateVar -> IO CardanoLedgerState
-readLedgerState (LedgerStateVar stateVar) =
-  atomically $ readTVar stateVar
+readLedgerState (LedgerStateVar stateVar) = readTVarIO stateVar
 
 -- | Remove given file path and ignore any IOEXceptions.
 safeRemoveFile :: FilePath -> IO ()
@@ -262,15 +262,30 @@ ledgerEpochNo cls =
     epochInfo :: EpochInfo Identity
     epochInfo = epochInfoLedger (clsConfig cls) $ hardForkLedgerStatePerEra (clsState cls)
 
-ledgerEpochProtocolParams :: LedgerState CardanoBlock -> Maybe (Shelley.PParams StandardShelley)
-ledgerEpochProtocolParams lsc =
-  case lsc of
-    LedgerStateByron _ -> Nothing
-    LedgerStateShelley sls -> Just $ Shelley.esPp (Shelley.nesEs $ Consensus.shelleyLedgerState sls)
+-- Create an EpochUpdate from the current epoch state and the rewards from the last epoch.
+ledgerEpochUpdate :: LedgerState CardanoBlock -> Maybe (Shelley.RewardUpdate StandardShelley) -> EpochUpdate
+ledgerEpochUpdate lcs mRewards =
+  case lcs of
+    LedgerStateByron _ -> panic "ledgerEpochUpdate: LedgerStateByron but should be Shelley"
+    LedgerStateShelley sls ->
+      EpochUpdate
+        { esParamUpdate = Shelley.esPp $ Shelley.nesEs (Consensus.shelleyLedgerState sls)
+        , esRewardUpdate = fromMaybe Shelley.emptyRewardUpdate mRewards
 
+        -- Use '_pstakeSet' here instead of '_pstateMark' because the stake addresses for the
+        -- later may not have been added to the database yet. That means that whne these values
+        -- are added to the database, the epoch number where they become active is the current
+        -- epoch plus one.
+        , esStakeUpdate = Shelley._stake . Shelley._pstakeSet . Shelley.esSnapshots
+                            $ Shelley.nesEs (Consensus.shelleyLedgerState sls)
+        }
+
+-- This will return a 'Just' from the time the rewards are updated until the end of the
+-- epoch. It is 'Nothing' for the first block of a new epoch (which is slightly inconvenient).
 ledgerRewardUpdate :: LedgerState CardanoBlock -> Maybe (Shelley.RewardUpdate StandardShelley)
 ledgerRewardUpdate lsc =
   case lsc of
-    LedgerStateByron _ -> Nothing
+    LedgerStateByron _ -> Nothing -- This actually happens on the Byron/Shelley boundary.
     LedgerStateShelley sls -> Shelley.strictMaybeToMaybe . Shelley.nesRu
                                 $ Consensus.shelleyLedgerState sls
+

@@ -263,11 +263,13 @@ share
     blockId             BlockId
     UniqueReward        addrId blockId
 
-  Stake
+  EpochStake
     addrId              StakeAddressId
-    txId                TxId
-    stake               Word64              sqltype=lovelace
-    UniqueStake         addrId stake
+    poolId              PoolHashId
+    amount              Word64              sqltype=lovelace
+    epochNo             Word64
+    blockId             BlockId             -- To make rollbacks work correctly.
+    UniqueStake         addrId epochNo
 
   Treasury
     addrId              StakeAddressId
