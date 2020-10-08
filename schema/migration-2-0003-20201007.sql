@@ -76,10 +76,11 @@ BEGIN
     EXECUTE 'ALTER TABLE "reward" ADD CONSTRAINT "reward_addr_id_fkey" FOREIGN KEY("addr_id") REFERENCES "stake_address"("id")' ;
     EXECUTE 'ALTER TABLE "reward" ADD CONSTRAINT "reward_pool_id_fkey" FOREIGN KEY("pool_id") REFERENCES "pool_hash"("id")' ;
     EXECUTE 'ALTER TABLE "reward" ADD CONSTRAINT "reward_block_id_fkey" FOREIGN KEY("block_id") REFERENCES "block"("id")' ;
-    EXECUTE 'CREATe TABLE "stake"("id" SERIAL8  PRIMARY KEY UNIQUE,"addr_id" INT8 NOT NULL,"tx_id" INT8 NOT NULL,"stake" lovelace NOT NULL)' ;
-    EXECUTE 'ALTER TABLE "stake" ADD CONSTRAINT "unique_stake" UNIQUE("addr_id","stake")' ;
-    EXECUTE 'ALTER TABLE "stake" ADD CONSTRAINT "stake_addr_id_fkey" FOREIGN KEY("addr_id") REFERENCES "stake_address"("id")' ;
-    EXECUTE 'ALTER TABLE "stake" ADD CONSTRAINT "stake_tx_id_fkey" FOREIGN KEY("tx_id") REFERENCES "tx"("id")' ;
+    EXECUTE 'CREATe TABLE "epoch_stake"("id" SERIAL8  PRIMARY KEY UNIQUE,"addr_id" INT8 NOT NULL,"pool_id" INT8 NOT NULL,"amount" lovelace NOT NULL,"epoch_no" INT8 NOT NULL,"block_id" INT8 NOT NULL)' ;
+    EXECUTE 'ALTER TABLE "epoch_stake" ADD CONSTRAINT "unique_stake" UNIQUE("addr_id","epoch_no")' ;
+    EXECUTE 'ALTER TABLE "epoch_stake" ADD CONSTRAINT "epoch_stake_addr_id_fkey" FOREIGN KEY("addr_id") REFERENCES "stake_address"("id")' ;
+    EXECUTE 'ALTER TABLE "epoch_stake" ADD CONSTRAINT "epoch_stake_pool_id_fkey" FOREIGN KEY("pool_id") REFERENCES "pool_hash"("id")' ;
+    EXECUTE 'ALTER TABLE "epoch_stake" ADD CONSTRAINT "epoch_stake_block_id_fkey" FOREIGN KEY("block_id") REFERENCES "block"("id")' ;
     EXECUTE 'CREATe TABLE "treasury"("id" SERIAL8  PRIMARY KEY UNIQUE,"addr_id" INT8 NOT NULL,"cert_index" INT4 NOT NULL,"amount" lovelace NOT NULL,"tx_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "treasury" ADD CONSTRAINT "unique_treasury" UNIQUE("addr_id","tx_id")' ;
     EXECUTE 'ALTER TABLE "treasury" ADD CONSTRAINT "treasury_addr_id_fkey" FOREIGN KEY("addr_id") REFERENCES "stake_address"("id")' ;
