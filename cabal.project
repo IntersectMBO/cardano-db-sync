@@ -10,13 +10,13 @@ constraints:
     splitmix < 0.1
 
 package cardano-explorer-db
-  ghc-options: -Wall -Werror -fwarn-redundant-constraints
+  ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields
 
 package cardano-db-sync
-  ghc-options: -Wall -Werror -fwarn-redundant-constraints
+  ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields
 
 package cardano-db-sync-extended
-  ghc-options: -Wall -Werror -fwarn-redundant-constraints
+  ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields
 
 -- ---------------------------------------------------------
 -- Disable all tests by default

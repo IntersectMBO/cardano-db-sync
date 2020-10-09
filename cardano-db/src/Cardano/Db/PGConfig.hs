@@ -51,7 +51,7 @@ readPGPassFileEnv = do
   mpath <- lookupEnv "PGPASSFILE"
   case mpath of
     Just fp -> readPGPassFileExit (PGPassFile fp)
-    Nothing -> error $ "Environment variable 'PGPASSFILE' not set."
+    Nothing -> error "Environment variable 'PGPASSFILE' not set."
 
 -- | Read the PostgreSQL configuration from the specified file.
 readPGPassFile :: PGPassFile -> IO (Maybe PGConfig)

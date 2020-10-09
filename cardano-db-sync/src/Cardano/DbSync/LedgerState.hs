@@ -62,6 +62,8 @@ import qualified Shelley.Spec.Ledger.PParams as Shelley
 import           System.Directory (listDirectory, removeFile)
 import           System.FilePath ((</>), dropExtension, takeExtension)
 
+{- HLINT ignore "Reduce duplication" -}
+
 data CardanoLedgerState = CardanoLedgerState
   { clsState :: !(LedgerState CardanoBlock)
   , clsConfig :: !(LedgerConfig CardanoBlock)

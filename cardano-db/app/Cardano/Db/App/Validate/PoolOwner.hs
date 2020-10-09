@@ -9,8 +9,6 @@ import           Cardano.Db
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Data.Maybe (fromMaybe)
-
 import           Database.Esqueleto (Value (..), (^.), (==.),
                     countRows, from, notExists, select, unValue, where_)
 
@@ -19,7 +17,7 @@ import           Database.Persist.Sql (SqlBackend)
 
 validateAllPoolsHaveOwners :: IO ()
 validateAllPoolsHaveOwners = do
-  putStrF $ "All pools have owners : "
+  putStrF "All pools have owners : "
   count <- runDbNoLogging queryPoolsWithoutOwners
   if count == 0
     then putStrLn $ greenText "ok"
@@ -36,4 +34,4 @@ queryPoolsWithoutOwners = do
               where_ . notExists . from $ \ powner -> do
                 where_ (phash ^. PoolHashId ==. powner ^. PoolOwnerPoolHashId)
               pure countRows
-    pure $ fromMaybe 0 (unValue <$> listToMaybe res)
+    pure $ maybe 0 unValue (listToMaybe res)

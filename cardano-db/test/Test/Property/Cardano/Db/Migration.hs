@@ -23,7 +23,7 @@ prop_roundtrip_renderMigrationVersion_no_spaces :: Property
 prop_roundtrip_renderMigrationVersion_no_spaces =
   H.property $ do
     mv <- H.forAll genMigrationVersion
-    any (== ' ') (renderMigrationVersionFile mv) === False
+    elem ' ' (renderMigrationVersionFile mv) === False
 
 -- -----------------------------------------------------------------------------
 

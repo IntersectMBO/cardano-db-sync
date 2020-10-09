@@ -11,7 +11,6 @@ import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.Either (lefts)
-import           Data.Maybe (fromMaybe)
 import           Data.Word (Word64)
 
 import           Database.Esqueleto (InnerJoin (..), Value (..), (^.), (==.),
@@ -72,7 +71,7 @@ queryBlockTxCount blockNo = do
             on (blk ^. BlockId ==. tx ^. TxBlock)
             where_ (blk ^. BlockBlockNo ==. just (val blockNo))
             pure countRows
-  pure $ fromMaybe 0 (unValue <$> listToMaybe res)
+  pure $ maybe 0 unValue (listToMaybe res)
 
 queryEpochBlockNumbers :: MonadIO m => Word64 -> ReaderT SqlBackend m [(Word64, Word64)]
 queryEpochBlockNumbers epoch = do

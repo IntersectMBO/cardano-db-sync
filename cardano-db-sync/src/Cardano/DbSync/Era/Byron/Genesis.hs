@@ -104,7 +104,7 @@ insertValidateGenesisDist tracer networkName cfg = do
             liftIO . logInfo tracer $ "Initial genesis distribution populated. Hash "
                             <> renderByteArray (configGenesisHash cfg)
 
-            supply <- lift $ DB.queryTotalSupply
+            supply <- lift DB.queryTotalSupply
             liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
@@ -114,7 +114,7 @@ validateGenesisDistribution
     -> ReaderT SqlBackend m (Either DbSyncNodeError ())
 validateGenesisDistribution tracer networkName cfg bid =
   runExceptT $ do
-    meta <- liftLookupFail "validateGenesisDistribution" $ DB.queryMeta
+    meta <- liftLookupFail "validateGenesisDistribution" DB.queryMeta
 
     when (DB.metaStartTime meta /= Byron.configStartTime cfg) $
       dbSyncNodeError $ Text.concat

@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -61,14 +60,13 @@ module Cardano.Db.Query
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
-import           Control.Monad (join)
 import           Control.Monad.Extra (mapMaybeM)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Fixed (Micro)
-import           Data.Maybe (catMaybes, fromMaybe, listToMaybe)
+import           Data.Maybe (fromMaybe, mapMaybe, listToMaybe)
 import           Data.Ratio (numerator)
 import           Data.Text (Text)
 import           Data.Time.Clock (UTCTime)
@@ -86,6 +84,8 @@ import           Cardano.Db.Error
 import           Cardano.Db.Schema
 import           Cardano.Db.Types
 
+{- HLINT ignore "Reduce duplication" -}
+{- HLINT ignore "Redundant ^." -}
 
 -- If you squint, these Esqueleto queries almost look like SQL queries.
 
@@ -129,7 +129,7 @@ queryBlockHeight = do
           orderBy [desc (blk ^. BlockBlockNo)]
           limit 1
           pure (blk ^. BlockBlockNo)
-  pure $ fromMaybe 0 (join $ unValue <$> listToMaybe res)
+  pure $ fromMaybe 0 (unValue =<< listToMaybe res)
 
 -- | Get the latest 'Block' associated with the given hash, skipping any EBBs.
 queryMainBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail Block)
@@ -142,7 +142,7 @@ queryMainBlock hash = do
     queryMainBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m (Either LookupFail Block)
     queryMainBlockId blkid = do
       res <- select . from $ \ blk -> do
-              where_ $ (isJust (blk ^. BlockBlockNo) &&. blk ^. BlockId <=. val blkid)
+              where_ (isJust (blk ^. BlockBlockNo) &&. blk ^. BlockId <=. val blkid)
               orderBy [desc (blk ^. BlockSlotNo)]
               limit 1
               pure blk
@@ -164,11 +164,11 @@ queryCalcEpochEntry :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Epoch)
 queryCalcEpochEntry epochNum = do
     blkRes <- select . from $ \ blk -> do
               where_ (blk ^. BlockEpochNo ==. just (val epochNum))
-              pure $ (countRows, min_ (blk ^. BlockTime), max_ (blk ^. BlockTime))
+              pure (countRows, min_ (blk ^. BlockTime), max_ (blk ^. BlockTime))
     txRes <- select . from $ \ (tx `InnerJoin` blk) -> do
               on (tx ^. TxBlock ==. blk ^. BlockId)
               where_ (blk ^. BlockEpochNo ==. just (val epochNum))
-              pure $ (sum_ (tx ^. TxOutSum), sum_ (tx ^. TxFee), count (tx ^. TxOutSum))
+              pure (sum_ (tx ^. TxOutSum), sum_ (tx ^. TxFee), count (tx ^. TxOutSum))
     case (listToMaybe blkRes, listToMaybe txRes) of
       (Just blk, Just tx) -> pure $ convertAll (unValue3 blk) (unValue3 tx)
       (Just blk, Nothing) -> pure $ convertBlk (unValue3 blk)
@@ -193,33 +193,26 @@ queryCalcEpochEntry epochNum = do
 queryCheckPoints :: MonadIO m => Word64 -> ReaderT SqlBackend m [(Word64, ByteString)]
 queryCheckPoints limitCount = do
     latest <- select $ from $ \ blk -> do
-                where_ $ (isJust $ blk ^. BlockSlotNo)
+                where_ (isJust $ blk ^. BlockSlotNo)
                 orderBy [desc (blk ^. BlockSlotNo)]
                 limit (fromIntegral limitCount)
-                pure $ (blk ^. BlockSlotNo)
-    case catMaybes (map unValue latest) of
+                pure (blk ^. BlockSlotNo)
+    case mapMaybe unValue latest of
       [] -> pure []
       xs -> mapMaybeM querySpacing xs
   where
     querySpacing :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe (Word64, ByteString))
     querySpacing blkNo = do
        rows <- select $ from $ \ blk -> do
-                  where_ $ (blk ^. BlockSlotNo ==. just (val blkNo))
-                  pure $ (blk ^. BlockSlotNo, blk ^. BlockHash)
-       pure $ join (convert <$> listToMaybe rows)
+                  where_ (blk ^. BlockSlotNo ==. just (val blkNo))
+                  pure (blk ^. BlockSlotNo, blk ^. BlockHash)
+       pure $ convert =<< listToMaybe rows
 
     convert :: (Value (Maybe Word64), Value ByteString) -> Maybe (Word64, ByteString)
     convert (va, vb) =
       case (unValue va, unValue vb) of
         (Nothing, _ ) -> Nothing
         (Just a, b) -> Just (a, b)
-{-
-    calcSpacing :: Word64 -> [Word64]
-    calcSpacing end =
-      if end > 2 * limitCount
-        then [ end, end - end `div` limitCount .. 1 ]
-        else [ end, end - 2 .. 1 ]
--}
 
 queryDepositUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
 queryDepositUpToBlockNo blkNo = do
@@ -280,26 +273,26 @@ queryLastByronBlockNo = do
                 orderBy [desc (blk ^. BlockBlockNo)]
                 limit 1
                 pure (blk ^. BlockBlockNo)
-  pure $ join (fmap unValue $ listToMaybe res)
+  pure $ unValue =<< listToMaybe res
 
 -- | Get 'BlockId' of the latest block.
 queryLatestBlockId :: MonadIO m => ReaderT SqlBackend m (Maybe BlockId)
 queryLatestBlockId = do
   res <- select $ from $ \ blk -> do
                 orderBy [desc (blk ^. BlockSlotNo)]
-                limit $ 1
-                pure $ (blk ^. BlockId)
+                limit 1
+                pure (blk ^. BlockId)
   pure $ fmap unValue (listToMaybe res)
 
 -- | Get the 'BlockNo' of the latest block.
 queryLatestBlockNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
 queryLatestBlockNo = do
   res <- select $ from $ \ blk -> do
-                where_ $ (isJust $ blk ^. BlockBlockNo)
+                where_ (isJust $ blk ^. BlockBlockNo)
                 orderBy [desc (blk ^. BlockBlockNo)]
                 limit 1
                 pure $ blk ^. BlockBlockNo
-  pure $ listToMaybe (catMaybes $ map unValue res)
+  pure $ listToMaybe (mapMaybe unValue res)
 
 -- | Get the latest block.
 queryLatestBlock :: MonadIO m => ReaderT SqlBackend m (Maybe Block)
@@ -308,7 +301,7 @@ queryLatestBlock = do
                 where_ (isJust $ blk ^. BlockSlotNo)
                 orderBy [desc (blk ^. BlockSlotNo)]
                 limit 1
-                pure $ blk
+                pure blk
   pure $ fmap entityVal (listToMaybe res)
 
 queryLatestCachedEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
@@ -322,21 +315,21 @@ queryLatestCachedEpochNo = do
 queryLatestEpochNo :: MonadIO m => ReaderT SqlBackend m Word64
 queryLatestEpochNo = do
   res <- select . from $ \ blk -> do
-            where_ $ (isJust $ blk ^. BlockSlotNo)
+            where_ (isJust $ blk ^. BlockSlotNo)
             orderBy [desc (blk ^. BlockEpochNo)]
             limit 1
             pure (blk ^. BlockEpochNo)
-  pure $ fromMaybe 0 (listToMaybe . catMaybes $ map unValue res)
+  pure $ fromMaybe 0 (listToMaybe $ mapMaybe unValue res)
 
 -- | Get the latest slot number
 queryLatestSlotNo :: MonadIO m => ReaderT SqlBackend m Word64
 queryLatestSlotNo = do
   res <- select . from $ \ blk -> do
-            where_ $ (isJust $ blk ^. BlockSlotNo)
+            where_ (isJust $ blk ^. BlockSlotNo)
             orderBy [desc (blk ^. BlockSlotNo)]
             limit 1
             pure $ blk ^. BlockSlotNo
-  pure $ fromMaybe 0 (listToMaybe . catMaybes $ map unValue res)
+  pure $ fromMaybe 0 (listToMaybe $ mapMaybe unValue res)
 
 -- | Given a 'SlotNo' return the 'SlotNo' of the previous block.
 queryPreviousSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Word64)
@@ -344,8 +337,8 @@ queryPreviousSlotNo slotNo = do
   res <- select . from $ \ (blk `InnerJoin` pblk) -> do
                 on (blk ^. BlockPrevious ==. just (pblk ^. BlockId))
                 where_ (blk ^. BlockSlotNo ==. just (val slotNo))
-                pure $ (pblk ^. BlockSlotNo)
-  pure $ maybe Nothing unValue (listToMaybe res)
+                pure $ pblk ^. BlockSlotNo
+  pure $ unValue =<< listToMaybe res
 
 -- | Count the number of rows that match the select with the supplied predicate.
 querySelectCount :: (MonadIO m, From table) => (table -> SqlQuery ()) -> ReaderT SqlBackend m Word
@@ -389,8 +382,7 @@ querySlotNosGreaterThan slotNo = do
             -- ones first.
             orderBy [desc (blk ^. BlockSlotNo)]
             pure (blk ^. BlockSlotNo)
-  pure $ catMaybes (map (fmap SlotNo . unValue) res)
-
+  pure $ mapMaybe (fmap SlotNo . unValue) res
 
 -- | Calculate the slot time (as UTCTime) for a given slot number.
 -- This will fail if the slot is empty.
@@ -465,7 +457,7 @@ queryUtxoAtBlockId blkid = do
                   on $ tx1 ^. TxBlock ==. blk ^. BlockId
                   on $ txin ^. TxInTxInId ==. tx1 ^. TxId
                   on $ (txout ^. TxOutTxId ==. txin ^. TxInTxOutId) &&. (txout ^. TxOutIndex ==. txin ^. TxInTxOutIndex)
-                  where_ $ (txout ^. TxOutTxId `in_` txLessEqual blkid) &&. ((isNothing $ blk ^. BlockBlockNo) ||. (blk ^. BlockId >. val blkid))
+                  where_ $ (txout ^. TxOutTxId `in_` txLessEqual blkid) &&. (isNothing (blk ^. BlockBlockNo) ||. (blk ^. BlockId >. val blkid))
                   pure (txout, tx2 ^. TxHash)
     pure $ map convert outputs
   where
@@ -477,14 +469,14 @@ queryUtxoAtBlockNo blkNo = do
   eblkId <- select . from $ \blk -> do
                 where_ (blk ^. BlockBlockNo ==. just (val blkNo))
                 pure (blk ^. BlockId)
-  maybe (pure []) queryUtxoAtBlockId $ fmap unValue (listToMaybe eblkId)
+  maybe (pure []) (queryUtxoAtBlockId . unValue) (listToMaybe eblkId)
 
 queryUtxoAtSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m [(TxOut, ByteString)]
 queryUtxoAtSlotNo slotNo = do
   eblkId <- select . from $ \blk -> do
                 where_ (blk ^. BlockSlotNo ==. just (val slotNo))
                 pure (blk ^. BlockId)
-  maybe (pure []) queryUtxoAtBlockId $ fmap unValue (listToMaybe eblkId)
+  maybe (pure []) (queryUtxoAtBlockId . unValue) (listToMaybe eblkId)
 
 queryWithdrawalsUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
 queryWithdrawalsUpToBlockNo blkNo = do

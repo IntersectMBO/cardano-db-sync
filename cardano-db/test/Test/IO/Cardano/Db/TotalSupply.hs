@@ -31,7 +31,7 @@ initialSupplyTest =
     slid <- insertSlotLeader testSlotLeader
     bid0 <- insertBlock (mkBlock 0 slid)
     (tx0Ids :: [TxId]) <- mapM insertTx $ mkTxs bid0 4
-    _ <- mapM insertTxOut $ map (mkTxOut bid0) tx0Ids
+    mapM_ (insertTxOut . mkTxOut bid0) tx0Ids
     count <- queryBlockCount
     assertBool ("Block count should be 1, got " ++ show count) (count == 1)
     supply0 <- queryTotalSupply

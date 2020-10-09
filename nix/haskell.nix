@@ -45,7 +45,6 @@ let
     echo post-check
     DBNAME=nixbld
     NAME=db_schema.sql
-    rm $out
     mkdir -p $out/nix-support
     echo "Dumping schema to db_schema.sql"
     pg_dump -h /tmp -s $DBNAME > $out/$NAME

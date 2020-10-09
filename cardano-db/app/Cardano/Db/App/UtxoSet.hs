@@ -28,7 +28,7 @@ utxoSetAtSlot slotNo = do
   let aggregated = aggregateUtxos utxoSet
   let (accept, reject) = partitionUtxos aggregated
 
-  if length aggregated == 0
+  if null aggregated
     then reportSlotDate slotNo eUtcTime
     else do
       putStr $ unlines

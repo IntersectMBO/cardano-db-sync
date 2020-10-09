@@ -1,8 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -213,7 +211,7 @@ dbSyncProtocols
     -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
 dbSyncProtocols trce env plugin queryVar ledgerVar _version codecs _connectionId =
     NodeToClientProtocols {
-          localChainSyncProtocol = localChainSyncProtocol
+          localChainSyncProtocol = localChainSyncPtcl
         , localTxSubmissionProtocol = dummylocalTxSubmit
         , localStateQueryProtocol = localStateQuery
         }
@@ -221,8 +219,8 @@ dbSyncProtocols trce env plugin queryVar ledgerVar _version codecs _connectionId
     localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync CardanoBlock (Tip CardanoBlock)))
     localChainSyncTracer = toLogObject $ appendName "ChainSync" trce
 
-    localChainSyncProtocol :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
-    localChainSyncProtocol = InitiatorProtocolOnly $ MuxPeerRaw $ \channel ->
+    localChainSyncPtcl :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
+    localChainSyncPtcl = InitiatorProtocolOnly $ MuxPeerRaw $ \channel ->
       liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
         logInfo trce "Starting chainSyncClient"
         latestPoints <- getLatestPoints (envLedgerStateDir env)
@@ -329,7 +327,7 @@ chainSyncClient trce env queryVar ledgerVar metrics latestPoints currentTip acti
         (if null latestPoints then [genesisPoint] else latestPoints)
         ClientPipelinedStIntersect
           { recvMsgIntersectFound = \ _hdr tip -> pure $ go policy Zero currentTip (getTipBlockNo tip)
-          , recvMsgIntersectNotFound = \ tip -> pure $ go policy Zero currentTip (getTipBlockNo tip)
+          , recvMsgIntersectNotFound = pure . go policy Zero currentTip . getTipBlockNo
           }
   where
     policy = pipelineDecisionLowHighMark 1000 10000

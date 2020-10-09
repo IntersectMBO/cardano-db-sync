@@ -5,22 +5,22 @@
         "homepage": "https://input-output-hk.github.io/haskell.nix",
         "owner": "input-output-hk",
         "repo": "haskell.nix",
-        "rev": "35b1ec8cd577bfc5abf7d0325f38aab01de5ed00",
-        "sha256": "0mg18i6g7nxd7qk0kaca6k8dsc3kam21772zlr19k03ff67ws55j",
+        "rev": "316351ab3e44f33c9322c28f38c90e52d4533be3",
+        "sha256": "0fakjwrhnjd0f37gmdsmfgcx5m57yjb13bch2db2vz0zsvd3ijh7",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/haskell.nix/archive/35b1ec8cd577bfc5abf7d0325f38aab01de5ed00.tar.gz",
+        "url": "https://github.com/input-output-hk/haskell.nix/archive/316351ab3e44f33c9322c28f38c90e52d4533be3.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "iohk-nix": {
-        "branch": "master",
+        "branch": "SRE-141-hlint-subdirs",
         "description": "nix scripts shared across projects",
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "iohk-nix",
-        "rev": "2894091a8fee6688b53880a1aea89f4951144c58",
-        "sha256": "0y7z57bgag166891isaj9vn0sphn2jvszzgj64lq1a2d8xg3vifk",
+        "rev": "38e15bd84926cfe61e6bd5991de861da3c58009c",
+        "sha256": "0sbrs6g77ba603pa8g5zzakdkn20ch39mxllxzlxyy9c0s20h22l",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/iohk-nix/archive/2894091a8fee6688b53880a1aea89f4951144c58.tar.gz",
+        "url": "https://github.com/input-output-hk/iohk-nix/archive/38e15bd84926cfe61e6bd5991de861da3c58009c.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     }
 }
