@@ -50,7 +50,6 @@ import qualified Cardano.Api.Typed as Api
 import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Crypto.DSIGN as DSIGN
 import qualified Cardano.Crypto.KES.Class as KES
-import qualified Cardano.Crypto.VRF.Class as VRF
 
 import qualified Cardano.Db as Db
 import           Cardano.DbSync.Config
@@ -124,8 +123,8 @@ blockTxs =
 blockOpCert :: Shelley.BHBody StandardShelley -> ByteString
 blockOpCert = KES.rawSerialiseVerKeyKES . Shelley.ocertVkHot . Shelley.bheaderOCert
 
-blockVrfKey :: Shelley.BHBody StandardShelley -> ByteString
-blockVrfKey = VRF.rawSerialiseVerKeyVRF . Shelley.bheaderVrfVk
+blockVrfKey :: Shelley.BHBody StandardShelley -> Text
+blockVrfKey = Api.serialiseToBech32 . Api.VrfVerificationKey . Shelley.bheaderVrfVk
 
 blockVrfKeyToPoolHash :: ShelleyBlock -> ByteString
 blockVrfKeyToPoolHash =
