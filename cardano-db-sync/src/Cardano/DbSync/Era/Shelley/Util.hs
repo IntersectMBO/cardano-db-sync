@@ -39,7 +39,8 @@ module Cardano.DbSync.Era.Shelley.Util
   , txWithdrawalSum
   , unHeaderHash
   , unitIntervalToDouble
-  , unKeyHash
+  , unKeyHashRaw
+  , unKeyHashView
   , unTxHash
   ) where
 
@@ -232,8 +233,11 @@ unHeaderHash = Crypto.hashToBytes . Shelley.unHashHeader . Consensus.unShelleyHa
 unitIntervalToDouble :: Shelley.UnitInterval -> Double
 unitIntervalToDouble = fromRational . Shelley.unitIntervalToRational
 
-unKeyHash :: Shelley.KeyHash d era -> ByteString
-unKeyHash (Shelley.KeyHash kh) = Crypto.hashToBytes kh
+unKeyHashRaw :: Shelley.KeyHash d era -> ByteString
+unKeyHashRaw (Shelley.KeyHash kh) = Crypto.hashToBytes kh
+
+unKeyHashView :: Shelley.KeyHash 'Shelley.StakePool StandardShelley -> Text
+unKeyHashView = Api.serialiseToBech32 . Api.StakePoolKeyHash
 
 unTxHash :: ShelleyTxId -> ByteString
 unTxHash (Shelley.TxId txid) = Crypto.hashToBytes txid

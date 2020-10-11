@@ -58,8 +58,9 @@ share
     stageThree Int
 
   PoolHash
-    hash                ByteString          sqltype=hash28type
-    UniquePoolHash      hash
+    hashRaw             ByteString          sqltype=hash28type
+    view                Text
+    UniquePoolHash      hashRaw
 
   SlotLeader
     hash                ByteString          sqltype=hash32type
