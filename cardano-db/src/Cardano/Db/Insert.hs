@@ -38,8 +38,8 @@ import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Database.Persist.Class (AtLeastOneUniqueKey, Key, PersistEntityBackend,
-                    getByValue, insert)
+import           Database.Persist.Class (AtLeastOneUniqueKey, Key, PersistEntityBackend, getByValue,
+                   insert)
 import           Database.Persist.Sql (SqlBackend)
 import           Database.Persist.Types (entityKey)
 import           Database.PostgreSQL.Simple (SqlError)

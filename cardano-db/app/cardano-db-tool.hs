@@ -1,6 +1,6 @@
 
-import           Cardano.Db.App
 import           Cardano.Db
+import           Cardano.Db.App
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 

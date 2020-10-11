@@ -24,8 +24,8 @@ module Cardano.DbSync
 
 import           Control.Tracer (Tracer)
 
-import qualified Cardano.BM.Setup as Logging
 import           Cardano.BM.Data.Tracer (ToLogObject (..))
+import qualified Cardano.BM.Setup as Logging
 import           Cardano.BM.Trace (Trace, appendName, logInfo)
 import qualified Cardano.BM.Trace as Logging
 
@@ -45,13 +45,13 @@ import           Cardano.DbSync.Metrics
 import           Cardano.DbSync.Plugin (DbSyncNodePlugin (..))
 import           Cardano.DbSync.Plugin.Default (defDbSyncNodePlugin)
 import           Cardano.DbSync.Rollback (unsafeRollback)
-import           Cardano.DbSync.StateQuery (StateQueryTMVar, getSlotDetails,
-                    localStateQueryHandler, newStateQueryTMVar)
+import           Cardano.DbSync.StateQuery (StateQueryTMVar, getSlotDetails, localStateQueryHandler,
+                   newStateQueryTMVar)
 import           Cardano.DbSync.Tracing.ToObjectOrphans ()
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
-import           Cardano.Prelude hiding (option, (%), Nat)
+import           Cardano.Prelude hiding (Nat, option, (%))
 
 import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
 
@@ -70,8 +70,8 @@ import           Data.Void (Void)
 import           Network.Mux (MuxTrace, WithMuxBearer)
 import           Network.Mux.Types (MuxMode (..))
 
+import           Network.TypedProtocol.Pipelined (Nat (Succ, Zero))
 import           Ouroboros.Network.Driver.Simple (runPipelinedPeer)
-import           Network.TypedProtocol.Pipelined (Nat(Zero, Succ))
 
 import           Ouroboros.Consensus.Block.Abstract (CodecConfig, ConvertRawHash (..))
 import           Ouroboros.Consensus.Byron.Ledger.Config (mkByronCodecConfig)
@@ -79,30 +79,31 @@ import           Ouroboros.Consensus.Byron.Node ()
 import           Ouroboros.Consensus.Cardano.Block (CardanoEras, CodecConfig (..))
 import           Ouroboros.Consensus.Cardano.Node ()
 import           Ouroboros.Consensus.HardFork.History.Qry (Interpreter)
-import           Ouroboros.Consensus.Network.NodeToClient (ClientCodecs,
-                    cChainSyncCodec, cStateQueryCodec, cTxSubmissionCodec)
+import           Ouroboros.Consensus.Network.NodeToClient (ClientCodecs, cChainSyncCodec,
+                   cStateQueryCodec, cTxSubmissionCodec)
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
 import           Ouroboros.Consensus.Shelley.Ledger.Config (CodecConfig (ShelleyCodecConfig))
 import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
 
+import           Ouroboros.Network.Block (BlockNo (..), HeaderHash, Point (..), Tip (..), blockNo,
+                   genesisPoint, getTipBlockNo, getTipPoint)
+import           Ouroboros.Network.Mux (MuxPeer (..), RunMiniProtocol (..))
+import           Ouroboros.Network.NodeToClient (ClientSubscriptionParams (..), ConnectionId,
+                   ErrorPolicyTrace (..), Handshake, IOManager, LocalAddress,
+                   NetworkSubscriptionTracers (..), NodeToClientProtocols (..), TraceSendRecv,
+                   WithAddr (..), localSnocket, localTxSubmissionPeerNull, networkErrorPolicies,
+                   withIOManager)
 import qualified Ouroboros.Network.NodeToClient.Version as Network
-import           Ouroboros.Network.Block (BlockNo (..), HeaderHash, Point (..),
-                    Tip (..), blockNo, genesisPoint, getTipBlockNo, getTipPoint)
-import           Ouroboros.Network.Mux (MuxPeer (..),  RunMiniProtocol (..))
-import           Ouroboros.Network.NodeToClient (IOManager, ClientSubscriptionParams (..),
-                    ConnectionId, ErrorPolicyTrace (..), Handshake, LocalAddress,
-                    NetworkSubscriptionTracers (..), NodeToClientProtocols (..),
-                    TraceSendRecv, WithAddr (..), localSnocket,
-                    localTxSubmissionPeerNull, networkErrorPolicies, withIOManager)
-import qualified Ouroboros.Network.Point as Point
 import           Ouroboros.Network.Point (withOrigin)
+import qualified Ouroboros.Network.Point as Point
 
-import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined (ChainSyncClientPipelined (..),
-                    ClientPipelinedStIdle (..), ClientPipelinedStIntersect (..), ClientStNext (..),
-                    chainSyncClientPeerPipelined, recvMsgIntersectFound, recvMsgIntersectNotFound,
-                    recvMsgRollBackward, recvMsgRollForward)
-import           Ouroboros.Network.Protocol.ChainSync.PipelineDecision (pipelineDecisionLowHighMark,
-                        PipelineDecision (..), runPipelineDecision, MkPipelineDecision)
+import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined
+                   (ChainSyncClientPipelined (..), ClientPipelinedStIdle (..),
+                   ClientPipelinedStIntersect (..), ClientStNext (..), chainSyncClientPeerPipelined,
+                   recvMsgIntersectFound, recvMsgIntersectNotFound, recvMsgRollBackward,
+                   recvMsgRollForward)
+import           Ouroboros.Network.Protocol.ChainSync.PipelineDecision (MkPipelineDecision,
+                   PipelineDecision (..), pipelineDecisionLowHighMark, runPipelineDecision)
 import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
 import           Ouroboros.Network.Protocol.LocalStateQuery.Client (localStateQueryClientPeer)
 import qualified Ouroboros.Network.Snocket as Snocket

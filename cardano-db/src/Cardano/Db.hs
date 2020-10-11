@@ -24,7 +24,7 @@ import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Database.Persist.Sql (IsolationLevel (Serializable), SqlBackend,
-                    transactionSaveWithIsolation)
+                   transactionSaveWithIsolation)
 
 transactionCommit :: MonadIO m => ReaderT SqlBackend m ()
 transactionCommit = transactionSaveWithIsolation Serializable

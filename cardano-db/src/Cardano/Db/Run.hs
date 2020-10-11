@@ -12,25 +12,26 @@ module Cardano.Db.Run
   , runDbStdoutLogging
   ) where
 
-import           Cardano.BM.Data.LogItem (LogObject (..), LOContent (..), PrivacyAnnotation (..), mkLOMeta)
+import           Cardano.BM.Data.LogItem (LOContent (..), LogObject (..), PrivacyAnnotation (..),
+                   mkLOMeta)
 import           Cardano.BM.Data.Severity (Severity (..))
 import           Cardano.BM.Trace (Trace)
 
+import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Logger (LogLevel (..), LogSource, LoggingT, NoLoggingT,
-                    defaultLogStr, runLoggingT, runNoLoggingT, runStdoutLoggingT)
+                   defaultLogStr, runLoggingT, runNoLoggingT, runStdoutLoggingT)
 import           Control.Monad.Trans.Reader (ReaderT)
 import           Control.Tracer (traceWith)
-import           Control.Monad.IO.Class (liftIO)
 
 import qualified Data.ByteString.Char8 as BS
 import           Data.Text (Text)
 import qualified Data.Text.Encoding as T
-import qualified Data.Text.Lazy.IO as LT
 import qualified Data.Text.Lazy.Builder as LT
+import qualified Data.Text.Lazy.IO as LT
 
-import           Database.Persist.Postgresql (withPostgresqlConn, openSimpleConn)
+import           Database.Persist.Postgresql (openSimpleConn, withPostgresqlConn)
+import           Database.Persist.Sql (IsolationLevel (..), SqlBackend, runSqlConnWithIsolation)
 import           Database.PostgreSQL.Simple (connectPostgreSQL)
-import           Database.Persist.Sql (SqlBackend, IsolationLevel (..), runSqlConnWithIsolation)
 
 import           Database.Esqueleto
 import           Database.Esqueleto.Internal.Sql

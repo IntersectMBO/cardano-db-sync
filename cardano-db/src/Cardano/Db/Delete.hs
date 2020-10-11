@@ -9,7 +9,7 @@ import           Cardano.Slotting.Slot (SlotNo (..))
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Database.Persist.Sql (SqlBackend, (==.), deleteCascade, selectKeysList)
+import           Database.Persist.Sql (SqlBackend, deleteCascade, selectKeysList, (==.))
 
 import           Cardano.Db.Schema
 

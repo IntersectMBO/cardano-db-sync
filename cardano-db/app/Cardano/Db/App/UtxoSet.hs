@@ -5,8 +5,8 @@ module Cardano.Db.App.UtxoSet
 
 import           Cardano.Chain.Common (decodeAddressBase58, isRedeemAddress)
 
-import           Data.Word (Word64)
 import           Data.Time.Clock (UTCTime)
+import           Data.Word (Word64)
 
 import           Cardano.Db
 

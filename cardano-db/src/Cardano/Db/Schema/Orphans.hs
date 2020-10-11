@@ -20,8 +20,8 @@ import           Numeric.Natural (Natural)
 
 import           Shelley.Spec.Ledger.PParams (ProtVer (..))
 
-import           Text.ParserCombinators.ReadP (ReadP, char, choice, many1, munch1,
-                    readP_to_S, satisfy, string, skipSpaces)
+import           Text.ParserCombinators.ReadP (ReadP, char, choice, many1, munch1, readP_to_S,
+                   satisfy, skipSpaces, string)
 import           Text.Read (readMaybe)
 
 instance PersistField DbWord64 where

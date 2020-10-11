@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.DbSync.Era.Byron.Util
@@ -37,8 +37,8 @@ import qualified Cardano.Chain.Block as Byron
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Chain.Slotting as ByronInsanity
-import qualified Cardano.Chain.Update as Byron
 import qualified Cardano.Chain.UTxO as Byron
+import qualified Cardano.Chain.Update as Byron
 
 import           Crypto.Hash (Blake2b_256)
 

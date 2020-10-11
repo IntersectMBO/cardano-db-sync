@@ -8,13 +8,13 @@ module Cardano.Db.Schema.Types
   , PaymentAddrHash (..)
   ) where
 
-import Data.ByteString.Char8 (ByteString)
+import           Data.ByteString.Char8 (ByteString)
 
-import Database.Persist.Class (PersistField)
+import           Database.Persist.Class (PersistField)
 
-import GHC.Generics (Generic)
+import           GHC.Generics (Generic)
 
-import Quiet (Quiet (..))
+import           Quiet (Quiet (..))
 
 
 newtype Address -- Length of 28/56/94 bytes enforced by Postgres.

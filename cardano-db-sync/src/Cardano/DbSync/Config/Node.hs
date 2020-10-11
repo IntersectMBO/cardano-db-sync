@@ -25,8 +25,8 @@ import           Cardano.Prelude
 import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Data.Aeson (FromJSON (..), Object, (.:), (.:?))
-import           Data.Aeson.Types (Parser)
 import qualified Data.Aeson as Aeson
+import           Data.Aeson.Types (Parser)
 import           Data.Foldable (asum)
 import qualified Data.Yaml as Yaml
 

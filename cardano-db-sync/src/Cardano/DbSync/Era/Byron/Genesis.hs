@@ -15,12 +15,13 @@ module Cardano.DbSync.Era.Byron.Genesis
 
 import           Cardano.Prelude
 
-import qualified Cardano.Binary as Binary
 import           Cardano.BM.Trace (Trace, logInfo)
+import qualified Cardano.Binary as Binary
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Chain.UTxO as Byron
-import qualified Cardano.Crypto as Crypto (Hash, fromCompactRedeemVerificationKey, serializeCborHash)
+import qualified Cardano.Crypto as Crypto (Hash, fromCompactRedeemVerificationKey,
+                   serializeCborHash)
 
 import qualified Cardano.Db as DB
 import qualified Cardano.DbSync.Era.Byron.Util as Byron

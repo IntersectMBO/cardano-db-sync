@@ -48,8 +48,8 @@ import           Cardano.Prelude
 
 import qualified Cardano.Api.Typed as Api
 
-import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Crypto.DSIGN as DSIGN
+import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Crypto.KES.Class as KES
 
 import qualified Cardano.Db as Db
@@ -72,9 +72,9 @@ import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 import           Ouroboros.Network.Block (BlockNo (..))
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
-import           Shelley.Spec.Ledger.Coin (Coin (..))
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.BlockChain as Shelley
+import           Shelley.Spec.Ledger.Coin (Coin (..))
 import qualified Shelley.Spec.Ledger.Hashing as Shelley
 import qualified Shelley.Spec.Ledger.Keys as Shelley
 import qualified Shelley.Spec.Ledger.MetaData as Shelley

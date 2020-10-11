@@ -1,13 +1,13 @@
-{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans  #-}
 
 module Cardano.DbSync.Tracing.ToObjectOrphans () where
 
-import           Data.Text (Text)
 import           Data.Aeson ((.=))
+import           Data.Text (Text)
 
 import           Cardano.BM.Data.Tracer
 import           Cardano.Tracing.OrphanInstances.Network ()

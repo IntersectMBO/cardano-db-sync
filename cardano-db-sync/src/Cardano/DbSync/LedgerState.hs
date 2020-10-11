@@ -30,7 +30,7 @@ import           Cardano.Prelude
 import           Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), fromWithOrigin)
 
-import           Control.Concurrent.STM.TVar (TVar, newTVarIO, writeTVar, readTVar, readTVarIO)
+import           Control.Concurrent.STM.TVar (TVar, newTVarIO, readTVar, readTVarIO, writeTVar)
 import           Control.Exception (IOException, handle)
 import qualified Control.Exception as Exception
 import           Control.Monad.Extra (firstJustM)
@@ -40,16 +40,17 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import           Data.Either (partitionEithers)
 import qualified Data.List as List
 
-import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockSlot, blockPrevHash)
+import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockPrevHash, blockSlot)
 import           Ouroboros.Consensus.Byron.Ledger (initByronLedgerState)
+import           Ouroboros.Consensus.Cardano.Block
+                   (LedgerState (LedgerStateByron, LedgerStateShelley))
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
-import           Ouroboros.Consensus.Cardano.Block (LedgerState (LedgerStateByron, LedgerStateShelley))
 import           Ouroboros.Consensus.Config (TopLevelConfig (..))
-import           Ouroboros.Consensus.Ledger.Abstract (LedgerConfig, ledgerTipHash, ledgerTipSlot,
-                    tickThenApply, tickThenReapply)
 import           Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import           Ouroboros.Consensus.HardFork.Combinator.State (epochInfoLedger)
 import           Ouroboros.Consensus.HardFork.Combinator.State.Infra (initHardForkState)
+import           Ouroboros.Consensus.Ledger.Abstract (LedgerConfig, ledgerTipHash, ledgerTipSlot,
+                   tickThenApply, tickThenReapply)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 import           Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), EncodeDisk (..))
@@ -60,7 +61,7 @@ import qualified Shelley.Spec.Ledger.LedgerState as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 
 import           System.Directory (listDirectory, removeFile)
-import           System.FilePath ((</>), dropExtension, takeExtension)
+import           System.FilePath (dropExtension, takeExtension, (</>))
 
 {- HLINT ignore "Reduce duplication" -}
 

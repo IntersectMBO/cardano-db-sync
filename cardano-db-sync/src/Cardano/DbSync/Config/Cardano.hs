@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Cardano.DbSync.Config.Cardano
@@ -20,8 +20,8 @@ import           Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Crypto.Hash.Class as Crypto
 
 import           Cardano.DbSync.Config.Byron
-import           Cardano.DbSync.Config.Types
 import           Cardano.DbSync.Config.Shelley
+import           Cardano.DbSync.Config.Types
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Util
 
@@ -29,8 +29,8 @@ import           Control.Monad.Trans.Except (ExceptT)
 
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Cardano (Nonce (..), Protocol (..))
-import           Ouroboros.Consensus.Cardano.CanHardFork (TriggerHardFork (..))
 import qualified Ouroboros.Consensus.Cardano as Consensus
+import           Ouroboros.Consensus.Cardano.CanHardFork (TriggerHardFork (..))
 import           Ouroboros.Consensus.Config (TopLevelConfig (..))
 import           Ouroboros.Consensus.Ledger.Basics (LedgerConfig)
 import           Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)

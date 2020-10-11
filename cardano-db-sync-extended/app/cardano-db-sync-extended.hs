@@ -4,7 +4,7 @@ import           Cardano.Prelude
 
 import           Cardano.Db (MigrationDir (..))
 import           Cardano.DbSync (ConfigFile (..), DbSyncNodeParams (..), LedgerStateDir (..),
-                    SocketPath (..), runDbSyncNode)
+                   SocketPath (..), runDbSyncNode)
 import           Cardano.DbSync.Plugin.Extended (extendedDbSyncNodePlugin)
 
 import           Cardano.Slotting.Slot (SlotNo (..))
