@@ -155,7 +155,7 @@ share
     hashRaw             ByteString          sqltype=addr29type
     view                Text
     registeredTxId      TxId                -- Only used for rollback.
-    UniqueStakeAddress  hashRaw registeredTxId
+    UniqueStakeAddress  hashRaw
 
   -- -----------------------------------------------------------------------------------------------
   -- A Pool can have more than one owner, so we have a PoolOwner table that references this one.
