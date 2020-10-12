@@ -1,5 +1,9 @@
 # Revision history for cardano-db
 
+## 5.0.2
+
+* Fix handling of unsigned 64bit integer fields (#334, #335)
+
 ## 5.0.1
 
 * Update dependencies.
