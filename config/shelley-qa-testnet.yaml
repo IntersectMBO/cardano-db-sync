@@ -1,19 +1,17 @@
 # Explorer DB Node configuration
 
-NetworkName: mainnet
+NetworkName: shelley-qa
+
 EnableLogMetrics: False
 EnableLogging: True
 
 Protocol: Cardano
 
-RequiresNetworkMagic: RequiresNoMagic
-
-ByronGenesisFile: /nix/store/nr8wrfw9bv9zg225zyxj3w90jac9k9qm-shelley_qa-byron-genesis.json
-ByronGenesisHash: 23e1652476eb78532d3907dec52e79a8dedd8c81c1150b2fc3efb9b3a58977b5
-
-# Shelley genesis is not actully used but to specify Protocol Cardano, we need to sepcify one.
-ShelleyGenesisFile: /nix/store/35j9yg3hzngcrpqz0by9dqqw8n717kfq-shelley_qa-shelley-genesis.json
-ShelleyGenesisHash: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+# The config file for the node we are connecting to. If this is not the correct
+# config, it will likely lead to db-sync throwing up weird error messages from
+# the consensus layer.
+# The path to the node config file is relative to this config file.
+NodeConfigFile: ../../cardano-node/configuration/cardano/shelley_qa-config.json
 
 # ------------------------------------------------------------------------------
 # Logging configuration follows.
