@@ -20,8 +20,13 @@ import Shelley.Spec.Ledger.PParams (ProtVer (..))
 instance PersistField DbWord64 where
   toPersistValue = PersistText . Text.pack . show . unDbWord64
   fromPersistValue (PersistText bs) = Right $ DbWord64 (read $ Text.unpack bs)
+  fromPersistValue x@(PersistRational r) =
+    -- If the value is greater than MAX_INT64, it comes back as a PersistRational (wat??).
+    if denominator r == 1
+      then Right $ DbWord64 (fromIntegral $ numerator r)
+      else Left $ mconcat [ "Failed to parse Haskell type DbWord64: ", Text.pack (show x) ]
   fromPersistValue x =
-    Left $ mconcat [ "Failed to parse Haskell type Word64: ", Text.pack (show x) ]
+    Left $ mconcat [ "Failed to parse Haskell type DbWord64: ", Text.pack (show x) ]
 
 instance PersistField Word128 where
   toPersistValue = PersistText . Text.pack . show
