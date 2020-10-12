@@ -14,7 +14,7 @@ module Cardano.DbSync.Era.Shelley.Query
 import qualified Cardano.Crypto.Hash as Crypto
 import           Cardano.Db
 import           Cardano.DbSync.Types
-import           Cardano.DbSync.Era.Shelley.Util (unKeyHash)
+import           Cardano.DbSync.Era.Shelley.Util (unKeyHashRaw)
 import           Cardano.DbSync.Util
 
 import           Control.Monad.IO.Class (MonadIO)
@@ -34,7 +34,7 @@ import qualified Shelley.Spec.Ledger.TxBody as Shelley
 queryPoolHashId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe PoolHashId)
 queryPoolHashId hash = do
   res <- select . from $ \ phash -> do
-            where_ (phash ^. PoolHashHash ==. val hash)
+            where_ (phash ^. PoolHashHashRaw ==. val hash)
             pure (phash ^. PoolHashId)
   pure $ unValue <$> listToMaybe res
 
@@ -76,7 +76,7 @@ queryStakePoolKeyHash kh = do
             on (blk ^. BlockId ==. tx ^. TxBlock)
             on (tx ^. TxId ==. poolUpdate ^. PoolUpdateRegisteredTxId)
             on (poolUpdate ^. PoolUpdateHashId ==. poolHash ^. PoolHashId)
-            where_ (poolHash ^. PoolHashHash ==. val (unKeyHash kh))
+            where_ (poolHash ^. PoolHashHashRaw ==. val (unKeyHashRaw kh))
             orderBy [desc (blk ^. BlockSlotNo)]
             pure (poolHash ^. PoolHashId)
   pure $ maybeToEither (DbLookupMessage "StakePoolKeyHash") unValue (listToMaybe res)

@@ -257,7 +257,7 @@ insertPoolRegister tracer (EpochNo epoch) txId idx params = do
         , " > maxLovelace. See https://github.com/input-output-hk/cardano-ledger-specs/issues/1551"
         ]
 
-  poolHashId <- lift . DB.insertPoolHash $ DB.PoolHash (Shelley.unKeyHash $ Shelley._poolPubKey params)
+  poolHashId <- insertPoolHash (Shelley._poolPubKey params)
   poolUpdateId <- lift . DB.insertPoolUpdate $
                     DB.PoolUpdate
                       { DB.poolUpdateHashId = poolHashId
@@ -277,6 +277,18 @@ insertPoolRegister tracer (EpochNo epoch) txId idx params = do
 
 maxLovelace :: Word64
 maxLovelace = 45000000000000000
+
+insertPoolHash
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Shelley.KeyHash 'Shelley.StakePool StandardShelley
+    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) DB.PoolHashId
+insertPoolHash kh =
+    lift . DB.insertPoolHash $
+      DB.PoolHash
+        { DB.poolHashHashRaw = Shelley.unKeyHashRaw kh
+        , DB.poolHashView = Shelley.unKeyHashView kh
+        }
+
 
 insertPoolRetire
     :: (MonadBaseControl IO m, MonadIO m)
@@ -324,8 +336,8 @@ insertPoolOwner
 insertPoolOwner poolHashId txId skh =
   void . lift . DB.insertPoolOwner $
     DB.PoolOwner
-      { DB.poolOwnerHash = Shelley.unKeyHash skh
-      , DB.poolOwnerPoolHashId = poolHashId
+      { DB.poolOwnerPoolHashId = poolHashId
+      , DB.poolOwnerHash = Shelley.unKeyHashRaw skh
       , DB.poolOwnerRegisteredTxId = txId
       }
 
@@ -482,7 +494,7 @@ insertParamProposal _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap
       void . lift . DB.insertParamProposal $
         DB.ParamProposal
           { DB.paramProposalEpochNo = epoch
-          , DB.paramProposalKey = Shelley.unKeyHash key
+          , DB.paramProposalKey = Shelley.unKeyHashRaw key
           , DB.paramProposalMinFeeA = fromIntegral <$> strictMaybeToMaybe (Shelley._minfeeA pmap)
           , DB.paramProposalMinFeeB = fromIntegral <$> strictMaybeToMaybe (Shelley._minfeeB pmap)
           , DB.paramProposalMaxBlockSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxBBSize pmap)

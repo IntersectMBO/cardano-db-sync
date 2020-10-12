@@ -58,8 +58,9 @@ share
     stageThree Int
 
   PoolHash
-    hash                ByteString          sqltype=hash28type
-    UniquePoolHash      hash
+    hashRaw             ByteString          sqltype=hash28type
+    view                Text
+    UniquePoolHash      hashRaw
 
   SlotLeader
     hash                ByteString          sqltype=hash32type
@@ -88,7 +89,7 @@ share
     time                UTCTime             sqltype=timestamp
     txCount             Word64
     -- Shelley specific
-    vrfKey              ByteString Maybe    sqltype=hash32type
+    vrfKey              Text Maybe
     opCert              ByteString Maybe    sqltype=hash32type
     protoVersion        Text Maybe
     UniqueBlock         hash
