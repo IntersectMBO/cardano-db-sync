@@ -124,6 +124,36 @@ cexplorer=# select withdrawal.* from withdrawal
  27684 |   30399 | 154619825 | 2788211
 ```
 
+### Get the stake distribution for each pool for a given epoch:
+Simplest query is:
+```
+cexplorer=# select pool_id, sum (amount) from epoch_stake
+              where epoch_no = 216 group by pool_id ;
+
+ pool_id |       sum
+---------+-----------------
+       1 |  25326935163066
+       2 | 112825285842751
+...
+    1172 |       498620686
+    1173 |     15024987189
+(1114 rows)
+```
+Or, to use the Bech32 pool identifier instead of the Postgres generated `pool_id` field:
+```
+cexplorer=# select pool_hash.view, sum (amount) as lovelace from epoch_stake
+              inner join pool_hash on epoch_stake.pool_id = pool_hash.id
+              where epoch_no = 216 group by pool_hash.id ;
+                           view                           |    lovelace
+----------------------------------------------------------+-----------------
+ pool10p6wd9k0fwk2zqkqnqr8efyr7gms627ujk9dxgk6majskhawr6r |    789466838780
+ pool1vvh72z8dktfy2x965w0yp5psmnyv3845pmm37nerhl6jk6m2njw |   1427697660218
+...
+ pool1tq03j8aa5myedlr8xj6tltstdsn5eprxq4cd4qr54mhv25unsyk |     50297430457
+ pool1nux6acnlx0du7ss9fhg2phjlaqe87l4wcurln5r6f0k8xreluez |   5401615743207
+(1114 rows)
+
+```
 
 
 
