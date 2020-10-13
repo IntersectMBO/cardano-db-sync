@@ -24,6 +24,7 @@ let
       cabal-install
       ghcid
       hlint
+      stylish-haskell
       weeder
       nix
       niv
