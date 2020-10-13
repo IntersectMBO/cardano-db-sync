@@ -19,4 +19,11 @@ pkgs: _: with pkgs;
     compiler-nix-name = compiler;
     inherit (cardanoDbSyncHaskellPackages) index-state;
   }).components.exes) hlint;
+
+  inherit ((haskell-nix.hackage-package {
+    name = "stylish-haskell";
+    version = "0.12.2.0";
+    compiler-nix-name = compiler;
+    inherit (cardanoDbSyncHaskellPackages) index-state;
+  }).components.exes) stylish-haskell;
 }

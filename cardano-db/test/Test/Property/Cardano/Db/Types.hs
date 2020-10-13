@@ -8,8 +8,8 @@ module Test.Property.Cardano.Db.Types
 import           Cardano.Chain.Common (maxLovelaceVal)
 
 import qualified Data.Aeson as Aeson
-import           Data.Word (Word64)
 import           Data.WideWord.Word128 (Word128 (..))
+import           Data.Word (Word64)
 
 import           Database.Persist.Class (PersistField (..))
 

@@ -15,18 +15,19 @@ import           Control.Monad.Logger (NoLoggingT)
 import           Control.Monad.Trans.Reader (ReaderT)
 import           Control.Monad.Trans.Resource (runResourceT)
 
+import qualified Data.ByteString.Char8 as BS
 import           Data.Conduit.Binary (sinkHandle)
 import           Data.Conduit.Process (sourceCmdWithConsumer)
 import           Data.Either (partitionEithers)
 import qualified Data.List as List
-import qualified Data.ByteString.Char8 as BS
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           Data.Time.Clock (getCurrentTime)
 import           Data.Time.Format (defaultTimeLocale, formatTime, iso8601DateFormat)
 
-import           Database.Persist.Sql (SqlBackend, SqlPersistT, entityVal, getMigration, selectFirst)
+import           Database.Persist.Sql (SqlBackend, SqlPersistT, entityVal, getMigration,
+                   selectFirst)
 
 import           Cardano.Db.Migration.Haskell
 import           Cardano.Db.Migration.Version
@@ -36,8 +37,9 @@ import           Cardano.Db.Schema
 
 import           System.Directory (listDirectory)
 import           System.Exit (ExitCode (..), exitFailure)
-import           System.FilePath ((</>), takeFileName)
-import           System.IO (Handle, IOMode (AppendMode), hFlush, hPrint, hPutStrLn, stdout, withFile)
+import           System.FilePath (takeFileName, (</>))
+import           System.IO (Handle, IOMode (AppendMode), hFlush, hPrint, hPutStrLn, stdout,
+                   withFile)
 
 
 

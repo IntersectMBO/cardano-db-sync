@@ -7,7 +7,7 @@ module Test.Property.Cardano.Db.Migration
 
 import           Cardano.Db
 
-import           Hedgehog (Gen, Property, (===), discover)
+import           Hedgehog (Gen, Property, discover, (===))
 import qualified Hedgehog as H
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range

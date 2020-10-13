@@ -11,13 +11,13 @@ module Cardano.DbSync.Era.Byron.Insert
   ( insertByronBlock
   ) where
 
-import           Cardano.Binary (serialize')
 import           Cardano.BM.Trace (Trace, logDebug, logInfo)
+import           Cardano.Binary (serialize')
 
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, newExceptT,
-                    runExceptT)
+                   runExceptT)
 
 import qualified Cardano.Binary as Binary
 

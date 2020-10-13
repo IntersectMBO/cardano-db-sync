@@ -10,9 +10,9 @@ module Cardano.DbSync.Metrics
 import           Cardano.Prelude
 
 import           System.Metrics.Prometheus.Concurrent.RegistryT (RegistryT (..), registerGauge,
-                    runRegistryT, unRegistryT)
-import           System.Metrics.Prometheus.Metric.Gauge (Gauge)
+                   runRegistryT, unRegistryT)
 import           System.Metrics.Prometheus.Http.Scrape (serveHttpTextMetricsT)
+import           System.Metrics.Prometheus.Metric.Gauge (Gauge)
 
 
 data Metrics = Metrics

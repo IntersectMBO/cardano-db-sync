@@ -43,8 +43,8 @@ import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..))
 import           Cardano.Prelude
 
 import           Data.Aeson (FromJSON (..), Object, Value (..), (.:))
-import           Data.Aeson.Types (Parser, typeMismatch)
 import qualified Data.Aeson as Aeson
+import           Data.Aeson.Types (Parser, typeMismatch)
 import           Data.Text (Text)
 
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))

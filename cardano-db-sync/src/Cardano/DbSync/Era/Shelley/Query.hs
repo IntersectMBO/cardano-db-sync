@@ -13,8 +13,8 @@ module Cardano.DbSync.Era.Shelley.Query
 
 import qualified Cardano.Crypto.Hash as Crypto
 import           Cardano.Db
-import           Cardano.DbSync.Types
 import           Cardano.DbSync.Era.Shelley.Util (unKeyHashRaw)
+import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
 import           Control.Monad.IO.Class (MonadIO)
@@ -25,8 +25,8 @@ import           Data.Either (fromRight)
 import           Data.Maybe (listToMaybe)
 import           Data.Word (Word64)
 
-import           Database.Esqueleto (InnerJoin (..), Value (..),  (^.), (==.), (<=.),
-                    desc, from, on, orderBy, select, val, where_)
+import           Database.Esqueleto (InnerJoin (..), Value (..), desc, from, on, orderBy, select,
+                   val, where_, (<=.), (==.), (^.))
 import           Database.Persist.Sql (SqlBackend)
 
 import qualified Shelley.Spec.Ledger.TxBody as Shelley

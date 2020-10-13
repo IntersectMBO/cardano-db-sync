@@ -7,13 +7,13 @@ module Cardano.DbSync.Plugin.Default
   ) where
 
 
-import           Cardano.Prelude
 import           Cardano.BM.Trace (Trace)
+import           Cardano.Prelude
 
 import           Cardano.DbSync.Config
-import           Cardano.DbSync.Error
 import qualified Cardano.DbSync.Era.Byron.Insert as Byron
 import qualified Cardano.DbSync.Era.Shelley.Insert as Shelley
+import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState
 import           Cardano.DbSync.Plugin
 import           Cardano.DbSync.Rollback (rollbackToSlot)

@@ -70,7 +70,10 @@ let
 
       hlint = callPackage iohkNix.tests.hlint {
         src = ./. ;
-        projects = attrNames (selectProjectPackages cardanoDbSyncHaskellPackages);
+      };
+
+      stylish-haskell = callPackage iohkNix.tests.stylish-haskell {
+        src = ./. ;
       };
     };
 

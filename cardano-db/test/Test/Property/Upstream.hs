@@ -10,7 +10,7 @@ module Test.Property.Upstream
 
 import           Cardano.Chain.Common (decodeAddressBase58, isRedeemAddress)
 
-import           Hedgehog (Property, (===), discover)
+import           Hedgehog (Property, discover, (===))
 import qualified Hedgehog as H
 import qualified Hedgehog.Gen as Gen
 

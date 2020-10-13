@@ -66,18 +66,17 @@ import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Fixed (Micro)
-import           Data.Maybe (fromMaybe, mapMaybe, listToMaybe)
+import           Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import           Data.Ratio (numerator)
 import           Data.Text (Text)
 import           Data.Time.Clock (UTCTime)
 import           Data.Word (Word16, Word64)
 
 import           Database.Esqueleto (Entity (..), From, InnerJoin (..), LeftOuterJoin (..),
-                    PersistField, SqlExpr, SqlQuery, Value (..), ValueList,
-                    (^.), (==.), (<=.), (&&.), (||.), (>.),
-                    count, countRows, desc, entityKey, entityVal, from, exists,
-                    in_, isNothing, just, limit, max_, min_, not_, notExists, on, orderBy,
-                    select, subList_select, sum_, unValue, unSqlBackendKey, val, where_)
+                   PersistField, SqlExpr, SqlQuery, Value (..), ValueList, count, countRows, desc,
+                   entityKey, entityVal, exists, from, in_, isNothing, just, limit, max_, min_,
+                   notExists, not_, on, orderBy, select, subList_select, sum_, unSqlBackendKey,
+                   unValue, val, where_, (&&.), (<=.), (==.), (>.), (^.), (||.))
 import           Database.Persist.Sql (SqlBackend)
 
 import           Cardano.Db.Error

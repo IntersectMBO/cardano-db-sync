@@ -9,8 +9,8 @@ import           Cardano.Db
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Database.Esqueleto (Value (..), (^.), (==.),
-                    countRows, from, notExists, select, unValue, where_)
+import           Database.Esqueleto (Value (..), countRows, from, notExists, select, unValue,
+                   where_, (==.), (^.))
 
 import           Database.Persist.Sql (SqlBackend)
 

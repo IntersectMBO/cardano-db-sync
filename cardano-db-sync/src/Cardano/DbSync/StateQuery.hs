@@ -27,21 +27,23 @@ import           Cardano.Prelude
 import           Control.Concurrent.STM.TMVar (TMVar, newEmptyTMVarIO, putTMVar, takeTMVar)
 
 import           Data.IORef (IORef, newIORef, readIORef, writeIORef)
-import           Data.Time.Clock (UTCTime, getCurrentTime, addUTCTime)
+import           Data.Time.Clock (UTCTime, addUTCTime, getCurrentTime)
 
-import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (RelativeTime (..), SystemStart (..))
+import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (RelativeTime (..),
+                   SystemStart (..))
 import           Ouroboros.Consensus.Cardano.Block (CardanoEras, Query (..))
 import           Ouroboros.Consensus.Cardano.Node ()
 import           Ouroboros.Consensus.HardFork.Combinator.Basics (HardForkBlock (..))
-import           Ouroboros.Consensus.HardFork.Combinator.Ledger.Query (QueryHardFork (GetInterpreter))
-import           Ouroboros.Consensus.HardFork.History.Qry (PastHorizonException, Expr (..), Qry, Interpreter,
-                    interpretQuery, qryFromExpr, slotToEpoch')
+import           Ouroboros.Consensus.HardFork.Combinator.Ledger.Query
+                   (QueryHardFork (GetInterpreter))
+import           Ouroboros.Consensus.HardFork.History.Qry (Expr (..), Interpreter,
+                   PastHorizonException, Qry, interpretQuery, qryFromExpr, slotToEpoch')
 import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
 
 import           Ouroboros.Network.Block (Point (..))
-import           Ouroboros.Network.Protocol.LocalStateQuery.Client (ClientStQuerying (..),
-                    ClientStAcquired (..), ClientStAcquiring (..), ClientStIdle (..),
-                    LocalStateQueryClient (..))
+import           Ouroboros.Network.Protocol.LocalStateQuery.Client (ClientStAcquired (..),
+                   ClientStAcquiring (..), ClientStIdle (..), ClientStQuerying (..),
+                   LocalStateQueryClient (..))
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as StateQuery
 import           Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 

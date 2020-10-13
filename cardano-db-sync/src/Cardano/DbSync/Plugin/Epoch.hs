@@ -26,13 +26,13 @@ import           Data.Text (Text)
 import qualified Data.Time.Clock as Time
 import           Data.Word (Word64)
 
-import           Database.Esqueleto (Value (..), (^.), (==.),
-                    desc, from, limit, orderBy, select, val, where_)
+import           Database.Esqueleto (Value (..), desc, from, limit, orderBy, select, val, where_,
+                   (==.), (^.))
 
 import           Database.Persist.Class (replace)
 import           Database.Persist.Sql (SqlBackend)
 
-import           Cardano.Db (EpochId, EntityField (..), listToMaybe)
+import           Cardano.Db (EntityField (..), EpochId, listToMaybe)
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState

@@ -6,10 +6,10 @@ module Cardano.Db.Error
   ) where
 
 
-import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Base16 as Base16
-import qualified Data.Text as Text
+import           Data.ByteString.Char8 (ByteString)
 import           Data.Text (Text)
+import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import           Data.Word (Word16, Word64)
 

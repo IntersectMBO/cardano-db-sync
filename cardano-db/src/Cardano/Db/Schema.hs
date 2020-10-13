@@ -16,21 +16,21 @@
 
 module Cardano.Db.Schema where
 
-import Cardano.Db.Schema.Orphans ()
-import Cardano.Db.Types (DbWord64)
+import           Cardano.Db.Schema.Orphans ()
+import           Cardano.Db.Types (DbWord64)
 
-import Data.ByteString.Char8 (ByteString)
-import Data.Int (Int64)
-import Data.Text (Text)
-import Data.Time.Clock (UTCTime)
-import Data.Word (Word16, Word64)
-import Data.WideWord.Word128 (Word128)
+import           Data.ByteString.Char8 (ByteString)
+import           Data.Int (Int64)
+import           Data.Text (Text)
+import           Data.Time.Clock (UTCTime)
+import           Data.WideWord.Word128 (Word128)
+import           Data.Word (Word16, Word64)
 
 -- Do not use explicit imports from this module as the imports can change
 -- from version to version due to changes to the TH code in Persistent.
-import Database.Persist.TH
+import           Database.Persist.TH
 
-import Shelley.Spec.Ledger.PParams (ProtVer (..))
+import           Shelley.Spec.Ledger.PParams (ProtVer (..))
 
 -- In the schema definition we need to match Haskell types with with the
 -- custom type defined in PostgreSQL (via 'DOMAIN' statements). For the

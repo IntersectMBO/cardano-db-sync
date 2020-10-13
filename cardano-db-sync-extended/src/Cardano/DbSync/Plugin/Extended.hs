@@ -4,8 +4,8 @@ module Cardano.DbSync.Plugin.Extended
 
 
 import           Cardano.DbSync (DbSyncNodePlugin (..), defDbSyncNodePlugin)
-import           Cardano.DbSync.Plugin.Epoch (epochPluginOnStartup, epochPluginInsertBlock,
-                    epochPluginRollbackBlock)
+import           Cardano.DbSync.Plugin.Epoch (epochPluginInsertBlock, epochPluginOnStartup,
+                   epochPluginRollbackBlock)
 
 extendedDbSyncNodePlugin :: DbSyncNodePlugin
 extendedDbSyncNodePlugin =
