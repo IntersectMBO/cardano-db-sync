@@ -12,15 +12,15 @@
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "iohk-nix": {
-        "branch": "SRE-141-add_stylish-haskell",
+        "branch": "master",
         "description": "nix scripts shared across projects",
         "homepage": null,
         "owner": "input-output-hk",
         "repo": "iohk-nix",
-        "rev": "7b18aac929997d71c64cbf8c7e62476299ea9b1d",
+        "rev": "f2dee151a917aac96121246ed76fb17e3f9026b0",
         "sha256": "1d8ygzczk4zbzz04j1yrwzbfld59bc6a6ar7bmlfx1j5m6fhjb8k",
         "type": "tarball",
-        "url": "https://github.com/input-output-hk/iohk-nix/archive/7b18aac929997d71c64cbf8c7e62476299ea9b1d.tar.gz",
+        "url": "https://github.com/input-output-hk/iohk-nix/archive/f2dee151a917aac96121246ed76fb17e3f9026b0.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     }
 }
