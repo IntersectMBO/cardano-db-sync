@@ -115,14 +115,14 @@ mkProtocolCardano ge =
           Nothing                                   -- Maybe PBftSignatureThreshold
           (dncByronProtocolVersion dnc)
           (dncByronSoftwareVersion dnc)
-          Nothing                                   -- Maybe ByronLeaderCredentials
+          []                                        -- [ByronLeaderCredentials]
 
           -- Shelley parameters
           (scConfig shelleyGenesis)
           (shelleyPraosNonce shelleyGenesis)
           (shelleyProtVer dnc)
           (Consensus.MaxMajorProtVer $ dncShelleyMaxProtocolVersion dnc)
-          Nothing                                   -- Maybe (TPraosLeaderCredentials StandardShelley)
+          []                                        -- [TPraosLeaderCredentials StandardShelley]
 
           -- Hard fork parameters
           (dncShelleyHardForkNotBeforeEpoch dnc)
