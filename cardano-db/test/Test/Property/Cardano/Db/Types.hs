@@ -8,10 +8,14 @@ module Test.Property.Cardano.Db.Types
 import           Cardano.Chain.Common (maxLovelaceVal)
 
 import qualified Data.Aeson as Aeson
+import           Data.Int (Int64)
+import           Data.Ratio ((%))
+import qualified Data.Text as Text
 import           Data.WideWord.Word128 (Word128 (..))
 import           Data.Word (Word64)
 
 import           Database.Persist.Class (PersistField (..))
+import           Database.Persist.Types (PersistValue (..))
 
 import           Cardano.Db
 
@@ -30,6 +34,19 @@ prop_roundtrip_Ada_via_JSON =
   H.withTests 5000 . H.property $ do
     mv <- H.forAll genAda
     H.tripping mv Aeson.encode Aeson.eitherDecode
+
+prop_roundtrip_DbWord64_PersistField :: Property
+prop_roundtrip_DbWord64_PersistField =
+    H.withTests 5000 . H.property $ do
+      w64 <- H.forAll genDbWord64
+      H.tripping w64 specialPersistDbWord64 fromPersistValue
+  where
+    specialPersistDbWord64 :: DbWord64 -> PersistValue
+    specialPersistDbWord64 (DbWord64 w64) =
+      if w64 > fromIntegral (maxBound :: Int64)
+        then PersistRational (fromIntegral w64 % 1)
+        else PersistText (Text.pack $ show w64)
+
 
 prop_roundtrip_ProtVer_PersistField :: Property
 prop_roundtrip_ProtVer_PersistField =
@@ -56,6 +73,9 @@ genAda =
         , Gen.word64 (Range.linear 0 5000)           -- Small values
         , Gen.word64 (Range.linear (maxLovelaceVal - 5000) maxLovelaceVal) -- Near max.
         ]
+
+genDbWord64 :: Gen DbWord64
+genDbWord64 = DbWord64 <$> genWord64
 
 genNatural :: Gen Natural
 genNatural = fromIntegral <$> Gen.word (Range.linear 0 5000)
