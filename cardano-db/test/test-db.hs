@@ -23,7 +23,7 @@ main = do
   mPgPassFile <- lookupEnv "PGPASSFILE"
   when (isNothing mPgPassFile) $ do
     currentDir <- getCurrentDirectory
-    setEnv "PGPASSFILE" (currentDir </> "../config/pgpass")
+    setEnv "PGPASSFILE" (currentDir </> "../config/pgpass-mainnet")
 
   defaultMain $
     testGroup "Database"
