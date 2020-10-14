@@ -58,8 +58,8 @@ nix-build -A scripts.testnet.node -o testnet-node-remote && ./testnet-node-remot
 ```
 and then the two `db-sync` process run as:
 ```
-PGPASSFILE=config/pgpass scripts/postgresql-setup.sh --createdb
-PGPASSFILE=config/pgpass ./cardano-db-sync-extended-exe \
+PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh --createdb
+PGPASSFILE=config/pgpass-mainnet ./cardano-db-sync-extended-exe \
     --config config/mainnet-config.yaml \
     --socket-path ../cardano-node/state-node-mainnet/node.socket --schema-dir schema/
 ```
