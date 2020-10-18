@@ -15,7 +15,7 @@ module Cardano.DbSync.Era.Shelley.Insert
 
 import           Cardano.Prelude
 
-import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo, logWarning)
+import           Cardano.BM.Trace (Trace, logDebug, logInfo, logWarning)
 
 import           Cardano.Db (DbWord64 (..))
 
@@ -251,10 +251,17 @@ insertPoolRegister tracer (EpochNo epoch) txId idx params = do
   rewardId <- insertStakeAddress txId $ Shelley._poolRAcnt params
 
   when (fromIntegral (Shelley.unCoin $ Shelley._poolPledge params) > maxLovelace) $
-    liftIO . logError tracer $
+    liftIO . logWarning tracer $
       mconcat
         [ "Bad pledge amount: ", textShow (Shelley.unCoin $ Shelley._poolPledge params)
         , " > maxLovelace. See https://github.com/input-output-hk/cardano-ledger-specs/issues/1551"
+        ]
+
+  when (fromIntegral (Shelley.unCoin $ Shelley._poolCost params) > maxLovelace) $
+    liftIO . logWarning tracer $
+      mconcat
+        [ "Bad fixed cost amount: ", textShow (Shelley.unCoin $ Shelley._poolCost params)
+        , " > maxLovelace. See https://github.com/input-output-hk/cardano-db-sync/issues/351"
         ]
 
   poolHashId <- insertPoolHash (Shelley._poolPubKey params)
@@ -268,7 +275,7 @@ insertPoolRegister tracer (EpochNo epoch) txId idx params = do
                       , DB.poolUpdateActiveEpochNo = epoch + 2
                       , DB.poolUpdateMeta = mdId
                       , DB.poolUpdateMargin = realToFrac $ Shelley.intervalValue (Shelley._poolMargin params)
-                      , DB.poolUpdateFixedCost = fromIntegral $ Shelley.unCoin (Shelley._poolCost params)
+                      , DB.poolUpdateFixedCost = DbWord64 $ fromIntegral (Shelley.unCoin $ Shelley._poolCost params)
                       , DB.poolUpdateRegisteredTxId = txId
                       }
 

@@ -176,7 +176,7 @@ share
     activeEpochNo       Word64
     meta                PoolMetaDataId Maybe
     margin              Double                                  -- sqltype=percentage????
-    fixedCost           Word64              sqltype=lovelace
+    fixedCost           DbWord64            sqltype=word64type
     registeredTxId      TxId                                    -- Slot number in which the pool was registered.
     UniquePoolUpdate    hashId registeredTxId
 
