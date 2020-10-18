@@ -169,8 +169,8 @@ insertTxOuts blkId (address, value) = do
               { DB.txHash = Byron.unTxHash $ txHashOfAddress address
               , DB.txBlock = blkId
               , DB.txBlockIndex = 0
-              , DB.txOutSum = Byron.unsafeGetLovelace value
-              , DB.txFee = 0
+              , DB.txOutSum = DB.DbLovelace (Byron.unsafeGetLovelace value)
+              , DB.txFee = DB.DbLovelace 0
               , DB.txDeposit = 0
               , DB.txSize = 0 -- Genesis distribution address to not have a size.
               }
@@ -181,7 +181,7 @@ insertTxOuts blkId (address, value) = do
               , DB.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 address
               , DB.txOutAddressRaw = Binary.serialize' address
               , DB.txOutPaymentCred = Nothing
-              , DB.txOutValue = Byron.unsafeGetLovelace value
+              , DB.txOutValue = DB.DbLovelace (Byron.unsafeGetLovelace value)
               }
 
 -- -----------------------------------------------------------------------------

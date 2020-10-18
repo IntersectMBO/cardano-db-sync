@@ -65,7 +65,7 @@ aggregateUtxos xs =
   List.sortOn (Text.length . fst)
     . Map.toList
     . Map.fromListWith (+)
-    $ map (\(x, _) -> (txOutAddress x, txOutValue x)) xs
+    $ map (\(x, _) -> (txOutAddress x, unDbLovelace (txOutValue x))) xs
 
 isRedeemTextAddress :: Text -> Bool
 isRedeemTextAddress addr =
@@ -113,7 +113,7 @@ textShow = Text.pack . show
 
 utxoSetSum :: [(TxOut, a)] -> Ada
 utxoSetSum xs =
-  word64ToAda . sum $ map (txOutValue . fst) xs
+  word64ToAda . sum $ map (unDbLovelace . txOutValue . fst) xs
 
 writeUtxos :: FilePath -> [(Text, Word64)] -> IO ()
 writeUtxos fname xs = do

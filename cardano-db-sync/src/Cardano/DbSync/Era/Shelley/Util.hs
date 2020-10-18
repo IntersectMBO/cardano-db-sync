@@ -16,6 +16,7 @@ module Cardano.DbSync.Era.Shelley.Util
   , blockOpCert
   , blockVrfKeyView
   , blockCreatorPoolHash
+  , coinToDbLovelace
   , epochNumber
   , fakeGenesisHash
   , maybePaymentCred
@@ -51,6 +52,7 @@ import qualified Cardano.Api.Typed as Api
 import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Crypto.KES.Class as KES
 
+import           Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as Db
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Types
@@ -128,6 +130,9 @@ blockOpCert = KES.rawSerialiseVerKeyKES . Shelley.ocertVkHot . Shelley.bheaderOC
 
 blockVrfKeyView :: ShelleyBlock -> Text
 blockVrfKeyView = Api.serialiseToBech32 . Api.VrfVerificationKey . Shelley.bheaderVrfVk . blockBody
+
+coinToDbLovelace :: Coin -> DbLovelace
+coinToDbLovelace = DbLovelace . fromIntegral . unCoin
 
 epochNumber :: ShelleyBlock -> Word64 -> Word64
 epochNumber blk slotsPerEpoch = slotNumber blk `div` slotsPerEpoch

@@ -17,7 +17,7 @@
 module Cardano.Db.Schema where
 
 import           Cardano.Db.Schema.Orphans ()
-import           Cardano.Db.Types (DbWord64)
+import           Cardano.Db.Types (DbLovelace, DbWord64)
 
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Int (Int64)
@@ -98,8 +98,8 @@ share
     hash                ByteString          sqltype=hash32type
     block               BlockId                                 -- This type is the primary key for the 'block' table.
     blockIndex          Word64              sqltype=uinteger    -- The index of this transaction within the block.
-    outSum              Word64              sqltype=lovelace
-    fee                 Word64              sqltype=lovelace
+    outSum              DbLovelace          sqltype=lovelace
+    fee                 DbLovelace          sqltype=lovelace
     deposit             Int64                                   -- Needs to allow negaitve values.
     size                Word64              sqltype=uinteger
     UniqueTx            hash
@@ -110,7 +110,7 @@ share
     address             Text
     addressRaw          ByteString
     paymentCred         ByteString Maybe    sqltype=hash28type
-    value               Word64              sqltype=lovelace
+    value               DbLovelace          sqltype=lovelace
     UniqueTxout         txId index          -- The (tx_id, index) pair must be unique.
 
   TxIn
@@ -139,7 +139,7 @@ share
   -- in a single epoch is relatively low.
   Epoch
     outSum              Word128             sqltype=word128type
-    fees                Word64              sqltype=lovelace
+    fees                DbLovelace          sqltype=lovelace
     txCount             Word64              sqltype=uinteger
     blkCount            Word64              sqltype=uinteger
     no                  Word64              sqltype=uinteger
@@ -212,14 +212,14 @@ share
     addrId              StakeAddressId
     certIndex           Word16
     -- poolId              PoolHashId
-    amount              Word64              sqltype=lovelace
+    amount              DbLovelace          sqltype=lovelace
     txId                TxId
     UniqueReserves      addrId txId
 
   Withdrawal
     addrId              StakeAddressId
     -- poolId              PoolHashId
-    amount              Word64              sqltype=lovelace
+    amount              DbLovelace          sqltype=lovelace
     txId                TxId
     UniqueWithdrawal    addrId txId
 
@@ -258,7 +258,7 @@ share
     -- epoch in which the reward was earned.
   Reward
     addrId              StakeAddressId
-    amount              Word64              sqltype=lovelace
+    amount              DbLovelace          sqltype=lovelace
     epochNo             Word64
     poolId              PoolHashId
     blockId             BlockId
@@ -267,7 +267,7 @@ share
   EpochStake
     addrId              StakeAddressId
     poolId              PoolHashId
-    amount              Word64              sqltype=lovelace
+    amount              DbLovelace          sqltype=lovelace
     epochNo             Word64
     blockId             BlockId             -- To make rollbacks work correctly.
     UniqueStake         addrId epochNo
@@ -276,7 +276,7 @@ share
     addrId              StakeAddressId
     certIndex           Word16
     -- poolId              PoolHashId
-    amount              Word64              sqltype=lovelace
+    amount              DbLovelace          sqltype=lovelace
     txId                TxId
     UniqueTreasury      addrId txId
 
@@ -291,8 +291,8 @@ share
     maxBlockSize        Word64 Maybe        sqltype=uinteger
     maxTxSize           Word64 Maybe        sqltype=uinteger
     maxBhSize           Word64 Maybe        sqltype=uinteger
-    keyDeposit          Word64 Maybe        sqltype=lovelace
-    poolDeposit         Word64 Maybe        sqltype=lovelace
+    keyDeposit          DbLovelace Maybe    sqltype=lovelace
+    poolDeposit         DbLovelace Maybe    sqltype=lovelace
     maxEpoch            Word64 Maybe        sqltype=uinteger
     optimalPoolCount    Word64 Maybe        sqltype=uinteger
     influence           Double Maybe        -- sqltype=rational
@@ -301,8 +301,8 @@ share
     decentralisation    Double Maybe        -- sqltype=interval
     entropy             ByteString Maybe    sqltype=hash32type
     protocolVersion     ProtVer Maybe
-    minUtxoValue        Word64 Maybe        sqltype=lovelace
-    minPoolCost         Word64 Maybe        sqltype=lovelace
+    minUtxoValue        DbLovelace Maybe    sqltype=lovelace
+    minPoolCost         DbLovelace Maybe    sqltype=lovelace
 
     registeredTxId      TxId                -- Slot number in which update registered.
     UniqueParamProposal key registeredTxId
@@ -314,8 +314,8 @@ share
     maxBlockSize        Word64              sqltype=uinteger
     maxTxSize           Word64              sqltype=uinteger
     maxBhSize           Word64              sqltype=uinteger
-    keyDeposit          Word64              sqltype=lovelace
-    poolDeposit         Word64              sqltype=lovelace
+    keyDeposit          DbLovelace          sqltype=lovelace
+    poolDeposit         DbLovelace          sqltype=lovelace
     maxEpoch            Word64              sqltype=uinteger
     optimalPoolCount    Word64              sqltype=uinteger
     influence           Double              -- sqltype=rational
@@ -324,8 +324,8 @@ share
     decentralisation    Double              -- sqltype=interval
     entropy             ByteString Maybe    sqltype=hash32type
     protocolVersion     ProtVer
-    minUtxoValue        Word64              sqltype=lovelace
-    minPoolCost         Word64              sqltype=lovelace
+    minUtxoValue        DbLovelace          sqltype=lovelace
+    minPoolCost         DbLovelace          sqltype=lovelace
 
     blockId             BlockId             -- The first block where these parameters are valid.
     UniqueEpochParam    epochNo blockId

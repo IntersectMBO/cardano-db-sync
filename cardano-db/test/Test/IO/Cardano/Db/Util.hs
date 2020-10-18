@@ -72,7 +72,7 @@ mkTxs :: BlockId -> Word -> [Tx]
 mkTxs blkId count =
     take (fromIntegral count) $ map create [ 0 .. ]
   where
-    create w = Tx (mkTxHash blkId w) blkId 0 2 1 0 12
+    create w = Tx (mkTxHash blkId w) blkId 0 (DbLovelace 2) (DbLovelace 1) 0 12
 
 testSlotLeader :: SlotLeader
 testSlotLeader =
@@ -81,7 +81,7 @@ testSlotLeader =
 mkTxOut :: BlockId -> TxId -> TxOut
 mkTxOut blkId txId =
   let addr = mkAddressHash blkId txId in
-  TxOut txId 0 (Text.pack addr) (BS.pack addr) Nothing 1000000000
+  TxOut txId 0 (Text.pack addr) (BS.pack addr) Nothing (DbLovelace 1000000000)
 
 unTxId :: TxId -> Word64
 unTxId = fromIntegral . unSqlBackendKey . unTxKey

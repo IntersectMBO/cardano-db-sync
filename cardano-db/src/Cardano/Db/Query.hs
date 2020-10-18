@@ -179,14 +179,14 @@ queryCalcEpochEntry epochNum = do
     convertAll (blkCount, b, c) (d, e, txCount) =
       case (b, c, d, e) of
         (Just start, Just end, Just outSum, Just fees) ->
-          Just $ Epoch (fromIntegral $ numerator outSum) (fromIntegral $ numerator fees)
+          Just $ Epoch (fromIntegral $ numerator outSum) (DbLovelace . fromIntegral $ numerator fees)
                         txCount blkCount epochNum start end
         _otherwise -> Nothing
 
     convertBlk :: (Word64, Maybe UTCTime, Maybe UTCTime) -> Maybe Epoch
     convertBlk (blkCount, b, c) =
       case (b, c) of
-        (Just start, Just end) -> Just (Epoch 0 0 0 blkCount epochNum start end)
+        (Just start, Just end) -> Just (Epoch 0 (DbLovelace 0) 0 blkCount epochNum start end)
         _otherwise -> Nothing
 
 queryCheckPoints :: MonadIO m => Word64 -> ReaderT SqlBackend m [(Word64, ByteString)]
@@ -434,7 +434,7 @@ queryTxOutCount = do
 
 -- | Give a (tx hash, index) pair, return the TxOut value.
 -- It can return 0 if the output does not exist.
-queryTxOutValue :: MonadIO m => (ByteString, Word16) -> ReaderT SqlBackend m (Either LookupFail Word64)
+queryTxOutValue :: MonadIO m => (ByteString, Word16) -> ReaderT SqlBackend m (Either LookupFail DbLovelace)
 queryTxOutValue (hash, index) = do
   res <- select . from $ \ (tx `InnerJoin` txOut) -> do
             on (tx ^. TxId ==. txOut ^. TxOutTxId)

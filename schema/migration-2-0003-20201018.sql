@@ -9,6 +9,7 @@ BEGIN
     EXECUTE 'CREATe TABLE "pool_hash"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash_raw" hash28type NOT NULL,"view" VARCHAR NOT NULL)' ;
     EXECUTE 'ALTER TABLE "pool_hash" ADD CONSTRAINT "unique_pool_hash" UNIQUE("hash_raw")' ;
     EXECUTE 'ALTER TABLE "slot_leader" ADD COLUMN "pool_hash_id" INT8 NULL' ;
+    EXECUTE 'ALTER TABLE "slot_leader" ADD CONSTRAINT "slot_leader_pool_hash_id_fkey" FOREIGN KEY("pool_hash_id") REFERENCES "pool_hash"("id")' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "epoch_slot_no" uinteger NULL' ;
     EXECUTE 'ALTER TABLE "block" ALTER COLUMN "tx_count" TYPE INT8' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "vrf_key" VARCHAR NULL' ;

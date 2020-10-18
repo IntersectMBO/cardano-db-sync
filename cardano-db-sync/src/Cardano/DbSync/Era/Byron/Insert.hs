@@ -30,6 +30,8 @@ import qualified Cardano.Chain.UTxO as Byron
 
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
 
+import           Cardano.Db (DbLovelace (..))
+
 import           Cardano.DbSync.Types
 
 import           Cardano.Prelude
@@ -54,8 +56,8 @@ import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 
 -- Trivial local data type for use in place of a tuple.
 data ValueFee = ValueFee
-  { vfValue :: !Word64
-  , vfFee :: !Word64
+  { vfValue :: !DbLovelace
+  , vfFee :: !DbLovelace
   }
 
 insertByronBlock
@@ -212,7 +214,7 @@ insertTxOut _tracer txId index txout =
               , DB.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
               , DB.txOutAddressRaw = Binary.serialize' (Byron.txOutAddress txout)
               , DB.txOutPaymentCred = Nothing -- Byron does not have a payment credential.
-              , DB.txOutValue = Byron.unsafeGetLovelace $ Byron.txOutValue txout
+              , DB.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
               }
 
 
@@ -237,10 +239,10 @@ calculateTxFee tx =
       outval <- firstExceptT (\e -> NEError $ "calculateTxFee: " <> textShow e) $ hoistEither output
       when (null inputs) $
         dbSyncNodeError "calculateTxFee: List of transaction inputs is zero."
-      inval <- sum <$> mapMExceptT (liftLookupFail "calculateTxFee" . DB.queryTxOutValue) inputs
+      inval <- sum . map unDbLovelace <$> mapMExceptT (liftLookupFail "calculateTxFee" . DB.queryTxOutValue) inputs
       if inval < outval
         then dbSyncInvariant "calculateTxFee" $ EInvInOut inval outval
-        else pure $ ValueFee outval (inval - outval)
+        else pure $ ValueFee (DbLovelace outval) (DbLovelace $ inval - outval)
   where
     -- [(Hash of tx, index within tx)]
     inputs :: [(ByteString, Word16)]

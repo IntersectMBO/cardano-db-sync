@@ -8,7 +8,10 @@ DECLARE
 BEGIN
   SELECT stage_one + 1 INTO next_version FROM "schema_version";
   IF next_version = 1 THEN
-    EXECUTE 'CREATE DOMAIN lovelace AS bigint CHECK (VALUE >= 0 AND VALUE <= 45000000000000000);';
+    -- Lovelace used to be bounded to [0, 45000000000000000] but things like 'pool_update.pledge'
+    -- can be any Word64 value so we need this :cry:.
+    EXECUTE 'CREATE DOMAIN lovelace AS numeric (20, 0) CHECK (VALUE >= 0 AND VALUE <= 18446744073709551615);';
+
     EXECUTE 'CREATE DOMAIN txindex AS smallint CHECK (VALUE >= 0 AND VALUE < 1024);';
     EXECUTE 'CREATE DOMAIN uinteger AS integer CHECK (VALUE >= 0);';
 

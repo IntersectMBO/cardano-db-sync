@@ -174,8 +174,8 @@ insertTxOuts blkId (Shelley.TxIn txInId _, txOut) = do
               { DB.txHash = Shelley.unTxHash txInId
               , DB.txBlock = blkId
               , DB.txBlockIndex = 0
-              , DB.txOutSum = fromIntegral $ Shelley.unCoin (txOutCoin txOut)
-              , DB.txFee = 0
+              , DB.txOutSum = Shelley.coinToDbLovelace (txOutCoin txOut)
+              , DB.txFee = DB.DbLovelace 0
               , DB.txDeposit = 0
               , DB.txSize = 0 -- Genesis distribution address to not have a size.
               }
@@ -186,7 +186,7 @@ insertTxOuts blkId (Shelley.TxIn txInId _, txOut) = do
               , DB.txOutAddress = Shelley.renderAddress (txOutAddress txOut)
               , DB.txOutAddressRaw = Shelley.serialiseAddr (txOutAddress txOut)
               , DB.txOutPaymentCred = Shelley.maybePaymentCred (txOutAddress txOut)
-              , DB.txOutValue = fromIntegral $ Shelley.unCoin (txOutCoin txOut)
+              , DB.txOutValue = Shelley.coinToDbLovelace (txOutCoin txOut)
               }
   where
     txOutAddress :: ShelleyTxOut -> ShelleyAddress
