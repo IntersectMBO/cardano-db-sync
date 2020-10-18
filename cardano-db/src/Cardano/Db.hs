@@ -1,5 +1,6 @@
 module Cardano.Db
   ( module X
+  , showProtVer
   , transactionCommit
 
   -- Data types from Cardano.Db.Schema:
@@ -18,6 +19,7 @@ import           Cardano.Db.PGConfig as X
 import           Cardano.Db.Query as X
 import           Cardano.Db.Run as X
 import           Cardano.Db.Schema as X
+import           Cardano.Db.Schema.Orphans (showProtVer)
 import           Cardano.Db.Types as X
 
 import           Control.Monad.IO.Class (MonadIO)

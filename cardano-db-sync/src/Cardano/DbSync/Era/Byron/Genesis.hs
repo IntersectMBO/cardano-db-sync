@@ -34,6 +34,7 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
 import           Control.Monad.Trans.Reader (ReaderT)
 
+import qualified Data.ByteString.Char8 as BS
 import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import           Data.Text (Text)
@@ -78,7 +79,7 @@ insertValidateGenesisDist tracer networkName cfg = do
             -- which would be a pain in the neck.
             slid <- lift . DB.insertSlotLeader $
                             DB.SlotLeader
-                              { DB.slotLeaderHash = genesisHashSlotLeader cfg
+                              { DB.slotLeaderHash = BS.take 28 $ configGenesisHash cfg
                               , DB.slotLeaderPoolHashId = Nothing
                               , DB.slotLeaderDescription = "Genesis slot leader"
                               }
@@ -188,10 +189,6 @@ insertTxOuts blkId (address, value) = do
 configGenesisHash :: Byron.Config -> ByteString
 configGenesisHash =
   Byron.unAbstractHash . Byron.unGenesisHash . Byron.configGenesisHash
-
-genesisHashSlotLeader :: Byron.Config -> ByteString
-genesisHashSlotLeader = configGenesisHash
-
 
 configGenesisSupply :: Byron.Config -> Either Byron.LovelaceError Word64
 configGenesisSupply =

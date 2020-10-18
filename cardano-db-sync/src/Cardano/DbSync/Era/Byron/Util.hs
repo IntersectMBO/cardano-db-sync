@@ -97,8 +97,9 @@ renderAbstractHash =
 
 slotLeaderHash :: Byron.ABlock ByteString -> ByteString
 slotLeaderHash =
-    Crypto.abstractHashToBytes . Crypto.hashRaw .LBS.fromStrict . Crypto.xpubPublicKey
-        . Crypto.unVerificationKey . Byron.headerGenesisKey . Byron.blockHeader
+  BS.take 28
+    . Crypto.abstractHashToBytes . Crypto.hashRaw .LBS.fromStrict . Crypto.xpubPublicKey
+    . Crypto.unVerificationKey . Byron.headerGenesisKey . Byron.blockHeader
 
 slotNumber :: Byron.ABlock ByteString -> Word64
 slotNumber =

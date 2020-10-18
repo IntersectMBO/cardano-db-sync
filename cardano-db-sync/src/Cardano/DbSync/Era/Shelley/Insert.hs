@@ -75,7 +75,7 @@ insertShelleyBlock
 insertShelleyBlock tracer env blk lStateSnap details = do
   runExceptT $ do
     pbid <- liftLookupFail "insertShelleyBlock" $ DB.queryBlockId (Shelley.blockPrevHash blk)
-    mPhid <- lift $ queryPoolHashId (Shelley.blockVrfKeyToPoolHash blk)
+    mPhid <- lift $ queryPoolHashId (Shelley.blockCreatorPoolHash blk)
 
     slid <- lift . DB.insertSlotLeader $ Shelley.mkSlotLeader blk mPhid
     blkId <- lift . DB.insertBlock $
@@ -93,9 +93,9 @@ insertShelleyBlock tracer env blk lStateSnap details = do
                     , DB.blockTxCount = Shelley.blockTxCount blk
 
                     -- Shelley specific
-                    , DB.blockVrfKey = Just $ Shelley.blockVrfKey (Shelley.blockBody blk)
-                    , DB.blockOpCert = Just $ Shelley.blockOpCert (Shelley.blockBody blk)
-                    , DB.blockProtoVersion = Just $ Shelley.blockProtoVersion (Shelley.blockBody blk)
+                    , DB.blockVrfKey = Just $ Shelley.blockVrfKeyView blk
+                    , DB.blockOpCert = Just $ Shelley.blockOpCert blk
+                    , DB.blockProtoVersion = Just $ Shelley.blockProtoVersion blk
                     }
 
     zipWithM_ (insertTx tracer env blkId (sdEpochNo details)) [0 .. ] (Shelley.blockTxs blk)
