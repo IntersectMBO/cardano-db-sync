@@ -14,8 +14,8 @@ module Cardano.DbSync.Era.Shelley.Util
   , blockTxCount
   , blockTxs
   , blockOpCert
-  , blockVrfKey
-  , blockVrfKeyToPoolHash
+  , blockVrfKeyView
+  , blockCreatorPoolHash
   , epochNumber
   , fakeGenesisHash
   , maybePaymentCred
@@ -48,7 +48,6 @@ import           Cardano.Prelude
 
 import qualified Cardano.Api.Typed as Api
 
-import qualified Cardano.Crypto.DSIGN as DSIGN
 import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Crypto.KES.Class as KES
 
@@ -93,6 +92,9 @@ annotateStakingCred env cred =
 blockBody :: ShelleyBlock -> Shelley.BHBody StandardShelley
 blockBody = Shelley.bhbody . Shelley.bheader . Consensus.shelleyBlockRaw
 
+blockCreatorPoolHash :: ShelleyBlock -> ByteString
+blockCreatorPoolHash = unKeyHashRaw . Shelley.issuerIDfromBHBody . blockBody
+
 blockHash :: ShelleyBlock -> ByteString
 blockHash = unHeaderHash . Consensus.shelleyBlockHeaderHash
 
@@ -105,8 +107,8 @@ blockPrevHash blk =
     Shelley.GenesisHash -> fakeGenesisHash
     Shelley.BlockHash h -> Crypto.hashToBytes $ Shelley.unHashHeader h
 
-blockProtoVersion :: Shelley.BHBody StandardShelley -> Text
-blockProtoVersion = Text.pack . show . Shelley.bprotver
+blockProtoVersion :: ShelleyBlock -> Text
+blockProtoVersion = Text.pack . Db.showProtVer . Shelley.bprotver . blockBody
 
 blockSize :: ShelleyBlock -> Word64
 blockSize = fromIntegral . Shelley.bBodySize . Shelley.bbody . Consensus.shelleyBlockRaw
@@ -121,22 +123,18 @@ blockTxs =
     txList :: ShelleyTxSeq -> [ShelleyTx]
     txList (Shelley.TxSeq txSeq) = toList txSeq
 
-blockOpCert :: Shelley.BHBody StandardShelley -> ByteString
-blockOpCert = KES.rawSerialiseVerKeyKES . Shelley.ocertVkHot . Shelley.bheaderOCert
+blockOpCert :: ShelleyBlock -> ByteString
+blockOpCert = KES.rawSerialiseVerKeyKES . Shelley.ocertVkHot . Shelley.bheaderOCert . blockBody
 
-blockVrfKey :: Shelley.BHBody StandardShelley -> Text
-blockVrfKey = Api.serialiseToBech32 . Api.VrfVerificationKey . Shelley.bheaderVrfVk
-
-blockVrfKeyToPoolHash :: ShelleyBlock -> ByteString
-blockVrfKeyToPoolHash =
- Crypto.digest (Proxy :: Proxy Crypto.Blake2b_224) . slotLeaderHash
+blockVrfKeyView :: ShelleyBlock -> Text
+blockVrfKeyView = Api.serialiseToBech32 . Api.VrfVerificationKey . Shelley.bheaderVrfVk . blockBody
 
 epochNumber :: ShelleyBlock -> Word64 -> Word64
 epochNumber blk slotsPerEpoch = slotNumber blk `div` slotsPerEpoch
 
 -- | This is both the Genesis Hash and the hash of the previous block.
 fakeGenesisHash :: ByteString
-fakeGenesisHash = BS.take 32 ("GenesisHash " <> BS.replicate 32 '\0')
+fakeGenesisHash = BS.take 28 ("GenesisHash " <> BS.replicate 28 '\0')
 
 maybePaymentCred :: Shelley.Addr StandardShelley -> Maybe ByteString
 maybePaymentCred addr =
@@ -177,8 +175,7 @@ renderRewardAcnt (Shelley.RewardAcnt nw cred) =
     Api.serialiseAddress (Api.StakeAddress nw cred)
 
 slotLeaderHash :: ShelleyBlock -> ByteString
-slotLeaderHash =
-  DSIGN.rawSerialiseVerKeyDSIGN . Shelley.unVKey . Shelley.bheaderVk . blockBody
+slotLeaderHash = unKeyHashRaw . Shelley.issuerIDfromBHBody . blockBody
 
 slotNumber :: ShelleyBlock -> Word64
 slotNumber = unSlotNo . Shelley.bheaderSlotNo . blockBody

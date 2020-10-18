@@ -63,7 +63,7 @@ share
     UniquePoolHash      hashRaw
 
   SlotLeader
-    hash                ByteString          sqltype=hash32type
+    hash                ByteString          sqltype=hash28type
     poolHashId          PoolHashId Maybe    -- This will be non-null when a block is mined by a pool.
     description         Text                -- Description of the Slots leader.
     UniqueSlotLeader    hash
