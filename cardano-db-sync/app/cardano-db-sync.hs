@@ -1,32 +1,54 @@
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 import           Cardano.Prelude
 
 import           Cardano.Db (MigrationDir (..))
-import           Cardano.DbSync (ConfigFile (..), DbSyncNodeParams (..), LedgerStateDir (..),
-                   SocketPath (..), defDbSyncNodePlugin, runDbSyncNode)
+import           Cardano.DbSync (ConfigFile (..), DbSyncCommand (..), DbSyncNodeParams (..),
+                   LedgerStateDir (..), SocketPath (..), defDbSyncNodePlugin, runDbSyncNode)
 
 import           Cardano.Slotting.Slot (SlotNo (..))
+
+import           Data.String (String)
+import qualified Data.Text as Text
+import           Data.Version (showVersion)
+
+import           Development.GitRev (gitHash)
 
 import           Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative as Opt
 
+import           Paths_cardano_db_sync (version)
+
+import           System.Info (arch, compilerName, compilerVersion, os)
+
 
 main :: IO ()
 main = do
-  runDbSyncNode defDbSyncNodePlugin =<< Opt.execParser opts
+  cmd <- Opt.execParser opts
+  case cmd of
+    CmdVersion -> runVersionCommand
+    CmdRun params -> runDbSyncNode defDbSyncNodePlugin params
 
 -- -------------------------------------------------------------------------------------------------
 
-opts :: ParserInfo DbSyncNodeParams
+opts :: ParserInfo DbSyncCommand
 opts =
   Opt.info (pCommandLine <**> Opt.helper)
     ( Opt.fullDesc
     <> Opt.progDesc "Cardano PostgreSQL sync node."
     )
 
-pCommandLine :: Parser DbSyncNodeParams
+pCommandLine :: Parser DbSyncCommand
 pCommandLine =
+  asum
+    [ pVersionCommand
+    , CmdRun <$> pRunDbSyncNode
+    ]
+
+pRunDbSyncNode :: Parser DbSyncNodeParams
+pRunDbSyncNode =
   DbSyncNodeParams
     <$> pConfigFile
     <*> pSocketPath
@@ -77,3 +99,34 @@ pSlotNo =
     <> Opt.help "Force a rollback to the specified slot (mainly for testing and debugging)."
     <> Opt.metavar "WORD"
     )
+
+pVersionCommand :: Parser DbSyncCommand
+pVersionCommand =
+  asum
+    [ Opt.subparser
+        ( mconcat
+          [ command' "version" "Show the program version" (pure CmdVersion) ]
+        )
+    , Opt.flag' CmdVersion
+        (  Opt.long "version"
+        <> Opt.help "Show the program version"
+        <> Opt.hidden
+        )
+    ]
+
+command' :: String -> String -> Parser a -> Opt.Mod Opt.CommandFields a
+command' c descr p =
+  Opt.command c
+    $ Opt.info (p <**> Opt.helper)
+    $ mconcat [ Opt.progDesc descr ]
+
+runVersionCommand :: IO ()
+runVersionCommand = do
+    liftIO . putTextLn $ mconcat
+                [ "cardano-db-sync ", renderVersion version
+                , " - ", Text.pack os, "-", Text.pack arch
+                , " - ", Text.pack compilerName, "-", renderVersion compilerVersion
+                , "\ngit revision ", Text.pack $(gitHash)
+                ]
+  where
+    renderVersion = Text.pack . showVersion

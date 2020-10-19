@@ -10,6 +10,7 @@
 
 module Cardano.DbSync
   ( ConfigFile (..)
+  , DbSyncCommand (..)
   , DbSyncNodeParams (..)
   , DbSyncNodePlugin (..)
   , GenesisFile (..)

@@ -55,6 +55,8 @@ executable cardano-db-sync-extended
                         -Wno-unsafe
                         -threaded
 
+  other-modules:        Paths_cardano_db_sync_extended
+
   build-depends:        base                            >= 4.12         && < 4.13
                       , bytestring
                       , cardano-db
@@ -62,5 +64,7 @@ executable cardano-db-sync-extended
                       , cardano-db-sync-extended
                       , cardano-prelude
                       , cardano-slotting
+                      , gitrev
                       , optparse-applicative
                       , ouroboros-network
+                      , text
