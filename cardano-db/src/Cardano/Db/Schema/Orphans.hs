@@ -4,7 +4,7 @@
 
 module Cardano.Db.Schema.Orphans where
 
-import           Cardano.Db.Types (DbWord64 (..))
+import           Cardano.Db.Types (DbLovelace (..), DbWord64 (..))
 
 import qualified Data.Char as Char
 import           Data.Ratio (denominator, numerator)
@@ -24,8 +24,21 @@ import           Text.ParserCombinators.ReadP (ReadP, char, choice, many1, munch
                    satisfy, skipSpaces, string)
 import           Text.Read (readMaybe)
 
+instance PersistField DbLovelace where
+  toPersistValue = PersistText . Text.pack . show . unDbLovelace
+  fromPersistValue (PersistInt64 i) = Right $ DbLovelace (fromIntegral i)
+  fromPersistValue (PersistText bs) = Right $ DbLovelace (read $ Text.unpack bs)
+  fromPersistValue x@(PersistRational r) =
+    -- If the value is greater than MAX_INT64, it comes back as a PersistRational (wat??).
+    if denominator r == 1
+      then Right $ DbLovelace (fromIntegral $ numerator r)
+      else Left $ mconcat [ "Failed to parse Haskell type DbLovelace: ", Text.pack (show x) ]
+  fromPersistValue x =
+    Left $ mconcat [ "Failed to parse Haskell type DbLovelace: ", Text.pack (show x) ]
+
 instance PersistField DbWord64 where
   toPersistValue = PersistText . Text.pack . show . unDbWord64
+  fromPersistValue (PersistInt64 i) = Right $ DbWord64 (fromIntegral i)
   fromPersistValue (PersistText bs) = Right $ DbWord64 (read $ Text.unpack bs)
   fromPersistValue x@(PersistRational r) =
     -- If the value is greater than MAX_INT64, it comes back as a PersistRational (wat??).

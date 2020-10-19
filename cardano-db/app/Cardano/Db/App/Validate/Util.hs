@@ -40,4 +40,4 @@ putStrF s = putStr s >> hFlush stdout
 
 utxoSetSum :: [(TxOut, a)] -> Ada
 utxoSetSum xs =
-  word64ToAda . sum $ map (txOutValue . fst) xs
+  word64ToAda . sum $ map (unDbLovelace . txOutValue . fst) xs

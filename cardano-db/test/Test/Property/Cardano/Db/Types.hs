@@ -8,6 +8,7 @@ module Test.Property.Cardano.Db.Types
 import           Cardano.Chain.Common (maxLovelaceVal)
 
 import qualified Data.Aeson as Aeson
+import           Data.Bifunctor (first)
 import           Data.Int (Int64)
 import           Data.Ratio ((%))
 import qualified Data.Text as Text
@@ -21,7 +22,7 @@ import           Cardano.Db
 
 import           Numeric.Natural (Natural)
 
-import           Hedgehog (Gen, Property, discover)
+import           Hedgehog (Gen, Property, discover, (===))
 import qualified Hedgehog as H
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
@@ -35,18 +36,17 @@ prop_roundtrip_Ada_via_JSON =
     mv <- H.forAll genAda
     H.tripping mv Aeson.encode Aeson.eitherDecode
 
+prop_roundtrip_DbLovelace_PersistField :: Property
+prop_roundtrip_DbLovelace_PersistField =
+    H.withTests 5000 . H.property $ do
+      (w64, pv) <- H.forAll genDbLovelacePresistValue
+      fromPersistValue pv === Right w64
+
 prop_roundtrip_DbWord64_PersistField :: Property
 prop_roundtrip_DbWord64_PersistField =
     H.withTests 5000 . H.property $ do
-      w64 <- H.forAll genDbWord64
-      H.tripping w64 specialPersistDbWord64 fromPersistValue
-  where
-    specialPersistDbWord64 :: DbWord64 -> PersistValue
-    specialPersistDbWord64 (DbWord64 w64) =
-      if w64 > fromIntegral (maxBound :: Int64)
-        then PersistRational (fromIntegral w64 % 1)
-        else PersistText (Text.pack $ show w64)
-
+      (w64, pv) <- H.forAll genDbWord64PresistValue
+      fromPersistValue pv === Right w64
 
 prop_roundtrip_ProtVer_PersistField :: Property
 prop_roundtrip_ProtVer_PersistField =
@@ -77,11 +77,25 @@ genAda =
 genDbWord64 :: Gen DbWord64
 genDbWord64 = DbWord64 <$> genWord64
 
+genDbLovelacePresistValue :: Gen (DbLovelace, PersistValue)
+genDbLovelacePresistValue = first DbLovelace <$> genWord64PresistValue
+
+genDbWord64PresistValue :: Gen (DbWord64, PersistValue)
+genDbWord64PresistValue = first DbWord64 <$> genWord64PresistValue
+
 genNatural :: Gen Natural
 genNatural = fromIntegral <$> Gen.word (Range.linear 0 5000)
 
 genProtVer :: Gen ProtVer
 genProtVer = ProtVer <$> genNatural <*> genNatural
+
+genWord64PresistValue :: Gen (Word64, PersistValue)
+genWord64PresistValue =
+  Gen.choice
+    [ (\w64 -> (w64, PersistText (Text.pack $ show w64))) <$> genWord64
+    , (\i64 -> (fromIntegral i64, PersistInt64 i64)) . fromIntegral <$> Gen.int64 (Range.linear 0 (maxBound :: Int64))
+    , (\w64 -> (w64, PersistRational (fromIntegral w64 % 1))) <$> genWord64
+    ]
 
 genWord128 :: Gen Word128
 genWord128 = Word128 <$> genWord64 <*> genWord64

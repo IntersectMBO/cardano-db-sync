@@ -17,7 +17,7 @@ import           Cardano.Prelude
 
 import           Cardano.BM.Trace (Trace, logDebug, logInfo, logWarning)
 
-import           Cardano.Db (DbWord64 (..))
+import           Cardano.Db (DbLovelace (..), DbWord64 (..))
 
 import           Control.Monad.Extra (whenJust)
 import           Control.Monad.Logger (LoggingT)
@@ -146,15 +146,15 @@ insertTx tracer env blkId epochNo blockIndex tx = do
     let fees = Shelley.txFee tx
         outSum = Shelley.txOutputSum tx
         withdrawalSum = Shelley.txWithdrawalSum tx
-    inSum <- lift $ queryTxInputSum (Shelley.txInputList tx)
+    inSum <- unDbLovelace <$> lift (queryTxInputSum $ Shelley.txInputList tx)
     -- Insert transaction and get txId from the DB.
     txId <- lift . DB.insertTx $
               DB.Tx
                 { DB.txHash = Shelley.txHash tx
                 , DB.txBlock = blkId
                 , DB.txBlockIndex = blockIndex
-                , DB.txOutSum = outSum
-                , DB.txFee = fees
+                , DB.txOutSum = DB.DbLovelace outSum
+                , DB.txFee = DB.DbLovelace fees
                 , DB.txDeposit = fromIntegral (inSum + withdrawalSum) - fromIntegral (outSum + fees)
                 , DB.txSize = fromIntegral $ LBS.length (Shelley.txFullBytes tx)
                 }
@@ -189,7 +189,7 @@ insertTxOut _tracer txId (index, Shelley.TxOut addr value) =
               , DB.txOutAddress = Shelley.renderAddress addr
               , DB.txOutAddressRaw = Shelley.serialiseAddr addr
               , DB.txOutPaymentCred = Shelley.maybePaymentCred addr
-              , DB.txOutValue = fromIntegral $ Shelley.unCoin value
+              , DB.txOutValue = Shelley.coinToDbLovelace value
               }
 
 insertTxIn
@@ -419,7 +419,7 @@ insertMirCert _tracer env txId idx mcert = do
           { DB.reserveAddrId = addrId
           , DB.reserveCertIndex = idx
           , DB.reserveTxId = txId
-          , DB.reserveAmount = fromIntegral $ Shelley.unCoin coin
+          , DB.reserveAmount = Shelley.coinToDbLovelace coin
           }
 
     insertMirTreasury
@@ -433,7 +433,7 @@ insertMirCert _tracer env txId idx mcert = do
           { DB.treasuryAddrId = addrId
           , DB.treasuryCertIndex = idx
           , DB.treasuryTxId = txId
-          , DB.treasuryAmount = fromIntegral $ Shelley.unCoin coin
+          , DB.treasuryAmount = Shelley.coinToDbLovelace coin
           }
 
 insertWithdrawals
@@ -448,7 +448,7 @@ insertWithdrawals _tracer txId (account, coin) = do
     DB.Withdrawal
       { DB.withdrawalAddrId = addrId
       , DB.withdrawalTxId = txId
-      , DB.withdrawalAmount = fromIntegral $ Shelley.unCoin coin
+      , DB.withdrawalAmount = Shelley.coinToDbLovelace coin
       }
 
 insertPoolRelay
@@ -507,8 +507,8 @@ insertParamProposal _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap
           , DB.paramProposalMaxBlockSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxBBSize pmap)
           , DB.paramProposalMaxTxSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxTxSize pmap)
           , DB.paramProposalMaxBhSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxBHSize pmap)
-          , DB.paramProposalKeyDeposit = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._keyDeposit pmap)
-          , DB.paramProposalPoolDeposit = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._poolDeposit pmap)
+          , DB.paramProposalKeyDeposit = Shelley.coinToDbLovelace <$> strictMaybeToMaybe (Shelley._keyDeposit pmap)
+          , DB.paramProposalPoolDeposit = Shelley.coinToDbLovelace <$> strictMaybeToMaybe (Shelley._poolDeposit pmap)
           , DB.paramProposalMaxEpoch = unEpochNo <$> strictMaybeToMaybe (Shelley._eMax pmap)
           , DB.paramProposalOptimalPoolCount = fromIntegral <$> strictMaybeToMaybe (Shelley._nOpt pmap)
           , DB.paramProposalInfluence = fromRational <$> strictMaybeToMaybe (Shelley._a0 pmap)
@@ -517,8 +517,8 @@ insertParamProposal _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap
           , DB.paramProposalDecentralisation = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._d pmap)
           , DB.paramProposalEntropy = Shelley.nonceToBytes =<< strictMaybeToMaybe (Shelley._extraEntropy pmap)
           , DB.paramProposalProtocolVersion = strictMaybeToMaybe (Shelley._protocolVersion pmap)
-          , DB.paramProposalMinUtxoValue = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._minUTxOValue pmap)
-          , DB.paramProposalMinPoolCost = fromIntegral . Shelley.unCoin <$> strictMaybeToMaybe (Shelley._minPoolCost pmap)
+          , DB.paramProposalMinUtxoValue = Shelley.coinToDbLovelace <$> strictMaybeToMaybe (Shelley._minUTxOValue pmap)
+          , DB.paramProposalMinPoolCost = Shelley.coinToDbLovelace <$> strictMaybeToMaybe (Shelley._minPoolCost pmap)
           , DB.paramProposalRegisteredTxId = txId
           }
 
@@ -582,7 +582,7 @@ insertRewards _tracer env blkId epoch rewards =
       void . lift . DB.insertReward $
         DB.Reward
           { DB.rewardAddrId = saId
-          , DB.rewardAmount = fromIntegral (Shelley.unCoin coin)
+          , DB.rewardAmount = Shelley.coinToDbLovelace coin
           , DB.rewardEpochNo = unEpochNo epoch
           , DB.rewardPoolId = poolId
           , DB.rewardBlockId = blkId
@@ -601,8 +601,8 @@ insertEpochParam _tracer blkId (EpochNo epoch) params =
       , DB.epochParamMaxBlockSize = fromIntegral (Shelley._maxBBSize params)
       , DB.epochParamMaxTxSize = fromIntegral (Shelley._maxTxSize params)
       , DB.epochParamMaxBhSize = fromIntegral (Shelley._maxBHSize params)
-      , DB.epochParamKeyDeposit = fromIntegral $ Shelley.unCoin (Shelley._keyDeposit params)
-      , DB.epochParamPoolDeposit = fromIntegral $ Shelley.unCoin (Shelley._poolDeposit params)
+      , DB.epochParamKeyDeposit = Shelley.coinToDbLovelace (Shelley._keyDeposit params)
+      , DB.epochParamPoolDeposit = Shelley.coinToDbLovelace (Shelley._poolDeposit params)
       , DB.epochParamMaxEpoch = unEpochNo (Shelley._eMax params)
       , DB.epochParamOptimalPoolCount = fromIntegral (Shelley._nOpt params)
       , DB.epochParamInfluence = fromRational (Shelley._a0 params)
@@ -611,8 +611,8 @@ insertEpochParam _tracer blkId (EpochNo epoch) params =
       , DB.epochParamDecentralisation = Shelley.unitIntervalToDouble (Shelley._d params)
       , DB.epochParamEntropy = Shelley.nonceToBytes $ Shelley._extraEntropy params
       , DB.epochParamProtocolVersion = Shelley._protocolVersion params
-      , DB.epochParamMinUtxoValue = fromIntegral $ Shelley.unCoin (Shelley._minUTxOValue params)
-      , DB.epochParamMinPoolCost = fromIntegral $ Shelley.unCoin (Shelley._minPoolCost params)
+      , DB.epochParamMinUtxoValue = Shelley.coinToDbLovelace (Shelley._minUTxOValue params)
+      , DB.epochParamMinPoolCost = Shelley.coinToDbLovelace (Shelley._minPoolCost params)
       , DB.epochParamBlockId = blkId
       }
 
@@ -636,7 +636,7 @@ insertEpochStake _tracer env blkId (EpochNo epoch) smap =
         DB.EpochStake
           { DB.epochStakeAddrId = saId
           , DB.epochStakePoolId = poolId
-          , DB.epochStakeAmount = fromIntegral $ Shelley.unCoin coin
+          , DB.epochStakeAmount = Shelley.coinToDbLovelace coin
           , DB.epochStakeEpochNo = epoch + 1 -- The epoch where this delegation becomes valid.
           , DB.epochStakeBlockId = blkId
           }

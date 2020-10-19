@@ -81,10 +81,10 @@ queryStakePoolKeyHash kh = do
             pure (poolHash ^. PoolHashId)
   pure $ maybeToEither (DbLookupMessage "StakePoolKeyHash") unValue (listToMaybe res)
 
-queryTxInputSum :: MonadIO m => [ShelleyTxIn] -> ReaderT SqlBackend m Word64
+queryTxInputSum :: MonadIO m => [ShelleyTxIn] -> ReaderT SqlBackend m DbLovelace
 queryTxInputSum txins =
-    sum <$> mapM queryTxInputValue txins
+    DbLovelace . sum . map unDbLovelace <$> mapM queryTxInputValue txins
   where
-    queryTxInputValue :: MonadIO m => ShelleyTxIn -> ReaderT SqlBackend m Word64
+    queryTxInputValue :: MonadIO m => ShelleyTxIn -> ReaderT SqlBackend m DbLovelace
     queryTxInputValue (Shelley.TxIn (Shelley.TxId hash) index) =
-      fromRight 0 <$> queryTxOutValue (Crypto.hashToBytes hash, fromIntegral index)
+      fromRight (DbLovelace 0) <$> queryTxOutValue (Crypto.hashToBytes hash, fromIntegral index)
