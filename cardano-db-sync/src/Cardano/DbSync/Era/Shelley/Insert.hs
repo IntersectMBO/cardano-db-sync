@@ -272,12 +272,12 @@ insertPoolRegister tracer (EpochNo epoch) txId idx params = do
                       { DB.poolUpdateHashId = poolHashId
                       , DB.poolUpdateCertIndex = idx
                       , DB.poolUpdateVrfKey = Crypto.hashToBytes (Shelley._poolVrf params)
-                      , DB.poolUpdatePledge = DbWord64 $ fromIntegral (Shelley.unCoin $ Shelley._poolPledge params)
+                      , DB.poolUpdatePledge = Shelley.coinToDbLovelace (Shelley._poolPledge params)
                       , DB.poolUpdateRewardAddrId = rewardId
                       , DB.poolUpdateActiveEpochNo = epoch + 2
                       , DB.poolUpdateMeta = mdId
                       , DB.poolUpdateMargin = realToFrac $ Shelley.intervalValue (Shelley._poolMargin params)
-                      , DB.poolUpdateFixedCost = DbWord64 $ fromIntegral (Shelley.unCoin $ Shelley._poolCost params)
+                      , DB.poolUpdateFixedCost = Shelley.coinToDbLovelace (Shelley._poolCost params)
                       , DB.poolUpdateRegisteredTxId = txId
                       }
 

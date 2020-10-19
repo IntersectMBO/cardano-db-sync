@@ -172,12 +172,12 @@ share
     hashId              PoolHashId
     certIndex           Word16
     vrfKey              ByteString          sqltype=hash32type
-    pledge              DbWord64            sqltype=word64type
+    pledge              DbLovelace          sqltype=lovelace
     rewardAddrId        StakeAddressId
     activeEpochNo       Word64
     meta                PoolMetaDataId Maybe
     margin              Double                                  -- sqltype=percentage????
-    fixedCost           DbWord64            sqltype=word64type
+    fixedCost           DbLovelace          sqltype=lovelace
     registeredTxId      TxId                                    -- Slot number in which the pool was registered.
     UniquePoolUpdate    hashId registeredTxId
 
