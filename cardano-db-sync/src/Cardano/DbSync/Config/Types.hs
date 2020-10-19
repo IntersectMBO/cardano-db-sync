@@ -10,6 +10,7 @@ module Cardano.DbSync.Config.Types
   ( CardanoBlock
   , CardanoProtocol
   , ConfigFile (..)
+  , DbSyncCommand (..)
   , DbSyncEnv (..)
   , DbSyncNodeParams (..)
   , DbSyncProtocol (..)
@@ -66,6 +67,10 @@ type CardanoProtocol = Cardano.HardForkProtocol '[ByronBlock, Shelley.ShelleyBlo
 newtype ConfigFile = ConfigFile
   { unConfigFile :: FilePath
   }
+
+data DbSyncCommand
+  = CmdRun !DbSyncNodeParams
+  | CmdVersion
 
 data DbSyncEnv = DbSyncEnv
   { envProtocol :: !DbSyncProtocol

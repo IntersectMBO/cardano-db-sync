@@ -5,6 +5,7 @@
 
 module Cardano.DbSync.Config
   ( ConfigFile (..)
+  , DbSyncCommand (..)
   , DbSyncProtocol (..)
   , DbSyncNodeConfig (..)
   , DbSyncNodeParams (..)

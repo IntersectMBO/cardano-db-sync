@@ -55,6 +55,7 @@ library
 
                         Cardano.DbSync.Tracing.ToObjectOrphans
 
+
   other-modules:        Cardano.DbSync.Era.Byron.Genesis
                         Cardano.DbSync.Era.Byron.Insert
                         Cardano.DbSync.Era.Shelley.Genesis
@@ -134,11 +135,16 @@ executable cardano-db-sync
                         -Wno-unsafe
                         -threaded
 
+
+  other-modules:        Paths_cardano_db_sync
+
   build-depends:        base                            >= 4.12         && < 4.13
                       , bytestring
                       , cardano-db
                       , cardano-db-sync
                       , cardano-prelude
                       , cardano-slotting
+                      , gitrev
                       , optparse-applicative
                       , ouroboros-network
+                      , text
