@@ -81,7 +81,7 @@ testSlotLeader =
 mkTxOut :: BlockId -> TxId -> TxOut
 mkTxOut blkId txId =
   let addr = mkAddressHash blkId txId in
-  TxOut txId 0 (Text.pack addr) (BS.pack addr) Nothing (DbLovelace 1000000000)
+  TxOut txId 0 (Text.pack addr) (BS.pack addr) Nothing Nothing (DbLovelace 1000000000)
 
 unTxId :: TxId -> Word64
 unTxId = fromIntegral . unSqlBackendKey . unTxKey

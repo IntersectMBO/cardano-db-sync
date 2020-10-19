@@ -186,6 +186,7 @@ insertTxOuts blkId (Shelley.TxIn txInId _, txOut) = do
               , DB.txOutAddress = Shelley.renderAddress (txOutAddress txOut)
               , DB.txOutAddressRaw = Shelley.serialiseAddr (txOutAddress txOut)
               , DB.txOutPaymentCred = Shelley.maybePaymentCred (txOutAddress txOut)
+              , DB.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
               , DB.txOutValue = Shelley.coinToDbLovelace (txOutCoin txOut)
               }
   where

@@ -110,6 +110,7 @@ share
     address             Text
     addressRaw          ByteString
     paymentCred         ByteString Maybe    sqltype=hash28type
+    stakeAddressId      StakeAddressId Maybe
     value               DbLovelace          sqltype=lovelace
     UniqueTxout         txId index          -- The (tx_id, index) pair must be unique.
 

@@ -7,6 +7,7 @@ module Cardano.DbSync.Era.Shelley.Query
   , queryStakeAddress
   , queryStakeAddressAndPool
   , queryStakePoolKeyHash
+  , queryStakeAddressRef
   , queryTxInputSum
   ) where
 
@@ -17,6 +18,8 @@ import           Cardano.DbSync.Era.Shelley.Util (unKeyHashRaw)
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
+import           Cardano.Slotting.Slot (SlotNo (..))
+
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
@@ -25,10 +28,16 @@ import           Data.Either (fromRight)
 import           Data.Maybe (listToMaybe)
 import           Data.Word (Word64)
 
-import           Database.Esqueleto (InnerJoin (..), Value (..), desc, from, on, orderBy, select,
-                   val, where_, (<=.), (==.), (^.))
+import           Database.Esqueleto (InnerJoin (..), Value (..), desc, from, just, on, orderBy,
+                   select, val, where_, (<=.), (==.), (^.))
 import           Database.Persist.Sql (SqlBackend)
 
+import           Numeric.Natural (Natural)
+
+import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
+
+import qualified Shelley.Spec.Ledger.Address as Shelley
+import           Shelley.Spec.Ledger.Credential (Ptr (..), StakeReference (..))
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 queryPoolHashId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe PoolHashId)
@@ -37,6 +46,7 @@ queryPoolHashId hash = do
             where_ (phash ^. PoolHashHashRaw ==. val hash)
             pure (phash ^. PoolHashId)
   pure $ unValue <$> listToMaybe res
+
 
 queryStakeAddress :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail StakeAddressId)
 queryStakeAddress addr = do
@@ -70,6 +80,7 @@ queryStakeAddressAndPool epoch addr = do
                 pure (saddr ^. StakeAddressId, pu ^. PoolUpdateHashId)
       pure $ maybeToEither (DbLookupMessage $ "StakeAddressAndPool " <> renderByteArray addr) unValue2 (listToMaybe res)
 
+
 queryStakePoolKeyHash :: MonadIO m => ShelleyStakePoolKeyHash -> ReaderT SqlBackend m (Either LookupFail PoolHashId)
 queryStakePoolKeyHash kh = do
   res <- select . from $ \ (poolUpdate `InnerJoin` poolHash `InnerJoin` tx `InnerJoin` blk) -> do
@@ -80,6 +91,29 @@ queryStakePoolKeyHash kh = do
             orderBy [desc (blk ^. BlockSlotNo)]
             pure (poolHash ^. PoolHashId)
   pure $ maybeToEither (DbLookupMessage "StakePoolKeyHash") unValue (listToMaybe res)
+
+queryStakeAddressRef :: MonadIO m => Shelley.Addr StandardShelley -> ReaderT SqlBackend m (Maybe StakeAddressId)
+queryStakeAddressRef addr =
+    case addr of
+      Shelley.AddrBootstrap {} -> pure Nothing
+      Shelley.Addr nw _pcred sref ->
+        case sref of
+          StakeRefBase cred -> do
+            eres <- queryStakeAddress $ Shelley.serialiseRewardAcnt (Shelley.RewardAcnt nw cred)
+            pure $ either (const Nothing) Just eres
+          StakeRefPtr (Ptr slotNo txIx certIx) -> queryStakeDelegation slotNo txIx certIx
+          StakeRefNull -> pure Nothing
+  where
+    queryStakeDelegation :: MonadIO m => SlotNo -> Natural -> Natural -> ReaderT SqlBackend m (Maybe StakeAddressId)
+    queryStakeDelegation (SlotNo slot) txIx certIx = do
+      res <- select . from $ \ (blk `InnerJoin` tx `InnerJoin` dlg) -> do
+                on (tx ^. TxId ==. dlg ^. DelegationTxId)
+                on (blk ^. BlockId ==. tx ^. TxBlock)
+                where_ (blk ^. BlockSlotNo ==. just (val slot))
+                where_ (tx ^. TxBlockIndex ==. val (fromIntegral txIx))
+                where_ (dlg ^. DelegationCertIndex ==. val (fromIntegral certIx))
+                pure (dlg ^. DelegationAddrId)
+      pure $ unValue <$> listToMaybe res
 
 queryTxInputSum :: MonadIO m => [ShelleyTxIn] -> ReaderT SqlBackend m DbLovelace
 queryTxInputSum txins =

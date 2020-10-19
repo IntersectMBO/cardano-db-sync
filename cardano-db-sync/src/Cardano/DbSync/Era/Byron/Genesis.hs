@@ -181,6 +181,7 @@ insertTxOuts blkId (address, value) = do
               , DB.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 address
               , DB.txOutAddressRaw = Binary.serialize' address
               , DB.txOutPaymentCred = Nothing
+              , DB.txOutStakeAddressId = Nothing
               , DB.txOutValue = DB.DbLovelace (Byron.unsafeGetLovelace value)
               }
 
