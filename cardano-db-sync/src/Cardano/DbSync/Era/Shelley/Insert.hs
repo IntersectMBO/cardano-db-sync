@@ -271,7 +271,7 @@ insertPoolRegister tracer (EpochNo epoch) txId idx params = do
                     DB.PoolUpdate
                       { DB.poolUpdateHashId = poolHashId
                       , DB.poolUpdateCertIndex = idx
-                      , DB.poolUpdateVrfKey = Crypto.hashToBytes (Shelley._poolVrf params)
+                      , DB.poolUpdateVrfKeyHash = Crypto.hashToBytes (Shelley._poolVrf params)
                       , DB.poolUpdatePledge = Shelley.coinToDbLovelace (Shelley._poolPledge params)
                       , DB.poolUpdateRewardAddrId = rewardId
                       , DB.poolUpdateActiveEpochNo = epoch + 2

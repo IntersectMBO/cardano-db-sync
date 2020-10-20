@@ -171,7 +171,7 @@ share
   PoolUpdate
     hashId              PoolHashId
     certIndex           Word16
-    vrfKey              ByteString          sqltype=hash32type
+    vrfKeyHash          ByteString          sqltype=hash32type
     pledge              DbLovelace          sqltype=lovelace
     rewardAddrId        StakeAddressId
     activeEpochNo       Word64

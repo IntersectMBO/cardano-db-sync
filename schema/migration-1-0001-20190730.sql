@@ -12,7 +12,7 @@ BEGIN
     -- can be any Word64 value so we need this :cry:.
     EXECUTE 'CREATE DOMAIN lovelace AS numeric (20, 0) CHECK (VALUE >= 0 AND VALUE <= 18446744073709551615);';
 
-    EXECUTE 'CREATE DOMAIN txindex AS smallint CHECK (VALUE >= 0 AND VALUE < 1024);';
+    EXECUTE 'CREATE DOMAIN txindex AS smallint CHECK (VALUE >= 0);';
     EXECUTE 'CREATE DOMAIN uinteger AS integer CHECK (VALUE >= 0);';
 
     -- Blocks, transactions and merkel roots use a 32 byte hash.
@@ -26,7 +26,7 @@ BEGIN
 
     -- 'maxBound :: Word128' as a decimal has 39 digits, so we only need to check that it
     -- is positive.
-    EXECUTE 'CREATE DOMAIN word128type AS numeric (38, 0) CHECK (VALUE >= 0);';
+    EXECUTE 'CREATE DOMAIN word128type AS numeric (38, 0) CHECK (VALUE >= (0)::numeric AND VALUE <= (340282366920938463463374607431768211455)::numeric);';
 
     -- 'maxBound :: Word64' as a decimal has 20 digits but not all 20 digit values are less than
     -- 'maxBound :: Word64'.
