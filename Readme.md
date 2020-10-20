@@ -1,5 +1,24 @@
 # Cardano DB Sync
 
+## Purpose
+
+The purpose of Cardano DB Sync is to follow the Cardano chain and take information from the chain
+and an internally maintained copy of ledger state. Data is then extracted from the chain and
+inserted into a PostgreSQL database. SQL queries can then be written directly against the database
+schema or as queries embedded in any language with libraries for interacting with an SQL database.
+
+Examples of what someone would be able to do via an SQL query against a Cardano DB Sync
+instance fully synced fully synced to a specific network is:
+
+* Look up any block, transaction, address, stake pool etc on that network, usually be the hash that
+  identifies that item.
+* Look up the balance of any stake address for any Shelley or later epoch.
+* Look up the amount of ADA delegated to each pool for any Shelley or later epoch.
+
+Example SQL queries are available at [Example Queries][ExampleQueries].
+
+## Architecture
+
 The cardano-db-sync component consists of a set of components:
 
 * `cardano-db` which defines common data types and functions used by any application that needs
@@ -13,15 +32,13 @@ The two versions `cardano-db-sync` and `cardano-db-sync-extended` are fully comp
 identical database schema. The only difference is that the extended version maintains an `Epoch`
 table. The non-extended version will still create this table but will not maintain it.
 
-## Architecture
-
 The db-sync node is written in a highly modular fashion to allow it to be as flexible as possible.
 
 The `cardano-db-sync` node connects to a locally running `cardano-node` (ie one connected to other
 nodes in the Cardano network over the internet with TCP/IP) using a Unix domain socket, retrieves
-blocks and stores parts of each block in a local PostgreSQL database. The database does not store
-things like cryptographic signatures but does store enough information to follow the chain of
-blocks and look at the transactions within blocks.
+blocks, updates its internal ledger state and stores parts of each block in a local PostgreSQL
+database. The database does not store things like cryptographic signatures but does store enough
+information to follow the chain of blocks and look at the transactions within blocks.
 
 The PostgreSQL database is designed to be accessed in a read-only fashion from other applications.
 The database schema is highly normalised which helps prevent data inconsistencies (specifically
