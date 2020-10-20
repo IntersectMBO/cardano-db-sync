@@ -62,21 +62,29 @@ queryStakeAddress addr = do
 -- query catches this situation.
 queryStakeAddressAndPool :: MonadIO m => Word64 -> ByteString -> ReaderT SqlBackend m (Either LookupFail (StakeAddressId, PoolHashId))
 queryStakeAddressAndPool epoch addr = do
-    res <- select . from $ \ (saddr `InnerJoin` dlg) -> do
+    res <- select . from $ \ (saddr `InnerJoin` dlg `InnerJoin` tx `InnerJoin` blk) -> do
+            on (blk ^. BlockId ==. tx ^. TxBlock)
+            on (dlg ^. DelegationTxId ==. tx ^. TxId)
             on (saddr ^. StakeAddressId ==. dlg ^. DelegationAddrId)
             where_ (saddr ^. StakeAddressHashRaw ==. val addr)
             where_ (dlg ^. DelegationActiveEpochNo <=. val epoch)
-            orderBy [desc (dlg ^. DelegationActiveEpochNo)]
+            -- Need to order by BlockSlotNo descending for correct behavior when there are two
+            -- or more delegation certificates in a single epoch.
+            orderBy [desc (blk ^. BlockSlotNo)]
             pure (saddr ^. StakeAddressId, dlg ^. DelegationPoolHashId)
     maybe queryPool (pure . Right . unValue2) (listToMaybe res)
   where
     queryPool :: MonadIO m => ReaderT SqlBackend m (Either LookupFail (StakeAddressId, PoolHashId))
     queryPool = do
-      res <- select . from $ \ (saddr `InnerJoin` pu) -> do
+      res <- select . from $ \ (saddr `InnerJoin` pu `InnerJoin` tx `InnerJoin` blk) -> do
+                on (blk ^. BlockId ==. tx ^. TxBlock)
+                on (pu ^. PoolUpdateRegisteredTxId ==. tx ^. TxId)
                 on (saddr ^. StakeAddressId ==. pu ^. PoolUpdateRewardAddrId)
                 where_ (saddr ^. StakeAddressHashRaw ==. val addr)
                 where_ (pu ^. PoolUpdateActiveEpochNo <=. val epoch)
-                orderBy [desc (pu ^. PoolUpdateActiveEpochNo)]
+                -- Need to order by BlockSlotNo descending for correct behavior when there are two
+                -- or more pool update certificates in a single epoch.
+                orderBy [desc (blk ^. BlockSlotNo)]
                 pure (saddr ^. StakeAddressId, pu ^. PoolUpdateHashId)
       pure $ maybeToEither (DbLookupMessage $ "StakeAddressAndPool " <> renderByteArray addr) unValue2 (listToMaybe res)
 
@@ -112,6 +120,9 @@ queryStakeAddressRef addr =
                 where_ (blk ^. BlockSlotNo ==. just (val slot))
                 where_ (tx ^. TxBlockIndex ==. val (fromIntegral txIx))
                 where_ (dlg ^. DelegationCertIndex ==. val (fromIntegral certIx))
+                -- Need to order by BlockSlotNo descending for correct behavior when there are two
+                -- or more delegation certificates in a single epoch.
+                orderBy [desc (blk ^. BlockSlotNo)]
                 pure (dlg ^. DelegationAddrId)
       pure $ unValue <$> listToMaybe res
 
