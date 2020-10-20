@@ -1,5 +1,9 @@
 # Revision history for cardano-db-sync-extended
 
+## 5.0.3
+
+* Workaround fix handling of unsigned 64bit integer fields (#351)
+
 ## 5.0.2
 
 * Fix handling of unsigned 64bit integer fields (#334, #335)
