@@ -3,8 +3,9 @@
 module Cardano.Db.Migration
   ( MigrationDir (..)
   , LogFileDir (..)
-  , createMigration
   , applyMigration
+  , createMigration
+  , getMigrationScripts
   , runMigrations
   ) where
 

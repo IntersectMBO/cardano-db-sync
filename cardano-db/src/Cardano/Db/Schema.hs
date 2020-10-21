@@ -56,6 +56,7 @@ share
     stageOne Int
     stageTwo Int
     stageThree Int
+    deriving Eq
 
   PoolHash
     hashRaw             ByteString          sqltype=hash28type

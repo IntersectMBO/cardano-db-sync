@@ -29,6 +29,7 @@ module Cardano.Db.Query
   , queryMeta
   , queryNetworkName
   , queryPreviousSlotNo
+  , querySchemaVersion
   , querySelectCount
   , querySlotHash
   , querySlotNosGreaterThan
@@ -70,6 +71,7 @@ import           Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import           Data.Ratio (numerator)
 import           Data.Text (Text)
 import           Data.Time.Clock (UTCTime)
+import           Data.Tuple.Extra (uncurry3)
 import           Data.Word (Word16, Word64)
 
 import           Database.Esqueleto (Entity (..), From, InnerJoin (..), LeftOuterJoin (..),
@@ -338,6 +340,13 @@ queryPreviousSlotNo slotNo = do
                 where_ (blk ^. BlockSlotNo ==. just (val slotNo))
                 pure $ pblk ^. BlockSlotNo
   pure $ unValue =<< listToMaybe res
+
+querySchemaVersion :: MonadIO m => ReaderT SqlBackend m (Maybe SchemaVersion)
+querySchemaVersion = do
+  res <- select . from $ \ sch -> do
+            orderBy [desc (sch ^. SchemaVersionStageOne)]
+            pure (sch ^. SchemaVersionStageOne, sch ^. SchemaVersionStageTwo, sch ^. SchemaVersionStageThree)
+  pure $ uncurry3 SchemaVersion . unValue3 <$> listToMaybe res
 
 -- | Count the number of rows that match the select with the supplied predicate.
 querySelectCount :: (MonadIO m, From table) => (table -> SqlQuery ()) -> ReaderT SqlBackend m Word
