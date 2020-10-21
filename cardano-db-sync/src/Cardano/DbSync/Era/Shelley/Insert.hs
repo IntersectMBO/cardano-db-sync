@@ -91,11 +91,12 @@ insertShelleyBlock tracer env blk lStateSnap details = do
                     , DB.blockSize = Shelley.blockSize blk
                     , DB.blockTime = sdSlotTime details
                     , DB.blockTxCount = Shelley.blockTxCount blk
+                    , DB.blockProtoMajor = fromIntegral $ Shelley.pvMajor (Shelley.blockProtoVersion blk)
+                    , DB.blockProtoMinor = fromIntegral $ Shelley.pvMinor (Shelley.blockProtoVersion blk)
 
                     -- Shelley specific
                     , DB.blockVrfKey = Just $ Shelley.blockVrfKeyView blk
                     , DB.blockOpCert = Just $ Shelley.blockOpCert blk
-                    , DB.blockProtoVersion = Just $ Shelley.blockProtoVersion blk
                     }
 
     zipWithM_ (insertTx tracer env blkId (sdEpochNo details)) [0 .. ] (Shelley.blockTxs blk)
@@ -541,7 +542,8 @@ insertParamProposal _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap
           , DB.paramProposalTreasuryGrowthRate = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._tau pmap)
           , DB.paramProposalDecentralisation = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._d pmap)
           , DB.paramProposalEntropy = Shelley.nonceToBytes =<< strictMaybeToMaybe (Shelley._extraEntropy pmap)
-          , DB.paramProposalProtocolVersion = strictMaybeToMaybe (Shelley._protocolVersion pmap)
+          , DB.paramProposalProtocolMajor = fromIntegral . Shelley.pvMajor <$> strictMaybeToMaybe (Shelley._protocolVersion pmap)
+          , DB.paramProposalProtocolMinor = fromIntegral . Shelley.pvMinor <$> strictMaybeToMaybe (Shelley._protocolVersion pmap)
           , DB.paramProposalMinUtxoValue = Shelley.coinToDbLovelace <$> strictMaybeToMaybe (Shelley._minUTxOValue pmap)
           , DB.paramProposalMinPoolCost = Shelley.coinToDbLovelace <$> strictMaybeToMaybe (Shelley._minPoolCost pmap)
           , DB.paramProposalRegisteredTxId = txId
@@ -635,7 +637,8 @@ insertEpochParam _tracer blkId (EpochNo epoch) params =
       , DB.epochParamTreasuryGrowthRate = Shelley.unitIntervalToDouble (Shelley._tau params)
       , DB.epochParamDecentralisation = Shelley.unitIntervalToDouble (Shelley._d params)
       , DB.epochParamEntropy = Shelley.nonceToBytes $ Shelley._extraEntropy params
-      , DB.epochParamProtocolVersion = Shelley._protocolVersion params
+      , DB.epochParamProtocolMajor = fromIntegral $ Shelley.pvMajor (Shelley._protocolVersion params)
+      , DB.epochParamProtocolMinor = fromIntegral $ Shelley.pvMinor (Shelley._protocolVersion params)
       , DB.epochParamMinUtxoValue = Shelley.coinToDbLovelace (Shelley._minUTxOValue params)
       , DB.epochParamMinPoolCost = Shelley.coinToDbLovelace (Shelley._minPoolCost params)
       , DB.epochParamBlockId = blkId

@@ -53,8 +53,24 @@ mkAddressHash blkId txId =
 
 mkBlock :: Word64 -> SlotLeaderId -> Block
 mkBlock blk slid =
-  Block (mkBlockHash blk) (Just 0) (Just 0) Nothing Nothing Nothing Nothing slid 42 dummyUTCTime 0
-    Nothing Nothing Nothing
+  Block
+    { blockHash = mkBlockHash blk
+    , blockEpochNo = Just 0
+    , blockSlotNo = Just 0
+    , blockEpochSlotNo = Nothing
+    , blockBlockNo = Nothing
+    , blockPrevious = Nothing
+    , blockMerkelRoot = Nothing
+    , blockSlotLeader = slid
+    , blockSize = 42
+    , blockTime = dummyUTCTime
+    , blockTxCount = 0
+    , blockProtoMajor = 1
+    , blockProtoMinor = 0
+    , blockVrfKey = Nothing
+    , blockOpCert = Nothing
+    }
+
 
 mkBlockHash :: Word64 -> ByteString
 mkBlockHash blkId =

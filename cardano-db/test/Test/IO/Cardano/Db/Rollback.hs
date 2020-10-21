@@ -93,10 +93,24 @@ createAndInsertBlocks blockCount =
         -> ReaderT SqlBackend m (Word64, Maybe BlockId, Maybe Block, Maybe TxId)
     createAndInsert (indx, mPrevId, mPrevBlock, mTxOutId) = do
         slid <- insertSlotLeader testSlotLeader
-        let newBlock = Block (mkBlockHash indx) (Just 0) (Just indx) (Just indx) (Just indx) mPrevId
-                        (const (Just (mkMerkelRoot indx)) =<< mPrevBlock)
-                        slid 42 dummyUTCTime 0
-                        Nothing Nothing Nothing
+        let newBlock = Block
+                        { blockHash = mkBlockHash indx
+                        , blockEpochNo = Just 0
+                        , blockSlotNo = Just indx
+                        , blockEpochSlotNo = Just indx
+                        , blockBlockNo = Just indx
+                        , blockPrevious = mPrevId
+                        , blockMerkelRoot = const (Just (mkMerkelRoot indx)) =<< mPrevBlock
+                        , blockSlotLeader = slid
+                        , blockSize = 42
+                        , blockTime = dummyUTCTime
+                        , blockTxCount = 0
+                        , blockProtoMajor = 1
+                        , blockProtoMinor = 0
+                        , blockVrfKey = Nothing
+                        , blockOpCert = Nothing
+                        }
+
         blkId <- insertBlock newBlock
         newMTxOutId <- if indx /= 0
                       then pure mTxOutId
@@ -114,3 +128,4 @@ createAndInsertBlocks blockCount =
                 void $ insertTxOut (mkTxOut blkId txId)
             _ -> pure ()
         pure (indx + 1, Just blkId, Just newBlock, newMTxOutId)
+

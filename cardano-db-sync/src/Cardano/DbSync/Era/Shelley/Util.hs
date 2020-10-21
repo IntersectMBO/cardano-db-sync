@@ -66,7 +66,6 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
 import           Data.Sequence.Strict (StrictSeq (..))
-import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
@@ -110,8 +109,8 @@ blockPrevHash blk =
     Shelley.GenesisHash -> fakeGenesisHash
     Shelley.BlockHash h -> Crypto.hashToBytes $ Shelley.unHashHeader h
 
-blockProtoVersion :: ShelleyBlock -> Text
-blockProtoVersion = Text.pack . Db.showProtVer . Shelley.bprotver . blockBody
+blockProtoVersion :: ShelleyBlock -> Shelley.ProtVer
+blockProtoVersion = Shelley.bprotver . blockBody
 
 blockSize :: ShelleyBlock -> Word64
 blockSize = fromIntegral . Shelley.bBodySize . Shelley.bbody . Consensus.shelleyBlockRaw
