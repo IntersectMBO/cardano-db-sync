@@ -6,8 +6,17 @@
 CREATE FUNCTION drop_cexplorer_views () RETURNS void language plpgsql as $$
 
 DECLARE vname text;
+DECLARE next_version int;
 
 BEGIN
+  SELECT stage_one + 1 INTO next_version FROM "schema_version";
+  IF next_version = 2 THEN
+    -- Only update the schema version if the versions are as expected.
+    UPDATE "schema_version" SET stage_one = next_version;
+    RAISE NOTICE 'DB has been migrated to stage_one version %', next_version;
+  END IF;
+
+  -- Always run the following.
   for vname in
       select '"' || table_name || '"'
 	    from information_schema.views
