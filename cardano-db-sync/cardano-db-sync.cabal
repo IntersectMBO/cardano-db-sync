@@ -55,8 +55,7 @@ library
 
                         Cardano.DbSync.Tracing.ToObjectOrphans
 
-
-  other-modules:        Cardano.DbSync.Era.Byron.Genesis
+                        Cardano.DbSync.Era.Byron.Genesis
                         Cardano.DbSync.Era.Byron.Insert
                         Cardano.DbSync.Era.Shelley.Genesis
                         Cardano.DbSync.Era.Shelley.Insert
