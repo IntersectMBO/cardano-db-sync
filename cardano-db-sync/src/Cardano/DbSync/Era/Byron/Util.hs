@@ -14,6 +14,7 @@ module Cardano.DbSync.Era.Byron.Util
   , epochNumber
   , genesisToHeaderHash
   , mkSlotLeader
+  , protocolVersion
   , renderAbstractHash
   , slotLeaderHash
   , slotNumber
@@ -90,6 +91,9 @@ mkSlotLeader blk =
       slName = "ByronGenesis-" <> Text.decodeUtf8 (Base16.encode $ BS.take 8 slHash)
   -- On Byrom poolHashId will always be Nothing.
   in DB.SlotLeader slHash Nothing slName
+
+protocolVersion :: Byron.ABlock ByteString -> Byron.ProtocolVersion
+protocolVersion = Byron.headerProtocolVersion . Byron.blockHeader
 
 renderAbstractHash :: Crypto.AbstractHash algo a -> Text
 renderAbstractHash =

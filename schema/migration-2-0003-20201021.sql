@@ -9,13 +9,16 @@ BEGIN
     EXECUTE 'CREATe TABLE "pool_hash"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash_raw" hash28type NOT NULL,"view" VARCHAR NOT NULL)' ;
     EXECUTE 'ALTER TABLE "pool_hash" ADD CONSTRAINT "unique_pool_hash" UNIQUE("hash_raw")' ;
     EXECUTE 'ALTER TABLE "slot_leader" ADD COLUMN "pool_hash_id" INT8 NULL' ;
-    EXECUTE 'ALTER TABLE "slot_leader" ADD CONSTRAINT "slot_leader_pool_hash_id_fkey" FOREIGN KEY("pool_hash_id") REFERENCES "pool_hash"("id")' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "epoch_slot_no" uinteger NULL' ;
     EXECUTE 'ALTER TABLE "block" ALTER COLUMN "tx_count" TYPE INT8' ;
+    EXECUTE 'ALTER TABLE "block" ADD COLUMN "proto_major" uinteger NOT NULL' ;
+    EXECUTE 'ALTER TABLE "block" ADD COLUMN "proto_minor" uinteger NOT NULL' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "vrf_key" VARCHAR NULL' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "op_cert" hash32type NULL' ;
-    EXECUTE 'ALTER TABLE "block" ADD COLUMN "proto_version" VARCHAR NULL' ;
     EXECUTE 'ALTER TABLE "tx" ADD COLUMN "deposit" INT8 NOT NULL' ;
+    EXECUTE 'ALTER TABLE "tx_out" ADD COLUMN "address_raw" BYTEA NOT NULL' ;
+    EXECUTE 'ALTER TABLE "tx_out" ADD COLUMN "payment_cred" hash28type NULL' ;
+    EXECUTE 'ALTER TABLE "tx_out" ADD COLUMN "stake_address_id" INT8 NULL' ;
     EXECUTE 'ALTER TABLE "meta" ALTER COLUMN "network_name" SET NOT NULL' ;
     EXECUTE 'ALTER TABLE "meta" DROP COLUMN "protocol_const"' ;
     EXECUTE 'ALTER TABLE "meta" DROP COLUMN "slot_duration"' ;
@@ -25,10 +28,6 @@ BEGIN
     EXECUTE 'CREATe TABLE "stake_address"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash_raw" addr29type NOT NULL,"view" VARCHAR NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "stake_address" ADD CONSTRAINT "unique_stake_address" UNIQUE("hash_raw")' ;
     EXECUTE 'ALTER TABLE "stake_address" ADD CONSTRAINT "stake_address_registered_tx_id_fkey" FOREIGN KEY("registered_tx_id") REFERENCES "tx"("id")' ;
-    EXECUTE 'ALTER TABLE "tx_out" ADD COLUMN "address_raw" BYTEA NOT NULL' ;
-    EXECUTE 'ALTER TABLE "tx_out" ADD COLUMN "payment_cred" hash28type NULL' ;
-    EXECUTE 'ALTER TABLE "tx_out" ADD COLUMN "stake_address_id" INT8 NULL' ;
-    EXECUTE 'ALTER TABLE "tx_out" ADD CONSTRAINT "tx_out_stake_address_id_fkey" FOREIGN KEY("stake_address_id") REFERENCES "stake_address"("id")' ;
     EXECUTE 'CREATe TABLE "pool_meta_data"("id" SERIAL8  PRIMARY KEY UNIQUE,"url" VARCHAR NOT NULL,"hash" hash32type NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "pool_meta_data" ADD CONSTRAINT "unique_pool_meta_data" UNIQUE("url","hash")' ;
     EXECUTE 'ALTER TABLE "pool_meta_data" ADD CONSTRAINT "pool_meta_data_registered_tx_id_fkey" FOREIGN KEY("registered_tx_id") REFERENCES "tx"("id")' ;
@@ -87,13 +86,20 @@ BEGIN
     EXECUTE 'ALTER TABLE "treasury" ADD CONSTRAINT "unique_treasury" UNIQUE("addr_id","tx_id")' ;
     EXECUTE 'ALTER TABLE "treasury" ADD CONSTRAINT "treasury_addr_id_fkey" FOREIGN KEY("addr_id") REFERENCES "stake_address"("id")' ;
     EXECUTE 'ALTER TABLE "treasury" ADD CONSTRAINT "treasury_tx_id_fkey" FOREIGN KEY("tx_id") REFERENCES "tx"("id")' ;
-    EXECUTE 'CREATe TABLE "param_proposal"("id" SERIAL8  PRIMARY KEY UNIQUE,"epoch_no" uinteger NOT NULL,"key" hash28type NOT NULL,"min_fee_a" uinteger NULL,"min_fee_b" uinteger NULL,"max_block_size" uinteger NULL,"max_tx_size" uinteger NULL,"max_bh_size" uinteger NULL,"key_deposit" lovelace NULL,"pool_deposit" lovelace NULL,"max_epoch" uinteger NULL,"optimal_pool_count" uinteger NULL,"influence" DOUBLE PRECISION NULL,"monetary_expand_rate" DOUBLE PRECISION NULL,"treasury_growth_rate" DOUBLE PRECISION NULL,"decentralisation" DOUBLE PRECISION NULL,"entropy" hash32type NULL,"protocol_version" VARCHAR NULL,"min_utxo_value" lovelace NULL,"min_pool_cost" lovelace NULL,"registered_tx_id" INT8 NOT NULL)' ;
+    EXECUTE 'CREATe TABLE "param_proposal"("id" SERIAL8  PRIMARY KEY UNIQUE,"epoch_no" uinteger NOT NULL,"key" hash28type NOT NULL,"min_fee_a" uinteger NULL,"min_fee_b" uinteger NULL,"max_block_size" uinteger NULL,"max_tx_size" uinteger NULL,"max_bh_size" uinteger NULL,"key_deposit" lovelace NULL,"pool_deposit" lovelace NULL,"max_epoch" uinteger NULL,"optimal_pool_count" uinteger NULL,"influence" DOUBLE PRECISION NULL,"monetary_expand_rate" DOUBLE PRECISION NULL,"treasury_growth_rate" DOUBLE PRECISION NULL,"decentralisation" DOUBLE PRECISION NULL,"entropy" hash32type NULL,"protocol_major" uinteger NULL,"protocol_minor" uinteger NULL,"min_utxo_value" lovelace NULL,"min_pool_cost" lovelace NULL,"registered_tx_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "param_proposal" ADD CONSTRAINT "unique_param_proposal" UNIQUE("key","registered_tx_id")' ;
     EXECUTE 'ALTER TABLE "param_proposal" ADD CONSTRAINT "param_proposal_registered_tx_id_fkey" FOREIGN KEY("registered_tx_id") REFERENCES "tx"("id")' ;
-    EXECUTE 'CREATe TABLE "epoch_param"("id" SERIAL8  PRIMARY KEY UNIQUE,"epoch_no" uinteger NOT NULL,"min_fee_a" uinteger NOT NULL,"min_fee_b" uinteger NOT NULL,"max_block_size" uinteger NOT NULL,"max_tx_size" uinteger NOT NULL,"max_bh_size" uinteger NOT NULL,"key_deposit" lovelace NOT NULL,"pool_deposit" lovelace NOT NULL,"max_epoch" uinteger NOT NULL,"optimal_pool_count" uinteger NOT NULL,"influence" DOUBLE PRECISION NOT NULL,"monetary_expand_rate" DOUBLE PRECISION NOT NULL,"treasury_growth_rate" DOUBLE PRECISION NOT NULL,"decentralisation" DOUBLE PRECISION NOT NULL,"entropy" hash32type NULL,"protocol_version" VARCHAR NOT NULL,"min_utxo_value" lovelace NOT NULL,"min_pool_cost" lovelace NOT NULL,"block_id" INT8 NOT NULL)' ;
+    EXECUTE 'CREATe TABLE "epoch_param"("id" SERIAL8  PRIMARY KEY UNIQUE,"epoch_no" uinteger NOT NULL,"min_fee_a" uinteger NOT NULL,"min_fee_b" uinteger NOT NULL,"max_block_size" uinteger NOT NULL,"max_tx_size" uinteger NOT NULL,"max_bh_size" uinteger NOT NULL,"key_deposit" lovelace NOT NULL,"pool_deposit" lovelace NOT NULL,"max_epoch" uinteger NOT NULL,"optimal_pool_count" uinteger NOT NULL,"influence" DOUBLE PRECISION NOT NULL,"monetary_expand_rate" DOUBLE PRECISION NOT NULL,"treasury_growth_rate" DOUBLE PRECISION NOT NULL,"decentralisation" DOUBLE PRECISION NOT NULL,"entropy" hash32type NULL,"protocol_major" uinteger NOT NULL,"protocol_minor" uinteger NOT NULL,"min_utxo_value" lovelace NOT NULL,"min_pool_cost" lovelace NOT NULL,"block_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "epoch_param" ADD CONSTRAINT "unique_epoch_param" UNIQUE("epoch_no","block_id")' ;
     EXECUTE 'ALTER TABLE "epoch_param" ADD CONSTRAINT "epoch_param_block_id_fkey" FOREIGN KEY("block_id") REFERENCES "block"("id")' ;
+
     -- Hand written SQL statements can be added here.
+    -- For some reason this are added not always added when the schema is regenerated.
+    -- I think this is a bug in Persistent, but add them manually for now.
+    EXECUTE 'ALTER TABLE "slot_leader" ADD CONSTRAINT "slot_leader_pool_hash_id_fkey" FOREIGN KEY("pool_hash_id") REFERENCES "pool_hash"("id")' ;
+    EXECUTE 'ALTER TABLE "tx_out" ADD CONSTRAINT "tx_out_stake_address_id_fkey" FOREIGN KEY("stake_address_id") REFERENCES "stake_address"("id")' ;
+    --
+
     UPDATE schema_version SET stage_two = 3 ;
     RAISE NOTICE 'DB has been migrated to stage_two version %', next_version ;
   END IF ;

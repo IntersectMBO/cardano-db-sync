@@ -27,8 +27,6 @@ import qualified Hedgehog as H
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
-import           Shelley.Spec.Ledger.PParams (ProtVer (..))
-
 
 prop_roundtrip_Ada_via_JSON :: Property
 prop_roundtrip_Ada_via_JSON =
@@ -47,12 +45,6 @@ prop_roundtrip_DbWord64_PersistField =
     H.withTests 5000 . H.property $ do
       (w64, pv) <- H.forAll genDbWord64PresistValue
       fromPersistValue pv === Right w64
-
-prop_roundtrip_ProtVer_PersistField :: Property
-prop_roundtrip_ProtVer_PersistField =
-  H.withTests 5000 . H.property $ do
-    pv <- H.forAll genProtVer
-    H.tripping pv toPersistValue fromPersistValue
 
 prop_roundtrip_Word128_PersistField :: Property
 prop_roundtrip_Word128_PersistField =
@@ -85,9 +77,6 @@ genDbWord64PresistValue = first DbWord64 <$> genWord64PresistValue
 
 genNatural :: Gen Natural
 genNatural = fromIntegral <$> Gen.word (Range.linear 0 5000)
-
-genProtVer :: Gen ProtVer
-genProtVer = ProtVer <$> genNatural <*> genNatural
 
 genWord64PresistValue :: Gen (Word64, PersistValue)
 genWord64PresistValue =

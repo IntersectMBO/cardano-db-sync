@@ -63,9 +63,10 @@ blockZero slid =
     , blockSize = 42
     , blockTime = dummyUTCTime
     , blockTxCount = 0
+    , blockProtoMajor = 1
+    , blockProtoMinor = 0
     , blockVrfKey = Nothing
     , blockOpCert = Nothing
-    , blockProtoVersion = Nothing
     }
 
 
@@ -83,9 +84,10 @@ blockOne slid =
     , blockSize = 42
     , blockTime = dummyUTCTime
     , blockTxCount = 0
+    , blockProtoMajor = 1
+    , blockProtoMinor = 0
     , blockVrfKey = Nothing
     , blockOpCert = Nothing
-    , blockProtoVersion = Nothing
     }
 
 mkHash32 :: Char -> ByteString

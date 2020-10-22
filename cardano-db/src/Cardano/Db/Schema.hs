@@ -30,8 +30,6 @@ import           Data.Word (Word16, Word64)
 -- from version to version due to changes to the TH code in Persistent.
 import           Database.Persist.TH
 
-import           Shelley.Spec.Ledger.PParams (ProtVer (..))
-
 -- In the schema definition we need to match Haskell types with with the
 -- custom type defined in PostgreSQL (via 'DOMAIN' statements). For the
 -- time being the Haskell types will be simple Haskell types like
@@ -89,10 +87,11 @@ share
     size                Word64              sqltype=uinteger
     time                UTCTime             sqltype=timestamp
     txCount             Word64
+    protoMajor          Word16              sqltype=uinteger
+    protoMinor          Word16              sqltype=uinteger
     -- Shelley specific
     vrfKey              Text Maybe
     opCert              ByteString Maybe    sqltype=hash32type
-    protoVersion        Text Maybe
     UniqueBlock         hash
 
   Tx
@@ -302,7 +301,8 @@ share
     treasuryGrowthRate  Double Maybe        -- sqltype=interval
     decentralisation    Double Maybe        -- sqltype=interval
     entropy             ByteString Maybe    sqltype=hash32type
-    protocolVersion     ProtVer Maybe
+    protocolMajor       Word16 Maybe        sqltype=uinteger
+    protocolMinor       Word16 Maybe        sqltype=uinteger
     minUtxoValue        DbLovelace Maybe    sqltype=lovelace
     minPoolCost         DbLovelace Maybe    sqltype=lovelace
 
@@ -325,7 +325,8 @@ share
     treasuryGrowthRate  Double              -- sqltype=interval
     decentralisation    Double              -- sqltype=interval
     entropy             ByteString Maybe    sqltype=hash32type
-    protocolVersion     ProtVer
+    protocolMajor       Word16              sqltype=uinteger
+    protocolMinor       Word16              sqltype=uinteger
     minUtxoValue        DbLovelace          sqltype=lovelace
     minPoolCost         DbLovelace          sqltype=lovelace
 

@@ -27,6 +27,7 @@ import qualified Cardano.Binary as Binary
 import qualified Cardano.Chain.Block as Byron hiding (blockHash)
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.UTxO as Byron
+import qualified Cardano.Chain.Update as Byron hiding (protocolVersion)
 
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
 
@@ -94,20 +95,23 @@ insertABOBBoundary tracer blk details = do
             DB.Block
               { DB.blockHash = Byron.unHeaderHash $ Byron.boundaryHashAnnotated blk
               , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
-              , DB.blockSlotNo = Nothing -- No slotNo for a boundary block
+              -- No slotNo for a boundary block
+              , DB.blockSlotNo = Nothing
               , DB.blockEpochSlotNo = Nothing
               , DB.blockBlockNo = Nothing
               , DB.blockPrevious = Just pbid
-              , DB.blockMerkelRoot = Nothing -- No merkelRoot for a boundary block
+              -- No merkelRoot for a boundary block
+              , DB.blockMerkelRoot = Nothing
               , DB.blockSlotLeader = slid
               , DB.blockSize = fromIntegral $ Byron.boundaryBlockLength blk
               , DB.blockTime = sdSlotTime details
               , DB.blockTxCount = 0
-
+              -- EBBs do not seem to have protocol version fields, so set this to '0'.
+              , DB.blockProtoMajor = 0
+              , DB.blockProtoMinor = 0
               -- Shelley specific
               , DB.blockVrfKey = Nothing
               , DB.blockOpCert = Nothing
-              , DB.blockProtoVersion = Nothing
               }
 
   liftIO . logInfo tracer $
@@ -138,11 +142,11 @@ insertABlock tracer blk details = do
                     , DB.blockSize = fromIntegral $ Byron.blockLength blk
                     , DB.blockTime = sdSlotTime details
                     , DB.blockTxCount = fromIntegral $ length (Byron.blockPayload blk)
-
+                    , DB.blockProtoMajor = Byron.pvMajor (Byron.protocolVersion blk)
+                    , DB.blockProtoMinor = Byron.pvMinor (Byron.protocolVersion blk)
                     -- Shelley specific
                     , DB.blockVrfKey = Nothing
                     , DB.blockOpCert = Nothing
-                    , DB.blockProtoVersion = Nothing
                     }
 
     zipWithM_ (insertTx tracer blkId) (Byron.blockPayload blk) [ 0 .. ]
