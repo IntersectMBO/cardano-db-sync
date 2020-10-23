@@ -1,4 +1,4 @@
-index-state: 2020-07-15T00:00:00Z
+index-state: 2020-10-01T00:00:00Z
 
 packages:
   cardano-db
@@ -48,8 +48,8 @@ package ouroboros-consensus-cardano
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-base
-  tag: 13f44ad35d2762dbf98b3d3be56b7ba2adf515f4
-  --sha256: 0sl7adyrjf3w6025gvljxyr222s53avin0sv0gzhdypmj9wg5ml6
+  tag: 42a31449d68150ea89663c61727745f9448e0590
+  --sha256: 14mlw54lsavzx9glnm21dw431fpjpzc3ifbjl5z1z7m2za0v0mzk
   subdir:
     binary
     binary/test
@@ -66,8 +66,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-ledger-specs
-  tag: a6ce8feddc09bf78c4378c9b4592c6509bfddc81
-  --sha256: 1f8149wynplf83haqnx124jw89kg45i3wbsm8chl7g68qkw7xhzq
+  tag: d5eaac6c4b21a8e69dc3a5503a72e3c3bfde648e
+  --sha256: 1lzwfi6bc7z995s345ij6aachsrmhmrgm71060z6rvk1w97b3jqk
   subdir:
     byron/crypto
     byron/crypto/test
@@ -95,15 +95,11 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-prelude
-  tag: 0c5b0a6619fadf22f4d62a12154e181a6d035c1c
-  --sha256: 0qjn7xsw5py05zmq9935z91719v5i4apsizwhkwppi8dahbanrs4
-
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/cardano-prelude
-  tag: 0c5b0a6619fadf22f4d62a12154e181a6d035c1c
-  --sha256: 0qjn7xsw5py05zmq9935z91719v5i4apsizwhkwppi8dahbanrs4
-  subdir: test
+  tag: d7a531a8a9f48944299bcdccd3856684dfddce19
+  --sha256: 0svzcc9q5xyh9a96v9vhbgaaqbinm3gv74vnm5k4phfirc9jpg5s
+  subdir:
+    cardano-prelude
+    cardano-prelude-test
 
 source-repository-package
   type: git
@@ -129,8 +125,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/ouroboros-network
-  tag: f6466b6473df52a42316061e495f0defa2a71442
-  --sha256: 0wvqrnhhlgx90cccsdgj94qgnvy6yb41x63gihdascx1cnhxzkik
+  tag: 6a2b8922856460cccdc7015d33a14ebd28696d14
+  --sha256: 01sxmgm65i8lspzh600vvyn5pfwhny4bx215ksxh9lpz8kjp1lc5
   subdir:
     cardano-client
     io-sim
