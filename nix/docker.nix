@@ -10,6 +10,7 @@
 #    docker run \
 #      -v $PATH_TO/node-ipc:/node-ipc \
 #      -v $PATH_TO/pgpass:/configuration/pgpass \
+#      -v $PWD/data:/var/lib/cdbsync \
 #      -e NETWORK=mainnet|testnet \
 #
 # Provide an (almost*) complete command otherwise:
@@ -18,10 +19,12 @@
 #     -v $PWD/config/mainnet-config:/configuration/configuration.yaml
 #     -v $PWD/node-ipc:/node-ipc \
 #     -v $PWD/config/pgpass:/pgpass \
+#     -v $PWD/data:/data \
 #     -e PGPASSFILE=/pgpass
 #     inputoutput/cardano-db-sync run \
 #      --config /configuration/configuration.yaml \
 #      --socket-path /node-ipc/node.socket \
+#      --state-dir /data
 #
 #   * --schema-dir is set within the script
 #
