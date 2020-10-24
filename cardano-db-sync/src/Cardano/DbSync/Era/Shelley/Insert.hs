@@ -665,6 +665,6 @@ insertEpochStake _tracer env blkId (EpochNo epoch) smap =
           { DB.epochStakeAddrId = saId
           , DB.epochStakePoolId = poolId
           , DB.epochStakeAmount = Shelley.coinToDbLovelace coin
-          , DB.epochStakeEpochNo = epoch + 1 -- The epoch where this delegation becomes valid.
+          , DB.epochStakeEpochNo = epoch -- The epoch where this delegation becomes valid.
           , DB.epochStakeBlockId = blkId
           }
