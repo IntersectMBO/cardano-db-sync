@@ -63,7 +63,7 @@ queryStakeAddress addr = do
 queryStakeAddressAndPool :: MonadIO m => Word64 -> ByteString -> ReaderT SqlBackend m (Either LookupFail (StakeAddressId, PoolHashId))
 queryStakeAddressAndPool epoch addr = do
     res <- select . from $ \ (saddr `InnerJoin` dlg `InnerJoin` tx `InnerJoin` blk) -> do
-            on (blk ^. BlockId ==. tx ^. TxBlock)
+            on (blk ^. BlockId ==. tx ^. TxBlockId)
             on (dlg ^. DelegationTxId ==. tx ^. TxId)
             on (saddr ^. StakeAddressId ==. dlg ^. DelegationAddrId)
             where_ (saddr ^. StakeAddressHashRaw ==. val addr)
@@ -77,7 +77,7 @@ queryStakeAddressAndPool epoch addr = do
     queryPool :: MonadIO m => ReaderT SqlBackend m (Either LookupFail (StakeAddressId, PoolHashId))
     queryPool = do
       res <- select . from $ \ (saddr `InnerJoin` pu `InnerJoin` tx `InnerJoin` blk) -> do
-                on (blk ^. BlockId ==. tx ^. TxBlock)
+                on (blk ^. BlockId ==. tx ^. TxBlockId)
                 on (pu ^. PoolUpdateRegisteredTxId ==. tx ^. TxId)
                 on (saddr ^. StakeAddressId ==. pu ^. PoolUpdateRewardAddrId)
                 where_ (saddr ^. StakeAddressHashRaw ==. val addr)
@@ -92,7 +92,7 @@ queryStakeAddressAndPool epoch addr = do
 queryStakePoolKeyHash :: MonadIO m => ShelleyStakePoolKeyHash -> ReaderT SqlBackend m (Either LookupFail PoolHashId)
 queryStakePoolKeyHash kh = do
   res <- select . from $ \ (poolUpdate `InnerJoin` poolHash `InnerJoin` tx `InnerJoin` blk) -> do
-            on (blk ^. BlockId ==. tx ^. TxBlock)
+            on (blk ^. BlockId ==. tx ^. TxBlockId)
             on (tx ^. TxId ==. poolUpdate ^. PoolUpdateRegisteredTxId)
             on (poolUpdate ^. PoolUpdateHashId ==. poolHash ^. PoolHashId)
             where_ (poolHash ^. PoolHashHashRaw ==. val (unKeyHashRaw kh))
@@ -116,7 +116,7 @@ queryStakeAddressRef addr =
     queryStakeDelegation (SlotNo slot) txIx certIx = do
       res <- select . from $ \ (blk `InnerJoin` tx `InnerJoin` dlg) -> do
                 on (tx ^. TxId ==. dlg ^. DelegationTxId)
-                on (blk ^. BlockId ==. tx ^. TxBlock)
+                on (blk ^. BlockId ==. tx ^. TxBlockId)
                 where_ (blk ^. BlockSlotNo ==. just (val slot))
                 where_ (tx ^. TxBlockIndex ==. val (fromIntegral txIx))
                 where_ (dlg ^. DelegationCertIndex ==. val (fromIntegral certIx))

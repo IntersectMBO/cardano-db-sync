@@ -96,9 +96,9 @@ insertValidateGenesisDist tracer networkName cfg = do
                             , DB.blockSlotNo = Nothing
                             , DB.blockEpochSlotNo = Nothing
                             , DB.blockBlockNo = Nothing
-                            , DB.blockPrevious = Nothing
+                            , DB.blockPreviousId = Nothing
                             , DB.blockMerkelRoot = Nothing
-                            , DB.blockSlotLeader = slid
+                            , DB.blockSlotLeaderId = slid
                             , DB.blockSize = 0
                             , DB.blockTime = configStartTime cfg
                             , DB.blockTxCount = 0
@@ -173,7 +173,7 @@ insertTxOuts blkId (Shelley.TxIn txInId _, txOut) = do
   txId <- DB.insertTx $
             DB.Tx
               { DB.txHash = Shelley.unTxHash txInId
-              , DB.txBlock = blkId
+              , DB.txBlockId = blkId
               , DB.txBlockIndex = 0
               , DB.txOutSum = Shelley.coinToDbLovelace (txOutCoin txOut)
               , DB.txFee = DB.DbLovelace 0

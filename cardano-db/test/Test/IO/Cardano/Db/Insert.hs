@@ -45,7 +45,7 @@ insertFirstTest =
     void $ deleteCascadeBlock (blockOne slid)
     -- Insert the same block twice.
     bid0 <- insertBlock (blockZero slid)
-    bid1 <- insertBlock $ (\b -> b { blockPrevious = Just bid0 }) (blockOne slid)
+    bid1 <- insertBlock $ (\b -> b { blockPreviousId = Just bid0 }) (blockOne slid)
     assertBool (show bid0 ++ " == " ++ show bid1) (bid0 /= bid1)
 
 
@@ -57,9 +57,9 @@ blockZero slid =
     , blockSlotNo = Just 0
     , blockEpochSlotNo = Just 0
     , blockBlockNo = Just 0
-    , blockPrevious = Nothing
+    , blockPreviousId = Nothing
     , blockMerkelRoot = Nothing
-    , blockSlotLeader = slid
+    , blockSlotLeaderId = slid
     , blockSize = 42
     , blockTime = dummyUTCTime
     , blockTxCount = 0
@@ -78,9 +78,9 @@ blockOne slid =
     , blockSlotNo = Just 1
     , blockEpochSlotNo = Just 1
     , blockBlockNo = Just 1
-    , blockPrevious = Nothing
+    , blockPreviousId = Nothing
     , blockMerkelRoot = Just $ mkMerkelRoot 1
-    , blockSlotLeader = slid
+    , blockSlotLeaderId = slid
     , blockSize = 42
     , blockTime = dummyUTCTime
     , blockTxCount = 0

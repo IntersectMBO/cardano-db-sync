@@ -19,11 +19,11 @@ BEGIN
     CREATE INDEX idx_block_epoch_no
     ON block(epoch_no);
 
-    CREATE INDEX idx_block_previous
-    ON block(previous);
+    CREATE INDEX idx_block_previous_id
+    ON block(previous_id);
 
-    CREATE INDEX idx_tx_block
-    ON tx(block);
+    CREATE INDEX idx_tx_block_id
+    ON tx(block_id);
 
     CREATE INDEX idx_tx_in_source_tx
     ON tx_in(tx_in_id);

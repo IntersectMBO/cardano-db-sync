@@ -153,7 +153,7 @@ queryMainBlock hash = do
 queryBlockTxCount :: MonadIO m => BlockId -> ReaderT SqlBackend m Word64
 queryBlockTxCount blkId = do
   res <- select . from $ \ tx -> do
-            where_ (tx ^. TxBlock ==. val blkId)
+            where_ (tx ^. TxBlockId ==. val blkId)
             pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
@@ -167,7 +167,7 @@ queryCalcEpochEntry epochNum = do
               where_ (blk ^. BlockEpochNo ==. just (val epochNum))
               pure (countRows, min_ (blk ^. BlockTime), max_ (blk ^. BlockTime))
     txRes <- select . from $ \ (tx `InnerJoin` blk) -> do
-              on (tx ^. TxBlock ==. blk ^. BlockId)
+              on (tx ^. TxBlockId ==. blk ^. BlockId)
               where_ (blk ^. BlockEpochNo ==. just (val epochNum))
               pure (sum_ (tx ^. TxOutSum), sum_ (tx ^. TxFee), count (tx ^. TxOutSum))
     case (listToMaybe blkRes, listToMaybe txRes) of
@@ -218,7 +218,7 @@ queryCheckPoints limitCount = do
 queryDepositUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
 queryDepositUpToBlockNo blkNo = do
   res <- select . from $ \ (tx `InnerJoin` blk) -> do
-            on (tx ^. TxBlock ==. blk ^. BlockId)
+            on (tx ^. TxBlockId ==. blk ^. BlockId)
             where_ (blk ^. BlockBlockNo <=. just (val blkNo))
             pure $ sum_ (tx ^. TxDeposit)
   pure $ unValueSumAda (listToMaybe res)
@@ -243,7 +243,7 @@ queryEpochNo blkId = do
 queryFeesUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
 queryFeesUpToBlockNo blkNo = do
   res <- select . from $ \ (tx `InnerJoin` blk) -> do
-            on (tx ^. TxBlock ==. blk ^. BlockId)
+            on (tx ^. TxBlockId ==. blk ^. BlockId)
             where_ (blk ^. BlockBlockNo <=. just (val blkNo))
             pure $ sum_ (tx ^. TxFee)
   pure $ unValueSumAda (listToMaybe res)
@@ -251,7 +251,7 @@ queryFeesUpToBlockNo blkNo = do
 queryFeesUpToSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
 queryFeesUpToSlotNo slotNo = do
   res <- select . from $ \ (tx `InnerJoin` blk) -> do
-            on (tx ^. TxBlock ==. blk ^. BlockId)
+            on (tx ^. TxBlockId ==. blk ^. BlockId)
             where_ (isJust $ blk ^. BlockSlotNo)
             where_ (blk ^. BlockSlotNo <=. just (val slotNo))
             pure $ sum_ (tx ^. TxFee)
@@ -262,7 +262,7 @@ queryGenesisSupply :: MonadIO m => ReaderT SqlBackend m Ada
 queryGenesisSupply = do
     res <- select . from $ \ (txOut `InnerJoin` tx) -> do
                 on (tx ^. TxId ==. txOut ^. TxOutTxId)
-                where_ (tx ^. TxBlock ==. val (BlockKey 1))
+                where_ (tx ^. TxBlockId ==. val (BlockKey 1))
                 pure $ sum_ (txOut ^. TxOutValue)
     pure $ unValueSumAda (listToMaybe res)
 
@@ -336,7 +336,7 @@ queryLatestSlotNo = do
 queryPreviousSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Word64)
 queryPreviousSlotNo slotNo = do
   res <- select . from $ \ (blk `InnerJoin` pblk) -> do
-                on (blk ^. BlockPrevious ==. just (pblk ^. BlockId))
+                on (blk ^. BlockPreviousId ==. just (pblk ^. BlockId))
                 where_ (blk ^. BlockSlotNo ==. just (val slotNo))
                 pure $ pblk ^. BlockSlotNo
   pure $ unValue =<< listToMaybe res
@@ -462,7 +462,7 @@ queryUtxoAtBlockId blkid = do
     -- tx2 refers to the tx of the output
     outputs <- select . from $ \(txout `LeftOuterJoin` txin `LeftOuterJoin` tx1 `LeftOuterJoin` blk `LeftOuterJoin` tx2) -> do
                   on $ txout ^. TxOutTxId ==. tx2 ^. TxId
-                  on $ tx1 ^. TxBlock ==. blk ^. BlockId
+                  on $ tx1 ^. TxBlockId ==. blk ^. BlockId
                   on $ txin ^. TxInTxInId ==. tx1 ^. TxId
                   on $ (txout ^. TxOutTxId ==. txin ^. TxInTxOutId) &&. (txout ^. TxOutIndex ==. txin ^. TxInTxOutIndex)
                   where_ $ (txout ^. TxOutTxId `in_` txLessEqual blkid) &&. (isNothing (blk ^. BlockBlockNo) ||. (blk ^. BlockId >. val blkid))
@@ -490,7 +490,7 @@ queryWithdrawalsUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
 queryWithdrawalsUpToBlockNo blkNo = do
   res <- select . from $ \ (tx `InnerJoin` blk `InnerJoin` withDraw) -> do
             on (tx ^. TxId ==. withDraw ^. WithdrawalTxId)
-            on (tx ^. TxBlock ==. blk ^. BlockId)
+            on (tx ^. TxBlockId ==. blk ^. BlockId)
             where_ (blk ^. BlockBlockNo <=. just (val blkNo))
             pure $ sum_ (withDraw ^. WithdrawalAmount)
   pure $ unValueSumAda (listToMaybe res)
@@ -533,7 +533,7 @@ txOutUnspentP txOut =
 txLessEqual :: BlockId -> SqlExpr (ValueList TxId)
 txLessEqual blkid =
     subList_select . from $ \tx -> do
-      where_ $ tx ^. TxBlock `in_` blockLessEqual
+      where_ $ tx ^. TxBlockId `in_` blockLessEqual
       pure $ tx ^. TxId
   where
     -- every block made before or at the snapshot time
