@@ -5,34 +5,34 @@ DECLARE
   next_version int ;
 BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
-  IF next_version = 3 THEN
+  IF next_version = 1 THEN
     EXECUTE 'CREATe TABLE "pool_hash"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash_raw" hash28type NOT NULL,"view" VARCHAR NOT NULL)' ;
     EXECUTE 'ALTER TABLE "pool_hash" ADD CONSTRAINT "unique_pool_hash" UNIQUE("hash_raw")' ;
-    EXECUTE 'ALTER TABLE "slot_leader" ADD COLUMN "pool_hash_id" INT8 NULL' ;
-    EXECUTE 'ALTER TABLE "block" ADD COLUMN "epoch_slot_no" uinteger NULL' ;
-    EXECUTE 'ALTER TABLE "block" ADD COLUMN "previous_id" INT8 NULL' ;
-    EXECUTE 'ALTER TABLE "block" ADD COLUMN "slot_leader_id" INT8 NOT NULL' ;
-    EXECUTE 'ALTER TABLE "block" ALTER COLUMN "tx_count" TYPE INT8' ;
-    EXECUTE 'ALTER TABLE "block" ADD COLUMN "proto_major" uinteger NOT NULL' ;
-    EXECUTE 'ALTER TABLE "block" ADD COLUMN "proto_minor" uinteger NOT NULL' ;
-    EXECUTE 'ALTER TABLE "block" ADD COLUMN "vrf_key" VARCHAR NULL' ;
-    EXECUTE 'ALTER TABLE "block" ADD COLUMN "op_cert" hash32type NULL' ;
-    EXECUTE 'ALTER TABLE "block" DROP COLUMN "slot_leader"' ;
-    EXECUTE 'ALTER TABLE "tx" ADD COLUMN "block_id" INT8 NOT NULL' ;
-    EXECUTE 'ALTER TABLE "tx" ADD COLUMN "deposit" INT8 NOT NULL' ;
-    EXECUTE 'ALTER TABLE "tx" DROP COLUMN "block"' ;
-    EXECUTE 'ALTER TABLE "tx_out" ADD COLUMN "address_raw" BYTEA NOT NULL' ;
-    EXECUTE 'ALTER TABLE "tx_out" ADD COLUMN "payment_cred" hash28type NULL' ;
-    EXECUTE 'ALTER TABLE "tx_out" ADD COLUMN "stake_address_id" INT8 NULL' ;
-    EXECUTE 'ALTER TABLE "meta" ALTER COLUMN "network_name" SET NOT NULL' ;
-    EXECUTE 'ALTER TABLE "meta" DROP COLUMN "protocol_const"' ;
-    EXECUTE 'ALTER TABLE "meta" DROP COLUMN "slot_duration"' ;
-    EXECUTE 'ALTER TABLE "meta" DROP COLUMN "slots_per_epoch"' ;
-    EXECUTE 'ALTER TABLE "epoch" ALTER COLUMN "out_sum" TYPE word128type' ;
-    EXECUTE 'ALTER TABLE "epoch" ADD COLUMN "fees" lovelace NOT NULL' ;
+    EXECUTE 'CREATe TABLE "slot_leader"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash" hash28type NOT NULL,"pool_hash_id" INT8 NULL,"description" VARCHAR NOT NULL)' ;
+    EXECUTE 'ALTER TABLE "slot_leader" ADD CONSTRAINT "unique_slot_leader" UNIQUE("hash")' ;
+    EXECUTE 'ALTER TABLE "slot_leader" ADD CONSTRAINT "slot_leader_pool_hash_id_fkey" FOREIGN KEY("pool_hash_id") REFERENCES "pool_hash"("id")' ;
+    EXECUTE 'CREATe TABLE "block"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash" hash32type NOT NULL,"epoch_no" uinteger NULL,"slot_no" uinteger NULL,"epoch_slot_no" uinteger NULL,"block_no" uinteger NULL,"previous_id" INT8 NULL,"merkel_root" hash32type NULL,"slot_leader_id" INT8 NOT NULL,"size" uinteger NOT NULL,"time" timestamp NOT NULL,"tx_count" INT8 NOT NULL,"proto_major" uinteger NOT NULL,"proto_minor" uinteger NOT NULL,"vrf_key" VARCHAR NULL,"op_cert" hash32type NULL)' ;
+    EXECUTE 'ALTER TABLE "block" ADD CONSTRAINT "unique_block" UNIQUE("hash")' ;
+    EXECUTE 'ALTER TABLE "block" ADD CONSTRAINT "block_previous_id_fkey" FOREIGN KEY("previous_id") REFERENCES "block"("id")' ;
+    EXECUTE 'ALTER TABLE "block" ADD CONSTRAINT "block_slot_leader_id_fkey" FOREIGN KEY("slot_leader_id") REFERENCES "slot_leader"("id")' ;
+    EXECUTE 'CREATe TABLE "tx"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash" hash32type NOT NULL,"block_id" INT8 NOT NULL,"block_index" uinteger NOT NULL,"out_sum" lovelace NOT NULL,"fee" lovelace NOT NULL,"deposit" INT8 NOT NULL,"size" uinteger NOT NULL)' ;
+    EXECUTE 'ALTER TABLE "tx" ADD CONSTRAINT "unique_tx" UNIQUE("hash")' ;
+    EXECUTE 'ALTER TABLE "tx" ADD CONSTRAINT "tx_block_id_fkey" FOREIGN KEY("block_id") REFERENCES "block"("id")' ;
     EXECUTE 'CREATe TABLE "stake_address"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash_raw" addr29type NOT NULL,"view" VARCHAR NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "stake_address" ADD CONSTRAINT "unique_stake_address" UNIQUE("hash_raw")' ;
     EXECUTE 'ALTER TABLE "stake_address" ADD CONSTRAINT "stake_address_registered_tx_id_fkey" FOREIGN KEY("registered_tx_id") REFERENCES "tx"("id")' ;
+    EXECUTE 'CREATe TABLE "tx_out"("id" SERIAL8  PRIMARY KEY UNIQUE,"tx_id" INT8 NOT NULL,"index" txindex NOT NULL,"address" VARCHAR NOT NULL,"address_raw" BYTEA NOT NULL,"payment_cred" hash28type NULL,"stake_address_id" INT8 NULL,"value" lovelace NOT NULL)' ;
+    EXECUTE 'ALTER TABLE "tx_out" ADD CONSTRAINT "unique_txout" UNIQUE("tx_id","index")' ;
+    EXECUTE 'ALTER TABLE "tx_out" ADD CONSTRAINT "tx_out_tx_id_fkey" FOREIGN KEY("tx_id") REFERENCES "tx"("id")' ;
+    EXECUTE 'ALTER TABLE "tx_out" ADD CONSTRAINT "tx_out_stake_address_id_fkey" FOREIGN KEY("stake_address_id") REFERENCES "stake_address"("id")' ;
+    EXECUTE 'CREATe TABLE "tx_in"("id" SERIAL8  PRIMARY KEY UNIQUE,"tx_in_id" INT8 NOT NULL,"tx_out_id" INT8 NOT NULL,"tx_out_index" txindex NOT NULL)' ;
+    EXECUTE 'ALTER TABLE "tx_in" ADD CONSTRAINT "unique_txin" UNIQUE("tx_out_id","tx_out_index")' ;
+    EXECUTE 'ALTER TABLE "tx_in" ADD CONSTRAINT "tx_in_tx_in_id_fkey" FOREIGN KEY("tx_in_id") REFERENCES "tx"("id")' ;
+    EXECUTE 'ALTER TABLE "tx_in" ADD CONSTRAINT "tx_in_tx_out_id_fkey" FOREIGN KEY("tx_out_id") REFERENCES "tx"("id")' ;
+    EXECUTE 'CREATe TABLE "meta"("id" SERIAL8  PRIMARY KEY UNIQUE,"start_time" timestamp NOT NULL,"network_name" VARCHAR NOT NULL)' ;
+    EXECUTE 'ALTER TABLE "meta" ADD CONSTRAINT "unique_meta" UNIQUE("start_time")' ;
+    EXECUTE 'CREATe TABLE "epoch"("id" SERIAL8  PRIMARY KEY UNIQUE,"out_sum" word128type NOT NULL,"fees" lovelace NOT NULL,"tx_count" uinteger NOT NULL,"blk_count" uinteger NOT NULL,"no" uinteger NOT NULL,"start_time" timestamp NOT NULL,"end_time" timestamp NOT NULL)' ;
+    EXECUTE 'ALTER TABLE "epoch" ADD CONSTRAINT "unique_epoch" UNIQUE("no")' ;
     EXECUTE 'CREATe TABLE "pool_meta_data"("id" SERIAL8  PRIMARY KEY UNIQUE,"url" VARCHAR NOT NULL,"hash" hash32type NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "pool_meta_data" ADD CONSTRAINT "unique_pool_meta_data" UNIQUE("url","hash")' ;
     EXECUTE 'ALTER TABLE "pool_meta_data" ADD CONSTRAINT "pool_meta_data_registered_tx_id_fkey" FOREIGN KEY("registered_tx_id") REFERENCES "tx"("id")' ;
@@ -97,15 +97,8 @@ BEGIN
     EXECUTE 'CREATe TABLE "epoch_param"("id" SERIAL8  PRIMARY KEY UNIQUE,"epoch_no" uinteger NOT NULL,"min_fee_a" uinteger NOT NULL,"min_fee_b" uinteger NOT NULL,"max_block_size" uinteger NOT NULL,"max_tx_size" uinteger NOT NULL,"max_bh_size" uinteger NOT NULL,"key_deposit" lovelace NOT NULL,"pool_deposit" lovelace NOT NULL,"max_epoch" uinteger NOT NULL,"optimal_pool_count" uinteger NOT NULL,"influence" DOUBLE PRECISION NOT NULL,"monetary_expand_rate" DOUBLE PRECISION NOT NULL,"treasury_growth_rate" DOUBLE PRECISION NOT NULL,"decentralisation" DOUBLE PRECISION NOT NULL,"entropy" hash32type NULL,"protocol_major" uinteger NOT NULL,"protocol_minor" uinteger NOT NULL,"min_utxo_value" lovelace NOT NULL,"min_pool_cost" lovelace NOT NULL,"block_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "epoch_param" ADD CONSTRAINT "unique_epoch_param" UNIQUE("epoch_no","block_id")' ;
     EXECUTE 'ALTER TABLE "epoch_param" ADD CONSTRAINT "epoch_param_block_id_fkey" FOREIGN KEY("block_id") REFERENCES "block"("id")' ;
-
-    -- Hand written SQL statements can be added here.-
-    -- For some reason this are added not always added when the schema is regenerated.
-    -- I think this is a bug in Persistent, but add them manually for now.
-    EXECUTE 'ALTER TABLE "slot_leader" ADD CONSTRAINT "slot_leader_pool_hash_id_fkey" FOREIGN KEY("pool_hash_id") REFERENCES "pool_hash"("id")' ;
-    EXECUTE 'ALTER TABLE "tx_out" ADD CONSTRAINT "tx_out_stake_address_id_fkey" FOREIGN KEY("stake_address_id") REFERENCES "stake_address"("id")' ;
-     --
-
-    UPDATE schema_version SET stage_two = 3 ;
+    -- Hand written SQL statements can be added here.
+    UPDATE schema_version SET stage_two = 1 ;
     RAISE NOTICE 'DB has been migrated to stage_two version %', next_version ;
   END IF ;
 END ;
