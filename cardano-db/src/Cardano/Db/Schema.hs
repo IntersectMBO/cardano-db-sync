@@ -79,11 +79,11 @@ share
     slotNo              Word64 Maybe        sqltype=uinteger
     epochSlotNo         Word64 Maybe        sqltype=uinteger
     blockNo             Word64 Maybe        sqltype=uinteger
-    previous            BlockId Maybe
+    previousId          BlockId Maybe
     -- Shelley does not have a Merkel Root, but Byron does.
     -- Once we are well into the Shelley era, this column can be dropped.
     merkelRoot          ByteString Maybe    sqltype=hash32type
-    slotLeader          SlotLeaderId
+    slotLeaderId        SlotLeaderId
     size                Word64              sqltype=uinteger
     time                UTCTime             sqltype=timestamp
     txCount             Word64
@@ -96,7 +96,7 @@ share
 
   Tx
     hash                ByteString          sqltype=hash32type
-    block               BlockId                                 -- This type is the primary key for the 'block' table.
+    blockId             BlockId                                 -- This type is the primary key for the 'block' table.
     blockIndex          Word64              sqltype=uinteger    -- The index of this transaction within the block.
     outSum              DbLovelace          sqltype=lovelace
     fee                 DbLovelace          sqltype=lovelace
@@ -175,7 +175,7 @@ share
     pledge              DbLovelace          sqltype=lovelace
     rewardAddrId        StakeAddressId
     activeEpochNo       Word64
-    meta                PoolMetaDataId Maybe
+    metaId              PoolMetaDataId Maybe
     margin              Double                                  -- sqltype=percentage????
     fixedCost           DbLovelace          sqltype=lovelace
     registeredTxId      TxId                                    -- Slot number in which the pool was registered.

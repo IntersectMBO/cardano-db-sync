@@ -99,10 +99,10 @@ insertABOBBoundary tracer blk details = do
               , DB.blockSlotNo = Nothing
               , DB.blockEpochSlotNo = Nothing
               , DB.blockBlockNo = Nothing
-              , DB.blockPrevious = Just pbid
+              , DB.blockPreviousId = Just pbid
               -- No merkelRoot for a boundary block
               , DB.blockMerkelRoot = Nothing
-              , DB.blockSlotLeader = slid
+              , DB.blockSlotLeaderId = slid
               , DB.blockSize = fromIntegral $ Byron.boundaryBlockLength blk
               , DB.blockTime = sdSlotTime details
               , DB.blockTxCount = 0
@@ -136,9 +136,9 @@ insertABlock tracer blk details = do
                     , DB.blockSlotNo = Just $ Byron.slotNumber blk
                     , DB.blockEpochSlotNo = Just $ unEpochSlot (sdEpochSlot details)
                     , DB.blockBlockNo = Just $ Byron.blockNumber blk
-                    , DB.blockPrevious = Just pbid
+                    , DB.blockPreviousId = Just pbid
                     , DB.blockMerkelRoot = Just $ Byron.unCryptoHash (Byron.blockMerkelRoot blk)
-                    , DB.blockSlotLeader = slid
+                    , DB.blockSlotLeaderId = slid
                     , DB.blockSize = fromIntegral $ Byron.blockLength blk
                     , DB.blockTime = sdSlotTime details
                     , DB.blockTxCount = fromIntegral $ length (Byron.blockPayload blk)
@@ -185,7 +185,7 @@ insertTx tracer blkId tx blockIndex = do
     txId <- lift . DB.insertTx $
               DB.Tx
                 { DB.txHash = Byron.unTxHash $ Crypto.serializeCborHash (Byron.taTx tx)
-                , DB.txBlock = blkId
+                , DB.txBlockId = blkId
                 , DB.txBlockIndex = blockIndex
                 , DB.txOutSum = vfValue valFee
                 , DB.txFee = vfFee valFee

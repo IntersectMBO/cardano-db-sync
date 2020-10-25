@@ -10,12 +10,17 @@ BEGIN
     EXECUTE 'ALTER TABLE "pool_hash" ADD CONSTRAINT "unique_pool_hash" UNIQUE("hash_raw")' ;
     EXECUTE 'ALTER TABLE "slot_leader" ADD COLUMN "pool_hash_id" INT8 NULL' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "epoch_slot_no" uinteger NULL' ;
+    EXECUTE 'ALTER TABLE "block" ADD COLUMN "previous_id" INT8 NULL' ;
+    EXECUTE 'ALTER TABLE "block" ADD COLUMN "slot_leader_id" INT8 NOT NULL' ;
     EXECUTE 'ALTER TABLE "block" ALTER COLUMN "tx_count" TYPE INT8' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "proto_major" uinteger NOT NULL' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "proto_minor" uinteger NOT NULL' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "vrf_key" VARCHAR NULL' ;
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "op_cert" hash32type NULL' ;
+    EXECUTE 'ALTER TABLE "block" DROP COLUMN "slot_leader"' ;
+    EXECUTE 'ALTER TABLE "tx" ADD COLUMN "block_id" INT8 NOT NULL' ;
     EXECUTE 'ALTER TABLE "tx" ADD COLUMN "deposit" INT8 NOT NULL' ;
+    EXECUTE 'ALTER TABLE "tx" DROP COLUMN "block"' ;
     EXECUTE 'ALTER TABLE "tx_out" ADD COLUMN "address_raw" BYTEA NOT NULL' ;
     EXECUTE 'ALTER TABLE "tx_out" ADD COLUMN "payment_cred" hash28type NULL' ;
     EXECUTE 'ALTER TABLE "tx_out" ADD COLUMN "stake_address_id" INT8 NULL' ;
@@ -31,11 +36,11 @@ BEGIN
     EXECUTE 'CREATe TABLE "pool_meta_data"("id" SERIAL8  PRIMARY KEY UNIQUE,"url" VARCHAR NOT NULL,"hash" hash32type NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "pool_meta_data" ADD CONSTRAINT "unique_pool_meta_data" UNIQUE("url","hash")' ;
     EXECUTE 'ALTER TABLE "pool_meta_data" ADD CONSTRAINT "pool_meta_data_registered_tx_id_fkey" FOREIGN KEY("registered_tx_id") REFERENCES "tx"("id")' ;
-    EXECUTE 'CREATe TABLE "pool_update"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash_id" INT8 NOT NULL,"cert_index" INT4 NOT NULL,"vrf_key_hash" hash32type NOT NULL,"pledge" lovelace NOT NULL,"reward_addr_id" INT8 NOT NULL,"active_epoch_no" INT8 NOT NULL,"meta" INT8 NULL,"margin" DOUBLE PRECISION NOT NULL,"fixed_cost" lovelace NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
+    EXECUTE 'CREATe TABLE "pool_update"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash_id" INT8 NOT NULL,"cert_index" INT4 NOT NULL,"vrf_key_hash" hash32type NOT NULL,"pledge" lovelace NOT NULL,"reward_addr_id" INT8 NOT NULL,"active_epoch_no" INT8 NOT NULL,"meta_id" INT8 NULL,"margin" DOUBLE PRECISION NOT NULL,"fixed_cost" lovelace NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "pool_update" ADD CONSTRAINT "unique_pool_update" UNIQUE("hash_id","registered_tx_id")' ;
     EXECUTE 'ALTER TABLE "pool_update" ADD CONSTRAINT "pool_update_hash_id_fkey" FOREIGN KEY("hash_id") REFERENCES "pool_hash"("id")' ;
     EXECUTE 'ALTER TABLE "pool_update" ADD CONSTRAINT "pool_update_reward_addr_id_fkey" FOREIGN KEY("reward_addr_id") REFERENCES "stake_address"("id")' ;
-    EXECUTE 'ALTER TABLE "pool_update" ADD CONSTRAINT "pool_update_meta_fkey" FOREIGN KEY("meta") REFERENCES "pool_meta_data"("id")' ;
+    EXECUTE 'ALTER TABLE "pool_update" ADD CONSTRAINT "pool_update_meta_id_fkey" FOREIGN KEY("meta_id") REFERENCES "pool_meta_data"("id")' ;
     EXECUTE 'ALTER TABLE "pool_update" ADD CONSTRAINT "pool_update_registered_tx_id_fkey" FOREIGN KEY("registered_tx_id") REFERENCES "tx"("id")' ;
     EXECUTE 'CREATe TABLE "pool_owner"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash" hash28type NOT NULL,"pool_hash_id" INT8 NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "pool_owner" ADD CONSTRAINT "unique_pool_owner" UNIQUE("hash","pool_hash_id","registered_tx_id")' ;
@@ -93,12 +98,12 @@ BEGIN
     EXECUTE 'ALTER TABLE "epoch_param" ADD CONSTRAINT "unique_epoch_param" UNIQUE("epoch_no","block_id")' ;
     EXECUTE 'ALTER TABLE "epoch_param" ADD CONSTRAINT "epoch_param_block_id_fkey" FOREIGN KEY("block_id") REFERENCES "block"("id")' ;
 
-    -- Hand written SQL statements can be added here.
+    -- Hand written SQL statements can be added here.-
     -- For some reason this are added not always added when the schema is regenerated.
     -- I think this is a bug in Persistent, but add them manually for now.
     EXECUTE 'ALTER TABLE "slot_leader" ADD CONSTRAINT "slot_leader_pool_hash_id_fkey" FOREIGN KEY("pool_hash_id") REFERENCES "pool_hash"("id")' ;
     EXECUTE 'ALTER TABLE "tx_out" ADD CONSTRAINT "tx_out_stake_address_id_fkey" FOREIGN KEY("stake_address_id") REFERENCES "stake_address"("id")' ;
-    --
+     --
 
     UPDATE schema_version SET stage_two = 3 ;
     RAISE NOTICE 'DB has been migrated to stage_two version %', next_version ;

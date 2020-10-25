@@ -99,9 +99,9 @@ createAndInsertBlocks blockCount =
                         , blockSlotNo = Just indx
                         , blockEpochSlotNo = Just indx
                         , blockBlockNo = Just indx
-                        , blockPrevious = mPrevId
+                        , blockPreviousId = mPrevId
                         , blockMerkelRoot = const (Just (mkMerkelRoot indx)) =<< mPrevBlock
-                        , blockSlotLeader = slid
+                        , blockSlotLeaderId = slid
                         , blockSize = 42
                         , blockTime = dummyUTCTime
                         , blockTxCount = 0

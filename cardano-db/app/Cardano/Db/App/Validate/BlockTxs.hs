@@ -68,7 +68,7 @@ validateBlockCount (blockNo, txCountExpected) = do
 queryBlockTxCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
 queryBlockTxCount blockNo = do
   res <- select . from $ \ (blk `InnerJoin` tx) -> do
-            on (blk ^. BlockId ==. tx ^. TxBlock)
+            on (blk ^. BlockId ==. tx ^. TxBlockId)
             where_ (blk ^. BlockBlockNo ==. just (val blockNo))
             pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
