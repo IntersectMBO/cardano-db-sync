@@ -10,8 +10,8 @@ schema or as queries embedded in any language with libraries for interacting wit
 Examples of what someone would be able to do via an SQL query against a Cardano DB Sync
 instance fully synced fully synced to a specific network is:
 
-* Look up any block, transaction, address, stake pool etc on that network, usually be the hash that
-  identifies that item.
+* Look up any block, transaction, address, stake pool etc on that network, usually by the hash that
+  identifies that item or the index into another table.
 * Look up the balance of any stake address for any Shelley or later epoch.
 * Look up the amount of ADA delegated to each pool for any Shelley or later epoch.
 
@@ -47,7 +47,7 @@ implemented using [Postgres Views][PostgresView] to implement joins between tabl
 
 ## Troubleshooting
 
-If you have any issues with this project, consult the [troubleshooting][troubleshooting] page for
+If you have any issues with this project, consult the [Troubleshooting][Troubleshooting] page for
 possible solutions.
 
 ## Further Reading
@@ -65,5 +65,5 @@ possible solutions.
 [ExampleQueries]: doc/interesting-queries.md
 [PostgresView]: https://www.postgresql.org/docs/current/sql-createview.html
 [Schema Management]: doc/interesting-queries.md
+[Troubleshooting]: doc/troubleshooting.md
 [Validation]: doc/validation.md
-[PostgresView]: doc/troubleshooting.md
