@@ -3,6 +3,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Cardano.DbSync.LedgerState
   ( CardanoLedgerState (..)
@@ -45,20 +46,29 @@ import           Ouroboros.Consensus.Cardano.Block
                    (LedgerState (LedgerStateByron, LedgerStateShelley))
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Config (TopLevelConfig (..), configCodec, configLedger)
+import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
 import           Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import           Ouroboros.Consensus.HardFork.Combinator.State (epochInfoLedger)
+import qualified Ouroboros.Consensus.HardFork.Combinator.State as Consensus
+import qualified Ouroboros.Consensus.HeaderValidation as Consensus
 import           Ouroboros.Consensus.Ledger.Abstract (ledgerTipSlot, tickThenApply, tickThenReapply)
 import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerCfg (..), ExtLedgerState (..),
                    decodeExtLedgerState, encodeExtLedgerState)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
+import qualified Ouroboros.Consensus.Shelley.Protocol as Consensus
 import           Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), EncodeDisk (..))
+import qualified Ouroboros.Consensus.TypeFamilyWrappers as Consensus
 
+
+
+import qualified Shelley.Spec.Ledger.API.Protocol as Shelley
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.EpochBoundary as Shelley
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
+import qualified Shelley.Spec.Ledger.STS.Tickn as Shelley
 
 import           System.Directory (listDirectory, removeFile)
 import           System.FilePath (dropExtension, takeExtension, (</>))
@@ -71,9 +81,10 @@ data CardanoLedgerState = CardanoLedgerState
   }
 
 data EpochUpdate = EpochUpdate
-  { esParamUpdate :: !(Shelley.PParams StandardShelley)
-  , esRewardUpdate :: !(Shelley.RewardUpdate StandardShelley)
-  , esStakeUpdate :: !(Shelley.Stake StandardShelley)
+  { euProtoParams :: !(Shelley.PParams StandardShelley)
+  , euRewards :: !(Shelley.RewardUpdate StandardShelley)
+  , euStakeDistribution :: !(Shelley.Stake StandardShelley)
+  , euNonce :: !Shelley.Nonce
   }
 
 newtype LedgerStateVar = LedgerStateVar
@@ -119,8 +130,8 @@ applyBlock (LedgerStateVar stateVar) blk =
                     if ledgerEpochNo newState == ledgerEpochNo oldState + 1
                       then Just $
                              ledgerEpochUpdate
-                               (ledgerState (clsState newState))
-                               (ledgerRewardUpdate (ledgerState (clsState oldState)))
+                               (clsState newState)
+                               (ledgerRewardUpdate (ledgerState $ clsState oldState))
                       else Nothing
                 }
   where
@@ -276,21 +287,22 @@ ledgerEpochNo cls =
     epochInfo = epochInfoLedger (configLedger $ clsConfig cls) (hardForkLedgerStatePerEra . ledgerState $ clsState cls)
 
 -- Create an EpochUpdate from the current epoch state and the rewards from the last epoch.
-ledgerEpochUpdate :: LedgerState CardanoBlock -> Maybe (Shelley.RewardUpdate StandardShelley) -> EpochUpdate
-ledgerEpochUpdate lcs mRewards =
-  case lcs of
+ledgerEpochUpdate :: ExtLedgerState CardanoBlock -> Maybe (Shelley.RewardUpdate StandardShelley) -> EpochUpdate
+ledgerEpochUpdate els mRewards =
+  case ledgerState els of
     LedgerStateByron _ -> panic "ledgerEpochUpdate: LedgerStateByron but should be Shelley"
     LedgerStateShelley sls ->
       EpochUpdate
-        { esParamUpdate = Shelley.esPp $ Shelley.nesEs (Consensus.shelleyLedgerState sls)
-        , esRewardUpdate = fromMaybe Shelley.emptyRewardUpdate mRewards
+        { euProtoParams = Shelley.esPp $ Shelley.nesEs (Consensus.shelleyLedgerState sls)
+        , euRewards = fromMaybe Shelley.emptyRewardUpdate mRewards
 
         -- Use '_pstakeSet' here instead of '_pstateMark' because the stake addresses for the
         -- later may not have been added to the database yet. That means that whne these values
         -- are added to the database, the epoch number where they become active is the current
         -- epoch plus one.
-        , esStakeUpdate = Shelley._stake . Shelley._pstakeSet . Shelley.esSnapshots
-                            $ Shelley.nesEs (Consensus.shelleyLedgerState sls)
+        , euStakeDistribution = Shelley._stake . Shelley._pstakeSet . Shelley.esSnapshots
+                                $ Shelley.nesEs (Consensus.shelleyLedgerState sls)
+        , euNonce = fromMaybe Shelley.NeutralNonce $ extractEpochNonce els
         }
 
 -- This will return a 'Just' from the time the rewards are updated until the end of the
@@ -302,3 +314,15 @@ ledgerRewardUpdate lsc =
     LedgerStateShelley sls -> Shelley.strictMaybeToMaybe . Shelley.nesRu
                                 $ Consensus.shelleyLedgerState sls
 
+-- Some of the nastiness here will disappear when suitable PatternSynonyms are added to Consensus.
+-- TODO: Replace this horrible stuff with the PatternSynonyms when they become available.
+extractEpochNonce :: ExtLedgerState CardanoBlock -> Maybe Shelley.Nonce
+extractEpochNonce extLedgerState =
+  case Consensus.getHardForkState (Consensus.headerStateChainDep (headerState extLedgerState)) of
+    Consensus.TZ {} ->
+      Nothing
+    Consensus.TS _ (Consensus.TZ Consensus.Current { Consensus.currentState = chainDepStateShelley }) ->
+      Just . Shelley.ticknStateEpochNonce . Shelley.csTickn
+            $ Consensus.tpraosStateChainDepState (Consensus.unwrapChainDepState chainDepStateShelley)
+    Consensus.TS {} ->
+      Nothing

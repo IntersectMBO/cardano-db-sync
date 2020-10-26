@@ -122,9 +122,9 @@ insertShelleyBlock tracer env blk lStateSnap details = do
 
     whenJust (lssEpochUpdate lStateSnap) $ \ esum -> do
       -- Subtract 2 from the epoch to calculate when the epoch in which the reward was earned.
-      insertRewards tracer env blkId (sdEpochNo details - 2) (esRewardUpdate esum)
-      insertEpochParam tracer blkId (sdEpochNo details) (esParamUpdate esum)
-      insertEpochStake tracer env blkId (sdEpochNo details) (esStakeUpdate esum)
+      insertRewards tracer env blkId (sdEpochNo details - 2) (euRewards esum)
+      insertEpochParam tracer blkId (sdEpochNo details) (euProtoParams esum) (euNonce esum)
+      insertEpochStake tracer env blkId (sdEpochNo details) (euStakeDistribution esum)
 
     when (getSyncStatus details == SyncFollowing) $
       -- Serializiing things during syncing can drastically slow down full sync
@@ -617,9 +617,9 @@ insertRewards _tracer env blkId epoch rewards =
 
 insertEpochParam
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.BlockId -> EpochNo -> Shelley.PParams StandardShelley
+    => Trace IO Text -> DB.BlockId -> EpochNo -> Shelley.PParams StandardShelley -> Shelley.Nonce
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertEpochParam _tracer blkId (EpochNo epoch) params =
+insertEpochParam _tracer blkId (EpochNo epoch) params nonce =
   void . lift . DB.insertEpochParam $
     DB.EpochParam
       { DB.epochParamEpochNo = epoch
@@ -641,6 +641,7 @@ insertEpochParam _tracer blkId (EpochNo epoch) params =
       , DB.epochParamProtocolMinor = fromIntegral $ Shelley.pvMinor (Shelley._protocolVersion params)
       , DB.epochParamMinUtxoValue = Shelley.coinToDbLovelace (Shelley._minUTxOValue params)
       , DB.epochParamMinPoolCost = Shelley.coinToDbLovelace (Shelley._minPoolCost params)
+      , DB.epochParamNonce = Shelley.nonceToBytes nonce
       , DB.epochParamBlockId = blkId
       }
 
