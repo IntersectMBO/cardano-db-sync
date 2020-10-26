@@ -117,5 +117,29 @@ jobs:
     - name: Build
       run: cabal build all --builddir="$CABAL_BUILDDIR"
 
-    - name: Test
-      run: cabal test cardano-db:test --builddir="$CABAL_BUILDDIR"
+    - name: Set up config cardano-node
+      run: |
+        git clone https://github.com/input-output-hk/cardano-node.git
+        sed -i 's|^NodeConfigFile:.*$|NodeConfigFile: ../cardano-node/configuration/cardano/mainnet-config.json|g' config/mainnet-config.yaml
+        cat config/mainnet-config.yaml
+
+    - name: Set up database user (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: sudo -u postgres createuser --createdb --superuser runner
+
+    - name: Set up database
+      run: |
+        cardano_db_sync_exe="$(cat $CABAL_BUILDDIR/cache/plan.json | jq -r '."install-plan"[] | select(."component-name" == "exe:cardano-db-sync") | ."bin-file"' | head)"
+
+        echo "Executable found at: $cardano_db_sync_exe"
+        chmod 600 config/pgpass-mainnet
+
+        PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh --createdb
+        PGPASSFILE=config/pgpass-mainnet "$cardano_db_sync_exe" \
+            --config config/mainnet-config.yaml \
+            --socket-path node.socket \
+            --state-dir ledger-state/mainnet \
+            --schema-dir schema/
+
+    - name: Run tests
+      run: cabal test --builddir="$CABAL_BUILDDIR" all -j1
