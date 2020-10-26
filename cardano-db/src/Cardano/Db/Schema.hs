@@ -104,6 +104,12 @@ share
     size                Word64              sqltype=uinteger
     UniqueTx            hash
 
+  StakeAddress          -- Can be an address of a script hash
+    hashRaw             ByteString          sqltype=addr29type
+    view                Text
+    registeredTxId      TxId                -- Only used for rollback.
+    UniqueStakeAddress  hashRaw
+
   TxOut
     txId                TxId                -- This type is the primary key for the 'tx' table.
     index               Word16              sqltype=txindex
@@ -149,15 +155,6 @@ share
     UniqueEpoch         no
     deriving Eq
     deriving Show
-
-  -- -----------------------------------------------------------------------------------------------
-  -- Shelley bits
-
-  StakeAddress          -- Can be an address of a script hash
-    hashRaw             ByteString          sqltype=addr29type
-    view                Text
-    registeredTxId      TxId                -- Only used for rollback.
-    UniqueStakeAddress  hashRaw
 
   -- -----------------------------------------------------------------------------------------------
   -- A Pool can have more than one owner, so we have a PoolOwner table that references this one.
