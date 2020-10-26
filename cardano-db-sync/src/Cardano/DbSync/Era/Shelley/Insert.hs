@@ -27,7 +27,8 @@ import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Cardano.Api.MetaData (TxMetadataValue (..))
+import           Cardano.Api.MetaData (TxMetadataValue (..), makeTransactionMetadata)
+import           Cardano.Api.Typed (SerialiseAsCBOR (..))
 
 import qualified Cardano.Crypto.Hash as Crypto
 
@@ -562,22 +563,28 @@ insertTxMetadata tracer txId metadata =
         -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     insert (key, md) = do
       let jsonbs = LBS.toStrict $ Aeson.encode (metadataValueToJsonNoSchema md)
+          singleKeyCBORMetadata = serialiseToCBOR $ makeTransactionMetadata $ Map.singleton key md
       ejson <- liftIO $ safeDecodeUtf8 jsonbs
-      case ejson of
-        Left err ->
-          liftIO . logWarning tracer $ mconcat
-            [ "insertTxMetadata: Could not decode to UTF8: ", textShow err ]
-        Right json -> do
-          -- See https://github.com/input-output-hk/cardano-db-sync/issues/297
-          if containsUnicodeNul json
-            then liftIO $ logWarning tracer "insertTxMetadata: dropped due to a Unicode NUL character."
-            else
-              void . lift . DB.insertTxMetadata $
-                DB.TxMetadata
-                  { DB.txMetadataKey = DbWord64 key
-                  , DB.txMetadataJson = json
-                  , DB.txMetadataTxId = txId
-                  }
+      mjson <- case ejson of
+                 Left err -> do
+                   liftIO . logWarning tracer $ mconcat
+                      [ "insertTxMetadata: Could not decode to UTF8: ", textShow err ]
+                   return Nothing
+                 Right json ->
+                   -- See https://github.com/input-output-hk/cardano-db-sync/issues/297
+                   if containsUnicodeNul json
+                     then do
+                       liftIO $ logWarning tracer "insertTxMetadata: dropped due to a Unicode NUL character."
+                       return Nothing
+                     else
+                       return $ Just json
+      void . lift . DB.insertTxMetadata $
+        DB.TxMetadata
+          { DB.txMetadataKey = DbWord64 key
+          , DB.txMetadataJson = mjson
+          , DB.txMetadataBytes = singleKeyCBORMetadata
+          , DB.txMetadataTxId = txId
+          }
 
 safeDecodeUtf8 :: ByteString -> IO (Either Text.UnicodeException Text)
 safeDecodeUtf8 bs
