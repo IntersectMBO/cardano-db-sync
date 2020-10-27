@@ -10,6 +10,7 @@ module Cardano.DbSync.Config.Cardano
   , genesisConfigToEnv
   , genesisProtocolMagicId
   , mkTopLevelConfig
+  , mkProtocolInfoCardano
   , readCardanoGenesisConfig
   ) where
 

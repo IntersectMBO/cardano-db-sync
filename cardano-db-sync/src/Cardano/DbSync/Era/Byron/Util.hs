@@ -37,7 +37,7 @@ import qualified Cardano.Crypto.Wallet as Crypto
 import qualified Cardano.Chain.Block as Byron
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.Genesis as Byron
-import qualified Cardano.Chain.Slotting as ByronInsanity
+import qualified Cardano.Chain.Slotting as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Chain.Update as Byron
 
@@ -107,7 +107,7 @@ slotLeaderHash =
 
 slotNumber :: Byron.ABlock ByteString -> Word64
 slotNumber =
-  ByronInsanity.unSlotNumber . Byron.headerSlot . Byron.blockHeader
+  Byron.unSlotNumber . Byron.headerSlot . Byron.blockHeader
 
 unAbstractHash :: Crypto.Hash Raw -> ByteString
 unAbstractHash = Crypto.abstractHashToBytes

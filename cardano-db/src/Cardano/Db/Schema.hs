@@ -327,6 +327,8 @@ share
     minUtxoValue        DbLovelace          sqltype=lovelace
     minPoolCost         DbLovelace          sqltype=lovelace
 
+    nonce               ByteString Maybe    sqltype=hash32type
+
     blockId             BlockId             -- The first block where these parameters are valid.
     UniqueEpochParam    epochNo blockId
 
