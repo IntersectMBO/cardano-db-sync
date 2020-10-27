@@ -1,5 +1,35 @@
 # Revision history for cardano-db-sync-extended
 
+## 6.0.0
+
+* Note that this release requires the database to be dropped and recreated.
+* Update dependencies.
+* Rename 'config/pgpass' to 'config/pgpass-mainnet'.
+* Maintain a copy of the ledger state which contains data that is not on chain.
+* Add Reward table (populated from ledger state).
+* Rejig how configuration is handled (it now reads the node's config file).
+* Read node config from a path relative to db-sync config (#321).
+* Rename ParamUpdate table to ParamProposal.
+* Fix uniqueness constraint for PoolRetire table (#306).
+* Add and populate EpochParam table (for Shelley not Byron).
+* Add and populate EpochStake table (#319).
+* Store Bech32 encodings of two more fields (#295).
+* Fix bad registeredTxId uniqueness constraint on StakeAddress (#326, #327) (this was never
+  included in a release).
+* Robustify handling of the Word64 types in database (#334, #351).
+* Add version number CLI commands for standard and extended db-sync
+* Fix incorrect hash for SlotLeader (#349).
+* Fix pool_id column in reward table (#361).
+* Add a stake_address_id column to the tx_out table
+* Documentation updates.
+* Improve the way ProtVer is stored in the database (#368).
+* Fix EpochNo column of EpochStake table (#379).
+* Add the epoch nonce field to the EpochParam table (#332).
+
+## 5.0.2
+
+* Fix handling of unsigned 64bit integer fields (#334, #335).
+
 ## 5.0.1
 
 * Update dependencies.
