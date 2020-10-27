@@ -13,10 +13,10 @@ type cardano-repo-tool > /dev/null 2>&1 || { echo "${HELP_TEXT}"; exit 1; }
 HELP_TEXT="git not found."
 type git > /dev/null 2>&1 || { echo "${HELP_TEXT}"; exit 1; }
 
-# Update `cabal.project` from the `stack.yaml` file.
-cardano-repo-tool update-cabal-project
+# Update `stack.yaml` from the `cabal.project` file.
+cardano-repo-tool update-stack-yaml
 
-git diff cabal.project | tee stack-cabal.patch
+git diff stack.yaml | tee stack-cabal.patch
 
 if test "$(wc -l < stack-cabal.patch)" -gt 0 ; then
   buildkite-agent artifact upload stack-cabal.patch --job "$BUILDKITE_JOB_ID"
