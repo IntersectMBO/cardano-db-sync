@@ -245,7 +245,8 @@ share
 
   TxMetadata
     key                 DbWord64            sqltype=word64type
-    json                Text                sqltype=jsonb
+    json                Text Maybe          sqltype=jsonb
+    bytes               ByteString          sqltype=bytea
     txId                TxId
     UniqueTxMetadata    key txId
 
