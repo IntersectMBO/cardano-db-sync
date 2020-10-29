@@ -34,6 +34,7 @@ import qualified Ouroboros.Consensus.Cardano.CanHardFork as Shelley
 
 data NodeConfig = NodeConfig
   { ncProtocol :: !DbSyncProtocol
+  , ncPBftSignatureThreshold :: !(Maybe Double)
   , ncByronGenesisFile :: !GenesisFile
   , ncByronGenesisHash :: !GenesisHashByron
   , ncShelleyGenesisFile :: !GenesisFile
@@ -62,6 +63,7 @@ instance FromJSON NodeConfig where
       parse o =
         NodeConfig
           <$> o .: "Protocol"
+          <*> o .:? "PBftSignatureThreshold"
           <*> fmap GenesisFile (o .: "ByronGenesisFile")
           <*> fmap GenesisHashByron (o .: "ByronGenesisHash")
           <*> fmap GenesisFile (o .: "ShelleyGenesisFile")

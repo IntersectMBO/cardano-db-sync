@@ -69,6 +69,7 @@ coalesceConfig pcfg ncfg adjustGenesisPath = do
           , dncRequiresNetworkMagic = ncRequiresNetworkMagic ncfg
           , dncEnableLogging = pcEnableLogging pcfg
           , dncEnableMetrics = pcEnableMetrics pcfg
+          , dncPBftSignatureThreshold = ncPBftSignatureThreshold ncfg
           , dncByronGenesisFile = adjustGenesisFilePath adjustGenesisPath (ncByronGenesisFile ncfg)
           , dncByronGenesisHash = ncByronGenesisHash ncfg
           , dncShelleyGenesisFile = adjustGenesisFilePath adjustGenesisPath (ncShelleyGenesisFile ncfg)

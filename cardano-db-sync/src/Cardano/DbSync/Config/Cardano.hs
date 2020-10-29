@@ -113,7 +113,7 @@ mkProtocolCardano ge =
         ProtocolCardano
           -- Byron parameters
           byronGenesis
-          Nothing                                   -- Maybe PBftSignatureThreshold
+          (Consensus.PBftSignatureThreshold <$> dncPBftSignatureThreshold dnc)
           (dncByronProtocolVersion dnc)
           (dncByronSoftwareVersion dnc)
           Nothing                                   -- Maybe ByronLeaderCredentials
