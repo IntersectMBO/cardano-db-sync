@@ -25,6 +25,7 @@
 * Improve the way ProtVer is stored in the database (#368).
 * Fix EpochNo column of EpochStake table (#379).
 * Add the epoch nonce field to the EpochParam table (#332).
+* Fix parsing PBftSignatureThreshold field of node config file.
 
 ## 5.0.2
 
