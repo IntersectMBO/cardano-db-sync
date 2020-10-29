@@ -102,6 +102,7 @@ data DbSyncNodeConfig = DbSyncNodeConfig
   , dncRequiresNetworkMagic :: !RequiresNetworkMagic
   , dncEnableLogging :: !Bool
   , dncEnableMetrics :: !Bool
+  , dncPBftSignatureThreshold :: !(Maybe Double)
   , dncByronGenesisFile :: !GenesisFile
   , dncByronGenesisHash :: !GenesisHashByron
   , dncShelleyGenesisFile :: !GenesisFile
