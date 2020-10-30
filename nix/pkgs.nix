@@ -4,7 +4,7 @@ pkgs: _: with pkgs;
     compiler = config.haskellNix.compiler or "ghc865";
   in {
     cardanoDbSyncHaskellPackages = callPackage ./haskell.nix {
-      inherit compiler;
+      inherit compiler gitrev;
     };
 
   # Grab the executable component of our package.
