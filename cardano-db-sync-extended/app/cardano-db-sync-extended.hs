@@ -1,8 +1,9 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 import           Cardano.Prelude
+
+import           Cardano.Config.Git.Rev (gitRev)
 
 import           Cardano.Db (MigrationDir (..))
 import           Cardano.DbSync (ConfigFile (..), DbSyncCommand (..), DbSyncNodeParams (..),
@@ -14,9 +15,6 @@ import           Cardano.Slotting.Slot (SlotNo (..))
 import           Data.String (String)
 import qualified Data.Text as Text
 import           Data.Version (showVersion)
-
-import           Development.GitRev (gitHash)
-
 
 import           Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative as Opt
@@ -127,7 +125,7 @@ runVersionCommand = do
                 [ "cardano-db-sync-extended ", renderVersion version
                 , " - ", Text.pack os, "-", Text.pack arch
                 , " - ", Text.pack compilerName, "-", renderVersion compilerVersion
-                , "\ngit revision ", Text.pack $(gitHash)
+                , "\ngit revision ", gitRev
                 ]
   where
     renderVersion = Text.pack . showVersion

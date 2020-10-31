@@ -11,6 +11,8 @@
 # Enable profiling
 , profiling ? config.haskellNix.profiling or false
 , postgresql
+# Version info, to be passed when not building from a git work tree
+, gitrev ? null
 }:
 let
   preCheck = ''
@@ -75,6 +77,14 @@ let
         };
       }
       {
+        # Stamp executables with the git revision
+        packages = lib.genAttrs ["cardano-db-sync" "cardano-db-sync-extended"] (name: {
+          components.exes.${name}.postInstall = ''
+            ${setGitRev}
+          '';
+        });
+      }
+      {
         # Packages we wish to ignore version bounds of.
         # This is similar to jailbreakCabal, however it
         # does not require any messing with cabal files.
@@ -109,5 +119,14 @@ let
       })
     ];
   };
+  # setGitRev is a postInstall script to stamp executables with
+  # version info. It uses the "gitrev" argument, if set. Otherwise,
+  # the revision is sourced from the local git work tree.
+  setGitRev = ''${haskellBuildUtils}/bin/set-git-rev "${gitrev'}" $out/bin/*'';
+  # package with libsodium:
+  gitrev' = if (gitrev == null)
+    then buildPackages.commonLib.commitIdFromGitRepoOrZero ../.git
+    else gitrev;
+  haskellBuildUtils = buildPackages.haskellBuildUtils.package;
 in
   pkgSet

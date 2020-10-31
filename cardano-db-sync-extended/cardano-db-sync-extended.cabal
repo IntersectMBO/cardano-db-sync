@@ -59,12 +59,12 @@ executable cardano-db-sync-extended
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , bytestring
+                      , cardano-config
                       , cardano-db
                       , cardano-db-sync
                       , cardano-db-sync-extended
                       , cardano-prelude
                       , cardano-slotting
-                      , gitrev
                       , optparse-applicative
                       , ouroboros-network
                       , text
