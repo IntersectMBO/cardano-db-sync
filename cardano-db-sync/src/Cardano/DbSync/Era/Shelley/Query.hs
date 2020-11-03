@@ -79,7 +79,7 @@ queryStakeAddressAndPool epoch addr = do
       res <- select . from $ \ (saddr `InnerJoin` pu `InnerJoin` tx `InnerJoin` blk) -> do
                 on (blk ^. BlockId ==. tx ^. TxBlockId)
                 on (pu ^. PoolUpdateRegisteredTxId ==. tx ^. TxId)
-                on (saddr ^. StakeAddressId ==. pu ^. PoolUpdateRewardAddrId)
+                on (saddr ^. StakeAddressHashRaw ==. pu ^. PoolUpdateRewardAddr)
                 where_ (saddr ^. StakeAddressHashRaw ==. val addr)
                 where_ (pu ^. PoolUpdateActiveEpochNo <=. val epoch)
                 -- Need to order by BlockSlotNo descending for correct behavior when there are two

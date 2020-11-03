@@ -170,7 +170,7 @@ share
     certIndex           Word16
     vrfKeyHash          ByteString          sqltype=hash32type
     pledge              DbLovelace          sqltype=lovelace
-    rewardAddrId        StakeAddressId
+    rewardAddr          ByteString          sqltype=addr29type
     activeEpochNo       Word64
     metaId              PoolMetaDataId Maybe
     margin              Double                                  -- sqltype=percentage????
