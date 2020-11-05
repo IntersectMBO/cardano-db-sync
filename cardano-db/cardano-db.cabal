@@ -101,6 +101,7 @@ executable cardano-db-tool
                         Cardano.Db.App.Validate.EpochTable
                         Cardano.Db.App.Validate.PoolOwner
                         Cardano.Db.App.Validate.TotalSupply
+                        Cardano.Db.App.Validate.TxAccounting
                         Cardano.Db.App.Validate.Util
 
   build-depends:        base                            >= 4.12         && < 4.13
@@ -117,6 +118,7 @@ executable cardano-db-tool
                       , text
                       , time
                       , transformers
+                      , transformers-except
 
 test-suite test
   default-language:     Haskell2010

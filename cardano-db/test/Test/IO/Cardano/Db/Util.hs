@@ -28,7 +28,7 @@ import           Data.Time.Calendar (Day (..))
 import           Data.Time.Clock (UTCTime (..))
 import           Data.Word (Word64)
 
-import           Database.Persist.Sql (SqlBackend, deleteCascade, selectKeysList, unSqlBackendKey)
+import           Database.Persist.Sql (SqlBackend, deleteCascade, selectKeysList)
 
 import           Cardano.Db
 
@@ -98,6 +98,3 @@ mkTxOut :: BlockId -> TxId -> TxOut
 mkTxOut blkId txId =
   let addr = mkAddressHash blkId txId in
   TxOut txId 0 (Text.pack addr) (BS.pack addr) Nothing Nothing (DbLovelace 1000000000)
-
-unTxId :: TxId -> Word64
-unTxId = fromIntegral . unSqlBackendKey . unTxKey
