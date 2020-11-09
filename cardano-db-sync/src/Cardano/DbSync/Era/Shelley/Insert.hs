@@ -252,7 +252,6 @@ insertPoolRegister tracer (EpochNo epoch) txId idx params = do
   mdId <- case strictMaybeToMaybe $ Shelley._poolMD params of
             Just md -> Just <$> insertMetaData txId md
             Nothing -> pure Nothing
-  rewardId <- lift $ insertStakeAddress txId $ Shelley._poolRAcnt params
 
   when (fromIntegral (Shelley.unCoin $ Shelley._poolPledge params) > maxLovelace) $
     liftIO . logWarning tracer $
@@ -275,7 +274,7 @@ insertPoolRegister tracer (EpochNo epoch) txId idx params = do
                       , DB.poolUpdateCertIndex = idx
                       , DB.poolUpdateVrfKeyHash = Crypto.hashToBytes (Shelley._poolVrf params)
                       , DB.poolUpdatePledge = Shelley.coinToDbLovelace (Shelley._poolPledge params)
-                      , DB.poolUpdateRewardAddrId = rewardId
+                      , DB.poolUpdateRewardAddr = Shelley.serialiseRewardAcnt (Shelley._poolRAcnt params)
                       , DB.poolUpdateActiveEpochNo = epoch + 2
                       , DB.poolUpdateMetaId = mdId
                       , DB.poolUpdateMargin = realToFrac $ Shelley.intervalValue (Shelley._poolMargin params)
