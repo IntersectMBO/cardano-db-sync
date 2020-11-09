@@ -2,6 +2,7 @@ module Cardano.Db.App.Validation
   ( runValidation
   ) where
 
+import           Cardano.Db.App.Validate.BlockProperties (validateBlockProperties)
 import           Cardano.Db.App.Validate.BlockTxs (validateEpochBlockTxs)
 import           Cardano.Db.App.Validate.EpochTable (validateEpochTable)
 import           Cardano.Db.App.Validate.PoolOwner (validateAllPoolsHaveOwners)
@@ -17,6 +18,7 @@ fastValidations :: IO ()
 fastValidations = do
   validateAllPoolsHaveOwners
   validateTxAccounting
+  validateBlockProperties
 
 slowValidations :: IO ()
 slowValidations = do

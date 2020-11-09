@@ -97,6 +97,7 @@ executable cardano-db-tool
   other-modules:        Cardano.Db.App
                         Cardano.Db.App.UtxoSet
                         Cardano.Db.App.Validation
+                        Cardano.Db.App.Validate.BlockProperties
                         Cardano.Db.App.Validate.BlockTxs
                         Cardano.Db.App.Validate.EpochTable
                         Cardano.Db.App.Validate.PoolOwner
@@ -112,6 +113,7 @@ executable cardano-db-tool
                       , cardano-slotting
                       , containers
                       , esqueleto
+                      , extra
                       , optparse-applicative
                       , persistent
                       , random
