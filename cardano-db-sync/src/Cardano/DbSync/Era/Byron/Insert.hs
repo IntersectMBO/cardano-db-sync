@@ -193,6 +193,8 @@ insertTx tracer blkId tx blockIndex = do
                 -- Would be really nice to have a way to get the transaction size
                 -- without re-serializing it.
                 , DB.txSize = fromIntegral $ BS.length (serialize' $ Byron.taTx tx)
+                , DB.txInvalidHereAfter = Nothing
+                , DB.txInvalidBefore = Nothing
                 }
 
     -- Insert outputs for a transaction before inputs in case the inputs for this transaction

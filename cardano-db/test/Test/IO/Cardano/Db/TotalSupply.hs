@@ -39,7 +39,18 @@ initialSupplyTest =
 
     -- Spend from the Utxo set.
     bid1 <- insertBlock (mkBlock 1 slid)
-    tx1Id <- insertTx (Tx (mkTxHash bid1 1) bid1 0 (DbLovelace 500000000) (DbLovelace 100) 0 123)
+    tx1Id <- insertTx $
+                Tx
+                  { txHash = mkTxHash bid1 1
+                  , txBlockId = bid1
+                  , txBlockIndex = 0
+                  , txOutSum = DbLovelace 500000000
+                  , txFee = DbLovelace 100
+                  , txDeposit = 0
+                  , txSize = 123
+                  , txInvalidHereAfter = Nothing
+                  , txInvalidBefore = Nothing
+                  }
     _ <- insertTxIn (TxIn tx1Id (head tx0Ids) 0)
     let addr = mkAddressHash bid1 tx1Id
     _ <- insertTxOut $ TxOut tx1Id 0 (Text.pack addr) (BS.pack addr) Nothing Nothing (DbLovelace 500000000)

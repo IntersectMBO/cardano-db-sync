@@ -17,7 +17,7 @@
 module Cardano.Db.Schema where
 
 import           Cardano.Db.Schema.Orphans ()
-import           Cardano.Db.Types (DbLovelace, DbWord64)
+import           Cardano.Db.Types (DbInt65, DbLovelace, DbWord64)
 
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Int (Int64)
@@ -102,6 +102,9 @@ share
     fee                 DbLovelace          sqltype=lovelace
     deposit             Int64                                   -- Needs to allow negaitve values.
     size                Word64              sqltype=uinteger
+
+    invalidBefore       Word64 Maybe        sqltype=uinteger
+    invalidHereAfter    Word64 Maybe        sqltype=uinteger
     UniqueTx            hash
 
   StakeAddress          -- Can be an address of a script hash
@@ -278,6 +281,23 @@ share
     amount              DbLovelace          sqltype=lovelace
     txId                TxId
     UniqueTreasury      addrId txId
+
+  -- -----------------------------------------------------------------------------------------------
+  -- Multi Asset related tables.
+
+  MaTxMint
+    policy              ByteString          sqltype=hash28type
+    name                ByteString          sqltype=asset32type
+    quantity            DbInt65             sqltype=int65type
+    txId                TxId
+    UniqueMaTxMint      policy name txId
+
+  MaTxOut
+    policy              ByteString          sqltype=hash28type
+    name                ByteString          sqltype=asset32type
+    quantity            DbWord64            sqltype=word64type
+    txOutId             TxOutId
+    UniqueMaTxOut       policy name txOutId
 
   -- -----------------------------------------------------------------------------------------------
   -- Update parameter proposals.
