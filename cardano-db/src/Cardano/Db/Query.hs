@@ -53,6 +53,9 @@ module Cardano.Db.Query
   , txOutSpentP
   , txOutUnspentP
   , unBlockId
+  , unTxId
+  , unTxInId
+  , unTxOutId
   , unValue2
   , unValue3
   , unValueSumAda
@@ -563,6 +566,15 @@ maybeToEither e f =
 
 unBlockId :: BlockId -> Word64
 unBlockId = fromIntegral . unSqlBackendKey . unBlockKey
+
+unTxId :: TxId -> Word64
+unTxId = fromIntegral . unSqlBackendKey . unTxKey
+
+unTxInId :: TxInId -> Word64
+unTxInId = fromIntegral . unSqlBackendKey . unTxInKey
+
+unTxOutId :: TxOutId -> Word64
+unTxOutId = fromIntegral . unSqlBackendKey . unTxOutKey
 
 unValue2 :: (Value a, Value b) -> (a, b)
 unValue2 (a, b) = (unValue a, unValue b)
