@@ -8,10 +8,13 @@
 module Cardano.Db.Types
   ( Ada (..)
   , DbLovelace (..)
+  , DbInt65 (..)
   , DbWord64 (..)
   , lovelaceToAda
   , renderAda
   , scientificToAda
+  , readDbInt65
+  , showDbInt65
   , word64ToAda
   ) where
 
@@ -51,6 +54,12 @@ instance ToJSON Ada where
 instance Show Ada where
     show (Ada ada) = showFixed True ada
 
+-- This is horrible. Need a 'Word64' with an extra sign bit.
+data DbInt65
+  = PosInt65 !Word64
+  | NegInt65 !Word64
+  deriving (Eq, Generic, Show)
+
 -- Newtype wrapper around Word64 so we can hand define a PersistentField instance.
 newtype DbLovelace
   = DbLovelace { unDbLovelace :: Word64 }
@@ -74,6 +83,19 @@ renderAda (Ada a) = Text.pack (show a)
 scientificToAda :: Scientific -> Ada
 scientificToAda s =
   word64ToAda $ floor (s * 1000000)
+
+readDbInt65 :: String -> DbInt65
+readDbInt65 str =
+  case str of
+    ('-':rest) -> NegInt65 $ read rest
+    _other -> PosInt65 $ read str
+
+showDbInt65 :: DbInt65 -> String
+showDbInt65 i65 =
+  case i65 of
+    PosInt65 w -> show w
+    NegInt65 0 ->  "0"
+    NegInt65 w ->  '-' : show w
 
 word64ToAda :: Word64 -> Ada
 word64ToAda w =

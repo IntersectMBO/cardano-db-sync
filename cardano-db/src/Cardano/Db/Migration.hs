@@ -148,7 +148,7 @@ createMigration (MigrationDir migdir) = do
         ]
         ++ concatMap buildStatement statements ++
         [ "    -- Hand written SQL statements can be added here.\n"
-        , "    UPDATE schema_version SET stage_two = ", textShow next_version, " ;\n"
+        , "    UPDATE schema_version SET stage_two = next_version ;\n"
         , "    RAISE NOTICE 'DB has been migrated to stage_two version %', next_version ;\n"
         , "  END IF ;\n"
         , "END ;\n"

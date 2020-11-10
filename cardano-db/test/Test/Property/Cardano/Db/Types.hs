@@ -1,4 +1,6 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections #-}
 
 module Test.Property.Cardano.Db.Types
   ( genAda
@@ -34,6 +36,12 @@ prop_roundtrip_Ada_via_JSON =
     mv <- H.forAll genAda
     H.tripping mv Aeson.encode Aeson.eitherDecode
 
+prop_roundtrip_DbInt65_PersistField :: Property
+prop_roundtrip_DbInt65_PersistField =
+    H.withTests 5000 . H.property $ do
+      (i65, pv) <- H.forAll genDbInt65PresistValue
+      fromPersistValue pv === Right i65
+
 prop_roundtrip_DbLovelace_PersistField :: Property
 prop_roundtrip_DbLovelace_PersistField =
     H.withTests 5000 . H.property $ do
@@ -68,6 +76,25 @@ genAda =
 
 genDbWord64 :: Gen DbWord64
 genDbWord64 = DbWord64 <$> genWord64
+
+genDbInt65PresistValue :: Gen (DbInt65, PersistValue)
+genDbInt65PresistValue = do
+    (w64, pv) <- genWord64PresistValue
+    Gen.element
+      [ (PosInt65 w64, pv)
+      , if w64 == 0
+          then (PosInt65 0, pv)
+          else (NegInt65 w64, negatePresistValue pv)
+      ]
+  where
+    negatePresistValue :: PersistValue -> PersistValue
+    negatePresistValue pv =
+      case pv of
+        PersistText txt -> PersistText ("-" <> txt)
+        PersistInt64 i64 -> PersistInt64 (negate i64)
+        PersistRational r -> PersistRational (negate r)
+        _other -> pv
+
 
 genDbLovelacePresistValue :: Gen (DbLovelace, PersistValue)
 genDbLovelacePresistValue = first DbLovelace <$> genWord64PresistValue

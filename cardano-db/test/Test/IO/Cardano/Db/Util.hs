@@ -88,7 +88,18 @@ mkTxs :: BlockId -> Word -> [Tx]
 mkTxs blkId count =
     take (fromIntegral count) $ map create [ 0 .. ]
   where
-    create w = Tx (mkTxHash blkId w) blkId 0 (DbLovelace 2) (DbLovelace 1) 0 12
+    create w =
+      Tx
+        { txHash = mkTxHash blkId w
+        , txBlockId = blkId
+        , txBlockIndex = 0
+        , txOutSum = DbLovelace 2
+        , txFee = DbLovelace 1
+        , txDeposit = 0
+        , txSize = 12
+        , txInvalidHereAfter = Nothing
+        , txInvalidBefore = Nothing
+        }
 
 testSlotLeader :: SlotLeader
 testSlotLeader =

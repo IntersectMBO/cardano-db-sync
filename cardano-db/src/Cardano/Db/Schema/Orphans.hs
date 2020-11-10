@@ -4,7 +4,8 @@
 
 module Cardano.Db.Schema.Orphans where
 
-import           Cardano.Db.Types (DbLovelace (..), DbWord64 (..))
+import           Cardano.Db.Types (DbInt65 (..), DbLovelace (..), DbWord64 (..), readDbInt65,
+                   showDbInt65)
 
 import           Data.Ratio (denominator, numerator)
 import           Data.WideWord.Word128 (Word128)
@@ -13,6 +14,21 @@ import qualified Data.Text as Text
 
 import           Database.Persist.Class (PersistField (..))
 import           Database.Persist.Types (PersistValue (..))
+
+instance PersistField DbInt65 where
+  toPersistValue = PersistText . Text.pack . showDbInt65
+  fromPersistValue (PersistInt64 i) = Right $ if i >= 0
+                                                then PosInt65 (fromIntegral i)
+                                                else NegInt65 (fromIntegral $ negate i)
+  fromPersistValue (PersistText bs) = Right $ readDbInt65 (Text.unpack bs)
+  fromPersistValue x@(PersistRational r) =
+    if denominator r == 1
+      then Right $ if numerator r >= 0
+                    then PosInt65 (fromIntegral $ numerator r)
+                    else NegInt65 (fromIntegral . numerator $ negate r)
+      else Left $ mconcat [ "Failed to parse Haskell type DbInt65: ", Text.pack (show x) ]
+  fromPersistValue x =
+    Left $ mconcat [ "Failed to parse Haskell type DbInt65: ", Text.pack (show x) ]
 
 instance PersistField DbLovelace where
   toPersistValue = PersistText . Text.pack . show . unDbLovelace

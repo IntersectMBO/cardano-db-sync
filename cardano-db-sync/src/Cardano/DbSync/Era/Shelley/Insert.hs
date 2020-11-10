@@ -159,6 +159,8 @@ insertTx tracer env blkId epochNo blockIndex tx = do
                 , DB.txFee = DB.DbLovelace fees
                 , DB.txDeposit = fromIntegral (inSum + withdrawalSum) - fromIntegral (outSum + fees)
                 , DB.txSize = fromIntegral $ LBS.length (Shelley.txFullBytes tx)
+                , DB.txInvalidHereAfter = Nothing
+                , DB.txInvalidBefore = Nothing
                 }
 
     -- Insert outputs for a transaction before inputs in case the inputs for this transaction
