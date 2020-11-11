@@ -11,6 +11,7 @@ module Cardano.Db.Query
   , queryBlockNo
   , queryMainBlock
   , queryBlockTxCount
+  , queryBlocksAfterSlot
   , queryCalcEpochEntry
   , queryCheckPoints
   , queryDepositUpToBlockNo
@@ -157,6 +158,13 @@ queryBlockTxCount :: MonadIO m => BlockId -> ReaderT SqlBackend m Word64
 queryBlockTxCount blkId = do
   res <- select . from $ \ tx -> do
             where_ (tx ^. TxBlockId ==. val blkId)
+            pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
+
+queryBlocksAfterSlot :: MonadIO m => Word64 -> ReaderT SqlBackend m Int
+queryBlocksAfterSlot slotNo = do
+  res <- select . from $ \ blk -> do
+            where_ (blk ^. BlockSlotNo >. just (val slotNo))
             pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 

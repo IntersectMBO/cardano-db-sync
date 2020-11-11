@@ -264,10 +264,10 @@ logDbState :: Trace IO Text -> IO ()
 logDbState trce = do
     mblk <- DB.runDbNoLogging DB.queryLatestBlock
     case mblk of
-      Nothing -> logInfo trce "Cardano.Db is empty"
+      Nothing -> logInfo trce "Database is empty"
       Just block ->
-          logInfo trce $ Text.concat
-                  [ "Cardano.Db tip is at "
+          logInfo trce $ mconcat
+                  [ "Database tip is at "
                   , Text.pack (showTip block)
                   ]
   where
