@@ -7,7 +7,7 @@ module Cardano.DbSync.Rollback
 
 import           Cardano.Prelude
 
-import           Cardano.BM.Trace (Trace, logInfo)
+import           Cardano.BM.Trace (Trace, logError, logInfo)
 
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Error
@@ -32,6 +32,13 @@ rollbackToSlot trce slotNo =
             mconcat
               [ "Rolling back to slot ", textShow (unSlotNo slotNo), ", hash "
               , maybe (if unSlotNo slotNo == 0 then "genesis" else "unknown") renderByteArray mHash
+              ]
+        count <- lift $ DB.queryBlocksAfterSlot (unSlotNo slotNo)
+        when (count > 50000) .
+          liftIO . logError trce $
+            mconcat
+              [ "Rollback block count is high and therefore rollback is likely to be incredibly slow. "
+              , "Dropping the database and resyncing from scratch will be faster."
               ]
         xs <- lift $ DB.querySlotNosGreaterThan (unSlotNo slotNo)
         liftIO . logInfo trce $
