@@ -116,6 +116,7 @@ library
                       , transformers
                       , transformers-except
                       , typed-protocols
+                      , unix
                       , vector
                       , yaml
 
