@@ -28,16 +28,12 @@ import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Util
 
-import           Control.Monad (void)
-import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
-import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
-import           Control.Monad.Trans.Reader (ReaderT)
+import           Control.Monad.Trans.Except.Extra (newExceptT)
 
 import qualified Data.ByteString.Char8 as BS
 import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
-import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 

@@ -25,9 +25,9 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
+import           Ouroboros.Consensus.Shelley.Eras (StandardShelley)
 import           Ouroboros.Consensus.Shelley.Ledger.Block ()
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
-import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 
 -- Everything in this file should be in ouroboros-consensus so that both 'node' and 'db-=sync'
 -- can use it.

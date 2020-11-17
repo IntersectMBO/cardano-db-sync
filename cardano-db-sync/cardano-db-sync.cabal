@@ -66,7 +66,7 @@ library
                         Cardano.DbSync.Types
                         Cardano.DbSync.Util
 
-  build-depends:        base                            >= 4.12         && < 4.13
+  build-depends:        base                            >= 4.12         && < 4.15
                       , aeson
                       , binary
                       , base16-bytestring
@@ -140,7 +140,7 @@ executable cardano-db-sync
 
   other-modules:        Paths_cardano_db_sync
 
-  build-depends:        base                            >= 4.12         && < 4.13
+  build-depends:        base                            >= 4.12         && < 4.15
                       , bytestring
                       , cardano-config
                       , cardano-db

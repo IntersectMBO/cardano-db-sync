@@ -14,7 +14,7 @@ module Cardano.DbSync.Era.Shelley.Metadata
 
 import           Cardano.Prelude
 
-import           Cardano.Api.MetaData (TxMetadataValue (..))
+import           Cardano.Api.Shelley (TxMetadataValue (..))
 
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Text as Aeson.Text

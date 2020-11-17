@@ -31,14 +31,12 @@ import           Control.Monad.Trans.Except (ExceptT)
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Cardano (Nonce (..), Protocol (..))
 import qualified Ouroboros.Consensus.Cardano as Consensus
-import           Ouroboros.Consensus.Cardano.CanHardFork (TriggerHardFork (..))
 import           Ouroboros.Consensus.Config (TopLevelConfig (..))
 import           Ouroboros.Consensus.Ledger.Basics (LedgerConfig)
 import           Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
+import           Ouroboros.Consensus.Shelley.Eras (StandardShelley)
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
-import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
-
 import           Ouroboros.Network.Magic (NetworkMagic (..))
 
 import qualified Shelley.Spec.Ledger.PParams as Shelley
@@ -108,34 +106,40 @@ mkProtocolInfoCardano = Consensus.protocolInfo . mkProtocolCardano
 
 mkProtocolCardano :: GenesisConfig -> Protocol m CardanoBlock CardanoProtocol
 mkProtocolCardano ge =
-    case ge of
-      GenesisCardano dnc byronGenesis shelleyGenesis ->
-        ProtocolCardano
-          -- Byron parameters
-          byronGenesis
-          (Consensus.PBftSignatureThreshold <$> dncPBftSignatureThreshold dnc)
-          (dncByronProtocolVersion dnc)
-          (dncByronSoftwareVersion dnc)
-          Nothing                                   -- Maybe ByronLeaderCredentials
+  case ge of
+    GenesisCardano dnc byronGenesis shelleyGenesis ->
+        Consensus.ProtocolCardano
+          Consensus.ProtocolParamsByron
+            { Consensus.byronGenesis = byronGenesis
+            , Consensus.byronPbftSignatureThreshold = Consensus.PBftSignatureThreshold <$> dncPBftSignatureThreshold dnc
+            , Consensus.byronProtocolVersion = dncByronProtocolVersion dnc
+            , Consensus.byronSoftwareVersion = dncByronSoftwareVersion dnc
+            , Consensus.byronLeaderCredentials = Nothing
+            }
+          Consensus.ProtocolParamsShelley
+            { Consensus.shelleyGenesis = scConfig shelleyGenesis
+            , Consensus.shelleyInitialNonce = shelleyPraosNonce shelleyGenesis
+            , Consensus.shelleyProtVer = shelleyProtVer dnc
+            , Consensus.shelleyLeaderCredentials = Nothing
+            }
+          Consensus.ProtocolParamsAllegra
+            { Consensus.allegraProtVer = shelleyProtVer dnc
+            , Consensus.allegraLeaderCredentials = Nothing
+            }
+          Consensus.ProtocolParamsMary
+            { Consensus.maryProtVer = shelleyProtVer dnc
+            , Consensus.maryLeaderCredentials = Nothing
+            }
+          (dncByronToShelley dnc)
+          (dncShelleyToAllegra dnc)
+          (dncAllegraToMary dnc)
 
-          -- Shelley parameters
-          (scConfig shelleyGenesis)
-          (shelleyPraosNonce shelleyGenesis)
-          (shelleyProtVer dnc)
-          (Consensus.MaxMajorProtVer $ dncShelleyMaxProtocolVersion dnc)
-          Nothing                                   -- Maybe (TPraosLeaderCredentials StandardShelley)
 
-          -- Hard fork parameters
-          (dncShelleyHardForkNotBeforeEpoch dnc)
-          (dncShelleyHardFork dnc)
+shelleyPraosNonce :: ShelleyConfig -> Nonce
+shelleyPraosNonce sCfg = Nonce (Crypto.castHash . unGenesisHashShelley $ scGenesisHash sCfg)
 
-          (TriggerHardForkAtVersion 3)              -- Value stolen from cardano-node.
+shelleyProtVer :: DbSyncNodeConfig -> Shelley.ProtVer
+shelleyProtVer dnc =
+  let bver = dncByronProtocolVersion dnc in
+  Shelley.ProtVer (fromIntegral $ Byron.pvMajor bver) (fromIntegral $ Byron.pvMinor bver)
 
-  where
-    shelleyPraosNonce :: ShelleyConfig -> Nonce
-    shelleyPraosNonce sCfg = Nonce (Crypto.castHash . unGenesisHashShelley $ scGenesisHash sCfg)
-
-    shelleyProtVer :: DbSyncNodeConfig -> Shelley.ProtVer
-    shelleyProtVer dnc =
-      let bver = dncByronProtocolVersion dnc in
-      Shelley.ProtVer (fromIntegral $ Byron.pvMajor bver) (fromIntegral $ Byron.pvMinor bver)

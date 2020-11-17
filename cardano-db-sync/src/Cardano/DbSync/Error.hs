@@ -22,7 +22,6 @@ import           Cardano.Prelude
 import           Control.Monad.Trans.Except.Extra (firstExceptT, left, newExceptT)
 
 import qualified Data.ByteString.Base16 as Base16
-import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 

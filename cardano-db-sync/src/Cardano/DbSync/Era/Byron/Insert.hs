@@ -16,8 +16,7 @@ import           Cardano.Binary (serialize')
 
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Control (MonadBaseControl)
-import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, newExceptT,
-                   runExceptT)
+import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, newExceptT)
 
 import qualified Cardano.Binary as Binary
 
@@ -38,9 +37,6 @@ import           Cardano.DbSync.Types
 import           Cardano.Prelude
 
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
-
-import           Control.Monad.IO.Class (liftIO)
-import           Control.Monad.Trans.Reader (ReaderT)
 
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text

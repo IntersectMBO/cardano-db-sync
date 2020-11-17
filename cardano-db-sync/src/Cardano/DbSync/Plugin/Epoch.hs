@@ -40,7 +40,7 @@ import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
-import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (BlockByron, BlockShelley))
+import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 
 import           System.IO.Unsafe (unsafePerformIO)
 
@@ -85,6 +85,8 @@ epochPluginInsertBlock trce _env _ledgerState (BlockDetails cblk details) = do
           [ "Slot time '", textShow (sdSlotTime details) ,  "' is in the future" ]
       insertBlock trce details
 
+    BlockAllegra _ -> error "epochPluginInsertBlock: BlockAllegra"
+    BlockMary _ -> error "epochPluginInsertBlock: BlockMary"
 
 -- Nothing to be done here.
 -- Rollback will take place in the Default plugin and the epoch table will be recalculated.

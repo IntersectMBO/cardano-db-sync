@@ -21,7 +21,7 @@ import           Cardano.Prelude
 import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Control.Monad.Logger (LoggingT)
-import           Control.Monad.Trans.Except.Extra (left, newExceptT, runExceptT)
+import           Control.Monad.Trans.Except.Extra (left, newExceptT)
 
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Config
@@ -36,7 +36,7 @@ import           Cardano.DbSync.Util
 import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
-import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (BlockByron, BlockShelley))
+import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 
 import qualified System.Metrics.Prometheus.Metric.Gauge as Gauge
 
@@ -132,6 +132,10 @@ checkDbState trce xs =
 
         BlockShelley {} ->
           panic "checkDbState for ShelleyBlock not yet implemented"
+        BlockAllegra {} ->
+          panic "checkDbState for AllegraBlock not yet implemented"
+        BlockMary {} ->
+          panic "checkDbState for MaryBlock not yet implemented"
 
     isMainBlockApply :: DbAction -> Bool
     isMainBlockApply dba =
@@ -143,6 +147,8 @@ checkDbState trce xs =
                 Ledger.ABOBBlock _ -> True
                 Ledger.ABOBBoundary _ -> False
             BlockShelley {} -> False
+            BlockAllegra {} -> False
+            BlockMary {} -> False
         DbRollBackToPoint {} -> False
         DbFinish -> False
 

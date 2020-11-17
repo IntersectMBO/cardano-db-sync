@@ -1,4 +1,4 @@
-index-state: 2020-07-15T00:00:00Z
+index-state: 2020-10-01T00:00:00Z
 
 packages:
   cardano-db
@@ -7,7 +7,11 @@ packages:
   cardano-db-sync-extended
 
 constraints:
-    splitmix < 0.1
+    libsystemd-journal >= 1.4.4
+  , systemd >= 2.3.0
+    -- systemd-2.3.0 requires at least network 3.1.1.0 but it doesn't declare
+    -- that dependency
+  , network >= 3.1.1.0
 
 package cardano-explorer-db
   ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields
@@ -48,8 +52,8 @@ package ouroboros-consensus-cardano
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-base
-  tag: 13f44ad35d2762dbf98b3d3be56b7ba2adf515f4
-  --sha256: 0sl7adyrjf3w6025gvljxyr222s53avin0sv0gzhdypmj9wg5ml6
+  tag: 6226a0feb1d74f50a430242a1b4608fd48e10aad
+  --sha256: 034q2anpbc7bgp5draykz6lkzznxk31wy4nbgr4jv4f7778yls6b
   subdir:
     binary
     binary/test
@@ -66,8 +70,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-ledger-specs
-  tag: a6ce8feddc09bf78c4378c9b4592c6509bfddc81
-  --sha256: 1f8149wynplf83haqnx124jw89kg45i3wbsm8chl7g68qkw7xhzq
+  tag: 7c64ed8ca2e2141780326ac2990f59ab942356af
+  --sha256: 0md1lm50jyg0navmw9yazzsvw4xrbzvsvawlk91rmpsxfscn92yz
   subdir:
     byron/crypto
     byron/crypto/test
@@ -80,12 +84,13 @@ source-repository-package
     shelley/chain-and-ledger/dependencies/non-integer
     shelley/chain-and-ledger/executable-spec
     shelley/chain-and-ledger/shelley-spec-ledger-test
+    shelley-ma/impl
 
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: a819311473563cb2ab3cd91543cf0f63facdf43e
-  --sha256: 1zj780z3j11rwbvazg79ja5110cgvskzdls81ms0dv3qy7lw4iyr
+  tag: eed250546fa9acec4c9de557b3e3551c1f682a30
+  --sha256: 0n74w8s6py7v59dl09a3khlk2b4h2k6cnh6p916gv35bx5p712bz
   subdir:
     cardano-api
     cardano-config
@@ -95,15 +100,11 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-prelude
-  tag: 0c5b0a6619fadf22f4d62a12154e181a6d035c1c
-  --sha256: 0qjn7xsw5py05zmq9935z91719v5i4apsizwhkwppi8dahbanrs4
-
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/cardano-prelude
-  tag: 0c5b0a6619fadf22f4d62a12154e181a6d035c1c
-  --sha256: 0qjn7xsw5py05zmq9935z91719v5i4apsizwhkwppi8dahbanrs4
-  subdir: test
+  tag: 58e146c14e1349553d0ed75dd5245bbe65f0533e
+  --sha256: 166rm0sxldnf0g2g9jp4k0rgd01wcbm0g54fcw3bxilzr1dvwqfi
+  subdir:
+    cardano-prelude
+    cardano-prelude-test
 
 source-repository-package
   type: git
@@ -114,8 +115,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/iohk-monitoring-framework
-  tag: d4bb653fcef181befe3883490c66faed46b6197d
-  --sha256: 0j859gyrcsdnnw3yflp8l70fvddlpca4x8y2l6kqzn0a9s1qvcb3
+  tag: b5965e013fbcfb2a155582953d4a9a99eee22a8a
+  --sha256: 0c2xmf57rw2p1llm69x4b3cxzigxj0iyxa6cl0ivps92m9l2rv2n
   subdir:
     contra-tracer
     iohk-monitoring
@@ -129,8 +130,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/ouroboros-network
-  tag: 9e498e0962044c582df0cbf2f81fa0450a67d5f7
-  --sha256: 000ypfbdc6i6plc91vrcywj4yrw5vvafn7c6993xn1pvd18xjm5g
+  tag: 8b69168baa362abdeabe6a3bf50f912f62ac44b6
+  --sha256: 1gfhafyqll36qd1grkbc69x5fg1j75000nmad172r1h4r95irfdd
   subdir:
     cardano-client
     io-sim

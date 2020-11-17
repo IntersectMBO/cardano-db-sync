@@ -27,8 +27,7 @@ import           Cardano.DbSync.Types
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
-import           Control.Exception.Lifted (SomeException, catch)
-import           Control.Monad.IO.Class (MonadIO, liftIO)
+import           Control.Exception.Lifted (catch)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 
 import           Data.ByteArray (ByteArrayAccess)
@@ -51,7 +50,6 @@ import           Ouroboros.Network.Point (withOrigin)
 
 import qualified Shelley.Spec.Ledger.BlockChain as Shelley
 
-import           System.Exit (ExitCode (..))
 import           System.IO.Unsafe (unsafePerformIO)
 import           System.Posix.Process (exitImmediately)
 
@@ -61,6 +59,10 @@ cardanoBlockSlotNo blk =
   case blk of
     BlockByron (ByronBlock _bblk slot _hash) -> slot
     BlockShelley sblk -> Shelley.bheaderSlotNo $
+                            Shelley.bhbody (Shelley.bheader $ Shelley.shelleyBlockRaw sblk)
+    BlockAllegra sblk -> Shelley.bheaderSlotNo $
+                            Shelley.bhbody (Shelley.bheader $ Shelley.shelleyBlockRaw sblk)
+    BlockMary sblk -> Shelley.bheaderSlotNo $
                             Shelley.bhbody (Shelley.bheader $ Shelley.shelleyBlockRaw sblk)
 
 fmap3 :: (Functor f, Functor g, Functor h) => (a -> b) -> f (g (h a)) -> f (g (h b))

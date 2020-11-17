@@ -25,7 +25,6 @@ import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Either (fromRight)
-import           Data.Maybe (listToMaybe)
 import           Data.Word (Word64)
 
 import           Database.Esqueleto (InnerJoin (..), Value (..), desc, from, just, on, orderBy,
@@ -34,7 +33,7 @@ import           Database.Persist.Sql (SqlBackend)
 
 import           Numeric.Natural (Natural)
 
-import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
+import           Ouroboros.Consensus.Cardano.Block (StandardShelley)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import           Shelley.Spec.Ledger.Credential (Ptr (..), StakeReference (..))

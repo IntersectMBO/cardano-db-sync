@@ -25,8 +25,8 @@ module Cardano.DbSync.Era.Shelley.Types
 
 import           Cardano.DbSync.Config.Types (CardanoBlock, CardanoProtocol)
 
+import           Ouroboros.Consensus.Shelley.Eras (StandardCrypto, StandardShelley)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
-import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import qualified Shelley.Spec.Ledger.BlockChain as Shelley
@@ -47,8 +47,8 @@ type ShelleyPoolParams = Shelley.PoolParams StandardShelley
 type ShelleyRewardAccount = Shelley.RewardAcnt StandardShelley
 type ShelleyStakeCreds = Shelley.StakeCreds StandardShelley
 type ShelleyStakingCred = Shelley.StakeCredential StandardShelley
-type ShelleyStakingKeyHash = Shelley.KeyHash 'Shelley.Staking StandardShelley
-type ShelleyStakePoolKeyHash = Shelley.KeyHash 'Shelley.StakePool StandardShelley
+type ShelleyStakingKeyHash = Shelley.KeyHash 'Shelley.Staking StandardCrypto
+type ShelleyStakePoolKeyHash = Shelley.KeyHash 'Shelley.StakePool StandardCrypto
 type ShelleyTx = Shelley.Tx StandardShelley
 type ShelleyTxBody = Shelley.TxBody StandardShelley
 type ShelleyTxId = Shelley.TxId StandardShelley

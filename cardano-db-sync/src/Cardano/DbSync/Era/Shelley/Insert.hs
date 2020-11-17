@@ -21,13 +21,11 @@ import           Cardano.Db (DbLovelace (..), DbWord64 (..))
 
 import           Control.Monad.Extra (whenJust)
 import           Control.Monad.Logger (LoggingT)
-import           Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT, runExceptT)
+import           Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT)
 
-import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
-import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Cardano.Api.MetaData (TxMetadataValue (..), makeTransactionMetadata)
+import           Cardano.Api.Shelley (TxMetadataValue (..), makeTransactionMetadata)
 import           Cardano.Api.Typed (SerialiseAsCBOR (..))
 
 import qualified Cardano.Crypto.Hash as Crypto
@@ -43,6 +41,8 @@ import           Cardano.DbSync.LedgerState
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
+import           Cardano.Ledger.Era (Crypto)
+
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
 
 import qualified Data.Aeson as Aeson
@@ -55,7 +55,7 @@ import qualified Data.Text.Encoding.Error as Text
 
 import           Database.Persist.Sql (SqlBackend)
 
-import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
+import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShelley)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import           Shelley.Spec.Ledger.BaseTypes (StrictMaybe, strictMaybeToMaybe)
@@ -270,7 +270,7 @@ insertPoolRegister tracer (EpochNo epoch) txId idx params = do
         , " > maxLovelace. See https://github.com/input-output-hk/cardano-db-sync/issues/351"
         ]
 
-  poolHashId <- insertPoolHash (Shelley._poolPubKey params)
+  poolHashId <- insertPoolHash (Shelley._poolId params)
   poolUpdateId <- lift . DB.insertPoolUpdate $
                     DB.PoolUpdate
                       { DB.poolUpdateHashId = poolHashId
@@ -292,8 +292,8 @@ maxLovelace :: Word64
 maxLovelace = 45000000000000000
 
 insertPoolHash
-    :: (MonadBaseControl IO m, MonadIO m)
-    => Shelley.KeyHash 'Shelley.StakePool StandardShelley
+    :: forall m . (MonadBaseControl IO m, MonadIO m)
+    => Shelley.KeyHash 'Shelley.StakePool StandardCrypto
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) DB.PoolHashId
 insertPoolHash kh =
     lift . DB.insertPoolHash $
@@ -520,14 +520,14 @@ insertParamProposal
     => Trace IO Text -> DB.TxId -> Shelley.Update StandardShelley
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertParamProposal _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap) (EpochNo epoch)) =
-    mapM_ insert $ Map.toList umap
+    lift . mapM_ insert $ Map.toList umap
   where
     insert
       :: forall era r m. (MonadBaseControl IO m, MonadIO m)
-      => (Shelley.KeyHash r StandardShelley, Shelley.PParams' StrictMaybe era)
-      -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+      => (Shelley.KeyHash r (Crypto era), Shelley.PParams' StrictMaybe era)
+      -> ReaderT SqlBackend m ()
     insert (key, pmap) =
-      void . lift . DB.insertParamProposal $
+      void . DB.insertParamProposal $
         DB.ParamProposal
           { DB.paramProposalEpochNo = epoch
           , DB.paramProposalKey = Shelley.unKeyHashRaw key

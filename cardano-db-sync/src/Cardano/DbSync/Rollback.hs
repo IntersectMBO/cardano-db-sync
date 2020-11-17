@@ -15,8 +15,6 @@ import           Cardano.DbSync.Util
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
-import           Data.Text (Text)
-
 import           Database.Persist.Sql (SqlBackend)
 
 -- Rollbacks are done in an Era generic way based just on the SlotNo we are

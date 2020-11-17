@@ -1,4 +1,4 @@
-resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/0c5b0a6619fadf22f4d62a12154e181a6d035c1c/snapshot.yaml
+resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/58e146c14e1349553d0ed75dd5245bbe65f0533e/snapshot.yaml
 compiler: ghc-8.6.5
 
 allow-newer: true
@@ -65,13 +65,13 @@ extra-deps:
     commit: 2547ad1e80aeabca2899951601079408becbc92c
 
   - git: https://github.com/input-output-hk/cardano-prelude
-    commit: 0c5b0a6619fadf22f4d62a12154e181a6d035c1c
+    commit: 58e146c14e1349553d0ed75dd5245bbe65f0533e
     subdirs:
-      - .
-      - test
+      - cardano-prelude
+      - cardano-prelude-test
 
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: d4bb653fcef181befe3883490c66faed46b6197d
+    commit: b5965e013fbcfb2a155582953d4a9a99eee22a8a
     subdirs:
       - contra-tracer
       - iohk-monitoring
@@ -83,7 +83,7 @@ extra-deps:
       - tracer-transformers
 
   - git: https://github.com/input-output-hk/cardano-base
-    commit: 13f44ad35d2762dbf98b3d3be56b7ba2adf515f4
+    commit: 6226a0feb1d74f50a430242a1b4608fd48e10aad
     subdirs:
       - binary
       - cardano-crypto-praos
@@ -95,7 +95,7 @@ extra-deps:
     commit: cde90a2b27f79187ca8310b6549331e59595e7ba
 
   - git: https://github.com/input-output-hk/cardano-ledger-specs
-    commit: a6ce8feddc09bf78c4378c9b4592c6509bfddc81
+    commit: 7c64ed8ca2e2141780326ac2990f59ab942356af
     subdirs:
       - byron/crypto
       - byron/crypto/test
@@ -109,7 +109,7 @@ extra-deps:
       - shelley/chain-and-ledger/executable-spec/test
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: 9e498e0962044c582df0cbf2f81fa0450a67d5f7
+    commit: 8b69168baa362abdeabe6a3bf50f912f62ac44b6
     subdirs:
       - cardano-client
       - io-sim
@@ -130,7 +130,7 @@ extra-deps:
       - ouroboros-consensus/ouroboros-consensus-test-infra
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: a819311473563cb2ab3cd91543cf0f63facdf43e
+    commit: eed250546fa9acec4c9de557b3e3551c1f682a30
     subdirs:
       - cardano-config
 

@@ -21,11 +21,10 @@ import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
 import           Control.Monad.Logger (LoggingT)
-import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Database.Persist.Sql (SqlBackend)
 
-import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (BlockByron, BlockShelley))
+import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 
 
 -- | The default DbSyncNodePlugin.
@@ -53,6 +52,10 @@ insertDefaultBlock tracer env ledgerStateVar (BlockDetails cblk details) = do
               Byron.insertByronBlock tracer blk details
             BlockShelley blk ->
               Shelley.insertShelleyBlock tracer env blk lStateSnap details
+            BlockAllegra _ ->
+              panic "insertDefaultBlock: BlockAllegra"
+            BlockMary _ ->
+              panic "insertDefaultBlock: BlockMary"
   -- Now we update it in ledgerStateVar and (possibly) store it to disk.
   liftIO $ saveLedgerState (envLedgerStateDir env) ledgerStateVar
                 (lssState lStateSnap) (isSyncedWithinSeconds details 60)

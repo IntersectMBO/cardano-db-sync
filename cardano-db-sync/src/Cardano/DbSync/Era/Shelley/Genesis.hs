@@ -17,11 +17,8 @@ import           Cardano.Prelude
 
 import           Cardano.BM.Trace (Trace, logInfo)
 
-import           Control.Monad (void)
-import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
-import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
-import           Control.Monad.Trans.Reader (ReaderT)
+import           Control.Monad.Trans.Except.Extra (newExceptT)
 
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Era.Shelley.Types
@@ -30,19 +27,19 @@ import           Cardano.DbSync.Error
 import           Cardano.DbSync.Util
 
 import qualified Data.Map.Strict as Map
-import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Time.Clock (UTCTime (..))
 import qualified Data.Time.Clock as Time
 
 import           Database.Persist.Sql (SqlBackend)
 
+import           Ouroboros.Consensus.Cardano.Block (StandardShelley)
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
-import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import qualified Shelley.Spec.Ledger.Coin as Shelley
 import qualified Shelley.Spec.Ledger.Genesis as Shelley
+import           Shelley.Spec.Ledger.Scripts ()
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
 import qualified Shelley.Spec.Ledger.UTxO as Shelley
 

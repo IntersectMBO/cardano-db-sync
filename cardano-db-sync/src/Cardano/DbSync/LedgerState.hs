@@ -25,6 +25,7 @@ import           Cardano.DbSync.Config
 import           Cardano.DbSync.Config.Cardano
 import           Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Cardano.Util as Cardano
+import           Cardano.DbSync.Era.Shelley.Types
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
@@ -34,18 +35,16 @@ import           Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), fromWithOrigin)
 
 import           Control.Concurrent.STM.TVar (TVar, newTVarIO, readTVar, readTVarIO, writeTVar)
-import           Control.Exception (IOException, handle)
 import qualified Control.Exception as Exception
 import           Control.Monad.Extra (firstJustM)
 
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as BSS
-import           Data.Either (partitionEithers)
 import qualified Data.List as List
 
 import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockHash, blockPrevHash)
-import           Ouroboros.Consensus.Cardano.Block (LedgerState (..))
+import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardShelley)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Config (TopLevelConfig (..), configCodec, configLedger)
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
@@ -58,7 +57,6 @@ import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerCfg (..), ExtLedg
                    decodeExtLedgerState, encodeExtLedgerState)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
-import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 import qualified Ouroboros.Consensus.Shelley.Protocol as Consensus
 import           Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), EncodeDisk (..))
 import qualified Ouroboros.Consensus.TypeFamilyWrappers as Consensus
@@ -290,7 +288,12 @@ ledgerEpochUpdate :: ExtLedgerState CardanoBlock -> Maybe (Shelley.RewardUpdate 
 ledgerEpochUpdate els mRewards =
   case ledgerState els of
     LedgerStateByron _ -> panic "ledgerEpochUpdate: LedgerStateByron but should be Shelley"
-    LedgerStateShelley sls ->
+    LedgerStateShelley sls -> build sls
+    LedgerStateAllegra _sls -> panic "ledgerEpochUpdate: LedgerStateAllegra"
+    LedgerStateMary _sls -> panic "ledgerEpochUpdate: LedgerStateMary"
+  where
+    build :: LedgerState ShelleyBlock -> EpochUpdate
+    build sls =
       EpochUpdate
         { euProtoParams = Shelley.esPp $ Shelley.nesEs (Consensus.shelleyLedgerState sls)
         , euRewards = fromMaybe Shelley.emptyRewardUpdate mRewards
@@ -312,6 +315,8 @@ ledgerRewardUpdate lsc =
     LedgerStateByron _ -> Nothing -- This actually happens on the Byron/Shelley boundary.
     LedgerStateShelley sls -> Shelley.strictMaybeToMaybe . Shelley.nesRu
                                 $ Consensus.shelleyLedgerState sls
+    LedgerStateAllegra _sls -> panic "ledgerRewardUpdate: LedgerStateAllegra"
+    LedgerStateMary _sls -> panic "ledgerRewardUpdate: LedgerStateMary"
 
 -- Some of the nastiness here will disappear when suitable PatternSynonyms are added to Consensus.
 -- TODO: Replace this horrible stuff with the PatternSynonyms when they become available.
