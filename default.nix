@@ -28,13 +28,26 @@ let
     customConfig = customConfig';
   };
 
+  rewrite-static = _: p: if (pkgs.stdenv.hostPlatform.isDarwin) then
+    pkgs.runCommandCC p.name {
+      nativeBuildInputs = [ pkgs.haskellBuildUtils.package pkgs.buildPackages.binutils pkgs.buildPackages.nix ];
+    } ''
+      cp -R ${p} $out
+      chmod -R +w $out
+      rewrite-libs $out/bin $out/bin/*
+    '' else if (pkgs.stdenv.hostPlatform.isMusl) then
+    pkgs.runCommandCC p.name { } ''
+      cp -R ${p} $out
+      chmod -R +w $out
+      $STRIP $out/bin/*
+    '' else p;
+
   packages = {
     inherit haskellPackages cardano-db-sync cardano-db-sync-extended cardano-node scripts;
 
-    # NixOS tests
-    #nixosTests = import ./nix/nixos/tests {
-    #  inherit pkgs;
-    #};
+    inherit (haskellPackages.cardano-db-sync.identifier) version;
+
+    exes = mapAttrsRecursiveCond (as: !(isDerivation as)) rewrite-static (collectComponents' "exes" haskellPackages);
 
     dockerImage = let
       defaultConfig = rec {

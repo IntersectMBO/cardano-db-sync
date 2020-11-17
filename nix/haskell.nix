@@ -5,16 +5,23 @@
 , stdenv
 , haskell-nix
 , buildPackages
+, src
 , config ? {}
 # GHC attribute name
 , compiler ? config.haskellNix.compiler or "ghc8102"
 # Enable profiling
 , profiling ? config.haskellNix.profiling or false
-, postgresql
 # Version info, to be passed when not building from a git work tree
 , gitrev ? null
 }:
 let
+
+  projectPackages = lib.attrNames (haskell-nix.haskellLib.selectProjectPackages
+    (haskell-nix.cabalProject {
+      inherit src;
+      compiler-nix-name = compiler;
+    }));
+
   preCheck = ''
     echo pre-check
     initdb --encoding=UTF8 --locale=en_US.UTF-8 --username=postgres $NIX_BUILD_TOP/db-dir
@@ -57,25 +64,9 @@ let
   # This creates the Haskell package set.
   # https://input-output-hk.github.io/haskell.nix/user-guide/projects/
   pkgSet = haskell-nix.cabalProject {
-    src = haskell-nix.haskellLib.cleanGit {
-      src = ../.;
-      name = "cardano-db-sync";
-    };
+    inherit src;
     compiler-nix-name = compiler;
     modules = [
-      # Add source filtering to local packages
-      {
-        packages.cardano-db-sync.src = haskell-nix.haskellLib.cleanGit {
-          src = ../.;
-          subDir = "cardano-db-sync";
-          name = "cardano-db-sync";
-        };
-        packages.cardano-db-sync-extneded.src = haskell-nix.haskellLib.cleanGit {
-          src = ../.;
-          subDir = "cardano-db-sync-extended";
-          name = "cardano-db-sync";
-        };
-      }
       {
         # Stamp executables with the git revision
         packages = lib.genAttrs ["cardano-db-sync" "cardano-db-sync-extended"] (name: {
@@ -92,13 +83,15 @@ let
 
         # split data output for ekg to reduce closure size
         packages.ekg.components.library.enableSeparateDataOutput = true;
-        packages.cardano-db-sync.configureFlags = [ "--ghc-option=-Wall" "--ghc-option=-Werror" ];
-        packages.cardano-db-sync-extended.configureFlags = [ "--ghc-option=-Wall" "--ghc-option=-Werror" ];
         enableLibraryProfiling = profiling;
       }
       {
+        packages = lib.genAttrs projectPackages
+          (name: { configureFlags = [ "--ghc-option=-Wall" "--ghc-option=-Werror" ]; });
+      }
+      {
         packages.cardano-db.components.tests.test-db = {
-          build-tools = [ postgresql ];
+          build-tools = [ buildPackages.postgresql ];
           inherit preCheck;
           inherit postCheck;
         };
@@ -109,6 +102,31 @@ let
           #dontStrip = false;
         };
       }
+      # Musl libc fully static build
+      ({ pkgs, ... }: lib.mkIf stdenv.hostPlatform.isMusl (let
+        # Module options which adds GHC flags and libraries for a fully static build
+        fullyStaticOptions = {
+          enableShared = false;
+          enableStatic = true;
+          configureFlags = [
+            "--ghc-option=-optl=-lssl"
+            "--ghc-option=-optl=-lcrypto"
+            "--ghc-option=-optl=-L${pkgs.openssl.out}/lib"
+          ];
+        };
+      in
+        {
+          packages = lib.genAttrs projectPackages (name: fullyStaticOptions);
+
+          # Haddock not working and not needed for cross builds
+          doHaddock = false;
+        }
+      ))
+      ({ pkgs, ... }: lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
+        # systemd can't be statically linked
+        packages.cardano-config.flags.systemd = !pkgs.stdenv.hostPlatform.isMusl;
+        packages.cardano-node.flags.systemd = !pkgs.stdenv.hostPlatform.isMusl;
+      })
     ];
   };
   # setGitRev is a postInstall script to stamp executables with

@@ -28,6 +28,9 @@ package cardano-db-sync-extended
 package cardano-sync
   ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields -Wunused-imports
 
+package postgresql-libpq
+   flags: +use-pkg-config
+
 -- ---------------------------------------------------------
 -- Disable all tests by default
 
