@@ -35,6 +35,7 @@ import qualified Cardano.Db as DB
 import           Cardano.DbSync.Config.Types
 import           Cardano.DbSync.Era.Shelley.Metadata
 import           Cardano.DbSync.Era.Shelley.Query
+import           Cardano.DbSync.Era.Shelley.Types
 import qualified Cardano.DbSync.Era.Shelley.Util as Shelley
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState

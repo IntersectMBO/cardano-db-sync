@@ -56,7 +56,7 @@ import qualified Cardano.Crypto.KES.Class as KES
 import           Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as Db
 import           Cardano.DbSync.Config
-import           Cardano.DbSync.Types
+import           Cardano.DbSync.Era.Shelley.Types
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 

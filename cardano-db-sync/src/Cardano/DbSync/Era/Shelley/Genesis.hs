@@ -24,9 +24,9 @@ import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import qualified Cardano.Db as DB
+import           Cardano.DbSync.Era.Shelley.Types
 import qualified Cardano.DbSync.Era.Shelley.Util as Shelley
 import           Cardano.DbSync.Error
-import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
 import qualified Data.Map.Strict as Map
