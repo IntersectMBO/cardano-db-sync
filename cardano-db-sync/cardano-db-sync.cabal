@@ -61,6 +61,7 @@ library
                         Cardano.DbSync.Era.Shelley.Insert
                         Cardano.DbSync.Era.Shelley.Query
                         Cardano.DbSync.Era.Shelley.Metadata
+                        Cardano.DbSync.Era.Shelley.Types
                         Cardano.DbSync.LedgerState
                         Cardano.DbSync.StateQuery
 
