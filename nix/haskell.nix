@@ -7,7 +7,7 @@
 , buildPackages
 , config ? {}
 # GHC attribute name
-, compiler ? config.haskellNix.compiler or "ghc865"
+, compiler ? config.haskellNix.compiler or "ghc8102"
 # Enable profiling
 , profiling ? config.haskellNix.profiling or false
 , postgresql
@@ -109,14 +109,6 @@ let
           #dontStrip = false;
         };
       }
-    ];
-    pkg-def-extras = [
-      # Workaround for https://github.com/input-output-hk/haskell.nix/issues/214
-      (hackage: {
-        packages = {
-          "hsc2hs" = (((hackage.hsc2hs)."0.68.4").revisions).default;
-        };
-      })
     ];
   };
   # setGitRev is a postInstall script to stamp executables with
