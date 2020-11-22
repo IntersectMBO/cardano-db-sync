@@ -237,7 +237,7 @@ dbSyncProtocols trce env plugin queryVar ledgerVar _version codecs _connectionId
                 (cChainSyncCodec codecs)
                 channel
                 (chainSyncClientPeerPipelined
-                    $ chainSyncClient trce env queryVar ledgerVar metrics latestPoints currentTip actionQueue)
+                    $ chainSyncClient trce env queryVar metrics latestPoints currentTip actionQueue)
             )
         atomically $ writeDbActionQueue actionQueue DbFinish
         cancel server
@@ -317,9 +317,9 @@ getCurrentTipBlockNo = do
 chainSyncClient
     :: Trace IO Text -> DbSyncEnv
     -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
-    -> LedgerStateVar -> Metrics -> [Point CardanoBlock] -> WithOrigin BlockNo -> DbActionQueue
+    -> Metrics -> [Point CardanoBlock] -> WithOrigin BlockNo -> DbActionQueue
     -> ChainSyncClientPipelined CardanoBlock (Tip CardanoBlock) IO ()
-chainSyncClient trce env queryVar ledgerVar metrics latestPoints currentTip actionQueue =
+chainSyncClient trce env queryVar metrics latestPoints currentTip actionQueue =
     ChainSyncClientPipelined $ pure $
       -- Notify the core node about the our latest points at which we are
       -- synchronised.  This client is not persistent and thus it just
@@ -373,7 +373,6 @@ chainSyncClient trce env queryVar ledgerVar metrics latestPoints currentTip acti
                 -- but will only be incorrect for a short time span.
                 let slot = toRollbackSlot point
                 atomically $ writeDbActionQueue actionQueue (mkDbRollback slot)
-                loadLedgerState (envLedgerStateDir env) ledgerVar slot
                 newTip <- getCurrentTipBlockNo
                 pure $ finish newTip tip
         }
