@@ -37,33 +37,34 @@ library
                         Cardano.DbSync.Config.Node
                         Cardano.DbSync.Config.Shelley
                         Cardano.DbSync.Config.Types
-                        Cardano.DbSync.Types
-                        Cardano.DbSync.Error
-                        Cardano.DbSync.Util
-                        Cardano.DbSync.Era
-                        Cardano.DbSync.Era.Byron.Util
-                        Cardano.DbSync.Era.Shelley.Util
-
                         Cardano.DbSync.Database
                         Cardano.DbSync.DbAction
-                        Cardano.DbSync.Metrics
-                        Cardano.DbSync.Plugin
-                        Cardano.DbSync.Plugin.Default
-                        Cardano.DbSync.Plugin.Epoch
+                        Cardano.DbSync.Error
 
-                        Cardano.DbSync.Rollback
-
-                        Cardano.DbSync.Tracing.ToObjectOrphans
-
+                        Cardano.DbSync.Era
                         Cardano.DbSync.Era.Byron.Genesis
                         Cardano.DbSync.Era.Byron.Insert
+                        Cardano.DbSync.Era.Byron.Util
+                        Cardano.DbSync.Era.Cardano.Util
                         Cardano.DbSync.Era.Shelley.Genesis
                         Cardano.DbSync.Era.Shelley.Insert
                         Cardano.DbSync.Era.Shelley.Query
                         Cardano.DbSync.Era.Shelley.Metadata
                         Cardano.DbSync.Era.Shelley.Types
+                        Cardano.DbSync.Era.Shelley.Util
+
                         Cardano.DbSync.LedgerState
+                        Cardano.DbSync.Metrics
+
+                        Cardano.DbSync.Plugin
+                        Cardano.DbSync.Plugin.Default
+                        Cardano.DbSync.Plugin.Epoch
+
+                        Cardano.DbSync.Rollback
                         Cardano.DbSync.StateQuery
+                        Cardano.DbSync.Tracing.ToObjectOrphans
+                        Cardano.DbSync.Types
+                        Cardano.DbSync.Util
 
   build-depends:        base                            >= 4.12         && < 4.13
                       , aeson
