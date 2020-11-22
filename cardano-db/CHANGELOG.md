@@ -1,5 +1,12 @@
 # Revision history for cardano-db
 
+## 6.0.1
+
+* There are no database changes relative to 6.0.0 so the database will be compatible with 6.0.0.
+* Log an error if excessive rollback is required on startup. It is up to the operator to drop the
+  database and restart.
+* Add hash checking when maintaining ledger state and fix race condition (#398).
+
 ## 6.0.0
 
 * Note that this release requires the database to be dropped and recreated.
