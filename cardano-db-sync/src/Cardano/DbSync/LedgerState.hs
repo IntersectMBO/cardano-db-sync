@@ -18,11 +18,13 @@ module Cardano.DbSync.LedgerState
   , saveLedgerState
   ) where
 
+import           Cardano.Binary (DecoderError)
 import qualified Cardano.Binary as Serialize
 
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Config.Cardano
 import           Cardano.DbSync.Config.Types
+import qualified Cardano.DbSync.Era.Cardano.Util as Cardano
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
@@ -38,12 +40,12 @@ import           Control.Monad.Extra (firstJustM)
 
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
+import qualified Data.ByteString.Short as BSS
 import           Data.Either (partitionEithers)
 import qualified Data.List as List
 
-import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..))
-import           Ouroboros.Consensus.Cardano.Block
-                   (LedgerState (LedgerStateByron, LedgerStateShelley))
+import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockHash, blockPrevHash)
+import           Ouroboros.Consensus.Cardano.Block (LedgerState (..))
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Config (TopLevelConfig (..), configCodec, configLedger)
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
@@ -51,7 +53,7 @@ import           Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..
 import           Ouroboros.Consensus.HardFork.Combinator.State (epochInfoLedger)
 import qualified Ouroboros.Consensus.HardFork.Combinator.State as Consensus
 import qualified Ouroboros.Consensus.HeaderValidation as Consensus
-import           Ouroboros.Consensus.Ledger.Abstract (ledgerTipSlot, tickThenApply, tickThenReapply)
+import           Ouroboros.Consensus.Ledger.Abstract (ledgerTipHash, ledgerTipSlot, tickThenReapply)
 import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerCfg (..), ExtLedgerState (..),
                    decodeExtLedgerState, encodeExtLedgerState)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
@@ -60,8 +62,6 @@ import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 import qualified Ouroboros.Consensus.Shelley.Protocol as Consensus
 import           Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), EncodeDisk (..))
 import qualified Ouroboros.Consensus.TypeFamilyWrappers as Consensus
-
-
 
 import qualified Shelley.Spec.Ledger.API.Protocol as Shelley
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
@@ -137,12 +137,9 @@ applyBlock (LedgerStateVar stateVar) blk =
   where
     applyBlk :: ExtLedgerCfg CardanoBlock -> CardanoBlock -> ExtLedgerState CardanoBlock -> ExtLedgerState CardanoBlock
     applyBlk cfg block lsb =
-      -- Set to False to get better error messages from Consensus (but slower block application).
-      if True
-        then tickThenReapply cfg block lsb
-        else case runExcept $ tickThenApply cfg block lsb of
-                Left err -> panic $ textShow err
-                Right result -> result
+      case tickThenReapplyCheckHash cfg block lsb of
+        Left err -> panic err
+        Right result -> result
 
 saveLedgerState :: LedgerStateDir -> LedgerStateVar -> CardanoLedgerState -> SyncState -> IO ()
 saveLedgerState lsd@(LedgerStateDir stateDir) (LedgerStateVar stateVar) ledger synced = do
@@ -232,21 +229,23 @@ loadState stateDir ledger slotNo = do
       mbs <- Exception.try $ BS.readFile fp
       case mbs of
         Left (_ :: IOException) -> pure Nothing
-        Right bs -> pure $ decode bs
+        Right bs ->
+          case decode bs of
+            Left err -> panic (textShow err)
+            Right ls -> pure $ Just ls
 
 
     codecConfig :: CodecConfig CardanoBlock
     codecConfig = configCodec (clsConfig ledger)
 
-    decode :: ByteString -> Maybe (ExtLedgerState CardanoBlock)
+    decode :: ByteString -> Either DecoderError (ExtLedgerState CardanoBlock)
     decode =
-      either (const Nothing) Just
-        . Serialize.decodeFullDecoder
-            "Ledger state file"
-            (decodeExtLedgerState
-              (decodeDisk codecConfig)
-              (decodeDisk codecConfig)
-              (decodeDisk codecConfig))
+      Serialize.decodeFullDecoder
+          "Ledger state file"
+          (decodeExtLedgerState
+            (decodeDisk codecConfig)
+            (decodeDisk codecConfig)
+            (decodeDisk codecConfig))
         . LBS.fromStrict
 
 -- Get a list of the ledger state files order most recent
@@ -297,7 +296,7 @@ ledgerEpochUpdate els mRewards =
         , euRewards = fromMaybe Shelley.emptyRewardUpdate mRewards
 
         -- Use '_pstakeSet' here instead of '_pstateMark' because the stake addresses for the
-        -- later may not have been added to the database yet. That means that whne these values
+        -- later may not have been added to the database yet. That means that when these values
         -- are added to the database, the epoch number where they become active is the current
         -- epoch plus one.
         , euStakeDistribution = Shelley._stake . Shelley._pstakeSet . Shelley.esSnapshots
@@ -326,3 +325,21 @@ extractEpochNonce extLedgerState =
             $ Consensus.tpraosStateChainDepState (Consensus.unwrapChainDepState chainDepStateShelley)
     Consensus.TS {} ->
       Nothing
+
+-- Like 'Consensus.tickThenReapply' but also checks that the previous hash from the block matches
+-- the head hash of the ledger state.
+tickThenReapplyCheckHash
+    :: ExtLedgerCfg CardanoBlock -> CardanoBlock -> ExtLedgerState CardanoBlock
+    -> Either Text (ExtLedgerState CardanoBlock)
+tickThenReapplyCheckHash cfg block lsb =
+  if blockPrevHash block == ledgerTipHash (ledgerState lsb)
+    then Right $ tickThenReapply cfg block lsb
+    else Left $ mconcat
+                  [ "Ledger state hash mismatch. Ledger head is slot "
+                  , textShow (unSlotNo $ fromWithOrigin (SlotNo 0) (ledgerTipSlot $ ledgerState lsb))
+                  , " hash ", renderByteArray (Cardano.unChainHash (ledgerTipHash $ ledgerState lsb))
+                  , " but block previous hash is "
+                  , renderByteArray (Cardano.unChainHash $ blockPrevHash block)
+                  , " and block current hash is "
+                  , renderByteArray (BSS.fromShort . Consensus.getOneEraHash $ blockHash block), "."
+                  ]
