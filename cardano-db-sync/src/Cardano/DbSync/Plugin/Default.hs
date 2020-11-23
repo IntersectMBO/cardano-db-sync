@@ -7,7 +7,7 @@ module Cardano.DbSync.Plugin.Default
   ) where
 
 
-import           Cardano.BM.Trace (Trace)
+import           Cardano.BM.Trace (Trace, logError)
 import           Cardano.Prelude
 
 import           Cardano.DbSync.Config
@@ -24,8 +24,9 @@ import           Control.Monad.Logger (LoggingT)
 
 import           Database.Persist.Sql (SqlBackend)
 
-import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
-
+import           Ouroboros.Consensus.Cardano.Block (AllegraEra, HardForkBlock (..), MaryEra,
+                   ShelleyEra, StandardCrypto)
+import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 
 -- | The default DbSyncNodePlugin.
 -- Does exactly what the cardano-db-sync node did before the plugin system was added.
@@ -51,12 +52,36 @@ insertDefaultBlock tracer env ledgerStateVar (BlockDetails cblk details) = do
             BlockByron blk ->
               Byron.insertByronBlock tracer blk details
             BlockShelley blk ->
-              Shelley.insertShelleyBlock tracer env blk lStateSnap details
-            BlockAllegra _ ->
-              panic "insertDefaultBlock: BlockAllegra"
-            BlockMary _ ->
-              panic "insertDefaultBlock: BlockMary"
+              insertShelleyBlock tracer env blk lStateSnap details
+            BlockAllegra blk ->
+              insertAllegraBlock tracer env blk lStateSnap details
+            BlockMary blk ->
+              insertMaryBlock tracer env blk lStateSnap details
   -- Now we update it in ledgerStateVar and (possibly) store it to disk.
   liftIO $ saveLedgerState (envLedgerStateDir env) ledgerStateVar
                 (lssState lStateSnap) (isSyncedWithinSeconds details 60)
   pure res
+
+-- -------------------------------------------------------------------------------------------------
+
+insertShelleyBlock
+    :: Trace IO Text -> DbSyncEnv -> ShelleyBlock (ShelleyEra StandardCrypto)
+    -> LedgerStateSnapshot -> SlotDetails
+    -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
+insertShelleyBlock = Shelley.insertShelleyBlock
+
+insertAllegraBlock
+    :: Trace IO Text -> DbSyncEnv -> ShelleyBlock (AllegraEra StandardCrypto)
+    -> LedgerStateSnapshot -> SlotDetails
+    -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
+insertAllegraBlock trce _ _ _ _ = do
+  liftIO $ logError trce "insertAllegraBlock: Not implemented yet."
+  pure $ Right ()
+
+insertMaryBlock
+    :: Trace IO Text -> DbSyncEnv -> ShelleyBlock (MaryEra StandardCrypto)
+    -> LedgerStateSnapshot -> SlotDetails
+    -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
+insertMaryBlock trce _ _ _ _ = do
+  liftIO $ logError trce "insertMaryBlock: Not implemented yet."
+  pure $ Right ()

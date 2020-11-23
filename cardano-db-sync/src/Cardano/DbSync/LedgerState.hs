@@ -25,7 +25,6 @@ import           Cardano.DbSync.Config
 import           Cardano.DbSync.Config.Cardano
 import           Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Cardano.Util as Cardano
-import           Cardano.DbSync.Era.Shelley.Types
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
@@ -44,22 +43,22 @@ import qualified Data.ByteString.Short as BSS
 import qualified Data.List as List
 
 import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockHash, blockPrevHash)
-import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardShelley)
+import           Ouroboros.Consensus.Cardano.Block (HardForkState (..), LedgerState (..),
+                   StandardShelley)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Config (TopLevelConfig (..), configCodec, configLedger)
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
 import           Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import           Ouroboros.Consensus.HardFork.Combinator.State (epochInfoLedger)
-import qualified Ouroboros.Consensus.HardFork.Combinator.State as Consensus
 import qualified Ouroboros.Consensus.HeaderValidation as Consensus
 import           Ouroboros.Consensus.Ledger.Abstract (ledgerTipHash, ledgerTipSlot, tickThenReapply)
 import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerCfg (..), ExtLedgerState (..),
                    decodeExtLedgerState, encodeExtLedgerState)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
+import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 import qualified Ouroboros.Consensus.Shelley.Protocol as Consensus
 import           Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), EncodeDisk (..))
-import qualified Ouroboros.Consensus.TypeFamilyWrappers as Consensus
 
 import qualified Shelley.Spec.Ledger.API.Protocol as Shelley
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
@@ -199,6 +198,18 @@ cleanupLedgerStateFiles stateDir slotNo = do
         then Right lsf
         else Left fp
 
+extractEpochNonce :: ExtLedgerState CardanoBlock -> Maybe Shelley.Nonce
+extractEpochNonce extLedgerState =
+    case Consensus.headerStateChainDep (headerState extLedgerState) of
+      ChainDepStateByron _ -> Nothing
+      ChainDepStateShelley st -> Just $ extractNonce st
+      ChainDepStateAllegra st -> Just $ extractNonce st
+      ChainDepStateMary st -> Just $ extractNonce st
+  where
+    extractNonce :: Consensus.TPraosState crypto -> Shelley.Nonce
+    extractNonce =
+      Shelley.ticknStateEpochNonce . Shelley.csTickn . Consensus.tpraosStateChainDepState
+
 loadState :: LedgerStateDir -> CardanoLedgerState -> SlotNo -> IO (Maybe CardanoLedgerState)
 loadState stateDir ledger slotNo = do
     files <- listLedgerStateFilesOrdered stateDir
@@ -292,7 +303,7 @@ ledgerEpochUpdate els mRewards =
     LedgerStateAllegra _sls -> panic "ledgerEpochUpdate: LedgerStateAllegra"
     LedgerStateMary _sls -> panic "ledgerEpochUpdate: LedgerStateMary"
   where
-    build :: LedgerState ShelleyBlock -> EpochUpdate
+    build :: LedgerState (ShelleyBlock StandardShelley) -> EpochUpdate
     build sls =
       EpochUpdate
         { euProtoParams = Shelley.esPp $ Shelley.nesEs (Consensus.shelleyLedgerState sls)
@@ -311,25 +322,14 @@ ledgerEpochUpdate els mRewards =
 -- epoch. It is 'Nothing' for the first block of a new epoch (which is slightly inconvenient).
 ledgerRewardUpdate :: LedgerState CardanoBlock -> Maybe (Shelley.RewardUpdate StandardShelley)
 ledgerRewardUpdate lsc =
-  case lsc of
-    LedgerStateByron _ -> Nothing -- This actually happens on the Byron/Shelley boundary.
-    LedgerStateShelley sls -> Shelley.strictMaybeToMaybe . Shelley.nesRu
-                                $ Consensus.shelleyLedgerState sls
-    LedgerStateAllegra _sls -> panic "ledgerRewardUpdate: LedgerStateAllegra"
-    LedgerStateMary _sls -> panic "ledgerRewardUpdate: LedgerStateMary"
-
--- Some of the nastiness here will disappear when suitable PatternSynonyms are added to Consensus.
--- TODO: Replace this horrible stuff with the PatternSynonyms when they become available.
-extractEpochNonce :: ExtLedgerState CardanoBlock -> Maybe Shelley.Nonce
-extractEpochNonce extLedgerState =
-  case Consensus.getHardForkState (Consensus.headerStateChainDep (headerState extLedgerState)) of
-    Consensus.TZ {} ->
-      Nothing
-    Consensus.TS _ (Consensus.TZ Consensus.Current { Consensus.currentState = chainDepStateShelley }) ->
-      Just . Shelley.ticknStateEpochNonce . Shelley.csTickn
-            $ Consensus.tpraosStateChainDepState (Consensus.unwrapChainDepState chainDepStateShelley)
-    Consensus.TS {} ->
-      Nothing
+    case lsc of
+      LedgerStateByron _ -> Nothing -- This actually happens on the Byron/Shelley boundary.
+      LedgerStateShelley sls -> update sls
+      LedgerStateAllegra _sls -> panic "ledgerRewardUpdate: LedgerStateAllegra"
+      LedgerStateMary _sls -> panic "ledgerRewardUpdate: LedgerStateMary"
+  where
+    update :: LedgerState (ShelleyBlock StandardShelley) -> Maybe (Shelley.RewardUpdate StandardShelley)
+    update = Shelley.strictMaybeToMaybe . Shelley.nesRu . Consensus.shelleyLedgerState
 
 -- Like 'Consensus.tickThenReapply' but also checks that the previous hash from the block matches
 -- the head hash of the ledger state.

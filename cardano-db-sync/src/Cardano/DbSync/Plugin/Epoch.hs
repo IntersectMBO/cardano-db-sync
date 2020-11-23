@@ -69,27 +69,31 @@ epochPluginInsertBlock
     :: Trace IO Text -> DbSyncEnv -> LedgerStateVar -> BlockDetails
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
 epochPluginInsertBlock trce _env _ledgerState (BlockDetails cblk details) = do
-  case cblk of
-    BlockByron bblk ->
-      case byronBlockRaw bblk of
-        Byron.ABOBBoundary {} ->
-          -- For the OBFT era there are no boundary blocks so we ignore them even in
-          -- the Ouroboros Classic era.
-          pure $ Right ()
+    case cblk of
+      BlockByron bblk ->
+        case byronBlockRaw bblk of
+          Byron.ABOBBoundary {} ->
+            -- For the OBFT era there are no boundary blocks so we ignore them even in
+            -- the Ouroboros Classic era.
+            pure $ Right ()
 
-        Byron.ABOBBlock _blk ->
-          insertBlock trce details
-    BlockShelley _sblk -> do
+          Byron.ABOBBlock _blk ->
+            insertBlock trce details
+      BlockShelley _sblk -> epochUpdate
+      BlockAllegra _ablk -> epochUpdate
+      BlockMary _mblk -> epochUpdate
+
+  where
+    -- What we do here is completely independent of Shelley/Allegra/Mary eras.
+    epochUpdate :: ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
+    epochUpdate = do
       when (sdSlotTime details > sdCurrentTime details) $
         liftIO . logError trce $ mconcat
           [ "Slot time '", textShow (sdSlotTime details) ,  "' is in the future" ]
       insertBlock trce details
 
-    BlockAllegra _ -> error "epochPluginInsertBlock: BlockAllegra"
-    BlockMary _ -> error "epochPluginInsertBlock: BlockMary"
-
 -- Nothing to be done here.
--- Rollback will take place in the Default plugin and the epoch table will be recalculated.
+-- Rollback will take place in the Default plugin and the epoch table will just be recalculated.
 epochPluginRollbackBlock :: Trace IO Text -> SlotNo -> IO (Either DbSyncNodeError ())
 epochPluginRollbackBlock _ _ = pure $ Right ()
 
