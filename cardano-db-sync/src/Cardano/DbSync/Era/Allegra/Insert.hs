@@ -7,8 +7,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Cardano.DbSync.Era.Shelley.Insert
-  ( insertShelleyBlock
+module Cardano.DbSync.Era.Allegra.Insert
+  ( insertAllegraBlock
   , containsUnicodeNul
   , safeDecodeUtf8
   ) where
@@ -34,10 +34,10 @@ import qualified Cardano.Crypto.Hash as Crypto
 
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Config.Types
-import           Cardano.DbSync.Era.Shelley.Metadata
-import           Cardano.DbSync.Era.Shelley.Query
-import           Cardano.DbSync.Era.Shelley.Types
-import qualified Cardano.DbSync.Era.Shelley.Util as Shelley
+import           Cardano.DbSync.Era.Allegra.Metadata
+import           Cardano.DbSync.Era.Allegra.Query
+import           Cardano.DbSync.Era.Allegra.Types
+import qualified Cardano.DbSync.Era.Allegra.Util as Allegra
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState
 import           Cardano.DbSync.Types
@@ -57,7 +57,7 @@ import qualified Data.Text.Encoding.Error as Text
 
 import           Database.Persist.Sql (SqlBackend)
 
-import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShelley)
+import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardCrypto)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import           Shelley.Spec.Ledger.BaseTypes (StrictMaybe, strictMaybeToMaybe)
@@ -71,55 +71,55 @@ import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 
-insertShelleyBlock
+insertAllegraBlock
     :: Trace IO Text -> DbSyncEnv -> ShelleyBlock -> LedgerStateSnapshot -> SlotDetails
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-insertShelleyBlock tracer env blk lStateSnap details = do
+insertAllegraBlock tracer env blk lStateSnap details = do
   runExceptT $ do
-    pbid <- liftLookupFail "insertShelleyBlock" $ DB.queryBlockId (Shelley.blockPrevHash blk)
-    mPhid <- lift $ queryPoolHashId (Shelley.blockCreatorPoolHash blk)
+    pbid <- liftLookupFail "insertAllegraBlock" $ DB.queryBlockId (Allegra.blockPrevHash blk)
+    mPhid <- lift $ queryPoolHashId (Allegra.blockCreatorPoolHash blk)
 
-    slid <- lift . DB.insertSlotLeader $ Shelley.mkSlotLeader blk mPhid
+    slid <- lift . DB.insertSlotLeader $ Allegra.mkSlotLeader blk mPhid
     blkId <- lift . DB.insertBlock $
                   DB.Block
-                    { DB.blockHash = Shelley.blockHash blk
+                    { DB.blockHash = Allegra.blockHash blk
                     , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
-                    , DB.blockSlotNo = Just $ Shelley.slotNumber blk
+                    , DB.blockSlotNo = Just $ Allegra.slotNumber blk
                     , DB.blockEpochSlotNo = Just $ unEpochSlot (sdEpochSlot details)
-                    , DB.blockBlockNo = Just $ Shelley.blockNumber blk
+                    , DB.blockBlockNo = Just $ Allegra.blockNumber blk
                     , DB.blockPreviousId  = Just pbid
-                    , DB.blockMerkelRoot = Nothing -- Shelley blocks do not have one.
+                    , DB.blockMerkelRoot = Nothing -- Allegra blocks do not have one.
                     , DB.blockSlotLeaderId = slid
-                    , DB.blockSize = Shelley.blockSize blk
+                    , DB.blockSize = Allegra.blockSize blk
                     , DB.blockTime = sdSlotTime details
-                    , DB.blockTxCount = Shelley.blockTxCount blk
-                    , DB.blockProtoMajor = fromIntegral $ Shelley.pvMajor (Shelley.blockProtoVersion blk)
-                    , DB.blockProtoMinor = fromIntegral $ Shelley.pvMinor (Shelley.blockProtoVersion blk)
+                    , DB.blockTxCount = Allegra.blockTxCount blk
+                    , DB.blockProtoMajor = fromIntegral $ Shelley.pvMajor (Allegra.blockProtoVersion blk)
+                    , DB.blockProtoMinor = fromIntegral $ Shelley.pvMinor (Allegra.blockProtoVersion blk)
 
-                    -- Shelley specific
-                    , DB.blockVrfKey = Just $ Shelley.blockVrfKeyView blk
-                    , DB.blockOpCert = Just $ Shelley.blockOpCert blk
+                    -- Allegra specific
+                    , DB.blockVrfKey = Just $ Allegra.blockVrfKeyView blk
+                    , DB.blockOpCert = Just $ Allegra.blockOpCert blk
                     }
 
-    zipWithM_ (insertTx tracer env blkId (sdEpochNo details)) [0 .. ] (Shelley.blockTxs blk)
+    zipWithM_ (insertTx tracer env blkId (sdEpochNo details)) [0 .. ] (Allegra.blockTxs blk)
 
     liftIO $ do
       let epoch = unEpochNo (sdEpochNo details)
           slotWithinEpoch = unEpochSlot (sdEpochSlot details)
           followingClosely = getSyncStatus details == SyncFollowing
 
-      when (followingClosely && slotWithinEpoch /= 0 && Shelley.slotNumber blk `mod` 200 == 0) $ do
+      when (followingClosely && slotWithinEpoch /= 0 && Allegra.slotNumber blk `mod` 200 == 0) $ do
         logInfo tracer $
           mconcat
-            [ "insertShelleyBlock: continuing epoch ", textShow epoch
+            [ "insertAllegraBlock: continuing epoch ", textShow epoch
             , " (slot ", textShow slotWithinEpoch , "/"
             , textShow (unEpochSize $ sdEpochSize details), ")"
             ]
       logger followingClosely tracer $ mconcat
-        [ "insertShelleyBlock: epoch ", textShow (unEpochNo $ sdEpochNo details)
-        , ", slot ", textShow (Shelley.slotNumber blk)
-        , ", block ", textShow (Shelley.blockNumber blk)
-        , ", hash ", renderByteArray (Shelley.blockHash blk)
+        [ "insertAllegraBlock: epoch ", textShow (unEpochNo $ sdEpochNo details)
+        , ", slot ", textShow (Allegra.slotNumber blk)
+        , ", block ", textShow (Allegra.blockNumber blk)
+        , ", hash ", renderByteArray (Allegra.blockHash blk)
         ]
 
     whenJust (lssEpochUpdate lStateSnap) $ \ esum -> do
@@ -137,55 +137,55 @@ insertShelleyBlock tracer env blk lStateSnap details = do
     logger :: Bool -> Trace IO a -> a -> IO ()
     logger followingClosely
       | followingClosely = logInfo
-      | Shelley.slotNumber blk `mod` 100000 == 0 = logInfo
+      | Allegra.slotNumber blk `mod` 100000 == 0 = logInfo
       | otherwise = logDebug
 
 -- -----------------------------------------------------------------------------
 
 insertTx
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.BlockId -> EpochNo -> Word64 -> ShelleyTx
+    => Trace IO Text -> DbSyncEnv -> DB.BlockId -> EpochNo -> Word64 -> Shelley.Tx StandardAllegra
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertTx tracer env blkId epochNo blockIndex tx = do
-    let fees = Shelley.txFee tx
-        outSum = Shelley.txOutputSum tx
-        withdrawalSum = Shelley.txWithdrawalSum tx
-    inSum <- unDbLovelace <$> lift (queryTxInputSum $ Shelley.txInputList tx)
+    let fees = Allegra.txFee tx
+        outSum = Allegra.txOutputSum tx
+        withdrawalSum = Allegra.txWithdrawalSum tx
+    inSum <- unDbLovelace <$> lift (queryTxInputSum $ Allegra.txInputList tx)
     -- Insert transaction and get txId from the DB.
     txId <- lift . DB.insertTx $
               DB.Tx
-                { DB.txHash = Shelley.txHash tx
+                { DB.txHash = Allegra.txHash tx
                 , DB.txBlockId = blkId
                 , DB.txBlockIndex = blockIndex
                 , DB.txOutSum = DB.DbLovelace outSum
                 , DB.txFee = DB.DbLovelace fees
                 , DB.txDeposit = fromIntegral (inSum + withdrawalSum) - fromIntegral (outSum + fees)
-                , DB.txSize = fromIntegral $ LBS.length (Shelley.txFullBytes tx)
-                , DB.txInvalidHereAfter = Nothing
-                , DB.txInvalidBefore = Nothing
+                , DB.txSize = Allegra.txSize tx
+                , DB.txInvalidHereAfter = Allegra.txInvalidBefore tx
+                , DB.txInvalidBefore = Allegra.txInvalidBefore tx
                 }
 
     -- Insert outputs for a transaction before inputs in case the inputs for this transaction
     -- references the output (not sure this can even happen).
-    mapM_ (insertTxOut tracer txId) (Shelley.txOutputList tx)
+    mapM_ (insertTxOut tracer txId) (Allegra.txOutputList tx)
 
     -- Insert the transaction inputs.
-    mapM_ (insertTxIn tracer txId) (Shelley.txInputList tx)
+    mapM_ (insertTxIn tracer txId) (Allegra.txInputList tx)
 
-    case Shelley.txMetadata tx of
+    case Allegra.txMetadata tx of
       Nothing -> pure ()
       Just md -> insertTxMetadata tracer txId md
 
-    mapM_ (insertCertificate tracer env txId epochNo) $ Shelley.txCertificates tx
-    mapM_ (insertWithdrawals tracer txId) $ Shelley.txWithdrawals tx
+    mapM_ (insertCertificate tracer env txId epochNo) $ Allegra.txCertificates tx
+    mapM_ (insertWithdrawals tracer txId) $ Allegra.txWithdrawals tx
 
-    case Shelley.txParamProposal tx of
+    case Allegra.txParamProposal tx of
       Nothing -> pure ()
       Just pu -> insertParamProposal tracer txId pu
 
 insertTxOut
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> (Word16, ShelleyTxOut)
+    => Trace IO Text -> DB.TxId -> (Word16, AllegraTxOut)
     -> ExceptT e (ReaderT SqlBackend m) ()
 insertTxOut _tracer txId (index, Shelley.TxOut addr value) = do
   mSaId <- lift $ insertStakeAddressRefIfMissing txId addr
@@ -193,19 +193,19 @@ insertTxOut _tracer txId (index, Shelley.TxOut addr value) = do
             DB.TxOut
               { DB.txOutTxId = txId
               , DB.txOutIndex = index
-              , DB.txOutAddress = Shelley.renderAddress addr
+              , DB.txOutAddress = Allegra.renderAddress addr
               , DB.txOutAddressRaw = Shelley.serialiseAddr addr
-              , DB.txOutPaymentCred = Shelley.maybePaymentCred addr
+              , DB.txOutPaymentCred = Allegra.maybePaymentCred addr
               , DB.txOutStakeAddressId = mSaId
-              , DB.txOutValue = Shelley.coinToDbLovelace value
+              , DB.txOutValue = Allegra.coinToDbLovelace value
               }
 
 insertTxIn
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> ShelleyTxIn
+    => Trace IO Text -> DB.TxId -> AllegraTxIn
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertTxIn _tracer txInId (Shelley.TxIn txId index) = do
-  txOutId <- liftLookupFail "insertTxIn" $ DB.queryTxId (Shelley.unTxHash txId)
+  txOutId <- liftLookupFail "insertTxIn" $ DB.queryTxId (Allegra.unTxHash txId)
   void . lift . DB.insertTxIn $
             DB.TxIn
               { DB.txInTxInId = txInId
@@ -215,7 +215,7 @@ insertTxIn _tracer txInId (Shelley.TxIn txId index) = do
 
 insertCertificate
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.TxId -> EpochNo -> (Word16, ShelleyDCert)
+    => Trace IO Text -> DbSyncEnv -> DB.TxId -> EpochNo -> (Word16, AllegraDCert)
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertCertificate tracer env txId epochNo (idx, cert) =
   case cert of
@@ -230,7 +230,7 @@ insertCertificate tracer env txId epochNo (idx, cert) =
 
 insertPoolCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> EpochNo -> DB.TxId -> Word16 -> ShelleyPoolCert
+    => Trace IO Text -> EpochNo -> DB.TxId -> Word16 -> AllegraPoolCert
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertPoolCert tracer epoch txId idx pCert =
   case pCert of
@@ -239,18 +239,18 @@ insertPoolCert tracer epoch txId idx pCert =
 
 insertDelegCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> EpochNo -> ShelleyDelegCert
+    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> EpochNo -> AllegraDelegCert
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertDelegCert tracer env txId idx epochNo dCert =
   case dCert of
-    Shelley.RegKey cred -> insertStakeRegistration tracer txId idx $ Shelley.annotateStakingCred env cred
+    Shelley.RegKey cred -> insertStakeRegistration tracer txId idx $ Allegra.annotateStakingCred env cred
     Shelley.DeRegKey cred -> insertStakeDeregistration tracer env txId idx cred
     Shelley.Delegate (Shelley.Delegation cred poolkh) -> insertDelegation tracer env txId idx epochNo cred poolkh
 
 
 insertPoolRegister
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> EpochNo -> DB.TxId -> Word16 -> ShelleyPoolParams
+    => Trace IO Text -> EpochNo -> DB.TxId -> Word16 -> AllegraPoolParams
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRegister tracer (EpochNo epoch) txId idx params = do
   mdId <- case strictMaybeToMaybe $ Shelley._poolMD params of
@@ -277,12 +277,12 @@ insertPoolRegister tracer (EpochNo epoch) txId idx params = do
                       { DB.poolUpdateHashId = poolHashId
                       , DB.poolUpdateCertIndex = idx
                       , DB.poolUpdateVrfKeyHash = Crypto.hashToBytes (Shelley._poolVrf params)
-                      , DB.poolUpdatePledge = Shelley.coinToDbLovelace (Shelley._poolPledge params)
+                      , DB.poolUpdatePledge = Allegra.coinToDbLovelace (Shelley._poolPledge params)
                       , DB.poolUpdateRewardAddr = Shelley.serialiseRewardAcnt (Shelley._poolRAcnt params)
                       , DB.poolUpdateActiveEpochNo = epoch + 2
                       , DB.poolUpdateMetaId = mdId
                       , DB.poolUpdateMargin = realToFrac $ Shelley.intervalValue (Shelley._poolMargin params)
-                      , DB.poolUpdateFixedCost = Shelley.coinToDbLovelace (Shelley._poolCost params)
+                      , DB.poolUpdateFixedCost = Allegra.coinToDbLovelace (Shelley._poolCost params)
                       , DB.poolUpdateRegisteredTxId = txId
                       }
 
@@ -299,14 +299,14 @@ insertPoolHash
 insertPoolHash kh =
     lift . DB.insertPoolHash $
       DB.PoolHash
-        { DB.poolHashHashRaw = Shelley.unKeyHashRaw kh
-        , DB.poolHashView = Shelley.unKeyHashView kh
+        { DB.poolHashHashRaw = Allegra.unKeyHashRaw kh
+        , DB.poolHashView = Allegra.unKeyHashView kh
         }
 
 
 insertPoolRetire
     :: (MonadBaseControl IO m, MonadIO m)
-    => DB.TxId -> EpochNo -> Word16 -> ShelleyStakePoolKeyHash
+    => DB.TxId -> EpochNo -> Word16 -> AllegraStakePoolKeyHash
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRetire txId epochNum idx keyHash = do
   poolId <- firstExceptT (NELookup "insertPoolRetire") . newExceptT $ queryStakePoolKeyHash keyHash
@@ -333,7 +333,7 @@ insertMetaData txId md =
 
 insertStakeAddress
     :: (MonadBaseControl IO m, MonadIO m)
-    => DB.TxId -> Shelley.RewardAcnt StandardShelley
+    => DB.TxId -> Shelley.RewardAcnt StandardAllegra
     -> ReaderT SqlBackend m DB.StakeAddressId
 insertStakeAddress txId rewardAddr =
   -- If the address already esists in the table, it will not be inserted again (due to
@@ -341,13 +341,13 @@ insertStakeAddress txId rewardAddr =
   DB.insertStakeAddress $
     DB.StakeAddress
       { DB.stakeAddressHashRaw = Shelley.serialiseRewardAcnt rewardAddr
-      , DB.stakeAddressView = Shelley.renderRewardAcnt rewardAddr
+      , DB.stakeAddressView = Allegra.renderRewardAcnt rewardAddr
       , DB.stakeAddressRegisteredTxId = txId
       }
 
 insertStakeAddressRefIfMissing
     :: (MonadBaseControl IO m, MonadIO m)
-    => DB.TxId -> Shelley.Addr StandardShelley
+    => DB.TxId -> Shelley.Addr StandardAllegra
     -> ReaderT SqlBackend m (Maybe DB.StakeAddressId)
 insertStakeAddressRefIfMissing txId addr =
     maybe insertSAR (pure . Just) =<< queryStakeAddressRef addr
@@ -368,19 +368,19 @@ insertStakeAddressRefIfMissing txId addr =
 
 insertPoolOwner
     :: (MonadBaseControl IO m, MonadIO m)
-    => DB.PoolHashId -> DB.TxId -> ShelleyStakingKeyHash
+    => DB.PoolHashId -> DB.TxId -> AllegraStakingKeyHash
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertPoolOwner poolHashId txId skh =
   void . lift . DB.insertPoolOwner $
     DB.PoolOwner
       { DB.poolOwnerPoolHashId = poolHashId
-      , DB.poolOwnerHash = Shelley.unKeyHashRaw skh
+      , DB.poolOwnerHash = Allegra.unKeyHashRaw skh
       , DB.poolOwnerRegisteredTxId = txId
       }
 
 insertStakeRegistration
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> Word16 -> Shelley.RewardAcnt StandardShelley
+    => Trace IO Text -> DB.TxId -> Word16 -> Shelley.RewardAcnt StandardAllegra
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertStakeRegistration _tracer txId idx rewardAccount = do
   scId <- lift $ insertStakeAddress txId rewardAccount
@@ -393,12 +393,12 @@ insertStakeRegistration _tracer txId idx rewardAccount = do
 
 insertStakeDeregistration
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> Shelley.StakeCredential StandardShelley
+    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> Shelley.StakeCredential StandardAllegra
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertStakeDeregistration _tracer env txId idx cred = do
   scId <- firstExceptT (NELookup "insertStakeDeregistration")
             . newExceptT
-            $ queryStakeAddress (Shelley.stakingCredHash env cred)
+            $ queryStakeAddress (Allegra.stakingCredHash env cred)
   void . lift . DB.insertStakeDeregistration $
     DB.StakeDeregistration
       { DB.stakeDeregistrationAddrId = scId
@@ -409,12 +409,12 @@ insertStakeDeregistration _tracer env txId idx cred = do
 insertDelegation
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> EpochNo
-    -> Shelley.StakeCredential StandardShelley -> ShelleyStakePoolKeyHash
+    -> Shelley.StakeCredential StandardAllegra -> AllegraStakePoolKeyHash
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertDelegation _tracer env txId idx (EpochNo epoch) cred poolkh = do
   addrId <- firstExceptT (NELookup "insertDelegation")
                 . newExceptT
-                $ queryStakeAddress (Shelley.stakingCredHash env cred)
+                $ queryStakeAddress (Allegra.stakingCredHash env cred)
   poolHashId <- firstExceptT (NELookup "insertDelegation")
                   . newExceptT
                   $ queryStakePoolKeyHash poolkh
@@ -429,7 +429,7 @@ insertDelegation _tracer env txId idx (EpochNo epoch) cred poolkh = do
 
 insertMirCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> ShelleyMIRCert
+    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> AllegraMIRCert
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertMirCert _tracer env txId idx mcert = do
     case Shelley.mirPot mcert of
@@ -440,35 +440,35 @@ insertMirCert _tracer env txId idx mcert = do
   where
     insertMirReserves
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Shelley.StakeCredential StandardShelley, Shelley.Coin)
+        => (Shelley.StakeCredential StandardAllegra, Shelley.Coin)
         -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     insertMirReserves (cred, coin) = do
-      addrId <- lift . insertStakeAddress txId $ Shelley.annotateStakingCred env cred
+      addrId <- lift . insertStakeAddress txId $ Allegra.annotateStakingCred env cred
       void . lift . DB.insertReserve $
         DB.Reserve
           { DB.reserveAddrId = addrId
           , DB.reserveCertIndex = idx
           , DB.reserveTxId = txId
-          , DB.reserveAmount = Shelley.coinToDbLovelace coin
+          , DB.reserveAmount = Allegra.coinToDbLovelace coin
           }
 
     insertMirTreasury
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Shelley.StakeCredential StandardShelley, Shelley.Coin)
+        => (Shelley.StakeCredential StandardAllegra, Shelley.Coin)
         -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     insertMirTreasury (cred, coin) = do
-      addrId <- lift . insertStakeAddress txId $ Shelley.annotateStakingCred env cred
+      addrId <- lift . insertStakeAddress txId $ Allegra.annotateStakingCred env cred
       void . lift . DB.insertTreasury $
         DB.Treasury
           { DB.treasuryAddrId = addrId
           , DB.treasuryCertIndex = idx
           , DB.treasuryTxId = txId
-          , DB.treasuryAmount = Shelley.coinToDbLovelace coin
+          , DB.treasuryAmount = Allegra.coinToDbLovelace coin
           }
 
 insertWithdrawals
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> (ShelleyRewardAccount, Shelley.Coin)
+    => Trace IO Text -> DB.TxId -> (AllegraRewardAccount, Shelley.Coin)
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertWithdrawals _tracer txId (account, coin) = do
   addrId <- firstExceptT (NELookup "insertWithdrawals")
@@ -478,7 +478,7 @@ insertWithdrawals _tracer txId (account, coin) = do
     DB.Withdrawal
       { DB.withdrawalAddrId = addrId
       , DB.withdrawalTxId = txId
-      , DB.withdrawalAmount = Shelley.coinToDbLovelace coin
+      , DB.withdrawalAmount = Allegra.coinToDbLovelace coin
       }
 
 insertPoolRelay
@@ -518,7 +518,7 @@ insertPoolRelay updateId relay =
 
 insertParamProposal
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> Shelley.Update StandardShelley
+    => Trace IO Text -> DB.TxId -> Shelley.Update StandardAllegra
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertParamProposal _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap) (EpochNo epoch)) =
     lift . mapM_ insert $ Map.toList umap
@@ -531,25 +531,25 @@ insertParamProposal _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap
       void . DB.insertParamProposal $
         DB.ParamProposal
           { DB.paramProposalEpochNo = epoch
-          , DB.paramProposalKey = Shelley.unKeyHashRaw key
+          , DB.paramProposalKey = Allegra.unKeyHashRaw key
           , DB.paramProposalMinFeeA = fromIntegral <$> strictMaybeToMaybe (Shelley._minfeeA pmap)
           , DB.paramProposalMinFeeB = fromIntegral <$> strictMaybeToMaybe (Shelley._minfeeB pmap)
           , DB.paramProposalMaxBlockSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxBBSize pmap)
           , DB.paramProposalMaxTxSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxTxSize pmap)
           , DB.paramProposalMaxBhSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxBHSize pmap)
-          , DB.paramProposalKeyDeposit = Shelley.coinToDbLovelace <$> strictMaybeToMaybe (Shelley._keyDeposit pmap)
-          , DB.paramProposalPoolDeposit = Shelley.coinToDbLovelace <$> strictMaybeToMaybe (Shelley._poolDeposit pmap)
+          , DB.paramProposalKeyDeposit = Allegra.coinToDbLovelace <$> strictMaybeToMaybe (Shelley._keyDeposit pmap)
+          , DB.paramProposalPoolDeposit = Allegra.coinToDbLovelace <$> strictMaybeToMaybe (Shelley._poolDeposit pmap)
           , DB.paramProposalMaxEpoch = unEpochNo <$> strictMaybeToMaybe (Shelley._eMax pmap)
           , DB.paramProposalOptimalPoolCount = fromIntegral <$> strictMaybeToMaybe (Shelley._nOpt pmap)
           , DB.paramProposalInfluence = fromRational <$> strictMaybeToMaybe (Shelley._a0 pmap)
-          , DB.paramProposalMonetaryExpandRate = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._rho pmap)
-          , DB.paramProposalTreasuryGrowthRate = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._tau pmap)
-          , DB.paramProposalDecentralisation = Shelley.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._d pmap)
-          , DB.paramProposalEntropy = Shelley.nonceToBytes =<< strictMaybeToMaybe (Shelley._extraEntropy pmap)
+          , DB.paramProposalMonetaryExpandRate = Allegra.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._rho pmap)
+          , DB.paramProposalTreasuryGrowthRate = Allegra.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._tau pmap)
+          , DB.paramProposalDecentralisation = Allegra.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._d pmap)
+          , DB.paramProposalEntropy = Allegra.nonceToBytes =<< strictMaybeToMaybe (Shelley._extraEntropy pmap)
           , DB.paramProposalProtocolMajor = fromIntegral . Shelley.pvMajor <$> strictMaybeToMaybe (Shelley._protocolVersion pmap)
           , DB.paramProposalProtocolMinor = fromIntegral . Shelley.pvMinor <$> strictMaybeToMaybe (Shelley._protocolVersion pmap)
-          , DB.paramProposalMinUtxoValue = Shelley.coinToDbLovelace <$> strictMaybeToMaybe (Shelley._minUTxOValue pmap)
-          , DB.paramProposalMinPoolCost = Shelley.coinToDbLovelace <$> strictMaybeToMaybe (Shelley._minPoolCost pmap)
+          , DB.paramProposalMinUtxoValue = Allegra.coinToDbLovelace <$> strictMaybeToMaybe (Shelley._minUTxOValue pmap)
+          , DB.paramProposalMinPoolCost = Allegra.coinToDbLovelace <$> strictMaybeToMaybe (Shelley._minPoolCost pmap)
           , DB.paramProposalRegisteredTxId = txId
           }
 
@@ -558,7 +558,7 @@ insertTxMetadata
     => Trace IO Text -> DB.TxId -> Shelley.MetaData
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertTxMetadata tracer txId metadata =
-    mapM_ insert $ Map.toList (fromShelleyMetaData metadata)
+    mapM_ insert $ Map.toList (fromAllegraMetaData metadata)
   where
     insert
         :: (MonadBaseControl IO m, MonadIO m)
@@ -618,7 +618,7 @@ insertRewards _tracer blkId epoch rewards =
       void . lift . DB.insertReward $
         DB.Reward
           { DB.rewardAddrId = saId
-          , DB.rewardAmount = Shelley.coinToDbLovelace coin
+          , DB.rewardAmount = Allegra.coinToDbLovelace coin
           , DB.rewardEpochNo = unEpochNo epoch
           , DB.rewardPoolId = poolId
           , DB.rewardBlockId = blkId
@@ -637,20 +637,20 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce =
       , DB.epochParamMaxBlockSize = fromIntegral (Generic.ppMaxBBSize params)
       , DB.epochParamMaxTxSize = fromIntegral (Generic.ppMaxTxSize params)
       , DB.epochParamMaxBhSize = fromIntegral (Generic.ppMaxBHSize params)
-      , DB.epochParamKeyDeposit = Shelley.coinToDbLovelace (Generic.ppKeyDeposit params)
-      , DB.epochParamPoolDeposit = Shelley.coinToDbLovelace (Generic.ppPoolDeposit params)
+      , DB.epochParamKeyDeposit = Allegra.coinToDbLovelace (Generic.ppKeyDeposit params)
+      , DB.epochParamPoolDeposit = Allegra.coinToDbLovelace (Generic.ppPoolDeposit params)
       , DB.epochParamMaxEpoch = unEpochNo (Generic.ppMaxEpoch params)
       , DB.epochParamOptimalPoolCount = fromIntegral (Generic.ppOptialPoolCount params)
       , DB.epochParamInfluence = fromRational (Generic.ppInfluence params)
-      , DB.epochParamMonetaryExpandRate = Shelley.unitIntervalToDouble (Generic.ppMonetaryExpandRate params)
-      , DB.epochParamTreasuryGrowthRate = Shelley.unitIntervalToDouble (Generic.ppTreasuryGrowthRate params)
-      , DB.epochParamDecentralisation = Shelley.unitIntervalToDouble (Generic.ppDecentralisation params)
-      , DB.epochParamEntropy = Shelley.nonceToBytes $ Generic.ppExtraEntropy params
+      , DB.epochParamMonetaryExpandRate = Allegra.unitIntervalToDouble (Generic.ppMonetaryExpandRate params)
+      , DB.epochParamTreasuryGrowthRate = Allegra.unitIntervalToDouble (Generic.ppTreasuryGrowthRate params)
+      , DB.epochParamDecentralisation = Allegra.unitIntervalToDouble (Generic.ppDecentralisation params)
+      , DB.epochParamEntropy = Allegra.nonceToBytes $ Generic.ppExtraEntropy params
       , DB.epochParamProtocolMajor = fromIntegral $ Shelley.pvMajor (Generic.ppProtocolVersion params)
       , DB.epochParamProtocolMinor = fromIntegral $ Shelley.pvMinor (Generic.ppProtocolVersion params)
-      , DB.epochParamMinUtxoValue = Shelley.coinToDbLovelace (Generic.ppMinUTxOValue params)
-      , DB.epochParamMinPoolCost = Shelley.coinToDbLovelace (Generic.ppMinPoolCost params)
-      , DB.epochParamNonce = Shelley.nonceToBytes nonce
+      , DB.epochParamMinUtxoValue = Allegra.coinToDbLovelace (Generic.ppMinUTxOValue params)
+      , DB.epochParamMinPoolCost = Allegra.coinToDbLovelace (Generic.ppMinPoolCost params)
+      , DB.epochParamNonce = Allegra.nonceToBytes nonce
       , DB.epochParamBlockId = blkId
       }
 
@@ -673,7 +673,7 @@ insertEpochStake _tracer blkId (EpochNo epoch) smap =
         DB.EpochStake
           { DB.epochStakeAddrId = saId
           , DB.epochStakePoolId = poolId
-          , DB.epochStakeAmount = Shelley.coinToDbLovelace coin
+          , DB.epochStakeAmount = Allegra.coinToDbLovelace coin
           , DB.epochStakeEpochNo = epoch -- The epoch where this delegation becomes valid.
           , DB.epochStakeBlockId = blkId
           }

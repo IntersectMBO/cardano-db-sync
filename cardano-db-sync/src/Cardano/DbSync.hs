@@ -179,7 +179,7 @@ runDbSyncNodeNodeClient env ledgerVar iomgr trce plugin codecConfig (SocketPath 
     clientSubscriptionParams = ClientSubscriptionParams {
         cspAddress = Snocket.localAddressFromPath socketPath,
         cspConnectionAttemptDelay = Nothing,
-        cspErrorPolicies = networkErrorPolicies <> consensusErrorPolicy
+        cspErrorPolicies = networkErrorPolicies <> consensusErrorPolicy (Proxy @CardanoBlock)
         }
 
     networkSubscriptionTracers = NetworkSubscriptionTracers {
