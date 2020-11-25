@@ -116,19 +116,19 @@ mkProtocolCardano ge =
             , Consensus.byronSoftwareVersion = dncByronSoftwareVersion dnc
             , Consensus.byronLeaderCredentials = Nothing
             }
+          Consensus.ProtocolParamsShelleyBased
+            { Consensus.shelleyBasedGenesis = scConfig shelleyGenesis
+            , Consensus.shelleyBasedInitialNonce = shelleyPraosNonce shelleyGenesis
+            , Consensus.shelleyBasedLeaderCredentials = Nothing
+            }
           Consensus.ProtocolParamsShelley
-            { Consensus.shelleyGenesis = scConfig shelleyGenesis
-            , Consensus.shelleyInitialNonce = shelleyPraosNonce shelleyGenesis
-            , Consensus.shelleyProtVer = shelleyProtVer dnc
-            , Consensus.shelleyLeaderCredentials = Nothing
+            { Consensus.shelleyProtVer = shelleyProtVer dnc
             }
           Consensus.ProtocolParamsAllegra
             { Consensus.allegraProtVer = shelleyProtVer dnc
-            , Consensus.allegraLeaderCredentials = Nothing
             }
           Consensus.ProtocolParamsMary
             { Consensus.maryProtVer = shelleyProtVer dnc
-            , Consensus.maryLeaderCredentials = Nothing
             }
           (dncByronToShelley dnc)
           (dncShelleyToAllegra dnc)

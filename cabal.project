@@ -89,8 +89,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: eed250546fa9acec4c9de557b3e3551c1f682a30
-  --sha256: 0n74w8s6py7v59dl09a3khlk2b4h2k6cnh6p916gv35bx5p712bz
+  tag: 4aa93f48328abb49ba5e35c65a17f64601eaa298
+  --sha256: 17gkx986zini3w4y6gcw63a8xwikl261bm9wh67n55kg6yh3lmpx
   subdir:
     cardano-api
     cardano-config
@@ -130,8 +130,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/ouroboros-network
-  tag: 8b69168baa362abdeabe6a3bf50f912f62ac44b6
-  --sha256: 1gfhafyqll36qd1grkbc69x5fg1j75000nmad172r1h4r95irfdd
+  tag: 57ab00435e6c38d146e029ac2d3f824ff6e738a8
+  --sha256: 0l9nv0lr9wxf9z7gs91dvpci7ghfbk9d4mcly1mm5xd76d21jbbb
   subdir:
     cardano-client
     io-sim
