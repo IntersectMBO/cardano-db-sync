@@ -140,20 +140,19 @@ validateGenesisDistribution tracer networkName cfg bid =
               , textShow txCount
               ]
     totalSupply <- lift DB.queryGenesisSupply
-    case configGenesisSupply cfg of
+    case DB.word64ToAda <$> configGenesisSupply cfg of
       Left err -> dbSyncNodeError $ "validateGenesisDistribution: " <> textShow err
       Right expectedSupply ->
-        when (DB.word64ToAda expectedSupply /= totalSupply) $
+        when (expectedSupply /= totalSupply) $
           dbSyncNodeError  $ Text.concat
                 [ "validateGenesisDistribution: Expected total supply to be "
-                , textShow expectedSupply
+                , DB.renderAda expectedSupply
                 , " but got "
-                , textShow totalSupply
+                , DB.renderAda totalSupply
                 ]
-    supply <- lift DB.queryGenesisSupply
     liftIO $ do
       logInfo tracer "Initial genesis distribution present and correct"
-      logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
+      logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda totalSupply)
 
 -- -----------------------------------------------------------------------------
 
