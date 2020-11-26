@@ -271,9 +271,10 @@ queryFeesUpToSlotNo slotNo = do
 -- | Return the total Genesis coin supply.
 queryGenesisSupply :: MonadIO m => ReaderT SqlBackend m Ada
 queryGenesisSupply = do
-    res <- select . from $ \ (txOut `InnerJoin` tx) -> do
+    res <- select . from $ \ (txOut `InnerJoin` tx `InnerJoin` blk) -> do
+                on (tx ^. TxBlockId ==. blk ^. BlockId)
                 on (tx ^. TxId ==. txOut ^. TxOutTxId)
-                where_ (tx ^. TxBlockId ==. val (BlockKey 1))
+                where_ (isNothing $ blk ^. BlockEpochNo)
                 pure $ sum_ (txOut ^. TxOutValue)
     pure $ unValueSumAda (listToMaybe res)
 
