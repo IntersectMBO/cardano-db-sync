@@ -31,6 +31,11 @@ extra-deps:
   # Compiler error 'System.Metrics.Prometheus.Http.Scrape (serveMetricsT)'
   - prometheus-2.2.2
 
+  - git: https://github.com/kderme/persistent
+    commit: c31367bb080963f2e8d46c5e7c613ae07b12b9fe
+    subdirs:
+      - persistent-postgresql
+
 nix:
   pure: true
   packages: [ zlib.dev, zlib.out

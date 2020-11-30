@@ -147,3 +147,11 @@ source-repository-package
     typed-protocols-examples
     network-mux
     Win32-network
+
+source-repository-package
+  type: git
+  location: https://github.com/kderme/persistent
+  tag: c31367bb080963f2e8d46c5e7c613ae07b12b9fe
+  --sha256: 0i61nz4xfn2i1f5iij4hwil08ihs18hvc9yz985h8p3703rvayql
+  subdir:
+    persistent-postgresql
