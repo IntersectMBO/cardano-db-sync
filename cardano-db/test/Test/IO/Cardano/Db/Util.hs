@@ -28,7 +28,7 @@ import           Data.Time.Calendar (Day (..))
 import           Data.Time.Clock (UTCTime (..))
 import           Data.Word (Word64)
 
-import           Database.Persist.Sql (SqlBackend, deleteCascade, selectKeysList)
+import           Database.Persist.Sql (SqlBackend, delete, selectKeysList)
 
 import           Cardano.Db
 
@@ -42,7 +42,7 @@ assertBool msg bool =
 deleteAllBlocksCascade :: MonadIO m => ReaderT SqlBackend m ()
 deleteAllBlocksCascade = do
   (keys :: [BlockId]) <- selectKeysList [] []
-  mapM_ deleteCascade keys
+  mapM_ delete keys
 
 dummyUTCTime :: UTCTime
 dummyUTCTime = UTCTime (ModifiedJulianDay 0) 0
