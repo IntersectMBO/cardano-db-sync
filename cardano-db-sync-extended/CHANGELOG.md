@@ -1,5 +1,13 @@
 # Revision history for cardano-db-sync-extended
 
+## 7.0.0
+* Note that this release requires the database to be dropped and recreated.
+* Update dependencies.
+* Support for the Allegra era (ie support for time locking of transactions).
+* Log an error if excessive rollback is required on startup. It is up to the operator to drop the
+  database and restart.
+* Add hash checking when maintaining ledger state and fix race condition (#398).
+
 ## 6.0.0
 
 * Note that this release requires the database to be dropped and recreated.
