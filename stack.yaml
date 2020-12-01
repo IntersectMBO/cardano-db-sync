@@ -30,15 +30,15 @@ extra-deps:
   - containers-0.5.11.0
   - data-clist-0.1.2.3
   - ekg-prometheus-adapter-0.1.0.4
-  - esqueleto-3.2.2
+  - esqueleto-3.4.0.1
   - generic-monoid-0.1.0.0
   - libsystemd-journal-1.4.4
   - network-3.1.1.1
   - snap-core-1.0.4.1
   - snap-server-1.1.1.1
-  - persistent-2.10.5.1
-  - persistent-postgresql-2.10.1.2
-  - persistent-template-2.8.2.3
+  - persistent-2.11.0.1
+  - persistent-postgresql-2.11.0.0
+  - persistent-template-2.9.1.0
   - prometheus-2.1.2
   - pvss-0.2.0
   - tasty-hedgehog-1.0.0.2
@@ -60,6 +60,13 @@ extra-deps:
   - http-api-data-0.4.1.1
   - time-compat-1.9.2.2
   - quiet-0.2
+  - partial-order-0.2.0.0
+  - text-1.2.4.0
+  - base64-0.4.2.2
+  - bech32-1.1.0
+  - ghc-byteorder-4.11.0.0.10
+  - systemd-2.3.0
+  - memory-0.15.0
 
   - git: https://github.com/input-output-hk/cardano-crypto
     commit: 2547ad1e80aeabca2899951601079408becbc92c
@@ -104,9 +111,11 @@ extra-deps:
       - byron/ledger/impl
       - byron/ledger/impl/test
       - semantics/executable-spec
+      - semantics/small-steps-test
       - shelley/chain-and-ledger/dependencies/non-integer
       - shelley/chain-and-ledger/executable-spec
-      - shelley/chain-and-ledger/executable-spec/test
+      - shelley/chain-and-ledger/shelley-spec-ledger-test
+      - shelley-ma/impl
 
   - git: https://github.com/input-output-hk/ouroboros-network
     commit: 57ab00435e6c38d146e029ac2d3f824ff6e738a8
@@ -114,25 +123,26 @@ extra-deps:
       - cardano-client
       - io-sim
       - io-sim-classes
-      - network-mux
-      - ouroboros-network
-      - ouroboros-network-framework
-      - Win32-network
       - ouroboros-consensus
       - ouroboros-consensus-byron
-      - ouroboros-consensus-byronspec
-      - ouroboros-consensus-shelley
       - ouroboros-consensus-cardano
+      - ouroboros-consensus-shelley
+      - ouroboros-network
+      - ouroboros-network-framework
+      - ouroboros-network-testing
       - typed-protocols
       - typed-protocols-examples
-      - ouroboros-network-testing
-      - ouroboros-consensus/ouroboros-consensus-mock
-      - ouroboros-consensus/ouroboros-consensus-test-infra
+      - network-mux
+      - Win32-network
+
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: 58e7a0409fdedbcf630527325ce9532484f6a31f
+    commit: 4aa93f48328abb49ba5e35c65a17f64601eaa298
     subdirs:
+      - cardano-api
       - cardano-config
+      - cardano-node
+      - hedgehog-extras
 
 flags:
   # Bundle VRF crypto in libsodium and do not rely on an external fork to have it.
