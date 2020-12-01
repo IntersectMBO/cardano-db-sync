@@ -5,16 +5,15 @@ module Cardano.DbSync.Era.Cardano.Util
 
 import qualified Data.ByteString.Short as BSS
 
-import           Cardano.DbSync.Config.Types
-
 import           Cardano.Prelude
 
+import           Ouroboros.Consensus.Cardano.Block (CardanoBlock)
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
 
 import           Ouroboros.Network.Block (ChainHash (..))
 
 
-unChainHash :: ChainHash CardanoBlock -> ByteString
+unChainHash :: ChainHash (CardanoBlock era) -> ByteString
 unChainHash ch =
   case ch of
     GenesisHash -> "genesis"

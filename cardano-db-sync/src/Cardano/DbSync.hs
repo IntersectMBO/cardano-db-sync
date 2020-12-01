@@ -58,15 +58,12 @@ import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
 
 import qualified Codec.CBOR.Term as CBOR
 
-import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Trans.Except.Exit (orDie)
 import           Control.Monad.Trans.Except.Extra (hoistEither)
 
 import qualified Data.ByteString.Lazy as BSL
 import           Data.Functor.Contravariant (contramap)
-import           Data.Text (Text)
 import qualified Data.Text as Text
-import           Data.Void (Void)
 
 import           Network.Mux (MuxTrace, WithMuxBearer)
 import           Network.Mux.Types (MuxMode (..))
@@ -155,7 +152,12 @@ runDbSyncNode plugin enp =
                 iomgr trce plugin (cardanoCodecConfig bCfg) (enpSocketPath enp)
   where
     cardanoCodecConfig :: Byron.Config -> CodecConfig CardanoBlock
-    cardanoCodecConfig cfg = CardanoCodecConfig (mkByronCodecConfig cfg) ShelleyCodecConfig
+    cardanoCodecConfig cfg =
+      CardanoCodecConfig
+        (mkByronCodecConfig cfg)
+        ShelleyCodecConfig
+        ShelleyCodecConfig -- Allegra
+        ShelleyCodecConfig -- Mary
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -177,7 +179,7 @@ runDbSyncNodeNodeClient env ledgerVar iomgr trce plugin codecConfig (SocketPath 
     clientSubscriptionParams = ClientSubscriptionParams {
         cspAddress = Snocket.localAddressFromPath socketPath,
         cspConnectionAttemptDelay = Nothing,
-        cspErrorPolicies = networkErrorPolicies <> consensusErrorPolicy
+        cspErrorPolicies = networkErrorPolicies <> consensusErrorPolicy (Proxy @CardanoBlock)
         }
 
     networkSubscriptionTracers = NetworkSubscriptionTracers {
@@ -218,7 +220,7 @@ dbSyncProtocols trce env plugin queryVar ledgerVar _version codecs _connectionId
         , localStateQueryProtocol = localStateQuery
         }
   where
-    localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync CardanoBlock (Tip CardanoBlock)))
+    localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync CardanoBlock(Point CardanoBlock) (Tip CardanoBlock)))
     localChainSyncTracer = toLogObject $ appendName "ChainSync" trce
 
     localChainSyncPtcl :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
@@ -318,7 +320,7 @@ chainSyncClient
     :: Trace IO Text -> DbSyncEnv
     -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
     -> Metrics -> [Point CardanoBlock] -> WithOrigin BlockNo -> DbActionQueue
-    -> ChainSyncClientPipelined CardanoBlock (Tip CardanoBlock) IO ()
+    -> ChainSyncClientPipelined CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
 chainSyncClient trce env queryVar metrics latestPoints currentTip actionQueue =
     ChainSyncClientPipelined $ pure $
       -- Notify the core node about the our latest points at which we are
@@ -335,7 +337,7 @@ chainSyncClient trce env queryVar metrics latestPoints currentTip actionQueue =
     policy = pipelineDecisionLowHighMark 1000 10000
 
     go :: MkPipelineDecision -> Nat n -> WithOrigin BlockNo -> WithOrigin BlockNo
-        -> ClientPipelinedStIdle n CardanoBlock (Tip CardanoBlock) IO ()
+        -> ClientPipelinedStIdle n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
     go mkPipelineDecision n clientTip serverTip =
       case (n, runPipelineDecision mkPipelineDecision n clientTip serverTip) of
         (_Zero, (Request, mkPipelineDecision')) ->
@@ -354,8 +356,9 @@ chainSyncClient trce env queryVar metrics latestPoints currentTip actionQueue =
             Nothing
             (mkClientStNext $ \clientBlockNo newServerTip -> go mkPipelineDecision' n' clientBlockNo (getTipBlockNo newServerTip))
 
-    mkClientStNext :: (WithOrigin BlockNo -> Tip CardanoBlock -> ClientPipelinedStIdle n CardanoBlock (Tip CardanoBlock) IO a)
-                    -> ClientStNext n CardanoBlock (Tip CardanoBlock) IO a
+    mkClientStNext :: (WithOrigin BlockNo -> Tip CardanoBlock
+                    -> ClientPipelinedStIdle n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO a)
+                    -> ClientStNext n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO a
     mkClientStNext finish =
       ClientStNext
         { recvMsgRollForward = \blk tip ->

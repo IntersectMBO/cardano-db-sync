@@ -22,14 +22,14 @@ import           Cardano.DbSync.Util
 
 import           Cardano.Prelude
 
-import           Cardano.Slotting.Slot (EpochNo (..))
+-- import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Data.Aeson (FromJSON (..), Object, (.:), (.:?))
 import qualified Data.Aeson as Aeson
 import           Data.Aeson.Types (Parser)
-import           Data.Foldable (asum)
 import qualified Data.Yaml as Yaml
 
+import qualified Ouroboros.Consensus.Cardano as Consensus
 import qualified Ouroboros.Consensus.Cardano.CanHardFork as Shelley
 
 data NodeConfig = NodeConfig
@@ -42,9 +42,18 @@ data NodeConfig = NodeConfig
   , ncRequiresNetworkMagic :: !RequiresNetworkMagic
   , ncByronSotfwareVersion :: !Byron.SoftwareVersion
   , ncByronProtocolVersion :: !Byron.ProtocolVersion
+
+  -- Shelley hardfok parameters
   , ncShelleyHardFork :: !Shelley.TriggerHardFork
-  , ncShelleyHardForkAfterEpoch :: !(Maybe EpochNo)
-  , ncShelleyMaxProtocolVersion :: !Natural
+  , ncByronToShelley :: !ByronToShelley
+
+  -- Allegra hardfok parameters
+  , ncAllegraHardFork :: !Shelley.TriggerHardFork
+  , ncShelleyToAllegra :: !ShelleyToAllegra
+
+  -- Mary hardfok parameters
+  , ncMaryHardFork :: !Shelley.TriggerHardFork
+  , ncAllegraToMary :: !AllegraToMary
   }
 
 parseNodeConfig :: ByteString -> NodeConfig
@@ -71,9 +80,15 @@ instance FromJSON NodeConfig where
           <*> o .: "RequiresNetworkMagic"
           <*> parseByronSoftwareVersion o
           <*> parseByronProtocolVersion o
-          <*> parseShelleyHardFork o
-          <*> o .:? "ShelleyHardForkNotBeforeEpoch"
-          <*> fmap (fromMaybe 1) (o .:? "MaxKnownMajorProtocolVersion")
+
+          <*> parseShelleyHardForkEpoch o
+          <*> (Consensus.ProtocolParamsTransition <$> parseShelleyHardForkEpoch o)
+
+          <*> parseAllegraHardForkEpoch o
+          <*> (Consensus.ProtocolParamsTransition <$> parseAllegraHardForkEpoch o)
+
+          <*> parseMaryHardForkEpoch o
+          <*> (Consensus.ProtocolParamsTransition <$> parseMaryHardForkEpoch o)
 
       parseByronProtocolVersion :: Object -> Parser Byron.ProtocolVersion
       parseByronProtocolVersion o =
@@ -88,9 +103,23 @@ instance FromJSON NodeConfig where
           <$> fmap Byron.ApplicationName (o .: "ApplicationName")
           <*> o .: "ApplicationVersion"
 
-      parseShelleyHardFork :: Object -> Parser Shelley.TriggerHardFork
-      parseShelleyHardFork o =
-        asum -- choice
+      parseShelleyHardForkEpoch :: Object -> Parser Shelley.TriggerHardFork
+      parseShelleyHardForkEpoch o =
+        asum
           [ Shelley.TriggerHardForkAtEpoch <$> o .: "TestShelleyHardForkAtEpoch"
           , pure $ Shelley.TriggerHardForkAtVersion 2 -- Mainnet default
+          ]
+
+      parseAllegraHardForkEpoch :: Object -> Parser Shelley.TriggerHardFork
+      parseAllegraHardForkEpoch o =
+        asum
+          [ Shelley.TriggerHardForkAtEpoch <$> o .: "TestAllegraHardForkAtEpoch"
+          , pure $ Shelley.TriggerHardForkAtVersion 3 -- Mainnet default
+          ]
+
+      parseMaryHardForkEpoch :: Object -> Parser Shelley.TriggerHardFork
+      parseMaryHardForkEpoch o =
+        asum
+          [ Shelley.TriggerHardForkAtEpoch <$> o .: "TestMaryHardForkAtEpoch"
+          , pure $ Shelley.TriggerHardForkAtVersion 4 -- Mainnet default
           ]

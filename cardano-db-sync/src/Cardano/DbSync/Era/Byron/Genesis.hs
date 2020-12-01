@@ -28,16 +28,12 @@ import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Util
 
-import           Control.Monad (void)
-import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
-import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
-import           Control.Monad.Trans.Reader (ReaderT)
+import           Control.Monad.Trans.Except.Extra (newExceptT)
 
 import qualified Data.ByteString.Char8 as BS
 import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
-import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
@@ -144,20 +140,19 @@ validateGenesisDistribution tracer networkName cfg bid =
               , textShow txCount
               ]
     totalSupply <- lift DB.queryGenesisSupply
-    case configGenesisSupply cfg of
+    case DB.word64ToAda <$> configGenesisSupply cfg of
       Left err -> dbSyncNodeError $ "validateGenesisDistribution: " <> textShow err
       Right expectedSupply ->
-        when (DB.word64ToAda expectedSupply /= totalSupply) $
+        when (expectedSupply /= totalSupply) $
           dbSyncNodeError  $ Text.concat
                 [ "validateGenesisDistribution: Expected total supply to be "
-                , textShow expectedSupply
+                , DB.renderAda expectedSupply
                 , " but got "
-                , textShow totalSupply
+                , DB.renderAda totalSupply
                 ]
-    supply <- lift DB.queryGenesisSupply
     liftIO $ do
       logInfo tracer "Initial genesis distribution present and correct"
-      logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
+      logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda totalSupply)
 
 -- -----------------------------------------------------------------------------
 

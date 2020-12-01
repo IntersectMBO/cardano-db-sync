@@ -118,11 +118,11 @@ getHistoryInterpreter tracer queryVar point = do
 localStateQueryHandler
     :: forall block result a
     . StateQueryTMVar block result
-    -> LocalStateQueryClient block (Query block) IO a
+    -> LocalStateQueryClient block (Point block) (Query block) IO a
 localStateQueryHandler (StateQueryTMVar reqVar) =
     LocalStateQueryClient idleState
   where
-    idleState :: IO (StateQuery.ClientStIdle block (Query block) IO a)
+    idleState :: IO (StateQuery.ClientStIdle block (Point block) (Query block) IO a)
     idleState = do
       (point, query, respVar) <- atomically $ takeTMVar reqVar
       pure $

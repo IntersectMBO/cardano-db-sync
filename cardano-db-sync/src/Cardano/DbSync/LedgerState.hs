@@ -7,7 +7,6 @@
 
 module Cardano.DbSync.LedgerState
   ( CardanoLedgerState (..)
-  , EpochUpdate (..)
   , LedgerStateSnapshot (..)
   , LedgerStateVar (..)
   , applyBlock
@@ -23,9 +22,10 @@ import qualified Cardano.Binary as Serialize
 
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Config.Cardano
-import           Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Cardano.Util as Cardano
-import           Cardano.DbSync.Types
+import qualified Cardano.DbSync.Era.Generic.EpochUpdate as Generic
+import qualified Cardano.DbSync.Era.Generic.Rewards as Generic
+import           Cardano.DbSync.Types hiding (CardanoBlock)
 import           Cardano.DbSync.Util
 
 import           Cardano.Prelude
@@ -34,40 +34,32 @@ import           Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), fromWithOrigin)
 
 import           Control.Concurrent.STM.TVar (TVar, newTVarIO, readTVar, readTVarIO, writeTVar)
-import           Control.Exception (IOException, handle)
 import qualified Control.Exception as Exception
 import           Control.Monad.Extra (firstJustM)
 
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as BSS
-import           Data.Either (partitionEithers)
 import qualified Data.List as List
 
 import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockHash, blockPrevHash)
-import           Ouroboros.Consensus.Cardano.Block (LedgerState (..))
+import           Ouroboros.Consensus.Cardano.Block (CardanoBlock, HardForkState (..),
+                   LedgerState (..), StandardCrypto)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Config (TopLevelConfig (..), configCodec, configLedger)
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
 import           Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import           Ouroboros.Consensus.HardFork.Combinator.State (epochInfoLedger)
-import qualified Ouroboros.Consensus.HardFork.Combinator.State as Consensus
 import qualified Ouroboros.Consensus.HeaderValidation as Consensus
 import           Ouroboros.Consensus.Ledger.Abstract (ledgerTipHash, ledgerTipSlot, tickThenReapply)
 import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerCfg (..), ExtLedgerState (..),
                    decodeExtLedgerState, encodeExtLedgerState)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
-import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
-import           Ouroboros.Consensus.Shelley.Protocol (StandardShelley)
 import qualified Ouroboros.Consensus.Shelley.Protocol as Consensus
 import           Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), EncodeDisk (..))
-import qualified Ouroboros.Consensus.TypeFamilyWrappers as Consensus
 
 import qualified Shelley.Spec.Ledger.API.Protocol as Shelley
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
-import qualified Shelley.Spec.Ledger.EpochBoundary as Shelley
-import qualified Shelley.Spec.Ledger.LedgerState as Shelley
-import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.STS.Tickn as Shelley
 
 import           System.Directory (listDirectory, removeFile)
@@ -76,15 +68,8 @@ import           System.FilePath (dropExtension, takeExtension, (</>))
 {- HLINT ignore "Reduce duplication" -}
 
 data CardanoLedgerState = CardanoLedgerState
-  { clsState :: !(ExtLedgerState CardanoBlock)
-  , clsConfig :: !(TopLevelConfig CardanoBlock)
-  }
-
-data EpochUpdate = EpochUpdate
-  { euProtoParams :: !(Shelley.PParams StandardShelley)
-  , euRewards :: !(Shelley.RewardUpdate StandardShelley)
-  , euStakeDistribution :: !(Shelley.Stake StandardShelley)
-  , euNonce :: !Shelley.Nonce
+  { clsState :: !(ExtLedgerState (CardanoBlock StandardCrypto))
+  , clsConfig :: !(TopLevelConfig (CardanoBlock StandardCrypto))
   }
 
 newtype LedgerStateVar = LedgerStateVar
@@ -98,7 +83,7 @@ data LedgerStateFile = LedgerStateFile -- Internal use only.
 
 data LedgerStateSnapshot = LedgerStateSnapshot
   { lssState :: !CardanoLedgerState
-  , lssEpochUpdate :: !(Maybe EpochUpdate) -- Only Just for a single block at the epoch boundary
+  , lssEpochUpdate :: !(Maybe Generic.EpochUpdate) -- Only Just for a single block at the epoch boundary
   }
 
 
@@ -115,8 +100,8 @@ initLedgerStateVar genesisConfig =
 -- The function 'tickThenReapply' does zero validation, so add minimal validation ('blockPrevHash'
 -- matches the tip hash of the 'LedgerState'). This was originally for debugging but the check is
 -- cheap enough to keep.
-applyBlock :: LedgerStateVar -> CardanoBlock -> IO LedgerStateSnapshot
-applyBlock (LedgerStateVar stateVar) blk =
+applyBlock :: DbSyncEnv -> LedgerStateVar -> CardanoBlock StandardCrypto -> IO LedgerStateSnapshot
+applyBlock env (LedgerStateVar stateVar) blk =
     -- 'LedgerStateVar' is just being used as a mutable variable. There should not ever
     -- be any contention on this variable, so putting everything inside 'atomically'
     -- is fine.
@@ -129,13 +114,15 @@ applyBlock (LedgerStateVar stateVar) blk =
                 , lssEpochUpdate =
                     if ledgerEpochNo newState == ledgerEpochNo oldState + 1
                       then Just $
-                             ledgerEpochUpdate
-                               (clsState newState)
-                               (ledgerRewardUpdate (ledgerState $ clsState oldState))
+                             ledgerEpochUpdate env (clsState newState)
+                               (ledgerRewardUpdate env (ledgerState $ clsState oldState))
                       else Nothing
                 }
   where
-    applyBlk :: ExtLedgerCfg CardanoBlock -> CardanoBlock -> ExtLedgerState CardanoBlock -> ExtLedgerState CardanoBlock
+    applyBlk
+        :: ExtLedgerCfg (CardanoBlock StandardCrypto) -> CardanoBlock StandardCrypto
+        -> ExtLedgerState (CardanoBlock StandardCrypto)
+        -> ExtLedgerState (CardanoBlock StandardCrypto)
     applyBlk cfg block lsb =
       case tickThenReapplyCheckHash cfg block lsb of
         Left err -> panic err
@@ -169,7 +156,7 @@ saveLedgerState lsd@(LedgerStateDir stateDir) (LedgerStateVar stateVar) ledger s
              (clsState ledger)
       cleanupLedgerStateFiles lsd slot
 
-    codecConfig :: CodecConfig CardanoBlock
+    codecConfig :: CodecConfig (CardanoBlock StandardCrypto)
     codecConfig = configCodec (clsConfig ledger)
 
 loadLedgerState :: LedgerStateDir -> LedgerStateVar -> SlotNo -> IO ()
@@ -201,6 +188,18 @@ cleanupLedgerStateFiles stateDir slotNo = do
         then Right lsf
         else Left fp
 
+extractEpochNonce :: ExtLedgerState (CardanoBlock era) -> Maybe Shelley.Nonce
+extractEpochNonce extLedgerState =
+    case Consensus.headerStateChainDep (headerState extLedgerState) of
+      ChainDepStateByron _ -> Nothing
+      ChainDepStateShelley st -> Just $ extractNonce st
+      ChainDepStateAllegra st -> Just $ extractNonce st
+      ChainDepStateMary st -> Just $ extractNonce st
+  where
+    extractNonce :: Consensus.TPraosState crypto -> Shelley.Nonce
+    extractNonce =
+      Shelley.ticknStateEpochNonce . Shelley.csTickn . Consensus.tpraosStateChainDepState
+
 loadState :: LedgerStateDir -> CardanoLedgerState -> SlotNo -> IO (Maybe CardanoLedgerState)
 loadState stateDir ledger slotNo = do
     files <- listLedgerStateFilesOrdered stateDir
@@ -224,7 +223,7 @@ loadState stateDir ledger slotNo = do
         Nothing -> pure Nothing
         Just st -> pure . Just $ ledger { clsState = st }
 
-    safeReadFile :: FilePath -> IO (Maybe (ExtLedgerState CardanoBlock))
+    safeReadFile :: FilePath -> IO (Maybe (ExtLedgerState (CardanoBlock StandardCrypto)))
     safeReadFile fp = do
       mbs <- Exception.try $ BS.readFile fp
       case mbs of
@@ -235,10 +234,10 @@ loadState stateDir ledger slotNo = do
             Right ls -> pure $ Just ls
 
 
-    codecConfig :: CodecConfig CardanoBlock
+    codecConfig :: CodecConfig (CardanoBlock StandardCrypto)
     codecConfig = configCodec (clsConfig ledger)
 
-    decode :: ByteString -> Either DecoderError (ExtLedgerState CardanoBlock)
+    decode :: ByteString -> Either DecoderError (ExtLedgerState (CardanoBlock StandardCrypto))
     decode =
       Serialize.decodeFullDecoder
           "Ledger state file"
@@ -286,51 +285,33 @@ ledgerEpochNo cls =
     epochInfo = epochInfoLedger (configLedger $ clsConfig cls) (hardForkLedgerStatePerEra . ledgerState $ clsState cls)
 
 -- Create an EpochUpdate from the current epoch state and the rewards from the last epoch.
-ledgerEpochUpdate :: ExtLedgerState CardanoBlock -> Maybe (Shelley.RewardUpdate StandardShelley) -> EpochUpdate
-ledgerEpochUpdate els mRewards =
+ledgerEpochUpdate :: DbSyncEnv -> ExtLedgerState (CardanoBlock StandardCrypto) -> Maybe Generic.Rewards -> Generic.EpochUpdate
+ledgerEpochUpdate env els mRewards =
   case ledgerState els of
     LedgerStateByron _ -> panic "ledgerEpochUpdate: LedgerStateByron but should be Shelley"
-    LedgerStateShelley sls ->
-      EpochUpdate
-        { euProtoParams = Shelley.esPp $ Shelley.nesEs (Consensus.shelleyLedgerState sls)
-        , euRewards = fromMaybe Shelley.emptyRewardUpdate mRewards
-
-        -- Use '_pstakeSet' here instead of '_pstateMark' because the stake addresses for the
-        -- later may not have been added to the database yet. That means that when these values
-        -- are added to the database, the epoch number where they become active is the current
-        -- epoch plus one.
-        , euStakeDistribution = Shelley._stake . Shelley._pstakeSet . Shelley.esSnapshots
-                                $ Shelley.nesEs (Consensus.shelleyLedgerState sls)
-        , euNonce = fromMaybe Shelley.NeutralNonce $ extractEpochNonce els
-        }
+    LedgerStateShelley sls -> Generic.shelleyEpochUpdate env sls mRewards mNonce
+    LedgerStateAllegra als -> Generic.allegraEpochUpdate env als mRewards mNonce
+    LedgerStateMary mls -> Generic.maryEpochUpdate env mls mRewards mNonce
+  where
+    mNonce :: Maybe Shelley.Nonce
+    mNonce = extractEpochNonce els
 
 -- This will return a 'Just' from the time the rewards are updated until the end of the
 -- epoch. It is 'Nothing' for the first block of a new epoch (which is slightly inconvenient).
-ledgerRewardUpdate :: LedgerState CardanoBlock -> Maybe (Shelley.RewardUpdate StandardShelley)
-ledgerRewardUpdate lsc =
-  case lsc of
-    LedgerStateByron _ -> Nothing -- This actually happens on the Byron/Shelley boundary.
-    LedgerStateShelley sls -> Shelley.strictMaybeToMaybe . Shelley.nesRu
-                                $ Consensus.shelleyLedgerState sls
-
--- Some of the nastiness here will disappear when suitable PatternSynonyms are added to Consensus.
--- TODO: Replace this horrible stuff with the PatternSynonyms when they become available.
-extractEpochNonce :: ExtLedgerState CardanoBlock -> Maybe Shelley.Nonce
-extractEpochNonce extLedgerState =
-  case Consensus.getHardForkState (Consensus.headerStateChainDep (headerState extLedgerState)) of
-    Consensus.TZ {} ->
-      Nothing
-    Consensus.TS _ (Consensus.TZ Consensus.Current { Consensus.currentState = chainDepStateShelley }) ->
-      Just . Shelley.ticknStateEpochNonce . Shelley.csTickn
-            $ Consensus.tpraosStateChainDepState (Consensus.unwrapChainDepState chainDepStateShelley)
-    Consensus.TS {} ->
-      Nothing
+ledgerRewardUpdate :: DbSyncEnv -> LedgerState (CardanoBlock StandardCrypto) -> Maybe Generic.Rewards
+ledgerRewardUpdate env lsc =
+    case lsc of
+      LedgerStateByron _ -> Nothing -- This actually happens during the Byron era.
+      LedgerStateShelley sls -> Generic.shelleyRewards env sls
+      LedgerStateAllegra als -> Generic.allegraRewards env als
+      LedgerStateMary mls -> Generic.maryRewards env mls
 
 -- Like 'Consensus.tickThenReapply' but also checks that the previous hash from the block matches
 -- the head hash of the ledger state.
 tickThenReapplyCheckHash
-    :: ExtLedgerCfg CardanoBlock -> CardanoBlock -> ExtLedgerState CardanoBlock
-    -> Either Text (ExtLedgerState CardanoBlock)
+    :: ExtLedgerCfg (CardanoBlock StandardCrypto) -> CardanoBlock StandardCrypto
+    -> ExtLedgerState (CardanoBlock StandardCrypto)
+    -> Either Text (ExtLedgerState (CardanoBlock StandardCrypto))
 tickThenReapplyCheckHash cfg block lsb =
   if blockPrevHash block == ledgerTipHash (ledgerState lsb)
     then Right $ tickThenReapply cfg block lsb

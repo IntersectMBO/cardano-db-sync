@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Cardano.DbSync.Era.Shelley.Util
+module Cardano.DbSync.Era.Allegra.Util
   ( annotateStakingCred
   , blockBody
   , blockHash
@@ -33,12 +33,15 @@ module Cardano.DbSync.Era.Shelley.Util
   , txHash
   , txCertificates
   , txInputList
+  , txInvalidBefore
+  , txInvalidHereAfter
   , txMetadata
   , txOutputList
   , txOutputSum
   , txParamProposal
   , txWithdrawals
   , txWithdrawalSum
+  , txSize
   , unHeaderHash
   , unitIntervalToDouble
   , unKeyHashRaw
@@ -48,6 +51,7 @@ module Cardano.DbSync.Era.Shelley.Util
 
 import           Cardano.Prelude
 
+import qualified Cardano.Api.Shelley as Api
 import qualified Cardano.Api.Typed as Api
 
 import qualified Cardano.Crypto.Hash as Crypto
@@ -56,9 +60,11 @@ import qualified Cardano.Crypto.KES.Class as KES
 import           Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as Db
 import           Cardano.DbSync.Config
-import           Cardano.DbSync.Era.Shelley.Types
+import           Cardano.DbSync.Era.Allegra.Types
 
 import           Cardano.Ledger.Era (Crypto)
+import qualified Cardano.Ledger.ShelleyMA.Timelocks as ShelleyMa
+import qualified Cardano.Ledger.ShelleyMA.TxBody as ShelleyMa
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
@@ -66,11 +72,13 @@ import qualified Data.Binary.Put as Binary
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
+import qualified Data.ByteString.Short as BSS
 import qualified Data.Map.Strict as Map
+import           Data.MemoBytes (MemoBytes (..))
 import           Data.Sequence.Strict (StrictSeq (..))
 import qualified Data.Text.Encoding as Text
 
-import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShelley)
+import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardCrypto)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
 import           Ouroboros.Network.Block (BlockNo (..))
 
@@ -86,66 +94,66 @@ import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
-annotateStakingCred :: DbSyncEnv -> ShelleyStakingCred -> Shelley.RewardAcnt StandardShelley
+annotateStakingCred :: DbSyncEnv -> AllegraStakingCred -> Shelley.RewardAcnt StandardAllegra
 annotateStakingCred env cred =
   let network =
         case envProtocol env of
           DbSyncProtocolCardano -> envNetwork env
   in Shelley.RewardAcnt network cred
 
-blockBody :: Consensus.ShelleyBlock StandardShelley -> Shelley.BHBody (Crypto StandardShelley)
+blockBody :: Consensus.ShelleyBlock StandardAllegra -> Shelley.BHBody (Crypto StandardAllegra)
 blockBody = Shelley.bhbody . Shelley.bheader . Consensus.shelleyBlockRaw
 
-blockCreatorPoolHash :: Consensus.ShelleyBlock StandardShelley -> ByteString
+blockCreatorPoolHash :: Consensus.ShelleyBlock StandardAllegra -> ByteString
 blockCreatorPoolHash = unKeyHashRaw . Shelley.issuerIDfromBHBody . blockBody
 
-blockHash :: Consensus.ShelleyBlock StandardShelley -> ByteString
+blockHash :: Consensus.ShelleyBlock StandardAllegra -> ByteString
 blockHash =
   Crypto.hashToBytes . Shelley.unHashHeader
     . Consensus.unShelleyHash . Consensus.shelleyBlockHeaderHash
 
-blockNumber :: Consensus.ShelleyBlock StandardShelley -> Word64
+blockNumber :: Consensus.ShelleyBlock StandardAllegra -> Word64
 blockNumber = unBlockNo . Shelley.bheaderBlockNo . blockBody
 
-blockPrevHash :: Consensus.ShelleyBlock StandardShelley -> ByteString
+blockPrevHash :: Consensus.ShelleyBlock StandardAllegra -> ByteString
 blockPrevHash blk =
   case Shelley.bheaderPrev (Shelley.bhbody . Shelley.bheader $ Consensus.shelleyBlockRaw blk) of
     Shelley.GenesisHash -> fakeGenesisHash
     Shelley.BlockHash h -> Crypto.hashToBytes $ Shelley.unHashHeader h
 
-blockProtoVersion :: Consensus.ShelleyBlock StandardShelley -> Shelley.ProtVer
+blockProtoVersion :: Consensus.ShelleyBlock StandardAllegra -> Shelley.ProtVer
 blockProtoVersion = Shelley.bprotver . blockBody
 
-blockSize :: Consensus.ShelleyBlock StandardShelley -> Word64
+blockSize :: Consensus.ShelleyBlock StandardAllegra -> Word64
 blockSize = fromIntegral . Shelley.bBodySize . Shelley.bbody . Consensus.shelleyBlockRaw
 
-blockTxCount :: Consensus.ShelleyBlock StandardShelley -> Word64
+blockTxCount :: Consensus.ShelleyBlock StandardAllegra -> Word64
 blockTxCount = fromIntegral . length . unTxSeq . Shelley.bbody . Consensus.shelleyBlockRaw
 
-blockTxs :: Consensus.ShelleyBlock StandardShelley -> [ShelleyTx]
+blockTxs :: Consensus.ShelleyBlock StandardAllegra -> [Shelley.Tx StandardAllegra]
 blockTxs =
     txList . Shelley.bbody . Consensus.shelleyBlockRaw
   where
-    txList :: ShelleyTxSeq -> [ShelleyTx]
+    txList :: Shelley.TxSeq StandardAllegra -> [Shelley.Tx StandardAllegra]
     txList (Shelley.TxSeq txSeq) = toList txSeq
 
-blockOpCert :: Consensus.ShelleyBlock StandardShelley -> ByteString
+blockOpCert :: Consensus.ShelleyBlock StandardAllegra -> ByteString
 blockOpCert = KES.rawSerialiseVerKeyKES . Shelley.ocertVkHot . Shelley.bheaderOCert . blockBody
 
-blockVrfKeyView :: Consensus.ShelleyBlock StandardShelley -> Text
+blockVrfKeyView :: Consensus.ShelleyBlock StandardAllegra -> Text
 blockVrfKeyView = Api.serialiseToBech32 . Api.VrfVerificationKey . Shelley.bheaderVrfVk . blockBody
 
 coinToDbLovelace :: Coin -> DbLovelace
 coinToDbLovelace = DbLovelace . fromIntegral . unCoin
 
-epochNumber :: Consensus.ShelleyBlock StandardShelley -> Word64 -> Word64
+epochNumber :: Consensus.ShelleyBlock StandardAllegra -> Word64 -> Word64
 epochNumber blk slotsPerEpoch = slotNumber blk `div` slotsPerEpoch
 
 -- | This is both the Genesis Hash and the hash of the previous block.
 fakeGenesisHash :: ByteString
 fakeGenesisHash = BS.take 28 ("GenesisHash " <> BS.replicate 28 '\0')
 
-maybePaymentCred :: Shelley.Addr StandardShelley -> Maybe ByteString
+maybePaymentCred :: Shelley.Addr StandardAllegra -> Maybe ByteString
 maybePaymentCred addr =
   case addr of
     Shelley.Addr _nw pcred _sref ->
@@ -153,12 +161,12 @@ maybePaymentCred addr =
     Shelley.AddrBootstrap {} ->
       Nothing
 
-mkSlotLeader :: Consensus.ShelleyBlock StandardShelley -> Maybe Db.PoolHashId -> Db.SlotLeader
+mkSlotLeader :: Consensus.ShelleyBlock StandardAllegra -> Maybe Db.PoolHashId -> Db.SlotLeader
 mkSlotLeader blk mPoolId =
   let slHash = slotLeaderHash blk
       short = Text.decodeUtf8 (Base16.encode $ BS.take 8 slHash)
       slName = case mPoolId of
-                Nothing -> "ShelleyGenesis-" <> short
+                Nothing -> "AllegraGenesis-" <> short
                 Just _ -> "Pool-" <> short
   in Db.SlotLeader slHash mPoolId slName
 
@@ -168,72 +176,77 @@ nonceToBytes nonce =
     Shelley.Nonce hash -> Just $ Crypto.hashToBytes hash
     Shelley.NeutralNonce -> Nothing
 
-renderAddress :: Shelley.Addr StandardShelley -> Text
-renderAddress addr =
-    case addr of
-      Shelley.Addr nw pcred sref ->
-        Api.serialiseAddress (Api.ShelleyAddress nw pcred sref)
-      Shelley.AddrBootstrap (Shelley.BootstrapAddress baddr) ->
-        Api.serialiseAddress (Api.ByronAddress baddr)
+renderAddress :: Shelley.Addr StandardAllegra -> Text
+renderAddress a = Api.serialiseAddress (Api.fromShelleyAddr a :: Api.AddressInEra Api.AllegraEra)
 
 renderHash :: ShelleyHash -> Text
 renderHash = Text.decodeUtf8 . Base16.encode . unHeaderHash
 
-renderRewardAcnt :: Shelley.RewardAcnt StandardShelley -> Text
-renderRewardAcnt (Shelley.RewardAcnt nw cred) =
-    Api.serialiseAddress (Api.StakeAddress nw cred)
+renderRewardAcnt :: Shelley.RewardAcnt StandardAllegra -> Text
+renderRewardAcnt = Api.serialiseAddress . Api.fromShelleyStakeAddr
 
-slotLeaderHash :: Consensus.ShelleyBlock StandardShelley -> ByteString
+slotLeaderHash :: Consensus.ShelleyBlock StandardAllegra -> ByteString
 slotLeaderHash = unKeyHashRaw . Shelley.issuerIDfromBHBody . blockBody
 
-slotNumber :: Consensus.ShelleyBlock StandardShelley -> Word64
+slotNumber :: Consensus.ShelleyBlock StandardAllegra -> Word64
 slotNumber = unSlotNo . Shelley.bheaderSlotNo . blockBody
 
-stakingCredHash :: DbSyncEnv -> ShelleyStakingCred -> ByteString
+stakingCredHash :: DbSyncEnv -> AllegraStakingCred -> ByteString
 stakingCredHash env = Shelley.serialiseRewardAcnt . annotateStakingCred env
 
-txCertificates :: Shelley.Tx StandardShelley-> [(Word16, ShelleyDCert)]
+txCertificates :: Shelley.Tx StandardAllegra -> [(Word16, AllegraDCert)]
 txCertificates tx =
-    zip [0 ..] (toList . Shelley._certs $ Shelley._body tx)
+    zip [0 ..] (toList . ShelleyMa.certs $ unTxBodyRaw tx)
 
-txFee :: ShelleyTx -> Word64
-txFee = fromIntegral . unCoin . Shelley._txfee . Shelley._body
+txFee :: Shelley.Tx StandardAllegra -> Word64
+txFee = fromIntegral . unCoin . ShelleyMa.txfee . unTxBodyRaw
 
-txHash :: ShelleyTx -> ByteString
+txHash :: AllegraTx -> ByteString
 txHash = Crypto.hashToBytes . Shelley.hashAnnotated . Shelley._body
 
-txInputList :: ShelleyTx -> [ShelleyTxIn]
-txInputList = toList . Shelley._inputs . Shelley._body
+txInputList :: Shelley.Tx StandardAllegra -> [AllegraTxIn]
+txInputList = toList . ShelleyMa.inputs . unTxBodyRaw
 
-txMetadata :: ShelleyTx -> Maybe Shelley.MetaData
+txInvalidBefore :: Shelley.Tx StandardAllegra -> Maybe Word64
+txInvalidBefore =
+  fmap unSlotNo . Shelley.strictMaybeToMaybe . ShelleyMa.validTo . ShelleyMa.vldt . unTxBodyRaw
+
+txInvalidHereAfter :: Shelley.Tx StandardAllegra -> Maybe Word64
+txInvalidHereAfter =
+  fmap unSlotNo . Shelley.strictMaybeToMaybe . ShelleyMa.validFrom . ShelleyMa.vldt . unTxBodyRaw
+
+txMetadata :: Shelley.Tx StandardAllegra -> Maybe Shelley.MetaData
 txMetadata = Shelley.strictMaybeToMaybe . Shelley._metadata
 
 -- Regardless of the type name, this is actually a parameter update *proposal*
 -- rather than the update itself.
-txParamProposal :: ShelleyTx -> Maybe (Shelley.Update StandardShelley)
-txParamProposal = Shelley.strictMaybeToMaybe . Shelley._txUpdate . Shelley._body
+txParamProposal :: Shelley.Tx StandardAllegra -> Maybe (Shelley.Update StandardAllegra)
+txParamProposal = Shelley.strictMaybeToMaybe . ShelleyMa.update . unTxBodyRaw
 
 -- Outputs are ordered, so provide them as such with indices.
-txOutputList :: ShelleyTx -> [(Word16, ShelleyTxOut)]
+txOutputList :: Shelley.Tx StandardAllegra -> [(Word16, AllegraTxOut)]
 txOutputList tx =
-  zip [0 .. ] $ toList (Shelley._outputs $ Shelley._body tx)
+  zip [0 .. ] $ toList (ShelleyMa.outputs $ unTxBodyRaw tx)
 
-txOutputSum :: ShelleyTx -> Word64
+txOutputSum :: Shelley.Tx StandardAllegra -> Word64
 txOutputSum tx =
-    sum $ map outValue (Shelley._outputs $ Shelley._body tx)
+    sum $ map outValue (toList . ShelleyMa.outputs $ unTxBodyRaw tx)
   where
-    outValue :: ShelleyTxOut -> Word64
+    outValue :: Shelley.TxOut StandardAllegra -> Word64
     outValue (Shelley.TxOut _ coin) = fromIntegral $ unCoin coin
 
-txWithdrawals :: ShelleyTx -> [(Shelley.RewardAcnt StandardShelley, Coin)]
-txWithdrawals = Map.toList . Shelley.unWdrl . Shelley._wdrls . Shelley._body
+txWithdrawals :: Shelley.Tx StandardAllegra -> [(Shelley.RewardAcnt StandardAllegra, Coin)]
+txWithdrawals = Map.toList . Shelley.unWdrl . ShelleyMa.wdrls . unTxBodyRaw
 
-txWithdrawalSum :: ShelleyTx -> Word64
+txWithdrawalSum :: Shelley.Tx StandardAllegra -> Word64
 txWithdrawalSum =
   fromIntegral . sum . map (unCoin . snd) . Map.toList . Shelley.unWdrl
-    . Shelley._wdrls . Shelley._body
+    . ShelleyMa.wdrls . unTxBodyRaw
 
-unHeaderHash :: Consensus.ShelleyHash StandardShelley -> ByteString
+txSize :: Shelley.Tx StandardAllegra -> Word64
+txSize (Shelley.Tx (ShelleyMa.TxBodyConstr txBody) _wit _md) = fromIntegral (BSS.length $ memobytes txBody)
+
+unHeaderHash :: Consensus.ShelleyHash StandardAllegra -> ByteString
 unHeaderHash = Crypto.hashToBytes . Shelley.unHashHeader . Consensus.unShelleyHash
 
 unitIntervalToDouble :: Shelley.UnitInterval -> Double
@@ -245,8 +258,14 @@ unKeyHashRaw (Shelley.KeyHash kh) = Crypto.hashToBytes kh
 unKeyHashView :: Shelley.KeyHash 'Shelley.StakePool StandardCrypto -> Text
 unKeyHashView = Api.serialiseToBech32 . Api.StakePoolKeyHash
 
-unTxHash :: ShelleyTxId -> ByteString
+-- unTxBody :: Shelley.Tx StandardAllegra -> ShelleyMa.TxBody StandardAllegra
+-- unTxBody (Shelley.Tx txBody _wit _md) = txBody
+
+unTxBodyRaw :: Shelley.Tx StandardAllegra -> ShelleyMa.TxBodyRaw StandardAllegra
+unTxBodyRaw (Shelley.Tx (ShelleyMa.TxBodyConstr txBody) _wit _md) = memotype txBody
+
+unTxHash :: AllegraTxId -> ByteString
 unTxHash (Shelley.TxId txid) = Crypto.hashToBytes txid
 
-unTxSeq :: ShelleyTxSeq-> StrictSeq ShelleyTx
+unTxSeq :: AllegraTxSeq -> StrictSeq AllegraTx
 unTxSeq (Shelley.TxSeq txSeq) = txSeq

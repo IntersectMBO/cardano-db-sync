@@ -34,7 +34,8 @@ import           Database.Persist.Sql (IsolationLevel (..), SqlBackend, runSqlCo
 import           Database.PostgreSQL.Simple (connectPostgreSQL)
 
 import           Database.Esqueleto
-import           Database.Esqueleto.Internal.Sql
+import           Database.Esqueleto.Internal.Internal (Mode (SELECT), SqlSelect, initialIdentState,
+                   toRawSql)
 
 import           Cardano.Db.PGConfig
 
@@ -134,9 +135,7 @@ defaultOutput :: Handle
               -> LogStr
               -> IO ()
 defaultOutput h loc src level msg =
-    BS.hPutStr h ls
-  where
-    ls = defaultLogStrBS loc src level msg
+    BS.hPutStr h $ defaultLogStrBS loc src level msg
 
 defaultLogStrBS :: Loc
                 -> LogSource
@@ -144,9 +143,7 @@ defaultLogStrBS :: Loc
                 -> LogStr
                 -> BS.ByteString
 defaultLogStrBS a b c d =
-    toBS $ defaultLogStr a b c d
-  where
-    toBS = fromLogStr
+  fromLogStr $ defaultLogStr a b c d
 
 getBackendGhci :: IO SqlBackend
 getBackendGhci = do
@@ -158,8 +155,7 @@ ghciDebugQuery :: SqlSelect a r => SqlQuery a -> IO ()
 ghciDebugQuery query = do
   pgconfig <- readPGPassFileEnv
   runStdoutLoggingT . withPostgresqlConn (toConnectionString pgconfig) $ \backend -> do
-    let
-      (sql,params) = toRawSql SELECT (backend, initialIdentState) query
+    let (sql,params) = toRawSql SELECT (backend, initialIdentState) query
     liftIO $ do
       LT.putStr $ LT.toLazyText sql
       print params

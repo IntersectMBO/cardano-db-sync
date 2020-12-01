@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["8.6.5"]
+        ghc: ["8.6.5", "8.10.2"]
         os: [ubuntu-latest, macos-latest]
 
     steps:
@@ -57,7 +57,7 @@ jobs:
         sudo ln -s /tmp/.s.PGSQL.5432 /var/run/postgresql/.s.PGSQL.5432
 
     - name: Check if postgres is running
-      run: | 
+      run: |
         sleep 20
         netstat -an
         ls -al /var/run/postgresql/.s.PGSQL.5432 || true

@@ -7,7 +7,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.DbSync.Config.Types
-  ( CardanoBlock
+  ( AllegraToMary
+  , ByronToShelley
+  , CardanoBlock
   , CardanoProtocol
   , ConfigFile (..)
   , DbSyncCommand (..)
@@ -23,6 +25,7 @@ module Cardano.DbSync.Config.Types
   , LogFileDir (..)
   , NetworkName (..)
   , NodeConfigFile (..)
+  , ShelleyToAllegra
   , SocketPath (..)
   , adjustGenesisFilePath
   , adjustNodeConfigFilePath
@@ -39,20 +42,21 @@ import qualified Cardano.Crypto.Hash as Crypto
 
 import           Cardano.Db (MigrationDir (..))
 
-import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..))
+import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Cardano.Prelude
 
 import           Data.Aeson (FromJSON (..), Object, Value (..), (.:))
 import qualified Data.Aeson as Aeson
 import           Data.Aeson.Types (Parser, typeMismatch)
-import           Data.Text (Text)
 
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import qualified Ouroboros.Consensus.Cardano.Block as Cardano
 import qualified Ouroboros.Consensus.Cardano.CanHardFork as Shelley
+import           Ouroboros.Consensus.Cardano.Node (ProtocolParamsTransition)
 import qualified Ouroboros.Consensus.HardFork.Combinator.Basics as Cardano
+import           Ouroboros.Consensus.Shelley.Eras (StandardShelley)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
 import qualified Ouroboros.Consensus.Shelley.Protocol as Shelley
 
@@ -61,8 +65,26 @@ import           Ouroboros.Network.Magic (NetworkMagic (..))
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 
 
-type CardanoBlock = Cardano.HardForkBlock (Cardano.CardanoEras Shelley.StandardCrypto)
-type CardanoProtocol = Cardano.HardForkProtocol '[ByronBlock, Shelley.ShelleyBlock Shelley.StandardShelley]
+type CardanoBlock =
+        Cardano.HardForkBlock
+            (Cardano.CardanoEras Shelley.StandardCrypto)
+
+type CardanoProtocol =
+        Cardano.HardForkProtocol
+            '[ ByronBlock
+            , Shelley.ShelleyBlock StandardShelley
+            , Shelley.ShelleyBlock Cardano.StandardAllegra
+            , Shelley.ShelleyBlock Cardano.StandardMary
+            ]
+
+type ByronToShelley =
+        ProtocolParamsTransition ByronBlock (Shelley.ShelleyBlock Cardano.StandardShelley)
+
+type ShelleyToAllegra =
+        ProtocolParamsTransition (Shelley.ShelleyBlock Cardano.StandardShelley) (Shelley.ShelleyBlock Cardano.StandardAllegra)
+
+type AllegraToMary =
+        ProtocolParamsTransition (Shelley.ShelleyBlock Cardano.StandardAllegra) (Shelley.ShelleyBlock Cardano.StandardMary)
 
 newtype ConfigFile = ConfigFile
   { unConfigFile :: FilePath
@@ -111,10 +133,13 @@ data DbSyncNodeConfig = DbSyncNodeConfig
   , dncByronProtocolVersion :: !Byron.ProtocolVersion
 
   , dncShelleyHardFork :: !Shelley.TriggerHardFork
-  , dncShelleyHardForkNotBeforeEpoch :: !(Maybe EpochNo)
-  , dncShelleyMaxProtocolVersion :: !Natural
-  }
+  , dncAllegraHardFork :: !Shelley.TriggerHardFork
+  , dncMaryHardFork :: !Shelley.TriggerHardFork
 
+  , dncByronToShelley :: !ByronToShelley
+  , dncShelleyToAllegra :: !ShelleyToAllegra
+  , dncAllegraToMary :: !AllegraToMary
+  }
 
 data DbSyncPreConfig = DbSyncPreConfig
   { pcNetworkName :: !NetworkName

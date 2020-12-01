@@ -7,8 +7,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Cardano.DbSync.Era.Shelley.Metadata
-  ( fromShelleyMetaData
+module Cardano.DbSync.Era.Allegra.Metadata
+  ( fromAllegraMetaData
   , metadataValueToJsonNoSchema
   ) where
 
@@ -26,25 +26,25 @@ import qualified Data.Text.Lazy as Text.Lazy
 import           Data.Tuple.Extra (both)
 import qualified Data.Vector as Vector
 
-import qualified Shelley.Spec.Ledger.MetaData as Shelley
+import qualified Shelley.Spec.Ledger.MetaData as Allegra
 
 -- This module should not even exist. The only reason it does is because functionality
 -- that was in cardano-node commit 0dc6efa467a0fdae7aba7c5bcd5c657e189c8f19 and being
 -- used here in db-sync was drastically changed and then the changed version was not
 -- exported.
 
-fromShelleyMetaData :: Shelley.MetaData -> Map Word64 TxMetadataValue
-fromShelleyMetaData (Shelley.MetaData mdMap) =
-    Map.map fromShelleyMetaDatum mdMap
+fromAllegraMetaData :: Allegra.MetaData -> Map Word64 TxMetadataValue
+fromAllegraMetaData (Allegra.MetaData mdMap) =
+    Map.map fromAllegraMetaDatum mdMap
   where
-    fromShelleyMetaDatum :: Shelley.MetaDatum -> TxMetadataValue
-    fromShelleyMetaDatum smd =
+    fromAllegraMetaDatum :: Allegra.MetaDatum -> TxMetadataValue
+    fromAllegraMetaDatum smd =
       case smd of
-        Shelley.I x -> TxMetaNumber x
-        Shelley.B x -> TxMetaBytes  x
-        Shelley.S x -> TxMetaText   x
-        Shelley.List xs -> TxMetaList $ map fromShelleyMetaDatum xs
-        Shelley.Map xs -> TxMetaMap $ map (both fromShelleyMetaDatum) xs
+        Allegra.I x -> TxMetaNumber x
+        Allegra.B x -> TxMetaBytes  x
+        Allegra.S x -> TxMetaText   x
+        Allegra.List xs -> TxMetaList $ map fromAllegraMetaDatum xs
+        Allegra.Map xs -> TxMetaMap $ map (both fromAllegraMetaDatum) xs
 
 
 metadataValueToJsonNoSchema :: TxMetadataValue -> Aeson.Value

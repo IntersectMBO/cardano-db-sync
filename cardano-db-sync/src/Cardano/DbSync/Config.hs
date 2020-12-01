@@ -76,9 +76,14 @@ coalesceConfig pcfg ncfg adjustGenesisPath = do
           , dncShelleyGenesisHash = ncShelleyGenesisHash ncfg
           , dncByronSoftwareVersion = ncByronSotfwareVersion ncfg
           , dncByronProtocolVersion = ncByronProtocolVersion ncfg
+
           , dncShelleyHardFork = ncShelleyHardFork ncfg
-          , dncShelleyHardForkNotBeforeEpoch = ncShelleyHardForkAfterEpoch ncfg
-          , dncShelleyMaxProtocolVersion = ncShelleyMaxProtocolVersion ncfg
+          , dncAllegraHardFork = ncAllegraHardFork ncfg
+          , dncMaryHardFork = ncMaryHardFork ncfg
+
+          , dncByronToShelley = ncByronToShelley ncfg
+          , dncShelleyToAllegra = ncShelleyToAllegra ncfg
+          , dncAllegraToMary = ncAllegraToMary ncfg
           }
 
 mkAdjustPath :: DbSyncPreConfig -> (FilePath -> FilePath)

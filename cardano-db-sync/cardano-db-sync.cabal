@@ -3,7 +3,7 @@ cabal-version:          >= 1.10
 -- http://haskell.org/cabal/users-guide/
 
 name:                   cardano-db-sync
-version:                6.0.0
+version:                7.0.0
 synopsis:               The Cardano DB Sync node
 description:            A Cardano node that follows the Cardano chain and inserts data from the
                         chain into a PostgresQL database.
@@ -42,10 +42,23 @@ library
                         Cardano.DbSync.Error
 
                         Cardano.DbSync.Era
+
+                        Cardano.DbSync.Era.Allegra.Insert
+                        Cardano.DbSync.Era.Allegra.Query
+                        Cardano.DbSync.Era.Allegra.Metadata
+                        Cardano.DbSync.Era.Allegra.Types
+                        Cardano.DbSync.Era.Allegra.Util
+
                         Cardano.DbSync.Era.Byron.Genesis
                         Cardano.DbSync.Era.Byron.Insert
                         Cardano.DbSync.Era.Byron.Util
                         Cardano.DbSync.Era.Cardano.Util
+                        Cardano.DbSync.Era.Generic
+                        Cardano.DbSync.Era.Generic.EpochUpdate
+                        Cardano.DbSync.Era.Generic.ProtoParams
+                        Cardano.DbSync.Era.Generic.Rewards
+                        Cardano.DbSync.Era.Generic.StakeCred
+                        Cardano.DbSync.Era.Generic.StakeDist
                         Cardano.DbSync.Era.Shelley.Genesis
                         Cardano.DbSync.Era.Shelley.Insert
                         Cardano.DbSync.Era.Shelley.Query
@@ -66,7 +79,7 @@ library
                         Cardano.DbSync.Types
                         Cardano.DbSync.Util
 
-  build-depends:        base                            >= 4.12         && < 4.13
+  build-depends:        base                            >= 4.12         && < 4.15
                       , aeson
                       , binary
                       , base16-bytestring
@@ -79,6 +92,7 @@ library
                       , cardano-crypto-wrapper
                       , cardano-db
                       , cardano-ledger
+                      , cardano-ledger-shelley-ma
                       -- Only for some orphan tracing instances.
                       , cardano-node
                       , cardano-prelude
@@ -110,6 +124,7 @@ library
                       , ouroboros-network-framework
                       , persistent
                       , prometheus
+                      , small-steps
                       , serialise
                       , shelley-spec-ledger
                       , stm
@@ -140,7 +155,7 @@ executable cardano-db-sync
 
   other-modules:        Paths_cardano_db_sync
 
-  build-depends:        base                            >= 4.12         && < 4.13
+  build-depends:        base                            >= 4.12         && < 4.15
                       , bytestring
                       , cardano-config
                       , cardano-db
