@@ -43,6 +43,7 @@ import           Cardano.DbSync.LedgerState
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
+import qualified Cardano.Ledger.Core as ShelleyMa
 import           Cardano.Ledger.Era (Crypto)
 
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
@@ -65,7 +66,6 @@ import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.Coin as Shelley
 import qualified Shelley.Spec.Ledger.Credential as Shelley
 import qualified Shelley.Spec.Ledger.Keys as Shelley
-import qualified Shelley.Spec.Ledger.MetaData as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
@@ -555,10 +555,10 @@ insertParamProposal _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap
 
 insertTxMetadata
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> Shelley.MetaData
+    => Trace IO Text -> DB.TxId -> ShelleyMa.Metadata StandardAllegra
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertTxMetadata tracer txId metadata =
-    mapM_ insert $ Map.toList (fromAllegraMetaData metadata)
+    mapM_ insert $ Map.toList (fromAllegraMetadata metadata)
   where
     insert
         :: (MonadBaseControl IO m, MonadIO m)

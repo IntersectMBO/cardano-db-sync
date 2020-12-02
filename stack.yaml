@@ -1,4 +1,4 @@
-resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/58e146c14e1349553d0ed75dd5245bbe65f0533e/snapshot.yaml
+resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/742e8525b96bf4b66fb61a00c8298d75d7931d5e/snapshot.yaml
 compiler: ghc-8.6.5
 
 allow-newer: true
@@ -72,13 +72,13 @@ extra-deps:
     commit: 2547ad1e80aeabca2899951601079408becbc92c
 
   - git: https://github.com/input-output-hk/cardano-prelude
-    commit: 58e146c14e1349553d0ed75dd5245bbe65f0533e
+    commit: 742e8525b96bf4b66fb61a00c8298d75d7931d5e
     subdirs:
       - cardano-prelude
       - cardano-prelude-test
 
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: b5965e013fbcfb2a155582953d4a9a99eee22a8a
+    commit: 563e79f28c6da5c547463391d4c58a81442e48db
     subdirs:
       - contra-tracer
       - iohk-monitoring
@@ -90,7 +90,7 @@ extra-deps:
       - tracer-transformers
 
   - git: https://github.com/input-output-hk/cardano-base
-    commit: 6226a0feb1d74f50a430242a1b4608fd48e10aad
+    commit: 2574600da11065937c1f07e4b234ecb451016a2e
     subdirs:
       - binary
       - cardano-crypto-praos
@@ -102,7 +102,7 @@ extra-deps:
     commit: cde90a2b27f79187ca8310b6549331e59595e7ba
 
   - git: https://github.com/input-output-hk/cardano-ledger-specs
-    commit: 7c64ed8ca2e2141780326ac2990f59ab942356af
+    commit: 345683717da0e5008103a9e25cc2445736ca8e82
     subdirs:
       - byron/crypto
       - byron/crypto/test
@@ -118,7 +118,7 @@ extra-deps:
       - shelley-ma/impl
 
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: 57ab00435e6c38d146e029ac2d3f824ff6e738a8
+    commit: 7e00984293b51fed8e72683607d8b9e0717382bd
     subdirs:
       - cardano-client
       - io-sim
@@ -137,7 +137,7 @@ extra-deps:
 
 
   - git: https://github.com/input-output-hk/cardano-node
-    commit: 4aa93f48328abb49ba5e35c65a17f64601eaa298
+    commit: 3bfead449bae8a4b19635196334c7e81b3752e20
     subdirs:
       - cardano-api
       - cardano-config

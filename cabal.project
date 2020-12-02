@@ -12,7 +12,6 @@ constraints:
     -- systemd-2.3.0 requires at least network 3.1.1.0 but it doesn't declare
     -- that dependency
   , network >= 3.1.1.0
-  , streaming-bytestring < 0.1.7
 
 package cardano-explorer-db
   ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields
@@ -53,8 +52,8 @@ package ouroboros-consensus-cardano
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-base
-  tag: 6226a0feb1d74f50a430242a1b4608fd48e10aad
-  --sha256: 034q2anpbc7bgp5draykz6lkzznxk31wy4nbgr4jv4f7778yls6b
+  tag: 2574600da11065937c1f07e4b234ecb451016a2e
+  --sha256: 0nq8bpzsr3fd2i59a6s6qb6slpymjh47zv57wlifjfvhh0xlgmpx
   subdir:
     binary
     binary/test
@@ -71,8 +70,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-ledger-specs
-  tag: 7c64ed8ca2e2141780326ac2990f59ab942356af
-  --sha256: 0md1lm50jyg0navmw9yazzsvw4xrbzvsvawlk91rmpsxfscn92yz
+  tag: 345683717da0e5008103a9e25cc2445736ca8e82
+  --sha256: 0iih2pryyps5xqrdxylpihy99g0ny5lgpka9wzd612jvj14lv08d
   subdir:
     byron/crypto
     byron/crypto/test
@@ -90,8 +89,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: 4aa93f48328abb49ba5e35c65a17f64601eaa298
-  --sha256: 17gkx986zini3w4y6gcw63a8xwikl261bm9wh67n55kg6yh3lmpx
+  tag: 3bfead449bae8a4b19635196334c7e81b3752e20
+  --sha256: 13ngy5cbx870n6rknmiiw2d7xafynbn2rzzcj2qg0lr25qwzh345
   subdir:
     cardano-api
     cardano-config
@@ -101,8 +100,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-prelude
-  tag: 58e146c14e1349553d0ed75dd5245bbe65f0533e
-  --sha256: 166rm0sxldnf0g2g9jp4k0rgd01wcbm0g54fcw3bxilzr1dvwqfi
+  tag: 742e8525b96bf4b66fb61a00c8298d75d7931d5e
+  --sha256: 1132r58bjgdcf7yz3n77nlrkanqcmpn5b5km4nw151yar2dgifsv
   subdir:
     cardano-prelude
     cardano-prelude-test
@@ -116,8 +115,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/iohk-monitoring-framework
-  tag: b5965e013fbcfb2a155582953d4a9a99eee22a8a
-  --sha256: 0c2xmf57rw2p1llm69x4b3cxzigxj0iyxa6cl0ivps92m9l2rv2n
+  tag: 563e79f28c6da5c547463391d4c58a81442e48db
+  --sha256: 1is18h9kk8j16my89q76nihvapiiff3jl8777vk7c4wl2h4zry2w
   subdir:
     contra-tracer
     iohk-monitoring
@@ -131,8 +130,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/ouroboros-network
-  tag: 57ab00435e6c38d146e029ac2d3f824ff6e738a8
-  --sha256: 0l9nv0lr9wxf9z7gs91dvpci7ghfbk9d4mcly1mm5xd76d21jbbb
+  tag: 7e00984293b51fed8e72683607d8b9e0717382bd
+  --sha256: 1m89ih9m4p48nw1mybzf3ssr5va9ppsskx9pl9130aczhhi5ix85
   subdir:
     cardano-client
     io-sim

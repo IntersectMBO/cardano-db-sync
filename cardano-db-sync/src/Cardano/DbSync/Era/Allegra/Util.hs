@@ -62,6 +62,7 @@ import qualified Cardano.Db as Db
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Era.Allegra.Types
 
+import qualified Cardano.Ledger.Core as ShelleyMa
 import           Cardano.Ledger.Era (Crypto)
 import qualified Cardano.Ledger.ShelleyMA.Timelocks as ShelleyMa
 import qualified Cardano.Ledger.ShelleyMA.TxBody as ShelleyMa
@@ -88,7 +89,6 @@ import qualified Shelley.Spec.Ledger.BlockChain as Shelley
 import           Shelley.Spec.Ledger.Coin (Coin (..))
 import qualified Shelley.Spec.Ledger.Hashing as Shelley
 import qualified Shelley.Spec.Ledger.Keys as Shelley
-import qualified Shelley.Spec.Ledger.MetaData as Shelley
 import qualified Shelley.Spec.Ledger.OCert as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
@@ -215,8 +215,8 @@ txInvalidHereafter :: Shelley.Tx StandardAllegra -> Maybe Word64
 txInvalidHereafter =
   fmap unSlotNo . Shelley.strictMaybeToMaybe . ShelleyMa.validFrom . ShelleyMa.vldt . unTxBodyRaw
 
-txMetadata :: Shelley.Tx StandardAllegra -> Maybe Shelley.MetaData
-txMetadata = Shelley.strictMaybeToMaybe . Shelley._metadata
+txMetadata :: Shelley.Tx StandardAllegra -> Maybe (ShelleyMa.Metadata StandardAllegra)
+txMetadata (Shelley.Tx _body _wit md) = Shelley.strictMaybeToMaybe md
 
 -- Regardless of the type name, this is actually a parameter update *proposal*
 -- rather than the update itself.
