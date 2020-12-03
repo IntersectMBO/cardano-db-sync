@@ -97,7 +97,7 @@ mkTxs blkId count =
         , txFee = DbLovelace 1
         , txDeposit = 0
         , txSize = 12
-        , txInvalidHereAfter = Nothing
+        , txInvalidHereafter = Nothing
         , txInvalidBefore = Nothing
         }
 

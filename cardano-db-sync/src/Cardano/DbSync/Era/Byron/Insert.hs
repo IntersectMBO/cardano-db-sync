@@ -189,7 +189,7 @@ insertTx tracer blkId tx blockIndex = do
                 -- Would be really nice to have a way to get the transaction size
                 -- without re-serializing it.
                 , DB.txSize = fromIntegral $ BS.length (serialize' $ Byron.taTx tx)
-                , DB.txInvalidHereAfter = Nothing
+                , DB.txInvalidHereafter = Nothing
                 , DB.txInvalidBefore = Nothing
                 }
 

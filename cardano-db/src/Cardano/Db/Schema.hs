@@ -105,7 +105,7 @@ share
     size                Word64              sqltype=uinteger
 
     invalidBefore       Word64 Maybe        sqltype=uinteger
-    invalidHereAfter    Word64 Maybe        sqltype=uinteger
+    invalidHereafter    Word64 Maybe        sqltype=uinteger
     UniqueTx            hash
 
   StakeAddress          -- Can be an address of a script hash
