@@ -161,7 +161,7 @@ insertTx tracer env blkId epochNo blockIndex tx = do
                 , DB.txFee = DB.DbLovelace fees
                 , DB.txDeposit = fromIntegral (inSum + withdrawalSum) - fromIntegral (outSum + fees)
                 , DB.txSize = fromIntegral $ LBS.length (Shelley.txFullBytes tx)
-                , DB.txInvalidHereAfter = Nothing
+                , DB.txInvalidHereafter = Nothing
                 , DB.txInvalidBefore = Nothing
                 }
 

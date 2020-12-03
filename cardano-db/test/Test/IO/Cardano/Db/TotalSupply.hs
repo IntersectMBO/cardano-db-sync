@@ -48,7 +48,7 @@ initialSupplyTest =
                   , txFee = DbLovelace 100
                   , txDeposit = 0
                   , txSize = 123
-                  , txInvalidHereAfter = Nothing
+                  , txInvalidHereafter = Nothing
                   , txInvalidBefore = Nothing
                   }
     _ <- insertTxIn (TxIn tx1Id (head tx0Ids) 0)

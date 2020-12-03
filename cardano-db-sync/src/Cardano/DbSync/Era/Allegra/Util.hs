@@ -34,7 +34,7 @@ module Cardano.DbSync.Era.Allegra.Util
   , txCertificates
   , txInputList
   , txInvalidBefore
-  , txInvalidHereAfter
+  , txInvalidHereafter
   , txMetadata
   , txOutputList
   , txOutputSum
@@ -211,8 +211,8 @@ txInvalidBefore :: Shelley.Tx StandardAllegra -> Maybe Word64
 txInvalidBefore =
   fmap unSlotNo . Shelley.strictMaybeToMaybe . ShelleyMa.validTo . ShelleyMa.vldt . unTxBodyRaw
 
-txInvalidHereAfter :: Shelley.Tx StandardAllegra -> Maybe Word64
-txInvalidHereAfter =
+txInvalidHereafter :: Shelley.Tx StandardAllegra -> Maybe Word64
+txInvalidHereafter =
   fmap unSlotNo . Shelley.strictMaybeToMaybe . ShelleyMa.validFrom . ShelleyMa.vldt . unTxBodyRaw
 
 txMetadata :: Shelley.Tx StandardAllegra -> Maybe Shelley.MetaData

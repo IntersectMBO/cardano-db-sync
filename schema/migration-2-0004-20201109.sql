@@ -7,7 +7,7 @@ BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
   IF next_version = 4 THEN
     EXECUTE 'ALTER TABLE "tx" ADD COLUMN "invalid_before" uinteger NULL' ;
-    EXECUTE 'ALTER TABLE "tx" ADD COLUMN "invalid_here_after" uinteger NULL' ;
+    EXECUTE 'ALTER TABLE "tx" ADD COLUMN "invalid_hereafter" uinteger NULL' ;
     EXECUTE 'CREATe TABLE "ma_tx_mint"("id" SERIAL8  PRIMARY KEY UNIQUE,"policy" hash28type NOT NULL,"name" asset32type NOT NULL,"quantity" int65type NOT NULL,"tx_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "ma_tx_mint" ADD CONSTRAINT "unique_ma_tx_mint" UNIQUE("policy","name","tx_id")' ;
     EXECUTE 'ALTER TABLE "ma_tx_mint" ADD CONSTRAINT "ma_tx_mint_tx_id_fkey" FOREIGN KEY("tx_id") REFERENCES "tx"("id")' ;
