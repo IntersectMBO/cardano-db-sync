@@ -110,6 +110,7 @@ let
       collectTests jobs.native.benchmarks ++ [
       jobs.native.cardano-db-sync.x86_64-linux
       jobs.native.cardano-db-sync-extended.x86_64-linux
+      jobs.native.cardano-node.x86_64-linux
     ]));
 
 in jobs

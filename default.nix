@@ -29,7 +29,7 @@ let
   };
 
   packages = {
-    inherit haskellPackages cardano-db-sync cardano-db-sync-extended scripts;
+    inherit haskellPackages cardano-db-sync cardano-db-sync-extended cardano-node scripts;
 
     # NixOS tests
     #nixosTests = import ./nix/nixos/tests {
