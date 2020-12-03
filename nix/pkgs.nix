@@ -12,6 +12,8 @@ pkgs: _: with pkgs;
       cardano-db-sync;
   inherit (cardanoDbSyncHaskellPackages.cardano-db-sync-extended.components.exes)
       cardano-db-sync-extended;
+  inherit (cardanoDbSyncHaskellPackages.cardano-node.components.exes)
+      cardano-node;
 
   inherit ((haskell-nix.hackage-package {
     name = "hlint";
