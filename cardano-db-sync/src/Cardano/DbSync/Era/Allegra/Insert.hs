@@ -161,7 +161,7 @@ insertTx tracer env blkId epochNo blockIndex tx = do
                 , DB.txFee = DB.DbLovelace fees
                 , DB.txDeposit = fromIntegral (inSum + withdrawalSum) - fromIntegral (outSum + fees)
                 , DB.txSize = Allegra.txSize tx
-                , DB.txInvalidHereafter = Allegra.txInvalidBefore tx
+                , DB.txInvalidHereafter = Allegra.txInvalidHereafter tx
                 , DB.txInvalidBefore = Allegra.txInvalidBefore tx
                 }
 
