@@ -43,28 +43,24 @@ library
 
                         Cardano.DbSync.Era
 
-                        Cardano.DbSync.Era.Allegra.Insert
-                        Cardano.DbSync.Era.Allegra.Query
-                        Cardano.DbSync.Era.Allegra.Metadata
-                        Cardano.DbSync.Era.Allegra.Types
-                        Cardano.DbSync.Era.Allegra.Util
-
                         Cardano.DbSync.Era.Byron.Genesis
                         Cardano.DbSync.Era.Byron.Insert
                         Cardano.DbSync.Era.Byron.Util
                         Cardano.DbSync.Era.Cardano.Util
-                        Cardano.DbSync.Era.Generic
-                        Cardano.DbSync.Era.Generic.EpochUpdate
-                        Cardano.DbSync.Era.Generic.ProtoParams
-                        Cardano.DbSync.Era.Generic.Rewards
-                        Cardano.DbSync.Era.Generic.StakeCred
-                        Cardano.DbSync.Era.Generic.StakeDist
+
                         Cardano.DbSync.Era.Shelley.Genesis
+                        Cardano.DbSync.Era.Shelley.Generic
+                        Cardano.DbSync.Era.Shelley.Generic.Block
+                        Cardano.DbSync.Era.Shelley.Generic.EpochUpdate
+                        Cardano.DbSync.Era.Shelley.Generic.Metadata
+                        Cardano.DbSync.Era.Shelley.Generic.ProtoParams
+                        Cardano.DbSync.Era.Shelley.Generic.Rewards
+                        Cardano.DbSync.Era.Shelley.Generic.StakeCred
+                        Cardano.DbSync.Era.Shelley.Generic.StakeDist
+                        Cardano.DbSync.Era.Shelley.Generic.Tx
+                        Cardano.DbSync.Era.Shelley.Generic.Util
                         Cardano.DbSync.Era.Shelley.Insert
                         Cardano.DbSync.Era.Shelley.Query
-                        Cardano.DbSync.Era.Shelley.Metadata
-                        Cardano.DbSync.Era.Shelley.Types
-                        Cardano.DbSync.Era.Shelley.Util
 
                         Cardano.DbSync.LedgerState
                         Cardano.DbSync.Metrics
@@ -89,6 +85,7 @@ library
                       , cardano-client
                       , cardano-crypto
                       , cardano-crypto-class
+                      , cardano-crypto-praos
                       , cardano-crypto-wrapper
                       , cardano-db
                       , cardano-ledger

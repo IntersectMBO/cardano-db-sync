@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-module Cardano.DbSync.Era.Generic.StakeDist
+module Cardano.DbSync.Era.Shelley.Generic.StakeDist
   ( StakeCred (..)
   , StakeDist (..)
   , allegraStakeDist
@@ -9,7 +9,7 @@ module Cardano.DbSync.Era.Generic.StakeDist
   ) where
 
 import           Cardano.DbSync.Config.Types (DbSyncEnv (..))
-import           Cardano.DbSync.Era.Generic.StakeCred
+import           Cardano.DbSync.Era.Shelley.Generic.StakeCred
 
 import           Cardano.Prelude
 

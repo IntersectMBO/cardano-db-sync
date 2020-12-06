@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-module Cardano.DbSync.Era.Generic.StakeCred
+module Cardano.DbSync.Era.Shelley.Generic.StakeCred
   ( StakeCred (..)
   , toStakeCred
   ) where
