@@ -24,7 +24,7 @@ services:
         max-file: "10"
 
   cardano-node:
-    image: inputoutput/cardano-node:1.23.0
+    image: inputoutput/cardano-node:1.24.0
     environment:
       - NETWORK=${NETWORK:-mainnet}
     volumes:
