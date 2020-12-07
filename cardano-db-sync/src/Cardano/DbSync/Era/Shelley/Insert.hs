@@ -265,14 +265,14 @@ insertPoolRegister tracer (EpochNo epoch) txId idx params = do
     liftIO . logWarning tracer $
       mconcat
         [ "Bad pledge amount: ", textShow (Shelley.unCoin $ Shelley._poolPledge params)
-        , " > maxLovelace. See https://github.com/input-output-hk/cardano-ledger-specs/issues/1551"
+        , " > maxLovelace."
         ]
 
   when (fromIntegral (Shelley.unCoin $ Shelley._poolCost params) > maxLovelace) $
     liftIO . logWarning tracer $
       mconcat
         [ "Bad fixed cost amount: ", textShow (Shelley.unCoin $ Shelley._poolCost params)
-        , " > maxLovelace. See https://github.com/input-output-hk/cardano-db-sync/issues/351"
+        , " > maxLovelace."
         ]
 
   poolHashId <- insertPoolHash (Shelley._poolId params)
