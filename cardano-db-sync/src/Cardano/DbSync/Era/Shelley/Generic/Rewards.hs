@@ -1,5 +1,5 @@
 {-# LANGUAGE DataKinds #-}
-module Cardano.DbSync.Era.Generic.Rewards
+module Cardano.DbSync.Era.Shelley.Generic.Rewards
   ( Rewards (..)
   , allegraRewards
   , maryRewards
@@ -7,7 +7,7 @@ module Cardano.DbSync.Era.Generic.Rewards
   ) where
 
 import           Cardano.DbSync.Config.Types (DbSyncEnv (..))
-import           Cardano.DbSync.Era.Generic.StakeCred
+import           Cardano.DbSync.Era.Shelley.Generic.StakeCred
 
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map

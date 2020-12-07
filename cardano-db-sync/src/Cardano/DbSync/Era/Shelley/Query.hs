@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -12,10 +13,8 @@ module Cardano.DbSync.Era.Shelley.Query
   ) where
 
 
-import qualified Cardano.Crypto.Hash as Crypto
 import           Cardano.Db
-import           Cardano.DbSync.Era.Shelley.Types
-import           Cardano.DbSync.Era.Shelley.Util (unKeyHashRaw)
+import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Util
 
 import           Cardano.Slotting.Slot (SlotNo (..))
@@ -37,7 +36,8 @@ import           Ouroboros.Consensus.Cardano.Block (StandardShelley)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import           Shelley.Spec.Ledger.Credential (Ptr (..), StakeReference (..))
-import qualified Shelley.Spec.Ledger.TxBody as Shelley
+import qualified Shelley.Spec.Ledger.Keys as Shelley
+
 
 queryPoolHashId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe PoolHashId)
 queryPoolHashId hash = do
@@ -47,7 +47,10 @@ queryPoolHashId hash = do
   pure $ unValue <$> listToMaybe res
 
 
-queryStakeAddress :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail StakeAddressId)
+queryStakeAddress
+    :: MonadIO m
+    => ByteString
+    -> ReaderT SqlBackend m (Either LookupFail StakeAddressId)
 queryStakeAddress addr = do
   res <- select . from $ \ saddr -> do
             where_ (saddr ^. StakeAddressHashRaw ==. val addr)
@@ -59,7 +62,10 @@ queryStakeAddress addr = do
 -- delegation which is caught in the first query below. However, if a reward address is specified
 -- as the reward address for a pool, then no explicit delegation is needed. The second part of the
 -- query catches this situation.
-queryStakeAddressAndPool :: MonadIO m => Word64 -> ByteString -> ReaderT SqlBackend m (Either LookupFail (StakeAddressId, PoolHashId))
+queryStakeAddressAndPool
+    :: MonadIO m
+    => Word64 -> ByteString
+    -> ReaderT SqlBackend m (Either LookupFail (StakeAddressId, PoolHashId))
 queryStakeAddressAndPool epoch addr = do
     res <- select . from $ \ (saddr `InnerJoin` dlg `InnerJoin` tx `InnerJoin` blk) -> do
             on (blk ^. BlockId ==. tx ^. TxBlockId)
@@ -88,18 +94,24 @@ queryStakeAddressAndPool epoch addr = do
       pure $ maybeToEither (DbLookupMessage $ "StakeAddressAndPool " <> renderByteArray addr) unValue2 (listToMaybe res)
 
 
-queryStakePoolKeyHash :: MonadIO m => ShelleyStakePoolKeyHash -> ReaderT SqlBackend m (Either LookupFail PoolHashId)
+queryStakePoolKeyHash
+    :: forall era m. MonadIO m
+    => Shelley.KeyHash 'Shelley.StakePool era
+    -> ReaderT SqlBackend m (Either LookupFail PoolHashId)
 queryStakePoolKeyHash kh = do
   res <- select . from $ \ (poolUpdate `InnerJoin` poolHash `InnerJoin` tx `InnerJoin` blk) -> do
             on (blk ^. BlockId ==. tx ^. TxBlockId)
             on (tx ^. TxId ==. poolUpdate ^. PoolUpdateRegisteredTxId)
             on (poolUpdate ^. PoolUpdateHashId ==. poolHash ^. PoolHashId)
-            where_ (poolHash ^. PoolHashHashRaw ==. val (unKeyHashRaw kh))
+            where_ (poolHash ^. PoolHashHashRaw ==. val (Generic.unKeyHashRaw kh))
             orderBy [desc (blk ^. BlockSlotNo)]
             pure (poolHash ^. PoolHashId)
   pure $ maybeToEither (DbLookupMessage "StakePoolKeyHash") unValue (listToMaybe res)
 
-queryStakeAddressRef :: MonadIO m => Shelley.Addr StandardShelley -> ReaderT SqlBackend m (Maybe StakeAddressId)
+queryStakeAddressRef
+    :: MonadIO m
+    => Shelley.Addr StandardShelley
+    -> ReaderT SqlBackend m (Maybe StakeAddressId)
 queryStakeAddressRef addr =
     case addr of
       Shelley.AddrBootstrap {} -> pure Nothing
@@ -111,7 +123,10 @@ queryStakeAddressRef addr =
           StakeRefPtr (Ptr slotNo txIx certIx) -> queryStakeDelegation slotNo txIx certIx
           StakeRefNull -> pure Nothing
   where
-    queryStakeDelegation :: MonadIO m => SlotNo -> Natural -> Natural -> ReaderT SqlBackend m (Maybe StakeAddressId)
+    queryStakeDelegation
+        :: MonadIO m
+        => SlotNo -> Natural -> Natural
+        -> ReaderT SqlBackend m (Maybe StakeAddressId)
     queryStakeDelegation (SlotNo slot) txIx certIx = do
       res <- select . from $ \ (blk `InnerJoin` tx `InnerJoin` dlg) -> do
                 on (tx ^. TxId ==. dlg ^. DelegationTxId)
@@ -125,10 +140,10 @@ queryStakeAddressRef addr =
                 pure (dlg ^. DelegationAddrId)
       pure $ unValue <$> listToMaybe res
 
-queryTxInputSum :: MonadIO m => [ShelleyTxIn] -> ReaderT SqlBackend m DbLovelace
+queryTxInputSum :: MonadIO m => [Generic.TxIn] -> ReaderT SqlBackend m DbLovelace
 queryTxInputSum txins =
     DbLovelace . sum . map unDbLovelace <$> mapM queryTxInputValue txins
   where
-    queryTxInputValue :: MonadIO m => ShelleyTxIn -> ReaderT SqlBackend m DbLovelace
-    queryTxInputValue (Shelley.TxIn (Shelley.TxId hash) index) =
-      fromRight (DbLovelace 0) <$> queryTxOutValue (Crypto.hashToBytes hash, fromIntegral index)
+    queryTxInputValue :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m DbLovelace
+    queryTxInputValue txIn =
+      fromRight (DbLovelace 0) <$> queryTxOutValue (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))

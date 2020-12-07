@@ -23,8 +23,8 @@ import qualified Cardano.Binary as Serialize
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Config.Cardano
 import qualified Cardano.DbSync.Era.Cardano.Util as Cardano
-import qualified Cardano.DbSync.Era.Generic.EpochUpdate as Generic
-import qualified Cardano.DbSync.Era.Generic.Rewards as Generic
+import qualified Cardano.DbSync.Era.Shelley.Generic.EpochUpdate as Generic
+import qualified Cardano.DbSync.Era.Shelley.Generic.Rewards as Generic
 import           Cardano.DbSync.Types hiding (CardanoBlock)
 import           Cardano.DbSync.Util
 

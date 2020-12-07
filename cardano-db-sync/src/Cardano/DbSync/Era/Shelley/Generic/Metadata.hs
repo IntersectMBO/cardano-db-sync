@@ -7,14 +7,18 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Cardano.DbSync.Era.Allegra.Metadata
-  ( fromAllegraMetaData
+module Cardano.DbSync.Era.Shelley.Generic.Metadata
+  ( fromAllegraMetadata
+  , fromShelleyMetadata
+  , fromMaryMetadata
   , metadataValueToJsonNoSchema
   ) where
 
 import           Cardano.Prelude
 
 import           Cardano.Api.Shelley (TxMetadataValue (..))
+
+import qualified Cardano.Ledger.ShelleyMA.Metadata as ShelleyMa
 
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Text as Aeson.Text
@@ -26,26 +30,26 @@ import qualified Data.Text.Lazy as Text.Lazy
 import           Data.Tuple.Extra (both)
 import qualified Data.Vector as Vector
 
-import qualified Shelley.Spec.Ledger.MetaData as Allegra
+import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardMary)
+
+import qualified Shelley.Spec.Ledger.MetaData as Shelley
 
 -- This module should not even exist. The only reason it does is because functionality
 -- that was in cardano-node commit 0dc6efa467a0fdae7aba7c5bcd5c657e189c8f19 and being
 -- used here in db-sync was drastically changed and then the changed version was not
 -- exported.
 
-fromAllegraMetaData :: Allegra.MetaData -> Map Word64 TxMetadataValue
-fromAllegraMetaData (Allegra.MetaData mdMap) =
-    Map.map fromAllegraMetaDatum mdMap
-  where
-    fromAllegraMetaDatum :: Allegra.MetaDatum -> TxMetadataValue
-    fromAllegraMetaDatum smd =
-      case smd of
-        Allegra.I x -> TxMetaNumber x
-        Allegra.B x -> TxMetaBytes  x
-        Allegra.S x -> TxMetaText   x
-        Allegra.List xs -> TxMetaList $ map fromAllegraMetaDatum xs
-        Allegra.Map xs -> TxMetaMap $ map (both fromAllegraMetaDatum) xs
+fromAllegraMetadata :: ShelleyMa.Metadata StandardAllegra -> Map Word64 TxMetadataValue
+fromAllegraMetadata (ShelleyMa.Metadata mdMap _scripts) =
+  Map.map fromAllegraMetaDatum mdMap
 
+fromShelleyMetadata :: Shelley.MetaData -> Map Word64 TxMetadataValue
+fromShelleyMetadata (Shelley.MetaData mdMap) =
+  Map.map fromAllegraMetaDatum mdMap
+
+fromMaryMetadata :: ShelleyMa.Metadata StandardMary -> Map Word64 TxMetadataValue
+fromMaryMetadata (ShelleyMa.Metadata mdMap _scripts) =
+  Map.map fromAllegraMetaDatum mdMap
 
 metadataValueToJsonNoSchema :: TxMetadataValue -> Aeson.Value
 metadataValueToJsonNoSchema = conv
@@ -71,10 +75,20 @@ metadataValueToJsonNoSchema = conv
     convKey (TxMetaText txt) = txt
     convKey v                = Text.Lazy.toStrict
                              . Aeson.Text.encodeToLazyText
-                             . conv
-                             $ v
+                             $ conv v
+
+-- -------------------------------------------------------------------------------------------------
 
 -- | JSON strings that are base16 encoded and prefixed with 'bytesPrefix' will
 -- be encoded as CBOR bytestrings.
 bytesPrefix :: Text
 bytesPrefix = "0x"
+
+fromAllegraMetaDatum :: Shelley.MetaDatum -> TxMetadataValue
+fromAllegraMetaDatum smd =
+  case smd of
+    Shelley.I x -> TxMetaNumber x
+    Shelley.B x -> TxMetaBytes x
+    Shelley.S x -> TxMetaText x
+    Shelley.List xs -> TxMetaList $ map fromAllegraMetaDatum xs
+    Shelley.Map xs -> TxMetaMap $ map (both fromAllegraMetaDatum) xs

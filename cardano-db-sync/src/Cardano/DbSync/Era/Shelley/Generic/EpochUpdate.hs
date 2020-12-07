@@ -1,4 +1,4 @@
-module Cardano.DbSync.Era.Generic.EpochUpdate
+module Cardano.DbSync.Era.Shelley.Generic.EpochUpdate
   ( EpochUpdate (..)
   , allegraEpochUpdate
   , maryEpochUpdate
@@ -6,9 +6,9 @@ module Cardano.DbSync.Era.Generic.EpochUpdate
   ) where
 
 import           Cardano.DbSync.Config.Types (DbSyncEnv (..))
-import           Cardano.DbSync.Era.Generic.ProtoParams
-import           Cardano.DbSync.Era.Generic.Rewards
-import           Cardano.DbSync.Era.Generic.StakeDist
+import           Cardano.DbSync.Era.Shelley.Generic.ProtoParams
+import           Cardano.DbSync.Era.Shelley.Generic.Rewards
+import           Cardano.DbSync.Era.Shelley.Generic.StakeDist
 
 import           Data.Maybe (fromMaybe)
 
