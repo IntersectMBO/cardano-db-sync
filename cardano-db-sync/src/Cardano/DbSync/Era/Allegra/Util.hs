@@ -209,11 +209,11 @@ txInputList = toList . ShelleyMa.inputs . unTxBodyRaw
 
 txInvalidBefore :: Shelley.Tx StandardAllegra -> Maybe Word64
 txInvalidBefore =
-  fmap unSlotNo . Shelley.strictMaybeToMaybe . ShelleyMa.validTo . ShelleyMa.vldt . unTxBodyRaw
+  fmap unSlotNo . Shelley.strictMaybeToMaybe . ShelleyMa.validFrom . ShelleyMa.vldt . unTxBodyRaw
 
 txInvalidHereafter :: Shelley.Tx StandardAllegra -> Maybe Word64
 txInvalidHereafter =
-  fmap unSlotNo . Shelley.strictMaybeToMaybe . ShelleyMa.validFrom . ShelleyMa.vldt . unTxBodyRaw
+  fmap unSlotNo . Shelley.strictMaybeToMaybe . ShelleyMa.validTo . ShelleyMa.vldt . unTxBodyRaw
 
 txMetadata :: Shelley.Tx StandardAllegra -> Maybe (ShelleyMa.Metadata StandardAllegra)
 txMetadata (Shelley.Tx _body _wit md) = Shelley.strictMaybeToMaybe md
