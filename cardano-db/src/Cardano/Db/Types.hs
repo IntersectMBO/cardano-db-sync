@@ -10,6 +10,7 @@ module Cardano.Db.Types
   , DbLovelace (..)
   , DbInt65 (..)
   , DbWord64 (..)
+  , integerToDbInt65
   , lovelaceToAda
   , renderAda
   , scientificToAda
@@ -72,6 +73,11 @@ newtype DbWord64
   deriving (Eq, Generic)
   deriving (Read, Show) via (Quiet DbWord64)
 
+integerToDbInt65 :: Integer -> DbInt65
+integerToDbInt65 i =
+  if i >= 0
+    then PosInt65 (fromIntegral i)
+    else NegInt65 (fromIntegral $ negate i)
 
 lovelaceToAda :: Micro -> Ada
 lovelaceToAda ll =

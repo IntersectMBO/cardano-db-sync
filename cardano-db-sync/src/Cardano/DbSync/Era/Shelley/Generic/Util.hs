@@ -21,6 +21,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Util
   , unitIntervalToDouble
   , unKeyHashRaw
   , unKeyHashView
+  , unScriptHash
   , unTxHash
   ) where
 
@@ -51,6 +52,7 @@ import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import           Shelley.Spec.Ledger.Coin (Coin (..))
 import qualified Shelley.Spec.Ledger.Credential as Shelley
 import qualified Shelley.Spec.Ledger.Keys as Shelley
+import qualified Shelley.Spec.Ledger.Scripts as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 
 
@@ -113,6 +115,9 @@ unKeyHashRaw (Shelley.KeyHash kh) = Crypto.hashToBytes kh
 
 unKeyHashView :: Shelley.KeyHash 'Shelley.StakePool StandardCrypto -> Text
 unKeyHashView = Api.serialiseToBech32 . Api.StakePoolKeyHash
+
+unScriptHash :: Shelley.ScriptHash StandardShelley -> ByteString
+unScriptHash (Shelley.ScriptHash h) = Crypto.hashToBytes h
 
 unTxHash :: Shelley.TxId era -> ByteString
 unTxHash (Shelley.TxId txid) = Crypto.hashToBytes txid

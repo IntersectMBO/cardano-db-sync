@@ -61,6 +61,7 @@ data Tx = Tx
   , txCertificates :: ![TxCertificate]
   , txWithdrawals :: ![TxWithdrawal]
   , txParamProposal :: !(Maybe (Shelley.Update StandardShelley))
+  , txMint :: !(Value StandardShelley)
   }
 
 data TxCertificate = TxCertificate
@@ -103,6 +104,7 @@ fromAllegraTx (blkIndex, tx) =
       , txCertificates = zipWith TxCertificate [0..] (map coerceCertificate . toList . ShelleyMa.certs $ unTxBodyRaw tx)
       , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . ShelleyMa.wdrls $ unTxBodyRaw tx)
       , txParamProposal = coerceProtoUpdate <$> Shelley.strictMaybeToMaybe (ShelleyMa.update $ unTxBodyRaw tx)
+      , txMint = mempty     -- Allegra does not support Multi-Assets
       }
   where
     fromTxOut :: Word16 -> Shelley.TxOut StandardAllegra -> TxOut
@@ -111,7 +113,7 @@ fromAllegraTx (blkIndex, tx) =
         { txOutIndex = index
         , txOutAddress = coerceAddress addr
         , txOutAdaValue = ada
-        , txOutMaValue = mempty
+        , txOutMaValue = mempty -- Allegra does not support Multi-Assets
         }
 
     txMeta :: Shelley.Tx StandardAllegra -> Maybe (ShelleyMa.Metadata StandardAllegra)
@@ -119,9 +121,6 @@ fromAllegraTx (blkIndex, tx) =
 
     txOutValue :: Shelley.TxOut StandardAllegra -> Integer
     txOutValue (Shelley.TxOut _ (Coin coin)) = coin
-
-    -- txByteSize :: Shelley.Tx StandardAllegra -> Int
-    -- txByteSize (Shelley.Tx (ShelleyMa.TxBodyConstr txBody) _wit _md) = SBS.length (memobytes txBody)
 
     unTxBodyRaw :: Shelley.Tx StandardAllegra -> ShelleyMa.TxBodyRaw StandardAllegra
     unTxBodyRaw (Shelley.Tx (ShelleyMa.TxBodyConstr txBody) _wit _md) = memotype txBody
@@ -144,6 +143,7 @@ fromShelleyTx (blkIndex, tx) =
       , txCertificates = zipWith TxCertificate [0..] (toList . Shelley._certs $ Shelley._body tx)
       , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . Shelley._wdrls $ Shelley._body tx)
       , txParamProposal = Shelley.strictMaybeToMaybe $ Shelley._txUpdate (Shelley._body tx)
+      , txMint = mempty     -- Shelley does not support Multi-Assets
       }
   where
     fromTxOut :: Word16 -> Shelley.TxOut StandardShelley -> TxOut
@@ -152,7 +152,7 @@ fromShelleyTx (blkIndex, tx) =
         { txOutIndex = index
         , txOutAddress = coerceAddress addr
         , txOutAdaValue = ada
-        , txOutMaValue = mempty
+        , txOutMaValue = mempty -- Shelley does not support Multi-Assets
         }
 
     txOutValue :: Shelley.TxOut StandardShelley -> Integer
@@ -176,6 +176,7 @@ fromMaryTx (blkIndex, tx) =
       , txCertificates = zipWith TxCertificate [0..] (map coerceCertificate . toList . ShelleyMa.certs $ unTxBodyRaw tx)
       , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . ShelleyMa.wdrls $ unTxBodyRaw tx)
       , txParamProposal = coerceProtoUpdate <$> Shelley.strictMaybeToMaybe (ShelleyMa.update $ unTxBodyRaw tx)
+      , txMint = coerceMint (ShelleyMa.mint $ unTxBodyRaw tx)
       }
   where
     fromTxOut :: Word16 -> Shelley.TxOut StandardMary -> TxOut
@@ -212,6 +213,9 @@ coerceCertificate cert =
     Shelley.DCertPool pool -> Shelley.DCertPool (coercePoolCert pool)
     Shelley.DCertMir (Shelley.MIRCert pot rwds) -> Shelley.DCertMir (Shelley.MIRCert pot (Map.mapKeys coerce rwds))
     Shelley.DCertGenesis gen -> Shelley.DCertGenesis (coerce gen)
+
+coerceMint :: Value StandardMary -> Value StandardShelley
+coerceMint (Value ada maMap) = Value ada (Map.mapKeys coerce maMap)
 
 coerceMultiAsset
     :: Map (PolicyID era) (Map AssetName Integer)
@@ -256,7 +260,11 @@ fromTxIn (Shelley.TxIn (Shelley.TxId txid) index) =
     }
 
 mkTxWithdrawal :: (Shelley.RewardAcnt era, Coin) -> TxWithdrawal
-mkTxWithdrawal (ra, c) = TxWithdrawal (coerce ra) c
+mkTxWithdrawal (ra, c) =
+  TxWithdrawal
+    { txwRewardAccount = coerce ra
+    , txwAmount = c
+    }
 
 txHashId :: ShelleyBasedEra era => Shelley.Tx era -> ByteString
 txHashId = Crypto.hashToBytes . Shelley.hashAnnotated . Shelley._body
