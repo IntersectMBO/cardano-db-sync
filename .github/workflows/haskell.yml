@@ -116,3 +116,6 @@ jobs:
 
     - name: Build
       run: cabal build all --builddir="$CABAL_BUILDDIR"
+
+    - name: Test
+      run: cabal test cardano-db:test --builddir="$CABAL_BUILDDIR"
