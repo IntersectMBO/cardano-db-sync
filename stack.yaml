@@ -1,7 +1,7 @@
-resolver: https://raw.githubusercontent.com/input-output-hk/cardano-prelude/742e8525b96bf4b66fb61a00c8298d75d7931d5e/snapshot.yaml
+resolver: https://raw.githubusercontent.com/input-output-hk/cardano-haskell/master/snapshots/cardano-1.24.2.yaml
 compiler: ghc-8.6.5
 
-allow-newer: true
+#allow-newer: true
 
 packages:
   - cardano-db
@@ -22,134 +22,14 @@ ghc-options:
   cardano-db-sync-extended: -Wall -Werror -fwarn-redundant-constraints
 
 extra-deps:
-
-  - binary-0.8.7.0
-  - bimap-0.4.0
-  - brick-0.47.1
-  - config-ini-0.2.4.0
-  - containers-0.5.11.0
-  - data-clist-0.1.2.3
-  - ekg-prometheus-adapter-0.1.0.4
-  - esqueleto-3.4.0.1
-  - generic-monoid-0.1.0.0
-  - libsystemd-journal-1.4.4
-  - network-3.1.1.1
-  - snap-core-1.0.4.1
-  - snap-server-1.1.1.1
   - persistent-2.11.0.1
   - persistent-postgresql-2.11.0.0
   - persistent-template-2.9.1.0
-  - prometheus-2.1.2
-  - pvss-0.2.0
-  - tasty-hedgehog-1.0.0.2
-  - text-zipper-0.10.1
-  - time-units-1.0.0
-  - word-wrap-0.4.1
-  - transformers-except-0.1.1
-  - text-ansi-0.1.0
-  - Diff-0.4.0
-  - katip-0.8.3.0
-  - moo-1.2
-  - gray-code-0.3.1
-  - Unique-0.4.7.6
-  - statistics-linreg-0.3
-  - socks-0.6.1
-  - servant-0.17
-  - servant-server-0.17
-  - connection-0.3.1
-  - http-api-data-0.4.1.1
-  - time-compat-1.9.2.2
-  - quiet-0.2
-  - partial-order-0.2.0.0
-  - text-1.2.4.0
-  - base64-0.4.2.2
-  - bech32-1.1.0
-  - ghc-byteorder-4.11.0.0.10
-  - systemd-2.3.0
-  - memory-0.15.0
 
-  - git: https://github.com/input-output-hk/cardano-crypto
-    commit: 2547ad1e80aeabca2899951601079408becbc92c
+  - esqueleto-3.4.0.1
 
-  - git: https://github.com/input-output-hk/cardano-prelude
-    commit: 742e8525b96bf4b66fb61a00c8298d75d7931d5e
-    subdirs:
-      - cardano-prelude
-      - cardano-prelude-test
-
-  - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: 563e79f28c6da5c547463391d4c58a81442e48db
-    subdirs:
-      - contra-tracer
-      - iohk-monitoring
-      - plugins/backend-aggregation
-      - plugins/backend-ekg
-      - plugins/backend-monitoring
-      - plugins/backend-trace-forwarder
-      - plugins/scribe-systemd
-      - tracer-transformers
-
-  - git: https://github.com/input-output-hk/cardano-base
-    commit: 2574600da11065937c1f07e4b234ecb451016a2e
-    subdirs:
-      - binary
-      - cardano-crypto-praos
-      - binary/test
-      - cardano-crypto-class
-      - slotting
-
-  - git: https://github.com/input-output-hk/goblins
-    commit: cde90a2b27f79187ca8310b6549331e59595e7ba
-
-  - git: https://github.com/input-output-hk/cardano-ledger-specs
-    commit: 581767d1329f3f702e332af08355e81a0f85333e
-    subdirs:
-      - byron/crypto
-      - byron/crypto/test
-      - byron/chain/executable-spec
-      - byron/ledger/executable-spec
-      - byron/ledger/impl
-      - byron/ledger/impl/test
-      - semantics/executable-spec
-      - semantics/small-steps-test
-      - shelley/chain-and-ledger/dependencies/non-integer
-      - shelley/chain-and-ledger/executable-spec
-      - shelley/chain-and-ledger/shelley-spec-ledger-test
-      - shelley-ma/impl
-
-  - git: https://github.com/input-output-hk/ouroboros-network
-    commit: c2bd6814e231bfd48059f306ef486b830e524aa8
-    subdirs:
-      - cardano-client
-      - io-sim
-      - io-sim-classes
-      - ouroboros-consensus
-      - ouroboros-consensus-byron
-      - ouroboros-consensus-cardano
-      - ouroboros-consensus-shelley
-      - ouroboros-network
-      - ouroboros-network-framework
-      - ouroboros-network-testing
-      - typed-protocols
-      - typed-protocols-examples
-      - network-mux
-      - Win32-network
-
-
-  - git: https://github.com/input-output-hk/cardano-node
-    commit: 196ba716c425a0b7c75741c168f6a6d7edaee1fc
-    subdirs:
-      - cardano-api
-      - cardano-config
-      - cardano-node
-      - hedgehog-extras
-
-flags:
-  # Bundle VRF crypto in libsodium and do not rely on an external fork to have it.
-  # This still requires the host system to have the 'standard' libsodium installed.
-  cardano-crypto-praos:
-    external-libsodium-vrf: false
-
+  # Compiler error 'System.Metrics.Prometheus.Http.Scrape (serveMetricsT)'
+  - prometheus-2.2.2
 
 nix:
   pure: true
