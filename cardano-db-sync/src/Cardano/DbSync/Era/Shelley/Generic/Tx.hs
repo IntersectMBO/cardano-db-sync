@@ -95,8 +95,8 @@ fromAllegraTx (blkIndex, tx) =
       , txOutputs = zipWith fromTxOut [0 .. ] $ toList (ShelleyMa.outputs $ unTxBodyRaw tx)
       , txFees = ShelleyMa.txfee (unTxBodyRaw tx)
       , txOutSum = Coin . sum $ map txOutValue (ShelleyMa.outputs $ unTxBodyRaw tx)
-      , txInvalidBefore = Shelley.strictMaybeToMaybe . ShelleyMa.validTo $ ShelleyMa.vldt (unTxBodyRaw tx)
-      , txInvalidHereafter = Shelley.strictMaybeToMaybe . ShelleyMa.validFrom $ ShelleyMa.vldt (unTxBodyRaw tx)
+      , txInvalidBefore = Shelley.strictMaybeToMaybe . ShelleyMa.validFrom $ ShelleyMa.vldt (unTxBodyRaw tx)
+      , txInvalidHereafter = Shelley.strictMaybeToMaybe . ShelleyMa.validTo $ ShelleyMa.vldt (unTxBodyRaw tx)
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
                             . Shelley.unWdrl $ ShelleyMa.wdrls (unTxBodyRaw tx)
       , txMetadata = fromAllegraMetadata <$> txMeta tx
@@ -168,8 +168,8 @@ fromMaryTx (blkIndex, tx) =
       , txOutputs = zipWith fromTxOut [0 .. ] $ toList (ShelleyMa.outputs $ unTxBodyRaw tx)
       , txFees = ShelleyMa.txfee (unTxBodyRaw tx)
       , txOutSum = Coin . sum $ map txOutValue (ShelleyMa.outputs $ unTxBodyRaw tx)
-      , txInvalidBefore = Shelley.strictMaybeToMaybe . ShelleyMa.validTo $ ShelleyMa.vldt (unTxBodyRaw tx)
-      , txInvalidHereafter = Shelley.strictMaybeToMaybe . ShelleyMa.validFrom $ ShelleyMa.vldt (unTxBodyRaw tx)
+      , txInvalidBefore = Shelley.strictMaybeToMaybe . ShelleyMa.validFrom $ ShelleyMa.vldt (unTxBodyRaw tx)
+      , txInvalidHereafter = Shelley.strictMaybeToMaybe . ShelleyMa.validTo $ ShelleyMa.vldt (unTxBodyRaw tx)
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
                             . Shelley.unWdrl $ ShelleyMa.wdrls (unTxBodyRaw tx)
       , txMetadata = fromMaryMetadata <$> txMeta tx
