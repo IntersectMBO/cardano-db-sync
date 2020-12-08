@@ -35,6 +35,7 @@ import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
 import           Cardano.Ledger.Era (Crypto)
+import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..), Value (..))
 
 import           Cardano.Slotting.Block (BlockNo (..))
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
@@ -114,8 +115,8 @@ insertShelleyBlock tracer env blk lStateSnap details = do
       logger followingClosely tracer $ mconcat
         [ renderInsertName (Generic.blkEra blk), ": epoch "
         , textShow (unEpochNo $ sdEpochNo details)
-        , ", slot ", textShow (Generic.blkSlotNo blk)
-        , ", block ", textShow (Generic.blkBlockNo blk)
+        , ", slot ", textShow (unSlotNo $ Generic.blkSlotNo blk)
+        , ", block ", textShow (unBlockNo $ Generic.blkBlockNo blk)
         , ", hash ", renderByteArray (Generic.blkHash blk)
         ]
 
@@ -187,22 +188,25 @@ insertTx tracer env blkId epochNo blockIndex tx = do
       Nothing -> pure ()
       Just pu -> insertParamProposal tracer txId pu
 
+    insertMaTxMint tracer txId $ Generic.txMint tx
+
 insertTxOut
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Generic.TxOut
     -> ExceptT e (ReaderT SqlBackend m) ()
-insertTxOut _tracer txId (Generic.TxOut index addr value _massets) = do
+insertTxOut tracer txId (Generic.TxOut index addr value maMap) = do
   mSaId <- lift $ insertStakeAddressRefIfMissing txId addr
-  void . lift . DB.insertTxOut $
-            DB.TxOut
-              { DB.txOutTxId = txId
-              , DB.txOutIndex = index
-              , DB.txOutAddress = Generic.renderAddress addr
-              , DB.txOutAddressRaw = Shelley.serialiseAddr addr
-              , DB.txOutPaymentCred = Generic.maybePaymentCred addr
-              , DB.txOutStakeAddressId = mSaId
-              , DB.txOutValue = Generic.coinToDbLovelace value
-              }
+  txOutId <- lift . DB.insertTxOut $
+                DB.TxOut
+                  { DB.txOutTxId = txId
+                  , DB.txOutIndex = index
+                  , DB.txOutAddress = Generic.renderAddress addr
+                  , DB.txOutAddressRaw = Shelley.serialiseAddr addr
+                  , DB.txOutPaymentCred = Generic.maybePaymentCred addr
+                  , DB.txOutStakeAddressId = mSaId
+                  , DB.txOutValue = Generic.coinToDbLovelace value
+                  }
+  insertMaTxOut tracer txOutId maMap
 
 insertTxIn
     :: (MonadBaseControl IO m, MonadIO m)
@@ -680,4 +684,58 @@ insertEpochStake _tracer blkId (EpochNo epoch) smap =
           , DB.epochStakeAmount = Generic.coinToDbLovelace coin
           , DB.epochStakeEpochNo = epoch -- The epoch where this delegation becomes valid.
           , DB.epochStakeBlockId = blkId
+          }
+
+insertMaTxMint
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DB.TxId -> Value StandardShelley
+    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+insertMaTxMint _tracer txId (Value _adaShouldAlwaysBeZeroButWeDoNotCheck mintMap) =
+    mapM_ insertOuter $ Map.toList mintMap
+  where
+    insertOuter
+        :: (MonadBaseControl IO m, MonadIO m)
+        => (PolicyID StandardShelley, Map AssetName Integer)
+        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    insertOuter (policy, aMap) =
+      mapM_ (insertInner policy) $ Map.toList aMap
+
+    insertInner
+        :: (MonadBaseControl IO m, MonadIO m)
+        => PolicyID StandardShelley -> (AssetName, Integer)
+        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    insertInner policy (aname, amount) =
+      void . lift . DB.insertMaTxMint $
+        DB.MaTxMint
+          { DB.maTxMintPolicy = Generic.unScriptHash (policyID policy)
+          , DB.maTxMintName = assetName aname
+          , DB.maTxMintQuantity = DB.integerToDbInt65 amount
+          , DB.maTxMintTxId = txId
+          }
+
+insertMaTxOut
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DB.TxOutId -> Map (PolicyID StandardShelley) (Map AssetName Integer)
+    -> ExceptT e (ReaderT SqlBackend m) ()
+insertMaTxOut _tracer txOutId maMap =
+    mapM_ insertOuter $ Map.toList maMap
+  where
+    insertOuter
+        :: (MonadBaseControl IO m, MonadIO m)
+        => (PolicyID StandardShelley, Map AssetName Integer)
+        -> ExceptT e (ReaderT SqlBackend m) ()
+    insertOuter (policy, aMap) =
+      mapM_ (insertInner policy) $ Map.toList aMap
+
+    insertInner
+        :: (MonadBaseControl IO m, MonadIO m)
+        => PolicyID StandardShelley -> (AssetName, Integer)
+        -> ExceptT e (ReaderT SqlBackend m) ()
+    insertInner policy (aname, amount) =
+      void . lift . DB.insertMaTxOut $
+        DB.MaTxOut
+          { DB.maTxOutPolicy = Generic.unScriptHash (policyID policy)
+          , DB.maTxOutName = assetName aname
+          , DB.maTxOutQuantity = DbWord64 (fromIntegral amount)
+          , DB.maTxOutTxOutId = txOutId
           }

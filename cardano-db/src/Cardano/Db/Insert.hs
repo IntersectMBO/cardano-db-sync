@@ -8,6 +8,8 @@ module Cardano.Db.Insert
   , insertEpochParam
   , insertEpochStake
   , insertMeta
+  , insertMaTxMint
+  , insertMaTxOut
   , insertParamProposal
   , insertPoolHash
   , insertPoolMetaData
@@ -61,6 +63,12 @@ insertEpochParam = insertByReturnKey "EpochParam"
 
 insertEpochStake :: (MonadBaseControl IO m, MonadIO m) => EpochStake -> ReaderT SqlBackend m EpochStakeId
 insertEpochStake = insertByReturnKey "EpochStake"
+
+insertMaTxMint :: (MonadBaseControl IO m, MonadIO m) => MaTxMint -> ReaderT SqlBackend m MaTxMintId
+insertMaTxMint = insertByReturnKey "insertMaTxMint"
+
+insertMaTxOut :: (MonadBaseControl IO m, MonadIO m) => MaTxOut -> ReaderT SqlBackend m MaTxOutId
+insertMaTxOut = insertByReturnKey "insertMaTxOut"
 
 insertMeta :: (MonadBaseControl IO m, MonadIO m) => Meta -> ReaderT SqlBackend m MetaId
 insertMeta = insertByReturnKey "Meta"
