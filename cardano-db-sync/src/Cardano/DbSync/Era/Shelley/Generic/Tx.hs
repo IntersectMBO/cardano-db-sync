@@ -137,7 +137,7 @@ fromShelleyTx (blkIndex, tx) =
       , txFees = Shelley._txfee (Shelley._body tx)
       , txOutSum = Coin . sum $ map txOutValue (Shelley._outputs $ Shelley._body tx)
       , txInvalidBefore = Nothing
-      , txInvalidHereafter = Nothing
+      , txInvalidHereafter = Just $ Shelley._ttl (Shelley._body tx)
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
                             . Shelley.unWdrl $ Shelley._wdrls (Shelley._body tx)
       , txMetadata = fromShelleyMetadata <$> Shelley.strictMaybeToMaybe (Shelley._metadata tx)
