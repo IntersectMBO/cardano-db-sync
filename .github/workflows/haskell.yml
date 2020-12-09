@@ -117,17 +117,6 @@ jobs:
     - name: Build
       run: cabal build all --builddir="$CABAL_BUILDDIR"
 
-    - name: Set up and build cardano-node
-      run: |
-        cd ..
-        git clone https://github.com/input-output-hk/cardano-node.git --branch 1.24.1
-        cd cardano-node
-
-        cat >> cabal.project.local <<EOF
-        package cardano-crypto-praos
-          flags: -external-libsodium-vrf
-        EOF
-
     - name: Configure and run testnet
       run: |
         cat config/mainnet-config.yaml | sed 's|^NodeConfigFile:.*$|NodeConfigFile: ../../cardano-node/configuration/cardano/mainnet-config.json|g' > config/mainnet-config.yaml.tmp
