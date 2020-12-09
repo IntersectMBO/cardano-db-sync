@@ -128,14 +128,12 @@ jobs:
           flags: -external-libsodium-vrf
         EOF
 
-        cabal build cardano-cli cardano-node cardano-node-chairman cardano-testnet
+        cabal build cardano-cli cardano-node cardano-node-chairman
 
     - name: Configure and run testnet
       run: |
         cat config/mainnet-config.yaml | sed 's|^NodeConfigFile:.*$|NodeConfigFile: ../../cardano-node/configuration/cardano/mainnet-config.json|g' > config/mainnet-config.yaml.tmp
         mv config/mainnet-config.yaml.tmp config/mainnet-config.yaml
-        cd ../cardano-node
-        cabal run -- cardano-testnet byron-shelley &
 
     - name: Set up database user (Linux)
       if: matrix.os == 'ubuntu-latest'
