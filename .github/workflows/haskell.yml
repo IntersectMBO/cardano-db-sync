@@ -128,7 +128,7 @@ jobs:
           flags: -external-libsodium-vrf
         EOF
 
-        cabal build cardano-cli cardano-node cardano-node-chairman
+        cabal build cardano-cli cardano-node
 
     - name: Configure and run testnet
       run: |
