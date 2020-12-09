@@ -128,8 +128,6 @@ jobs:
           flags: -external-libsodium-vrf
         EOF
 
-        cabal build cardano-cli cardano-node
-
     - name: Configure and run testnet
       run: |
         cat config/mainnet-config.yaml | sed 's|^NodeConfigFile:.*$|NodeConfigFile: ../../cardano-node/configuration/cardano/mainnet-config.json|g' > config/mainnet-config.yaml.tmp
