@@ -166,8 +166,8 @@ insertTx tracer env blkId epochNo blockIndex tx = do
                 , DB.txFee = DB.DbLovelace (fromIntegral . unCoin $ Generic.txFees tx)
                 , DB.txDeposit = fromIntegral (inSum + withdrawalSum) - fromIntegral (outSum + fees)
                 , DB.txSize = Generic.txSize tx
-                , DB.txInvalidBefore = unSlotNo <$> Generic.txInvalidBefore tx
-                , DB.txInvalidHereafter = unSlotNo <$> Generic.txInvalidHereafter tx
+                , DB.txInvalidBefore = DbWord64 . unSlotNo <$> Generic.txInvalidBefore tx
+                , DB.txInvalidHereafter = DbWord64 . unSlotNo <$> Generic.txInvalidHereafter tx
                 }
 
     -- Insert outputs for a transaction before inputs in case the inputs for this transaction
