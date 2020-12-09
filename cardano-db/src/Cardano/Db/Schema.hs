@@ -104,9 +104,10 @@ share
     deposit             Int64                                   -- Needs to allow negaitve values.
     size                Word64              sqltype=uinteger
 
-    invalidBefore       Word64 Maybe        sqltype=uinteger
-    invalidHereafter    Word64 Maybe        sqltype=uinteger
+    invalidBefore       DbWord64 Maybe      sqltype=word64type
+    invalidHereafter    DbWord64 Maybe      sqltype=word64type
     UniqueTx            hash
+    deriving Show
 
   StakeAddress          -- Can be an address of a script hash
     hashRaw             ByteString          sqltype=addr29type
