@@ -117,11 +117,25 @@ jobs:
     - name: Build
       run: cabal build all --builddir="$CABAL_BUILDDIR"
 
-    - name: Set up config cardano-node
+    - name: Set up and build cardano-node
       run: |
-        git clone https://github.com/input-output-hk/cardano-node.git
-        sed -i 's|^NodeConfigFile:.*$|NodeConfigFile: ../cardano-node/configuration/cardano/mainnet-config.json|g' config/mainnet-config.yaml
-        cat config/mainnet-config.yaml
+        cd ..
+        git clone https://github.com/input-output-hk/cardano-node.git --branch 1.24.1
+        cd cardano-node
+
+        cat >> cabal.project.local <<EOF
+        package cardano-crypto-praos
+          flags: -external-libsodium-vrf
+        EOF
+
+        cabal build cardano-cli cardano-node cardano-node-chairman cardano-testnet
+
+    - name: Configure and run testnet
+      run: |
+        cat config/mainnet-config.yaml | sed 's|^NodeConfigFile:.*$|NodeConfigFile: ../../cardano-node/configuration/cardano/mainnet-config.json|g' > config/mainnet-config.yaml.tmp
+        mv config/mainnet-config.yaml.tmp config/mainnet-config.yaml
+        cd ../cardano-node
+        cabal run -- cardano-testnet byron-shelley &
 
     - name: Set up database user (Linux)
       if: matrix.os == 'ubuntu-latest'
@@ -135,11 +149,14 @@ jobs:
         chmod 600 config/pgpass-mainnet
 
         PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh --createdb
-        PGPASSFILE=config/pgpass-mainnet "$cardano_db_sync_exe" \
-            --config config/mainnet-config.yaml \
-            --socket-path node.socket \
-            --state-dir ledger-state/mainnet \
-            --schema-dir schema/
+        # PGPASSFILE=config/pgpass-mainnet "$cardano_db_sync_exe" \
+        #     --config config/mainnet-config.yaml \
+        #     --socket-path node.socket \
+        #     --state-dir ledger-state/mainnet \
+        #     --schema-dir schema/
+
+    - name: Clone mainnet
+      run: git clone https://github.com/input-output-hk/cardano-mainnet-mirror
 
     - name: Run tests
-      run: cabal test --builddir="$CABAL_BUILDDIR" all -j1
+      run: CARDANO_MAINNET_MIRROR="$(pwd)/cardano-mainnet-mirror/epochs" cabal test --builddir="$CABAL_BUILDDIR" all -j1
