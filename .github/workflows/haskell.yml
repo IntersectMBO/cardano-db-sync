@@ -92,7 +92,7 @@ jobs:
       run: cabal update
 
     - name: Cabal Configure
-      run: cabal configure --builddir="$CABAL_BUILDDIR" --enable-tests --enable-benchmarks --write-ghc-environment-files=always
+      run: cabal configure --builddir="$CABAL_BUILDDIR" --write-ghc-environment-files=always
 
     - name: Configure to use libsodium
       run: |
@@ -117,5 +117,18 @@ jobs:
     - name: Build
       run: cabal build all --builddir="$CABAL_BUILDDIR"
 
-    - name: Test
-      run: cabal test cardano-db:test --builddir="$CABAL_BUILDDIR"
+    - name: Set up database user (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: sudo -u postgres createuser --createdb --superuser runner
+
+    - name: Set up database
+      run: |
+        cardano_db_sync_exe="$(cat $CABAL_BUILDDIR/cache/plan.json | jq -r '."install-plan"[] | select(."component-name" == "exe:cardano-db-sync") | ."bin-file"' | head)"
+
+        echo "Executable found at: $cardano_db_sync_exe"
+        chmod 600 config/pgpass-mainnet
+
+        PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh --createdb
+
+    - name: Run tests
+      run: cabal test --builddir="$CABAL_BUILDDIR" all -j1
