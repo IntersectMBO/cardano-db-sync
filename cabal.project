@@ -1,4 +1,4 @@
-index-state: 2020-11-15T00:00:00Z
+index-state: 2020-12-11T00:00:00Z
 
 packages:
   cardano-db
@@ -12,6 +12,7 @@ constraints:
     -- systemd-2.3.0 requires at least network 3.1.1.0 but it doesn't declare
     -- that dependency
   , network >= 3.1.1.0
+  , persistent-postgresql >= 2.11.0.1
 
 package cardano-explorer-db
   ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields
@@ -52,8 +53,8 @@ package ouroboros-consensus-cardano
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-base
-  tag: 2574600da11065937c1f07e4b234ecb451016a2e
-  --sha256: 0nq8bpzsr3fd2i59a6s6qb6slpymjh47zv57wlifjfvhh0xlgmpx
+  tag: 1312b41c520433478fd4297cfbe9e40d4f3114d4
+  --sha256: 1sw11ifzmbz12p1gmvh8laprmd947kf91l0xr1i4kxc0xnzn9fmf
   subdir:
     binary
     binary/test
@@ -89,8 +90,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: 196ba716c425a0b7c75741c168f6a6d7edaee1fc
-  --sha256: 0i6l645hsa1dih1rqc6kz51c906k5f9zj5aq095gkwby3f0hzikp
+  tag: ce18072408c390abf1ef4b85d82580fe5421cdb3
+  --sha256: 1s23ndh0dl8j14zhmisx0xblbl8w867fizbyksxsfq0m72jwl4sg
   subdir:
     cardano-api
     cardano-config
@@ -100,8 +101,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-prelude
-  tag: 742e8525b96bf4b66fb61a00c8298d75d7931d5e
-  --sha256: 1132r58bjgdcf7yz3n77nlrkanqcmpn5b5km4nw151yar2dgifsv
+  tag: 8ced9d8713a7ad82f75a90c6103259e61c412d33
+  --sha256: 19inypc7ixydjjs7082iysanqrv9r276irs07lba7h1m2jy6d5xq
   subdir:
     cardano-prelude
     cardano-prelude-test
@@ -115,8 +116,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/iohk-monitoring-framework
-  tag: 563e79f28c6da5c547463391d4c58a81442e48db
-  --sha256: 1is18h9kk8j16my89q76nihvapiiff3jl8777vk7c4wl2h4zry2w
+  tag: a89c38ed5825ba17ca79fddb85651007753d699d
+  --sha256: 0i4p3jbr9pxhklgbky2g7rfqhccvkqzph0ak5x8bb6kwp7c7b8wf
   subdir:
     contra-tracer
     iohk-monitoring
@@ -147,11 +148,3 @@ source-repository-package
     typed-protocols-examples
     network-mux
     Win32-network
-
-source-repository-package
-  type: git
-  location: https://github.com/kderme/persistent
-  tag: c31367bb080963f2e8d46c5e7c613ae07b12b9fe
-  --sha256: 0i61nz4xfn2i1f5iij4hwil08ihs18hvc9yz985h8p3703rvayql
-  subdir:
-    persistent-postgresql

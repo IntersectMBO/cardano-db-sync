@@ -23,18 +23,13 @@ ghc-options:
 
 extra-deps:
   - persistent-2.11.0.1
-  - persistent-postgresql-2.11.0.0
+  - persistent-postgresql-2.11.0.1
   - persistent-template-2.9.1.0
 
   - esqueleto-3.4.0.1
 
   # Compiler error 'System.Metrics.Prometheus.Http.Scrape (serveMetricsT)'
   - prometheus-2.2.2
-
-  - git: https://github.com/kderme/persistent
-    commit: c31367bb080963f2e8d46c5e7c613ae07b12b9fe
-    subdirs:
-      - persistent-postgresql
 
 nix:
   pure: true
