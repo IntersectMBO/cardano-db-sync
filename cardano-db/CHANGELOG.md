@@ -1,5 +1,9 @@
 # Revision history for cardano-db
 
+## 7.1.1
+* Handle ChainSync protocol oddity (#433).
+* Update dependencies.
+
 ## 7.1.0
 * Upgrading from 7.0.x will not require the database to be dropped and recreated but upgrading from
   6.0.x and earlier will require it.
