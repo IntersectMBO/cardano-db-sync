@@ -142,6 +142,13 @@ let
       mkdir -p -m 1777 tmp
       if [[ -z "$NETWORK" ]]; then
         echo "Connecting to network specified in configuration.yaml"
+
+        # This is a hack to try to workaround issue 433,
+        # until that is fixed properly.
+        # https://github.com/input-output-hk/cardano-db-sync/issues/433
+        echo "Waiting 60s to give the node a head start"
+        sleep 60
+
         if [[ ! -z "''${EXTENDED}" ]] && [[ "''${EXTENDED}" == true ]]
         then
           DBSYNC=${cardano-db-sync-extended}/bin/cardano-db-sync-extended
