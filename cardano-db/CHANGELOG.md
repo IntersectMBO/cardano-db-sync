@@ -1,5 +1,12 @@
 # Revision history for cardano-db
 
+## 7.1.0
+* Upgrading from 7.0.x will not require the database to be dropped and recreated but upgrading from
+  6.0.x and earlier will require it.
+* Update dependencies.
+* Support for the Mary era (ie multi-asset support).
+* Fix issues with transactions invalidBefore/invalidHereafter fields.
+
 ## 7.0.0
 * Note that this release requires the database to be dropped and recreated.
 * Update dependencies.

@@ -27,7 +27,7 @@ import           Control.Tracer (Tracer)
 
 import           Cardano.BM.Data.Tracer (ToLogObject (..))
 import qualified Cardano.BM.Setup as Logging
-import           Cardano.BM.Trace (Trace, appendName, logInfo)
+import           Cardano.BM.Trace (Trace, appendName, logInfo, logWarning)
 import qualified Cardano.BM.Trace as Logging
 
 import qualified Cardano.Chain.Genesis as Byron
@@ -363,12 +363,18 @@ chainSyncClient trce env queryVar metrics latestPoints currentTip actionQueue =
       ClientStNext
         { recvMsgRollForward = \blk tip ->
               logException trce "recvMsgRollForward: " $ do
-                Gauge.set (withOrigin 0 (fromIntegral . unBlockNo) (getTipBlockNo tip)) (mNodeHeight metrics)
-                details <- getSlotDetails trce env queryVar (getTipPoint tip) (cardanoBlockSlotNo blk)
-                newSize <- atomically $ do
-                            writeDbActionQueue actionQueue $ mkDbApply blk details
-                            lengthDbActionQueue actionQueue
-                Gauge.set (fromIntegral newSize) $ mQueuePostWrite metrics
+                if withOrigin 0 unBlockNo (getTipBlockNo tip) == 0
+                  then do
+                    -- https://github.com/input-output-hk/cardano-db-sync/issues/433
+                    liftIO $ logWarning trce "Node has not yet received blocks from the network. Sleeping for 1 minute."
+                    threadDelay (60 * 1000 * 1000)
+                  else do
+                    Gauge.set (withOrigin 0 (fromIntegral . unBlockNo) (getTipBlockNo tip)) (mNodeHeight metrics)
+                    details <- getSlotDetails trce env queryVar (getTipPoint tip) (cardanoBlockSlotNo blk)
+                    newSize <- atomically $ do
+                                writeDbActionQueue actionQueue $ mkDbApply blk details
+                                lengthDbActionQueue actionQueue
+                    Gauge.set (fromIntegral newSize) $ mQueuePostWrite metrics
                 pure $ finish (At (blockNo blk)) tip
         , recvMsgRollBackward = \point tip ->
               logException trce "recvMsgRollBackward: " $ do
