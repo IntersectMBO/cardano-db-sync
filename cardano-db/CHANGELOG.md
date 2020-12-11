@@ -1,5 +1,8 @@
 # Revision history for cardano-db
 
+## 7.1.2
+* Change the workaround for the startup race condition (#433, #436).
+
 ## 7.1.1
 * Handle ChainSync protocol oddity (#433).
 * Update dependencies.
