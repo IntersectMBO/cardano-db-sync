@@ -14,6 +14,7 @@ module Cardano.DbSync.LedgerState
   , listLedgerStateSlotNos
   , loadLedgerState
   , readLedgerState
+  , resetLedgerState
   , saveLedgerState
   ) where
 
@@ -33,7 +34,8 @@ import           Cardano.Prelude
 import           Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), fromWithOrigin)
 
-import           Control.Concurrent.STM.TVar (TVar, newTVarIO, readTVar, readTVarIO, writeTVar)
+import           Control.Concurrent.STM.TVar (TVar, modifyTVar', newTVarIO, readTVar, readTVarIO,
+                   writeTVar)
 import qualified Control.Exception as Exception
 import           Control.Monad.Extra (firstJustM)
 
@@ -68,8 +70,9 @@ import           System.FilePath (dropExtension, takeExtension, (</>))
 {- HLINT ignore "Reduce duplication" -}
 
 data CardanoLedgerState = CardanoLedgerState
-  { clsState :: !(ExtLedgerState (CardanoBlock StandardCrypto))
-  , clsConfig :: !(TopLevelConfig (CardanoBlock StandardCrypto))
+  { clsConfig :: !(TopLevelConfig (CardanoBlock StandardCrypto))
+  , clsGenesis :: !(ExtLedgerState (CardanoBlock StandardCrypto))
+  , clsState :: !(ExtLedgerState (CardanoBlock StandardCrypto))
   }
 
 newtype LedgerStateVar = LedgerStateVar
@@ -92,6 +95,7 @@ initLedgerStateVar genesisConfig =
   fmap LedgerStateVar . newTVarIO $
     CardanoLedgerState
       { clsState = Consensus.pInfoInitLedger protocolInfo
+      , clsGenesis = Consensus.pInfoInitLedger protocolInfo
       , clsConfig = Consensus.pInfoConfig protocolInfo
       }
   where
@@ -168,6 +172,11 @@ loadLedgerState stateDir (LedgerStateVar stateVar) slotNo = do
   case mState of
     Nothing -> pure ()
     Just st -> atomically $ writeTVar stateVar st
+
+-- | Reset the ledger state to Genesis.
+resetLedgerState :: LedgerStateVar -> IO ()
+resetLedgerState (LedgerStateVar var) =
+  atomically $ modifyTVar' var (\ st -> st { clsState = clsGenesis st })
 
 -- -------------------------------------------------------------------------------------------------
 

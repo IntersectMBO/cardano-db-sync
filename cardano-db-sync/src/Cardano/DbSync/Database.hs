@@ -93,6 +93,10 @@ runActions trce env plugin ledgerState actions = do
       case spanDbApply xs of
         ([], DbFinish:_) -> do
             pure Done
+        ([], DbRollBackToGenesis:ys) -> do
+            runRollbacks trce plugin (SlotNo 0)
+            liftIO $ resetLedgerState ledgerState
+            dbAction Continue ys
         ([], DbRollBackToPoint sn:ys) -> do
             runRollbacks trce plugin sn
             liftIO $ loadLedgerState (envLedgerStateDir env) ledgerState sn
@@ -149,6 +153,7 @@ checkDbState trce xs =
             BlockShelley {} -> False
             BlockAllegra {} -> False
             BlockMary {} -> False
+        DbRollBackToGenesis -> False
         DbRollBackToPoint {} -> False
         DbFinish -> False
 

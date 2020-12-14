@@ -29,6 +29,7 @@ import           Ouroboros.Network.Block (Point (..), pointSlot)
 data DbAction
   = DbApplyBlock !BlockDetails
   | DbRollBackToPoint !SlotNo
+  | DbRollBackToGenesis
   | DbFinish
 
 
@@ -41,9 +42,9 @@ mkDbApply :: CardanoBlock -> SlotDetails -> DbAction
 mkDbApply cblk details =
   DbApplyBlock (BlockDetails cblk details)
 
-mkDbRollback :: SlotNo -> DbAction
-mkDbRollback = DbRollBackToPoint
-
+mkDbRollback :: Point CardanoBlock -> DbAction
+mkDbRollback =
+  withOrigin DbRollBackToGenesis DbRollBackToPoint . pointSlot
 
 -- The Point data type is probably really convenient in the libraries where it is defined
 -- and used but is a huge pain in the neck here in db-sync.
