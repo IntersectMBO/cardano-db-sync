@@ -230,6 +230,22 @@ cexplorer=# select block.epoch_no, count (*) as block_count
 ....
 ```
 
+### Get the tx_id, tx_block_id, tx_out_address of a voting registration.
+```
+cexplorer=# select tx.id as tx_id, tx.block_id as tx_block_id, tx_out.address as tx_out_address from tx inner join tx_metadata on tx.id = tx_metadata.tx_id inner join tx_out on tx.id = tx_out.tx_id WHERE tx.hash = '\x9053a4cf0c6c9fb29792c78e688c5915a02909d0073371d8fff1abba0bed3065';
+  tx_id  | tx_block_id |                       tx_out_address                       
+---------+-------------+------------------------------------------------------------
+ 3192730 |     5083822 | addr1vy6d0htdaa9k8du2262p2ju74s25g6rjyjsc9x2fky9r6jq402r08
+ 3192730 |     5083822 | addr1vy6d0htdaa9k8du2262p2ju74s25g6rjyjsc9x2fky9r6jq402r08
+....
+```
+
+to find your transaction hash of your voter registration:
+```
+cardano-cli transaction txid --tx-file metadata.txsigned
+9053a4cf0c6c9fb29792c78e688c5915a02909d0073371d8fff1abba0bed3065
+```
+
 ---
 
 [Query.hs]: https://github.com/input-output-hk/cardano-db-sync/blob/master/cardano-db/src/Cardano/Db/Query.hs
