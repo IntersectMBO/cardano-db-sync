@@ -73,11 +73,19 @@ jobs:
       if: matrix.os == 'macos-latest'
       run: brew install libsodium
 
+    - name: Select optimal cabal version
+      run: |
+        case "$OS" in
+          Windows_NT)   echo "CABAL_VERSION=3.2.0.0"      >> $GITHUB_ENV;;
+          *)            echo "CABAL_VERSION=3.4.0.0-rc4"  >> $GITHUB_ENV;;
+        esac
+
     - uses: actions/setup-haskell@v1
       id: setup-haskell
       with:
         ghc-version: ${{ matrix.ghc }}
-        cabal-version: '3.2.0.0'
+        cabal-version: ${{ env.CABAL_VERSION }}
+
 
     - name: Install build environment
       if: matrix.os == 'ubuntu-latest'
