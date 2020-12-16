@@ -5,6 +5,7 @@ let
   self = config.internal.syncPackages;
   envConfig = cfg.environment;
   configFile = __toFile "db-sync-config.json" (__toJSON (cfg.explorerConfig // cfg.logConfig));
+  stateDirBase = "/var/lib/";
 in {
   options = {
     internal = lib.mkOption {
@@ -141,9 +142,15 @@ in {
         ExecStart        = cfg.script;
         User             = cfg.postgres.user;
         WorkingDirectory = cfg.stateDir;
-        RuntimeDirectory = cfg.stateDir;
-        StateDirectory   = cfg.stateDir;
+        StateDirectory   = lib.removePrefix stateDirBase cfg.stateDir;
       };
     };
+
+    assertions = [
+      {
+        assertion = lib.hasPrefix stateDirBase cfg.stateDir;
+        message = "The option services.cardano-db-sync.stateDir should have ${stateDirBase} as a prefix!";
+      }
+    ];
   };
 }
