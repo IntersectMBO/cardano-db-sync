@@ -25,6 +25,7 @@ import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Util
 
+import           Cardano.Ledger.Core (TxBody)
 import           Cardano.Ledger.Era (Crypto)
 import           Cardano.Ledger.Shelley.Constraints (ShelleyBased)
 
@@ -43,6 +44,7 @@ import qualified Shelley.Spec.Ledger.API as Shelley
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import qualified Shelley.Spec.Ledger.Coin as Shelley
 import qualified Shelley.Spec.Ledger.Genesis as Shelley
+import           Shelley.Spec.Ledger.Hashing (HashIndex)
 import           Shelley.Spec.Ledger.Scripts ()
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
 import qualified Shelley.Spec.Ledger.UTxO as Shelley
@@ -226,13 +228,19 @@ genesisTxoAssocList =
     -- unTxOut :: Shelley.TxOut StandardCrypto -> (Shelley.Addr StandardCrypto, Shelley.Coin)
     unTxOut (Shelley.TxOut addr amount) = (addr, amount)
 
-genesisUtxOs :: ShelleyBased era => ShelleyGenesis (Crypto era) -> [(Shelley.TxIn (Crypto era), Shelley.TxOut (Crypto era))]
+genesisUtxOs
+    :: HashIndex (TxBody era) ~ Shelley.EraIndependentTxBody
+    => HashIndex (TxBody (Crypto era)) ~ Shelley.EraIndependentTxBody
+    => ShelleyGenesis era -> [(Shelley.TxIn (Crypto era), Shelley.TxOut era)]
 genesisUtxOs =
     Map.toList . unUTxO . Shelley.genesisUtxO
-  where
-    -- Sigh!
-    unUTxO :: ShelleyBased era => Shelley.UTxO era -> Map (Shelley.TxIn (Crypto era)) (Shelley.TxOut era)
-    unUTxO (Shelley.UTxO m) = m
+
+
+-- Sigh!
+unUTxO
+    :: HashIndex (TxBody (Crypto era)) ~ Shelley.EraIndependentTxBody
+    => Shelley.UTxO era -> Map (Shelley.TxIn (Crypto era)) (Shelley.TxOut era)
+unUTxO (Shelley.UTxO m) = m
 
 configStartTime :: ShelleyGenesis StandardShelley -> UTCTime
 configStartTime = roundToMillseconds . Shelley.sgSystemStart
