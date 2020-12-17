@@ -13,7 +13,7 @@ constraints:
     -- that dependency
   , network >= 3.1.1.0
   , persistent-postgresql >= 2.11.0.1
-  , nothunks >= 0.1.2
+  , nothunks < 0.1.2
 
 package cardano-explorer-db
   ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields
