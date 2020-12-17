@@ -19,8 +19,9 @@ import qualified Cardano.Crypto.Hash as Crypto
 
 import           Cardano.DbSync.Era.Shelley.Generic.Metadata
 
-import qualified Cardano.Ledger.Core as ShelleyMa
+import           Cardano.Ledger.Crypto (Crypto)
 import           Cardano.Ledger.Mary.Value (AssetName, PolicyID, Value (..))
+import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as ShelleyMa
 import qualified Cardano.Ledger.ShelleyMA.TxBody as ShelleyMa
 
 import           Cardano.Prelude
@@ -33,7 +34,8 @@ import qualified Data.Map.Strict as Map
 import           Data.MemoBytes (MemoBytes (..))
 import qualified Data.Set as Set
 
-import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardMary, StandardShelley)
+import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardCrypto, StandardMary,
+                   StandardShelley)
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
@@ -66,7 +68,7 @@ data Tx = Tx
 
 data TxCertificate = TxCertificate
   { txcIndex :: !Word16
-  , txcCert :: !(Shelley.DCert StandardShelley)
+  , txcCert :: !(Shelley.DCert StandardCrypto)
   }
 
 data TxWithdrawal = TxWithdrawal
@@ -96,8 +98,8 @@ fromAllegraTx (blkIndex, tx) =
       , txOutputs = zipWith fromTxOut [0 .. ] $ toList (ShelleyMa.outputs $ unTxBodyRaw tx)
       , txFees = ShelleyMa.txfee (unTxBodyRaw tx)
       , txOutSum = Coin . sum $ map txOutValue (ShelleyMa.outputs $ unTxBodyRaw tx)
-      , txInvalidBefore = Shelley.strictMaybeToMaybe . ShelleyMa.validFrom $ ShelleyMa.vldt (unTxBodyRaw tx)
-      , txInvalidHereafter = Shelley.strictMaybeToMaybe . ShelleyMa.validTo $ ShelleyMa.vldt (unTxBodyRaw tx)
+      , txInvalidBefore = Shelley.strictMaybeToMaybe . ShelleyMa.invalidBefore $ ShelleyMa.vldt (unTxBodyRaw tx)
+      , txInvalidHereafter = Shelley.strictMaybeToMaybe . ShelleyMa.invalidHereafter $ ShelleyMa.vldt (unTxBodyRaw tx)
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
                             . Shelley.unWdrl $ ShelleyMa.wdrls (unTxBodyRaw tx)
       , txMetadata = fromAllegraMetadata <$> txMeta tx
@@ -116,7 +118,7 @@ fromAllegraTx (blkIndex, tx) =
         , txOutMaValue = mempty -- Allegra does not support Multi-Assets
         }
 
-    txMeta :: Shelley.Tx StandardAllegra -> Maybe (ShelleyMa.Metadata StandardAllegra)
+    txMeta :: Shelley.Tx StandardAllegra -> Maybe (ShelleyMa.AuxiliaryData StandardAllegra)
     txMeta (Shelley.Tx _body _wit md) = Shelley.strictMaybeToMaybe md
 
     txOutValue :: Shelley.TxOut StandardAllegra -> Integer
@@ -168,8 +170,8 @@ fromMaryTx (blkIndex, tx) =
       , txOutputs = zipWith fromTxOut [0 .. ] $ toList (ShelleyMa.outputs $ unTxBodyRaw tx)
       , txFees = ShelleyMa.txfee (unTxBodyRaw tx)
       , txOutSum = Coin . sum $ map txOutValue (ShelleyMa.outputs $ unTxBodyRaw tx)
-      , txInvalidBefore = Shelley.strictMaybeToMaybe . ShelleyMa.validFrom $ ShelleyMa.vldt (unTxBodyRaw tx)
-      , txInvalidHereafter = Shelley.strictMaybeToMaybe . ShelleyMa.validTo $ ShelleyMa.vldt (unTxBodyRaw tx)
+      , txInvalidBefore = Shelley.strictMaybeToMaybe . ShelleyMa.invalidBefore $ ShelleyMa.vldt (unTxBodyRaw tx)
+      , txInvalidHereafter = Shelley.strictMaybeToMaybe . ShelleyMa.invalidHereafter $ ShelleyMa.vldt (unTxBodyRaw tx)
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
                             . Shelley.unWdrl $ ShelleyMa.wdrls (unTxBodyRaw tx)
       , txMetadata = fromMaryMetadata <$> txMeta tx
@@ -188,7 +190,7 @@ fromMaryTx (blkIndex, tx) =
         , txOutMaValue = coerceMultiAsset maMap
         }
 
-    txMeta :: Shelley.Tx StandardMary -> Maybe (ShelleyMa.Metadata StandardMary)
+    txMeta :: Shelley.Tx StandardMary -> Maybe (ShelleyMa.AuxiliaryData StandardMary)
     txMeta (Shelley.Tx _body _wit md) = Shelley.strictMaybeToMaybe md
 
     txOutValue :: Shelley.TxOut StandardMary -> Integer
@@ -206,7 +208,7 @@ coerceAddress saddr =
     Shelley.Addr nw pcred sref -> Shelley.Addr nw (coerce pcred) (coerce sref)
     Shelley.AddrBootstrap addr -> Shelley.AddrBootstrap (coerce addr)
 
-coerceCertificate :: Shelley.DCert era -> Shelley.DCert StandardShelley
+coerceCertificate :: Shelley.DCert era -> Shelley.DCert StandardCrypto
 coerceCertificate cert =
   case cert of
     Shelley.DCertDeleg deleg -> Shelley.DCertDeleg (coerce deleg)
@@ -214,7 +216,7 @@ coerceCertificate cert =
     Shelley.DCertMir (Shelley.MIRCert pot rwds) -> Shelley.DCertMir (Shelley.MIRCert pot (Map.mapKeys coerce rwds))
     Shelley.DCertGenesis gen -> Shelley.DCertGenesis (coerce gen)
 
-coerceMint :: Value StandardMary -> Value StandardShelley
+coerceMint :: Value era -> Value StandardShelley
 coerceMint (Value ada maMap) = Value ada (Map.mapKeys coerce maMap)
 
 coerceMultiAsset
@@ -222,13 +224,13 @@ coerceMultiAsset
     -> Map (PolicyID StandardShelley) (Map AssetName Integer)
 coerceMultiAsset = Map.mapKeys coerce
 
-coercePoolCert :: Shelley.PoolCert era -> Shelley.PoolCert StandardShelley
+coercePoolCert :: Shelley.PoolCert era -> Shelley.PoolCert StandardCrypto
 coercePoolCert pcert =
   case pcert of
     Shelley.RegPool cert -> Shelley.RegPool (coercePoolParams cert)
     Shelley.RetirePool kh e -> Shelley.RetirePool (coerce kh) e
 
-coercePoolParams :: Shelley.PoolParams era -> Shelley.PoolParams StandardShelley
+coercePoolParams :: Shelley.PoolParams era -> Shelley.PoolParams StandardCrypto
 coercePoolParams pp =
   Shelley.PoolParams
     { Shelley._poolId = coerce (Shelley._poolId pp)
@@ -252,7 +254,7 @@ coerceProtoUpdate (Shelley.Update pp epoch) =
 
 -- -------------------------------------------------------------------------------------------------
 
-fromTxIn :: ShelleyBasedEra era => Shelley.TxIn era -> TxIn
+fromTxIn :: Crypto era => Shelley.TxIn era -> TxIn
 fromTxIn (Shelley.TxIn (Shelley.TxId txid) index) =
   TxIn
     { txInHash = Crypto.hashToBytes txid
