@@ -45,6 +45,17 @@ The database schema is highly normalised which helps prevent data inconsistencie
 with the use of foreign keys from one table to another). More user friendly database queries can be
 implemented using [Postgres Views][PostgresView] to implement joins between tables.
 
+## System Requirements
+
+The system requirements for `cardano-db-sync` (with both `db-sync` and the `node` running
+on the same machine are:
+
+* Any of the big well known Linux distributions (eg, Debian, Ubuntu, RHEL, CentOS, Arch
+  etc).
+* 8 Gigabytes of RAM.
+* 2 CPU cores.
+* 50 Gigabytes or more of disk storage.
+
 ## Troubleshooting
 
 If you have any issues with this project, consult the [Troubleshooting][Troubleshooting] page for
