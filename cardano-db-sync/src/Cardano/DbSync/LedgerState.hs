@@ -113,9 +113,8 @@ applyBlock env (LedgerStateVar stateVar) blk =
                 { lssState = newState
                 , lssEpochUpdate =
                     if ledgerEpochNo newState == ledgerEpochNo oldState + 1
-                      then Just $
-                             ledgerEpochUpdate env (clsState newState)
-                               (ledgerRewardUpdate env (ledgerState $ clsState oldState))
+                      then ledgerEpochUpdate env (clsState newState)
+                             (ledgerRewardUpdate env (ledgerState $ clsState oldState))
                       else Nothing
                 }
   where
@@ -285,13 +284,13 @@ ledgerEpochNo cls =
     epochInfo = epochInfoLedger (configLedger $ clsConfig cls) (hardForkLedgerStatePerEra . ledgerState $ clsState cls)
 
 -- Create an EpochUpdate from the current epoch state and the rewards from the last epoch.
-ledgerEpochUpdate :: DbSyncEnv -> ExtLedgerState (CardanoBlock StandardCrypto) -> Maybe Generic.Rewards -> Generic.EpochUpdate
+ledgerEpochUpdate :: DbSyncEnv -> ExtLedgerState (CardanoBlock StandardCrypto) -> Maybe Generic.Rewards -> Maybe Generic.EpochUpdate
 ledgerEpochUpdate env els mRewards =
   case ledgerState els of
-    LedgerStateByron _ -> panic "ledgerEpochUpdate: LedgerStateByron but should be Shelley"
-    LedgerStateShelley sls -> Generic.shelleyEpochUpdate env sls mRewards mNonce
-    LedgerStateAllegra als -> Generic.allegraEpochUpdate env als mRewards mNonce
-    LedgerStateMary mls -> Generic.maryEpochUpdate env mls mRewards mNonce
+    LedgerStateByron _ -> Nothing
+    LedgerStateShelley sls -> Just $ Generic.shelleyEpochUpdate env sls mRewards mNonce
+    LedgerStateAllegra als -> Just $ Generic.allegraEpochUpdate env als mRewards mNonce
+    LedgerStateMary mls -> Just $ Generic.maryEpochUpdate env mls mRewards mNonce
   where
     mNonce :: Maybe Shelley.Nonce
     mNonce = extractEpochNonce els
