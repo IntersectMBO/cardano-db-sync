@@ -75,6 +75,6 @@ possible solutions.
 [Docker]: doc/docker.md
 [ExampleQueries]: doc/interesting-queries.md
 [PostgresView]: https://www.postgresql.org/docs/current/sql-createview.html
-[Schema Management]: doc/interesting-queries.md
+[Schema Management]: doc/schema-management.md
 [Troubleshooting]: doc/troubleshooting.md
 [Validation]: doc/validation.md
