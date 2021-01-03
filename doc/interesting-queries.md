@@ -247,6 +247,18 @@ cardano-cli transaction txid --tx-file metadata.txsigned
 9053a4cf0c6c9fb29792c78e688c5915a02909d0073371d8fff1abba0bed3065
 ```
 
+### Get the amount delegated by epoch for a specified address
+```
+cexplorer=# select stake_address.view as stake_address, epoch_stake.epoch_no, epoch_stake.amount
+              from stake_address inner join epoch_stake on stake_address.id = epoch_stake.addr_id
+              where stake_address.view = 'stake1u8mt5gqclkq0swmvzx9lvq4jgwsnx9yh030yrxwqwllu0mq2m0l4n' ;
+                        stake_address                        | epoch_no |   amount
+-------------------------------------------------------------+----------+-------------
+ stake1u8mt5gqclkq0swmvzx9lvq4jgwsnx9yh030yrxwqwllu0mq2m0l4n |      211 |  1561003730
+ stake1u8mt5gqclkq0swmvzx9lvq4jgwsnx9yh030yrxwqwllu0mq2m0l4n |      212 |  1561003730
+...
+```
+
 ---
 
 [Query.hs]: https://github.com/input-output-hk/cardano-db-sync/blob/master/cardano-db/src/Cardano/Db/Query.hs
