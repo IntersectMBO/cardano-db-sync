@@ -69,14 +69,14 @@ retire. Therefore to get the latest pool registration for every pool that is sti
 valid:
 ```
 cexplorer=# select * from pool_update
-              where registered_tx_id in (select max(registered_tx_id) from pool_update group by reward_addr_id)
+              where registered_tx_id in (select max(registered_tx_id) from pool_update group by reward_addr)
               and not exists (select * from pool_retire where pool_retire.hash_id = pool_update.id);
 
 ```
 To include the pool hash in the query output:
 ```
 cexplorer=# select * from pool_update inner join pool_hash on pool_update.hash_id = pool_hash.id
-              where registered_tx_id in (select max(registered_tx_id) from pool_update group by reward_addr_id)
+              where registered_tx_id in (select max(registered_tx_id) from pool_update group by reward_addr)
               and not exists (select * from pool_retire where pool_retire.hash_id = pool_update.id);
 ```
 
@@ -202,7 +202,7 @@ cexplorer=# select reward.epoch_no, pool_hash.view as delegated_pool, reward.amo
 
 ```
 cexplorer=# select block.block_no, block.epoch_no, pool_hash.view as pool_view
-              from block inner join slot_leader on block.slot_leader = slot_leader.id
+              from block inner join slot_leader on block.slot_leader_id = slot_leader.id
               inner join pool_hash on slot_leader.pool_hash_id = pool_hash.id
               where block.epoch_no = 220
                 and pool_hash.view = 'pool137x32lrkprphrd0aa8x4jqz98z6lc0wawlc88hdjeps4qe408ad' ;
@@ -217,7 +217,7 @@ cexplorer=# select block.block_no, block.epoch_no, pool_hash.view as pool_view
 
 ```
 cexplorer=# select block.epoch_no, count (*) as block_count
-              from block inner join slot_leader on block.slot_leader = slot_leader.id
+              from block inner join slot_leader on block.slot_leader_id = slot_leader.id
               inner join pool_hash on slot_leader.pool_hash_id = pool_hash.id
               where pool_hash.view = 'pool1nux6acnlx0du7ss9fhg2phjlaqe87l4wcurln5r6f0k8xreluez'
               group by block.epoch_no, pool_hash.view ;
