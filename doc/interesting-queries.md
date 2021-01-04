@@ -69,14 +69,14 @@ retire. Therefore to get the latest pool registration for every pool that is sti
 valid:
 ```
 cexplorer=# select * from pool_update
-              where registered_tx_id in (select max(registered_tx_id) from pool_update group by reward_addr_id)
+              where registered_tx_id in (select max(registered_tx_id) from pool_update group by reward_addr)
               and not exists (select * from pool_retire where pool_retire.hash_id = pool_update.id);
 
 ```
 To include the pool hash in the query output:
 ```
 cexplorer=# select * from pool_update inner join pool_hash on pool_update.hash_id = pool_hash.id
-              where registered_tx_id in (select max(registered_tx_id) from pool_update group by reward_addr_id)
+              where registered_tx_id in (select max(registered_tx_id) from pool_update group by reward_addr)
               and not exists (select * from pool_retire where pool_retire.hash_id = pool_update.id);
 ```
 
@@ -202,7 +202,7 @@ cexplorer=# select reward.epoch_no, pool_hash.view as delegated_pool, reward.amo
 
 ```
 cexplorer=# select block.block_no, block.epoch_no, pool_hash.view as pool_view
-              from block inner join slot_leader on block.slot_leader = slot_leader.id
+              from block inner join slot_leader on block.slot_leader_id = slot_leader.id
               inner join pool_hash on slot_leader.pool_hash_id = pool_hash.id
               where block.epoch_no = 220
                 and pool_hash.view = 'pool137x32lrkprphrd0aa8x4jqz98z6lc0wawlc88hdjeps4qe408ad' ;
@@ -217,7 +217,7 @@ cexplorer=# select block.block_no, block.epoch_no, pool_hash.view as pool_view
 
 ```
 cexplorer=# select block.epoch_no, count (*) as block_count
-              from block inner join slot_leader on block.slot_leader = slot_leader.id
+              from block inner join slot_leader on block.slot_leader_id = slot_leader.id
               inner join pool_hash on slot_leader.pool_hash_id = pool_hash.id
               where pool_hash.view = 'pool1nux6acnlx0du7ss9fhg2phjlaqe87l4wcurln5r6f0k8xreluez'
               group by block.epoch_no, pool_hash.view ;
@@ -245,6 +245,18 @@ to find your transaction hash of your voter registration:
 ```
 cardano-cli transaction txid --tx-file metadata.txsigned
 9053a4cf0c6c9fb29792c78e688c5915a02909d0073371d8fff1abba0bed3065
+```
+
+### Get the amount delegated by epoch for a specified address
+```
+cexplorer=# select stake_address.view as stake_address, epoch_stake.epoch_no, epoch_stake.amount
+              from stake_address inner join epoch_stake on stake_address.id = epoch_stake.addr_id
+              where stake_address.view = 'stake1u8mt5gqclkq0swmvzx9lvq4jgwsnx9yh030yrxwqwllu0mq2m0l4n' ;
+                        stake_address                        | epoch_no |   amount
+-------------------------------------------------------------+----------+-------------
+ stake1u8mt5gqclkq0swmvzx9lvq4jgwsnx9yh030yrxwqwllu0mq2m0l4n |      211 |  1561003730
+ stake1u8mt5gqclkq0swmvzx9lvq4jgwsnx9yh030yrxwqwllu0mq2m0l4n |      212 |  1561003730
+...
 ```
 
 ---
