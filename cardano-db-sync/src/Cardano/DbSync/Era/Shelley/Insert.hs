@@ -55,7 +55,7 @@ import qualified Data.Text.Encoding.Error as Text
 
 import           Database.Persist.Sql (SqlBackend)
 
-import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShelley)
+import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import           Shelley.Spec.Ledger.BaseTypes (StrictMaybe, strictMaybeToMaybe)
@@ -238,7 +238,7 @@ insertCertificate tracer env txId epochNo (Generic.TxCertificate idx cert) =
 
 insertPoolCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> EpochNo -> DB.TxId -> Word16 -> Shelley.PoolCert StandardShelley
+    => Trace IO Text -> EpochNo -> DB.TxId -> Word16 -> Shelley.PoolCert StandardCrypto
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertPoolCert tracer epoch txId idx pCert =
   case pCert of
@@ -247,7 +247,7 @@ insertPoolCert tracer epoch txId idx pCert =
 
 insertDelegCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> EpochNo -> Shelley.DelegCert StandardShelley
+    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> EpochNo -> Shelley.DelegCert StandardCrypto
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertDelegCert tracer env txId idx epochNo dCert =
   case dCert of
@@ -255,10 +255,9 @@ insertDelegCert tracer env txId idx epochNo dCert =
     Shelley.DeRegKey cred -> insertStakeDeregistration tracer env txId idx cred
     Shelley.Delegate (Shelley.Delegation cred poolkh) -> insertDelegation tracer env txId idx epochNo cred poolkh
 
-
 insertPoolRegister
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> EpochNo -> DB.TxId -> Word16 -> Shelley.PoolParams StandardShelley
+    => Trace IO Text -> EpochNo -> DB.TxId -> Word16 -> Shelley.PoolParams StandardCrypto
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRegister tracer (EpochNo epoch) txId idx params = do
   mdId <- case strictMaybeToMaybe $ Shelley._poolMD params of
@@ -329,7 +328,7 @@ insertPoolRetire txId epochNum idx keyHash = do
 
 insertMetaData
     :: (MonadBaseControl IO m, MonadIO m)
-    => DB.TxId -> Shelley.PoolMetaData
+    => DB.TxId -> Shelley.PoolMetadata
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) DB.PoolMetaDataId
 insertMetaData txId md =
   lift . DB.insertPoolMetaData $
@@ -341,7 +340,7 @@ insertMetaData txId md =
 
 insertStakeAddress
     :: (MonadBaseControl IO m, MonadIO m)
-    => DB.TxId -> Shelley.RewardAcnt StandardShelley
+    => DB.TxId -> Shelley.RewardAcnt StandardCrypto
     -> ReaderT SqlBackend m DB.StakeAddressId
 insertStakeAddress txId rewardAddr =
   -- If the address already esists in the table, it will not be inserted again (due to
@@ -355,7 +354,7 @@ insertStakeAddress txId rewardAddr =
 
 insertStakeAddressRefIfMissing
     :: (MonadBaseControl IO m, MonadIO m)
-    => DB.TxId -> Shelley.Addr StandardShelley
+    => DB.TxId -> Shelley.Addr StandardCrypto
     -> ReaderT SqlBackend m (Maybe DB.StakeAddressId)
 insertStakeAddressRefIfMissing txId addr =
     maybe insertSAR (pure . Just) =<< queryStakeAddressRef addr
@@ -388,7 +387,7 @@ insertPoolOwner poolHashId txId skh =
 
 insertStakeRegistration
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> Word16 -> Shelley.RewardAcnt StandardShelley
+    => Trace IO Text -> DB.TxId -> Word16 -> Shelley.RewardAcnt StandardCrypto
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertStakeRegistration _tracer txId idx rewardAccount = do
   scId <- lift $ insertStakeAddress txId rewardAccount
@@ -401,7 +400,7 @@ insertStakeRegistration _tracer txId idx rewardAccount = do
 
 insertStakeDeregistration
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> Shelley.StakeCredential StandardShelley
+    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> Shelley.StakeCredential StandardCrypto
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertStakeDeregistration _tracer env txId idx cred = do
   scId <- firstExceptT (NELookup "insertStakeDeregistration")
@@ -417,7 +416,7 @@ insertStakeDeregistration _tracer env txId idx cred = do
 insertDelegation
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> EpochNo
-    -> Shelley.StakeCredential StandardShelley -> Shelley.KeyHash 'Shelley.StakePool StandardCrypto
+    -> Shelley.StakeCredential StandardCrypto -> Shelley.KeyHash 'Shelley.StakePool StandardCrypto
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertDelegation _tracer env txId idx (EpochNo epoch) cred poolkh = do
   addrId <- firstExceptT (NELookup "insertDelegation")
@@ -437,7 +436,7 @@ insertDelegation _tracer env txId idx (EpochNo epoch) cred poolkh = do
 
 insertMirCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> Shelley.MIRCert StandardShelley
+    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> Shelley.MIRCert StandardCrypto
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertMirCert _tracer env txId idx mcert = do
     case Shelley.mirPot mcert of
@@ -448,7 +447,7 @@ insertMirCert _tracer env txId idx mcert = do
   where
     insertMirReserves
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Shelley.StakeCredential StandardShelley, Shelley.Coin)
+        => (Shelley.StakeCredential StandardCrypto, Shelley.Coin)
         -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     insertMirReserves (cred, coin) = do
       addrId <- lift . insertStakeAddress txId $ Generic.annotateStakingCred env cred
@@ -462,7 +461,7 @@ insertMirCert _tracer env txId idx mcert = do
 
     insertMirTreasury
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Shelley.StakeCredential StandardShelley, Shelley.Coin)
+        => (Shelley.StakeCredential StandardCrypto, Shelley.Coin)
         -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     insertMirTreasury (cred, coin) = do
       addrId <- lift . insertStakeAddress txId $ Generic.annotateStakingCred env cred
@@ -526,7 +525,7 @@ insertPoolRelay updateId relay =
 
 insertParamProposal
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> Shelley.Update StandardShelley
+    => Trace IO Text -> DB.TxId -> Shelley.Update StandardCrypto
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertParamProposal _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap) (EpochNo epoch)) =
     lift . mapM_ insert $ Map.toList umap
@@ -688,21 +687,21 @@ insertEpochStake _tracer blkId (EpochNo epoch) smap =
 
 insertMaTxMint
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> Value StandardShelley
+    => Trace IO Text -> DB.TxId -> Value StandardCrypto
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertMaTxMint _tracer txId (Value _adaShouldAlwaysBeZeroButWeDoNotCheck mintMap) =
     mapM_ insertOuter $ Map.toList mintMap
   where
     insertOuter
         :: (MonadBaseControl IO m, MonadIO m)
-        => (PolicyID StandardShelley, Map AssetName Integer)
+        => (PolicyID StandardCrypto, Map AssetName Integer)
         -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     insertOuter (policy, aMap) =
       mapM_ (insertInner policy) $ Map.toList aMap
 
     insertInner
         :: (MonadBaseControl IO m, MonadIO m)
-        => PolicyID StandardShelley -> (AssetName, Integer)
+        => PolicyID StandardCrypto -> (AssetName, Integer)
         -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     insertInner policy (aname, amount) =
       void . lift . DB.insertMaTxMint $
@@ -715,21 +714,21 @@ insertMaTxMint _tracer txId (Value _adaShouldAlwaysBeZeroButWeDoNotCheck mintMap
 
 insertMaTxOut
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxOutId -> Map (PolicyID StandardShelley) (Map AssetName Integer)
+    => Trace IO Text -> DB.TxOutId -> Map (PolicyID StandardCrypto) (Map AssetName Integer)
     -> ExceptT e (ReaderT SqlBackend m) ()
 insertMaTxOut _tracer txOutId maMap =
     mapM_ insertOuter $ Map.toList maMap
   where
     insertOuter
         :: (MonadBaseControl IO m, MonadIO m)
-        => (PolicyID StandardShelley, Map AssetName Integer)
+        => (PolicyID StandardCrypto, Map AssetName Integer)
         -> ExceptT e (ReaderT SqlBackend m) ()
     insertOuter (policy, aMap) =
       mapM_ (insertInner policy) $ Map.toList aMap
 
     insertInner
         :: (MonadBaseControl IO m, MonadIO m)
-        => PolicyID StandardShelley -> (AssetName, Integer)
+        => PolicyID StandardCrypto -> (AssetName, Integer)
         -> ExceptT e (ReaderT SqlBackend m) ()
     insertInner policy (aname, amount) =
       void . lift . DB.insertMaTxOut $

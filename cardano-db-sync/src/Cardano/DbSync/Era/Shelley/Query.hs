@@ -32,7 +32,7 @@ import           Database.Persist.Sql (SqlBackend)
 
 import           Numeric.Natural (Natural)
 
-import           Ouroboros.Consensus.Cardano.Block (StandardShelley)
+import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import           Shelley.Spec.Ledger.Credential (Ptr (..), StakeReference (..))
@@ -110,7 +110,7 @@ queryStakePoolKeyHash kh = do
 
 queryStakeAddressRef
     :: MonadIO m
-    => Shelley.Addr StandardShelley
+    => Shelley.Addr StandardCrypto
     -> ReaderT SqlBackend m (Maybe StakeAddressId)
 queryStakeAddressRef addr =
     case addr of

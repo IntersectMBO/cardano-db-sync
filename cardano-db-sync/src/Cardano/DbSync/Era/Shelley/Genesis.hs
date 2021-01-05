@@ -25,6 +25,8 @@ import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Util
 
+import           Cardano.Ledger.Era (Crypto)
+
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
@@ -33,7 +35,7 @@ import qualified Data.Time.Clock as Time
 
 import           Database.Persist.Sql (SqlBackend)
 
-import           Ouroboros.Consensus.Cardano.Block (StandardShelley)
+import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShelley)
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
@@ -165,7 +167,7 @@ validateGenesisDistribution tracer networkName cfg bid =
 
 insertTxOuts
     :: (MonadBaseControl IO m, MonadIO m)
-    => DB.BlockId -> (Shelley.TxIn StandardShelley, Shelley.TxOut StandardShelley)
+    => DB.BlockId -> (Shelley.TxIn (Crypto StandardShelley), Shelley.TxOut StandardShelley)
     -> ReaderT SqlBackend m ()
 insertTxOuts blkId (Shelley.TxIn txInId _, txOut) = do
   -- Each address/value pair of the initial coin distribution comes from an artifical transaction
@@ -193,7 +195,7 @@ insertTxOuts blkId (Shelley.TxIn txInId _, txOut) = do
               , DB.txOutValue = Generic.coinToDbLovelace (txOutCoin txOut)
               }
   where
-    txOutAddress :: Shelley.TxOut StandardShelley -> Shelley.Addr StandardShelley
+    txOutAddress :: Shelley.TxOut StandardShelley -> Shelley.Addr StandardCrypto
     txOutAddress (Shelley.TxOut out _) = out
 
     txOutCoin :: Shelley.TxOut StandardShelley -> Shelley.Coin
@@ -214,19 +216,19 @@ configGenesisSupply =
 genesisTxos :: ShelleyGenesis StandardShelley -> [Shelley.TxOut StandardShelley]
 genesisTxos = map (uncurry Shelley.TxOut) . genesisTxoAssocList
 
-genesisTxoAssocList :: ShelleyGenesis StandardShelley -> [(Shelley.Addr StandardShelley, Shelley.Coin)]
+genesisTxoAssocList :: ShelleyGenesis StandardShelley -> [(Shelley.Addr StandardCrypto, Shelley.Coin)]
 genesisTxoAssocList =
     map (unTxOut . snd) . genesisUtxOs
   where
-    unTxOut :: Shelley.TxOut StandardShelley -> (Shelley.Addr StandardShelley, Shelley.Coin)
+    unTxOut :: Shelley.TxOut StandardShelley -> (Shelley.Addr StandardCrypto, Shelley.Coin)
     unTxOut (Shelley.TxOut addr amount) = (addr, amount)
 
-genesisUtxOs :: ShelleyGenesis StandardShelley -> [(Shelley.TxIn StandardShelley, Shelley.TxOut StandardShelley)]
+genesisUtxOs :: ShelleyGenesis StandardShelley -> [(Shelley.TxIn (Crypto StandardShelley), Shelley.TxOut StandardShelley)]
 genesisUtxOs =
     Map.toList . unUTxO . Shelley.genesisUtxO
   where
     -- Sigh!
-    unUTxO :: Shelley.UTxO StandardShelley -> Map (Shelley.TxIn StandardShelley) (Shelley.TxOut StandardShelley)
+    unUTxO :: Shelley.UTxO StandardShelley -> Map (Shelley.TxIn (Crypto StandardShelley)) (Shelley.TxOut StandardShelley)
     unUTxO (Shelley.UTxO m) = m
 
 configStartTime :: ShelleyGenesis StandardShelley -> UTCTime
