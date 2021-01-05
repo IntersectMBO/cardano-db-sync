@@ -18,7 +18,7 @@ import           Cardano.Prelude
 
 import           Cardano.Api.Shelley (TxMetadataValue (..))
 
-import qualified Cardano.Ledger.ShelleyMA.Metadata as ShelleyMa
+import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as ShelleyMa
 
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Text as Aeson.Text
@@ -32,24 +32,24 @@ import qualified Data.Vector as Vector
 
 import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardMary)
 
-import qualified Shelley.Spec.Ledger.MetaData as Shelley
+import qualified Shelley.Spec.Ledger.Metadata as Shelley
 
 -- This module should not even exist. The only reason it does is because functionality
 -- that was in cardano-node commit 0dc6efa467a0fdae7aba7c5bcd5c657e189c8f19 and being
 -- used here in db-sync was drastically changed and then the changed version was not
 -- exported.
 
-fromAllegraMetadata :: ShelleyMa.Metadata StandardAllegra -> Map Word64 TxMetadataValue
-fromAllegraMetadata (ShelleyMa.Metadata mdMap _scripts) =
-  Map.map fromAllegraMetaDatum mdMap
+fromAllegraMetadata :: ShelleyMa.AuxiliaryData StandardAllegra -> Map Word64 TxMetadataValue
+fromAllegraMetadata (ShelleyMa.AuxiliaryData mdMap _scripts) =
+  Map.map fromMetadatum mdMap
 
-fromShelleyMetadata :: Shelley.MetaData -> Map Word64 TxMetadataValue
-fromShelleyMetadata (Shelley.MetaData mdMap) =
-  Map.map fromAllegraMetaDatum mdMap
+fromShelleyMetadata :: Shelley.Metadata -> Map Word64 TxMetadataValue
+fromShelleyMetadata (Shelley.Metadata mdMap) =
+  Map.map fromMetadatum mdMap
 
-fromMaryMetadata :: ShelleyMa.Metadata StandardMary -> Map Word64 TxMetadataValue
-fromMaryMetadata (ShelleyMa.Metadata mdMap _scripts) =
-  Map.map fromAllegraMetaDatum mdMap
+fromMaryMetadata :: ShelleyMa.AuxiliaryData StandardMary -> Map Word64 TxMetadataValue
+fromMaryMetadata (ShelleyMa.AuxiliaryData mdMap _scripts) =
+  Map.map fromMetadatum mdMap
 
 metadataValueToJsonNoSchema :: TxMetadataValue -> Aeson.Value
 metadataValueToJsonNoSchema = conv
@@ -84,11 +84,11 @@ metadataValueToJsonNoSchema = conv
 bytesPrefix :: Text
 bytesPrefix = "0x"
 
-fromAllegraMetaDatum :: Shelley.MetaDatum -> TxMetadataValue
-fromAllegraMetaDatum smd =
+fromMetadatum :: Shelley.Metadatum -> TxMetadataValue
+fromMetadatum smd =
   case smd of
     Shelley.I x -> TxMetaNumber x
     Shelley.B x -> TxMetaBytes x
     Shelley.S x -> TxMetaText x
-    Shelley.List xs -> TxMetaList $ map fromAllegraMetaDatum xs
-    Shelley.Map xs -> TxMetaMap $ map (both fromAllegraMetaDatum) xs
+    Shelley.List xs -> TxMetaList $ map fromMetadatum xs
+    Shelley.Map xs -> TxMetaMap $ map (both fromMetadatum) xs

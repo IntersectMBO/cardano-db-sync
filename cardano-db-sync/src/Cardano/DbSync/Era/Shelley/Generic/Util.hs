@@ -28,15 +28,12 @@ module Cardano.DbSync.Era.Shelley.Generic.Util
 import           Cardano.Prelude
 
 import qualified Cardano.Api.Shelley as Api
-import qualified Cardano.Api.Typed as Api
 
 import qualified Cardano.Crypto.Hash as Crypto
 
 import           Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as Db
 import           Cardano.DbSync.Config
-
-import           Cardano.Ledger.Crypto ()
 
 import qualified Data.Binary.Put as Binary
 import qualified Data.ByteString.Base16 as Base16
@@ -94,14 +91,15 @@ type family LedgerEraToApiEra ledgerera where
   LedgerEraToApiEra StandardMary = Api.MaryEra
 
 renderAddress
-    :: forall ledgerera era. Api.IsCardanoEra era
-    => LedgerEraToApiEra ledgerera ~ era
+    :: forall era ledgerera.
+       LedgerEraToApiEra ledgerera ~ era
     => Api.ShelleyLedgerEra era ~ ledgerera
     => Api.IsShelleyBasedEra era
-    => Shelley.Addr ledgerera -> Text
+    => ledgerera ~ StandardShelley
+    => Shelley.Addr StandardCrypto -> Text
 renderAddress addr = Api.serialiseAddress (Api.fromShelleyAddr addr :: Api.AddressInEra era)
 
-renderRewardAcnt :: Shelley.RewardAcnt era -> Text
+renderRewardAcnt :: Shelley.RewardAcnt StandardCrypto -> Text
 renderRewardAcnt = Api.serialiseAddress . Api.fromShelleyStakeAddr
 
 stakingCredHash :: DbSyncEnv -> Shelley.StakeCredential era -> ByteString
@@ -116,7 +114,7 @@ unKeyHashRaw (Shelley.KeyHash kh) = Crypto.hashToBytes kh
 unKeyHashView :: Shelley.KeyHash 'Shelley.StakePool StandardCrypto -> Text
 unKeyHashView = Api.serialiseToBech32 . Api.StakePoolKeyHash
 
-unScriptHash :: Shelley.ScriptHash StandardShelley -> ByteString
+unScriptHash :: Shelley.ScriptHash StandardCrypto -> ByteString
 unScriptHash (Shelley.ScriptHash h) = Crypto.hashToBytes h
 
 unTxHash :: Shelley.TxId era -> ByteString
