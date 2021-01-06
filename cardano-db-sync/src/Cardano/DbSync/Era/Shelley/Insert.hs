@@ -612,7 +612,7 @@ insertRewards
     => Trace IO Text -> DB.BlockId -> EpochNo -> Generic.Rewards
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertRewards _tracer blkId epoch rewards =
-    mapM_ insertOneReward $ Map.toList (Generic.unRewards rewards)
+    mapM_ insertOneReward $ Map.toList (Generic.rewards rewards)
   where
     insertOneReward
         :: (MonadBaseControl IO m, MonadIO m)
