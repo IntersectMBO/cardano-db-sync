@@ -7,9 +7,10 @@ module Cardano.Db.Insert
   , insertEpoch
   , insertEpochParam
   , insertEpochStake
-  , insertMeta
   , insertMaTxMint
   , insertMaTxOut
+  , insertMeta
+  , insertOrphanedReward
   , insertParamProposal
   , insertPoolHash
   , insertPoolMetaData
@@ -40,7 +41,7 @@ import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Database.Persist.Class (AtLeastOneUniqueKey, Key, PersistEntityBackend, getByValue,
+import           Database.Persist.Class (AtLeastOneUniqueKey, PersistEntityBackend, getByValue,
                    insert)
 import           Database.Persist.Sql (SqlBackend)
 import           Database.Persist.Types (entityKey)
@@ -72,6 +73,9 @@ insertMaTxOut = insertByReturnKey "insertMaTxOut"
 
 insertMeta :: (MonadBaseControl IO m, MonadIO m) => Meta -> ReaderT SqlBackend m MetaId
 insertMeta = insertByReturnKey "Meta"
+
+insertOrphanedReward :: (MonadBaseControl IO m, MonadIO m) => OrphanedReward -> ReaderT SqlBackend m OrphanedRewardId
+insertOrphanedReward = insertByReturnKey "OrphanedReward"
 
 insertParamProposal :: (MonadBaseControl IO m, MonadIO m) => ParamProposal -> ReaderT SqlBackend m ParamProposalId
 insertParamProposal = insertByReturnKey "ParamProposal"

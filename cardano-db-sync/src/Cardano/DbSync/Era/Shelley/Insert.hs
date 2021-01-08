@@ -121,9 +121,11 @@ insertShelleyBlock tracer env blk lStateSnap details = do
         ]
 
     whenJust (lssEpochUpdate lStateSnap) $ \ esum -> do
-      whenJust (Generic.euRewards esum) $ \ rewards ->
+      whenJust (Generic.euRewards esum) $ \ rewards -> do
         -- Subtract 2 from the epoch to calculate when the epoch in which the reward was earned.
-        insertRewards tracer blkId (sdEpochNo details - 2) rewards
+        insertRewards tracer blkId (sdEpochNo details - 2) (Generic.rewards rewards)
+        insertOrphanedRewards tracer blkId (sdEpochNo details - 2) (Generic.orphaned rewards)
+
       insertEpochParam tracer blkId (sdEpochNo details) (Generic.euProtoParams esum) (Generic.euNonce esum)
       insertEpochStake tracer blkId (sdEpochNo details) (Generic.euStakeDistribution esum)
 
@@ -609,10 +611,10 @@ containsUnicodeNul = Text.isInfixOf "\\u000"
 
 insertRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.BlockId -> EpochNo -> Generic.Rewards
+    => Trace IO Text -> DB.BlockId -> EpochNo -> Map Generic.StakeCred Coin
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertRewards _tracer blkId epoch rewards =
-    mapM_ insertOneReward $ Map.toList (Generic.unRewards rewards)
+    mapM_ insertOneReward $ Map.toList rewards
   where
     insertOneReward
         :: (MonadBaseControl IO m, MonadIO m)
@@ -629,6 +631,30 @@ insertRewards _tracer blkId epoch rewards =
           , DB.rewardEpochNo = unEpochNo epoch
           , DB.rewardPoolId = poolId
           , DB.rewardBlockId = blkId
+          }
+
+insertOrphanedRewards
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DB.BlockId -> EpochNo -> Map Generic.StakeCred Coin
+    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+insertOrphanedRewards _tracer blkId epoch orphanedRewards =
+    mapM_ insertOneOrphanedReward $ Map.toList orphanedRewards
+  where
+    insertOneOrphanedReward
+        :: (MonadBaseControl IO m, MonadIO m)
+        => (Generic.StakeCred, Shelley.Coin)
+        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    insertOneOrphanedReward (saddr, coin) = do
+      (saId, poolId) <- firstExceptT (NELookup "insertOrphanedReward")
+                          . newExceptT
+                          $ queryStakeAddressAndPool (unEpochNo epoch) (Generic.unStakeCred saddr)
+      void . lift . DB.insertOrphanedReward $
+        DB.OrphanedReward
+          { DB.orphanedRewardAddrId = saId
+          , DB.orphanedRewardAmount = Generic.coinToDbLovelace coin
+          , DB.orphanedRewardEpochNo = unEpochNo epoch
+          , DB.orphanedRewardPoolId = poolId
+          , DB.orphanedRewardBlockId = blkId
           }
 
 insertEpochParam

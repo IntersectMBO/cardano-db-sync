@@ -267,6 +267,16 @@ share
     blockId             BlockId             OnDeleteCascade
     UniqueReward        addrId blockId
 
+  -- Orphaned rewards happen when a stake address earns rewards, but the stake address is
+  -- deregistered before the rewards are distributed.
+  OrphanedReward
+    addrId              StakeAddressId
+    amount              DbLovelace          sqltype=lovelace
+    epochNo             Word64
+    poolId              PoolHashId          OnDeleteCascade
+    blockId             BlockId             OnDeleteCascade
+    UniqueOrphaned      addrId blockId
+
   EpochStake
     addrId              StakeAddressId      OnDeleteCascade
     poolId              PoolHashId          OnDeleteCascade
