@@ -91,7 +91,7 @@ insertValidateGenesisDist tracer networkName cfg = do
                         , DB.blockSlotLeaderId = slid
                         , DB.blockSize = 0
                         , DB.blockTime = Byron.configStartTime cfg
-                        , DB.blockTxCount = 0
+                        , DB.blockTxCount = fromIntegral (length $ genesisTxos cfg)
                         -- Genesis block does not have a protocol version, so set this to '0'.
                         , DB.blockProtoMajor = 0
                         , DB.blockProtoMinor = 0
