@@ -5,7 +5,7 @@
 
 module Cardano.DbSync.Era.Byron.Util
   ( blockHash
-  , blockMerkelRoot
+  , blockMerkleRoot
   , blockNumber
   , blockPayload
   , blockPreviousHash
@@ -55,8 +55,8 @@ import qualified Cardano.Db as DB
 blockHash :: Byron.ABlock ByteString -> ByteString
 blockHash = unHeaderHash . Byron.blockHashAnnotated
 
-blockMerkelRoot :: Byron.ABlock ByteString -> Crypto.AbstractHash Blake2b_256 Raw
-blockMerkelRoot =
+blockMerkleRoot :: Byron.ABlock ByteString -> Crypto.AbstractHash Blake2b_256 Raw
+blockMerkleRoot =
   Byron.getMerkleRoot . Byron.txpRoot . Byron.recoverTxProof
     . Byron.bodyTxPayload . Byron.blockBody
 

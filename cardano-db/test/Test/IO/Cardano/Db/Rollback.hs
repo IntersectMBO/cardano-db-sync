@@ -100,7 +100,7 @@ createAndInsertBlocks blockCount =
                         , blockEpochSlotNo = Just indx
                         , blockBlockNo = Just indx
                         , blockPreviousId = mPrevId
-                        , blockMerkelRoot = const (Just (mkMerkelRoot indx)) =<< mPrevBlock
+                        , blockMerkleRoot = const (Just (mkMerkleRoot indx)) =<< mPrevBlock
                         , blockSlotLeaderId = slid
                         , blockSize = 42
                         , blockTime = dummyUTCTime

@@ -15,7 +15,7 @@ BEGIN
     EXECUTE 'CREATE DOMAIN txindex AS smallint CHECK (VALUE >= 0);';
     EXECUTE 'CREATE DOMAIN uinteger AS integer CHECK (VALUE >= 0);';
 
-    -- Blocks, transactions and merkel roots use a 32 byte hash.
+    -- Blocks, transactions and merkle roots use a 32 byte hash.
     EXECUTE 'CREATE DOMAIN hash32type AS bytea CHECK (octet_length (VALUE) = 32);';
 
     -- Addresses use a 28 byte hash (as do StakeholdIds).
