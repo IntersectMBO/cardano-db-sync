@@ -282,7 +282,7 @@ queryGenesisSupply = do
 queryLastByronBlockNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
 queryLastByronBlockNo = do
   res <- select $ from $ \ blk -> do
-                where_ (isJust $ blk ^. BlockMerkelRoot)
+                where_ (isJust $ blk ^. BlockMerkleRoot)
                 orderBy [desc (blk ^. BlockBlockNo)]
                 limit 1
                 pure (blk ^. BlockBlockNo)
