@@ -78,7 +78,7 @@ mkBlockHash blkId =
 
 mkMerkleRoot :: Word64 -> ByteString
 mkMerkleRoot blkId =
-  BS.pack (take 32 $ printf "merkel root #%d" blkId ++ replicate 32 ' ')
+  BS.pack (take 32 $ printf "merkle root #%d" blkId ++ replicate 32 ' ')
 
 mkTxHash :: BlockId -> Word64 -> ByteString
 mkTxHash blk tx =

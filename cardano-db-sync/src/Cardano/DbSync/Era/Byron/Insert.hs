@@ -96,7 +96,7 @@ insertABOBBoundary tracer blk details = do
               , DB.blockEpochSlotNo = Nothing
               , DB.blockBlockNo = Nothing
               , DB.blockPreviousId = Just pbid
-              -- No merkelRoot for a boundary block
+              -- No merkleRoot for a boundary block
               , DB.blockMerkleRoot = Nothing
               , DB.blockSlotLeaderId = slid
               , DB.blockSize = fromIntegral $ Byron.boundaryBlockLength blk
