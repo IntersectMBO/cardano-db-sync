@@ -1,12 +1,9 @@
-
 import           Cardano.Db
-import           Cardano.Db.App
+import           Cardano.Db.Tool
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Control.Applicative (optional)
-
-import           Data.Monoid ((<>))
 import           Data.Word (Word64)
 
 import           Options.Applicative (Parser, ParserInfo, ParserPrefs)

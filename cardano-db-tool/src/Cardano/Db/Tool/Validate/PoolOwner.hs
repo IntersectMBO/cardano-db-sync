@@ -1,8 +1,8 @@
-module Cardano.Db.App.Validate.PoolOwner
+module Cardano.Db.Tool.Validate.PoolOwner
   ( validateAllPoolsHaveOwners
   ) where
 
-import           Cardano.Db.App.Validate.Util
+import           Cardano.Db.Tool.Validate.Util
 
 import           Cardano.Db
 

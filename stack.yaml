@@ -8,6 +8,7 @@ packages:
   - cardano-db/test
   - cardano-db-sync
   - cardano-db-sync-extended
+  - cardano-db-tool
 
 flags:
   # Bundle VRF crypto in libsodium and do not rely on an external fork to have it.
@@ -20,6 +21,7 @@ ghc-options:
   cardano-db-test:          -Wall -Werror -fwarn-redundant-constraints
   cardano-db-sync:          -Wall -Werror -fwarn-redundant-constraints
   cardano-db-sync-extended: -Wall -Werror -fwarn-redundant-constraints
+  cardano-db-tool:          -Wall -Werror -fwarn-redundant-constraints
 
 extra-deps:
   - persistent-2.11.0.1

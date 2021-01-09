@@ -1,0 +1,79 @@
+cabal-version:          >= 1.10
+
+-- http://haskell.org/cabal/users-guide/
+
+name:                   cardano-db-tool
+version:                7.1.0
+synopsis:               Utilities to manage the cardano-db-sync databases.
+description:            Utilities and executable, used to manage and validate the
+                        PostgreSQL db and the ledger database of the cardano-db-sync node
+homepage:               https://github.com/input-output-hk/cardano-db-sync
+bug-reports:		    https://github.com/input-output-hk/cardano-db-sync/issues
+license:                Apache-2.0
+license-file:           LICENSE
+author:                 IOHK Engineering Team
+maintainer:             operations@iohk.io
+copyright:              (c) 2019 IOHK
+category:               Cryptocurrency
+build-type:             Simple
+
+library
+  default-language:     Haskell2010
+  hs-source-dirs:       src
+
+  ghc-options:          -Wall
+                        -Wcompat
+                        -fwarn-redundant-constraints
+                        -fwarn-incomplete-patterns
+                        -fwarn-unused-imports
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+
+  exposed-modules:      Cardano.Db.Tool
+
+  other-modules:        Cardano.Db.Tool.UtxoSet
+                        Cardano.Db.Tool.Validation
+                        Cardano.Db.Tool.Validate.BlockProperties
+                        Cardano.Db.Tool.Validate.BlockTxs
+                        Cardano.Db.Tool.Validate.EpochTable
+                        Cardano.Db.Tool.Validate.PoolOwner
+                        Cardano.Db.Tool.Validate.TotalSupply
+                        Cardano.Db.Tool.Validate.TxAccounting
+                        Cardano.Db.Tool.Validate.Util
+
+  build-depends:        base                            >= 4.12         && < 4.15
+                      , bytestring
+                      , ansi-terminal
+                      , cardano-db
+                      , cardano-ledger
+                      , cardano-slotting
+                      , containers
+                      , esqueleto
+                      , extra
+                      , optparse-applicative
+                      , persistent
+                      , random
+                      , text
+                      , time
+                      , transformers
+                      , transformers-except
+
+executable cardano-db-tool
+  default-language:     Haskell2010
+  main-is:              cardano-db-tool.hs
+  main-is:              cardano-db-tool.hs
+  hs-source-dirs:       app
+
+  ghc-options:          -Wall
+                        -Wcompat
+                        -fwarn-redundant-constraints
+                        -fwarn-incomplete-patterns
+                        -fwarn-unused-imports
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+
+  build-depends:        base                            >= 4.12         && < 4.15
+                      , cardano-db
+                      , cardano-db-tool
+                      , cardano-slotting
+                      , optparse-applicative

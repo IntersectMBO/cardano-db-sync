@@ -1,9 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Cardano.Db.App.Validate.EpochTable
+module Cardano.Db.Tool.Validate.EpochTable
   ( validateEpochTable
   ) where
 
-import           Cardano.Db.App.Validate.Util
+import           Cardano.Db.Tool.Validate.Util
 
 import           Control.Monad (when)
 
