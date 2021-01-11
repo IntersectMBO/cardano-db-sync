@@ -1,4 +1,4 @@
-module Cardano.Db.App.Validate.Util
+module Cardano.Db.Tool.Validate.Util
   ( codeGreen
   , codeRed
   , codeReset
