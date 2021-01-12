@@ -1,9 +1,14 @@
 import           Cardano.Db
 import           Cardano.Db.Tool
+import           Cardano.DbSync.Config.Types hiding (LogFileDir)
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Control.Applicative (optional)
+import           Control.Monad
+import           Control.Monad.Extra (whenJust)
+import           Data.Foldable (asum)
+import           Data.Text (Text)
 import           Data.Word (Word64)
 
 import           Options.Applicative (Parser, ParserInfo, ParserPrefs)
@@ -30,7 +35,7 @@ data Command
   | Rollback SlotNo
   | RunMigrations MigrationDir (Maybe LogFileDir)
   | UtxoSetAtBlock Word64
-  | Validate
+  | Validate Bool (Maybe LedgerValidationParams)
 
 runCommand :: Command -> IO ()
 runCommand cmd =
@@ -39,7 +44,9 @@ runCommand cmd =
     Rollback slotNo -> runRollback slotNo
     RunMigrations mdir mldir -> runMigrations id False mdir mldir
     UtxoSetAtBlock blkid -> utxoSetAtSlot blkid
-    Validate -> runValidation
+    Validate skip mLedgerPar -> do
+      unless skip runValidation
+      whenJust mLedgerPar runLedgerValidation
 
 doCreateMigration :: MigrationDir -> IO ()
 doCreateMigration mdir = do
@@ -82,8 +89,8 @@ pCommand =
           $ Opt.progDesc "Get UTxO set at specified BlockNo."
           )
     <> Opt.command "validate"
-        ( Opt.info (pure Validate)
-          $ Opt.progDesc "Run validation checks against the database."
+        ( Opt.info pValidate
+          $ Opt.progDesc "Run validation checks against the database and the ledger."
           )
     )
   where
@@ -123,4 +130,60 @@ pLogFileDir =
     (  Opt.long "ldir"
     <> Opt.help "The directory to write the log to."
     <> Opt.completer (Opt.bashCompleter "directory")
+    )
+
+pValidateLedgerParams :: Parser LedgerValidationParams
+pValidateLedgerParams =
+  LedgerValidationParams
+    <$> pConfigFile
+    <*> pLedgerStateDir
+    <*> pAddress
+
+pValidate :: Parser Command
+pValidate =
+    Validate <$> pSkipDBValidation <*> mParams
+  where
+    mParams =
+      asum
+        [ Just <$> pValidateLedgerParams
+        , pure Nothing
+        ]
+
+    pSkipDBValidation = Opt.switch
+        (  Opt.long "skip-simple"
+        <> Opt.help "Run only the validations against the ledger db"
+        <> Opt.hidden
+        )
+
+pAddress :: Parser (Maybe Text)
+pAddress =
+    asum
+      [ Just <$> parser
+      , pure Nothing
+      ]
+  where
+    parser =
+      Opt.strOption
+        (mconcat [
+            Opt.long "address"
+          , Opt.help "Cardano address"
+          , Opt.metavar "ADDRESS"
+        ])
+
+pLedgerStateDir :: Parser LedgerStateDir
+pLedgerStateDir =
+  LedgerStateDir <$> Opt.strOption
+    (  Opt.long "state-dir"
+    <> Opt.help "The directory for persistung ledger state."
+    <> Opt.completer (Opt.bashCompleter "directory")
+    <> Opt.metavar "FILEPATH"
+    )
+
+pConfigFile :: Parser ConfigFile
+pConfigFile =
+  ConfigFile <$> Opt.strOption
+    ( Opt.long "config"
+    <> Opt.help "Path to the db-sync node config file"
+    <> Opt.completer (Opt.bashCompleter "file")
+    <> Opt.metavar "FILEPATH"
     )
