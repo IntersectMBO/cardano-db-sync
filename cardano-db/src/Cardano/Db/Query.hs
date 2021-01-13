@@ -4,6 +4,7 @@
 
 module Cardano.Db.Query
   ( LookupFail (..)
+  , queryAddressBalanceAtSlot
   , queryBlock
   , queryBlockCount
   , queryBlockHeight
@@ -94,6 +95,27 @@ import           Cardano.Db.Types
 
 -- If you squint, these Esqueleto queries almost look like SQL queries.
 
+
+queryAddressBalanceAtSlot :: MonadIO m => Text -> Word64 -> ReaderT SqlBackend m Ada
+queryAddressBalanceAtSlot addr slotNo = do
+    eblkId <- select . from $ \blk -> do
+                  where_ (blk ^. BlockSlotNo ==. just (val slotNo))
+                  pure (blk ^. BlockId)
+    maybe (pure 0) (queryAddressBalanceAtBlockId . unValue) (listToMaybe eblkId)
+  where
+    queryAddressBalanceAtBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m Ada
+    queryAddressBalanceAtBlockId blkid = do
+        -- tx1 refers to the tx of the input spending this output (if it is ever spent)
+        -- tx2 refers to the tx of the output
+        res <- select . from $ \(txout `LeftOuterJoin` txin `LeftOuterJoin` tx1 `LeftOuterJoin` blk `LeftOuterJoin` tx2) -> do
+                  on $ txout ^. TxOutTxId ==. tx2 ^. TxId
+                  on $ tx1 ^. TxBlockId ==. blk ^. BlockId
+                  on $ txin ^. TxInTxInId ==. tx1 ^. TxId
+                  on $ (txout ^. TxOutTxId ==. txin ^. TxInTxOutId) &&. (txout ^. TxOutIndex ==. txin ^. TxInTxOutIndex)
+                  where_ $ (txout ^. TxOutTxId `in_` txLessEqual blkid) &&. (isNothing (blk ^. BlockBlockNo) ||. (blk ^. BlockId >. val blkid))
+                  where_ (txout ^. TxOutAddress ==. val addr)
+                  pure $ sum_ (txout ^. TxOutValue)
+        pure $ unValueSumAda (listToMaybe res)
 
 -- | Get the 'Block' associated with the given hash.
 queryBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail Block)
