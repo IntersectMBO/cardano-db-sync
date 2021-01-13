@@ -33,9 +33,11 @@ library
 
   other-modules:        Cardano.Db.Tool.UtxoSet
                         Cardano.Db.Tool.Validation
+                        Cardano.Db.Tool.Validate.Balance
                         Cardano.Db.Tool.Validate.BlockProperties
                         Cardano.Db.Tool.Validate.BlockTxs
                         Cardano.Db.Tool.Validate.EpochTable
+                        Cardano.Db.Tool.Validate.Ledger
                         Cardano.Db.Tool.Validate.PoolOwner
                         Cardano.Db.Tool.Validate.TotalSupply
                         Cardano.Db.Tool.Validate.TxAccounting
@@ -44,15 +46,24 @@ library
   build-depends:        base                            >= 4.12         && < 4.15
                       , bytestring
                       , ansi-terminal
+                      , cardano-api
                       , cardano-db
+                      , cardano-db-sync
                       , cardano-ledger
+                      , cardano-prelude
                       , cardano-slotting
                       , containers
                       , esqueleto
                       , extra
                       , optparse-applicative
+                      , ouroboros-consensus
+                      , ouroboros-consensus-byron
+                      , ouroboros-consensus-cardano
+                      , ouroboros-consensus-shelley
+                      , ouroboros-network
                       , persistent
                       , random
+                      , shelley-spec-ledger
                       , text
                       , time
                       , transformers
@@ -60,7 +71,6 @@ library
 
 executable cardano-db-tool
   default-language:     Haskell2010
-  main-is:              cardano-db-tool.hs
   main-is:              cardano-db-tool.hs
   hs-source-dirs:       app
 
@@ -75,5 +85,8 @@ executable cardano-db-tool
   build-depends:        base                            >= 4.12         && < 4.15
                       , cardano-db
                       , cardano-db-tool
+                      , cardano-db-sync
                       , cardano-slotting
+                      , extra
                       , optparse-applicative
+                      , text

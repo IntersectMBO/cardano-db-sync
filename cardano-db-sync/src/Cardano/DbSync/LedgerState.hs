@@ -9,12 +9,15 @@ module Cardano.DbSync.LedgerState
   ( CardanoLedgerState (..)
   , LedgerStateSnapshot (..)
   , LedgerStateVar (..)
+  , LedgerStateFile (..)
   , applyBlock
   , initLedgerStateVar
   , listLedgerStateSlotNos
   , loadLedgerState
   , readLedgerState
   , saveLedgerState
+  , listLedgerStateFilesOrdered
+  , getLedgerFromFile
   ) where
 
 import           Cardano.Binary (DecoderError)
@@ -77,9 +80,9 @@ newtype LedgerStateVar = LedgerStateVar
   }
 
 data LedgerStateFile = LedgerStateFile -- Internal use only.
-  { lsfSlotNo :: !Word64
+  { lsfSlotNo :: !SlotNo
   , lsfFilePath :: !FilePath
-  }
+  } deriving Show
 
 data LedgerStateSnapshot = LedgerStateSnapshot
   { lssState :: !CardanoLedgerState
@@ -89,8 +92,10 @@ data LedgerStateSnapshot = LedgerStateSnapshot
 
 initLedgerStateVar :: GenesisConfig -> IO LedgerStateVar
 initLedgerStateVar genesisConfig =
-  fmap LedgerStateVar . newTVarIO $
-    CardanoLedgerState
+  fmap LedgerStateVar . newTVarIO $ initCardanoLedgerState genesisConfig
+
+initCardanoLedgerState :: GenesisConfig -> CardanoLedgerState
+initCardanoLedgerState genesisConfig = CardanoLedgerState
       { clsState = Consensus.pInfoInitLedger protocolInfo
       , clsConfig = Consensus.pInfoConfig protocolInfo
       }
@@ -183,7 +188,7 @@ cleanupLedgerStateFiles stateDir slotNo = do
     -- Left files are deleted, Right files are kept.
     keepFile :: LedgerStateFile ->  Either FilePath LedgerStateFile
     keepFile lsf@(LedgerStateFile w fp) =
-      if SlotNo w <= slotNo
+      if w <= slotNo
         then Right lsf
         else Left fp
 
@@ -199,6 +204,10 @@ extractEpochNonce extLedgerState =
     extractNonce =
       Shelley.ticknStateEpochNonce . Shelley.csTickn . Consensus.tpraosStateChainDepState
 
+getLedgerFromFile :: GenesisConfig -> LedgerStateFile -> IO (Maybe CardanoLedgerState)
+getLedgerFromFile conf file = do
+  loadFile (initCardanoLedgerState conf) file
+
 loadState :: LedgerStateDir -> CardanoLedgerState -> SlotNo -> IO (Maybe CardanoLedgerState)
 loadState stateDir ledger slotNo = do
     files <- listLedgerStateFilesOrdered stateDir
@@ -206,22 +215,22 @@ loadState stateDir ledger slotNo = do
     -- Remove invalid (ie SlotNo >= current) ledger state files (occurs on rollback).
     mapM_ safeRemoveFile invalid
     -- Want the highest numbered snapshot.
-    firstJustM loadFile valid
+    firstJustM (loadFile ledger) valid
   where
     -- Left files are deleted, Right files are kept.
     keepFile :: LedgerStateFile ->  Either FilePath LedgerStateFile
     keepFile lsf@(LedgerStateFile w fp) =
-      if SlotNo w <= slotNo
+      if w <= slotNo
         then Right lsf
         else Left fp
 
-    loadFile :: LedgerStateFile -> IO (Maybe CardanoLedgerState)
-    loadFile lsf = do
-      mst <- safeReadFile (lsfFilePath lsf)
-      case mst of
-        Nothing -> pure Nothing
-        Just st -> pure . Just $ ledger { clsState = st }
-
+loadFile :: CardanoLedgerState -> LedgerStateFile -> IO (Maybe CardanoLedgerState)
+loadFile ledger lsf = do
+    mst <- safeReadFile (lsfFilePath lsf)
+    case mst of
+      Nothing -> pure Nothing
+      Just st -> pure . Just $ ledger { clsState = st }
+  where
     safeReadFile :: FilePath -> IO (Maybe (ExtLedgerState (CardanoBlock StandardCrypto)))
     safeReadFile fp = do
       mbs <- Exception.try $ BS.readFile fp
@@ -259,13 +268,13 @@ listLedgerStateFilesOrdered (LedgerStateDir stateDir) = do
     extractIndex fp =
       case readMaybe (dropExtension fp) of
         Nothing -> Nothing
-        Just w -> Just $ LedgerStateFile w (stateDir </> fp)
+        Just w -> Just $ LedgerStateFile (SlotNo w) (stateDir </> fp)
 
     revSlotNoOrder :: LedgerStateFile -> LedgerStateFile -> Ordering
     revSlotNoOrder a b = compare (lsfSlotNo b) (lsfSlotNo a)
 
 listLedgerStateSlotNos :: LedgerStateDir -> IO [SlotNo]
-listLedgerStateSlotNos = fmap3 (SlotNo . lsfSlotNo) listLedgerStateFilesOrdered
+listLedgerStateSlotNos = fmap3 lsfSlotNo listLedgerStateFilesOrdered
 
 readLedgerState :: LedgerStateVar -> IO CardanoLedgerState
 readLedgerState (LedgerStateVar stateVar) = readTVarIO stateVar
