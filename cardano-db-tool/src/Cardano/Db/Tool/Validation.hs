@@ -1,6 +1,6 @@
 module Cardano.Db.Tool.Validation
   ( LedgerValidationParams (..)
-  , runValidation
+  , runDbValidation
   , runLedgerValidation
   ) where
 
@@ -12,8 +12,8 @@ import           Cardano.Db.Tool.Validate.PoolOwner (validateAllPoolsHaveOwners)
 import           Cardano.Db.Tool.Validate.TotalSupply (validateTotalSupplyDecreasing)
 import           Cardano.Db.Tool.Validate.TxAccounting (validateTxAccounting)
 
-runValidation :: IO ()
-runValidation = do
+runDbValidation :: IO ()
+runDbValidation = do
   slowValidations
   fastValidations
 

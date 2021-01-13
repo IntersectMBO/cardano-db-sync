@@ -5,9 +5,6 @@ import           Cardano.DbSync.Config.Types hiding (LogFileDir)
 import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Control.Applicative (optional)
-import           Control.Monad
-import           Control.Monad.Extra (whenJust)
-import           Data.Foldable (asum)
 import           Data.Text (Text)
 import           Data.Word (Word64)
 
@@ -35,7 +32,8 @@ data Command
   | Rollback SlotNo
   | RunMigrations MigrationDir (Maybe LogFileDir)
   | UtxoSetAtBlock Word64
-  | Validate Bool (Maybe LedgerValidationParams)
+  | ValidateDb
+  | ValidateAddressBalance LedgerValidationParams
 
 runCommand :: Command -> IO ()
 runCommand cmd =
@@ -44,9 +42,8 @@ runCommand cmd =
     Rollback slotNo -> runRollback slotNo
     RunMigrations mdir mldir -> runMigrations id False mdir mldir
     UtxoSetAtBlock blkid -> utxoSetAtSlot blkid
-    Validate skip mLedgerPar -> do
-      unless skip runValidation
-      whenJust mLedgerPar runLedgerValidation
+    ValidateDb -> runDbValidation
+    ValidateAddressBalance params -> runLedgerValidation params
 
 doCreateMigration :: MigrationDir -> IO ()
 doCreateMigration mdir = do
@@ -89,8 +86,12 @@ pCommand =
           $ Opt.progDesc "Get UTxO set at specified BlockNo."
           )
     <> Opt.command "validate"
-        ( Opt.info pValidate
-          $ Opt.progDesc "Run validation checks against the database and the ledger."
+        ( Opt.info (pure ValidateDb)
+          $ Opt.progDesc "Run validation checks against the database."
+          )
+    <> Opt.command "validate-address-balance"
+        ( Opt.info (ValidateAddressBalance <$> pValidateLedgerParams)
+          $ Opt.progDesc "Run validation checks against the database and the ledger Utxo set."
           )
     )
   where
@@ -139,36 +140,14 @@ pValidateLedgerParams =
     <*> pLedgerStateDir
     <*> pAddress
 
-pValidate :: Parser Command
-pValidate =
-    Validate <$> pSkipDBValidation <*> mParams
-  where
-    mParams =
-      asum
-        [ Just <$> pValidateLedgerParams
-        , pure Nothing
-        ]
-
-    pSkipDBValidation = Opt.switch
-        (  Opt.long "skip-simple"
-        <> Opt.help "Run only the validations against the ledger db"
-        <> Opt.hidden
-        )
-
-pAddress :: Parser (Maybe Text)
+pAddress :: Parser Text
 pAddress =
-    asum
-      [ Just <$> parser
-      , pure Nothing
+  Opt.strOption $
+    mconcat
+      [ Opt.long "address"
+      , Opt.help "Cardano address"
+      , Opt.metavar "ADDRESS"
       ]
-  where
-    parser =
-      Opt.strOption
-        (mconcat [
-            Opt.long "address"
-          , Opt.help "Cardano address"
-          , Opt.metavar "ADDRESS"
-        ])
 
 pLedgerStateDir :: Parser LedgerStateDir
 pLedgerStateDir =
