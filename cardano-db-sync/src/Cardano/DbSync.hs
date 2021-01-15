@@ -144,10 +144,10 @@ runDbSyncNode plugin enp =
       liftIO $ do
         -- Must run plugin startup after the genesis distribution has been inserted/validate.
         runDbStartup trce plugin
-
         case genCfg of
           GenesisCardano _ bCfg _sCfg -> do
             ledgerVar <- initLedgerStateVar genCfg
+            loadLatestLedgerState (envLedgerStateDir genesisEnv) ledgerVar
             runDbSyncNodeNodeClient genesisEnv ledgerVar
                 iomgr trce plugin (cardanoCodecConfig bCfg) (enpSocketPath enp)
   where
@@ -286,13 +286,13 @@ logDbState trce = do
 
 getLatestPoints :: LedgerStateDir -> IO [Point CardanoBlock]
 getLatestPoints ledgerStateDir = do
-    xs <- listLedgerStateSlotNos ledgerStateDir
+    xs <- lsfSlotNo <<$>> listLedgerStateFilesOrdered ledgerStateDir
     ys <- catMaybes <$> DB.runDbNoLogging (mapM DB.querySlotHash xs)
     pure $ mapMaybe convert ys
   where
     convert :: (SlotNo, ByteString) -> Maybe (Point CardanoBlock)
     convert (slot, hashBlob) =
-      fmap (Point . Point.block slot) (convertHashBlob hashBlob)
+      Point . Point.block slot <$> convertHashBlob hashBlob
 
     convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
     convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)

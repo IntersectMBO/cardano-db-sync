@@ -12,8 +12,9 @@ module Cardano.DbSync.LedgerState
   , LedgerStateFile (..)
   , applyBlock
   , initLedgerStateVar
-  , listLedgerStateSlotNos
-  , loadLedgerState
+  , ledgerStateTipSlot
+  , loadLatestLedgerState
+  , loadLedgerStateAtSlot
   , readLedgerState
   , saveLedgerState
   , listLedgerStateFilesOrdered
@@ -143,6 +144,11 @@ applyBlock env (LedgerStateVar stateVar) blk =
         Left err -> panic err
         Right result -> result
 
+ledgerStateTipSlot :: LedgerStateVar -> IO SlotNo
+ledgerStateTipSlot (LedgerStateVar stateVar) = do
+  lstate <- readTVarIO stateVar
+  pure $ fromWithOrigin (SlotNo 0) . ledgerTipSlot $ ledgerState (clsState lstate)
+
 saveLedgerState :: LedgerStateDir -> LedgerStateVar -> LedgerStateSnapshot -> SyncState -> IO ()
 saveLedgerState lsd@(LedgerStateDir stateDir) (LedgerStateVar stateVar) snapshot synced = do
   atomically $ writeTVar stateVar ledger
@@ -181,8 +187,17 @@ saveLedgerState lsd@(LedgerStateDir stateDir) (LedgerStateVar stateVar) snapshot
     codecConfig :: CodecConfig (CardanoBlock StandardCrypto)
     codecConfig = configCodec (clsConfig ledger)
 
-loadLedgerState :: LedgerStateDir -> LedgerStateVar -> SlotNo -> IO ()
-loadLedgerState stateDir (LedgerStateVar stateVar) slotNo = do
+loadLatestLedgerState :: LedgerStateDir -> LedgerStateVar -> IO ()
+loadLatestLedgerState stateDir ledgerVar = do
+  files <- listLedgerStateFilesOrdered stateDir
+  ledger <- readLedgerState ledgerVar
+  mcs <- firstJustM (loadFile ledger) files
+  case mcs of
+    Just cs -> atomically $ writeTVar (unLedgerStateVar ledgerVar) cs
+    Nothing -> pure ()
+
+loadLedgerStateAtSlot :: LedgerStateDir -> LedgerStateVar -> SlotNo -> IO ()
+loadLedgerStateAtSlot stateDir (LedgerStateVar stateVar) slotNo = do
   -- Read current state to get the LedgerConfig and CodecConfig.
   lstate <- readLedgerState (LedgerStateVar stateVar)
   -- Load the state
@@ -260,7 +275,9 @@ loadFile ledger lsf = do
         Left (_ :: IOException) -> pure Nothing
         Right bs ->
           case decode bs of
-            Left err -> panic (textShow err)
+            Left _err -> do
+              safeRemoveFile fp
+              pure Nothing
             Right ls -> pure $ Just ls
 
 
@@ -294,9 +311,6 @@ listLedgerStateFilesOrdered (LedgerStateDir stateDir) = do
 
     revSlotNoOrder :: LedgerStateFile -> LedgerStateFile -> Ordering
     revSlotNoOrder a b = compare (lsfSlotNo b) (lsfSlotNo a)
-
-listLedgerStateSlotNos :: LedgerStateDir -> IO [SlotNo]
-listLedgerStateSlotNos = fmap3 lsfSlotNo listLedgerStateFilesOrdered
 
 readLedgerState :: LedgerStateVar -> IO CardanoLedgerState
 readLedgerState (LedgerStateVar stateVar) = readTVarIO stateVar
