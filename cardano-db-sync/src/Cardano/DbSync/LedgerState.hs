@@ -45,7 +45,8 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as BSS
 import qualified Data.List as List
 
-import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockHash, blockPrevHash)
+import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockHash, blockPrevHash,
+                   withOrigin)
 import           Ouroboros.Consensus.Cardano.Block (CardanoBlock, HardForkState (..),
                    LedgerState (..), StandardCrypto)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
@@ -55,11 +56,13 @@ import           Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..
 import           Ouroboros.Consensus.HardFork.Combinator.State (epochInfoLedger)
 import qualified Ouroboros.Consensus.HeaderValidation as Consensus
 import           Ouroboros.Consensus.Ledger.Abstract (ledgerTipHash, ledgerTipSlot, tickThenReapply)
-import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerCfg (..), ExtLedgerState (..),
-                   decodeExtLedgerState, encodeExtLedgerState)
+import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerCfg (..), ExtLedgerState (..))
+import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import qualified Ouroboros.Consensus.Shelley.Protocol as Consensus
 import           Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), EncodeDisk (..))
+
+import           Ouroboros.Network.Block (BlockNo (..))
 
 import qualified Shelley.Spec.Ledger.API.Protocol as Shelley
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
@@ -67,6 +70,14 @@ import qualified Shelley.Spec.Ledger.STS.Tickn as Shelley
 
 import           System.Directory (listDirectory, removeFile)
 import           System.FilePath (dropExtension, takeExtension, (</>))
+
+
+-- Note: The decision on whether a ledger-state is written to disk is based on the block number
+-- rather than the slot number because while the block number is fully populated (for every block
+-- other then genesis with number N there exists a block with number N - 1) whereas in the Shelley
+-- era, only about 1/20 slots are occupied with blocks.
+-- However, rollbacks are specified using a Point (basically a tuple of SlotNo and hash) and
+-- therefore ledger states are stored in files with the SlotNo and hash in the file name.
 
 {- HLINT ignore "Reduce duplication" -}
 
@@ -139,21 +150,24 @@ saveLedgerState lsd@(LedgerStateDir stateDir) (LedgerStateVar stateVar) ledger s
     SyncFollowing -> saveState                      -- If following, save every state.
     SyncLagging
       | unSlotNo slot == 0 -> pure ()               -- Genesis and the first EBB are weird so do not store them.
-      | unSlotNo slot `mod` 10000 == 0 -> saveState -- Only save state ocassionally.
+      | block `mod` 2000 == 0 -> saveState          -- Only save state ocassionally.
       | otherwise -> pure ()
   where
     filename :: FilePath
     filename = stateDir </> show (unSlotNo slot) ++ ".lstate"
 
     slot :: SlotNo
-    slot = fromWithOrigin (SlotNo 0) (ledgerTipSlot $ ledgerState $ clsState ledger)
+    slot = fromWithOrigin (SlotNo 0) (ledgerTipSlot . ledgerState $ clsState ledger)
+
+    block :: Word64
+    block = withOrigin 0 unBlockNo $ ledgerTipBlockNo (clsState ledger)
 
     saveState :: IO ()
     saveState = do
       -- Encode and write lazily.
       LBS.writeFile filename $
         Serialize.serializeEncoding $
-          encodeExtLedgerState
+          Consensus.encodeExtLedgerState
              (encodeDisk codecConfig)
              (encodeDisk codecConfig)
              (encodeDisk codecConfig)
@@ -172,6 +186,10 @@ loadLedgerState stateDir (LedgerStateVar stateVar) slotNo = do
   case mState of
     Nothing -> pure ()
     Just st -> atomically $ writeTVar stateVar st
+
+-- | This should be exposed by 'consensus'.
+ledgerTipBlockNo :: ExtLedgerState blk -> WithOrigin BlockNo
+ledgerTipBlockNo = fmap Consensus.annTipBlockNo . Consensus.headerStateTip . Consensus.headerState
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -249,7 +267,7 @@ loadFile ledger lsf = do
     decode =
       Serialize.decodeFullDecoder
           "Ledger state file"
-          (decodeExtLedgerState
+          (Consensus.decodeExtLedgerState
             (decodeDisk codecConfig)
             (decodeDisk codecConfig)
             (decodeDisk codecConfig))

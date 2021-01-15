@@ -105,7 +105,7 @@ insertShelleyBlock tracer env blk lStateSnap details = do
           slotWithinEpoch = unEpochSlot (sdEpochSlot details)
           followingClosely = getSyncStatus details == SyncFollowing
 
-      when (followingClosely && slotWithinEpoch /= 0 && unSlotNo (Generic.blkSlotNo blk) `mod` 200 == 0) $ do
+      when (followingClosely && slotWithinEpoch /= 0 && unBlockNo (Generic.blkBlockNo blk) `mod` 20 == 0) $ do
         logInfo tracer $
           mconcat
             [ renderInsertName (Generic.blkEra blk), ": continuing epoch ", textShow epoch
@@ -137,7 +137,7 @@ insertShelleyBlock tracer env blk lStateSnap details = do
     logger :: Bool -> Trace IO a -> a -> IO ()
     logger followingClosely
       | followingClosely = logInfo
-      | unSlotNo (Generic.blkSlotNo blk) `mod` 100000 == 0 = logInfo
+      | unBlockNo (Generic.blkBlockNo blk) `mod` 5000 == 0 = logInfo
       | otherwise = logDebug
 
 

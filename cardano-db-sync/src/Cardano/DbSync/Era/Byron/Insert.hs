@@ -152,7 +152,7 @@ insertABlock tracer blk details = do
           slotWithinEpoch = unEpochSlot (sdEpochSlot details)
           followingClosely = getSyncStatus details == SyncFollowing
 
-      when (followingClosely && slotWithinEpoch /= 0 && Byron.slotNumber blk `mod` 20 == 0) $ do
+      when (followingClosely && slotWithinEpoch /= 0 && Byron.blockNumber blk `mod` 20 == 0) $ do
         logInfo tracer $
           mconcat
             [ "insertByronBlock: continuing epoch ", textShow epoch
@@ -168,7 +168,7 @@ insertABlock tracer blk details = do
     logger :: Bool -> Trace IO a -> a -> IO ()
     logger followingClosely
       | followingClosely = logInfo
-      | Byron.slotNumber blk `mod` 5000 == 0 = logInfo
+      | Byron.blockNumber blk `mod` 5000 == 0 = logInfo
       | otherwise = logDebug
 
 
