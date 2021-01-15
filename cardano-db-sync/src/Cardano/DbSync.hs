@@ -176,17 +176,19 @@ runDbSyncNodeNodeClient env ledgerVar iomgr trce plugin codecConfig (SocketPath 
     clientSubscriptionParams
     (dbSyncProtocols trce env plugin queryVar ledgerVar)
   where
-    clientSubscriptionParams = ClientSubscriptionParams {
-        cspAddress = Snocket.localAddressFromPath socketPath,
-        cspConnectionAttemptDelay = Nothing,
-        cspErrorPolicies = networkErrorPolicies <> consensusErrorPolicy (Proxy @CardanoBlock)
+    clientSubscriptionParams =
+      ClientSubscriptionParams
+        { cspAddress = Snocket.localAddressFromPath socketPath
+        , cspConnectionAttemptDelay = Nothing
+        , cspErrorPolicies = networkErrorPolicies <> consensusErrorPolicy (Proxy @CardanoBlock)
         }
 
-    networkSubscriptionTracers = NetworkSubscriptionTracers {
-        nsMuxTracer = muxTracer,
-        nsHandshakeTracer = handshakeTracer,
-        nsErrorPolicyTracer = errorPolicyTracer,
-        nsSubscriptionTracer = subscriptionTracer
+    networkSubscriptionTracers =
+      NetworkSubscriptionTracers
+        { nsMuxTracer = muxTracer
+        , nsHandshakeTracer = handshakeTracer
+        , nsErrorPolicyTracer = errorPolicyTracer
+        , nsSubscriptionTracer = subscriptionTracer
         }
 
     errorPolicyTracer :: Tracer IO (WithAddr LocalAddress ErrorPolicyTrace)
@@ -214,11 +216,11 @@ dbSyncProtocols
     -> ConnectionId LocalAddress
     -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
 dbSyncProtocols trce env plugin queryVar ledgerVar _version codecs _connectionId =
-    NodeToClientProtocols {
-          localChainSyncProtocol = localChainSyncPtcl
-        , localTxSubmissionProtocol = dummylocalTxSubmit
-        , localStateQueryProtocol = localStateQuery
-        }
+    NodeToClientProtocols
+      { localChainSyncProtocol = localChainSyncPtcl
+      , localTxSubmissionProtocol = dummylocalTxSubmit
+      , localStateQueryProtocol = localStateQuery
+      }
   where
     localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync CardanoBlock(Point CardanoBlock) (Tip CardanoBlock)))
     localChainSyncTracer = toLogObject $ appendName "ChainSync" trce
