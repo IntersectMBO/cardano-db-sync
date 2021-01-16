@@ -260,7 +260,7 @@ share
     -- The reward for each stake address and. This is not a balance, but a reward amount and the
     -- epoch in which the reward was earned.
   Reward
-    addrId              StakeAddressId
+    addrId              StakeAddressId      OnDeleteCascade
     amount              DbLovelace          sqltype=lovelace
     epochNo             Word64
     poolId              PoolHashId          OnDeleteCascade
@@ -270,7 +270,7 @@ share
   -- Orphaned rewards happen when a stake address earns rewards, but the stake address is
   -- deregistered before the rewards are distributed.
   OrphanedReward
-    addrId              StakeAddressId
+    addrId              StakeAddressId      OnDeleteCascade
     amount              DbLovelace          sqltype=lovelace
     epochNo             Word64
     poolId              PoolHashId          OnDeleteCascade
@@ -290,7 +290,7 @@ share
     certIndex           Word16
     -- poolId              PoolHashId
     amount              DbLovelace          sqltype=lovelace
-    txId                TxId
+    txId                TxId                OnDeleteCascade
     UniqueTreasury      addrId txId
 
   -- -----------------------------------------------------------------------------------------------
@@ -300,14 +300,14 @@ share
     policy              ByteString          sqltype=hash28type
     name                ByteString          sqltype=asset32type
     quantity            DbInt65             sqltype=int65type
-    txId                TxId
+    txId                TxId                OnDeleteCascade
     UniqueMaTxMint      policy name txId
 
   MaTxOut
     policy              ByteString          sqltype=hash28type
     name                ByteString          sqltype=asset32type
     quantity            DbWord64            sqltype=word64type
-    txOutId             TxOutId
+    txOutId             TxOutId             OnDeleteCascade
     UniqueMaTxOut       policy name txOutId
 
   -- -----------------------------------------------------------------------------------------------
