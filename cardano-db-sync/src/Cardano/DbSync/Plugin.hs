@@ -22,8 +22,8 @@ import           Cardano.DbSync.Types
 -- actions on a block insert or rollback.
 --
 -- The insert and rollback actions are applied from the head of the list to the tail.
--- THe default DbSyncNodePlugin is 'Cardano.DbSync.Plugin.Default.defDbSyncNodePlugin'. This
--- allows clients to insert db actions both before and after the default action.
+-- THe default DbSyncNodePlugin is created in 'Cardano.DbSync.Plugin.Default.mkDefDbSyncNodePlugin'.
+-- This allows clients to insert db actions both before and after the default action.
 
 -- Plugins are free to read from the existing tables but should not modify them. Plugins however
 -- are free to operation on their own tables.

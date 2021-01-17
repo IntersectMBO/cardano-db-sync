@@ -32,6 +32,7 @@ import qualified Cardano.Crypto as Crypto (serializeCborHash)
 
 import           Cardano.Db (DbLovelace (..))
 
+import           Cardano.DbSync.Database
 import           Cardano.DbSync.Types
 
 import           Cardano.Prelude
@@ -58,12 +59,12 @@ data ValueFee = ValueFee
   }
 
 insertByronBlock
-    :: Trace IO Text -> ByronBlock -> SlotDetails
+    :: Trace IO Text -> Cache -> ByronBlock -> SlotDetails
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-insertByronBlock tracer blk details = do
+insertByronBlock tracer cache blk details = do
   res <- runExceptT $
             case byronBlockRaw blk of
-              Byron.ABOBBlock ablk -> insertABlock tracer ablk details
+              Byron.ABOBBlock ablk -> insertABlock tracer cache ablk details
               Byron.ABOBBoundary abblk -> insertABOBBoundary tracer abblk details
   -- Serializiing things during syncing can drastically slow down full sync
   -- times (ie 10x or more).
@@ -120,12 +121,16 @@ insertABOBBoundary tracer blk details = do
 
 insertABlock
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Byron.ABlock ByteString -> SlotDetails
+    => Trace IO Text -> Cache -> Byron.ABlock ByteString -> SlotDetails
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertABlock tracer blk details = do
-    pbid <- liftLookupFail "insertABlock" $ DB.queryBlockId (Byron.unHeaderHash $ Byron.blockPreviousHash blk)
-    slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
-    blkId <- lift . DB.insertBlock $
+insertABlock tracer cache blk details = do
+    blkId <- withCachedPrevBlock
+      "insertABlock"
+      cache
+      (Byron.unHeaderHash $ Byron.blockPreviousHash blk)
+      $ \pbid -> do
+          slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
+          blkId <- lift . DB.insertBlock $
                   DB.Block
                     { DB.blockHash = Byron.blockHash blk
                     , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
@@ -144,6 +149,7 @@ insertABlock tracer blk details = do
                     , DB.blockVrfKey = Nothing
                     , DB.blockOpCert = Nothing
                     }
+          return (blkId, Byron.blockHash blk)
 
     zipWithM_ (insertTx tracer blkId) (Byron.blockPayload blk) [ 0 .. ]
 

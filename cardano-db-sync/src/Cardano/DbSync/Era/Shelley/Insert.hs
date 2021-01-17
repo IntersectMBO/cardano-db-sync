@@ -27,6 +27,7 @@ import qualified Cardano.Crypto.Hash as Crypto
 
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Config.Types
+import           Cardano.DbSync.Database
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Error
@@ -69,15 +70,19 @@ import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 
 insertShelleyBlock
-    :: Trace IO Text -> DbSyncEnv -> Generic.Block -> LedgerStateSnapshot -> SlotDetails
+    :: Trace IO Text -> Cache -> DbSyncEnv -> Generic.Block -> LedgerStateSnapshot -> SlotDetails
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-insertShelleyBlock tracer env blk lStateSnap details = do
+insertShelleyBlock tracer cache env blk lStateSnap details = do
   runExceptT $ do
-    pbid <- liftLookupFail (renderInsertName (Generic.blkEra blk)) $ DB.queryBlockId (Generic.blkPreviousHash blk)
-    mPhid <- lift $ queryPoolHashId (Generic.blkCreatorPoolHash blk)
+    blkId <- withCachedPrevBlock
+      (renderInsertName (Generic.blkEra blk))
+      cache
+      (Generic.blkPreviousHash blk)
+      $ \pbid -> do
+          mPhid <- lift $ queryPoolHashId (Generic.blkCreatorPoolHash blk)
 
-    slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (Generic.blkSlotLeader blk) mPhid
-    blkId <- lift . DB.insertBlock $
+          slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (Generic.blkSlotLeader blk) mPhid
+          blkId <- lift . DB.insertBlock $
                   DB.Block
                     { DB.blockHash = Generic.blkHash blk
                     , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
@@ -97,6 +102,7 @@ insertShelleyBlock tracer env blk lStateSnap details = do
                     , DB.blockVrfKey = Just $ Generic.blkVrfKey blk
                     , DB.blockOpCert = Just $ Generic.blkOpCert blk
                     }
+          return (blkId, Generic.blkHash blk)
 
     zipWithM_ (insertTx tracer env blkId (sdEpochNo details)) [0 .. ] (Generic.blkTxs blk)
 

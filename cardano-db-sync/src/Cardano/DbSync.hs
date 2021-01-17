@@ -19,7 +19,7 @@ module Cardano.DbSync
   , SocketPath (..)
   , DB.MigrationDir (..)
 
-  , defDbSyncNodePlugin
+  , mkDefDbSyncNodePlugin
   , runDbSyncNode
   ) where
 
@@ -44,7 +44,7 @@ import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState
 import           Cardano.DbSync.Metrics
 import           Cardano.DbSync.Plugin (DbSyncNodePlugin (..))
-import           Cardano.DbSync.Plugin.Default (defDbSyncNodePlugin)
+import           Cardano.DbSync.Plugin.Default (mkDefDbSyncNodePlugin)
 import           Cardano.DbSync.Rollback (unsafeRollback)
 import           Cardano.DbSync.StateQuery (StateQueryTMVar, getSlotDetails, localStateQueryHandler,
                    newStateQueryTMVar)

@@ -44,6 +44,7 @@ rollbackToSlot trce slotNo =
               [ "Deleting slots numbered: ", renderSlotList xs
               ]
         mapM_ (lift . DB.deleteCascadeSlotNo) xs
+        liftIO $ logInfo trce "Slots deleted"
 
 
 -- For testing and debugging.

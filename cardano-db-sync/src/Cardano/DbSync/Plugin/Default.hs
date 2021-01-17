@@ -1,7 +1,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Cardano.DbSync.Plugin.Default
-  ( defDbSyncNodePlugin
+  ( mkDefDbSyncNodePlugin
   , insertDefaultBlock
   , rollbackToSlot
   ) where
@@ -30,32 +30,33 @@ import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 -- | The default DbSyncNodePlugin.
 -- Does exactly what the cardano-db-sync node did before the plugin system was added.
 -- The non-default node takes this structure and extends the lists.
-defDbSyncNodePlugin :: DbSyncNodePlugin
-defDbSyncNodePlugin =
-  DbSyncNodePlugin
+mkDefDbSyncNodePlugin :: IO DbSyncNodePlugin
+mkDefDbSyncNodePlugin = do
+  cache <- newCache
+  return $ DbSyncNodePlugin
     { plugOnStartup = []
-    , plugInsertBlock = [insertDefaultBlock]
+    , plugInsertBlock = [insertDefaultBlock cache]
     , plugRollbackBlock = [rollbackToSlot]
     }
 
 -- -------------------------------------------------------------------------------------------------
 
 insertDefaultBlock
-    :: Trace IO Text -> DbSyncEnv -> LedgerStateVar -> BlockDetails
+    :: Cache -> Trace IO Text -> DbSyncEnv -> LedgerStateVar -> BlockDetails
     -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-insertDefaultBlock tracer env ledgerStateVar (BlockDetails cblk details) = do
+insertDefaultBlock cache tracer env ledgerStateVar (BlockDetails cblk details) = do
   -- Calculate the new ledger state to pass to the DB insert functions but do not yet
   -- update ledgerStateVar.
   lStateSnap <- liftIO $ applyBlock env ledgerStateVar cblk
   res <- case cblk of
             BlockByron blk ->
-              insertByronBlock tracer blk details
+              insertByronBlock tracer cache blk details
             BlockShelley blk ->
-              insertShelleyBlock tracer env (Generic.fromShelleyBlock blk) lStateSnap details
+              insertShelleyBlock tracer cache env (Generic.fromShelleyBlock blk) lStateSnap details
             BlockAllegra blk ->
-              insertShelleyBlock tracer env (Generic.fromAllegraBlock blk) lStateSnap details
+              insertShelleyBlock tracer cache env (Generic.fromAllegraBlock blk) lStateSnap details
             BlockMary blk ->
-              insertShelleyBlock tracer env (Generic.fromMaryBlock blk) lStateSnap details
+              insertShelleyBlock tracer cache env (Generic.fromMaryBlock blk) lStateSnap details
   -- Now we update it in ledgerStateVar and (possibly) store it to disk.
   liftIO $ saveLedgerState (envLedgerStateDir env) ledgerStateVar
                 lStateSnap (isSyncedWithinSeconds details 60)

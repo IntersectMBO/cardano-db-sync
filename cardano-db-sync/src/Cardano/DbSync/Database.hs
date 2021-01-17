@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -12,6 +13,7 @@ module Cardano.DbSync.Database
   , runDbStartup
   , runDbThread
   , writeDbActionQueue
+  , withCachedPrevBlock
   ) where
 
 import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo)
@@ -21,6 +23,7 @@ import           Cardano.Prelude
 import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Control.Monad.Logger (LoggingT)
+import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (left, newExceptT)
 
 import qualified Cardano.Db as DB
@@ -182,3 +185,20 @@ spanDbApply lst =
   case lst of
     (DbApplyBlock bt:xs) -> let (ys, zs) = spanDbApply xs in (bt:ys, zs)
     xs -> ([], xs)
+
+-- Wrapper around 'queryBlockId', which first checks if the previous block is cached.
+withCachedPrevBlock
+  :: (MonadBaseControl IO m, MonadIO m)
+  => Text -> Cache -> ByteString -- the hash of the previous block
+  -> (DB.BlockId -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) (DB.BlockId, ByteString))
+  -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) DB.BlockId
+withCachedPrevBlock loc cache pHash writeDB = do
+  mPrevInfo <- lift $ liftIO $ readPrevInfo cache
+  (blkId, blkHash) <- case mPrevInfo of
+    Just prevInfo | cachePrevHash prevInfo == pHash ->
+      writeDB $ cachePrevBlockId prevInfo
+    _ -> do
+      pBid <- liftLookupFail loc $ DB.queryBlockId pHash
+      writeDB pBid
+  lift $ liftIO $ writePrevInfo cache $ Just $ PrevInfo blkId blkHash
+  return blkId

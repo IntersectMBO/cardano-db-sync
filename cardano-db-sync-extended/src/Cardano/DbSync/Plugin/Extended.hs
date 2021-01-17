@@ -1,15 +1,16 @@
 module Cardano.DbSync.Plugin.Extended
-  ( extendedDbSyncNodePlugin
+  ( mkExtendedDbSyncNodePlugin
   ) where
 
 
-import           Cardano.DbSync (DbSyncNodePlugin (..), defDbSyncNodePlugin)
+import           Cardano.DbSync (DbSyncNodePlugin (..), mkDefDbSyncNodePlugin)
 import           Cardano.DbSync.Plugin.Epoch (epochPluginInsertBlock, epochPluginOnStartup,
                    epochPluginRollbackBlock)
 
-extendedDbSyncNodePlugin :: DbSyncNodePlugin
-extendedDbSyncNodePlugin =
-  defDbSyncNodePlugin
+mkExtendedDbSyncNodePlugin :: IO DbSyncNodePlugin
+mkExtendedDbSyncNodePlugin = do
+  defDbSyncNodePlugin <- mkDefDbSyncNodePlugin
+  return $ defDbSyncNodePlugin
     { plugOnStartup =
         plugOnStartup defDbSyncNodePlugin
           ++ [epochPluginOnStartup]
