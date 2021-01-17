@@ -225,7 +225,7 @@ genesisTxoAssocList =
 
 genesisUtxOs :: ShelleyGenesis StandardShelley -> [(Shelley.TxIn (Crypto StandardShelley), Shelley.TxOut StandardShelley)]
 genesisUtxOs =
-    Map.toList . unUTxO . Shelley.genesisUtxO
+    Map.toList . unUTxO . Shelley.genesisUTxO
   where
     -- Sigh!
     unUTxO :: Shelley.UTxO StandardShelley -> Map (Shelley.TxIn (Crypto StandardShelley)) (Shelley.TxOut StandardShelley)
