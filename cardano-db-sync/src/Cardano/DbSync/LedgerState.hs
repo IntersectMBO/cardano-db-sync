@@ -143,16 +143,20 @@ applyBlock env (LedgerStateVar stateVar) blk =
         Left err -> panic err
         Right result -> result
 
-saveLedgerState :: LedgerStateDir -> LedgerStateVar -> CardanoLedgerState -> SyncState -> IO ()
-saveLedgerState lsd@(LedgerStateDir stateDir) (LedgerStateVar stateVar) ledger synced = do
+saveLedgerState :: LedgerStateDir -> LedgerStateVar -> LedgerStateSnapshot -> SyncState -> IO ()
+saveLedgerState lsd@(LedgerStateDir stateDir) (LedgerStateVar stateVar) snapshot synced = do
   atomically $ writeTVar stateVar ledger
   case synced of
-    SyncFollowing -> saveState                      -- If following, save every state.
+    SyncFollowing -> saveState                          -- If following, save every state.
     SyncLagging
-      | unSlotNo slot == 0 -> pure ()               -- Genesis and the first EBB are weird so do not store them.
-      | block `mod` 2000 == 0 -> saveState          -- Only save state ocassionally.
+      | unSlotNo slot == 0 -> pure ()                   -- Genesis and the first EBB are weird so do not store them.
+      | block `mod` 2000 == 0 -> saveState              -- Only save state ocassionally.
+      | isJust (lssEpochUpdate snapshot) -> saveState   -- Epoch boundaries cost a lot, so we better save them
       | otherwise -> pure ()
   where
+    ledger :: CardanoLedgerState
+    ledger = lssState snapshot
+
     filename :: FilePath
     filename = stateDir </> show (unSlotNo slot) ++ ".lstate"
 

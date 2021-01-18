@@ -58,5 +58,5 @@ insertDefaultBlock tracer env ledgerStateVar (BlockDetails cblk details) = do
               insertShelleyBlock tracer env (Generic.fromMaryBlock blk) lStateSnap details
   -- Now we update it in ledgerStateVar and (possibly) store it to disk.
   liftIO $ saveLedgerState (envLedgerStateDir env) ledgerStateVar
-                (lssState lStateSnap) (isSyncedWithinSeconds details 60)
+                lStateSnap (isSyncedWithinSeconds details 60)
   pure res
