@@ -1,58 +1,62 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbSync.DbAction
   ( DbAction (..)
+  , DbPoint (..)
   , DbActionQueue (..)
   , blockingFlushDbActionQueue
   , lengthDbActionQueue
   , mkDbApply
   , mkDbRollback
   , newDbActionQueue
-  , toRollbackSlot
   , writeDbActionQueue
   ) where
 
 import           Cardano.Prelude
 
 import           Cardano.DbSync.Types
-import           Cardano.Slotting.Slot (SlotNo (..), withOrigin)
+import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
 
 import qualified Control.Concurrent.STM as STM
 import           Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as TBQ
 
-import           Ouroboros.Network.Block (Point (..), pointSlot)
+import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
 
+import           Ouroboros.Network.Block (Point (..))
+import           Ouroboros.Network.Point (Block (..), blockPointHash)
 
 data DbAction
   = DbApplyBlock !BlockDetails
-  | DbRollBackToPoint !SlotNo
+  | DbRollBackToPoint !DbPoint
   | DbFinish
 
+-- Define a db-sync specific Point type because the one in ouroborous-network
+-- is parameterised over era which makes it a huge pain in the neck to use.
+data DbPoint = DbPoint
+  { dbpSlot :: !SlotNo
+  , dbpHash :: !ByteString
+  }
 
 newtype DbActionQueue = DbActionQueue
   { dbActQueue :: TBQueue DbAction
   }
 
-
 mkDbApply :: CardanoBlock -> SlotDetails -> DbAction
 mkDbApply cblk details =
   DbApplyBlock (BlockDetails cblk details)
 
-mkDbRollback :: SlotNo -> DbAction
-mkDbRollback = DbRollBackToPoint
-
-
--- The Point data type is probably really convenient in the libraries where it is defined
--- and used but is a huge pain in the neck here in db-sync.
--- A Point contains a SlotNo and a hash, but the hashes on Byron and Shelley are different
--- and its an incredible pain in the neck extracting the hash in a way that works for
--- Byron, Shelley and Cardano/HFC. Since the hash was only used for the log message anyway
--- its easier to just drop it.
-toRollbackSlot :: Point blk -> SlotNo
-toRollbackSlot = withOrigin (SlotNo 0) identity . pointSlot
+mkDbRollback :: Point CardanoBlock -> DbAction
+mkDbRollback pt =
+  case getPoint pt of
+    Origin -> DbRollBackToPoint $ DbPoint (SlotNo 0) "genesis"
+    At blk -> DbRollBackToPoint $
+                DbPoint
+                  (blockPointSlot blk)
+                  (toRawHash (Proxy @CardanoBlock) $ blockPointHash blk)
 
 lengthDbActionQueue :: DbActionQueue -> STM Natural
 lengthDbActionQueue (DbActionQueue q) = STM.lengthTBQueue q

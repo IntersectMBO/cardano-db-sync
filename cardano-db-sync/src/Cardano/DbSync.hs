@@ -27,7 +27,7 @@ import           Control.Tracer (Tracer)
 
 import           Cardano.BM.Data.Tracer (ToLogObject (..))
 import qualified Cardano.BM.Setup as Logging
-import           Cardano.BM.Trace (Trace, appendName, logError, logInfo, logWarning)
+import           Cardano.BM.Trace (Trace, appendName, logError, logInfo)
 import qualified Cardano.BM.Trace as Logging
 
 import qualified Cardano.Chain.Genesis as Byron
@@ -38,7 +38,6 @@ import           Cardano.Db (LogFileDir (..))
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Database
-import           Cardano.DbSync.DbAction
 import           Cardano.DbSync.Era
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState
@@ -148,6 +147,7 @@ runDbSyncNode plugin enp =
           GenesisCardano _ bCfg _sCfg -> do
             ledgerVar <- initLedgerStateVar genCfg
 
+            saveCurrentLedgerState (envLedgerStateDir genesisEnv) ledgerVar
             latestSlot <- SlotNo <$> DB.runDbNoLogging DB.queryLatestSlotNo
             deleteNewerLedgerStateFiles (envLedgerStateDir genesisEnv) latestSlot
 
@@ -383,25 +383,18 @@ chainSyncClient trce env queryVar metrics latestPoints currentTip actionQueue =
       ClientStNext
         { recvMsgRollForward = \blk tip ->
               logException trce "recvMsgRollForward: " $ do
-                if withOrigin 0 unBlockNo (getTipBlockNo tip) == 0
-                  then do
-                    -- https://github.com/input-output-hk/cardano-db-sync/issues/433
-                    liftIO $ logWarning trce "Node has not yet received blocks from the network. Sleeping for 1 minute."
-                    threadDelay (60 * 1000 * 1000)
-                  else do
-                    Gauge.set (withOrigin 0 (fromIntegral . unBlockNo) (getTipBlockNo tip)) (mNodeHeight metrics)
-                    details <- getSlotDetails trce env queryVar (cardanoBlockSlotNo blk)
-                    newSize <- atomically $ do
+                Gauge.set (withOrigin 0 (fromIntegral . unBlockNo) (getTipBlockNo tip)) (mNodeHeight metrics)
+                details <- getSlotDetails trce env queryVar (cardanoBlockSlotNo blk)
+                newSize <- atomically $ do
                                 writeDbActionQueue actionQueue $ mkDbApply blk details
                                 lengthDbActionQueue actionQueue
-                    Gauge.set (fromIntegral newSize) $ mQueuePostWrite metrics
+                Gauge.set (fromIntegral newSize) $ mQueuePostWrite metrics
                 pure $ finish (At (blockNo blk)) tip
         , recvMsgRollBackward = \point tip ->
               logException trce "recvMsgRollBackward: " $ do
                 -- This will get the current tip rather than what we roll back to
                 -- but will only be incorrect for a short time span.
-                let slot = toRollbackSlot point
-                atomically $ writeDbActionQueue actionQueue (mkDbRollback slot)
+                atomically $ writeDbActionQueue actionQueue (mkDbRollback point)
                 newTip <- getCurrentTipBlockNo
                 pure $ finish newTip tip
         }
