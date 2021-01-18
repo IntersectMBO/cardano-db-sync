@@ -144,10 +144,10 @@ runDbSyncNode plugin enp =
       liftIO $ do
         -- Must run plugin startup after the genesis distribution has been inserted/validate.
         runDbStartup trce plugin
-
         case genCfg of
           GenesisCardano _ bCfg _sCfg -> do
             ledgerVar <- initLedgerStateVar genCfg
+            loadLatestLedgerState (envLedgerStateDir genesisEnv) ledgerVar
             runDbSyncNodeNodeClient genesisEnv ledgerVar
                 iomgr trce plugin (cardanoCodecConfig bCfg) (enpSocketPath enp)
   where
@@ -176,17 +176,19 @@ runDbSyncNodeNodeClient env ledgerVar iomgr trce plugin codecConfig (SocketPath 
     clientSubscriptionParams
     (dbSyncProtocols trce env plugin queryVar ledgerVar)
   where
-    clientSubscriptionParams = ClientSubscriptionParams {
-        cspAddress = Snocket.localAddressFromPath socketPath,
-        cspConnectionAttemptDelay = Nothing,
-        cspErrorPolicies = networkErrorPolicies <> consensusErrorPolicy (Proxy @CardanoBlock)
+    clientSubscriptionParams =
+      ClientSubscriptionParams
+        { cspAddress = Snocket.localAddressFromPath socketPath
+        , cspConnectionAttemptDelay = Nothing
+        , cspErrorPolicies = networkErrorPolicies <> consensusErrorPolicy (Proxy @CardanoBlock)
         }
 
-    networkSubscriptionTracers = NetworkSubscriptionTracers {
-        nsMuxTracer = muxTracer,
-        nsHandshakeTracer = handshakeTracer,
-        nsErrorPolicyTracer = errorPolicyTracer,
-        nsSubscriptionTracer = subscriptionTracer
+    networkSubscriptionTracers =
+      NetworkSubscriptionTracers
+        { nsMuxTracer = muxTracer
+        , nsHandshakeTracer = handshakeTracer
+        , nsErrorPolicyTracer = errorPolicyTracer
+        , nsSubscriptionTracer = subscriptionTracer
         }
 
     errorPolicyTracer :: Tracer IO (WithAddr LocalAddress ErrorPolicyTrace)
@@ -214,11 +216,11 @@ dbSyncProtocols
     -> ConnectionId LocalAddress
     -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
 dbSyncProtocols trce env plugin queryVar ledgerVar _version codecs _connectionId =
-    NodeToClientProtocols {
-          localChainSyncProtocol = localChainSyncPtcl
-        , localTxSubmissionProtocol = dummylocalTxSubmit
-        , localStateQueryProtocol = localStateQuery
-        }
+    NodeToClientProtocols
+      { localChainSyncProtocol = localChainSyncPtcl
+      , localTxSubmissionProtocol = dummylocalTxSubmit
+      , localStateQueryProtocol = localStateQuery
+      }
   where
     localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync CardanoBlock(Point CardanoBlock) (Tip CardanoBlock)))
     localChainSyncTracer = toLogObject $ appendName "ChainSync" trce
@@ -284,13 +286,13 @@ logDbState trce = do
 
 getLatestPoints :: LedgerStateDir -> IO [Point CardanoBlock]
 getLatestPoints ledgerStateDir = do
-    xs <- listLedgerStateSlotNos ledgerStateDir
+    xs <- lsfSlotNo <<$>> listLedgerStateFilesOrdered ledgerStateDir
     ys <- catMaybes <$> DB.runDbNoLogging (mapM DB.querySlotHash xs)
     pure $ mapMaybe convert ys
   where
     convert :: (SlotNo, ByteString) -> Maybe (Point CardanoBlock)
     convert (slot, hashBlob) =
-      fmap (Point . Point.block slot) (convertHashBlob hashBlob)
+      Point . Point.block slot <$> convertHashBlob hashBlob
 
     convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
     convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)

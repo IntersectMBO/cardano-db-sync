@@ -95,7 +95,7 @@ runActions trce env plugin ledgerState actions = do
             pure Done
         ([], DbRollBackToPoint sn:ys) -> do
             runRollbacks trce plugin sn
-            liftIO $ loadLedgerState (envLedgerStateDir env) ledgerState sn
+            liftIO $ loadLedgerStateAtSlot (envLedgerStateDir env) ledgerState sn
             dbAction Continue ys
         (ys, zs) -> do
           insertBlockList trce env ledgerState plugin ys
