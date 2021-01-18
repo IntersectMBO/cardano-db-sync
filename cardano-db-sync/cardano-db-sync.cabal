@@ -124,6 +124,7 @@ library
                       , small-steps
                       , serialise
                       , shelley-spec-ledger
+                      , split
                       , stm
                       , text
                       , time
