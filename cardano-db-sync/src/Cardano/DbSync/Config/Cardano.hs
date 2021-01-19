@@ -119,7 +119,7 @@ mkProtocolCardano ge =
           Consensus.ProtocolParamsShelleyBased
             { Consensus.shelleyBasedGenesis = scConfig shelleyGenesis
             , Consensus.shelleyBasedInitialNonce = shelleyPraosNonce shelleyGenesis
-            , Consensus.shelleyBasedLeaderCredentials = Nothing
+            , Consensus.shelleyBasedLeaderCredentials = []
             }
           Consensus.ProtocolParamsShelley
             { Consensus.shelleyProtVer = shelleyProtVer dnc
