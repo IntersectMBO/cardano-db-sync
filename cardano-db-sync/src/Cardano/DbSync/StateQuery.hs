@@ -52,8 +52,7 @@ import           System.IO.Unsafe (unsafePerformIO)
 newtype StateQueryTMVar blk result = StateQueryTMVar
   { unStateQueryTMVar ::
       TMVar
-        ( Point blk
-        , Query blk result
+        ( Query blk result
         , TMVar (Either AcquireFailure result)
         )
   }
@@ -68,14 +67,14 @@ newStateQueryTMVar = StateQueryTMVar <$> newEmptyTMVarIO
 getSlotDetails
     :: Trace IO Text -> DbSyncEnv
     -> StateQueryTMVar (HardForkBlock (CardanoEras StandardCrypto)) (Interpreter (CardanoEras StandardCrypto))
-    -> Point (HardForkBlock (CardanoEras StandardCrypto)) -> SlotNo
+    -> SlotNo
     -> IO SlotDetails
-getSlotDetails tracer env queryVar point slot = do
-    einterp1 <- maybe (getHistoryInterpreter tracer queryVar point) pure =<< readIORef historyInterpVar
+getSlotDetails tracer env queryVar slot = do
+    einterp1 <- maybe (getHistoryInterpreter tracer queryVar) pure =<< readIORef historyInterpVar
     case evalSlotDetails einterp1 of
       Right sd -> insertCurrentTime sd
       Left _ -> do
-        einterp2 <- getHistoryInterpreter tracer queryVar point
+        einterp2 <- getHistoryInterpreter tracer queryVar
         case evalSlotDetails einterp2 of
           Left err -> panic $ "getSlotDetails: " <> textShow err
           Right sd -> insertCurrentTime sd
@@ -98,11 +97,10 @@ historyInterpVar = unsafePerformIO $ newIORef Nothing
 getHistoryInterpreter
     :: Trace IO Text
     -> StateQueryTMVar (HardForkBlock (CardanoEras StandardCrypto)) (Interpreter (CardanoEras StandardCrypto))
-    -> Point (HardForkBlock (CardanoEras StandardCrypto))
     -> IO (Interpreter (CardanoEras StandardCrypto))
-getHistoryInterpreter tracer queryVar point = do
+getHistoryInterpreter tracer queryVar = do
   respVar <- newEmptyTMVarIO
-  atomically $ putTMVar (unStateQueryTMVar queryVar) (point, QueryHardFork GetInterpreter, respVar)
+  atomically $ putTMVar (unStateQueryTMVar queryVar) (QueryHardFork GetInterpreter, respVar)
   res <- atomically $ takeTMVar respVar
   case res of
     Left err ->
@@ -124,9 +122,9 @@ localStateQueryHandler (StateQueryTMVar reqVar) =
   where
     idleState :: IO (StateQuery.ClientStIdle block (Point block) (Query block) IO a)
     idleState = do
-      (point, query, respVar) <- atomically $ takeTMVar reqVar
+      (query, respVar) <- atomically $ takeTMVar reqVar
       pure $
-        SendMsgAcquire point $
+        SendMsgAcquire Nothing $
           ClientStAcquiring
             { recvMsgAcquired =
                 SendMsgQuery query $

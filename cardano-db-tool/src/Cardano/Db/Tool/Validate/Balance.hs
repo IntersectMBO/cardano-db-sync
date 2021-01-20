@@ -15,10 +15,10 @@ import           Cardano.Chain.Common (CompactAddress, Lovelace, decodeAddressBa
                    toCompactAddress, unsafeGetLovelace)
 import qualified Cardano.Chain.UTxO as Byron
 
+import qualified Cardano.Ledger.Core as Ledger
 import           Cardano.Ledger.Era (Crypto)
 
 import           Cardano.Ledger.Compactible
-import           Cardano.Ledger.Shelley.Constraints
 import           Cardano.Ledger.Val
 import           Cardano.Prelude
 
@@ -64,24 +64,28 @@ getByronBalance addrText utxo = do
         else Nothing
 
 getShelleyBalance
-    :: forall era. ShelleyBased era
+    :: forall era. Ledger.TxOut era ~ Shelley.TxOut era -- somewhere in ledger-spec, there is probably a better constraint synonym for these
+    => Compactible (Ledger.Value era) => Val (Ledger.Value era)
     => Text -> Shelley.UTxO era -> Either Text Word64
 getShelleyBalance addrText utxo = do
-    caddr <- case Api.deserialiseAddress (Api.AsAddress Api.AsShelleyAddr) addrText of
-              Nothing ->
-                case decodeAddressBase58 addrText of
-                  Left err ->  Left $ textShow err
-                  Right badrr -> Right $ compactAddr (AddrBootstrap $ BootstrapAddress badrr)
-              Just (Api.ShelleyAddress n p s) ->
-                let addr = Addr n (coerce p) (coerce s)
-                in Right $ compactAddr addr
+    caddr <- getCompactAddress addrText
     Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue caddr) (Map.elems $ Shelley.unUTxO utxo)
   where
-    compactTxOutValue :: CompactAddr (Crypto era) -> Shelley.TxOut era -> Maybe Coin
+    compactTxOutValue :: CompactAddr (Crypto era) -> Ledger.TxOut era -> Maybe Coin
     compactTxOutValue caddr (Shelley.TxOutCompact scaddr v) =
       if caddr == scaddr
         then Just $ coin (fromCompact v)
         else Nothing
+
+getCompactAddress :: Text -> Either Text (CompactAddr c)
+getCompactAddress addrText = case Api.deserialiseAddress (Api.AsAddress Api.AsShelleyAddr) addrText of
+    Nothing ->
+      case decodeAddressBase58 addrText of
+        Left err ->  Left $ textShow err
+        Right badrr -> Right $ compactAddr (AddrBootstrap $ BootstrapAddress badrr)
+    Just (Api.ShelleyAddress n p s) ->
+      let addr = Addr n (coerce p) (coerce s)
+      in Right $ compactAddr addr
 
 textShow :: Show a => a -> Text
 textShow = Text.pack . show
