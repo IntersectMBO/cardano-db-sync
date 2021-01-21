@@ -27,7 +27,7 @@ import           Control.Tracer (Tracer)
 
 import           Cardano.BM.Data.Tracer (ToLogObject (..))
 import qualified Cardano.BM.Setup as Logging
-import           Cardano.BM.Trace (Trace, appendName, logInfo, logWarning)
+import           Cardano.BM.Trace (Trace, appendName, logError, logInfo, logWarning)
 import qualified Cardano.BM.Trace as Logging
 
 import qualified Cardano.Chain.Genesis as Byron
@@ -84,7 +84,7 @@ import           Ouroboros.Consensus.Shelley.Ledger.Config (CodecConfig (Shelley
 import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
 
 import           Ouroboros.Network.Block (BlockNo (..), HeaderHash, Point (..), Tip (..), blockNo,
-                   genesisPoint, getTipBlockNo, getTipPoint)
+                   genesisPoint, getTipBlockNo)
 import           Ouroboros.Network.Mux (MuxPeer (..), RunMiniProtocol (..))
 import           Ouroboros.Network.NodeToClient (ClientSubscriptionParams (..), ConnectionId,
                    ErrorPolicyTrace (..), Handshake, IOManager, LocalAddress,
@@ -215,7 +215,7 @@ dbSyncProtocols
     -> ClientCodecs CardanoBlock IO
     -> ConnectionId LocalAddress
     -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols trce env plugin queryVar ledgerVar _version codecs _connectionId =
+dbSyncProtocols trce env plugin queryVar ledgerVar version codecs _connectionId =
     NodeToClientProtocols
       { localChainSyncProtocol = localChainSyncPtcl
       , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -229,6 +229,9 @@ dbSyncProtocols trce env plugin queryVar ledgerVar _version codecs _connectionId
     localChainSyncPtcl = InitiatorProtocolOnly $ MuxPeerRaw $ \channel ->
       liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
         logInfo trce "Starting chainSyncClient"
+        when (version < minVersion) $ do
+          logError trce versionErrorMsg
+          throwIO $ ErrorCall (Text.unpack versionErrorMsg)
         latestPoints <- getLatestPoints (envLedgerStateDir env)
         currentTip <- getCurrentTipBlockNo
         logDbState trce
@@ -263,6 +266,17 @@ dbSyncProtocols trce env plugin queryVar ledgerVar _version codecs _connectionId
         (cStateQueryCodec codecs)
         (localStateQueryClientPeer (localStateQueryHandler queryVar))
 
+    versionErrorMsg :: Text
+    versionErrorMsg = Text.concat
+        [ "The cardano-node version is too old. Please upgrade to a compatible "
+        , "cardano-node version. The db-sync requires a node that supports "
+        , textShow minVersion
+        , ", the one in use only supports "
+        , textShow version
+        ]
+
+    minVersion :: Network.NodeToClientVersion
+    minVersion = Network.NodeToClientV_8
 
 logDbState :: Trace IO Text -> IO ()
 logDbState trce = do
@@ -372,7 +386,7 @@ chainSyncClient trce env queryVar metrics latestPoints currentTip actionQueue =
                     threadDelay (60 * 1000 * 1000)
                   else do
                     Gauge.set (withOrigin 0 (fromIntegral . unBlockNo) (getTipBlockNo tip)) (mNodeHeight metrics)
-                    details <- getSlotDetails trce env queryVar (getTipPoint tip) (cardanoBlockSlotNo blk)
+                    details <- getSlotDetails trce env queryVar (cardanoBlockSlotNo blk)
                     newSize <- atomically $ do
                                 writeDbActionQueue actionQueue $ mkDbApply blk details
                                 lengthDbActionQueue actionQueue

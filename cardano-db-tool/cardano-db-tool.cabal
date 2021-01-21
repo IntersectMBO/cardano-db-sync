@@ -50,6 +50,7 @@ library
                       , cardano-db
                       , cardano-db-sync
                       , cardano-ledger
+                      , cardano-ledger-shelley-ma
                       , cardano-prelude
                       , cardano-slotting
                       , containers

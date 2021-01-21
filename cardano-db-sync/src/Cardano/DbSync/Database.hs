@@ -15,13 +15,11 @@ module Cardano.DbSync.Database
   ) where
 
 import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo)
-import qualified Cardano.Chain.Block as Ledger
-import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import           Cardano.Prelude
 import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Control.Monad.Logger (LoggingT)
-import           Control.Monad.Trans.Except.Extra (left, newExceptT)
+import           Control.Monad.Trans.Except.Extra (newExceptT)
 
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Config
@@ -34,9 +32,6 @@ import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
 import           Database.Persist.Sql (SqlBackend)
-
-import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
-import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 
 import qualified System.Metrics.Prometheus.Metric.Gauge as Gauge
 
@@ -81,10 +76,7 @@ runActions
     :: Trace IO Text -> DbSyncEnv -> DbSyncNodePlugin -> LedgerStateVar -> [DbAction]
     -> ExceptT DbSyncNodeError IO NextState
 runActions trce env plugin ledgerState actions = do
-    nextState <- checkDbState trce actions
-    if nextState /= Done
-      then dbAction Continue actions
-      else pure Continue
+    dbAction Continue actions
   where
     dbAction :: NextState -> [DbAction] -> ExceptT DbSyncNodeError IO NextState
     dbAction next [] = pure next
@@ -102,55 +94,6 @@ runActions trce env plugin ledgerState actions = do
           if null zs
             then pure Continue
             else dbAction Continue zs
-
-checkDbState :: Trace IO Text -> [DbAction] -> ExceptT DbSyncNodeError IO NextState
-checkDbState trce xs =
-    case filter isMainBlockApply (reverse xs) of
-      [] -> pure Continue
-      (DbApplyBlock blktip : _) -> validateBlock blktip
-      _ -> pure Continue
-  where
-    validateBlock :: BlockDetails -> ExceptT DbSyncNodeError IO NextState
-    validateBlock (BlockDetails cblk _) = do
-      case cblk of
-        BlockByron bblk ->
-          case byronBlockRaw bblk of
-            Ledger.ABOBBoundary _ -> left $ NEError "checkDbState got a boundary block"
-            Ledger.ABOBBlock chBlk -> do
-              mDbBlk <- liftIO $ DB.runDbAction (Just trce) $ DB.queryBlockNo (Byron.blockNumber chBlk)
-              case mDbBlk of
-                Nothing -> pure Continue
-                Just dbBlk -> do
-                  when (DB.blockHash dbBlk /= Byron.blockHash chBlk) $ do
-                    liftIO $ logInfo trce (textShow chBlk)
-                    -- liftIO $ logInfo trce (textShow dbBlk)
-                    left $ NEBlockMismatch (Byron.blockNumber chBlk) (DB.blockHash dbBlk) (Byron.blockHash chBlk)
-
-                  liftIO . logInfo trce $
-                    mconcat [ "checkDbState: Block no ", textShow (Byron.blockNumber chBlk), " present" ]
-                  pure Done -- Block already exists, so we are done.
-
-        BlockShelley {} ->
-          panic "checkDbState for ShelleyBlock not yet implemented"
-        BlockAllegra {} ->
-          panic "checkDbState for AllegraBlock not yet implemented"
-        BlockMary {} ->
-          panic "checkDbState for MaryBlock not yet implemented"
-
-    isMainBlockApply :: DbAction -> Bool
-    isMainBlockApply dba =
-      case dba of
-        DbApplyBlock (BlockDetails cblk _details) ->
-          case cblk of
-            BlockByron bblk ->
-              case byronBlockRaw bblk of
-                Ledger.ABOBBlock _ -> True
-                Ledger.ABOBBoundary _ -> False
-            BlockShelley {} -> False
-            BlockAllegra {} -> False
-            BlockMary {} -> False
-        DbRollBackToPoint {} -> False
-        DbFinish -> False
 
 runRollbacks
     :: Trace IO Text -> DbSyncNodePlugin -> SlotNo
