@@ -53,7 +53,7 @@ import           Cardano.DbSync.Util
 
 import           Cardano.Prelude hiding (Nat, option, (%))
 
-import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
+import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..), withOrigin)
 
 import qualified Codec.CBOR.Term as CBOR
 
@@ -91,7 +91,6 @@ import           Ouroboros.Network.NodeToClient (ClientSubscriptionParams (..), 
                    WithAddr (..), localSnocket, localTxSubmissionPeerNull, networkErrorPolicies,
                    withIOManager)
 import qualified Ouroboros.Network.NodeToClient.Version as Network
-import           Ouroboros.Network.Point (withOrigin)
 import qualified Ouroboros.Network.Point as Point
 
 import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined
@@ -172,13 +171,14 @@ runDbSyncNodeNodeClient
 runDbSyncNodeNodeClient env ledgerVar iomgr trce plugin codecConfig (SocketPath socketPath) = do
   queryVar <- newStateQueryTMVar
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
-  void $ subscribe
-    (localSnocket iomgr socketPath)
-    codecConfig
-    (envNetworkMagic env)
-    networkSubscriptionTracers
-    clientSubscriptionParams
-    (dbSyncProtocols trce env plugin queryVar ledgerVar)
+  withMetricsServer $ \ metrics ->
+    void $ subscribe
+      (localSnocket iomgr socketPath)
+      codecConfig
+      (envNetworkMagic env)
+      networkSubscriptionTracers
+      clientSubscriptionParams
+      (dbSyncProtocols trce env plugin metrics queryVar ledgerVar)
   where
     clientSubscriptionParams =
       ClientSubscriptionParams
@@ -213,13 +213,14 @@ dbSyncProtocols
     :: Trace IO Text
     -> DbSyncEnv
     -> DbSyncNodePlugin
+    -> Metrics
     -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
     -> LedgerStateVar
     -> Network.NodeToClientVersion
     -> ClientCodecs CardanoBlock IO
     -> ConnectionId LocalAddress
     -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols trce env plugin queryVar ledgerVar version codecs _connectionId =
+dbSyncProtocols trce env plugin metrics queryVar ledgerVar version codecs _connectionId =
     NodeToClientProtocols
       { localChainSyncProtocol = localChainSyncPtcl
       , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -240,7 +241,6 @@ dbSyncProtocols trce env plugin queryVar ledgerVar version codecs _connectionId 
         currentTip <- getCurrentTipBlockNo
         logDbState trce
         actionQueue <- newDbActionQueue
-        (metrics, server) <- registerMetricsServer
         race_
             (runDbThread trce env plugin metrics actionQueue ledgerVar)
             (runPipelinedPeer
@@ -251,7 +251,6 @@ dbSyncProtocols trce env plugin queryVar ledgerVar version codecs _connectionId 
                     $ chainSyncClient trce env queryVar metrics latestPoints currentTip actionQueue)
             )
         atomically $ writeDbActionQueue actionQueue DbFinish
-        cancel server
         -- We should return leftover bytes returned by 'runPipelinedPeer', but
         -- client application do not care about them (it's only important if one
         -- would like to restart a protocol on the same mux and thus bearer).
@@ -341,7 +340,7 @@ chainSyncClient
     -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
     -> Metrics -> [Point CardanoBlock] -> WithOrigin BlockNo -> DbActionQueue
     -> ChainSyncClientPipelined CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-chainSyncClient trce env queryVar metrics latestPoints currentTip actionQueue =
+chainSyncClient trce env queryVar metrics latestPoints currentTip actionQueue = do
     ChainSyncClientPipelined $ pure $
       -- Notify the core node about the our latest points at which we are
       -- synchronised.  This client is not persistent and thus it just
