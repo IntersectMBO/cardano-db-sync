@@ -6,6 +6,7 @@ let
     systemdCompat.options = {
       systemd.services = lib.mkOption {};
       services.postgresql = lib.mkOption {};
+      assertions = lib.mkOption {};
       users = lib.mkOption {};
     };
     eval = let
