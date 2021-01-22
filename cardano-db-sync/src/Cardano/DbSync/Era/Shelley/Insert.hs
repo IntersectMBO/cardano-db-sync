@@ -48,12 +48,13 @@ import           Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
+import           Data.List.Split.Internals (chunksOf)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Error as Text
 
-import           Database.Persist.Sql (SqlBackend)
+import           Database.Persist.Sql (SqlBackend, putMany)
 
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
@@ -121,13 +122,21 @@ insertShelleyBlock tracer env blk lStateSnap details = do
         ]
 
     whenJust (lssEpochUpdate lStateSnap) $ \ esum -> do
-      whenJust (Generic.euRewards esum) $ \ rewards -> do
+      let stakes = Generic.euStakeDistribution esum
+      whenJust (Generic.euRewards esum) $ \ grewards -> do
+        liftIO $ logInfo tracer $ mconcat
+          [ "Finishing epoch ", textShow (unEpochNo (sdEpochNo details) - 1), ": "
+          , textShow (length (Generic.rewards grewards)), " rewards, "
+          , textShow (length (Generic.orphaned grewards)), " orphaned_rewards, "
+          , textShow (length (Generic.unStakeDist stakes)), " stakes."
+          ]
         -- Subtract 2 from the epoch to calculate when the epoch in which the reward was earned.
-        insertRewards tracer blkId (sdEpochNo details - 2) (Generic.rewards rewards)
-        insertOrphanedRewards tracer blkId (sdEpochNo details - 2) (Generic.orphaned rewards)
+        insertRewards tracer blkId (sdEpochNo details - 2) (Generic.rewards grewards)
+        insertOrphanedRewards tracer blkId (sdEpochNo details - 2) (Generic.orphaned grewards)
 
       insertEpochParam tracer blkId (sdEpochNo details) (Generic.euProtoParams esum) (Generic.euNonce esum)
-      insertEpochStake tracer blkId (sdEpochNo details) (Generic.euStakeDistribution esum)
+      insertEpochStake tracer blkId (sdEpochNo details) stakes
+      liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo (sdEpochNo details))
 
     when (getSyncStatus details == SyncFollowing) $
       -- Serializiing things during syncing can drastically slow down full sync
@@ -589,7 +598,7 @@ insertTxMetadata tracer txId metadata =
                        liftIO $ logWarning tracer "insertTxMetadata: dropped due to a Unicode NUL character."
                        return Nothing
                      else
-                       return $ Just json
+                       pure $ Just json
       void . lift . DB.insertTxMetadata $
         DB.TxMetadata
           { DB.txMetadataKey = DbWord64 key
@@ -613,18 +622,20 @@ insertRewards
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.BlockId -> EpochNo -> Map Generic.StakeCred Coin
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-insertRewards _tracer blkId epoch rewards =
-    mapM_ insertOneReward $ Map.toList rewards
+insertRewards _tracer blkId epoch rewards = do
+    forM_ (chunksOf 1000 $ Map.toList rewards) $ \rewardsChunk -> do
+      dbRewards <- mapM mkReward rewardsChunk
+      lift $ putMany dbRewards
   where
-    insertOneReward
+    mkReward
         :: (MonadBaseControl IO m, MonadIO m)
         => (Generic.StakeCred, Shelley.Coin)
-        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-    insertOneReward (saddr, coin) = do
+        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) DB.Reward
+    mkReward (saddr, coin) = do
       (saId, poolId) <- firstExceptT (NELookup "insertReward")
                           . newExceptT
                           $ queryStakeAddressAndPool (unEpochNo epoch) (Generic.unStakeCred saddr)
-      void . lift . DB.insertReward $
+      pure $
         DB.Reward
           { DB.rewardAddrId = saId
           , DB.rewardAmount = Generic.coinToDbLovelace coin
@@ -638,17 +649,21 @@ insertOrphanedRewards
     => Trace IO Text -> DB.BlockId -> EpochNo -> Map Generic.StakeCred Coin
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertOrphanedRewards _tracer blkId epoch orphanedRewards =
-    mapM_ insertOneOrphanedReward $ Map.toList orphanedRewards
+    -- There are probably not many of these for each epoch, but just in case there
+    -- are, it does not hurt to chunk them.
+    forM_ (chunksOf 1000 $ Map.toList orphanedRewards) $ \orphanedRewardsChunk -> do
+      dbRewards <- mapM mkOrphanedReward orphanedRewardsChunk
+      lift $ putMany dbRewards
   where
-    insertOneOrphanedReward
+    mkOrphanedReward
         :: (MonadBaseControl IO m, MonadIO m)
         => (Generic.StakeCred, Shelley.Coin)
-        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-    insertOneOrphanedReward (saddr, coin) = do
+        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) DB.OrphanedReward
+    mkOrphanedReward (saddr, coin) = do
       (saId, poolId) <- firstExceptT (NELookup "insertOrphanedReward")
                           . newExceptT
                           $ queryStakeAddressAndPool (unEpochNo epoch) (Generic.unStakeCred saddr)
-      void . lift . DB.insertOrphanedReward $
+      pure $
         DB.OrphanedReward
           { DB.orphanedRewardAddrId = saId
           , DB.orphanedRewardAmount = Generic.coinToDbLovelace coin
@@ -692,17 +707,19 @@ insertEpochStake
     => Trace IO Text -> DB.BlockId -> EpochNo -> Generic.StakeDist
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertEpochStake _tracer blkId (EpochNo epoch) smap =
-    mapM_ insert $ Map.toList (Generic.unStakeDist smap)
+    forM_ (chunksOf 1000 $ Map.toList (Generic.unStakeDist smap)) $ \stakeChunk -> do
+      dbStakes <- mapM mkStake stakeChunk
+      lift $ putMany dbStakes
   where
-    insert
+    mkStake
         :: (MonadBaseControl IO m, MonadIO m)
         => (Generic.StakeCred, Shelley.Coin)
-        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
-    insert (saddr, coin) = do
+        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) DB.EpochStake
+    mkStake (saddr, coin) = do
       (saId, poolId) <- firstExceptT (NELookup "insertEpochStake")
                           . newExceptT
                           $ queryStakeAddressAndPool epoch (Generic.unStakeCred saddr)
-      void . lift . DB.insertEpochStake $
+      pure $
         DB.EpochStake
           { DB.epochStakeAddrId = saId
           , DB.epochStakePoolId = poolId
