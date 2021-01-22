@@ -11,6 +11,7 @@ module Cardano.DbSync.LedgerState
   , LedgerStateVar (..)
   , LedgerStateFile (..)
   , applyBlock
+  , deleteNewerLedgerStateFiles
   , initLedgerStateVar
   , ledgerStateTipSlot
   , loadLatestLedgerState
@@ -143,6 +144,15 @@ applyBlock env (LedgerStateVar stateVar) blk =
       case tickThenReapplyCheckHash cfg block lsb of
         Left err -> panic err
         Right result -> result
+
+-- Delete allo ledger state files for slots later than the provided SlotNo.
+deleteNewerLedgerStateFiles :: LedgerStateDir -> SlotNo -> IO ()
+deleteNewerLedgerStateFiles stateDir slotNo = do
+    delFiles <- filter isNewer <$> listLedgerStateFilesOrdered stateDir
+    mapM_ (safeRemoveFile . lsfFilePath) delFiles
+  where
+    isNewer :: LedgerStateFile -> Bool
+    isNewer lsf = lsfSlotNo lsf > slotNo
 
 ledgerStateTipSlot :: LedgerStateVar -> IO SlotNo
 ledgerStateTipSlot (LedgerStateVar stateVar) = do

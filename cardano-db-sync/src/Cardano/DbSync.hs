@@ -147,6 +147,10 @@ runDbSyncNode plugin enp =
         case genCfg of
           GenesisCardano _ bCfg _sCfg -> do
             ledgerVar <- initLedgerStateVar genCfg
+
+            latestSlot <- SlotNo <$> DB.runDbNoLogging DB.queryLatestSlotNo
+            deleteNewerLedgerStateFiles (envLedgerStateDir genesisEnv) latestSlot
+
             loadLatestLedgerState (envLedgerStateDir genesisEnv) ledgerVar
             runDbSyncNodeNodeClient genesisEnv ledgerVar
                 iomgr trce plugin (cardanoCodecConfig bCfg) (enpSocketPath enp)
