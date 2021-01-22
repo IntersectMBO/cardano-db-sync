@@ -3,6 +3,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.DbSync.LedgerState
@@ -11,14 +12,16 @@ module Cardano.DbSync.LedgerState
   , LedgerStateVar (..)
   , LedgerStateFile (..)
   , applyBlock
+  , deleteNewerLedgerStateFiles
   , initLedgerStateVar
   , ledgerStateTipSlot
   , loadLatestLedgerState
-  , loadLedgerStateAtSlot
+  , loadLedgerStateAtPoint
   , readLedgerState
   , saveLedgerState
   , listLedgerStateFilesOrdered
-  , getLedgerFromFile
+  , loadLedgerStateFromFile
+  , saveCurrentLedgerState
   ) where
 
 import           Cardano.Binary (DecoderError)
@@ -26,6 +29,7 @@ import qualified Cardano.Binary as Serialize
 
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Config.Cardano
+import           Cardano.DbSync.DbAction
 import qualified Cardano.DbSync.Era.Cardano.Util as Cardano
 import qualified Cardano.DbSync.Era.Shelley.Generic.EpochUpdate as Generic
 import qualified Cardano.DbSync.Era.Shelley.Generic.Rewards as Generic
@@ -34,6 +38,8 @@ import           Cardano.DbSync.Util
 
 import           Cardano.Prelude
 
+import           Cardano.Slotting.Block (BlockNo (..))
+
 import           Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), fromWithOrigin)
 
@@ -41,13 +47,16 @@ import           Control.Concurrent.STM.TVar (TVar, newTVarIO, readTVar, readTVa
 import qualified Control.Exception as Exception
 import           Control.Monad.Extra (firstJustM)
 
+import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as BSS
 import qualified Data.List as List
+import qualified Data.Text as Text
 
 import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockHash, blockPrevHash,
                    withOrigin)
+import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
 import           Ouroboros.Consensus.Cardano.Block (CardanoBlock, HardForkState (..),
                    LedgerState (..), StandardCrypto)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
@@ -63,7 +72,7 @@ import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import qualified Ouroboros.Consensus.Shelley.Protocol as Consensus
 import           Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), EncodeDisk (..))
 
-import           Ouroboros.Network.Block (BlockNo (..))
+import           Ouroboros.Network.Block (ChainHash (..))
 
 import qualified Shelley.Spec.Ledger.API.Protocol as Shelley
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
@@ -93,6 +102,7 @@ newtype LedgerStateVar = LedgerStateVar
 
 data LedgerStateFile = LedgerStateFile -- Internal use only.
   { lsfSlotNo :: !SlotNo
+  , lsfHash :: !ByteString
   , lsfFilePath :: !FilePath
   } deriving Show
 
@@ -144,48 +154,54 @@ applyBlock env (LedgerStateVar stateVar) blk =
         Left err -> panic err
         Right result -> result
 
+-- Delete allo ledger state files for slots later than the provided SlotNo.
+deleteNewerLedgerStateFiles :: LedgerStateDir -> SlotNo -> IO ()
+deleteNewerLedgerStateFiles stateDir slotNo = do
+    delFiles <- filter isNewer <$> listLedgerStateFilesOrdered stateDir
+    mapM_ (safeRemoveFile . lsfFilePath) delFiles
+  where
+    isNewer :: LedgerStateFile -> Bool
+    isNewer lsf = lsfSlotNo lsf > slotNo
+
 ledgerStateTipSlot :: LedgerStateVar -> IO SlotNo
 ledgerStateTipSlot (LedgerStateVar stateVar) = do
   lstate <- readTVarIO stateVar
   pure $ fromWithOrigin (SlotNo 0) . ledgerTipSlot $ ledgerState (clsState lstate)
 
+saveCurrentLedgerState :: LedgerStateDir -> LedgerStateVar -> IO ()
+saveCurrentLedgerState stateDir (LedgerStateVar stateVar) = do
+    ledger <- readTVarIO stateVar
+    LBS.writeFile (mkLedgerStateFilename stateDir ledger) $
+        Serialize.serializeEncoding $
+          Consensus.encodeExtLedgerState
+             (encodeDisk $ codecConfig ledger)
+             (encodeDisk $ codecConfig ledger)
+             (encodeDisk $ codecConfig ledger)
+             (clsState ledger)
+    cleanupLedgerStateFiles stateDir $
+        fromWithOrigin (SlotNo 0) (ledgerTipSlot . ledgerState $ clsState ledger)
+  where
+    codecConfig :: CardanoLedgerState -> CodecConfig (CardanoBlock StandardCrypto)
+    codecConfig = configCodec . clsConfig
+
 saveLedgerState :: LedgerStateDir -> LedgerStateVar -> LedgerStateSnapshot -> SyncState -> IO ()
-saveLedgerState lsd@(LedgerStateDir stateDir) (LedgerStateVar stateVar) snapshot synced = do
+saveLedgerState stateDir (LedgerStateVar stateVar) snapshot synced = do
   atomically $ writeTVar stateVar ledger
   case synced of
     SyncFollowing -> saveState                          -- If following, save every state.
     SyncLagging
-      | unSlotNo slot == 0 -> pure ()                   -- Genesis and the first EBB are weird so do not store them.
       | block `mod` 2000 == 0 -> saveState              -- Only save state ocassionally.
       | isJust (lssEpochUpdate snapshot) -> saveState   -- Epoch boundaries cost a lot, so we better save them
       | otherwise -> pure ()
   where
-    ledger :: CardanoLedgerState
-    ledger = lssState snapshot
-
-    filename :: FilePath
-    filename = stateDir </> show (unSlotNo slot) ++ ".lstate"
-
-    slot :: SlotNo
-    slot = fromWithOrigin (SlotNo 0) (ledgerTipSlot . ledgerState $ clsState ledger)
-
     block :: Word64
     block = withOrigin 0 unBlockNo $ ledgerTipBlockNo (clsState ledger)
 
-    saveState :: IO ()
-    saveState = do
-      -- Encode and write lazily.
-      LBS.writeFile filename $
-        Serialize.serializeEncoding $
-          Consensus.encodeExtLedgerState
-             (encodeDisk codecConfig)
-             (encodeDisk codecConfig)
-             (encodeDisk codecConfig)
-             (clsState ledger)
-      cleanupLedgerStateFiles lsd slot
+    ledger :: CardanoLedgerState
+    ledger = lssState snapshot
 
-    codecConfig :: CodecConfig (CardanoBlock StandardCrypto)
-    codecConfig = configCodec (clsConfig ledger)
+    saveState :: IO ()
+    saveState = saveCurrentLedgerState stateDir (LedgerStateVar stateVar)
 
 loadLatestLedgerState :: LedgerStateDir -> LedgerStateVar -> IO ()
 loadLatestLedgerState stateDir ledgerVar = do
@@ -194,17 +210,57 @@ loadLatestLedgerState stateDir ledgerVar = do
   mcs <- firstJustM (loadFile ledger) files
   case mcs of
     Just cs -> atomically $ writeTVar (unLedgerStateVar ledgerVar) cs
-    Nothing -> pure ()
+    Nothing -> panic "loadLatestLedgerState failed to find required state file."
 
-loadLedgerStateAtSlot :: LedgerStateDir -> LedgerStateVar -> SlotNo -> IO ()
-loadLedgerStateAtSlot stateDir (LedgerStateVar stateVar) slotNo = do
+loadLedgerStateAtPoint :: LedgerStateDir -> LedgerStateVar -> DbPoint -> IO ()
+loadLedgerStateAtPoint stateDir stateVar point = do
   -- Read current state to get the LedgerConfig and CodecConfig.
-  lstate <- readLedgerState (LedgerStateVar stateVar)
+  lstate <- readLedgerState stateVar
   -- Load the state
-  mState <- loadState stateDir lstate slotNo
+  mState <- loadState stateDir lstate point
   case mState of
-    Nothing -> pure ()
-    Just st -> atomically $ writeTVar stateVar st
+    Just st -> atomically $ writeTVar (unLedgerStateVar stateVar) st
+    Nothing -> panic $ "loadLedgerStateAtPoint failed to find required state file: "
+                        <> Text.pack (lsfFilePath $ dbPointToFileName stateDir point)
+
+mkLedgerStateFilename :: LedgerStateDir -> CardanoLedgerState -> FilePath
+mkLedgerStateFilename (LedgerStateDir stateDir) ledger =
+    stateDir </> show (unSlotNo slot) ++ "-" ++ BS.unpack hash ++ ".lstate"
+  where
+    slot :: SlotNo
+    slot = fromWithOrigin (SlotNo 0) (ledgerTipSlot $ ledgerState $ clsState ledger)
+
+    hash :: ByteString
+    hash =
+      Base16.encode . BS.take 5 $
+        case ledgerTipHash (ledgerState $ clsState ledger) of
+          GenesisHash -> "genesis"
+          BlockHash h -> toRawHash (Proxy @(CardanoBlock StandardCrypto)) h
+
+dbPointToFileName :: LedgerStateDir -> DbPoint -> LedgerStateFile
+dbPointToFileName (LedgerStateDir stateDir) (DbPoint slot hash) =
+    LedgerStateFile
+      { lsfSlotNo = slot
+      , lsfHash = shortHash
+      , lsfFilePath = stateDir </> show (unSlotNo slot) ++ "-" ++ BS.unpack shortHash ++ ".lstate"
+      }
+  where
+    shortHash :: ByteString
+    shortHash = Base16.encode $ BS.take 5 hash
+
+parseLedgerStateFileName :: LedgerStateDir -> FilePath -> Maybe LedgerStateFile
+parseLedgerStateFileName (LedgerStateDir stateDir) fp =
+    case break (== '-') (dropExtension fp) of
+      (slot, '-':hash) -> build (BS.pack hash) <$> readMaybe slot
+      _otherwise -> Nothing
+  where
+    build :: ByteString -> Word64 -> LedgerStateFile
+    build hash slot =
+      LedgerStateFile
+        { lsfSlotNo = SlotNo slot
+        , lsfHash = hash
+        , lsfFilePath = stateDir </> fp
+        }
 
 -- | This should be exposed by 'consensus'.
 ledgerTipBlockNo :: ExtLedgerState blk -> WithOrigin BlockNo
@@ -224,8 +280,8 @@ cleanupLedgerStateFiles stateDir slotNo = do
   where
     -- Left files are deleted, Right files are kept.
     keepFile :: LedgerStateFile ->  Either FilePath LedgerStateFile
-    keepFile lsf@(LedgerStateFile w fp) =
-      if w <= slotNo
+    keepFile lsf@(LedgerStateFile s _ fp) =
+      if s <= slotNo
         then Right lsf
         else Left fp
 
@@ -241,25 +297,12 @@ extractEpochNonce extLedgerState =
     extractNonce =
       Shelley.ticknStateEpochNonce . Shelley.csTickn . Consensus.tpraosStateChainDepState
 
-getLedgerFromFile :: GenesisConfig -> LedgerStateFile -> IO (Maybe CardanoLedgerState)
-getLedgerFromFile conf file = do
-  loadFile (initCardanoLedgerState conf) file
+loadLedgerStateFromFile :: GenesisConfig -> LedgerStateFile -> IO (Maybe CardanoLedgerState)
+loadLedgerStateFromFile conf = loadFile (initCardanoLedgerState conf)
 
-loadState :: LedgerStateDir -> CardanoLedgerState -> SlotNo -> IO (Maybe CardanoLedgerState)
-loadState stateDir ledger slotNo = do
-    files <- listLedgerStateFilesOrdered stateDir
-    let (invalid, valid) = partitionEithers $ map keepFile files
-    -- Remove invalid (ie SlotNo >= current) ledger state files (occurs on rollback).
-    mapM_ safeRemoveFile invalid
-    -- Want the highest numbered snapshot.
-    firstJustM (loadFile ledger) valid
-  where
-    -- Left files are deleted, Right files are kept.
-    keepFile :: LedgerStateFile ->  Either FilePath LedgerStateFile
-    keepFile lsf@(LedgerStateFile w fp) =
-      if w <= slotNo
-        then Right lsf
-        else Left fp
+loadState :: LedgerStateDir -> CardanoLedgerState -> DbPoint -> IO (Maybe CardanoLedgerState)
+loadState stateDir ledger point =
+  loadFile ledger $ dbPointToFileName stateDir point
 
 loadFile :: CardanoLedgerState -> LedgerStateFile -> IO (Maybe CardanoLedgerState)
 loadFile ledger lsf = do
@@ -296,18 +339,12 @@ loadFile ledger lsf = do
 
 -- Get a list of the ledger state files order most recent
 listLedgerStateFilesOrdered :: LedgerStateDir -> IO [LedgerStateFile]
-listLedgerStateFilesOrdered (LedgerStateDir stateDir) = do
-    files <- filter isLedgerStateFile <$> listDirectory stateDir
-    pure . List.sortBy revSlotNoOrder $ mapMaybe extractIndex files
+listLedgerStateFilesOrdered stateDir = do
+    files <- filter isLedgerStateFile <$> listDirectory (unLedgerStateDir stateDir)
+    pure . List.sortBy revSlotNoOrder $ mapMaybe (parseLedgerStateFileName stateDir) files
   where
     isLedgerStateFile :: FilePath -> Bool
     isLedgerStateFile fp = takeExtension fp == ".lstate"
-
-    extractIndex :: FilePath -> Maybe LedgerStateFile
-    extractIndex fp =
-      case readMaybe (dropExtension fp) of
-        Nothing -> Nothing
-        Just w -> Just $ LedgerStateFile (SlotNo w) (stateDir </> fp)
 
     revSlotNoOrder :: LedgerStateFile -> LedgerStateFile -> Ordering
     revSlotNoOrder a b = compare (lsfSlotNo b) (lsfSlotNo a)
