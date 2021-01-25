@@ -178,8 +178,6 @@ saveCurrentLedgerState stateDir (LedgerStateVar stateVar) = do
              (encodeDisk $ codecConfig ledger)
              (encodeDisk $ codecConfig ledger)
              (clsState ledger)
-    cleanupLedgerStateFiles stateDir $
-        fromWithOrigin (SlotNo 0) (ledgerTipSlot . ledgerState $ clsState ledger)
   where
     codecConfig :: CardanoLedgerState -> CodecConfig (CardanoBlock StandardCrypto)
     codecConfig = configCodec . clsConfig
@@ -188,10 +186,10 @@ saveLedgerState :: LedgerStateDir -> LedgerStateVar -> LedgerStateSnapshot -> Sy
 saveLedgerState stateDir (LedgerStateVar stateVar) snapshot synced = do
   atomically $ writeTVar stateVar ledger
   case synced of
-    SyncFollowing -> saveState                          -- If following, save every state.
+    SyncFollowing -> saveCleanupState                          -- If following, save every state.
     SyncLagging
-      | block `mod` 2000 == 0 -> saveState              -- Only save state ocassionally.
-      | isJust (lssEpochUpdate snapshot) -> saveState   -- Epoch boundaries cost a lot, so we better save them
+      | block `mod` 2000 == 0 -> saveCleanupState              -- Only save state ocassionally.
+      | isJust (lssEpochUpdate snapshot) -> saveCleanupState   -- Epoch boundaries cost a lot, so we better save them
       | otherwise -> pure ()
   where
     block :: Word64
@@ -200,8 +198,11 @@ saveLedgerState stateDir (LedgerStateVar stateVar) snapshot synced = do
     ledger :: CardanoLedgerState
     ledger = lssState snapshot
 
-    saveState :: IO ()
-    saveState = saveCurrentLedgerState stateDir (LedgerStateVar stateVar)
+    saveCleanupState :: IO ()
+    saveCleanupState = do
+      saveCurrentLedgerState stateDir (LedgerStateVar stateVar)
+      cleanupLedgerStateFiles stateDir $
+        fromWithOrigin (SlotNo 0) (ledgerTipSlot . ledgerState $ clsState ledger)
 
 loadLatestLedgerState :: LedgerStateDir -> LedgerStateVar -> IO ()
 loadLatestLedgerState stateDir ledgerVar = do
