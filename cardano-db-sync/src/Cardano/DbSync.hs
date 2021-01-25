@@ -151,7 +151,7 @@ runDbSyncNode plugin enp =
             deleteNewerLedgerStateFiles (envLedgerStateDir genesisEnv) latestSlot
 
             loadLatestLedgerState (envLedgerStateDir genesisEnv) ledgerVar
-            runDbSyncNodeNodeClient genesisEnv ledgerVar
+            runDbSyncNodeNodeClient (dncPrometheusPort enc) genesisEnv ledgerVar
                 iomgr trce plugin (cardanoCodecConfig bCfg) (enpSocketPath enp)
   where
     cardanoCodecConfig :: Byron.Config -> CodecConfig CardanoBlock
@@ -165,13 +165,13 @@ runDbSyncNode plugin enp =
 -- -------------------------------------------------------------------------------------------------
 
 runDbSyncNodeNodeClient
-    :: DbSyncEnv -> LedgerStateVar -> IOManager -> Trace IO Text -> DbSyncNodePlugin
+    :: Int -> DbSyncEnv -> LedgerStateVar -> IOManager -> Trace IO Text -> DbSyncNodePlugin
     -> CodecConfig CardanoBlock -> SocketPath
     -> IO ()
-runDbSyncNodeNodeClient env ledgerVar iomgr trce plugin codecConfig (SocketPath socketPath) = do
+runDbSyncNodeNodeClient port env ledgerVar iomgr trce plugin codecConfig (SocketPath socketPath) = do
   queryVar <- newStateQueryTMVar
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
-  withMetricsServer $ \ metrics ->
+  withMetricsServer port $ \ metrics ->
     void $ subscribe
       (localSnocket iomgr socketPath)
       codecConfig

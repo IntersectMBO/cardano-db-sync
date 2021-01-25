@@ -5,6 +5,9 @@ NetworkName: mainnet
 EnableLogMetrics: False
 EnableLogging: True
 
+# The default port is 8080
+# PrometheusPort: 8080
+
 # The config file for the node we are connecting to. If this is not the correct
 # config, it will likely lead to db-sync throwing up weird error messages from
 # the consensus layer.

@@ -23,11 +23,11 @@ data Metrics = Metrics
   , mQueuePostWrite :: !Gauge
   }
 
-withMetricsServer :: (Metrics -> IO a) -> IO a
-withMetricsServer action = do
+withMetricsServer :: Int -> (Metrics -> IO a) -> IO a
+withMetricsServer port action = do
   (metrics, registry) <- runRegistryT $ (,) <$> makeMetrics <*> RegistryT ask
   bracket
-     (async $ runReaderT (unRegistryT $ serveMetricsT 8080 []) registry)
+     (async $ runReaderT (unRegistryT $ serveMetricsT port []) registry)
      cancel
      (const $ action metrics)
 
