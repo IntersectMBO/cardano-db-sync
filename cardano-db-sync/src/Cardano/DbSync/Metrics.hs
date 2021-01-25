@@ -4,7 +4,7 @@
 module Cardano.DbSync.Metrics
   ( Metrics (..)
   , makeMetrics
-  , registerMetricsServer
+  , withMetricsServer
   ) where
 
 import           Cardano.Prelude
@@ -23,13 +23,13 @@ data Metrics = Metrics
   , mQueuePostWrite :: !Gauge
   }
 
-registerMetricsServer :: IO (Metrics, Async ())
-registerMetricsServer =
-  runRegistryT $ do
-    metrics <- makeMetrics
-    registry <- RegistryT ask
-    server <- liftIO . async $ runReaderT (unRegistryT $ serveMetricsT 8080 []) registry
-    pure (metrics, server)
+withMetricsServer :: Int -> (Metrics -> IO a) -> IO a
+withMetricsServer port action = do
+  (metrics, registry) <- runRegistryT $ (,) <$> makeMetrics <*> RegistryT ask
+  bracket
+     (async $ runReaderT (unRegistryT $ serveMetricsT port []) registry)
+     cancel
+     (const $ action metrics)
 
 makeMetrics :: RegistryT IO Metrics
 makeMetrics =

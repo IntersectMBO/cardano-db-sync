@@ -46,7 +46,7 @@ import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Cardano.Prelude
 
-import           Data.Aeson (FromJSON (..), Object, Value (..), (.:))
+import           Data.Aeson (FromJSON (..), Object, Value (..), (.:), (.:?))
 import qualified Data.Aeson as Aeson
 import           Data.Aeson.Types (Parser, typeMismatch)
 
@@ -124,6 +124,7 @@ data DbSyncNodeConfig = DbSyncNodeConfig
   , dncRequiresNetworkMagic :: !RequiresNetworkMagic
   , dncEnableLogging :: !Bool
   , dncEnableMetrics :: !Bool
+  , dncPrometheusPort :: !Int
   , dncPBftSignatureThreshold :: !(Maybe Double)
   , dncByronGenesisFile :: !GenesisFile
   , dncByronGenesisHash :: !GenesisHashByron
@@ -147,6 +148,7 @@ data DbSyncPreConfig = DbSyncPreConfig
   , pcNodeConfigFile :: !NodeConfigFile
   , pcEnableLogging :: !Bool
   , pcEnableMetrics :: !Bool
+  , pcPrometheusPort :: !Int
   }
 
 newtype GenesisFile = GenesisFile
@@ -203,6 +205,7 @@ parseGenDbSyncNodeConfig o =
     <*> fmap NodeConfigFile (o .: "NodeConfigFile")
     <*> o .: "EnableLogging"
     <*> o .: "EnableLogMetrics"
+    <*> fmap (fromMaybe 8080) (o .:? "PrometheusPort")
 
 instance FromJSON DbSyncProtocol where
   parseJSON o =
