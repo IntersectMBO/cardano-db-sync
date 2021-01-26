@@ -1,5 +1,12 @@
 # Revision history for cardano-db
 
+## 8.0.0
+* Note that this release requires the database to be dropped and recreated.
+* Documentation updates.
+* Update dependencies.
+* Fix typo in database column name (Merkel -> Merkle) (#446).
+* `cardano-db-tool` moved to a separate package in this repo.
+
 ## 7.1.0
 * Upgrading from 7.0.x will not require the database to be dropped and recreated but upgrading from
   6.0.x and earlier will require it.
