@@ -1,4 +1,19 @@
-# Revision history for cardano-db-sync node
+# Revision history for cardano-db-sync
+
+## 8.0.0
+* Note that this release requires the database to be dropped and recreated.
+* Requires version 1.25.0 or later of the node.
+* Documentation updates.
+* Update dependencies.
+* Vastly improve database rollback performance (#256, #397).
+* Split the ledger state rewards into valid and invalid sets (#415, #467).
+* Fix tx_count for genesis blocks (#471).
+* Fix typo in database column name (Merkel -> Merkle) (#446).
+* Improve logging.
+* Handle case where latest ledger state file cannot be parsed (#483).
+* Improve handling/naming of ledger state files.
+* Fix Prometheus metrics server (#154).
+* Make the port that the Prometheus metrics server listens on configurable (#488).
 
 ## 7.1.0
 * Upgrading from 7.0.x will not require the database to be dropped and recreated but upgrading from
