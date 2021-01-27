@@ -6,6 +6,21 @@ packages:
   cardano-db-sync
   cardano-db-sync-extended
   cardano-db-tool
+  ../ouroboros-network/ouroboros-consensus
+  ../ouroboros-network/ouroboros-network
+  ../ouroboros-network/ouroboros-network-framework
+  ../ouroboros-network/ouroboros-consensus-cardano
+  ../ouroboros-network/ouroboros-consensus-shelley
+  ../ouroboros-network/ouroboros-consensus-byron
+  ../ouroboros-network/cardano-client
+  ../ouroboros-network/network-mux
+  ../ouroboros-network/typed-protocols
+  ../ouroboros-network/io-sim
+  ../ouroboros-network/io-sim-classes
+  ../ouroboros-network/ouroboros-network-testing
+  ../ouroboros-network/typed-protocols-examples
+  ../ouroboros-network/Win32-network
+  ../cardano-node/cardano-api
 
 constraints:
     libsystemd-journal >= 1.4.4
@@ -94,7 +109,6 @@ source-repository-package
   tag: 9d62ffad185eafaabc35682355602fb5b61d33f6
   --sha256: 0krfbhxx7xcrlfi3l4hnngd7wxcv2vgbvmzn9nnzf057s6rwwxck
   subdir:
-    cardano-api
     cardano-config
     cardano-node
     hedgehog-extras
@@ -128,24 +142,3 @@ source-repository-package
     plugins/backend-trace-forwarder
     plugins/scribe-systemd
     tracer-transformers
-
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/ouroboros-network
-  tag: 6cb9052bde39472a0555d19ade8a42da63d3e904
-  --sha256: 0rz4acz15wda6yfc7nls6g94gcwg2an5zibv0irkxk297n76gkmg
-  subdir:
-    cardano-client
-    io-sim
-    io-sim-classes
-    ouroboros-consensus
-    ouroboros-consensus-byron
-    ouroboros-consensus-cardano
-    ouroboros-consensus-shelley
-    ouroboros-network
-    ouroboros-network-framework
-    ouroboros-network-testing
-    typed-protocols
-    typed-protocols-examples
-    network-mux
-    Win32-network

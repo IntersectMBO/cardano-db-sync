@@ -201,7 +201,9 @@ saveLedgerState stateDir (LedgerStateVar stateVar) snapshot synced = do
     ledger = lssState snapshot
 
     saveState :: IO ()
-    saveState = saveCurrentLedgerState stateDir (LedgerStateVar stateVar)
+    saveState = do
+      putStrLn ("saveState" :: Text)
+      saveCurrentLedgerState stateDir (LedgerStateVar stateVar)
 
 loadLatestLedgerState :: LedgerStateDir -> LedgerStateVar -> IO ()
 loadLatestLedgerState stateDir ledgerVar = do
