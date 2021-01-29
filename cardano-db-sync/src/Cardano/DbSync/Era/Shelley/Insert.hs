@@ -123,23 +123,24 @@ insertShelleyBlock tracer env blk lStateSnap details = do
         , ", hash ", renderByteArray (Generic.blkHash blk)
         ]
 
-    whenJust (lssEpochUpdate lStateSnap) $ \ esum -> do
-      let stakes = Generic.euStakeDistribution esum
+    whenJust (lssNewEpoch lStateSnap) $ \ newEpoch ->
+      whenJust (Generic.epochUpdate newEpoch) $ \esum -> do
+        let stakes = Generic.euStakeDistribution esum
 
-      whenJust (Generic.euRewards esum) $ \ grewards -> do
-        liftIO $ logInfo tracer $ mconcat
-          [ "Finishing epoch ", textShow (unEpochNo (sdEpochNo details) - 1), ": "
-          , textShow (length (Generic.rewards grewards)), " rewards, "
-          , textShow (length (Generic.orphaned grewards)), " orphaned_rewards, "
-          , textShow (length (Generic.unStakeDist stakes)), " stakes."
-          ]
-        -- Subtract 2 from the epoch to calculate when the epoch in which the reward was earned.
-        insertRewards tracer blkId (sdEpochNo details - 2) (Generic.rewards grewards)
-        insertOrphanedRewards tracer blkId (sdEpochNo details - 2) (Generic.orphaned grewards)
+        whenJust (Generic.euRewards esum) $ \ grewards -> do
+          liftIO $ logInfo tracer $ mconcat
+            [ "Finishing epoch ", textShow (unEpochNo (sdEpochNo details) - 1), ": "
+            , textShow (length (Generic.rewards grewards)), " rewards, "
+            , textShow (length (Generic.orphaned grewards)), " orphaned_rewards, "
+            , textShow (length (Generic.unStakeDist stakes)), " stakes."
+            ]
+          -- Subtract 2 from the epoch to calculate when the epoch in which the reward was earned.
+          insertRewards tracer blkId (sdEpochNo details - 2) (Generic.rewards grewards)
+          insertOrphanedRewards tracer blkId (sdEpochNo details - 2) (Generic.orphaned grewards)
 
-      insertEpochParam tracer blkId (sdEpochNo details) (Generic.euProtoParams esum) (Generic.euNonce esum)
-      insertEpochStake tracer blkId (sdEpochNo details) stakes
-      liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo (sdEpochNo details))
+        insertEpochParam tracer blkId (sdEpochNo details) (Generic.euProtoParams esum) (Generic.euNonce esum)
+        insertEpochStake tracer blkId (sdEpochNo details) stakes
+        liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo (sdEpochNo details))
 
     when (getSyncStatus details == SyncFollowing) $
       -- Serializiing things during syncing can drastically slow down full sync
