@@ -6,7 +6,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Cardano.DbSync.Config.Types
+module Cardano.Sync.Config.Types
   ( AllegraToMary
   , ByronToShelley
   , CardanoBlock
@@ -22,6 +22,7 @@ module Cardano.DbSync.Config.Types
   , DbSyncNodeConfig (..)
   , DbSyncPreConfig (..)
   , LedgerStateDir (..)
+  , MigrationDir (..)
   , LogFileDir (..)
   , NetworkName (..)
   , NodeConfigFile (..)
@@ -32,6 +33,8 @@ module Cardano.DbSync.Config.Types
   , pcNodeConfigFilePath
   ) where
 
+import           Cardano.Prelude
+
 import qualified Cardano.BM.Configuration as Logging
 import qualified Cardano.BM.Data.Configuration as Logging
 
@@ -40,11 +43,7 @@ import qualified Cardano.Chain.Update as Byron
 import           Cardano.Crypto (RequiresNetworkMagic (..))
 import qualified Cardano.Crypto.Hash as Crypto
 
-import           Cardano.Db (MigrationDir (..))
-
 import           Cardano.Slotting.Slot (SlotNo (..))
-
-import           Cardano.Prelude
 
 import           Data.Aeson (FromJSON (..), Object, Value (..), (.:), (.:?))
 import qualified Data.Aeson as Aeson
@@ -64,6 +63,10 @@ import           Ouroboros.Network.Magic (NetworkMagic (..))
 
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 
+
+newtype MigrationDir = MigrationDir FilePath
+
+newtype LogFileDir = LogFileDir FilePath
 
 type CardanoBlock =
         Cardano.HardForkBlock
@@ -166,9 +169,6 @@ newtype GenesisHashShelley = GenesisHashShelley
 newtype LedgerStateDir = LedgerStateDir
   {  unLedgerStateDir :: FilePath
   } deriving Show
-
-newtype LogFileDir
-  = LogFileDir FilePath
 
 newtype NetworkName = NetworkName
   { unNetworkName :: Text

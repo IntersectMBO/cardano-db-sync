@@ -1,11 +1,7 @@
 {-# LANGUAGE DataKinds #-}
-module Cardano.DbSync.Era.Shelley.Generic
+module Cardano.Sync.Era.Shelley.Generic
   ( module X
   ) where
-
-import           Cardano.DbSync.Era.Shelley.Generic.Block as X
-import           Cardano.DbSync.Era.Shelley.Generic.Tx as X
-import           Cardano.DbSync.Era.Shelley.Generic.Util as X
 
 import           Cardano.Sync.Era.Shelley.Generic.EpochUpdate as X
 import           Cardano.Sync.Era.Shelley.Generic.ProtoParams as X

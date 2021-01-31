@@ -6,6 +6,7 @@ packages:
   cardano-db-sync
   cardano-db-sync-extended
   cardano-db-tool
+  cardano-sync
 
 constraints:
     libsystemd-journal >= 1.4.4
@@ -15,14 +16,17 @@ constraints:
   , network >= 3.1.1.0
   , persistent-postgresql >= 2.11.0.1
 
-package cardano-explorer-db
-  ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields
+package cardano-db
+  ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields -Wunused-imports
 
 package cardano-db-sync
-  ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields
+  ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields -Wunused-imports
 
 package cardano-db-sync-extended
-  ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields
+  ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields -Wunused-imports
+
+package cardano-sync
+  ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields -Wunused-imports
 
 -- ---------------------------------------------------------
 -- Disable all tests by default

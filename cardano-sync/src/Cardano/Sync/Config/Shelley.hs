@@ -4,16 +4,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Cardano.DbSync.Config.Shelley
+module Cardano.Sync.Config.Shelley
   ( ShelleyConfig (..)
   , readShelleyGenesisConfig
   ) where
 
 import qualified Cardano.Crypto.Hash as Crypto
 
-import           Cardano.DbSync.Config.Types
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.Util
+import           Cardano.Sync.Config.Types
+import           Cardano.Sync.Error
+import           Cardano.Sync.Util
 
 import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, handleIOExceptT, hoistEither, left)

@@ -5,7 +5,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Cardano.DbSync.Config.Node
+module Cardano.Sync.Config.Node
   ( NodeConfig (..)
   , parseNodeConfig
   ) where
@@ -17,8 +17,8 @@ import qualified Cardano.Chain.Update as Byron
 
 import           Cardano.Crypto (RequiresNetworkMagic (..))
 
-import           Cardano.DbSync.Config.Types
-import           Cardano.DbSync.Util
+import           Cardano.Sync.Config.Types
+import           Cardano.Sync.Util
 
 import           Cardano.Prelude
 

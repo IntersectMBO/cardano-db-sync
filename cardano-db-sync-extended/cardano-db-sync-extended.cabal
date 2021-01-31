@@ -36,8 +36,11 @@ library
   build-depends:        base                            >= 4.12         && < 4.15
                       , cardano-db
                       , cardano-db-sync
-                      , text
-                      , transformers
+                      , cardano-prelude
+                      , cardano-sync
+                      , iohk-monitoring
+                      , persistent
+                      , monad-logger
                       , transformers-except
 
 executable cardano-db-sync-extended
@@ -58,13 +61,11 @@ executable cardano-db-sync-extended
   other-modules:        Paths_cardano_db_sync_extended
 
   build-depends:        base                            >= 4.12         && < 4.15
-                      , bytestring
                       , cardano-config
-                      , cardano-db
                       , cardano-db-sync
                       , cardano-db-sync-extended
+                      , cardano-sync
                       , cardano-prelude
                       , cardano-slotting
                       , optparse-applicative
-                      , ouroboros-network
                       , text

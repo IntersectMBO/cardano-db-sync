@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-module Cardano.DbSync.Era.Shelley.Generic.StakeDist
+module Cardano.Sync.Era.Shelley.Generic.StakeDist
   ( StakeCred (..)
   , StakeDist (..)
   , allegraStakeDist
@@ -8,10 +8,10 @@ module Cardano.DbSync.Era.Shelley.Generic.StakeDist
   , shelleyStakeDist
   ) where
 
-import           Cardano.DbSync.Config.Types (DbSyncEnv (..))
-import           Cardano.DbSync.Era.Shelley.Generic.StakeCred
-
 import           Cardano.Prelude
+
+import           Cardano.Sync.Config.Types (DbSyncEnv (..))
+import           Cardano.Sync.Era.Shelley.Generic.StakeCred
 
 import qualified Data.Map.Strict as Map
 

@@ -3,7 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Cardano.DbSync.Config
+module Cardano.Sync.Config
   ( ConfigFile (..)
   , DbSyncCommand (..)
   , DbSyncProtocol (..)
@@ -21,17 +21,22 @@ module Cardano.DbSync.Config
   , genesisProtocolMagicId
   , readDbSyncNodeConfig
   , readCardanoGenesisConfig
+  , configureLogging
   ) where
+
+import           Cardano.Prelude
+
+import qualified Cardano.BM.Setup as Logging
+import           Cardano.BM.Trace (Trace)
+import qualified Cardano.BM.Trace as Logging
 
 import qualified Cardano.BM.Configuration.Model as Logging
 
-import           Cardano.DbSync.Config.Cardano
-import           Cardano.DbSync.Config.Node
-import           Cardano.DbSync.Config.Shelley
-import           Cardano.DbSync.Config.Types
-import           Cardano.DbSync.Util
-
-import           Cardano.Prelude
+import           Cardano.Sync.Config.Cardano
+import           Cardano.Sync.Config.Node
+import           Cardano.Sync.Config.Shelley
+import           Cardano.Sync.Config.Types
+import           Cardano.Sync.Util
 
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
@@ -39,6 +44,14 @@ import qualified Data.Yaml as Yaml
 
 import           System.FilePath (takeDirectory, (</>))
 
+configureLogging :: DbSyncNodeParams -> IO (Trace IO Text)
+configureLogging params = do
+    let configFile = enpConfigFile params
+    enc <- readDbSyncNodeConfig configFile
+
+    if not (dncEnableLogging enc)
+       then pure Logging.nullTracer
+       else liftIO $ Logging.setupTrace (Right $ dncLoggingConfig enc) "db-sync-node"
 
 readDbSyncNodeConfig :: ConfigFile -> IO DbSyncNodeConfig
 readDbSyncNodeConfig (ConfigFile fp) = do

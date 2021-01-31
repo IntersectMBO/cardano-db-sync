@@ -11,6 +11,8 @@ module Cardano.DbSync.Era.Byron.Insert
   ( insertByronBlock
   ) where
 
+import           Cardano.Prelude
+
 import           Cardano.BM.Trace (Trace, logDebug, logInfo)
 import           Cardano.Binary (serialize')
 
@@ -31,10 +33,9 @@ import qualified Cardano.Chain.Update as Byron hiding (protocolVersion)
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
 
 import           Cardano.Db (DbLovelace (..))
+import           Cardano.DbSync.Era.Util (liftLookupFail)
 
-import           Cardano.DbSync.Types
-
-import           Cardano.Prelude
+import           Cardano.Sync.Types
 
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
 
@@ -46,8 +47,8 @@ import           Database.Persist.Sql (SqlBackend)
 
 import qualified Cardano.Db as DB
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.Util
+import           Cardano.Sync.Error
+import           Cardano.Sync.Util
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 

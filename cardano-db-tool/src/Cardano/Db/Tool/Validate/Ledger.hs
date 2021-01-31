@@ -12,10 +12,12 @@ import           Prelude
 import qualified Cardano.Db as DB
 import           Cardano.Db.Tool.Validate.Balance (ledgerAddrBalance)
 import           Cardano.Db.Tool.Validate.Util
-import           Cardano.DbSync.Config
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.LedgerState
-import           Cardano.DbSync.Tracing.ToObjectOrphans ()
+
+import           Cardano.Sync.Config
+import           Cardano.Sync.Error
+import           Cardano.Sync.LedgerState
+import           Cardano.Sync.Tracing.ToObjectOrphans ()
+
 import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Ouroboros.Consensus.Cardano.Node ()

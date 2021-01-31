@@ -4,7 +4,7 @@
 
 {-# OPTIONS_GHC -fno-warn-orphans  #-}
 
-module Cardano.DbSync.Tracing.ToObjectOrphans () where
+module Cardano.Sync.Tracing.ToObjectOrphans () where
 
 import           Data.Aeson ((.=))
 import           Data.Text (Text)

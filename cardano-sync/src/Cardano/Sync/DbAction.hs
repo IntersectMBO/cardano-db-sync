@@ -3,7 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Cardano.DbSync.DbAction
+module Cardano.Sync.DbAction
   ( DbAction (..)
   , DbPoint (..)
   , DbActionQueue (..)
@@ -17,8 +17,8 @@ module Cardano.DbSync.DbAction
 
 import           Cardano.Prelude
 
-import           Cardano.DbSync.Types
 import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
+import           Cardano.Sync.Types
 
 import qualified Control.Concurrent.STM as STM
 import           Control.Concurrent.STM.TBQueue (TBQueue)

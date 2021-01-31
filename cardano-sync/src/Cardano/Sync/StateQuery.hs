@@ -7,7 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Cardano.DbSync.StateQuery
+module Cardano.Sync.StateQuery
   ( StateQueryTMVar -- Opaque, so it cannot be misused.
   , getSlotDetails
   , localStateQueryHandler
@@ -18,9 +18,9 @@ import           Cardano.BM.Trace (Trace, logInfo)
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
-import           Cardano.DbSync.Config.Types
-import           Cardano.DbSync.Types
-import           Cardano.DbSync.Util
+import           Cardano.Sync.Config.Types
+import           Cardano.Sync.Types
+import           Cardano.Sync.Util
 
 import           Cardano.Prelude
 

@@ -10,8 +10,8 @@ import           Cardano.Prelude
 import           Cardano.BM.Trace (Trace, logInfo)
 
 import qualified Cardano.Db as DB
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.Util
+import           Cardano.Sync.Error
+import           Cardano.Sync.Util
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
@@ -19,9 +19,9 @@ import           Database.Persist.Sql (SqlBackend)
 
 -- Rollbacks are done in an Era generic way based just on the SlotNo we are
 -- rolling back to.
-rollbackToSlot :: Trace IO Text -> SlotNo -> IO (Either DbSyncNodeError ())
-rollbackToSlot trce slotNo =
-    DB.runDbNoLogging $ runExceptT action
+rollbackToSlot :: SqlBackend -> Trace IO Text -> SlotNo -> IO (Either DbSyncNodeError ())
+rollbackToSlot backend trce slotNo =
+    DB.runDbIohkNoLogging backend $ runExceptT action
   where
     action :: MonadIO m => ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     action = do

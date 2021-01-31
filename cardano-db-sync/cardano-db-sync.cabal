@@ -31,109 +31,73 @@ library
                         -Wincomplete-uni-patterns
 
   exposed-modules:      Cardano.DbSync
-                        Cardano.DbSync.Config
-                        Cardano.DbSync.Config.Byron
-                        Cardano.DbSync.Config.Cardano
-                        Cardano.DbSync.Config.Node
-                        Cardano.DbSync.Config.Shelley
-                        Cardano.DbSync.Config.Types
-                        Cardano.DbSync.Database
-                        Cardano.DbSync.DbAction
-                        Cardano.DbSync.Error
 
                         Cardano.DbSync.Era
 
                         Cardano.DbSync.Era.Byron.Genesis
                         Cardano.DbSync.Era.Byron.Insert
                         Cardano.DbSync.Era.Byron.Util
+
                         Cardano.DbSync.Era.Cardano.Util
 
                         Cardano.DbSync.Era.Shelley.Genesis
                         Cardano.DbSync.Era.Shelley.Generic
                         Cardano.DbSync.Era.Shelley.Generic.Block
-                        Cardano.DbSync.Era.Shelley.Generic.EpochUpdate
                         Cardano.DbSync.Era.Shelley.Generic.Metadata
-                        Cardano.DbSync.Era.Shelley.Generic.ProtoParams
-                        Cardano.DbSync.Era.Shelley.Generic.Rewards
-                        Cardano.DbSync.Era.Shelley.Generic.StakeCred
-                        Cardano.DbSync.Era.Shelley.Generic.StakeDist
                         Cardano.DbSync.Era.Shelley.Generic.Tx
                         Cardano.DbSync.Era.Shelley.Generic.Util
                         Cardano.DbSync.Era.Shelley.Insert
                         Cardano.DbSync.Era.Shelley.Query
 
-                        Cardano.DbSync.LedgerState
+                        Cardano.DbSync.Era.Util
+
                         Cardano.DbSync.Metrics
 
-                        Cardano.DbSync.Plugin
                         Cardano.DbSync.Plugin.Default
                         Cardano.DbSync.Plugin.Epoch
 
                         Cardano.DbSync.Rollback
-                        Cardano.DbSync.StateQuery
-                        Cardano.DbSync.Tracing.ToObjectOrphans
-                        Cardano.DbSync.Types
-                        Cardano.DbSync.Util
 
   build-depends:        base                            >= 4.12         && < 4.15
                       , aeson
                       , binary
-                      , base16-bytestring
                       , bytestring
+                      , base16-bytestring
                       , cardano-api
                       , cardano-binary
-                      , cardano-client
                       , cardano-crypto
                       , cardano-crypto-class
                       , cardano-crypto-praos
                       , cardano-crypto-wrapper
                       , cardano-db
+                      , cardano-sync
                       , cardano-ledger
                       , cardano-ledger-shelley-ma
-                      -- Only for some orphan tracing instances.
-                      , cardano-node
                       , cardano-prelude
                       , cardano-slotting
-                      , cborg
                       , containers
-                      , contra-tracer
                       , cryptonite
-                      , directory
                       , esqueleto
                       , extra
-                      , filepath
-                      , formatting
-                      , io-sim-classes
                       , iohk-monitoring
-                      , lifted-base
                       , monad-control
-                      , memory
                       , monad-logger
-                      , network-mux
-                      , optparse-applicative
-                      , pretty-show
-                      , network
                       , ouroboros-consensus
                       , ouroboros-consensus-byron
                       , ouroboros-consensus-cardano
                       , ouroboros-consensus-shelley
                       , ouroboros-network
-                      , ouroboros-network-framework
                       , persistent
+                      , persistent-postgresql
                       , prometheus
                       , small-steps
-                      , serialise
                       , shelley-spec-ledger
                       , split
-                      , stm
                       , text
                       , time
                       , transformers
                       , transformers-except
-                      , typed-protocols
-                      , unix
                       , vector
-                      , yaml
 
 executable cardano-db-sync
   default-language:     Haskell2010
@@ -141,6 +105,7 @@ executable cardano-db-sync
   hs-source-dirs:       app
 
   ghc-options:          -Wall
+                        -Werror
                         -Wcompat
                         -fwarn-redundant-constraints
                         -fwarn-incomplete-patterns
@@ -150,16 +115,14 @@ executable cardano-db-sync
                         -Wno-unsafe
                         -threaded
 
-
   other-modules:        Paths_cardano_db_sync
 
   build-depends:        base                            >= 4.12         && < 4.15
-                      , bytestring
                       , cardano-config
-                      , cardano-db
+                      , cardano-sync
                       , cardano-db-sync
                       , cardano-prelude
                       , cardano-slotting
                       , optparse-applicative
-                      , ouroboros-network
                       , text
+                      , transformers-except

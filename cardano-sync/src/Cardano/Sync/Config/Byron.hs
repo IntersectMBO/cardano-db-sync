@@ -3,15 +3,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Cardano.DbSync.Config.Byron
+module Cardano.Sync.Config.Byron
   ( readByronGenesisConfig
   ) where
 
 import qualified Cardano.Chain.Genesis as Byron
 import           Cardano.Crypto (decodeAbstractHash)
 
-import           Cardano.DbSync.Config.Types
-import           Cardano.DbSync.Error
+import           Cardano.Sync.Config.Types
+import           Cardano.Sync.Error
 
 import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither)

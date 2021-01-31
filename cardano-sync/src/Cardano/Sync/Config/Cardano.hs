@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Cardano.DbSync.Config.Cardano
+module Cardano.Sync.Config.Cardano
   ( GenesisConfig (..)
   , cardanoLedgerConfig
   , genesisConfigToEnv
@@ -20,11 +20,11 @@ import           Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 
 import qualified Cardano.Crypto.Hash.Class as Crypto
 
-import           Cardano.DbSync.Config.Byron
-import           Cardano.DbSync.Config.Shelley
-import           Cardano.DbSync.Config.Types
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.Util
+import           Cardano.Sync.Config.Byron
+import           Cardano.Sync.Config.Shelley
+import           Cardano.Sync.Config.Types
+import           Cardano.Sync.Error
+import           Cardano.Sync.Util
 
 import           Control.Monad.Trans.Except (ExceptT)
 

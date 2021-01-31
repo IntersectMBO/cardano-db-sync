@@ -6,7 +6,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Cardano.DbSync.LedgerState
+module Cardano.Sync.LedgerState
   ( CardanoLedgerState (..)
   , LedgerStateSnapshot (..)
   , LedgerStateVar (..)
@@ -27,14 +27,14 @@ module Cardano.DbSync.LedgerState
 import           Cardano.Binary (DecoderError)
 import qualified Cardano.Binary as Serialize
 
-import           Cardano.DbSync.Config
-import           Cardano.DbSync.Config.Cardano
-import           Cardano.DbSync.DbAction
-import qualified Cardano.DbSync.Era.Cardano.Util as Cardano
-import qualified Cardano.DbSync.Era.Shelley.Generic.EpochUpdate as Generic
-import qualified Cardano.DbSync.Era.Shelley.Generic.Rewards as Generic
-import           Cardano.DbSync.Types hiding (CardanoBlock)
-import           Cardano.DbSync.Util
+import           Cardano.Sync.Config
+import           Cardano.Sync.Config.Cardano
+import           Cardano.Sync.DbAction
+import qualified Cardano.Sync.Era.Cardano.Util as Cardano
+import qualified Cardano.Sync.Era.Shelley.Generic.EpochUpdate as Generic
+import qualified Cardano.Sync.Era.Shelley.Generic.Rewards as Generic
+import           Cardano.Sync.Types hiding (CardanoBlock)
+import           Cardano.Sync.Util
 
 import           Cardano.Prelude
 

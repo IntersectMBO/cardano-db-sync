@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.DbSync.Plugin.Epoch
@@ -8,23 +9,18 @@ module Cardano.DbSync.Plugin.Epoch
   , epochPluginRollbackBlock
   ) where
 
+import           Cardano.Prelude hiding (from, on, replace)
+
 import           Cardano.BM.Trace (Trace, logError, logInfo)
 
 import qualified Cardano.Chain.Block as Byron
-import           Cardano.DbSync.Config.Types
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..))
 
-import           Control.Monad (void, when)
-import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Control (MonadBaseControl)
-import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.IORef (IORef, atomicWriteIORef, newIORef, readIORef)
-import           Data.Maybe (fromMaybe, isNothing)
-import           Data.Text (Text)
 import qualified Data.Time.Clock as Time
-import           Data.Word (Word64)
 
 import           Database.Esqueleto (Value (..), desc, from, limit, orderBy, select, val, where_,
                    (==.), (^.))
@@ -32,12 +28,14 @@ import           Database.Esqueleto (Value (..), desc, from, limit, orderBy, sel
 import           Database.Persist.Class (replace)
 import           Database.Persist.Sql (SqlBackend)
 
-import           Cardano.Db (EntityField (..), EpochId, listToMaybe)
+import           Cardano.Db (EntityField (..), EpochId)
 import qualified Cardano.Db as DB
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.LedgerState
-import           Cardano.DbSync.Types
-import           Cardano.DbSync.Util
+
+import           Cardano.Sync.Config.Types
+import           Cardano.Sync.Error
+import           Cardano.Sync.LedgerState
+import           Cardano.Sync.Types
+import           Cardano.Sync.Util
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
@@ -53,9 +51,9 @@ import           System.IO.Unsafe (unsafePerformIO)
 -- When in syncing mode, the row for the current epoch being synced may be incorrect.
 
 
-
-epochPluginOnStartup :: Trace IO Text -> ReaderT SqlBackend (LoggingT IO) ()
-epochPluginOnStartup trce = do
+epochPluginOnStartup :: SqlBackend -> Trace IO Text -> IO (Either a ())
+epochPluginOnStartup backend trce =
+  Right <<$>> DB.runDbAction backend (Just trce) $ do
     liftIO . logInfo trce $ "epochPluginOnStartup: Checking"
     mlbe <- queryLatestEpochNo
     case mlbe of
@@ -66,27 +64,30 @@ epochPluginOnStartup trce = do
         liftIO $ atomicWriteIORef latestCachedEpochVar (Just backOne)
 
 epochPluginInsertBlock
-    :: Trace IO Text -> DbSyncEnv -> LedgerStateVar -> BlockDetails
-    -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-epochPluginInsertBlock trce _env _ledgerState (BlockDetails cblk details) = do
-    case cblk of
-      BlockByron bblk ->
-        case byronBlockRaw bblk of
-          Byron.ABOBBoundary {} ->
-            -- For the OBFT era there are no boundary blocks so we ignore them even in
-            -- the Ouroboros Classic era.
-            pure $ Right ()
-
-          Byron.ABOBBlock _blk ->
-            insertBlock trce details
-      BlockShelley _sblk -> epochUpdate
-      BlockAllegra _ablk -> epochUpdate
-      BlockMary _mblk -> epochUpdate
-
+    :: SqlBackend -> Trace IO Text -> DbSyncEnv -> LedgerStateVar -> [BlockDetails]
+    -> IO (Either DbSyncNodeError ())
+epochPluginInsertBlock backend trce _dbSyncEnv _ledgerStateVar blockDetails =
+    DB.runDbAction backend (Just trce) $ traverseMEither insert blockDetails
   where
+    insert :: BlockDetails -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
+    insert (BlockDetails cblk details) = do
+      case cblk of
+        BlockByron bblk ->
+          case byronBlockRaw bblk of
+            Byron.ABOBBoundary {} ->
+              -- For the OBFT era there are no boundary blocks so we ignore them even in
+              -- the Ouroboros Classic era.
+              pure $ Right ()
+
+            Byron.ABOBBlock _blk ->
+              insertBlock trce details
+        BlockShelley _sblk -> epochUpdate details
+        BlockAllegra _ablk -> epochUpdate details
+        BlockMary _mblk -> epochUpdate details
+
     -- What we do here is completely independent of Shelley/Allegra/Mary eras.
-    epochUpdate :: ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-    epochUpdate = do
+    epochUpdate :: SlotDetails -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
+    epochUpdate details = do
       when (sdSlotTime details > sdCurrentTime details) $
         liftIO . logError trce $ mconcat
           [ "Slot time '", textShow (sdSlotTime details) ,  "' is in the future" ]
