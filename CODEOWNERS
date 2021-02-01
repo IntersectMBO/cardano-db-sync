@@ -1,0 +1,18 @@
+# General reviewers per PR
+#                       Erik
+*                       @erikd
+
+# Specific reviewers for code pieces
+# NB - The last matching pattern takes precedence
+
+# /doc folder and README.* needs to be owned by @docs-access
+doc                          @docs-access
+Readme.*                     @docs-access
+
+.buildkite                   @devops
+.github                      @devops
+config                       @devops
+nix                          @devops
+*.nix                        @devops
+bors.toml                    @devops
+nix-shell.project            @devops
