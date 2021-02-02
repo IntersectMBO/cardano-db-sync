@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # This is a git pre-commit hook that runs sytlish-haskell and hlint over the
 # Haskell files you are about to commit. Sylish-haskell will modify the files
@@ -42,24 +42,24 @@ files="$(git diff-index --name-status --cached HEAD | sed "s/^D.*$//;s/^[A-Z]+[ 
 # Redirect output to stderr.
 exec 1>&2
 
-hsfiles=""
+hsfiles=()
 for f in $files ; do
   if test "$(echo "$f" | grep -c "\.hs$")" -gt 0 ; then
     if test "$(echo "$f" | grep -c ^PatchedPkgs)" -eq 0 ; then
-      hsfiles="$hsfiles $f"
+      hsfiles=("${hsfiles[@]}" "$f")
       fi
     fi
   done
 
-if test -n "${hsfiles}" ; then
-  echo "hsfiles: ${hsfiles}"
-  stylish-haskell -i "${hsfiles}"
+if test ${#hsfiles[@]} -gt 0 ; then
+  # echo "hsfiles:" "${hsfiles[@]}"
+  stylish-haskell -i "${hsfiles[@]}"
   if test $? -ne 0 ; then
     echo
     echo "Commit aborted. Stylish Haskell failed."
     exit 1
     fi
-  hlint "${hsfiles}"
+  hlint "${hsfiles[@]}"
   if test $? -ne 0 ; then
     echo
     echo "Commit aborted. Fix the above error before trying again."
@@ -67,7 +67,7 @@ if test -n "${hsfiles}" ; then
     fi
 
   # Need to add them if we want stylish-haskell changes to be commited.
-  git add "${hsfiles}"
+  git add "${hsfiles[@]}"
   fi
 
 
