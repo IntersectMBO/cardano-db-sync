@@ -58,6 +58,11 @@ on the same machine are:
 * 2 CPU cores.
 * 50 Gigabytes or more of disk storage.
 
+The recommended configuration is to have the `db-sync` and the PostgreSQL server on the same
+machine. During syncing (getting historical data from the blockchain) there is a **HUGE** amount
+of data traffic between `db-sync` and the database. Traffic to a local database is significantly
+faster than traffic to a database on the LAN or remotely to another location.
+
 ## Troubleshooting
 
 If you have any issues with this project, consult the [Troubleshooting][Troubleshooting] page for
