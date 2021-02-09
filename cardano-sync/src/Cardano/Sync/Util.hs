@@ -3,7 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Cardano.DbSync.Util
+module Cardano.Sync.Util
   ( cardanoBlockSlotNo
   , fmap3
   , getSyncStatus
@@ -23,7 +23,7 @@ import           Cardano.Prelude hiding (catch)
 
 import           Cardano.BM.Trace (Trace, logError)
 
-import           Cardano.DbSync.Types
+import           Cardano.Sync.Types
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
@@ -46,7 +46,6 @@ import           Ouroboros.Network.Point (withOrigin)
 
 import           System.IO.Unsafe (unsafePerformIO)
 import           System.Posix.Process (exitImmediately)
-
 
 cardanoBlockSlotNo :: CardanoBlock -> SlotNo
 cardanoBlockSlotNo = blockSlot

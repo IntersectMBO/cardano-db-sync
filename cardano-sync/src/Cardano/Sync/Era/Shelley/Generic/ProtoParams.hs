@@ -1,5 +1,5 @@
 {-# LANGUAGE NoImplicitPrelude #-}
-module Cardano.DbSync.Era.Shelley.Generic.ProtoParams
+module Cardano.Sync.Era.Shelley.Generic.ProtoParams
   ( ProtoParams (..)
   , allegraProtoParams
   , maryProtoParams

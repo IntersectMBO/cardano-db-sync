@@ -4,9 +4,11 @@
 import           Cardano.Prelude
 
 import           Cardano.Config.Git.Rev (gitRev)
-import           Cardano.Db (MigrationDir (..))
-import           Cardano.DbSync (ConfigFile (..), DbSyncCommand (..), DbSyncNodeParams (..),
-                   LedgerStateDir (..), SocketPath (..), defDbSyncNodePlugin, runDbSyncNode)
+
+import           Cardano.DbSync (defDbSyncNodePlugin, runDbSyncNode)
+
+import           Cardano.Sync.Config
+import           Cardano.Sync.Config.Types
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 

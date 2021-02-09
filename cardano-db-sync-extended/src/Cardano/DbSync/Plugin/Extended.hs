@@ -2,22 +2,25 @@ module Cardano.DbSync.Plugin.Extended
   ( extendedDbSyncNodePlugin
   ) where
 
-
-import           Cardano.DbSync (DbSyncNodePlugin (..), defDbSyncNodePlugin)
+import           Cardano.DbSync.Plugin.Default (defDbSyncNodePlugin)
 import           Cardano.DbSync.Plugin.Epoch (epochPluginInsertBlock, epochPluginOnStartup,
                    epochPluginRollbackBlock)
 
-extendedDbSyncNodePlugin :: DbSyncNodePlugin
-extendedDbSyncNodePlugin =
-  defDbSyncNodePlugin
-    { plugOnStartup =
-        plugOnStartup defDbSyncNodePlugin
-          ++ [epochPluginOnStartup]
-    , plugInsertBlock =
-        plugInsertBlock defDbSyncNodePlugin
-          ++ [epochPluginInsertBlock]
-    , plugRollbackBlock =
-        plugRollbackBlock defDbSyncNodePlugin
-          ++ [epochPluginRollbackBlock]
-    }
+import           Cardano.Sync (DbSyncNodePlugin (..))
 
+import           Database.Persist.Sql (SqlBackend)
+
+extendedDbSyncNodePlugin :: SqlBackend -> DbSyncNodePlugin
+extendedDbSyncNodePlugin backend =
+  let defPlugin = defDbSyncNodePlugin backend
+  in  defPlugin
+        { plugOnStartup =
+            plugOnStartup defPlugin
+              ++ [epochPluginOnStartup backend]
+        , plugInsertBlock =
+            plugInsertBlock defPlugin
+                ++ [epochPluginInsertBlock backend]
+        , plugRollbackBlock =
+            plugRollbackBlock defPlugin
+              ++ [epochPluginRollbackBlock]
+        }

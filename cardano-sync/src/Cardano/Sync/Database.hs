@@ -2,7 +2,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Cardano.DbSync.Database
+module Cardano.Sync.Database
   ( DbAction (..)
   , DbActionQueue (..)
   , lengthDbActionQueue
@@ -14,57 +14,58 @@ module Cardano.DbSync.Database
   , writeDbActionQueue
   ) where
 
-import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo)
 import           Cardano.Prelude
+
+import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo)
 import           Cardano.Slotting.Slot (SlotNo (..))
 
-import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
-import qualified Cardano.Db as DB
-import           Cardano.DbSync.Config
-import           Cardano.DbSync.DbAction
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.LedgerState
-import           Cardano.DbSync.Metrics
-import           Cardano.DbSync.Plugin
-import           Cardano.DbSync.Types
-import           Cardano.DbSync.Util
-
-import           Database.Persist.Sql (SqlBackend)
+import           Cardano.Sync.Config
+import           Cardano.Sync.DbAction
+import           Cardano.Sync.Error
+import           Cardano.Sync.LedgerState
+import           Cardano.Sync.Metrics
+import           Cardano.Sync.Plugin
+import           Cardano.Sync.Types
+import           Cardano.Sync.Util
 
 import qualified System.Metrics.Prometheus.Metric.Gauge as Gauge
-
 
 data NextState
   = Continue
   | Done
   deriving Eq
 
-
 runDbStartup :: Trace IO Text -> DbSyncNodePlugin -> IO ()
 runDbStartup trce plugin =
-  DB.runDbAction (Just trce) $
     mapM_ (\action -> action trce) $ plugOnStartup plugin
 
 runDbThread
-    :: Trace IO Text -> DbSyncEnv -> DbSyncNodePlugin -> Metrics
+    :: CardanoSyncDataLayer -> Trace IO Text -> DbSyncEnv -> DbSyncNodePlugin -> Metrics
     -> DbActionQueue -> LedgerStateVar
     -> IO ()
-runDbThread trce env plugin metrics queue ledgerStateVar = do
+runDbThread dataLayer trce env plugin metrics queue ledgerStateVar = do
     logInfo trce "Running DB thread"
     logException trce "runDBThread: " loop
     logInfo trce "Shutting down DB thread"
   where
     loop = do
       xs <- blockingFlushDbActionQueue queue
+
       when (length xs > 1) $ do
         logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
+
       eNextState <- runExceptT $ runActions trce env plugin ledgerStateVar xs
-      mBlkNo <-  DB.runDbAction (Just trce) DB.queryLatestBlockNo
-      case mBlkNo of
+
+      let getLatestBlock = csdlGetLatestBlock dataLayer
+      mBlkNo <- getLatestBlock
+
+      -- Chain Maybe's.
+      case bBlockNo =<< mBlkNo of
         Nothing -> pure ()
         Just blkNo -> Gauge.set (fromIntegral blkNo) $ mDbHeight metrics
+
       case eNextState of
         Left err -> logError trce $ renderDbSyncNodeError err
         Right Continue -> loop
@@ -109,15 +110,10 @@ insertBlockList
 insertBlockList trce env ledgerState plugin blks =
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise is *way* too chatty.
+  --newExceptT $ traverseMEither insertBlock blks
   newExceptT
-    . DB.runDbAction (Just trce)
-    $ traverseMEither insertBlock blks
-  where
-    insertBlock
-        :: BlockDetails
-        -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
-    insertBlock blkTip =
-      traverseMEither (\ f -> f trce env ledgerState blkTip) $ plugInsertBlock plugin
+    . traverseMEither (\ f -> f trce env ledgerState blks)
+    $ plugInsertBlock plugin
 
 -- | Split the DbAction list into a prefix containing blocks to apply and a postfix.
 spanDbApply :: [DbAction] -> ([BlockDetails], [DbAction])

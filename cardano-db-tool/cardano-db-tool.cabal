@@ -48,15 +48,13 @@ library
                       , ansi-terminal
                       , cardano-api
                       , cardano-db
-                      , cardano-db-sync
+                      , cardano-sync
                       , cardano-ledger
-                      , cardano-ledger-shelley-ma
                       , cardano-prelude
                       , cardano-slotting
                       , containers
                       , esqueleto
                       , extra
-                      , optparse-applicative
                       , ouroboros-consensus
                       , ouroboros-consensus-byron
                       , ouroboros-consensus-cardano
@@ -86,8 +84,7 @@ executable cardano-db-tool
   build-depends:        base                            >= 4.12         && < 4.15
                       , cardano-db
                       , cardano-db-tool
-                      , cardano-db-sync
+                      , cardano-sync
                       , cardano-slotting
-                      , extra
                       , optparse-applicative
                       , text

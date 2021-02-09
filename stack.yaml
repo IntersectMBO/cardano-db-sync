@@ -1,9 +1,10 @@
-resolver: https://raw.githubusercontent.com/input-output-hk/cardano-haskell/master/snapshots/cardano-1.24.2.yaml
+resolver: https://raw.githubusercontent.com/input-output-hk/cardano-haskell/master/snapshots/cardano-1.25.1.yaml
 compiler: ghc-8.6.5
 
 #allow-newer: true
 
 packages:
+  - cardano-sync
   - cardano-db
   - cardano-db/test
   - cardano-db-sync
@@ -17,11 +18,16 @@ flags:
     external-libsodium-vrf: false
 
 ghc-options:
-  cardano-db:               -Wall -Werror -fwarn-redundant-constraints
-  cardano-db-test:          -Wall -Werror -fwarn-redundant-constraints
-  cardano-db-sync:          -Wall -Werror -fwarn-redundant-constraints
-  cardano-db-sync-extended: -Wall -Werror -fwarn-redundant-constraints
-  cardano-db-tool:          -Wall -Werror -fwarn-redundant-constraints
+  cardano-sync:             -Wall -Werror -fwarn-redundant-constraints -Wunused-imports
+  cardano-db:               -Wall -Werror -fwarn-redundant-constraints -Wunused-imports
+  cardano-db-test:          -Wall -Werror -fwarn-redundant-constraints -Wunused-imports
+  cardano-db-sync:          -Wall -Werror -fwarn-redundant-constraints -Wunused-imports
+  cardano-db-sync-extended: -Wall -Werror -fwarn-redundant-constraints -Wunused-imports
+  cardano-db-tool:          -Wall -Werror -fwarn-redundant-constraints -Wunused-imports
+
+# Generate files required by Weeder.
+# See https://github.com/ndmitchell/weeder/issues/53
+#ghc-options: {"$locals": -ddump-to-file -ddump-hi}
 
 extra-deps:
   - persistent-2.11.0.1

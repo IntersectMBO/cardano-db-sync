@@ -1,14 +1,14 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module Cardano.DbSync.Era.Shelley.Generic.Rewards
+module Cardano.Sync.Era.Shelley.Generic.Rewards
   ( Rewards (..)
   , allegraRewards
   , maryRewards
   , shelleyRewards
   ) where
 
-import           Cardano.DbSync.Config.Types (DbSyncEnv (..))
-import           Cardano.DbSync.Era.Shelley.Generic.StakeCred
+import           Cardano.Sync.Config.Types (DbSyncEnv (..))
+import           Cardano.Sync.Era.Shelley.Generic.StakeCred
 
 import           Cardano.Ledger.Era (Crypto)
 

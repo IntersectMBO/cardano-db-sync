@@ -1,13 +1,13 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-module Cardano.DbSync.Era.Shelley.Generic.StakeCred
+module Cardano.Sync.Era.Shelley.Generic.StakeCred
   ( StakeCred (..)
   , toStakeCred
   ) where
 
-import           Cardano.DbSync.Config.Types (DbSyncEnv (..))
-
 import           Cardano.Prelude
+
+import           Cardano.Sync.Config.Types (DbSyncEnv (..))
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import qualified Shelley.Spec.Ledger.Credential as Shelley

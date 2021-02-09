@@ -13,6 +13,8 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx
   , fromMaryTx
   ) where
 
+import           Cardano.Prelude
+
 import           Cardano.Api.Shelley (TxMetadataValue (..))
 
 import qualified Cardano.Crypto.Hash as Crypto
@@ -22,8 +24,6 @@ import           Cardano.DbSync.Era.Shelley.Generic.Metadata
 import           Cardano.Ledger.Mary.Value (AssetName, PolicyID, Value (..))
 import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as ShelleyMa
 import qualified Cardano.Ledger.ShelleyMA.TxBody as ShelleyMa
-
-import           Cardano.Prelude
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 

@@ -33,33 +33,12 @@ library
 
   build-depends:        aeson
                       , base                            >= 4.12         && < 4.15
-                      , base16-bytestring
                       , bytestring
                       , cardano-db
                       , cardano-ledger
-                      , conduit
-                      , conduit-extra
-                      , containers
-                      , contra-tracer
-                      , directory
-                      , esqueleto
-                      , extra
-                      , fast-logger
-                      , filepath
                       , hedgehog
-                      , iohk-monitoring
-                      , monad-logger
                       , persistent
-                      , persistent-postgresql
-                      , persistent-template >= 2.7.0
-                      , postgresql-simple
-                      , resourcet
-                      , scientific
-                      , shelley-spec-ledger
                       , text
-                      , template-haskell
                       , time
                       , transformers
-                      -- This is never intended to run on non-POSIX systems.
-                      , unix
                       , wide-word

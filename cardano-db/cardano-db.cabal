@@ -72,7 +72,6 @@ library
                       , quiet
                       , resourcet
                       , scientific
-                      , shelley-spec-ledger
                       , text
                       , template-haskell
                       , time
@@ -105,7 +104,6 @@ test-suite test
                       , cardano-ledger
                       , persistent
                       , hedgehog
-                      , shelley-spec-ledger
                       , text
                       , wide-word
 
@@ -135,7 +133,6 @@ test-suite test-db
                       , cardano-slotting
                       , directory
                       , filepath
-                      , HUnit
                       , monad-control
                       , persistent
                       , tasty

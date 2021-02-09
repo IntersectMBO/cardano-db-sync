@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -12,25 +13,18 @@ module Cardano.DbSync.Era.Shelley.Query
   , queryTxInputSum
   ) where
 
+import           Cardano.Prelude hiding (from, maybeToEither, on)
 
 import           Cardano.Db
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import           Cardano.DbSync.Util
+
+import           Cardano.Sync.Util
 
 import           Cardano.Slotting.Slot (SlotNo (..))
-
-import           Control.Monad.IO.Class (MonadIO)
-import           Control.Monad.Trans.Reader (ReaderT)
-
-import           Data.ByteString.Char8 (ByteString)
-import           Data.Either (fromRight)
-import           Data.Word (Word64)
 
 import           Database.Esqueleto (InnerJoin (..), Value (..), desc, from, just, on, orderBy,
                    select, val, where_, (<=.), (==.), (^.))
 import           Database.Persist.Sql (SqlBackend)
-
-import           Numeric.Natural (Natural)
 
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 

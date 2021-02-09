@@ -26,13 +26,16 @@ import           Cardano.Db (DbLovelace (..), DbWord64 (..))
 import qualified Cardano.Crypto.Hash as Crypto
 
 import qualified Cardano.Db as DB
-import           Cardano.DbSync.Config.Types
+
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Query
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.LedgerState
-import           Cardano.DbSync.Types
-import           Cardano.DbSync.Util
+import           Cardano.DbSync.Era.Util (liftLookupFail)
+
+import           Cardano.Sync.Config.Types
+import           Cardano.Sync.Error
+import           Cardano.Sync.LedgerState
+import           Cardano.Sync.Types
+import           Cardano.Sync.Util
 
 import           Cardano.Ledger.Era (Crypto)
 import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..), Value (..))
@@ -43,7 +46,6 @@ import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..
 import           Control.Monad.Extra (whenJust)
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Control (MonadBaseControl)
-import           Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT)
 
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Char8 as BS
@@ -123,6 +125,7 @@ insertShelleyBlock tracer env blk lStateSnap details = do
 
     whenJust (lssEpochUpdate lStateSnap) $ \ esum -> do
       let stakes = Generic.euStakeDistribution esum
+
       whenJust (Generic.euRewards esum) $ \ grewards -> do
         liftIO $ logInfo tracer $ mconcat
           [ "Finishing epoch ", textShow (unEpochNo (sdEpochNo details) - 1), ": "
@@ -327,7 +330,7 @@ insertPoolRetire
     => DB.TxId -> EpochNo -> Word16 -> Shelley.KeyHash 'Shelley.StakePool StandardCrypto
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRetire txId epochNum idx keyHash = do
-  poolId <- firstExceptT (NELookup "insertPoolRetire") . newExceptT $ queryStakePoolKeyHash keyHash
+  poolId <- liftLookupFail "insertPoolRetire" $ queryStakePoolKeyHash keyHash
   void . lift . DB.insertPoolRetire $
     DB.PoolRetire
       { DB.poolRetireHashId = poolId
@@ -414,9 +417,7 @@ insertStakeDeregistration
     => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> Shelley.StakeCredential StandardCrypto
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertStakeDeregistration _tracer env txId idx cred = do
-  scId <- firstExceptT (NELookup "insertStakeDeregistration")
-            . newExceptT
-            $ queryStakeAddress (Generic.stakingCredHash env cred)
+  scId <- liftLookupFail "insertStakeDeregistration" $ queryStakeAddress (Generic.stakingCredHash env cred)
   void . lift . DB.insertStakeDeregistration $
     DB.StakeDeregistration
       { DB.stakeDeregistrationAddrId = scId
@@ -430,12 +431,8 @@ insertDelegation
     -> Shelley.StakeCredential StandardCrypto -> Shelley.KeyHash 'Shelley.StakePool StandardCrypto
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertDelegation _tracer env txId idx (EpochNo epoch) cred poolkh = do
-  addrId <- firstExceptT (NELookup "insertDelegation")
-                . newExceptT
-                $ queryStakeAddress (Generic.stakingCredHash env cred)
-  poolHashId <- firstExceptT (NELookup "insertDelegation")
-                  . newExceptT
-                  $ queryStakePoolKeyHash poolkh
+  addrId <- liftLookupFail "insertDelegation" $ queryStakeAddress (Generic.stakingCredHash env cred)
+  poolHashId <-liftLookupFail "insertDelegation" $ queryStakePoolKeyHash poolkh
   void . lift . DB.insertDelegation $
     DB.Delegation
       { DB.delegationAddrId = addrId
@@ -489,9 +486,7 @@ insertWithdrawals
     => Trace IO Text -> DB.TxId -> Generic.TxWithdrawal
     -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
 insertWithdrawals _tracer txId (Generic.TxWithdrawal account coin) = do
-  addrId <- firstExceptT (NELookup "insertWithdrawals")
-                . newExceptT
-                $ queryStakeAddress (Shelley.serialiseRewardAcnt account)
+  addrId <- liftLookupFail "insertWithdrawals" $ queryStakeAddress (Shelley.serialiseRewardAcnt account)
   void . lift . DB.insertWithdrawal $
     DB.Withdrawal
       { DB.withdrawalAddrId = addrId
@@ -632,9 +627,7 @@ insertRewards _tracer blkId epoch rewards = do
         => (Generic.StakeCred, Shelley.Coin)
         -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) DB.Reward
     mkReward (saddr, coin) = do
-      (saId, poolId) <- firstExceptT (NELookup "insertReward")
-                          . newExceptT
-                          $ queryStakeAddressAndPool (unEpochNo epoch) (Generic.unStakeCred saddr)
+      (saId, poolId) <- liftLookupFail "insertReward" $ queryStakeAddressAndPool (unEpochNo epoch) (Generic.unStakeCred saddr)
       pure $
         DB.Reward
           { DB.rewardAddrId = saId
@@ -660,9 +653,7 @@ insertOrphanedRewards _tracer blkId epoch orphanedRewards =
         => (Generic.StakeCred, Shelley.Coin)
         -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) DB.OrphanedReward
     mkOrphanedReward (saddr, coin) = do
-      (saId, poolId) <- firstExceptT (NELookup "insertOrphanedReward")
-                          . newExceptT
-                          $ queryStakeAddressAndPool (unEpochNo epoch) (Generic.unStakeCred saddr)
+      (saId, poolId) <- liftLookupFail "insertOrphanedReward" $ queryStakeAddressAndPool (unEpochNo epoch) (Generic.unStakeCred saddr)
       pure $
         DB.OrphanedReward
           { DB.orphanedRewardAddrId = saId
@@ -716,9 +707,7 @@ insertEpochStake _tracer blkId (EpochNo epoch) smap =
         => (Generic.StakeCred, Shelley.Coin)
         -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) DB.EpochStake
     mkStake (saddr, coin) = do
-      (saId, poolId) <- firstExceptT (NELookup "insertEpochStake")
-                          . newExceptT
-                          $ queryStakeAddressAndPool epoch (Generic.unStakeCred saddr)
+      (saId, poolId) <- liftLookupFail "insertEpochStake" $ queryStakeAddressAndPool epoch (Generic.unStakeCred saddr)
       pure $
         DB.EpochStake
           { DB.epochStakeAddrId = saId

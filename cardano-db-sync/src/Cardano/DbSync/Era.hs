@@ -7,22 +7,23 @@ module Cardano.DbSync.Era
   ( insertValidateGenesisDist
   ) where
 
+import           Cardano.Prelude
+
 import           Cardano.BM.Data.Trace (Trace)
 
-import           Cardano.DbSync.Config
+import           Cardano.Sync.Config
+import           Cardano.Sync.Error
+
 import qualified Cardano.DbSync.Era.Byron.Genesis as Byron
 import qualified Cardano.DbSync.Era.Shelley.Genesis as Shelley
-import           Cardano.DbSync.Error
 
-import           Control.Monad.Trans.Except (ExceptT)
-
-import           Data.Text (Text)
+import           Database.Persist.Sql (SqlBackend)
 
 insertValidateGenesisDist
-        :: Trace IO Text -> NetworkName -> GenesisConfig
-        -> ExceptT DbSyncNodeError IO ()
-insertValidateGenesisDist trce nname genCfg =
+    :: SqlBackend -> Trace IO Text -> NetworkName -> GenesisConfig
+    -> ExceptT DbSyncNodeError IO ()
+insertValidateGenesisDist backend trce nname genCfg =
   case genCfg of
     GenesisCardano _ bCfg sCfg -> do
-      Byron.insertValidateGenesisDist trce (unNetworkName nname) bCfg
-      Shelley.insertValidateGenesisDist trce (unNetworkName nname) (scConfig sCfg)
+      Byron.insertValidateGenesisDist backend trce (unNetworkName nname) bCfg
+      Shelley.insertValidateGenesisDist backend trce (unNetworkName nname) (scConfig sCfg)
