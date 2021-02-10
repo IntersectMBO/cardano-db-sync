@@ -5,7 +5,6 @@ module Cardano.Sync.Era.Shelley.Generic.EpochUpdate
   , shelleyEpochUpdate
   ) where
 
-import           Cardano.Sync.Config.Types (DbSyncEnv (..))
 import           Cardano.Sync.Era.Shelley.Generic.ProtoParams
 import           Cardano.Sync.Era.Shelley.Generic.Rewards
 import           Cardano.Sync.Era.Shelley.Generic.StakeDist
@@ -26,29 +25,29 @@ data EpochUpdate = EpochUpdate
   , euNonce :: !Shelley.Nonce
   }
 
-allegraEpochUpdate :: DbSyncEnv -> LedgerState (ShelleyBlock StandardAllegra) -> Maybe Rewards -> Maybe Shelley.Nonce -> EpochUpdate
-allegraEpochUpdate env sls mRewards mNonce =
+allegraEpochUpdate :: Shelley.Network -> LedgerState (ShelleyBlock StandardAllegra) -> Maybe Rewards -> Maybe Shelley.Nonce -> EpochUpdate
+allegraEpochUpdate network sls mRewards mNonce =
   EpochUpdate
     { euProtoParams = allegraProtoParams sls
     , euRewards = mRewards
-    , euStakeDistribution = allegraStakeDist env sls
+    , euStakeDistribution = allegraStakeDist network sls
     , euNonce = fromMaybe Shelley.NeutralNonce mNonce
     }
 
-maryEpochUpdate :: DbSyncEnv -> LedgerState (ShelleyBlock StandardMary) -> Maybe Rewards -> Maybe Shelley.Nonce -> EpochUpdate
-maryEpochUpdate env sls mRewards mNonce =
+maryEpochUpdate :: Shelley.Network -> LedgerState (ShelleyBlock StandardMary) -> Maybe Rewards -> Maybe Shelley.Nonce -> EpochUpdate
+maryEpochUpdate network sls mRewards mNonce =
   EpochUpdate
     { euProtoParams = maryProtoParams sls
     , euRewards = mRewards
-    , euStakeDistribution = maryStakeDist env sls
+    , euStakeDistribution = maryStakeDist network sls
     , euNonce = fromMaybe Shelley.NeutralNonce mNonce
     }
 
-shelleyEpochUpdate :: DbSyncEnv -> LedgerState (ShelleyBlock StandardShelley) -> Maybe Rewards -> Maybe Shelley.Nonce -> EpochUpdate
-shelleyEpochUpdate env sls mRewards mNonce =
+shelleyEpochUpdate :: Shelley.Network -> LedgerState (ShelleyBlock StandardShelley) -> Maybe Rewards -> Maybe Shelley.Nonce -> EpochUpdate
+shelleyEpochUpdate network sls mRewards mNonce =
   EpochUpdate
     { euProtoParams = shelleyProtoParams sls
     , euRewards = mRewards
-    , euStakeDistribution = shelleyStakeDist env sls
+    , euStakeDistribution = shelleyStakeDist network sls
     , euNonce = fromMaybe Shelley.NeutralNonce mNonce
     }

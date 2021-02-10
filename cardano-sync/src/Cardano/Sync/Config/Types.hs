@@ -13,7 +13,6 @@ module Cardano.Sync.Config.Types
   , CardanoProtocol
   , ConfigFile (..)
   , DbSyncCommand (..)
-  , DbSyncEnv (..)
   , DbSyncNodeParams (..)
   , DbSyncProtocol (..)
   , GenesisFile (..)
@@ -49,7 +48,6 @@ import           Data.Aeson (FromJSON (..), Object, Value (..), (.:), (.:?))
 import qualified Data.Aeson as Aeson
 import           Data.Aeson.Types (Parser, typeMismatch)
 
-import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import qualified Ouroboros.Consensus.Cardano.Block as Cardano
 import qualified Ouroboros.Consensus.Cardano.CanHardFork as Shelley
@@ -58,11 +56,6 @@ import qualified Ouroboros.Consensus.HardFork.Combinator.Basics as Cardano
 import           Ouroboros.Consensus.Shelley.Eras (StandardShelley)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
 import qualified Ouroboros.Consensus.Shelley.Protocol as Shelley
-
-import           Ouroboros.Network.Magic (NetworkMagic (..))
-
-import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
-
 
 newtype MigrationDir = MigrationDir FilePath
 
@@ -96,14 +89,6 @@ newtype ConfigFile = ConfigFile
 data DbSyncCommand
   = CmdRun !DbSyncNodeParams
   | CmdVersion
-
-data DbSyncEnv = DbSyncEnv
-  { envProtocol :: !DbSyncProtocol
-  , envNetwork :: !Shelley.Network
-  , envNetworkMagic :: !NetworkMagic
-  , envSystemStart :: !SystemStart
-  , envLedgerStateDir :: !LedgerStateDir
-  }
 
 -- | The product type of all command line arguments
 data DbSyncNodeParams = DbSyncNodeParams

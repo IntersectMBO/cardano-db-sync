@@ -1,5 +1,6 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 module Cardano.DbSync.Rollback
   ( rollbackToSlot
   , unsafeRollback
@@ -10,34 +11,50 @@ import           Cardano.Prelude
 import           Cardano.BM.Trace (Trace, logInfo)
 
 import qualified Cardano.Db as DB
-import           Cardano.Sync.Error
-import           Cardano.Sync.Util
 
-import           Cardano.Slotting.Slot (SlotNo (..))
+import           Cardano.Sync.Error
+import           Cardano.Sync.Types
+import           Cardano.Sync.Util
 
 import           Database.Persist.Sql (SqlBackend)
 
--- Rollbacks are done in an Era generic way based just on the SlotNo we are
+import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
+
+import           Ouroboros.Network.Block
+import           Ouroboros.Network.Point
+
+-- Rollbacks are done in an Era generic way based on the 'Point' we are
 -- rolling back to.
-rollbackToSlot :: SqlBackend -> Trace IO Text -> SlotNo -> IO (Either DbSyncNodeError ())
-rollbackToSlot backend trce slotNo =
+rollbackToSlot :: SqlBackend -> Trace IO Text -> CardanoPoint -> IO (Either DbSyncNodeError ())
+rollbackToSlot backend trce point =
     DB.runDbIohkNoLogging backend $ runExceptT action
   where
     action :: MonadIO m => ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
     action = do
-        mHash <- fmap snd <$> lift (DB.querySlotHash slotNo)
-        liftIO . logInfo trce $
-            mconcat
-              [ "Rolling back to slot ", textShow (unSlotNo slotNo), ", hash "
-              , maybe (if unSlotNo slotNo == 0 then "genesis" else "unknown") renderByteArray mHash
-              ]
-        xs <- lift $ DB.querySlotNosGreaterThan (unSlotNo slotNo)
-        liftIO . logInfo trce $
-            mconcat
-              [ "Deleting slots numbered: ", renderSlotList xs
-              ]
-        mapM_ (lift . DB.deleteCascadeSlotNo) xs
-        liftIO $ logInfo trce "Slots deleted"
+        liftIO $ logInfo trce msg
+        xs <- lift $ slotsToDelete (pointSlot point)
+        if null xs then
+          liftIO $ logInfo trce "No Rollback is necessary"
+        else do
+          liftIO . logInfo trce $
+              mconcat
+                [ "Deleting slots numbered: ", renderSlotList xs
+                ]
+          mapM_ (lift . DB.deleteCascadeSlotNo) xs
+          liftIO $ logInfo trce "Slots deleted"
+
+    slotsToDelete Origin = DB.querySlotNos
+    slotsToDelete (At sl) = DB.querySlotNosGreaterThan (unSlotNo sl)
+
+    msg :: Text
+    msg = case getPoint point of
+            Origin -> "Rolling back to genesis"
+            At blk -> mconcat
+                  [ "Rolling back to "
+                  , show $ blockPointSlot blk
+                  , ", hash "
+                  , renderByteArray $ toRawHash (Proxy @CardanoBlock) $ blockPointHash blk
+                  ]
 
 -- For testing and debugging.
 unsafeRollback :: Trace IO Text -> SlotNo -> IO (Either DbSyncNodeError ())

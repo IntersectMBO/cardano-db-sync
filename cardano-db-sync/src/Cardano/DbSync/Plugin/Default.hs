@@ -18,7 +18,7 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
 import           Cardano.DbSync.Rollback (rollbackToSlot)
 
-import           Cardano.Sync.Config
+import           Cardano.Sync.Api
 import           Cardano.Sync.Error
 import           Cardano.Sync.LedgerState
 import           Cardano.Sync.Plugin
@@ -45,9 +45,9 @@ defDbSyncNodePlugin backend =
 -- -------------------------------------------------------------------------------------------------
 
 insertDefaultBlock
-    :: SqlBackend -> Trace IO Text -> DbSyncEnv -> LedgerStateVar -> [BlockDetails]
+    :: SqlBackend -> Trace IO Text -> DbSyncEnv -> [BlockDetails]
     -> IO (Either DbSyncNodeError ())
-insertDefaultBlock backend tracer env ledgerStateVar blockDetails =
+insertDefaultBlock backend tracer env blockDetails =
     DB.runDbAction backend (Just tracer) $
       traverseMEither insert blockDetails
   where
@@ -57,7 +57,7 @@ insertDefaultBlock backend tracer env ledgerStateVar blockDetails =
     insert (BlockDetails cblk details) = do
       -- Calculate the new ledger state to pass to the DB insert functions but do not yet
       -- update ledgerStateVar.
-      lStateSnap <- liftIO $ applyBlock env ledgerStateVar cblk
+      lStateSnap <- liftIO $ applyBlock (envLedger env) cblk
       res <- case cblk of
                 BlockByron blk ->
                   insertByronBlock tracer blk details
@@ -68,6 +68,6 @@ insertDefaultBlock backend tracer env ledgerStateVar blockDetails =
                 BlockMary blk ->
                   insertShelleyBlock tracer env (Generic.fromMaryBlock blk) lStateSnap details
       -- Now we update it in ledgerStateVar and (possibly) store it to disk.
-      liftIO $ saveLedgerState (envLedgerStateDir env) ledgerStateVar
+      liftIO $ saveLedgerState (envLedger env)
                     lStateSnap (isSyncedWithinSeconds details 60)
       pure res

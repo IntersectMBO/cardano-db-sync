@@ -14,7 +14,7 @@ import           Cardano.Prelude hiding (from, on, replace)
 import           Cardano.BM.Trace (Trace, logError, logInfo)
 
 import qualified Cardano.Chain.Block as Byron
-import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..))
+import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Control (MonadBaseControl)
@@ -31,9 +31,8 @@ import           Database.Persist.Sql (SqlBackend)
 import           Cardano.Db (EntityField (..), EpochId)
 import qualified Cardano.Db as DB
 
-import           Cardano.Sync.Config.Types
+import           Cardano.Sync.Api
 import           Cardano.Sync.Error
-import           Cardano.Sync.LedgerState
 import           Cardano.Sync.Types
 import           Cardano.Sync.Util
 
@@ -64,9 +63,9 @@ epochPluginOnStartup backend trce =
         liftIO $ atomicWriteIORef latestCachedEpochVar (Just backOne)
 
 epochPluginInsertBlock
-    :: SqlBackend -> Trace IO Text -> DbSyncEnv -> LedgerStateVar -> [BlockDetails]
+    :: SqlBackend -> Trace IO Text -> DbSyncEnv -> [BlockDetails]
     -> IO (Either DbSyncNodeError ())
-epochPluginInsertBlock backend trce _dbSyncEnv _ledgerStateVar blockDetails =
+epochPluginInsertBlock backend trce _dbSyncEnv blockDetails =
     DB.runDbAction backend (Just trce) $ traverseMEither insert blockDetails
   where
     insert :: BlockDetails -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
@@ -95,7 +94,7 @@ epochPluginInsertBlock backend trce _dbSyncEnv _ledgerStateVar blockDetails =
 
 -- Nothing to be done here.
 -- Rollback will take place in the Default plugin and the epoch table will just be recalculated.
-epochPluginRollbackBlock :: Trace IO Text -> SlotNo -> IO (Either DbSyncNodeError ())
+epochPluginRollbackBlock :: Trace IO Text -> CardanoPoint -> IO (Either DbSyncNodeError ())
 epochPluginRollbackBlock _ _ = pure $ Right ()
 
 -- -------------------------------------------------------------------------------------------------

@@ -31,7 +31,7 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 
-import           Cardano.Sync.Config.Types
+import           Cardano.Sync.Api
 import           Cardano.Sync.Error
 import           Cardano.Sync.LedgerState
 import           Cardano.Sync.Types

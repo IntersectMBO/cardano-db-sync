@@ -23,6 +23,7 @@ import           Cardano.Prelude hiding (catch)
 
 import           Cardano.BM.Trace (Trace, logError)
 
+import           Cardano.Sync.Config.Types ()
 import           Cardano.Sync.Types
 
 import           Cardano.Slotting.Slot (SlotNo (..))

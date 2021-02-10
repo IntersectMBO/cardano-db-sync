@@ -18,7 +18,7 @@ module Cardano.Sync
   , NetworkName (..)
   , SocketPath (..)
 
-  , CardanoSyncDataLayer (..)
+  , SyncDataLayer (..)
   , Block (..)
   , Meta (..)
   , DbSyncEnv (..)
@@ -40,10 +40,10 @@ import qualified Cardano.Chain.Genesis as Byron
 import           Cardano.Client.Subscription (subscribe)
 import qualified Cardano.Crypto as Crypto
 
+import           Cardano.Sync.Api
 import           Cardano.Sync.Config
 import           Cardano.Sync.Database
 import           Cardano.Sync.Error
-import           Cardano.Sync.LedgerState
 import           Cardano.Sync.Metrics
 import           Cardano.Sync.Plugin (DbSyncNodePlugin (..))
 import           Cardano.Sync.StateQuery (StateQueryTMVar, getSlotDetails, localStateQueryHandler,
@@ -52,12 +52,11 @@ import           Cardano.Sync.Tracing.ToObjectOrphans ()
 import           Cardano.Sync.Types
 import           Cardano.Sync.Util
 
-import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..), withOrigin)
+import           Cardano.Slotting.Slot (WithOrigin (..), withOrigin)
 
 import qualified Codec.CBOR.Term as CBOR
 
 import           Control.Monad.Trans.Except.Exit (orDie)
-import           Control.Monad.Trans.Except.Extra (hoistEither)
 
 import qualified Data.ByteString.Lazy as BSL
 import           Data.Functor.Contravariant (contramap)
@@ -69,7 +68,7 @@ import           Network.Mux.Types (MuxMode (..))
 import           Network.TypedProtocol.Pipelined (Nat (Succ, Zero))
 import           Ouroboros.Network.Driver.Simple (runPipelinedPeer)
 
-import           Ouroboros.Consensus.Block.Abstract (CodecConfig, ConvertRawHash (..))
+import           Ouroboros.Consensus.Block.Abstract (CodecConfig)
 import           Ouroboros.Consensus.Byron.Ledger.Config (mkByronCodecConfig)
 import           Ouroboros.Consensus.Byron.Node ()
 import           Ouroboros.Consensus.Cardano.Block (CardanoEras, CodecConfig (..))
@@ -81,8 +80,8 @@ import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
 import           Ouroboros.Consensus.Shelley.Ledger.Config (CodecConfig (ShelleyCodecConfig))
 import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
 
-import           Ouroboros.Network.Block (BlockNo (..), HeaderHash, Point (..), Tip (..), blockNo,
-                   genesisPoint, getTipBlockNo)
+import           Ouroboros.Network.Block (BlockNo (..), Point (..), Tip (..), blockNo, genesisPoint,
+                   getTipBlockNo)
 import           Ouroboros.Network.Mux (MuxPeer (..), RunMiniProtocol (..))
 import           Ouroboros.Network.NodeToClient (ClientSubscriptionParams (..), ConnectionId,
                    ErrorPolicyTrace (..), Handshake, IOManager, LocalAddress,
@@ -90,7 +89,6 @@ import           Ouroboros.Network.NodeToClient (ClientSubscriptionParams (..), 
                    WithAddr (..), localSnocket, localTxSubmissionPeerNull, networkErrorPolicies,
                    withIOManager)
 import qualified Ouroboros.Network.NodeToClient.Version as Network
-import qualified Ouroboros.Network.Point as Point
 
 import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined
                    (ChainSyncClientPipelined (..), ClientPipelinedStIdle (..),
@@ -115,7 +113,7 @@ type InsertValidateGenesisFunction
     -> ExceptT DbSyncNodeError IO ()
 
 runSyncNode
-    :: CardanoSyncDataLayer
+    :: SyncDataLayer
     -> DbSyncNodePlugin
     -> DbSyncNodeParams
     -> InsertValidateGenesisFunction
@@ -137,31 +135,18 @@ runSyncNode dataLayer plugin enp insertValidateGenesisDist =
 
     orDie renderDbSyncNodeError $ do
       genCfg <- readCardanoGenesisConfig enc
-      genesisEnv <- hoistEither $ genesisConfigToEnv enp genCfg
       logProtocolMagicId trce $ genesisProtocolMagicId genCfg
 
       -- If the DB is empty it will be inserted, otherwise it will be validated (to make
       -- sure we are on the right chain).
       insertValidateGenesisDist trce (dncNetworkName enc) genCfg
 
-      liftIO $ do
         -- Must run plugin startup after the genesis distribution has been inserted/validate.
-        runDbStartup trce plugin
-        case genCfg of
+      liftIO $ runDbStartup trce plugin
+      case genCfg of
           GenesisCardano _ bCfg _sCfg -> do
-            ledgerVar <- initLedgerStateVar genCfg
-
-            saveCurrentLedgerState (envLedgerStateDir genesisEnv) ledgerVar
-
-            let getLatestBlock = csdlGetLatestBlock dataLayer
-            latestBlock <- getLatestBlock
-
-            let latestSlot = SlotNo $ fromMaybe 0 (bSlotNo =<< latestBlock)
-
-            deleteNewerLedgerStateFiles (envLedgerStateDir genesisEnv) latestSlot
-
-            loadLatestLedgerState (envLedgerStateDir genesisEnv) ledgerVar
-            runDbSyncNodeNodeClient dataLayer (dncPrometheusPort enc) genesisEnv ledgerVar
+            syncEnv <- ExceptT $ mkDbSyncEnvFromConfig dataLayer (enpLedgerStateDir enp) genCfg
+            liftIO $ runDbSyncNodeNodeClient (dncPrometheusPort enc) syncEnv
                 iomgr trce plugin (cardanoCodecConfig bCfg) (enpSocketPath enp)
   where
     cardanoCodecConfig :: Byron.Config -> CodecConfig CardanoBlock
@@ -175,17 +160,15 @@ runSyncNode dataLayer plugin enp insertValidateGenesisDist =
 -- -------------------------------------------------------------------------------------------------
 
 runDbSyncNodeNodeClient
-    :: CardanoSyncDataLayer
-    -> Int
+    :: Int
     -> DbSyncEnv
-    -> LedgerStateVar
     -> IOManager
     -> Trace IO Text
     -> DbSyncNodePlugin
     -> CodecConfig CardanoBlock
     -> SocketPath
     -> IO ()
-runDbSyncNodeNodeClient dataLayer port env ledgerVar iomgr trce plugin codecConfig (SocketPath socketPath) = do
+runDbSyncNodeNodeClient port env iomgr trce plugin codecConfig (SocketPath socketPath) = do
   queryVar <- newStateQueryTMVar
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   withMetricsServer port $ \ metrics ->
@@ -195,7 +178,7 @@ runDbSyncNodeNodeClient dataLayer port env ledgerVar iomgr trce plugin codecConf
       (envNetworkMagic env)
       networkSubscriptionTracers
       clientSubscriptionParams
-      (dbSyncProtocols dataLayer trce env plugin metrics queryVar ledgerVar)
+      (dbSyncProtocols trce env plugin metrics queryVar)
   where
     clientSubscriptionParams =
       ClientSubscriptionParams
@@ -227,18 +210,16 @@ runDbSyncNodeNodeClient dataLayer port env ledgerVar iomgr trce plugin codecConf
     handshakeTracer = toLogObject $ appendName "Handshake" trce
 
 dbSyncProtocols
-    :: CardanoSyncDataLayer
-    -> Trace IO Text
+    :: Trace IO Text
     -> DbSyncEnv
     -> DbSyncNodePlugin
     -> Metrics
     -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
-    -> LedgerStateVar
     -> Network.NodeToClientVersion
     -> ClientCodecs CardanoBlock IO
     -> ConnectionId LocalAddress
     -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols dataLayer trce env plugin metrics queryVar ledgerVar version codecs _connectionId =
+dbSyncProtocols trce env plugin metrics queryVar version codecs _connectionId =
     NodeToClientProtocols
       { localChainSyncProtocol = localChainSyncPtcl
       , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -257,18 +238,18 @@ dbSyncProtocols dataLayer trce env plugin metrics queryVar ledgerVar version cod
           logError trce versionErrorMsg
           throwIO $ ErrorCall (Text.unpack versionErrorMsg)
 
-        latestPoints <- getLatestPoints dataLayer (envLedgerStateDir env)
-        currentTip <- getCurrentTipBlockNo dataLayer
-        logDbState dataLayer trce
+        latestPoints <- getLatestPoints env
+        currentTip <- getCurrentTipBlockNo (envDataLayer env)
+        logDbState (envDataLayer env) trce
         actionQueue <- newDbActionQueue
         race_
-            (runDbThread dataLayer trce env plugin metrics actionQueue ledgerVar)
+            (runDbThread trce env plugin metrics actionQueue)
             (runPipelinedPeer
                 localChainSyncTracer
                 (cChainSyncCodec codecs)
                 channel
                 (chainSyncClientPeerPipelined
-                    $ chainSyncClient dataLayer trce env queryVar metrics latestPoints currentTip actionQueue)
+                    $ chainSyncClient (envDataLayer env) trce env queryVar metrics latestPoints currentTip actionQueue)
             )
         atomically $ writeDbActionQueue actionQueue DbFinish
         -- We should return leftover bytes returned by 'runPipelinedPeer', but
@@ -301,9 +282,9 @@ dbSyncProtocols dataLayer trce env plugin metrics queryVar ledgerVar version cod
     minVersion :: Network.NodeToClientVersion
     minVersion = Network.NodeToClientV_8
 
-logDbState :: CardanoSyncDataLayer -> Trace IO Text -> IO ()
+logDbState :: SyncDataLayer -> Trace IO Text -> IO ()
 logDbState dataLayer trce = do
-    let getLatestBlock = csdlGetLatestBlock dataLayer
+    let getLatestBlock = sdlGetLatestBlock dataLayer
     mblk <- getLatestBlock
     case mblk of
       Nothing -> logInfo trce "Cardano.Db is empty"
@@ -321,25 +302,9 @@ logDbState dataLayer trce = do
         (Nothing, Just blkNo) -> toS $ "block " ++ show blkNo
         (Nothing, Nothing) -> "empty (genesis)"
 
-
-getLatestPoints :: CardanoSyncDataLayer -> LedgerStateDir -> IO [Point CardanoBlock]
-getLatestPoints dataLayer ledgerStateDir = do
-    xs <- lsfSlotNo <<$>> listLedgerStateFilesOrdered ledgerStateDir
-
-    let getSlotHash = csdlGetSlotHash dataLayer
-    ys <- catMaybes <$> mapM getSlotHash xs
-    pure $ mapMaybe convert ys
-  where
-    convert :: (SlotNo, ByteString) -> Maybe (Point CardanoBlock)
-    convert (slot, hashBlob) =
-      Point . Point.block slot <$> convertHashBlob hashBlob
-
-    convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
-    convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)
-
-getCurrentTipBlockNo :: CardanoSyncDataLayer -> IO (WithOrigin BlockNo)
+getCurrentTipBlockNo :: SyncDataLayer -> IO (WithOrigin BlockNo)
 getCurrentTipBlockNo dataLayer = do
-    let getLatestBlock = csdlGetLatestBlock dataLayer
+    let getLatestBlock = sdlGetLatestBlock dataLayer
     maybeTip <- getLatestBlock
 
     case maybeTip of
@@ -361,7 +326,7 @@ getCurrentTipBlockNo dataLayer = do
 --    rollback, see 'clientStNext' below.
 --
 chainSyncClient
-    :: CardanoSyncDataLayer
+    :: SyncDataLayer
     -> Trace IO Text
     -> DbSyncEnv
     -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))

@@ -2,12 +2,11 @@
 module Cardano.Sync.Types
   ( BlockDetails (..)
   , CardanoBlock
+  , CardanoPoint
   , CardanoProtocol
   , EpochSlot (..)
   , SlotDetails (..)
   , SyncState (..)
-
-  , CardanoSyncDataLayer (..)
   , Block (..)
   , Meta (..)
   ) where
@@ -16,9 +15,13 @@ import           Cardano.Prelude hiding (Meta)
 
 import           Cardano.Sync.Config.Types (CardanoBlock, CardanoProtocol)
 
-import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
+import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
 
 import           Data.Time.Clock (UTCTime)
+
+import           Ouroboros.Network.Block (Point)
+
+type CardanoPoint = Point CardanoBlock
 
 data BlockDetails = BlockDetails
   { bdBlock :: !CardanoBlock
@@ -68,10 +71,3 @@ newtype BlockId = BlockId Int
 -- @Word64@ is valid as well.
 newtype MetaId = MetaId Int
     deriving (Eq, Show)
-
--- The base @DataLayer@ that contains the functions required for syncing to work.
-data CardanoSyncDataLayer = CardanoSyncDataLayer
-    { csdlGetSlotHash :: SlotNo -> IO (Maybe (SlotNo, ByteString))
-    , csdlGetLatestBlock :: IO (Maybe Block)
-    }
-
