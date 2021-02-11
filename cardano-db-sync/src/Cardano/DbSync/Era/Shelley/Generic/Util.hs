@@ -55,11 +55,11 @@ import qualified Shelley.Spec.Ledger.Scripts as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 
 
-annotateStakingCred :: DbSyncEnv -> Shelley.StakeCredential era -> Shelley.RewardAcnt era
+annotateStakingCred :: SyncEnv -> Shelley.StakeCredential era -> Shelley.RewardAcnt era
 annotateStakingCred env cred =
   let network =
         case envProtocol env of
-          DbSyncProtocolCardano -> leNetwork $ envLedger env
+          SyncProtocolCardano -> leNetwork $ envLedger env
   in Shelley.RewardAcnt network cred
 
 coinToDbLovelace :: Coin -> DbLovelace
@@ -104,7 +104,7 @@ renderAddress addr = Api.serialiseAddress (Api.fromShelleyAddr addr :: Api.Addre
 renderRewardAcnt :: Shelley.RewardAcnt StandardCrypto -> Text
 renderRewardAcnt = Api.serialiseAddress . Api.fromShelleyStakeAddr
 
-stakingCredHash :: DbSyncEnv -> Shelley.StakeCredential era -> ByteString
+stakingCredHash :: SyncEnv -> Shelley.StakeCredential era -> ByteString
 stakingCredHash env = Shelley.serialiseRewardAcnt . annotateStakingCred env
 
 unitIntervalToDouble :: Shelley.UnitInterval -> Double

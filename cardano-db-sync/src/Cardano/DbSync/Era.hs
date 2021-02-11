@@ -21,7 +21,7 @@ import           Database.Persist.Sql (SqlBackend)
 
 insertValidateGenesisDist
     :: SqlBackend -> Trace IO Text -> NetworkName -> GenesisConfig
-    -> ExceptT DbSyncNodeError IO ()
+    -> ExceptT SyncNodeError IO ()
 insertValidateGenesisDist backend trce nname genCfg =
   case genCfg of
     GenesisCardano _ bCfg sCfg -> do

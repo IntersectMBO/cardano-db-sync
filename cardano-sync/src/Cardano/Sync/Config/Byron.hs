@@ -17,8 +17,8 @@ import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither)
 
 readByronGenesisConfig
-        :: DbSyncNodeConfig
-        -> ExceptT DbSyncNodeError IO Byron.Config
+        :: SyncNodeConfig
+        -> ExceptT SyncNodeError IO Byron.Config
 readByronGenesisConfig enc = do
   let file = unGenesisFile $ dncByronGenesisFile enc
   genHash <- firstExceptT NEError

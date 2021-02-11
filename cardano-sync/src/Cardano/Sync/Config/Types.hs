@@ -12,14 +12,14 @@ module Cardano.Sync.Config.Types
   , CardanoBlock
   , CardanoProtocol
   , ConfigFile (..)
-  , DbSyncCommand (..)
-  , DbSyncNodeParams (..)
-  , DbSyncProtocol (..)
+  , SyncCommand (..)
+  , SyncNodeParams (..)
+  , SyncProtocol (..)
   , GenesisFile (..)
   , GenesisHashShelley (..)
   , GenesisHashByron (..)
-  , DbSyncNodeConfig (..)
-  , DbSyncPreConfig (..)
+  , SyncNodeConfig (..)
+  , SyncPreConfig (..)
   , LedgerStateDir (..)
   , MigrationDir (..)
   , LogFileDir (..)
@@ -86,12 +86,12 @@ newtype ConfigFile = ConfigFile
   { unConfigFile :: FilePath
   }
 
-data DbSyncCommand
-  = CmdRun !DbSyncNodeParams
+data SyncCommand
+  = CmdRun !SyncNodeParams
   | CmdVersion
 
 -- | The product type of all command line arguments
-data DbSyncNodeParams = DbSyncNodeParams
+data SyncNodeParams = SyncNodeParams
   { enpConfigFile :: !ConfigFile
   , enpSocketPath :: !SocketPath
   , enpLedgerStateDir :: !LedgerStateDir
@@ -100,15 +100,15 @@ data DbSyncNodeParams = DbSyncNodeParams
   }
 
 -- May have other constructors when we are preparing for a HFC event.
-data DbSyncProtocol
-  = DbSyncProtocolCardano
+data SyncProtocol
+  = SyncProtocolCardano
   deriving Show
 
-data DbSyncNodeConfig = DbSyncNodeConfig
+data SyncNodeConfig = SyncNodeConfig
   { dncNetworkName :: !NetworkName
   , dncLoggingConfig :: !Logging.Configuration
   , dncNodeConfigFile :: !NodeConfigFile
-  , dncProtocol :: !DbSyncProtocol
+  , dncProtocol :: !SyncProtocol
   , dncRequiresNetworkMagic :: !RequiresNetworkMagic
   , dncEnableLogging :: !Bool
   , dncEnableMetrics :: !Bool
@@ -130,7 +130,7 @@ data DbSyncNodeConfig = DbSyncNodeConfig
   , dncAllegraToMary :: !AllegraToMary
   }
 
-data DbSyncPreConfig = DbSyncPreConfig
+data SyncPreConfig = SyncPreConfig
   { pcNetworkName :: !NetworkName
   , pcLoggingConfig :: !Logging.Representation
   , pcNodeConfigFile :: !NodeConfigFile
@@ -173,18 +173,18 @@ adjustGenesisFilePath f (GenesisFile p) = GenesisFile (f p)
 adjustNodeConfigFilePath :: (FilePath -> FilePath) -> NodeConfigFile -> NodeConfigFile
 adjustNodeConfigFilePath f (NodeConfigFile p) = NodeConfigFile (f p)
 
-pcNodeConfigFilePath :: DbSyncPreConfig -> FilePath
+pcNodeConfigFilePath :: SyncPreConfig -> FilePath
 pcNodeConfigFilePath = unNodeConfigFile . pcNodeConfigFile
 
 -- -------------------------------------------------------------------------------------------------
 
-instance FromJSON DbSyncPreConfig where
+instance FromJSON SyncPreConfig where
   parseJSON o =
-    Aeson.withObject "top-level" parseGenDbSyncNodeConfig o
+    Aeson.withObject "top-level" parseGenSyncNodeConfig o
 
-parseGenDbSyncNodeConfig :: Object -> Parser DbSyncPreConfig
-parseGenDbSyncNodeConfig o =
-  DbSyncPreConfig
+parseGenSyncNodeConfig :: Object -> Parser SyncPreConfig
+parseGenSyncNodeConfig o =
+  SyncPreConfig
     <$> fmap NetworkName (o .: "NetworkName")
     <*> parseJSON (Object o)
     <*> fmap NodeConfigFile (o .: "NodeConfigFile")
@@ -192,8 +192,8 @@ parseGenDbSyncNodeConfig o =
     <*> o .: "EnableLogMetrics"
     <*> fmap (fromMaybe 8080) (o .:? "PrometheusPort")
 
-instance FromJSON DbSyncProtocol where
+instance FromJSON SyncProtocol where
   parseJSON o =
     case o of
-      String "Cardano" -> pure DbSyncProtocolCardano
+      String "Cardano" -> pure SyncProtocolCardano
       x -> typeMismatch "Protocol" x

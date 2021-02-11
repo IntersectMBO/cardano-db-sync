@@ -72,8 +72,8 @@ import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 
 insertShelleyBlock
-    :: Trace IO Text -> DbSyncEnv -> Generic.Block -> LedgerStateSnapshot -> SlotDetails
-    -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
+    :: Trace IO Text -> SyncEnv -> Generic.Block -> LedgerStateSnapshot -> SlotDetails
+    -> ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
 insertShelleyBlock tracer env blk lStateSnap details = do
   runExceptT $ do
     pbid <- liftLookupFail (renderInsertName (Generic.blkEra blk)) $ DB.queryBlockId (Generic.blkPreviousHash blk)
@@ -163,8 +163,8 @@ renderInsertName eraName =
 
 insertTx
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.BlockId -> EpochNo -> Word64 -> Generic.Tx
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    => Trace IO Text -> SyncEnv -> DB.BlockId -> EpochNo -> Word64 -> Generic.Tx
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertTx tracer env blkId epochNo blockIndex tx = do
     let fees = unCoin $ Generic.txFees tx
         outSum = unCoin $ Generic.txOutSum tx
@@ -225,7 +225,7 @@ insertTxOut tracer txId (Generic.TxOut index addr value maMap) = do
 insertTxIn
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Generic.TxIn
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertTxIn _tracer txInId (Generic.TxIn txId index) = do
   txOutId <- liftLookupFail "insertTxIn" $ DB.queryTxId txId
   void . lift . DB.insertTxIn $
@@ -237,8 +237,8 @@ insertTxIn _tracer txInId (Generic.TxIn txId index) = do
 
 insertCertificate
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.TxId -> EpochNo -> Generic.TxCertificate
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    => Trace IO Text -> SyncEnv -> DB.TxId -> EpochNo -> Generic.TxCertificate
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertCertificate tracer env txId epochNo (Generic.TxCertificate idx cert) =
   case cert of
     Shelley.DCertDeleg deleg -> insertDelegCert tracer env txId idx epochNo deleg
@@ -253,7 +253,7 @@ insertCertificate tracer env txId epochNo (Generic.TxCertificate idx cert) =
 insertPoolCert
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> EpochNo -> DB.TxId -> Word16 -> Shelley.PoolCert StandardCrypto
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolCert tracer epoch txId idx pCert =
   case pCert of
     Shelley.RegPool pParams -> insertPoolRegister tracer epoch txId idx pParams
@@ -261,8 +261,8 @@ insertPoolCert tracer epoch txId idx pCert =
 
 insertDelegCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> EpochNo -> Shelley.DelegCert StandardCrypto
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    => Trace IO Text -> SyncEnv -> DB.TxId -> Word16 -> EpochNo -> Shelley.DelegCert StandardCrypto
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertDelegCert tracer env txId idx epochNo dCert =
   case dCert of
     Shelley.RegKey cred -> insertStakeRegistration tracer txId idx $ Generic.annotateStakingCred env cred
@@ -272,7 +272,7 @@ insertDelegCert tracer env txId idx epochNo dCert =
 insertPoolRegister
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> EpochNo -> DB.TxId -> Word16 -> Shelley.PoolParams StandardCrypto
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRegister tracer (EpochNo epoch) txId idx params = do
   mdId <- case strictMaybeToMaybe $ Shelley._poolMD params of
             Just md -> Just <$> insertMetaData txId md
@@ -316,7 +316,7 @@ maxLovelace = 45000000000000000
 insertPoolHash
     :: forall m . (MonadBaseControl IO m, MonadIO m)
     => Shelley.KeyHash 'Shelley.StakePool StandardCrypto
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) DB.PoolHashId
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.PoolHashId
 insertPoolHash kh =
     lift . DB.insertPoolHash $
       DB.PoolHash
@@ -328,7 +328,7 @@ insertPoolHash kh =
 insertPoolRetire
     :: (MonadBaseControl IO m, MonadIO m)
     => DB.TxId -> EpochNo -> Word16 -> Shelley.KeyHash 'Shelley.StakePool StandardCrypto
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRetire txId epochNum idx keyHash = do
   poolId <- liftLookupFail "insertPoolRetire" $ queryStakePoolKeyHash keyHash
   void . lift . DB.insertPoolRetire $
@@ -343,7 +343,7 @@ insertPoolRetire txId epochNum idx keyHash = do
 insertMetaData
     :: (MonadBaseControl IO m, MonadIO m)
     => DB.TxId -> Shelley.PoolMetadata
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) DB.PoolMetaDataId
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.PoolMetaDataId
 insertMetaData txId md =
   lift . DB.insertPoolMetaData $
     DB.PoolMetaData
@@ -390,7 +390,7 @@ insertStakeAddressRefIfMissing txId addr =
 insertPoolOwner
     :: (MonadBaseControl IO m, MonadIO m)
     => DB.PoolHashId -> DB.TxId -> Shelley.KeyHash 'Shelley.Staking StandardCrypto
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolOwner poolHashId txId skh =
   void . lift . DB.insertPoolOwner $
     DB.PoolOwner
@@ -402,7 +402,7 @@ insertPoolOwner poolHashId txId skh =
 insertStakeRegistration
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Word16 -> Shelley.RewardAcnt StandardCrypto
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertStakeRegistration _tracer txId idx rewardAccount = do
   scId <- lift $ insertStakeAddress txId rewardAccount
   void . lift . DB.insertStakeRegistration $
@@ -414,8 +414,8 @@ insertStakeRegistration _tracer txId idx rewardAccount = do
 
 insertStakeDeregistration
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> Shelley.StakeCredential StandardCrypto
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    => Trace IO Text -> SyncEnv -> DB.TxId -> Word16 -> Shelley.StakeCredential StandardCrypto
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertStakeDeregistration _tracer env txId idx cred = do
   scId <- liftLookupFail "insertStakeDeregistration" $ queryStakeAddress (Generic.stakingCredHash env cred)
   void . lift . DB.insertStakeDeregistration $
@@ -427,9 +427,9 @@ insertStakeDeregistration _tracer env txId idx cred = do
 
 insertDelegation
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> EpochNo
+    => Trace IO Text -> SyncEnv -> DB.TxId -> Word16 -> EpochNo
     -> Shelley.StakeCredential StandardCrypto -> Shelley.KeyHash 'Shelley.StakePool StandardCrypto
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertDelegation _tracer env txId idx (EpochNo epoch) cred poolkh = do
   addrId <- liftLookupFail "insertDelegation" $ queryStakeAddress (Generic.stakingCredHash env cred)
   poolHashId <-liftLookupFail "insertDelegation" $ queryStakePoolKeyHash poolkh
@@ -444,8 +444,8 @@ insertDelegation _tracer env txId idx (EpochNo epoch) cred poolkh = do
 
 insertMirCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DbSyncEnv -> DB.TxId -> Word16 -> Shelley.MIRCert StandardCrypto
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    => Trace IO Text -> SyncEnv -> DB.TxId -> Word16 -> Shelley.MIRCert StandardCrypto
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertMirCert _tracer env txId idx mcert = do
     case Shelley.mirPot mcert of
       Shelley.ReservesMIR ->
@@ -456,7 +456,7 @@ insertMirCert _tracer env txId idx mcert = do
     insertMirReserves
         :: (MonadBaseControl IO m, MonadIO m)
         => (Shelley.StakeCredential StandardCrypto, Shelley.Coin)
-        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+        -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     insertMirReserves (cred, coin) = do
       addrId <- lift . insertStakeAddress txId $ Generic.annotateStakingCred env cred
       void . lift . DB.insertReserve $
@@ -470,7 +470,7 @@ insertMirCert _tracer env txId idx mcert = do
     insertMirTreasury
         :: (MonadBaseControl IO m, MonadIO m)
         => (Shelley.StakeCredential StandardCrypto, Shelley.Coin)
-        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+        -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     insertMirTreasury (cred, coin) = do
       addrId <- lift . insertStakeAddress txId $ Generic.annotateStakingCred env cred
       void . lift . DB.insertTreasury $
@@ -484,7 +484,7 @@ insertMirCert _tracer env txId idx mcert = do
 insertWithdrawals
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Generic.TxWithdrawal
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertWithdrawals _tracer txId (Generic.TxWithdrawal account coin) = do
   addrId <- liftLookupFail "insertWithdrawals" $ queryStakeAddress (Shelley.serialiseRewardAcnt account)
   void . lift . DB.insertWithdrawal $
@@ -497,7 +497,7 @@ insertWithdrawals _tracer txId (Generic.TxWithdrawal account coin) = do
 insertPoolRelay
     :: (MonadBaseControl IO m, MonadIO m)
     => DB.PoolUpdateId -> Shelley.StakePoolRelay
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRelay updateId relay =
   void . lift . DB.insertPoolRelay $
     case relay of
@@ -532,7 +532,7 @@ insertPoolRelay updateId relay =
 insertParamProposal
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Shelley.Update StandardCrypto
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertParamProposal _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap) (EpochNo epoch)) =
     lift . mapM_ insert $ Map.toList umap
   where
@@ -569,14 +569,14 @@ insertParamProposal _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap
 insertTxMetadata
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Map Word64 TxMetadataValue
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertTxMetadata tracer txId metadata =
     mapM_ insert $ Map.toList metadata
   where
     insert
         :: (MonadBaseControl IO m, MonadIO m)
         => (Word64, TxMetadataValue)
-        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+        -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     insert (key, md) = do
       let jsonbs = LBS.toStrict $ Aeson.encode (metadataValueToJsonNoSchema md)
           singleKeyCBORMetadata = serialiseToCBOR $ makeTransactionMetadata $ Map.singleton key md
@@ -616,7 +616,7 @@ containsUnicodeNul = Text.isInfixOf "\\u000"
 insertRewards
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.BlockId -> EpochNo -> Map Generic.StakeCred Coin
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertRewards _tracer blkId epoch rewards = do
     forM_ (chunksOf 1000 $ Map.toList rewards) $ \rewardsChunk -> do
       dbRewards <- mapM mkReward rewardsChunk
@@ -625,7 +625,7 @@ insertRewards _tracer blkId epoch rewards = do
     mkReward
         :: (MonadBaseControl IO m, MonadIO m)
         => (Generic.StakeCred, Shelley.Coin)
-        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) DB.Reward
+        -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.Reward
     mkReward (saddr, coin) = do
       (saId, poolId) <- liftLookupFail "insertReward" $ queryStakeAddressAndPool (unEpochNo epoch) (Generic.unStakeCred saddr)
       pure $
@@ -640,7 +640,7 @@ insertRewards _tracer blkId epoch rewards = do
 insertOrphanedRewards
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.BlockId -> EpochNo -> Map Generic.StakeCred Coin
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertOrphanedRewards _tracer blkId epoch orphanedRewards =
     -- There are probably not many of these for each epoch, but just in case there
     -- are, it does not hurt to chunk them.
@@ -651,7 +651,7 @@ insertOrphanedRewards _tracer blkId epoch orphanedRewards =
     mkOrphanedReward
         :: (MonadBaseControl IO m, MonadIO m)
         => (Generic.StakeCred, Shelley.Coin)
-        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) DB.OrphanedReward
+        -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.OrphanedReward
     mkOrphanedReward (saddr, coin) = do
       (saId, poolId) <- liftLookupFail "insertOrphanedReward" $ queryStakeAddressAndPool (unEpochNo epoch) (Generic.unStakeCred saddr)
       pure $
@@ -666,7 +666,7 @@ insertOrphanedRewards _tracer blkId epoch orphanedRewards =
 insertEpochParam
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.BlockId -> EpochNo -> Generic.ProtoParams -> Shelley.Nonce
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertEpochParam _tracer blkId (EpochNo epoch) params nonce =
   void . lift . DB.insertEpochParam $
     DB.EpochParam
@@ -696,7 +696,7 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce =
 insertEpochStake
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.BlockId -> EpochNo -> Generic.StakeDist
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertEpochStake _tracer blkId (EpochNo epoch) smap =
     forM_ (chunksOf 1000 $ Map.toList (Generic.unStakeDist smap)) $ \stakeChunk -> do
       dbStakes <- mapM mkStake stakeChunk
@@ -705,7 +705,7 @@ insertEpochStake _tracer blkId (EpochNo epoch) smap =
     mkStake
         :: (MonadBaseControl IO m, MonadIO m)
         => (Generic.StakeCred, Shelley.Coin)
-        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) DB.EpochStake
+        -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.EpochStake
     mkStake (saddr, coin) = do
       (saId, poolId) <- liftLookupFail "insertEpochStake" $ queryStakeAddressAndPool epoch (Generic.unStakeCred saddr)
       pure $
@@ -720,21 +720,21 @@ insertEpochStake _tracer blkId (EpochNo epoch) smap =
 insertMaTxMint
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Value StandardCrypto
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertMaTxMint _tracer txId (Value _adaShouldAlwaysBeZeroButWeDoNotCheck mintMap) =
     mapM_ insertOuter $ Map.toList mintMap
   where
     insertOuter
         :: (MonadBaseControl IO m, MonadIO m)
         => (PolicyID StandardCrypto, Map AssetName Integer)
-        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+        -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     insertOuter (policy, aMap) =
       mapM_ (insertInner policy) $ Map.toList aMap
 
     insertInner
         :: (MonadBaseControl IO m, MonadIO m)
         => PolicyID StandardCrypto -> (AssetName, Integer)
-        -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+        -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     insertInner policy (aname, amount) =
       void . lift . DB.insertMaTxMint $
         DB.MaTxMint

@@ -5,20 +5,20 @@
 
 module Cardano.Sync.Config
   ( ConfigFile (..)
-  , DbSyncCommand (..)
-  , DbSyncProtocol (..)
-  , DbSyncNodeConfig (..)
-  , DbSyncNodeParams (..)
   , GenesisConfig (..)
   , GenesisFile (..)
   , LedgerStateDir (..)
   , NetworkName (..)
   , ShelleyConfig (..)
   , SocketPath (..)
+  , SyncCommand (..)
+  , SyncProtocol (..)
+  , SyncNodeConfig (..)
+  , SyncNodeParams (..)
   , cardanoLedgerConfig
   , genesisProtocolMagicId
-  , readDbSyncNodeConfig
   , readCardanoGenesisConfig
+  , readSyncNodeConfig
   , configureLogging
   ) where
 
@@ -42,37 +42,37 @@ import qualified Data.Yaml as Yaml
 
 import           System.FilePath (takeDirectory, (</>))
 
-configureLogging :: DbSyncNodeParams -> IO (Trace IO Text)
+configureLogging :: SyncNodeParams -> IO (Trace IO Text)
 configureLogging params = do
     let configFile = enpConfigFile params
-    enc <- readDbSyncNodeConfig configFile
+    enc <- readSyncNodeConfig configFile
 
     if not (dncEnableLogging enc)
        then pure Logging.nullTracer
        else liftIO $ Logging.setupTrace (Right $ dncLoggingConfig enc) "db-sync-node"
 
-readDbSyncNodeConfig :: ConfigFile -> IO DbSyncNodeConfig
-readDbSyncNodeConfig (ConfigFile fp) = do
-    pcfg <- adjustNodeFilePath . parseDbSyncPreConfig <$> readByteString fp "DbSync"
+readSyncNodeConfig :: ConfigFile -> IO SyncNodeConfig
+readSyncNodeConfig (ConfigFile fp) = do
+    pcfg <- adjustNodeFilePath . parseSyncPreConfig <$> readByteString fp "DbSync"
     ncfg <- parseNodeConfig <$> readByteString (pcNodeConfigFilePath pcfg) "node"
     coalesceConfig pcfg ncfg (mkAdjustPath pcfg)
   where
-    parseDbSyncPreConfig :: ByteString -> DbSyncPreConfig
-    parseDbSyncPreConfig bs =
+    parseSyncPreConfig :: ByteString -> SyncPreConfig
+    parseSyncPreConfig bs =
       case Yaml.decodeEither' bs of
-      Left err -> panic $ "readDbSyncNodeConfig: Error parsing config: " <> textShow err
+      Left err -> panic $ "readSyncNodeConfig: Error parsing config: " <> textShow err
       Right res -> res
 
-    adjustNodeFilePath :: DbSyncPreConfig -> DbSyncPreConfig
+    adjustNodeFilePath :: SyncPreConfig -> SyncPreConfig
     adjustNodeFilePath cfg =
       cfg { pcNodeConfigFile = adjustNodeConfigFilePath (takeDirectory fp </>) (pcNodeConfigFile cfg) }
 
 coalesceConfig
-    :: DbSyncPreConfig -> NodeConfig -> (FilePath -> FilePath)
-    -> IO DbSyncNodeConfig
+    :: SyncPreConfig -> NodeConfig -> (FilePath -> FilePath)
+    -> IO SyncNodeConfig
 coalesceConfig pcfg ncfg adjustGenesisPath = do
   lc <- Logging.setupFromRepresentation $ pcLoggingConfig pcfg
-  pure $ DbSyncNodeConfig
+  pure $ SyncNodeConfig
           { dncNetworkName = pcNetworkName pcfg
           , dncLoggingConfig = lc
           , dncNodeConfigFile = pcNodeConfigFile pcfg
@@ -98,7 +98,7 @@ coalesceConfig pcfg ncfg adjustGenesisPath = do
           , dncAllegraToMary = ncAllegraToMary ncfg
           }
 
-mkAdjustPath :: DbSyncPreConfig -> (FilePath -> FilePath)
+mkAdjustPath :: SyncPreConfig -> (FilePath -> FilePath)
 mkAdjustPath cfg fp = takeDirectory (pcNodeConfigFilePath cfg) </> fp
 
 readByteString :: FilePath -> Text -> IO ByteString

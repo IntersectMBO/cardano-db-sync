@@ -39,7 +39,7 @@ import qualified Shelley.Spec.Ledger.PParams as Shelley
 
 -- Usually only one constructor, but may have two when we are preparing for a HFC event.
 data GenesisConfig
-  = GenesisCardano !DbSyncNodeConfig !Byron.Config !ShelleyConfig
+  = GenesisCardano !SyncNodeConfig !Byron.Config !ShelleyConfig
 
 genesisProtocolMagicId :: GenesisConfig -> ProtocolMagicId
 genesisProtocolMagicId ge =
@@ -50,11 +50,11 @@ genesisProtocolMagicId ge =
     shelleyProtocolMagicId sCfg = ProtocolMagicId (sgNetworkMagic sCfg)
 
 readCardanoGenesisConfig
-        :: DbSyncNodeConfig
-        -> ExceptT DbSyncNodeError IO GenesisConfig
+        :: SyncNodeConfig
+        -> ExceptT SyncNodeError IO GenesisConfig
 readCardanoGenesisConfig enc =
   case dncProtocol enc of
-    DbSyncProtocolCardano ->
+    SyncProtocolCardano ->
       GenesisCardano enc <$> readByronGenesisConfig enc <*> readShelleyGenesisConfig enc
 
 -- -------------------------------------------------------------------------------------------------
@@ -108,7 +108,7 @@ mkProtocolCardano ge =
 shelleyPraosNonce :: ShelleyConfig -> Nonce
 shelleyPraosNonce sCfg = Nonce (Crypto.castHash . unGenesisHashShelley $ scGenesisHash sCfg)
 
-shelleyProtVer :: DbSyncNodeConfig -> Shelley.ProtVer
+shelleyProtVer :: SyncNodeConfig -> Shelley.ProtVer
 shelleyProtVer dnc =
   let bver = dncByronProtocolVersion dnc in
   Shelley.ProtVer (fromIntegral $ Byron.pvMajor bver) (fromIntegral $ Byron.pvMinor bver)

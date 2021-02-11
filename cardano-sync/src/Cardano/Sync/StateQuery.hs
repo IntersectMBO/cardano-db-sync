@@ -65,7 +65,7 @@ newStateQueryTMVar = StateQueryTMVar <$> newEmptyTMVarIO
 -- If the history interpreter does not exist, get one.
 -- If the existing history interpreter returns an error, get a new one and try again.
 getSlotDetails
-    :: Trace IO Text -> DbSyncEnv
+    :: Trace IO Text -> SyncEnv
     -> StateQueryTMVar (HardForkBlock (CardanoEras StandardCrypto)) (Interpreter (CardanoEras StandardCrypto))
     -> SlotNo
     -> IO SlotDetails

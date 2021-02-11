@@ -25,11 +25,11 @@ import           Ouroboros.Network.Point
 
 -- Rollbacks are done in an Era generic way based on the 'Point' we are
 -- rolling back to.
-rollbackToSlot :: SqlBackend -> Trace IO Text -> CardanoPoint -> IO (Either DbSyncNodeError ())
+rollbackToSlot :: SqlBackend -> Trace IO Text -> CardanoPoint -> IO (Either SyncNodeError ())
 rollbackToSlot backend trce point =
     DB.runDbIohkNoLogging backend $ runExceptT action
   where
-    action :: MonadIO m => ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    action :: MonadIO m => ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     action = do
         liftIO $ logInfo trce msg
         xs <- lift $ slotsToDelete (pointSlot point)
@@ -57,7 +57,7 @@ rollbackToSlot backend trce point =
                   ]
 
 -- For testing and debugging.
-unsafeRollback :: Trace IO Text -> SlotNo -> IO (Either DbSyncNodeError ())
+unsafeRollback :: Trace IO Text -> SlotNo -> IO (Either SyncNodeError ())
 unsafeRollback trce slotNo = do
   logInfo trce $ "Forced rollback to slot " <> textShow slotNo
   Right <$> DB.runDbNoLogging (void $ DB.deleteCascadeSlotNo slotNo)

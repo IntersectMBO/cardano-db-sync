@@ -60,7 +60,7 @@ data ValueFee = ValueFee
 
 insertByronBlock
     :: Trace IO Text -> ByronBlock -> SlotDetails
-    -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
+    -> ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
 insertByronBlock tracer blk details = do
   res <- runExceptT $
             case byronBlockRaw blk of
@@ -76,7 +76,7 @@ insertByronBlock tracer blk details = do
 insertABOBBoundary
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> Byron.ABoundaryBlock ByteString -> SlotDetails
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertABOBBoundary tracer blk details = do
   let prevHash = case Byron.boundaryPrevHash (Byron.boundaryHeader blk) of
                     Left gh -> Byron.genesisToHeaderHash gh
@@ -122,7 +122,7 @@ insertABOBBoundary tracer blk details = do
 insertABlock
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> Byron.ABlock ByteString -> SlotDetails
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertABlock tracer blk details = do
     pbid <- liftLookupFail "insertABlock" $ DB.queryBlockId (Byron.unHeaderHash $ Byron.blockPreviousHash blk)
     slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
@@ -176,7 +176,7 @@ insertABlock tracer blk details = do
 insertTx
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.BlockId -> Byron.TxAux -> Word64
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertTx tracer blkId tx blockIndex = do
     valFee <- firstExceptT annotateTx $ newExceptT (calculateTxFee $ Byron.taTx tx)
     txId <- lift . DB.insertTx $
@@ -199,7 +199,7 @@ insertTx tracer blkId tx blockIndex = do
     lift $ zipWithM_ (insertTxOut tracer txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
     mapMVExceptT (insertTxIn tracer txId) (toList . Byron.txInputs $ Byron.taTx tx)
   where
-    annotateTx :: DbSyncNodeError -> DbSyncNodeError
+    annotateTx :: SyncNodeError -> SyncNodeError
     annotateTx ee =
       case ee of
         NEInvariant loc ei -> NEInvariant loc (annotateInvariantTx (Byron.taTx tx) ei)
@@ -225,7 +225,7 @@ insertTxOut _tracer txId index txout =
 insertTxIn
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Byron.TxIn
-    -> ExceptT DbSyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertTxIn _tracer txInId (Byron.TxInUtxo txHash inIndex) = do
   txOutId <- liftLookupFail "insertTxIn" $ DB.queryTxId (Byron.unTxHash txHash)
   void . lift . DB.insertTxIn $
@@ -237,7 +237,7 @@ insertTxIn _tracer txInId (Byron.TxInUtxo txHash inIndex) = do
 
 -- -----------------------------------------------------------------------------
 
-calculateTxFee :: (MonadBaseControl IO m, MonadIO m) => Byron.Tx -> ReaderT SqlBackend m (Either DbSyncNodeError ValueFee)
+calculateTxFee :: (MonadBaseControl IO m, MonadIO m) => Byron.Tx -> ReaderT SqlBackend m (Either SyncNodeError ValueFee)
 calculateTxFee tx =
     runExceptT $ do
       outval <- firstExceptT (\e -> NEError $ "calculateTxFee: " <> textShow e) $ hoistEither output
