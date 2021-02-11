@@ -1,13 +1,11 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Cardano.Sync.Config.Cardano
   ( GenesisConfig (..)
   , cardanoLedgerConfig
-  , genesisConfigToEnv
   , genesisProtocolMagicId
   , mkTopLevelConfig
   , mkProtocolInfoCardano
@@ -24,11 +22,9 @@ import           Cardano.Sync.Config.Byron
 import           Cardano.Sync.Config.Shelley
 import           Cardano.Sync.Config.Types
 import           Cardano.Sync.Error
-import           Cardano.Sync.Util
 
 import           Control.Monad.Trans.Except (ExceptT)
 
-import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Cardano (Nonce (..), Protocol (..))
 import qualified Ouroboros.Consensus.Cardano as Consensus
 import           Ouroboros.Consensus.Config (TopLevelConfig (..))
@@ -37,7 +33,6 @@ import           Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import           Ouroboros.Consensus.Shelley.Eras (StandardShelley)
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
-import           Ouroboros.Network.Magic (NetworkMagic (..))
 
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 
@@ -45,31 +40,6 @@ import qualified Shelley.Spec.Ledger.PParams as Shelley
 -- Usually only one constructor, but may have two when we are preparing for a HFC event.
 data GenesisConfig
   = GenesisCardano !DbSyncNodeConfig !Byron.Config !ShelleyConfig
-
-genesisConfigToEnv :: DbSyncNodeParams -> GenesisConfig -> Either DbSyncNodeError DbSyncEnv
-genesisConfigToEnv enp genCfg =
-    case genCfg of
-      GenesisCardano _ bCfg sCfg
-        | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= sgNetworkMagic (scConfig sCfg) ->
-            Left . NECardanoConfig $
-              mconcat
-                [ "ProtocolMagicId ", textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
-                , " /= ", textShow (sgNetworkMagic $ scConfig sCfg)
-                ]
-        | Byron.gdStartTime (Byron.configGenesisData bCfg) /= sgSystemStart (scConfig sCfg) ->
-            Left . NECardanoConfig $
-              mconcat
-                [ "SystemStart ", textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
-                , " /= ", textShow (sgSystemStart $ scConfig sCfg)
-                ]
-        | otherwise ->
-            Right $ DbSyncEnv
-                  { envProtocol = DbSyncProtocolCardano
-                  , envNetwork = sgNetworkId (scConfig sCfg)
-                  , envNetworkMagic = NetworkMagic (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
-                  , envSystemStart = SystemStart (Byron.gdStartTime $ Byron.configGenesisData bCfg)
-                  , envLedgerStateDir = enpLedgerStateDir enp
-                  }
 
 genesisProtocolMagicId :: GenesisConfig -> ProtocolMagicId
 genesisProtocolMagicId ge =

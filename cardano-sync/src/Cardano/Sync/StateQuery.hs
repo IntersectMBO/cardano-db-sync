@@ -18,7 +18,7 @@ import           Cardano.BM.Trace (Trace, logInfo)
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
-import           Cardano.Sync.Config.Types
+import           Cardano.Sync.Api
 import           Cardano.Sync.Types
 import           Cardano.Sync.Util
 

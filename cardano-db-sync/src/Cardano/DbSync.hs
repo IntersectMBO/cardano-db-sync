@@ -26,6 +26,8 @@ import           Cardano.Prelude hiding (Nat, option, (%))
 
 import           Control.Monad.Trans.Maybe (MaybeT (..))
 
+import           Cardano.Api (SlotNo (..))
+
 import           Cardano.BM.Trace (Trace)
 
 import qualified Cardano.Db as DB
@@ -60,17 +62,17 @@ runDbSyncNode mkPlugin params = do
           Just slotNo -> void $ unsafeRollback trce slotNo
           Nothing -> pure ()
 
-        runSyncNode (mkCardanoSyncDataLayer trce backend) (mkPlugin backend)
+        runSyncNode (mkSyncDataLayer trce backend) (mkPlugin backend)
             params (insertValidateGenesisDist backend)
 
 -- -------------------------------------------------------------------------------------------------
 
 -- The base @DataLayer@.
-mkCardanoSyncDataLayer :: Trace IO Text -> SqlBackend -> CardanoSyncDataLayer
-mkCardanoSyncDataLayer trce backend =
-  CardanoSyncDataLayer
-    { csdlGetSlotHash = DB.runDbIohkLogging backend trce . DB.querySlotHash
-    , csdlGetLatestBlock =
+mkSyncDataLayer :: Trace IO Text -> SqlBackend -> SyncDataLayer
+mkSyncDataLayer trce backend =
+  SyncDataLayer
+    { sdlGetSlotHash = DB.runDbIohkLogging backend trce . DB.querySlotHash
+    , sdlGetLatestBlock =
         runMaybeT $ do
           block <- MaybeT $ DB.runDbNoLogging DB.queryLatestBlock
           pure $ Block
@@ -79,4 +81,5 @@ mkCardanoSyncDataLayer trce backend =
                   , bSlotNo = DB.blockSlotNo block
                   , bBlockNo = DB.blockBlockNo block
                   }
+    , sdlGetLatestSlotNo = SlotNo <$> DB.runDbNoLogging DB.queryLatestSlotNo
     }

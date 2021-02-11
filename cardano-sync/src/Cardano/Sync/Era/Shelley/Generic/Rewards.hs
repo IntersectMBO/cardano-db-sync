@@ -7,7 +7,6 @@ module Cardano.Sync.Era.Shelley.Generic.Rewards
   , shelleyRewards
   ) where
 
-import           Cardano.Sync.Config.Types (DbSyncEnv (..))
 import           Cardano.Sync.Era.Shelley.Generic.StakeCred
 
 import           Cardano.Ledger.Era (Crypto)
@@ -35,27 +34,27 @@ data Rewards = Rewards
     , orphaned :: Map StakeCred Coin
     }
 
-allegraRewards :: DbSyncEnv -> LedgerState (ShelleyBlock StandardAllegra) -> Maybe Rewards
+allegraRewards :: Shelley.Network -> LedgerState (ShelleyBlock StandardAllegra) -> Maybe Rewards
 allegraRewards = genericRewards
 
-maryRewards :: DbSyncEnv -> LedgerState (ShelleyBlock StandardMary) -> Maybe Rewards
+maryRewards :: Shelley.Network -> LedgerState (ShelleyBlock StandardMary) -> Maybe Rewards
 maryRewards = genericRewards
 
-shelleyRewards :: DbSyncEnv -> LedgerState (ShelleyBlock StandardShelley) -> Maybe Rewards
+shelleyRewards :: Shelley.Network -> LedgerState (ShelleyBlock StandardShelley) -> Maybe Rewards
 shelleyRewards = genericRewards
 
 -- -------------------------------------------------------------------------------------------------
 
-genericRewards :: forall era. DbSyncEnv -> LedgerState (ShelleyBlock era) -> Maybe Rewards
-genericRewards env lstate =
+genericRewards :: forall era. Shelley.Network -> LedgerState (ShelleyBlock era) -> Maybe Rewards
+genericRewards network lstate =
     fmap cleanup rewardUpdate
   where
     cleanup :: Map (Shelley.Credential 'Shelley.Staking (Crypto era)) Coin -> Rewards
     cleanup rmap =
       let (rm, om) = Map.partitionWithKey validRewardAddress rmap in
       Rewards
-        { rewards = Map.mapKeys (toStakeCred env) rm
-        , orphaned = Map.mapKeys (toStakeCred env) om
+        { rewards = Map.mapKeys (toStakeCred network) rm
+        , orphaned = Map.mapKeys (toStakeCred network) om
         }
     rewardAccounts :: Shelley.RewardAccounts (Crypto era)
     rewardAccounts =

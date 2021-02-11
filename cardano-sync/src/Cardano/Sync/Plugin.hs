@@ -6,12 +6,10 @@ import           Cardano.BM.Trace (Trace)
 
 import           Cardano.Prelude
 
-import           Cardano.Slotting.Slot (SlotNo (..))
-import           Cardano.Sync.LedgerState
-
-import           Cardano.Sync.Config.Types
+import           Cardano.Sync.Api
 import           Cardano.Sync.Error
 import           Cardano.Sync.Types
+
 
 -- | This plugin system allows access to the database to be extended by running one or more
 -- actions on a block insert or rollback.
@@ -38,8 +36,8 @@ data DbSyncNodePlugin = DbSyncNodePlugin
     -- This will not be called for the original genesis block, but will be called for
     -- all subsequent blocks.
     -- Blocks (including epoch boundary blocks) are called in sequence from the oldest to the newest.
-  , plugInsertBlock :: [Trace IO Text -> DbSyncEnv -> LedgerStateVar -> [BlockDetails] -> IO (Either DbSyncNodeError ())]
+  , plugInsertBlock :: [Trace IO Text -> DbSyncEnv -> [BlockDetails] -> IO (Either DbSyncNodeError ())]
 
-    -- Rollback to the specified absolute SlotNo.
-  , plugRollbackBlock :: [Trace IO Text -> SlotNo -> IO (Either DbSyncNodeError ())]
+    -- Rollback to the specified Point.
+  , plugRollbackBlock :: [Trace IO Text -> CardanoPoint -> IO (Either DbSyncNodeError ())]
   }

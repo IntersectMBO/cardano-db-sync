@@ -31,6 +31,7 @@ library
                         -Wincomplete-uni-patterns
 
   exposed-modules:      Cardano.Sync
+                        Cardano.Sync.Api
                         Cardano.Sync.Config
                         Cardano.Sync.Config.Byron
                         Cardano.Sync.Config.Cardano

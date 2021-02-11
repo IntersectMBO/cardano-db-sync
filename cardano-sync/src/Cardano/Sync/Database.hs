@@ -17,11 +17,10 @@ module Cardano.Sync.Database
 import           Cardano.Prelude
 
 import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo)
-import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
-import           Cardano.Sync.Config
+import           Cardano.Sync.Api
 import           Cardano.Sync.DbAction
 import           Cardano.Sync.Error
 import           Cardano.Sync.LedgerState
@@ -42,10 +41,10 @@ runDbStartup trce plugin =
     mapM_ (\action -> action trce) $ plugOnStartup plugin
 
 runDbThread
-    :: CardanoSyncDataLayer -> Trace IO Text -> DbSyncEnv -> DbSyncNodePlugin -> Metrics
-    -> DbActionQueue -> LedgerStateVar
+    :: Trace IO Text -> DbSyncEnv -> DbSyncNodePlugin -> Metrics
+    -> DbActionQueue
     -> IO ()
-runDbThread dataLayer trce env plugin metrics queue ledgerStateVar = do
+runDbThread trce env plugin metrics queue = do
     logInfo trce "Running DB thread"
     logException trce "runDBThread: " loop
     logInfo trce "Shutting down DB thread"
@@ -56,9 +55,9 @@ runDbThread dataLayer trce env plugin metrics queue ledgerStateVar = do
       when (length xs > 1) $ do
         logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
 
-      eNextState <- runExceptT $ runActions trce env plugin ledgerStateVar xs
+      eNextState <- runExceptT $ runActions trce env plugin xs
 
-      let getLatestBlock = csdlGetLatestBlock dataLayer
+      let getLatestBlock = sdlGetLatestBlock (envDataLayer env)
       mBlkNo <- getLatestBlock
 
       -- Chain Maybe's.
@@ -74,9 +73,9 @@ runDbThread dataLayer trce env plugin metrics queue ledgerStateVar = do
 -- | Run the list of 'DbAction's. Block are applied in a single set (as a transaction)
 -- and other operations are applied one-by-one.
 runActions
-    :: Trace IO Text -> DbSyncEnv -> DbSyncNodePlugin -> LedgerStateVar -> [DbAction]
+    :: Trace IO Text -> DbSyncEnv -> DbSyncNodePlugin -> [DbAction]
     -> ExceptT DbSyncNodeError IO NextState
-runActions trce env plugin ledgerState actions = do
+runActions trce env plugin actions = do
     dbAction Continue actions
   where
     dbAction :: NextState -> [DbAction] -> ExceptT DbSyncNodeError IO NextState
@@ -87,17 +86,17 @@ runActions trce env plugin ledgerState actions = do
         ([], DbFinish:_) -> do
             pure Done
         ([], DbRollBackToPoint pt:ys) -> do
-            runRollbacks trce plugin (dbpSlot pt)
-            liftIO $ loadLedgerStateAtPoint (envLedgerStateDir env) ledgerState pt
+            runRollbacks trce plugin pt
+            liftIO $ loadLedgerStateAtPoint (envLedger env) pt
             dbAction Continue ys
         (ys, zs) -> do
-          insertBlockList trce env ledgerState plugin ys
+          insertBlockList trce env plugin ys
           if null zs
             then pure Continue
             else dbAction Continue zs
 
 runRollbacks
-    :: Trace IO Text -> DbSyncNodePlugin -> SlotNo
+    :: Trace IO Text -> DbSyncNodePlugin -> CardanoPoint
     -> ExceptT DbSyncNodeError IO ()
 runRollbacks trce plugin point =
   newExceptT
@@ -105,14 +104,14 @@ runRollbacks trce plugin point =
     $ plugRollbackBlock plugin
 
 insertBlockList
-    :: Trace IO Text -> DbSyncEnv -> LedgerStateVar -> DbSyncNodePlugin -> [BlockDetails]
+    :: Trace IO Text -> DbSyncEnv -> DbSyncNodePlugin -> [BlockDetails]
     -> ExceptT DbSyncNodeError IO ()
-insertBlockList trce env ledgerState plugin blks =
+insertBlockList trce env plugin blks =
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise is *way* too chatty.
   --newExceptT $ traverseMEither insertBlock blks
   newExceptT
-    . traverseMEither (\ f -> f trce env ledgerState blks)
+    . traverseMEither (\ f -> f trce env blks)
     $ plugInsertBlock plugin
 
 -- | Split the DbAction list into a prefix containing blocks to apply and a postfix.
