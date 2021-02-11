@@ -15,6 +15,7 @@ import qualified Control.Exception as Exception
 
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
+import           Data.Maybe (fromMaybe)
 
 import           Database.Persist.Postgresql (ConnectionString)
 
@@ -46,12 +47,13 @@ toConnectionString pgc =
 
 -- | Read the PostgreSQL configuration from the file at the location specified by the
 -- '$PGPASSFILE' environment variable.
-readPGPassFileEnv :: IO PGConfig
-readPGPassFileEnv = do
-  mpath <- lookupEnv "PGPASSFILE"
+readPGPassFileEnv :: Maybe String -> IO PGConfig
+readPGPassFileEnv mName = do
+  let name = fromMaybe "PGPASSFILE" mName
+  mpath <- lookupEnv name
   case mpath of
     Just fp -> readPGPassFileExit (PGPassFile fp)
-    Nothing -> error "Environment variable 'PGPASSFILE' not set."
+    Nothing -> error $ mconcat [ "Environment variable '", name, " not set." ]
 
 -- | Read the PostgreSQL configuration from the specified file.
 readPGPassFile :: PGPassFile -> IO (Maybe PGConfig)

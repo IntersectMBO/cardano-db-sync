@@ -23,6 +23,8 @@ library
   hs-source-dirs:       src
 
   ghc-options:          -Wall
+                        -Werror
+                        -Wunused-imports
                         -Wcompat
                         -fwarn-redundant-constraints
                         -fwarn-incomplete-patterns

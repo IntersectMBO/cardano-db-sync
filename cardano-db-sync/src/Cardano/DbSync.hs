@@ -32,12 +32,16 @@ import           Cardano.BM.Trace (Trace)
 
 import qualified Cardano.Db as DB
 
-import           Cardano.DbSync.Era
+import           Cardano.DbSync.Era (insertValidateGenesisDist)
 import           Cardano.DbSync.Plugin.Default (defDbSyncNodePlugin)
 import           Cardano.DbSync.Rollback (unsafeRollback)
+import           Cardano.Sync.Database (runDbThread)
 
-import           Cardano.Sync
-import           Cardano.Sync.Config.Types
+import           Cardano.Sync (Block (..), SyncDataLayer (..), SyncNodePlugin (..),
+                   configureLogging, runSyncNode)
+import           Cardano.Sync.Config.Types (ConfigFile (..), GenesisFile (..), LedgerStateDir (..),
+                   MigrationDir (..), NetworkName (..), SocketPath (..), SyncCommand (..),
+                   SyncNodeParams (..))
 import           Cardano.Sync.Tracing.ToObjectOrphans ()
 
 import           Database.Persist.Postgresql (withPostgresqlConn)
@@ -47,13 +51,16 @@ import           Database.Persist.Sql (SqlBackend)
 
 runDbSyncNode :: (SqlBackend -> SyncNodePlugin) -> SyncNodeParams -> IO ()
 runDbSyncNode mkPlugin params = do
+
+    -- Read the PG connection info
+    pgConfig <- DB.readPGPassFileEnv Nothing
+
     let MigrationDir migrationDir = enpMigrationDir params
-    DB.runMigrations identity True (DB.MigrationDir migrationDir) (Just $ DB.LogFileDir "/tmp")
+    DB.runMigrations pgConfig True (DB.MigrationDir migrationDir) (Just $ DB.LogFileDir "/tmp")
 
-    trce <- configureLogging params
+    trce <- configureLogging params "db-sync-node"
 
-    -- Open up a connection and use it
-    connectionString <- DB.toConnectionString <$> DB.readPGPassFileEnv
+    let connectionString = DB.toConnectionString pgConfig
 
     DB.runIohkLogging trce $ withPostgresqlConn connectionString $ \backend ->
       lift $ do
@@ -62,8 +69,8 @@ runDbSyncNode mkPlugin params = do
           Just slotNo -> void $ unsafeRollback trce slotNo
           Nothing -> pure ()
 
-        runSyncNode (mkSyncDataLayer trce backend) (mkPlugin backend)
-            params (insertValidateGenesisDist backend)
+        runSyncNode (mkSyncDataLayer trce backend) trce (mkPlugin backend)
+            params (insertValidateGenesisDist backend) runDbThread
 
 -- -------------------------------------------------------------------------------------------------
 

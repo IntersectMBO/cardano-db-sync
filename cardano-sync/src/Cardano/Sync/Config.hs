@@ -42,14 +42,14 @@ import qualified Data.Yaml as Yaml
 
 import           System.FilePath (takeDirectory, (</>))
 
-configureLogging :: SyncNodeParams -> IO (Trace IO Text)
-configureLogging params = do
+configureLogging :: SyncNodeParams -> Text -> IO (Trace IO Text)
+configureLogging params loggingName = do
     let configFile = enpConfigFile params
     enc <- readSyncNodeConfig configFile
 
     if not (dncEnableLogging enc)
        then pure Logging.nullTracer
-       else liftIO $ Logging.setupTrace (Right $ dncLoggingConfig enc) "db-sync-node"
+       else liftIO $ Logging.setupTrace (Right $ dncLoggingConfig enc) loggingName
 
 readSyncNodeConfig :: ConfigFile -> IO SyncNodeConfig
 readSyncNodeConfig (ConfigFile fp) = do

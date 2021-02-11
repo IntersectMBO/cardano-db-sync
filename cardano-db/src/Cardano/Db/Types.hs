@@ -19,7 +19,6 @@ module Cardano.Db.Types
   , word64ToAda
   ) where
 
-
 import           Data.Aeson.Encoding (unsafeToEncoding)
 import           Data.Aeson.Types (FromJSON (..), ToJSON (..))
 import qualified Data.Aeson.Types as Aeson

@@ -52,9 +52,8 @@ newtype LogFileDir
 
 -- | Run the migrations in the provided 'MigrationDir' and write date stamped log file
 -- to 'LogFileDir'.
-runMigrations :: (PGConfig -> PGConfig) -> Bool -> MigrationDir -> Maybe LogFileDir -> IO ()
-runMigrations cfgOverride quiet migrationDir mLogfiledir = do
-    pgconfig <- cfgOverride <$> readPGPassFileEnv
+runMigrations :: PGConfig -> Bool -> MigrationDir -> Maybe LogFileDir -> IO ()
+runMigrations pgconfig quiet migrationDir mLogfiledir = do
     scripts <- getMigrationScripts migrationDir
     case mLogfiledir of
       Nothing -> do

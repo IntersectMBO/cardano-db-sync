@@ -25,7 +25,8 @@ tests =
 migrationTest :: IO ()
 migrationTest = do
   let schemaDir = MigrationDir "../schema"
-  runMigrations id True schemaDir (Just $ LogFileDir "/tmp")
+  pgConfig <- readPGPassFileEnv Nothing
+  runMigrations pgConfig True schemaDir (Just $ LogFileDir "/tmp")
   expected <- readSchemaVersion schemaDir
   actual <- getDbSchemaVersion
   unless (expected == actual) $

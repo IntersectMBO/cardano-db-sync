@@ -18,12 +18,12 @@ flags:
     external-libsodium-vrf: false
 
 ghc-options:
-  cardano-sync:             -Wall -Werror -fwarn-redundant-constraints -Wunused-imports
-  cardano-db:               -Wall -Werror -fwarn-redundant-constraints -Wunused-imports
-  cardano-db-test:          -Wall -Werror -fwarn-redundant-constraints -Wunused-imports
-  cardano-db-sync:          -Wall -Werror -fwarn-redundant-constraints -Wunused-imports
+  cardano-sync: -Wall -Werror -fwarn-redundant-constraints -Wunused-imports
+  cardano-db: -Wall -Werror -fwarn-redundant-constraints -Wunused-imports
+  cardano-db-test: -Wall -Werror -fwarn-redundant-constraints -Wunused-imports
+  cardano-db-sync: -Wall -Werror -fwarn-redundant-constraints -Wunused-imports
   cardano-db-sync-extended: -Wall -Werror -fwarn-redundant-constraints -Wunused-imports
-  cardano-db-tool:          -Wall -Werror -fwarn-redundant-constraints -Wunused-imports
+  cardano-db-tool: -Wall -Werror -fwarn-redundant-constraints -Wunused-imports
 
 # Generate files required by Weeder.
 # See https://github.com/ndmitchell/weeder/issues/53
