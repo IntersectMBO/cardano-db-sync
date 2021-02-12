@@ -44,7 +44,7 @@ import           Database.Persist.Sql (SqlBackend)
 -- If these transactions are already in the DB, they are validated.
 insertValidateGenesisDist
     :: SqlBackend -> Trace IO Text -> Text -> Byron.Config
-    -> ExceptT DbSyncNodeError IO ()
+    -> ExceptT SyncNodeError IO ()
 insertValidateGenesisDist backend tracer networkName cfg = do
     -- Setting this to True will log all 'Persistent' operations which is great
     -- for debugging, but otherwise *way* too chatty.
@@ -52,7 +52,7 @@ insertValidateGenesisDist backend tracer networkName cfg = do
       then newExceptT $ DB.runDbIohkLogging backend tracer insertAction
       else newExceptT $ DB.runDbIohkNoLogging backend insertAction
   where
-    insertAction :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either DbSyncNodeError ())
+    insertAction :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either SyncNodeError ())
     insertAction = do
       ebid <- DB.queryBlockId (configGenesisHash cfg)
       case ebid of
@@ -111,7 +111,7 @@ insertValidateGenesisDist backend tracer networkName cfg = do
 validateGenesisDistribution
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> Text -> Byron.Config -> DB.BlockId
-    -> ReaderT SqlBackend m (Either DbSyncNodeError ())
+    -> ReaderT SqlBackend m (Either SyncNodeError ())
 validateGenesisDistribution tracer networkName cfg bid =
   runExceptT $ do
     meta <- liftLookupFail "validateGenesisDistribution" DB.queryMeta

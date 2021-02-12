@@ -33,23 +33,23 @@ main = do
 
 -- -------------------------------------------------------------------------------------------------
 
-opts :: ParserInfo DbSyncCommand
+opts :: ParserInfo SyncCommand
 opts =
   Opt.info (pCommandLine <**> Opt.helper)
     ( Opt.fullDesc
     <> Opt.progDesc "Extended Cardano POstgreSQL sync node."
     )
 
-pCommandLine :: Parser DbSyncCommand
+pCommandLine :: Parser SyncCommand
 pCommandLine =
   asum
     [ pVersionCommand
     , CmdRun <$> pRunDbSyncNode
     ]
 
-pRunDbSyncNode :: Parser DbSyncNodeParams
+pRunDbSyncNode :: Parser SyncNodeParams
 pRunDbSyncNode =
-  DbSyncNodeParams
+  SyncNodeParams
     <$> pConfigFile
     <*> pSocketPath
     <*> pLedgerStateDir
@@ -100,7 +100,7 @@ pSlotNo =
     <> Opt.metavar "WORD"
     )
 
-pVersionCommand :: Parser DbSyncCommand
+pVersionCommand :: Parser SyncCommand
 pVersionCommand =
   asum
     [ Opt.subparser

@@ -33,7 +33,7 @@ import qualified Ouroboros.Consensus.Cardano as Consensus
 import qualified Ouroboros.Consensus.Cardano.CanHardFork as Shelley
 
 data NodeConfig = NodeConfig
-  { ncProtocol :: !DbSyncProtocol
+  { ncProtocol :: !SyncProtocol
   , ncPBftSignatureThreshold :: !(Maybe Double)
   , ncByronGenesisFile :: !GenesisFile
   , ncByronGenesisHash :: !GenesisHashByron

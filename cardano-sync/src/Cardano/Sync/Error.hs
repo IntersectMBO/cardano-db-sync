@@ -2,14 +2,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.Sync.Error
-  ( DbSyncInvariant (..)
-  , DbSyncNodeError (..)
+  ( SyncInvariant (..)
+  , SyncNodeError (..)
   , annotateInvariantTx
   , bsBase16Encode
   , dbSyncNodeError
   , dbSyncInvariant
-  , renderDbSyncInvariant
-  , renderDbSyncNodeError
+  , renderSyncInvariant
+  , renderSyncNodeError
   ) where
 
 import           Cardano.Prelude
@@ -27,32 +27,32 @@ import qualified Data.Text.Encoding as Text
 import qualified Cardano.Sync.Era.Byron.Util as Byron
 import           Cardano.Sync.Util
 
-data DbSyncInvariant
+data SyncInvariant
   = EInvInOut !Word64 !Word64
   | EInvTxInOut !Byron.Tx !Word64 !Word64
 
-data DbSyncNodeError
+data SyncNodeError
   = NEError !Text
-  | NEInvariant !Text !DbSyncInvariant
+  | NEInvariant !Text !SyncInvariant
   | NEBlockMismatch !Word64 !ByteString !ByteString
   | NEByronConfig !FilePath !Byron.ConfigurationError
   | NEShelleyConfig !FilePath !Text
   | NECardanoConfig !Text
 
-annotateInvariantTx :: Byron.Tx -> DbSyncInvariant -> DbSyncInvariant
+annotateInvariantTx :: Byron.Tx -> SyncInvariant -> SyncInvariant
 annotateInvariantTx tx ei =
   case ei of
     EInvInOut inval outval -> EInvTxInOut tx inval outval
     _other -> ei
 
-dbSyncNodeError :: Monad m => Text -> ExceptT DbSyncNodeError m a
+dbSyncNodeError :: Monad m => Text -> ExceptT SyncNodeError m a
 dbSyncNodeError = left . NEError
 
-dbSyncInvariant :: Monad m => Text -> DbSyncInvariant -> ExceptT DbSyncNodeError m a
+dbSyncInvariant :: Monad m => Text -> SyncInvariant -> ExceptT SyncNodeError m a
 dbSyncInvariant loc = left . NEInvariant loc
 
-renderDbSyncInvariant :: DbSyncInvariant -> Text
-renderDbSyncInvariant ei =
+renderSyncInvariant :: SyncInvariant -> Text
+renderSyncInvariant ei =
   case ei of
     EInvInOut inval outval ->
       mconcat [ "input value ", textShow inval, " < output value ", textShow outval ]
@@ -63,11 +63,11 @@ renderDbSyncInvariant ei =
         , "\n", textShow tx
         ]
 
-renderDbSyncNodeError :: DbSyncNodeError -> Text
-renderDbSyncNodeError ne =
+renderSyncNodeError :: SyncNodeError -> Text
+renderSyncNodeError ne =
   case ne of
     NEError t -> "Error: " <> t
-    NEInvariant loc i -> mconcat [ loc, ": " <> renderDbSyncInvariant i ]
+    NEInvariant loc i -> mconcat [ loc, ": " <> renderSyncInvariant i ]
     NEBlockMismatch blkNo hashDb hashBlk ->
       mconcat
         [ "Block mismatch for block number ", textShow blkNo, ", db has "

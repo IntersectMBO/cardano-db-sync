@@ -9,9 +9,9 @@
 
 module Cardano.DbSync
   ( ConfigFile (..)
-  , DbSyncCommand (..)
-  , DbSyncNodeParams (..)
-  , DbSyncNodePlugin (..)
+  , SyncCommand (..)
+  , SyncNodeParams (..)
+  , SyncNodePlugin (..)
   , GenesisFile (..)
   , LedgerStateDir (..)
   , NetworkName (..)
@@ -45,7 +45,7 @@ import           Database.Persist.Postgresql (withPostgresqlConn)
 import           Database.Persist.Sql (SqlBackend)
 
 
-runDbSyncNode :: (SqlBackend -> DbSyncNodePlugin) -> DbSyncNodeParams -> IO ()
+runDbSyncNode :: (SqlBackend -> SyncNodePlugin) -> SyncNodeParams -> IO ()
 runDbSyncNode mkPlugin params = do
     let MigrationDir migrationDir = enpMigrationDir params
     DB.runMigrations identity True (DB.MigrationDir migrationDir) (Just $ DB.LogFileDir "/tmp")

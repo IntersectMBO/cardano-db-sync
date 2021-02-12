@@ -31,12 +31,12 @@ import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 
--- | The default DbSyncNodePlugin.
+-- | The default SyncNodePlugin.
 -- Does exactly what the cardano-db-sync node did before the plugin system was added.
 -- The non-default node takes this structure and extends the lists.
-defDbSyncNodePlugin :: SqlBackend -> DbSyncNodePlugin
+defDbSyncNodePlugin :: SqlBackend -> SyncNodePlugin
 defDbSyncNodePlugin backend =
-  DbSyncNodePlugin
+  SyncNodePlugin
     { plugOnStartup = []
     , plugInsertBlock = [insertDefaultBlock backend]
     , plugRollbackBlock = [rollbackToSlot backend]
@@ -45,15 +45,15 @@ defDbSyncNodePlugin backend =
 -- -------------------------------------------------------------------------------------------------
 
 insertDefaultBlock
-    :: SqlBackend -> Trace IO Text -> DbSyncEnv -> [BlockDetails]
-    -> IO (Either DbSyncNodeError ())
+    :: SqlBackend -> Trace IO Text -> SyncEnv -> [BlockDetails]
+    -> IO (Either SyncNodeError ())
 insertDefaultBlock backend tracer env blockDetails =
     DB.runDbAction backend (Just tracer) $
       traverseMEither insert blockDetails
   where
     insert
         :: BlockDetails
-        -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
+        -> ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
     insert (BlockDetails cblk details) = do
       -- Calculate the new ledger state to pass to the DB insert functions but do not yet
       -- update ledgerStateVar.
@@ -68,6 +68,6 @@ insertDefaultBlock backend tracer env blockDetails =
                 BlockMary blk ->
                   insertShelleyBlock tracer env (Generic.fromMaryBlock blk) lStateSnap details
       -- Now we update it in ledgerStateVar and (possibly) store it to disk.
-      liftIO $ saveLedgerState (envLedger env)
+      liftIO $ saveLedgerStateMaybe (envLedger env)
                     lStateSnap (isSyncedWithinSeconds details 60)
       pure res

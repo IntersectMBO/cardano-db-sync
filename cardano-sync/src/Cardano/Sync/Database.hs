@@ -36,12 +36,12 @@ data NextState
   | Done
   deriving Eq
 
-runDbStartup :: Trace IO Text -> DbSyncNodePlugin -> IO ()
+runDbStartup :: Trace IO Text -> SyncNodePlugin -> IO ()
 runDbStartup trce plugin =
     mapM_ (\action -> action trce) $ plugOnStartup plugin
 
 runDbThread
-    :: Trace IO Text -> DbSyncEnv -> DbSyncNodePlugin -> Metrics
+    :: Trace IO Text -> SyncEnv -> SyncNodePlugin -> Metrics
     -> DbActionQueue
     -> IO ()
 runDbThread trce env plugin metrics queue = do
@@ -66,19 +66,19 @@ runDbThread trce env plugin metrics queue = do
         Just blkNo -> Gauge.set (fromIntegral blkNo) $ mDbHeight metrics
 
       case eNextState of
-        Left err -> logError trce $ renderDbSyncNodeError err
+        Left err -> logError trce $ renderSyncNodeError err
         Right Continue -> loop
         Right Done -> pure ()
 
 -- | Run the list of 'DbAction's. Block are applied in a single set (as a transaction)
 -- and other operations are applied one-by-one.
 runActions
-    :: Trace IO Text -> DbSyncEnv -> DbSyncNodePlugin -> [DbAction]
-    -> ExceptT DbSyncNodeError IO NextState
+    :: Trace IO Text -> SyncEnv -> SyncNodePlugin -> [DbAction]
+    -> ExceptT SyncNodeError IO NextState
 runActions trce env plugin actions = do
     dbAction Continue actions
   where
-    dbAction :: NextState -> [DbAction] -> ExceptT DbSyncNodeError IO NextState
+    dbAction :: NextState -> [DbAction] -> ExceptT SyncNodeError IO NextState
     dbAction next [] = pure next
     dbAction Done _ = pure Done
     dbAction Continue xs =
@@ -96,16 +96,16 @@ runActions trce env plugin actions = do
             else dbAction Continue zs
 
 runRollbacks
-    :: Trace IO Text -> DbSyncNodePlugin -> CardanoPoint
-    -> ExceptT DbSyncNodeError IO ()
+    :: Trace IO Text -> SyncNodePlugin -> CardanoPoint
+    -> ExceptT SyncNodeError IO ()
 runRollbacks trce plugin point =
   newExceptT
     . traverseMEither (\ f -> f trce point)
     $ plugRollbackBlock plugin
 
 insertBlockList
-    :: Trace IO Text -> DbSyncEnv -> DbSyncNodePlugin -> [BlockDetails]
-    -> ExceptT DbSyncNodeError IO ()
+    :: Trace IO Text -> SyncEnv -> SyncNodePlugin -> [BlockDetails]
+    -> ExceptT SyncNodeError IO ()
 insertBlockList trce env plugin blks =
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise is *way* too chatty.

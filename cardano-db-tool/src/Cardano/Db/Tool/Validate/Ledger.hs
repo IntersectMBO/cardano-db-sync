@@ -34,8 +34,8 @@ data LedgerValidationParams = LedgerValidationParams
 validateLedger :: LedgerValidationParams -> IO ()
 validateLedger params =
   withIOManager $ \ _ -> do
-    enc <- readDbSyncNodeConfig (vpConfigFile params)
-    genCfg <- orDie renderDbSyncNodeError $ readCardanoGenesisConfig enc
+    enc <- readSyncNodeConfig (vpConfigFile params)
+    genCfg <- orDie renderSyncNodeError $ readCardanoGenesisConfig enc
     ledgerFiles <- listLedgerStateFilesOrdered (vpLedgerStateDir params)
     slotNo <- SlotNo <$> DB.runDbNoLogging DB.queryLatestSlotNo
     validate params genCfg slotNo ledgerFiles

@@ -63,12 +63,12 @@ epochPluginOnStartup backend trce =
         liftIO $ atomicWriteIORef latestCachedEpochVar (Just backOne)
 
 epochPluginInsertBlock
-    :: SqlBackend -> Trace IO Text -> DbSyncEnv -> [BlockDetails]
-    -> IO (Either DbSyncNodeError ())
+    :: SqlBackend -> Trace IO Text -> SyncEnv -> [BlockDetails]
+    -> IO (Either SyncNodeError ())
 epochPluginInsertBlock backend trce _dbSyncEnv blockDetails =
     DB.runDbAction backend (Just trce) $ traverseMEither insert blockDetails
   where
-    insert :: BlockDetails -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
+    insert :: BlockDetails -> ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
     insert (BlockDetails cblk details) = do
       case cblk of
         BlockByron bblk ->
@@ -85,7 +85,7 @@ epochPluginInsertBlock backend trce _dbSyncEnv blockDetails =
         BlockMary _mblk -> epochUpdate details
 
     -- What we do here is completely independent of Shelley/Allegra/Mary eras.
-    epochUpdate :: SlotDetails -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
+    epochUpdate :: SlotDetails -> ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
     epochUpdate details = do
       when (sdSlotTime details > sdCurrentTime details) $
         liftIO . logError trce $ mconcat
@@ -94,14 +94,14 @@ epochPluginInsertBlock backend trce _dbSyncEnv blockDetails =
 
 -- Nothing to be done here.
 -- Rollback will take place in the Default plugin and the epoch table will just be recalculated.
-epochPluginRollbackBlock :: Trace IO Text -> CardanoPoint -> IO (Either DbSyncNodeError ())
+epochPluginRollbackBlock :: Trace IO Text -> CardanoPoint -> IO (Either SyncNodeError ())
 epochPluginRollbackBlock _ _ = pure $ Right ()
 
 -- -------------------------------------------------------------------------------------------------
 
 insertBlock
     :: Trace IO Text -> SlotDetails
-    -> ReaderT SqlBackend (LoggingT IO) (Either DbSyncNodeError ())
+    -> ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
 insertBlock trce details = do
   mLatestCachedEpoch <- liftIO $ readIORef latestCachedEpochVar
   let lastCachedEpoch = fromMaybe 0 mLatestCachedEpoch
@@ -126,7 +126,7 @@ insertBlock trce details = do
 latestCachedEpochVar :: IORef (Maybe Word64)
 latestCachedEpochVar = unsafePerformIO $ newIORef Nothing -- Gets updated later.
 
-updateEpochNum :: (MonadBaseControl IO m, MonadIO m) => Word64 -> Trace IO Text -> ReaderT SqlBackend m (Either DbSyncNodeError ())
+updateEpochNum :: (MonadBaseControl IO m, MonadIO m) => Word64 -> Trace IO Text -> ReaderT SqlBackend m (Either SyncNodeError ())
 updateEpochNum epochNum trce = do
     DB.transactionCommit
     mid <- queryEpochId epochNum
@@ -134,13 +134,13 @@ updateEpochNum epochNum trce = do
     liftIO $ atomicWriteIORef latestCachedEpochVar (Just epochNum)
     pure res
   where
-    updateEpoch :: MonadIO m => EpochId -> ReaderT SqlBackend m (Either DbSyncNodeError ())
+    updateEpoch :: MonadIO m => EpochId -> ReaderT SqlBackend m (Either SyncNodeError ())
     updateEpoch epochId = do
       mEpoch <- DB.queryCalcEpochEntry epochNum
       epoch <- maybe (liftIO calcEpochFromHistory) pure mEpoch
       Right <$> replace epochId epoch
 
-    insertEpoch :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either DbSyncNodeError ())
+    insertEpoch :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either SyncNodeError ())
     insertEpoch = do
       mEpoch <- DB.queryCalcEpochEntry epochNum
       liftIO . logInfo trce $ "epochPluginInsertBlock: epoch " <> textShow epochNum

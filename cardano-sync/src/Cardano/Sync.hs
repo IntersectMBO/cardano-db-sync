@@ -10,9 +10,9 @@
 
 module Cardano.Sync
   ( ConfigFile (..)
-  , DbSyncCommand (..)
-  , DbSyncNodeParams (..)
-  , DbSyncNodePlugin (..)
+  , SyncCommand (..)
+  , SyncNodeParams (..)
+  , SyncNodePlugin (..)
   , GenesisFile (..)
   , LedgerStateDir (..)
   , NetworkName (..)
@@ -21,7 +21,7 @@ module Cardano.Sync
   , SyncDataLayer (..)
   , Block (..)
   , Meta (..)
-  , DbSyncEnv (..)
+  , SyncEnv (..)
 
   , configureLogging
   , runSyncNode
@@ -45,7 +45,7 @@ import           Cardano.Sync.Config
 import           Cardano.Sync.Database
 import           Cardano.Sync.Error
 import           Cardano.Sync.Metrics
-import           Cardano.Sync.Plugin (DbSyncNodePlugin (..))
+import           Cardano.Sync.Plugin (SyncNodePlugin (..))
 import           Cardano.Sync.StateQuery (StateQueryTMVar, getSlotDetails, localStateQueryHandler,
                    newStateQueryTMVar)
 import           Cardano.Sync.Tracing.ToObjectOrphans ()
@@ -110,19 +110,19 @@ type InsertValidateGenesisFunction
     = Trace IO Text
     -> NetworkName
     -> GenesisConfig
-    -> ExceptT DbSyncNodeError IO ()
+    -> ExceptT SyncNodeError IO ()
 
 runSyncNode
     :: SyncDataLayer
-    -> DbSyncNodePlugin
-    -> DbSyncNodeParams
+    -> SyncNodePlugin
+    -> SyncNodeParams
     -> InsertValidateGenesisFunction
     -> IO ()
 runSyncNode dataLayer plugin enp insertValidateGenesisDist =
   withIOManager $ \iomgr -> do
 
     let configFile = enpConfigFile enp
-    enc <- readDbSyncNodeConfig configFile
+    enc <- readSyncNodeConfig configFile
 
     createDirectoryIfMissing True (unLedgerStateDir $ enpLedgerStateDir enp)
 
@@ -133,7 +133,7 @@ runSyncNode dataLayer plugin enp insertValidateGenesisDist =
     logInfo trce $ "Using byron genesis file from: " <> (show . unGenesisFile $ dncByronGenesisFile enc)
     logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile enc)
 
-    orDie renderDbSyncNodeError $ do
+    orDie renderSyncNodeError $ do
       genCfg <- readCardanoGenesisConfig enc
       logProtocolMagicId trce $ genesisProtocolMagicId genCfg
 
@@ -145,8 +145,8 @@ runSyncNode dataLayer plugin enp insertValidateGenesisDist =
       liftIO $ runDbStartup trce plugin
       case genCfg of
           GenesisCardano _ bCfg _sCfg -> do
-            syncEnv <- ExceptT $ mkDbSyncEnvFromConfig dataLayer (enpLedgerStateDir enp) genCfg
-            liftIO $ runDbSyncNodeNodeClient (dncPrometheusPort enc) syncEnv
+            syncEnv <- ExceptT $ mkSyncEnvFromConfig dataLayer (enpLedgerStateDir enp) genCfg
+            liftIO $ runSyncNodeNodeClient (dncPrometheusPort enc) syncEnv
                 iomgr trce plugin (cardanoCodecConfig bCfg) (enpSocketPath enp)
   where
     cardanoCodecConfig :: Byron.Config -> CodecConfig CardanoBlock
@@ -159,16 +159,16 @@ runSyncNode dataLayer plugin enp insertValidateGenesisDist =
 
 -- -------------------------------------------------------------------------------------------------
 
-runDbSyncNodeNodeClient
+runSyncNodeNodeClient
     :: Int
-    -> DbSyncEnv
+    -> SyncEnv
     -> IOManager
     -> Trace IO Text
-    -> DbSyncNodePlugin
+    -> SyncNodePlugin
     -> CodecConfig CardanoBlock
     -> SocketPath
     -> IO ()
-runDbSyncNodeNodeClient port env iomgr trce plugin codecConfig (SocketPath socketPath) = do
+runSyncNodeNodeClient port env iomgr trce plugin codecConfig (SocketPath socketPath) = do
   queryVar <- newStateQueryTMVar
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   withMetricsServer port $ \ metrics ->
@@ -211,8 +211,8 @@ runDbSyncNodeNodeClient port env iomgr trce plugin codecConfig (SocketPath socke
 
 dbSyncProtocols
     :: Trace IO Text
-    -> DbSyncEnv
-    -> DbSyncNodePlugin
+    -> SyncEnv
+    -> SyncNodePlugin
     -> Metrics
     -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
     -> Network.NodeToClientVersion
@@ -328,7 +328,7 @@ getCurrentTipBlockNo dataLayer = do
 chainSyncClient
     :: SyncDataLayer
     -> Trace IO Text
-    -> DbSyncEnv
+    -> SyncEnv
     -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
     -> Metrics
     -> [Point CardanoBlock]
@@ -393,7 +393,7 @@ chainSyncClient dataLayer trce env queryVar metrics latestPoints currentTip acti
                 pure $ finish newTip tip
         }
 
-logProtocolMagicId :: Trace IO Text -> Crypto.ProtocolMagicId -> ExceptT DbSyncNodeError IO ()
+logProtocolMagicId :: Trace IO Text -> Crypto.ProtocolMagicId -> ExceptT SyncNodeError IO ()
 logProtocolMagicId tracer pm =
   liftIO . logInfo tracer $ mconcat
     [ "NetworkMagic: ", textShow (Crypto.unProtocolMagicId pm)

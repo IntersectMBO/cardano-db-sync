@@ -2,10 +2,10 @@
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.Sync.Api
-  ( DbSyncEnv (..)
+  ( SyncEnv (..)
   , LedgerEnv (..)
   , SyncDataLayer (..)
-  , mkDbSyncEnvFromConfig
+  , mkSyncEnvFromConfig
   , getLatestPoints
   ) where
 
@@ -36,8 +36,8 @@ import qualified Ouroboros.Network.Point as Point
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.Genesis as Shelley
 
-data DbSyncEnv = DbSyncEnv
-  { envProtocol :: !DbSyncProtocol
+data SyncEnv = SyncEnv
+  { envProtocol :: !SyncProtocol
   , envNetworkMagic :: !NetworkMagic
   , envSystemStart :: !SystemStart
   , envDataLayer :: SyncDataLayer
@@ -51,20 +51,20 @@ data SyncDataLayer = SyncDataLayer
   , sdlGetLatestSlotNo :: IO SlotNo
   }
 
-mkDbSyncEnv :: SyncDataLayer -> ProtocolInfo IO CardanoBlock -> Shelley.Network -> NetworkMagic -> SystemStart -> LedgerStateDir -> IO DbSyncEnv
-mkDbSyncEnv dataLayer protocolInfo network networkMagic systemStart dir = do
+mkSyncEnv :: SyncDataLayer -> ProtocolInfo IO CardanoBlock -> Shelley.Network -> NetworkMagic -> SystemStart -> LedgerStateDir -> IO SyncEnv
+mkSyncEnv dataLayer protocolInfo network networkMagic systemStart dir = do
     latestSlot <- sdlGetLatestSlotNo dataLayer
     ledgerEnv <- mkLedgerEnv protocolInfo dir network latestSlot True
-    pure $ DbSyncEnv
-      { envProtocol = DbSyncProtocolCardano
+    return $ SyncEnv
+      { envProtocol = SyncProtocolCardano
       , envNetworkMagic = networkMagic
       , envSystemStart = systemStart
       , envDataLayer = dataLayer
       , envLedger = ledgerEnv
       }
 
-mkDbSyncEnvFromConfig :: SyncDataLayer -> LedgerStateDir -> GenesisConfig -> IO (Either DbSyncNodeError DbSyncEnv)
-mkDbSyncEnvFromConfig dataLayer dir genCfg =
+mkSyncEnvFromConfig :: SyncDataLayer -> LedgerStateDir -> GenesisConfig -> IO (Either SyncNodeError SyncEnv)
+mkSyncEnvFromConfig dataLayer dir genCfg =
     case genCfg of
       GenesisCardano _ bCfg sCfg
         | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -79,7 +79,7 @@ mkDbSyncEnvFromConfig dataLayer dir genCfg =
                 [ "SystemStart ", textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
                 , " /= ", textShow (Shelley.sgSystemStart $ scConfig sCfg)
                 ]
-        | otherwise -> Right <$> mkDbSyncEnv
+        | otherwise -> Right <$> mkSyncEnv
                          dataLayer
                          (mkProtocolInfoCardano genCfg)
                          (Shelley.sgNetworkId (scConfig sCfg))
@@ -87,7 +87,7 @@ mkDbSyncEnvFromConfig dataLayer dir genCfg =
                          (SystemStart (Byron.gdStartTime $ Byron.configGenesisData bCfg))
                          dir
 
-getLatestPoints :: DbSyncEnv -> IO [CardanoPoint]
+getLatestPoints :: SyncEnv -> IO [CardanoPoint]
 getLatestPoints env = do
     files <- listLedgerStateFilesOrdered $ leDir $ envLedger env
     catMaybes <$> mapM validLedgerFileToPoint files
