@@ -231,6 +231,7 @@ share
     poolHashId          PoolHashId          OnDeleteCascade
     activeEpochNo       Word64
     txId                TxId                OnDeleteCascade
+    slotNo              Word64              sqltype=uinteger
     UniqueDelegation    addrId poolHashId txId
 
   -- When was a staking key/script registered

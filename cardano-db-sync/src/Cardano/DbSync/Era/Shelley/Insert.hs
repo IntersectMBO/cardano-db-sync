@@ -101,7 +101,7 @@ insertShelleyBlock tracer env blk lStateSnap details = do
                     , DB.blockOpCert = Just $ Generic.blkOpCert blk
                     }
 
-    zipWithM_ (insertTx tracer env blkId (sdEpochNo details)) [0 .. ] (Generic.blkTxs blk)
+    zipWithM_ (insertTx tracer env blkId (sdEpochNo details) (Generic.blkSlotNo blk)) [0 .. ] (Generic.blkTxs blk)
 
     liftIO $ do
       let epoch = unEpochNo (sdEpochNo details)
@@ -164,9 +164,9 @@ renderInsertName eraName =
 
 insertTx
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> SyncEnv -> DB.BlockId -> EpochNo -> Word64 -> Generic.Tx
+    => Trace IO Text -> SyncEnv -> DB.BlockId -> EpochNo -> SlotNo -> Word64 -> Generic.Tx
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertTx tracer env blkId epochNo blockIndex tx = do
+insertTx tracer env blkId epochNo slotNo blockIndex tx = do
     let fees = unCoin $ Generic.txFees tx
         outSum = unCoin $ Generic.txOutSum tx
         withdrawalSum = unCoin $ Generic.txWithdrawalSum tx
@@ -196,7 +196,7 @@ insertTx tracer env blkId epochNo blockIndex tx = do
       Nothing -> pure ()
       Just md -> insertTxMetadata tracer txId md
 
-    mapM_ (insertCertificate tracer env txId epochNo) $ Generic.txCertificates tx
+    mapM_ (insertCertificate tracer env txId epochNo slotNo) $ Generic.txCertificates tx
     mapM_ (insertWithdrawals tracer txId) $ Generic.txWithdrawals tx
 
     case Generic.txParamProposal tx of
@@ -238,11 +238,11 @@ insertTxIn _tracer txInId (Generic.TxIn txId index) = do
 
 insertCertificate
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> SyncEnv -> DB.TxId -> EpochNo -> Generic.TxCertificate
+    => Trace IO Text -> SyncEnv -> DB.TxId -> EpochNo -> SlotNo -> Generic.TxCertificate
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertCertificate tracer env txId epochNo (Generic.TxCertificate idx cert) =
+insertCertificate tracer env txId epochNo slotNo (Generic.TxCertificate idx cert) =
   case cert of
-    Shelley.DCertDeleg deleg -> insertDelegCert tracer env txId idx epochNo deleg
+    Shelley.DCertDeleg deleg -> insertDelegCert tracer env txId idx epochNo slotNo deleg
     Shelley.DCertPool pool -> insertPoolCert tracer epochNo txId idx pool
     Shelley.DCertMir mir -> insertMirCert tracer env txId idx mir
     Shelley.DCertGenesis _gen -> do
@@ -262,13 +262,13 @@ insertPoolCert tracer epoch txId idx pCert =
 
 insertDelegCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> SyncEnv -> DB.TxId -> Word16 -> EpochNo -> Shelley.DelegCert StandardCrypto
+    => Trace IO Text -> SyncEnv -> DB.TxId -> Word16 -> EpochNo -> SlotNo -> Shelley.DelegCert StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertDelegCert tracer env txId idx epochNo dCert =
+insertDelegCert tracer env txId idx epochNo slotNo dCert =
   case dCert of
     Shelley.RegKey cred -> insertStakeRegistration tracer txId idx $ Generic.annotateStakingCred env cred
     Shelley.DeRegKey cred -> insertStakeDeregistration tracer env txId idx cred
-    Shelley.Delegate (Shelley.Delegation cred poolkh) -> insertDelegation tracer env txId idx epochNo cred poolkh
+    Shelley.Delegate (Shelley.Delegation cred poolkh) -> insertDelegation tracer env txId idx epochNo slotNo cred poolkh
 
 insertPoolRegister
     :: (MonadBaseControl IO m, MonadIO m)
@@ -428,10 +428,10 @@ insertStakeDeregistration _tracer env txId idx cred = do
 
 insertDelegation
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> SyncEnv -> DB.TxId -> Word16 -> EpochNo
+    => Trace IO Text -> SyncEnv -> DB.TxId -> Word16 -> EpochNo -> SlotNo
     -> Shelley.StakeCredential StandardCrypto -> Shelley.KeyHash 'Shelley.StakePool StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertDelegation _tracer env txId idx (EpochNo epoch) cred poolkh = do
+insertDelegation _tracer env txId idx (EpochNo epoch) slotNo cred poolkh = do
   addrId <- liftLookupFail "insertDelegation" $ queryStakeAddress (Generic.stakingCredHash env cred)
   poolHashId <-liftLookupFail "insertDelegation" $ queryStakePoolKeyHash poolkh
   void . lift . DB.insertDelegation $
@@ -441,6 +441,7 @@ insertDelegation _tracer env txId idx (EpochNo epoch) cred poolkh = do
       , DB.delegationPoolHashId = poolHashId
       , DB.delegationActiveEpochNo = epoch + 2 -- The first epoch where this delegation is valid.
       , DB.delegationTxId = txId
+      , DB.delegationSlotNo = unSlotNo slotNo
       }
 
 insertMirCert
