@@ -61,15 +61,13 @@ queryStakeAddressAndPool
     => Word64 -> ByteString
     -> ReaderT SqlBackend m (Either LookupFail (StakeAddressId, PoolHashId))
 queryStakeAddressAndPool epoch addr = do
-    res <- select . from $ \ (saddr `InnerJoin` dlg `InnerJoin` tx `InnerJoin` blk) -> do
-            on (blk ^. BlockId ==. tx ^. TxBlockId)
-            on (dlg ^. DelegationTxId ==. tx ^. TxId)
+    res <- select . from $ \ (saddr `InnerJoin` dlg) -> do
             on (saddr ^. StakeAddressId ==. dlg ^. DelegationAddrId)
             where_ (saddr ^. StakeAddressHashRaw ==. val addr)
             where_ (dlg ^. DelegationActiveEpochNo <=. val epoch)
-            -- Need to order by BlockSlotNo descending for correct behavior when there are two
+            -- Need to order by DelegationSlotNo descending for correct behavior when there are two
             -- or more delegation certificates in a single epoch.
-            orderBy [desc (blk ^. BlockSlotNo)]
+            orderBy [desc (dlg ^. DelegationSlotNo)]
             pure (saddr ^. StakeAddressId, dlg ^. DelegationPoolHashId)
     maybe queryPool (pure . Right . unValue2) (listToMaybe res)
   where
