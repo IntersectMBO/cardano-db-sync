@@ -49,7 +49,7 @@ import           System.Log.FastLogger (LogStr, fromLogStr)
 -- | Run a DB action logging via the provided Handle.
 runDbHandleLogger :: Handle -> ReaderT SqlBackend (LoggingT IO) a -> IO a
 runDbHandleLogger logHandle dbAction = do
-    pgconf <- readPGPassFileEnv
+    pgconf <- readPGPassFileEnv Nothing
     runHandleLoggerT .
       withPostgresqlConn (toConnectionString pgconf) $ \backend ->
         -- The 'runSqlConnWithIsolation' function starts a transaction, runs the 'dbAction'
@@ -114,7 +114,7 @@ runIohkLogging tracer action =
 -- | Run a DB action without any logging. Mainly for tests.
 runDbNoLogging :: ReaderT SqlBackend (NoLoggingT IO) a -> IO a
 runDbNoLogging action = do
-  pgconfig <- readPGPassFileEnv
+  pgconfig <- readPGPassFileEnv Nothing
   runNoLoggingT .
     withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
       runSqlConnWithIsolation action backend Serializable
@@ -122,7 +122,7 @@ runDbNoLogging action = do
 -- | Run a DB action with stdout logging. Mainly for debugging.
 runDbStdoutLogging :: ReaderT SqlBackend (LoggingT IO) b -> IO b
 runDbStdoutLogging action = do
-  pgconfig <- readPGPassFileEnv
+  pgconfig <- readPGPassFileEnv Nothing
   runStdoutLoggingT .
     withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
       runSqlConnWithIsolation action backend Serializable
@@ -147,13 +147,13 @@ defaultLogStrBS a b c d =
 
 getBackendGhci :: IO SqlBackend
 getBackendGhci = do
-  pgconfig <- readPGPassFileEnv
+  pgconfig <- readPGPassFileEnv Nothing
   connection <- connectPostgreSQL (toConnectionString pgconfig)
   openSimpleConn (defaultOutput stdout) connection
 
 ghciDebugQuery :: SqlSelect a r => SqlQuery a -> IO ()
 ghciDebugQuery query = do
-  pgconfig <- readPGPassFileEnv
+  pgconfig <- readPGPassFileEnv Nothing
   runStdoutLoggingT . withPostgresqlConn (toConnectionString pgconfig) $ \backend -> do
     let (sql,params) = toRawSql SELECT (backend, initialIdentState) query
     liftIO $ do

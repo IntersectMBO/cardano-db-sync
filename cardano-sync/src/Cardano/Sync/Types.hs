@@ -55,12 +55,7 @@ data Block = Block
 
 -- The startTime must be unique!
 data Meta = Meta
-    { mProtocolConst :: !Word64
-    -- ^ The block security parameter.
-    , mSlotDuration  :: !Word64
-    -- ^ Slot duration in milliseconds.
-    , mStartTime     :: !UTCTime
-    , mSlotsPerEpoch :: !Word64
+    { mStartTime     :: !UTCTime
     , mNetworkName   :: !(Maybe Text)
     } deriving (Eq, Show)
 

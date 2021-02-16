@@ -40,7 +40,9 @@ runCommand cmd =
   case cmd of
     CreateMigration mdir -> doCreateMigration mdir
     Rollback slotNo -> runRollback slotNo
-    RunMigrations mdir mldir -> runMigrations id False mdir mldir
+    RunMigrations mdir mldir -> do
+        pgConfig <- readPGPassFileEnv Nothing
+        runMigrations pgConfig False mdir mldir
     UtxoSetAtBlock blkid -> utxoSetAtSlot blkid
     ValidateDb -> runDbValidation
     ValidateAddressBalance params -> runLedgerValidation params

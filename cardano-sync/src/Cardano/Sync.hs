@@ -32,7 +32,6 @@ import           Cardano.Prelude hiding (Meta, Nat, option, (%))
 import           Control.Tracer (Tracer)
 
 import           Cardano.BM.Data.Tracer (ToLogObject (..))
-import qualified Cardano.BM.Setup as Logging
 import           Cardano.BM.Trace (Trace, appendName, logError, logInfo)
 import qualified Cardano.BM.Trace as Logging
 
@@ -42,7 +41,8 @@ import qualified Cardano.Crypto as Crypto
 
 import           Cardano.Sync.Api
 import           Cardano.Sync.Config
-import           Cardano.Sync.Database
+import           Cardano.Sync.Database (DbAction (..), DbActionQueue, lengthDbActionQueue,
+                   mkDbApply, mkDbRollback, newDbActionQueue, runDbStartup, writeDbActionQueue)
 import           Cardano.Sync.Error
 import           Cardano.Sync.Metrics
 import           Cardano.Sync.Plugin (SyncNodePlugin (..))
@@ -112,23 +112,29 @@ type InsertValidateGenesisFunction
     -> GenesisConfig
     -> ExceptT SyncNodeError IO ()
 
+type RunDBThreadFunction
+    =  Trace IO Text
+    -> SyncEnv
+    -> SyncNodePlugin
+    -> Metrics
+    -> DbActionQueue
+    -> IO ()
+
 runSyncNode
     :: SyncDataLayer
+    -> Trace IO Text
     -> SyncNodePlugin
     -> SyncNodeParams
     -> InsertValidateGenesisFunction
+    -> RunDBThreadFunction
     -> IO ()
-runSyncNode dataLayer plugin enp insertValidateGenesisDist =
+runSyncNode dataLayer trce plugin enp insertValidateGenesisDist runDBThreadFunction =
   withIOManager $ \iomgr -> do
 
     let configFile = enpConfigFile enp
     enc <- readSyncNodeConfig configFile
 
     createDirectoryIfMissing True (unLedgerStateDir $ enpLedgerStateDir enp)
-
-    trce <- if not (dncEnableLogging enc)
-              then pure Logging.nullTracer
-              else liftIO $ Logging.setupTrace (Right $ dncLoggingConfig enc) "db-sync-node"
 
     logInfo trce $ "Using byron genesis file from: " <> (show . unGenesisFile $ dncByronGenesisFile enc)
     logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile enc)
@@ -146,8 +152,8 @@ runSyncNode dataLayer plugin enp insertValidateGenesisDist =
       case genCfg of
           GenesisCardano _ bCfg _sCfg -> do
             syncEnv <- ExceptT $ mkSyncEnvFromConfig dataLayer (enpLedgerStateDir enp) genCfg
-            liftIO $ runSyncNodeNodeClient (dncPrometheusPort enc) syncEnv
-                iomgr trce plugin (cardanoCodecConfig bCfg) (enpSocketPath enp)
+            liftIO $ runSyncNodeNodeClient (dncPrometheusPort enc) syncEnv iomgr trce plugin
+                        runDBThreadFunction (cardanoCodecConfig bCfg) (enpSocketPath enp)
   where
     cardanoCodecConfig :: Byron.Config -> CodecConfig CardanoBlock
     cardanoCodecConfig cfg =
@@ -165,10 +171,11 @@ runSyncNodeNodeClient
     -> IOManager
     -> Trace IO Text
     -> SyncNodePlugin
+    -> RunDBThreadFunction
     -> CodecConfig CardanoBlock
     -> SocketPath
     -> IO ()
-runSyncNodeNodeClient port env iomgr trce plugin codecConfig (SocketPath socketPath) = do
+runSyncNodeNodeClient port env iomgr trce plugin runDBThreadFunction codecConfig (SocketPath socketPath) = do
   queryVar <- newStateQueryTMVar
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   withMetricsServer port $ \ metrics ->
@@ -178,7 +185,7 @@ runSyncNodeNodeClient port env iomgr trce plugin codecConfig (SocketPath socketP
       (envNetworkMagic env)
       networkSubscriptionTracers
       clientSubscriptionParams
-      (dbSyncProtocols trce env plugin metrics queryVar)
+      (dbSyncProtocols trce env plugin metrics queryVar runDBThreadFunction)
   where
     clientSubscriptionParams =
       ClientSubscriptionParams
@@ -215,11 +222,12 @@ dbSyncProtocols
     -> SyncNodePlugin
     -> Metrics
     -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
+    -> RunDBThreadFunction
     -> Network.NodeToClientVersion
     -> ClientCodecs CardanoBlock IO
     -> ConnectionId LocalAddress
     -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols trce env plugin metrics queryVar version codecs _connectionId =
+dbSyncProtocols trce env plugin metrics queryVar runDBThreadFunction version codecs _connectionId =
     NodeToClientProtocols
       { localChainSyncProtocol = localChainSyncPtcl
       , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -242,8 +250,9 @@ dbSyncProtocols trce env plugin metrics queryVar version codecs _connectionId =
         currentTip <- getCurrentTipBlockNo (envDataLayer env)
         logDbState (envDataLayer env) trce
         actionQueue <- newDbActionQueue
+
         race_
-            (runDbThread trce env plugin metrics actionQueue)
+            (runDBThreadFunction trce env plugin metrics actionQueue)
             (runPipelinedPeer
                 localChainSyncTracer
                 (cChainSyncCodec codecs)
@@ -251,6 +260,7 @@ dbSyncProtocols trce env plugin metrics queryVar version codecs _connectionId =
                 (chainSyncClientPeerPipelined
                     $ chainSyncClient (envDataLayer env) trce env queryVar metrics latestPoints currentTip actionQueue)
             )
+
         atomically $ writeDbActionQueue actionQueue DbFinish
         -- We should return leftover bytes returned by 'runPipelinedPeer', but
         -- client application do not care about them (it's only important if one
