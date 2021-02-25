@@ -1,4 +1,4 @@
-index-state: 2021-01-08T00:00:00Z
+index-state: 2021-01-10T00:00:00Z
 
 packages:
   cardano-db
@@ -58,8 +58,8 @@ package ouroboros-consensus-cardano
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-base
-  tag: b364d925e0a72689ecba40dd1f4899f76170b894
-  --sha256: 0igb4gnzlwxy1h40vy5s1aysmaa04wypxn7sn67qy6din7ysmad3
+  tag: 4251c0bb6e4f443f00231d28f5f70d42876da055
+  --sha256: 02a61ymvx054pcdcgvg5qj9kpybiajg993nr22iqiya196jmgciv
   subdir:
     binary
     binary/test
@@ -76,8 +76,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-ledger-specs
-  tag: 097890495cbb0e8b62106bcd090a5721c3f4b36f
-  --sha256: 0i3y9n0rsyarvhfqzzzjccqnjgwb9fbmbs6b7vj40afjhimf5hcj
+  tag: 99e2f2e32ebfca3291fa523ddcae14c8cbb48fa0
+  --sha256: 0fy8y7cp10ls8p3zs2fqzqpd41vri6z0imhyif5wa9bi2rp57i3z
   subdir:
     byron/crypto
     byron/crypto/test
@@ -95,8 +95,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: 9a7331cce5e8bc0ea9c6bfa1c28773f4c5a7000f
-  --sha256: 1scffi7igv4kj93bpjf8yibcaq0sskfikmm00f7r6q031l53y50c
+  tag: e15515b785f7caae0ae5d997b26d9c4518062c71
+  --sha256: 14w39l4jgxhb68xzv889bibj8q44aknqnsdrz1kbwx2ca3yzbkpw
   subdir:
     cardano-api
     cardano-config
@@ -121,8 +121,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/iohk-monitoring-framework
-  tag: 563e79f28c6da5c547463391d4c58a81442e48db
-  --sha256: 1is18h9kk8j16my89q76nihvapiiff3jl8777vk7c4wl2h4zry2w
+  tag: 60b13d80afa266f02f363672950e896ed735e807
+  --sha256: 0gci6r4c6ldrgracbr4fni4hbrl62lmm5p70cafkwk21a0kqs8cz
   subdir:
     contra-tracer
     iohk-monitoring
@@ -136,8 +136,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/ouroboros-network
-  tag: 6cb9052bde39472a0555d19ade8a42da63d3e904
-  --sha256: 0rz4acz15wda6yfc7nls6g94gcwg2an5zibv0irkxk297n76gkmg
+  tag: 96cf17bcc6ea4ef455a19430313ce17d476d62b5
+  --sha256: 00xp605lb8qp1jhp43mg7818x8yzn2rnsd18qcy5721yj4q675nz
   subdir:
     cardano-client
     io-sim
