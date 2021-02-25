@@ -54,7 +54,7 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libpq-dev libpq5 postgresql
+        sudo apt-get install -y libpq-dev libpq5 net-tools postgresql
         sudo pg_ctlcluster 13 main start
 
     - name: Install Postgres support (MacOS)
