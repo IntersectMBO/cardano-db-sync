@@ -15,9 +15,9 @@ module Cardano.DbSync.Era.Shelley.Insert
 
 import           Cardano.Prelude
 
+import           Cardano.Api (SerialiseAsCBOR (..))
 import           Cardano.Api.Shelley (TxMetadataValue (..), makeTransactionMetadata,
                    metadataValueToJsonNoSchema)
-import           Cardano.Api.Typed (SerialiseAsCBOR (..))
 
 import           Cardano.BM.Trace (Trace, logDebug, logInfo, logWarning)
 

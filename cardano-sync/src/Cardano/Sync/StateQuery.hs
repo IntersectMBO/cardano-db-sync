@@ -123,11 +123,11 @@ localStateQueryHandler (StateQueryTMVar reqVar) =
     idleState :: IO (StateQuery.ClientStIdle block (Point block) (Query block) IO a)
     idleState = do
       (query, respVar) <- atomically $ takeTMVar reqVar
-      pure $
+      pure .
         SendMsgAcquire Nothing $
           ClientStAcquiring
             { recvMsgAcquired =
-                SendMsgQuery query $
+                pure . SendMsgQuery query $
                   ClientStQuerying
                     { recvMsgResult = \result -> do
                         atomically $ putTMVar respVar (Right result)
