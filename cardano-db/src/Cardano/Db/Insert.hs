@@ -1,4 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.Db.Insert
@@ -32,7 +36,9 @@ module Cardano.Db.Insert
   , insertWithdrawal
 
   -- Export mainly for testing.
-  , insertByReturnKey
+  , insertBlockChecked
+  , insertCheckUnique
+  , insertUnchecked
   ) where
 
 
@@ -41,98 +47,123 @@ import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Database.Persist.Class (AtLeastOneUniqueKey, PersistEntityBackend, getByValue,
-                   insert)
-import           Database.Persist.Sql (SqlBackend)
-import           Database.Persist.Types (entityKey)
+import           Data.Proxy (Proxy (..))
+import           Data.Text (Text)
+import qualified Data.Text as Text
+
+import           Database.Persist.Class (AtLeastOneUniqueKey, PersistEntityBackend, insert)
+import           Database.Persist.Sql (OnlyOneUniqueKey, PersistRecordBackend, SqlBackend,
+                   UniqueDef, entityDB, entityDef, entityUniques, rawSql, toPersistFields,
+                   toPersistValue, uniqueDBName)
+import qualified Database.Persist.Sql.Util as Util
+import           Database.Persist.Types (DBName (..), PersistValue)
 import           Database.PostgreSQL.Simple (SqlError)
 
 import           Cardano.Db.Schema
 
 
+-- The original naive way of inserting rows into Postgres was:
+--
+--     insertByReturnKey :: record -> ReaderT SqlBackend m recordId
+--        res <- getByValue value
+--        case res of
+--          Nothing -> insertBy value
+--          Just ident -> pure ident
+--
+-- Unfortunately this is relatively slow if the row is not already found in the database.
+--
+-- One alternative is to just use `insert` but that fails on some uniquness constraints on some
+-- tables (about 6 out of a total of 25+).
+--
+-- Instead we use `insertUnchecked` for tables where uniqueness constraints are unlikley to be hit
+-- and `insertChecked` for tables where the uniqueness constraint might can be hit.
+
 insertBlock :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
-insertBlock = insertByReturnKey "Block"
+insertBlock = insertUnchecked "Block"
+
+insertBlockChecked :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
+insertBlockChecked = insertCheckUnique "Block"
 
 insertDelegation :: (MonadBaseControl IO m, MonadIO m) => Delegation -> ReaderT SqlBackend m DelegationId
-insertDelegation = insertByReturnKey "Delegation"
+insertDelegation = insertCheckUnique "Delegation"
 
 insertEpoch :: (MonadBaseControl IO m, MonadIO m) => Epoch -> ReaderT SqlBackend m EpochId
-insertEpoch = insertByReturnKey "Epoch"
+insertEpoch = insertUnchecked "Epoch"
 
 insertEpochParam :: (MonadBaseControl IO m, MonadIO m) => EpochParam -> ReaderT SqlBackend m EpochParamId
-insertEpochParam = insertByReturnKey "EpochParam"
+insertEpochParam = insertUnchecked "EpochParam"
 
 insertEpochStake :: (MonadBaseControl IO m, MonadIO m) => EpochStake -> ReaderT SqlBackend m EpochStakeId
-insertEpochStake = insertByReturnKey "EpochStake"
+insertEpochStake = insertUnchecked "EpochStake"
 
 insertMaTxMint :: (MonadBaseControl IO m, MonadIO m) => MaTxMint -> ReaderT SqlBackend m MaTxMintId
-insertMaTxMint = insertByReturnKey "insertMaTxMint"
+insertMaTxMint = insertCheckUnique "insertMaTxMint"
 
 insertMaTxOut :: (MonadBaseControl IO m, MonadIO m) => MaTxOut -> ReaderT SqlBackend m MaTxOutId
-insertMaTxOut = insertByReturnKey "insertMaTxOut"
+insertMaTxOut = insertCheckUnique "insertMaTxOut"
 
 insertMeta :: (MonadBaseControl IO m, MonadIO m) => Meta -> ReaderT SqlBackend m MetaId
-insertMeta = insertByReturnKey "Meta"
+insertMeta = insertCheckUnique "Meta"
 
 insertOrphanedReward :: (MonadBaseControl IO m, MonadIO m) => OrphanedReward -> ReaderT SqlBackend m OrphanedRewardId
-insertOrphanedReward = insertByReturnKey "OrphanedReward"
+insertOrphanedReward = insertUnchecked "OrphanedReward"
 
 insertParamProposal :: (MonadBaseControl IO m, MonadIO m) => ParamProposal -> ReaderT SqlBackend m ParamProposalId
-insertParamProposal = insertByReturnKey "ParamProposal"
+insertParamProposal = insertUnchecked "ParamProposal"
 
 insertPoolHash :: (MonadBaseControl IO m, MonadIO m) => PoolHash -> ReaderT SqlBackend m PoolHashId
-insertPoolHash = insertByReturnKey "PoolHash"
+insertPoolHash = insertCheckUnique "PoolHash"
 
 insertPoolMetaData :: (MonadBaseControl IO m, MonadIO m) => PoolMetaData -> ReaderT SqlBackend m PoolMetaDataId
-insertPoolMetaData = insertByReturnKey "PoolMetaData"
+insertPoolMetaData = insertCheckUnique "PoolMetaData"
 
 insertPoolOwner :: (MonadBaseControl IO m, MonadIO m) => PoolOwner -> ReaderT SqlBackend m PoolOwnerId
-insertPoolOwner = insertByReturnKey "PoolOwner"
+insertPoolOwner = insertCheckUnique "PoolOwner"
 
 insertPoolRelay :: (MonadBaseControl IO m, MonadIO m) => PoolRelay -> ReaderT SqlBackend m PoolRelayId
-insertPoolRelay = insertByReturnKey "PoolRelay"
+insertPoolRelay = insertUnchecked "PoolRelay"
 
 insertPoolRetire :: (MonadBaseControl IO m, MonadIO m) => PoolRetire -> ReaderT SqlBackend m PoolRetireId
-insertPoolRetire = insertByReturnKey "PoolRetire"
+insertPoolRetire = insertUnchecked "PoolRetire"
 
 insertPoolUpdate :: (MonadBaseControl IO m, MonadIO m) => PoolUpdate -> ReaderT SqlBackend m PoolUpdateId
-insertPoolUpdate = insertByReturnKey "PoolUpdate"
+insertPoolUpdate = insertCheckUnique "PoolUpdate"
 
 insertReserve :: (MonadBaseControl IO m, MonadIO m) => Reserve -> ReaderT SqlBackend m ReserveId
-insertReserve = insertByReturnKey "Reserve"
+insertReserve = insertUnchecked "Reserve"
 
 insertReward :: (MonadBaseControl IO m, MonadIO m) => Reward -> ReaderT SqlBackend m RewardId
-insertReward = insertByReturnKey "Reward"
+insertReward = insertUnchecked "Reward"
 
 insertSlotLeader :: (MonadBaseControl IO m, MonadIO m) => SlotLeader -> ReaderT SqlBackend m SlotLeaderId
-insertSlotLeader = insertByReturnKey "SlotLeader"
+insertSlotLeader = insertCheckUnique "SlotLeader"
 
 insertStakeAddress :: (MonadBaseControl IO m, MonadIO m) => StakeAddress -> ReaderT SqlBackend m StakeAddressId
-insertStakeAddress = insertByReturnKey "StakeAddress"
+insertStakeAddress = insertCheckUnique "StakeAddress"
 
 insertStakeDeregistration :: (MonadBaseControl IO m, MonadIO m) => StakeDeregistration -> ReaderT SqlBackend m StakeDeregistrationId
-insertStakeDeregistration = insertByReturnKey "StakeDeregistration"
+insertStakeDeregistration = insertUnchecked "StakeDeregistration"
 
 insertStakeRegistration :: (MonadBaseControl IO m, MonadIO m) => StakeRegistration -> ReaderT SqlBackend m StakeRegistrationId
-insertStakeRegistration = insertByReturnKey "StakeRegistration"
+insertStakeRegistration = insertUnchecked "StakeRegistration"
 
 insertTreasury :: (MonadBaseControl IO m, MonadIO m) => Treasury -> ReaderT SqlBackend m TreasuryId
-insertTreasury = insertByReturnKey "Treasury"
+insertTreasury = insertUnchecked "Treasury"
 
 insertTx :: (MonadBaseControl IO m, MonadIO m) => Tx -> ReaderT SqlBackend m TxId
-insertTx = insertByReturnKey "Tx"
+insertTx = insertUnchecked "Tx"
 
 insertTxIn :: (MonadBaseControl IO m, MonadIO m) => TxIn -> ReaderT SqlBackend m TxInId
-insertTxIn = insertByReturnKey "TxIn"
+insertTxIn = insertUnchecked "TxIn"
 
 insertTxMetadata :: (MonadBaseControl IO m, MonadIO m) => TxMetadata -> ReaderT SqlBackend m TxMetadataId
-insertTxMetadata = insertByReturnKey "TxMetadata"
+insertTxMetadata = insertCheckUnique "TxMetadata"
 
 insertTxOut :: (MonadBaseControl IO m, MonadIO m) => TxOut -> ReaderT SqlBackend m TxOutId
-insertTxOut = insertByReturnKey "TxOut"
+insertTxOut = insertUnchecked "TxOut"
 
 insertWithdrawal :: (MonadBaseControl IO m, MonadIO m) => Withdrawal  -> ReaderT SqlBackend m WithdrawalId
-insertWithdrawal = insertByReturnKey "Withdrawal"
+insertWithdrawal = insertUnchecked "Withdrawal"
 
 -- -----------------------------------------------------------------------------
 
@@ -142,21 +173,83 @@ data DbInsertException
 
 instance Exception DbInsertException
 
--- | Insert a record (with a Unique constraint), and return 'Right key' if the
--- record is inserted and 'Left key' if the record already exists in the DB.
-insertByReturnKey
+-- Insert without checking uniqueness constraints. This should be safe for most tables
+-- even tables with uniqueness constraints, especially block, tx and many others, where
+-- uniqueness is enforced by the ledger.
+insertUnchecked
     :: ( AtLeastOneUniqueKey record
        , MonadIO m
        , MonadBaseControl IO m
        , PersistEntityBackend record ~ SqlBackend
        )
     => String -> record -> ReaderT SqlBackend m (Key record)
-insertByReturnKey vtype value = do
-    res <- getByValue value
-    case res of
-      Nothing -> handle exceptHandler $ insert value
-      Just r -> pure $ entityKey r
+insertUnchecked vtype =
+    handle exceptHandler . insert
   where
     exceptHandler :: MonadIO m => SqlError -> ReaderT SqlBackend m a
     exceptHandler e =
       liftIO $ throwIO (DbInsertException vtype e)
+
+-- Insert, getting PostgreSQL to check the uniqueness constaint, and if it is violated, rewrite
+-- the first field with the same value to force PostgresSQL to return the row identifier.
+insertCheckUnique
+    :: forall m record.
+        ( MonadBaseControl IO m
+        , MonadIO m
+        , OnlyOneUniqueKey record
+        , PersistRecordBackend record SqlBackend
+        )
+    => String -> record -> ReaderT SqlBackend m (Key record)
+insertCheckUnique vtype record = do
+    res <- handle exceptHandler $ rawSql query values
+    case res of
+      [ident] -> pure ident
+      _other -> error $ mconcat [ "insertCheckUnique: Inserting ", vtype, " failed with ", show res ]
+  where
+    query :: Text
+    query =
+      Text.concat
+        [ "INSERT INTO "
+        , unDBName (entityDB . entityDef $ Just record)
+        , " (", Util.commaSeparated fieldNames
+        , ") VALUES (", Util.commaSeparated placeholders
+        , ") ON CONFLICT ON CONSTRAINT "
+        , unDBName (uniqueDBName $ onlyOneUniqueDef (Proxy @record))
+        -- Head is applied to these two lists, but these two lists should never be empty.
+        -- If either list is empty, it is due to a table definition with zero columns.
+        , " DO UPDATE SET ", head fieldNames, " = ", head placeholders
+        , " RETURNING id ;"
+        ]
+
+    values :: [PersistValue]
+    values = pvalues ++ case pvalues of
+                          [] -> []
+                          (x:_) -> [x]
+
+    pvalues :: [PersistValue]
+    pvalues = map toPersistValue (toPersistFields record)
+
+    fieldNames, placeholders :: [Text]
+    (fieldNames, placeholders) =
+      unzip (Util.mkInsertPlaceholders (entityDef (Proxy @record)) escape)
+
+    exceptHandler :: SqlError -> ReaderT SqlBackend m a
+    exceptHandler e =
+      liftIO $ throwIO (DbInsertException vtype e)
+
+-- This is cargo culted from Persistent because it is not exported.
+escape :: DBName -> Text
+escape (DBName s) =
+    Text.pack $ '"' : go (Text.unpack s) ++ "\""
+  where
+    go "" = ""
+    go ('"':xs) = "\"\"" ++ go xs
+    go (x:xs) = x : go xs
+
+-- This is cargo culted from Persistent because it is not exported.
+-- https://github.com/yesodweb/persistent/issues/1194
+onlyOneUniqueDef :: OnlyOneUniqueKey record => proxy record -> UniqueDef
+onlyOneUniqueDef prxy =
+    case entityUniques (entityDef prxy) of
+        [uniq] -> uniq
+        _ -> error "impossible due to OnlyOneUniqueKey constraint"
