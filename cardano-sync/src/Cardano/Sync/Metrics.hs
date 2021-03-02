@@ -1,42 +1,28 @@
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedStrings #-}
-
 module Cardano.Sync.Metrics
-  ( Metrics (..)
-  , makeMetrics
-  , withMetricsServer
+  ( setNodeBlockHeight
+  , setDbQueueLength
+  , setDbBlockHeight
+  , setDbSlotHeight
   ) where
 
-import           Cardano.Prelude
+import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..), fromWithOrigin)
 
-import           System.Metrics.Prometheus.Concurrent.RegistryT (RegistryT (..), registerGauge,
-                   runRegistryT, unRegistryT)
-import           System.Metrics.Prometheus.Http.Scrape (serveMetricsT)
-import           System.Metrics.Prometheus.Metric.Gauge (Gauge)
+import           Cardano.Sync.Types
+
+import           Numeric.Natural (Natural)
+
+import           Ouroboros.Network.Block (BlockNo (..))
 
 
-data Metrics = Metrics
-  { mDbHeight :: !Gauge
-  , mNodeHeight :: !Gauge
-  , mQueuePre :: !Gauge
-  , mQueuePost :: !Gauge
-  , mQueuePostWrite :: !Gauge
-  }
+setNodeBlockHeight :: MetricSetters -> WithOrigin BlockNo -> IO ()
+setNodeBlockHeight setters woBlkNo =
+  metricsSetNodeBlockHeight setters (fromWithOrigin (BlockNo 0) woBlkNo)
 
-withMetricsServer :: Int -> (Metrics -> IO a) -> IO a
-withMetricsServer port action = do
-  (metrics, registry) <- runRegistryT $ (,) <$> makeMetrics <*> RegistryT ask
-  bracket
-     (async $ runReaderT (unRegistryT $ serveMetricsT port []) registry)
-     cancel
-     (const $ action metrics)
+setDbQueueLength :: MetricSetters -> Natural -> IO ()
+setDbQueueLength = metricsSetDbQueueLength
 
-makeMetrics :: RegistryT IO Metrics
-makeMetrics =
-  Metrics
-    <$> registerGauge "db_block_height" mempty
-    <*> registerGauge "remote_tip_height" mempty
-    <*> registerGauge "action_queue_length_pre" mempty
-    <*> registerGauge "action_queue_length_post" mempty
-    <*> registerGauge "action_queue_length_post_write" mempty
+setDbBlockHeight :: MetricSetters -> BlockNo -> IO ()
+setDbBlockHeight = metricsSetDbBlockHeight
 
+setDbSlotHeight :: MetricSetters -> SlotNo -> IO ()
+setDbSlotHeight = metricsSetDbSlotHeight

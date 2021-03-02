@@ -18,6 +18,7 @@ import           Cardano.Prelude
 
 import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo)
 
+import           Control.Monad.Extra (whenJust)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
 import           Cardano.Sync.Api
@@ -29,8 +30,6 @@ import           Cardano.Sync.Plugin
 import           Cardano.Sync.Types
 import           Cardano.Sync.Util
 
-import qualified System.Metrics.Prometheus.Metric.Gauge as Gauge
-
 data NextState
   = Continue
   | Done
@@ -41,10 +40,9 @@ runDbStartup trce plugin =
     mapM_ (\action -> action trce) $ plugOnStartup plugin
 
 runDbThread
-    :: Trace IO Text -> SyncEnv -> SyncNodePlugin -> Metrics
-    -> DbActionQueue
+    :: Trace IO Text -> SyncEnv -> MetricSetters -> SyncNodePlugin -> DbActionQueue
     -> IO ()
-runDbThread trce env plugin metrics queue = do
+runDbThread trce env metricsSetters plugin queue = do
     logInfo trce "Running DB thread"
     logException trce "runDBThread: " loop
     logInfo trce "Shutting down DB thread"
@@ -57,13 +55,10 @@ runDbThread trce env plugin metrics queue = do
 
       eNextState <- runExceptT $ runActions trce env plugin xs
 
-      let getLatestBlock = sdlGetLatestBlock (envDataLayer env)
-      mBlkNo <- getLatestBlock
-
-      -- Chain Maybe's.
-      case bBlockNo =<< mBlkNo of
-        Nothing -> pure ()
-        Just blkNo -> Gauge.set (fromIntegral blkNo) $ mDbHeight metrics
+      mBlock <- sdlGetLatestBlock (envDataLayer env)
+      whenJust mBlock $ \ block -> do
+        setDbBlockHeight metricsSetters $ bBlockNo block
+        setDbSlotHeight metricsSetters $ bSlotNo block
 
       case eNextState of
         Left err -> logError trce $ renderSyncNodeError err

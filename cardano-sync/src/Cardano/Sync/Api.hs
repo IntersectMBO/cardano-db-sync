@@ -53,15 +53,15 @@ data SyncDataLayer = SyncDataLayer
 
 mkSyncEnv :: SyncDataLayer -> ProtocolInfo IO CardanoBlock -> Shelley.Network -> NetworkMagic -> SystemStart -> LedgerStateDir -> IO SyncEnv
 mkSyncEnv dataLayer protocolInfo network networkMagic systemStart dir = do
-    latestSlot <- sdlGetLatestSlotNo dataLayer
-    ledgerEnv <- mkLedgerEnv protocolInfo dir network latestSlot True
-    return $ SyncEnv
-      { envProtocol = SyncProtocolCardano
-      , envNetworkMagic = networkMagic
-      , envSystemStart = systemStart
-      , envDataLayer = dataLayer
-      , envLedger = ledgerEnv
-      }
+  latestSlot <- sdlGetLatestSlotNo dataLayer
+  ledgerEnv <- mkLedgerEnv protocolInfo dir network latestSlot True
+  pure $ SyncEnv
+          { envProtocol = SyncProtocolCardano
+          , envNetworkMagic = networkMagic
+          , envSystemStart = systemStart
+          , envDataLayer = dataLayer
+          , envLedger = ledgerEnv
+          }
 
 mkSyncEnvFromConfig :: SyncDataLayer -> LedgerStateDir -> GenesisConfig -> IO (Either SyncNodeError SyncEnv)
 mkSyncEnvFromConfig dataLayer dir genCfg =
