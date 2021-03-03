@@ -29,8 +29,7 @@ validate lastEpoch = do
       | current > lastEpoch = putStrLn $ greenText "ok"
       | otherwise = do
           -- Recalculate the epoch entry
-          recalc <- maybe (Left $ DbLookupMessage "validate") Right
-                      <$> runDbNoLogging (queryCalcEpochEntry current)
+          recalc <- Right <$> runDbNoLogging (queryCalcEpochEntry current)
           -- Get the table entry
           value <- runDbNoLogging $ queryEpochEntry current
 

@@ -20,7 +20,6 @@ import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 
 import           Data.IORef (IORef, atomicWriteIORef, newIORef, readIORef)
-import qualified Data.Time.Clock as Time
 
 import           Database.Esqueleto (Value (..), desc, from, limit, orderBy, select, val, where_,
                    (==.), (^.))
@@ -136,23 +135,15 @@ updateEpochNum epochNum trce = do
   where
     updateEpoch :: MonadIO m => EpochId -> ReaderT SqlBackend m (Either SyncNodeError ())
     updateEpoch epochId = do
-      mEpoch <- DB.queryCalcEpochEntry epochNum
-      epoch <- maybe (liftIO calcEpochFromHistory) pure mEpoch
+      epoch <- DB.queryCalcEpochEntry epochNum
       Right <$> replace epochId epoch
 
     insertEpoch :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either SyncNodeError ())
     insertEpoch = do
-      mEpoch <- DB.queryCalcEpochEntry epochNum
+      epoch <- DB.queryCalcEpochEntry epochNum
       liftIO . logInfo trce $ "epochPluginInsertBlock: epoch " <> textShow epochNum
-      epoch <- maybe (liftIO calcEpochFromHistory) pure mEpoch
       void $ DB.insertEpoch epoch
       pure $ Right ()
-
-    -- Really do not think this can happen but this is better than an error.
-    calcEpochFromHistory :: IO DB.Epoch
-    calcEpochFromHistory = do
-      now <- Time.getCurrentTime
-      pure $ DB.Epoch 0 (DB.DbLovelace 0) 0 0 epochNum now now
 
 -- -------------------------------------------------------------------------------------------------
 
