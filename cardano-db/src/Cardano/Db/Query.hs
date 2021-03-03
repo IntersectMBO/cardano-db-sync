@@ -77,7 +77,7 @@ import           Data.Fixed (Micro)
 import           Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import           Data.Ratio (numerator)
 import           Data.Text (Text)
-import           Data.Time.Clock (UTCTime)
+import           Data.Time.Clock (UTCTime (..))
 import           Data.Tuple.Extra (uncurry3)
 import           Data.Word (Word16, Word64)
 
@@ -204,7 +204,7 @@ queryBlocksAfterSlot slotNo = do
 -- When syncing the chain or filling an empty table, this is called at each epoch boundary to
 -- calculate the Epcoh entry for the last epoch.
 -- When following the chain, this is called for each new block of the current epoch.
-queryCalcEpochEntry :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Epoch)
+queryCalcEpochEntry :: MonadIO m => Word64 -> ReaderT SqlBackend m Epoch
 queryCalcEpochEntry epochNum = do
     blkRes <- select . from $ \ blk -> do
               where_ (blk ^. BlockEpochNo ==. just (val epochNum))
@@ -216,23 +216,42 @@ queryCalcEpochEntry epochNum = do
     case (listToMaybe blkRes, listToMaybe txRes) of
       (Just blk, Just tx) -> pure $ convertAll (unValue3 blk) (unValue3 tx)
       (Just blk, Nothing) -> pure $ convertBlk (unValue3 blk)
-      _otherwise -> pure Nothing
+      _otherwise -> pure emptyEpoch
   where
     convertAll
         :: (Word64, Maybe UTCTime, Maybe UTCTime) -> (Maybe Rational, Maybe Rational, Word64)
-        -> Maybe Epoch
+        -> Epoch
     convertAll (blkCount, b, c) (d, e, txCount) =
       case (b, c, d, e) of
         (Just start, Just end, Just outSum, Just fees) ->
-          Just $ Epoch (fromIntegral $ numerator outSum) (DbLovelace . fromIntegral $ numerator fees)
+            Epoch (fromIntegral $ numerator outSum) (DbLovelace . fromIntegral $ numerator fees)
                         txCount blkCount epochNum start end
-        _otherwise -> Nothing
+        (Just start, Just end, Nothing, Nothing) ->
+            Epoch 0 (DbLovelace 0) txCount blkCount epochNum start end
+        _otherwise ->
+            emptyEpoch
 
-    convertBlk :: (Word64, Maybe UTCTime, Maybe UTCTime) -> Maybe Epoch
+    convertBlk :: (Word64, Maybe UTCTime, Maybe UTCTime) -> Epoch
     convertBlk (blkCount, b, c) =
       case (b, c) of
-        (Just start, Just end) -> Just (Epoch 0 (DbLovelace 0) 0 blkCount epochNum start end)
-        _otherwise -> Nothing
+        (Just start, Just end) -> Epoch 0 (DbLovelace 0) 0 blkCount epochNum start end
+        _otherwise -> emptyEpoch
+
+    -- We only return this when something has screwed up.
+    emptyEpoch :: Epoch
+    emptyEpoch =
+      Epoch
+        { epochOutSum = 0
+        , epochFees = DbLovelace 0
+        , epochTxCount = 0
+        , epochBlkCount = 0
+        , epochNo = epochNum
+        , epochStartTime = defaultUTCTime
+        , epochEndTime = defaultUTCTime
+        }
+
+    defaultUTCTime :: UTCTime
+    defaultUTCTime = read "2000-01-01 00:00:00.000000 UTC"
 
 queryCheckPoints :: MonadIO m => Word64 -> ReaderT SqlBackend m [(Word64, ByteString)]
 queryCheckPoints limitCount = do
