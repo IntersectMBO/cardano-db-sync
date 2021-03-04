@@ -14,10 +14,7 @@ let
   shell = cardanoDbSyncHaskellPackages.shellFor {
     name = "cabal-dev-shell";
 
-    packages = ps: with ps; [
-       ps.cardano-db-sync
-       ps.cardano-db-sync-extended
-    ];
+    packages = ps: lib.attrValues (haskell-nix.haskellLib.selectProjectPackages ps);
 
     # These programs will be available inside the nix-shell.
     buildInputs = with haskellPackages; [
@@ -31,7 +28,7 @@ let
       pkgconfig
       sqlite-interactive
       tmux
-      git
+      pkgs.git
     ];
 
     # Prevents cabal from choosing alternate plans, so that

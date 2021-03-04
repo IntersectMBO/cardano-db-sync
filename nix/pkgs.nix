@@ -1,10 +1,16 @@
 # our packages overlay
-pkgs: _: with pkgs;
+pkgs: super: with pkgs;
   let
     compiler = config.haskellNix.compiler or "ghc8102";
+    src = haskell-nix.haskellLib.cleanGit {
+      src = ../.;
+      name = "cardano-db-sync";
+    };
   in {
+    inherit src;
+
     cardanoDbSyncHaskellPackages = callPackage ./haskell.nix {
-      inherit compiler gitrev;
+      inherit compiler gitrev src;
     };
 
   # Grab the executable component of our package.
@@ -28,4 +34,9 @@ pkgs: _: with pkgs;
     compiler-nix-name = compiler;
     inherit (cardanoDbSyncHaskellPackages) index-state;
   }).components.exes) stylish-haskell;
+
+  # systemd can't be statically linked:
+  postgresql = super.postgresql.override {
+    enableSystemd = stdenv.hostPlatform.isLinux && !stdenv.hostPlatform.isMusl;
+  };
 }
