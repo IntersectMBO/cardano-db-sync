@@ -160,6 +160,24 @@ share
     deriving Eq
     deriving Show
 
+  -- A table with all the different types of total balances.
+  -- This is only populated for the Shelley and later eras, and only on epoch boundaries.
+  -- The treasury and rewards fields will be correct for the whole epoch, but all other
+  -- fields change block by block.
+  AdaPots
+    slotNo              Word64              sqltype=uinteger
+    epochNo             Word64              sqltype=uinteger
+    treasury            DbLovelace          sqltype=lovelace
+    reserves            DbLovelace          sqltype=lovelace
+    rewards             DbLovelace          sqltype=lovelace
+    circulation         DbLovelace          sqltype=lovelace
+    deposits            DbLovelace          sqltype=lovelace
+    fees                DbLovelace          sqltype=lovelace
+    blockId             BlockId             OnDeleteCascade
+    UniqueAdaPots       blockId
+    deriving Eq
+    deriving Show
+
   -- -----------------------------------------------------------------------------------------------
   -- A Pool can have more than one owner, so we have a PoolOwner table that references this one.
 

@@ -6,7 +6,8 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.Db.Insert
-  ( insertBlock
+  ( insertAdaPots
+  , insertBlock
   , insertDelegation
   , insertEpoch
   , insertEpochParam
@@ -164,6 +165,9 @@ insertTxOut = insertUnchecked "TxOut"
 
 insertWithdrawal :: (MonadBaseControl IO m, MonadIO m) => Withdrawal  -> ReaderT SqlBackend m WithdrawalId
 insertWithdrawal = insertUnchecked "Withdrawal"
+
+insertAdaPots :: (MonadBaseControl IO m, MonadIO m) => AdaPots -> ReaderT SqlBackend m AdaPotsId
+insertAdaPots = insertCheckUnique "AdaPots"
 
 -- -----------------------------------------------------------------------------
 
