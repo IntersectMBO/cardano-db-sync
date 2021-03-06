@@ -1,6 +1,7 @@
 module Cardano.Sync.Era.Shelley.Generic.EpochUpdate
   ( NewEpoch (..)
   , EpochUpdate (..)
+  , AdaPots (..)
   , allegraEpochUpdate
   , maryEpochUpdate
   , shelleyEpochUpdate
@@ -19,10 +20,12 @@ import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
+import           Shelley.Spec.Ledger.Coin (Coin (..))
 
 data NewEpoch = NewEpoch
   { epoch :: !EpochNo
   , isEBB :: !Bool
+  , adaPots :: !(Maybe AdaPots)
   , epochUpdate :: !(Maybe EpochUpdate)
   }
 
@@ -31,6 +34,16 @@ data EpochUpdate = EpochUpdate
   , euRewards :: !(Maybe Rewards)
   , euStakeDistribution :: !StakeDist
   , euNonce :: !Shelley.Nonce
+  }
+
+-- There is a similar type in ledger-spec, but it is not exported yet.
+data AdaPots = AdaPots
+  { apTreasury :: !Coin
+  , apReserves :: !Coin
+  , apRewards :: !Coin
+  , apCirculation :: !Coin
+  , apDeposits :: !Coin
+  , apFees :: !Coin
   }
 
 allegraEpochUpdate :: Shelley.Network -> LedgerState (ShelleyBlock StandardAllegra) -> Maybe Rewards -> Maybe Shelley.Nonce -> EpochUpdate
