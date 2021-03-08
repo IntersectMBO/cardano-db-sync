@@ -1,4 +1,4 @@
-cabal-version:          >= 1.10
+cabal-version:          2.2
 
 -- http://haskell.org/cabal/users-guide/
 
@@ -23,11 +23,12 @@ library
 
   ghc-options:          -Wall
                         -Wcompat
-                        -fwarn-redundant-constraints
-                        -fwarn-incomplete-patterns
-                        -fwarn-unused-imports
+                        -Wredundant-constraints
+                        -Wincomplete-patterns
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
+                        -Wunused-imports
+                        -Wunused-packages
 
   exposed-modules:      Cardano.Db.Tool
 
@@ -75,11 +76,12 @@ executable cardano-db-tool
 
   ghc-options:          -Wall
                         -Wcompat
-                        -fwarn-redundant-constraints
-                        -fwarn-incomplete-patterns
-                        -fwarn-unused-imports
+                        -Wredundant-constraints
+                        -Wincomplete-patterns
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
+                        -Wunused-imports
+                        -Wunused-packages
 
   build-depends:        base                            >= 4.12         && < 4.15
                       , cardano-db

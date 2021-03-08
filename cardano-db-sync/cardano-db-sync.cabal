@@ -1,4 +1,4 @@
-cabal-version:          >= 1.10
+cabal-version:          2.2
 
 -- http://haskell.org/cabal/users-guide/
 
@@ -24,11 +24,12 @@ library
 
   ghc-options:          -Wall
                         -Wcompat
-                        -fwarn-redundant-constraints
-                        -fwarn-incomplete-patterns
-                        -fwarn-unused-imports
+                        -Wredundant-constraints
+                        -Wincomplete-patterns
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
+                        -Wunused-imports
+                        -Wunused-packages
 
   exposed-modules:      Cardano.DbSync
 
@@ -107,11 +108,12 @@ executable cardano-db-sync
   ghc-options:          -Wall
                         -Werror
                         -Wcompat
-                        -fwarn-redundant-constraints
-                        -fwarn-incomplete-patterns
-                        -fwarn-unused-imports
+                        -Wredundant-constraints
+                        -Wincomplete-patterns
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
+                        -Wunused-imports
+                        -Wunused-packages
                         -Wno-unsafe
                         -threaded
 
@@ -125,4 +127,3 @@ executable cardano-db-sync
                       , cardano-slotting
                       , optparse-applicative
                       , text
-                      , transformers-except
