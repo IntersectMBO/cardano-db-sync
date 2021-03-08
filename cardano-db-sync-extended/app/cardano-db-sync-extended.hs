@@ -6,6 +6,7 @@ import           Cardano.Prelude
 import           Cardano.Config.Git.Rev (gitRev)
 
 import           Cardano.DbSync (runDbSyncNode)
+import           Cardano.DbSync.Metrics (withMetricSetters)
 import           Cardano.DbSync.Plugin.Extended (extendedDbSyncNodePlugin)
 
 import           Cardano.Sync.Config
@@ -29,7 +30,11 @@ main = do
   cmd <- Opt.execParser opts
   case cmd of
     CmdVersion -> runVersionCommand
-    CmdRun params -> runDbSyncNode extendedDbSyncNodePlugin params
+    CmdRun params -> do
+        prometheusPort <- dncPrometheusPort <$> readSyncNodeConfig (enpConfigFile params)
+
+        withMetricSetters prometheusPort $ \metricsSetters ->
+            runDbSyncNode metricsSetters extendedDbSyncNodePlugin params
 
 -- -------------------------------------------------------------------------------------------------
 

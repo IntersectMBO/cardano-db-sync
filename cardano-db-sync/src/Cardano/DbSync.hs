@@ -26,7 +26,7 @@ import           Cardano.Prelude hiding (Nat, option, (%))
 
 import           Control.Monad.Trans.Maybe (MaybeT (..))
 
-import           Cardano.Api (SlotNo (..))
+import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..))
 
 import           Cardano.BM.Trace (Trace)
 
@@ -37,20 +37,24 @@ import           Cardano.DbSync.Plugin.Default (defDbSyncNodePlugin)
 import           Cardano.DbSync.Rollback (unsafeRollback)
 import           Cardano.Sync.Database (runDbThread)
 
-import           Cardano.Sync (Block (..), SyncDataLayer (..), SyncNodePlugin (..),
+import           Cardano.Sync (Block (..), MetricSetters, SyncDataLayer (..), SyncNodePlugin (..),
                    configureLogging, runSyncNode)
 import           Cardano.Sync.Config.Types (ConfigFile (..), GenesisFile (..), LedgerStateDir (..),
                    MigrationDir (..), NetworkName (..), SocketPath (..), SyncCommand (..),
                    SyncNodeParams (..))
 import           Cardano.Sync.Tracing.ToObjectOrphans ()
 
+import           Control.Monad.Extra (whenJust)
+
 import           Database.Persist.Postgresql (withPostgresqlConn)
 
 import           Database.Persist.Sql (SqlBackend)
 
+import           Ouroboros.Network.Block (BlockNo (..))
 
-runDbSyncNode :: (SqlBackend -> SyncNodePlugin) -> SyncNodeParams -> IO ()
-runDbSyncNode mkPlugin params = do
+
+runDbSyncNode :: MetricSetters -> (SqlBackend -> SyncNodePlugin) -> SyncNodeParams -> IO ()
+runDbSyncNode metricsSetters mkPlugin params = do
 
     -- Read the PG connection info
     pgConfig <- DB.readPGPassFileEnv Nothing
@@ -65,11 +69,10 @@ runDbSyncNode mkPlugin params = do
     DB.runIohkLogging trce $ withPostgresqlConn connectionString $ \backend ->
       lift $ do
         -- For testing and debugging.
-        case enpMaybeRollback params of
-          Just slotNo -> void $ unsafeRollback trce slotNo
-          Nothing -> pure ()
+        whenJust (enpMaybeRollback params) $ \ slotNo ->
+          void $ unsafeRollback trce slotNo
 
-        runSyncNode (mkSyncDataLayer trce backend) trce (mkPlugin backend)
+        runSyncNode (mkSyncDataLayer trce backend) metricsSetters trce (mkPlugin backend)
             params (insertValidateGenesisDist backend) runDbThread
 
 -- -------------------------------------------------------------------------------------------------
@@ -82,11 +85,13 @@ mkSyncDataLayer trce backend =
     , sdlGetLatestBlock =
         runMaybeT $ do
           block <- MaybeT $ DB.runDbNoLogging DB.queryLatestBlock
+          -- The EpochNo, SlotNo and BlockNo can only be zero for the Byron
+          -- era, but we need to make the types match, hence `fromMaybe`.
           pure $ Block
                   { bHash = DB.blockHash block
-                  , bEpochNo = DB.blockEpochNo block
-                  , bSlotNo = DB.blockSlotNo block
-                  , bBlockNo = DB.blockBlockNo block
+                  , bEpochNo = EpochNo . fromMaybe 0 $ DB.blockEpochNo block
+                  , bSlotNo = SlotNo . fromMaybe 0 $ DB.blockSlotNo block
+                  , bBlockNo = BlockNo . fromMaybe 0 $ DB.blockBlockNo block
                   }
     , sdlGetLatestSlotNo = SlotNo <$> DB.runDbNoLogging DB.queryLatestSlotNo
     }

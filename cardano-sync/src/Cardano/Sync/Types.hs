@@ -8,18 +8,18 @@ module Cardano.Sync.Types
   , SlotDetails (..)
   , SyncState (..)
   , Block (..)
-  , Meta (..)
+  , MetricSetters (..)
   ) where
 
 import           Cardano.Prelude hiding (Meta)
 
 import           Cardano.Sync.Config.Types (CardanoBlock, CardanoProtocol)
 
-import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
+import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
 
 import           Data.Time.Clock (UTCTime)
 
-import           Ouroboros.Network.Block (Point)
+import           Ouroboros.Network.Block (BlockNo, Point)
 
 type CardanoPoint = Point CardanoBlock
 
@@ -47,22 +47,21 @@ data SyncState
 
 -- The hash must be unique!
 data Block = Block
-    { bHash    :: !ByteString
-    , bEpochNo :: !(Maybe Word64)
-    , bSlotNo  :: !(Maybe Word64)
-    , bBlockNo :: !(Maybe Word64)
-    } deriving (Eq, Show)
+  { bHash :: !ByteString
+  , bEpochNo :: !EpochNo
+  , bSlotNo  :: !SlotNo
+  , bBlockNo :: !BlockNo
+  } deriving (Eq, Show)
 
--- The startTime must be unique!
-data Meta = Meta
-    { mStartTime     :: !UTCTime
-    , mNetworkName   :: !(Maybe Text)
-    } deriving (Eq, Show)
+-- The metrics we use.
+-- Kept as a separate struct and do not put into environment because
+-- when we need to test functions using this we need to initialize the
+-- whole environment and not just pass in the layer. This shows clearly
+-- that it needs to remain a separate parameter passed around where needed.
+data MetricSetters = MetricSetters
+  { metricsSetNodeBlockHeight :: BlockNo -> IO ()
+  , metricsSetDbQueueLength :: Natural -> IO ()
+  , metricsSetDbBlockHeight :: BlockNo -> IO ()
+  , metricsSetDbSlotHeight :: SlotNo -> IO ()
+  }
 
--- @Word64@ is valid as well.
-newtype BlockId = BlockId Int
-    deriving (Eq, Show)
-
--- @Word64@ is valid as well.
-newtype MetaId = MetaId Int
-    deriving (Eq, Show)

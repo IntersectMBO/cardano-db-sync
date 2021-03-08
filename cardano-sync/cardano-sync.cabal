@@ -45,7 +45,6 @@ library
                         Cardano.Sync.Error
 
                         Cardano.Sync.LedgerState
-                        Cardano.Sync.Metrics
 
                         Cardano.Sync.Era.Byron.Util
                         Cardano.Sync.Era.Cardano.Util
@@ -57,6 +56,7 @@ library
                         Cardano.Sync.Era.Shelley.Generic.StakeCred
                         Cardano.Sync.Era.Shelley.Generic.StakeDist
 
+                        Cardano.Sync.Metrics
                         Cardano.Sync.Plugin
 
                         Cardano.Sync.StateQuery
@@ -97,7 +97,6 @@ library
                       , ouroboros-consensus-shelley
                       , ouroboros-network
                       , ouroboros-network-framework
-                      , prometheus
                       , shelley-spec-ledger
                       , stm
                       , text

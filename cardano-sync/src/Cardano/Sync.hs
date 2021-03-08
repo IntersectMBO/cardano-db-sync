@@ -19,8 +19,9 @@ module Cardano.Sync
   , SocketPath (..)
 
   , SyncDataLayer (..)
+  , MetricSetters (..)
+  , nullMetricSetters
   , Block (..)
-  , Meta (..)
   , SyncEnv (..)
 
   , configureLogging
@@ -39,6 +40,8 @@ import qualified Cardano.Chain.Genesis as Byron
 import           Cardano.Client.Subscription (subscribe)
 import qualified Cardano.Crypto as Crypto
 
+import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
+
 import           Cardano.Sync.Api
 import           Cardano.Sync.Config
 import           Cardano.Sync.Database (DbAction (..), DbActionQueue, lengthDbActionQueue,
@@ -51,8 +54,6 @@ import           Cardano.Sync.StateQuery (StateQueryTMVar, getSlotDetails, local
 import           Cardano.Sync.Tracing.ToObjectOrphans ()
 import           Cardano.Sync.Types
 import           Cardano.Sync.Util
-
-import           Cardano.Slotting.Slot (WithOrigin (..), withOrigin)
 
 import qualified Codec.CBOR.Term as CBOR
 
@@ -103,7 +104,6 @@ import qualified Ouroboros.Network.Snocket as Snocket
 import           Ouroboros.Network.Subscription (SubscriptionTrace)
 
 import           System.Directory (createDirectoryIfMissing)
-import qualified System.Metrics.Prometheus.Metric.Gauge as Gauge
 
 
 type InsertValidateGenesisFunction
@@ -115,20 +115,21 @@ type InsertValidateGenesisFunction
 type RunDBThreadFunction
     =  Trace IO Text
     -> SyncEnv
+    -> MetricSetters
     -> SyncNodePlugin
-    -> Metrics
     -> DbActionQueue
     -> IO ()
 
 runSyncNode
     :: SyncDataLayer
+    -> MetricSetters
     -> Trace IO Text
     -> SyncNodePlugin
     -> SyncNodeParams
     -> InsertValidateGenesisFunction
     -> RunDBThreadFunction
     -> IO ()
-runSyncNode dataLayer trce plugin enp insertValidateGenesisDist runDBThreadFunction =
+runSyncNode dataLayer metricsSetters trce plugin enp insertValidateGenesisDist runDBThreadFunction =
   withIOManager $ \iomgr -> do
 
     let configFile = enpConfigFile enp
@@ -152,7 +153,7 @@ runSyncNode dataLayer trce plugin enp insertValidateGenesisDist runDBThreadFunct
       case genCfg of
           GenesisCardano _ bCfg _sCfg -> do
             syncEnv <- ExceptT $ mkSyncEnvFromConfig dataLayer (enpLedgerStateDir enp) genCfg
-            liftIO $ runSyncNodeNodeClient (dncPrometheusPort enc) syncEnv iomgr trce plugin
+            liftIO $ runSyncNodeNodeClient metricsSetters syncEnv iomgr trce plugin
                         runDBThreadFunction (cardanoCodecConfig bCfg) (enpSocketPath enp)
   where
     cardanoCodecConfig :: Byron.Config -> CodecConfig CardanoBlock
@@ -166,7 +167,7 @@ runSyncNode dataLayer trce plugin enp insertValidateGenesisDist runDBThreadFunct
 -- -------------------------------------------------------------------------------------------------
 
 runSyncNodeNodeClient
-    :: Int
+    :: MetricSetters
     -> SyncEnv
     -> IOManager
     -> Trace IO Text
@@ -175,17 +176,16 @@ runSyncNodeNodeClient
     -> CodecConfig CardanoBlock
     -> SocketPath
     -> IO ()
-runSyncNodeNodeClient port env iomgr trce plugin runDBThreadFunction codecConfig (SocketPath socketPath) = do
+runSyncNodeNodeClient metricsSetters env iomgr trce plugin runDBThreadFunction codecConfig (SocketPath socketPath) = do
   queryVar <- newStateQueryTMVar
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
-  withMetricsServer port $ \ metrics ->
-    void $ subscribe
-      (localSnocket iomgr socketPath)
-      codecConfig
-      (envNetworkMagic env)
-      networkSubscriptionTracers
-      clientSubscriptionParams
-      (dbSyncProtocols trce env plugin metrics queryVar runDBThreadFunction)
+  void $ subscribe
+    (localSnocket iomgr socketPath)
+    codecConfig
+    (envNetworkMagic env)
+    networkSubscriptionTracers
+    clientSubscriptionParams
+    (dbSyncProtocols trce env metricsSetters plugin queryVar runDBThreadFunction)
   where
     clientSubscriptionParams =
       ClientSubscriptionParams
@@ -219,15 +219,15 @@ runSyncNodeNodeClient port env iomgr trce plugin runDBThreadFunction codecConfig
 dbSyncProtocols
     :: Trace IO Text
     -> SyncEnv
+    -> MetricSetters
     -> SyncNodePlugin
-    -> Metrics
     -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
     -> RunDBThreadFunction
     -> Network.NodeToClientVersion
     -> ClientCodecs CardanoBlock IO
     -> ConnectionId LocalAddress
     -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols trce env plugin metrics queryVar runDBThreadFunction version codecs _connectionId =
+dbSyncProtocols trce env metricsSetters plugin queryVar runDBThreadFunction version codecs _connectionId =
     NodeToClientProtocols
       { localChainSyncProtocol = localChainSyncPtcl
       , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -252,13 +252,13 @@ dbSyncProtocols trce env plugin metrics queryVar runDBThreadFunction version cod
         actionQueue <- newDbActionQueue
 
         race_
-            (runDBThreadFunction trce env plugin metrics actionQueue)
+            (runDBThreadFunction trce env metricsSetters plugin actionQueue)
             (runPipelinedPeer
                 localChainSyncTracer
                 (cChainSyncCodec codecs)
                 channel
                 (chainSyncClientPeerPipelined
-                    $ chainSyncClient (envDataLayer env) trce env queryVar metrics latestPoints currentTip actionQueue)
+                    $ chainSyncClient (envDataLayer env) metricsSetters trce env queryVar latestPoints currentTip actionQueue)
             )
 
         atomically $ writeDbActionQueue actionQueue DbFinish
@@ -306,26 +306,17 @@ logDbState dataLayer trce = do
   where
     showTip :: Block -> Text
     showTip blk =
-      case (bSlotNo blk, bBlockNo blk) of
-        (Just slotNo, Just blkNo) -> toS $ "slot " ++ show slotNo ++ ", block " ++ show blkNo
-        (Just slotNo, Nothing) -> toS $ "slot " ++ show slotNo
-        (Nothing, Just blkNo) -> toS $ "block " ++ show blkNo
-        (Nothing, Nothing) -> "empty (genesis)"
+      mconcat
+        [ "slot ", textShow (unSlotNo $ bSlotNo blk)
+        , ", block ", textShow (unBlockNo $ bBlockNo blk)
+        ]
 
 getCurrentTipBlockNo :: SyncDataLayer -> IO (WithOrigin BlockNo)
 getCurrentTipBlockNo dataLayer = do
-    let getLatestBlock = sdlGetLatestBlock dataLayer
-    maybeTip <- getLatestBlock
-
+    maybeTip <- sdlGetLatestBlock dataLayer
     case maybeTip of
-      Just tip -> pure $ convert tip
+      Just tip -> pure $ At (bBlockNo tip)
       Nothing -> pure Origin
-  where
-    convert :: Block -> WithOrigin BlockNo
-    convert blk =
-      case bBlockNo blk of
-        Just blockno -> At (BlockNo blockno)
-        Nothing -> Origin
 
 -- | 'ChainSyncClient' which traces received blocks and ignores when it
 -- receives a request to rollbackwar.  A real wallet client should:
@@ -337,15 +328,15 @@ getCurrentTipBlockNo dataLayer = do
 --
 chainSyncClient
     :: SyncDataLayer
+    -> MetricSetters
     -> Trace IO Text
     -> SyncEnv
     -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
-    -> Metrics
     -> [Point CardanoBlock]
     -> WithOrigin BlockNo
     -> DbActionQueue
     -> ChainSyncClientPipelined CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-chainSyncClient dataLayer trce env queryVar metrics latestPoints currentTip actionQueue = do
+chainSyncClient dataLayer metricsSetters trce env queryVar latestPoints currentTip actionQueue = do
     ChainSyncClientPipelined $ pure $
       -- Notify the core node about the our latest points at which we are
       -- synchronised.  This client is not persistent and thus it just
@@ -387,12 +378,16 @@ chainSyncClient dataLayer trce env queryVar metrics latestPoints currentTip acti
       ClientStNext
         { recvMsgRollForward = \blk tip ->
               logException trce "recvMsgRollForward: " $ do
-                Gauge.set (withOrigin 0 (fromIntegral . unBlockNo) (getTipBlockNo tip)) (mNodeHeight metrics)
+
+                setNodeBlockHeight metricsSetters (getTipBlockNo tip)
+
                 details <- getSlotDetails trce env queryVar (cardanoBlockSlotNo blk)
                 newSize <- atomically $ do
                                 writeDbActionQueue actionQueue $ mkDbApply blk details
                                 lengthDbActionQueue actionQueue
-                Gauge.set (fromIntegral newSize) $ mQueuePostWrite metrics
+
+                setDbQueueLength metricsSetters newSize
+
                 pure $ finish (At (blockNo blk)) tip
         , recvMsgRollBackward = \point tip ->
               logException trce "recvMsgRollBackward: " $ do
