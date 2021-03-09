@@ -1,4 +1,4 @@
-cabal-version:          >= 1.10
+cabal-version:          2.2
 
 -- http://haskell.org/cabal/users-guide/
 
@@ -24,13 +24,13 @@ library
 
   ghc-options:          -Wall
                         -Werror
-                        -Wunused-imports
                         -Wcompat
-                        -fwarn-redundant-constraints
-                        -fwarn-incomplete-patterns
-                        -fwarn-unused-imports
+                        -Wredundant-constraints
+                        -Wincomplete-patterns
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
+                        -Wunused-imports
+                        -Wunused-packages
 
   exposed-modules:      Cardano.Sync
                         Cardano.Sync.Api
