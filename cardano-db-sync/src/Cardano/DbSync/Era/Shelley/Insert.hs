@@ -123,7 +123,7 @@ insertShelleyBlock tracer env blk lStateSnap details = do
         , ", hash ", renderByteArray (Generic.blkHash blk)
         ]
 
-    whenJust (lssNewEpoch lStateSnap) $ \ newEpoch ->
+    whenJust (lssNewEpoch lStateSnap) $ \ newEpoch -> do
       whenJust (Generic.epochUpdate newEpoch) $ \esum -> do
         let stakes = Generic.euStakeDistribution esum
 
@@ -141,6 +141,9 @@ insertShelleyBlock tracer env blk lStateSnap details = do
         insertEpochParam tracer blkId (sdEpochNo details) (Generic.euProtoParams esum) (Generic.euNonce esum)
         insertEpochStake tracer blkId (sdEpochNo details) stakes
         liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo (sdEpochNo details))
+      whenJust (Generic.adaPots newEpoch) $ \pots ->
+        insertPots blkId (Generic.blkSlotNo blk) (sdEpochNo details) pots
+
 
     when (getSyncStatus details == SyncFollowing) $
       -- Serializiing things during syncing can drastically slow down full sync
@@ -772,3 +775,23 @@ insertMaTxOut _tracer txOutId maMap =
           , DB.maTxOutQuantity = DbWord64 (fromIntegral amount)
           , DB.maTxOutTxOutId = txOutId
           }
+
+insertPots
+    :: (MonadBaseControl IO m, MonadIO m)
+    => DB.BlockId
+    -> SlotNo -> EpochNo
+    -> Generic.AdaPots
+    -> ExceptT e (ReaderT SqlBackend m) ()
+insertPots blockId slotNo epochNo pots =
+    void . lift $ DB.insertAdaPots $
+      DB.AdaPots
+        { DB.adaPotsSlotNo = unSlotNo slotNo
+        , DB.adaPotsEpochNo = unEpochNo epochNo
+        , DB.adaPotsTreasury = Generic.coinToDbLovelace $ Generic.apTreasury pots
+        , DB.adaPotsReserves = Generic.coinToDbLovelace $ Generic.apReserves pots
+        , DB.adaPotsRewards = Generic.coinToDbLovelace $ Generic.apRewards pots
+        , DB.adaPotsCirculation = Generic.coinToDbLovelace $ Generic.apCirculation pots
+        , DB.adaPotsDeposits = Generic.coinToDbLovelace $ Generic.apDeposits pots
+        , DB.adaPotsFees = Generic.coinToDbLovelace $ Generic.apFees pots
+        , DB.adaPotsBlockId = blockId
+        }

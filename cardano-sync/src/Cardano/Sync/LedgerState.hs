@@ -23,6 +23,9 @@ module Cardano.Sync.LedgerState
 import           Cardano.Binary (DecoderError)
 import qualified Cardano.Binary as Serialize
 
+import           Cardano.Ledger.Shelley.Constraints (UsesTxOut, UsesValue)
+import qualified Cardano.Ledger.Val as Val
+
 import           Cardano.Sync.Config.Types
 import qualified Cardano.Sync.Era.Cardano.Util as Cardano
 import qualified Cardano.Sync.Era.Shelley.Generic.EpochUpdate as Generic
@@ -45,6 +48,7 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as BSS
 import qualified Data.List as List
+import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 
 import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockHash, blockIsEBB,
@@ -62,6 +66,8 @@ import           Ouroboros.Consensus.Ledger.Abstract (ledgerTipHash, ledgerTipPo
 import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerCfg (..), ExtLedgerState (..))
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
+import           Ouroboros.Consensus.Shelley.Ledger.Block
+import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 import qualified Ouroboros.Consensus.Shelley.Protocol as Consensus
 import           Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), EncodeDisk (..))
 
@@ -70,7 +76,11 @@ import qualified Ouroboros.Network.Point as Point
 
 import qualified Shelley.Spec.Ledger.API.Protocol as Shelley
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
+import           Shelley.Spec.Ledger.Coin (Coin)
+import           Shelley.Spec.Ledger.LedgerState (AccountState, EpochState, UTxOState)
+import qualified Shelley.Spec.Ledger.LedgerState as Shelley
 import qualified Shelley.Spec.Ledger.STS.Tickn as Shelley
+import qualified Shelley.Spec.Ledger.UTxO as Shelley
 
 import           System.Directory (listDirectory, removeFile)
 import           System.FilePath (dropExtension, takeExtension, (</>))
@@ -167,6 +177,7 @@ applyBlock env blk =
             Generic.NewEpoch
               { Generic.epoch = ledgerEpochNo env newState
               , Generic.isEBB = isJust $ blockIsEBB blk
+              , Generic.adaPots = getAdaPots newState
               , Generic.epochUpdate =
                   ledgerEpochUpdate env (clsState newState)
                     (ledgerRewardUpdate env (ledgerState $ clsState oldState))
@@ -406,6 +417,16 @@ writeLedgerState env st = atomically $ writeTVar (leStateVar env) (CardanoLedger
 safeRemoveFile :: FilePath -> IO ()
 safeRemoveFile fp = handle (\(_ :: IOException) -> pure ()) $ removeFile fp
 
+-- We only compute 'AdaPots' for later eras. This is a time consuming
+-- function and we only want to run it on epoch boundaries.
+getAdaPots :: CardanoLedgerState -> Maybe Generic.AdaPots
+getAdaPots st =
+    case ledgerState $ clsState st of
+      LedgerStateByron _ -> Nothing
+      LedgerStateShelley sts -> Just $ totalAdaPots sts
+      LedgerStateAllegra sta -> Just $ totalAdaPots sta
+      LedgerStateMary stm -> Just $ totalAdaPots stm
+
 ledgerEpochNo :: LedgerEnv -> CardanoLedgerState -> EpochNo
 ledgerEpochNo env cls =
     case ledgerTipSlot (ledgerState (clsState cls)) of
@@ -455,3 +476,35 @@ tickThenReapplyCheckHash cfg block lsb =
                   , " and block current hash is "
                   , renderByteArray (BSS.fromShort . Consensus.getOneEraHash $ blockHash block), "."
                   ]
+
+totalAdaPots
+    :: forall era. (UsesValue era, UsesTxOut era)
+    => LedgerState (ShelleyBlock era)
+    -> Generic.AdaPots
+totalAdaPots lState =
+    Generic.AdaPots
+      { Generic.apTreasury = Shelley._treasury accountState
+      , Generic.apReserves = Shelley._reserves accountState
+      , Generic.apRewards = rewards
+      , Generic.apCirculation = circulation
+      , Generic.apDeposits = Shelley._deposited uState
+      , Generic.apFees = Shelley._fees uState
+      }
+  where
+    eState :: EpochState era
+    eState = Shelley.nesEs $ Consensus.shelleyLedgerState lState
+
+    accountState :: AccountState
+    accountState = Shelley.esAccountState eState
+
+    slState :: Shelley.LedgerState era
+    slState = Shelley.esLState eState
+
+    uState :: UTxOState era
+    uState = Shelley._utxoState slState
+
+    rewards :: Coin
+    rewards = fold (Map.elems (Shelley._rewards . Shelley._dstate $ Shelley._delegationState slState))
+
+    circulation :: Coin
+    circulation = Val.coin $ Shelley.balance (Shelley._utxo uState)
