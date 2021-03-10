@@ -486,7 +486,7 @@ totalAdaPots lState =
       { Generic.apTreasury = Shelley._treasury accountState
       , Generic.apReserves = Shelley._reserves accountState
       , Generic.apRewards = rewards
-      , Generic.apCirculation = circulation
+      , Generic.apUtxo = utxo
       , Generic.apDeposits = Shelley._deposited uState
       , Generic.apFees = Shelley._fees uState
       }
@@ -506,5 +506,5 @@ totalAdaPots lState =
     rewards :: Coin
     rewards = fold (Map.elems (Shelley._rewards . Shelley._dstate $ Shelley._delegationState slState))
 
-    circulation :: Coin
-    circulation = Val.coin $ Shelley.balance (Shelley._utxo uState)
+    utxo :: Coin
+    utxo = Val.coin $ Shelley.balance (Shelley._utxo uState)
