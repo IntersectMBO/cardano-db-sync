@@ -170,7 +170,7 @@ share
     treasury            DbLovelace          sqltype=lovelace
     reserves            DbLovelace          sqltype=lovelace
     rewards             DbLovelace          sqltype=lovelace
-    circulation         DbLovelace          sqltype=lovelace
+    utxo                DbLovelace          sqltype=lovelace
     deposits            DbLovelace          sqltype=lovelace
     fees                DbLovelace          sqltype=lovelace
     blockId             BlockId             OnDeleteCascade

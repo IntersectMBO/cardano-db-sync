@@ -41,7 +41,7 @@ data AdaPots = AdaPots
   { apTreasury :: !Coin
   , apReserves :: !Coin
   , apRewards :: !Coin
-  , apCirculation :: !Coin
+  , apUtxo :: !Coin
   , apDeposits :: !Coin
   , apFees :: !Coin
   }
