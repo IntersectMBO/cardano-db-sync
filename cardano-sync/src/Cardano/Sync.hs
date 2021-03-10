@@ -364,7 +364,7 @@ chainSyncClient dataLayer metricsSetters trce env queryVar latestPoints currentT
             (go mkPipelineDecision' (Succ n) clientTip serverTip)
         (Succ n', (CollectOrPipeline, mkPipelineDecision')) ->
           CollectResponse
-            (Just . pure $ SendMsgRequestNextPipelined $ go mkPipelineDecision' (Succ n) clientTip serverTip)
+            (Just $ SendMsgRequestNextPipelined $ go mkPipelineDecision' (Succ n) clientTip serverTip)
             (mkClientStNext $ \clientBlockNo newServerTip -> go mkPipelineDecision' n' clientBlockNo (getTipBlockNo newServerTip))
         (Succ n', (Collect, mkPipelineDecision')) ->
           CollectResponse
