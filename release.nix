@@ -71,7 +71,7 @@ let
     ["checks" "hlint"] ["checks" "stylish-haskell"] ["dockerImage"]
   ];
   # Paths or prefix of paths for which musl64 are disabled:
-  noMusl64Build = [ ["shell"] ["checks"] ["tests"] ["benchmarks"] ["haskellPackages"] ]
+  noMusl64Build = [ ["shell"] ["checks"] ["tests"] ["benchmarks"] ["haskellPackages"] ["roots"] ["plan-nix"] ]
     ++ onlyBuildOnDefaultSystem;
 
   # Remove build jobs for which cross compiling does not make sense.
