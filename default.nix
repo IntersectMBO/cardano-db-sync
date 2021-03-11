@@ -45,6 +45,10 @@ let
   packages = {
     inherit haskellPackages cardano-db-sync cardano-db-sync-extended cardano-node scripts;
 
+    # so that eval time gc roots are cached (nix-tools stuff)
+    inherit (cardanoDbSyncHaskellPackages) roots;
+    inherit (haskellPackages.cardano-db-sync.project) plan-nix;
+
     inherit (haskellPackages.cardano-db-sync.identifier) version;
 
     exes = mapAttrsRecursiveCond (as: !(isDerivation as)) rewrite-static (collectComponents' "exes" haskellPackages);
