@@ -126,26 +126,7 @@ insertShelleyBlock tracer env blk lStateSnap details = do
         ]
 
     whenJust (lssNewEpoch lStateSnap) $ \ newEpoch -> do
-      whenJust (Generic.epochUpdate newEpoch) $ \esum -> do
-        let stakes = Generic.euStakeDistribution esum
-
-        whenJust (Generic.euRewards esum) $ \ grewards -> do
-          liftIO $ logInfo tracer $ mconcat
-            [ "Finishing epoch ", textShow (unEpochNo (sdEpochNo details) - 1), ": "
-            , textShow (length (Generic.rewards grewards)), " rewards, "
-            , textShow (length (Generic.orphaned grewards)), " orphaned_rewards, "
-            , textShow (length (Generic.unStakeDist stakes)), " stakes."
-            ]
-          -- Subtract 2 from the epoch to calculate when the epoch in which the reward was earned.
-          insertRewards tracer blkId (sdEpochNo details - 2) (Generic.rewards grewards)
-          insertOrphanedRewards tracer blkId (sdEpochNo details - 2) (Generic.orphaned grewards)
-
-        insertEpochParam tracer blkId (sdEpochNo details) (Generic.euProtoParams esum) (Generic.euNonce esum)
-        insertEpochStake tracer blkId (sdEpochNo details) stakes
-        liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo (sdEpochNo details))
-      whenJust (Generic.adaPots newEpoch) $ \pots ->
-        insertPots blkId (Generic.blkSlotNo blk) (sdEpochNo details) pots
-
+      insertOnNewEpoch tracer blkId (Generic.blkSlotNo blk) (sdEpochNo details) newEpoch
 
     when (getSyncStatus details == SyncFollowing) $
       -- Serializiing things during syncing can drastically slow down full sync
@@ -158,12 +139,47 @@ insertShelleyBlock tracer env blk lStateSnap details = do
       | unBlockNo (Generic.blkBlockNo blk) `mod` 5000 == 0 = logInfo
       | otherwise = logDebug
 
-
 renderInsertName :: Generic.BlockEra -> Text
 renderInsertName eraName =
   case eraName of
     Generic.Shelley -> "insertShelleyBlock"
     other -> mconcat [ "insertShelleyBlock(", textShow other, ")" ]
+
+-- -----------------------------------------------------------------------------
+
+insertOnNewEpoch
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DB.BlockId -> SlotNo -> EpochNo -> Generic.NewEpoch
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+insertOnNewEpoch tracer blkId slotNo epochNo newEpoch = do
+    whenJust (Generic.epochUpdate newEpoch) $ \esum -> do
+      let stakes = Generic.euStakeDistribution esum
+
+      whenJust (Generic.euRewards esum) $ \ grewards ->
+        insertGenericRewards grewards stakes
+
+      insertEpochParam tracer blkId epochNo (Generic.euProtoParams esum) (Generic.euNonce esum)
+      insertEpochStake tracer blkId epochNo stakes
+
+    whenJust (Generic.adaPots newEpoch) $ \pots ->
+      insertPots blkId slotNo epochNo pots
+    liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo epochNo)
+  where
+    insertGenericRewards
+        :: (MonadBaseControl IO m, MonadIO m)
+        => Generic.Rewards -> Generic.StakeDist
+        -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+    insertGenericRewards grewards stakes = do
+      liftIO . logInfo tracer $ mconcat
+                [ "Finishing epoch ", textShow (unEpochNo epochNo - 1), ": "
+                , textShow (length (Generic.rewards grewards)), " rewards, "
+                , textShow (length (Generic.orphaned grewards)), " orphaned_rewards, "
+                , textShow (length (Generic.unStakeDist stakes)), " stakes."
+                ]
+
+      -- Subtract 2 from the epoch to calculate when the epoch in which the reward was earned.
+      insertRewards tracer blkId (epochNo - 2) (Generic.rewards grewards)
+      insertOrphanedRewards tracer blkId (epochNo - 2) (Generic.orphaned grewards)
 
 -- -----------------------------------------------------------------------------
 
@@ -654,7 +670,6 @@ insertRewards _tracer blkId epoch rewards = do
                   , DB.rewardPoolId = poolId
                   , DB.rewardBlockId = blkId
                   }
-
 
 insertOrphanedRewards
     :: (MonadBaseControl IO m, MonadIO m)
