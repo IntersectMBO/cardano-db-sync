@@ -45,8 +45,10 @@ library
                         Cardano.DbSync.Era.Shelley.Generic
                         Cardano.DbSync.Era.Shelley.Generic.Block
                         Cardano.DbSync.Era.Shelley.Generic.Metadata
+                        Cardano.DbSync.Era.Shelley.Generic.ParamProposal
                         Cardano.DbSync.Era.Shelley.Generic.Tx
                         Cardano.DbSync.Era.Shelley.Generic.Util
+                        Cardano.DbSync.Era.Shelley.Generic.Witness
                         Cardano.DbSync.Era.Shelley.Insert
                         Cardano.DbSync.Era.Shelley.Query
 
@@ -72,7 +74,8 @@ library
                       , cardano-crypto-wrapper
                       , cardano-db
                       , cardano-sync
-                      , cardano-ledger
+                      , cardano-ledger-alonzo
+                      , cardano-ledger-byron
                       , cardano-ledger-shelley-ma
                       , cardano-prelude
                       , cardano-slotting
@@ -80,6 +83,7 @@ library
                       , cryptonite
                       , esqueleto
                       , extra
+                      , groups
                       , iohk-monitoring
                       , monad-control
                       , monad-logger
@@ -92,8 +96,8 @@ library
                       , persistent-postgresql
                       , prometheus
                       , small-steps
-                      , shelley-spec-ledger
                       , split
+                      , shelley-spec-ledger
                       , text
                       , time
                       , transformers

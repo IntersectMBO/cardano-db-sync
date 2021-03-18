@@ -19,6 +19,7 @@ import qualified Cardano.Crypto.KES.Class as KES
 import           Cardano.Crypto.VRF.Praos (PraosVRF)
 
 import           Cardano.DbSync.Era.Shelley.Generic.Tx
+import           Cardano.DbSync.Era.Shelley.Generic.Util
 
 import           Cardano.Ledger.Crypto (VRF)
 import           Cardano.Ledger.Era (Crypto)
@@ -34,7 +35,6 @@ import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
 import           Ouroboros.Network.Block (BlockNo (..))
 
 import qualified Shelley.Spec.Ledger.BlockChain as Shelley
-import qualified Shelley.Spec.Ledger.Keys as Shelley
 import qualified Shelley.Spec.Ledger.OCert as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
@@ -155,9 +155,6 @@ slotLeaderHash = unKeyHashRaw . Shelley.issuerIDfromBHBody . blockBody
 
 slotNumber :: ShelleyBasedEra era => ShelleyBlock era -> SlotNo
 slotNumber = Shelley.bheaderSlotNo . blockBody
-
-unKeyHashRaw :: Shelley.KeyHash d era -> ByteString
-unKeyHashRaw (Shelley.KeyHash kh) = Crypto.hashToBytes kh
 
 unTxSeq :: ShelleyBasedEra era => Shelley.TxSeq era -> [Shelley.Tx era]
 unTxSeq (Shelley.TxSeq txSeq) = toList txSeq

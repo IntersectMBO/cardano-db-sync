@@ -35,7 +35,7 @@ library
                       , base                            >= 4.14         && < 4.16
                       , bytestring
                       , cardano-db
-                      , cardano-ledger
+                      , cardano-ledger-byron
                       , hedgehog
                       , persistent
                       , text

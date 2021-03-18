@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.DbSync.Era.Shelley.Generic.Tx
@@ -20,8 +21,11 @@ import           Cardano.Api.Shelley (TxMetadataValue (..))
 import qualified Cardano.Crypto.Hash as Crypto
 
 import           Cardano.DbSync.Era.Shelley.Generic.Metadata
+import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
+import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
 import           Cardano.Ledger.Mary.Value (AssetName, PolicyID, Value (..))
+import qualified Cardano.Ledger.SafeHash as Ledger
 import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as ShelleyMa
 import qualified Cardano.Ledger.ShelleyMA.TxBody as ShelleyMa
 
@@ -40,12 +44,9 @@ import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra)
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import           Shelley.Spec.Ledger.Coin (Coin (..))
-import qualified Shelley.Spec.Ledger.Hashing as Shelley
-import qualified Shelley.Spec.Ledger.PParams as Shelley
 import           Shelley.Spec.Ledger.Scripts ()
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
-
 
 data Tx = Tx
   { txHash :: !ByteString
@@ -61,7 +62,7 @@ data Tx = Tx
   , txMetadata :: !(Maybe (Map Word64 TxMetadataValue))
   , txCertificates :: ![TxCertificate]
   , txWithdrawals :: ![TxWithdrawal]
-  , txParamProposal :: !(Maybe (Shelley.Update StandardCrypto))
+  , txParamProposal :: ![ParamProposal]
   , txMint :: !(Value StandardCrypto)
   }
 
@@ -104,7 +105,7 @@ fromAllegraTx (blkIndex, tx) =
       , txMetadata = fromAllegraMetadata <$> txMeta tx
       , txCertificates = zipWith TxCertificate [0..] (map coerceCertificate . toList . ShelleyMa.certs $ unTxBodyRaw tx)
       , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . ShelleyMa.wdrls $ unTxBodyRaw tx)
-      , txParamProposal = coerceProtoUpdate <$> Shelley.strictMaybeToMaybe (ShelleyMa.update $ unTxBodyRaw tx)
+      , txParamProposal = maybe [] (convertParamProposal (Allegra Standard)) $ Shelley.strictMaybeToMaybe (ShelleyMa.update $ unTxBodyRaw tx)
       , txMint = mempty     -- Allegra does not support Multi-Assets
       }
   where
@@ -143,7 +144,7 @@ fromShelleyTx (blkIndex, tx) =
       , txMetadata = fromShelleyMetadata <$> Shelley.strictMaybeToMaybe (Shelley._metadata tx)
       , txCertificates = zipWith TxCertificate [0..] (toList . Shelley._certs $ Shelley._body tx)
       , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . Shelley._wdrls $ Shelley._body tx)
-      , txParamProposal = coerceProtoUpdate <$> Shelley.strictMaybeToMaybe (Shelley._txUpdate $ Shelley._body tx)
+      , txParamProposal = maybe [] (convertParamProposal (Shelley Standard)) $ Shelley.strictMaybeToMaybe (Shelley._txUpdate $ Shelley._body tx)
       , txMint = mempty     -- Shelley does not support Multi-Assets
       }
   where
@@ -176,7 +177,7 @@ fromMaryTx (blkIndex, tx) =
       , txMetadata = fromMaryMetadata <$> txMeta tx
       , txCertificates = zipWith TxCertificate [0..] (map coerceCertificate . toList . ShelleyMa.certs $ unTxBodyRaw tx)
       , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . ShelleyMa.wdrls $ unTxBodyRaw tx)
-      , txParamProposal = coerceProtoUpdate <$> Shelley.strictMaybeToMaybe (ShelleyMa.update $ unTxBodyRaw tx)
+      , txParamProposal = maybe [] (convertParamProposal (Mary Standard)) $ Shelley.strictMaybeToMaybe (ShelleyMa.update $ unTxBodyRaw tx)
       , txMint = coerceMint (ShelleyMa.mint $ unTxBodyRaw tx)
       }
   where
@@ -212,8 +213,14 @@ coerceCertificate cert =
   case cert of
     Shelley.DCertDeleg deleg -> Shelley.DCertDeleg (coerce deleg)
     Shelley.DCertPool pool -> Shelley.DCertPool (coercePoolCert pool)
-    Shelley.DCertMir (Shelley.MIRCert pot rwds) -> Shelley.DCertMir (Shelley.MIRCert pot (Map.mapKeys coerce rwds))
+    Shelley.DCertMir (Shelley.MIRCert pot target) -> Shelley.DCertMir (Shelley.MIRCert pot (coerceMIRTarget target))
     Shelley.DCertGenesis gen -> Shelley.DCertGenesis (coerce gen)
+
+coerceMIRTarget :: Shelley.MIRTarget crypto -> Shelley.MIRTarget StandardCrypto
+coerceMIRTarget mt =
+  case mt of
+    Shelley.StakeAddressesMIR m -> Shelley.StakeAddressesMIR (Map.mapKeys coerce m)
+    Shelley.SendToOppositePotMIR c -> Shelley.SendToOppositePotMIR c
 
 coerceMint :: Value era -> Value StandardCrypto
 coerceMint (Value ada maMap) = Value ada (Map.mapKeys coerce maMap)
@@ -243,20 +250,12 @@ coercePoolParams pp =
     , Shelley._poolMD = Shelley._poolMD pp
     }
 
-coerceProtoUpdate :: Shelley.Update era -> Shelley.Update StandardCrypto
-coerceProtoUpdate (Shelley.Update pp epoch) =
-    Shelley.Update (coerceProposal pp) epoch
-  where
-    coerceProposal :: Shelley.ProposedPPUpdates era -> Shelley.ProposedPPUpdates StandardCrypto
-    coerceProposal (Shelley.ProposedPPUpdates p) =
-      Shelley.ProposedPPUpdates $ Map.map coerce (Map.mapKeys coerce p)
-
 -- -------------------------------------------------------------------------------------------------
 
 fromTxIn :: Shelley.TxIn StandardCrypto -> TxIn
 fromTxIn (Shelley.TxIn (Shelley.TxId txid) index) =
   TxIn
-    { txInHash = Crypto.hashToBytes txid
+    { txInHash = Crypto.hashToBytes $ Ledger.extractHash txid
     , txInIndex = fromIntegral index
     }
 
@@ -268,4 +267,4 @@ mkTxWithdrawal (ra, c) =
     }
 
 txHashId :: ShelleyBasedEra era => Shelley.Tx era -> ByteString
-txHashId = Crypto.hashToBytes . Shelley.hashAnnotated . Shelley._body
+txHashId = Crypto.hashToBytes . Ledger.extractHash . Ledger.hashAnnotated . Shelley._body

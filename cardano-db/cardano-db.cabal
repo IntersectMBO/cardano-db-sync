@@ -74,6 +74,7 @@ library
                       , quiet
                       , resourcet
                       , scientific
+                      , shelley-spec-ledger
                       , text
                       , template-haskell
                       , time
@@ -105,7 +106,7 @@ test-suite test
   build-depends:        base                            >= 4.14         && < 4.16
                       , aeson
                       , cardano-db
-                      , cardano-ledger
+                      , cardano-ledger-byron
                       , persistent
                       , hedgehog
                       , text
