@@ -17,6 +17,7 @@ module Cardano.Db.Insert
   , insertMeta
   , insertOrphanedReward
   , insertParamProposal
+  , insertPotTransfer
   , insertPoolHash
   , insertPoolMetaData
   , insertPoolOwner
@@ -48,6 +49,7 @@ import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Reader (ReaderT)
 
+import qualified Data.ByteString.Char8 as BS
 import           Data.Proxy (Proxy (..))
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -112,6 +114,9 @@ insertOrphanedReward = insertUnchecked "OrphanedReward"
 insertParamProposal :: (MonadBaseControl IO m, MonadIO m) => ParamProposal -> ReaderT SqlBackend m ParamProposalId
 insertParamProposal = insertUnchecked "ParamProposal"
 
+insertPotTransfer :: (MonadBaseControl IO m, MonadIO m) => PotTransfer -> ReaderT SqlBackend m PotTransferId
+insertPotTransfer = insertUnchecked "PotTransfer"
+
 insertPoolHash :: (MonadBaseControl IO m, MonadIO m) => PoolHash -> ReaderT SqlBackend m PoolHashId
 insertPoolHash = insertCheckUnique "PoolHash"
 
@@ -152,7 +157,7 @@ insertTreasury :: (MonadBaseControl IO m, MonadIO m) => Treasury -> ReaderT SqlB
 insertTreasury = insertUnchecked "Treasury"
 
 insertTx :: (MonadBaseControl IO m, MonadIO m) => Tx -> ReaderT SqlBackend m TxId
-insertTx = insertUnchecked "Tx"
+insertTx tx = insertUnchecked ("Tx: " ++ show (BS.length (txHash tx))) tx
 
 insertTxIn :: (MonadBaseControl IO m, MonadIO m) => TxIn -> ReaderT SqlBackend m TxInId
 insertTxIn = insertUnchecked "TxIn"

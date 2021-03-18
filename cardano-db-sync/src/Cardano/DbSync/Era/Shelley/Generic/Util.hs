@@ -15,6 +15,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Util
   , maybePaymentCred
   , mkSlotLeader
   , nonceToBytes
+  , partitionMIRTargets
   , renderAddress
   , renderRewardAcnt
   , stakingCredHash
@@ -34,6 +35,8 @@ import qualified Cardano.Crypto.Hash as Crypto
 import           Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as Db
 
+import qualified Cardano.Ledger.SafeHash as Ledger
+
 import           Cardano.Sync.Api
 import           Cardano.Sync.Config
 
@@ -41,6 +44,7 @@ import qualified Data.Binary.Put as Binary
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
+import qualified Data.List as List
 import qualified Data.Text.Encoding as Text
 
 import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardCrypto, StandardMary,
@@ -48,11 +52,12 @@ import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardCry
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
-import           Shelley.Spec.Ledger.Coin (Coin (..))
+import           Shelley.Spec.Ledger.Coin (Coin (..), DeltaCoin)
 import qualified Shelley.Spec.Ledger.Credential as Shelley
 import qualified Shelley.Spec.Ledger.Keys as Shelley
 import qualified Shelley.Spec.Ledger.Scripts as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
+import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 
 annotateStakingCred :: SyncEnv -> Shelley.StakeCredential era -> Shelley.RewardAcnt era
@@ -87,6 +92,21 @@ nonceToBytes nonce =
     Shelley.Nonce hash -> Just $ Crypto.hashToBytes hash
     Shelley.NeutralNonce -> Nothing
 
+partitionMIRTargets
+    :: [Shelley.MIRTarget StandardCrypto]
+    -> ([Map (Shelley.Credential 'Shelley.Staking StandardCrypto) DeltaCoin], [Coin])
+partitionMIRTargets =
+    List.foldl' foldfunc ([], [])
+  where
+    foldfunc
+        :: ([Map (Shelley.Credential 'Shelley.Staking StandardCrypto) DeltaCoin], [Coin])
+        -> Shelley.MIRTarget StandardCrypto
+        -> ([Map (Shelley.Credential 'Shelley.Staking StandardCrypto) DeltaCoin], [Coin])
+    foldfunc (xs, ys) mt =
+      case mt of
+        Shelley.StakeAddressesMIR x -> (x : xs, ys)
+        Shelley.SendToOppositePotMIR y -> (xs, y : ys)
+
 type family LedgerEraToApiEra ledgerera where
   LedgerEraToApiEra StandardShelley = Api.ShelleyEra
   LedgerEraToApiEra StandardAllegra = Api.AllegraEra
@@ -120,4 +140,4 @@ unScriptHash :: Shelley.ScriptHash StandardCrypto -> ByteString
 unScriptHash (Shelley.ScriptHash h) = Crypto.hashToBytes h
 
 unTxHash :: Shelley.TxId era -> ByteString
-unTxHash (Shelley.TxId txid) = Crypto.hashToBytes txid
+unTxHash (Shelley.TxId txid) = Crypto.hashToBytes $ Ledger.extractHash txid

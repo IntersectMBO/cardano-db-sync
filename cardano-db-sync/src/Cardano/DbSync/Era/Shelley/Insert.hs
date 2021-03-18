@@ -28,6 +28,7 @@ import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Db as DB
 
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
+import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 
@@ -37,7 +38,6 @@ import           Cardano.Sync.LedgerState
 import           Cardano.Sync.Types
 import           Cardano.Sync.Util
 
-import           Cardano.Ledger.Era (Crypto)
 import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..), Value (..))
 
 import           Cardano.Slotting.Block (BlockNo (..))
@@ -50,8 +50,10 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
+import           Data.Group (invert)
 import           Data.List.Split.Internals (chunksOf)
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Error as Text
@@ -61,15 +63,15 @@ import           Database.Persist.Sql (SqlBackend, putMany)
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
-import           Shelley.Spec.Ledger.BaseTypes (StrictMaybe, strictMaybeToMaybe)
+import           Shelley.Spec.Ledger.BaseTypes (strictMaybeToMaybe)
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import           Shelley.Spec.Ledger.Coin (Coin (..))
 import qualified Shelley.Spec.Ledger.Coin as Shelley
 import qualified Shelley.Spec.Ledger.Credential as Shelley
 import qualified Shelley.Spec.Ledger.Keys as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
+import qualified Shelley.Spec.Ledger.Rewards as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
-
 
 insertShelleyBlock
     :: Trace IO Text -> SyncEnv -> Generic.Block -> LedgerStateSnapshot -> SlotDetails
@@ -202,9 +204,7 @@ insertTx tracer env blkId epochNo slotNo blockIndex tx = do
     mapM_ (insertCertificate tracer env txId epochNo slotNo) $ Generic.txCertificates tx
     mapM_ (insertWithdrawals tracer txId) $ Generic.txWithdrawals tx
 
-    case Generic.txParamProposal tx of
-      Nothing -> pure ()
-      Just pu -> insertParamProposal tracer txId pu
+    mapM_ (insertParamProposal tracer txId) $ Generic.txParamProposal tx
 
     insertMaTxMint tracer txId $ Generic.txMint tx
 
@@ -454,36 +454,54 @@ insertMirCert
 insertMirCert _tracer env txId idx mcert = do
     case Shelley.mirPot mcert of
       Shelley.ReservesMIR ->
-        mapM_ insertMirReserves $ Map.toList (Shelley.mirRewards mcert)
-      Shelley.TreasuryMIR ->
-        mapM_ insertMirTreasury $ Map.toList (Shelley.mirRewards mcert)
+        case Shelley.mirRewards mcert of
+          Shelley.StakeAddressesMIR rwds -> mapM_ insertMirReserves $ Map.toList rwds
+          Shelley.SendToOppositePotMIR xfrs -> insertPotTransfer (invert $ Shelley.toDeltaCoin xfrs)
+
+      Shelley.TreasuryMIR -> do
+        case Shelley.mirRewards mcert of
+          Shelley.StakeAddressesMIR rwds -> mapM_ insertMirTreasury $ Map.toList rwds
+          Shelley.SendToOppositePotMIR xfrs -> insertPotTransfer (Shelley.toDeltaCoin xfrs)
+
   where
     insertMirReserves
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Shelley.StakeCredential StandardCrypto, Shelley.Coin)
+        => (Shelley.StakeCredential StandardCrypto, Shelley.DeltaCoin)
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-    insertMirReserves (cred, coin) = do
+    insertMirReserves (cred, dcoin) = do
       addrId <- lift . insertStakeAddress txId $ Generic.annotateStakingCred env cred
       void . lift . DB.insertReserve $
         DB.Reserve
           { DB.reserveAddrId = addrId
           , DB.reserveCertIndex = idx
           , DB.reserveTxId = txId
-          , DB.reserveAmount = Generic.coinToDbLovelace coin
+          , DB.reserveAmount = DB.deltaCoinToDbInt65 dcoin
           }
 
     insertMirTreasury
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Shelley.StakeCredential StandardCrypto, Shelley.Coin)
+        => (Shelley.StakeCredential StandardCrypto, Shelley.DeltaCoin)
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-    insertMirTreasury (cred, coin) = do
+    insertMirTreasury (cred, dcoin) = do
       addrId <- lift . insertStakeAddress txId $ Generic.annotateStakingCred env cred
       void . lift . DB.insertTreasury $
         DB.Treasury
           { DB.treasuryAddrId = addrId
           , DB.treasuryCertIndex = idx
           , DB.treasuryTxId = txId
-          , DB.treasuryAmount = Generic.coinToDbLovelace coin
+          , DB.treasuryAmount = DB.deltaCoinToDbInt65 dcoin
+          }
+
+    insertPotTransfer
+        :: (MonadBaseControl IO m, MonadIO m)
+        => Shelley.DeltaCoin -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+    insertPotTransfer dcoin =
+      void . lift . DB.insertPotTransfer $
+        DB.PotTransfer
+          { DB.potTransferCertIndex = idx
+          , DB.potTransferTreasury = DB.deltaCoinToDbInt65 dcoin
+          , DB.potTransferReserves = DB.deltaCoinToDbInt65 (invert dcoin)
+          , DB.potTransferTxId = txId
           }
 
 insertWithdrawals
@@ -536,40 +554,33 @@ insertPoolRelay updateId relay =
 
 insertParamProposal
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> Shelley.Update StandardCrypto
+    => Trace IO Text -> DB.TxId -> ParamProposal
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertParamProposal _tracer txId (Shelley.Update (Shelley.ProposedPPUpdates umap) (EpochNo epoch)) =
-    lift . mapM_ insert $ Map.toList umap
-  where
-    insert
-      :: forall era r m. (MonadBaseControl IO m, MonadIO m)
-      => (Shelley.KeyHash r (Crypto era), Shelley.PParams' StrictMaybe era)
-      -> ReaderT SqlBackend m ()
-    insert (key, pmap) =
-      void . DB.insertParamProposal $
-        DB.ParamProposal
-          { DB.paramProposalEpochNo = epoch
-          , DB.paramProposalKey = Generic.unKeyHashRaw key
-          , DB.paramProposalMinFeeA = fromIntegral <$> strictMaybeToMaybe (Shelley._minfeeA pmap)
-          , DB.paramProposalMinFeeB = fromIntegral <$> strictMaybeToMaybe (Shelley._minfeeB pmap)
-          , DB.paramProposalMaxBlockSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxBBSize pmap)
-          , DB.paramProposalMaxTxSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxTxSize pmap)
-          , DB.paramProposalMaxBhSize = fromIntegral <$> strictMaybeToMaybe (Shelley._maxBHSize pmap)
-          , DB.paramProposalKeyDeposit = Generic.coinToDbLovelace <$> strictMaybeToMaybe (Shelley._keyDeposit pmap)
-          , DB.paramProposalPoolDeposit = Generic.coinToDbLovelace <$> strictMaybeToMaybe (Shelley._poolDeposit pmap)
-          , DB.paramProposalMaxEpoch = unEpochNo <$> strictMaybeToMaybe (Shelley._eMax pmap)
-          , DB.paramProposalOptimalPoolCount = fromIntegral <$> strictMaybeToMaybe (Shelley._nOpt pmap)
-          , DB.paramProposalInfluence = fromRational <$> strictMaybeToMaybe (Shelley._a0 pmap)
-          , DB.paramProposalMonetaryExpandRate = Generic.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._rho pmap)
-          , DB.paramProposalTreasuryGrowthRate = Generic.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._tau pmap)
-          , DB.paramProposalDecentralisation = Generic.unitIntervalToDouble <$> strictMaybeToMaybe (Shelley._d pmap)
-          , DB.paramProposalEntropy = Generic.nonceToBytes =<< strictMaybeToMaybe (Shelley._extraEntropy pmap)
-          , DB.paramProposalProtocolMajor = fromIntegral . Shelley.pvMajor <$> strictMaybeToMaybe (Shelley._protocolVersion pmap)
-          , DB.paramProposalProtocolMinor = fromIntegral . Shelley.pvMinor <$> strictMaybeToMaybe (Shelley._protocolVersion pmap)
-          , DB.paramProposalMinUtxoValue = Generic.coinToDbLovelace <$> strictMaybeToMaybe (Shelley._minUTxOValue pmap)
-          , DB.paramProposalMinPoolCost = Generic.coinToDbLovelace <$> strictMaybeToMaybe (Shelley._minPoolCost pmap)
-          , DB.paramProposalRegisteredTxId = txId
-          }
+insertParamProposal _tracer txId pp =
+  void . lift . DB.insertParamProposal $
+    DB.ParamProposal
+      { DB.paramProposalEpochNo = unEpochNo $ pppEpochNo pp
+      , DB.paramProposalKey = pppKey pp
+      , DB.paramProposalMinFeeA = fromIntegral <$> pppMinFeeA pp
+      , DB.paramProposalMinFeeB = fromIntegral <$> pppMinFeeB pp
+      , DB.paramProposalMaxBlockSize = fromIntegral <$> pppMaxBhSize pp
+      , DB.paramProposalMaxTxSize = fromIntegral <$> pppMaxTxSize pp
+      , DB.paramProposalMaxBhSize = fromIntegral <$> pppMaxBhSize pp
+      , DB.paramProposalKeyDeposit = Generic.coinToDbLovelace <$> pppKeyDeposit pp
+      , DB.paramProposalPoolDeposit = Generic.coinToDbLovelace <$> pppPoolDeposit pp
+      , DB.paramProposalMaxEpoch = unEpochNo <$> pppMaxEpoch pp
+      , DB.paramProposalOptimalPoolCount = fromIntegral <$> pppOptimalPoolCount pp
+      , DB.paramProposalInfluence = fromRational <$> pppInfluence pp
+      , DB.paramProposalMonetaryExpandRate = Generic.unitIntervalToDouble <$> pppMonetaryExpandRate pp
+      , DB.paramProposalTreasuryGrowthRate = Generic.unitIntervalToDouble <$> pppTreasuryGrowthRate pp
+      , DB.paramProposalDecentralisation = Generic.unitIntervalToDouble <$> pppDecentralisation pp
+      , DB.paramProposalEntropy = Generic.nonceToBytes =<< pppEntropy pp
+      , DB.paramProposalProtocolMajor = fromIntegral . Shelley.pvMajor <$> pppProtocolVersion pp
+      , DB.paramProposalProtocolMinor = fromIntegral . Shelley.pvMinor <$> pppProtocolVersion pp
+      , DB.paramProposalMinUtxoValue = Generic.coinToDbLovelace <$> pppMinUtxoValue pp
+      , DB.paramProposalMinPoolCost = Generic.coinToDbLovelace <$> pppMinPoolCost pp
+      , DB.paramProposalRegisteredTxId = txId
+      }
 
 insertTxMetadata
     :: (MonadBaseControl IO m, MonadIO m)
@@ -620,53 +631,58 @@ containsUnicodeNul = Text.isInfixOf "\\u000"
 
 insertRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.BlockId -> EpochNo -> Map Generic.StakeCred Coin
+    => Trace IO Text -> DB.BlockId -> EpochNo -> Map Generic.StakeCred (Set (Shelley.Reward StandardCrypto))
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertRewards _tracer blkId epoch rewards = do
     forM_ (chunksOf 1000 $ Map.toList rewards) $ \rewardsChunk -> do
-      dbRewards <- mapM mkReward rewardsChunk
+      dbRewards <- concatMapM mkRewards rewardsChunk
       lift $ putMany dbRewards
   where
-    mkReward
+    mkRewards
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Generic.StakeCred, Shelley.Coin)
-        -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.Reward
-    mkReward (saddr, coin) = do
-      (saId, poolId) <- liftLookupFail "insertReward" $ queryStakeAddressAndPool (unEpochNo epoch) (Generic.unStakeCred saddr)
-      pure $
-        DB.Reward
-          { DB.rewardAddrId = saId
-          , DB.rewardAmount = Generic.coinToDbLovelace coin
-          , DB.rewardEpochNo = unEpochNo epoch
-          , DB.rewardPoolId = poolId
-          , DB.rewardBlockId = blkId
-          }
+        => (Generic.StakeCred, Set (Shelley.Reward StandardCrypto))
+        -> ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.Reward]
+    mkRewards (saddr, rset) = do
+      saId <- liftLookupFail "insertReward StakeAddress" $ queryStakeAddress (Generic.unStakeCred saddr)
+      forM (Set.toList rset) $ \ rwd -> do
+        poolId <- liftLookupFail "insertReward StakePool" $ queryStakePoolKeyHash (Shelley.rewardPool rwd)
+        pure $ DB.Reward
+                  { DB.rewardAddrId = saId
+                  , DB.rewardType = DB.showRewardType (Shelley.rewardType rwd)
+                  , DB.rewardAmount = Generic.coinToDbLovelace (Shelley.rewardAmount rwd)
+                  , DB.rewardEpochNo = unEpochNo epoch
+                  , DB.rewardPoolId = poolId
+                  , DB.rewardBlockId = blkId
+                  }
+
 
 insertOrphanedRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.BlockId -> EpochNo -> Map Generic.StakeCred Coin
+    => Trace IO Text -> DB.BlockId -> EpochNo -> Map Generic.StakeCred (Set (Shelley.Reward StandardCrypto))
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertOrphanedRewards _tracer blkId epoch orphanedRewards =
     -- There are probably not many of these for each epoch, but just in case there
     -- are, it does not hurt to chunk them.
     forM_ (chunksOf 1000 $ Map.toList orphanedRewards) $ \orphanedRewardsChunk -> do
-      dbRewards <- mapM mkOrphanedReward orphanedRewardsChunk
+      dbRewards <- concatMapM mkOrphanedReward orphanedRewardsChunk
       lift $ putMany dbRewards
   where
     mkOrphanedReward
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Generic.StakeCred, Shelley.Coin)
-        -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.OrphanedReward
-    mkOrphanedReward (saddr, coin) = do
-      (saId, poolId) <- liftLookupFail "insertOrphanedReward" $ queryStakeAddressAndPool (unEpochNo epoch) (Generic.unStakeCred saddr)
-      pure $
-        DB.OrphanedReward
-          { DB.orphanedRewardAddrId = saId
-          , DB.orphanedRewardAmount = Generic.coinToDbLovelace coin
-          , DB.orphanedRewardEpochNo = unEpochNo epoch
-          , DB.orphanedRewardPoolId = poolId
-          , DB.orphanedRewardBlockId = blkId
-          }
+        => (Generic.StakeCred, Set (Shelley.Reward StandardCrypto))
+        -> ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.OrphanedReward]
+    mkOrphanedReward (saddr, rset) = do
+      saId <- liftLookupFail "insertReward StakeAddress" $ queryStakeAddress (Generic.unStakeCred saddr)
+      forM (Set.toList rset) $ \ rwd -> do
+        poolId <- liftLookupFail "insertReward StakePool" $ queryStakePoolKeyHash (Shelley.rewardPool rwd)
+        pure $ DB.OrphanedReward
+                  { DB.orphanedRewardAddrId = saId
+                  , DB.orphanedRewardType = DB.showRewardType (Shelley.rewardType rwd)
+                  , DB.orphanedRewardAmount = Generic.coinToDbLovelace (Shelley.rewardAmount rwd)
+                  , DB.orphanedRewardEpochNo = unEpochNo epoch
+                  , DB.orphanedRewardPoolId = poolId
+                  , DB.orphanedRewardBlockId = blkId
+                  }
 
 insertEpochParam
     :: (MonadBaseControl IO m, MonadIO m)

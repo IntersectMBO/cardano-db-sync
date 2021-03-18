@@ -23,7 +23,7 @@ module Cardano.Sync.LedgerState
 import           Cardano.Binary (DecoderError)
 import qualified Cardano.Binary as Serialize
 
-import           Cardano.Ledger.Shelley.Constraints (UsesTxOut, UsesValue)
+import           Cardano.Ledger.Shelley.Constraints (UsesValue)
 import qualified Cardano.Ledger.Val as Val
 
 import           Cardano.Sync.Config.Types
@@ -478,7 +478,7 @@ tickThenReapplyCheckHash cfg block lsb =
                   ]
 
 totalAdaPots
-    :: forall era. (UsesValue era, UsesTxOut era)
+    :: forall era. UsesValue era
     => LedgerState (ShelleyBlock era)
     -> Generic.AdaPots
 totalAdaPots lState =

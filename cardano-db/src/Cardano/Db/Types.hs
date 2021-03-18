@@ -10,12 +10,15 @@ module Cardano.Db.Types
   , DbLovelace (..)
   , DbInt65 (..)
   , DbWord64 (..)
+  , deltaCoinToDbInt65
   , integerToDbInt65
   , lovelaceToAda
   , renderAda
   , scientificToAda
   , readDbInt65
   , showDbInt65
+  , readRewardType
+  , showRewardType
   , word64ToAda
   ) where
 
@@ -32,6 +35,10 @@ import           Data.Word (Word64)
 import           GHC.Generics (Generic)
 
 import           Quiet (Quiet (..))
+
+import           Shelley.Spec.Ledger.Coin (DeltaCoin (..))
+import qualified Shelley.Spec.Ledger.Rewards as Shelley
+
 
 newtype Ada = Ada
   { unAda :: Micro
@@ -72,6 +79,12 @@ newtype DbWord64
   deriving (Eq, Generic)
   deriving (Read, Show) via (Quiet DbWord64)
 
+deltaCoinToDbInt65 :: DeltaCoin -> DbInt65
+deltaCoinToDbInt65 (DeltaCoin dc) =
+  if dc < 0
+    then NegInt65 (fromIntegral $ abs dc)
+    else PosInt65 (fromIntegral dc)
+
 integerToDbInt65 :: Integer -> DbInt65
 integerToDbInt65 i =
   if i >= 0
@@ -101,6 +114,21 @@ showDbInt65 i65 =
     PosInt65 w -> show w
     NegInt65 0 ->  "0"
     NegInt65 w ->  '-' : show w
+
+readRewardType :: Text -> Shelley.RewardType
+readRewardType str =
+  case str of
+    "member" -> Shelley.MemberReward
+    "leader" -> Shelley.LeaderReward
+    -- This should never happen. On the Postgres side we defined an ENUM with
+    -- only the two values as above.
+    _other -> error $ "readRewardType: Unknown RewardType " ++ Text.unpack str
+
+showRewardType :: Shelley.RewardType -> Text
+showRewardType rt =
+  case rt of
+    Shelley.MemberReward -> "member"
+    Shelley.LeaderReward -> "leader"
 
 word64ToAda :: Word64 -> Ada
 word64ToAda w =

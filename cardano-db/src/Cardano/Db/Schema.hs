@@ -231,14 +231,12 @@ share
   Reserve
     addrId              StakeAddressId      OnDeleteCascade
     certIndex           Word16
-    -- poolId              PoolHashId
-    amount              DbLovelace          sqltype=lovelace
+    amount              DbInt65             sqltype=int65type
     txId                TxId                OnDeleteCascade
     UniqueReserves      addrId txId
 
   Withdrawal
     addrId              StakeAddressId      OnDeleteCascade
-    -- poolId              PoolHashId
     amount              DbLovelace          sqltype=lovelace
     txId                TxId                OnDeleteCascade
     UniqueWithdrawal    addrId txId
@@ -280,6 +278,7 @@ share
     -- epoch in which the reward was earned.
   Reward
     addrId              StakeAddressId      OnDeleteCascade
+    type                Text                sqltype=rewardtype
     amount              DbLovelace          sqltype=lovelace
     epochNo             Word64
     poolId              PoolHashId          OnDeleteCascade
@@ -290,6 +289,7 @@ share
   -- deregistered before the rewards are distributed.
   OrphanedReward
     addrId              StakeAddressId      OnDeleteCascade
+    type                Text                sqltype=rewardtype
     amount              DbLovelace          sqltype=lovelace
     epochNo             Word64
     poolId              PoolHashId          OnDeleteCascade
@@ -307,10 +307,16 @@ share
   Treasury
     addrId              StakeAddressId      OnDeleteCascade
     certIndex           Word16
-    -- poolId              PoolHashId
-    amount              DbLovelace          sqltype=lovelace
+    amount              DbInt65             sqltype=int65type
     txId                TxId                OnDeleteCascade
     UniqueTreasury      addrId txId
+
+  PotTransfer
+    certIndex           Word16
+    treasury            DbInt65             sqltype=int65type
+    reserves            DbInt65             sqltype=int65type
+    txId                TxId                OnDeleteCascade
+    UniquePotTransfer   txId certIndex
 
   -- -----------------------------------------------------------------------------------------------
   -- Multi Asset related tables.
