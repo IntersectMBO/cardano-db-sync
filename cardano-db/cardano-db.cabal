@@ -49,7 +49,7 @@ library
 
 
   build-depends:        aeson
-                      , base                            >= 4.12         && < 4.15
+                      , base                            >= 4.14         && < 4.16
                       , base16-bytestring
                       , bytestring
                       , cardano-slotting
@@ -102,7 +102,7 @@ test-suite test
                         Test.Property.Cardano.Db.Types
                         Test.Property.Upstream
 
-  build-depends:        base                            >= 4.12         && < 4.15
+  build-depends:        base                            >= 4.14         && < 4.16
                       , aeson
                       , cardano-db
                       , cardano-ledger
@@ -133,7 +133,7 @@ test-suite test-db
                         -Wunused-imports
                         -Wunused-packages
 
-  build-depends:        base                            >= 4.12         && < 4.15
+  build-depends:        base                            >= 4.14         && < 4.16
                       , bytestring
                       , cardano-db
                       , cardano-slotting

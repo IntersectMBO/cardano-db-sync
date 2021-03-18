@@ -32,7 +32,7 @@ library
 
 
   build-depends:        aeson
-                      , base                            >= 4.12         && < 4.15
+                      , base                            >= 4.14         && < 4.16
                       , bytestring
                       , cardano-db
                       , cardano-ledger
