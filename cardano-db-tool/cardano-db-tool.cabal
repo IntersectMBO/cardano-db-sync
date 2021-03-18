@@ -44,7 +44,7 @@ library
                         Cardano.Db.Tool.Validate.TxAccounting
                         Cardano.Db.Tool.Validate.Util
 
-  build-depends:        base                            >= 4.12         && < 4.15
+  build-depends:        base                            >= 4.14         && < 4.16
                       , bytestring
                       , ansi-terminal
                       , cardano-api
@@ -83,7 +83,7 @@ executable cardano-db-tool
                         -Wunused-imports
                         -Wunused-packages
 
-  build-depends:        base                            >= 4.12         && < 4.15
+  build-depends:        base                            >= 4.14         && < 4.16
                       , cardano-db
                       , cardano-db-tool
                       , cardano-sync
