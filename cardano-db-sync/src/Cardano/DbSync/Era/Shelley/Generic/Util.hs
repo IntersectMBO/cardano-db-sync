@@ -17,6 +17,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Util
   , nonceToBytes
   , renderAddress
   , renderRewardAcnt
+  , serialiseRewardAcntWithNetwork
   , stakingCredHash
   , unitIntervalToDouble
   , unKeyHashRaw
@@ -103,6 +104,12 @@ renderAddress addr = Api.serialiseAddress (Api.fromShelleyAddr addr :: Api.Addre
 
 renderRewardAcnt :: Shelley.RewardAcnt StandardCrypto -> Text
 renderRewardAcnt = Api.serialiseAddress . Api.fromShelleyStakeAddr
+
+-- Ignore the network in the `RewardAcnt` and use the provided one instead.
+-- This is a workaround for https://github.com/input-output-hk/cardano-db-sync/issues/546
+serialiseRewardAcntWithNetwork :: Shelley.Network -> Shelley.RewardAcnt StandardCrypto -> ByteString
+serialiseRewardAcntWithNetwork network (Shelley.RewardAcnt _ cred) =
+  Shelley.serialiseRewardAcnt $ Shelley.RewardAcnt network cred
 
 stakingCredHash :: SyncEnv -> Shelley.StakeCredential era -> ByteString
 stakingCredHash env = Shelley.serialiseRewardAcnt . annotateStakingCred env
