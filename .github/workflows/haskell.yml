@@ -137,8 +137,8 @@ jobs:
           cache-cabal-store-v1-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('dependencies.txt') }}
           cache-cabal-store-v1-${{ runner.os }}-${{ matrix.ghc }}-
 
-    - name: Build dependencies
-      run: cabal build all --builddir="$CABAL_BUILDDIR" --only-dependencies
+          #    - name: Build dependencies
+          #      run: cabal build all --builddir="$CABAL_BUILDDIR" --only-dependencies
 
     - name: Build
       run: cabal build all --builddir="$CABAL_BUILDDIR"

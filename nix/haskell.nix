@@ -126,6 +126,7 @@ let
         # systemd can't be statically linked
         packages.cardano-config.flags.systemd = !pkgs.stdenv.hostPlatform.isMusl;
         packages.cardano-node.flags.systemd = !pkgs.stdenv.hostPlatform.isMusl;
+        packages.smash.flags.systemd = !pkgs.stdenv.hostPlatform.isMusl;
       })
     ];
   };

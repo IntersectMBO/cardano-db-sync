@@ -1,0 +1,69 @@
+cabal-version:          2.2
+
+-- http://haskell.org/cabal/users-guide/
+
+name:                   cardano-db-sync-smash
+version:                8.0.0
+synopsis:               The SMASH Cardano DB Sync node
+description:            A Cardano node that follows the Cardano chain and inserts data from the
+                        chain into a PostgresQL database. It also contains the SMASH module inside.
+homepage:               https://github.com/input-output-hk/cardano-db-sync
+bug-reports:            https://github.com/input-output-hk/cardano-db-sync/issues
+license:                Apache-2.0
+license-file:           LICENSE
+author:                 IOHK Engineering Team
+maintainer:             operations@iohk.io
+copyright:              (c) 2019 IOHK
+category:               Cryptocurrency
+build-type:             Simple
+extra-source-files:     CHANGELOG.md
+
+library
+  default-language:     Haskell2010
+  hs-source-dirs:       src
+
+  ghc-options:          -Wall
+                        -Wcompat
+                        -Wredundant-constraints
+                        -Wincomplete-patterns
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+                        -Wunused-imports
+                        -Wunused-packages
+
+  exposed-modules:      Cardano.DbSync.Plugin.Smash
+
+  build-depends:        base                            >= 4.12         && < 4.15
+                      , cardano-db-sync
+                      , cardano-sync
+                      , smash
+                      , persistent
+
+executable cardano-db-sync-smash
+  default-language:     Haskell2010
+  main-is:              cardano-db-sync-smash.hs
+  hs-source-dirs:       app
+
+  ghc-options:          -Wall
+                        -Wcompat
+                        -Wredundant-constraints
+                        -Wincomplete-patterns
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+                        -Wunused-imports
+                        -Wunused-packages
+                        -Wno-unsafe
+                        -threaded
+
+  other-modules:        Paths_cardano_db_sync_smash
+
+  build-depends:        base                            >= 4.12         && < 4.15
+                      , cardano-config
+                      , cardano-db-sync
+                      , cardano-db-sync-smash
+                      , cardano-sync
+                      , smash
+                      , cardano-prelude
+                      , cardano-slotting
+                      , optparse-applicative
+                      , text
