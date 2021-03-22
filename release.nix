@@ -71,8 +71,9 @@ let
     ["checks" "hlint"] ["checks" "stylish-haskell"] ["dockerImage"]
   ];
   # Paths or prefix of paths for which musl64 are disabled:
-  noMusl64Build = [ ["shell"] ["checks"] ["tests"] ["benchmarks"] ["haskellPackages"] ["roots"] ["plan-nix"] ]
-    ++ onlyBuildOnDefaultSystem;
+  noMusl64Build = [ ["shell"] ["checks"] ["tests"] ["benchmarks"] ["haskellPackages"] ["roots"] ["plan-nix"]
+    [ "haskellPackages" "cardano-db-sync-smash" ] [ "exes" "cardano-db-sync-smash" ]
+  ] ++ onlyBuildOnDefaultSystem;
 
   # Remove build jobs for which cross compiling does not make sense.
   filterProject = noBuildList: mapAttrsRecursiveCond (a: !(isDerivation a)) (path: value:
