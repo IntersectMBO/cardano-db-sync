@@ -1,5 +1,14 @@
 # Revision history for cardano-db
 
+## 9.0.0
+* Note that this release requires the database to be dropped and recreated.
+* Requires ghc-8.10.x tp build.
+* Documentation updates.
+* Add `delegation_slot_no` column to `delegation` table to simplify a query used when populating the
+  database.
+* Add static (musl64) linux builds.
+* Add and populate `ada_pots` table.
+
 ## 8.0.0
 * Note that this release requires the database to be dropped and recreated.
 * Documentation updates.
