@@ -6,9 +6,21 @@
 -- Conventions:
 --  * Views use `_view` as a suffix to show they are views rather than table.
 
--- The utxo view which shows all unspent transaction outputs.
-create view utxo_view as select
+-- A utxo view which shows all unspent transaction outputs including the un-redeemed redeem
+-- addresses.
+create view utxo_byron_view as select
 	tx_out.*
   from tx_out left outer join tx_in
 	on tx_out.tx_id = tx_in.tx_out_id and tx_out.index = tx_in.tx_out_index
   where tx_in.tx_in_id is null ;
+
+
+-- A utxo view which shows all unspent transaction outputs *excluding* the un-redeemed redeem
+-- addresses.
+create view utxo_view as select
+	tx_out.*
+  from tx_out
+	left outer join tx_in on tx_out.tx_id = tx_in.tx_out_id and tx_out.index = tx_in.tx_out_index
+	left outer join tx on tx.id = tx_out.tx_id
+	left outer join block on tx.block_id = block.id
+  where tx_in.tx_in_id is null and block.epoch_no is null ;
