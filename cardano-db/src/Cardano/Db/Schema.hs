@@ -201,10 +201,10 @@ share
     UniquePoolUpdate    hashId registeredTxId
 
   PoolOwner
-    hash                ByteString          sqltype=hash28type
+    addrId              StakeAddressId      OnDeleteCascade
     poolHashId          PoolHashId          OnDeleteCascade
     registeredTxId      TxId                OnDeleteCascade     -- Slot number in which the owner was registered.
-    UniquePoolOwner     hash poolHashId registeredTxId
+    UniquePoolOwner     addrId poolHashId registeredTxId
 
   PoolRetire
     hashId              PoolHashId          OnDeleteCascade

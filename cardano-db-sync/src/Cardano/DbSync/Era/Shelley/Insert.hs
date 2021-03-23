@@ -327,7 +327,7 @@ insertPoolRegister tracer network (EpochNo epoch) txId idx params = do
                       , DB.poolUpdateRegisteredTxId = txId
                       }
 
-  mapM_ (insertPoolOwner poolHashId txId) $ toList (Shelley._poolOwners params)
+  mapM_ (insertPoolOwner network poolHashId txId) $ toList (Shelley._poolOwners params)
   mapM_ (insertPoolRelay poolUpdateId) $ toList (Shelley._poolRelays params)
 
 maxLovelace :: Word64
@@ -409,13 +409,14 @@ insertStakeAddressRefIfMissing txId addr =
 
 insertPoolOwner
     :: (MonadBaseControl IO m, MonadIO m)
-    => DB.PoolHashId -> DB.TxId -> Shelley.KeyHash 'Shelley.Staking StandardCrypto
+    => Shelley.Network -> DB.PoolHashId -> DB.TxId -> Shelley.KeyHash 'Shelley.Staking StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolOwner poolHashId txId skh =
+insertPoolOwner network poolHashId txId skh = do
+  saId <- lift $ insertStakeAddress txId (Shelley.RewardAcnt network (Shelley.KeyHashObj skh))
   void . lift . DB.insertPoolOwner $
     DB.PoolOwner
-      { DB.poolOwnerPoolHashId = poolHashId
-      , DB.poolOwnerHash = Generic.unKeyHashRaw skh
+      { DB.poolOwnerAddrId = saId
+      , DB.poolOwnerPoolHashId = poolHashId
       , DB.poolOwnerRegisteredTxId = txId
       }
 
@@ -424,10 +425,10 @@ insertStakeRegistration
     => Trace IO Text -> DB.TxId -> Word16 -> Shelley.RewardAcnt StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertStakeRegistration _tracer txId idx rewardAccount = do
-  scId <- lift $ insertStakeAddress txId rewardAccount
+  saId <- lift $ insertStakeAddress txId rewardAccount
   void . lift . DB.insertStakeRegistration $
     DB.StakeRegistration
-      { DB.stakeRegistrationAddrId = scId
+      { DB.stakeRegistrationAddrId = saId
       , DB.stakeRegistrationCertIndex = idx
       , DB.stakeRegistrationTxId = txId
       }
