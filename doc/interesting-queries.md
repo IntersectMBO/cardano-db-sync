@@ -298,6 +298,69 @@ from the treasury. These can be coalesced into single query via an SQL `union` o
 ...
 ```
 
+### Get historical UTxO set for a given timestamp
+The UTxO set is dependent on time, this will return it for a given timestamp
+```
+# with const as ( select to_timestamp( '2020-10-10 17:00:00', 'YYYY-MM-DD HH24:MI:SS' ) as effective_time_ )
+  select tx_out.address as address, tx_out.value as lovelace, generating_block.time as timestamp
+  from const
+  cross join tx_out
+  inner join tx as generating_tx on generating_tx.id = tx_out.tx_id
+  inner join block as generating_block on generating_block.id = generating_tx.block_id
+  left join tx_in as consuming_input on consuming_input.tx_out_id = generating_tx.id
+    and consuming_input.tx_out_index = tx_out.index
+  left join tx as consuming_tx on consuming_tx.id = consuming_input.tx_in_id
+  left join block as consuming_block on consuming_block.id = consuming_tx.block_id
+  where ( -- Ommit outputs from genesis after Allegra hard fork
+      const.effective_time_ < '2020-12-16 21:44:00'
+      or generating_block.epoch_no is not null
+    )
+    and const.effective_time_ >= generating_block.time -- Only outputs from blocks generated in the past
+    and ( -- Only outputs consumed in the future or unconsumed outputs
+      const.effective_time_ <= consuming_block.time or consuming_input.id IS NULL
+    ) ;
+
+                           address                           |   lovelace    |      timestamp      
+-------------------------------------------------------------+---------------+---------------------
+ Ae2tdPwUPEZFdcW8MaYNxoJJkKmkSwJD5D4AdJPBLLn7PCVMenKMvwtWV8K |       1000000 | 2017-09-23 21:44:51
+ Ae2tdPwUPEZ1pRs1gSidtoRGMpJR54UyNrdVDMFxXu2pBkhxitAWhqrGqd9 |  715399000000 | 2017-09-23 21:44:51
+ Ae2tdPwUPEZJn5QH1xKqNFmtEfvBXFHJ5RacD1xtR9kcvndvebirJHG7Sam |  380723000000 | 2017-09-23 21:44:51
+ Ae2tdPwUPEZBZRPzrsCvbaG3HH89AUtAkBwjeR4pC2WZvXYZ4Ab7J7JNpLz |  469809000000 | 2017-09-23 21:44:51
+ Ae2tdPwUPEYyvoxws84ogrBf7CqRjiGaqP6yKeb2gsLZaKPaDWKdxiQn1Pm | 1838066000000 | 2017-09-23 21:44:51
+...
+```
+
+### Get tagged Genesis addresses
+The genesis block contains multiple addresses, this query will tag them with their origin.
+```
+# select genesis_output.address as address, floor( genesis_output.value / 1000000 ) AS ada, redemption_block.time as redeemed_at,
+    cast(( case
+      when genesis_output.value = 1000000 then 'Test Ada'
+      when genesis_output.address in (
+        'Ae2tdPwUPEZKQuZh2UndEoTKEakMYHGNjJVYmNZgJk2qqgHouxDsA5oT83n',
+        'Ae2tdPwUPEZGcVv9qJ3KSTx5wk3dHKNn6G3a3eshzqX2y3N9LzL3ZTBEApq',
+        'Ae2tdPwUPEZ9dH9VC4iVXZRNYe5HGc73AKVMYHExpgYBmDMkgCUgnJGqqqq'
+      ) then 'Development Pool'
+      else 'Pre-Sale'
+    end ) as varchar ) as origin
+  from block as genesis_block
+  inner join tx as genesis_tx on genesis_tx.block_id = genesis_block.id
+  inner join tx_out as genesis_output on genesis_output.tx_id = genesis_tx.id
+  left join tx_in as redemption_input on redemption_input.tx_out_id = genesis_tx.id
+  left join tx as redemption_tx on redemption_tx.id = redemption_input.tx_in_id
+  left join block as redemption_block on redemption_block.id = redemption_tx.block_id
+  where genesis_block.epoch_no is null ;
+
+                           address                           |    ada     |     redeemed_at     |      origin      
+-------------------------------------------------------------+------------+---------------------+------------------
+ Ae2tdPwUPEZJkVfTW9cFmxAxsp1WtgV4hde53p5eLccUUFzQu8amyrLHcTL |     385509 | 2017-11-19 06:36:11 | Pre-Sale
+ Ae2tdPwUPEZM65iaQ1jYtgmtTSvjrcPXfXcFBineY27wYot6t2ToY8FqkXu |    1923076 | 2017-09-30 16:40:31 | Pre-Sale
+ Ae2tdPwUPEZMeLeeSL9Lq2Kr3UhBt1a23KhCMqFWvjYGXxGjkvV9giSQAeH |     832476 | 2017-09-29 07:47:31 | Pre-Sale
+ Ae2tdPwUPEYwQuL8cXMVstbEUvfdxwWpjepjKTD9BYQbcXJG8BdLjEpuD8Y |     409116 | 2017-10-08 06:27:31 | Pre-Sale
+ Ae2tdPwUPEZApyHh2AfjfSyCRYhwDLoWo91WvmjE9fQKo6VB9BjWk6N7eXv |     384615 | 2017-09-30 03:58:51 | Pre-Sale
+...
+```
+
 ---
 
 [Query.hs]: https://github.com/input-output-hk/cardano-db-sync/blob/master/cardano-db/src/Cardano/Db/Query.hs
