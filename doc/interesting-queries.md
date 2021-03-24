@@ -4,7 +4,7 @@ The following is a set of example SQL queries that can be run against the `db-sy
 
 These queries are run using the `psql` executable distributed with PostgreSQL. Connecting to the
 database can be done from the `cardano-db-sync` git checkout using:
-```
+```sh
 PGPASSFILE=config/pgpass-mainnet psql cexplorer
 ```
 
@@ -12,8 +12,8 @@ Some of these queries have Haskell/Esqueleto equivalents in the file [Query.hs][
 they exist, the names of those queries will be included in parentheses.
 
 ### Chain meta data (`queryMeta`)
-```
-# select * from meta ;
+```sql
+select * from meta ;
  id |     start_time      | network_name
 ----+---------------------+--------------
   1 | 2017-09-23 21:44:51 | mainnet
@@ -29,8 +29,8 @@ This just queries the UTxO set for unspent transaction outputs. It does not incl
 that have have not yet been withdrawn. Before being withdrawn rewards exist in ledger state and not
 on-chain.
 
-```
-# select sum (value) / 1000000 as current_supply from tx_out as tx_outer where
+```sql
+select sum (value) / 1000000 as current_supply from tx_out as tx_outer where
     not exists
       ( select tx_out.id from tx_out inner join tx_in
           on tx_out.tx_id = tx_in.tx_out_id and tx_out.index = tx_in.tx_out_index
@@ -43,8 +43,8 @@ on-chain.
 ```
 
 ### Slot number of the most recent block (`queryLatestSlotNo`)
-```
-# select slot_no from block where block_no is not null
+```sql
+select slot_no from block where block_no is not null
     order by block_no desc limit 1 ;
  slot_no
 ---------
@@ -54,8 +54,8 @@ on-chain.
 ```
 
 ### Size of the cexplorer database
-```
-# select pg_size_pretty (pg_database_size ('cexplorer'));
+```sql
+select pg_size_pretty (pg_database_size ('cexplorer'));
  pg_size_pretty
 ----------------
  4067 MB
@@ -67,8 +67,8 @@ In general the database is operated on in an append only manner. Pool certificat
 be updated so that later certificates override earlier ones. In addition pools can
 retire. Therefore to get the latest pool registration for every pool that is still
 valid:
-```
-# select * from pool_update
+```sql
+select * from pool_update
     where registered_tx_id in (select max(registered_tx_id) from pool_update group by hash_id)
     and not exists
       ( select * from pool_retire where pool_retire.hash_id = pool_update.hash_id
@@ -77,8 +77,8 @@ valid:
 
 ```
 To include the pool hash in the query output:
-```
-# select * from pool_update inner join pool_hash on pool_update.hash_id = pool_hash.id
+```sql
+select * from pool_update inner join pool_hash on pool_update.hash_id = pool_hash.id
     where registered_tx_id in (select max(registered_tx_id) from pool_update group by hash_id)
     and not exists
       ( select * from pool_retire where pool_retire.hash_id = pool_update.hash_id
@@ -87,8 +87,8 @@ To include the pool hash in the query output:
 ```
 
 ### Transaction fee for specified transaction hash:
-```
-# select tx.id, tx.fee from tx
+```sql
+select tx.id, tx.fee from tx
     where tx.hash = '\xf9c0997afc8159dbe0568eadf0823112e0cc29cd097c8dc939ff44c372388bc0' ;
    id    |  fee
 ---------+--------
@@ -97,8 +97,8 @@ To include the pool hash in the query output:
 ```
 
 ### Transaction outputs for specified transaction hash:
-```
-# select tx_out.* from tx_out inner join tx on tx_out.tx_id = tx.id
+```sql
+select tx_out.* from tx_out inner join tx on tx_out.tx_id = tx.id
     where tx.hash = '\xf9c0997afc8159dbe0568eadf0823112e0cc29cd097c8dc939ff44c372388bc0' ;
    id    |  tx_id  | index |         address         |    value     |        address_raw        | payment_cred
 ---------+---------+-------+-------------------------+--------------+---------------------------+--------------
@@ -108,8 +108,8 @@ To include the pool hash in the query output:
 ```
 
 ### Transaction inputs for specified transaction hash:
-```
-# select tx_out.* from tx_out
+```sql
+select tx_out.* from tx_out
     inner join tx_in on tx_out.tx_id = tx_in.tx_out_id
     inner join tx on tx.id = tx_in.tx_in_id and tx_in.tx_out_index = tx_out.index
     where tx.hash = '\xf9c0997afc8159dbe0568eadf0823112e0cc29cd097c8dc939ff44c372388bc0' ;
@@ -121,8 +121,8 @@ To include the pool hash in the query output:
 ### Transaction withdrawals for specified transaction hash:
 Withdrawals are a feature of some transactions of the Shelley era and later.
 
-```
-# select withdrawal.* from withdrawal
+```sql
+select withdrawal.* from withdrawal
     inner join tx on withdrawal.tx_id = tx.id
     where tx.hash = '\x0b8c5be678209bb051a02904dd18896a929f9aca8aecd48850939a590175f7e8' ;
   id   | addr_id |  amount   |  tx_id
@@ -132,8 +132,8 @@ Withdrawals are a feature of some transactions of the Shelley era and later.
 
 ### Get the stake distribution for each pool for a given epoch:
 Simplest query is:
-```
-# select pool_id, sum (amount) from epoch_stake
+```sql
+select pool_id, sum (amount) from epoch_stake
     where epoch_no = 216 group by pool_id ;
 
  pool_id |       sum
@@ -146,8 +146,8 @@ Simplest query is:
 (1114 rows)
 ```
 Or, to use the Bech32 pool identifier instead of the Postgres generated `pool_id` field:
-```
-# select pool_hash.view, sum (amount) as lovelace from epoch_stake
+```sql
+select pool_hash.view, sum (amount) as lovelace from epoch_stake
     inner join pool_hash on epoch_stake.pool_id = pool_hash.id
     where epoch_no = 216 group by pool_hash.id ;
                            view                           |    lovelace
@@ -162,8 +162,8 @@ Or, to use the Bech32 pool identifier instead of the Postgres generated `pool_id
 ```
 
 ### Get the delegation history for a specified stake address
-```
-# select delegation.active_epoch_no, pool_hash.view from delegation
+```sql
+select delegation.active_epoch_no, pool_hash.view from delegation
     inner join stake_address on delegation.addr_id = stake_address.id
     inner join pool_hash on delegation.pool_hash_id = pool_hash.id
     where stake_address.view = 'stake1u8gsndukzghdukmqdsd7r7wd6kvamvjv2pzcgag8v6jd69qfqyl5h'
@@ -183,8 +183,8 @@ epochs 214, 216 and 217.
 
 ### Get the reward history for a specified stake address
 
-```
-# select reward.epoch_no, pool_hash.view as delegated_pool, reward.amount as lovelace
+```sql
+select reward.epoch_no, pool_hash.view as delegated_pool, reward.amount as lovelace
     from reward inner join stake_address on reward.addr_id = stake_address.id
     inner join pool_hash on reward.pool_id = pool_hash.id
     where stake_address.view = 'stake1u8gsndukzghdukmqdsd7r7wd6kvamvjv2pzcgag8v6jd69qfqyl5h'
@@ -206,8 +206,8 @@ epochs 214, 216 and 217.
 
 ### Get the block number of blocks created in an epoch by a specified pool
 
-```
-# select block.block_no, block.epoch_no, pool_hash.view as pool_view
+```sql
+select block.block_no, block.epoch_no, pool_hash.view as pool_view
     from block inner join slot_leader on block.slot_leader_id = slot_leader.id
     inner join pool_hash on slot_leader.pool_hash_id = pool_hash.id
     where block.epoch_no = 220
@@ -221,8 +221,8 @@ epochs 214, 216 and 217.
 
 ### Get the block number of blocks created by a specified pool for each epoch
 
-```
-# select block.epoch_no, count (*) as block_count
+```sql
+select block.epoch_no, count (*) as block_count
     from block inner join slot_leader on block.slot_leader_id = slot_leader.id
     inner join pool_hash on slot_leader.pool_hash_id = pool_hash.id
     where pool_hash.view = 'pool1nux6acnlx0du7ss9fhg2phjlaqe87l4wcurln5r6f0k8xreluez'
@@ -237,8 +237,8 @@ epochs 214, 216 and 217.
 ```
 
 ### Get the tx_id, tx_block_id, tx_out_address of a voting registration.
-```
-# select tx.id as tx_id, tx.block_id as tx_block_id, tx_out.address as tx_out_address
+```sql
+select tx.id as tx_id, tx.block_id as tx_block_id, tx_out.address as tx_out_address
     from tx inner join tx_out on tx.id = tx_out.tx_id
     where tx.hash = '\x9053a4cf0c6c9fb29792c78e688c5915a02909d0073371d8fff1abba0bed3065';
   tx_id  | tx_block_id |                       tx_out_address
@@ -248,14 +248,14 @@ epochs 214, 216 and 217.
 ```
 
 to find your transaction hash of your voter registration:
-```
+```sh
 cardano-cli transaction txid --tx-file metadata.txsigned
 9053a4cf0c6c9fb29792c78e688c5915a02909d0073371d8fff1abba0bed3065
 ```
 
 ### Get the amount delegated by epoch for a specified address
-```
-# select stake_address.view as stake_address, epoch_stake.epoch_no, epoch_stake.amount
+```sql
+select stake_address.view as stake_address, epoch_stake.epoch_no, epoch_stake.amount
     from stake_address inner join epoch_stake on stake_address.id = epoch_stake.addr_id
     where stake_address.view = 'stake1u8mt5gqclkq0swmvzx9lvq4jgwsnx9yh030yrxwqwllu0mq2m0l4n' ;
                         stake_address                        | epoch_no |   amount
@@ -269,8 +269,8 @@ cardano-cli transaction txid --tx-file metadata.txsigned
 Orphaned rewards for epoch `N` are rewards that acrue to a stake address that was registered in
 before the end of epoch `N - 2` but for which the stake address has been de-registered before the
 rewards could be distributed (which happens at the start of epoch `N + 2`).
-```
-# select max (epoch_no) as max_epoch_no, sum (amount) / 1000000 as orphaned_reward_ada
+```sql
+select max (epoch_no) as max_epoch_no, sum (amount) / 1000000 as orphaned_reward_ada
     from orphaned_reward ;
  max_epoch_no | orphaned_reward_ada
 --------------+---------------------
@@ -281,8 +281,8 @@ rewards could be distributed (which happens at the start of epoch `N + 2`).
 ### Get all reward account deposits
 Reward payments can come from two places; staking rewards which are in the `reward` table and payments
 from the treasury. These can be coalesced into single query via an SQL `union` operations:
-```
-# select addr_id, amount, NULL as reward_epoch_no, tx_id as treasury_tx_id from treasury
+```sql
+select addr_id, amount, NULL as reward_epoch_no, tx_id as treasury_tx_id from treasury
     union
     select addr_id, amount, epoch_no as reward_epoch_no, NULL as treasury_tx_id from reward ;
  addr_id |    amount     | reward_epoch_no | treasury_tx_id
@@ -300,7 +300,7 @@ from the treasury. These can be coalesced into single query via an SQL `union` o
 
 ### Get historical UTxO set for a given timestamp
 The UTxO set is dependent on time, this will return it for a given timestamp
-```
+```sql
 # with const as (select to_timestamp ('2020-10-10 17:00:00', 'YYYY-MM-DD HH24:MI:SS') as effective_time_)
   select tx_out.address as address, tx_out.value as lovelace, generating_block.time as timestamp
     from const
@@ -332,8 +332,8 @@ The UTxO set is dependent on time, this will return it for a given timestamp
 
 ### Get tagged Genesis addresses
 The genesis block contains multiple addresses, this query will tag them with their origin.
-```
-# select
+```sql
+select
     genesis_output.address as address,
     floor (genesis_output.value / 1000000) as ada,
     redemption_block.time as redeemed_at,
