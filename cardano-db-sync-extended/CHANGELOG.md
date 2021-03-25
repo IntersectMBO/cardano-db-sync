@@ -1,5 +1,20 @@
 # Revision history for cardano-db-sync-extended
 
+## 9.0.0
+* Note that this release requires the database to be dropped and recreated.
+* Requires ghc-8.10.x tp build.
+* Documentation updates.
+* Improve DbSync API.
+* Add `delegation_slot_no` column to `delegation` table to simplify a query used when populating the
+  database.
+* Improve the way database inserts are done.
+* Fix `blk_count` column in `epoch` table for epochs without transactions (#296).
+* Extract new package `cardano-sync` (which contains only the functionality require to sync the
+  chain, and avoids all PostgreSQL dependencies) from `cardano-db-sync`.
+* Add static (musl64) linux builds.
+* Add and populate `ada_pots` table.
+* Fix network id for `reward_addr` in `pool_update` table (#546).
+
 ## 8.0.0
 * Note that this release requires the database to be dropped and recreated.
 * Requires version 1.25.0 or later of the node.
