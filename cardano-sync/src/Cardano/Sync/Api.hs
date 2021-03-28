@@ -40,8 +40,8 @@ data SyncEnv = SyncEnv
   { envProtocol :: !SyncProtocol
   , envNetworkMagic :: !NetworkMagic
   , envSystemStart :: !SystemStart
-  , envDataLayer :: SyncDataLayer
-  , envLedger :: LedgerEnv
+  , envDataLayer :: !SyncDataLayer
+  , envLedger :: !LedgerEnv
   }
 
 -- The base @DataLayer@ that contains the functions required for syncing to work.
