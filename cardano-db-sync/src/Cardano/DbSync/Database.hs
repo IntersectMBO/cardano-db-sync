@@ -139,13 +139,13 @@ runRollbacksDB env point =
   newExceptT $ rollbackToPoint (envBackend env) (getTrace env) point
 
 insertBlockList
-    :: SyncEnv -> [BlockDetails]
+    :: SyncEnv -> [CardanoBlock]
     -> ExceptT SyncNodeError IO ()
 insertBlockList env blks =
   newExceptT $ insertDefaultBlock env blks
 
 -- | Split the DbAction list into a prefix containing blocks to apply and a postfix.
-spanDbApply :: [DbAction] -> ([BlockDetails], [DbAction])
+spanDbApply :: [DbAction] -> ([CardanoBlock], [DbAction])
 spanDbApply lst =
   case lst of
     (DbApplyBlock bt:xs) -> let (ys, zs) = spanDbApply xs in (bt:ys, zs)

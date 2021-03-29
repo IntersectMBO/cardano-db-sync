@@ -23,7 +23,7 @@ import qualified Control.Concurrent.STM.TBQueue as TBQ
 import           Control.Monad.Class.MonadSTM.Strict (StrictTMVar, newEmptyTMVarIO, takeTMVar)
 
 data DbAction
-  = DbApplyBlock !BlockDetails
+  = DbApplyBlock !CardanoBlock
   | DbRollBackToPoint !CardanoPoint (StrictTMVar IO (Maybe [CardanoPoint]))
   | DbFinish
 
@@ -31,9 +31,8 @@ newtype DbActionQueue = DbActionQueue
   { dbActQueue :: TBQueue DbAction
   }
 
-mkDbApply :: CardanoBlock -> SlotDetails -> DbAction
-mkDbApply cblk details =
-  DbApplyBlock (BlockDetails cblk details)
+mkDbApply :: CardanoBlock -> DbAction
+mkDbApply = DbApplyBlock
 
 -- | This simulates a synhronous operations, since the thread waits for the db
 -- worker thread to finish the rollback.
