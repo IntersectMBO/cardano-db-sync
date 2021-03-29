@@ -23,6 +23,7 @@ module Cardano.DbSync.Config.Types
   , SyncPreConfig (..)
   , LedgerStateDir (..)
   , MaryToAlonzo
+  , CardanoInterpreter
   , LogFileDir (..)
   , NetworkName (..)
   , NodeConfigFile (..)
@@ -60,6 +61,7 @@ import qualified Ouroboros.Consensus.Cardano.Block as Cardano
 import qualified Ouroboros.Consensus.Cardano.CanHardFork as Shelley
 import           Ouroboros.Consensus.Cardano.Node (ProtocolTransitionParamsShelleyBased)
 import qualified Ouroboros.Consensus.HardFork.Combinator.Basics as Cardano
+import qualified Ouroboros.Consensus.HardFork.History as History
 import           Ouroboros.Consensus.Shelley.Eras (StandardShelley)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
 
@@ -90,6 +92,14 @@ type AllegraToMary =
 
 type MaryToAlonzo =
         ProtocolTransitionParamsShelleyBased (AlonzoEra StandardCrypto)
+
+type CardanoInterpreter = History.Interpreter
+           '[ ByronBlock
+            , Shelley.ShelleyBlock StandardShelley
+            , Shelley.ShelleyBlock Cardano.StandardAllegra
+            , Shelley.ShelleyBlock Cardano.StandardMary
+            , Shelley.ShelleyBlock Cardano.StandardAlonzo
+            ]
 
 newtype ConfigFile = ConfigFile
   { unConfigFile :: FilePath

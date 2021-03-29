@@ -95,7 +95,7 @@ mkSyncEnv
     -> NetworkMagic -> SystemStart -> LedgerStateDir -> EpochSlot
     -> IO SyncEnv
 mkSyncEnv trce backend syncOptions protoInfo nw nwMagic systemStart dir stableEpochSlot = do
-  ledgerEnv <- mkLedgerEnv trce protoInfo dir nw stableEpochSlot
+  ledgerEnv <- mkLedgerEnv trce protoInfo dir nw stableEpochSlot systemStart
   pure $ SyncEnv
           { envProtocol = SyncProtocolCardano
           , envNetworkMagic = nwMagic
