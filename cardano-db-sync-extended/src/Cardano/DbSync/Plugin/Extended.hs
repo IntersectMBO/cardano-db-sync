@@ -3,7 +3,7 @@ module Cardano.DbSync.Plugin.Extended
   ) where
 
 import           Cardano.DbSync.Plugin.Default (defDbSyncNodePlugin)
-import           Cardano.DbSync.Plugin.Epoch (epochPluginInsertBlock, epochPluginOnStartup,
+import           Cardano.DbSync.Plugin.Epoch (epochPluginInsertBlockDetails, epochPluginOnStartup,
                    epochPluginRollbackBlock)
 
 import           Cardano.Sync (SyncNodePlugin (..))
@@ -19,7 +19,9 @@ extendedDbSyncNodePlugin backend =
               ++ [epochPluginOnStartup backend]
         , plugInsertBlock =
             plugInsertBlock defPlugin
-                ++ [epochPluginInsertBlock backend]
+        , plugInsertBlockDetails =
+            plugInsertBlockDetails defPlugin
+                ++ [epochPluginInsertBlockDetails backend]
         , plugRollbackBlock =
             plugRollbackBlock defPlugin
               ++ [epochPluginRollbackBlock]

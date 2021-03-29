@@ -5,7 +5,7 @@
 
 module Cardano.DbSync.Plugin.Epoch
   ( epochPluginOnStartup
-  , epochPluginInsertBlock
+  , epochPluginInsertBlockDetails
   , epochPluginRollbackBlock
   ) where
 
@@ -61,11 +61,12 @@ epochPluginOnStartup backend trce =
         let backOne = if lbe == 0 then 0 else lbe - 1
         liftIO $ atomicWriteIORef latestCachedEpochVar (Just backOne)
 
-epochPluginInsertBlock
+epochPluginInsertBlockDetails
     :: SqlBackend -> Trace IO Text -> SyncEnv -> [BlockDetails]
-    -> IO (Either SyncNodeError ())
-epochPluginInsertBlock backend trce _dbSyncEnv blockDetails =
-    DB.runDbIohkLogging backend trce $ traverseMEither insert blockDetails
+    -> ExceptT SyncNodeError IO ()
+epochPluginInsertBlockDetails backend trce _dbSyncEnv blockDetails =
+    mapExceptT (DB.runDbIohkLogging backend trce) $
+      mapM_ (ExceptT . insert) blockDetails
   where
     insert :: BlockDetails -> ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
     insert (BlockDetails cblk details) = do
@@ -141,7 +142,7 @@ updateEpochNum epochNum trce = do
     insertEpoch :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either SyncNodeError ())
     insertEpoch = do
       epoch <- DB.queryCalcEpochEntry epochNum
-      liftIO . logInfo trce $ "epochPluginInsertBlock: epoch " <> textShow epochNum
+      liftIO . logInfo trce $ "epochPluginInsertBlockDetails: epoch " <> textShow epochNum
       void $ DB.insertEpoch epoch
       pure $ Right ()
 

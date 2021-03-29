@@ -22,7 +22,7 @@ import           Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as TBQ
 
 data DbAction
-  = DbApplyBlock !BlockDetails
+  = DbApplyBlock !CardanoBlock
   | DbRollBackToPoint !CardanoPoint
   | DbFinish
 
@@ -30,9 +30,8 @@ newtype DbActionQueue = DbActionQueue
   { dbActQueue :: TBQueue DbAction
   }
 
-mkDbApply :: CardanoBlock -> SlotDetails -> DbAction
-mkDbApply cblk details =
-  DbApplyBlock (BlockDetails cblk details)
+mkDbApply :: CardanoBlock -> DbAction
+mkDbApply = DbApplyBlock
 
 mkDbRollback :: CardanoPoint -> DbAction
 mkDbRollback = DbRollBackToPoint

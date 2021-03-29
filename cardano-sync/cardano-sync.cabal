@@ -89,6 +89,7 @@ library
                       , lifted-base
                       , monad-control
                       , memory
+                      , mtl
                       , network-mux
                       , pretty-show
                       , ouroboros-consensus

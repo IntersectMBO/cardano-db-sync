@@ -99,18 +99,17 @@ runRollbacks trce plugin point =
     $ plugRollbackBlock plugin
 
 insertBlockList
-    :: Trace IO Text -> SyncEnv -> SyncNodePlugin -> [BlockDetails]
+    :: Trace IO Text -> SyncEnv -> SyncNodePlugin -> [CardanoBlock]
     -> ExceptT SyncNodeError IO ()
-insertBlockList trce env plugin blks =
+insertBlockList trce env plugin blks = do
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise is *way* too chatty.
   --newExceptT $ traverseMEither insertBlock blks
-  newExceptT
-    . traverseMEither (\ f -> f trce env blks)
-    $ plugInsertBlock plugin
+  blockDetails <- plugInsertBlock plugin trce env blks
+  forM_ (plugInsertBlockDetails plugin) $ \f -> f trce env blockDetails
 
 -- | Split the DbAction list into a prefix containing blocks to apply and a postfix.
-spanDbApply :: [DbAction] -> ([BlockDetails], [DbAction])
+spanDbApply :: [DbAction] -> ([CardanoBlock], [DbAction])
 spanDbApply lst =
   case lst of
     (DbApplyBlock bt:xs) -> let (ys, zs) = spanDbApply xs in (bt:ys, zs)
