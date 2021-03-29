@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -56,23 +57,24 @@ import           Ouroboros.Network.Block (blockNo)
 
 
 insertDefaultBlock
-    :: SyncEnv -> [BlockDetails]
+    :: SyncEnv -> [CardanoBlock]
     -> IO (Either SyncNodeError ())
-insertDefaultBlock env blockDetails =
+insertDefaultBlock env blocks =
     DB.runDbIohkLogging backend tracer .
       runExceptT $ do
-        traverse_ insertDetails blockDetails
+        traverse_ insertDetails blocks
   where
     tracer = getTrace env
     backend = envBackend env
 
     insertDetails
-        :: BlockDetails -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
-    insertDetails (BlockDetails cblk details) = do
+        :: CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
+    insertDetails cblk = do
       -- Calculate the new ledger state to pass to the DB insert functions but do not yet
       -- update ledgerStateVar.
       let lenv = envLedger env
-      lStateSnap <- liftIO $ applyBlock (envLedger env) cblk details
+      lStateSnap <- liftIO $ applyBlock (envLedger env) cblk
+      let !details = lssSlotDetails lStateSnap
       mkSnapshotMaybe env lStateSnap (blockNo cblk) (isSyncedWithinSeconds details 600)
       handleLedgerEvents tracer (envLedger env) (lssPoint lStateSnap) (lssEvents lStateSnap)
       let firstBlockOfEpoch = hasEpochStartEvent (lssEvents lStateSnap)

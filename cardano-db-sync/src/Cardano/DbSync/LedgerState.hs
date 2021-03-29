@@ -57,6 +57,7 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Generic.StakeCred
 import           Cardano.DbSync.Era.Shelley.Generic.StakePoolKeyHash
 import           Cardano.DbSync.LedgerEvent
+import           Cardano.DbSync.StateQuery
 import           Cardano.DbSync.Types hiding (CardanoBlock)
 import           Cardano.DbSync.Util
 
@@ -84,13 +85,16 @@ import           Data.Time.Clock (UTCTime, getCurrentTime)
 import           Ouroboros.Consensus.Block (CodecConfig, Point (..), WithOrigin (..), blockHash,
                    blockIsEBB, blockPoint, blockPrevHash, pointSlot)
 import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
+import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardAlonzo,
                    StandardCrypto)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Config (TopLevelConfig (..), configCodec, configLedger)
+import           Ouroboros.Consensus.HardFork.Abstract
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
 import           Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import           Ouroboros.Consensus.HardFork.Combinator.State (epochInfoLedger)
+import qualified Ouroboros.Consensus.HardFork.History as History
 import qualified Ouroboros.Consensus.HeaderValidation as Consensus
 import           Ouroboros.Consensus.Ledger.Abstract (LedgerResult (..), getTipSlot, ledgerTipHash,
                    ledgerTipPoint, ledgerTipSlot, tickThenReapplyLedgerResult)
@@ -139,6 +143,8 @@ data LedgerEnv = LedgerEnv
   , leProtocolInfo :: !(Consensus.ProtocolInfo IO CardanoBlock)
   , leDir :: !LedgerStateDir
   , leNetwork :: !Ledger.Network
+  , leSystemStart :: !SystemStart
+  , leInterpreter :: !(StrictTVar IO (Maybe CardanoInterpreter))
   , leStateVar :: !(StrictTVar IO (Maybe LedgerDB))
   , leEventState :: !(StrictTVar IO LedgerEventState)
   , lePoolRewards :: !(StrictTMVar IO Generic.Rewards)
@@ -211,12 +217,13 @@ ledgerDbCurrent = either id id . AS.head . ledgerDbCheckpoints
 
 mkLedgerEnv
     :: Trace IO Text -> Consensus.ProtocolInfo IO CardanoBlock -> LedgerStateDir
-    -> Ledger.Network -> EpochSlot
+    -> Ledger.Network -> EpochSlot -> SystemStart
     -> IO LedgerEnv
-mkLedgerEnv trce protocolInfo dir nw stableEpochSlot = do
+mkLedgerEnv trce protocolInfo dir nw stableEpochSlot systemStart = do
     svar <- newTVarIO Nothing
     evar <- newTVarIO initLedgerEventState
     ivar <- newTVarIO $ IndexCache mempty mempty
+    intervar <- newTVarIO Nothing
     -- 2.5 days worth of slots. If we try to stick more than this number of
     -- items in the queue, bad things are likely to happen.
     boq <- newTBQueueIO 10800
@@ -230,6 +237,8 @@ mkLedgerEnv trce protocolInfo dir nw stableEpochSlot = do
       , leProtocolInfo = protocolInfo
       , leDir = dir
       , leNetwork = nw
+      , leSystemStart = systemStart
+      , leInterpreter = intervar
       , leStateVar = svar
       , leEventState = evar
       , lePoolRewards = prvar
@@ -270,16 +279,18 @@ readStateUnsafe env = do
 -- The function 'tickThenReapply' does zero validation, so add minimal validation ('blockPrevHash'
 -- matches the tip hash of the 'LedgerState'). This was originally for debugging but the check is
 -- cheap enough to keep.
-applyBlock :: LedgerEnv -> CardanoBlock -> SlotDetails -> IO LedgerStateSnapshot
-applyBlock env blk details =
+applyBlock :: LedgerEnv -> CardanoBlock -> IO LedgerStateSnapshot
+applyBlock env blk = do
     -- 'LedgerStateVar' is just being used as a mutable variable. There should not ever
     -- be any contention on this variable, so putting everything inside 'atomically'
     -- is fine.
+    time <- getCurrentTime
     atomically $ do
       ledgerDB <- readStateUnsafe env
       let oldState = ledgerDbCurrent ledgerDB
       let !result = applyBlk (ExtLedgerCfg (topLevelConfig env)) blk (clsState oldState)
       let !newState = oldState { clsState = lrResult result }
+      details <- getSlotDetails env (ledgerState $ clsState newState) time (cardanoBlockSlotNo blk)
       let !ledgerDB' = pushLedgerDB ledgerDB newState
       writeTVar (leStateVar env) (Just ledgerDB')
       oldEventState <- readTVar (leEventState env)
@@ -748,4 +759,28 @@ getAlonzoPParams cls =
 -- | This should be exposed by 'consensus'.
 ledgerTipBlockNo :: ExtLedgerState blk -> WithOrigin BlockNo
 ledgerTipBlockNo = fmap Consensus.annTipBlockNo . Consensus.headerStateTip . Consensus.headerState
+
+getSlotDetails :: LedgerEnv -> LedgerState CardanoBlock -> UTCTime -> SlotNo -> STM SlotDetails
+getSlotDetails env st time slot = do
+    minter <- readTVar $ leInterpreter env
+    details <- case minter of
+      Just inter -> case queryWith inter of
+        Left _ -> queryNewInterpreter
+        Right sd -> return sd
+      Nothing -> queryNewInterpreter
+    pure $ details { sdCurrentTime = time }
+  where
+    hfConfig = configLedger $ Consensus.pInfoConfig $ leProtocolInfo env
+
+    queryNewInterpreter :: STM SlotDetails
+    queryNewInterpreter =
+      let inter = History.mkInterpreter $ hardForkSummary hfConfig st
+      in case queryWith inter of
+        Left err -> throwSTM err
+        Right sd -> do
+          writeTVar (leInterpreter env) (Just inter)
+          return sd
+
+    queryWith inter =
+      History.interpretQuery inter (querySlotDetails (leSystemStart env) slot)
 

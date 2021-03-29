@@ -129,7 +129,7 @@ updateEpochNum epochNum trce = do
     insertEpoch :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either SyncNodeError ())
     insertEpoch = do
       epoch <- DB.queryCalcEpochEntry epochNum
-      liftIO . logInfo trce $ "epochPluginInsertBlock: epoch " <> textShow epochNum
+      liftIO . logInfo trce $ "epochPluginInsertBlockDetails: epoch " <> textShow epochNum
       void $ DB.insertEpoch epoch
       pure $ Right ()
 
