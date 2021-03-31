@@ -57,9 +57,13 @@ import           Ouroboros.Consensus.Shelley.Eras (StandardShelley)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
 import qualified Ouroboros.Consensus.Shelley.Protocol as Shelley
 
-newtype MigrationDir = MigrationDir FilePath
+newtype MigrationDir = MigrationDir
+  { unMigrationDir :: FilePath
+  }
 
-newtype LogFileDir = LogFileDir FilePath
+newtype LogFileDir = LogFileDir
+  { unLogFileDir :: FilePath
+  }
 
 type CardanoBlock =
         Cardano.HardForkBlock

@@ -59,8 +59,7 @@ runDbSyncNode metricsSetters mkPlugin params = do
     -- Read the PG connection info
     pgConfig <- DB.readPGPassFileEnv Nothing
 
-    let MigrationDir migrationDir = enpMigrationDir params
-    DB.runMigrations pgConfig True (DB.MigrationDir migrationDir) (Just $ DB.LogFileDir "/tmp")
+    DB.runMigrations pgConfig True dbMigrationDir (Just $ DB.LogFileDir "/tmp")
 
     trce <- configureLogging params "db-sync-node"
 
@@ -74,6 +73,11 @@ runDbSyncNode metricsSetters mkPlugin params = do
 
         runSyncNode (mkSyncDataLayer trce backend) metricsSetters trce (mkPlugin backend)
             params (insertValidateGenesisDist backend) runDbThread
+  where
+    -- This is only necessary because `cardano-db` and `cardano-sync` both define
+    -- this newtype, but the later does not depend on the former.
+    dbMigrationDir :: DB.MigrationDir
+    dbMigrationDir = DB.MigrationDir $ unMigrationDir (enpMigrationDir params)
 
 -- -------------------------------------------------------------------------------------------------
 
