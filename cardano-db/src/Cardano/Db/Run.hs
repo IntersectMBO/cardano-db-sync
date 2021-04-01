@@ -5,7 +5,6 @@
 module Cardano.Db.Run
   ( getBackendGhci
   , ghciDebugQuery
-  , runDbAction
   , runDbHandleLogger
   , runDbIohkLogging
   , runDbIohkNoLogging
@@ -63,21 +62,6 @@ runDbHandleLogger logHandle dbAction = do
     logOut :: Loc -> LogSource -> LogLevel -> LogStr -> IO ()
     logOut loc src level msg =
       BS.hPutStrLn logHandle . fromLogStr $ defaultLogStr loc src level msg
-
--- Be explicit and send the @SqlBackend@ inside.
-runDbAction :: SqlBackend -> Maybe (Trace IO Text) -> ReaderT SqlBackend (LoggingT IO) a -> IO a
-runDbAction backend mLogging dbAction =
-    case mLogging of
-      Nothing ->
-        runSilentLoggingT $ runSqlConnWithIsolation dbAction backend Serializable
-      Just tracer ->
-        runIohkLogging tracer $ runSqlConnWithIsolation dbAction backend Serializable
-  where
-    runSilentLoggingT :: LoggingT m a -> m a
-    runSilentLoggingT action = runLoggingT action silentLog
-
-    silentLog :: Monad m => Loc -> LogSource -> LogLevel -> LogStr -> m ()
-    silentLog _loc _src _level _msg = pure ()
 
 -- | Run a DB action logging via iohk-monitoring-framework.
 runDbIohkLogging :: SqlBackend -> Trace IO Text -> ReaderT SqlBackend (LoggingT IO) b -> IO b

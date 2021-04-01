@@ -51,7 +51,7 @@ import           System.IO.Unsafe (unsafePerformIO)
 
 epochPluginOnStartup :: SqlBackend -> Trace IO Text -> IO (Either a ())
 epochPluginOnStartup backend trce =
-  Right <<$>> DB.runDbAction backend (Just trce) $ do
+  Right <<$>> DB.runDbIohkLogging backend trce $ do
     liftIO . logInfo trce $ "epochPluginOnStartup: Checking"
     mlbe <- queryLatestEpochNo
     case mlbe of
@@ -65,7 +65,7 @@ epochPluginInsertBlock
     :: SqlBackend -> Trace IO Text -> SyncEnv -> [BlockDetails]
     -> IO (Either SyncNodeError ())
 epochPluginInsertBlock backend trce _dbSyncEnv blockDetails =
-    DB.runDbAction backend (Just trce) $ traverseMEither insert blockDetails
+    DB.runDbIohkLogging backend trce $ traverseMEither insert blockDetails
   where
     insert :: BlockDetails -> ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
     insert (BlockDetails cblk details) = do
