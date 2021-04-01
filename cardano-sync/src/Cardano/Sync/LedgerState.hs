@@ -41,7 +41,7 @@ import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (.
 
 import           Control.Concurrent.STM.TVar (TVar, newTVarIO, readTVar, readTVarIO, writeTVar)
 import qualified Control.Exception as Exception
-import           Control.Monad.Extra (firstJustM, fromMaybeM)
+import           Control.Monad.Extra (firstJustM, fromMaybeM, whenJust)
 
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
@@ -101,9 +101,6 @@ data LedgerEnv = LedgerEnv
   , leStateVar :: TVar CardanoLedgerState
   }
 
-topLevelConfig :: LedgerEnv -> TopLevelConfig CardanoBlock
-topLevelConfig = Consensus.pInfoConfig . leProtocolInfo
-
 newtype CardanoLedgerState = CardanoLedgerState
   { clsState :: ExtLedgerState CardanoBlock
   }
@@ -123,13 +120,12 @@ data LedgerStateSnapshot = LedgerStateSnapshot
 mkLedgerEnv :: Consensus.ProtocolInfo IO CardanoBlock
             -> LedgerStateDir
             -> Shelley.Network
-            -> SlotNo
-            -> Bool
+            -> Maybe SlotNo
             -> IO LedgerEnv
-mkLedgerEnv protocolInfo dir network slot deleteFiles = do
-  when deleteFiles $
+mkLedgerEnv protocolInfo dir network mSlot = do
+  whenJust mSlot $ \ slot ->
     deleteNewerLedgerStateFiles dir slot
-  st <- findLatestLedgerState protocolInfo dir deleteFiles
+  st <- findLatestLedgerState protocolInfo dir (isJust mSlot)
   var <- newTVarIO st
   pure LedgerEnv
     { leProtocolInfo = protocolInfo
@@ -141,8 +137,11 @@ mkLedgerEnv protocolInfo dir network slot deleteFiles = do
 
 initCardanoLedgerState :: Consensus.ProtocolInfo IO CardanoBlock -> CardanoLedgerState
 initCardanoLedgerState pInfo = CardanoLedgerState
-      { clsState = Consensus.pInfoInitLedger pInfo
-      }
+  { clsState = Consensus.pInfoInitLedger pInfo
+  }
+
+topLevelConfig :: LedgerEnv -> TopLevelConfig CardanoBlock
+topLevelConfig = Consensus.pInfoConfig . leProtocolInfo
 
 -- The function 'tickThenReapply' does zero validation, so add minimal validation ('blockPrevHash'
 -- matches the tip hash of the 'LedgerState'). This was originally for debugging but the check is

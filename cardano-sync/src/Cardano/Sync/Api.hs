@@ -54,7 +54,7 @@ data SyncDataLayer = SyncDataLayer
 mkSyncEnv :: SyncDataLayer -> ProtocolInfo IO CardanoBlock -> Shelley.Network -> NetworkMagic -> SystemStart -> LedgerStateDir -> IO SyncEnv
 mkSyncEnv dataLayer protocolInfo network networkMagic systemStart dir = do
   latestSlot <- sdlGetLatestSlotNo dataLayer
-  ledgerEnv <- mkLedgerEnv protocolInfo dir network latestSlot True
+  ledgerEnv <- mkLedgerEnv protocolInfo dir network (Just latestSlot)
   pure $ SyncEnv
           { envProtocol = SyncProtocolCardano
           , envNetworkMagic = networkMagic
