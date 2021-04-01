@@ -48,7 +48,7 @@ insertDefaultBlock
     :: SqlBackend -> Trace IO Text -> SyncEnv -> [BlockDetails]
     -> IO (Either SyncNodeError ())
 insertDefaultBlock backend tracer env blockDetails =
-    DB.runDbAction backend (Just tracer) $
+    DB.runDbIohkLogging backend tracer $
       traverseMEither insert blockDetails
   where
     insert
