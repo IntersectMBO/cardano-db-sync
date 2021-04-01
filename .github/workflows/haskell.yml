@@ -21,8 +21,6 @@ jobs:
 
     - name: Select build directory
       run: |
-        echo "CABAL_BUILDDIR=dist"              >> $GITHUB_ENV
-        echo "PLAN_JSON=dist/cache/plan.json"   >> $GITHUB_ENV
         echo "$HOME/.cabal/bin"                 >> $GITHUB_PATH
 
     - name: Install pkgconfiglite
@@ -76,13 +74,6 @@ jobs:
       if: matrix.os == 'macos-latest'
       run: brew install libsodium
 
-    - name: Select optimal cabal version
-      run: |
-        case "$OS" in
-          Windows_NT)   echo "CABAL_VERSION=3.2.0.0"      >> $GITHUB_ENV;;
-          *)            echo "CABAL_VERSION=3.4.0.0"  >> $GITHUB_ENV;;
-        esac
-
     - uses: haskell/actions/setup@v1
       id: setup-haskell
       with:
@@ -115,7 +106,7 @@ jobs:
       run: cabal update
 
     - name: Cabal Configure
-      run: cabal configure --builddir="$CABAL_BUILDDIR" --write-ghc-environment-files=always
+      run: cabal configure --write-ghc-environment-files=always
 
     - name: Configure to use libsodium
       run: |
@@ -126,7 +117,7 @@ jobs:
 
     - name: Record dependencies
       run: |
-        cat ${{ env.PLAN_JSON }} | jq -r '."install-plan"[].id' | sort > dependencies.txt
+        cat dist-newstyle/cache/plan.json | jq -r '."install-plan"[].id' | sort > dependencies.txt
 
     - uses: actions/cache@v2
       name: Cache cabal store
@@ -138,10 +129,10 @@ jobs:
           cache-cabal-store-v1-${{ runner.os }}-${{ matrix.ghc }}-
 
     - name: Build dependencies
-      run: cabal build all --builddir="$CABAL_BUILDDIR" --only-dependencies
+      run: cabal build all --only-dependencies
 
     - name: Build
-      run: cabal build all --builddir="$CABAL_BUILDDIR"
+      run: cabal build all
 
     - name: Set up database user (Linux)
       if: matrix.os == 'ubuntu-latest'
@@ -149,7 +140,7 @@ jobs:
 
     - name: Set up database
       run: |
-        cardano_db_sync_exe="$(cat $CABAL_BUILDDIR/cache/plan.json | jq -r '."install-plan"[] | select(."component-name" == "exe:cardano-db-sync") | ."bin-file"' | head)"
+        cardano_db_sync_exe="$(cat dist-newstyle/cache/plan.json | jq -r '."install-plan"[] | select(."component-name" == "exe:cardano-db-sync") | ."bin-file"' | head)"
 
         echo "Executable found at: $cardano_db_sync_exe"
         chmod 600 config/pgpass-mainnet
@@ -157,4 +148,4 @@ jobs:
         PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh --createdb
 
     - name: Run tests
-      run: cabal test --builddir="$CABAL_BUILDDIR" all -j1
+      run: cabal test all -j1
