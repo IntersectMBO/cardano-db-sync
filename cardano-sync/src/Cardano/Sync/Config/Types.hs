@@ -11,6 +11,7 @@ module Cardano.Sync.Config.Types
   , ByronToShelley
   , CardanoBlock
   , CardanoProtocol
+  , CardanoInterpreter
   , ConfigFile (..)
   , SyncCommand (..)
   , SyncNodeParams (..)
@@ -53,6 +54,7 @@ import qualified Ouroboros.Consensus.Cardano.Block as Cardano
 import qualified Ouroboros.Consensus.Cardano.CanHardFork as Shelley
 import           Ouroboros.Consensus.Cardano.Node (ProtocolParamsTransition)
 import qualified Ouroboros.Consensus.HardFork.Combinator.Basics as Cardano
+import qualified Ouroboros.Consensus.HardFork.History as History
 import           Ouroboros.Consensus.Shelley.Eras (StandardShelley)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
 import qualified Ouroboros.Consensus.Shelley.Protocol as Shelley
@@ -72,6 +74,13 @@ type CardanoBlock =
 type CardanoProtocol =
         Cardano.HardForkProtocol
             '[ ByronBlock
+            , Shelley.ShelleyBlock StandardShelley
+            , Shelley.ShelleyBlock Cardano.StandardAllegra
+            , Shelley.ShelleyBlock Cardano.StandardMary
+            ]
+
+type CardanoInterpreter = History.Interpreter
+           '[ ByronBlock
             , Shelley.ShelleyBlock StandardShelley
             , Shelley.ShelleyBlock Cardano.StandardAllegra
             , Shelley.ShelleyBlock Cardano.StandardMary

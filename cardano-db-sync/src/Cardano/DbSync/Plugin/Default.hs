@@ -31,11 +31,7 @@ import           Control.Monad.Logger (LoggingT)
 import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
-import           Ouroboros.Consensus.Config
-import           Ouroboros.Consensus.HardFork.Abstract (hardForkSummary)
-import qualified Ouroboros.Consensus.HardFork.History as History
 import           Ouroboros.Consensus.Ledger.Extended
-import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 
 -- | The default SyncNodePlugin.
 -- Does exactly what the cardano-db-sync node did before the plugin system was added.
@@ -58,8 +54,6 @@ insertDefaultBlock backend tracer env blocks =
     mapExceptT (DB.runDbIohkLogging backend tracer) $
       mapM (ExceptT . insert) blocks
   where
-    hfConfig = configLedger $ Consensus.pInfoConfig $ leProtocolInfo $ envLedger env
-
     insert
         :: CardanoBlock
         -> ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError BlockDetails)
@@ -67,8 +61,7 @@ insertDefaultBlock backend tracer env blocks =
       -- Calculate the new ledger state to pass to the DB insert functions but do not yet
       -- update ledgerStateVar.
       lStateSnap <- liftIO $ applyBlock (envLedger env) cblk
-      let inter = History.mkInterpreter $ hardForkSummary hfConfig (ledgerState $ clsState $ lssState lStateSnap)
-      details <- liftIO $ getSlotDetails env inter (cardanoBlockSlotNo cblk)
+      details <- liftIO $ getSlotDetails env (ledgerState $ clsState $ lssState lStateSnap) (cardanoBlockSlotNo cblk)
       _ <- case cblk of
                 BlockByron blk ->
                   insertByronBlock tracer blk details

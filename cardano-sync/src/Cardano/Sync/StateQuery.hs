@@ -11,6 +11,8 @@ module Cardano.Sync.StateQuery
   ( getSlotDetails
   ) where
 
+import           Control.Concurrent.STM.TVar
+
 import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Cardano.Sync.Types
@@ -24,9 +26,13 @@ import           Data.Time.Clock (UTCTime, addUTCTime, getCurrentTime)
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (RelativeTime (..),
                    SystemStart (..))
 import           Ouroboros.Consensus.Cardano.Node ()
+import           Ouroboros.Consensus.Config
+import           Ouroboros.Consensus.HardFork.Abstract
 import qualified Ouroboros.Consensus.HardFork.History as History
 import           Ouroboros.Consensus.HardFork.History.Qry (Expr (..), Qry, qryFromExpr,
                    slotToEpoch')
+import           Ouroboros.Consensus.Ledger.Basics
+import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -48,10 +54,27 @@ querySlotDetails start absSlot = do
 relToUTCTime :: SystemStart -> RelativeTime -> UTCTime
 relToUTCTime (SystemStart start) (RelativeTime rel) = addUTCTime rel start
 
-getSlotDetails :: SyncEnv -> History.Interpreter xs -> SlotNo -> IO SlotDetails
-getSlotDetails env inter slot =
-    case History.interpretQuery inter (querySlotDetails (envSystemStart env) slot) of
-      Left err -> throwIO err
-      Right sd -> do
-        time <- getCurrentTime
-        pure $ sd { sdCurrentTime = time }
+getSlotDetails :: SyncEnv -> LedgerState CardanoBlock -> SlotNo -> IO SlotDetails
+getSlotDetails env st slot = do
+    minter <- readTVarIO $ envInterpreter env
+    details <- case minter of
+      Just inter -> case queryWith inter of
+        Left _ -> queryNewInterpreter
+        Right sd -> return sd
+      Nothing -> queryNewInterpreter
+    time <- getCurrentTime
+    pure $ details { sdCurrentTime = time }
+  where
+    hfConfig = configLedger $ Consensus.pInfoConfig $ leProtocolInfo $ envLedger env
+
+    queryNewInterpreter :: IO SlotDetails
+    queryNewInterpreter =
+      let inter = History.mkInterpreter $ hardForkSummary hfConfig st
+      in case queryWith inter of
+        Left err -> throwIO err
+        Right sd -> do
+          atomically $ writeTVar (envInterpreter env) (Just inter)
+          return sd
+
+    queryWith inter =
+      History.interpretQuery inter (querySlotDetails (envSystemStart env) slot)

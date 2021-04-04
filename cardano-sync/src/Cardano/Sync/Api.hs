@@ -24,6 +24,8 @@ import           Cardano.Slotting.Slot (SlotNo (..))
 import qualified Cardano.Chain.Genesis as Byron
 import           Cardano.Crypto.ProtocolMagic
 
+import           Control.Concurrent.STM.TVar
+
 import           Data.ByteString (ByteString)
 
 import           Ouroboros.Consensus.Block.Abstract (HeaderHash, fromRawHash)
@@ -41,6 +43,7 @@ data SyncEnv = SyncEnv
   , envNetworkMagic :: !NetworkMagic
   , envSystemStart :: !SystemStart
   , envDataLayer :: SyncDataLayer
+  , envInterpreter :: TVar (Maybe CardanoInterpreter)
   , envLedger :: LedgerEnv
   }
 
@@ -55,11 +58,13 @@ mkSyncEnv :: SyncDataLayer -> ProtocolInfo IO CardanoBlock -> Shelley.Network ->
 mkSyncEnv dataLayer protocolInfo network networkMagic systemStart dir = do
   latestSlot <- sdlGetLatestSlotNo dataLayer
   ledgerEnv <- mkLedgerEnv protocolInfo dir network latestSlot True
+  varInter <- newTVarIO Nothing
   pure $ SyncEnv
           { envProtocol = SyncProtocolCardano
           , envNetworkMagic = networkMagic
           , envSystemStart = systemStart
           , envDataLayer = dataLayer
+          , envInterpreter = varInter
           , envLedger = ledgerEnv
           }
 
