@@ -11,6 +11,7 @@ module Cardano.Db.Run
   , runDbNoLogging
   , runDbStdoutLogging
   , runIohkLogging
+  , transactionCommit
   ) where
 
 import           Cardano.BM.Data.LogItem (LOContent (..), LogObject (..), PrivacyAnnotation (..),
@@ -18,7 +19,7 @@ import           Cardano.BM.Data.LogItem (LOContent (..), LogObject (..), Privac
 import           Cardano.BM.Data.Severity (Severity (..))
 import           Cardano.BM.Trace (Trace)
 
-import           Control.Monad.IO.Class (liftIO)
+import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Logger (LogLevel (..), LogSource, LoggingT, NoLoggingT,
                    defaultLogStr, runLoggingT, runNoLoggingT, runStdoutLoggingT)
 import           Control.Monad.Trans.Reader (ReaderT)
@@ -31,7 +32,8 @@ import qualified Data.Text.Lazy.Builder as LT
 import qualified Data.Text.Lazy.IO as LT
 
 import           Database.Persist.Postgresql (openSimpleConn, withPostgresqlConn)
-import           Database.Persist.Sql (IsolationLevel (..), runSqlConnWithIsolation)
+import           Database.Persist.Sql (IsolationLevel (..), runSqlConnWithIsolation,
+                   transactionSaveWithIsolation)
 import           Database.PostgreSQL.Simple (connectPostgreSQL)
 
 import           Database.Esqueleto
@@ -143,3 +145,6 @@ ghciDebugQuery query = do
     liftIO $ do
       LT.putStr $ LT.toLazyText sql
       print params
+
+transactionCommit :: MonadIO m => ReaderT SqlBackend m ()
+transactionCommit = transactionSaveWithIsolation Serializable
