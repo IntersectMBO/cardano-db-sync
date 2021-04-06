@@ -59,5 +59,5 @@ rollbackToSlot backend trce point =
 -- For testing and debugging.
 unsafeRollback :: Trace IO Text -> SlotNo -> IO (Either SyncNodeError ())
 unsafeRollback trce slotNo = do
-  logInfo trce $ "Forced rollback to slot " <> textShow slotNo
+  logInfo trce $ "Forced rollback to slot " <> textShow (unSlotNo slotNo)
   Right <$> DB.runDbNoLogging (void $ DB.deleteCascadeSlotNo slotNo)
