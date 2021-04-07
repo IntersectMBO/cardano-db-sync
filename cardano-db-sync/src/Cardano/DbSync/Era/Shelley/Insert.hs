@@ -159,7 +159,7 @@ insertOnNewEpoch tracer blkId slotNo epochNo newEpoch = do
         insertGenericRewards grewards stakes
 
       insertEpochParam tracer blkId epochNo (Generic.euProtoParams esum) (Generic.euNonce esum)
-      insertEpochStake tracer blkId epochNo stakes
+      insertEpochStake tracer epochNo stakes
 
     whenJust (Generic.adaPots newEpoch) $ \pots ->
       insertPots blkId slotNo epochNo pots
@@ -178,8 +178,8 @@ insertOnNewEpoch tracer blkId slotNo epochNo newEpoch = do
                 ]
 
       -- Subtract 2 from the epoch to calculate when the epoch in which the reward was earned.
-      insertRewards tracer blkId (epochNo - 2) (Generic.rewards grewards)
-      insertOrphanedRewards tracer blkId (epochNo - 2) (Generic.orphaned grewards)
+      insertRewards tracer (epochNo - 2) (Generic.rewards grewards)
+      insertOrphanedRewards tracer (epochNo - 2) (Generic.orphaned grewards)
 
 -- -----------------------------------------------------------------------------
 
@@ -648,9 +648,9 @@ containsUnicodeNul = Text.isInfixOf "\\u000"
 
 insertRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.BlockId -> EpochNo -> Map Generic.StakeCred (Set (Shelley.Reward StandardCrypto))
+    => Trace IO Text -> EpochNo -> Map Generic.StakeCred (Set (Shelley.Reward StandardCrypto))
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertRewards _tracer blkId epoch rewards = do
+insertRewards _tracer epoch rewards = do
     forM_ (chunksOf 1000 $ Map.toList rewards) $ \rewardsChunk -> do
       dbRewards <- concatMapM mkRewards rewardsChunk
       lift $ putMany dbRewards
@@ -669,14 +669,13 @@ insertRewards _tracer blkId epoch rewards = do
                   , DB.rewardAmount = Generic.coinToDbLovelace (Shelley.rewardAmount rwd)
                   , DB.rewardEpochNo = unEpochNo epoch
                   , DB.rewardPoolId = poolId
-                  , DB.rewardBlockId = blkId
                   }
 
 insertOrphanedRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.BlockId -> EpochNo -> Map Generic.StakeCred (Set (Shelley.Reward StandardCrypto))
+    => Trace IO Text -> EpochNo -> Map Generic.StakeCred (Set (Shelley.Reward StandardCrypto))
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertOrphanedRewards _tracer blkId epoch orphanedRewards =
+insertOrphanedRewards _tracer epoch orphanedRewards =
     -- There are probably not many of these for each epoch, but just in case there
     -- are, it does not hurt to chunk them.
     forM_ (chunksOf 1000 $ Map.toList orphanedRewards) $ \orphanedRewardsChunk -> do
@@ -697,7 +696,6 @@ insertOrphanedRewards _tracer blkId epoch orphanedRewards =
                   , DB.orphanedRewardAmount = Generic.coinToDbLovelace (Shelley.rewardAmount rwd)
                   , DB.orphanedRewardEpochNo = unEpochNo epoch
                   , DB.orphanedRewardPoolId = poolId
-                  , DB.orphanedRewardBlockId = blkId
                   }
 
 insertEpochParam
@@ -732,9 +730,9 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce =
 
 insertEpochStake
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.BlockId -> EpochNo -> Generic.StakeDist
+    => Trace IO Text -> EpochNo -> Generic.StakeDist
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertEpochStake _tracer blkId (EpochNo epoch) smap =
+insertEpochStake _tracer (EpochNo epoch) smap =
     forM_ (chunksOf 1000 $ Map.toList (Generic.unStakeDist smap)) $ \stakeChunk -> do
       dbStakes <- mapM mkStake stakeChunk
       lift $ putMany dbStakes
@@ -751,7 +749,6 @@ insertEpochStake _tracer blkId (EpochNo epoch) smap =
           , DB.epochStakePoolId = poolId
           , DB.epochStakeAmount = Generic.coinToDbLovelace coin
           , DB.epochStakeEpochNo = epoch -- The epoch where this delegation becomes valid.
-          , DB.epochStakeBlockId = blkId
           }
 
 insertMaTxMint

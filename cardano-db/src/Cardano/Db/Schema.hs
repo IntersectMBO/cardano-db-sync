@@ -274,34 +274,34 @@ share
   -- -----------------------------------------------------------------------------------------------
   -- Reward, Stake and Treasury need to be obtained from the ledger state.
 
-    -- The reward for each stake address and. This is not a balance, but a reward amount and the
-    -- epoch in which the reward was earned.
+  -- The reward for each stake address and. This is not a balance, but a reward amount and the
+  -- epoch in which the reward was earned.
+  -- This table should never get rolled back.
   Reward
     addrId              StakeAddressId      OnDeleteCascade
     type                Text                sqltype=rewardtype
     amount              DbLovelace          sqltype=lovelace
     epochNo             Word64
     poolId              PoolHashId          OnDeleteCascade
-    blockId             BlockId             OnDeleteCascade
-    UniqueReward        addrId blockId
+    UniqueReward        addrId epochNo
 
   -- Orphaned rewards happen when a stake address earns rewards, but the stake address is
   -- deregistered before the rewards are distributed.
+  -- This table should never get rolled back.
   OrphanedReward
     addrId              StakeAddressId      OnDeleteCascade
     type                Text                sqltype=rewardtype
     amount              DbLovelace          sqltype=lovelace
     epochNo             Word64
     poolId              PoolHashId          OnDeleteCascade
-    blockId             BlockId             OnDeleteCascade
-    UniqueOrphaned      addrId blockId
+    UniqueOrphaned      addrId epochNo
 
+  -- This table should never get rolled back.
   EpochStake
     addrId              StakeAddressId      OnDeleteCascade
     poolId              PoolHashId          OnDeleteCascade
     amount              DbLovelace          sqltype=lovelace
     epochNo             Word64
-    blockId             BlockId             OnDeleteCascade    -- To make rollbacks work correctly.
     UniqueStake         addrId epochNo
 
   Treasury
