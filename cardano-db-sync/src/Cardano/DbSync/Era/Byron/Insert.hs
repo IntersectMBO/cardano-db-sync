@@ -161,7 +161,8 @@ insertABlock tracer blk details = do
             , textShow (unEpochSize $ sdEpochSize details), ")"
             ]
       logger followingClosely tracer $ mconcat
-        [ "insertByronBlock: slot ", textShow (Byron.slotNumber blk)
+        [ "insertByronBlock: epoch ", textShow (unEpochNo $ sdEpochNo details)
+        , ", slot ", textShow (Byron.slotNumber blk)
         , ", block ", textShow (Byron.blockNumber blk)
         , ", hash ", renderByteArray (Byron.blockHash blk)
         ]

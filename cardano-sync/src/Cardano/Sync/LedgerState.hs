@@ -98,7 +98,7 @@ data LedgerEnv = LedgerEnv
   { leProtocolInfo :: !(Consensus.ProtocolInfo IO CardanoBlock)
   , leDir :: !LedgerStateDir
   , leNetwork :: !Shelley.Network
-  , leStateVar :: TVar CardanoLedgerState
+  , leStateVar :: !(TVar CardanoLedgerState)
   }
 
 topLevelConfig :: LedgerEnv -> TopLevelConfig CardanoBlock
