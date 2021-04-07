@@ -19,9 +19,9 @@ BEGIN
     CREATE INDEX idx_block_slot_leader_id ON block(slot_leader_id) ;
     --    CREATE INDEX idx_block_previous_id ON block(previous_id) ;
     CREATE INDEX idx_epoch_param_block_id ON epoch_param(block_id) ;
-    CREATE INDEX idx_epoch_stake_block_id ON epoch_stake(block_id) ;
-    CREATE INDEX idx_orphaned_reward_block_id ON orphaned_reward(block_id) ;
-    CREATE INDEX idx_reward_block_id ON reward(block_id) ;
+    CREATE INDEX idx_epoch_stake_epoch_no ON epoch_stake(epoch_no) ;
+    CREATE INDEX idx_orphaned_reward_epoch_no ON orphaned_reward(epoch_no) ;
+    CREATE INDEX idx_reward_epoch_no ON reward(epoch_no) ;
     --    CREATE INDEX idx_tx_block_id ON tx(block_id) ;
     CREATE INDEX idx_delegation_tx_id ON delegation(tx_id) ;
     CREATE INDEX idx_ma_tx_mint_tx_id ON ma_tx_mint(tx_id) ;
