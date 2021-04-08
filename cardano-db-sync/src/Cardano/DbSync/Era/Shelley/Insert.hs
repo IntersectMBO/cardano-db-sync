@@ -32,7 +32,6 @@ import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 
-import           Cardano.Sync.Api
 import           Cardano.Sync.Error
 import           Cardano.Sync.LedgerState
 import           Cardano.Sync.Types
@@ -74,9 +73,9 @@ import qualified Shelley.Spec.Ledger.Rewards as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 insertShelleyBlock
-    :: Trace IO Text -> SyncEnv -> Generic.Block -> LedgerStateSnapshot -> SlotDetails
+    :: Trace IO Text -> Shelley.Network -> Generic.Block -> LedgerStateSnapshot -> SlotDetails
     -> ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
-insertShelleyBlock tracer env blk lStateSnap details = do
+insertShelleyBlock tracer network blk lStateSnap details = do
   runExceptT $ do
     pbid <- liftLookupFail (renderInsertName (Generic.blkEra blk)) $ DB.queryBlockId (Generic.blkPreviousHash blk)
     mPhid <- lift $ queryPoolHashId (Generic.blkCreatorPoolHash blk)
@@ -103,7 +102,7 @@ insertShelleyBlock tracer env blk lStateSnap details = do
                     , DB.blockOpCert = Just $ Generic.blkOpCert blk
                     }
 
-    zipWithM_ (insertTx tracer env blkId (sdEpochNo details) (Generic.blkSlotNo blk)) [0 .. ] (Generic.blkTxs blk)
+    zipWithM_ (insertTx tracer network blkId (sdEpochNo details) (Generic.blkSlotNo blk)) [0 .. ] (Generic.blkTxs blk)
 
     liftIO $ do
       let epoch = unEpochNo (sdEpochNo details)
@@ -185,9 +184,9 @@ insertOnNewEpoch tracer blkId slotNo epochNo newEpoch = do
 
 insertTx
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> SyncEnv -> DB.BlockId -> EpochNo -> SlotNo -> Word64 -> Generic.Tx
+    => Trace IO Text -> Shelley.Network -> DB.BlockId -> EpochNo -> SlotNo -> Word64 -> Generic.Tx
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertTx tracer env blkId epochNo slotNo blockIndex tx = do
+insertTx tracer network blkId epochNo slotNo blockIndex tx = do
     let fees = unCoin $ Generic.txFees tx
         outSum = unCoin $ Generic.txOutSum tx
         withdrawalSum = unCoin $ Generic.txWithdrawalSum tx
@@ -217,7 +216,7 @@ insertTx tracer env blkId epochNo slotNo blockIndex tx = do
       Nothing -> pure ()
       Just md -> insertTxMetadata tracer txId md
 
-    mapM_ (insertCertificate tracer env txId epochNo slotNo) $ Generic.txCertificates tx
+    mapM_ (insertCertificate tracer network txId epochNo slotNo) $ Generic.txCertificates tx
     mapM_ (insertWithdrawals tracer txId) $ Generic.txWithdrawals tx
 
     mapM_ (insertParamProposal tracer txId) $ Generic.txParamProposal tx
@@ -257,13 +256,13 @@ insertTxIn _tracer txInId (Generic.TxIn txId index) = do
 
 insertCertificate
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> SyncEnv -> DB.TxId -> EpochNo -> SlotNo -> Generic.TxCertificate
+    => Trace IO Text -> Shelley.Network -> DB.TxId -> EpochNo -> SlotNo -> Generic.TxCertificate
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertCertificate tracer env txId epochNo slotNo (Generic.TxCertificate idx cert) =
+insertCertificate tracer network txId epochNo slotNo (Generic.TxCertificate idx cert) =
   case cert of
-    Shelley.DCertDeleg deleg -> insertDelegCert tracer env txId idx epochNo slotNo deleg
-    Shelley.DCertPool pool -> insertPoolCert tracer (leNetwork $ envLedger env) epochNo txId idx pool
-    Shelley.DCertMir mir -> insertMirCert tracer env txId idx mir
+    Shelley.DCertDeleg deleg -> insertDelegCert tracer network txId idx epochNo slotNo deleg
+    Shelley.DCertPool pool -> insertPoolCert tracer network epochNo txId idx pool
+    Shelley.DCertMir mir -> insertMirCert tracer network txId idx mir
     Shelley.DCertGenesis _gen -> do
         -- TODO : Low priority
         liftIO $ logWarning tracer "insertCertificate: Unhandled DCertGenesis certificate"
@@ -281,13 +280,13 @@ insertPoolCert tracer network epoch txId idx pCert =
 
 insertDelegCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> SyncEnv -> DB.TxId -> Word16 -> EpochNo -> SlotNo -> Shelley.DelegCert StandardCrypto
+    => Trace IO Text -> Shelley.Network -> DB.TxId -> Word16 -> EpochNo -> SlotNo -> Shelley.DelegCert StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertDelegCert tracer env txId idx epochNo slotNo dCert =
+insertDelegCert tracer network txId idx epochNo slotNo dCert =
   case dCert of
-    Shelley.RegKey cred -> insertStakeRegistration tracer txId idx $ Generic.annotateStakingCred env cred
-    Shelley.DeRegKey cred -> insertStakeDeregistration tracer env txId idx cred
-    Shelley.Delegate (Shelley.Delegation cred poolkh) -> insertDelegation tracer env txId idx epochNo slotNo cred poolkh
+    Shelley.RegKey cred -> insertStakeRegistration tracer txId idx $ Generic.annotateStakingCred network cred
+    Shelley.DeRegKey cred -> insertStakeDeregistration tracer network txId idx cred
+    Shelley.Delegate (Shelley.Delegation cred poolkh) -> insertDelegation tracer network txId idx epochNo slotNo cred poolkh
 
 insertPoolRegister
     :: (MonadBaseControl IO m, MonadIO m)
@@ -435,10 +434,10 @@ insertStakeRegistration _tracer txId idx rewardAccount = do
 
 insertStakeDeregistration
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> SyncEnv -> DB.TxId -> Word16 -> Shelley.StakeCredential StandardCrypto
+    => Trace IO Text -> Shelley.Network -> DB.TxId -> Word16 -> Shelley.StakeCredential StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertStakeDeregistration _tracer env txId idx cred = do
-  scId <- liftLookupFail "insertStakeDeregistration" $ queryStakeAddress (Generic.stakingCredHash env cred)
+insertStakeDeregistration _tracer network txId idx cred = do
+  scId <- liftLookupFail "insertStakeDeregistration" $ queryStakeAddress (Generic.stakingCredHash network cred)
   void . lift . DB.insertStakeDeregistration $
     DB.StakeDeregistration
       { DB.stakeDeregistrationAddrId = scId
@@ -448,11 +447,11 @@ insertStakeDeregistration _tracer env txId idx cred = do
 
 insertDelegation
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> SyncEnv -> DB.TxId -> Word16 -> EpochNo -> SlotNo
+    => Trace IO Text -> Shelley.Network -> DB.TxId -> Word16 -> EpochNo -> SlotNo
     -> Shelley.StakeCredential StandardCrypto -> Shelley.KeyHash 'Shelley.StakePool StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertDelegation _tracer env txId idx (EpochNo epoch) slotNo cred poolkh = do
-  addrId <- liftLookupFail "insertDelegation" $ queryStakeAddress (Generic.stakingCredHash env cred)
+insertDelegation _tracer network txId idx (EpochNo epoch) slotNo cred poolkh = do
+  addrId <- liftLookupFail "insertDelegation" $ queryStakeAddress (Generic.stakingCredHash network cred)
   poolHashId <-liftLookupFail "insertDelegation" $ queryStakePoolKeyHash poolkh
   void . lift . DB.insertDelegation $
     DB.Delegation
@@ -466,9 +465,9 @@ insertDelegation _tracer env txId idx (EpochNo epoch) slotNo cred poolkh = do
 
 insertMirCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> SyncEnv -> DB.TxId -> Word16 -> Shelley.MIRCert StandardCrypto
+    => Trace IO Text -> Shelley.Network -> DB.TxId -> Word16 -> Shelley.MIRCert StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertMirCert _tracer env txId idx mcert = do
+insertMirCert _tracer network txId idx mcert = do
     case Shelley.mirPot mcert of
       Shelley.ReservesMIR ->
         case Shelley.mirRewards mcert of
@@ -486,7 +485,7 @@ insertMirCert _tracer env txId idx mcert = do
         => (Shelley.StakeCredential StandardCrypto, Shelley.DeltaCoin)
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     insertMirReserves (cred, dcoin) = do
-      addrId <- lift . insertStakeAddress txId $ Generic.annotateStakingCred env cred
+      addrId <- lift . insertStakeAddress txId $ Generic.annotateStakingCred network cred
       void . lift . DB.insertReserve $
         DB.Reserve
           { DB.reserveAddrId = addrId
@@ -500,7 +499,7 @@ insertMirCert _tracer env txId idx mcert = do
         => (Shelley.StakeCredential StandardCrypto, Shelley.DeltaCoin)
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     insertMirTreasury (cred, dcoin) = do
-      addrId <- lift . insertStakeAddress txId $ Generic.annotateStakingCred env cred
+      addrId <- lift . insertStakeAddress txId $ Generic.annotateStakingCred network cred
       void . lift . DB.insertTreasury $
         DB.Treasury
           { DB.treasuryAddrId = addrId

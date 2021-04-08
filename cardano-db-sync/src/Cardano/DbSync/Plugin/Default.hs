@@ -57,16 +57,17 @@ insertDefaultBlock backend tracer env blockDetails =
     insert (BlockDetails cblk details) = do
       -- Calculate the new ledger state to pass to the DB insert functions but do not yet
       -- update ledgerStateVar.
+      let network = leNetwork (envLedger env)
       lStateSnap <- liftIO $ applyBlock (envLedger env) cblk
       res <- case cblk of
                 BlockByron blk ->
                   insertByronBlock tracer blk details
                 BlockShelley blk ->
-                  insertShelleyBlock tracer env (Generic.fromShelleyBlock blk) lStateSnap details
+                  insertShelleyBlock tracer network (Generic.fromShelleyBlock blk) lStateSnap details
                 BlockAllegra blk ->
-                  insertShelleyBlock tracer env (Generic.fromAllegraBlock blk) lStateSnap details
+                  insertShelleyBlock tracer network (Generic.fromAllegraBlock blk) lStateSnap details
                 BlockMary blk ->
-                  insertShelleyBlock tracer env (Generic.fromMaryBlock blk) lStateSnap details
+                  insertShelleyBlock tracer network (Generic.fromMaryBlock blk) lStateSnap details
       -- Now we update it in ledgerStateVar and (possibly) store it to disk.
       liftIO $ saveLedgerStateMaybe (envLedger env)
                     lStateSnap (isSyncedWithinSeconds details 60)
