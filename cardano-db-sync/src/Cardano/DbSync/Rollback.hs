@@ -51,7 +51,7 @@ rollbackToSlot backend trce point =
             Origin -> "Rolling back to genesis"
             At blk -> mconcat
                   [ "Rolling back to "
-                  , show $ blockPointSlot blk
+                  , textShow (unSlotNo $ blockPointSlot blk)
                   , ", hash "
                   , renderByteArray $ toRawHash (Proxy @CardanoBlock) $ blockPointHash blk
                   ]

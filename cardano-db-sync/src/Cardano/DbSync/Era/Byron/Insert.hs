@@ -115,7 +115,7 @@ insertABOBBoundary tracer blk details = do
         Text.concat
           [ "insertABOBBoundary: epoch "
           , textShow (Byron.boundaryEpoch $ Byron.boundaryHeader blk)
-          , " hash "
+          , ", hash "
           , Byron.renderAbstractHash (Byron.boundaryHashAnnotated blk)
           ]
 
