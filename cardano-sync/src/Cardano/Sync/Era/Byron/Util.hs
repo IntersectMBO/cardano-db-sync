@@ -5,7 +5,6 @@
 
 module Cardano.Sync.Era.Byron.Util
   ( blockHash
-  , blockMerkleRoot
   , blockNumber
   , blockPayload
   , blockPreviousHash
@@ -40,8 +39,6 @@ import qualified Cardano.Chain.Slotting as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Chain.Update as Byron
 
-import           Crypto.Hash (Blake2b_256)
-
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
@@ -51,11 +48,6 @@ import qualified Data.Text.Encoding as Text
 
 blockHash :: Byron.ABlock ByteString -> ByteString
 blockHash = unHeaderHash . Byron.blockHashAnnotated
-
-blockMerkleRoot :: Byron.ABlock ByteString -> Crypto.AbstractHash Blake2b_256 Raw
-blockMerkleRoot =
-  Byron.getMerkleRoot . Byron.txpRoot . Byron.recoverTxProof
-    . Byron.bodyTxPayload . Byron.blockBody
 
 boundaryEpochNumber :: Byron.ABoundaryBlock ByteString -> Word64
 boundaryEpochNumber = Byron.boundaryEpoch . Byron.boundaryHeader

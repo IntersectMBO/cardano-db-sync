@@ -8,7 +8,6 @@ module Test.IO.Cardano.Db.Util
   , mkAddressHash
   , mkBlock
   , mkBlockHash
-  , mkMerkleRoot
   , mkTxHash
   , mkTxs
   , mkTxOut
@@ -60,7 +59,6 @@ mkBlock blk slid =
     , blockEpochSlotNo = Nothing
     , blockBlockNo = Nothing
     , blockPreviousId = Nothing
-    , blockMerkleRoot = Nothing
     , blockSlotLeaderId = slid
     , blockSize = 42
     , blockTime = dummyUTCTime
@@ -75,10 +73,6 @@ mkBlock blk slid =
 mkBlockHash :: Word64 -> ByteString
 mkBlockHash blkId =
   BS.pack (take 32 $ printf "block #%d" blkId ++ replicate 32 ' ')
-
-mkMerkleRoot :: Word64 -> ByteString
-mkMerkleRoot blkId =
-  BS.pack (take 32 $ printf "merkle root #%d" blkId ++ replicate 32 ' ')
 
 mkTxHash :: BlockId -> Word64 -> ByteString
 mkTxHash blk tx =

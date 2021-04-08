@@ -98,7 +98,6 @@ insertValidateGenesisDist backend tracer networkName cfg = do
                             , DB.blockEpochSlotNo = Nothing
                             , DB.blockBlockNo = Nothing
                             , DB.blockPreviousId = Nothing
-                            , DB.blockMerkleRoot = Nothing
                             , DB.blockSlotLeaderId = slid
                             , DB.blockSize = 0
                             , DB.blockTime = configStartTime cfg

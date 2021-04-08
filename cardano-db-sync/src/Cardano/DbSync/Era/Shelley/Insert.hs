@@ -89,7 +89,6 @@ insertShelleyBlock tracer network blk lStateSnap details = do
                     , DB.blockEpochSlotNo = Just $ unEpochSlot (sdEpochSlot details)
                     , DB.blockBlockNo = Just $ unBlockNo (Generic.blkBlockNo blk)
                     , DB.blockPreviousId  = Just pbid
-                    , DB.blockMerkleRoot = Nothing -- Shelley blocks do not have one.
                     , DB.blockSlotLeaderId = slid
                     , DB.blockSize = Generic.blkSize blk
                     , DB.blockTime = sdSlotTime details

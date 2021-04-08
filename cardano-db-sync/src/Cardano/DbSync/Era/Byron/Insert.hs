@@ -97,8 +97,6 @@ insertABOBBoundary tracer blk details = do
               , DB.blockEpochSlotNo = Nothing
               , DB.blockBlockNo = Nothing
               , DB.blockPreviousId = Just pbid
-              -- No merkleRoot for a boundary block
-              , DB.blockMerkleRoot = Nothing
               , DB.blockSlotLeaderId = slid
               , DB.blockSize = fromIntegral $ Byron.boundaryBlockLength blk
               , DB.blockTime = sdSlotTime details
@@ -134,7 +132,6 @@ insertABlock tracer blk details = do
                     , DB.blockEpochSlotNo = Just $ unEpochSlot (sdEpochSlot details)
                     , DB.blockBlockNo = Just $ Byron.blockNumber blk
                     , DB.blockPreviousId = Just pbid
-                    , DB.blockMerkleRoot = Just $ Byron.unCryptoHash (Byron.blockMerkleRoot blk)
                     , DB.blockSlotLeaderId = slid
                     , DB.blockSize = fromIntegral $ Byron.blockLength blk
                     , DB.blockTime = sdSlotTime details

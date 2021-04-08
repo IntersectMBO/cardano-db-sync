@@ -22,7 +22,6 @@ module Cardano.Db.Query
   , queryFeesUpToBlockNo
   , queryFeesUpToSlotNo
   , queryGenesisSupply
-  , queryLastByronBlockNo
   , queryLatestBlock
   , queryLatestCachedEpochNo
   , queryLatestEpochNo
@@ -328,16 +327,6 @@ queryGenesisSupply = do
                 where_ (isNothing $ blk ^. BlockEpochNo)
                 pure $ sum_ (txOut ^. TxOutValue)
     pure $ unValueSumAda (listToMaybe res)
-
--- | Get the BlockNo of the last Block in the Byron Era.
-queryLastByronBlockNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
-queryLastByronBlockNo = do
-  res <- select $ from $ \ blk -> do
-                where_ (isJust $ blk ^. BlockMerkleRoot)
-                orderBy [desc (blk ^. BlockBlockNo)]
-                limit 1
-                pure (blk ^. BlockBlockNo)
-  pure $ unValue =<< listToMaybe res
 
 -- | Get 'BlockId' of the latest block.
 queryLatestBlockId :: MonadIO m => ReaderT SqlBackend m (Maybe BlockId)
