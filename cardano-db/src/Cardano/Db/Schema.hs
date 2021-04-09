@@ -80,9 +80,6 @@ share
     epochSlotNo         Word64 Maybe        sqltype=uinteger
     blockNo             Word64 Maybe        sqltype=uinteger
     previousId          BlockId Maybe       OnDeleteCascade
-    -- Shelley does not have a Merkle Root, but Byron does.
-    -- Once we are well into the Shelley era, this column can be dropped.
-    merkleRoot          ByteString Maybe    sqltype=hash32type
     slotLeaderId        SlotLeaderId        OnDeleteCascade
     size                Word64              sqltype=uinteger
     time                UTCTime             sqltype=timestamp

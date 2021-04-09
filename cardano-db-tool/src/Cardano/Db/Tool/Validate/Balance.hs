@@ -81,7 +81,7 @@ getCompactAddress :: Text -> Either Text (CompactAddr c)
 getCompactAddress addrText = case Api.deserialiseAddress (Api.AsAddress Api.AsShelleyAddr) addrText of
     Nothing ->
       case decodeAddressBase58 addrText of
-        Left err ->  Left $ textShow err
+        Left err -> Left $ textShow err
         Right badrr -> Right $ compactAddr (AddrBootstrap $ BootstrapAddress badrr)
     Just (Api.ShelleyAddress n p s) ->
       let addr = Addr n (coerce p) (coerce s)

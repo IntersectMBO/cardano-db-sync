@@ -38,9 +38,6 @@ import qualified Cardano.Db as Db
 
 import qualified Cardano.Ledger.SafeHash as Ledger
 
-import           Cardano.Sync.Api
-import           Cardano.Sync.Config
-
 import qualified Data.Binary.Put as Binary
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
@@ -61,12 +58,8 @@ import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 
-annotateStakingCred :: SyncEnv -> Shelley.StakeCredential era -> Shelley.RewardAcnt era
-annotateStakingCred env cred =
-  let network =
-        case envProtocol env of
-          SyncProtocolCardano -> leNetwork $ envLedger env
-  in Shelley.RewardAcnt network cred
+annotateStakingCred :: Shelley.Network -> Shelley.StakeCredential era -> Shelley.RewardAcnt era
+annotateStakingCred = Shelley.RewardAcnt
 
 coinToDbLovelace :: Coin -> DbLovelace
 coinToDbLovelace = DbLovelace . fromIntegral . unCoin
@@ -131,8 +124,8 @@ serialiseRewardAcntWithNetwork :: Shelley.Network -> Shelley.RewardAcnt Standard
 serialiseRewardAcntWithNetwork network (Shelley.RewardAcnt _ cred) =
   Shelley.serialiseRewardAcnt $ Shelley.RewardAcnt network cred
 
-stakingCredHash :: SyncEnv -> Shelley.StakeCredential era -> ByteString
-stakingCredHash env = Shelley.serialiseRewardAcnt . annotateStakingCred env
+stakingCredHash :: Shelley.Network -> Shelley.StakeCredential era -> ByteString
+stakingCredHash network = Shelley.serialiseRewardAcnt . annotateStakingCred network
 
 unitIntervalToDouble :: Shelley.UnitInterval -> Double
 unitIntervalToDouble = fromRational . Shelley.unitIntervalToRational

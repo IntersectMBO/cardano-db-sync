@@ -112,8 +112,8 @@ showDbInt65 :: DbInt65 -> String
 showDbInt65 i65 =
   case i65 of
     PosInt65 w -> show w
-    NegInt65 0 ->  "0"
-    NegInt65 w ->  '-' : show w
+    NegInt65 0 -> "0"
+    NegInt65 w -> '-' : show w
 
 readRewardType :: Text -> Shelley.RewardType
 readRewardType str =

@@ -73,6 +73,7 @@ library
                       , postgresql-simple
                       , quiet
                       , resourcet
+                      , resource-pool
                       , scientific
                       , shelley-spec-ledger
                       , text

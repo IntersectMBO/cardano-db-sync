@@ -1,6 +1,5 @@
 module Cardano.Db
   ( module X
-  , transactionCommit
 
   -- Data types from Cardano.Db.Schema:
   , Block (..)
@@ -19,12 +18,3 @@ import           Cardano.Db.Query as X
 import           Cardano.Db.Run as X
 import           Cardano.Db.Schema as X
 import           Cardano.Db.Types as X
-
-import           Control.Monad.IO.Class (MonadIO)
-import           Control.Monad.Trans.Reader (ReaderT)
-
-import           Database.Persist.Sql (IsolationLevel (Serializable), SqlBackend,
-                   transactionSaveWithIsolation)
-
-transactionCommit :: MonadIO m => ReaderT SqlBackend m ()
-transactionCommit = transactionSaveWithIsolation Serializable

@@ -76,22 +76,22 @@ queryWalkChain count blkNo
 
 createAndInsertBlocks :: (MonadBaseControl IO m, MonadIO m) => Word64 -> ReaderT SqlBackend m ()
 createAndInsertBlocks blockCount =
-    void $ loop (0, Nothing, Nothing, Nothing)
+    void $ loop (0, Nothing, Nothing)
   where
     loop
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Word64, Maybe BlockId, Maybe Block, Maybe TxId)
-        -> ReaderT SqlBackend m (Word64, Maybe BlockId, Maybe Block, Maybe TxId)
-    loop (indx, mPrevId, mPrevBlock, mOutId) =
+        => (Word64, Maybe BlockId, Maybe TxId)
+        -> ReaderT SqlBackend m (Word64, Maybe BlockId, Maybe TxId)
+    loop (indx, mPrevId, mOutId) =
       if indx < blockCount
-        then loop =<< createAndInsert (indx, mPrevId, mPrevBlock, mOutId)
-        else pure (0, Nothing, Nothing, Nothing)
+        then loop =<< createAndInsert (indx, mPrevId, mOutId)
+        else pure (0, Nothing, Nothing)
 
     createAndInsert
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Word64, Maybe BlockId, Maybe Block, Maybe TxId)
-        -> ReaderT SqlBackend m (Word64, Maybe BlockId, Maybe Block, Maybe TxId)
-    createAndInsert (indx, mPrevId, mPrevBlock, mTxOutId) = do
+        => (Word64, Maybe BlockId, Maybe TxId)
+        -> ReaderT SqlBackend m (Word64, Maybe BlockId, Maybe TxId)
+    createAndInsert (indx, mPrevId, mTxOutId) = do
         slid <- insertSlotLeader testSlotLeader
         let newBlock = Block
                         { blockHash = mkBlockHash indx
@@ -100,7 +100,6 @@ createAndInsertBlocks blockCount =
                         , blockEpochSlotNo = Just indx
                         , blockBlockNo = Just indx
                         , blockPreviousId = mPrevId
-                        , blockMerkleRoot = const (Just (mkMerkleRoot indx)) =<< mPrevBlock
                         , blockSlotLeaderId = slid
                         , blockSize = 42
                         , blockTime = dummyUTCTime
@@ -127,5 +126,5 @@ createAndInsertBlocks blockCount =
                 void $ insertTxIn (TxIn txId txOutId 0)
                 void $ insertTxOut (mkTxOut blkId txId)
             _ -> pure ()
-        pure (indx + 1, Just blkId, Just newBlock, newMTxOutId)
+        pure (indx + 1, Just blkId, newMTxOutId)
 
