@@ -38,7 +38,7 @@ rollbackToSlot backend trce point =
         else do
           liftIO . logInfo trce $
               mconcat
-                [ "Deleting slots numbered: ", renderSlotList xs
+                [ "Deleting ", textShow (length xs), " slots: ", renderSlotList xs
                 ]
           mapM_ (lift . DB.deleteCascadeSlotNo) xs
           liftIO $ logInfo trce "Slots deleted"
