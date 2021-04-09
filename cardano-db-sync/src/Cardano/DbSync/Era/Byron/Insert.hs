@@ -78,6 +78,7 @@ insertABOBBoundary
     => Trace IO Text -> Byron.ABoundaryBlock ByteString -> SlotDetails
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertABOBBoundary tracer blk details = do
+  -- Will not get called in the OBFT part of the Byron era.
   let prevHash = case Byron.boundaryPrevHash (Byron.boundaryHeader blk) of
                     Left gh -> Byron.genesisToHeaderHash gh
                     Right hh -> hh
