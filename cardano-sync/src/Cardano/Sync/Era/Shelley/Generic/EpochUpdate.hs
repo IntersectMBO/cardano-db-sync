@@ -1,22 +1,27 @@
+{-# LANGUAGE NoImplicitPrelude #-}
 module Cardano.Sync.Era.Shelley.Generic.EpochUpdate
   ( NewEpoch (..)
   , EpochUpdate (..)
   , AdaPots (..)
-  , allegraEpochUpdate
-  , maryEpochUpdate
-  , shelleyEpochUpdate
+  , epochUpdate
+  , orphanedRewardCount
+  , rewardCount
+  , stakeDistributionCount
   ) where
+
+import           Cardano.Prelude
+
+import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Cardano.Sync.Era.Shelley.Generic.ProtoParams
 import           Cardano.Sync.Era.Shelley.Generic.Rewards
 import           Cardano.Sync.Era.Shelley.Generic.StakeDist
+import           Cardano.Sync.Types
 
-import           Data.Maybe (fromMaybe)
-
-import           Ouroboros.Consensus.Block (EpochNo)
 import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardAllegra, StandardMary,
                    StandardShelley)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
+import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
@@ -26,14 +31,15 @@ data NewEpoch = NewEpoch
   { epoch :: !EpochNo
   , isEBB :: !Bool
   , adaPots :: !(Maybe AdaPots)
-  , epochUpdate :: !(Maybe EpochUpdate)
+  , neEpochUpdate :: !(Maybe EpochUpdate)
+  , neProtoParams :: !(Maybe ProtoParams)
+  , neNonce :: !Shelley.Nonce
   }
 
 data EpochUpdate = EpochUpdate
-  { euProtoParams :: !ProtoParams
-  , euRewards :: !(Maybe Rewards)
+  { euEpoch :: !EpochNo
+  , euRewards :: !Rewards
   , euStakeDistribution :: !StakeDist
-  , euNonce :: !Shelley.Nonce
   }
 
 -- There is a similar type in ledger-spec, but it is not exported yet.
@@ -46,29 +52,46 @@ data AdaPots = AdaPots
   , apFees :: !Coin
   }
 
-allegraEpochUpdate :: Shelley.Network -> LedgerState (ShelleyBlock StandardAllegra) -> Maybe Rewards -> Maybe Shelley.Nonce -> EpochUpdate
-allegraEpochUpdate network sls mRewards mNonce =
+-- Create an EpochUpdate from the current epoch state and the rewards from the last epoch.
+epochUpdate :: Shelley.Network -> EpochNo -> ExtLedgerState CardanoBlock -> Rewards -> Maybe EpochUpdate
+epochUpdate nw epochNo els rwds =
+  case ledgerState els of
+    LedgerStateByron _ -> Nothing
+    LedgerStateShelley sls -> Just $ shelleyEpochUpdate nw epochNo sls rwds
+    LedgerStateAllegra als -> Just $ allegraEpochUpdate nw epochNo als rwds
+    LedgerStateMary mls -> Just $ maryEpochUpdate nw epochNo mls rwds
+
+orphanedRewardCount :: EpochUpdate -> Int
+orphanedRewardCount eu = length (rwdOrphaned $ euRewards eu)
+
+rewardCount :: EpochUpdate -> Int
+rewardCount eu = length (rwdRewards $ euRewards eu)
+
+stakeDistributionCount :: EpochUpdate -> Int
+stakeDistributionCount eu = length (unStakeDist $ euStakeDistribution eu)
+
+-- -------------------------------------------------------------------------------------------------
+
+allegraEpochUpdate :: Shelley.Network -> EpochNo -> LedgerState (ShelleyBlock StandardAllegra) -> Rewards -> EpochUpdate
+allegraEpochUpdate nw epochNo als rwds =
   EpochUpdate
-    { euProtoParams = allegraProtoParams sls
-    , euRewards = mRewards
-    , euStakeDistribution = allegraStakeDist network sls
-    , euNonce = fromMaybe Shelley.NeutralNonce mNonce
+    { euEpoch = epochNo - 2
+    , euRewards = rwds
+    , euStakeDistribution = allegraStakeDist nw als
     }
 
-maryEpochUpdate :: Shelley.Network -> LedgerState (ShelleyBlock StandardMary) -> Maybe Rewards -> Maybe Shelley.Nonce -> EpochUpdate
-maryEpochUpdate network sls mRewards mNonce =
+maryEpochUpdate :: Shelley.Network -> EpochNo -> LedgerState (ShelleyBlock StandardMary) -> Rewards -> EpochUpdate
+maryEpochUpdate nw epochNo mls rwds =
   EpochUpdate
-    { euProtoParams = maryProtoParams sls
-    , euRewards = mRewards
-    , euStakeDistribution = maryStakeDist network sls
-    , euNonce = fromMaybe Shelley.NeutralNonce mNonce
+    { euEpoch = epochNo - 2
+    , euRewards = rwds
+    , euStakeDistribution = maryStakeDist nw mls
     }
 
-shelleyEpochUpdate :: Shelley.Network -> LedgerState (ShelleyBlock StandardShelley) -> Maybe Rewards -> Maybe Shelley.Nonce -> EpochUpdate
-shelleyEpochUpdate network sls mRewards mNonce =
+shelleyEpochUpdate :: Shelley.Network -> EpochNo -> LedgerState (ShelleyBlock StandardShelley) -> Rewards -> EpochUpdate
+shelleyEpochUpdate nw epochNo sls rwds =
   EpochUpdate
-    { euProtoParams = shelleyProtoParams sls
-    , euRewards = mRewards
-    , euStakeDistribution = shelleyStakeDist network sls
-    , euNonce = fromMaybe Shelley.NeutralNonce mNonce
+    { euEpoch = epochNo - 2
+    , euRewards = rwds
+    , euStakeDistribution = shelleyStakeDist nw sls
     }

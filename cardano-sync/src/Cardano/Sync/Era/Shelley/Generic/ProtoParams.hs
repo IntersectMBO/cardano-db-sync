@@ -1,6 +1,8 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 module Cardano.Sync.Era.Shelley.Generic.ProtoParams
   ( ProtoParams (..)
+  , epochProtoParams
+
   , allegraProtoParams
   , maryProtoParams
   , shelleyProtoParams
@@ -9,9 +11,12 @@ module Cardano.Sync.Era.Shelley.Generic.ProtoParams
 import           Cardano.Prelude
 
 import           Cardano.Slotting.Slot (EpochNo (..))
+import           Cardano.Sync.Types
 
 import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardAllegra, StandardMary,
                    StandardShelley)
+import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
+
 
 import           Ouroboros.Consensus.Cardano (Nonce (..))
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
@@ -22,6 +27,7 @@ import           Shelley.Spec.Ledger.Coin (Coin (..))
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley
 import           Shelley.Spec.Ledger.PParams (ProtVer)
 import qualified Shelley.Spec.Ledger.PParams as Shelley
+
 
 data ProtoParams = ProtoParams
   { ppMinfeeA :: !Natural
@@ -43,6 +49,17 @@ data ProtoParams = ProtoParams
   , ppMinPoolCost :: !Coin
   }
 
+
+epochProtoParams :: ExtLedgerState CardanoBlock -> Maybe ProtoParams
+epochProtoParams lstate =
+  case ledgerState lstate of
+    LedgerStateByron _ -> Nothing
+    LedgerStateShelley sls -> Just $ shelleyProtoParams sls
+    LedgerStateAllegra als -> Just $ allegraProtoParams als
+    LedgerStateMary mls -> Just $ maryProtoParams mls
+
+-- -------------------------------------------------------------------------------------------------
+
 allegraProtoParams :: LedgerState (ShelleyBlock StandardAllegra) -> ProtoParams
 allegraProtoParams =
   toProtoParams . Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState
@@ -54,8 +71,6 @@ maryProtoParams =
 shelleyProtoParams :: LedgerState (ShelleyBlock StandardShelley) -> ProtoParams
 shelleyProtoParams =
   toProtoParams . Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState
-
--- -------------------------------------------------------------------------------------------------
 
 toProtoParams :: Shelley.PParams' Identity era -> ProtoParams
 toProtoParams params =
