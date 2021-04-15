@@ -6,6 +6,7 @@ module Cardano.Sync.Api
   , LedgerEnv (..)
   , SyncDataLayer (..)
   , mkSyncEnvFromConfig
+  , verifyFilePoints
   , getLatestPoints
   ) where
 
@@ -87,9 +88,8 @@ mkSyncEnvFromConfig dataLayer dir genCfg =
                          (SystemStart (Byron.gdStartTime $ Byron.configGenesisData bCfg))
                          dir
 
-getLatestPoints :: SyncEnv -> IO [CardanoPoint]
-getLatestPoints env = do
-    files <- listLedgerStateFilesOrdered $ leDir $ envLedger env
+verifyFilePoints :: SyncEnv -> [LedgerStateFile] -> IO [CardanoPoint]
+verifyFilePoints env files =
     catMaybes <$> mapM validLedgerFileToPoint files
   where
     validLedgerFileToPoint :: LedgerStateFile -> IO (Maybe CardanoPoint)
@@ -106,3 +106,8 @@ getLatestPoints env = do
 
     convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
     convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)
+
+getLatestPoints :: SyncEnv -> IO [CardanoPoint]
+getLatestPoints env = do
+    files <- listLedgerStateFilesOrdered $ leDir $ envLedger env
+    verifyFilePoints env files

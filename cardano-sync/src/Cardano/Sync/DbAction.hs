@@ -8,9 +8,9 @@ module Cardano.Sync.DbAction
   , blockingFlushDbActionQueue
   , lengthDbActionQueue
   , mkDbApply
-  , mkDbRollback
   , newDbActionQueue
   , writeDbActionQueue
+  , waitRollback
   ) where
 
 import           Cardano.Prelude
@@ -21,9 +21,11 @@ import qualified Control.Concurrent.STM as STM
 import           Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as TBQ
 
+import           Control.Monad.Class.MonadSTM.Strict (StrictTMVar, newEmptyTMVarIO, takeTMVar)
+
 data DbAction
   = DbApplyBlock !BlockDetails
-  | DbRollBackToPoint !CardanoPoint
+  | DbRollBackToPoint !CardanoPoint (StrictTMVar IO (Maybe [CardanoPoint]))
   | DbFinish
 
 newtype DbActionQueue = DbActionQueue
@@ -34,8 +36,13 @@ mkDbApply :: CardanoBlock -> SlotDetails -> DbAction
 mkDbApply cblk details =
   DbApplyBlock (BlockDetails cblk details)
 
-mkDbRollback :: CardanoPoint -> DbAction
-mkDbRollback = DbRollBackToPoint
+-- | This simulates a synhronous operations, since the thread waits for the db
+-- worker thread to finish the rollback.
+waitRollback :: DbActionQueue -> CardanoPoint -> IO (Maybe [CardanoPoint])
+waitRollback queue point = do
+    resultVar <- newEmptyTMVarIO
+    atomically $ writeDbActionQueue queue $ DbRollBackToPoint point resultVar
+    atomically $ takeTMVar resultVar
 
 lengthDbActionQueue :: DbActionQueue -> STM Natural
 lengthDbActionQueue (DbActionQueue q) = STM.lengthTBQueue q
