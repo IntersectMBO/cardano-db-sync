@@ -33,14 +33,15 @@ import qualified Cardano.Sync.Era.Shelley.Generic.Rewards as Generic
 import           Cardano.Sync.Types hiding (CardanoBlock)
 import           Cardano.Sync.Util
 
-import           Cardano.Prelude
+import           Cardano.Prelude hiding (atomically)
 import           Cardano.Slotting.Block (BlockNo (..))
 
 import           Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..), fromWithOrigin)
 
-import           Control.Concurrent.STM.TVar (TVar, newTVarIO, readTVar, readTVarIO, writeTVar)
 import qualified Control.Exception as Exception
+import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, atomically, newTVarIO, readTVar,
+                   writeTVar)
 import           Control.Monad.Extra (firstJustM, fromMaybeM)
 
 import qualified Data.ByteString.Base16 as Base16
@@ -49,6 +50,7 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as BSS
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map
+import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 
 import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockHash, blockIsEBB,
@@ -93,12 +95,13 @@ import           System.FilePath (dropExtension, takeExtension, (</>))
 -- therefore ledger states are stored in files with the SlotNo and hash in the file name.
 
 {- HLINT ignore "Reduce duplication" -}
+{- HLINT ignore "Use readTVarIO" -}
 
 data LedgerEnv = LedgerEnv
   { leProtocolInfo :: !(Consensus.ProtocolInfo IO CardanoBlock)
   , leDir :: !LedgerStateDir
   , leNetwork :: !Shelley.Network
-  , leStateVar :: !(TVar CardanoLedgerState)
+  , leStateVar :: !(StrictTVar IO CardanoLedgerState)
   }
 
 topLevelConfig :: LedgerEnv -> TopLevelConfig CardanoBlock
@@ -117,7 +120,7 @@ data LedgerStateFile = LedgerStateFile
 
 data LedgerStateSnapshot = LedgerStateSnapshot
   { lssState :: !CardanoLedgerState
-  , lssNewEpoch :: !(Maybe Generic.NewEpoch) -- Only Just for a single block at the epoch boundary
+  , lssNewEpoch :: !(Strict.Maybe Generic.NewEpoch) -- Only Just for a single block at the epoch boundary
   }
 
 mkLedgerEnv :: Consensus.ProtocolInfo IO CardanoBlock
@@ -158,7 +161,7 @@ applyBlock env blk =
       writeTVar (leStateVar env) newState
       pure $ LedgerStateSnapshot
                 { lssState = newState
-                , lssNewEpoch = mkNewEpoch oldState newState
+                , lssNewEpoch = maybeToStrict $ mkNewEpoch oldState newState
                 }
   where
     applyBlk
@@ -177,10 +180,10 @@ applyBlock env blk =
             Generic.NewEpoch
               { Generic.epoch = ledgerEpochNo env newState
               , Generic.isEBB = isJust $ blockIsEBB blk
-              , Generic.adaPots = getAdaPots newState
+              , Generic.adaPots = maybeToStrict $ getAdaPots newState
               , Generic.epochUpdate =
-                  ledgerEpochUpdate env (clsState newState)
-                    (ledgerRewardUpdate env (ledgerState $ clsState oldState))
+                  maybeToStrict $ ledgerEpochUpdate env (clsState newState)
+                    (maybeToStrict $ ledgerRewardUpdate env (ledgerState $ clsState oldState))
               }
         else Nothing
 
@@ -195,7 +198,7 @@ deleteNewerLedgerStateFiles stateDir slotNo = do
 
 saveCurrentLedgerState :: LedgerEnv -> Bool -> IO ()
 saveCurrentLedgerState env isNewEpoch = do
-    ledger <- readTVarIO (leStateVar env)
+    ledger <- atomically $ readTVar (leStateVar env)
     case mkLedgerStateFilename (leDir env) ledger isNewEpoch of
       Origin -> pure () -- we don't store genesis
       At file -> LBS.writeFile file $
@@ -213,11 +216,11 @@ saveLedgerStateMaybe :: LedgerEnv -> LedgerStateSnapshot -> SyncState -> IO ()
 saveLedgerStateMaybe env snapshot synced = do
   writeLedgerState env ledger
   case (synced, lssNewEpoch snapshot) of
-    (_, Just newEpoch) | not (Generic.isEBB newEpoch) ->
+    (_, Strict.Just newEpoch) | not (Generic.isEBB newEpoch) ->
       saveCleanupState True    -- Save ledger states on epoch boundaries, unless they are EBBs
-    (SyncFollowing, Nothing) ->
+    (SyncFollowing, Strict.Nothing) ->
       saveCleanupState False   -- If following, save every state.
-    (SyncLagging, Nothing) | block `mod` 2000 == 0 ->
+    (SyncLagging, Strict.Nothing) | block `mod` 2000 == 0 ->
       saveCleanupState False   -- Only save state ocassionally.
     _ -> pure ()
   where
@@ -437,7 +440,7 @@ ledgerEpochNo env cls =
     epochInfo = epochInfoLedger (configLedger $ topLevelConfig env) (hardForkLedgerStatePerEra . ledgerState $ clsState cls)
 
 -- Create an EpochUpdate from the current epoch state and the rewards from the last epoch.
-ledgerEpochUpdate :: LedgerEnv -> ExtLedgerState CardanoBlock -> Maybe Generic.Rewards -> Maybe Generic.EpochUpdate
+ledgerEpochUpdate :: LedgerEnv -> ExtLedgerState CardanoBlock -> Strict.Maybe Generic.Rewards -> Maybe Generic.EpochUpdate
 ledgerEpochUpdate env els mRewards =
   case ledgerState els of
     LedgerStateByron _ -> Nothing
@@ -445,8 +448,8 @@ ledgerEpochUpdate env els mRewards =
     LedgerStateAllegra als -> Just $ Generic.allegraEpochUpdate (leNetwork env) als mRewards mNonce
     LedgerStateMary mls -> Just $ Generic.maryEpochUpdate (leNetwork env) mls mRewards mNonce
   where
-    mNonce :: Maybe Shelley.Nonce
-    mNonce = extractEpochNonce els
+    mNonce :: Strict.Maybe Shelley.Nonce
+    mNonce = maybeToStrict $ extractEpochNonce els
 
 -- This will return a 'Just' from the time the rewards are updated until the end of the
 -- epoch. It is 'Nothing' for the first block of a new epoch (which is slightly inconvenient).

@@ -28,7 +28,7 @@ import           Cardano.Sync.LedgerState
 import           Cardano.Sync.Metrics
 import           Cardano.Sync.Plugin
 import           Cardano.Sync.Types
-import           Cardano.Sync.Util
+import           Cardano.Sync.Util hiding (whenJust)
 
 data NextState
   = Continue

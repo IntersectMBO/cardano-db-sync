@@ -7,11 +7,13 @@ module Cardano.Sync.Era.Shelley.Generic.EpochUpdate
   , shelleyEpochUpdate
   ) where
 
+import           Prelude hiding (Maybe)
+
 import           Cardano.Sync.Era.Shelley.Generic.ProtoParams
 import           Cardano.Sync.Era.Shelley.Generic.Rewards
 import           Cardano.Sync.Era.Shelley.Generic.StakeDist
 
-import           Data.Maybe (fromMaybe)
+import           Data.Strict.Maybe (Maybe, fromMaybe)
 
 import           Ouroboros.Consensus.Block (EpochNo)
 import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardAllegra, StandardMary,
