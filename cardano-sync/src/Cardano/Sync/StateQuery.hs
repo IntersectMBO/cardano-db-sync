@@ -22,9 +22,9 @@ import           Cardano.Sync.Api
 import           Cardano.Sync.Types
 import           Cardano.Sync.Util
 
-import           Cardano.Prelude
+import           Cardano.Prelude hiding (atomically)
 
-import           Control.Concurrent.STM.TMVar (TMVar, newEmptyTMVarIO, putTMVar, takeTMVar)
+import           Control.Monad.Class.MonadSTM.Strict
 
 import           Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import           Data.Time.Clock (UTCTime, addUTCTime, getCurrentTime)
@@ -51,9 +51,9 @@ import           System.IO.Unsafe (unsafePerformIO)
 
 newtype StateQueryTMVar blk result = StateQueryTMVar
   { unStateQueryTMVar ::
-      TMVar
+      StrictTMVar IO
         ( Query blk result
-        , TMVar (Either AcquireFailure result)
+        , StrictTMVar IO (Either AcquireFailure result)
         )
   }
 

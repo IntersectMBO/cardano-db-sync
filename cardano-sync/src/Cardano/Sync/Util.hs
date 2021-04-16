@@ -18,6 +18,8 @@ module Cardano.Sync.Util
   , tipBlockNo
   , traverseMEither
   , nullMetricSetters
+  , maybeToStrict
+  , whenJust
   ) where
 
 import           Cardano.Prelude hiding (catch)
@@ -36,6 +38,7 @@ import           Data.ByteArray (ByteArrayAccess)
 import qualified Data.ByteArray
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.List as List
+import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.IO as Text
@@ -142,3 +145,12 @@ renderSlotList xs
   | length xs < 10 = textShow (map unSlotNo xs)
   | otherwise =
       mconcat [ "[", textShow (unSlotNo $ List.head xs), "..", textShow (unSlotNo $ List.last xs), "]" ]
+
+maybeToStrict :: Maybe a -> Strict.Maybe a
+maybeToStrict Nothing = Strict.Nothing
+maybeToStrict (Just a) = Strict.Just a
+
+whenJust :: Applicative m => Strict.Maybe a -> (a -> m ()) -> m ()
+whenJust ma f = case ma of
+  Strict.Nothing -> pure ()
+  Strict.Just a -> f a

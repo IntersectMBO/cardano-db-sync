@@ -85,6 +85,7 @@ library
                       , extra
                       , filepath
                       , iohk-monitoring
+                      , io-sim-classes
                       , lifted-base
                       , monad-control
                       , memory
@@ -98,6 +99,7 @@ library
                       , ouroboros-network-framework
                       , shelley-spec-ledger
                       , stm
+                      , strict
                       , text
                       , time
                       , transformers
