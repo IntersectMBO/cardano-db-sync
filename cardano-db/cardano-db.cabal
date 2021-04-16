@@ -76,6 +76,7 @@ library
                       , resource-pool
                       , scientific
                       , shelley-spec-ledger
+                      , smash-servant-types
                       , text
                       , template-haskell
                       , time

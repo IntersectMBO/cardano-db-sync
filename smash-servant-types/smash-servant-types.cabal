@@ -1,0 +1,68 @@
+cabal-version:      1.12
+name:               smash-servant-types
+version:            1.4.0
+description:
+  Shared servant API types for SMASH
+
+homepage:           https://github.com/input-output-hk/smash#readme
+bug-reports:        https://github.com/input-output-hk/smash/issues
+author:             IOHK
+maintainer:         operations@iohk.io
+license:            Apache-2.0
+license-file:       LICENSE
+build-type:         Simple
+
+source-repository head
+  type:     git
+  location: https://github.com/input-output-hk/smash
+
+flag disable-basic-auth
+  description: Disable basic authentication scheme for other authentication mechanisms.
+  default:     False
+
+flag testing-mode
+  description: A flag for allowing operations that promote easy testing.
+  default:     False
+
+library
+  if flag(disable-basic-auth)
+    cpp-options: -DDISABLE_BASIC_AUTH
+
+  if flag(testing-mode)
+    cpp-options: -DTESTING_MODE
+
+  exposed-modules:
+    Cardano.SMASH.API
+    Cardano.SMASH.Types
+    Cardano.SMASH.DBSync.Db.Error
+    Cardano.SMASH.DBSync.Db.Types
+
+  hs-source-dirs:     src
+  build-depends:
+      aeson
+    , base                         >=4.7   && <5
+    , bytestring
+    , cardano-prelude
+    , cardano-api
+    , base16-bytestring
+    , persistent
+    , network-uri
+    , servant
+    , servant-server
+    , servant-swagger
+    , swagger2
+    , text
+    , time
+    , quiet
+    , wai
+
+  default-language:   Haskell2010
+  default-extensions:
+    NoImplicitPrelude
+    OverloadedStrings
+
+  ghc-options:
+    -Wall -Wcompat -Wincomplete-record-updates
+    -Wincomplete-uni-patterns -Wredundant-constraints -Wpartial-fields
+    -fno-warn-orphans
+
