@@ -9,7 +9,7 @@ module Cardano.DbSync.Plugin.Default
 
 import           Cardano.Prelude
 
-import           Cardano.BM.Trace (Trace)
+import           Cardano.BM.Trace (Trace, logInfo)
 
 import qualified Cardano.Db as DB
 
@@ -17,6 +17,8 @@ import           Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
 import           Cardano.DbSync.Rollback (rollbackToSlot)
+
+import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
 
 import           Cardano.Sync.Api
 import           Cardano.Sync.Error
@@ -58,7 +60,8 @@ insertDefaultBlock backend tracer env blockDetails =
       -- Calculate the new ledger state to pass to the DB insert functions but do not yet
       -- update ledgerStateVar.
       let network = leNetwork (envLedger env)
-      lStateSnap <- liftIO $ applyBlock (envLedger env) cblk
+      lStateSnap <- liftIO $ applyBlock (envLedger env) cblk details
+      liftIO $ handleLedgerEvents tracer (lssEvents lStateSnap)
       res <- case cblk of
                 BlockByron blk ->
                   insertByronBlock tracer blk details
@@ -72,3 +75,30 @@ insertDefaultBlock backend tracer env blockDetails =
       liftIO $ saveLedgerStateMaybe (envLedger env)
                     lStateSnap (isSyncedWithinSeconds details 60)
       pure res
+
+handleLedgerEvents :: Trace IO Text -> [LedgerEvent] -> IO ()
+handleLedgerEvents tracer =
+    mapM_ printer
+  where
+    printer :: LedgerEvent -> IO ()
+    printer ev =
+      case ev of
+        LedgerNewEpoch en ->
+          logInfo tracer $ "Starting epoch " <> textShow (unEpochNo en)
+
+        LedgerRewards details rwds -> do
+          logInfo tracer $
+            mconcat
+              [ "LedgerRewards "
+              , textShow  ( truncate4 (calcEpochProgress details)
+                          , length (Generic.rwdRewards rwds)
+                          , length (Generic.rwdOrphaned rwds)
+                          )
+              ]
+
+    calcEpochProgress :: SlotDetails -> Double
+    calcEpochProgress sd =
+      fromIntegral (unEpochSlot $ sdEpochSlot sd) / fromIntegral (unEpochSize $ sdEpochSize sd)
+
+    truncate4 :: Double -> Double
+    truncate4 x = fromIntegral (floor (x * 1000) :: Int) / 1000

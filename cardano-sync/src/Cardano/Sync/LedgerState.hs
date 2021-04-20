@@ -9,6 +9,7 @@
 module Cardano.Sync.LedgerState
   ( CardanoLedgerState (..)
   , LedgerEnv (..)
+  , LedgerEvent (..)
   , LedgerStateSnapshot (..)
   , LedgerStateFile (..)
   , applyBlock
@@ -102,6 +103,17 @@ data LedgerEnv = LedgerEnv
   , leDir :: !LedgerStateDir
   , leNetwork :: !Shelley.Network
   , leStateVar :: !(StrictTVar IO CardanoLedgerState)
+  , leEventState :: !(StrictTVar IO LedgerEventState)
+  }
+
+data LedgerEvent
+  = LedgerNewEpoch !EpochNo
+  | LedgerRewards !SlotDetails !Generic.Rewards
+  deriving Eq
+
+data LedgerEventState = LedgerEventState
+  { lesEpochNo :: !EpochNo
+  , lesLastRewardsEpoch :: !EpochNo
   }
 
 topLevelConfig :: LedgerEnv -> TopLevelConfig CardanoBlock
@@ -121,6 +133,8 @@ data LedgerStateFile = LedgerStateFile
 data LedgerStateSnapshot = LedgerStateSnapshot
   { lssState :: !CardanoLedgerState
   , lssNewEpoch :: !(Strict.Maybe Generic.NewEpoch) -- Only Just for a single block at the epoch boundary
+  , lssSlotDetails :: !SlotDetails
+  , lssEvents :: ![LedgerEvent]
   }
 
 mkLedgerEnv :: Consensus.ProtocolInfo IO CardanoBlock
@@ -130,16 +144,25 @@ mkLedgerEnv :: Consensus.ProtocolInfo IO CardanoBlock
             -> Bool
             -> IO LedgerEnv
 mkLedgerEnv protocolInfo dir network slot deleteFiles = do
-  when deleteFiles $
-    deleteNewerLedgerStateFiles dir slot
-  st <- findLatestLedgerState protocolInfo dir deleteFiles
-  var <- newTVarIO st
-  pure LedgerEnv
-    { leProtocolInfo = protocolInfo
-    , leDir = dir
-    , leNetwork = network
-    , leStateVar = var
-    }
+    when deleteFiles $
+      deleteNewerLedgerStateFiles dir slot
+    st <- findLatestLedgerState protocolInfo dir deleteFiles
+    svar <- newTVarIO st
+    evar <- newTVarIO initLedgerEventState
+    pure LedgerEnv
+      { leProtocolInfo = protocolInfo
+      , leDir = dir
+      , leNetwork = network
+      , leStateVar = svar
+      , leEventState = evar
+      }
+  where
+    initLedgerEventState :: LedgerEventState
+    initLedgerEventState =
+      LedgerEventState
+        { lesEpochNo = EpochNo 0
+        , lesLastRewardsEpoch = EpochNo 0
+        }
 
 
 initCardanoLedgerState :: Consensus.ProtocolInfo IO CardanoBlock -> CardanoLedgerState
@@ -150,8 +173,8 @@ initCardanoLedgerState pInfo = CardanoLedgerState
 -- The function 'tickThenReapply' does zero validation, so add minimal validation ('blockPrevHash'
 -- matches the tip hash of the 'LedgerState'). This was originally for debugging but the check is
 -- cheap enough to keep.
-applyBlock :: LedgerEnv -> CardanoBlock -> IO LedgerStateSnapshot
-applyBlock env blk =
+applyBlock :: LedgerEnv -> CardanoBlock -> SlotDetails -> IO LedgerStateSnapshot
+applyBlock env blk details =
     -- 'LedgerStateVar' is just being used as a mutable variable. There should not ever
     -- be any contention on this variable, so putting everything inside 'atomically'
     -- is fine.
@@ -159,9 +182,13 @@ applyBlock env blk =
       oldState <- readTVar (leStateVar env)
       let !newState = oldState { clsState = applyBlk (ExtLedgerCfg (topLevelConfig env)) blk (clsState oldState) }
       writeTVar (leStateVar env) newState
+      oldEventState <- readTVar (leEventState env)
+      events <- generateEvents env oldEventState  details newState
       pure $ LedgerStateSnapshot
                 { lssState = newState
                 , lssNewEpoch = maybeToStrict $ mkNewEpoch oldState newState
+                , lssSlotDetails = details
+                , lssEvents = events
                 }
   where
     applyBlk
@@ -187,6 +214,32 @@ applyBlock env blk =
                     (maybeToStrict $ Generic.epochRewards (leNetwork env) epochNo (clsState oldState))
               }
         else Nothing
+
+generateEvents :: LedgerEnv -> LedgerEventState -> SlotDetails -> CardanoLedgerState -> STM [LedgerEvent]
+generateEvents env oldEventState details cls = do
+    writeTVar (leEventState env) newEventState
+    pure $ catMaybes
+            [ if lesEpochNo oldEventState > 0 && lesEpochNo oldEventState < currentEpochNo
+                then Just (LedgerNewEpoch currentEpochNo) else Nothing
+            , LedgerRewards details <$> rewards
+            ]
+  where
+    currentEpochNo :: EpochNo
+    currentEpochNo = sdEpochNo details
+
+    rewards :: Maybe Generic.Rewards
+    rewards =
+      -- Want the rewards event to be delivered once only, on a single slot.
+      if lesLastRewardsEpoch oldEventState < currentEpochNo
+        then Generic.epochRewards (leNetwork env) (sdEpochNo details) (clsState cls)
+        else Nothing
+
+    newEventState :: LedgerEventState
+    newEventState =
+      LedgerEventState
+        { lesEpochNo = currentEpochNo
+        , lesLastRewardsEpoch = if isJust rewards then currentEpochNo else lesLastRewardsEpoch oldEventState
+        }
 
 -- Delete ledger state files for slots later than the provided SlotNo.
 deleteNewerLedgerStateFiles :: LedgerStateDir -> SlotNo -> IO ()

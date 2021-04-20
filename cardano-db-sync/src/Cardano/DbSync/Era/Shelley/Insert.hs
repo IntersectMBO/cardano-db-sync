@@ -160,7 +160,6 @@ insertOnNewEpoch tracer blkId slotNo epochNo newEpoch = do
 
     whenJust (Generic.adaPots newEpoch) $ \pots ->
       insertPots blkId slotNo epochNo pots
-    liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo epochNo)
   where
     insertGenericRewards
         :: (MonadBaseControl IO m, MonadIO m)
