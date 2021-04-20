@@ -18,9 +18,10 @@
 module Cardano.Db.Schema where
 
 import           Cardano.Db.Schema.Orphans ()
+import           Cardano.Db.Schema.Types as Types
+
 import           Cardano.Db.Types (DbInt65, DbLovelace, DbWord64)
 
-import qualified Cardano.SMASH.DBSync.Db.Types as Types
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Int (Int64)
 import           Data.Text (Text)
@@ -393,31 +394,31 @@ share
   -- The table containing pools' on-chain reference to its off-chain metadata.
 
   PoolMetadataReference
-    poolId              Types.PoolId              sqltype=text
-    url                 Types.PoolUrl             sqltype=text
-    hash                Types.PoolMetadataHash    sqltype=text
+    poolId              Types.DbPoolId              sqltype=text
+    url                 Types.DbPoolUrl             sqltype=text
+    hash                Types.DbPoolMetadataHash    sqltype=text
     UniquePoolMetadataReference  poolId hash
 
   -- The table containing the metadata.
 
   PoolMetadata
-    poolId              Types.PoolId              sqltype=text
-    tickerName          Types.TickerName          sqltype=text
-    hash                Types.PoolMetadataHash    sqltype=text
-    metadata            Types.PoolMetadataRaw     sqltype=text
+    poolId              Types.DbPoolId              sqltype=text
+    tickerName          Types.DbTickerName          sqltype=text
+    hash                Types.DbPoolMetadataHash    sqltype=text
+    metadata            Types.DbPoolMetadataRaw     sqltype=text
     pmrId               PoolMetadataReferenceId Maybe
     UniquePoolMetadata  poolId hash
 
   -- The pools themselves (identified by the owner vkey hash)
 
   Pool
-    poolId              Types.PoolId              sqltype=text
+    poolId              Types.DbPoolId              sqltype=text
     UniquePoolId poolId
 
   -- The retired pools.
 
   RetiredPool
-    poolId              Types.PoolId              sqltype=text
+    poolId              Types.DbPoolId              sqltype=text
     blockNo             Word64                    sqltype=uinteger -- When the pool was retired.
     UniqueRetiredPoolId poolId
 
@@ -426,8 +427,8 @@ share
 
   PoolMetadataFetchError
     fetchTime           UTCTime                   sqltype=timestamp
-    poolId              Types.PoolId              sqltype=text
-    poolHash            Types.PoolMetadataHash    sqltype=text
+    poolId              Types.DbPoolId              sqltype=text
+    poolHash            Types.DbPoolMetadataHash    sqltype=text
     pmrId               PoolMetadataReferenceId
     fetchError          Text
     retryCount          Word                      sqltype=uinteger
@@ -439,14 +440,14 @@ share
 
   -- A table containing a list of delisted pools.
   DelistedPool
-    poolId              Types.PoolId        sqltype=text
+    poolId              Types.DbPoolId        sqltype=text
     UniqueDelistedPool poolId
 
   -- A table containing a managed list of reserved ticker names.
   -- For now they are grouped under the specific hash of the pool.
   ReservedTicker
-    name                Types.TickerName        sqltype=text
-    poolHash            Types.PoolMetadataHash  sqltype=text
+    name                Text
+    poolHash            ByteString
     UniqueReservedTicker name
     deriving Show
 

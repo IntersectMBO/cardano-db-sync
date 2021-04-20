@@ -133,3 +133,4 @@ showRewardType rt =
 word64ToAda :: Word64 -> Ada
 word64ToAda w =
   Ada (fromIntegral w / 1000000)
+
