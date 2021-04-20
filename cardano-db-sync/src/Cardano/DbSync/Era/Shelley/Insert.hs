@@ -169,14 +169,14 @@ insertOnNewEpoch tracer blkId slotNo epochNo newEpoch = do
     insertGenericRewards grewards stakes = do
       liftIO . logInfo tracer $ mconcat
                 [ "Finishing epoch ", textShow (unEpochNo epochNo - 1), ": "
-                , textShow (length (Generic.rewards grewards)), " rewards, "
-                , textShow (length (Generic.orphaned grewards)), " orphaned_rewards, "
+                , textShow (length (Generic.rwdRewards grewards)), " rewards, "
+                , textShow (length (Generic.rwdOrphaned grewards)), " orphaned_rewards, "
                 , textShow (length (Generic.unStakeDist stakes)), " stakes."
                 ]
 
       -- Subtract 2 from the epoch to calculate when the epoch in which the reward was earned.
-      insertRewards tracer (epochNo - 2) (Generic.rewards grewards)
-      insertOrphanedRewards tracer (epochNo - 2) (Generic.orphaned grewards)
+      insertRewards tracer (epochNo - 2) (Generic.rwdRewards grewards)
+      insertOrphanedRewards tracer (epochNo - 2) (Generic.rwdOrphaned grewards)
 
 -- -----------------------------------------------------------------------------
 

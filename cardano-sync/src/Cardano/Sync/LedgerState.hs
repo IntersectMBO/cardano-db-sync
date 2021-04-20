@@ -176,14 +176,15 @@ applyBlock env blk =
     mkNewEpoch oldState newState =
       if ledgerEpochNo env newState == ledgerEpochNo env oldState + 1
         then
+          let epochNo = ledgerEpochNo env newState in
           Just $
             Generic.NewEpoch
-              { Generic.epoch = ledgerEpochNo env newState
+              { Generic.epoch = epochNo
               , Generic.isEBB = isJust $ blockIsEBB blk
               , Generic.adaPots = maybeToStrict $ getAdaPots newState
               , Generic.epochUpdate =
                   maybeToStrict $ ledgerEpochUpdate env (clsState newState)
-                    (maybeToStrict $ ledgerRewardUpdate env (ledgerState $ clsState oldState))
+                    (maybeToStrict $ Generic.epochRewards (leNetwork env) epochNo (clsState oldState))
               }
         else Nothing
 
@@ -450,16 +451,6 @@ ledgerEpochUpdate env els mRewards =
   where
     mNonce :: Strict.Maybe Shelley.Nonce
     mNonce = maybeToStrict $ extractEpochNonce els
-
--- This will return a 'Just' from the time the rewards are updated until the end of the
--- epoch. It is 'Nothing' for the first block of a new epoch (which is slightly inconvenient).
-ledgerRewardUpdate :: LedgerEnv -> LedgerState CardanoBlock -> Maybe Generic.Rewards
-ledgerRewardUpdate env lsc =
-    case lsc of
-      LedgerStateByron _ -> Nothing -- This actually happens during the Byron era.
-      LedgerStateShelley sls -> Generic.shelleyRewards (leNetwork env) sls
-      LedgerStateAllegra als -> Generic.allegraRewards (leNetwork env) als
-      LedgerStateMary mls -> Generic.maryRewards (leNetwork env) mls
 
 -- Like 'Consensus.tickThenReapply' but also checks that the previous hash from the block matches
 -- the head hash of the ledger state.
