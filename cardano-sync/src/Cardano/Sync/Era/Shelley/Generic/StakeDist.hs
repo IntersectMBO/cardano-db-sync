@@ -1,51 +1,81 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Cardano.Sync.Era.Shelley.Generic.StakeDist
-  ( StakeCred (..)
-  , StakeDist (..)
-  , allegraStakeDist
-  , maryStakeDist
-  , shelleyStakeDist
+  ( StakeDist (..)
+  , epochStakeDist
   ) where
 
 import           Cardano.Prelude
 
-import           Cardano.Sync.Era.Shelley.Generic.StakeCred
+import           Cardano.Ledger.Era (Crypto)
 
+import           Cardano.Slotting.Slot (EpochNo (..))
+
+import           Cardano.Sync.Era.Shelley.Generic.StakeCred
+import           Cardano.Sync.Types
+
+import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 
-import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardAllegra, StandardMary,
-                   StandardShelley)
+import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
 
+import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import           Shelley.Spec.Ledger.Coin (Coin (..))
+import           Shelley.Spec.Ledger.Credential (Credential)
 import qualified Shelley.Spec.Ledger.EpochBoundary as Shelley
-import qualified Shelley.Spec.Ledger.LedgerState as Shelley
+import           Shelley.Spec.Ledger.Keys (KeyHash, KeyRole (..))
+import qualified Shelley.Spec.Ledger.LedgerState as Shelley hiding (_delegations)
 
 
-newtype StakeDist
-  = StakeDist { unStakeDist :: Map StakeCred Coin }
+data StakeDist = StakeDist
+  { sdistEpochNo :: !EpochNo
+  , sdistStakeMap :: !(Map StakeCred (Coin, KeyHash 'StakePool StandardCrypto))
+  }
 
+epochStakeDist :: Shelley.Network -> EpochNo -> ExtLedgerState CardanoBlock -> StakeDist
+epochStakeDist network epoch els =
+  case ledgerState els of
+    LedgerStateByron _ -> panic "epochStakeDist: LedgerStateByron"
+    LedgerStateShelley sls -> genericStakeDist network epoch sls
+    LedgerStateAllegra als -> genericStakeDist network epoch als
+    LedgerStateMary mls -> genericStakeDist network epoch mls
 
--- We use '_pstakeSet' here instead of '_pstateMark' because the stake addresses for the
--- later may not have been added to the database yet. That means that when these values
--- are added to the database, the epoch number where they become active is the current
--- epoch plus one.
+-- -------------------------------------------------------------------------------------------------
 
-allegraStakeDist :: Shelley.Network -> LedgerState (ShelleyBlock StandardAllegra) -> StakeDist
-allegraStakeDist network =
-  StakeDist . Map.mapKeys (toStakeCred network) . Shelley.unStake . Shelley._stake . Shelley._pstakeSet
-    . Shelley.esSnapshots . Shelley.nesEs . Consensus.shelleyLedgerState
+genericStakeDist :: forall era. Shelley.Network -> EpochNo -> LedgerState (ShelleyBlock era) -> StakeDist
+genericStakeDist network epoch lstate =
+    StakeDist
+      { sdistEpochNo = epoch
+      , sdistStakeMap = stakeMap
+      }
+  where
+    stakeMap :: Map StakeCred (Coin, KeyHash 'StakePool StandardCrypto)
+    stakeMap =
+      Map.mapKeys (toStakeCred network) $
+        Map.intersectionWith (,) stakeCoinMap stakePoolMap
 
-maryStakeDist :: Shelley.Network -> LedgerState (ShelleyBlock StandardMary) -> StakeDist
-maryStakeDist network =
-  StakeDist . Map.mapKeys (toStakeCred network) . Shelley.unStake . Shelley._stake . Shelley._pstakeSet
-    . Shelley.esSnapshots . Shelley.nesEs . Consensus.shelleyLedgerState
+    -- We used coerce here on a phanton type: Crypto era -> StandardCrypto.
+    stakeCoinMap :: Map (Credential 'Staking StandardCrypto) Coin
+    stakeCoinMap = Map.mapKeys coerce . Shelley.unStake $ Shelley._stake stakeSet
 
-shelleyStakeDist :: Shelley.Network -> LedgerState (ShelleyBlock StandardShelley) -> StakeDist
-shelleyStakeDist network =
-  StakeDist . Map.mapKeys (toStakeCred network) . Shelley.unStake . Shelley._stake . Shelley._pstakeSet
-    . Shelley.esSnapshots . Shelley.nesEs . Consensus.shelleyLedgerState
+    stakePoolMap :: Map (Credential 'Staking StandardCrypto) (KeyHash 'StakePool StandardCrypto)
+    stakePoolMap = mapBimap coerce coerce $ Shelley._delegations stakeSet
+
+    -- We use '_pstakeSet' here instead of '_pstateMark' because the stake addresses for the
+    -- later may not have been added to the database yet. That means that when these values
+    -- are added to the database, the epoch number where they become active is the current
+    -- epoch plus one.
+
+    stakeSet :: Shelley.SnapShot (Crypto era)
+    stakeSet = Shelley._pstakeSet . Shelley.esSnapshots . Shelley.nesEs
+                $ Consensus.shelleyLedgerState lstate
+
+-- Is there a better way to do this?
+mapBimap :: Ord k2 => (k1 -> k2) -> (a1 -> a2) -> Map k1 a1 -> Map k2 a2
+mapBimap fk fa = Map.fromAscList . map (bimap fk fa) . Map.toAscList

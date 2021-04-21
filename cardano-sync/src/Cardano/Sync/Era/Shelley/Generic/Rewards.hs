@@ -89,4 +89,4 @@ genericRewards network epoch lstate =
       sr { Shelley.rewardPool = coerce $ Shelley.rewardPool sr }
 
 mapBimap :: Ord k2 => (k1 -> k2) -> (a1 -> a2) -> Map k1 a1 -> Map k2 a2
-mapBimap fk fa = Map.fromList . map (bimap fk fa) . Map.toList
+mapBimap fk fa = Map.fromAscList . map (bimap fk fa) . Map.toAscList

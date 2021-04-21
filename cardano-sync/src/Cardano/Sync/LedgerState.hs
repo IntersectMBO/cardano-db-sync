@@ -57,7 +57,7 @@ import qualified Data.Text as Text
 import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockHash, blockIsEBB,
                    blockPrevHash, withOrigin)
 import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
-import           Ouroboros.Consensus.Cardano.Block (HardForkState (..), LedgerState (..))
+import           Ouroboros.Consensus.Cardano.Block (LedgerState (..))
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Config (TopLevelConfig (..), configCodec, configLedger)
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
@@ -71,18 +71,15 @@ import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import           Ouroboros.Consensus.Shelley.Ledger.Block
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
-import qualified Ouroboros.Consensus.Shelley.Protocol as Consensus
 import           Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), EncodeDisk (..))
 
 import           Ouroboros.Network.Block (HeaderHash, Point (..))
 import qualified Ouroboros.Network.Point as Point
 
-import qualified Shelley.Spec.Ledger.API.Protocol as Shelley
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import           Shelley.Spec.Ledger.Coin (Coin)
 import           Shelley.Spec.Ledger.LedgerState (AccountState, EpochState, UTxOState)
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley
-import qualified Shelley.Spec.Ledger.STS.Tickn as Shelley
 import qualified Shelley.Spec.Ledger.UTxO as Shelley
 
 import           System.Directory (listDirectory, removeFile)
@@ -206,11 +203,11 @@ applyBlock env blk details =
           let epochNo = ledgerEpochNo env newState in
           Just $
             Generic.NewEpoch
-              { Generic.epoch = epochNo
-              , Generic.isEBB = isJust $ blockIsEBB blk
-              , Generic.adaPots = maybeToStrict $ getAdaPots newState
-              , Generic.epochUpdate =
-                  maybeToStrict $ ledgerEpochUpdate env (clsState newState)
+              { Generic.neEpoch = epochNo
+              , Generic.neIsEBB = isJust $ blockIsEBB blk
+              , Generic.neAdaPots = maybeToStrict $ getAdaPots newState
+              , Generic.neEpochUpdate =
+                  Generic.epochUpdate (leNetwork env) epochNo (clsState newState)
                     (maybeToStrict $ Generic.epochRewards (leNetwork env) epochNo (clsState oldState))
               }
         else Nothing
@@ -270,7 +267,7 @@ saveLedgerStateMaybe :: LedgerEnv -> LedgerStateSnapshot -> SyncState -> IO ()
 saveLedgerStateMaybe env snapshot synced = do
   writeLedgerState env ledger
   case (synced, lssNewEpoch snapshot) of
-    (_, Strict.Just newEpoch) | not (Generic.isEBB newEpoch) ->
+    (_, Strict.Just newEpoch) | not (Generic.neIsEBB newEpoch) ->
       saveCleanupState True    -- Save ledger states on epoch boundaries, unless they are EBBs
     (SyncFollowing, Strict.Nothing) ->
       saveCleanupState False   -- If following, save every state.
@@ -391,18 +388,6 @@ cleanupLedgerStateFiles env slotNo = do
       | otherwise =
         (epochBoundary, lFile : regularFile, invalid)
 
-extractEpochNonce :: ExtLedgerState CardanoBlock -> Maybe Shelley.Nonce
-extractEpochNonce extLedgerState =
-    case Consensus.headerStateChainDep (headerState extLedgerState) of
-      ChainDepStateByron _ -> Nothing
-      ChainDepStateShelley st -> Just $ extractNonce st
-      ChainDepStateAllegra st -> Just $ extractNonce st
-      ChainDepStateMary st -> Just $ extractNonce st
-  where
-    extractNonce :: Consensus.TPraosState crypto -> Shelley.Nonce
-    extractNonce =
-      Shelley.ticknStateEpochNonce . Shelley.csTickn . Consensus.tpraosStateChainDepState
-
 loadState :: LedgerEnv -> CardanoPoint -> IO (Either LedgerStateFile CardanoLedgerState)
 loadState env point =
   case getPoint point of
@@ -492,18 +477,6 @@ ledgerEpochNo env cls =
   where
     epochInfo :: EpochInfo Identity
     epochInfo = epochInfoLedger (configLedger $ topLevelConfig env) (hardForkLedgerStatePerEra . ledgerState $ clsState cls)
-
--- Create an EpochUpdate from the current epoch state and the rewards from the last epoch.
-ledgerEpochUpdate :: LedgerEnv -> ExtLedgerState CardanoBlock -> Strict.Maybe Generic.Rewards -> Maybe Generic.EpochUpdate
-ledgerEpochUpdate env els mRewards =
-  case ledgerState els of
-    LedgerStateByron _ -> Nothing
-    LedgerStateShelley sls -> Just $ Generic.shelleyEpochUpdate (leNetwork env) sls mRewards mNonce
-    LedgerStateAllegra als -> Just $ Generic.allegraEpochUpdate (leNetwork env) als mRewards mNonce
-    LedgerStateMary mls -> Just $ Generic.maryEpochUpdate (leNetwork env) mls mRewards mNonce
-  where
-    mNonce :: Strict.Maybe Shelley.Nonce
-    mNonce = maybeToStrict $ extractEpochNonce els
 
 -- Like 'Consensus.tickThenReapply' but also checks that the previous hash from the block matches
 -- the head hash of the ledger state.

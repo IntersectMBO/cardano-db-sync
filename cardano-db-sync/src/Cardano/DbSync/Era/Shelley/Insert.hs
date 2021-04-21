@@ -150,16 +150,16 @@ insertOnNewEpoch
     => Trace IO Text -> DB.BlockId -> SlotNo -> EpochNo -> Generic.NewEpoch
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertOnNewEpoch tracer blkId slotNo epochNo newEpoch = do
-    whenJust (Generic.epochUpdate newEpoch) $ \esum -> do
-      let stakes = Generic.euStakeDistribution esum
+    let epochUpdate = Generic.neEpochUpdate newEpoch
+        stakes = Generic.euStakeDistribution epochUpdate
 
-      whenJust (Generic.euRewards esum) $ \ grewards ->
-        insertGenericRewards grewards stakes
+    whenJust (Generic.euRewards epochUpdate) $ \ grewards ->
+      insertGenericRewards grewards stakes
 
-      insertEpochParam tracer blkId epochNo (Generic.euProtoParams esum) (Generic.euNonce esum)
-      insertEpochStake tracer epochNo stakes
+    insertEpochParam tracer blkId epochNo (Generic.euProtoParams epochUpdate) (Generic.euNonce epochUpdate)
+    insertEpochStake tracer stakes
 
-    whenJust (Generic.adaPots newEpoch) $ \pots ->
+    whenJust (Generic.neAdaPots newEpoch) $ \pots ->
       insertPots blkId slotNo epochNo pots
   where
     insertGenericRewards
@@ -171,7 +171,7 @@ insertOnNewEpoch tracer blkId slotNo epochNo newEpoch = do
                 [ "Finishing epoch ", textShow (unEpochNo epochNo - 1), ": "
                 , textShow (length (Generic.rwdRewards grewards)), " rewards, "
                 , textShow (length (Generic.rwdOrphaned grewards)), " orphaned_rewards, "
-                , textShow (length (Generic.unStakeDist stakes)), " stakes."
+                , textShow (length (Generic.sdistStakeMap stakes)), " stakes."
                 ]
 
       -- Subtract 2 from the epoch to calculate when the epoch in which the reward was earned.
@@ -727,18 +727,21 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce =
 
 insertEpochStake
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> EpochNo -> Generic.StakeDist
+    => Trace IO Text -> Generic.StakeDist
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertEpochStake _tracer (EpochNo epoch) smap =
-    forM_ (chunksOf 1000 $ Map.toList (Generic.unStakeDist smap)) $ \stakeChunk -> do
+insertEpochStake _tracer smap =
+    forM_ (chunksOf 1000 $ Map.toList (Generic.sdistStakeMap smap)) $ \stakeChunk -> do
       dbStakes <- mapM mkStake stakeChunk
       lift $ putMany dbStakes
   where
+    epoch :: Word64
+    epoch = unEpochNo (Generic.sdistEpochNo smap)
+
     mkStake
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Generic.StakeCred, Shelley.Coin)
+        => (Generic.StakeCred, (Shelley.Coin, Shelley.KeyHash 'Shelley.StakePool StandardCrypto))
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.EpochStake
-    mkStake (saddr, coin) = do
+    mkStake (saddr, (coin, _)) = do
       (saId, poolId) <- liftLookupFail "insertEpochStake" $ queryStakeAddressAndPool epoch (Generic.unStakeCred saddr)
       pure $
         DB.EpochStake
