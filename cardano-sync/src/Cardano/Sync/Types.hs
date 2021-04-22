@@ -5,6 +5,7 @@ module Cardano.Sync.Types
   , CardanoPoint
   , CardanoProtocol
   , EpochSlot (..)
+  , PoolKeyHash
   , SlotDetails (..)
   , SyncState (..)
   , Block (..)
@@ -19,9 +20,15 @@ import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..
 
 import           Data.Time.Clock (UTCTime)
 
+import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 import           Ouroboros.Network.Block (BlockNo, Point)
 
+import qualified Shelley.Spec.Ledger.Keys as Shelley
+
+
 type CardanoPoint = Point CardanoBlock
+
+type PoolKeyHash = Shelley.KeyHash 'Shelley.StakePool StandardCrypto
 
 data BlockDetails = BlockDetails
   { bdBlock :: !CardanoBlock

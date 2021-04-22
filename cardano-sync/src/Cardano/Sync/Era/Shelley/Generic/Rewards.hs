@@ -3,6 +3,8 @@
 module Cardano.Sync.Era.Shelley.Generic.Rewards
   ( Rewards (..)
   , epochRewards
+  , rewardsPoolHashKeys
+  , rewardsStakeCreds
   ) where
 
 import           Cardano.Sync.Era.Shelley.Generic.StakeCred
@@ -48,6 +50,15 @@ epochRewards nw epoch lstate =
     LedgerStateShelley sls -> genericRewards nw epoch sls
     LedgerStateAllegra als -> genericRewards nw epoch als
     LedgerStateMary mls -> genericRewards nw epoch mls
+
+rewardsPoolHashKeys :: Rewards -> Set PoolKeyHash
+rewardsPoolHashKeys rwds =
+  Set.unions . map (Set.map Shelley.rewardPool) $
+    Map.elems (rwdRewards rwds) ++ Map.elems (rwdOrphaned rwds)
+
+rewardsStakeCreds :: Rewards -> Set StakeCred
+rewardsStakeCreds rwds =
+  Set.union (Map.keysSet $ rwdRewards rwds) (Map.keysSet $ rwdOrphaned rwds)
 
 -- -------------------------------------------------------------------------------------------------
 

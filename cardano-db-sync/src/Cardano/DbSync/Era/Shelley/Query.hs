@@ -11,6 +11,9 @@ module Cardano.DbSync.Era.Shelley.Query
   , queryStakePoolKeyHash
   , queryStakeAddressRef
   , queryTxInputSum
+
+  , queryStakeAddressIdPair
+  , queryPoolHashIdPair
   ) where
 
 import           Cardano.Prelude hiding (from, maybeToEither, on)
@@ -18,6 +21,7 @@ import           Cardano.Prelude hiding (from, maybeToEither, on)
 import           Cardano.Db
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 
+import qualified Cardano.Sync.Era.Shelley.Generic as Generic
 import           Cardano.Sync.Util
 
 import           Cardano.Slotting.Slot (SlotNo (..))
@@ -139,3 +143,25 @@ queryTxInputSum txins =
     queryTxInputValue :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m DbLovelace
     queryTxInputValue txIn =
       fromRight (DbLovelace 0) <$> queryTxOutValue (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
+
+
+queryStakeAddressIdPair :: MonadIO m => Generic.StakeCred -> ReaderT SqlBackend m (Maybe (Generic.StakeCred, StakeAddressId))
+queryStakeAddressIdPair cred@(Generic.StakeCred bs) = do
+    res <- select . from $ \ saddr -> do
+              where_ (saddr ^. StakeAddressHashRaw ==. val bs)
+              pure $ saddr ^. StakeAddressId
+    pure $ convert <$> listToMaybe res
+  where
+    convert :: Value StakeAddressId -> (Generic.StakeCred, StakeAddressId)
+    convert (Value said) = (cred, said)
+
+queryPoolHashIdPair :: MonadIO m => Shelley.KeyHash 'Shelley.StakePool StandardCrypto -> ReaderT SqlBackend m (Maybe (Shelley.KeyHash 'Shelley.StakePool StandardCrypto, PoolHashId))
+queryPoolHashIdPair pkh = do
+    res <- select . from $ \ pool -> do
+              where_ (pool ^. PoolHashHashRaw ==. val (Generic.unKeyHashRaw pkh))
+              pure $ pool ^. PoolHashId
+    pure $ convert <$> listToMaybe res
+  where
+    convert :: Value PoolHashId -> (Shelley.KeyHash 'Shelley.StakePool StandardCrypto, PoolHashId)
+    convert (Value phid) = (pkh, phid)
+
