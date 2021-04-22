@@ -12,8 +12,8 @@ import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Cardano.Sync.Era.Shelley.Generic.ProtoParams
 import           Cardano.Sync.Era.Shelley.Generic.Rewards
-import           Cardano.Sync.Era.Shelley.Generic.StakeDist
 import           Cardano.Sync.Types
+import           Cardano.Sync.Util
 
 import           Data.Strict.Maybe (Maybe (..))
 
@@ -38,7 +38,6 @@ data NewEpoch = NewEpoch
 data EpochUpdate = EpochUpdate
   { euProtoParams :: !(Maybe ProtoParams)
   , euRewards :: !(Maybe Rewards)
-  , euStakeDistribution :: !StakeDist
   , euNonce :: !Shelley.Nonce
   }
 
@@ -52,12 +51,11 @@ data AdaPots = AdaPots
   , apFees :: !Coin
   }
 
-epochUpdate :: Shelley.Network -> EpochNo -> ExtLedgerState CardanoBlock -> Maybe Rewards -> EpochUpdate
-epochUpdate network epochNo lstate mRewards =
+epochUpdate :: ExtLedgerState CardanoBlock -> Maybe Rewards -> EpochUpdate
+epochUpdate lstate mRewards =
     EpochUpdate
       { euProtoParams = maybeToStrict $ epochProtoParams lstate
       , euRewards = mRewards
-      , euStakeDistribution = epochStakeDist network epochNo lstate
       , euNonce = extractEpochNonce lstate
       }
 

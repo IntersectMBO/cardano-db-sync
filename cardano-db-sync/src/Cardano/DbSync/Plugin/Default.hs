@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Cardano.DbSync.Plugin.Default
@@ -15,7 +16,7 @@ import qualified Cardano.Db as DB
 
 import           Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
+import           Cardano.DbSync.Era.Shelley.Insert (insertEpochStake, insertShelleyBlock)
 import           Cardano.DbSync.Rollback (rollbackToSlot)
 
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
@@ -27,7 +28,8 @@ import           Cardano.Sync.Plugin
 import           Cardano.Sync.Types
 import           Cardano.Sync.Util
 
-import           Control.Monad.Logger (LoggingT)
+import           Control.Monad.Trans.Control (MonadBaseControl)
+import           Control.Monad.Trans.Except.Extra (newExceptT)
 
 import           Database.Persist.Sql (SqlBackend)
 
@@ -51,54 +53,60 @@ insertDefaultBlock
     -> IO (Either SyncNodeError ())
 insertDefaultBlock backend tracer env blockDetails =
     DB.runDbIohkLogging backend tracer $
-      traverseMEither insert blockDetails
+      runExceptT (traverse_ insert blockDetails)
   where
     insert
-        :: BlockDetails
-        -> ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
+        :: (MonadBaseControl IO m, MonadIO m)
+        => BlockDetails -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     insert (BlockDetails cblk details) = do
       -- Calculate the new ledger state to pass to the DB insert functions but do not yet
       -- update ledgerStateVar.
       let network = leNetwork (envLedger env)
       lStateSnap <- liftIO $ applyBlock (envLedger env) cblk details
-      liftIO $ handleLedgerEvents tracer (lssEvents lStateSnap)
-      res <- case cblk of
-                BlockByron blk ->
-                  insertByronBlock tracer blk details
-                BlockShelley blk ->
-                  insertShelleyBlock tracer network (Generic.fromShelleyBlock blk) lStateSnap details
-                BlockAllegra blk ->
-                  insertShelleyBlock tracer network (Generic.fromAllegraBlock blk) lStateSnap details
-                BlockMary blk ->
-                  insertShelleyBlock tracer network (Generic.fromMaryBlock blk) lStateSnap details
+      handleLedgerEvents tracer (lssEvents lStateSnap)
+      case cblk of
+        BlockByron blk ->
+          newExceptT $ insertByronBlock tracer blk details
+        BlockShelley blk ->
+          newExceptT $ insertShelleyBlock tracer network (Generic.fromShelleyBlock blk) lStateSnap details
+        BlockAllegra blk ->
+          newExceptT $ insertShelleyBlock tracer network (Generic.fromAllegraBlock blk) lStateSnap details
+        BlockMary blk ->
+          newExceptT $ insertShelleyBlock tracer network (Generic.fromMaryBlock blk) lStateSnap details
       -- Now we update it in ledgerStateVar and (possibly) store it to disk.
       liftIO $ saveLedgerStateMaybe (envLedger env)
                     lStateSnap (isSyncedWithinSeconds details 60)
-      pure res
 
-handleLedgerEvents :: Trace IO Text -> [LedgerEvent] -> IO ()
+handleLedgerEvents
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> [LedgerEvent]
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 handleLedgerEvents tracer =
     mapM_ printer
   where
-    printer :: LedgerEvent -> IO ()
+    printer
+        :: (MonadBaseControl IO m, MonadIO m)
+        => LedgerEvent -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     printer ev =
       case ev of
         LedgerNewEpoch en ->
-          logInfo tracer $ "Starting epoch " <> textShow (unEpochNo en)
+          liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo en)
 
         LedgerRewards details rwds -> do
-          logInfo tracer $
+          liftIO . logInfo tracer $
             mconcat
               [ "LedgerRewards "
-              , textShow  ( truncate4 (calcEpochProgress details)
+              , textShow  ( calcEpochProgress 4 details
                           , length (Generic.rwdRewards rwds)
                           , length (Generic.rwdOrphaned rwds)
                           )
               ]
 
-    calcEpochProgress :: SlotDetails -> Double
-    calcEpochProgress sd =
-      fromIntegral (unEpochSlot $ sdEpochSlot sd) / fromIntegral (unEpochSize $ sdEpochSize sd)
+        LedgerStakeDist sdist ->
+          insertEpochStake tracer sdist
 
-    truncate4 :: Double -> Double
-    truncate4 x = fromIntegral (floor (x * 1000) :: Int) / 1000
+calcEpochProgress :: Int -> SlotDetails -> Double
+calcEpochProgress digits sd =
+  let factor = 10 ^ digits
+      dval = fromIntegral (unEpochSlot $ sdEpochSlot sd) / fromIntegral (unEpochSize $ sdEpochSize sd)
+  in fromIntegral (floor (dval * factor) :: Int) / factor

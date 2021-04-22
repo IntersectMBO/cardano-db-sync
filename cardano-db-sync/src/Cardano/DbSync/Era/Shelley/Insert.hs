@@ -9,6 +9,7 @@
 
 module Cardano.DbSync.Era.Shelley.Insert
   ( insertShelleyBlock
+  , insertEpochStake
   , containsUnicodeNul
   , safeDecodeUtf8
   ) where
@@ -29,6 +30,7 @@ import qualified Cardano.Db as DB
 
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
+import           Cardano.DbSync.Era.Shelley.Insert.Epoch
 import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 
@@ -43,7 +45,6 @@ import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..), Value
 import           Cardano.Slotting.Block (BlockNo (..))
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
 
-import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 
 import qualified Data.Aeson as Aeson
@@ -72,9 +73,11 @@ import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Rewards as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
+
 insertShelleyBlock
-    :: Trace IO Text -> Shelley.Network -> Generic.Block -> LedgerStateSnapshot -> SlotDetails
-    -> ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> Shelley.Network -> Generic.Block -> LedgerStateSnapshot -> SlotDetails
+    -> ReaderT SqlBackend m (Either SyncNodeError ())
 insertShelleyBlock tracer network blk lStateSnap details = do
   runExceptT $ do
     pbid <- liftLookupFail (renderInsertName (Generic.blkEra blk)) $ DB.queryBlockId (Generic.blkPreviousHash blk)
@@ -137,11 +140,11 @@ insertShelleyBlock tracer network blk lStateSnap details = do
       | unBlockNo (Generic.blkBlockNo blk) `mod` 5000 == 0 = logInfo
       | otherwise = logDebug
 
-renderInsertName :: Generic.BlockEra -> Text
-renderInsertName eraName =
-  case eraName of
-    Generic.Shelley -> "insertShelleyBlock"
-    other -> mconcat [ "insertShelleyBlock(", textShow other, ")" ]
+    renderInsertName :: Generic.BlockEra -> Text
+    renderInsertName eraName =
+      case eraName of
+        Generic.Shelley -> "insertShelleyBlock"
+        other -> mconcat [ "insertShelleyBlock(", textShow other, ")" ]
 
 -- -----------------------------------------------------------------------------
 
@@ -151,27 +154,24 @@ insertOnNewEpoch
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertOnNewEpoch tracer blkId slotNo epochNo newEpoch = do
     let epochUpdate = Generic.neEpochUpdate newEpoch
-        stakes = Generic.euStakeDistribution epochUpdate
 
     whenJust (Generic.euRewards epochUpdate) $ \ grewards ->
-      insertGenericRewards grewards stakes
+      insertGenericRewards grewards
 
     insertEpochParam tracer blkId epochNo (Generic.euProtoParams epochUpdate) (Generic.euNonce epochUpdate)
-    insertEpochStake tracer stakes
 
     whenJust (Generic.neAdaPots newEpoch) $ \pots ->
       insertPots blkId slotNo epochNo pots
   where
     insertGenericRewards
         :: (MonadBaseControl IO m, MonadIO m)
-        => Generic.Rewards -> Generic.StakeDist
+        => Generic.Rewards
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-    insertGenericRewards grewards stakes = do
+    insertGenericRewards grewards = do
       liftIO . logInfo tracer $ mconcat
                 [ "Finishing epoch ", textShow (unEpochNo epochNo - 1), ": "
                 , textShow (length (Generic.rwdRewards grewards)), " rewards, "
-                , textShow (length (Generic.rwdOrphaned grewards)), " orphaned_rewards, "
-                , textShow (length (Generic.sdistStakeMap stakes)), " stakes."
+                , textShow (length (Generic.rwdOrphaned grewards)), " orphaned_rewards"
                 ]
 
       -- Subtract 2 from the epoch to calculate when the epoch in which the reward was earned.
@@ -724,32 +724,6 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce =
       , DB.epochParamNonce = Generic.nonceToBytes nonce
       , DB.epochParamBlockId = blkId
       }
-
-insertEpochStake
-    :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Generic.StakeDist
-    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertEpochStake _tracer smap =
-    forM_ (chunksOf 1000 $ Map.toList (Generic.sdistStakeMap smap)) $ \stakeChunk -> do
-      dbStakes <- mapM mkStake stakeChunk
-      lift $ putMany dbStakes
-  where
-    epoch :: Word64
-    epoch = unEpochNo (Generic.sdistEpochNo smap)
-
-    mkStake
-        :: (MonadBaseControl IO m, MonadIO m)
-        => (Generic.StakeCred, (Shelley.Coin, Shelley.KeyHash 'Shelley.StakePool StandardCrypto))
-        -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.EpochStake
-    mkStake (saddr, (coin, _)) = do
-      (saId, poolId) <- liftLookupFail "insertEpochStake" $ queryStakeAddressAndPool epoch (Generic.unStakeCred saddr)
-      pure $
-        DB.EpochStake
-          { DB.epochStakeAddrId = saId
-          , DB.epochStakePoolId = poolId
-          , DB.epochStakeAmount = Generic.coinToDbLovelace coin
-          , DB.epochStakeEpochNo = epoch -- The epoch where this delegation becomes valid.
-          }
 
 insertMaTxMint
     :: (MonadBaseControl IO m, MonadIO m)

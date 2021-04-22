@@ -50,6 +50,7 @@ library
                         Cardano.DbSync.Era.Shelley.Generic.Util
                         Cardano.DbSync.Era.Shelley.Generic.Witness
                         Cardano.DbSync.Era.Shelley.Insert
+                        Cardano.DbSync.Era.Shelley.Insert.Epoch
                         Cardano.DbSync.Era.Shelley.Query
 
                         Cardano.DbSync.Era.Util

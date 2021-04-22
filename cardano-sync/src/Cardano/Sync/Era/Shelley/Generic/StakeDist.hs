@@ -1,6 +1,5 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Cardano.Sync.Era.Shelley.Generic.StakeDist
   ( StakeDist (..)
@@ -36,15 +35,15 @@ import qualified Shelley.Spec.Ledger.LedgerState as Shelley hiding (_delegations
 data StakeDist = StakeDist
   { sdistEpochNo :: !EpochNo
   , sdistStakeMap :: !(Map StakeCred (Coin, KeyHash 'StakePool StandardCrypto))
-  }
+  } deriving Eq
 
-epochStakeDist :: Shelley.Network -> EpochNo -> ExtLedgerState CardanoBlock -> StakeDist
+epochStakeDist :: Shelley.Network -> EpochNo -> ExtLedgerState CardanoBlock -> Maybe StakeDist
 epochStakeDist network epoch els =
   case ledgerState els of
-    LedgerStateByron _ -> panic "epochStakeDist: LedgerStateByron"
-    LedgerStateShelley sls -> genericStakeDist network epoch sls
-    LedgerStateAllegra als -> genericStakeDist network epoch als
-    LedgerStateMary mls -> genericStakeDist network epoch mls
+    LedgerStateByron _ -> Nothing
+    LedgerStateShelley sls -> Just $ genericStakeDist network epoch sls
+    LedgerStateAllegra als -> Just $ genericStakeDist network epoch als
+    LedgerStateMary mls -> Just $ genericStakeDist network epoch mls
 
 -- -------------------------------------------------------------------------------------------------
 

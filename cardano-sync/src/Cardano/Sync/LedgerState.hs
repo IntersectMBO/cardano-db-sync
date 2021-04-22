@@ -29,8 +29,7 @@ import qualified Cardano.Ledger.Val as Val
 
 import           Cardano.Sync.Config.Types
 import qualified Cardano.Sync.Era.Cardano.Util as Cardano
-import qualified Cardano.Sync.Era.Shelley.Generic.EpochUpdate as Generic
-import qualified Cardano.Sync.Era.Shelley.Generic.Rewards as Generic
+import qualified Cardano.Sync.Era.Shelley.Generic as Generic
 import           Cardano.Sync.Types hiding (CardanoBlock)
 import           Cardano.Sync.Util
 
@@ -106,11 +105,13 @@ data LedgerEnv = LedgerEnv
 data LedgerEvent
   = LedgerNewEpoch !EpochNo
   | LedgerRewards !SlotDetails !Generic.Rewards
+  | LedgerStakeDist !Generic.StakeDist
   deriving Eq
 
 data LedgerEventState = LedgerEventState
   { lesEpochNo :: !EpochNo
   , lesLastRewardsEpoch :: !EpochNo
+  , lesLastStateDistEpoch :: !EpochNo
   }
 
 topLevelConfig :: LedgerEnv -> TopLevelConfig CardanoBlock
@@ -159,6 +160,7 @@ mkLedgerEnv protocolInfo dir network slot deleteFiles = do
       LedgerEventState
         { lesEpochNo = EpochNo 0
         , lesLastRewardsEpoch = EpochNo 0
+        , lesLastStateDistEpoch = EpochNo 0
         }
 
 
@@ -207,7 +209,7 @@ applyBlock env blk details =
               , Generic.neIsEBB = isJust $ blockIsEBB blk
               , Generic.neAdaPots = maybeToStrict $ getAdaPots newState
               , Generic.neEpochUpdate =
-                  Generic.epochUpdate (leNetwork env) epochNo (clsState newState)
+                  Generic.epochUpdate (clsState newState)
                     (maybeToStrict $ Generic.epochRewards (leNetwork env) epochNo (clsState oldState))
               }
         else Nothing
@@ -216,9 +218,10 @@ generateEvents :: LedgerEnv -> LedgerEventState -> SlotDetails -> CardanoLedgerS
 generateEvents env oldEventState details cls = do
     writeTVar (leEventState env) newEventState
     pure $ catMaybes
-            [ if lesEpochNo oldEventState > 0 && lesEpochNo oldEventState < currentEpochNo
+            [ if lesEpochNo oldEventState < currentEpochNo
                 then Just (LedgerNewEpoch currentEpochNo) else Nothing
             , LedgerRewards details <$> rewards
+            , LedgerStakeDist <$> stakeDist
             ]
   where
     currentEpochNo :: EpochNo
@@ -231,11 +234,18 @@ generateEvents env oldEventState details cls = do
         then Generic.epochRewards (leNetwork env) (sdEpochNo details) (clsState cls)
         else Nothing
 
+    stakeDist :: Maybe Generic.StakeDist
+    stakeDist =
+      if lesLastStateDistEpoch oldEventState < currentEpochNo
+        then Generic.epochStakeDist (leNetwork env) (sdEpochNo details) (clsState cls)
+        else Nothing
+
     newEventState :: LedgerEventState
     newEventState =
       LedgerEventState
         { lesEpochNo = currentEpochNo
         , lesLastRewardsEpoch = if isJust rewards then currentEpochNo else lesLastRewardsEpoch oldEventState
+        , lesLastStateDistEpoch = if isJust stakeDist then currentEpochNo else lesLastStateDistEpoch oldEventState
         }
 
 -- Delete ledger state files for slots later than the provided SlotNo.
