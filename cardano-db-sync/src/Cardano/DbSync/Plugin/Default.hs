@@ -16,7 +16,8 @@ import qualified Cardano.Db as DB
 
 import           Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import           Cardano.DbSync.Era.Shelley.Insert (insertEpochStake, insertShelleyBlock)
+import           Cardano.DbSync.Era.Shelley.Insert (insertEpochRewards, insertEpochStake,
+                   insertShelleyBlock)
 import           Cardano.DbSync.Rollback (rollbackToSlot)
 
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
@@ -91,17 +92,11 @@ handleLedgerEvents tracer =
       case ev of
         LedgerNewEpoch en ->
           liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo en)
-
         LedgerRewards details rwds -> do
-          liftIO . logInfo tracer $
-            mconcat
-              [ "LedgerRewards "
-              , textShow  ( calcEpochProgress 4 details
-                          , length (Generic.rwdRewards rwds)
-                          , length (Generic.rwdOrphaned rwds)
-                          )
-              ]
-
+          let progress = calcEpochProgress 4 details
+          when (progress > 0.6) $
+            liftIO . logInfo tracer $ mconcat [ "LedgerRewards: ", textShow progress ]
+          insertEpochRewards tracer rwds
         LedgerStakeDist sdist ->
           insertEpochStake tracer sdist
 

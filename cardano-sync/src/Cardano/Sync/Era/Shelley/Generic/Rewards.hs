@@ -59,7 +59,7 @@ genericRewards network epoch lstate =
     cleanup rmap =
       let (rm, om) = Map.partitionWithKey validRewardAddress rmap in
       Rewards
-        { rwdEpoch = epoch - 2 -- Epoch in whch rewards were earned.
+        { rwdEpoch = epoch - 1 -- Epoch in whch rewards were earned.
         , rwdRewards = mapBimap (toStakeCred network) (Set.map convertReward) rm
         , rwdOrphaned = mapBimap (toStakeCred network) (Set.map convertReward) om
         }

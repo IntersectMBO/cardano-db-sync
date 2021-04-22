@@ -208,9 +208,7 @@ applyBlock env blk details =
               { Generic.neEpoch = epochNo
               , Generic.neIsEBB = isJust $ blockIsEBB blk
               , Generic.neAdaPots = maybeToStrict $ getAdaPots newState
-              , Generic.neEpochUpdate =
-                  Generic.epochUpdate (clsState newState)
-                    (maybeToStrict $ Generic.epochRewards (leNetwork env) epochNo (clsState oldState))
+              , Generic.neEpochUpdate = Generic.epochUpdate (clsState newState)
               }
         else Nothing
 

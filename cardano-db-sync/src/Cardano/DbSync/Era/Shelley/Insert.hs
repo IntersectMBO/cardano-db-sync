@@ -8,8 +8,10 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.DbSync.Era.Shelley.Insert
-  ( insertShelleyBlock
+  ( insertEpochRewards
   , insertEpochStake
+  , insertShelleyBlock
+
   , containsUnicodeNul
   , safeDecodeUtf8
   ) where
@@ -34,7 +36,6 @@ import           Cardano.DbSync.Era.Shelley.Insert.Epoch
 import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 
-import qualified Cardano.Sync.Era.Shelley.Generic as Generic
 import           Cardano.Sync.Error
 import           Cardano.Sync.LedgerState
 import           Cardano.Sync.Types
@@ -51,14 +52,12 @@ import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import           Data.Group (invert)
-import           Data.List.Split.Internals (chunksOf)
 import qualified Data.Map.Strict as Map
-import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Error as Text
 
-import           Database.Persist.Sql (SqlBackend, putMany)
+import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
@@ -70,9 +69,7 @@ import qualified Shelley.Spec.Ledger.Coin as Shelley
 import qualified Shelley.Spec.Ledger.Credential as Shelley
 import qualified Shelley.Spec.Ledger.Keys as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
-import qualified Shelley.Spec.Ledger.Rewards as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
-
 
 insertShelleyBlock
     :: (MonadBaseControl IO m, MonadIO m)
@@ -153,30 +150,13 @@ insertOnNewEpoch
     => Trace IO Text -> DB.BlockId -> SlotNo -> EpochNo -> Generic.NewEpoch
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertOnNewEpoch tracer blkId slotNo epochNo newEpoch = do
-    let epochUpdate = Generic.neEpochUpdate newEpoch
-
-    whenJust (Generic.euRewards epochUpdate) $ \ grewards ->
-      insertGenericRewards grewards
-
-    insertEpochParam tracer blkId epochNo (Generic.euProtoParams epochUpdate) (Generic.euNonce epochUpdate)
-
+    whenJust (Generic.euProtoParams epochUpdate) $ \ params ->
+      insertEpochParam tracer blkId epochNo params (Generic.euNonce epochUpdate)
     whenJust (Generic.neAdaPots newEpoch) $ \pots ->
       insertPots blkId slotNo epochNo pots
   where
-    insertGenericRewards
-        :: (MonadBaseControl IO m, MonadIO m)
-        => Generic.Rewards
-        -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-    insertGenericRewards grewards = do
-      liftIO . logInfo tracer $ mconcat
-                [ "Finishing epoch ", textShow (unEpochNo epochNo - 1), ": "
-                , textShow (length (Generic.rwdRewards grewards)), " rewards, "
-                , textShow (length (Generic.rwdOrphaned grewards)), " orphaned_rewards"
-                ]
-
-      -- Subtract 2 from the epoch to calculate when the epoch in which the reward was earned.
-      insertRewards tracer (epochNo - 2) (Generic.rwdRewards grewards)
-      insertOrphanedRewards tracer (epochNo - 2) (Generic.rwdOrphaned grewards)
+    epochUpdate :: Generic.EpochUpdate
+    epochUpdate = Generic.neEpochUpdate newEpoch
 
 -- -----------------------------------------------------------------------------
 
@@ -642,58 +622,6 @@ safeDecodeUtf8 bs
 
 containsUnicodeNul :: Text -> Bool
 containsUnicodeNul = Text.isInfixOf "\\u000"
-
-insertRewards
-    :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> EpochNo -> Map Generic.StakeCred (Set (Shelley.Reward StandardCrypto))
-    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertRewards _tracer epoch rewards = do
-    forM_ (chunksOf 1000 $ Map.toList rewards) $ \rewardsChunk -> do
-      dbRewards <- concatMapM mkRewards rewardsChunk
-      lift $ putMany dbRewards
-  where
-    mkRewards
-        :: (MonadBaseControl IO m, MonadIO m)
-        => (Generic.StakeCred, Set (Shelley.Reward StandardCrypto))
-        -> ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.Reward]
-    mkRewards (saddr, rset) = do
-      saId <- liftLookupFail "insertReward StakeAddress" $ queryStakeAddress (Generic.unStakeCred saddr)
-      forM (Set.toList rset) $ \ rwd -> do
-        poolId <- liftLookupFail "insertReward StakePool" $ queryStakePoolKeyHash (Shelley.rewardPool rwd)
-        pure $ DB.Reward
-                  { DB.rewardAddrId = saId
-                  , DB.rewardType = DB.showRewardType (Shelley.rewardType rwd)
-                  , DB.rewardAmount = Generic.coinToDbLovelace (Shelley.rewardAmount rwd)
-                  , DB.rewardEpochNo = unEpochNo epoch
-                  , DB.rewardPoolId = poolId
-                  }
-
-insertOrphanedRewards
-    :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> EpochNo -> Map Generic.StakeCred (Set (Shelley.Reward StandardCrypto))
-    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertOrphanedRewards _tracer epoch orphanedRewards =
-    -- There are probably not many of these for each epoch, but just in case there
-    -- are, it does not hurt to chunk them.
-    forM_ (chunksOf 1000 $ Map.toList orphanedRewards) $ \orphanedRewardsChunk -> do
-      dbRewards <- concatMapM mkOrphanedReward orphanedRewardsChunk
-      lift $ putMany dbRewards
-  where
-    mkOrphanedReward
-        :: (MonadBaseControl IO m, MonadIO m)
-        => (Generic.StakeCred, Set (Shelley.Reward StandardCrypto))
-        -> ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.OrphanedReward]
-    mkOrphanedReward (saddr, rset) = do
-      saId <- liftLookupFail "insertReward StakeAddress" $ queryStakeAddress (Generic.unStakeCred saddr)
-      forM (Set.toList rset) $ \ rwd -> do
-        poolId <- liftLookupFail "insertReward StakePool" $ queryStakePoolKeyHash (Shelley.rewardPool rwd)
-        pure $ DB.OrphanedReward
-                  { DB.orphanedRewardAddrId = saId
-                  , DB.orphanedRewardType = DB.showRewardType (Shelley.rewardType rwd)
-                  , DB.orphanedRewardAmount = Generic.coinToDbLovelace (Shelley.rewardAmount rwd)
-                  , DB.orphanedRewardEpochNo = unEpochNo epoch
-                  , DB.orphanedRewardPoolId = poolId
-                  }
 
 insertEpochParam
     :: (MonadBaseControl IO m, MonadIO m)
