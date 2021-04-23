@@ -108,7 +108,7 @@ extra-deps:
     commit: f73079303f663e028288f9f4a9e08bcca39a923e
   
   - git: https://github.com/input-output-hk/cardano-ledger-specs
-    commit: 2e0e7b625492e5e0182464247f4c26d6949ab6f7
+    commit: 0730828363ad6d0669b7a5a12635e22944b32880
     subdirs:
     - alonzo/impl
     - byron/crypto
@@ -126,7 +126,7 @@ extra-deps:
     - shelley-ma/shelley-ma-test 
   
   - git: https://github.com/input-output-hk/cardano-node
-    commit: 3531289c9f79eab7ac5d3272ce6e6821504fec4c
+    commit: 324c2d83ec4b7862e5e317a341e7732fbedeeaa8
     subdirs:
     - cardano-api
     - cardano-api/test
@@ -149,7 +149,7 @@ extra-deps:
     commit: cde90a2b27f79187ca8310b6549331e59595e7ba
   
   - git: https://github.com/input-output-hk/iohk-monitoring-framework
-    commit: f6ab0631275d04dff1b990283bbf9671093e7505
+    commit: bf3b4336dfd202fe0b5e765cdaa97788674e456c
     subdirs:
     - contra-tracer
     - iohk-monitoring
