@@ -64,7 +64,7 @@ insertDefaultBlock backend tracer env blockDetails =
       -- update ledgerStateVar.
       let network = leNetwork (envLedger env)
       lStateSnap <- liftIO $ applyBlock (envLedger env) cblk details
-      handleLedgerEvents tracer (lssEvents lStateSnap)
+      handleLedgerEvents tracer (envLedger env) (lssEvents lStateSnap)
       case cblk of
         BlockByron blk ->
           newExceptT $ insertByronBlock tracer blk details
@@ -80,9 +80,9 @@ insertDefaultBlock backend tracer env blockDetails =
 
 handleLedgerEvents
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> [LedgerEvent]
+    => Trace IO Text -> LedgerEnv -> [LedgerEvent]
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-handleLedgerEvents tracer =
+handleLedgerEvents tracer lenv =
     mapM_ printer
   where
     printer
@@ -96,9 +96,9 @@ handleLedgerEvents tracer =
           let progress = calcEpochProgress 4 details
           when (progress > 0.6) $
             liftIO . logInfo tracer $ mconcat [ "LedgerRewards: ", textShow progress ]
-          insertEpochRewards tracer rwds
+          insertEpochRewards tracer lenv rwds
         LedgerStakeDist sdist ->
-          insertEpochStake tracer sdist
+          insertEpochStake tracer lenv sdist
 
 calcEpochProgress :: Int -> SlotDetails -> Double
 calcEpochProgress digits sd =

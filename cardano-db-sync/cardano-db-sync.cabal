@@ -85,6 +85,7 @@ library
                       , extra
                       , groups
                       , iohk-monitoring
+                      , io-sim-classes
                       , monad-control
                       , monad-logger
                       , ouroboros-consensus

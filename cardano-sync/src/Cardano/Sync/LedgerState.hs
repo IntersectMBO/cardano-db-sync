@@ -8,6 +8,7 @@
 
 module Cardano.Sync.LedgerState
   ( CardanoLedgerState (..)
+  , IndexCache (..)
   , LedgerEnv (..)
   , LedgerEvent (..)
   , LedgerStateSnapshot (..)
@@ -23,6 +24,8 @@ module Cardano.Sync.LedgerState
 
 import           Cardano.Binary (DecoderError)
 import qualified Cardano.Binary as Serialize
+
+import qualified Cardano.Db as DB
 
 import           Cardano.Ledger.Shelley.Constraints (UsesValue)
 import qualified Cardano.Ledger.Val as Val
@@ -94,12 +97,18 @@ import           System.FilePath (dropExtension, takeExtension, (</>))
 {- HLINT ignore "Reduce duplication" -}
 {- HLINT ignore "Use readTVarIO" -}
 
+data IndexCache = IndexCache
+  { icAddressCache :: !(Map Generic.StakeCred DB.StakeAddressId)
+  , icPoolCache :: !(Map PoolKeyHash DB.PoolHashId)
+  }
+
 data LedgerEnv = LedgerEnv
   { leProtocolInfo :: !(Consensus.ProtocolInfo IO CardanoBlock)
   , leDir :: !LedgerStateDir
   , leNetwork :: !Shelley.Network
   , leStateVar :: !(StrictTVar IO CardanoLedgerState)
   , leEventState :: !(StrictTVar IO LedgerEventState)
+  , leIndexCache :: !(StrictTVar IO IndexCache)
   }
 
 data LedgerEvent
@@ -147,12 +156,14 @@ mkLedgerEnv protocolInfo dir network slot deleteFiles = do
     st <- findLatestLedgerState protocolInfo dir deleteFiles
     svar <- newTVarIO st
     evar <- newTVarIO initLedgerEventState
+    ivar <- newTVarIO $ IndexCache mempty mempty
     pure LedgerEnv
       { leProtocolInfo = protocolInfo
       , leDir = dir
       , leNetwork = network
       , leStateVar = svar
       , leEventState = evar
+      , leIndexCache = ivar
       }
   where
     initLedgerEventState :: LedgerEventState

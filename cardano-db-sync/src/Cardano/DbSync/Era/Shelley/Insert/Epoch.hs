@@ -23,11 +23,13 @@ import           Cardano.DbSync.Era.Shelley.Query
 
 import qualified Cardano.Sync.Era.Shelley.Generic as Generic
 import           Cardano.Sync.Error
+import           Cardano.Sync.LedgerState
 import           Cardano.Sync.Types
 import           Cardano.Sync.Util
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
+import           Control.Monad.Class.MonadSTM.Strict (readTVar, writeTVar)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (hoistEither)
 
@@ -42,13 +44,15 @@ import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 import qualified Shelley.Spec.Ledger.Coin as Shelley
 import qualified Shelley.Spec.Ledger.Rewards as Shelley
 
+{- HLINT ignore "Use readTVarIO" -}
+
 
 insertEpochRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Generic.Rewards
+    => Trace IO Text -> LedgerEnv -> Generic.Rewards
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertEpochRewards tracer rwds = do
-  lcache <- lift $ updateLookupCache (Generic.rewardsStakeCreds rwds) (Generic.rewardsPoolHashKeys rwds)
+insertEpochRewards tracer lenv rwds = do
+  lcache <- lift $ updateIndexCache lenv (Generic.rewardsStakeCreds rwds) (Generic.rewardsPoolHashKeys rwds)
   insertRewards tracer lcache epochNo (Generic.rwdRewards rwds)
   insertOrphanedRewards tracer lcache epochNo (Generic.rwdOrphaned rwds)
   liftIO . logInfo tracer $
@@ -63,10 +67,10 @@ insertEpochRewards tracer rwds = do
 
 insertEpochStake
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Generic.StakeDist
+    => Trace IO Text -> LedgerEnv -> Generic.StakeDist
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertEpochStake tracer smap = do
-    lcache <- lift $ updateLookupCache (Generic.stakeDistStakeCreds smap) (Generic.stakeDistPoolHashKeys smap)
+insertEpochStake tracer lenv smap = do
+    lcache <- lift $ updateIndexCache lenv (Generic.stakeDistStakeCreds smap) (Generic.stakeDistPoolHashKeys smap)
     forM_ (chunksOf 1000 $ Map.toList (Generic.sdistStakeMap smap)) $ \stakeChunk -> do
       dbStakes <- mapM (mkStake lcache) stakeChunk
       lift $ putMany dbStakes
@@ -81,7 +85,7 @@ insertEpochStake tracer smap = do
 
     mkStake
         :: MonadBaseControl IO m
-        => LookupCache
+        => IndexCache
         -> (Generic.StakeCred, (Shelley.Coin, PoolKeyHash))
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.EpochStake
     mkStake lcache (saddr, (coin, pool)) = do
@@ -97,14 +101,9 @@ insertEpochStake tracer smap = do
 
 -- -------------------------------------------------------------------------------------------------
 
-data LookupCache = LookupCache
-  { lcAddressCache :: !(Map Generic.StakeCred DB.StakeAddressId)
-  , lcPoolCache :: !(Map PoolKeyHash DB.PoolHashId)
-  }
-
 insertRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> LookupCache -> EpochNo -> Map Generic.StakeCred (Set (Shelley.Reward StandardCrypto))
+    => Trace IO Text -> IndexCache -> EpochNo -> Map Generic.StakeCred (Set (Shelley.Reward StandardCrypto))
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertRewards _tracer lcache epoch rewards = do
     forM_ (chunksOf 1000 $ Map.toList rewards) $ \rewardsChunk -> do
@@ -129,7 +128,7 @@ insertRewards _tracer lcache epoch rewards = do
 
 insertOrphanedRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> LookupCache -> EpochNo -> Map Generic.StakeCred (Set (Shelley.Reward StandardCrypto))
+    => Trace IO Text -> IndexCache -> EpochNo -> Map Generic.StakeCred (Set (Shelley.Reward StandardCrypto))
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertOrphanedRewards _tracer lcache epoch orphanedRewards =
     -- There are probably not many of these for each epoch, but just in case there
@@ -157,10 +156,10 @@ insertOrphanedRewards _tracer lcache epoch orphanedRewards =
 -- -------------------------------------------------------------------------------------------------
 
 lookupStakeAddrIdPair
-    :: Text -> Generic.StakeCred -> LookupCache
+    :: Text -> Generic.StakeCred -> IndexCache
     -> Either SyncNodeError DB.StakeAddressId
 lookupStakeAddrIdPair msg scred lcache =
-    maybe errMsg Right $ Map.lookup scred (lcAddressCache lcache)
+    maybe errMsg Right $ Map.lookup scred (icAddressCache lcache)
   where
     errMsg :: Either SyncNodeError a
     errMsg =
@@ -169,10 +168,10 @@ lookupStakeAddrIdPair msg scred lcache =
 
 
 lookupPoolIdPair
-    :: Text -> PoolKeyHash -> LookupCache
+    :: Text -> PoolKeyHash -> IndexCache
     -> Either SyncNodeError DB.PoolHashId
 lookupPoolIdPair msg pkh lcache =
-    maybe errMsg Right $ Map.lookup pkh (lcPoolCache lcache)
+    maybe errMsg Right $ Map.lookup pkh (icPoolCache lcache)
   where
     errMsg :: Either SyncNodeError a
     errMsg =
@@ -181,14 +180,43 @@ lookupPoolIdPair msg pkh lcache =
 
 -- -------------------------------------------------------------------------------------------------
 
-updateLookupCache
+updateIndexCache
     :: (MonadBaseControl IO m, MonadIO m)
-    => Set Generic.StakeCred -> Set PoolKeyHash
-    -> ReaderT SqlBackend m LookupCache
-updateLookupCache screds pkhs = do
-  xs <- catMaybes <$> mapM queryStakeAddressIdPair (Set.toList screds)
-  ys <- catMaybes <$> mapM queryPoolHashIdPair (Set.toList pkhs)
-  pure $ LookupCache
-            { lcAddressCache = Map.fromList xs
-            , lcPoolCache = Map.fromList ys
-            }
+    => LedgerEnv -> Set Generic.StakeCred -> Set PoolKeyHash
+    -> ReaderT SqlBackend m IndexCache
+updateIndexCache lenv screds pkhs = do
+    oldCache <- liftIO . atomically $ readTVar (leIndexCache lenv)
+    newIndexCache <- createNewCache oldCache
+    liftIO . atomically $ writeTVar (leIndexCache lenv) newIndexCache
+    pure newIndexCache
+  where
+    createNewCache
+        :: (MonadBaseControl IO m, MonadIO m)
+        => IndexCache -> ReaderT SqlBackend m IndexCache
+    createNewCache oldCache = do
+      newAddresses <- newAddressCache (icAddressCache oldCache)
+      newPools <- newPoolCache (icPoolCache oldCache)
+      pure $ IndexCache
+                { icAddressCache = newAddresses
+                , icPoolCache = newPools
+                }
+
+    newAddressCache
+        :: (MonadBaseControl IO m, MonadIO m)
+        => Map Generic.StakeCred DB.StakeAddressId
+        -> ReaderT SqlBackend m (Map Generic.StakeCred DB.StakeAddressId)
+    newAddressCache oldMap = do
+      let reduced = Map.restrictKeys oldMap screds
+          newCreds = Set.filter (`Map.notMember` reduced) screds
+      newPairs <- catMaybes <$> mapM queryStakeAddressIdPair (Set.toList newCreds)
+      pure $ Map.union reduced (Map.fromList newPairs)
+
+    newPoolCache
+        :: (MonadBaseControl IO m, MonadIO m)
+        => Map PoolKeyHash DB.PoolHashId
+        -> ReaderT SqlBackend m (Map PoolKeyHash DB.PoolHashId)
+    newPoolCache oldMap = do
+      let reduced = Map.restrictKeys oldMap pkhs
+          newPkhs = Set.filter (`Map.notMember` reduced) pkhs
+      newPairs <- catMaybes <$> mapM queryPoolHashIdPair (Set.toList newPkhs)
+      pure $ Map.union reduced (Map.fromList newPairs)
