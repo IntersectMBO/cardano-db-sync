@@ -1,40 +1,41 @@
+{-# LANGUAGE NoImplicitPrelude #-}
 module Cardano.Sync.Era.Shelley.Generic.EpochUpdate
   ( NewEpoch (..)
   , EpochUpdate (..)
   , AdaPots (..)
-  , allegraEpochUpdate
-  , maryEpochUpdate
-  , shelleyEpochUpdate
+  , epochUpdate
   ) where
 
-import           Prelude hiding (Maybe)
+import           Cardano.Prelude hiding (Maybe (..), fromMaybe)
+
+import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Cardano.Sync.Era.Shelley.Generic.ProtoParams
-import           Cardano.Sync.Era.Shelley.Generic.Rewards
-import           Cardano.Sync.Era.Shelley.Generic.StakeDist
+import           Cardano.Sync.Types
+import           Cardano.Sync.Util
 
-import           Data.Strict.Maybe (Maybe, fromMaybe)
+import           Data.Strict.Maybe (Maybe (..))
 
-import           Ouroboros.Consensus.Block (EpochNo)
-import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardAllegra, StandardMary,
-                   StandardShelley)
+import           Ouroboros.Consensus.Cardano.Block (HardForkState (..))
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
-import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
+import qualified Ouroboros.Consensus.HeaderValidation as Consensus
+import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
+import qualified Ouroboros.Consensus.Shelley.Protocol as Consensus
 
+import qualified Shelley.Spec.Ledger.API.Protocol as Shelley
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import           Shelley.Spec.Ledger.Coin (Coin (..))
+import qualified Shelley.Spec.Ledger.STS.Tickn as Shelley
 
 data NewEpoch = NewEpoch
-  { epoch :: !EpochNo
-  , isEBB :: !Bool
-  , adaPots :: !(Maybe AdaPots)
-  , epochUpdate :: !(Maybe EpochUpdate)
+  { neEpoch :: !EpochNo
+  , neIsEBB :: !Bool
+  , neAdaPots :: !(Maybe AdaPots)
+  , neEpochUpdate :: !EpochUpdate
   }
 
 data EpochUpdate = EpochUpdate
-  { euProtoParams :: !ProtoParams
-  , euRewards :: !(Maybe Rewards)
-  , euStakeDistribution :: !StakeDist
+  { euProtoParams :: !(Maybe ProtoParams)
   , euNonce :: !Shelley.Nonce
   }
 
@@ -48,29 +49,24 @@ data AdaPots = AdaPots
   , apFees :: !Coin
   }
 
-allegraEpochUpdate :: Shelley.Network -> LedgerState (ShelleyBlock StandardAllegra) -> Maybe Rewards -> Maybe Shelley.Nonce -> EpochUpdate
-allegraEpochUpdate network sls mRewards mNonce =
+epochUpdate :: ExtLedgerState CardanoBlock -> EpochUpdate
+epochUpdate lstate =
   EpochUpdate
-    { euProtoParams = allegraProtoParams sls
-    , euRewards = mRewards
-    , euStakeDistribution = allegraStakeDist network sls
-    , euNonce = fromMaybe Shelley.NeutralNonce mNonce
+    { euProtoParams = maybeToStrict $ epochProtoParams lstate
+    , euNonce = extractEpochNonce lstate
     }
 
-maryEpochUpdate :: Shelley.Network -> LedgerState (ShelleyBlock StandardMary) -> Maybe Rewards -> Maybe Shelley.Nonce -> EpochUpdate
-maryEpochUpdate network sls mRewards mNonce =
-  EpochUpdate
-    { euProtoParams = maryProtoParams sls
-    , euRewards = mRewards
-    , euStakeDistribution = maryStakeDist network sls
-    , euNonce = fromMaybe Shelley.NeutralNonce mNonce
-    }
+-- -------------------------------------------------------------------------------------------------
 
-shelleyEpochUpdate :: Shelley.Network -> LedgerState (ShelleyBlock StandardShelley) -> Maybe Rewards -> Maybe Shelley.Nonce -> EpochUpdate
-shelleyEpochUpdate network sls mRewards mNonce =
-  EpochUpdate
-    { euProtoParams = shelleyProtoParams sls
-    , euRewards = mRewards
-    , euStakeDistribution = shelleyStakeDist network sls
-    , euNonce = fromMaybe Shelley.NeutralNonce mNonce
-    }
+extractEpochNonce :: ExtLedgerState CardanoBlock -> Shelley.Nonce
+extractEpochNonce extLedgerState =
+    case Consensus.headerStateChainDep (headerState extLedgerState) of
+      ChainDepStateByron _ -> Shelley.NeutralNonce
+      ChainDepStateShelley st -> extractNonce st
+      ChainDepStateAllegra st -> extractNonce st
+      ChainDepStateMary st -> extractNonce st
+  where
+    extractNonce :: Consensus.TPraosState crypto -> Shelley.Nonce
+    extractNonce =
+      Shelley.ticknStateEpochNonce . Shelley.csTickn . Consensus.tpraosStateChainDepState
+

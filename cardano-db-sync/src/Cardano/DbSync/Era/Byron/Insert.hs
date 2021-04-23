@@ -16,7 +16,6 @@ import           Cardano.Prelude
 import           Cardano.BM.Trace (Trace, logDebug, logInfo)
 import           Cardano.Binary (serialize')
 
-import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, newExceptT)
 
@@ -59,8 +58,9 @@ data ValueFee = ValueFee
   }
 
 insertByronBlock
-    :: Trace IO Text -> ByronBlock -> SlotDetails
-    -> ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> ByronBlock -> SlotDetails
+    -> ReaderT SqlBackend m (Either SyncNodeError ())
 insertByronBlock tracer blk details = do
   res <- runExceptT $
             case byronBlockRaw blk of
