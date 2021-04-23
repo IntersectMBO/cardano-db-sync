@@ -8,7 +8,7 @@
 , src
 , config ? {}
 # GHC attribute name
-, compiler ? config.haskellNix.compiler or "ghc8102"
+, compiler ? config.haskellNix.compiler or "ghc8104"
 # Enable profiling
 , profiling ? config.haskellNix.profiling or false
 # Version info, to be passed when not building from a git work tree

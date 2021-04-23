@@ -59,7 +59,8 @@ import           Database.Persist.Sql (OnlyOneUniqueKey, PersistRecordBackend, S
                    UniqueDef, entityDB, entityDef, entityUniques, rawSql, toPersistFields,
                    toPersistValue, uniqueDBName)
 import qualified Database.Persist.Sql.Util as Util
-import           Database.Persist.Types (DBName (..), PersistValue)
+import           Database.Persist.Types (ConstraintNameDB (..), EntityNameDB (..), FieldNameDB (..),
+                   PersistValue)
 import           Database.PostgreSQL.Simple (SqlError)
 
 import           Cardano.Db.Schema
@@ -219,11 +220,11 @@ insertCheckUnique vtype record = do
     query =
       Text.concat
         [ "INSERT INTO "
-        , unDBName (entityDB . entityDef $ Just record)
+        , unEntityNameDB (entityDB . entityDef $ Just record)
         , " (", Util.commaSeparated fieldNames
         , ") VALUES (", Util.commaSeparated placeholders
         , ") ON CONFLICT ON CONSTRAINT "
-        , unDBName (uniqueDBName $ onlyOneUniqueDef (Proxy @record))
+        , unConstraintNameDB (uniqueDBName $ onlyOneUniqueDef (Proxy @record))
         -- Head is applied to these two lists, but these two lists should never be empty.
         -- If either list is empty, it is due to a table definition with zero columns.
         , " DO UPDATE SET ", head fieldNames, " = ", head placeholders
@@ -240,15 +241,15 @@ insertCheckUnique vtype record = do
 
     fieldNames, placeholders :: [Text]
     (fieldNames, placeholders) =
-      unzip (Util.mkInsertPlaceholders (entityDef (Proxy @record)) escape)
+      unzip (Util.mkInsertPlaceholders (entityDef (Proxy @record)) escapeFieldName)
 
     exceptHandler :: SqlError -> ReaderT SqlBackend m a
     exceptHandler e =
       liftIO $ throwIO (DbInsertException vtype e)
 
 -- This is cargo culted from Persistent because it is not exported.
-escape :: DBName -> Text
-escape (DBName s) =
+escapeFieldName :: FieldNameDB -> Text
+escapeFieldName (FieldNameDB s) =
     Text.pack $ '"' : go (Text.unpack s) ++ "\""
   where
     go "" = ""

@@ -1,7 +1,7 @@
 # our packages overlay
 pkgs: super: with pkgs;
   let
-    compiler = config.haskellNix.compiler or "ghc8102";
+    compiler = config.haskellNix.compiler or "ghc8104";
     src = haskell-nix.haskellLib.cleanGit {
       src = ../.;
       name = "cardano-db-sync";

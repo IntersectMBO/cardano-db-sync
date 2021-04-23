@@ -69,7 +69,7 @@ library
                       , ouroboros-network
                       , persistent
                       , persistent-postgresql
-                      , persistent-template >= 2.7.0
+                      -- , persistent-template >= 2.7.0
                       , postgresql-simple
                       , quiet
                       , resourcet
