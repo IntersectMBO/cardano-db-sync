@@ -4,6 +4,8 @@
 module Cardano.Sync.Era.Shelley.Generic.StakeDist
   ( StakeDist (..)
   , epochStakeDist
+  , stakeDistPoolHashKeys
+  , stakeDistStakeCreds
   ) where
 
 import           Cardano.Prelude
@@ -17,6 +19,7 @@ import           Cardano.Sync.Types
 
 import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 
 import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
 
@@ -44,6 +47,13 @@ epochStakeDist network epoch els =
     LedgerStateShelley sls -> Just $ genericStakeDist network epoch sls
     LedgerStateAllegra als -> Just $ genericStakeDist network epoch als
     LedgerStateMary mls -> Just $ genericStakeDist network epoch mls
+
+-- Use Set because they guarantee unique elements.
+stakeDistPoolHashKeys :: StakeDist -> Set PoolKeyHash
+stakeDistPoolHashKeys = Set.fromList . map snd . Map.elems . sdistStakeMap
+
+stakeDistStakeCreds :: StakeDist -> Set StakeCred
+stakeDistStakeCreds = Map.keysSet . sdistStakeMap
 
 -- -------------------------------------------------------------------------------------------------
 
