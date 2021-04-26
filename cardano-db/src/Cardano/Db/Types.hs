@@ -22,6 +22,8 @@ module Cardano.Db.Types
   , word64ToAda
   ) where
 
+import           Cardano.Ledger.Coin (DeltaCoin (..))
+
 import           Data.Aeson.Encoding (unsafeToEncoding)
 import           Data.Aeson.Types (FromJSON (..), ToJSON (..))
 import qualified Data.Aeson.Types as Aeson
@@ -36,7 +38,6 @@ import           GHC.Generics (Generic)
 
 import           Quiet (Quiet (..))
 
-import           Shelley.Spec.Ledger.Coin (DeltaCoin (..))
 import qualified Shelley.Spec.Ledger.Rewards as Shelley
 
 

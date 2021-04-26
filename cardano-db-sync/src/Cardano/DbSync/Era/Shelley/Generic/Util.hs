@@ -36,6 +36,7 @@ import qualified Cardano.Crypto.Hash as Crypto
 import           Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as Db
 
+import           Cardano.Ledger.Coin (Coin (..), DeltaCoin)
 import qualified Cardano.Ledger.SafeHash as Ledger
 
 import qualified Data.Binary.Put as Binary
@@ -50,7 +51,6 @@ import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardCry
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
-import           Shelley.Spec.Ledger.Coin (Coin (..), DeltaCoin)
 import qualified Shelley.Spec.Ledger.Credential as Shelley
 import qualified Shelley.Spec.Ledger.Keys as Shelley
 import qualified Shelley.Spec.Ledger.Scripts as Shelley
