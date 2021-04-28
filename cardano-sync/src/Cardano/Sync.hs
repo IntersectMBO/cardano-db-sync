@@ -349,7 +349,8 @@ chainSyncClient dataLayer metricsSetters trce env queryVar latestPoints currentT
           , recvMsgIntersectNotFound = pure . go policy Zero currentTip . getTipBlockNo
           }
   where
-    policy = pipelineDecisionLowHighMark 1000 10000
+    policy :: MkPipelineDecision
+    policy = pipelineDecisionLowHighMark 1 50
 
     go :: MkPipelineDecision -> Nat n -> WithOrigin BlockNo -> WithOrigin BlockNo
         -> ClientPipelinedStIdle n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
