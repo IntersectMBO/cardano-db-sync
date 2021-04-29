@@ -34,8 +34,7 @@
 #
 ############################################################################
 
-{ iohkNix
-, commonLib
+{ cardanoLib
 , dockerTools
 
 # The main contents of the image.
@@ -45,7 +44,7 @@
 , extendedScripts
 
 # Get the current commit
-, gitrev ? iohkNix.commitIdFromGitRepoOrZero ../.git
+, gitrev
 
 # Other things to include in the image.
 , bashInteractive
@@ -102,13 +101,12 @@ let
   };
 
   dbSyncDockerImage = let
-    clusterStatements = lib.concatStringsSep "\n" (lib.mapAttrsToList (_: value: value) (commonLib.forEnvironmentsCustom (env: let
-      dbSyncScript = scripts.${env.name}.db-sync;
-      dbSyncExtendedScript = extendedScripts.${env.name}.db-sync;
+    clusterStatements = lib.concatStringsSep "\n" (lib.mapAttrsToList (env: script: let
+      dbSyncScript = script.db-sync;
+      dbSyncExtendedScript = extendedScripts.${env}.db-sync;
     in ''
-        elif [[ "$NETWORK" == "${env.name}" ]]; then
-        ${if (env ? nodeConfig) then ''
-            echo "Connecting to network: ${env.name}"
+        elif [[ "$NETWORK" == "${env}" ]]; then
+            echo "Connecting to network: ${env}"
             if [[ ! -z "''${EXTENDED}" ]] && [[ "''${EXTENDED}" == true ]]
             then
               exec ${dbSyncExtendedScript}
@@ -117,8 +115,7 @@ let
             fi
             echo "Cleaning up"
         ''
-        else "echo db-sync not supported on ${env.name} ; exit 1"}
-    '') scripts.environments));
+    ) scripts);
     genPgPass = writeScript "gen-pgpass" ''
       #!${runtimeShell}
       SECRET_DIR=$1

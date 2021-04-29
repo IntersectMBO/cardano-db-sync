@@ -12,15 +12,15 @@
 # Enable profiling
 , profiling ? config.haskellNix.profiling or false
 # Version info, to be passed when not building from a git work tree
-, gitrev ? null
+, gitrev
 }:
 let
 
   projectPackages = lib.attrNames (haskell-nix.haskellLib.selectProjectPackages
-    (haskell-nix.cabalProject {
+    (haskell-nix.cabalProject' {
       inherit src;
       compiler-nix-name = compiler;
-    }));
+    }).hsPkgs);
 
   preCheck = ''
     echo pre-check
@@ -63,7 +63,7 @@ let
 
   # This creates the Haskell package set.
   # https://input-output-hk.github.io/haskell.nix/user-guide/projects/
-  pkgSet = haskell-nix.cabalProject {
+  pkgSet = haskell-nix.cabalProject' {
     inherit src;
     compiler-nix-name = compiler;
     modules = [
@@ -132,11 +132,6 @@ let
   # setGitRev is a postInstall script to stamp executables with
   # version info. It uses the "gitrev" argument, if set. Otherwise,
   # the revision is sourced from the local git work tree.
-  setGitRev = ''${haskellBuildUtils}/bin/set-git-rev "${gitrev'}" $out/bin/*'';
-  # package with libsodium:
-  gitrev' = if (gitrev == null)
-    then buildPackages.commonLib.commitIdFromGitRepoOrZero ../.git
-    else gitrev;
-  haskellBuildUtils = buildPackages.haskellBuildUtils.package;
+  setGitRev = ''${buildPackages.haskellBuildUtils}/bin/set-git-rev "${gitrev}" $out/bin/*'';
 in
   pkgSet

@@ -56,7 +56,17 @@ package cardano-node
 package ouroboros-consensus-cardano
   tests: False
 
+
+allow-newer:
+  monoidal-containers:aeson,
+  size-based:template-haskell
+
 -- ---------------------------------------------------------
+
+-- The two following one-liners will cut off / restore the remainder of this file (for nix-shell users):
+-- when using the "cabal" wrapper script provided by nix-shell.
+-- --------------------------- 8< --------------------------
+-- Please do not put any `source-repository-package` clause above this line.
 
 source-repository-package
   type: git
@@ -163,7 +173,3 @@ source-repository-package
     typed-protocols
     typed-protocols-examples
     network-mux
-
-allow-newer:
-  monoidal-containers:aeson,
-  size-based:template-haskell

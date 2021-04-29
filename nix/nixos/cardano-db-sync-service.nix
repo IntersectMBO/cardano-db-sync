@@ -2,17 +2,12 @@
 
 let
   cfg = config.services.cardano-db-sync;
-  self = config.internal.syncPackages;
+  self = cfg.dbSyncPkgs;
   envConfig = cfg.environment;
   configFile = __toFile "db-sync-config.json" (__toJSON (cfg.explorerConfig // cfg.logConfig));
   stateDirBase = "/var/lib/";
 in {
   options = {
-    internal = lib.mkOption {
-      type = lib.types.attrs;
-      internal = true;
-      default = { syncPackages = import ../. {}; };
-    };
     services.cardano-db-sync = {
       enable = lib.mkEnableOption "enable the cardano-db-sync service";
       script = lib.mkOption {
@@ -31,7 +26,7 @@ in {
       };
       environment = lib.mkOption {
         type = lib.types.nullOr lib.types.attrs;
-        default = self.iohkNix.cardanoLib.environments.${cfg.cluster};
+        default = self.cardanoLib.environments.${cfg.cluster};
       };
       cluster = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
@@ -43,7 +38,7 @@ in {
       };
       logConfig = lib.mkOption {
         type = lib.types.attrs;
-        default = self.iohkNix.cardanoLib.defaultExplorerLogConfig;
+        default = self.cardanoLib.defaultExplorerLogConfig;
       };
       socketPath = lib.mkOption {
         type = lib.types.nullOr lib.types.path;
@@ -52,6 +47,16 @@ in {
       stateDir = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         default = "/var/lib/${cfg.user}";
+      };
+      dbSyncPkgs = lib.mkOption {
+        type = lib.types.attrs;
+        default = import ../. {};
+        defaultText = "cardano-db-sync pkgs";
+        description = ''
+          The cardano-db-sync packages and library that should be used.
+          Main usage is sharing optimization:
+          reduce eval time when service is instantiated multiple times.
+        '';
       };
       package = lib.mkOption {
         type = lib.types.package;

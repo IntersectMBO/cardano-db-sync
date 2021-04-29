@@ -1,30 +1,31 @@
-{ pkgs, lib, iohkNix, customConfig }:
+{ pkgs
+, customConfigs ? [ pkgs.customConfig ] }:
 let
+  inherit (pkgs) lib cardanoLib;
+  inherit (pkgs.commonLib) evalService;
   blacklistedEnvs = [ "selfnode" "shelley_selfnode" "latency-tests" "mainnet-ci" ];
-  environments = lib.filterAttrs (k: v: (!builtins.elem k blacklistedEnvs)) iohkNix.cardanoLib.environments;
-  mkStartScripts = envConfig: let
-    systemdCompat.options = {
-      systemd.services = lib.mkOption {};
-      services.postgresql = lib.mkOption {};
-      assertions = lib.mkOption {};
-      users = lib.mkOption {};
+  environments = lib.filterAttrs (k: v: (!builtins.elem k blacklistedEnvs)) cardanoLib.environments;
+  mkScript = envConfig: let
+    service = evalService {
+      inherit pkgs customConfigs;
+      serviceName = "cardano-db-sync";
+      modules = [
+        ./nixos/cardano-db-sync-service.nix
+        {
+          services.cardano-db-sync = {
+            postgres.user = lib.mkDefault "*";
+            environment = lib.mkDefault envConfig;
+            cluster = lib.mkDefault envConfig.name;
+            dbSyncPkgs = lib.mkDefault pkgs;
+          };
+        }
+      ];
     };
-    eval = let
-      extra = {
-        internal.syncPackages = pkgs;
-        services.cardano-db-sync = {
-          enable = true;
-          postgres.user = "*";
-          environment = envConfig;
-          cluster = envConfig.name;
-        };
-      };
-    in lib.evalModules {
-      prefix = [];
-      modules = import nixos/module-list.nix ++ [ systemdCompat customConfig extra ];
-      args = { inherit pkgs; };
-    };
-  in {
-    db-sync = eval.config.services.cardano-db-sync.script;
+  in lib.recurseIntoAttrs {
+    db-sync = pkgs.writeScriptBin "cardano-db-sync-${service.cluster}" ''
+      #!${pkgs.runtimeShell}
+      set -euo pipefail
+      ${service.script} $@
+    '';
   };
-in iohkNix.cardanoLib.forEnvironmentsCustom mkStartScripts environments // { inherit environments; }
+in cardanoLib.forEnvironmentsCustom mkScript environments
