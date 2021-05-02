@@ -73,7 +73,7 @@ runDbIohkLogging backend tracer dbAction = do
     runIohkLogging tracer $ runSqlConnWithIsolation dbAction backend Serializable
 
 -- | Run a DB action logging via iohk-monitoring-framework.
-runDbIohkNoLogging:: SqlBackend -> ReaderT SqlBackend (NoLoggingT IO) a -> IO a
+runDbIohkNoLogging :: SqlBackend -> ReaderT SqlBackend (NoLoggingT IO) a -> IO a
 runDbIohkNoLogging backend action = do
     runNoLoggingT $ runSqlConnWithIsolation action backend Serializable
 

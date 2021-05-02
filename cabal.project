@@ -5,6 +5,7 @@ packages:
   cardano-db/test
   cardano-db-sync
   cardano-db-sync-extended
+  cardano-db-sync-smash
   cardano-db-tool
   cardano-sync
 

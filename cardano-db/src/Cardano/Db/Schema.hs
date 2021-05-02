@@ -19,6 +19,7 @@ module Cardano.Db.Schema where
 
 import           Cardano.Db.Schema.Orphans ()
 
+import           Cardano.Db.Schema.Types as Types
 import           Cardano.Db.Types (DbInt65, DbLovelace, DbWord64)
 
 import           Data.ByteString.Char8 (ByteString)
@@ -392,47 +393,60 @@ share
   -- The table containing pools' on-chain reference to its off-chain metadata.
 
   PoolMetadataRef
-    poolId              PoolHashId
-    url                 Text
-    hash                ByteString          sqltype=hash32type
+    poolId              Types.PoolIdentifier      sqltype=text
+    url                 Types.PoolUrl             sqltype=text
+    hash                Types.PoolMetaHash        sqltype=text
     UniquePoolMetadataRef poolId hash
 
   -- The table containing the metadata.
 
   PoolMetadata
-    poolId              PoolHashId
-    tickerName          Text
-    hash                ByteString          sqltype=hash32type
-    metadata            Text
+    poolId              Types.PoolIdentifier      sqltype=text
+    tickerName          Types.TickerName          sqltype=text
+    hash                Types.PoolMetaHash        sqltype=text
+    metadata            Types.PoolMetadataRaw     sqltype=text
     pmrId               PoolMetadataRefId Maybe
     UniquePoolMetadata  poolId hash
+
+  -- The pools themselves (identified by the owner vkey hash)
+
+  Pool
+    poolId              Types.PoolIdentifier      sqltype=text
+    UniquePoolId poolId
+
+  -- The retired pools.
+
+  RetiredPool
+    poolId              Types.PoolIdentifier      sqltype=text
+    blockNo             Word64                    sqltype=uinteger -- When the pool was retired.
+    UniqueRetiredPoolId poolId
 
   -- The pool metadata fetch error. We duplicate the poolId for easy access.
   -- TODO(KS): Debatable whether we need to persist this between migrations!
 
   PoolMetadataFetchError
-    fetchTime           UTCTime             sqltype=timestamp
-    poolId              PoolHashId
+    fetchTime           UTCTime                   sqltype=timestamp
+    poolId              Types.PoolIdentifier      sqltype=text
+    poolHash            Types.PoolMetaHash        sqltype=text
     pmrId               PoolMetadataRefId
     fetchError          Text
-    retryCount          Word                sqltype=uinteger
-    UniquePoolMetadataFetchError fetchTime poolId retryCount
+    retryCount          Word                      sqltype=uinteger
+    UniquePoolMetadataFetchError fetchTime poolId poolHash retryCount
 
   --------------------------------------------------------------------------
   -- Tables below must be preserved when migrations occur!
   --------------------------------------------------------------------------
 
-  -- A table containing a list of delisted pools. Pools which should not be
-  -- provided over the SMASH web service.
+  -- A table containing a list of delisted pools.
   DelistedPool
-    poolId              PoolHashId
+    poolId              Types.PoolIdentifier    sqltype=text
     UniqueDelistedPool poolId
 
   -- A table containing a managed list of reserved ticker names.
   -- For now they are grouped under the specific hash of the pool.
   ReservedTicker
-    name                Text
-    poolId              PoolHashId
+    name                Types.TickerName        sqltype=text
+    poolHash            Types.PoolMetaHash      sqltype=text
     UniqueReservedTicker name
     deriving Show
 

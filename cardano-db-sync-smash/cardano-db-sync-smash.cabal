@@ -1,0 +1,110 @@
+cabal-version:          2.2
+
+-- http://haskell.org/cabal/users-guide/
+
+name:                   cardano-db-sync-smash
+version:                9.0.0
+synopsis:               The SMASH Cardano DB Sync node
+description:            A Cardano node that follows the Cardano chain and inserts data from the
+                        chain into a PostgresQL database. It is "extended" with SMASH functionality.
+homepage:               https://github.com/input-output-hk/cardano-db-sync
+bug-reports:            https://github.com/input-output-hk/cardano-db-sync/issues
+license:                Apache-2.0
+license-file:           LICENSE
+author:                 IOHK Engineering Team
+maintainer:             operations@iohk.io
+copyright:              (c) 2019 IOHK
+category:               Cryptocurrency
+build-type:             Simple
+extra-source-files:     CHANGELOG.md
+
+library
+  default-language:     Haskell2010
+  default-extensions:
+    NoImplicitPrelude
+    OverloadedStrings
+  hs-source-dirs:       src
+
+  ghc-options:          -Wall
+                        -Wcompat
+                        -Wredundant-constraints
+                        -Wincomplete-patterns
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+                        -Wunused-imports
+                        -Wunused-packages
+
+  exposed-modules:      Cardano.DbSync.Plugin.SMASH
+                        Cardano.SMASH.Db.Error
+                        Cardano.SMASH.Db.Types
+                        Cardano.SMASH.API
+                        Cardano.SMASH.Types
+                        Cardano.SMASH.DB
+                        Cardano.SMASH.DBSync.Db.Delete
+                        Cardano.SMASH.DBSync.Db.Insert
+                        Cardano.SMASH.DBSync.Db.Query
+                        Cardano.SMASH.FetchQueue
+                        Cardano.SMASH.Offline
+
+  build-depends:        base                            >= 4.14         && < 4.16
+                      , cardano-db-sync
+                      , cardano-db
+                      , cardano-sync
+                      , persistent
+                      , cardano-prelude
+                      , iohk-monitoring
+                      , monad-logger
+                      , transformers-except
+                      , cardano-ledger-byron
+                      , cardano-crypto-class
+                      , base16-bytestring
+                      , ouroboros-consensus-cardano
+                      , ouroboros-consensus-byron
+                      , shelley-spec-ledger
+                      , cardano-slotting
+                      , time
+                      , aeson
+                      , cardano-api
+                      , bytestring
+                      , transformers
+                      , postgresql-simple
+                      , esqueleto
+                      , text
+                      , servant
+                      , servant-server
+                      , servant-swagger
+                      , swagger2
+                      , network-uri
+                      , containers
+                      , http-client
+                      , http-client-tls
+                      , http-types
+                      , wai
+
+executable cardano-db-sync-smash
+  default-language:     Haskell2010
+  main-is:              cardano-db-sync-smash.hs
+  hs-source-dirs:       app
+
+  ghc-options:          -Wall
+                        -Wcompat
+                        -Wredundant-constraints
+                        -Wincomplete-patterns
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+                        -Wunused-imports
+                        -Wunused-packages
+                        -Wno-unsafe
+                        -threaded
+
+  other-modules:        Paths_cardano_db_sync_smash
+
+  build-depends:        base                            >= 4.14         && < 4.16
+                      , cardano-config
+                      , cardano-db-sync
+                      , cardano-db-sync-smash
+                      , cardano-sync
+                      , cardano-prelude
+                      , cardano-slotting
+                      , optparse-applicative
+                      , text
