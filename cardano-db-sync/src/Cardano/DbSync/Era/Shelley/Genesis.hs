@@ -27,6 +27,7 @@ import           Cardano.DbSync.Era.Util (liftLookupFail)
 import           Cardano.Sync.Error
 import           Cardano.Sync.Util
 
+import qualified Cardano.Ledger.Coin as Shelley
 import           Cardano.Ledger.Era (Crypto)
 
 import qualified Data.ByteString.Char8 as BS
@@ -41,7 +42,6 @@ import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShel
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
-import qualified Shelley.Spec.Ledger.Coin as Shelley
 import qualified Shelley.Spec.Ledger.Genesis as Shelley
 import           Shelley.Spec.Ledger.Scripts ()
 import qualified Shelley.Spec.Ledger.TxBody as Shelley

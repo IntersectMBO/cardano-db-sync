@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.DbSync.Era.Shelley.Generic.ParamProposal
@@ -14,6 +13,7 @@ import           Cardano.Prelude
 import           Cardano.DbSync.Era.Shelley.Generic.Util (unKeyHashRaw)
 import           Cardano.DbSync.Era.Shelley.Generic.Witness (Witness (..))
 
+import           Cardano.Ledger.Coin (Coin)
 import           Cardano.Ledger.Shelley (ShelleyEra)
 import qualified Cardano.Ledger.ShelleyMA as ShelleyMA
 
@@ -23,7 +23,6 @@ import qualified Data.Map.Strict as Map
 
 import           Shelley.Spec.Ledger.BaseTypes (UnitInterval, strictMaybeToMaybe)
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
-import           Shelley.Spec.Ledger.Coin (Coin)
 import qualified Shelley.Spec.Ledger.Keys as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 
@@ -55,7 +54,7 @@ convertParamProposal witness (Shelley.Update pp epoch) =
     Shelley _ -> shelleyParamProposal epoch pp
     Allegra _ -> allegraOrMaryParamProposal epoch pp
     Mary _ -> allegraOrMaryParamProposal epoch pp
-    Alonzo _ -> panic "convertParamProposal: Alonzo"
+    -- Alonzo _ -> panic "convertParamProposal: Alonzo"
 
 -- -------------------------------------------------------------------------------------------------
 

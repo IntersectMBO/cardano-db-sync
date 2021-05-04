@@ -30,6 +30,7 @@ import qualified Cardano.Binary as Serialize
 
 import qualified Cardano.Db as DB
 
+import           Cardano.Ledger.Coin (Coin)
 import           Cardano.Ledger.Shelley.Constraints (UsesValue)
 import qualified Cardano.Ledger.Val as Val
 
@@ -82,7 +83,6 @@ import           Ouroboros.Network.Block (HeaderHash, Point (..))
 import qualified Ouroboros.Network.Point as Point
 
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
-import           Shelley.Spec.Ledger.Coin (Coin)
 import           Shelley.Spec.Ledger.LedgerState (AccountState, EpochState, UTxOState)
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley
 import qualified Shelley.Spec.Ledger.UTxO as Shelley

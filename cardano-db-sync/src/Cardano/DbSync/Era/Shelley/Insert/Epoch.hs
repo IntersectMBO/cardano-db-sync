@@ -21,6 +21,8 @@ import qualified Cardano.Db as DB
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Query
 
+import qualified Cardano.Ledger.Coin as Shelley
+
 import qualified Cardano.Sync.Era.Shelley.Generic as Generic
 import           Cardano.Sync.Error
 import           Cardano.Sync.LedgerState
@@ -41,7 +43,6 @@ import           Database.Persist.Sql (SqlBackend, putMany)
 
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
-import qualified Shelley.Spec.Ledger.Coin as Shelley
 import qualified Shelley.Spec.Ledger.Rewards as Shelley
 
 {- HLINT ignore "Use readTVarIO" -}

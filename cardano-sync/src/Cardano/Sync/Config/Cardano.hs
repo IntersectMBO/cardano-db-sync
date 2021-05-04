@@ -25,8 +25,9 @@ import           Cardano.Sync.Error
 
 import           Control.Monad.Trans.Except (ExceptT)
 
-import           Ouroboros.Consensus.Cardano (Nonce (..), Protocol (..))
+import           Ouroboros.Consensus.Cardano (Nonce (..))
 import qualified Ouroboros.Consensus.Cardano as Consensus
+import qualified Ouroboros.Consensus.Cardano.Node as Consensus
 import           Ouroboros.Consensus.Config (TopLevelConfig (..))
 import           Ouroboros.Consensus.Ledger.Basics (LedgerConfig)
 import           Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
@@ -66,19 +67,15 @@ mkTopLevelConfig :: GenesisConfig -> TopLevelConfig CardanoBlock
 mkTopLevelConfig = Consensus.pInfoConfig . mkProtocolInfoCardano
 
 -- Need a concrete type for 'm' ('IO') to make the type checker happy.
-mkProtocolInfoCardano :: GenesisConfig -> ProtocolInfo IO CardanoBlock
-mkProtocolInfoCardano = Consensus.protocolInfo . mkProtocolCardano
-
 -- | The vast majority of the following struct fields are *COMPLETELY IRRELEVANT* to the
 -- operation of db-sync, but I have no idea at all what happens of any of these are
 -- wrong. This really needs to be a done a different way.
 -- mkProtocolCardano :: GenesisConfig -> Protocol m CardanoBlock CardanoProtocol
-
-mkProtocolCardano :: GenesisConfig -> Protocol m CardanoBlock CardanoProtocol
-mkProtocolCardano ge =
+mkProtocolInfoCardano :: GenesisConfig -> ProtocolInfo IO CardanoBlock
+mkProtocolInfoCardano ge =
   case ge of
     GenesisCardano dnc byronGenesis shelleyGenesis ->
-        Consensus.ProtocolCardano
+        Consensus.protocolInfoCardano
           Consensus.ProtocolParamsByron
             { Consensus.byronGenesis = byronGenesis
             , Consensus.byronPbftSignatureThreshold = Consensus.PBftSignatureThreshold <$> dncPBftSignatureThreshold dnc

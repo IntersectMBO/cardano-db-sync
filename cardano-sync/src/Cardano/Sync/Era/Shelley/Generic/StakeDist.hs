@@ -10,6 +10,7 @@ module Cardano.Sync.Era.Shelley.Generic.StakeDist
 
 import           Cardano.Prelude
 
+import           Cardano.Ledger.Coin (Coin (..))
 import           Cardano.Ledger.Era (Crypto)
 
 import           Cardano.Slotting.Slot (EpochNo (..))
@@ -28,7 +29,6 @@ import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
-import           Shelley.Spec.Ledger.Coin (Coin (..))
 import           Shelley.Spec.Ledger.Credential (Credential)
 import qualified Shelley.Spec.Ledger.EpochBoundary as Shelley
 import           Shelley.Spec.Ledger.Keys (KeyHash, KeyRole (..))

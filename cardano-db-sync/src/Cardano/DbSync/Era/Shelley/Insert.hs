@@ -36,6 +36,9 @@ import           Cardano.DbSync.Era.Shelley.Insert.Epoch
 import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 
+import           Cardano.Ledger.Coin (Coin (..))
+import qualified Cardano.Ledger.Coin as Shelley
+
 import           Cardano.Sync.Error
 import           Cardano.Sync.LedgerState
 import           Cardano.Sync.Types
@@ -64,8 +67,6 @@ import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import           Shelley.Spec.Ledger.BaseTypes (strictMaybeToMaybe)
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
-import           Shelley.Spec.Ledger.Coin (Coin (..))
-import qualified Shelley.Spec.Ledger.Coin as Shelley
 import qualified Shelley.Spec.Ledger.Credential as Shelley
 import qualified Shelley.Spec.Ledger.Keys as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley

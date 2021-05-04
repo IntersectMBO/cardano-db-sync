@@ -1,6 +1,8 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.DbSync.Era.Shelley.Generic.Tx
@@ -24,6 +26,7 @@ import           Cardano.DbSync.Era.Shelley.Generic.Metadata
 import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
+import           Cardano.Ledger.Coin (Coin (..))
 import           Cardano.Ledger.Mary.Value (AssetName, PolicyID, Value (..))
 import qualified Cardano.Ledger.SafeHash as Ledger
 import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as ShelleyMa
@@ -31,7 +34,6 @@ import qualified Cardano.Ledger.ShelleyMA.TxBody as ShelleyMa
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
-import qualified Data.ByteString.Lazy.Char8 as LBS
 import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import           Data.MemoBytes (MemoBytes (..))
@@ -43,7 +45,6 @@ import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
-import           Shelley.Spec.Ledger.Coin (Coin (..))
 import           Shelley.Spec.Ledger.Scripts ()
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
@@ -93,7 +94,7 @@ fromAllegraTx (blkIndex, tx) =
     Tx
       { txHash = txHashId tx
       , txBlockIndex = blkIndex
-      , txSize = fromIntegral $ LBS.length (Shelley.txFullBytes tx)
+      , txSize = fromIntegral $ getField @"txsize" tx
       , txInputs = map fromTxIn (toList . ShelleyMa.inputs $ unTxBodyRaw tx)
       , txOutputs = zipWith fromTxOut [0 .. ] $ toList (ShelleyMa.outputs $ unTxBodyRaw tx)
       , txFees = ShelleyMa.txfee (unTxBodyRaw tx)
@@ -132,19 +133,19 @@ fromShelleyTx (blkIndex, tx) =
     Tx
       { txHash = txHashId tx
       , txBlockIndex = blkIndex
-      , txSize = fromIntegral $ LBS.length (Shelley.txFullBytes tx)
-      , txInputs = map fromTxIn (toList . Shelley._inputs $ Shelley._body tx)
-      , txOutputs = zipWith fromTxOut [0 .. ] $ toList (Shelley._outputs $ Shelley._body tx)
-      , txFees = Shelley._txfee (Shelley._body tx)
-      , txOutSum = Coin . sum $ map txOutValue (Shelley._outputs $ Shelley._body tx)
+      , txSize = fromIntegral $ getField @"txsize" tx
+      , txInputs = map fromTxIn (toList . Shelley._inputs $ Shelley.body tx)
+      , txOutputs = zipWith fromTxOut [0 .. ] $ toList (Shelley._outputs $ Shelley.body tx)
+      , txFees = Shelley._txfee (Shelley.body tx)
+      , txOutSum = Coin . sum $ map txOutValue (Shelley._outputs $ Shelley.body tx)
       , txInvalidBefore = Nothing
-      , txInvalidHereafter = Just $ Shelley._ttl (Shelley._body tx)
+      , txInvalidHereafter = Just $ Shelley._ttl (Shelley.body tx)
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
-                            . Shelley.unWdrl $ Shelley._wdrls (Shelley._body tx)
-      , txMetadata = fromShelleyMetadata <$> Shelley.strictMaybeToMaybe (Shelley._metadata tx)
-      , txCertificates = zipWith TxCertificate [0..] (toList . Shelley._certs $ Shelley._body tx)
-      , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . Shelley._wdrls $ Shelley._body tx)
-      , txParamProposal = maybe [] (convertParamProposal (Shelley Standard)) $ Shelley.strictMaybeToMaybe (Shelley._txUpdate $ Shelley._body tx)
+                            . Shelley.unWdrl $ Shelley._wdrls (Shelley.body tx)
+      , txMetadata = fromShelleyMetadata <$> Shelley.strictMaybeToMaybe (getField @"auxiliaryData" tx)
+      , txCertificates = zipWith TxCertificate [0..] (toList . Shelley._certs $ Shelley.body tx)
+      , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . Shelley._wdrls $ Shelley.body tx)
+      , txParamProposal = maybe [] (convertParamProposal (Shelley Standard)) $ Shelley.strictMaybeToMaybe (Shelley._txUpdate $ Shelley.body tx)
       , txMint = mempty     -- Shelley does not support Multi-Assets
       }
   where
@@ -165,7 +166,7 @@ fromMaryTx (blkIndex, tx) =
     Tx
       { txHash = txHashId tx
       , txBlockIndex = blkIndex
-      , txSize = fromIntegral $ LBS.length (Shelley.txFullBytes tx)
+      , txSize = fromIntegral $ getField @"txsize" tx
       , txInputs = map fromTxIn (toList . ShelleyMa.inputs $ unTxBodyRaw tx)
       , txOutputs = zipWith fromTxOut [0 .. ] $ toList (ShelleyMa.outputs $ unTxBodyRaw tx)
       , txFees = ShelleyMa.txfee (unTxBodyRaw tx)
@@ -267,4 +268,4 @@ mkTxWithdrawal (ra, c) =
     }
 
 txHashId :: ShelleyBasedEra era => Shelley.Tx era -> ByteString
-txHashId = Crypto.hashToBytes . Ledger.extractHash . Ledger.hashAnnotated . Shelley._body
+txHashId = Crypto.hashToBytes . Ledger.extractHash . Ledger.hashAnnotated . Shelley.body

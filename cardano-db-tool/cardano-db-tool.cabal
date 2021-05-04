@@ -51,6 +51,7 @@ library
                       , cardano-db
                       , cardano-sync
                       , cardano-ledger-byron
+                      , cardano-ledger-core
                       , cardano-prelude
                       , cardano-slotting
                       , containers

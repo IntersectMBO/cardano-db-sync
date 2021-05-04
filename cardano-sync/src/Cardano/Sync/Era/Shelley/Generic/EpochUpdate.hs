@@ -10,6 +10,8 @@ import           Cardano.Prelude hiding (Maybe (..), fromMaybe)
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
+import           Cardano.Ledger.Coin (Coin (..))
+
 import           Cardano.Sync.Era.Shelley.Generic.ProtoParams
 import           Cardano.Sync.Types
 import           Cardano.Sync.Util
@@ -24,7 +26,6 @@ import qualified Ouroboros.Consensus.Shelley.Protocol as Consensus
 
 import qualified Shelley.Spec.Ledger.API.Protocol as Shelley
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
-import           Shelley.Spec.Ledger.Coin (Coin (..))
 import qualified Shelley.Spec.Ledger.STS.Tickn as Shelley
 
 data NewEpoch = NewEpoch
