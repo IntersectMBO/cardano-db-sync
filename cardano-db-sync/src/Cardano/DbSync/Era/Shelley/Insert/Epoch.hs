@@ -8,8 +8,9 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.DbSync.Era.Shelley.Insert.Epoch
-  ( insertEpochRewards
-  , insertEpochStake
+  ( insertEpochInterleaved
+  , postEpochRewards
+  , postEpochStake
   ) where
 
 import           Cardano.Prelude
@@ -31,7 +32,7 @@ import           Cardano.Sync.Util
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
-import           Control.Monad.Class.MonadSTM.Strict (readTVar, writeTVar)
+import           Control.Monad.Class.MonadSTM.Strict (readTVar, writeTBQueue, writeTVar)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (hoistEither)
 
@@ -47,78 +48,109 @@ import qualified Shelley.Spec.Ledger.Rewards as Shelley
 
 {- HLINT ignore "Use readTVarIO" -}
 
-
-insertEpochRewards
-    :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> LedgerEnv -> Generic.Rewards
-    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertEpochRewards tracer lenv rwds = do
-  lcache <- lift $ updateIndexCache lenv (Generic.rewardsStakeCreds rwds) (Generic.rewardsPoolHashKeys rwds)
-  insertRewards tracer lcache epochNo (Generic.rwdRewards rwds)
-  insertOrphanedRewards tracer lcache epochNo (Generic.rwdOrphaned rwds)
-  liftIO . logInfo tracer $
-    mconcat
-      [ "insertEpochRewards: Epoch ", textShow (unEpochNo epochNo), ", "
-      , textShow (length (Generic.rwdRewards rwds)), " rewards, "
-      , textShow (length (Generic.rwdOrphaned rwds)), " orphaned_rewards"
-      ]
+insertEpochInterleaved
+     :: (MonadBaseControl IO m, MonadIO m)
+     => Trace IO Text -> BulkOperation
+     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+insertEpochInterleaved tracer bop =
+    case bop of
+      BulkOrphanedRewardChunk epochNo icache orwds ->
+        insertOrphanedRewards epochNo icache orwds
+      BulkRewardChunk epochNo icache rwds ->
+        insertRewards epochNo icache rwds
+      BulkRewardReport epochNo rewardCount orphanCount ->
+        liftIO $ reportRewards epochNo rewardCount orphanCount
+      BulkStakeDistChunk epochNo icache sDistChunk ->
+        insertEpochStake tracer icache epochNo sDistChunk
+      BuldStakeDistReport epochNo count ->
+        liftIO $ reportStakeDist epochNo count
   where
-    epochNo :: EpochNo
-    epochNo = Generic.rwdEpoch rwds
+    reportStakeDist :: EpochNo -> Int -> IO ()
+    reportStakeDist epochNo count =
+      logInfo tracer $
+        mconcat
+          [ "insertEpochInterleaved: Epoch ", textShow (unEpochNo epochNo)
+          , ", ", textShow count, " stake addresses"
+          ]
+
+    reportRewards :: EpochNo -> Int -> Int -> IO ()
+    reportRewards epochNo rewardCount orphanCount =
+      logInfo tracer $
+        mconcat
+          [ "insertEpochInterleaved: Epoch ", textShow (unEpochNo epochNo)
+          , ", ", textShow rewardCount, " rewards, ", textShow orphanCount
+          , " orphaned_rewards"
+          ]
+
+postEpochRewards
+     :: (MonadBaseControl IO m, MonadIO m)
+     => LedgerEnv -> Generic.Rewards
+     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+postEpochRewards lenv rwds = do
+  icache <- lift $ updateIndexCache lenv (Generic.rewardsStakeCreds rwds) (Generic.rewardsPoolHashKeys rwds)
+  liftIO . atomically $ do
+    let epochNo = Generic.rwdEpoch rwds
+    forM_ (chunksOf 1000 $ Map.toList (Generic.rwdRewards rwds)) $ \rewardChunk ->
+      writeTBQueue (leBulkOpQueue lenv) $ BulkRewardChunk epochNo icache rewardChunk
+    forM_ (chunksOf 1000 $ Map.toList (Generic.rwdOrphaned rwds)) $ \orphanedChunk ->
+      writeTBQueue (leBulkOpQueue lenv) $ BulkRewardChunk epochNo icache orphanedChunk
+    writeTBQueue (leBulkOpQueue lenv) $
+      BulkRewardReport epochNo (length $ Generic.rwdRewards rwds) (length $ Generic.rwdOrphaned rwds)
+
+postEpochStake
+     :: (MonadBaseControl IO m, MonadIO m)
+     => LedgerEnv -> Generic.StakeDist
+     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+postEpochStake lenv smap = do
+  icache <- lift $ updateIndexCache lenv (Generic.stakeDistStakeCreds smap) (Generic.stakeDistPoolHashKeys smap)
+  liftIO . atomically $ do
+    let epochNo = Generic.sdistEpochNo smap
+    forM_ (chunksOf 1000 $ Map.toList (Generic.sdistStakeMap smap)) $ \stakeChunk ->
+      writeTBQueue (leBulkOpQueue lenv) $ BulkStakeDistChunk epochNo icache stakeChunk
+    writeTBQueue (leBulkOpQueue lenv) $ BuldStakeDistReport epochNo (length $ Generic.sdistStakeMap smap)
+
+-- -------------------------------------------------------------------------------------------------
 
 insertEpochStake
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> LedgerEnv -> Generic.StakeDist
+    => Trace IO Text -> IndexCache -> EpochNo
+    -> [(Generic.StakeCred, (Shelley.Coin, PoolKeyHash))]
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertEpochStake tracer lenv smap = do
-    lcache <- lift $ updateIndexCache lenv (Generic.stakeDistStakeCreds smap) (Generic.stakeDistPoolHashKeys smap)
-    forM_ (chunksOf 1000 $ Map.toList (Generic.sdistStakeMap smap)) $ \stakeChunk -> do
-      dbStakes <- mapM (mkStake lcache) stakeChunk
-      lift $ putMany dbStakes
-    liftIO . logInfo tracer $
-      mconcat
-        [ "insertEpochStake: Epoch ", textShow (unEpochNo $ Generic.sdistEpochNo smap)
-        , ", ", textShow (length $ Generic.sdistStakeMap smap), " stake addresses"
-        ]
+insertEpochStake _tracer icache epochNo stakeChunk = do
+    dbStakes <- mapM mkStake stakeChunk
+    lift $ putMany dbStakes
   where
-    epoch :: Word64
-    epoch = unEpochNo (Generic.sdistEpochNo smap)
-
     mkStake
         :: MonadBaseControl IO m
-        => IndexCache
-        -> (Generic.StakeCred, (Shelley.Coin, PoolKeyHash))
+        => (Generic.StakeCred, (Shelley.Coin, PoolKeyHash))
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.EpochStake
-    mkStake lcache (saddr, (coin, pool)) = do
-      saId <- hoistEither $ lookupStakeAddrIdPair "insertRewards StakePool" saddr lcache
-      poolId <- hoistEither $ lookupPoolIdPair "insertRewards StakePool" pool lcache
+    mkStake (saddr, (coin, pool)) = do
+      saId <- hoistEither $ lookupStakeAddrIdPair "insertEpochStake StakeCred" saddr icache
+      poolId <- hoistEither $ lookupPoolIdPair "insertEpochStake PoolKeyHash" pool icache
       pure $
         DB.EpochStake
           { DB.epochStakeAddrId = saId
           , DB.epochStakePoolId = poolId
           , DB.epochStakeAmount = Generic.coinToDbLovelace coin
-          , DB.epochStakeEpochNo = epoch -- The epoch where this delegation becomes valid.
+          , DB.epochStakeEpochNo = unEpochNo epochNo -- The epoch where this delegation becomes valid.
           }
-
--- -------------------------------------------------------------------------------------------------
 
 insertRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> IndexCache -> EpochNo -> Map Generic.StakeCred (Set (Shelley.Reward StandardCrypto))
+    => EpochNo -> IndexCache -> [(Generic.StakeCred, Set (Shelley.Reward StandardCrypto))]
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertRewards _tracer lcache epoch rewards = do
-    forM_ (chunksOf 1000 $ Map.toList rewards) $ \rewardsChunk -> do
-      dbRewards <- concatMapM mkRewards rewardsChunk
-      lift $ putMany dbRewards
+insertRewards epoch icache rewardsChunk = do
+    dbRewards <- concatMapM mkRewards rewardsChunk
+    lift $ putMany dbRewards
   where
     mkRewards
         :: MonadBaseControl IO m
         => (Generic.StakeCred, Set (Shelley.Reward StandardCrypto))
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.Reward]
     mkRewards (saddr, rset) = do
-      saId <- hoistEither $ lookupStakeAddrIdPair "insertRewards StakePool" saddr lcache
+      saId <- hoistEither $ lookupStakeAddrIdPair "insertRewards StakePool" saddr icache
       forM (Set.toList rset) $ \ rwd -> do
-        poolId <- hoistEither $ lookupPoolIdPair "insertRewards StakePool" (Shelley.rewardPool rwd) lcache
+        poolId <- hoistEither $ lookupPoolIdPair "insertRewards StakePool" (Shelley.rewardPool rwd) icache
         pure $ DB.Reward
                   { DB.rewardAddrId = saId
                   , DB.rewardType = DB.showRewardType (Shelley.rewardType rwd)
@@ -129,23 +161,20 @@ insertRewards _tracer lcache epoch rewards = do
 
 insertOrphanedRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> IndexCache -> EpochNo -> Map Generic.StakeCred (Set (Shelley.Reward StandardCrypto))
+    => EpochNo -> IndexCache -> [(Generic.StakeCred, Set (Shelley.Reward StandardCrypto))]
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertOrphanedRewards _tracer lcache epoch orphanedRewards =
-    -- There are probably not many of these for each epoch, but just in case there
-    -- are, it does not hurt to chunk them.
-    forM_ (chunksOf 1000 $ Map.toList orphanedRewards) $ \orphanedRewardsChunk -> do
-      dbRewards <- concatMapM mkOrphanedReward orphanedRewardsChunk
-      lift $ putMany dbRewards
+insertOrphanedRewards epoch icache orphanedRewardsChunk = do
+    dbRewards <- concatMapM mkOrphanedReward orphanedRewardsChunk
+    lift $ putMany dbRewards
   where
     mkOrphanedReward
         :: MonadBaseControl IO m
         => (Generic.StakeCred, Set (Shelley.Reward StandardCrypto))
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.OrphanedReward]
     mkOrphanedReward (saddr, rset) = do
-      saId <- hoistEither $ lookupStakeAddrIdPair "insertRewards StakePool" saddr lcache
+      saId <- hoistEither $ lookupStakeAddrIdPair "insertOrphanedRewards StakeCred" saddr icache
       forM (Set.toList rset) $ \ rwd -> do
-        poolId <- hoistEither $ lookupPoolIdPair "insertRewards StakePool" (Shelley.rewardPool rwd) lcache
+        poolId <- hoistEither $ lookupPoolIdPair "insertOrphanedRewards StakePool" (Shelley.rewardPool rwd) icache
         pure $ DB.OrphanedReward
                   { DB.orphanedRewardAddrId = saId
                   , DB.orphanedRewardType = DB.showRewardType (Shelley.rewardType rwd)
