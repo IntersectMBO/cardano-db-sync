@@ -44,8 +44,8 @@ import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
 
 import           Cardano.Sync.Api
 import           Cardano.Sync.Config
-import           Cardano.Sync.Database (DbAction (..), DbActionQueue, lengthDbActionQueue,
-                   mkDbApply, mkDbRollback, newDbActionQueue, runDbStartup, writeDbActionQueue)
+import           Cardano.Sync.Database (runDbStartup)
+import           Cardano.Sync.DbAction
 import           Cardano.Sync.Error
 import           Cardano.Sync.Metrics
 import           Cardano.Sync.Plugin (SyncNodePlugin (..))
@@ -66,7 +66,7 @@ import qualified Data.Text as Text
 import           Network.Mux (MuxTrace, WithMuxBearer)
 import           Network.Mux.Types (MuxMode (..))
 
-import           Network.TypedProtocol.Pipelined (Nat (Succ, Zero))
+import           Network.TypedProtocol.Pipelined (N (..), Nat (Succ, Zero))
 import           Ouroboros.Network.Driver.Simple (runPipelinedPeer)
 
 import           Ouroboros.Consensus.Block.Abstract (CodecConfig)
@@ -258,7 +258,7 @@ dbSyncProtocols trce env metricsSetters plugin queryVar runDBThreadFunction vers
                 (cChainSyncCodec codecs)
                 channel
                 (chainSyncClientPeerPipelined
-                    $ chainSyncClient (envDataLayer env) metricsSetters trce env queryVar latestPoints currentTip actionQueue)
+                    $ chainSyncClient plugin metricsSetters trce env queryVar latestPoints currentTip actionQueue)
             )
 
         atomically $ writeDbActionQueue actionQueue DbFinish
@@ -326,8 +326,13 @@ getCurrentTipBlockNo dataLayer = do
 --  * update its state when the client receives next block or is requested to
 --    rollback, see 'clientStNext' below.
 --
+-- When an intersect with the node is found, we are sure that the next message
+-- will trigger the 'recvMsgRollBackward', so this is where we actually handle
+-- any necessary rollback. This means that at this point, the 'currentTip' may not
+-- be correct. This is not an issue, because we only use it for performance reasons
+-- in the pipeline policy.
 chainSyncClient
-    :: SyncDataLayer
+    :: SyncNodePlugin
     -> MetricSetters
     -> Trace IO Text
     -> SyncEnv
@@ -336,45 +341,57 @@ chainSyncClient
     -> WithOrigin BlockNo
     -> DbActionQueue
     -> ChainSyncClientPipelined CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-chainSyncClient dataLayer metricsSetters trce env queryVar latestPoints currentTip actionQueue = do
-    ChainSyncClientPipelined $ pure $
+chainSyncClient _plugin metricsSetters trce env queryVar latestPoints currentTip actionQueue = do
+    ChainSyncClientPipelined $ pure $ clientPipelinedStIdle currentTip latestPoints
+  where
+    clientPipelinedStIdle
+        :: WithOrigin BlockNo -> [CardanoPoint]
+        -> ClientPipelinedStIdle 'Z CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+    clientPipelinedStIdle clintTip points =
       -- Notify the core node about the our latest points at which we are
       -- synchronised.  This client is not persistent and thus it just
       -- synchronises from the genesis block.  A real implementation should send
       -- a list of points up to a point which is k blocks deep.
       SendMsgFindIntersect
-        (if null latestPoints then [genesisPoint] else latestPoints)
+        (if null points then [genesisPoint] else points)
         ClientPipelinedStIntersect
-          { recvMsgIntersectFound = \ _hdr tip -> pure $ go policy Zero currentTip (getTipBlockNo tip)
-          , recvMsgIntersectNotFound = pure . go policy Zero currentTip . getTipBlockNo
+          { recvMsgIntersectFound = \ _hdr tip -> pure $ go policy Zero clintTip (getTipBlockNo tip) Nothing
+          , recvMsgIntersectNotFound = \tip -> pure $ goTip policy Zero clintTip tip Nothing
           }
-  where
+
     policy :: MkPipelineDecision
     policy = pipelineDecisionLowHighMark 1 50
 
-    go :: MkPipelineDecision -> Nat n -> WithOrigin BlockNo -> WithOrigin BlockNo
+    goTip :: MkPipelineDecision -> Nat n -> WithOrigin BlockNo -> Tip CardanoBlock -> Maybe [CardanoPoint]
+          -> ClientPipelinedStIdle n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+    goTip mkPipelineDecision n clientTip serverTip mPoint =
+      go mkPipelineDecision n clientTip (getTipBlockNo serverTip) mPoint
+
+    go :: MkPipelineDecision -> Nat n -> WithOrigin BlockNo -> WithOrigin BlockNo -> Maybe [CardanoPoint]
         -> ClientPipelinedStIdle n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-    go mkPipelineDecision n clientTip serverTip =
-      case (n, runPipelineDecision mkPipelineDecision n clientTip serverTip) of
-        (_Zero, (Request, mkPipelineDecision')) ->
+    go mkPipelineDecision n clientTip serverTip mPoint =
+      case (mPoint, n, runPipelineDecision mkPipelineDecision n clientTip serverTip) of
+        (Just points, _, _) -> drainThePipe n $ clientPipelinedStIdle clientTip points
+        (_, _Zero, (Request, mkPipelineDecision')) ->
             SendMsgRequestNext clientStNext (pure clientStNext)
           where
-            clientStNext = mkClientStNext $ \clientBlockNo newServerTip -> go mkPipelineDecision' n clientBlockNo (getTipBlockNo newServerTip)
-        (_, (Pipeline, mkPipelineDecision')) ->
+            clientStNext = mkClientStNext $ goTip mkPipelineDecision' n
+        (_, _, (Pipeline, mkPipelineDecision')) ->
           SendMsgRequestNextPipelined
-            (go mkPipelineDecision' (Succ n) clientTip serverTip)
-        (Succ n', (CollectOrPipeline, mkPipelineDecision')) ->
+            (go mkPipelineDecision' (Succ n) clientTip serverTip Nothing)
+        (_, Succ n', (CollectOrPipeline, mkPipelineDecision')) ->
           CollectResponse
-            (Just . pure $ SendMsgRequestNextPipelined $ go mkPipelineDecision' (Succ n) clientTip serverTip)
-            (mkClientStNext $ \clientBlockNo newServerTip -> go mkPipelineDecision' n' clientBlockNo (getTipBlockNo newServerTip))
-        (Succ n', (Collect, mkPipelineDecision')) ->
+            (Just . pure $ SendMsgRequestNextPipelined $ go mkPipelineDecision' (Succ n) clientTip serverTip Nothing)
+            (mkClientStNext $ goTip mkPipelineDecision' n')
+        (_, Succ n', (Collect, mkPipelineDecision')) ->
           CollectResponse
             Nothing
-            (mkClientStNext $ \clientBlockNo newServerTip -> go mkPipelineDecision' n' clientBlockNo (getTipBlockNo newServerTip))
+            (mkClientStNext $ goTip mkPipelineDecision' n')
 
-    mkClientStNext :: (WithOrigin BlockNo -> Tip CardanoBlock
-                    -> ClientPipelinedStIdle n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO a)
-                    -> ClientStNext n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO a
+    mkClientStNext
+        :: (WithOrigin BlockNo -> Tip CardanoBlock -> Maybe [CardanoPoint]
+        -> ClientPipelinedStIdle n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ())
+        -> ClientStNext n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
     mkClientStNext finish =
       ClientStNext
         { recvMsgRollForward = \blk tip ->
@@ -389,14 +406,14 @@ chainSyncClient dataLayer metricsSetters trce env queryVar latestPoints currentT
 
                 setDbQueueLength metricsSetters newSize
 
-                pure $ finish (At (blockNo blk)) tip
+                pure $ finish (At (blockNo blk)) tip Nothing
         , recvMsgRollBackward = \point tip ->
               logException trce "recvMsgRollBackward: " $ do
                 -- This will get the current tip rather than what we roll back to
                 -- but will only be incorrect for a short time span.
-                atomically $ writeDbActionQueue actionQueue (mkDbRollback point)
-                newTip <- getCurrentTipBlockNo dataLayer
-                pure $ finish newTip tip
+                mPoints <- waitRollback actionQueue point
+                newTip <- getCurrentTipBlockNo (envDataLayer env)
+                pure $ finish newTip tip mPoints
         }
 
 logProtocolMagicId :: Trace IO Text -> Crypto.ProtocolMagicId -> ExceptT SyncNodeError IO ()
@@ -404,3 +421,20 @@ logProtocolMagicId tracer pm =
   liftIO . logInfo tracer $ mconcat
     [ "NetworkMagic: ", textShow (Crypto.unProtocolMagicId pm)
     ]
+
+drainThePipe
+    :: Nat n -> ClientPipelinedStIdle 'Z CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+    -> ClientPipelinedStIdle  n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+drainThePipe n0 client = go n0
+  where
+    go :: forall n'. Nat n'
+       -> ClientPipelinedStIdle n' CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+    go n =
+      case n of
+        Zero -> client
+        Succ n' ->
+          CollectResponse Nothing $
+            ClientStNext
+              { recvMsgRollForward  = \_hdr _tip -> pure $ go n'
+              , recvMsgRollBackward = \_pt  _tip -> pure $ go n'
+              }

@@ -1,23 +1,24 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Cardano.Sync.Database
   ( DbAction (..)
   , DbActionQueue (..)
   , lengthDbActionQueue
   , mkDbApply
-  , mkDbRollback
   , newDbActionQueue
   , runDbStartup
   , runDbThread
   , writeDbActionQueue
   ) where
 
-import           Cardano.Prelude
+import           Cardano.Prelude hiding (atomically)
 
 import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo)
 
+import           Control.Monad.Class.MonadSTM.Strict
 import           Control.Monad.Extra (whenJust)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
@@ -29,6 +30,16 @@ import           Cardano.Sync.Metrics
 import           Cardano.Sync.Plugin
 import           Cardano.Sync.Types
 import           Cardano.Sync.Util hiding (whenJust)
+
+import           Cardano.Slotting.Slot (WithOrigin (..))
+
+import           Ouroboros.Consensus.HeaderValidation
+import           Ouroboros.Consensus.Ledger.Extended
+
+import           Ouroboros.Network.Block (Point (..))
+import           Ouroboros.Network.Point (blockPointHash, blockPointSlot)
+
+import           System.IO.Error
 
 data NextState
   = Continue
@@ -80,9 +91,10 @@ runActions trce env plugin actions = do
       case spanDbApply xs of
         ([], DbFinish:_) -> do
             pure Done
-        ([], DbRollBackToPoint pt:ys) -> do
-            runRollbacks trce plugin pt
-            liftIO $ loadLedgerStateAtPoint (envLedger env) pt
+        ([], DbRollBackToPoint pt resultVar : ys) -> do
+            runRollbacksDB trce plugin pt
+            res <- lift $ rollbackLedger trce plugin env pt
+            lift $ atomically $ putTMVar resultVar res
             dbAction Continue ys
         (ys, zs) -> do
           insertBlockList trce env plugin ys
@@ -90,10 +102,46 @@ runActions trce env plugin actions = do
             then pure Continue
             else dbAction Continue zs
 
-runRollbacks
+rollbackLedger :: Trace IO Text -> SyncNodePlugin -> SyncEnv -> CardanoPoint -> IO (Maybe [CardanoPoint])
+rollbackLedger _trce _plugin env point = do
+    mst <- loadLedgerAtPoint (envLedger env) point True
+    dbBlock <- sdlGetLatestBlock (envDataLayer env)
+    case mst of
+      Right st -> do
+        checkDBWithState point dbBlock
+        let statePoint = headerStatePoint $ headerState $ clsState st
+        -- This check should always succeed, since 'loadLedgerAtPoint' returns succesfully.
+        -- we just leave it here for extra validation.
+        checkDBWithState statePoint dbBlock
+        pure Nothing
+      Left lsfs -> do
+        points <- verifyFilePoints env lsfs
+        pure $ Just points
+  where
+
+    checkDBWithState :: CardanoPoint -> Maybe Block -> IO ()
+    checkDBWithState pnt blk =
+      if compareTips pnt blk
+        then pure ()
+        else throwIO . userError $
+                mconcat
+                    [ "Ledger state point ", show pnt, " and db tip "
+                    , show blk, " don't match"
+                    ]
+
+compareTips :: CardanoPoint -> Maybe Block -> Bool
+compareTips = go
+  where
+    go (Point Origin) Nothing = True
+    go (Point (At blk)) (Just tip) =
+         getHeaderHash (blockPointHash blk) == bHash tip
+      && blockPointSlot blk == bSlotNo tip
+    go  _ _ = False
+
+runRollbacksDB
     :: Trace IO Text -> SyncNodePlugin -> CardanoPoint
     -> ExceptT SyncNodeError IO ()
-runRollbacks trce plugin point =
+runRollbacksDB trce plugin point =
   newExceptT
     . traverseMEither (\ f -> f trce point)
     $ plugRollbackBlock plugin
