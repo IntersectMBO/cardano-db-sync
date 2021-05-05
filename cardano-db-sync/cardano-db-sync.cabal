@@ -121,6 +121,7 @@ executable cardano-db-sync
                         -Wunused-packages
                         -Wno-unsafe
                         -threaded
+                        -with-rtsopts=-N2
 
   other-modules:        Paths_cardano_db_sync
 
