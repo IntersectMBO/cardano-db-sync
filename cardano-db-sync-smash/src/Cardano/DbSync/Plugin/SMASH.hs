@@ -6,13 +6,13 @@ module Cardano.DbSync.Plugin.SMASH
 
 import           Cardano.Prelude
 
-import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo)
+import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo, modifyName)
 
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT)
 
 import           Cardano.SMASH.DB (DBFail (..), DataLayer (..))
-import           Cardano.SMASH.Offline (fetchInsertNewPoolMetadata)
+import           Cardano.SMASH.Offline (fetchInsertNewPoolMetadata, runOfflineFetchThread)
 import           Cardano.SMASH.Types (PoolIdentifier (..), PoolMetaHash (..), PoolUrl (..))
 
 import           Cardano.Chain.Block (ABlockOrBoundary (..))
@@ -58,14 +58,21 @@ smashDbSyncNodePlugin trace' backend =
         { plugOnStartup =
             plugOnStartup defPlugin
               ++ [epochPluginOnStartup backend]
+              ++ [smashPluginOnStartup backend]
         , plugInsertBlock =
             plugInsertBlock defPlugin
               ++ [epochPluginInsertBlock backend]
-              ++ [insertSMASHBlocks dataLayer backend]
+              ++ [smashPluginInsertBlock dataLayer backend]
         , plugRollbackBlock =
             plugRollbackBlock defPlugin
               ++ [epochPluginRollbackBlock]
         }
+
+smashPluginOnStartup :: SqlBackend -> Trace IO Text -> IO (Either a ())
+smashPluginOnStartup backend tracer = do
+  liftIO . logInfo tracer $ "smashPluginOnStartup: Starting offline fetch thread"
+  _ <- async $ runOfflineFetchThread backend $ modifyName (const "smash.fetch") tracer
+  pure $ Right ()
 
 -- For information on what era we are in.
 data BlockName
@@ -74,16 +81,17 @@ data BlockName
     | Mary
     deriving (Eq, Show)
 
-insertSMASHBlocks
+smashPluginInsertBlock
     :: DataLayer
     -> SqlBackend
     -> Trace IO Text
     -> SyncEnv
     -> [BlockDetails]
     -> IO (Either SyncNodeError ())
-insertSMASHBlocks dataLayer sqlBackend tracer env blockDetails =
-    DB.runDbIohkLogging sqlBackend tracer $
-      traverseMEither (insertSMASHBlock dataLayer tracer env) blockDetails
+smashPluginInsertBlock dataLayer sqlBackend tracer env blockDetails =
+    let smashTracer = modifyName (const "smash") tracer
+    in  DB.runDbIohkLogging sqlBackend smashTracer $
+            traverseMEither (insertSMASHBlock dataLayer smashTracer env) blockDetails
 
 -- |TODO(KS): We need to abstract over these blocks so we can test this functionality
 -- separatly from the actual blockchain, using tests only.
@@ -103,8 +111,6 @@ insertSMASHBlock dataLayer tracer env (BlockDetails cblk details) =
       insertShelleyBlock Allegra dataLayer tracer env (Generic.fromAllegraBlock blk) details
     BlockMary blk -> do
       insertShelleyBlock Mary dataLayer tracer env (Generic.fromMaryBlock blk) details
-
-
 
 -- We don't care about Byron, no pools there.
 -- Also, we don't want to add additional info to clutter the logs.

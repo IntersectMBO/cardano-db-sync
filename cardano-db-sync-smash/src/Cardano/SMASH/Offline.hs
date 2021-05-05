@@ -31,7 +31,7 @@ import qualified Data.Time.Clock.POSIX as Time
 
 import qualified Cardano.Crypto.Hash.Blake2b as Crypto
 import qualified Cardano.Crypto.Hash.Class as Crypto
---import qualified Cardano.SMASH.DBSync.Db.Schema as DB
+
 import           Cardano.Db
 import qualified Cardano.Db as DB
 
