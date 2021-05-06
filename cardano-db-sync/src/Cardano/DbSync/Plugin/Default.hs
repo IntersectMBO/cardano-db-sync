@@ -16,8 +16,8 @@ import qualified Cardano.Db as DB
 
 import           Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import           Cardano.DbSync.Era.Shelley.Insert (insertEpochRewards, insertEpochStake,
-                   insertShelleyBlock)
+import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock, postEpochRewards,
+                   postEpochStake)
 import           Cardano.DbSync.Rollback (rollbackToSlot)
 
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
@@ -62,18 +62,18 @@ insertDefaultBlock backend tracer env blockDetails =
     insert (BlockDetails cblk details) = do
       -- Calculate the new ledger state to pass to the DB insert functions but do not yet
       -- update ledgerStateVar.
-      let network = leNetwork (envLedger env)
+      let lenv = envLedger env
       lStateSnap <- liftIO $ applyBlock (envLedger env) cblk details
       handleLedgerEvents tracer (envLedger env) (lssEvents lStateSnap)
       case cblk of
         BlockByron blk ->
           newExceptT $ insertByronBlock tracer blk details
         BlockShelley blk ->
-          newExceptT $ insertShelleyBlock tracer network (Generic.fromShelleyBlock blk) lStateSnap details
+          newExceptT $ insertShelleyBlock tracer lenv (Generic.fromShelleyBlock blk) lStateSnap details
         BlockAllegra blk ->
-          newExceptT $ insertShelleyBlock tracer network (Generic.fromAllegraBlock blk) lStateSnap details
+          newExceptT $ insertShelleyBlock tracer lenv (Generic.fromAllegraBlock blk) lStateSnap details
         BlockMary blk ->
-          newExceptT $ insertShelleyBlock tracer network (Generic.fromMaryBlock blk) lStateSnap details
+          newExceptT $ insertShelleyBlock tracer lenv (Generic.fromMaryBlock blk) lStateSnap details
       -- Now we update it in ledgerStateVar and (possibly) store it to disk.
       liftIO $ saveLedgerStateMaybe (envLedger env)
                     lStateSnap (isSyncedWithinSeconds details 60)
@@ -96,9 +96,9 @@ handleLedgerEvents tracer lenv =
           let progress = calcEpochProgress 4 details
           when (progress > 0.6) $
             liftIO . logInfo tracer $ mconcat [ "LedgerRewards: ", textShow progress ]
-          insertEpochRewards tracer lenv rwds
+          postEpochRewards lenv rwds
         LedgerStakeDist sdist ->
-          insertEpochStake tracer lenv sdist
+          postEpochStake lenv sdist
 
 calcEpochProgress :: Int -> SlotDetails -> Double
 calcEpochProgress digits sd =

@@ -7,7 +7,8 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.Sync.LedgerState
-  ( CardanoLedgerState (..)
+  ( BulkOperation (..)
+  , CardanoLedgerState (..)
   , IndexCache (..)
   , LedgerEnv (..)
   , LedgerEvent (..)
@@ -36,6 +37,7 @@ import qualified Cardano.Ledger.Val as Val
 
 import           Cardano.Sync.Config.Types
 import qualified Cardano.Sync.Era.Cardano.Util as Cardano
+import           Cardano.Sync.Era.Shelley.Generic (StakeCred)
 import qualified Cardano.Sync.Era.Shelley.Generic as Generic
 import           Cardano.Sync.Types hiding (CardanoBlock)
 import           Cardano.Sync.Util
@@ -47,8 +49,8 @@ import           Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..), fromWithOrigin)
 
 import qualified Control.Exception as Exception
-import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, atomically, newTVarIO, readTVar,
-                   writeTVar)
+import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, TBQueue, atomically, newTBQueueIO,
+                   newTVarIO, readTVar, writeTVar)
 import           Control.Monad.Extra (firstJustM, fromMaybeM)
 
 import qualified Data.ByteString.Base16 as Base16
@@ -63,7 +65,8 @@ import qualified Data.Text as Text
 import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockHash, blockIsEBB,
                    blockPrevHash, withOrigin)
 import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
-import           Ouroboros.Consensus.Cardano.Block (LedgerState (..))
+import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
+
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Config (TopLevelConfig (..), configCodec, configLedger)
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
@@ -85,6 +88,7 @@ import qualified Ouroboros.Network.Point as Point
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import           Shelley.Spec.Ledger.LedgerState (AccountState, EpochState, UTxOState)
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley
+import qualified Shelley.Spec.Ledger.Rewards as Shelley
 import qualified Shelley.Spec.Ledger.UTxO as Shelley
 
 import           System.Directory (listDirectory, removeFile)
@@ -100,6 +104,14 @@ import           System.FilePath (dropExtension, takeExtension, (</>))
 {- HLINT ignore "Reduce duplication" -}
 {- HLINT ignore "Use readTVarIO" -}
 
+data BulkOperation
+  = BulkRewardChunk !EpochNo !IndexCache ![(StakeCred, Set (Shelley.Reward StandardCrypto))]
+  | BulkOrphanedRewardChunk !EpochNo !IndexCache ![(StakeCred, Set (Shelley.Reward StandardCrypto))]
+  | BulkRewardReport !EpochNo !Int !Int
+  | BulkStakeDistChunk !EpochNo !IndexCache ![(StakeCred, (Coin, PoolKeyHash))]
+  | BuldStakeDistReport !EpochNo !Int
+
+
 data IndexCache = IndexCache
   { icAddressCache :: !(Map Generic.StakeCred DB.StakeAddressId)
   , icPoolCache :: !(Map PoolKeyHash DB.PoolHashId)
@@ -111,7 +123,11 @@ data LedgerEnv = LedgerEnv
   , leNetwork :: !Shelley.Network
   , leStateVar :: !(StrictTVar IO CardanoLedgerState)
   , leEventState :: !(StrictTVar IO LedgerEventState)
+  -- The following two do not really have anything to do with maintaining ledger
+  -- state. They are here due to the ongoing headaches around the split between
+  -- `cardano-sync` and `cardano-db-sync`.
   , leIndexCache :: !(StrictTVar IO IndexCache)
+  , leBulkOpQueue :: !(TBQueue IO BulkOperation)
   }
 
 data LedgerEvent
@@ -160,6 +176,9 @@ mkLedgerEnv protocolInfo dir network slot deleteFiles = do
     svar <- newTVarIO st
     evar <- newTVarIO initLedgerEventState
     ivar <- newTVarIO $ IndexCache mempty mempty
+    -- 2.5 days worth of slots. If we try to stick more than this number of
+    -- items in the queue, bad things are likely to happen.
+    boq <- newTBQueueIO 10800
     pure LedgerEnv
       { leProtocolInfo = protocolInfo
       , leDir = dir
@@ -167,6 +186,7 @@ mkLedgerEnv protocolInfo dir network slot deleteFiles = do
       , leStateVar = svar
       , leEventState = evar
       , leIndexCache = ivar
+      , leBulkOpQueue = boq
       }
   where
     initLedgerEventState :: LedgerEventState

@@ -8,9 +8,9 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.DbSync.Era.Shelley.Insert
-  ( insertEpochRewards
-  , insertEpochStake
-  , insertShelleyBlock
+  ( insertShelleyBlock
+  , postEpochRewards
+  , postEpochStake
 
   , containsUnicodeNul
   , safeDecodeUtf8
@@ -49,6 +49,7 @@ import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..), Value
 import           Cardano.Slotting.Block (BlockNo (..))
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
 
+import           Control.Monad.Class.MonadSTM.Strict (tryReadTBQueue)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 
 import qualified Data.Aeson as Aeson
@@ -74,9 +75,9 @@ import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 insertShelleyBlock
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Shelley.Network -> Generic.Block -> LedgerStateSnapshot -> SlotDetails
+    => Trace IO Text -> LedgerEnv -> Generic.Block -> LedgerStateSnapshot -> SlotDetails
     -> ReaderT SqlBackend m (Either SyncNodeError ())
-insertShelleyBlock tracer network blk lStateSnap details = do
+insertShelleyBlock tracer lenv blk lStateSnap details = do
   runExceptT $ do
     pbid <- liftLookupFail (renderInsertName (Generic.blkEra blk)) $ DB.queryBlockId (Generic.blkPreviousHash blk)
     mPhid <- lift $ queryPoolHashId (Generic.blkCreatorPoolHash blk)
@@ -102,7 +103,7 @@ insertShelleyBlock tracer network blk lStateSnap details = do
                     , DB.blockOpCert = Just $ Generic.blkOpCert blk
                     }
 
-    zipWithM_ (insertTx tracer network blkId (sdEpochNo details) (Generic.blkSlotNo blk)) [0 .. ] (Generic.blkTxs blk)
+    zipWithM_ (insertTx tracer (leNetwork lenv) blkId (sdEpochNo details) (Generic.blkSlotNo blk)) [0 .. ] (Generic.blkTxs blk)
 
     liftIO $ do
       let epoch = unEpochNo (sdEpochNo details)
@@ -126,6 +127,10 @@ insertShelleyBlock tracer network blk lStateSnap details = do
 
     whenJust (lssNewEpoch lStateSnap) $ \ newEpoch -> do
       insertOnNewEpoch tracer blkId (Generic.blkSlotNo blk) (sdEpochNo details) newEpoch
+
+    mbop <- liftIO . atomically $ tryReadTBQueue (leBulkOpQueue lenv)
+    whenJust (maybeToStrict mbop) $ \ bop ->
+      insertEpochInterleaved tracer bop
 
     when (getSyncStatus details == SyncFollowing) $
       -- Serializiing things during syncing can drastically slow down full sync
