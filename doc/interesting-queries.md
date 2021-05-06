@@ -62,6 +62,26 @@ select pg_size_pretty (pg_database_size ('cexplorer'));
 (1 row)
 ```
 
+### Sync progress of `db-sync`
+
+To get a rough estimate of how close to fully synced the database is, we can use the time stamps on
+the blocks as follows:
+
+```sql
+select
+   100 * (extract (epoch from (max (time) at time zone 'UTC')) - extract (epoch from (min (time) at time zone 'UTC')))
+      / (extract (epoch from (now () at time zone 'UTC')) - extract (epoch from (min (time) at time zone 'UTC')))
+  as sync_percent
+  from block ;
+   sync_percent
+------------------
+ 97.4357948804029
+(1 row)
+```
+Note: The value returned by this query can be rather misleading as it operates on block time stamps
+and early epochs contain much less data (eg Byron era did not have staking) and much fewer
+transactions.
+
 ### Current valid pools
 In general the database is operated on in an append only manner. Pool certificates can
 be updated so that later certificates override earlier ones. In addition pools can
