@@ -45,6 +45,9 @@ library
                         Cardano.SMASH.DBSync.Db.Query
                         Cardano.SMASH.FetchQueue
                         Cardano.SMASH.Offline
+                        Cardano.SMASH.HttpClient
+                        Cardano.SMASH.Lib
+                        Paths_cardano_db_sync_smash
 
   build-depends:        base                            >= 4.14         && < 4.16
                       , cardano-db-sync
@@ -80,6 +83,8 @@ library
                       , http-client-tls
                       , http-types
                       , wai
+                      , warp
+                      , http-conduit
 
 executable cardano-db-sync-smash
   default-language:     Haskell2010

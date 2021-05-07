@@ -11,7 +11,8 @@ import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo, modifyNam
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT)
 
-import           Cardano.SMASH.DB (DBFail (..), DataLayer (..))
+import           Cardano.SMASH.DB (DataLayer (..))
+import           Cardano.SMASH.Lib
 import           Cardano.SMASH.Offline (fetchInsertNewPoolMetadata, runOfflineFetchThread)
 import           Cardano.SMASH.Types (PoolIdentifier (..), PoolMetaHash (..), PoolUrl (..))
 
@@ -58,7 +59,7 @@ smashDbSyncNodePlugin trace' backend =
         { plugOnStartup =
             plugOnStartup defPlugin
               ++ [epochPluginOnStartup backend]
-              ++ [smashPluginOnStartup backend]
+              ++ [smashPluginOnStartup dataLayer backend]
         , plugInsertBlock =
             plugInsertBlock defPlugin
               ++ [epochPluginInsertBlock backend]
@@ -68,10 +69,12 @@ smashDbSyncNodePlugin trace' backend =
               ++ [epochPluginRollbackBlock]
         }
 
-smashPluginOnStartup :: SqlBackend -> Trace IO Text -> IO (Either a ())
-smashPluginOnStartup backend tracer = do
+smashPluginOnStartup :: DataLayer -> SqlBackend -> Trace IO Text -> IO (Either a ())
+smashPluginOnStartup dataLayer backend tracer = do
   liftIO . logInfo tracer $ "smashPluginOnStartup: Starting offline fetch thread"
   _ <- async $ runOfflineFetchThread backend $ modifyName (const "smash.fetch") tracer
+  liftIO . logInfo tracer $ "smashPluginOnStartup: Starting the web API"
+  _ <- async $ runApp tracer dataLayer defaultConfiguration
   pure $ Right ()
 
 -- For information on what era we are in.
