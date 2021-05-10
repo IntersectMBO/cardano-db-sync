@@ -285,6 +285,30 @@ select stake_address.view as stake_address, epoch_stake.epoch_no, epoch_stake.am
 ...
 ```
 
+### Get delegators, their latest address and live-stake of a pool
+
+```sql
+with 
+delegates as (
+	select stake_address, pool_address, stake_address_id  from (
+		select row_number() over(PARTITION BY d.addr_id order by d.addr_id, d.id desc) row_number, sa."view" stake_address, ph."view" pool_address, d.addr_id stake_address_id
+		from delegation d 
+		join pool_hash ph on ph.id = d.pool_hash_id
+		join stake_address sa on sa.id = d.addr_id 
+		join delegation alldelegations on alldelegations.addr_id=d.addr_id
+		where 
+		ph.view='pool180fejev4xgwe2y53ky0pxvgxr3wcvkweu6feq5mdljfzcsmtg6u'
+	) inner_query
+	where row_number=1 and pool_address='pool180fejev4xgwe2y53ky0pxvgxr3wcvkweu6feq5mdljfzcsmtg6u'
+),
+delegator_addresses as (
+	select row_number() over(PARTITION BY txo.stake_address_id order by txo.stake_address_id, txo.tx_id desc) row_number, encode(tx.hash, 'hex') tx_hash_view,  stake_address, txo.address , pool_address, txo.stake_address_id, txo.value from delegates
+	join tx_out txo on txo.stake_address_id = delegates.stake_address_id
+	join tx on tx.id =txo.tx_id
+)
+select *, (select sum(value) from utxo_view uv where uv.stake_address_id = delegator_addresses.stake_address_id) from delegator_addresses where row_number = 1
+```
+
 ### Get the total orphaned rewards.
 Orphaned rewards for epoch `N` are rewards that acrue to a stake address that was registered in
 before the end of epoch `N - 2` but for which the stake address has been de-registered before the
