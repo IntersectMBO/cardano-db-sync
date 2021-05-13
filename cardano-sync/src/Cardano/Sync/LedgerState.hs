@@ -24,6 +24,7 @@ module Cardano.Sync.LedgerState
   , findStateFromPoint
   , loadLedgerAtPoint
   , getHeaderHash
+  , getPoolParams
   ) where
 
 import           Cardano.Binary (DecoderError)
@@ -32,6 +33,7 @@ import qualified Cardano.Binary as Serialize
 import qualified Cardano.Db as DB
 
 import           Cardano.Ledger.Coin (Coin)
+import           Cardano.Ledger.Era
 import           Cardano.Ledger.Shelley.Constraints (UsesValue)
 import qualified Cardano.Ledger.Val as Val
 
@@ -59,6 +61,7 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as BSS
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 
@@ -66,7 +69,6 @@ import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockH
                    blockPrevHash, withOrigin)
 import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
 import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
-
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Config (TopLevelConfig (..), configCodec, configLedger)
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
@@ -86,6 +88,7 @@ import           Ouroboros.Network.Block (HeaderHash, Point (..))
 import qualified Ouroboros.Network.Point as Point
 
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
+import           Shelley.Spec.Ledger.Keys (KeyHash (..), KeyRole (..))
 import           Shelley.Spec.Ledger.LedgerState (AccountState, EpochState, UTxOState)
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley
 import qualified Shelley.Spec.Ledger.Rewards as Shelley
@@ -160,6 +163,7 @@ data LedgerStateFile = LedgerStateFile
 
 data LedgerStateSnapshot = LedgerStateSnapshot
   { lssState :: !CardanoLedgerState
+  , lssOldState :: !CardanoLedgerState
   , lssNewEpoch :: !(Strict.Maybe Generic.NewEpoch) -- Only Just for a single block at the epoch boundary
   , lssSlotDetails :: !SlotDetails
   , lssEvents :: ![LedgerEvent]
@@ -225,6 +229,7 @@ applyBlock env blk details =
       events <- generateEvents env oldEventState  details newState
       pure $ LedgerStateSnapshot
                 { lssState = newState
+                , lssOldState = oldState
                 , lssNewEpoch = maybeToStrict $ mkNewEpoch oldState newState
                 , lssSlotDetails = details
                 , lssEvents = events
@@ -578,6 +583,22 @@ writeLedgerState env st = atomically $ writeTVar (leStateVar env) (CardanoLedger
 -- | Remove given file path and ignore any IOEXceptions.
 safeRemoveFile :: FilePath -> IO ()
 safeRemoveFile fp = handle (\(_ :: IOException) -> pure ()) $ removeFile fp
+
+getPoolParams :: CardanoLedgerState -> Set.Set (KeyHash 'StakePool StandardCrypto)
+getPoolParams st =
+    case ledgerState $ clsState st of
+      LedgerStateByron _ -> Set.empty
+      LedgerStateShelley sts -> getPoolParamsShelley sts
+      LedgerStateAllegra sts -> getPoolParamsShelley sts
+      LedgerStateMary sts -> getPoolParamsShelley sts
+
+getPoolParamsShelley
+    :: forall era. (Crypto era ~ StandardCrypto)
+    => LedgerState (ShelleyBlock era)
+    -> Set.Set (KeyHash 'StakePool StandardCrypto)
+getPoolParamsShelley lState =
+  Map.keysSet $ Shelley._pParams $ Shelley._pstate $ Shelley._delegationState
+              $ Shelley.esLState $ Shelley.nesEs $ Consensus.shelleyLedgerState lState
 
 -- We only compute 'AdaPots' for later eras. This is a time consuming
 -- function and we only want to run it on epoch boundaries.
