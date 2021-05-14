@@ -11,70 +11,25 @@
 # }'
 , sourcesOverride ? {}
 # pinned version of nixpkgs augmented with overlays (iohk-nix and our packages).
-, pkgs ? import ./nix { inherit system crossSystem config sourcesOverride gitrev; }
-, gitrev ? pkgs.iohkNix.commitIdFromGitRepoOrZero ./.git
+, pkgs ? import ./nix { inherit system crossSystem config sourcesOverride gitrev customConfig; }
+, gitrev ? null
 }:
 with pkgs; with commonLib;
 let
-  customConfig' = if customConfig ? services then customConfig else {
-    services.cardano-db-sync = customConfig;
-  };
 
   haskellPackages = recRecurseIntoAttrs
       # the Haskell.nix package set, reduced to local packages.
       (selectProjectPackages cardanoDbSyncHaskellPackages);
 
-  scripts = callPackage ./nix/scripts.nix {
-    customConfig = customConfig';
-  };
-
-  rewrite-static = _: p: if (pkgs.stdenv.hostPlatform.isDarwin) then
-    pkgs.runCommandCC p.name {
-      nativeBuildInputs = [ pkgs.haskellBuildUtils.package pkgs.buildPackages.binutils pkgs.buildPackages.nix ];
-    } ''
-      cp -R ${p} $out
-      chmod -R +w $out
-      rewrite-libs $out/bin $out/bin/*
-    '' else if (pkgs.stdenv.hostPlatform.isMusl) then
-    pkgs.runCommandCC p.name { } ''
-      cp -R ${p} $out
-      chmod -R +w $out
-      $STRIP $out/bin/*
-    '' else p;
-
   packages = {
-    inherit haskellPackages cardano-db-sync cardano-db-sync-extended cardano-node scripts;
+    inherit haskellPackages cardano-db-sync cardano-db-sync-extended cardano-node scripts dockerImage;
 
     # so that eval time gc roots are cached (nix-tools stuff)
-    inherit (cardanoDbSyncHaskellPackages) roots;
-    inherit (haskellPackages.cardano-db-sync.project) plan-nix;
+    inherit (cardanoDbSyncProject) roots plan-nix;
 
     inherit (haskellPackages.cardano-db-sync.identifier) version;
 
-    exes = mapAttrsRecursiveCond (as: !(isDerivation as)) rewrite-static (collectComponents' "exes" haskellPackages);
-
-    dockerImage = let
-      defaultConfig = rec {
-        services.cardano-db-sync = {
-          socketPath = lib.mkDefault ("/node-ipc/node.socket");
-          postgres.generatePGPASS = false;
-        };
-      };
-      customConfig'' = mkMerge [ defaultConfig customConfig' ];
-    in callPackage ./nix/docker.nix {
-      scripts = scripts.override {
-        customConfig = customConfig'';
-      };
-      extendedScripts = scripts.override {
-        customConfig = mkMerge [
-          customConfig''
-          { services.cardano-db-sync = {
-              extended = true;
-            };
-          }
-        ];
-      };
-    };
+    exes = mapAttrsRecursiveCond (as: !(isDerivation as)) rewriteStatic (collectComponents' "exes" haskellPackages);
 
     # `tests` are the test suites which have been built.
     tests = collectComponents' "tests" haskellPackages;
@@ -85,12 +40,12 @@ let
       # `checks.tests` collect results of executing the tests:
       tests = collectChecks haskellPackages;
 
-      hlint = callPackage iohkNix.tests.hlint {
-        src = ./. ;
+      hlint = callPackage hlintCheck {
+        inherit (pkgs.cardanoDbSyncProject.projectModule) src;
       };
 
-      stylish-haskell = callPackage iohkNix.tests.stylish-haskell {
-        src = ./. ;
+      stylish-haskell = callPackage stylishHaskellCheck {
+        inherit (pkgs.cardanoDbSyncProject.projectModule) src;
       };
     };
 

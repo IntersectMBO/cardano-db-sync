@@ -1,17 +1,18 @@
 # our packages overlay
-pkgs: super: with pkgs;
-  let
-    compiler = config.haskellNix.compiler or "ghc8104";
-    src = haskell-nix.haskellLib.cleanGit {
-      src = ../.;
-      name = "cardano-db-sync";
-    };
-  in {
-    inherit src;
+final: prev: with final;
+let
+  compiler = config.haskellNix.compiler or "ghc8104";
+in {
+  src = haskell-nix.haskellLib.cleanGit {
+    src = ../.;
+    name = "cardano-db-sync";
+  };
 
-    cardanoDbSyncHaskellPackages = callPackage ./haskell.nix {
-      inherit compiler gitrev src;
-    };
+  cardanoDbSyncProject = callPackage ./haskell.nix {
+    inherit compiler;
+  };
+
+  cardanoDbSyncHaskellPackages = cardanoDbSyncProject.hsPkgs;
 
   # Grab the executable component of our package.
   inherit (cardanoDbSyncHaskellPackages.cardano-db-sync.components.exes)
@@ -21,22 +22,46 @@ pkgs: super: with pkgs;
   inherit (cardanoDbSyncHaskellPackages.cardano-node.components.exes)
       cardano-node;
 
-  inherit ((haskell-nix.hackage-package {
-    name = "hlint";
-    version = "3.1.6";
-    compiler-nix-name = compiler;
-    inherit (cardanoDbSyncHaskellPackages) index-state;
-  }).components.exes) hlint;
+  cabal = haskell-nix.tool compiler "cabal" {
+    version = "latest";
+    inherit (cardanoDbSyncProject) index-state;
+  };
 
-  inherit ((haskell-nix.hackage-package {
-    name = "stylish-haskell";
-    version = "0.12.2.0";
-    compiler-nix-name = compiler;
-    inherit (cardanoDbSyncHaskellPackages) index-state;
-  }).components.exes) stylish-haskell;
+  hlint = haskell-nix.tool compiler "hlint" {
+    version = "3.2.7";
+    inherit (cardanoDbSyncProject) index-state;
+  };
+
+  stylish-haskell = haskell-nix.tool compiler "stylish-haskell" {
+    version = "latest";
+    inherit (cardanoDbSyncProject) index-state;
+  };
 
   # systemd can't be statically linked:
-  postgresql = super.postgresql.override {
+  postgresql = prev.postgresql.override {
     enableSystemd = stdenv.hostPlatform.isLinux && !stdenv.hostPlatform.isMusl;
+  };
+
+  scripts = import ./scripts.nix { inherit pkgs; };
+
+  dockerImage = let
+    defaultConfig = rec {
+      services.cardano-db-sync = {
+        socketPath = lib.mkDefault ("/node-ipc/node.socket");
+        postgres.generatePGPASS = false;
+      };
+    };
+  in callPackage ./docker.nix {
+    scripts = import ./scripts.nix {
+      inherit pkgs;
+      customConfigs = [ defaultConfig customConfig ];
+    };
+    extendedScripts = import ./scripts.nix {
+      inherit pkgs;
+      customConfigs = [
+        defaultConfig customConfig
+        { services.cardano-db-sync.extended = true; }
+      ];
+    };
   };
 }

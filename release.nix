@@ -50,7 +50,7 @@ let
     pkgs.runCommand "${image.name}-hydra" {} ''
       mkdir -pv $out/nix-support/
       cat <<EOF > $out/nix-support/hydra-build-products
-      file dockerimage-${image.name} ${image}
+      file binary-dist ${image}
       EOF
     '';
 
