@@ -22,7 +22,8 @@ library
   default-language:     Haskell2010
   hs-source-dirs:       src
 
-  ghc-options:          -Wall
+  ghc-options:          -O2
+                        -Wall
                         -Wcompat
                         -Wredundant-constraints
                         -Wincomplete-patterns
@@ -110,7 +111,8 @@ executable cardano-db-sync
   main-is:              cardano-db-sync.hs
   hs-source-dirs:       app
 
-  ghc-options:          -Wall
+  ghc-options:          -O2
+                        -Wall
                         -Werror
                         -Wcompat
                         -Wredundant-constraints
@@ -121,7 +123,7 @@ executable cardano-db-sync
                         -Wunused-packages
                         -Wno-unsafe
                         -threaded
-                        -with-rtsopts=-N2
+                        -with-rtsopts=-N3
 
   other-modules:        Paths_cardano_db_sync
 

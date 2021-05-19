@@ -44,7 +44,8 @@ executable cardano-db-sync-extended
   main-is:              cardano-db-sync-extended.hs
   hs-source-dirs:       app
 
-  ghc-options:          -Wall
+  ghc-options:          -O2
+                        -Wall
                         -Wcompat
                         -Wredundant-constraints
                         -Wincomplete-patterns
@@ -54,7 +55,7 @@ executable cardano-db-sync-extended
                         -Wunused-packages
                         -Wno-unsafe
                         -threaded
-                        -with-rtsopts=-N2
+                        -with-rtsopts=-N3
 
   other-modules:        Paths_cardano_db_sync_extended
 
