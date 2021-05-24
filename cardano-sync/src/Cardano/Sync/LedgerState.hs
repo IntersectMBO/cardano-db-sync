@@ -19,6 +19,8 @@ module Cardano.Sync.LedgerState
   , saveLedgerStateMaybe
   , listLedgerStateFilesOrdered
   , loadLedgerStateFromFile
+  , findStateFromPoint
+  , findLedgerStateFile
   , loadLedgerAtPoint
   , hashToAnnotation
   , getHeaderHash
@@ -364,8 +366,11 @@ mkLedgerStateFilename dir ledger mEpochNo = lsfFilePath . dbPointToFileName dir 
 hashToAnnotation :: ByteString -> ByteString
 hashToAnnotation = Base16.encode . BS.take 5
 
+mkRawHash :: HeaderHash CardanoBlock -> ByteString
+mkRawHash = toRawHash (Proxy @CardanoBlock)
+
 mkShortHash :: HeaderHash CardanoBlock -> ByteString
-mkShortHash = hashToAnnotation . toRawHash (Proxy @CardanoBlock)
+mkShortHash = hashToAnnotation . mkRawHash
 
 dbPointToFileName :: LedgerStateDir -> Maybe EpochNo -> Point.Block SlotNo (HeaderHash CardanoBlock) -> LedgerStateFile
 dbPointToFileName (LedgerStateDir stateDir) mEpochNo (Point.Block slot hash) =
@@ -453,32 +458,27 @@ loadLedgerAtPoint env point delFiles = do
 findStateFromPoint :: LedgerEnv -> CardanoPoint -> Bool -> IO (Either [LedgerStateFile] CardanoLedgerState)
 findStateFromPoint env point delFiles = do
   files <- listLedgerStateFilesOrdered (leDir env)
-  found <- findLedgerStateFileDelete files
     -- Genesis can be reproduced from configuration.
     -- TODO: We can make this a monadic action (reread config from disk) to save some memory.
-  case (getPoint point, found) of
-    (Origin, _) -> do
+  case getPoint point of
+    Origin -> do
+      when delFiles $
+        mapM_ (safeRemoveFile . lsfFilePath) files
       pure . Right $ initCardanoLedgerState (leProtocolInfo env)
-    (_, Right lsf) -> do
-      mState <- loadLedgerStateFromFile (topLevelConfig env) False lsf
-      case mState of
-        Nothing -> do
-          when delFiles $ safeRemoveFile $ lsfFilePath lsf
-          panic $ "findStateFromPoint failed to parse required state file: "
-               <> Text.pack (lsfFilePath lsf)
-        Just st -> pure $ Right st
-    (_, Left lsfs) -> do
-      pure $ Left lsfs
-  where
-    -- | Thin wrapper around 'findLedgerStateFile', which deletes files if the flag is enabled.
-    findLedgerStateFileDelete :: [LedgerStateFile]
-                              -> IO (Either [LedgerStateFile] LedgerStateFile)
-    findLedgerStateFileDelete files = do
-      let (filesToDelete, found) = findLedgerStateFile files point
-      -- TODO log which files we delete
+    At blk -> do
+      let (filesToDelete, found) = findLedgerStateFile files (Point.blockPointSlot blk, mkRawHash $ Point.blockPointHash blk)
       when delFiles $
         mapM_ (safeRemoveFile . lsfFilePath) filesToDelete
-      pure found
+      case found of
+        Right lsf -> do
+          mState <- loadLedgerStateFromFile (topLevelConfig env) False lsf
+          case mState of
+            Nothing -> do
+              when delFiles $ safeRemoveFile $ lsfFilePath lsf
+              panic $ "findStateFromPoint failed to parse required state file: "
+                   <> Text.pack (lsfFilePath lsf)
+            Just st -> pure $ Right st
+        Left lsfs -> pure $ Left lsfs
 
 -- Tries to find a file which matches the given point.
 -- It returns the file if we found one, or a list older files. These can
@@ -486,26 +486,23 @@ findStateFromPoint env point delFiles = do
 -- It will also return a list of files that are newer than the point. These files should
 -- be deleted. Files with same slot, but different hash are considered newer.
 findLedgerStateFile
-    :: [LedgerStateFile] -> CardanoPoint
+    :: [LedgerStateFile] -> (SlotNo, ByteString)
     -> ([LedgerStateFile], Either [LedgerStateFile] LedgerStateFile)
-findLedgerStateFile files point =
-  case getPoint point of
-    Origin -> (files, Left [])
-    At blk ->
+findLedgerStateFile files pointPair =
         go [] files
       where
         go delFiles [] = (delFiles, Left [])
         go delFiles (file : rest) =
-          case comparePointToFile file blk  of
+          case comparePointToFile file pointPair of
             EQ -> (delFiles, Right file) -- found the file we were looking for
             LT -> (delFiles, Left $ file : rest) -- found an older file first
             GT -> go (file : delFiles) rest -- keep looking on older files
 
-comparePointToFile :: LedgerStateFile -> Point.Block SlotNo (HeaderHash CardanoBlock) -> Ordering
-comparePointToFile lsf blk =
-  case compare (lsfSlotNo lsf) (Point.blockPointSlot blk)  of
+comparePointToFile :: LedgerStateFile -> (SlotNo, ByteString) -> Ordering
+comparePointToFile lsf (blSlotNo, blHash) =
+  case compare (lsfSlotNo lsf) blSlotNo of
     EQ ->
-      if mkShortHash (Point.blockPointHash blk) == lsfHash lsf
+      if hashToAnnotation blHash == lsfHash lsf
         then EQ
         else GT
     x -> x
