@@ -120,6 +120,39 @@ function dump_schema {
 	pg_dump -s "${databasename}"
 }
 
+function create_snapshot {
+	tgz_file=$1.tgz
+	dbfile=$1.sql
+	ledger_file=$2
+	tmp_dir=$(mktemp --directory -t db-sync-snapshot-XXXXXXXXXX)
+	echo $"Working directory: ${tmp_dir}"
+	pg_dump "${databasename}" > "${tmp_dir}/$1.sql"
+	cp "$ledger_file" "$tmp_dir/$(basename "${ledger_file}")"
+	tar zcvf "${tgz_file}" --directory "${tmp_dir}" "${dbfile}" "$(basename "${ledger_file}")"
+	rm -rf "${tmp_dir}"
+	if test "$(gzip --test "${tgz_file}")" ; then
+	  echo "Gzip reports the snapshot file as being corrupt."
+	  echo "It is not safe to drop the database and restore using this file."
+	  exit 1
+	  fi
+	echo "Created ${tgz_file}"
+}
+
+function restore_snapshot {
+	file_count=$(find "$2" -type f -name '*.lstate' | wc -l)
+	if test "${file_count}" -gt 0 ; then
+	  echo "Ledger state directory ($2) is not empty. Please empty it and then retry."
+	  exit 1
+	  fi
+	tmp_dir=$(mktemp --directory -t db-sync-snapshot-XXXXXXXXXX)
+	tar -zxvf "$1" --directory "$tmp_dir"
+	db_file=$(find "$tmp_dir/" -iname "*.sql")
+	lstate_file=$(find "${tmp_dir}/" -iname "*.lstate")
+	mv "${lstate_file}" "$2"
+	psql --dbname="${databasename}" -f "${db_file}"
+	rm --recursive "${tmp_dir}"
+}
+
 function usage_exit {
 	echo
 	echo "Usage:"
@@ -132,6 +165,12 @@ function usage_exit {
 	echo "    $progname --create-migration  - Create a migration (if one is needed)."
 	echo "    $progname --run-migrations    - Run all migrations applying as needed."
 	echo "    $progname --dump-schema       - Dump the schema of the database."
+	echo
+	echo "    - Create a db-sync state snapshot"
+	echo "      $progname --create-snapshot <snapshot-file> <ledger-state-file>"
+	echo
+	echo "    - Restore a db-sync state snapshot."
+	echo "      $progname --restore-snapshot <snapshot-file> <ledger-state-dir>"
 	echo
 	exit 0
 }
@@ -196,6 +235,47 @@ case "${1:-""}" in
 		check_pgpass_file
 		check_db_exists
 		dump_schema
+		;;
+	--create-snapshot)
+		check_pgpass_file
+		check_db_exists
+		if test $# -ne 3 ; then
+		  echo "Expecting exactly 2 more arguments, the snapshot file name template and the ledger state directory."
+		  exit 1
+		  fi
+		if test -z "$2" ; then
+		  echo "Second argument should be the snapshot file name template."
+		  exit 1
+		  fi
+		if test -z "$3" ; then
+		  echo "Third argument should be the ledger state directory."
+		  exit 1
+		  fi
+		create_snapshot "$2" "$3"
+		;;
+	--restore-snapshot)
+		check_pgpass_file
+		check_for_psql
+		check_psql_superuser
+		drop_db
+		create_db
+		if test $# -ne 3 ; then
+		  echo "Expecting exactly 2 more arguments, the snapshot file and the ledger state directory."
+		  exit 1
+		  fi
+		if test -z "$2" ; then
+		  echo "Second argument should be the snapshot file."
+		  exit 1
+		  fi
+		if test -z "$3" ; then
+		  echo "Third argument should be the ledger state directory."
+		  exit 1
+		  fi
+		if test -f "$3" ; then
+		  echo "Third argument is a file and expecting a directory."
+		  exit 1
+		  fi
+		restore_snapshot "$2" "$3"
 		;;
 	*)
 		usage_exit
