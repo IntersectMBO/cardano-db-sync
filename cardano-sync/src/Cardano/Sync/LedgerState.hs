@@ -15,13 +15,11 @@ module Cardano.Sync.LedgerState
   , LedgerStateSnapshot (..)
   , LedgerStateFile (..)
   , applyBlock
-  , loadLedgerStateAtPoint
   , saveLedgerStateMaybe
   , listLedgerStateFilesOrdered
   , hashToAnnotation
   , loadLedgerStateFromFile
   , mkLedgerEnv
-  , findStateFromPoint
   , loadLedgerAtPoint
   , getHeaderHash
   , getPoolParams
@@ -352,16 +350,6 @@ findLatestLedgerStateDisk config dir deleteFiles = do
   files <- listLedgerStateFilesOrdered dir
   firstJustM (loadLedgerStateFromFile config deleteFiles) files
 
-
-loadLedgerStateAtPoint :: LedgerEnv -> CardanoPoint -> IO ()
-loadLedgerStateAtPoint env point = do
-  -- Load the state
-  mState <- loadState env point
-  case mState of
-    Right st -> writeLedgerState env (clsState st)
-    Left file -> panic $ "loadLedgerStateAtPoint failed to find required state file: "
-                        <> Text.pack (lsfFilePath file)
-
 mkLedgerStateFilename :: LedgerStateDir -> CardanoLedgerState -> Bool -> WithOrigin FilePath
 mkLedgerStateFilename dir ledger isNewEpoch = lsfFilePath . dbPointToFileName dir isNewEpoch
     <$> getPoint (ledgerTipPoint (Proxy @CardanoBlock) (ledgerState $ clsState ledger))
@@ -443,26 +431,6 @@ cleanupLedgerStateFiles env slotNo = do
         (lFile : epochBoundary, regularFile, invalid)
       | otherwise =
         (epochBoundary, lFile : regularFile, invalid)
-
-loadState :: LedgerEnv -> CardanoPoint -> IO (Either LedgerStateFile CardanoLedgerState)
-loadState env point =
-  case getPoint point of
-    -- Genesis can be reproduced from configuration.
-    -- TODO: We can make this a monadic action (reread config from disk) to save some memory.
-    Origin -> pure . Right $ initCardanoLedgerState (leProtocolInfo env)
-    At blk -> do
-      -- First try to parse the file without the "epoch" suffix
-      let file = dbPointToFileName (leDir env) False blk
-      mState <- loadLedgerStateFromFile (topLevelConfig env) False file
-      case mState of
-        Just st -> pure $ Right st
-        Nothing -> do
-          -- Now try with the "epoch" suffix
-          let fileEpoch = dbPointToFileName (leDir env) True blk
-          mStateEpoch <- loadLedgerStateFromFile (topLevelConfig env) False fileEpoch
-          case mStateEpoch of
-            Nothing -> pure $ Left file
-            Just stEpoch -> pure $ Right stEpoch
 
 loadLedgerAtPoint :: LedgerEnv -> CardanoPoint -> Bool -> IO (Either [LedgerStateFile] CardanoLedgerState)
 loadLedgerAtPoint env point delFiles = do
