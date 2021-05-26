@@ -14,16 +14,18 @@ module Cardano.Sync.LedgerState
   , LedgerEvent (..)
   , LedgerStateSnapshot (..)
   , LedgerStateFile (..)
+  , mkLedgerEnv
   , applyBlock
   , saveLedgerStateMaybe
   , listLedgerStateFilesOrdered
-  , hashToAnnotation
   , loadLedgerStateFromFile
-  , mkLedgerEnv
   , loadLedgerAtPoint
+  , hashToAnnotation
   , getHeaderHash
   , getPoolParams
   ) where
+
+import           Prelude (String)
 
 import           Cardano.Binary (DecoderError)
 import qualified Cardano.Binary as Serialize
@@ -155,7 +157,7 @@ newtype CardanoLedgerState = CardanoLedgerState
 data LedgerStateFile = LedgerStateFile
   { lsfSlotNo :: !SlotNo
   , lsfHash :: !ByteString
-  , lsNewEpoch :: !Bool
+  , lsNewEpoch :: !(Maybe EpochNo)
   , lsfFilePath :: !FilePath
   } deriving Show
 
@@ -298,10 +300,10 @@ deleteNewerLedgerStateFiles stateDir slotNo = do
     isNewer :: LedgerStateFile -> Bool
     isNewer lsf = lsfSlotNo lsf > slotNo
 
-saveCurrentLedgerState :: LedgerEnv -> Bool -> IO ()
-saveCurrentLedgerState env isNewEpoch = do
+saveCurrentLedgerState :: LedgerEnv -> Maybe EpochNo -> IO ()
+saveCurrentLedgerState env mEpochNo = do
     ledger <- atomically $ readTVar (leStateVar env)
-    case mkLedgerStateFilename (leDir env) ledger isNewEpoch of
+    case mkLedgerStateFilename (leDir env) ledger mEpochNo of
       Origin -> pure () -- we don't store genesis
       At file -> LBS.writeFile file $
         Serialize.serializeEncoding $
@@ -319,11 +321,11 @@ saveLedgerStateMaybe env snapshot synced = do
   writeLedgerState env ledger
   case (synced, lssNewEpoch snapshot) of
     (_, Strict.Just newEpoch) | not (Generic.neIsEBB newEpoch) ->
-      saveCleanupState True    -- Save ledger states on epoch boundaries, unless they are EBBs
+      saveCleanupState (Just $ Generic.neEpoch newEpoch) -- Save ledger states on epoch boundaries, unless they are EBBs
     (SyncFollowing, Strict.Nothing) ->
-      saveCleanupState False   -- If following, save every state.
+      saveCleanupState Nothing   -- If following, save every state.
     (SyncLagging, Strict.Nothing) | block `mod` 2000 == 0 ->
-      saveCleanupState False   -- Only save state ocassionally.
+      saveCleanupState Nothing   -- Only save state ocassionally.
     _ -> pure ()
   where
     block :: Word64
@@ -332,9 +334,9 @@ saveLedgerStateMaybe env snapshot synced = do
     ledger :: ExtLedgerState CardanoBlock
     ledger = clsState $ lssState snapshot
 
-    saveCleanupState :: Bool -> IO ()
-    saveCleanupState isNewEpoch = do
-      saveCurrentLedgerState env isNewEpoch
+    saveCleanupState :: Maybe EpochNo -> IO ()
+    saveCleanupState mEpochNo = do
+      saveCurrentLedgerState env mEpochNo
       cleanupLedgerStateFiles env $
         fromWithOrigin (SlotNo 0) (ledgerTipSlot $ ledgerState ledger)
 
@@ -350,8 +352,8 @@ findLatestLedgerStateDisk config dir deleteFiles = do
   files <- listLedgerStateFilesOrdered dir
   firstJustM (loadLedgerStateFromFile config deleteFiles) files
 
-mkLedgerStateFilename :: LedgerStateDir -> CardanoLedgerState -> Bool -> WithOrigin FilePath
-mkLedgerStateFilename dir ledger isNewEpoch = lsfFilePath . dbPointToFileName dir isNewEpoch
+mkLedgerStateFilename :: LedgerStateDir -> CardanoLedgerState -> Maybe EpochNo -> WithOrigin FilePath
+mkLedgerStateFilename dir ledger mEpochNo = lsfFilePath . dbPointToFileName dir mEpochNo
     <$> getPoint (ledgerTipPoint (Proxy @CardanoBlock) (ledgerState $ clsState ledger))
 
 hashToAnnotation :: ByteString -> ByteString
@@ -360,18 +362,18 @@ hashToAnnotation = Base16.encode . BS.take 5
 mkShortHash :: HeaderHash CardanoBlock -> ByteString
 mkShortHash = hashToAnnotation . toRawHash (Proxy @CardanoBlock)
 
-dbPointToFileName :: LedgerStateDir -> Bool -> Point.Block SlotNo (HeaderHash CardanoBlock) -> LedgerStateFile
-dbPointToFileName (LedgerStateDir stateDir) isNewEpoch (Point.Block slot hash) =
+dbPointToFileName :: LedgerStateDir -> Maybe EpochNo -> Point.Block SlotNo (HeaderHash CardanoBlock) -> LedgerStateFile
+dbPointToFileName (LedgerStateDir stateDir) mEpochNo (Point.Block slot hash) =
     LedgerStateFile
       { lsfSlotNo = slot
       , lsfHash = shortHash
-      , lsNewEpoch = isNewEpoch
+      , lsNewEpoch = mEpochNo
       , lsfFilePath =
           mconcat
             [ stateDir </> show (unSlotNo slot)
             , "-"
             , BS.unpack shortHash
-            , if isNewEpoch then '-' : Text.unpack epochSuffix else ""
+            , epochSuffix
             , ".lstate"
             ]
       }
@@ -379,30 +381,32 @@ dbPointToFileName (LedgerStateDir stateDir) isNewEpoch (Point.Block slot hash) =
     shortHash :: ByteString
     shortHash = mkShortHash hash
 
+    epochSuffix :: String
+    epochSuffix = case mEpochNo of
+      Nothing -> ""
+      Just epoch -> "-" ++ show (unEpochNo epoch)
+
 parseLedgerStateFileName :: LedgerStateDir -> FilePath -> Maybe LedgerStateFile
 parseLedgerStateFileName (LedgerStateDir stateDir) fp =
     case break (== '-') (dropExtension fp) of
       (slotStr, '-': hashEpoch) -> do
         slot <- readMaybe slotStr
         case break (== '-') hashEpoch of
-          (hash, '-' : suffix) | suffix == Text.unpack epochSuffix -> do
-            Just $ build (BS.pack hash) slot True
-          (hash, []) ->
-            Just $ build (BS.pack hash) slot False
+          (hash, '-' : suffix) | Just epochNo <- readMaybe suffix -> do
+            Just $ build (BS.pack hash) slot (Just epochNo)
+          (hash, "") ->
+            Just $ build (BS.pack hash) slot Nothing
           _otherwise -> Nothing
       _otherwise -> Nothing
   where
-    build :: ByteString -> Word64 -> Bool -> LedgerStateFile
-    build hash slot isNewEpoch =
+    build :: ByteString -> Word64 -> Maybe Word64 -> LedgerStateFile
+    build hash slot mEpochNo =
       LedgerStateFile
         { lsfSlotNo = SlotNo slot
         , lsfHash = hash
-        , lsNewEpoch = isNewEpoch
+        , lsNewEpoch = EpochNo <$> mEpochNo
         , lsfFilePath = stateDir </> fp
         }
-
-epochSuffix :: Text
-epochSuffix = "epoch"
 
 -- | This should be exposed by 'consensus'.
 ledgerTipBlockNo :: ExtLedgerState blk -> WithOrigin BlockNo
@@ -427,7 +431,7 @@ cleanupLedgerStateFiles env slotNo = do
     groupFiles lFile (epochBoundary, regularFile, invalid)
       | lsfSlotNo lFile > slotNo =
         (epochBoundary, regularFile, lsfFilePath lFile : invalid)
-      | lsNewEpoch lFile =
+      | Just _ <- lsNewEpoch lFile =
         (lFile : epochBoundary, regularFile, invalid)
       | otherwise =
         (epochBoundary, lFile : regularFile, invalid)
