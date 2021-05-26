@@ -1,4 +1,5 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -22,7 +23,9 @@ import           Cardano.BM.Trace (Trace)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Logger (LogLevel (..), LogSource, LoggingT, NoLoggingT,
                    defaultLogStr, runLoggingT, runNoLoggingT, runStdoutLoggingT)
+import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Reader (ReaderT)
+import           Control.Monad.Trans.Resource (MonadUnliftIO)
 import           Control.Tracer (traceWith)
 
 import qualified Data.ByteString.Char8 as BS
@@ -68,12 +71,12 @@ runDbHandleLogger logHandle dbAction = do
       BS.hPutStrLn logHandle . fromLogStr $ defaultLogStr loc src level msg
 
 -- | Run a DB action logging via iohk-monitoring-framework.
-runDbIohkLogging :: SqlBackend -> Trace IO Text -> ReaderT SqlBackend (LoggingT IO) b -> IO b
+runDbIohkLogging :: MonadUnliftIO m => SqlBackend -> Trace IO Text -> ReaderT SqlBackend (LoggingT m) b -> m b
 runDbIohkLogging backend tracer dbAction = do
     runIohkLogging tracer $ runSqlConnWithIsolation dbAction backend Serializable
 
 -- | Run a DB action logging via iohk-monitoring-framework.
-runDbIohkNoLogging:: SqlBackend -> ReaderT SqlBackend (NoLoggingT IO) a -> IO a
+runDbIohkNoLogging :: MonadUnliftIO m => SqlBackend -> ReaderT SqlBackend (NoLoggingT m) a -> m a
 runDbIohkNoLogging backend action = do
     runNoLoggingT $ runSqlConnWithIsolation action backend Serializable
 
@@ -100,9 +103,9 @@ runIohkLogging tracer action =
         LevelOther _ -> Error
 
 -- | Run a DB action without any logging. Mainly for tests.
-runDbNoLogging :: ReaderT SqlBackend (NoLoggingT IO) a -> IO a
+runDbNoLogging :: (MonadBaseControl IO m, MonadUnliftIO m) => ReaderT SqlBackend (NoLoggingT m) a -> m a
 runDbNoLogging action = do
-  pgconfig <- readPGPassFileEnv Nothing
+  pgconfig <- liftIO $ readPGPassFileEnv Nothing
   runNoLoggingT .
     withPostgresqlPool (toConnectionString pgconfig) defPoolCount $ \pool ->
       Pool.withResource pool $ \backend ->
