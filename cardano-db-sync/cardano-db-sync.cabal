@@ -52,6 +52,11 @@ library
                         Cardano.DbSync.Era.Shelley.Generic.Witness
                         Cardano.DbSync.Era.Shelley.Insert
                         Cardano.DbSync.Era.Shelley.Insert.Epoch
+                        Cardano.DbSync.Era.Shelley.Offline
+                        Cardano.DbSync.Era.Shelley.Offline.FetchQueue
+                        Cardano.DbSync.Era.Shelley.Offline.Http
+                        Cardano.DbSync.Era.Shelley.Offline.Query
+                        Cardano.DbSync.Era.Shelley.Offline.Types
                         Cardano.DbSync.Era.Shelley.Query
 
                         Cardano.DbSync.Era.Util
@@ -85,6 +90,9 @@ library
                       , esqueleto
                       , extra
                       , groups
+                      , http-client
+                      , http-client-tls
+                      , http-types
                       , iohk-monitoring
                       , io-sim-classes
                       , monad-control
@@ -97,9 +105,11 @@ library
                       , persistent
                       , persistent-postgresql
                       , prometheus
+                      , random-shuffle
                       , small-steps
                       , split
                       , shelley-spec-ledger
+                      , swagger2
                       , text
                       , time
                       , transformers

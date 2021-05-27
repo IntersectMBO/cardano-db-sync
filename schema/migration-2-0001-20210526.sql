@@ -37,13 +37,14 @@ BEGIN
     EXECUTE 'CREATe TABLE "ada_pots"("id" SERIAL8  PRIMARY KEY UNIQUE,"slot_no" uinteger NOT NULL,"epoch_no" uinteger NOT NULL,"treasury" lovelace NOT NULL,"reserves" lovelace NOT NULL,"rewards" lovelace NOT NULL,"utxo" lovelace NOT NULL,"deposits" lovelace NOT NULL,"fees" lovelace NOT NULL,"block_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "ada_pots" ADD CONSTRAINT "unique_ada_pots" UNIQUE("block_id")' ;
     EXECUTE 'ALTER TABLE "ada_pots" ADD CONSTRAINT "ada_pots_block_id_fkey" FOREIGN KEY("block_id") REFERENCES "block"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
-    EXECUTE 'CREATe TABLE "pool_meta_data"("id" SERIAL8  PRIMARY KEY UNIQUE,"url" VARCHAR NOT NULL,"hash" hash32type NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
-    EXECUTE 'ALTER TABLE "pool_meta_data" ADD CONSTRAINT "unique_pool_meta_data" UNIQUE("url","hash")' ;
-    EXECUTE 'ALTER TABLE "pool_meta_data" ADD CONSTRAINT "pool_meta_data_registered_tx_id_fkey" FOREIGN KEY("registered_tx_id") REFERENCES "tx"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
+    EXECUTE 'CREATe TABLE "pool_metadata_ref"("id" SERIAL8  PRIMARY KEY UNIQUE,"pool_id" INT8 NOT NULL,"url" VARCHAR NOT NULL,"hash" hash32type NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
+    EXECUTE 'ALTER TABLE "pool_metadata_ref" ADD CONSTRAINT "unique_pool_metadata_ref" UNIQUE("pool_id","hash")' ;
+    EXECUTE 'ALTER TABLE "pool_metadata_ref" ADD CONSTRAINT "pool_metadata_ref_pool_id_fkey" FOREIGN KEY("pool_id") REFERENCES "pool_hash"("id") ON DELETE RESTRICT  ON UPDATE RESTRICT' ;
+    EXECUTE 'ALTER TABLE "pool_metadata_ref" ADD CONSTRAINT "pool_metadata_ref_registered_tx_id_fkey" FOREIGN KEY("registered_tx_id") REFERENCES "tx"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
     EXECUTE 'CREATe TABLE "pool_update"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash_id" INT8 NOT NULL,"cert_index" INT4 NOT NULL,"vrf_key_hash" hash32type NOT NULL,"pledge" lovelace NOT NULL,"reward_addr" addr29type NOT NULL,"active_epoch_no" INT8 NOT NULL,"meta_id" INT8 NULL,"margin" DOUBLE PRECISION NOT NULL,"fixed_cost" lovelace NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "pool_update" ADD CONSTRAINT "unique_pool_update" UNIQUE("hash_id","registered_tx_id")' ;
     EXECUTE 'ALTER TABLE "pool_update" ADD CONSTRAINT "pool_update_hash_id_fkey" FOREIGN KEY("hash_id") REFERENCES "pool_hash"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
-    EXECUTE 'ALTER TABLE "pool_update" ADD CONSTRAINT "pool_update_meta_id_fkey" FOREIGN KEY("meta_id") REFERENCES "pool_meta_data"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
+    EXECUTE 'ALTER TABLE "pool_update" ADD CONSTRAINT "pool_update_meta_id_fkey" FOREIGN KEY("meta_id") REFERENCES "pool_metadata_ref"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
     EXECUTE 'ALTER TABLE "pool_update" ADD CONSTRAINT "pool_update_registered_tx_id_fkey" FOREIGN KEY("registered_tx_id") REFERENCES "tx"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
     EXECUTE 'CREATe TABLE "pool_owner"("id" SERIAL8  PRIMARY KEY UNIQUE,"addr_id" INT8 NOT NULL,"pool_hash_id" INT8 NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "pool_owner" ADD CONSTRAINT "unique_pool_owner" UNIQUE("addr_id","pool_hash_id","registered_tx_id")' ;
@@ -112,6 +113,19 @@ BEGIN
     EXECUTE 'CREATe TABLE "epoch_param"("id" SERIAL8  PRIMARY KEY UNIQUE,"epoch_no" uinteger NOT NULL,"min_fee_a" uinteger NOT NULL,"min_fee_b" uinteger NOT NULL,"max_block_size" uinteger NOT NULL,"max_tx_size" uinteger NOT NULL,"max_bh_size" uinteger NOT NULL,"key_deposit" lovelace NOT NULL,"pool_deposit" lovelace NOT NULL,"max_epoch" uinteger NOT NULL,"optimal_pool_count" uinteger NOT NULL,"influence" DOUBLE PRECISION NOT NULL,"monetary_expand_rate" DOUBLE PRECISION NOT NULL,"treasury_growth_rate" DOUBLE PRECISION NOT NULL,"decentralisation" DOUBLE PRECISION NOT NULL,"entropy" hash32type NULL,"protocol_major" uinteger NOT NULL,"protocol_minor" uinteger NOT NULL,"min_utxo_value" lovelace NOT NULL,"min_pool_cost" lovelace NOT NULL,"nonce" hash32type NULL,"block_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "epoch_param" ADD CONSTRAINT "unique_epoch_param" UNIQUE("epoch_no","block_id")' ;
     EXECUTE 'ALTER TABLE "epoch_param" ADD CONSTRAINT "epoch_param_block_id_fkey" FOREIGN KEY("block_id") REFERENCES "block"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
+    EXECUTE 'CREATe TABLE "pool_offline_data"("id" SERIAL8  PRIMARY KEY UNIQUE,"pool_id" INT8 NOT NULL,"ticker_name" VARCHAR NOT NULL,"hash" hash32type NOT NULL,"metadata" VARCHAR NOT NULL,"pmr_id" INT8 NOT NULL)' ;
+    EXECUTE 'ALTER TABLE "pool_offline_data" ADD CONSTRAINT "unique_pool_offline_data" UNIQUE("pool_id","hash")' ;
+    EXECUTE 'ALTER TABLE "pool_offline_data" ADD CONSTRAINT "pool_offline_data_pool_id_fkey" FOREIGN KEY("pool_id") REFERENCES "pool_hash"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
+    EXECUTE 'ALTER TABLE "pool_offline_data" ADD CONSTRAINT "pool_offline_data_pmr_id_fkey" FOREIGN KEY("pmr_id") REFERENCES "pool_metadata_ref"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
+    EXECUTE 'CREATe TABLE "pool_offline_fetch_error"("id" SERIAL8  PRIMARY KEY UNIQUE,"pool_id" INT8 NOT NULL,"fetch_time" timestamp NOT NULL,"pmr_id" INT8 NOT NULL,"fetch_error" VARCHAR NOT NULL,"retry_count" uinteger NOT NULL)' ;
+    EXECUTE 'ALTER TABLE "pool_offline_fetch_error" ADD CONSTRAINT "unique_pool_offline_fetch_error" UNIQUE("pool_id","fetch_time","retry_count")' ;
+    EXECUTE 'ALTER TABLE "pool_offline_fetch_error" ADD CONSTRAINT "pool_offline_fetch_error_pool_id_fkey" FOREIGN KEY("pool_id") REFERENCES "pool_hash"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
+    EXECUTE 'ALTER TABLE "pool_offline_fetch_error" ADD CONSTRAINT "pool_offline_fetch_error_pmr_id_fkey" FOREIGN KEY("pmr_id") REFERENCES "pool_metadata_ref"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
+    EXECUTE 'CREATe TABLE "reserved_pool_ticker"("id" SERIAL8  PRIMARY KEY UNIQUE,"name" VARCHAR NOT NULL,"pool_id" INT8 NOT NULL)' ;
+    EXECUTE 'ALTER TABLE "reserved_pool_ticker" ADD CONSTRAINT "unique_reserved_pool_ticker" UNIQUE("name")' ;
+    EXECUTE 'ALTER TABLE "reserved_pool_ticker" ADD CONSTRAINT "reserved_pool_ticker_pool_id_fkey" FOREIGN KEY("pool_id") REFERENCES "pool_hash"("id") ON DELETE RESTRICT  ON UPDATE RESTRICT' ;
+    EXECUTE 'CREATe TABLE "admin_user"("id" SERIAL8  PRIMARY KEY UNIQUE,"username" VARCHAR NOT NULL,"password" VARCHAR NOT NULL)' ;
+    EXECUTE 'ALTER TABLE "admin_user" ADD CONSTRAINT "unique_admin_user" UNIQUE("username")' ;
     -- Hand written SQL statements can be added here.
     UPDATE schema_version SET stage_two = next_version ;
     RAISE NOTICE 'DB has been migrated to stage_two version %', next_version ;

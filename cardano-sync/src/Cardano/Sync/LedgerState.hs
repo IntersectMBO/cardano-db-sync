@@ -123,11 +123,13 @@ data LedgerEnv = LedgerEnv
   , leNetwork :: !Shelley.Network
   , leStateVar :: !(StrictTVar IO CardanoLedgerState)
   , leEventState :: !(StrictTVar IO LedgerEventState)
-  -- The following two do not really have anything to do with maintaining ledger
+  -- The following do not really have anything to do with maintaining ledger
   -- state. They are here due to the ongoing headaches around the split between
   -- `cardano-sync` and `cardano-db-sync`.
   , leIndexCache :: !(StrictTVar IO IndexCache)
   , leBulkOpQueue :: !(TBQueue IO BulkOperation)
+  , leOfflineWorkQueue :: !(TBQueue IO PoolFetchRetry)
+  , leOfflineResultQueue :: !(TBQueue IO FetchResult)
   }
 
 data LedgerEvent
@@ -179,6 +181,8 @@ mkLedgerEnv protocolInfo dir network slot deleteFiles = do
     -- 2.5 days worth of slots. If we try to stick more than this number of
     -- items in the queue, bad things are likely to happen.
     boq <- newTBQueueIO 10800
+    owq <- newTBQueueIO 100
+    orq <- newTBQueueIO 100
     pure LedgerEnv
       { leProtocolInfo = protocolInfo
       , leDir = dir
@@ -187,6 +191,8 @@ mkLedgerEnv protocolInfo dir network slot deleteFiles = do
       , leEventState = evar
       , leIndexCache = ivar
       , leBulkOpQueue = boq
+      , leOfflineWorkQueue = owq
+      , leOfflineResultQueue  = orq
       }
   where
     initLedgerEventState :: LedgerEventState

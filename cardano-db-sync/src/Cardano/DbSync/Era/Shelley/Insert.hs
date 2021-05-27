@@ -30,6 +30,7 @@ import qualified Cardano.Crypto.Hash as Crypto
 
 import qualified Cardano.Db as DB
 
+import           Cardano.DbSync.Era
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Insert.Epoch
@@ -132,6 +133,11 @@ insertShelleyBlock tracer lenv blk lStateSnap details = do
     whenJust (maybeToStrict mbop) $ \ bop ->
       insertEpochInterleaved tracer bop
 
+    when (unBlockNo (Generic.blkBlockNo blk) `mod` offlineModBase == 0) .
+      lift $ do
+        insertOfflineResults tracer (leOfflineResultQueue lenv)
+        loadOfflineWorkQueue tracer (leOfflineWorkQueue lenv)
+
     when (getSyncStatus details == SyncFollowing) $
       -- Serializiing things during syncing can drastically slow down full sync
       -- times (ie 10x or more).
@@ -148,6 +154,12 @@ insertShelleyBlock tracer lenv blk lStateSnap details = do
       case eraName of
         Generic.Shelley -> "insertShelleyBlock"
         other -> mconcat [ "insertShelleyBlock(", textShow other, ")" ]
+
+    offlineModBase :: Word64
+    offlineModBase =
+      case getSyncStatus details of
+        SyncFollowing -> 10
+        SyncLagging -> 2000
 
 -- -----------------------------------------------------------------------------
 
@@ -277,10 +289,6 @@ insertPoolRegister
     => Trace IO Text -> Shelley.Network -> EpochNo -> DB.TxId -> Word16 -> Shelley.PoolParams StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRegister tracer network (EpochNo epoch) txId idx params = do
-  mdId <- case strictMaybeToMaybe $ Shelley._poolMD params of
-            Just md -> Just <$> insertMetaData txId md
-            Nothing -> pure Nothing
-
   when (fromIntegral (Shelley.unCoin $ Shelley._poolPledge params) > maxLovelace) $
     liftIO . logWarning tracer $
       mconcat
@@ -296,6 +304,10 @@ insertPoolRegister tracer network (EpochNo epoch) txId idx params = do
         ]
 
   poolHashId <- insertPoolHash (Shelley._poolId params)
+  mdId <- case strictMaybeToMaybe $ Shelley._poolMD params of
+            Just md -> Just <$> insertMetaDataRef poolHashId txId md
+            Nothing -> pure Nothing
+
   poolUpdateId <- lift . DB.insertPoolUpdate $
                     DB.PoolUpdate
                       { DB.poolUpdateHashId = poolHashId
@@ -343,16 +355,17 @@ insertPoolRetire txId epochNum idx keyHash = do
       }
 
 
-insertMetaData
+insertMetaDataRef
     :: (MonadBaseControl IO m, MonadIO m)
-    => DB.TxId -> Shelley.PoolMetadata
-    -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.PoolMetaDataId
-insertMetaData txId md =
-  lift . DB.insertPoolMetaData $
-    DB.PoolMetaData
-      { DB.poolMetaDataUrl = Shelley.urlToText (Shelley._poolMDUrl md)
-      , DB.poolMetaDataHash = Shelley._poolMDHash md
-      , DB.poolMetaDataRegisteredTxId = txId
+    => DB.PoolHashId -> DB.TxId -> Shelley.PoolMetadata
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.PoolMetadataRefId
+insertMetaDataRef poolId txId md =
+  lift . DB.insertPoolMetadataRef $
+    DB.PoolMetadataRef
+      { DB.poolMetadataRefPoolId = poolId
+      , DB.poolMetadataRefUrl = Shelley.urlToText (Shelley._poolMDUrl md)
+      , DB.poolMetadataRefHash = Shelley._poolMDHash md
+      , DB.poolMetadataRefRegisteredTxId = txId
       }
 
 insertStakeAddress

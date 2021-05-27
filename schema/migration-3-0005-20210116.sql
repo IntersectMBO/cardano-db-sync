@@ -26,7 +26,7 @@ BEGIN
     CREATE INDEX idx_delegation_tx_id ON delegation(tx_id) ;
     CREATE INDEX idx_ma_tx_mint_tx_id ON ma_tx_mint(tx_id) ;
     CREATE INDEX idx_param_proposal_registered_tx_id ON param_proposal(registered_tx_id) ;
-    CREATE INDEX idx_pool_meta_data_registered_tx_id ON pool_meta_data(registered_tx_id) ;
+    CREATE INDEX idx_pool_metadata_ref_registered_tx_id ON pool_metadata_ref(registered_tx_id) ;
     CREATE INDEX idx_pool_owner_registered_tx_id ON pool_owner(registered_tx_id) ;
     CREATE INDEX idx_pool_retire_announced_tx_id ON pool_retire(announced_tx_id) ;
     CREATE INDEX idx_pool_update_registered_tx_id ON pool_update(registered_tx_id) ;

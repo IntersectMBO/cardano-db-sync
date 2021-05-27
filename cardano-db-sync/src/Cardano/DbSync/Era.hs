@@ -4,7 +4,8 @@
 {-# LANGUAGE RankNTypes #-}
 
 module Cardano.DbSync.Era
-  ( insertValidateGenesisDist
+  ( module X
+  , insertValidateGenesisDist
   ) where
 
 import           Cardano.Prelude
@@ -16,6 +17,7 @@ import           Cardano.Sync.Error
 
 import qualified Cardano.DbSync.Era.Byron.Genesis as Byron
 import qualified Cardano.DbSync.Era.Shelley.Genesis as Shelley
+import           Cardano.DbSync.Era.Shelley.Offline as X
 
 import           Database.Persist.Sql (SqlBackend)
 
