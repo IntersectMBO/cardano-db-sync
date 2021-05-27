@@ -1,24 +1,32 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
 module Cardano.Sync.Types
   ( BlockDetails (..)
   , CardanoBlock
   , CardanoPoint
   , CardanoProtocol
   , EpochSlot (..)
+  , FetchResult (..)
   , PoolKeyHash
   , SlotDetails (..)
   , SyncState (..)
   , Block (..)
   , MetricSetters (..)
+  , PoolFetchRetry (..)
+  , Retry (..)
   ) where
 
 import           Cardano.Prelude hiding (Meta)
+
+import           Cardano.Db (PoolHashId, PoolMetaHash, PoolMetadataRefId, PoolOfflineData,
+                   PoolOfflineFetchError, PoolUrl)
 
 import           Cardano.Sync.Config.Types (CardanoBlock, CardanoProtocol)
 
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
 
 import           Data.Time.Clock (UTCTime)
+import           Data.Time.Clock.POSIX (POSIXTime)
 
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 import           Ouroboros.Network.Block (BlockNo, Point)
@@ -38,6 +46,11 @@ data BlockDetails = BlockDetails
 newtype EpochSlot = EpochSlot
   { unEpochSlot :: Word64
   } deriving (Eq, Show)
+
+data FetchResult
+    = ResultMetadata !PoolOfflineData
+    | ResultError !PoolOfflineFetchError
+    deriving Show
 
 data SlotDetails = SlotDetails
   { sdSlotTime :: !UTCTime
@@ -72,3 +85,17 @@ data MetricSetters = MetricSetters
   , metricsSetDbSlotHeight :: SlotNo -> IO ()
   }
 
+data PoolFetchRetry = PoolFetchRetry
+  { pfrPoolHashId :: !PoolHashId
+  , pfrReferenceId :: !PoolMetadataRefId
+  , pfrPoolUrl :: !PoolUrl
+  , pfrPoolMDHash :: !PoolMetaHash
+  , pfrRetry :: !Retry
+  } deriving (Show)
+
+
+data Retry = Retry
+  { retryFetchTime :: !POSIXTime -- Time last time time
+  , retryRetryTime :: !POSIXTime -- Time to retry
+  , retryCount :: !Word
+  } deriving (Eq, Show, Generic)

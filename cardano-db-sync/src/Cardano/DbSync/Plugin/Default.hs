@@ -22,6 +22,8 @@ import           Cardano.DbSync.Rollback (rollbackToSlot)
 
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
 
+import           Cardano.DbSync.Era
+
 import           Cardano.Sync.Api
 import           Cardano.Sync.Error
 import           Cardano.Sync.LedgerState
@@ -32,9 +34,13 @@ import           Cardano.Sync.Util
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
+import           Data.IORef (IORef, newIORef, readIORef, writeIORef)
+
 import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
+
+import           System.IO.Unsafe (unsafePerformIO)
 
 -- | The default SyncNodePlugin.
 -- Does exactly what the cardano-db-sync node did before the plugin system was added.
@@ -52,7 +58,8 @@ defDbSyncNodePlugin backend =
 insertDefaultBlock
     :: SqlBackend -> Trace IO Text -> SyncEnv -> [BlockDetails]
     -> IO (Either SyncNodeError ())
-insertDefaultBlock backend tracer env blockDetails =
+insertDefaultBlock backend tracer env blockDetails = do
+    thisIsAnUglyHack tracer (envLedger env)
     DB.runDbIohkLogging backend tracer $
       runExceptT (traverse_ insert blockDetails)
   where
@@ -77,6 +84,24 @@ insertDefaultBlock backend tracer env blockDetails =
       -- Now we update it in ledgerStateVar and (possibly) store it to disk.
       liftIO $ saveLedgerStateMaybe (envLedger env)
                     lStateSnap (isSyncedWithinSeconds details 60)
+
+-- -------------------------------------------------------------------------------------------------
+-- This horrible hack is only need because of the split between `cardano-sync` and `cardano-db-sync`.
+
+{-# NOINLINE offlineThreadStarted #-}
+offlineThreadStarted :: IORef Bool
+offlineThreadStarted = unsafePerformIO $ newIORef False
+
+thisIsAnUglyHack :: Trace IO Text -> LedgerEnv -> IO ()
+thisIsAnUglyHack tracer lenv = do
+  started <- readIORef offlineThreadStarted
+  unless started $ do
+    -- This is horrible!
+    writeIORef offlineThreadStarted True
+    void . async $ runOfflineFetchThread tracer lenv
+    logInfo tracer "thisIsAnUglyHack: Main thead"
+
+-- -------------------------------------------------------------------------------------------------
 
 handleLedgerEvents
     :: (MonadBaseControl IO m, MonadIO m)

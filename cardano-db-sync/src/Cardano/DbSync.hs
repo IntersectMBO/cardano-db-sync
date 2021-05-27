@@ -71,6 +71,7 @@ runDbSyncNode metricsSetters mkPlugin params = do
         whenJust (enpMaybeRollback params) $ \ slotNo ->
           void $ unsafeRollback trce slotNo
 
+        -- The separation of `cardano-db` and `cardano-sync` is such a *HUGE* pain in the neck.
         runSyncNode (mkSyncDataLayer trce backend) metricsSetters trce (mkPlugin backend)
             params (insertValidateGenesisDist backend) runDbThread
   where

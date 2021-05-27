@@ -7,6 +7,7 @@
 
 module Cardano.Db.Insert
   ( insertAdaPots
+  , insertAdminUser
   , insertBlock
   , insertDelegation
   , insertEpoch
@@ -19,12 +20,15 @@ module Cardano.Db.Insert
   , insertParamProposal
   , insertPotTransfer
   , insertPoolHash
-  , insertPoolMetaData
+  , insertPoolMetadataRef
+  , insertPoolOfflineData
+  , insertPoolOfflineFetchError
   , insertPoolOwner
   , insertPoolRelay
   , insertPoolRetire
   , insertPoolUpdate
   , insertReserve
+  , insertReservedPoolTicker
   , insertReward
   , insertSlotLeader
   , insertStakeAddress
@@ -82,6 +86,12 @@ import           Cardano.Db.Schema
 -- Instead we use `insertUnchecked` for tables where uniqueness constraints are unlikley to be hit
 -- and `insertChecked` for tables where the uniqueness constraint might can be hit.
 
+insertAdaPots :: (MonadBaseControl IO m, MonadIO m) => AdaPots -> ReaderT SqlBackend m AdaPotsId
+insertAdaPots = insertCheckUnique "AdaPots"
+
+insertAdminUser :: (MonadBaseControl IO m, MonadIO m) => AdminUser -> ReaderT SqlBackend m AdminUserId
+insertAdminUser = insertUnchecked "AdminUser"
+
 insertBlock :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
 insertBlock = insertUnchecked "Block"
 
@@ -121,8 +131,14 @@ insertPotTransfer = insertUnchecked "PotTransfer"
 insertPoolHash :: (MonadBaseControl IO m, MonadIO m) => PoolHash -> ReaderT SqlBackend m PoolHashId
 insertPoolHash = insertCheckUnique "PoolHash"
 
-insertPoolMetaData :: (MonadBaseControl IO m, MonadIO m) => PoolMetaData -> ReaderT SqlBackend m PoolMetaDataId
-insertPoolMetaData = insertCheckUnique "PoolMetaData"
+insertPoolMetadataRef :: (MonadBaseControl IO m, MonadIO m) => PoolMetadataRef -> ReaderT SqlBackend m PoolMetadataRefId
+insertPoolMetadataRef = insertCheckUnique "PoolMetadataRef"
+
+insertPoolOfflineData :: (MonadBaseControl IO m, MonadIO m) => PoolOfflineData -> ReaderT SqlBackend m PoolOfflineDataId
+insertPoolOfflineData = insertCheckUnique "PoolOfflineData"
+
+insertPoolOfflineFetchError :: (MonadBaseControl IO m, MonadIO m) => PoolOfflineFetchError -> ReaderT SqlBackend m PoolOfflineFetchErrorId
+insertPoolOfflineFetchError = insertCheckUnique "PoolOfflineFetchError"
 
 insertPoolOwner :: (MonadBaseControl IO m, MonadIO m) => PoolOwner -> ReaderT SqlBackend m PoolOwnerId
 insertPoolOwner = insertCheckUnique "PoolOwner"
@@ -138,6 +154,9 @@ insertPoolUpdate = insertCheckUnique "PoolUpdate"
 
 insertReserve :: (MonadBaseControl IO m, MonadIO m) => Reserve -> ReaderT SqlBackend m ReserveId
 insertReserve = insertUnchecked "Reserve"
+
+insertReservedPoolTicker :: (MonadBaseControl IO m, MonadIO m) => ReservedPoolTicker -> ReaderT SqlBackend m ReservedPoolTickerId
+insertReservedPoolTicker = insertUnchecked "ReservedPoolTicker"
 
 insertReward :: (MonadBaseControl IO m, MonadIO m) => Reward -> ReaderT SqlBackend m RewardId
 insertReward = insertUnchecked "Reward"
@@ -171,9 +190,6 @@ insertTxOut = insertUnchecked "TxOut"
 
 insertWithdrawal :: (MonadBaseControl IO m, MonadIO m) => Withdrawal  -> ReaderT SqlBackend m WithdrawalId
 insertWithdrawal = insertUnchecked "Withdrawal"
-
-insertAdaPots :: (MonadBaseControl IO m, MonadIO m) => AdaPots -> ReaderT SqlBackend m AdaPotsId
-insertAdaPots = insertCheckUnique "AdaPots"
 
 -- -----------------------------------------------------------------------------
 
