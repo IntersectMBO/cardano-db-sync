@@ -282,7 +282,7 @@ share
     amount              DbLovelace          sqltype=lovelace
     epochNo             Word64
     poolId              PoolHashId          OnDeleteCascade
-    UniqueReward        addrId epochNo
+    UniqueReward        epochNo addrId poolId
 
   -- Orphaned rewards happen when a stake address earns rewards, but the stake address is
   -- deregistered before the rewards are distributed.
@@ -293,7 +293,7 @@ share
     amount              DbLovelace          sqltype=lovelace
     epochNo             Word64
     poolId              PoolHashId          OnDeleteCascade
-    UniqueOrphaned      addrId epochNo
+    UniqueOrphaned      epochNo addrId poolId
 
   -- This table should never get rolled back.
   EpochStake
@@ -301,7 +301,7 @@ share
     poolId              PoolHashId          OnDeleteCascade
     amount              DbLovelace          sqltype=lovelace
     epochNo             Word64
-    UniqueStake         addrId epochNo
+    UniqueStake         epochNo addrId poolId
 
   Treasury
     addrId              StakeAddressId      OnDeleteCascade
