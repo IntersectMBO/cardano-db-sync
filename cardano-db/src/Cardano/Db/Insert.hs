@@ -13,6 +13,7 @@ module Cardano.Db.Insert
   , insertEpoch
   , insertEpochParam
   , insertEpochStake
+  , insertEpochSyncTime
   , insertMaTxMint
   , insertMaTxOut
   , insertMeta
@@ -58,13 +59,14 @@ import           Data.Proxy (Proxy (..))
 import           Data.Text (Text)
 import qualified Data.Text as Text
 
-import           Database.Persist.Class (AtLeastOneUniqueKey, PersistEntityBackend, insert)
+import           Database.Persist.Class (AtLeastOneUniqueKey, PersistEntityBackend, insert,
+                   insertBy, replaceUnique)
 import           Database.Persist.Sql (OnlyOneUniqueKey, PersistRecordBackend, SqlBackend,
                    UniqueDef, entityDB, entityDef, entityUniques, rawSql, toPersistFields,
                    toPersistValue, uniqueDBName)
 import qualified Database.Persist.Sql.Util as Util
 import           Database.Persist.Types (ConstraintNameDB (..), EntityNameDB (..), FieldNameDB (..),
-                   PersistValue)
+                   PersistValue, entityKey)
 import           Database.PostgreSQL.Simple (SqlError)
 
 import           Cardano.Db.Schema
@@ -109,6 +111,9 @@ insertEpochParam = insertUnchecked "EpochParam"
 
 insertEpochStake :: (MonadBaseControl IO m, MonadIO m) => EpochStake -> ReaderT SqlBackend m EpochStakeId
 insertEpochStake = insertUnchecked "EpochStake"
+
+insertEpochSyncTime :: (MonadBaseControl IO m, MonadIO m) => EpochSyncTime -> ReaderT SqlBackend m EpochSyncTimeId
+insertEpochSyncTime = insertReplace "EpochSyncTime"
 
 insertMaTxMint :: (MonadBaseControl IO m, MonadIO m) => MaTxMint -> ReaderT SqlBackend m MaTxMintId
 insertMaTxMint = insertCheckUnique "insertMaTxMint"
@@ -199,23 +204,6 @@ data DbInsertException
 
 instance Exception DbInsertException
 
--- Insert without checking uniqueness constraints. This should be safe for most tables
--- even tables with uniqueness constraints, especially block, tx and many others, where
--- uniqueness is enforced by the ledger.
-insertUnchecked
-    :: ( AtLeastOneUniqueKey record
-       , MonadIO m
-       , MonadBaseControl IO m
-       , PersistEntityBackend record ~ SqlBackend
-       )
-    => String -> record -> ReaderT SqlBackend m (Key record)
-insertUnchecked vtype =
-    handle exceptHandler . insert
-  where
-    exceptHandler :: MonadIO m => SqlError -> ReaderT SqlBackend m a
-    exceptHandler e =
-      liftIO $ throwIO (DbInsertException vtype e)
-
 -- Insert, getting PostgreSQL to check the uniqueness constaint, and if it is violated, rewrite
 -- the first field with the same value to force PostgresSQL to return the row identifier.
 insertCheckUnique
@@ -262,6 +250,46 @@ insertCheckUnique vtype record = do
     exceptHandler :: SqlError -> ReaderT SqlBackend m a
     exceptHandler e =
       liftIO $ throwIO (DbInsertException vtype e)
+
+insertReplace
+    :: forall m record.
+        ( AtLeastOneUniqueKey record
+        , Eq (Unique record)
+        , MonadBaseControl IO m
+        , MonadIO m
+        , PersistRecordBackend record SqlBackend
+        )
+    => String -> record -> ReaderT SqlBackend m (Key record)
+insertReplace vtype record =
+    handle exceptHandler $ do
+      eres <- insertBy record
+      case eres of
+        Right rid -> pure rid
+        Left rec -> do
+          mres <- replaceUnique (entityKey rec) record
+          maybe (pure $ entityKey rec) (const . pure $ entityKey rec) mres
+  where
+    exceptHandler :: SqlError -> ReaderT SqlBackend m a
+    exceptHandler e =
+      liftIO $ throwIO (DbInsertException vtype e)
+
+-- Insert without checking uniqueness constraints. This should be safe for most tables
+-- even tables with uniqueness constraints, especially block, tx and many others, where
+-- uniqueness is enforced by the ledger.
+insertUnchecked
+    :: ( AtLeastOneUniqueKey record
+       , MonadIO m
+       , MonadBaseControl IO m
+       , PersistEntityBackend record ~ SqlBackend
+       )
+    => String -> record -> ReaderT SqlBackend m (Key record)
+insertUnchecked vtype =
+    handle exceptHandler . insert
+  where
+    exceptHandler :: MonadIO m => SqlError -> ReaderT SqlBackend m a
+    exceptHandler e =
+      liftIO $ throwIO (DbInsertException vtype e)
+
 
 -- This is cargo culted from Persistent because it is not exported.
 escapeFieldName :: FieldNameDB -> Text

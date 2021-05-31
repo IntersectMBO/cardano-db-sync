@@ -15,6 +15,7 @@ import           Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Db as DB
 
 import           Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
+import           Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock, postEpochRewards,
                    postEpochStake)
@@ -115,7 +116,8 @@ handleLedgerEvents tracer lenv =
         => LedgerEvent -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     printer ev =
       case ev of
-        LedgerNewEpoch en ->
+        LedgerNewEpoch en ss -> do
+          lift $ insertEpochSyncTime en ss (leEpochSyncTime lenv)
           liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo en)
         LedgerRewards details rwds -> do
           let progress = calcEpochProgress 4 details

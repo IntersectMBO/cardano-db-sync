@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Cardano.Sync.Types
   ( BlockDetails (..)
   , CardanoBlock
@@ -14,6 +15,9 @@ module Cardano.Sync.Types
   , MetricSetters (..)
   , PoolFetchRetry (..)
   , Retry (..)
+
+  , readSyncState
+  , renderSyncState
   ) where
 
 import           Cardano.Prelude hiding (Meta)
@@ -25,6 +29,7 @@ import           Cardano.Sync.Config.Types (CardanoBlock, CardanoProtocol)
 
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
 
+import qualified Data.Text as Text
 import           Data.Time.Clock (UTCTime)
 import           Data.Time.Clock.POSIX (POSIXTime)
 
@@ -99,3 +104,18 @@ data Retry = Retry
   , retryRetryTime :: !POSIXTime -- Time to retry
   , retryCount :: !Word
   } deriving (Eq, Show, Generic)
+
+readSyncState :: Text -> SyncState
+readSyncState str =
+  case str of
+    "lagging" -> SyncLagging
+    "following" -> SyncFollowing
+    -- This should never happen. On the Postgres side we defined an ENUM with
+    -- only the two values as above.
+    _other -> error $ "readSyncState: Unknown SyncState " ++ Text.unpack str
+
+renderSyncState :: SyncState -> Text
+renderSyncState ss =
+  case ss of
+    SyncFollowing -> "following"
+    SyncLagging -> "lagging"
