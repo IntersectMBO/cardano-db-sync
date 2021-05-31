@@ -64,6 +64,7 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
+import           Data.Time.Clock (UTCTime)
 
 import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockHash, blockIsEBB,
                    blockPrevHash, withOrigin)
@@ -133,10 +134,11 @@ data LedgerEnv = LedgerEnv
   , leBulkOpQueue :: !(TBQueue IO BulkOperation)
   , leOfflineWorkQueue :: !(TBQueue IO PoolFetchRetry)
   , leOfflineResultQueue :: !(TBQueue IO FetchResult)
+  , leEpochSyncTime :: !(StrictTVar IO (Maybe UTCTime))
   }
 
 data LedgerEvent
-  = LedgerNewEpoch !EpochNo
+  = LedgerNewEpoch !EpochNo !SyncState
   | LedgerRewards !SlotDetails !Generic.Rewards
   | LedgerStakeDist !Generic.StakeDist
   deriving Eq
@@ -187,6 +189,7 @@ mkLedgerEnv protocolInfo dir network slot deleteFiles = do
     boq <- newTBQueueIO 10800
     owq <- newTBQueueIO 100
     orq <- newTBQueueIO 100
+    est <- newTVarIO Nothing
     pure LedgerEnv
       { leProtocolInfo = protocolInfo
       , leDir = dir
@@ -197,6 +200,7 @@ mkLedgerEnv protocolInfo dir network slot deleteFiles = do
       , leBulkOpQueue = boq
       , leOfflineWorkQueue = owq
       , leOfflineResultQueue  = orq
+      , leEpochSyncTime = est
       }
   where
     initLedgerEventState :: LedgerEventState
@@ -262,7 +266,7 @@ generateEvents env oldEventState details cls = do
     writeTVar (leEventState env) newEventState
     pure $ catMaybes
             [ if lesEpochNo oldEventState < currentEpochNo
-                then Just (LedgerNewEpoch currentEpochNo) else Nothing
+                then Just (LedgerNewEpoch currentEpochNo (getSyncStatus details)) else Nothing
             , LedgerRewards details <$> rewards
             , LedgerStakeDist <$> stakeDist
             ]

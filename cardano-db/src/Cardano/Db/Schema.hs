@@ -30,6 +30,7 @@ import           Data.Word (Word16, Word64)
 
 -- Do not use explicit imports from this module as the imports can change
 -- from version to version due to changes to the TH code in Persistent.
+import           Database.Persist.Class (Unique)
 import           Database.Persist.TH
 
 -- In the schema definition we need to match Haskell types with with the
@@ -412,6 +413,12 @@ share
     UniquePoolOfflineFetchError poolId fetchTime retryCount
     deriving Show
 
+  EpochSyncTime
+    no                  Word64
+    seconds             Double Maybe
+    state               Text                sqltype=syncstatetype
+    UniqueEpochSyncTime no
+
   --------------------------------------------------------------------------
   -- Tables below must be preserved when migrations occur!
   --------------------------------------------------------------------------
@@ -433,3 +440,5 @@ share
     deriving Show
 
   |]
+
+deriving instance Eq (Unique EpochSyncTime)
