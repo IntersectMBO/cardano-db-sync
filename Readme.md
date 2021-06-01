@@ -54,9 +54,9 @@ on the same machine are:
 
 * Any of the big well known Linux distributions (eg, Debian, Ubuntu, RHEL, CentOS, Arch
   etc).
-* 8 Gigabytes of RAM.
-* 2 CPU cores.
-* 50 Gigabytes or more of disk storage.
+* 16 Gigabytes of RAM.
+* 4 CPU cores.
+* 80 Gigabytes or more of disk storage.
 
 The recommended configuration is to have the `db-sync` and the PostgreSQL server on the same
 machine. During syncing (getting historical data from the blockchain) there is a **HUGE** amount
