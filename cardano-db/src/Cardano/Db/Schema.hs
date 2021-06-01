@@ -19,7 +19,7 @@ module Cardano.Db.Schema where
 
 import           Cardano.Db.Schema.Orphans ()
 
-import           Cardano.Db.Types (DbInt65, DbLovelace, DbWord64)
+import           Cardano.Db.Types (DbInt65, DbLovelace, DbWord64, SyncState)
 
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Int (Int64)
@@ -416,7 +416,7 @@ share
   EpochSyncTime
     no                  Word64
     seconds             Double Maybe
-    state               Text                sqltype=syncstatetype
+    state               SyncState           sqltype=syncstatetype
     UniqueEpochSyncTime no
 
   --------------------------------------------------------------------------

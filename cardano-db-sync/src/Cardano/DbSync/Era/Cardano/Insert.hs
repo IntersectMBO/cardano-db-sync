@@ -11,7 +11,7 @@ import           Cardano.Prelude hiding (STM, atomically)
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
-import           Cardano.Sync.Types (SyncState, renderSyncState)
+import           Cardano.Db (SyncState)
 
 import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, STM, StrictTVar, atomically,
                    readTVar, writeTVar)
@@ -36,7 +36,7 @@ insertEpochSyncTime epochNo syncState estvar = do
           Db.EpochSyncTime
             { Db.epochSyncTimeNo = unEpochNo epochNo - 1
             , Db.epochSyncTimeSeconds = realToFrac . Time.diffUTCTime now <$> mlast
-            , Db.epochSyncTimeState = renderSyncState syncState
+            , Db.epochSyncTimeState = syncState
             }
 
 

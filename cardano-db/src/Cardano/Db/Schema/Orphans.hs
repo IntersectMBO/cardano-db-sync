@@ -4,13 +4,13 @@
 
 module Cardano.Db.Schema.Orphans where
 
-import           Cardano.Db.Types (DbInt65 (..), DbLovelace (..), DbWord64 (..), readDbInt65,
-                   showDbInt65)
+import           Cardano.Db.Types (DbInt65 (..), DbLovelace (..), DbWord64 (..), SyncState,
+                   readDbInt65, readSyncState, renderSyncState, showDbInt65)
 
+import qualified Data.ByteString.Char8 as BS
 import           Data.Ratio (denominator, numerator)
-import           Data.WideWord.Word128 (Word128)
-
 import qualified Data.Text as Text
+import           Data.WideWord.Word128 (Word128)
 
 import           Database.Persist.Class (PersistField (..))
 import           Database.Persist.Types (PersistValue (..))
@@ -53,6 +53,12 @@ instance PersistField DbWord64 where
       else Left $ mconcat [ "Failed to parse Haskell type DbWord64: ", Text.pack (show x) ]
   fromPersistValue x =
     Left $ mconcat [ "Failed to parse Haskell type DbWord64: ", Text.pack (show x) ]
+
+instance PersistField SyncState where
+  toPersistValue = PersistText . renderSyncState
+  fromPersistValue (PersistLiteral bs) = Right $ readSyncState (BS.unpack bs)
+  fromPersistValue x =
+    Left $ mconcat [ "Failed to parse Haskell type SyncState: ", Text.pack (show x) ]
 
 instance PersistField Word128 where
   toPersistValue = PersistText . Text.pack . show
