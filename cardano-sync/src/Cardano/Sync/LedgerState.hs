@@ -30,6 +30,7 @@ import           Prelude (String)
 import           Cardano.Binary (DecoderError)
 import qualified Cardano.Binary as Serialize
 
+import           Cardano.Db (SyncState (..))
 import qualified Cardano.Db as DB
 
 import           Cardano.Ledger.Coin (Coin)

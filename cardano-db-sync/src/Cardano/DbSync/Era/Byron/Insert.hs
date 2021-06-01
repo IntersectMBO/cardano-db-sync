@@ -31,7 +31,7 @@ import qualified Cardano.Chain.Update as Byron hiding (protocolVersion)
 
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
 
-import           Cardano.Db (DbLovelace (..))
+import           Cardano.Db (DbLovelace (..), SyncState (..))
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 
 import           Cardano.Sync.Types

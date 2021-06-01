@@ -27,7 +27,7 @@ import           Database.Esqueleto (Value (..), desc, from, limit, orderBy, sel
 import           Database.Persist.Class (replace)
 import           Database.Persist.Sql (SqlBackend)
 
-import           Cardano.Db (EntityField (..), EpochId)
+import           Cardano.Db (EntityField (..), EpochId, SyncState (..))
 import qualified Cardano.Db as DB
 
 import           Cardano.Sync.Api

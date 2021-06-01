@@ -10,6 +10,7 @@ module Cardano.Db.Types
   , DbLovelace (..)
   , DbInt65 (..)
   , DbWord64 (..)
+  , SyncState (..)
   , deltaCoinToDbInt65
   , integerToDbInt65
   , lovelaceToAda
@@ -18,6 +19,8 @@ module Cardano.Db.Types
   , readDbInt65
   , showDbInt65
   , readRewardType
+  , readSyncState
+  , renderSyncState
   , showRewardType
   , word64ToAda
   ) where
@@ -80,6 +83,11 @@ newtype DbWord64
   deriving (Eq, Generic)
   deriving (Read, Show) via (Quiet DbWord64)
 
+data SyncState
+  = SyncLagging         -- Local tip is lagging the global chain tip.
+  | SyncFollowing       -- Local tip is following global chain tip.
+  deriving (Eq, Show)
+
 deltaCoinToDbInt65 :: DeltaCoin -> DbInt65
 deltaCoinToDbInt65 (DeltaCoin dc) =
   if dc < 0
@@ -124,6 +132,21 @@ readRewardType str =
     -- This should never happen. On the Postgres side we defined an ENUM with
     -- only the two values as above.
     _other -> error $ "readRewardType: Unknown RewardType " ++ Text.unpack str
+
+readSyncState :: String -> SyncState
+readSyncState str =
+  case str of
+    "lagging" -> SyncLagging
+    "following" -> SyncFollowing
+    -- This should never happen. On the Postgres side we defined an ENUM with
+    -- only the two values as above.
+    _other -> error $ "readSyncState: Unknown SyncState " ++ str
+
+renderSyncState :: SyncState -> Text
+renderSyncState ss =
+  case ss of
+    SyncFollowing -> "following"
+    SyncLagging -> "lagging"
 
 showRewardType :: Shelley.RewardType -> Text
 showRewardType rt =

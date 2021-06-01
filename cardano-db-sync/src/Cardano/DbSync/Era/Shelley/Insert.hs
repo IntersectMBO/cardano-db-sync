@@ -24,10 +24,10 @@ import           Cardano.Api.Shelley (TxMetadataValue (..), makeTransactionMetad
 
 import           Cardano.BM.Trace (Trace, logDebug, logInfo, logWarning)
 
-import           Cardano.Db (DbLovelace (..), DbWord64 (..))
 
 import qualified Cardano.Crypto.Hash as Crypto
 
+import           Cardano.Db (DbLovelace (..), DbWord64 (..), SyncState (..))
 import qualified Cardano.Db as DB
 
 import           Cardano.DbSync.Era

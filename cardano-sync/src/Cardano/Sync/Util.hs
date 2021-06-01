@@ -26,6 +26,8 @@ import           Cardano.Prelude hiding (catch)
 
 import           Cardano.BM.Trace (Trace, logError)
 
+import           Cardano.Db (SyncState (..))
+
 import           Cardano.Sync.Config.Types ()
 import           Cardano.Sync.Types
 
