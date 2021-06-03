@@ -32,7 +32,8 @@ library
 
   exposed-modules:      Cardano.Db.Tool
 
-  other-modules:        Cardano.Db.Tool.UtxoSet
+  other-modules:        Cardano.Db.Tool.PrepareSnapshot
+                        Cardano.Db.Tool.UtxoSet
                         Cardano.Db.Tool.Validation
                         Cardano.Db.Tool.Validate.Balance
                         Cardano.Db.Tool.Validate.BlockProperties
@@ -43,8 +44,10 @@ library
                         Cardano.Db.Tool.Validate.TotalSupply
                         Cardano.Db.Tool.Validate.TxAccounting
                         Cardano.Db.Tool.Validate.Util
+                        Paths_cardano_db_tool
 
   build-depends:        base                            >= 4.14         && < 4.16
+                      , base16-bytestring
                       , bytestring
                       , ansi-terminal
                       , cardano-api

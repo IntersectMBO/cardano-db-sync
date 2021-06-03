@@ -32,6 +32,7 @@ data Command
   | Rollback SlotNo
   | RunMigrations MigrationDir (Maybe LogFileDir)
   | UtxoSetAtBlock Word64
+  | PrepareSnapshot PrepareSnapshotArgs
   | ValidateDb
   | ValidateAddressBalance LedgerValidationParams
 
@@ -44,6 +45,7 @@ runCommand cmd =
         pgConfig <- readPGPassFileEnv Nothing
         runMigrations pgConfig False mdir mldir
     UtxoSetAtBlock blkid -> utxoSetAtSlot blkid
+    PrepareSnapshot pargs -> prepareSnapshot pargs
     ValidateDb -> runDbValidation
     ValidateAddressBalance params -> runLedgerValidation params
 
@@ -87,6 +89,10 @@ pCommand =
         ( Opt.info pUtxoSetAtBlock
           $ Opt.progDesc "Get UTxO set at specified BlockNo."
           )
+    <> Opt.command "prepare-snapshot"
+        ( Opt.info pPrepareSnapshot
+          $ Opt.progDesc "Prepare to create a snapshot pair"
+          )
     <> Opt.command "validate"
         ( Opt.info (pure ValidateDb)
           $ Opt.progDesc "Run validation checks against the database."
@@ -118,6 +124,13 @@ pCommand =
         (  Opt.long "slot-no"
         <> Opt.help "The SlotNo."
         )
+
+    pPrepareSnapshot :: Parser Command
+    pPrepareSnapshot =
+      PrepareSnapshot <$> pPrepareSnapshotArgs
+
+pPrepareSnapshotArgs :: Parser PrepareSnapshotArgs
+pPrepareSnapshotArgs = PrepareSnapshotArgs <$> pLedgerStateDir
 
 pMigrationDir :: Parser MigrationDir
 pMigrationDir =
