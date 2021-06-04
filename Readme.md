@@ -86,5 +86,6 @@ possible solutions.
 [PostgresView]: https://www.postgresql.org/docs/current/sql-createview.html
 [PoolOfflineData]: doc/pool-offline-data.md
 [Schema Management]: doc/schema-management.md
+[StateSnapshot]: doc/state-snapshot.md
 [Troubleshooting]: doc/troubleshooting.md
 [Validation]: doc/validation.md
