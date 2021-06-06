@@ -147,7 +147,8 @@ data LedgerEvent
   deriving Eq
 
 data LedgerEventState = LedgerEventState
-  { lesEpochNo :: !EpochNo
+  { lesInitialized :: !Bool
+  , lesEpochNo :: !EpochNo
   , lesLastRewardsEpoch :: !EpochNo
   , lesLastStateDistEpoch :: !EpochNo
   }
@@ -209,7 +210,8 @@ mkLedgerEnv protocolInfo dir network slot deleteFiles = do
     initLedgerEventState :: LedgerEventState
     initLedgerEventState =
       LedgerEventState
-        { lesEpochNo = EpochNo 0
+        { lesInitialized = False
+        , lesEpochNo = EpochNo 0
         , lesLastRewardsEpoch = EpochNo 0
         , lesLastStateDistEpoch = EpochNo 0
         }
@@ -268,8 +270,9 @@ generateEvents :: LedgerEnv -> LedgerEventState -> SlotDetails -> CardanoLedgerS
 generateEvents env oldEventState details cls = do
     writeTVar (leEventState env) newEventState
     pure $ catMaybes
-            [ if lesEpochNo oldEventState < currentEpochNo
-                then Just (LedgerNewEpoch currentEpochNo (getSyncStatus details)) else Nothing
+            [ if currentEpochNo == 1 + lesEpochNo oldEventState
+                then Just (LedgerNewEpoch currentEpochNo (getSyncStatus details))
+                else Nothing
             , LedgerRewards details <$> rewards
             , LedgerStakeDist <$> stakeDist
             ]
@@ -280,22 +283,29 @@ generateEvents env oldEventState details cls = do
     rewards :: Maybe Generic.Rewards
     rewards =
       -- Want the rewards event to be delivered once only, on a single slot.
-      if lesLastRewardsEpoch oldEventState < currentEpochNo
+      if lesLastRewardsEpoch oldEventState < currentEpochNo && lesInitialized oldEventState
         then Generic.epochRewards (leNetwork env) (sdEpochNo details) (clsState cls)
         else Nothing
 
     stakeDist :: Maybe Generic.StakeDist
     stakeDist =
-      if lesLastStateDistEpoch oldEventState < currentEpochNo
+      if lesLastStateDistEpoch oldEventState < currentEpochNo && lesInitialized oldEventState
         then Generic.epochStakeDist (leNetwork env) (sdEpochNo details) (clsState cls)
         else Nothing
 
     newEventState :: LedgerEventState
     newEventState =
       LedgerEventState
-        { lesEpochNo = currentEpochNo
-        , lesLastRewardsEpoch = if isJust rewards then currentEpochNo else lesLastRewardsEpoch oldEventState
-        , lesLastStateDistEpoch = if isJust stakeDist then currentEpochNo else lesLastStateDistEpoch oldEventState
+        { lesInitialized = True
+        , lesEpochNo = currentEpochNo
+        , lesLastRewardsEpoch =
+            if isJust rewards || not (lesInitialized oldEventState)
+              then currentEpochNo
+              else lesLastRewardsEpoch oldEventState
+        , lesLastStateDistEpoch =
+            if isJust stakeDist || not (lesInitialized oldEventState)
+              then currentEpochNo
+              else lesLastStateDistEpoch oldEventState
         }
 
 -- Delete ledger state files for slots later than the provided SlotNo.
