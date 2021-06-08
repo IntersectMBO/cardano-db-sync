@@ -126,7 +126,7 @@ function create_snapshot {
 	ledger_file=$2
 	tmp_dir=$(mktemp --directory -t db-sync-snapshot-XXXXXXXXXX)
 	echo $"Working directory: ${tmp_dir}"
-	pg_dump "${databasename}" > "${tmp_dir}/$1.sql"
+	pg_dump --no-owner "${databasename}" > "${tmp_dir}/$1.sql"
 	cp "$ledger_file" "$tmp_dir/$(basename "${ledger_file}")"
 	tar zcvf "${tgz_file}" --directory "${tmp_dir}" "${dbfile}" "$(basename "${ledger_file}")"
 	rm -rf "${tmp_dir}"
