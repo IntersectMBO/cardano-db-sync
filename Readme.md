@@ -56,7 +56,8 @@ on the same machine are:
   etc).
 * 16 Gigabytes of RAM.
 * 4 CPU cores.
-* 80 Gigabytes or more of disk storage.
+* 80 Gigabytes or more of disk storage (preferably SSD which are 2-5 times faster than
+  electro-mechanical disks).
 
 The recommended configuration is to have the `db-sync` and the PostgreSQL server on the same
 machine. During syncing (getting historical data from the blockchain) there is a **HUGE** amount
