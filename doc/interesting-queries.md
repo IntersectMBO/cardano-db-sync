@@ -138,6 +138,49 @@ select tx_out.* from tx_out
  2195714 | 996126 |     4 | DdzFFzCqrh...dtq1FQQSCN | 158685237964 | \x82d8185842...1a330b42df |
 ```
 
+### Get per epoch performance statistics (sync time, tx count, etc):
+There are many ways this query can be written, but this is the one which so far has the best
+performance (runs in a little over 10 minutes at epoch 270):
+```sql
+select epoch_no, max (seconds) as sync_secs, sum (tx_count) as tx_count, sum (sum_tx_size) as sum_tx_size,
+	sum (reward_count) as reward_count, sum (stake_count) as stake_count
+  from (
+    select epoch_no, 0 as sync_secs, 0 as tx_count, 0 as sum_tx_size, count (reward) as reward_count,
+	    0 as stake_count from reward group by epoch_no
+    union
+    select epoch_no, 0 as sync_secs, 0 as tx_count, 0 as sum_tx_size, 0 as reward_count,
+        count (epoch_stake) as stake_count from epoch_stake group by epoch_no
+    union
+    select epoch_no, 0 as sync_secs, count (tx) as tx_count, sum (tx.size) as tx_sum_size, 0 as reward_count,
+        0 as stake_count
+      from block inner join tx on tx.block_id = block.id
+      where epoch_no is not null
+      group by epoch_no
+    union
+    select no as epoch_no, seconds, 0 as tx_count, 0 as tx_sum_size, 0 as reward_count,
+        0 as stake_count
+      from epoch_sync_time
+  )
+  as derived_table group by epoch_no ;
+
+ epoch_no |   sync_secs    | tx_count | sum_tx_size | reward_count | stake_count
+----------+----------------+----------+-------------+--------------+-------------
+        0 |              0 |       33 |        6093 |            0 |           0
+        1 |   28.256384637 |    12870 |     2256995 |            0 |           0
+        2 |   19.462634986 |     4292 |      830307 |            0 |           0
+        3 |   18.302536512 |     3293 |      658490 |            0 |           0
+...
+      209 |  177.122253524 |    36916 |    19098427 |            0 |           0
+      210 |  188.630659101 |    36267 |    19694637 |            0 |       17305
+      211 |  160.841826393 |    29083 |    16330473 |        17988 |       24252
+      212 |  146.277991679 |    24691 |    13503603 |        24421 |       30628
+...
+      268 | 3491.985000071 |   208164 |   127281166 |       527806 |      557805
+      269 | 3234.034316171 |   197254 |   118772706 |            0 |      577352
+      270 |              0 |   120754 |    70076543 |            0 |      595592
+(271 rows)
+```
+
 ### Transaction withdrawals for specified transaction hash:
 Withdrawals are a feature of some transactions of the Shelley era and later.
 
