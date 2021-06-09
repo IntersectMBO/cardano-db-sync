@@ -82,6 +82,7 @@ library
                       , cardano-crypto-wrapper
                       , cardano-db
                       , cardano-sync
+                      , cardano-ledger-alonzo
                       , cardano-ledger-byron
                       , cardano-ledger-core
                       , cardano-ledger-shelley-ma
@@ -110,6 +111,7 @@ library
                       , small-steps
                       , split
                       , shelley-spec-ledger
+                      , strict-containers
                       , swagger2
                       , text
                       , time

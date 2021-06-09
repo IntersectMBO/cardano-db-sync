@@ -37,8 +37,10 @@ import           Cardano.DbSync.Era.Shelley.Insert.Epoch
 import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 
+import qualified Cardano.Ledger.BaseTypes as Shelley
 import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Coin as Shelley
+import qualified Cardano.Ledger.Keys as Shelley
 
 import           Cardano.Sync.Error
 import           Cardano.Sync.LedgerState
@@ -58,6 +60,7 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import           Data.Group (invert)
 import qualified Data.Map.Strict as Map
+import           Data.Maybe.Strict (strictMaybeToMaybe)
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -68,10 +71,7 @@ import           Database.Persist.Sql (SqlBackend)
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
-import           Shelley.Spec.Ledger.BaseTypes (strictMaybeToMaybe)
-import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.Credential as Shelley
-import qualified Shelley.Spec.Ledger.Keys as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
@@ -558,11 +558,11 @@ insertPoolRelay updateId relay =
       Shelley.SingleHostAddr mPort mIpv4 mIpv6 ->
         DB.PoolRelay -- An IPv4 and/or IPv6 address
           { DB.poolRelayUpdateId = updateId
-          , DB.poolRelayIpv4 = textShow <$> Shelley.strictMaybeToMaybe mIpv4
-          , DB.poolRelayIpv6 = textShow <$> Shelley.strictMaybeToMaybe mIpv6
+          , DB.poolRelayIpv4 = textShow <$> strictMaybeToMaybe mIpv4
+          , DB.poolRelayIpv6 = textShow <$> strictMaybeToMaybe mIpv6
           , DB.poolRelayDnsName = Nothing
           , DB.poolRelayDnsSrvName = Nothing
-          , DB.poolRelayPort = Shelley.portToWord16 <$> Shelley.strictMaybeToMaybe mPort
+          , DB.poolRelayPort = Shelley.portToWord16 <$> strictMaybeToMaybe mPort
           }
       Shelley.SingleHostName mPort name ->
         DB.PoolRelay -- An A or AAAA DNS record
@@ -571,7 +571,7 @@ insertPoolRelay updateId relay =
           , DB.poolRelayIpv6 = Nothing
           , DB.poolRelayDnsName = Just (Shelley.dnsToText name)
           , DB.poolRelayDnsSrvName = Nothing
-          , DB.poolRelayPort = Shelley.portToWord16 <$> Shelley.strictMaybeToMaybe mPort
+          , DB.poolRelayPort = Shelley.portToWord16 <$> strictMaybeToMaybe mPort
           }
       Shelley.MultiHostName name ->
         DB.PoolRelay -- An SRV DNS record
@@ -590,7 +590,9 @@ insertParamProposal
 insertParamProposal _tracer txId pp =
   void . lift . DB.insertParamProposal $
     DB.ParamProposal
-      { DB.paramProposalEpochNo = unEpochNo $ pppEpochNo pp
+      { DB.paramProposalRegisteredTxId = txId
+
+      , DB.paramProposalEpochNo = unEpochNo $ pppEpochNo pp
       , DB.paramProposalKey = pppKey pp
       , DB.paramProposalMinFeeA = fromIntegral <$> pppMinFeeA pp
       , DB.paramProposalMinFeeB = fromIntegral <$> pppMinFeeB pp
@@ -610,7 +612,20 @@ insertParamProposal _tracer txId pp =
       , DB.paramProposalProtocolMinor = fromIntegral . Shelley.pvMinor <$> pppProtocolVersion pp
       , DB.paramProposalMinUtxoValue = Generic.coinToDbLovelace <$> pppMinUtxoValue pp
       , DB.paramProposalMinPoolCost = Generic.coinToDbLovelace <$> pppMinPoolCost pp
-      , DB.paramProposalRegisteredTxId = txId
+
+      -- New for Alonzo
+
+      , DB.paramProposalAdaPerUTxOWord = Generic.coinToDbLovelace <$> pppAdaPerUTxOWord pp
+      , DB.paramProposalCostModels = Generic.renderLanguageCostModel <$> pppCostmdls pp
+      , DB.paramProposalPriceMem = Generic.coinToDbLovelace <$> pppPriceMem pp
+      , DB.paramProposalPriceStep = Generic.coinToDbLovelace <$> pppPriceStep pp
+      , DB.paramProposalMaxTxExMem = DbWord64 <$> pppMaxTxExMem pp
+      , DB.paramProposalMaxTxExSteps = DbWord64 <$> pppMaxTxExSteps pp
+      , DB.paramProposalMaxBlockExMem = DbWord64 <$> pppMaxBlockExMem pp
+      , DB.paramProposalMaxBlockExSteps = DbWord64 <$> pppMaxBlockExSteps pp
+      , DB.paramProposalMaxValSize = DbWord64 . fromIntegral <$> pppMaxValSize pp
+      , DB.paramProposalCollateralPercent = fromIntegral <$> pppCollateralPercentage pp
+      , DB.paramProposalMaxCollateralInputs = fromIntegral <$> pppMaxCollateralInputs pp
       }
 
 insertTxMetadata

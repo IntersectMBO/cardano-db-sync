@@ -35,8 +35,10 @@ import qualified Cardano.Binary as Serialize
 import           Cardano.Db (SyncState (..))
 import qualified Cardano.Db as DB
 
+import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin)
 import           Cardano.Ledger.Era
+import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import           Cardano.Ledger.Shelley.Constraints (UsesValue)
 import qualified Cardano.Ledger.Val as Val
 
@@ -91,8 +93,6 @@ import           Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), Enc
 import           Ouroboros.Network.Block (HeaderHash, Point (..))
 import qualified Ouroboros.Network.Point as Point
 
-import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
-import           Shelley.Spec.Ledger.Keys (KeyHash (..), KeyRole (..))
 import           Shelley.Spec.Ledger.LedgerState (AccountState, EpochState, UTxOState)
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley
 import qualified Shelley.Spec.Ledger.Rewards as Shelley
@@ -127,7 +127,7 @@ data IndexCache = IndexCache
 data LedgerEnv = LedgerEnv
   { leProtocolInfo :: !(Consensus.ProtocolInfo IO CardanoBlock)
   , leDir :: !LedgerStateDir
-  , leNetwork :: !Shelley.Network
+  , leNetwork :: !Ledger.Network
   , leStateVar :: !(StrictTVar IO CardanoLedgerState)
   , leEventState :: !(StrictTVar IO LedgerEventState)
   -- The following do not really have anything to do with maintaining ledger
@@ -177,7 +177,7 @@ data LedgerStateSnapshot = LedgerStateSnapshot
 
 mkLedgerEnv :: Consensus.ProtocolInfo IO CardanoBlock
             -> LedgerStateDir
-            -> Shelley.Network
+            -> Ledger.Network
             -> SlotNo
             -> Bool
             -> IO LedgerEnv
@@ -575,6 +575,7 @@ getPoolParams st =
       LedgerStateShelley sts -> getPoolParamsShelley sts
       LedgerStateAllegra sts -> getPoolParamsShelley sts
       LedgerStateMary sts -> getPoolParamsShelley sts
+      LedgerStateAlonzo ats -> getPoolParamsShelley ats
 
 getPoolParamsShelley
     :: forall era. (Crypto era ~ StandardCrypto)
@@ -593,14 +594,18 @@ getAdaPots st =
       LedgerStateShelley sts -> Just $ totalAdaPots sts
       LedgerStateAllegra sta -> Just $ totalAdaPots sta
       LedgerStateMary stm -> Just $ totalAdaPots stm
+      LedgerStateAlonzo sta -> Just $ totalAdaPots sta
 
 ledgerEpochNo :: LedgerEnv -> CardanoLedgerState -> EpochNo
 ledgerEpochNo env cls =
     case ledgerTipSlot (ledgerState (clsState cls)) of
       Origin -> 0 -- An empty chain is in epoch 0
-      NotOrigin slot -> runIdentity $ epochInfoEpoch epochInfo slot
+      NotOrigin slot ->
+        case runExcept $ epochInfoEpoch epochInfo slot of
+          Left err -> panic $ "ledgerEpochNo: " <> textShow err
+          Right en -> en
   where
-    epochInfo :: EpochInfo Identity
+    epochInfo :: EpochInfo (Except Consensus.PastHorizonException)
     epochInfo = epochInfoLedger (configLedger $ topLevelConfig env) (hardForkLedgerStatePerEra . ledgerState $ clsState cls)
 
 -- Like 'Consensus.tickThenReapply' but also checks that the previous hash from the block matches

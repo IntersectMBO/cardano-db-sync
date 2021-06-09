@@ -18,6 +18,9 @@ import           Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 
 import qualified Cardano.Crypto.Hash.Class as Crypto
 
+import           Cardano.Ledger.Alonzo.Genesis
+
+import           Cardano.Sync.Config.Alonzo
 import           Cardano.Sync.Config.Byron
 import           Cardano.Sync.Config.Shelley
 import           Cardano.Sync.Config.Types
@@ -40,12 +43,12 @@ import qualified Shelley.Spec.Ledger.PParams as Shelley
 
 -- Usually only one constructor, but may have two when we are preparing for a HFC event.
 data GenesisConfig
-  = GenesisCardano !SyncNodeConfig !Byron.Config !ShelleyConfig
+  = GenesisCardano !SyncNodeConfig !Byron.Config !ShelleyConfig !AlonzoGenesis
 
 genesisProtocolMagicId :: GenesisConfig -> ProtocolMagicId
 genesisProtocolMagicId ge =
     case ge of
-      GenesisCardano _cfg _bCfg sCfg -> shelleyProtocolMagicId (scConfig sCfg)
+      GenesisCardano _cfg _bCfg sCfg _aCfg -> shelleyProtocolMagicId (scConfig sCfg)
   where
     shelleyProtocolMagicId :: ShelleyGenesis StandardShelley -> ProtocolMagicId
     shelleyProtocolMagicId sCfg = ProtocolMagicId (sgNetworkMagic sCfg)
@@ -56,7 +59,9 @@ readCardanoGenesisConfig
 readCardanoGenesisConfig enc =
   case dncProtocol enc of
     SyncProtocolCardano ->
-      GenesisCardano enc <$> readByronGenesisConfig enc <*> readShelleyGenesisConfig enc
+      GenesisCardano enc <$> readByronGenesisConfig enc
+                         <*> readShelleyGenesisConfig enc
+                         <*> readAlonzoGenesisConfig enc
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -74,7 +79,7 @@ mkTopLevelConfig = Consensus.pInfoConfig . mkProtocolInfoCardano
 mkProtocolInfoCardano :: GenesisConfig -> ProtocolInfo IO CardanoBlock
 mkProtocolInfoCardano ge =
   case ge of
-    GenesisCardano dnc byronGenesis shelleyGenesis ->
+    GenesisCardano dnc byronGenesis shelleyGenesis alonzoGenesis ->
         Consensus.protocolInfoCardano
           Consensus.ProtocolParamsByron
             { Consensus.byronGenesis = byronGenesis
@@ -97,10 +102,13 @@ mkProtocolInfoCardano ge =
           Consensus.ProtocolParamsMary
             { Consensus.maryProtVer = shelleyProtVer dnc
             }
-          (dncByronToShelley dnc)
-          (dncShelleyToAllegra dnc)
-          (dncAllegraToMary dnc)
-
+          Consensus.ProtocolParamsAlonzo
+            { Consensus.alonzoProtVer = shelleyProtVer dnc
+            }
+          (Consensus.ProtocolTransitionParamsShelleyBased () $ dncShelleyHardFork dnc)
+          (Consensus.ProtocolTransitionParamsShelleyBased () $ dncAllegraHardFork dnc)
+          (Consensus.ProtocolTransitionParamsShelleyBased () $ dncMaryHardFork dnc)
+          (Consensus.ProtocolTransitionParamsShelleyBased alonzoGenesis $ dncAlonzoHardFork dnc)
 
 shelleyPraosNonce :: ShelleyConfig -> Nonce
 shelleyPraosNonce sCfg = Nonce (Crypto.castHash . unGenesisHashShelley $ scGenesisHash sCfg)

@@ -10,8 +10,10 @@ module Cardano.Sync.Era.Shelley.Generic.StakeDist
 
 import           Cardano.Prelude
 
+import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
 import           Cardano.Ledger.Era (Crypto)
+import           Cardano.Ledger.Keys (KeyHash, KeyRole (..))
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
@@ -28,10 +30,8 @@ import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 
-import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import           Shelley.Spec.Ledger.Credential (Credential)
 import qualified Shelley.Spec.Ledger.EpochBoundary as Shelley
-import           Shelley.Spec.Ledger.Keys (KeyHash, KeyRole (..))
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley hiding (_delegations)
 
 
@@ -40,13 +40,14 @@ data StakeDist = StakeDist
   , sdistStakeMap :: !(Map StakeCred (Coin, KeyHash 'StakePool StandardCrypto))
   } deriving Eq
 
-epochStakeDist :: Shelley.Network -> EpochNo -> ExtLedgerState CardanoBlock -> Maybe StakeDist
+epochStakeDist :: Ledger.Network -> EpochNo -> ExtLedgerState CardanoBlock -> Maybe StakeDist
 epochStakeDist network epoch els =
   case ledgerState els of
     LedgerStateByron _ -> Nothing
     LedgerStateShelley sls -> Just $ genericStakeDist network epoch sls
     LedgerStateAllegra als -> Just $ genericStakeDist network epoch als
     LedgerStateMary mls -> Just $ genericStakeDist network epoch mls
+    LedgerStateAlonzo als -> Just $ genericStakeDist network epoch als
 
 -- Use Set because they guarantee unique elements.
 stakeDistPoolHashKeys :: StakeDist -> Set PoolKeyHash
@@ -57,7 +58,7 @@ stakeDistStakeCreds = Map.keysSet . sdistStakeMap
 
 -- -------------------------------------------------------------------------------------------------
 
-genericStakeDist :: forall era. Shelley.Network -> EpochNo -> LedgerState (ShelleyBlock era) -> StakeDist
+genericStakeDist :: forall era. Ledger.Network -> EpochNo -> LedgerState (ShelleyBlock era) -> StakeDist
 genericStakeDist network epoch lstate =
     StakeDist
       { sdistEpochNo = epoch

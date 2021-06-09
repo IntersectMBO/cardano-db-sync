@@ -35,6 +35,7 @@ library
   exposed-modules:      Cardano.Sync
                         Cardano.Sync.Api
                         Cardano.Sync.Config
+                        Cardano.Sync.Config.Alonzo
                         Cardano.Sync.Config.Byron
                         Cardano.Sync.Config.Cardano
                         Cardano.Sync.Config.Node
@@ -68,14 +69,17 @@ library
                       , aeson
                       , base16-bytestring
                       , bytestring
+                      , cardano-api
                       , cardano-binary
                       , cardano-client
                       , cardano-crypto
                       , cardano-crypto-class
                       , cardano-crypto-wrapper
                       , cardano-db
+                      , cardano-ledger-alonzo
                       , cardano-ledger-byron
                       , cardano-ledger-core
+                      , cardano-ledger-shelley-ma
                       -- Only for some orphan tracing instances.
                       , cardano-node
                       , cardano-prelude

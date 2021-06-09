@@ -24,20 +24,22 @@ import           Cardano.Sync.Util
 
 import           Cardano.Prelude hiding (atomically)
 
-import           Control.Monad.Class.MonadSTM.Strict
+import           Control.Monad.Class.MonadSTM.Strict (StrictTMVar, atomically, newEmptyTMVarIO,
+                   putTMVar, takeTMVar)
 
 import           Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import           Data.Time.Clock (UTCTime, addUTCTime, getCurrentTime)
 
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (RelativeTime (..),
                    SystemStart (..))
-import           Ouroboros.Consensus.Cardano.Block (CardanoEras, Query (..))
+import           Ouroboros.Consensus.Cardano.Block (BlockQuery (QueryHardFork), CardanoEras)
 import           Ouroboros.Consensus.Cardano.Node ()
 import           Ouroboros.Consensus.HardFork.Combinator.Basics (HardForkBlock (..))
 import           Ouroboros.Consensus.HardFork.Combinator.Ledger.Query
                    (QueryHardFork (GetInterpreter))
 import           Ouroboros.Consensus.HardFork.History.Qry (Expr (..), Interpreter,
                    PastHorizonException, Qry, interpretQuery, qryFromExpr, slotToEpoch')
+import           Ouroboros.Consensus.Ledger.Query (Query (..))
 import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
 
 import           Ouroboros.Network.Block (Point (..))
@@ -100,7 +102,7 @@ getHistoryInterpreter
     -> IO (Interpreter (CardanoEras StandardCrypto))
 getHistoryInterpreter tracer queryVar = do
   respVar <- newEmptyTMVarIO
-  atomically $ putTMVar (unStateQueryTMVar queryVar) (QueryHardFork GetInterpreter, respVar)
+  atomically $ putTMVar (unStateQueryTMVar queryVar) (BlockQuery $ QueryHardFork GetInterpreter, respVar)
   res <- atomically $ takeTMVar respVar
   case res of
     Left err ->
