@@ -139,6 +139,7 @@ runSyncNode dataLayer metricsSetters trce plugin enp insertValidateGenesisDist r
 
     logInfo trce $ "Using byron genesis file from: " <> (show . unGenesisFile $ dncByronGenesisFile enc)
     logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile enc)
+    logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile enc)
 
     orDie renderSyncNodeError $ do
       genCfg <- readCardanoGenesisConfig enc
@@ -151,7 +152,7 @@ runSyncNode dataLayer metricsSetters trce plugin enp insertValidateGenesisDist r
         -- Must run plugin startup after the genesis distribution has been inserted/validate.
       liftIO $ runDbStartup trce plugin
       case genCfg of
-          GenesisCardano _ bCfg _sCfg -> do
+          GenesisCardano _ bCfg _sCfg _aCfg -> do
             syncEnv <- ExceptT $ mkSyncEnvFromConfig dataLayer (enpLedgerStateDir enp) genCfg
             liftIO $ runSyncNodeNodeClient metricsSetters syncEnv iomgr trce plugin
                         runDBThreadFunction (cardanoCodecConfig bCfg) (enpSocketPath enp)
@@ -163,6 +164,7 @@ runSyncNode dataLayer metricsSetters trce plugin enp insertValidateGenesisDist r
         ShelleyCodecConfig
         ShelleyCodecConfig -- Allegra
         ShelleyCodecConfig -- Mary
+        ShelleyCodecConfig -- Alonzo
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -217,14 +219,9 @@ runSyncNodeNodeClient metricsSetters env iomgr trce plugin runDBThreadFunction c
     handshakeTracer = toLogObject $ appendName "Handshake" trce
 
 dbSyncProtocols
-    :: Trace IO Text
-    -> SyncEnv
-    -> MetricSetters
-    -> SyncNodePlugin
+    :: Trace IO Text -> SyncEnv -> MetricSetters -> SyncNodePlugin
     -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
-    -> RunDBThreadFunction
-    -> Network.NodeToClientVersion
-    -> ClientCodecs CardanoBlock IO
+    -> RunDBThreadFunction -> Network.NodeToClientVersion -> ClientCodecs CardanoBlock IO
     -> ConnectionId LocalAddress
     -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
 dbSyncProtocols trce env metricsSetters plugin queryVar runDBThreadFunction version codecs _connectionId =

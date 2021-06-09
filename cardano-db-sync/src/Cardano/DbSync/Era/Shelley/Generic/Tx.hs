@@ -14,6 +14,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx
   , fromShelleyTx
   , fromAllegraTx
   , fromMaryTx
+  , fromAlonzoTx
   ) where
 
 import           Cardano.Prelude
@@ -26,7 +27,12 @@ import           Cardano.DbSync.Era.Shelley.Generic.Metadata
 import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
+import           Cardano.Ledger.Alonzo ()
+import           Cardano.Ledger.Alonzo.Tx (ValidatedTx (..))
+import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
 import           Cardano.Ledger.Coin (Coin (..))
+import qualified Cardano.Ledger.Core as Ledger
+import qualified Cardano.Ledger.Era as Ledger
 import           Cardano.Ledger.Mary.Value (AssetName, PolicyID, Value (..))
 import qualified Cardano.Ledger.SafeHash as Ledger
 import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as ShelleyMa
@@ -36,15 +42,15 @@ import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
+import           Data.Maybe.Strict (strictMaybeToMaybe)
 import           Data.MemoBytes (MemoBytes (..))
 import qualified Data.Set as Set
 
-import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardCrypto, StandardMary,
-                   StandardShelley)
+import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlonzo, StandardCrypto,
+                   StandardMary, StandardShelley)
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra)
 
 import qualified Shelley.Spec.Ledger.Address as Shelley
-import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import           Shelley.Spec.Ledger.Scripts ()
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
@@ -95,18 +101,18 @@ fromAllegraTx (blkIndex, tx) =
       { txHash = txHashId tx
       , txBlockIndex = blkIndex
       , txSize = fromIntegral $ getField @"txsize" tx
-      , txInputs = map fromTxIn (toList . ShelleyMa.inputs $ unTxBodyRaw tx)
-      , txOutputs = zipWith fromTxOut [0 .. ] $ toList (ShelleyMa.outputs $ unTxBodyRaw tx)
-      , txFees = ShelleyMa.txfee (unTxBodyRaw tx)
-      , txOutSum = Coin . sum $ map txOutValue (ShelleyMa.outputs $ unTxBodyRaw tx)
-      , txInvalidBefore = Shelley.strictMaybeToMaybe . ShelleyMa.invalidBefore $ ShelleyMa.vldt (unTxBodyRaw tx)
-      , txInvalidHereafter = Shelley.strictMaybeToMaybe . ShelleyMa.invalidHereafter $ ShelleyMa.vldt (unTxBodyRaw tx)
+      , txInputs = map fromTxIn (toList $ ShelleyMa.inputs rawTxBody)
+      , txOutputs = zipWith fromTxOut [0 .. ] $ toList (ShelleyMa.outputs rawTxBody)
+      , txFees = ShelleyMa.txfee rawTxBody
+      , txOutSum = Coin . sum $ map txOutValue (ShelleyMa.outputs rawTxBody)
+      , txInvalidBefore = strictMaybeToMaybe . ShelleyMa.invalidBefore $ ShelleyMa.vldt rawTxBody
+      , txInvalidHereafter = strictMaybeToMaybe . ShelleyMa.invalidHereafter $ ShelleyMa.vldt rawTxBody
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
-                            . Shelley.unWdrl $ ShelleyMa.wdrls (unTxBodyRaw tx)
+                            . Shelley.unWdrl $ ShelleyMa.wdrls rawTxBody
       , txMetadata = fromAllegraMetadata <$> txMeta tx
-      , txCertificates = zipWith TxCertificate [0..] (map coerceCertificate . toList . ShelleyMa.certs $ unTxBodyRaw tx)
-      , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . ShelleyMa.wdrls $ unTxBodyRaw tx)
-      , txParamProposal = maybe [] (convertParamProposal (Allegra Standard)) $ Shelley.strictMaybeToMaybe (ShelleyMa.update $ unTxBodyRaw tx)
+      , txCertificates = zipWith TxCertificate [0..] (map coerceCertificate . toList $ ShelleyMa.certs rawTxBody)
+      , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl $ ShelleyMa.wdrls rawTxBody)
+      , txParamProposal = maybe [] (convertParamProposal (Allegra Standard)) $ strictMaybeToMaybe (ShelleyMa.update rawTxBody)
       , txMint = mempty     -- Allegra does not support Multi-Assets
       }
   where
@@ -120,13 +126,16 @@ fromAllegraTx (blkIndex, tx) =
         }
 
     txMeta :: Shelley.Tx StandardAllegra -> Maybe (ShelleyMa.AuxiliaryData StandardAllegra)
-    txMeta (Shelley.Tx _body _wit md) = Shelley.strictMaybeToMaybe md
+    txMeta (Shelley.Tx _body _wit md) = strictMaybeToMaybe md
 
     txOutValue :: Shelley.TxOut StandardAllegra -> Integer
     txOutValue (Shelley.TxOut _ (Coin coin)) = coin
 
-    unTxBodyRaw :: Shelley.Tx StandardAllegra -> ShelleyMa.TxBodyRaw StandardAllegra
-    unTxBodyRaw (Shelley.Tx (ShelleyMa.TxBodyConstr txBody) _wit _md) = memotype txBody
+    rawTxBody :: ShelleyMa.TxBodyRaw StandardAllegra
+    rawTxBody =
+      case tx of
+        (Shelley.Tx (ShelleyMa.TxBodyConstr txBody) _wit _md) -> memotype txBody
+
 
 fromShelleyTx :: (Word64, Shelley.Tx StandardShelley) -> Tx
 fromShelleyTx (blkIndex, tx) =
@@ -142,10 +151,10 @@ fromShelleyTx (blkIndex, tx) =
       , txInvalidHereafter = Just $ Shelley._ttl (Shelley.body tx)
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
                             . Shelley.unWdrl $ Shelley._wdrls (Shelley.body tx)
-      , txMetadata = fromShelleyMetadata <$> Shelley.strictMaybeToMaybe (getField @"auxiliaryData" tx)
+      , txMetadata = fromShelleyMetadata <$> strictMaybeToMaybe (getField @"auxiliaryData" tx)
       , txCertificates = zipWith TxCertificate [0..] (toList . Shelley._certs $ Shelley.body tx)
       , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . Shelley._wdrls $ Shelley.body tx)
-      , txParamProposal = maybe [] (convertParamProposal (Shelley Standard)) $ Shelley.strictMaybeToMaybe (Shelley._txUpdate $ Shelley.body tx)
+      , txParamProposal = maybe [] (convertParamProposal (Shelley Standard)) $ strictMaybeToMaybe (Shelley._txUpdate $ Shelley.body tx)
       , txMint = mempty     -- Shelley does not support Multi-Assets
       }
   where
@@ -171,14 +180,14 @@ fromMaryTx (blkIndex, tx) =
       , txOutputs = zipWith fromTxOut [0 .. ] $ toList (ShelleyMa.outputs $ unTxBodyRaw tx)
       , txFees = ShelleyMa.txfee (unTxBodyRaw tx)
       , txOutSum = Coin . sum $ map txOutValue (ShelleyMa.outputs $ unTxBodyRaw tx)
-      , txInvalidBefore = Shelley.strictMaybeToMaybe . ShelleyMa.invalidBefore $ ShelleyMa.vldt (unTxBodyRaw tx)
-      , txInvalidHereafter = Shelley.strictMaybeToMaybe . ShelleyMa.invalidHereafter $ ShelleyMa.vldt (unTxBodyRaw tx)
+      , txInvalidBefore = strictMaybeToMaybe . ShelleyMa.invalidBefore $ ShelleyMa.vldt (unTxBodyRaw tx)
+      , txInvalidHereafter = strictMaybeToMaybe . ShelleyMa.invalidHereafter $ ShelleyMa.vldt (unTxBodyRaw tx)
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
                             . Shelley.unWdrl $ ShelleyMa.wdrls (unTxBodyRaw tx)
       , txMetadata = fromMaryMetadata <$> txMeta tx
       , txCertificates = zipWith TxCertificate [0..] (map coerceCertificate . toList . ShelleyMa.certs $ unTxBodyRaw tx)
       , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . ShelleyMa.wdrls $ unTxBodyRaw tx)
-      , txParamProposal = maybe [] (convertParamProposal (Mary Standard)) $ Shelley.strictMaybeToMaybe (ShelleyMa.update $ unTxBodyRaw tx)
+      , txParamProposal = maybe [] (convertParamProposal (Mary Standard)) $ strictMaybeToMaybe (ShelleyMa.update $ unTxBodyRaw tx)
       , txMint = coerceMint (ShelleyMa.mint $ unTxBodyRaw tx)
       }
   where
@@ -192,13 +201,49 @@ fromMaryTx (blkIndex, tx) =
         }
 
     txMeta :: Shelley.Tx StandardMary -> Maybe (ShelleyMa.AuxiliaryData StandardMary)
-    txMeta (Shelley.Tx _body _wit md) = Shelley.strictMaybeToMaybe md
+    txMeta (Shelley.Tx _body _wit md) = strictMaybeToMaybe md
 
     txOutValue :: Shelley.TxOut StandardMary -> Integer
     txOutValue (Shelley.TxOut _ (Value coin _ma)) = coin
 
     unTxBodyRaw :: Shelley.Tx StandardMary -> ShelleyMa.TxBodyRaw StandardMary
     unTxBodyRaw (Shelley.Tx (ShelleyMa.TxBodyConstr txBody) _wit _md) = memotype txBody
+
+fromAlonzoTx :: (Word64, Ledger.TxInBlock StandardAlonzo) -> Tx
+fromAlonzoTx (blkIndex, tx) =
+    Tx
+      { txHash = Crypto.hashToBytes . Ledger.extractHash $ Ledger.hashAnnotated txBody
+      , txBlockIndex = blkIndex
+      , txSize = fromIntegral $ getField @"txsize" tx
+      , txInputs = map fromTxIn . toList $ getField @"inputs" txBody
+      , txOutputs = zipWith fromTxOut [0 .. ] . toList $ getField @"outputs" txBody
+      , txFees = getField @"txfee" txBody
+      , txOutSum = Coin . sum $ map txOutValue (getField @"outputs" txBody)
+      , txInvalidBefore = strictMaybeToMaybe . ShelleyMa.invalidBefore $ getField @"vldt" txBody
+      , txInvalidHereafter = strictMaybeToMaybe . ShelleyMa.invalidHereafter $ getField @"vldt" txBody
+      , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
+                            . Shelley.unWdrl $ getField @"wdrls" txBody
+      , txMetadata = fromAlonzoMetadata <$> strictMaybeToMaybe (getField @"auxiliaryData" tx)
+      , txCertificates = zipWith TxCertificate [0..] (map coerceCertificate . toList $ getField @"certs" txBody)
+      , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl $ getField @"wdrls" txBody)
+      , txParamProposal = maybe [] (convertParamProposal (Alonzo Standard)) $ strictMaybeToMaybe (getField @"update" txBody)
+      , txMint = coerceMint (getField @"mint" txBody)
+      }
+  where
+    fromTxOut :: Word16 -> Alonzo.TxOut StandardAlonzo -> TxOut
+    fromTxOut index (Alonzo.TxOut addr (Value ada maMap) _dataHash) =
+      TxOut
+        { txOutIndex = index
+        , txOutAddress = coerceAddress addr
+        , txOutAdaValue = Coin ada
+        , txOutMaValue = coerceMultiAsset maMap
+        }
+
+    txBody :: Ledger.TxBody StandardAlonzo
+    txBody = getField @"body" tx
+
+    txOutValue :: Alonzo.TxOut StandardAlonzo -> Integer
+    txOutValue (Alonzo.TxOut _addr (Value coin _ma) _dataHash) = coin
 
 -- -------------------------------------------------------------------------------------------------
 

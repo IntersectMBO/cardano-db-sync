@@ -7,6 +7,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Witness
 
 
 import           Cardano.Ledger.Allegra (AllegraEra)
+import           Cardano.Ledger.Alonzo (AlonzoEra)
 import           Cardano.Ledger.Mary (MaryEra)
 import           Cardano.Ledger.Shelley (ShelleyEra)
 
@@ -31,10 +32,10 @@ data Witness era where
   Shelley :: Evidence c -> Witness (ShelleyEra c)
   Allegra :: Evidence c -> Witness (AllegraEra c)
   Mary :: Evidence c -> Witness (MaryEra c)
-  -- Alonzo :: Evidence c -> Witness (AlonzoEra c)
+  Alonzo :: Evidence c -> Witness (AlonzoEra c)
 
 instance Show (Witness e) where
   show (Shelley c) = "Shelley " ++ show c
   show (Allegra c) = "Allegra " ++ show c
   show (Mary c) = "Mary " ++ show c
-  -- show (Alonzo c) = "Alonzo " ++ show c
+  show (Alonzo c) = "Alonzo " ++ show c

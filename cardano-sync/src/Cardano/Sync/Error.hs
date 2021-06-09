@@ -37,6 +37,7 @@ data SyncNodeError
   | NEBlockMismatch !Word64 !ByteString !ByteString
   | NEByronConfig !FilePath !Byron.ConfigurationError
   | NEShelleyConfig !FilePath !Text
+  | NEAlonzoConfig !FilePath !Text
   | NECardanoConfig !Text
 
 annotateInvariantTx :: Byron.Tx -> SyncInvariant -> SyncInvariant
@@ -80,6 +81,10 @@ renderSyncNodeError ne =
     NEShelleyConfig fp txt ->
       mconcat
         [ "Failed reading Shelley genesis file ", textShow fp, ": ", txt
+        ]
+    NEAlonzoConfig fp txt ->
+      mconcat
+        [ "Failed reading Alonzo genesis file ", textShow fp, ": ", txt
         ]
     NECardanoConfig err ->
       mconcat

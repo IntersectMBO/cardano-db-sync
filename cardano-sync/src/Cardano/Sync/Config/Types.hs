@@ -18,10 +18,12 @@ module Cardano.Sync.Config.Types
   , GenesisFile (..)
   , GenesisHashShelley (..)
   , GenesisHashByron (..)
+  , GenesisHashAlonzo (..)
   , SyncNodeConfig (..)
   , SyncPreConfig (..)
   , LedgerStateDir (..)
   , MigrationDir (..)
+  , MaryToAlonzo
   , LogFileDir (..)
   , NetworkName (..)
   , NodeConfigFile (..)
@@ -42,6 +44,8 @@ import qualified Cardano.Chain.Update as Byron
 import           Cardano.Crypto (RequiresNetworkMagic (..))
 import qualified Cardano.Crypto.Hash as Crypto
 
+import           Cardano.Ledger.Allegra (AllegraEra)
+
 import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Data.Aeson (FromJSON (..), Object, Value (..), (.:), (.:?))
@@ -49,13 +53,14 @@ import qualified Data.Aeson as Aeson
 import           Data.Aeson.Types (Parser, typeMismatch)
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
+import           Ouroboros.Consensus.Cardano.Block (AlonzoEra, MaryEra, ShelleyEra)
 import qualified Ouroboros.Consensus.Cardano.Block as Cardano
 import qualified Ouroboros.Consensus.Cardano.CanHardFork as Shelley
-import           Ouroboros.Consensus.Cardano.Node (ProtocolParamsTransition)
+import           Ouroboros.Consensus.Cardano.Node (ProtocolTransitionParamsShelleyBased)
 import qualified Ouroboros.Consensus.HardFork.Combinator.Basics as Cardano
 import           Ouroboros.Consensus.Shelley.Eras (StandardShelley)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
-import qualified Ouroboros.Consensus.Shelley.Protocol as Shelley
+import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
 
 newtype MigrationDir = MigrationDir
   { unMigrationDir :: FilePath
@@ -67,7 +72,7 @@ newtype LogFileDir = LogFileDir
 
 type CardanoBlock =
         Cardano.HardForkBlock
-            (Cardano.CardanoEras Shelley.StandardCrypto)
+            (Cardano.CardanoEras StandardCrypto)
 
 type CardanoProtocol =
         Cardano.HardForkProtocol
@@ -78,13 +83,16 @@ type CardanoProtocol =
             ]
 
 type ByronToShelley =
-        ProtocolParamsTransition ByronBlock (Shelley.ShelleyBlock Cardano.StandardShelley)
+        ProtocolTransitionParamsShelleyBased (ShelleyEra StandardCrypto)
 
 type ShelleyToAllegra =
-        ProtocolParamsTransition (Shelley.ShelleyBlock Cardano.StandardShelley) (Shelley.ShelleyBlock Cardano.StandardAllegra)
+        ProtocolTransitionParamsShelleyBased (AllegraEra StandardCrypto)
 
 type AllegraToMary =
-        ProtocolParamsTransition (Shelley.ShelleyBlock Cardano.StandardAllegra) (Shelley.ShelleyBlock Cardano.StandardMary)
+        ProtocolTransitionParamsShelleyBased (MaryEra StandardCrypto)
+
+type MaryToAlonzo =
+        ProtocolTransitionParamsShelleyBased (AlonzoEra StandardCrypto)
 
 newtype ConfigFile = ConfigFile
   { unConfigFile :: FilePath
@@ -122,16 +130,15 @@ data SyncNodeConfig = SyncNodeConfig
   , dncByronGenesisHash :: !GenesisHashByron
   , dncShelleyGenesisFile :: !GenesisFile
   , dncShelleyGenesisHash :: !GenesisHashShelley
+  , dncAlonzoGenesisFile :: !GenesisFile
+  , dncAlonzoGenesisHash :: !GenesisHashAlonzo
   , dncByronSoftwareVersion :: !Byron.SoftwareVersion
   , dncByronProtocolVersion :: !Byron.ProtocolVersion
 
   , dncShelleyHardFork :: !Shelley.TriggerHardFork
   , dncAllegraHardFork :: !Shelley.TriggerHardFork
   , dncMaryHardFork :: !Shelley.TriggerHardFork
-
-  , dncByronToShelley :: !ByronToShelley
-  , dncShelleyToAllegra :: !ShelleyToAllegra
-  , dncAllegraToMary :: !AllegraToMary
+  , dncAlonzoHardFork :: !Shelley.TriggerHardFork
   }
 
 data SyncPreConfig = SyncPreConfig
@@ -154,6 +161,11 @@ newtype GenesisHashByron = GenesisHashByron
 newtype GenesisHashShelley = GenesisHashShelley
   { unGenesisHashShelley :: Crypto.Hash Crypto.Blake2b_256 ByteString
   } deriving newtype (Eq, Show)
+
+newtype GenesisHashAlonzo = GenesisHashAlonzo
+  { unGenesisHashAlonzo :: Crypto.Hash Crypto.Blake2b_256 ByteString
+  } deriving newtype (Eq, Show)
+
 
 newtype LedgerStateDir = LedgerStateDir
   {  unLedgerStateDir :: FilePath

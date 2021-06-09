@@ -13,7 +13,14 @@ import           Cardano.Prelude
 import           Cardano.DbSync.Era.Shelley.Generic.Util (unKeyHashRaw)
 import           Cardano.DbSync.Era.Shelley.Generic.Witness (Witness (..))
 
+import qualified Cardano.Ledger.Alonzo as Alonzo
+import           Cardano.Ledger.Alonzo.Language (Language)
+import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
+import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
+import           Cardano.Ledger.BaseTypes (UnitInterval, strictMaybeToMaybe)
+import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin)
+import qualified Cardano.Ledger.Keys as Ledger
 import           Cardano.Ledger.Shelley (ShelleyEra)
 import qualified Cardano.Ledger.ShelleyMA as ShelleyMA
 
@@ -21,9 +28,6 @@ import           Cardano.Slotting.Slot (EpochNo (..))
 
 import qualified Data.Map.Strict as Map
 
-import           Shelley.Spec.Ledger.BaseTypes (UnitInterval, strictMaybeToMaybe)
-import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
-import qualified Shelley.Spec.Ledger.Keys as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 
 data ParamProposal = ParamProposal
@@ -42,32 +46,88 @@ data ParamProposal = ParamProposal
   , pppMonetaryExpandRate :: !(Maybe UnitInterval)
   , pppTreasuryGrowthRate :: !(Maybe UnitInterval)
   , pppDecentralisation :: !(Maybe UnitInterval)
-  , pppEntropy :: !(Maybe Shelley.Nonce)
+  , pppEntropy :: !(Maybe Ledger.Nonce)
   , pppProtocolVersion :: !(Maybe Shelley.ProtVer)
   , pppMinUtxoValue :: !(Maybe Coin)
   , pppMinPoolCost :: !(Maybe Coin)
+
+  -- New for Alonzo.
+  , pppAdaPerUTxOWord :: !(Maybe Coin)
+  , pppCostmdls :: !(Maybe (Map Language Alonzo.CostModel))
+  , pppPriceMem :: !(Maybe Coin)
+  , pppPriceStep :: !(Maybe Coin)
+  , pppMaxTxExMem :: !(Maybe Word64)
+  , pppMaxTxExSteps :: !(Maybe Word64)
+  , pppMaxBlockExMem :: !(Maybe Word64)
+  , pppMaxBlockExSteps :: !(Maybe Word64)
+  , pppMaxValSize :: !(Maybe Natural)
+  , pppCollateralPercentage :: !(Maybe Natural)
+  , pppMaxCollateralInputs :: !(Maybe Natural)
   }
 
 convertParamProposal :: Witness era -> Shelley.Update era -> [ParamProposal]
 convertParamProposal witness (Shelley.Update pp epoch) =
   case witness of
-    Shelley _ -> shelleyParamProposal epoch pp
-    Allegra _ -> allegraOrMaryParamProposal epoch pp
-    Mary _ -> allegraOrMaryParamProposal epoch pp
-    -- Alonzo _ -> panic "convertParamProposal: Alonzo"
+    Shelley {} -> shelleyParamProposal epoch pp
+    Allegra {} -> allegraOrMaryParamProposal epoch pp
+    Mary {} -> allegraOrMaryParamProposal epoch pp
+    Alonzo {} -> alonzoParamProposal epoch pp
 
 -- -------------------------------------------------------------------------------------------------
 
 allegraOrMaryParamProposal :: EpochNo -> Shelley.ProposedPPUpdates (ShelleyMA.ShelleyMAEra a c) -> [ParamProposal]
 allegraOrMaryParamProposal epochNo (Shelley.ProposedPPUpdates umap) =
-    map (mkParamProposal epochNo) $ Map.toList umap
+    map (convertShelleyParamProposal epochNo) $ Map.toList umap
+
+alonzoParamProposal :: EpochNo -> Shelley.ProposedPPUpdates (Alonzo.AlonzoEra c) -> [ParamProposal]
+alonzoParamProposal epochNo (Shelley.ProposedPPUpdates umap) =
+    map (convertAlonzoParamProposal epochNo) $ Map.toList umap
 
 shelleyParamProposal :: EpochNo -> Shelley.ProposedPPUpdates (ShelleyEra c) -> [ParamProposal]
 shelleyParamProposal epochNo (Shelley.ProposedPPUpdates umap) =
-    map (mkParamProposal epochNo) $ Map.toList umap
+    map (convertShelleyParamProposal epochNo) $ Map.toList umap
 
-mkParamProposal :: EpochNo -> (Shelley.KeyHash genesis crypto, Shelley.PParams' Shelley.StrictMaybe era) -> ParamProposal
-mkParamProposal epochNo (key, pmap) =
+-- -------------------------------------------------------------------------------------------------
+
+convertAlonzoParamProposal :: EpochNo -> (Ledger.KeyHash genesis crypto, Alonzo.PParamsUpdate era) -> ParamProposal
+convertAlonzoParamProposal  epochNo (key, pmap) =
+  ParamProposal
+    { pppEpochNo = epochNo
+    , pppKey = unKeyHashRaw key
+    , pppMinFeeA = strictMaybeToMaybe (Alonzo._minfeeA pmap)
+    , pppMinFeeB = strictMaybeToMaybe (Alonzo._minfeeB pmap)
+    , pppMaxBlockSize = strictMaybeToMaybe (Alonzo._maxBBSize pmap)
+    , pppMaxTxSize = strictMaybeToMaybe (Alonzo._maxTxSize pmap)
+    , pppMaxBhSize = strictMaybeToMaybe (Alonzo._maxBHSize pmap)
+    , pppKeyDeposit = strictMaybeToMaybe (Alonzo._keyDeposit pmap)
+    , pppPoolDeposit = strictMaybeToMaybe (Alonzo._poolDeposit pmap)
+    , pppMaxEpoch = strictMaybeToMaybe (Alonzo._eMax pmap)
+    , pppOptimalPoolCount = strictMaybeToMaybe (Alonzo._nOpt pmap)
+    , pppInfluence = strictMaybeToMaybe (Alonzo._a0 pmap)
+    , pppMonetaryExpandRate = strictMaybeToMaybe (Alonzo._rho pmap)
+    , pppTreasuryGrowthRate = strictMaybeToMaybe (Alonzo._tau pmap)
+    , pppDecentralisation = strictMaybeToMaybe (Alonzo._d pmap)
+    , pppEntropy = strictMaybeToMaybe (Alonzo._extraEntropy pmap)
+    , pppProtocolVersion = strictMaybeToMaybe (Alonzo._protocolVersion pmap)
+    , pppMinUtxoValue = Nothing -- Removed in Alonzo
+    , pppMinPoolCost = strictMaybeToMaybe (Alonzo._minPoolCost pmap)
+
+    -- New for Alonzo.
+    , pppAdaPerUTxOWord = strictMaybeToMaybe (Alonzo._adaPerUTxOWord pmap)
+    , pppCostmdls = strictMaybeToMaybe (Alonzo._costmdls pmap)
+    , pppPriceMem = Alonzo.prMem <$> strictMaybeToMaybe (Alonzo._prices pmap)
+    , pppPriceStep = Alonzo.prSteps <$> strictMaybeToMaybe (Alonzo._prices pmap)
+    , pppMaxTxExMem = Alonzo.exUnitsMem <$> strictMaybeToMaybe (Alonzo._maxTxExUnits pmap)
+    , pppMaxTxExSteps = Alonzo.exUnitsSteps <$> strictMaybeToMaybe (Alonzo._maxTxExUnits pmap)
+    , pppMaxBlockExMem = Alonzo.exUnitsMem <$> strictMaybeToMaybe (Alonzo._maxBlockExUnits pmap)
+    , pppMaxBlockExSteps = Alonzo.exUnitsSteps <$> strictMaybeToMaybe (Alonzo._maxBlockExUnits pmap)
+    , pppMaxValSize = strictMaybeToMaybe (Alonzo._maxValSize pmap)
+    , pppCollateralPercentage = strictMaybeToMaybe (Alonzo._collateralPercentage pmap)
+    , pppMaxCollateralInputs = strictMaybeToMaybe (Alonzo._maxCollateralInputs pmap)
+    }
+
+convertShelleyParamProposal :: EpochNo -> (Ledger.KeyHash genesis crypto, Shelley.PParams' Ledger.StrictMaybe era) -> ParamProposal
+convertShelleyParamProposal epochNo (key, pmap) =
   ParamProposal
     { pppEpochNo = epochNo
     , pppKey = unKeyHashRaw key
@@ -88,4 +148,17 @@ mkParamProposal epochNo (key, pmap) =
     , pppProtocolVersion = strictMaybeToMaybe (Shelley._protocolVersion pmap)
     , pppMinUtxoValue = strictMaybeToMaybe (Shelley._minUTxOValue pmap)
     , pppMinPoolCost = strictMaybeToMaybe (Shelley._minPoolCost pmap)
+
+    -- The following are Alonzo related, hence Nothing.
+    , pppAdaPerUTxOWord = Nothing
+    , pppCostmdls = Nothing
+    , pppPriceMem = Nothing
+    , pppPriceStep = Nothing
+    , pppMaxTxExMem = Nothing
+    , pppMaxTxExSteps = Nothing
+    , pppMaxBlockExMem = Nothing
+    , pppMaxBlockExSteps = Nothing
+    , pppMaxValSize = Nothing
+    , pppCollateralPercentage = Nothing
+    , pppMaxCollateralInputs = Nothing
     }

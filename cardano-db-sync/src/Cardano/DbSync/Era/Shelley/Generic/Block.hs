@@ -1,5 +1,8 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 module Cardano.DbSync.Era.Shelley.Generic.Block
   ( Block (..)
@@ -7,6 +10,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Block
   , fromShelleyBlock
   , fromAllegraBlock
   , fromMaryBlock
+  , fromAlonzoBlock
 
   , slotLeaderHash
   ) where
@@ -21,14 +25,19 @@ import           Cardano.Crypto.VRF.Praos (PraosVRF)
 import           Cardano.DbSync.Era.Shelley.Generic.Tx
 import           Cardano.DbSync.Era.Shelley.Generic.Util
 
+import           Cardano.Ledger.Alonzo ()
+import           Cardano.Ledger.Core (Witnesses)
 import           Cardano.Ledger.Crypto (VRF)
-import           Cardano.Ledger.Era (Crypto)
+import           Cardano.Ledger.Era (Crypto, SupportsSegWit (..))
+import qualified Cardano.Ledger.Era as Ledger
+import           Cardano.Ledger.SafeHash (SafeToHash)
 
 import           Cardano.Prelude
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
-import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardMary, StandardShelley)
+import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlonzo, StandardMary,
+                   StandardShelley)
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra, ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
 
@@ -44,6 +53,7 @@ data BlockEra
   = Shelley
   | Allegra
   | Mary
+  | Alonzo
   deriving (Eq, Show)
 
 data Block = Block
@@ -113,7 +123,27 @@ fromMaryBlock blk =
     , blkTxs = map fromMaryTx (blockTxs blk)
     }
 
+fromAlonzoBlock :: ShelleyBlock StandardAlonzo -> Block
+fromAlonzoBlock blk =
+  Block
+    { blkEra = Alonzo
+    , blkHash = blockHash blk
+    , blkPreviousHash = blockPrevHash blk
+    , blkCreatorPoolHash = creatorPoolHash blk
+    , blkSlotLeader = slotLeaderHash blk
+    , blkSlotNo = slotNumber blk
+    , blkBlockNo = blockNumber blk
+    , blkSize = blockSize blk
+    , blkProto = blockProtoVersion blk
+    , blkVrfKey = blockVrfKeyView blk
+    , blkOpCert = blockOpCert blk
+    , blkTxs = map fromAlonzoTx (alonzoBlockTxs blk)
+    }
+
 -- -------------------------------------------------------------------------------------------------
+
+alonzoBlockTxs :: ShelleyBlock StandardAlonzo -> [(Word64, Ledger.TxInBlock StandardAlonzo)]
+alonzoBlockTxs = zip [0 ..] . toList . fromTxSeq @StandardAlonzo . Shelley.bbody . Consensus.shelleyBlockRaw
 
 blockBody :: ShelleyBasedEra era => ShelleyBlock era -> Shelley.BHBody (Crypto era)
 blockBody = Shelley.bhbody . Shelley.bheader . Consensus.shelleyBlockRaw
@@ -141,7 +171,12 @@ blockProtoVersion = Shelley.bprotver . blockBody
 blockSize :: ShelleyBasedEra era => ShelleyBlock era -> Word64
 blockSize = fromIntegral . Shelley.bBodySize . Shelley.bbody . Consensus.shelleyBlockRaw
 
-blockTxs :: ShelleyBasedEra era => ShelleyBlock era -> [(Word64, Shelley.Tx era)]
+blockTxs
+    :: ( ShelleyBasedEra era
+        , Ledger.TxSeq era ~ Shelley.TxSeq era
+        , SafeToHash (Witnesses era)
+        )
+    => ShelleyBlock era -> [(Word64, Shelley.Tx era)]
 blockTxs = zip [0 ..] . unTxSeq . Shelley.bbody . Consensus.shelleyBlockRaw
 
 blockVrfKeyView :: (ShelleyBasedEra era, VRF (Crypto era) ~ PraosVRF) => ShelleyBlock era -> Text
@@ -156,5 +191,7 @@ slotLeaderHash = unKeyHashRaw . Shelley.issuerIDfromBHBody . blockBody
 slotNumber :: ShelleyBasedEra era => ShelleyBlock era -> SlotNo
 slotNumber = Shelley.bheaderSlotNo . blockBody
 
-unTxSeq :: ShelleyBasedEra era => Shelley.TxSeq era -> [Shelley.Tx era]
+unTxSeq
+    :: (ShelleyBasedEra era, SafeToHash (Witnesses era))
+    => Shelley.TxSeq era -> [Shelley.Tx era]
 unTxSeq (Shelley.TxSeq txSeq) = toList txSeq

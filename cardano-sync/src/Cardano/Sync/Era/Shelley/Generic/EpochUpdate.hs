@@ -10,6 +10,7 @@ import           Cardano.Prelude hiding (Maybe (..), fromMaybe)
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
+import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
 
 import           Cardano.Sync.Era.Shelley.Generic.ProtoParams
@@ -25,7 +26,6 @@ import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import qualified Ouroboros.Consensus.Shelley.Protocol as Consensus
 
 import qualified Shelley.Spec.Ledger.API.Protocol as Shelley
-import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.STS.Tickn as Shelley
 
 data NewEpoch = NewEpoch
@@ -37,7 +37,7 @@ data NewEpoch = NewEpoch
 
 data EpochUpdate = EpochUpdate
   { euProtoParams :: !(Maybe ProtoParams)
-  , euNonce :: !Shelley.Nonce
+  , euNonce :: !Ledger.Nonce
   }
 
 -- There is a similar type in ledger-spec, but it is not exported yet.
@@ -59,15 +59,16 @@ epochUpdate lstate =
 
 -- -------------------------------------------------------------------------------------------------
 
-extractEpochNonce :: ExtLedgerState CardanoBlock -> Shelley.Nonce
+extractEpochNonce :: ExtLedgerState CardanoBlock -> Ledger.Nonce
 extractEpochNonce extLedgerState =
     case Consensus.headerStateChainDep (headerState extLedgerState) of
-      ChainDepStateByron _ -> Shelley.NeutralNonce
+      ChainDepStateByron _ -> Ledger.NeutralNonce
       ChainDepStateShelley st -> extractNonce st
       ChainDepStateAllegra st -> extractNonce st
       ChainDepStateMary st -> extractNonce st
+      ChainDepStateAlonzo st -> extractNonce st
   where
-    extractNonce :: Consensus.TPraosState crypto -> Shelley.Nonce
+    extractNonce :: Consensus.TPraosState crypto -> Ledger.Nonce
     extractNonce =
       Shelley.ticknStateEpochNonce . Shelley.csTickn . Consensus.tpraosStateChainDepState
 

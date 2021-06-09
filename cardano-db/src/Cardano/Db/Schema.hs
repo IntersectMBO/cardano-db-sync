@@ -341,15 +341,15 @@ share
   ParamProposal
     epochNo             Word64              sqltype=uinteger
     key                 ByteString          sqltype=hash28type
-    minFeeA             Word64 Maybe        sqltype=uinteger
-    minFeeB             Word64 Maybe        sqltype=uinteger
-    maxBlockSize        Word64 Maybe        sqltype=uinteger
-    maxTxSize           Word64 Maybe        sqltype=uinteger
-    maxBhSize           Word64 Maybe        sqltype=uinteger
+    minFeeA             Word64 Maybe        sqltype=word64type
+    minFeeB             Word64 Maybe        sqltype=word64type
+    maxBlockSize        Word64 Maybe        sqltype=word64type
+    maxTxSize           Word64 Maybe        sqltype=word64type
+    maxBhSize           Word64 Maybe        sqltype=word64type
     keyDeposit          DbLovelace Maybe    sqltype=lovelace
     poolDeposit         DbLovelace Maybe    sqltype=lovelace
-    maxEpoch            Word64 Maybe        sqltype=uinteger
-    optimalPoolCount    Word64 Maybe        sqltype=uinteger
+    maxEpoch            Word64 Maybe        sqltype=word64type
+    optimalPoolCount    Word64 Maybe        sqltype=word64type
     influence           Double Maybe        -- sqltype=rational
     monetaryExpandRate  Double Maybe        -- sqltype=interval
     treasuryGrowthRate  Double Maybe        -- sqltype=interval
@@ -359,6 +359,18 @@ share
     protocolMinor       Word16 Maybe        sqltype=uinteger
     minUtxoValue        DbLovelace Maybe    sqltype=lovelace
     minPoolCost         DbLovelace Maybe    sqltype=lovelace
+
+    adaPerUTxOWord      DbLovelace Maybe    sqltype=lovelace
+    costModels          Text Maybe
+    priceMem            DbLovelace Maybe    sqltype=lovelace
+    priceStep           DbLovelace Maybe    sqltype=lovelace
+    maxTxExMem          DbWord64 Maybe      sqltype=word64type
+    maxTxExSteps        DbWord64 Maybe      sqltype=word64type
+    maxBlockExMem       DbWord64 Maybe      sqltype=word64type
+    maxBlockExSteps     DbWord64 Maybe      sqltype=word64type
+    maxValSize          DbWord64 Maybe      sqltype=word64type
+    collateralPercent   Word16 Maybe        sqltype=uinteger
+    maxCollateralInputs Word16 Maybe        sqltype=uinteger
 
     registeredTxId      TxId                OnDeleteCascade    -- Slot number in which update registered.
     UniqueParamProposal key registeredTxId

@@ -9,6 +9,7 @@
 
 module Cardano.DbSync.Era.Shelley.Generic.Metadata
   ( fromAllegraMetadata
+  , fromAlonzoMetadata
   , fromShelleyMetadata
   , fromMaryMetadata
   , metadataValueToJsonNoSchema
@@ -18,6 +19,7 @@ import           Cardano.Prelude
 
 import           Cardano.Api.Shelley (TxMetadataValue (..))
 
+import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as ShelleyMa
 
 import qualified Data.Aeson as Aeson
@@ -30,7 +32,7 @@ import qualified Data.Text.Lazy as Text.Lazy
 import           Data.Tuple.Extra (both)
 import qualified Data.Vector as Vector
 
-import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardMary)
+import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlonzo, StandardMary)
 
 import qualified Shelley.Spec.Ledger.Metadata as Shelley
 
@@ -41,6 +43,10 @@ import qualified Shelley.Spec.Ledger.Metadata as Shelley
 
 fromAllegraMetadata :: ShelleyMa.AuxiliaryData StandardAllegra -> Map Word64 TxMetadataValue
 fromAllegraMetadata (ShelleyMa.AuxiliaryData mdMap _scripts) =
+  Map.map fromMetadatum mdMap
+
+fromAlonzoMetadata :: Alonzo.AuxiliaryData StandardAlonzo -> Map Word64 TxMetadataValue
+fromAlonzoMetadata (Alonzo.AuxiliaryData mdMap _scripts _dats) =
   Map.map fromMetadatum mdMap
 
 fromShelleyMetadata :: Shelley.Metadata era -> Map Word64 TxMetadataValue
