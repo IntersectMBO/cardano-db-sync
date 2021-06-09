@@ -5,7 +5,7 @@ DECLARE
   next_version int ;
 BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
-  IF next_version = 3 THEN
+  IF next_version = 4 THEN
     EXECUTE 'ALTER TABLE "param_proposal" ALTER COLUMN "min_fee_a" TYPE word64type' ;
     EXECUTE 'ALTER TABLE "param_proposal" ALTER COLUMN "min_fee_b" TYPE word64type' ;
     EXECUTE 'ALTER TABLE "param_proposal" ALTER COLUMN "max_block_size" TYPE word64type' ;
