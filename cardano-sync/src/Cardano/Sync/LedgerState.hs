@@ -174,10 +174,9 @@ data LedgerStateSnapshot = LedgerStateSnapshot
   , lssEvents :: ![LedgerEvent]
   }
 
-mkLedgerEnv :: Consensus.ProtocolInfo IO CardanoBlock
-            -> LedgerStateDir
-            -> Ledger.Network
-            -> IO LedgerEnv
+mkLedgerEnv
+    :: Consensus.ProtocolInfo IO CardanoBlock -> LedgerStateDir -> Ledger.Network
+    -> IO LedgerEnv
 mkLedgerEnv protocolInfo dir network = do
     svar <- newTVarIO Nothing
     evar <- newTVarIO initLedgerEventState
@@ -439,6 +438,10 @@ cleanupLedgerStateFiles env slotNo = do
 
 loadLedgerAtPoint :: LedgerEnv -> CardanoPoint -> Bool -> IO (Either [LedgerStateFile] CardanoLedgerState)
 loadLedgerAtPoint env point delFiles = do
+    -- Ledger states are growing to become very big in memory.
+    -- Before parsing the new ledger state we need to make sure the old ledger state
+    -- is or can be garbage collected.
+    writeLedgerState env Nothing
     mst <- findStateFromPoint env point delFiles
     case mst of
       Right st -> do
