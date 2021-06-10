@@ -93,6 +93,7 @@ mkTxs blkId count =
         , txSize = 12
         , txInvalidHereafter = Nothing
         , txInvalidBefore = Nothing
+        , txValidContract = True
         }
 
 testSlotLeader :: SlotLeader

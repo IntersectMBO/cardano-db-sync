@@ -50,6 +50,7 @@ initialSupplyTest =
                   , txSize = 123
                   , txInvalidHereafter = Nothing
                   , txInvalidBefore = Nothing
+                  , txValidContract = True
                   }
     _ <- insertTxIn (TxIn tx1Id (head tx0Ids) 0)
     let addr = mkAddressHash bid1 tx1Id

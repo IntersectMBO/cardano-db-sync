@@ -9,6 +9,7 @@ module Cardano.Db.Insert
   ( insertAdaPots
   , insertAdminUser
   , insertBlock
+  , insertCollateralTxIn
   , insertDelegation
   , insertEpoch
   , insertEpochParam
@@ -99,6 +100,9 @@ insertBlock = insertUnchecked "Block"
 
 insertBlockChecked :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
 insertBlockChecked = insertCheckUnique "Block"
+
+insertCollateralTxIn :: (MonadBaseControl IO m, MonadIO m) => CollateralTxIn -> ReaderT SqlBackend m CollateralTxInId
+insertCollateralTxIn = insertUnchecked "CollateralTxIn"
 
 insertDelegation :: (MonadBaseControl IO m, MonadIO m) => Delegation -> ReaderT SqlBackend m DelegationId
 insertDelegation = insertCheckUnique "Delegation"
