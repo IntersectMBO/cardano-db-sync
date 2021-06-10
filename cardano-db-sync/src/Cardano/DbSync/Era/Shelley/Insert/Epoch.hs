@@ -40,7 +40,7 @@ import           Data.List.Split.Internals (chunksOf)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
-import           Database.Persist.Sql (SqlBackend, putMany)
+import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
@@ -118,7 +118,7 @@ insertEpochStake
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertEpochStake _tracer icache epochNo stakeChunk = do
     dbStakes <- mapM mkStake stakeChunk
-    lift $ putMany dbStakes
+    lift $ DB.insertManyEpochStakes dbStakes
   where
     mkStake
         :: MonadBaseControl IO m
@@ -141,7 +141,7 @@ insertRewards
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertRewards epoch icache rewardsChunk = do
     dbRewards <- concatMapM mkRewards rewardsChunk
-    lift $ putMany dbRewards
+    lift $ DB.insertManyRewards dbRewards
   where
     mkRewards
         :: MonadBaseControl IO m
@@ -165,7 +165,7 @@ insertOrphanedRewards
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertOrphanedRewards epoch icache orphanedRewardsChunk = do
     dbRewards <- concatMapM mkOrphanedReward orphanedRewardsChunk
-    lift $ putMany dbRewards
+    lift $ DB.insertManyOrphanedRewards dbRewards
   where
     mkOrphanedReward
         :: MonadBaseControl IO m

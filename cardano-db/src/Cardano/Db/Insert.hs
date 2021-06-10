@@ -13,12 +13,13 @@ module Cardano.Db.Insert
   , insertDelegation
   , insertEpoch
   , insertEpochParam
-  , insertEpochStake
   , insertEpochSyncTime
+  , insertManyEpochStakes
+  , insertManyRewards
+  , insertManyOrphanedRewards
   , insertMaTxMint
   , insertMaTxOut
   , insertMeta
-  , insertOrphanedReward
   , insertParamProposal
   , insertPotTransfer
   , insertPoolHash
@@ -31,7 +32,6 @@ module Cardano.Db.Insert
   , insertPoolUpdate
   , insertReserve
   , insertReservedPoolTicker
-  , insertReward
   , insertSlotLeader
   , insertStakeAddress
   , insertStakeDeregistration
@@ -46,6 +46,7 @@ module Cardano.Db.Insert
   -- Export mainly for testing.
   , insertBlockChecked
   , insertCheckUnique
+  , insertManyUncheckedUnique
   , insertUnchecked
   ) where
 
@@ -63,8 +64,8 @@ import qualified Data.Text as Text
 import           Database.Persist.Class (AtLeastOneUniqueKey, PersistEntityBackend, insert,
                    insertBy, replaceUnique)
 import           Database.Persist.Sql (OnlyOneUniqueKey, PersistRecordBackend, SqlBackend,
-                   UniqueDef, entityDB, entityDef, entityUniques, rawSql, toPersistFields,
-                   toPersistValue, uniqueDBName)
+                   UniqueDef, entityDB, entityDef, entityUniques, rawExecute, rawSql,
+                   toPersistFields, toPersistValue, uniqueDBName)
 import qualified Database.Persist.Sql.Util as Util
 import           Database.Persist.Types (ConstraintNameDB (..), EntityNameDB (..), FieldNameDB (..),
                    PersistValue, entityKey)
@@ -113,11 +114,17 @@ insertEpoch = insertUnchecked "Epoch"
 insertEpochParam :: (MonadBaseControl IO m, MonadIO m) => EpochParam -> ReaderT SqlBackend m EpochParamId
 insertEpochParam = insertUnchecked "EpochParam"
 
-insertEpochStake :: (MonadBaseControl IO m, MonadIO m) => EpochStake -> ReaderT SqlBackend m EpochStakeId
-insertEpochStake = insertUnchecked "EpochStake"
-
 insertEpochSyncTime :: (MonadBaseControl IO m, MonadIO m) => EpochSyncTime -> ReaderT SqlBackend m EpochSyncTimeId
 insertEpochSyncTime = insertReplace "EpochSyncTime"
+
+insertManyEpochStakes :: (MonadBaseControl IO m, MonadIO m) => [EpochStake] -> ReaderT SqlBackend m ()
+insertManyEpochStakes = insertManyUncheckedUnique "Many EpochStake"
+
+insertManyOrphanedRewards :: (MonadBaseControl IO m, MonadIO m) => [OrphanedReward] -> ReaderT SqlBackend m ()
+insertManyOrphanedRewards = insertManyUncheckedUnique "Many OrphanedRewards"
+
+insertManyRewards :: (MonadBaseControl IO m, MonadIO m) => [Reward] -> ReaderT SqlBackend m ()
+insertManyRewards = insertManyUncheckedUnique "Many Rewards"
 
 insertMaTxMint :: (MonadBaseControl IO m, MonadIO m) => MaTxMint -> ReaderT SqlBackend m MaTxMintId
 insertMaTxMint = insertCheckUnique "insertMaTxMint"
@@ -127,9 +134,6 @@ insertMaTxOut = insertCheckUnique "insertMaTxOut"
 
 insertMeta :: (MonadBaseControl IO m, MonadIO m) => Meta -> ReaderT SqlBackend m MetaId
 insertMeta = insertCheckUnique "Meta"
-
-insertOrphanedReward :: (MonadBaseControl IO m, MonadIO m) => OrphanedReward -> ReaderT SqlBackend m OrphanedRewardId
-insertOrphanedReward = insertUnchecked "OrphanedReward"
 
 insertParamProposal :: (MonadBaseControl IO m, MonadIO m) => ParamProposal -> ReaderT SqlBackend m ParamProposalId
 insertParamProposal = insertUnchecked "ParamProposal"
@@ -166,9 +170,6 @@ insertReserve = insertUnchecked "Reserve"
 
 insertReservedPoolTicker :: (MonadBaseControl IO m, MonadIO m) => ReservedPoolTicker -> ReaderT SqlBackend m ReservedPoolTickerId
 insertReservedPoolTicker = insertUnchecked "ReservedPoolTicker"
-
-insertReward :: (MonadBaseControl IO m, MonadIO m) => Reward -> ReaderT SqlBackend m RewardId
-insertReward = insertUnchecked "Reward"
 
 insertSlotLeader :: (MonadBaseControl IO m, MonadIO m) => SlotLeader -> ReaderT SqlBackend m SlotLeaderId
 insertSlotLeader = insertCheckUnique "SlotLeader"
@@ -207,6 +208,41 @@ data DbInsertException
   deriving Show
 
 instance Exception DbInsertException
+
+insertManyUncheckedUnique
+    :: forall m record.
+        ( MonadBaseControl IO m
+        , MonadIO m
+        , OnlyOneUniqueKey record
+        )
+    => String -> [record] -> ReaderT SqlBackend m ()
+insertManyUncheckedUnique vtype records = do
+    handle exceptHandler (rawExecute query values)
+  where
+    query :: Text
+    query =
+      Text.concat
+        [ "INSERT INTO "
+        , unEntityNameDB (entityDB . entityDef $ records)
+        , " (", Util.commaSeparated fieldNames
+        , ") VALUES "
+        ,  Util.commaSeparated . replicate (length records)
+             . Util.parenWrapped . Util.commaSeparated $ placeholders
+        , " ON CONFLICT ON CONSTRAINT "
+        , unConstraintNameDB (uniqueDBName $ onlyOneUniqueDef (Proxy @record))
+        , " DO NOTHING"
+        ]
+
+    values :: [PersistValue]
+    values = concatMap (map toPersistValue . toPersistFields) records
+
+    fieldNames, placeholders :: [Text]
+    (fieldNames, placeholders) =
+      unzip (Util.mkInsertPlaceholders (entityDef (Proxy @record)) escapeFieldName)
+
+    exceptHandler :: SqlError -> ReaderT SqlBackend m a
+    exceptHandler e =
+      liftIO $ throwIO (DbInsertException vtype e)
 
 -- Insert, getting PostgreSQL to check the uniqueness constaint, and if it is violated, rewrite
 -- the first field with the same value to force PostgresSQL to return the row identifier.
