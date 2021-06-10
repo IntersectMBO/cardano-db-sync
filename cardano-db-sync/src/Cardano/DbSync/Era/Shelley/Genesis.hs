@@ -184,6 +184,7 @@ insertTxOuts blkId (Shelley.TxIn txInId _, txOut) = do
               , DB.txSize = 0 -- Genesis distribution address to not have a size.
               , DB.txInvalidHereafter = Nothing
               , DB.txInvalidBefore = Nothing
+              , DB.txValidContract = True
               }
   void . DB.insertTxOut $
             DB.TxOut

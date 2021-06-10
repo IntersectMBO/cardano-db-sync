@@ -200,14 +200,16 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx = do
                 , DB.txSize = Generic.txSize tx
                 , DB.txInvalidBefore = DbWord64 . unSlotNo <$> Generic.txInvalidBefore tx
                 , DB.txInvalidHereafter = DbWord64 . unSlotNo <$> Generic.txInvalidHereafter tx
+                , DB.txValidContract = Generic.txValidContract tx
                 }
 
     -- Insert outputs for a transaction before inputs in case the inputs for this transaction
     -- references the output (not sure this can even happen).
     mapM_ (insertTxOut tracer txId) (Generic.txOutputs tx)
 
-    -- Insert the transaction inputs.
+    -- Insert the transaction inputs and collateral inputs (Alonzo).
     mapM_ (insertTxIn tracer txId) (Generic.txInputs tx)
+    mapM_ (insertCollateralTxIn tracer txId) (Generic.txCollateralInputs tx)
 
     case Generic.txMetadata tx of
       Nothing -> pure ()
@@ -249,6 +251,19 @@ insertTxIn _tracer txInId (Generic.TxIn txId index) = do
               { DB.txInTxInId = txInId
               , DB.txInTxOutId = txOutId
               , DB.txInTxOutIndex = fromIntegral index
+              }
+
+insertCollateralTxIn
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DB.TxId -> Generic.TxIn
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+insertCollateralTxIn _tracer txInId (Generic.TxIn txId index) = do
+  txOutId <- liftLookupFail "insertCollateralTxIn" $ DB.queryTxId txId
+  void . lift . DB.insertCollateralTxIn $
+            DB.CollateralTxIn
+              { DB.collateralTxInTxInId = txInId
+              , DB.collateralTxInTxOutId = txOutId
+              , DB.collateralTxInTxOutIndex = fromIntegral index
               }
 
 insertCertificate

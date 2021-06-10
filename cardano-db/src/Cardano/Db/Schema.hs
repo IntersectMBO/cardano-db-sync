@@ -104,6 +104,8 @@ share
 
     invalidBefore       DbWord64 Maybe      sqltype=word64type
     invalidHereafter    DbWord64 Maybe      sqltype=word64type
+
+    validContract       Bool                                    -- False if the contract is invalid, True otherwise.
     UniqueTx            hash
     deriving Show
 
@@ -128,6 +130,12 @@ share
     txOutId             TxId                OnDeleteCascade     -- The transaction where this was created as an output.
     txOutIndex          Word16              sqltype=txindex
     UniqueTxin          txOutId txOutIndex
+
+  CollateralTxIn
+    txInId              TxId                OnDeleteCascade     -- The transaction where this is used as an input.
+    txOutId             TxId                OnDeleteCascade     -- The transaction where this was created as an output.
+    txOutIndex          Word16              sqltype=txindex
+    UniqueColTxin       txOutId txOutIndex
 
   -- A table containing metadata about the chain. There will probably only ever be one
   -- row in this table.

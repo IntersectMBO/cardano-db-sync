@@ -29,6 +29,7 @@ import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
 import           Cardano.Ledger.Alonzo ()
 import           Cardano.Ledger.Alonzo.Tx (ValidatedTx (..))
+import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
 import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Core as Ledger
@@ -59,7 +60,9 @@ data Tx = Tx
   { txHash :: !ByteString
   , txBlockIndex :: !Word64
   , txSize :: !Word64
+  , txValidContract :: !Bool
   , txInputs :: ![TxIn]
+  , txCollateralInputs :: ![TxIn]
   , txOutputs :: ![TxOut]
   , txFees :: !Coin
   , txOutSum :: !Coin
@@ -101,7 +104,9 @@ fromAllegraTx (blkIndex, tx) =
       { txHash = txHashId tx
       , txBlockIndex = blkIndex
       , txSize = fromIntegral $ getField @"txsize" tx
+      , txValidContract = True
       , txInputs = map fromTxIn (toList $ ShelleyMa.inputs rawTxBody)
+      , txCollateralInputs = [] -- Allegra does not have collateral inputs
       , txOutputs = zipWith fromTxOut [0 .. ] $ toList (ShelleyMa.outputs rawTxBody)
       , txFees = ShelleyMa.txfee rawTxBody
       , txOutSum = Coin . sum $ map txOutValue (ShelleyMa.outputs rawTxBody)
@@ -143,7 +148,9 @@ fromShelleyTx (blkIndex, tx) =
       { txHash = txHashId tx
       , txBlockIndex = blkIndex
       , txSize = fromIntegral $ getField @"txsize" tx
+      , txValidContract = True
       , txInputs = map fromTxIn (toList . Shelley._inputs $ Shelley.body tx)
+      , txCollateralInputs = [] -- Shelley does not have collateral inputs
       , txOutputs = zipWith fromTxOut [0 .. ] $ toList (Shelley._outputs $ Shelley.body tx)
       , txFees = Shelley._txfee (Shelley.body tx)
       , txOutSum = Coin . sum $ map txOutValue (Shelley._outputs $ Shelley.body tx)
@@ -176,7 +183,9 @@ fromMaryTx (blkIndex, tx) =
       { txHash = txHashId tx
       , txBlockIndex = blkIndex
       , txSize = fromIntegral $ getField @"txsize" tx
+      , txValidContract = True
       , txInputs = map fromTxIn (toList . ShelleyMa.inputs $ unTxBodyRaw tx)
+      , txCollateralInputs = [] -- Mary does not have collateral inputs
       , txOutputs = zipWith fromTxOut [0 .. ] $ toList (ShelleyMa.outputs $ unTxBodyRaw tx)
       , txFees = ShelleyMa.txfee (unTxBodyRaw tx)
       , txOutSum = Coin . sum $ map txOutValue (ShelleyMa.outputs $ unTxBodyRaw tx)
@@ -215,7 +224,9 @@ fromAlonzoTx (blkIndex, tx) =
       { txHash = Crypto.hashToBytes . Ledger.extractHash $ Ledger.hashAnnotated txBody
       , txBlockIndex = blkIndex
       , txSize = fromIntegral $ getField @"txsize" tx
-      , txInputs = map fromTxIn . toList $ getField @"inputs" txBody
+      , txValidContract = isValid
+      , txInputs = map fromTxIn inputs
+      , txCollateralInputs = map fromTxIn . toList $ getField @"collateral" txBody
       , txOutputs = zipWith fromTxOut [0 .. ] . toList $ getField @"outputs" txBody
       , txFees = getField @"txfee" txBody
       , txOutSum = Coin . sum $ map txOutValue (getField @"outputs" txBody)
@@ -244,6 +255,20 @@ fromAlonzoTx (blkIndex, tx) =
 
     txOutValue :: Alonzo.TxOut StandardAlonzo -> Integer
     txOutValue (Alonzo.TxOut _addr (Value coin _ma) _dataHash) = coin
+
+    isValid :: Bool
+    isValid =
+      case Alonzo.isValidating tx of
+        Alonzo.IsValidating x -> x
+
+    inputs :: [Shelley.TxIn StandardCrypto]
+    inputs =
+      -- Chose which inputs will be spent depending in where the tx is valid.
+      -- If the transaction is valid, the regular inputs will be consumed and if it is
+      -- invalid, the collateral inputs will be consumed.
+      if isValid
+        then toList $ getField @"inputs" txBody
+        else toList $ getField @"collateral" txBody
 
 -- -------------------------------------------------------------------------------------------------
 

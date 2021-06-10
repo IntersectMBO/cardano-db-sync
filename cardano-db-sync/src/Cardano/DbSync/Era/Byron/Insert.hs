@@ -191,6 +191,7 @@ insertTx tracer blkId tx blockIndex = do
                 , DB.txSize = fromIntegral $ BS.length (serialize' $ Byron.taTx tx)
                 , DB.txInvalidHereafter = Nothing
                 , DB.txInvalidBefore = Nothing
+                , DB.txValidContract = True
                 }
 
     -- Insert outputs for a transaction before inputs in case the inputs for this transaction
