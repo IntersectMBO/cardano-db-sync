@@ -99,6 +99,8 @@ import qualified Shelley.Spec.Ledger.UTxO as Shelley
 
 import           System.Directory (listDirectory, removeFile)
 import           System.FilePath (dropExtension, takeExtension, (</>))
+import           System.Mem (performMajorGC)
+
 
 -- Note: The decision on whether a ledger-state is written to disk is based on the block number
 -- rather than the slot number because while the block number is fully populated (for every block
@@ -442,6 +444,7 @@ loadLedgerAtPoint env point delFiles = do
     -- Before parsing the new ledger state we need to make sure the old ledger state
     -- is or can be garbage collected.
     writeLedgerState env Nothing
+    performMajorGC
     mst <- findStateFromPoint env point delFiles
     case mst of
       Right st -> do
