@@ -662,13 +662,13 @@ insertTxMetadata tracer txId metadata =
                  Left err -> do
                    liftIO . logWarning tracer $ mconcat
                       [ "insertTxMetadata: Could not decode to UTF8: ", textShow err ]
-                   return Nothing
+                   pure Nothing
                  Right json ->
                    -- See https://github.com/input-output-hk/cardano-db-sync/issues/297
                    if containsUnicodeNul json
                      then do
                        liftIO $ logWarning tracer "insertTxMetadata: dropped due to a Unicode NUL character."
-                       return Nothing
+                       pure Nothing
                      else
                        pure $ Just json
       void . lift . DB.insertTxMetadata $
