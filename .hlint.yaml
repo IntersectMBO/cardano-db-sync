@@ -43,6 +43,9 @@
 # Will suggest replacing "wibbleMany [myvar]" with "wibbleOne myvar"
 # - error: {lhs: "wibbleMany [x]", rhs: wibbleOne x}
 
+# The monad of no return will be here one day
+- error: {lhs: "return x", rhs: pure x}
+
 
 # Turn on hints that are off by default
 #
