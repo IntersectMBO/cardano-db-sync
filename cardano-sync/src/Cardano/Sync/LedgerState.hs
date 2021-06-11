@@ -58,7 +58,6 @@ import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (.
 import qualified Control.Exception as Exception
 import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, TBQueue, atomically, newTBQueueIO,
                    newTVarIO, readTVar, writeTVar)
-import           Control.Monad.Extra (firstJustM, fromMaybeM)
 
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
@@ -100,6 +99,8 @@ import qualified Shelley.Spec.Ledger.UTxO as Shelley
 
 import           System.Directory (listDirectory, removeFile)
 import           System.FilePath (dropExtension, takeExtension, (</>))
+import           System.Mem (performMajorGC)
+
 
 -- Note: The decision on whether a ledger-state is written to disk is based on the block number
 -- rather than the slot number because while the block number is fully populated (for every block
@@ -128,7 +129,7 @@ data LedgerEnv = LedgerEnv
   { leProtocolInfo :: !(Consensus.ProtocolInfo IO CardanoBlock)
   , leDir :: !LedgerStateDir
   , leNetwork :: !Ledger.Network
-  , leStateVar :: !(StrictTVar IO CardanoLedgerState)
+  , leStateVar :: !(StrictTVar IO (Maybe CardanoLedgerState))
   , leEventState :: !(StrictTVar IO LedgerEventState)
   -- The following do not really have anything to do with maintaining ledger
   -- state. They are here due to the ongoing headaches around the split between
@@ -175,17 +176,11 @@ data LedgerStateSnapshot = LedgerStateSnapshot
   , lssEvents :: ![LedgerEvent]
   }
 
-mkLedgerEnv :: Consensus.ProtocolInfo IO CardanoBlock
-            -> LedgerStateDir
-            -> Ledger.Network
-            -> SlotNo
-            -> Bool
-            -> IO LedgerEnv
-mkLedgerEnv protocolInfo dir network slot deleteFiles = do
-    when deleteFiles $
-      deleteNewerLedgerStateFiles dir slot
-    st <- findLatestLedgerState protocolInfo dir deleteFiles
-    svar <- newTVarIO st
+mkLedgerEnv
+    :: Consensus.ProtocolInfo IO CardanoBlock -> LedgerStateDir -> Ledger.Network
+    -> IO LedgerEnv
+mkLedgerEnv protocolInfo dir network = do
+    svar <- newTVarIO Nothing
     evar <- newTVarIO initLedgerEventState
     ivar <- newTVarIO $ IndexCache mempty mempty
     -- 2.5 days worth of slots. If we try to stick more than this number of
@@ -222,6 +217,15 @@ initCardanoLedgerState pInfo = CardanoLedgerState
       { clsState = Consensus.pInfoInitLedger pInfo
       }
 
+-- TODO make this type safe. We make the assumption here that the first message of
+-- the chainsync protocol is 'RollbackTo'.
+readStateUnsafe :: LedgerEnv -> STM CardanoLedgerState
+readStateUnsafe env = do
+    mState <- readTVar $ leStateVar env
+    case mState of
+      Nothing -> panic "LedgerState.readStateUnsafe: Ledger state is not found"
+      Just st -> pure st
+
 -- The function 'tickThenReapply' does zero validation, so add minimal validation ('blockPrevHash'
 -- matches the tip hash of the 'LedgerState'). This was originally for debugging but the check is
 -- cheap enough to keep.
@@ -231,9 +235,9 @@ applyBlock env blk details =
     -- be any contention on this variable, so putting everything inside 'atomically'
     -- is fine.
     atomically $ do
-      oldState <- readTVar (leStateVar env)
+      oldState <- readStateUnsafe env
       let !newState = oldState { clsState = applyBlk (ExtLedgerCfg (topLevelConfig env)) blk (clsState oldState) }
-      writeTVar (leStateVar env) newState
+      writeTVar (leStateVar env) (Just newState)
       oldEventState <- readTVar (leEventState env)
       events <- generateEvents env oldEventState  details newState
       pure $ LedgerStateSnapshot
@@ -308,18 +312,8 @@ generateEvents env oldEventState details cls = do
               else lesLastStateDistEpoch oldEventState
         }
 
--- Delete ledger state files for slots later than the provided SlotNo.
-deleteNewerLedgerStateFiles :: LedgerStateDir -> SlotNo -> IO ()
-deleteNewerLedgerStateFiles stateDir slotNo = do
-    delFiles <- filter isNewer <$> listLedgerStateFilesOrdered stateDir
-    mapM_ (safeRemoveFile . lsfFilePath) delFiles
-  where
-    isNewer :: LedgerStateFile -> Bool
-    isNewer lsf = lsfSlotNo lsf > slotNo
-
-saveCurrentLedgerState :: LedgerEnv -> Maybe EpochNo -> IO ()
-saveCurrentLedgerState env mEpochNo = do
-    ledger <- atomically $ readTVar (leStateVar env)
+saveCurrentLedgerState :: LedgerEnv -> ExtLedgerState CardanoBlock -> Maybe EpochNo -> IO ()
+saveCurrentLedgerState env ledger mEpochNo = do
     case mkLedgerStateFilename (leDir env) ledger mEpochNo of
       Origin -> pure () -- we don't store genesis
       At file -> LBS.writeFile file $
@@ -328,14 +322,14 @@ saveCurrentLedgerState env mEpochNo = do
              (encodeDisk codecConfig)
              (encodeDisk codecConfig)
              (encodeDisk codecConfig)
-             (clsState ledger)
+             ledger
   where
     codecConfig :: CodecConfig CardanoBlock
     codecConfig = configCodec (topLevelConfig env)
 
 saveLedgerStateMaybe :: LedgerEnv -> LedgerStateSnapshot -> SyncState -> IO ()
 saveLedgerStateMaybe env snapshot synced = do
-  writeLedgerState env ledger
+  writeLedgerState env (Just ledger)
   case (synced, lssNewEpoch snapshot) of
     (_, Strict.Just newEpoch) | not (Generic.neIsEBB newEpoch) ->
       saveCleanupState (Just $ Generic.neEpoch newEpoch) -- Save ledger states on epoch boundaries, unless they are EBBs
@@ -353,25 +347,13 @@ saveLedgerStateMaybe env snapshot synced = do
 
     saveCleanupState :: Maybe EpochNo -> IO ()
     saveCleanupState mEpochNo = do
-      saveCurrentLedgerState env mEpochNo
+      saveCurrentLedgerState env ledger mEpochNo
       cleanupLedgerStateFiles env $
         fromWithOrigin (SlotNo 0) (ledgerTipSlot $ ledgerState ledger)
 
-findLatestLedgerState :: Consensus.ProtocolInfo IO CardanoBlock -> LedgerStateDir -> Bool -> IO CardanoLedgerState
-findLatestLedgerState pInfo dir deleteFiles =
-    fromMaybeM (pure $ initCardanoLedgerState pInfo)
-               (findLatestLedgerStateDisk config dir deleteFiles)
-  where
-    config = Consensus.pInfoConfig pInfo
-
-findLatestLedgerStateDisk :: TopLevelConfig CardanoBlock -> LedgerStateDir -> Bool -> IO (Maybe CardanoLedgerState)
-findLatestLedgerStateDisk config dir deleteFiles = do
-  files <- listLedgerStateFilesOrdered dir
-  firstJustM (loadLedgerStateFromFile config deleteFiles) files
-
-mkLedgerStateFilename :: LedgerStateDir -> CardanoLedgerState -> Maybe EpochNo -> WithOrigin FilePath
+mkLedgerStateFilename :: LedgerStateDir -> ExtLedgerState CardanoBlock -> Maybe EpochNo -> WithOrigin FilePath
 mkLedgerStateFilename dir ledger mEpochNo = lsfFilePath . dbPointToFileName dir mEpochNo
-    <$> getPoint (ledgerTipPoint (Proxy @CardanoBlock) (ledgerState $ clsState ledger))
+    <$> getPoint (ledgerTipPoint (Proxy @CardanoBlock) (ledgerState ledger))
 
 hashToAnnotation :: ByteString -> ByteString
 hashToAnnotation = Base16.encode . BS.take 5
@@ -458,10 +440,15 @@ cleanupLedgerStateFiles env slotNo = do
 
 loadLedgerAtPoint :: LedgerEnv -> CardanoPoint -> Bool -> IO (Either [LedgerStateFile] CardanoLedgerState)
 loadLedgerAtPoint env point delFiles = do
+    -- Ledger states are growing to become very big in memory.
+    -- Before parsing the new ledger state we need to make sure the old ledger state
+    -- is or can be garbage collected.
+    writeLedgerState env Nothing
+    performMajorGC
     mst <- findStateFromPoint env point delFiles
     case mst of
       Right st -> do
-        writeLedgerState env (clsState st)
+        writeLedgerState env (Just $ clsState st)
         pure $ Right st
       Left lsfs -> pure $ Left lsfs
 
@@ -561,8 +548,8 @@ listLedgerStateFilesOrdered dir = do
     revSlotNoOrder :: LedgerStateFile -> LedgerStateFile -> Ordering
     revSlotNoOrder a b = compare (lsfSlotNo b) (lsfSlotNo a)
 
-writeLedgerState :: LedgerEnv -> ExtLedgerState CardanoBlock -> IO ()
-writeLedgerState env st = atomically $ writeTVar (leStateVar env) (CardanoLedgerState st)
+writeLedgerState :: LedgerEnv -> Maybe (ExtLedgerState CardanoBlock) -> IO ()
+writeLedgerState env mst = atomically $ writeTVar (leStateVar env) (CardanoLedgerState <$> mst)
 
 -- | Remove given file path and ignore any IOEXceptions.
 safeRemoveFile :: FilePath -> IO ()
