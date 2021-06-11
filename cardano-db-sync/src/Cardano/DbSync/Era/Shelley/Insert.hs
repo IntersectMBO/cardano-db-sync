@@ -103,6 +103,7 @@ insertShelleyBlock tracer lenv blk lStateSnap details = do
                     -- Shelley specific
                     , DB.blockVrfKey = Just $ Generic.blkVrfKey blk
                     , DB.blockOpCert = Just $ Generic.blkOpCert blk
+                    , DB.blockOpCertCounter = Just $ Generic.blkOpCertCounter blk
                     }
 
     zipWithM_ (insertTx tracer (leNetwork lenv) lStateSnap blkId (sdEpochNo details) (Generic.blkSlotNo blk)) [0 .. ] (Generic.blkTxs blk)

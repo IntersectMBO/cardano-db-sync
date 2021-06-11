@@ -91,6 +91,7 @@ share
     -- Shelley specific
     vrfKey              Text Maybe
     opCert              ByteString Maybe    sqltype=hash32type
+    opCertCounter       Word64 Maybe        sqltype=word63type
     UniqueBlock         hash
 
   Tx
