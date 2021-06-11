@@ -67,6 +67,7 @@ mkBlock blk slid =
     , blockProtoMinor = 0
     , blockVrfKey = Nothing
     , blockOpCert = Nothing
+    , blockOpCertCounter = Nothing
     }
 
 

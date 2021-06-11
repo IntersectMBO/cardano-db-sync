@@ -98,6 +98,7 @@ insertValidateGenesisDist backend tracer networkName cfg = do
                         -- Shelley specific
                         , DB.blockVrfKey = Nothing
                         , DB.blockOpCert = Nothing
+                        , DB.blockOpCertCounter = Nothing
                         }
             lift $ mapM_ (insertTxOuts bid) $ genesisTxos cfg
             liftIO . logInfo tracer $ "Initial genesis distribution populated. Hash "

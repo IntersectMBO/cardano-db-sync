@@ -68,6 +68,7 @@ data Block = Block
   , blkProto :: !Shelley.ProtVer
   , blkVrfKey :: !Text
   , blkOpCert :: !ByteString
+  , blkOpCertCounter :: !Word64
   , blkTxs :: ![Tx]
   }
 
@@ -86,6 +87,7 @@ fromAllegraBlock blk =
     , blkProto = blockProtoVersion blk
     , blkVrfKey = blockVrfKeyView blk
     , blkOpCert = blockOpCert blk
+    , blkOpCertCounter = blockOpCertCounter blk
     , blkTxs = map fromAllegraTx (blockTxs blk)
     }
 
@@ -103,6 +105,7 @@ fromShelleyBlock blk =
     , blkProto = blockProtoVersion blk
     , blkVrfKey = blockVrfKeyView blk
     , blkOpCert = blockOpCert blk
+    , blkOpCertCounter = blockOpCertCounter blk
     , blkTxs = map fromShelleyTx (blockTxs blk)
     }
 
@@ -120,6 +123,7 @@ fromMaryBlock blk =
     , blkProto = blockProtoVersion blk
     , blkVrfKey = blockVrfKeyView blk
     , blkOpCert = blockOpCert blk
+    , blkOpCertCounter = blockOpCertCounter blk
     , blkTxs = map fromMaryTx (blockTxs blk)
     }
 
@@ -137,6 +141,7 @@ fromAlonzoBlock blk =
     , blkProto = blockProtoVersion blk
     , blkVrfKey = blockVrfKeyView blk
     , blkOpCert = blockOpCert blk
+    , blkOpCertCounter = blockOpCertCounter blk
     , blkTxs = map fromAlonzoTx (alonzoBlockTxs blk)
     }
 
@@ -164,6 +169,9 @@ blockPrevHash blk =
 
 blockOpCert :: ShelleyBasedEra era => ShelleyBlock era -> ByteString
 blockOpCert = KES.rawSerialiseVerKeyKES . Shelley.ocertVkHot . Shelley.bheaderOCert . blockBody
+
+blockOpCertCounter :: ShelleyBasedEra era => ShelleyBlock era -> Word64
+blockOpCertCounter = Shelley.ocertN . Shelley.bheaderOCert . blockBody
 
 blockProtoVersion :: ShelleyBasedEra era => ShelleyBlock era -> Shelley.ProtVer
 blockProtoVersion = Shelley.bprotver . blockBody

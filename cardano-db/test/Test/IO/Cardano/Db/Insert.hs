@@ -66,6 +66,7 @@ blockZero slid =
     , blockProtoMinor = 0
     , blockVrfKey = Nothing
     , blockOpCert = Nothing
+    , blockOpCertCounter = Nothing
     }
 
 
@@ -86,6 +87,7 @@ blockOne slid =
     , blockProtoMinor = 0
     , blockVrfKey = Nothing
     , blockOpCert = Nothing
+    , blockOpCertCounter = Nothing
     }
 
 mkHash32 :: Char -> ByteString

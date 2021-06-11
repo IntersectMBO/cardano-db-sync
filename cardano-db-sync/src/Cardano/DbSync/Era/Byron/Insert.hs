@@ -108,6 +108,7 @@ insertABOBBoundary tracer blk details = do
               -- Shelley specific
               , DB.blockVrfKey = Nothing
               , DB.blockOpCert = Nothing
+              , DB.blockOpCertCounter = Nothing
               }
 
   liftIO . logInfo tracer $
@@ -142,6 +143,7 @@ insertABlock tracer blk details = do
                     -- Shelley specific
                     , DB.blockVrfKey = Nothing
                     , DB.blockOpCert = Nothing
+                    , DB.blockOpCertCounter = Nothing
                     }
 
     zipWithM_ (insertTx tracer blkId) (Byron.blockPayload blk) [ 0 .. ]
