@@ -1,5 +1,8 @@
 # Revision history for cardano-db-tool
 
+## 10.0.0
+* Add helper functionality for state snapshot generation.
+
 ## 9.0.0
 * No changes for this release.
 
