@@ -407,6 +407,18 @@ share
 
     nonce               ByteString Maybe    sqltype=hash32type
 
+    adaPerUTxOWord      DbLovelace Maybe    sqltype=lovelace
+    costModels          Text Maybe
+    priceMem            DbLovelace Maybe    sqltype=lovelace
+    priceStep           DbLovelace Maybe    sqltype=lovelace
+    maxTxExMem          DbWord64 Maybe      sqltype=word64type
+    maxTxExSteps        DbWord64 Maybe      sqltype=word64type
+    maxBlockExMem       DbWord64 Maybe      sqltype=word64type
+    maxBlockExSteps     DbWord64 Maybe      sqltype=word64type
+    maxValSize          DbWord64 Maybe      sqltype=word64type
+    collateralPercent   Word16 Maybe        sqltype=uinteger
+    maxCollateralInputs Word16 Maybe        sqltype=uinteger
+
     blockId             BlockId             OnDeleteCascade      -- The first block where these parameters are valid.
     UniqueEpochParam    epochNo blockId
 

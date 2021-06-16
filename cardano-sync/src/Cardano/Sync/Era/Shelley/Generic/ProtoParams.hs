@@ -8,7 +8,9 @@ module Cardano.Sync.Era.Shelley.Generic.ProtoParams
 import           Cardano.Prelude
 
 import qualified Cardano.Ledger.Alonzo as Alonzo
+import           Cardano.Ledger.Alonzo.Language (Language)
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
+import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import           Cardano.Ledger.BaseTypes (UnitInterval)
 import           Cardano.Ledger.Coin (Coin (..))
 import           Cardano.Slotting.Slot (EpochNo (..))
@@ -45,6 +47,19 @@ data ProtoParams = ProtoParams
   , ppProtocolVersion :: !ProtVer
   , ppMinUTxOValue :: !Coin
   , ppMinPoolCost :: !Coin
+
+  -- New for Alonzo.
+  , ppAdaPerUTxOWord :: !(Maybe Coin)
+  , ppCostmdls :: !(Maybe (Map Language Alonzo.CostModel))
+  , ppPriceMem :: !(Maybe Coin)
+  , ppPriceStep :: !(Maybe Coin)
+  , ppMaxTxExMem :: !(Maybe Word64)
+  , ppMaxTxExSteps :: !(Maybe Word64)
+  , ppMaxBlockExMem :: !(Maybe Word64)
+  , ppMaxBlockExSteps :: !(Maybe Word64)
+  , ppMaxValSize :: !(Maybe Natural)
+  , ppCollateralPercentage :: !(Maybe Natural)
+  , ppMaxCollateralInputs :: !(Maybe Natural)
   }
 
 epochProtoParams :: ExtLedgerState CardanoBlock -> Maybe ProtoParams
@@ -94,6 +109,17 @@ fromAlonzoParams params =
     , ppProtocolVersion = Alonzo._protocolVersion params
     , ppMinUTxOValue = Alonzo._adaPerUTxOWord params
     , ppMinPoolCost = Alonzo._minPoolCost params
+    , ppAdaPerUTxOWord = Just $ Alonzo._adaPerUTxOWord params
+    , ppCostmdls = Just $ Alonzo._costmdls params
+    , ppPriceMem = Just $ Alonzo.prMem (Alonzo._prices params)
+    , ppPriceStep = Just $ Alonzo.prSteps (Alonzo._prices params)
+    , ppMaxTxExMem = Just $ Alonzo.exUnitsMem (Alonzo._maxTxExUnits params)
+    , ppMaxTxExSteps = Just $ Alonzo.exUnitsSteps (Alonzo._maxTxExUnits params)
+    , ppMaxBlockExMem = Just $ Alonzo.exUnitsMem (Alonzo._maxBlockExUnits params)
+    , ppMaxBlockExSteps = Just $ Alonzo.exUnitsSteps (Alonzo._maxBlockExUnits params)
+    , ppMaxValSize = Just $ Alonzo._maxValSize params
+    , ppCollateralPercentage = Just $ Alonzo._collateralPercentage params
+    , ppMaxCollateralInputs = Just $ Alonzo._maxCollateralInputs params
     }
 
 fromShelleyParams :: Shelley.PParams' Identity era -> ProtoParams
@@ -116,4 +142,15 @@ fromShelleyParams params =
     , ppProtocolVersion = Shelley._protocolVersion params
     , ppMinUTxOValue = Shelley._minUTxOValue params
     , ppMinPoolCost = Shelley._minPoolCost params
+    , ppAdaPerUTxOWord = Nothing
+    , ppCostmdls = Nothing
+    , ppPriceMem = Nothing
+    , ppPriceStep = Nothing
+    , ppMaxTxExMem = Nothing
+    , ppMaxTxExSteps = Nothing
+    , ppMaxBlockExMem = Nothing
+    , ppMaxBlockExSteps = Nothing
+    , ppMaxValSize = Nothing
+    , ppCollateralPercentage = Nothing
+    , ppMaxCollateralInputs = Nothing
     }
