@@ -1,5 +1,6 @@
 module Cardano.Db.Delete
   ( deleteCascadeBlock
+  , deleteCascadeAfter
   , deleteCascadeBlockNo
   , deleteCascadeSlotNo
   ) where
@@ -21,6 +22,14 @@ import           Ouroboros.Network.Block (BlockNo (..))
 deleteCascadeBlock :: MonadIO m => Block -> ReaderT SqlBackend m Bool
 deleteCascadeBlock block = do
   keys <- selectKeysList [ BlockHash ==. blockHash block ] []
+  mapM_ delete keys
+  pure $ not (null keys)
+
+-- | Delete a block after the specified 'BlockId'. Returns 'True' if it did exist and has been
+-- deleted and 'False' if it did not exist.
+deleteCascadeAfter :: MonadIO m => BlockId -> ReaderT SqlBackend m Bool
+deleteCascadeAfter bid = do
+  keys <- selectKeysList [ BlockPreviousId ==. Just bid ] []
   mapM_ delete keys
   pure $ not (null keys)
 

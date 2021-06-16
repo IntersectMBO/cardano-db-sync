@@ -24,6 +24,7 @@ data LookupFail
   | DbLookupSlotNo !Word64
   | DbMetaEmpty
   | DbMetaMultipleRows
+  | DBMultipleGenesis
   deriving (Eq, Show)
 
 renderLookupFail :: LookupFail -> Text
@@ -41,6 +42,8 @@ renderLookupFail lf =
         Text.concat [ "slot number ", textShow s ]
     DbMetaEmpty -> "Meta table is empty"
     DbMetaMultipleRows -> "Multiple rows in Meta table which should only contain one"
+    DBMultipleGenesis ->
+        "Multiple Genesis blocks found. These are blocks without an EpochNo"
 
 base16encode :: ByteString -> Text
 base16encode = Text.decodeUtf8 . Base16.encode
