@@ -718,6 +718,17 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce =
       , DB.epochParamMinUtxoValue = Generic.coinToDbLovelace (Generic.ppMinUTxOValue params)
       , DB.epochParamMinPoolCost = Generic.coinToDbLovelace (Generic.ppMinPoolCost params)
       , DB.epochParamNonce = Generic.nonceToBytes nonce
+      , DB.epochParamAdaPerUTxOWord = Generic.coinToDbLovelace <$> Generic.ppAdaPerUTxOWord params
+      , DB.epochParamCostModels = Generic.renderLanguageCostModel <$> Generic.ppCostmdls params
+      , DB.epochParamPriceMem = Generic.coinToDbLovelace <$> Generic.ppPriceMem params
+      , DB.epochParamPriceStep = Generic.coinToDbLovelace <$> Generic.ppPriceStep params
+      , DB.epochParamMaxTxExMem = DbWord64 <$> Generic.ppMaxTxExMem params
+      , DB.epochParamMaxTxExSteps = DbWord64 <$> Generic.ppMaxTxExSteps params
+      , DB.epochParamMaxBlockExMem = DbWord64 <$> Generic.ppMaxBlockExMem params
+      , DB.epochParamMaxBlockExSteps = DbWord64 <$> Generic.ppMaxBlockExSteps params
+      , DB.epochParamMaxValSize = DbWord64 . fromIntegral <$> Generic.ppMaxValSize params
+      , DB.epochParamCollateralPercent = fromIntegral <$> Generic.ppCollateralPercentage params
+      , DB.epochParamMaxCollateralInputs = fromIntegral <$> Generic.ppMaxCollateralInputs params
       , DB.epochParamBlockId = blkId
       }
 
