@@ -67,7 +67,6 @@ import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
-import qualified Data.Text as Text
 import           Data.Time.Clock (UTCTime)
 
 import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockHash, blockIsEBB,
@@ -463,37 +462,41 @@ findStateFromPoint env point delFiles = do
         mapM_ (safeRemoveFile . lsfFilePath) files
       pure . Right $ initCardanoLedgerState (leProtocolInfo env)
     At blk -> do
-      let (filesToDelete, found) = findLedgerStateFile files (Point.blockPointSlot blk, mkRawHash $ Point.blockPointHash blk)
+      let (newerFiles, found, olderFiles) =
+            findLedgerStateFile files (Point.blockPointSlot blk, mkRawHash $ Point.blockPointHash blk)
       when delFiles $
-        mapM_ (safeRemoveFile . lsfFilePath) filesToDelete
+        mapM_ (safeRemoveFile . lsfFilePath) newerFiles
       case found of
-        Right lsf -> do
+        Just lsf -> do
           mState <- loadLedgerStateFromFile (topLevelConfig env) False lsf
           case mState of
             Nothing -> do
               when delFiles $ safeRemoveFile $ lsfFilePath lsf
-              panic $ "findStateFromPoint failed to parse required state file: "
-                   <> Text.pack (lsfFilePath lsf)
+              pure $ Left olderFiles
             Just st -> pure $ Right st
-        Left lsfs -> pure $ Left lsfs
+        Nothing -> pure $ Left olderFiles
 
--- Tries to find a file which matches the given point.
--- It returns the file if we found one, or a list older files. These can
--- be used to rollback even further.
--- It will also return a list of files that are newer than the point. These files should
--- be deleted. Files with same slot, but different hash are considered newer.
+-- Splits the files based on the comparison with the given point. It will return
+-- a list of newer files, a file at the given point if found and a list of older
+-- files. All lists of files should be ordered most recent first.
+--
+-- Newer files can be deleted
+-- File at the exact point can be used to initial the LedgerState
+-- Older files can be used to rollback even further.
+--
+-- Files with same slot, but different hash are considered newer.
 findLedgerStateFile
     :: [LedgerStateFile] -> (SlotNo, ByteString)
-    -> ([LedgerStateFile], Either [LedgerStateFile] LedgerStateFile)
+    -> ([LedgerStateFile], Maybe LedgerStateFile, [LedgerStateFile])
 findLedgerStateFile files pointPair =
         go [] files
       where
-        go delFiles [] = (delFiles, Left [])
-        go delFiles (file : rest) =
+        go newerFiles [] = (reverse newerFiles, Nothing, [])
+        go newerFiles (file : rest) =
           case comparePointToFile file pointPair of
-            EQ -> (delFiles, Right file) -- found the file we were looking for
-            LT -> (delFiles, Left $ file : rest) -- found an older file first
-            GT -> go (file : delFiles) rest -- keep looking on older files
+            EQ -> (reverse newerFiles, Just file, rest) -- found the file we were looking for
+            LT -> (reverse newerFiles, Nothing, file : rest) -- found an older file first
+            GT -> go (file : newerFiles) rest -- keep looking on older files
 
 comparePointToFile :: LedgerStateFile -> (SlotNo, ByteString) -> Ordering
 comparePointToFile lsf (blSlotNo, blHash) =
