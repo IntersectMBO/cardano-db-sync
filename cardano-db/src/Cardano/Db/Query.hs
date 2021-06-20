@@ -5,6 +5,7 @@
 module Cardano.Db.Query
   ( LookupFail (..)
   , queryAddressBalanceAtSlot
+  , queryGenesis
   , queryBlock
   , queryBlockCount
   , queryBlockHeight
@@ -117,6 +118,15 @@ queryAddressBalanceAtSlot addr slotNo = do
                   where_ (txout ^. TxOutAddress ==. val addr)
                   pure $ sum_ (txout ^. TxOutValue)
         pure $ unValueSumAda (listToMaybe res)
+
+queryGenesis :: MonadIO m => ReaderT SqlBackend m (Either LookupFail BlockId)
+queryGenesis = do
+  res <- select . from $ \ blk -> do
+            where_ (isNothing (blk ^. BlockEpochNo))
+            pure $ blk ^. BlockId
+  case res of
+    [blk] -> pure $ Right (unValue blk)
+    _ -> pure $ Left DBMultipleGenesis
 
 -- | Get the 'Block' associated with the given hash.
 queryBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail Block)

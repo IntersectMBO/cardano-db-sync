@@ -1,60 +1,82 @@
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 module Cardano.DbSync.Rollback
-  ( rollbackToSlot
+  ( rollbackToPoint
   , unsafeRollback
   ) where
 
 import           Cardano.Prelude
+import qualified Data.ByteString.Short as BSS
 
 import           Cardano.BM.Trace (Trace, logInfo)
 
 import qualified Cardano.Db as DB
 
+import           Cardano.DbSync.Era.Util
+
 import           Cardano.Sync.Error
 import           Cardano.Sync.Types
 import           Cardano.Sync.Util
 
+import qualified Data.List as List
 import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
+import           Ouroboros.Consensus.HardFork.Combinator.AcrossEras (getOneEraHash)
 
 import           Ouroboros.Network.Block
 import           Ouroboros.Network.Point
 
 -- Rollbacks are done in an Era generic way based on the 'Point' we are
 -- rolling back to.
-rollbackToSlot :: SqlBackend -> Trace IO Text -> CardanoPoint -> IO (Either SyncNodeError ())
-rollbackToSlot backend trce point =
+rollbackToPoint :: SqlBackend -> Trace IO Text -> CardanoPoint -> IO (Either SyncNodeError ())
+rollbackToPoint backend trce point =
     DB.runDbIohkNoLogging backend $ runExceptT action
   where
     action :: MonadIO m => ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     action = do
         liftIO $ logInfo trce msg
         xs <- lift $ slotsToDelete (pointSlot point)
-        if null xs then
-          liftIO $ logInfo trce "No Rollback is necessary"
-        else do
+        unless (null xs) $
+          -- there may be more deleted blocks than slots, because ebbs don't have
+          -- a slot. We can only make an estimation here.
           liftIO . logInfo trce $
               mconcat
-                [ "Deleting ", textShow (length xs), " slots: ", renderSlotList xs
+                [ "Deleting ", textShow (length xs), " blocks up to slot "
+                , textShow (unSlotNo $ List.head xs)
                 ]
-          mapM_ (lift . DB.deleteCascadeSlotNo) xs
-          liftIO $ logInfo trce "Slots deleted"
+        -- We delete the block right after the point we rollback to. This delete
+        -- should cascade to the rest of the chain.
+        prevId <- liftLookupFail "Rollback.rollbackToPoint" $ queryBlockId point
+        deleted <- lift $ DB.deleteCascadeAfter prevId
+        liftIO . logInfo trce $
+                    if deleted
+                      then "Blocks deleted"
+                      else "No blocks need to be deleted"
 
-    slotsToDelete Origin = DB.querySlotNos
-    slotsToDelete (At sl) = DB.querySlotNosGreaterThan (unSlotNo sl)
+    slotsToDelete :: MonadIO m => WithOrigin SlotNo -> ReaderT SqlBackend m [SlotNo]
+    slotsToDelete wosl =
+      case wosl of
+        Origin -> DB.querySlotNos
+        At sl -> DB.querySlotNosGreaterThan (unSlotNo sl)
+
+    queryBlockId :: MonadIO m => Point CardanoBlock -> ReaderT SqlBackend m (Either DB.LookupFail DB.BlockId)
+    queryBlockId pnt =
+      case getPoint pnt of
+        Origin -> DB.queryGenesis
+        At blk -> DB.queryBlockId (BSS.fromShort . getOneEraHash $ blockPointHash blk)
 
     msg :: Text
-    msg = case getPoint point of
-            Origin -> "Rolling back to genesis"
-            At blk -> mconcat
-                  [ "Rolling back to "
-                  , textShow (unSlotNo $ blockPointSlot blk)
-                  , ", hash "
-                  , renderByteArray $ toRawHash (Proxy @CardanoBlock) $ blockPointHash blk
-                  ]
+    msg =
+      case getPoint point of
+        Origin -> "Rolling back to genesis"
+        At blk ->
+          mconcat
+            [ "Rolling back to ", textShow (unSlotNo $ blockPointSlot blk), ", hash "
+            , renderByteArray $ toRawHash (Proxy @CardanoBlock) (blockPointHash blk)
+            ]
 
 -- For testing and debugging.
 unsafeRollback :: Trace IO Text -> SlotNo -> IO (Either SyncNodeError ())

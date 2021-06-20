@@ -4,7 +4,7 @@
 module Cardano.DbSync.Plugin.Default
   ( defDbSyncNodePlugin
   , insertDefaultBlock
-  , rollbackToSlot
+  , rollbackToPoint
   ) where
 
 
@@ -19,7 +19,7 @@ import           Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock, postEpochRewards,
                    postEpochStake)
-import           Cardano.DbSync.Rollback (rollbackToSlot)
+import           Cardano.DbSync.Rollback (rollbackToPoint)
 
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
 
@@ -51,7 +51,7 @@ defDbSyncNodePlugin backend =
   SyncNodePlugin
     { plugOnStartup = []
     , plugInsertBlock = [insertDefaultBlock backend]
-    , plugRollbackBlock = [rollbackToSlot backend]
+    , plugRollbackBlock = [rollbackToPoint backend]
     }
 
 -- -------------------------------------------------------------------------------------------------
