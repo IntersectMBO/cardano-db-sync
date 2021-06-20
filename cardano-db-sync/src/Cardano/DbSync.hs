@@ -28,7 +28,7 @@ import           Control.Monad.Trans.Maybe (MaybeT (..))
 
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..))
 
-import           Cardano.BM.Trace (Trace)
+import           Cardano.BM.Trace (Trace, logInfo)
 
 import qualified Cardano.Db as DB
 
@@ -59,9 +59,10 @@ runDbSyncNode metricsSetters mkPlugin params = do
     -- Read the PG connection info
     pgConfig <- DB.readPGPassFileEnv Nothing
 
-    DB.runMigrations pgConfig True dbMigrationDir (Just $ DB.LogFileDir "/tmp")
-
     trce <- configureLogging params "db-sync-node"
+    logInfo trce "Running database migrations"
+
+    DB.runMigrations pgConfig True dbMigrationDir (Just $ DB.LogFileDir "/tmp")
 
     let connectionString = DB.toConnectionString pgConfig
 

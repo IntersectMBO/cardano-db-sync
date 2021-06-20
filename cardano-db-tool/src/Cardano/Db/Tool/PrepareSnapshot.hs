@@ -34,13 +34,13 @@ prepareSnapshotAux firstTry args = do
     case mblock of
       Just block | Just bSlotNo <- SlotNo <$> blockSlotNo block -> do
         let bHash = blockHash block
-        let (newerFiles, mfile) = findLedgerStateFile ledgerFiles (bSlotNo, bHash)
+        let (newerFiles, mfile, olderFiles) = findLedgerStateFile ledgerFiles (bSlotNo, bHash)
         printNewerSnapshots newerFiles
-        case mfile of
-            Right file -> do
+        case (mfile, olderFiles) of
+            (Just file, _) -> do
               let bblockNo = fromMaybe 0 $ blockBlockNo block
               printCreateSnapshot bblockNo (lsfFilePath file)
-            Left (file : _) -> do
+            (_, file : _) -> do
                 -- We couldn't find the tip of the db, so we return a list of
                 -- the available ledger files, before this tip.
               putStrLn $ concat
@@ -55,7 +55,7 @@ prepareSnapshotAux firstTry args = do
                 prepareSnapshotAux False args
               else
                 putStrLn "After a rollback the db is in sync with no ledger state file"
-            Left [] ->
+            (_, []) ->
               putStrLn "No ledger state file matches the db tip. You need to run db-sync before creating a snapshot"
 
       _ -> do

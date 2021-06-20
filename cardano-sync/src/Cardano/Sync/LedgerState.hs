@@ -29,6 +29,8 @@ module Cardano.Sync.LedgerState
 
 import           Prelude (String)
 
+import           Cardano.BM.Trace (Trace, logInfo, logWarning)
+
 import           Cardano.Binary (DecoderError)
 import qualified Cardano.Binary as Serialize
 
@@ -126,7 +128,8 @@ data IndexCache = IndexCache
   }
 
 data LedgerEnv = LedgerEnv
-  { leProtocolInfo :: !(Consensus.ProtocolInfo IO CardanoBlock)
+  { leTrace :: Trace IO Text
+  , leProtocolInfo :: !(Consensus.ProtocolInfo IO CardanoBlock)
   , leDir :: !LedgerStateDir
   , leNetwork :: !Ledger.Network
   , leStateVar :: !(StrictTVar IO (Maybe CardanoLedgerState))
@@ -177,9 +180,9 @@ data LedgerStateSnapshot = LedgerStateSnapshot
   }
 
 mkLedgerEnv
-    :: Consensus.ProtocolInfo IO CardanoBlock -> LedgerStateDir -> Ledger.Network
+    :: Trace IO Text -> Consensus.ProtocolInfo IO CardanoBlock -> LedgerStateDir -> Ledger.Network
     -> IO LedgerEnv
-mkLedgerEnv protocolInfo dir network = do
+mkLedgerEnv trce protocolInfo dir network = do
     svar <- newTVarIO Nothing
     evar <- newTVarIO initLedgerEventState
     ivar <- newTVarIO $ IndexCache mempty mempty
@@ -190,7 +193,8 @@ mkLedgerEnv protocolInfo dir network = do
     orq <- newTBQueueIO 100
     est <- newTVarIO Nothing
     pure LedgerEnv
-      { leProtocolInfo = protocolInfo
+      { leTrace = trce
+      , leProtocolInfo = protocolInfo
       , leDir = dir
       , leNetwork = network
       , leStateVar = svar
@@ -459,41 +463,66 @@ findStateFromPoint env point delFiles = do
     -- TODO: We can make this a monadic action (reread config from disk) to save some memory.
   case getPoint point of
     Origin -> do
-      when delFiles $
-        mapM_ (safeRemoveFile . lsfFilePath) files
+      deleteNewerFiles files
       pure . Right $ initCardanoLedgerState (leProtocolInfo env)
     At blk -> do
-      let (filesToDelete, found) = findLedgerStateFile files (Point.blockPointSlot blk, mkRawHash $ Point.blockPointHash blk)
-      when delFiles $
-        mapM_ (safeRemoveFile . lsfFilePath) filesToDelete
+      let (newerFiles, found, olderFiles) =
+            findLedgerStateFile files (Point.blockPointSlot blk, mkRawHash $ Point.blockPointHash blk)
+      deleteNewerFiles newerFiles
       case found of
-        Right lsf -> do
+        Just lsf -> do
           mState <- loadLedgerStateFromFile (topLevelConfig env) False lsf
           case mState of
-            Nothing -> do
-              when delFiles $ safeRemoveFile $ lsfFilePath lsf
-              panic $ "findStateFromPoint failed to parse required state file: "
-                   <> Text.pack (lsfFilePath lsf)
-            Just st -> pure $ Right st
-        Left lsfs -> pure $ Left lsfs
+            Left err -> do
+              deleteLedgerFile err lsf
+              logNewerFiles olderFiles
+              pure $ Left olderFiles
+            Right st -> pure $ Right st
+        Nothing -> do
+          logNewerFiles olderFiles
+          pure $ Left olderFiles
+  where
+    deleteNewerFiles :: [LedgerStateFile] -> IO ()
+    deleteNewerFiles lsfs = when (delFiles && not (null lsfs)) $ do
+      logInfo (leTrace env) $ mconcat ["Removing newer files ", textShow (map lsfFilePath lsfs)]
+      mapM_ (safeRemoveFile . lsfFilePath) lsfs
 
--- Tries to find a file which matches the given point.
--- It returns the file if we found one, or a list older files. These can
--- be used to rollback even further.
--- It will also return a list of files that are newer than the point. These files should
--- be deleted. Files with same slot, but different hash are considered newer.
+    deleteLedgerFile :: Text -> LedgerStateFile -> IO ()
+    deleteLedgerFile err lsf = when delFiles $ do
+      logWarning (leTrace env) $ mconcat
+        [ "Failed to parse ledger state file ", Text.pack (lsfFilePath  lsf)
+        , " with error '", err, "'. Deleting it."
+        ]
+      safeRemoveFile $ lsfFilePath lsf
+
+    logNewerFiles :: [LedgerStateFile] -> IO ()
+    logNewerFiles lsfs =
+      logWarning (leTrace env) $
+        case lsfs of
+          [] -> "Rollback failed. No more ledger state files."
+          (x:_) -> mconcat [ "Rolling back further to slot ", textShow (unSlotNo $ lsfSlotNo x) ]
+
+-- Splits the files based on the comparison with the given point. It will return
+-- a list of newer files, a file at the given point if found and a list of older
+-- files. All lists of files should be ordered most recent first.
+--
+-- Newer files can be deleted
+-- File at the exact point can be used to initial the LedgerState
+-- Older files can be used to rollback even further.
+--
+-- Files with same slot, but different hash are considered newer.
 findLedgerStateFile
     :: [LedgerStateFile] -> (SlotNo, ByteString)
-    -> ([LedgerStateFile], Either [LedgerStateFile] LedgerStateFile)
+    -> ([LedgerStateFile], Maybe LedgerStateFile, [LedgerStateFile])
 findLedgerStateFile files pointPair =
         go [] files
       where
-        go delFiles [] = (delFiles, Left [])
-        go delFiles (file : rest) =
+        go newerFiles [] = (reverse newerFiles, Nothing, [])
+        go newerFiles (file : rest) =
           case comparePointToFile file pointPair of
-            EQ -> (delFiles, Right file) -- found the file we were looking for
-            LT -> (delFiles, Left $ file : rest) -- found an older file first
-            GT -> go (file : delFiles) rest -- keep looking on older files
+            EQ -> (reverse newerFiles, Just file, rest) -- found the file we were looking for
+            LT -> (reverse newerFiles, Nothing, file : rest) -- found an older file first
+            GT -> go (file : newerFiles) rest -- keep looking on older files
 
 comparePointToFile :: LedgerStateFile -> (SlotNo, ByteString) -> Ordering
 comparePointToFile lsf (blSlotNo, blHash) =
@@ -504,24 +533,22 @@ comparePointToFile lsf (blSlotNo, blHash) =
         else GT
     x -> x
 
-loadLedgerStateFromFile :: TopLevelConfig CardanoBlock -> Bool -> LedgerStateFile -> IO (Maybe CardanoLedgerState)
+loadLedgerStateFromFile :: TopLevelConfig CardanoBlock -> Bool -> LedgerStateFile -> IO (Either Text CardanoLedgerState)
 loadLedgerStateFromFile config delete lsf = do
     mst <- safeReadFile (lsfFilePath lsf)
     case mst of
-      Nothing -> when delete (safeRemoveFile $ lsfFilePath lsf) >> pure Nothing
-      Just st -> pure . Just $ CardanoLedgerState { clsState = st }
+      Left err -> when delete (safeRemoveFile $ lsfFilePath lsf) >> pure (Left err)
+      Right st -> pure . Right $ CardanoLedgerState { clsState = st }
   where
-    safeReadFile :: FilePath -> IO (Maybe (ExtLedgerState CardanoBlock))
+    safeReadFile :: FilePath -> IO (Either Text (ExtLedgerState CardanoBlock))
     safeReadFile fp = do
       mbs <- Exception.try $ BS.readFile fp
       case mbs of
-        Left (_ :: IOException) -> pure Nothing
+        Left (err :: IOException) -> pure $ Left (Text.pack $ displayException err)
         Right bs ->
           case decode bs of
-            Left _err -> do
-              safeRemoveFile fp
-              pure Nothing
-            Right ls -> pure $ Just ls
+            Left err -> pure $ Left $ textShow err
+            Right ls -> pure $ Right ls
 
     codecConfig :: CodecConfig CardanoBlock
     codecConfig = configCodec config

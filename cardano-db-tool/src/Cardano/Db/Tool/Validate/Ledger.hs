@@ -50,7 +50,7 @@ validate params genCfg slotNo ledgerFiles =
       let ledgerSlot = lsfSlotNo ledgerFile
       if ledgerSlot <= slotNo
         then do
-          Just state <- loadLedgerStateFromFile (mkTopLevelConfig genCfg) False ledgerFile
+          Right state <- loadLedgerStateFromFile (mkTopLevelConfig genCfg) False ledgerFile
           validateBalance ledgerSlot (vpAddressUtxo params) state
         else do
           when logFailure . putStrLn $ redText "Ledger is newer than DB. Trying an older ledger."

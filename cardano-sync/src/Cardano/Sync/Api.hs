@@ -12,6 +12,8 @@ module Cardano.Sync.Api
 
 import           Cardano.Prelude (Proxy (..), catMaybes, find)
 
+import           Cardano.BM.Trace (Trace)
+
 import qualified Cardano.Ledger.BaseTypes as Ledger
 
 import           Cardano.Sync.Config.Cardano
@@ -28,6 +30,7 @@ import qualified Cardano.Chain.Genesis as Byron
 import           Cardano.Crypto.ProtocolMagic
 
 import           Data.ByteString (ByteString)
+import           Data.Text (Text)
 
 import           Ouroboros.Consensus.Block.Abstract (HeaderHash, fromRawHash)
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
@@ -53,9 +56,9 @@ data SyncDataLayer = SyncDataLayer
   , sdlGetLatestSlotNo :: IO SlotNo
   }
 
-mkSyncEnv :: SyncDataLayer -> ProtocolInfo IO CardanoBlock -> Ledger.Network -> NetworkMagic -> SystemStart -> LedgerStateDir -> IO SyncEnv
-mkSyncEnv dataLayer protocolInfo network networkMagic systemStart dir = do
-  ledgerEnv <- mkLedgerEnv protocolInfo dir network
+mkSyncEnv :: SyncDataLayer -> Trace IO Text -> ProtocolInfo IO CardanoBlock -> Ledger.Network -> NetworkMagic -> SystemStart -> LedgerStateDir -> IO SyncEnv
+mkSyncEnv dataLayer trce protocolInfo network networkMagic systemStart dir = do
+  ledgerEnv <- mkLedgerEnv trce protocolInfo dir network
   pure $ SyncEnv
           { envProtocol = SyncProtocolCardano
           , envNetworkMagic = networkMagic
@@ -64,8 +67,8 @@ mkSyncEnv dataLayer protocolInfo network networkMagic systemStart dir = do
           , envLedger = ledgerEnv
           }
 
-mkSyncEnvFromConfig :: SyncDataLayer -> LedgerStateDir -> GenesisConfig -> IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig dataLayer dir genCfg =
+mkSyncEnvFromConfig :: SyncDataLayer -> Trace IO Text -> LedgerStateDir -> GenesisConfig -> IO (Either SyncNodeError SyncEnv)
+mkSyncEnvFromConfig trce dataLayer dir genCfg =
     case genCfg of
       GenesisCardano _ bCfg sCfg _aCfg
         | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -81,6 +84,7 @@ mkSyncEnvFromConfig dataLayer dir genCfg =
                 , " /= ", textShow (Shelley.sgSystemStart $ scConfig sCfg)
                 ]
         | otherwise -> Right <$> mkSyncEnv
+                         trce
                          dataLayer
                          (mkProtocolInfoCardano genCfg)
                          (Shelley.sgNetworkId (scConfig sCfg))
