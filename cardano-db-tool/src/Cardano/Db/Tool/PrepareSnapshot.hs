@@ -1,6 +1,6 @@
 module Cardano.Db.Tool.PrepareSnapshot
   ( PrepareSnapshotArgs (..)
-  , prepareSnapshot
+  , runPrepareSnapshot
   ) where
 
 import           Cardano.Prelude (Word64, fromMaybe)
@@ -24,11 +24,11 @@ newtype PrepareSnapshotArgs = PrepareSnapshotArgs
   { unPrepareSnapshotArgs :: LedgerStateDir
   }
 
-prepareSnapshot :: PrepareSnapshotArgs -> IO ()
-prepareSnapshot = prepareSnapshotAux True
+runPrepareSnapshot :: PrepareSnapshotArgs -> IO ()
+runPrepareSnapshot = runPrepareSnapshotAux True
 
-prepareSnapshotAux :: Bool -> PrepareSnapshotArgs -> IO ()
-prepareSnapshotAux firstTry args = do
+runPrepareSnapshotAux :: Bool -> PrepareSnapshotArgs -> IO ()
+runPrepareSnapshotAux firstTry args = do
     ledgerFiles <- listLedgerStateFilesOrdered (unPrepareSnapshotArgs args)
     mblock <- runDbNoLogging queryLatestBlock
     case mblock of
@@ -52,7 +52,7 @@ prepareSnapshotAux firstTry args = do
                 ]
               if firstTry then do
                 interactiveRollback $ lsfSlotNo file
-                prepareSnapshotAux False args
+                runPrepareSnapshotAux False args
               else
                 putStrLn "After a rollback the db is in sync with no ledger state file"
             (_, []) ->

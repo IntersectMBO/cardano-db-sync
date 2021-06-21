@@ -6,6 +6,7 @@ import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Control.Applicative (optional)
 import           Data.Text (Text)
+import qualified Data.Text as Text
 import           Data.Word (Word64)
 
 import           Options.Applicative (Parser, ParserInfo, ParserPrefs)
@@ -28,29 +29,31 @@ main = do
 -- -----------------------------------------------------------------------------
 
 data Command
-  = CreateMigration MigrationDir
-  | Rollback SlotNo
-  | RunMigrations MigrationDir (Maybe LogFileDir)
-  | UtxoSetAtBlock Word64
-  | PrepareSnapshot PrepareSnapshotArgs
-  | ValidateDb
-  | ValidateAddressBalance LedgerValidationParams
+  = CmdCreateMigration !MigrationDir
+  | CmdReport !Report
+  | CmdRollback !SlotNo
+  | CmdRunMigrations !MigrationDir !(Maybe LogFileDir)
+  | CmdUtxoSetAtBlock !Word64
+  | CmdPrepareSnapshot !PrepareSnapshotArgs
+  | CmdValidateDb
+  | CmdValidateAddressBalance !LedgerValidationParams
 
 runCommand :: Command -> IO ()
 runCommand cmd =
   case cmd of
-    CreateMigration mdir -> doCreateMigration mdir
-    Rollback slotNo -> runRollback slotNo
-    RunMigrations mdir mldir -> do
+    CmdCreateMigration mdir -> runCreateMigration mdir
+    CmdReport report -> runReport report
+    CmdRollback slotNo -> runRollback slotNo
+    CmdRunMigrations mdir mldir -> do
         pgConfig <- readPGPassFileEnv Nothing
         runMigrations pgConfig False mdir mldir
-    UtxoSetAtBlock blkid -> utxoSetAtSlot blkid
-    PrepareSnapshot pargs -> prepareSnapshot pargs
-    ValidateDb -> runDbValidation
-    ValidateAddressBalance params -> runLedgerValidation params
+    CmdUtxoSetAtBlock blkid -> utxoSetAtSlot blkid
+    CmdPrepareSnapshot pargs -> runPrepareSnapshot pargs
+    CmdValidateDb -> runDbValidation
+    CmdValidateAddressBalance params -> runLedgerValidation params
 
-doCreateMigration :: MigrationDir -> IO ()
-doCreateMigration mdir = do
+runCreateMigration :: MigrationDir -> IO ()
+runCreateMigration mdir = do
   mfp <- createMigration mdir
   case mfp of
     Nothing -> putStrLn "No migration needed."
@@ -72,62 +75,58 @@ pVersion =
 
 pCommand :: Parser Command
 pCommand =
-  Opt.subparser
-    ( Opt.command "create-migration"
-        ( Opt.info pCreateMigration
-          $ Opt.progDesc "Create a database migration (only really used by devs)."
-          )
-    <> Opt.command "rollback"
-        ( Opt.info pRollback
-          $ Opt.progDesc "Rollback the database to the block with the provided slot number."
-          )
-    <> Opt.command "run-migrations"
-        ( Opt.info pRunMigrations
-          $ Opt.progDesc "Run the database migrations (which are idempotent)."
-          )
-    <> Opt.command "utxo-set"
-        ( Opt.info pUtxoSetAtBlock
-          $ Opt.progDesc "Get UTxO set at specified BlockNo."
-          )
-    <> Opt.command "prepare-snapshot"
-        ( Opt.info pPrepareSnapshot
-          $ Opt.progDesc "Prepare to create a snapshot pair"
-          )
-    <> Opt.command "validate"
-        ( Opt.info (pure ValidateDb)
-          $ Opt.progDesc "Run validation checks against the database."
-          )
-    <> Opt.command "validate-address-balance"
-        ( Opt.info (ValidateAddressBalance <$> pValidateLedgerParams)
-          $ Opt.progDesc "Run validation checks against the database and the ledger Utxo set."
-          )
-    )
+  Opt.subparser $ mconcat
+    [ Opt.command "create-migration"
+        $ Opt.info pCreateMigration
+            (Opt.progDesc "Create a database migration (only really used by devs).")
+    , Opt.command "report"
+        $ Opt.info (CmdReport <$> pReport)
+            (Opt.progDesc "Run a report using data from the database.")
+    , Opt.command "rollback"
+        $ Opt.info pRollback
+            (Opt.progDesc "Rollback the database to the block with the provided slot number.")
+    , Opt.command "run-migrations"
+        $ Opt.info pRunMigrations
+            (Opt.progDesc "Run the database migrations (which are idempotent).")
+    , Opt.command "utxo-set"
+        $ Opt.info pUtxoSetAtBlock
+            (Opt.progDesc "Get UTxO set at specified BlockNo.")
+    , Opt.command "prepare-snapshot"
+        $ Opt.info pPrepareSnapshot
+            (Opt.progDesc "Prepare to create a snapshot pair")
+    , Opt.command "validate"
+        $ Opt.info (pure CmdValidateDb)
+            (Opt.progDesc "Run validation checks against the database.")
+    , Opt.command "validate-address-balance"
+        $ Opt.info (CmdValidateAddressBalance <$> pValidateLedgerParams)
+            (Opt.progDesc "Run validation checks against the database and the ledger Utxo set.")
+    ]
   where
     pCreateMigration :: Parser Command
     pCreateMigration =
-      CreateMigration <$> pMigrationDir
+      CmdCreateMigration <$> pMigrationDir
 
     pRunMigrations :: Parser Command
     pRunMigrations =
-      RunMigrations <$> pMigrationDir <*> optional pLogFileDir
+      CmdRunMigrations <$> pMigrationDir <*> optional pLogFileDir
 
     pRollback :: Parser Command
     pRollback =
-      Rollback . SlotNo . read <$> Opt.strOption
+      CmdRollback . SlotNo . read <$> Opt.strOption
         (  Opt.long "slot"
         <> Opt.help "The slot number to roll back to."
         )
 
     pUtxoSetAtBlock :: Parser Command
     pUtxoSetAtBlock =
-      UtxoSetAtBlock . read <$> Opt.strOption
+      CmdUtxoSetAtBlock . read <$> Opt.strOption
         (  Opt.long "slot-no"
         <> Opt.help "The SlotNo."
         )
 
     pPrepareSnapshot :: Parser Command
     pPrepareSnapshot =
-      PrepareSnapshot <$> pPrepareSnapshotArgs
+      CmdPrepareSnapshot <$> pPrepareSnapshotArgs
 
 pPrepareSnapshotArgs :: Parser PrepareSnapshotArgs
 pPrepareSnapshotArgs = PrepareSnapshotArgs <$> pLedgerStateDir
@@ -181,3 +180,36 @@ pConfigFile =
     <> Opt.completer (Opt.bashCompleter "file")
     <> Opt.metavar "FILEPATH"
     )
+
+pReport :: Parser Report
+pReport =
+    Opt.subparser $ mconcat
+      [ Opt.command "balance"
+          $ Opt.info (ReportBalance <$> pStakeAddress)
+              (Opt.progDesc "Report the balance of a given stake address (or addresses)")
+      , Opt.command "rewards"
+          $ Opt.info pReward
+              (Opt.progDesc "Rewards report")
+      , Opt.command "transactions"
+          $ Opt.info (ReportTransactions <$> pStakeAddress)
+              (Opt.progDesc "Report the transaction histiory for a given stake address (or addresses)")
+      ]
+  where
+    pReward :: Parser Report
+    pReward =
+      Opt.subparser $ mconcat
+        [ Opt.command "latest"
+            $ Opt.info (ReportLatestRewards <$> pStakeAddress)
+                (Opt.progDesc "Report the latest epoch rewards for a given stake address (or addresses)")
+        , Opt.command "history"
+            $ Opt.info (ReportAllRewards <$> pStakeAddress)
+                (Opt.progDesc "Report the reward histiory for a given stake address (or addresses)")
+        ]
+
+    pStakeAddress :: Parser [Text]
+    pStakeAddress =
+      Text.split (== ',')
+        . Text.pack <$> Opt.strOption
+            (  Opt.long "stake-address"
+            <> Opt.help "Either a single stake address or a comma separated list."
+            )
