@@ -62,6 +62,7 @@ module Cardano.Db.Query
   , unTxOutId
   , unValue2
   , unValue3
+  , unValue4
   , unValueSumAda
   ) where
 
@@ -650,3 +651,6 @@ unValue2 (a, b) = (unValue a, unValue b)
 
 unValue3 :: (Value a, Value b, Value c) -> (a, b, c)
 unValue3 (a, b, c) = (unValue a, unValue b, unValue c)
+
+unValue4 :: (Value a, Value b, Value c, Value d) -> (a, b, c, d)
+unValue4 (a, b, c, d) = (unValue a, unValue b, unValue c, unValue d)
