@@ -19,6 +19,8 @@ in {
       cardano-db-sync;
   inherit (cardanoDbSyncHaskellPackages.cardano-db-sync-extended.components.exes)
       cardano-db-sync-extended;
+  inherit (cardanoDbSyncHaskellPackages.cardano-db-tool.components.exes)
+    cardano-db-tool;
   inherit (cardanoDbSyncHaskellPackages.cardano-node.components.exes)
       cardano-node;
 
