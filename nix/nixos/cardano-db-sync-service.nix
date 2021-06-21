@@ -6,6 +6,7 @@ let
   envConfig = cfg.environment;
   configFile = __toFile "db-sync-config.json" (__toJSON (cfg.explorerConfig // cfg.logConfig));
   stateDirBase = "/var/lib/";
+  majorVersion = lib.versions.major cfg.package.version;
 in {
   options = {
     services.cardano-db-sync = {
@@ -18,6 +19,20 @@ in {
         type = lib.types.bool;
         default = false;
         description = "use cardano-db-sync-extended";
+      };
+      takeSnapshot = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Take snapshot before starting cardano-db-sync";
+      };
+      restoreSnapshot = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          Restore a snapshot before starting cardano-db-sync,
+          if the snasphot file given by the option exist.
+          Snapshot file is deleted after restore.
+          '';
       };
       # FIXME: is my assumption that this is required correct?
       pgpass = lib.mkOption {
@@ -108,12 +123,31 @@ in {
           echo "You must set \$CARDANO_NODE_SOCKET_PATH"
           exit 1
         fi'' else "export CARDANO_NODE_SOCKET_PATH=\"${cfg.socketPath}\""}
-        export PATH=${lib.makeBinPath [ pkgs.postgresql ]}:$PATH
 
         ${lib.optionalString cfg.postgres.generatePGPASS ''
         cp ${cfg.pgpass} ./pgpass
         chmod 0600 ./pgpass
         export PGPASSFILE=$(pwd)/pgpass
+        ''}
+
+        ${lib.optionalString cfg.takeSnapshot ''
+        for f in db-sync-snapshot-schema-${majorVersion}*; do
+          if [ -f $f ]; then
+            echo "Skipping snapshot: already exist for this version: $f"
+            SKIP_SNAPSHOT=1
+          fi
+        done
+        if [ -z $SKIP_SNAPSHOT ]; then
+          SNAPSHOT_SCRIPT=$(cardano-db-tool prepare-snapshot --state-dir ./ | tail -n 1)
+          ${../../scripts/postgresql-setup.sh} ''${SNAPSHOT_SCRIPT#*scripts/postgresql-setup.sh}
+        fi
+        ''}
+
+        ${lib.optionalString (cfg.restoreSnapshot != null) ''
+        if [ -f ${cfg.restoreSnapshot} ]; then
+          ${../../scripts/postgresql-setup.sh} --restore-snapshot ${cfg.restoreSnapshot} ./
+          rm ${cfg.restoreSnapshot}
+        fi
         ''}
 
         mkdir -p log-dir
@@ -135,7 +169,14 @@ in {
     systemd.services.cardano-db-sync = {
       wantedBy = [ "multi-user.target" ];
       requires = [ "postgresql.service" ];
-      path = [ pkgs.netcat ];
+      path = with pkgs; [
+        self.cardano-db-tool
+        config.services.postgresql.package
+        netcat
+        bash
+        gnutar
+        gzip
+      ];
       preStart = ''
         for x in {1..10}; do
           nc -z localhost ${toString cfg.postgres.port} && break
