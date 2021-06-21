@@ -3,5 +3,6 @@ module Cardano.Db.Tool
   ) where
 
 import           Cardano.Db.Tool.PrepareSnapshot as X
+import           Cardano.Db.Tool.Report as X
 import           Cardano.Db.Tool.UtxoSet as X
 import           Cardano.Db.Tool.Validation as X

@@ -33,6 +33,14 @@ library
   exposed-modules:      Cardano.Db.Tool
 
   other-modules:        Cardano.Db.Tool.PrepareSnapshot
+                        Cardano.Db.Tool.Report
+                        Cardano.Db.Tool.Report.Balance
+                        Cardano.Db.Tool.Report.Display
+                        Cardano.Db.Tool.Report.StakeReward
+                        Cardano.Db.Tool.Report.StakeReward.History
+                        Cardano.Db.Tool.Report.StakeReward.Latest
+                        Cardano.Db.Tool.Report.Synced
+                        Cardano.Db.Tool.Report.Transactions
                         Cardano.Db.Tool.UtxoSet
                         Cardano.Db.Tool.Validation
                         Cardano.Db.Tool.Validate.Balance
