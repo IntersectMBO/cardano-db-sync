@@ -503,12 +503,12 @@ insertMirCert _tracer network txId idx mcert = do
       Shelley.ReservesMIR ->
         case Shelley.mirRewards mcert of
           Shelley.StakeAddressesMIR rwds -> mapM_ insertMirReserves $ Map.toList rwds
-          Shelley.SendToOppositePotMIR xfrs -> insertPotTransfer (invert $ Shelley.toDeltaCoin xfrs)
+          Shelley.SendToOppositePotMIR xfrs -> insertPotTransfer (Shelley.toDeltaCoin xfrs)
 
       Shelley.TreasuryMIR -> do
         case Shelley.mirRewards mcert of
           Shelley.StakeAddressesMIR rwds -> mapM_ insertMirTreasury $ Map.toList rwds
-          Shelley.SendToOppositePotMIR xfrs -> insertPotTransfer (Shelley.toDeltaCoin xfrs)
+          Shelley.SendToOppositePotMIR xfrs -> insertPotTransfer (invert $ Shelley.toDeltaCoin xfrs)
 
   where
     insertMirReserves
@@ -542,12 +542,12 @@ insertMirCert _tracer network txId idx mcert = do
     insertPotTransfer
         :: (MonadBaseControl IO m, MonadIO m)
         => Shelley.DeltaCoin -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-    insertPotTransfer dcoin =
+    insertPotTransfer dcoinTreasury =
       void . lift . DB.insertPotTransfer $
         DB.PotTransfer
           { DB.potTransferCertIndex = idx
-          , DB.potTransferTreasury = DB.deltaCoinToDbInt65 dcoin
-          , DB.potTransferReserves = DB.deltaCoinToDbInt65 (invert dcoin)
+          , DB.potTransferTreasury = DB.deltaCoinToDbInt65 dcoinTreasury
+          , DB.potTransferReserves = DB.deltaCoinToDbInt65 (invert dcoinTreasury)
           , DB.potTransferTxId = txId
           }
 
