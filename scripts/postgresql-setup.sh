@@ -91,11 +91,15 @@ function check_db_exists {
 }
 
 function create_db {
-	createdb -T template0 --owner="$(whoami)" --encoding=UTF8 "${databasename}"
+	if test "$( psql -tAc "SELECT 1 FROM pg_database WHERE datname='${databasename}'" )" != '1' ; then
+		createdb -T template0 --owner="$(whoami)" --encoding=UTF8 "${databasename}"
+		fi
 }
 
 function drop_db {
-	dropdb --if-exists "${databasename}"
+	if test "$( psql -tAc "SELECT 1 FROM pg_database WHERE datname='${databasename}'" )" = '1' ; then
+		psql "${databasename}" --command="DROP OWNED BY CURRENT_USER;"
+		fi
 }
 
 function list_views {

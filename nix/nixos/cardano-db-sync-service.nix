@@ -118,7 +118,9 @@ in {
     in {
       pgpass = builtins.toFile "pgpass" "${cfg.postgres.socketdir}:${toString cfg.postgres.port}:${cfg.postgres.database}:${cfg.postgres.user}:*";
       script = pkgs.writeShellScript "cardano-db-sync" ''
-        ${if (cfg.socketPath == null) then ''if [ -z "$CARDANO_NODE_SOCKET_PATH" ]
+        set -euo pipefail
+
+        ${if (cfg.socketPath == null) then ''if [ -z "''${CARDANO_NODE_SOCKET_PATH:-}" ]
         then
           echo "You must set \$CARDANO_NODE_SOCKET_PATH"
           exit 1
@@ -137,7 +139,7 @@ in {
             SKIP_SNAPSHOT=1
           fi
         done
-        if [ -z $SKIP_SNAPSHOT ]; then
+        if [ -z ''${SKIP_SNAPSHOT:-} ]; then
           SNAPSHOT_SCRIPT=$(cardano-db-tool prepare-snapshot --state-dir ./ | tail -n 1)
           ${../../scripts/postgresql-setup.sh} ''${SNAPSHOT_SCRIPT#*scripts/postgresql-setup.sh}
         fi
@@ -145,6 +147,7 @@ in {
 
         ${lib.optionalString (cfg.restoreSnapshot != null) ''
         if [ -f ${cfg.restoreSnapshot} ]; then
+          rm *.lstate
           ${../../scripts/postgresql-setup.sh} --restore-snapshot ${cfg.restoreSnapshot} ./
           rm ${cfg.restoreSnapshot}
         fi
