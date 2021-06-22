@@ -515,16 +515,15 @@ queryTxOutCount = do
   pure $ maybe 0 unValue (listToMaybe res)
 
 -- | Give a (tx hash, index) pair, return the TxOut value.
--- It can return 0 if the output does not exist.
-queryTxOutValue :: MonadIO m => (ByteString, Word16) -> ReaderT SqlBackend m (Either LookupFail DbLovelace)
+queryTxOutValue :: MonadIO m => (ByteString, Word16) -> ReaderT SqlBackend m (Either LookupFail (TxId, DbLovelace))
 queryTxOutValue (hash, index) = do
   res <- select . from $ \ (tx `InnerJoin` txOut) -> do
             on (tx ^. TxId ==. txOut ^. TxOutTxId)
             where_ (txOut ^. TxOutIndex ==. val index
                     &&. tx ^. TxHash ==. val hash
                     )
-            pure $ txOut ^. TxOutValue
-  pure $ maybeToEither (DbLookupTxHash hash) unValue (listToMaybe res)
+            pure (txOut ^. TxOutTxId, txOut ^. TxOutValue)
+  pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
 
 -- | Get the UTxO set after the specified 'BlockId' has been applied to the chain.
 -- Not exported because 'BlockId' to 'BlockHash' relationship may not be the same

@@ -17,7 +17,7 @@ import           Cardano.BM.Trace (Trace, logDebug, logInfo)
 import           Cardano.Binary (serialize')
 
 import           Control.Monad.Trans.Control (MonadBaseControl)
-import           Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither, newExceptT)
+import           Control.Monad.Trans.Except.Extra (firstExceptT)
 
 import qualified Cardano.Binary as Binary
 
@@ -179,7 +179,8 @@ insertTx
     => Trace IO Text -> DB.BlockId -> Byron.TxAux -> Word64
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertTx tracer blkId tx blockIndex = do
-    valFee <- firstExceptT annotateTx $ newExceptT (calculateTxFee $ Byron.taTx tx)
+    resolvedInputs <- mapM resolveTxInputs (toList $ Byron.txInputs (Byron.taTx tx))
+    valFee <- firstExceptT annotateTx $ ExceptT $ pure (calculateTxFee (Byron.taTx tx) resolvedInputs)
     txId <- lift . DB.insertTx $
               DB.Tx
                 { DB.txHash = Byron.unTxHash $ Crypto.serializeCborHash (Byron.taTx tx)
@@ -199,7 +200,7 @@ insertTx tracer blkId tx blockIndex = do
     -- Insert outputs for a transaction before inputs in case the inputs for this transaction
     -- references the output (not sure this can even happen).
     lift $ zipWithM_ (insertTxOut tracer txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
-    mapMVExceptT (insertTxIn tracer txId) (toList . Byron.txInputs $ Byron.taTx tx)
+    mapMVExceptT (insertTxIn tracer txId) resolvedInputs
   where
     annotateTx :: SyncNodeError -> SyncNodeError
     annotateTx ee =
@@ -226,10 +227,9 @@ insertTxOut _tracer txId index txout =
 
 insertTxIn
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> Byron.TxIn
+    => Trace IO Text -> DB.TxId -> (Byron.TxIn, DB.TxId, DbLovelace)
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertTxIn _tracer txInId (Byron.TxInUtxo txHash inIndex) = do
-  txOutId <- liftLookupFail "insertTxIn" $ DB.queryTxId (Byron.unTxHash txHash)
+insertTxIn _tracer txInId (Byron.TxInUtxo _txHash inIndex, txOutId, _lovelace) = do
   void . lift . DB.insertTxIn $
             DB.TxIn
               { DB.txInTxInId = txInId
@@ -239,35 +239,28 @@ insertTxIn _tracer txInId (Byron.TxInUtxo txHash inIndex) = do
 
 -- -----------------------------------------------------------------------------
 
-calculateTxFee :: (MonadBaseControl IO m, MonadIO m) => Byron.Tx -> ReaderT SqlBackend m (Either SyncNodeError ValueFee)
-calculateTxFee tx =
-    runExceptT $ do
-      outval <- firstExceptT (\e -> NEError $ "calculateTxFee: " <> textShow e) $ hoistEither output
-      when (null inputs) $
-        dbSyncNodeError "calculateTxFee: List of transaction inputs is zero."
-      inval <- sum . map unDbLovelace <$> mapMExceptT (liftLookupFail "calculateTxFee" . DB.queryTxOutValue) inputs
-      if inval < outval
-        then dbSyncInvariant "calculateTxFee" $ EInvInOut inval outval
-        else pure $ ValueFee (DbLovelace outval) (DbLovelace $ inval - outval)
+resolveTxInputs :: MonadIO m => Byron.TxIn -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Byron.TxIn, DB.TxId, DbLovelace)
+resolveTxInputs txIn@(Byron.TxInUtxo txHash index) = do
+    res <- liftLookupFail "resolveInput" $ DB.queryTxOutValue (Byron.unTxHash txHash, fromIntegral index)
+    pure $ convert res
   where
-    -- [(Hash of tx, index within tx)]
-    inputs :: [(ByteString, Word16)]
-    inputs = map unpack $ toList (Byron.txInputs tx)
+    convert :: (DB.TxId, DbLovelace) -> (Byron.TxIn, DB.TxId, DbLovelace)
+    convert (txId, lovelace) = (txIn, txId, lovelace)
 
-    unpack :: Byron.TxIn -> (ByteString, Word16)
-    unpack (Byron.TxInUtxo txHash index) = (Byron.unTxHash txHash, fromIntegral index)
-
+calculateTxFee :: Byron.Tx -> [(Byron.TxIn, DB.TxId, DbLovelace)] -> Either SyncNodeError ValueFee
+calculateTxFee tx resolvedInputs = do
+      outval <- first (\e -> NEError $ "calculateTxFee: " <> textShow e) output
+      when (null resolvedInputs) $
+        Left $ NEError "calculateTxFee: List of transaction inputs is zero."
+      let inval = sum $ map (unDbLovelace . thrd3) resolvedInputs
+      if inval < outval
+        then Left $ NEInvariant "calculateTxFee" $ EInvInOut inval outval
+        else Right $ ValueFee (DbLovelace outval) (DbLovelace $ inval - outval)
+  where
     output :: Either Byron.LovelaceError Word64
     output =
       Byron.unsafeGetLovelace
         <$> Byron.sumLovelace (map Byron.txOutValue $ Byron.txOutputs tx)
-
--- | An 'ExceptT' version of 'mapM' which will 'left' the first 'Left' it finds.
-mapMExceptT :: Monad m => (a -> ExceptT e m b) -> [a] -> ExceptT e m [b]
-mapMExceptT action xs =
-  case xs of
-    [] -> pure []
-    (y:ys) -> (:) <$> action y <*> mapMExceptT action ys
 
 -- | An 'ExceptT' version of 'mapM_' which will 'left' the first 'Left' it finds.
 mapMVExceptT :: Monad m => (a -> ExceptT e m ()) -> [a] -> ExceptT e m ()

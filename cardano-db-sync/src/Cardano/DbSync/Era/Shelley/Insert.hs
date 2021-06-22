@@ -188,7 +188,8 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx = do
     let fees = unCoin $ Generic.txFees tx
         outSum = unCoin $ Generic.txOutSum tx
         withdrawalSum = unCoin $ Generic.txWithdrawalSum tx
-    inSum <- fromIntegral . unDbLovelace <$> lift (queryTxInputSum $ Generic.txInputs tx)
+    resolvedInputs <- mapM resolveTxInputs (Generic.txInputs tx)
+    let inSum = fromIntegral $ sum $ map (unDbLovelace . thrd3) resolvedInputs
     -- Insert transaction and get txId from the DB.
     txId <- lift . DB.insertTx $
               DB.Tx
@@ -209,7 +210,7 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx = do
     mapM_ (insertTxOut tracer txId) (Generic.txOutputs tx)
 
     -- Insert the transaction inputs and collateral inputs (Alonzo).
-    mapM_ (insertTxIn tracer txId) (Generic.txInputs tx)
+    mapM_ (insertTxIn tracer txId) resolvedInputs
     mapM_ (insertCollateralTxIn tracer txId) (Generic.txCollateralInputs tx)
 
     case Generic.txMetadata tx of
@@ -222,6 +223,14 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx = do
     mapM_ (insertParamProposal tracer txId) $ Generic.txParamProposal tx
 
     insertMaTxMint tracer txId $ Generic.txMint tx
+
+resolveTxInputs :: MonadIO m => Generic.TxIn -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, DbLovelace)
+resolveTxInputs txIn = do
+    res <- liftLookupFail "resolveTxInputs" $ queryResolveInput txIn
+    pure $ convert res
+  where
+    convert :: (DB.TxId, DbLovelace) -> (Generic.TxIn, DB.TxId, DbLovelace)
+    convert (txId, lovelace) = (txIn, txId, lovelace)
 
 insertTxOut
     :: (MonadBaseControl IO m, MonadIO m)
@@ -243,10 +252,9 @@ insertTxOut tracer txId (Generic.TxOut index addr value maMap) = do
 
 insertTxIn
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> Generic.TxIn
+    => Trace IO Text -> DB.TxId -> (Generic.TxIn, DB.TxId, DbLovelace)
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertTxIn _tracer txInId (Generic.TxIn txId index) = do
-  txOutId <- liftLookupFail "insertTxIn" $ DB.queryTxId txId
+insertTxIn _tracer txInId (Generic.TxIn _txHash index, txOutId, _lovelace) = do
   void . lift . DB.insertTxIn $
             DB.TxIn
               { DB.txInTxInId = txInId

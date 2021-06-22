@@ -10,7 +10,7 @@ module Cardano.DbSync.Era.Shelley.Query
   , queryStakeAddressAndPool
   , queryStakePoolKeyHash
   , queryStakeAddressRef
-  , queryTxInputSum
+  , queryResolveInput
 
   , queryStakeAddressIdPair
   , queryPoolHashIdPair
@@ -138,14 +138,9 @@ queryStakeAddressRef addr =
                 pure (dlg ^. DelegationAddrId)
       pure $ unValue <$> listToMaybe res
 
-queryTxInputSum :: MonadIO m => [Generic.TxIn] -> ReaderT SqlBackend m DbLovelace
-queryTxInputSum txins =
-    DbLovelace . sum . map unDbLovelace <$> mapM queryTxInputValue txins
-  where
-    queryTxInputValue :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m DbLovelace
-    queryTxInputValue txIn =
-      fromRight (DbLovelace 0) <$> queryTxOutValue (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
-
+queryResolveInput :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (TxId, DbLovelace))
+queryResolveInput txIn = do
+    queryTxOutValue (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
 
 queryStakeAddressIdPair :: MonadIO m => Generic.StakeCred -> ReaderT SqlBackend m (Maybe (Generic.StakeCred, StakeAddressId))
 queryStakeAddressIdPair cred@(Generic.StakeCred bs) = do
