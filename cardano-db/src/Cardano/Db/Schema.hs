@@ -136,7 +136,7 @@ share
     txInId              TxId                OnDeleteCascade     -- The transaction where this is used as an input.
     txOutId             TxId                OnDeleteCascade     -- The transaction where this was created as an output.
     txOutIndex          Word16              sqltype=txindex
-    UniqueColTxin       txOutId txOutIndex
+    UniqueColTxin       txInId
 
   -- A table containing metadata about the chain. There will probably only ever be one
   -- row in this table.
