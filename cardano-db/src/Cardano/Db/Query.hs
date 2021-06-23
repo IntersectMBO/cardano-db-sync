@@ -408,6 +408,7 @@ querySchemaVersion :: MonadIO m => ReaderT SqlBackend m (Maybe SchemaVersion)
 querySchemaVersion = do
   res <- select . from $ \ sch -> do
             orderBy [desc (sch ^. SchemaVersionStageOne)]
+            limit 1
             pure (sch ^. SchemaVersionStageOne, sch ^. SchemaVersionStageTwo, sch ^. SchemaVersionStageThree)
   pure $ uncurry3 SchemaVersion . unValue3 <$> listToMaybe res
 
