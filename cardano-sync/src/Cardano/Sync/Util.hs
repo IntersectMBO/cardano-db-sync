@@ -20,6 +20,7 @@ module Cardano.Sync.Util
   , nullMetricSetters
   , maybeToStrict
   , whenJust
+  , thrd3
   ) where
 
 import           Cardano.Prelude hiding (catch)
@@ -156,3 +157,7 @@ whenJust :: Applicative m => Strict.Maybe a -> (a -> m ()) -> m ()
 whenJust ma f = case ma of
   Strict.Nothing -> pure ()
   Strict.Just a -> f a
+
+thrd3 :: (a, b, c) -> c
+thrd3 (_, _, c) = c
+
