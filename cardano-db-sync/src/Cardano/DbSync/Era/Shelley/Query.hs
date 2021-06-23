@@ -7,7 +7,6 @@
 module Cardano.DbSync.Era.Shelley.Query
   ( queryPoolHashId
   , queryStakeAddress
-  , queryStakeAddressAndPool
   , queryStakePoolKeyHash
   , queryStakeAddressRef
   , queryResolveInput
@@ -29,8 +28,8 @@ import           Cardano.Sync.Util
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
-import           Database.Esqueleto (InnerJoin (..), Value (..), desc, from, just, on, orderBy,
-                   select, val, where_, (<=.), (==.), (^.))
+import           Database.Esqueleto (InnerJoin (..), Value (..), desc, from, just, limit, on,
+                   orderBy, select, val, where_, (==.), (^.))
 import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
@@ -57,41 +56,6 @@ queryStakeAddress addr = do
             pure (saddr ^. StakeAddressId)
   pure $ maybeToEither (DbLookupMessage $ "StakeAddress " <> renderByteArray addr) unValue (listToMaybe res)
 
--- Get the stake address id and the pool hash id the stake address is delegated to in the specified
--- epoch. This is called when populating the reward table. Most rewards are the result of a
--- delegation which is caught in the first query below. However, if a reward address is specified
--- as the reward address for a pool, then no explicit delegation is needed. The second part of the
--- query catches this situation.
-queryStakeAddressAndPool
-    :: MonadIO m
-    => Word64 -> ByteString
-    -> ReaderT SqlBackend m (Either LookupFail (StakeAddressId, PoolHashId))
-queryStakeAddressAndPool epoch addr = do
-    res <- select . from $ \ (saddr `InnerJoin` dlg) -> do
-            on (saddr ^. StakeAddressId ==. dlg ^. DelegationAddrId)
-            where_ (saddr ^. StakeAddressHashRaw ==. val addr)
-            where_ (dlg ^. DelegationActiveEpochNo <=. val epoch)
-            -- Need to order by DelegationSlotNo descending for correct behavior when there are two
-            -- or more delegation certificates in a single epoch.
-            orderBy [desc (dlg ^. DelegationSlotNo)]
-            pure (saddr ^. StakeAddressId, dlg ^. DelegationPoolHashId)
-    maybe queryPool (pure . Right . unValue2) (listToMaybe res)
-  where
-    queryPool :: MonadIO m => ReaderT SqlBackend m (Either LookupFail (StakeAddressId, PoolHashId))
-    queryPool = do
-      res <- select . from $ \ (saddr `InnerJoin` pu `InnerJoin` tx `InnerJoin` blk) -> do
-                on (blk ^. BlockId ==. tx ^. TxBlockId)
-                on (pu ^. PoolUpdateRegisteredTxId ==. tx ^. TxId)
-                on (saddr ^. StakeAddressHashRaw ==. pu ^. PoolUpdateRewardAddr)
-                where_ (saddr ^. StakeAddressHashRaw ==. val addr)
-                where_ (pu ^. PoolUpdateActiveEpochNo <=. val epoch)
-                -- Need to order by BlockSlotNo descending for correct behavior when there are two
-                -- or more pool update certificates in a single epoch.
-                orderBy [desc (blk ^. BlockSlotNo)]
-                pure (saddr ^. StakeAddressId, pu ^. PoolUpdateHashId)
-      pure $ maybeToEither (DbLookupMessage $ "StakeAddressAndPool " <> renderByteArray addr) unValue2 (listToMaybe res)
-
-
 queryStakePoolKeyHash
     :: forall era m. MonadIO m
     => Ledger.KeyHash 'Ledger.StakePool era
@@ -103,6 +67,7 @@ queryStakePoolKeyHash kh = do
             on (poolUpdate ^. PoolUpdateHashId ==. poolHash ^. PoolHashId)
             where_ (poolHash ^. PoolHashHashRaw ==. val (Generic.unKeyHashRaw kh))
             orderBy [desc (blk ^. BlockSlotNo)]
+            limit 1
             pure (poolHash ^. PoolHashId)
   pure $ maybeToEither (DbLookupMessage "StakePoolKeyHash") unValue (listToMaybe res)
 
@@ -135,6 +100,7 @@ queryStakeAddressRef addr =
                 -- Need to order by BlockSlotNo descending for correct behavior when there are two
                 -- or more delegation certificates in a single epoch.
                 orderBy [desc (blk ^. BlockSlotNo)]
+                limit 1
                 pure (dlg ^. DelegationAddrId)
       pure $ unValue <$> listToMaybe res
 
@@ -173,5 +139,6 @@ queryPoolUpdateByBlock blkId poolHashId = do
               on (tx ^. TxId ==. poolUpdate ^. PoolUpdateRegisteredTxId)
               where_ (poolUpdate ^. PoolUpdateHashId ==. val poolHashId)
               where_ (blk ^. BlockId ==. val blkId)
+              limit 1
               pure (blk ^. BlockEpochNo)
     pure $ not (null res)
