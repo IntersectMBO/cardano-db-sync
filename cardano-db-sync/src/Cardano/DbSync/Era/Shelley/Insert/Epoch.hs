@@ -93,7 +93,7 @@ postEpochRewards lenv rwds = do
     forM_ (chunksOf 1000 $ Map.toList (Generic.rwdRewards rwds)) $ \rewardChunk ->
       writeTBQueue (leBulkOpQueue lenv) $ BulkRewardChunk epochNo icache rewardChunk
     forM_ (chunksOf 1000 $ Map.toList (Generic.rwdOrphaned rwds)) $ \orphanedChunk ->
-      writeTBQueue (leBulkOpQueue lenv) $ BulkRewardChunk epochNo icache orphanedChunk
+      writeTBQueue (leBulkOpQueue lenv) $ BulkOrphanedRewardChunk epochNo icache orphanedChunk
     writeTBQueue (leBulkOpQueue lenv) $
       BulkRewardReport epochNo (length $ Generic.rwdRewards rwds) (length $ Generic.rwdOrphaned rwds)
 
