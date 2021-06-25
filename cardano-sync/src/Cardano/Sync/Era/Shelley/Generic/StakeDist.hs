@@ -12,6 +12,7 @@ import           Cardano.Prelude
 
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
+import           Cardano.Ledger.Credential (Credential)
 import           Cardano.Ledger.Era (Crypto)
 import           Cardano.Ledger.Keys (KeyHash, KeyRole (..))
 
@@ -30,7 +31,6 @@ import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 
-import           Shelley.Spec.Ledger.Credential (Credential)
 import qualified Shelley.Spec.Ledger.EpochBoundary as Shelley
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley hiding (_delegations)
 

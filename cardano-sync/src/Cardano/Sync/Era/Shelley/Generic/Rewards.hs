@@ -10,6 +10,7 @@ module Cardano.Sync.Era.Shelley.Generic.Rewards
 import           Cardano.Sync.Era.Shelley.Generic.StakeCred
 
 import qualified Cardano.Ledger.BaseTypes as Ledger
+import qualified Cardano.Ledger.Credential as Ledger
 import           Cardano.Ledger.Era (Crypto)
 import qualified Cardano.Ledger.Keys as Ledger
 
@@ -30,7 +31,6 @@ import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 
-import qualified Shelley.Spec.Ledger.Credential as Shelley
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley
 import qualified Shelley.Spec.Ledger.Rewards as Shelley
 
@@ -67,7 +67,7 @@ genericRewards :: forall era. Ledger.Network -> EpochNo -> LedgerState (ShelleyB
 genericRewards network epoch lstate =
     fmap cleanup rewardUpdate
   where
-    cleanup :: Map (Shelley.Credential 'Ledger.Staking (Crypto era)) (Set (Shelley.Reward (Crypto era))) -> Rewards
+    cleanup :: Map (Ledger.Credential 'Ledger.Staking (Crypto era)) (Set (Shelley.Reward (Crypto era))) -> Rewards
     cleanup rmap =
       let (rm, om) = Map.partitionWithKey validRewardAddress rmap in
       Rewards
@@ -80,19 +80,19 @@ genericRewards network epoch lstate =
       Shelley._rewards . Shelley._dstate . Shelley._delegationState . Shelley.esLState
         $ Shelley.nesEs (Consensus.shelleyLedgerState lstate)
 
-    rewardUpdate :: Maybe (Map (Shelley.Credential 'Ledger.Staking (Crypto era)) (Set (Shelley.Reward (Crypto era))))
+    rewardUpdate :: Maybe (Map (Ledger.Credential 'Ledger.Staking (Crypto era)) (Set (Shelley.Reward (Crypto era))))
     rewardUpdate =
       completeRewardUpdate =<< Ledger.strictMaybeToMaybe (Shelley.nesRu $ Consensus.shelleyLedgerState lstate)
 
     completeRewardUpdate
         :: Shelley.PulsingRewUpdate crypto
-        -> Maybe (Map (Shelley.Credential 'Ledger.Staking crypto) (Set (Shelley.Reward crypto)))
+        -> Maybe (Map (Ledger.Credential 'Ledger.Staking crypto) (Set (Shelley.Reward crypto)))
     completeRewardUpdate x =
       case x of
         Shelley.Pulsing {} -> Nothing -- Should never happen.
         Shelley.Complete ru -> Just $ Shelley.rs ru
 
-    validRewardAddress :: Shelley.Credential 'Ledger.Staking (Crypto era) -> a -> Bool
+    validRewardAddress :: Ledger.Credential 'Ledger.Staking (Crypto era) -> a -> Bool
     validRewardAddress addr _value = Map.member addr rewardAccounts
 
     convertReward :: Shelley.Reward (Crypto era) -> Shelley.Reward StandardCrypto

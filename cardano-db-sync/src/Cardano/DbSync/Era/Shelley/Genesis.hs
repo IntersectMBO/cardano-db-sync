@@ -27,7 +27,8 @@ import           Cardano.DbSync.Era.Util (liftLookupFail)
 import           Cardano.Sync.Error
 import           Cardano.Sync.Util
 
-import qualified Cardano.Ledger.Coin as Shelley
+import qualified Cardano.Ledger.Address as Ledger
+import qualified Cardano.Ledger.Coin as Ledger
 import           Cardano.Ledger.Era (Crypto)
 
 import qualified Data.ByteString.Char8 as BS
@@ -41,7 +42,6 @@ import           Database.Persist.Sql (SqlBackend)
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShelley)
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 
-import qualified Shelley.Spec.Ledger.Address as Shelley
 import qualified Shelley.Spec.Ledger.Genesis as Shelley
 import           Shelley.Spec.Ledger.Scripts ()
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
@@ -192,16 +192,16 @@ insertTxOuts blkId (Shelley.TxIn txInId _, txOut) = do
               { DB.txOutTxId = txId
               , DB.txOutIndex = 0
               , DB.txOutAddress = Generic.renderAddress (txOutAddress txOut)
-              , DB.txOutAddressRaw = Shelley.serialiseAddr (txOutAddress txOut)
+              , DB.txOutAddressRaw = Ledger.serialiseAddr (txOutAddress txOut)
               , DB.txOutPaymentCred = Generic.maybePaymentCred (txOutAddress txOut)
               , DB.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
               , DB.txOutValue = Generic.coinToDbLovelace (txOutCoin txOut)
               }
   where
-    txOutAddress :: Shelley.TxOut StandardShelley -> Shelley.Addr StandardCrypto
+    txOutAddress :: Shelley.TxOut StandardShelley -> Ledger.Addr StandardCrypto
     txOutAddress (Shelley.TxOut out _) = out
 
-    txOutCoin :: Shelley.TxOut StandardShelley -> Shelley.Coin
+    txOutCoin :: Shelley.TxOut StandardShelley -> Ledger.Coin
     txOutCoin (Shelley.TxOut _ coin) = coin
 
 -- -----------------------------------------------------------------------------
@@ -214,16 +214,16 @@ genesisHashSlotLeader = configGenesisHash
 
 configGenesisSupply :: ShelleyGenesis StandardShelley -> DB.Ada
 configGenesisSupply =
-  DB.word64ToAda . fromIntegral . sum . map (Shelley.unCoin . snd) . genesisTxoAssocList
+  DB.word64ToAda . fromIntegral . sum . map (Ledger.unCoin . snd) . genesisTxoAssocList
 
 genesisTxos :: ShelleyGenesis StandardShelley -> [Shelley.TxOut StandardShelley]
 genesisTxos = map (uncurry Shelley.TxOut) . genesisTxoAssocList
 
-genesisTxoAssocList :: ShelleyGenesis StandardShelley -> [(Shelley.Addr StandardCrypto, Shelley.Coin)]
+genesisTxoAssocList :: ShelleyGenesis StandardShelley -> [(Ledger.Addr StandardCrypto, Ledger.Coin)]
 genesisTxoAssocList =
     map (unTxOut . snd) . genesisUtxOs
   where
-    unTxOut :: Shelley.TxOut StandardShelley -> (Shelley.Addr StandardCrypto, Shelley.Coin)
+    unTxOut :: Shelley.TxOut StandardShelley -> (Ledger.Addr StandardCrypto, Ledger.Coin)
     unTxOut (Shelley.TxOut addr amount) = (addr, amount)
 
 genesisUtxOs :: ShelleyGenesis StandardShelley -> [(Shelley.TxIn (Crypto StandardShelley), Shelley.TxOut StandardShelley)]
