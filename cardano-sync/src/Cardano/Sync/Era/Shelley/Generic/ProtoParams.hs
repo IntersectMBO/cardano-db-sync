@@ -49,7 +49,7 @@ data ProtoParams = ProtoParams
   , ppMinPoolCost :: !Coin
 
   -- New for Alonzo.
-  , ppAdaPerUTxOWord :: !(Maybe Coin)
+  , ppCoinsPerUtxoWord :: !(Maybe Coin)
   , ppCostmdls :: !(Maybe (Map Language Alonzo.CostModel))
   , ppPriceMem :: !(Maybe Coin)
   , ppPriceStep :: !(Maybe Coin)
@@ -107,9 +107,9 @@ fromAlonzoParams params =
     , ppDecentralisation  = Alonzo._d params
     , ppExtraEntropy = Alonzo._extraEntropy params
     , ppProtocolVersion = Alonzo._protocolVersion params
-    , ppMinUTxOValue = Alonzo._adaPerUTxOWord params
+    , ppMinUTxOValue = Alonzo._coinsPerUTxOWord params
     , ppMinPoolCost = Alonzo._minPoolCost params
-    , ppAdaPerUTxOWord = Just $ Alonzo._adaPerUTxOWord params
+    , ppCoinsPerUtxoWord = Just $ Alonzo._coinsPerUTxOWord params
     , ppCostmdls = Just $ Alonzo._costmdls params
     , ppPriceMem = Just $ Alonzo.prMem (Alonzo._prices params)
     , ppPriceStep = Just $ Alonzo.prSteps (Alonzo._prices params)
@@ -142,7 +142,7 @@ fromShelleyParams params =
     , ppProtocolVersion = Shelley._protocolVersion params
     , ppMinUTxOValue = Shelley._minUTxOValue params
     , ppMinPoolCost = Shelley._minPoolCost params
-    , ppAdaPerUTxOWord = Nothing
+    , ppCoinsPerUtxoWord = Nothing
     , ppCostmdls = Nothing
     , ppPriceMem = Nothing
     , ppPriceStep = Nothing

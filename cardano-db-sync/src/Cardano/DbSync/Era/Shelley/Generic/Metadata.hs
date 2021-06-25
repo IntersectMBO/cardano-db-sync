@@ -46,7 +46,7 @@ fromAllegraMetadata (ShelleyMa.AuxiliaryData mdMap _scripts) =
   Map.map fromMetadatum mdMap
 
 fromAlonzoMetadata :: Alonzo.AuxiliaryData StandardAlonzo -> Map Word64 TxMetadataValue
-fromAlonzoMetadata (Alonzo.AuxiliaryData mdMap _scripts _dats) =
+fromAlonzoMetadata (Alonzo.AuxiliaryData mdMap _scripts) =
   Map.map fromMetadatum mdMap
 
 fromShelleyMetadata :: Shelley.Metadata era -> Map Word64 TxMetadataValue

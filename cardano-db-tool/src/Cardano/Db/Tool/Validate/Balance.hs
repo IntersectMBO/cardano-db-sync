@@ -15,6 +15,7 @@ import           Cardano.Chain.Common (CompactAddress, Lovelace, decodeAddressBa
                    toCompactAddress, unsafeGetLovelace)
 import qualified Cardano.Chain.UTxO as Byron
 
+import           Cardano.Ledger.Address (BootstrapAddress (..))
 import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
 import qualified Cardano.Ledger.Core as Ledger
 import           Cardano.Ledger.Era (Crypto)
@@ -38,7 +39,6 @@ import qualified Shelley.Spec.Ledger.TxBody as Shelley
 import qualified Shelley.Spec.Ledger.UTxO as Shelley
 
 import           Shelley.Spec.Ledger.API (Addr (..), Coin (..))
-import           Shelley.Spec.Ledger.Address (BootstrapAddress (..))
 
 -- Given an address, return it's current UTxO balance.
 ledgerAddrBalance :: Text -> LedgerState (CardanoBlock StandardCrypto) -> Either Text Word64

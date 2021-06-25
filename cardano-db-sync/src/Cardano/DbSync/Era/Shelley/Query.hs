@@ -21,6 +21,8 @@ import           Cardano.Prelude hiding (from, maybeToEither, on)
 import           Cardano.Db
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 
+import qualified Cardano.Ledger.Address as Ledger
+import           Cardano.Ledger.Credential (Ptr (..), StakeReference (..))
 import qualified Cardano.Ledger.Keys as Ledger
 
 import qualified Cardano.Sync.Era.Shelley.Generic as Generic
@@ -33,9 +35,6 @@ import           Database.Esqueleto (InnerJoin (..), Value (..), desc, from, jus
 import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
-
-import qualified Shelley.Spec.Ledger.Address as Shelley
-import           Shelley.Spec.Ledger.Credential (Ptr (..), StakeReference (..))
 
 
 queryPoolHashId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe PoolHashId)
@@ -73,17 +72,17 @@ queryStakePoolKeyHash kh = do
 
 queryStakeAddressRef
     :: MonadIO m
-    => Shelley.Addr StandardCrypto
+    => Ledger.Addr StandardCrypto
     -> ReaderT SqlBackend m (Maybe StakeAddressId)
 queryStakeAddressRef addr =
     case addr of
-      Shelley.AddrBootstrap {} -> pure Nothing
-      Shelley.Addr nw _pcred sref ->
+      Ledger.AddrBootstrap {} -> pure Nothing
+      Ledger.Addr nw _pcred sref ->
         case sref of
           StakeRefBase cred -> do
-            eres <- queryStakeAddress $ Shelley.serialiseRewardAcnt (Shelley.RewardAcnt nw cred)
+            eres <- queryStakeAddress $ Ledger.serialiseRewardAcnt (Ledger.RewardAcnt nw cred)
             pure $ either (const Nothing) Just eres
-          StakeRefPtr (Ptr slotNo txIx certIx) -> queryStakeDelegation slotNo txIx certIx
+          StakeRefPtr (Ptr slotNo txIx certIx) -> queryStakeDelegation slotNo (fromIntegral txIx) (fromIntegral certIx)
           StakeRefNull -> pure Nothing
   where
     queryStakeDelegation

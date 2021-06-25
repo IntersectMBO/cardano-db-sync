@@ -37,10 +37,12 @@ import           Cardano.DbSync.Era.Shelley.Insert.Epoch
 import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 
-import qualified Cardano.Ledger.BaseTypes as Shelley
+import qualified Cardano.Ledger.Address as Ledger
+import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
-import qualified Cardano.Ledger.Coin as Shelley
-import qualified Cardano.Ledger.Keys as Shelley
+import qualified Cardano.Ledger.Coin as Ledger
+import qualified Cardano.Ledger.Credential as Ledger
+import qualified Cardano.Ledger.Keys as Ledger
 
 import           Cardano.Sync.Error
 import           Cardano.Sync.LedgerState
@@ -70,8 +72,6 @@ import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
-import qualified Shelley.Spec.Ledger.Address as Shelley
-import qualified Shelley.Spec.Ledger.Credential as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
@@ -182,7 +182,7 @@ insertOnNewEpoch tracer blkId slotNo epochNo newEpoch = do
 
 insertTx
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Shelley.Network -> LedgerStateSnapshot -> DB.BlockId -> EpochNo -> SlotNo -> Word64 -> Generic.Tx
+    => Trace IO Text -> Ledger.Network -> LedgerStateSnapshot -> DB.BlockId -> EpochNo -> SlotNo -> Word64 -> Generic.Tx
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx = do
     let fees = unCoin $ Generic.txFees tx
@@ -243,7 +243,7 @@ insertTxOut tracer txId (Generic.TxOut index addr value maMap) = do
                   { DB.txOutTxId = txId
                   , DB.txOutIndex = index
                   , DB.txOutAddress = Generic.renderAddress addr
-                  , DB.txOutAddressRaw = Shelley.serialiseAddr addr
+                  , DB.txOutAddressRaw = Ledger.serialiseAddr addr
                   , DB.txOutPaymentCred = Generic.maybePaymentCred addr
                   , DB.txOutStakeAddressId = mSaId
                   , DB.txOutValue = Generic.coinToDbLovelace value
@@ -277,7 +277,7 @@ insertCollateralTxIn _tracer txInId (Generic.TxIn txId index) = do
 
 insertCertificate
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> LedgerStateSnapshot -> Shelley.Network -> DB.BlockId -> DB.TxId -> EpochNo -> SlotNo -> Generic.TxCertificate
+    => Trace IO Text -> LedgerStateSnapshot -> Ledger.Network -> DB.BlockId -> DB.TxId -> EpochNo -> SlotNo -> Generic.TxCertificate
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertCertificate tracer lStateSnap network blkId txId epochNo slotNo (Generic.TxCertificate idx cert) =
   case cert of
@@ -292,7 +292,7 @@ insertCertificate tracer lStateSnap network blkId txId epochNo slotNo (Generic.T
 
 insertPoolCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> LedgerStateSnapshot -> Shelley.Network -> EpochNo -> DB.BlockId -> DB.TxId -> Word16 -> Shelley.PoolCert StandardCrypto
+    => Trace IO Text -> LedgerStateSnapshot -> Ledger.Network -> EpochNo -> DB.BlockId -> DB.TxId -> Word16 -> Shelley.PoolCert StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolCert tracer lStateSnap network epoch blkId txId idx pCert =
   case pCert of
@@ -301,7 +301,7 @@ insertPoolCert tracer lStateSnap network epoch blkId txId idx pCert =
 
 insertDelegCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Shelley.Network -> DB.TxId -> Word16 -> EpochNo -> SlotNo -> Shelley.DelegCert StandardCrypto
+    => Trace IO Text -> Ledger.Network -> DB.TxId -> Word16 -> EpochNo -> SlotNo -> Shelley.DelegCert StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertDelegCert tracer network txId idx epochNo slotNo dCert =
   case dCert of
@@ -311,21 +311,21 @@ insertDelegCert tracer network txId idx epochNo slotNo dCert =
 
 insertPoolRegister
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> LedgerStateSnapshot -> Shelley.Network -> EpochNo -> DB.BlockId -> DB.TxId -> Word16 -> Shelley.PoolParams StandardCrypto
+    => Trace IO Text -> LedgerStateSnapshot -> Ledger.Network -> EpochNo -> DB.BlockId -> DB.TxId -> Word16 -> Shelley.PoolParams StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRegister tracer lStateSnap network (EpochNo epoch) blkId txId idx params = do
 
-    when (fromIntegral (Shelley.unCoin $ Shelley._poolPledge params) > maxLovelace) $
+    when (fromIntegral (Ledger.unCoin $ Shelley._poolPledge params) > maxLovelace) $
       liftIO . logWarning tracer $
         mconcat
-          [ "Bad pledge amount: ", textShow (Shelley.unCoin $ Shelley._poolPledge params)
+          [ "Bad pledge amount: ", textShow (Ledger.unCoin $ Shelley._poolPledge params)
           , " > maxLovelace."
           ]
 
-    when (fromIntegral (Shelley.unCoin $ Shelley._poolCost params) > maxLovelace) $
+    when (fromIntegral (Ledger.unCoin $ Shelley._poolCost params) > maxLovelace) $
       liftIO . logWarning tracer $
         mconcat
-          [ "Bad fixed cost amount: ", textShow (Shelley.unCoin $ Shelley._poolCost params)
+          [ "Bad fixed cost amount: ", textShow (Ledger.unCoin $ Shelley._poolCost params)
           , " > maxLovelace."
           ]
 
@@ -346,7 +346,7 @@ insertPoolRegister tracer lStateSnap network (EpochNo epoch) blkId txId idx para
                         , DB.poolUpdateRewardAddr = Generic.serialiseRewardAcntWithNetwork network (Shelley._poolRAcnt params)
                         , DB.poolUpdateActiveEpochNo = epoch + epochActivationDelay
                         , DB.poolUpdateMetaId = mdId
-                        , DB.poolUpdateMargin = realToFrac $ Shelley.intervalValue (Shelley._poolMargin params)
+                        , DB.poolUpdateMargin = realToFrac $ Ledger.intervalValue (Shelley._poolMargin params)
                         , DB.poolUpdateFixedCost = Generic.coinToDbLovelace (Shelley._poolCost params)
                         , DB.poolUpdateRegisteredTxId = txId
                         }
@@ -372,7 +372,7 @@ maxLovelace = 45000000000000000
 
 insertPoolHash
     :: forall m . (MonadBaseControl IO m, MonadIO m)
-    => Shelley.KeyHash 'Shelley.StakePool StandardCrypto
+    => Ledger.KeyHash 'Ledger.StakePool StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.PoolHashId
 insertPoolHash kh =
     lift . DB.insertPoolHash $
@@ -384,7 +384,7 @@ insertPoolHash kh =
 
 insertPoolRetire
     :: (MonadBaseControl IO m, MonadIO m)
-    => DB.TxId -> EpochNo -> Word16 -> Shelley.KeyHash 'Shelley.StakePool StandardCrypto
+    => DB.TxId -> EpochNo -> Word16 -> Ledger.KeyHash 'Ledger.StakePool StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRetire txId epochNum idx keyHash = do
   poolId <- liftLookupFail "insertPoolRetire" $ queryStakePoolKeyHash keyHash
@@ -405,7 +405,7 @@ insertMetaDataRef poolId txId md =
   lift . DB.insertPoolMetadataRef $
     DB.PoolMetadataRef
       { DB.poolMetadataRefPoolId = poolId
-      , DB.poolMetadataRefUrl = Shelley.urlToText (Shelley._poolMDUrl md)
+      , DB.poolMetadataRefUrl = Ledger.urlToText (Shelley._poolMDUrl md)
       , DB.poolMetadataRefHash = Shelley._poolMDHash md
       , DB.poolMetadataRefRegisteredTxId = txId
       }
@@ -419,14 +419,14 @@ insertStakeAddress txId rewardAddr =
   -- the uniqueness constraint) but the function will return the 'StakeAddressId'.
   DB.insertStakeAddress $
     DB.StakeAddress
-      { DB.stakeAddressHashRaw = Shelley.serialiseRewardAcnt rewardAddr
+      { DB.stakeAddressHashRaw = Ledger.serialiseRewardAcnt rewardAddr
       , DB.stakeAddressView = Generic.renderRewardAcnt rewardAddr
       , DB.stakeAddressRegisteredTxId = txId
       }
 
 insertStakeAddressRefIfMissing
     :: (MonadBaseControl IO m, MonadIO m)
-    => DB.TxId -> Shelley.Addr StandardCrypto
+    => DB.TxId -> Ledger.Addr StandardCrypto
     -> ReaderT SqlBackend m (Maybe DB.StakeAddressId)
 insertStakeAddressRefIfMissing txId addr =
     maybe insertSAR (pure . Just) =<< queryStakeAddressRef addr
@@ -434,23 +434,23 @@ insertStakeAddressRefIfMissing txId addr =
     insertSAR :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Maybe DB.StakeAddressId)
     insertSAR =
       case addr of
-        Shelley.AddrBootstrap {} -> pure Nothing
-        Shelley.Addr nw _pcred sref ->
+        Ledger.AddrBootstrap {} -> pure Nothing
+        Ledger.Addr nw _pcred sref ->
           case sref of
-            Shelley.StakeRefBase cred ->
+            Ledger.StakeRefBase cred ->
               Just <$> insertStakeAddress txId (Shelley.RewardAcnt nw cred)
-            Shelley.StakeRefPtr {} ->
+            Ledger.StakeRefPtr {} ->
               -- This happens when users pay to payment addresses that refer to a stake addresses
               -- by pointer, but where the pointer does not refer to a registered stake address.
               pure Nothing
-            Shelley.StakeRefNull -> pure Nothing
+            Ledger.StakeRefNull -> pure Nothing
 
 insertPoolOwner
     :: (MonadBaseControl IO m, MonadIO m)
-    => Shelley.Network -> DB.PoolHashId -> DB.TxId -> Shelley.KeyHash 'Shelley.Staking StandardCrypto
+    => Ledger.Network -> DB.PoolHashId -> DB.TxId -> Ledger.KeyHash 'Ledger.Staking StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolOwner network poolHashId txId skh = do
-  saId <- lift $ insertStakeAddress txId (Shelley.RewardAcnt network (Shelley.KeyHashObj skh))
+  saId <- lift $ insertStakeAddress txId (Shelley.RewardAcnt network (Ledger.KeyHashObj skh))
   void . lift . DB.insertPoolOwner $
     DB.PoolOwner
       { DB.poolOwnerAddrId = saId
@@ -473,7 +473,7 @@ insertStakeRegistration _tracer txId idx rewardAccount = do
 
 insertStakeDeregistration
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Shelley.Network -> DB.TxId -> Word16 -> Shelley.StakeCredential StandardCrypto
+    => Trace IO Text -> Ledger.Network -> DB.TxId -> Word16 -> Ledger.StakeCredential StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertStakeDeregistration _tracer network txId idx cred = do
   scId <- liftLookupFail "insertStakeDeregistration" $ queryStakeAddress (Generic.stakingCredHash network cred)
@@ -486,8 +486,8 @@ insertStakeDeregistration _tracer network txId idx cred = do
 
 insertDelegation
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Shelley.Network -> DB.TxId -> Word16 -> EpochNo -> SlotNo
-    -> Shelley.StakeCredential StandardCrypto -> Shelley.KeyHash 'Shelley.StakePool StandardCrypto
+    => Trace IO Text -> Ledger.Network -> DB.TxId -> Word16 -> EpochNo -> SlotNo
+    -> Ledger.StakeCredential StandardCrypto -> Ledger.KeyHash 'Ledger.StakePool StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertDelegation _tracer network txId idx (EpochNo epoch) slotNo cred poolkh = do
   addrId <- liftLookupFail "insertDelegation" $ queryStakeAddress (Generic.stakingCredHash network cred)
@@ -504,24 +504,24 @@ insertDelegation _tracer network txId idx (EpochNo epoch) slotNo cred poolkh = d
 
 insertMirCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Shelley.Network -> DB.TxId -> Word16 -> Shelley.MIRCert StandardCrypto
+    => Trace IO Text -> Ledger.Network -> DB.TxId -> Word16 -> Shelley.MIRCert StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertMirCert _tracer network txId idx mcert = do
     case Shelley.mirPot mcert of
       Shelley.ReservesMIR ->
         case Shelley.mirRewards mcert of
           Shelley.StakeAddressesMIR rwds -> mapM_ insertMirReserves $ Map.toList rwds
-          Shelley.SendToOppositePotMIR xfrs -> insertPotTransfer (Shelley.toDeltaCoin xfrs)
+          Shelley.SendToOppositePotMIR xfrs -> insertPotTransfer (Ledger.toDeltaCoin xfrs)
 
       Shelley.TreasuryMIR -> do
         case Shelley.mirRewards mcert of
           Shelley.StakeAddressesMIR rwds -> mapM_ insertMirTreasury $ Map.toList rwds
-          Shelley.SendToOppositePotMIR xfrs -> insertPotTransfer (invert $ Shelley.toDeltaCoin xfrs)
+          Shelley.SendToOppositePotMIR xfrs -> insertPotTransfer (invert $ Ledger.toDeltaCoin xfrs)
 
   where
     insertMirReserves
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Shelley.StakeCredential StandardCrypto, Shelley.DeltaCoin)
+        => (Ledger.StakeCredential StandardCrypto, Ledger.DeltaCoin)
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     insertMirReserves (cred, dcoin) = do
       addrId <- lift . insertStakeAddress txId $ Generic.annotateStakingCred network cred
@@ -535,7 +535,7 @@ insertMirCert _tracer network txId idx mcert = do
 
     insertMirTreasury
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Shelley.StakeCredential StandardCrypto, Shelley.DeltaCoin)
+        => (Ledger.StakeCredential StandardCrypto, Ledger.DeltaCoin)
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     insertMirTreasury (cred, dcoin) = do
       addrId <- lift . insertStakeAddress txId $ Generic.annotateStakingCred network cred
@@ -549,7 +549,7 @@ insertMirCert _tracer network txId idx mcert = do
 
     insertPotTransfer
         :: (MonadBaseControl IO m, MonadIO m)
-        => Shelley.DeltaCoin -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+        => Ledger.DeltaCoin -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     insertPotTransfer dcoinTreasury =
       void . lift . DB.insertPotTransfer $
         DB.PotTransfer
@@ -564,7 +564,7 @@ insertWithdrawals
     => Trace IO Text -> DB.TxId -> Generic.TxWithdrawal
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertWithdrawals _tracer txId (Generic.TxWithdrawal account coin) = do
-  addrId <- liftLookupFail "insertWithdrawals" $ queryStakeAddress (Shelley.serialiseRewardAcnt account)
+  addrId <- liftLookupFail "insertWithdrawals" $ queryStakeAddress (Ledger.serialiseRewardAcnt account)
   void . lift . DB.insertWithdrawal $
     DB.Withdrawal
       { DB.withdrawalAddrId = addrId
@@ -586,16 +586,16 @@ insertPoolRelay updateId relay =
           , DB.poolRelayIpv6 = textShow <$> strictMaybeToMaybe mIpv6
           , DB.poolRelayDnsName = Nothing
           , DB.poolRelayDnsSrvName = Nothing
-          , DB.poolRelayPort = Shelley.portToWord16 <$> strictMaybeToMaybe mPort
+          , DB.poolRelayPort = Ledger.portToWord16 <$> strictMaybeToMaybe mPort
           }
       Shelley.SingleHostName mPort name ->
         DB.PoolRelay -- An A or AAAA DNS record
           { DB.poolRelayUpdateId = updateId
           , DB.poolRelayIpv4 = Nothing
           , DB.poolRelayIpv6 = Nothing
-          , DB.poolRelayDnsName = Just (Shelley.dnsToText name)
+          , DB.poolRelayDnsName = Just (Ledger.dnsToText name)
           , DB.poolRelayDnsSrvName = Nothing
-          , DB.poolRelayPort = Shelley.portToWord16 <$> strictMaybeToMaybe mPort
+          , DB.poolRelayPort = Ledger.portToWord16 <$> strictMaybeToMaybe mPort
           }
       Shelley.MultiHostName name ->
         DB.PoolRelay -- An SRV DNS record
@@ -603,7 +603,7 @@ insertPoolRelay updateId relay =
           , DB.poolRelayIpv4 = Nothing
           , DB.poolRelayIpv6 = Nothing
           , DB.poolRelayDnsName = Nothing
-          , DB.poolRelayDnsSrvName = Just (Shelley.dnsToText name)
+          , DB.poolRelayDnsSrvName = Just (Ledger.dnsToText name)
           , DB.poolRelayPort = Nothing
           }
 
@@ -639,7 +639,7 @@ insertParamProposal _tracer txId pp =
 
       -- New for Alonzo
 
-      , DB.paramProposalAdaPerUTxOWord = Generic.coinToDbLovelace <$> pppAdaPerUTxOWord pp
+      , DB.paramProposalCoinsPerUtxoWord = Generic.coinToDbLovelace <$> pppCoinsPerUtxoWord pp
       , DB.paramProposalCostModels = Generic.renderLanguageCostModel <$> pppCostmdls pp
       , DB.paramProposalPriceMem = Generic.coinToDbLovelace <$> pppPriceMem pp
       , DB.paramProposalPriceStep = Generic.coinToDbLovelace <$> pppPriceStep pp
@@ -701,7 +701,7 @@ containsUnicodeNul = Text.isInfixOf "\\u000"
 
 insertEpochParam
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.BlockId -> EpochNo -> Generic.ProtoParams -> Shelley.Nonce
+    => Trace IO Text -> DB.BlockId -> EpochNo -> Generic.ProtoParams -> Ledger.Nonce
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertEpochParam _tracer blkId (EpochNo epoch) params nonce =
   void . lift . DB.insertEpochParam $
@@ -726,7 +726,7 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce =
       , DB.epochParamMinUtxoValue = Generic.coinToDbLovelace (Generic.ppMinUTxOValue params)
       , DB.epochParamMinPoolCost = Generic.coinToDbLovelace (Generic.ppMinPoolCost params)
       , DB.epochParamNonce = Generic.nonceToBytes nonce
-      , DB.epochParamAdaPerUTxOWord = Generic.coinToDbLovelace <$> Generic.ppAdaPerUTxOWord params
+      , DB.epochParamCoinsPerUtxoWord = Generic.coinToDbLovelace <$> Generic.ppCoinsPerUtxoWord params
       , DB.epochParamCostModels = Generic.renderLanguageCostModel <$> Generic.ppCostmdls params
       , DB.epochParamPriceMem = Generic.coinToDbLovelace <$> Generic.ppPriceMem params
       , DB.epochParamPriceStep = Generic.coinToDbLovelace <$> Generic.ppPriceStep params

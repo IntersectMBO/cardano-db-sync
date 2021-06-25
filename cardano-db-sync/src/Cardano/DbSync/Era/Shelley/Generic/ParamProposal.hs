@@ -52,7 +52,7 @@ data ParamProposal = ParamProposal
   , pppMinPoolCost :: !(Maybe Coin)
 
   -- New for Alonzo.
-  , pppAdaPerUTxOWord :: !(Maybe Coin)
+  , pppCoinsPerUtxoWord :: !(Maybe Coin)
   , pppCostmdls :: !(Maybe (Map Language Alonzo.CostModel))
   , pppPriceMem :: !(Maybe Coin)
   , pppPriceStep :: !(Maybe Coin)
@@ -113,7 +113,7 @@ convertAlonzoParamProposal  epochNo (key, pmap) =
     , pppMinPoolCost = strictMaybeToMaybe (Alonzo._minPoolCost pmap)
 
     -- New for Alonzo.
-    , pppAdaPerUTxOWord = strictMaybeToMaybe (Alonzo._adaPerUTxOWord pmap)
+    , pppCoinsPerUtxoWord = strictMaybeToMaybe (Alonzo._coinsPerUTxOWord pmap)
     , pppCostmdls = strictMaybeToMaybe (Alonzo._costmdls pmap)
     , pppPriceMem = Alonzo.prMem <$> strictMaybeToMaybe (Alonzo._prices pmap)
     , pppPriceStep = Alonzo.prSteps <$> strictMaybeToMaybe (Alonzo._prices pmap)
@@ -150,7 +150,7 @@ convertShelleyParamProposal epochNo (key, pmap) =
     , pppMinPoolCost = strictMaybeToMaybe (Shelley._minPoolCost pmap)
 
     -- The following are Alonzo related, hence Nothing.
-    , pppAdaPerUTxOWord = Nothing
+    , pppCoinsPerUtxoWord = Nothing
     , pppCostmdls = Nothing
     , pppPriceMem = Nothing
     , pppPriceStep = Nothing

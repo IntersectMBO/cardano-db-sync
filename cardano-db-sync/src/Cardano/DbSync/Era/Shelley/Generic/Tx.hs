@@ -27,6 +27,7 @@ import           Cardano.DbSync.Era.Shelley.Generic.Metadata
 import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
+import qualified Cardano.Ledger.Address as Ledger
 import           Cardano.Ledger.Alonzo ()
 import           Cardano.Ledger.Alonzo.Tx (ValidatedTx (..))
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
@@ -51,7 +52,6 @@ import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlo
                    StandardMary, StandardShelley)
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra)
 
-import qualified Shelley.Spec.Ledger.Address as Shelley
 import           Shelley.Spec.Ledger.Scripts ()
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
@@ -93,7 +93,7 @@ data TxIn = TxIn
 
 data TxOut = TxOut
   { txOutIndex :: !Word16
-  , txOutAddress :: !(Shelley.Addr StandardCrypto)
+  , txOutAddress :: !(Ledger.Addr StandardCrypto)
   , txOutAdaValue :: !Coin
   , txOutMaValue :: !(Map (PolicyID StandardCrypto) (Map AssetName Integer))
   }
@@ -273,11 +273,11 @@ fromAlonzoTx (blkIndex, tx) =
 -- -------------------------------------------------------------------------------------------------
 
 -- Coerce is safe here because 'era' is a phantom type.
-coerceAddress :: Shelley.Addr era -> Shelley.Addr StandardCrypto
+coerceAddress :: Ledger.Addr era -> Ledger.Addr StandardCrypto
 coerceAddress saddr =
   case saddr of
-    Shelley.Addr nw pcred sref -> Shelley.Addr nw (coerce pcred) (coerce sref)
-    Shelley.AddrBootstrap addr -> Shelley.AddrBootstrap (coerce addr)
+    Ledger.Addr nw pcred sref -> Ledger.Addr nw (coerce pcred) (coerce sref)
+    Ledger.AddrBootstrap addr -> Ledger.AddrBootstrap (coerce addr)
 
 coerceCertificate :: Shelley.DCert era -> Shelley.DCert StandardCrypto
 coerceCertificate cert =

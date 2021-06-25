@@ -37,9 +37,11 @@ import qualified Cardano.Crypto.Hash as Crypto
 import           Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as Db
 
+import qualified Cardano.Ledger.Address as Ledger
 import           Cardano.Ledger.Alonzo.Language (Language)
 import           Cardano.Ledger.Alonzo.Scripts (CostModel (..))
 import qualified Cardano.Ledger.BaseTypes as Ledger
+import qualified Cardano.Ledger.Credential as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
 
 import           Cardano.Ledger.Coin (Coin (..), DeltaCoin)
@@ -58,25 +60,23 @@ import qualified Data.Text.Encoding as Text
 import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardCrypto, StandardMary,
                    StandardShelley)
 
-import qualified Shelley.Spec.Ledger.Address as Shelley
-import qualified Shelley.Spec.Ledger.Credential as Shelley
 import qualified Shelley.Spec.Ledger.Scripts as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 
-annotateStakingCred :: Ledger.Network -> Shelley.StakeCredential era -> Shelley.RewardAcnt era
+annotateStakingCred :: Ledger.Network -> Ledger.StakeCredential era -> Ledger.RewardAcnt era
 annotateStakingCred = Shelley.RewardAcnt
 
 coinToDbLovelace :: Coin -> DbLovelace
 coinToDbLovelace = DbLovelace . fromIntegral . unCoin
 
-maybePaymentCred :: Shelley.Addr era -> Maybe ByteString
+maybePaymentCred :: Ledger.Addr era -> Maybe ByteString
 maybePaymentCred addr =
   case addr of
-    Shelley.Addr _nw pcred _sref ->
-      Just $ LBS.toStrict (Binary.runPut $ Shelley.putCredential pcred)
-    Shelley.AddrBootstrap {} ->
+    Ledger.Addr _nw pcred _sref ->
+      Just $ LBS.toStrict (Binary.runPut $ Ledger.putCredential pcred)
+    Ledger.AddrBootstrap {} ->
       Nothing
 
 mkSlotLeader :: ByteString -> Maybe Db.PoolHashId -> Db.SlotLeader
@@ -95,14 +95,14 @@ nonceToBytes nonce =
 
 partitionMIRTargets
     :: [Shelley.MIRTarget StandardCrypto]
-    -> ([Map (Shelley.Credential 'Ledger.Staking StandardCrypto) DeltaCoin], [Coin])
+    -> ([Map (Ledger.Credential 'Ledger.Staking StandardCrypto) DeltaCoin], [Coin])
 partitionMIRTargets =
     List.foldl' foldfunc ([], [])
   where
     foldfunc
-        :: ([Map (Shelley.Credential 'Ledger.Staking StandardCrypto) DeltaCoin], [Coin])
+        :: ([Map (Ledger.Credential 'Ledger.Staking StandardCrypto) DeltaCoin], [Coin])
         -> Shelley.MIRTarget StandardCrypto
-        -> ([Map (Shelley.Credential 'Ledger.Staking StandardCrypto) DeltaCoin], [Coin])
+        -> ([Map (Ledger.Credential 'Ledger.Staking StandardCrypto) DeltaCoin], [Coin])
     foldfunc (xs, ys) mt =
       case mt of
         Shelley.StakeAddressesMIR x -> (x : xs, ys)
@@ -119,7 +119,7 @@ renderAddress
     => Api.ShelleyLedgerEra era ~ ledgerera
     => Api.IsShelleyBasedEra era
     => ledgerera ~ StandardShelley
-    => Shelley.Addr StandardCrypto -> Text
+    => Ledger.Addr StandardCrypto -> Text
 renderAddress addr = Api.serialiseAddress (Api.fromShelleyAddr addr :: Api.AddressInEra era)
 
 renderCostModel :: CostModel -> Text
@@ -128,17 +128,17 @@ renderCostModel (CostModel x) = textShow x
 renderLanguageCostModel :: Map Language CostModel -> Text
 renderLanguageCostModel mlc = textShow $ Map.map renderCostModel mlc
 
-renderRewardAcnt :: Shelley.RewardAcnt StandardCrypto -> Text
+renderRewardAcnt :: Ledger.RewardAcnt StandardCrypto -> Text
 renderRewardAcnt = Api.serialiseAddress . Api.fromShelleyStakeAddr
 
 -- Ignore the network in the `RewardAcnt` and use the provided one instead.
 -- This is a workaround for https://github.com/input-output-hk/cardano-db-sync/issues/546
-serialiseRewardAcntWithNetwork :: Ledger.Network -> Shelley.RewardAcnt StandardCrypto -> ByteString
+serialiseRewardAcntWithNetwork :: Ledger.Network -> Ledger.RewardAcnt StandardCrypto -> ByteString
 serialiseRewardAcntWithNetwork network (Shelley.RewardAcnt _ cred) =
-  Shelley.serialiseRewardAcnt $ Shelley.RewardAcnt network cred
+  Ledger.serialiseRewardAcnt $ Shelley.RewardAcnt network cred
 
-stakingCredHash :: Ledger.Network -> Shelley.StakeCredential era -> ByteString
-stakingCredHash network = Shelley.serialiseRewardAcnt . annotateStakingCred network
+stakingCredHash :: Ledger.Network -> Ledger.StakeCredential era -> ByteString
+stakingCredHash network = Ledger.serialiseRewardAcnt . annotateStakingCred network
 
 unitIntervalToDouble :: Ledger.UnitInterval -> Double
 unitIntervalToDouble = fromRational . Ledger.unitIntervalToRational

@@ -369,7 +369,7 @@ share
     minUtxoValue        DbLovelace Maybe    sqltype=lovelace
     minPoolCost         DbLovelace Maybe    sqltype=lovelace
 
-    adaPerUTxOWord      DbLovelace Maybe    sqltype=lovelace
+    coinsPerUtxoWord    DbLovelace Maybe    sqltype=lovelace
     costModels          Text Maybe
     priceMem            DbLovelace Maybe    sqltype=lovelace
     priceStep           DbLovelace Maybe    sqltype=lovelace
@@ -407,7 +407,7 @@ share
 
     nonce               ByteString Maybe    sqltype=hash32type
 
-    adaPerUTxOWord      DbLovelace Maybe    sqltype=lovelace
+    coinsPerUtxoWord    DbLovelace Maybe    sqltype=lovelace
     costModels          Text Maybe
     priceMem            DbLovelace Maybe    sqltype=lovelace
     priceStep           DbLovelace Maybe    sqltype=lovelace
