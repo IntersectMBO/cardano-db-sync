@@ -58,7 +58,7 @@ import           Cardano.Slotting.Slot (SlotNo (..))
 
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
-import qualified Data.ByteString.Short as SBS
+import qualified Data.ByteString.Short as BSS
 import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import           Data.Maybe.Strict (strictMaybeToMaybe)
@@ -70,6 +70,7 @@ import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlo
                    StandardMary, StandardShelley)
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra)
 
+import qualified Shelley.Spec.Ledger.CompactAddr as Ledger
 import           Shelley.Spec.Ledger.Scripts (ScriptHash)
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
@@ -120,6 +121,7 @@ data TxIn = TxIn
 data TxOut = TxOut
   { txOutIndex :: !Word16
   , txOutAddress :: !(Ledger.Addr StandardCrypto)
+  , txOutAddressRaw :: !ByteString
   , txOutAdaValue :: !Coin
   , txOutMaValue :: !(Map (PolicyID StandardCrypto) (Map AssetName Integer))
   , txOutDataHash :: !(Maybe ByteString)
@@ -174,14 +176,20 @@ fromAllegraTx (blkIndex, tx) =
       }
   where
     fromTxOut :: Word16 -> Shelley.TxOut StandardAllegra -> TxOut
-    fromTxOut index (Shelley.TxOut addr ada) =
+    fromTxOut index txOut =
       TxOut
         { txOutIndex = index
         , txOutAddress = coerceAddress addr
+        , txOutAddressRaw = BSS.fromShort bs
         , txOutAdaValue = ada
         , txOutMaValue = mempty -- Allegra does not support Multi-Assets
         , txOutDataHash = mempty -- Allegra does not support scripts
         }
+      where
+        Shelley.TxOutCompact (Ledger.UnsafeCompactAddr bs) _ = txOut
+        -- This pattern match also does the deserialisation of the address
+        Shelley.TxOut addr ada = txOut
+
 
     txMeta :: Shelley.Tx StandardAllegra -> Maybe (ShelleyMa.AuxiliaryData StandardAllegra)
     txMeta (Shelley.Tx _body _wit md) = strictMaybeToMaybe md
@@ -244,14 +252,19 @@ fromShelleyTx (blkIndex, tx) =
       }
   where
     fromTxOut :: Word16 -> Shelley.TxOut StandardShelley -> TxOut
-    fromTxOut index (Shelley.TxOut addr ada) =
+    fromTxOut index txOut =
       TxOut
         { txOutIndex = index
         , txOutAddress = coerceAddress addr
+        , txOutAddressRaw = BSS.fromShort bs
         , txOutAdaValue = ada
         , txOutMaValue = mempty -- Shelley does not support Multi-Assets
         , txOutDataHash = mempty -- Shelley does not support scripts
         }
+      where
+        Shelley.TxOutCompact (Ledger.UnsafeCompactAddr bs) _ = txOut
+        -- This pattern match also does the deserialisation of the address
+        Shelley.TxOut addr ada = txOut
 
     txOutValue :: Shelley.TxOut StandardShelley -> Integer
     txOutValue (Shelley.TxOut _ (Coin coin)) = coin
@@ -285,14 +298,19 @@ fromMaryTx (blkIndex, tx) =
       }
   where
     fromTxOut :: Word16 -> Shelley.TxOut StandardMary -> TxOut
-    fromTxOut index (Shelley.TxOut addr (Value ada maMap)) =
+    fromTxOut index txOut =
       TxOut
         { txOutIndex = index
         , txOutAddress = coerceAddress addr
+        , txOutAddressRaw = BSS.fromShort bs
         , txOutAdaValue = Coin ada
         , txOutMaValue = coerceMultiAsset maMap
         , txOutDataHash = mempty -- Mary does not support scripts
         }
+      where
+        Shelley.TxOutCompact (Ledger.UnsafeCompactAddr bs) _ = txOut
+        -- This pattern match also does the deserialisation of the address
+        Shelley.TxOut addr (Value ada maMap) = txOut
 
     txMeta :: Shelley.Tx StandardMary -> Maybe (ShelleyMa.AuxiliaryData StandardMary)
     txMeta (Shelley.Tx _body _wit md) = strictMaybeToMaybe md
@@ -353,14 +371,22 @@ fromAlonzoTx pp (blkIndex, tx) =
       }
   where
     fromTxOut :: Word16 -> Alonzo.TxOut StandardAlonzo -> TxOut
-    fromTxOut index (Alonzo.TxOut addr (Value ada maMap) mDataHash) =
+    fromTxOut index txOut =
       TxOut
         { txOutIndex = index
         , txOutAddress = coerceAddress addr
+        , txOutAddressRaw = BSS.fromShort caddr
         , txOutAdaValue = Coin ada
         , txOutMaValue = coerceMultiAsset maMap
         , txOutDataHash = getDataHash <$> strictMaybeToMaybe mDataHash
         }
+      where
+        caddr = case txOut of
+          Alonzo.TxOutCompact (Ledger.UnsafeCompactAddr bs) _-> bs
+          Alonzo.TxOutCompactDH (Ledger.UnsafeCompactAddr bs) _ _-> bs
+        -- This pattern match also does the deserialisation of the address
+        Alonzo.TxOut addr (Value ada maMap) mDataHash = txOut
+
 
     txBody :: Ledger.TxBody StandardAlonzo
     txBody = getField @"body" tx
@@ -394,7 +420,7 @@ fromAlonzoTx pp (blkIndex, tx) =
 
     getScriptSize :: Alonzo.Script (AlonzoEra StandardCrypto) -> Maybe Word64
     getScriptSize (Alonzo.TimelockScript _) = Nothing
-    getScriptSize (Alonzo.PlutusScript sbs) = Just $ fromIntegral $ SBS.length sbs
+    getScriptSize (Alonzo.PlutusScript sbs) = Just $ fromIntegral $ BSS.length sbs
 
     minFees :: Coin
     minFees = txscriptfee (Alonzo._prices pp) $ Alonzo.totExUnits tx
