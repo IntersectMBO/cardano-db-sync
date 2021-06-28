@@ -11,6 +11,7 @@ module Cardano.DbSync.Era.Shelley.Insert.Epoch
   ( insertEpochInterleaved
   , postEpochRewards
   , postEpochStake
+  , flushBulkOperation
   ) where
 
 import           Cardano.Prelude
@@ -32,7 +33,8 @@ import           Cardano.Sync.Util
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
-import           Control.Monad.Class.MonadSTM.Strict (readTVar, writeTBQueue, writeTVar)
+import           Control.Monad.Class.MonadSTM.Strict (flushTBQueue, readTVar, writeTBQueue,
+                   writeTVar)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (hoistEither)
 
@@ -108,6 +110,17 @@ postEpochStake lenv smap = do
     forM_ (chunksOf 1000 $ Map.toList (Generic.sdistStakeMap smap)) $ \stakeChunk ->
       writeTBQueue (leBulkOpQueue lenv) $ BulkStakeDistChunk epochNo icache stakeChunk
     writeTBQueue (leBulkOpQueue lenv) $ BuldStakeDistReport epochNo (length $ Generic.sdistStakeMap smap)
+
+flushBulkOperation
+     :: (MonadBaseControl IO m, MonadIO m)
+     => LedgerEnv
+     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+flushBulkOperation lenv = do
+    bops <- liftIO $ atomically $ flushTBQueue (leBulkOpQueue lenv)
+    unless (null bops) $
+      liftIO $ logInfo (leTrace lenv) $ mconcat
+        ["Flushing remaining ", show (length bops), " BulkOperations"]
+    mapM_ (insertEpochInterleaved (leTrace lenv)) bops
 
 -- -------------------------------------------------------------------------------------------------
 

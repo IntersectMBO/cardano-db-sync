@@ -10,15 +10,15 @@ module Cardano.DbSync.Plugin.Default
 
 import           Cardano.Prelude
 
-import           Cardano.BM.Trace (Trace, logInfo)
+import           Cardano.BM.Trace (Trace, logDebug, logInfo)
 
 import qualified Cardano.Db as DB
 
 import           Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import           Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock, postEpochRewards,
-                   postEpochStake)
+import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
+import           Cardano.DbSync.Era.Shelley.Insert.Epoch
 import           Cardano.DbSync.Rollback (rollbackToPoint)
 
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
@@ -72,6 +72,7 @@ insertDefaultBlock backend tracer env blockDetails = do
       -- update ledgerStateVar.
       let lenv = envLedger env
       lStateSnap <- liftIO $ applyBlock (envLedger env) cblk details
+      mkSnapshotMaybe lStateSnap (isSyncedWithinSeconds details 60)
       handleLedgerEvents tracer (envLedger env) (lssEvents lStateSnap)
       case cblk of
         BlockByron blk ->
@@ -84,9 +85,23 @@ insertDefaultBlock backend tracer env blockDetails = do
           newExceptT $ insertShelleyBlock tracer lenv (Generic.fromMaryBlock blk) lStateSnap details
         BlockAlonzo blk ->
           newExceptT $ insertShelleyBlock tracer lenv (Generic.fromAlonzoBlock blk) lStateSnap details
-      -- Now we update it in ledgerStateVar and (possibly) store it to disk.
-      liftIO $ saveLedgerStateMaybe (envLedger env)
-                    lStateSnap (isSyncedWithinSeconds details 60)
+
+    mkSnapshotMaybe
+        :: (MonadBaseControl IO m, MonadIO m)
+        => LedgerStateSnapshot -> DB.SyncState
+        -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+    mkSnapshotMaybe snapshot syncState = whenJust (lssNewEpoch snapshot) $ \newEpoch -> do
+      liftIO $ logDebug (leTrace $ envLedger env) "Preparing for a snapshot"
+      let newEpochNo = Generic.neEpoch newEpoch
+      -- flush all volatile data
+      flushBulkOperation (envLedger env)
+      -- commit everything in the db
+      lift DB.transactionCommit
+      liftIO $ logDebug (leTrace $ envLedger env) "Taking a ledger a snapshot"
+      -- finally take a ledger snapshot
+      -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
+      liftIO $ saveCleanupState (envLedger env) (lssOldState snapshot) syncState  (Just $ newEpochNo - 1)
+      liftIO $ logInfo (leTrace $ envLedger env) "Took a ledger snapshot"
 
 -- -------------------------------------------------------------------------------------------------
 -- This horrible hack is only need because of the split between `cardano-sync` and `cardano-db-sync`.
