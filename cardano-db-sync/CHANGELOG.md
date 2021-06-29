@@ -1,5 +1,23 @@
 # Revision history for cardano-db-sync
 
+## 10.0.0
+* Note that this release requires the database to be dropped and recreated. Restoring the `db-sync`
+  state can take a long time so it is possible to restore it from a snapsot file.
+  See `doc/state-snapshot.md`.
+* Ability to create and restore state snapshots (#613).
+* Documentation updates.
+* Fix network id for reward_addr in pool_update table (#546).
+* Update utxo_view query (#543).
+* Minor update of database schema.
+* Remove `merkle_root` field from `block` table.
+* Refactor/improve rollbacks (#570).
+* Interleave bulk insertion (`epoch_stake`, `reward` and `orphaned_reward`) with regular insertions.
+* Fetch and insert pool offline metadata.
+* Update a couple of uniqueness constraints.
+* Fix PoolUpdate activeEpochNo field (#610)
+* Add EpochSyncTime table (#621).
+* Update system requirements in Readme.hd.
+
 ## 9.0.0
 * Note that this release requires the database to be dropped and recreated.
 * Requires ghc-8.10.x tp build.
