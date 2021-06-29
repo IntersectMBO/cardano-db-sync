@@ -147,7 +147,7 @@ in {
 
         ${lib.optionalString (cfg.restoreSnapshot != null) ''
         if [ -f ${cfg.restoreSnapshot} ]; then
-          rm *.lstate
+          rm -f *.lstate
           ${../../scripts/postgresql-setup.sh} --restore-snapshot ${cfg.restoreSnapshot} ./
           rm ${cfg.restoreSnapshot}
         fi
