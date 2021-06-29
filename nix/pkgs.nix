@@ -8,6 +8,12 @@ in {
     name = "cardano-db-sync";
   };
 
+  schema = haskell-nix.haskellLib.cleanGit {
+    src = ../.;
+    subDir = "schema";
+    name = "cardano-db-sync-schema";
+  };
+
   cardanoDbSyncProject = callPackage ./haskell.nix {
     inherit compiler;
   };
