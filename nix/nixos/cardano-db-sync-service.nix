@@ -173,7 +173,7 @@ in {
       wantedBy = [ "multi-user.target" ];
       requires = [ "postgresql.service" ];
       path = with pkgs; [
-        self.cardano-db-tool
+        self.cardanoDbSyncHaskellPackages.cardano-db-tool.components.exes.cardano-db-tool
         config.services.postgresql.package
         netcat
         bash
