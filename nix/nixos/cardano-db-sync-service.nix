@@ -147,7 +147,7 @@ in {
 
         ${lib.optionalString (cfg.restoreSnapshot != null) ''
         if [ -f ${cfg.restoreSnapshot} ]; then
-          rm *.lstate
+          rm -f *.lstate
           ${../../scripts/postgresql-setup.sh} --restore-snapshot ${cfg.restoreSnapshot} ./
           rm ${cfg.restoreSnapshot}
         fi
@@ -173,7 +173,7 @@ in {
       wantedBy = [ "multi-user.target" ];
       requires = [ "postgresql.service" ];
       path = with pkgs; [
-        self.cardano-db-tool
+        self.cardanoDbSyncHaskellPackages.cardano-db-tool.components.exes.cardano-db-tool
         config.services.postgresql.package
         netcat
         bash
