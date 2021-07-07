@@ -62,8 +62,8 @@ import           Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..), fromWithOrigin)
 
 import qualified Control.Exception as Exception
-import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, TBQueue, atomically, newTBQueueIO,
-                   newTVarIO, readTVar, writeTVar)
+import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, TBQueue, atomically, flushTBQueue,
+                   newTBQueueIO, newTVarIO, readTVar, writeTBQueue, writeTVar)
 
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
@@ -76,8 +76,8 @@ import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import           Data.Time.Clock (UTCTime)
 
-import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockHash, blockIsEBB,
-                   blockPrevHash, pointSlot)
+import           Ouroboros.Consensus.Block (CodecConfig, Point (..), WithOrigin (..), blockHash,
+                   blockIsEBB, blockPoint, blockPrevHash, pointSlot)
 import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
 import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
@@ -120,13 +120,23 @@ import           System.Mem (performMajorGC)
 {- HLINT ignore "Reduce duplication" -}
 {- HLINT ignore "Use readTVarIO" -}
 
+-- 'CardanoPoint' indicates at which point the 'BulkOperation' became available.
+-- It is only used in case of a rollback.
 data BulkOperation
-  = BulkRewardChunk !EpochNo !IndexCache ![(StakeCred, Set (Shelley.Reward StandardCrypto))]
-  | BulkOrphanedRewardChunk !EpochNo !IndexCache ![(StakeCred, Set (Shelley.Reward StandardCrypto))]
-  | BulkRewardReport !EpochNo !Int !Int
-  | BulkStakeDistChunk !EpochNo !IndexCache ![(StakeCred, (Coin, PoolKeyHash))]
-  | BuldStakeDistReport !EpochNo !Int
+  = BulkRewardChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, Set (Shelley.Reward StandardCrypto))]
+  | BulkOrphanedRewardChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, Set (Shelley.Reward StandardCrypto))]
+  | BulkRewardReport !EpochNo !CardanoPoint !Int !Int
+  | BulkStakeDistChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, (Coin, PoolKeyHash))]
+  | BulkStakeDistReport !EpochNo !CardanoPoint !Int
 
+getBopPoint :: BulkOperation -> CardanoPoint
+getBopPoint = go
+  where
+    go (BulkRewardChunk _ point _ _) = point
+    go (BulkOrphanedRewardChunk _ point _ _) = point
+    go (BulkRewardReport _ point _ _) = point
+    go (BulkStakeDistChunk _ point _ _) = point
+    go (BulkStakeDistReport _ point _) = point
 
 data IndexCache = IndexCache
   { icAddressCache :: !(Map Generic.StakeCred DB.StakeAddressId)
@@ -161,6 +171,7 @@ data LedgerEventState = LedgerEventState
   , lesEpochNo :: !EpochNo
   , lesLastRewardsEpoch :: !EpochNo
   , lesLastStateDistEpoch :: !EpochNo
+  , lesLastAdded :: !CardanoPoint
   }
 
 topLevelConfig :: LedgerEnv -> TopLevelConfig CardanoBlock
@@ -182,6 +193,7 @@ data LedgerStateSnapshot = LedgerStateSnapshot
   , lssOldState :: !CardanoLedgerState
   , lssNewEpoch :: !(Strict.Maybe Generic.NewEpoch) -- Only Just for a single block at the epoch boundary
   , lssSlotDetails :: !SlotDetails
+  , lssPoint :: !CardanoPoint
   , lssEvents :: ![LedgerEvent]
   }
 
@@ -243,6 +255,7 @@ mkLedgerEnv trce protocolInfo dir network = do
         , lesEpochNo = EpochNo 0
         , lesLastRewardsEpoch = EpochNo 0
         , lesLastStateDistEpoch = EpochNo 0
+        , lesLastAdded = GenesisPoint
         }
 
 
@@ -275,12 +288,13 @@ applyBlock env blk details =
       let !ledgerDB' = pushLedgerDB ledgerDB newState
       writeTVar (leStateVar env) (Just ledgerDB')
       oldEventState <- readTVar (leEventState env)
-      events <- generateEvents env oldEventState  details newState
+      events <- generateEvents env oldEventState  details newState (blockPoint blk)
       pure $ LedgerStateSnapshot
                 { lssState = newState
                 , lssOldState = oldState
                 , lssNewEpoch = maybeToStrict $ mkNewEpoch oldState newState
                 , lssSlotDetails = details
+                , lssPoint = blockPoint blk
                 , lssEvents = events
                 }
   where
@@ -306,8 +320,8 @@ applyBlock env blk details =
               }
         else Nothing
 
-generateEvents :: LedgerEnv -> LedgerEventState -> SlotDetails -> CardanoLedgerState -> STM [LedgerEvent]
-generateEvents env oldEventState details cls = do
+generateEvents :: LedgerEnv -> LedgerEventState -> SlotDetails -> CardanoLedgerState -> CardanoPoint -> STM [LedgerEvent]
+generateEvents env oldEventState details cls pnt = do
     writeTVar (leEventState env) newEventState
     pure $ catMaybes
             [ if currentEpochNo == 1 + lesEpochNo oldEventState
@@ -346,6 +360,10 @@ generateEvents env oldEventState details cls = do
             if isJust stakeDist || not (lesInitialized oldEventState)
               then currentEpochNo
               else lesLastStateDistEpoch oldEventState
+        , lesLastAdded =
+            if isNothing rewards && isNothing stakeDist
+              then lesLastAdded oldEventState
+              else pnt
         }
 
 saveCurrentLedgerState :: LedgerEnv -> ExtLedgerState CardanoBlock -> Maybe EpochNo -> IO ()
@@ -478,6 +496,10 @@ loadLedgerAtPoint env point = do
         logInfo (leTrace env) $ mconcat ["Found in memory ledger snapshot at ", show point]
         let ledgerDB' = LedgerDB anchoredSeq'
         let st = ledgerDbCurrent ledgerDB'
+        eventSt <- atomically $ readTVar $ leEventState env
+        when (point < lesLastAdded eventSt) $
+          -- This indicates there are at least some BulkOperation after the point
+          drainBulkOperation env point
         deleteNewerFiles env point
         writeLedgerState env $ Just ledgerDB'
         pure $ Right st
@@ -488,6 +510,18 @@ loadLedgerAtPoint env point = do
     rollbackLedger mLedgerDB = do
       ledgerDB <- mLedgerDB
       AS.rollback (pointSlot point) (const True) (ledgerDbCheckpoints ledgerDB)
+
+-- Filter out the BulkOperation's added after the specific point.
+drainBulkOperation :: LedgerEnv -> CardanoPoint -> IO ()
+drainBulkOperation lenv point = do
+    bops <- atomically $ flushTBQueue (leBulkOpQueue lenv)
+    let bops' = filter (\bop -> getBopPoint bop <= point) bops
+    let removed = length bops - length bops'
+    unless (removed == 0) $
+      logInfo (leTrace lenv) $ mconcat
+        ["Removing ", show removed, " BulkOperations added after ", show point]
+    atomically $ mapM_ (writeTBQueue (leBulkOpQueue lenv)) bops'
+    pure ()
 
 deleteNewerFiles :: LedgerEnv -> CardanoPoint -> IO ()
 deleteNewerFiles env point = do

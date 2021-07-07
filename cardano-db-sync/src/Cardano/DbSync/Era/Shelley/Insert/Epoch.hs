@@ -56,15 +56,15 @@ insertEpochInterleaved
      -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertEpochInterleaved tracer bop =
     case bop of
-      BulkOrphanedRewardChunk epochNo icache orwds ->
+      BulkOrphanedRewardChunk epochNo _ icache orwds ->
         insertOrphanedRewards epochNo icache orwds
-      BulkRewardChunk epochNo icache rwds ->
+      BulkRewardChunk epochNo _ icache rwds ->
         insertRewards epochNo icache rwds
-      BulkRewardReport epochNo rewardCount orphanCount ->
+      BulkRewardReport epochNo _ rewardCount orphanCount ->
         liftIO $ reportRewards epochNo rewardCount orphanCount
-      BulkStakeDistChunk epochNo icache sDistChunk ->
+      BulkStakeDistChunk epochNo _ icache sDistChunk ->
         insertEpochStake tracer icache epochNo sDistChunk
-      BuldStakeDistReport epochNo count ->
+      BulkStakeDistReport epochNo _ count ->
         liftIO $ reportStakeDist epochNo count
   where
     reportStakeDist :: EpochNo -> Int -> IO ()
@@ -86,30 +86,30 @@ insertEpochInterleaved tracer bop =
 
 postEpochRewards
      :: (MonadBaseControl IO m, MonadIO m)
-     => LedgerEnv -> Generic.Rewards
+     => LedgerEnv -> Generic.Rewards -> CardanoPoint
      -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-postEpochRewards lenv rwds = do
+postEpochRewards lenv rwds point = do
   icache <- lift $ updateIndexCache lenv (Generic.rewardsStakeCreds rwds) (Generic.rewardsPoolHashKeys rwds)
   liftIO . atomically $ do
     let epochNo = Generic.rwdEpoch rwds
     forM_ (chunksOf 1000 $ Map.toList (Generic.rwdRewards rwds)) $ \rewardChunk ->
-      writeTBQueue (leBulkOpQueue lenv) $ BulkRewardChunk epochNo icache rewardChunk
+      writeTBQueue (leBulkOpQueue lenv) $ BulkRewardChunk epochNo point icache rewardChunk
     forM_ (chunksOf 1000 $ Map.toList (Generic.rwdOrphaned rwds)) $ \orphanedChunk ->
-      writeTBQueue (leBulkOpQueue lenv) $ BulkOrphanedRewardChunk epochNo icache orphanedChunk
+      writeTBQueue (leBulkOpQueue lenv) $ BulkOrphanedRewardChunk epochNo point icache orphanedChunk
     writeTBQueue (leBulkOpQueue lenv) $
-      BulkRewardReport epochNo (length $ Generic.rwdRewards rwds) (length $ Generic.rwdOrphaned rwds)
+      BulkRewardReport epochNo point (length $ Generic.rwdRewards rwds) (length $ Generic.rwdOrphaned rwds)
 
 postEpochStake
      :: (MonadBaseControl IO m, MonadIO m)
-     => LedgerEnv -> Generic.StakeDist
+     => LedgerEnv -> Generic.StakeDist -> CardanoPoint
      -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-postEpochStake lenv smap = do
+postEpochStake lenv smap point = do
   icache <- lift $ updateIndexCache lenv (Generic.stakeDistStakeCreds smap) (Generic.stakeDistPoolHashKeys smap)
   liftIO . atomically $ do
     let epochNo = Generic.sdistEpochNo smap
     forM_ (chunksOf 1000 $ Map.toList (Generic.sdistStakeMap smap)) $ \stakeChunk ->
-      writeTBQueue (leBulkOpQueue lenv) $ BulkStakeDistChunk epochNo icache stakeChunk
-    writeTBQueue (leBulkOpQueue lenv) $ BuldStakeDistReport epochNo (length $ Generic.sdistStakeMap smap)
+      writeTBQueue (leBulkOpQueue lenv) $ BulkStakeDistChunk epochNo point icache stakeChunk
+    writeTBQueue (leBulkOpQueue lenv) $ BulkStakeDistReport epochNo point (length $ Generic.sdistStakeMap smap)
 
 flushBulkOperation
      :: (MonadBaseControl IO m, MonadIO m)
