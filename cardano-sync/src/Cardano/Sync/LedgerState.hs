@@ -105,7 +105,7 @@ import qualified Shelley.Spec.Ledger.LedgerState as Shelley
 import qualified Shelley.Spec.Ledger.Rewards as Shelley
 import qualified Shelley.Spec.Ledger.UTxO as Shelley
 
-import           System.Directory (listDirectory, removeFile)
+import           System.Directory (doesFileExist, listDirectory, removeFile)
 import           System.FilePath (dropExtension, takeExtension, (</>))
 import           System.Mem (performMajorGC)
 
@@ -371,14 +371,19 @@ saveCurrentLedgerState env ledger mEpochNo = do
     case mkLedgerStateFilename (leDir env) ledger mEpochNo of
       Origin -> pure () -- we don't store genesis
       At file -> do
-        LBS.writeFile file $
-          Serialize.serializeEncoding $
-            Consensus.encodeExtLedgerState
-               (encodeDisk codecConfig)
-               (encodeDisk codecConfig)
-               (encodeDisk codecConfig)
-               ledger
-        logInfo (leTrace env) $ mconcat ["Took a ledger snapshot at ", Text.pack file]
+        exists <- doesFileExist file
+        if exists then
+          logInfo (leTrace env) $ mconcat
+            ["File ", Text.pack file, " exists"]
+        else do
+          LBS.writeFile file $
+            Serialize.serializeEncoding $
+              Consensus.encodeExtLedgerState
+                 (encodeDisk codecConfig)
+                 (encodeDisk codecConfig)
+                 (encodeDisk codecConfig)
+                 ledger
+          logInfo (leTrace env) $ mconcat ["Took a ledger snapshot at ", Text.pack file]
   where
     codecConfig :: CodecConfig CardanoBlock
     codecConfig = configCodec (topLevelConfig env)

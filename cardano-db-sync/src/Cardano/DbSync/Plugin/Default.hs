@@ -36,6 +36,7 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
 import           Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import qualified Data.Map as M
 
 import           Database.Persist.Sql (SqlBackend)
 
@@ -101,7 +102,6 @@ insertDefaultBlock backend tracer env blockDetails = do
       -- finally take a ledger snapshot
       -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
       liftIO $ saveCleanupState (envLedger env) (lssOldState snapshot) syncState  (Just $ newEpochNo - 1)
-      liftIO $ logInfo (leTrace $ envLedger env) "Took a ledger snapshot"
 
 -- -------------------------------------------------------------------------------------------------
 -- This horrible hack is only need because of the split between `cardano-sync` and `cardano-db-sync`.
@@ -138,10 +138,16 @@ handleLedgerEvents tracer lenv point =
           liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo en)
         LedgerRewards details rwds -> do
           let progress = calcEpochProgress 4 details
+          liftIO . logInfo tracer $ mconcat
+            [ "Handling ", show (M.size (Generic.rwdRewards rwds)), " rewards for "
+            , show (Generic.rwdEpoch rwds), " ", show point]
           when (progress > 0.6) $
             liftIO . logInfo tracer $ mconcat [ "LedgerRewards: ", textShow progress ]
           postEpochRewards lenv rwds point
-        LedgerStakeDist sdist ->
+        LedgerStakeDist sdist -> do
+          liftIO . logInfo tracer $ mconcat
+            [ "Handling ", show (M.size (Generic.sdistStakeMap sdist)), " stakes for "
+            , show (Generic.sdistEpochNo sdist), " ", show point]
           postEpochStake lenv sdist point
 
 calcEpochProgress :: Int -> SlotDetails -> Double
