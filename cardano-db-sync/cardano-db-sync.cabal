@@ -96,7 +96,7 @@ library
                       , http-client-tls
                       , http-types
                       , iohk-monitoring
-                      , io-sim-classes
+                      , io-classes
                       , monad-control
                       , monad-logger
                       , ouroboros-consensus

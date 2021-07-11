@@ -91,7 +91,7 @@ library
                       , extra
                       , filepath
                       , iohk-monitoring
-                      , io-sim-classes
+                      , io-classes
                       , lifted-base
                       , monad-control
                       , memory

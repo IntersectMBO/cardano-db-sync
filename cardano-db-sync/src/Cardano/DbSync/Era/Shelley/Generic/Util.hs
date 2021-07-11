@@ -141,7 +141,7 @@ stakingCredHash :: Ledger.Network -> Ledger.StakeCredential era -> ByteString
 stakingCredHash network = Ledger.serialiseRewardAcnt . annotateStakingCred network
 
 unitIntervalToDouble :: Ledger.UnitInterval -> Double
-unitIntervalToDouble = fromRational . Ledger.unitIntervalToRational
+unitIntervalToDouble = fromRational . Ledger.unboundRational
 
 unKeyHashRaw :: Ledger.KeyHash d era -> ByteString
 unKeyHashRaw (Ledger.KeyHash kh) = Crypto.hashToBytes kh
