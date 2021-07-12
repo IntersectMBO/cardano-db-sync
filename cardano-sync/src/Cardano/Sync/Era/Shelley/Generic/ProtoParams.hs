@@ -12,6 +12,7 @@ import           Cardano.Ledger.Alonzo.Language (Language)
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import           Cardano.Ledger.BaseTypes (UnitInterval)
+import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
 import           Cardano.Slotting.Slot (EpochNo (..))
 
@@ -51,8 +52,8 @@ data ProtoParams = ProtoParams
   -- New for Alonzo.
   , ppCoinsPerUtxoWord :: !(Maybe Coin)
   , ppCostmdls :: !(Maybe (Map Language Alonzo.CostModel))
-  , ppPriceMem :: !(Maybe Coin)
-  , ppPriceStep :: !(Maybe Coin)
+  , ppPriceMem :: !(Maybe Rational)
+  , ppPriceStep :: !(Maybe Rational)
   , ppMaxTxExMem :: !(Maybe Word64)
   , ppMaxTxExSteps :: !(Maybe Word64)
   , ppMaxBlockExMem :: !(Maybe Word64)
@@ -101,7 +102,7 @@ fromAlonzoParams params =
     , ppPoolDeposit = Alonzo._poolDeposit params
     , ppMaxEpoch = Alonzo._eMax params
     , ppOptialPoolCount = Alonzo._nOpt params
-    , ppInfluence = Alonzo._a0 params
+    , ppInfluence = Ledger.unboundRational $ Alonzo._a0 params
     , ppMonetaryExpandRate = Alonzo._rho params
     , ppTreasuryGrowthRate = Alonzo._tau params
     , ppDecentralisation  = Alonzo._d params
@@ -111,8 +112,8 @@ fromAlonzoParams params =
     , ppMinPoolCost = Alonzo._minPoolCost params
     , ppCoinsPerUtxoWord = Just $ Alonzo._coinsPerUTxOWord params
     , ppCostmdls = Just $ Alonzo._costmdls params
-    , ppPriceMem = Just $ Alonzo.prMem (Alonzo._prices params)
-    , ppPriceStep = Just $ Alonzo.prSteps (Alonzo._prices params)
+    , ppPriceMem = Just . Ledger.unboundRational $ Alonzo.prMem (Alonzo._prices params)
+    , ppPriceStep = Just . Ledger.unboundRational $ Alonzo.prSteps (Alonzo._prices params)
     , ppMaxTxExMem = Just $ Alonzo.exUnitsMem (Alonzo._maxTxExUnits params)
     , ppMaxTxExSteps = Just $ Alonzo.exUnitsSteps (Alonzo._maxTxExUnits params)
     , ppMaxBlockExMem = Just $ Alonzo.exUnitsMem (Alonzo._maxBlockExUnits params)
@@ -134,7 +135,7 @@ fromShelleyParams params =
     , ppPoolDeposit = Shelley._poolDeposit params
     , ppMaxEpoch = Shelley._eMax params
     , ppOptialPoolCount = Shelley._nOpt params
-    , ppInfluence = Shelley._a0 params
+    , ppInfluence = Ledger.unboundRational $ Shelley._a0 params
     , ppMonetaryExpandRate = Shelley._rho params
     , ppTreasuryGrowthRate = Shelley._tau params
     , ppDecentralisation  = Shelley._d params

@@ -371,8 +371,8 @@ share
 
     coinsPerUtxoWord    DbLovelace Maybe    sqltype=lovelace
     costModels          Text Maybe
-    priceMem            DbLovelace Maybe    sqltype=lovelace
-    priceStep           DbLovelace Maybe    sqltype=lovelace
+    priceMem            Double Maybe        -- sqltype=rational
+    priceStep           Double Maybe        -- sqltype=rational
     maxTxExMem          DbWord64 Maybe      sqltype=word64type
     maxTxExSteps        DbWord64 Maybe      sqltype=word64type
     maxBlockExMem       DbWord64 Maybe      sqltype=word64type
@@ -409,8 +409,8 @@ share
 
     coinsPerUtxoWord    DbLovelace Maybe    sqltype=lovelace
     costModels          Text Maybe
-    priceMem            DbLovelace Maybe    sqltype=lovelace
-    priceStep           DbLovelace Maybe    sqltype=lovelace
+    priceMem            Double Maybe        -- sqltype=rational
+    priceStep           Double Maybe        -- sqltype=rational
     maxTxExMem          DbWord64 Maybe      sqltype=word64type
     maxTxExSteps        DbWord64 Maybe      sqltype=word64type
     maxBlockExMem       DbWord64 Maybe      sqltype=word64type

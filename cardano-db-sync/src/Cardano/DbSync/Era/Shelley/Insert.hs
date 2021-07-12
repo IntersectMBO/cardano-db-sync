@@ -346,7 +346,7 @@ insertPoolRegister tracer lStateSnap network (EpochNo epoch) blkId txId idx para
                         , DB.poolUpdateRewardAddr = Generic.serialiseRewardAcntWithNetwork network (Shelley._poolRAcnt params)
                         , DB.poolUpdateActiveEpochNo = epoch + epochActivationDelay
                         , DB.poolUpdateMetaId = mdId
-                        , DB.poolUpdateMargin = realToFrac $ Ledger.intervalValue (Shelley._poolMargin params)
+                        , DB.poolUpdateMargin = realToFrac $ Ledger.unboundRational (Shelley._poolMargin params)
                         , DB.poolUpdateFixedCost = Generic.coinToDbLovelace (Shelley._poolCost params)
                         , DB.poolUpdateRegisteredTxId = txId
                         }
@@ -641,8 +641,8 @@ insertParamProposal _tracer txId pp =
 
       , DB.paramProposalCoinsPerUtxoWord = Generic.coinToDbLovelace <$> pppCoinsPerUtxoWord pp
       , DB.paramProposalCostModels = Generic.renderLanguageCostModel <$> pppCostmdls pp
-      , DB.paramProposalPriceMem = Generic.coinToDbLovelace <$> pppPriceMem pp
-      , DB.paramProposalPriceStep = Generic.coinToDbLovelace <$> pppPriceStep pp
+      , DB.paramProposalPriceMem = realToFrac <$> pppPriceMem pp
+      , DB.paramProposalPriceStep = realToFrac <$> pppPriceStep pp
       , DB.paramProposalMaxTxExMem = DbWord64 <$> pppMaxTxExMem pp
       , DB.paramProposalMaxTxExSteps = DbWord64 <$> pppMaxTxExSteps pp
       , DB.paramProposalMaxBlockExMem = DbWord64 <$> pppMaxBlockExMem pp
@@ -728,8 +728,8 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce =
       , DB.epochParamNonce = Generic.nonceToBytes nonce
       , DB.epochParamCoinsPerUtxoWord = Generic.coinToDbLovelace <$> Generic.ppCoinsPerUtxoWord params
       , DB.epochParamCostModels = Generic.renderLanguageCostModel <$> Generic.ppCostmdls params
-      , DB.epochParamPriceMem = Generic.coinToDbLovelace <$> Generic.ppPriceMem params
-      , DB.epochParamPriceStep = Generic.coinToDbLovelace <$> Generic.ppPriceStep params
+      , DB.epochParamPriceMem = realToFrac <$> Generic.ppPriceMem params
+      , DB.epochParamPriceStep = realToFrac <$> Generic.ppPriceStep params
       , DB.epochParamMaxTxExMem = DbWord64 <$> Generic.ppMaxTxExMem params
       , DB.epochParamMaxTxExSteps = DbWord64 <$> Generic.ppMaxTxExSteps params
       , DB.epochParamMaxBlockExMem = DbWord64 <$> Generic.ppMaxBlockExMem params
