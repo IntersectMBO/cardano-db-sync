@@ -109,9 +109,9 @@ let
             echo "Connecting to network: ${env}"
             if [[ ! -z "''${EXTENDED}" ]] && [[ "''${EXTENDED}" == true ]]
             then
-              exec ${dbSyncExtendedScript}
+              exec ${dbSyncExtendedScript}/bin/${dbSyncExtendedScript.name}
             else
-              exec ${dbSyncScript}
+              exec ${dbSyncScript}/bin/${dbSyncScript.name}
             fi
             echo "Cleaning up"
         ''
