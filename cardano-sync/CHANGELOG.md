@@ -1,5 +1,8 @@
 # Revision history for cardano-sync
 
+## 10.0.1
+* Fix docker issue (#686).
+
 ## 10.0.0
 * Changes required for other changes.
 
