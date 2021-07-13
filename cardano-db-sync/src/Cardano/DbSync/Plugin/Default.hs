@@ -21,7 +21,7 @@ import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
 import           Cardano.DbSync.Era.Shelley.Insert.Epoch
 import           Cardano.DbSync.Rollback (rollbackToPoint)
 
-import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
+import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Cardano.DbSync.Era
 
@@ -136,22 +136,19 @@ handleLedgerEvents tracer lenv point =
         LedgerNewEpoch en ss -> do
           lift $ insertEpochSyncTime en ss (leEpochSyncTime lenv)
           liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo en)
-        LedgerRewards details rwds -> do
-          let progress = calcEpochProgress 4 details
+        LedgerStartAtEpoch en ->
+          -- This is different from the previous case in that the db-sync started
+          -- in this epoch, for example after a restart, instead of after an epoch boundary.
+          liftIO . logInfo tracer $ "Starting at epoch " <> textShow (unEpochNo en)
+        LedgerRewards _details rwds -> do
           liftIO . logInfo tracer $ mconcat
-            [ "Handling ", show (M.size (Generic.rwdRewards rwds)), " rewards for "
-            , show (Generic.rwdEpoch rwds), " ", show point]
-          when (progress > 0.6) $
-            liftIO . logInfo tracer $ mconcat [ "LedgerRewards: ", textShow progress ]
+            [ "Handling ", show (M.size (Generic.rwdRewards rwds)), " rewards for epoch "
+            , show (unEpochNo $ Generic.rwdEpoch rwds), " ", renderPoint point
+            ]
           postEpochRewards lenv rwds point
         LedgerStakeDist sdist -> do
           liftIO . logInfo tracer $ mconcat
-            [ "Handling ", show (M.size (Generic.sdistStakeMap sdist)), " stakes for "
-            , show (Generic.sdistEpochNo sdist), " ", show point]
+            [ "Handling ", show (M.size (Generic.sdistStakeMap sdist)), " stakes for epoch "
+            , show (unEpochNo $ Generic.sdistEpochNo sdist), " ", renderPoint point
+            ]
           postEpochStake lenv sdist point
-
-calcEpochProgress :: Int -> SlotDetails -> Double
-calcEpochProgress digits sd =
-  let factor = 10 ^ digits
-      dval = fromIntegral (unEpochSlot $ sdEpochSlot sd) / fromIntegral (unEpochSize $ sdEpochSize sd)
-  in fromIntegral (floor (dval * factor) :: Int) / factor

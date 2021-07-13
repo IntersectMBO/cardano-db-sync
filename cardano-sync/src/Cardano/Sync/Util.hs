@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.Sync.Util
@@ -12,6 +13,7 @@ module Cardano.Sync.Util
   , logException
   , panicAbort
   , renderByteArray
+  , renderPoint
   , renderSlotList
   , textPrettyShow
   , textShow
@@ -32,7 +34,7 @@ import           Cardano.Db (SyncState (..))
 import           Cardano.Sync.Config.Types ()
 import           Cardano.Sync.Types
 
-import           Cardano.Slotting.Slot (SlotNo (..))
+import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..), withOrigin)
 
 import           Control.Exception.Lifted (catch)
 import           Control.Monad.Trans.Control (MonadBaseControl)
@@ -49,8 +51,9 @@ import           Data.Time (diffUTCTime)
 
 import           Text.Show.Pretty (ppShow)
 
-import           Ouroboros.Network.Block (BlockNo (..), Tip, blockSlot, getTipBlockNo)
-import           Ouroboros.Network.Point (withOrigin)
+import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
+import           Ouroboros.Network.Block (BlockNo (..), Tip, blockSlot, getPoint, getTipBlockNo)
+import qualified Ouroboros.Network.Point as Point
 
 import           System.IO.Unsafe (unsafePerformIO)
 import           System.Posix.Process (exitImmediately)
@@ -143,6 +146,14 @@ renderByteArray :: ByteArrayAccess bin => bin -> Text
 renderByteArray =
   Text.decodeUtf8 . Base16.encode . Data.ByteArray.convert
 
+renderPoint :: CardanoPoint -> Text
+renderPoint point =
+  case getPoint point of
+    Origin -> "genesis"
+    At blk -> mconcat
+                [ "slot ", textShow (unSlotNo $ Point.blockPointSlot blk), ", hash "
+                , renderByteArray $ toRawHash (Proxy @CardanoBlock) (Point.blockPointHash blk)
+                ]
 renderSlotList :: [SlotNo] -> Text
 renderSlotList xs
   | length xs < 10 = textShow (map unSlotNo xs)

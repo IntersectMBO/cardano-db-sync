@@ -1,7 +1,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
 module Cardano.DbSync.Rollback
   ( rollbackToPoint
   , unsafeRollback
@@ -23,7 +22,6 @@ import           Cardano.Sync.Util
 import qualified Data.List as List
 import           Database.Persist.Sql (SqlBackend)
 
-import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
 import           Ouroboros.Consensus.HardFork.Combinator.AcrossEras (getOneEraHash)
 
 import           Ouroboros.Network.Block
@@ -37,7 +35,7 @@ rollbackToPoint backend trce point =
   where
     action :: MonadIO m => ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     action = do
-        liftIO $ logInfo trce msg
+        liftIO . logInfo trce $ "Rolling back to " <> renderPoint point
         xs <- lift $ slotsToDelete (pointSlot point)
         unless (null xs) $
           -- there may be more deleted blocks than slots, because ebbs don't have
@@ -67,16 +65,6 @@ rollbackToPoint backend trce point =
       case getPoint pnt of
         Origin -> DB.queryGenesis
         At blk -> DB.queryBlockId (BSS.fromShort . getOneEraHash $ blockPointHash blk)
-
-    msg :: Text
-    msg =
-      case getPoint point of
-        Origin -> "Rolling back to genesis"
-        At blk ->
-          mconcat
-            [ "Rolling back to ", textShow (unSlotNo $ blockPointSlot blk), ", hash "
-            , renderByteArray $ toRawHash (Proxy @CardanoBlock) (blockPointHash blk)
-            ]
 
 -- For testing and debugging.
 unsafeRollback :: Trace IO Text -> SlotNo -> IO (Either SyncNodeError ())

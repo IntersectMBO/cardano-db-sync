@@ -162,15 +162,16 @@ data LedgerEnv = LedgerEnv
 
 data LedgerEvent
   = LedgerNewEpoch !EpochNo !SyncState
+  | LedgerStartAtEpoch !EpochNo
   | LedgerRewards !SlotDetails !Generic.Rewards
   | LedgerStakeDist !Generic.StakeDist
   deriving Eq
 
 data LedgerEventState = LedgerEventState
   { lesInitialized :: !Bool
-  , lesEpochNo :: !EpochNo
-  , lesLastRewardsEpoch :: !EpochNo
-  , lesLastStateDistEpoch :: !EpochNo
+  , lesEpochNo :: !(Maybe EpochNo)
+  , lesLastRewardsEpoch :: !(Maybe EpochNo)
+  , lesLastStateDistEpoch :: !(Maybe EpochNo)
   , lesLastAdded :: !CardanoPoint
   }
 
@@ -252,9 +253,9 @@ mkLedgerEnv trce protocolInfo dir network = do
     initLedgerEventState =
       LedgerEventState
         { lesInitialized = False
-        , lesEpochNo = EpochNo 0
-        , lesLastRewardsEpoch = EpochNo 0
-        , lesLastStateDistEpoch = EpochNo 0
+        , lesEpochNo = Nothing
+        , lesLastRewardsEpoch = Nothing
+        , lesLastStateDistEpoch = Nothing
         , lesLastAdded = GenesisPoint
         }
 
@@ -324,9 +325,7 @@ generateEvents :: LedgerEnv -> LedgerEventState -> SlotDetails -> CardanoLedgerS
 generateEvents env oldEventState details cls pnt = do
     writeTVar (leEventState env) newEventState
     pure $ catMaybes
-            [ if currentEpochNo == 1 + lesEpochNo oldEventState
-                then Just (LedgerNewEpoch currentEpochNo (getSyncStatus details))
-                else Nothing
+            [ newEpochEvent
             , LedgerRewards details <$> rewards
             , LedgerStakeDist <$> stakeDist
             ]
@@ -334,31 +333,44 @@ generateEvents env oldEventState details cls pnt = do
     currentEpochNo :: EpochNo
     currentEpochNo = sdEpochNo details
 
+    newEpochEvent :: Maybe LedgerEvent
+    newEpochEvent = case lesEpochNo oldEventState of
+      Nothing -> Just $ LedgerStartAtEpoch currentEpochNo
+      Just oldEpoch | currentEpochNo == 1 + oldEpoch ->
+        Just (LedgerNewEpoch currentEpochNo (getSyncStatus details))
+      _ -> Nothing
+
+    -- Want the rewards event to be delivered once only, on a single slot.
     rewards :: Maybe Generic.Rewards
-    rewards =
-      -- Want the rewards event to be delivered once only, on a single slot.
-      if lesLastRewardsEpoch oldEventState < currentEpochNo && lesInitialized oldEventState
-        then Generic.epochRewards (leNetwork env) (sdEpochNo details) (clsState cls)
-        else Nothing
+    rewards = case lesLastRewardsEpoch oldEventState of
+      Nothing -> mkRewards
+      Just oldRewardEpoch | oldRewardEpoch < currentEpochNo -> mkRewards
+      _ -> Nothing
+
+    mkRewards :: Maybe Generic.Rewards
+    mkRewards = Generic.epochRewards (leNetwork env) (sdEpochNo details) (clsState cls)
 
     stakeDist :: Maybe Generic.StakeDist
-    stakeDist =
-      if lesLastStateDistEpoch oldEventState < currentEpochNo && lesInitialized oldEventState
-        then Generic.epochStakeDist (leNetwork env) (sdEpochNo details) (clsState cls)
-        else Nothing
+    stakeDist = case lesLastStateDistEpoch oldEventState of
+      Nothing -> mkStakeDist
+      Just oldStakeEpoch | oldStakeEpoch < currentEpochNo -> mkStakeDist
+      _ -> Nothing
+
+    mkStakeDist :: Maybe Generic.StakeDist
+    mkStakeDist = Generic.epochStakeDist (leNetwork env) (sdEpochNo details) (clsState cls)
 
     newEventState :: LedgerEventState
     newEventState =
       LedgerEventState
         { lesInitialized = True
-        , lesEpochNo = currentEpochNo
+        , lesEpochNo = Just currentEpochNo
         , lesLastRewardsEpoch =
-            if isJust rewards || not (lesInitialized oldEventState)
-              then currentEpochNo
+            if isJust rewards
+              then Just currentEpochNo
               else lesLastRewardsEpoch oldEventState
         , lesLastStateDistEpoch =
-            if isJust stakeDist || not (lesInitialized oldEventState)
-              then currentEpochNo
+            if isJust stakeDist
+              then Just currentEpochNo
               else lesLastStateDistEpoch oldEventState
         , lesLastAdded =
             if isNothing rewards && isNothing stakeDist
@@ -493,12 +505,12 @@ loadLedgerAtPoint env point = do
         mst <- findStateFromPoint env point
         case mst of
           Right st -> do
-            writeLedgerState env (Just $ LedgerDB $ AS.Empty st)
-            logInfo (leTrace env) $ mconcat ["Found file snapshot at ", show point]
+            writeLedgerState env (Just . LedgerDB $ AS.Empty st)
+            logInfo (leTrace env) $ mconcat [ "Found snapshot file for ", renderPoint point ]
             pure $ Right st
           Left lsfs -> pure $ Left lsfs
       Just anchoredSeq' -> do
-        logInfo (leTrace env) $ mconcat ["Found in memory ledger snapshot at ", show point]
+        logInfo (leTrace env) $ mconcat ["Found in memory ledger snapshot at ", renderPoint point ]
         let ledgerDB' = LedgerDB anchoredSeq'
         let st = ledgerDbCurrent ledgerDB'
         eventSt <- atomically $ readTVar $ leEventState env
