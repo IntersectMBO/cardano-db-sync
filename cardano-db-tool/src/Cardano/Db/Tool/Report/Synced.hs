@@ -11,7 +11,8 @@ import           Control.Monad.Trans.Reader (ReaderT)
 import           Data.Time.Clock (UTCTime)
 import qualified Data.Time.Clock as Time
 
-import           Database.Esqueleto (desc, from, limit, orderBy, select, unValue, where_, (^.))
+import           Database.Esqueleto.Legacy (desc, from, limit, orderBy, select, unValue, where_,
+                   (^.))
 import           Database.Persist.Sql (SqlBackend)
 
 import           System.Exit (exitFailure)

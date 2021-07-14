@@ -18,8 +18,8 @@ import qualified Data.Text.IO as Text
 import           Data.Time.Clock (UTCTime)
 import           Data.Word (Word64)
 
-import           Database.Esqueleto (InnerJoin (..), Value (..), asc, desc, from, limit, max_, on,
-                   orderBy, select, val, where_, (<=.), (==.), (^.))
+import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), asc, desc, from, limit,
+                   max_, on, orderBy, select, val, where_, (<=.), (==.), (^.))
 import           Database.Persist.Sql (SqlBackend)
 
 import           Text.Printf (printf)

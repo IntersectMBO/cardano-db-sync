@@ -82,7 +82,7 @@ import           Data.Time.Clock (UTCTime (..))
 import           Data.Tuple.Extra (uncurry3)
 import           Data.Word (Word16, Word64)
 
-import           Database.Esqueleto (Entity (..), From, InnerJoin (..), LeftOuterJoin (..),
+import           Database.Esqueleto.Legacy (Entity (..), From, InnerJoin (..), LeftOuterJoin (..),
                    PersistField, SqlExpr, SqlQuery, Value (..), ValueList, count, countRows, desc,
                    entityKey, entityVal, exists, from, in_, isNothing, just, limit, max_, min_,
                    notExists, not_, on, orderBy, select, subList_select, sum_, unSqlBackendKey,

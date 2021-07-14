@@ -16,8 +16,8 @@ import           Data.Time.Clock (UTCTime)
 import qualified Data.Time.Clock as Time
 import           Data.Word (Word64)
 
-import           Database.Esqueleto (asc, desc, from, just, limit, orderBy, select, unValue, val,
-                   where_, (>.), (^.))
+import           Database.Esqueleto.Legacy (asc, desc, from, just, limit, orderBy, select, unValue,
+                   val, where_, (>.), (^.))
 
 import           Database.Persist.Sql (SqlBackend)
 

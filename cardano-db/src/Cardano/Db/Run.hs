@@ -20,6 +20,8 @@ import           Cardano.BM.Data.LogItem (LOContent (..), LogObject (..), Privac
 import           Cardano.BM.Data.Severity (Severity (..))
 import           Cardano.BM.Trace (Trace)
 
+import           Cardano.Db.PGConfig
+
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Logger (LogLevel (..), LogSource, LoggingT, NoLoggingT,
                    defaultLogStr, runLoggingT, runNoLoggingT, runStdoutLoggingT)
@@ -35,16 +37,14 @@ import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Lazy.Builder as LazyText
 import qualified Data.Text.Lazy.IO as LazyText
 
-import           Database.Persist.Postgresql (openSimpleConn, withPostgresqlPool)
+import           Database.Esqueleto.Internal.Internal (Mode (SELECT), SqlSelect, initialIdentState,
+                   toRawSql)
+import           Database.Esqueleto.Legacy (SqlQuery)
+
+import           Database.Persist.Postgresql (SqlBackend, openSimpleConn, withPostgresqlPool)
 import           Database.Persist.Sql (IsolationLevel (..), runSqlConnWithIsolation,
                    transactionSaveWithIsolation)
 import           Database.PostgreSQL.Simple (connectPostgreSQL)
-
-import           Database.Esqueleto
-import           Database.Esqueleto.Internal.Internal (Mode (SELECT), SqlSelect, initialIdentState,
-                   toRawSql)
-
-import           Cardano.Db.PGConfig
 
 import           Language.Haskell.TH.Syntax (Loc)
 

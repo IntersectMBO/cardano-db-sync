@@ -17,10 +17,10 @@ import           Data.Int (Int64)
 import qualified Data.List as List
 import           Data.Word (Word64)
 
-import           Database.Esqueleto (Entity, InnerJoin (..), SqlExpr, Value (..), countRows,
+import           Database.Esqueleto.Legacy (Entity, InnerJoin (..), SqlExpr, Value (..), countRows,
                    entityVal, from, on, select, unValue, val, where_, (==.), (>.), (^.))
 
-import           Database.Persist.Sql (SqlBackend (..), toSqlKey)
+import           Database.Persist.Sql (SqlBackend, toSqlKey)
 
 import qualified System.Random as Random
 
