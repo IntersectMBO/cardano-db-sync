@@ -108,7 +108,6 @@ share
 
     validContract       Bool                                    -- False if the contract is invalid, True otherwise.
     UniqueTx            hash
-    deriving Show
 
   StakeAddress          -- Can be an address of a script hash
     hashRaw             ByteString          sqltype=addr29type
@@ -165,8 +164,7 @@ share
     startTime           UTCTime             sqltype=timestamp
     endTime             UTCTime             sqltype=timestamp
     UniqueEpoch         no
-    deriving Eq
-    deriving Show
+    deriving Eq Show
 
   -- A table with all the different types of total balances.
   -- This is only populated for the Shelley and later eras, and only on epoch boundaries.
@@ -184,7 +182,6 @@ share
     blockId             BlockId             OnDeleteCascade
     UniqueAdaPots       blockId
     deriving Eq
-    deriving Show
 
   -- -----------------------------------------------------------------------------------------------
   -- A Pool can have more than one owner, so we have a PoolOwner table that references this one.
@@ -462,7 +459,6 @@ share
     name                Text
     poolId              PoolHashId
     UniqueReservedPoolTicker name
-    deriving Show
 
   -- A table containin a list of administrator users that can be used to access the secure API endpoints.
   -- Yes, we don't have any hash check mechanisms here, if they get to the database, game over anyway.
@@ -470,7 +466,6 @@ share
     username            Text
     password            Text
     UniqueAdminUser     username
-    deriving Show
 
   |]
 

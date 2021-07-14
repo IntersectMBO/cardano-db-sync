@@ -13,8 +13,8 @@ import           Control.Monad.Trans.Reader (ReaderT)
 import           Data.Either (lefts)
 import           Data.Word (Word64)
 
-import           Database.Esqueleto (InnerJoin (..), Value (..), countRows, from, just, on, select,
-                   unValue, val, where_, (==.), (^.))
+import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), countRows, from, just, on,
+                   select, unValue, val, where_, (==.), (^.))
 
 import           Database.Persist.Sql (SqlBackend)
 

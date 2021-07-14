@@ -17,9 +17,9 @@ import qualified Data.Time.Clock.POSIX as Time
 import           Cardano.Db
 import           Cardano.Sync.Types
 
-import           Database.Esqueleto (InnerJoin (..), SqlExpr, Value (..), ValueList, desc, from,
-                   groupBy, in_, just, max_, notExists, on, orderBy, select, subList_select, val,
-                   where_, (==.), (^.))
+import           Database.Esqueleto.Legacy (InnerJoin (..), SqlExpr, Value (..), ValueList, desc,
+                   from, groupBy, in_, just, max_, notExists, on, orderBy, select, subList_select,
+                   val, where_, (==.), (^.))
 import           Database.Persist.Sql (SqlBackend)
 
 import           System.Random.Shuffle (shuffleM)

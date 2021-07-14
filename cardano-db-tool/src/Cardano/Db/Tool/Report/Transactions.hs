@@ -20,7 +20,7 @@ import qualified Data.Text.Encoding as Text
 import qualified Data.Text.IO as Text
 import           Data.Time.Clock (UTCTime)
 
-import           Database.Esqueleto (InnerJoin (..), Value (..), from, just, on, select, val,
+import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), from, just, on, select, val,
                    where_, (&&.), (==.), (^.))
 import           Database.Persist.Sql (SqlBackend)
 

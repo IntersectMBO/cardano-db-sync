@@ -16,8 +16,8 @@ import           Data.Ord (Down (..))
 import           Data.Text (Text)
 import qualified Data.Text.IO as Text
 
-import           Database.Esqueleto (InnerJoin (..), Value (..), from, just, on, select, sum_, val,
-                   where_, (&&.), (<=.), (==.), (^.))
+import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), from, just, on, select,
+                   sum_, val, where_, (&&.), (<=.), (==.), (^.))
 import           Database.Persist.Sql (SqlBackend)
 
 {- HLINT ignore "Redundant ^." -}

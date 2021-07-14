@@ -21,8 +21,8 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 
 import           Data.IORef (IORef, atomicWriteIORef, newIORef, readIORef)
 
-import           Database.Esqueleto (Value (..), desc, from, limit, orderBy, select, val, where_,
-                   (==.), (^.))
+import           Database.Esqueleto.Legacy (Value (..), desc, from, limit, orderBy, select, val,
+                   where_, (==.), (^.))
 
 import           Database.Persist.Class (replace)
 import           Database.Persist.Sql (SqlBackend)

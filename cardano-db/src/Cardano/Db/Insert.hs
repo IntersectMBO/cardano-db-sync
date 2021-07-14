@@ -63,9 +63,10 @@ import qualified Data.Text as Text
 
 import           Database.Persist.Class (AtLeastOneUniqueKey, PersistEntityBackend, insert,
                    insertBy, replaceUnique)
+import           Database.Persist.EntityDef.Internal (entityDB, entityUniques)
 import           Database.Persist.Sql (OnlyOneUniqueKey, PersistRecordBackend, SqlBackend,
-                   UniqueDef, entityDB, entityDef, entityUniques, rawExecute, rawSql,
-                   toPersistFields, toPersistValue, uniqueDBName)
+                   UniqueDef, entityDef, rawExecute, rawSql, toPersistFields, toPersistValue,
+                   uniqueDBName)
 import qualified Database.Persist.Sql.Util as Util
 import           Database.Persist.Types (ConstraintNameDB (..), EntityNameDB (..), FieldNameDB (..),
                    PersistValue, entityKey)

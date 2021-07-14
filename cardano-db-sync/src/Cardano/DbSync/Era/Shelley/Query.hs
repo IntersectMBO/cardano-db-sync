@@ -30,7 +30,7 @@ import           Cardano.Sync.Util
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
-import           Database.Esqueleto (InnerJoin (..), Value (..), desc, from, just, limit, on,
+import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), desc, from, just, limit, on,
                    orderBy, select, val, where_, (==.), (^.))
 import           Database.Persist.Sql (SqlBackend)
 
