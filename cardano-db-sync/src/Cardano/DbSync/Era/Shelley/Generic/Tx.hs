@@ -28,10 +28,14 @@ import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
 import qualified Cardano.Ledger.Address as Ledger
-import           Cardano.Ledger.Alonzo ()
+import           Cardano.Ledger.Alonzo (AlonzoEra)
+import qualified Cardano.Ledger.Alonzo.Data as Alonzo
+import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
+import           Cardano.Ledger.Alonzo.Scripts (ExUnits (..), Script (..), txscriptfee)
 import           Cardano.Ledger.Alonzo.Tx (ValidatedTx (..))
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
+import qualified Cardano.Ledger.Alonzo.TxWitness as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Core as Ledger
 import qualified Cardano.Ledger.Era as Ledger
@@ -42,6 +46,7 @@ import qualified Cardano.Ledger.ShelleyMA.TxBody as ShelleyMa
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
+import qualified Data.ByteString.Short as SBS
 import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import           Data.Maybe.Strict (strictMaybeToMaybe)
@@ -74,6 +79,9 @@ data Tx = Tx
   , txWithdrawals :: ![TxWithdrawal]
   , txParamProposal :: ![ParamProposal]
   , txMint :: !(Value StandardCrypto)
+  , txExUnits :: [ExUnits]
+  , scriptSizes :: [Int]
+  , scriptsFee :: Coin
   }
 
 data TxCertificate = TxCertificate
@@ -119,6 +127,9 @@ fromAllegraTx (blkIndex, tx) =
       , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl $ ShelleyMa.wdrls rawTxBody)
       , txParamProposal = maybe [] (convertParamProposal (Allegra Standard)) $ strictMaybeToMaybe (ShelleyMa.update rawTxBody)
       , txMint = mempty     -- Allegra does not support Multi-Assets
+      , txExUnits = []      -- Allegra does not support ExUnits
+      , scriptSizes = []    -- Allegra does not support scripts
+      , scriptsFee = Coin 0 -- Allegra does not support scripts
       }
   where
     fromTxOut :: Word16 -> Shelley.TxOut StandardAllegra -> TxOut
@@ -163,6 +174,9 @@ fromShelleyTx (blkIndex, tx) =
       , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . Shelley._wdrls $ Shelley.body tx)
       , txParamProposal = maybe [] (convertParamProposal (Shelley Standard)) $ strictMaybeToMaybe (Shelley._txUpdate $ Shelley.body tx)
       , txMint = mempty     -- Shelley does not support Multi-Assets
+      , txExUnits = []      -- Shelley does not support ExUnits
+      , scriptSizes = []    -- Shelley does not support scripts
+      , scriptsFee = Coin 0 -- Shelley does not support scripts
       }
   where
     fromTxOut :: Word16 -> Shelley.TxOut StandardShelley -> TxOut
@@ -198,6 +212,9 @@ fromMaryTx (blkIndex, tx) =
       , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . ShelleyMa.wdrls $ unTxBodyRaw tx)
       , txParamProposal = maybe [] (convertParamProposal (Mary Standard)) $ strictMaybeToMaybe (ShelleyMa.update $ unTxBodyRaw tx)
       , txMint = coerceMint (ShelleyMa.mint $ unTxBodyRaw tx)
+      , txExUnits = []      -- Mary does not support ExUnits
+      , scriptSizes = []    -- Mary does not support scripts
+      , scriptsFee = Coin 0 -- Mary does not support scripts
       }
   where
     fromTxOut :: Word16 -> Shelley.TxOut StandardMary -> TxOut
@@ -218,8 +235,8 @@ fromMaryTx (blkIndex, tx) =
     unTxBodyRaw :: Shelley.Tx StandardMary -> ShelleyMa.TxBodyRaw StandardMary
     unTxBodyRaw (Shelley.Tx (ShelleyMa.TxBodyConstr txBody) _wit _md) = memotype txBody
 
-fromAlonzoTx :: (Word64, Ledger.TxInBlock StandardAlonzo) -> Tx
-fromAlonzoTx (blkIndex, tx) =
+fromAlonzoTx :: Ledger.PParams StandardAlonzo -> (Word64, Ledger.TxInBlock StandardAlonzo) -> Tx
+fromAlonzoTx pp (blkIndex, tx) =
     Tx
       { txHash = Crypto.hashToBytes . Ledger.extractHash $ Ledger.hashAnnotated txBody
       , txBlockIndex = blkIndex
@@ -239,6 +256,9 @@ fromAlonzoTx (blkIndex, tx) =
       , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl $ getField @"wdrls" txBody)
       , txParamProposal = maybe [] (convertParamProposal (Alonzo Standard)) $ strictMaybeToMaybe (getField @"update" txBody)
       , txMint = coerceMint (getField @"mint" txBody)
+      , txExUnits = exUnits
+      , scriptSizes = sizes
+      , scriptsFee = minFees
       }
   where
     fromTxOut :: Word16 -> Alonzo.TxOut StandardAlonzo -> TxOut
@@ -252,6 +272,20 @@ fromAlonzoTx (blkIndex, tx) =
 
     txBody :: Ledger.TxBody StandardAlonzo
     txBody = getField @"body" tx
+
+    exUnits :: [ExUnits]
+    exUnits = map snd (Map.elems $
+      Ledger.unRedeemers $ getField @"txrdmrs" (getField @"wits" tx))
+
+    sizes :: [Int]
+    sizes = mapMaybe getScriptSize $ toList $ Ledger.txscripts $ getField @"wits" tx
+
+    getScriptSize :: Script (AlonzoEra StandardCrypto) -> Maybe Int
+    getScriptSize (TimelockScript _) = Nothing
+    getScriptSize (PlutusScript sbs) = Just $ SBS.length sbs
+
+    minFees :: Coin
+    minFees = txscriptfee (Alonzo._prices pp) $ Alonzo.totExUnits tx
 
     txOutValue :: Alonzo.TxOut StandardAlonzo -> Integer
     txOutValue (Alonzo.TxOut _addr (Value coin _ma) _dataHash) = coin
