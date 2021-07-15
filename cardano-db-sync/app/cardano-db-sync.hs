@@ -20,6 +20,7 @@ import           Data.Version (showVersion)
 import           Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative as Opt
 
+import           MigrationValidations (KnownMigration (..), knownMigrations)
 import           Paths_cardano_db_sync (version)
 
 import           System.Info (arch, compilerName, compilerVersion, os)
@@ -34,7 +35,10 @@ main = do
         prometheusPort <- dncPrometheusPort <$> readSyncNodeConfig (enpConfigFile params)
 
         withMetricSetters prometheusPort $ \metricsSetters ->
-            runDbSyncNode metricsSetters defDbSyncNodePlugin params
+            runDbSyncNode metricsSetters defDbSyncNodePlugin knownMigrationsPlain params
+  where
+    knownMigrationsPlain :: [(Text, Text)]
+    knownMigrationsPlain = (\x -> (md5 x, filepath x)) <$> knownMigrations
 
 -- -------------------------------------------------------------------------------------------------
 

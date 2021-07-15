@@ -1,4 +1,4 @@
-cabal-version:          2.2
+cabal-version:          2.4
 
 -- http://haskell.org/cabal/users-guide/
 
@@ -16,8 +16,41 @@ author:                 IOHK Engineering Team
 maintainer:             operations@iohk.io
 copyright:              (c) 2019 IOHK
 category:               Cryptocurrency
-build-type:             Simple
+build-type:             Custom
 extra-source-files:     CHANGELOG.md
+                        schema/migration-1-0000-20190730.sql
+                        schema/migration-2-0001-20210526.sql
+                        schema/migration-2-0009-20210624.sql
+                        schema/migration-1-0001-20190730.sql
+                        schema/migration-2-0002-20210527.sql
+                        schema/migration-3-0001-20190816.sql
+                        schema/migration-1-0002-20190912.sql
+                        schema/migration-2-0003-20210531.sql
+                        schema/migration-3-0002-20200521.sql
+                        schema/migration-1-0003-20200211.sql
+                        schema/migration-2-0004-20210609.sql
+                        schema/migration-3-0003-20200702.sql
+                        schema/migration-1-0004-20201026.sql
+                        schema/migration-2-0005-20210610.sql
+                        schema/migration-3-0004-20200810.sql
+                        schema/migration-1-0005-20210311.sql
+                        schema/migration-2-0006-20210611.sql
+                        schema/migration-3-0005-20210116.sql
+                        schema/migration-1-0006-20210531.sql
+                        schema/migration-2-0007-20210617.sql
+                        schema/migration-3-0006-20210116.sql
+                        schema/migration-1-0007-20210611.sql
+                        schema/migration-2-0008-20210623.sql
+                        schema/migration-3-9999-20200728.sql
+
+custom-setup
+  setup-depends:
+                        base
+                      , Cabal
+                      , filepath
+                      , cryptonite
+                      , bytestring
+
 
 library
   default-language:     Haskell2010
@@ -42,7 +75,7 @@ library
 executable cardano-db-sync-extended
   default-language:     Haskell2010
   main-is:              cardano-db-sync-extended.hs
-  hs-source-dirs:       app
+  hs-source-dirs:       gen, app
 
   ghc-options:          -O2
                         -Wall
@@ -57,7 +90,10 @@ executable cardano-db-sync-extended
                         -threaded
                         -with-rtsopts=-N3
 
+  autogen-modules:      Paths_cardano_db_sync_extended
+                        MigrationValidations
   other-modules:        Paths_cardano_db_sync_extended
+                        MigrationValidations
 
   build-depends:        base                            >= 4.14         && < 4.16
                       , cardano-config

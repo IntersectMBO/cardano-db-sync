@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.Db.Migration
@@ -7,12 +8,18 @@ module Cardano.Db.Migration
   , createMigration
   , getMigrationScripts
   , runMigrations
+
+  , MigrationValidate (..)
+  , MigrationValidateError (..)
+  , validateMigrations
+  , renderMigrationValidateError
   ) where
 
 import           Control.Exception (SomeException, handle)
-import           Control.Monad (forM_, unless)
+import           Control.Monad (forM, forM_, unless)
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Logger (NoLoggingT)
+import           Control.Monad.Trans.Except (ExceptT, throwE)
 import           Control.Monad.Trans.Reader (ReaderT)
 import           Control.Monad.Trans.Resource (runResourceT)
 
@@ -20,6 +27,7 @@ import qualified Data.ByteString.Char8 as BS
 import           Data.Conduit.Binary (sinkHandle)
 import           Data.Conduit.Process (sourceCmdWithConsumer)
 import           Data.Either (partitionEithers)
+import           Data.List ((\\))
 import qualified Data.List as List
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -42,13 +50,20 @@ import           System.FilePath (takeFileName, (</>))
 import           System.IO (Handle, IOMode (AppendMode), hFlush, hPrint, hPutStrLn, stdout,
                    withFile)
 
-
+import           Crypto.Hash (MD5 (..), hashWith)
 
 newtype MigrationDir
   = MigrationDir FilePath
 
 newtype LogFileDir
   = LogFileDir FilePath
+
+data MigrationValidate = MigrationValidate
+  { mvMD5 :: String
+  , mvFilepath :: String
+  } deriving (Eq, Show)
+
+newtype MigrationValidateError = UnknownMigrationsFound [MigrationValidate] deriving (Eq, Show)
 
 -- | Run the migrations in the provided 'MigrationDir' and write date stamped log file
 -- to 'LogFileDir'.
@@ -72,6 +87,17 @@ runMigrations pgconfig quiet migrationDir mLogfiledir = do
       (logdir </>)
         . formatTime defaultTimeLocale ("migrate-" ++ iso8601DateFormat (Just "%H%M%S") ++ ".log")
         <$> getCurrentTime
+
+-- Build MD5 for each file found in a directory.
+validateMigrations :: MigrationDir -> [(Text, Text)]-> ExceptT MigrationValidateError IO ()
+validateMigrations migrationDir knownMigrations = do
+    let knownMigrations' = fmap (\(x,y) -> MigrationValidate (Text.unpack x) (Text.unpack y)) knownMigrations
+    scripts <- liftIO $ hashMigrations migrationDir
+
+    unless (scripts == knownMigrations') $
+      -- Error knownMigrations // scripts found [x] something
+      let unknown = scripts \\ knownMigrations' in
+      throwE $ UnknownMigrationsFound unknown
 
 applyMigration :: Bool -> PGConfig -> Maybe FilePath -> Handle -> (MigrationVersion, FilePath) -> IO ()
 applyMigration quiet pgconfig mLogFilename logHandle (version, script) = do
@@ -191,3 +217,16 @@ getMigrationScripts (MigrationDir location) = do
 
 textShow :: Show a => a -> Text
 textShow = Text.pack . show
+
+hashMigrations :: MigrationDir -> IO [MigrationValidate]
+hashMigrations migrationDir = do
+    scripts <- getMigrationScripts migrationDir
+    forM scripts $ \(_v, filepath) -> do
+      file <- BS.readFile filepath
+      pure $ MigrationValidate (show . hashWith MD5 $ file) filepath
+
+renderMigrationValidateError :: MigrationValidateError -> Text
+renderMigrationValidateError = \case
+    UnknownMigrationsFound migrations -> "Newer migrations found that were missing at compile time: " <> textShow migrations
+
+

@@ -1,2 +1,1 @@
-import           Distribution.Simple
-main = defaultMain
+../cardano-db-sync/Setup.hs

@@ -58,6 +58,7 @@ library
                       , conduit
                       , conduit-extra
                       , contra-tracer
+                      , cryptonite
                       , directory
                       , esqueleto
                       , extra
