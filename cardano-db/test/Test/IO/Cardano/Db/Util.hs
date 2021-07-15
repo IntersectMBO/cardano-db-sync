@@ -95,6 +95,8 @@ mkTxs blkId count =
         , txInvalidHereafter = Nothing
         , txInvalidBefore = Nothing
         , txValidContract = True
+        , txExUnitsNumber = 0
+        , txExUnitsFees = DbLovelace 0
         }
 
 testSlotLeader :: SlotLeader
