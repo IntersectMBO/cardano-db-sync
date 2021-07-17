@@ -194,7 +194,7 @@ source-repository-package
     word-array
 
 
--- From the node. No idea WTF.
+-- Something in plutus-core requries this.
 source-repository-package
   type: git
   location: https://github.com/Quid2/flat.git

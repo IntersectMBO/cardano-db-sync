@@ -104,7 +104,7 @@ runActions trce env plugin actions = do
 
 rollbackLedger :: Trace IO Text -> SyncNodePlugin -> SyncEnv -> CardanoPoint -> IO (Maybe [CardanoPoint])
 rollbackLedger _trce _plugin env point = do
-    mst <- loadLedgerAtPoint (envLedger env) point True
+    mst <- loadLedgerAtPoint (envLedger env) point
     dbBlock <- sdlGetLatestBlock (envDataLayer env)
     case mst of
       Right st -> do

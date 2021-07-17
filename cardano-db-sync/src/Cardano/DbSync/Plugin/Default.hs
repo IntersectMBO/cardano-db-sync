@@ -10,18 +10,18 @@ module Cardano.DbSync.Plugin.Default
 
 import           Cardano.Prelude
 
-import           Cardano.BM.Trace (Trace, logInfo)
+import           Cardano.BM.Trace (Trace, logDebug, logInfo)
 
 import qualified Cardano.Db as DB
 
 import           Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import           Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock, postEpochRewards,
-                   postEpochStake)
+import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
+import           Cardano.DbSync.Era.Shelley.Insert.Epoch
 import           Cardano.DbSync.Rollback (rollbackToPoint)
 
-import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
+import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Cardano.DbSync.Era
 
@@ -36,6 +36,7 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
 import           Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import qualified Data.Map as M
 
 import           Database.Persist.Sql (SqlBackend)
 
@@ -72,7 +73,8 @@ insertDefaultBlock backend tracer env blockDetails = do
       -- update ledgerStateVar.
       let lenv = envLedger env
       lStateSnap <- liftIO $ applyBlock (envLedger env) cblk details
-      handleLedgerEvents tracer (envLedger env) (lssEvents lStateSnap)
+      mkSnapshotMaybe lStateSnap (isSyncedWithinSeconds details 60)
+      handleLedgerEvents tracer (envLedger env) (lssPoint lStateSnap) (lssEvents lStateSnap)
       case cblk of
         BlockByron blk ->
           newExceptT $ insertByronBlock tracer blk details
@@ -84,9 +86,22 @@ insertDefaultBlock backend tracer env blockDetails = do
           newExceptT $ insertShelleyBlock tracer lenv (Generic.fromMaryBlock blk) lStateSnap details
         BlockAlonzo blk ->
           newExceptT $ insertShelleyBlock tracer lenv (Generic.fromAlonzoBlock blk) lStateSnap details
-      -- Now we update it in ledgerStateVar and (possibly) store it to disk.
-      liftIO $ saveLedgerStateMaybe (envLedger env)
-                    lStateSnap (isSyncedWithinSeconds details 60)
+
+    mkSnapshotMaybe
+        :: (MonadBaseControl IO m, MonadIO m)
+        => LedgerStateSnapshot -> DB.SyncState
+        -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+    mkSnapshotMaybe snapshot syncState = whenJust (lssNewEpoch snapshot) $ \newEpoch -> do
+      liftIO $ logDebug (leTrace $ envLedger env) "Preparing for a snapshot"
+      let newEpochNo = Generic.neEpoch newEpoch
+      -- flush all volatile data
+      flushBulkOperation (envLedger env)
+      -- commit everything in the db
+      lift DB.transactionCommit
+      liftIO $ logDebug (leTrace $ envLedger env) "Taking a ledger a snapshot"
+      -- finally take a ledger snapshot
+      -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
+      liftIO $ saveCleanupState (envLedger env) (lssOldState snapshot) syncState  (Just $ newEpochNo - 1)
 
 -- -------------------------------------------------------------------------------------------------
 -- This horrible hack is only need because of the split between `cardano-sync` and `cardano-db-sync`.
@@ -108,9 +123,9 @@ thisIsAnUglyHack tracer lenv = do
 
 handleLedgerEvents
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> LedgerEnv -> [LedgerEvent]
+    => Trace IO Text -> LedgerEnv -> CardanoPoint -> [LedgerEvent]
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-handleLedgerEvents tracer lenv =
+handleLedgerEvents tracer lenv point =
     mapM_ printer
   where
     printer
@@ -121,16 +136,19 @@ handleLedgerEvents tracer lenv =
         LedgerNewEpoch en ss -> do
           lift $ insertEpochSyncTime en ss (leEpochSyncTime lenv)
           liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo en)
-        LedgerRewards details rwds -> do
-          let progress = calcEpochProgress 4 details
-          when (progress > 0.6) $
-            liftIO . logInfo tracer $ mconcat [ "LedgerRewards: ", textShow progress ]
-          postEpochRewards lenv rwds
-        LedgerStakeDist sdist ->
-          postEpochStake lenv sdist
-
-calcEpochProgress :: Int -> SlotDetails -> Double
-calcEpochProgress digits sd =
-  let factor = 10 ^ digits
-      dval = fromIntegral (unEpochSlot $ sdEpochSlot sd) / fromIntegral (unEpochSize $ sdEpochSize sd)
-  in fromIntegral (floor (dval * factor) :: Int) / factor
+        LedgerStartAtEpoch en ->
+          -- This is different from the previous case in that the db-sync started
+          -- in this epoch, for example after a restart, instead of after an epoch boundary.
+          liftIO . logInfo tracer $ "Starting at epoch " <> textShow (unEpochNo en)
+        LedgerRewards _details rwds -> do
+          liftIO . logInfo tracer $ mconcat
+            [ "Handling ", show (M.size (Generic.rwdRewards rwds)), " rewards for epoch "
+            , show (unEpochNo $ Generic.rwdEpoch rwds), " ", renderPoint point
+            ]
+          postEpochRewards lenv rwds point
+        LedgerStakeDist sdist -> do
+          liftIO . logInfo tracer $ mconcat
+            [ "Handling ", show (M.size (Generic.sdistStakeMap sdist)), " stakes for epoch "
+            , show (unEpochNo $ Generic.sdistEpochNo sdist), " ", renderPoint point
+            ]
+          postEpochStake lenv sdist point

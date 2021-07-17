@@ -128,7 +128,6 @@ latestCachedEpochVar = unsafePerformIO $ newIORef Nothing -- Gets updated later.
 
 updateEpochNum :: (MonadBaseControl IO m, MonadIO m) => Word64 -> Trace IO Text -> ReaderT SqlBackend m (Either SyncNodeError ())
 updateEpochNum epochNum trce = do
-    DB.transactionCommit
     mid <- queryEpochId epochNum
     res <- maybe insertEpoch updateEpoch mid
     liftIO $ atomicWriteIORef latestCachedEpochVar (Just epochNum)
