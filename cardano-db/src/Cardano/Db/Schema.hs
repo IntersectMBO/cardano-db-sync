@@ -195,7 +195,7 @@ share
     url                 Text
     hash                ByteString          sqltype=hash32type
     registeredTxId      TxId                OnDeleteCascade     -- Only used for rollback.
-    UniquePoolMetadataRef poolId hash
+    UniquePoolMetadataRef poolId url hash
 
   PoolUpdate
     hashId              PoolHashId          OnDeleteCascade
