@@ -69,6 +69,7 @@ library
                       , monad-logger
                       , ouroboros-network
                       , persistent
+                      , persistent-documentation
                       , persistent-postgresql
                       -- , persistent-template >= 2.7.0
                       , postgresql-simple

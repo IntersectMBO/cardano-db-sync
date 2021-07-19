@@ -28,9 +28,11 @@ import           Data.Time.Clock (UTCTime)
 import           Data.WideWord.Word128 (Word128)
 import           Data.Word (Word16, Word64)
 
+import           Database.Persist.Class (Unique)
+import           Database.Persist.Documentation (deriveShowFields, document, (#), (--^))
+import           Database.Persist.EntityDef.Internal (EntityDef (..))
 -- Do not use explicit imports from this module as the imports can change
 -- from version to version due to changes to the TH code in Persistent.
-import           Database.Persist.Class (Unique)
 import           Database.Persist.TH
 
 -- In the schema definition we need to match Haskell types with with the
@@ -44,6 +46,8 @@ import           Database.Persist.TH
 share
   [ mkPersist sqlSettings
   , mkMigrate "migrateCardanoDb"
+  , mkEntityDefList "entityDefs"
+  , deriveShowFields
   ]
   [persistLowerCase|
 
@@ -234,28 +238,6 @@ share
 
   -- -----------------------------------------------------------------------------------------------
 
-  Reserve
-    addrId              StakeAddressId      OnDeleteCascade
-    certIndex           Word16
-    amount              DbInt65             sqltype=int65type
-    txId                TxId                OnDeleteCascade
-    UniqueReserves      addrId txId
-
-  Withdrawal
-    addrId              StakeAddressId      OnDeleteCascade
-    amount              DbLovelace          sqltype=lovelace
-    txId                TxId                OnDeleteCascade
-    UniqueWithdrawal    addrId txId
-
-  Delegation
-    addrId              StakeAddressId      OnDeleteCascade
-    certIndex           Word16
-    poolHashId          PoolHashId          OnDeleteCascade
-    activeEpochNo       Word64
-    txId                TxId                OnDeleteCascade
-    slotNo              Word64              sqltype=uinteger
-    UniqueDelegation    addrId poolHashId txId
-
   -- When was a staking key/script registered
   StakeRegistration
     addrId              StakeAddressId      OnDeleteCascade
@@ -269,6 +251,15 @@ share
     certIndex           Word16
     txId                TxId                OnDeleteCascade
     UniqueStakeDeregistration addrId txId
+
+  Delegation
+    addrId              StakeAddressId      OnDeleteCascade
+    certIndex           Word16
+    poolHashId          PoolHashId          OnDeleteCascade
+    activeEpochNo       Word64
+    txId                TxId                OnDeleteCascade
+    slotNo              Word64              sqltype=uinteger
+    UniqueDelegation    addrId poolHashId txId
 
   TxMetadata
     key                 DbWord64            sqltype=word64type
@@ -302,6 +293,12 @@ share
     poolId              PoolHashId          OnDeleteCascade
     UniqueOrphaned      epochNo addrId poolId
 
+  Withdrawal
+    addrId              StakeAddressId      OnDeleteCascade
+    amount              DbLovelace          sqltype=lovelace
+    txId                TxId                OnDeleteCascade
+    UniqueWithdrawal    addrId txId
+
   -- This table should never get rolled back.
   EpochStake
     addrId              StakeAddressId      OnDeleteCascade
@@ -317,12 +314,25 @@ share
     txId                TxId                OnDeleteCascade
     UniqueTreasury      addrId txId
 
+  Reserve
+    addrId              StakeAddressId      OnDeleteCascade
+    certIndex           Word16
+    amount              DbInt65             sqltype=int65type
+    txId                TxId                OnDeleteCascade
+    UniqueReserves      addrId txId
+
   PotTransfer
     certIndex           Word16
     treasury            DbInt65             sqltype=int65type
     reserves            DbInt65             sqltype=int65type
     txId                TxId                OnDeleteCascade
     UniquePotTransfer   txId certIndex
+
+  EpochSyncTime
+    no                  Word64
+    seconds             Double Maybe
+    state               SyncState           sqltype=syncstatetype
+    UniqueEpochSyncTime no
 
   -- -----------------------------------------------------------------------------------------------
   -- Multi Asset related tables.
@@ -443,12 +453,6 @@ share
     UniquePoolOfflineFetchError poolId fetchTime retryCount
     deriving Show
 
-  EpochSyncTime
-    no                  Word64
-    seconds             Double Maybe
-    state               SyncState           sqltype=syncstatetype
-    UniqueEpochSyncTime no
-
   --------------------------------------------------------------------------
   -- Tables below must be preserved when migrations occur!
   --------------------------------------------------------------------------
@@ -470,3 +474,351 @@ share
   |]
 
 deriving instance Eq (Unique EpochSyncTime)
+
+schemaDocs :: [EntityDef]
+schemaDocs =
+  document entityDefs $ do
+    SchemaVersion --^ do
+      "The version of the database schema. Schema versioning is split into three stages as detailed\
+        \ below. This table should only ever have a single row."
+      SchemaVersionStageOne # "Set up PostgreSQL data types (using SQL 'DOMAIN' statements)."
+      SchemaVersionStageTwo # "Persistent generated migrations."
+      SchemaVersionStageThree # "Set up database views, indices etc."
+
+    PoolHash --^ do
+      "A table for every unique pool key hash. The `id` field of this table is used as foreign keys in other tables."
+      PoolHashHashRaw # "The raw bytes of the pool hash."
+      PoolHashView # "The Bech32 encoding of the pool hash."
+
+    SlotLeader --^ do
+      "Every unique slot leader (ie an entity that mines a block)."
+      SlotLeaderHash # "The hash of of the block producer identifier."
+      SlotLeaderPoolHashId # "If the slot leader is a pool, an index into the `PoolHash` table."
+      SlotLeaderDescription # "An auto-generated description of the slot leader."
+
+    Block --^ do
+      "A table for blocks on the chain."
+      BlockHash # "The hash identifier of the block."
+      BlockEpochNo # "The epoch number."
+      BlockSlotNo # "The slot number."
+      BlockEpochSlotNo # "The slot number within an epoch (resets to zero at the start of each epoch)."
+      BlockBlockNo # "The block number."
+      BlockPreviousId # "The Block table index of the previous block."
+      BlockSlotLeaderId # "The SlotLeader table index of the creator of this block."
+      BlockSize # "The block size (in bytes)."
+      BlockTime # "The block time (UTCTime)."
+      BlockTxCount # "The number of transactions in this block."
+      BlockProtoMajor # "The block's major protocol number."
+      BlockProtoMinor # "The block's major protocol number."
+      -- Shelley specific
+      BlockVrfKey # "The VRF key of the creator of this block."
+      BlockOpCert # "The hash of the operational certificate of the block producer."
+      BlockOpCertCounter # "The value of the counter used to produce the operational certificate."
+
+    Tx --^ do
+      "A table for transactions within a block on the chain."
+      TxHash # "The hash identifier of the transaction."
+      TxBlockId # "The Block table index of the block that contains this transaction."
+      TxBlockIndex # "The index of this transaction with the block (zero based)."
+      TxOutSum # "The sum of the transaction outputs (in Lovelace)."
+      TxFee # "The fees paid for this transaction."
+      TxDeposit # "Deposit (or deposit refund) in this transaction. Deposits are positive, refunds negative."
+      TxSize # "The size of the transaction in bytes."
+      TxInvalidBefore # "Transaction in invalid before this slot number."
+      TxInvalidHereafter # "Transaction in invalid at or after this slot number."
+      TxValidContract # "False if the contract is invalid. True if the contract is valid or there is no contract."
+
+    StakeAddress --^ do
+      "A table of unique stake addresses. Can be an actual address or a script hash."
+      StakeAddressHashRaw # "The raw bytes of the stake address hash."
+      StakeAddressView # "The Bech32 encoded version of the stake address."
+      StakeAddressRegisteredTxId # "The Tx table index of the transaction in which this address was registered."
+
+    TxOut --^ do
+      "A table for transaction outputs."
+      TxOutTxId # "The Tx table index of the transaction that contains this transaction output."
+      TxOutIndex # "The index of this transaction output with the transaction."
+      TxOutAddress # "The human readable encoding of the output address. Will be Base58 for Byron era addresses and Bech32 for Shelley era."
+      TxOutAddressRaw # "The raw binary address."
+      TxOutPaymentCred # "The payment credential part of the Shelley address. (NULL for Byron addresses)."
+      TxOutStakeAddressId # "The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses)."
+      TxOutValue # "The output value (in Lovelace) of the transaction output."
+
+    TxIn --^ do
+      "A table for transaction inputs."
+      TxInTxInId # "The Tx table index where this transaction is used as an input."
+      TxInTxOutId # "The Tx table index where this transaction was created as an output."
+      TxInTxOutIndex # "The index within the transaction outputs."
+
+    CollateralTxIn --^ do
+      "A table for transaction collateral inputs."
+      CollateralTxInTxInId # "The Tx table index where this transaction is used as an input."
+      CollateralTxInTxOutId # "The Tx table index where this transaction was created as an output."
+      CollateralTxInTxOutIndex # "The index within the transaction outputs."
+
+    Meta --^ do
+      "A table containing metadata about the chain. There will probably only ever be one row in this table."
+      MetaStartTime # "The start time of the network."
+      MetaNetworkName # "The network name."
+
+    Epoch --^ do
+      "Aggregation of data within an epoch."
+      EpochOutSum # "The sum of the transaction output values (in Lovelace) in this epoch."
+      EpochFees # "The sum of the fees (in Lovelace) in this epoch."
+      EpochTxCount # "The number of transactions in this epoch."
+      EpochBlkCount # "The number of blocks in this epoch."
+      EpochNo # "The epoch number."
+      EpochStartTime # "The epoch start time."
+      EpochEndTime # "The epoch end time."
+
+    AdaPots --^ do
+      "A table with all the different types of total balances (Shelley only).\n\
+        \The treasury and rewards fields will be correct for the whole epoch, but all other \
+        \fields change block by block."
+      AdaPotsSlotNo # "The slot number where this AdaPots snapshot was taken."
+      AdaPotsEpochNo # "The epoch number where this AdaPots snapshot was taken."
+      AdaPotsTreasury # "The amount (in Lovelace) in the treasury pot."
+      AdaPotsReserves # "The amount (in Lovelace) in the reserves pot."
+      AdaPotsRewards # "The amount (in Lovelace) in the rewards pot."
+      AdaPotsUtxo # "The amount (in Lovelace) in the UTxO set."
+      AdaPotsDeposits # "The amount (in Lovelace) in the deposit pot."
+      AdaPotsFees # "The amount (in Lovelace) in the fee pot."
+      AdaPotsBlockId # "The Block table index of the block for which this snapshot was taken."
+
+    PoolMetadataRef --^ do
+      "An on-chain reference to off-chain pool metadata."
+      PoolMetadataRefPoolId # "The PoolHash table index of the pool for this reference."
+      PoolMetadataRefUrl # "The URL for the location of the off-chain data."
+      PoolMetadataRefHash # "The expected hash for the off-chain data."
+      PoolMetadataRefRegisteredTxId # "The Tx table index of the transaction in which provided this metadata reference."
+
+    PoolUpdate --^ do
+      "An on-chain pool update."
+      PoolUpdateHashId # "The PoolHash table index of the pool this update refers to."
+      PoolUpdateCertIndex # "The index of this pool update within the certificates of this transaction."
+      PoolUpdateVrfKeyHash # "The hash of the pool's VRF key."
+      PoolUpdatePledge # "The amount (in Lovelace) the pool owner pledges to the pool."
+      PoolUpdateRewardAddr # "The pool's rewards address."
+      PoolUpdateActiveEpochNo # "The epoch number where this update becomes active."
+      PoolUpdateMetaId # "The PoolMetadataRef table index this pool update refers to."
+      PoolUpdateMargin # "The margin (as a percentage) this pool charges."
+      PoolUpdateFixedCost # "The fixed per epoch fee (in ADA) this pool charges."
+      PoolUpdateRegisteredTxId # "The Tx table index of the transaction in which provided this pool update."
+
+    PoolOwner --^ do
+      "A table containing pool owners."
+      PoolOwnerAddrId # "The StakeAddress table index for the pool owner's stake address."
+      PoolOwnerPoolHashId # "The PoolHash table index for the pool."
+      PoolOwnerRegisteredTxId # "The Tx table index of the transaction where this pool owner was registered."
+
+    PoolRetire --^ do
+      "A table containing information about pools retiring."
+      PoolRetireHashId # "The PoolHash table index of the pool this retirement refers to."
+      PoolRetireCertIndex # "The index of this pool retirement within the certificates of this transaction."
+      PoolRetireAnnouncedTxId # "The Tx table index of the transaction where this pool retirement was announced."
+      PoolRetireRetiringEpoch # "The epoch where this pool retires."
+
+    PoolRelay --^ do
+      PoolRelayUpdateId # "The PoolUpdate table index this PoolRelay entry refers to."
+      PoolRelayIpv4 # "The IPv4 address of the relay (NULLable)."
+      PoolRelayIpv6 # "The IPv6 address of the relay (NULLable)."
+      PoolRelayDnsName # "The DNS name of the relay (NULLable)."
+      PoolRelayDnsSrvName # "The DNS service name of the relay (NULLable)."
+      PoolRelayPort # "The port number of relay (NULLable)."
+
+    StakeRegistration --^ do
+      "A table containing stake address registrations."
+      StakeRegistrationAddrId # "The StakeAddress table index for the stake address."
+      StakeRegistrationCertIndex # "The index of this stake registration within the certificates of this transaction."
+      StakeRegistrationTxId # "The Tx table index of the transaction where this stake address was registered."
+
+    StakeDeregistration --^ do
+      "A table containing stake address deregistrations."
+      StakeDeregistrationAddrId # "The StakeAddress table index for the stake address."
+      StakeDeregistrationCertIndex # "The index of this stake deregistration within the certificates of this transaction."
+      StakeDeregistrationTxId # "The Tx table index of the transaction where this stake address was deregistered."
+
+    Delegation --^ do
+      "A table containing delegations from a stake address to a stake pool."
+      DelegationAddrId # "The StakeAddress table index for the stake address."
+      DelegationCertIndex # "The index of this delegation within the certificates of this transaction."
+      DelegationPoolHashId # "The PoolHash table index for the pool being delegated to."
+      DelegationActiveEpochNo # "The epoch number where this delegation becomes active."
+      DelegationTxId # "The Tx table index of the transaction that contained this delegation."
+      DelegationSlotNo # "The slot number of the block that contained this delegation."
+
+    TxMetadata --^ do
+      "A table for metadata attached to a transaction."
+      TxMetadataKey # "The metadata key (a Word64/unsigned 64 bit number)."
+      TxMetadataJson # "The JSON payload."
+      TxMetadataBytes # "The raw bytes of the payload."
+      TxMetadataTxId # "The Tx table index of the transaction where this metadata was included."
+
+    Reward --^ do
+      "A table for rewards earned by staking. One of the fields is the epoch number in which the\
+        \ reward was earned, but rewards can only be spent two epochs after they are earned."
+      RewardAddrId # "The StakeAddress table index for the stake address that earned the reward."
+      RewardType # "The source of the rewards; pool `member` vs pool `owner`."
+      RewardAmount # "The reward amount (in Lovelace)."
+      RewardEpochNo # "The epoch in which the reward was earned."
+      RewardPoolId # "The PoolHash table index for the pool the stake address was delegated to when the reward is earned."
+
+    OrphanedReward --^ do
+      "A table for rewards earned by staking, but are orphaned. Rewards are orphaned when the stake address\
+        \ is deregistered before the rewards are distributed."
+      OrphanedRewardAddrId # "The StakeAddress table index for the stake address that earned the reward."
+      OrphanedRewardType # "The source of the rewards; pool `member` vs pool `owner`."
+      OrphanedRewardAmount # "The reward amount (in Lovelace)."
+      OrphanedRewardEpochNo # "The epoch in which the reward was earned."
+      OrphanedRewardPoolId # "The PoolHash table index for the pool the stake address was delegated to when the reward is earned."
+
+    Withdrawal --^ do
+      "A table for withdrawals from a reward account."
+      WithdrawalAddrId # "The StakeAddress table index for the stake address for which the withdrawal is for."
+      WithdrawalAmount # "The withdrawal amount (in Lovelace)."
+      WithdrawalTxId # "The Tx table index for the transaction that contains this withdrawal."
+
+    EpochStake --^ do
+      "A table containing the epoch stake distribution for each epoch."
+      EpochStakeAddrId # "The StakeAddress table index for the stake address for this EpochStake entry."
+      EpochStakePoolId # "The PoolHash table index for the pool this entry is delegated to."
+      EpochStakeAmount # "The amount (in Lovelace) being staked."
+      EpochStakeEpochNo # "The epoch number."
+
+    Treasury --^ do
+      "A table for payments from the treasury to a StakeAddress."
+      TreasuryAddrId # "The StakeAddress table index for the stake address for this Treasury entry."
+      TreasuryCertIndex # "The index of this payment certificate within the certificates of this transaction."
+      TreasuryAmount # "The payment amount (in Lovelace)."
+      TreasuryTxId # "The Tx table index for the transaction that contains this payment."
+
+    Reserve --^ do
+      "A table for payments from the reserves to a StakeAddress."
+      ReserveAddrId # "The StakeAddress table index for the stake address for this Treasury entry."
+      ReserveCertIndex # "The index of this payment certificate within the certificates of this transaction."
+      ReserveAmount # "The payment amount (in Lovelace)."
+      ReserveTxId # "The Tx table index for the transaction that contains this payment."
+
+    PotTransfer --^ do
+      "A table containing transfers between the reserves pot and the treasury pot."
+      PotTransferCertIndex # "The index of this transfer certificate within the certificates of this transaction."
+      PotTransferTreasury # "The amount (in Lovelace) the treasury balance changes by."
+      PotTransferReserves # "The amount (in Lovelace) the reserves balance changes by."
+      PotTransferTxId # "The Tx table index for the transaction that contains this transfer."
+
+    EpochSyncTime --^ do
+      "A table containing the time required to fully sync an epoch."
+      EpochSyncTimeNo # "The epoch number for this sync time."
+      EpochSyncTimeSeconds # "The time (in seconds) required to sync this epoch (may be NULL for an epoch\
+                                \ that was already partially synced when `db-sync` was started)."
+      EpochSyncTimeState # "The sync state when the sync time is recorded (either 'lagging' or 'following')."
+
+    MaTxMint --^ do
+      "A table containing Multi-Asset mint events."
+      MaTxMintPolicy # "The MultiAsset policy hash."
+      MaTxMintName # "The MultiAsset name."
+      MaTxMintQuantity # "The amount of the Multi Asset to mint (can be negative to \"burn\" assets)."
+      MaTxMintTxId # "The Tx table index for the transaction that contains this minting event."
+
+    MaTxOut --^ do
+      "A table containing Multi-Asset transaction outputs."
+      MaTxOutPolicy # "The MultiAsset policy hash."
+      MaTxOutName # "The MultiAsset name."
+      MaTxOutQuantity # "The Multi Asset transaction output amount (denominated in the Multi Asset)."
+      MaTxOutTxOutId # "The TxOut table index for the transaction that this Multi Asset transaction output."
+
+    ParamProposal --^ do
+      "A table containing block chain parameter change proposals."
+      ParamProposalEpochNo # "The epoch for which this parameter proposal in intended to become active."
+      ParamProposalKey # "The hash of the crypto key used to sign this proposal."
+      ParamProposalMinFeeA # "The 'a' parameter to calculate the minimum transaction fee."
+      ParamProposalMinFeeB # "The 'b' parameter to calculate the minimum transaction fee."
+      ParamProposalMaxBlockSize # "The maximum block size (in bytes)."
+      ParamProposalMaxTxSize # "The maximum transaction size (in bytes)."
+      ParamProposalMaxBhSize # "The maximum block header size (in bytes)."
+      ParamProposalKeyDeposit # "The amount (in Lovelace) require for a deposit to register a StakeAddress."
+      ParamProposalPoolDeposit # "The amount (in Lovelace) require for a deposit to register a stake pool."
+      ParamProposalMaxEpoch # "The maximum number of epochs in the future that a pool retirement is allowed to be scheduled for."
+      ParamProposalOptimalPoolCount # "The optimal number of stake pools."
+      ParamProposalInfluence # "The influence of the pledge on a stake pool's probability on minting a block."
+      ParamProposalMonetaryExpandRate # "The monetary expansion rate."
+      ParamProposalTreasuryGrowthRate # "The treasury growth rate."
+      ParamProposalDecentralisation # "The decentralisation parameter (1 fully centralised, 0 fully decentralised)."
+      ParamProposalEntropy # "The 32 byte string of extra random-ness to be added into the protocol's entropy pool."
+      ParamProposalProtocolMajor # "The protocol major number."
+      ParamProposalProtocolMinor # "The protocol minor number."
+      ParamProposalMinUtxoValue # "The minimum value of a UTxO entry."
+      ParamProposalMinPoolCost # "The minimum pool cost."
+      ParamProposalCoinsPerUtxoWord # "The cost per UTxO word."
+      ParamProposalCostModels # "The per language cost models."
+      ParamProposalPriceMem # "The per word cost of script memory usage."
+      ParamProposalPriceStep # "The cost of script execution step usage."
+      ParamProposalMaxTxExMem # "The maximum number of execution memory allowed to be used in a single transaction."
+      ParamProposalMaxTxExSteps # "The maximum number of execution steps allowed to be used in a single transaction."
+      ParamProposalMaxBlockExMem # "The maximum number of execution memory allowed to be used in a single block."
+      ParamProposalMaxBlockExSteps # "The maximum number of execution steps allowed to be used in a single block."
+      ParamProposalMaxValSize # "The maximum Val size."
+      ParamProposalCollateralPercent # "The percentage of the txfee which must be provided as collateral when including non-native scripts."
+      ParamProposalMaxCollateralInputs # "The maximum number of collateral inputs allowed in a transaction."
+      ParamProposalRegisteredTxId # "The Tx table index for the transaction that contains this parameter proposal."
+
+    EpochParam --^ do
+      "The accepted protocol parameters for an epoch."
+      EpochParamEpochNo # "The first epoch for which these parameters are valid."
+      EpochParamMinFeeA # "The 'a' parameter to calculate the minimum transaction fee."
+      EpochParamMinFeeB # "The 'b' parameter to calculate the minimum transaction fee."
+      EpochParamMaxBlockSize # "The maximum block size (in bytes)."
+      EpochParamMaxTxSize # "The maximum transaction size (in bytes)."
+      EpochParamMaxBhSize # "The maximum block header size (in bytes)."
+      EpochParamKeyDeposit # "The amount (in Lovelace) require for a deposit to register a StakeAddress."
+      EpochParamPoolDeposit # "The amount (in Lovelace) require for a deposit to register a stake pool."
+      EpochParamMaxEpoch  # "The maximum number of epochs in the future that a pool retirement is allowed to be scheduled for."
+      EpochParamOptimalPoolCount # "The optimal number of stake pools."
+      EpochParamInfluence # "The influence of the pledge on a stake pool's probability on minting a block."
+      EpochParamMonetaryExpandRate # "The monetary expansion rate."
+      EpochParamTreasuryGrowthRate # "The treasury growth rate."
+      EpochParamDecentralisation # "The decentralisation parameter (1 fully centralised, 0 fully decentralised)."
+      EpochParamEntropy # "The 32 byte string of extra random-ness to be added into the protocol's entropy pool."
+      EpochParamProtocolMajor # "The protocol major number."
+      EpochParamProtocolMinor # "The protocol minor number."
+      EpochParamMinUtxoValue # "The minimum value of a UTxO entry."
+      EpochParamMinPoolCost # "The minimum pool cost."
+      EpochParamNonce # "The nonce value for this epoch."
+      EpochParamCoinsPerUtxoWord # "The cost per UTxO word."
+      EpochParamCostModels # "The per language cost models."
+      EpochParamPriceMem # "The per word cost of script memory usage."
+      EpochParamPriceStep # "The cost of script execution step usage."
+      EpochParamMaxTxExMem # "The maximum number of execution memory allowed to be used in a single transaction."
+      EpochParamMaxTxExSteps # "The maximum number of execution steps allowed to be used in a single transaction."
+      EpochParamMaxBlockExMem # "The maximum number of execution memory allowed to be used in a single block."
+      EpochParamMaxBlockExSteps # "The maximum number of execution steps allowed to be used in a single block."
+      EpochParamMaxValSize # "The maximum Val size."
+      EpochParamCollateralPercent # "The percentage of the txfee which must be provided as collateral when including non-native scripts."
+      EpochParamMaxCollateralInputs # "The maximum number of collateral inputs allowed in a transaction."
+      EpochParamBlockId # "The Block table index for the first block where these parameters are valid."
+
+    PoolOfflineData --^ do
+      "The pool offline (ie not on chain) for a stake pool."
+      PoolOfflineDataPoolId # "The PoolHash table index for the pool this offline data refers."
+      PoolOfflineDataTickerName # "The pool's ticker name (as many as 5 characters)."
+      PoolOfflineDataHash # "The hash of the offline data."
+      PoolOfflineDataMetadata # "The raw offline data."
+      PoolOfflineDataPmrId # "The PoolMetadataRef table index for this offline data."
+
+    PoolOfflineFetchError --^ do
+      "A table containing pool offline data fetch errors."
+      PoolOfflineFetchErrorPoolId # "The PoolHash table index for the pool this offline fetch error refers."
+      PoolOfflineFetchErrorFetchTime # "The UTC time stamp of the error."
+      PoolOfflineFetchErrorPmrId # "The PoolMetadataRef table index for this offline data."
+      PoolOfflineFetchErrorFetchError # "The text of the error."
+      PoolOfflineFetchErrorRetryCount # "The number of retries."
+
+    ReservedPoolTicker --^ do
+      "A table containing a managed list of reserved ticker names."
+      ReservedPoolTickerName # "The ticker name."
+      ReservedPoolTickerPoolId # "The PoolHash table index for the pool that has reserved this name."
+
+    AdminUser --^ do
+      "A table listing all admin users (for maintaining the SMASH related data)."
+      AdminUserUsername # "The user name."
+      AdminUserPassword # "The password."
