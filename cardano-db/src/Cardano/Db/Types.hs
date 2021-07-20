@@ -10,6 +10,7 @@ module Cardano.Db.Types
   , DbLovelace (..)
   , DbInt65 (..)
   , DbWord64 (..)
+  , RewardSource (..)
   , SyncState (..)
   , deltaCoinToDbInt65
   , integerToDbInt65
@@ -18,10 +19,11 @@ module Cardano.Db.Types
   , scientificToAda
   , readDbInt65
   , showDbInt65
-  , readRewardType
+  , readRewardSource
   , readSyncState
   , renderSyncState
-  , showRewardType
+  , rewardTypeToSource
+  , showRewardSource
   , word64ToAda
   ) where
 
@@ -83,6 +85,13 @@ newtype DbWord64
   deriving (Eq, Generic)
   deriving (Read, Show) via (Quiet DbWord64)
 
+data RewardSource
+  = RwdMember
+  | RwdLeader
+  | RwdReserves
+  | RwdTreasury
+  deriving (Bounded, Enum, Eq, Show)
+
 data SyncState
   = SyncLagging         -- Local tip is lagging the global chain tip.
   | SyncFollowing       -- Local tip is following global chain tip.
@@ -124,14 +133,16 @@ showDbInt65 i65 =
     NegInt65 0 -> "0"
     NegInt65 w -> '-' : show w
 
-readRewardType :: Text -> Shelley.RewardType
-readRewardType str =
+readRewardSource :: Text -> RewardSource
+readRewardSource str =
   case str of
-    "member" -> Shelley.MemberReward
-    "leader" -> Shelley.LeaderReward
+    "member" -> RwdMember
+    "leader" -> RwdLeader
+    "reserves" -> RwdReserves
+    "treasury" -> RwdTreasury
     -- This should never happen. On the Postgres side we defined an ENUM with
     -- only the two values as above.
-    _other -> error $ "readRewardType: Unknown RewardType " ++ Text.unpack str
+    _other -> error $ "readRewardSource: Unknown RewardSource " ++ Text.unpack str
 
 readSyncState :: String -> SyncState
 readSyncState str =
@@ -148,11 +159,19 @@ renderSyncState ss =
     SyncFollowing -> "following"
     SyncLagging -> "lagging"
 
-showRewardType :: Shelley.RewardType -> Text
-showRewardType rt =
+rewardTypeToSource :: Shelley.RewardType -> RewardSource
+rewardTypeToSource rt =
   case rt of
-    Shelley.MemberReward -> "member"
-    Shelley.LeaderReward -> "leader"
+    Shelley.LeaderReward -> RwdLeader
+    Shelley.MemberReward -> RwdMember
+
+showRewardSource :: RewardSource -> Text
+showRewardSource rt =
+  case rt of
+    RwdMember -> "member"
+    RwdLeader -> "leader"
+    RwdReserves -> "reserves"
+    RwdTreasury -> "treasury"
 
 word64ToAda :: Word64 -> Ada
 word64ToAda w =

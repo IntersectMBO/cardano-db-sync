@@ -166,7 +166,7 @@ insertRewards epoch icache rewardsChunk = do
         poolId <- hoistEither $ lookupPoolIdPair "insertRewards StakePool" (Shelley.rewardPool rwd) icache
         pure $ DB.Reward
                   { DB.rewardAddrId = saId
-                  , DB.rewardType = DB.showRewardType (Shelley.rewardType rwd)
+                  , DB.rewardType = DB.showRewardSource (DB.rewardTypeToSource $ Shelley.rewardType rwd)
                   , DB.rewardAmount = Generic.coinToDbLovelace (Shelley.rewardAmount rwd)
                   , DB.rewardEpochNo = unEpochNo epoch
                   , DB.rewardPoolId = poolId
@@ -190,7 +190,7 @@ insertOrphanedRewards epoch icache orphanedRewardsChunk = do
         poolId <- hoistEither $ lookupPoolIdPair "insertOrphanedRewards StakePool" (Shelley.rewardPool rwd) icache
         pure $ DB.OrphanedReward
                   { DB.orphanedRewardAddrId = saId
-                  , DB.orphanedRewardType = DB.showRewardType (Shelley.rewardType rwd)
+                  , DB.orphanedRewardType = DB.showRewardSource (DB.rewardTypeToSource $ Shelley.rewardType rwd)
                   , DB.orphanedRewardAmount = Generic.coinToDbLovelace (Shelley.rewardAmount rwd)
                   , DB.orphanedRewardEpochNo = unEpochNo epoch
                   , DB.orphanedRewardPoolId = poolId
