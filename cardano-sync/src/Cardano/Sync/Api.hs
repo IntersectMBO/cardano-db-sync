@@ -56,12 +56,15 @@ data SyncDataLayer = SyncDataLayer
   , sdlGetLatestSlotNo :: IO SlotNo
   }
 
-mkSyncEnv :: SyncDataLayer -> Trace IO Text -> ProtocolInfo IO CardanoBlock -> Ledger.Network -> NetworkMagic -> SystemStart -> LedgerStateDir -> IO SyncEnv
-mkSyncEnv dataLayer trce protocolInfo network networkMagic systemStart dir = do
-  ledgerEnv <- mkLedgerEnv trce protocolInfo dir network
+mkSyncEnv
+    :: SyncDataLayer -> Trace IO Text -> ProtocolInfo IO CardanoBlock -> Ledger.Network
+    -> NetworkMagic -> SystemStart -> LedgerStateDir -> EpochSlot
+    -> IO SyncEnv
+mkSyncEnv dataLayer trce protoInfo nw nwMagic systemStart dir stableEpochSlot = do
+  ledgerEnv <- mkLedgerEnv trce protoInfo dir nw stableEpochSlot
   pure $ SyncEnv
           { envProtocol = SyncProtocolCardano
-          , envNetworkMagic = networkMagic
+          , envNetworkMagic = nwMagic
           , envSystemStart = systemStart
           , envDataLayer = dataLayer
           , envLedger = ledgerEnv
@@ -83,14 +86,17 @@ mkSyncEnvFromConfig trce dataLayer dir genCfg =
                 [ "SystemStart ", textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
                 , " /= ", textShow (Shelley.sgSystemStart $ scConfig sCfg)
                 ]
-        | otherwise -> Right <$> mkSyncEnv
-                         trce
-                         dataLayer
-                         (mkProtocolInfoCardano genCfg)
-                         (Shelley.sgNetworkId (scConfig sCfg))
-                         (NetworkMagic (unProtocolMagicId $ Byron.configProtocolMagicId bCfg))
-                         (SystemStart (Byron.gdStartTime $ Byron.configGenesisData bCfg))
-                         dir
+        | otherwise ->
+            Right <$> mkSyncEnv trce dataLayer (mkProtocolInfoCardano genCfg) (Shelley.sgNetworkId $ scConfig sCfg)
+                        (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+                        (SystemStart .Byron.gdStartTime $ Byron.configGenesisData bCfg)
+                        dir (calculateStableEpochSlot $ scConfig sCfg)
+
+
+getLatestPoints :: SyncEnv -> IO [CardanoPoint]
+getLatestPoints env = do
+    files <- listLedgerStateFilesOrdered $ leDir (envLedger env)
+    verifyFilePoints env files
 
 verifyFilePoints :: SyncEnv -> [LedgerStateFile] -> IO [CardanoPoint]
 verifyFilePoints env files =
@@ -111,7 +117,17 @@ verifyFilePoints env files =
     convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
     convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)
 
-getLatestPoints :: SyncEnv -> IO [CardanoPoint]
-getLatestPoints env = do
-    files <- listLedgerStateFilesOrdered $ leDir $ envLedger env
-    verifyFilePoints env files
+-- -------------------------------------------------------------------------------------------------
+
+-- This is correct for now, but theoretically these values can change in a HFC event.
+-- Hopefully this code will be long gone (replaced when ledger-specs gets a proper API) before
+-- this becomes wrong.
+calculateStableEpochSlot :: Shelley.ShelleyGenesis era -> EpochSlot
+calculateStableEpochSlot cfg =
+    EpochSlot $ ceiling (3.0 * secParam / actSlotCoeff)
+  where
+    secParam :: Double
+    secParam = fromIntegral $ Shelley.sgSecurityParam cfg
+
+    actSlotCoeff :: Double
+    actSlotCoeff = fromRational (Ledger.unboundRational $ Shelley.sgActiveSlotsCoeff cfg)

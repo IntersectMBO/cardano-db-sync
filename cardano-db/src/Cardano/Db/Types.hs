@@ -90,7 +90,7 @@ data RewardSource
   | RwdLeader
   | RwdReserves
   | RwdTreasury
-  deriving (Bounded, Enum, Eq, Show)
+  deriving (Bounded, Enum, Eq, Ord, Show)
 
 data SyncState
   = SyncLagging         -- Local tip is lagging the global chain tip.
@@ -166,8 +166,8 @@ rewardTypeToSource rt =
     Shelley.MemberReward -> RwdMember
 
 showRewardSource :: RewardSource -> Text
-showRewardSource rt =
-  case rt of
+showRewardSource rs =
+  case rs of
     RwdMember -> "member"
     RwdLeader -> "leader"
     RwdReserves -> "reserves"

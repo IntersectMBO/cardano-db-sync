@@ -1,21 +1,24 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Cardano.Sync.Era.Shelley.Generic.Rewards
-  ( Rewards (..)
+  ( Reward (..)
+  , Rewards (..)
   , epochRewards
   , rewardsPoolHashKeys
   , rewardsStakeCreds
   ) where
 
-import           Cardano.Sync.Era.Shelley.Generic.StakeCred
+import           Cardano.Db (RewardSource (..), rewardTypeToSource)
 
 import qualified Cardano.Ledger.BaseTypes as Ledger
+import           Cardano.Ledger.Coin (Coin)
 import qualified Cardano.Ledger.Credential as Ledger
 import           Cardano.Ledger.Era (Crypto)
 import qualified Cardano.Ledger.Keys as Ledger
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
+import           Cardano.Sync.Era.Shelley.Generic.StakeCred
 import           Cardano.Sync.Types
 
 import           Data.Bifunctor (bimap)
@@ -34,13 +37,19 @@ import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley
 import qualified Shelley.Spec.Ledger.Rewards as Shelley
 
+data Reward = Reward
+  { rewardSource :: !RewardSource
+  , rewardPool :: !(Ledger.KeyHash 'Ledger.StakePool StandardCrypto)
+  , rewardAmount :: !Coin
+  } deriving (Eq, Ord, Show)
+
 -- The `ledger-specs` code defines a `RewardUpdate` type that is parameterised over
 -- Shelley/Allegra/Mary. This is a huge pain in the neck for `db-sync` so we define a
 -- generic one instead.
 data Rewards = Rewards
   { rwdEpoch :: !EpochNo
-  , rwdRewards :: !(Map StakeCred (Set (Shelley.Reward StandardCrypto)))
-  , rwdOrphaned :: !(Map StakeCred (Set (Shelley.Reward StandardCrypto)))
+  , rwdRewards :: !(Map StakeCred (Set Reward))
+  , rwdOrphaned :: !(Map StakeCred (Set Reward))
   } deriving Eq
 
 epochRewards :: Ledger.Network -> EpochNo -> ExtLedgerState CardanoBlock -> Maybe Rewards
@@ -54,7 +63,7 @@ epochRewards nw epoch lstate =
 
 rewardsPoolHashKeys :: Rewards -> Set PoolKeyHash
 rewardsPoolHashKeys rwds =
-  Set.unions . map (Set.map Shelley.rewardPool) $
+  Set.unions . map (Set.map rewardPool) $
     Map.elems (rwdRewards rwds) ++ Map.elems (rwdOrphaned rwds)
 
 rewardsStakeCreds :: Rewards -> Set StakeCred
@@ -67,38 +76,49 @@ genericRewards :: forall era. Ledger.Network -> EpochNo -> LedgerState (ShelleyB
 genericRewards network epoch lstate =
     fmap cleanup rewardUpdate
   where
-    cleanup :: Map (Ledger.Credential 'Ledger.Staking (Crypto era)) (Set (Shelley.Reward (Crypto era))) -> Rewards
+    cleanup :: Map StakeCred (Set Reward) -> Rewards
     cleanup rmap =
       let (rm, om) = Map.partitionWithKey validRewardAddress rmap in
       Rewards
-        { rwdEpoch = epoch - 1 -- Epoch in whch rewards were earned.
-        , rwdRewards = mapBimap (toStakeCred network) (Set.map convertReward) rm
-        , rwdOrphaned = mapBimap (toStakeCred network) (Set.map convertReward) om
+        { rwdEpoch = epoch - 1 -- Epoch in which rewards were earned.
+        , rwdRewards = rm
+        , rwdOrphaned = om
         }
-    rewardAccounts :: Shelley.RewardAccounts (Crypto era)
-    rewardAccounts =
-      Shelley._rewards . Shelley._dstate . Shelley._delegationState . Shelley.esLState
-        $ Shelley.nesEs (Consensus.shelleyLedgerState lstate)
 
-    rewardUpdate :: Maybe (Map (Ledger.Credential 'Ledger.Staking (Crypto era)) (Set (Shelley.Reward (Crypto era))))
+    rewardUpdate :: Maybe (Map StakeCred (Set Reward))
     rewardUpdate =
       completeRewardUpdate =<< Ledger.strictMaybeToMaybe (Shelley.nesRu $ Consensus.shelleyLedgerState lstate)
 
-    completeRewardUpdate
-        :: Shelley.PulsingRewUpdate crypto
-        -> Maybe (Map (Ledger.Credential 'Ledger.Staking crypto) (Set (Shelley.Reward crypto)))
+    completeRewardUpdate :: Shelley.PulsingRewUpdate (Crypto era) -> Maybe (Map StakeCred (Set Reward))
     completeRewardUpdate x =
       case x of
         Shelley.Pulsing {} -> Nothing -- Should never happen.
-        Shelley.Complete ru -> Just $ Shelley.rs ru
+        Shelley.Complete ru -> Just $ convertRewardMap (Shelley.rs ru)
 
-    validRewardAddress :: Ledger.Credential 'Ledger.Staking (Crypto era) -> a -> Bool
-    validRewardAddress addr _value = Map.member addr rewardAccounts
+    validRewardAddress :: StakeCred -> Set Reward -> Bool
+    validRewardAddress addr _value = Set.member addr rewardAccounts
 
-    convertReward :: Shelley.Reward (Crypto era) -> Shelley.Reward StandardCrypto
+    rewardAccounts :: Set StakeCred
+    rewardAccounts =
+        Set.fromList . map (toStakeCred network) . Map.keys
+          . Shelley._rewards . Shelley._dstate . Shelley._delegationState . Shelley.esLState
+          . Shelley.nesEs $ Consensus.shelleyLedgerState lstate
+
+    convertRewardMap
+        :: Map (Ledger.Credential 'Ledger.Staking (Crypto era)) (Set (Shelley.Reward (Crypto era)))
+        -> Map StakeCred (Set Reward)
+    convertRewardMap = mapBimap (toStakeCred network) (Set.map convertReward)
+
+    convertReward :: Shelley.Reward (Crypto era) -> Reward
     convertReward sr =
-      -- Coerce is safe because we are coercing away an un-needed phantom type parameter.
-      sr { Shelley.rewardPool = coerce $ Shelley.rewardPool sr }
+      Reward
+        { rewardSource = rewardTypeToSource $ Shelley.rewardType sr
+        , rewardAmount = Shelley.rewardAmount sr
+        , -- Coerce is safe here because we are coercing away an un-needed phantom type parameter (era).
+          rewardPool = coerce $ Shelley.rewardPool sr
+        }
+
 
 mapBimap :: Ord k2 => (k1 -> k2) -> (a1 -> a2) -> Map k1 a1 -> Map k2 a2
 mapBimap fk fa = Map.fromAscList . map (bimap fk fa) . Map.toAscList
+

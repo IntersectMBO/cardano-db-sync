@@ -42,6 +42,7 @@ data BlockDetails = BlockDetails
   , bdSlot :: !SlotDetails
   }
 
+-- | Slot within an Epoch.
 newtype EpochSlot = EpochSlot
   { unEpochSlot :: Word64
   } deriving (Eq, Show)
