@@ -45,6 +45,7 @@ library
                         Cardano.Db.Schema
                         Cardano.Db.Schema.Types
                         Cardano.Db.Schema.Orphans
+                        Cardano.Db.Text
                         Cardano.Db.Types
 
 
@@ -52,13 +53,13 @@ library
                       , base                            >= 4.14         && < 4.16
                       , base16-bytestring
                       , bytestring
+                      , cardano-crypto-class
                       , cardano-ledger-core
                       , cardano-slotting
                       , containers
                       , conduit
                       , conduit-extra
                       , contra-tracer
-                      , cryptonite
                       , directory
                       , esqueleto
                       , extra

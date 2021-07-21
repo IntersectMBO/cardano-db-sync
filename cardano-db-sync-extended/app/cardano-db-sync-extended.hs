@@ -9,16 +9,15 @@ import           Cardano.DbSync (runDbSyncNode)
 import           Cardano.DbSync.Metrics (withMetricSetters)
 import           Cardano.DbSync.Plugin.Extended (extendedDbSyncNodePlugin)
 
+import           Cardano.Slotting.Slot (SlotNo (..))
 import           Cardano.Sync.Config
 import           Cardano.Sync.Config.Types
-
-import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Data.String (String)
 import qualified Data.Text as Text
 import           Data.Version (showVersion)
 
-import           MigrationValidations
+import           MigrationValidations (KnownMigration (..), knownMigrations)
 
 import           Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative as Opt
@@ -33,20 +32,20 @@ main = do
   case cmd of
     CmdVersion -> runVersionCommand
     CmdRun params -> do
-      prometheusPort <- dncPrometheusPort <$> readSyncNodeConfig (enpConfigFile params)
 
-      withMetricSetters prometheusPort $ \metricsSetters ->
-        runDbSyncNode metricsSetters extendedDbSyncNodePlugin knownMigrationsPlain params
+        prometheusPort <- dncPrometheusPort <$> readSyncNodeConfig (enpConfigFile params)
+
+        withMetricSetters prometheusPort $ \metricsSetters ->
+            runDbSyncNode metricsSetters extendedDbSyncNodePlugin knownMigrationsPlain params
   where
     knownMigrationsPlain :: [(Text, Text)]
-    knownMigrationsPlain = (\x -> (md5 x, filepath x)) <$> knownMigrations
+    knownMigrationsPlain = (\x -> (hash x, filepath x)) <$> knownMigrations
 
 -- -------------------------------------------------------------------------------------------------
 
 opts :: ParserInfo SyncCommand
 opts =
-  Opt.info
-    (pCommandLine <**> Opt.helper)
+  Opt.info (pCommandLine <**> Opt.helper)
     ( Opt.fullDesc
     <> Opt.progDesc "Extended Cardano POstgreSQL sync node."
     )

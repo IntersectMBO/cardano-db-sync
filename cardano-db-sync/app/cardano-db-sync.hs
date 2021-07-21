@@ -38,7 +38,7 @@ main = do
             runDbSyncNode metricsSetters defDbSyncNodePlugin knownMigrationsPlain params
   where
     knownMigrationsPlain :: [(Text, Text)]
-    knownMigrationsPlain = (\x -> (md5 x, filepath x)) <$> knownMigrations
+    knownMigrationsPlain = (\x -> (hash x, filepath x)) <$> knownMigrations
 
 -- -------------------------------------------------------------------------------------------------
 

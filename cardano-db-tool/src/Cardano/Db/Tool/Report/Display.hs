@@ -3,7 +3,6 @@ module Cardano.Db.Tool.Report.Display
   ( leftPad
   , separator
   , spaces
-  , textShow
   ) where
 
 import           Data.Text (Text)
@@ -18,6 +17,3 @@ separator = " | "
 
 spaces :: Text
 spaces = "                                                        "
-
-textShow :: Show a => a -> Text
-textShow = Text.pack . show

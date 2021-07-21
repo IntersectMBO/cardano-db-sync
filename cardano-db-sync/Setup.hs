@@ -1,7 +1,7 @@
 module Main where
 
-import           Control.Monad (forM)
-import           Crypto.Hash (Digest (..), MD5 (..), hashWith)
+import           Cardano.Crypto.Hash
+import           Control.Monad (foldM, forM)
 
 import qualified Data.ByteString.Char8 as BS
 
@@ -14,7 +14,8 @@ import           Distribution.Simple.LocalBuildInfo (LocalBuildInfo (..))
 import           Distribution.Simple.Utils (createDirectoryIfMissingVerbose, rewriteFileEx)
 import           Distribution.Verbosity (normal)
 
-import           System.FilePath (takeExtension)
+import           System.Directory (listDirectory)
+import           System.FilePath (pathSeparator, takeDirectory, takeExtension)
 
 main :: IO ()
 main = defaultMainWithHooks generateHooks
@@ -32,28 +33,38 @@ main = defaultMainWithHooks generateHooks
     generate locInfo =
       generateMigrations locInfo "schema" (autogenPackageModulesDir locInfo)
 
+
 generateMigrations :: LocalBuildInfo -> FilePath -> FilePath -> IO ()
 generateMigrations locInfo srcDir outDir = do
-  createDirectoryIfMissingVerbose normal True "gen"
-  let sqls = collectMigrationSql srcDir
-  sqls' <- forM sqls build
-  buildMigrationModule sqls'
-  where
-    -- TODO Should we be more specific with the SQL files we pickup?
-    -- There is a naming convention of migration-1-0000-20190730.sql
-    --                                 migration-<major>-<minor>-<yyyymmdd>.sql
-    collectMigrationSql :: FilePath -> [FilePath]
-    collectMigrationSql path =
-      filter ((== ".sql") . takeExtension) (extraSrcFiles $ localPkgDescr locInfo)
+    -- Given the migrationDirectories (usually just a single directory)
+    collectMigrationSql <- forM migrationDirectories $ \path -> do
+      fmap (\x -> path <> [pathSeparator] <> x ) <$> listDirectory path
 
-    build :: FilePath -> IO (Digest MD5, FilePath)
+    createDirectoryIfMissingVerbose normal True "gen"
+    sqls <- forM (concat collectMigrationSql) build
+    buildMigrationModule sqls
+  where
+
+    -- Find directories listed in cabal file with *.sql extensions
+    -- eg schema/*.sql
+    --
+    migrationDirectories :: [FilePath]
+    migrationDirectories = takeDirectory <$>
+      filter ((== ".sql") . takeExtension)
+      (extraSrcFiles $ localPkgDescr locInfo)
+
+    hashAs :: ByteString -> Hash Blake2b_256 ByteString
+    hashAs = hashWith id
+
+    build :: FilePath -> IO (String, FilePath)
     build filepath = do
       file <- BS.readFile filepath
-      pure (hashWith MD5 file, filepath)
+      pure (hashToStringAsHex . hashAs $ file, filepath)
 
-    buildMigrationModule :: [(Digest MD5, FilePath)] -> IO ()
+
+    buildMigrationModule :: [(String, FilePath)] -> IO ()
     buildMigrationModule sqls =
-      let buildLine (md5, filepath) = "    KnownMigration \"" ++ show md5 ++ "\" \"" ++ filepath ++ "\"" in
+      let buildLine (hashedFile, filepath) = "    KnownMigration \"" ++ hashedFile ++ "\" \"" ++ filepath ++ "\"" in
 
       rewriteFileEx normal "gen/MigrationValidations.hs" $
         unlines
@@ -62,7 +73,7 @@ generateMigrations locInfo srcDir outDir = do
             "",
             "import Prelude",
             "import Data.Text",
-            "data KnownMigration = KnownMigration { md5 :: Text, filepath :: Text } deriving (Eq, Show)",
+            "data KnownMigration = KnownMigration { hash :: Text, filepath :: Text } deriving (Eq, Show)",
             "",
             "knownMigrations :: [KnownMigration]",
             "knownMigrations = [ ",

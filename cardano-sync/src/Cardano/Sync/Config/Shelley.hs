@@ -11,9 +11,10 @@ module Cardano.Sync.Config.Shelley
 
 import qualified Cardano.Crypto.Hash as Crypto
 
+import           Cardano.Db (textShow)
+
 import           Cardano.Sync.Config.Types
 import           Cardano.Sync.Error
-import           Cardano.Sync.Util
 
 import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, handleIOExceptT, hoistEither, left)

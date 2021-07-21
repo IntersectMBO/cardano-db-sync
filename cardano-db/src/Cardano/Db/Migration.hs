@@ -12,11 +12,12 @@ module Cardano.Db.Migration
   , MigrationValidate (..)
   , MigrationValidateError (..)
   , validateMigrations
+  , hashMigrations
   , renderMigrationValidateError
   ) where
 
 import           Control.Exception (SomeException, handle)
-import           Control.Monad (forM, forM_, unless)
+import           Control.Monad (forM, forM_, unless, when)
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Logger (NoLoggingT)
 import           Control.Monad.Trans.Except (ExceptT, throwE)
@@ -38,19 +39,19 @@ import           Data.Time.Format (defaultTimeLocale, formatTime, iso8601DateFor
 import           Database.Persist.Sql (SqlBackend, SqlPersistT, entityVal, getMigration,
                    selectFirst)
 
+import           Cardano.Crypto.Hash (Blake2b_256, ByteString, Hash, hashToStringAsHex, hashWith)
 import           Cardano.Db.Migration.Haskell
 import           Cardano.Db.Migration.Version
 import           Cardano.Db.PGConfig
 import           Cardano.Db.Run
 import           Cardano.Db.Schema
+import           Cardano.Db.Text
 
 import           System.Directory (listDirectory)
 import           System.Exit (ExitCode (..), exitFailure)
 import           System.FilePath (takeFileName, (</>))
 import           System.IO (Handle, IOMode (AppendMode), hFlush, hPrint, hPutStrLn, stdout,
                    withFile)
-
-import           Crypto.Hash (MD5 (..), hashWith)
 
 newtype MigrationDir
   = MigrationDir FilePath
@@ -59,11 +60,14 @@ newtype LogFileDir
   = LogFileDir FilePath
 
 data MigrationValidate = MigrationValidate
-  { mvMD5 :: String
-  , mvFilepath :: String
+  { mvHash :: Text
+  , mvFilepath :: Text
   } deriving (Eq, Show)
 
-newtype MigrationValidateError = UnknownMigrationsFound [MigrationValidate] deriving (Eq, Show)
+data MigrationValidateError = UnknownMigrationsFound
+  { missingMigrations :: [MigrationValidate]
+  , extraMigrations :: [MigrationValidate]
+  } deriving (Eq, Show)
 
 -- | Run the migrations in the provided 'MigrationDir' and write date stamped log file
 -- to 'LogFileDir'.
@@ -88,16 +92,17 @@ runMigrations pgconfig quiet migrationDir mLogfiledir = do
         . formatTime defaultTimeLocale ("migrate-" ++ iso8601DateFormat (Just "%H%M%S") ++ ".log")
         <$> getCurrentTime
 
--- Build MD5 for each file found in a directory.
-validateMigrations :: MigrationDir -> [(Text, Text)]-> ExceptT MigrationValidateError IO ()
+-- Build hash for each file found in a directory.
+validateMigrations :: MigrationDir -> [(Text, Text)] -> ExceptT MigrationValidateError IO ()
 validateMigrations migrationDir knownMigrations = do
-    let knownMigrations' = fmap (\(x,y) -> MigrationValidate (Text.unpack x) (Text.unpack y)) knownMigrations
+    let knownMigrations' = uncurry MigrationValidate  <$> knownMigrations
     scripts <- liftIO $ hashMigrations migrationDir
 
-    unless (scripts == knownMigrations') $
-      -- Error knownMigrations // scripts found [x] something
-      let unknown = scripts \\ knownMigrations' in
-      throwE $ UnknownMigrationsFound unknown
+    when (scripts /= knownMigrations') $
+      throwE $ UnknownMigrationsFound
+          { missingMigrations = knownMigrations' \\ scripts -- Migrations missing at runtime that were present at compilation time
+          , extraMigrations = scripts \\ knownMigrations'   -- Migrations found at runtime that were missing at compilation time
+          }
 
 applyMigration :: Bool -> PGConfig -> Maybe FilePath -> Handle -> (MigrationVersion, FilePath) -> IO ()
 applyMigration quiet pgconfig mLogFilename logHandle (version, script) = do
@@ -215,18 +220,21 @@ getMigrationScripts (MigrationDir location) = do
     addVersionString fp =
       maybe (Left fp) (\mv -> Right (mv, location </> fp)) $ parseMigrationVersionFromFile fp
 
-textShow :: Show a => a -> Text
-textShow = Text.pack . show
-
 hashMigrations :: MigrationDir -> IO [MigrationValidate]
 hashMigrations migrationDir = do
     scripts <- getMigrationScripts migrationDir
-    forM scripts $ \(_v, filepath) -> do
+    forM scripts $ \(_version, filepath) -> do
       file <- BS.readFile filepath
-      pure $ MigrationValidate (show . hashWith MD5 $ file) filepath
+      pure $ MigrationValidate (Text.pack . hashToStringAsHex . hashAs $ file) (Text.pack filepath)
+  where
+    hashAs :: ByteString -> Hash Blake2b_256 ByteString
+    hashAs = hashWith id
 
 renderMigrationValidateError :: MigrationValidateError -> Text
 renderMigrationValidateError = \case
-    UnknownMigrationsFound migrations -> "Newer migrations found that were missing at compile time: " <> textShow migrations
+    UnknownMigrationsFound missing unknown ->
+      "Inconsistent migrations found: \n" <>
+      "Migrations missing at runtime that were present at compilation time: " <> textShow missing <> "\n" <>
+      "Migrations found at runtime that were missing at compilation time: " <> textShow unknown
 
 

@@ -108,9 +108,6 @@ showUtxo (addr, value) =
     , "    }"
     ]
 
-textShow :: Show a => a -> Text
-textShow = Text.pack . show
-
 utxoSetSum :: [(TxOut, a)] -> Ada
 utxoSetSum xs =
   word64ToAda . sum $ map (unDbLovelace . txOutValue . fst) xs

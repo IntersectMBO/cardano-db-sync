@@ -16,13 +16,14 @@ import           Cardano.BM.Trace (Trace)
 
 import qualified Cardano.Ledger.BaseTypes as Ledger
 
+import           Cardano.Db (textShow)
+
 import           Cardano.Sync.Config.Cardano
 import           Cardano.Sync.Config.Shelley
 import           Cardano.Sync.Config.Types
 import           Cardano.Sync.Error
 import           Cardano.Sync.LedgerState
 import           Cardano.Sync.Types
-import           Cardano.Sync.Util (textShow)
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
