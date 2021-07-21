@@ -106,6 +106,16 @@ select * from pool_update inner join pool_hash on pool_update.hash_id = pool_has
           ) ;
 ```
 
+### Get the stake address for a given Shelley address:
+```sql
+select stake_address.id as stake_address_id, tx_out.address, stake_address.view as stake_address
+	from tx_out inner join stake_address on tx_out.stake_address_id = stake_address.id
+	where address = 'addr1qx2kd28nq8ac5pr...08ly3tu9sy0f4qd' ;
+ stake_address_id |         address                      |           stake_address
+------------------+--------------------------------------+-------------------------------------
+               42 | addr1qx2kd28nq8ac5p...8ly3tu9sy0f4qd | stake1u9ylzsgxaa6xct...nljg47zctvm3rc
+```
+
 ### Transaction fee for specified transaction hash:
 ```sql
 select tx.id, tx.fee from tx
