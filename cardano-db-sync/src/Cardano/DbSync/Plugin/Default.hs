@@ -84,8 +84,10 @@ insertDefaultBlock backend tracer env blockDetails = do
           newExceptT $ insertShelleyBlock tracer lenv (Generic.fromAllegraBlock blk) lStateSnap details
         BlockMary blk ->
           newExceptT $ insertShelleyBlock tracer lenv (Generic.fromMaryBlock blk) lStateSnap details
-        BlockAlonzo blk ->
-          newExceptT $ insertShelleyBlock tracer lenv (Generic.fromAlonzoBlock blk) lStateSnap details
+        BlockAlonzo blk -> do
+          let pp = getAlonzoPParams $ lssState lStateSnap
+          newExceptT $ insertShelleyBlock tracer lenv (Generic.fromAlonzoBlock pp blk)
+            lStateSnap details
 
     mkSnapshotMaybe
         :: (MonadBaseControl IO m, MonadIO m)

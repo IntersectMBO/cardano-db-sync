@@ -29,6 +29,7 @@ module Cardano.Sync.LedgerState
   , getHeaderHash
   , ledgerTipBlockNo
   , getPoolParams
+  , getAlonzoPParams
   ) where
 
 import           Prelude (String, id)
@@ -43,6 +44,7 @@ import qualified Cardano.Db as DB
 
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin)
+import           Cardano.Ledger.Core (PParams)
 import           Cardano.Ledger.Era
 import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import           Cardano.Ledger.Shelley.Constraints (UsesValue)
@@ -79,7 +81,8 @@ import           Data.Time.Clock (UTCTime)
 import           Ouroboros.Consensus.Block (CodecConfig, Point (..), WithOrigin (..), blockHash,
                    blockIsEBB, blockPoint, blockPrevHash, pointSlot)
 import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
-import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
+import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardAlonzo,
+                   StandardCrypto)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Config (TopLevelConfig (..), configCodec, configLedger)
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
@@ -100,7 +103,7 @@ import qualified Ouroboros.Network.AnchoredSeq as AS
 import           Ouroboros.Network.Block (HeaderHash, Point (..))
 import qualified Ouroboros.Network.Point as Point
 
-import           Shelley.Spec.Ledger.LedgerState (AccountState, EpochState, UTxOState)
+import           Shelley.Spec.Ledger.LedgerState (AccountState, EpochState (..), UTxOState)
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley
 import qualified Shelley.Spec.Ledger.Rewards as Shelley
 import qualified Shelley.Spec.Ledger.UTxO as Shelley
@@ -779,3 +782,9 @@ getHeaderHash bh = BSS.fromShort (Consensus.getOneEraHash bh)
 -- | This should be exposed by 'consensus'.
 ledgerTipBlockNo :: ExtLedgerState blk -> WithOrigin BlockNo
 ledgerTipBlockNo = fmap Consensus.annTipBlockNo . Consensus.headerStateTip . Consensus.headerState
+
+-- | This will fail if the state is not a 'LedgerStateAlonzo'
+getAlonzoPParams :: CardanoLedgerState -> PParams StandardAlonzo
+getAlonzoPParams cls = case ledgerState $ clsState cls of
+    LedgerStateAlonzo als -> esPp $ Shelley.nesEs $ Consensus.shelleyLedgerState als
+    _ -> panic "Expected LedgerStateAlonzo after an Alonzo Block"
