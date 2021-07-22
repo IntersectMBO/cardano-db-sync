@@ -203,6 +203,8 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx = do
                 , DB.txInvalidBefore = DbWord64 . unSlotNo <$> Generic.txInvalidBefore tx
                 , DB.txInvalidHereafter = DbWord64 . unSlotNo <$> Generic.txInvalidHereafter tx
                 , DB.txValidContract = Generic.txValidContract tx
+                , DB.txExUnitsNumber = fromIntegral $ length $ Generic.txExUnits tx
+                , DB.txExUnitsFees = DB.DbLovelace (fromIntegral . unCoin $ Generic.txExUnitsFees tx)
                 }
 
     -- Insert outputs for a transaction before inputs in case the inputs for this transaction

@@ -173,6 +173,8 @@ insertTxOuts blkId (address, value) = do
               , DB.txInvalidHereafter = Nothing
               , DB.txInvalidBefore = Nothing
               , DB.txValidContract = True
+              , DB.txExUnitsNumber = 0
+              , DB.txExUnitsFees = DB.DbLovelace 0
               }
   void . DB.insertTxOut $
             DB.TxOut
