@@ -655,8 +655,9 @@ schemaDocs =
       TxMetadataTxId # "The Tx table index of the transaction where this metadata was included."
 
     Reward --^ do
-      "A table for rewards earned by staking. One of the fields is the epoch number in which the\
-        \ reward was earned, but rewards can only be spent two epochs after they are earned."
+      "A table for rewards earned by staking. The rewards earned in epoch `N` are added in this\
+        \ table when they are calculated during epoch `N + 1` but are not spendable until after the\
+        \ start of epoch `N + 2`."
       RewardAddrId # "The StakeAddress table index for the stake address that earned the reward."
       RewardType # "The source of the rewards; pool `member` vs pool `owner`."
       RewardAmount # "The reward amount (in Lovelace)."
@@ -664,8 +665,8 @@ schemaDocs =
       RewardPoolId # "The PoolHash table index for the pool the stake address was delegated to when the reward is earned."
 
     OrphanedReward --^ do
-      "A table for rewards earned by staking, but are orphaned. Rewards are orphaned when the stake address\
-        \ is deregistered before the rewards are distributed."
+      "A table for rewards earned by staking, but are orphaned. Rewards are orphaned when the stake\
+        \ address is deregistered before the rewards are distributed."
       OrphanedRewardAddrId # "The StakeAddress table index for the stake address that earned the reward."
       OrphanedRewardType # "The source of the rewards; pool `member` vs pool `owner`."
       OrphanedRewardAmount # "The reward amount (in Lovelace)."
