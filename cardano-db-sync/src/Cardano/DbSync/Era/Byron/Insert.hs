@@ -195,6 +195,9 @@ insertTx tracer blkId tx blockIndex = do
                 , DB.txInvalidHereafter = Nothing
                 , DB.txInvalidBefore = Nothing
                 , DB.txValidContract = True
+                , DB.txExUnitNumber = 0
+                , DB.txExUnitFee = DB.DbLovelace 0
+                , DB.txScriptSize = 0
                 }
 
     -- Insert outputs for a transaction before inputs in case the inputs for this transaction

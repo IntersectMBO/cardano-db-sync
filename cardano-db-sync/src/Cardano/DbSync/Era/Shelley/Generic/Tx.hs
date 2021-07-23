@@ -29,7 +29,6 @@ import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
 import qualified Cardano.Ledger.Address as Ledger
 import           Cardano.Ledger.Alonzo (AlonzoEra)
-import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
 import           Cardano.Ledger.Alonzo.Scripts (ExUnits (..), Script (..), txscriptfee)
 import           Cardano.Ledger.Alonzo.Tx (ValidatedTx (..))
@@ -274,8 +273,8 @@ fromAlonzoTx pp (blkIndex, tx) =
     txBody = getField @"body" tx
 
     exUnits :: [ExUnits]
-    exUnits = map snd (Map.elems $
-      Ledger.unRedeemers $ getField @"txrdmrs" (getField @"wits" tx))
+    exUnits =
+      map snd . Map.elems . Ledger.unRedeemers $ getField @"txrdmrs" (getField @"wits" tx)
 
     sizes :: [Int]
     sizes = mapMaybe getScriptSize $ toList $ Ledger.txscripts $ getField @"wits" tx
