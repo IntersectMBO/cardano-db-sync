@@ -27,6 +27,7 @@ import           Cardano.DbSync.Era.Shelley.Generic.Util
 
 import           Cardano.Ledger.Alonzo ()
 import           Cardano.Ledger.Core (Witnesses)
+import qualified Cardano.Ledger.Core as Ledger
 import           Cardano.Ledger.Crypto (VRF)
 import           Cardano.Ledger.Era (Crypto, SupportsSegWit (..))
 import qualified Cardano.Ledger.Era as Ledger
@@ -127,8 +128,8 @@ fromMaryBlock blk =
     , blkTxs = map fromMaryTx (blockTxs blk)
     }
 
-fromAlonzoBlock :: ShelleyBlock StandardAlonzo -> Block
-fromAlonzoBlock blk =
+fromAlonzoBlock :: Ledger.PParams StandardAlonzo -> ShelleyBlock StandardAlonzo -> Block
+fromAlonzoBlock pp blk =
   Block
     { blkEra = Alonzo
     , blkHash = blockHash blk
@@ -142,7 +143,7 @@ fromAlonzoBlock blk =
     , blkVrfKey = blockVrfKeyView blk
     , blkOpCert = blockOpCert blk
     , blkOpCertCounter = blockOpCertCounter blk
-    , blkTxs = map fromAlonzoTx (alonzoBlockTxs blk)
+    , blkTxs = map (fromAlonzoTx pp) (alonzoBlockTxs blk)
     }
 
 -- -------------------------------------------------------------------------------------------------

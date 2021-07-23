@@ -1,6 +1,6 @@
 # Schema Documentation for cardano-db-sync
 
-Schema version: 10.0.0 (from branch **erikd/schema-docs** which may not accurately reflect the version number)
+Schema version: 10.0.0 (from branch **kderme/scripts-data** which may not accurately reflect the version number)
 
 ### `schema_version`
 
@@ -84,6 +84,9 @@ A table for transactions within a block on the chain.
 | `invalid_before` | word64type | Transaction in invalid before this slot number. |
 | `invalid_hereafter` | word64type | Transaction in invalid at or after this slot number. |
 | `valid_contract` | boolean | False if the contract is invalid. True if the contract is valid or there is no contract. |
+| `ex_unit_number` | uinteger | The cost of running the scripts in a transaction in arbitrary execution units. |
+| `ex_unit_fee` | lovelace | The fees associated with Plutus scripts in the transaction. |
+| `script_size` | uinteger | The sum of the script sizes (in bytes) of scripts in the transaction. |
 
 ### `stake_address`
 
@@ -325,7 +328,7 @@ A table for metadata attached to a transaction.
 
 ### `reward`
 
-A table for rewards earned by staking. One of the fields is the epoch number in which the reward was earned, but rewards can only be spent two epochs after they are earned.
+A table for rewards earned by staking. The rewards earned in epoch `N` are added in this table when they are calculated during epoch `N + 1` but are not spendable until after the start of epoch `N + 2`.
 
 * Primary Id: `id`
 

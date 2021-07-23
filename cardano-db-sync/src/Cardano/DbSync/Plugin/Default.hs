@@ -84,24 +84,26 @@ insertDefaultBlock backend tracer env blockDetails = do
           newExceptT $ insertShelleyBlock tracer lenv (Generic.fromAllegraBlock blk) lStateSnap details
         BlockMary blk ->
           newExceptT $ insertShelleyBlock tracer lenv (Generic.fromMaryBlock blk) lStateSnap details
-        BlockAlonzo blk ->
-          newExceptT $ insertShelleyBlock tracer lenv (Generic.fromAlonzoBlock blk) lStateSnap details
+        BlockAlonzo blk -> do
+          let pp = getAlonzoPParams $ lssState lStateSnap
+          newExceptT $ insertShelleyBlock tracer lenv (Generic.fromAlonzoBlock pp blk) lStateSnap details
 
     mkSnapshotMaybe
         :: (MonadBaseControl IO m, MonadIO m)
         => LedgerStateSnapshot -> DB.SyncState
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-    mkSnapshotMaybe snapshot syncState = whenJust (lssNewEpoch snapshot) $ \newEpoch -> do
-      liftIO $ logDebug (leTrace $ envLedger env) "Preparing for a snapshot"
-      let newEpochNo = Generic.neEpoch newEpoch
-      -- flush all volatile data
-      flushBulkOperation (envLedger env)
-      -- commit everything in the db
-      lift DB.transactionCommit
-      liftIO $ logDebug (leTrace $ envLedger env) "Taking a ledger a snapshot"
-      -- finally take a ledger snapshot
-      -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
-      liftIO $ saveCleanupState (envLedger env) (lssOldState snapshot) syncState  (Just $ newEpochNo - 1)
+    mkSnapshotMaybe snapshot syncState =
+      whenJust (lssNewEpoch snapshot) $ \newEpoch -> do
+        liftIO $ logDebug (leTrace $ envLedger env) "Preparing for a snapshot"
+        let newEpochNo = Generic.neEpoch newEpoch
+        -- flush all volatile data
+        flushBulkOperation (envLedger env)
+        -- commit everything in the db
+        lift DB.transactionCommit
+        liftIO $ logDebug (leTrace $ envLedger env) "Taking a ledger a snapshot"
+        -- finally take a ledger snapshot
+        -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
+        liftIO $ saveCleanupState (envLedger env) (lssOldState snapshot) syncState  (Just $ newEpochNo - 1)
 
 -- -------------------------------------------------------------------------------------------------
 -- This horrible hack is only need because of the split between `cardano-sync` and `cardano-db-sync`.

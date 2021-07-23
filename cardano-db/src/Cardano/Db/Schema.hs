@@ -107,10 +107,15 @@ share
     deposit             Int64                                   -- Needs to allow negaitve values.
     size                Word64              sqltype=uinteger
 
+    -- New for Allega
     invalidBefore       DbWord64 Maybe      sqltype=word64type
     invalidHereafter    DbWord64 Maybe      sqltype=word64type
 
+    -- New for Alonzo
     validContract       Bool                                    -- False if the contract is invalid, True otherwise.
+    exUnitNumber        Word64              sqltype=uinteger
+    exUnitFee           DbLovelace          sqltype=lovelace
+    scriptSize          Word64              sqltype=uinteger
     UniqueTx            hash
 
   StakeAddress          -- Can be an address of a script hash
@@ -527,6 +532,9 @@ schemaDocs =
       TxInvalidBefore # "Transaction in invalid before this slot number."
       TxInvalidHereafter # "Transaction in invalid at or after this slot number."
       TxValidContract # "False if the contract is invalid. True if the contract is valid or there is no contract."
+      TxExUnitNumber # "The cost of running the scripts in a transaction in arbitrary execution units."
+      TxExUnitFee # "The fees associated with Plutus scripts in the transaction."
+      TxScriptSize # "The sum of the script sizes (in bytes) of scripts in the transaction."
 
     StakeAddress --^ do
       "A table of unique stake addresses. Can be an actual address or a script hash."
