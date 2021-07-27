@@ -145,8 +145,12 @@ let
         else
           DBSYNC=${cardano-db-sync}/bin/cardano-db-sync
         fi
-         exec $DBSYNC \
-           --schema-dir ${../schema} $@
+
+        set -euo pipefail
+        ${scripts.mainnet.db-sync.passthru.service.restoreSnapshotScript}
+
+        exec $DBSYNC \
+          --schema-dir ${../schema} $@
       ${clusterStatements}
       else
         echo "Managed configuration for network "$NETWORK" does not exist"

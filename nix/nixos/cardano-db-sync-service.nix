@@ -6,6 +6,7 @@ let
   envConfig = cfg.environment;
   configFile = __toFile "db-sync-config.json" (__toJSON (cfg.explorerConfig // cfg.logConfig));
   stateDirBase = "/var/lib/";
+  majorVersion = lib.versions.major cfg.package.version;
 in {
   options = {
     services.cardano-db-sync = {
@@ -18,6 +19,71 @@ in {
         type = lib.types.bool;
         default = false;
         description = "use cardano-db-sync-extended";
+      };
+      takeSnapshot = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "Take snapshot before starting cardano-db-sync";
+      };
+      restoreSnapshot = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          Restore a snapshot before starting cardano-db-sync,
+          if the snasphot file given by the option exist.
+          Snapshot file is deleted after restore.
+          '';
+      };
+      restoreSnapshotSha = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          SHA256 checksum of the snapshot to restore
+        '';
+      };
+      restoreSnapshotSigKey = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = if (cfg.cluster == "mainnet" || cfg.cluster == "testnet")
+          then "D32587D4090FE461CAEE0FF4966E5CB9CBFAA9BA"
+          else null;
+        description = ''
+          Key ID for verifying the snaspshot signature.
+        '';
+      };
+      restoreSnapshotScript = lib.mkOption {
+        type = lib.types.str;
+        internal = true;
+        default = lib.optionalString (cfg.restoreSnapshot != null) ''
+        ${lib.optionalString (lib.hasPrefix "$" cfg.restoreSnapshot) ''if [ ! -z "''${${lib.removePrefix "$" cfg.restoreSnapshot}:-}" ]; then''}
+        SNAPSHOT_BASENAME="$(basename "${cfg.restoreSnapshot}")"
+        RESTORED_MARKER="$SNAPSHOT_BASENAME.restored"
+        if [ ! -f "$RESTORED_MARKER" ]; then
+          if [[ "${cfg.restoreSnapshot}" =~ ^https://.* ]]; then
+            ${pkgs.curl}/bin/curl -LOC - "${cfg.restoreSnapshot}"
+
+            ${if (cfg.restoreSnapshotSha != null)
+            then  ''echo "${cfg.restoreSnapshotSha} $SNAPSHOT_BASENAME" > "$SNAPSHOT_BASENAME.sha256sum"''
+            else  ''${pkgs.curl}/bin/curl -LO "${cfg.restoreSnapshot}.sha256sum"''
+            }
+            ${pkgs.coreutils}/bin/sha256sum -c "$SNAPSHOT_BASENAME.sha256sum"
+
+            ${lib.optionalString (cfg.restoreSnapshotSigKey != null) ''
+              ${pkgs.curl}/bin/curl -LO "${cfg.restoreSnapshot}.asc"
+              ${pkgs.gnupg}/bin/gpg --keyserver keys.openpgp.org --recv-keys ${cfg.restoreSnapshotSigKey}
+              ${pkgs.gnupg}/bin/gpg --verify "$SNAPSHOT_BASENAME.asc" "$SNAPSHOT_BASENAME"
+            ''}
+
+            SNAPSHOT="$SNAPSHOT_BASENAME"
+          else
+            SNAPSHOT="${cfg.restoreSnapshot}"
+          fi
+          rm -f *.lstate
+          ${../../scripts/postgresql-setup.sh} --restore-snapshot "$SNAPSHOT" ./
+          touch $RESTORED_MARKER
+          rm -f $SNAPSHOT{,.sha256sum,.asc}
+        fi
+        ${lib.optionalString (lib.hasPrefix "$" cfg.restoreSnapshot) "fi"}
+        '';
       };
       # FIXME: is my assumption that this is required correct?
       pgpass = lib.mkOption {
@@ -103,12 +169,13 @@ in {
     in {
       pgpass = builtins.toFile "pgpass" "${cfg.postgres.socketdir}:${toString cfg.postgres.port}:${cfg.postgres.database}:${cfg.postgres.user}:*";
       script = pkgs.writeShellScript "cardano-db-sync" ''
-        ${if (cfg.socketPath == null) then ''if [ -z "$CARDANO_NODE_SOCKET_PATH" ]
+        set -euo pipefail
+
+        ${if (cfg.socketPath == null) then ''if [ -z "''${CARDANO_NODE_SOCKET_PATH:-}" ]
         then
           echo "You must set \$CARDANO_NODE_SOCKET_PATH"
           exit 1
         fi'' else "export CARDANO_NODE_SOCKET_PATH=\"${cfg.socketPath}\""}
-        export PATH=${lib.makeBinPath [ pkgs.postgresql ]}:$PATH
 
         ${lib.optionalString cfg.postgres.generatePGPASS ''
         cp ${cfg.pgpass} ./pgpass
@@ -116,11 +183,26 @@ in {
         export PGPASSFILE=$(pwd)/pgpass
         ''}
 
+        ${lib.optionalString cfg.takeSnapshot ''
+        for f in db-sync-snapshot-schema-${majorVersion}*; do
+          if [ -f $f ]; then
+            echo "Skipping snapshot: already exist for this version: $f"
+            SKIP_SNAPSHOT=1
+          fi
+        done
+        if [ -z ''${SKIP_SNAPSHOT:-} ]; then
+          SNAPSHOT_SCRIPT=$(cardano-db-tool prepare-snapshot --state-dir ./ | tail -n 1)
+          ${../../scripts/postgresql-setup.sh} ''${SNAPSHOT_SCRIPT#*scripts/postgresql-setup.sh}
+        fi
+        ''}
+
+        ${cfg.restoreSnapshotScript}
+
         mkdir -p log-dir
         exec ${exec} \
           --config ${configFile} \
           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-          --schema-dir ${../../schema} \
+          --schema-dir ${self.schema or (self.src + "/schema")} \
           --state-dir ${cfg.stateDir}
       '';
     };
@@ -135,7 +217,14 @@ in {
     systemd.services.cardano-db-sync = {
       wantedBy = [ "multi-user.target" ];
       requires = [ "postgresql.service" ];
-      path = [ pkgs.netcat ];
+      path = with pkgs; [
+        self.cardanoDbSyncHaskellPackages.cardano-db-tool.components.exes.cardano-db-tool
+        config.services.postgresql.package
+        netcat
+        bash
+        gnutar
+        gzip
+      ];
       preStart = ''
         for x in {1..10}; do
           nc -z localhost ${toString cfg.postgres.port} && break

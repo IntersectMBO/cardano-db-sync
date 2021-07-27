@@ -47,6 +47,7 @@ in {
   dockerImage = let
     defaultConfig = rec {
       services.cardano-db-sync = {
+        restoreSnapshot = lib.mkDefault "$RESTORE_SNAPSHOT";
         socketPath = lib.mkDefault ("/node-ipc/node.socket");
         postgres.generatePGPASS = false;
       };
