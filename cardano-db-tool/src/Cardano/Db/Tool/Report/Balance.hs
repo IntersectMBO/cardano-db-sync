@@ -88,7 +88,7 @@ queryStakeAddressBalance address = do
       currentEpoch <- queryLatestEpochNo
       res <- select . from $ \ rwd -> do
                 where_ (rwd ^. RewardAddrId ==. val saId)
-                where_ (rwd ^. RewardEpochNo <=. val (currentEpoch - 2))
+                where_ (rwd ^. RewardSpendableEpoch <=. val currentEpoch)
                 pure (sum_ (rwd ^. RewardAmount))
       pure $ unValueSumAda (listToMaybe res)
 

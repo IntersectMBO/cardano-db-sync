@@ -352,7 +352,7 @@ generateEvents env oldEventState details cls pnt = do
       case lesLastRewardsEpoch oldEventState of
         Nothing -> mkRewards
         Just oldRewardEpoch ->
-          if oldRewardEpoch < currentEpochNo
+          if sdEpochSlot details >= leStableEpochSlot env && oldRewardEpoch < currentEpochNo
             then mkRewards
             else Nothing
 

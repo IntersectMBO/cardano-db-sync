@@ -45,7 +45,7 @@ data BlockDetails = BlockDetails
 -- | Slot within an Epoch.
 newtype EpochSlot = EpochSlot
   { unEpochSlot :: Word64
-  } deriving (Eq, Show)
+  } deriving (Eq, Ord, Show)
 
 data FetchResult
     = ResultMetadata !PoolOfflineData

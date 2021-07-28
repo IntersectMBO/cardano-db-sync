@@ -25,6 +25,7 @@ import           Data.Bifunctor (bimap)
 import           Data.Coerce (coerce)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import           Data.Maybe (mapMaybe)
 import           Data.Set (Set)
 import qualified Data.Set as Set
 
@@ -39,7 +40,7 @@ import qualified Shelley.Spec.Ledger.Rewards as Shelley
 
 data Reward = Reward
   { rewardSource :: !RewardSource
-  , rewardPool :: !(Ledger.KeyHash 'Ledger.StakePool StandardCrypto)
+  , rewardPool :: !(Maybe (Ledger.KeyHash 'Ledger.StakePool StandardCrypto))
   , rewardAmount :: !Coin
   } deriving (Eq, Ord, Show)
 
@@ -63,8 +64,9 @@ epochRewards nw epoch lstate =
 
 rewardsPoolHashKeys :: Rewards -> Set PoolKeyHash
 rewardsPoolHashKeys rwds =
-  Set.unions . map (Set.map rewardPool) $
-    Map.elems (rwdRewards rwds) ++ Map.elems (rwdOrphaned rwds)
+  Set.fromList . mapMaybe rewardPool
+    $ concatMap Set.toList (Map.elems $ rwdRewards rwds)
+    ++ concatMap Set.toList (Map.elems $ rwdOrphaned rwds)
 
 rewardsStakeCreds :: Rewards -> Set StakeCred
 rewardsStakeCreds rwds =
@@ -93,7 +95,9 @@ genericRewards network epoch lstate =
     completeRewardUpdate x =
       case x of
         Shelley.Pulsing {} -> Nothing -- Should never happen.
-        Shelley.Complete ru -> Just $ convertRewardMap (Shelley.rs ru)
+        Shelley.Complete ru -> Just $ Map.unionWith mappend
+                                        (convertRewardMap $ Shelley.rs ru)
+                                        (getInstantaneousRewards network lstate)
 
     validRewardAddress :: StakeCred -> Set Reward -> Bool
     validRewardAddress addr _value = Set.member addr rewardAccounts
@@ -115,10 +119,30 @@ genericRewards network epoch lstate =
         { rewardSource = rewardTypeToSource $ Shelley.rewardType sr
         , rewardAmount = Shelley.rewardAmount sr
         , -- Coerce is safe here because we are coercing away an un-needed phantom type parameter (era).
-          rewardPool = coerce $ Shelley.rewardPool sr
+          rewardPool = Just $ coerce (Shelley.rewardPool sr)
         }
 
 
 mapBimap :: Ord k2 => (k1 -> k2) -> (a1 -> a2) -> Map k1 a1 -> Map k2 a2
 mapBimap fk fa = Map.fromAscList . map (bimap fk fa) . Map.toAscList
 
+
+getInstantaneousRewards :: forall era. Ledger.Network -> LedgerState (ShelleyBlock era) -> Map StakeCred (Set Reward)
+getInstantaneousRewards network lstate =
+    Map.unionWith mappend
+        (mapBimap (toStakeCred network) (convert RwdReserves) $ Shelley.iRReserves instRwds)
+        (mapBimap (toStakeCred network) (convert RwdTreasury) $ Shelley.iRTreasury instRwds)
+  where
+    convert :: RewardSource -> Coin -> Set Reward
+    convert rs coin =
+      Set.singleton
+        Reward
+          { rewardSource = rs
+          , rewardAmount = coin
+          , rewardPool = Nothing
+          }
+
+    instRwds :: Shelley.InstantaneousRewards (Crypto era)
+    instRwds =
+      Shelley._irwd . Shelley._dstate . Shelley._delegationState
+        . Shelley.esLState . Shelley.nesEs $ Consensus.shelleyLedgerState lstate

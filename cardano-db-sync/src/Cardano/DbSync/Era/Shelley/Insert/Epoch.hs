@@ -159,14 +159,14 @@ insertRewards epoch icache rewardsChunk = do
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.Reward]
     mkRewards (saddr, rset) = do
       saId <- hoistEither $ lookupStakeAddrIdPair "insertRewards StakePool" saddr icache
-      forM (Set.toList rset) $ \ rwd -> do
-        poolId <- hoistEither $ lookupPoolIdPair "insertRewards StakePool" (Generic.rewardPool rwd) icache
+      forM (Set.toList rset) $ \ rwd ->
         pure $ DB.Reward
                   { DB.rewardAddrId = saId
                   , DB.rewardType = DB.showRewardSource (Generic.rewardSource rwd)
                   , DB.rewardAmount = Generic.coinToDbLovelace (Generic.rewardAmount rwd)
-                  , DB.rewardEpochNo = unEpochNo epoch
-                  , DB.rewardPoolId = poolId
+                  , DB.rewardEarnedEpoch = unEpochNo epoch
+                  , DB.rewardSpendableEpoch = 2 + unEpochNo epoch
+                  , DB.rewardPoolId = lookupPoolIdPairMaybe (Generic.rewardPool rwd) icache
                   }
 
 insertOrphanedRewards
@@ -184,13 +184,12 @@ insertOrphanedRewards epoch icache orphanedRewardsChunk = do
     mkOrphanedReward (saddr, rset) = do
       saId <- hoistEither $ lookupStakeAddrIdPair "insertOrphanedRewards StakeCred" saddr icache
       forM (Set.toList rset) $ \ rwd -> do
-        poolId <- hoistEither $ lookupPoolIdPair "insertOrphanedRewards StakePool" (Generic.rewardPool rwd) icache
         pure $ DB.OrphanedReward
                   { DB.orphanedRewardAddrId = saId
                   , DB.orphanedRewardType = DB.showRewardSource (Generic.rewardSource rwd)
                   , DB.orphanedRewardAmount = Generic.coinToDbLovelace (Generic.rewardAmount rwd)
                   , DB.orphanedRewardEpochNo = unEpochNo epoch
-                  , DB.orphanedRewardPoolId = poolId
+                  , DB.orphanedRewardPoolId = lookupPoolIdPairMaybe (Generic.rewardPool rwd) icache
                   }
 
 -- -------------------------------------------------------------------------------------------------
@@ -206,6 +205,15 @@ lookupStakeAddrIdPair msg scred lcache =
       Left . NEError $
         mconcat [ "lookupStakeAddrIdPair: ", msg, renderByteArray (Generic.unStakeCred scred) ]
 
+
+lookupPoolIdPairMaybe
+    :: Maybe PoolKeyHash -> IndexCache
+    -> Maybe DB.PoolHashId
+lookupPoolIdPairMaybe mpkh lcache =
+    lookup =<< mpkh
+  where
+    lookup :: PoolKeyHash -> Maybe DB.PoolHashId
+    lookup pkh = Map.lookup pkh $ icPoolCache lcache
 
 lookupPoolIdPair
     :: Text -> PoolKeyHash -> IndexCache

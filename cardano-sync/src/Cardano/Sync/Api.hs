@@ -118,13 +118,17 @@ verifyFilePoints env files =
     convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)
 
 -- -------------------------------------------------------------------------------------------------
-
--- This is correct for now, but theoretically these values can change in a HFC event.
--- Hopefully this code will be long gone (replaced when ledger-specs gets a proper API) before
--- this becomes wrong.
+-- This is incredibly suboptimal. It should work, for now, but may break at some future time and
+-- when it is wrong then data in `db-sync` will simply be wrong and we do not have any way of
+-- detecting that it is wrong.
+--
+-- An epoch is `10 k / f` long, and the stability window is `3 k / f` so the time from the start
+-- of the epoch to start of the stability window is `7 k / f`.
+--
+-- Hopefully lower level libraries will be able to provide us with something better than this soon.
 calculateStableEpochSlot :: Shelley.ShelleyGenesis era -> EpochSlot
 calculateStableEpochSlot cfg =
-    EpochSlot $ ceiling (3.0 * secParam / actSlotCoeff)
+    EpochSlot $ ceiling (7.0 * secParam / actSlotCoeff)
   where
     secParam :: Double
     secParam = fromIntegral $ Shelley.sgSecurityParam cfg

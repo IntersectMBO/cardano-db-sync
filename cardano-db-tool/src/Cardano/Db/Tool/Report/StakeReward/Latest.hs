@@ -69,7 +69,7 @@ queryLatestStakeRewards address = do
         -> ReaderT SqlBackend m EpochReward
     queryRewards (saId, en, date, DbLovelace delegated) = do
       res <- select . from $ \ (saddr `InnerJoin` reward `InnerJoin` epoch) -> do
-                on (epoch ^. EpochNo ==. reward ^. RewardEpochNo)
+                on (epoch ^. EpochNo ==. reward ^. RewardEarnedEpoch)
                 on (saddr ^. StakeAddressId ==. reward ^. RewardAddrId)
                 where_ (epoch ^. EpochNo ==. val en)
                 where_ (saddr ^. StakeAddressId ==. val saId)
@@ -91,7 +91,7 @@ queryLatestStakeRewards address = do
         => ReaderT SqlBackend m Word64
     queryMaxEpochRewardNo = do
       res <- select . from $ \ reward -> do
-                pure (max_ (reward ^. RewardEpochNo))
+                pure (max_ (reward ^. RewardEarnedEpoch))
       pure $ fromMaybe 0 (listToMaybe $ mapMaybe unValue res)
 
 renderRewards :: [EpochReward] -> IO ()

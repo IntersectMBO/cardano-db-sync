@@ -283,9 +283,10 @@ share
     addrId              StakeAddressId      OnDeleteCascade
     type                Text                sqltype=rewardtype
     amount              DbLovelace          sqltype=lovelace
-    epochNo             Word64
-    poolId              PoolHashId          OnDeleteCascade
-    UniqueReward        epochNo addrId poolId
+    earnedEpoch         Word64
+    spendableEpoch      Word64
+    poolId              PoolHashId Maybe    OnDeleteCascade
+    UniqueReward        addrId type amount earnedEpoch
 
   -- Orphaned rewards happen when a stake address earns rewards, but the stake address is
   -- deregistered before the rewards are distributed.
@@ -295,8 +296,8 @@ share
     type                Text                sqltype=rewardtype
     amount              DbLovelace          sqltype=lovelace
     epochNo             Word64
-    poolId              PoolHashId          OnDeleteCascade
-    UniqueOrphaned      epochNo addrId poolId
+    poolId              PoolHashId Maybe    OnDeleteCascade
+    UniqueOrphaned      addrId type amount epochNo
 
   Withdrawal
     addrId              StakeAddressId      OnDeleteCascade
@@ -669,8 +670,9 @@ schemaDocs =
       RewardAddrId # "The StakeAddress table index for the stake address that earned the reward."
       RewardType # "The source of the rewards; pool `member` vs pool `owner`."
       RewardAmount # "The reward amount (in Lovelace)."
-      RewardEpochNo # "The epoch in which the reward was earned."
-      RewardPoolId # "The PoolHash table index for the pool the stake address was delegated to when the reward is earned."
+      RewardEarnedEpoch # "The epoch in which the reward was earned."
+      RewardPoolId # "The PoolHash table index for the pool the stake address was delegated to when\
+            \ the reward is earned. Will be NULL for payments from the treasury or the reserves."
 
     OrphanedReward --^ do
       "A table for rewards earned by staking, but are orphaned. Rewards are orphaned when the stake\
@@ -679,7 +681,9 @@ schemaDocs =
       OrphanedRewardType # "The source of the rewards; pool `member` vs pool `owner`."
       OrphanedRewardAmount # "The reward amount (in Lovelace)."
       OrphanedRewardEpochNo # "The epoch in which the reward was earned."
-      OrphanedRewardPoolId # "The PoolHash table index for the pool the stake address was delegated to when the reward is earned."
+      OrphanedRewardPoolId # "The PoolHash table index for the pool the stake address was delegated to when\
+            \ the reward is earned. Will be NULL for payments from the treasury or the reserves."
+
 
     Withdrawal --^ do
       "A table for withdrawals from a reward account."
