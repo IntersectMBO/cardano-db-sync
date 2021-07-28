@@ -148,7 +148,7 @@ fromAlonzoBlock pp blk =
 
 -- -------------------------------------------------------------------------------------------------
 
-alonzoBlockTxs :: ShelleyBlock StandardAlonzo -> [(Word64, Ledger.TxInBlock StandardAlonzo)]
+alonzoBlockTxs :: ShelleyBlock StandardAlonzo -> [(Word64, Ledger.Tx StandardAlonzo)]
 alonzoBlockTxs = zip [0 ..] . toList . fromTxSeq @StandardAlonzo . Shelley.bbody . Consensus.shelleyBlockRaw
 
 blockBody :: ShelleyBasedEra era => ShelleyBlock era -> Shelley.BHBody (Crypto era)
