@@ -43,6 +43,7 @@ library
                         Cardano.DbSync.Era.Cardano.Insert
                         Cardano.DbSync.Era.Cardano.Util
 
+                        Cardano.DbSync.Era.Shelley.Adjust
                         Cardano.DbSync.Era.Shelley.Genesis
                         Cardano.DbSync.Era.Shelley.Generic
                         Cardano.DbSync.Era.Shelley.Generic.Block
