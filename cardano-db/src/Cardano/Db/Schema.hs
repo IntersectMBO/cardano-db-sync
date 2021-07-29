@@ -247,6 +247,7 @@ share
   StakeRegistration
     addrId              StakeAddressId      OnDeleteCascade
     certIndex           Word16
+    epochNo             Word64              sqltype=uinteger
     txId                TxId                OnDeleteCascade
     UniqueStakeRegistration addrId txId
 
@@ -254,6 +255,7 @@ share
   StakeDeregistration
     addrId              StakeAddressId      OnDeleteCascade
     certIndex           Word16
+    epochNo             Word64              sqltype=uinteger
     txId                TxId                OnDeleteCascade
     UniqueStakeDeregistration addrId txId
 
@@ -639,12 +641,14 @@ schemaDocs =
       "A table containing stake address registrations."
       StakeRegistrationAddrId # "The StakeAddress table index for the stake address."
       StakeRegistrationCertIndex # "The index of this stake registration within the certificates of this transaction."
+      StakeRegistrationEpochNo # "The epoch in which the registration took place."
       StakeRegistrationTxId # "The Tx table index of the transaction where this stake address was registered."
 
     StakeDeregistration --^ do
       "A table containing stake address deregistrations."
       StakeDeregistrationAddrId # "The StakeAddress table index for the stake address."
       StakeDeregistrationCertIndex # "The index of this stake deregistration within the certificates of this transaction."
+      StakeDeregistrationEpochNo # "The epoch in which the deregistration took place."
       StakeDeregistrationTxId # "The Tx table index of the transaction where this stake address was deregistered."
 
     Delegation --^ do

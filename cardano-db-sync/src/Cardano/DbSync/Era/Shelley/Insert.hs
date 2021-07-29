@@ -309,8 +309,8 @@ insertDelegCert
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertDelegCert tracer network txId idx epochNo slotNo dCert =
   case dCert of
-    Shelley.RegKey cred -> insertStakeRegistration tracer txId idx $ Generic.annotateStakingCred network cred
-    Shelley.DeRegKey cred -> insertStakeDeregistration tracer network txId idx cred
+    Shelley.RegKey cred -> insertStakeRegistration tracer epochNo txId idx $ Generic.annotateStakingCred network cred
+    Shelley.DeRegKey cred -> insertStakeDeregistration tracer network epochNo txId idx cred
     Shelley.Delegate (Shelley.Delegation cred poolkh) -> insertDelegation tracer network txId idx epochNo slotNo cred poolkh
 
 insertPoolRegister
@@ -464,27 +464,29 @@ insertPoolOwner network poolHashId txId skh = do
 
 insertStakeRegistration
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> Word16 -> Shelley.RewardAcnt StandardCrypto
+    => Trace IO Text -> EpochNo -> DB.TxId -> Word16 -> Shelley.RewardAcnt StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertStakeRegistration _tracer txId idx rewardAccount = do
+insertStakeRegistration _tracer epochNo txId idx rewardAccount = do
   saId <- lift $ insertStakeAddress txId rewardAccount
   void . lift . DB.insertStakeRegistration $
     DB.StakeRegistration
       { DB.stakeRegistrationAddrId = saId
       , DB.stakeRegistrationCertIndex = idx
+      , DB.stakeRegistrationEpochNo = unEpochNo epochNo
       , DB.stakeRegistrationTxId = txId
       }
 
 insertStakeDeregistration
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Ledger.Network -> DB.TxId -> Word16 -> Ledger.StakeCredential StandardCrypto
+    => Trace IO Text -> Ledger.Network -> EpochNo -> DB.TxId -> Word16 -> Ledger.StakeCredential StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertStakeDeregistration _tracer network txId idx cred = do
+insertStakeDeregistration _tracer network epochNo txId idx cred = do
   scId <- liftLookupFail "insertStakeDeregistration" $ queryStakeAddress (Generic.stakingCredHash network cred)
   void . lift . DB.insertStakeDeregistration $
     DB.StakeDeregistration
       { DB.stakeDeregistrationAddrId = scId
       , DB.stakeDeregistrationCertIndex = idx
+      , DB.stakeDeregistrationEpochNo = unEpochNo epochNo
       , DB.stakeDeregistrationTxId = txId
       }
 
