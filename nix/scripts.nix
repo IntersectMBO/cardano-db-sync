@@ -26,6 +26,8 @@ let
       #!${pkgs.runtimeShell}
       set -euo pipefail
       ${service.script} $@
-    '';
+    '' // {
+      passthru = { inherit service; };
+    };
   };
 in cardanoLib.forEnvironmentsCustom mkScript environments

@@ -34,6 +34,57 @@ in {
           Snapshot file is deleted after restore.
           '';
       };
+      restoreSnapshotSha = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          SHA256 checksum of the snapshot to restore
+        '';
+      };
+      restoreSnapshotSigKey = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = if (cfg.cluster == "mainnet" || cfg.cluster == "testnet")
+          then "D32587D4090FE461CAEE0FF4966E5CB9CBFAA9BA"
+          else null;
+        description = ''
+          Key ID for verifying the snaspshot signature.
+        '';
+      };
+      restoreSnapshotScript = lib.mkOption {
+        type = lib.types.str;
+        internal = true;
+        default = lib.optionalString (cfg.restoreSnapshot != null) ''
+        ${lib.optionalString (lib.hasPrefix "$" cfg.restoreSnapshot) ''if [ ! -z "''${${lib.removePrefix "$" cfg.restoreSnapshot}:-}" ]; then''}
+        SNAPSHOT_BASENAME="$(basename "${cfg.restoreSnapshot}")"
+        RESTORED_MARKER="$SNAPSHOT_BASENAME.restored"
+        if [ ! -f "$RESTORED_MARKER" ]; then
+          if [[ "${cfg.restoreSnapshot}" =~ ^https://.* ]]; then
+            ${pkgs.curl}/bin/curl -LOC - "${cfg.restoreSnapshot}"
+
+            ${if (cfg.restoreSnapshotSha != null)
+            then  ''echo "${cfg.restoreSnapshotSha} $SNAPSHOT_BASENAME" > "$SNAPSHOT_BASENAME.sha256sum"''
+            else  ''${pkgs.curl}/bin/curl -LO "${cfg.restoreSnapshot}.sha256sum"''
+            }
+            ${pkgs.coreutils}/bin/sha256sum -c "$SNAPSHOT_BASENAME.sha256sum"
+
+            ${lib.optionalString (cfg.restoreSnapshotSigKey != null) ''
+              ${pkgs.curl}/bin/curl -LO "${cfg.restoreSnapshot}.asc"
+              ${pkgs.gnupg}/bin/gpg --keyserver keys.openpgp.org --recv-keys ${cfg.restoreSnapshotSigKey}
+              ${pkgs.gnupg}/bin/gpg --verify "$SNAPSHOT_BASENAME.asc" "$SNAPSHOT_BASENAME"
+            ''}
+
+            SNAPSHOT="$SNAPSHOT_BASENAME"
+          else
+            SNAPSHOT="${cfg.restoreSnapshot}"
+          fi
+          rm -f *.lstate
+          ${../../scripts/postgresql-setup.sh} --restore-snapshot "$SNAPSHOT" ./
+          touch $RESTORED_MARKER
+          rm -f $SNAPSHOT{,.sha256sum,.asc}
+        fi
+        ${lib.optionalString (lib.hasPrefix "$" cfg.restoreSnapshot) "fi"}
+        '';
+      };
       # FIXME: is my assumption that this is required correct?
       pgpass = lib.mkOption {
         internal = true;
@@ -145,13 +196,7 @@ in {
         fi
         ''}
 
-        ${lib.optionalString (cfg.restoreSnapshot != null) ''
-        if [ -f ${cfg.restoreSnapshot} ]; then
-          rm -f *.lstate
-          ${../../scripts/postgresql-setup.sh} --restore-snapshot ${cfg.restoreSnapshot} ./
-          rm ${cfg.restoreSnapshot}
-        fi
-        ''}
+        ${cfg.restoreSnapshotScript}
 
         mkdir -p log-dir
         exec ${exec} \
