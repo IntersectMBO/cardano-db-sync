@@ -1,5 +1,8 @@
 # Revision history for cardano-db-tool
 
+## 10.0.2
+* Fix docker issue (#712).
+
 ## 10.0.0
 * Add helper functionality for state snapshot generation.
 

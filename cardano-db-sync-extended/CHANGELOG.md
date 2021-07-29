@@ -1,5 +1,8 @@
 # Revision history for cardano-db-sync-extended
 
+## 10.0.2
+* Fix docker issue (#712).
+
 ## 10.0.1
 * Fix docker issue (#686).
 
