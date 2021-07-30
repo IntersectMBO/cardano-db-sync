@@ -15,7 +15,7 @@ services:
     volumes:
       - postgres:/var/lib/postgresql/data
     ports:
-      - 5432:5432
+      - ${POSTGRES_PORT:-5432}:5432
     restart: on-failure
     logging:
       driver: "json-file"
@@ -43,6 +43,7 @@ services:
       - NETWORK=${NETWORK:-mainnet}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
+      - RESTORE_SNAPSHOT=${RESTORE_SNAPSHOT:-}
     depends_on:
       - cardano-node
       - postgres
