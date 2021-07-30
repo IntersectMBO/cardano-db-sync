@@ -48,7 +48,6 @@ import           Cardano.Ledger.Core (PParams)
 import           Cardano.Ledger.Era
 import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import           Cardano.Ledger.Shelley.Constraints (UsesValue)
-import qualified Cardano.Ledger.Val as Val
 
 import           Cardano.Sync.Config.Types
 import qualified Cardano.Sync.Era.Cardano.Util as Cardano
@@ -103,10 +102,10 @@ import qualified Ouroboros.Network.AnchoredSeq as AS
 import           Ouroboros.Network.Block (HeaderHash, Point (..))
 import qualified Ouroboros.Network.Point as Point
 
-import           Shelley.Spec.Ledger.LedgerState (AccountState, EpochState (..), UTxOState)
+import           Shelley.Spec.Ledger.LedgerState (EpochState (..))
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley
 import qualified Shelley.Spec.Ledger.Rewards as Shelley
-import qualified Shelley.Spec.Ledger.UTxO as Shelley
+import qualified Shelley.Spec.Ledger.STS.Chain as Shelley
 
 import           System.Directory (doesFileExist, listDirectory, removeFile)
 import           System.FilePath (dropExtension, takeExtension, (</>))
@@ -704,7 +703,7 @@ getPoolParamsShelley lState =
 
 -- We only compute 'AdaPots' for later eras. This is a time consuming
 -- function and we only want to run it on epoch boundaries.
-getAdaPots :: CardanoLedgerState -> Maybe Generic.AdaPots
+getAdaPots :: CardanoLedgerState -> Maybe Shelley.AdaPots
 getAdaPots st =
     case ledgerState $ clsState st of
       LedgerStateByron _ -> Nothing
@@ -747,34 +746,8 @@ tickThenReapplyCheckHash cfg block lsb =
 totalAdaPots
     :: forall era. UsesValue era
     => LedgerState (ShelleyBlock era)
-    -> Generic.AdaPots
-totalAdaPots lState =
-    Generic.AdaPots
-      { Generic.apTreasury = Shelley._treasury accountState
-      , Generic.apReserves = Shelley._reserves accountState
-      , Generic.apRewards = rewards
-      , Generic.apUtxo = utxo
-      , Generic.apDeposits = Shelley._deposited uState
-      , Generic.apFees = Shelley._fees uState
-      }
-  where
-    eState :: EpochState era
-    eState = Shelley.nesEs $ Consensus.shelleyLedgerState lState
-
-    accountState :: AccountState
-    accountState = Shelley.esAccountState eState
-
-    slState :: Shelley.LedgerState era
-    slState = Shelley.esLState eState
-
-    uState :: UTxOState era
-    uState = Shelley._utxoState slState
-
-    rewards :: Coin
-    rewards = fold (Map.elems (Shelley._rewards . Shelley._dstate $ Shelley._delegationState slState))
-
-    utxo :: Coin
-    utxo = Val.coin $ Shelley.balance (Shelley._utxo uState)
+    -> Shelley.AdaPots
+totalAdaPots = Shelley.totalAdaPotsES . Shelley.nesEs . Consensus.shelleyLedgerState
 
 getHeaderHash :: HeaderHash CardanoBlock -> ByteString
 getHeaderHash bh = BSS.fromShort (Consensus.getOneEraHash bh)

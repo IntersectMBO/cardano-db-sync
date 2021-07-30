@@ -73,6 +73,7 @@ import           Database.Persist.Sql (SqlBackend)
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 import qualified Shelley.Spec.Ledger.PParams as Shelley
+import qualified Shelley.Spec.Ledger.STS.Chain as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 insertShelleyBlock
@@ -801,18 +802,18 @@ insertPots
     :: (MonadBaseControl IO m, MonadIO m)
     => DB.BlockId
     -> SlotNo -> EpochNo
-    -> Generic.AdaPots
+    -> Shelley.AdaPots
     -> ExceptT e (ReaderT SqlBackend m) ()
 insertPots blockId slotNo epochNo pots =
     void . lift $ DB.insertAdaPots $
       DB.AdaPots
         { DB.adaPotsSlotNo = unSlotNo slotNo
         , DB.adaPotsEpochNo = unEpochNo epochNo
-        , DB.adaPotsTreasury = Generic.coinToDbLovelace $ Generic.apTreasury pots
-        , DB.adaPotsReserves = Generic.coinToDbLovelace $ Generic.apReserves pots
-        , DB.adaPotsRewards = Generic.coinToDbLovelace $ Generic.apRewards pots
-        , DB.adaPotsUtxo = Generic.coinToDbLovelace $ Generic.apUtxo pots
-        , DB.adaPotsDeposits = Generic.coinToDbLovelace $ Generic.apDeposits pots
-        , DB.adaPotsFees = Generic.coinToDbLovelace $ Generic.apFees pots
+        , DB.adaPotsTreasury = Generic.coinToDbLovelace $ Shelley.treasuryAdaPot pots
+        , DB.adaPotsReserves = Generic.coinToDbLovelace $ Shelley.reservesAdaPot pots
+        , DB.adaPotsRewards = Generic.coinToDbLovelace $ Shelley.rewardsAdaPot pots
+        , DB.adaPotsUtxo = Generic.coinToDbLovelace $ Shelley.utxoAdaPot pots
+        , DB.adaPotsDeposits = Generic.coinToDbLovelace $ Shelley.depositsAdaPot pots
+        , DB.adaPotsFees = Generic.coinToDbLovelace $ Shelley.feesAdaPot pots
         , DB.adaPotsBlockId = blockId
         }
