@@ -29,6 +29,8 @@
 #   * --schema-dir is set within the script
 #
 #  To launch the extended service include -e EXTENDED=true
+#  To download and restore a snapshot include -e RESTORE_SNAPSHOT=https://update-cardano-mainnet.iohk.io/cardano-db-sync/db-sync-snapshot-schema-10-block-6014140-x86_64.tgz
+#  See the latest releases for a recent snapshot https://github.com/input-output-hk/cardano-db-sync/releases
 #  See the docker-compose.yml for demonstration of using Docker secrets instead of mounting a pgpass
 #
 #
