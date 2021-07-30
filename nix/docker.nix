@@ -53,7 +53,10 @@
 , cacert
 , coreutils
 , curl
+, findutils
 , glibcLocales
+, gnutar
+, gzip
 , iana-etc
 , iproute
 , iputils
@@ -61,6 +64,7 @@
 , utillinux
 , writeScript
 , writeScriptBin
+, runCommand
 , runtimeShell
 , lib
 , libidn
@@ -72,15 +76,27 @@
 
 let
 
+  env-shim = runCommand "env-shim" {} ''
+    mkdir -p $out/usr/bin
+    ln -s ${coreutils}/bin/env $out/usr/bin/env
+  '';
+
   # Layer of tools which aren't going to change much between versions.
   baseImage = dockerTools.buildImage {
     name = "base-env";
+    config.Env = [
+      "NIX_SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt"
+    ];
     contents = [
       bashInteractive   # Provide the BASH shell
       cacert            # X.509 certificates of public CA's
       coreutils         # Basic utilities expected in GNU OS's
       curl              # CLI tool for transferring files via URLs
+      env-shim          # Make /usr/bin/env available
+      findutils         # GNU find
+      gnutar            # GNU tar
       glibcLocales      # Locale information for the GNU C Library
+      gzip              # Gnuzip
       iana-etc          # IANA protocol and port number assignments
       iproute           # Utilities for controlling TCP/IP networking
       iputils           # Useful utilities for Linux networking
@@ -90,6 +106,11 @@ let
       socat             # Utility for bidirectional data transfer
       utillinux         # System utilities for Linux
     ];
+    runAsRoot = ''
+      #!${runtimeShell}
+      ${dockerTools.shadowSetup}
+      mkdir -p /root
+    '';
   };
 
   # The applications, without configuration, for which the target container is being built
