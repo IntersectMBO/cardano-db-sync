@@ -75,6 +75,9 @@ let
   # Layer of tools which aren't going to change much between versions.
   baseImage = dockerTools.buildImage {
     name = "base-env";
+    config.Env = [
+      "NIX_SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt"
+    ];
     contents = [
       bashInteractive   # Provide the BASH shell
       cacert            # X.509 certificates of public CA's
