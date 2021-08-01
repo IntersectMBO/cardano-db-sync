@@ -32,6 +32,7 @@ module Cardano.Db.Insert
   , insertPoolUpdate
   , insertReserve
   , insertReservedPoolTicker
+  , insertScript
   , insertSlotLeader
   , insertStakeAddress
   , insertStakeDeregistration
@@ -42,6 +43,7 @@ module Cardano.Db.Insert
   , insertTxMetadata
   , insertTxOut
   , insertWithdrawal
+  , insertRedeemer
 
   -- Export mainly for testing.
   , insertBlockChecked
@@ -172,6 +174,9 @@ insertReserve = insertUnchecked "Reserve"
 insertReservedPoolTicker :: (MonadBaseControl IO m, MonadIO m) => ReservedPoolTicker -> ReaderT SqlBackend m ReservedPoolTickerId
 insertReservedPoolTicker = insertUnchecked "ReservedPoolTicker"
 
+insertScript :: (MonadBaseControl IO m, MonadIO m) => Script -> ReaderT SqlBackend m ScriptId
+insertScript = insertCheckUnique "insertScript"
+
 insertSlotLeader :: (MonadBaseControl IO m, MonadIO m) => SlotLeader -> ReaderT SqlBackend m SlotLeaderId
 insertSlotLeader = insertCheckUnique "SlotLeader"
 
@@ -201,6 +206,9 @@ insertTxOut = insertUnchecked "TxOut"
 
 insertWithdrawal :: (MonadBaseControl IO m, MonadIO m) => Withdrawal  -> ReaderT SqlBackend m WithdrawalId
 insertWithdrawal = insertUnchecked "Withdrawal"
+
+insertRedeemer :: (MonadBaseControl IO m, MonadIO m) => Redeemer -> ReaderT SqlBackend m RedeemerId
+insertRedeemer = insertCheckUnique "Redeemer"
 
 -- -----------------------------------------------------------------------------
 

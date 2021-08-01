@@ -173,8 +173,6 @@ insertTxOuts blkId (address, value) = do
               , DB.txInvalidHereafter = Nothing
               , DB.txInvalidBefore = Nothing
               , DB.txValidContract = True
-              , DB.txExUnitNumber = 0
-              , DB.txExUnitFee = DB.DbLovelace 0
               , DB.txScriptSize = 0
               }
   void . DB.insertTxOut $
@@ -183,6 +181,7 @@ insertTxOuts blkId (address, value) = do
               , DB.txOutIndex = 0
               , DB.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 address
               , DB.txOutAddressRaw = Binary.serialize' address
+              , DB.txOutAddressHasScript = False
               , DB.txOutPaymentCred = Nothing
               , DB.txOutStakeAddressId = Nothing
               , DB.txOutValue = DB.DbLovelace (Byron.unsafeGetLovelace value)

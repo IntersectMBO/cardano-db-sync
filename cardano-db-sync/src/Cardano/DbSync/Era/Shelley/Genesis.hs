@@ -186,8 +186,6 @@ insertTxOuts blkId (Shelley.TxIn txInId _, txOut) = do
               , DB.txInvalidHereafter = Nothing
               , DB.txInvalidBefore = Nothing
               , DB.txValidContract = True
-              , DB.txExUnitNumber = 0
-              , DB.txExUnitFee = DB.DbLovelace 0
               , DB.txScriptSize = 0
               }
   void . DB.insertTxOut $
@@ -196,6 +194,7 @@ insertTxOuts blkId (Shelley.TxIn txInId _, txOut) = do
               , DB.txOutIndex = 0
               , DB.txOutAddress = Generic.renderAddress (txOutAddress txOut)
               , DB.txOutAddressRaw = Ledger.serialiseAddr (txOutAddress txOut)
+              , DB.txOutAddressHasScript = hasScript (txOutAddress txOut)
               , DB.txOutPaymentCred = Generic.maybePaymentCred (txOutAddress txOut)
               , DB.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
               , DB.txOutValue = Generic.coinToDbLovelace (txOutCoin txOut)
@@ -206,6 +205,8 @@ insertTxOuts blkId (Shelley.TxIn txInId _, txOut) = do
 
     txOutCoin :: Shelley.TxOut StandardShelley -> Ledger.Coin
     txOutCoin (Shelley.TxOut _ coin) = coin
+
+    hasScript addr = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
 
 -- -----------------------------------------------------------------------------
 
