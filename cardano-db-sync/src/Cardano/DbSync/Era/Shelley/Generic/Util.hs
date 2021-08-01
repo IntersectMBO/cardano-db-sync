@@ -12,6 +12,9 @@
 module Cardano.DbSync.Era.Shelley.Generic.Util
   ( annotateStakingCred
   , coinToDbLovelace
+  , getPaymentCred
+  , hasCredScript
+  , getCredentialScriptHash
   , maybePaymentCred
   , mkSlotLeader
   , nonceToBytes
@@ -71,6 +74,18 @@ annotateStakingCred = Shelley.RewardAcnt
 coinToDbLovelace :: Coin -> DbLovelace
 coinToDbLovelace = DbLovelace . fromIntegral . unCoin
 
+getPaymentCred :: Ledger.Addr StandardCrypto -> Maybe (Ledger.PaymentCredential StandardCrypto)
+getPaymentCred addr =
+  case addr of
+    Ledger.Addr _nw pcred _sref -> Just pcred
+    Ledger.AddrBootstrap {} -> Nothing
+
+hasCredScript :: Ledger.Credential kr StandardCrypto -> Bool
+hasCredScript pc =
+  case pc of
+    Ledger.ScriptHashObj _ -> True
+    Ledger.KeyHashObj {} -> False
+
 maybePaymentCred :: Ledger.Addr era -> Maybe ByteString
 maybePaymentCred addr =
   case addr of
@@ -78,6 +93,12 @@ maybePaymentCred addr =
       Just $ LBS.toStrict (Binary.runPut $ Ledger.putCredential pcred)
     Ledger.AddrBootstrap {} ->
       Nothing
+
+getCredentialScriptHash :: Ledger.Credential kr StandardCrypto -> Maybe ByteString
+getCredentialScriptHash pc =
+  case pc of
+    Ledger.ScriptHashObj hash -> Just $ unScriptHash hash
+    Ledger.KeyHashObj {} -> Nothing
 
 mkSlotLeader :: ByteString -> Maybe Db.PoolHashId -> Db.SlotLeader
 mkSlotLeader slHash mPoolId =
