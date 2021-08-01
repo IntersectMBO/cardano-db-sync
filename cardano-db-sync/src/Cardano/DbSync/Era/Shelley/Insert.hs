@@ -204,7 +204,7 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx = do
                 , DB.txInvalidBefore = DbWord64 . unSlotNo <$> Generic.txInvalidBefore tx
                 , DB.txInvalidHereafter = DbWord64 . unSlotNo <$> Generic.txInvalidHereafter tx
                 , DB.txValidContract = Generic.txValidContract tx
-                , DB.txExUnitNumber = fromIntegral $ length $ Generic.txExUnits tx
+                , DB.txExUnitNumber = fromIntegral $ length $ Generic.txRedeemer tx
                 , DB.txExUnitFee = DB.DbLovelace (fromIntegral . unCoin $ Generic.scriptsFee tx)
                 , DB.txScriptSize = fromIntegral $ sum $ Generic.scriptSizes tx
                 }
@@ -258,7 +258,7 @@ insertTxIn
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> (Generic.TxIn, DB.TxId, DbLovelace)
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertTxIn _tracer txInId (Generic.TxIn _txHash index, txOutId, _lovelace) = do
+insertTxIn _tracer txInId (Generic.TxIn _txHash index _, txOutId, _lovelace) = do
   void . lift . DB.insertTxIn $
             DB.TxIn
               { DB.txInTxInId = txInId
@@ -270,7 +270,7 @@ insertCollateralTxIn
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Generic.TxIn
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertCollateralTxIn _tracer txInId (Generic.TxIn txId index) = do
+insertCollateralTxIn _tracer txInId (Generic.TxIn txId index _) = do
   txOutId <- liftLookupFail "insertCollateralTxIn" $ DB.queryTxId txId
   void . lift . DB.insertCollateralTxIn $
             DB.CollateralTxIn
@@ -283,7 +283,7 @@ insertCertificate
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> LedgerStateSnapshot -> Ledger.Network -> DB.BlockId -> DB.TxId -> EpochNo -> SlotNo -> Generic.TxCertificate
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertCertificate tracer lStateSnap network blkId txId epochNo slotNo (Generic.TxCertificate idx cert) =
+insertCertificate tracer lStateSnap network blkId txId epochNo slotNo (Generic.TxCertificate _ridx idx cert) =
   case cert of
     Shelley.DCertDeleg deleg -> insertDelegCert tracer network txId idx epochNo slotNo deleg
     Shelley.DCertPool pool -> insertPoolCert tracer lStateSnap network epochNo blkId txId idx pool
@@ -569,7 +569,7 @@ insertWithdrawals
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Generic.TxWithdrawal
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertWithdrawals _tracer txId (Generic.TxWithdrawal account coin) = do
+insertWithdrawals _tracer txId (Generic.TxWithdrawal _ account coin) = do
   addrId <- liftLookupFail "insertWithdrawals" $ queryStakeAddress (Ledger.serialiseRewardAcnt account)
   void . lift . DB.insertWithdrawal $
     DB.Withdrawal

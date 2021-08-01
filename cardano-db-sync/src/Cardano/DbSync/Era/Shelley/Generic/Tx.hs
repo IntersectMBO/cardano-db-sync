@@ -2,6 +2,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -10,6 +12,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx
   , TxCertificate (..)
   , TxIn (..)
   , TxOut (..)
+  , TxRedeemer (..)
   , TxWithdrawal (..)
   , fromShelleyTx
   , fromAllegraTx
@@ -25,12 +28,13 @@ import qualified Cardano.Crypto.Hash as Crypto
 
 import           Cardano.DbSync.Era.Shelley.Generic.Metadata
 import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
+import           Cardano.DbSync.Era.Shelley.Generic.Util
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
 import qualified Cardano.Ledger.Address as Ledger
 import           Cardano.Ledger.Alonzo (AlonzoEra)
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
-import           Cardano.Ledger.Alonzo.Scripts (ExUnits (..), Script (..), txscriptfee)
+import           Cardano.Ledger.Alonzo.Scripts (ExUnits (..), Script (..), Tag (..), txscriptfee)
 import           Cardano.Ledger.Alonzo.Tx (ValidatedTx (..))
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
@@ -49,6 +53,7 @@ import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import           Data.Maybe.Strict (strictMaybeToMaybe)
 import           Data.MemoBytes (MemoBytes (..))
+import           Data.Sequence.Strict (StrictSeq)
 import qualified Data.Set as Set
 
 import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlonzo, StandardCrypto,
@@ -77,24 +82,27 @@ data Tx = Tx
   , txWithdrawals :: ![TxWithdrawal]
   , txParamProposal :: ![ParamProposal]
   , txMint :: !(Value StandardCrypto)
-  , txExUnits :: [ExUnits]
+  , txRedeemer :: [TxRedeemer]
   , scriptSizes :: [Int]
   , scriptsFee :: Coin
   }
 
 data TxCertificate = TxCertificate
-  { txcIndex :: !Word16
+  { txcRedeemerIndex :: !(Maybe Word64)
+  , txcIndex :: !Word16
   , txcCert :: !(Shelley.DCert StandardCrypto)
   }
 
 data TxWithdrawal = TxWithdrawal
-  { txwRewardAccount :: !(Shelley.RewardAcnt StandardCrypto)
+  { txwRedeemerIndex :: !(Maybe Word64)
+  , txwRewardAccount :: !(Shelley.RewardAcnt StandardCrypto)
   , txwAmount :: !Coin
   }
 
 data TxIn = TxIn
   { txInHash :: !ByteString
   , txInIndex :: !Word16
+  , txInRedeemerIndex :: !(Maybe Word64) -- This only has a meaning for Alonzo.
   }
 
 data TxOut = TxOut
@@ -104,6 +112,15 @@ data TxOut = TxOut
   , txOutMaValue :: !(Map (PolicyID StandardCrypto) (Map AssetName Integer))
   }
 
+data TxRedeemer = TxRedeemer
+  { txRedeemerMem :: !Word64
+  , txRedeemerSteps :: !Word64
+  , txRedeemerPurpose :: !Tag
+  , txRedeemerFee :: !Coin
+  , txRedeemerIndex :: !Word64
+  , txScriptHash :: Maybe (Either TxIn ByteString)
+  }
+
 fromAllegraTx :: (Word64, Shelley.Tx StandardAllegra) -> Tx
 fromAllegraTx (blkIndex, tx) =
     Tx
@@ -111,7 +128,7 @@ fromAllegraTx (blkIndex, tx) =
       , txBlockIndex = blkIndex
       , txSize = fromIntegral $ getField @"txsize" tx
       , txValidContract = True
-      , txInputs = map fromTxIn (toList $ ShelleyMa.inputs rawTxBody)
+      , txInputs = map (fromTxIn Nothing) (toList $ ShelleyMa.inputs rawTxBody)
       , txCollateralInputs = [] -- Allegra does not have collateral inputs
       , txOutputs = zipWith fromTxOut [0 .. ] $ toList (ShelleyMa.outputs rawTxBody)
       , txFees = ShelleyMa.txfee rawTxBody
@@ -121,11 +138,11 @@ fromAllegraTx (blkIndex, tx) =
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
                             . Shelley.unWdrl $ ShelleyMa.wdrls rawTxBody
       , txMetadata = fromAllegraMetadata <$> txMeta tx
-      , txCertificates = zipWith TxCertificate [0..] (map coerceCertificate . toList $ ShelleyMa.certs rawTxBody)
-      , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl $ ShelleyMa.wdrls rawTxBody)
+      , txCertificates = zipWith (TxCertificate Nothing) [0..] (map coerceCertificate . toList $ ShelleyMa.certs rawTxBody)
+      , txWithdrawals = map (mkTxWithdrawal Nothing) (Map.toList . Shelley.unWdrl $ ShelleyMa.wdrls rawTxBody)
       , txParamProposal = maybe [] (convertParamProposal (Allegra Standard)) $ strictMaybeToMaybe (ShelleyMa.update rawTxBody)
       , txMint = mempty     -- Allegra does not support Multi-Assets
-      , txExUnits = []      -- Allegra does not support ExUnits
+      , txRedeemer = []     -- Allegra does not support Redeemers
       , scriptSizes = []    -- Allegra does not support scripts
       , scriptsFee = Coin 0 -- Allegra does not support scripts
       }
@@ -158,7 +175,7 @@ fromShelleyTx (blkIndex, tx) =
       , txBlockIndex = blkIndex
       , txSize = fromIntegral $ getField @"txsize" tx
       , txValidContract = True
-      , txInputs = map fromTxIn (toList . Shelley._inputs $ Shelley.body tx)
+      , txInputs = map (fromTxIn Nothing) (toList . Shelley._inputs $ Shelley.body tx)
       , txCollateralInputs = [] -- Shelley does not have collateral inputs
       , txOutputs = zipWith fromTxOut [0 .. ] $ toList (Shelley._outputs $ Shelley.body tx)
       , txFees = Shelley._txfee (Shelley.body tx)
@@ -168,11 +185,11 @@ fromShelleyTx (blkIndex, tx) =
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
                             . Shelley.unWdrl $ Shelley._wdrls (Shelley.body tx)
       , txMetadata = fromShelleyMetadata <$> strictMaybeToMaybe (getField @"auxiliaryData" tx)
-      , txCertificates = zipWith TxCertificate [0..] (toList . Shelley._certs $ Shelley.body tx)
-      , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . Shelley._wdrls $ Shelley.body tx)
+      , txCertificates = zipWith (TxCertificate Nothing) [0..] (toList . Shelley._certs $ Shelley.body tx)
+      , txWithdrawals = map (mkTxWithdrawal Nothing) (Map.toList . Shelley.unWdrl . Shelley._wdrls $ Shelley.body tx)
       , txParamProposal = maybe [] (convertParamProposal (Shelley Standard)) $ strictMaybeToMaybe (Shelley._txUpdate $ Shelley.body tx)
       , txMint = mempty     -- Shelley does not support Multi-Assets
-      , txExUnits = []      -- Shelley does not support ExUnits
+      , txRedeemer = []     -- Shelley does not support Redeemer
       , scriptSizes = []    -- Shelley does not support scripts
       , scriptsFee = Coin 0 -- Shelley does not support scripts
       }
@@ -196,7 +213,7 @@ fromMaryTx (blkIndex, tx) =
       , txBlockIndex = blkIndex
       , txSize = fromIntegral $ getField @"txsize" tx
       , txValidContract = True
-      , txInputs = map fromTxIn (toList . ShelleyMa.inputs $ unTxBodyRaw tx)
+      , txInputs = map (fromTxIn Nothing) (toList . ShelleyMa.inputs $ unTxBodyRaw tx)
       , txCollateralInputs = [] -- Mary does not have collateral inputs
       , txOutputs = zipWith fromTxOut [0 .. ] $ toList (ShelleyMa.outputs $ unTxBodyRaw tx)
       , txFees = ShelleyMa.txfee (unTxBodyRaw tx)
@@ -206,11 +223,11 @@ fromMaryTx (blkIndex, tx) =
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
                             . Shelley.unWdrl $ ShelleyMa.wdrls (unTxBodyRaw tx)
       , txMetadata = fromMaryMetadata <$> txMeta tx
-      , txCertificates = zipWith TxCertificate [0..] (map coerceCertificate . toList . ShelleyMa.certs $ unTxBodyRaw tx)
-      , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . ShelleyMa.wdrls $ unTxBodyRaw tx)
+      , txCertificates = zipWith (TxCertificate Nothing) [0..] (map coerceCertificate . toList . ShelleyMa.certs $ unTxBodyRaw tx)
+      , txWithdrawals = map (mkTxWithdrawal Nothing) (Map.toList . Shelley.unWdrl . ShelleyMa.wdrls $ unTxBodyRaw tx)
       , txParamProposal = maybe [] (convertParamProposal (Mary Standard)) $ strictMaybeToMaybe (ShelleyMa.update $ unTxBodyRaw tx)
       , txMint = coerceMint (ShelleyMa.mint $ unTxBodyRaw tx)
-      , txExUnits = []      -- Mary does not support ExUnits
+      , txRedeemer = []     -- Mary does not support Redeemer
       , scriptSizes = []    -- Mary does not support scripts
       , scriptsFee = Coin 0 -- Mary does not support scripts
       }
@@ -240,8 +257,8 @@ fromAlonzoTx pp (blkIndex, tx) =
       , txBlockIndex = blkIndex
       , txSize = fromIntegral $ getField @"txsize" tx
       , txValidContract = isValid
-      , txInputs = map fromTxIn inputs
-      , txCollateralInputs = map fromTxIn . toList $ getField @"collateral" txBody
+      , txInputs = txIns
+      , txCollateralInputs = map (fromTxIn Nothing) . toList $ getField @"collateral" txBody
       , txOutputs = zipWith fromTxOut [0 .. ] . toList $ getField @"outputs" txBody
       , txFees = getField @"txfee" txBody
       , txOutSum = Coin . sum $ map txOutValue (getField @"outputs" txBody)
@@ -250,11 +267,11 @@ fromAlonzoTx pp (blkIndex, tx) =
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
                             . Shelley.unWdrl $ getField @"wdrls" txBody
       , txMetadata = fromAlonzoMetadata <$> strictMaybeToMaybe (getField @"auxiliaryData" tx)
-      , txCertificates = zipWith TxCertificate [0..] (map coerceCertificate . toList $ getField @"certs" txBody)
-      , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl $ getField @"wdrls" txBody)
+      , txCertificates = txCerts
+      , txWithdrawals = txWdrls
       , txParamProposal = maybe [] (convertParamProposal (Alonzo Standard)) $ strictMaybeToMaybe (getField @"update" txBody)
       , txMint = coerceMint (getField @"mint" txBody)
-      , txExUnits = exUnits
+      , txRedeemer = redeemers
       , scriptSizes = sizes
       , scriptsFee = minFees
       }
@@ -271,10 +288,6 @@ fromAlonzoTx pp (blkIndex, tx) =
     txBody :: Ledger.TxBody StandardAlonzo
     txBody = getField @"body" tx
 
-    exUnits :: [ExUnits]
-    exUnits =
-      map snd . Map.elems . Ledger.unRedeemers $ getField @"txrdmrs" (getField @"wits" tx)
-
     sizes :: [Int]
     sizes = mapMaybe getScriptSize $ toList $ Ledger.txscripts $ getField @"wits" tx
 
@@ -288,19 +301,78 @@ fromAlonzoTx pp (blkIndex, tx) =
     txOutValue :: Alonzo.TxOut StandardAlonzo -> Integer
     txOutValue (Alonzo.TxOut _addr (Value coin _ma) _dataHash) = coin
 
+    certificates :: StrictSeq (Shelley.DCert StandardCrypto)
+    certificates = getField @"certs" txBody
+
+    mkTxCertificate :: Word16 -> Shelley.DCert StandardCrypto -> TxCertificate
+    mkTxCertificate n cert =
+      TxCertificate
+        { txcIndex = n
+        , txcRedeemerIndex = strictMaybeToMaybe $ Alonzo.indexOf cert certificates
+        , txcCert = cert
+        }
+
+    txCerts :: [TxCertificate]
+    txCerts = zipWith mkTxCertificate [0..] (map coerceCertificate . toList $ certificates)
+
+    withdrawals :: Map (Shelley.RewardAcnt StandardCrypto) Coin
+    withdrawals = Shelley.unWdrl $ getField @"wdrls" txBody
+
+    mkTxWithdrawal' :: (Shelley.RewardAcnt era, Coin) -> TxWithdrawal
+    mkTxWithdrawal' (acnt, coin) =
+      let acnt' = coerce acnt
+      in mkTxWithdrawal (strictMaybeToMaybe $ Alonzo.indexOf acnt' withdrawals) (acnt', coin)
+
+    txWdrls :: [TxWithdrawal]
+    txWdrls = map mkTxWithdrawal' (Map.toList withdrawals)
+
     isValid :: Bool
     isValid =
       case Alonzo.isValidating tx of
         Alonzo.IsValidating x -> x
 
-    inputs :: [Shelley.TxIn StandardCrypto]
-    inputs =
-      -- Chose which inputs will be spent depending in where the tx is valid.
-      -- If the transaction is valid, the regular inputs will be consumed and if it is
-      -- invalid, the collateral inputs will be consumed.
-      if isValid
-        then toList $ getField @"inputs" txBody
-        else toList $ getField @"collateral" txBody
+    txIns :: [TxIn]
+    txIns =
+      if isValid then
+        let inputsSet = getField @"inputs" txBody
+            withIndex txIn = fromTxIn (strictMaybeToMaybe $ Alonzo.indexOf txIn inputsSet) txIn
+        in map withIndex $ toList inputsSet
+      else
+          let inputsSet = getField @"collateral" txBody
+          in map (fromTxIn Nothing) $ toList inputsSet
+
+    redeemers :: [TxRedeemer]
+    redeemers =
+      mkRedeemer <$> Map.toList (snd <$> Ledger.unRedeemers (getField @"txrdmrs" (getField @"wits" tx)))
+
+    mkRedeemer :: (Ledger.RdmrPtr, ExUnits) -> TxRedeemer
+    mkRedeemer (ptr@(Ledger.RdmrPtr tag index), exUnits) = TxRedeemer
+      { txRedeemerMem = exUnitsMem exUnits
+      , txRedeemerSteps = exUnitsSteps exUnits
+      , txRedeemerFee = txscriptfee (Alonzo._prices pp) exUnits
+      , txRedeemerPurpose = tag
+      , txRedeemerIndex = index
+      , txScriptHash = findScriptHash ptr
+      }
+
+    -- For 'Spend' script, we need to resolve the 'TxIn' to find the ScriptHash
+    -- so we return 'Left TxIn' and resolve it later from the db. In other cases
+    -- we can directly find the 'ScriptHash'.
+    findScriptHash :: Ledger.RdmrPtr -> Maybe (Either TxIn ByteString)
+    findScriptHash (Ledger.RdmrPtr tag index) = case tag of
+      Spend
+        | Just txIn <- find (\txin -> txInRedeemerIndex txin == Just index) txIns
+          -> Just $ Left txIn
+      Rewrd
+        | Just acnt <- txwRewardAccount <$> find (\wdrl -> txwRedeemerIndex wdrl == Just index) txWdrls
+          -> Right <$> scriptHashAcnt acnt
+      Cert
+        | Just cert <- txcCert <$> find (\cert -> txcRedeemerIndex cert == Just index) txCerts
+          -> Right <$> scriptHashCert cert
+      Mint
+        | Just hash <- elemAtSet index (getField @"minted" txBody)
+          -> Just $ Right $ unScriptHash hash
+      _ -> Nothing -- this should never happen. We should always be able to resolve the 'RdmrPtr'.
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -355,19 +427,42 @@ coercePoolParams pp =
 
 -- -------------------------------------------------------------------------------------------------
 
-fromTxIn :: Shelley.TxIn StandardCrypto -> TxIn
-fromTxIn (Shelley.TxIn (Shelley.TxId txid) index) =
+fromTxIn :: Maybe Word64 -> Shelley.TxIn StandardCrypto -> TxIn
+fromTxIn setIndex (Shelley.TxIn (Shelley.TxId txid) index) =
   TxIn
     { txInHash = Crypto.hashToBytes $ Ledger.extractHash txid
     , txInIndex = fromIntegral index
+    , txInRedeemerIndex = setIndex
     }
 
-mkTxWithdrawal :: (Shelley.RewardAcnt era, Coin) -> TxWithdrawal
-mkTxWithdrawal (ra, c) =
+mkTxWithdrawal :: Maybe Word64 -> (Shelley.RewardAcnt StandardCrypto, Coin) -> TxWithdrawal
+mkTxWithdrawal rIndex (ra, c) =
   TxWithdrawal
-    { txwRewardAccount = coerce ra
+    { txwRedeemerIndex = rIndex
+    , txwRewardAccount = ra
     , txwAmount = c
     }
 
 txHashId :: ShelleyBasedEra era => Shelley.Tx era -> ByteString
 txHashId = Crypto.hashToBytes . Ledger.extractHash . Ledger.hashAnnotated . Shelley.body
+
+-- | 'Set.elemAt' is a partial function so we can't use it. This reverses the 'indexOf' of the
+-- 'class Indexable elem container'.
+elemAtSet :: forall a. Ord a => Word64 -> Set a -> Maybe a
+elemAtSet n set =
+    snd <$> find (\(index, _a) -> index == Just n) (Set.toList setWithIndexes)
+  where
+    setWithIndexes :: Set (Maybe Word64, a)
+    setWithIndexes = Set.map (\a -> (strictMaybeToMaybe $ Alonzo.indexOf a set, a)) set
+
+scriptHashAcnt :: Shelley.RewardAcnt StandardCrypto -> Maybe ByteString
+scriptHashAcnt rewardAddr = getCredentialScriptHash $ Ledger.getRwdCred rewardAddr
+
+-- This mimics 'Ledger.addOnlyCwitness'
+scriptHashCert :: Shelley.DCert StandardCrypto -> Maybe ByteString
+scriptHashCert cert = case cert of
+  Shelley.DCertDeleg (Shelley.DeRegKey cred) ->
+    getCredentialScriptHash cred
+  Shelley.DCertDeleg (Shelley.Delegate (Shelley.Delegation cred _)) ->
+    getCredentialScriptHash cred
+  _ -> Nothing
