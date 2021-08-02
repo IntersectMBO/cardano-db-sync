@@ -437,6 +437,84 @@ select
 ...
 ```
 
+### Get Ada in UTxO locked by scripts
+```sql
+select sum (value) / 1000000 as script_locked from tx_out as tx_outer where
+    tx_outer.address_has_script = true and
+    not exists
+      ( select tx_out.id from tx_out inner join tx_in
+          on tx_out.tx_id = tx_in.tx_out_id and tx_out.index = tx_in.tx_out_index
+          where tx_outer.id = tx_out.id
+      ) ;
+    script_locked
+----------------------
+ 3695300.068246000000
+(1 row)
+
+```
+
+### Get information about script tx's
+```sql
+select tx.id as tx_id, tx.fee as fees, SUM(redeemer.fee) as script_fees, SUM(units_mem) as units_mem,
+       SUM (units_steps) as units_steps, tx.valid_contract as valid, count(redeemer.id) scripts, tx.script_size
+from tx join redeemer on tx.id = redeemer.tx_id group by tx.id;
+ tx_id | fees     |script_fees |units_mem |units_steps| valid|scripts|script_size
+ ------+----------+------------+----------+-----------+------+-------+-----------
+ 11812 |200193089 |  200000000 | 100000000|  100000000| t    |      1|         92
+ 11909 |  5000000 |    4000000 |   2000000|    2000000| f    |      1|        565
+ 11931 |  5000000 |    4000000 |   2000000|    2000000| f    |      1|         92
+ 11983 |255089500 |  204089500 |     39500|  204050000| t    |      1|         92
+ 11987 |102635800 |   81635800 |     15800|   81620000| t    |      1|         92
+ 11992 |102635800 |   81635800 |     15800|   81620000| t    |      1|         92
+ 12004 |822865300 |  791865300 |    195300|  791670000| t    |      1|       4559
+ 12010 |822865300 |  791865300 |    195300|  791670000| t    |      1|       4559
+
+```
+
+### Get the sum of collatereal input lost
+```sql
+select SUM(value)/1000000 as lost_amount
+  from tx
+  join tx_in on tx.id = tx_in.tx_in_id
+  join tx_out on tx_in.tx_out_id = tx_out.id
+    where tx.valid_contract = false ;
+  lost_amount
+--------------------
+ 592003625.28471400
+
+```
+
+### Get all uses of a spend script and how much ada it unlocked from an output
+```sql
+select tx.id as tx_id, tx_out.value as tx_out_value, redeemer.units_mem, redeemer.units_steps, redeemer.fee, redeemer.purpose
+  from tx join redeemer on redeemer.tx_id = tx.id
+  join tx_in on tx_in.redeemer_id = redeemer.id
+  join tx_out on tx_in.tx_out_id = tx_out.tx_id and tx_in.tx_out_index = tx_out.index
+    where redeemer.script_hash = '\x8a08f851b22e5c54de087be307eeab3b5c8588a8cea8319867c786e0';
+ tx_id | tx_out_value |  units_mem  | units_steps |    fee     | purpose
+-------+--------------+-------------+-------------+------------+---------
+ 10184 |    200000000 |    70000000 |    70000000 |  140000000 | spend
+ 11680 |   1000000000 |   700000000 |   700000000 | 1400000000 | spend
+ 11812 |    512000000 |   100000000 |   100000000 |  200000000 | spend
+ 11983 |    300000000 |       39500 |   204050000 |  204089500 | spend
+ 11987 |    200000000 |       15800 |    81620000 |   81635800 | spend
+ 11992 |    120000000 |       15800 |    81620000 |   81635800 | spend
+
+```
+
+### Get all mint scripts
+```sql
+select redeemer.tx_id as tx_id, redeemer.units_mem, redeemer.units_steps, redeemer.fee as redeemer_fee, redeemer.purpose, ma_tx_mint.policy, ma_tx_mint.name, ma_tx_mint.quantity
+  from redeemer join ma_tx_mint on redeemer.script_hash = ma_tx_mint.policy
+  and redeemer.tx_id = ma_tx_mint.tx_id
+    where purpose = 'mint';
+tx_id |units_mem|units_steps|redeemer_fee|purpose|                      policy                               |      name      | quantity
+------+---------+-----------+------------+-------+-----------------------------------------------------------+----------------+----------
+ 11728|700000000|700000000  |1400000000  |mint   |\x3f216fc1b7a9cdfa2ee964f44a6718e108fb131d36011e3fdbfcfd21 | \x7161636f696e |5
+ 17346|700000000|700000000  |1400000000  |mint   |\x3f216fc1b7a9cdfa2ee964f44a6718e108fb131d36011e3fdbfcfd21 | \x7161636f696e |5
+(2 rows)
+
+```
 ---
 
 [Query.hs]: https://github.com/input-output-hk/cardano-db-sync/blob/master/cardano-db/src/Cardano/Db/Query.hs
