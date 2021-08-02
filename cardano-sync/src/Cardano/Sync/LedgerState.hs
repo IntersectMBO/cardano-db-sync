@@ -104,7 +104,6 @@ import qualified Ouroboros.Network.Point as Point
 
 import           Shelley.Spec.Ledger.LedgerState (EpochState (..))
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley
-import qualified Shelley.Spec.Ledger.Rewards as Shelley
 import qualified Shelley.Spec.Ledger.STS.Chain as Shelley
 
 import           System.Directory (doesFileExist, listDirectory, removeFile)
@@ -125,8 +124,8 @@ import           System.Mem (performMajorGC)
 -- 'CardanoPoint' indicates at which point the 'BulkOperation' became available.
 -- It is only used in case of a rollback.
 data BulkOperation
-  = BulkRewardChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, Set (Shelley.Reward StandardCrypto))]
-  | BulkOrphanedRewardChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, Set (Shelley.Reward StandardCrypto))]
+  = BulkRewardChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, Set Generic.Reward)]
+  | BulkOrphanedRewardChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, Set Generic.Reward)]
   | BulkRewardReport !EpochNo !CardanoPoint !Int !Int
   | BulkStakeDistChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, (Coin, PoolKeyHash))]
   | BulkStakeDistReport !EpochNo !CardanoPoint !Int
@@ -160,6 +159,7 @@ data LedgerEnv = LedgerEnv
   , leOfflineWorkQueue :: !(TBQueue IO PoolFetchRetry)
   , leOfflineResultQueue :: !(TBQueue IO FetchResult)
   , leEpochSyncTime :: !(StrictTVar IO UTCTime)
+  , leStableEpochSlot :: !EpochSlot
   }
 
 data LedgerEvent
@@ -225,9 +225,10 @@ ledgerDbCurrent :: LedgerDB -> CardanoLedgerState
 ledgerDbCurrent = either id id . AS.head . ledgerDbCheckpoints
 
 mkLedgerEnv
-    :: Trace IO Text -> Consensus.ProtocolInfo IO CardanoBlock -> LedgerStateDir -> Ledger.Network
+    :: Trace IO Text -> Consensus.ProtocolInfo IO CardanoBlock -> LedgerStateDir
+    -> Ledger.Network -> EpochSlot
     -> IO LedgerEnv
-mkLedgerEnv trce protocolInfo dir network = do
+mkLedgerEnv trce protocolInfo dir nw stableEpochSlot = do
     svar <- newTVarIO Nothing
     evar <- newTVarIO initLedgerEventState
     ivar <- newTVarIO $ IndexCache mempty mempty
@@ -241,7 +242,7 @@ mkLedgerEnv trce protocolInfo dir network = do
       { leTrace = trce
       , leProtocolInfo = protocolInfo
       , leDir = dir
-      , leNetwork = network
+      , leNetwork = nw
       , leStateVar = svar
       , leEventState = evar
       , leIndexCache = ivar
@@ -249,6 +250,7 @@ mkLedgerEnv trce protocolInfo dir network = do
       , leOfflineWorkQueue = owq
       , leOfflineResultQueue  = orq
       , leEpochSyncTime = est
+      , leStableEpochSlot = stableEpochSlot
       }
   where
     initLedgerEventState :: LedgerEventState
@@ -310,18 +312,18 @@ applyBlock env blk details =
         Left err -> panic err
         Right result -> result
 
+    mkNewEpoch :: CardanoLedgerState -> CardanoLedgerState -> Maybe Generic.NewEpoch
     mkNewEpoch oldState newState =
-      if ledgerEpochNo env newState == ledgerEpochNo env oldState + 1
-        then
-          let epochNo = ledgerEpochNo env newState in
+      if ledgerEpochNo env newState /= ledgerEpochNo env oldState + 1
+        then Nothing
+        else
           Just $
             Generic.NewEpoch
-              { Generic.neEpoch = epochNo
+              { Generic.neEpoch = ledgerEpochNo env newState
               , Generic.neIsEBB = isJust $ blockIsEBB blk
               , Generic.neAdaPots = maybeToStrict $ getAdaPots newState
               , Generic.neEpochUpdate = Generic.epochUpdate (clsState newState)
               }
-        else Nothing
 
 generateEvents :: LedgerEnv -> LedgerEventState -> SlotDetails -> CardanoLedgerState -> CardanoPoint -> STM [LedgerEvent]
 generateEvents env oldEventState details cls pnt = do
@@ -336,27 +338,36 @@ generateEvents env oldEventState details cls pnt = do
     currentEpochNo = sdEpochNo details
 
     newEpochEvent :: Maybe LedgerEvent
-    newEpochEvent = case lesEpochNo oldEventState of
-      Nothing -> Just $ LedgerStartAtEpoch currentEpochNo
-      Just oldEpoch | currentEpochNo == 1 + oldEpoch ->
-        Just (LedgerNewEpoch currentEpochNo (getSyncStatus details))
-      _ -> Nothing
+    newEpochEvent =
+      case lesEpochNo oldEventState of
+        Nothing -> Just $ LedgerStartAtEpoch currentEpochNo
+        Just oldEpoch ->
+          if currentEpochNo == 1 + oldEpoch
+            then Just $ LedgerNewEpoch currentEpochNo (getSyncStatus details)
+            else Nothing
 
     -- Want the rewards event to be delivered once only, on a single slot.
     rewards :: Maybe Generic.Rewards
-    rewards = case lesLastRewardsEpoch oldEventState of
-      Nothing -> mkRewards
-      Just oldRewardEpoch | oldRewardEpoch < currentEpochNo -> mkRewards
-      _ -> Nothing
+    rewards =
+      case lesLastRewardsEpoch oldEventState of
+        Nothing -> mkRewards
+        Just oldRewardEpoch ->
+          if sdEpochSlot details >= leStableEpochSlot env && oldRewardEpoch < currentEpochNo
+            then mkRewards
+            else Nothing
+
 
     mkRewards :: Maybe Generic.Rewards
     mkRewards = Generic.epochRewards (leNetwork env) (sdEpochNo details) (clsState cls)
 
     stakeDist :: Maybe Generic.StakeDist
-    stakeDist = case lesLastStateDistEpoch oldEventState of
-      Nothing -> mkStakeDist
-      Just oldStakeEpoch | oldStakeEpoch < currentEpochNo -> mkStakeDist
-      _ -> Nothing
+    stakeDist =
+      case lesLastStateDistEpoch oldEventState of
+        Nothing -> mkStakeDist
+        Just oldStakeEpoch ->
+          if oldStakeEpoch < currentEpochNo
+            then mkStakeDist
+            else Nothing
 
     mkStakeDist :: Maybe Generic.StakeDist
     mkStakeDist = Generic.epochStakeDist (leNetwork env) (sdEpochNo details) (clsState cls)
@@ -442,9 +453,10 @@ dbPointToFileName (LedgerStateDir stateDir) mEpochNo (Point.Block slot hash) =
     shortHash = mkShortHash hash
 
     epochSuffix :: String
-    epochSuffix = case mEpochNo of
-      Nothing -> ""
-      Just epoch -> "-" ++ show (unEpochNo epoch)
+    epochSuffix =
+      case mEpochNo of
+        Nothing -> ""
+        Just epoch -> "-" ++ show (unEpochNo epoch)
 
 parseLedgerStateFileName :: LedgerStateDir -> FilePath -> Maybe LedgerStateFile
 parseLedgerStateFileName (LedgerStateDir stateDir) fp =

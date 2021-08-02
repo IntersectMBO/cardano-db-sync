@@ -247,6 +247,7 @@ share
   StakeRegistration
     addrId              StakeAddressId      OnDeleteCascade
     certIndex           Word16
+    epochNo             Word64              sqltype=uinteger
     txId                TxId                OnDeleteCascade
     UniqueStakeRegistration addrId txId
 
@@ -254,6 +255,7 @@ share
   StakeDeregistration
     addrId              StakeAddressId      OnDeleteCascade
     certIndex           Word16
+    epochNo             Word64              sqltype=uinteger
     txId                TxId                OnDeleteCascade
     UniqueStakeDeregistration addrId txId
 
@@ -283,9 +285,10 @@ share
     addrId              StakeAddressId      OnDeleteCascade
     type                Text                sqltype=rewardtype
     amount              DbLovelace          sqltype=lovelace
-    epochNo             Word64
-    poolId              PoolHashId          OnDeleteCascade
-    UniqueReward        epochNo addrId poolId
+    earnedEpoch         Word64
+    spendableEpoch      Word64
+    poolId              PoolHashId Maybe    OnDeleteCascade
+    UniqueReward        addrId type amount earnedEpoch
 
   -- Orphaned rewards happen when a stake address earns rewards, but the stake address is
   -- deregistered before the rewards are distributed.
@@ -295,8 +298,8 @@ share
     type                Text                sqltype=rewardtype
     amount              DbLovelace          sqltype=lovelace
     epochNo             Word64
-    poolId              PoolHashId          OnDeleteCascade
-    UniqueOrphaned      epochNo addrId poolId
+    poolId              PoolHashId Maybe    OnDeleteCascade
+    UniqueOrphaned      addrId type amount epochNo
 
   Withdrawal
     addrId              StakeAddressId      OnDeleteCascade
@@ -638,12 +641,14 @@ schemaDocs =
       "A table containing stake address registrations."
       StakeRegistrationAddrId # "The StakeAddress table index for the stake address."
       StakeRegistrationCertIndex # "The index of this stake registration within the certificates of this transaction."
+      StakeRegistrationEpochNo # "The epoch in which the registration took place."
       StakeRegistrationTxId # "The Tx table index of the transaction where this stake address was registered."
 
     StakeDeregistration --^ do
       "A table containing stake address deregistrations."
       StakeDeregistrationAddrId # "The StakeAddress table index for the stake address."
       StakeDeregistrationCertIndex # "The index of this stake deregistration within the certificates of this transaction."
+      StakeDeregistrationEpochNo # "The epoch in which the deregistration took place."
       StakeDeregistrationTxId # "The Tx table index of the transaction where this stake address was deregistered."
 
     Delegation --^ do
@@ -669,8 +674,9 @@ schemaDocs =
       RewardAddrId # "The StakeAddress table index for the stake address that earned the reward."
       RewardType # "The source of the rewards; pool `member` vs pool `owner`."
       RewardAmount # "The reward amount (in Lovelace)."
-      RewardEpochNo # "The epoch in which the reward was earned."
-      RewardPoolId # "The PoolHash table index for the pool the stake address was delegated to when the reward is earned."
+      RewardEarnedEpoch # "The epoch in which the reward was earned."
+      RewardPoolId # "The PoolHash table index for the pool the stake address was delegated to when\
+            \ the reward is earned. Will be NULL for payments from the treasury or the reserves."
 
     OrphanedReward --^ do
       "A table for rewards earned by staking, but are orphaned. Rewards are orphaned when the stake\
@@ -679,7 +685,9 @@ schemaDocs =
       OrphanedRewardType # "The source of the rewards; pool `member` vs pool `owner`."
       OrphanedRewardAmount # "The reward amount (in Lovelace)."
       OrphanedRewardEpochNo # "The epoch in which the reward was earned."
-      OrphanedRewardPoolId # "The PoolHash table index for the pool the stake address was delegated to when the reward is earned."
+      OrphanedRewardPoolId # "The PoolHash table index for the pool the stake address was delegated to when\
+            \ the reward is earned. Will be NULL for payments from the treasury or the reserves."
+
 
     Withdrawal --^ do
       "A table for withdrawals from a reward account."

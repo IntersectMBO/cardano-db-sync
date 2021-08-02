@@ -44,9 +44,6 @@ import qualified Data.Set as Set
 
 import           Database.Persist.Sql (SqlBackend)
 
-import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
-
-import qualified Shelley.Spec.Ledger.Rewards as Shelley
 
 {- HLINT ignore "Use readTVarIO" -}
 
@@ -150,7 +147,7 @@ insertEpochStake _tracer icache epochNo stakeChunk = do
 
 insertRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => EpochNo -> IndexCache -> [(Generic.StakeCred, Set (Shelley.Reward StandardCrypto))]
+    => EpochNo -> IndexCache -> [(Generic.StakeCred, Set Generic.Reward)]
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertRewards epoch icache rewardsChunk = do
     dbRewards <- concatMapM mkRewards rewardsChunk
@@ -158,23 +155,23 @@ insertRewards epoch icache rewardsChunk = do
   where
     mkRewards
         :: MonadBaseControl IO m
-        => (Generic.StakeCred, Set (Shelley.Reward StandardCrypto))
+        => (Generic.StakeCred, Set Generic.Reward)
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.Reward]
     mkRewards (saddr, rset) = do
       saId <- hoistEither $ lookupStakeAddrIdPair "insertRewards StakePool" saddr icache
-      forM (Set.toList rset) $ \ rwd -> do
-        poolId <- hoistEither $ lookupPoolIdPair "insertRewards StakePool" (Shelley.rewardPool rwd) icache
+      forM (Set.toList rset) $ \ rwd ->
         pure $ DB.Reward
                   { DB.rewardAddrId = saId
-                  , DB.rewardType = DB.showRewardType (Shelley.rewardType rwd)
-                  , DB.rewardAmount = Generic.coinToDbLovelace (Shelley.rewardAmount rwd)
-                  , DB.rewardEpochNo = unEpochNo epoch
-                  , DB.rewardPoolId = poolId
+                  , DB.rewardType = DB.showRewardSource (Generic.rewardSource rwd)
+                  , DB.rewardAmount = Generic.coinToDbLovelace (Generic.rewardAmount rwd)
+                  , DB.rewardEarnedEpoch = unEpochNo epoch
+                  , DB.rewardSpendableEpoch = 2 + unEpochNo epoch
+                  , DB.rewardPoolId = lookupPoolIdPairMaybe (Generic.rewardPool rwd) icache
                   }
 
 insertOrphanedRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => EpochNo -> IndexCache -> [(Generic.StakeCred, Set (Shelley.Reward StandardCrypto))]
+    => EpochNo -> IndexCache -> [(Generic.StakeCred, Set Generic.Reward)]
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertOrphanedRewards epoch icache orphanedRewardsChunk = do
     dbRewards <- concatMapM mkOrphanedReward orphanedRewardsChunk
@@ -182,18 +179,17 @@ insertOrphanedRewards epoch icache orphanedRewardsChunk = do
   where
     mkOrphanedReward
         :: MonadBaseControl IO m
-        => (Generic.StakeCred, Set (Shelley.Reward StandardCrypto))
+        => (Generic.StakeCred, Set Generic.Reward)
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.OrphanedReward]
     mkOrphanedReward (saddr, rset) = do
       saId <- hoistEither $ lookupStakeAddrIdPair "insertOrphanedRewards StakeCred" saddr icache
       forM (Set.toList rset) $ \ rwd -> do
-        poolId <- hoistEither $ lookupPoolIdPair "insertOrphanedRewards StakePool" (Shelley.rewardPool rwd) icache
         pure $ DB.OrphanedReward
                   { DB.orphanedRewardAddrId = saId
-                  , DB.orphanedRewardType = DB.showRewardType (Shelley.rewardType rwd)
-                  , DB.orphanedRewardAmount = Generic.coinToDbLovelace (Shelley.rewardAmount rwd)
+                  , DB.orphanedRewardType = DB.showRewardSource (Generic.rewardSource rwd)
+                  , DB.orphanedRewardAmount = Generic.coinToDbLovelace (Generic.rewardAmount rwd)
                   , DB.orphanedRewardEpochNo = unEpochNo epoch
-                  , DB.orphanedRewardPoolId = poolId
+                  , DB.orphanedRewardPoolId = lookupPoolIdPairMaybe (Generic.rewardPool rwd) icache
                   }
 
 -- -------------------------------------------------------------------------------------------------
@@ -209,6 +205,15 @@ lookupStakeAddrIdPair msg scred lcache =
       Left . NEError $
         mconcat [ "lookupStakeAddrIdPair: ", msg, renderByteArray (Generic.unStakeCred scred) ]
 
+
+lookupPoolIdPairMaybe
+    :: Maybe PoolKeyHash -> IndexCache
+    -> Maybe DB.PoolHashId
+lookupPoolIdPairMaybe mpkh lcache =
+    lookup =<< mpkh
+  where
+    lookup :: PoolKeyHash -> Maybe DB.PoolHashId
+    lookup pkh = Map.lookup pkh $ icPoolCache lcache
 
 lookupPoolIdPair
     :: Text -> PoolKeyHash -> IndexCache
