@@ -75,7 +75,7 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
-import           Data.Time.Clock (UTCTime)
+import           Data.Time.Clock (UTCTime, getCurrentTime)
 
 import           Ouroboros.Consensus.Block (CodecConfig, Point (..), WithOrigin (..), blockHash,
                    blockIsEBB, blockPoint, blockPrevHash, pointSlot)
@@ -159,7 +159,7 @@ data LedgerEnv = LedgerEnv
   , leBulkOpQueue :: !(TBQueue IO BulkOperation)
   , leOfflineWorkQueue :: !(TBQueue IO PoolFetchRetry)
   , leOfflineResultQueue :: !(TBQueue IO FetchResult)
-  , leEpochSyncTime :: !(StrictTVar IO (Maybe UTCTime))
+  , leEpochSyncTime :: !(StrictTVar IO UTCTime)
   }
 
 data LedgerEvent
@@ -236,7 +236,7 @@ mkLedgerEnv trce protocolInfo dir network = do
     boq <- newTBQueueIO 10800
     owq <- newTBQueueIO 100
     orq <- newTBQueueIO 100
-    est <- newTVarIO Nothing
+    est <- newTVarIO =<< getCurrentTime
     pure LedgerEnv
       { leTrace = trce
       , leProtocolInfo = protocolInfo
