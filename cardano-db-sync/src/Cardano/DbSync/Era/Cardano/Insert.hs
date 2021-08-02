@@ -28,14 +28,14 @@ import           Database.Persist.Sql (SqlBackend)
 
 insertEpochSyncTime
     :: (MonadBaseControl IO m, MonadIO m)
-    => EpochNo -> SyncState -> StrictTVar IO (Maybe UTCTime) -> ReaderT SqlBackend m ()
+    => EpochNo -> SyncState -> StrictTVar IO UTCTime -> ReaderT SqlBackend m ()
 insertEpochSyncTime epochNo syncState estvar = do
   now <- liftIO Time.getCurrentTime
-  mlast <- liftIO . atomically $ swapTVar estvar (Just now)
+  mlast <- liftIO . atomically $ swapTVar estvar now
   void . Db.insertEpochSyncTime $
           Db.EpochSyncTime
             { Db.epochSyncTimeNo = unEpochNo epochNo - 1
-            , Db.epochSyncTimeSeconds = realToFrac . Time.diffUTCTime now <$> mlast
+            , Db.epochSyncTimeSeconds = ceiling (realToFrac (Time.diffUTCTime now mlast) :: Double)
             , Db.epochSyncTimeState = syncState
             }
 

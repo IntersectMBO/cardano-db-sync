@@ -335,7 +335,7 @@ share
 
   EpochSyncTime
     no                  Word64
-    seconds             Double Maybe
+    seconds             Word64              sqltype=word63type
     state               SyncState           sqltype=syncstatetype
     UniqueEpochSyncTime no
 
