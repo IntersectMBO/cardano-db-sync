@@ -126,7 +126,7 @@ extra-deps:
     - shelley-ma/shelley-ma-test 
   
   - git: https://github.com/input-output-hk/cardano-node
-    commit: f69205c7a134ed0b22ecb4e06058f5611880a09e
+    commit: dc87b20197a134fae5be2181f20af8404bcb029f
     subdirs:
     - cardano-api
     - cardano-api/test
