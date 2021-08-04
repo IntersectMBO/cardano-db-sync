@@ -1,5 +1,11 @@
 # Revision history for cardano-db-sync
 
+## 10.0.2
+* Fix docker issue (#712).
+
+## 10.0.1
+* Fix docker issue (#686).
+
 ## 10.0.0
 * Note that this release requires the database to be dropped and recreated. Restoring the `db-sync`
   state can take a long time so it is possible to restore it from a snapsot file.
