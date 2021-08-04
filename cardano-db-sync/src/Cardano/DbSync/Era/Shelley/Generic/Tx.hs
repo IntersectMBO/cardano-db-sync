@@ -268,7 +268,7 @@ fromAlonzoTx pp (blkIndex, tx) =
       { txHash = Crypto.hashToBytes . Ledger.extractHash $ Ledger.hashAnnotated txBody
       , txBlockIndex = blkIndex
       , txSize = fromIntegral $ getField @"txsize" tx
-      , txValidContract = isValid
+      , txValidContract = isValid2
       , txInputs = txIns
       , txCollateralInputs = map (fromTxIn Nothing) . toList $ getField @"collateral" txBody
       , txOutputs = zipWith fromTxOut [0 .. ] . toList $ getField @"outputs" txBody
@@ -361,14 +361,14 @@ fromAlonzoTx pp (blkIndex, tx) =
     txWdrls = map mkTxWithdrawal' (Map.toList withdrawals)
 
     -- This is true if second stage contract validation passes.
-    isValid :: Bool
-    isValid =
-      case Alonzo.isValidating tx of
-        Alonzo.IsValidating x -> x
+    isValid2 :: Bool
+    isValid2 =
+      case Alonzo.isValid tx of
+        Alonzo.IsValid x -> x
 
     txIns :: [TxIn]
     txIns =
-      if isValid then
+      if isValid2 then
         let inputsSet = getField @"inputs" txBody
             withIndex txIn = fromTxIn (strictMaybeToMaybe $ Alonzo.indexOf txIn inputsSet) txIn
         in map withIndex $ toList inputsSet

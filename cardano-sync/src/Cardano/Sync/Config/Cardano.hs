@@ -33,6 +33,7 @@ import qualified Ouroboros.Consensus.Cardano as Consensus
 import qualified Ouroboros.Consensus.Cardano.Node as Consensus
 import           Ouroboros.Consensus.Config (TopLevelConfig (..))
 import           Ouroboros.Consensus.Ledger.Basics (LedgerConfig)
+import qualified Ouroboros.Consensus.Mempool.TxLimits as TxLimits
 import           Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import           Ouroboros.Consensus.Shelley.Eras (StandardShelley)
@@ -87,6 +88,7 @@ mkProtocolInfoCardano ge =
             , Consensus.byronProtocolVersion = dncByronProtocolVersion dnc
             , Consensus.byronSoftwareVersion = dncByronSoftwareVersion dnc
             , Consensus.byronLeaderCredentials = Nothing
+            , Consensus.byronMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
             }
           Consensus.ProtocolParamsShelleyBased
             { Consensus.shelleyBasedGenesis = scConfig shelleyGenesis
@@ -95,15 +97,19 @@ mkProtocolInfoCardano ge =
             }
           Consensus.ProtocolParamsShelley
             { Consensus.shelleyProtVer = shelleyProtVer dnc
+            , Consensus.shelleyMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
             }
           Consensus.ProtocolParamsAllegra
             { Consensus.allegraProtVer = shelleyProtVer dnc
+            , Consensus.allegraMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
             }
           Consensus.ProtocolParamsMary
             { Consensus.maryProtVer = shelleyProtVer dnc
+            , Consensus.maryMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
             }
           Consensus.ProtocolParamsAlonzo
             { Consensus.alonzoProtVer = shelleyProtVer dnc
+            , Consensus.alonzoMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
             }
           (Consensus.ProtocolTransitionParamsShelleyBased () $ dncShelleyHardFork dnc)
           (Consensus.ProtocolTransitionParamsShelleyBased () $ dncAllegraHardFork dnc)
