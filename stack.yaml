@@ -95,7 +95,7 @@ extra-deps:
   - nothunks-0.1.2
   
   - git: https://github.com/input-output-hk/cardano-base
-    commit: c028519d1180e42d6ab3ddf97d6fa57395966c2e
+    commit: 8c732560b201b5da8e3bdf175c6eda73a32d64bc
     subdirs:
     - binary
     - binary/test
@@ -105,10 +105,10 @@ extra-deps:
     - slotting
   
   - git: https://github.com/input-output-hk/cardano-crypto
-    commit: 07397f0e50da97eaa0575d93bee7ac4b2b2576ec
+    commit: f73079303f663e028288f9f4a9e08bcca39a923e
   
   - git: https://github.com/input-output-hk/cardano-ledger-specs
-    commit: bc5e54f0611a416db1e906d3783e4b973429f5eb
+    commit: 30eca73a2f5c13f1fbed9a98a59540ac3d0c8afe
     subdirs:
     - alonzo/impl
     - byron/crypto
@@ -126,7 +126,7 @@ extra-deps:
     - shelley-ma/shelley-ma-test 
   
   - git: https://github.com/input-output-hk/cardano-node
-    commit: dc87b20197a134fae5be2181f20af8404bcb029f
+    commit: 9921d76c40928369592f1e289a0b0c1c32c97631
     subdirs:
     - cardano-api
     - cardano-api/test
@@ -137,7 +137,7 @@ extra-deps:
     - hedgehog-extras
   
   - git: https://github.com/input-output-hk/cardano-prelude
-    commit: fd773f7a58412131512b9f694ab95653ac430852
+    commit: bb4ed71ba8e587f672d06edf9d2e376f4b055555
     subdirs:
     - cardano-prelude
     - cardano-prelude-test
@@ -161,7 +161,7 @@ extra-deps:
     - tracer-transformers
   
   - git: https://github.com/input-output-hk/ouroboros-network
-    commit: f026e71e8925dc2cb1a55a9a77b54bbeb1273ef0
+    commit: e9cda57df7ea6969edbc3bfc4e117668277d09c8
     subdirs:
     - io-sim
     - io-sim-classes
