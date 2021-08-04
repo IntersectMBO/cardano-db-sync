@@ -703,7 +703,7 @@ schemaDocs =
         \ table when they are calculated during epoch `N + 1` but are not spendable until after the\
         \ start of epoch `N + 2`."
       RewardAddrId # "The StakeAddress table index for the stake address that earned the reward."
-      RewardType # "The source of the rewards; pool `member` vs pool `owner`."
+      RewardType # "The source of the rewards; pool `member`, pool `owner`, `treasury` or `reserve` payment."
       RewardAmount # "The reward amount (in Lovelace)."
       RewardEarnedEpoch # "The epoch in which the reward was earned."
       RewardPoolId # "The PoolHash table index for the pool the stake address was delegated to when\
