@@ -95,8 +95,6 @@ mkTxs blkId count =
         , txInvalidHereafter = Nothing
         , txInvalidBefore = Nothing
         , txValidContract = True
-        , txExUnitNumber = 0
-        , txExUnitFee = DbLovelace 0
         , txScriptSize = 0
         }
 
@@ -107,4 +105,4 @@ testSlotLeader =
 mkTxOut :: BlockId -> TxId -> TxOut
 mkTxOut blkId txId =
   let addr = mkAddressHash blkId txId in
-  TxOut txId 0 (Text.pack addr) (BS.pack addr) Nothing Nothing (DbLovelace 1000000000)
+  TxOut txId 0 (Text.pack addr) (BS.pack addr) False Nothing Nothing (DbLovelace 1000000000)

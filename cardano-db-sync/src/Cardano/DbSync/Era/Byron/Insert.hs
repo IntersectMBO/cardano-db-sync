@@ -195,8 +195,6 @@ insertTx tracer blkId tx blockIndex = do
                 , DB.txInvalidHereafter = Nothing
                 , DB.txInvalidBefore = Nothing
                 , DB.txValidContract = True
-                , DB.txExUnitNumber = 0
-                , DB.txExUnitFee = DB.DbLovelace 0
                 , DB.txScriptSize = 0
                 }
 
@@ -222,6 +220,7 @@ insertTxOut _tracer txId index txout =
               , DB.txOutIndex = fromIntegral index
               , DB.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
               , DB.txOutAddressRaw = Binary.serialize' (Byron.txOutAddress txout)
+              , DB.txOutAddressHasScript = False
               , DB.txOutPaymentCred = Nothing -- Byron does not have a payment credential.
               , DB.txOutStakeAddressId = Nothing -- Byron does not have a stake address.
               , DB.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
@@ -238,6 +237,7 @@ insertTxIn _tracer txInId (Byron.TxInUtxo _txHash inIndex, txOutId, _lovelace) =
               { DB.txInTxInId = txInId
               , DB.txInTxOutId = txOutId
               , DB.txInTxOutIndex = fromIntegral inIndex
+              , DB.txInRedeemerId = Nothing
               }
 
 -- -----------------------------------------------------------------------------

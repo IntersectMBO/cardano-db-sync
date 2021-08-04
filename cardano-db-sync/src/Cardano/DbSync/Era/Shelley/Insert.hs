@@ -24,7 +24,6 @@ import           Cardano.Api.Shelley (TxMetadataValue (..), makeTransactionMetad
 
 import           Cardano.BM.Trace (Trace, logDebug, logInfo, logWarning)
 
-
 import qualified Cardano.Crypto.Hash as Crypto
 
 import           Cardano.Db (DbLovelace (..), DbWord64 (..), SyncState (..))
@@ -38,6 +37,7 @@ import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 
 import qualified Cardano.Ledger.Address as Ledger
+import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Coin as Ledger
@@ -204,29 +204,32 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx = do
                 , DB.txInvalidBefore = DbWord64 . unSlotNo <$> Generic.txInvalidBefore tx
                 , DB.txInvalidHereafter = DbWord64 . unSlotNo <$> Generic.txInvalidHereafter tx
                 , DB.txValidContract = Generic.txValidContract tx
-                , DB.txExUnitNumber = fromIntegral $ length $ Generic.txExUnits tx
-                , DB.txExUnitFee = DB.DbLovelace (fromIntegral . unCoin $ Generic.scriptsFee tx)
-                , DB.txScriptSize = fromIntegral $ sum $ Generic.scriptSizes tx
+                , DB.txScriptSize = sum $ Generic.txScriptSizes tx
                 }
 
     -- Insert outputs for a transaction before inputs in case the inputs for this transaction
     -- references the output (not sure this can even happen).
     mapM_ (insertTxOut tracer txId) (Generic.txOutputs tx)
 
+    redeemersIds <- mapM (insertRedeemer tracer txId) (Generic.txRedeemer tx)
+    let redeemers = zip redeemersIds (Generic.txRedeemer tx)
+
     -- Insert the transaction inputs and collateral inputs (Alonzo).
-    mapM_ (insertTxIn tracer txId) resolvedInputs
+    mapM_ (insertTxIn tracer txId redeemers) resolvedInputs
     mapM_ (insertCollateralTxIn tracer txId) (Generic.txCollateralInputs tx)
 
     case Generic.txMetadata tx of
       Nothing -> pure ()
       Just md -> insertTxMetadata tracer txId md
 
-    mapM_ (insertCertificate tracer lStateSnap network blkId txId epochNo slotNo) $ Generic.txCertificates tx
-    mapM_ (insertWithdrawals tracer txId) $ Generic.txWithdrawals tx
+    mapM_ (insertCertificate tracer lStateSnap network blkId txId epochNo slotNo redeemers) $ Generic.txCertificates tx
+    mapM_ (insertWithdrawals tracer txId redeemers) $ Generic.txWithdrawals tx
 
     mapM_ (insertParamProposal tracer txId) $ Generic.txParamProposal tx
 
     insertMaTxMint tracer txId $ Generic.txMint tx
+
+    mapM_ (insertScript tracer txId) $ Generic.txScripts tx
 
 resolveTxInputs :: MonadIO m => Generic.TxIn -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, DbLovelace)
 resolveTxInputs txIn = do
@@ -241,36 +244,47 @@ insertTxOut
     => Trace IO Text -> DB.TxId -> Generic.TxOut
     -> ExceptT e (ReaderT SqlBackend m) ()
 insertTxOut tracer txId (Generic.TxOut index addr value maMap) = do
-  mSaId <- lift $ insertStakeAddressRefIfMissing txId addr
-  txOutId <- lift . DB.insertTxOut $
+    mSaId <- lift $ insertStakeAddressRefIfMissing txId addr
+    txOutId <- lift . DB.insertTxOut $
                 DB.TxOut
                   { DB.txOutTxId = txId
                   , DB.txOutIndex = index
                   , DB.txOutAddress = Generic.renderAddress addr
                   , DB.txOutAddressRaw = Ledger.serialiseAddr addr
+                  , DB.txOutAddressHasScript = hasScript
                   , DB.txOutPaymentCred = Generic.maybePaymentCred addr
                   , DB.txOutStakeAddressId = mSaId
                   , DB.txOutValue = Generic.coinToDbLovelace value
                   }
-  insertMaTxOut tracer txOutId maMap
+    insertMaTxOut tracer txOutId maMap
+  where
+    hasScript :: Bool
+    hasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
 
 insertTxIn
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> (Generic.TxIn, DB.TxId, DbLovelace)
+    => Trace IO Text -> DB.TxId -> [(DB.RedeemerId, Generic.TxRedeemer)]
+    -> (Generic.TxIn, DB.TxId, DbLovelace)
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertTxIn _tracer txInId (Generic.TxIn _txHash index, txOutId, _lovelace) = do
-  void . lift . DB.insertTxIn $
+insertTxIn _tracer txInId redeemers (Generic.TxIn _txHash index txInRedeemerIndex, txOutId, _lovelace) = do
+    void . lift . DB.insertTxIn $
             DB.TxIn
               { DB.txInTxInId = txInId
               , DB.txInTxOutId = txOutId
               , DB.txInTxOutIndex = fromIntegral index
+              , DB.txInRedeemerId = fst <$> find redeemerMatches redeemers
               }
+  where
+    redeemerMatches :: (DB.RedeemerId, Generic.TxRedeemer) -> Bool
+    redeemerMatches (_rid, redeemer) =
+      Generic.txRedeemerPurpose redeemer == Ledger.Spend
+        && Just (Generic.txRedeemerIndex redeemer) == txInRedeemerIndex
 
 insertCollateralTxIn
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Generic.TxIn
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertCollateralTxIn _tracer txInId (Generic.TxIn txId index) = do
+insertCollateralTxIn _tracer txInId (Generic.TxIn txId index _) = do
   txOutId <- liftLookupFail "insertCollateralTxIn" $ DB.queryTxId txId
   void . lift . DB.insertCollateralTxIn $
             DB.CollateralTxIn
@@ -281,11 +295,13 @@ insertCollateralTxIn _tracer txInId (Generic.TxIn txId index) = do
 
 insertCertificate
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> LedgerStateSnapshot -> Ledger.Network -> DB.BlockId -> DB.TxId -> EpochNo -> SlotNo -> Generic.TxCertificate
+    => Trace IO Text -> LedgerStateSnapshot -> Ledger.Network -> DB.BlockId -> DB.TxId -> EpochNo -> SlotNo
+    -> [(DB.RedeemerId, Generic.TxRedeemer)]
+    -> Generic.TxCertificate
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertCertificate tracer lStateSnap network blkId txId epochNo slotNo (Generic.TxCertificate idx cert) =
+insertCertificate tracer lStateSnap network blkId txId epochNo slotNo redeemers (Generic.TxCertificate ridx idx cert) =
   case cert of
-    Shelley.DCertDeleg deleg -> insertDelegCert tracer network txId idx epochNo slotNo deleg
+    Shelley.DCertDeleg deleg -> insertDelegCert tracer network txId idx ridx epochNo slotNo redeemers deleg
     Shelley.DCertPool pool -> insertPoolCert tracer lStateSnap network epochNo blkId txId idx pool
     Shelley.DCertMir mir -> insertMirCert tracer network txId idx mir
     Shelley.DCertGenesis _gen -> do
@@ -305,13 +321,15 @@ insertPoolCert tracer lStateSnap network epoch blkId txId idx pCert =
 
 insertDelegCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Ledger.Network -> DB.TxId -> Word16 -> EpochNo -> SlotNo -> Shelley.DelegCert StandardCrypto
+    => Trace IO Text -> Ledger.Network -> DB.TxId -> Word16 -> Maybe Word64 -> EpochNo -> SlotNo
+    -> [(DB.RedeemerId, Generic.TxRedeemer)]
+    -> Shelley.DelegCert StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertDelegCert tracer network txId idx epochNo slotNo dCert =
+insertDelegCert tracer network txId idx ridx epochNo slotNo redeemers dCert =
   case dCert of
     Shelley.RegKey cred -> insertStakeRegistration tracer epochNo txId idx $ Generic.annotateStakingCred network cred
-    Shelley.DeRegKey cred -> insertStakeDeregistration tracer network epochNo txId idx cred
-    Shelley.Delegate (Shelley.Delegation cred poolkh) -> insertDelegation tracer network txId idx epochNo slotNo cred poolkh
+    Shelley.DeRegKey cred -> insertStakeDeregistration tracer network epochNo txId idx ridx redeemers cred
+    Shelley.Delegate (Shelley.Delegation cred poolkh) -> insertDelegation tracer network epochNo slotNo txId idx ridx cred redeemers poolkh
 
 insertPoolRegister
     :: (MonadBaseControl IO m, MonadIO m)
@@ -425,6 +443,7 @@ insertStakeAddress txId rewardAddr =
     DB.StakeAddress
       { DB.stakeAddressHashRaw = Ledger.serialiseRewardAcnt rewardAddr
       , DB.stakeAddressView = Generic.renderRewardAcnt rewardAddr
+      , DB.stakeAddressScriptHash = Generic.getCredentialScriptHash $ Ledger.getRwdCred rewardAddr
       , DB.stakeAddressRegisteredTxId = txId
       }
 
@@ -478,35 +497,50 @@ insertStakeRegistration _tracer epochNo txId idx rewardAccount = do
 
 insertStakeDeregistration
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Ledger.Network -> EpochNo -> DB.TxId -> Word16 -> Ledger.StakeCredential StandardCrypto
+    => Trace IO Text -> Ledger.Network -> EpochNo -> DB.TxId -> Word16 -> Maybe Word64
+    -> [(DB.RedeemerId, Generic.TxRedeemer)] -> Ledger.StakeCredential StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertStakeDeregistration _tracer network epochNo txId idx cred = do
-  scId <- liftLookupFail "insertStakeDeregistration" $ queryStakeAddress (Generic.stakingCredHash network cred)
-  void . lift . DB.insertStakeDeregistration $
-    DB.StakeDeregistration
-      { DB.stakeDeregistrationAddrId = scId
-      , DB.stakeDeregistrationCertIndex = idx
-      , DB.stakeDeregistrationEpochNo = unEpochNo epochNo
-      , DB.stakeDeregistrationTxId = txId
-      }
+insertStakeDeregistration _tracer network epochNo txId idx ridx redeemers cred = do
+    scId <- liftLookupFail "insertStakeDeregistration" $ queryStakeAddress (Generic.stakingCredHash network cred)
+    void . lift . DB.insertStakeDeregistration $
+      DB.StakeDeregistration
+        { DB.stakeDeregistrationAddrId = scId
+        , DB.stakeDeregistrationCertIndex = idx
+        , DB.stakeDeregistrationEpochNo = unEpochNo epochNo
+        , DB.stakeDeregistrationTxId = txId
+        , DB.stakeDeregistrationRedeemerId = fst <$> find redeemerMatches redeemers
+        }
+  where
+    redeemerMatches :: (DB.RedeemerId, Generic.TxRedeemer) -> Bool
+    redeemerMatches (_rid, redeemer) =
+      Generic.txRedeemerPurpose redeemer == Ledger.Cert
+        && Just (Generic.txRedeemerIndex redeemer) == ridx
 
 insertDelegation
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Ledger.Network -> DB.TxId -> Word16 -> EpochNo -> SlotNo
-    -> Ledger.StakeCredential StandardCrypto -> Ledger.KeyHash 'Ledger.StakePool StandardCrypto
+    => Trace IO Text -> Ledger.Network -> EpochNo -> SlotNo -> DB.TxId -> Word16 -> Maybe Word64
+    -> Ledger.StakeCredential StandardCrypto
+    -> [(DB.RedeemerId, Generic.TxRedeemer)]
+    -> Ledger.KeyHash 'Ledger.StakePool StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertDelegation _tracer network txId idx (EpochNo epoch) slotNo cred poolkh = do
-  addrId <- liftLookupFail "insertDelegation" $ queryStakeAddress (Generic.stakingCredHash network cred)
-  poolHashId <-liftLookupFail "insertDelegation" $ queryStakePoolKeyHash poolkh
-  void . lift . DB.insertDelegation $
-    DB.Delegation
-      { DB.delegationAddrId = addrId
-      , DB.delegationCertIndex = idx
-      , DB.delegationPoolHashId = poolHashId
-      , DB.delegationActiveEpochNo = epoch + 2 -- The first epoch where this delegation is valid.
-      , DB.delegationTxId = txId
-      , DB.delegationSlotNo = unSlotNo slotNo
-      }
+insertDelegation _tracer network (EpochNo epoch) slotNo txId idx ridx cred redeemers poolkh = do
+    addrId <- liftLookupFail "insertDelegation" $ queryStakeAddress (Generic.stakingCredHash network cred)
+    poolHashId <-liftLookupFail "insertDelegation" $ queryStakePoolKeyHash poolkh
+    void . lift . DB.insertDelegation $
+      DB.Delegation
+        { DB.delegationAddrId = addrId
+        , DB.delegationCertIndex = idx
+        , DB.delegationPoolHashId = poolHashId
+        , DB.delegationActiveEpochNo = epoch + 2 -- The first epoch where this delegation is valid.
+        , DB.delegationTxId = txId
+        , DB.delegationSlotNo = unSlotNo slotNo
+        , DB.delegationRedeemerId = fst <$> find redeemerMatches redeemers
+        }
+  where
+    redeemerMatches :: (DB.RedeemerId, Generic.TxRedeemer) -> Bool
+    redeemerMatches (_rid, redeemer) =
+      Generic.txRedeemerPurpose redeemer == Ledger.Cert
+        && Just (Generic.txRedeemerIndex redeemer) == ridx
 
 insertMirCert
     :: (MonadBaseControl IO m, MonadIO m)
@@ -567,16 +601,23 @@ insertMirCert _tracer network txId idx mcert = do
 
 insertWithdrawals
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> Generic.TxWithdrawal
+    => Trace IO Text -> DB.TxId -> [(DB.RedeemerId, Generic.TxRedeemer)]
+    -> Generic.TxWithdrawal
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertWithdrawals _tracer txId (Generic.TxWithdrawal account coin) = do
-  addrId <- liftLookupFail "insertWithdrawals" $ queryStakeAddress (Ledger.serialiseRewardAcnt account)
-  void . lift . DB.insertWithdrawal $
-    DB.Withdrawal
-      { DB.withdrawalAddrId = addrId
-      , DB.withdrawalTxId = txId
-      , DB.withdrawalAmount = Generic.coinToDbLovelace coin
-      }
+insertWithdrawals _tracer txId redeemers (Generic.TxWithdrawal index account coin) = do
+    addrId <- liftLookupFail "insertWithdrawals" $ queryStakeAddress (Ledger.serialiseRewardAcnt account)
+    void . lift . DB.insertWithdrawal $
+      DB.Withdrawal
+        { DB.withdrawalAddrId = addrId
+        , DB.withdrawalTxId = txId
+        , DB.withdrawalAmount = Generic.coinToDbLovelace coin
+        , DB.withdrawalRedeemerId = fst <$> find redeemerMatches redeemers
+        }
+  where
+    redeemerMatches :: (DB.RedeemerId, Generic.TxRedeemer) -> Bool
+    redeemerMatches (_rid, redeemer) =
+      Generic.txRedeemerPurpose redeemer == Ledger.Rewrd &&
+      Just (Generic.txRedeemerIndex redeemer) == index
 
 insertPoolRelay
     :: (MonadBaseControl IO m, MonadIO m)
@@ -658,6 +699,40 @@ insertParamProposal _tracer txId pp =
       , DB.paramProposalMaxCollateralInputs = fromIntegral <$> pppMaxCollateralInputs pp
       }
 
+insertRedeemer
+  :: (MonadBaseControl IO m, MonadIO m)
+  => Trace IO Text -> DB.TxId -> Generic.TxRedeemer
+  -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.RedeemerId
+insertRedeemer _tr txId redeemer = do
+    scriptHash <- findScriptHash
+    lift . DB.insertRedeemer $
+      DB.Redeemer
+        { DB.redeemerTxId = txId
+        , DB.redeemerUnitMem = Generic.txRedeemerMem redeemer
+        , DB.redeemerUnitSteps = Generic.txRedeemerSteps redeemer
+        , DB.redeemerFee = DB.DbLovelace (fromIntegral . unCoin $ Generic.txRedeemerFee redeemer)
+        , DB.redeemerPurpose = mkPurpose $ Generic.txRedeemerPurpose redeemer
+        , DB.redeemerIndex = Generic.txRedeemerIndex redeemer
+        , DB.redeemerScriptHash = scriptHash
+        }
+  where
+    mkPurpose :: Ledger.Tag -> DB.ScriptPurpose
+    mkPurpose tag =
+      case tag of
+        Ledger.Spend -> DB.Spend
+        Ledger.Mint -> DB.Mint
+        Ledger.Cert -> DB.Cert
+        Ledger.Rewrd -> DB.Rewrd
+
+    findScriptHash
+      :: (MonadBaseControl IO m, MonadIO m)
+      => ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe ByteString)
+    findScriptHash =
+      case Generic.txRedeemerScriptHash redeemer of
+        Nothing -> pure Nothing
+        Just (Right bs) -> pure $ Just bs
+        Just (Left txIn) -> fst <$> liftLookupFail "insertRedeemer" (queryResolveInputCredentials txIn)
+
 insertTxMetadata
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Map Word64 TxMetadataValue
@@ -671,7 +746,7 @@ insertTxMetadata tracer txId metadata =
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     insert (key, md) = do
       let jsonbs = LBS.toStrict $ Aeson.encode (metadataValueToJsonNoSchema md)
-          singleKeyCBORMetadata = serialiseToCBOR $ makeTransactionMetadata $ Map.singleton key md
+          singleKeyCBORMetadata = serialiseToCBOR $ makeTransactionMetadata (Map.singleton key md)
       ejson <- liftIO $ safeDecodeUtf8 jsonbs
       mjson <- case ejson of
                  Left err -> do
@@ -799,6 +874,25 @@ insertMaTxOut _tracer txOutId maMap =
           , DB.maTxOutQuantity = DbWord64 (fromIntegral amount)
           , DB.maTxOutTxOutId = txOutId
           }
+
+insertScript
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DB.TxId -> Generic.TxScript
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+insertScript _tracer txId script = do
+    void . lift . DB.insertScript $
+      DB.Script
+        { DB.scriptTxId = txId
+        , DB.scriptHash = Generic.txScriptHash script
+        , DB.scriptType = scriptType
+        , DB.scriptSerialisedSize = Generic.txScriptPlutusSize script
+        }
+  where
+    scriptType :: DB.ScriptType
+    scriptType =
+      case Generic.txScriptPlutusSize script of
+        Nothing -> DB.Timelock
+        Just _ -> DB.Plutus
 
 insertPots
     :: (MonadBaseControl IO m, MonadIO m)

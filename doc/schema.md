@@ -1,6 +1,6 @@
 # Schema Documentation for cardano-db-sync
 
-Schema version: 10.0.0 (from branch **kderme/scripts-data** which may not accurately reflect the version number)
+Schema version: 10.0.0 (from branch **kderme/scripts-tables** which may not accurately reflect the version number)
 
 ### `schema_version`
 
@@ -84,8 +84,6 @@ A table for transactions within a block on the chain.
 | `invalid_before` | word64type | Transaction in invalid before this slot number. |
 | `invalid_hereafter` | word64type | Transaction in invalid at or after this slot number. |
 | `valid_contract` | boolean | False if the contract is invalid. True if the contract is valid or there is no contract. |
-| `ex_unit_number` | uinteger | The cost of running the scripts in a transaction in arbitrary execution units. |
-| `ex_unit_fee` | lovelace | The fees associated with Plutus scripts in the transaction. |
 | `script_size` | uinteger | The sum of the script sizes (in bytes) of scripts in the transaction. |
 
 ### `stake_address`
@@ -99,6 +97,7 @@ A table of unique stake addresses. Can be an actual address or a script hash.
 | `id` | integer (64) |  |
 | `hash_raw` | addr29type | The raw bytes of the stake address hash. |
 | `view` | string | The Bech32 encoded version of the stake address. |
+| `script_hash` | hash28type | The script hash, in case this address is locked by a script. |
 | `registered_tx_id` | integer (64) | The Tx table index of the transaction in which this address was registered. |
 
 ### `tx_out`
@@ -114,7 +113,8 @@ A table for transaction outputs.
 | `index` | txindex | The index of this transaction output with the transaction. |
 | `address` | string | The human readable encoding of the output address. Will be Base58 for Byron era addresses and Bech32 for Shelley era. |
 | `address_raw` | blob | The raw binary address. |
-| `payment_cred` | hash28type | The payment credential part of the Shelley address. (NULL for Byron addresses). |
+| `address_has_script` | boolean | Flag which shows if this address is locked by a script. |
+| `payment_cred` | hash28type | The payment credential part of the Shelley address. (NULL for Byron addresses). For a script-locked address, this is the script hash. |
 | `stake_address_id` | integer (64) | The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses). |
 | `value` | lovelace | The output value (in Lovelace) of the transaction output. |
 
@@ -130,6 +130,7 @@ A table for transaction inputs.
 | `tx_in_id` | integer (64) | The Tx table index where this transaction is used as an input. |
 | `tx_out_id` | integer (64) | The Tx table index where this transaction was created as an output. |
 | `tx_out_index` | txindex | The index within the transaction outputs. |
+| `redeemer_id` | integer (64) | The Redeemer table index which is used to validate this input. |
 
 ### `collateral_tx_in`
 
@@ -281,6 +282,7 @@ A table containing stake address registrations.
 | `id` | integer (64) |  |
 | `addr_id` | integer (64) | The StakeAddress table index for the stake address. |
 | `cert_index` | integer (32) | The index of this stake registration within the certificates of this transaction. |
+| `epoch_no` | uinteger | The epoch in which the registration took place. |
 | `tx_id` | integer (64) | The Tx table index of the transaction where this stake address was registered. |
 
 ### `stake_deregistration`
@@ -294,7 +296,9 @@ A table containing stake address deregistrations.
 | `id` | integer (64) |  |
 | `addr_id` | integer (64) | The StakeAddress table index for the stake address. |
 | `cert_index` | integer (32) | The index of this stake deregistration within the certificates of this transaction. |
+| `epoch_no` | uinteger | The epoch in which the deregistration took place. |
 | `tx_id` | integer (64) | The Tx table index of the transaction where this stake address was deregistered. |
+| `redeemer_id` | integer (64) | The Redeemer table index that is related with this certificate. |
 
 ### `delegation`
 
@@ -311,6 +315,7 @@ A table containing delegations from a stake address to a stake pool.
 | `active_epoch_no` | integer (64) | The epoch number where this delegation becomes active. |
 | `tx_id` | integer (64) | The Tx table index of the transaction that contained this delegation. |
 | `slot_no` | uinteger | The slot number of the block that contained this delegation. |
+| `redeemer_id` | integer (64) | The Redeemer table index that is related with this certificate. |
 
 ### `tx_metadata`
 
@@ -338,8 +343,9 @@ A table for rewards earned by staking. The rewards earned in epoch `N` are added
 | `addr_id` | integer (64) | The StakeAddress table index for the stake address that earned the reward. |
 | `type` | rewardtype | The source of the rewards; pool `member` vs pool `owner`. |
 | `amount` | lovelace | The reward amount (in Lovelace). |
-| `epoch_no` | integer (64) | The epoch in which the reward was earned. |
-| `pool_id` | integer (64) | The PoolHash table index for the pool the stake address was delegated to when the reward is earned. |
+| `earned_epoch` | integer (64) | The epoch in which the reward was earned. |
+| `spendable_epoch` | integer (64) |  |
+| `pool_id` | integer (64) | The PoolHash table index for the pool the stake address was delegated to when the reward is earned. Will be NULL for payments from the treasury or the reserves. |
 
 ### `orphaned_reward`
 
@@ -354,7 +360,7 @@ A table for rewards earned by staking, but are orphaned. Rewards are orphaned wh
 | `type` | rewardtype | The source of the rewards; pool `member` vs pool `owner`. |
 | `amount` | lovelace | The reward amount (in Lovelace). |
 | `epoch_no` | integer (64) | The epoch in which the reward was earned. |
-| `pool_id` | integer (64) | The PoolHash table index for the pool the stake address was delegated to when the reward is earned. |
+| `pool_id` | integer (64) | The PoolHash table index for the pool the stake address was delegated to when the reward is earned. Will be NULL for payments from the treasury or the reserves. |
 
 ### `withdrawal`
 
@@ -367,6 +373,7 @@ A table for withdrawals from a reward account.
 | `id` | integer (64) |  |
 | `addr_id` | integer (64) | The StakeAddress table index for the stake address for which the withdrawal is for. |
 | `amount` | lovelace | The withdrawal amount (in Lovelace). |
+| `redeemer_id` | integer (64) | The Redeemer table index that is related with this withdrawal. |
 | `tx_id` | integer (64) | The Tx table index for the transaction that contains this withdrawal. |
 
 ### `epoch_stake`
@@ -435,7 +442,7 @@ A table containing the time required to fully sync an epoch.
 |-|-|-|
 | `id` | integer (64) |  |
 | `no` | integer (64) | The epoch number for this sync time. |
-| `seconds` | double | The time (in seconds) required to sync this epoch (may be NULL for an epoch that was already partially synced when `db-sync` was started). |
+| `seconds` | word63type | The time (in seconds) required to sync this epoch (may be NULL for an epoch that was already partially synced when `db-sync` was started). |
 | `state` | syncstatetype | The sync state when the sync time is recorded (either 'lagging' or 'following'). |
 
 ### `ma_tx_mint`
@@ -465,6 +472,37 @@ A table containing Multi-Asset transaction outputs.
 | `name` | asset32type | The MultiAsset name. |
 | `quantity` | word64type | The Multi Asset transaction output amount (denominated in the Multi Asset). |
 | `tx_out_id` | integer (64) | The TxOut table index for the transaction that this Multi Asset transaction output. |
+
+### `redeemer`
+
+A table containing redeemers. A redeemer is provided for all items that are validated by a script.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `tx_id` | integer (64) | The Tx table index that contains this redeemer. |
+| `unit_mem` | word63type | The budget in Memory to run a script. |
+| `unit_steps` | word63type | The budget in Cpu steps to run a script. |
+| `fee` | lovelace | The budget in fees to run a script. The fees depend on the ExUnits and the current prices. |
+| `purpose` | scriptpurposetype | What kind pf validation this redeemer is used for. It can be one of 'spend', 'mint', 'cert', 'reward'. |
+| `index` | uinteger | The index of the redeemer pointer in the transaction. |
+| `script_hash` | hash28type | The script hash this redeemer is used for. |
+
+### `script`
+
+A table containing scripts available in the blockchain, found in witnesses or auxdata of transactions.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `tx_id` | integer (64) | The Tx table index for the transaction where this script first became available. |
+| `hash` | hash28type | The Hash of the Script. |
+| `type` | scripttype | The type of the script. This is currenttly either 'timelock' or 'plutus'. |
+| `serialised_size` | uinteger | The size of the CBOR serialised script, if it is a Plutus script. |
 
 ### `param_proposal`
 

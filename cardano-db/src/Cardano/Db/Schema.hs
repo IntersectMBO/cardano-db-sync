@@ -19,7 +19,8 @@ module Cardano.Db.Schema where
 
 import           Cardano.Db.Schema.Orphans ()
 
-import           Cardano.Db.Types (DbInt65, DbLovelace, DbWord64, SyncState)
+import           Cardano.Db.Types (DbInt65, DbLovelace, DbWord64, ScriptPurpose, ScriptType,
+                   SyncState)
 
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Int (Int64)
@@ -113,14 +114,13 @@ share
 
     -- New for Alonzo
     validContract       Bool                                    -- False if the contract is invalid, True otherwise.
-    exUnitNumber        Word64              sqltype=uinteger
-    exUnitFee           DbLovelace          sqltype=lovelace
     scriptSize          Word64              sqltype=uinteger
     UniqueTx            hash
 
   StakeAddress          -- Can be an address of a script hash
     hashRaw             ByteString          sqltype=addr29type
     view                Text
+    scriptHash          ByteString Maybe    sqltype=hash28type
     registeredTxId      TxId                OnDeleteCascade     -- Only used for rollback.
     UniqueStakeAddress  hashRaw
 
@@ -129,6 +129,7 @@ share
     index               Word16              sqltype=txindex
     address             Text
     addressRaw          ByteString
+    addressHasScript    Bool
     paymentCred         ByteString Maybe    sqltype=hash28type
     stakeAddressId      StakeAddressId Maybe OnDeleteCascade
     value               DbLovelace          sqltype=lovelace
@@ -138,6 +139,7 @@ share
     txInId              TxId                OnDeleteCascade     -- The transaction where this is used as an input.
     txOutId             TxId                OnDeleteCascade     -- The transaction where this was created as an output.
     txOutIndex          Word16              sqltype=txindex
+    redeemerId          RedeemerId Maybe    OnDeleteCascade
     UniqueTxin          txOutId txOutIndex
 
   CollateralTxIn
@@ -257,6 +259,7 @@ share
     certIndex           Word16
     epochNo             Word64              sqltype=uinteger
     txId                TxId                OnDeleteCascade
+    redeemerId          RedeemerId Maybe    OnDeleteCascade
     UniqueStakeDeregistration addrId txId
 
   Delegation
@@ -266,6 +269,7 @@ share
     activeEpochNo       Word64
     txId                TxId                OnDeleteCascade
     slotNo              Word64              sqltype=uinteger
+    redeemerId          RedeemerId Maybe    OnDeleteCascade
     UniqueDelegation    addrId poolHashId txId
 
   TxMetadata
@@ -304,6 +308,7 @@ share
   Withdrawal
     addrId              StakeAddressId      OnDeleteCascade
     amount              DbLovelace          sqltype=lovelace
+    redeemerId          RedeemerId Maybe    OnDeleteCascade
     txId                TxId                OnDeleteCascade
     UniqueWithdrawal    addrId txId
 
@@ -358,6 +363,29 @@ share
     quantity            DbWord64            sqltype=word64type
     txOutId             TxOutId             OnDeleteCascade
     UniqueMaTxOut       policy name txOutId
+
+  -- -----------------------------------------------------------------------------------------------
+  -- Scripts related tables.
+  --
+  -- Unit step is in picosends, and `maxBound :: Int64` picoseconds is over 100 days, so using
+  -- Word64/word63type is safe here. Similarly, `maxBound :: Int64` if unit step would be an
+  -- *enormous* amount a memory which would cost a fortune.
+  Redeemer
+    txId                TxId                OnDeleteCascade
+    unitMem             Word64              sqltype=word63type
+    unitSteps           Word64              sqltype=word63type
+    fee                 DbLovelace          sqltype=lovelace
+    purpose             ScriptPurpose       sqltype=scriptpurposetype
+    index               Word64              sqltype=uinteger
+    scriptHash          ByteString Maybe    sqltype=hash28type
+    UniqueRedeemer      txId purpose index
+
+  Script
+    txId                TxId                OnDeleteCascade
+    hash                ByteString          sqltype=hash28type
+    type                ScriptType          sqltype=scripttype
+    serialisedSize      Word64 Maybe        sqltype=uinteger
+    UniqueScript        hash
 
   -- -----------------------------------------------------------------------------------------------
   -- Update parameter proposals.
@@ -535,14 +563,13 @@ schemaDocs =
       TxInvalidBefore # "Transaction in invalid before this slot number."
       TxInvalidHereafter # "Transaction in invalid at or after this slot number."
       TxValidContract # "False if the contract is invalid. True if the contract is valid or there is no contract."
-      TxExUnitNumber # "The cost of running the scripts in a transaction in arbitrary execution units."
-      TxExUnitFee # "The fees associated with Plutus scripts in the transaction."
       TxScriptSize # "The sum of the script sizes (in bytes) of scripts in the transaction."
 
     StakeAddress --^ do
       "A table of unique stake addresses. Can be an actual address or a script hash."
       StakeAddressHashRaw # "The raw bytes of the stake address hash."
       StakeAddressView # "The Bech32 encoded version of the stake address."
+      StakeAddressScriptHash # "The script hash, in case this address is locked by a script."
       StakeAddressRegisteredTxId # "The Tx table index of the transaction in which this address was registered."
 
     TxOut --^ do
@@ -551,7 +578,8 @@ schemaDocs =
       TxOutIndex # "The index of this transaction output with the transaction."
       TxOutAddress # "The human readable encoding of the output address. Will be Base58 for Byron era addresses and Bech32 for Shelley era."
       TxOutAddressRaw # "The raw binary address."
-      TxOutPaymentCred # "The payment credential part of the Shelley address. (NULL for Byron addresses)."
+      TxOutAddressHasScript # "Flag which shows if this address is locked by a script."
+      TxOutPaymentCred # "The payment credential part of the Shelley address. (NULL for Byron addresses). For a script-locked address, this is the script hash."
       TxOutStakeAddressId # "The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses)."
       TxOutValue # "The output value (in Lovelace) of the transaction output."
 
@@ -560,6 +588,7 @@ schemaDocs =
       TxInTxInId # "The Tx table index where this transaction is used as an input."
       TxInTxOutId # "The Tx table index where this transaction was created as an output."
       TxInTxOutIndex # "The index within the transaction outputs."
+      TxInRedeemerId # "The Redeemer table index which is used to validate this input."
 
     CollateralTxIn --^ do
       "A table for transaction collateral inputs."
@@ -650,6 +679,7 @@ schemaDocs =
       StakeDeregistrationCertIndex # "The index of this stake deregistration within the certificates of this transaction."
       StakeDeregistrationEpochNo # "The epoch in which the deregistration took place."
       StakeDeregistrationTxId # "The Tx table index of the transaction where this stake address was deregistered."
+      StakeDeregistrationRedeemerId # "The Redeemer table index that is related with this certificate."
 
     Delegation --^ do
       "A table containing delegations from a stake address to a stake pool."
@@ -659,6 +689,7 @@ schemaDocs =
       DelegationActiveEpochNo # "The epoch number where this delegation becomes active."
       DelegationTxId # "The Tx table index of the transaction that contained this delegation."
       DelegationSlotNo # "The slot number of the block that contained this delegation."
+      DelegationRedeemerId # "The Redeemer table index that is related with this certificate."
 
     TxMetadata --^ do
       "A table for metadata attached to a transaction."
@@ -694,6 +725,7 @@ schemaDocs =
       WithdrawalAddrId # "The StakeAddress table index for the stake address for which the withdrawal is for."
       WithdrawalAmount # "The withdrawal amount (in Lovelace)."
       WithdrawalTxId # "The Tx table index for the transaction that contains this withdrawal."
+      WithdrawalRedeemerId # "The Redeemer table index that is related with this withdrawal."
 
     EpochStake --^ do
       "A table containing the epoch stake distribution for each epoch."
@@ -743,6 +775,23 @@ schemaDocs =
       MaTxOutName # "The MultiAsset name."
       MaTxOutQuantity # "The Multi Asset transaction output amount (denominated in the Multi Asset)."
       MaTxOutTxOutId # "The TxOut table index for the transaction that this Multi Asset transaction output."
+
+    Redeemer --^ do
+      "A table containing redeemers. A redeemer is provided for all items that are validated by a script."
+      RedeemerTxId # "The Tx table index that contains this redeemer."
+      RedeemerUnitMem # "The budget in Memory to run a script."
+      RedeemerUnitSteps # "The budget in Cpu steps to run a script."
+      RedeemerFee # "The budget in fees to run a script. The fees depend on the ExUnits and the current prices."
+      RedeemerPurpose # "What kind pf validation this redeemer is used for. It can be one of 'spend', 'mint', 'cert', 'reward'."
+      RedeemerIndex # "The index of the redeemer pointer in the transaction."
+      RedeemerScriptHash # "The script hash this redeemer is used for."
+
+    Script --^ do
+      "A table containing scripts available in the blockchain, found in witnesses or auxdata of transactions."
+      ScriptTxId # "The Tx table index for the transaction where this script first became available."
+      ScriptHash # "The Hash of the Script."
+      ScriptType # "The type of the script. This is currenttly either 'timelock' or 'plutus'."
+      ScriptSerialisedSize # "The size of the CBOR serialised script, if it is a Plutus script."
 
     ParamProposal --^ do
       "A table containing block chain parameter change proposals."

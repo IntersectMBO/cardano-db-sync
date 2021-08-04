@@ -44,6 +44,7 @@ module Cardano.Db.Query
   , queryTxInCount
   , queryTxOutCount
   , queryTxOutValue
+  , queryTxOutCredentials
   , queryUtxoAtBlockNo
   , queryUtxoAtSlotNo
   , queryWithdrawalsUpToBlockNo
@@ -524,6 +525,17 @@ queryTxOutValue (hash, index) = do
                     &&. tx ^. TxHash ==. val hash
                     )
             pure (txOut ^. TxOutTxId, txOut ^. TxOutValue)
+  pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
+
+-- | Give a (tx hash, index) pair, return the TxOut Credentials.
+queryTxOutCredentials :: MonadIO m => (ByteString, Word16) -> ReaderT SqlBackend m (Either LookupFail (Maybe ByteString, Bool))
+queryTxOutCredentials (hash, index) = do
+  res <- select . from $ \ (tx `InnerJoin` txOut) -> do
+            on (tx ^. TxId ==. txOut ^. TxOutTxId)
+            where_ (txOut ^. TxOutIndex ==. val index
+                    &&. tx ^. TxHash ==. val hash
+                    )
+            pure (txOut ^. TxOutPaymentCred, txOut ^. TxOutAddressHasScript)
   pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
 
 -- | Get the UTxO set after the specified 'BlockId' has been applied to the chain.
