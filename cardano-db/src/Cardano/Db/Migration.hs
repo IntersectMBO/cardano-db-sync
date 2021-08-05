@@ -49,7 +49,7 @@ import           Cardano.Db.Text
 
 import           System.Directory (listDirectory)
 import           System.Exit (ExitCode (..), exitFailure)
-import           System.FilePath (takeFileName, (</>))
+import           System.FilePath ((</>))
 import           System.IO (Handle, IOMode (AppendMode), hFlush, hPrint, hPutStrLn, stdout,
                    withFile)
 
@@ -77,13 +77,13 @@ runMigrations pgconfig quiet migrationDir mLogfiledir = do
     case mLogfiledir of
       Nothing -> do
         putStrLn "Running:"
-        forM_ scripts $ applyMigration quiet pgconfig Nothing stdout
+        forM_ scripts $ applyMigration migrationDir quiet pgconfig Nothing stdout
         putStrLn "Success!"
       Just logfiledir -> do
         logFilename <- genLogFilename logfiledir
         withFile logFilename AppendMode $ \logHandle -> do
           unless quiet $ putStrLn "Running:"
-          forM_ scripts $ applyMigration quiet pgconfig (Just logFilename) logHandle
+          forM_ scripts $ applyMigration migrationDir quiet pgconfig (Just logFilename) logHandle
           unless quiet $ putStrLn "Success!"
   where
     genLogFilename :: LogFileDir -> IO FilePath
@@ -95,17 +95,16 @@ runMigrations pgconfig quiet migrationDir mLogfiledir = do
 -- Build hash for each file found in a directory.
 validateMigrations :: MigrationDir -> [(Text, Text)] -> ExceptT MigrationValidateError IO ()
 validateMigrations migrationDir knownMigrations = do
-    let knownMigrations' = uncurry MigrationValidate  <$> knownMigrations
+    let knownMigrations' = uncurry MigrationValidate <$> knownMigrations
     scripts <- liftIO $ hashMigrations migrationDir
-
     when (scripts /= knownMigrations') $
       throwE $ UnknownMigrationsFound
           { missingMigrations = knownMigrations' \\ scripts -- Migrations missing at runtime that were present at compilation time
           , extraMigrations = scripts \\ knownMigrations'   -- Migrations found at runtime that were missing at compilation time
           }
 
-applyMigration :: Bool -> PGConfig -> Maybe FilePath -> Handle -> (MigrationVersion, FilePath) -> IO ()
-applyMigration quiet pgconfig mLogFilename logHandle (version, script) = do
+applyMigration :: MigrationDir -> Bool -> PGConfig -> Maybe FilePath -> Handle -> (MigrationVersion, FilePath) -> IO ()
+applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (version, script) = do
     -- This assumes that the credentials for 'psql' are already sorted out.
     -- One way to achive this is via a 'PGPASSFILE' environment variable
     -- as per the PostgreSQL documentation.
@@ -121,11 +120,11 @@ applyMigration quiet pgconfig mLogFilename logHandle (version, script) = do
             , "--no-psqlrc"                     -- Ignore the ~/.psqlrc file.
             , "--single-transaction"            -- Run the file as a transaction.
             , "--set ON_ERROR_STOP=on"          -- Exit with non-zero on error.
-            , "--file='" ++ script ++ "'"
+            , "--file='" ++ location </> script ++ "'"
             , "2>&1"                            -- Pipe stderr to stdout.
             ]
-    hPutStrLn logHandle $ "Running : " ++ takeFileName script
-    unless quiet $ putStr ("    " ++ takeFileName script ++ " ... ")
+    hPutStrLn logHandle $ "Running : " ++ script
+    unless quiet $ putStr ("    " ++ script ++ " ... ")
     hFlush stdout
     exitCode <- fst <$> handle (errorExit :: SomeException -> IO a)
                         (runResourceT $ sourceCmdWithConsumer command (sinkHandle logHandle))
@@ -218,13 +217,13 @@ getMigrationScripts (MigrationDir location) = do
 
     addVersionString :: FilePath -> Either FilePath (MigrationVersion, FilePath)
     addVersionString fp =
-      maybe (Left fp) (\mv -> Right (mv, location </> fp)) $ parseMigrationVersionFromFile fp
+      maybe (Left fp) (\mv -> Right (mv, fp)) $ parseMigrationVersionFromFile fp
 
 hashMigrations :: MigrationDir -> IO [MigrationValidate]
-hashMigrations migrationDir = do
+hashMigrations migrationDir@(MigrationDir location) = do
     scripts <- getMigrationScripts migrationDir
     forM scripts $ \(_version, filepath) -> do
-      file <- BS.readFile filepath
+      file <- BS.readFile (location </> filepath)
       pure $ MigrationValidate (Text.pack . hashToStringAsHex . hashAs $ file) (Text.pack filepath)
   where
     hashAs :: ByteString -> Hash Blake2b_256 ByteString
@@ -233,8 +232,12 @@ hashMigrations migrationDir = do
 renderMigrationValidateError :: MigrationValidateError -> Text
 renderMigrationValidateError = \case
     UnknownMigrationsFound missing unknown ->
-      "Inconsistent migrations found: \n" <>
-      "Migrations missing at runtime that were present at compilation time: " <> textShow missing <> "\n" <>
-      "Migrations found at runtime that were missing at compilation time: " <> textShow unknown
+      mconcat
+        [ "Inconsistent migrations found: \n"
+        , "Migrations missing at runtime that were present at compilation time: "
+        , textShow (map mvFilepath missing), "\n"
+        , "Migrations found at runtime that were missing at compilation time: "
+        , textShow (map mvFilepath unknown)
+        ]
 
 
