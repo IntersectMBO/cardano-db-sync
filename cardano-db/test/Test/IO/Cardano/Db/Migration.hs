@@ -10,6 +10,7 @@ import           Control.Monad.Trans.Except (runExceptT)
 
 import qualified Data.List as List
 import           Data.Maybe (fromMaybe)
+import           Data.Text (Text)
 
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (testCase)
@@ -26,13 +27,7 @@ tests =
 
 unknownMigrationValidate :: IO ()
 unknownMigrationValidate = do
-  let schemaDir = MigrationDir "test" -- Point to empty migration directory
-  let knownMigrations = [("hash", "schema/migration-1-0000-20190730.sql")]
-  let expected = Left (UnknownMigrationsFound
-                        { missingMigrations = [MigrationValidate {mvHash = "hash", mvFilepath = "schema/migration-1-0000-20190730.sql"} ]
-                        , extraMigrations = []
-                        }) :: Either MigrationValidateError ()
-  result <- runExceptT $ validateMigrations schemaDir knownMigrations
+  result <- runExceptT $ validateMigrations testSchemaDir knownTestMigrations
   unless (result == expected) $
     error $ mconcat
             [ "Schema version mismatch. Expected "
@@ -41,17 +36,28 @@ unknownMigrationValidate = do
             , show result
             , "."
             ]
+  where
+    expected :: Either MigrationValidateError ()
+    expected =
+      Left $ UnknownMigrationsFound
+                { missingMigrations =
+                    [ MigrationValidate
+                      { mvHash = "hash"
+                      , mvFilepath = "migration-1-0000-20190730.sql"
+                      }
+                    ]
+                , extraMigrations =
+                    [ MigrationValidate
+                      { mvHash = "395187b4157ef5307b7d95e0150542e09bb19679055eee8017a34bcca89a691d"
+                      , mvFilepath = "migration-1-0000-20190730.sql"
+                      }
+                    ]
+                }
+
 
 invalidHashMigrationValidate :: IO ()
 invalidHashMigrationValidate = do
-  let schemaDir = MigrationDir "test/schema" -- Migration directory with single migration
-  let knownMigrations = [("hash"             -- Non-matching hash to file in test/schema/migration-1-0000-20190730.sql
-                         , "test/schema/migration-1-0000-20190730.sql")]
-  let expected = Left (UnknownMigrationsFound
-                       { missingMigrations = [MigrationValidate { mvHash = "hash", mvFilepath = "test/schema/migration-1-0000-20190730.sql" }]
-                       , extraMigrations = [MigrationValidate { mvHash = "395187b4157ef5307b7d95e0150542e09bb19679055eee8017a34bcca89a691d"
-                                                                , mvFilepath = "test/schema/migration-1-0000-20190730.sql"}]}) :: Either MigrationValidateError ()
-  result <- runExceptT $ validateMigrations schemaDir knownMigrations
+  result <- runExceptT $ validateMigrations testSchemaDir knownTestMigrations
   unless (result == expected) $
     error $ mconcat
             [ "Schema version mismatch. Expected "
@@ -60,16 +66,28 @@ invalidHashMigrationValidate = do
             , show result
             , "."
             ]
+  where
+    expected  :: Either MigrationValidateError ()
+    expected =
+      Left $ UnknownMigrationsFound
+                { missingMigrations =
+                    [ MigrationValidate
+                      { mvHash = "hash"
+                      , mvFilepath = "migration-1-0000-20190730.sql"
+                      }
+                    ]
+                , extraMigrations =
+                    [ MigrationValidate
+                      { mvHash = "395187b4157ef5307b7d95e0150542e09bb19679055eee8017a34bcca89a691d"
+                      , mvFilepath = "migration-1-0000-20190730.sql"
+                      }
+                    ]
+                }
 
 invalidHashMigrationValidate' :: IO ()
 invalidHashMigrationValidate' = do
-  let schemaDir = MigrationDir "test/schema" -- Migration directory with single migration
-  let knownMigrations = []                   -- No known migrations from compiling
-  let expected = Left (UnknownMigrationsFound
-                       { missingMigrations = []
-                       , extraMigrations = [MigrationValidate { mvHash = "395187b4157ef5307b7d95e0150542e09bb19679055eee8017a34bcca89a691d"
-                                                                , mvFilepath = "test/schema/migration-1-0000-20190730.sql"}]}) :: Either MigrationValidateError ()
-  result <- runExceptT $ validateMigrations schemaDir knownMigrations
+  let emptyMigrations = []                   -- No known migrations from compiling
+  result <- runExceptT $ validateMigrations testSchemaDir emptyMigrations
   unless (result == expected) $
     error $ mconcat
             [ "Schema version mismatch. Expected "
@@ -78,6 +96,18 @@ invalidHashMigrationValidate' = do
             , show result
             , "."
             ]
+  where
+    expected  :: Either MigrationValidateError ()
+    expected =
+      Left $ UnknownMigrationsFound
+                { missingMigrations = []
+                , extraMigrations =
+                    [ MigrationValidate
+                      { mvHash = "395187b4157ef5307b7d95e0150542e09bb19679055eee8017a34bcca89a691d"
+                      , mvFilepath = "migration-1-0000-20190730.sql"
+                      }
+                    ]
+                }
 
 -- Really just make sure that the migrations do actually run correctly.
 -- If they fail the file path of the log file (in /tmp) will be printed.
@@ -122,3 +152,9 @@ readSchemaVersion migrationDir = do
 showSchemaVersion :: SchemaVersion -> String
 showSchemaVersion (SchemaVersion a b c) =
   List.intercalate "." [show a, show b, show c]
+
+testSchemaDir :: MigrationDir
+testSchemaDir = MigrationDir "test/schema" -- Migration directory with single migration
+
+knownTestMigrations :: [(Text, Text)]
+knownTestMigrations = [("hash", "migration-1-0000-20190730.sql")]

@@ -5,7 +5,7 @@ import           Control.Monad (foldM, forM)
 
 import qualified Data.ByteString.Char8 as BS
 
-import           Data.List (intercalate)
+import qualified Data.List as List
 
 import           Distribution.PackageDescription (extraSrcFiles)
 import           Distribution.Simple (UserHooks (..), defaultMainWithHooks, simpleUserHooks)
@@ -15,7 +15,7 @@ import           Distribution.Simple.Utils (createDirectoryIfMissingVerbose, rew
 import           Distribution.Verbosity (normal)
 
 import           System.Directory (listDirectory)
-import           System.FilePath (pathSeparator, takeDirectory, takeExtension)
+import           System.FilePath (pathSeparator, takeDirectory, takeExtension, takeFileName)
 
 main :: IO ()
 main = defaultMainWithHooks generateHooks
@@ -42,7 +42,7 @@ generateMigrations locInfo srcDir outDir = do
 
     createDirectoryIfMissingVerbose normal True "gen"
     sqls <- forM (concat collectMigrationSql) build
-    buildMigrationModule sqls
+    buildMigrationModule $ List.sortOn snd sqls
   where
 
     -- Find directories listed in cabal file with *.sql extensions
@@ -59,7 +59,7 @@ generateMigrations locInfo srcDir outDir = do
     build :: FilePath -> IO (String, FilePath)
     build filepath = do
       file <- BS.readFile filepath
-      pure (hashToStringAsHex . hashAs $ file, filepath)
+      pure (hashToStringAsHex . hashAs $ file, takeFileName filepath)
 
 
     buildMigrationModule :: [(String, FilePath)] -> IO ()
@@ -77,7 +77,7 @@ generateMigrations locInfo srcDir outDir = do
             "",
             "knownMigrations :: [KnownMigration]",
             "knownMigrations = [ ",
-            (intercalate ",\n" . fmap buildLine $ sqls) ++ "]"
+            (List.intercalate ",\n" . fmap buildLine $ sqls) ++ "]"
           ]
 
 
