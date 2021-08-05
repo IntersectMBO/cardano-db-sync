@@ -294,17 +294,6 @@ share
     poolId              PoolHashId Maybe    OnDeleteCascade
     UniqueReward        addrId type amount earnedEpoch
 
-  -- Orphaned rewards happen when a stake address earns rewards, but the stake address is
-  -- deregistered before the rewards are distributed.
-  -- This table should never get rolled back.
-  OrphanedReward
-    addrId              StakeAddressId      OnDeleteCascade
-    type                Text                sqltype=rewardtype
-    amount              DbLovelace          sqltype=lovelace
-    epochNo             Word64
-    poolId              PoolHashId Maybe    OnDeleteCascade
-    UniqueOrphaned      addrId type amount epochNo
-
   Withdrawal
     addrId              StakeAddressId      OnDeleteCascade
     amount              DbLovelace          sqltype=lovelace
@@ -708,17 +697,6 @@ schemaDocs =
       RewardEarnedEpoch # "The epoch in which the reward was earned."
       RewardPoolId # "The PoolHash table index for the pool the stake address was delegated to when\
             \ the reward is earned. Will be NULL for payments from the treasury or the reserves."
-
-    OrphanedReward --^ do
-      "A table for rewards earned by staking, but are orphaned. Rewards are orphaned when the stake\
-        \ address is deregistered before the rewards are distributed."
-      OrphanedRewardAddrId # "The StakeAddress table index for the stake address that earned the reward."
-      OrphanedRewardType # "The source of the rewards; pool `member` vs pool `owner`."
-      OrphanedRewardAmount # "The reward amount (in Lovelace)."
-      OrphanedRewardEpochNo # "The epoch in which the reward was earned."
-      OrphanedRewardPoolId # "The PoolHash table index for the pool the stake address was delegated to when\
-            \ the reward is earned. Will be NULL for payments from the treasury or the reserves."
-
 
     Withdrawal --^ do
       "A table for withdrawals from a reward account."
