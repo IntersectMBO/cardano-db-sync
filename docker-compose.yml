@@ -14,8 +14,6 @@ services:
       - postgres_db
     volumes:
       - postgres:/var/lib/postgresql/data
-    ports:
-      - 5432:5432
     restart: on-failure
     logging:
       driver: "json-file"

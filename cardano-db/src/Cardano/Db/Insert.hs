@@ -16,7 +16,6 @@ module Cardano.Db.Insert
   , insertEpochSyncTime
   , insertManyEpochStakes
   , insertManyRewards
-  , insertManyOrphanedRewards
   , insertMaTxMint
   , insertMaTxOut
   , insertMeta
@@ -122,9 +121,6 @@ insertEpochSyncTime = insertReplace "EpochSyncTime"
 
 insertManyEpochStakes :: (MonadBaseControl IO m, MonadIO m) => [EpochStake] -> ReaderT SqlBackend m ()
 insertManyEpochStakes = insertManyUncheckedUnique "Many EpochStake"
-
-insertManyOrphanedRewards :: (MonadBaseControl IO m, MonadIO m) => [OrphanedReward] -> ReaderT SqlBackend m ()
-insertManyOrphanedRewards = insertManyUncheckedUnique "Many OrphanedRewards"
 
 insertManyRewards :: (MonadBaseControl IO m, MonadIO m) => [Reward] -> ReaderT SqlBackend m ()
 insertManyRewards = insertManyUncheckedUnique "Many Rewards"

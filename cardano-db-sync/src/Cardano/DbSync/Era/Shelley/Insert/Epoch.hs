@@ -53,12 +53,10 @@ insertEpochInterleaved
      -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertEpochInterleaved tracer bop =
     case bop of
-      BulkOrphanedRewardChunk epochNo _ icache orwds ->
-        insertOrphanedRewards epochNo icache orwds
       BulkRewardChunk epochNo _ icache rwds ->
         insertRewards epochNo icache rwds
-      BulkRewardReport epochNo _ rewardCount orphanCount ->
-        liftIO $ reportRewards epochNo rewardCount orphanCount
+      BulkRewardReport epochNo _ rewardCount ->
+        liftIO $ reportRewards epochNo rewardCount
       BulkStakeDistChunk epochNo _ icache sDistChunk ->
         insertEpochStake tracer icache epochNo sDistChunk
       BulkStakeDistReport epochNo _ count ->
@@ -72,13 +70,12 @@ insertEpochInterleaved tracer bop =
           , ", ", textShow count, " stake addresses"
           ]
 
-    reportRewards :: EpochNo -> Int -> Int -> IO ()
-    reportRewards epochNo rewardCount orphanCount =
+    reportRewards :: EpochNo -> Int -> IO ()
+    reportRewards epochNo rewardCount =
       logInfo tracer $
         mconcat
           [ "insertEpochInterleaved: Epoch ", textShow (unEpochNo epochNo)
-          , ", ", textShow rewardCount, " rewards, ", textShow orphanCount
-          , " orphaned_rewards"
+          , ", ", textShow rewardCount, " rewards"
           ]
 
 postEpochRewards
@@ -91,10 +88,8 @@ postEpochRewards lenv rwds point = do
     let epochNo = Generic.rwdEpoch rwds
     forM_ (chunksOf 1000 $ Map.toList (Generic.rwdRewards rwds)) $ \rewardChunk ->
       writeTBQueue (leBulkOpQueue lenv) $ BulkRewardChunk epochNo point icache rewardChunk
-    forM_ (chunksOf 1000 $ Map.toList (Generic.rwdOrphaned rwds)) $ \orphanedChunk ->
-      writeTBQueue (leBulkOpQueue lenv) $ BulkOrphanedRewardChunk epochNo point icache orphanedChunk
     writeTBQueue (leBulkOpQueue lenv) $
-      BulkRewardReport epochNo point (length $ Generic.rwdRewards rwds) (length $ Generic.rwdOrphaned rwds)
+      BulkRewardReport epochNo point (length $ Generic.rwdRewards rwds)
 
 postEpochStake
      :: (MonadBaseControl IO m, MonadIO m)
@@ -167,29 +162,6 @@ insertRewards epoch icache rewardsChunk = do
                   , DB.rewardEarnedEpoch = unEpochNo epoch
                   , DB.rewardSpendableEpoch = 2 + unEpochNo epoch
                   , DB.rewardPoolId = lookupPoolIdPairMaybe (Generic.rewardPool rwd) icache
-                  }
-
-insertOrphanedRewards
-    :: (MonadBaseControl IO m, MonadIO m)
-    => EpochNo -> IndexCache -> [(Generic.StakeCred, Set Generic.Reward)]
-    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertOrphanedRewards epoch icache orphanedRewardsChunk = do
-    dbRewards <- concatMapM mkOrphanedReward orphanedRewardsChunk
-    lift $ DB.insertManyOrphanedRewards dbRewards
-  where
-    mkOrphanedReward
-        :: MonadBaseControl IO m
-        => (Generic.StakeCred, Set Generic.Reward)
-        -> ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.OrphanedReward]
-    mkOrphanedReward (saddr, rset) = do
-      saId <- hoistEither $ lookupStakeAddrIdPair "insertOrphanedRewards StakeCred" saddr icache
-      forM (Set.toList rset) $ \ rwd -> do
-        pure $ DB.OrphanedReward
-                  { DB.orphanedRewardAddrId = saId
-                  , DB.orphanedRewardType = DB.showRewardSource (Generic.rewardSource rwd)
-                  , DB.orphanedRewardAmount = Generic.coinToDbLovelace (Generic.rewardAmount rwd)
-                  , DB.orphanedRewardEpochNo = unEpochNo epoch
-                  , DB.orphanedRewardPoolId = lookupPoolIdPairMaybe (Generic.rewardPool rwd) icache
                   }
 
 -- -------------------------------------------------------------------------------------------------

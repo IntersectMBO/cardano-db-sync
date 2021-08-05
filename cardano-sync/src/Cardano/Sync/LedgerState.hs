@@ -125,17 +125,15 @@ import           System.Mem (performMajorGC)
 -- It is only used in case of a rollback.
 data BulkOperation
   = BulkRewardChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, Set Generic.Reward)]
-  | BulkOrphanedRewardChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, Set Generic.Reward)]
-  | BulkRewardReport !EpochNo !CardanoPoint !Int !Int
+  | BulkRewardReport !EpochNo !CardanoPoint !Int
   | BulkStakeDistChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, (Coin, PoolKeyHash))]
   | BulkStakeDistReport !EpochNo !CardanoPoint !Int
 
-getBopPoint :: BulkOperation -> CardanoPoint
-getBopPoint = go
+getBulkOpPoint :: BulkOperation -> CardanoPoint
+getBulkOpPoint = go
   where
     go (BulkRewardChunk _ point _ _) = point
-    go (BulkOrphanedRewardChunk _ point _ _) = point
-    go (BulkRewardReport _ point _ _) = point
+    go (BulkRewardReport _ point _) = point
     go (BulkStakeDistChunk _ point _ _) = point
     go (BulkStakeDistReport _ point _) = point
 
@@ -546,7 +544,7 @@ loadLedgerAtPoint env point = do
 drainBulkOperation :: LedgerEnv -> CardanoPoint -> IO ()
 drainBulkOperation lenv point = do
     bops <- atomically $ flushTBQueue (leBulkOpQueue lenv)
-    let bops' = filter (\bop -> getBopPoint bop <= point) bops
+    let bops' = filter (\bop -> getBulkOpPoint bop <= point) bops
     let removed = length bops - length bops'
     unless (removed == 0) $
       logInfo (leTrace lenv) $ mconcat

@@ -50,7 +50,6 @@ data Reward = Reward
 data Rewards = Rewards
   { rwdEpoch :: !EpochNo
   , rwdRewards :: !(Map StakeCred (Set Reward))
-  , rwdOrphaned :: !(Map StakeCred (Set Reward))
   } deriving Eq
 
 epochRewards :: Ledger.Network -> EpochNo -> ExtLedgerState CardanoBlock -> Maybe Rewards
@@ -66,11 +65,9 @@ rewardsPoolHashKeys :: Rewards -> Set PoolKeyHash
 rewardsPoolHashKeys rwds =
   Set.fromList . mapMaybe rewardPool
     $ concatMap Set.toList (Map.elems $ rwdRewards rwds)
-    ++ concatMap Set.toList (Map.elems $ rwdOrphaned rwds)
 
 rewardsStakeCreds :: Rewards -> Set StakeCred
-rewardsStakeCreds rwds =
-  Set.union (Map.keysSet $ rwdRewards rwds) (Map.keysSet $ rwdOrphaned rwds)
+rewardsStakeCreds = Map.keysSet . rwdRewards
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -80,11 +77,9 @@ genericRewards network epoch lstate =
   where
     cleanup :: Map StakeCred (Set Reward) -> Rewards
     cleanup rmap =
-      let (rm, om) = Map.partitionWithKey validRewardAddress rmap in
       Rewards
         { rwdEpoch = epoch - 1 -- Epoch in which rewards were earned.
-        , rwdRewards = rm
-        , rwdOrphaned = om
+        , rwdRewards = Map.filterWithKey validRewardAddress rmap
         }
 
     rewardUpdate :: Maybe (Map StakeCred (Set Reward))
