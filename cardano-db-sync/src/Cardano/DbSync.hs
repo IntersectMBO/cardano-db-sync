@@ -1,6 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -28,7 +29,7 @@ import           Control.Monad.Trans.Maybe (MaybeT (..))
 
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..))
 
-import           Cardano.BM.Trace (Trace, logInfo)
+import           Cardano.BM.Trace (Trace, logError, logInfo)
 
 import qualified Cardano.Db as DB
 
@@ -52,14 +53,18 @@ import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Network.Block (BlockNo (..))
 
-
-runDbSyncNode :: MetricSetters -> (SqlBackend -> SyncNodePlugin) -> SyncNodeParams -> IO ()
-runDbSyncNode metricsSetters mkPlugin params = do
+runDbSyncNode :: MetricSetters -> (SqlBackend -> SyncNodePlugin) -> [(Text, Text)] -> SyncNodeParams -> IO ()
+runDbSyncNode metricsSetters mkPlugin knownMigrations params = do
 
     -- Read the PG connection info
     pgConfig <- DB.readPGPassFileEnv Nothing
 
     trce <- configureLogging params "db-sync-node"
+
+    orDieWithLog DB.renderMigrationValidateError trce $ DB.validateMigrations dbMigrationDir knownMigrations
+
+    logInfo trce "Schema migration files validated"
+
     logInfo trce "Running database migrations"
 
     DB.runMigrations pgConfig True dbMigrationDir (Just $ DB.LogFileDir "/tmp")
@@ -101,3 +106,14 @@ mkSyncDataLayer trce backend =
                   }
     , sdlGetLatestSlotNo = SlotNo <$> DB.runDbNoLogging DB.queryLatestSlotNo
     }
+
+-- Log error to Trace and panic.
+orDieWithLog :: (t -> Text) -> Trace IO Text -> ExceptT t IO () -> IO ()
+orDieWithLog render trce e = do
+  runExceptT e >>= \case
+    Left errors -> do
+      let errorStr = render errors
+      liftIO $ logError trce errorStr
+      panic errorStr
+    Right () -> pure ()
+

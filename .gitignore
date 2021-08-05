@@ -6,5 +6,5 @@ log-dir
 result*
 launch_*
 cabal.project.local
-
+gen/
 /.vscode

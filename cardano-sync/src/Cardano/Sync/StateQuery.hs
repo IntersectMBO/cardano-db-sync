@@ -18,9 +18,10 @@ import           Cardano.BM.Trace (Trace, logInfo)
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
+import           Cardano.Db (textShow)
+
 import           Cardano.Sync.Api
 import           Cardano.Sync.Types
-import           Cardano.Sync.Util
 
 import           Cardano.Prelude hiding (atomically)
 

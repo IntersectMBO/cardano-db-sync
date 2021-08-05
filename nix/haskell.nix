@@ -127,6 +127,10 @@ let
         packages.cardano-config.flags.systemd = !pkgs.stdenv.hostPlatform.isMusl;
         packages.cardano-node.flags.systemd = !pkgs.stdenv.hostPlatform.isMusl;
       })
+      {
+        packages.cardano-db-sync.package.extraSrcFiles = ["../schema/*.sql"];
+        packages.cardano-db-sync-extended.package.extraSrcFiles = ["../cardano-db-sync/Setup.hs" "../schema/*.sql"];
+      }
     ];
   };
   # setGitRev is a postInstall script to stamp executables with

@@ -33,6 +33,4 @@ cabal run cardano-db-sync-db-tool -- create-migration --mdir schema/
 which will only generate a migration if one is needed. It is usually best to run the test suite
 (`cabal test cardano-db-sync db` which tests the migrations) first and then generate the migration.
 
-
-
 [Persistent]: https://hackage.haskell.org/package/persistent

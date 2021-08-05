@@ -1,4 +1,4 @@
-cabal-version:          2.2
+cabal-version:          2.4
 
 -- http://haskell.org/cabal/users-guide/
 
@@ -15,8 +15,18 @@ author:                 IOHK Engineering Team
 maintainer:             operations@iohk.io
 copyright:              (c) 2019 IOHK
 category:               Cryptocurrency
-build-type:             Simple
+build-type:             Custom
 extra-source-files:     CHANGELOG.md
+                        schema/*.sql  
+
+custom-setup
+  setup-depends:
+                        base
+                      , Cabal
+                      , bytestring
+                      , cardano-crypto-class
+                      , directory
+                      , filepath
 
 library
   default-language:     Haskell2010
@@ -123,7 +133,7 @@ library
 executable cardano-db-sync
   default-language:     Haskell2010
   main-is:              cardano-db-sync.hs
-  hs-source-dirs:       app
+  hs-source-dirs:       gen, app
 
   ghc-options:          -O2
                         -Wall
@@ -139,7 +149,10 @@ executable cardano-db-sync
                         -threaded
                         -with-rtsopts=-N3
 
+  autogen-modules:      Paths_cardano_db_sync
+                        MigrationValidations
   other-modules:        Paths_cardano_db_sync
+                        MigrationValidations
 
   build-depends:        base                            >= 4.14         && < 4.16
                       , cardano-config

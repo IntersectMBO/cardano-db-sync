@@ -1,11 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Test.IO.Cardano.Db.Migration
-  ( tests
-  ) where
+module Test.IO.Cardano.Db.Migration where
 
-import           Cardano.Db
-
+import           Cardano.Db (LogFileDir (..), MigrationDir (..), MigrationValidate (..),
+                   MigrationValidateError (..), MigrationVersion (..), SchemaVersion (..),
+                   getMigrationScripts, querySchemaVersion, readPGPassFileEnv, runDbNoLogging,
+                   runMigrations, validateMigrations)
 import           Control.Monad (unless)
+import           Control.Monad.Trans.Except (runExceptT)
 
 import qualified Data.List as List
 import           Data.Maybe (fromMaybe)
@@ -18,7 +19,65 @@ tests :: TestTree
 tests =
   testGroup "Migration"
     [ testCase "Migration is idempotent" migrationTest
+    , testCase "Migration validation - unknown migration found" unknownMigrationValidate
+    , testCase "Migration validation - mismatched hash for migration" invalidHashMigrationValidate
+    , testCase "Migration validation - mismatched hash for migration 2" invalidHashMigrationValidate'
     ]
+
+unknownMigrationValidate :: IO ()
+unknownMigrationValidate = do
+  let schemaDir = MigrationDir "test" -- Point to empty migration directory
+  let knownMigrations = [("hash", "schema/migration-1-0000-20190730.sql")]
+  let expected = Left (UnknownMigrationsFound
+                        { missingMigrations = [MigrationValidate {mvHash = "hash", mvFilepath = "schema/migration-1-0000-20190730.sql"} ]
+                        , extraMigrations = []
+                        }) :: Either MigrationValidateError ()
+  result <- runExceptT $ validateMigrations schemaDir knownMigrations
+  unless (result == expected) $
+    error $ mconcat
+            [ "Schema version mismatch. Expected "
+            , show expected
+            , " but got "
+            , show result
+            , "."
+            ]
+
+invalidHashMigrationValidate :: IO ()
+invalidHashMigrationValidate = do
+  let schemaDir = MigrationDir "test/schema" -- Migration directory with single migration
+  let knownMigrations = [("hash"             -- Non-matching hash to file in test/schema/migration-1-0000-20190730.sql
+                         , "test/schema/migration-1-0000-20190730.sql")]
+  let expected = Left (UnknownMigrationsFound
+                       { missingMigrations = [MigrationValidate { mvHash = "hash", mvFilepath = "test/schema/migration-1-0000-20190730.sql" }]
+                       , extraMigrations = [MigrationValidate { mvHash = "395187b4157ef5307b7d95e0150542e09bb19679055eee8017a34bcca89a691d"
+                                                                , mvFilepath = "test/schema/migration-1-0000-20190730.sql"}]}) :: Either MigrationValidateError ()
+  result <- runExceptT $ validateMigrations schemaDir knownMigrations
+  unless (result == expected) $
+    error $ mconcat
+            [ "Schema version mismatch. Expected "
+            , show expected
+            , " but got "
+            , show result
+            , "."
+            ]
+
+invalidHashMigrationValidate' :: IO ()
+invalidHashMigrationValidate' = do
+  let schemaDir = MigrationDir "test/schema" -- Migration directory with single migration
+  let knownMigrations = []                   -- No known migrations from compiling
+  let expected = Left (UnknownMigrationsFound
+                       { missingMigrations = []
+                       , extraMigrations = [MigrationValidate { mvHash = "395187b4157ef5307b7d95e0150542e09bb19679055eee8017a34bcca89a691d"
+                                                                , mvFilepath = "test/schema/migration-1-0000-20190730.sql"}]}) :: Either MigrationValidateError ()
+  result <- runExceptT $ validateMigrations schemaDir knownMigrations
+  unless (result == expected) $
+    error $ mconcat
+            [ "Schema version mismatch. Expected "
+            , show expected
+            , " but got "
+            , show result
+            , "."
+            ]
 
 -- Really just make sure that the migrations do actually run correctly.
 -- If they fail the file path of the log file (in /tmp) will be printed.

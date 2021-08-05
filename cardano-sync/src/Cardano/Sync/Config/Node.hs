@@ -17,8 +17,9 @@ import qualified Cardano.Chain.Update as Byron
 
 import           Cardano.Crypto (RequiresNetworkMagic (..))
 
+import           Cardano.Db (textShow)
+
 import           Cardano.Sync.Config.Types
-import           Cardano.Sync.Util
 
 import           Cardano.Prelude
 
