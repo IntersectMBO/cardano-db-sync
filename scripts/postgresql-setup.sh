@@ -25,7 +25,7 @@ function check_pgpass_file {
 	fi
 
   if test ! -f "${PGPASSFILE}" ; then
-    echo "Error: PostgeSQL password file ${PGPASSFILE} does not exist."
+    echo "Error: PostgreSQL password file ${PGPASSFILE} does not exist."
     exit 1
     fi
 
