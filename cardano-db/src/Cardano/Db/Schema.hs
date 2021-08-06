@@ -461,7 +461,8 @@ share
     poolId              PoolHashId          OnDeleteCascade
     tickerName          Text
     hash                ByteString          sqltype=hash32type
-    metadata            Text
+    json                Text                sqltype=jsonb
+    bytes               ByteString          sqltype=bytea
     pmrId               PoolMetadataRefId   OnDeleteCascade
     UniquePoolOfflineData  poolId hash
     deriving Show
@@ -683,7 +684,7 @@ schemaDocs =
     TxMetadata --^ do
       "A table for metadata attached to a transaction."
       TxMetadataKey # "The metadata key (a Word64/unsigned 64 bit number)."
-      TxMetadataJson # "The JSON payload."
+      TxMetadataJson # "The JSON payload if it can bde decoded as JSON."
       TxMetadataBytes # "The raw bytes of the payload."
       TxMetadataTxId # "The Tx table index of the transaction where this metadata was included."
 
@@ -846,7 +847,8 @@ schemaDocs =
       PoolOfflineDataPoolId # "The PoolHash table index for the pool this offline data refers."
       PoolOfflineDataTickerName # "The pool's ticker name (as many as 5 characters)."
       PoolOfflineDataHash # "The hash of the offline data."
-      PoolOfflineDataMetadata # "The raw offline data."
+      PoolOfflineDataJson # "The payload as JSON."
+      PoolOfflineDataBytes # "The raw bytes of the payload."
       PoolOfflineDataPmrId # "The PoolMetadataRef table index for this offline data."
 
     PoolOfflineFetchError --^ do
