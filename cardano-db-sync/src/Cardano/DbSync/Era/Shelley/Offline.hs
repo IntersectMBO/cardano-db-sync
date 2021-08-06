@@ -143,7 +143,8 @@ fetchOfflineData _tracer manager pfr =
                 { DB.poolOfflineDataPoolId = pfrPoolHashId pfr
                 , DB.poolOfflineDataTickerName = unPoolTicker $ pomTicker decodedMetadata
                 , DB.poolOfflineDataHash = metadataHash
-                , DB.poolOfflineDataMetadata = Text.decodeUtf8 respBS
+                , DB.poolOfflineDataBytes = respBS
+                , DB.poolOfflineDataJson = Text.decodeUtf8 respBS
                 , DB.poolOfflineDataPmrId = pfrReferenceId pfr
                 }
   where
