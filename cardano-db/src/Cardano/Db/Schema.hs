@@ -133,6 +133,7 @@ share
     paymentCred         ByteString Maybe    sqltype=hash28type
     stakeAddressId      StakeAddressId Maybe OnDeleteCascade
     value               DbLovelace          sqltype=lovelace
+    dataHash            ByteString Maybe    sqltype=hash32type
     UniqueTxout         txId index          -- The (tx_id, index) pair must be unique.
 
   TxIn
@@ -572,6 +573,7 @@ schemaDocs =
       TxOutPaymentCred # "The payment credential part of the Shelley address. (NULL for Byron addresses). For a script-locked address, this is the script hash."
       TxOutStakeAddressId # "The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses)."
       TxOutValue # "The output value (in Lovelace) of the transaction output."
+      TxOutDataHash # "The hash of the transaction output datum. (NULL for Txs without scripts)."
 
     TxIn --^ do
       "A table for transaction inputs."

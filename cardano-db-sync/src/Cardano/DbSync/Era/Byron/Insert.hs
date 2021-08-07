@@ -224,6 +224,7 @@ insertTxOut _tracer txId index txout =
               , DB.txOutPaymentCred = Nothing -- Byron does not have a payment credential.
               , DB.txOutStakeAddressId = Nothing -- Byron does not have a stake address.
               , DB.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
+              , DB.txOutDataHash = Nothing
               }
 
 
