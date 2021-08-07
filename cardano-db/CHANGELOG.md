@@ -1,5 +1,8 @@
 # Revision history for cardano-db
 
+## Next
+* Add tx_out.data_hash field (Alonzo transaction output data hashes)
+
 ## 10.0.1
 * Fix docker issue (#686).
 

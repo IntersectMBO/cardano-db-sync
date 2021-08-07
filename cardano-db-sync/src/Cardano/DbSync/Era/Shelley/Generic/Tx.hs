@@ -114,6 +114,7 @@ data TxOut = TxOut
   , txOutAddress :: !(Ledger.Addr StandardCrypto)
   , txOutAdaValue :: !Coin
   , txOutMaValue :: !(Map (PolicyID StandardCrypto) (Map AssetName Integer))
+  , txOutDataHash :: !(Maybe ByteString)
   }
 
 data TxRedeemer = TxRedeemer
@@ -164,6 +165,7 @@ fromAllegraTx (blkIndex, tx) =
         , txOutAddress = coerceAddress addr
         , txOutAdaValue = ada
         , txOutMaValue = mempty -- Allegra does not support Multi-Assets
+        , txOutDataHash = mempty -- Allegra does not support scripts
         }
 
     txMeta :: Shelley.Tx StandardAllegra -> Maybe (ShelleyMa.AuxiliaryData StandardAllegra)
@@ -212,6 +214,7 @@ fromShelleyTx (blkIndex, tx) =
         , txOutAddress = coerceAddress addr
         , txOutAdaValue = ada
         , txOutMaValue = mempty -- Shelley does not support Multi-Assets
+        , txOutDataHash = mempty -- Shelley does not support scripts
         }
 
     txOutValue :: Shelley.TxOut StandardShelley -> Integer
@@ -251,6 +254,7 @@ fromMaryTx (blkIndex, tx) =
         , txOutAddress = coerceAddress addr
         , txOutAdaValue = Coin ada
         , txOutMaValue = coerceMultiAsset maMap
+        , txOutDataHash = mempty -- Mary does not support scripts
         }
 
     txMeta :: Shelley.Tx StandardMary -> Maybe (ShelleyMa.AuxiliaryData StandardMary)
@@ -290,12 +294,13 @@ fromAlonzoTx pp (blkIndex, tx) =
       }
   where
     fromTxOut :: Word16 -> Alonzo.TxOut StandardAlonzo -> TxOut
-    fromTxOut index (Alonzo.TxOut addr (Value ada maMap) _dataHash) =
+    fromTxOut index (Alonzo.TxOut addr (Value ada maMap) mDataHash) =
       TxOut
         { txOutIndex = index
         , txOutAddress = coerceAddress addr
         , txOutAdaValue = Coin ada
         , txOutMaValue = coerceMultiAsset maMap
+        , txOutDataHash = getDataHash mDataHash
         }
 
     txBody :: Ledger.TxBody StandardAlonzo
@@ -318,6 +323,11 @@ fromAlonzoTx pp (blkIndex, tx) =
         Nothing -> []
         Just (Alonzo.AuxiliaryData _ scrs) ->
           map (\scr -> (Ledger.hashScript @StandardAlonzo scr, scr)) $ toList scrs
+
+    getDataHash mDataHash =
+      case strictMaybeToMaybe mDataHash of
+        Nothing -> Nothing
+        Just dataHash -> Just $ Crypto.hashToBytes $ Ledger.extractHash dataHash
 
     mkTxScript :: (ScriptHash StandardCrypto, Script (AlonzoEra StandardCrypto)) -> TxScript
     mkTxScript (hsh, script) = TxScript

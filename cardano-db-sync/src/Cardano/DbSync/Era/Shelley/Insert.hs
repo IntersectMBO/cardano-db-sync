@@ -243,7 +243,7 @@ insertTxOut
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Generic.TxOut
     -> ExceptT e (ReaderT SqlBackend m) ()
-insertTxOut tracer txId (Generic.TxOut index addr value maMap) = do
+insertTxOut tracer txId (Generic.TxOut index addr value maMap dataHash) = do
     mSaId <- lift $ insertStakeAddressRefIfMissing txId addr
     txOutId <- lift . DB.insertTxOut $
                 DB.TxOut
@@ -255,6 +255,7 @@ insertTxOut tracer txId (Generic.TxOut index addr value maMap) = do
                   , DB.txOutPaymentCred = Generic.maybePaymentCred addr
                   , DB.txOutStakeAddressId = mSaId
                   , DB.txOutValue = Generic.coinToDbLovelace value
+                  , DB.txOutDataHash = dataHash
                   }
     insertMaTxOut tracer txOutId maMap
   where
