@@ -26,7 +26,7 @@ import           Control.Monad.Class.MonadSTM.Strict (TBQueue, flushTBQueue, isE
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (handleExceptT, left)
 
-import           Data.Aeson (eitherDecode')
+import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -129,7 +129,7 @@ fetchOfflineData _tracer manager pfr =
         left $ FEHttpResponse poolMetadataUrl (Http.statusCode status)
 
       decodedMetadata <-
-            case eitherDecode' (LBS.fromStrict respBS) of
+            case Aeson.eitherDecode' (LBS.fromStrict respBS) of
               Left err -> left $ FEJsonDecodeFail poolMetadataUrl (Text.pack err)
               Right res -> pure res
 
@@ -144,7 +144,10 @@ fetchOfflineData _tracer manager pfr =
                 , DB.poolOfflineDataTickerName = unPoolTicker $ pomTicker decodedMetadata
                 , DB.poolOfflineDataHash = metadataHash
                 , DB.poolOfflineDataBytes = respBS
-                , DB.poolOfflineDataJson = Text.decodeUtf8 respBS
+                  -- Instead of inserting the `respBS` here, we encode the JSON and then store that.
+                  -- This is necessary because the PostgreSQL JSON parser can reject some ByteStrings
+                  -- that the Aeson parser accepts.
+                , DB.poolOfflineDataJson = Text.decodeUtf8 $ LBS.toStrict (Aeson.encode decodedMetadata)
                 , DB.poolOfflineDataPmrId = pfrReferenceId pfr
                 }
   where
