@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -55,8 +56,9 @@ insertEpochInterleaved tracer bop =
     case bop of
       BulkRewardChunk epochNo _ icache rwds ->
         insertRewards epochNo icache rwds
-      BulkRewardReport epochNo _ rewardCount ->
+      BulkRewardReport epochNo _ rewardCount total -> do
         liftIO $ reportRewards epochNo rewardCount
+        lift $ insertEpochRewardTotalReceived epochNo total
       BulkStakeDistChunk epochNo _ icache sDistChunk ->
         insertEpochStake tracer icache epochNo sDistChunk
       BulkStakeDistReport epochNo _ count ->
@@ -89,7 +91,7 @@ postEpochRewards lenv rwds point = do
     forM_ (chunksOf 1000 $ Map.toList (Generic.rwdRewards rwds)) $ \rewardChunk ->
       writeTBQueue (leBulkOpQueue lenv) $ BulkRewardChunk epochNo point icache rewardChunk
     writeTBQueue (leBulkOpQueue lenv) $
-      BulkRewardReport epochNo point (length $ Generic.rwdRewards rwds)
+      BulkRewardReport epochNo point (length $ Generic.rwdRewards rwds) (sumRewardTotal $ Generic.rwdRewards rwds)
 
 postEpochStake
      :: (MonadBaseControl IO m, MonadIO m)
@@ -115,6 +117,17 @@ flushBulkOperation lenv = do
     mapM_ (insertEpochInterleaved (leTrace lenv)) bops
 
 -- -------------------------------------------------------------------------------------------------
+
+insertEpochRewardTotalReceived
+    :: (MonadBaseControl IO m, MonadIO m)
+    => EpochNo -> Shelley.Coin
+    -> ReaderT SqlBackend m ()
+insertEpochRewardTotalReceived epochNo total =
+  void . DB.insertEpochRewardTotalReceived $
+    DB.EpochRewardTotalReceived
+      { DB.epochRewardTotalReceivedEarnedEpoch = unEpochNo epochNo
+      , DB.epochRewardTotalReceivedAmount = Generic.coinToDbLovelace total
+      }
 
 insertEpochStake
     :: (MonadBaseControl IO m, MonadIO m)
@@ -240,3 +253,11 @@ updateIndexCache lenv screds pkhs = do
           newPkhs = Set.filter (`Map.notMember` reduced) pkhs
       newPairs <- catMaybes <$> mapM queryPoolHashIdPair (Set.toList newPkhs)
       pure $ Map.union reduced (Map.fromList newPairs)
+
+sumRewardTotal :: Map Generic.StakeCred (Set Generic.Reward) -> Shelley.Coin
+sumRewardTotal =
+    Shelley.Coin . Map.foldl' sumCoin 0
+  where
+    sumCoin :: Integer -> Set Generic.Reward -> Integer
+    sumCoin !acc sr =
+      acc + sum (map (Shelley.unCoin . Generic.rewardAmount) $ Set.toList sr)
