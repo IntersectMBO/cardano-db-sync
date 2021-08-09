@@ -293,7 +293,11 @@ share
     earnedEpoch         Word64
     spendableEpoch      Word64
     poolId              PoolHashId Maybe    OnDeleteCascade
-    UniqueReward        addrId type amount earnedEpoch
+    -- Usually NULLables are not allowed in a uniqueness constraint. The semantics of how NULL
+    -- interacts with those constraints is non-trivial:  two NULL values are not considered equal
+    -- for the purposes of an uniqueness constraint.
+    -- Use of "!force" attribute on the end of the line disables this check.
+    UniqueReward        addrId type earnedEpoch poolId !force
 
   Withdrawal
     addrId              StakeAddressId      OnDeleteCascade
