@@ -185,6 +185,7 @@ insertTxOuts blkId (address, value) = do
               , DB.txOutPaymentCred = Nothing
               , DB.txOutStakeAddressId = Nothing
               , DB.txOutValue = DB.DbLovelace (Byron.unsafeGetLovelace value)
+              , DB.txOutDataHash = Nothing
               }
 
 -- -----------------------------------------------------------------------------
