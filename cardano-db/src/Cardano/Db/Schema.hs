@@ -587,15 +587,15 @@ schemaDocs =
 
     TxIn --^ do
       "A table for transaction inputs."
-      TxInTxInId # "The Tx table index where this transaction is used as an input."
-      TxInTxOutId # "The Tx table index where this transaction was created as an output."
+      TxInTxInId # "The Tx table index of the transaction that contains this transaction input"
+      TxInTxOutId # "The Tx table index of the transaction that contains this transaction output."
       TxInTxOutIndex # "The index within the transaction outputs."
       TxInRedeemerId # "The Redeemer table index which is used to validate this input."
 
     CollateralTxIn --^ do
       "A table for transaction collateral inputs."
-      CollateralTxInTxInId # "The Tx table index where this transaction is used as an input."
-      CollateralTxInTxOutId # "The Tx table index where this transaction was created as an output."
+      CollateralTxInTxInId # "The Tx table index of the transaction that contains this transaction input"
+      CollateralTxInTxOutId # "The Tx table index of the transaction that contains this transaction output."
       CollateralTxInTxOutIndex # "The index within the transaction outputs."
 
     Meta --^ do
