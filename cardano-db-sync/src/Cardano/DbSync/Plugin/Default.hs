@@ -22,6 +22,7 @@ import           Cardano.DbSync.Era.Shelley.Adjust (adjustEpochRewards)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
 import           Cardano.DbSync.Era.Shelley.Insert.Epoch
+import           Cardano.DbSync.Era.Shelley.Validate (validateEpochRewardsBefore)
 import           Cardano.DbSync.Rollback (rollbackToPoint)
 
 import           Cardano.Slotting.Slot (EpochNo (..))
@@ -137,8 +138,10 @@ handleLedgerEvents tracer lenv point =
     printer ev =
       case ev of
         LedgerNewEpoch en ss -> do
-          lift $ insertEpochSyncTime en ss (leEpochSyncTime lenv)
-          lift $ adjustEpochRewards tracer en
+          lift $ do
+            insertEpochSyncTime en ss (leEpochSyncTime lenv)
+            validateEpochRewardsBefore tracer (en - 2)
+            adjustEpochRewards tracer (en - 1)
           liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo en)
         LedgerStartAtEpoch en ->
           -- This is different from the previous case in that the db-sync started

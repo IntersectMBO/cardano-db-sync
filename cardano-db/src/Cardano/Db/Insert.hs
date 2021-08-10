@@ -13,6 +13,7 @@ module Cardano.Db.Insert
   , insertDelegation
   , insertEpoch
   , insertEpochParam
+  , insertEpochRewardTotalReceived
   , insertEpochSyncTime
   , insertManyEpochStakes
   , insertManyRewards
@@ -115,6 +116,9 @@ insertEpoch = insertUnchecked "Epoch"
 
 insertEpochParam :: (MonadBaseControl IO m, MonadIO m) => EpochParam -> ReaderT SqlBackend m EpochParamId
 insertEpochParam = insertUnchecked "EpochParam"
+
+insertEpochRewardTotalReceived :: (MonadBaseControl IO m, MonadIO m) => EpochRewardTotalReceived -> ReaderT SqlBackend m EpochRewardTotalReceivedId
+insertEpochRewardTotalReceived = insertCheckUnique "EpochRewardTotalReceived"
 
 insertEpochSyncTime :: (MonadBaseControl IO m, MonadIO m) => EpochSyncTime -> ReaderT SqlBackend m EpochSyncTimeId
 insertEpochSyncTime = insertReplace "EpochSyncTime"

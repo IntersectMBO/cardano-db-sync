@@ -125,7 +125,7 @@ import           System.Mem (performMajorGC)
 -- It is only used in case of a rollback.
 data BulkOperation
   = BulkRewardChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, Set Generic.Reward)]
-  | BulkRewardReport !EpochNo !CardanoPoint !Int
+  | BulkRewardReport !EpochNo !CardanoPoint !Int !Coin
   | BulkStakeDistChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, (Coin, PoolKeyHash))]
   | BulkStakeDistReport !EpochNo !CardanoPoint !Int
 
@@ -133,7 +133,7 @@ getBulkOpPoint :: BulkOperation -> CardanoPoint
 getBulkOpPoint = go
   where
     go (BulkRewardChunk _ point _ _) = point
-    go (BulkRewardReport _ point _) = point
+    go (BulkRewardReport _ point _ _) = point
     go (BulkStakeDistChunk _ point _ _) = point
     go (BulkStakeDistReport _ point _) = point
 

@@ -44,7 +44,7 @@ adjustEpochRewards
     => Trace IO Text -> EpochNo
     -> ReaderT SqlBackend m ()
 adjustEpochRewards tracer epochNo = do
-  addrs <- queryOrphanedAddrs (epochNo - 1)
+  addrs <- queryOrphanedAddrs epochNo
   unless (null addrs) .
     liftIO . logInfo tracer $ mconcat
                 [ "adjustEpochRewards: epoch ", textShow (unEpochNo epochNo), ", "

@@ -17,7 +17,7 @@ copyright:              (c) 2019 IOHK
 category:               Cryptocurrency
 build-type:             Custom
 extra-source-files:     CHANGELOG.md
-                        schema/*.sql  
+                        schema/*.sql
 
 custom-setup
   setup-depends:
@@ -70,6 +70,7 @@ library
                         Cardano.DbSync.Era.Shelley.Offline.Query
                         Cardano.DbSync.Era.Shelley.Offline.Types
                         Cardano.DbSync.Era.Shelley.Query
+                        Cardano.DbSync.Era.Shelley.Validate
 
                         Cardano.DbSync.Era.Util
 
