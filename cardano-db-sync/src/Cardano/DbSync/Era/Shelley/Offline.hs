@@ -95,13 +95,12 @@ insertOfflineResults trce resultQueue = do
 
 runOfflineFetchThread :: Trace IO Text -> LedgerEnv -> IO ()
 runOfflineFetchThread trce lenv = do
-    -- Sleep a little so the rest of the system can get up an running.
-    threadDelay 30_000_000 -- 30 seconds
     logInfo trce "Running Offline fetch thread"
     forever $ do
+      threadDelay 60_000_000 -- 60 second sleep
       xs <- blockingFlushTBQueue (leOfflineWorkQueue lenv)
       manager <- Http.newManager tlsManagerSettings
-      mapM (queueInsert <=< fetchOfflineData trce manager) xs
+      mapM_ (queueInsert <=< fetchOfflineData trce manager) xs
   where
     queueInsert :: FetchResult -> IO ()
     queueInsert = atomically . writeTBQueue (leOfflineResultQueue lenv)

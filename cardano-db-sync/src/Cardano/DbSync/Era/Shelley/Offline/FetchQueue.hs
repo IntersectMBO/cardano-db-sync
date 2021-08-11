@@ -28,15 +28,15 @@ newRetry now =
 retryAgain :: POSIXTime -> Word -> Retry
 retryAgain fetchTime existingRetryCount =
     -- When to retry. Maximum of a day for a retry.
-    -- We are basically using a series to predict the next retry time.
+    -- POSIXTime is in seconds.
     Retry
       { retryFetchTime = fetchTime
-      , retryRetryTime = fetchTime + sum (map calculateNewDiff [0 .. existingRetryCount])
-      , retryCount = 1 + existingRetryCount
+      , retryRetryTime = fetchTime + min (24 * 60 * 60) (30 + (5 ^ nextRetryCount) * 60)
+      , retryCount = nextRetryCount
       }
   where
-    calculateNewDiff :: Word -> POSIXTime
-    calculateNewDiff currRetryCount = min (24 * 60 * 60) ((3 ^ currRetryCount) * 60)
+    nextRetryCount :: Word
+    nextRetryCount = 1 + existingRetryCount
 
 -- A nice pretty printer for the retry.
 showRetryTimes :: Retry -> Text
