@@ -80,8 +80,8 @@ allow-newer:
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/optparse-applicative
-  tag: 3876479d01d681ee529d1b26784335cbe0baf7cd
-  --sha256: 00gavws6jvl930rq09gs5rdwmyc4n42avk7p9s7pjv52d205v967
+  tag: 7497a29cb998721a9068d5725d49461f2bba0e7a
+  --sha256: 1gvsrg925vynwgqwplgjmp53vj953qyh3wbdf34pw21c8r47w35r
 
 -- Using a fork until our patches can be merged upstream
 source-repository-package
@@ -99,8 +99,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-base
-  tag: 8c732560b201b5da8e3bdf175c6eda73a32d64bc
-  --sha256: 0nwy03wyd2ks4qxg47py7lm18karjz6vs7p8knmn3zy72i3n9rfi
+  tag: cb0f19c85e5bb5299839ad4ed66af6fa61322cc4
+  --sha256: 0dnkfqcvbifbk3m5pg8kyjqjy0zj1l4vd23p39n6ym4q0bnib1cq
   subdir:
     base-deriving-via
     binary
@@ -121,8 +121,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-ledger-specs
-  tag: 30eca73a2f5c13f1fbed9a98a59540ac3d0c8afe
-  --sha256: 02klj4zpcl98p22n2v9nkjxxdf8mmw069mw4ddhlgr931bfigz6w
+  tag: 12a0ef69d64a55e737fbf4e846bd8ed9fb30a956
+  --sha256: 0mx1g18ypdd5m8ijc2cl9m1xmymlqfbwl1r362f92vxrmziacifv
   subdir:
     alonzo/impl
     byron/chain/executable-spec
@@ -143,8 +143,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: 9921d76c40928369592f1e289a0b0c1c32c97631
-  --sha256: 07kqgdz571qckr9cml2zn0k9za072z0r0zkwvhbj87v7hqqlqm5p
+  tag: 3a56ac245c83d3345f81123ec3bb496bb23477a3
+  --sha256: 0dglxqhqrdn5nc3n6c8b7himgxrjdjszcl905xihrnaav49z09mg
   subdir:
     cardano-api
     cardano-config
@@ -183,8 +183,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/ouroboros-network
-  tag: e9cda57df7ea6969edbc3bfc4e117668277d09c8
-  --sha256: 1a91z6yvlhzlqrf7fy51fmmpm3ssk684h6pjgg022cdlsq56yif2
+  tag: f149c1c1e4e4bb5bab51fa055e9e3a7084ddc30e
+  --sha256: 1szh3xr7qnx56kyxd554yswpddbavb7m7k2mk3dqdn7xbg7s8b8w
   subdir:
     cardano-client
     io-sim
@@ -204,8 +204,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/plutus
-  tag: 826c2514a40e962c2e4d56ce912803a434cc28fe
-  --sha256: 04jryrgi2wggkf4a994smbcp8j39clshbzfnvfvvk7lq0sm8kssz
+  tag: 2c8161ad142f56b14611cc0f66b0a2803016fe37
+  --sha256: 19sj9f4pxfjcqkdxq46kx7qiv0qw4lf670jy8jyzvkmwyjl5agwm
   subdir:
     plutus-core
     plutus-ledger-api
