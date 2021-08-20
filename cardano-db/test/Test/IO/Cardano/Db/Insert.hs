@@ -21,6 +21,7 @@ tests =
   testGroup "Insert"
     [ testCase "Insert zeroth block" insertZeroTest
     , testCase "Insert first block" insertFirstTest
+    , testCase "Insert twice" insertTwice
     ]
 
 insertZeroTest :: IO ()
@@ -48,6 +49,19 @@ insertFirstTest =
     bid1 <- insertBlockChecked $ (\b -> b { blockPreviousId = Just bid0 }) (blockOne slid)
     assertBool (show bid0 ++ " == " ++ show bid1) (bid0 /= bid1)
 
+insertTwice :: IO ()
+insertTwice =
+  runDbNoLogging $ do
+    slid <- insertSlotLeader testSlotLeader
+    bid <- insertBlockChecked (blockZero slid)
+    let adaPots = adaPotsZero bid
+    _ <- insertAdaPots adaPots
+    Just pots0 <- queryAdaPots bid
+    -- Insert with same Unique key, different first field
+    _ <- insertAdaPots (adaPots {adaPotsSlotNo = 1 + adaPotsSlotNo adaPots})
+    Just pots0' <- queryAdaPots bid
+    assertBool (show (adaPotsSlotNo pots0) ++ " /= " ++ show (adaPotsSlotNo pots0'))
+      (adaPotsSlotNo pots0 == adaPotsSlotNo pots0')
 
 blockZero :: SlotLeaderId -> Block
 blockZero slid =
@@ -88,6 +102,20 @@ blockOne slid =
     , blockVrfKey = Nothing
     , blockOpCert = Nothing
     , blockOpCertCounter = Nothing
+    }
+
+adaPotsZero :: BlockId -> AdaPots
+adaPotsZero bid =
+  AdaPots
+    { adaPotsSlotNo = 0
+    , adaPotsEpochNo = 0
+    , adaPotsTreasury = DbLovelace 0
+    , adaPotsReserves = DbLovelace 0
+    , adaPotsRewards = DbLovelace 0
+    , adaPotsUtxo = DbLovelace 0
+    , adaPotsDeposits = DbLovelace 0
+    , adaPotsFees = DbLovelace 0
+    , adaPotsBlockId = bid
     }
 
 mkHash32 :: Char -> ByteString
