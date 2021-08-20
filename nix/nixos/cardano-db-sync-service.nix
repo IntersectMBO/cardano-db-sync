@@ -191,8 +191,15 @@ in {
           fi
         done
         if [ -z ''${SKIP_SNAPSHOT:-} ]; then
+          set +e
           SNAPSHOT_SCRIPT=$(cardano-db-tool prepare-snapshot --state-dir ./ | tail -n 1)
-          ${../../scripts/postgresql-setup.sh} ''${SNAPSHOT_SCRIPT#*scripts/postgresql-setup.sh}
+          res=$?
+          set -e
+          if [ $res -eq 0 ]; then
+            ${../../scripts/postgresql-setup.sh} ''${SNAPSHOT_SCRIPT#*scripts/postgresql-setup.sh}
+          else
+            >&2 echo "State does not permit to take snapshot, proceeding with normal startup."
+          fi
         fi
         ''}
 
