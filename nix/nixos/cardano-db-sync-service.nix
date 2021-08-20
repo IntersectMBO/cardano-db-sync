@@ -192,7 +192,7 @@ in {
         done
         if [ -z ''${SKIP_SNAPSHOT:-} ]; then
           set +e
-          SNAPSHOT_SCRIPT=$(cardano-db-tool prepare-snapshot --state-dir ./ | tail -n 1)
+          SNAPSHOT_SCRIPT=$( (yes phrase ||:) | cardano-db-tool prepare-snapshot --state-dir ./ | tail -n 1)
           res=$?
           set -e
           if [ $res -eq 0 ]; then
