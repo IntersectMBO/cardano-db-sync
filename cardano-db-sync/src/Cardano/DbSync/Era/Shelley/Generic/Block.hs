@@ -55,7 +55,7 @@ import qualified Shelley.Spec.Ledger.Tx as Shelley
 data Block = Block
   { blkEra :: !BlockEra
   , blkHash :: !ByteString
-  , blkPreviousHash :: !ByteString
+  , blkPreviousHash :: !(Maybe ByteString) -- Nothing is used for first block after Genesis.
   , blkCreatorPoolHash :: !ByteString
   , blkSlotLeader :: !ByteString
   , blkSlotNo :: !SlotNo
@@ -157,11 +157,11 @@ blockHash =
 blockNumber :: ShelleyBasedEra era => ShelleyBlock era -> BlockNo
 blockNumber = Protocol.bheaderBlockNo . blockBody
 
-blockPrevHash :: ShelleyBasedEra era => ShelleyBlock era -> ByteString
+blockPrevHash :: ShelleyBasedEra era => ShelleyBlock era -> Maybe ByteString
 blockPrevHash blk =
   case Protocol.bheaderPrev (Protocol.bhbody . Shelley.bheader $ Consensus.shelleyBlockRaw blk) of
-    Protocol.GenesisHash -> "Cardano.DbSync.Era.Shelley.Generic.Block.blockPrevHash"
-    Protocol.BlockHash (Protocol.HashHeader h) -> Crypto.hashToBytes h
+    Protocol.GenesisHash -> Just "Cardano.DbSync.Era.Shelley.Generic.Block.blockPrevHash"
+    Protocol.BlockHash (Protocol.HashHeader h) -> Just $ Crypto.hashToBytes h
 
 blockOpCert :: ShelleyBasedEra era => ShelleyBlock era -> ByteString
 blockOpCert = KES.rawSerialiseVerKeyKES . Protocol.ocertVkHot . Protocol.bheaderOCert . blockBody

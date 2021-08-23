@@ -23,12 +23,14 @@ import           Control.Monad.Trans.Except.Extra (newExceptT)
 import qualified Cardano.Db as DB
 
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
+import           Cardano.DbSync.Era.Shelley.Insert
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 import           Cardano.Sync.Error
 import           Cardano.Sync.Util
 
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.Coin as Ledger
+import           Cardano.Ledger.Credential (Credential (KeyHashObj))
 import           Cardano.Ledger.Era (Crypto)
 
 import qualified Data.ByteString.Char8 as BS
@@ -40,7 +42,8 @@ import qualified Data.Time.Clock as Time
 import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShelley)
-import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
+import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..), ShelleyGenesisStaking (..),
+                   emptyGenesisStaking)
 
 import qualified Shelley.Spec.Ledger.Genesis as Shelley
 import           Shelley.Spec.Ledger.Scripts ()
@@ -59,17 +62,23 @@ insertValidateGenesisDist backend tracer networkName cfg = do
       then newExceptT $ DB.runDbIohkLogging backend tracer insertAction
       else newExceptT $ DB.runDbIohkNoLogging backend insertAction
   where
+    hasInitialFunds :: Bool
+    hasInitialFunds = not $ Map.null $ sgInitialFunds cfg
+
+    hasStakes :: Bool
+    hasStakes = sgStaking cfg /= emptyGenesisStaking
+
     insertAction :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either SyncNodeError ())
     insertAction = do
       ebid <- DB.queryBlockId (configGenesisHash cfg)
       case ebid of
-        Right bid -> validateGenesisDistribution tracer networkName cfg bid
+        Right bid -> validateGenesisDistribution tracer networkName cfg bid hasStakes
         Left _ ->
           runExceptT $ do
             liftIO $ logInfo tracer "Inserting Shelley Genesis distribution"
             emeta <- lift DB.queryMeta
             case emeta of
-              Right _ -> pure () -- Metadata from Byron era already exists. TODO Validate metadata.
+              Right _ -> pure () -- Metadata from Shelley era already exists. TODO Validate metadata.
               Left _ -> do
                 count <- lift DB.queryBlockCount
                 when (count > 0) $
@@ -79,6 +88,8 @@ insertValidateGenesisDist backend tracer networkName cfg = do
                               { DB.metaStartTime = configStartTime cfg
                               , DB.metaNetworkName = networkName
                               }
+            -- No reason to insert the artificial block if there are no funds or stakes definitions.
+            when (hasInitialFunds || hasStakes) $ do
                 -- Insert an 'artificial' Genesis block (with a genesis specific slot leader). We
                 -- need this block to attach the genesis distribution transactions to.
                 -- It would be nice to not need this artificial block, but that would
@@ -90,6 +101,13 @@ insertValidateGenesisDist backend tracer networkName cfg = do
                                   , DB.slotLeaderPoolHashId = Nothing
                                   , DB.slotLeaderDescription = "Shelley Genesis slot leader"
                                   }
+                -- We attach the Genesis Shelley Block after the block with the biggest Slot.
+                -- In most cases this will simply be the Genesis Byron artificial Block,
+                -- since this configuration is used for networks which start from Shelley.
+                -- This means the previous block will have two blocks after it, resulting in a
+                -- tree format, which is unavoidable.
+                pid <- lift DB.queryLatestBlockId
+                liftIO $ logInfo tracer $ textShow pid
                 bid <- lift . DB.insertBlock $
                           DB.Block
                             { DB.blockHash = configGenesisHash cfg
@@ -97,7 +115,7 @@ insertValidateGenesisDist backend tracer networkName cfg = do
                             , DB.blockSlotNo = Nothing
                             , DB.blockEpochSlotNo = Nothing
                             , DB.blockBlockNo = Nothing
-                            , DB.blockPreviousId = Nothing
+                            , DB.blockPreviousId = pid
                             , DB.blockSlotLeaderId = slid
                             , DB.blockSize = 0
                             , DB.blockTime = configStartTime cfg
@@ -113,16 +131,16 @@ insertValidateGenesisDist backend tracer networkName cfg = do
                 lift $ mapM_ (insertTxOuts bid) $ genesisUtxOs cfg
                 liftIO . logInfo tracer $ "Initial genesis distribution populated. Hash "
                                 <> renderByteArray (configGenesisHash cfg)
-
+                insertStaking tracer bid cfg
                 supply <- lift DB.queryTotalSupply
                 liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
 validateGenesisDistribution
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Text -> ShelleyGenesis StandardShelley -> DB.BlockId
+    => Trace IO Text -> Text -> ShelleyGenesis StandardShelley -> DB.BlockId -> Bool
     -> ReaderT SqlBackend m (Either SyncNodeError ())
-validateGenesisDistribution tracer networkName cfg bid =
+validateGenesisDistribution tracer networkName cfg bid hasStakeTx =
   runExceptT $ do
     liftIO $ logInfo tracer "Validating Genesis distribution"
     meta <- liftLookupFail "Shelley.validateGenesisDistribution" DB.queryMeta
@@ -143,7 +161,7 @@ validateGenesisDistribution tracer networkName cfg bid =
             ]
 
     txCount <- lift $ DB.queryBlockTxCount bid
-    let expectedTxCount = fromIntegral $length (genesisTxos cfg)
+    let expectedTxCount = fromIntegral $length (genesisTxos cfg) + if hasStakeTx then 1 else 0
     when (txCount /= expectedTxCount) $
       dbSyncNodeError $ Text.concat
               [ "Shelley.validateGenesisDistribution: Expected initial block to have "
@@ -151,7 +169,7 @@ validateGenesisDistribution tracer networkName cfg bid =
               , " but got "
               , textShow txCount
               ]
-    totalSupply <- lift DB.queryGenesisSupply
+    totalSupply <- lift DB.queryShelleyGenesisSupply
     let expectedSupply = configGenesisSupply cfg
     when (expectedSupply /= totalSupply) $
       dbSyncNodeError  $ Text.concat
@@ -160,10 +178,9 @@ validateGenesisDistribution tracer networkName cfg bid =
          , " but got "
          , textShow totalSupply
          ]
-    supply <- lift DB.queryGenesisSupply
     liftIO $ do
       logInfo tracer "Initial genesis distribution present and correct"
-      logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
+      logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda totalSupply)
 
 -- -----------------------------------------------------------------------------
 
@@ -188,6 +205,7 @@ insertTxOuts blkId (Shelley.TxIn txInId _, txOut) = do
               , DB.txValidContract = True
               , DB.txScriptSize = 0
               }
+  _ <- insertStakeAddressRefIfMissing txId (txOutAddress txOut)
   void . DB.insertTxOut $
             DB.TxOut
               { DB.txOutTxId = txId
@@ -209,13 +227,45 @@ insertTxOuts blkId (Shelley.TxIn txInId _, txOut) = do
 
     hasScript addr = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
 
+-- Insert pools and delegations coming from Genesis.
+insertStaking
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text
+    -> DB.BlockId
+    -> ShelleyGenesis StandardShelley
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+insertStaking tracer blkId genesis = do
+  -- All Genesis staking comes from an artifical transaction
+  -- with a hash generated by hashing the address.
+  txId <- lift $ DB.insertTx $
+            DB.Tx
+              { DB.txHash = configGenesisStakingHash
+              , DB.txBlockId = blkId
+              , DB.txBlockIndex = 0
+              , DB.txOutSum = DB.DbLovelace 0
+              , DB.txFee = DB.DbLovelace 0
+              , DB.txDeposit = 0
+              , DB.txSize = 0
+              , DB.txInvalidHereafter = Nothing
+              , DB.txInvalidBefore = Nothing
+              , DB.txValidContract = True
+              , DB.txScriptSize = 0
+              }
+  let params = zip [0..] $ Map.elems (sgsPools $ sgStaking genesis)
+  forM_ params $ uncurry (insertPoolRegister tracer (Left 2) (sgNetworkId genesis) 0 blkId txId)
+  let stakes = zip [0..] $ Map.toList (sgsStake $ sgStaking genesis)
+  forM_ stakes $ \(n, (keyStaking, keyPool)) -> insertDelegation tracer (sgNetworkId genesis) 0 0 txId n Nothing (KeyHashObj keyStaking) [] keyPool
+
 -- -----------------------------------------------------------------------------
 
 configGenesisHash :: ShelleyGenesis StandardShelley -> ByteString
-configGenesisHash _ =  BS.take 28 ("GenesisHash " <> BS.replicate 28 '\0')
+configGenesisHash _ =  BS.take 32 ("Shelley Genesis Block Hash " <> BS.replicate 32 '\0')
 
 genesisHashSlotLeader :: ShelleyGenesis StandardShelley -> ByteString
-genesisHashSlotLeader = configGenesisHash
+genesisHashSlotLeader _ = BS.take 28 ("Shelley Genesis SlotLeader Hash" <> BS.replicate 28 '\0')
+
+configGenesisStakingHash :: ByteString
+configGenesisStakingHash =  BS.take 32 ("Shelley Genesis Staking Tx Hash " <> BS.replicate 32 '\0')
 
 configGenesisSupply :: ShelleyGenesis StandardShelley -> DB.Ada
 configGenesisSupply =

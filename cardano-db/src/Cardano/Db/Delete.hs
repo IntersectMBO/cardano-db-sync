@@ -10,7 +10,7 @@ import           Cardano.Slotting.Slot (SlotNo (..))
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Database.Persist.Sql (SqlBackend, delete, selectKeysList, (==.))
+import           Database.Persist.Sql (SqlBackend, delete, selectKeysList, (!=.), (==.))
 
 import           Cardano.Db.Schema
 
@@ -29,7 +29,8 @@ deleteCascadeBlock block = do
 -- deleted and 'False' if it did not exist.
 deleteCascadeAfter :: MonadIO m => BlockId -> ReaderT SqlBackend m Bool
 deleteCascadeAfter bid = do
-  keys <- selectKeysList [ BlockPreviousId ==. Just bid ] []
+  -- Genesis artificial blocks are not deleted (Byron or Shelley) since they have null epoch
+  keys <- selectKeysList [ BlockPreviousId ==. Just bid, BlockEpochNo !=. Nothing ] []
   mapM_ delete keys
   pure $ not (null keys)
 
