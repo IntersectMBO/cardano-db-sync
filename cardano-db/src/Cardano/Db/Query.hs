@@ -23,6 +23,7 @@ module Cardano.Db.Query
   , queryFeesUpToBlockNo
   , queryFeesUpToSlotNo
   , queryGenesisSupply
+  , queryShelleyGenesisSupply
   , queryLatestBlock
   , queryLatestCachedEpochNo
   , queryLatestEpochNo
@@ -125,7 +126,7 @@ queryAddressBalanceAtSlot addr slotNo = do
 queryGenesis :: MonadIO m => ReaderT SqlBackend m (Either LookupFail BlockId)
 queryGenesis = do
   res <- select . from $ \ blk -> do
-            where_ (isNothing (blk ^. BlockEpochNo))
+            where_ (isNothing (blk ^. BlockPreviousId))
             pure $ blk ^. BlockId
   case res of
     [blk] -> pure $ Right (unValue blk)
@@ -337,6 +338,18 @@ queryGenesisSupply = do
     res <- select . from $ \ (txOut `InnerJoin` tx `InnerJoin` blk) -> do
                 on (tx ^. TxBlockId ==. blk ^. BlockId)
                 on (tx ^. TxId ==. txOut ^. TxOutTxId)
+                where_ (isNothing $ blk ^. BlockPreviousId)
+                pure $ sum_ (txOut ^. TxOutValue)
+    pure $ unValueSumAda (listToMaybe res)
+
+-- | Return the total Shelley Genesis coin supply. The Shelley Genesis Block
+-- is the unique which has a non-null PreviousId, but has null Epoch.
+queryShelleyGenesisSupply :: MonadIO m => ReaderT SqlBackend m Ada
+queryShelleyGenesisSupply = do
+    res <- select . from $ \ (txOut `InnerJoin` tx `InnerJoin` blk) -> do
+                on (tx ^. TxBlockId ==. blk ^. BlockId)
+                on (tx ^. TxId ==. txOut ^. TxOutTxId)
+                where_ (isJust $ blk ^. BlockPreviousId)
                 where_ (isNothing $ blk ^. BlockEpochNo)
                 pure $ sum_ (txOut ^. TxOutValue)
     pure $ unValueSumAda (listToMaybe res)
