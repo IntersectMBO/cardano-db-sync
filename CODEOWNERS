@@ -16,3 +16,5 @@ nix                          @devops
 *.nix                        @devops
 bors.toml                    @devops
 nix-shell.project            @devops
+docker-compose.yml           @devops
+scripts/postgresql-setup.sh  @devops
