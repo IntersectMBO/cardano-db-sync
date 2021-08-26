@@ -3,7 +3,7 @@ cabal-version:          2.4
 -- http://haskell.org/cabal/users-guide/
 
 name:                   cardano-db-sync-extended
-version:                10.0.1
+version:                11.0.0
 synopsis:               The Extended Cardano DB Sync node
 description:            A Cardano node that follows the Cardano chain and inserts data from the
                         chain into a PostgresQL database. It is "extended" because it maintains an
