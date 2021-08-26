@@ -34,7 +34,7 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Insert.Epoch
 import           Cardano.DbSync.Era.Shelley.Query
-import           Cardano.DbSync.Era.Util (liftLookupFail)
+import           Cardano.DbSync.Era.Util (liftLookupFail, safeDecodeUtf8)
 
 import qualified Cardano.Ledger.Address as Ledger
 import           Cardano.Ledger.Alonzo.Language (Language)
@@ -59,7 +59,6 @@ import           Control.Monad.Class.MonadSTM.Strict (tryReadTBQueue)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 
 import qualified Data.Aeson as Aeson
-import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import           Data.Group (invert)
 import qualified Data.Map.Strict as Map
@@ -67,7 +66,6 @@ import           Data.Maybe.Strict (strictMaybeToMaybe)
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-import qualified Data.Text.Encoding.Error as Text
 
 import           Database.Persist.Sql (SqlBackend)
 
@@ -215,6 +213,7 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx = do
     redeemersIds <- mapM (insertRedeemer tracer txId) (Generic.txRedeemer tx)
     let redeemers = zip redeemersIds (Generic.txRedeemer tx)
 
+    mapM_ (insertDatum tracer txId) (Generic.txData tx)
     -- Insert the transaction inputs and collateral inputs (Alonzo).
     mapM_ (insertTxIn tracer txId redeemers) resolvedInputs
     mapM_ (insertCollateralTxIn tracer txId) (Generic.txCollateralInputs tx)
@@ -706,7 +705,8 @@ insertRedeemer
   :: (MonadBaseControl IO m, MonadIO m)
   => Trace IO Text -> DB.TxId -> Generic.TxRedeemer
   -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.RedeemerId
-insertRedeemer _tr txId redeemer = do
+insertRedeemer tracer txId redeemer = do
+    tdId <- insertDatum tracer txId $ Generic.txRedeemerDatum redeemer
     scriptHash <- findScriptHash
     lift . DB.insertRedeemer $
       DB.Redeemer
@@ -717,6 +717,7 @@ insertRedeemer _tr txId redeemer = do
         , DB.redeemerPurpose = mkPurpose $ Generic.txRedeemerPurpose redeemer
         , DB.redeemerIndex = Generic.txRedeemerIndex redeemer
         , DB.redeemerScriptHash = scriptHash
+        , DB.redeemerDatumId = tdId
         }
   where
     mkPurpose :: Ledger.Tag -> DB.ScriptPurpose
@@ -735,6 +736,33 @@ insertRedeemer _tr txId redeemer = do
         Nothing -> pure Nothing
         Just (Right bs) -> pure $ Just bs
         Just (Left txIn) -> fst <$> liftLookupFail "insertRedeemer" (queryResolveInputCredentials txIn)
+
+insertDatum
+  :: (MonadBaseControl IO m, MonadIO m)
+  => Trace IO Text -> DB.TxId -> Generic.TxDatum
+  -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.DatumId
+insertDatum tracer txId txd = do
+    ejson <- liftIO $ safeDecodeUtf8 $ Generic.txDatumValue txd
+    value <- case ejson of
+      Left err -> do
+        liftIO . logWarning tracer $ mconcat
+            [ "insertDatum: Could not decode to UTF8: ", textShow err ]
+        -- We have to inser
+        pure Nothing
+      Right json ->
+        -- See https://github.com/input-output-hk/cardano-db-sync/issues/297
+        if containsUnicodeNul json
+          then do
+            liftIO $ logWarning tracer "insertDatum: dropped due to a Unicode NUL character."
+            pure Nothing
+          else
+            pure $ Just json
+
+    lift . DB.insertDatum $ DB.Datum
+      { DB.datumHash = Generic.txDatumHash txd
+      , DB.datumTxId = txId
+      , DB.datumValue = value
+      }
 
 insertTxMetadata
     :: (MonadBaseControl IO m, MonadIO m)
@@ -771,14 +799,6 @@ insertTxMetadata tracer txId metadata =
           , DB.txMetadataBytes = singleKeyCBORMetadata
           , DB.txMetadataTxId = txId
           }
-
-safeDecodeUtf8 :: ByteString -> IO (Either Text.UnicodeException Text)
-safeDecodeUtf8 bs
-    | BS.any isNullChar bs = pure $ Left (Text.DecodeError (BS.unpack bs) (Just 0))
-    | otherwise = try $ evaluate (Text.decodeUtf8With Text.strictDecode bs)
-  where
-    isNullChar :: Char -> Bool
-    isNullChar ch = ord ch == 0
 
 containsUnicodeNul :: Text -> Bool
 containsUnicodeNul = Text.isInfixOf "\\u000"
