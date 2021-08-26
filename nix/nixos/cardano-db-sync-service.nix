@@ -21,9 +21,13 @@ in {
         description = "use cardano-db-sync-extended";
       };
       takeSnapshot = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-        description = "Take snapshot before starting cardano-db-sync";
+        type = lib.types.enum [ "never" "once" "always" ];
+        default = "never";
+        description = ''Take snapshot before starting cardano-db-sync,
+          "once" (skip if there is one already),
+          "always" (removing previous snapshot),
+          or "never".
+        '';
       };
       restoreSnapshot = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
@@ -183,24 +187,31 @@ in {
         export PGPASSFILE=$(pwd)/pgpass
         ''}
 
-        ${lib.optionalString cfg.takeSnapshot ''
+        ${lib.optionalString (cfg.takeSnapshot != "never")  ''
+        EXISTING_SNAPSHOTS=()
         for f in db-sync-snapshot-schema-${majorVersion}*; do
           if [ -f $f ]; then
-            echo "Skipping snapshot: already exist for this version: $f"
-            SKIP_SNAPSHOT=1
+            echo "A snapshot already exist for this version: $f"
+            EXISTING_SNAPSHOTS+=( $f )
           fi
         done
-        if [ -z ''${SKIP_SNAPSHOT:-} ]; then
+        ${lib.optionalString (cfg.takeSnapshot == "once") ''
+        if [ ''${#EXISTING_SNAPSHOTS[@]} -eq 0 ]; then
+        ''}
           set +e
           SNAPSHOT_SCRIPT=$( (yes phrase ||:) | cardano-db-tool prepare-snapshot --state-dir ./ | tail -n 1)
           res=$?
           set -e
           if [ $res -eq 0 ]; then
             ${../../scripts/postgresql-setup.sh} ''${SNAPSHOT_SCRIPT#*scripts/postgresql-setup.sh}
+            for s in ''${EXISTING_SNAPSHOTS[@]}; do
+              rm $s
+            done
           else
             >&2 echo "State does not permit to take snapshot, proceeding with normal startup."
           fi
-        fi
+        ${lib.optionalString (cfg.takeSnapshot == "once") ''
+        fi''}
         ''}
 
         ${cfg.restoreSnapshotScript}
