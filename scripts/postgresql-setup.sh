@@ -29,8 +29,13 @@ function check_pgpass_file {
     exit 1
     fi
 
-  databasename=$(cut -d ":" -f 3 "${PGPASSFILE}")
-  export databasename
+	export PGHOST=$(cut -d ":" -f 1 "${PGPASSFILE}")
+	export PGPORT=$(cut -d ":" -f 2 "${PGPASSFILE}")
+	export PGDATABASE=$(cut -d ":" -f 3 "${PGPASSFILE}")
+	user=$(cut -d ":" -f 4 "${PGPASSFILE}")
+	if [ "$user" != "*" ]; then
+		export PGUSER=$user
+	fi;
 }
 
 function check_for_psql {
@@ -39,15 +44,14 @@ function check_for_psql {
 }
 
 function check_psql_superuser {
-	user="$(whoami)"
 	set +e
-	psql -l > /dev/null 2>&1
+	psql -l "${PGDATABASE}" > /dev/null 2>&1 || psql -l > /dev/null 2>&1
 	if test $? -ne 0 ; then
 		echo
-		echo "Error : User '$user' can't access postgres."
+		echo "Error : User '${PGUSER:-$(whoami)}' can't access postgres."
 		echo
 		echo "To fix this, log into the postgres account and run:"
-		echo "    createuser --createdb --superuser $user"
+		echo "    createuser --createdb --superuser ${PGUSER:-$(whoami)}"
 		echo
 		exit 1
 		fi
@@ -55,10 +59,10 @@ function check_psql_superuser {
 }
 
 function check_connect_as_user {
-	psql  "${databasename}" --no-password --command='\dt' > /dev/null
+	psql  "${PGDATABASE}" --no-password --command='\dt' > /dev/null
 	if test $? -ne 0 ; then
 		echo
-		echo "Error : Not able to connect as '$(whoami)' user."
+		echo "Error : Not able to connect as '${PGUSER:-$(whoami)}' user."
 		echo
 		exit 1
 		fi
@@ -66,20 +70,20 @@ function check_connect_as_user {
 
 function check_db_exists {
 	set +e
-	count=$(psql -l | grep -c "${databasename} ")
+	count=$(psql -l "${PGDATABASE}" | grep -c "${PGDATABASE} ")
 	if test "${count}" -lt 1 ; then
 		echo
-		echo "Error : No '${databasename}' database."
+		echo "Error : No '${PGDATABASE}' database."
 		echo
 		echo "To create one run:"
 		echo "    $progname --createdb"
 		echo
 		exit 1
 		fi
-	count=$(psql -l | grep "${databasename} " | cut -d \| -f 3 | grep -c UTF8)
+	count=$(psql -l "${PGDATABASE}" | grep "${PGDATABASE} " | cut -d \| -f 3 | grep -c UTF8)
 	if test "${count}" -ne 1 ; then
 		echo
-		echo "Error : '${databasename}' database exists, but is not UTF8."
+		echo "Error : '${PGDATABASE}' database exists, but is not UTF8."
 		echo
 		echo "To fix this you should drop the current one and create a new one using:"
 		echo "    $progname --dropdb"
@@ -91,20 +95,22 @@ function check_db_exists {
 }
 
 function create_db {
-	if test "$( psql "${databasename}" -tAc "SELECT 1 FROM pg_database WHERE datname='${databasename}'" )" != '1' ; then
-		createdb -T template0 --owner="$(whoami)" --encoding=UTF8 "${databasename}"
+	if test "$( psql "${PGDATABASE}" -tAc "SELECT 1 FROM pg_database WHERE datname='${PGDATABASE}'" )" != '1' ; then
+		createdb -T template0 --owner="${PGUSER:-$(whoami)}" --encoding=UTF8 "${PGDATABASE}"
 		fi
 }
 
+
+
 function drop_db {
-	if test "$( psql "${databasename}" -tAc "SELECT 1 FROM pg_database WHERE datname='${databasename}'" )" = '1' ; then
-		psql "${databasename}" --command="DROP OWNED BY CURRENT_USER;"
-		fi
+	if test "$( psql "${PGDATABASE}" -tAc "SELECT 1 FROM pg_database WHERE datname='${PGDATABASE}'" )" = '1' ; then
+		psql "${PGDATABASE}" --command="DROP OWNED BY CURRENT_USER;"
+	fi
 }
 
 function list_views {
-	psql "${databasename}" \
-		--command="select table_name from information_schema.views where table_catalog = '${databasename}' and table_schema = 'public' ;"
+	psql "${PGDATABASE}" \
+		--command="select table_name from information_schema.views where table_catalog = '${PGDATABASE}' and table_schema = 'public' ;"
 }
 
 function create_migration {
@@ -121,7 +127,7 @@ function run_migrations {
 }
 
 function dump_schema {
-	pg_dump -s "${databasename}"
+	pg_dump -s "${PGDATABASE}"
 }
 
 function create_snapshot {
@@ -130,7 +136,7 @@ function create_snapshot {
 	ledger_file=$2
 	tmp_dir=$(mktemp --directory -t db-sync-snapshot-XXXXXXXXXX)
 	echo $"Working directory: ${tmp_dir}"
-	pg_dump --no-owner "${databasename}" > "${tmp_dir}/$1.sql"
+	pg_dump --no-owner "${PGDATABASE}" > "${tmp_dir}/$1.sql"
 	cp "$ledger_file" "$tmp_dir/$(basename "${ledger_file}")"
 	tar zcvf "${tgz_file}" --directory "${tmp_dir}" "${dbfile}" "$(basename "${ledger_file}")"
 	rm -rf "${tmp_dir}"
@@ -153,7 +159,7 @@ function restore_snapshot {
 	db_file=$(find "$tmp_dir/" -iname "*.sql")
 	lstate_file=$(find "${tmp_dir}/" -iname "*.lstate")
 	mv "${lstate_file}" "$2"
-	psql --dbname="${databasename}" -f "${db_file}"
+	psql --dbname="${PGDATABASE}" -f "${db_file}"
 	rm --recursive "${tmp_dir}"
 }
 
@@ -219,7 +225,7 @@ case "${1:-""}" in
 		check_connect_as_user
 		drop_db
 		create_db
-		echo "The database ${databasename} has been dropped and recreated."
+		echo "The database ${PGDATABASE} has been dropped and recreated."
 		echo "The tables will be recreated when the application is run."
 		exit 0
 		;;
@@ -261,8 +267,10 @@ case "${1:-""}" in
 		check_pgpass_file
 		check_for_psql
 		check_psql_superuser
-		drop_db
-		create_db
+		if [ ${RESTORE_RECREATE_DB:-"Y"} == "Y" ]; then
+			drop_db
+			create_db
+		fi
 		if test $# -ne 3 ; then
 		  echo "Expecting exactly 2 more arguments, the snapshot file and the ledger state directory."
 		  exit 1

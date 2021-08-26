@@ -43,11 +43,10 @@ in {
       };
       restoreSnapshotSigKey = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
-        default = if (cfg.cluster == "mainnet" || cfg.cluster == "testnet")
-          then "D32587D4090FE461CAEE0FF4966E5CB9CBFAA9BA"
-          else null;
+        default = null;
         description = ''
           Key ID for verifying the snaspshot signature.
+          (Signature check disabled if null)
         '';
       };
       restoreSnapshotScript = lib.mkOption {
@@ -59,6 +58,7 @@ in {
         RESTORED_MARKER="$SNAPSHOT_BASENAME.restored"
         if [ ! -f "$RESTORED_MARKER" ]; then
           if [[ "${cfg.restoreSnapshot}" =~ ^https://.* ]]; then
+            echo "Downloading snapshot ${cfg.restoreSnapshot} ..."
             ${pkgs.curl}/bin/curl -LOC - "${cfg.restoreSnapshot}"
 
             ${if (cfg.restoreSnapshotSha != null)
