@@ -1,5 +1,12 @@
 # Revision history for cardano-db-sync
 
+## 11.0.0
+* Note that this release requires the database to be dropped and recreated.
+* Alonzo support.
+* Database changes as per cardano-db changelog.
+* Add run time validation that the on-disk schema matches what the app expects (#472).
+* Add partial validation of `Reward` table.
+
 ## 10.0.1
 * Fix docker issue (#686).
 
