@@ -342,7 +342,7 @@ A table for rewards earned by staking. The rewards earned in epoch `N` are added
 |-|-|-|
 | `id` | integer (64) |  |
 | `addr_id` | integer (64) | The StakeAddress table index for the stake address that earned the reward. |
-| `type` | rewardtype | The source of the rewards; pool `member`, pool `owner`, `treasury` or `reserve` payment. |
+| `type` | rewardtype | The source of the rewards; pool `member`, pool `leader`, `treasury` or `reserve` payment. |
 | `amount` | lovelace | The reward amount (in Lovelace). |
 | `earned_epoch` | integer (64) | The epoch in which the reward was earned. |
 | `spendable_epoch` | integer (64) |  |
