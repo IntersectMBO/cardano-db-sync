@@ -292,7 +292,7 @@ select block.block_no, block.epoch_no, pool_hash.view as pool_view
 (2 rows)
 ```
 
-### Get the block number of blocks created by a specified pool for each epoch
+### Get the number of blocks created by a specified pool for each epoch
 
 ```sql
 select block.epoch_no, count (*) as block_count
