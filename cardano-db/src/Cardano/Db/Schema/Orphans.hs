@@ -4,14 +4,15 @@
 
 module Cardano.Db.Schema.Orphans where
 
-import           Cardano.Db.Types (DbInt65 (..), DbLovelace (..), DbWord64 (..), ScriptPurpose,
-                   ScriptType (..), SyncState, readDbInt65, readScriptPurpose, readScriptType,
-                   readSyncState, renderScriptPurpose, renderScriptType, renderSyncState,
-                   showDbInt65)
+import           Cardano.Db.Types (DbInt65 (..), DbLovelace (..), DbWord64 (..), RewardSource,
+                   ScriptPurpose, ScriptType (..), SyncState, readDbInt65, readRewardSource,
+                   readScriptPurpose, readScriptType, readSyncState, renderScriptPurpose,
+                   renderScriptType, renderSyncState, showDbInt65, showRewardSource)
 
 import qualified Data.ByteString.Char8 as BS
 import           Data.Ratio (denominator, numerator)
 import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 import           Data.WideWord.Word128 (Word128)
 
 import           Database.Persist.Class (PersistField (..))
@@ -55,6 +56,12 @@ instance PersistField DbWord64 where
       else Left $ mconcat [ "Failed to parse Haskell type DbWord64: ", Text.pack (show x) ]
   fromPersistValue x =
     Left $ mconcat [ "Failed to parse Haskell type DbWord64: ", Text.pack (show x) ]
+
+instance PersistField RewardSource where
+  toPersistValue = PersistText . showRewardSource
+  fromPersistValue (PersistLiteral bs) = Right $ readRewardSource (Text.decodeLatin1 bs)
+  fromPersistValue x =
+    Left $ mconcat [ "Failed to parse Haskell type RewardSource: ", Text.pack (show x) ]
 
 instance PersistField SyncState where
   toPersistValue = PersistText . renderSyncState
