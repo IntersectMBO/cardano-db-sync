@@ -33,10 +33,12 @@ import           Cardano.DbSync.Era.Shelley.Generic.Util
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
 import qualified Cardano.Ledger.Address as Ledger
+import qualified Cardano.Ledger.Allegra as Allegra
 import           Cardano.Ledger.Alonzo (AlonzoEra)
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
-import           Cardano.Ledger.Alonzo.Scripts (ExUnits (..), Script (..), Tag (..), txscriptfee)
+import           Cardano.Ledger.Alonzo.Scripts (ExUnits (..), Tag (..), txscriptfee)
+import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import           Cardano.Ledger.Alonzo.Tx (ValidatedTx (..))
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
@@ -44,6 +46,7 @@ import qualified Cardano.Ledger.Alonzo.TxWitness as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Core as Ledger
 import qualified Cardano.Ledger.Era as Ledger
+import qualified Cardano.Ledger.Mary as Mary
 import           Cardano.Ledger.Mary.Value (AssetName, PolicyID, Value (..))
 import qualified Cardano.Ledger.SafeHash as Ledger
 import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as ShelleyMa
@@ -153,8 +156,8 @@ fromAllegraTx (blkIndex, tx) =
       , txParamProposal = maybe [] (convertParamProposal (Allegra Standard)) $ strictMaybeToMaybe (ShelleyMa.update rawTxBody)
       , txMint = mempty     -- Allegra does not support Multi-Assets
       , txRedeemer = []     -- Allegra does not support Redeemers
-      , txScriptSizes = []    -- Allegra does not support scripts
-      , txScripts = []        -- We don't populate scripts for Allegra
+      , txScriptSizes = []    -- No sizes for Timelock scripts.
+      , txScripts = scripts
       , txScriptsFee = Coin 0 -- Allegra does not support scripts
       }
   where
@@ -179,6 +182,26 @@ fromAllegraTx (blkIndex, tx) =
       case tx of
         (Shelley.Tx (ShelleyMa.TxBodyConstr txBody) _wit _md) -> memotype txBody
 
+    scripts :: [TxScript]
+    scripts =
+      mkTxScript
+        <$> (Map.toList (Shelley.scriptWits $ getField @"wits" tx)
+            ++ getAuxScripts (getField @"auxiliaryData" tx))
+
+    getAuxScripts
+        :: ShelleyMa.StrictMaybe (Allegra.AuxiliaryData StandardAllegra)
+        -> [(ScriptHash StandardCrypto, Allegra.Script StandardAllegra)]
+    getAuxScripts maux =
+      case strictMaybeToMaybe maux of
+        Nothing -> []
+        Just (ShelleyMa.AuxiliaryData _ scrs) ->
+          map (\scr -> (Ledger.hashScript @StandardAllegra scr, scr)) $ toList scrs
+
+    mkTxScript :: (ScriptHash StandardCrypto, Allegra.Script StandardAllegra) -> TxScript
+    mkTxScript (hsh, _script) = TxScript
+      { txScriptHash = unScriptHash hsh
+      , txScriptPlutusSize = Nothing -- Allegra has only Timelock scripts.
+      }
 
 fromShelleyTx :: (Word64, Shelley.Tx StandardShelley) -> Tx
 fromShelleyTx (blkIndex, tx) =
@@ -242,8 +265,8 @@ fromMaryTx (blkIndex, tx) =
       , txParamProposal = maybe [] (convertParamProposal (Mary Standard)) $ strictMaybeToMaybe (ShelleyMa.update $ unTxBodyRaw tx)
       , txMint = coerceMint (ShelleyMa.mint $ unTxBodyRaw tx)
       , txRedeemer = []     -- Mary does not support Redeemer
-      , txScriptSizes = []    -- Mary does not support scripts
-      , txScripts = []        -- We don't populate scripts for Mary
+      , txScriptSizes = []  -- No sizes for Timelock scripts.
+      , txScripts = scripts
       , txScriptsFee = Coin 0 -- Mary does not support scripts
       }
   where
@@ -265,6 +288,27 @@ fromMaryTx (blkIndex, tx) =
 
     unTxBodyRaw :: Shelley.Tx StandardMary -> ShelleyMa.TxBodyRaw StandardMary
     unTxBodyRaw (Shelley.Tx (ShelleyMa.TxBodyConstr txBody) _wit _md) = memotype txBody
+
+    scripts :: [TxScript]
+    scripts =
+      mkTxScript
+        <$> (Map.toList (Shelley.scriptWits $ getField @"wits" tx)
+            ++ getAuxScripts (getField @"auxiliaryData" tx))
+
+    getAuxScripts
+        :: ShelleyMa.StrictMaybe (ShelleyMa.AuxiliaryData StandardMary)
+        -> [(ScriptHash StandardCrypto, Mary.Script StandardMary)]
+    getAuxScripts maux =
+      case strictMaybeToMaybe maux of
+        Nothing -> []
+        Just (ShelleyMa.AuxiliaryData _ scrs) ->
+          map (\scr -> (Ledger.hashScript @StandardMary scr, scr)) $ toList scrs
+
+    mkTxScript :: (ScriptHash StandardCrypto, Mary.Script StandardMary) -> TxScript
+    mkTxScript (hsh, _script) = TxScript
+      { txScriptHash = unScriptHash hsh
+      , txScriptPlutusSize = Nothing -- Mary has only Timelock scripts.
+      }
 
 fromAlonzoTx :: Ledger.PParams StandardAlonzo -> (Word64, Ledger.Tx StandardAlonzo) -> Tx
 fromAlonzoTx pp (blkIndex, tx) =
@@ -317,7 +361,7 @@ fromAlonzoTx pp (blkIndex, tx) =
 
     getAuxScripts
         :: ShelleyMa.StrictMaybe (Alonzo.AuxiliaryData StandardAlonzo)
-        -> [(ScriptHash StandardCrypto, Script (AlonzoEra StandardCrypto))]
+        -> [(ScriptHash StandardCrypto, Alonzo.Script (AlonzoEra StandardCrypto))]
     getAuxScripts maux =
       case strictMaybeToMaybe maux of
         Nothing -> []
@@ -330,15 +374,15 @@ fromAlonzoTx pp (blkIndex, tx) =
         Nothing -> Nothing
         Just dataHash -> Just $ Crypto.hashToBytes (Ledger.extractHash dataHash)
 
-    mkTxScript :: (ScriptHash StandardCrypto, Script (AlonzoEra StandardCrypto)) -> TxScript
+    mkTxScript :: (ScriptHash StandardCrypto, Alonzo.Script (AlonzoEra StandardCrypto)) -> TxScript
     mkTxScript (hsh, script) = TxScript
       { txScriptHash = unScriptHash hsh
       , txScriptPlutusSize = getScriptSize script
       }
 
-    getScriptSize :: Script (AlonzoEra StandardCrypto) -> Maybe Word64
-    getScriptSize (TimelockScript _) = Nothing
-    getScriptSize (PlutusScript sbs) = Just $ fromIntegral $ SBS.length sbs
+    getScriptSize :: Alonzo.Script (AlonzoEra StandardCrypto) -> Maybe Word64
+    getScriptSize (Alonzo.TimelockScript _) = Nothing
+    getScriptSize (Alonzo.PlutusScript sbs) = Just $ fromIntegral $ SBS.length sbs
 
     minFees :: Coin
     minFees = txscriptfee (Alonzo._prices pp) $ Alonzo.totExUnits tx
