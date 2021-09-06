@@ -1,6 +1,6 @@
 # Schema Documentation for cardano-db-sync
 
-Schema version: 10.0.0 (from branch **kderme/scripts-tables** which may not accurately reflect the version number)
+Schema version: 11.0.0 (from branch **prerelease/11.0.x** which may not accurately reflect the version number)
 
 ### `schema_version`
 
@@ -117,6 +117,7 @@ A table for transaction outputs.
 | `payment_cred` | hash28type | The payment credential part of the Shelley address. (NULL for Byron addresses). For a script-locked address, this is the script hash. |
 | `stake_address_id` | integer (64) | The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses). |
 | `value` | lovelace | The output value (in Lovelace) of the transaction output. |
+| `data_hash` | hash32type | The hash of the transaction output datum. (NULL for Txs without scripts). |
 
 ### `tx_in`
 
@@ -127,8 +128,8 @@ A table for transaction inputs.
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `tx_in_id` | integer (64) | The Tx table index where this transaction is used as an input. |
-| `tx_out_id` | integer (64) | The Tx table index where this transaction was created as an output. |
+| `tx_in_id` | integer (64) | The Tx table index of the transaction that contains this transaction input |
+| `tx_out_id` | integer (64) | The Tx table index of the transaction that contains this transaction output. |
 | `tx_out_index` | txindex | The index within the transaction outputs. |
 | `redeemer_id` | integer (64) | The Redeemer table index which is used to validate this input. |
 
@@ -141,8 +142,8 @@ A table for transaction collateral inputs.
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `tx_in_id` | integer (64) | The Tx table index where this transaction is used as an input. |
-| `tx_out_id` | integer (64) | The Tx table index where this transaction was created as an output. |
+| `tx_in_id` | integer (64) | The Tx table index of the transaction that contains this transaction input |
+| `tx_out_id` | integer (64) | The Tx table index of the transaction that contains this transaction output. |
 | `tx_out_index` | txindex | The index within the transaction outputs. |
 
 ### `meta`
@@ -327,7 +328,7 @@ A table for metadata attached to a transaction.
 |-|-|-|
 | `id` | integer (64) |  |
 | `key` | word64type | The metadata key (a Word64/unsigned 64 bit number). |
-| `json` | jsonb | The JSON payload. |
+| `json` | jsonb | The JSON payload if it can bde decoded as JSON. |
 | `bytes` | bytea | The raw bytes of the payload. |
 | `tx_id` | integer (64) | The Tx table index of the transaction where this metadata was included. |
 
@@ -341,25 +342,10 @@ A table for rewards earned by staking. The rewards earned in epoch `N` are added
 |-|-|-|
 | `id` | integer (64) |  |
 | `addr_id` | integer (64) | The StakeAddress table index for the stake address that earned the reward. |
-| `type` | rewardtype | The source of the rewards; pool `member` vs pool `owner`. |
+| `type` | rewardtype | The source of the rewards; pool `member`, pool `owner`, `treasury` or `reserve` payment. |
 | `amount` | lovelace | The reward amount (in Lovelace). |
 | `earned_epoch` | integer (64) | The epoch in which the reward was earned. |
 | `spendable_epoch` | integer (64) |  |
-| `pool_id` | integer (64) | The PoolHash table index for the pool the stake address was delegated to when the reward is earned. Will be NULL for payments from the treasury or the reserves. |
-
-### `orphaned_reward`
-
-A table for rewards earned by staking, but are orphaned. Rewards are orphaned when the stake address is deregistered before the rewards are distributed.
-
-* Primary Id: `id`
-
-| Column name | Type | Description |
-|-|-|-|
-| `id` | integer (64) |  |
-| `addr_id` | integer (64) | The StakeAddress table index for the stake address that earned the reward. |
-| `type` | rewardtype | The source of the rewards; pool `member` vs pool `owner`. |
-| `amount` | lovelace | The reward amount (in Lovelace). |
-| `epoch_no` | integer (64) | The epoch in which the reward was earned. |
 | `pool_id` | integer (64) | The PoolHash table index for the pool the stake address was delegated to when the reward is earned. Will be NULL for payments from the treasury or the reserves. |
 
 ### `withdrawal`
@@ -600,7 +586,8 @@ The pool offline (ie not on chain) for a stake pool.
 | `pool_id` | integer (64) | The PoolHash table index for the pool this offline data refers. |
 | `ticker_name` | string | The pool's ticker name (as many as 5 characters). |
 | `hash` | hash32type | The hash of the offline data. |
-| `metadata` | string | The raw offline data. |
+| `json` | jsonb | The payload as JSON. |
+| `bytes` | bytea | The raw bytes of the payload. |
 | `pmr_id` | integer (64) | The PoolMetadataRef table index for this offline data. |
 
 ### `pool_offline_fetch_error`
@@ -617,6 +604,18 @@ A table containing pool offline data fetch errors.
 | `pmr_id` | integer (64) | The PoolMetadataRef table index for this offline data. |
 | `fetch_error` | string | The text of the error. |
 | `retry_count` | uinteger | The number of retries. |
+
+### `epoch_reward_total_received`
+
+This table is used to help validate the accounting of rewards. It contains the total reward  amount for each epoch received from the ledger state and includes orphaned rewards that  are later removed from the Reward table.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `earned_epoch` | uinteger | The epoch in which the reward was earned. |
+| `amount` | lovelace | The total rewards for the epoch in Lovelace. |
 
 ### `reserved_pool_ticker`
 

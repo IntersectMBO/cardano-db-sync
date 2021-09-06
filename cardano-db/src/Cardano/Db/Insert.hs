@@ -44,6 +44,7 @@ module Cardano.Db.Insert
   , insertTxOut
   , insertWithdrawal
   , insertRedeemer
+  , insertCostModels
 
   -- Export mainly for testing.
   , insertBlockChecked
@@ -59,6 +60,7 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.List.NonEmpty as NonEmpty
 import           Data.Proxy (Proxy (..))
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -68,7 +70,7 @@ import           Database.Persist.Class (AtLeastOneUniqueKey, PersistEntityBacke
 import           Database.Persist.EntityDef.Internal (entityDB, entityUniques)
 import           Database.Persist.Sql (OnlyOneUniqueKey, PersistRecordBackend, SqlBackend,
                    UniqueDef, entityDef, rawExecute, rawSql, toPersistFields, toPersistValue,
-                   uniqueDBName)
+                   uniqueDBName, uniqueFields)
 import qualified Database.Persist.Sql.Util as Util
 import           Database.Persist.Types (ConstraintNameDB (..), EntityNameDB (..), FieldNameDB (..),
                    PersistValue, entityKey)
@@ -210,6 +212,9 @@ insertWithdrawal = insertUnchecked "Withdrawal"
 insertRedeemer :: (MonadBaseControl IO m, MonadIO m) => Redeemer -> ReaderT SqlBackend m RedeemerId
 insertRedeemer = insertCheckUnique "Redeemer"
 
+insertCostModels :: (MonadBaseControl IO m, MonadIO m) => CostModels -> ReaderT SqlBackend m CostModelsId
+insertCostModels = insertCheckUnique "CostModels"
+
 -- -----------------------------------------------------------------------------
 
 data DbInsertException
@@ -253,8 +258,8 @@ insertManyUncheckedUnique vtype records = do
     exceptHandler e =
       liftIO $ throwIO (DbInsertException vtype e)
 
--- Insert, getting PostgreSQL to check the uniqueness constaint, and if it is violated, rewrite
--- the first field with the same value to force PostgresSQL to return the row identifier.
+-- Insert, getting PostgreSQL to check the uniqueness constaint. If it is violated,
+-- simply returns the Key, without changing anything.
 insertCheckUnique
     :: forall m record.
         ( MonadBaseControl IO m
@@ -278,19 +283,16 @@ insertCheckUnique vtype record = do
         , ") VALUES (", Util.commaSeparated placeholders
         , ") ON CONFLICT ON CONSTRAINT "
         , unConstraintNameDB (uniqueDBName $ onlyOneUniqueDef (Proxy @record))
-        -- Head is applied to these two lists, but these two lists should never be empty.
-        -- If either list is empty, it is due to a table definition with zero columns.
-        , " DO UPDATE SET ", head fieldNames, " = ", head placeholders
+        -- An update is necessary, to force Postgres to return the Id. 'EXCLUDED'
+        -- is used for the new row. 'dummyUpdateField' is a part of the Unique key
+        -- so even if it is updated with the new value on conflict, no actual
+        -- effect will take place.
+        , " DO UPDATE SET ", dummyUpdateField, " = EXCLUDED.", dummyUpdateField
         , " RETURNING id ;"
         ]
 
     values :: [PersistValue]
-    values = pvalues ++ case pvalues of
-                          [] -> []
-                          (x:_) -> [x]
-
-    pvalues :: [PersistValue]
-    pvalues = map toPersistValue (toPersistFields record)
+    values = map toPersistValue (toPersistFields record)
 
     fieldNames, placeholders :: [Text]
     (fieldNames, placeholders) =
@@ -299,6 +301,10 @@ insertCheckUnique vtype record = do
     exceptHandler :: SqlError -> ReaderT SqlBackend m a
     exceptHandler e =
       liftIO $ throwIO (DbInsertException vtype e)
+
+    -- The first field of the Unique key
+    dummyUpdateField :: Text
+    dummyUpdateField = escapeFieldName . snd . NonEmpty.head . uniqueFields $ onlyOneUniqueDef (Proxy @record)
 
 insertReplace
     :: forall m record.

@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Cardano.Sync.Types
   ( BlockDetails (..)
+  , BlockEra (..)
   , CardanoBlock
   , CardanoPoint
   , CardanoProtocol
@@ -41,6 +42,14 @@ data BlockDetails = BlockDetails
   { bdBlock :: !CardanoBlock
   , bdSlot :: !SlotDetails
   }
+
+data BlockEra
+  = Shelley
+  | Allegra
+  | Mary
+  | Alonzo
+  deriving (Eq, Show)
+
 
 -- | Slot within an Epoch.
 newtype EpochSlot = EpochSlot

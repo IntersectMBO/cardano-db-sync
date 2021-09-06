@@ -3,7 +3,7 @@ cabal-version:          2.2
 -- http://haskell.org/cabal/users-guide/
 
 name:                   cardano-sync
-version:                10.0.1
+version:                11.0.0
 synopsis:               The Cardano Sync node
 description:            A Cardano node that follows the Cardano chain and inserts data from the
                         chain into a PostgresQL database.
@@ -45,6 +45,7 @@ library
                         Cardano.Sync.DbAction
                         Cardano.Sync.Error
 
+                        Cardano.Sync.LedgerEvent
                         Cardano.Sync.LedgerState
 
                         Cardano.Sync.Era.Byron.Util
@@ -104,6 +105,7 @@ library
                       , ouroboros-network
                       , ouroboros-network-framework
                       , shelley-spec-ledger
+                      , small-steps
                       , stm
                       , strict
                       , text
