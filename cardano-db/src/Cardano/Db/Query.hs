@@ -48,6 +48,7 @@ module Cardano.Db.Query
   , queryUtxoAtBlockNo
   , queryUtxoAtSlotNo
   , queryWithdrawalsUpToBlockNo
+  , queryAdaPots
 
   , entityPair
   , isJust
@@ -579,6 +580,13 @@ queryWithdrawalsUpToBlockNo blkNo = do
             where_ (blk ^. BlockBlockNo <=. just (val blkNo))
             pure $ sum_ (withDraw ^. WithdrawalAmount)
   pure $ unValueSumAda (listToMaybe res)
+
+queryAdaPots :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe AdaPots)
+queryAdaPots blkId = do
+  res <- select . from $ \ adaPots -> do
+            where_ (adaPots  ^. AdaPotsBlockId ==. val blkId)
+            pure adaPots
+  pure $ fmap entityVal (listToMaybe res)
 
 -- -----------------------------------------------------------------------------
 -- SqlQuery predicates
