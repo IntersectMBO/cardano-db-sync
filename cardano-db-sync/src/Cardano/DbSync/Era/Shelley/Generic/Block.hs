@@ -36,6 +36,7 @@ import           Cardano.Ledger.SafeHash (SafeToHash)
 import           Cardano.Prelude
 
 import           Cardano.Slotting.Slot (SlotNo (..))
+import           Cardano.Sync.Types hiding (Block)
 
 import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlonzo, StandardMary,
                    StandardShelley)
@@ -49,13 +50,6 @@ import qualified Shelley.Spec.Ledger.OCert as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 
-
-data BlockEra
-  = Shelley
-  | Allegra
-  | Mary
-  | Alonzo
-  deriving (Eq, Show)
 
 data Block = Block
   { blkEra :: !BlockEra

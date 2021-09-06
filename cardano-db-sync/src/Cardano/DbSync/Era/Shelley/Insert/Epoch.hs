@@ -9,10 +9,10 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.DbSync.Era.Shelley.Insert.Epoch
-  ( insertEpochInterleaved
+  ( finalizeEpochBulkOps
+  , insertEpochInterleaved
   , postEpochRewards
   , postEpochStake
-  , flushBulkOperation
   ) where
 
 import           Cardano.Prelude
@@ -105,11 +105,12 @@ postEpochStake lenv smap point = do
       writeTBQueue (leBulkOpQueue lenv) $ BulkStakeDistChunk epochNo point icache stakeChunk
     writeTBQueue (leBulkOpQueue lenv) $ BulkStakeDistReport epochNo point (length $ Generic.sdistStakeMap smap)
 
-flushBulkOperation
+
+finalizeEpochBulkOps
      :: (MonadBaseControl IO m, MonadIO m)
      => LedgerEnv
      -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-flushBulkOperation lenv = do
+finalizeEpochBulkOps lenv = do
     bops <- liftIO $ atomically $ flushTBQueue (leBulkOpQueue lenv)
     unless (null bops) $
       liftIO $ logInfo (leTrace lenv) $ mconcat
@@ -170,7 +171,7 @@ insertRewards epoch icache rewardsChunk = do
       forM (Set.toList rset) $ \ rwd ->
         pure $ DB.Reward
                   { DB.rewardAddrId = saId
-                  , DB.rewardType = DB.showRewardSource (Generic.rewardSource rwd)
+                  , DB.rewardType = Generic.rewardSource rwd
                   , DB.rewardAmount = Generic.coinToDbLovelace (Generic.rewardAmount rwd)
                   , DB.rewardEarnedEpoch = unEpochNo epoch
                   , DB.rewardSpendableEpoch = 2 + unEpochNo epoch

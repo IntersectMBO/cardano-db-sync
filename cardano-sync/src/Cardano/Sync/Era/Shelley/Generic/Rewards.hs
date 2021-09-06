@@ -1,4 +1,6 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Cardano.Sync.Era.Shelley.Generic.Rewards
   ( Reward (..)
@@ -8,10 +10,14 @@ module Cardano.Sync.Era.Shelley.Generic.Rewards
   , rewardsStakeCreds
   ) where
 
-import           Cardano.Db (RewardSource (..), rewardTypeToSource)
+import           Cardano.Prelude
 
+import           Cardano.Db (RewardSource (..), rewardTypeToSource, textShow)
+
+import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
 import qualified Cardano.Ledger.BaseTypes as Ledger
-import           Cardano.Ledger.Coin (Coin)
+import           Cardano.Ledger.Coin (Coin (..))
+import qualified Cardano.Ledger.Core as Ledger
 import qualified Cardano.Ledger.Credential as Ledger
 import           Cardano.Ledger.Era (Crypto)
 import qualified Cardano.Ledger.Keys as Ledger
@@ -21,12 +27,8 @@ import           Cardano.Slotting.Slot (EpochNo (..))
 import           Cardano.Sync.Era.Shelley.Generic.StakeCred
 import           Cardano.Sync.Types
 
-import           Data.Bifunctor (bimap)
 import           Data.Coerce (coerce)
-import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import           Data.Maybe (mapMaybe)
-import           Data.Set (Set)
 import qualified Data.Set as Set
 
 import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
@@ -36,8 +38,12 @@ import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley
+import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Rewards as Shelley
 
+
+-- The fields of this struct *must* remain in this ordering in order for the `Ord` instance
+-- to work correctly for `takeFirstReward` to operate correctly.
 data Reward = Reward
   { rewardSource :: !RewardSource
   , rewardPool :: !(Maybe (Ledger.KeyHash 'Ledger.StakePool StandardCrypto))
@@ -54,12 +60,15 @@ data Rewards = Rewards
 
 epochRewards :: Ledger.Network -> EpochNo -> ExtLedgerState CardanoBlock -> Maybe Rewards
 epochRewards nw epoch lstate =
-  case ledgerState lstate of
-    LedgerStateByron _ -> Nothing
-    LedgerStateShelley sls -> genericRewards nw epoch sls
-    LedgerStateAllegra als -> genericRewards nw epoch als
-    LedgerStateMary mls -> genericRewards nw epoch mls
-    LedgerStateAlonzo als -> genericRewards nw epoch als
+    case ledgerState lstate of
+      LedgerStateByron _ -> Nothing
+      LedgerStateShelley sls -> genericRewards nw era epoch sls
+      LedgerStateAllegra als -> genericRewards nw era epoch als
+      LedgerStateMary mls -> genericRewards nw era epoch mls
+      LedgerStateAlonzo als -> genericRewards nw era epoch als
+  where
+    era :: BlockEra
+    era = rewardBlockEra $ rewardProtoVer lstate
 
 rewardsPoolHashKeys :: Rewards -> Set PoolKeyHash
 rewardsPoolHashKeys rwds =
@@ -69,17 +78,39 @@ rewardsPoolHashKeys rwds =
 rewardsStakeCreds :: Rewards -> Set StakeCred
 rewardsStakeCreds = Map.keysSet . rwdRewards
 
+rewardBlockEra :: Shelley.ProtVer -> BlockEra
+rewardBlockEra pv =
+  case pv of
+    Shelley.ProtVer 2 0 -> Shelley
+    Shelley.ProtVer 3 0 -> Allegra
+    Shelley.ProtVer 4 0 -> Mary
+    Shelley.ProtVer 5 0 -> Alonzo
+    x -> panic $ "rewardBlockEra: " <> textShow x
+
+rewardProtoVer :: ExtLedgerState CardanoBlock -> Shelley.ProtVer
+rewardProtoVer lstate =
+    case ledgerState lstate of
+      LedgerStateByron _ -> Shelley.ProtVer 1 0 -- Should never happen.
+      LedgerStateShelley sls -> Shelley._protocolVersion $ previousPParams sls
+      LedgerStateAllegra als -> Shelley._protocolVersion $ previousPParams als
+      LedgerStateMary mls -> Shelley._protocolVersion $ previousPParams mls
+      LedgerStateAlonzo als -> Alonzo._protocolVersion $ previousPParams als
+  where
+    -- Get the *previous* block's PParams by using `esPrevPp` `esPp`.
+    previousPParams :: LedgerState (ShelleyBlock era) -> Ledger.PParams era
+    previousPParams = Shelley.esPrevPp . Shelley.nesEs . Consensus.shelleyLedgerState
+
 -- -------------------------------------------------------------------------------------------------
 
-genericRewards :: forall era. Ledger.Network -> EpochNo -> LedgerState (ShelleyBlock era) -> Maybe Rewards
-genericRewards network epoch lstate =
+genericRewards :: forall era. Ledger.Network -> BlockEra -> EpochNo -> LedgerState (ShelleyBlock era) -> Maybe Rewards
+genericRewards network era epoch lstate =
     fmap cleanup rewardUpdate
   where
     cleanup :: Map StakeCred (Set Reward) -> Rewards
     cleanup rmap =
       Rewards
         { rwdEpoch = epoch - 1 -- Epoch in which rewards were earned.
-        , rwdRewards = Map.filterWithKey validRewardAddress rmap
+        , rwdRewards = filterByEra era rmap
         }
 
     rewardUpdate :: Maybe (Map StakeCred (Set Reward))
@@ -94,15 +125,6 @@ genericRewards network epoch lstate =
                                         (convertRewardMap $ Shelley.rs ru)
                                         (getInstantaneousRewards network lstate)
 
-    validRewardAddress :: StakeCred -> Set Reward -> Bool
-    validRewardAddress addr _value = Set.member addr rewardAccounts
-
-    rewardAccounts :: Set StakeCred
-    rewardAccounts =
-        Set.fromList . map (toStakeCred network) . Map.keys
-          . Shelley._rewards . Shelley._dstate . Shelley._delegationState . Shelley.esLState
-          . Shelley.nesEs $ Consensus.shelleyLedgerState lstate
-
     convertRewardMap
         :: Map (Ledger.Credential 'Ledger.Staking (Crypto era)) (Set (Shelley.Reward (Crypto era)))
         -> Map StakeCred (Set Reward)
@@ -116,6 +138,7 @@ genericRewards network epoch lstate =
         , -- Coerce is safe here because we are coercing away an un-needed phantom type parameter (era).
           rewardPool = Just $ coerce (Shelley.rewardPool sr)
         }
+
 
 
 mapBimap :: Ord k2 => (k1 -> k2) -> (a1 -> a2) -> Map k1 a1 -> Map k2 a2
@@ -141,3 +164,30 @@ getInstantaneousRewards network lstate =
     instRwds =
       Shelley._irwd . Shelley._dstate . Shelley._delegationState
         . Shelley.esLState . Shelley.nesEs $ Consensus.shelleyLedgerState lstate
+
+-- -------------------------------------------------------------------------------------------------
+-- `db-sync` needs to match the implementation of the logic in `ledger-specs` even when that logic
+-- is not actually correct (ie it needs to be bug compatible). Eg it was intended that a single
+-- stake address can receive rewards from more than one place (eg for being a pool owner and a
+-- pool member or rewards from two separate pools going to the name stake address). However, due
+-- to a bug in `ledger-specs` all rewards other than the first are accidentally dropped (caused by
+-- the use of `Map.union` instead of `Map.unionWith mapppend`). These missing rewards have since
+-- been paid back with payments from the reserves.
+
+filterByEra :: BlockEra -> Map StakeCred (Set Reward) -> Map StakeCred (Set Reward)
+filterByEra be rmap =
+  case be of
+    Shelley -> Map.map takeFirstReward rmap
+    Allegra -> rmap
+    Mary -> rmap
+    Alonzo -> rmap
+
+-- This emulates the `ledger-specs` bug by taking the first element of the reward Set.
+-- The `Ord` instance on `Reward`, orders by `rewardSource` first, then `rewardPool` and then
+-- `rewardAmount`.
+takeFirstReward :: Set Reward -> Set Reward
+takeFirstReward rs =
+  -- The `toList` operation returns an ordered list.
+  case Set.toList rs of
+    [] -> mempty -- Should never happen.
+    x:_ -> Set.singleton x

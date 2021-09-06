@@ -338,19 +338,6 @@ select stake_address.view as stake_address, epoch_stake.epoch_no, epoch_stake.am
 ...
 ```
 
-### Get the total orphaned rewards.
-Orphaned rewards for epoch `N` are rewards that acrue to a stake address that was registered in
-before the end of epoch `N - 2` but for which the stake address has been de-registered before the
-rewards could be distributed (which happens at the start of epoch `N + 2`).
-```sql
-select max (epoch_no) as max_epoch_no, sum (amount) / 1000000 as orphaned_reward_ada
-    from orphaned_reward ;
- max_epoch_no | orphaned_reward_ada
---------------+---------------------
-          238 |  67129.771592000000
-
-```
-
 ### Get all reward account deposits
 Reward payments can come from two places; staking rewards which are in the `reward` table and payments
 from the treasury. These can be coalesced into single query via an SQL `union` operations:

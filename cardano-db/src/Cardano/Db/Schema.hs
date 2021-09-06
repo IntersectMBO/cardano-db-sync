@@ -19,8 +19,8 @@ module Cardano.Db.Schema where
 
 import           Cardano.Db.Schema.Orphans ()
 
-import           Cardano.Db.Types (DbInt65, DbLovelace, DbWord64, ScriptPurpose, ScriptType,
-                   SyncState)
+import           Cardano.Db.Types (DbInt65, DbLovelace, DbWord64, RewardSource, ScriptPurpose,
+                   ScriptType, SyncState)
 
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Int (Int64)
@@ -288,7 +288,7 @@ share
   -- This table should never get rolled back.
   Reward
     addrId              StakeAddressId      OnDeleteCascade
-    type                Text                sqltype=rewardtype
+    type                RewardSource        sqltype=rewardtype
     amount              DbLovelace          sqltype=lovelace
     earnedEpoch         Word64
     spendableEpoch      Word64

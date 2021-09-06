@@ -12,6 +12,7 @@ module Cardano.Sync.Util
   , liftedLogException
   , logException
   , panicAbort
+  , plusCoin
   , renderByteArray
   , renderPoint
   , renderSlotList
@@ -30,6 +31,8 @@ import           Cardano.Prelude hiding (catch)
 import           Cardano.BM.Trace (Trace, logError)
 
 import           Cardano.Db (SyncState (..), textShow)
+
+import           Cardano.Ledger.Coin (Coin (..))
 
 import           Cardano.Sync.Config.Types ()
 import           Cardano.Sync.Types
@@ -138,6 +141,9 @@ panicAbort msg = do
     Text.putStrLn msg
     exitImmediately (ExitFailure 1)
     panic msg -- To satisfy the type checker.
+
+plusCoin :: Coin -> Coin -> Coin
+plusCoin (Coin a) (Coin b) = Coin (a + b)
 
 renderByteArray :: ByteArrayAccess bin => bin -> Text
 renderByteArray =

@@ -82,7 +82,7 @@ data DbInt65
 -- Newtype wrapper around Word64 so we can hand define a PersistentField instance.
 newtype DbLovelace
   = DbLovelace { unDbLovelace :: Word64 }
-  deriving (Eq, Generic)
+  deriving (Eq, Generic, Ord)
   deriving (Read, Show) via (Quiet DbLovelace)
 
 -- Newtype wrapper around Word64 so we can hand define a PersistentField instance.
@@ -91,9 +91,10 @@ newtype DbWord64
   deriving (Eq, Generic)
   deriving (Read, Show) via (Quiet DbWord64)
 
+-- The following must be in alphabetic order.
 data RewardSource
-  = RwdMember
-  | RwdLeader
+  = RwdLeader
+  | RwdMember
   | RwdReserves
   | RwdTreasury
   deriving (Bounded, Enum, Eq, Ord, Show)
