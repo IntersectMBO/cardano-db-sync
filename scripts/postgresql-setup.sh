@@ -127,7 +127,7 @@ function run_migrations {
 }
 
 function dump_schema {
-	pg_dump -s "${PGDATABASE}"
+	pg_dump -s --schema=public "${PGDATABASE}"
 }
 
 function create_snapshot {
@@ -136,9 +136,10 @@ function create_snapshot {
 	ledger_file=$2
 	tmp_dir=$(mktemp --directory -t db-sync-snapshot-XXXXXXXXXX)
 	echo $"Working directory: ${tmp_dir}"
-	pg_dump --no-owner "${PGDATABASE}" > "${tmp_dir}/$1.sql"
+	pg_dump --no-owner --schema=public "${PGDATABASE}" > "${tmp_dir}/$1.sql"
 	cp "$ledger_file" "$tmp_dir/$(basename "${ledger_file}")"
-	tar zcvf "${tgz_file}" --directory "${tmp_dir}" "${dbfile}" "$(basename "${ledger_file}")"
+	tar zcvf "${tgz_file}.tmp" --directory "${tmp_dir}" "${dbfile}" "$(basename "${ledger_file}")"
+	mv "${tgz_file}.tmp" "${tgz_file}"
 	rm -rf "${tmp_dir}"
 	if test "$(gzip --test "${tgz_file}")" ; then
 	  echo "Gzip reports the snapshot file as being corrupt."
