@@ -37,6 +37,7 @@ import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 
 import qualified Cardano.Ledger.Address as Ledger
+import           Cardano.Ledger.Alonzo.Language (Language)
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
@@ -225,7 +226,7 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx = do
     mapM_ (insertCertificate tracer lStateSnap network blkId txId epochNo slotNo redeemers) $ Generic.txCertificates tx
     mapM_ (insertWithdrawals tracer txId redeemers) $ Generic.txWithdrawals tx
 
-    mapM_ (insertParamProposal tracer txId) $ Generic.txParamProposal tx
+    mapM_ (insertParamProposal tracer blkId txId) $ Generic.txParamProposal tx
 
     insertMaTxMint tracer txId $ Generic.txMint tx
 
@@ -657,9 +658,10 @@ insertPoolRelay updateId relay =
 
 insertParamProposal
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> ParamProposal
+    => Trace IO Text -> DB.BlockId -> DB.TxId -> ParamProposal
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertParamProposal _tracer txId pp =
+insertParamProposal tracer blkId txId pp = do
+  cmId <- maybe (pure Nothing) (fmap Just . insertCostModels tracer blkId) (pppCostmdls pp)
   void . lift . DB.insertParamProposal $
     DB.ParamProposal
       { DB.paramProposalRegisteredTxId = txId
@@ -688,7 +690,7 @@ insertParamProposal _tracer txId pp =
       -- New for Alonzo
 
       , DB.paramProposalCoinsPerUtxoWord = Generic.coinToDbLovelace <$> pppCoinsPerUtxoWord pp
-      , DB.paramProposalCostModels = Generic.renderLanguageCostModel <$> pppCostmdls pp
+      , DB.paramProposalCostModelsId = cmId
       , DB.paramProposalPriceMem = realToFrac <$> pppPriceMem pp
       , DB.paramProposalPriceStep = realToFrac <$> pppPriceStep pp
       , DB.paramProposalMaxTxExMem = DbWord64 <$> pppMaxTxExMem pp
@@ -781,11 +783,23 @@ safeDecodeUtf8 bs
 containsUnicodeNul :: Text -> Bool
 containsUnicodeNul = Text.isInfixOf "\\u000"
 
+insertCostModels
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DB.BlockId -> Map Language Ledger.CostModel
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.CostModelsId
+insertCostModels _tracer blkId cms =
+  lift . DB.insertCostModels $
+    DB.CostModels
+      { DB.costModelsCosts = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode cms
+      , DB.costModelsBlockId = blkId
+      }
+
 insertEpochParam
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.BlockId -> EpochNo -> Generic.ProtoParams -> Ledger.Nonce
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertEpochParam _tracer blkId (EpochNo epoch) params nonce =
+insertEpochParam tracer blkId (EpochNo epoch) params nonce = do
+  cmId <- maybe (pure Nothing) (fmap Just . insertCostModels tracer blkId) (Generic.ppCostmdls params)
   void . lift . DB.insertEpochParam $
     DB.EpochParam
       { DB.epochParamEpochNo = epoch
@@ -809,7 +823,7 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce =
       , DB.epochParamMinPoolCost = Generic.coinToDbLovelace (Generic.ppMinPoolCost params)
       , DB.epochParamNonce = Generic.nonceToBytes nonce
       , DB.epochParamCoinsPerUtxoWord = Generic.coinToDbLovelace <$> Generic.ppCoinsPerUtxoWord params
-      , DB.epochParamCostModels = Generic.renderLanguageCostModel <$> Generic.ppCostmdls params
+      , DB.epochParamCostModelsId = cmId
       , DB.epochParamPriceMem = realToFrac <$> Generic.ppPriceMem params
       , DB.epochParamPriceStep = realToFrac <$> Generic.ppPriceStep params
       , DB.epochParamMaxTxExMem = DbWord64 <$> Generic.ppMaxTxExMem params
