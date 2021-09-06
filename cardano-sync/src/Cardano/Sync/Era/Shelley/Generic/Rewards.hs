@@ -40,8 +40,8 @@ import qualified Shelley.Spec.Ledger.Rewards as Shelley
 
 data Reward = Reward
   { rewardSource :: !RewardSource
-  , rewardPool :: !(Maybe (Ledger.KeyHash 'Ledger.StakePool StandardCrypto))
   , rewardAmount :: !Coin
+  , rewardPool :: !(Maybe (Ledger.KeyHash 'Ledger.StakePool StandardCrypto))
   } deriving (Eq, Ord, Show)
 
 -- The `ledger-specs` code defines a `RewardUpdate` type that is parameterised over
@@ -143,28 +143,27 @@ getInstantaneousRewards network lstate =
         . Shelley.esLState . Shelley.nesEs $ Consensus.shelleyLedgerState lstate
 
 -- -------------------------------------------------------------------------------------------------
+-- `db-sync` needs to match the implementation of the logic in `ledger-specs` even when that logic
+-- is not actually correct (ie it needs to be bug compatible). Eg it was intended that a single
+-- stake address can receive rewards from more than one place (eg for being a pool owner and a
+-- pool member or rewards from two separate pools going to the name stake address). However, due
+-- to a bug in `ledger-specs` all rewards other than the first are accidentally dropped (caused by
+-- the use of `Map.union` instead of `Map.unionWith mapppend`). These missing rewards have since
+-- been paid back with payments from the reserves.
 
--- | `db-sync` needs to be match the implementation of the logic it `ledger-specs` even when that
--- logic is not actually correct (ie bug compatible). Eg it was intended that a single stake address
--- can receive rewards for being a pool owner and a pool member. However, due to a bug in
--- `ledger-specs` member rewards a accidentally dropped whenever the same address got a pool owner
--- reward (this was paid back later with a payment from the reserves).
 filterByEra :: BlockEra -> Map StakeCred (Set Reward) -> Map StakeCred (Set Reward)
 filterByEra be rmap =
   case be of
-    Shelley -> Map.map shelleyFilter rmap
+    Shelley -> Map.map takeFirstReward rmap
     Allegra -> rmap
     Mary -> rmap
     Alonzo -> rmap
 
-shelleyFilter :: Set Reward -> Set Reward
-shelleyFilter rs =
-    if hasLeaderReward
-      then Set.fromList $ filter (\x -> rewardSource x == RwdMember) xs
-      else rs
-  where
-    xs :: [Reward]
-    xs = Set.toList rs
-
-    hasLeaderReward :: Bool
-    hasLeaderReward = any (\x -> rewardSource x == RwdLeader) xs
+-- This emulates the `ledger-specs` bug by taking the first element of the reward Set.
+-- The `Ord` instance on `Reward`, orders by `rewardSource` first and then `rewardAmount`.
+takeFirstReward :: Set Reward -> Set Reward
+takeFirstReward rs =
+  -- The `toList` operation returns an ordered list.
+  case Set.toList rs of
+    [] -> mempty -- Should never happen.
+    x:_ -> Set.singleton x

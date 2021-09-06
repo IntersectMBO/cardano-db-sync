@@ -91,9 +91,10 @@ newtype DbWord64
   deriving (Eq, Generic)
   deriving (Read, Show) via (Quiet DbWord64)
 
+-- The following must be in alphabetic order.
 data RewardSource
-  = RwdMember
-  | RwdLeader
+  = RwdLeader
+  | RwdMember
   | RwdReserves
   | RwdTreasury
   deriving (Bounded, Enum, Eq, Ord, Show)

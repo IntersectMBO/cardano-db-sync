@@ -20,7 +20,7 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 
 import           Database.Esqueleto.Legacy (InnerJoin (..), SqlExpr, Value (..), ValueList, delete,
                    from, in_, not_, on, select, subSelectList, sum_, unValue, val, valList, where_,
-                   (==.), (>.), (>=.), (^.))
+                   (==.), (>=.), (^.))
 
 import           Database.Persist.Sql (SqlBackend)
 
@@ -70,7 +70,7 @@ queryOrphanedAddrs :: MonadIO m => EpochNo -> ReaderT SqlBackend m [Db.StakeAddr
 queryOrphanedAddrs (EpochNo epochNo) = do
     res <- select . from $ \ (sa `InnerJoin` dereg) -> do
                on (sa ^. Db.StakeAddressId ==. dereg ^. Db.StakeDeregistrationAddrId)
-               where_ (dereg ^. Db.StakeDeregistrationEpochNo >. val epochNo)
+               where_ (dereg ^. Db.StakeDeregistrationEpochNo ==. val (epochNo + 1))
                where_ (not_ $ sa ^. Db.StakeAddressId `in_` reregistered)
                pure (sa ^. Db.StakeAddressId)
     pure $ map unValue res
@@ -78,7 +78,7 @@ queryOrphanedAddrs (EpochNo epochNo) = do
     reregistered :: SqlExpr (ValueList Db.StakeAddressId)
     reregistered =
       subSelectList . from $ \ reg -> do
-        where_ (reg ^. Db.StakeRegistrationEpochNo ==. val epochNo)
+        where_ (reg ^. Db.StakeRegistrationEpochNo ==. val (epochNo + 1))
         pure (reg ^. Db.StakeRegistrationAddrId)
 
 queryOrphanedRewardAmount :: MonadIO m => EpochNo -> [Db.StakeAddressId] -> ReaderT SqlBackend m Db.Ada

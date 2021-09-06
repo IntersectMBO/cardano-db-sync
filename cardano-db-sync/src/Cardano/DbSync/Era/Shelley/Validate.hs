@@ -147,6 +147,8 @@ diffRewardMap dbMap ledgerMap = do
     putStrLn $ "dbMap length: " ++ show (length $ Map.keys dbMap)
     putStrLn $ "ledgerMap length: " ++ show (length $ Map.keys ledgerMap)
     mapM_ print $ Map.toList diffMap
+    when (Map.size diffMap > 0) $
+      panic "diffMap"
   where
     keys :: [Generic.StakeCred]
     keys = List.nubOrd (Map.keys dbMap ++ Map.keys ledgerMap)
