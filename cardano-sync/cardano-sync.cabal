@@ -45,6 +45,7 @@ library
                         Cardano.Sync.DbAction
                         Cardano.Sync.Error
 
+                        Cardano.Sync.LedgerEvent
                         Cardano.Sync.LedgerState
 
                         Cardano.Sync.Era.Byron.Util
@@ -104,6 +105,7 @@ library
                       , ouroboros-network
                       , ouroboros-network-framework
                       , shelley-spec-ledger
+                      , small-steps
                       , stm
                       , strict
                       , text

@@ -22,7 +22,7 @@ import           Cardano.DbSync.Era.Shelley.Adjust (adjustEpochRewards)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
 import           Cardano.DbSync.Era.Shelley.Insert.Epoch
-import           Cardano.DbSync.Era.Shelley.Validate (validateEpochRewardsBefore)
+import           Cardano.DbSync.Era.Shelley.Validate
 import           Cardano.DbSync.Rollback (rollbackToPoint)
 
 import           Cardano.Slotting.Slot (EpochNo (..))
@@ -38,7 +38,7 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
 import           Data.IORef (IORef, newIORef, readIORef, writeIORef)
-import qualified Data.Map as M
+import qualified Data.Map.Strict as Map
 
 import           Database.Persist.Sql (SqlBackend)
 
@@ -141,7 +141,7 @@ handleLedgerEvents tracer lenv point =
           lift $ do
             insertEpochSyncTime en ss (leEpochSyncTime lenv)
             validateEpochRewardsBefore tracer (en - 2)
-            adjustEpochRewards tracer (en - 1)
+            adjustEpochRewards tracer (en - 2)
           liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo en)
         LedgerStartAtEpoch en ->
           -- This is different from the previous case in that the db-sync started
@@ -149,13 +149,15 @@ handleLedgerEvents tracer lenv point =
           liftIO . logInfo tracer $ "Starting at epoch " <> textShow (unEpochNo en)
         LedgerRewards _details rwds -> do
           liftIO . logInfo tracer $ mconcat
-            [ "Handling ", show (M.size (Generic.rwdRewards rwds)), " rewards for epoch "
+            [ "Handling ", show (Map.size (Generic.rwdRewards rwds)), " rewards for epoch "
             , show (unEpochNo $ Generic.rwdEpoch rwds), " ", renderPoint point
             ]
           postEpochRewards lenv rwds point
         LedgerStakeDist sdist -> do
           liftIO . logInfo tracer $ mconcat
-            [ "Handling ", show (M.size (Generic.sdistStakeMap sdist)), " stakes for epoch "
+            [ "Handling ", show (Map.size (Generic.sdistStakeMap sdist)), " stakes for epoch "
             , show (unEpochNo $ Generic.sdistEpochNo sdist), " ", renderPoint point
             ]
           postEpochStake lenv sdist point
+        LedgerRewardDist en rd ->
+          lift $ validateEpochRewardsAfter tracer (leNetwork lenv) (en - 2) rd

@@ -56,10 +56,10 @@ epochRewards :: Ledger.Network -> EpochNo -> ExtLedgerState CardanoBlock -> Mayb
 epochRewards nw epoch lstate =
   case ledgerState lstate of
     LedgerStateByron _ -> Nothing
-    LedgerStateShelley sls -> genericRewards nw epoch sls
-    LedgerStateAllegra als -> genericRewards nw epoch als
-    LedgerStateMary mls -> genericRewards nw epoch mls
-    LedgerStateAlonzo als -> genericRewards nw epoch als
+    LedgerStateShelley sls -> genericRewards nw Shelley epoch sls
+    LedgerStateAllegra als -> genericRewards nw Allegra epoch als
+    LedgerStateMary mls -> genericRewards nw Mary epoch mls
+    LedgerStateAlonzo als -> genericRewards nw Alonzo epoch als
 
 rewardsPoolHashKeys :: Rewards -> Set PoolKeyHash
 rewardsPoolHashKeys rwds =
@@ -71,15 +71,15 @@ rewardsStakeCreds = Map.keysSet . rwdRewards
 
 -- -------------------------------------------------------------------------------------------------
 
-genericRewards :: forall era. Ledger.Network -> EpochNo -> LedgerState (ShelleyBlock era) -> Maybe Rewards
-genericRewards network epoch lstate =
+genericRewards :: forall era. Ledger.Network -> BlockEra -> EpochNo -> LedgerState (ShelleyBlock era) -> Maybe Rewards
+genericRewards network era epoch lstate =
     fmap cleanup rewardUpdate
   where
     cleanup :: Map StakeCred (Set Reward) -> Rewards
     cleanup rmap =
       Rewards
         { rwdEpoch = epoch - 1 -- Epoch in which rewards were earned.
-        , rwdRewards = Map.filterWithKey validRewardAddress rmap
+        , rwdRewards = filterByEra era $ Map.filterWithKey validRewardAddress rmap
         }
 
     rewardUpdate :: Maybe (Map StakeCred (Set Reward))
@@ -141,3 +141,30 @@ getInstantaneousRewards network lstate =
     instRwds =
       Shelley._irwd . Shelley._dstate . Shelley._delegationState
         . Shelley.esLState . Shelley.nesEs $ Consensus.shelleyLedgerState lstate
+
+-- -------------------------------------------------------------------------------------------------
+
+-- | `db-sync` needs to be match the implementation of the logic it `ledger-specs` even when that
+-- logic is not actually correct (ie bug compatible). Eg it was intended that a single stake address
+-- can receive rewards for being a pool owner and a pool member. However, due to a bug in
+-- `ledger-specs` member rewards a accidentally dropped whenever the same address got a pool owner
+-- reward (this was paid back later with a payment from the reserves).
+filterByEra :: BlockEra -> Map StakeCred (Set Reward) -> Map StakeCred (Set Reward)
+filterByEra be rmap =
+  case be of
+    Shelley -> Map.map shelleyFilter rmap
+    Allegra -> rmap
+    Mary -> rmap
+    Alonzo -> rmap
+
+shelleyFilter :: Set Reward -> Set Reward
+shelleyFilter rs =
+    if hasLeaderReward
+      then Set.fromList $ filter (\x -> rewardSource x == RwdMember) xs
+      else rs
+  where
+    xs :: [Reward]
+    xs = Set.toList rs
+
+    hasLeaderReward :: Bool
+    hasLeaderReward = any (\x -> rewardSource x == RwdLeader) xs

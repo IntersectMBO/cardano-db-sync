@@ -53,6 +53,7 @@ import           Cardano.Sync.Config.Types
 import qualified Cardano.Sync.Era.Cardano.Util as Cardano
 import           Cardano.Sync.Era.Shelley.Generic (StakeCred)
 import qualified Cardano.Sync.Era.Shelley.Generic as Generic
+import           Cardano.Sync.LedgerEvent
 import           Cardano.Sync.Types hiding (CardanoBlock)
 import           Cardano.Sync.Util
 
@@ -88,8 +89,8 @@ import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
 import           Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import           Ouroboros.Consensus.HardFork.Combinator.State (epochInfoLedger)
 import qualified Ouroboros.Consensus.HeaderValidation as Consensus
-import           Ouroboros.Consensus.Ledger.Abstract (getTipSlot, ledgerTipHash, ledgerTipPoint,
-                   ledgerTipSlot, tickThenReapply)
+import           Ouroboros.Consensus.Ledger.Abstract (LedgerResult (..), getTipSlot, ledgerTipHash,
+                   ledgerTipPoint, ledgerTipSlot, tickThenReapplyLedgerResult)
 import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerCfg (..), ExtLedgerState (..))
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
@@ -159,13 +160,6 @@ data LedgerEnv = LedgerEnv
   , leEpochSyncTime :: !(StrictTVar IO UTCTime)
   , leStableEpochSlot :: !EpochSlot
   }
-
-data LedgerEvent
-  = LedgerNewEpoch !EpochNo !SyncState
-  | LedgerStartAtEpoch !EpochNo
-  | LedgerRewards !SlotDetails !Generic.Rewards
-  | LedgerStakeDist !Generic.StakeDist
-  deriving Eq
 
 data LedgerEventState = LedgerEventState
   { lesInitialized :: !Bool
@@ -287,7 +281,8 @@ applyBlock env blk details =
     atomically $ do
       ledgerDB <- readStateUnsafe env
       let oldState = ledgerDbCurrent ledgerDB
-      let !newState = oldState { clsState = applyBlk (ExtLedgerCfg (topLevelConfig env)) blk (clsState oldState) }
+      let !result = applyBlk (ExtLedgerCfg (topLevelConfig env)) blk (clsState oldState)
+      let !newState = oldState { clsState = lrResult result }
       let !ledgerDB' = pushLedgerDB ledgerDB newState
       writeTVar (leStateVar env) (Just ledgerDB')
       oldEventState <- readTVar (leEventState env)
@@ -298,13 +293,13 @@ applyBlock env blk details =
                 , lssNewEpoch = maybeToStrict $ mkNewEpoch oldState newState
                 , lssSlotDetails = details
                 , lssPoint = blockPoint blk
-                , lssEvents = events
+                , lssEvents = events ++ mapMaybe convertAuxLedgerEvent (lrEvents result)
                 }
   where
     applyBlk
         :: ExtLedgerCfg CardanoBlock -> CardanoBlock
         -> ExtLedgerState CardanoBlock
-        -> ExtLedgerState CardanoBlock
+        -> LedgerResult (ExtLedgerState CardanoBlock) (ExtLedgerState CardanoBlock)
     applyBlk cfg block lsb =
       case tickThenReapplyCheckHash cfg block lsb of
         Left err -> panic err
@@ -739,10 +734,10 @@ ledgerEpochNo env cls =
 tickThenReapplyCheckHash
     :: ExtLedgerCfg CardanoBlock -> CardanoBlock
     -> ExtLedgerState CardanoBlock
-    -> Either Text (ExtLedgerState CardanoBlock)
+    -> Either Text (LedgerResult (ExtLedgerState CardanoBlock) (ExtLedgerState CardanoBlock))
 tickThenReapplyCheckHash cfg block lsb =
   if blockPrevHash block == ledgerTipHash (ledgerState lsb)
-    then Right $ tickThenReapply cfg block lsb
+    then Right $ tickThenReapplyLedgerResult cfg block lsb
     else Left $ mconcat
                   [ "Ledger state hash mismatch. Ledger head is slot "
                   , textShow (unSlotNo $ fromWithOrigin (SlotNo 0) (ledgerTipSlot $ ledgerState lsb))

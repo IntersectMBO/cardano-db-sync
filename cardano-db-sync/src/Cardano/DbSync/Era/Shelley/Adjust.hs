@@ -19,8 +19,8 @@ import           Cardano.Slotting.Slot (EpochNo (..))
 import           Control.Monad.Trans.Control (MonadBaseControl)
 
 import           Database.Esqueleto.Legacy (InnerJoin (..), SqlExpr, Value (..), ValueList, delete,
-                   from, in_, not_, on, select, subSelectList, unValue, val, valList, where_, (==.),
-                   (^.))
+                   from, in_, not_, on, select, subSelectList, sum_, unValue, val, valList, where_,
+                   (==.), (>.), (>=.), (^.))
 
 import           Database.Persist.Sql (SqlBackend)
 
@@ -45,17 +45,22 @@ adjustEpochRewards
     -> ReaderT SqlBackend m ()
 adjustEpochRewards tracer epochNo = do
   addrs <- queryOrphanedAddrs epochNo
-  unless (null addrs) .
+  unless (null addrs) $ do
+    ada <- queryOrphanedRewardAmount epochNo addrs
     liftIO . logInfo tracer $ mconcat
                 [ "adjustEpochRewards: epoch ", textShow (unEpochNo epochNo), ", "
-                , textShow (length addrs), " orphaned rewards removed"
+                , textShow (length addrs), " orphaned rewards removed ("
+                , textShow ada, " ADA)"
                 ]
-  deleteOrphanedRewards addrs
+    deleteOrphanedRewards epochNo addrs
 
 -- ------------------------------------------------------------------------------------------------
 
-deleteOrphanedRewards :: MonadIO m => [Db.StakeAddressId] -> ReaderT SqlBackend m ()
-deleteOrphanedRewards xs =
+-- TODO: When we know this is correct, the query and the delete should be composed so that
+-- the list of StakeAddressIds does not need to be returned to Haskell land.
+
+deleteOrphanedRewards :: MonadIO m => EpochNo -> [Db.StakeAddressId] -> ReaderT SqlBackend m ()
+deleteOrphanedRewards (EpochNo _epochNo) xs =
   delete . from $ \ rwd ->
     where_ (rwd ^. Db.RewardAddrId `in_` valList xs)
 
@@ -65,7 +70,7 @@ queryOrphanedAddrs :: MonadIO m => EpochNo -> ReaderT SqlBackend m [Db.StakeAddr
 queryOrphanedAddrs (EpochNo epochNo) = do
     res <- select . from $ \ (sa `InnerJoin` dereg) -> do
                on (sa ^. Db.StakeAddressId ==. dereg ^. Db.StakeDeregistrationAddrId)
-               where_ (dereg ^. Db.StakeDeregistrationEpochNo ==. val epochNo)
+               where_ (dereg ^. Db.StakeDeregistrationEpochNo >. val epochNo)
                where_ (not_ $ sa ^. Db.StakeAddressId `in_` reregistered)
                pure (sa ^. Db.StakeAddressId)
     pure $ map unValue res
@@ -75,3 +80,11 @@ queryOrphanedAddrs (EpochNo epochNo) = do
       subSelectList . from $ \ reg -> do
         where_ (reg ^. Db.StakeRegistrationEpochNo ==. val epochNo)
         pure (reg ^. Db.StakeRegistrationAddrId)
+
+queryOrphanedRewardAmount :: MonadIO m => EpochNo -> [Db.StakeAddressId] -> ReaderT SqlBackend m Db.Ada
+queryOrphanedRewardAmount (EpochNo epochNo) xs = do
+    res <- select . from $ \ rwd -> do
+            where_ (rwd ^. Db.RewardEarnedEpoch >=. val epochNo)
+            where_ (rwd ^. Db.RewardAddrId `in_` valList xs)
+            pure (sum_ $ rwd ^. Db.RewardAmount)
+    pure $ Db.unValueSumAda (listToMaybe res)
