@@ -45,6 +45,7 @@ import qualified Cardano.Db as DB
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin)
 import           Cardano.Ledger.Core (PParams)
+import           Cardano.Ledger.Credential (StakeCredential)
 import           Cardano.Ledger.Era
 import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import           Cardano.Ledger.Shelley.Constraints (UsesValue)
@@ -64,8 +65,9 @@ import           Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..), fromWithOrigin)
 
 import qualified Control.Exception as Exception
-import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, TBQueue, atomically, flushTBQueue,
-                   newTBQueueIO, newTVarIO, readTVar, writeTBQueue, writeTVar)
+import           Control.Monad.Class.MonadSTM.Strict (StrictTMVar, StrictTVar, TBQueue, atomically,
+                   flushTBQueue, newEmptyTMVarIO, newTBQueueIO, newTVarIO, readTVar, writeTBQueue,
+                   writeTVar)
 
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
@@ -150,6 +152,8 @@ data LedgerEnv = LedgerEnv
   , leNetwork :: !Ledger.Network
   , leStateVar :: !(StrictTVar IO (Maybe LedgerDB))
   , leEventState :: !(StrictTVar IO LedgerEventState)
+  , lePoolRewards :: !(StrictTMVar IO (EpochNo, Map (StakeCredential StandardCrypto) Coin))
+  , leMirRewards :: !(StrictTMVar IO (Map (StakeCredential StandardCrypto) Coin))
   -- The following do not really have anything to do with maintaining ledger
   -- state. They are here due to the ongoing headaches around the split between
   -- `cardano-sync` and `cardano-db-sync`.
@@ -230,6 +234,8 @@ mkLedgerEnv trce protocolInfo dir nw stableEpochSlot = do
     owq <- newTBQueueIO 100
     orq <- newTBQueueIO 100
     est <- newTVarIO =<< getCurrentTime
+    prvar <- newEmptyTMVarIO
+    mrvar <- newEmptyTMVarIO
     pure LedgerEnv
       { leTrace = trce
       , leProtocolInfo = protocolInfo
@@ -237,6 +243,8 @@ mkLedgerEnv trce protocolInfo dir nw stableEpochSlot = do
       , leNetwork = nw
       , leStateVar = svar
       , leEventState = evar
+      , lePoolRewards = prvar
+      , leMirRewards = mrvar
       , leIndexCache = ivar
       , leBulkOpQueue = boq
       , leOfflineWorkQueue = owq

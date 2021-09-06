@@ -25,6 +25,10 @@ import           Cardano.DbSync.Era.Shelley.Insert.Epoch
 import           Cardano.DbSync.Era.Shelley.Validate
 import           Cardano.DbSync.Rollback (rollbackToPoint)
 
+import           Cardano.Ledger.Coin (Coin (..))
+import           Cardano.Ledger.Credential (StakeCredential)
+import           Cardano.Ledger.Crypto (StandardCrypto)
+
 import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Cardano.Sync.Api
@@ -34,6 +38,7 @@ import           Cardano.Sync.Plugin
 import           Cardano.Sync.Types
 import           Cardano.Sync.Util
 
+import           Control.Monad.Class.MonadSTM.Strict (putTMVar, tryTakeTMVar)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
@@ -99,9 +104,7 @@ insertDefaultBlock backend tracer env blockDetails = do
         liftIO $ logDebug (leTrace $ envLedger env) "Preparing for a snapshot"
         let newEpochNo = Generic.neEpoch newEpoch
         -- flush all volatile data
-        flushBulkOperation (envLedger env)
-        -- commit everything in the db
-        lift DB.transactionCommit
+        finalizeEpochBulkOps (envLedger env)
         liftIO $ logDebug (leTrace $ envLedger env) "Taking a ledger a snapshot"
         -- finally take a ledger snapshot
         -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
@@ -130,18 +133,21 @@ handleLedgerEvents
     => Trace IO Text -> LedgerEnv -> CardanoPoint -> [LedgerEvent]
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 handleLedgerEvents tracer lenv point =
-    mapM_ printer
+    mapM_ handler
   where
-    printer
+    handler
         :: (MonadBaseControl IO m, MonadIO m)
         => LedgerEvent -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-    printer ev =
+    handler ev =
       case ev of
         LedgerNewEpoch en ss -> do
           lift $ do
             insertEpochSyncTime en ss (leEpochSyncTime lenv)
-            validateEpochRewardsBefore tracer (en - 2)
             adjustEpochRewards tracer (en - 2)
+          finalizeEpochBulkOps lenv
+          -- Commit everything in the db *AFTER* the epoch rewards have been inserted, the orphaned
+          -- rewards removed and the bulk operations finalized.
+          lift DB.transactionCommit
           liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo en)
         LedgerStartAtEpoch en ->
           -- This is different from the previous case in that the db-sync started
@@ -160,4 +166,31 @@ handleLedgerEvents tracer lenv point =
             ]
           postEpochStake lenv sdist point
         LedgerRewardDist en rd ->
-          lift $ validateEpochRewardsAfter tracer (leNetwork lenv) (en - 2) rd
+          lift $ stashPoolRewards tracer lenv en rd
+        LedgerMirDist md ->
+          lift $ stashMirRewards tracer lenv md
+
+-- These two functions must handle being called in either order.
+stashPoolRewards
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> LedgerEnv -> EpochNo -> Map (StakeCredential StandardCrypto) Coin
+    -> ReaderT SqlBackend m ()
+stashPoolRewards tracer lenv epoch rmap = do
+  mMirRwd <- liftIO . atomically $ tryTakeTMVar (leMirRewards lenv)
+  case mMirRwd of
+    Nothing ->
+      liftIO . atomically $ putTMVar (lePoolRewards lenv) (epoch, rmap)
+    Just mirMap ->
+      validateEpochRewards tracer (leNetwork lenv) (epoch - 2) (Map.unionWith plusCoin rmap mirMap)
+
+stashMirRewards
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> LedgerEnv -> Map (StakeCredential StandardCrypto) Coin
+    -> ReaderT SqlBackend m ()
+stashMirRewards tracer lenv mirMap = do
+    mRwds <- liftIO . atomically $ tryTakeTMVar (lePoolRewards lenv)
+    case mRwds of
+      Nothing ->
+        liftIO . atomically $ putTMVar (leMirRewards lenv) mirMap
+      Just (epoch, rmap) ->
+        validateEpochRewards tracer (leNetwork lenv) (epoch - 2) (Map.unionWith plusCoin rmap mirMap)
