@@ -36,6 +36,8 @@ services:
         max-file: "10"
 
   cardano-db-sync:
+    working_dir: /var/lib/cdbsync
+    #TODO: remove db-sync-tmp workaround for next release.
     image: inputoutput/cardano-db-sync:11.0.0
     environment:
       - NETWORK=${NETWORK:-mainnet}
@@ -51,6 +53,7 @@ services:
       - postgres_user
       - postgres_db
     volumes:
+      - db-sync-tmp:/tmp
       - db-sync-data:/var/lib/cdbsync
       - node-ipc:/node-ipc
     restart: on-failure
@@ -70,6 +73,7 @@ secrets:
 
 volumes:
   db-sync-data:
+  db-sync-tmp:
   postgres:
   node-db:
   node-ipc:

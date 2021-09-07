@@ -159,7 +159,7 @@ let
       fi
       export PGPASSFILE=/configuration/pgpass
       # set up /tmp (override with TMPDIR variable)
-      mkdir -p -m 1777 tmp
+      mkdir -p -m 1777 /tmp
       if [[ -z "$NETWORK" ]]; then
         echo "Connecting to network specified in configuration.yaml"
         if [[ ! -z "''${EXTENDED}" ]] && [[ "''${EXTENDED}" == true ]]
@@ -173,7 +173,8 @@ let
         ${scripts.mainnet.db-sync.passthru.service.restoreSnapshotScript}
 
         exec $DBSYNC \
-          --schema-dir ${../schema} $@
+          --schema-dir ${../schema} \
+          --state-dir ${scripts.mainnet.db-sync.passthru.service.stateDir} $@
       ${clusterStatements}
       else
         echo "Managed configuration for network "$NETWORK" does not exist"
