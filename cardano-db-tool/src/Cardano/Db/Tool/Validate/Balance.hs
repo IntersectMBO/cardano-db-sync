@@ -88,10 +88,13 @@ getAlonzoBalance addrText utxo = do
     Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue caddr) (Map.elems $ Shelley.unUTxO utxo)
   where
     compactTxOutValue :: CompactAddr (Crypto era) -> Ledger.TxOut era -> Maybe Coin
-    compactTxOutValue caddr (Alonzo.TxOutCompact scaddr v _) =
-      if caddr == scaddr
-        then Just $ coin (fromCompact v)
-        else Nothing
+    compactTxOutValue caddr txOut =
+      let (scaddr, val) = case txOut of
+                            Alonzo.TxOutCompact a v -> (a, v)
+                            Alonzo.TxOutCompactDH a v _ -> (a, v)
+      in if caddr == scaddr
+          then Just $ coin (fromCompact val)
+          else Nothing
 
 getCompactAddress :: Text -> Either Text (CompactAddr c)
 getCompactAddress addrText = case Api.deserialiseAddress (Api.AsAddress Api.AsShelleyAddr) addrText of
