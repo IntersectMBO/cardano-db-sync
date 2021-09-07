@@ -372,6 +372,7 @@ share
     purpose             ScriptPurpose       sqltype=scriptpurposetype
     index               Word64              sqltype=uinteger
     scriptHash          ByteString Maybe    sqltype=hash28type
+    datumId             DatumId             OnDeleteCascade
     UniqueRedeemer      txId purpose index
 
   Script
@@ -380,6 +381,12 @@ share
     type                ScriptType          sqltype=scripttype
     serialisedSize      Word64 Maybe        sqltype=uinteger
     UniqueScript        hash
+
+  Datum
+    hash                ByteString          sqltype=hash32type
+    txId                TxId                OnDeleteCascade
+    value               Text Maybe          sqltype=jsonb
+    UniqueData          hash
 
   -- -----------------------------------------------------------------------------------------------
   -- Update parameter proposals.
@@ -788,6 +795,12 @@ schemaDocs =
       ScriptHash # "The Hash of the Script."
       ScriptType # "The type of the script. This is currenttly either 'timelock' or 'plutus'."
       ScriptSerialisedSize # "The size of the CBOR serialised script, if it is a Plutus script."
+
+    Datum --^ do
+      "A table containing Plutus Data available in the blockchain, found in redeemers or witnesses"
+      DatumHash # "The Hash of the Plutus Data"
+      DatumTxId # "The Tx table index for the transaction where this script first became available."
+      DatumValue # "The actual data in json format"
 
     ParamProposal --^ do
       "A table containing block chain parameter change proposals."
