@@ -77,8 +77,8 @@ in {
           else
             SNAPSHOT="${cfg.restoreSnapshot}"
           fi
-          rm -f *.lstate
-          ${../../scripts/postgresql-setup.sh} --restore-snapshot "$SNAPSHOT" ./
+          rm -f ${cfg.stateDir}/*.lstate
+          ${../../scripts/postgresql-setup.sh} --restore-snapshot "$SNAPSHOT" ${cfg.stateDir}
           touch $RESTORED_MARKER
           rm -f $SNAPSHOT{,.sha256sum,.asc}
         fi
@@ -191,7 +191,7 @@ in {
           fi
         done
         if [ -z ''${SKIP_SNAPSHOT:-} ]; then
-          SNAPSHOT_SCRIPT=$(cardano-db-tool prepare-snapshot --state-dir ./ | tail -n 1)
+          SNAPSHOT_SCRIPT=$(cardano-db-tool prepare-snapshot --state-dir ${cfg.stateDir} | tail -n 1)
           ${../../scripts/postgresql-setup.sh} ''${SNAPSHOT_SCRIPT#*scripts/postgresql-setup.sh}
         fi
         ''}
