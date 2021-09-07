@@ -257,11 +257,11 @@ epochs 214, 216 and 217.
 ### Get the reward history for a specified stake address
 
 ```sql
-select reward.epoch_no, pool_hash.view as delegated_pool, reward.amount as lovelace
+select reward.earned_epoch, pool_hash.view as delegated_pool, reward.amount as lovelace
     from reward inner join stake_address on reward.addr_id = stake_address.id
     inner join pool_hash on reward.pool_id = pool_hash.id
     where stake_address.view = 'stake1u8gsndukzghdukmqdsd7r7wd6kvamvjv2pzcgag8v6jd69qfqyl5h'
-    order by epoch_no asc ;
+    order by earned_epoch asc ;
  epoch_no |                      delegated_pool                      | lovelace
 ----------+----------------------------------------------------------+----------
       212 | pool1hwlghkwnjsjk8370qt3dvp23d7urwm36f95fmxcz3np2kghknj9 |  2953284
@@ -292,7 +292,7 @@ select block.block_no, block.epoch_no, pool_hash.view as pool_view
 (2 rows)
 ```
 
-### Get the block number of blocks created by a specified pool for each epoch
+### Get the number of blocks created by a specified pool for each epoch
 
 ```sql
 select block.epoch_no, count (*) as block_count
