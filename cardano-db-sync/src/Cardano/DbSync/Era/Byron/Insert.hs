@@ -60,12 +60,12 @@ data ValueFee = ValueFee
 
 insertByronBlock
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> ByronBlock -> SlotDetails
+    => Trace IO Text -> Bool -> ByronBlock -> SlotDetails
     -> ReaderT SqlBackend m (Either SyncNodeError ())
-insertByronBlock tracer blk details = do
+insertByronBlock tracer firstBlockOfEpoch blk details = do
   res <- runExceptT $
             case byronBlockRaw blk of
-              Byron.ABOBBlock ablk -> insertABlock tracer ablk details
+              Byron.ABOBBlock ablk -> insertABlock tracer firstBlockOfEpoch ablk details
               Byron.ABOBBoundary abblk -> insertABOBBoundary tracer abblk details
   -- Serializiing things during syncing can drastically slow down full sync
   -- times (ie 10x or more).
@@ -122,9 +122,9 @@ insertABOBBoundary tracer blk details = do
 
 insertABlock
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Byron.ABlock ByteString -> SlotDetails
+    => Trace IO Text -> Bool -> Byron.ABlock ByteString -> SlotDetails
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertABlock tracer blk details = do
+insertABlock tracer firstBlockOfEpoch blk details = do
     pbid <- liftLookupFail "insertABlock" $ DB.queryBlockId (Byron.unHeaderHash $ Byron.blockPreviousHash blk)
     slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
     blkId <- lift . DB.insertBlock $
@@ -170,6 +170,7 @@ insertABlock tracer blk details = do
   where
     logger :: Bool -> Trace IO a -> a -> IO ()
     logger followingClosely
+      | firstBlockOfEpoch = logInfo
       | followingClosely = logInfo
       | Byron.blockNumber blk `mod` 5000 == 0 = logInfo
       | otherwise = logDebug

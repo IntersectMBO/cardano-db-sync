@@ -82,18 +82,19 @@ insertDefaultBlock backend tracer env blockDetails = do
       lStateSnap <- liftIO $ applyBlock (envLedger env) cblk details
       mkSnapshotMaybe lStateSnap (isSyncedWithinSeconds details 60)
       handleLedgerEvents tracer (envLedger env) (lssPoint lStateSnap) (lssEvents lStateSnap)
+      let firstBlockOfEpoch = hasEpochStartEvent (lssEvents lStateSnap)
       case cblk of
         BlockByron blk ->
-          newExceptT $ insertByronBlock tracer blk details
+          newExceptT $ insertByronBlock tracer firstBlockOfEpoch blk details
         BlockShelley blk ->
-          newExceptT $ insertShelleyBlock tracer lenv (Generic.fromShelleyBlock blk) lStateSnap details
+          newExceptT $ insertShelleyBlock tracer lenv firstBlockOfEpoch (Generic.fromShelleyBlock blk) lStateSnap details
         BlockAllegra blk ->
-          newExceptT $ insertShelleyBlock tracer lenv (Generic.fromAllegraBlock blk) lStateSnap details
+          newExceptT $ insertShelleyBlock tracer lenv firstBlockOfEpoch (Generic.fromAllegraBlock blk) lStateSnap details
         BlockMary blk ->
-          newExceptT $ insertShelleyBlock tracer lenv (Generic.fromMaryBlock blk) lStateSnap details
+          newExceptT $ insertShelleyBlock tracer lenv firstBlockOfEpoch (Generic.fromMaryBlock blk) lStateSnap details
         BlockAlonzo blk -> do
           let pp = getAlonzoPParams $ lssState lStateSnap
-          newExceptT $ insertShelleyBlock tracer lenv (Generic.fromAlonzoBlock pp blk) lStateSnap details
+          newExceptT $ insertShelleyBlock tracer lenv firstBlockOfEpoch (Generic.fromAlonzoBlock pp blk) lStateSnap details
 
     mkSnapshotMaybe
         :: (MonadBaseControl IO m, MonadIO m)
@@ -170,6 +171,17 @@ handleLedgerEvents tracer lenv point =
         LedgerMirDist md ->
           lift $ stashMirRewards tracer lenv md
 
+hasEpochStartEvent :: [LedgerEvent] -> Bool
+hasEpochStartEvent = any isNewEpoch
+  where
+    isNewEpoch :: LedgerEvent -> Bool
+    isNewEpoch le =
+      case le of
+        LedgerNewEpoch {} -> True
+        LedgerStartAtEpoch {} -> True
+        _otherwise -> False
+
+-- -------------------------------------------------------------------------------------------------
 -- These two functions must handle being called in either order.
 stashPoolRewards
     :: (MonadBaseControl IO m, MonadIO m)
