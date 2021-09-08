@@ -337,22 +337,7 @@ insertPoolRegister
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> LedgerStateSnapshot -> Ledger.Network -> EpochNo -> DB.BlockId -> DB.TxId -> Word16 -> Shelley.PoolParams StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolRegister tracer lStateSnap network (EpochNo epoch) blkId txId idx params = do
-
-    when (fromIntegral (Ledger.unCoin $ Shelley._poolPledge params) > maxLovelace) $
-      liftIO . logWarning tracer $
-        mconcat
-          [ "Bad pledge amount: ", textShow (Ledger.unCoin $ Shelley._poolPledge params)
-          , " > maxLovelace."
-          ]
-
-    when (fromIntegral (Ledger.unCoin $ Shelley._poolCost params) > maxLovelace) $
-      liftIO . logWarning tracer $
-        mconcat
-          [ "Bad fixed cost amount: ", textShow (Ledger.unCoin $ Shelley._poolCost params)
-          , " > maxLovelace."
-          ]
-
+insertPoolRegister _tracer lStateSnap network (EpochNo epoch) blkId txId idx params = do
     poolHashId <- insertPoolHash (Shelley._poolId params)
 
     mdId <- case strictMaybeToMaybe $ Shelley._poolMD params of
@@ -390,9 +375,6 @@ insertPoolRegister tracer lStateSnap network (EpochNo epoch) blkId txId idx para
           otherUpdates <- lift $ queryPoolUpdateByBlock blkId poolHashId
           pure $ if otherUpdates then 3 else 2
 
-
-maxLovelace :: Word64
-maxLovelace = 45000000000000000
 
 insertPoolHash
     :: forall m . (MonadBaseControl IO m, MonadIO m)
