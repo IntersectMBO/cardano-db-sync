@@ -18,7 +18,7 @@ import qualified Cardano.Chain.UTxO as Byron
 import           Cardano.Ledger.Address (BootstrapAddress (..))
 import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
 import qualified Cardano.Ledger.Core as Ledger
-import           Cardano.Ledger.Era (Crypto)
+import           Cardano.Ledger.Era (Crypto, Era)
 
 import           Cardano.Ledger.Compactible
 import           Cardano.Ledger.Val
@@ -33,7 +33,7 @@ import           Ouroboros.Consensus.Cardano.Block (CardanoBlock, LedgerState (.
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import           Ouroboros.Consensus.Shelley.Ledger.Ledger
 
-import           Shelley.Spec.Ledger.CompactAddr (CompactAddr, compactAddr)
+import           Shelley.Spec.Ledger.CompactAddr (CompactAddr, compactAddr, decompactAddr)
 import qualified Shelley.Spec.Ledger.LedgerState as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
 import qualified Shelley.Spec.Ledger.UTxO as Shelley
@@ -81,16 +81,23 @@ getShelleyBalance addrText utxo = do
 
 getAlonzoBalance
     :: forall era. Ledger.TxOut era ~ Alonzo.TxOut era -- somewhere in ledger-spec, there is probably a better constraint synonym for these
-    => Compactible (Ledger.Value era) => Val (Ledger.Value era)
+    => Era era => Show (Ledger.Value era)
     => Text -> Shelley.UTxO era -> Either Text Word64
 getAlonzoBalance addrText utxo = do
     caddr <- getCompactAddress addrText
     Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue caddr) (Map.elems $ Shelley.unUTxO utxo)
   where
     compactTxOutValue :: CompactAddr (Crypto era) -> Ledger.TxOut era -> Maybe Coin
-    compactTxOutValue caddr (Alonzo.TxOutCompact scaddr v _) =
+    compactTxOutValue caddr (Alonzo.TxOutCompact scaddr v) =
       if caddr == scaddr
         then Just $ coin (fromCompact v)
+        else Nothing
+    -- The other constructor 'TxOutCompactDH' is not exported, so we use the 'TxOut' pattern.
+    -- This pattern turns things to their uncompacted form, so it's less efficient. It's also
+    -- less usual though.
+    compactTxOutValue caddr (Alonzo.TxOut scaddr v _) =
+      if decompactAddr caddr == scaddr
+        then Just $ coin v
         else Nothing
 
 getCompactAddress :: Text -> Either Text (CompactAddr c)
