@@ -16,10 +16,6 @@ module Cardano.DbSync.Era.Shelley.Insert
   , insertPoolRegister
   , insertDelegation
   , insertStakeAddressRefIfMissing
-
-  -- Util
-  , containsUnicodeNul
-  , safeDecodeUtf8
   ) where
 
 import           Cardano.Prelude
@@ -40,7 +36,7 @@ import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Insert.Epoch
 import           Cardano.DbSync.Era.Shelley.Offline
 import           Cardano.DbSync.Era.Shelley.Query
-import           Cardano.DbSync.Era.Util (liftLookupFail, safeDecodeUtf8)
+import           Cardano.DbSync.Era.Util (liftLookupFail, safeDecodeToJson)
 
 import qualified Cardano.Ledger.Address as Ledger
 import           Cardano.Ledger.Alonzo.Language (Language)
@@ -70,7 +66,6 @@ import           Data.Group (invert)
 import qualified Data.Map.Strict as Map
 import           Data.Maybe.Strict (strictMaybeToMaybe)
 import qualified Data.Set as Set
-import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
 import           Database.Persist.Sql (SqlBackend)
@@ -736,21 +731,7 @@ insertDatum
   => Trace IO Text -> DB.TxId -> Generic.TxDatum
   -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.DatumId
 insertDatum tracer txId txd = do
-    ejson <- liftIO $ safeDecodeUtf8 $ Generic.txDatumValue txd
-    value <- case ejson of
-      Left err -> do
-        liftIO . logWarning tracer $ mconcat
-            [ "insertDatum: Could not decode to UTF8: ", textShow err ]
-        -- We have to inser
-        pure Nothing
-      Right json ->
-        -- See https://github.com/input-output-hk/cardano-db-sync/issues/297
-        if containsUnicodeNul json
-          then do
-            liftIO $ logWarning tracer "insertDatum: dropped due to a Unicode NUL character."
-            pure Nothing
-          else
-            pure $ Just json
+    value <- safeDecodeToJson tracer "insertDatum" $ Generic.txDatumValue txd
 
     lift . DB.insertDatum $ DB.Datum
       { DB.datumHash = Generic.txDatumHash txd
@@ -772,20 +753,8 @@ insertTxMetadata tracer txId metadata =
     insert (key, md) = do
       let jsonbs = LBS.toStrict $ Aeson.encode (metadataValueToJsonNoSchema md)
           singleKeyCBORMetadata = serialiseToCBOR $ makeTransactionMetadata (Map.singleton key md)
-      ejson <- liftIO $ safeDecodeUtf8 jsonbs
-      mjson <- case ejson of
-                 Left err -> do
-                   liftIO . logWarning tracer $ mconcat
-                      [ "insertTxMetadata: Could not decode to UTF8: ", textShow err ]
-                   pure Nothing
-                 Right json ->
-                   -- See https://github.com/input-output-hk/cardano-db-sync/issues/297
-                   if containsUnicodeNul json
-                     then do
-                       liftIO $ logWarning tracer "insertTxMetadata: dropped due to a Unicode NUL character."
-                       pure Nothing
-                     else
-                       pure $ Just json
+      mjson <- safeDecodeToJson tracer "insertTxMetdata" jsonbs
+
       void . lift . DB.insertTxMetadata $
         DB.TxMetadata
           { DB.txMetadataKey = DbWord64 key
@@ -793,9 +762,6 @@ insertTxMetadata tracer txId metadata =
           , DB.txMetadataBytes = singleKeyCBORMetadata
           , DB.txMetadataTxId = txId
           }
-
-containsUnicodeNul :: Text -> Bool
-containsUnicodeNul = Text.isInfixOf "\\u000"
 
 insertCostModels
     :: (MonadBaseControl IO m, MonadIO m)
