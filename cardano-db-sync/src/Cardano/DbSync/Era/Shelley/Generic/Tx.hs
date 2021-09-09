@@ -71,6 +71,7 @@ import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra)
 
 import qualified Shelley.Spec.Ledger.CompactAddr as Ledger
 import           Shelley.Spec.Ledger.Scripts (ScriptHash)
+import qualified Shelley.Spec.Ledger.Scripts as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
@@ -252,7 +253,7 @@ fromShelleyTx (blkIndex, tx) =
       , txRedeemer = []     -- Shelley does not support Redeemer
       , txData = []
       , txScriptSizes = []    -- Shelley does not support scripts
-      , txScripts = []        -- We don't populate scripts for Shelley
+      , txScripts = scripts
       , txScriptsFee = Coin 0 -- Shelley does not support scripts
       }
   where
@@ -274,6 +275,17 @@ fromShelleyTx (blkIndex, tx) =
     txOutValue :: Shelley.TxOut StandardShelley -> Integer
     txOutValue (Shelley.TxOut _ (Coin coin)) = coin
 
+    scripts :: [TxScript]
+    scripts =
+      mkTxScript <$> Map.toList (Shelley.scriptWits $ getField @"wits" tx)
+
+    mkTxScript :: (ScriptHash StandardCrypto, Shelley.MultiSig StandardCrypto) -> TxScript
+    mkTxScript (hsh, script) = TxScript
+      { txScriptHash = unScriptHash hsh
+      , txScriptPlutusSize = Nothing -- Shelley has only MultiSig scripts.
+      , txScriptJson = Just . LBS.toStrict . Aeson.encode $ Api.fromShelleyMultiSig script
+      , txScriptCBOR = Nothing
+      }
 
 fromMaryTx :: (Word64, Shelley.Tx StandardMary) -> Tx
 fromMaryTx (blkIndex, tx) =
