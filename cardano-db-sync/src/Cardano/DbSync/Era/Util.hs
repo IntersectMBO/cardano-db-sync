@@ -1,18 +1,23 @@
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Cardano.DbSync.Era.Util
     ( liftLookupFail
+    , containsUnicodeNul
     , safeDecodeUtf8
+    , safeDecodeToJson
     ) where
 
 import           Cardano.Prelude
 
 import           Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT)
 
+import           Cardano.BM.Trace (Trace, logWarning)
 import qualified Cardano.Db as DB
 
 import           Cardano.Sync.Error
 
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Error as Text
 
@@ -27,3 +32,24 @@ safeDecodeUtf8 bs
   where
     isNullChar :: Char -> Bool
     isNullChar ch = ord ch == 0
+
+containsUnicodeNul :: Text -> Bool
+containsUnicodeNul = Text.isInfixOf "\\u000"
+
+safeDecodeToJson :: MonadIO m => Trace IO Text -> Text -> ByteString -> m (Maybe Text)
+safeDecodeToJson tracer tracePrefix x = do
+    ejson <- liftIO $ safeDecodeUtf8 x
+    case ejson of
+      Left err -> do
+        liftIO . logWarning tracer $ mconcat
+            [ tracePrefix, ": Could not decode to UTF8: ", DB.textShow err ]
+        -- We have to insert
+        pure Nothing
+      Right json ->
+        -- See https://github.com/input-output-hk/cardano-db-sync/issues/297
+        if containsUnicodeNul json
+          then do
+            liftIO $ logWarning tracer $ tracePrefix <> ": dropped due to a Unicode NUL character."
+            pure Nothing
+          else
+            pure $ Just json
