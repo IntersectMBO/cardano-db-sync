@@ -386,6 +386,8 @@ share
     hash                ByteString          sqltype=hash32type
     txId                TxId                OnDeleteCascade
     value               Text Maybe          sqltype=jsonb
+    noSchemaValue       Text Maybe          sqltype=jsonb
+    rawValue            ByteString Maybe    sqltype=bytea
     UniqueData          hash
 
   -- -----------------------------------------------------------------------------------------------
@@ -801,6 +803,8 @@ schemaDocs =
       DatumHash # "The Hash of the Plutus Data"
       DatumTxId # "The Tx table index for the transaction where this script first became available."
       DatumValue # "The actual data in json format"
+      DatumNoSchemaValue # "The data in a schema-less format"
+      DatumRawValue # "Serialized alonzo script data"
 
     ParamProposal --^ do
       "A table containing block chain parameter change proposals."

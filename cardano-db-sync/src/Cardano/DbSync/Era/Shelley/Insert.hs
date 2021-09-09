@@ -18,7 +18,7 @@ module Cardano.DbSync.Era.Shelley.Insert
 
 import           Cardano.Prelude
 
-import           Cardano.Api (SerialiseAsCBOR (..))
+import           Cardano.Api (SerialiseAsCBOR (..), ScriptData(..))
 import           Cardano.Api.Shelley (TxMetadataValue (..), makeTransactionMetadata,
                    metadataValueToJsonNoSchema)
 
@@ -37,6 +37,7 @@ import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Era.Util (liftLookupFail, safeDecodeUtf8)
 
 import qualified Cardano.Ledger.Address as Ledger
+import qualified Cardano.Ledger.Alonzo.Data as Ledger
 import           Cardano.Ledger.Alonzo.Language (Language)
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
@@ -69,11 +70,13 @@ import qualified Data.Text.Encoding as Text
 
 import           Database.Persist.Sql (SqlBackend)
 
-import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
+import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardAlonzo)
 
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.STS.Chain as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
+import qualified Cardano.Api.Shelley as Api
+import Cardano.Binary (serialize')
 
 insertShelleyBlock
     :: (MonadBaseControl IO m, MonadIO m)
@@ -742,12 +745,12 @@ insertDatum
   => Trace IO Text -> DB.TxId -> Generic.TxDatum
   -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.DatumId
 insertDatum tracer txId txd = do
-    ejson <- liftIO $ safeDecodeUtf8 $ Generic.txDatumValue txd
+    ejson <- liftIO $ safeDecodeUtf8 schemaJson
+    sjson <- liftIO $ safeDecodeUtf8 noSchemaJson
     value <- case ejson of
       Left err -> do
         liftIO . logWarning tracer $ mconcat
             [ "insertDatum: Could not decode to UTF8: ", textShow err ]
-        -- We have to inser
         pure Nothing
       Right json ->
         -- See https://github.com/input-output-hk/cardano-db-sync/issues/297
@@ -757,12 +760,48 @@ insertDatum tracer txId txd = do
             pure Nothing
           else
             pure $ Just json
+    noSchemaValue <- case sjson of
+      Left err -> do
+        liftIO . logWarning tracer $ mconcat
+            [ "insertDatum: Could not decode no schema to UTF8: ", textShow err ]
+        pure Nothing
+      Right json ->
+        -- See https://github.com/input-output-hk/cardano-db-sync/issues/297
+        if containsUnicodeNul json
+          then do
+            liftIO $ logWarning tracer "insertDatum: dropped due to a Unicode NULL character in no schema."
+            pure Nothing
+          else
+            pure $ Just json
 
     lift . DB.insertDatum $ DB.Datum
       { DB.datumHash = Generic.txDatumHash txd
       , DB.datumTxId = txId
       , DB.datumValue = value
+      , DB.datumNoSchemaValue = noSchemaValue
+      , DB.datumRawValue = Just datumRawValue
       }
+  where    
+    schemaJson :: ByteString
+    schemaJson = LBS.toStrict $ Aeson.encode $
+      Api.scriptDataToJson Api.ScriptDataJsonDetailedSchema $ Generic.txDatumRawValue txd
+    
+    -- script data json serialization does not encode bytestring as actual strings in some situations
+    -- like keys in maps.
+    -- The keys are in this case set as '0x616263' (='abc') hexa string
+    noSchemaJson :: ByteString
+    noSchemaJson = LBS.toStrict $ Aeson.encode $
+        Api.scriptDataToJson Api.ScriptDataJsonNoSchema $ Generic.txDatumRawValue txd
+    
+    scriptData :: ScriptData
+    scriptData = Generic.txDatumRawValue txd
+
+    alonzoData :: Ledger.Data StandardAlonzo
+    alonzoData = Api.toAlonzoData scriptData
+
+    datumRawValue :: ByteString
+    datumRawValue = serialize' alonzoData
+
 
 insertTxMetadata
     :: (MonadBaseControl IO m, MonadIO m)

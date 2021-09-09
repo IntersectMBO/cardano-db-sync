@@ -142,7 +142,7 @@ data TxScript = TxScript
 
 data TxDatum = TxDatum
   { txDatumHash :: !ByteString
-  , txDatumValue :: !ByteString -- we turn this into json later.
+  , txDatumRawValue :: !Api.ScriptData  -- the source data
   }
 
 fromAllegraTx :: (Word64, Shelley.Tx StandardAllegra) -> Tx
@@ -455,19 +455,14 @@ fromAlonzoTx pp (blkIndex, tx) =
       , txRedeemerPurpose = tag
       , txRedeemerIndex = index
       , txRedeemerScriptHash = findScriptHash ptr
-      , txRedeemerDatum = TxDatum (getDataHash $ Alonzo.hashData dt) (encodeData dt)
+      , txRedeemerDatum = TxDatum (getDataHash $ Alonzo.hashData dt) (Api.fromAlonzoData dt)
       }
-
-    encodeData :: Alonzo.Data StandardAlonzo -> ByteString
-    encodeData dt = LBS.toStrict $ Aeson.encode $
-      Api.scriptDataToJson Api.ScriptDataJsonDetailedSchema $ Api.fromAlonzoData dt
-
+ 
     txDataWitness :: [TxDatum]
-    txDataWitness =
-      mkTxDatum <$> Map.toList (Ledger.unTxDats $ Ledger.txdats' (getField @"wits" tx))
+    txDataWitness = mkTxDatum <$> (Map.toList $ Ledger.unTxDats $ Ledger.txdats' (getField @"wits" tx))
 
     mkTxDatum :: (Ledger.SafeHash StandardCrypto a, Alonzo.Data StandardAlonzo) -> TxDatum
-    mkTxDatum (dataHash, dt) = TxDatum (getDataHash dataHash) (encodeData dt)
+    mkTxDatum (dataHash, dt) = TxDatum (getDataHash dataHash) (Api.fromAlonzoData dt)
 
     -- For 'Spend' script, we need to resolve the 'TxIn' to find the ScriptHash
     -- so we return 'Left TxIn' and resolve it later from the db. In other cases
