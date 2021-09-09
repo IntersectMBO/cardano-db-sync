@@ -137,6 +137,8 @@ data TxRedeemer = TxRedeemer
 data TxScript = TxScript
   { txScriptHash :: !ByteString
   , txScriptPlutusSize :: Maybe Word64
+  , txScriptJson :: Maybe ByteString
+  , txScriptCBOR :: Maybe ByteString
   }
 
 data TxDatum = TxDatum
@@ -209,9 +211,15 @@ fromAllegraTx (blkIndex, tx) =
           map (\scr -> (Ledger.hashScript @StandardAllegra scr, scr)) $ toList scrs
 
     mkTxScript :: (ScriptHash StandardCrypto, Allegra.Script StandardAllegra) -> TxScript
-    mkTxScript (hsh, _script) = TxScript
+    mkTxScript (hsh, script) = TxScript
       { txScriptHash = unScriptHash hsh
       , txScriptPlutusSize = Nothing -- Allegra has only Timelock scripts.
+      , txScriptJson =
+            Just
+          . LBS.toStrict
+          . Aeson.encode
+          $ Api.fromAllegraTimelock Api.TimeLocksInSimpleScriptV2 script
+      , txScriptCBOR = Nothing
       }
 
 fromShelleyTx :: (Word64, Shelley.Tx StandardShelley) -> Tx
@@ -318,9 +326,15 @@ fromMaryTx (blkIndex, tx) =
           map (\scr -> (Ledger.hashScript @StandardMary scr, scr)) $ toList scrs
 
     mkTxScript :: (ScriptHash StandardCrypto, Mary.Script StandardMary) -> TxScript
-    mkTxScript (hsh, _script) = TxScript
+    mkTxScript (hsh, script) = TxScript
       { txScriptHash = unScriptHash hsh
       , txScriptPlutusSize = Nothing -- Mary has only Timelock scripts.
+      , txScriptJson =
+            Just
+          . LBS.toStrict
+          . Aeson.encode
+          $ Api.fromAllegraTimelock Api.TimeLocksInSimpleScriptV2 script
+      , txScriptCBOR = Nothing
       }
 
 fromAlonzoTx :: Ledger.PParams StandardAlonzo -> (Word64, Ledger.Tx StandardAlonzo) -> Tx
@@ -389,7 +403,25 @@ fromAlonzoTx pp (blkIndex, tx) =
     mkTxScript (hsh, script) = TxScript
       { txScriptHash = unScriptHash hsh
       , txScriptPlutusSize = getScriptSize script
+      , txScriptJson = timelockJsonScript script
+      , txScriptCBOR = plutusCborScript script
       }
+
+    timelockJsonScript :: Alonzo.Script (AlonzoEra StandardCrypto) -> Maybe ByteString
+    timelockJsonScript (Alonzo.TimelockScript s) =
+          Just
+        . LBS.toStrict
+        . Aeson.encode
+        $ Api.fromAllegraTimelock Api.TimeLocksInSimpleScriptV2 s
+    timelockJsonScript (Alonzo.PlutusScript _) = Nothing
+
+    plutusCborScript :: Alonzo.Script (AlonzoEra StandardCrypto) -> Maybe ByteString
+    plutusCborScript (Alonzo.TimelockScript _) = Nothing
+    plutusCborScript (Alonzo.PlutusScript s) =
+          Just
+        . Api.serialiseToCBOR
+        . Api.PlutusScript Api.PlutusScriptV1
+        $ Api.PlutusScriptSerialised s
 
     getScriptSize :: Alonzo.Script (AlonzoEra StandardCrypto) -> Maybe Word64
     getScriptSize (Alonzo.TimelockScript _) = Nothing

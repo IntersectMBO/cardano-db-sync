@@ -864,13 +864,21 @@ insertScript
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Generic.TxScript
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertScript _tracer txId script = do
+insertScript tracer txId script = do
+    value <-
+      maybe
+        (pure Nothing)
+        (safeDecodeToJson tracer "insertScript")
+        (Generic.txScriptJson script)
+
     void . lift . DB.insertScript $
       DB.Script
         { DB.scriptTxId = txId
         , DB.scriptHash = Generic.txScriptHash script
         , DB.scriptType = scriptType
         , DB.scriptSerialisedSize = Generic.txScriptPlutusSize script
+        , DB.scriptJson = value -- Generic.txScriptJson script
+        , DB.scriptBytes = Generic.txScriptCBOR script
         }
   where
     scriptType :: DB.ScriptType
