@@ -379,6 +379,8 @@ share
     txId                TxId                OnDeleteCascade
     hash                ByteString          sqltype=hash28type
     type                ScriptType          sqltype=scripttype
+    json                Text Maybe          sqltype=jsonb
+    bytes               ByteString Maybe    sqltype=bytea
     serialisedSize      Word64 Maybe        sqltype=uinteger
     UniqueScript        hash
 
@@ -794,6 +796,8 @@ schemaDocs =
       ScriptTxId # "The Tx table index for the transaction where this script first became available."
       ScriptHash # "The Hash of the Script."
       ScriptType # "The type of the script. This is currenttly either 'timelock' or 'plutus'."
+      ScriptJson # "JSON representation of the timelock script, null for other script types"
+      ScriptBytes # "CBOR encoded plutus script data, null for other script types"
       ScriptSerialisedSize # "The size of the CBOR serialised script, if it is a Plutus script."
 
     Datum --^ do
