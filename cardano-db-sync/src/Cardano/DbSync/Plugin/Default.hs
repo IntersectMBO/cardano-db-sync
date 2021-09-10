@@ -8,7 +8,7 @@ module Cardano.DbSync.Plugin.Default
   ) where
 
 
-import           Cardano.Prelude
+import           Cardano.Prelude hiding (atomically)
 
 import           Cardano.BM.Trace (Trace, logDebug, logInfo)
 
@@ -38,7 +38,7 @@ import           Cardano.Sync.Plugin
 import           Cardano.Sync.Types
 import           Cardano.Sync.Util
 
-import           Control.Monad.Class.MonadSTM.Strict (putTMVar, tryTakeTMVar)
+import           Control.Monad.Class.MonadSTM.Strict (atomically, tryPutTMVar, tryTakeTMVar)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
@@ -179,7 +179,7 @@ stashPoolRewards tracer lenv epoch rmap = do
   mMirRwd <- liftIO . atomically $ tryTakeTMVar (leMirRewards lenv)
   case mMirRwd of
     Nothing ->
-      liftIO . atomically $ putTMVar (lePoolRewards lenv) (epoch, rmap)
+      void . liftIO . atomically $ tryPutTMVar (lePoolRewards lenv) (epoch, rmap)
     Just mirMap ->
       validateEpochRewards tracer (leNetwork lenv) (epoch - 2) (Map.unionWith plusCoin rmap mirMap)
 
@@ -191,6 +191,6 @@ stashMirRewards tracer lenv mirMap = do
     mRwds <- liftIO . atomically $ tryTakeTMVar (lePoolRewards lenv)
     case mRwds of
       Nothing ->
-        liftIO . atomically $ putTMVar (leMirRewards lenv) mirMap
+        void . liftIO . atomically $ tryPutTMVar (leMirRewards lenv) mirMap
       Just (epoch, rmap) ->
         validateEpochRewards tracer (leNetwork lenv) (epoch - 2) (Map.unionWith plusCoin rmap mirMap)
