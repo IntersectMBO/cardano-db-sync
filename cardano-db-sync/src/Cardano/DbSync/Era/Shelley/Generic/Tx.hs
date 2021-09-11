@@ -460,7 +460,7 @@ fromAlonzoTx pp (blkIndex, tx) =
 
     encodeData :: Alonzo.Data StandardAlonzo -> ByteString
     encodeData dt = LBS.toStrict $ Aeson.encode $
-      Api.scriptDataToJson Api.ScriptDataJsonDetailedSchema $ Api.fromAlonzoData dt
+      Api.scriptDataToJson Api.ScriptDataJsonNoSchema $ Api.fromAlonzoData dt
 
     txDataWitness :: [TxDatum]
     txDataWitness =
