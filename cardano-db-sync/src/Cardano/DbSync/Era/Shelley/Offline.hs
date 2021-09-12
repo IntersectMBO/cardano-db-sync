@@ -11,9 +11,9 @@ module Cardano.DbSync.Era.Shelley.Offline
   , runOfflineFetchThread
   ) where
 
-import           Cardano.Prelude
+import           Cardano.Prelude hiding (handle)
 
-import           Cardano.BM.Trace (Trace, logInfo)
+import           Cardano.BM.Trace (Trace, logInfo, logWarning)
 
 import           Cardano.DbSync.Era.Shelley.Offline.Http
 import           Cardano.DbSync.Era.Shelley.Offline.Query
@@ -21,12 +21,14 @@ import           Cardano.DbSync.Era.Shelley.Offline.Types
 
 import           Cardano.Sync.Types
 
+import           Control.Monad.Catch (MonadCatch, handle)
 import           Control.Monad.Class.MonadSTM.Strict (TBQueue, flushTBQueue, isEmptyTBQueue,
                    readTBQueue, writeTBQueue)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (handleExceptT, left)
 
 import qualified Data.Aeson as Aeson
+import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -43,6 +45,7 @@ import           Cardano.Sync.LedgerState
 import           Cardano.Sync.Util
 
 import           Database.Persist.Sql (SqlBackend)
+import           Database.PostgreSQL.Simple (SqlError, sqlErrorMsg)
 
 import           Network.HTTP.Client (HttpException (..))
 import qualified Network.HTTP.Client as Http
@@ -68,7 +71,7 @@ loadOfflineWorkQueue _trce workQueue =
     queueInsert = atomically . writeTBQueue workQueue
 
 insertOfflineResults
-    :: (MonadBaseControl IO m, MonadIO m)
+    :: (MonadBaseControl IO m, MonadCatch m, MonadIO m)
     => Trace IO Text -> TBQueue IO FetchResult -> ReaderT SqlBackend m ()
 insertOfflineResults trce resultQueue = do
     res <- liftIO . atomically $ flushTBQueue resultQueue
@@ -80,11 +83,14 @@ insertOfflineResults trce resultQueue = do
         ]
     mapM_ insert res
   where
-    insert :: (MonadBaseControl IO m, MonadIO m) => FetchResult -> ReaderT SqlBackend m ()
+    insert :: (MonadBaseControl IO m, MonadCatch m, MonadIO m) => FetchResult -> ReaderT SqlBackend m ()
     insert fr =
-      case fr of
-        ResultMetadata md -> void $ DB.insertPoolOfflineData md
-        ResultError fe -> void $ DB.insertPoolOfflineFetchError fe
+      -- If a rollback occurs after the PoolMetadataRef is fetched, the insertion of the
+      -- result can fail. In this insert fail case, we simply log and drop the exception.
+      handle (liftIO . logFKeyConstraintFail) $
+        case fr of
+          ResultMetadata md -> void $ DB.insertPoolOfflineData md
+          ResultError fe -> void $ DB.insertPoolOfflineFetchError fe
 
     isFetchError :: FetchResult -> Bool
     isFetchError fe =
@@ -92,6 +98,13 @@ insertOfflineResults trce resultQueue = do
         ResultMetadata {} -> False
         ResultError {} -> True
 
+    logFKeyConstraintFail :: SqlError -> IO ()
+    logFKeyConstraintFail e =
+      -- Comparing strings here. Hope the string in the `postgresql-simple`
+      -- package never changes.
+      if "violates foreign key constraint" `BS.isInfixOf` sqlErrorMsg e
+        then logWarning trce $ "insertOfflineResults: " <> textShow e
+        else throwIO e
 
 runOfflineFetchThread :: Trace IO Text -> LedgerEnv -> IO ()
 runOfflineFetchThread trce lenv = do
