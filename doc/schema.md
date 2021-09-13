@@ -328,7 +328,7 @@ A table for metadata attached to a transaction.
 |-|-|-|
 | `id` | integer (64) |  |
 | `key` | word64type | The metadata key (a Word64/unsigned 64 bit number). |
-| `json` | jsonb | The JSON payload if it can bde decoded as JSON. |
+| `json` | jsonb | The JSON payload if it can be decoded as JSON. |
 | `bytes` | bytea | The raw bytes of the payload. |
 | `tx_id` | integer (64) | The Tx table index of the transaction where this metadata was included. |
 

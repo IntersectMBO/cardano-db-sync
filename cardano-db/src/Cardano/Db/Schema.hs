@@ -708,7 +708,7 @@ schemaDocs =
     TxMetadata --^ do
       "A table for metadata attached to a transaction."
       TxMetadataKey # "The metadata key (a Word64/unsigned 64 bit number)."
-      TxMetadataJson # "The JSON payload if it can bde decoded as JSON."
+      TxMetadataJson # "The JSON payload if it can be decoded as JSON."
       TxMetadataBytes # "The raw bytes of the payload."
       TxMetadataTxId # "The Tx table index of the transaction where this metadata was included."
 
