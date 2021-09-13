@@ -311,7 +311,7 @@ share
     addrId              StakeAddressId      OnDeleteCascade
     poolId              PoolHashId          OnDeleteCascade
     amount              DbLovelace          sqltype=lovelace
-    epochNo             Word64
+    epochNo             Word64              sqltype=uinteger
     UniqueStake         epochNo addrId poolId
 
   Treasury
