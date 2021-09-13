@@ -173,18 +173,28 @@ insertRewards epoch icache rewardsChunk = do
                   { DB.rewardAddrId = saId
                   , DB.rewardType = Generic.rewardSource rwd
                   , DB.rewardAmount = Generic.coinToDbLovelace (Generic.rewardAmount rwd)
-                  , DB.rewardEarnedEpoch = unEpochNo epoch
-                  , DB.rewardSpendableEpoch = unEpochNo epoch + spendableEpoch (Generic.rewardSource rwd)
+                  , DB.rewardEarnedEpoch = earnedEpoch (Generic.rewardSource rwd)
+                  , DB.rewardSpendableEpoch = spendableEpoch (Generic.rewardSource rwd)
                   , DB.rewardPoolId = lookupPoolIdPairMaybe (Generic.rewardPool rwd) icache
                   }
 
+    earnedEpoch :: DB.RewardSource -> Word64
+    earnedEpoch src =
+      unEpochNo epoch +
+        case src of
+          DB.RwdMember -> 0
+          DB.RwdLeader -> 0
+          DB.RwdReserves -> 1
+          DB.RwdTreasury -> 1
+
     spendableEpoch :: DB.RewardSource -> Word64
     spendableEpoch src =
-      case src of
-        DB.RwdMember -> 2
-        DB.RwdLeader -> 2
-        DB.RwdReserves -> 1
-        DB.RwdTreasury -> 1
+      unEpochNo epoch +
+        case src of
+          DB.RwdMember -> 2
+          DB.RwdLeader -> 2
+          DB.RwdReserves -> 2
+          DB.RwdTreasury -> 2
 
 -- -------------------------------------------------------------------------------------------------
 

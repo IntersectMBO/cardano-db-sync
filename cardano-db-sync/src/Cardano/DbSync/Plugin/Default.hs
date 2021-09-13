@@ -193,7 +193,7 @@ stashPoolRewards tracer lenv epoch rmap = do
     Nothing ->
       liftIO . atomically $ putTMVar (lePoolRewards lenv) (epoch, rmap)
     Just mirMap ->
-      validateEpochRewards tracer (leNetwork lenv) (epoch - 2) (Map.unionWith plusCoin rmap mirMap)
+      validateEpochRewards tracer (leNetwork lenv) epoch (Map.unionWith plusCoin rmap mirMap)
 
 stashMirRewards
     :: (MonadBaseControl IO m, MonadIO m)
@@ -205,4 +205,4 @@ stashMirRewards tracer lenv mirMap = do
       Nothing ->
         liftIO . atomically $ putTMVar (leMirRewards lenv) mirMap
       Just (epoch, rmap) ->
-        validateEpochRewards tracer (leNetwork lenv) (epoch - 2) (Map.unionWith plusCoin rmap mirMap)
+        validateEpochRewards tracer (leNetwork lenv) epoch (Map.unionWith plusCoin rmap mirMap)

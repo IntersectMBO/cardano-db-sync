@@ -40,20 +40,20 @@ validateEpochRewards
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> Network -> EpochNo -> Map (Ledger.StakeCredential c) Coin
     -> ReaderT SqlBackend m ()
-validateEpochRewards tracer nw epochNo rmap = do
-    actual <- queryEpochRewardTotal epochNo
+validateEpochRewards tracer nw currentEpoch rmap = do
+    actual <- queryEpochRewardTotal currentEpoch
     if actual /= expected
         then do
           liftIO . logWarning tracer $ mconcat
-                      [ "validateEpochRewards: rewards earned in epoch "
-                      , textShow (unEpochNo epochNo), " expected total of ", textShow expected
+                      [ "validateEpochRewards: rewards spendable in epoch "
+                      , textShow (unEpochNo currentEpoch), " expected total of ", textShow expected
                       , " ADA but got " , textShow actual, " ADA"
                       ]
-          logFullRewardMap epochNo (convertRewardMap nw rmap)
+          logFullRewardMap currentEpoch (convertRewardMap nw rmap)
         else
           liftIO . logInfo tracer $ mconcat
                       [ "validateEpochRewards: total rewards that become spendable in epoch "
-                      , textShow (2 + unEpochNo epochNo), " is ", textShow actual, " ADA"
+                      , textShow (unEpochNo currentEpoch), " is ", textShow actual, " ADA"
                       ]
   where
     expected :: Db.Ada
@@ -66,7 +66,7 @@ queryEpochRewardTotal
     => EpochNo -> ReaderT SqlBackend m Db.Ada
 queryEpochRewardTotal (EpochNo epochNo) = do
   res <- select . from $ \ rwd -> do
-            where_ (rwd ^. Db.RewardEarnedEpoch ==. val epochNo)
+            where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
             pure (sum_ $ rwd ^. Db.RewardAmount)
   pure $ Db.unValueSumAda (listToMaybe res)
 
@@ -91,10 +91,10 @@ queryRewardMap
 queryRewardMap (EpochNo epochNo) = do
     res <- select . from $ \ (rwd `InnerJoin` saddr) -> do
               on (rwd ^. Db.RewardAddrId ==. saddr ^. Db.StakeAddressId)
-              where_ (rwd ^. Db.RewardEarnedEpoch ==. val epochNo)
+              where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
               -- Need this orderBy so that the `groupOn` below works correctly.
               orderBy [desc (saddr ^. Db.StakeAddressHashRaw)]
-              pure (saddr ^. Db.StakeAddressHashRaw, rwd ^. Db.RewardType, rwd ^.Db.RewardAmount)
+              pure (saddr ^. Db.StakeAddressHashRaw, rwd ^. Db.RewardType, rwd ^. Db.RewardAmount)
     pure . Map.fromList . map collapse $ List.groupOn fst (map convert res)
   where
     convert :: (Value ByteString, Value RewardSource, Value DbLovelace) -> (Generic.StakeCred, (RewardSource, DbLovelace))
@@ -173,7 +173,7 @@ queryRewardEntries
 queryRewardEntries (EpochNo epochNo) (Generic.StakeCred cred) = do
   res <- select . from $ \ (rwd `InnerJoin` saddr) -> do
             on (rwd ^. Db.RewardAddrId ==. saddr ^. Db.StakeAddressId)
-            where_ (rwd ^. Db.RewardEarnedEpoch ==. val epochNo)
+            where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
             where_ (saddr ^. Db.StakeAddressHashRaw ==. val cred)
             pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
