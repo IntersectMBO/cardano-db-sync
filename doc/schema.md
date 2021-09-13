@@ -1,6 +1,6 @@
 # Schema Documentation for cardano-db-sync
 
-Schema version: 11.0.0 (from branch **prerelease/11.0.x** which may not accurately reflect the version number)
+Schema version: 11.0.1
 
 ### `schema_version`
 

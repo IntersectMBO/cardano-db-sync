@@ -1,5 +1,9 @@
 # Revision history for cardano-db-tool
 
+## 11.0.1
+* Fix docker issue (#810).
+* Fix schema documentation typo (#799).
+
 ## 11.0.0
 * Alonzo support.
 * Database changes as per cardano-db changelog.
