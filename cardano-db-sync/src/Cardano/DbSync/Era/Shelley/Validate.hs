@@ -13,6 +13,7 @@ import           Cardano.BM.Trace (Trace, logInfo, logWarning)
 
 import           Cardano.Db (DbLovelace, RewardSource)
 import qualified Cardano.Db as Db
+import           Cardano.DbSync.Era.Shelley.ValidateWithdrawal (validateRewardWithdrawals)
 
 import           Cardano.Ledger.BaseTypes (Network)
 import           Cardano.Ledger.Coin (Coin (..))
@@ -55,6 +56,7 @@ validateEpochRewards tracer nw currentEpoch rmap = do
                       [ "validateEpochRewards: total rewards that become spendable in epoch "
                       , textShow (unEpochNo currentEpoch), " is ", textShow actual, " ADA"
                       ]
+    validateRewardWithdrawals currentEpoch
   where
     expected :: Db.Ada
     expected = Db.word64ToAda . fromIntegral . sum $ map unCoin (Map.elems rmap)
@@ -114,6 +116,7 @@ diffRewardMap
     -> ReaderT SqlBackend m ()
 diffRewardMap epochNo dbMap ledgerMap = do
     liftIO $ do
+      putStrLn $ "Epoch No: " ++ show (unEpochNo epochNo)
       putStrLn $ "dbMap length: " ++ show (Map.size dbMap)
       putStrLn $ "ledgerMap length: " ++ show (Map.size ledgerMap)
       putStrLn $ "diffMap length: " ++ show (Map.size diffMap)

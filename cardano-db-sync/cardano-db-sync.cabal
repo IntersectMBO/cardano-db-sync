@@ -72,6 +72,9 @@ library
                         Cardano.DbSync.Era.Shelley.Query
                         Cardano.DbSync.Era.Shelley.Validate
 
+                        -- Temporary debugging validation
+                        Cardano.DbSync.Era.Shelley.ValidateWithdrawal
+
                         Cardano.DbSync.Era.Util
 
                         Cardano.DbSync.Metrics
