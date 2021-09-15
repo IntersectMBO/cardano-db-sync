@@ -85,6 +85,7 @@ rewardBlockEra pv =
     Shelley.ProtVer 3 0 -> Allegra
     Shelley.ProtVer 4 0 -> Mary
     Shelley.ProtVer 5 0 -> Alonzo
+    Shelley.ProtVer 6 0 -> Alonzo
     x -> panic $ "rewardBlockEra: " <> textShow x
 
 rewardProtoVer :: ExtLedgerState CardanoBlock -> Shelley.ProtVer
