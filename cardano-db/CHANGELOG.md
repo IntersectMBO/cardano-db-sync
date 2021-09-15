@@ -1,5 +1,8 @@
 # Revision history for cardano-db
 
+## 11.0.2
+* Fix schema documentation typo (#799).
+
 ## 11.0.0
 * Note that this release requires the database to be dropped and recreated.
 * Many changed to support Alonzo release.
