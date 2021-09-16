@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Test.IO.Cardano.Db.Insert
   ( tests
   ) where
@@ -7,6 +8,9 @@ import           Control.Monad (void)
 
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
+import           Data.Time.Clock
+
+import           Database.Persist.Sql (Entity, delete, selectList)
 
 import           Cardano.Db
 
@@ -22,6 +26,7 @@ tests =
     [ testCase "Insert zeroth block" insertZeroTest
     , testCase "Insert first block" insertFirstTest
     , testCase "Insert twice" insertTwice
+    , testCase "Insert foreign key" insertForeignKey
     ]
 
 insertZeroTest :: IO ()
@@ -63,10 +68,27 @@ insertTwice =
     assertBool (show (adaPotsSlotNo pots0) ++ " /= " ++ show (adaPotsSlotNo pots0'))
       (adaPotsSlotNo pots0 == adaPotsSlotNo pots0')
 
+insertForeignKey :: IO ()
+insertForeignKey = do
+  time <- getCurrentTime
+  runDbNoLogging $ do
+    slid <- insertSlotLeader testSlotLeader
+    bid <- insertBlockChecked (blockZero slid)
+    txid <- insertTx (txZero bid)
+    phid <- insertPoolHash poolHash0
+    pmrid <- insertPoolMetadataRef $ poolMetadataRef txid phid
+    void $ insertAbortForeignKey print $ void $ insertPoolOfflineFetchError $
+      poolOfflineFetchError phid pmrid time
+    delete pmrid
+    void $ insertAbortForeignKey print $ void $ insertPoolOfflineFetchError $
+      poolOfflineFetchError phid pmrid time
+    ls :: [Entity PoolOfflineFetchError] <- selectList [] []
+    assertBool (show (length ls) ++ "/= 0") (length ls == 0)
+
 blockZero :: SlotLeaderId -> Block
 blockZero slid =
   Block
-    { blockHash = mkHash32 '\0'
+    { blockHash = mkHash 32 '\0'
     , blockEpochNo = Just 0
     , blockSlotNo = Just 0
     , blockEpochSlotNo = Just 0
@@ -87,7 +109,7 @@ blockZero slid =
 blockOne :: SlotLeaderId -> Block
 blockOne slid =
   Block
-    { blockHash = mkHash32 '\1'
+    { blockHash = mkHash 32 '\1'
     , blockEpochNo = Just 0
     , blockSlotNo = Just 1
     , blockEpochSlotNo = Just 1
@@ -104,6 +126,38 @@ blockOne slid =
     , blockOpCertCounter = Nothing
     }
 
+txZero :: BlockId -> Tx
+txZero bid =
+  Tx
+    { txHash = mkHash 32 '2'
+    , txBlockId = bid
+    , txBlockIndex = 0
+    , txOutSum = DbLovelace 0
+    , txFee = DbLovelace 0
+    , txDeposit = 0
+    , txSize = 0
+    , txInvalidBefore = Nothing
+    , txInvalidHereafter = Nothing
+    , txValidContract = True
+    , txScriptSize = 0
+    }
+
+poolHash0 :: PoolHash
+poolHash0 =
+  PoolHash
+    { poolHashHashRaw = mkHash 28 '0'
+    , poolHashView = "best pool"
+    }
+
+poolMetadataRef :: TxId -> PoolHashId -> PoolMetadataRef
+poolMetadataRef txid phid =
+  PoolMetadataRef
+    { poolMetadataRefPoolId = phid
+    , poolMetadataRefUrl = "best.pool.com"
+    , poolMetadataRefHash = mkHash 32 '4'
+    , poolMetadataRefRegisteredTxId = txid
+    }
+
 adaPotsZero :: BlockId -> AdaPots
 adaPotsZero bid =
   AdaPots
@@ -118,6 +172,16 @@ adaPotsZero bid =
     , adaPotsBlockId = bid
     }
 
-mkHash32 :: Char -> ByteString
-mkHash32 = BS.pack . replicate 32
+poolOfflineFetchError :: PoolHashId -> PoolMetadataRefId -> UTCTime -> PoolOfflineFetchError
+poolOfflineFetchError phid pmrid time =
+  PoolOfflineFetchError
+    { poolOfflineFetchErrorPoolId = phid
+    , poolOfflineFetchErrorFetchTime = time
+    , poolOfflineFetchErrorPmrId = pmrid
+    , poolOfflineFetchErrorFetchError = "too good"
+    , poolOfflineFetchErrorRetryCount = 5
+    }
+
+mkHash :: Int -> Char -> ByteString
+mkHash n = BS.pack . replicate n
 

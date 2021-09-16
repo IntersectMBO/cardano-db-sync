@@ -55,7 +55,6 @@ import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..), Value
 import           Cardano.Slotting.Block (BlockNo (..))
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
 
-import           Control.Monad.Catch (MonadCatch)
 import           Control.Monad.Class.MonadSTM.Strict (tryReadTBQueue)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 
@@ -77,7 +76,7 @@ import qualified Shelley.Spec.Ledger.STS.Chain as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 insertShelleyBlock
-    :: (MonadBaseControl IO m, MonadCatch m, MonadIO m)
+    :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> LedgerEnv -> Generic.Block -> LedgerStateSnapshot -> SlotDetails
     -> ReaderT SqlBackend m (Either SyncNodeError ())
 insertShelleyBlock tracer lenv blk lStateSnap details = do

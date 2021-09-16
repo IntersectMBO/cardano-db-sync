@@ -46,6 +46,7 @@ module Cardano.Db.Insert
   , insertRedeemer
   , insertCostModels
   , insertDatum
+  , insertAbortForeignKey
 
   -- Export mainly for testing.
   , insertBlockChecked
@@ -55,7 +56,7 @@ module Cardano.Db.Insert
   ) where
 
 
-import           Control.Exception.Lifted (Exception, handle, throwIO)
+import           Control.Exception.Lifted (Exception, handle, throw, throwIO)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Reader (ReaderT)
@@ -75,9 +76,10 @@ import           Database.Persist.Sql (OnlyOneUniqueKey, PersistRecordBackend, S
 import qualified Database.Persist.Sql.Util as Util
 import           Database.Persist.Types (ConstraintNameDB (..), EntityNameDB (..), FieldNameDB (..),
                    PersistValue, entityKey)
-import           Database.PostgreSQL.Simple (SqlError)
+import           Database.PostgreSQL.Simple (SqlError, sqlErrorMsg)
 
 import           Cardano.Db.Schema
+import           Cardano.Db.Text
 
 
 -- The original naive way of inserting rows into Postgres was:
@@ -226,6 +228,20 @@ data DbInsertException
   deriving Show
 
 instance Exception DbInsertException
+
+-- | Simple wrapper around any insert function, that makes it abort in case of a
+-- foreign key constraint error.
+insertAbortForeignKey :: forall m. (MonadBaseControl IO m, MonadIO m) => (Text -> IO ()) -> ReaderT SqlBackend m () -> ReaderT SqlBackend m ()
+insertAbortForeignKey logWarn insertDB = do
+    handle checkFKeyConstraintFail insertDB
+  where
+    checkFKeyConstraintFail :: DbInsertException -> ReaderT SqlBackend m ()
+    checkFKeyConstraintFail (DbInsertException vtype e) =
+      -- Comparing strings here. Hope the string in the `postgresql-simple`
+      -- package never changes.
+      if "violates foreign key constraint" `BS.isInfixOf` sqlErrorMsg e
+        then liftIO $ logWarn $ Text.pack vtype <> ": " <> textShow e
+        else throw $ DbInsertException vtype e
 
 insertManyUncheckedUnique
     :: forall m record.

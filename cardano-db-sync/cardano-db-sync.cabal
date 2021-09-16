@@ -102,7 +102,6 @@ library
                       , cardano-slotting
                       , containers
                       , esqueleto
-                      , exceptions
                       , extra
                       , groups
                       , http-client
@@ -119,7 +118,6 @@ library
                       , ouroboros-network
                       , persistent
                       , persistent-postgresql
-                      , postgresql-simple
                       , prometheus
                       , random-shuffle
                       , small-steps
