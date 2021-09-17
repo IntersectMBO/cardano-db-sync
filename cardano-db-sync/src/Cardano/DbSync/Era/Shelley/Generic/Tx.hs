@@ -332,9 +332,15 @@ fromAlonzoTx pp (blkIndex, tx) =
       , txValidContract = isValid2
       , txInputs = txIns
       , txCollateralInputs = map (fromTxIn Nothing) . toList $ getField @"collateral" txBody
-      , txOutputs = zipWith fromTxOut [0 .. ] . toList $ getField @"outputs" txBody
+      , txOutputs =
+          if not isValid2
+            then []
+            else zipWith fromTxOut [0 .. ] . toList $ getField @"outputs" txBody
       , txFees = getField @"txfee" txBody
-      , txOutSum = Coin . sum $ map txOutValue (getField @"outputs" txBody)
+      , txOutSum =
+          if not isValid2
+            then Coin 0
+            else Coin . sum $ map txOutValue (getField @"outputs" txBody)
       , txInvalidBefore = strictMaybeToMaybe . ShelleyMa.invalidBefore $ getField @"vldt" txBody
       , txInvalidHereafter = strictMaybeToMaybe . ShelleyMa.invalidHereafter $ getField @"vldt" txBody
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems

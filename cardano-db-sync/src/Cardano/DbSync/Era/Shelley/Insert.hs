@@ -198,8 +198,10 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx = do
                 , DB.txBlockId = blkId
                 , DB.txBlockIndex = blockIndex
                 , DB.txOutSum = DB.DbLovelace (fromIntegral outSum)
-                , DB.txFee = DB.DbLovelace (fromIntegral . unCoin $ Generic.txFees tx)
-                , DB.txDeposit = fromIntegral (inSum + withdrawalSum) - fromIntegral (outSum + fees)
+                , DB.txFee = if not (Generic.txValidContract tx) then DB.DbLovelace (fromIntegral inSum)
+                    else DB.DbLovelace (fromIntegral . unCoin $ Generic.txFees tx)
+                , DB.txDeposit = if not (Generic.txValidContract tx) then 0
+                    else fromIntegral (inSum + withdrawalSum) - fromIntegral (outSum + fees)
                 , DB.txSize = Generic.txSize tx
                 , DB.txInvalidBefore = DbWord64 . unSlotNo <$> Generic.txInvalidBefore tx
                 , DB.txInvalidHereafter = DbWord64 . unSlotNo <$> Generic.txInvalidHereafter tx
