@@ -44,6 +44,8 @@ module Cardano.Db.Insert
   , insertTxOut
   , insertWithdrawal
   , insertRedeemer
+  , insertCheckPoolOfflineData
+  , insertCheckPoolOfflineFetchError
 
   -- Export mainly for testing.
   , insertBlockChecked
@@ -54,6 +56,7 @@ module Cardano.Db.Insert
 
 
 import           Control.Exception.Lifted (Exception, handle, throwIO)
+import           Control.Monad (void, when)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Reader (ReaderT)
@@ -74,6 +77,7 @@ import           Database.Persist.Types (ConstraintNameDB (..), EntityNameDB (..
                    PersistValue, entityKey)
 import           Database.PostgreSQL.Simple (SqlError)
 
+import           Cardano.Db.Query
 import           Cardano.Db.Schema
 
 
@@ -209,6 +213,18 @@ insertWithdrawal = insertUnchecked "Withdrawal"
 
 insertRedeemer :: (MonadBaseControl IO m, MonadIO m) => Redeemer -> ReaderT SqlBackend m RedeemerId
 insertRedeemer = insertCheckUnique "Redeemer"
+
+insertCheckPoolOfflineData :: (MonadBaseControl IO m, MonadIO m) => PoolOfflineData -> ReaderT SqlBackend m ()
+insertCheckPoolOfflineData pod = do
+  foundPool <- existsPoolHashId (poolOfflineDataPoolId pod)
+  foundMeta <- existsPoolMetadataRefId (poolOfflineDataPmrId pod)
+  when (foundPool && foundMeta) $ void $ insertPoolOfflineData pod
+
+insertCheckPoolOfflineFetchError :: (MonadBaseControl IO m, MonadIO m) => PoolOfflineFetchError -> ReaderT SqlBackend m ()
+insertCheckPoolOfflineFetchError pofe = do
+  foundPool <- existsPoolHashId (poolOfflineFetchErrorPoolId pofe)
+  foundMeta <- existsPoolMetadataRefId (poolOfflineFetchErrorPmrId pofe)
+  when (foundPool && foundMeta) $ void $ insertPoolOfflineFetchError pofe
 
 -- -----------------------------------------------------------------------------
 
