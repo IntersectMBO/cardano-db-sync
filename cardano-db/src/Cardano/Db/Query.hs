@@ -49,6 +49,8 @@ module Cardano.Db.Query
   , queryUtxoAtSlotNo
   , queryWithdrawalsUpToBlockNo
   , queryAdaPots
+  , existsPoolHashId
+  , existsPoolMetadataRefId
 
   , entityPair
   , isJust
@@ -587,6 +589,22 @@ queryAdaPots blkId = do
             where_ (adaPots  ^. AdaPotsBlockId ==. val blkId)
             pure adaPots
   pure $ fmap entityVal (listToMaybe res)
+
+existsPoolHashId :: MonadIO m => PoolHashId -> ReaderT SqlBackend m Bool
+existsPoolHashId phid = do
+  res <- select . from $ \ poolHash -> do
+            where_ (poolHash  ^. PoolHashId ==. val phid)
+            limit 1
+            pure (poolHash ^. PoolHashId)
+  pure $ not (null res)
+
+existsPoolMetadataRefId :: MonadIO m => PoolMetadataRefId -> ReaderT SqlBackend m Bool
+existsPoolMetadataRefId pmrid = do
+  res <- select . from $ \ pmr -> do
+            where_ (pmr  ^. PoolMetadataRefId ==. val pmrid)
+            limit 1
+            pure (pmr  ^. PoolMetadataRefId)
+  pure $ not (null res)
 
 -- -----------------------------------------------------------------------------
 -- SqlQuery predicates
