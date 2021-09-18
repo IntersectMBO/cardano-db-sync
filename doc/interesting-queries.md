@@ -152,11 +152,11 @@ select tx_out.* from tx_out
 There are many ways this query can be written, but this is the one which so far has the best
 performance (runs in a little over 10 minutes at epoch 270):
 ```sql
-select epoch_no, max (seconds) as sync_secs, sum (tx_count) as tx_count, sum (sum_tx_size) as sum_tx_size,
-	sum (reward_count) as reward_count, sum (stake_count) as stake_count
+select epoch_no, max (sync_secs) as sync_secs, sum (tx_count) as tx_count, sum (sum_tx_size) as sum_tx_size,
+    sum (reward_count) as reward_count, sum (stake_count) as stake_count
   from (
-    select epoch_no, 0 as sync_secs, 0 as tx_count, 0 as sum_tx_size, count (reward) as reward_count,
-	    0 as stake_count from reward group by epoch_no
+    select earned_epoch as epoch_no, 0 as sync_secs, 0 as tx_count, 0 as sum_tx_size, count (reward) as reward_count,
+        0 as stake_count from reward group by earned_epoch
     union
     select epoch_no, 0 as sync_secs, 0 as tx_count, 0 as sum_tx_size, 0 as reward_count,
         count (epoch_stake) as stake_count from epoch_stake group by epoch_no
