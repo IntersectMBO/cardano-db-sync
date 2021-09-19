@@ -82,6 +82,15 @@ Note: The value returned by this query can be rather misleading as it operates o
 and early epochs contain much less data (eg Byron era did not have staking) and much fewer
 transactions.
 
+To find out how far behind `db-sync` is:
+```sql
+select now () - max (time) as behind_by from block ; 
+       behind_by        
+------------------------
+ 4 days 20:59:39.134497
+(1 row)
+```
+
 ### Current valid pools
 In general the database is operated on in an append only manner. Pool certificates can
 be updated so that later certificates override earlier ones. In addition pools can
