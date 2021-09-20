@@ -202,11 +202,16 @@ in {
           SNAPSHOT_SCRIPT=$( (yes phrase ||:) | cardano-db-tool prepare-snapshot --state-dir ${cfg.stateDir} | tail -n 1)
           res=$?
           set -e
+          SNAPSHOT="$(echo $SNAPSHOT_SCRIPT | cut -d " " -f3)"
           if [ $res -eq 0 ]; then
-            ${../../scripts/postgresql-setup.sh} ''${SNAPSHOT_SCRIPT#*scripts/postgresql-setup.sh}
-            for s in ''${EXISTING_SNAPSHOTS[@]}; do
-              rm $s
-            done
+            if [ ! -f "$SNAPSHOT.tgz" ]; then
+              ${../../scripts/postgresql-setup.sh} ''${SNAPSHOT_SCRIPT#*scripts/postgresql-setup.sh}
+              for s in ''${EXISTING_SNAPSHOTS[@]}; do
+                rm $s
+              done
+            else
+              >&2 echo "A snapshot already exist for same schema/block, skipping snapshot creation."
+            fi
           else
             >&2 echo "State does not permit to take snapshot, proceeding with normal startup."
           fi
