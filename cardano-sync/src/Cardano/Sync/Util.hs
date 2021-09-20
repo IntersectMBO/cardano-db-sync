@@ -12,6 +12,9 @@ module Cardano.Sync.Util
   , liftedLogException
   , logActionDuration
   , logException
+  , maybeFromStrict
+  , maybeToStrict
+  , nullMetricSetters
   , panicAbort
   , plusCoin
   , renderByteArray
@@ -19,12 +22,10 @@ module Cardano.Sync.Util
   , renderSlotList
   , textPrettyShow
   , textShow
+  , thrd3
   , tipBlockNo
   , traverseMEither
-  , nullMetricSetters
-  , maybeToStrict
   , whenJust
-  , thrd3
   ) where
 
 import           Cardano.Prelude hiding (catch)
@@ -173,6 +174,10 @@ renderSlotList xs
   | length xs < 10 = textShow (map unSlotNo xs)
   | otherwise =
       mconcat [ "[", textShow (unSlotNo $ List.head xs), "..", textShow (unSlotNo $ List.last xs), "]" ]
+
+maybeFromStrict :: Strict.Maybe a -> Maybe a
+maybeFromStrict Strict.Nothing = Nothing
+maybeFromStrict (Strict.Just a) = Just a
 
 maybeToStrict :: Maybe a -> Strict.Maybe a
 maybeToStrict Nothing = Strict.Nothing

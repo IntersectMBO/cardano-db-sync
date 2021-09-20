@@ -39,7 +39,6 @@ import           Cardano.BM.Trace (Trace, logInfo, logWarning)
 import           Cardano.Binary (DecoderError)
 import qualified Cardano.Binary as Serialize
 
-import           Cardano.Db (SyncState (..))
 import qualified Cardano.Db as DB
 
 import qualified Cardano.Ledger.BaseTypes as Ledger
@@ -418,8 +417,8 @@ mkLedgerStateFilename :: LedgerStateDir -> ExtLedgerState CardanoBlock -> Maybe 
 mkLedgerStateFilename dir ledger mEpochNo = lsfFilePath . dbPointToFileName dir mEpochNo
     <$> getPoint (ledgerTipPoint (Proxy @CardanoBlock) (ledgerState ledger))
 
-saveCleanupState :: LedgerEnv -> CardanoLedgerState -> SyncState -> Maybe EpochNo -> IO ()
-saveCleanupState env ledger _syncState mEpochNo = do
+saveCleanupState :: LedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
+saveCleanupState env ledger mEpochNo = do
   let st = clsState ledger
   saveCurrentLedgerState env st mEpochNo
   cleanupLedgerStateFiles env $
@@ -489,8 +488,8 @@ cleanupLedgerStateFiles env slotNo = do
     let (epochBoundary, valid, invalid) = foldr groupFiles ([], [], []) files
     -- Remove invalid (ie SlotNo >= current) ledger state files (occurs on rollback).
     deleteAndLogFiles env "invalid" invalid
-    -- Remove all but 8 most recent state files.
-    deleteAndLogStateFile env "valid" (List.drop 8 valid)
+    -- Remove all but 2 most recent state files.
+    deleteAndLogStateFile env "valid" (List.drop 2 valid)
     -- Remove all but 2 most recent epoch boundary state files.
     deleteAndLogStateFile env "epoch boundary" (List.drop 2 epochBoundary)
   where
