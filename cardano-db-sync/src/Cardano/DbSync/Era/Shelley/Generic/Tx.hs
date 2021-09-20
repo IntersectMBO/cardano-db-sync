@@ -59,7 +59,6 @@ import           Cardano.Slotting.Slot (SlotNo (..))
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
-import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import           Data.Maybe.Strict (strictMaybeToMaybe)
 import           Data.MemoBytes (MemoBytes (..))
@@ -162,7 +161,7 @@ fromAllegraTx (blkIndex, tx) =
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
                             . Shelley.unWdrl $ ShelleyMa.wdrls rawTxBody
       , txMetadata = fromAllegraMetadata <$> txMeta tx
-      , txCertificates = zipWith (TxCertificate Nothing) [0..] (map coerceCertificate . toList $ ShelleyMa.certs rawTxBody)
+      , txCertificates = zipWith (TxCertificate Nothing) [0..] (toList $ ShelleyMa.certs rawTxBody)
       , txWithdrawals = map (mkTxWithdrawal Nothing) (Map.toList . Shelley.unWdrl $ ShelleyMa.wdrls rawTxBody)
       , txParamProposal = maybe [] (convertParamProposal (Allegra Standard)) $ strictMaybeToMaybe (ShelleyMa.update rawTxBody)
       , txMint = mempty     -- Allegra does not support Multi-Assets
@@ -177,7 +176,7 @@ fromAllegraTx (blkIndex, tx) =
     fromTxOut index (Shelley.TxOut addr ada) =
       TxOut
         { txOutIndex = index
-        , txOutAddress = coerceAddress addr
+        , txOutAddress = addr
         , txOutAdaValue = ada
         , txOutMaValue = mempty -- Allegra does not support Multi-Assets
         , txOutDataHash = mempty -- Allegra does not support scripts
@@ -247,7 +246,7 @@ fromShelleyTx (blkIndex, tx) =
     fromTxOut index (Shelley.TxOut addr ada) =
       TxOut
         { txOutIndex = index
-        , txOutAddress = coerceAddress addr
+        , txOutAddress = addr
         , txOutAdaValue = ada
         , txOutMaValue = mempty -- Shelley does not support Multi-Assets
         , txOutDataHash = mempty -- Shelley does not support scripts
@@ -273,10 +272,10 @@ fromMaryTx (blkIndex, tx) =
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
                             . Shelley.unWdrl $ ShelleyMa.wdrls (unTxBodyRaw tx)
       , txMetadata = fromMaryMetadata <$> txMeta tx
-      , txCertificates = zipWith (TxCertificate Nothing) [0..] (map coerceCertificate . toList . ShelleyMa.certs $ unTxBodyRaw tx)
+      , txCertificates = zipWith (TxCertificate Nothing) [0..] (toList . ShelleyMa.certs $ unTxBodyRaw tx)
       , txWithdrawals = map (mkTxWithdrawal Nothing) (Map.toList . Shelley.unWdrl . ShelleyMa.wdrls $ unTxBodyRaw tx)
       , txParamProposal = maybe [] (convertParamProposal (Mary Standard)) $ strictMaybeToMaybe (ShelleyMa.update $ unTxBodyRaw tx)
-      , txMint = coerceMint (ShelleyMa.mint $ unTxBodyRaw tx)
+      , txMint = ShelleyMa.mint $ unTxBodyRaw tx
       , txRedeemer = []     -- Mary does not support Redeemer
       , txData = []
       , txScriptSizes = []    -- Mary does not support scripts
@@ -288,9 +287,9 @@ fromMaryTx (blkIndex, tx) =
     fromTxOut index (Shelley.TxOut addr (Value ada maMap)) =
       TxOut
         { txOutIndex = index
-        , txOutAddress = coerceAddress addr
+        , txOutAddress = addr
         , txOutAdaValue = Coin ada
-        , txOutMaValue = coerceMultiAsset maMap
+        , txOutMaValue = maMap
         , txOutDataHash = mempty -- Mary does not support scripts
         }
 
@@ -344,7 +343,7 @@ fromAlonzoTx pp (blkIndex, tx) =
       , txCertificates = txCerts
       , txWithdrawals = txWdrls
       , txParamProposal = maybe [] (convertParamProposal (Alonzo Standard)) $ strictMaybeToMaybe (getField @"update" txBody)
-      , txMint = coerceMint (getField @"mint" txBody)
+      , txMint = getField @"mint" txBody
       , txRedeemer = redeemers
       , txData = txDataWitness
       , txScriptSizes = sizes
@@ -356,9 +355,9 @@ fromAlonzoTx pp (blkIndex, tx) =
     fromTxOut index (Alonzo.TxOut addr (Value ada maMap) mDataHash) =
       TxOut
         { txOutIndex = index
-        , txOutAddress = coerceAddress addr
+        , txOutAddress = addr
         , txOutAdaValue = Coin ada
-        , txOutMaValue = coerceMultiAsset maMap
+        , txOutMaValue = maMap
         , txOutDataHash = getDataHash <$> strictMaybeToMaybe mDataHash
         }
 
@@ -414,15 +413,14 @@ fromAlonzoTx pp (blkIndex, tx) =
         }
 
     txCerts :: [TxCertificate]
-    txCerts = zipWith mkTxCertificate [0..] (map coerceCertificate . toList $ certificates)
+    txCerts = zipWith mkTxCertificate [0..] (toList certificates)
 
     withdrawals :: Map (Shelley.RewardAcnt StandardCrypto) Coin
     withdrawals = Shelley.unWdrl $ getField @"wdrls" txBody
 
-    mkTxWithdrawal' :: (Shelley.RewardAcnt era, Coin) -> TxWithdrawal
+    mkTxWithdrawal' :: (Shelley.RewardAcnt StandardCrypto, Coin) -> TxWithdrawal
     mkTxWithdrawal' (acnt, coin) =
-      let acnt' = coerce acnt
-      in mkTxWithdrawal (strictMaybeToMaybe $ Alonzo.indexOf acnt' withdrawals) (acnt', coin)
+      mkTxWithdrawal (strictMaybeToMaybe $ Alonzo.indexOf acnt withdrawals) (acnt, coin)
 
     txWdrls :: [TxWithdrawal]
     txWdrls = map mkTxWithdrawal' (Map.toList withdrawals)
@@ -486,56 +484,6 @@ fromAlonzoTx pp (blkIndex, tx) =
         Mint ->
           Right . unScriptHash <$> elemAtSet index (getField @"minted" txBody)
 
--- -------------------------------------------------------------------------------------------------
-
--- Coerce is safe here because 'era' is a phantom type.
-coerceAddress :: Ledger.Addr era -> Ledger.Addr StandardCrypto
-coerceAddress saddr =
-  case saddr of
-    Ledger.Addr nw pcred sref -> Ledger.Addr nw (coerce pcred) (coerce sref)
-    Ledger.AddrBootstrap addr -> Ledger.AddrBootstrap (coerce addr)
-
-coerceCertificate :: Shelley.DCert era -> Shelley.DCert StandardCrypto
-coerceCertificate cert =
-  case cert of
-    Shelley.DCertDeleg deleg -> Shelley.DCertDeleg (coerce deleg)
-    Shelley.DCertPool pool -> Shelley.DCertPool (coercePoolCert pool)
-    Shelley.DCertMir (Shelley.MIRCert pot target) -> Shelley.DCertMir (Shelley.MIRCert pot (coerceMIRTarget target))
-    Shelley.DCertGenesis gen -> Shelley.DCertGenesis (coerce gen)
-
-coerceMIRTarget :: Shelley.MIRTarget crypto -> Shelley.MIRTarget StandardCrypto
-coerceMIRTarget mt =
-  case mt of
-    Shelley.StakeAddressesMIR m -> Shelley.StakeAddressesMIR (Map.mapKeys coerce m)
-    Shelley.SendToOppositePotMIR c -> Shelley.SendToOppositePotMIR c
-
-coerceMint :: Value era -> Value StandardCrypto
-coerceMint (Value ada maMap) = Value ada (Map.mapKeys coerce maMap)
-
-coerceMultiAsset
-    :: Map (PolicyID era) (Map AssetName Integer)
-    -> Map (PolicyID StandardCrypto) (Map AssetName Integer)
-coerceMultiAsset = Map.mapKeys coerce
-
-coercePoolCert :: Shelley.PoolCert era -> Shelley.PoolCert StandardCrypto
-coercePoolCert pcert =
-  case pcert of
-    Shelley.RegPool cert -> Shelley.RegPool (coercePoolParams cert)
-    Shelley.RetirePool kh e -> Shelley.RetirePool (coerce kh) e
-
-coercePoolParams :: Shelley.PoolParams era -> Shelley.PoolParams StandardCrypto
-coercePoolParams pp =
-  Shelley.PoolParams
-    { Shelley._poolId = coerce (Shelley._poolId pp)
-    , Shelley._poolVrf = coerce (Shelley._poolVrf pp)
-    , Shelley._poolPledge = Shelley._poolPledge pp
-    , Shelley._poolCost  = Shelley._poolCost pp
-    , Shelley._poolMargin = Shelley._poolMargin pp
-    , Shelley._poolRAcnt = coerce (Shelley._poolRAcnt pp)
-    , Shelley._poolOwners = Set.map coerce (Shelley._poolOwners pp)
-    , Shelley._poolRelays = Shelley._poolRelays pp
-    , Shelley._poolMD = Shelley._poolMD pp
-    }
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -555,7 +503,7 @@ mkTxWithdrawal rIndex (ra, c) =
     , txwAmount = c
     }
 
-txHashId :: ShelleyBasedEra era => Shelley.Tx era -> ByteString
+txHashId :: (Ledger.Crypto era ~ StandardCrypto, ShelleyBasedEra era) => Shelley.Tx era -> ByteString
 txHashId = Crypto.hashToBytes . Ledger.extractHash . Ledger.hashAnnotated . Shelley.body
 
 -- | 'Set.elemAt' is a partial function so we can't use it. This reverses the 'indexOf' of the

@@ -129,7 +129,7 @@ import           System.Mem (performMajorGC)
 data BulkOperation
   = BulkRewardChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, Set Generic.Reward)]
   | BulkRewardReport !EpochNo !CardanoPoint !Int !Coin
-  | BulkStakeDistChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, (Coin, PoolKeyHash))]
+  | BulkStakeDistChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, (Coin, Generic.StakePoolKeyHash))]
   | BulkStakeDistReport !EpochNo !CardanoPoint !Int
 
 getBulkOpPoint :: BulkOperation -> CardanoPoint
@@ -142,7 +142,7 @@ getBulkOpPoint = go
 
 data IndexCache = IndexCache
   { icAddressCache :: !(Map Generic.StakeCred DB.StakeAddressId)
-  , icPoolCache :: !(Map PoolKeyHash DB.PoolHashId)
+  , icPoolCache :: !(Map Generic.StakePoolKeyHash DB.PoolHashId)
   }
 
 data LedgerEnv = LedgerEnv

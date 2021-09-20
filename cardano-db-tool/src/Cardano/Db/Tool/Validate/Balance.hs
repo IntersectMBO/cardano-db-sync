@@ -24,7 +24,6 @@ import           Cardano.Ledger.Compactible
 import           Cardano.Ledger.Val
 import           Cardano.Prelude
 
-import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 
@@ -66,11 +65,11 @@ getByronBalance addrText utxo = do
         else Nothing
 
 getShelleyBalance
-    :: forall era. Ledger.TxOut era ~ Shelley.TxOut era -- somewhere in ledger-spec, there is probably a better constraint synonym for these
+    :: forall era. (Crypto era ~ StandardCrypto, Ledger.TxOut era ~ Shelley.TxOut era)
     => Compactible (Ledger.Value era) => Val (Ledger.Value era)
     => Text -> Shelley.UTxO era -> Either Text Word64
 getShelleyBalance addrText utxo = do
-    caddr <- getCompactAddress addrText
+    caddr <- covertToCompactAddress addrText
     Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue caddr) (Map.elems $ Shelley.unUTxO utxo)
   where
     compactTxOutValue :: CompactAddr (Crypto era) -> Ledger.TxOut era -> Maybe Coin
@@ -80,11 +79,11 @@ getShelleyBalance addrText utxo = do
         else Nothing
 
 getAlonzoBalance
-    :: forall era. Ledger.TxOut era ~ Alonzo.TxOut era -- somewhere in ledger-spec, there is probably a better constraint synonym for these
+    :: forall era. (Crypto era ~ StandardCrypto, Ledger.TxOut era ~ Alonzo.TxOut era)
     => Compactible (Ledger.Value era) => Val (Ledger.Value era)
     => Text -> Shelley.UTxO era -> Either Text Word64
 getAlonzoBalance addrText utxo = do
-    caddr <- getCompactAddress addrText
+    caddr <- covertToCompactAddress addrText
     Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue caddr) (Map.elems $ Shelley.unUTxO utxo)
   where
     compactTxOutValue :: CompactAddr (Crypto era) -> Ledger.TxOut era -> Maybe Coin
@@ -96,15 +95,15 @@ getAlonzoBalance addrText utxo = do
           then Just $ coin (fromCompact val)
           else Nothing
 
-getCompactAddress :: Text -> Either Text (CompactAddr c)
-getCompactAddress addrText = case Api.deserialiseAddress (Api.AsAddress Api.AsShelleyAddr) addrText of
+covertToCompactAddress :: Text -> Either Text (CompactAddr StandardCrypto)
+covertToCompactAddress addrText =
+  case Api.deserialiseAddress (Api.AsAddress Api.AsShelleyAddr) addrText of
     Nothing ->
       case decodeAddressBase58 addrText of
         Left err -> Left $ textShow err
         Right badrr -> Right $ compactAddr (AddrBootstrap $ BootstrapAddress badrr)
     Just (Api.ShelleyAddress n p s) ->
-      let addr = Addr n (coerce p) (coerce s)
-      in Right $ compactAddr addr
+      Right $ compactAddr (Addr n p s)
 
 textShow :: Show a => a -> Text
 textShow = Text.pack . show
