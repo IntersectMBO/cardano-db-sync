@@ -132,7 +132,7 @@ insertEpochRewardTotalReceived epochNo total =
 insertEpochStake
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> IndexCache -> EpochNo
-    -> [(Generic.StakeCred, (Shelley.Coin, PoolKeyHash))]
+    -> [(Generic.StakeCred, (Shelley.Coin, Generic.StakePoolKeyHash))]
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertEpochStake _tracer icache epochNo stakeChunk = do
     dbStakes <- mapM mkStake stakeChunk
@@ -140,7 +140,7 @@ insertEpochStake _tracer icache epochNo stakeChunk = do
   where
     mkStake
         :: MonadBaseControl IO m
-        => (Generic.StakeCred, (Shelley.Coin, PoolKeyHash))
+        => (Generic.StakeCred, (Shelley.Coin, Generic.StakePoolKeyHash))
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.EpochStake
     mkStake (saddr, (coin, pool)) = do
       saId <- hoistEither $ lookupStakeAddrIdPair "insertEpochStake StakeCred" saddr icache
@@ -192,16 +192,16 @@ lookupStakeAddrIdPair msg scred lcache =
 
 
 lookupPoolIdPairMaybe
-    :: Maybe PoolKeyHash -> IndexCache
+    :: Maybe Generic.StakePoolKeyHash -> IndexCache
     -> Maybe DB.PoolHashId
 lookupPoolIdPairMaybe mpkh lcache =
     lookup =<< mpkh
   where
-    lookup :: PoolKeyHash -> Maybe DB.PoolHashId
+    lookup :: Generic.StakePoolKeyHash -> Maybe DB.PoolHashId
     lookup pkh = Map.lookup pkh $ icPoolCache lcache
 
 lookupPoolIdPair
-    :: Text -> PoolKeyHash -> IndexCache
+    :: Text -> Generic.StakePoolKeyHash -> IndexCache
     -> Either SyncNodeError DB.PoolHashId
 lookupPoolIdPair msg pkh lcache =
     maybe errMsg Right $ Map.lookup pkh (icPoolCache lcache)
@@ -209,13 +209,13 @@ lookupPoolIdPair msg pkh lcache =
     errMsg :: Either SyncNodeError a
     errMsg =
       Left . NEError $
-        mconcat [ "lookupPoolIdPair: ", msg, renderByteArray (Generic.unKeyHashRaw pkh) ]
+        mconcat [ "lookupPoolIdPair: ", msg, renderByteArray (Generic.unStakePoolKeyHash pkh) ]
 
 -- -------------------------------------------------------------------------------------------------
 
 updateIndexCache
     :: (MonadBaseControl IO m, MonadIO m)
-    => LedgerEnv -> Set Generic.StakeCred -> Set PoolKeyHash
+    => LedgerEnv -> Set Generic.StakeCred -> Set Generic.StakePoolKeyHash
     -> ReaderT SqlBackend m IndexCache
 updateIndexCache lenv screds pkhs = do
     oldCache <- liftIO . atomically $ readTVar (leIndexCache lenv)
@@ -246,8 +246,8 @@ updateIndexCache lenv screds pkhs = do
 
     newPoolCache
         :: (MonadBaseControl IO m, MonadIO m)
-        => Map PoolKeyHash DB.PoolHashId
-        -> ReaderT SqlBackend m (Map PoolKeyHash DB.PoolHashId)
+        => Map Generic.StakePoolKeyHash DB.PoolHashId
+        -> ReaderT SqlBackend m (Map Generic.StakePoolKeyHash DB.PoolHashId)
     newPoolCache oldMap = do
       let reduced = Map.restrictKeys oldMap pkhs
           newPkhs = Set.filter (`Map.notMember` reduced) pkhs

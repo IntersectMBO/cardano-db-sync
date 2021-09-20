@@ -35,20 +35,21 @@ import           Cardano.Ledger.SafeHash (SafeToHash)
 
 import           Cardano.Prelude
 
+import qualified Cardano.Protocol.TPraos.BHeader as Protocol
+import qualified Cardano.Protocol.TPraos.OCert as Protocol
+
 import           Cardano.Slotting.Slot (SlotNo (..))
 
-import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlonzo, StandardMary,
-                   StandardShelley)
+import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlonzo, StandardCrypto,
+                   StandardMary, StandardShelley)
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra, ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
 
 import           Ouroboros.Network.Block (BlockNo (..))
 
 import qualified Shelley.Spec.Ledger.BlockChain as Shelley
-import qualified Shelley.Spec.Ledger.OCert as Shelley
 import qualified Shelley.Spec.Ledger.PParams as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
-
 
 data BlockEra
   = Shelley
@@ -151,31 +152,31 @@ fromAlonzoBlock pp blk =
 alonzoBlockTxs :: ShelleyBlock StandardAlonzo -> [(Word64, Ledger.Tx StandardAlonzo)]
 alonzoBlockTxs = zip [0 ..] . toList . fromTxSeq @StandardAlonzo . Shelley.bbody . Consensus.shelleyBlockRaw
 
-blockBody :: ShelleyBasedEra era => ShelleyBlock era -> Shelley.BHBody (Crypto era)
-blockBody = Shelley.bhbody . Shelley.bheader . Consensus.shelleyBlockRaw
+blockBody :: ShelleyBasedEra era => ShelleyBlock era -> Protocol.BHBody (Crypto era)
+blockBody = Protocol.bhbody . Shelley.bheader . Consensus.shelleyBlockRaw
 
 blockHash :: ShelleyBlock era -> ByteString
 blockHash =
-  Crypto.hashToBytes . Shelley.unHashHeader
+  Crypto.hashToBytes . Protocol.unHashHeader
     . Consensus.unShelleyHash . Consensus.shelleyBlockHeaderHash
 
 blockNumber :: ShelleyBasedEra era => ShelleyBlock era -> BlockNo
-blockNumber = Shelley.bheaderBlockNo . blockBody
+blockNumber = Protocol.bheaderBlockNo . blockBody
 
 blockPrevHash :: ShelleyBasedEra era => ShelleyBlock era -> ByteString
 blockPrevHash blk =
-  case Shelley.bheaderPrev (Shelley.bhbody . Shelley.bheader $ Consensus.shelleyBlockRaw blk) of
-    Shelley.GenesisHash -> "Cardano.DbSync.Era.Shelley.Generic.Block.blockPrevHash"
-    Shelley.BlockHash h -> Crypto.hashToBytes (Shelley.unHashHeader h)
+  case Protocol.bheaderPrev (Protocol.bhbody . Shelley.bheader $ Consensus.shelleyBlockRaw blk) of
+    Protocol.GenesisHash -> "Cardano.DbSync.Era.Shelley.Generic.Block.blockPrevHash"
+    Protocol.BlockHash (Protocol.HashHeader h) -> Crypto.hashToBytes h
 
 blockOpCert :: ShelleyBasedEra era => ShelleyBlock era -> ByteString
-blockOpCert = KES.rawSerialiseVerKeyKES . Shelley.ocertVkHot . Shelley.bheaderOCert . blockBody
+blockOpCert = KES.rawSerialiseVerKeyKES . Protocol.ocertVkHot . Protocol.bheaderOCert . blockBody
 
 blockOpCertCounter :: ShelleyBasedEra era => ShelleyBlock era -> Word64
-blockOpCertCounter = Shelley.ocertN . Shelley.bheaderOCert . blockBody
+blockOpCertCounter = Protocol.ocertN . Protocol.bheaderOCert . blockBody
 
 blockProtoVersion :: ShelleyBasedEra era => ShelleyBlock era -> Shelley.ProtVer
-blockProtoVersion = Shelley.bprotver . blockBody
+blockProtoVersion = Protocol.bprotver . blockBody
 
 blockSize :: ShelleyBasedEra era => ShelleyBlock era -> Word64
 blockSize = fromIntegral . Shelley.bBodySize . Shelley.bbody . Consensus.shelleyBlockRaw
@@ -189,16 +190,16 @@ blockTxs
 blockTxs = zip [0 ..] . unTxSeq . Shelley.bbody . Consensus.shelleyBlockRaw
 
 blockVrfKeyView :: (ShelleyBasedEra era, VRF (Crypto era) ~ PraosVRF) => ShelleyBlock era -> Text
-blockVrfKeyView = Api.serialiseToBech32 . Api.VrfVerificationKey . Shelley.bheaderVrfVk . blockBody
+blockVrfKeyView = Api.serialiseToBech32 . Api.VrfVerificationKey . Protocol.bheaderVrfVk . blockBody
 
 creatorPoolHash :: ShelleyBasedEra era => ShelleyBlock era -> ByteString
-creatorPoolHash = unKeyHashRaw . Shelley.issuerIDfromBHBody . blockBody
+creatorPoolHash = unKeyHashRaw . Protocol.issuerIDfromBHBody . blockBody
 
 slotLeaderHash :: ShelleyBasedEra era => ShelleyBlock era -> ByteString
-slotLeaderHash = unKeyHashRaw . Shelley.issuerIDfromBHBody . blockBody
+slotLeaderHash = unKeyHashRaw . Protocol.issuerIDfromBHBody . blockBody
 
-slotNumber :: ShelleyBasedEra era => ShelleyBlock era -> SlotNo
-slotNumber = Shelley.bheaderSlotNo . blockBody
+slotNumber :: (Crypto era ~ StandardCrypto, ShelleyBasedEra era) => ShelleyBlock era -> SlotNo
+slotNumber = Protocol.bheaderSlotNo . blockBody
 
 unTxSeq
     :: (ShelleyBasedEra era, SafeToHash (Witnesses era))

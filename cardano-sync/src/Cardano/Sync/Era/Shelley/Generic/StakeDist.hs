@@ -3,6 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Cardano.Sync.Era.Shelley.Generic.StakeDist
   ( StakeDist (..)
+  , StakePoolKeyHash (..)
   , epochStakeDist
   , stakeDistPoolHashKeys
   , stakeDistStakeCreds
@@ -10,22 +11,22 @@ module Cardano.Sync.Era.Shelley.Generic.StakeDist
 
 import           Cardano.Prelude
 
+import           Cardano.Crypto.Hash (hashToBytes)
+
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
-import           Cardano.Ledger.Credential (Credential)
 import           Cardano.Ledger.Era (Crypto)
-import           Cardano.Ledger.Keys (KeyHash, KeyRole (..))
+import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Cardano.Sync.Era.Shelley.Generic.StakeCred
 import           Cardano.Sync.Types
 
-import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
-import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
+import           Ouroboros.Consensus.Cardano.Block (LedgerState (..))
 
 import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
@@ -37,8 +38,12 @@ import qualified Shelley.Spec.Ledger.LedgerState as Shelley hiding (_delegations
 
 data StakeDist = StakeDist
   { sdistEpochNo :: !EpochNo
-  , sdistStakeMap :: !(Map StakeCred (Coin, KeyHash 'StakePool StandardCrypto))
+  , sdistStakeMap :: !(Map StakeCred (Coin, StakePoolKeyHash))
   } deriving Eq
+
+newtype StakePoolKeyHash
+  = StakePoolKeyHash { unStakePoolKeyHash :: ByteString }
+  deriving (Eq, Ord, Show)
 
 epochStakeDist :: Ledger.Network -> EpochNo -> ExtLedgerState CardanoBlock -> Maybe StakeDist
 epochStakeDist network epoch els =
@@ -50,7 +55,7 @@ epochStakeDist network epoch els =
     LedgerStateAlonzo als -> Just $ genericStakeDist network epoch als
 
 -- Use Set because they guarantee unique elements.
-stakeDistPoolHashKeys :: StakeDist -> Set PoolKeyHash
+stakeDistPoolHashKeys :: StakeDist -> Set StakePoolKeyHash
 stakeDistPoolHashKeys = Set.fromList . map snd . Map.elems . sdistStakeMap
 
 stakeDistStakeCreds :: StakeDist -> Set StakeCred
@@ -65,17 +70,14 @@ genericStakeDist network epoch lstate =
       , sdistStakeMap = stakeMap
       }
   where
-    stakeMap :: Map StakeCred (Coin, KeyHash 'StakePool StandardCrypto)
-    stakeMap =
-      Map.mapKeys (toStakeCred network) $
-        Map.intersectionWith (,) stakeCoinMap stakePoolMap
+    stakeMap :: Map StakeCred (Coin, StakePoolKeyHash)
+    stakeMap = Map.intersectionWith (,) stakeCoinMap stakePoolMap
 
-    -- We used coerce here on a phanton type: Crypto era -> StandardCrypto.
-    stakeCoinMap :: Map (Credential 'Staking StandardCrypto) Coin
-    stakeCoinMap = Map.mapKeys coerce . Shelley.unStake $ Shelley._stake stakeSet
+    stakeCoinMap :: Map StakeCred Coin
+    stakeCoinMap = Map.mapKeys (toStakeCred network) . Shelley.unStake $ Shelley._stake stakeSet
 
-    stakePoolMap :: Map (Credential 'Staking StandardCrypto) (KeyHash 'StakePool StandardCrypto)
-    stakePoolMap = mapBimap coerce coerce $ Shelley._delegations stakeSet
+    stakePoolMap :: Map StakeCred StakePoolKeyHash
+    stakePoolMap = mapBimap (toStakeCred network) convertStakePoolkeyHash $ Shelley._delegations stakeSet
 
     -- We use '_pstakeSet' here instead of '_pstateMark' because the stake addresses for the
     -- later may not have been added to the database yet. That means that when these values
@@ -86,6 +88,11 @@ genericStakeDist network epoch lstate =
     stakeSet = Shelley._pstakeSet . Shelley.esSnapshots . Shelley.nesEs
                 $ Consensus.shelleyLedgerState lstate
 
+    convertStakePoolkeyHash :: KeyHash 'StakePool (Crypto era) -> StakePoolKeyHash
+    convertStakePoolkeyHash (KeyHash h) = StakePoolKeyHash $ hashToBytes h
+
 -- Is there a better way to do this?
 mapBimap :: Ord k2 => (k1 -> k2) -> (a1 -> a2) -> Map k1 a1 -> Map k2 a2
 mapBimap fk fa = Map.fromAscList . map (bimap fk fa) . Map.toAscList
+
+

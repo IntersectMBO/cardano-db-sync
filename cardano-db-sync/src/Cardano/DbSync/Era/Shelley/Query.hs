@@ -124,15 +124,15 @@ queryStakeAddressIdPair cred@(Generic.StakeCred bs) = do
 
 queryPoolHashIdPair
     :: MonadIO m
-    => Ledger.KeyHash 'Ledger.StakePool StandardCrypto
-    -> ReaderT SqlBackend m (Maybe (Ledger.KeyHash 'Ledger.StakePool StandardCrypto, PoolHashId))
+    => Generic.StakePoolKeyHash
+    -> ReaderT SqlBackend m (Maybe (Generic.StakePoolKeyHash, PoolHashId))
 queryPoolHashIdPair pkh = do
     res <- select . from $ \ pool -> do
-              where_ (pool ^. PoolHashHashRaw ==. val (Generic.unKeyHashRaw pkh))
+              where_ (pool ^. PoolHashHashRaw ==. val (Generic.unStakePoolKeyHash pkh))
               pure $ pool ^. PoolHashId
     pure $ convert <$> listToMaybe res
   where
-    convert :: Value PoolHashId -> (Ledger.KeyHash 'Ledger.StakePool StandardCrypto, PoolHashId)
+    convert :: Value PoolHashId -> (Generic.StakePoolKeyHash, PoolHashId)
     convert (Value phid) = (pkh, phid)
 
 -- Check if there are other PoolUpdates in the same blocks for the same pool

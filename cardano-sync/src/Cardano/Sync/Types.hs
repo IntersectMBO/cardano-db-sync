@@ -7,7 +7,6 @@ module Cardano.Sync.Types
   , CardanoProtocol
   , EpochSlot (..)
   , FetchResult (..)
-  , PoolKeyHash
   , SlotDetails (..)
   , Block (..)
   , MetricSetters (..)
@@ -16,8 +15,6 @@ module Cardano.Sync.Types
   ) where
 
 import           Cardano.Prelude hiding (Meta)
-
-import qualified Cardano.Ledger.Keys as Ledger
 
 import           Cardano.Db (PoolHashId, PoolMetaHash, PoolMetadataRefId, PoolOfflineData,
                    PoolOfflineFetchError, PoolUrl)
@@ -29,13 +26,10 @@ import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..
 import           Data.Time.Clock (UTCTime)
 import           Data.Time.Clock.POSIX (POSIXTime)
 
-import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 import           Ouroboros.Network.Block (BlockNo, Point)
 
 
 type CardanoPoint = Point CardanoBlock
-
-type PoolKeyHash = Ledger.KeyHash 'Ledger.StakePool StandardCrypto
 
 data BlockDetails = BlockDetails
   { bdBlock :: !CardanoBlock

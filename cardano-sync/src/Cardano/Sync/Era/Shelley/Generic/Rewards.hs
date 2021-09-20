@@ -8,28 +8,31 @@ module Cardano.Sync.Era.Shelley.Generic.Rewards
   , rewardsStakeCreds
   ) where
 
+import           Cardano.Crypto.Hash (hashToBytes)
+
 import           Cardano.Db (RewardSource (..), rewardTypeToSource)
 
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin)
 import qualified Cardano.Ledger.Credential as Ledger
 import           Cardano.Ledger.Era (Crypto)
+import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import qualified Cardano.Ledger.Keys as Ledger
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Cardano.Sync.Era.Shelley.Generic.StakeCred
+import           Cardano.Sync.Era.Shelley.Generic.StakeDist
 import           Cardano.Sync.Types
 
 import           Data.Bifunctor (bimap)
-import           Data.Coerce (coerce)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import           Data.Maybe (mapMaybe)
 import           Data.Set (Set)
 import qualified Data.Set as Set
 
-import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
+import           Ouroboros.Consensus.Cardano.Block (LedgerState (..))
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
@@ -40,7 +43,7 @@ import qualified Shelley.Spec.Ledger.Rewards as Shelley
 
 data Reward = Reward
   { rewardSource :: !RewardSource
-  , rewardPool :: !(Maybe (Ledger.KeyHash 'Ledger.StakePool StandardCrypto))
+  , rewardPool :: !(Maybe StakePoolKeyHash)
   , rewardAmount :: !Coin
   } deriving (Eq, Ord, Show)
 
@@ -61,7 +64,7 @@ epochRewards nw epoch lstate =
     LedgerStateMary mls -> genericRewards nw epoch mls
     LedgerStateAlonzo als -> genericRewards nw epoch als
 
-rewardsPoolHashKeys :: Rewards -> Set PoolKeyHash
+rewardsPoolHashKeys :: Rewards -> Set StakePoolKeyHash
 rewardsPoolHashKeys rwds =
   Set.fromList . mapMaybe rewardPool
     $ concatMap Set.toList (Map.elems $ rwdRewards rwds)
@@ -113,10 +116,11 @@ genericRewards network epoch lstate =
       Reward
         { rewardSource = rewardTypeToSource $ Shelley.rewardType sr
         , rewardAmount = Shelley.rewardAmount sr
-        , -- Coerce is safe here because we are coercing away an un-needed phantom type parameter (era).
-          rewardPool = Just $ coerce (Shelley.rewardPool sr)
+        , rewardPool = Just $ convertStakePoolkeyHash (Shelley.rewardPool sr)
         }
 
+    convertStakePoolkeyHash :: KeyHash 'StakePool (Crypto era) -> StakePoolKeyHash
+    convertStakePoolkeyHash (KeyHash h) = StakePoolKeyHash $ hashToBytes h
 
 mapBimap :: Ord k2 => (k1 -> k2) -> (a1 -> a2) -> Map k1 a1 -> Map k2 a2
 mapBimap fk fa = Map.fromAscList . map (bimap fk fa) . Map.toAscList
