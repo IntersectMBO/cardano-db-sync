@@ -46,6 +46,7 @@ import           Database.Persist.Sql (SqlBackend)
 
 import qualified Cardano.Db as DB
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
+import qualified Cardano.Sync.Era.Byron.Util as Byron
 import           Cardano.Sync.Error
 import           Cardano.Sync.Util
 
