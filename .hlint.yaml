@@ -38,6 +38,10 @@
   - {name: [Data.ByteString.Char8], as: BS}
   - {name: [Data.ByteString.Lazy.Char8], as: LBS}
 
+# Banned functions
+- functions:
+  - {name: coerce, within: []}
+
 # Add custom hints for this project
 #
 # Will suggest replacing "wibbleMany [myvar]" with "wibbleOne myvar"

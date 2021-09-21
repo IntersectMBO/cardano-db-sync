@@ -20,8 +20,7 @@ import qualified Cardano.Binary as Binary
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Chain.UTxO as Byron
-import qualified Cardano.Crypto as Crypto (Hash, fromCompactRedeemVerificationKey,
-                   serializeCborHash)
+import qualified Cardano.Crypto as Crypto
 
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Era.Util (liftLookupFail)
@@ -33,7 +32,6 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
 import qualified Data.ByteString.Char8 as BS
-import           Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -215,4 +213,7 @@ genesisTxos config =
       Map.toList $ Byron.unGenesisNonAvvmBalances (Byron.configNonAvvmBalances config)
 
 txHashOfAddress :: Byron.Address -> Crypto.Hash Byron.Tx
-txHashOfAddress = coerce . Crypto.serializeCborHash
+txHashOfAddress =
+  fromMaybe (panic "Cardano.DbSync.Era.Byron.Genesis.txHashOfAddress")
+    . Crypto.abstractHashFromBytes . Crypto.abstractHashToBytes . Crypto.serializeCborHash
+
