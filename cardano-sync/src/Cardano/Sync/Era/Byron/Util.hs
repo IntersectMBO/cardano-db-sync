@@ -42,7 +42,6 @@ import qualified Cardano.Chain.Update as Byron
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
-import           Data.Coerce (coerce)
 import qualified Data.Text.Encoding as Text
 
 
@@ -72,7 +71,9 @@ epochNumber blk slotsPerEpoch =
   slotNumber blk `div` slotsPerEpoch
 
 genesisToHeaderHash :: Byron.GenesisHash -> Byron.HeaderHash
-genesisToHeaderHash = coerce
+genesisToHeaderHash =
+  fromMaybe (panic "Cardano.Sync.Era.Byron.Util.genesisToHeaderHash")
+    . Crypto.abstractHashFromBytes . Crypto.abstractHashToBytes . Crypto.serializeCborHash
 
 protocolVersion :: Byron.ABlock ByteString -> Byron.ProtocolVersion
 protocolVersion = Byron.headerProtocolVersion . Byron.blockHeader
