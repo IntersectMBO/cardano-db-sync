@@ -38,7 +38,6 @@ import           Cardano.Sync.Plugin
 import           Cardano.Sync.Types
 import           Cardano.Sync.Util
 
-import           Control.Monad.Catch (MonadCatch)
 import           Control.Monad.Class.MonadSTM.Strict (putTMVar, tryTakeTMVar)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
@@ -74,7 +73,7 @@ insertDefaultBlock backend tracer env blockDetails = do
       runExceptT (traverse_ insert blockDetails)
   where
     insert
-        :: (MonadBaseControl IO m, MonadCatch m, MonadIO m)
+        :: (MonadBaseControl IO m, MonadIO m)
         => BlockDetails -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     insert (BlockDetails cblk details) = do
       -- Calculate the new ledger state to pass to the DB insert functions but do not yet
