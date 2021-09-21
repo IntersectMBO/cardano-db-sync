@@ -70,10 +70,8 @@ epochNumber :: Byron.ABlock ByteString -> Word64 -> Word64
 epochNumber blk slotsPerEpoch =
   slotNumber blk `div` slotsPerEpoch
 
-genesisToHeaderHash :: Byron.GenesisHash -> Byron.HeaderHash
-genesisToHeaderHash =
-  fromMaybe (panic "Cardano.Sync.Era.Byron.Util.genesisToHeaderHash")
-    . Crypto.abstractHashFromBytes . Crypto.abstractHashToBytes . Crypto.serializeCborHash
+genesisToHeaderHash :: Byron.GenesisHash -> ByteString
+genesisToHeaderHash = unAbstractHash . Byron.unGenesisHash
 
 protocolVersion :: Byron.ABlock ByteString -> Byron.ProtocolVersion
 protocolVersion = Byron.headerProtocolVersion . Byron.blockHeader

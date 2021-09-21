@@ -82,8 +82,8 @@ insertABOBBoundary tracer blk details = do
   -- Will not get called in the OBFT part of the Byron era.
   let prevHash = case Byron.boundaryPrevHash (Byron.boundaryHeader blk) of
                     Left gh -> Byron.genesisToHeaderHash gh
-                    Right hh -> hh
-  pbid <- liftLookupFail "insertABOBBoundary" $ DB.queryBlockId (Byron.unHeaderHash prevHash)
+                    Right hh -> Byron.unHeaderHash hh
+  pbid <- liftLookupFail "insertABOBBoundary" $ DB.queryBlockId prevHash
   slid <- lift . DB.insertSlotLeader $
                   DB.SlotLeader
                     { DB.slotLeaderHash = BS.replicate 28 '\0'
