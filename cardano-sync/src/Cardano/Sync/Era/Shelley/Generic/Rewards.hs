@@ -2,6 +2,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 module Cardano.Sync.Era.Shelley.Generic.Rewards
   ( Reward (..)
   , Rewards (..)
@@ -12,8 +13,6 @@ module Cardano.Sync.Era.Shelley.Generic.Rewards
 
 import           Cardano.Prelude
 
-import           Cardano.Crypto.Hash (hashToBytes)
-
 import           Cardano.Db (RewardSource (..), rewardTypeToSource, textShow)
 
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
@@ -22,19 +21,18 @@ import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Core as Ledger
 import qualified Cardano.Ledger.Credential as Ledger
 import           Cardano.Ledger.Era (Crypto)
-import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import qualified Cardano.Ledger.Keys as Ledger
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Cardano.Sync.Era.Shelley.Generic.StakeCred
-import           Cardano.Sync.Era.Shelley.Generic.StakeDist
+import           Cardano.Sync.Era.Shelley.Generic.StakePoolKeyHash
 import           Cardano.Sync.Types
 
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
-import           Ouroboros.Consensus.Cardano.Block (LedgerState (..))
+import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
@@ -106,7 +104,10 @@ rewardProtoVer lstate =
 
 -- -------------------------------------------------------------------------------------------------
 
-genericRewards :: forall era. Ledger.Network -> BlockEra -> EpochNo -> LedgerState (ShelleyBlock era) -> Maybe Rewards
+genericRewards
+    :: forall era. Crypto era ~ StandardCrypto
+    => Ledger.Network -> BlockEra -> EpochNo -> LedgerState (ShelleyBlock era)
+    -> Maybe Rewards
 genericRewards network era epoch lstate =
     fmap cleanup rewardUpdate
   where
@@ -121,7 +122,7 @@ genericRewards network era epoch lstate =
     rewardUpdate =
       completeRewardUpdate =<< Ledger.strictMaybeToMaybe (Shelley.nesRu $ Consensus.shelleyLedgerState lstate)
 
-    completeRewardUpdate :: Shelley.PulsingRewUpdate (Crypto era) -> Maybe (Map StakeCred (Set Reward))
+    completeRewardUpdate :: Shelley.PulsingRewUpdate StandardCrypto -> Maybe (Map StakeCred (Set Reward))
     completeRewardUpdate x =
       case x of
         Shelley.Pulsing {} -> Nothing -- Should never happen.
@@ -130,21 +131,17 @@ genericRewards network era epoch lstate =
                                         (getInstantaneousRewards network lstate)
 
     convertRewardMap
-        :: Map (Ledger.Credential 'Ledger.Staking (Crypto era)) (Set (Shelley.Reward (Crypto era)))
+        :: Map (Ledger.Credential 'Ledger.Staking StandardCrypto) (Set (Shelley.Reward StandardCrypto))
         -> Map StakeCred (Set Reward)
     convertRewardMap = mapBimap (toStakeCred network) (Set.map convertReward)
 
-    convertReward :: Shelley.Reward (Crypto era) -> Reward
+    convertReward :: Shelley.Reward StandardCrypto -> Reward
     convertReward sr =
       Reward
         { rewardSource = rewardTypeToSource $ Shelley.rewardType sr
         , rewardAmount = Shelley.rewardAmount sr
-        , rewardPool = Just $ convertStakePoolkeyHash (Shelley.rewardPool sr)
+        , rewardPool = Just $ toStakePoolKeyHash (Shelley.rewardPool sr)
         }
-
-    convertStakePoolkeyHash :: KeyHash 'StakePool (Crypto era) -> StakePoolKeyHash
-    convertStakePoolkeyHash (KeyHash h) = StakePoolKeyHash $ hashToBytes h
-
 
 mapBimap :: Ord k2 => (k1 -> k2) -> (a1 -> a2) -> Map k1 a1 -> Map k2 a2
 mapBimap fk fa = Map.fromAscList . map (bimap fk fa) . Map.toAscList

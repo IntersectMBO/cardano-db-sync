@@ -11,6 +11,7 @@
 module Cardano.DbSync.Era.Shelley.Insert.Epoch
   ( finalizeEpochBulkOps
   , insertEpochInterleaved
+  , insertPoolDepositRefunds
   , postEpochRewards
   , postEpochStake
   ) where
@@ -178,6 +179,7 @@ insertRewards epoch icache rewardsChunk = do
                   , DB.rewardPoolId = lookupPoolIdPairMaybe (Generic.rewardPool rwd) icache
                   }
 
+    -- The earnedEpoch and spendableEpoch functions have been tweaked to match the login of the ledger.
     earnedEpoch :: DB.RewardSource -> Word64
     earnedEpoch src =
       unEpochNo epoch +
@@ -186,6 +188,7 @@ insertRewards epoch icache rewardsChunk = do
           DB.RwdLeader -> 0
           DB.RwdReserves -> 1
           DB.RwdTreasury -> 1
+          DB.RwdDepositRefund -> 0
 
     spendableEpoch :: DB.RewardSource -> Word64
     spendableEpoch src =
@@ -195,6 +198,15 @@ insertRewards epoch icache rewardsChunk = do
           DB.RwdLeader -> 2
           DB.RwdReserves -> 2
           DB.RwdTreasury -> 2
+          DB.RwdDepositRefund -> 0
+
+insertPoolDepositRefunds
+    :: (MonadBaseControl IO m, MonadIO m)
+    => LedgerEnv -> Generic.Rewards
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+insertPoolDepositRefunds lenv refunds = do
+  icache <- lift $ updateIndexCache lenv (Generic.rewardsStakeCreds refunds) (Generic.rewardsPoolHashKeys refunds)
+  insertRewards (Generic.rwdEpoch refunds) icache (Map.toList $ Generic.rwdRewards refunds)
 
 -- -------------------------------------------------------------------------------------------------
 

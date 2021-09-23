@@ -30,8 +30,8 @@ import qualified Data.List.Extra as List
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 
-import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), countRows, desc, from, on,
-                   orderBy, select, sum_, val, where_, (==.), (^.))
+import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), countRows, desc, from, not_,
+                   on, orderBy, select, sum_, val, where_, (==.), (^.))
 
 import           Database.Persist.Sql (SqlBackend)
 
@@ -67,6 +67,9 @@ queryEpochRewardTotal
 queryEpochRewardTotal (EpochNo epochNo) = do
   res <- select . from $ \ rwd -> do
             where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
+            -- For ... reasons ... pool deposit refunds are put into the rewards account
+            -- but are not considered part of the total rewards for an epoh.
+            where_ (not_ $ rwd ^. Db.RewardType ==. val Db.RwdDepositRefund)
             pure (sum_ $ rwd ^. Db.RewardAmount)
   pure $ Db.unValueSumAda (listToMaybe res)
 
@@ -74,7 +77,6 @@ queryEpochRewardTotal (EpochNo epochNo) = do
 
 convertRewardMap :: Network -> Map (Ledger.StakeCredential c) Coin -> Map Generic.StakeCred Coin
 convertRewardMap nw = Map.mapKeys (Generic.toStakeCred nw)
-
 
 logFullRewardMap
     :: (MonadBaseControl IO m, MonadIO m)

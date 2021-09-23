@@ -3,7 +3,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Cardano.Sync.Era.Shelley.Generic.StakeDist
   ( StakeDist (..)
-  , StakePoolKeyHash (..)
   , epochStakeDist
   , stakeDistPoolHashKeys
   , stakeDistStakeCreds
@@ -21,6 +20,7 @@ import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Cardano.Sync.Era.Shelley.Generic.StakeCred
+import           Cardano.Sync.Era.Shelley.Generic.StakePoolKeyHash
 import           Cardano.Sync.Types
 
 import qualified Data.Map.Strict as Map
@@ -40,10 +40,6 @@ data StakeDist = StakeDist
   { sdistEpochNo :: !EpochNo
   , sdistStakeMap :: !(Map StakeCred (Coin, StakePoolKeyHash))
   } deriving Eq
-
-newtype StakePoolKeyHash
-  = StakePoolKeyHash { unStakePoolKeyHash :: ByteString }
-  deriving (Eq, Ord, Show)
 
 epochStakeDist :: Ledger.Network -> EpochNo -> ExtLedgerState CardanoBlock -> Maybe StakeDist
 epochStakeDist network epoch els =
