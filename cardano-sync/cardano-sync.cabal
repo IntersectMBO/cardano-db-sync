@@ -3,7 +3,7 @@ cabal-version:          2.2
 -- http://haskell.org/cabal/users-guide/
 
 name:                   cardano-sync
-version:                11.0.2
+version:                11.0.3
 synopsis:               The Cardano Sync node
 description:            A Cardano node that follows the Cardano chain and inserts data from the
                         chain into a PostgresQL database.

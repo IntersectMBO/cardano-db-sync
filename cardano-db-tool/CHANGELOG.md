@@ -1,5 +1,8 @@
 # Revision history for cardano-db-tool
 
+## 11.0.3
+* Use same dependencies as 1.30.1 of `cardano-node`.
+
 ## 11.0.2
 * Fix schema documentation typo (#799).
 

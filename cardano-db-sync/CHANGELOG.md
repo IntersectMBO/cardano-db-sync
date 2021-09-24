@@ -1,5 +1,9 @@
 # Revision history for cardano-db-sync
 
+## 11.0.3
+* Use same dependencies as 1.30.1 of `cardano-node`.
+* Fix race condition on insertion of pool offline data or error response (#806, #823, #831).
+
 ## 11.0.2
 * Fix schema documentation typo (#799).
 * Fix race condition on insertion of pool offline data or error response (#806, #823).
