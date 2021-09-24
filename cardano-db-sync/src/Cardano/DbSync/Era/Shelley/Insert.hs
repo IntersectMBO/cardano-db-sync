@@ -77,9 +77,9 @@ import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 insertShelleyBlock
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> LedgerEnv -> Generic.Block -> LedgerStateSnapshot -> SlotDetails
+    => Trace IO Text -> LedgerEnv -> Bool -> Generic.Block -> LedgerStateSnapshot -> SlotDetails
     -> ReaderT SqlBackend m (Either SyncNodeError ())
-insertShelleyBlock tracer lenv blk lStateSnap details = do
+insertShelleyBlock tracer lenv firstBlockOfEpoch blk lStateSnap details = do
   runExceptT $ do
     pbid <- liftLookupFail (renderInsertName (Generic.blkEra blk)) $ DB.queryBlockId (Generic.blkPreviousHash blk)
     mPhid <- lift $ queryPoolHashId (Generic.blkCreatorPoolHash blk)
@@ -147,6 +147,7 @@ insertShelleyBlock tracer lenv blk lStateSnap details = do
   where
     logger :: Bool -> Trace IO a -> a -> IO ()
     logger followingClosely
+      | firstBlockOfEpoch = logInfo
       | followingClosely = logInfo
       | unBlockNo (Generic.blkBlockNo blk) `mod` 5000 == 0 = logInfo
       | otherwise = logDebug
@@ -336,22 +337,7 @@ insertPoolRegister
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> LedgerStateSnapshot -> Ledger.Network -> EpochNo -> DB.BlockId -> DB.TxId -> Word16 -> Shelley.PoolParams StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolRegister tracer lStateSnap network (EpochNo epoch) blkId txId idx params = do
-
-    when (fromIntegral (Ledger.unCoin $ Shelley._poolPledge params) > maxLovelace) $
-      liftIO . logWarning tracer $
-        mconcat
-          [ "Bad pledge amount: ", textShow (Ledger.unCoin $ Shelley._poolPledge params)
-          , " > maxLovelace."
-          ]
-
-    when (fromIntegral (Ledger.unCoin $ Shelley._poolCost params) > maxLovelace) $
-      liftIO . logWarning tracer $
-        mconcat
-          [ "Bad fixed cost amount: ", textShow (Ledger.unCoin $ Shelley._poolCost params)
-          , " > maxLovelace."
-          ]
-
+insertPoolRegister _tracer lStateSnap network (EpochNo epoch) blkId txId idx params = do
     poolHashId <- insertPoolHash (Shelley._poolId params)
 
     mdId <- case strictMaybeToMaybe $ Shelley._poolMD params of
@@ -389,9 +375,6 @@ insertPoolRegister tracer lStateSnap network (EpochNo epoch) blkId txId idx para
           otherUpdates <- lift $ queryPoolUpdateByBlock blkId poolHashId
           pure $ if otherUpdates then 3 else 2
 
-
-maxLovelace :: Word64
-maxLovelace = 45000000000000000
 
 insertPoolHash
     :: forall m . (MonadBaseControl IO m, MonadIO m)

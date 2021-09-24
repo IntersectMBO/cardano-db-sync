@@ -10,6 +10,7 @@ module Cardano.Sync.Util
   , getSyncStatus
   , isSyncedWithinSeconds
   , liftedLogException
+  , logActionDuration
   , logException
   , panicAbort
   , plusCoin
@@ -28,7 +29,7 @@ module Cardano.Sync.Util
 
 import           Cardano.Prelude hiding (catch)
 
-import           Cardano.BM.Trace (Trace, logError)
+import           Cardano.BM.Trace (Trace, logError, logInfo)
 
 import           Cardano.Db (SyncState (..), textShow)
 
@@ -50,7 +51,7 @@ import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.IO as Text
-import           Data.Time (diffUTCTime)
+import qualified Data.Time.Clock as Time
 
 import           Text.Show.Pretty (ppShow)
 
@@ -73,7 +74,7 @@ getSyncStatus sd = isSyncedWithinSeconds sd 120
 isSyncedWithinSeconds :: SlotDetails -> Word -> SyncState
 isSyncedWithinSeconds sd target =
   -- diffUTCTime returns seconds.
-  let secDiff = ceiling (diffUTCTime (sdCurrentTime sd) (sdSlotTime sd)) :: Int
+  let secDiff = ceiling (Time.diffUTCTime (sdCurrentTime sd) (sdSlotTime sd)) :: Int
   in if fromIntegral (abs secDiff) <= target
         then SyncFollowing
         else SyncLagging
@@ -106,6 +107,15 @@ liftedLogException tracer txt action =
         putStrLn $ "Caught exception: txt " ++ show e
         logError tracer $ txt <> textShow e
         throwIO e
+
+-- | Log the runtime duration of an action. Mainly for debugging.
+logActionDuration :: (MonadBaseControl IO m, MonadIO m) => Trace IO Text -> Text -> m a -> m a
+logActionDuration tracer label action = do
+  before <- liftIO Time.getCurrentTime
+  a <- action
+  after <- liftIO Time.getCurrentTime
+  liftIO . logInfo tracer $ mconcat [ label, ": duration ", textShow (Time.diffUTCTime after before) ]
+  pure a
 
 -- | ouroboros-network catches 'SomeException' and if a 'nullTracer' is passed into that
 -- code, the caught exception will not be logged. Therefore wrap all cardano-db-sync code that
@@ -157,6 +167,7 @@ renderPoint point =
                 [ "slot ", textShow (unSlotNo $ Point.blockPointSlot blk), ", hash "
                 , renderByteArray $ toRawHash (Proxy @CardanoBlock) (Point.blockPointHash blk)
                 ]
+
 renderSlotList :: [SlotNo] -> Text
 renderSlotList xs
   | length xs < 10 = textShow (map unSlotNo xs)
