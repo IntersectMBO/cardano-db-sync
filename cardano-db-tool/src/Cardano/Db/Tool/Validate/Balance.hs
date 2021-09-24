@@ -89,8 +89,7 @@ getAlonzoBalance addrText utxo = do
     compactTxOutValue :: CompactAddr (Crypto era) -> Ledger.TxOut era -> Maybe Coin
     compactTxOutValue caddr txOut =
       let (scaddr, val) = case txOut of
-                            Alonzo.TxOutCompact a v -> (a, v)
-                            Alonzo.TxOutCompactDH a v _ -> (a, v)
+                            Alonzo.TxOutCompact a v _ -> (a, v)
       in if caddr == scaddr
           then Just $ coin (fromCompact val)
           else Nothing
