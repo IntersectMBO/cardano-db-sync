@@ -53,17 +53,17 @@ adjustEpochRewards tracer epochNo = do
                 , textShow (length addrs), " orphaned rewards removed ("
                 , textShow ada, " ADA)"
                 ]
-    -- liftIO . logInfo tracer $ "adjustEpochRewards: " <> textShow (sort $ map (unSqlBackendKey . Db.unStakeAddressKey) addrs)
-    deleteOrphanedRewards addrs
+    deleteOrphanedRewards epochNo addrs
 
 -- ------------------------------------------------------------------------------------------------
 
 -- TODO: When we know this is correct, the query and the delete should be composed so that
 -- the list of StakeAddressIds does not need to be returned to Haskell land.
 
-deleteOrphanedRewards :: MonadIO m => [Db.StakeAddressId] -> ReaderT SqlBackend m ()
-deleteOrphanedRewards xs =
-  delete . from $ \ rwd ->
+deleteOrphanedRewards :: MonadIO m => EpochNo -> [Db.StakeAddressId] -> ReaderT SqlBackend m ()
+deleteOrphanedRewards (EpochNo epochNo) xs =
+  delete . from $ \ rwd -> do
+    where_ (rwd ^. Db.RewardSpendableEpoch >=. val (epochNo + 2))
     where_ (rwd ^. Db.RewardAddrId `in_` valList xs)
 
 -- TODO: This query is slow and inefficient. Need to replace it with something better.

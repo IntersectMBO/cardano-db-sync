@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -25,13 +26,16 @@ import           Cardano.DbSync.Era.Shelley.Insert.Epoch
 import           Cardano.DbSync.Era.Shelley.Validate
 import           Cardano.DbSync.Rollback (rollbackToPoint)
 
+import           Cardano.Ledger.BaseTypes (Network)
 import           Cardano.Ledger.Coin (Coin (..))
 import           Cardano.Ledger.Credential (StakeCredential)
 import           Cardano.Ledger.Crypto (StandardCrypto)
+import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Cardano.Sync.Api
+import qualified Cardano.Sync.Era.Shelley.Generic as Generic
 import           Cardano.Sync.Error
 import           Cardano.Sync.LedgerState
 import           Cardano.Sync.Plugin
@@ -44,6 +48,7 @@ import           Control.Monad.Trans.Except.Extra (newExceptT)
 
 import           Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 
 import           Database.Persist.Sql (SqlBackend)
 
@@ -170,6 +175,26 @@ handleLedgerEvents tracer lenv point =
           lift $ stashPoolRewards tracer lenv en rd
         LedgerMirDist md ->
           lift $ stashMirRewards tracer lenv md
+        LedgerPoolReap en drs ->
+          insertPoolDepositRefunds lenv (Generic.Rewards en $ convertPoolDepositReunds (leNetwork lenv) drs)
+
+convertPoolDepositReunds
+    :: Network -> Map (StakeCredential StandardCrypto) (Map (KeyHash 'StakePool StandardCrypto) Coin)
+    -> Map Generic.StakeCred (Set Generic.Reward)
+convertPoolDepositReunds nw =
+    mapBimap (Generic.toStakeCred nw) (Set.fromList . map convert . Map.toList)
+  where
+    convert :: (KeyHash 'StakePool StandardCrypto, Coin) -> Generic.Reward
+    convert (kh, coin) =
+      Generic.Reward
+        { Generic.rewardSource = DB.RwdDepositRefund
+        , Generic.rewardPool = Just (Generic.toStakePoolKeyHash kh)
+        , Generic.rewardAmount = coin
+        }
+
+mapBimap :: Ord k2 => (k1 -> k2) -> (a1 -> a2) -> Map k1 a1 -> Map k2 a2
+mapBimap fk fa = Map.fromAscList . map (bimap fk fa) . Map.toAscList
+
 
 hasEpochStartEvent :: [LedgerEvent] -> Bool
 hasEpochStartEvent = any isNewEpoch
@@ -193,7 +218,7 @@ stashPoolRewards tracer lenv epoch rmap = do
     Nothing ->
       liftIO . atomically $ putTMVar (lePoolRewards lenv) (epoch, rmap)
     Just mirMap ->
-      validateEpochRewards tracer (leNetwork lenv) (epoch - 2) (Map.unionWith plusCoin rmap mirMap)
+      validateEpochRewards tracer (leNetwork lenv) epoch (Map.unionWith plusCoin rmap mirMap)
 
 stashMirRewards
     :: (MonadBaseControl IO m, MonadIO m)
@@ -205,4 +230,4 @@ stashMirRewards tracer lenv mirMap = do
       Nothing ->
         liftIO . atomically $ putTMVar (leMirRewards lenv) mirMap
       Just (epoch, rmap) ->
-        validateEpochRewards tracer (leNetwork lenv) (epoch - 2) (Map.unionWith plusCoin rmap mirMap)
+        validateEpochRewards tracer (leNetwork lenv) epoch (Map.unionWith plusCoin rmap mirMap)

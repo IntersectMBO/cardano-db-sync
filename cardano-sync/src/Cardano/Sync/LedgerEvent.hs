@@ -17,6 +17,7 @@ import qualified Cardano.Ledger.Core as Ledger
 import qualified Cardano.Ledger.Credential as Ledger
 import           Cardano.Ledger.Crypto (StandardCrypto)
 import           Cardano.Ledger.Era (Crypto)
+import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import           Cardano.Slotting.Slot (EpochNo (..))
 import qualified Cardano.Sync.Era.Shelley.Generic as Generic
 import           Cardano.Sync.Types
@@ -37,8 +38,10 @@ import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock, ShelleyLedger
 import           Ouroboros.Consensus.TypeFamilyWrappers
 
 import           Shelley.Spec.Ledger.API (InstantaneousRewards (..))
+import           Shelley.Spec.Ledger.STS.Epoch (EpochEvent (PoolReapEvent))
 import           Shelley.Spec.Ledger.STS.Mir (MirEvent (..))
 import           Shelley.Spec.Ledger.STS.NewEpoch (NewEpochEvent (..))
+import           Shelley.Spec.Ledger.STS.PoolReap (PoolreapEvent (..))
 import           Shelley.Spec.Ledger.STS.Tick (TickEvent (..))
 
 data LedgerEvent
@@ -49,6 +52,7 @@ data LedgerEvent
 
   | LedgerRewardDist !EpochNo !(Map (Ledger.StakeCredential StandardCrypto) Coin)
   | LedgerMirDist !(Map (Ledger.StakeCredential StandardCrypto) Coin)
+  | LedgerPoolReap !EpochNo !(Map (Ledger.StakeCredential StandardCrypto) (Map (KeyHash 'StakePool StandardCrypto) Coin))
   deriving Eq
 
 convertAuxLedgerEvent :: OneEraLedgerEvent (CardanoEras StandardCrypto) -> Maybe LedgerEvent
@@ -71,6 +75,8 @@ instance
     , Event (Ledger.EraRule "TICK" ledgerera) ~ TickEvent ledgerera
     , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera
     , Event (Ledger.EraRule "MIR" ledgerera) ~ MirEvent ledgerera
+    , Event (Ledger.EraRule "EPOCH" ledgerera) ~ EpochEvent ledgerera
+    , Event (Ledger.EraRule "POOLREAP" ledgerera) ~ PoolreapEvent ledgerera
     ) =>
   ConvertLedgerEvent (ShelleyBlock ledgerera)
   where
@@ -78,6 +84,7 @@ instance
       case unwrapLedgerEvent evt of
         LESumRewards e m -> Just $ LedgerRewardDist e m
         LEMirTransfer rp tp _rtt _ttr -> Just $ LedgerMirDist (Map.unionWith plusCoin rp tp)
+        LERetiredPools r _u en -> Just $ LedgerPoolReap en r
         ShelleyLedgerEventBBODY {} -> Nothing
         ShelleyLedgerEventTICK {} -> Nothing
 
@@ -117,6 +124,28 @@ pattern LEMirTransfer rp tp rtt ttr <-
         ( MirEvent
             ( MirTransfer
                 ( InstantaneousRewards rp tp rtt ttr
+                  )
+              )
+          )
+      )
+
+pattern LERetiredPools
+  :: ( Crypto ledgerera ~ StandardCrypto
+     , Event (Ledger.EraRule "TICK" ledgerera) ~ TickEvent ledgerera
+     , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera
+     , Event (Ledger.EraRule "EPOCH" ledgerera) ~ EpochEvent ledgerera
+     , Event (Ledger.EraRule "POOLREAP" ledgerera) ~ PoolreapEvent ledgerera
+     )
+  => Map (Ledger.StakeCredential StandardCrypto) (Map (KeyHash 'StakePool StandardCrypto) Coin)
+  -> Map (Ledger.StakeCredential StandardCrypto) (Map (KeyHash 'StakePool StandardCrypto) Coin)
+  -> EpochNo
+  -> AuxLedgerEvent (LedgerState (ShelleyBlock ledgerera))
+pattern LERetiredPools r u e <-
+  ShelleyLedgerEventTICK
+    ( NewEpochEvent
+        ( EpochEvent
+            ( PoolReapEvent
+                ( RetiredPools r u e
                   )
               )
           )

@@ -11,6 +11,7 @@
 module Cardano.DbSync.Era.Shelley.Insert.Epoch
   ( finalizeEpochBulkOps
   , insertEpochInterleaved
+  , insertPoolDepositRefunds
   , postEpochRewards
   , postEpochStake
   ) where
@@ -173,10 +174,39 @@ insertRewards epoch icache rewardsChunk = do
                   { DB.rewardAddrId = saId
                   , DB.rewardType = Generic.rewardSource rwd
                   , DB.rewardAmount = Generic.coinToDbLovelace (Generic.rewardAmount rwd)
-                  , DB.rewardEarnedEpoch = unEpochNo epoch
-                  , DB.rewardSpendableEpoch = 2 + unEpochNo epoch
+                  , DB.rewardEarnedEpoch = earnedEpoch (Generic.rewardSource rwd)
+                  , DB.rewardSpendableEpoch = spendableEpoch (Generic.rewardSource rwd)
                   , DB.rewardPoolId = lookupPoolIdPairMaybe (Generic.rewardPool rwd) icache
                   }
+
+    -- The earnedEpoch and spendableEpoch functions have been tweaked to match the login of the ledger.
+    earnedEpoch :: DB.RewardSource -> Word64
+    earnedEpoch src =
+      unEpochNo epoch +
+        case src of
+          DB.RwdMember -> 0
+          DB.RwdLeader -> 0
+          DB.RwdReserves -> 1
+          DB.RwdTreasury -> 1
+          DB.RwdDepositRefund -> 0
+
+    spendableEpoch :: DB.RewardSource -> Word64
+    spendableEpoch src =
+      unEpochNo epoch +
+        case src of
+          DB.RwdMember -> 2
+          DB.RwdLeader -> 2
+          DB.RwdReserves -> 2
+          DB.RwdTreasury -> 2
+          DB.RwdDepositRefund -> 0
+
+insertPoolDepositRefunds
+    :: (MonadBaseControl IO m, MonadIO m)
+    => LedgerEnv -> Generic.Rewards
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+insertPoolDepositRefunds lenv refunds = do
+  icache <- lift $ updateIndexCache lenv (Generic.rewardsStakeCreds refunds) (Generic.rewardsPoolHashKeys refunds)
+  insertRewards (Generic.rwdEpoch refunds) icache (Map.toList $ Generic.rwdRewards refunds)
 
 -- -------------------------------------------------------------------------------------------------
 
