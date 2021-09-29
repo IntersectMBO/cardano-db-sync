@@ -83,8 +83,8 @@ insertOfflineResults trce resultQueue = do
     insert :: (MonadBaseControl IO m, MonadIO m) => FetchResult -> ReaderT SqlBackend m ()
     insert fr =
       case fr of
-        ResultMetadata md -> void $ DB.insertPoolOfflineData md
-        ResultError fe -> void $ DB.insertPoolOfflineFetchError fe
+        ResultMetadata md -> void $ DB.insertCheckPoolOfflineData md
+        ResultError fe -> void $ DB.insertCheckPoolOfflineFetchError fe
 
     isFetchError :: FetchResult -> Bool
     isFetchError fe =
