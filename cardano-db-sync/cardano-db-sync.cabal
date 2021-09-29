@@ -44,6 +44,9 @@ library
 
   exposed-modules:      Cardano.DbSync
 
+                        Cardano.DbSync.Cli
+                        Cardano.DbSync.TH
+
                         Cardano.DbSync.Era
 
                         Cardano.DbSync.Era.Byron.Genesis
@@ -110,6 +113,7 @@ library
                       , containers
                       , esqueleto
                       , extra
+                      , file-embed
                       , groups
                       , http-client
                       , http-client-tls
@@ -123,8 +127,10 @@ library
                       , ouroboros-consensus-cardano
                       , ouroboros-consensus-shelley
                       , ouroboros-network
+                      , optparse-applicative
                       , persistent
                       , persistent-postgresql
+                      , process
                       , prometheus
                       , random-shuffle
                       , small-steps
@@ -132,6 +138,7 @@ library
                       , strict-containers
                       , swagger2
                       , text
+                      , template-haskell
                       , time
                       , transformers
                       , transformers-except
@@ -162,10 +169,8 @@ executable cardano-db-sync
                         MigrationValidations
 
   build-depends:        base                            >= 4.14         && < 4.16
-                      , cardano-config
                       , cardano-sync
                       , cardano-db-sync
                       , cardano-prelude
-                      , cardano-slotting
                       , optparse-applicative
                       , text
