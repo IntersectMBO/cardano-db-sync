@@ -24,8 +24,6 @@ module Cardano.Db.Insert
   , insertPotTransfer
   , insertPoolHash
   , insertPoolMetadataRef
-  , insertPoolOfflineData
-  , insertPoolOfflineFetchError
   , insertPoolOwner
   , insertPoolRelay
   , insertPoolRetire
@@ -154,12 +152,6 @@ insertPoolHash = insertCheckUnique "PoolHash"
 insertPoolMetadataRef :: (MonadBaseControl IO m, MonadIO m) => PoolMetadataRef -> ReaderT SqlBackend m PoolMetadataRefId
 insertPoolMetadataRef = insertCheckUnique "PoolMetadataRef"
 
-insertPoolOfflineData :: (MonadBaseControl IO m, MonadIO m) => PoolOfflineData -> ReaderT SqlBackend m PoolOfflineDataId
-insertPoolOfflineData = insertCheckUnique "PoolOfflineData"
-
-insertPoolOfflineFetchError :: (MonadBaseControl IO m, MonadIO m) => PoolOfflineFetchError -> ReaderT SqlBackend m PoolOfflineFetchErrorId
-insertPoolOfflineFetchError = insertCheckUnique "PoolOfflineFetchError"
-
 insertPoolOwner :: (MonadBaseControl IO m, MonadIO m) => PoolOwner -> ReaderT SqlBackend m PoolOwnerId
 insertPoolOwner = insertCheckUnique "PoolOwner"
 
@@ -218,13 +210,13 @@ insertCheckPoolOfflineData :: (MonadBaseControl IO m, MonadIO m) => PoolOfflineD
 insertCheckPoolOfflineData pod = do
   foundPool <- existsPoolHashId (poolOfflineDataPoolId pod)
   foundMeta <- existsPoolMetadataRefId (poolOfflineDataPmrId pod)
-  when (foundPool && foundMeta) $ void $ insertPoolOfflineData pod
+  when (foundPool && foundMeta) . void $ insertCheckUnique "PoolOfflineData" pod
 
 insertCheckPoolOfflineFetchError :: (MonadBaseControl IO m, MonadIO m) => PoolOfflineFetchError -> ReaderT SqlBackend m ()
 insertCheckPoolOfflineFetchError pofe = do
   foundPool <- existsPoolHashId (poolOfflineFetchErrorPoolId pofe)
   foundMeta <- existsPoolMetadataRefId (poolOfflineFetchErrorPmrId pofe)
-  when (foundPool && foundMeta) $ void $ insertPoolOfflineFetchError pofe
+  when (foundPool && foundMeta) . void $ insertCheckUnique "PoolOfflineFetchError" pofe
 
 -- -----------------------------------------------------------------------------
 
