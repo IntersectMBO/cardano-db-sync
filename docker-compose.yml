@@ -36,7 +36,7 @@ services:
         max-file: "10"
 
   cardano-db-sync:
-    image: inputoutput/cardano-db-sync:11.0.3
+    image: inputoutput/cardano-db-sync:11.0.4
     environment:
       - NETWORK=${NETWORK:-mainnet}
       - POSTGRES_HOST=postgres
