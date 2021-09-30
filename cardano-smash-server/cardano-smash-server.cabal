@@ -1,0 +1,80 @@
+cabal-version:          2.2
+
+-- http://haskell.org/cabal/users-guide/
+
+name:                   cardano-smash-server
+version:                11.0.0
+synopsis:               The Cardano smash server
+description:            Please see the README on GitHub at
+                        <https://github.com/input-output-hk/cardano-db-sync/cardano-smash-server/#readme>
+homepage:               https://github.com/input-output-hk/cardano-db-sync
+bug-reports:            https://github.com/input-output-hk/cardano-db-sync/issues
+license:                Apache-2.0
+license-file:           LICENSE
+author:                 IOHK Engineering Team
+maintainer:             operations@iohk.io
+copyright:              (c) 2019 IOHK
+category:               Cryptocurrency
+build-type:             Custom
+extra-source-files:     CHANGELOG.md
+
+custom-setup
+  setup-depends:
+                        base
+                      , Cabal
+                      , bytestring
+                      , cardano-crypto-class
+                      , directory
+                      , filepath
+
+flag disable-basic-auth
+  description: Disable basic authentication scheme for other authentication mechanisms.
+  default:     False
+
+flag testing-mode
+  description: A flag for allowing operations that promote easy testing.
+  default:     False
+
+library
+  if flag(disable-basic-auth)
+    cpp-options:        -DDISABLE_BASIC_AUTH
+
+  if flag(testing-mode)
+    cpp-options:        -DTESTING_MODE
+
+  default-language:     Haskell2010
+  hs-source-dirs:       src
+
+  ghc-options:          -Wall
+                        -Wcompat
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+                        -Wredundant-constraints
+                        -Wpartial-fields
+                        -fno-warn-orphans
+
+  exposed-modules:
+
+  build-depends:
+                        aeson
+                      , base                         >=4.7   && <5
+                      , bytestring
+                      , cardano-prelude
+                      , cardano-api
+                      , base16-bytestring
+                      , persistent
+                      , network-uri
+                      , servant
+                      , servant-server
+                      , servant-swagger
+                      , swagger2
+                      , text
+                      , time
+                      , quiet
+                      , wai
+
+  default-extensions:   NoImplicitPrelude
+                        OverloadedStrings
+
+
+
