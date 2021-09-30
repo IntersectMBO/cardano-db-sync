@@ -127,6 +127,7 @@ library
                       , small-steps
                       , split
                       , shelley-spec-ledger
+                      , strict
                       , strict-containers
                       , swagger2
                       , text

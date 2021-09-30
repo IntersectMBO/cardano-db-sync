@@ -10,6 +10,7 @@
 
 module Cardano.DbSync.Era.Shelley.Insert.Epoch
   ( finalizeEpochBulkOps
+  , isEmptyEpochBulkOps
   , insertEpochInterleaved
   , insertPoolDepositRefunds
   , postEpochRewards
@@ -35,8 +36,8 @@ import           Cardano.Sync.Util
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
-import           Control.Monad.Class.MonadSTM.Strict (flushTBQueue, readTVar, writeTBQueue,
-                   writeTVar)
+import           Control.Monad.Class.MonadSTM.Strict (flushTBQueue, isEmptyTBQueue, readTVar,
+                   writeTBQueue, writeTVar)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (hoistEither)
 
@@ -117,6 +118,13 @@ finalizeEpochBulkOps lenv = do
       liftIO $ logInfo (leTrace lenv) $ mconcat
         ["Flushing remaining ", show (length bops), " BulkOperations"]
     mapM_ (insertEpochInterleaved (leTrace lenv)) bops
+
+isEmptyEpochBulkOps
+     :: MonadIO m
+     => LedgerEnv
+     -> ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
+isEmptyEpochBulkOps lenv =
+  liftIO . atomically $ isEmptyTBQueue (leBulkOpQueue lenv)
 
 -- -------------------------------------------------------------------------------------------------
 
