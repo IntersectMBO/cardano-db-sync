@@ -37,6 +37,7 @@
   - {name: [Data.Text], as: Text}
   - {name: [Data.ByteString.Char8], as: BS}
   - {name: [Data.ByteString.Lazy.Char8], as: LBS}
+  - {name: [Data.ByteString.Short], as: SBS}
 
 # Banned functions
 - functions:

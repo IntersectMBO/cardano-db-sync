@@ -5,7 +5,7 @@ module Cardano.DbSync.Era.Cardano.Util
 
 import           Cardano.Prelude
 
-import qualified Data.ByteString.Short as BSS
+import qualified Data.ByteString.Short as SBS
 
 import           Ouroboros.Consensus.Cardano.Block (CardanoBlock)
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
@@ -16,5 +16,5 @@ unChainHash :: ChainHash (CardanoBlock era) -> ByteString
 unChainHash ch =
   case ch of
     GenesisHash -> "genesis"
-    BlockHash bh -> BSS.fromShort (Consensus.getOneEraHash bh)
+    BlockHash bh -> SBS.fromShort (Consensus.getOneEraHash bh)
 
