@@ -414,7 +414,7 @@ share
     minPoolCost         DbLovelace Maybe    sqltype=lovelace
 
     coinsPerUtxoWord    DbLovelace Maybe    sqltype=lovelace
-    costModelsId        CostModelsId Maybe
+    costModelsId        CostModelsId Maybe  OnDeleteCascade
     priceMem            Double Maybe        -- sqltype=rational
     priceStep           Double Maybe        -- sqltype=rational
     maxTxExMem          DbWord64 Maybe      sqltype=word64type
@@ -452,7 +452,7 @@ share
     nonce               ByteString Maybe    sqltype=hash32type
 
     coinsPerUtxoWord    DbLovelace Maybe    sqltype=lovelace
-    costModelsId        CostModelsId Maybe
+    costModelsId        CostModelsId Maybe  OnDeleteCascade
     priceMem            Double Maybe        -- sqltype=rational
     priceStep           Double Maybe        -- sqltype=rational
     maxTxExMem          DbWord64 Maybe      sqltype=word64type

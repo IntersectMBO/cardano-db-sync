@@ -71,7 +71,7 @@ import           Control.Monad.Class.MonadSTM.Strict (StrictTMVar, StrictTVar, T
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
-import qualified Data.ByteString.Short as BSS
+import qualified Data.ByteString.Short as SBS
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
@@ -752,7 +752,7 @@ tickThenReapplyCheckHash cfg block lsb =
                   , " but block previous hash is "
                   , renderByteArray (Cardano.unChainHash $ blockPrevHash block)
                   , " and block current hash is "
-                  , renderByteArray (BSS.fromShort . Consensus.getOneEraHash $ blockHash block), "."
+                  , renderByteArray (SBS.fromShort . Consensus.getOneEraHash $ blockHash block), "."
                   ]
 
 totalAdaPots
@@ -762,7 +762,7 @@ totalAdaPots
 totalAdaPots = Shelley.totalAdaPotsES . Shelley.nesEs . Consensus.shelleyLedgerState
 
 getHeaderHash :: HeaderHash CardanoBlock -> ByteString
-getHeaderHash bh = BSS.fromShort (Consensus.getOneEraHash bh)
+getHeaderHash bh = SBS.fromShort (Consensus.getOneEraHash bh)
 
 -- | This will fail if the state is not a 'LedgerStateAlonzo'
 getAlonzoPParams :: CardanoLedgerState -> PParams StandardAlonzo

@@ -12,6 +12,12 @@ module Cardano.DbSync.Era.Shelley.Insert
   , postEpochRewards
   , postEpochStake
 
+  -- These are exported for data in Shelley Genesis
+  , insertPoolRegister
+  , insertDelegation
+  , insertStakeAddressRefIfMissing
+
+  -- Util
   , containsUnicodeNul
   , safeDecodeUtf8
   ) where
@@ -29,10 +35,10 @@ import qualified Cardano.Crypto.Hash as Crypto
 import           Cardano.Db (DbLovelace (..), DbWord64 (..), SyncState (..))
 import qualified Cardano.Db as DB
 
-import           Cardano.DbSync.Era
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Insert.Epoch
+import           Cardano.DbSync.Era.Shelley.Offline
 import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Era.Util (liftLookupFail, safeDecodeUtf8)
 
@@ -81,7 +87,9 @@ insertShelleyBlock
     -> ReaderT SqlBackend m (Either SyncNodeError ())
 insertShelleyBlock tracer lenv firstBlockOfEpoch blk lStateSnap details = do
   runExceptT $ do
-    pbid <- liftLookupFail (renderInsertName (Generic.blkEra blk)) $ DB.queryBlockId (Generic.blkPreviousHash blk)
+    pbid <- case Generic.blkPreviousHash blk of
+      Nothing -> liftLookupFail (renderInsertName (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
+      Just pHash -> liftLookupFail (renderInsertName (Generic.blkEra blk)) $ DB.queryBlockId pHash
     mPhid <- lift $ queryPoolHashId (Generic.blkCreatorPoolHash blk)
 
     slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (Generic.blkSlotLeader blk) mPhid
@@ -246,14 +254,14 @@ insertTxOut
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Generic.TxOut
     -> ExceptT e (ReaderT SqlBackend m) ()
-insertTxOut tracer txId (Generic.TxOut index addr value maMap dataHash) = do
+insertTxOut tracer txId (Generic.TxOut index addr addrRaw value maMap dataHash) = do
     mSaId <- lift $ insertStakeAddressRefIfMissing txId addr
     txOutId <- lift . DB.insertTxOut $
                 DB.TxOut
                   { DB.txOutTxId = txId
                   , DB.txOutIndex = index
                   , DB.txOutAddress = Generic.renderAddress addr
-                  , DB.txOutAddressRaw = Ledger.serialiseAddr addr
+                  , DB.txOutAddressRaw = addrRaw
                   , DB.txOutAddressHasScript = hasScript
                   , DB.txOutPaymentCred = Generic.maybePaymentCred addr
                   , DB.txOutStakeAddressId = mSaId
@@ -320,7 +328,7 @@ insertPoolCert
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolCert tracer lStateSnap network epoch blkId txId idx pCert =
   case pCert of
-    Shelley.RegPool pParams -> insertPoolRegister tracer lStateSnap network epoch blkId txId idx pParams
+    Shelley.RegPool pParams -> insertPoolRegister tracer (Right lStateSnap) network epoch blkId txId idx pParams
     Shelley.RetirePool keyHash epochNum -> insertPoolRetire txId epochNum idx keyHash
 
 insertDelegCert
@@ -337,9 +345,9 @@ insertDelegCert tracer network txId idx ridx epochNo slotNo redeemers dCert =
 
 insertPoolRegister
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> LedgerStateSnapshot -> Ledger.Network -> EpochNo -> DB.BlockId -> DB.TxId -> Word16 -> Shelley.PoolParams StandardCrypto
+    => Trace IO Text -> Either Word64 LedgerStateSnapshot -> Ledger.Network -> EpochNo -> DB.BlockId -> DB.TxId -> Word16 -> Shelley.PoolParams StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolRegister _tracer lStateSnap network (EpochNo epoch) blkId txId idx params = do
+insertPoolRegister _tracer mlStateSnap network (EpochNo epoch) blkId txId idx params = do
     poolHashId <- insertPoolHash (Shelley._poolId params)
 
     mdId <- case strictMaybeToMaybe $ Shelley._poolMD params of
@@ -367,8 +375,9 @@ insertPoolRegister _tracer lStateSnap network (EpochNo epoch) blkId txId idx par
 
   where
     mkEpochActivationDelay :: MonadIO m => DB.PoolHashId -> ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
-    mkEpochActivationDelay poolHashId =
-      if Set.member (Shelley._poolId params) $ getPoolParams (lssOldState lStateSnap)
+    mkEpochActivationDelay poolHashId = case mlStateSnap of
+      Left n -> pure n
+      Right lStateSnap -> if Set.member (Shelley._poolId params) $ getPoolParams (lssOldState lStateSnap)
         then pure 3
         else do
           -- if the pool is not registered at the end of the previous block, check for

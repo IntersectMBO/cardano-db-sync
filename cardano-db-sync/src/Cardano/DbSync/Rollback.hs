@@ -7,7 +7,7 @@ module Cardano.DbSync.Rollback
   ) where
 
 import           Cardano.Prelude
-import qualified Data.ByteString.Short as BSS
+import qualified Data.ByteString.Short as SBS
 
 import           Cardano.BM.Trace (Trace, logInfo)
 
@@ -64,7 +64,7 @@ rollbackToPoint backend trce point =
     queryBlockId pnt =
       case getPoint pnt of
         Origin -> DB.queryGenesis
-        At blk -> DB.queryBlockId (BSS.fromShort . getOneEraHash $ blockPointHash blk)
+        At blk -> DB.queryBlockId (SBS.fromShort . getOneEraHash $ blockPointHash blk)
 
 -- For testing and debugging.
 unsafeRollback :: Trace IO Text -> SlotNo -> IO (Either SyncNodeError ())
