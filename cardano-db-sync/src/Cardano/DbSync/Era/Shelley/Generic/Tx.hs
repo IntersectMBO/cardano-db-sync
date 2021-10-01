@@ -71,6 +71,7 @@ import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra)
 
 import qualified Shelley.Spec.Ledger.CompactAddr as Ledger
 import           Shelley.Spec.Ledger.Scripts (ScriptHash)
+import qualified Shelley.Spec.Ledger.Scripts as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
@@ -139,6 +140,8 @@ data TxRedeemer = TxRedeemer
 data TxScript = TxScript
   { txScriptHash :: !ByteString
   , txScriptPlutusSize :: Maybe Word64
+  , txScriptJson :: Maybe ByteString
+  , txScriptCBOR :: Maybe ByteString
   }
 
 data TxDatum = TxDatum
@@ -217,9 +220,13 @@ fromAllegraTx (blkIndex, tx) =
           map (\scr -> (Ledger.hashScript @StandardAllegra scr, scr)) $ toList scrs
 
     mkTxScript :: (ScriptHash StandardCrypto, Allegra.Script StandardAllegra) -> TxScript
-    mkTxScript (hsh, _script) = TxScript
+    mkTxScript (hsh, script) = TxScript
       { txScriptHash = unScriptHash hsh
       , txScriptPlutusSize = Nothing -- Allegra has only Timelock scripts.
+      , txScriptJson =
+          Just . LBS.toStrict . Aeson.encode
+            $ Api.fromAllegraTimelock Api.TimeLocksInSimpleScriptV2 script
+      , txScriptCBOR = Nothing
       }
 
 fromShelleyTx :: (Word64, Shelley.Tx StandardShelley) -> Tx
@@ -246,7 +253,7 @@ fromShelleyTx (blkIndex, tx) =
       , txRedeemer = []     -- Shelley does not support Redeemer
       , txData = []
       , txScriptSizes = []    -- Shelley does not support scripts
-      , txScripts = []        -- We don't populate scripts for Shelley
+      , txScripts = scripts
       , txScriptsFee = Coin 0 -- Shelley does not support scripts
       }
   where
@@ -267,6 +274,18 @@ fromShelleyTx (blkIndex, tx) =
 
     txOutValue :: Shelley.TxOut StandardShelley -> Integer
     txOutValue (Shelley.TxOut _ (Coin coin)) = coin
+
+    scripts :: [TxScript]
+    scripts =
+      mkTxScript <$> Map.toList (Shelley.scriptWits $ getField @"wits" tx)
+
+    mkTxScript :: (ScriptHash StandardCrypto, Shelley.MultiSig StandardCrypto) -> TxScript
+    mkTxScript (hsh, script) = TxScript
+      { txScriptHash = unScriptHash hsh
+      , txScriptPlutusSize = Nothing -- Shelley has only MultiSig scripts.
+      , txScriptJson = Just . LBS.toStrict . Aeson.encode $ Api.fromShelleyMultiSig script
+      , txScriptCBOR = Nothing
+      }
 
 fromMaryTx :: (Word64, Shelley.Tx StandardMary) -> Tx
 fromMaryTx (blkIndex, tx) =
@@ -336,9 +355,13 @@ fromMaryTx (blkIndex, tx) =
           map (\scr -> (Ledger.hashScript @StandardMary scr, scr)) $ toList scrs
 
     mkTxScript :: (ScriptHash StandardCrypto, Mary.Script StandardMary) -> TxScript
-    mkTxScript (hsh, _script) = TxScript
+    mkTxScript (hsh, script) = TxScript
       { txScriptHash = unScriptHash hsh
       , txScriptPlutusSize = Nothing -- Mary has only Timelock scripts.
+      , txScriptJson =
+          Just . LBS.toStrict . Aeson.encode
+            $ Api.fromAllegraTimelock Api.TimeLocksInSimpleScriptV2 script
+      , txScriptCBOR = Nothing
       }
 
 fromAlonzoTx :: Ledger.PParams StandardAlonzo -> (Word64, Ledger.Tx StandardAlonzo) -> Tx
@@ -421,11 +444,29 @@ fromAlonzoTx pp (blkIndex, tx) =
     mkTxScript (hsh, script) = TxScript
       { txScriptHash = unScriptHash hsh
       , txScriptPlutusSize = getScriptSize script
+      , txScriptJson = timelockJsonScript script
+      , txScriptCBOR = plutusCborScript script
       }
 
+    timelockJsonScript :: Alonzo.Script (AlonzoEra StandardCrypto) -> Maybe ByteString
+    timelockJsonScript script =
+      case script of
+        Alonzo.TimelockScript s ->
+            Just . LBS.toStrict . Aeson.encode $ Api.fromAllegraTimelock Api.TimeLocksInSimpleScriptV2 s
+        Alonzo.PlutusScript {} -> Nothing
+
+    plutusCborScript :: Alonzo.Script (AlonzoEra StandardCrypto) -> Maybe ByteString
+    plutusCborScript script =
+      case script of
+        Alonzo.TimelockScript {} -> Nothing
+        Alonzo.PlutusScript s ->
+          Just . Api.serialiseToCBOR . Api.PlutusScript Api.PlutusScriptV1 $ Api.PlutusScriptSerialised s
+
     getScriptSize :: Alonzo.Script (AlonzoEra StandardCrypto) -> Maybe Word64
-    getScriptSize (Alonzo.TimelockScript _) = Nothing
-    getScriptSize (Alonzo.PlutusScript sbs) = Just $ fromIntegral $ SBS.length sbs
+    getScriptSize script =
+      case script of
+        Alonzo.TimelockScript {} ->  Nothing
+        Alonzo.PlutusScript sbs -> Just $ fromIntegral (SBS.length sbs)
 
     minFees :: Coin
     minFees = txscriptfee (Alonzo._prices pp) $ Alonzo.totExUnits tx

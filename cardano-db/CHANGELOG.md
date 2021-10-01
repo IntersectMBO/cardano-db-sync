@@ -1,5 +1,14 @@
 # Revision history for cardano-db
 
+## 11.0.4
+* Fix race condition on insertion of pool offline data or error response (#806, #823, #858).
+
+## 11.0.3
+* Use same dependencies as 1.30.1 of `cardano-node`.
+
+## 11.0.2
+* Fix schema documentation typo (#799).
+
 ## 11.0.0
 * Note that this release requires the database to be dropped and recreated.
 * Many changed to support Alonzo release.
