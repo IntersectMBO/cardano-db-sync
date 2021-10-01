@@ -144,6 +144,7 @@ test-suite test-db
                       , cardano-db
                       , cardano-slotting
                       , directory
+                      , extra
                       , filepath
                       , monad-control
                       , persistent

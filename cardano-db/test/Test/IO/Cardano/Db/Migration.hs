@@ -5,10 +5,11 @@ import           Cardano.Db (LogFileDir (..), MigrationDir (..), MigrationValida
                    MigrationValidateError (..), MigrationVersion (..), SchemaVersion (..),
                    getMigrationScripts, querySchemaVersion, readPGPassFileEnv, runDbNoLogging,
                    runMigrations, validateMigrations)
-import           Control.Monad (unless)
+import           Control.Monad (unless, when)
 import           Control.Monad.Trans.Except (runExceptT)
 
 import qualified Data.List as List
+import qualified Data.List.Extra as List
 import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
 
@@ -19,7 +20,8 @@ import           Test.Tasty.HUnit (testCase)
 tests :: TestTree
 tests =
   testGroup "Migration"
-    [ testCase "Migration is idempotent" migrationTest
+    [ testCase "Migration script names do not clash" migrationScriptNameTest
+    , testCase "Migration is idempotent" migrationTest
     , testCase "Migration validation - unknown migration found" unknownMigrationValidate
     , testCase "Migration validation - mismatched hash for migration" invalidHashMigrationValidate
     , testCase "Migration validation - mismatched hash for migration 2" invalidHashMigrationValidate'
@@ -126,6 +128,22 @@ migrationTest = do
             , showSchemaVersion actual
             , "."
             ]
+
+-- Check that the migration script names do not clash, where clash means two scripts have the
+-- same `mvStage` and `mvVersion` components.
+migrationScriptNameTest :: IO ()
+migrationScriptNameTest = do
+    xs <- fmap fst <$> getMigrationScripts (MigrationDir "../schema")
+    when (null xs) $ error "Unable to find schema migration files"
+    mapM_ validate $ List.groupOn mvStage xs
+  where
+    validate :: [MigrationVersion] -> IO ()
+    validate xs =
+      case xs of
+        [] -> pure () -- Impossible
+        (x:_) -> let versions = map mvVersion xs in
+             when (List.nubOrd versions /= versions) .
+               error $ "Stage " ++ show (mvStage x) ++ " migration scripts do not have unique version numbers."
 
 getDbSchemaVersion :: IO SchemaVersion
 getDbSchemaVersion =
