@@ -113,7 +113,8 @@ data ScriptPurpose
   deriving (Eq, Generic, Show)
 
 data ScriptType
-  = Timelock
+  = MultiSig
+  | Timelock
   | Plutus
   deriving (Eq, Generic, Show)
 
@@ -215,12 +216,14 @@ showRewardSource rs =
 renderScriptType :: ScriptType -> Text
 renderScriptType st =
   case st of
+    MultiSig -> "multisig"
     Timelock -> "timelock"
     Plutus -> "plutus"
 
 readScriptType :: String -> ScriptType
 readScriptType str =
   case str of
+    "multisig" -> MultiSig
     "timelock" -> Timelock
     "plutus" -> Plutus
     _other -> error $ "readScriptType: Unknown ScriptType " ++ str

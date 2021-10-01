@@ -880,18 +880,12 @@ insertScript tracer txId script = do
       DB.Script
         { DB.scriptTxId = txId
         , DB.scriptHash = Generic.txScriptHash script
-        , DB.scriptType = scriptType
+        , DB.scriptType = Generic.txScriptType script
         , DB.scriptSerialisedSize = Generic.txScriptPlutusSize script
         , DB.scriptJson = json
         , DB.scriptBytes = Generic.txScriptCBOR script
         }
   where
-    scriptType :: DB.ScriptType
-    scriptType =
-      case Generic.txScriptPlutusSize script of
-        Nothing -> DB.Timelock
-        Just _ -> DB.Plutus
-
     scriptConvert :: MonadIO m => Generic.TxScript -> m (Maybe Text)
     scriptConvert s =
       maybe (pure Nothing) (safeDecodeToJson tracer "insertScript") (Generic.txScriptJson s)
