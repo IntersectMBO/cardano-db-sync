@@ -29,6 +29,8 @@ import qualified Cardano.Api.Shelley as Api
 
 import qualified Cardano.Crypto.Hash as Crypto
 
+import           Cardano.Db (ScriptType (..))
+
 import           Cardano.DbSync.Era.Shelley.Generic.Metadata
 import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Generic.Util
@@ -139,6 +141,7 @@ data TxRedeemer = TxRedeemer
 
 data TxScript = TxScript
   { txScriptHash :: !ByteString
+  , txScriptType :: ScriptType
   , txScriptPlutusSize :: Maybe Word64
   , txScriptJson :: Maybe ByteString
   , txScriptCBOR :: Maybe ByteString
@@ -222,7 +225,8 @@ fromAllegraTx (blkIndex, tx) =
     mkTxScript :: (ScriptHash StandardCrypto, Allegra.Script StandardAllegra) -> TxScript
     mkTxScript (hsh, script) = TxScript
       { txScriptHash = unScriptHash hsh
-      , txScriptPlutusSize = Nothing -- Allegra has only Timelock scripts.
+      , txScriptType = Timelock
+      , txScriptPlutusSize = Nothing
       , txScriptJson =
           Just . LBS.toStrict . Aeson.encode
             $ Api.fromAllegraTimelock Api.TimeLocksInSimpleScriptV2 script
@@ -282,7 +286,8 @@ fromShelleyTx (blkIndex, tx) =
     mkTxScript :: (ScriptHash StandardCrypto, Shelley.MultiSig StandardCrypto) -> TxScript
     mkTxScript (hsh, script) = TxScript
       { txScriptHash = unScriptHash hsh
-      , txScriptPlutusSize = Nothing -- Shelley has only MultiSig scripts.
+      , txScriptType = MultiSig
+      , txScriptPlutusSize = Nothing
       , txScriptJson = Just . LBS.toStrict . Aeson.encode $ Api.fromShelleyMultiSig script
       , txScriptCBOR = Nothing
       }
@@ -357,7 +362,8 @@ fromMaryTx (blkIndex, tx) =
     mkTxScript :: (ScriptHash StandardCrypto, Mary.Script StandardMary) -> TxScript
     mkTxScript (hsh, script) = TxScript
       { txScriptHash = unScriptHash hsh
-      , txScriptPlutusSize = Nothing -- Mary has only Timelock scripts.
+      , txScriptType = Timelock
+      , txScriptPlutusSize = Nothing
       , txScriptJson =
           Just . LBS.toStrict . Aeson.encode
             $ Api.fromAllegraTimelock Api.TimeLocksInSimpleScriptV2 script
@@ -443,6 +449,7 @@ fromAlonzoTx pp (blkIndex, tx) =
     mkTxScript :: (ScriptHash StandardCrypto, Alonzo.Script (AlonzoEra StandardCrypto)) -> TxScript
     mkTxScript (hsh, script) = TxScript
       { txScriptHash = unScriptHash hsh
+      , txScriptType = getScriptType script
       , txScriptPlutusSize = getScriptSize script
       , txScriptJson = timelockJsonScript script
       , txScriptCBOR = plutusCborScript script
@@ -467,6 +474,12 @@ fromAlonzoTx pp (blkIndex, tx) =
       case script of
         Alonzo.TimelockScript {} ->  Nothing
         Alonzo.PlutusScript sbs -> Just $ fromIntegral (SBS.length sbs)
+
+    getScriptType :: Alonzo.Script (AlonzoEra StandardCrypto) -> ScriptType
+    getScriptType script =
+      case script of
+        Alonzo.TimelockScript {} -> Timelock
+        Alonzo.PlutusScript {} -> Plutus
 
     minFees :: Coin
     minFees = txscriptfee (Alonzo._prices pp) $ Alonzo.totExUnits tx
