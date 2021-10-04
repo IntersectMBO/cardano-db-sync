@@ -65,8 +65,7 @@ import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (.
 
 import qualified Control.Exception as Exception
 import           Control.Monad.Class.MonadSTM.Strict (StrictTMVar, StrictTVar, TBQueue, atomically,
-                   flushTBQueue, newEmptyTMVarIO, newTBQueueIO, newTVarIO, readTVar, writeTBQueue,
-                   writeTVar)
+                   newEmptyTMVarIO, newTBQueueIO, newTVarIO, readTVar, writeTVar)
 
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
@@ -130,14 +129,6 @@ data BulkOperation
   | BulkRewardReport !EpochNo !CardanoPoint !Int !Coin
   | BulkStakeDistChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, (Coin, Generic.StakePoolKeyHash))]
   | BulkStakeDistReport !EpochNo !CardanoPoint !Int
-
-getBulkOpPoint :: BulkOperation -> CardanoPoint
-getBulkOpPoint = go
-  where
-    go (BulkRewardChunk _ point _ _) = point
-    go (BulkRewardReport _ point _ _) = point
-    go (BulkStakeDistChunk _ point _ _) = point
-    go (BulkStakeDistReport _ point _) = point
 
 data IndexCache = IndexCache
   { icAddressCache :: !(Map Generic.StakeCred DB.StakeAddressId)
@@ -527,10 +518,6 @@ loadLedgerAtPoint env point = do
         logInfo (leTrace env) $ mconcat ["Found in memory ledger snapshot at ", renderPoint point ]
         let ledgerDB' = LedgerDB anchoredSeq'
         let st = ledgerDbCurrent ledgerDB'
-        eventSt <- atomically $ readTVar $ leEventState env
-        when (point < lesLastAdded eventSt) $
-          -- This indicates there are at least some BulkOperation after the point
-          drainBulkOperation env point
         deleteNewerFiles env point
         writeLedgerState env $ Just ledgerDB'
         pure $ Right st
@@ -541,18 +528,6 @@ loadLedgerAtPoint env point = do
     rollbackLedger mLedgerDB = do
       ledgerDB <- mLedgerDB
       AS.rollback (pointSlot point) (const True) (ledgerDbCheckpoints ledgerDB)
-
--- Filter out the BulkOperation's added after the specific point.
-drainBulkOperation :: LedgerEnv -> CardanoPoint -> IO ()
-drainBulkOperation lenv point = do
-    bops <- atomically $ flushTBQueue (leBulkOpQueue lenv)
-    let bops' = filter (\bop -> getBulkOpPoint bop <= point) bops
-    let removed = length bops - length bops'
-    unless (removed == 0) $
-      logInfo (leTrace lenv) $ mconcat
-        ["Removing ", show removed, " BulkOperations added after ", show point]
-    atomically $ mapM_ (writeTBQueue (leBulkOpQueue lenv)) bops'
-    pure ()
 
 deleteNewerFiles :: LedgerEnv -> CardanoPoint -> IO ()
 deleteNewerFiles env point = do
