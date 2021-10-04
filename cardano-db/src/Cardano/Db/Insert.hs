@@ -42,7 +42,7 @@ module Cardano.Db.Insert
   , insertTxOut
   , insertWithdrawal
   , insertRedeemer
-  , insertCostModels
+  , insertCostModel
   , insertDatum
   , insertCheckPoolOfflineData
   , insertCheckPoolOfflineFetchError
@@ -209,8 +209,8 @@ insertWithdrawal = insertUnchecked "Withdrawal"
 insertRedeemer :: (MonadBaseControl IO m, MonadIO m) => Redeemer -> ReaderT SqlBackend m RedeemerId
 insertRedeemer = insertCheckUnique "Redeemer"
 
-insertCostModels :: (MonadBaseControl IO m, MonadIO m) => CostModels -> ReaderT SqlBackend m CostModelsId
-insertCostModels = insertCheckUnique "CostModels"
+insertCostModel :: (MonadBaseControl IO m, MonadIO m) => CostModel -> ReaderT SqlBackend m CostModelId
+insertCostModel = insertCheckUnique "CostModel"
 
 insertDatum :: (MonadBaseControl IO m, MonadIO m) => Datum -> ReaderT SqlBackend m DatumId
 insertDatum = insertCheckUnique "Datum"

@@ -649,7 +649,7 @@ insertParamProposal
     => Trace IO Text -> DB.BlockId -> DB.TxId -> ParamProposal
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertParamProposal tracer blkId txId pp = do
-  cmId <- maybe (pure Nothing) (fmap Just . insertCostModels tracer blkId) (pppCostmdls pp)
+  cmId <- maybe (pure Nothing) (fmap Just . insertCostModel tracer blkId) (pppCostmdls pp)
   void . lift . DB.insertParamProposal $
     DB.ParamProposal
       { DB.paramProposalRegisteredTxId = txId
@@ -678,7 +678,7 @@ insertParamProposal tracer blkId txId pp = do
       -- New for Alonzo
 
       , DB.paramProposalCoinsPerUtxoWord = Generic.coinToDbLovelace <$> pppCoinsPerUtxoWord pp
-      , DB.paramProposalCostModelsId = cmId
+      , DB.paramProposalCostModelId = cmId
       , DB.paramProposalPriceMem = realToFrac <$> pppPriceMem pp
       , DB.paramProposalPriceStep = realToFrac <$> pppPriceStep pp
       , DB.paramProposalMaxTxExMem = DbWord64 <$> pppMaxTxExMem pp
@@ -763,15 +763,15 @@ insertTxMetadata tracer txId metadata =
           , DB.txMetadataTxId = txId
           }
 
-insertCostModels
+insertCostModel
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.BlockId -> Map Language Ledger.CostModel
-    -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.CostModelsId
-insertCostModels _tracer blkId cms =
-  lift . DB.insertCostModels $
-    DB.CostModels
-      { DB.costModelsCosts = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode cms
-      , DB.costModelsBlockId = blkId
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.CostModelId
+insertCostModel _tracer blkId cms =
+  lift . DB.insertCostModel $
+    DB.CostModel
+      { DB.costModelCosts = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode cms
+      , DB.costModelBlockId = blkId
       }
 
 insertEpochParam
@@ -779,7 +779,7 @@ insertEpochParam
     => Trace IO Text -> DB.BlockId -> EpochNo -> Generic.ProtoParams -> Ledger.Nonce
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertEpochParam tracer blkId (EpochNo epoch) params nonce = do
-  cmId <- maybe (pure Nothing) (fmap Just . insertCostModels tracer blkId) (Generic.ppCostmdls params)
+  cmId <- maybe (pure Nothing) (fmap Just . insertCostModel tracer blkId) (Generic.ppCostmdls params)
   void . lift . DB.insertEpochParam $
     DB.EpochParam
       { DB.epochParamEpochNo = epoch
@@ -803,7 +803,7 @@ insertEpochParam tracer blkId (EpochNo epoch) params nonce = do
       , DB.epochParamMinPoolCost = Generic.coinToDbLovelace (Generic.ppMinPoolCost params)
       , DB.epochParamNonce = Generic.nonceToBytes nonce
       , DB.epochParamCoinsPerUtxoWord = Generic.coinToDbLovelace <$> Generic.ppCoinsPerUtxoWord params
-      , DB.epochParamCostModelsId = cmId
+      , DB.epochParamCostModelId = cmId
       , DB.epochParamPriceMem = realToFrac <$> Generic.ppPriceMem params
       , DB.epochParamPriceStep = realToFrac <$> Generic.ppPriceStep params
       , DB.epochParamMaxTxExMem = DbWord64 <$> Generic.ppMaxTxExMem params
