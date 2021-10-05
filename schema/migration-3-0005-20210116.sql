@@ -10,7 +10,6 @@ BEGIN
     -- Some of them are intentional commented out, because they already exist.
     CREATE INDEX idx_delegation_pool_hash_id ON delegation(pool_hash_id) ;
     CREATE INDEX idx_epoch_stake_pool_id ON epoch_stake(pool_id) ;
-    CREATE INDEX idx_orphaned_reward_pool_id ON orphaned_reward(pool_id) ;
     CREATE INDEX idx_pool_owner_pool_hash_id ON pool_owner(pool_hash_id) ;
     CREATE INDEX idx_pool_retire_hash_id ON pool_retire(hash_id) ;
     --    CREATE INDEX idx_pool_update_hash_id ON pool_update(hash_id) ;
@@ -20,7 +19,6 @@ BEGIN
     --    CREATE INDEX idx_block_previous_id ON block(previous_id) ;
     CREATE INDEX idx_epoch_param_block_id ON epoch_param(block_id) ;
     CREATE INDEX idx_epoch_stake_epoch_no ON epoch_stake(epoch_no) ;
-    CREATE INDEX idx_orphaned_reward_epoch_no ON orphaned_reward(epoch_no) ;
     CREATE INDEX idx_reward_earned_epoch ON reward(earned_epoch) ;
     --    CREATE INDEX idx_tx_block_id ON tx(block_id) ;
     CREATE INDEX idx_delegation_tx_id ON delegation(tx_id) ;
@@ -42,7 +40,6 @@ BEGIN
     CREATE INDEX idx_withdrawal_tx_id ON withdrawal(tx_id) ;
     CREATE INDEX idx_delegation_addr_id ON delegation(addr_id) ;
     CREATE INDEX idx_epoch_stake_addr_id ON epoch_stake(addr_id) ;
-    CREATE INDEX idx_orphaned_reward_addr_id ON orphaned_reward(addr_id) ;
     CREATE INDEX idx_reserve_addr_id ON reserve(addr_id) ;
     CREATE INDEX idx_reward_addr_id ON reward(addr_id) ;
     CREATE INDEX idx_stake_deregistration_addr_id ON stake_deregistration(addr_id) ;

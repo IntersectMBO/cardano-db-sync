@@ -416,7 +416,7 @@ share
     minPoolCost         DbLovelace Maybe    sqltype=lovelace
 
     coinsPerUtxoWord    DbLovelace Maybe    sqltype=lovelace
-    costModelsId        CostModelsId Maybe  OnDeleteCascade
+    costModelId         CostModelId Maybe   OnDeleteCascade
     priceMem            Double Maybe        -- sqltype=rational
     priceStep           Double Maybe        -- sqltype=rational
     maxTxExMem          DbWord64 Maybe      sqltype=word64type
@@ -454,7 +454,7 @@ share
     nonce               ByteString Maybe    sqltype=hash32type
 
     coinsPerUtxoWord    DbLovelace Maybe    sqltype=lovelace
-    costModelsId        CostModelsId Maybe  OnDeleteCascade
+    costModelId         CostModelId Maybe   OnDeleteCascade
     priceMem            Double Maybe        -- sqltype=rational
     priceStep           Double Maybe        -- sqltype=rational
     maxTxExMem          DbWord64 Maybe      sqltype=word64type
@@ -468,10 +468,10 @@ share
     blockId             BlockId             OnDeleteCascade      -- The first block where these parameters are valid.
     UniqueEpochParam    epochNo blockId
 
-  CostModels
+  CostModel
     costs               Text                sqltype=jsonb
     blockId             BlockId             OnDeleteCascade
-    UniqueCostModels    costs
+    UniqueCostModel     costs
 
   -- -----------------------------------------------------------------------------------------------
   -- Pool offline (ie not on the blockchain) data.
@@ -829,7 +829,7 @@ schemaDocs =
       ParamProposalMinUtxoValue # "The minimum value of a UTxO entry."
       ParamProposalMinPoolCost # "The minimum pool cost."
       ParamProposalCoinsPerUtxoWord # "The cost per UTxO word."
-      ParamProposalCostModelsId # "The CostModels table index for the proposal."
+      ParamProposalCostModelId # "The CostModel table index for the proposal."
       ParamProposalPriceMem # "The per word cost of script memory usage."
       ParamProposalPriceStep # "The cost of script execution step usage."
       ParamProposalMaxTxExMem # "The maximum number of execution memory allowed to be used in a single transaction."
@@ -864,7 +864,7 @@ schemaDocs =
       EpochParamMinPoolCost # "The minimum pool cost."
       EpochParamNonce # "The nonce value for this epoch."
       EpochParamCoinsPerUtxoWord # "The cost per UTxO word."
-      EpochParamCostModelsId # "The CostModels table index for the params."
+      EpochParamCostModelId # "The CostModel table index for the params."
       EpochParamPriceMem # "The per word cost of script memory usage."
       EpochParamPriceStep # "The cost of script execution step usage."
       EpochParamMaxTxExMem # "The maximum number of execution memory allowed to be used in a single transaction."
@@ -876,10 +876,10 @@ schemaDocs =
       EpochParamMaxCollateralInputs # "The maximum number of collateral inputs allowed in a transaction."
       EpochParamBlockId # "The Block table index for the first block where these parameters are valid."
 
-    CostModels --^ do
-      "CostModels for EpochParam and ParamProposal."
-      CostModelsCosts # "The actual costs formatted as json."
-      CostModelsBlockId # "The first block where these costs were introduced. This is only used for rollbacks."
+    CostModel --^ do
+      "CostModel for EpochParam and ParamProposal."
+      CostModelCosts # "The actual costs formatted as json."
+      CostModelBlockId # "The first block where these costs were introduced. This is only used for rollbacks."
 
     PoolOfflineData --^ do
       "The pool offline (ie not on chain) for a stake pool."
