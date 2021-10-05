@@ -56,7 +56,7 @@ module Cardano.Db.Insert
 
 
 import           Control.Exception.Lifted (Exception, handle, throwIO)
-import           Control.Monad (void, when)
+import           Control.Monad (unless, void, when)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Reader (ReaderT)
@@ -242,8 +242,9 @@ insertManyUncheckedUnique
         , OnlyOneUniqueKey record
         )
     => String -> [record] -> ReaderT SqlBackend m ()
-insertManyUncheckedUnique vtype records = do
-    handle exceptHandler (rawExecute query values)
+insertManyUncheckedUnique vtype records =
+    unless (null records) $
+      handle exceptHandler (rawExecute query values)
   where
     query :: Text
     query =
