@@ -10,6 +10,9 @@ import           Cardano.Prelude hiding (Maybe (..), fromMaybe)
 import           Cardano.Slotting.Slot (EpochNo (..))
 
 import qualified Cardano.Ledger.BaseTypes as Ledger
+import qualified Cardano.Ledger.Shelley.API.Protocol as Shelley
+import qualified Cardano.Ledger.Shelley.Rules.Chain as Shelley
+import qualified Cardano.Ledger.Shelley.Rules.Tickn as Shelley
 
 import           Cardano.Sync.Era.Shelley.Generic.ProtoParams
 import           Cardano.Sync.Types
@@ -23,9 +26,6 @@ import qualified Ouroboros.Consensus.HeaderValidation as Consensus
 import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import qualified Ouroboros.Consensus.Shelley.Protocol as Consensus
 
-import qualified Shelley.Spec.Ledger.API.Protocol as Shelley
-import qualified Shelley.Spec.Ledger.STS.Chain as Shelley
-import qualified Shelley.Spec.Ledger.STS.Tickn as Shelley
 
 data NewEpoch = NewEpoch
   { neEpoch :: !EpochNo

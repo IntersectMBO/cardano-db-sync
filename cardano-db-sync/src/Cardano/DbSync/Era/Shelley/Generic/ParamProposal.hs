@@ -22,13 +22,12 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin)
 import qualified Cardano.Ledger.Keys as Ledger
 import           Cardano.Ledger.Shelley (ShelleyEra)
+import qualified Cardano.Ledger.Shelley.PParams as Shelley
 import qualified Cardano.Ledger.ShelleyMA as ShelleyMA
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
 import qualified Data.Map.Strict as Map
-
-import qualified Shelley.Spec.Ledger.PParams as Shelley
 
 data ParamProposal = ParamProposal
   { pppEpochNo :: !EpochNo

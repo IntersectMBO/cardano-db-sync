@@ -22,6 +22,9 @@ import qualified Cardano.Ledger.Core as Ledger
 import qualified Cardano.Ledger.Credential as Ledger
 import           Cardano.Ledger.Era (Crypto)
 import qualified Cardano.Ledger.Keys as Ledger
+import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
+import qualified Cardano.Ledger.Shelley.PParams as Shelley
+import qualified Cardano.Ledger.Shelley.Rewards as Shelley
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
@@ -37,11 +40,6 @@ import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
-
-import qualified Shelley.Spec.Ledger.LedgerState as Shelley
-import qualified Shelley.Spec.Ledger.PParams as Shelley
-import qualified Shelley.Spec.Ledger.Rewards as Shelley
-
 
 -- The fields of this struct *must* remain in this ordering in order for the `Ord` instance
 -- to work correctly for `takeFirstReward` to operate correctly.

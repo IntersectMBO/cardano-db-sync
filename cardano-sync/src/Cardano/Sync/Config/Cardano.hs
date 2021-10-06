@@ -18,7 +18,8 @@ import           Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 
 import qualified Cardano.Crypto.Hash.Class as Crypto
 
-import           Cardano.Ledger.Alonzo.Genesis
+import           Cardano.Ledger.Alonzo.Genesis (AlonzoGenesis)
+import qualified Cardano.Ledger.Shelley.PParams as Shelley
 
 import           Cardano.Sync.Config.Alonzo
 import           Cardano.Sync.Config.Byron
@@ -38,8 +39,6 @@ import           Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import           Ouroboros.Consensus.Shelley.Eras (StandardShelley)
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
-
-import qualified Shelley.Spec.Ledger.PParams as Shelley
 
 
 -- Usually only one constructor, but may have two when we are preparing for a HFC event.

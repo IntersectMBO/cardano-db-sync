@@ -12,12 +12,20 @@ module Cardano.Sync.LedgerEvent
   ) where
 
 import           Cardano.Db
+
 import           Cardano.Ledger.Coin (Coin (..), DeltaCoin (..))
 import qualified Cardano.Ledger.Core as Ledger
 import qualified Cardano.Ledger.Credential as Ledger
 import           Cardano.Ledger.Crypto (StandardCrypto)
 import           Cardano.Ledger.Era (Crypto)
 import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
+import           Cardano.Ledger.Shelley.API (InstantaneousRewards (..))
+import           Cardano.Ledger.Shelley.Rules.Epoch (EpochEvent (PoolReapEvent))
+import           Cardano.Ledger.Shelley.Rules.Mir (MirEvent (..))
+import           Cardano.Ledger.Shelley.Rules.NewEpoch (NewEpochEvent (..))
+import           Cardano.Ledger.Shelley.Rules.PoolReap (PoolreapEvent (..))
+import           Cardano.Ledger.Shelley.Rules.Tick (TickEvent (..))
+
 import           Cardano.Slotting.Slot (EpochNo (..))
 import qualified Cardano.Sync.Era.Shelley.Generic as Generic
 import           Cardano.Sync.Types
@@ -37,12 +45,6 @@ import           Ouroboros.Consensus.Ledger.Abstract (AuxLedgerEvent, LedgerStat
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock, ShelleyLedgerEvent (..))
 import           Ouroboros.Consensus.TypeFamilyWrappers
 
-import           Shelley.Spec.Ledger.API (InstantaneousRewards (..))
-import           Shelley.Spec.Ledger.STS.Epoch (EpochEvent (PoolReapEvent))
-import           Shelley.Spec.Ledger.STS.Mir (MirEvent (..))
-import           Shelley.Spec.Ledger.STS.NewEpoch (NewEpochEvent (..))
-import           Shelley.Spec.Ledger.STS.PoolReap (PoolreapEvent (..))
-import           Shelley.Spec.Ledger.STS.Tick (TickEvent (..))
 
 data LedgerEvent
   = LedgerNewEpoch !EpochNo !SyncState

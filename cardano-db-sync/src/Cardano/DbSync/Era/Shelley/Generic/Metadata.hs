@@ -20,6 +20,7 @@ import           Cardano.Prelude
 import           Cardano.Api.Shelley (TxMetadataValue (..))
 
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
+import qualified Cardano.Ledger.Shelley.Metadata as Shelley
 import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as ShelleyMa
 
 import qualified Data.Aeson as Aeson
@@ -33,8 +34,6 @@ import           Data.Tuple.Extra (both)
 import qualified Data.Vector as Vector
 
 import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlonzo, StandardMary)
-
-import qualified Shelley.Spec.Ledger.Metadata as Shelley
 
 -- This module should not even exist. The only reason it does is because functionality
 -- that was in cardano-node commit 0dc6efa467a0fdae7aba7c5bcd5c657e189c8f19 and being

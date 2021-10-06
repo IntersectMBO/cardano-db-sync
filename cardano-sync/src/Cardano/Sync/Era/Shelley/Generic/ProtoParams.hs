@@ -14,6 +14,9 @@ import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import           Cardano.Ledger.BaseTypes (UnitInterval)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
+import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
+import           Cardano.Ledger.Shelley.PParams (ProtVer)
+import qualified Cardano.Ledger.Shelley.PParams as Shelley
 import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Cardano.Sync.Types
@@ -25,10 +28,6 @@ import           Ouroboros.Consensus.Cardano (Nonce (..))
 import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
-
-import qualified Shelley.Spec.Ledger.LedgerState as Shelley
-import           Shelley.Spec.Ledger.PParams (ProtVer)
-import qualified Shelley.Spec.Ledger.PParams as Shelley
 
 data ProtoParams = ProtoParams
   { ppMinfeeA :: !Natural

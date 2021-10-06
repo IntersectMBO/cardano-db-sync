@@ -53,6 +53,9 @@ import           Cardano.Sync.Types
 import           Cardano.Sync.Util
 
 import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..), Value (..))
+import qualified Cardano.Ledger.Shelley.PParams as Shelley
+import qualified Cardano.Ledger.Shelley.Rules.Chain as Shelley
+import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 
 import           Cardano.Slotting.Block (BlockNo (..))
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
@@ -72,9 +75,6 @@ import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
-import qualified Shelley.Spec.Ledger.PParams as Shelley
-import qualified Shelley.Spec.Ledger.STS.Chain as Shelley
-import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 insertShelleyBlock
     :: (MonadBaseControl IO m, MonadIO m)

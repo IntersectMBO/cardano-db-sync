@@ -14,9 +14,16 @@ import           Cardano.Prelude (Proxy (..), catMaybes, find)
 
 import           Cardano.BM.Trace (Trace)
 
-import qualified Cardano.Ledger.BaseTypes as Ledger
+
+import qualified Cardano.Chain.Genesis as Byron
+import           Cardano.Crypto.ProtocolMagic
 
 import           Cardano.Db (textShow)
+
+import qualified Cardano.Ledger.BaseTypes as Ledger
+import qualified Cardano.Ledger.Shelley.Genesis as Shelley
+
+import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Cardano.Sync.Config.Cardano
 import           Cardano.Sync.Config.Shelley
@@ -24,11 +31,6 @@ import           Cardano.Sync.Config.Types
 import           Cardano.Sync.Error
 import           Cardano.Sync.LedgerState
 import           Cardano.Sync.Types
-
-import           Cardano.Slotting.Slot (SlotNo (..))
-
-import qualified Cardano.Chain.Genesis as Byron
-import           Cardano.Crypto.ProtocolMagic
 
 import           Data.ByteString (ByteString)
 import           Data.Text (Text)
@@ -40,7 +42,6 @@ import           Ouroboros.Network.Block (Point (..))
 import           Ouroboros.Network.Magic (NetworkMagic (..))
 import qualified Ouroboros.Network.Point as Point
 
-import qualified Shelley.Spec.Ledger.Genesis as Shelley
 
 data SyncEnv = SyncEnv
   { envProtocol :: !SyncProtocol

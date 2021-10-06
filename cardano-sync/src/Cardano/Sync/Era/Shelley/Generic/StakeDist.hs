@@ -16,6 +16,8 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
 import           Cardano.Ledger.Era (Crypto)
 import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
+import qualified Cardano.Ledger.Shelley.EpochBoundary as Shelley
+import qualified Cardano.Ledger.Shelley.LedgerState as Shelley hiding (_delegations)
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
@@ -31,9 +33,6 @@ import           Ouroboros.Consensus.Cardano.Block (LedgerState (..))
 import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
-
-import qualified Shelley.Spec.Ledger.EpochBoundary as Shelley
-import qualified Shelley.Spec.Ledger.LedgerState as Shelley hiding (_delegations)
 
 
 data StakeDist = StakeDist
