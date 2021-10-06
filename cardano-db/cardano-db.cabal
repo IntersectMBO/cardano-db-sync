@@ -51,6 +51,7 @@ library
 
   build-depends:        aeson
                       , base                            >= 4.14         && < 4.16
+                      , bech32
                       , base16-bytestring
                       , bytestring
                       , cardano-crypto-class
@@ -61,6 +62,7 @@ library
                       , conduit
                       , conduit-extra
                       , contra-tracer
+                      , cryptonite
                       , directory
                       , esqueleto
                       , extra
@@ -68,6 +70,7 @@ library
                       , filepath
                       , iohk-monitoring
                       , lifted-base
+                      , memory
                       , monad-control
                       , monad-logger
                       , ouroboros-network
@@ -108,10 +111,17 @@ test-suite test
                         Test.Property.Cardano.Db.Types
                         Test.Property.Upstream
 
+
   build-depends:        base                            >= 4.14         && < 4.16
                       , aeson
+                      , base16-bytestring
+                      , bytestring
+                      , cardano-crypto-class
                       , cardano-db
                       , cardano-ledger-byron
+                      , cardano-ledger-core
+                      , cardano-ledger-shelley-ma
+                      , ouroboros-consensus-shelley
                       , persistent
                       , hedgehog
                       , text

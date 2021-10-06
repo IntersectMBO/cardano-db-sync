@@ -9,9 +9,20 @@ module Test.Property.Cardano.Db.Types
 
 import           Cardano.Chain.Common (maxLovelaceVal)
 
+import qualified Cardano.Crypto.Hash as Crypto
+
+import           Cardano.Db
+
+import qualified Cardano.Ledger.Hashes as Ledger
+import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..))
+
 import qualified Data.Aeson as Aeson
 import           Data.Bifunctor (first)
+import qualified Data.ByteString.Base16 as Base16
+import           Data.ByteString.Char8 (ByteString)
+import           Data.Either (fromRight)
 import           Data.Int (Int64)
+import           Data.Maybe (fromMaybe)
 import           Data.Ratio ((%))
 import qualified Data.Text as Text
 import           Data.WideWord.Word128 (Word128 (..))
@@ -20,14 +31,14 @@ import           Data.Word (Word64)
 import           Database.Persist.Class (PersistField (..))
 import           Database.Persist.Types (PersistValue (..))
 
-import           Cardano.Db
-
-import           Numeric.Natural (Natural)
-
 import           Hedgehog (Gen, Property, discover, (===))
 import qualified Hedgehog as H
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
+
+import           Numeric.Natural (Natural)
+
+import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
 
 
 prop_roundtrip_Ada_via_JSON :: Property
@@ -35,6 +46,56 @@ prop_roundtrip_Ada_via_JSON =
   H.withTests 5000 . H.property $ do
     mv <- H.forAll genAda
     H.tripping mv Aeson.encode Aeson.eitherDecode
+
+prop_AssetFingerprint :: Property
+prop_AssetFingerprint =
+    H.withTests 1 . H.property $
+      mapM_ (\(p, a, f) -> mkAssetFingerprint p a === f) testVectors
+  where
+    testVectors :: [(PolicyID StandardCrypto, AssetName, AssetFingerprint)]
+    testVectors =
+      [ ( mkPolicyId "7eae28af2208be856f7a119668ae52a49b73725e326dc16579dcc373"
+        , AssetName ""
+        , AssetFingerprint "asset1rjklcrnsdzqp65wjgrg55sy9723kw09mlgvlc3"
+        )
+      , ( mkPolicyId "7eae28af2208be856f7a119668ae52a49b73725e326dc16579dcc37e"
+        , AssetName ""
+        , AssetFingerprint "asset1nl0puwxmhas8fawxp8nx4e2q3wekg969n2auw3"
+        )
+      , ( mkPolicyId "1e349c9bdea19fd6c147626a5260bc44b71635f398b67c59881df209"
+        , AssetName ""
+        , AssetFingerprint "asset1uyuxku60yqe57nusqzjx38aan3f2wq6s93f6ea"
+        )
+      , ( mkPolicyId "7eae28af2208be856f7a119668ae52a49b73725e326dc16579dcc373"
+        , hexAssetName "504154415445"
+        , AssetFingerprint "asset13n25uv0yaf5kus35fm2k86cqy60z58d9xmde92"
+        )
+      , ( mkPolicyId "1e349c9bdea19fd6c147626a5260bc44b71635f398b67c59881df209"
+        , hexAssetName "504154415445"
+        , AssetFingerprint "asset1hv4p5tv2a837mzqrst04d0dcptdjmluqvdx9k3"
+        )
+      , ( mkPolicyId "1e349c9bdea19fd6c147626a5260bc44b71635f398b67c59881df209"
+        , hexAssetName "7eae28af2208be856f7a119668ae52a49b73725e326dc16579dcc373"
+        , AssetFingerprint "asset1aqrdypg669jgazruv5ah07nuyqe0wxjhe2el6f"
+        )
+      , ( mkPolicyId "7eae28af2208be856f7a119668ae52a49b73725e326dc16579dcc373"
+        , hexAssetName "1e349c9bdea19fd6c147626a5260bc44b71635f398b67c59881df209"
+        , AssetFingerprint "asset17jd78wukhtrnmjh3fngzasxm8rck0l2r4hhyyt"
+        )
+      , ( mkPolicyId "7eae28af2208be856f7a119668ae52a49b73725e326dc16579dcc373"
+        , hexAssetName "0000000000000000000000000000000000000000000000000000000000000000"
+        , AssetFingerprint "asset1pkpwyknlvul7az0xx8czhl60pyel45rpje4z8w"
+        )
+      ]
+
+    mkPolicyId :: ByteString -> PolicyID StandardCrypto
+    mkPolicyId =
+      PolicyID . Ledger.ScriptHash . fromMaybe (error "mkPolicyId:Hash") . Crypto.hashFromBytes
+        . fromRight (error "mkPolicyId:Base16") . Base16.decode
+
+    hexAssetName :: ByteString -> AssetName
+    hexAssetName = AssetName . fromRight (error "hexAssetName") . Base16.decode
+
 
 prop_roundtrip_DbInt65_PersistField :: Property
 prop_roundtrip_DbInt65_PersistField =

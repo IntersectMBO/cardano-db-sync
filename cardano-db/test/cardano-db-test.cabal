@@ -31,8 +31,8 @@ library
                         Test.IO.Cardano.Db.Util
 
 
-  build-depends:        aeson
-                      , base                            >= 4.14         && < 4.16
+  build-depends:        base                            >= 4.14         && < 4.16
+                      , aeson
                       , bytestring
                       , cardano-db
                       , cardano-ledger-byron
@@ -42,4 +42,18 @@ library
                       , text
                       , time
                       , transformers
+                      , wide-word
+
+                      , base16-bytestring
+                      , bytestring
+                      , aeson
+                      , cardano-crypto-class
+                      , cardano-db
+                      , cardano-ledger-byron
+                      , cardano-ledger-core
+                      , cardano-ledger-shelley-ma
+                      , ouroboros-consensus-shelley
+                      , persistent
+                      , hedgehog
+                      , text
                       , wide-word

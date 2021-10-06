@@ -1,6 +1,7 @@
 module Cardano.Db
   ( module X
 
+  , AssetFingerprint (..)
   -- Data types from Cardano.Db.Schema:
   , Block (..)
   , Tx (..)
