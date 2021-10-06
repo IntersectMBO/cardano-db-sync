@@ -46,6 +46,9 @@ import           Cardano.Ledger.Alonzo.Scripts (CostModel (..))
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Credential as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
+import qualified Cardano.Ledger.Shelley.Scripts as Shelley
+import qualified Cardano.Ledger.Shelley.Tx as Shelley
+import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 
 import           Cardano.Ledger.Coin (Coin (..), DeltaCoin)
 import qualified Cardano.Ledger.SafeHash as Ledger
@@ -62,10 +65,6 @@ import qualified Data.Text.Encoding as Text
 
 import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardCrypto, StandardMary,
                    StandardShelley)
-
-import qualified Shelley.Spec.Ledger.Scripts as Shelley
-import qualified Shelley.Spec.Ledger.Tx as Shelley
-import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 
 annotateStakingCred :: Ledger.Network -> Ledger.StakeCredential era -> Ledger.RewardAcnt era

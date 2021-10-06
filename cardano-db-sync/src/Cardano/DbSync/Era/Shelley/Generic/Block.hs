@@ -32,6 +32,9 @@ import           Cardano.Ledger.Crypto (VRF)
 import           Cardano.Ledger.Era (Crypto, SupportsSegWit (..))
 import qualified Cardano.Ledger.Era as Ledger
 import           Cardano.Ledger.SafeHash (SafeToHash)
+import qualified Cardano.Ledger.Shelley.BlockChain as Shelley
+import qualified Cardano.Ledger.Shelley.PParams as Shelley
+import qualified Cardano.Ledger.Shelley.Tx as Shelley
 
 import           Cardano.Prelude
 
@@ -48,9 +51,6 @@ import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
 
 import           Ouroboros.Network.Block (BlockNo (..))
 
-import qualified Shelley.Spec.Ledger.BlockChain as Shelley
-import qualified Shelley.Spec.Ledger.PParams as Shelley
-import qualified Shelley.Spec.Ledger.Tx as Shelley
 
 data Block = Block
   { blkEra :: !BlockEra

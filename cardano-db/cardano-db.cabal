@@ -55,6 +55,7 @@ library
                       , bytestring
                       , cardano-crypto-class
                       , cardano-ledger-core
+                      , cardano-ledger-shelley
                       , cardano-slotting
                       , containers
                       , conduit
@@ -79,7 +80,6 @@ library
                       , resourcet
                       , resource-pool
                       , scientific
-                      , shelley-spec-ledger
                       , text
                       , template-haskell
                       , time

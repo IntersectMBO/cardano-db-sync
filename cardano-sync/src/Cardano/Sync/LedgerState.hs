@@ -48,6 +48,10 @@ import           Cardano.Ledger.Credential (StakeCredential)
 import           Cardano.Ledger.Era
 import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import           Cardano.Ledger.Shelley.Constraints (UsesValue)
+import           Cardano.Ledger.Shelley.LedgerState (EpochState (..))
+import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
+import qualified Cardano.Ledger.Shelley.Rules.Chain as Shelley
+
 
 import           Cardano.Sync.Config.Types
 import qualified Cardano.Sync.Era.Cardano.Util as Cardano
@@ -102,10 +106,6 @@ import           Ouroboros.Network.AnchoredSeq (Anchorable (..), AnchoredSeq (..
 import qualified Ouroboros.Network.AnchoredSeq as AS
 import           Ouroboros.Network.Block (HeaderHash, Point (..))
 import qualified Ouroboros.Network.Point as Point
-
-import           Shelley.Spec.Ledger.LedgerState (EpochState (..))
-import qualified Shelley.Spec.Ledger.LedgerState as Shelley
-import qualified Shelley.Spec.Ledger.STS.Chain as Shelley
 
 import           System.Directory (doesFileExist, listDirectory, removeFile)
 import           System.FilePath (dropExtension, takeExtension, (</>))

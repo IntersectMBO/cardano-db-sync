@@ -182,7 +182,7 @@ runSyncNodeNodeClient metricsSetters env iomgr trce plugin runDBThreadFunction c
   queryVar <- newStateQueryTMVar
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   void $ subscribe
-    (localSnocket iomgr socketPath)
+    (localSnocket iomgr)
     codecConfig
     (envNetworkMagic env)
     networkSubscriptionTracers

@@ -53,6 +53,11 @@ import qualified Cardano.Ledger.Era as Ledger
 import qualified Cardano.Ledger.Mary as Mary
 import           Cardano.Ledger.Mary.Value (AssetName, PolicyID, Value (..))
 import qualified Cardano.Ledger.SafeHash as Ledger
+import qualified Cardano.Ledger.Shelley.CompactAddr as Ledger
+import           Cardano.Ledger.Shelley.Scripts (ScriptHash)
+import qualified Cardano.Ledger.Shelley.Scripts as Shelley
+import qualified Cardano.Ledger.Shelley.Tx as Shelley
+import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as ShelleyMa
 import qualified Cardano.Ledger.ShelleyMA.TxBody as ShelleyMa
 
@@ -71,11 +76,6 @@ import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlo
                    StandardMary, StandardShelley)
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra)
 
-import qualified Shelley.Spec.Ledger.CompactAddr as Ledger
-import           Shelley.Spec.Ledger.Scripts (ScriptHash)
-import qualified Shelley.Spec.Ledger.Scripts as Shelley
-import qualified Shelley.Spec.Ledger.Tx as Shelley
-import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 data Tx = Tx
   { txHash :: !ByteString

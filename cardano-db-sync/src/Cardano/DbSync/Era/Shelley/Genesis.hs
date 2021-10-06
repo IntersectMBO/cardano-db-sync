@@ -32,6 +32,10 @@ import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.Coin as Ledger
 import           Cardano.Ledger.Credential (Credential (KeyHashObj))
 import           Cardano.Ledger.Era (Crypto)
+import qualified Cardano.Ledger.Shelley.Genesis as Shelley
+import           Cardano.Ledger.Shelley.Scripts ()
+import qualified Cardano.Ledger.Shelley.TxBody as Shelley
+import qualified Cardano.Ledger.Shelley.UTxO as Shelley
 
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Map.Strict as Map
@@ -45,10 +49,6 @@ import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShel
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..), ShelleyGenesisStaking (..),
                    emptyGenesisStaking)
 
-import qualified Shelley.Spec.Ledger.Genesis as Shelley
-import           Shelley.Spec.Ledger.Scripts ()
-import qualified Shelley.Spec.Ledger.TxBody as Shelley
-import qualified Shelley.Spec.Ledger.UTxO as Shelley
 
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.

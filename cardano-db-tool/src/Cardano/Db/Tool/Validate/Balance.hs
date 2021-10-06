@@ -19,6 +19,11 @@ import           Cardano.Ledger.Address (BootstrapAddress (..))
 import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
 import qualified Cardano.Ledger.Core as Ledger
 import           Cardano.Ledger.Era (Crypto)
+import           Cardano.Ledger.Shelley.API (Addr (..), Coin (..))
+import           Cardano.Ledger.Shelley.CompactAddr (CompactAddr, compactAddr)
+import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
+import qualified Cardano.Ledger.Shelley.TxBody as Shelley
+import qualified Cardano.Ledger.Shelley.UTxO as Shelley
 
 import           Cardano.Ledger.Compactible
 import           Cardano.Ledger.Val
@@ -32,12 +37,6 @@ import           Ouroboros.Consensus.Cardano.Block (CardanoBlock, LedgerState (.
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import           Ouroboros.Consensus.Shelley.Ledger.Ledger
 
-import           Shelley.Spec.Ledger.CompactAddr (CompactAddr, compactAddr)
-import qualified Shelley.Spec.Ledger.LedgerState as Shelley
-import qualified Shelley.Spec.Ledger.TxBody as Shelley
-import qualified Shelley.Spec.Ledger.UTxO as Shelley
-
-import           Shelley.Spec.Ledger.API (Addr (..), Coin (..))
 
 -- Given an address, return it's current UTxO balance.
 ledgerAddrBalance :: Text -> LedgerState (CardanoBlock StandardCrypto) -> Either Text Word64

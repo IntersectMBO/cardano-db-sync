@@ -81,6 +81,7 @@ library
                       , cardano-ledger-alonzo
                       , cardano-ledger-byron
                       , cardano-ledger-core
+                      , cardano-ledger-shelley
                       , cardano-ledger-shelley-ma
                       -- Only for some orphan tracing instances.
                       , cardano-node
@@ -105,7 +106,6 @@ library
                       , ouroboros-consensus-shelley
                       , ouroboros-network
                       , ouroboros-network-framework
-                      , shelley-spec-ledger
                       , small-steps
                       , stm
                       , strict
