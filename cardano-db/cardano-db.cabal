@@ -48,15 +48,16 @@ library
                         Cardano.Db.Text
                         Cardano.Db.Types
 
-
   build-depends:        aeson
                       , base                            >= 4.14         && < 4.16
                       , bech32
                       , base16-bytestring
                       , bytestring
                       , cardano-crypto-class
+                      , cardano-crypto-wrapper
                       , cardano-ledger-core
                       , cardano-ledger-shelley
+                      , cardano-ledger-shelley-ma
                       , cardano-slotting
                       , containers
                       , conduit
@@ -73,6 +74,7 @@ library
                       , memory
                       , monad-control
                       , monad-logger
+                      , ouroboros-consensus-shelley
                       , ouroboros-network
                       , persistent
                       , persistent-documentation

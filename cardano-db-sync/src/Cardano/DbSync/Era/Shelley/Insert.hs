@@ -248,7 +248,7 @@ resolveTxInputs txIn = do
 insertTxOut
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Generic.TxOut
-    -> ExceptT e (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertTxOut tracer txId (Generic.TxOut index addr addrRaw value maMap dataHash) = do
     mSaId <- lift $ insertStakeAddressRefIfMissing txId addr
     txOutId <- lift . DB.insertTxOut $
@@ -821,24 +821,24 @@ insertMaTxMint
     => Trace IO Text -> DB.TxId -> Value StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertMaTxMint _tracer txId (Value _adaShouldAlwaysBeZeroButWeDoNotCheck mintMap) =
-    mapM_ insertOuter $ Map.toList mintMap
+    mapM_ (lift . insertOuter) $ Map.toList mintMap
   where
     insertOuter
         :: (MonadBaseControl IO m, MonadIO m)
         => (PolicyID StandardCrypto, Map AssetName Integer)
-        -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+        -> ReaderT SqlBackend m ()
     insertOuter (policy, aMap) =
       mapM_ (insertInner policy) $ Map.toList aMap
 
     insertInner
         :: (MonadBaseControl IO m, MonadIO m)
         => PolicyID StandardCrypto -> (AssetName, Integer)
-        -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-    insertInner policy (aname, amount) =
-      void . lift . DB.insertMaTxMint $
+        -> ReaderT SqlBackend m ()
+    insertInner policy (aname, amount) = do
+      maId <- insertMultiAsset policy aname
+      void . DB.insertMaTxMint $
         DB.MaTxMint
-          { DB.maTxMintPolicy = Generic.unScriptHash (policyID policy)
-          , DB.maTxMintName = assetName aname
+          { DB.maTxMintIdent = maId
           , DB.maTxMintQuantity = DB.integerToDbInt65 amount
           , DB.maTxMintTxId = txId
           }
@@ -846,29 +846,45 @@ insertMaTxMint _tracer txId (Value _adaShouldAlwaysBeZeroButWeDoNotCheck mintMap
 insertMaTxOut
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxOutId -> Map (PolicyID StandardCrypto) (Map AssetName Integer)
-    -> ExceptT e (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertMaTxOut _tracer txOutId maMap =
-    mapM_ insertOuter $ Map.toList maMap
+    mapM_ (lift . insertOuter) $ Map.toList maMap
   where
     insertOuter
         :: (MonadBaseControl IO m, MonadIO m)
         => (PolicyID StandardCrypto, Map AssetName Integer)
-        -> ExceptT e (ReaderT SqlBackend m) ()
+        -> ReaderT SqlBackend m ()
     insertOuter (policy, aMap) =
       mapM_ (insertInner policy) $ Map.toList aMap
 
     insertInner
         :: (MonadBaseControl IO m, MonadIO m)
         => PolicyID StandardCrypto -> (AssetName, Integer)
-        -> ExceptT e (ReaderT SqlBackend m) ()
-    insertInner policy (aname, amount) =
-      void . lift . DB.insertMaTxOut $
+        -> ReaderT SqlBackend m ()
+    insertInner policy (aname, amount) = do
+      maId <- insertMultiAsset policy aname
+      void . DB.insertMaTxOut $
         DB.MaTxOut
-          { DB.maTxOutPolicy = Generic.unScriptHash (policyID policy)
-          , DB.maTxOutName = assetName aname
+          { DB.maTxOutIdent = maId
           , DB.maTxOutQuantity = DbWord64 (fromIntegral amount)
           , DB.maTxOutTxOutId = txOutId
           }
+
+insertMultiAsset
+    :: (MonadBaseControl IO m, MonadIO m)
+    => PolicyID StandardCrypto -> AssetName
+    -> ReaderT SqlBackend m DB.MultiAssetId
+insertMultiAsset p@(PolicyID pol) a@(AssetName aName) = do
+  mId <- DB.queryMultiAssetId (Generic.unScriptHash pol) aName
+  case mId of
+    Just maId -> pure maId
+    Nothing -> DB.insertMultiAssetUnchecked $
+                DB.MultiAsset
+                  { DB.multiAssetPolicy = Generic.unScriptHash pol
+                  , DB.multiAssetName = aName
+                  , DB.multiAssetFingerprint = DB.unAssetFingerprint (DB.mkAssetFingerprint p a)
+                  }
+
 
 insertScript
     :: (MonadBaseControl IO m, MonadIO m)
