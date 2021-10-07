@@ -51,6 +51,10 @@ module Cardano.Db.Query
   , queryUtxoAtSlotNo
   , queryWithdrawalsUpToBlockNo
   , queryAdaPots
+  , queryPoolOfflineData
+  , queryRetiredPools
+  , queryReservedTickers
+  , existsPoolHash
   , existsPoolHashId
   , existsPoolMetadataRefId
 
@@ -610,6 +614,37 @@ queryAdaPots blkId = do
             where_ (adaPots  ^. AdaPotsBlockId ==. val blkId)
             pure adaPots
   pure $ fmap entityVal (listToMaybe res)
+
+queryReservedTickers :: MonadIO m => ReaderT SqlBackend m [(Text, ByteString)]
+queryReservedTickers = do
+  res <- select . from $ \pod -> do
+            pure $ (pod ^. PoolOfflineDataTickerName, pod ^. PoolOfflineDataHash)
+  pure $ unValue2 <$> res
+
+queryPoolOfflineData :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe PoolOfflineData)
+queryPoolOfflineData poolHash poolMetadataHash = do
+  res <- select . from $ \ (pod `InnerJoin` ph) -> do
+            on (pod ^. PoolOfflineDataPoolId ==. ph ^. PoolHashId)
+            where_ (ph ^. PoolHashHashRaw ==.  val poolHash)
+            where_ (pod  ^. PoolOfflineDataHash ==. val poolMetadataHash)
+            limit 1
+            pure pod
+  pure (entityVal <$> listToMaybe res)
+
+queryRetiredPools :: MonadIO m => ReaderT SqlBackend m [ByteString]
+queryRetiredPools = do
+  res <- select . from $ \(retired `InnerJoin` poolHash) -> do
+            on (retired ^. PoolRetireHashId ==. poolHash ^. PoolHashId)
+            pure (poolHash ^. PoolHashHashRaw)
+  pure $ unValue <$> res
+
+existsPoolHash :: MonadIO m => ByteString -> ReaderT SqlBackend m Bool
+existsPoolHash hsh = do
+  res <- select . from $ \ poolHash -> do
+            where_ (poolHash  ^. PoolHashHashRaw ==. val hsh)
+            limit 1
+            pure (poolHash ^. PoolHashId)
+  pure $ not (null res)
 
 existsPoolHashId :: MonadIO m => PoolHashId -> ReaderT SqlBackend m Bool
 existsPoolHashId phid = do

@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
+
 
 module Cardano.Db.Error
   ( LookupFail (..)
@@ -6,13 +8,14 @@ module Cardano.Db.Error
   ) where
 
 
+import           Data.Aeson (ToJSON (..))
 import qualified Data.ByteString.Base16 as Base16
 import           Data.ByteString.Char8 (ByteString)
+import           GHC.Generics
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import           Data.Word (Word16, Word64)
-
 
 data LookupFail
   = DbLookupBlockHash !ByteString
@@ -25,12 +28,15 @@ data LookupFail
   | DbMetaEmpty
   | DbMetaMultipleRows
   | DBMultipleGenesis
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
+
+instance ToJSON LookupFail where
+    toJSON _ = undefined -- _failure@(DbLookupBlockHash _hash) = undefined
 
 renderLookupFail :: LookupFail -> Text
 renderLookupFail lf =
   case lf of
-    DbLookupBlockHash h -> "block hash " <> base16encode h
+    DbLookupBlockHash h -> "The block hash " <> base16encode h <> " is missing from the DB."
     DbLookupBlockId blkid -> "block id " <> textShow blkid
     DbLookupMessage txt -> txt
     DbLookupTxHash h -> "tx hash " <> base16encode h

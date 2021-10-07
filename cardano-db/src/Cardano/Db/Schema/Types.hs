@@ -5,7 +5,6 @@ module Cardano.Db.Schema.Types
   ( Address (..)
   , AddressHash (..)
   , PaymentAddrHash (..)
-  , PoolIdent (..)
   , PoolMetaHash (..)
   , PoolUrl (..)
   , TickerName (..)

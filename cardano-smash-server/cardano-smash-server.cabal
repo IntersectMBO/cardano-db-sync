@@ -53,7 +53,15 @@ library
                         -Wpartial-fields
                         -fno-warn-orphans
 
-  exposed-modules:
+  exposed-modules:      Cardano.SMASH.Server.Api
+                        Cardano.SMASH.Server.FetchPolicies
+                        Cardano.SMASH.Server.Impl
+                        Cardano.SMASH.Server.Orphans
+                        Cardano.SMASH.Server.PoolApi
+                        Cardano.SMASH.Server.Run
+                        Cardano.SMASH.Server.Types
+
+  other-modules:        Paths_cardano_smash_server
 
   build-depends:
                         aeson
@@ -62,7 +70,9 @@ library
                       , cardano-prelude
                       , cardano-api
                       , base16-bytestring
+                      , http-conduit
                       , persistent
+                      , iohk-monitoring
                       , network-uri
                       , servant
                       , servant-server
@@ -70,8 +80,12 @@ library
                       , swagger2
                       , text
                       , time
+                      , transformers-except
                       , quiet
                       , wai
+                      , warp
+                      , cardano-slotting
+                      , cardano-db
 
   default-extensions:   NoImplicitPrelude
                         OverloadedStrings

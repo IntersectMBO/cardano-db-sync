@@ -38,6 +38,9 @@ import           Cardano.DbSync.Plugin.Default (defDbSyncNodePlugin)
 import           Cardano.DbSync.Rollback (unsafeRollback)
 import           Cardano.Sync.Database (runDbThread)
 
+import           Cardano.SMASH.Server.PoolApi
+import           Cardano.SMASH.Server.Run
+
 import           Cardano.Sync (Block (..), MetricSetters, SyncDataLayer (..), SyncNodePlugin (..),
                    configureLogging, runSyncNode)
 import           Cardano.Sync.Config.Types (ConfigFile (..), GenesisFile (..), LedgerStateDir (..),
@@ -78,8 +81,12 @@ runDbSyncNode metricsSetters mkPlugin knownMigrations params = do
           void $ unsafeRollback trce slotNo
 
         -- The separation of `cardano-db` and `cardano-sync` is such a *HUGE* pain in the neck.
-        runSyncNode (mkSyncDataLayer trce backend) metricsSetters trce (mkPlugin backend)
-            params (insertValidateGenesisDist backend) runDbThread
+        let syncNode = runSyncNode (mkSyncDataLayer trce backend) metricsSetters trce (mkPlugin backend)
+              params (insertValidateGenesisDist backend) runDbThread
+
+        let poolApi = postgresqlPoolApi trce
+
+        race_ syncNode (runApp poolApi 3100)
   where
     -- This is only necessary because `cardano-db` and `cardano-sync` both define
     -- this newtype, but the later does not depend on the former.
