@@ -43,10 +43,11 @@ validateLatestBlockTxs latestEpoch = do
 
 validateBlockTxs :: Word64 -> IO ()
 validateBlockTxs epoch = do
-  putStrF $ "All transactions for blocks in epoch " ++ show epoch
-                ++ " are present: "
+  putStrF $ "All transactions for blocks in epoch " ++ show epoch ++ " are present: "
   blks <- runDbNoLogging $ queryEpochBlockNumbers epoch
+  putStrLn "A"
   results <- mapM validateBlockCount blks
+  putStrLn "B"
   case lefts results of
     [] -> putStrLn $ greenText "ok"
     xs -> do
