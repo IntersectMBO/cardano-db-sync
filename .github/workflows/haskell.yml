@@ -53,7 +53,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y libpq-dev libpq5 net-tools postgresql
-        sudo pg_ctlcluster 13 main start
+        sudo pg_ctlcluster 14 main start
 
     - name: Install Postgres support (MacOS)
       if: matrix.os == 'macos-latest'
