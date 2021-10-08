@@ -9,7 +9,6 @@ module Cardano.DbSync.Database
   , lengthDbActionQueue
   , mkDbApply
   , newDbActionQueue
-  , runDbStartup
   , runDbThread
   , writeDbActionQueue
   ) where
@@ -27,7 +26,7 @@ import           Cardano.DbSync.DbAction
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState
 import           Cardano.DbSync.Metrics
-import           Cardano.DbSync.Plugin
+import           Cardano.DbSync.Default
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util hiding (whenJust)
 
@@ -46,14 +45,10 @@ data NextState
   | Done
   deriving Eq
 
-runDbStartup :: Trace IO Text -> SyncNodePlugin -> IO ()
-runDbStartup trce plugin =
-    mapM_ (\action -> action trce) $ plugOnStartup plugin
-
 runDbThread
-    :: Trace IO Text -> SyncEnv -> MetricSetters -> SyncNodePlugin -> DbActionQueue
+    :: Trace IO Text -> SyncEnv -> MetricSetters -> DbActionQueue
     -> IO ()
-runDbThread trce env metricsSetters plugin queue = do
+runDbThread trce env metricsSetters queue = do
     logInfo trce "Running DB thread"
     logException trce "runDBThread: " loop
     logInfo trce "Shutting down DB thread"
@@ -64,7 +59,7 @@ runDbThread trce env metricsSetters plugin queue = do
       when (length xs > 1) $ do
         logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
 
-      eNextState <- runExceptT $ runActions trce env plugin xs
+      eNextState <- runExceptT $ runActions env xs
 
       mBlock <- getDbLatestBlockInfo
       whenJust mBlock $ \ block -> do
@@ -79,9 +74,9 @@ runDbThread trce env metricsSetters plugin queue = do
 -- | Run the list of 'DbAction's. Block are applied in a single set (as a transaction)
 -- and other operations are applied one-by-one.
 runActions
-    :: Trace IO Text -> SyncEnv -> SyncNodePlugin -> [DbAction]
+    :: SyncEnv -> [DbAction]
     -> ExceptT SyncNodeError IO NextState
-runActions trce env plugin actions = do
+runActions env actions = do
     dbAction Continue actions
   where
     dbAction :: NextState -> [DbAction] -> ExceptT SyncNodeError IO NextState
@@ -92,18 +87,18 @@ runActions trce env plugin actions = do
         ([], DbFinish:_) -> do
             pure Done
         ([], DbRollBackToPoint pt resultVar : ys) -> do
-            runRollbacksDB trce plugin pt
-            res <- lift $ rollbackLedger trce plugin env pt
+            runRollbacksDB env pt
+            res <- lift $ rollbackLedger env pt
             lift $ atomically $ putTMVar resultVar res
             dbAction Continue ys
         (ys, zs) -> do
-          insertBlockList trce env plugin ys
+          insertBlockList env ys
           if null zs
             then pure Continue
             else dbAction Continue zs
 
-rollbackLedger :: Trace IO Text -> SyncNodePlugin -> SyncEnv -> CardanoPoint -> IO (Maybe [CardanoPoint])
-rollbackLedger _trce _plugin env point = do
+rollbackLedger :: SyncEnv -> CardanoPoint -> IO (Maybe [CardanoPoint])
+rollbackLedger env point = do
     mst <- loadLedgerAtPoint (envLedger env) point
     dbTipInfo <- getDbLatestBlockInfo
     case mst of
@@ -114,9 +109,8 @@ rollbackLedger _trce _plugin env point = do
         -- we just leave it here for extra validation.
         checkDBWithState statePoint dbTipInfo
         pure Nothing
-      Left lsfs -> do
-        points <- verifyFilePoints lsfs
-        pure $ Just points
+      Left lsfs ->
+        Just <$> verifyFilePoints lsfs
   where
 
     checkDBWithState :: CardanoPoint -> Maybe TipInfo -> IO ()
@@ -139,23 +133,16 @@ compareTips = go
     go  _ _ = False
 
 runRollbacksDB
-    :: Trace IO Text -> SyncNodePlugin -> CardanoPoint
+    :: SyncEnv -> CardanoPoint
     -> ExceptT SyncNodeError IO ()
-runRollbacksDB trce plugin point =
-  newExceptT
-    . traverseMEither (\ f -> f trce point)
-    $ plugRollbackBlock plugin
+runRollbacksDB env point =
+  newExceptT $ rollbackToPoint (envBackend env) (getTrace env) point
 
 insertBlockList
-    :: Trace IO Text -> SyncEnv -> SyncNodePlugin -> [BlockDetails]
+    :: SyncEnv -> [BlockDetails]
     -> ExceptT SyncNodeError IO ()
-insertBlockList trce env plugin blks =
-  -- Setting this to True will log all 'Persistent' operations which is great
-  -- for debugging, but otherwise is *way* too chatty.
-  --newExceptT $ traverseMEither insertBlock blks
-  newExceptT
-    . traverseMEither (\ f -> f trce env blks)
-    $ plugInsertBlock plugin
+insertBlockList env blks =
+  newExceptT $ insertDefaultBlock env blks
 
 -- | Split the DbAction list into a prefix containing blocks to apply and a postfix.
 spanDbApply :: [DbAction] -> ([BlockDetails], [DbAction])

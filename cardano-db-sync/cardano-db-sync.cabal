@@ -97,9 +97,8 @@ library
 
                         Cardano.DbSync.Metrics
 
-                        Cardano.DbSync.Plugin
-                        Cardano.DbSync.Plugin.Default
-                        Cardano.DbSync.Plugin.Epoch
+                        Cardano.DbSync.Default
+                        Cardano.DbSync.Epoch
 
                         Cardano.DbSync.Rollback
 
@@ -134,6 +133,7 @@ library
                       , cardano-protocol-tpraos
                       , cardano-slotting
                       , cborg
+                      , compact-map
                       , containers
                       , contra-tracer
                       , directory

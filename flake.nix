@@ -76,7 +76,7 @@
 
         packages = {
           inherit (devShell) devops;
-          inherit (pkgs) cardano-db-sync cardano-db-sync-extended cardano-node
+          inherit (pkgs) cardano-db-sync cardano-node
             dockerImage;
         }
         // exes
@@ -118,7 +118,7 @@
       }
     ) // {
       overlay = final: prev: with self.legacyPackages.${final.system}; {
-        inherit cardano-db-sync cardano-db-sync-extended cardano-node
+        inherit cardano-db-sync cardano-node
             dockerImage;
       };
       nixosModules = {

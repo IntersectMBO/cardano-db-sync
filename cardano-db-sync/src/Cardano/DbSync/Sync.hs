@@ -12,7 +12,6 @@ module Cardano.DbSync.Sync
   ( ConfigFile (..)
   , SyncCommand (..)
   , SyncNodeParams (..)
-  , SyncNodePlugin (..)
   , GenesisFile (..)
   , LedgerStateDir (..)
   , NetworkName (..)
@@ -41,11 +40,10 @@ import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (.
 
 import           Cardano.DbSync.Api
 import           Cardano.DbSync.Config
-import           Cardano.DbSync.Database (runDbStartup)
 import           Cardano.DbSync.DbAction
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Metrics
-import           Cardano.DbSync.Plugin (SyncNodePlugin (..))
+import           Cardano.DbSync.Epoch
 import           Cardano.DbSync.StateQuery (StateQueryTMVar, getSlotDetails, localStateQueryHandler,
                    newStateQueryTMVar)
 import           Cardano.DbSync.Tracing.ToObjectOrphans ()
@@ -59,6 +57,8 @@ import           Control.Monad.Trans.Except.Exit (orDie)
 import qualified Data.ByteString.Lazy as BSL
 import           Data.Functor.Contravariant (contramap)
 import qualified Data.Text as Text
+
+import           Database.Persist.Sql (SqlBackend)
 
 import           Network.Mux (MuxTrace, WithMuxBearer)
 import           Network.Mux.Types (MuxMode (..))
@@ -115,19 +115,19 @@ type RunDBThreadFunction
     =  Trace IO Text
     -> SyncEnv
     -> MetricSetters
-    -> SyncNodePlugin
     -> DbActionQueue
     -> IO ()
 
 runSyncNode
     :: MetricSetters
     -> Trace IO Text
-    -> SyncNodePlugin
+    -> SqlBackend
+    -> Bool
     -> SyncNodeParams
     -> InsertValidateGenesisFunction
     -> RunDBThreadFunction
     -> IO ()
-runSyncNode metricsSetters trce plugin enp insertValidateGenesisDist runDBThreadFunction =
+runSyncNode metricsSetters trce backend extendedOpt enp insertValidateGenesisDist runDBThreadFunction =
   withIOManager $ \iomgr -> do
 
     let configFile = enpConfigFile enp
@@ -145,20 +145,20 @@ runSyncNode metricsSetters trce plugin enp insertValidateGenesisDist runDBThread
 
       -- If the DB is empty it will be inserted, otherwise it will be validated (to make
       -- sure we are on the right chain).
-      insertValidateGenesisDist trce (dncNetworkName enc) genCfg (useShelleyInit $ dncShelleyHardFork enc)
+      insertValidateGenesisDist trce (dncNetworkName enc) genCfg (useShelleyInit enc)
 
-        -- Must run plugin startup after the genesis distribution has been inserted/validate.
-      liftIO $ runDbStartup trce plugin
       case genCfg of
           GenesisCardano {} -> do
-            syncEnv <- ExceptT $ mkSyncEnvFromConfig trce (enpLedgerStateDir enp) genCfg
-            liftIO $ runSyncNodeNodeClient metricsSetters syncEnv iomgr trce plugin
+            syncEnv <- ExceptT $ mkSyncEnvFromConfig trce backend (mkSyncOptions extendedOpt) (enpLedgerStateDir enp) genCfg
+            liftIO $ epochStartup syncEnv
+            liftIO $ runSyncNodeNodeClient metricsSetters syncEnv iomgr trce
                         runDBThreadFunction (enpSocketPath enp)
   where
-    useShelleyInit :: HardFork.TriggerHardFork -> Bool
-    useShelleyInit trigger = case trigger of
-      HardFork.TriggerHardForkAtEpoch (EpochNo 0) -> True
-      _ -> False
+    useShelleyInit :: SyncNodeConfig -> Bool
+    useShelleyInit cfg =
+      case dncShelleyHardFork cfg of
+        HardFork.TriggerHardForkAtEpoch (EpochNo 0) -> True
+        _ -> False
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -167,11 +167,10 @@ runSyncNodeNodeClient
     -> SyncEnv
     -> IOManager
     -> Trace IO Text
-    -> SyncNodePlugin
     -> RunDBThreadFunction
     -> SocketPath
     -> IO ()
-runSyncNodeNodeClient metricsSetters env iomgr trce plugin runDBThreadFunction (SocketPath socketPath) = do
+runSyncNodeNodeClient metricsSetters env iomgr trce runDBThreadFunction (SocketPath socketPath) = do
   queryVar <- newStateQueryTMVar
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   void $ subscribe
@@ -180,7 +179,7 @@ runSyncNodeNodeClient metricsSetters env iomgr trce plugin runDBThreadFunction (
     (envNetworkMagic env)
     networkSubscriptionTracers
     clientSubscriptionParams
-    (dbSyncProtocols trce env metricsSetters plugin queryVar runDBThreadFunction)
+    (dbSyncProtocols trce env metricsSetters queryVar runDBThreadFunction)
   where
     codecConfig :: CodecConfig CardanoBlock
     codecConfig = configCodec $ Consensus.pInfoConfig (leProtocolInfo $ envLedger env)
@@ -215,12 +214,12 @@ runSyncNodeNodeClient metricsSetters env iomgr trce plugin runDBThreadFunction (
     handshakeTracer = toLogObject $ appendName "Handshake" trce
 
 dbSyncProtocols
-    :: Trace IO Text -> SyncEnv -> MetricSetters -> SyncNodePlugin
+    :: Trace IO Text -> SyncEnv -> MetricSetters
     -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
     -> RunDBThreadFunction -> Network.NodeToClientVersion -> ClientCodecs CardanoBlock IO
     -> ConnectionId LocalAddress
     -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols trce env metricsSetters plugin queryVar runDBThreadFunction version codecs _connectionId =
+dbSyncProtocols trce env metricsSetters queryVar runDBThreadFunction version codecs _connectionId =
     NodeToClientProtocols
       { localChainSyncProtocol = localChainSyncPtcl
       , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -245,13 +244,13 @@ dbSyncProtocols trce env metricsSetters plugin queryVar runDBThreadFunction vers
         actionQueue <- newDbActionQueue
 
         race_
-            (runDBThreadFunction trce env metricsSetters plugin actionQueue)
+            (runDBThreadFunction trce env metricsSetters actionQueue)
             (runPipelinedPeer
                 localChainSyncTracer
                 (cChainSyncCodec codecs)
                 channel
                 (chainSyncClientPeerPipelined
-                    $ chainSyncClient plugin metricsSetters trce env queryVar latestPoints currentTip actionQueue)
+                    $ chainSyncClient metricsSetters trce env queryVar latestPoints currentTip actionQueue)
             )
 
         atomically $ writeDbActionQueue actionQueue DbFinish
@@ -324,8 +323,7 @@ getCurrentTipBlockNo = do
 -- be correct. This is not an issue, because we only use it for performance reasons
 -- in the pipeline policy.
 chainSyncClient
-    :: SyncNodePlugin
-    -> MetricSetters
+    :: MetricSetters
     -> Trace IO Text
     -> SyncEnv
     -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
@@ -333,7 +331,7 @@ chainSyncClient
     -> WithOrigin BlockNo
     -> DbActionQueue
     -> ChainSyncClientPipelined CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-chainSyncClient _plugin metricsSetters trce env queryVar latestPoints currentTip actionQueue = do
+chainSyncClient metricsSetters trce env queryVar latestPoints currentTip actionQueue = do
     ChainSyncClientPipelined $ pure $ clientPipelinedStIdle currentTip latestPoints
   where
     clientPipelinedStIdle

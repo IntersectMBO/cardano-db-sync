@@ -4,7 +4,6 @@ packages:
   cardano-db
   cardano-db/test
   cardano-db-sync
-  cardano-db-sync-extended
   cardano-db-tool
   cardano-smash-server
 
@@ -20,9 +19,6 @@ package cardano-db
   ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields -Wunused-imports -Wunused-packages
 
 package cardano-db-sync
-  ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields -Wunused-imports -Wunused-packages
-
-package cardano-db-sync-extended
   ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields -Wunused-imports -Wunused-packages
 
 package cardano-db-tool

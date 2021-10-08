@@ -41,7 +41,6 @@
 
 # The main contents of the image.
 , cardano-db-sync
-, cardano-db-sync-extended
 , scripts
 , extendedScripts
 
@@ -119,7 +118,6 @@ let
     fromImage = baseImage;
     contents = [
       cardano-db-sync
-      cardano-db-sync-extended
     ];
   };
 

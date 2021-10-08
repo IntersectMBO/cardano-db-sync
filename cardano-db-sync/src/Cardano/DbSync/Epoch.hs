@@ -3,10 +3,9 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Cardano.DbSync.Plugin.Epoch
-  ( epochPluginOnStartup
-  , epochPluginInsertBlock
-  , epochPluginRollbackBlock
+module Cardano.DbSync.Epoch
+  ( epochStartup
+  , epochInsert
   ) where
 
 import           Cardano.Prelude hiding (from, on, replace)
@@ -47,55 +46,44 @@ import           System.IO.Unsafe (unsafePerformIO)
 --    updated on each new block.
 --
 -- When in syncing mode, the row for the current epoch being synced may be incorrect.
+epochStartup :: SyncEnv -> IO ()
+epochStartup env =
+  when (extended $ envOptions env) $ do
+    let trce = getTrace env
+    let backend = envBackend env
+    DB.runDbIohkLogging backend trce $ do
+      liftIO . logInfo trce $ "epochStartup: Checking"
+      mlbe <- queryLatestEpochNo
+      case mlbe of
+        Nothing ->
+          pure ()
+        Just lbe -> do
+          let backOne = if lbe == 0 then 0 else lbe - 1
+          liftIO $ atomicWriteIORef latestCachedEpochVar (Just backOne)
 
-
-epochPluginOnStartup :: SqlBackend -> Trace IO Text -> IO (Either a ())
-epochPluginOnStartup backend trce =
-  Right <<$>> DB.runDbIohkLogging backend trce $ do
-    liftIO . logInfo trce $ "epochPluginOnStartup: Checking"
-    mlbe <- queryLatestEpochNo
-    case mlbe of
-      Nothing ->
-        pure ()
-      Just lbe -> do
-        let backOne = if lbe == 0 then 0 else lbe - 1
-        liftIO $ atomicWriteIORef latestCachedEpochVar (Just backOne)
-
-epochPluginInsertBlock
-    :: SqlBackend -> Trace IO Text -> SyncEnv -> [BlockDetails]
-    -> IO (Either SyncNodeError ())
-epochPluginInsertBlock backend trce _dbSyncEnv blockDetails =
-    DB.runDbIohkLogging backend trce $ traverseMEither insert blockDetails
+epochInsert :: Trace IO Text -> BlockDetails -> ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
+epochInsert trce (BlockDetails cblk details) = do
+  case cblk of
+    BlockByron bblk ->
+      case byronBlockRaw bblk of
+        Byron.ABOBBoundary {} ->
+          -- For the OBFT era there are no boundary blocks so we ignore them even in
+          -- the Ouroboros Classic era.
+          pure $ Right ()
+        Byron.ABOBBlock _blk ->
+          insertBlock trce details
+    BlockShelley {} -> epochUpdate
+    BlockAllegra {} -> epochUpdate
+    BlockMary {} -> epochUpdate
+    BlockAlonzo {} -> epochUpdate
   where
-    insert :: BlockDetails -> ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
-    insert (BlockDetails cblk details) = do
-      case cblk of
-        BlockByron bblk ->
-          case byronBlockRaw bblk of
-            Byron.ABOBBoundary {} ->
-              -- For the OBFT era there are no boundary blocks so we ignore them even in
-              -- the Ouroboros Classic era.
-              pure $ Right ()
-
-            Byron.ABOBBlock _blk ->
-              insertBlock trce details
-        BlockShelley {} -> epochUpdate details
-        BlockAllegra {} -> epochUpdate details
-        BlockMary {} -> epochUpdate details
-        BlockAlonzo {} -> epochUpdate details
-
     -- What we do here is completely independent of Shelley/Allegra/Mary eras.
-    epochUpdate :: SlotDetails -> ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
-    epochUpdate details = do
+    epochUpdate :: ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
+    epochUpdate = do
       when (sdSlotTime details > sdCurrentTime details) $
         liftIO . logError trce $ mconcat
           [ "Slot time '", textShow (sdSlotTime details) ,  "' is in the future" ]
       insertBlock trce details
-
--- Nothing to be done here.
--- Rollback will take place in the Default plugin and the epoch table will just be recalculated.
-epochPluginRollbackBlock :: Trace IO Text -> CardanoPoint -> IO (Either SyncNodeError ())
-epochPluginRollbackBlock _ _ = pure $ Right ()
 
 -- -------------------------------------------------------------------------------------------------
 

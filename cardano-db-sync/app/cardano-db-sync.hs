@@ -5,9 +5,9 @@ import           Cardano.Prelude
 
 
 import           Cardano.Db (gitRev)
-import           Cardano.DbSync (defDbSyncNodePlugin, runDbSyncNode)
-import           Cardano.DbSync.Metrics (withMetricSetters)
 
+import           Cardano.DbSync (runDbSyncNode)
+import           Cardano.DbSync.Metrics (withMetricSetters)
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Config.Types
 
@@ -35,7 +35,7 @@ main = do
         prometheusPort <- dncPrometheusPort <$> readSyncNodeConfig (enpConfigFile params)
 
         withMetricSetters prometheusPort $ \metricsSetters ->
-            runDbSyncNode metricsSetters defDbSyncNodePlugin knownMigrationsPlain params
+            runDbSyncNode metricsSetters (enpExtended params) knownMigrationsPlain params
   where
     knownMigrationsPlain :: [(Text, Text)]
     knownMigrationsPlain = (\x -> (hash x, filepath x)) <$> knownMigrations
@@ -63,6 +63,7 @@ pRunDbSyncNode =
     <*> pSocketPath
     <*> pLedgerStateDir
     <*> pMigrationDir
+    <*> pExtended
     <*> optional pSlotNo
 
 pConfigFile :: Parser ConfigFile
@@ -90,6 +91,13 @@ pMigrationDir =
     <> Opt.help "The directory containing the migrations."
     <> Opt.completer (Opt.bashCompleter "directory")
     <> Opt.metavar "FILEPATH"
+    )
+
+pExtended :: Parser Bool
+pExtended =
+  Opt.flag True False
+    ( Opt.long "no-epoch-table"
+    <> Opt.help "Makes epoch table remain empty"
     )
 
 pSocketPath :: Parser SocketPath
