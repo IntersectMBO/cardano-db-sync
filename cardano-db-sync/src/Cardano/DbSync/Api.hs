@@ -4,16 +4,18 @@
 module Cardano.DbSync.Api
   ( SyncEnv (..)
   , LedgerEnv (..)
-  , SyncDataLayer (..)
   , mkSyncEnvFromConfig
   , verifyFilePoints
+  , getTrace
   , getLatestPoints
+  , getSlotHash
+  , getDbLatestBlockInfo
+  , getDbTipBlockNo
   ) where
 
-import           Cardano.Prelude (Proxy (..), catMaybes, find)
+import           Cardano.Prelude hiding ((.))
 
 import           Cardano.BM.Trace (Trace)
-
 
 import qualified Cardano.Chain.Genesis as Byron
 import           Cardano.Crypto.ProtocolMagic
@@ -23,7 +25,7 @@ import qualified Cardano.Db as DB
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Shelley.Genesis as Shelley
 
-import           Cardano.Slotting.Slot (SlotNo (..))
+import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..))
 
 import           Cardano.DbSync.Config.Cardano
 import           Cardano.DbSync.Config.Shelley
@@ -32,15 +34,12 @@ import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState
 import           Cardano.DbSync.Types
 
-import           Data.ByteString (ByteString)
-import           Data.Text (Text)
-
-import           Database.Persist.Sql (SqlBackend)
+import           Control.Monad.Trans.Maybe (MaybeT (..))
 
 import           Ouroboros.Consensus.Block.Abstract (HeaderHash, fromRawHash)
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
-import           Ouroboros.Network.Block (Point (..))
+import           Ouroboros.Network.Block (BlockNo (..), Point (..))
 import           Ouroboros.Network.Magic (NetworkMagic (..))
 import qualified Ouroboros.Network.Point as Point
 
@@ -49,35 +48,57 @@ data SyncEnv = SyncEnv
   { envProtocol :: !SyncProtocol
   , envNetworkMagic :: !NetworkMagic
   , envSystemStart :: !SystemStart
-  , envBackend :: !SqlBackend
-  , envDataLayer :: !SyncDataLayer
   , envLedger :: !LedgerEnv
   }
 
--- The base @DataLayer@ that contains the functions required for syncing to work.
-data SyncDataLayer = SyncDataLayer
-  { sdlGetSlotHash :: SlotNo -> IO [(SlotNo, ByteString)]
-  , sdlGetLatestBlock :: IO (Maybe Block)
-  , sdlGetLatestSlotNo :: IO SlotNo
+newtype SyncOptions = SyncOptions
+  { extended :: Bool
   }
 
+mkSyncOptions :: Bool -> SyncOptions
+mkSyncOptions = SyncOptions
+
+getTrace :: SyncEnv -> Trace IO Text
+getTrace env = leTrace (envLedger env)
+
+getSlotHash :: SlotNo -> IO [(SlotNo, ByteString)]
+getSlotHash slotNo = DB.runDbNoLogging $ DB.querySlotHash slotNo
+
+getDbLatestBlockInfo :: IO (Maybe TipInfo)
+getDbLatestBlockInfo = do
+  runMaybeT $ do
+    block <- MaybeT $ DB.runDbNoLogging DB.queryLatestBlock
+    -- The EpochNo, SlotNo and BlockNo can only be zero for the Byron
+    -- era, but we need to make the types match, hence `fromMaybe`.
+    pure $ TipInfo
+            { bHash = DB.blockHash block
+            , bEpochNo = EpochNo . fromMaybe 0 $ DB.blockEpochNo block
+            , bSlotNo = SlotNo . fromMaybe 0 $ DB.blockSlotNo block
+            , bBlockNo = BlockNo . fromMaybe 0 $ DB.blockBlockNo block
+            }
+
+getDbTipBlockNo :: IO (Point.WithOrigin BlockNo)
+getDbTipBlockNo = do
+  maybeTip <- getDbLatestBlockInfo
+  case maybeTip of
+    Just tip -> pure $ Point.At (bBlockNo tip)
+    Nothing -> pure Point.Origin
+
 mkSyncEnv
-    :: SyncDataLayer -> SqlBackend -> Trace IO Text -> ProtocolInfo IO CardanoBlock -> Ledger.Network
+    :: Trace IO Text -> ProtocolInfo IO CardanoBlock -> Ledger.Network
     -> NetworkMagic -> SystemStart -> LedgerStateDir -> EpochSlot
     -> IO SyncEnv
-mkSyncEnv dataLayer backend trce protoInfo nw nwMagic systemStart dir stableEpochSlot = do
+mkSyncEnv trce protoInfo nw nwMagic systemStart dir stableEpochSlot = do
   ledgerEnv <- mkLedgerEnv trce protoInfo dir nw stableEpochSlot
   pure $ SyncEnv
           { envProtocol = SyncProtocolCardano
           , envNetworkMagic = nwMagic
           , envSystemStart = systemStart
-          , envBackend = backend
-          , envDataLayer = dataLayer
           , envLedger = ledgerEnv
           }
 
-mkSyncEnvFromConfig :: SyncDataLayer -> SqlBackend -> Trace IO Text -> LedgerStateDir -> GenesisConfig -> IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig dataLayer backend trce dir genCfg =
+mkSyncEnvFromConfig :: Trace IO Text -> LedgerStateDir -> GenesisConfig -> IO (Either SyncNodeError SyncEnv)
+mkSyncEnvFromConfig trce dir genCfg =
     case genCfg of
       GenesisCardano _ bCfg sCfg _
         | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -93,7 +114,7 @@ mkSyncEnvFromConfig dataLayer backend trce dir genCfg =
                 , " /= ", DB.textShow (Shelley.sgSystemStart $ scConfig sCfg)
                 ]
         | otherwise ->
-            Right <$> mkSyncEnv dataLayer backend trce (mkProtocolInfoCardano genCfg) (Shelley.sgNetworkId $ scConfig sCfg)
+            Right <$> mkSyncEnv trce (mkProtocolInfoCardano genCfg) (Shelley.sgNetworkId $ scConfig sCfg)
                         (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
                         (SystemStart .Byron.gdStartTime $ Byron.configGenesisData bCfg)
                         dir (calculateStableEpochSlot $ scConfig sCfg)
@@ -102,15 +123,15 @@ mkSyncEnvFromConfig dataLayer backend trce dir genCfg =
 getLatestPoints :: SyncEnv -> IO [CardanoPoint]
 getLatestPoints env = do
     files <- listLedgerStateFilesOrdered $ leDir (envLedger env)
-    verifyFilePoints env files
+    verifyFilePoints files
 
-verifyFilePoints :: SyncEnv -> [LedgerStateFile] -> IO [CardanoPoint]
-verifyFilePoints env files =
+verifyFilePoints :: [LedgerStateFile] -> IO [CardanoPoint]
+verifyFilePoints files =
     catMaybes <$> mapM validLedgerFileToPoint files
   where
     validLedgerFileToPoint :: LedgerStateFile -> IO (Maybe CardanoPoint)
     validLedgerFileToPoint lsf = do
-        hashes <- sdlGetSlotHash (envDataLayer env) (lsfSlotNo lsf)
+        hashes <- getSlotHash (lsfSlotNo lsf)
         let valid  = find (\(_, h) -> lsfHash lsf == hashToAnnotation h) hashes
         case valid of
           Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convert (slot, hash)

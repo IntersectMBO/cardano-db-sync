@@ -14,12 +14,10 @@ import           Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 import           Cardano.Db (DbLovelace, RewardSource)
 import qualified Cardano.Db as Db
 import           Cardano.DbSync.Era.Shelley.ValidateWithdrawal (validateRewardWithdrawals)
-import           Cardano.DbSync.Era.Shelley.Generic.StakeCred
-
-import           Cardano.Ledger.Coin (Coin (..))
-
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Util
+
+import           Cardano.Ledger.Coin (Coin (..))
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
@@ -95,7 +93,7 @@ logFullRewardMap tracer ledgerMap = do
 
 queryRewardMap
     :: (MonadBaseControl IO m, MonadIO m)
-    => EpochNo -> ReaderT SqlBackend m (Map StakeCred [(RewardSource, DbLovelace)])
+    => EpochNo -> ReaderT SqlBackend m (Map Generic.StakeCred [(RewardSource, DbLovelace)])
 queryRewardMap (EpochNo epochNo) = do
     res <- select . from $ \ (rwd `InnerJoin` saddr) -> do
               on (rwd ^. Db.RewardAddrId ==. saddr ^. Db.StakeAddressId)
@@ -105,10 +103,10 @@ queryRewardMap (EpochNo epochNo) = do
               pure (saddr ^. Db.StakeAddressHashRaw, rwd ^. Db.RewardType, rwd ^. Db.RewardAmount)
     pure . Map.fromList . map collapse $ List.groupOn fst (map convert res)
   where
-    convert :: (Value ByteString, Value RewardSource, Value DbLovelace) -> (StakeCred, (RewardSource, DbLovelace))
-    convert (Value cred, Value source, Value amount) = (StakeCred cred, (source, amount))
+    convert :: (Value ByteString, Value RewardSource, Value DbLovelace) -> (Generic.StakeCred, (RewardSource, DbLovelace))
+    convert (Value cred, Value source, Value amount) = (Generic.StakeCred cred, (source, amount))
 
-    collapse :: [(StakeCred, (RewardSource, DbLovelace))] -> (StakeCred, [(RewardSource, DbLovelace)])
+    collapse :: [(Generic.StakeCred, (RewardSource, DbLovelace))] -> (Generic.StakeCred, [(RewardSource, DbLovelace)])
     collapse xs =
       case xs of
         [] -> panic "queryRewardMap.collapse: Unexpected empty list" -- Impossible
@@ -124,7 +122,7 @@ diffRewardMap tracer dbMap ledgerMap = do
       mapM_ (logError tracer . render) $ Map.toList diffMap
       panicAbort "Rewards differ between ledger and db-sync."
   where
-    keys :: [StakeCred]
+    keys :: [Generic.StakeCred]
     keys = List.nubOrd (Map.keys dbMap ++ Map.keys ledgerMap)
 
     diffMap :: Map Generic.StakeCred ([(RewardSource, DbLovelace)], [(RewardSource, Coin)])

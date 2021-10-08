@@ -9,7 +9,7 @@ module Cardano.DbSync.Types
   , EpochSlot (..)
   , FetchResult (..)
   , SlotDetails (..)
-  , Block (..)
+  , TipInfo (..)
   , MetricSetters (..)
   , PoolFetchRetry (..)
   , Retry (..)
@@ -66,7 +66,7 @@ data SlotDetails = SlotDetails
   } deriving (Eq, Show)
 
 -- The hash must be unique!
-data Block = Block
+data TipInfo = TipInfo
   { bHash :: !ByteString
   , bEpochNo :: !EpochNo
   , bSlotNo  :: !SlotNo

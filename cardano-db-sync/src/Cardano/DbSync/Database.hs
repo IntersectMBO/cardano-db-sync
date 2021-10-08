@@ -33,7 +33,7 @@ import           Cardano.DbSync.Util hiding (whenJust)
 
 import           Cardano.Slotting.Slot (WithOrigin (..))
 
-import           Ouroboros.Consensus.HeaderValidation
+import           Ouroboros.Consensus.HeaderValidation hiding (TipInfo)
 import           Ouroboros.Consensus.Ledger.Extended
 
 import           Ouroboros.Network.Block (Point (..))
@@ -66,7 +66,7 @@ runDbThread trce env metricsSetters plugin queue = do
 
       eNextState <- runExceptT $ runActions trce env plugin xs
 
-      mBlock <- sdlGetLatestBlock (envDataLayer env)
+      mBlock <- getDbLatestBlockInfo
       whenJust mBlock $ \ block -> do
         setDbBlockHeight metricsSetters $ bBlockNo block
         setDbSlotHeight metricsSetters $ bSlotNo block
@@ -105,31 +105,31 @@ runActions trce env plugin actions = do
 rollbackLedger :: Trace IO Text -> SyncNodePlugin -> SyncEnv -> CardanoPoint -> IO (Maybe [CardanoPoint])
 rollbackLedger _trce _plugin env point = do
     mst <- loadLedgerAtPoint (envLedger env) point
-    dbBlock <- sdlGetLatestBlock (envDataLayer env)
+    dbTipInfo <- getDbLatestBlockInfo
     case mst of
       Right st -> do
-        checkDBWithState point dbBlock
+        checkDBWithState point dbTipInfo
         let statePoint = headerStatePoint $ headerState $ clsState st
         -- This check should always succeed, since 'loadLedgerAtPoint' returns succesfully.
         -- we just leave it here for extra validation.
-        checkDBWithState statePoint dbBlock
+        checkDBWithState statePoint dbTipInfo
         pure Nothing
       Left lsfs -> do
-        points <- verifyFilePoints env lsfs
+        points <- verifyFilePoints lsfs
         pure $ Just points
   where
 
-    checkDBWithState :: CardanoPoint -> Maybe Block -> IO ()
-    checkDBWithState pnt blk =
-      if compareTips pnt blk
+    checkDBWithState :: CardanoPoint -> Maybe TipInfo -> IO ()
+    checkDBWithState pnt dbTipInfo =
+      if compareTips pnt dbTipInfo
         then pure ()
         else throwIO . userError $
                 mconcat
                     [ "Ledger state point ", show pnt, " and db tip "
-                    , show blk, " don't match"
+                    , show dbTipInfo, " don't match"
                     ]
 
-compareTips :: CardanoPoint -> Maybe Block -> Bool
+compareTips :: CardanoPoint -> Maybe TipInfo -> Bool
 compareTips = go
   where
     go (Point Origin) Nothing = True

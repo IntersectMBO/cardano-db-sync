@@ -18,10 +18,8 @@ module Cardano.DbSync.Sync
   , NetworkName (..)
   , SocketPath (..)
 
-  , SyncDataLayer (..)
   , MetricSetters (..)
   , nullMetricSetters
-  , Block (..)
   , SyncEnv (..)
 
   , configureLogging
@@ -61,8 +59,6 @@ import           Control.Monad.Trans.Except.Exit (orDie)
 import qualified Data.ByteString.Lazy as BSL
 import           Data.Functor.Contravariant (contramap)
 import qualified Data.Text as Text
-
-import           Database.Persist.Sql (SqlBackend)
 
 import           Network.Mux (MuxTrace, WithMuxBearer)
 import           Network.Mux.Types (MuxMode (..))
@@ -124,16 +120,14 @@ type RunDBThreadFunction
     -> IO ()
 
 runSyncNode
-    :: SyncDataLayer
-    -> SqlBackend
-    -> MetricSetters
+    :: MetricSetters
     -> Trace IO Text
     -> SyncNodePlugin
     -> SyncNodeParams
     -> InsertValidateGenesisFunction
     -> RunDBThreadFunction
     -> IO ()
-runSyncNode dataLayer backend metricsSetters trce plugin enp insertValidateGenesisDist runDBThreadFunction =
+runSyncNode metricsSetters trce plugin enp insertValidateGenesisDist runDBThreadFunction =
   withIOManager $ \iomgr -> do
 
     let configFile = enpConfigFile enp
@@ -157,7 +151,7 @@ runSyncNode dataLayer backend metricsSetters trce plugin enp insertValidateGenes
       liftIO $ runDbStartup trce plugin
       case genCfg of
           GenesisCardano {} -> do
-            syncEnv <- ExceptT $ mkSyncEnvFromConfig dataLayer trce (enpLedgerStateDir enp) genCfg
+            syncEnv <- ExceptT $ mkSyncEnvFromConfig trce (enpLedgerStateDir enp) genCfg
             liftIO $ runSyncNodeNodeClient metricsSetters syncEnv iomgr trce plugin
                         runDBThreadFunction (enpSocketPath enp)
   where
@@ -246,8 +240,8 @@ dbSyncProtocols trce env metricsSetters plugin queryVar runDBThreadFunction vers
           throwIO $ ErrorCall (Text.unpack versionErrorMsg)
 
         latestPoints <- getLatestPoints env
-        currentTip <- getCurrentTipBlockNo (envDataLayer env)
-        logDbState (envDataLayer env) trce
+        currentTip <- getCurrentTipBlockNo
+        logDbState trce
         actionQueue <- newDbActionQueue
 
         race_
@@ -291,28 +285,27 @@ dbSyncProtocols trce env metricsSetters plugin queryVar runDBThreadFunction vers
     minVersion :: Network.NodeToClientVersion
     minVersion = Network.NodeToClientV_8
 
-logDbState :: SyncDataLayer -> Trace IO Text -> IO ()
-logDbState dataLayer trce = do
-    let getLatestBlock = sdlGetLatestBlock dataLayer
-    mblk <- getLatestBlock
+logDbState :: Trace IO Text -> IO ()
+logDbState trce = do
+    mblk <- getDbLatestBlockInfo
     case mblk of
       Nothing -> logInfo trce "Cardano.Db is empty"
-      Just block ->
+      Just tip ->
           logInfo trce $ Text.concat
                   [ "Cardano.Db tip is at "
-                  , showTip block
+                  , showTip tip
                   ]
   where
-    showTip :: Block -> Text
-    showTip blk =
+    showTip :: TipInfo -> Text
+    showTip tipInfo =
       mconcat
-        [ "slot ", textShow (unSlotNo $ bSlotNo blk)
-        , ", block ", textShow (unBlockNo $ bBlockNo blk)
+        [ "slot ", textShow (unSlotNo $ bSlotNo tipInfo)
+        , ", block ", textShow (unBlockNo $ bBlockNo tipInfo)
         ]
 
-getCurrentTipBlockNo :: SyncDataLayer -> IO (WithOrigin BlockNo)
-getCurrentTipBlockNo dataLayer = do
-    maybeTip <- sdlGetLatestBlock dataLayer
+getCurrentTipBlockNo :: IO (WithOrigin BlockNo)
+getCurrentTipBlockNo = do
+    maybeTip <- getDbLatestBlockInfo
     case maybeTip of
       Just tip -> pure $ At (bBlockNo tip)
       Nothing -> pure Origin
@@ -411,7 +404,7 @@ chainSyncClient _plugin metricsSetters trce env queryVar latestPoints currentTip
                 -- This will get the current tip rather than what we roll back to
                 -- but will only be incorrect for a short time span.
                 mPoints <- waitRollback actionQueue point
-                newTip <- getCurrentTipBlockNo (envDataLayer env)
+                newTip <- getDbTipBlockNo
                 pure $ finish newTip tip mPoints
         }
 
