@@ -31,6 +31,7 @@ module Cardano.Db.Query
   , queryLatestBlockNo
   , queryLatestSlotNo
   , queryMeta
+  , queryMultiAssetId
   , queryNetworkName
   , queryPreviousSlotNo
   , querySchemaVersion
@@ -454,6 +455,13 @@ queryMeta = do
             [] -> Left DbMetaEmpty
             [m] -> Right $ entityVal m
             _ -> Left DbMetaMultipleRows
+
+queryMultiAssetId :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe MultiAssetId)
+queryMultiAssetId policy assetName = do
+  res <- select . from $ \ ma -> do
+            where_ (ma ^. MultiAssetPolicy ==. val policy &&. ma ^. MultiAssetName ==. val assetName)
+            pure (ma ^. MultiAssetId)
+  pure $ unValue <$> listToMaybe res
 
 -- | Get the network name from the Meta table.
 queryNetworkName :: MonadIO m => ReaderT SqlBackend m (Maybe Text)

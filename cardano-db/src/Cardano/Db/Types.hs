@@ -4,9 +4,11 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Cardano.Db.Types
   ( Ada (..)
+  , AssetFingerprint (..)
   , DbLovelace (..)
   , DbInt65 (..)
   , DbWord64 (..)
@@ -17,6 +19,7 @@ module Cardano.Db.Types
   , deltaCoinToDbInt65
   , integerToDbInt65
   , lovelaceToAda
+  , mkAssetFingerprint
   , renderAda
   , scientificToAda
   , readDbInt65
@@ -33,13 +36,24 @@ module Cardano.Db.Types
   , word64ToAda
   ) where
 
+import qualified Cardano.Crypto.Hash as Crypto
+
 import           Cardano.Ledger.Coin (DeltaCoin (..))
+import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..))
 import           Cardano.Ledger.Shelley.Rewards as Shelley
+import qualified Cardano.Ledger.Shelley.Scripts as Shelley
+
+import qualified Codec.Binary.Bech32 as Bech32
+
+import           Crypto.Hash (Blake2b_160)
+import qualified Crypto.Hash
 
 import           Data.Aeson.Encoding (unsafeToEncoding)
 import           Data.Aeson.Types (FromJSON (..), ToJSON (..))
 import qualified Data.Aeson.Types as Aeson
+import qualified Data.ByteArray as ByteArray
 import qualified Data.ByteString.Builder as BS (string8)
+import           Data.Either (fromRight)
 import           Data.Fixed (Micro, showFixed)
 import           Data.Scientific (Scientific)
 import           Data.Text (Text)
@@ -47,6 +61,8 @@ import qualified Data.Text as Text
 import           Data.Word (Word64)
 
 import           GHC.Generics (Generic)
+
+import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
 
 import           Quiet (Quiet (..))
 
@@ -71,6 +87,20 @@ instance ToJSON Ada where
 
 instance Show Ada where
     show (Ada ada) = showFixed True ada
+
+newtype AssetFingerprint = AssetFingerprint
+  { unAssetFingerprint :: Text
+  } deriving (Eq, Show)
+
+mkAssetFingerprint :: PolicyID StandardCrypto -> AssetName -> AssetFingerprint
+mkAssetFingerprint (PolicyID (Shelley.ScriptHash h)) (AssetName name) =
+    AssetFingerprint . Bech32.encodeLenient hrp . Bech32.dataPartFromBytes . ByteArray.convert
+      $ Crypto.Hash.hash @_ @Blake2b_160 (Crypto.hashToBytes h <> name)
+  where
+    hrp :: Bech32.HumanReadablePart
+    hrp =
+      fromRight (error "mkAssetFingerprint: Bad human readable part") -- Should never happen
+        $ Bech32.humanReadablePartFromText "asset"
 
 -- This is horrible. Need a 'Word64' with an extra sign bit.
 data DbInt65
