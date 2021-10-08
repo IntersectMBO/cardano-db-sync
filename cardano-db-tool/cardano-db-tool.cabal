@@ -53,6 +53,7 @@ library
                         Cardano.Db.Tool.Validate.TotalSupply
                         Cardano.Db.Tool.Validate.TxAccounting
                         Cardano.Db.Tool.Validate.Util
+                        Cardano.Db.Tool.Validate.Withdrawal
                         Paths_cardano_db_tool
 
   build-depends:        base                            >= 4.14         && < 4.16
@@ -78,6 +79,7 @@ library
                       , ouroboros-network
                       , persistent
                       , random
+                      , random-shuffle
                       , text
                       , time
                       , transformers
@@ -96,6 +98,8 @@ executable cardano-db-tool
                         -Wincomplete-uni-patterns
                         -Wunused-imports
                         -Wunused-packages
+                        -threaded
+                        -with-rtsopts=-N2
 
   build-depends:        base                            >= 4.14         && < 4.16
                       , cardano-db

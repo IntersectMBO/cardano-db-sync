@@ -43,10 +43,9 @@ validateLatestBlockTxs latestEpoch = do
 
 validateBlockTxs :: Word64 -> IO ()
 validateBlockTxs epoch = do
-  putStrF $ "All transactions for blocks in epoch " ++ show epoch
-                ++ " are present: "
+  putStrF $ "All transactions for blocks in epoch " ++ show epoch ++ " are present: "
   blks <- runDbNoLogging $ queryEpochBlockNumbers epoch
-  results <- mapM validateBlockCount blks
+  results <- runDbNoLogging $ mapM validateBlockCount blks
   case lefts results of
     [] -> putStrLn $ greenText "ok"
     xs -> do
@@ -57,9 +56,9 @@ validateBlockTxs epoch = do
                             ++ " but got " ++ show (veTxCountActual ve)
                             )
 
-validateBlockCount :: (Word64, Word64) -> IO (Either ValidateError ())
+validateBlockCount :: MonadIO m => (Word64, Word64) -> ReaderT SqlBackend m (Either ValidateError ())
 validateBlockCount (blockNo, txCountExpected) = do
-  txCountActual <- runDbNoLogging $ queryBlockTxCount blockNo
+  txCountActual <- queryBlockTxCount blockNo
   pure $ if txCountActual == txCountExpected
           then Right ()
           else Left $ ValidateError blockNo txCountActual txCountExpected
