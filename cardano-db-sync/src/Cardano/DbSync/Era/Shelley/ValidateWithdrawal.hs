@@ -13,7 +13,7 @@ import           Cardano.BM.Trace (Trace, logError)
 import           Cardano.Db (Ada (..))
 import qualified Cardano.Db as Db
 import           Cardano.Slotting.Slot (EpochNo (..))
-import           Cardano.Sync.Util
+import           Cardano.DbSync.Util
 
 import           Data.Either (partitionEithers)
 import           Data.Fixed (Micro)

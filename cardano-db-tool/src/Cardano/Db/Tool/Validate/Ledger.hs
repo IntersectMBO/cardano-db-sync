@@ -13,11 +13,11 @@ import qualified Cardano.Db as DB
 import           Cardano.Db.Tool.Validate.Balance (ledgerAddrBalance)
 import           Cardano.Db.Tool.Validate.Util
 
-import           Cardano.Sync.Config
-import           Cardano.Sync.Config.Cardano
-import           Cardano.Sync.Error
-import           Cardano.Sync.LedgerState
-import           Cardano.Sync.Tracing.ToObjectOrphans ()
+import           Cardano.DbSync.Config
+import           Cardano.DbSync.Config.Cardano
+import           Cardano.DbSync.Error
+import           Cardano.DbSync.LedgerState
+import           Cardano.DbSync.Tracing.ToObjectOrphans ()
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 

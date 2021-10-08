@@ -11,8 +11,8 @@ import           Cardano.DbSync.Plugin.Extended (extendedDbSyncNodePlugin)
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
-import           Cardano.Sync.Config
-import           Cardano.Sync.Config.Types
+import           Cardano.DbSync.Config
+import           Cardano.DbSync.Config.Types
 
 import           Data.String (String)
 import qualified Data.Text as Text

@@ -9,7 +9,7 @@ module Cardano.DbSync.Era.Shelley.Offline.FetchQueue
 
 
 import           Cardano.Prelude hiding (retry)
-import           Cardano.Sync.Types
+import           Cardano.DbSync.Types
 
 import qualified Data.Text as Text
 import           Data.Time.Clock.POSIX (POSIXTime)

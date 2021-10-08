@@ -14,7 +14,7 @@ import           Data.Time.Clock.POSIX (POSIXTime)
 import qualified Data.Time.Clock.POSIX as Time
 
 import           Cardano.Db
-import           Cardano.Sync.Types
+import           Cardano.DbSync.Types
 
 import           Database.Esqueleto.Legacy (InnerJoin (..), SqlExpr, Value (..), ValueList, desc,
                    from, groupBy, in_, just, max_, notExists, on, orderBy, select, subList_select,

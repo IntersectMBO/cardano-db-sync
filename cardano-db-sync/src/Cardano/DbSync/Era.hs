@@ -12,8 +12,8 @@ import           Cardano.Prelude
 
 import           Cardano.BM.Data.Trace (Trace)
 
-import           Cardano.Sync.Config
-import           Cardano.Sync.Error
+import           Cardano.DbSync.Config
+import           Cardano.DbSync.Error
 
 import qualified Cardano.DbSync.Era.Byron.Genesis as Byron
 import qualified Cardano.DbSync.Era.Shelley.Genesis as Shelley

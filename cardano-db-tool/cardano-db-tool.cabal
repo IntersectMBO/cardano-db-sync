@@ -62,7 +62,7 @@ library
                       , ansi-terminal
                       , cardano-api
                       , cardano-db
-                      , cardano-sync
+                      , cardano-db-sync
                       , cardano-ledger-alonzo
                       , cardano-ledger-byron
                       , cardano-ledger-core
@@ -105,8 +105,8 @@ executable cardano-db-tool
 
   build-depends:        base                            >= 4.14         && < 4.16
                       , cardano-db
+                      , cardano-db-sync
                       , cardano-db-tool
-                      , cardano-sync
                       , cardano-slotting
                       , optparse-applicative
                       , text

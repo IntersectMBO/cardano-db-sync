@@ -29,11 +29,10 @@ import           Cardano.DbSync.Era.Shelley.Query
 
 import qualified Cardano.Ledger.Coin as Shelley
 
-import qualified Cardano.Sync.Era.Shelley.Generic as Generic
-import           Cardano.Sync.Error
-import           Cardano.Sync.LedgerState
-import           Cardano.Sync.Types
-import           Cardano.Sync.Util
+import           Cardano.DbSync.Error
+import           Cardano.DbSync.LedgerState
+import           Cardano.DbSync.Types
+import           Cardano.DbSync.Util
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 

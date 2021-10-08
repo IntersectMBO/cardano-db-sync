@@ -8,8 +8,8 @@ import           Cardano.Db (gitRev)
 import           Cardano.DbSync (defDbSyncNodePlugin, runDbSyncNode)
 import           Cardano.DbSync.Metrics (withMetricSetters)
 
-import           Cardano.Sync.Config
-import           Cardano.Sync.Config.Types
+import           Cardano.DbSync.Config
+import           Cardano.DbSync.Config.Types
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 

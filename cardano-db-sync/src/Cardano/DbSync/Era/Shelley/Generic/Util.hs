@@ -53,7 +53,7 @@ import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import           Cardano.Ledger.Coin (Coin (..), DeltaCoin)
 import qualified Cardano.Ledger.SafeHash as Ledger
 
-import           Cardano.Sync.Util
+import           Cardano.DbSync.Util
 
 import qualified Data.Binary.Put as Binary
 import qualified Data.ByteString.Base16 as Base16

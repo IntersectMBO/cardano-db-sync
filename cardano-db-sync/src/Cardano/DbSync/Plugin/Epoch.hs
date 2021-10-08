@@ -30,10 +30,10 @@ import           Database.Persist.Sql (SqlBackend)
 import           Cardano.Db (EntityField (..), EpochId, SyncState (..))
 import qualified Cardano.Db as DB
 
-import           Cardano.Sync.Api
-import           Cardano.Sync.Error
-import           Cardano.Sync.Types
-import           Cardano.Sync.Util
+import           Cardano.DbSync.Api
+import           Cardano.DbSync.Error
+import           Cardano.DbSync.Types
+import           Cardano.DbSync.Util
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))

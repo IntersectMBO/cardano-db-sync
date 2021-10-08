@@ -25,6 +25,12 @@ import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
 import           Cardano.DbSync.Era.Shelley.Insert.Epoch
 import           Cardano.DbSync.Era.Shelley.Validate
 import           Cardano.DbSync.Rollback (rollbackToPoint)
+import           Cardano.DbSync.Api
+import           Cardano.DbSync.Error
+import           Cardano.DbSync.LedgerState
+import           Cardano.DbSync.Plugin
+import           Cardano.DbSync.Types
+import           Cardano.DbSync.Util
 
 import           Cardano.Ledger.BaseTypes (Network)
 import           Cardano.Ledger.Coin (Coin (..))
@@ -35,13 +41,6 @@ import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import           Cardano.Slotting.Block (BlockNo (..))
 import           Cardano.Slotting.Slot (EpochNo (..))
 
-import           Cardano.Sync.Api
-import qualified Cardano.Sync.Era.Shelley.Generic as Generic
-import           Cardano.Sync.Error
-import           Cardano.Sync.LedgerState
-import           Cardano.Sync.Plugin
-import           Cardano.Sync.Types
-import           Cardano.Sync.Util
 
 import           Control.Monad.Class.MonadSTM.Strict (putTMVar, tryTakeTMVar)
 import           Control.Monad.Trans.Control (MonadBaseControl)

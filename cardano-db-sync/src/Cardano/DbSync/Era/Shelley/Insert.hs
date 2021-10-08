@@ -48,10 +48,10 @@ import qualified Cardano.Ledger.Credential as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
 
-import           Cardano.Sync.Error
-import           Cardano.Sync.LedgerState
-import           Cardano.Sync.Types
-import           Cardano.Sync.Util
+import           Cardano.DbSync.Error
+import           Cardano.DbSync.LedgerState
+import           Cardano.DbSync.Types
+import           Cardano.DbSync.Util
 
 import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..), Value (..))
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley

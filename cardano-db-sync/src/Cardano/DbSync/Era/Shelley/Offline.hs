@@ -19,7 +19,7 @@ import           Cardano.DbSync.Era.Shelley.Offline.Http
 import           Cardano.DbSync.Era.Shelley.Offline.Query
 import           Cardano.DbSync.Era.Shelley.Offline.Types
 
-import           Cardano.Sync.Types
+import           Cardano.DbSync.Types
 
 import           Control.Monad.Class.MonadSTM.Strict (TBQueue, flushTBQueue, isEmptyTBQueue,
                    readTBQueue, writeTBQueue)
@@ -39,8 +39,8 @@ import qualified Cardano.Crypto.Hash.Class as Crypto
 import           Cardano.Db
 import qualified Cardano.Db as DB
 
-import           Cardano.Sync.LedgerState
-import           Cardano.Sync.Util
+import           Cardano.DbSync.LedgerState
+import           Cardano.DbSync.Util
 
 import           Database.Persist.Sql (SqlBackend)
 

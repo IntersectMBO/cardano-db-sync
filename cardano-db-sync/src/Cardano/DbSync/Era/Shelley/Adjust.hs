@@ -12,7 +12,7 @@ import           Cardano.BM.Trace (Trace, logInfo)
 
 import qualified Cardano.Db as Db
 
-import           Cardano.Sync.Util
+import           Cardano.DbSync.Util
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 

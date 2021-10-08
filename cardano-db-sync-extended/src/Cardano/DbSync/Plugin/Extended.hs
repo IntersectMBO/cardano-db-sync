@@ -6,7 +6,7 @@ import           Cardano.DbSync.Plugin.Default (defDbSyncNodePlugin)
 import           Cardano.DbSync.Plugin.Epoch (epochPluginInsertBlock, epochPluginOnStartup,
                    epochPluginRollbackBlock)
 
-import           Cardano.Sync (SyncNodePlugin (..))
+import           Cardano.DbSync.Plugin (SyncNodePlugin (..))
 
 import           Database.Persist.Sql (SqlBackend)
 

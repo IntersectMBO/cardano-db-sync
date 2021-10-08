@@ -46,7 +46,6 @@ library
 
   build-depends:        base                            >= 4.14         && < 4.16
                       , cardano-db-sync
-                      , cardano-sync
                       , persistent
 
 executable cardano-db-sync-extended
@@ -76,7 +75,6 @@ executable cardano-db-sync-extended
                       , cardano-db
                       , cardano-db-sync
                       , cardano-db-sync-extended
-                      , cardano-sync
                       , cardano-prelude
                       , cardano-slotting
                       , optparse-applicative

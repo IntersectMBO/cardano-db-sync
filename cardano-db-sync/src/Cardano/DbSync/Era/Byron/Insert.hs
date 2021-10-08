@@ -34,7 +34,7 @@ import qualified Cardano.Crypto as Crypto (serializeCborHash)
 import           Cardano.Db (DbLovelace (..), SyncState (..))
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 
-import           Cardano.Sync.Types
+import           Cardano.DbSync.Types
 
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
 
@@ -46,9 +46,8 @@ import           Database.Persist.Sql (SqlBackend)
 
 import qualified Cardano.Db as DB
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
-import qualified Cardano.Sync.Era.Byron.Util as Byron
-import           Cardano.Sync.Error
-import           Cardano.Sync.Util
+import           Cardano.DbSync.Error
+import           Cardano.DbSync.Util
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 

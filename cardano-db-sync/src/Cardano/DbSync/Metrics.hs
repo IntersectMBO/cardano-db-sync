@@ -3,6 +3,10 @@
 
 module Cardano.DbSync.Metrics
   ( Metrics (..)
+  , setNodeBlockHeight
+  , setDbQueueLength
+  , setDbBlockHeight
+  , setDbSlotHeight
   , makeMetrics
   , withMetricSetters
   , withMetricsServer
@@ -10,9 +14,9 @@ module Cardano.DbSync.Metrics
 
 import           Cardano.Prelude
 
-import           Cardano.Slotting.Slot (SlotNo (..))
+import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..), fromWithOrigin)
 
-import           Cardano.Sync.Types (MetricSetters (..))
+import           Cardano.DbSync.Types (MetricSetters (..))
 
 import           Ouroboros.Network.Block (BlockNo (..))
 
@@ -67,3 +71,17 @@ makeMetrics =
     <*> registerGauge "cardano_db_sync_db_queue_length" mempty
     <*> registerGauge "cardano_db_sync_db_block_height" mempty
     <*> registerGauge "cardano_db_sync_db_slot_height" mempty
+
+
+setNodeBlockHeight :: MetricSetters -> WithOrigin BlockNo -> IO ()
+setNodeBlockHeight setters woBlkNo =
+  metricsSetNodeBlockHeight setters (fromWithOrigin (BlockNo 0) woBlkNo)
+
+setDbQueueLength :: MetricSetters -> Natural -> IO ()
+setDbQueueLength = metricsSetDbQueueLength
+
+setDbBlockHeight :: MetricSetters -> BlockNo -> IO ()
+setDbBlockHeight = metricsSetDbBlockHeight
+
+setDbSlotHeight :: MetricSetters -> SlotNo -> IO ()
+setDbSlotHeight = metricsSetDbSlotHeight

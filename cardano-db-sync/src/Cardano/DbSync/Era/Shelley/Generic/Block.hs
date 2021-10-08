@@ -43,7 +43,7 @@ import qualified Cardano.Protocol.TPraos.BHeader as Protocol
 import qualified Cardano.Protocol.TPraos.OCert as Protocol
 
 import           Cardano.Slotting.Slot (SlotNo (..))
-import           Cardano.Sync.Types hiding (Block)
+import           Cardano.DbSync.Types hiding (Block)
 
 import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlonzo, StandardCrypto,
                    StandardMary, StandardShelley)
