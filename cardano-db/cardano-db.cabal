@@ -54,7 +54,6 @@ library
                       , base16-bytestring
                       , bytestring
                       , cardano-crypto-class
-                      , cardano-crypto-wrapper
                       , cardano-ledger-core
                       , cardano-ledger-shelley
                       , cardano-ledger-shelley-ma

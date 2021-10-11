@@ -6,6 +6,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-missing-methods #-}
 
 module Cardano.SMASH.Server.Api
   ( API
@@ -16,25 +17,19 @@ module Cardano.SMASH.Server.Api
 
 
 import           Cardano.Prelude
-import           Prelude                       (String)
+import           Prelude (String)
 
-import           Data.Aeson                    (FromJSON, ToJSON (..),
-                                                eitherDecode, encode, object,
-                                                (.=))
-import           Data.Swagger                  (Swagger (..))
+import           Data.Aeson (FromJSON, ToJSON (..), eitherDecode, encode, object, (.=))
+import           Data.Swagger (Swagger (..))
 
-import           Network.Wai                   (Request, lazyRequestBody)
-import           Servant                       (BasicAuth, Capture, Get,
-                                                HasServer (..), Header, Headers,
-                                                JSON, Patch, Post,
-                                                QueryParam, ReqBody,
-                                                (:<|>) (..), (:>))
-import           Servant.Server                (err400)
-import           Servant.Server.Internal       (DelayedIO, addBodyCheck,
-                                                delayedFailFatal, errBody,
-                                                withRequest)
+import           Network.Wai (Request, lazyRequestBody)
+import           Servant (BasicAuth, Capture, Get, HasServer (..), Header, Headers, JSON, Patch,
+                   Post, QueryParam, ReqBody, (:<|>) (..), (:>))
+import           Servant.Server (err400)
+import           Servant.Server.Internal (DelayedIO, addBodyCheck, delayedFailFatal, errBody,
+                   withRequest)
 
-import           Servant.Swagger               (HasSwagger (..))
+import           Servant.Swagger (HasSwagger (..))
 
 import           Cardano.SMASH.Server.Types
 
@@ -59,7 +54,7 @@ instance (FromJSON a, HasServer api context) => HasServer (Body a :> api) contex
           Left dbFail ->
             delayedFailFatal err400 { errBody = encode dbFail }
           Right v ->
-            return v
+            pure v
 
 newtype BodyError = BodyError String
 instance ToJSON BodyError where

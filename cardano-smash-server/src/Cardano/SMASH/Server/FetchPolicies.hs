@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.SMASH.Server.FetchPolicies
@@ -11,17 +11,12 @@ import           Cardano.Prelude
 
 import           Control.Monad.Trans.Except.Extra
 
-import           Cardano.SMASH.Server.Types       (HealthStatus,
-                                                   PolicyResult (..),
-                                                   PoolId,
-                                                   SmashURL (..))
-import           Data.Aeson                       (FromJSON, parseJSON)
-import           Data.Aeson.Types                 (parseEither)
+import           Cardano.SMASH.Server.Types (HealthStatus, PolicyResult (..), PoolId, SmashURL (..))
+import           Data.Aeson (FromJSON, parseJSON)
+import           Data.Aeson.Types (parseEither)
 
-import           Network.HTTP.Simple              (Request, getResponseBody,
-                                                   getResponseStatusCode,
-                                                   httpJSONEither,
-                                                   parseRequestThrow)
+import           Network.HTTP.Simple (Request, getResponseBody, getResponseStatusCode,
+                   httpJSONEither, parseRequestThrow)
 
 -- |The possible errors for the http client.
 data HttpClientError
@@ -74,7 +69,7 @@ httpClientFetchPolicies smashURL = runExceptT $ do
 
     -- TODO(KS): Current version doesn't have exposed the tickers endpoint and would fail!
     -- uniqueTickers :: [UniqueTicker] <- httpApiCall reservedTickersRequest
-    uniqueTickers <- pure []
+    let uniqueTickers = []
 
     let policyResult =
             PolicyResult
@@ -84,7 +79,7 @@ httpClientFetchPolicies smashURL = runExceptT $ do
                 , prUniqueTickers = uniqueTickers
                 }
 
-    return policyResult
+    pure policyResult
 
 -- |A simple HTTP call for remote server.
 httpApiCall :: forall a. (FromJSON a) => Request -> ExceptT HttpClientError IO a
@@ -93,7 +88,7 @@ httpApiCall request = do
     httpResult <- httpJSONEither request
     let httpResponseBody = getResponseBody httpResult
 
-    httpResponse <- firstExceptT (\_ -> HttpClientInvalidClientBody) $ hoistEither httpResponseBody
+    httpResponse <- firstExceptT (const HttpClientInvalidClientBody) $ hoistEither httpResponseBody
 
     let httpStatusCode  = getResponseStatusCode httpResult
 

@@ -1,8 +1,9 @@
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Cardano.SMASH.Server.Types where
 
@@ -15,8 +16,7 @@ import qualified Data.Aeson as Aeson
 import           Data.Aeson.Encoding (unsafeToEncoding)
 import qualified Data.Aeson.Types ()
 import qualified Data.ByteString.Lazy as LBS
-import           Data.Swagger (NamedSchema (..), ToParamSchema (..),
-                   ToSchema (..))
+import           Data.Swagger (NamedSchema (..), ToParamSchema (..), ToSchema (..))
 import qualified Data.Text.Encoding as Text
 import           Data.Time.Clock (UTCTime)
 import qualified Data.Time.Clock.POSIX as Time
@@ -28,17 +28,12 @@ import           Servant (FromHttpApiData (..), MimeUnrender (..), OctetStream)
 
 import           Cardano.Db hiding (TickerName)
 
-import           Cardano.Api            (AsType (..), Hash,
-                                         deserialiseFromBech32,
-                                         deserialiseFromRawBytesHex,
-                                         serialiseToRawBytes)
-import           Cardano.Api.Shelley    (StakePoolKey)
+import           Cardano.Api (AsType (..), Hash, deserialiseFromBech32, deserialiseFromRawBytesHex,
+                   serialiseToRawBytes)
+import           Cardano.Api.Shelley (StakePoolKey)
 import qualified Data.ByteString.Base16 as B16
-import qualified Data.ByteString.Char8  as BSC
-import           Quiet                  (Quiet (..))
--- import           Cardano.SMASH.Db.Error
--- import           Cardano.SMASH.Db.Types
--- import           Cardano.Sync.Types (PoolMetaHash (..), PoolMetaHex (..))
+import qualified Data.ByteString.Char8 as BS
+import           Quiet (Quiet (..))
 
 -- | The stake pool identifier. It is the hash of the stake pool operator's
 -- vkey.
@@ -60,7 +55,7 @@ instance FromJSON PoolId where
         poolId <- o .: "poolId"
         case parsePoolId poolId of
             Left err      -> fail $ toS err
-            Right poolId' -> return poolId'
+            Right poolId' -> pure poolId'
 
 instance ToParamSchema PoolId
 
@@ -88,7 +83,7 @@ parsePoolId poolId =
         -- e5cb8a89cabad2cb22ea85423bcbbe270f292be3dbe838948456d3ae
         pHexStakePoolId :: Text -> Maybe (Hash StakePoolKey)
         pHexStakePoolId =
-            deserialiseFromRawBytesHex (AsHash AsStakePoolKey) . BSC.pack . toS
+            deserialiseFromRawBytesHex (AsHash AsStakePoolKey) . BS.pack . toS
 
         -- pool1uh9c4zw2htfvkgh2s4prhja7yu8jj2lrm05r39yy2mf6uqqegn6
         pBech32StakePoolId :: Text -> Maybe (Hash StakePoolKey)
@@ -116,12 +111,12 @@ instance ToJSON PoolMetadataHash where
 instance FromJSON PoolMetadataHash where
     parseJSON = withObject "PoolMetadataHash" $ \o -> do
         poolHash <- o .: "poolHash"
-        return $ PoolMetadataHash poolHash
+        pure $ PoolMetadataHash poolHash
 
 -- Converting the basic type to a strong one.
 -- Presumes the user knows what he is doing, NOT TYPE SAFE!
 bytestringToPoolMetaHash :: ByteString -> PoolMetadataHash
-bytestringToPoolMetaHash bs = PoolMetadataHash . decodeUtf8 . B16.encode $ bs
+bytestringToPoolMetaHash = PoolMetadataHash . decodeUtf8 . B16.encode
 
 instance ToSchema PoolMetadataHash
 
@@ -164,7 +159,7 @@ instance FromJSON HealthStatus where
         status          <- o .: "status"
         version         <- o .: "version"
 
-        return $ HealthStatus
+        pure HealthStatus
             { hsStatus  = status
             , hsVersion = version
             }
@@ -230,11 +225,11 @@ instance FromJSON SmashURL where
 
         case parsedURI of
             Nothing -> fail "Not a valid URI for SMASH server."
-            Just uri' -> return $ SmashURL uri'
+            Just uri' -> pure (SmashURL uri')
 
 instance ToSchema SmashURL where
   declareNamedSchema _ =
-    return $ NamedSchema (Just "SmashURL") $ mempty
+    pure (NamedSchema (Just "SmashURL") mempty)
 
 
 newtype UniqueTicker = UniqueTicker { getUniqueTicker :: (TickerName, PoolMetadataHash) }
@@ -252,7 +247,7 @@ instance FromJSON UniqueTicker where
         tickerName <- o .: "tickerName"
         poolMetadataHash <- o .: "poolMetadataHash"
 
-        return . UniqueTicker $ (tickerName, poolMetadataHash)
+        pure . UniqueTicker $ (tickerName, poolMetadataHash)
 
 instance ToSchema UniqueTicker
 
@@ -280,7 +275,7 @@ instance FromHttpApiData TickerName where
 -- |Util.
 eitherToMonadFail :: MonadFail m => Either Text a -> m a
 eitherToMonadFail (Left err)  = fail $ toS err
-eitherToMonadFail (Right val) = return val
+eitherToMonadFail (Right val) = pure val
 
 -- |The validation for the ticker name we can reuse.
 validateTickerName :: Text -> Either Text TickerName
@@ -314,11 +309,11 @@ instance FromJSON PoolIdBlockNumber where
         poolId          <- o .: "poolId"
         blockNumber     <- o .: "blockNumber"
 
-        return $ PoolIdBlockNumber poolId blockNumber
+        pure (PoolIdBlockNumber poolId blockNumber)
 
 instance ToSchema PoolIdBlockNumber
 
--- | The stake pool metadata. It is JSON format. This type represents it in
+-- | The stake pool metadata in JSON format. This type represents it in
 -- its raw original form. The hash of this content is the 'PoolMetadataHash'.
 newtype PoolMetadataRaw = PoolMetadataRaw { getPoolMetadata :: Text }
   deriving stock (Eq, Show, Ord, Generic)
@@ -383,6 +378,7 @@ data UserValidity
 
 data DBFail
   = UnknownError !Text
+  | DbInsertError !Text
   | DbLookupPoolMetadataHash !PoolId !PoolMetadataHash
   | RecordDoesNotExist
   | DBFail LookupFail
@@ -390,7 +386,7 @@ data DBFail
 
 instance ToSchema DBFail where
   declareNamedSchema _ =
-    return $ NamedSchema (Just "DBFail") $ mempty
+    pure (NamedSchema (Just "DBFail") mempty)
 
 {-
 
@@ -409,7 +405,12 @@ instance ToJSON DBFail where
             [ "code"            .= Aeson.String "UnknownError"
             , "description"     .= Aeson.String err
             ]
-    toJSON failure@(DbLookupPoolMetadataHash pid pmh) =
+    toJSON (DbInsertError err) =
+        object
+            [ "code"            .= Aeson.String "DbInsertError"
+            , "description"     .= Aeson.String err
+            ]
+    toJSON failure@DbLookupPoolMetadataHash {} =
         object
             [ "code"            .= Aeson.String "DbLookupPoolMetadataHash"
             , "description"     .= Aeson.String (renderDBFail failure)
@@ -426,8 +427,11 @@ instance ToJSON DBFail where
             ]
 
 renderDBFail :: DBFail -> Text
-renderDBFail (UnknownError err) = err
+renderDBFail (UnknownError err) = "Unknown error. Context: " <> err
+renderDBFail (DbInsertError err) =
+    "The database got an error while trying to insert a record. Error: " <> err
 renderDBFail (DbLookupPoolMetadataHash poolId poolMDHash) =
     "The metadata with hash " <> show poolMDHash <> " for pool " <> show poolId <> " is missing from the DB."
 renderDBFail RecordDoesNotExist =
     "The requested record does not exist."
+renderDBFail (DBFail lookupFail) = renderLookupFail lookupFail

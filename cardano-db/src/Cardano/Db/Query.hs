@@ -20,6 +20,7 @@ module Cardano.Db.Query
   , queryDepositUpToBlockNo
   , queryEpochEntry
   , queryEpochNo
+  , queryCurrentEpochNo
   , queryFeesUpToBlockNo
   , queryFeesUpToSlotNo
   , queryGenesisSupply
@@ -52,8 +53,12 @@ module Cardano.Db.Query
   , queryWithdrawalsUpToBlockNo
   , queryAdaPots
   , queryPoolOfflineData
+  , queryPoolRegister
   , queryRetiredPools
-  , queryReservedTickers
+  , queryReservedTicker
+  , queryDelistedPools
+  , queryPoolOfflineFetchError
+  , existsDelistedPool
   , existsPoolHash
   , existsPoolHashId
   , existsPoolMetadataRefId
@@ -79,7 +84,7 @@ module Cardano.Db.Query
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
-import           Control.Monad.Extra (mapMaybeM)
+import           Control.Monad.Extra (join, mapMaybeM, whenJust)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
@@ -96,7 +101,7 @@ import           Database.Esqueleto.Legacy (Entity (..), From, InnerJoin (..), L
                    PersistField, SqlExpr, SqlQuery, Value (..), ValueList, count, countRows, desc,
                    entityKey, entityVal, exists, from, in_, isNothing, just, limit, max_, min_,
                    notExists, not_, on, orderBy, select, subList_select, sum_, unSqlBackendKey,
-                   unValue, val, where_, (&&.), (<=.), (==.), (>.), (^.), (||.))
+                   unValue, val, where_, (&&.), (<=.), (==.), (>.), (>=.), (^.), (||.))
 import           Database.Persist.Sql (SqlBackend)
 
 import           Cardano.Db.Error
@@ -320,6 +325,14 @@ queryEpochNo blkId = do
             where_ (blk ^. BlockId ==. val blkId)
             pure $ blk ^. BlockEpochNo
   pure $ maybeToEither (DbLookupBlockId $ unBlockId blkId) unValue (listToMaybe res)
+
+queryCurrentEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
+queryCurrentEpochNo = do
+    res <- select . from $ \ blk -> do
+              pure $ max_ (blk ^. BlockEpochNo)
+    pure $ join (unValue =<< listToMaybe res)
+
+
 
 -- | Get the fees paid in all block from genesis up to and including the specified block.
 queryFeesUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
@@ -615,28 +628,106 @@ queryAdaPots blkId = do
             pure adaPots
   pure $ fmap entityVal (listToMaybe res)
 
-queryReservedTickers :: MonadIO m => ReaderT SqlBackend m [(Text, ByteString)]
-queryReservedTickers = do
-  res <- select . from $ \pod -> do
-            pure $ (pod ^. PoolOfflineDataTickerName, pod ^. PoolOfflineDataHash)
-  pure $ unValue2 <$> res
+queryReservedTicker :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe Text)
+queryReservedTicker poolHash metaHash = do
+  res <- select . from $ \(pod `InnerJoin` ph) -> do
+            on (ph ^. PoolHashId ==. pod ^. PoolOfflineDataPoolId)
+            where_ (ph ^. PoolHashHashRaw ==. val poolHash)
+            where_ (pod ^. PoolOfflineDataHash ==. val metaHash)
+            pure $ pod ^. PoolOfflineDataTickerName
+  pure $ unValue <$> listToMaybe res
 
-queryPoolOfflineData :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe PoolOfflineData)
+queryPoolOfflineData :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe (Text, Text))
 queryPoolOfflineData poolHash poolMetadataHash = do
   res <- select . from $ \ (pod `InnerJoin` ph) -> do
             on (pod ^. PoolOfflineDataPoolId ==. ph ^. PoolHashId)
             where_ (ph ^. PoolHashHashRaw ==.  val poolHash)
             where_ (pod  ^. PoolOfflineDataHash ==. val poolMetadataHash)
             limit 1
-            pure pod
-  pure (entityVal <$> listToMaybe res)
+            pure (pod ^. PoolOfflineDataTickerName, pod ^. PoolOfflineDataJson)
+  pure $ unValue2 <$> listToMaybe res
 
-queryRetiredPools :: MonadIO m => ReaderT SqlBackend m [ByteString]
-queryRetiredPools = do
-  res <- select . from $ \(retired `InnerJoin` poolHash) -> do
+queryPoolRegister :: MonadIO m => Maybe ByteString -> ReaderT SqlBackend m [PoolCert]
+queryPoolRegister mPoolHash = do
+    res <- select . from $ \(poolUpdate `InnerJoin` poolHash `InnerJoin` poolMeta `InnerJoin` tx `InnerJoin` blk) -> do
+            on (poolUpdate ^. PoolUpdateHashId ==. poolHash ^. PoolHashId)
+            on (poolUpdate ^. PoolUpdateMetaId ==.  just (poolMeta ^. PoolMetadataRefId))
+            on (poolUpdate ^. PoolUpdateRegisteredTxId ==. tx ^. TxId)
+            on (tx ^. TxBlockId ==. blk ^. BlockId)
+            whenJust mPoolHash $ \ph ->
+              where_ (poolHash  ^. PoolHashHashRaw ==. val ph)
+            pure (poolHash ^. PoolHashHashRaw, poolMeta ^. PoolMetadataRefHash, blk ^. BlockBlockNo,
+                 tx ^. TxBlockIndex, poolUpdate ^. PoolUpdateCertIndex)
+    pure $ toUpdateInfo . unValue5 <$> res
+  where
+    toUpdateInfo (poolHash, metaHash, blkNo, txIndex, retIndex) =
+      PoolCert
+        { pcHash = poolHash
+        , pcCertAction = Register metaHash
+        , pcCertNo = CertNo blkNo txIndex retIndex
+        }
+
+queryRetiredPools :: MonadIO m => Maybe ByteString -> ReaderT SqlBackend m [PoolCert]
+queryRetiredPools mPoolHash = do
+    res <- select . from $ \(retired `InnerJoin` poolHash `InnerJoin` tx `InnerJoin` blk) -> do
             on (retired ^. PoolRetireHashId ==. poolHash ^. PoolHashId)
-            pure (poolHash ^. PoolHashHashRaw)
+            on (retired ^. PoolRetireAnnouncedTxId ==. tx ^. TxId)
+            on (tx ^. TxBlockId ==. blk ^. BlockId)
+            whenJust mPoolHash $ \ph ->
+              where_ (poolHash  ^. PoolHashHashRaw ==. val ph)
+            pure (poolHash ^. PoolHashHashRaw, retired ^. PoolRetireRetiringEpoch,
+                 blk ^. BlockBlockNo, tx ^. TxBlockIndex, retired ^. PoolRetireCertIndex)
+    pure $ toRetirementInfo . unValue5 <$> res
+  where
+    toRetirementInfo (hsh, retEpoch, blkNo, txIndex, retIndex) =
+      PoolCert
+        { pcHash = hsh
+        , pcCertAction = Retirement retEpoch
+        , pcCertNo = CertNo blkNo txIndex retIndex
+        }
+
+-- Return delisted Pool hashes.
+queryDelistedPools :: MonadIO m => ReaderT SqlBackend m [ByteString]
+queryDelistedPools = do
+  res <- select  . from $ \ delistedPool -> do
+            pure $ delistedPool ^. DelistedPoolHashRaw
   pure $ unValue <$> res
+
+-- Returns also the metadata hash
+queryPoolOfflineFetchError :: MonadIO m => ByteString -> Maybe UTCTime -> ReaderT SqlBackend m [(PoolOfflineFetchError, ByteString)]
+queryPoolOfflineFetchError poolHash Nothing = do
+    res <- select . from $ \(poolOfflineFetchError `InnerJoin` pooolHash `InnerJoin` poolMetadataRef) -> do
+            on (poolOfflineFetchError ^. PoolOfflineFetchErrorPoolId ==. pooolHash ^. PoolHashId)
+            on (poolOfflineFetchError ^. PoolOfflineFetchErrorPmrId ==. poolMetadataRef ^. PoolMetadataRefId)
+            where_ (pooolHash ^. PoolHashHashRaw ==. val poolHash)
+            orderBy [desc (poolOfflineFetchError ^. PoolOfflineFetchErrorFetchTime)]
+            limit 10
+            pure (poolOfflineFetchError, poolMetadataRef ^. PoolMetadataRefHash)
+    pure $ fmap extract res
+  where
+    extract (fetchErr, metadataHash) = (entityVal fetchErr, unValue metadataHash)
+
+queryPoolOfflineFetchError poolHash (Just fromTime) = do
+    res <- select . from $ \(poolOfflineFetchError `InnerJoin` pooolHash `InnerJoin` poolMetadataRef) -> do
+            on (poolOfflineFetchError ^. PoolOfflineFetchErrorPoolId ==. pooolHash ^. PoolHashId)
+            on (poolOfflineFetchError ^. PoolOfflineFetchErrorPmrId ==. poolMetadataRef ^. PoolMetadataRefId)
+            where_ (pooolHash ^. PoolHashHashRaw ==. val poolHash
+              &&. poolOfflineFetchError ^. PoolOfflineFetchErrorFetchTime >=. val fromTime)
+            orderBy [desc (poolOfflineFetchError ^. PoolOfflineFetchErrorFetchTime)]
+            limit 10
+            pure (poolOfflineFetchError, poolMetadataRef ^. PoolMetadataRefHash)
+    pure $ fmap extract res
+  where
+    extract (fetchErr, metadataHash) = (entityVal fetchErr, unValue metadataHash)
+
+existsDelistedPool :: MonadIO m => ByteString -> ReaderT SqlBackend m Bool
+existsDelistedPool ph = do
+  res <- select  . from $ \delistedPool -> do
+            where_ (delistedPool ^. DelistedPoolHashRaw ==. val ph)
+            limit 1
+            pure (delistedPool ^. DelistedPoolId)
+  pure $ not (null res)
+
 
 existsPoolHash :: MonadIO m => ByteString -> ReaderT SqlBackend m Bool
 existsPoolHash hsh = do
@@ -748,3 +839,6 @@ unValue3 (a, b, c) = (unValue a, unValue b, unValue c)
 
 unValue4 :: (Value a, Value b, Value c, Value d) -> (a, b, c, d)
 unValue4 (a, b, c, d) = (unValue a, unValue b, unValue c, unValue d)
+
+unValue5 :: (Value a, Value b, Value c, Value d, Value e) -> (a, b, c, d, e)
+unValue5 (a, b, c, d, e) = (unValue a, unValue b, unValue c, unValue d, unValue e)

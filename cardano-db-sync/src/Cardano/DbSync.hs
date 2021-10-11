@@ -38,8 +38,9 @@ import           Cardano.DbSync.Plugin.Default (defDbSyncNodePlugin)
 import           Cardano.DbSync.Rollback (unsafeRollback)
 import           Cardano.Sync.Database (runDbThread)
 
-import           Cardano.SMASH.Server.PoolApi
+import           Cardano.SMASH.Server.PoolDataLayer
 import           Cardano.SMASH.Server.Run
+import           Cardano.SMASH.Server.Types
 
 import           Cardano.Sync (Block (..), MetricSetters, SyncDataLayer (..), SyncNodePlugin (..),
                    configureLogging, runSyncNode)
@@ -84,9 +85,9 @@ runDbSyncNode metricsSetters mkPlugin knownMigrations params = do
         let syncNode = runSyncNode (mkSyncDataLayer trce backend) metricsSetters trce (mkPlugin backend)
               params (insertValidateGenesisDist backend) runDbThread
 
-        let poolApi = postgresqlPoolApi trce
+        let poolApi = postgresqlPoolDataLayer trce
 
-        race_ syncNode (runApp poolApi 3100)
+        race_ syncNode (runSmashServer poolApi (ApplicationUsers []) 3100)
   where
     -- This is only necessary because `cardano-db` and `cardano-sync` both define
     -- this newtype, but the later does not depend on the former.

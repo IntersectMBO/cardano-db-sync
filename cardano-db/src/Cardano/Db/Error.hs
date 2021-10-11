@@ -1,5 +1,5 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 
 module Cardano.Db.Error
@@ -8,14 +8,14 @@ module Cardano.Db.Error
   ) where
 
 
-import           Data.Aeson (ToJSON (..))
+-- import           Data.Aeson (ToJSON (..))
 import qualified Data.ByteString.Base16 as Base16
 import           Data.ByteString.Char8 (ByteString)
-import           GHC.Generics
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import           Data.Word (Word16, Word64)
+import           GHC.Generics
 
 data LookupFail
   = DbLookupBlockHash !ByteString
@@ -29,9 +29,6 @@ data LookupFail
   | DbMetaMultipleRows
   | DBMultipleGenesis
   deriving (Eq, Show, Generic)
-
-instance ToJSON LookupFail where
-    toJSON _ = undefined -- _failure@(DbLookupBlockHash _hash) = undefined
 
 renderLookupFail :: LookupFail -> Text
 renderLookupFail lf =

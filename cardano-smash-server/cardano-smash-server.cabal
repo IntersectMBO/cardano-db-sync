@@ -21,8 +21,8 @@ extra-source-files:     CHANGELOG.md
 custom-setup
   setup-depends:
                         base
-                      , Cabal
                       , bytestring
+                      , Cabal
                       , cardano-crypto-class
                       , directory
                       , filepath
@@ -45,7 +45,9 @@ library
   default-language:     Haskell2010
   hs-source-dirs:       src
 
-  ghc-options:          -Wall
+  ghc-options:          -O2
+                        -Wall
+                        -Wall
                         -Wcompat
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
@@ -56,8 +58,7 @@ library
   exposed-modules:      Cardano.SMASH.Server.Api
                         Cardano.SMASH.Server.FetchPolicies
                         Cardano.SMASH.Server.Impl
-                        Cardano.SMASH.Server.Orphans
-                        Cardano.SMASH.Server.PoolApi
+                        Cardano.SMASH.Server.PoolDataLayer
                         Cardano.SMASH.Server.Run
                         Cardano.SMASH.Server.Types
 
@@ -66,14 +67,16 @@ library
   build-depends:
                         aeson
                       , base                         >=4.7   && <5
-                      , bytestring
-                      , cardano-prelude
-                      , cardano-api
                       , base16-bytestring
+                      , bytestring
+                      , cardano-api
+                      , cardano-db
+                      , cardano-prelude
+                      , containers
                       , http-conduit
-                      , persistent
                       , iohk-monitoring
                       , network-uri
+                      , quiet
                       , servant
                       , servant-server
                       , servant-swagger
@@ -81,14 +84,8 @@ library
                       , text
                       , time
                       , transformers-except
-                      , quiet
                       , wai
                       , warp
-                      , cardano-slotting
-                      , cardano-db
 
   default-extensions:   NoImplicitPrelude
                         OverloadedStrings
-
-
-
