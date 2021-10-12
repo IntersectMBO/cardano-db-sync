@@ -38,6 +38,8 @@ import qualified Data.Text.Encoding as Text
 
 import           Database.Persist.Sql (SqlBackend)
 
+import           Paths_cardano_db_sync (version)
+
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.
 insertValidateGenesisDist
@@ -65,6 +67,7 @@ insertValidateGenesisDist backend tracer networkName cfg = do
                             DB.Meta
                               { DB.metaStartTime = Byron.configStartTime cfg
                               , DB.metaNetworkName = networkName
+                              , DB.metaVersion = textShow version
                               }
 
             -- Insert an 'artificial' Genesis block (with a genesis specific slot leader). We

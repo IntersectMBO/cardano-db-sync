@@ -49,6 +49,8 @@ import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShel
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..), ShelleyGenesisStaking (..),
                    emptyGenesisStaking)
 
+import           Paths_cardano_db_sync (version)
+
 
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.
@@ -87,6 +89,7 @@ insertValidateGenesisDist backend tracer networkName cfg = do
                             DB.Meta
                               { DB.metaStartTime = configStartTime cfg
                               , DB.metaNetworkName = networkName
+                              , DB.metaVersion = textShow version
                               }
             -- No reason to insert the artificial block if there are no funds or stakes definitions.
             when (hasInitialFunds || hasStakes) $ do
