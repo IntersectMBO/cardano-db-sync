@@ -80,11 +80,11 @@ rewardsStakeCreds = Map.keysSet . rwdRewards
 rewardBlockEra :: Shelley.ProtVer -> BlockEra
 rewardBlockEra pv =
   case pv of
-    Shelley.ProtVer 2 0 -> Shelley
-    Shelley.ProtVer 3 0 -> Allegra
-    Shelley.ProtVer 4 0 -> Mary
-    Shelley.ProtVer 5 0 -> Alonzo
-    Shelley.ProtVer 6 0 -> Alonzo
+    Shelley.ProtVer 2 _ -> Shelley
+    Shelley.ProtVer 3 _ -> Allegra
+    Shelley.ProtVer 4 _ -> Mary
+    Shelley.ProtVer 5 _ -> Alonzo
+    Shelley.ProtVer 6 _ -> Alonzo
     x -> panic $ "rewardBlockEra: " <> textShow x
 
 rewardProtoVer :: ExtLedgerState CardanoBlock -> Shelley.ProtVer
