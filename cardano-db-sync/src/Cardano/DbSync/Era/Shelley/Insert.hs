@@ -437,6 +437,8 @@ insertStakeAddress txId rewardAddr =
       , DB.stakeAddressRegisteredTxId = txId
       }
 
+-- | Insert a stake address if it is not already in the `stake_address` table. Regardless of
+-- whether it is newly inserted or it is already there, we retrun the `StakeAddressId`.
 insertStakeAddressRefIfMissing
     :: (MonadBaseControl IO m, MonadIO m)
     => DB.TxId -> Ledger.Addr StandardCrypto
