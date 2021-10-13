@@ -154,6 +154,7 @@ share
   Meta
     startTime           UTCTime             sqltype=timestamp
     networkName         Text
+    version             Text
     UniqueMeta          startTime
 
 

@@ -84,6 +84,8 @@ library
 
                         Cardano.DbSync.Rollback
 
+                        Paths_cardano_db_sync
+
   build-depends:        base                            >= 4.14         && < 4.16
                       , aeson
                       , binary
