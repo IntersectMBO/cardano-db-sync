@@ -108,6 +108,7 @@ data SyncNodeParams = SyncNodeParams
   , enpSocketPath :: !SocketPath
   , enpLedgerStateDir :: !LedgerStateDir
   , enpMigrationDir :: !MigrationDir
+  , enpRunSmash :: !Bool
   , enpMaybeRollback :: !(Maybe SlotNo)
   }
 

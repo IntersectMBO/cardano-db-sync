@@ -63,6 +63,7 @@ pRunDbSyncNode =
     <*> pSocketPath
     <*> pLedgerStateDir
     <*> pMigrationDir
+    <*> pRunSmash
     <*> optional pSlotNo
 
 pConfigFile :: Parser ConfigFile
@@ -91,6 +92,12 @@ pMigrationDir =
     <> Opt.completer (Opt.bashCompleter "directory")
     <> Opt.metavar "FILEPATH"
     )
+
+pRunSmash :: Parser Bool
+pRunSmash = Opt.switch
+  ( Opt.long "smash"
+  <> Opt.help "Enable smash web server"
+  )
 
 pSocketPath :: Parser SocketPath
 pSocketPath =

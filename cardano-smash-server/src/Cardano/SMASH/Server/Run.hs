@@ -14,17 +14,22 @@ import           Servant (Application, BasicAuthCheck (..), BasicAuthData (..),
 
 import           Network.Wai.Handler.Warp (defaultSettings, runSettings, setBeforeMainLoop, setPort)
 
+import           Cardano.BM.Trace (Trace, logInfo)
+
+import           Cardano.Db (textShow)
+
 import           Cardano.SMASH.Server.Api
 import           Cardano.SMASH.Server.Impl
 import           Cardano.SMASH.Server.PoolDataLayer
 import           Cardano.SMASH.Server.Types
 
 
-runSmashServer :: PoolDataLayer -> ApplicationUsers -> Int -> IO ()
-runSmashServer dataLayer appUsers port = do
+runSmashServer :: Trace IO Text -> PoolDataLayer -> ApplicationUsers -> Int -> IO ()
+runSmashServer tracer dataLayer appUsers port = do
     let settings =
           setPort port $
-          setBeforeMainLoop (hPutStrLn stderr ("SMASH listening on port " ++ show port))
+          setBeforeMainLoop
+            (logInfo tracer $ "SMASH listening on port " <> textShow port)
           defaultSettings
 
     runSettings settings =<< mkApp dataLayer appUsers

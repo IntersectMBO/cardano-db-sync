@@ -87,7 +87,9 @@ runDbSyncNode metricsSetters mkPlugin knownMigrations params = do
 
         let poolApi = postgresqlPoolDataLayer trce
 
-        race_ syncNode (runSmashServer poolApi (ApplicationUsers []) 3100)
+        if enpRunSmash params
+          then race_ syncNode (runSmashServer trce poolApi (ApplicationUsers []) 3100)
+          else syncNode
   where
     -- This is only necessary because `cardano-db` and `cardano-sync` both define
     -- this newtype, but the later does not depend on the former.
