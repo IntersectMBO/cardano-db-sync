@@ -8,7 +8,6 @@ module Cardano.Db.Error
   ) where
 
 
--- import           Data.Aeson (ToJSON (..))
 import qualified Data.ByteString.Base16 as Base16
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Text (Text)

@@ -332,8 +332,6 @@ queryCurrentEpochNo = do
               pure $ max_ (blk ^. BlockEpochNo)
     pure $ join (unValue =<< listToMaybe res)
 
-
-
 -- | Get the fees paid in all block from genesis up to and including the specified block.
 queryFeesUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
 queryFeesUpToBlockNo blkNo = do

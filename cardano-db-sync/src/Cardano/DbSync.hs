@@ -40,7 +40,6 @@ import           Cardano.Sync.Database (runDbThread)
 
 import           Cardano.SMASH.Server.PoolDataLayer
 import           Cardano.SMASH.Server.Run
-import           Cardano.SMASH.Server.Types
 
 import           Cardano.Sync (Block (..), MetricSetters, SyncDataLayer (..), SyncNodePlugin (..),
                    configureLogging, runSyncNode)
@@ -88,7 +87,7 @@ runDbSyncNode metricsSetters mkPlugin knownMigrations params = do
         let poolApi = postgresqlPoolDataLayer trce
 
         if enpRunSmash params
-          then race_ syncNode (runSmashServer trce poolApi (ApplicationUsers []) 3100)
+          then race_ syncNode (runSmashServer trce poolApi (enpSmashUserFile params) 3100)
           else syncNode
   where
     -- This is only necessary because `cardano-db` and `cardano-sync` both define

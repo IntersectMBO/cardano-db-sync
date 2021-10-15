@@ -14,6 +14,9 @@ import           Servant (Application, BasicAuthCheck (..), BasicAuthData (..),
 
 import           Network.Wai.Handler.Warp (defaultSettings, runSettings, setBeforeMainLoop, setPort)
 
+import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
+
 import           Cardano.BM.Trace (Trace, logInfo)
 
 import           Cardano.Db (textShow)
@@ -23,9 +26,13 @@ import           Cardano.SMASH.Server.Impl
 import           Cardano.SMASH.Server.PoolDataLayer
 import           Cardano.SMASH.Server.Types
 
+import           System.IO.Error
 
-runSmashServer :: Trace IO Text -> PoolDataLayer -> ApplicationUsers -> Int -> IO ()
-runSmashServer tracer dataLayer appUsers port = do
+runSmashServer :: Trace IO Text -> PoolDataLayer -> Maybe FilePath -> Int -> IO ()
+runSmashServer tracer dataLayer mUsersFile port = do
+
+    appUsers <- readAppUsers mUsersFile
+
     let settings =
           setPort port $
           setBeforeMainLoop
@@ -33,6 +40,25 @@ runSmashServer tracer dataLayer appUsers port = do
           defaultSettings
 
     runSettings settings =<< mkApp dataLayer appUsers
+
+readAppUsers :: Maybe FilePath -> IO ApplicationUsers
+readAppUsers mPath = case mPath of
+  Nothing -> pure $ ApplicationUsers []
+  Just path -> do
+    userLines <- Text.lines <$> Text.readFile path
+    case mapM parseAppUser userLines of
+      Right users -> pure $ ApplicationUsers users
+      Left err -> throwIO $ userError $ Text.unpack err
+
+parseAppUser :: Text -> Either Text ApplicationUser
+parseAppUser line = case Text.breakOn "," line of
+    (user, commaPswd)
+      | not (Text.null commaPswd)
+      , passwd <- Text.tail commaPswd -- strip the comma
+      -> Right $ ApplicationUser (prepareCred user) (prepareCred passwd)
+    _ -> Left "Credentials need to be supplied in the form: username,password"
+  where
+    prepareCred name = Text.strip name
 
 mkApp :: PoolDataLayer -> ApplicationUsers -> IO Application
 mkApp dataLayer appUsers = do

@@ -65,6 +65,7 @@ pRunDbSyncNode =
     <*> pLedgerStateDir
     <*> pMigrationDir
     <*> pRunSmash
+    <*> optional pSmashUserFile
     <*> optional pSlotNo
 
 pConfigFile :: Parser ConfigFile
@@ -99,6 +100,15 @@ pRunSmash = Opt.switch
   ( Opt.long "smash"
   <> Opt.help "Enable smash web server"
   )
+
+pSmashUserFile :: Parser FilePath
+pSmashUserFile =
+  Opt.strOption
+    ( Opt.long "admins"
+    <> Opt.help "Path to the file containing the credentials of smash server admin users"
+    <> Opt.completer (Opt.bashCompleter "file")
+    <> Opt.metavar "FILEPATH"
+    )
 
 pSocketPath :: Parser SocketPath
 pSocketPath =

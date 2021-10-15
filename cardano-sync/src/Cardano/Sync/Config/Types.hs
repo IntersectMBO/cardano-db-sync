@@ -109,6 +109,7 @@ data SyncNodeParams = SyncNodeParams
   , enpLedgerStateDir :: !LedgerStateDir
   , enpMigrationDir :: !MigrationDir
   , enpRunSmash :: !Bool
+  , enpSmashUserFile :: !(Maybe FilePath)
   , enpMaybeRollback :: !(Maybe SlotNo)
   }
 

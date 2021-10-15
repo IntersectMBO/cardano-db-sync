@@ -520,7 +520,7 @@ share
     poolId              PoolHashId
     UniqueReservedPoolTicker name
 
-  -- A table containing a list of delisted pools.
+  -- A table containing delisted pools.
   DelistedPool
     hashRaw             ByteString          sqltype=hash28type
     UniqueDelistedPool  hashRaw
