@@ -14,51 +14,29 @@ import           Servant (Application, BasicAuthCheck (..), BasicAuthData (..),
 
 import           Network.Wai.Handler.Warp (defaultSettings, runSettings, setBeforeMainLoop, setPort)
 
-import qualified Data.Text as Text
-import qualified Data.Text.IO as Text
-
-import           Cardano.BM.Trace (Trace, logInfo)
+import           Cardano.BM.Trace (logInfo)
 
 import           Cardano.Db (textShow)
 
 import           Cardano.SMASH.Server.Api
+import           Cardano.SMASH.Server.Config
 import           Cardano.SMASH.Server.Impl
 import           Cardano.SMASH.Server.PoolDataLayer
 import           Cardano.SMASH.Server.Types
 
-import           System.IO.Error
+runSmashServer :: SmashServerConfig -> IO ()
+runSmashServer config = do
 
-runSmashServer :: Trace IO Text -> PoolDataLayer -> Maybe FilePath -> Int -> IO ()
-runSmashServer tracer dataLayer mUsersFile port = do
-
-    appUsers <- readAppUsers mUsersFile
+    let trce = sscTrace config
+    let poolDataLayer = postgresqlPoolDataLayer trce
 
     let settings =
-          setPort port $
+          setPort (sscSmashPort config) $
           setBeforeMainLoop
-            (logInfo tracer $ "SMASH listening on port " <> textShow port)
+            (logInfo trce $ "SMASH listening on port " <> textShow (sscSmashPort config))
           defaultSettings
 
-    runSettings settings =<< mkApp dataLayer appUsers
-
-readAppUsers :: Maybe FilePath -> IO ApplicationUsers
-readAppUsers mPath = case mPath of
-  Nothing -> pure $ ApplicationUsers []
-  Just path -> do
-    userLines <- Text.lines <$> Text.readFile path
-    case mapM parseAppUser userLines of
-      Right users -> pure $ ApplicationUsers users
-      Left err -> throwIO $ userError $ Text.unpack err
-
-parseAppUser :: Text -> Either Text ApplicationUser
-parseAppUser line = case Text.breakOn "," line of
-    (user, commaPswd)
-      | not (Text.null commaPswd)
-      , passwd <- Text.tail commaPswd -- strip the comma
-      -> Right $ ApplicationUser (prepareCred user) (prepareCred passwd)
-    _ -> Left "Credentials need to be supplied in the form: username,password"
-  where
-    prepareCred name = Text.strip name
+    runSettings settings =<< mkApp poolDataLayer (sscAdmins config)
 
 mkApp :: PoolDataLayer -> ApplicationUsers -> IO Application
 mkApp dataLayer appUsers = do
