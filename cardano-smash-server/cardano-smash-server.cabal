@@ -56,6 +56,7 @@ library
                         -fno-warn-orphans
 
   exposed-modules:      Cardano.SMASH.Server.Api
+                        Cardano.SMASH.Server.Config
                         Cardano.SMASH.Server.FetchPolicies
                         Cardano.SMASH.Server.Impl
                         Cardano.SMASH.Server.PoolDataLayer
@@ -86,6 +87,40 @@ library
                       , transformers-except
                       , wai
                       , warp
+                      , yaml
 
   default-extensions:   NoImplicitPrelude
                         OverloadedStrings
+
+executable cardano-smash-server
+  default-language:     Haskell2010
+  main-is:              cardano-smash-server.hs
+  hs-source-dirs:       app
+
+  ghc-options:          -O2
+                        -Wall
+                        -Werror
+                        -Wcompat
+                        -Wredundant-constraints
+                        -Wincomplete-patterns
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+                        -Wunused-imports
+                        -Wunused-packages
+                        -Wno-unsafe
+                        -threaded
+                        -with-rtsopts=-N3
+
+  autogen-modules:      Paths_cardano_smash_server
+
+  other-modules:        Paths_cardano_smash_server
+
+  build-depends:        base                            >= 4.14         && < 4.16
+                      , cardano-config
+                      , cardano-smash-server
+                      , cardano-prelude
+                      , optparse-applicative
+                      , text
+
+
+

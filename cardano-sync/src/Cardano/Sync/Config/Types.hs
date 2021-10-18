@@ -110,6 +110,7 @@ data SyncNodeParams = SyncNodeParams
   , enpMigrationDir :: !MigrationDir
   , enpRunSmash :: !Bool
   , enpSmashUserFile :: !(Maybe FilePath)
+  , enpSmashPort :: !Int
   , enpMaybeRollback :: !(Maybe SlotNo)
   }
 

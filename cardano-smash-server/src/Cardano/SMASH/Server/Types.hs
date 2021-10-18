@@ -348,24 +348,6 @@ instance MonadFail (Either Text) where
 
 instance ToParamSchema TimeStringFormat
 
-
--- A data type we use to store user credentials.
-data ApplicationUser = ApplicationUser
-    { username :: !Text
-    , password :: !Text
-    } deriving (Eq, Show, Generic)
-
-instance ToJSON ApplicationUser
-instance FromJSON ApplicationUser
-
--- A list of users we use.
-newtype ApplicationUsers = ApplicationUsers [ApplicationUser]
-    deriving (Eq, Show, Generic)
-
-instance ToJSON ApplicationUsers
-instance FromJSON ApplicationUsers
-
-
 -- | A user we'll grab from the database when we authenticate someone
 newtype User = User { userName :: Text }
   deriving (Eq, Show)

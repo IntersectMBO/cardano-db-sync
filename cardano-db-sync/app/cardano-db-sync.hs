@@ -2,11 +2,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import           Cardano.Prelude
+import           Prelude (read)
 
 import           Cardano.Config.Git.Rev (gitRev)
 
 import           Cardano.DbSync (defDbSyncNodePlugin, runDbSyncNode)
 import           Cardano.DbSync.Metrics (withMetricSetters)
+
+import           Cardano.SMASH.Server.Config (defaultSmashPort)
 
 import           Cardano.Sync.Config
 import           Cardano.Sync.Config.Types
@@ -65,6 +68,7 @@ pRunDbSyncNode =
     <*> pMigrationDir
     <*> pRunSmash
     <*> optional pSmashUserFile
+    <*> asum [pSmashPort, pure defaultSmashPort]
     <*> optional pSlotNo
 
 pConfigFile :: Parser ConfigFile
@@ -107,6 +111,15 @@ pSmashUserFile =
     <> Opt.help "Path to the file containing the credentials of smash server admin users"
     <> Opt.completer (Opt.bashCompleter "file")
     <> Opt.metavar "FILEPATH"
+    )
+
+pSmashPort :: Parser Int
+pSmashPort =
+  read <$> Opt.strOption
+    ( Opt.long "smash-port"
+    <> Opt.help "Port for the smash web app server"
+    <> Opt.completer (Opt.bashCompleter "port")
+    <> Opt.metavar "PORT"
     )
 
 pSocketPath :: Parser SocketPath

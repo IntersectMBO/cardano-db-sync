@@ -168,5 +168,6 @@ executable cardano-db-sync
                       , cardano-db-sync
                       , cardano-prelude
                       , cardano-slotting
+                      , cardano-smash-server
                       , optparse-applicative
                       , text
