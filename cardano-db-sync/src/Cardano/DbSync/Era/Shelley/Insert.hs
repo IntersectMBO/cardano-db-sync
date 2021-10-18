@@ -200,10 +200,14 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx = do
                 , DB.txBlockId = blkId
                 , DB.txBlockIndex = blockIndex
                 , DB.txOutSum = DB.DbLovelace (fromIntegral outSum)
-                , DB.txFee = if not (Generic.txValidContract tx) then DB.DbLovelace (fromIntegral inSum)
-                    else DB.DbLovelace (fromIntegral . unCoin $ Generic.txFees tx)
-                , DB.txDeposit = if not (Generic.txValidContract tx) then 0
-                    else fromIntegral (inSum + withdrawalSum) - fromIntegral (outSum + fees)
+                , DB.txFee =
+                    if not (Generic.txValidContract tx)
+                      then DB.DbLovelace (fromIntegral inSum)
+                      else DB.DbLovelace (fromIntegral . unCoin $ Generic.txFees tx)
+                , DB.txDeposit =
+                    if not (Generic.txValidContract tx)
+                      then 0
+                      else fromIntegral (inSum + withdrawalSum) - fromIntegral (outSum + fees)
                 , DB.txSize = Generic.txSize tx
                 , DB.txInvalidBefore = DbWord64 . unSlotNo <$> Generic.txInvalidBefore tx
                 , DB.txInvalidHereafter = DbWord64 . unSlotNo <$> Generic.txInvalidHereafter tx
@@ -215,17 +219,15 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx = do
     -- references the output (not sure this can even happen).
     mapM_ (insertTxOut tracer txId) (Generic.txOutputs tx)
 
-    redeemersIds <- mapM (insertRedeemer tracer txId) (Generic.txRedeemer tx)
-    let redeemers = zip redeemersIds (Generic.txRedeemer tx)
+    redeemers <- mapM (insertRedeemer tracer txId) (Generic.txRedeemer tx)
 
     mapM_ (insertDatum tracer txId) (Generic.txData tx)
     -- Insert the transaction inputs and collateral inputs (Alonzo).
     mapM_ (insertTxIn tracer txId redeemers) resolvedInputs
     mapM_ (insertCollateralTxIn tracer txId) (Generic.txCollateralInputs tx)
 
-    case Generic.txMetadata tx of
-      Nothing -> pure ()
-      Just md -> insertTxMetadata tracer txId md
+    whenJust (maybeToStrict $ Generic.txMetadata tx) $ \ md ->
+      insertTxMetadata tracer txId md
 
     mapM_ (insertCertificate tracer lStateSnap network blkId txId epochNo slotNo redeemers) $ Generic.txCertificates tx
     mapM_ (insertWithdrawals tracer txId redeemers) $ Generic.txWithdrawals tx
@@ -694,21 +696,22 @@ insertParamProposal tracer blkId txId pp = do
 insertRedeemer
   :: (MonadBaseControl IO m, MonadIO m)
   => Trace IO Text -> DB.TxId -> Generic.TxRedeemer
-  -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.RedeemerId
+  -> ExceptT SyncNodeError (ReaderT SqlBackend m) (DB.RedeemerId, Generic.TxRedeemer)
 insertRedeemer tracer txId redeemer = do
     tdId <- insertDatum tracer txId $ Generic.txRedeemerDatum redeemer
     scriptHash <- findScriptHash
-    lift . DB.insertRedeemer $
-      DB.Redeemer
-        { DB.redeemerTxId = txId
-        , DB.redeemerUnitMem = Generic.txRedeemerMem redeemer
-        , DB.redeemerUnitSteps = Generic.txRedeemerSteps redeemer
-        , DB.redeemerFee = DB.DbLovelace (fromIntegral . unCoin $ Generic.txRedeemerFee redeemer)
-        , DB.redeemerPurpose = mkPurpose $ Generic.txRedeemerPurpose redeemer
-        , DB.redeemerIndex = Generic.txRedeemerIndex redeemer
-        , DB.redeemerScriptHash = scriptHash
-        , DB.redeemerDatumId = tdId
-        }
+    rid <- lift . DB.insertRedeemer $
+              DB.Redeemer
+                { DB.redeemerTxId = txId
+                , DB.redeemerUnitMem = Generic.txRedeemerMem redeemer
+                , DB.redeemerUnitSteps = Generic.txRedeemerSteps redeemer
+                , DB.redeemerFee = DB.DbLovelace (fromIntegral . unCoin $ Generic.txRedeemerFee redeemer)
+                , DB.redeemerPurpose = mkPurpose $ Generic.txRedeemerPurpose redeemer
+                , DB.redeemerIndex = Generic.txRedeemerIndex redeemer
+                , DB.redeemerScriptHash = scriptHash
+                , DB.redeemerDatumId = tdId
+                }
+    pure (rid, redeemer)
   where
     mkPurpose :: Ledger.Tag -> DB.ScriptPurpose
     mkPurpose tag =
