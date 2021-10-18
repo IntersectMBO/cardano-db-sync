@@ -217,26 +217,31 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx = do
 
     -- Insert outputs for a transaction before inputs in case the inputs for this transaction
     -- references the output (not sure this can even happen).
+    -- In the case of a second state script validation failure, these outputs have already beeb
+    -- switched to the collcateral outputs in place of the "successful transaction" outputs.
     mapM_ (insertTxOut tracer txId) (Generic.txOutputs tx)
 
-    redeemers <- mapM (insertRedeemer tracer txId) (Generic.txRedeemer tx)
+    -- The following operations only happen if the script passes stage 2 validation (or the tx has
+    -- no script).
+    when (Generic.txValidContract tx) $ do
+      redeemers <- mapM (insertRedeemer tracer txId) (Generic.txRedeemer tx)
 
-    mapM_ (insertDatum tracer txId) (Generic.txData tx)
-    -- Insert the transaction inputs and collateral inputs (Alonzo).
-    mapM_ (insertTxIn tracer txId redeemers) resolvedInputs
-    mapM_ (insertCollateralTxIn tracer txId) (Generic.txCollateralInputs tx)
+      mapM_ (insertDatum tracer txId) (Generic.txData tx)
+      -- Insert the transaction inputs and collateral inputs (Alonzo).
+      mapM_ (insertTxIn tracer txId redeemers) resolvedInputs
+      mapM_ (insertCollateralTxIn tracer txId) (Generic.txCollateralInputs tx)
 
-    whenJust (maybeToStrict $ Generic.txMetadata tx) $ \ md ->
-      insertTxMetadata tracer txId md
+      whenJust (maybeToStrict $ Generic.txMetadata tx) $ \ md ->
+        insertTxMetadata tracer txId md
 
-    mapM_ (insertCertificate tracer lStateSnap network blkId txId epochNo slotNo redeemers) $ Generic.txCertificates tx
-    mapM_ (insertWithdrawals tracer txId redeemers) $ Generic.txWithdrawals tx
+      mapM_ (insertCertificate tracer lStateSnap network blkId txId epochNo slotNo redeemers) $ Generic.txCertificates tx
+      mapM_ (insertWithdrawals tracer txId redeemers) $ Generic.txWithdrawals tx
 
-    mapM_ (insertParamProposal tracer blkId txId) $ Generic.txParamProposal tx
+      mapM_ (insertParamProposal tracer blkId txId) $ Generic.txParamProposal tx
 
-    insertMaTxMint tracer txId $ Generic.txMint tx
+      insertMaTxMint tracer txId $ Generic.txMint tx
 
-    mapM_ (insertScript tracer txId) $ Generic.txScripts tx
+      mapM_ (insertScript tracer txId) $ Generic.txScripts tx
 
 resolveTxInputs :: MonadIO m => Generic.TxIn -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, DbLovelace)
 resolveTxInputs txIn = do
