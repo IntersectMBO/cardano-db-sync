@@ -3,7 +3,6 @@
 
 module Cardano.DbSync.Era.Shelley.Offline.Query
   ( queryOfflinePoolData
-  , queryPoolHashId
   ) where
 
 import           Cardano.Prelude hiding (from, groupBy, on, retry)
@@ -19,7 +18,7 @@ import           Cardano.Sync.Types
 
 import           Database.Esqueleto.Legacy (InnerJoin (..), SqlExpr, Value (..), ValueList, desc,
                    from, groupBy, in_, just, max_, notExists, on, orderBy, select, subList_select,
-                   val, where_, (==.), (^.))
+                   where_, (==.), (^.))
 import           Database.Persist.Sql (SqlBackend)
 
 import           System.Random.Shuffle (shuffleM)
@@ -111,11 +110,3 @@ queryPoolFetchRetry _now = do
         , pfrPoolMDHash = PoolMetaHash pmh
         , pfrRetry = retryAgain (Time.utcTimeToPOSIXSeconds time) rCount
         }
-
--- Given the Bech32 encoded PoolIdent, return the PoolHash index.
-queryPoolHashId :: MonadIO m => PoolIdent -> ReaderT SqlBackend m (Either LookupFail PoolHashId)
-queryPoolHashId (PoolIdent pname) = do
-    res <- select . from $ \ ph -> do
-              where_ (ph ^. PoolHashView ==. val pname)
-              pure (ph ^. PoolHashId)
-    pure $ maybe (Left $ DbLookupMessage pname) (Right . unValue) (listToMaybe res)

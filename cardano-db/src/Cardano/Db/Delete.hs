@@ -3,6 +3,7 @@ module Cardano.Db.Delete
   , deleteCascadeAfter
   , deleteCascadeBlockNo
   , deleteCascadeSlotNo
+  , deleteDelistedPool
   ) where
 
 import           Cardano.Slotting.Slot (SlotNo (..))
@@ -11,6 +12,8 @@ import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Database.Persist.Sql (SqlBackend, delete, selectKeysList, (!=.), (==.))
+
+import           Data.ByteString (ByteString)
 
 import           Cardano.Db.Schema
 
@@ -50,3 +53,10 @@ deleteCascadeSlotNo (SlotNo slotNo) = do
   mapM_ delete keys
   pure $ not (null keys)
 
+-- | Delete a delisted pool if it exists. Returns 'True' if it did exist and has been
+-- deleted and 'False' if it did not exist.
+deleteDelistedPool :: MonadIO m => ByteString -> ReaderT SqlBackend m Bool
+deleteDelistedPool poolHash = do
+  keys <- selectKeysList [ DelistedPoolHashRaw ==. poolHash ] []
+  mapM_ delete keys
+  pure $ not (null keys)

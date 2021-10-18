@@ -7,7 +7,6 @@
 
 module Cardano.Db.Insert
   ( insertAdaPots
-  , insertAdminUser
   , insertBlock
   , insertCollateralTxIn
   , insertDelegation
@@ -48,6 +47,7 @@ module Cardano.Db.Insert
   , insertDatum
   , insertCheckPoolOfflineData
   , insertCheckPoolOfflineFetchError
+  , insertDelistedPool
 
   -- Export mainly for testing.
   , insertBlockChecked
@@ -102,9 +102,6 @@ import           Cardano.Db.Schema
 
 insertAdaPots :: (MonadBaseControl IO m, MonadIO m) => AdaPots -> ReaderT SqlBackend m AdaPotsId
 insertAdaPots = insertCheckUnique "AdaPots"
-
-insertAdminUser :: (MonadBaseControl IO m, MonadIO m) => AdminUser -> ReaderT SqlBackend m AdminUserId
-insertAdminUser = insertUnchecked "AdminUser"
 
 insertBlock :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
 insertBlock = insertUnchecked "Block"
@@ -234,6 +231,9 @@ insertCheckPoolOfflineFetchError pofe = do
   foundPool <- existsPoolHashId (poolOfflineFetchErrorPoolId pofe)
   foundMeta <- existsPoolMetadataRefId (poolOfflineFetchErrorPmrId pofe)
   when (foundPool && foundMeta) . void $ insertCheckUnique "PoolOfflineFetchError" pofe
+
+insertDelistedPool :: (MonadBaseControl IO m, MonadIO m) => DelistedPool -> ReaderT SqlBackend m DelistedPoolId
+insertDelistedPool = insertCheckUnique "DelistedPool"
 
 -- -----------------------------------------------------------------------------
 

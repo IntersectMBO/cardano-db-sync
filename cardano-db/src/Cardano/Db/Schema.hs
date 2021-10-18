@@ -520,12 +520,10 @@ share
     poolId              PoolHashId
     UniqueReservedPoolTicker name
 
-  -- A table containin a list of administrator users that can be used to access the secure API endpoints.
-  -- Yes, we don't have any hash check mechanisms here, if they get to the database, game over anyway.
-  AdminUser
-    username            Text
-    password            Text
-    UniqueAdminUser     username
+  -- A table containing delisted pools.
+  DelistedPool
+    hashRaw             ByteString          sqltype=hash28type
+    UniqueDelistedPool  hashRaw
 
   |]
 
@@ -919,7 +917,6 @@ schemaDocs =
       ReservedPoolTickerName # "The ticker name."
       ReservedPoolTickerPoolId # "The PoolHash table index for the pool that has reserved this name."
 
-    AdminUser --^ do
-      "A table listing all admin users (for maintaining the SMASH related data)."
-      AdminUserUsername # "The user name."
-      AdminUserPassword # "The password."
+    DelistedPool --^ do
+      "A table containing pools that have been delisted."
+      DelistedPoolHashRaw # "The pool hash"

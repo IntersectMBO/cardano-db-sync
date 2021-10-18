@@ -13,6 +13,7 @@ module Cardano.Db.Run
   , runDbStdoutLogging
   , runIohkLogging
   , transactionCommit
+  , runWithConnectionLogging
   ) where
 
 import           Cardano.BM.Data.LogItem (LOContent (..), LogObject (..), PrivacyAnnotation (..),
@@ -41,7 +42,8 @@ import           Database.Esqueleto.Internal.Internal (Mode (SELECT), SqlSelect,
                    toRawSql)
 import           Database.Esqueleto.Legacy (SqlQuery)
 
-import           Database.Persist.Postgresql (SqlBackend, openSimpleConn, withPostgresqlPool)
+import           Database.Persist.Postgresql (SqlBackend, openSimpleConn, withPostgresqlConn,
+                   withPostgresqlPool)
 import           Database.Persist.Sql (IsolationLevel (..), runSqlConnWithIsolation,
                    transactionSaveWithIsolation)
 import           Database.PostgreSQL.Simple (connectPostgreSQL)
@@ -69,6 +71,13 @@ runDbHandleLogger logHandle dbAction = do
     logOut :: Loc -> LogSource -> LogLevel -> LogStr -> IO ()
     logOut loc src level msg =
       BS.hPutStrLn logHandle . fromLogStr $ defaultLogStr loc src level msg
+
+runWithConnectionLogging :: Trace IO Text -> ReaderT SqlBackend (LoggingT IO) a -> IO a
+runWithConnectionLogging tracer dbAction = do
+  pgconf <- readPGPassFileEnv Nothing
+  runIohkLogging tracer .
+    withPostgresqlConn (toConnectionString pgconf) $ \backend ->
+      runSqlConnWithIsolation dbAction backend Serializable
 
 -- | Run a DB action logging via iohk-monitoring-framework.
 runDbIohkLogging :: MonadUnliftIO m => SqlBackend -> Trace IO Text -> ReaderT SqlBackend (LoggingT m) b -> m b

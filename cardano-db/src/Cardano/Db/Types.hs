@@ -16,6 +16,9 @@ module Cardano.Db.Types
   , SyncState (..)
   , ScriptPurpose (..)
   , ScriptType (..)
+  , PoolCertAction (..)
+  , CertNo (..)
+  , PoolCert (..)
   , deltaCoinToDbInt65
   , integerToDbInt65
   , lovelaceToAda
@@ -52,13 +55,14 @@ import           Data.Aeson.Encoding (unsafeToEncoding)
 import           Data.Aeson.Types (FromJSON (..), ToJSON (..))
 import qualified Data.Aeson.Types as Aeson
 import qualified Data.ByteArray as ByteArray
+import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Builder as BS (string8)
 import           Data.Either (fromRight)
 import           Data.Fixed (Micro, showFixed)
 import           Data.Scientific (Scientific)
 import           Data.Text (Text)
 import qualified Data.Text as Text
-import           Data.Word (Word64)
+import           Data.Word (Word16, Word64)
 
 import           GHC.Generics (Generic)
 
@@ -146,6 +150,28 @@ data ScriptType
   | Timelock
   | Plutus
   deriving (Eq, Generic, Show)
+
+data PoolCertAction
+  = Retirement Word64   -- retirement epoch
+  | Register ByteString -- metadata hash
+  deriving (Eq, Show)
+
+-- | A Unique identifier for a certificate in the
+-- blockchain. Ord instance gives a chronological order.
+data CertNo = CertNo
+  { ciBlockNo :: Maybe Word64
+  , ciTxIndex :: Word64
+  , ciCertIndex :: Word16
+  } deriving (Eq, Ord, Show)
+
+data PoolCert = PoolCert
+  { pcHash :: ByteString
+  , pcCertAction :: PoolCertAction
+  , pcCertNo :: CertNo
+  } deriving (Eq, Show)
+
+instance Ord PoolCert where
+  compare a b = compare (pcCertNo a) (pcCertNo b)
 
 deltaCoinToDbInt65 :: DeltaCoin -> DbInt65
 deltaCoinToDbInt65 (DeltaCoin dc) =
