@@ -78,7 +78,7 @@ getPoolOfflineMetadata
     -> PoolId
     -> PoolMetadataHash
     -> Handler (Headers '[Header "Cache-Control" Text] (ApiResult DBFail PoolMetadataRaw))
-getPoolOfflineMetadata dataLayer poolId poolHash = fmap (addHeader $ cacheControlHeader NoCache) . convertIOToHandler $ do
+getPoolOfflineMetadata dataLayer poolId poolMetaHash = fmap (addHeader $ cacheControlHeader NoCache) . convertIOToHandler $ do
 
     isDelisted <- dlCheckDelistedPool dataLayer poolId
 
@@ -90,10 +90,15 @@ getPoolOfflineMetadata dataLayer poolId poolHash = fmap (addHeader $ cacheContro
     when isRetired $
         throwIO err404
 
-    mmetadata <- dlGetPoolMetadata dataLayer poolId poolHash
+    mmetadata <- dlGetPoolMetadata dataLayer poolId poolMetaHash
     case mmetadata of
-        Left _err -> throwIO err404
-        Right meta -> pure $ ApiResult $ Right meta
+      Left _err -> throwIO err404
+      Right (tickerName, meta) -> do
+        mPoolHash <- dlCheckReservedTicker dataLayer tickerName
+        case mPoolHash of
+          Nothing -> pure $ ApiResult $ Right meta
+          Just tickerPoolHash | tickerPoolHash == poolId -> pure $ ApiResult $ Right meta
+          Just _poolHash -> throwIO err404 -- ticker is reserved by another pool.
 
 -- |Simple health status, there are ideas for improvement.
 getHealthStatus :: Handler (ApiResult DBFail HealthStatus)
@@ -183,10 +188,18 @@ checkPool dataLayer poolId = convertIOToHandler $ do
 
     pure . ApiResult $ existingPoolId
 
-addTicker :: PoolDataLayer -> TickerName -> PoolMetadataHash -> Handler (ApiResult DBFail TickerName)
-addTicker dataLayer tickerName poolMetadataHash = convertIOToHandler $ do
+#ifdef DISABLE_BASIC_AUTH
+addTicker :: PoolDataLayer -> TickerName -> PoolId -> Handler (ApiResult DBFail TickerName)
+addTicker = addTicker'
+#else
+addTicker :: PoolDataLayer -> User -> TickerName -> PoolId -> Handler (ApiResult DBFail TickerName)
+addTicker dataLayer _user = addTicker' dataLayer
+#endif
 
-    reservedTickerE <- dlAddReservedTicker dataLayer tickerName poolMetadataHash
+addTicker' :: PoolDataLayer -> TickerName -> PoolId -> Handler (ApiResult DBFail TickerName)
+addTicker' dataLayer tickerName poolId = convertIOToHandler $ do
+
+    reservedTickerE <- dlAddReservedTicker dataLayer tickerName poolId
 
     case reservedTickerE of
         Left dbFail           -> throwDBFailException dbFail

@@ -99,7 +99,7 @@ type DelistPoolAPI = BasicAuthURL :> "api" :> APIVersion :> "delist" :> ReqBody 
 
 type EnlistPoolAPI = BasicAuthURL :> "api" :> APIVersion :> "enlist" :> ReqBody '[JSON] PoolId :> ApiRes Patch PoolId
 
-type AddTickerAPI = "api" :> APIVersion :> "tickers" :> Capture "name" TickerName :> ReqBody '[JSON] PoolMetadataHash :> ApiRes Post TickerName
+type AddTickerAPI = BasicAuthURL :> "api" :> APIVersion :> "tickers" :> Capture "name" TickerName :> ReqBody '[JSON] PoolId :> ApiRes Post TickerName
 
 -- Enabling the SMASH server to fetch the policies from remote SMASH server. Policies like delisting or unique ticker names.
 type FetchPoliciesAPI = BasicAuthURL :> "api" :> APIVersion :> "policies" :> ReqBody '[JSON] SmashURL :> ApiRes Post PolicyResult
