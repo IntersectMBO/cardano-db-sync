@@ -55,7 +55,9 @@ module Cardano.Db.Query
   , queryPoolOfflineData
   , queryPoolRegister
   , queryRetiredPools
+  , queryUsedTicker
   , queryReservedTicker
+  , queryReservedTickers
   , queryDelistedPools
   , queryPoolOfflineFetchError
   , existsDelistedPool
@@ -102,7 +104,7 @@ import           Database.Esqueleto.Legacy (Entity (..), From, InnerJoin (..), L
                    entityKey, entityVal, exists, from, in_, isNothing, just, limit, max_, min_,
                    notExists, not_, on, orderBy, select, subList_select, sum_, unSqlBackendKey,
                    unValue, val, where_, (&&.), (<=.), (==.), (>.), (>=.), (^.), (||.))
-import           Database.Persist.Sql (SqlBackend)
+import           Database.Persist.Sql (SqlBackend, selectList)
 
 import           Cardano.Db.Error
 import           Cardano.Db.Schema
@@ -626,14 +628,25 @@ queryAdaPots blkId = do
             pure adaPots
   pure $ fmap entityVal (listToMaybe res)
 
-queryReservedTicker :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe Text)
-queryReservedTicker poolHash metaHash = do
+queryUsedTicker :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe Text)
+queryUsedTicker poolHash metaHash = do
   res <- select . from $ \(pod `InnerJoin` ph) -> do
             on (ph ^. PoolHashId ==. pod ^. PoolOfflineDataPoolId)
             where_ (ph ^. PoolHashHashRaw ==. val poolHash)
             where_ (pod ^. PoolOfflineDataHash ==. val metaHash)
             pure $ pod ^. PoolOfflineDataTickerName
   pure $ unValue <$> listToMaybe res
+
+queryReservedTicker :: MonadIO m => Text -> ReaderT SqlBackend m (Maybe ByteString)
+queryReservedTicker tickerName = do
+  res <- select . from $ \ticker -> do
+            where_ (ticker ^. ReservedPoolTickerName ==. val tickerName)
+            pure $ ticker ^. ReservedPoolTickerPoolHash
+  pure $ unValue <$> listToMaybe res
+
+queryReservedTickers :: MonadIO m => ReaderT SqlBackend m [ReservedPoolTicker]
+queryReservedTickers =
+  fmap entityVal <$> selectList [] []
 
 queryPoolOfflineData :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe (Text, Text))
 queryPoolOfflineData poolHash poolMetadataHash = do

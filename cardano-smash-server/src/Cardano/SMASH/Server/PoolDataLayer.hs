@@ -19,15 +19,16 @@ import qualified Cardano.Db as Db
 
 import           Cardano.SMASH.Server.Types
 
+{- HLINT ignore "Reduce duplication" -}
 
 data PoolDataLayer =
   PoolDataLayer
-    { dlGetPoolMetadata         :: PoolId -> PoolMetadataHash -> IO (Either DBFail PoolMetadataRaw)
+    { dlGetPoolMetadata         :: PoolId -> PoolMetadataHash -> IO (Either DBFail (TickerName, PoolMetadataRaw))
     , dlAddPoolMetadata         :: Maybe Db.PoolMetadataRefId -> PoolId -> PoolMetadataHash -> PoolMetadataRaw -> Db.ReservedPoolTicker -> IO (Either DBFail PoolMetadataRaw) -- testing
 
-    , dlGetReservedTickers      :: IO [(TickerName, PoolMetadataHash)]
-    , dlAddReservedTicker       :: TickerName -> PoolMetadataHash -> IO (Either DBFail TickerName)
-    , dlCheckReservedTicker     :: TickerName -> PoolMetadataHash -> IO (Maybe TickerName)
+    , dlGetReservedTickers      :: IO [(TickerName, PoolId)]
+    , dlAddReservedTicker       :: TickerName -> PoolId -> IO (Either DBFail TickerName)
+    , dlCheckReservedTicker     :: TickerName -> IO (Maybe PoolId)
 
     , dlGetDelistedPools        :: IO [PoolId]
     , dlCheckDelistedPool       :: PoolId -> IO Bool
@@ -51,14 +52,22 @@ postgresqlPoolDataLayer tracer = PoolDataLayer {
       let metaHash = servantToDbPoolMetaHash poolMetadataHash
       mMeta <- Db.runWithConnectionLogging tracer $ Db.queryPoolOfflineData poolHash metaHash
       case mMeta of
-        Just (_tickerName, metadata) -> pure $ Right $ PoolMetadataRaw metadata
+        Just (tickerName, metadata) -> pure $ Right (TickerName tickerName, PoolMetadataRaw metadata)
         Nothing -> pure $ Left $ DbLookupPoolMetadataHash poolId poolMetadataHash
   , dlAddPoolMetadata = panic "dlAddPoolMetadata not defined. Will be used only for testing."
-  , dlGetReservedTickers = pure [] -- TODO: The ticker endpoints need a reword
-  , dlAddReservedTicker = \_ticker _ ->
-      pure $ Left RecordDoesNotExist
-  , dlCheckReservedTicker = \_ticker _metaHash -> do
-      pure Nothing
+  , dlGetReservedTickers = do
+      tickers <- Db.runWithConnectionLogging tracer Db.queryReservedTickers
+      pure $ fmap (\ticker -> (TickerName $ Db.reservedPoolTickerName ticker, dbToServantPoolId $ Db.reservedPoolTickerPoolHash ticker)) tickers
+  , dlAddReservedTicker = \ticker poolId -> do
+      inserted <- Db.runWithConnectionLogging tracer $
+        Db.insertReservedPoolTicker $
+          Db.ReservedPoolTicker (getTickerName ticker) (servantToDbPoolId poolId)
+      case inserted of
+        Just _ -> pure $ Right ticker
+        Nothing -> pure $ Left RecordDoesNotExist
+  , dlCheckReservedTicker = \ticker -> do
+      Db.runWithConnectionLogging tracer $
+        fmap dbToServantPoolId <$> Db.queryReservedTicker (getTickerName ticker)
   , dlGetDelistedPools = do
       fmap dbToServantPoolId <$> Db.runWithConnectionLogging tracer Db.queryDelistedPools
   , dlCheckDelistedPool = \poolHash -> do
@@ -183,7 +192,7 @@ _getUsedTickers :: Trace IO Text ->  IO [(TickerName, PoolMetadataHash)]
 _getUsedTickers tracer = do
   pools <- getActivePools tracer Nothing
   tickers <- Db.runWithConnectionLogging tracer $ forM (Map.toList pools) $ \(ph, meta) -> do
-    mticker <- Db.queryReservedTicker ph meta
+    mticker <- Db.queryUsedTicker ph meta
     pure $ map (\ticker -> (TickerName ticker, dbToServantMetaHash meta)) mticker
   pure $ catMaybes tickers
 
@@ -191,7 +200,7 @@ _checkUsedTicker :: Trace IO Text -> TickerName -> IO (Maybe TickerName)
 _checkUsedTicker tracer ticker = do
     pools <- getActivePools tracer Nothing
     tickers <- Db.runWithConnectionLogging tracer $ forM (Map.toList pools) $ \(ph, meta) -> do
-      mticker <- Db.queryReservedTicker ph meta
+      mticker <- Db.queryUsedTicker ph meta
       pure $ map (\tickerText -> (TickerName tickerText, dbToServantMetaHash meta)) mticker
     case Map.lookup ticker (Map.fromList $ catMaybes tickers) of
       Nothing -> pure Nothing

@@ -7,7 +7,6 @@ module Cardano.Db.Schema.Types
   , PaymentAddrHash (..)
   , PoolMetaHash (..)
   , PoolUrl (..)
-  , TickerName (..)
   ) where
 
 import           Data.ByteString.Char8 (ByteString)
@@ -52,10 +51,3 @@ newtype PoolUrl
   = PoolUrl { unPoolUrl :: Text }
   deriving (Eq, Ord, Generic)
   deriving Show via (Quiet PoolUrl)
-
--- | The ticker name wrapper so we have some additional safety.
-newtype TickerName
-  = TickerName { unTickerName :: Text }
-  deriving (Eq, Ord, Generic)
-  deriving Show via (Quiet TickerName)
-

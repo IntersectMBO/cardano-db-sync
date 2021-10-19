@@ -30,7 +30,6 @@ module Cardano.Db.Insert
   , insertPoolRetire
   , insertPoolUpdate
   , insertReserve
-  , insertReservedPoolTicker
   , insertScript
   , insertSlotLeader
   , insertStakeAddress
@@ -47,6 +46,7 @@ module Cardano.Db.Insert
   , insertDatum
   , insertCheckPoolOfflineData
   , insertCheckPoolOfflineFetchError
+  , insertReservedPoolTicker
   , insertDelistedPool
 
   -- Export mainly for testing.
@@ -69,8 +69,8 @@ import           Data.Proxy (Proxy (..))
 import           Data.Text (Text)
 import qualified Data.Text as Text
 
-import           Database.Persist.Class (AtLeastOneUniqueKey, PersistEntityBackend, insert,
-                   insertBy, replaceUnique)
+import           Database.Persist.Class (AtLeastOneUniqueKey, PersistEntityBackend, checkUnique,
+                   insert, insertBy, replaceUnique)
 import           Database.Persist.EntityDef.Internal (entityDB, entityUniques)
 import           Database.Persist.Sql (OnlyOneUniqueKey, PersistRecordBackend, SqlBackend,
                    UniqueDef, entityDef, rawExecute, rawSql, toPersistFields, toPersistValue,
@@ -175,9 +175,6 @@ insertPoolUpdate = insertCheckUnique "PoolUpdate"
 insertReserve :: (MonadBaseControl IO m, MonadIO m) => Reserve -> ReaderT SqlBackend m ReserveId
 insertReserve = insertUnchecked "Reserve"
 
-insertReservedPoolTicker :: (MonadBaseControl IO m, MonadIO m) => ReservedPoolTicker -> ReaderT SqlBackend m ReservedPoolTickerId
-insertReservedPoolTicker = insertUnchecked "ReservedPoolTicker"
-
 insertScript :: (MonadBaseControl IO m, MonadIO m) => Script -> ReaderT SqlBackend m ScriptId
 insertScript = insertCheckUnique "insertScript"
 
@@ -231,6 +228,13 @@ insertCheckPoolOfflineFetchError pofe = do
   foundPool <- existsPoolHashId (poolOfflineFetchErrorPoolId pofe)
   foundMeta <- existsPoolMetadataRefId (poolOfflineFetchErrorPmrId pofe)
   when (foundPool && foundMeta) . void $ insertCheckUnique "PoolOfflineFetchError" pofe
+
+insertReservedPoolTicker :: (MonadBaseControl IO m, MonadIO m) => ReservedPoolTicker -> ReaderT SqlBackend m (Maybe ReservedPoolTickerId)
+insertReservedPoolTicker ticker = do
+  isUnique <- checkUnique ticker
+  case isUnique of
+    Nothing -> Just <$> insertUnchecked "ReservedPoolTicker" ticker
+    Just _key -> pure Nothing
 
 insertDelistedPool :: (MonadBaseControl IO m, MonadIO m) => DelistedPool -> ReaderT SqlBackend m DelistedPoolId
 insertDelistedPool = insertCheckUnique "DelistedPool"

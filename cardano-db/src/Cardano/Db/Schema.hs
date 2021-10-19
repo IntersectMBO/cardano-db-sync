@@ -517,7 +517,7 @@ share
   -- For now they are grouped under the specific hash of the pool.
   ReservedPoolTicker
     name                Text
-    poolId              PoolHashId
+    poolHash            ByteString          sqltype=hash28type
     UniqueReservedPoolTicker name
 
   -- A table containing delisted pools.
@@ -915,7 +915,7 @@ schemaDocs =
     ReservedPoolTicker --^ do
       "A table containing a managed list of reserved ticker names."
       ReservedPoolTickerName # "The ticker name."
-      ReservedPoolTickerPoolId # "The PoolHash table index for the pool that has reserved this name."
+      ReservedPoolTickerPoolHash # "The hash of the pool that owns this ticker."
 
     DelistedPool --^ do
       "A table containing pools that have been delisted."

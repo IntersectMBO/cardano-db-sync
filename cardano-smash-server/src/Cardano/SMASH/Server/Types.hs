@@ -26,7 +26,7 @@ import           Data.Time.Format (defaultTimeLocale, formatTime, parseTimeM)
 import           Network.URI (URI, parseURI)
 import           Servant (FromHttpApiData (..), MimeUnrender (..), OctetStream)
 
-import           Cardano.Db hiding (TickerName)
+import           Cardano.Db
 
 import           Cardano.Api (AsType (..), Hash, deserialiseFromBech32, deserialiseFromRawBytesHex,
                    serialiseToRawBytes)
@@ -232,20 +232,20 @@ instance ToSchema SmashURL where
     pure (NamedSchema (Just "SmashURL") mempty)
 
 
-newtype UniqueTicker = UniqueTicker { getUniqueTicker :: (TickerName, PoolMetadataHash) }
+newtype UniqueTicker = UniqueTicker { getUniqueTicker :: (TickerName, PoolId) }
     deriving (Eq, Show, Generic)
 
 instance ToJSON UniqueTicker where
     toJSON (UniqueTicker (tickerName, poolMetadataHash)) =
         object
             [ "tickerName" .= getTickerName tickerName
-            , "poolMetadataHash" .= getPoolMetadataHash poolMetadataHash
+            , "poolId" .= getPoolId poolMetadataHash
             ]
 
 instance FromJSON UniqueTicker where
     parseJSON = withObject "UniqueTicker" $ \o -> do
         tickerName <- o .: "tickerName"
-        poolMetadataHash <- o .: "poolMetadataHash"
+        poolMetadataHash <- o .: "poolId"
 
         pure . UniqueTicker $ (tickerName, poolMetadataHash)
 
