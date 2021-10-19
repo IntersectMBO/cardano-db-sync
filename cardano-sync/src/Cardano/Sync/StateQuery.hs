@@ -155,8 +155,14 @@ querySlotDetails start absSlot = do
   (absEpoch, slotInEpoch) <- slotToEpoch' absSlot
   epochSize <- qryFromExpr $ EEpochSize (ELit absEpoch)
   let time = relToUTCTime start absTime
-  -- Set sdCurrentTime below and over write that above.
-  pure $ SlotDetails time time absEpoch (EpochSlot slotInEpoch) epochSize
+  pure $ SlotDetails
+            { sdSlotTime  = time
+            , sdCurrentTime = time -- Corrected above in insertCurrentTime
+            , sdEpochNo = absEpoch
+            , sdSlotNo = absSlot
+            , sdEpochSlot = EpochSlot slotInEpoch
+            , sdEpochSize = epochSize
+            }
 
 relToUTCTime :: SystemStart -> RelativeTime -> UTCTime
 relToUTCTime (SystemStart start) (RelativeTime rel) = addUTCTime rel start

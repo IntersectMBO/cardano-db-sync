@@ -38,7 +38,8 @@ data BlockDetails = BlockDetails
   }
 
 data BlockEra
-  = Shelley
+  = Byron
+  | Shelley
   | Allegra
   | Mary
   | Alonzo
@@ -59,6 +60,7 @@ data SlotDetails = SlotDetails
   { sdSlotTime :: !UTCTime
   , sdCurrentTime :: !UTCTime
   , sdEpochNo :: !EpochNo
+  , sdSlotNo :: !SlotNo
   , sdEpochSlot :: !EpochSlot
   , sdEpochSize :: !EpochSize
   } deriving (Eq, Show)

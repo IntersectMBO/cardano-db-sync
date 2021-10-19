@@ -743,14 +743,20 @@ schemaDocs =
       EpochStakeEpochNo # "The epoch number."
 
     Treasury --^ do
-      "A table for payments from the treasury to a StakeAddress."
+      "A table for payments from the treasury to a StakeAddress. Note: Before protocol version 5.0\
+      \ (Alonzo) if more than one payment was made to a stake address in a single epoch, only the\
+      \ last payment was kept and earlier ones removed. For protocol version 5.0 and later, they\
+      \ are summed."
       TreasuryAddrId # "The StakeAddress table index for the stake address for this Treasury entry."
       TreasuryCertIndex # "The index of this payment certificate within the certificates of this transaction."
       TreasuryAmount # "The payment amount (in Lovelace)."
       TreasuryTxId # "The Tx table index for the transaction that contains this payment."
 
     Reserve --^ do
-      "A table for payments from the reserves to a StakeAddress."
+      "A table for payments from the reserves to a StakeAddress. Note: Before protocol version 5.0\
+      \ (Alonzo) if more than one payment was made to a stake address in a single epoch, only the\
+      \ last payment was kept and earlier ones removed. For protocol version 5.0 and later, they\
+      \ are summed."
       ReserveAddrId # "The StakeAddress table index for the stake address for this Treasury entry."
       ReserveCertIndex # "The index of this payment certificate within the certificates of this transaction."
       ReserveAmount # "The payment amount (in Lovelace)."

@@ -178,6 +178,7 @@ getInstantaneousRewards network lstate =
 filterByEra :: BlockEra -> Map StakeCred (Set Reward) -> Map StakeCred (Set Reward)
 filterByEra be rmap =
   case be of
+    Byron -> rmap -- Should never happen (Byron does not have rewards)
     Shelley -> Map.map takeFirstReward rmap
     Allegra -> rmap
     Mary -> rmap
