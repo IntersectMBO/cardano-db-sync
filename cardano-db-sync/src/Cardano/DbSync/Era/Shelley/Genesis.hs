@@ -15,7 +15,7 @@ module Cardano.DbSync.Era.Shelley.Genesis
 
 import           Cardano.Prelude
 
-import           Cardano.BM.Trace (Trace, logInfo)
+import           Cardano.BM.Trace (Trace, logError, logInfo)
 
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
@@ -54,12 +54,16 @@ import           Paths_cardano_db_sync (version)
 
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.
+-- 'shelleyInitiation' is True for testnets that fork at 0 to Shelley.
 insertValidateGenesisDist
-    :: SqlBackend -> Trace IO Text -> Text -> ShelleyGenesis StandardShelley
+    :: SqlBackend -> Trace IO Text -> Text -> ShelleyGenesis StandardShelley -> Bool
     -> ExceptT SyncNodeError IO ()
-insertValidateGenesisDist backend tracer networkName cfg = do
+insertValidateGenesisDist backend tracer networkName cfg shelleyInitiation = do
     -- Setting this to True will log all 'Persistent' operations which is great
     -- for debugging, but otherwise *way* too chatty.
+    when (not shelleyInitiation && (hasInitialFunds || hasStakes)) $ do
+      liftIO $ logError tracer $ renderSyncNodeError NEIgnoreShelleyInitiation
+      throwError NEIgnoreShelleyInitiation
     if False
       then newExceptT $ DB.runDbIohkLogging backend tracer insertAction
       else newExceptT $ DB.runDbIohkNoLogging backend insertAction

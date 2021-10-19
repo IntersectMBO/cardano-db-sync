@@ -40,7 +40,7 @@ import qualified Cardano.Chain.Genesis as Byron
 import           Cardano.Client.Subscription (subscribe)
 import qualified Cardano.Crypto as Crypto
 
-import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
+import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
 
 import           Cardano.Sync.Api
 import           Cardano.Sync.Config
@@ -75,6 +75,7 @@ import           Ouroboros.Consensus.Byron.Node ()
 import           Ouroboros.Consensus.Cardano.Block (CardanoEras, CodecConfig (..))
 import           Ouroboros.Consensus.Cardano.Node ()
 import           Ouroboros.Consensus.HardFork.History.Qry (Interpreter)
+import qualified Ouroboros.Consensus.HardFork.Simple as HardFork
 import           Ouroboros.Consensus.Network.NodeToClient (ClientCodecs, cChainSyncCodec,
                    cStateQueryCodec, cTxSubmissionCodec)
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
@@ -110,6 +111,7 @@ type InsertValidateGenesisFunction
     = Trace IO Text
     -> NetworkName
     -> GenesisConfig
+    -> Bool
     -> ExceptT SyncNodeError IO ()
 
 type RunDBThreadFunction
@@ -147,7 +149,7 @@ runSyncNode dataLayer metricsSetters trce plugin enp insertValidateGenesisDist r
 
       -- If the DB is empty it will be inserted, otherwise it will be validated (to make
       -- sure we are on the right chain).
-      insertValidateGenesisDist trce (dncNetworkName enc) genCfg
+      insertValidateGenesisDist trce (dncNetworkName enc) genCfg (useShelleyInit $ dncShelleyHardFork enc)
 
         -- Must run plugin startup after the genesis distribution has been inserted/validate.
       liftIO $ runDbStartup trce plugin
@@ -166,6 +168,10 @@ runSyncNode dataLayer metricsSetters trce plugin enp insertValidateGenesisDist r
         ShelleyCodecConfig -- Mary
         ShelleyCodecConfig -- Alonzo
 
+    useShelleyInit :: HardFork.TriggerHardFork -> Bool
+    useShelleyInit trigger = case trigger of
+      HardFork.TriggerHardForkAtEpoch (EpochNo 0) -> True
+      _ -> False
 -- -------------------------------------------------------------------------------------------------
 
 runSyncNodeNodeClient

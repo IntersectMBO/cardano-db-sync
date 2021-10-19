@@ -35,6 +35,7 @@ data SyncNodeError
   = NEError !Text
   | NEInvariant !Text !SyncInvariant
   | NEBlockMismatch !Word64 !ByteString !ByteString
+  | NEIgnoreShelleyInitiation
   | NEByronConfig !FilePath !Byron.ConfigurationError
   | NEShelleyConfig !FilePath !Text
   | NEAlonzoConfig !FilePath !Text
@@ -73,6 +74,11 @@ renderSyncNodeError ne =
       mconcat
         [ "Block mismatch for block number ", textShow blkNo, ", db has "
         , bsBase16Encode hashDb, " but chain provided ", bsBase16Encode hashBlk
+        ]
+    NEIgnoreShelleyInitiation ->
+      mconcat
+        [ "Node configs that don't fork to Shelley directly and initiate"
+        , " funds or stakes in Shelley Genesis are not supported."
         ]
     NEByronConfig fp ce ->
       mconcat
