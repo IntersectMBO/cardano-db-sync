@@ -59,6 +59,7 @@ data SlotDetails = SlotDetails
   { sdSlotTime :: !UTCTime
   , sdCurrentTime :: !UTCTime
   , sdEpochNo :: !EpochNo
+  , sdSlotNo :: !SlotNo
   , sdEpochSlot :: !EpochSlot
   , sdEpochSize :: !EpochSize
   } deriving (Eq, Show)
