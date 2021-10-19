@@ -1,6 +1,6 @@
 # Schema Documentation for cardano-db-sync
 
-Schema version: 11.0.4
+Schema version: 11.0.4 (from branch **erikd/correct-mir** which may not accurately reflect the version number)
 
 ### `schema_version`
 
@@ -157,6 +157,7 @@ A table containing metadata about the chain. There will probably only ever be on
 | `id` | integer (64) |  |
 | `start_time` | timestamp | The start time of the network. |
 | `network_name` | string | The network name. |
+| `version` | string |  |
 
 ### `epoch`
 
@@ -374,11 +375,11 @@ A table containing the epoch stake distribution for each epoch.
 | `addr_id` | integer (64) | The StakeAddress table index for the stake address for this EpochStake entry. |
 | `pool_id` | integer (64) | The PoolHash table index for the pool this entry is delegated to. |
 | `amount` | lovelace | The amount (in Lovelace) being staked. |
-| `epoch_no` | integer (64) | The epoch number. |
+| `epoch_no` | uinteger | The epoch number. |
 
 ### `treasury`
 
-A table for payments from the treasury to a StakeAddress.
+A table for payments from the treasury to a StakeAddress. Note: Before protocol version 5.0 (Alonzo) if more than one payment was made to a stake address in a single epoch, only the last payment was kept and earlier ones removed. For protocol version 5.0 and later, they are summed.
 
 * Primary Id: `id`
 
@@ -392,7 +393,7 @@ A table for payments from the treasury to a StakeAddress.
 
 ### `reserve`
 
-A table for payments from the reserves to a StakeAddress.
+A table for payments from the reserves to a StakeAddress. Note: Before protocol version 5.0 (Alonzo) if more than one payment was made to a stake address in a single epoch, only the last payment was kept and earlier ones removed. For protocol version 5.0 and later, they are summed.
 
 * Primary Id: `id`
 
@@ -431,6 +432,19 @@ A table containing the time required to fully sync an epoch.
 | `seconds` | word63type | The time (in seconds) required to sync this epoch (may be NULL for an epoch that was already partially synced when `db-sync` was started). |
 | `state` | syncstatetype | The sync state when the sync time is recorded (either 'lagging' or 'following'). |
 
+### `multi_asset`
+
+A table containing all the unique policy/name pairs along with a CIP14 asset fingerprint
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `policy` | hash28type | The MultiAsset policy hash. |
+| `name` | asset32type | The MultiAsset name. |
+| `fingerprint` | string | The CIP14 fingerprint for the MultiAsset. |
+
 ### `ma_tx_mint`
 
 A table containing Multi-Asset mint events.
@@ -440,8 +454,7 @@ A table containing Multi-Asset mint events.
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `policy` | hash28type | The MultiAsset policy hash. |
-| `name` | asset32type | The MultiAsset name. |
+| `ident` | integer (64) | The MultiAsset table index specifying the asset. |
 | `quantity` | int65type | The amount of the Multi Asset to mint (can be negative to "burn" assets). |
 | `tx_id` | integer (64) | The Tx table index for the transaction that contains this minting event. |
 
@@ -454,8 +467,7 @@ A table containing Multi-Asset transaction outputs.
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `policy` | hash28type | The MultiAsset policy hash. |
-| `name` | asset32type | The MultiAsset name. |
+| `ident` | integer (64) | The MultiAsset table index specifying the asset. |
 | `quantity` | word64type | The Multi Asset transaction output amount (denominated in the Multi Asset). |
 | `tx_out_id` | integer (64) | The TxOut table index for the transaction that this Multi Asset transaction output. |
 
@@ -475,6 +487,7 @@ A table containing redeemers. A redeemer is provided for all items that are vali
 | `purpose` | scriptpurposetype | What kind pf validation this redeemer is used for. It can be one of 'spend', 'mint', 'cert', 'reward'. |
 | `index` | uinteger | The index of the redeemer pointer in the transaction. |
 | `script_hash` | hash28type | The script hash this redeemer is used for. |
+| `datum_id` | integer (64) |  |
 
 ### `script`
 
@@ -488,7 +501,22 @@ A table containing scripts available in the blockchain, found in witnesses or au
 | `tx_id` | integer (64) | The Tx table index for the transaction where this script first became available. |
 | `hash` | hash28type | The Hash of the Script. |
 | `type` | scripttype | The type of the script. This is currenttly either 'timelock' or 'plutus'. |
+| `json` | jsonb | JSON representation of the timelock script, null for other script types |
+| `bytes` | bytea | CBOR encoded plutus script data, null for other script types |
 | `serialised_size` | uinteger | The size of the CBOR serialised script, if it is a Plutus script. |
+
+### `datum`
+
+A table containing Plutus Data available in the blockchain, found in redeemers or witnesses
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `hash` | hash32type | The Hash of the Plutus Data |
+| `tx_id` | integer (64) | The Tx table index for the transaction where this script first became available. |
+| `value` | jsonb | The actual data in json format |
 
 ### `param_proposal`
 
@@ -520,7 +548,7 @@ A table containing block chain parameter change proposals.
 | `min_utxo_value` | lovelace | The minimum value of a UTxO entry. |
 | `min_pool_cost` | lovelace | The minimum pool cost. |
 | `coins_per_utxo_word` | lovelace | The cost per UTxO word. |
-| `cost_models` | string | The per language cost models. |
+| `cost_model_id` | integer (64) | The CostModel table index for the proposal. |
 | `price_mem` | double | The per word cost of script memory usage. |
 | `price_step` | double | The cost of script execution step usage. |
 | `max_tx_ex_mem` | word64type | The maximum number of execution memory allowed to be used in a single transaction. |
@@ -562,7 +590,7 @@ The accepted protocol parameters for an epoch.
 | `min_pool_cost` | lovelace | The minimum pool cost. |
 | `nonce` | hash32type | The nonce value for this epoch. |
 | `coins_per_utxo_word` | lovelace | The cost per UTxO word. |
-| `cost_models` | string | The per language cost models. |
+| `cost_model_id` | integer (64) | The CostModel table index for the params. |
 | `price_mem` | double | The per word cost of script memory usage. |
 | `price_step` | double | The cost of script execution step usage. |
 | `max_tx_ex_mem` | word64type | The maximum number of execution memory allowed to be used in a single transaction. |
@@ -573,6 +601,18 @@ The accepted protocol parameters for an epoch.
 | `collateral_percent` | uinteger | The percentage of the txfee which must be provided as collateral when including non-native scripts. |
 | `max_collateral_inputs` | uinteger | The maximum number of collateral inputs allowed in a transaction. |
 | `block_id` | integer (64) | The Block table index for the first block where these parameters are valid. |
+
+### `cost_model`
+
+CostModel for EpochParam and ParamProposal.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `costs` | jsonb | The actual costs formatted as json. |
+| `block_id` | integer (64) | The first block where these costs were introduced. This is only used for rollbacks. |
 
 ### `pool_offline_data`
 
@@ -629,16 +669,15 @@ A table containing a managed list of reserved ticker names.
 | `name` | string | The ticker name. |
 | `pool_id` | integer (64) | The PoolHash table index for the pool that has reserved this name. |
 
-### `admin_user`
+### `delisted_pool`
 
-A table listing all admin users (for maintaining the SMASH related data).
+A table containing pools that have been delisted.
 
 * Primary Id: `id`
 
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `username` | string | The user name. |
-| `password` | string | The password. |
+| `hash_raw` | hash28type | The pool hash |
 
 
