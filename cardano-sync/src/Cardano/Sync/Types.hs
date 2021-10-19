@@ -38,7 +38,8 @@ data BlockDetails = BlockDetails
   }
 
 data BlockEra
-  = Shelley
+  = Byron
+  | Shelley
   | Allegra
   | Mary
   | Alonzo
