@@ -22,10 +22,10 @@ import           Cardano.DbSync.Era.Shelley.Offline as X
 import           Database.Persist.Sql (SqlBackend)
 
 insertValidateGenesisDist
-    :: SqlBackend -> Trace IO Text -> NetworkName -> GenesisConfig
+    :: SqlBackend -> Trace IO Text -> NetworkName -> GenesisConfig -> Bool
     -> ExceptT SyncNodeError IO ()
-insertValidateGenesisDist backend trce nname genCfg =
+insertValidateGenesisDist backend trce nname genCfg shelleyInitiation =
   case genCfg of
     GenesisCardano _ bCfg sCfg _aCfg -> do
       Byron.insertValidateGenesisDist backend trce (unNetworkName nname) bCfg
-      Shelley.insertValidateGenesisDist backend trce (unNetworkName nname) (scConfig sCfg)
+      Shelley.insertValidateGenesisDist backend trce (unNetworkName nname) (scConfig sCfg) shelleyInitiation
