@@ -76,7 +76,7 @@ pSmashConfig =
 pSmashPort :: Parser Int
 pSmashPort =
   read <$> Opt.strOption
-    ( Opt.long "smash-port"
+    ( Opt.long "port"
     <> Opt.help "Port for the smash web app server. Default is 3100."
     <> Opt.completer (Opt.bashCompleter "port")
     <> Opt.metavar "PORT"
