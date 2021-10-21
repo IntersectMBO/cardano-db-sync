@@ -46,6 +46,7 @@ import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Coin as Ledger
 import qualified Cardano.Ledger.Credential as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
+import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
 
 import           Cardano.Sync.Error
 import           Cardano.Sync.LedgerState
@@ -53,8 +54,6 @@ import           Cardano.Sync.Types
 import           Cardano.Sync.Util
 
 import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..), Value (..))
-import qualified Cardano.Ledger.Shelley.PParams as Shelley
-import qualified Cardano.Ledger.Shelley.Rules.Chain as Shelley
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 
 import           Cardano.Slotting.Block (BlockNo (..))
@@ -100,8 +99,8 @@ insertShelleyBlock tracer lenv firstBlockOfEpoch blk lStateSnap details = do
                     , DB.blockSize = Generic.blkSize blk
                     , DB.blockTime = sdSlotTime details
                     , DB.blockTxCount = fromIntegral $ length (Generic.blkTxs blk)
-                    , DB.blockProtoMajor = fromIntegral $ Shelley.pvMajor (Generic.blkProto blk)
-                    , DB.blockProtoMinor = fromIntegral $ Shelley.pvMinor (Generic.blkProto blk)
+                    , DB.blockProtoMajor = fromIntegral $ Ledger.pvMajor (Generic.blkProto blk)
+                    , DB.blockProtoMinor = fromIntegral $ Ledger.pvMinor (Generic.blkProto blk)
 
                     -- Shelley specific
                     , DB.blockVrfKey = Just $ Generic.blkVrfKey blk
@@ -672,8 +671,8 @@ insertParamProposal tracer blkId txId pp = do
       , DB.paramProposalTreasuryGrowthRate = Generic.unitIntervalToDouble <$> pppTreasuryGrowthRate pp
       , DB.paramProposalDecentralisation = Generic.unitIntervalToDouble <$> pppDecentralisation pp
       , DB.paramProposalEntropy = Generic.nonceToBytes =<< pppEntropy pp
-      , DB.paramProposalProtocolMajor = fromIntegral . Shelley.pvMajor <$> pppProtocolVersion pp
-      , DB.paramProposalProtocolMinor = fromIntegral . Shelley.pvMinor <$> pppProtocolVersion pp
+      , DB.paramProposalProtocolMajor = fromIntegral . Ledger.pvMajor <$> pppProtocolVersion pp
+      , DB.paramProposalProtocolMinor = fromIntegral . Ledger.pvMinor <$> pppProtocolVersion pp
       , DB.paramProposalMinUtxoValue = Generic.coinToDbLovelace <$> pppMinUtxoValue pp
       , DB.paramProposalMinPoolCost = Generic.coinToDbLovelace <$> pppMinPoolCost pp
 
@@ -799,8 +798,8 @@ insertEpochParam tracer blkId (EpochNo epoch) params nonce = do
       , DB.epochParamTreasuryGrowthRate = Generic.unitIntervalToDouble (Generic.ppTreasuryGrowthRate params)
       , DB.epochParamDecentralisation = Generic.unitIntervalToDouble (Generic.ppDecentralisation params)
       , DB.epochParamEntropy = Generic.nonceToBytes $ Generic.ppExtraEntropy params
-      , DB.epochParamProtocolMajor = fromIntegral $ Shelley.pvMajor (Generic.ppProtocolVersion params)
-      , DB.epochParamProtocolMinor = fromIntegral $ Shelley.pvMinor (Generic.ppProtocolVersion params)
+      , DB.epochParamProtocolMajor = fromIntegral $ Ledger.pvMajor (Generic.ppProtocolVersion params)
+      , DB.epochParamProtocolMinor = fromIntegral $ Ledger.pvMinor (Generic.ppProtocolVersion params)
       , DB.epochParamMinUtxoValue = Generic.coinToDbLovelace (Generic.ppMinUTxOValue params)
       , DB.epochParamMinPoolCost = Generic.coinToDbLovelace (Generic.ppMinPoolCost params)
       , DB.epochParamNonce = Generic.nonceToBytes nonce

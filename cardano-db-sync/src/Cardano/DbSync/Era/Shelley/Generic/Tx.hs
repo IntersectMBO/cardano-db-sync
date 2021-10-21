@@ -56,7 +56,7 @@ import qualified Cardano.Ledger.SafeHash as Ledger
 import qualified Cardano.Ledger.Shelley.CompactAddr as Ledger
 import           Cardano.Ledger.Shelley.Scripts (ScriptHash)
 import qualified Cardano.Ledger.Shelley.Scripts as Shelley
-import qualified Cardano.Ledger.Shelley.Tx as Shelley
+import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as ShelleyMa
 import qualified Cardano.Ledger.ShelleyMA.TxBody as ShelleyMa
@@ -152,7 +152,7 @@ data TxDatum = TxDatum
   , txDatumValue :: !ByteString -- we turn this into json later.
   }
 
-fromAllegraTx :: (Word64, Shelley.Tx StandardAllegra) -> Tx
+fromAllegraTx :: (Word64, ShelleyTx.Tx StandardAllegra) -> Tx
 fromAllegraTx (blkIndex, tx) =
     Tx
       { txHash = txHashId tx
@@ -180,7 +180,7 @@ fromAllegraTx (blkIndex, tx) =
       , txScriptsFee = Coin 0 -- Allegra does not support scripts
       }
   where
-    fromTxOut :: Word16 -> Shelley.TxOut StandardAllegra -> TxOut
+    fromTxOut :: Word16 -> ShelleyTx.TxOut StandardAllegra -> TxOut
     fromTxOut index txOut =
       TxOut
         { txOutIndex = index
@@ -191,26 +191,26 @@ fromAllegraTx (blkIndex, tx) =
         , txOutDataHash = mempty -- Allegra does not support scripts
         }
       where
-        Shelley.TxOutCompact (Ledger.UnsafeCompactAddr bs) _ = txOut
+        ShelleyTx.TxOutCompact (Ledger.UnsafeCompactAddr bs) _ = txOut
         -- This pattern match also does the deserialisation of the address
-        Shelley.TxOut addr ada = txOut
+        ShelleyTx.TxOut addr ada = txOut
 
 
-    txMeta :: Shelley.Tx StandardAllegra -> Maybe (ShelleyMa.AuxiliaryData StandardAllegra)
-    txMeta (Shelley.Tx _body _wit md) = strictMaybeToMaybe md
+    txMeta :: ShelleyTx.Tx StandardAllegra -> Maybe (ShelleyMa.AuxiliaryData StandardAllegra)
+    txMeta (ShelleyTx.Tx _body _wit md) = strictMaybeToMaybe md
 
-    txOutValue :: Shelley.TxOut StandardAllegra -> Integer
-    txOutValue (Shelley.TxOut _ (Coin coin)) = coin
+    txOutValue :: ShelleyTx.TxOut StandardAllegra -> Integer
+    txOutValue (ShelleyTx.TxOut _ (Coin coin)) = coin
 
     rawTxBody :: ShelleyMa.TxBodyRaw StandardAllegra
     rawTxBody =
       case tx of
-        (Shelley.Tx (ShelleyMa.TxBodyConstr txBody) _wit _md) -> memotype txBody
+        (ShelleyTx.Tx (ShelleyMa.TxBodyConstr txBody) _wit _md) -> memotype txBody
 
     scripts :: [TxScript]
     scripts =
       mkTxScript
-        <$> (Map.toList (Shelley.scriptWits $ getField @"wits" tx)
+        <$> (Map.toList (ShelleyTx.scriptWits $ getField @"wits" tx)
             ++ getAuxScripts (getField @"auxiliaryData" tx))
 
     getAuxScripts
@@ -233,26 +233,26 @@ fromAllegraTx (blkIndex, tx) =
       , txScriptCBOR = Nothing
       }
 
-fromShelleyTx :: (Word64, Shelley.Tx StandardShelley) -> Tx
+fromShelleyTx :: (Word64, ShelleyTx.Tx StandardShelley) -> Tx
 fromShelleyTx (blkIndex, tx) =
     Tx
       { txHash = txHashId tx
       , txBlockIndex = blkIndex
       , txSize = fromIntegral $ getField @"txsize" tx
       , txValidContract = True
-      , txInputs = map (fromTxIn Nothing) (toList . Shelley._inputs $ Shelley.body tx)
+      , txInputs = map (fromTxIn Nothing) (toList . Shelley._inputs $ ShelleyTx.body tx)
       , txCollateralInputs = [] -- Shelley does not have collateral inputs
-      , txOutputs = zipWith fromTxOut [0 .. ] $ toList (Shelley._outputs $ Shelley.body tx)
-      , txFees = Shelley._txfee (Shelley.body tx)
-      , txOutSum = Coin . sum $ map txOutValue (Shelley._outputs $ Shelley.body tx)
+      , txOutputs = zipWith fromTxOut [0 .. ] $ toList (Shelley._outputs $ ShelleyTx.body tx)
+      , txFees = Shelley._txfee (ShelleyTx.body tx)
+      , txOutSum = Coin . sum $ map txOutValue (Shelley._outputs $ ShelleyTx.body tx)
       , txInvalidBefore = Nothing
-      , txInvalidHereafter = Just $ Shelley._ttl (Shelley.body tx)
+      , txInvalidHereafter = Just $ Shelley._ttl (ShelleyTx.body tx)
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
-                            . Shelley.unWdrl $ Shelley._wdrls (Shelley.body tx)
+                            . Shelley.unWdrl $ Shelley._wdrls (ShelleyTx.body tx)
       , txMetadata = fromShelleyMetadata <$> strictMaybeToMaybe (getField @"auxiliaryData" tx)
-      , txCertificates = zipWith (TxCertificate Nothing) [0..] (toList . Shelley._certs $ Shelley.body tx)
-      , txWithdrawals = map (mkTxWithdrawal Nothing) (Map.toList . Shelley.unWdrl . Shelley._wdrls $ Shelley.body tx)
-      , txParamProposal = maybe [] (convertParamProposal (Shelley Standard)) $ strictMaybeToMaybe (Shelley._txUpdate $ Shelley.body tx)
+      , txCertificates = zipWith (TxCertificate Nothing) [0..] (toList . Shelley._certs $ ShelleyTx.body tx)
+      , txWithdrawals = map (mkTxWithdrawal Nothing) (Map.toList . Shelley.unWdrl . Shelley._wdrls $ ShelleyTx.body tx)
+      , txParamProposal = maybe [] (convertParamProposal (Shelley Standard)) $ strictMaybeToMaybe (ShelleyTx._txUpdate $ ShelleyTx.body tx)
       , txMint = mempty     -- Shelley does not support Multi-Assets
       , txRedeemer = []     -- Shelley does not support Redeemer
       , txData = []
@@ -261,7 +261,7 @@ fromShelleyTx (blkIndex, tx) =
       , txScriptsFee = Coin 0 -- Shelley does not support scripts
       }
   where
-    fromTxOut :: Word16 -> Shelley.TxOut StandardShelley -> TxOut
+    fromTxOut :: Word16 -> ShelleyTx.TxOut StandardShelley -> TxOut
     fromTxOut index txOut =
       TxOut
         { txOutIndex = index
@@ -272,16 +272,16 @@ fromShelleyTx (blkIndex, tx) =
         , txOutDataHash = mempty -- Shelley does not support scripts
         }
       where
-        Shelley.TxOutCompact (Ledger.UnsafeCompactAddr bs) _ = txOut
+        ShelleyTx.TxOutCompact (Ledger.UnsafeCompactAddr bs) _ = txOut
         -- This pattern match also does the deserialisation of the address
-        Shelley.TxOut addr ada = txOut
+        ShelleyTx.TxOut addr ada = txOut
 
-    txOutValue :: Shelley.TxOut StandardShelley -> Integer
-    txOutValue (Shelley.TxOut _ (Coin coin)) = coin
+    txOutValue :: ShelleyTx.TxOut StandardShelley -> Integer
+    txOutValue (ShelleyTx.TxOut _ (Coin coin)) = coin
 
     scripts :: [TxScript]
     scripts =
-      mkTxScript <$> Map.toList (Shelley.scriptWits $ getField @"wits" tx)
+      mkTxScript <$> Map.toList (ShelleyTx.scriptWits $ getField @"wits" tx)
 
     mkTxScript :: (ScriptHash StandardCrypto, Shelley.MultiSig StandardCrypto) -> TxScript
     mkTxScript (hsh, script) = TxScript
@@ -292,7 +292,7 @@ fromShelleyTx (blkIndex, tx) =
       , txScriptCBOR = Nothing
       }
 
-fromMaryTx :: (Word64, Shelley.Tx StandardMary) -> Tx
+fromMaryTx :: (Word64, ShelleyTx.Tx StandardMary) -> Tx
 fromMaryTx (blkIndex, tx) =
     Tx
       { txHash = txHashId tx
@@ -320,7 +320,7 @@ fromMaryTx (blkIndex, tx) =
       , txScriptsFee = Coin 0 -- Mary does not support scripts
       }
   where
-    fromTxOut :: Word16 -> Shelley.TxOut StandardMary -> TxOut
+    fromTxOut :: Word16 -> ShelleyTx.TxOut StandardMary -> TxOut
     fromTxOut index txOut =
       TxOut
         { txOutIndex = index
@@ -331,23 +331,23 @@ fromMaryTx (blkIndex, tx) =
         , txOutDataHash = mempty -- Mary does not support scripts
         }
       where
-        Shelley.TxOutCompact (Ledger.UnsafeCompactAddr bs) _ = txOut
+        ShelleyTx.TxOutCompact (Ledger.UnsafeCompactAddr bs) _ = txOut
         -- This pattern match also does the deserialisation of the address
-        Shelley.TxOut addr (Value ada maMap) = txOut
+        ShelleyTx.TxOut addr (Value ada maMap) = txOut
 
-    txMeta :: Shelley.Tx StandardMary -> Maybe (ShelleyMa.AuxiliaryData StandardMary)
-    txMeta (Shelley.Tx _body _wit md) = strictMaybeToMaybe md
+    txMeta :: ShelleyTx.Tx StandardMary -> Maybe (ShelleyMa.AuxiliaryData StandardMary)
+    txMeta (ShelleyTx.Tx _body _wit md) = strictMaybeToMaybe md
 
-    txOutValue :: Shelley.TxOut StandardMary -> Integer
-    txOutValue (Shelley.TxOut _ (Value coin _ma)) = coin
+    txOutValue :: ShelleyTx.TxOut StandardMary -> Integer
+    txOutValue (ShelleyTx.TxOut _ (Value coin _ma)) = coin
 
-    unTxBodyRaw :: Shelley.Tx StandardMary -> ShelleyMa.TxBodyRaw StandardMary
-    unTxBodyRaw (Shelley.Tx (ShelleyMa.TxBodyConstr txBody) _wit _md) = memotype txBody
+    unTxBodyRaw :: ShelleyTx.Tx StandardMary -> ShelleyMa.TxBodyRaw StandardMary
+    unTxBodyRaw (ShelleyTx.Tx (ShelleyMa.TxBodyConstr txBody) _wit _md) = memotype txBody
 
     scripts :: [TxScript]
     scripts =
       mkTxScript
-        <$> (Map.toList (Shelley.scriptWits $ getField @"wits" tx)
+        <$> (Map.toList (ShelleyTx.scriptWits $ getField @"wits" tx)
             ++ getAuxScripts (getField @"auxiliaryData" tx))
 
     getAuxScripts
@@ -466,14 +466,14 @@ fromAlonzoTx pp (blkIndex, tx) =
     plutusCborScript script =
       case script of
         Alonzo.TimelockScript {} -> Nothing
-        Alonzo.PlutusScript s ->
+        Alonzo.PlutusScript _lang s ->
           Just . Api.serialiseToCBOR . Api.PlutusScript Api.PlutusScriptV1 $ Api.PlutusScriptSerialised s
 
     getScriptSize :: Alonzo.Script (AlonzoEra StandardCrypto) -> Maybe Word64
     getScriptSize script =
       case script of
         Alonzo.TimelockScript {} ->  Nothing
-        Alonzo.PlutusScript sbs -> Just $ fromIntegral (SBS.length sbs)
+        Alonzo.PlutusScript _lang sbs -> Just $ fromIntegral (SBS.length sbs)
 
     getScriptType :: Alonzo.Script (AlonzoEra StandardCrypto) -> ScriptType
     getScriptType script =
@@ -533,8 +533,8 @@ fromAlonzoTx pp (blkIndex, tx) =
 
     mkRedeemer :: (Ledger.RdmrPtr, (Alonzo.Data StandardAlonzo, ExUnits)) -> TxRedeemer
     mkRedeemer (ptr@(Ledger.RdmrPtr tag index), (dt, exUnits)) = TxRedeemer
-      { txRedeemerMem = exUnitsMem exUnits
-      , txRedeemerSteps = exUnitsSteps exUnits
+      { txRedeemerMem = fromIntegral $ exUnitsMem exUnits
+      , txRedeemerSteps = fromIntegral $ exUnitsSteps exUnits
       , txRedeemerFee = txscriptfee (Alonzo._prices pp) exUnits
       , txRedeemerPurpose = tag
       , txRedeemerIndex = index
@@ -573,8 +573,8 @@ fromAlonzoTx pp (blkIndex, tx) =
 
 -- -------------------------------------------------------------------------------------------------
 
-fromTxIn :: Maybe Word64 -> Shelley.TxIn StandardCrypto -> TxIn
-fromTxIn setIndex (Shelley.TxIn (Shelley.TxId txid) index) =
+fromTxIn :: Maybe Word64 -> ShelleyTx.TxIn StandardCrypto -> TxIn
+fromTxIn setIndex (ShelleyTx.TxIn (ShelleyTx.TxId txid) index) =
   TxIn
     { txInHash = Crypto.hashToBytes $ Ledger.extractHash txid
     , txInIndex = fromIntegral index
@@ -589,8 +589,8 @@ mkTxWithdrawal rIndex (ra, c) =
     , txwAmount = c
     }
 
-txHashId :: (Ledger.Crypto era ~ StandardCrypto, ShelleyBasedEra era) => Shelley.Tx era -> ByteString
-txHashId = Crypto.hashToBytes . Ledger.extractHash . Ledger.hashAnnotated . Shelley.body
+txHashId :: (Ledger.Crypto era ~ StandardCrypto, ShelleyBasedEra era) => ShelleyTx.Tx era -> ByteString
+txHashId = Crypto.hashToBytes . Ledger.extractHash . Ledger.hashAnnotated . ShelleyTx.body
 
 -- | 'Set.elemAt' is a partial function so we can't use it. This reverses the 'indexOf' of the
 -- 'class Indexable elem container'.

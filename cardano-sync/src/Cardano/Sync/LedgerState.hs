@@ -47,11 +47,10 @@ import           Cardano.Ledger.Core (PParams)
 import           Cardano.Ledger.Credential (StakeCredential)
 import           Cardano.Ledger.Era
 import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
+import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
 import           Cardano.Ledger.Shelley.Constraints (UsesValue)
 import           Cardano.Ledger.Shelley.LedgerState (EpochState (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
-import qualified Cardano.Ledger.Shelley.Rules.Chain as Shelley
-
 
 import           Cardano.Sync.Config.Types
 import qualified Cardano.Sync.Era.Cardano.Util as Cardano

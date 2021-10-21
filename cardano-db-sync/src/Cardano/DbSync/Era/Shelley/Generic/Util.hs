@@ -47,7 +47,7 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Credential as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
 import qualified Cardano.Ledger.Shelley.Scripts as Shelley
-import qualified Cardano.Ledger.Shelley.Tx as Shelley
+import           Cardano.Ledger.Shelley.Tx (TxId (..))
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 
 import           Cardano.Ledger.Coin (Coin (..), DeltaCoin)
@@ -172,5 +172,5 @@ unKeyHashView = Api.serialiseToBech32 . Api.StakePoolKeyHash
 unScriptHash :: Shelley.ScriptHash StandardCrypto -> ByteString
 unScriptHash (Shelley.ScriptHash h) = Crypto.hashToBytes h
 
-unTxHash :: Shelley.TxId era -> ByteString
-unTxHash (Shelley.TxId txid) = Crypto.hashToBytes $ Ledger.extractHash txid
+unTxHash :: TxId era -> ByteString
+unTxHash (TxId txid) = Crypto.hashToBytes $ Ledger.extractHash txid
