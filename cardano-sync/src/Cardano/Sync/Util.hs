@@ -50,6 +50,7 @@ import qualified Data.ByteString.Base16 as Base16
 import qualified Data.List as List
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
+import           Data.Text.ANSI (red)
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.IO as Text
 import qualified Data.Time.Clock as Time
@@ -149,7 +150,7 @@ nullMetricSetters =
 panicAbort :: Text -> a
 panicAbort msg = do
   unsafePerformIO $ do
-    Text.putStrLn msg
+    mapM_ (Text.putStrLn . red) [ "panic abort:", msg ]
     exitImmediately (ExitFailure 1)
     panic msg -- To satisfy the type checker.
 
