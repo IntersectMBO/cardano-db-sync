@@ -98,7 +98,6 @@ library
                       , cardano-crypto-praos
                       , cardano-crypto-wrapper
                       , cardano-db
-                      , cardano-smash-server
                       , cardano-sync
                       , cardano-ledger-alonzo
                       , cardano-ledger-byron
@@ -168,6 +167,5 @@ executable cardano-db-sync
                       , cardano-db-sync
                       , cardano-prelude
                       , cardano-slotting
-                      , cardano-smash-server
                       , optparse-applicative
                       , text
