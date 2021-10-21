@@ -26,6 +26,8 @@ import           Cardano.DbSync.Era.Shelley.Generic.Tx
 import           Cardano.DbSync.Era.Shelley.Generic.Util
 
 import           Cardano.Ledger.Alonzo ()
+import qualified Cardano.Ledger.BaseTypes as Ledger
+import qualified Cardano.Ledger.Block as Ledger
 import           Cardano.Ledger.Core (Witnesses)
 import qualified Cardano.Ledger.Core as Ledger
 import           Cardano.Ledger.Crypto (VRF)
@@ -33,7 +35,6 @@ import           Cardano.Ledger.Era (Crypto, SupportsSegWit (..))
 import qualified Cardano.Ledger.Era as Ledger
 import           Cardano.Ledger.SafeHash (SafeToHash)
 import qualified Cardano.Ledger.Shelley.BlockChain as Shelley
-import qualified Cardano.Ledger.Shelley.PParams as Shelley
 import qualified Cardano.Ledger.Shelley.Tx as Shelley
 
 import           Cardano.Prelude
@@ -61,7 +62,7 @@ data Block = Block
   , blkSlotNo :: !SlotNo
   , blkBlockNo :: !BlockNo
   , blkSize :: !Word64
-  , blkProto :: !Shelley.ProtVer
+  , blkProto :: !Ledger.ProtVer
   , blkVrfKey :: !Text
   , blkOpCert :: !ByteString
   , blkOpCertCounter :: !Word64
@@ -144,10 +145,10 @@ fromAlonzoBlock pp blk =
 -- -------------------------------------------------------------------------------------------------
 
 alonzoBlockTxs :: ShelleyBlock StandardAlonzo -> [(Word64, Ledger.Tx StandardAlonzo)]
-alonzoBlockTxs = zip [0 ..] . toList . fromTxSeq @StandardAlonzo . Shelley.bbody . Consensus.shelleyBlockRaw
+alonzoBlockTxs = zip [0 ..] . toList . fromTxSeq @StandardAlonzo . Ledger.bbody . Consensus.shelleyBlockRaw
 
 blockBody :: ShelleyBasedEra era => ShelleyBlock era -> Protocol.BHBody (Crypto era)
-blockBody = Protocol.bhbody . Shelley.bheader . Consensus.shelleyBlockRaw
+blockBody = Protocol.bhbody . Ledger.bheader . Consensus.shelleyBlockRaw
 
 blockHash :: ShelleyBlock era -> ByteString
 blockHash =
@@ -159,7 +160,7 @@ blockNumber = Protocol.bheaderBlockNo . blockBody
 
 blockPrevHash :: ShelleyBasedEra era => ShelleyBlock era -> Maybe ByteString
 blockPrevHash blk =
-  case Protocol.bheaderPrev (Protocol.bhbody . Shelley.bheader $ Consensus.shelleyBlockRaw blk) of
+  case Protocol.bheaderPrev (Protocol.bhbody . Ledger.bheader $ Consensus.shelleyBlockRaw blk) of
     Protocol.GenesisHash -> Just "Cardano.DbSync.Era.Shelley.Generic.Block.blockPrevHash"
     Protocol.BlockHash (Protocol.HashHeader h) -> Just $ Crypto.hashToBytes h
 
@@ -169,11 +170,11 @@ blockOpCert = KES.rawSerialiseVerKeyKES . Protocol.ocertVkHot . Protocol.bheader
 blockOpCertCounter :: ShelleyBasedEra era => ShelleyBlock era -> Word64
 blockOpCertCounter = Protocol.ocertN . Protocol.bheaderOCert . blockBody
 
-blockProtoVersion :: ShelleyBasedEra era => ShelleyBlock era -> Shelley.ProtVer
+blockProtoVersion :: ShelleyBasedEra era => ShelleyBlock era -> Ledger.ProtVer
 blockProtoVersion = Protocol.bprotver . blockBody
 
 blockSize :: ShelleyBasedEra era => ShelleyBlock era -> Word64
-blockSize = fromIntegral . Shelley.bBodySize . Shelley.bbody . Consensus.shelleyBlockRaw
+blockSize = fromIntegral . Shelley.bBodySize . Ledger.bbody . Consensus.shelleyBlockRaw
 
 blockTxs
     :: ( ShelleyBasedEra era
@@ -181,7 +182,7 @@ blockTxs
         , SafeToHash (Witnesses era)
         )
     => ShelleyBlock era -> [(Word64, Shelley.Tx era)]
-blockTxs = zip [0 ..] . unTxSeq . Shelley.bbody . Consensus.shelleyBlockRaw
+blockTxs = zip [0 ..] . unTxSeq . Ledger.bbody . Consensus.shelleyBlockRaw
 
 blockVrfKeyView :: (ShelleyBasedEra era, VRF (Crypto era) ~ PraosVRF) => ShelleyBlock era -> Text
 blockVrfKeyView = Api.serialiseToBech32 . Api.VrfVerificationKey . Protocol.bheaderVrfVk . blockBody

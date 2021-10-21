@@ -86,6 +86,7 @@ library
                       -- Only for some orphan tracing instances.
                       , cardano-node
                       , cardano-prelude
+                      , cardano-protocol-tpraos
                       , cardano-slotting
                       , cborg
                       , containers

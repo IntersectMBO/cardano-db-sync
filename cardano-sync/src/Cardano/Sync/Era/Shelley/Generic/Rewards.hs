@@ -77,20 +77,20 @@ rewardsPoolHashKeys rwds =
 rewardsStakeCreds :: Rewards -> Set StakeCred
 rewardsStakeCreds = Map.keysSet . rwdRewards
 
-rewardBlockEra :: Shelley.ProtVer -> BlockEra
+rewardBlockEra :: Ledger.ProtVer -> BlockEra
 rewardBlockEra pv =
   case pv of
-    Shelley.ProtVer 2 _ -> Shelley
-    Shelley.ProtVer 3 _ -> Allegra
-    Shelley.ProtVer 4 _ -> Mary
-    Shelley.ProtVer 5 _ -> Alonzo
-    Shelley.ProtVer 6 _ -> Alonzo
+    Ledger.ProtVer 2 _ -> Shelley
+    Ledger.ProtVer 3 _ -> Allegra
+    Ledger.ProtVer 4 _ -> Mary
+    Ledger.ProtVer 5 _ -> Alonzo
+    Ledger.ProtVer 6 _ -> Alonzo
     x -> panic $ "rewardBlockEra: " <> textShow x
 
-rewardProtoVer :: ExtLedgerState CardanoBlock -> Shelley.ProtVer
+rewardProtoVer :: ExtLedgerState CardanoBlock -> Ledger.ProtVer
 rewardProtoVer lstate =
     case ledgerState lstate of
-      LedgerStateByron _ -> Shelley.ProtVer 1 0 -- Should never happen.
+      LedgerStateByron _ -> Ledger.ProtVer 1 0 -- Should never happen.
       LedgerStateShelley sls -> Shelley._protocolVersion $ previousPParams sls
       LedgerStateAllegra als -> Shelley._protocolVersion $ previousPParams als
       LedgerStateMary mls -> Shelley._protocolVersion $ previousPParams mls

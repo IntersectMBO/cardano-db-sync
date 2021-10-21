@@ -19,7 +19,7 @@ import           Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Crypto.Hash.Class as Crypto
 
 import           Cardano.Ledger.Alonzo.Genesis (AlonzoGenesis)
-import qualified Cardano.Ledger.Shelley.PParams as Shelley
+import qualified Cardano.Ledger.BaseTypes as Ledger
 
 import           Cardano.Sync.Config.Alonzo
 import           Cardano.Sync.Config.Byron
@@ -118,8 +118,8 @@ mkProtocolInfoCardano ge =
 shelleyPraosNonce :: ShelleyConfig -> Nonce
 shelleyPraosNonce sCfg = Nonce (Crypto.castHash . unGenesisHashShelley $ scGenesisHash sCfg)
 
-shelleyProtVer :: SyncNodeConfig -> Shelley.ProtVer
+shelleyProtVer :: SyncNodeConfig -> Ledger.ProtVer
 shelleyProtVer dnc =
   let bver = dncByronProtocolVersion dnc in
-  Shelley.ProtVer (fromIntegral $ Byron.pvMajor bver) (fromIntegral $ Byron.pvMinor bver)
+  Ledger.ProtVer (fromIntegral $ Byron.pvMajor bver) (fromIntegral $ Byron.pvMinor bver)
 

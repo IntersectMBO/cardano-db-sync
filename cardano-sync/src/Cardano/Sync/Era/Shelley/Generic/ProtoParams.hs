@@ -15,7 +15,6 @@ import           Cardano.Ledger.BaseTypes (UnitInterval)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
-import           Cardano.Ledger.Shelley.PParams (ProtVer)
 import qualified Cardano.Ledger.Shelley.PParams as Shelley
 import           Cardano.Slotting.Slot (EpochNo (..))
 
@@ -44,7 +43,7 @@ data ProtoParams = ProtoParams
   , ppTreasuryGrowthRate :: !UnitInterval
   , ppDecentralisation :: !UnitInterval
   , ppExtraEntropy :: !Nonce
-  , ppProtocolVersion :: !ProtVer
+  , ppProtocolVersion :: !Ledger.ProtVer
   , ppMinUTxOValue :: !Coin
   , ppMinPoolCost :: !Coin
 
@@ -113,10 +112,10 @@ fromAlonzoParams params =
     , ppCostmdls = Just $ Alonzo._costmdls params
     , ppPriceMem = Just . Ledger.unboundRational $ Alonzo.prMem (Alonzo._prices params)
     , ppPriceStep = Just . Ledger.unboundRational $ Alonzo.prSteps (Alonzo._prices params)
-    , ppMaxTxExMem = Just $ Alonzo.exUnitsMem (Alonzo._maxTxExUnits params)
-    , ppMaxTxExSteps = Just $ Alonzo.exUnitsSteps (Alonzo._maxTxExUnits params)
-    , ppMaxBlockExMem = Just $ Alonzo.exUnitsMem (Alonzo._maxBlockExUnits params)
-    , ppMaxBlockExSteps = Just $ Alonzo.exUnitsSteps (Alonzo._maxBlockExUnits params)
+    , ppMaxTxExMem = Just . fromIntegral $ Alonzo.exUnitsMem (Alonzo._maxTxExUnits params)
+    , ppMaxTxExSteps = Just . fromIntegral $ Alonzo.exUnitsSteps (Alonzo._maxTxExUnits params)
+    , ppMaxBlockExMem = Just . fromIntegral $ Alonzo.exUnitsMem (Alonzo._maxBlockExUnits params)
+    , ppMaxBlockExSteps = Just . fromIntegral $ Alonzo.exUnitsSteps (Alonzo._maxBlockExUnits params)
     , ppMaxValSize = Just $ Alonzo._maxValSize params
     , ppCollateralPercentage = Just $ Alonzo._collateralPercentage params
     , ppMaxCollateralInputs = Just $ Alonzo._maxCollateralInputs params
