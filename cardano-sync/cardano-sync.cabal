@@ -110,6 +110,7 @@ library
                       , stm
                       , strict
                       , text
+                      , text-ansi
                       , time
                       , transformers
                       , transformers-except
