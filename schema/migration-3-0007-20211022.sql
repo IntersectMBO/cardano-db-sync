@@ -9,12 +9,6 @@ BEGIN
     CREATE INDEX idx_stake_address_view ON stake_address USING hash (view);
 
     CREATE INDEX idx_epoch_no ON epoch(no);
-    CREATE INDEX idx_epoch_out_sum ON epoch (out_sum);
-    CREATE INDEX idx_epoch_fees ON epoch (fees);
-    CREATE INDEX idx_epoch_tx_count ON epoch (tx_count);
-    CREATE INDEX idx_epoch_blk_count ON epoch (blk_count);
-    CREATE INDEX idx_epoch_start_time ON epoch (start_time);
-    CREATE INDEX idx_epoch_end_time ON epoch (end_time);
 
     CREATE INDEX idx_pool_offline_fetch_error_pmr_id ON pool_offline_fetch_error (pmr_id);
     CREATE INDEX idx_tx_in_redeemer_id ON tx_in (redeemer_id);
