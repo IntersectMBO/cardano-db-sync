@@ -56,7 +56,7 @@ import           Data.Aeson.Types (FromJSON (..), ToJSON (..))
 import qualified Data.Aeson.Types as Aeson
 import qualified Data.ByteArray as ByteArray
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString.Builder as BS (string8)
+import qualified Data.ByteString.Builder as Builder
 import           Data.Either (fromRight)
 import           Data.Fixed (Micro, showFixed)
 import           Data.Scientific (Scientific)
@@ -84,7 +84,7 @@ instance ToJSON Ada where
     -- `Number` results in it becoming `7.3112484749601107e10` while the old explorer is returning `73112484749.601107`
     toEncoding (Ada ada) =
         unsafeToEncoding $   -- convert ByteString to Aeson's Encoding
-        BS.string8 $         -- convert String to ByteString using Latin1 encoding
+        Builder.string8 $         -- convert String to ByteString using Latin1 encoding
         showFixed True ada   -- convert Micro to String chopping off trailing zeros
 
     toJSON = error "Ada.toJSON not supported due to numeric issues. Use toEncoding instead."
@@ -152,22 +152,22 @@ data ScriptType
   deriving (Eq, Generic, Show)
 
 data PoolCertAction
-  = Retirement Word64   -- retirement epoch
-  | Register ByteString -- metadata hash
+  = Retirement !Word64   -- retirement epoch
+  | Register !ByteString -- metadata hash
   deriving (Eq, Show)
 
 -- | A Unique identifier for a certificate in the
 -- blockchain. Ord instance gives a chronological order.
 data CertNo = CertNo
-  { ciBlockNo :: Maybe Word64
-  , ciTxIndex :: Word64
-  , ciCertIndex :: Word16
+  { ciBlockNo :: !(Maybe Word64)
+  , ciTxIndex :: !Word64
+  , ciCertIndex :: !Word16
   } deriving (Eq, Ord, Show)
 
 data PoolCert = PoolCert
-  { pcHash :: ByteString
-  , pcCertAction :: PoolCertAction
-  , pcCertNo :: CertNo
+  { pcHash :: !ByteString
+  , pcCertAction :: !PoolCertAction
+  , pcCertNo :: !CertNo
   } deriving (Eq, Show)
 
 instance Ord PoolCert where
