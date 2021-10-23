@@ -78,6 +78,5 @@ executable cardano-db-sync-extended
                       , cardano-db-sync-extended
                       , cardano-sync
                       , cardano-prelude
-                      , cardano-slotting
                       , optparse-applicative
                       , text

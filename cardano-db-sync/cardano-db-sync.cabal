@@ -44,6 +44,8 @@ library
 
   exposed-modules:      Cardano.DbSync
 
+                        Cardano.DbSync.Cli
+
                         Cardano.DbSync.Era
 
                         Cardano.DbSync.Era.Byron.Genesis
@@ -93,6 +95,7 @@ library
                       , base16-bytestring
                       , cardano-api
                       , cardano-binary
+                      , cardano-config
                       , cardano-crypto
                       , cardano-crypto-class
                       , cardano-crypto-praos
@@ -118,6 +121,7 @@ library
                       , io-classes
                       , monad-control
                       , monad-logger
+                      , optparse-applicative
                       , ouroboros-consensus
                       , ouroboros-consensus-byron
                       , ouroboros-consensus-cardano
@@ -162,10 +166,8 @@ executable cardano-db-sync
                         MigrationValidations
 
   build-depends:        base                            >= 4.14         && < 4.16
-                      , cardano-config
                       , cardano-sync
                       , cardano-db-sync
                       , cardano-prelude
-                      , cardano-slotting
                       , optparse-applicative
                       , text
