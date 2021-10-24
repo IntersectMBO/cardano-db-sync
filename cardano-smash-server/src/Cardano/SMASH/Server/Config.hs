@@ -64,7 +64,8 @@ readAppUsers mPath = case mPath of
   Nothing -> pure $ ApplicationUsers []
   Just path -> do
     userLines <- Text.lines <$> Text.readFile path
-    case mapM parseAppUser userLines of
+    let nonEmptyLines = filter (not . Text.null) userLines
+    case mapM parseAppUser nonEmptyLines of
       Right users -> pure $ ApplicationUsers users
       Left err -> throwIO $ userError $ Text.unpack err
 
