@@ -172,7 +172,7 @@ insertABlock tracer firstBlockOfEpoch blk details = do
     logger followingClosely
       | firstBlockOfEpoch = logInfo
       | followingClosely = logInfo
-      | Byron.blockNumber blk `mod` 5000 == 0 = logInfo
+      | Byron.blockNumber blk `mod` 1000 == 0 = logInfo
       | otherwise = logDebug
 
 
