@@ -16,7 +16,7 @@ BEGIN
     CREATE INDEX idx_pool_offline_data_pmr_id ON pool_offline_data (pmr_id);
     CREATE INDEX idx_withdrawal_redeemer_id ON withdrawal (redeemer_id);
     CREATE INDEX idx_stake_deregistration_redeemer_id ON stake_deregistration (redeemer_id);
-    CREATE INDEX idx_reserved_pool_ticker_pool_hash ON reserved_pool_ticker (pool_hash);
+    CREATE INDEX idx_reserved_pool_ticker_pool_id ON reserved_pool_ticker (pool_id);
     CREATE INDEX idx_collateral_tx_in_tx_out_id ON collateral_tx_in (tx_out_id);
     CREATE INDEX idx_script_tx_id ON script (tx_id);
 
