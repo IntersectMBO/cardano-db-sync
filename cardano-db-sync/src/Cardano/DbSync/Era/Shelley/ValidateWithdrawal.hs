@@ -8,6 +8,8 @@ import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Reader (ReaderT)
 
+import           Cardano.BM.Trace (Trace, logError)
+
 import           Cardano.Db (Ada (..))
 import qualified Cardano.Db as Db
 import           Cardano.Slotting.Slot (EpochNo (..))
@@ -31,16 +33,16 @@ import           Database.Persist.Sql (SqlBackend)
 
 validateRewardWithdrawals
     :: (MonadBaseControl IO m, MonadIO m)
-    => EpochNo -> ReaderT SqlBackend m ()
-validateRewardWithdrawals (EpochNo epochNo) = do
+    => Trace IO Text -> EpochNo -> ReaderT SqlBackend m ()
+validateRewardWithdrawals trce (EpochNo epochNo) = do
   res <- mapM validateAccounting =<< queryWithdrawalAddresses
   _bad <- queryBadWithdrawals
   liftIO $
     case partitionEithers res of
       ([], _) -> pure ()
       (xs, _) -> do
-        putStr $ show (length xs) ++ " errors, eg\n" ++ unlines (map reportError xs)
-        panicAbort $ "validateRewardWithdrawals: " <> textShow epochNo
+        logError trce $ textShow (length xs) <> " errors, eg\n" <> Text.unlines (map reportError xs)
+        logError trce $ "validateRewardWithdrawals: " <> textShow epochNo
 
 -- -----------------------------------------------------------------------------
 
@@ -50,8 +52,8 @@ data AddressInfo = AddressInfo
   , aiSumWithdrawals :: !Ada
   } deriving (Eq, Ord, Show)
 
-reportError :: AddressInfo -> String
-reportError ai =
+reportError :: AddressInfo -> Text
+reportError ai = Text.pack $
   mconcat
     [ "  ", Text.unpack (aiStakeAddress ai), " rewards are ", show (aiSumRewards ai)
     , " ADA and withdrawals are ", show (aiSumWithdrawals ai), " ADA\n"
