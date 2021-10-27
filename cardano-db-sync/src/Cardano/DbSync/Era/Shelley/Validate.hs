@@ -56,7 +56,7 @@ validateEpochRewards tracer nw currentEpoch rmap = do
                       [ "validateEpochRewards: total rewards that become spendable in epoch "
                       , textShow (unEpochNo currentEpoch), " is ", textShow actual, " ADA"
                       ]
-    validateRewardWithdrawals currentEpoch
+    validateRewardWithdrawals tracer currentEpoch
   where
     expected :: Db.Ada
     expected = Db.word64ToAda . fromIntegral . sum $ map unCoin (Map.elems rmap)
