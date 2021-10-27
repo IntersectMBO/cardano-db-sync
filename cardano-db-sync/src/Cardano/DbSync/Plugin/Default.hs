@@ -162,7 +162,7 @@ handleLedgerEvents tracer lenv point =
         LedgerNewEpoch en ss -> do
           lift $ do
             insertEpochSyncTime en ss (leEpochSyncTime lenv)
-            adjustEpochRewards tracer (en - 2)
+            adjustEpochRewards tracer en
           finalizeEpochBulkOps lenv
           -- Commit everything in the db *AFTER* the epoch rewards have been inserted, the orphaned
           -- rewards removed and the bulk operations finalized.
