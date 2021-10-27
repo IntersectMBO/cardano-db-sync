@@ -41,7 +41,7 @@ validateRewardWithdrawals trce (EpochNo epochNo) = do
     case partitionEithers res of
       ([], _) -> pure ()
       (xs, _) -> do
-        logError trce $ textShow (length xs) <> " errors, eg\n" <> Text.unlines (map reportError xs)
+        logError trce $ mconcat [ textShow (length xs), " errors, eg\n", Text.unlines (map reportError xs) ]
         logError trce $ "validateRewardWithdrawals: " <> textShow epochNo
 
 -- -----------------------------------------------------------------------------

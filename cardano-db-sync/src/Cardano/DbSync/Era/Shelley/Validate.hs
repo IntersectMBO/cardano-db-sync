@@ -9,7 +9,7 @@ module Cardano.DbSync.Era.Shelley.Validate
 
 import           Cardano.Prelude hiding (from, on)
 
-import           Cardano.BM.Trace (Trace, logInfo, logWarning)
+import           Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 
 import           Cardano.Db (DbLovelace, RewardSource)
 import qualified Cardano.Db as Db
@@ -50,7 +50,7 @@ validateEpochRewards tracer nw currentEpoch rmap = do
                       , textShow (unEpochNo currentEpoch), " expected total of ", textShow expected
                       , " ADA but got " , textShow actual, " ADA"
                       ]
-          logFullRewardMap currentEpoch (convertRewardMap nw rmap)
+          logFullRewardMap tracer currentEpoch (convertRewardMap nw rmap)
         else
           liftIO . logInfo tracer $ mconcat
                       [ "validateEpochRewards: total rewards that become spendable in epoch "
@@ -82,11 +82,11 @@ convertRewardMap nw = Map.mapKeys (Generic.toStakeCred nw)
 
 logFullRewardMap
     :: (MonadBaseControl IO m, MonadIO m)
-    => EpochNo -> Map Generic.StakeCred Coin -> ReaderT SqlBackend m ()
-logFullRewardMap epochNo ledgerMap = do
-    dbMap <- queryRewardMap epochNo
-    when (Map.size dbMap > 0 && Map.size ledgerMap > 0) $
-      diffRewardMap epochNo dbMap ledgerMap
+    => Trace IO Text -> EpochNo -> Map Generic.StakeCred Coin -> ReaderT SqlBackend m ()
+logFullRewardMap tracer epochNo ledgerMap = do
+  dbMap <- queryRewardMap epochNo
+  when (Map.size dbMap > 0 && Map.size ledgerMap > 0) $
+    diffRewardMap tracer epochNo dbMap ledgerMap
 
 
 queryRewardMap
@@ -112,18 +112,13 @@ queryRewardMap (EpochNo epochNo) = do
 
 diffRewardMap
     :: (MonadBaseControl IO m, MonadIO m)
-    => EpochNo -> Map Generic.StakeCred [(RewardSource, DbLovelace)] -> Map Generic.StakeCred Coin
+    => Trace IO Text -> EpochNo -> Map Generic.StakeCred [(RewardSource, DbLovelace)]
+    -> Map Generic.StakeCred Coin
     -> ReaderT SqlBackend m ()
-diffRewardMap epochNo dbMap ledgerMap = do
-    liftIO $ do
-      putStrLn $ "Epoch No: " ++ show (unEpochNo epochNo)
-      putStrLn $ "dbMap length: " ++ show (Map.size dbMap)
-      putStrLn $ "ledgerMap length: " ++ show (Map.size ledgerMap)
-      putStrLn $ "diffMap length: " ++ show (Map.size diffMap)
-      mapM_ reportDiff $ Map.toList diffMap
+diffRewardMap tracer epochNo dbMap ledgerMap = do
     when (Map.size diffMap > 0) $ do
-      reportCount epochNo diffMap
-      panicAbort $ Text.unlines
+      reportCount tracer epochNo diffMap
+      liftIO . logError tracer $ Text.unlines
             [ "Rewards differ between ledger and db-sync."
             , "Please report at https://github.com/input-output-hk/cardano-db-sync/issues."
             ]
@@ -147,20 +142,12 @@ diffRewardMap epochNo dbMap ledgerMap = do
           (Just s, Nothing) -> Map.insert addr (s, Coin (-1)) acc
           (Nothing, Nothing) -> acc
 
-reportDiff :: (Generic.StakeCred, ([(RewardSource, DbLovelace)], Coin)) -> IO ()
-reportDiff (cred, (xs, coin)) =
-    putStrLn . concat $
-      [ show cred, " (", show (sum $ map (Db.unDbLovelace . snd) xs), ", ", show (length xs), "): "
-      , show xs, ", ", show coin
-      ]
-
 reportCount
     :: (MonadBaseControl IO m, MonadIO m)
-    => EpochNo -> Map Generic.StakeCred ([(RewardSource, DbLovelace)], Coin)
+    => Trace IO Text -> EpochNo -> Map Generic.StakeCred ([(RewardSource, DbLovelace)], Coin)
     -> ReaderT SqlBackend m ()
-reportCount epochNo diffMap =
-    when (Map.size diffMap > 0) $
-      mapM_ report $ Map.toList diffMap
+reportCount tracer epochNo diffMap =
+    mapM_ report $ Map.toList diffMap
   where
     report
         :: (MonadBaseControl IO m, MonadIO m)
@@ -169,8 +156,8 @@ reportCount epochNo diffMap =
     report (cred, (xs, _coin)) = do
       count <- queryRewardEntries epochNo cred
       unless (count == length xs) $
-        putStrLn $ "reportCount: " ++ show count ++ " == " ++ show (length xs) ++ " ???"
-
+        liftIO . logError tracer $
+          mconcat [ "reportCount: ", textShow count, " == ", textShow (length xs), " ???" ]
 
 queryRewardEntries
     :: (MonadBaseControl IO m, MonadIO m)
