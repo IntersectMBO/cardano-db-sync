@@ -1,19 +1,29 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 
-module           Cardano.SMASH.Server.Impl where
+module Cardano.SMASH.Server.Impl
+  ( ServerEnv (..)
+  , server
+  ) where
 
 import           Cardano.Prelude hiding (Handler)
 
+import           Cardano.BM.Trace
+
 import           Data.Aeson (encode)
+import qualified Data.ByteString.Lazy as LBS
 
 import           Data.Swagger (Contact (..), Info (..), License (..), Swagger (..), URL (..))
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 import           Data.Version (showVersion)
 
 import           Servant (Handler (..), Header, Headers, Server, err400, err403, err404, errBody,
                    (:<|>) (..))
 import           Servant.API.ResponseHeaders (addHeader)
 import           Servant.Swagger (toSwagger)
+
+import           Cardano.Db (textShow)
 
 import           Cardano.SMASH.Server.Api
 import           Cardano.SMASH.Server.FetchPolicies
@@ -22,24 +32,29 @@ import           Cardano.SMASH.Server.Types
 
 import           Paths_cardano_smash_server (version)
 
+data ServerEnv = ServerEnv
+    { seTrace :: Trace IO Text
+    , seDataLayer :: PoolDataLayer
+    }
+
 -- | Combined server of a Smash service with Swagger documentation.
-server :: PoolDataLayer -> Server API
-server poolApi
+server :: ServerEnv -> Server API
+server serverEnv
     =       pure todoSwagger
-    :<|>    getPoolOfflineMetadata poolApi
+    :<|>    getPoolOfflineMetadata serverEnv
     :<|>    getHealthStatus
-    :<|>    getReservedTickers poolApi
-    :<|>    getDelistedPools poolApi
-    :<|>    delistPool poolApi
-    :<|>    enlistPool poolApi
-    :<|>    getPoolErrorAPI poolApi
-    :<|>    getRetiredPools poolApi
-    :<|>    checkPool poolApi
-    :<|>    addTicker poolApi
-    :<|>    fetchPolicies poolApi
+    :<|>    getReservedTickers serverEnv
+    :<|>    getDelistedPools serverEnv
+    :<|>    delistPool serverEnv
+    :<|>    enlistPool serverEnv
+    :<|>    getPoolErrorAPI serverEnv
+    :<|>    getRetiredPools serverEnv
+    :<|>    checkPool serverEnv
+    :<|>    addTicker serverEnv
+    :<|>    fetchPolicies serverEnv
 #ifdef TESTING_MODE
-    :<|>    retirePool poolApi
-    :<|>    addPool poolApi
+    :<|>    retirePool serverEnv
+    :<|>    addPool serverEnv
 #endif
 
 -- | Swagger spec for Todo API.
@@ -74,31 +89,41 @@ todoSwagger =
 -- 404 if it is not available (e.g. it could not be downloaded, or was invalid)
 -- 200 with the JSON content. Note that this must be the original content with the expected hash, not a re-rendering of the original.
 getPoolOfflineMetadata
-    :: PoolDataLayer
+    :: ServerEnv
     -> PoolId
     -> PoolMetadataHash
     -> Handler (Headers '[Header "Cache-Control" Text] (ApiResult DBFail PoolMetadataRaw))
-getPoolOfflineMetadata dataLayer poolId poolMetaHash = fmap (addHeader $ cacheControlHeader NoCache) . convertIOToHandler $ do
+getPoolOfflineMetadata (ServerEnv trce dataLayer) poolId poolMetaHash =
+  fmap (addHeader $ cacheControlHeader NoCache) . convertIOToHandler $ do
 
     isDelisted <- dlCheckDelistedPool dataLayer poolId
 
     -- When it is delisted, return 403. We don't need any more info.
-    when isDelisted $
-        throwIO err403
+    when isDelisted $ do
+      let msg = Text.unwords ["Pool", getPoolId poolId, "is delisted"]
+      logWarning trce msg
+      throwIO $ err403 {errBody = LBS.fromStrict $ Text.encodeUtf8 msg}
 
     isRetired <- dlCheckRetiredPool dataLayer poolId
-    when isRetired $
-        throwIO err404
+    when isRetired $ do
+      let msg = Text.unwords ["Pool", getPoolId poolId, "is retired"]
+      logWarning trce msg
+      throwIO err404 {errBody = LBS.fromStrict $ Text.encodeUtf8 msg}
 
     mmetadata <- dlGetPoolMetadata dataLayer poolId poolMetaHash
     case mmetadata of
-      Left _err -> throwIO err404
+      Left err -> do
+          logWarning trce $ textShow err
+          throwIO err404 {errBody = encode err}
       Right (tickerName, meta) -> do
         mPoolHash <- dlCheckReservedTicker dataLayer tickerName
         case mPoolHash of
-          Nothing -> pure $ ApiResult $ Right meta
-          Just tickerPoolHash | tickerPoolHash == poolId -> pure $ ApiResult $ Right meta
-          Just _poolHash -> throwIO err404 -- ticker is reserved by another pool.
+          Nothing -> pure $ ApiResult (Right meta)
+          Just tickerPoolHash | tickerPoolHash == poolId -> pure $ ApiResult (Right meta)
+          Just _poolHash -> do
+              let msg = Text.unwords ["Ticker name", getTickerName tickerName, "is reserved by pool", getPoolId poolId]
+              logWarning trce msg
+              throwIO err404 -- ticker is reserved by another pool.
 
 -- |Simple health status, there are ideas for improvement.
 getHealthStatus :: Handler (ApiResult DBFail HealthStatus)
@@ -109,60 +134,59 @@ getHealthStatus = pure . ApiResult . Right $
         }
 
 -- |Get all reserved tickers.
-getReservedTickers :: PoolDataLayer -> Handler (ApiResult DBFail [UniqueTicker])
-getReservedTickers dataLayer = convertIOToHandler $ do
-
+getReservedTickers :: ServerEnv -> Handler (ApiResult DBFail [UniqueTicker])
+getReservedTickers (ServerEnv _trce dataLayer) =
+  convertIOToHandler $ do
     reservedTickers <- dlGetReservedTickers dataLayer
-
     pure . ApiResult . Right . map UniqueTicker $ reservedTickers
 
 -- |Get all delisted pools
-getDelistedPools :: PoolDataLayer -> Handler (ApiResult DBFail [PoolId])
-getDelistedPools dataLayer = convertIOToHandler $ do
-
+getDelistedPools :: ServerEnv -> Handler (ApiResult DBFail [PoolId])
+getDelistedPools (ServerEnv _trce dataLayer) =
+  convertIOToHandler $ do
     allDelistedPools <- dlGetDelistedPools dataLayer
-
     pure . ApiResult . Right $ allDelistedPools
 
 #ifdef DISABLE_BASIC_AUTH
-delistPool :: PoolDataLayer -> PoolId -> Handler (ApiResult DBFail PoolId)
-delistPool dataLayer = delistPool' dataLayer
+delistPool :: ServerEnv -> PoolId -> Handler (ApiResult DBFail PoolId)
+delistPool env = delistPool' env
 #else
-delistPool :: PoolDataLayer -> User -> PoolId -> Handler (ApiResult DBFail PoolId)
-delistPool dataLayer _user = delistPool' dataLayer
+delistPool :: ServerEnv -> User -> PoolId -> Handler (ApiResult DBFail PoolId)
+delistPool env _user = delistPool' env
 #endif
 
 -- |General delist pool.
-delistPool' :: PoolDataLayer -> PoolId -> Handler (ApiResult DBFail PoolId)
-delistPool' dataLayer poolId = convertIOToHandler $ do
-
+delistPool' :: ServerEnv -> PoolId -> Handler (ApiResult DBFail PoolId)
+delistPool' (ServerEnv trce dataLayer) poolId =
+  convertIOToHandler $ do
     delistedPoolE <- dlAddDelistedPool dataLayer poolId
-
     case delistedPoolE of
-        Left dbFail   -> throwDBFailException dbFail
+        Left dbFail   -> throwDBFailException trce dbFail
         Right poolId' -> pure . ApiResult . Right $ poolId'
 
 #ifdef DISABLE_BASIC_AUTH
-enlistPool :: PoolDataLayer -> PoolId -> Handler (ApiResult DBFail PoolId)
-enlistPool dataLayer poolId = enlistPool' dataLayer poolId
+enlistPool :: ServerEnv -> PoolId -> Handler (ApiResult DBFail PoolId)
+enlistPool env poolId = enlistPool' env poolId
 #else
-enlistPool :: PoolDataLayer -> User -> PoolId -> Handler (ApiResult DBFail PoolId)
-enlistPool dataLayer _user = enlistPool' dataLayer
+enlistPool :: ServerEnv -> User -> PoolId -> Handler (ApiResult DBFail PoolId)
+enlistPool env _user = enlistPool' env
 #endif
 
 -- |General enlist pool function.
-enlistPool' :: PoolDataLayer -> PoolId -> Handler (ApiResult DBFail PoolId)
-enlistPool' dataLayer poolId = convertIOToHandler $ do
-
+enlistPool' :: ServerEnv -> PoolId -> Handler (ApiResult DBFail PoolId)
+enlistPool' (ServerEnv trce dataLayer) poolId =
+  convertIOToHandler $ do
     delistedPool' <- dlRemoveDelistedPool dataLayer poolId
 
     case delistedPool' of
-        Left _err     -> throwIO err404
+        Left err     -> do
+            logWarning trce $ textShow err
+            throwIO err404 { errBody = encode err }
         Right poolId' -> pure . ApiResult . Right $ poolId'
 
-getPoolErrorAPI :: PoolDataLayer -> PoolId -> Maybe TimeStringFormat -> Handler (ApiResult DBFail [PoolFetchError])
-getPoolErrorAPI dataLayer poolId mTimeInt = convertIOToHandler $ do
-
+getPoolErrorAPI :: ServerEnv -> PoolId -> Maybe TimeStringFormat -> Handler (ApiResult DBFail [PoolFetchError])
+getPoolErrorAPI (ServerEnv _trce dataLayer) poolId mTimeInt =
+  convertIOToHandler $ do
     let getFetchErrors = dlGetFetchErrors dataLayer
 
     -- Unless the user defines the date from which he wants to display the errors,
@@ -174,52 +198,50 @@ getPoolErrorAPI dataLayer poolId mTimeInt = convertIOToHandler $ do
 
     pure . ApiResult $ fetchErrors
 
-getRetiredPools :: PoolDataLayer -> Handler (ApiResult DBFail [PoolId])
-getRetiredPools dataLayer = convertIOToHandler $ do
-
+getRetiredPools :: ServerEnv -> Handler (ApiResult DBFail [PoolId])
+getRetiredPools (ServerEnv _trce dataLayer) =
+  convertIOToHandler $ do
     retiredPools <- dlGetRetiredPools dataLayer
 
     pure . ApiResult $ retiredPools
 
-checkPool :: PoolDataLayer -> PoolId -> Handler (ApiResult DBFail PoolId)
-checkPool dataLayer poolId = convertIOToHandler $ do
-
+checkPool :: ServerEnv -> PoolId -> Handler (ApiResult DBFail PoolId)
+checkPool (ServerEnv _trce dataLayer) poolId =
+  convertIOToHandler $ do
     existingPoolId <- dlGetPool dataLayer poolId
-
-    pure . ApiResult $ existingPoolId
+    pure $ ApiResult existingPoolId
 
 #ifdef DISABLE_BASIC_AUTH
-addTicker :: PoolDataLayer -> TickerName -> PoolId -> Handler (ApiResult DBFail TickerName)
+addTicker :: ServerEnv -> TickerName -> PoolId -> Handler (ApiResult DBFail TickerName)
 addTicker = addTicker'
 #else
-addTicker :: PoolDataLayer -> User -> TickerName -> PoolId -> Handler (ApiResult DBFail TickerName)
+addTicker :: ServerEnv -> User -> TickerName -> PoolId -> Handler (ApiResult DBFail TickerName)
 addTicker dataLayer _user = addTicker' dataLayer
 #endif
 
-addTicker' :: PoolDataLayer -> TickerName -> PoolId -> Handler (ApiResult DBFail TickerName)
-addTicker' dataLayer tickerName poolId = convertIOToHandler $ do
-
+addTicker' :: ServerEnv -> TickerName -> PoolId -> Handler (ApiResult DBFail TickerName)
+addTicker' (ServerEnv trce dataLayer) tickerName poolId =
+  convertIOToHandler $ do
     reservedTickerE <- dlAddReservedTicker dataLayer tickerName poolId
-
     case reservedTickerE of
-        Left dbFail           -> throwDBFailException dbFail
+        Left dbFail           -> throwDBFailException trce dbFail
         Right _reservedTicker -> pure . ApiResult . Right $ tickerName
 
 #ifdef DISABLE_BASIC_AUTH
-fetchPolicies :: PoolDataLayer -> SmashURL -> Handler (ApiResult DBFail PolicyResult)
+fetchPolicies :: ServerEnv -> SmashURL -> Handler (ApiResult DBFail PolicyResult)
 fetchPolicies = fetchPolicies'
 #else
-fetchPolicies :: PoolDataLayer -> User -> SmashURL -> Handler (ApiResult DBFail PolicyResult)
+fetchPolicies :: ServerEnv -> User -> SmashURL -> Handler (ApiResult DBFail PolicyResult)
 fetchPolicies dataLayer _user = fetchPolicies' dataLayer
 #endif
 
 -- |General fetch policies function.
-fetchPolicies' :: PoolDataLayer -> SmashURL -> Handler (ApiResult DBFail PolicyResult)
-fetchPolicies' dataLayer smashURL = convertIOToHandler $ do
-
+fetchPolicies' :: ServerEnv -> SmashURL -> Handler (ApiResult DBFail PolicyResult)
+fetchPolicies' (ServerEnv trce dataLayer) smashURL =
+  convertIOToHandler $ do
+    logInfo trce $ "Fetch policies from " <> textShow smashURL
     -- Fetch from the remote SMASH server.
     policyResult <- httpClientFetchPolicies smashURL
-
     let delistedPools =
             case policyResult of
                 Left httpClientErr -> panic $ renderHttpClientError httpClientErr
@@ -241,37 +263,37 @@ fetchPolicies' dataLayer smashURL = convertIOToHandler $ do
         Right policyResult' -> pure . ApiResult . Right $ policyResult'
 
 #ifdef TESTING_MODE
-retirePool :: PoolDataLayer -> PoolIdBlockNumber -> Handler (ApiResult DBFail PoolId)
-retirePool dataLayer (PoolIdBlockNumber poolId blockNo) = convertIOToHandler $ do
+retirePool :: ServerEnv -> PoolIdBlockNumber -> Handler (ApiResult DBFail PoolId)
+retirePool (ServerEnv trce dataLayer) (PoolIdBlockNumber poolId blockNo) =
+  convertIOToHandler $ do
 
     let addRetiredPool = dlAddRetiredPool dataLayer
     retiredPoolId <- addRetiredPool poolId blockNo
 
     pure . ApiResult $ retiredPoolId
 
-addPool :: PoolDataLayer -> PoolId -> PoolMetadataHash -> PoolMetadataRaw -> Handler (ApiResult DBFail PoolId)
-addPool dataLayer poolId poolHash poolMetadataRaw = convertIOToHandler $ do
-
+addPool :: ServerEnv -> PoolId -> PoolMetadataHash -> PoolMetadataRaw -> Handler (ApiResult DBFail PoolId)
+addPool (ServerEnv trce dataLayer) poolId poolHash poolMetadataRaw =
+  convertIOToHandler $ do
     poolMetadataE <- runPoolInsertion dataLayer poolMetadataRaw poolId poolHash
-
     case poolMetadataE of
-        Left dbFail         -> throwDBFailException dbFail
+        Left dbFail         -> throwDBFailException trce dbFail
         Right _poolMetadata -> pure . ApiResult . Right $ poolId
 
-runPoolInsertion :: PoolDataLayer -> PoolMetadataRaw -> PoolId -> PoolMetadataHash -> IO (Either DBFail PoolMetadataRaw)
-runPoolInsertion dataLayer poolMetadataRaw poolId poolHash = do
-
+runPoolInsertion :: ServerEnv -> PoolMetadataRaw -> PoolId -> PoolMetadataHash -> IO (Either DBFail PoolMetadataRaw)
+runPoolInsertion (ServerEnv trce dataLayer) poolMetadataRaw poolId poolHash = do
     decodedMetadata <-  case (eitherDecode' . BL.fromStrict . encodeUtf8 . getPoolMetadata $ poolMetadataRaw) of
                             Left err     -> panic $ toS err
                             Right result -> pure result
-
     dlAddPoolMetadata dataLayer Nothing poolId poolHash poolMetadataRaw (pomTicker decodedMetadata)
 #endif
 
 
 -- Generic throwing of exception when something goes bad.
-throwDBFailException :: DBFail -> IO (ApiResult DBFail a)
-throwDBFailException dbFail = throwIO $ err400 { errBody = encode dbFail }
+throwDBFailException ::Trace IO Text -> DBFail -> IO (ApiResult DBFail a)
+throwDBFailException trce dbFail = do
+    logWarning trce $ textShow dbFail
+    throwIO $ err400 { errBody = encode dbFail }
 
 -- | Natural transformation from @IO@ to @Handler@.
 convertIOToHandler :: IO a -> Handler a

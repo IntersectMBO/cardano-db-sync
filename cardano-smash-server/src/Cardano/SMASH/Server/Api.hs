@@ -11,6 +11,7 @@
 module Cardano.SMASH.Server.Api
   ( API
   , DelistedPoolsAPI
+  , BasicAuthURL
   , fullAPI
   , smashApi
   ) where
@@ -90,7 +91,7 @@ type DelistPoolAPI = "api" :> APIVersion :> "delist" :> ReqBody '[JSON] PoolId :
 
 type EnlistPoolAPI = "api" :> APIVersion :> "enlist" :> ReqBody '[JSON] PoolId :> ApiRes Patch PoolId
 
-type AddTickerAPI = "api" :> APIVersion :> "tickers" :> Capture "name" TickerName :> ReqBody '[JSON] PoolMetadataHash :> ApiRes Post TickerName
+type AddTickerAPI = "api" :> APIVersion :> "tickers" :> Capture "name" TickerName :> ReqBody '[JSON] PoolId :> ApiRes Post TickerName
 
 -- Enabling the SMASH server to fetch the policies from remote SMASH server. Policies like delisting or unique ticker names.
 type FetchPoliciesAPI = "api" :> APIVersion :> "policies" :> ReqBody '[JSON] SmashURL :> ApiRes Post PolicyResult

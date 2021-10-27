@@ -14,7 +14,7 @@ import           Servant (Application, BasicAuthCheck (..), BasicAuthData (..),
 
 import           Network.Wai.Handler.Warp (defaultSettings, runSettings, setBeforeMainLoop, setPort)
 
-import           Cardano.BM.Trace (logInfo)
+import           Cardano.BM.Trace (Trace, logInfo)
 
 import           Cardano.Db (textShow)
 
@@ -36,10 +36,10 @@ runSmashServer config = do
             (logInfo trce $ "SMASH listening on port " <> textShow (sscSmashPort config))
           defaultSettings
 
-    runSettings settings =<< mkApp poolDataLayer (sscAdmins config)
+    runSettings settings =<< mkApp (sscTrace config) poolDataLayer (sscAdmins config)
 
-mkApp :: PoolDataLayer -> ApplicationUsers -> IO Application
-mkApp dataLayer appUsers = do
+mkApp :: Trace IO Text -> PoolDataLayer -> ApplicationUsers -> IO Application
+mkApp trce dataLayer appUsers = do
 
     -- Ugly hack, wait 2s for migrations to run for the admin user to be created.
     -- You can always run the migrations first.
@@ -48,7 +48,7 @@ mkApp dataLayer appUsers = do
     pure $ serveWithContext
         fullAPI
         (basicAuthServerContext appUsers)
-        (server dataLayer)
+        (server $ ServerEnv trce dataLayer)
 
 -- | We need to supply our handlers with the right Context.
 basicAuthServerContext :: ApplicationUsers -> Context (BasicAuthCheck User ': '[])
@@ -81,23 +81,23 @@ checkIfUserValid (ApplicationUsers applicationUsers) applicationUser@(Applicatio
 
 -- Stub api
 
-runAppStubbed :: Int -> IO ()
-runAppStubbed port = do
+runAppStubbed :: Trace IO Text -> Int -> IO ()
+runAppStubbed trce port = do
     let settings =
           setPort port $
           setBeforeMainLoop (hPutStrLn stderr ("SMASH-stubbed listening on port " ++ show port))
           defaultSettings
 
-    runSettings settings =<< mkAppStubbed
+    runSettings settings =<< mkAppStubbed trce
 
-mkAppStubbed :: IO Application
-mkAppStubbed = do
+mkAppStubbed :: Trace IO Text -> IO Application
+mkAppStubbed trce = do
     dataLayer <- createCachedPoolDataLayer Nothing
 
     pure $ serveWithContext
         fullAPI
         (basicAuthServerContext stubbedApplicationUsers)
-        (server dataLayer)
+        (server $ ServerEnv trce dataLayer)
 
 stubbedApplicationUsers :: ApplicationUsers
 stubbedApplicationUsers = ApplicationUsers [ApplicationUser "user" "password"]
