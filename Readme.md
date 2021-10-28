@@ -8,7 +8,7 @@ inserted into a PostgreSQL database. SQL queries can then be written directly ag
 schema or as queries embedded in any language with libraries for interacting with an SQL database.
 
 Examples of what someone would be able to do via an SQL query against a Cardano DB Sync
-instance fully synced fully synced to a specific network is:
+instance fully synced to a specific network is:
 
 * Look up any block, transaction, address, stake pool etc on that network, usually by the hash that
   identifies that item or the index into another table.
