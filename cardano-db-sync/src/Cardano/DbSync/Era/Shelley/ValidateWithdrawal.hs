@@ -19,7 +19,6 @@ import           Data.Either (partitionEithers)
 import           Data.Fixed (Micro)
 import qualified Data.List as List
 import           Data.Text (Text)
-import qualified Data.Text as Text
 
 import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), asc, distinct, from,
                    groupBy, having, on, orderBy, select, sum_, unValue, val, where_, (<.), (==.),
@@ -41,8 +40,9 @@ validateRewardWithdrawals trce (EpochNo epochNo) = do
     case partitionEithers res of
       ([], _) -> pure ()
       (xs, _) -> do
-        logError trce $ mconcat [ textShow (length xs), " errors, eg\n", Text.unlines (map reportError xs) ]
-        logError trce $ "validateRewardWithdrawals: " <> textShow epochNo
+        logError trce . mconcat $
+            [ textShow epochNo, ": ", textShow (length xs), " errors, eg\n"]
+            ++ List.intersperse "\n" (map reportError xs)
 
 -- -----------------------------------------------------------------------------
 
@@ -53,10 +53,10 @@ data AddressInfo = AddressInfo
   } deriving (Eq, Ord, Show)
 
 reportError :: AddressInfo -> Text
-reportError ai = Text.pack $
+reportError ai =
   mconcat
-    [ "  ", Text.unpack (aiStakeAddress ai), " rewards are ", show (aiSumRewards ai)
-    , " ADA and withdrawals are ", show (aiSumWithdrawals ai), " ADA\n"
+    [ "  ", aiStakeAddress ai, " rewards are ", textShow (aiSumRewards ai)
+    , " ADA and withdrawals are ", textShow (aiSumWithdrawals ai), " ADA"
     ]
 
 -- For a given TxId, validate the input/output accounting.
