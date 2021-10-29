@@ -10,11 +10,12 @@ module Cardano.Sync.Era.Shelley.Generic.Rewards
   , mergeRewards
   , rewardsPoolHashKeys
   , rewardsStakeCreds
+  , totalAda
   ) where
 
 import           Cardano.Prelude
 
-import           Cardano.Db (RewardSource (..), rewardTypeToSource, textShow)
+import           Cardano.Db (Ada, RewardSource (..), rewardTypeToSource, textShow, word64ToAda)
 
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
 import qualified Cardano.Ledger.BaseTypes as Ledger
@@ -107,6 +108,12 @@ rewardProtoVer lstate =
     -- Get the *previous* block's PParams by using `esPrevPp` `esPp`.
     previousPParams :: LedgerState (ShelleyBlock era) -> Ledger.PParams era
     previousPParams = Shelley.esPrevPp . Shelley.nesEs . Consensus.shelleyLedgerState
+
+totalAda :: Rewards -> Ada
+totalAda rwds =
+  word64ToAda . fromIntegral . sum
+    . concatMap (map (unCoin . rewardAmount) . Set.toList)
+    $ Map.elems (rwdRewards rwds)
 
 -- -------------------------------------------------------------------------------------------------
 

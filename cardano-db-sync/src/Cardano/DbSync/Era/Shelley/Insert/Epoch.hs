@@ -10,6 +10,7 @@
 
 module Cardano.DbSync.Era.Shelley.Insert.Epoch
   ( finalizeEpochBulkOps
+  , forceInsertRewards
   , isEmptyEpochBulkOps
   , insertEpochInterleaved
   , insertPoolDepositRefunds
@@ -19,7 +20,7 @@ module Cardano.DbSync.Era.Shelley.Insert.Epoch
 
 import           Cardano.Prelude
 
-import           Cardano.BM.Trace (Trace, logInfo)
+import           Cardano.BM.Trace (Trace, logInfo, logWarning)
 
 import qualified Cardano.Db as DB
 
@@ -47,8 +48,38 @@ import qualified Data.Set as Set
 
 import           Database.Persist.Sql (SqlBackend)
 
-
 {- HLINT ignore "Use readTVarIO" -}
+
+finalizeEpochBulkOps
+     :: (MonadBaseControl IO m, MonadIO m)
+     => LedgerEnv
+     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+finalizeEpochBulkOps lenv = do
+  bops <- liftIO $ atomically $ flushTBQueue (leBulkOpQueue lenv)
+  unless (null bops) $
+    liftIO $ logInfo (leTrace lenv) $ mconcat
+      ["Flushing remaining ", show (length bops), " BulkOperations"]
+  mapM_ (insertEpochInterleaved (leTrace lenv)) bops
+
+-- | This gets called with the full set of rewards. If there are no blocks produced in the last 20%
+-- of the slots within an epoch, they will be inserted here.
+forceInsertRewards
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> LedgerEnv -> Generic.Rewards -> ReaderT SqlBackend m ()
+forceInsertRewards tracer lenv rwds = do
+  let mapSize = Map.size $ Generic.rwdRewards rwds
+  hasEntry <- DB.queryHasRewardsForEpoch $ unEpochNo (Generic.rwdEpoch rwds)
+  when (mapSize > 0 && not hasEntry) $ do
+    liftIO . logWarning tracer $ mconcat
+                                [ "forceInsertRewards: ", textShow mapSize, " rewards for epoch "
+                                , textShow (unEpochNo $ Generic.rwdEpoch rwds), " is "
+                                , textShow (Generic.totalAda rwds), " ADA"
+                                ]
+    icache <- updateIndexCache lenv (Generic.rewardsStakeCreds rwds) (Generic.rewardsPoolHashKeys rwds)
+    res <- runExceptT $ insertRewards (Generic.rwdEpoch rwds - 2) icache (Map.toList $ Generic.rwdRewards rwds)
+    case res of
+      Left err -> liftIO . logWarning tracer $ mconcat [ "forceInsertRewards: ", renderSyncNodeError err ]
+      Right () -> DB.transactionCommit
 
 insertEpochInterleaved
      :: (MonadBaseControl IO m, MonadIO m)
@@ -106,18 +137,6 @@ postEpochStake lenv smap point = do
     forM_ (chunksOf 1000 $ Map.toList (Generic.sdistStakeMap smap)) $ \stakeChunk ->
       writeTBQueue (leBulkOpQueue lenv) $ BulkStakeDistChunk epochNo point icache stakeChunk
     writeTBQueue (leBulkOpQueue lenv) $ BulkStakeDistReport epochNo point (length $ Generic.sdistStakeMap smap)
-
-
-finalizeEpochBulkOps
-     :: (MonadBaseControl IO m, MonadIO m)
-     => LedgerEnv
-     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-finalizeEpochBulkOps lenv = do
-    bops <- liftIO $ atomically $ flushTBQueue (leBulkOpQueue lenv)
-    unless (null bops) $
-      liftIO $ logInfo (leTrace lenv) $ mconcat
-        ["Flushing remaining ", show (length bops), " BulkOperations"]
-    mapM_ (insertEpochInterleaved (leTrace lenv)) bops
 
 isEmptyEpochBulkOps
      :: MonadIO m
@@ -187,7 +206,7 @@ insertRewards epoch icache rewardsChunk = do
                   , DB.rewardPoolId = lookupPoolIdPairMaybe (Generic.rewardPool rwd) icache
                   }
 
-    -- The earnedEpoch and spendableEpoch functions have been tweaked to match the login of the ledger.
+    -- The earnedEpoch and spendableEpoch functions have been tweaked to match the logic of the ledger.
     earnedEpoch :: DB.RewardSource -> Word64
     earnedEpoch src =
       unEpochNo epoch +

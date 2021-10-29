@@ -61,10 +61,10 @@ validateEpochRewards tracer rmap = do
     expected :: Db.Ada
     expected =
       Db.word64ToAda . fromIntegral . sum
-        $ map (unCoin . Set.foldl' foldf (Coin 0)) (Map.elems $ Generic.rwdRewards rmap)
+        $ map (unCoin . Set.foldl' foldfunc (Coin 0)) (Map.elems $ Generic.rwdRewards rmap)
 
-    foldf :: Coin -> Generic.Reward -> Coin
-    foldf coin rwd = plusCoin coin (Generic.rewardAmount rwd)
+    foldfunc :: Coin -> Generic.Reward -> Coin
+    foldfunc coin rwd = plusCoin coin (Generic.rewardAmount rwd)
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -75,7 +75,7 @@ queryEpochRewardTotal (EpochNo epochNo) = do
   res <- select . from $ \ rwd -> do
             where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
             -- For ... reasons ... pool deposit refunds are put into the rewards account
-            -- but are not considered part of the total rewards for an epoh.
+            -- but are not considered part of the total rewards for an epoch.
             where_ (not_ $ rwd ^. Db.RewardType ==. val Db.RwdDepositRefund)
             pure (sum_ $ rwd ^. Db.RewardAmount)
   pure $ Db.unValueSumAda (listToMaybe res)

@@ -89,7 +89,7 @@ instance
     toLedgerEvent nw evt =
       case unwrapLedgerEvent evt of
         LERewards e m -> Just $ LedgerRewardDist (convertPoolRewards nw e m)
-        LEMirTransfer rp tp _rtt _ttr -> Just $ LedgerMirDist (convertMirRewards rp tp)
+        LEMirTransfer rp tp _rtt _ttr -> Just $ LedgerMirDist (convertMirRewards nw rp tp)
         LERetiredPools r _u en -> Just $ LedgerPoolReap en r
         ShelleyLedgerEventBBODY {} -> Nothing
         ShelleyLedgerEventTICK {} -> Nothing
@@ -104,19 +104,28 @@ instance All ConvertLedgerEvent xs => ConvertLedgerEvent (HardForkBlock xs) wher
 --------------------------------------------------------------------------------
 
 convertMirRewards
-    :: Map (Ledger.StakeCredential StandardCrypto) Coin -> Map (Ledger.StakeCredential StandardCrypto) Coin
+    :: Network -> Map (Ledger.StakeCredential StandardCrypto) Coin -> Map (Ledger.StakeCredential StandardCrypto) Coin
     -> Generic.Rewards
-convertMirRewards resPay trePay =
+convertMirRewards nw resPay trePay =
   Generic.Rewards
-    { Generic.rwdEpoch = EpochNo 0
+    { Generic.rwdEpoch = EpochNo 0 -- Will be fixed later
     , Generic.rwdRewards = Map.unionWith Set.union (convertResPay resPay) (convertTrePay trePay)
     }
   where
     convertResPay :: Map (Ledger.StakeCredential StandardCrypto) Coin -> Map Generic.StakeCred (Set Generic.Reward)
-    convertResPay = panic "convertResPay"
+    convertResPay = mapBimap (Generic.toStakeCred nw) (mkPayment RwdReserves)
 
     convertTrePay :: Map (Ledger.StakeCredential StandardCrypto) Coin -> Map Generic.StakeCred (Set Generic.Reward)
-    convertTrePay = panic "convertTrePay"
+    convertTrePay = mapBimap (Generic.toStakeCred nw) (mkPayment RwdReserves)
+
+    mkPayment :: RewardSource -> Coin -> Set Generic.Reward
+    mkPayment src coin =
+      Set.singleton $
+        Generic.Reward
+          { Generic.rewardSource = src
+          , Generic.rewardPool = Nothing
+          , Generic.rewardAmount = coin
+          }
 
 convertPoolRewards
     :: Network -> EpochNo -> Map (Ledger.StakeCredential StandardCrypto) (Set (Ledger.Reward StandardCrypto))
@@ -135,8 +144,8 @@ convertPoolRewards network epochNum rmap =
         , Generic.rewardPool = Just $ Generic.toStakePoolKeyHash (Ledger.rewardPool sr)
         }
 
-    mapBimap :: Ord k2 => (k1 -> k2) -> (a1 -> a2) -> Map k1 a1 -> Map k2 a2
-    mapBimap fk fa = Map.fromAscList . map (bimap fk fa) . Map.toAscList
+mapBimap :: Ord k2 => (k1 -> k2) -> (a1 -> a2) -> Map k1 a1 -> Map k2 a2
+mapBimap fk fa = Map.fromAscList . map (bimap fk fa) . Map.toAscList
 
 --------------------------------------------------------------------------------
 -- Patterns for event access. Why aren't these in ledger-specs?

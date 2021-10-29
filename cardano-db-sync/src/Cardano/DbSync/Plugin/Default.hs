@@ -225,22 +225,26 @@ stashPoolRewards
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> LedgerEnv -> Generic.Rewards
     -> ReaderT SqlBackend m ()
-stashPoolRewards tracer lenv grwds = do
+stashPoolRewards tracer lenv rmap = do
   mMirRwd <- liftIO . atomically $ tryTakeTMVar (leMirRewards lenv)
   case mMirRwd of
     Nothing ->
-      liftIO . atomically $ putTMVar (lePoolRewards lenv) grwds
-    Just mirMap ->
-      validateEpochRewards tracer (Generic.mergeRewards grwds mirMap)
+      liftIO . atomically $ putTMVar (lePoolRewards lenv) rmap
+    Just mirMap -> do
+      let totalRwds = Generic.mergeRewards rmap mirMap
+      forceInsertRewards tracer lenv totalRwds
+      validateEpochRewards tracer (Generic.mergeRewards rmap mirMap)
 
 stashMirRewards
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> LedgerEnv -> Generic.Rewards
     -> ReaderT SqlBackend m ()
 stashMirRewards tracer lenv mirMap = do
-    mRwds <- liftIO . atomically $ tryTakeTMVar (lePoolRewards lenv)
-    case mRwds of
-      Nothing ->
-        liftIO . atomically $ putTMVar (leMirRewards lenv) mirMap
-      Just rmap ->
-        validateEpochRewards tracer (Generic.mergeRewards rmap mirMap)
+  mRwds <- liftIO . atomically $ tryTakeTMVar (lePoolRewards lenv)
+  case mRwds of
+    Nothing ->
+      liftIO . atomically $ putTMVar (leMirRewards lenv) mirMap
+    Just rmap -> do
+      let totalRwds = Generic.mergeRewards rmap mirMap
+      forceInsertRewards tracer lenv totalRwds
+      validateEpochRewards tracer totalRwds
