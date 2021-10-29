@@ -362,6 +362,7 @@ data DBFail
   = UnknownError !Text
   | DbInsertError !Text
   | DbLookupPoolMetadataHash !PoolId !PoolMetadataHash
+  | TickerAlreadyReserved !TickerName
   | RecordDoesNotExist
   | DBFail LookupFail
   deriving (Eq, Show)
@@ -397,6 +398,11 @@ instance ToJSON DBFail where
             [ "code"            .= Aeson.String "DbLookupPoolMetadataHash"
             , "description"     .= Aeson.String (renderDBFail failure)
             ]
+    toJSON failure@TickerAlreadyReserved {} =
+        object
+            [ "code"            .= Aeson.String "TickerAlreadyReserved"
+            , "description"     .= Aeson.String (renderDBFail failure)
+            ]
     toJSON failure@RecordDoesNotExist =
         object
             [ "code"            .= Aeson.String "RecordDoesNotExist"
@@ -414,6 +420,8 @@ renderDBFail (DbInsertError err) =
     "The database got an error while trying to insert a record. Error: " <> err
 renderDBFail (DbLookupPoolMetadataHash poolId poolMDHash) =
     "The metadata with hash " <> show poolMDHash <> " for pool " <> show poolId <> " is missing from the DB."
+renderDBFail (TickerAlreadyReserved ticker) =
+    "Ticker name " <> getTickerName ticker <> " is already reserved"
 renderDBFail RecordDoesNotExist =
     "The requested record does not exist."
 renderDBFail (DBFail lookupFail) = renderLookupFail lookupFail

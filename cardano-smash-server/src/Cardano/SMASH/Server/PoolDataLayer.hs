@@ -64,7 +64,7 @@ postgresqlPoolDataLayer tracer = PoolDataLayer {
           Db.ReservedPoolTicker (getTickerName ticker) (servantToDbPoolId poolId)
       case inserted of
         Just _ -> pure $ Right ticker
-        Nothing -> pure $ Left RecordDoesNotExist
+        Nothing -> pure $ Left $ TickerAlreadyReserved ticker
   , dlCheckReservedTicker = \ticker -> do
       Db.runWithConnectionLogging tracer $
         fmap dbToServantPoolId <$> Db.queryReservedTicker (getTickerName ticker)
