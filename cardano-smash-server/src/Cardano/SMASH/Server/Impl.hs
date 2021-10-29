@@ -52,10 +52,6 @@ server serverEnv
     :<|>    checkPool serverEnv
     :<|>    addTicker serverEnv
     :<|>    fetchPolicies serverEnv
-#ifdef TESTING_MODE
-    :<|>    retirePool serverEnv
-    :<|>    addPool serverEnv
-#endif
 
 -- | Swagger spec for Todo API.
 todoSwagger :: Swagger
@@ -261,33 +257,6 @@ fetchPolicies' (ServerEnv trce dataLayer) smashURL =
     case policyResult of
         Left httpClientErr -> pure . ApiResult . Left . UnknownError $ renderHttpClientError httpClientErr
         Right policyResult' -> pure . ApiResult . Right $ policyResult'
-
-#ifdef TESTING_MODE
-retirePool :: ServerEnv -> PoolIdBlockNumber -> Handler (ApiResult DBFail PoolId)
-retirePool (ServerEnv trce dataLayer) (PoolIdBlockNumber poolId blockNo) =
-  convertIOToHandler $ do
-
-    let addRetiredPool = dlAddRetiredPool dataLayer
-    retiredPoolId <- addRetiredPool poolId blockNo
-
-    pure . ApiResult $ retiredPoolId
-
-addPool :: ServerEnv -> PoolId -> PoolMetadataHash -> PoolMetadataRaw -> Handler (ApiResult DBFail PoolId)
-addPool (ServerEnv trce dataLayer) poolId poolHash poolMetadataRaw =
-  convertIOToHandler $ do
-    poolMetadataE <- runPoolInsertion dataLayer poolMetadataRaw poolId poolHash
-    case poolMetadataE of
-        Left dbFail         -> throwDBFailException trce dbFail
-        Right _poolMetadata -> pure . ApiResult . Right $ poolId
-
-runPoolInsertion :: ServerEnv -> PoolMetadataRaw -> PoolId -> PoolMetadataHash -> IO (Either DBFail PoolMetadataRaw)
-runPoolInsertion (ServerEnv trce dataLayer) poolMetadataRaw poolId poolHash = do
-    decodedMetadata <-  case (eitherDecode' . BL.fromStrict . encodeUtf8 . getPoolMetadata $ poolMetadataRaw) of
-                            Left err     -> panic $ toS err
-                            Right result -> pure result
-    dlAddPoolMetadata dataLayer Nothing poolId poolHash poolMetadataRaw (pomTicker decodedMetadata)
-#endif
-
 
 -- Generic throwing of exception when something goes bad.
 throwDBFailException ::Trace IO Text -> DBFail -> IO (ApiResult DBFail a)
