@@ -187,38 +187,6 @@ in {
         export PGPASSFILE=$(pwd)/pgpass
         ''}
 
-        ${lib.optionalString (cfg.takeSnapshot != "never")  ''
-        EXISTING_SNAPSHOTS=()
-        for f in db-sync-snapshot-schema-${majorVersion}*; do
-          if [ -f $f ]; then
-            echo "A snapshot already exist for this version: $f"
-            EXISTING_SNAPSHOTS+=( $f )
-          fi
-        done
-        ${lib.optionalString (cfg.takeSnapshot == "once") ''
-        if [ ''${#EXISTING_SNAPSHOTS[@]} -eq 0 ]; then
-        ''}
-          set +e
-          SNAPSHOT_SCRIPT=$( (yes phrase ||:) | cardano-db-tool prepare-snapshot --state-dir ${cfg.stateDir} | tail -n 1)
-          res=$?
-          set -e
-          SNAPSHOT="$(echo $SNAPSHOT_SCRIPT | cut -d " " -f3)"
-          if [ $res -eq 0 ]; then
-            if [ ! -f "$SNAPSHOT.tgz" ]; then
-              ${../../scripts/postgresql-setup.sh} ''${SNAPSHOT_SCRIPT#*scripts/postgresql-setup.sh}
-              for s in ''${EXISTING_SNAPSHOTS[@]}; do
-                rm $s
-              done
-            else
-              >&2 echo "A snapshot already exist for same schema/block, skipping snapshot creation."
-            fi
-          else
-            >&2 echo "State does not permit to take snapshot, proceeding with normal startup."
-          fi
-        ${lib.optionalString (cfg.takeSnapshot == "once") ''
-        fi''}
-        ''}
-
         ${cfg.restoreSnapshotScript}
 
         mkdir -p log-dir
@@ -261,6 +229,42 @@ in {
         WorkingDirectory = cfg.stateDir;
         StateDirectory   = lib.removePrefix stateDirBase cfg.stateDir;
       };
+      postStop = lib.optionalString (cfg.takeSnapshot != "never") ''
+        # Only take snapshot after service exited cleanly.
+        if [ "$SERVICE_RESULT" = "success" ]; then
+          EXISTING_SNAPSHOTS=()
+          for f in db-sync-snapshot-schema-${majorVersion}*; do
+            if [ -f $f ]; then
+              echo "A snapshot already exist for this version: $f"
+              EXISTING_SNAPSHOTS+=( $f )
+            fi
+          done
+          ${lib.optionalString (cfg.takeSnapshot == "once") ''
+          if [ ''${#EXISTING_SNAPSHOTS[@]} -eq 0 ]; then
+          ''}
+            set +e
+            SNAPSHOT_SCRIPT=$( (yes phrase ||:) | cardano-db-tool prepare-snapshot --state-dir ${cfg.stateDir} | tail -n 1)
+            res=$?
+            set -e
+            SNAPSHOT="$(echo $SNAPSHOT_SCRIPT | cut -d " " -f3)"
+            if [ $res -eq 0 ]; then
+              if [ ! -f "$SNAPSHOT.tgz" ]; then
+                ${../../scripts/postgresql-setup.sh} ''${SNAPSHOT_SCRIPT#*scripts/postgresql-setup.sh}
+                for s in ''${EXISTING_SNAPSHOTS[@]}; do
+                  rm $s
+                done
+              else
+                >&2 echo "A snapshot already exist for same schema/block, skipping snapshot creation."
+              fi
+            else
+              >&2 echo "State does not permit to take snapshot, proceeding with normal startup."
+            fi
+          ${lib.optionalString (cfg.takeSnapshot == "once") ''
+          fi''}
+        else
+          >&2 echo "Service did not exited cleanly. Skipping snapshot creation."
+        fi
+      '';
     };
 
     assertions = [
