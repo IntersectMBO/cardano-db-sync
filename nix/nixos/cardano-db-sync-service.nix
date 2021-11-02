@@ -242,6 +242,7 @@ in {
           ${lib.optionalString (cfg.takeSnapshot == "once") ''
           if [ ''${#EXISTING_SNAPSHOTS[@]} -eq 0 ]; then
           ''}
+            export PGPASSFILE=$(pwd)/pgpass
             set +e
             SNAPSHOT_SCRIPT=$( (yes phrase ||:) | cardano-db-tool prepare-snapshot --state-dir ${cfg.stateDir} | tail -n 1)
             res=$?
