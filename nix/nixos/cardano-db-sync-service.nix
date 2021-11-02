@@ -228,6 +228,7 @@ in {
         User             = cfg.postgres.user;
         WorkingDirectory = cfg.stateDir;
         StateDirectory   = lib.removePrefix stateDirBase cfg.stateDir;
+        TimeoutStopSec   = "2h";
       };
       postStop = lib.optionalString (cfg.takeSnapshot != "never") ''
         # Only take snapshot after service exited cleanly.
