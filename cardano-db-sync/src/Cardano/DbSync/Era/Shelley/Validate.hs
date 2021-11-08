@@ -30,8 +30,8 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 
-import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), countRows, desc, from, not_,
-                   on, orderBy, select, sum_, val, where_, (==.), (^.))
+import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), desc, from, not_, on,
+                   orderBy, select, sum_, val, where_, (==.), (^.))
 
 import           Database.Persist.Sql (SqlBackend)
 
@@ -88,7 +88,7 @@ logFullRewardMap
 logFullRewardMap tracer ledgerMap = do
     dbMap <- queryRewardMap $ Generic.rwdEpoch ledgerMap
     when (Map.size dbMap > 0 && Map.size (Generic.rwdRewards ledgerMap) > 0) $
-      diffRewardMap tracer (Generic.rwdEpoch ledgerMap) dbMap (Map.map convert $ Generic.rwdRewards ledgerMap)
+      liftIO $ diffRewardMap tracer dbMap (Map.map convert $ Generic.rwdRewards ledgerMap)
   where
     convert :: Set Generic.Reward -> [(RewardSource, Coin)]
     convert = map (\rwd -> (Generic.rewardSource rwd, Generic.rewardAmount rwd)) . Set.toList
@@ -115,14 +115,14 @@ queryRewardMap (EpochNo epochNo) = do
         x:_ -> (fst x, List.sort $ map snd xs)
 
 diffRewardMap
-    :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> EpochNo -> Map Generic.StakeCred [(RewardSource, DbLovelace)]
+    :: Trace IO Text -> Map Generic.StakeCred [(RewardSource, DbLovelace)]
     -> Map Generic.StakeCred [(RewardSource, Coin)]
-    -> ReaderT SqlBackend m ()
-diffRewardMap tracer epochNo dbMap ledgerMap = do
+    -> IO ()
+diffRewardMap tracer dbMap ledgerMap = do
     when (Map.size diffMap > 0) $ do
-      reportCount tracer epochNo diffMap
-      liftIO . logError tracer $ Text.unlines
+      logError tracer "diffRewardMap:"
+      mapM_ (logError tracer . render) $ Map.toList diffMap
+      logError tracer $ Text.unlines
             [ "Rewards differ between ledger and db-sync."
             , "Please report at https://github.com/input-output-hk/cardano-db-sync/issues."
             ]
@@ -139,38 +139,13 @@ diffRewardMap tracer epochNo dbMap ledgerMap = do
         -> Map Generic.StakeCred ([(RewardSource, DbLovelace)], [(RewardSource, Coin)])
     mkDiff !acc addr =
         case (Map.lookup addr dbMap, Map.lookup addr ledgerMap) of
-          (Just s, Just xs) ->
-                if fromIntegral (sum $ map (Db.unDbLovelace . snd) s) == sum (map (unCoin . snd) xs)
+          (Just xs, Just ys) ->
+                if fromIntegral (sum $ map (Db.unDbLovelace . snd) xs) == sum (map (unCoin . snd) ys)
                   then acc
-                  else Map.insert addr (s, xs) acc
-          (Nothing, Just xs) -> Map.insert addr ([], xs) acc
-          (Just s, Nothing) -> Map.insert addr (s, []) acc
+                  else Map.insert addr (xs, ys) acc
+          (Nothing, Just ys) -> Map.insert addr ([], ys) acc
+          (Just xs, Nothing) -> Map.insert addr (xs, []) acc
           (Nothing, Nothing) -> acc
 
-reportCount
-    :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> EpochNo -> Map Generic.StakeCred ([(RewardSource, DbLovelace)], [(RewardSource, Coin)])
-    -> ReaderT SqlBackend m ()
-reportCount tracer epochNo diffMap =
-    mapM_ report $ Map.toList diffMap
-  where
-    report
-        :: (MonadBaseControl IO m, MonadIO m)
-        => (Generic.StakeCred,  ([(RewardSource, DbLovelace)], [(RewardSource, Coin)]))
-        -> ReaderT SqlBackend m ()
-    report (cred, (xs, _coin)) = do
-      count <- queryRewardEntries epochNo cred
-      unless (count == length xs) $
-        liftIO . logError tracer $
-          mconcat [ "reportCount: ", textShow count, " == ", textShow (length xs), " ???" ]
-
-queryRewardEntries
-    :: (MonadBaseControl IO m, MonadIO m)
-    => EpochNo -> Generic.StakeCred -> ReaderT SqlBackend m Int
-queryRewardEntries (EpochNo epochNo) (Generic.StakeCred cred) = do
-  res <- select . from $ \ (rwd `InnerJoin` saddr) -> do
-            on (rwd ^. Db.RewardAddrId ==. saddr ^. Db.StakeAddressId)
-            where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
-            where_ (saddr ^. Db.StakeAddressHashRaw ==. val cred)
-            pure countRows
-  pure $ maybe 0 unValue (listToMaybe res)
+    render :: (Generic.StakeCred,  ([(RewardSource, DbLovelace)], [(RewardSource, Coin)])) -> Text
+    render (cred, (xs, ys)) = mconcat [ "  ", show cred, ": ", show xs, " /= ", show ys ]
