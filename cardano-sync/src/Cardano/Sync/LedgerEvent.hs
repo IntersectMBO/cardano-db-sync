@@ -1,6 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeApplications #-}
@@ -11,7 +13,7 @@ module Cardano.Sync.LedgerEvent
   , convertAuxLedgerEvent
   ) where
 
-import           Cardano.Db
+import           Cardano.Db hiding (EpochNo, epochNo)
 
 import           Cardano.Ledger.Coin (Coin (..), DeltaCoin (..))
 import qualified Cardano.Ledger.Core as Ledger
@@ -19,23 +21,25 @@ import qualified Cardano.Ledger.Credential as Ledger
 import           Cardano.Ledger.Crypto (StandardCrypto)
 import           Cardano.Ledger.Era (Crypto)
 import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
-import           Cardano.Ledger.Shelley.API (InstantaneousRewards (..))
+import           Cardano.Ledger.Shelley.API (InstantaneousRewards (..), Network)
+import qualified Cardano.Ledger.Shelley.Rewards as Ledger
 import           Cardano.Ledger.Shelley.Rules.Epoch (EpochEvent (PoolReapEvent))
 import           Cardano.Ledger.Shelley.Rules.Mir (MirEvent (..))
 import           Cardano.Ledger.Shelley.Rules.NewEpoch (NewEpochEvent (..))
 import           Cardano.Ledger.Shelley.Rules.PoolReap (PoolreapEvent (..))
 import           Cardano.Ledger.Shelley.Rules.Tick (TickEvent (..))
 
+import           Cardano.Prelude hiding (All)
+
 import           Cardano.Slotting.Slot (EpochNo (..))
 import qualified Cardano.Sync.Era.Shelley.Generic as Generic
 import           Cardano.Sync.Types
-import           Cardano.Sync.Util
 
 import           Control.State.Transition (Event)
 
-import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import           Data.SOP.Strict (All, K (..), Proxy (..), hcmap, hcollapse)
+import           Data.SOP.Strict (All, K (..), hcmap, hcollapse)
+import qualified Data.Set as Set
 
 import           Ouroboros.Consensus.Byron.Ledger.Block (ByronBlock)
 import           Ouroboros.Consensus.Cardano.Block (CardanoEras, HardForkBlock)
@@ -52,13 +56,13 @@ data LedgerEvent
   | LedgerRewards !SlotDetails !Generic.Rewards
   | LedgerStakeDist !Generic.StakeDist
 
-  | LedgerRewardDist !EpochNo !(Map (Ledger.StakeCredential StandardCrypto) Coin)
-  | LedgerMirDist !(Map (Ledger.StakeCredential StandardCrypto) Coin)
+  | LedgerRewardDist !Generic.Rewards
+  | LedgerMirDist !Generic.Rewards
   | LedgerPoolReap !EpochNo !(Map (Ledger.StakeCredential StandardCrypto) (Map (KeyHash 'StakePool StandardCrypto) Coin))
   deriving Eq
 
-convertAuxLedgerEvent :: OneEraLedgerEvent (CardanoEras StandardCrypto) -> Maybe LedgerEvent
-convertAuxLedgerEvent = toLedgerEvent . wrappedAuxLedgerEvent
+convertAuxLedgerEvent :: Network -> OneEraLedgerEvent (CardanoEras StandardCrypto) -> Maybe LedgerEvent
+convertAuxLedgerEvent nw = toLedgerEvent nw . wrappedAuxLedgerEvent
 
 wrappedAuxLedgerEvent
     :: OneEraLedgerEvent (CardanoEras StandardCrypto)
@@ -67,10 +71,10 @@ wrappedAuxLedgerEvent =
   WrapLedgerEvent @(HardForkBlock (CardanoEras StandardCrypto))
 
 class ConvertLedgerEvent blk where
-  toLedgerEvent :: WrapLedgerEvent blk -> Maybe LedgerEvent
+  toLedgerEvent :: Network -> WrapLedgerEvent blk -> Maybe LedgerEvent
 
 instance ConvertLedgerEvent ByronBlock where
-  toLedgerEvent _ = Nothing
+  toLedgerEvent _ _ = Nothing
 
 instance
     ( Crypto ledgerera ~ StandardCrypto
@@ -82,34 +86,71 @@ instance
     ) =>
   ConvertLedgerEvent (ShelleyBlock ledgerera)
   where
-    toLedgerEvent evt =
+    toLedgerEvent nw evt =
       case unwrapLedgerEvent evt of
-        LESumRewards e m -> Just $ LedgerRewardDist e m
-        LEMirTransfer rp tp _rtt _ttr -> Just $ LedgerMirDist (Map.unionWith plusCoin rp tp)
+        LERewards e m -> Just $ LedgerRewardDist (convertPoolRewards nw e m)
+        LEMirTransfer rp tp _rtt _ttr -> Just $ LedgerMirDist (convertMirRewards rp tp)
         LERetiredPools r _u en -> Just $ LedgerPoolReap en r
         ShelleyLedgerEventBBODY {} -> Nothing
         ShelleyLedgerEventTICK {} -> Nothing
 
 instance All ConvertLedgerEvent xs => ConvertLedgerEvent (HardForkBlock xs) where
-  toLedgerEvent =
+  toLedgerEvent nw =
     hcollapse
-      . hcmap (Proxy @ ConvertLedgerEvent) (K . toLedgerEvent)
+      . hcmap (Proxy @ ConvertLedgerEvent) (K . toLedgerEvent nw)
       . getOneEraLedgerEvent
       . unwrapLedgerEvent
 
 --------------------------------------------------------------------------------
+
+convertMirRewards
+    :: Map (Ledger.StakeCredential StandardCrypto) Coin -> Map (Ledger.StakeCredential StandardCrypto) Coin
+    -> Generic.Rewards
+convertMirRewards resPay trePay =
+  Generic.Rewards
+    { Generic.rwdEpoch = EpochNo 0
+    , Generic.rwdRewards = Map.unionWith Set.union (convertResPay resPay) (convertTrePay trePay)
+    }
+  where
+    convertResPay :: Map (Ledger.StakeCredential StandardCrypto) Coin -> Map Generic.StakeCred (Set Generic.Reward)
+    convertResPay = panic "convertResPay"
+
+    convertTrePay :: Map (Ledger.StakeCredential StandardCrypto) Coin -> Map Generic.StakeCred (Set Generic.Reward)
+    convertTrePay = panic "convertTrePay"
+
+convertPoolRewards
+    :: Network -> EpochNo -> Map (Ledger.StakeCredential StandardCrypto) (Set (Ledger.Reward StandardCrypto))
+    -> Generic.Rewards
+convertPoolRewards network epochNum rmap =
+  Generic.Rewards
+    { Generic.rwdEpoch = epochNum
+    , Generic.rwdRewards = mapBimap (Generic.toStakeCred network) (Set.map convertReward) rmap
+    }
+  where
+    convertReward :: Ledger.Reward StandardCrypto -> Generic.Reward
+    convertReward sr =
+      Generic.Reward
+        { Generic.rewardSource = rewardTypeToSource $ Ledger.rewardType sr
+        , Generic.rewardAmount = Ledger.rewardAmount sr
+        , Generic.rewardPool = Just $ Generic.toStakePoolKeyHash (Ledger.rewardPool sr)
+        }
+
+    mapBimap :: Ord k2 => (k1 -> k2) -> (a1 -> a2) -> Map k1 a1 -> Map k2 a2
+    mapBimap fk fa = Map.fromAscList . map (bimap fk fa) . Map.toAscList
+
+--------------------------------------------------------------------------------
 -- Patterns for event access. Why aren't these in ledger-specs?
 
-pattern LESumRewards
+pattern LERewards
     :: ( Crypto ledgerera ~ StandardCrypto
        , Event (Ledger.EraRule "TICK" ledgerera) ~ TickEvent ledgerera
        , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera
        )
-    => EpochNo -> Map (Ledger.StakeCredential StandardCrypto) Coin
+    => EpochNo -> Map (Ledger.StakeCredential StandardCrypto) (Set (Ledger.Reward StandardCrypto))
     -> AuxLedgerEvent (LedgerState (ShelleyBlock ledgerera))
-pattern LESumRewards e m <-
+pattern LERewards e m <-
   ShelleyLedgerEventTICK
-    (NewEpochEvent (SumRewards e m))
+    (NewEpochEvent (RewardEvent e m))
 
 pattern LEMirTransfer
     :: ( Crypto ledgerera ~ StandardCrypto

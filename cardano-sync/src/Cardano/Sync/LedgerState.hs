@@ -44,8 +44,7 @@ import qualified Cardano.Db as DB
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin)
 import           Cardano.Ledger.Core (PParams)
-import           Cardano.Ledger.Credential (StakeCredential)
-import           Cardano.Ledger.Era
+import           Cardano.Ledger.Era (Crypto)
 import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
 import           Cardano.Ledger.Shelley.Constraints (UsesValue)
@@ -141,8 +140,8 @@ data LedgerEnv = LedgerEnv
   , leNetwork :: !Ledger.Network
   , leStateVar :: !(StrictTVar IO (Maybe LedgerDB))
   , leEventState :: !(StrictTVar IO LedgerEventState)
-  , lePoolRewards :: !(StrictTMVar IO (EpochNo, Map (StakeCredential StandardCrypto) Coin))
-  , leMirRewards :: !(StrictTMVar IO (Map (StakeCredential StandardCrypto) Coin))
+  , lePoolRewards :: !(StrictTMVar IO Generic.Rewards)
+  , leMirRewards :: !(StrictTMVar IO Generic.Rewards)
   -- The following do not really have anything to do with maintaining ledger
   -- state. They are here due to the ongoing headaches around the split between
   -- `cardano-sync` and `cardano-db-sync`.
@@ -290,7 +289,7 @@ applyBlock env blk details =
                 , lssNewEpoch = maybeToStrict $ mkNewEpoch oldState newState
                 , lssSlotDetails = details
                 , lssPoint = blockPoint blk
-                , lssEvents = events ++ mapMaybe convertAuxLedgerEvent (lrEvents result)
+                , lssEvents = events ++ mapMaybe (convertAuxLedgerEvent (leNetwork env)) (lrEvents result)
                 }
   where
     applyBlk

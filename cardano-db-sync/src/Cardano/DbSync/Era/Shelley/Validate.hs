@@ -15,9 +15,7 @@ import           Cardano.Db (DbLovelace, RewardSource)
 import qualified Cardano.Db as Db
 import           Cardano.DbSync.Era.Shelley.ValidateWithdrawal (validateRewardWithdrawals)
 
-import           Cardano.Ledger.BaseTypes (Network)
 import           Cardano.Ledger.Coin (Coin (..))
-import qualified Cardano.Ledger.Credential as Ledger
 
 import qualified Cardano.Sync.Era.Shelley.Generic as Generic
 import           Cardano.Sync.Util
@@ -29,6 +27,7 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.List as List
 import qualified Data.List.Extra as List
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import qualified Data.Text as Text
 
 import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), countRows, desc, from, not_,
@@ -39,27 +38,33 @@ import           Database.Persist.Sql (SqlBackend)
 
 validateEpochRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Network -> EpochNo -> Map (Ledger.StakeCredential c) Coin
+    => Trace IO Text -> Generic.Rewards
     -> ReaderT SqlBackend m ()
-validateEpochRewards tracer nw currentEpoch rmap = do
-    actual <- queryEpochRewardTotal currentEpoch
+validateEpochRewards tracer rmap = do
+    actual <- queryEpochRewardTotal (Generic.rwdEpoch rmap)
     if actual /= expected
         then do
           liftIO . logWarning tracer $ mconcat
                       [ "validateEpochRewards: rewards spendable in epoch "
-                      , textShow (unEpochNo currentEpoch), " expected total of ", textShow expected
-                      , " ADA but got " , textShow actual, " ADA"
+                      , textShow (unEpochNo $ Generic.rwdEpoch rmap), " expected total of "
+                      , textShow expected , " ADA but got " , textShow actual, " ADA"
                       ]
-          logFullRewardMap tracer currentEpoch (convertRewardMap nw rmap)
+          logFullRewardMap tracer rmap
         else
           liftIO . logInfo tracer $ mconcat
                       [ "validateEpochRewards: total rewards that become spendable in epoch "
-                      , textShow (unEpochNo currentEpoch), " is ", textShow actual, " ADA"
+                      , textShow (unEpochNo $ Generic.rwdEpoch rmap), " is ", textShow actual
+                      , " ADA"
                       ]
-    validateRewardWithdrawals tracer currentEpoch
+    validateRewardWithdrawals tracer (Generic.rwdEpoch rmap)
   where
     expected :: Db.Ada
-    expected = Db.word64ToAda . fromIntegral . sum $ map unCoin (Map.elems rmap)
+    expected =
+      Db.word64ToAda . fromIntegral . sum
+        $ map (unCoin . Set.foldl' foldf (Coin 0)) (Map.elems $ Generic.rwdRewards rmap)
+
+    foldf :: Coin -> Generic.Reward -> Coin
+    foldf coin rwd = plusCoin coin (Generic.rewardAmount rwd)
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -77,17 +82,16 @@ queryEpochRewardTotal (EpochNo epochNo) = do
 
 -- -------------------------------------------------------------------------------------------------
 
-convertRewardMap :: Network -> Map (Ledger.StakeCredential c) Coin -> Map Generic.StakeCred Coin
-convertRewardMap nw = Map.mapKeys (Generic.toStakeCred nw)
-
 logFullRewardMap
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> EpochNo -> Map Generic.StakeCred Coin -> ReaderT SqlBackend m ()
-logFullRewardMap tracer epochNo ledgerMap = do
-  dbMap <- queryRewardMap epochNo
-  when (Map.size dbMap > 0 && Map.size ledgerMap > 0) $
-    diffRewardMap tracer epochNo dbMap ledgerMap
-
+    => Trace IO Text -> Generic.Rewards -> ReaderT SqlBackend m ()
+logFullRewardMap tracer ledgerMap = do
+    dbMap <- queryRewardMap $ Generic.rwdEpoch ledgerMap
+    when (Map.size dbMap > 0 && Map.size (Generic.rwdRewards ledgerMap) > 0) $
+      diffRewardMap tracer (Generic.rwdEpoch ledgerMap) dbMap (Map.map convert $ Generic.rwdRewards ledgerMap)
+  where
+    convert :: Set Generic.Reward -> [(RewardSource, Coin)]
+    convert = map (\rwd -> (Generic.rewardSource rwd, Generic.rewardAmount rwd)) . Set.toList
 
 queryRewardMap
     :: (MonadBaseControl IO m, MonadIO m)
@@ -113,7 +117,7 @@ queryRewardMap (EpochNo epochNo) = do
 diffRewardMap
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> EpochNo -> Map Generic.StakeCred [(RewardSource, DbLovelace)]
-    -> Map Generic.StakeCred Coin
+    -> Map Generic.StakeCred [(RewardSource, Coin)]
     -> ReaderT SqlBackend m ()
 diffRewardMap tracer epochNo dbMap ledgerMap = do
     when (Map.size diffMap > 0) $ do
@@ -126,32 +130,33 @@ diffRewardMap tracer epochNo dbMap ledgerMap = do
     keys :: [Generic.StakeCred]
     keys = List.nubOrd (Map.keys dbMap ++ Map.keys ledgerMap)
 
-    diffMap :: Map Generic.StakeCred ([(RewardSource, DbLovelace)], Coin)
+    diffMap :: Map Generic.StakeCred ([(RewardSource, DbLovelace)], [(RewardSource, Coin)])
     diffMap = List.foldl' mkDiff mempty keys
 
     mkDiff
-        :: Map Generic.StakeCred ([(RewardSource, DbLovelace)], Coin) -> Generic.StakeCred
-        -> Map Generic.StakeCred ([(RewardSource, DbLovelace)], Coin)
+        :: Map Generic.StakeCred ([(RewardSource, DbLovelace)], [(RewardSource, Coin)])
+        -> Generic.StakeCred
+        -> Map Generic.StakeCred ([(RewardSource, DbLovelace)], [(RewardSource, Coin)])
     mkDiff !acc addr =
         case (Map.lookup addr dbMap, Map.lookup addr ledgerMap) of
-          (Just s, Just coin) ->
-                if fromIntegral (sum $ map (Db.unDbLovelace . snd) s) == unCoin coin
+          (Just s, Just xs) ->
+                if fromIntegral (sum $ map (Db.unDbLovelace . snd) s) == sum (map (unCoin . snd) xs)
                   then acc
-                  else Map.insert addr (s, coin) acc
-          (Nothing, Just coin) -> Map.insert addr (mempty, coin) acc
-          (Just s, Nothing) -> Map.insert addr (s, Coin (-1)) acc
+                  else Map.insert addr (s, xs) acc
+          (Nothing, Just xs) -> Map.insert addr ([], xs) acc
+          (Just s, Nothing) -> Map.insert addr (s, []) acc
           (Nothing, Nothing) -> acc
 
 reportCount
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> EpochNo -> Map Generic.StakeCred ([(RewardSource, DbLovelace)], Coin)
+    => Trace IO Text -> EpochNo -> Map Generic.StakeCred ([(RewardSource, DbLovelace)], [(RewardSource, Coin)])
     -> ReaderT SqlBackend m ()
 reportCount tracer epochNo diffMap =
     mapM_ report $ Map.toList diffMap
   where
     report
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Generic.StakeCred,  ([(RewardSource, DbLovelace)], Coin))
+        => (Generic.StakeCred,  ([(RewardSource, DbLovelace)], [(RewardSource, Coin)]))
         -> ReaderT SqlBackend m ()
     report (cred, (xs, _coin)) = do
       count <- queryRewardEntries epochNo cred
