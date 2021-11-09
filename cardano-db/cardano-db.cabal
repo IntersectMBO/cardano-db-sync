@@ -47,12 +47,14 @@ library
                         Cardano.Db.Schema.Orphans
                         Cardano.Db.Text
                         Cardano.Db.Types
+                        Cardano.Db.Version
 
   build-depends:        aeson
                       , base                            >= 4.14         && < 4.16
                       , bech32
                       , base16-bytestring
                       , bytestring
+                      , cardano-config
                       , cardano-crypto-class
                       , cardano-ledger-core
                       , cardano-ledger-shelley
@@ -68,6 +70,7 @@ library
                       , extra
                       , fast-logger
                       , filepath
+                      , file-embed
                       , iohk-monitoring
                       , lifted-base
                       , memory

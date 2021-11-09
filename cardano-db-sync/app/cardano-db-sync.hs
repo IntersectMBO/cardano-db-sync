@@ -3,8 +3,8 @@
 
 import           Cardano.Prelude
 
-import           Cardano.Config.Git.Rev (gitRev)
 
+import           Cardano.Db (gitRev)
 import           Cardano.DbSync (defDbSyncNodePlugin, runDbSyncNode)
 import           Cardano.DbSync.Metrics (withMetricSetters)
 
