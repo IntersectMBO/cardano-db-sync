@@ -28,7 +28,6 @@ import qualified Data.List as List
 import qualified Data.List.Extra as List
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-import qualified Data.Text as Text
 
 import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), desc, from, not_, on,
                    orderBy, select, sum_, val, where_, (==.), (^.))
@@ -122,10 +121,7 @@ diffRewardMap tracer dbMap ledgerMap = do
     when (Map.size diffMap > 0) $ do
       logError tracer "diffRewardMap:"
       mapM_ (logError tracer . render) $ Map.toList diffMap
-      logError tracer $ Text.unlines
-            [ "Rewards differ between ledger and db-sync."
-            , "Please report at https://github.com/input-output-hk/cardano-db-sync/issues."
-            ]
+      panicAbort "Rewards differ between ledger and db-sync."
   where
     keys :: [Generic.StakeCred]
     keys = List.nubOrd (Map.keys dbMap ++ Map.keys ledgerMap)
