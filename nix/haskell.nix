@@ -123,10 +123,17 @@ let
             !pkgs.stdenv.hostPlatform.isMusl;
           packages.cardano-node.flags.systemd =
             !pkgs.stdenv.hostPlatform.isMusl;
-        })
+        }
+      )
       {
         packages.cardano-db-sync.package.extraSrcFiles = [ "../schema/*.sql" ];
       }
+      ({ pkgs, ...}: {
+        # Use the VRF fork of libsodium when building cardano-node
+        packages = lib.genAttrs [ "cardano-crypto-praos" "cardano-crypto-class" ] (_: {
+          components.library.pkgconfig = lib.mkForce [ [ pkgs.libsodium-vrf ] ];
+        });
+      })
     ];
   };
   # setGitRev is a postInstall script to stamp executables with

@@ -25,20 +25,22 @@ in {
     cardano-db-tool;
   inherit (cardanoDbSyncHaskellPackages.cardano-node.components.exes)
     cardano-node;
+  inherit (cardanoDbSyncHaskellPackages.cardano-smash-server.components.exes)
+    cardano-smash-server;
+  cardano-smash-server-no-basic-auth = (cardanoDbSyncProject.appendModule {
+    modules = [{packages.cardano-smash-server.flags.disable-basic-auth = true;}];
+  }).hsPkgs.cardano-smash-server.components.exes.cardano-smash-server;
 
   cabal = haskell-nix.tool compiler "cabal" {
     version = "latest";
-    inherit (cardanoDbSyncProject) index-state;
   };
 
   hlint = haskell-nix.tool compiler "hlint" {
     version = "3.2.7";
-    inherit (cardanoDbSyncProject) index-state;
   };
 
   stylish-haskell = haskell-nix.tool compiler "stylish-haskell" {
     version = "latest";
-    inherit (cardanoDbSyncProject) index-state;
   };
 
   # systemd can't be statically linked:
