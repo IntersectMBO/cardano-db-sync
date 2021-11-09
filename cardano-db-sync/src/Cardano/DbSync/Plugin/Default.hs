@@ -184,8 +184,8 @@ handleLedgerEvents tracer lenv point =
             , show (unEpochNo $ Generic.sdistEpochNo sdist), " ", renderPoint point
             ]
           postEpochStake lenv sdist point
-        LedgerRewardDist en rd ->
-          lift $ stashPoolRewards tracer lenv en rd
+        LedgerRewardDist rwd ->
+          lift $ stashPoolRewards tracer lenv rwd
         LedgerMirDist md ->
           lift $ stashMirRewards tracer lenv md
         LedgerPoolReap en drs ->
@@ -223,24 +223,24 @@ hasEpochStartEvent = any isNewEpoch
 -- These two functions must handle being called in either order.
 stashPoolRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> LedgerEnv -> EpochNo -> Map (StakeCredential StandardCrypto) Coin
+    => Trace IO Text -> LedgerEnv -> Generic.Rewards
     -> ReaderT SqlBackend m ()
-stashPoolRewards tracer lenv epoch rmap = do
+stashPoolRewards tracer lenv grwds = do
   mMirRwd <- liftIO . atomically $ tryTakeTMVar (leMirRewards lenv)
   case mMirRwd of
     Nothing ->
-      liftIO . atomically $ putTMVar (lePoolRewards lenv) (epoch, rmap)
+      liftIO . atomically $ putTMVar (lePoolRewards lenv) grwds
     Just mirMap ->
-      validateEpochRewards tracer (leNetwork lenv) epoch (Map.unionWith plusCoin rmap mirMap)
+      validateEpochRewards tracer (Generic.mergeRewards grwds mirMap)
 
 stashMirRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> LedgerEnv -> Map (StakeCredential StandardCrypto) Coin
+    => Trace IO Text -> LedgerEnv -> Generic.Rewards
     -> ReaderT SqlBackend m ()
 stashMirRewards tracer lenv mirMap = do
     mRwds <- liftIO . atomically $ tryTakeTMVar (lePoolRewards lenv)
     case mRwds of
       Nothing ->
         liftIO . atomically $ putTMVar (leMirRewards lenv) mirMap
-      Just (epoch, rmap) ->
-        validateEpochRewards tracer (leNetwork lenv) epoch (Map.unionWith plusCoin rmap mirMap)
+      Just rmap ->
+        validateEpochRewards tracer (Generic.mergeRewards rmap mirMap)

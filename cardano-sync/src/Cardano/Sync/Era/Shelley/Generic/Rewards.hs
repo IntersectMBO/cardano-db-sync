@@ -7,6 +7,7 @@ module Cardano.Sync.Era.Shelley.Generic.Rewards
   ( Reward (..)
   , Rewards (..)
   , epochRewards
+  , mergeRewards
   , rewardsPoolHashKeys
   , rewardsStakeCreds
   ) where
@@ -68,6 +69,13 @@ epochRewards nw epoch lstate =
   where
     era :: BlockEra
     era = rewardBlockEra $ rewardProtoVer lstate
+
+mergeRewards :: Rewards -> Rewards -> Rewards
+mergeRewards amap bmap =
+  Rewards
+    { rwdEpoch = max (rwdEpoch amap) (rwdEpoch bmap)
+    , rwdRewards = Map.unionWith Set.union (rwdRewards amap) (rwdRewards bmap)
+    }
 
 rewardsPoolHashKeys :: Rewards -> Set StakePoolKeyHash
 rewardsPoolHashKeys rwds =
