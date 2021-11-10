@@ -29,7 +29,7 @@ import           Control.Monad.Trans.Maybe (MaybeT (..))
 
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..))
 
-import           Cardano.BM.Trace (Trace, logError, logInfo)
+import           Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 
 import qualified Cardano.Db as DB
 
@@ -37,6 +37,7 @@ import           Cardano.DbSync.Era (insertValidateGenesisDist)
 import           Cardano.DbSync.Plugin.Default (defDbSyncNodePlugin)
 import           Cardano.DbSync.Rollback (unsafeRollback)
 import           Cardano.Sync.Database (runDbThread)
+import           Cardano.Sync.Util (readAbortOnPanic)
 
 import           Cardano.Sync (Block (..), MetricSetters, SyncDataLayer (..), SyncNodePlugin (..),
                    configureLogging, runSyncNode)
@@ -66,6 +67,11 @@ runDbSyncNode metricsSetters mkPlugin knownMigrations params = do
     logInfo trce "Schema migration files validated"
 
     logInfo trce "Running database migrations"
+
+    aop <- readAbortOnPanic
+    if aop
+      then logWarning trce "Enviroment variable DbSyncAbortOnPanic: True"
+      else logInfo trce "Enviroment variable DbSyncAbortOnPanic: False"
 
     DB.runMigrations pgConfig True dbMigrationDir (Just $ DB.LogFileDir "/tmp")
 

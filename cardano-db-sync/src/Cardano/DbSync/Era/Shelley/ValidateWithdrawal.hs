@@ -43,6 +43,7 @@ validateRewardWithdrawals trce (EpochNo epochNo) = do
         logError trce . mconcat $
             [ textShow epochNo, ": ", textShow (length xs), " errors, eg\n"]
             ++ List.intersperse "\n" (map reportError xs)
+        panicAbort "Validation failure"
 
 -- -----------------------------------------------------------------------------
 

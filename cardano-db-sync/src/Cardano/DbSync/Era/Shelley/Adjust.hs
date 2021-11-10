@@ -62,14 +62,21 @@ deleteOrphanedRewards (EpochNo epochNo) xs =
 -- Uses TxId as a proxy for BlockNo.
 queryOrphanedRewards :: MonadIO m => EpochNo -> ReaderT SqlBackend m ([Db.StakeAddressId], Db.Ada)
 queryOrphanedRewards (EpochNo epochNo) = do
-    res <- select . from $ \ (dereg `InnerJoin` rwd) -> do
+    -- Get payments to addresses that have never been registered.
+    res1 <- select . from $ \ rwd -> do
+              where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
+              where_ (notExists . from $ \reg ->
+                where_ (reg ^. Db.StakeRegistrationAddrId ==. rwd ^. Db.RewardAddrId))
+              pure (rwd ^. Db.RewardAddrId, rwd ^. Db.RewardAmount)
+    -- Get payments to addresses that have been registered but are now deregistered.
+    res2 <- select . from $ \ (dereg `InnerJoin` rwd) -> do
               on (dereg ^. Db.StakeDeregistrationAddrId ==. rwd ^. Db.RewardAddrId)
               where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
               where_ (notExists . from $ \reg ->
                 where_ (reg ^. Db.StakeRegistrationAddrId ==. dereg ^. Db.StakeDeregistrationAddrId
                           &&. reg ^. Db.StakeRegistrationTxId >. dereg ^. Db.StakeDeregistrationTxId))
               pure (dereg ^. Db.StakeDeregistrationAddrId, rwd ^. Db.RewardAmount)
-    pure $ convert (map Db.unValue2 res)
+    pure $ convert (map Db.unValue2 $ res1 ++ res2)
   where
     convert :: [(Db.StakeAddressId, Db.DbLovelace)] -> ([Db.StakeAddressId], Db.Ada)
     convert xs = (List.nubOrd (map fst xs), Db.word64ToAda . sum $ map (Db.unDbLovelace . snd) xs)

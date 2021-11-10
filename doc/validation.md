@@ -69,3 +69,12 @@ db-sync node by checking that all the transaction inputs exist and that the valu
 is greater than or equal to the value of the transaction outputs. As a by product of this validation
 the fees associated with the transaction are recorded in the database.
 
+
+## Runtime Reward Validations
+
+Due to recent issues with reward related tables, extra validation was added. When that validation
+fails, there are now two options. `db-sync` can abort or continue running. The behaviour is
+specified by the presence or absence of the `DbSyncAbortOnPanic` environemnt variable. If the
+variable is set, a validation failure will abort `db-sync` with a log/error message. This is the
+recommended configuration for all non-mission critical installations. On start up, `db-sync` also
+logs the `DbSyncAbortOnPanic` setting.
