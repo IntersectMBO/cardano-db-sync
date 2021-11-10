@@ -59,3 +59,40 @@ RESTORE_SNAPSHOT=https://update-cardano-mainnet.iohk.io/cardano-db-sync/db-sync-
 NETWORK=testnet docker-compose up && docker-compose logs -f
 
 ```
+
+## Running Tests with Docker Postgres
+
+Create a `pgpass-test` file with the credentials of (taken from config/secrets/postgres_* files):
+
+``` shell
+echo "localhost:5432:cexplorer:postgres:v8hlDV0yMAHHlIurYupj" > config/pgpass-test   
+chmod 0600 config/pgpass-test
+```
+
+inside `config/pgpass-test`
+
+Startup docker postgres via:
+
+``` shell
+docker-compose -f docker-test.yml up
+```
+
+Setup database with tables:
+
+``` shell
+PGPASSFILE=$PWD/config/pgpass-test \
+cabal run cardano-db-tool run-migrations -- --mdir schema/ --ldir .
+```
+
+Running the tests:
+
+``` shell
+PGPASSFILE=$PWD/config/pgpass-test \
+cabal test cardano-db
+```
+
+When you've finished with testing either docker-compose down or Ctl-C the terminal session.
+
+``` shell
+docker-compose down -f docker-test.yml
+```
