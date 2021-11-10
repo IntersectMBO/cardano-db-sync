@@ -1,24 +1,31 @@
+{-# LANGUAGE OverloadedStrings #-}
 import           Cardano.Db
 import           Cardano.Db.Tool
-import           Cardano.Sync.Config.Types hiding (LogFileDir, MigrationDir)
+
+import           Cardano.Sync.Config.Types hiding (CmdVersion, LogFileDir, MigrationDir)
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Control.Applicative (optional)
 import           Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
+import           Data.Version (showVersion)
 import           Data.Word (Word64)
 
 import           Options.Applicative (Parser, ParserInfo, ParserPrefs)
 import qualified Options.Applicative as Opt
 
+import           Paths_cardano_db_tool (version)
+
+import           System.Info (arch, compilerName, compilerVersion, os)
 
 main :: IO ()
 main = do
     Opt.customExecParser p opts >>= runCommand
   where
     opts :: ParserInfo Command
-    opts = Opt.info (Opt.helper <*> pVersion <*> pCommand)
+    opts = Opt.info (Opt.helper <*> pCommand)
       ( Opt.fullDesc
       <> Opt.header "cardano-db-tool - Manage the Cardano PostgreSQL Database"
       )
@@ -37,6 +44,7 @@ data Command
   | CmdPrepareSnapshot !PrepareSnapshotArgs
   | CmdValidateDb
   | CmdValidateAddressBalance !LedgerValidationParams
+  | CmdVersion
 
 runCommand :: Command -> IO ()
 runCommand cmd =
@@ -51,6 +59,7 @@ runCommand cmd =
     CmdPrepareSnapshot pargs -> runPrepareSnapshot pargs
     CmdValidateDb -> runDbValidation
     CmdValidateAddressBalance params -> runLedgerValidation params
+    CmdVersion -> runVersionCommand
 
 runCreateMigration :: MigrationDir -> IO ()
 runCreateMigration mdir = do
@@ -63,15 +72,18 @@ runRollback :: SlotNo -> IO ()
 runRollback slotNo =
   print =<< runDbNoLogging (deleteCascadeSlotNo slotNo)
 
--- -----------------------------------------------------------------------------
+runVersionCommand :: IO ()
+runVersionCommand = do
+    Text.putStrLn $ mconcat
+                [ "cardano-db-tool ", renderVersion version
+                , " - ", Text.pack os, "-", Text.pack arch
+                , " - ", Text.pack compilerName, "-", renderVersion compilerVersion
+                , "\ngit revision ", gitRev
+                ]
+  where
+    renderVersion = Text.pack . showVersion
 
-pVersion :: Parser (a -> a)
-pVersion =
-  Opt.infoOption "cardano-db-tool version 0.1.0.0"
-    (  Opt.long "version"
-    <> Opt.short 'v'
-    <> Opt.help "Print the version and exit"
-    )
+-- -----------------------------------------------------------------------------
 
 pCommand :: Parser Command
 pCommand =
@@ -100,6 +112,9 @@ pCommand =
     , Opt.command "validate-address-balance"
         $ Opt.info (CmdValidateAddressBalance <$> pValidateLedgerParams)
             (Opt.progDesc "Run validation checks against the database and the ledger Utxo set.")
+    , Opt.command "version"
+        $ Opt.info (pure CmdVersion)
+            (Opt.progDesc "Show the program version.")
     ]
   where
     pCreateMigration :: Parser Command

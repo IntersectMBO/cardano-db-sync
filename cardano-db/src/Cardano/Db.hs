@@ -7,6 +7,8 @@ module Cardano.Db
   , Tx (..)
   , TxIn (..)
   , TxOut (..)
+
+  , gitRev
   ) where
 
 import           Cardano.Db.Delete as X
@@ -21,3 +23,4 @@ import           Cardano.Db.Schema as X
 import           Cardano.Db.Schema.Types as X
 import           Cardano.Db.Text as X
 import           Cardano.Db.Types as X
+import           Cardano.Db.Version (gitRev)

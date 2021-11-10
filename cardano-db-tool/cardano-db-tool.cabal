@@ -101,6 +101,8 @@ executable cardano-db-tool
                         -threaded
                         -with-rtsopts=-N2
 
+  other-modules:        Paths_cardano_db_tool
+
   build-depends:        base                            >= 4.14         && < 4.16
                       , cardano-db
                       , cardano-db-tool

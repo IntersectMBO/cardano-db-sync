@@ -43,18 +43,13 @@ library
                         -Wunused-packages
 
   exposed-modules:      Cardano.DbSync
-
                         Cardano.DbSync.Era
-
                         Cardano.DbSync.Era.Byron.Genesis
                         Cardano.DbSync.Era.Byron.Insert
                         Cardano.DbSync.Era.Byron.Util
-
                         Cardano.DbSync.Era.Cardano.Insert
                         Cardano.DbSync.Era.Cardano.Util
-
                         Cardano.DbSync.Era.Shelley.Adjust
-                        Cardano.DbSync.Era.Shelley.Genesis
                         Cardano.DbSync.Era.Shelley.Generic
                         Cardano.DbSync.Era.Shelley.Generic.Block
                         Cardano.DbSync.Era.Shelley.Generic.Metadata
@@ -62,6 +57,7 @@ library
                         Cardano.DbSync.Era.Shelley.Generic.Tx
                         Cardano.DbSync.Era.Shelley.Generic.Util
                         Cardano.DbSync.Era.Shelley.Generic.Witness
+                        Cardano.DbSync.Era.Shelley.Genesis
                         Cardano.DbSync.Era.Shelley.Insert
                         Cardano.DbSync.Era.Shelley.Insert.Epoch
                         Cardano.DbSync.Era.Shelley.Offline
@@ -162,8 +158,8 @@ executable cardano-db-sync
                         MigrationValidations
 
   build-depends:        base                            >= 4.14         && < 4.16
-                      , cardano-config
                       , cardano-sync
+                      , cardano-db
                       , cardano-db-sync
                       , cardano-prelude
                       , cardano-slotting
