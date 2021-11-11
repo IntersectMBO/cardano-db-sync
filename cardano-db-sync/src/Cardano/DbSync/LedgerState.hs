@@ -324,7 +324,7 @@ applyBlock env blk = do
             Generic.NewEpoch
               { Generic.neEpoch = ledgerEpochNo env newState
               , Generic.neIsEBB = isJust $ blockIsEBB blk
-              , Generic.neAdaPots = maybeToStrict $ getAdaPots newState
+              , Generic.neAdaPots = maybeToStrict $ getAdaPots oldState
               , Generic.neEpochUpdate = Generic.epochUpdate (clsState newState)
               }
 

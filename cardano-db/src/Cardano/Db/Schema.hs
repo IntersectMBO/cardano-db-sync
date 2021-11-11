@@ -647,7 +647,7 @@ schemaDocs =
       AdaPotsUtxo # "The amount (in Lovelace) in the UTxO set."
       AdaPotsDeposits # "The amount (in Lovelace) in the deposit pot."
       AdaPotsFees # "The amount (in Lovelace) in the fee pot."
-      AdaPotsBlockId # "The Block table index of the block for which this snapshot was taken."
+      AdaPotsBlockId # "The Block table index of the block before which this snapshot was taken."
 
     PoolMetadataRef --^ do
       "An on-chain reference to off-chain pool metadata."
