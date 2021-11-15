@@ -14,6 +14,8 @@ import           Cardano.Crypto.Hash (hashToBytes)
 
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
+import qualified Cardano.Ledger.Compactible as Ledger
+import           Cardano.Ledger.Credential (Credential)
 import           Cardano.Ledger.Era (Crypto)
 import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import qualified Cardano.Ledger.Shelley.EpochBoundary as Shelley
@@ -25,6 +27,7 @@ import           Cardano.Sync.Era.Shelley.Generic.StakeCred
 import           Cardano.Sync.Era.Shelley.Generic.StakePoolKeyHash
 import           Cardano.Sync.Types
 
+import qualified Data.Compact.VMap as VMap
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
@@ -69,10 +72,16 @@ genericStakeDist network epoch lstate =
     stakeMap = Map.intersectionWith (,) stakeCoinMap stakePoolMap
 
     stakeCoinMap :: Map StakeCred Coin
-    stakeCoinMap = Map.mapKeys (toStakeCred network) . Shelley.unStake $ Shelley._stake stakeSet
+    stakeCoinMap = mapBimap (toStakeCred network) Ledger.fromCompact stMap
+
+    stMap :: Map (Credential 'Staking (Crypto era)) (Ledger.CompactForm Coin)
+    stMap = VMap.toMap . Shelley.unStake $ Shelley._stake stakeSet
 
     stakePoolMap :: Map StakeCred StakePoolKeyHash
-    stakePoolMap = mapBimap (toStakeCred network) convertStakePoolkeyHash $ Shelley._delegations stakeSet
+    stakePoolMap = mapBimap (toStakeCred network) convertStakePoolkeyHash delMap
+
+    delMap :: Map (Credential 'Staking (Crypto era)) (KeyHash 'StakePool (Crypto era))
+    delMap = VMap.toMap $ Shelley._delegations stakeSet
 
     -- We use '_pstakeSet' here instead of '_pstateMark' because the stake addresses for the
     -- later may not have been added to the database yet. That means that when these values
