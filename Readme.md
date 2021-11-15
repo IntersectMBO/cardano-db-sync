@@ -54,7 +54,7 @@ on the same machine are:
 
 * Any of the big well known Linux distributions (eg, Debian, Ubuntu, RHEL, CentOS, Arch
   etc).
-* 16 Gigabytes of RAM.
+* 32 Gigabytes of RAM.
 * 4 CPU cores.
 * 80 Gigabytes or more of disk storage (preferably SSD which are 2-5 times faster than
   electro-mechanical disks).
