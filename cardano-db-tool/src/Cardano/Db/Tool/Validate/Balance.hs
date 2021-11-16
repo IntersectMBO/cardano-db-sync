@@ -16,6 +16,7 @@ import           Cardano.Chain.Common (CompactAddress, Lovelace, decodeAddressBa
 import qualified Cardano.Chain.UTxO as Byron
 
 import           Cardano.Ledger.Address (BootstrapAddress (..))
+import           Cardano.Ledger.Alonzo (AlonzoEra)
 import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
 import qualified Cardano.Ledger.Core as Ledger
 import           Cardano.Ledger.Era (Crypto)
@@ -77,15 +78,13 @@ getShelleyBalance addrText utxo = do
         then Just $ coin (fromCompact v)
         else Nothing
 
-getAlonzoBalance
-    :: forall era. (Crypto era ~ StandardCrypto, Ledger.TxOut era ~ Alonzo.TxOut era)
-    => Compactible (Ledger.Value era) => Val (Ledger.Value era)
-    => Text -> Shelley.UTxO era -> Either Text Word64
+getAlonzoBalance :: Text -> Shelley.UTxO (AlonzoEra StandardCrypto) -> Either Text Word64
 getAlonzoBalance addrText utxo = do
     caddr <- covertToCompactAddress addrText
     Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue caddr) (Map.elems $ Shelley.unUTxO utxo)
   where
-    compactTxOutValue :: CompactAddr (Crypto era) -> Ledger.TxOut era -> Maybe Coin
+    compactTxOutValue
+      :: CompactAddr (Crypto (AlonzoEra StandardCrypto)) -> Alonzo.TxOut (AlonzoEra StandardCrypto) -> Maybe Coin
     compactTxOutValue caddr txOut =
       let (scaddr, val) = case txOut of
                             Alonzo.TxOutCompact a v -> (a, v)
