@@ -116,7 +116,7 @@ convertMirRewards nw resPay trePay =
     convertResPay = mapBimap (Generic.toStakeCred nw) (mkPayment RwdReserves)
 
     convertTrePay :: Map (Ledger.StakeCredential StandardCrypto) Coin -> Map Generic.StakeCred (Set Generic.Reward)
-    convertTrePay = mapBimap (Generic.toStakeCred nw) (mkPayment RwdReserves)
+    convertTrePay = mapBimap (Generic.toStakeCred nw) (mkPayment RwdTreasury)
 
     mkPayment :: RewardSource -> Coin -> Set Generic.Reward
     mkPayment src coin =
