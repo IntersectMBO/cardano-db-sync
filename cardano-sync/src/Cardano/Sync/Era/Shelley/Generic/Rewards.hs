@@ -6,6 +6,7 @@
 module Cardano.Sync.Era.Shelley.Generic.Rewards
   ( Reward (..)
   , Rewards (..)
+  , elemCount
   , epochRewards
   , mergeRewards
   , rewardsPoolHashKeys
@@ -59,6 +60,9 @@ data Rewards = Rewards
   , rwdRewards :: !(Map StakeCred (Set Reward))
   } deriving Eq
 
+elemCount :: Rewards -> Int
+elemCount = sum . map Set.size . Map.elems . rwdRewards
+
 epochRewards :: Ledger.Network -> EpochNo -> ExtLedgerState CardanoBlock -> Maybe Rewards
 epochRewards nw epoch lstate =
     case ledgerState lstate of
@@ -75,7 +79,7 @@ mergeRewards :: Rewards -> Rewards -> Rewards
 mergeRewards amap bmap =
   Rewards
     { rwdEpoch = max (rwdEpoch amap) (rwdEpoch bmap)
-    , rwdRewards = Map.unionWith Set.union (rwdRewards amap) (rwdRewards bmap)
+    , rwdRewards = Map.unionWith mappend (rwdRewards amap) (rwdRewards bmap)
     }
 
 rewardsPoolHashKeys :: Rewards -> Set StakePoolKeyHash
