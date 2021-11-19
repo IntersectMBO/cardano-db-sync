@@ -62,15 +62,15 @@ finalizeEpochBulkOps lenv = do
   mapM_ (insertEpochInterleaved (leTrace lenv)) bops
 
 -- | This gets called with the full set of rewards. If there are no blocks produced in the last 20%
--- of the slots within an epoch, the rewards are updated in the normal way so they will be inserted
--- here.
+-- of the slots within an epoch, the rewards will not be updated in the normal way so they will be
+-- inserted here.
 forceInsertRewards
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> LedgerEnv -> Generic.Rewards -> ReaderT SqlBackend m ()
 forceInsertRewards tracer lenv rwds = do
-  let mapSize = Map.size $ Generic.rwdRewards rwds
-  hasEntry <- DB.queryHasRewardsForEpoch $ unEpochNo (Generic.rwdEpoch rwds)
-  when (mapSize > 0 && not hasEntry) $ do
+  let mapSize = Generic.elemCount rwds
+  count <- fromIntegral <$> DB.queryEpochRewardCount (unEpochNo $ Generic.rwdEpoch rwds)
+  when (mapSize > count) $ do
     liftIO . logWarning tracer $ mconcat
                                 [ "forceInsertRewards: ", textShow mapSize, " rewards for epoch "
                                 , textShow (unEpochNo $ Generic.rwdEpoch rwds), " is "

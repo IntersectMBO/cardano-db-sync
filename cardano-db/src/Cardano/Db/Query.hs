@@ -17,14 +17,14 @@ module Cardano.Db.Query
   , queryBlocksAfterSlot
   , queryCalcEpochEntry
   , queryCheckPoints
+  , queryCurrentEpochNo
   , queryDepositUpToBlockNo
   , queryEpochEntry
   , queryEpochNo
-  , queryCurrentEpochNo
+  , queryEpochRewardCount
   , queryFeesUpToBlockNo
   , queryFeesUpToSlotNo
   , queryGenesisSupply
-  , queryHasRewardsForEpoch
   , queryShelleyGenesisSupply
   , queryLatestBlock
   , queryLatestCachedEpochNo
@@ -335,6 +335,13 @@ queryCurrentEpochNo = do
               pure $ max_ (blk ^. BlockEpochNo)
     pure $ join (unValue =<< listToMaybe res)
 
+queryEpochRewardCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
+queryEpochRewardCount epochNum = do
+  res <- select . from $ \ rwds -> do
+            where_ (rwds ^. RewardSpendableEpoch ==. val epochNum)
+            pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
+
 -- | Get the fees paid in all block from genesis up to and including the specified block.
 queryFeesUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
 queryFeesUpToBlockNo blkNo = do
@@ -362,13 +369,6 @@ queryGenesisSupply = do
                 where_ (isNothing $ blk ^. BlockPreviousId)
                 pure $ sum_ (txOut ^. TxOutValue)
     pure $ unValueSumAda (listToMaybe res)
-
-queryHasRewardsForEpoch :: MonadIO m => Word64 -> ReaderT SqlBackend m Bool
-queryHasRewardsForEpoch epochNum = do
-  res <- select . from $ \ rwds -> do
-            where_ (rwds ^. RewardSpendableEpoch ==. val epochNum)
-            pure countRows
-  pure $ maybe False (\c -> unValue c > 0) (listToMaybe res :: Maybe (Value Word64))
 
 -- | Return the total Shelley Genesis coin supply. The Shelley Genesis Block
 -- is the unique which has a non-null PreviousId, but has null Epoch.
