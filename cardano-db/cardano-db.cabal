@@ -3,7 +3,7 @@ cabal-version:          2.2
 -- http://haskell.org/cabal/users-guide/
 
 name:                   cardano-db
-version:                11.0.4
+version:                12.0.0
 synopsis:               A base PostgreSQL component for the cardano-db-sync node.
 description:            Code for the Cardano DB Sync node that is shared between the
                         cardano-db-node and other components.

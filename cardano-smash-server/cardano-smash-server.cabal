@@ -3,7 +3,7 @@ cabal-version:          2.2
 -- http://haskell.org/cabal/users-guide/
 
 name:                   cardano-smash-server
-version:                11.0.0
+version:                12.0.0
 synopsis:               The Cardano smash server
 description:            Please see the README on GitHub at
                         <https://github.com/input-output-hk/cardano-db-sync/cardano-smash-server/#readme>
