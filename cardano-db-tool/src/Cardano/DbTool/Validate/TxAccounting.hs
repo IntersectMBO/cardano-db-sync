@@ -1,4 +1,7 @@
+{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 module Cardano.DbTool.Validate.TxAccounting
   ( validateTxAccounting
   ) where
@@ -17,13 +20,13 @@ import           Data.Int (Int64)
 import qualified Data.List as List
 import           Data.Word (Word64)
 
-import           Database.Esqueleto.Legacy (Entity, InnerJoin (..), SqlExpr, Value (..), countRows,
-                   entityVal, from, on, select, unValue, val, where_, (==.), (>.), (^.))
-
-import           Database.Persist.Sql (SqlBackend, toSqlKey)
+import           Database.Esqueleto.Experimental (Entity (entityVal), SqlBackend,
+                   Value (Value, unValue), countRows, from, innerJoin, on, select, table, toSqlKey,
+                   type (:&) ((:&)), val, where_, (==.), (>.), (^.))
 
 import qualified System.Random as Random
 
+{- HLINT ignore "Fuse on/on" -}
 
 validateTxAccounting :: IO ()
 validateTxAccounting = do
@@ -51,8 +54,8 @@ data ValidateError = ValidateError
   }
 
 randomTxIds :: Int -> (Word64, Word64) -> IO [Word64]
-randomTxIds count (minTxId, maxIxId) =
-  List.sort <$> replicateM count (Random.randomRIO (minTxId, maxIxId))
+randomTxIds c (minTxId, maxIxId) =
+  List.sort <$> replicateM c (Random.randomRIO (minTxId, maxIxId))
 
 reportError :: ValidateError -> String
 reportError ve =
@@ -107,18 +110,18 @@ validateAccounting txId = do
 queryTestTxIds :: MonadIO m => ReaderT SqlBackend m (Word64, Word64)
 queryTestTxIds = do
   -- Exclude all 'faked' generated TxId values from the genesis block (block_id == 1).
-  lower <- select . from $ \ tx -> do
+  lower <- select $ from (table @Tx) >>= \ tx -> do
               where_ (tx ^. TxBlockId >. val (toSqlKey 1))
               pure (tx ^. TxId)
-  upper <- select . from $ \ (_ :: SqlExpr (Entity Tx)) -> do
-              pure countRows
+  upper <- select $ from (table @Tx) >> pure countRows
   pure (maybe 0 (unTxId . unValue) (listToMaybe lower), maybe 0 unValue (listToMaybe upper))
 
 queryTxFeeDeposit :: MonadIO m => Word64 -> ReaderT SqlBackend m (Ada, Int64)
 queryTxFeeDeposit txId = do
-    res <- select . from $ \ tx -> do
-              where_ (tx ^. TxId ==. val (toSqlKey $ fromIntegral txId))
-              pure (tx ^. TxFee, tx ^. TxDeposit)
+    res <- select $ do
+      tx <- from $ table @Tx
+      where_ (tx ^. TxId ==. val (toSqlKey $ fromIntegral txId))
+      pure (tx ^. TxFee, tx ^. TxDeposit)
     pure $ maybe (0, 0) convert (listToMaybe res)
   where
     convert :: (Value DbLovelace, Value Int64) -> (Ada, Int64)
@@ -126,28 +129,36 @@ queryTxFeeDeposit txId = do
 
 queryTxInputs :: MonadIO m => Word64 -> ReaderT SqlBackend m [TxOut]
 queryTxInputs txId = do
-  res <- select . from $ \ (tx `InnerJoin` txin `InnerJoin` txout) -> do
-            on (txin ^. TxInTxOutId ==. txout ^. TxOutTxId)
-            on (tx ^. TxId ==. txin ^. TxInTxInId)
-            where_ (tx ^. TxId ==. val (toSqlKey $ fromIntegral txId))
-            where_ (txout ^. TxOutIndex ==. txin ^. TxInTxOutIndex)
-            pure txout
+  res <- select $ do
+    (tx :& txin :& txout) <-
+      from $ table @Tx
+      `innerJoin` table @TxIn
+      `on` (\(tx :& txin) -> tx ^. TxId ==. txin ^. TxInTxInId)
+      `innerJoin` table @TxOut
+      `on` (\(_tx :& txin :& txout ) -> txin ^. TxInTxOutId ==. txout ^. TxOutTxId)
+    where_ (tx ^. TxId ==. val (toSqlKey $ fromIntegral txId))
+    where_ (txout ^. TxOutIndex ==. txin ^. TxInTxOutIndex)
+    pure txout
   pure $ entityVal <$> res
 
 queryTxOutputs :: MonadIO m => Word64 -> ReaderT SqlBackend m [TxOut]
 queryTxOutputs txId = do
-  res <- select . from $ \ (tx `InnerJoin` txout) -> do
-            on (tx ^. TxId ==. txout ^. TxOutTxId)
-            where_ (tx ^. TxId ==. val (toSqlKey $ fromIntegral txId))
-            pure txout
+  res <- select $ do
+    (tx :& txout) <-
+      from $ table @Tx
+      `innerJoin` table @TxOut
+      `on` (\(tx :& txout) -> tx ^. TxId ==. txout ^. TxOutTxId)
+    where_ (tx ^. TxId ==. val (toSqlKey $ fromIntegral txId))
+    pure txout
   pure $ entityVal <$> res
 
 
 queryTxWithdrawal :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
 queryTxWithdrawal txId = do
-  res <- select . from $ \ withdraw -> do
-            where_ (withdraw ^. WithdrawalTxId ==. val (toSqlKey $ fromIntegral txId))
-            pure (withdraw ^. WithdrawalAmount)
+  res <- select $ do
+    withdraw <- from $ table @Withdrawal
+    where_ (withdraw ^. WithdrawalTxId ==. val (toSqlKey $ fromIntegral txId))
+    pure (withdraw ^. WithdrawalAmount)
   -- It is probably not possible to have two withdrawals in a single Tx.
   -- If it is possible then there will be an accounting error.
   pure $ maybe 0 (word64ToAda . unDbLovelace . unValue) (listToMaybe res)

@@ -1,4 +1,6 @@
+{-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 module Cardano.DbTool.Report.Transactions
   ( reportTransactions
   ) where
@@ -20,11 +22,12 @@ import qualified Data.Text.Encoding as Text
 import qualified Data.Text.IO as Text
 import           Data.Time.Clock (UTCTime)
 
-import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), from, just, on, select, val,
-                   where_, (&&.), (==.), (^.))
-import           Database.Persist.Sql (SqlBackend)
+import           Database.Esqueleto.Experimental (SqlBackend, Value (Value, unValue), from,
+                   innerJoin, just, on, select, table, type (:&) ((:&)), val, where_, (&&.), (==.),
+                   (^.))
 
 {- HLINT ignore "Redundant ^." -}
+{- HLINT ignore "Fuse on/on" -}
 
 reportTransactions :: [Text] -> IO ()
 reportTransactions addrs =
@@ -66,9 +69,10 @@ queryStakeAddressTransactions address = do
   where
     queryStakeAddressId :: MonadIO m => ReaderT SqlBackend m (Maybe StakeAddressId)
     queryStakeAddressId = do
-      res <- select . from $ \ saddr -> do
-                where_ (saddr ^. StakeAddressView ==. val address)
-                pure (saddr ^. StakeAddressId)
+      res <- select $ do
+        saddr <- from (table @StakeAddress)
+        where_ (saddr ^. StakeAddressView ==. val address)
+        pure (saddr ^. StakeAddressId)
       pure $ fmap unValue (listToMaybe res)
 
     queryTransactions :: MonadIO m => StakeAddressId -> ReaderT SqlBackend m [Transaction]
@@ -80,19 +84,26 @@ queryStakeAddressTransactions address = do
 queryInputs :: MonadIO m => StakeAddressId -> ReaderT SqlBackend m [Transaction]
 queryInputs saId = do
     -- Standard UTxO inputs.
-    res1 <- select . from $ \ (txOut `InnerJoin` tx `InnerJoin` blk) -> do
-              on (txOut ^. TxOutTxId ==. tx ^. TxId)
-              on (tx ^. TxBlockId ==. blk ^. BlockId)
-              where_ (txOut ^. TxOutStakeAddressId ==. just (val saId))
-              pure (tx ^. TxHash, blk ^. BlockTime, txOut ^. TxOutValue)
+    res1 <- select $ do
+      (tx :& txOut :& blk) <-
+        from $ table @Tx
+        `innerJoin` table @TxOut
+        `on` (\(tx :& txOut) -> txOut ^. TxOutTxId ==. tx ^. TxId)
+        `innerJoin` table @Block
+        `on` (\(tx :& _txOut :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
+      where_ (txOut ^. TxOutStakeAddressId ==. just (val saId))
+      pure (tx ^. TxHash, blk ^. BlockTime, txOut ^. TxOutValue)
 
     -- Reward withdrawals.
-    res2 <- select . from $ \ (wdrl `InnerJoin` tx `InnerJoin` blk) -> do
-              on (tx ^. TxBlockId ==. blk ^. BlockId)
-              on (wdrl ^. WithdrawalTxId ==. tx ^. TxId)
-              where_ (wdrl ^. WithdrawalAddrId ==. val saId)
-              pure (tx ^. TxHash, blk ^. BlockTime, wdrl ^. WithdrawalAmount)
-
+    res2 <- select $ do
+      (tx :& blk :& wdrl) <-
+        from $ table @Tx
+        `innerJoin` table @Block
+        `on` (\(tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
+        `innerJoin` table @Withdrawal
+        `on` (\(tx :& _blk :& wdrl) -> wdrl ^. WithdrawalTxId ==. tx ^. TxId)
+      where_ (wdrl ^. WithdrawalAddrId ==. val saId)
+      pure (tx ^. TxHash, blk ^. BlockTime, wdrl ^. WithdrawalAmount)
     pure $ groupByTxHash (map (convertTx Incoming) res1 ++ map (convertTx Outgoing) res2)
   where
     groupByTxHash :: [Transaction] -> [Transaction]
@@ -120,16 +131,23 @@ sumAmounts =
         Incoming -> acc + trAmount tr
         Outgoing -> acc - trAmount tr
 
-
 queryOutputs :: MonadIO m => StakeAddressId -> ReaderT SqlBackend m [Transaction]
 queryOutputs saId = do
-    res <- select . from $ \ (txOut `InnerJoin` txInTx `InnerJoin` txIn `InnerJoin` txOutTx `InnerJoin` blk) -> do
-              on (txOutTx ^. TxBlockId ==. blk ^. BlockId)
-              on (txOutTx ^. TxId ==. txIn ^. TxInTxInId)
-              on (txOut ^. TxOutTxId ==. txInTx ^. TxId)
-              on (txIn ^. TxInTxOutId ==. txInTx ^. TxId &&. txIn ^. TxInTxOutIndex ==. txOut ^. TxOutIndex)
-              where_ (txOut ^. TxOutStakeAddressId ==. just (val saId))
-              pure (txOutTx ^. TxHash, blk ^. BlockTime, txOut ^. TxOutValue)
+    res <- select $ do
+      (txOut :& _txInTx :& _txIn :& txOutTx :& blk) <-
+        from $ table @TxOut
+        `innerJoin` table @Tx
+        `on` (\(txOut :& txInTx) -> txOut ^. TxOutTxId ==. txInTx ^. TxId)
+        `innerJoin` table @TxIn
+        `on` (\(txOut :& txInTx :& txIn) -> txIn ^. TxInTxOutId ==. txInTx ^. TxId &&. txIn ^. TxInTxOutIndex ==. txOut ^. TxOutIndex)
+        `innerJoin` table @Tx
+        `on` (\(_txOut :& _txInTx :& txIn :& txOutTx) -> txOutTx ^. TxId ==. txIn ^. TxInTxInId)
+        `innerJoin` table @Block
+        `on` (\(_txOut :& _txInTx :& _txIn :& txOutTx :& blk) -> txOutTx ^. TxBlockId ==. blk ^. BlockId)
+
+      where_ (txOut ^. TxOutStakeAddressId ==. just (val saId))
+      pure (txOutTx ^. TxHash, blk ^. BlockTime, txOut ^. TxOutValue)
+
     pure . groupOutputs $ map (convertTx Outgoing) res
   where
     groupOutputs :: [Transaction] -> [Transaction]

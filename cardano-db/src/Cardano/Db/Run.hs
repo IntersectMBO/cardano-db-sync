@@ -42,9 +42,9 @@ import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Lazy.Builder as LazyText
 import qualified Data.Text.Lazy.IO as LazyText
 
+import           Database.Esqueleto.Experimental (SqlQuery)
 import           Database.Esqueleto.Internal.Internal (Mode (SELECT), SqlSelect, initialIdentState,
                    toRawSql)
-import           Database.Esqueleto.Legacy (SqlQuery)
 
 import           Database.Persist.Postgresql (SqlBackend, openSimpleConn, withPostgresqlConn,
                    withPostgresqlPool)

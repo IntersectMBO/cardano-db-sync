@@ -1,5 +1,7 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE StrictData #-}
+{-# LANGUAGE TypeApplications #-}
+
 module Cardano.DbTool.Validate.AdaPots
   ( validateSumAdaPots
   ) where
@@ -14,10 +16,8 @@ import qualified Data.List as List
 import qualified Data.List.Extra as List
 import           Data.Word (Word64)
 
-import           Database.Esqueleto.Legacy (Entity (..), Value (..), from, select, (^.))
-
-import           Database.Persist.Sql (SqlBackend)
-
+import           Database.Esqueleto.Experimental (Entity (..), SqlBackend, Value (..), from, select,
+                   table, (^.))
 
 -- | Validate that for all epochs, the sum of the AdaPots values are always the
 -- same.
@@ -42,9 +42,10 @@ data Accounting = Accounting
   }
 
 queryAdaPotsAccounting :: MonadIO m => ReaderT SqlBackend m [Accounting]
-queryAdaPotsAccounting = do
-    res <- select . from $ \ ap ->
-              pure (ap ^. AdaPotsEpochNo, ap)
+queryAdaPotsAccounting = do -- AdaPots
+    res <- select $ do
+      ap <- from $ table @AdaPots
+      pure (ap ^. AdaPotsEpochNo, ap)
     pure $ map convert res
   where
     convert :: (Value Word64, Entity AdaPots) -> Accounting

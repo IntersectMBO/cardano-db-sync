@@ -2,6 +2,7 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbSync.Epoch
   ( epochStartup
@@ -20,11 +21,8 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 
 import           Data.IORef (IORef, atomicWriteIORef, newIORef, readIORef)
 
-import           Database.Esqueleto.Legacy (Value (..), desc, from, limit, orderBy, select, val,
-                   where_, (==.), (^.))
-
-import           Database.Persist.Class (replace)
-import           Database.Persist.Sql (SqlBackend)
+import           Database.Esqueleto.Experimental (SqlBackend, desc, from, limit, orderBy, replace,
+                   select, table, unValue, val, where_, (==.), (^.))
 
 import           Cardano.Db (EntityField (..), EpochId, SyncState (..))
 import qualified Cardano.Db as DB
@@ -138,16 +136,18 @@ updateEpochNum epochNum trce = do
 -- | Get the PostgreSQL row index (EpochId) that matches the given epoch number.
 queryEpochId :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe EpochId)
 queryEpochId epochNum = do
-  res <- select . from $ \ epoch -> do
-            where_ (epoch ^. DB.EpochNo ==. val epochNum)
-            pure (epoch ^. EpochId)
+  res <- select $ do
+    epoch <- from $ table @DB.Epoch
+    where_ (epoch ^. DB.EpochNo ==. val epochNum)
+    pure (epoch ^. EpochId)
   pure $ unValue <$> listToMaybe res
 
 -- | Get the epoch number of the most recent epoch in the Epoch table.
 queryLatestEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
 queryLatestEpochNo = do
-  res <- select . from $ \ epoch -> do
-            orderBy [desc (epoch ^. DB.EpochNo)]
-            limit 1
-            pure (epoch ^. DB.EpochNo)
+  res <- select $ do
+    epoch <- from $ table @DB.Epoch
+    orderBy [desc (epoch ^. DB.EpochNo)]
+    limit 1
+    pure (epoch ^. DB.EpochNo)
   pure $ unValue <$> listToMaybe res

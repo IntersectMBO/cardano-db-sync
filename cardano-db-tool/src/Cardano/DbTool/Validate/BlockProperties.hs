@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeApplications #-}
 module Cardano.DbTool.Validate.BlockProperties
   ( validateBlockProperties
   ) where
@@ -16,10 +17,8 @@ import           Data.Time.Clock (UTCTime)
 import qualified Data.Time.Clock as Time
 import           Data.Word (Word64)
 
-import           Database.Esqueleto.Legacy (asc, desc, from, just, limit, orderBy, select, unValue,
-                   val, where_, (>.), (^.))
-
-import           Database.Persist.Sql (SqlBackend)
+import           Database.Esqueleto.Experimental (SqlBackend, asc, desc, from, just, limit, orderBy,
+                   select, table, unValue, val, where_, (>.), (^.))
 
 import qualified System.Random as Random
 
@@ -92,28 +91,31 @@ validateTimestampsOrdered blkCount = do
 
 queryBlockNoList :: MonadIO m => Word64 -> Word64 -> ReaderT SqlBackend m [Word64]
 queryBlockNoList start count = do
-  res <- select . from $ \ blk -> do
-            where_ (isJust (blk ^. BlockBlockNo))
-            where_ (blk ^. BlockBlockNo >. just (val start))
-            orderBy [asc (blk ^. BlockBlockNo)]
-            limit (fromIntegral count)
-            pure (blk ^. BlockBlockNo)
+  res <- select $ do
+    blk <- from $ table @Block
+    where_ (isJust (blk ^. BlockBlockNo))
+    where_ (blk ^. BlockBlockNo >. just (val start))
+    orderBy [asc (blk ^. BlockBlockNo)]
+    limit (fromIntegral count)
+    pure (blk ^. BlockBlockNo)
   pure $ mapMaybe unValue res
 
 queryBlockTimestamps :: MonadIO m => Word64 -> Word64 -> ReaderT SqlBackend m [UTCTime]
 queryBlockTimestamps start count = do
-  res <- select . from $ \ blk -> do
-            where_ (isJust (blk ^. BlockBlockNo))
-            where_ (blk ^. BlockBlockNo >. just (val start))
-            orderBy [asc (blk ^. BlockBlockNo)]
-            limit (fromIntegral count)
-            pure (blk ^. BlockTime)
+  res <- select $ do
+    blk <- from $ table @Block
+    where_ (isJust (blk ^. BlockBlockNo))
+    where_ (blk ^. BlockBlockNo >. just (val start))
+    orderBy [asc (blk ^. BlockBlockNo)]
+    limit (fromIntegral count)
+    pure (blk ^. BlockTime)
   pure $ map unValue res
 
 queryBlocksTimeAfters :: MonadIO m => UTCTime -> ReaderT SqlBackend m [(Maybe Word64, Maybe Word64, UTCTime)]
 queryBlocksTimeAfters now = do
-  res <- select . from $ \ blk -> do
-            where_ (blk ^. BlockTime >. val now)
-            orderBy [desc (blk ^. BlockTime)]
-            pure (blk ^. BlockEpochNo, blk ^. BlockBlockNo, blk ^. BlockTime)
+  res <- select $ do
+    blk <- from $ table @Block
+    where_ (blk ^. BlockTime >. val now)
+    orderBy [desc (blk ^. BlockTime)]
+    pure (blk ^. BlockEpochNo, blk ^. BlockBlockNo, blk ^. BlockTime)
   pure $ map unValue3 res

@@ -1,4 +1,7 @@
+{-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+
 module Cardano.DbTool.Report.StakeReward.History
   ( reportStakeRewardHistory
   ) where
@@ -17,12 +20,13 @@ import qualified Data.Text.IO as Text
 import           Data.Time.Clock (UTCTime)
 import           Data.Word (Word64)
 
-import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), asc, from, max_, on,
-                   orderBy, select, val, where_, (<=.), (==.), (^.))
-import           Database.Persist.Sql (SqlBackend)
+import           Database.Esqueleto.Experimental (SqlBackend, Value (..), asc, from, innerJoin,
+                   max_, on, orderBy, select, table, type (:&) ((:&)), val, where_, (<=.), (==.),
+                   (^.))
 
 import           Text.Printf (printf)
 
+{- HLINT ignore "Fuse on/on" -}
 
 reportStakeRewardHistory :: Text -> IO ()
 reportStakeRewardHistory saddr = do
@@ -50,7 +54,6 @@ data EpochReward = EpochReward
   , erPercent :: !Double
   }
 
-
 queryHistoryStakeRewards :: MonadIO m => Text -> ReaderT SqlBackend m [EpochReward]
 queryHistoryStakeRewards address = do
     maxEpoch <- queryMaxEpochRewardNo
@@ -60,12 +63,16 @@ queryHistoryStakeRewards address = do
         :: MonadIO m
         => Word64 -> ReaderT SqlBackend m [(StakeAddressId, Word64, UTCTime, DbLovelace)]
     queryDelegation maxEpoch = do
-      res <- select . from $ \ (saddr `InnerJoin` es `InnerJoin` epoch) -> do
-                on (epoch ^. EpochNo ==. es ^. EpochStakeEpochNo)
-                on (saddr ^. StakeAddressId ==. es ^. EpochStakeAddrId)
-                where_ (saddr ^. StakeAddressView ==. val address)
-                where_ (es ^. EpochStakeEpochNo <=. val maxEpoch)
-                pure (es ^. EpochStakeAddrId, es ^. EpochStakeEpochNo, epoch ^.EpochEndTime, es ^. EpochStakeAmount)
+      res <- select $ do
+        (epoch :& es :& saddr) <-
+          from $ table @Epoch
+          `innerJoin` table @EpochStake
+          `on` (\(epoch :& es) -> epoch ^. EpochNo ==. es ^. EpochStakeEpochNo)
+          `innerJoin` table @StakeAddress
+          `on` (\(_epoch :& es :& saddr) ->saddr ^. StakeAddressId ==. es ^. EpochStakeAddrId)
+        where_ (saddr ^. StakeAddressView ==. val address)
+        where_ (es ^. EpochStakeEpochNo <=. val maxEpoch)
+        pure (es ^. EpochStakeAddrId, es ^. EpochStakeEpochNo, epoch ^.EpochEndTime, es ^. EpochStakeAmount)
       pure $ map unValue4 res
 
     queryReward
@@ -73,13 +80,18 @@ queryHistoryStakeRewards address = do
         => (StakeAddressId, Word64, UTCTime, DbLovelace)
         -> ReaderT SqlBackend m EpochReward
     queryReward (saId, en, date, DbLovelace delegated) = do
-      res <- select . from $ \ (saddr `InnerJoin` reward `InnerJoin` epoch) -> do
-                on (epoch ^. EpochNo ==. reward ^. RewardEarnedEpoch)
-                on (saddr ^. StakeAddressId ==. reward ^. RewardAddrId)
-                where_ (epoch ^. EpochNo ==. val en)
-                where_ (saddr ^. StakeAddressId ==. val saId)
-                orderBy [asc (epoch ^. EpochNo)]
-                pure  (reward ^. RewardAmount)
+      res <- select $ do
+        ( saddr :& reward :& epoch) <-
+          from $ table @StakeAddress
+          `innerJoin` table @Reward
+          `on` (\(saddr :& reward) -> saddr ^. StakeAddressId ==. reward ^. RewardAddrId)
+          `innerJoin` table @Epoch
+          `on` (\(_saddr :& reward :& epoch) -> epoch ^. EpochNo ==. reward ^. RewardEarnedEpoch)
+        where_ (epoch ^. EpochNo ==. val en)
+        where_ (saddr ^. StakeAddressId ==. val saId)
+        orderBy [asc (epoch ^. EpochNo)]
+        pure  (reward ^. RewardAmount)
+
       let reward = maybe 0 (unDbLovelace . unValue) (listToMaybe res)
       pure $ EpochReward
               { erAddressId = saId
@@ -95,8 +107,9 @@ queryHistoryStakeRewards address = do
         :: MonadIO m
         => ReaderT SqlBackend m Word64
     queryMaxEpochRewardNo = do
-      res <- select . from $ \ reward -> do
-                pure (max_ (reward ^. RewardEarnedEpoch))
+      res <- select $ do
+        reward <- from $ table @Reward
+        pure (max_ (reward ^. RewardEarnedEpoch))
       pure $ fromMaybe 0 (listToMaybe $ mapMaybe unValue res)
 
 renderRewards :: Text -> [EpochReward] -> IO ()

@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbSync.Era.Shelley.Validate
   ( validateEpochRewards
@@ -15,7 +16,7 @@ import           Cardano.Db (DbLovelace, RewardSource)
 import qualified Cardano.Db as Db
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.ValidateWithdrawal (validateRewardWithdrawals)
-import           Cardano.DbSync.Util
+import           Cardano.DbSync.Util (panicAbort, plusCoin, textShow)
 
 import           Cardano.Ledger.Coin (Coin (..))
 
@@ -28,11 +29,12 @@ import qualified Data.List.Extra as List
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
-import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), desc, from, not_, on,
-                   orderBy, select, sum_, val, where_, (==.), (^.))
 
-import           Database.Persist.Sql (SqlBackend)
+import           Database.Esqueleto.Experimental (InnerJoin (InnerJoin), SqlBackend, Value (Value),
+                   desc, from, not_, on, orderBy, select, sum_, table, val, where_, (:&) ((:&)),
+                   (==.), (^.))
 
+{- HLINT ignore "Fuse on/on" -}
 
 validateEpochRewards
     :: (MonadBaseControl IO m, MonadIO m)
@@ -70,12 +72,13 @@ queryEpochRewardTotal
     :: (MonadBaseControl IO m, MonadIO m)
     => EpochNo -> ReaderT SqlBackend m Db.Ada
 queryEpochRewardTotal (EpochNo epochNo) = do
-  res <- select . from $ \ rwd -> do
-            where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
+  res <- select $ do
+    rwd <- from $ table @Db.Reward
+    where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
             -- For ... reasons ... pool deposit refunds are put into the rewards account
             -- but are not considered part of the total rewards for an epoch.
-            where_ (not_ $ rwd ^. Db.RewardType ==. val Db.RwdDepositRefund)
-            pure (sum_ $ rwd ^. Db.RewardAmount)
+    where_ (not_ $ rwd ^. Db.RewardType ==. val Db.RwdDepositRefund)
+    pure (sum_ $ rwd ^. Db.RewardAmount)
   pure $ Db.unValueSumAda (listToMaybe res)
 
 -- -------------------------------------------------------------------------------------------------
@@ -95,13 +98,18 @@ queryRewardMap
     :: (MonadBaseControl IO m, MonadIO m)
     => EpochNo -> ReaderT SqlBackend m (Map Generic.StakeCred [(RewardSource, DbLovelace)])
 queryRewardMap (EpochNo epochNo) = do
-    res <- select . from $ \ (rwd `InnerJoin` saddr) -> do
-              on (rwd ^. Db.RewardAddrId ==. saddr ^. Db.StakeAddressId)
-              where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
-              -- Need this orderBy so that the `groupOn` below works correctly.
-              orderBy [desc (saddr ^. Db.StakeAddressHashRaw)]
-              pure (saddr ^. Db.StakeAddressHashRaw, rwd ^. Db.RewardType, rwd ^. Db.RewardAmount)
+    res <- select $ do
+      (rwd :& saddr) <-
+        from $ table @Db.Reward
+        `InnerJoin` table @Db.StakeAddress
+        `on` (\(rwd :& saddr) ->
+                rwd ^. Db.RewardAddrId ==. saddr ^. Db.StakeAddressId)
+      where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
+      orderBy [desc (saddr ^. Db.StakeAddressHashRaw)]
+      pure (saddr ^. Db.StakeAddressHashRaw, rwd ^. Db.RewardType, rwd ^. Db.RewardAmount)
+
     pure . Map.fromList . map collapse $ List.groupOn fst (map convert res)
+
   where
     convert :: (Value ByteString, Value RewardSource, Value DbLovelace) -> (Generic.StakeCred, (RewardSource, DbLovelace))
     convert (Value cred, Value source, Value amount) = (Generic.StakeCred cred, (source, amount))
