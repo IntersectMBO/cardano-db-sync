@@ -161,7 +161,7 @@ blockNumber = Protocol.bheaderBlockNo . blockBody
 blockPrevHash :: ShelleyBasedEra era => ShelleyBlock era -> Maybe ByteString
 blockPrevHash blk =
   case Protocol.bheaderPrev (Protocol.bhbody . Ledger.bheader $ Consensus.shelleyBlockRaw blk) of
-    Protocol.GenesisHash -> Just "Cardano.DbSync.Era.Shelley.Generic.Block.blockPrevHash"
+    Protocol.GenesisHash -> Nothing
     Protocol.BlockHash (Protocol.HashHeader h) -> Just $ Crypto.hashToBytes h
 
 blockOpCert :: ShelleyBasedEra era => ShelleyBlock era -> ByteString
