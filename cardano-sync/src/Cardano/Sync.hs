@@ -36,7 +36,6 @@ import           Cardano.BM.Data.Tracer (ToLogObject (..))
 import           Cardano.BM.Trace (Trace, appendName, logError, logInfo)
 import qualified Cardano.BM.Trace as Logging
 
-import qualified Cardano.Chain.Genesis as Byron
 import           Cardano.Client.Subscription (subscribe)
 import qualified Cardano.Crypto as Crypto
 
@@ -70,16 +69,16 @@ import           Network.TypedProtocol.Pipelined (N (..), Nat (Succ, Zero))
 import           Ouroboros.Network.Driver.Simple (runPipelinedPeer)
 
 import           Ouroboros.Consensus.Block.Abstract (CodecConfig)
-import           Ouroboros.Consensus.Byron.Ledger.Config (mkByronCodecConfig)
 import           Ouroboros.Consensus.Byron.Node ()
-import           Ouroboros.Consensus.Cardano.Block (CardanoEras, CodecConfig (..))
+import           Ouroboros.Consensus.Cardano.Block (CardanoEras)
 import           Ouroboros.Consensus.Cardano.Node ()
+import           Ouroboros.Consensus.Config (configCodec)
 import           Ouroboros.Consensus.HardFork.History.Qry (Interpreter)
 import qualified Ouroboros.Consensus.HardFork.Simple as HardFork
 import           Ouroboros.Consensus.Network.NodeToClient (ClientCodecs, cChainSyncCodec,
                    cStateQueryCodec, cTxSubmissionCodec)
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
-import           Ouroboros.Consensus.Shelley.Ledger.Config (CodecConfig (ShelleyCodecConfig))
+import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
 
 import           Ouroboros.Network.Block (BlockNo (..), Point (..), Tip (..), blockNo, genesisPoint,
@@ -154,24 +153,16 @@ runSyncNode dataLayer metricsSetters trce plugin enp insertValidateGenesisDist r
         -- Must run plugin startup after the genesis distribution has been inserted/validate.
       liftIO $ runDbStartup trce plugin
       case genCfg of
-          GenesisCardano _ bCfg _sCfg _aCfg -> do
+          GenesisCardano {} -> do
             syncEnv <- ExceptT $ mkSyncEnvFromConfig dataLayer trce (enpLedgerStateDir enp) genCfg
             liftIO $ runSyncNodeNodeClient metricsSetters syncEnv iomgr trce plugin
-                        runDBThreadFunction (cardanoCodecConfig bCfg) (enpSocketPath enp)
+                        runDBThreadFunction (enpSocketPath enp)
   where
-    cardanoCodecConfig :: Byron.Config -> CodecConfig CardanoBlock
-    cardanoCodecConfig cfg =
-      CardanoCodecConfig
-        (mkByronCodecConfig cfg)
-        ShelleyCodecConfig
-        ShelleyCodecConfig -- Allegra
-        ShelleyCodecConfig -- Mary
-        ShelleyCodecConfig -- Alonzo
-
     useShelleyInit :: HardFork.TriggerHardFork -> Bool
     useShelleyInit trigger = case trigger of
       HardFork.TriggerHardForkAtEpoch (EpochNo 0) -> True
       _ -> False
+
 -- -------------------------------------------------------------------------------------------------
 
 runSyncNodeNodeClient
@@ -181,10 +172,9 @@ runSyncNodeNodeClient
     -> Trace IO Text
     -> SyncNodePlugin
     -> RunDBThreadFunction
-    -> CodecConfig CardanoBlock
     -> SocketPath
     -> IO ()
-runSyncNodeNodeClient metricsSetters env iomgr trce plugin runDBThreadFunction codecConfig (SocketPath socketPath) = do
+runSyncNodeNodeClient metricsSetters env iomgr trce plugin runDBThreadFunction (SocketPath socketPath) = do
   queryVar <- newStateQueryTMVar
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   void $ subscribe
@@ -195,6 +185,9 @@ runSyncNodeNodeClient metricsSetters env iomgr trce plugin runDBThreadFunction c
     clientSubscriptionParams
     (dbSyncProtocols trce env metricsSetters plugin queryVar runDBThreadFunction)
   where
+    codecConfig :: CodecConfig CardanoBlock
+    codecConfig = configCodec $ Consensus.pInfoConfig (leProtocolInfo $ envLedger env)
+
     clientSubscriptionParams =
       ClientSubscriptionParams
         { cspAddress = Snocket.localAddressFromPath socketPath
