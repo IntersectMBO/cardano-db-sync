@@ -189,9 +189,10 @@ maybeToStrict Nothing = Strict.Nothing
 maybeToStrict (Just a) = Strict.Just a
 
 whenJust :: Applicative m => Strict.Maybe a -> (a -> m ()) -> m ()
-whenJust ma f = case ma of
-  Strict.Nothing -> pure ()
-  Strict.Just a -> f a
+whenJust ma f =
+  case ma of
+    Strict.Nothing -> pure ()
+    Strict.Just a -> f a
 
 thrd3 :: (a, b, c) -> c
 thrd3 (_, _, c) = c

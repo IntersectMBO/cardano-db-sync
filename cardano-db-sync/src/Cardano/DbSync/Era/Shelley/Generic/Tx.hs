@@ -415,9 +415,12 @@ fromAlonzoTx pp (blkIndex, tx) =
         , txOutDataHash = getDataHash <$> strictMaybeToMaybe mDataHash
         }
       where
-        caddr = case txOut of
-          Alonzo.TxOutCompact (Ledger.UnsafeCompactAddr bs) _-> bs
-          Alonzo.TxOutCompactDH (Ledger.UnsafeCompactAddr bs) _ _-> bs
+        caddr :: SBS.ShortByteString
+        caddr =
+          case txOut of
+            Alonzo.TxOutCompact (Ledger.UnsafeCompactAddr bs) _-> bs
+            Alonzo.TxOutCompactDH (Ledger.UnsafeCompactAddr bs) _ _-> bs
+
         -- This pattern match also does the deserialisation of the address
         Alonzo.TxOut addr (Value ada maMap) mDataHash = txOut
 
@@ -447,13 +450,14 @@ fromAlonzoTx pp (blkIndex, tx) =
     getDataHash dataHash = Crypto.hashToBytes (Ledger.extractHash dataHash)
 
     mkTxScript :: (ScriptHash StandardCrypto, Alonzo.Script (AlonzoEra StandardCrypto)) -> TxScript
-    mkTxScript (hsh, script) = TxScript
-      { txScriptHash = unScriptHash hsh
-      , txScriptType = getScriptType script
-      , txScriptPlutusSize = getScriptSize script
-      , txScriptJson = timelockJsonScript script
-      , txScriptCBOR = plutusCborScript script
-      }
+    mkTxScript (hsh, script) =
+      TxScript
+        { txScriptHash = unScriptHash hsh
+        , txScriptType = getScriptType script
+        , txScriptPlutusSize = getScriptSize script
+        , txScriptJson = timelockJsonScript script
+        , txScriptCBOR = plutusCborScript script
+        }
 
     timelockJsonScript :: Alonzo.Script (AlonzoEra StandardCrypto) -> Maybe ByteString
     timelockJsonScript script =

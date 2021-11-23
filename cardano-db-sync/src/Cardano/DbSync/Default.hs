@@ -16,6 +16,8 @@ import qualified Cardano.Db as DB
 
 import           Cardano.DbSync.Era
 
+import           Cardano.DbSync.Api
+import           Cardano.DbSync.Epoch
 import           Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import           Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
 import           Cardano.DbSync.Era.Shelley.Adjust (adjustEpochRewards)
@@ -23,11 +25,9 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
 import           Cardano.DbSync.Era.Shelley.Insert.Epoch
 import           Cardano.DbSync.Era.Shelley.Validate
-import           Cardano.DbSync.Rollback (rollbackToPoint)
-import           Cardano.DbSync.Api
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState
-import           Cardano.DbSync.Epoch
+import           Cardano.DbSync.Rollback (rollbackToPoint)
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
@@ -63,7 +63,7 @@ insertDefaultBlock env blockDetails = do
     thisIsAnUglyHack tracer (envLedger env)
     DB.runDbIohkLogging backend tracer $ runExceptT $ do
       traverse_ insertDetails blockDetails
-      when (extended $ envOptions env) $
+      when (soptExtended $ envOptions env) $
         traverse_ (ExceptT . epochInsert tracer) blockDetails
   where
     tracer = getTrace env

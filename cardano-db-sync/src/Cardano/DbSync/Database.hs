@@ -23,10 +23,10 @@ import           Control.Monad.Trans.Except.Extra (newExceptT)
 
 import           Cardano.DbSync.Api
 import           Cardano.DbSync.DbAction
+import           Cardano.DbSync.Default
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState
 import           Cardano.DbSync.Metrics
-import           Cardano.DbSync.Default
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util hiding (whenJust)
 

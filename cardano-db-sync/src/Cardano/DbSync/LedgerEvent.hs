@@ -31,9 +31,9 @@ import           Cardano.Ledger.Shelley.Rules.Tick (TickEvent (..))
 
 import           Cardano.Prelude hiding (All)
 
-import           Cardano.Slotting.Slot (EpochNo (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Types
+import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Control.State.Transition (Event)
 

@@ -41,9 +41,9 @@ import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (.
 import           Cardano.DbSync.Api
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.DbAction
+import           Cardano.DbSync.Epoch
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Metrics
-import           Cardano.DbSync.Epoch
 import           Cardano.DbSync.StateQuery (StateQueryTMVar, getSlotDetails, localStateQueryHandler,
                    newStateQueryTMVar)
 import           Cardano.DbSync.Tracing.ToObjectOrphans ()

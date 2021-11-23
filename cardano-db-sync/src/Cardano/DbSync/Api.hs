@@ -58,7 +58,7 @@ data SyncEnv = SyncEnv
   }
 
 newtype SyncOptions = SyncOptions
-  { extended :: Bool
+  { soptExtended :: Bool
   }
 
 mkSyncOptions :: Bool -> SyncOptions

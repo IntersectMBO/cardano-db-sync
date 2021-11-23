@@ -48,7 +48,7 @@ import           System.IO.Unsafe (unsafePerformIO)
 -- When in syncing mode, the row for the current epoch being synced may be incorrect.
 epochStartup :: SyncEnv -> IO ()
 epochStartup env =
-  when (extended $ envOptions env) $ do
+  when (soptExtended $ envOptions env) $ do
     let trce = getTrace env
     let backend = envBackend env
     DB.runDbIohkLogging backend trce $ do
