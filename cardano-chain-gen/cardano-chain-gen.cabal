@@ -42,6 +42,7 @@ library
   exposed-modules:
                         Cardano.Mock.Chain
                         Cardano.Mock.ChainDB
+                        Cardano.Mock.ChainSync.State
 
   build-depends:        base                            >= 4.14         && < 4.16
                       , async
