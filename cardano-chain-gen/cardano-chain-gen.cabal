@@ -44,6 +44,7 @@ library
                         Cardano.Mock.ChainDB
                         Cardano.Mock.ChainSync.Server
                         Cardano.Mock.ChainSync.State
+                        Cardano.Mock.Forging.Interpreter
 
   build-depends:        base                            >= 4.14         && < 4.16
                       , async
@@ -83,6 +84,7 @@ library
                       , mtl
                       , monad-control
                       , network-mux
+                      , nothunks
                       , ouroboros-consensus
                       , ouroboros-consensus-byron
                       , ouroboros-consensus-cardano

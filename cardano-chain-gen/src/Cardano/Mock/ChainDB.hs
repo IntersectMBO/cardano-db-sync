@@ -1,4 +1,6 @@
+
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -40,6 +42,11 @@ headTip :: HasHeader block => ChainDB block -> Tip block
 headTip chainDB = case cchain chainDB of
   Genesis _ -> TipGenesis
   (_ :> (b, _)) -> Tip (blockSlot b) (blockHash b) (blockNo b)
+
+currentState :: ChainDB block -> State block
+currentState chainDB = case cchain chainDB of
+  Genesis st -> st
+  _ :> (_, st) -> st
 
 replaceGenesisDB :: ChainDB block -> State block -> ChainDB block
 replaceGenesisDB chainDB st = chainDB {cchain = Genesis st}
