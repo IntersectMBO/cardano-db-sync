@@ -42,6 +42,7 @@ import           Cardano.Slotting.Slot (EpochNo (..))
 
 
 import           Control.Monad.Class.MonadSTM.Strict (putTMVar, tryTakeTMVar)
+import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
@@ -61,15 +62,12 @@ insertDefaultBlock env blockDetails =
     DB.runDbIohkLogging backend tracer .
       runExceptT $ do
         traverse_ insertDetails blockDetails
-        when (soptExtended $ envOptions env) $
-          traverse_ (ExceptT . epochInsert tracer) blockDetails
   where
     tracer = getTrace env
     backend = envBackend env
 
     insertDetails
-        :: (MonadBaseControl IO m, MonadIO m)
-        => BlockDetails -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+        :: BlockDetails -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
     insertDetails (BlockDetails cblk details) = do
       -- Calculate the new ledger state to pass to the DB insert functions but do not yet
       -- update ledgerStateVar.
@@ -90,6 +88,8 @@ insertDefaultBlock env blockDetails =
         BlockAlonzo blk -> do
           let pp = getAlonzoPParams $ lssState lStateSnap
           newExceptT $ insertShelleyBlock tracer lenv firstBlockOfEpoch (Generic.fromAlonzoBlock pp blk) lStateSnap details
+      when (soptExtended $ envOptions env) $
+        ExceptT $ epochInsert tracer $ BlockDetails cblk details
 
 mkSnapshotMaybe
         :: (MonadBaseControl IO m, MonadIO m)
