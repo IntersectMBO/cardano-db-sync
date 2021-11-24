@@ -40,6 +40,7 @@ library
                         -Wincomplete-uni-patterns
 
   exposed-modules:
+                        Cardano.Mock.Chain
 
   build-depends:        base                            >= 4.14         && < 4.16
                       , async
