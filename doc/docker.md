@@ -23,8 +23,8 @@ NETWORK=testnet docker-compose up && docker-compose logs -f
 ```
 
 ### Take control
-Excluding the `NETWORK` ENV will simply just call the `cardano-db-sync` or
-`cardano-db-sync-extended` executable as the entrypoint, so you must pass a command and
+Excluding the `NETWORK` ENV will simply just call the `cardano-db-sync` executable
+as the entrypoint, so you must pass a command and
 arguments in this case to provide config at runtime. The `--schema-dir` argument is preset,
 so is not required.
 

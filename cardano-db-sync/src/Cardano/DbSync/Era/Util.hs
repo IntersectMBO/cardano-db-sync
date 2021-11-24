@@ -14,7 +14,7 @@ import           Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT)
 import           Cardano.BM.Trace (Trace, logWarning)
 import qualified Cardano.Db as DB
 
-import           Cardano.Sync.Error
+import           Cardano.DbSync.Error
 
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text

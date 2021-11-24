@@ -15,9 +15,9 @@ import qualified Cardano.Db as DB
 
 import           Cardano.DbSync.Era.Util
 
-import           Cardano.Sync.Error
-import           Cardano.Sync.Types
-import           Cardano.Sync.Util
+import           Cardano.DbSync.Error
+import           Cardano.DbSync.Types
+import           Cardano.DbSync.Util
 
 import qualified Data.List as List
 import           Database.Persist.Sql (SqlBackend)

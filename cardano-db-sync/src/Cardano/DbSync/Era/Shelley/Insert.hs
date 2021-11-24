@@ -48,10 +48,10 @@ import qualified Cardano.Ledger.Credential as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
 
-import           Cardano.Sync.Error
-import           Cardano.Sync.LedgerState
-import           Cardano.Sync.Types
-import           Cardano.Sync.Util
+import           Cardano.DbSync.Error
+import           Cardano.DbSync.LedgerState
+import           Cardano.DbSync.Types
+import           Cardano.DbSync.Util
 
 import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..), Value (..))
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
@@ -376,16 +376,17 @@ insertPoolRegister _tracer mlStateSnap network (EpochNo epoch) blkId txId idx pa
 
   where
     mkEpochActivationDelay :: MonadIO m => DB.PoolHashId -> ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
-    mkEpochActivationDelay poolHashId = case mlStateSnap of
-      Left n -> pure n
-      Right lStateSnap -> if Set.member (Shelley._poolId params) $ getPoolParams (lssOldState lStateSnap)
-        then pure 3
-        else do
-          -- if the pool is not registered at the end of the previous block, check for
-          -- other registrations at the current block. If this is the first registration
-          -- then it's +2, else it's +3.
-          otherUpdates <- lift $ queryPoolUpdateByBlock blkId poolHashId
-          pure $ if otherUpdates then 3 else 2
+    mkEpochActivationDelay poolHashId =
+      case mlStateSnap of
+        Left n -> pure n
+        Right lStateSnap -> if Set.member (Shelley._poolId params) $ getPoolParams (lssOldState lStateSnap)
+          then pure 3
+          else do
+            -- if the pool is not registered at the end of the previous block, check for
+            -- other registrations at the current block. If this is the first registration
+            -- then it's +2, else it's +3.
+            otherUpdates <- lift $ queryPoolUpdateByBlock blkId poolHashId
+            pure $ if otherUpdates then 3 else 2
 
 
 insertPoolHash

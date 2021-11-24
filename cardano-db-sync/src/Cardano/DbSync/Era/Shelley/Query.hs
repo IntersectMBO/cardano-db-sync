@@ -26,8 +26,7 @@ import qualified Cardano.Ledger.Address as Ledger
 import           Cardano.Ledger.Credential (Ptr (..), StakeReference (..))
 import qualified Cardano.Ledger.Keys as Ledger
 
-import qualified Cardano.Sync.Era.Shelley.Generic as Generic
-import           Cardano.Sync.Util
+import           Cardano.DbSync.Util
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 

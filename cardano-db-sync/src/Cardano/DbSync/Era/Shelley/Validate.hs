@@ -13,12 +13,11 @@ import           Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 
 import           Cardano.Db (DbLovelace, RewardSource)
 import qualified Cardano.Db as Db
+import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.ValidateWithdrawal (validateRewardWithdrawals)
+import           Cardano.DbSync.Util
 
 import           Cardano.Ledger.Coin (Coin (..))
-
-import qualified Cardano.Sync.Era.Shelley.Generic as Generic
-import           Cardano.Sync.Util
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 

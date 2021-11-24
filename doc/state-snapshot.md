@@ -8,7 +8,7 @@ needs to be synced from scatch.
 To overcome these issues, we are providing a `cardano-db-sync` state snapshot, which should
 drastically reduce the time required to get `db-sync` back up and running after the database is
 dropped and recreated. This snapshot is compatible with both `cardano-db-sync` and
-`cardano-db-sync-extended` (which maintains an extra `epoch` table).
+`cardano-db-sync` with --no-epoch-table (which doesn't maintain the extra `epoch` table).
 
 **Note:** It is **not** possible to create a snapshot from one version of the database schema and
 restore it so it can be used with a `db-sync` that uses another version of the schema.

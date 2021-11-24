@@ -23,10 +23,10 @@ import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Crypto as Crypto
 
 import qualified Cardano.Db as DB
+import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import           Cardano.DbSync.Era.Util (liftLookupFail)
-import qualified Cardano.Sync.Era.Byron.Util as Byron
-import           Cardano.Sync.Error
-import           Cardano.Sync.Util
+import           Cardano.DbSync.Error
+import           Cardano.DbSync.Util
 
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
