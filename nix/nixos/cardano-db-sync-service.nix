@@ -16,11 +16,6 @@ in {
         internal = true;
         type = lib.types.package;
       };
-      extended = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-        description = "use cardano-db-sync-extended";
-      };
       takeSnapshot = lib.mkOption {
         type = lib.types.enum [ "never" "once" "always" ];
         default = "never";
@@ -143,10 +138,7 @@ in {
       };
       package = lib.mkOption {
         type = lib.types.package;
-        default = if cfg.extended then
-          self.cardano-db-sync-extended
-        else
-          self.cardano-db-sync;
+        default = self.cardano-db-sync;
       };
       user = lib.mkOption {
         type = lib.types.str;
@@ -184,11 +176,7 @@ in {
     };
   };
   config = lib.mkIf cfg.enable {
-    services.cardano-db-sync = let
-      exec = if cfg.extended then
-        "${cfg.package}/bin/cardano-db-sync-extended"
-      else
-        "${cfg.package}/bin/cardano-db-sync";
+    services.cardano-db-sync = let exec = "${cfg.package}/bin/cardano-db-sync";
     in {
       pgpass = builtins.toFile "pgpass" "${cfg.postgres.socketdir}:${
           toString cfg.postgres.port

@@ -28,7 +28,6 @@
 #
 #   * --schema-dir is set within the script
 #
-#  To launch the extended service include -e EXTENDED=true
 #  To download and restore a snapshot include -e RESTORE_SNAPSHOT=https://update-cardano-mainnet.iohk.io/cardano-db-sync/db-sync-snapshot-schema-10-block-6014140-x86_64.tgz
 #  See the latest releases for a recent snapshot https://github.com/input-output-hk/cardano-db-sync/releases
 #  See the docker-compose.yml for demonstration of using Docker secrets instead of mounting a pgpass
@@ -39,7 +38,7 @@
 { cardanoLib, dockerTools
 
 # The main contents of the image.
-, cardano-db-sync, scripts, extendedScripts
+, cardano-db-sync, scripts
 
 # Get the current commit
 , gitrev
@@ -98,18 +97,11 @@ let
   dbSyncDockerImage = let
     clusterStatements = lib.concatStringsSep "\n" (lib.mapAttrsToList
       (env: script:
-        let
-          dbSyncScript = script.db-sync;
-          dbSyncExtendedScript = extendedScripts.${env}.db-sync;
+        let dbSyncScript = script.db-sync;
         in ''
           elif [[ "$NETWORK" == "${env}" ]]; then
               echo "Connecting to network: ${env}"
-              if [[ ! -z "''${EXTENDED}" ]] && [[ "''${EXTENDED}" == true ]]
-              then
-                exec ${dbSyncExtendedScript}/bin/${dbSyncExtendedScript.name}
-              else
-                exec ${dbSyncScript}/bin/${dbSyncScript.name}
-              fi
+              exec ${dbSyncScript}/bin/${dbSyncScript.name}
               echo "Cleaning up"
         '') scripts);
     genPgPass = writeScript "gen-pgpass" ''
@@ -135,12 +127,7 @@ let
       mkdir -p -m 1777 /tmp
       if [[ -z "$NETWORK" ]]; then
         echo "Connecting to network specified in configuration.yaml"
-        if [[ ! -z "''${EXTENDED}" ]] && [[ "''${EXTENDED}" == true ]]
-        then
-          DBSYNC=${cardano-db-sync-extended}/bin/cardano-db-sync-extended
-        else
-          DBSYNC=${cardano-db-sync}/bin/cardano-db-sync
-        fi
+        DBSYNC=${cardano-db-sync}/bin/cardano-db-sync
 
         set -euo pipefail
         ${scripts.mainnet.db-sync.passthru.service.restoreSnapshotScript}

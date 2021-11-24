@@ -21,8 +21,6 @@ in {
   # Grab the executable component of our package.
   inherit (cardanoDbSyncHaskellPackages.cardano-db-sync.components.exes)
     cardano-db-sync;
-  inherit (cardanoDbSyncHaskellPackages.cardano-db-sync-extended.components.exes)
-    cardano-db-sync-extended;
   inherit (cardanoDbSyncHaskellPackages.cardano-db-tool.components.exes)
     cardano-db-tool;
   inherit (cardanoDbSyncHaskellPackages.cardano-node.components.exes)
@@ -62,14 +60,6 @@ in {
     scripts = import ./scripts.nix {
       inherit pkgs;
       customConfigs = [ defaultConfig customConfig ];
-    };
-    extendedScripts = import ./scripts.nix {
-      inherit pkgs;
-      customConfigs = [
-        defaultConfig
-        customConfig
-        { services.cardano-db-sync.extended = true; }
-      ];
     };
   };
 }

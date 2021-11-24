@@ -63,12 +63,11 @@ let
     modules = [
       {
         # Stamp executables with the git revision
-        packages = lib.genAttrs [ "cardano-db-sync" "cardano-db-sync-extended" ]
-          (name: {
-            components.exes.${name}.postInstall = ''
-              ${setGitRev}
-            '';
-          });
+        packages = lib.genAttrs [ "cardano-db-sync" ] (name: {
+          components.exes.${name}.postInstall = ''
+            ${setGitRev}
+          '';
+        });
       }
       {
         # Packages we wish to ignore version bounds of.
@@ -127,8 +126,6 @@ let
         })
       {
         packages.cardano-db-sync.package.extraSrcFiles = [ "../schema/*.sql" ];
-        packages.cardano-db-sync-extended.package.extraSrcFiles =
-          [ "../cardano-db-sync/Setup.hs" "../schema/*.sql" ];
       }
     ];
   };
