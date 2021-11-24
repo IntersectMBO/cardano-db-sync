@@ -1,19 +1,13 @@
-############################################################################
+# ###########################################################################
 # Builds Haskell packages with Haskell.nix
 ############################################################################
-{ lib
-, stdenv
-, haskell-nix
-, buildPackages
-, src
-, config ? {}
-# GHC attribute name
+{ lib, stdenv, haskell-nix, buildPackages, src, config ? { }
+  # GHC attribute name
 , compiler ? config.haskellNix.compiler or "ghc8104"
-# Enable profiling
+  # Enable profiling
 , profiling ? config.haskellNix.profiling or false
-# Version info, to be passed when not building from a git work tree
-, gitrev
-}:
+  # Version info, to be passed when not building from a git work tree
+, gitrev }:
 let
 
   projectPackages = lib.attrNames (haskell-nix.haskellLib.selectProjectPackages
@@ -69,11 +63,12 @@ let
     modules = [
       {
         # Stamp executables with the git revision
-        packages = lib.genAttrs ["cardano-db-sync" "cardano-db-sync-extended"] (name: {
-          components.exes.${name}.postInstall = ''
-            ${setGitRev}
-          '';
-        });
+        packages = lib.genAttrs [ "cardano-db-sync" "cardano-db-sync-extended" ]
+          (name: {
+            components.exes.${name}.postInstall = ''
+              ${setGitRev}
+            '';
+          });
       }
       {
         # Packages we wish to ignore version bounds of.
@@ -86,8 +81,9 @@ let
         enableLibraryProfiling = profiling;
       }
       {
-        packages = lib.genAttrs projectPackages
-          (name: { configureFlags = [ "--ghc-option=-Wall" "--ghc-option=-Werror" ]; });
+        packages = lib.genAttrs projectPackages (name: {
+          configureFlags = [ "--ghc-option=-Wall" "--ghc-option=-Werror" ];
+        });
       }
       {
         packages.cardano-db.components.tests.test-db = {
@@ -103,39 +99,42 @@ let
         };
       }
       # Musl libc fully static build
-      ({ pkgs, ... }: lib.mkIf stdenv.hostPlatform.isMusl (let
-        # Module options which adds GHC flags and libraries for a fully static build
-        fullyStaticOptions = {
-          enableShared = false;
-          enableStatic = true;
-          configureFlags = [
-            "--ghc-option=-optl=-lssl"
-            "--ghc-option=-optl=-lcrypto"
-            "--ghc-option=-optl=-L${pkgs.openssl.out}/lib"
-          ];
-        };
-      in
-        {
+      ({ pkgs, ... }:
+        lib.mkIf stdenv.hostPlatform.isMusl (let
+          # Module options which adds GHC flags and libraries for a fully static build
+          fullyStaticOptions = {
+            enableShared = false;
+            enableStatic = true;
+            configureFlags = [
+              "--ghc-option=-optl=-lssl"
+              "--ghc-option=-optl=-lcrypto"
+              "--ghc-option=-optl=-L${pkgs.openssl.out}/lib"
+            ];
+          };
+        in {
           packages = lib.genAttrs projectPackages (name: fullyStaticOptions);
 
           # Haddock not working and not needed for cross builds
           doHaddock = false;
-        }
-      ))
-      ({ pkgs, ... }: lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
-        # systemd can't be statically linked
-        packages.cardano-config.flags.systemd = !pkgs.stdenv.hostPlatform.isMusl;
-        packages.cardano-node.flags.systemd = !pkgs.stdenv.hostPlatform.isMusl;
-      })
+        }))
+      ({ pkgs, ... }:
+        lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
+          # systemd can't be statically linked
+          packages.cardano-config.flags.systemd =
+            !pkgs.stdenv.hostPlatform.isMusl;
+          packages.cardano-node.flags.systemd =
+            !pkgs.stdenv.hostPlatform.isMusl;
+        })
       {
-        packages.cardano-db-sync.package.extraSrcFiles = ["../schema/*.sql"];
-        packages.cardano-db-sync-extended.package.extraSrcFiles = ["../cardano-db-sync/Setup.hs" "../schema/*.sql"];
+        packages.cardano-db-sync.package.extraSrcFiles = [ "../schema/*.sql" ];
+        packages.cardano-db-sync-extended.package.extraSrcFiles =
+          [ "../cardano-db-sync/Setup.hs" "../schema/*.sql" ];
       }
     ];
   };
   # setGitRev is a postInstall script to stamp executables with
   # version info. It uses the "gitrev" argument, if set. Otherwise,
   # the revision is sourced from the local git work tree.
-  setGitRev = ''${buildPackages.haskellBuildUtils}/bin/set-git-rev "${gitrev}" $out/bin/*'';
-in
-  pkgSet
+  setGitRev = ''
+    ${buildPackages.haskellBuildUtils}/bin/set-git-rev "${gitrev}" $out/bin/*'';
+in pkgSet
