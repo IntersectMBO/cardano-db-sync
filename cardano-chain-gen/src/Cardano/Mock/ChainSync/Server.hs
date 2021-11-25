@@ -15,6 +15,7 @@ module Cardano.Mock.ChainSync.Server
     -- * ServerHandle api
   , ServerHandle (..)
   , MockServerConstraint
+  , IOManager
   , replaceGenesis
   , addBlock
   , readChain

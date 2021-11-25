@@ -135,6 +135,8 @@ test-suite cardano-chain-gen
                         MigrationValidations
 
   other-modules:        Test.Cardano.Db.Mock.Config
+                        Test.Cardano.Db.Mock.Examples
+                        Test.Cardano.Db.Mock.Unit
 
   build-depends:        async
                       , base                            >= 4.12         && < 4.15

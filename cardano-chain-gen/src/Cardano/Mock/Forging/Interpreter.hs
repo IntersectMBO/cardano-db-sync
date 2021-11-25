@@ -13,6 +13,7 @@
 module Cardano.Mock.Forging.Interpreter
   ( CardanoBlock
   , MockBlock (..)
+  , NodeId (..)
   , initInterpreter
   , forgeNext
   ) where
