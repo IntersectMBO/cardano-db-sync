@@ -37,7 +37,7 @@ import           Ouroboros.Consensus.Ledger.Basics (LedgerConfig)
 import qualified Ouroboros.Consensus.Mempool.TxLimits as TxLimits
 import           Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
-import           Ouroboros.Consensus.Shelley.Eras (StandardShelley)
+import           Ouroboros.Consensus.Shelley.Eras (StandardShelley, StandardCrypto)
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 
 
@@ -69,15 +69,17 @@ cardanoLedgerConfig :: GenesisConfig -> LedgerConfig CardanoBlock
 cardanoLedgerConfig = topLevelConfigLedger . mkTopLevelConfig
 
 mkTopLevelConfig :: GenesisConfig -> TopLevelConfig CardanoBlock
-mkTopLevelConfig = Consensus.pInfoConfig . mkProtocolInfoCardano
+mkTopLevelConfig cfg = Consensus.pInfoConfig $ mkProtocolInfoCardano cfg []
 
 -- Need a concrete type for 'm' ('IO') to make the type checker happy.
 -- | The vast majority of the following struct fields are *COMPLETELY IRRELEVANT* to the
 -- operation of db-sync, but I have no idea at all what happens of any of these are
 -- wrong. This really needs to be a done a different way.
 -- mkProtocolCardano :: GenesisConfig -> Protocol m CardanoBlock CardanoProtocol
-mkProtocolInfoCardano :: GenesisConfig -> ProtocolInfo IO CardanoBlock
-mkProtocolInfoCardano ge =
+mkProtocolInfoCardano :: GenesisConfig
+                      -> [Consensus.TPraosLeaderCredentials StandardCrypto] -- this is not empty only in tests
+                      -> ProtocolInfo IO CardanoBlock
+mkProtocolInfoCardano ge shelleyCred =
   case ge of
     GenesisCardano dnc byronGenesis shelleyGenesis alonzoGenesis ->
         Consensus.protocolInfoCardano
@@ -92,7 +94,7 @@ mkProtocolInfoCardano ge =
           Consensus.ProtocolParamsShelleyBased
             { Consensus.shelleyBasedGenesis = scConfig shelleyGenesis
             , Consensus.shelleyBasedInitialNonce = shelleyPraosNonce shelleyGenesis
-            , Consensus.shelleyBasedLeaderCredentials = []
+            , Consensus.shelleyBasedLeaderCredentials = shelleyCred
             }
           Consensus.ProtocolParamsShelley
             { Consensus.shelleyProtVer = shelleyProtVer dnc
