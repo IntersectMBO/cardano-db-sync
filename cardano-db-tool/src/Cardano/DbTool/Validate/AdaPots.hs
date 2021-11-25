@@ -1,11 +1,11 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE StrictData #-}
-module Cardano.Db.Tool.Validate.AdaPots
+module Cardano.DbTool.Validate.AdaPots
   ( validateSumAdaPots
   ) where
 
 import           Cardano.Db
-import           Cardano.Db.Tool.Validate.Util
+import           Cardano.DbTool.Validate.Util
 
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)

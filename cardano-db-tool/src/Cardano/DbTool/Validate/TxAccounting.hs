@@ -1,9 +1,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Cardano.Db.Tool.Validate.TxAccounting
+module Cardano.DbTool.Validate.TxAccounting
   ( validateTxAccounting
   ) where
 
-import           Cardano.Db.Tool.Validate.Util
+import           Cardano.DbTool.Validate.Util
 
 import           Cardano.Db
 

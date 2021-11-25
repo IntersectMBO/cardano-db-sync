@@ -1,9 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Cardano.Db.Tool.Validate.Withdrawal
+module Cardano.DbTool.Validate.Withdrawal
   ( validateWithdrawals
   ) where
 
-import           Cardano.Db.Tool.Validate.Util
+import           Cardano.DbTool.Validate.Util
 
 import           Cardano.Db
 

@@ -1,8 +1,8 @@
-module Cardano.Db.Tool.Validate.BlockProperties
+module Cardano.DbTool.Validate.BlockProperties
   ( validateBlockProperties
   ) where
 
-import           Cardano.Db.Tool.Validate.Util
+import           Cardano.DbTool.Validate.Util
 
 import           Cardano.Db hiding (queryBlockTxCount)
 

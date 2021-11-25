@@ -22,7 +22,6 @@ module Cardano.DbSync.Config.Types
   , SyncNodeConfig (..)
   , SyncPreConfig (..)
   , LedgerStateDir (..)
-  , MigrationDir (..)
   , MaryToAlonzo
   , LogFileDir (..)
   , NetworkName (..)
@@ -44,6 +43,8 @@ import qualified Cardano.Chain.Update as Byron
 import           Cardano.Crypto (RequiresNetworkMagic (..))
 import qualified Cardano.Crypto.Hash as Crypto
 
+import           Cardano.Db (MigrationDir)
+
 import           Cardano.Ledger.Allegra (AllegraEra)
 
 import           Cardano.Slotting.Slot (SlotNo (..))
@@ -61,10 +62,6 @@ import qualified Ouroboros.Consensus.HardFork.Combinator.Basics as Cardano
 import           Ouroboros.Consensus.Shelley.Eras (StandardShelley)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
 import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
-
-newtype MigrationDir = MigrationDir
-  { unMigrationDir :: FilePath
-  }
 
 newtype LogFileDir = LogFileDir
   { unLogFileDir :: FilePath

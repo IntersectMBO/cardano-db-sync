@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Cardano.Db.Tool.Report.Display
+module Cardano.DbTool.Report.Display
   ( leftPad
   , separator
   , spaces

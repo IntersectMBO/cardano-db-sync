@@ -40,8 +40,10 @@ import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (.
 
 import           Cardano.DbSync.Api
 import           Cardano.DbSync.Config
+import           Cardano.DbSync.Database
 import           Cardano.DbSync.DbAction
 import           Cardano.DbSync.Epoch
+import           Cardano.DbSync.Era
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Metrics
 import           Cardano.DbSync.StateQuery (StateQueryTMVar, getSlotDetails, localStateQueryHandler,
@@ -104,30 +106,14 @@ import           Ouroboros.Network.Subscription (SubscriptionTrace)
 import           System.Directory (createDirectoryIfMissing)
 
 
-type InsertValidateGenesisFunction
-    = Trace IO Text
-    -> NetworkName
-    -> GenesisConfig
-    -> Bool
-    -> ExceptT SyncNodeError IO ()
-
-type RunDBThreadFunction
-    =  Trace IO Text
-    -> SyncEnv
-    -> MetricSetters
-    -> DbActionQueue
-    -> IO ()
-
 runSyncNode
     :: MetricSetters
     -> Trace IO Text
     -> SqlBackend
     -> Bool
     -> SyncNodeParams
-    -> InsertValidateGenesisFunction
-    -> RunDBThreadFunction
     -> IO ()
-runSyncNode metricsSetters trce backend extendedOpt enp insertValidateGenesisDist runDBThreadFunction =
+runSyncNode metricsSetters trce backend extendedOpt enp =
   withIOManager $ \iomgr -> do
 
     let configFile = enpConfigFile enp
@@ -145,14 +131,13 @@ runSyncNode metricsSetters trce backend extendedOpt enp insertValidateGenesisDis
 
       -- If the DB is empty it will be inserted, otherwise it will be validated (to make
       -- sure we are on the right chain).
-      insertValidateGenesisDist trce (dncNetworkName enc) genCfg (useShelleyInit enc)
+      insertValidateGenesisDist trce backend (dncNetworkName enc) genCfg (useShelleyInit enc)
 
       case genCfg of
           GenesisCardano {} -> do
             syncEnv <- ExceptT $ mkSyncEnvFromConfig trce backend (mkSyncOptions extendedOpt) (enpLedgerStateDir enp) genCfg
             liftIO $ epochStartup syncEnv
-            liftIO $ runSyncNodeNodeClient metricsSetters syncEnv iomgr trce
-                        runDBThreadFunction (enpSocketPath enp)
+            liftIO $ runSyncNodeClient metricsSetters syncEnv iomgr trce (enpSocketPath enp)
   where
     useShelleyInit :: SyncNodeConfig -> Bool
     useShelleyInit cfg =
@@ -162,15 +147,14 @@ runSyncNode metricsSetters trce backend extendedOpt enp insertValidateGenesisDis
 
 -- -------------------------------------------------------------------------------------------------
 
-runSyncNodeNodeClient
+runSyncNodeClient
     :: MetricSetters
     -> SyncEnv
     -> IOManager
     -> Trace IO Text
-    -> RunDBThreadFunction
     -> SocketPath
     -> IO ()
-runSyncNodeNodeClient metricsSetters env iomgr trce runDBThreadFunction (SocketPath socketPath) = do
+runSyncNodeClient metricsSetters env iomgr trce (SocketPath socketPath) = do
   queryVar <- newStateQueryTMVar
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   void $ subscribe
@@ -179,7 +163,7 @@ runSyncNodeNodeClient metricsSetters env iomgr trce runDBThreadFunction (SocketP
     (envNetworkMagic env)
     networkSubscriptionTracers
     clientSubscriptionParams
-    (dbSyncProtocols trce env metricsSetters queryVar runDBThreadFunction)
+    (dbSyncProtocols trce env metricsSetters queryVar)
   where
     codecConfig :: CodecConfig CardanoBlock
     codecConfig = configCodec $ Consensus.pInfoConfig (leProtocolInfo $ envLedger env)
@@ -216,10 +200,10 @@ runSyncNodeNodeClient metricsSetters env iomgr trce runDBThreadFunction (SocketP
 dbSyncProtocols
     :: Trace IO Text -> SyncEnv -> MetricSetters
     -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
-    -> RunDBThreadFunction -> Network.NodeToClientVersion -> ClientCodecs CardanoBlock IO
+    -> Network.NodeToClientVersion -> ClientCodecs CardanoBlock IO
     -> ConnectionId LocalAddress
     -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols trce env metricsSetters queryVar runDBThreadFunction version codecs _connectionId =
+dbSyncProtocols trce env metricsSetters queryVar version codecs _connectionId =
     NodeToClientProtocols
       { localChainSyncProtocol = localChainSyncPtcl
       , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -244,7 +228,10 @@ dbSyncProtocols trce env metricsSetters queryVar runDBThreadFunction version cod
         actionQueue <- newDbActionQueue
 
         race_
-            (runDBThreadFunction trce env metricsSetters actionQueue)
+            (race
+                (runDbThread trce env metricsSetters actionQueue)
+                (runOfflineFetchThread trce (envLedger env))
+                )
             (runPipelinedPeer
                 localChainSyncTracer
                 (cChainSyncCodec codecs)

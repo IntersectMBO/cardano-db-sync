@@ -23,6 +23,7 @@ import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Crypto as Crypto
 
 import qualified Cardano.Db as DB
+import           Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 import           Cardano.DbSync.Error
@@ -43,9 +44,9 @@ import           Paths_cardano_db_sync (version)
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.
 insertValidateGenesisDist
-    :: SqlBackend -> Trace IO Text -> Text -> Byron.Config
+    :: SqlBackend -> Trace IO Text -> NetworkName -> Byron.Config
     -> ExceptT SyncNodeError IO ()
-insertValidateGenesisDist backend tracer networkName cfg = do
+insertValidateGenesisDist backend tracer (NetworkName networkName) cfg = do
     -- Setting this to True will log all 'Persistent' operations which is great
     -- for debugging, but otherwise *way* too chatty.
     if False

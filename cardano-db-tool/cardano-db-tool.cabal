@@ -30,30 +30,30 @@ library
                         -Wunused-imports
                         -Wunused-packages
 
-  exposed-modules:      Cardano.Db.Tool
+  exposed-modules:      Cardano.DbTool
 
-  other-modules:        Cardano.Db.Tool.PrepareSnapshot
-                        Cardano.Db.Tool.Report
-                        Cardano.Db.Tool.Report.Balance
-                        Cardano.Db.Tool.Report.Display
-                        Cardano.Db.Tool.Report.StakeReward
-                        Cardano.Db.Tool.Report.StakeReward.History
-                        Cardano.Db.Tool.Report.StakeReward.Latest
-                        Cardano.Db.Tool.Report.Synced
-                        Cardano.Db.Tool.Report.Transactions
-                        Cardano.Db.Tool.UtxoSet
-                        Cardano.Db.Tool.Validation
-                        Cardano.Db.Tool.Validate.AdaPots
-                        Cardano.Db.Tool.Validate.Balance
-                        Cardano.Db.Tool.Validate.BlockProperties
-                        Cardano.Db.Tool.Validate.BlockTxs
-                        Cardano.Db.Tool.Validate.EpochTable
-                        Cardano.Db.Tool.Validate.Ledger
-                        Cardano.Db.Tool.Validate.PoolOwner
-                        Cardano.Db.Tool.Validate.TotalSupply
-                        Cardano.Db.Tool.Validate.TxAccounting
-                        Cardano.Db.Tool.Validate.Util
-                        Cardano.Db.Tool.Validate.Withdrawal
+  other-modules:        Cardano.DbTool.PrepareSnapshot
+                        Cardano.DbTool.Report
+                        Cardano.DbTool.Report.Balance
+                        Cardano.DbTool.Report.Display
+                        Cardano.DbTool.Report.StakeReward
+                        Cardano.DbTool.Report.StakeReward.History
+                        Cardano.DbTool.Report.StakeReward.Latest
+                        Cardano.DbTool.Report.Synced
+                        Cardano.DbTool.Report.Transactions
+                        Cardano.DbTool.UtxoSet
+                        Cardano.DbTool.Validation
+                        Cardano.DbTool.Validate.AdaPots
+                        Cardano.DbTool.Validate.Balance
+                        Cardano.DbTool.Validate.BlockProperties
+                        Cardano.DbTool.Validate.BlockTxs
+                        Cardano.DbTool.Validate.EpochTable
+                        Cardano.DbTool.Validate.Ledger
+                        Cardano.DbTool.Validate.PoolOwner
+                        Cardano.DbTool.Validate.TotalSupply
+                        Cardano.DbTool.Validate.TxAccounting
+                        Cardano.DbTool.Validate.Util
+                        Cardano.DbTool.Validate.Withdrawal
                         Paths_cardano_db_tool
 
   build-depends:        base                            >= 4.14         && < 4.16
