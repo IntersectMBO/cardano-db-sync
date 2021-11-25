@@ -112,3 +112,63 @@ library
                       , unix
                       , vector
                       , yaml
+
+test-suite cardano-chain-gen
+  type:                 exitcode-stdio-1.0
+  default-language:     Haskell2010
+  main-is:              Main.hs
+  hs-source-dirs:       gen, test
+
+  ghc-options:          -Wall
+                        -Wcompat
+                        -fwarn-redundant-constraints
+                        -fwarn-incomplete-patterns
+                        -fwarn-unused-imports
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+                        -Wno-unsafe
+                        -threaded
+
+  autogen-modules:      Paths_cardano_chain_gen
+                        MigrationValidations
+  other-modules:        Paths_cardano_chain_gen
+                        MigrationValidations
+
+  other-modules:        Test.Cardano.Db.Mock.Config
+
+  build-depends:        async
+                      , base                            >= 4.12         && < 4.15
+                      , bytestring
+                      , cardano-api
+                      , cardano-cli
+                      , cardano-config
+                      , cardano-db
+                      , cardano-db-sync
+                      , cardano-chain-gen
+                      , cardano-ledger-alonzo
+                      , cardano-ledger-core
+                      , cardano-ledger-shelley
+                      , cardano-ledger-shelley-ma
+                      , cardano-node
+                      , cardano-prelude
+                      , cardano-slotting
+                      , contra-tracer
+                      , directory
+                      , extra
+                      , filepath
+                      , mtl
+                      , io-classes
+                      , optparse-applicative
+                      , ouroboros-network
+                      , strict-containers
+                      , tasty
+                      , tasty-quickcheck
+                      , text
+                      , transformers
+                      , tree-diff
+                      , tasty-hunit
+                      , ouroboros-consensus
+                      , ouroboros-consensus-cardano
+                      , ouroboros-consensus-shelley
+                      , ouroboros-network
+                      , ouroboros-network-framework
