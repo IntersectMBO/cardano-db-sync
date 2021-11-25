@@ -48,8 +48,11 @@ on the same machine are:
 
 * Any of the big well known Linux distributions (eg, Debian, Ubuntu, RHEL, CentOS, Arch
   etc).
-* 24 Gigabytes of RAM.
-* 4 CPU cores.
+* 32 Gigabytes of RAM or more.
+* 4 CPU cores or more.
+* Ensure that the machine has sufficient IOPS (Input/Output Operations per Second). Ie it should be
+  60k IOPS or better. Lower IOPS ratings will result in slower sync times and/or falling behind the
+  chain tip.
 * 80 Gigabytes or more of disk storage (preferably SSD which are 2-5 times faster than
   electro-mechanical disks).
 
