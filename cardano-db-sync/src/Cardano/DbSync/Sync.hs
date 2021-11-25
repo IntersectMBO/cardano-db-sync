@@ -228,7 +228,10 @@ dbSyncProtocols trce env metricsSetters queryVar version codecs _connectionId =
         actionQueue <- newDbActionQueue
 
         race_
-            (runDbThread trce env metricsSetters actionQueue)
+            (race
+                (runDbThread trce env metricsSetters actionQueue)
+                (runOfflineFetchThread trce (envLedger env))
+                )
             (runPipelinedPeer
                 localChainSyncTracer
                 (cChainSyncCodec codecs)

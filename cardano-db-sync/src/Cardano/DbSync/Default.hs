@@ -14,8 +14,6 @@ import           Cardano.BM.Trace (Trace, logDebug, logInfo)
 
 import qualified Cardano.Db as DB
 
-import           Cardano.DbSync.Era
-
 import           Cardano.DbSync.Api
 import           Cardano.DbSync.Epoch
 import           Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
@@ -47,7 +45,6 @@ import           Control.Monad.Class.MonadSTM.Strict (putTMVar, tryTakeTMVar)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
-import           Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
@@ -56,17 +53,16 @@ import           Database.Persist.Sql (SqlBackend)
 import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import           Ouroboros.Network.Block (blockNo)
 
-import           System.IO.Unsafe (unsafePerformIO)
 
 insertDefaultBlock
     :: SyncEnv -> [BlockDetails]
     -> IO (Either SyncNodeError ())
-insertDefaultBlock env blockDetails = do
-    thisIsAnUglyHack tracer (envLedger env)
-    DB.runDbIohkLogging backend tracer $ runExceptT $ do
-      traverse_ insertDetails blockDetails
-      when (soptExtended $ envOptions env) $
-        traverse_ (ExceptT . epochInsert tracer) blockDetails
+insertDefaultBlock env blockDetails =
+    DB.runDbIohkLogging backend tracer .
+      runExceptT $ do
+        traverse_ insertDetails blockDetails
+        when (soptExtended $ envOptions env) $
+          traverse_ (ExceptT . epochInsert tracer) blockDetails
   where
     tracer = getTrace env
     backend = envBackend env
@@ -121,22 +117,6 @@ mkSnapshotMaybe env snapshot blkNo syncState =
       case (syncSt, unBlockNo bNo) of
         (DB.SyncFollowing, bno) -> bno `mod` 500 == 0
         (DB.SyncLagging, bno) -> bno `mod` 10000 == 0
-
--- -------------------------------------------------------------------------------------------------
--- This horrible hack is only need because of the split between `cardano-sync` and `cardano-db-sync`.
-
-{-# NOINLINE offlineThreadStarted #-}
-offlineThreadStarted :: IORef Bool
-offlineThreadStarted = unsafePerformIO $ newIORef False
-
-thisIsAnUglyHack :: Trace IO Text -> LedgerEnv -> IO ()
-thisIsAnUglyHack tracer lenv = do
-  started <- readIORef offlineThreadStarted
-  unless started $ do
-    -- This is horrible!
-    writeIORef offlineThreadStarted True
-    void . async $ runOfflineFetchThread tracer lenv
-    logInfo tracer "thisIsAnUglyHack: Main thead"
 
 -- -------------------------------------------------------------------------------------------------
 
