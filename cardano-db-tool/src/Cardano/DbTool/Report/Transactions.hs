@@ -1,10 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Cardano.Db.Tool.Report.Transactions
+module Cardano.DbTool.Report.Transactions
   ( reportTransactions
   ) where
 
 import           Cardano.Db
-import           Cardano.Db.Tool.Report.Display
+import           Cardano.DbTool.Report.Display
 
 import           Control.Monad (forM_)
 import           Control.Monad.IO.Class (MonadIO)

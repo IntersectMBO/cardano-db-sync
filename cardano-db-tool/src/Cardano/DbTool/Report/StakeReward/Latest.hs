@@ -1,42 +1,34 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Cardano.Db.Tool.Report.StakeReward.History
-  ( reportStakeRewardHistory
+module Cardano.DbTool.Report.StakeReward.Latest
+  ( reportLatestStakeRewards
   ) where
 
 import           Cardano.Db
-import           Cardano.Db.Tool.Report.Display
+import           Cardano.DbTool.Report.Display
 
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import qualified Data.List as List
-import           Data.Maybe (fromMaybe, mapMaybe)
+import           Data.Maybe (catMaybes, fromMaybe, mapMaybe)
+import           Data.Ord (Down (..))
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           Data.Time.Clock (UTCTime)
 import           Data.Word (Word64)
 
-import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), asc, from, max_, on,
-                   orderBy, select, val, where_, (<=.), (==.), (^.))
+import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), asc, desc, from, limit,
+                   max_, on, orderBy, select, val, where_, (<=.), (==.), (^.))
 import           Database.Persist.Sql (SqlBackend)
 
 import           Text.Printf (printf)
 
 
-reportStakeRewardHistory :: Text -> IO ()
-reportStakeRewardHistory saddr = do
-    xs <- runDbNoLogging (queryHistoryStakeRewards saddr)
-    if List.null xs
-      then errorMsg
-      else renderRewards saddr xs
-  where
-    errorMsg :: IO ()
-    errorMsg =
-      Text.putStrLn $ mconcat
-        [ "Error: Stake address '", saddr, "' not found in database.\n"
-        , "Expecting as Bech32 encoded stake address. eg 'stake1...'."
-        ]
+reportLatestStakeRewards :: [Text] -> IO ()
+reportLatestStakeRewards saddr = do
+    xs <- catMaybes <$> runDbNoLogging (mapM queryLatestStakeRewards saddr)
+    renderRewards xs
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -51,22 +43,25 @@ data EpochReward = EpochReward
   }
 
 
-queryHistoryStakeRewards :: MonadIO m => Text -> ReaderT SqlBackend m [EpochReward]
-queryHistoryStakeRewards address = do
+queryLatestStakeRewards :: MonadIO m => Text -> ReaderT SqlBackend m (Maybe EpochReward)
+queryLatestStakeRewards address = do
     maxEpoch <- queryMaxEpochRewardNo
-    mapM queryRewards =<< queryDelegation maxEpoch
+    mdel <- queryDelegation maxEpoch
+    maybe (pure Nothing) (fmap2 Just queryRewards) mdel
   where
     queryDelegation
         :: MonadIO m
-        => Word64 -> ReaderT SqlBackend m [(StakeAddressId, Word64, UTCTime, DbLovelace)]
+        => Word64 -> ReaderT SqlBackend m (Maybe (StakeAddressId, Word64, UTCTime, DbLovelace))
     queryDelegation maxEpoch = do
       res <- select . from $ \ (saddr `InnerJoin` es `InnerJoin` epoch) -> do
                 on (epoch ^. EpochNo ==. es ^. EpochStakeEpochNo)
                 on (saddr ^. StakeAddressId ==. es ^. EpochStakeAddrId)
                 where_ (saddr ^. StakeAddressView ==. val address)
                 where_ (es ^. EpochStakeEpochNo <=. val maxEpoch)
+                orderBy [desc (es ^. EpochStakeEpochNo)]
+                limit 1
                 pure (es ^. EpochStakeAddrId, es ^. EpochStakeEpochNo, epoch ^.EpochEndTime, es ^. EpochStakeAmount)
-      pure $ map unValue4 res
+      pure $ fmap unValue4 (listToMaybe res)
 
     queryRewards
         :: MonadIO m
@@ -99,12 +94,11 @@ queryHistoryStakeRewards address = do
                 pure (max_ (reward ^. RewardEarnedEpoch))
       pure $ fromMaybe 0 (listToMaybe $ mapMaybe unValue res)
 
-renderRewards :: Text -> [EpochReward] -> IO ()
-renderRewards saddr xs = do
-    Text.putStrLn $ mconcat [ "\nRewards for: ", saddr, "\n" ]
-    putStrLn " epoch |      reward_date        |     delegated  |     reward   |  RoS (%pa)"
-    putStrLn "-------+-------------------------+----------------+--------------+-----------"
-    mapM_ renderReward xs
+renderRewards :: [EpochReward] -> IO ()
+renderRewards xs = do
+    putStrLn " epoch |                       stake_address                         |     delegated  |     reward   |  RoS (%pa)"
+    putStrLn "-------+-------------------------------------------------------------+----------------+--------------+-----------"
+    mapM_ renderReward (List.sortOn (Down . erDelegated) xs)
     putStrLn ""
   where
     renderReward :: EpochReward -> IO ()
@@ -112,7 +106,7 @@ renderRewards saddr xs = do
       Text.putStrLn $ mconcat
         [ leftPad 6 (textShow $ erEpochNo er)
         , separator
-        , textShow (erDate er)
+        , erAddress er
         , separator
         , leftPad 14 (renderAda (erDelegated er))
         , separator
@@ -129,3 +123,6 @@ rewardPercent reward mDelegated =
   case mDelegated of
     Nothing -> 0.0
     Just deleg -> 100.0 * 365.25 / 5.0 * fromIntegral reward / fromIntegral deleg
+
+fmap2 :: (Functor f, Functor g) => (a -> b) -> f (g a) -> f (g b)
+fmap2 = fmap . fmap

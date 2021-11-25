@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Cardano.Db.Tool.UtxoSet
+module Cardano.DbTool.UtxoSet
   ( utxoSetAtSlot
   ) where
 

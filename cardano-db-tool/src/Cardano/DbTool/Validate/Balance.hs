@@ -4,7 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Cardano.Db.Tool.Validate.Balance
+module Cardano.DbTool.Validate.Balance
   ( ledgerAddrBalance
   ) where
 

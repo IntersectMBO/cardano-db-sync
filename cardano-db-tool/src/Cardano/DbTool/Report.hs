@@ -1,14 +1,14 @@
-module Cardano.Db.Tool.Report
+module Cardano.DbTool.Report
   ( module X
   , Report (..)
   , runReport
   ) where
 
-import           Cardano.Db.Tool.Report.Balance (reportBalance)
-import           Cardano.Db.Tool.Report.StakeReward (reportLatestStakeRewards,
+import           Cardano.DbTool.Report.Balance (reportBalance)
+import           Cardano.DbTool.Report.StakeReward (reportLatestStakeRewards,
                    reportStakeRewardHistory)
-import           Cardano.Db.Tool.Report.Synced as X
-import           Cardano.Db.Tool.Report.Transactions (reportTransactions)
+import           Cardano.DbTool.Report.Synced as X
+import           Cardano.DbTool.Report.Transactions (reportTransactions)
 
 import           Data.Text (Text)
 

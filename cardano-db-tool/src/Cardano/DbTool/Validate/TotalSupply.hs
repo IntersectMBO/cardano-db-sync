@@ -1,9 +1,9 @@
 {-# LANGUAGE StrictData #-}
-module Cardano.Db.Tool.Validate.TotalSupply
+module Cardano.DbTool.Validate.TotalSupply
   ( validateTotalSupplyDecreasing
   ) where
 
-import           Cardano.Db.Tool.Validate.Util
+import           Cardano.DbTool.Validate.Util
 
 import           Data.Word (Word64)
 
@@ -47,7 +47,7 @@ genTestParameters :: IO TestParams
 genTestParameters = do
   mlatest <- runDbNoLogging queryLatestBlockNo
   case mlatest of
-    Nothing -> error "Cardano.Db.Tool.Validation: Empty database"
+    Nothing -> error "Cardano.DbTool.Validation: Empty database"
     Just latest ->
       TestParams
           <$> randomRIO (1, latest - 1)

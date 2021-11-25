@@ -1,8 +1,8 @@
-module Cardano.Db.Tool.Validate.BlockTxs
+module Cardano.DbTool.Validate.BlockTxs
   ( validateEpochBlockTxs
   ) where
 
-import           Cardano.Db.Tool.Validate.Util
+import           Cardano.DbTool.Validate.Util
 
 import           Cardano.Db hiding (queryBlockTxCount)
 

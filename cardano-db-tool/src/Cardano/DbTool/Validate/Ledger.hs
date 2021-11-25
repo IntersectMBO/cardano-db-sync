@@ -1,4 +1,4 @@
-module Cardano.Db.Tool.Validate.Ledger
+module Cardano.DbTool.Validate.Ledger
   ( LedgerValidationParams (..)
   , validateLedger
   ) where
@@ -10,8 +10,8 @@ import qualified Data.Text as Text
 import           Prelude
 
 import qualified Cardano.Db as DB
-import           Cardano.Db.Tool.Validate.Balance (ledgerAddrBalance)
-import           Cardano.Db.Tool.Validate.Util
+import           Cardano.DbTool.Validate.Balance (ledgerAddrBalance)
+import           Cardano.DbTool.Validate.Util
 
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Config.Cardano

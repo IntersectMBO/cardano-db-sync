@@ -1,4 +1,4 @@
-module Cardano.Db.Tool.PrepareSnapshot
+module Cardano.DbTool.PrepareSnapshot
   ( PrepareSnapshotArgs (..)
   , runPrepareSnapshot
   ) where

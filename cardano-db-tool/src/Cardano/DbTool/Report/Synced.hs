@@ -1,4 +1,4 @@
-module Cardano.Db.Tool.Report.Synced
+module Cardano.DbTool.Report.Synced
   ( assertFullySynced
   ) where
 
