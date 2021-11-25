@@ -15,8 +15,10 @@ module Cardano.Mock.ChainSync.Server
     -- * ServerHandle api
   , ServerHandle (..)
   , MockServerConstraint
+  , IOManager
   , replaceGenesis
   , addBlock
+  , rollback
   , readChain
   , stopServer
   , withIOManager
@@ -73,11 +75,10 @@ import           Ouroboros.Network.Protocol.ChainSync.Server (ChainSyncServer, S
 import           Ouroboros.Network.Protocol.Handshake.Version (simpleSingletonVersions)
 import           Ouroboros.Network.Snocket (LocalAddress, LocalSnocket, LocalSocket (..))
 import qualified Ouroboros.Network.Snocket as Snocket
-import           Ouroboros.Network.Socket (debuggingNetworkServerTracers)
 import           Ouroboros.Network.Util.ShowProxy (ShowProxy, Proxy(..))
 
 import           Cardano.Mock.ChainSync.State
-import           Cardano.Mock.Chain
+import           Cardano.Mock.Chain hiding (rollback)
 import           Cardano.Mock.ChainDB
 
 data ServerHandle m blk = ServerHandle
@@ -98,6 +99,13 @@ addBlock :: (LedgerSupportsProtocol blk, MonadSTM m) => ServerHandle m blk -> bl
 addBlock handle blk =
   modifyTVar (chainProducerState handle) $
     addBlockState blk
+
+rollback :: (LedgerSupportsProtocol blk, MonadSTM m) => ServerHandle m blk -> Point blk -> STM m ()
+rollback handle point =
+  modifyTVar (chainProducerState handle) $ \st ->
+    case rollbackState point st of
+      Nothing -> error $ "point " <> show point <> " not in chain"
+      Just st' -> st'
 
 stopServer :: ServerHandle m blk -> IO ()
 stopServer = cancel . threadHandle
@@ -143,7 +151,7 @@ runLocalServer iom codecConfig networkMagic localDomainSock chainProducerState =
       networkState <- NodeToClient.newNetworkMutableState
       _ <- NodeToClient.withServer
              localSnocket
-             debuggingNetworkServerTracers
+             NodeToClient.nullNetworkServerTracers -- debuggingNetworkServerTracers
              networkState
              localSocket
              (versions chainProducerState)
