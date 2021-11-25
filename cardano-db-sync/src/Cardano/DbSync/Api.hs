@@ -122,7 +122,7 @@ mkSyncEnvFromConfig trce backend syncOptions dir genCfg =
                 , " /= ", DB.textShow (Shelley.sgSystemStart $ scConfig sCfg)
                 ]
         | otherwise ->
-            Right <$> mkSyncEnv trce backend syncOptions (mkProtocolInfoCardano genCfg) (Shelley.sgNetworkId $ scConfig sCfg)
+            Right <$> mkSyncEnv trce backend syncOptions (mkProtocolInfoCardano genCfg []) (Shelley.sgNetworkId $ scConfig sCfg)
                         (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
                         (SystemStart .Byron.gdStartTime $ Byron.configGenesisData bCfg)
                         dir (calculateStableEpochSlot $ scConfig sCfg)
