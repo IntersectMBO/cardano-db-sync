@@ -23,10 +23,12 @@ import           Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
 import           Cardano.DbSync.Era.Shelley.Adjust (adjustEpochRewards)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
-import           Cardano.DbSync.Era.Shelley.Insert.Epoch
-import           Cardano.DbSync.Era.Shelley.Validate
+import           Cardano.DbSync.Era.Shelley.Insert.Epoch (finalizeEpochBulkOps, forceInsertRewards,
+                   insertPoolDepositRefunds, isEmptyEpochBulkOps, postEpochRewards, postEpochStake)
+import           Cardano.DbSync.Era.Shelley.Validate (validateEpochRewards)
 import           Cardano.DbSync.Error
-import           Cardano.DbSync.LedgerState
+import           Cardano.DbSync.LedgerState (LedgerEvent (..), LedgerStateSnapshot (..), applyBlock,
+                   getAlonzoPParams, saveCleanupState)
 import           Cardano.DbSync.Rollback (rollbackToPoint)
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
@@ -77,7 +79,7 @@ insertDefaultBlock env blockDetails = do
       -- update ledgerStateVar.
       let lenv = envLedger env
       lStateSnap <- liftIO $ applyBlock (envLedger env) cblk details
-      mkSnapshotMaybe lStateSnap (blockNo cblk) (isSyncedWithinSeconds details 600)
+      mkSnapshotMaybe env lStateSnap (blockNo cblk) (isSyncedWithinSeconds details 600)
       handleLedgerEvents tracer (envLedger env) (lssPoint lStateSnap) (lssEvents lStateSnap)
       let firstBlockOfEpoch = hasEpochStartEvent (lssEvents lStateSnap)
       case cblk of
@@ -93,29 +95,30 @@ insertDefaultBlock env blockDetails = do
           let pp = getAlonzoPParams $ lssState lStateSnap
           newExceptT $ insertShelleyBlock tracer lenv firstBlockOfEpoch (Generic.fromAlonzoBlock pp blk) lStateSnap details
 
-    mkSnapshotMaybe
+mkSnapshotMaybe
         :: (MonadBaseControl IO m, MonadIO m)
-        => LedgerStateSnapshot -> BlockNo -> DB.SyncState
+        => SyncEnv -> LedgerStateSnapshot -> BlockNo -> DB.SyncState
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-    mkSnapshotMaybe snapshot blkNo syncState =
-      case maybeFromStrict (lssNewEpoch snapshot) of
-        Just newEpoch -> do
-          liftIO $ logDebug (leTrace $ envLedger env) "Preparing for a snapshot"
-          let newEpochNo = Generic.neEpoch newEpoch
-          -- flush all volatile data
-          finalizeEpochBulkOps (envLedger env)
-          liftIO $ logDebug (leTrace $ envLedger env) "Taking a ledger a snapshot"
-          -- finally take a ledger snapshot
-          -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
-          liftIO $ saveCleanupState (envLedger env) (lssOldState snapshot) (Just $ newEpochNo - 1)
-        Nothing ->
-          when (timeToSnapshot syncState blkNo) .
-            whenM (isEmptyEpochBulkOps $ envLedger env) .
-              liftIO $ saveCleanupState (envLedger env) (lssOldState snapshot) Nothing
+mkSnapshotMaybe env snapshot blkNo syncState =
+    case maybeFromStrict (lssNewEpoch snapshot) of
+      Just newEpoch -> do
+        liftIO $ logDebug (leTrace $ envLedger env) "Preparing for a snapshot"
+        let newEpochNo = Generic.neEpoch newEpoch
+        -- flush all volatile data
+        finalizeEpochBulkOps (envLedger env)
+        liftIO $ logDebug (leTrace $ envLedger env) "Taking a ledger a snapshot"
+        -- finally take a ledger snapshot
+        -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
+        liftIO $ saveCleanupState (envLedger env) (lssOldState snapshot) (Just $ newEpochNo - 1)
+      Nothing ->
+        when (timeToSnapshot syncState blkNo) .
+          whenM (isEmptyEpochBulkOps $ envLedger env) .
+            liftIO $ saveCleanupState (envLedger env) (lssOldState snapshot) Nothing
 
+  where
     timeToSnapshot :: DB.SyncState -> BlockNo -> Bool
-    timeToSnapshot syncState blkNo =
-      case (syncState, unBlockNo blkNo) of
+    timeToSnapshot syncSt bNo =
+      case (syncSt, unBlockNo bNo) of
         (DB.SyncFollowing, bno) -> bno `mod` 500 == 0
         (DB.SyncLagging, bno) -> bno `mod` 10000 == 0
 

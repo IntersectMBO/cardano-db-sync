@@ -4,11 +4,10 @@
 import           Cardano.Prelude
 
 
-import           Cardano.Db (gitRev)
+import           Cardano.Db (MigrationDir (..), gitRev)
 
 import           Cardano.DbSync (runDbSyncNode)
 import           Cardano.DbSync.Config
-import           Cardano.DbSync.Config.Types
 import           Cardano.DbSync.Metrics (withMetricSetters)
 
 import           Cardano.Slotting.Slot (SlotNo (..))
