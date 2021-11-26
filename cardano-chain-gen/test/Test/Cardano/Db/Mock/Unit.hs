@@ -11,7 +11,8 @@ import           Control.Concurrent.Async
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Class.MonadSTM.Strict
-import           Data.Text
+import           Data.Text (Text)
+import qualified Data.Text as Text
 import           System.Directory
 import           System.FilePath hiding (isValid)
 
@@ -161,6 +162,51 @@ simpleRollback iom knownMigrations = do
     assertBlockNoBackoff 2
     atomically $ rollback mockServer (blockPoint blk1)
     assertBlockNoBackoff 1
+
+bigChain :: IOManager -> [(Text, Text)] -> IO ()
+bigChain iom knownMigrations = do
+    let testDir = rootTestDir </> "temp/bigChain"
+    recreateDir testDir
+    cfg <- mkConfig configDir testDir
+    interpreter <- initInterpreter (protocolInfoForging cfg) nullTracer
+    let initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
+    mockServer <- forkServerThread @CardanoBlock iom (topLevelConfig cfg) initSt (NetworkMagic 42) $ unSocketPath (enpSocketPath $ syncNodeParams cfg)
+    blks <- forM (take 101 $ repeat mockBlock0) (forgeNext interpreter)
+    atomically $ forM_ blks $ addBlock mockServer
+    _ <- async $ runDbSyncNode emptyMetricsSetters True knownMigrations (syncNodeParams cfg)
+    assertBlockNoBackoff 100
+    blks' <- forM (take 100 $ repeat mockBlock1) (forgeNext interpreter)
+    atomically $ forM_ blks' $ addBlock mockServer
+    assertBlockNoBackoff 200
+    blks'' <- forM (take 5 $ repeat mockBlock2) (forgeNext interpreter)
+    atomically $ forM_ blks'' $ addBlock mockServer
+    assertBlockNoBackoff 205
+    atomically $ rollback mockServer (blockPoint $ last blks')
+    assertBlockNoBackoff 200
+
+
+bigChainRestart :: IOManager -> [(Text, Text)] -> IO ()
+bigChainRestart iom knownMigrations = do
+    let testDir = rootTestDir </> "temp/bigChainRestart"
+    recreateDir testDir
+    cfg <- mkConfig configDir testDir
+    interpreter <- initInterpreter (protocolInfoForging cfg) nullTracer
+    let initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
+    mockServer <- forkServerThread @CardanoBlock iom (topLevelConfig cfg) initSt (NetworkMagic 42) $ unSocketPath (enpSocketPath $ syncNodeParams cfg)
+    blks <- forM (take 101 $ repeat mockBlock0) (forgeNext interpreter)
+    atomically $ forM_ blks $ addBlock mockServer
+    dbSync <- async $ runDbSyncNode emptyMetricsSetters True knownMigrations (syncNodeParams cfg)
+    assertBlockNoBackoff 100
+    blks' <- forM (take 100 $ repeat mockBlock1) (forgeNext interpreter)
+    atomically $ forM_ blks' $ addBlock mockServer
+    assertBlockNoBackoff 200
+    blks'' <- forM (take 5 $ repeat mockBlock2) (forgeNext interpreter)
+    atomically $ forM_ blks'' $ addBlock mockServer
+    assertBlockNoBackoff 205
+    cancel dbSync
+    atomically $ rollback mockServer (blockPoint $ last blks')
+    _ <- async $ runDbSyncNode emptyMetricsSetters True knownMigrations (syncNodeParams cfg)
+    assertBlockNoBackoff 200
 
 recreateDir :: FilePath -> IO ()
 recreateDir path = do
