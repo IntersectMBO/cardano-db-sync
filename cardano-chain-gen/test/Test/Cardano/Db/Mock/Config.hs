@@ -1,12 +1,17 @@
+{-# LANGUAGE TypeApplications #-}
+
 module Test.Cardano.Db.Mock.Config where
 
 import           Cardano.Prelude (panic)
 
+import           Control.Concurrent.Async
 import           Control.Monad.Extra (eitherM)
 import           Control.Monad.Trans.Except (runExceptT)
+import           Control.Tracer (nullTracer)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           System.FilePath.Posix ((</>))
+import           System.Directory
 
 import           Ouroboros.Consensus.Config
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
@@ -83,6 +88,25 @@ emptyMetricsSetters = MetricSetters
   , metricsSetDbBlockHeight = \_ -> pure ()
   , metricsSetDbSlotHeight = \_ -> pure ()
   }
+
+withFullConfig :: FilePath -> FilePath
+               -> (Interpreter -> ServerHandle IO CardanoBlock -> IO (Async ()) -> IO ())
+               -> IOManager -> [(Text, Text)] -> IO ()
+withFullConfig staticDir mutableDir action iom migr = do
+  recreateDir mutableDir
+  cfg <- mkConfig staticDir mutableDir
+  interpreter <- initInterpreter (protocolInfoForging cfg) nullTracer
+  let initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
+  -- TODO: get 42 from config
+  mockServer <- forkServerThread @CardanoBlock iom (topLevelConfig cfg) initSt (NetworkMagic 42) $ unSocketPath (enpSocketPath $ syncNodeParams cfg)
+  -- we dont forge dbsync here. Just prepare it as an action
+  let dbSync = async $ runDbSyncNode emptyMetricsSetters True migr (syncNodeParams cfg)
+  action interpreter mockServer dbSync
+
+recreateDir :: FilePath -> IO ()
+recreateDir path = do
+  removePathForcibly path
+  createDirectoryIfMissing True path
 
 textShow :: Show a => a -> Text
 textShow = Text.pack . show

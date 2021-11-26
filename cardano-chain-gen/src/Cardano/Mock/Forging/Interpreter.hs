@@ -11,7 +11,8 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Cardano.Mock.Forging.Interpreter
-  ( CardanoBlock
+  ( Interpreter (..)
+  , CardanoBlock
   , MockBlock (..)
   , NodeId (..)
   , initInterpreter
