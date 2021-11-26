@@ -58,11 +58,11 @@ addBlockState b (ChainProducerState c cflrst cfid) =
 -- | Rollback producer chain. It requires to update follower states, since some
 -- @'followerPoint'@s may not be on the new chain; in this case find intersection
 -- of the two chains and set @'followerNext'@ to @'FollowerBackTo'@.
-rollback :: (HasHeader block, HeaderHash block ~ HeaderHash block')
-         => Point block'
-         -> ChainProducerState block
-         -> Maybe (ChainProducerState block)
-rollback p (ChainProducerState c cflrst cfid) = do
+rollbackState :: (HasHeader block, HeaderHash block ~ HeaderHash block')
+              => Point block'
+              -> ChainProducerState block
+              -> Maybe (ChainProducerState block)
+rollbackState p (ChainProducerState c cflrst cfid) = do
     c' <- rollbackChainDB c (castPoint p)
     return $ ChainProducerState c' (rollbackFollower <$> cflrst) cfid
   where
