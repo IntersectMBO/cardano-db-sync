@@ -137,6 +137,7 @@ test-suite cardano-chain-gen
   other-modules:        Test.Cardano.Db.Mock.Config
                         Test.Cardano.Db.Mock.Examples
                         Test.Cardano.Db.Mock.Unit
+                        Test.Cardano.Db.Mock.Validate
 
   build-depends:        async
                       , base                            >= 4.12         && < 4.15
@@ -169,8 +170,11 @@ test-suite cardano-chain-gen
                       , transformers
                       , tree-diff
                       , tasty-hunit
+                      , monad-logger
                       , ouroboros-consensus
                       , ouroboros-consensus-cardano
                       , ouroboros-consensus-shelley
                       , ouroboros-network
                       , ouroboros-network-framework
+                      , persistent
+                      , postgresql-simple

@@ -33,12 +33,13 @@ import           Test.Tasty.HUnit (assertBool, testCase)
 
 import           Test.Cardano.Db.Mock.Config
 import           Test.Cardano.Db.Mock.Examples
+import           Test.Cardano.Db.Mock.Validate
 
 unitTests :: IOManager -> [(Text, Text)] -> TestTree
 unitTests iom knownMigrations =
   testGroup "unit tests"
     [ testCase "Forge some blocks" forgeBlocks
-    , testCase "Add one Simple block" (restartDBSync iom knownMigrations)
+    , testCase "Add one Simple block" (addSimpleChain iom knownMigrations)
     ]
 
 rootTestDir :: FilePath
@@ -77,12 +78,36 @@ addSimple iom knownMigrations = do
     let initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
     -- fork the mocked chainsync server
     mockServer <- liftIO $ forkServerThread @CardanoBlock iom (topLevelConfig cfg) initSt (NetworkMagic 42) $ unSocketPath (enpSocketPath $ syncNodeParams cfg)
-    liftIO $ atomically $ addBlock mockServer blk
+    atomically $ addBlock mockServer blk
     -- start db-sync and let it sync
     dbSync <- liftIO $ async $ runDbSyncNode emptyMetricsSetters True knownMigrations (syncNodeParams cfg)
-    liftIO $ link dbSync
-    liftIO $ threadDelay 10000000
-    liftIO $ checkDbSync dbSync
+    assertBlockNoBackoff 0
+
+addSimpleChain :: IOManager -> [(Text, Text)] -> IO ()
+addSimpleChain iom knownMigrations = do
+    let testDir = rootTestDir </> "temp/addSimpleChain"
+    recreateDir testDir
+      -- create all keys, configs and genesis files from a template
+      -- Normally these will be already hard-coded.
+    when False $
+      setupTestsDir testDir
+    -- create the configuration for dbsync and the interpreter
+    cfg <- mkConfig configDir testDir
+    -- initiate the interpreter
+    interpreter <- initInterpreter (protocolInfoForging cfg) nullTracer
+    -- translate the block to a real Cardano block.
+    blk0 <- forgeNext interpreter mockBlock0
+    blk1 <- forgeNext interpreter mockBlock1
+    blk2 <- forgeNext interpreter mockBlock2
+    let initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
+    -- fork the mocked chainsync server
+    mockServer <- liftIO $ forkServerThread @CardanoBlock iom (topLevelConfig cfg) initSt (NetworkMagic 42) $ unSocketPath (enpSocketPath $ syncNodeParams cfg)
+    atomically $ addBlock mockServer blk0
+    -- start db-sync and let it sync
+    dbSync <- liftIO $ async $ runDbSyncNode emptyMetricsSetters True knownMigrations (syncNodeParams cfg)
+    atomically $ addBlock mockServer blk1
+    atomically $ addBlock mockServer blk2
+    assertBlockNoBackoff 2
 
 restartDBSync :: IOManager -> [(Text, Text)] -> IO ()
 restartDBSync iom knownMigrations = do
@@ -101,25 +126,15 @@ restartDBSync iom knownMigrations = do
     -- fork the mocked chainsync server
     let initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
     mockServer <- liftIO $ forkServerThread @CardanoBlock iom (topLevelConfig cfg) initSt (NetworkMagic 42) $ unSocketPath (enpSocketPath $ syncNodeParams cfg)
-    liftIO $ atomically $ addBlock mockServer blk
+    atomically $ addBlock mockServer blk
     -- start db-sync and let it sync
-    dbSync <- liftIO $ async $ runDbSyncNode emptyMetricsSetters True knownMigrations (syncNodeParams cfg)
-    liftIO $ link dbSync
-    liftIO $ threadDelay 10000000
+    dbSync <- async $ runDbSyncNode emptyMetricsSetters True knownMigrations (syncNodeParams cfg)
+    assertBlockNoBackoff 0
     cancel dbSync
-    dbSync' <- liftIO $ async $ runDbSyncNode emptyMetricsSetters True knownMigrations (syncNodeParams cfg)
-    liftIO $ threadDelay 10000000
-    liftIO $ checkDbSync dbSync'
+    _dbSync' <- async $ runDbSyncNode emptyMetricsSetters True knownMigrations (syncNodeParams cfg)
+    assertBlockNoBackoff 0
 
 recreateDir :: FilePath -> IO ()
 recreateDir path = do
   removePathForcibly path
   createDirectoryIfMissing True path
-
-checkDbSync :: Async () -> IO ()
-checkDbSync action = do
-    ret <- poll action
-    case ret of
-      Nothing -> pure ()
-      Just (Right ()) -> pure ()
-      Just (Left err) -> throwIO err
