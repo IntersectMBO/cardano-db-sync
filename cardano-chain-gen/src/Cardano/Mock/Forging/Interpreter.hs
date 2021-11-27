@@ -17,6 +17,7 @@ module Cardano.Mock.Forging.Interpreter
   , NodeId (..)
   , initInterpreter
   , forgeNext
+  , withAlonzoLedgerState
   ) where
 
 import           Control.Monad
@@ -33,7 +34,7 @@ import           NoThunks.Class (OnlyCheckWhnfNamed (..))
 
 import           Ouroboros.Consensus.Block hiding (blockMatchesHeader)
 import qualified Ouroboros.Consensus.Block as Block
-import           Ouroboros.Consensus.Cardano.Block (CardanoEras, HardForkBlock, StandardCrypto, AlonzoEra)
+import           Ouroboros.Consensus.Cardano.Block (CardanoEras, HardForkBlock, StandardCrypto, AlonzoEra, LedgerState(LedgerStateAlonzo))
 import           Ouroboros.Consensus.Config
 import           Ouroboros.Consensus.Forecast
 import qualified Ouroboros.Consensus.HardFork.Combinator.AcrossEras as Consensus
@@ -45,6 +46,7 @@ import           Ouroboros.Consensus.Ledger.SupportsMempool
 import           Ouroboros.Consensus.Ledger.SupportsProtocol
 import           Ouroboros.Consensus.Node.ProtocolInfo
 import           Ouroboros.Consensus.Protocol.Abstract
+import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Mempool as Consensus
 import           Ouroboros.Consensus.Util.IOLike
 import           Ouroboros.Consensus.Util.Orphans ()
@@ -220,6 +222,20 @@ forgeNext interpreter testBlock = do
                   slotNo
                   tx
                   st
+
+getState :: Interpreter -> IO (ExtLedgerState CardanoBlock)
+getState inter = do
+    interState <- readMVar (iState inter)
+    pure $ currentState $ isChain interState
+
+withAlonzoLedgerState :: Interpreter
+                      -> (LedgerState (ShelleyBlock (AlonzoEra StandardCrypto)) -> a)
+                      -> IO a
+withAlonzoLedgerState inter mk = do
+    st <- getState inter
+    case ledgerState st of
+      LedgerStateAlonzo sta -> pure $ mk sta
+      _ -> error "Expected Alonzo era state"
 
 mkGenTx :: ValidatedTx (AlonzoEra StandardCrypto)
         -> Consensus.GenTx CardanoBlock -- Validated (GenTx CardanoBlock)

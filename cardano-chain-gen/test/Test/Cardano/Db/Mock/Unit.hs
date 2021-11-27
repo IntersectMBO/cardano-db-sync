@@ -27,7 +27,7 @@ unitTests :: IOManager -> [(Text, Text)] -> TestTree
 unitTests iom knownMigrations =
   testGroup "unit tests"
     [ testCase "Forge some blocks" forgeBlocks
-    , testCase "Add one Simple block" (bigChainRestart iom knownMigrations)
+    , testCase "Add one Simple block" (addSimple iom knownMigrations)
     ]
 
 rootTestDir :: FilePath
