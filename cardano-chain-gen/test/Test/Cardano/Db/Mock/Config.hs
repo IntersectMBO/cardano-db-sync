@@ -19,13 +19,15 @@ import           Cardano.CLI.Shelley.Run.Genesis as CLI
 import           Cardano.Node.Protocol.Shelley (readLeaderCredentials)
 import           Cardano.Node.Types (ProtocolFilepaths (..))
 
+import           Cardano.DbSync
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Config.Cardano
-import           Cardano.DbSync.Config.Types (MigrationDir (..))
+import           Cardano.DbSync.Config.Types
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Types (MetricSetters (..))
 
-import           Cardano.Mock.Forging.Interpreter
+import           Cardano.Mock.ChainSync.Server
+import           Cardano.Mock.Forging.Interpreter hiding (CardanoBlock)
 
 data Config = Config
     { topLevelConfig :: TopLevelConfig CardanoBlock
