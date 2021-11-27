@@ -31,8 +31,8 @@ import           Control.Concurrent (threadDelay)
 import           Control.Concurrent.Async
 import           Control.Exception (bracket)
 import           Control.Monad (forever)
-import           Control.Monad.Class.MonadSTM.Strict (STM, StrictTVar, newTVarIO)
-import           Control.Monad.Class.MonadSTM.Strict (modifyTVar, readTVar, writeTVar, MonadSTM(atomically), MonadSTMTx(retry) )
+import           Control.Monad.Class.MonadSTM.Strict (MonadSTM(atomically), STM, StrictTVar,
+                   MonadSTMTx(retry), modifyTVar, newTVarIO, readTVar, writeTVar)
 import           Control.Tracer (nullTracer)
 import           Data.Maybe (fromJust)
 import           Data.ByteString.Lazy.Char8 (ByteString)
@@ -52,8 +52,9 @@ import           Ouroboros.Consensus.Node (ConnectionId)
 import           Ouroboros.Consensus.Node.DbLock ()
 import           Ouroboros.Consensus.Node.DbMarker ()
 import           Ouroboros.Consensus.Node.InitStorage ()
-import           Ouroboros.Consensus.Node.NetworkProtocolVersion (latestReleasedNodeVersion)
-import           Ouroboros.Consensus.Node.NetworkProtocolVersion (BlockNodeToClientVersion, NodeToClientVersion, SupportedNetworkProtocolVersion, supportedNodeToClientVersions)
+import           Ouroboros.Consensus.Node.NetworkProtocolVersion (BlockNodeToClientVersion,
+                   NodeToClientVersion, SupportedNetworkProtocolVersion, latestReleasedNodeVersion,
+                   supportedNodeToClientVersions)
 import           Ouroboros.Consensus.Node.ProtocolInfo ()
 import           Ouroboros.Consensus.Node.Recovery ()
 import           Ouroboros.Consensus.Node.Run (SerialiseNodeToClientConstraints)
@@ -135,7 +136,7 @@ forkServerThread
 forkServerThread iom config initSt networkMagic path = do
     chainSt <- newTVarIO $ initChainProducerState config initSt
     thread <- async $ runLocalServer iom (configCodec config) networkMagic path chainSt
-    return $ ServerHandle chainSt thread
+    pure $ ServerHandle chainSt thread
 
 -- | Must be called from the main thread
 runLocalServer
@@ -156,7 +157,7 @@ runLocalServer iom codecConfig networkMagic localDomainSock chainProducerState =
              localSocket
              (versions chainProducerState)
              NodeToClient.networkErrorPolicies
-      return ()
+      pure ()
 
   where
     versions :: StrictTVar IO (ChainProducerState blk)
@@ -281,7 +282,7 @@ chainSyncServer state codec _blockVersion =
             let !cps' = updateFollower rid ipoint cps
             writeTVar state cps'
             let chain' = chainDB cps'
-            return (Just (castPoint ipoint), castTip (headTip chain'))
+            pure (Just (castPoint ipoint), castTip (headTip chain'))
 
     tryReadChainUpdate :: FollowerId
                        -> m (Maybe (Tip blk, ChainUpdate blk blk))

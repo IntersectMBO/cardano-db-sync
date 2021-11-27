@@ -50,7 +50,7 @@ setupTestsDir dir = do
 mkConfig :: FilePath -> FilePath -> IO Config
 mkConfig staticDir mutableDir = do
     config <- readSyncNodeConfig $ ConfigFile ( staticDir </> "test-db-sync-config.json")
-    genCfg <- either (error . Text.unpack . renderSyncNodeError) id <$> (runExceptT $ readCardanoGenesisConfig config)
+    genCfg <- either (error . Text.unpack . renderSyncNodeError) id <$> runExceptT (readCardanoGenesisConfig config)
     let pInfoDbSync = mkProtocolInfoCardano genCfg []
     creds <- mkShelleyCredentials $ staticDir </> "pools" </> "bulk1.creds"
     let pInfoForger = mkProtocolInfoCardano genCfg creds

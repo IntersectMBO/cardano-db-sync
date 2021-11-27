@@ -1,5 +1,4 @@
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Test.Cardano.Db.Mock.Unit where
 
@@ -120,16 +119,16 @@ simpleRollback = do
 bigChain :: IOManager -> [(Text, Text)] -> IO ()
 bigChain =
     withFullConfig configDir testDir $ \interpreter mockServer asyncDBSync -> do
-      blks <- forM (take 101 $ repeat mockBlock0) (forgeNext interpreter)
+      blks <- forM (replicate 101 mockBlock0) (forgeNext interpreter)
       atomically $ forM_ blks $ addBlock mockServer
       _ <- asyncDBSync
       assertBlockNoBackoff 100
 
-      blks' <- forM (take 100 $ repeat mockBlock1) (forgeNext interpreter)
+      blks' <- forM (replicate 100 mockBlock1) (forgeNext interpreter)
       atomically $ forM_ blks' $ addBlock mockServer
       assertBlockNoBackoff 200
 
-      blks'' <- forM (take 5 $ repeat mockBlock2) (forgeNext interpreter)
+      blks'' <- forM (replicate 5 mockBlock2) (forgeNext interpreter)
       atomically $ forM_ blks'' $ addBlock mockServer
       assertBlockNoBackoff 205
 
@@ -142,16 +141,16 @@ bigChain =
 bigChainRestart :: IOManager -> [(Text, Text)] -> IO ()
 bigChainRestart =
     withFullConfig configDir testDir $ \interpreter mockServer asyncDBSync -> do
-      blks <- forM (take 101 $ repeat mockBlock0) (forgeNext interpreter)
+      blks <- forM (replicate 101 mockBlock0) (forgeNext interpreter)
       atomically $ forM_ blks $ addBlock mockServer
       dbSync <- asyncDBSync
       assertBlockNoBackoff 100
 
-      blks' <- forM (take 100 $ repeat mockBlock1) (forgeNext interpreter)
+      blks' <- forM (replicate 10 mockBlock0) (forgeNext interpreter)
       atomically $ forM_ blks' $ addBlock mockServer
       assertBlockNoBackoff 200
 
-      blks'' <- forM (take 5 $ repeat mockBlock2) (forgeNext interpreter)
+      blks'' <- forM (replicate 5 mockBlock2) (forgeNext interpreter)
       atomically $ forM_ blks'' $ addBlock mockServer
       assertBlockNoBackoff 205
 

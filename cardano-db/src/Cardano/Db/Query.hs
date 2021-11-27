@@ -194,7 +194,7 @@ queryBlockHeight = do
           orderBy [desc (blk ^. BlockBlockNo)]
           limit 1
           pure (blk ^. BlockBlockNo)
-  pure $ join $ unValue <$> listToMaybe res
+  pure (unValue =<< listToMaybe res)
 
 -- | Get the latest 'Block' associated with the given hash, skipping any EBBs.
 queryMainBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail Block)

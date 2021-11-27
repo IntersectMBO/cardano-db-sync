@@ -46,7 +46,7 @@ consPaymentTx ins outs fees =
       mempty
       Strict.SNothing
       Strict.SNothing
-      (Strict.SJust $ Testnet)
+      (Strict.SJust Testnet)
 
 mkPaymentTx :: LedgerState (ShelleyBlock (AlonzoEra StandardCrypto))
             -> Int -> Int -> Word64 -> Word64 -> ValidatedTx (AlonzoEra StandardCrypto)
@@ -85,7 +85,7 @@ emptyTxBody = TxBody
   mempty
   Strict.SNothing
   Strict.SNothing
-  (Strict.SJust $ Testnet)
+  (Strict.SJust Testnet)
 
 emptyTx :: ValidatedTx (AlonzoEra StandardCrypto)
 emptyTx = ValidatedTx
