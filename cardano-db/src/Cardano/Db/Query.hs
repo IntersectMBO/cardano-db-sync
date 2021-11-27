@@ -187,14 +187,14 @@ queryBlockNo blkNo = do
   pure $ fmap entityVal (listToMaybe res)
 
 -- | Get the current block height.
-queryBlockHeight :: MonadIO m => ReaderT SqlBackend m Word64
+queryBlockHeight :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
 queryBlockHeight = do
   res <- select . from $ \ blk -> do
           where_ (isJust $ blk ^. BlockBlockNo)
           orderBy [desc (blk ^. BlockBlockNo)]
           limit 1
           pure (blk ^. BlockBlockNo)
-  pure $ fromMaybe 0 (unValue =<< listToMaybe res)
+  pure $ join $ unValue <$> listToMaybe res
 
 -- | Get the latest 'Block' associated with the given hash, skipping any EBBs.
 queryMainBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail Block)

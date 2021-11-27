@@ -15,6 +15,7 @@ module Cardano.Mock.Forging.Interpreter
   , CardanoBlock
   , MockBlock (..)
   , NodeId (..)
+  , InterpreterError (..)
   , initInterpreter
   , forgeNext
   , withAlonzoLedgerState

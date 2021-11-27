@@ -1,11 +1,14 @@
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Test.Cardano.Db.Mock.Unit where
 
-import           Control.Tracer (nullTracer)
+import           Control.Concurrent
 import           Control.Concurrent.Async
+import           Control.Exception
 import           Control.Monad
 import           Control.Monad.Class.MonadSTM.Strict
+import           Control.Tracer (nullTracer)
 import           Data.Text (Text)
 import           System.FilePath hiding (isValid)
 
@@ -17,7 +20,7 @@ import           Cardano.Mock.ChainSync.Server
 import           Cardano.Mock.Forging.Interpreter
 
 import           Test.Tasty (TestTree, testGroup)
-import           Test.Tasty.HUnit (assertBool, testCase)
+import           Test.Tasty.HUnit (assertBool, assertFailure, testCase)
 
 import           Test.Cardano.Db.Mock.Config
 import           Test.Cardano.Db.Mock.Examples
@@ -27,7 +30,7 @@ unitTests :: IOManager -> [(Text, Text)] -> TestTree
 unitTests iom knownMigrations =
   testGroup "unit tests"
     [ testCase "Forge some blocks" forgeBlocks
-    , testCase "Add one Simple block" (addSimple iom knownMigrations)
+    , testCase "Add one Simple block" (configNoStakes iom knownMigrations)
     ]
 
 rootTestDir :: FilePath
@@ -158,3 +161,42 @@ bigChainRestart =
       assertBlockNoBackoff 200
   where
     testDir = rootTestDir </> "temp/bigChainRestart"
+
+configNoPools :: IOManager -> [(Text, Text)] -> IO ()
+configNoPools =
+    withFullConfig (rootTestDir </> "config2") testDir $ \_ _ asyncDBSync -> do
+      dbSync <- asyncDBSync
+      assertBlocksCount 2
+      assertTxCount 6
+      cancel dbSync
+      _ <- asyncDBSync
+      -- Nothing changes, so polling assertions don't help here
+      -- We have to pause and check if anything crashed.
+      threadDelay 3_000_000
+      assertBlocksCount 2
+      assertTxCount 6
+  where
+    testDir = rootTestDir </> "temp/configNoPools"
+
+
+configNoStakes :: IOManager -> [(Text, Text)] -> IO ()
+configNoStakes =
+    withFullConfig (rootTestDir </> "config3") testDir $ \interpreter _ asyncDBSync -> do
+      dbSync <- asyncDBSync
+      assertBlocksCount 2
+      assertTxCount 7
+      cancel dbSync
+      _ <- asyncDBSync
+      -- Nothing changes, so polling assertions don't help here
+      -- We have to pause and check if anything crashed.
+      threadDelay 3_000_000
+      assertBlocksCount 2
+      assertTxCount 7
+      -- A pool with no stakes can't create a block.
+      eblk <- try $ forgeNext interpreter mockBlock0
+      case eblk of
+        Right _ -> assertFailure "should fail"
+        Left WentTooFar -> pure ()
+        Left err -> assertFailure $ "got " <> show err <> " instead of WentTooFar"
+  where
+    testDir = rootTestDir </> "temp/configNoStakes"

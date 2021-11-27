@@ -19,9 +19,17 @@ import           Database.Persist.Sql (SqlBackend)
 
 import           Test.Tasty.HUnit
 
+assertBlocksCount :: Word -> IO ()
+assertBlocksCount n = do
+    assertEqBackoff queryBlockCount n "Unexpected block count"
+
+assertTxCount :: Word -> IO ()
+assertTxCount n = do
+    assertEqBackoff queryTxCount n "Unexpected tx count"
+
 assertBlockNoBackoff :: Word64 -> IO ()
 assertBlockNoBackoff blockNo =
-    assertEqBackoff queryBlockHeight blockNo "Unexpected BlockNo"
+    assertEqBackoff queryBlockHeight (Just blockNo) "Unexpected BlockNo"
 
 assertEqBackoff :: (Eq a, Show a) => ReaderT SqlBackend (NoLoggingT IO) a -> a -> String -> IO ()
 assertEqBackoff query a msg = do
