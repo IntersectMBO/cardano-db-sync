@@ -3,7 +3,7 @@ cabal-version:          2.4
 -- http://haskell.org/cabal/users-guide/
 
 name:                   cardano-chain-gen
-version:                11.0.4
+version:                12.0.1
 synopsis:               A fake chain generator for testing cardano DB sync.
 description:            A fake chain generator for testing cardano DB sync.
 homepage:               https://github.com/input-output-hk/cardano-db-sync
@@ -45,13 +45,18 @@ library
                         Cardano.Mock.ChainSync.Server
                         Cardano.Mock.ChainSync.State
                         Cardano.Mock.Forging.Interpreter
-                        Cardano.Mock.Forging.Tx
+                        Cardano.Mock.Forging.Tx.Alonzo
+                        Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
+                        Cardano.Mock.Forging.Tx.Generic
+                        Cardano.Mock.Forging.Tx.Shelley
+                        Cardano.Mock.Forging.Types
 
   build-depends:        base                            >= 4.14         && < 4.16
                       , async
                       , aeson
                       , binary
                       , bytestring
+                      , cardano-api
                       , cardano-binary
                       , cardano-client
                       , cardano-crypto
@@ -63,6 +68,7 @@ library
                       , cardano-ledger-core
                       , cardano-ledger-shelley
                       , cardano-ledger-shelley-ma
+                      , cardano-ledger-shelley-test
                       , cardano-node
                       , cardano-prelude
                       , cardano-protocol-tpraos
@@ -94,15 +100,19 @@ library
                       , ouroboros-network-framework
                       , persistent
                       , persistent-postgresql
+                      , plutus-core
+                      , plutus-example
                       , pretty-show
                       , prometheus
                       , random-shuffle
                       , serialise
+                      , set-algebra
                       , small-steps
                       , split
                       , stm
                       , strict
                       , strict-containers
+                      , strict-stm
                       , swagger2
                       , text
                       , text-ansi
@@ -118,7 +128,8 @@ test-suite cardano-chain-gen
   type:                 exitcode-stdio-1.0
   default-language:     Haskell2010
   main-is:              Main.hs
-  hs-source-dirs:       gen, test
+  hs-source-dirs:       gen
+  hs-source-dirs:       test
 
   ghc-options:          -Wall
                         -Wcompat
@@ -138,6 +149,7 @@ test-suite cardano-chain-gen
   other-modules:        Test.Cardano.Db.Mock.Config
                         Test.Cardano.Db.Mock.Examples
                         Test.Cardano.Db.Mock.Unit
+                        Test.Cardano.Db.Mock.UnifiedApi
                         Test.Cardano.Db.Mock.Validate
 
   build-depends:        async
@@ -146,6 +158,7 @@ test-suite cardano-chain-gen
                       , cardano-api
                       , cardano-cli
                       , cardano-config
+                      , cardano-crypto-class
                       , cardano-db
                       , cardano-db-sync
                       , cardano-chain-gen
@@ -156,15 +169,21 @@ test-suite cardano-chain-gen
                       , cardano-node
                       , cardano-prelude
                       , cardano-slotting
+                      , cardano-smash-server
+                      , containers
                       , contra-tracer
                       , directory
+                      , esqueleto
                       , extra
                       , filepath
                       , mtl
                       , io-classes
                       , optparse-applicative
                       , ouroboros-network
+                      , silently
+                      , stm
                       , strict-containers
+                      , strict-stm
                       , tasty
                       , tasty-quickcheck
                       , text
@@ -178,4 +197,5 @@ test-suite cardano-chain-gen
                       , ouroboros-network
                       , ouroboros-network-framework
                       , persistent
+                      , plutus-example
                       , postgresql-simple

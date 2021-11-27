@@ -46,6 +46,9 @@ package cardano-db
 package cardano-db-sync
   tests: True
 
+package cardano-chain-gen
+  tests: True
+
 -- These are needed because Nix is doing something crazy.
 package cardano-api
   tests: False
@@ -123,10 +126,11 @@ source-repository-package
     eras/byron/ledger/impl
     eras/byron/ledger/impl/test
     eras/shelley/impl
-    -- eras/shelley/test-suite
+    eras/shelley/test-suite
     eras/shelley-ma/impl
     -- eras/shelley-ma/test-suite
     libs/cardano-ledger-core
+    libs/cardano-ledger-pretty
     libs/cardano-protocol-tpraos
     libs/cardano-data
     libs/compact-map

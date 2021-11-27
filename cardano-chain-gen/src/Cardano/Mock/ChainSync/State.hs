@@ -1,7 +1,18 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Cardano.Mock.ChainSync.State where
+module Cardano.Mock.ChainSync.State
+  ( ChainProducerState (..)
+  , FollowerStates
+  , FollowerId
+  , FollowerState (..)
+  , initChainProducerState
+  , addBlockState
+  , rollbackState
+  , updateFollower
+  , initFollower
+  , followerInstruction
+  ) where
 
 import           Control.Exception (assert)
 import           Data.Map.Strict (Map)
@@ -64,7 +75,7 @@ rollbackState :: (HasHeader block, HeaderHash block ~ HeaderHash block')
               -> Maybe (ChainProducerState block)
 rollbackState p (ChainProducerState c cflrst cfid) = do
     c' <- rollbackChainDB c (castPoint p)
-    return $ ChainProducerState c' (rollbackFollower <$> cflrst) cfid
+    pure (ChainProducerState c' (rollbackFollower <$> cflrst) cfid)
   where
     rollbackFollower flrst@FollowerState { followerPoint = p' }
       | Chain.pointIsAfter p' (castPoint p) (cchain c)

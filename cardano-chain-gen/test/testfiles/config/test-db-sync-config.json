@@ -1,7 +1,7 @@
 {
   "EnableLogMetrics": false,
   "EnableLogging": true,
-  "NetworkName": "alonzo-purple",
+  "NetworkName": "testing",
   "NodeConfigFile": "test-config.json",
   "PrometheusPort": 8080,
   "RequiresNetworkMagic": "RequiresMagic",
@@ -14,14 +14,14 @@
       "stdout"
     ]
   ],
-  "minSeverity": "Info",
+  "minSeverity": "Warning",
   "options": {
     "cfokey": {
       "value": "Release-1.0.0"
     },
     "mapBackends": {},
     "mapSeverity": {
-      "db-sync-node": "Info",
+      "db-sync-node": "Error",
       "db-sync-node.Mux": "Error",
       "db-sync-node.Subscription": "Error"
     },

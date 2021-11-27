@@ -2,7 +2,17 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Cardano.Mock.Chain where
+module Cardano.Mock.Chain
+  ( Chain' (..)
+  , State
+  , Chain
+  , getTipState
+  , successorBlock
+  , pointOnChain
+  , rollback
+  , findFirstPointChain
+  , pointIsAfter
+  ) where
 
 import           Ouroboros.Consensus.Block
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus

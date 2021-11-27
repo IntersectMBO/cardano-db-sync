@@ -11,6 +11,8 @@
 module Cardano.Mock.ChainSync.Server
   ( -- * server
     forkServerThread
+  , withServerHandle
+  , stopServer
 
     -- * ServerHandle api
   , ServerHandle (..)
@@ -20,7 +22,6 @@ module Cardano.Mock.ChainSync.Server
   , addBlock
   , rollback
   , readChain
-  , stopServer
   , withIOManager
   ) where
 
@@ -31,29 +32,29 @@ import           Control.Concurrent (threadDelay)
 import           Control.Concurrent.Async
 import           Control.Exception (bracket)
 import           Control.Monad (forever)
-import           Control.Monad.Class.MonadSTM.Strict (STM, StrictTVar, newTVarIO)
-import           Control.Monad.Class.MonadSTM.Strict (modifyTVar, readTVar, writeTVar, MonadSTM(atomically), MonadSTMTx(retry) )
+import           Control.Monad.Class.MonadSTM.Strict (MonadSTM (atomically), STM, StrictTVar,
+                   modifyTVar, newTVarIO, readTVar, retry, writeTVar)
 import           Control.Tracer (nullTracer)
-import           Data.Maybe (fromJust)
 import           Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.Map.Strict as Map
+import           Data.Maybe (fromJust)
 import           Data.Void (Void)
 
 import           Network.TypedProtocol.Core (Peer (..))
 
-import           Ouroboros.Consensus.Block (castPoint, Point, CodecConfig, HasHeader, StandardHash)
+import           Ouroboros.Consensus.Block (CodecConfig, HasHeader, Point, StandardHash, castPoint)
 import           Ouroboros.Consensus.Config (TopLevelConfig, configCodec)
 import           Ouroboros.Consensus.Ledger.Query (BlockQuery, ShowQuery)
 import           Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx)
 import           Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol)
 import           Ouroboros.Consensus.Network.NodeToClient (Apps (..), Codecs' (..), DefaultCodecs)
 import qualified Ouroboros.Consensus.Network.NodeToClient as NTC
-import           Ouroboros.Consensus.Node (ConnectionId)
 import           Ouroboros.Consensus.Node.DbLock ()
 import           Ouroboros.Consensus.Node.DbMarker ()
 import           Ouroboros.Consensus.Node.InitStorage ()
-import           Ouroboros.Consensus.Node.NetworkProtocolVersion (latestReleasedNodeVersion)
-import           Ouroboros.Consensus.Node.NetworkProtocolVersion (BlockNodeToClientVersion, NodeToClientVersion, SupportedNetworkProtocolVersion, supportedNodeToClientVersions)
+import           Ouroboros.Consensus.Node.NetworkProtocolVersion (BlockNodeToClientVersion,
+                   NodeToClientVersion, SupportedNetworkProtocolVersion, latestReleasedNodeVersion,
+                   supportedNodeToClientVersions)
 import           Ouroboros.Consensus.Node.ProtocolInfo ()
 import           Ouroboros.Consensus.Node.Recovery ()
 import           Ouroboros.Consensus.Node.Run (SerialiseNodeToClientConstraints)
@@ -61,8 +62,10 @@ import           Ouroboros.Consensus.Node.Tracers ()
 import           Ouroboros.Consensus.Storage.Serialisation (EncodeDisk (..))
 import           Ouroboros.Consensus.Util.Args ()
 
-import           Ouroboros.Network.Block (genesisPoint, Serialised (..), castTip, ChainUpdate(RollBack, AddBlock),  Tip, Serialised, HeaderHash, mkSerialised)
+import           Ouroboros.Network.Block (ChainUpdate (AddBlock, RollBack), HeaderHash,
+                   Serialised (..), Tip, castTip, genesisPoint, mkSerialised)
 import           Ouroboros.Network.Channel (Channel)
+import           Ouroboros.Network.ConnectionId (ConnectionId)
 import           Ouroboros.Network.Driver.Simple (runPeer)
 import           Ouroboros.Network.IOManager (IOManager)
 import qualified Ouroboros.Network.IOManager as IOManager
@@ -71,15 +74,17 @@ import           Ouroboros.Network.Mux (MuxMode (..), OuroborosApplication)
 import           Ouroboros.Network.NodeToClient (NodeToClientVersionData (..))
 import qualified Ouroboros.Network.NodeToClient as NodeToClient
 import           Ouroboros.Network.NodeToNode (Versions)
-import           Ouroboros.Network.Protocol.ChainSync.Server (ChainSyncServer, ServerStNext(SendMsgRollForward, SendMsgRollBackward),  ServerStIdle (..), ChainSyncServer (..), ServerStIntersect (..), chainSyncServerPeer)
+import           Ouroboros.Network.Protocol.ChainSync.Server (ChainSyncServer (..),
+                   ServerStIdle (..), ServerStIntersect (..),
+                   ServerStNext (SendMsgRollBackward, SendMsgRollForward), chainSyncServerPeer)
 import           Ouroboros.Network.Protocol.Handshake.Version (simpleSingletonVersions)
 import           Ouroboros.Network.Snocket (LocalAddress, LocalSnocket, LocalSocket (..))
 import qualified Ouroboros.Network.Snocket as Snocket
-import           Ouroboros.Network.Util.ShowProxy (ShowProxy, Proxy(..))
+import           Ouroboros.Network.Util.ShowProxy (Proxy (..), ShowProxy)
 
-import           Cardano.Mock.ChainSync.State
 import           Cardano.Mock.Chain hiding (rollback)
 import           Cardano.Mock.ChainDB
+import           Cardano.Mock.ChainSync.State
 
 data ServerHandle m blk = ServerHandle
   { chainProducerState :: StrictTVar m (ChainProducerState blk)
@@ -135,7 +140,19 @@ forkServerThread
 forkServerThread iom config initSt networkMagic path = do
     chainSt <- newTVarIO $ initChainProducerState config initSt
     thread <- async $ runLocalServer iom (configCodec config) networkMagic path chainSt
-    return $ ServerHandle chainSt thread
+    pure $ ServerHandle chainSt thread
+
+withServerHandle
+    :: forall blk a. MockServerConstraint blk
+    => IOManager
+    -> TopLevelConfig blk
+    -> State blk
+    -> NetworkMagic
+    -> FilePath
+    -> (ServerHandle IO blk -> IO a)
+    -> IO a
+withServerHandle iom config initSt networkMagic path =
+    bracket (forkServerThread iom config initSt networkMagic path) stopServer
 
 -- | Must be called from the main thread
 runLocalServer
@@ -156,7 +173,7 @@ runLocalServer iom codecConfig networkMagic localDomainSock chainProducerState =
              localSocket
              (versions chainProducerState)
              NodeToClient.networkErrorPolicies
-      return ()
+      pure ()
 
   where
     versions :: StrictTVar IO (ChainProducerState blk)
@@ -281,7 +298,7 @@ chainSyncServer state codec _blockVersion =
             let !cps' = updateFollower rid ipoint cps
             writeTVar state cps'
             let chain' = chainDB cps'
-            return (Just (castPoint ipoint), castTip (headTip chain'))
+            pure (Just (castPoint ipoint), castTip (headTip chain'))
 
     tryReadChainUpdate :: FollowerId
                        -> m (Maybe (Tip blk, ChainUpdate blk blk))

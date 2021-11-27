@@ -19,7 +19,7 @@ import           Cardano.Mock.Chain
 
 -- | Thin layer around 'Chain' that knows how to apply blocks and maintain
 -- new and old states. The state here, which is the 'Chain', is not a MVar,
--- because we want to reuse the api in different places, like in  the state
+-- because we want to reuse the Api in different places, like in  the state
 -- of Chainsync server, in property tests where we want pure code, in
 -- Forging etc.
 data ChainDB block = ChainDB
