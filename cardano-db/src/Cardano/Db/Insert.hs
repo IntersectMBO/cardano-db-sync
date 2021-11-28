@@ -42,6 +42,7 @@ module Cardano.Db.Insert
   , insertTxIn
   , insertTxMetadata
   , insertTxOut
+  , insertManyTxOut
   , insertWithdrawal
   , insertRedeemer
   , insertCostModel
@@ -75,8 +76,8 @@ import           Database.Persist.Class (AtLeastOneUniqueKey, PersistEntityBacke
                    insert, insertBy, replaceUnique)
 import           Database.Persist.EntityDef.Internal (entityDB, entityUniques)
 import           Database.Persist.Sql (OnlyOneUniqueKey, PersistRecordBackend, SqlBackend,
-                   UniqueDef, entityDef, rawExecute, rawSql, toPersistFields, toPersistValue,
-                   uniqueDBName, uniqueFields)
+                   UniqueDef, entityDef, insertMany, rawExecute, rawSql, toPersistFields,
+                   toPersistValue, uniqueDBName, uniqueFields)
 import qualified Database.Persist.Sql.Util as Util
 import           Database.Persist.Types (ConstraintNameDB (..), EntityNameDB (..), FieldNameDB (..),
                    PersistValue, entityKey)
@@ -213,6 +214,9 @@ insertTxMetadata = insertCheckUnique "TxMetadata"
 insertTxOut :: (MonadBaseControl IO m, MonadIO m) => TxOut -> ReaderT SqlBackend m TxOutId
 insertTxOut = insertUnchecked "TxOut"
 
+insertManyTxOut :: (MonadBaseControl IO m, MonadIO m) => [TxOut] -> ReaderT SqlBackend m [TxOutId]
+insertManyTxOut = insertMany' "TxOut"
+
 insertWithdrawal :: (MonadBaseControl IO m, MonadIO m) => Withdrawal  -> ReaderT SqlBackend m WithdrawalId
 insertWithdrawal = insertUnchecked "Withdrawal"
 
@@ -254,6 +258,19 @@ data DbInsertException
   deriving Show
 
 instance Exception DbInsertException
+
+insertMany'
+    :: forall m record.
+        ( MonadBaseControl IO m
+        , MonadIO m
+        , PersistRecordBackend record SqlBackend
+        )
+    => String -> [record] -> ReaderT SqlBackend m [Key record]
+insertMany' vtype records = handle exceptHandler (insertMany records)
+  where
+    exceptHandler :: SqlError -> ReaderT SqlBackend m [Key record]
+    exceptHandler e =
+      liftIO $ throwIO (DbInsertException vtype e)
 
 insertManyUncheckedUnique
     :: forall m record.

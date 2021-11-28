@@ -65,6 +65,7 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import           Data.Group (invert)
+import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import           Data.Maybe.Strict (strictMaybeToMaybe)
 import qualified Data.Set as Set
@@ -108,8 +109,10 @@ insertShelleyBlock tracer lenv firstBlockOfEpoch blk lStateSnap details = do
                     , DB.blockOpCertCounter = Just $ Generic.blkOpCertCounter blk
                     }
 
-    grouped <- zipWithM (insertTx tracer (leNetwork lenv) lStateSnap blkId (sdEpochNo details) (Generic.blkSlotNo blk)) [0 .. ] (Generic.blkTxs blk)
-    insertTxGroupedData tracer $ mconcat grouped
+    let zippedTx = zip [0 .. ] (Generic.blkTxs blk)
+    let txInserter = insertTx tracer (leNetwork lenv) lStateSnap blkId (sdEpochNo details) (Generic.blkSlotNo blk)
+    grouped <- foldM (\grouped (idx, tx) -> txInserter idx tx grouped) mempty zippedTx
+    insertTxGroupedData tracer grouped
 
     liftIO $ do
       let epoch = unEpochNo (sdEpochNo details)
@@ -186,16 +189,26 @@ insertOnNewEpoch tracer blkId slotNo epochNo newEpoch = do
 
 -- | Group data within the same block, to insert them together in batches
 --
--- TODO: We can't simply add TxOut here, because other TxIn in the same block
--- (different Tx) may reference them. So they can't be missing from the DB or 'resolveTxInputs'
--- may start to fail. However this can become possible if 'resolveTxInputs' queries
--- this structure as a fallback mechanism. Check 'queryTxOutValue' for what is needed
--- from TxOut. Important note is taht 'queryTxOutValue' doesn't get the TxOutId,
--- since TxIn doesn't reference it through a foreign key, but indirectly through
--- TxId and Index.
+-- important NOTE: 'MaTxOut' is the only table referencing 'TxOut'. If any
+-- other table references it in the future it has to be added here and delay its
+-- insertion.
 data TxGroupedData = TxGroupedData
-  { groupedMaTxOut :: [DB.MaTxOut]
-  , groupedTxIn :: [DB.TxIn]
+  { groupedTxIn :: ![DB.TxIn]
+  , groupedTxOut :: ![(ExtendedTxOut, [MissingMaTxOut])]
+  }
+
+-- | While we collect data, we don't have access yet to the 'TxOutId', since
+-- it's inserted to the db later. So it's missing fields compared to DB.MaTxOut.
+data MissingMaTxOut = MissingMaTxOut
+  { mmtoIdent :: !DB.MultiAssetId
+  , mmtoQuantity :: !DbWord64
+  }
+
+-- | 'TxOut' with its TxHash. The hash is used to resolve inputs which
+-- reference outputs that are not inserted to the db yet.
+data ExtendedTxOut = ExtendedTxOut
+  { etoTxHash :: !ByteString
+  , etoTxOut :: !DB.TxOut
   }
 
 instance Monoid TxGroupedData where
@@ -203,31 +216,46 @@ instance Monoid TxGroupedData where
 
 instance Semigroup TxGroupedData where
   tgd1 <> tgd2 =
-    TxGroupedData (groupedMaTxOut tgd1 <> groupedMaTxOut tgd2)
-                  (groupedTxIn tgd1 <> groupedTxIn tgd2)
+    TxGroupedData (groupedTxIn tgd1 <> groupedTxIn tgd2)
+                  (groupedTxOut tgd1 <> groupedTxOut tgd2)
 
 insertTxGroupedData
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> TxGroupedData
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertTxGroupedData _tracer grouped = do
+    txOutIds <- lift . DB.insertManyTxOut $ etoTxOut. fst <$> groupedTxOut grouped
+    let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> groupedTxOut grouped)
+    lift $ DB.insertManyMaTxOut maTxOuts
     lift . DB.insertManyTxIn $ groupedTxIn grouped
-    lift . DB.insertManyMaTxOut $ groupedMaTxOut grouped
+  where
+    mkmaTxOuts :: (DB.TxOutId, [MissingMaTxOut]) -> [DB.MaTxOut]
+    mkmaTxOuts (txOutId, mmtos) = map (mkmaTxOut txOutId) mmtos
+
+    mkmaTxOut :: DB.TxOutId -> MissingMaTxOut -> DB.MaTxOut
+    mkmaTxOut txOutId missingMaTx =
+      DB.MaTxOut
+        { DB.maTxOutIdent = mmtoIdent missingMaTx
+        , DB.maTxOutQuantity = mmtoQuantity missingMaTx
+        , DB.maTxOutTxOutId = txOutId
+        }
 
 insertTx
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Ledger.Network -> LedgerStateSnapshot -> DB.BlockId -> EpochNo -> SlotNo -> Word64 -> Generic.Tx
+    => Trace IO Text -> Ledger.Network -> LedgerStateSnapshot -> DB.BlockId -> EpochNo
+    -> SlotNo -> Word64 -> Generic.Tx -> TxGroupedData
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) TxGroupedData
-insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx = do
+insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx grouped = do
     let fees = unCoin $ Generic.txFees tx
         outSum = unCoin $ Generic.txOutSum tx
         withdrawalSum = unCoin $ Generic.txWithdrawalSum tx
-    resolvedInputs <- mapM resolveTxInputs (Generic.txInputs tx)
+    resolvedInputs <- mapM (resolveTxInputs (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
     let inSum = fromIntegral $ sum $ map (unDbLovelace . thrd3) resolvedInputs
+    let txHash = Generic.txHash tx
     -- Insert transaction and get txId from the DB.
     txId <- lift . DB.insertTx $
               DB.Tx
-                { DB.txHash = Generic.txHash tx
+                { DB.txHash = txHash
                 , DB.txBlockId = blkId
                 , DB.txBlockIndex = blockIndex
                 , DB.txOutSum = DB.DbLovelace (fromIntegral outSum)
@@ -248,7 +276,7 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx = do
 
     -- In the case of a second state script validation failure, these outputs have already beeb
     -- switched to the collcateral outputs in place of the "successful transaction" outputs.
-    maTxOuts <- concatMapM (insertTxOut tracer txId) (Generic.txOutputs tx)
+    txOutsGrouped <- mapM (prepareTxOut tracer (txId, txHash)) (Generic.txOutputs tx)
 
     -- The following operations only happen if the script passes stage 2 validation (or the tx has
     -- no script).
@@ -274,24 +302,35 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx = do
       mapM_ (insertScript tracer txId) $ Generic.txScripts tx
       pure txIns
 
-    pure $ TxGroupedData maTxOuts inputs
+    pure $ grouped <> TxGroupedData inputs txOutsGrouped
 
-resolveTxInputs :: MonadIO m => Generic.TxIn -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, DbLovelace)
-resolveTxInputs txIn = do
-    res <- liftLookupFail "resolveTxInputs" $ queryResolveInput txIn
-    pure $ convert res
+-- | If we can't resolve from the db, we fall back to the provided outputs
+-- This happens the input consumes an output introduced in the same block.
+resolveTxInputs :: MonadIO m => [ExtendedTxOut] -> Generic.TxIn -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, DbLovelace)
+resolveTxInputs groupedOutputs txIn = fmap convert $ liftLookupFail "resolveTxInputs" $ do
+    qres <- queryResolveInput txIn
+    case qres of
+      Right ret -> pure $ Right ret
+      Left err ->
+        case List.find matches groupedOutputs of
+          Nothing -> pure $ Left err
+          Just eutxo -> pure $ Right (DB.txOutTxId (etoTxOut eutxo), DB.txOutValue (etoTxOut eutxo))
   where
     convert :: (DB.TxId, DbLovelace) -> (Generic.TxIn, DB.TxId, DbLovelace)
     convert (txId, lovelace) = (txIn, txId, lovelace)
 
-insertTxOut
+    matches :: ExtendedTxOut -> Bool
+    matches eutxo =
+         Generic.txInHash txIn == etoTxHash eutxo
+      && Generic.txInIndex txIn == DB.txOutIndex (etoTxOut eutxo)
+
+prepareTxOut
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> Generic.TxOut
-    -> ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.MaTxOut]
-insertTxOut tracer txId (Generic.TxOut index addr addrRaw value maMap dataHash) = do
+    => Trace IO Text -> (DB.TxId, ByteString) -> Generic.TxOut
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
+prepareTxOut tracer (txId, txHash) (Generic.TxOut index addr addrRaw value maMap dataHash) = do
     mSaId <- lift $ insertStakeAddressRefIfMissing txId addr
-    txOutId <- lift . DB.insertTxOut $
-                DB.TxOut
+    let txOut = DB.TxOut
                   { DB.txOutTxId = txId
                   , DB.txOutIndex = index
                   , DB.txOutAddress = Generic.renderAddress addr
@@ -302,7 +341,9 @@ insertTxOut tracer txId (Generic.TxOut index addr addrRaw value maMap dataHash) 
                   , DB.txOutValue = Generic.coinToDbLovelace value
                   , DB.txOutDataHash = dataHash
                   }
-    prepareMaTxOut tracer txOutId maMap
+    let eutxo = ExtendedTxOut txHash txOut
+    maTxOuts <- prepareMaTxOuts tracer maMap
+    pure (eutxo, maTxOuts)
   where
     hasScript :: Bool
     hasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
@@ -884,31 +925,30 @@ insertMaTxMint _tracer txId (Value _adaShouldAlwaysBeZeroButWeDoNotCheck mintMap
           , DB.maTxMintTxId = txId
           }
 
-prepareMaTxOut
+prepareMaTxOuts
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxOutId -> Map (PolicyID StandardCrypto) (Map AssetName Integer)
-    -> ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.MaTxOut]
-prepareMaTxOut _tracer txOutId maMap =
-    concatMapM (lift . insertOuter) $ Map.toList maMap
+    => Trace IO Text -> Map (PolicyID StandardCrypto) (Map AssetName Integer)
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) [MissingMaTxOut]
+prepareMaTxOuts _tracer maMap =
+    concatMapM (lift . prepareOuter) $ Map.toList maMap
   where
-    insertOuter
+    prepareOuter
         :: (MonadBaseControl IO m, MonadIO m)
         => (PolicyID StandardCrypto, Map AssetName Integer)
-        -> ReaderT SqlBackend m [DB.MaTxOut]
-    insertOuter (policy, aMap) =
-      mapM (insertInner policy) $ Map.toList aMap
+        -> ReaderT SqlBackend m [MissingMaTxOut]
+    prepareOuter (policy, aMap) =
+      mapM (prepareInner policy) $ Map.toList aMap
 
-    insertInner
+    prepareInner
         :: (MonadBaseControl IO m, MonadIO m)
         => PolicyID StandardCrypto -> (AssetName, Integer)
-        -> ReaderT SqlBackend m DB.MaTxOut
-    insertInner policy (aname, amount) = do
+        -> ReaderT SqlBackend m MissingMaTxOut
+    prepareInner policy (aname, amount) = do
       maId <- insertMultiAsset policy aname
       pure $
-        DB.MaTxOut
-          { DB.maTxOutIdent = maId
-          , DB.maTxOutQuantity = DbWord64 (fromIntegral amount)
-          , DB.maTxOutTxOutId = txOutId
+        MissingMaTxOut
+          { mmtoIdent = maId
+          , mmtoQuantity = DbWord64 (fromIntegral amount)
           }
 
 insertMultiAsset
