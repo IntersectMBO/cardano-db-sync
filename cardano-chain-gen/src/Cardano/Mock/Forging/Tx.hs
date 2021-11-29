@@ -48,9 +48,10 @@ consPaymentTx ins outs fees =
       Strict.SNothing
       (Strict.SJust Testnet)
 
-mkPaymentTx :: LedgerState (ShelleyBlock (AlonzoEra StandardCrypto))
-            -> Int -> Int -> Word64 -> Word64 -> ValidatedTx (AlonzoEra StandardCrypto)
-mkPaymentTx sta inputIndex outputIntex amount fee =
+mkPaymentTx :: Int -> Int -> Word64 -> Word64
+            -> LedgerState (ShelleyBlock (AlonzoEra StandardCrypto))
+            -> ValidatedTx (AlonzoEra StandardCrypto)
+mkPaymentTx inputIndex outputIntex amount fee sta =
     mkSimpleTx $ consPaymentTx input (StrictSeq.fromList [output, change]) (Coin 0)
   where
     utxoPairs = Map.toList $ unUTxO $ _utxo $ _utxoState $ esLState $
@@ -60,8 +61,8 @@ mkPaymentTx sta inputIndex outputIntex amount fee =
     outputPair = utxoPairs !! outputIntex
     TxOut addr _ _ = snd outputPair
     output = TxOut addr (valueFromList (fromIntegral amount) []) Strict.SNothing
-    TxOut addr' _ _ = snd inputPair
-    change = TxOut addr' (valueFromList (fromIntegral fee) []) Strict.SNothing
+    TxOut addr' (Value inputValue _) _ = snd inputPair
+    change = TxOut addr' (valueFromList (fromIntegral $ fromIntegral inputValue - amount) []) Strict.SNothing
 
 mkSimpleTx :: TxBody (AlonzoEra StandardCrypto) -> ValidatedTx (AlonzoEra StandardCrypto)
 mkSimpleTx txBody = ValidatedTx

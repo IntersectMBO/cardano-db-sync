@@ -17,6 +17,7 @@ import           Ouroboros.Network.Block (blockNo, blockPoint)
 
 import           Cardano.Mock.ChainSync.Server
 import           Cardano.Mock.Forging.Interpreter
+import           Cardano.Mock.Forging.Tx
 
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (assertBool, assertFailure, testCase)
@@ -29,7 +30,7 @@ unitTests :: IOManager -> [(Text, Text)] -> TestTree
 unitTests iom knownMigrations =
   testGroup "unit tests"
     [ testCase "Forge some blocks" forgeBlocks
-    , testCase "Add one Simple block" (configNoStakes iom knownMigrations)
+    , testCase "Add one Simple block" (addSimpleTx iom knownMigrations)
     ]
 
 rootTestDir :: FilePath
@@ -199,3 +200,17 @@ configNoStakes =
         Left err -> assertFailure $ "got " <> show err <> " instead of WentTooFar"
   where
     testDir = rootTestDir </> "temp/configNoStakes"
+
+addSimpleTx :: IOManager -> [(Text, Text)] -> IO ()
+addSimpleTx =
+    withFullConfig configDir testDir $ \interpreter mockServer asyncDBSync -> do
+      -- translate the block to a real Cardano block.
+      tx0 <- withAlonzoLedgerState interpreter $ mkPaymentTx 0 1 10000 20
+      blk <- forgeNext interpreter $ MockBlock [tx0] (NodeId 0)
+
+      atomically $ addBlock mockServer blk
+      -- start db-sync and let it sync
+      _ <- asyncDBSync
+      assertBlockNoBackoff 0
+  where
+    testDir = rootTestDir </> "temp/addSimpleTx"

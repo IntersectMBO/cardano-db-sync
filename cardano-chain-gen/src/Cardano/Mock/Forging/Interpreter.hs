@@ -125,6 +125,7 @@ forgeNext interpreter testBlock = do
         blk <- tryConsecutiveSlots interState forging 0 (isSlot interState)
         let !chain' = extendChainDB (isChain interState) blk
         let !newSt = currentState chain'
+        print newSt
         let newInterState = InterpreterState
               { isChain = chain'
               , isForecast = mkForecast cfg newSt
