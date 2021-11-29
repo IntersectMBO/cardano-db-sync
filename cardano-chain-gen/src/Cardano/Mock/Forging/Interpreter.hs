@@ -49,12 +49,14 @@ import           Ouroboros.Consensus.Node.ProtocolInfo
 import           Ouroboros.Consensus.Protocol.Abstract
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Mempool as Consensus
+import qualified Ouroboros.Consensus.TypeFamilyWrappers as Consensus
 import           Ouroboros.Consensus.Util.IOLike
 import           Ouroboros.Consensus.Util.Orphans ()
 
 import           Ouroboros.Consensus.Cardano.Node ()
 
 import           Cardano.Ledger.Alonzo.Tx
+import qualified Cardano.Ledger.Shelley.API.Mempool as SL
 
 import           Cardano.Mock.ChainDB
 
@@ -193,11 +195,7 @@ forgeNext interpreter testBlock = do
                   currentSlot
                   (ledgerState $ currentState $ isChain interState)
 
-          let txs' = mkValidated . mkGenTx <$> txs testBlock
---        let txs' =
---              case applyTxs (mkGenTx <$> txs testBlock) currentSlot tickedLedgerSt of
---                Right t -> t
---                Left err -> error $ show err
+          let txs' = mkValidated <$> txs testBlock
 
           !blk <- Block.forgeBlock blockForging
             cfg
@@ -238,16 +236,15 @@ withAlonzoLedgerState inter mk = do
       LedgerStateAlonzo sta -> pure $ mk sta
       _ -> error "Expected Alonzo era state"
 
-mkGenTx :: ValidatedTx (AlonzoEra StandardCrypto)
-        -> Consensus.GenTx CardanoBlock -- Validated (GenTx CardanoBlock)
-mkGenTx tx =
-    Consensus.HardForkGenTx
-      (Consensus.OneEraGenTx (S (S (S (S (Z tx'))))))
+mkValidated :: ValidatedTx (AlonzoEra StandardCrypto)
+            -> Validated (Consensus.GenTx CardanoBlock)
+mkValidated tx =
+    Consensus.HardForkValidatedGenTx
+      (Consensus.OneEraValidatedGenTx
+        (S (S (S (S (Z (Consensus.WrapValidatedGenTx tx')))))))
   where
-    tx' = Consensus.mkShelleyTx tx
-
-mkValidated :: Consensus.GenTx CardanoBlock -> Validated (Consensus.GenTx CardanoBlock)
-mkValidated = undefined
+    tx' = Consensus.mkShelleyValidatedTx $
+            SL.unsafeMakeValidated tx
 
 mkForecast :: TopLevelConfig CardanoBlock
            -> ExtLedgerState CardanoBlock
