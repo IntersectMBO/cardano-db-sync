@@ -21,6 +21,7 @@ module Cardano.Db.Query
   , queryDepositUpToBlockNo
   , queryEpochEntry
   , queryEpochNo
+  , queryRewardCount
   , queryEpochRewardCount
   , queryFeesUpToBlockNo
   , queryFeesUpToSlotNo
@@ -334,6 +335,12 @@ queryCurrentEpochNo = do
     res <- select . from $ \ blk -> do
               pure $ max_ (blk ^. BlockEpochNo)
     pure $ join (unValue =<< listToMaybe res)
+
+queryRewardCount :: MonadIO m => ReaderT SqlBackend m Word64
+queryRewardCount = do
+  res <- select . from $ \ (_rwds :: SqlExpr (Entity Reward)) ->
+            pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
 
 queryEpochRewardCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
 queryEpochRewardCount epochNum = do

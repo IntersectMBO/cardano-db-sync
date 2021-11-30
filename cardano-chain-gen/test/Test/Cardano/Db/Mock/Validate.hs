@@ -21,22 +21,33 @@ import           Test.Tasty.HUnit
 
 assertBlocksCount :: Word -> IO ()
 assertBlocksCount n = do
-    assertEqBackoff queryBlockCount n "Unexpected block count"
+    assertEqBackoff queryBlockCount n defaultDelays "Unexpected block count"
+
+assertBlocksCountDetailed :: Word -> [Int] -> IO ()
+assertBlocksCountDetailed n delays = do
+    assertEqBackoff queryBlockCount n delays "Unexpected block count"
 
 assertTxCount :: Word -> IO ()
 assertTxCount n = do
-    assertEqBackoff queryTxCount n "Unexpected tx count"
+    assertEqBackoff queryTxCount n defaultDelays "Unexpected tx count"
+
+assertRewardCount :: Word64 -> IO ()
+assertRewardCount n =
+    assertEqBackoff queryRewardCount n defaultDelays "Unexpected rewards count"
 
 assertBlockNoBackoff :: Word64 -> IO ()
 assertBlockNoBackoff blockNo =
-    assertEqBackoff queryBlockHeight (Just blockNo) "Unexpected BlockNo"
+    assertEqBackoff queryBlockHeight (Just blockNo) defaultDelays "Unexpected BlockNo"
 
-assertEqBackoff :: (Eq a, Show a) => ReaderT SqlBackend (NoLoggingT IO) a -> a -> String -> IO ()
-assertEqBackoff query a msg = do
-    assertBackoff query (== a) (\a' -> msg <> ": " <> show a' <> " /= " <> show a)
+defaultDelays :: [Int]
+defaultDelays = [1,2,4,8,16,32,64]
 
-assertBackoff :: ReaderT SqlBackend (NoLoggingT IO) a -> (a -> Bool) -> (a -> String) -> IO ()
-assertBackoff query check errMsg = go delays
+assertEqBackoff :: (Eq a, Show a) => ReaderT SqlBackend (NoLoggingT IO) a -> a -> [Int] -> String -> IO ()
+assertEqBackoff query a delays msg = do
+    assertBackoff query delays (== a) (\a' -> msg <> ": " <> show a' <> " /= " <> show a)
+
+assertBackoff :: ReaderT SqlBackend (NoLoggingT IO) a -> [Int] -> (a -> Bool) -> (a -> String) -> IO ()
+assertBackoff query delays check errMsg = go delays
   where
     go ds = do
       q <- assertQuery query check errMsg
@@ -46,8 +57,6 @@ assertBackoff query check errMsg = go delays
         (Just _err, dl : rest) -> do
           threadDelay $ dl * 100_000
           go rest
-
-    delays = [1,2,4,8,16,32,64]
 
 assertQuery :: ReaderT SqlBackend (NoLoggingT IO) a -> (a -> Bool) -> (a -> String) -> IO (Maybe String)
 assertQuery query check errMsg = do

@@ -32,7 +32,7 @@ unitTests :: IOManager -> [(Text, Text)] -> TestTree
 unitTests iom knownMigrations =
   testGroup "unit tests"
     [ testCase "Forge some blocks" forgeBlocks
-    , testCase "Add one Simple block" (addSimpleTxShelley iom knownMigrations)
+    , testCase "Add one Simple block" (testSimpleRewards iom knownMigrations)
     ]
 
 rootTestDir :: FilePath
@@ -231,3 +231,85 @@ addSimpleTxShelley =
       assertBlockNoBackoff 0
   where
     testDir = rootTestDir </> "temp/addSimpleTxShelley"
+
+testSimpleRewards :: IOManager -> [(Text, Text)] -> IO ()
+testSimpleRewards =
+    withFullConfig configDir testDir $ \interpreter mockServer asyncDBSync -> do
+      _ <- asyncDBSync
+      blk <- registerAllStakeCreds interpreter (NodeId 0)
+      atomically $ addBlock mockServer blk
+      -- Pools are not registered yet, this takes 2 epochs. So fees of this tx
+      -- should not create any rewards.
+      tx0 <- withAlonzoLedgerState interpreter $  Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
+      blk0 <- forgeNext interpreter $ MockBlock [TxAlonzo tx0] (NodeId 1)
+      atomically $ addBlock mockServer blk0
+
+      fillEpochEqually interpreter mockServer
+      fillEpochEqually interpreter mockServer
+      fillEpochEqually interpreter mockServer
+
+      -- Now that pools are registered, we add a tx to fill the fees pot.
+      -- Rewards will be distributed.
+      tx1 <- withAlonzoLedgerState interpreter $  Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
+      blk1 <- forgeNext interpreter $ MockBlock [TxAlonzo tx1] (NodeId 1)
+      atomically $ addBlock mockServer blk1
+
+      fillEpochEqually interpreter mockServer
+      fillEpochEqually interpreter mockServer
+      fillEpochEqually interpreter mockServer
+
+      assertBlockNoBackoff (6 * 720 + 2)
+      assertRewardCount 17
+
+  where
+    testDir = rootTestDir </> "temp/addSimpleRewards"
+
+-- This test is the same as the previous, but in Shelley era. Rewards result
+-- should be different because of the old Shelley bug.
+-- https://github.com/input-output-hk/cardano-db-sync/issues/959
+--
+-- The differenece in rewards is triggered when a reward address of a pool A
+-- delegates to a pool B and is not an owner of pool B. In this case it receives
+-- leader rewards from pool A and member rewards from pool B. In this test, we
+-- have 2 instances of this case, one where A = B and one where A /= B.
+testRewardsShelley :: IOManager -> [(Text, Text)] -> IO ()
+testRewardsShelley =
+    withFullConfig (rootTestDir </> "config-shelley") testDir $ \interpreter mockServer asyncDBSync -> do
+      _ <- asyncDBSync
+      blk <- registerAllStakeCreds interpreter (NodeId 0)
+      atomically $ addBlock mockServer blk
+      tx0 <- withShelleyLedgerState interpreter $  Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
+      blk0 <- forgeNext interpreter $ MockBlock [TxShelley tx0] (NodeId 1)
+      atomically $ addBlock mockServer blk0
+
+      fillEpochEqually interpreter mockServer
+      fillEpochEqually interpreter mockServer
+      fillEpochEqually interpreter mockServer
+
+      tx1 <- withShelleyLedgerState interpreter $  Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
+      blk1 <- forgeNext interpreter $ MockBlock [TxShelley tx1] (NodeId 1)
+      atomically $ addBlock mockServer blk1
+
+      fillEpochEqually interpreter mockServer
+      fillEpochEqually interpreter mockServer
+      fillEpochEqually interpreter mockServer
+
+      assertBlockNoBackoff (6 * 720 + 2)
+      -- Note we have 2 rewards less compared to Alonzo era
+      assertRewardCount 15
+
+  where
+    testDir = rootTestDir </> "temp/testRewardsShelley"
+
+fillEpochEqually :: Interpreter -> ServerHandle IO CardanoBlock -> IO ()
+fillEpochEqually interpreter mockServer = do
+    blks0 <- forM (replicate thirdEpoch mockBlock0) (forgeNext interpreter)
+    atomically $ forM_ blks0 $ addBlock mockServer
+
+    blks1 <- forM (replicate thirdEpoch mockBlock1) (forgeNext interpreter)
+    atomically $ forM_ blks1 $ addBlock mockServer
+
+    blks2 <- forM (replicate thirdEpoch mockBlock2) (forgeNext interpreter)
+    atomically $ forM_ blks2 $ addBlock mockServer
+  where
+    thirdEpoch = div 720 3

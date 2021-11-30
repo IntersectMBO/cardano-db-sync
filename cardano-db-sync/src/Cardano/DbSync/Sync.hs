@@ -38,8 +38,6 @@ import qualified Cardano.Crypto as Crypto
 
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
 
-import           Cardano.Ledger.Crypto (StandardCrypto)
-
 import           Cardano.DbSync.Api
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Database

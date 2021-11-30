@@ -32,7 +32,7 @@ import           Control.Concurrent.Async
 import           Control.Exception (bracket)
 import           Control.Monad (forever)
 import           Control.Monad.Class.MonadSTM.Strict (MonadSTM(atomically), STM, StrictTVar,
-                   MonadSTMTx(retry), modifyTVar, newTVarIO, readTVar, writeTVar)
+                   retry, modifyTVar, newTVarIO, readTVar, writeTVar)
 import           Control.Tracer (nullTracer)
 import           Data.Maybe (fromJust)
 import           Data.ByteString.Lazy.Char8 (ByteString)
@@ -48,7 +48,6 @@ import           Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx)
 import           Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol)
 import           Ouroboros.Consensus.Network.NodeToClient (Apps (..), Codecs' (..), DefaultCodecs)
 import qualified Ouroboros.Consensus.Network.NodeToClient as NTC
-import           Ouroboros.Consensus.Node (ConnectionId)
 import           Ouroboros.Consensus.Node.DbLock ()
 import           Ouroboros.Consensus.Node.DbMarker ()
 import           Ouroboros.Consensus.Node.InitStorage ()
@@ -64,6 +63,7 @@ import           Ouroboros.Consensus.Util.Args ()
 
 import           Ouroboros.Network.Block (genesisPoint, Serialised (..), castTip, ChainUpdate(RollBack, AddBlock),  Tip, Serialised, HeaderHash, mkSerialised)
 import           Ouroboros.Network.Channel (Channel)
+import           Ouroboros.Network.ConnectionId (ConnectionId)
 import           Ouroboros.Network.Driver.Simple (runPeer)
 import           Ouroboros.Network.IOManager (IOManager)
 import qualified Ouroboros.Network.IOManager as IOManager

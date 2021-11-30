@@ -46,7 +46,7 @@
     "genDelegs": { },
     "slotLength": 1,
     "systemStart": "2021-11-18T20:22:02Z",
-    "epochLength": 432000,
+    "epochLength": 43200,
     "staking": {
         "pools": {
             "9f1b441b9b781b3c3abb43b25679dc17dbaaf116dddca1ad09dc1de0": {
