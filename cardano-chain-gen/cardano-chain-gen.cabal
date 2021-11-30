@@ -45,7 +45,10 @@ library
                         Cardano.Mock.ChainSync.Server
                         Cardano.Mock.ChainSync.State
                         Cardano.Mock.Forging.Interpreter
-                        Cardano.Mock.Forging.Tx
+                        Cardano.Mock.Forging.Tx.Alonzo
+                        Cardano.Mock.Forging.Tx.Generic
+                        Cardano.Mock.Forging.Tx.Shelley
+                        Cardano.Mock.Forging.Types
 
   build-depends:        base                            >= 4.14         && < 4.16
                       , async

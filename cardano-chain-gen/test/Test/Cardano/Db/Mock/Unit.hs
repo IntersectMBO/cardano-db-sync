@@ -17,7 +17,9 @@ import           Ouroboros.Network.Block (blockNo, blockPoint)
 
 import           Cardano.Mock.ChainSync.Server
 import           Cardano.Mock.Forging.Interpreter
-import           Cardano.Mock.Forging.Tx
+import           Cardano.Mock.Forging.Types
+import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
+import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
 
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (assertBool, assertFailure, testCase)
@@ -30,7 +32,7 @@ unitTests :: IOManager -> [(Text, Text)] -> TestTree
 unitTests iom knownMigrations =
   testGroup "unit tests"
     [ testCase "Forge some blocks" forgeBlocks
-    , testCase "Add one Simple block" (addSimpleTx iom knownMigrations)
+    , testCase "Add one Simple block" (addSimpleTxShelley iom knownMigrations)
     ]
 
 rootTestDir :: FilePath
@@ -205,8 +207,8 @@ addSimpleTx :: IOManager -> [(Text, Text)] -> IO ()
 addSimpleTx =
     withFullConfig configDir testDir $ \interpreter mockServer asyncDBSync -> do
       -- translate the block to a real Cardano block.
-      tx0 <- withAlonzoLedgerState interpreter $ mkPaymentTx 0 1 10000 20
-      blk <- forgeNext interpreter $ MockBlock [tx0] (NodeId 0)
+      tx0 <- withAlonzoLedgerState interpreter $  Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
+      blk <- forgeNext interpreter $ MockBlock [TxAlonzo tx0] (NodeId 0)
 
       atomically $ addBlock mockServer blk
       -- start db-sync and let it sync
@@ -214,3 +216,18 @@ addSimpleTx =
       assertBlockNoBackoff 0
   where
     testDir = rootTestDir </> "temp/addSimpleTx"
+
+addSimpleTxShelley :: IOManager -> [(Text, Text)] -> IO ()
+addSimpleTxShelley =
+    withFullConfig (rootTestDir </> "config-shelley") testDir $ \interpreter mockServer asyncDBSync -> do
+      -- translate the block to a real Cardano block.
+      tx0 <- withShelleyLedgerState interpreter $ Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
+      blk <- forgeNext interpreter $ MockBlock [TxShelley tx0] (NodeId 0)
+      print blk
+
+      atomically $ addBlock mockServer blk
+      -- start db-sync and let it sync
+      _ <- asyncDBSync
+      assertBlockNoBackoff 0
+  where
+    testDir = rootTestDir </> "temp/addSimpleTxShelley"
