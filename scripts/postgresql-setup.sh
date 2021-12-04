@@ -104,7 +104,7 @@ function create_db {
 
 function drop_db {
 	if test "$( psql "${PGDATABASE}" -tAc "SELECT 1 FROM pg_database WHERE datname='${PGDATABASE}'" )" = '1' ; then
-		psql "${PGDATABASE}" --command="DROP OWNED BY CURRENT_USER;"
+		psql "${PGDATABASE}" --command="DROP OWNED BY CURRENT_USER cascade;"
 	fi
 }
 
