@@ -71,7 +71,7 @@ consTxBody ins outs fees certs wdrl =
       ins
       outs
       (StrictSeq.fromList certs)
-      (Wdrl mempty)
+      wdrl
       fees
       (SlotNo 1000000000) -- TODO ttl
       Strict.SNothing

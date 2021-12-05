@@ -7,7 +7,6 @@ import           Control.Concurrent.Async
 import           Control.Exception
 import           Control.Monad
 import           Control.Monad.Class.MonadSTM.Strict
-import           Control.Tracer (nullTracer)
 import           Data.Text (Text)
 import           System.FilePath hiding (isValid)
 
@@ -31,8 +30,7 @@ import           Test.Cardano.Db.Mock.Validate
 unitTests :: IOManager -> [(Text, Text)] -> TestTree
 unitTests iom knownMigrations =
   testGroup "unit tests"
-    [ testCase "Forge some blocks" forgeBlocks
-    , testCase "Add one Simple block" (testSimpleRewards iom knownMigrations)
+    [ testCase "Forge some blocks" (forgeBlocks iom knownMigrations)
     ]
 
 rootTestDir :: FilePath
@@ -41,17 +39,15 @@ rootTestDir = "test/testfiles"
 configDir ::  FilePath
 configDir = rootTestDir </> "config"
 
-forgeBlocks :: IO ()
+forgeBlocks :: IOManager -> [(Text, Text)] -> IO ()
 forgeBlocks = do
-    recreateDir testDir
-    cfg <- mkConfig configDir testDir
-    interpreter <- initInterpreter (protocolInfoForging cfg) nullTracer
-    _block0 <- forgeNext interpreter mockBlock0
-    _block1 <- forgeNext interpreter mockBlock1
-    block2 <- forgeNext interpreter mockBlock2
-    let blkNo = blockNo block2
-    assertBool (show blkNo <> " /= " <> "2")
-      $ blkNo == BlockNo 2
+    withFullConfig configDir testDir $ \interpreter _mockServer _asyncDBSync -> do
+      _block0 <- forgeNext interpreter mockBlock0
+      _block1 <- forgeNext interpreter mockBlock1
+      block2 <- forgeNext interpreter mockBlock2
+      let blkNo = blockNo block2
+      assertBool (show blkNo <> " /= " <> "2")
+        $ blkNo == BlockNo 2
   where
     testDir = rootTestDir </> "temp/forgeBlocks"
 
@@ -258,7 +254,7 @@ testSimpleRewards =
       fillEpochEqually interpreter mockServer
       fillEpochEqually interpreter mockServer
 
-      assertBlockNoBackoff (6 * 720 + 2)
+      assertBlockNoBackoff (6 * 150 + 2)
       assertRewardCount 17
 
   where
@@ -301,15 +297,19 @@ testRewardsShelley =
   where
     testDir = rootTestDir </> "temp/testRewardsShelley"
 
+-- 43200 slots per epoch
+-- It takes on average 3 * 20 = 60 slots to create a block from a predefined leader
+-- If we skip additionally 156 blocks, we get on average 43200/(60 + 228) = 150 blocks/epoch
 fillEpochEqually :: Interpreter -> ServerHandle IO CardanoBlock -> IO ()
 fillEpochEqually interpreter mockServer = do
-    blks0 <- forM (replicate thirdEpoch mockBlock0) (forgeNext interpreter)
+    blks0 <- forM (replicate thirdEpoch mockBlock0) (forgeNextAfter interpreter skipSlots)
     atomically $ forM_ blks0 $ addBlock mockServer
 
-    blks1 <- forM (replicate thirdEpoch mockBlock1) (forgeNext interpreter)
+    blks1 <- forM (replicate thirdEpoch mockBlock1) (forgeNextAfter interpreter skipSlots)
     atomically $ forM_ blks1 $ addBlock mockServer
 
-    blks2 <- forM (replicate thirdEpoch mockBlock2) (forgeNext interpreter)
+    blks2 <- forM (replicate thirdEpoch mockBlock2) (forgeNextAfter interpreter skipSlots)
     atomically $ forM_ blks2 $ addBlock mockServer
   where
-    thirdEpoch = div 720 3
+    thirdEpoch = div 150 3
+    skipSlots = 228

@@ -35,6 +35,10 @@ data ForgingError =
   | ExpectedAlonzoState
   | ExpectedShelleyState
   | UnexpectedEra
+  | EmptyFingerprint SlotNo
+  | FailedToValidateSlot SlotNo Int
+  | NotExpectedSlotNo SlotNo SlotNo Int
+  | FingerprintDecodeError String
   deriving (Show, Exception)
 
 data UTxOIndex = UTxOIndex Int | UTxOAddress (Addr StandardCrypto)
