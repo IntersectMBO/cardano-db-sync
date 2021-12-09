@@ -233,7 +233,7 @@ in {
         # Only take snapshot after service exited cleanly.
         if [ "$SERVICE_RESULT" = "success" ]; then
           EXISTING_SNAPSHOTS=()
-          for f in db-sync-snapshot-schema-${majorVersion}*; do
+          for f in db-sync-snapshot-schema-${majorVersion}*.tgz; do
             if [ -f $f ]; then
               echo "A snapshot already exist for this version: $f"
               EXISTING_SNAPSHOTS+=( $f )
