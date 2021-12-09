@@ -15,7 +15,7 @@ module Cardano.DbSync.Database
 
 import           Cardano.Prelude hiding (atomically)
 
-import           Cardano.BM.Trace (Trace, logDebug, logError, logInfo)
+import           Cardano.BM.Trace (logDebug, logError, logInfo)
 
 import           Control.Monad.Class.MonadSTM.Strict
 import           Control.Monad.Extra (whenJust)
@@ -46,13 +46,14 @@ data NextState
   deriving Eq
 
 runDbThread
-    :: Trace IO Text -> SyncEnv -> MetricSetters -> DbActionQueue
+    :: SyncEnv -> MetricSetters -> DbActionQueue
     -> IO ()
-runDbThread trce env metricsSetters queue = do
+runDbThread env metricsSetters queue = do
     logInfo trce "Running DB thread"
     logException trce "runDBThread: " loop
     logInfo trce "Shutting down DB thread"
   where
+    trce = getTrace env
     loop = do
       xs <- blockingFlushDbActionQueue queue
 
@@ -61,7 +62,7 @@ runDbThread trce env metricsSetters queue = do
 
       eNextState <- runExceptT $ runActions env xs
 
-      mBlock <- getDbLatestBlockInfo
+      mBlock <- getDbLatestBlockInfo (envBackend env)
       whenJust mBlock $ \ block -> do
         setDbBlockHeight metricsSetters $ bBlockNo block
         setDbSlotHeight metricsSetters $ bSlotNo block
@@ -88,8 +89,9 @@ runActions env actions = do
             pure Done
         ([], DbRollBackToPoint pt resultVar : ys) -> do
             runRollbacksDB env pt
-            res <- lift $ rollbackLedger env pt
-            lift $ atomically $ putTMVar resultVar res
+            points <- lift $ rollbackLedger env pt
+            blockNo <- lift $ getDbTipBlockNo env
+            lift $ atomically $ putTMVar resultVar (points, blockNo)
             dbAction Continue ys
         (ys, zs) -> do
           insertBlockList env ys
@@ -100,7 +102,7 @@ runActions env actions = do
 rollbackLedger :: SyncEnv -> CardanoPoint -> IO (Maybe [CardanoPoint])
 rollbackLedger env point = do
     mst <- loadLedgerAtPoint (envLedger env) point
-    dbTipInfo <- getDbLatestBlockInfo
+    dbTipInfo <- getDbLatestBlockInfo (envBackend env)
     case mst of
       Right st -> do
         checkDBWithState point dbTipInfo
@@ -110,7 +112,7 @@ rollbackLedger env point = do
         checkDBWithState statePoint dbTipInfo
         pure Nothing
       Left lsfs ->
-        Just <$> verifyFilePoints lsfs
+        Just <$> verifyFilePoints env lsfs
   where
 
     checkDBWithState :: CardanoPoint -> Maybe TipInfo -> IO ()

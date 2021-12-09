@@ -23,7 +23,7 @@ tests =
 
 initialSupplyTest :: IO ()
 initialSupplyTest =
-  runDbNoLogging $ do
+  runDbNoLoggingEnv $ do
     -- Delete the blocks if they exist.
     deleteAllBlocksCascade
 

@@ -29,9 +29,9 @@ validate lastEpoch = do
       | current > lastEpoch = putStrLn $ greenText "ok"
       | otherwise = do
           -- Recalculate the epoch entry
-          recalc <- Right <$> runDbNoLogging (queryCalcEpochEntry current)
+          recalc <- Right <$> runDbNoLoggingEnv (queryCalcEpochEntry current)
           -- Get the table entry
-          value <- runDbNoLogging $ queryEpochEntry current
+          value <- runDbNoLoggingEnv $ queryEpochEntry current
 
           when (recalc /= value) .
             error $ redText (show recalc ++ " /= " ++ show value)
@@ -42,7 +42,7 @@ validate lastEpoch = do
 getStableEpochCount :: IO (Maybe Word64)
 getStableEpochCount = do
   -- May return Nothing if the EPoch table is empty.
-  mLatest <- runDbNoLogging queryLatestCachedEpochNo
+  mLatest <- runDbNoLoggingEnv queryLatestCachedEpochNo
   case mLatest of
     Nothing -> pure Nothing
     Just 0 -> pure Nothing

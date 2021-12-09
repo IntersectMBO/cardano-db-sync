@@ -27,7 +27,7 @@ import qualified System.Random as Random
 
 validateBlockProperties :: IO ()
 validateBlockProperties = do
-  blkCount <- fromIntegral <$> runDbNoLogging queryBlockCount
+  blkCount <- fromIntegral <$> runDbNoLoggingEnv queryBlockCount
   validateBlockTimesInPast
   validataBlockNosContiguous blkCount
   validateTimestampsOrdered blkCount
@@ -38,7 +38,7 @@ validateBlockTimesInPast :: IO ()
 validateBlockTimesInPast = do
     putStrF "All block times are in the past: "
     now <- Time.getCurrentTime
-    xs <- runDbNoLogging $ queryBlocksTimeAfters now
+    xs <- runDbNoLoggingEnv $ queryBlocksTimeAfters now
     if List.null xs
       then putStrLn $ greenText "ok"
       else error $ redText (reportFailures xs)
@@ -59,7 +59,7 @@ validataBlockNosContiguous blkCount = do
     startBlock <- Random.randomRIO (0, blkCount - testBlocks)
     putStrF $ "Block numbers [" ++ show startBlock ++ " .. "
                 ++ show (startBlock + testBlocks) ++ "] are contiguous: "
-    blockNos <- runDbNoLogging $ queryBlockNoList startBlock testBlocks
+    blockNos <- runDbNoLoggingEnv $ queryBlockNoList startBlock testBlocks
     case checkContinguous blockNos of
       Nothing -> putStrLn $ greenText "ok"
       Just xs -> error $ redText "failed: " ++ show xs
@@ -80,7 +80,7 @@ validateTimestampsOrdered blkCount = do
     startBlock <- Random.randomRIO (0, blkCount - testBlocks)
     putStrF $ "Block time stamps for blocks [" ++ show startBlock ++ " .. "
                 ++ show (startBlock + testBlocks) ++ "] are ordered: "
-    ts <- runDbNoLogging $ queryBlockTimestamps startBlock testBlocks
+    ts <- runDbNoLoggingEnv $ queryBlockTimestamps startBlock testBlocks
     if List.nubOrd ts == ts
       then putStrLn $ greenText "ok"
       else error $ redText "failed: " ++ show ts

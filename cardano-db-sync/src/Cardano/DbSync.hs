@@ -19,6 +19,7 @@ module Cardano.DbSync
   , Db.MigrationDir (..)
 
   , runDbSyncNode
+  , runDbSync
   ) where
 
 import           Cardano.Prelude hiding (Nat, option, (%))
@@ -40,26 +41,34 @@ import           Cardano.DbSync.Types
 
 import           Control.Monad.Extra (whenJust)
 
+import           Ouroboros.Network.NodeToClient (IOManager, withIOManager)
+
 import           Database.Persist.Postgresql (withPostgresqlConn)
 
-runDbSyncNode :: MetricSetters -> Bool -> [(Text, Text)] -> SyncNodeParams -> IO ()
-runDbSyncNode metricsSetters extended knownMigrations params = do
+runDbSyncNode :: MetricSetters -> [(Text, Text)] -> SyncNodeParams -> IO ()
+runDbSyncNode metricsSetters knownMigrations params =
+  withIOManager $ \iomgr -> do
+    trce <- configureLogging params "db-sync-node"
+
+    aop <- readAbortOnPanic
+    if aop
+      then logWarning trce "Enviroment variable DbSyncAbortOnPanic: True"
+      else logInfo trce "Enviroment variable DbSyncAbortOnPanic: False"
+
+    runDbSync metricsSetters knownMigrations iomgr trce params aop 500 10000
+
+runDbSync :: MetricSetters -> [(Text, Text)] -> IOManager -> Trace IO Text
+          -> SyncNodeParams -> Bool -> Word64 -> Word64 -> IO ()
+runDbSync metricsSetters knownMigrations iomgr trce params aop snEveryFollowing snEveryLagging = do
 
     -- Read the PG connection info
-    pgConfig <- Db.readPGPassFileEnv Nothing
-
-    trce <- configureLogging params "db-sync-node"
+    pgConfig <- Db.readPGPass (enpPGPassSource params)
 
     orDieWithLog Db.renderMigrationValidateError trce $
       Db.validateMigrations dbMigrationDir knownMigrations
 
     logInfo trce "Schema migration files validated"
     logInfo trce "Running database migrations"
-
-    aop <- readAbortOnPanic
-    if aop
-      then logWarning trce "Enviroment variable DbSyncAbortOnPanic: True"
-      else logInfo trce "Enviroment variable DbSyncAbortOnPanic: False"
 
     Db.runMigrations pgConfig True dbMigrationDir (Just $ Db.LogFileDir "/tmp")
 
@@ -69,9 +78,9 @@ runDbSyncNode metricsSetters extended knownMigrations params = do
       lift $ do
         -- For testing and debugging.
         whenJust (enpMaybeRollback params) $ \ slotNo ->
-          void $ unsafeRollback trce slotNo
+          void $ unsafeRollback trce pgConfig slotNo
 
-        runSyncNode metricsSetters trce backend extended params
+        runSyncNode metricsSetters trce backend iomgr aop snEveryFollowing snEveryLagging params
 
   where
     dbMigrationDir :: Db.MigrationDir

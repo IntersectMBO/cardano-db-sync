@@ -67,7 +67,7 @@ rollbackToPoint backend trce point =
         At blk -> DB.queryBlockId (SBS.fromShort . getOneEraHash $ blockPointHash blk)
 
 -- For testing and debugging.
-unsafeRollback :: Trace IO Text -> SlotNo -> IO (Either SyncNodeError ())
-unsafeRollback trce slotNo = do
+unsafeRollback :: Trace IO Text -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeError ())
+unsafeRollback trce config slotNo = do
   logInfo trce $ "Forced rollback to slot " <> textShow (unSlotNo slotNo)
-  Right <$> DB.runDbNoLogging (void $ DB.deleteCascadeSlotNo slotNo)
+  Right <$> DB.runDbNoLogging (DB.PGPassCached config) (void $ DB.deleteCascadeSlotNo slotNo)

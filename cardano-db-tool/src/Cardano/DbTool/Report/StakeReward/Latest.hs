@@ -27,7 +27,7 @@ import           Text.Printf (printf)
 
 reportLatestStakeRewards :: [Text] -> IO ()
 reportLatestStakeRewards saddr = do
-    xs <- catMaybes <$> runDbNoLogging (mapM queryLatestStakeRewards saddr)
+    xs <- catMaybes <$> runDbNoLoggingEnv (mapM queryLatestStakeRewards saddr)
     renderRewards xs
 
 -- -------------------------------------------------------------------------------------------------

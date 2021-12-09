@@ -36,7 +36,7 @@ import qualified Cardano.BM.Trace as Logging
 import           Cardano.Client.Subscription (subscribe)
 import qualified Cardano.Crypto as Crypto
 
-import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
+import           Cardano.Slotting.Slot (EpochNo (..), WithOrigin (..))
 
 import           Cardano.DbSync.Api
 import           Cardano.DbSync.Config
@@ -82,7 +82,7 @@ import           Ouroboros.Network.NodeToClient (ClientSubscriptionParams (..), 
                    ErrorPolicyTrace (..), Handshake, IOManager, LocalAddress,
                    NetworkSubscriptionTracers (..), NodeToClientProtocols (..), TraceSendRecv,
                    WithAddr (..), localSnocket, localStateQueryPeerNull, localTxSubmissionPeerNull,
-                   networkErrorPolicies, withIOManager)
+                   networkErrorPolicies)
 import qualified Ouroboros.Network.NodeToClient.Version as Network
 
 import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined
@@ -103,11 +103,13 @@ runSyncNode
     :: MetricSetters
     -> Trace IO Text
     -> SqlBackend
+    -> IOManager
     -> Bool
+    -> Word64
+    -> Word64
     -> SyncNodeParams
     -> IO ()
-runSyncNode metricsSetters trce backend extendedOpt enp =
-  withIOManager $ \iomgr -> do
+runSyncNode metricsSetters trce backend iomgr aop snEveryFollowing snEveryLagging enp = do
 
     let configFile = enpConfigFile enp
     enc <- readSyncNodeConfig configFile
@@ -128,7 +130,9 @@ runSyncNode metricsSetters trce backend extendedOpt enp =
 
       case genCfg of
           GenesisCardano {} -> do
-            syncEnv <- ExceptT $ mkSyncEnvFromConfig trce backend (mkSyncOptions extendedOpt) (enpLedgerStateDir enp) genCfg
+            syncEnv <- ExceptT $ mkSyncEnvFromConfig trce backend
+              (SyncOptions (enpExtended enp) aop snEveryLagging snEveryFollowing)
+              (enpLedgerStateDir enp) genCfg
             liftIO $ epochStartup syncEnv
             liftIO $ runSyncNodeClient metricsSetters syncEnv iomgr trce (enpSocketPath enp)
   where
@@ -213,14 +217,18 @@ dbSyncProtocols trce env metricsSetters version codecs _connectionId =
           logError trce versionErrorMsg
           throwIO $ ErrorCall (Text.unpack versionErrorMsg)
 
+        -- The Db thread is not forked at this point, so we can use
+        -- the connection here. A connection cannot be used concurrently by many
+        -- threads
         latestPoints <- getLatestPoints env
-        currentTip <- getCurrentTipBlockNo
-        logDbState trce
+        currentTip <- getCurrentTipBlockNo env
+        logDbState env
+        -- communication channel between datalayer thread and chainsync-client thread
         actionQueue <- newDbActionQueue
 
         race_
             (race
-                (runDbThread trce env metricsSetters actionQueue)
+                (runDbThread env metricsSetters actionQueue)
                 (runOfflineFetchThread trce (envLedger env))
                 )
             (runPipelinedPeer
@@ -261,31 +269,6 @@ dbSyncProtocols trce env metricsSetters version codecs _connectionId =
 
     minVersion :: Network.NodeToClientVersion
     minVersion = Network.NodeToClientV_8
-
-logDbState :: Trace IO Text -> IO ()
-logDbState trce = do
-    mblk <- getDbLatestBlockInfo
-    case mblk of
-      Nothing -> logInfo trce "Cardano.Db is empty"
-      Just tip ->
-          logInfo trce $ Text.concat
-                  [ "Cardano.Db tip is at "
-                  , showTip tip
-                  ]
-  where
-    showTip :: TipInfo -> Text
-    showTip tipInfo =
-      mconcat
-        [ "slot ", textShow (unSlotNo $ bSlotNo tipInfo)
-        , ", block ", textShow (unBlockNo $ bBlockNo tipInfo)
-        ]
-
-getCurrentTipBlockNo :: IO (WithOrigin BlockNo)
-getCurrentTipBlockNo = do
-    maybeTip <- getDbLatestBlockInfo
-    case maybeTip of
-      Just tip -> pure $ At (bBlockNo tip)
-      Nothing -> pure Origin
 
 -- | 'ChainSyncClient' which traces received blocks and ignores when it
 -- receives a request to rollbackwar.  A real wallet client should:
@@ -376,8 +359,7 @@ chainSyncClient metricsSetters trce latestPoints currentTip actionQueue = do
               logException trce "recvMsgRollBackward: " $ do
                 -- This will get the current tip rather than what we roll back to
                 -- but will only be incorrect for a short time span.
-                mPoints <- waitRollback actionQueue point
-                newTip <- getDbTipBlockNo
+                (mPoints, newTip) <- waitRollback actionQueue point
                 pure $ finish newTip tip mPoints
         }
 
