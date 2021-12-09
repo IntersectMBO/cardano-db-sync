@@ -42,9 +42,9 @@ mkPaymentTx inputIndex outputIndex amount fees st = do
 
     Right $ mkSimpleTx $ consPaymentTxBody input (StrictSeq.fromList [output, change]) (Coin fees)
 
-mkDCertTx :: LedgerState (ShelleyBlock (ShelleyEra StandardCrypto))
-          -> Either ForgingError (Tx (ShelleyEra StandardCrypto))
-mkDCertTx sta = Right $ mkSimpleTx $ consCertTxBody (allPoolStakeCert sta) (Wdrl mempty)
+mkDCertTxPools :: LedgerState (ShelleyBlock (ShelleyEra StandardCrypto))
+               -> Either ForgingError (Tx (ShelleyEra StandardCrypto))
+mkDCertTxPools sta = Right $ mkSimpleTx $ consCertTxBody (allPoolStakeCert sta) (Wdrl mempty)
 
 mkSimpleTx :: TxBody (ShelleyEra StandardCrypto) -> Tx (ShelleyEra StandardCrypto)
 mkSimpleTx txBody = Tx

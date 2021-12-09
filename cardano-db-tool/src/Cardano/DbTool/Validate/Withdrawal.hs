@@ -27,7 +27,7 @@ import           System.Random.Shuffle (shuffleM)
 
 validateWithdrawals :: IO ()
 validateWithdrawals = do
-  res <- runDbNoLogging $ mapM validateAccounting . take 1000 =<< queryWithdrawalAddresses
+  res <- runDbNoLoggingEnv $ mapM validateAccounting . take 1000 =<< queryWithdrawalAddresses
   putStrF $ "For " ++ show (length res) ++ " withdrawal addresses, sum withdrawals <= sum rewards: "
   case partitionEithers res of
     ([], _) -> putStrLn $ greenText "ok"

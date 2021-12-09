@@ -58,7 +58,7 @@ data Reward = Reward
 data Rewards = Rewards
   { rwdEpoch :: !EpochNo
   , rwdRewards :: !(Map StakeCred (Set Reward))
-  } deriving Eq
+  } deriving (Eq, Show)
 
 elemCount :: Rewards -> Int
 elemCount = sum . map Set.size . Map.elems . rwdRewards

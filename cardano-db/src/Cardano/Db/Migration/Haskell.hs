@@ -15,6 +15,7 @@ import qualified Data.Map.Strict as Map
 import           Database.Persist.Sql (SqlBackend)
 
 import           Cardano.Db.Migration.Version
+import           Cardano.Db.PGConfig
 import           Cardano.Db.Run
 
 import           System.Exit (exitFailure)
@@ -32,15 +33,15 @@ import           System.IO (Handle, hClose, hFlush, hPutStrLn, stdout)
 --      in the database.
 --   3. 'migration-2-0009-20190731.sql' makes the new column NOT NULL.
 
-runHaskellMigration :: Handle -> MigrationVersion -> IO ()
-runHaskellMigration logHandle mversion =
+runHaskellMigration :: PGPassSource -> Handle -> MigrationVersion -> IO ()
+runHaskellMigration source logHandle mversion =
     case Map.lookup mversion migrationMap of
       Nothing -> pure ()
       Just action -> do
         hPutStrLn logHandle $ "Running : migration-" ++ renderMigrationVersion mversion ++ ".hs"
         putStr $ "    migration-" ++ renderMigrationVersion mversion ++ ".hs  ... "
         hFlush stdout
-        handle handler $ runDbHandleLogger logHandle action
+        handle handler $ runDbHandleLogger logHandle source action
         putStrLn "ok"
   where
     handler :: SomeException -> IO a

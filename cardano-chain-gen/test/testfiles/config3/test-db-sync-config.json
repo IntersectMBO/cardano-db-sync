@@ -14,14 +14,14 @@
       "stdout"
     ]
   ],
-  "minSeverity": "Info",
+  "minSeverity": "Warning",
   "options": {
     "cfokey": {
       "value": "Release-1.0.0"
     },
     "mapBackends": {},
     "mapSeverity": {
-      "db-sync-node": "Info",
+      "db-sync-node": "Warning",
       "db-sync-node.Mux": "Error",
       "db-sync-node.Subscription": "Error"
     },

@@ -167,6 +167,8 @@ test-suite cardano-chain-gen
                       , io-classes
                       , optparse-applicative
                       , ouroboros-network
+                      , silently
+                      , stm
                       , strict-containers
                       , tasty
                       , tasty-quickcheck

@@ -33,7 +33,7 @@ tests =
 
 rollbackTest :: IO ()
 rollbackTest =
-  runDbNoLogging $ do
+  runDbNoLoggingEnv $ do
     -- Delete the blocks if they exist.
     deleteAllBlocksCascade
     setupBlockCount <- queryBlockCount

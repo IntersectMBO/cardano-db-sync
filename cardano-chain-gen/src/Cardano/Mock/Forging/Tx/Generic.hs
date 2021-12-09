@@ -44,9 +44,9 @@ resolveUTxOIndex index st = toLeft $ case index of
     utxoPairs = Map.toList $ unUTxO $ _utxo $ _utxoState $ esLState $
         nesEs $ Consensus.shelleyLedgerState st
 
-    safeIndex :: Int -> [(TxIn (Crypto era), Core.TxOut era)] -> Maybe (TxIn (Crypto era), Core.TxOut era)
+    safeIndex :: Int -> [a] -> Maybe a
     safeIndex n ls
-      | n < length ls = Just $ utxoPairs !! n
+      | n < length ls = Just $ ls !! n
       | True = Nothing
 
     eq addr (_, txOut) = addr == getField @"address" txOut

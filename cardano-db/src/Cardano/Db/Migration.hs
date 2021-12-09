@@ -8,6 +8,8 @@ module Cardano.Db.Migration
   , createMigration
   , getMigrationScripts
   , runMigrations
+  , recreateDB
+  , dropTables
 
   , MigrationValidate (..)
   , MigrationValidateError (..)
@@ -17,7 +19,7 @@ module Cardano.Db.Migration
   ) where
 
 import           Control.Exception (SomeException, handle)
-import           Control.Monad (forM, forM_, unless, when)
+import           Control.Monad.Extra
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Logger (NoLoggingT)
 import           Control.Monad.Trans.Except (ExceptT, throwE)
@@ -30,14 +32,15 @@ import           Data.Conduit.Process (sourceCmdWithConsumer)
 import           Data.Either (partitionEithers)
 import           Data.List ((\\))
 import qualified Data.List as List
+import           Data.Maybe (listToMaybe)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           Data.Time.Clock (getCurrentTime)
 import           Data.Time.Format (defaultTimeLocale, formatTime, iso8601DateFormat)
 
-import           Database.Persist.Sql (SqlBackend, SqlPersistT, entityVal, getMigration,
-                   selectFirst)
+import           Database.Persist.Sql (SqlBackend, SqlPersistT, Single (..), entityVal, getMigration,
+                   rawExecute, rawSql, selectFirst)
 
 import           Cardano.Crypto.Hash (Blake2b_256, ByteString, Hash, hashToStringAsHex, hashWith)
 import           Cardano.Db.Migration.Haskell
@@ -131,7 +134,7 @@ applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (ve
     case exitCode of
       ExitSuccess -> do
         unless quiet $ putStrLn "ok"
-        runHaskellMigration logHandle version
+        runHaskellMigration (PGPassCached pgconfig) logHandle version
       ExitFailure _ -> errorExit exitCode
   where
     errorExit :: Show e => e -> IO a
@@ -145,9 +148,9 @@ applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (ve
 
 -- | Create a database migration (using functionality built into Persistent). If no
 -- migration is needed return 'Nothing' otherwise return the migration as 'Text'.
-createMigration :: MigrationDir -> IO (Maybe FilePath)
-createMigration (MigrationDir migdir) = do
-    mt <- runDbNoLogging create
+createMigration :: PGPassSource -> MigrationDir -> IO (Maybe FilePath)
+createMigration source (MigrationDir migdir) = do
+    mt <- runDbNoLogging source create
     case mt of
       Nothing -> pure Nothing
       Just (ver, mig) -> do
@@ -200,6 +203,26 @@ createMigration (MigrationDir migdir) = do
           -- which Persistent migrations are generated.
           let (SchemaVersion _ stage2 _) = entityVal x
           pure $ MigrationVersion 2 stage2 0
+
+recreateDB ::  PGPassSource -> IO ()
+recreateDB pgpass = do
+    runWithConnectionNoLogging pgpass $ do
+      rawExecute "drop schema if exists public cascade" []
+      rawExecute "create schema public" []
+
+-- This doesn't clean the DOMAIN, so droppping the schema is a better alternative
+-- for a proper cleanup
+dropTables :: PGPassSource -> IO ()
+dropTables pgpass = do
+    runWithConnectionNoLogging pgpass $ do
+      mstr <- rawSql
+        ( mconcat
+          [ "select string_agg('drop table \"' || tablename || '\" cascade', '; ')"
+          , "from pg_tables where schemaname = 'public'"]
+        )
+        []
+      whenJust (join $ listToMaybe mstr) $ \(Single dropsCommand) ->
+        rawExecute dropsCommand []
 
 --------------------------------------------------------------------------------
 

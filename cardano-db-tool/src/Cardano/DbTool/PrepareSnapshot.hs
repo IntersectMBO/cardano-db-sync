@@ -30,7 +30,7 @@ runPrepareSnapshot = runPrepareSnapshotAux True
 runPrepareSnapshotAux :: Bool -> PrepareSnapshotArgs -> IO ()
 runPrepareSnapshotAux firstTry args = do
     ledgerFiles <- listLedgerStateFilesOrdered (unPrepareSnapshotArgs args)
-    mblock <- runDbNoLogging queryLatestBlock
+    mblock <- runDbNoLoggingEnv queryLatestBlock
     case mblock of
       Just block | Just bSlotNo <- SlotNo <$> blockSlotNo block -> do
         let bHash = blockHash block
@@ -75,7 +75,7 @@ runPrepareSnapshotAux firstTry args = do
           putStrLn ""
 
     runRollback :: SlotNo -> IO ()
-    runRollback slot = runDbNoLogging $ do
+    runRollback slot = runDbNoLoggingEnv $ do
       slots <- querySlotNosGreaterThan $ unSlotNo slot
       mapM_ deleteCascadeSlotNo slots
 

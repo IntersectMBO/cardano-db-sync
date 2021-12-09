@@ -45,3 +45,6 @@ data UTxOIndex = UTxOIndex Int | UTxOAddress (Addr StandardCrypto)
     deriving (Show, Eq)
 
 data StakeIndex = StakeIndex Int | StakeAddress (StakeCredential StandardCrypto)
+                | PoolAccount PoolIndex
+
+data PoolIndex = PoolIndex Int | PoolId

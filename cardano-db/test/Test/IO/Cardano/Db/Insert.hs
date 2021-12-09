@@ -32,7 +32,7 @@ tests =
 
 insertZeroTest :: IO ()
 insertZeroTest =
-  runDbNoLogging $ do
+  runDbNoLoggingEnv $ do
     -- Delete the blocks if they exist.
     slid <- insertSlotLeader testSlotLeader
     void $ deleteCascadeBlock (blockOne slid)
@@ -46,7 +46,7 @@ insertZeroTest =
 
 insertFirstTest :: IO ()
 insertFirstTest =
-  runDbNoLogging $ do
+  runDbNoLoggingEnv $ do
     -- Delete the block if it exists.
     slid <- insertSlotLeader testSlotLeader
     void $ deleteCascadeBlock (blockOne slid)
@@ -57,7 +57,7 @@ insertFirstTest =
 
 insertTwice :: IO ()
 insertTwice =
-  runDbNoLogging $ do
+  runDbNoLoggingEnv $ do
     slid <- insertSlotLeader testSlotLeader
     bid <- insertBlockChecked (blockZero slid)
     let adaPots = adaPotsZero bid
@@ -72,7 +72,7 @@ insertTwice =
 insertForeignKeyMissing :: IO ()
 insertForeignKeyMissing = do
   time <- getCurrentTime
-  runDbNoLogging $ do
+  runDbNoLoggingEnv $ do
     slid <- insertSlotLeader testSlotLeader
     bid <- insertBlockChecked (blockZero slid)
     txid <- insertTx (txZero bid)

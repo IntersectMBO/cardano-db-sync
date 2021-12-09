@@ -107,7 +107,6 @@ newtype Fingerprint = Fingerprint [Word64]
 
 mkFingerprint :: FilePath -> IO (FingerprintMode, Fingerprint)
 mkFingerprint path = do
-  print path
   thereIsFile <- doesPathExist path
   if thereIsFile then do
     mfingerPrint <- eitherDecodeFileStrict path
@@ -151,7 +150,6 @@ finalizeFingerprint inter = do
     interState <- readMVar $ iState inter
     case iFingerMode inter of
       SearchSlots fp -> do
-        print $ "Dumping slots to " <> fp
         encodeFile fp $ reverseFingerprint $ isFingerprint interState
       ValidateSlots -> pure ()
 
@@ -178,7 +176,6 @@ initInterpreter pinfo traceForge fingerprintFile = do
         , isNextBlockNo = BlockNo 0
         , isFingerprint = fingerprint
         }
-  print $ initChainDB topLeverCfg initSt
   stvar <- newMVar initState
   pure $ Interpreter
     { iForging = Map.fromList $ zip [0..] forging
@@ -373,8 +370,8 @@ registerAllStakeCreds :: Interpreter -> NodeId -> IO CardanoBlock
 registerAllStakeCreds inter nodeId = do
     st <- getState inter
     tx <- case ledgerState st of
-      LedgerStateShelley sts -> either throwIO (pure . TxShelley) $ Shelley.mkDCertTx sts
-      LedgerStateAlonzo sta -> either throwIO (pure . TxAlonzo) $ Alonzo.mkDCertTx sta
+      LedgerStateShelley sts -> either throwIO (pure . TxShelley) $ Shelley.mkDCertTxPools sts
+      LedgerStateAlonzo sta -> either throwIO (pure . TxAlonzo) $ Alonzo.mkDCertTxPools sta
       _ -> throwIO UnexpectedEra
     forgeNext inter $ MockBlock [tx] nodeId
 

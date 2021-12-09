@@ -4,7 +4,7 @@
 import           Cardano.Prelude
 
 
-import           Cardano.Db (MigrationDir (..), gitRev)
+import           Cardano.Db (MigrationDir (..), PGPassSource (PGPassDefaultEnv), gitRev)
 
 import           Cardano.DbSync (runDbSyncNode)
 import           Cardano.DbSync.Config
@@ -34,7 +34,7 @@ main = do
         prometheusPort <- dncPrometheusPort <$> readSyncNodeConfig (enpConfigFile params)
 
         withMetricSetters prometheusPort $ \metricsSetters ->
-            runDbSyncNode metricsSetters (enpExtended params) knownMigrationsPlain params
+            runDbSyncNode metricsSetters knownMigrationsPlain params
   where
     knownMigrationsPlain :: [(Text, Text)]
     knownMigrationsPlain = (\x -> (hash x, filepath x)) <$> knownMigrations
@@ -62,6 +62,7 @@ pRunDbSyncNode =
     <*> pSocketPath
     <*> pLedgerStateDir
     <*> pMigrationDir
+    <*> pPGPassSource
     <*> pExtended
     <*> optional pSlotNo
 
@@ -91,6 +92,11 @@ pMigrationDir =
     <> Opt.completer (Opt.bashCompleter "directory")
     <> Opt.metavar "FILEPATH"
     )
+
+-- TODO support more options here
+pPGPassSource :: Parser PGPassSource
+pPGPassSource =
+  pure PGPassDefaultEnv
 
 pExtended :: Parser Bool
 pExtended =

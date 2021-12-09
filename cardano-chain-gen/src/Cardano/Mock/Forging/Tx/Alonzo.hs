@@ -72,9 +72,14 @@ mkPaymentTx inputIndex outputIndex amount fees sta = do
         change = TxOut addr' (valueFromList (fromIntegral $ fromIntegral inputValue - amount - fees) []) Strict.SNothing
     Right $ mkSimpleTx $ consPaymentTxBody input (StrictSeq.fromList [output, change]) (Coin fees)
 
-mkDCertTx :: LedgerState (ShelleyBlock (AlonzoEra StandardCrypto))
+mkDCertTx :: [DCert StandardCrypto] -> Wdrl StandardCrypto
+          -> LedgerState (ShelleyBlock (AlonzoEra StandardCrypto))
           -> Either ForgingError (ValidatedTx (AlonzoEra StandardCrypto))
-mkDCertTx sta = Right $ mkSimpleTx $ consCertTxBody (allPoolStakeCert sta) (Wdrl mempty)
+mkDCertTx certs wdrl sta = Right $ mkSimpleTx $ consCertTxBody certs wdrl
+
+mkDCertTxPools :: LedgerState (ShelleyBlock (AlonzoEra StandardCrypto))
+               -> Either ForgingError (ValidatedTx (AlonzoEra StandardCrypto))
+mkDCertTxPools sta = Right $ mkSimpleTx $ consCertTxBody (allPoolStakeCert sta) (Wdrl mempty)
 
 mkSimpleTx :: TxBody (AlonzoEra StandardCrypto) -> ValidatedTx (AlonzoEra StandardCrypto)
 mkSimpleTx txBody = ValidatedTx

@@ -27,7 +27,7 @@ import qualified System.Random as Random
 
 validateTxAccounting :: IO ()
 validateTxAccounting = do
-    txIdRange <- runDbNoLogging queryTestTxIds
+    txIdRange <- runDbNoLoggingEnv queryTestTxIds
     putStrF $ "For " ++ show testCount ++ " transactions out of " ++ show (snd txIdRange)
                 ++ " accounting is: "
     ids <- randomTxIds testCount txIdRange
@@ -83,10 +83,10 @@ reportError ve =
 -- For a given TxId, validate the input/output accounting.
 validateAccounting :: Word64 -> ExceptT ValidateError IO ()
 validateAccounting txId = do
-    (fee, deposit) <- liftIO $ runDbNoLogging (queryTxFeeDeposit txId)
-    withdrawal <- liftIO $ runDbNoLogging (queryTxWithdrawal txId)
-    ins <- liftIO $ runDbNoLogging (queryTxInputs txId)
-    outs <- liftIO $ runDbNoLogging (queryTxOutputs txId)
+    (fee, deposit) <- liftIO $ runDbNoLoggingEnv (queryTxFeeDeposit txId)
+    withdrawal <- liftIO $ runDbNoLoggingEnv (queryTxWithdrawal txId)
+    ins <- liftIO $ runDbNoLoggingEnv (queryTxInputs txId)
+    outs <- liftIO $ runDbNoLoggingEnv (queryTxOutputs txId)
     -- A refund is a negative deposit.
     when (deposit >= 0 && sumValues ins + withdrawal /= fee + adaDeposit deposit + sumValues outs) $
       left (ValidateError txId fee deposit withdrawal ins outs)

@@ -117,8 +117,8 @@ mkSnapshotMaybe env snapshot blkNo syncState =
     timeToSnapshot :: DB.SyncState -> BlockNo -> Bool
     timeToSnapshot syncSt bNo =
       case (syncSt, unBlockNo bNo) of
-        (DB.SyncFollowing, bno) -> bno `mod` 500 == 0
-        (DB.SyncLagging, bno) -> bno `mod` 10000 == 0
+        (DB.SyncFollowing, bno) -> bno `mod` (snapshotEveryFollowing (envOptions env)) == 0
+        (DB.SyncLagging, bno) -> bno `mod` (snapshotEveryLagging (envOptions env)) == 0
 
 -- -------------------------------------------------------------------------------------------------
 

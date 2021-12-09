@@ -23,7 +23,7 @@ import qualified System.Random as Random
 
 validateEpochBlockTxs :: IO ()
 validateEpochBlockTxs = do
-  mLatestEpoch <- runDbNoLogging queryLatestCachedEpochNo
+  mLatestEpoch <- runDbNoLoggingEnv queryLatestCachedEpochNo
   case mLatestEpoch of
     Nothing -> putStrLn "Epoch table is empty"
     Just latest -> validateLatestBlockTxs latest
@@ -44,8 +44,8 @@ validateLatestBlockTxs latestEpoch = do
 validateBlockTxs :: Word64 -> IO ()
 validateBlockTxs epoch = do
   putStrF $ "All transactions for blocks in epoch " ++ show epoch ++ " are present: "
-  blks <- runDbNoLogging $ queryEpochBlockNumbers epoch
-  results <- runDbNoLogging $ mapM validateBlockCount blks
+  blks <- runDbNoLoggingEnv $ queryEpochBlockNumbers epoch
+  results <- runDbNoLoggingEnv $ mapM validateBlockCount blks
   case lefts results of
     [] -> putStrLn $ greenText "ok"
     xs -> do

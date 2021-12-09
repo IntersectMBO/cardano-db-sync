@@ -144,6 +144,7 @@ data LedgerEnv = LedgerEnv
   , leDir :: !LedgerStateDir
   , leNetwork :: !Ledger.Network
   , leSystemStart :: !SystemStart
+  , leAbortOnPanic :: !Bool
   , leInterpreter :: !(StrictTVar IO (Maybe CardanoInterpreter))
   , leStateVar :: !(StrictTVar IO (Maybe LedgerDB))
   , leEventState :: !(StrictTVar IO LedgerEventState)
@@ -217,9 +218,9 @@ ledgerDbCurrent = either id id . AS.head . ledgerDbCheckpoints
 
 mkLedgerEnv
     :: Trace IO Text -> Consensus.ProtocolInfo IO CardanoBlock -> LedgerStateDir
-    -> Ledger.Network -> EpochSlot -> SystemStart
+    -> Ledger.Network -> EpochSlot -> SystemStart -> Bool
     -> IO LedgerEnv
-mkLedgerEnv trce protocolInfo dir nw stableEpochSlot systemStart = do
+mkLedgerEnv trce protocolInfo dir nw stableEpochSlot systemStart aop = do
     svar <- newTVarIO Nothing
     evar <- newTVarIO initLedgerEventState
     ivar <- newTVarIO $ IndexCache mempty mempty
@@ -238,6 +239,7 @@ mkLedgerEnv trce protocolInfo dir nw stableEpochSlot systemStart = do
       , leDir = dir
       , leNetwork = nw
       , leSystemStart = systemStart
+      , leAbortOnPanic = aop
       , leInterpreter = intervar
       , leStateVar = svar
       , leEventState = evar

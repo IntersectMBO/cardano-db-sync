@@ -30,7 +30,7 @@ reportTransactions :: [Text] -> IO ()
 reportTransactions addrs =
   forM_ addrs $ \ saddr -> do
     Text.putStrLn $ "\nTransactions for: " <> saddr <> "\n"
-    xs <- runDbNoLogging (queryStakeAddressTransactions saddr)
+    xs <- runDbNoLoggingEnv (queryStakeAddressTransactions saddr)
     renderTransactions $ coaleseTxs xs
 
 -- -------------------------------------------------------------------------------------------------
