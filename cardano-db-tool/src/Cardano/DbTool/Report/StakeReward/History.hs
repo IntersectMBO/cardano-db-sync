@@ -26,7 +26,7 @@ import           Text.Printf (printf)
 
 reportStakeRewardHistory :: Text -> IO ()
 reportStakeRewardHistory saddr = do
-    xs <- runDbNoLogging (queryHistoryStakeRewards saddr)
+    xs <- runDbNoLoggingEnv (queryHistoryStakeRewards saddr)
     if List.null xs
       then errorMsg
       else renderRewards saddr xs

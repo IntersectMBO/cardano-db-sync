@@ -50,30 +50,30 @@ postgresqlPoolDataLayer tracer = PoolDataLayer {
     dlGetPoolMetadata = \poolId poolMetadataHash -> do
       let poolHash = servantToDbPoolId poolId
       let metaHash = servantToDbPoolMetaHash poolMetadataHash
-      mMeta <- Db.runWithConnectionLogging tracer $ Db.queryPoolOfflineData poolHash metaHash
+      mMeta <- Db.runWithConnectionLogging Db.PGPassDefaultEnv tracer $ Db.queryPoolOfflineData poolHash metaHash
       case mMeta of
         Just (tickerName, metadata) -> pure $ Right (TickerName tickerName, PoolMetadataRaw metadata)
         Nothing -> pure $ Left $ DbLookupPoolMetadataHash poolId poolMetadataHash
   , dlAddPoolMetadata = panic "dlAddPoolMetadata not defined. Will be used only for testing."
   , dlGetReservedTickers = do
-      tickers <- Db.runWithConnectionLogging tracer Db.queryReservedTickers
+      tickers <- Db.runWithConnectionLogging Db.PGPassDefaultEnv tracer Db.queryReservedTickers
       pure $ fmap (\ticker -> (TickerName $ Db.reservedPoolTickerName ticker, dbToServantPoolId $ Db.reservedPoolTickerPoolHash ticker)) tickers
   , dlAddReservedTicker = \ticker poolId -> do
-      inserted <- Db.runWithConnectionLogging tracer $
+      inserted <- Db.runWithConnectionLogging Db.PGPassDefaultEnv tracer $
         Db.insertReservedPoolTicker $
           Db.ReservedPoolTicker (getTickerName ticker) (servantToDbPoolId poolId)
       case inserted of
         Just _ -> pure $ Right ticker
         Nothing -> pure $ Left $ TickerAlreadyReserved ticker
   , dlCheckReservedTicker = \ticker -> do
-      Db.runWithConnectionLogging tracer $
+      Db.runWithConnectionLogging Db.PGPassDefaultEnv tracer $
         fmap dbToServantPoolId <$> Db.queryReservedTicker (getTickerName ticker)
   , dlGetDelistedPools = do
-      fmap dbToServantPoolId <$> Db.runWithConnectionLogging tracer Db.queryDelistedPools
+      fmap dbToServantPoolId <$> Db.runWithConnectionLogging Db.PGPassDefaultEnv tracer Db.queryDelistedPools
   , dlCheckDelistedPool = \poolHash -> do
-      Db.runWithConnectionLogging tracer $ Db.existsDelistedPool (servantToDbPoolId poolHash)
+      Db.runWithConnectionLogging Db.PGPassDefaultEnv tracer $ Db.existsDelistedPool (servantToDbPoolId poolHash)
   , dlAddDelistedPool = \poolHash -> do
-      Db.runWithConnectionLogging tracer $ do
+      Db.runWithConnectionLogging Db.PGPassDefaultEnv tracer $ do
         let poolHashDb = servantToDbPoolId poolHash
         isAlready <- Db.existsDelistedPool poolHashDb
         if isAlready then return . Left . DbInsertError $ "Delisted pool already exists!"
@@ -81,7 +81,7 @@ postgresqlPoolDataLayer tracer = PoolDataLayer {
           _ <- Db.insertDelistedPool (Db.DelistedPool poolHashDb)
           pure $ Right poolHash
   , dlRemoveDelistedPool = \poolHash -> do
-      deleted <- Db.runWithConnectionLogging tracer $
+      deleted <- Db.runWithConnectionLogging Db.PGPassDefaultEnv tracer $
         Db.deleteDelistedPool (servantToDbPoolId poolHash)
       if deleted
         then pure $ Right poolHash
@@ -94,7 +94,7 @@ postgresqlPoolDataLayer tracer = PoolDataLayer {
       ls <- filterRetired <$> getCertActions tracer Nothing
       pure $ Right $ dbToServantPoolId <$> ls
   , dlGetFetchErrors = \poolId mTimeFrom -> do
-      fetchErrors <- Db.runWithConnectionLogging tracer $
+      fetchErrors <- Db.runWithConnectionLogging Db.PGPassDefaultEnv tracer $
         Db.queryPoolOfflineFetchError (servantToDbPoolId poolId) mTimeFrom
       pure $ Right $ dbToServantFetchError poolId <$> fetchErrors
   , dlGetPool = \poolId -> do
@@ -116,7 +116,7 @@ dbToServantFetchError poolId (fetchError, metaHash) =
 -- current epoch.
 getCertActions :: Trace IO Text -> Maybe PoolId -> IO (Maybe Word64, Map ByteString Db.PoolCertAction)
 getCertActions tracer mPoolId = do
-  (certs, epoch) <- Db.runWithConnectionLogging tracer $ do
+  (certs, epoch) <- Db.runWithConnectionLogging Db.PGPassDefaultEnv tracer $ do
     poolRetired <- Db.queryRetiredPools (servantToDbPoolId <$> mPoolId)
     poolUpdate <- Db.queryPoolRegister (servantToDbPoolId <$> mPoolId)
     currentEpoch <- Db.queryCurrentEpochNo
@@ -126,7 +126,7 @@ getCertActions tracer mPoolId = do
 
 getActivePools :: Trace IO Text -> Maybe PoolId -> IO (Map ByteString ByteString)
 getActivePools tracer mPoolId = do
-  (certs, epoch) <- Db.runWithConnectionLogging tracer $ do
+  (certs, epoch) <- Db.runWithConnectionLogging Db.PGPassDefaultEnv tracer $ do
     poolRetired <- Db.queryRetiredPools (servantToDbPoolId <$> mPoolId)
     poolUpdate <- Db.queryPoolRegister (servantToDbPoolId <$> mPoolId)
     currentEpoch <- Db.queryCurrentEpochNo
@@ -191,7 +191,7 @@ createCachedPoolDataLayer _ = panic "createCachedPoolDataLayer not defined yet"
 _getUsedTickers :: Trace IO Text ->  IO [(TickerName, PoolMetadataHash)]
 _getUsedTickers tracer = do
   pools <- getActivePools tracer Nothing
-  tickers <- Db.runWithConnectionLogging tracer $ forM (Map.toList pools) $ \(ph, meta) -> do
+  tickers <- Db.runWithConnectionLogging Db.PGPassDefaultEnv tracer $ forM (Map.toList pools) $ \(ph, meta) -> do
     mticker <- Db.queryUsedTicker ph meta
     pure $ map (\ticker -> (TickerName ticker, dbToServantMetaHash meta)) mticker
   pure $ catMaybes tickers
@@ -199,7 +199,7 @@ _getUsedTickers tracer = do
 _checkUsedTicker :: Trace IO Text -> TickerName -> IO (Maybe TickerName)
 _checkUsedTicker tracer ticker = do
     pools <- getActivePools tracer Nothing
-    tickers <- Db.runWithConnectionLogging tracer $ forM (Map.toList pools) $ \(ph, meta) -> do
+    tickers <- Db.runWithConnectionLogging Db.PGPassDefaultEnv tracer $ forM (Map.toList pools) $ \(ph, meta) -> do
       mticker <- Db.queryUsedTicker ph meta
       pure $ map (\tickerText -> (TickerName tickerText, dbToServantMetaHash meta)) mticker
     case Map.lookup ticker (Map.fromList $ catMaybes tickers) of

@@ -19,7 +19,7 @@ import           System.Exit (exitFailure)
 
 assertFullySynced :: IO ()
 assertFullySynced = do
-  blockTime <- maybe (assertFail Nothing) pure =<< Db.runDbNoLogging queryLatestBlockTime
+  blockTime <- maybe (assertFail Nothing) pure =<< Db.runDbNoLoggingEnv queryLatestBlockTime
   currentTime <- Time.getCurrentTime
   -- print (blockTime, currentTime, Time.diffUTCTime currentTime blockTime)
   let diff = Time.diffUTCTime currentTime blockTime

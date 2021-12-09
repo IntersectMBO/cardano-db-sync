@@ -53,7 +53,7 @@ runCommand cmd =
     CmdReport report -> runReport report
     CmdRollback slotNo -> runRollback slotNo
     CmdRunMigrations mdir mldir -> do
-        pgConfig <- readPGPassFileEnv Nothing
+        pgConfig <- readPGPass PGPassDefaultEnv
         runMigrations pgConfig False mdir mldir
     CmdUtxoSetAtBlock blkid -> utxoSetAtSlot blkid
     CmdPrepareSnapshot pargs -> runPrepareSnapshot pargs
@@ -63,14 +63,14 @@ runCommand cmd =
 
 runCreateMigration :: MigrationDir -> IO ()
 runCreateMigration mdir = do
-  mfp <- createMigration mdir
+  mfp <- createMigration PGPassDefaultEnv mdir
   case mfp of
     Nothing -> putStrLn "No migration needed."
     Just fp -> putStrLn $ "New migration '" ++ fp ++ "' created."
 
 runRollback :: SlotNo -> IO ()
 runRollback slotNo =
-  print =<< runDbNoLogging (deleteCascadeSlotNo slotNo)
+  print =<< runDbNoLoggingEnv (deleteCascadeSlotNo slotNo)
 
 runVersionCommand :: IO ()
 runVersionCommand = do

@@ -24,7 +24,7 @@ import           Database.Persist.Sql (SqlBackend)
 
 reportBalance :: [Text] -> IO ()
 reportBalance saddr = do
-  xs <- catMaybes <$> runDbNoLogging (mapM queryStakeAddressBalance saddr)
+  xs <- catMaybes <$> runDbNoLoggingEnv (mapM queryStakeAddressBalance saddr)
   renderBalances xs
 
 -- -------------------------------------------------------------------------------------------------

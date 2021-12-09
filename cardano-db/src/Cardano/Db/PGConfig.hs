@@ -4,6 +4,10 @@
 module Cardano.Db.PGConfig
   ( PGConfig (..)
   , PGPassFile (..)
+  , PGPassSource (..)
+  , parsePGConfig
+  , readPGPassDefault
+  , readPGPass
   , readPGPassFileEnv
   , readPGPassFile
   , readPGPassFileExit
@@ -15,12 +19,16 @@ import qualified Control.Exception as Exception
 
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
-import           Data.Maybe (fromMaybe)
 
 import           Database.Persist.Postgresql (ConnectionString)
 
 import           System.Environment (lookupEnv, setEnv)
 import           System.Posix.User (getEffectiveUserName)
+
+data PGPassSource =
+    PGPassDefaultEnv
+  | PGPassEnv String
+  | PGPassCached PGConfig
 
 -- | PGConfig as specified by https://www.postgresql.org/docs/11/libpq-pgpass.html
 -- However, this module expects the config data to be on the first line.
@@ -45,11 +53,19 @@ toConnectionString pgc =
     , "password=", pgcPassword pgc
     ]
 
+readPGPassDefault :: IO PGConfig
+readPGPassDefault = readPGPass PGPassDefaultEnv
+
 -- | Read the PostgreSQL configuration from the file at the location specified by the
 -- '$PGPASSFILE' environment variable.
-readPGPassFileEnv :: Maybe String -> IO PGConfig
-readPGPassFileEnv mName = do
-  let name = fromMaybe "PGPASSFILE" mName
+readPGPass :: PGPassSource -> IO PGConfig
+readPGPass source = case source of
+  PGPassDefaultEnv -> readPGPassFileEnv "PGPASSFILE"
+  PGPassEnv name -> readPGPassFileEnv name
+  PGPassCached config -> pure config
+
+readPGPassFileEnv :: String -> IO PGConfig
+readPGPassFileEnv name = do
   mpath <- lookupEnv name
   case mpath of
     Just fp -> readPGPassFileExit (PGPassFile fp)
@@ -69,15 +85,15 @@ readPGPassFile (PGPassFile fpath) = do
     extract :: ByteString -> IO (Maybe PGConfig)
     extract bs =
       case BS.lines bs of
-        (b:_) -> parseConfig b
+        (b:_) -> parsePGConfig b
         _ -> pure Nothing
 
-    parseConfig :: ByteString -> IO (Maybe PGConfig)
-    parseConfig bs =
-      case BS.split ':' bs of
-        [h, pt, d, u, pwd] -> Just <$> replaceUser (PGConfig h pt d u pwd)
-        _ -> pure Nothing
-
+parsePGConfig :: ByteString -> IO (Maybe PGConfig)
+parsePGConfig bs =
+    case BS.split ':' bs of
+      [h, pt, d, u, pwd] -> Just <$> replaceUser (PGConfig h pt d u pwd)
+      _ -> pure Nothing
+  where
     replaceUser :: PGConfig -> IO PGConfig
     replaceUser pgc
       | pgcUser pgc /= "*" = pure pgc

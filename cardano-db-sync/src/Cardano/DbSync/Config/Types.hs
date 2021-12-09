@@ -44,7 +44,7 @@ import qualified Cardano.Chain.Update as Byron
 import           Cardano.Crypto (RequiresNetworkMagic (..))
 import qualified Cardano.Crypto.Hash as Crypto
 
-import           Cardano.Db (MigrationDir)
+import           Cardano.Db (MigrationDir, PGPassSource (..))
 
 import           Cardano.Ledger.Allegra (AllegraEra)
 import           Cardano.Ledger.Crypto (StandardCrypto)
@@ -115,6 +115,7 @@ data SyncNodeParams = SyncNodeParams
   , enpSocketPath :: !SocketPath
   , enpLedgerStateDir :: !LedgerStateDir
   , enpMigrationDir :: !MigrationDir
+  , enpPGPassSource :: !PGPassSource
   , enpExtended :: !Bool
   , enpMaybeRollback :: !(Maybe SlotNo)
   }

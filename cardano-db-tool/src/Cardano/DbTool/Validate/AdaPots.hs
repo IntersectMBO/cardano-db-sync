@@ -25,7 +25,7 @@ validateSumAdaPots :: IO ()
 validateSumAdaPots = do
   putStrF "Sum of AdaPots amounts is constant across epochs: "
 
-  xs <- runDbNoLogging queryAdaPotsAccounting
+  xs <- runDbNoLoggingEnv queryAdaPotsAccounting
   let uniqueCount = List.length $ List.nubOrd (map accSumAdaPots xs)
 
   if

@@ -86,7 +86,7 @@ partitionUtxos =
 queryAtSlot :: Word64 -> IO (Ada, [(TxOut, ByteString)], Ada, Either LookupFail UTCTime)
 queryAtSlot slotNo =
   -- Run the following queries in a single transaction.
-  runDbNoLogging $ do
+  runDbNoLoggingEnv $ do
     (,,,) <$> queryGenesisSupply
             <*> queryUtxoAtSlotNo slotNo
             <*> queryFeesUpToSlotNo slotNo
