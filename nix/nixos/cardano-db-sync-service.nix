@@ -171,7 +171,7 @@ in {
     };
   };
   config = lib.mkIf cfg.enable {
-    services.cardano-db-sync = let exec = "${cfg.package}/bin/cardano-db-sync";
+    services.cardano-db-sync = let exec = "${cfg.package}/bin/${cfg.package.exeName}";
     in {
       pgpass = builtins.toFile "pgpass" "${cfg.postgres.socketdir}:${
           toString cfg.postgres.port
