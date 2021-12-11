@@ -1,4 +1,3 @@
-{-# LANGUAGE DataKinds #-}
 module Cardano.DbSync.Era.Shelley.Generic
   ( module X
   ) where
