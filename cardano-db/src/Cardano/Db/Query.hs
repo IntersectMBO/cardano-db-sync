@@ -53,6 +53,7 @@ module Cardano.Db.Query
   , queryUtxoAtBlockNo
   , queryUtxoAtSlotNo
   , queryWithdrawalsUpToBlockNo
+  , queryCostModel
   , queryAdaPots
   , queryPoolOfflineData
   , queryPoolRegister
@@ -106,7 +107,7 @@ import           Database.Esqueleto.Legacy (Entity (..), From, InnerJoin (..), L
                    entityKey, entityVal, exists, from, in_, isNothing, just, limit, max_, min_,
                    notExists, not_, on, orderBy, select, subList_select, sum_, unSqlBackendKey,
                    unValue, val, where_, (&&.), (<=.), (==.), (>.), (>=.), (^.), (||.))
-import           Database.Persist.Sql (SqlBackend, selectList)
+import           Database.Persist.Sql (SelectOpt (Asc), SqlBackend, selectList)
 
 import           Cardano.Db.Error
 import           Cardano.Db.Schema
@@ -635,6 +636,10 @@ queryWithdrawalsUpToBlockNo blkNo = do
             where_ (blk ^. BlockBlockNo <=. just (val blkNo))
             pure $ sum_ (withDraw ^. WithdrawalAmount)
   pure $ unValueSumAda (listToMaybe res)
+
+queryCostModel :: MonadIO m => ReaderT SqlBackend m [CostModelId]
+queryCostModel =
+  fmap entityKey <$> selectList [] [Asc CostModelId]
 
 queryAdaPots :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe AdaPots)
 queryAdaPots blkId = do

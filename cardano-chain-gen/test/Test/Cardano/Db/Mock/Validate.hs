@@ -43,6 +43,10 @@ assertBlockNoBackoff env blockNo =
 defaultDelays :: [Int]
 defaultDelays = [1,2,4,8,16,32,64]
 
+assertEqQuery :: (Eq a, Show a) => DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> a -> String -> IO ()
+assertEqQuery env query a msg = do
+    assertEqBackoff env query a [] msg
+
 assertEqBackoff :: (Eq a, Show a) => DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> a -> [Int] -> String -> IO ()
 assertEqBackoff env query a delays msg = do
     assertBackoff env query delays (== a) (\a' -> msg <> ": " <> show a' <> " /= " <> show a)

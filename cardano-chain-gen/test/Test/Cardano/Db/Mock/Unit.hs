@@ -1,4 +1,5 @@
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Test.Cardano.Db.Mock.Unit where
 
@@ -6,11 +7,18 @@ import           Control.Concurrent
 import           Control.Exception
 import           Control.Monad
 import           Control.Monad.Class.MonadSTM.Strict
+import           Data.ByteString (ByteString)
 import           Data.Text (Text)
 
 import           Cardano.Ledger.Slot (BlockNo (..))
 
+import           Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
+
 import           Ouroboros.Network.Block (blockNo, blockPoint)
+
+import qualified Cardano.Db as DB
+
+import           Cardano.DbSync.Era.Shelley.Generic.Block (blockHash)
 
 import           Cardano.Mock.ChainSync.Server
 import           Cardano.Mock.Forging.Interpreter
@@ -35,6 +43,7 @@ unitTests iom knownMigrations =
       , test "simple rollback" simpleRollback
       , test "sync bigger chain" bigChain
       , test "rollback while db-sync is off" restartAndRollback
+      , test "rollback further" rollbackFurther
       , test "genesis config without pool" configNoPools
       , test "genesis config without stakes" configNoStakes
       , test "simple tx" addSimpleTx
@@ -168,6 +177,39 @@ restartAndRollback =
       assertBlockNoBackoff dbSync 200
   where
     testLabel = "restartAndRollback"
+
+rollbackFurther :: IOManager -> [(Text, Text)] -> Assertion
+rollbackFurther =
+    withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    blks <- forM (replicate 201 mockBlock0) (forgeNext interpreter)
+    atomically $ forM_ blks $ addBlock mockServer
+    startDBSync dbSync
+    assertBlockNoBackoff dbSync 200
+
+    -- We want to test that db-sync rollbacks temporarily to block 99
+    -- and then syncs further. We add references to blocks 99 and 100, to
+    -- validate later that one is deleted through cascade, but the other was not
+    -- because a checkpoint was found.
+    let blockHash1 = hfBlockHash $ (blks !! 99)
+    Right bid1 <- queryDBSync dbSync $ DB.queryBlockId blockHash1
+    cm1 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel "{\"1\" : 1}" bid1
+
+    let blockHash2 = hfBlockHash $ (blks !! 100)
+    Right bid2 <- queryDBSync dbSync $ DB.queryBlockId blockHash2
+    cm2 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel "{\"2\" : 2}" bid2
+
+    assertEqQuery dbSync DB.queryCostModel [cm1, cm2] "Unexpected CostModels"
+
+    -- server tells db-sync to rollback to point 150. However db-sync only haa
+    -- a snapshot at block 99, so it will go there first. There is no proper way
+    -- to test that db-sync temporarily is there, that's why we have this trick
+    -- with references.
+    atomically $ rollback mockServer (blockPoint $ blks !! 150)
+    assertBlockNoBackoff dbSync 150
+
+    assertEqQuery dbSync DB.queryCostModel [cm1] "Unexpected CostModel"
+  where
+    testLabel = "rollbackFurther"
 
 configNoPools :: IOManager -> [(Text, Text)] -> Assertion
 configNoPools =
@@ -322,3 +364,17 @@ fillEpochEqually interpreter mockServer = do
   where
     thirdEpoch = div 150 3
     skipSlots = 228
+
+hfBlockHash :: CardanoBlock -> ByteString
+hfBlockHash blk = case blk of
+  BlockShelley sblk -> blockHash sblk
+  BlockAlonzo ablk -> blockHash ablk
+  _ -> error "not supported block type"
+
+
+throwLeft :: Exception err => IO (Either err a) -> IO a
+throwLeft action = do
+  ma <- action
+  case ma of
+    Left err -> throwIO err
+    Right a -> pure a
