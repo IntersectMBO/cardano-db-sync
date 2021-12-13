@@ -1,7 +1,7 @@
 # our packages overlay
 final: prev:
 with final;
-let compiler = config.haskellNix.compiler or "ghc8104";
+let compiler = config.haskellNix.compiler or "ghc8107";
 in {
   src = haskell-nix.haskellLib.cleanGit {
     src = ../.;
@@ -44,8 +44,17 @@ in {
   };
 
   # systemd can't be statically linked:
-  postgresql = prev.postgresql.override {
-    enableSystemd = stdenv.hostPlatform.isLinux && !stdenv.hostPlatform.isMusl;
+  postgresql = (final.postgresql_11
+    .overrideAttrs (_: { dontDisableStatic = stdenv.hostPlatform.isMusl; }))
+    .override {
+      enableSystemd = stdenv.hostPlatform.isLinux && !stdenv.hostPlatform.isMusl;
+      gssSupport = stdenv.hostPlatform.isLinux && !stdenv.hostPlatform.isMusl;
+    };
+
+  python3 = prev.python3.override {
+    packageOverrides = python-final: python-prev: {
+      uvloop = python-prev.uvloop.overrideAttrs (_: { doInstallCheck = false; });
+    };
   };
 
   scripts = import ./scripts.nix { inherit pkgs; };

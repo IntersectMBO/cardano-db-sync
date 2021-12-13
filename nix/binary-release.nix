@@ -13,7 +13,7 @@ let
   name = "cardano-db-sync-${project.version}-${platform}";
 
 in pkgs.runCommand name {
-  buildInputs = with pkgs.buildPackages; [ zip haskellBuildUtils.package ];
+  buildInputs = with pkgs.buildPackages; [ zip haskellBuildUtils ];
 } ''
   mkdir -p $out release
   cd release
