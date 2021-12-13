@@ -656,14 +656,14 @@ queryReservedTickers :: MonadIO m => ReaderT SqlBackend m [ReservedPoolTicker]
 queryReservedTickers =
   fmap entityVal <$> selectList [] []
 
-queryPoolOfflineData :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe (Text, Text))
+queryPoolOfflineData :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe (Text, ByteString))
 queryPoolOfflineData poolHash poolMetadataHash = do
   res <- select . from $ \ (pod `InnerJoin` ph) -> do
             on (pod ^. PoolOfflineDataPoolId ==. ph ^. PoolHashId)
             where_ (ph ^. PoolHashHashRaw ==.  val poolHash)
             where_ (pod  ^. PoolOfflineDataHash ==. val poolMetadataHash)
             limit 1
-            pure (pod ^. PoolOfflineDataTickerName, pod ^. PoolOfflineDataJson)
+            pure (pod ^. PoolOfflineDataTickerName, pod ^. PoolOfflineDataBytes)
   pure $ unValue2 <$> listToMaybe res
 
 queryPoolRegister :: MonadIO m => Maybe ByteString -> ReaderT SqlBackend m [PoolCert]
