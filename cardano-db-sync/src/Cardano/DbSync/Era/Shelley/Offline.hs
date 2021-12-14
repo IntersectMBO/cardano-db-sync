@@ -54,7 +54,7 @@ loadOfflineWorkQueue
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> TBQueue IO PoolFetchRetry -> ReaderT SqlBackend m ()
 loadOfflineWorkQueue _trce workQueue =
-    -- If we try to writ the to queue when it is full it will block. Therefore only add more to
+    -- If we try to write the to queue when it is full it will block. Therefore only add more to
     -- the queue if it is empty.
     whenM (liftIO $ atomically (isEmptyTBQueue workQueue)) $ do
       now <- liftIO Time.getPOSIXTime
