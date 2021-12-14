@@ -15,9 +15,9 @@ import           Data.Aeson (FromJSON (..), ToJSON (..), object, withObject, (.:
 import qualified Data.Aeson as Aeson
 import           Data.Aeson.Encoding (unsafeToEncoding)
 import qualified Data.Aeson.Types ()
+import qualified Data.ByteString.Builder as BSB
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Swagger (NamedSchema (..), ToParamSchema (..), ToSchema (..))
-import qualified Data.Text.Encoding as Text
 import           Data.Time.Clock (UTCTime)
 import qualified Data.Time.Clock.POSIX as Time
 import           Data.Time.Format (defaultTimeLocale, formatTime, parseTimeM)
@@ -315,19 +315,20 @@ instance ToSchema PoolIdBlockNumber
 
 -- | The stake pool metadata in JSON format. This type represents it in
 -- its raw original form. The hash of this content is the 'PoolMetadataHash'.
-newtype PoolMetadataRaw = PoolMetadataRaw { getPoolMetadata :: Text }
+newtype PoolMetadataRaw = PoolMetadataRaw { getPoolMetadata :: ByteString }
   deriving stock (Eq, Show, Ord, Generic)
 
 instance MimeUnrender OctetStream PoolMetadataRaw where
-    mimeUnrender _ = Right . PoolMetadataRaw . Text.decodeUtf8 . LBS.toStrict
+    mimeUnrender _ = Right . PoolMetadataRaw . LBS.toStrict
 
 -- Here we are usingg the unsafe encoding since we already have the JSON format
 -- from the database.
 instance ToJSON PoolMetadataRaw where
     toJSON (PoolMetadataRaw metadata) = toJSON metadata
-    toEncoding (PoolMetadataRaw metadata) = unsafeToEncoding $ Text.encodeUtf8Builder metadata
+    toEncoding (PoolMetadataRaw metadata) = unsafeToEncoding $ BSB.byteString metadata
 
-instance ToSchema PoolMetadataRaw
+instance ToSchema PoolMetadataRaw where
+    declareNamedSchema _ = pure (NamedSchema (Just "RawPoolMetadata") mempty)
 
 -- |Specific time string format.
 newtype TimeStringFormat = TimeStringFormat { unTimeStringFormat :: UTCTime }
