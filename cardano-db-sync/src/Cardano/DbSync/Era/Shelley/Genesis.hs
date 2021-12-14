@@ -1,12 +1,10 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.DbSync.Era.Shelley.Genesis
@@ -75,11 +73,14 @@ insertValidateGenesisDist backend tracer networkName cfg shelleyInitiation = do
     hasStakes :: Bool
     hasStakes = sgStaking cfg /= emptyGenesisStaking
 
+    expectedTxCount :: Word64
+    expectedTxCount = fromIntegral $ length (genesisTxos cfg) + if hasStakes then 1 else 0
+
     insertAction :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either SyncNodeError ())
     insertAction = do
       ebid <- DB.queryBlockId (configGenesisHash cfg)
       case ebid of
-        Right bid -> validateGenesisDistribution tracer networkName cfg bid hasStakes
+        Right bid -> validateGenesisDistribution tracer networkName cfg bid expectedTxCount
         Left _ ->
           runExceptT $ do
             liftIO $ logInfo tracer "Inserting Shelley Genesis distribution"
@@ -127,7 +128,7 @@ insertValidateGenesisDist backend tracer networkName cfg shelleyInitiation = do
                             , DB.blockSlotLeaderId = slid
                             , DB.blockSize = 0
                             , DB.blockTime = configStartTime cfg
-                            , DB.blockTxCount = fromIntegral (length $ genesisTxos cfg)
+                            , DB.blockTxCount = expectedTxCount
                             -- Genesis block does not have a protocol version, so set this to '0'.
                             , DB.blockProtoMajor = 0
                             , DB.blockProtoMinor = 0
@@ -139,16 +140,17 @@ insertValidateGenesisDist backend tracer networkName cfg shelleyInitiation = do
                 lift $ mapM_ (insertTxOuts bid) $ genesisUtxOs cfg
                 liftIO . logInfo tracer $ "Initial genesis distribution populated. Hash "
                                 <> renderByteArray (configGenesisHash cfg)
-                insertStaking tracer bid cfg
+                when hasStakes $
+                  insertStaking tracer bid cfg
                 supply <- lift DB.queryTotalSupply
                 liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
 validateGenesisDistribution
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Text -> ShelleyGenesis StandardShelley -> DB.BlockId -> Bool
+    => Trace IO Text -> Text -> ShelleyGenesis StandardShelley -> DB.BlockId -> Word64
     -> ReaderT SqlBackend m (Either SyncNodeError ())
-validateGenesisDistribution tracer networkName cfg bid hasStakeTx =
+validateGenesisDistribution tracer networkName cfg bid expectedTxCount =
   runExceptT $ do
     liftIO $ logInfo tracer "Validating Genesis distribution"
     meta <- liftLookupFail "Shelley.validateGenesisDistribution" DB.queryMeta
@@ -169,7 +171,6 @@ validateGenesisDistribution tracer networkName cfg bid hasStakeTx =
             ]
 
     txCount <- lift $ DB.queryBlockTxCount bid
-    let expectedTxCount = fromIntegral $length (genesisTxos cfg) + if hasStakeTx then 1 else 0
     when (txCount /= expectedTxCount) $
       dbSyncNodeError $ Text.concat
               [ "Shelley.validateGenesisDistribution: Expected initial block to have "
