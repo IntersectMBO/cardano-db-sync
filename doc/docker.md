@@ -96,3 +96,36 @@ When you've finished with testing either docker-compose down or Ctl-C the termin
 ``` shell
 docker-compose down -f docker-test.yml
 ```
+
+## Building Docker images with Nix
+
+Assuming a base OSX machine with Nix installed. Building a Docker image for cardano-db-sync requires a
+Linux host to compile on. Nix provides a way to do [remote builds](https://nixos.org/manual/nix/unstable/advanced-topics/distributed-builds.html)
+
+Prerequisites:
+ * shell account on NixOS Linux machine (ask on Slack)
+   eg. builder@x86_64-linux.example.com
+
+Assuming you want a Linux x86 image run:
+
+``` shell
+nix-build -A dockerImage --no-out-link \
+--builders 'ssh://builder@x86_64-linux.example.com x86_64-linux' \
+--argstr system x86_64-linux
+```
+
+At the end it will generate a `tar.gz` file
+eg `/nix/store/arbrn0fs54whkn64m0wrcbl9hjd35byn-docker-image-cardano-db-sync.tar.gz`
+
+that can be loaded into docker and run as a normal image.
+
+``` shell
+$ docker load -i /nix/store/arbrn0fs54whkn64m0wrcbl9hjd35byn-docker-image-cardano-db-sync.tar.gz
+
+$ docker image ls
+REPOSITORY                    TAG                                        IMAGE ID       CREATED        SIZE
+inputoutput/cardano-db-sync   066b747a8bfd3791b06ea46c2e793f83ed64967f   f34b029e9c5c   15 hours ago   911MB
+
+# Run this as
+$ docker run inputoutput/cardano-db-sync:066b747a8bfd3791b06ea46c2e793f83ed64967f
+```
