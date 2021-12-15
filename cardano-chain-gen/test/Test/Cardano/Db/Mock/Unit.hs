@@ -5,10 +5,12 @@ module Test.Cardano.Db.Mock.Unit where
 
 import           Control.Concurrent
 import           Control.Exception
+import qualified Data.Map as Map
 import           Control.Monad
 import           Control.Monad.Class.MonadSTM.Strict
 import           Data.ByteString (ByteString)
 import           Data.Text (Text)
+import           Data.Word (Word64)
 
 import           Cardano.Ledger.Slot (BlockNo (..))
 
@@ -17,6 +19,9 @@ import           Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
 import           Ouroboros.Network.Block (blockNo, blockPoint)
 
 import qualified Cardano.Db as DB
+
+import           Cardano.Ledger.Coin
+import           Cardano.Ledger.Shelley.TxBody
 
 import           Cardano.DbSync.Era.Shelley.Generic.Block (blockHash)
 
@@ -37,19 +42,21 @@ unitTests :: IOManager -> [(Text, Text)] -> TestTree
 unitTests iom knownMigrations =
     testGroup "unit tests"
       [ test "simple forge blocks" forgeBlocks
-      , test "sync one block" addSimple
-      , test "sync small chain" addSimpleChain
-      , test "restart db-sync" restartDBSync
-      , test "simple rollback" simpleRollback
-      , test "sync bigger chain" bigChain
-      , test "rollback while db-sync is off" restartAndRollback
-      , test "rollback further" rollbackFurther
-      , test "genesis config without pool" configNoPools
-      , test "genesis config without stakes" configNoStakes
-      , test "simple tx" addSimpleTx
-      , test "simple tx in Shelley era" addSimpleTxShelley
+--      , test "test rewards empty last part of epoch" rewardsEmptyChainLast
+--      , test "sync one block" addSimple
+--      , test "sync small chain" addSimpleChain
+--      , test "restart db-sync" restartDBSync
+--      , test "simple rollback" simpleRollback
+--      , test "sync bigger chain" bigChain
+--      , test "rollback while db-sync is off" restartAndRollback
+--      , test "rollback further" rollbackFurther
+--      , test "genesis config without pool" configNoPools
+--      , test "genesis config without stakes" configNoStakes
+--      , test "simple tx" addSimpleTx
+--      , test "simple tx in Shelley era" addSimpleTxShelley
       , test "rewards" simpleRewards
-      , test "shelley rewards from multiple sources" rewardsShelley
+--      , test "Mir Cert" mirReward
+--      , test "shelley rewards from multiple sources" rewardsShelley
       ]
   where
     test :: String -> (IOManager -> [(Text, Text)] -> Assertion) -> TestTree
@@ -348,11 +355,88 @@ rewardsShelley =
   where
     testLabel = "rewardsShelley"
 
--- 43200 slots per epoch
--- It takes on average 3 * 20 = 60 slots to create a block from a predefined leader
--- If we skip additionally 156 blocks, we get on average 43200/(60 + 228) = 150 blocks/epoch
+mirReward :: IOManager -> [(Text, Text)] -> Assertion
+mirReward =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      blk <- registerAllStakeCreds interpreter (NodeId 0)
+      atomically $ addBlock mockServer blk
+
+      -- first move to treasury from reserves
+      tx1 <- withAlonzoLedgerState interpreter $
+        Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))]
+                         (Wdrl mempty)
+      blk1 <- forgeNext interpreter $ MockBlock [TxAlonzo tx1] (NodeId 0)
+      atomically $ addBlock mockServer blk1
+
+      fillEpochEqually interpreter mockServer
+      fillWithBlocksEqually interpreter mockServer 75
+
+      -- mir from treasury
+      tx2 <- withAlonzoLedgerState interpreter $ Alonzo.mkSimpleDCertTx (StakeIndex 1)
+        (\cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 1000))))
+      tx3 <- withAlonzoLedgerState interpreter $ Alonzo.mkSimpleDCertTx (StakeIndex 1)
+        (\cred -> DCertMir $ MIRCert ReservesMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 1000))))
+      blk2 <- forgeNext interpreter $ MockBlock [TxAlonzo tx2, TxAlonzo tx3] (NodeId 1)
+      atomically $ addBlock mockServer blk2
+
+      fillEpochEqually interpreter mockServer
+      assertRewardCount dbSync 1
+  where
+    testLabel = "mirReward"
+
+rewardsEmptyChainLast :: IOManager -> [(Text, Text)] -> Assertion
+rewardsEmptyChainLast =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      blk <- registerAllStakeCreds interpreter (NodeId 0)
+      atomically $ addBlock mockServer blk
+
+      fillEpochEqually interpreter mockServer
+      fillEpochEqually interpreter mockServer
+      -- Fill half an epoch
+      fillWithBlocksEqually interpreter mockServer 75
+
+      -- Now that pools are registered, we add a tx to fill the fees pot.
+      -- Rewards will be distributed.
+      tx1 <- withAlonzoLedgerState interpreter $  Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
+      blk1 <- forgeNext interpreter $ MockBlock [TxAlonzo tx1] (NodeId 1)
+      atomically $ addBlock mockServer blk1
+
+      fillEpochEqually interpreter mockServer
+      assertRewardCount dbSync 3
+
+      -- Skip half an epoch
+      forgeNextAfterForecast interpreter mockServer (div 43200 2)
+      fillEpochEqually interpreter mockServer
+      assertRewardCount dbSync 14
+  where
+    testLabel = "rewardsEmptyChainLast"
 fillEpochEqually :: Interpreter -> ServerHandle IO CardanoBlock -> Assertion
 fillEpochEqually interpreter mockServer = do
+    fillWithBlocksEqually interpreter mockServer 150
+
+-- We can't skip many slots, before we start getting 'OutsideForecastRange' errors
+forgeNextAfterForecast :: Interpreter -> ServerHandle IO CardanoBlock
+                       -> Word64 -> IO ()
+forgeNextAfterForecast inter mockServer = go
+  where
+    go rest
+      | rest > 10000 = do
+          blk <- forgeNextAfter inter 10000 mockBlock0
+          atomically $ addBlock mockServer blk
+          go (rest - 10000)
+      | True = do
+          blk <- forgeNextAfter inter rest mockBlock0
+          atomically $ addBlock mockServer blk
+          pure ()
+
+-- 43200 slots per epoch
+-- It takes on average 3 * 20 = 60 slots to create a block from a predefined leader
+-- We scip additional blocks since we don't need very dense chains.
+-- With 'blocksToCreate' equal to 150 this fills more or less an epoch.
+fillWithBlocksEqually :: Interpreter -> ServerHandle IO CardanoBlock -> Int -> Assertion
+fillWithBlocksEqually interpreter mockServer blocksToCreate = do
     blks0 <- forM (replicate thirdEpoch mockBlock0) (forgeNextAfter interpreter skipSlots)
     atomically $ forM_ blks0 $ addBlock mockServer
 
@@ -362,7 +446,7 @@ fillEpochEqually interpreter mockServer = do
     blks2 <- forM (replicate thirdEpoch mockBlock2) (forgeNextAfter interpreter skipSlots)
     atomically $ forM_ blks2 $ addBlock mockServer
   where
-    thirdEpoch = div 150 3
+    thirdEpoch = div blocksToCreate 3
     skipSlots = 228
 
 hfBlockHash :: CardanoBlock -> ByteString

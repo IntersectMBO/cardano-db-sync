@@ -15,6 +15,7 @@ import           Cardano.Ledger.Alonzo.Tx
 import           Cardano.Ledger.Alonzo.TxBody
 import           Cardano.Ledger.BaseTypes
 import           Cardano.Ledger.Coin
+import           Cardano.Ledger.Credential
 import           Cardano.Ledger.Era (Crypto)
 import           Cardano.Ledger.Mary.Value
 import           Cardano.Ledger.Shelley.TxBody (DCert (..), Wdrl (..))
@@ -76,6 +77,13 @@ mkDCertTx :: [DCert StandardCrypto] -> Wdrl StandardCrypto
           -> LedgerState (ShelleyBlock (AlonzoEra StandardCrypto))
           -> Either ForgingError (ValidatedTx (AlonzoEra StandardCrypto))
 mkDCertTx certs wdrl sta = Right $ mkSimpleTx $ consCertTxBody certs wdrl
+
+mkSimpleDCertTx :: StakeIndex -> (StakeCredential StandardCrypto -> DCert StandardCrypto)
+                -> LedgerState (ShelleyBlock (AlonzoEra StandardCrypto))
+                -> Either ForgingError (ValidatedTx (AlonzoEra StandardCrypto))
+mkSimpleDCertTx index mkCert st = do
+    cred <- resolveStakeCreds index st
+    mkDCertTx [mkCert cred] (Wdrl mempty) st
 
 mkDCertTxPools :: LedgerState (ShelleyBlock (AlonzoEra StandardCrypto))
                -> Either ForgingError (ValidatedTx (AlonzoEra StandardCrypto))

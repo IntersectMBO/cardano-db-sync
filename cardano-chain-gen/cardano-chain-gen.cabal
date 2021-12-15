@@ -159,6 +159,7 @@ test-suite cardano-chain-gen
                       , cardano-node
                       , cardano-prelude
                       , cardano-slotting
+                      , containers
                       , contra-tracer
                       , directory
                       , extra

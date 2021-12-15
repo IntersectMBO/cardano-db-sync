@@ -9,6 +9,7 @@
 module Cardano.Mock.Forging.Tx.Generic
   ( allPoolStakeCert
   , resolveUTxOIndex
+  , resolveStakeCreds
   ) where
 
 import           Cardano.Prelude hiding ((.), length)
@@ -54,6 +55,12 @@ resolveUTxOIndex index st = toLeft $ case index of
     toLeft :: Maybe (TxIn (Crypto era), Core.TxOut era) -> Either ForgingError ((TxIn (Crypto era), Core.TxOut era), UTxOIndex)
     toLeft Nothing = Left $ CantFindUTxO index
     toLeft (Just (txIn, txOut)) = Right ((txIn, txOut), UTxOAddress (getField @"address" txOut))
+
+resolveStakeCreds :: StakeIndex -> LedgerState (ShelleyBlock era) -> Either ForgingError (StakeCredential (Crypto era))
+resolveStakeCreds (StakeIndex n) st = Right $ rewardAccs !! n
+  where
+    rewardAccs = Map.keys $ _rewards $ _dstate $ _delegationState $ esLState $
+        nesEs $ Consensus.shelleyLedgerState st
 
 allPoolStakeCert :: LedgerState (ShelleyBlock era) -> [DCert (Crypto era)]
 allPoolStakeCert st =

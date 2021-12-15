@@ -299,6 +299,7 @@ share
     -- for the purposes of an uniqueness constraint.
     -- Use of "!force" attribute on the end of the line disables this check.
     UniqueReward        addrId type earnedEpoch poolId !force
+    deriving Show
 
   Withdrawal
     addrId              StakeAddressId      OnDeleteCascade
