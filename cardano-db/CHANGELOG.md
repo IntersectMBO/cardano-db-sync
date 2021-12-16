@@ -1,5 +1,8 @@
 # Revision history for cardano-db
 
+## 12.0.1
+* No changes.
+
 ## 12.0.0
 * Note that this release requires the database to be dropped and recreated.
 * Update `rewardtype` enum (used in `reward` table) to include a pool deposit refund type.
