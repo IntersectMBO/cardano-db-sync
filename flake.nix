@@ -7,7 +7,7 @@
       url = "github:input-output-hk/iohk-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nixpkgs.follows = "haskellNix/nixpkgs-unstable";
+    nixpkgs.follows = "haskellNix/nixpkgs-2111";
     utils.url = "github:numtide/flake-utils";
     customConfig = { url = "path:./custom-config"; };
   };

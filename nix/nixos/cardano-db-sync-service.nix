@@ -124,7 +124,7 @@ in {
       };
       stateDir = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
-        default = "/var/lib/${cfg.user}";
+        default = "/var/lib/cexplorer";
       };
       dbSyncPkgs = lib.mkOption {
         type = lib.types.attrs;
@@ -139,11 +139,6 @@ in {
       package = lib.mkOption {
         type = lib.types.package;
         default = self.cardano-db-sync;
-      };
-      user = lib.mkOption {
-        type = lib.types.str;
-        default = "cdbsync";
-        description = "the user to run as";
       };
       postgres = {
         generatePGPASS = lib.mkOption {
@@ -169,14 +164,14 @@ in {
         };
         user = lib.mkOption {
           type = lib.types.str;
-          default = cfg.user;
+          default = "cexplorer";
           description = "the postgresql user to use";
         };
       };
     };
   };
   config = lib.mkIf cfg.enable {
-    services.cardano-db-sync = let exec = "${cfg.package}/bin/cardano-db-sync";
+    services.cardano-db-sync = let exec = "${cfg.package}/bin/${cfg.package.exeName}";
     in {
       pgpass = builtins.toFile "pgpass" "${cfg.postgres.socketdir}:${
           toString cfg.postgres.port
@@ -208,14 +203,6 @@ in {
           --state-dir ${cfg.stateDir}
       '';
     };
-    users = {
-      users."${cfg.postgres.user}" = {
-        createHome = true;
-        home = "/var/lib/${cfg.user}";
-        group = cfg.user;
-      };
-      groups.cexplorer = { };
-    };
     systemd.services.cardano-db-sync = {
       wantedBy = [ "multi-user.target" ];
       requires = [ "postgresql.service" ];
@@ -236,16 +223,17 @@ in {
       '';
       serviceConfig = {
         ExecStart = cfg.script;
-        User = cfg.postgres.user;
+        DynamicUser = true;
         WorkingDirectory = cfg.stateDir;
         StateDirectory = lib.removePrefix stateDirBase cfg.stateDir;
         TimeoutStopSec = "2h";
+        SupplementaryGroups = "cardano-node";
       };
       postStop = lib.optionalString (cfg.takeSnapshot != "never") ''
         # Only take snapshot after service exited cleanly.
         if [ "$SERVICE_RESULT" = "success" ]; then
           EXISTING_SNAPSHOTS=()
-          for f in db-sync-snapshot-schema-${majorVersion}*; do
+          for f in db-sync-snapshot-schema-${majorVersion}*.tgz; do
             if [ -f $f ]; then
               echo "A snapshot already exist for this version: $f"
               EXISTING_SNAPSHOTS+=( $f )

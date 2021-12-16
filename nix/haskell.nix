@@ -3,7 +3,7 @@
 ############################################################################
 { lib, stdenv, haskell-nix, buildPackages, src, config ? { }
   # GHC attribute name
-, compiler ? config.haskellNix.compiler or "ghc8104"
+, compiler ? config.haskellNix.compiler or "ghc8107"
   # Enable profiling
 , profiling ? config.haskellNix.profiling or false
   # Version info, to be passed when not building from a git work tree
@@ -123,10 +123,22 @@ let
             !pkgs.stdenv.hostPlatform.isMusl;
           packages.cardano-node.flags.systemd =
             !pkgs.stdenv.hostPlatform.isMusl;
-        })
+        }
+      )
       {
         packages.cardano-db-sync.package.extraSrcFiles = [ "../schema/*.sql" ];
       }
+      ({ pkgs, ... }: {
+        packages = lib.genAttrs [ "cardano-config" "cardano-db" ] (_: {
+          components.library.build-tools = [ pkgs.buildPackages.buildPackages.gitMinimal ];
+        });
+      })
+      ({ pkgs, ...}: {
+        # Use the VRF fork of libsodium when building cardano-node
+        packages = lib.genAttrs [ "cardano-crypto-praos" "cardano-crypto-class" ] (_: {
+          components.library.pkgconfig = lib.mkForce [ [ pkgs.libsodium-vrf ] ];
+        });
+      })
     ];
   };
   # setGitRev is a postInstall script to stamp executables with
