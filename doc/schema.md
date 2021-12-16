@@ -1,6 +1,6 @@
 # Schema Documentation for cardano-db-sync
 
-Schema version: 11.0.4 (from branch **erikd/correct-mir** which may not accurately reflect the version number)
+Schema version: 12.0.0
 
 ### `schema_version`
 
@@ -667,7 +667,7 @@ A table containing a managed list of reserved ticker names.
 |-|-|-|
 | `id` | integer (64) |  |
 | `name` | string | The ticker name. |
-| `pool_id` | integer (64) | The PoolHash table index for the pool that has reserved this name. |
+| `pool_hash` | hash28type | The hash of the pool that owns this ticker. |
 
 ### `delisted_pool`
 
