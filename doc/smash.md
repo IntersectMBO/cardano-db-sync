@@ -76,11 +76,19 @@ Stake pool metadata information can be also found in [The mainnet metadata Desig
 
 ### Build SMASH
 
-SMASH can be built and installed from the command line using "cabal" as follows:
+SMASH can be built and installed from the command line using 
+
+- "cabal" as follows:
 
 ```
 cabal build cardano-smash-server
 cabal install cardano-smash-server
+```
+
+- nix
+
+```
+nix-build -A cardano-smash-server -o smash-server
 ```
 
 ## How to run SMASH with the Cardano node and db-sync
@@ -99,7 +107,7 @@ PGPASSFILE=config/pgpass-mainnet db-sync-node/bin/cardano-db-sync \
 ```
 
 see https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/building-running.md for more info on how
-to run cardano-db-sync. cardano-db-sync-extended can also run instead.
+to run cardano-db-sync.
 
 Finally you can then run ``smash-server`` using e.g:
 ```
