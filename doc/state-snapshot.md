@@ -27,6 +27,8 @@ Currently (at epoch 269), creating a snapshot takes about 15 minutes and restori
 * Creating and restoring snapshots requires significant amounts of free disk space (at epoch 269
   it required about 10G). If there is insufficient disk space, `gzip` can give some odd error
   messages.
+* node tip should be ahead of the snapshot point during restoration otherwise `cardano-db-sync` will 
+  roll back to genesis
 
 # Creating a Snapshot
 
