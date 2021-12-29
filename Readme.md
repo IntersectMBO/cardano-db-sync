@@ -1,6 +1,6 @@
 # Cardano DB Sync
 
-**Note:** Anyone wishing to build and run anything in this repository should avoid the `master` branch abd build/run from the latest release tag.
+**Note:** Anyone wishing to build and run anything in this repository should avoid the `master` branch and build/run from the latest release tag.
 
 ## Purpose
 
