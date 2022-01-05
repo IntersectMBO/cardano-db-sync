@@ -50,6 +50,7 @@ import qualified Cardano.Ledger.Alonzo.TxWitness as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Core as Ledger
 import qualified Cardano.Ledger.Era as Ledger
+import qualified Cardano.Ledger.Keys as Ledger
 import qualified Cardano.Ledger.Mary as Mary
 import           Cardano.Ledger.Mary.Value (AssetName, PolicyID, Value (..))
 import qualified Cardano.Ledger.SafeHash as Ledger
@@ -100,6 +101,7 @@ data Tx = Tx
   , txScriptSizes :: [Word64] -- this contains only the sizes of plutus scripts in witnesses
   , txScripts :: [TxScript]
   , txScriptsFee :: Coin
+  , txExtraKeyWitnesses :: ![ByteString]
   }
 
 data TxCertificate = TxCertificate
@@ -178,6 +180,7 @@ fromAllegraTx (blkIndex, tx) =
       , txScriptSizes = []    -- Allegra does not support scripts
       , txScripts = scripts
       , txScriptsFee = Coin 0 -- Allegra does not support scripts
+      , txExtraKeyWitnesses = []
       }
   where
     fromTxOut :: Word16 -> ShelleyTx.TxOut StandardAllegra -> TxOut
@@ -259,6 +262,7 @@ fromShelleyTx (blkIndex, tx) =
       , txScriptSizes = []    -- Shelley does not support scripts
       , txScripts = scripts
       , txScriptsFee = Coin 0 -- Shelley does not support scripts
+      , txExtraKeyWitnesses = []
       }
   where
     fromTxOut :: Word16 -> ShelleyTx.TxOut StandardShelley -> TxOut
@@ -318,6 +322,7 @@ fromMaryTx (blkIndex, tx) =
       , txScriptSizes = []    -- Mary does not support scripts
       , txScripts = scripts
       , txScriptsFee = Coin 0 -- Mary does not support scripts
+      , txExtraKeyWitnesses = []
       }
   where
     fromTxOut :: Word16 -> ShelleyTx.TxOut StandardMary -> TxOut
@@ -402,6 +407,7 @@ fromAlonzoTx pp (blkIndex, tx) =
       , txScriptSizes = sizes
       , txScripts = scripts
       , txScriptsFee = minFees
+      , txExtraKeyWitnesses = extraKeyWits
       }
   where
     fromTxOut :: Word16 -> Alonzo.TxOut StandardAlonzo -> TxOut
@@ -574,6 +580,10 @@ fromAlonzoTx pp (blkIndex, tx) =
         Mint ->
           Right . unScriptHash <$> elemAtSet index (getField @"minted" txBody)
 
+    extraKeyWits :: [ByteString]
+    extraKeyWits = Set.toList $
+      Set.map (\(Ledger.KeyHash h) -> Crypto.hashToBytes h) $
+      Alonzo.reqSignerHashes txBody
 
 -- -------------------------------------------------------------------------------------------------
 

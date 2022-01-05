@@ -395,6 +395,11 @@ share
     value               Text Maybe          sqltype=jsonb
     UniqueData          hash
 
+  ExtraKeyWitness
+    hash                ByteString          sqltype=hash28type
+    txId                TxId                OnDeleteCascade
+    UniqueWitness       hash
+
   -- -----------------------------------------------------------------------------------------------
   -- Update parameter proposals.
 
