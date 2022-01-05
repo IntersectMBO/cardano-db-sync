@@ -54,9 +54,10 @@ unitTests iom knownMigrations =
 --      , test "genesis config without stakes" configNoStakes
 --      , test "simple tx" addSimpleTx
 --      , test "simple tx in Shelley era" addSimpleTxShelley
-      , test "rewards" simpleRewards
+--      , test "rewards" simpleRewards
 --      , test "Mir Cert" mirReward
 --      , test "shelley rewards from multiple sources" rewardsShelley
+      , test "consume same block" consumeSameBlock
       ]
   where
     test :: String -> (IOManager -> [(Text, Text)] -> Assertion) -> TestTree
@@ -412,6 +413,30 @@ rewardsEmptyChainLast =
       assertRewardCount dbSync 14
   where
     testLabel = "rewardsEmptyChainLast"
+
+consumeSameBlock :: IOManager -> [(Text, Text)] -> Assertion
+consumeSameBlock =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      blk <- registerAllStakeCreds interpreter (NodeId 0)
+      atomically $ addBlock mockServer blk
+      fillWithBlocksEqually interpreter mockServer 75
+
+      tx0 <- withAlonzoLedgerState interpreter $  Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 20000 20000
+      tx1 <- withAlonzoLedgerState interpreter $  Alonzo.mkPaymentTx (UTxOIndex 1) (UTxOIndex 2) 10000 10000
+      blk0 <- forgeNext interpreter $ MockBlock [TxAlonzo tx0, TxAlonzo tx1] (NodeId 1)
+      atomically $ addBlock mockServer blk0
+      assertBlockNoBackoff dbSync 76
+  where
+    testLabel = "consumeSameBlock"
+
+simpleScript :: IOManager -> [(Text, Text)] -> Assertion
+simpleScript =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+  where
+    testLabel = "simpleScript"
+
+
 fillEpochEqually :: Interpreter -> ServerHandle IO CardanoBlock -> Assertion
 fillEpochEqually interpreter mockServer = do
     fillWithBlocksEqually interpreter mockServer 150
