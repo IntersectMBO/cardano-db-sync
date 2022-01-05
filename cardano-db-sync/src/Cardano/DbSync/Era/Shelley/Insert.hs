@@ -300,6 +300,8 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx grouped = 
       insertMaTxMint tracer txId $ Generic.txMint tx
 
       mapM_ (insertScript tracer txId) $ Generic.txScripts tx
+
+      mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
       pure txIns
 
     pure $ grouped <> TxGroupedData inputs txOutsGrouped
@@ -986,6 +988,17 @@ insertScript tracer txId script = do
     scriptConvert :: MonadIO m => Generic.TxScript -> m (Maybe Text)
     scriptConvert s =
       maybe (pure Nothing) (safeDecodeToJson tracer "insertScript") (Generic.txScriptJson s)
+
+insertExtraKeyWitness
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DB.TxId -> ByteString
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+insertExtraKeyWitness _tracer txId keyHash = do
+  void . lift . DB.insertExtraKeyWitness $
+          DB.ExtraKeyWitness
+          { DB.extraKeyWitnessHash = keyHash
+          , DB.extraKeyWitnessTxId = txId
+          }
 
 insertPots
     :: (MonadBaseControl IO m, MonadIO m)
