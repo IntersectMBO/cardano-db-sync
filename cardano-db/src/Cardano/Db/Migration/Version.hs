@@ -35,7 +35,7 @@ parseMigrationVersionFromFile str =
 nextMigrationVersion :: MigrationVersion -> IO MigrationVersion
 nextMigrationVersion (MigrationVersion _stage ver _date) = do
   -- We can ignore the provided 'stage' and 'date' fields, but we do bump the version number.
-  -- All new versions have 'stage == 2' because the stage 2 migrations are the Presistent
+  -- All new versions have 'stage == 2' because the stage 2 migrations are the Persistent
   -- generated ones. For the date we use today's date.
   (y, m, d) <- Time.toGregorian . Time.utctDay <$> Time.getCurrentTime
   pure $ MigrationVersion 2 (ver + 1) (fromIntegral y * 10000 + m * 100 + d)
