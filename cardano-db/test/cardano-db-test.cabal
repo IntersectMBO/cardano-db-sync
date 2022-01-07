@@ -52,7 +52,6 @@ library
                       , cardano-ledger-byron
                       , cardano-ledger-core
                       , cardano-ledger-shelley-ma
-                      , ouroboros-consensus-shelley
                       , persistent
                       , hedgehog
                       , text

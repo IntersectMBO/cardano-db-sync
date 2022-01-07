@@ -18,6 +18,8 @@ import           Cardano.BM.Trace (Trace, logInfo)
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
+import           Cardano.Ledger.Crypto (StandardCrypto)
+
 import           Cardano.Db (textShow)
 
 import           Cardano.DbSync.Api
@@ -41,7 +43,6 @@ import           Ouroboros.Consensus.HardFork.Combinator.Ledger.Query
 import           Ouroboros.Consensus.HardFork.History.Qry (Expr (..), Interpreter,
                    PastHorizonException, Qry, interpretQuery, qryFromExpr, slotToEpoch')
 import           Ouroboros.Consensus.Ledger.Query (Query (..))
-import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
 
 import           Ouroboros.Network.Block (Point (..))
 import           Ouroboros.Network.Protocol.LocalStateQuery.Client (ClientStAcquired (..),

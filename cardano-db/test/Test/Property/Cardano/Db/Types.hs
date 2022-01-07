@@ -13,6 +13,7 @@ import qualified Cardano.Crypto.Hash as Crypto
 
 import           Cardano.Db
 
+import           Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Hashes as Ledger
 import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..))
 
@@ -37,9 +38,6 @@ import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
 import           Numeric.Natural (Natural)
-
-import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
-
 
 prop_roundtrip_Ada_via_JSON :: Property
 prop_roundtrip_Ada_via_JSON =

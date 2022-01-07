@@ -76,7 +76,6 @@ library
                       , memory
                       , monad-control
                       , monad-logger
-                      , ouroboros-consensus-shelley
                       , ouroboros-network
                       , persistent
                       , persistent-documentation
@@ -124,7 +123,6 @@ test-suite test
                       , cardano-ledger-byron
                       , cardano-ledger-core
                       , cardano-ledger-shelley-ma
-                      , ouroboros-consensus-shelley
                       , persistent
                       , hedgehog
                       , text

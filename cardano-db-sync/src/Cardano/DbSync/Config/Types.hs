@@ -46,6 +46,7 @@ import qualified Cardano.Crypto.Hash as Crypto
 import           Cardano.Db (MigrationDir)
 
 import           Cardano.Ledger.Allegra (AllegraEra)
+import           Cardano.Ledger.Crypto (StandardCrypto)
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
@@ -61,7 +62,6 @@ import           Ouroboros.Consensus.Cardano.Node (ProtocolTransitionParamsShell
 import qualified Ouroboros.Consensus.HardFork.Combinator.Basics as Cardano
 import           Ouroboros.Consensus.Shelley.Eras (StandardShelley)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
-import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
 
 newtype LogFileDir = LogFileDir
   { unLogFileDir :: FilePath

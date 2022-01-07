@@ -42,6 +42,7 @@ module Cardano.Db.Types
 import qualified Cardano.Crypto.Hash as Crypto
 
 import           Cardano.Ledger.Coin (DeltaCoin (..))
+import           Cardano.Ledger.Crypto (StandardCrypto)
 import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..))
 import           Cardano.Ledger.Shelley.Rewards as Shelley
 import qualified Cardano.Ledger.Shelley.Scripts as Shelley
@@ -65,8 +66,6 @@ import qualified Data.Text as Text
 import           Data.Word (Word16, Word64)
 
 import           GHC.Generics (Generic)
-
-import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
 
 import           Quiet (Quiet (..))
 
