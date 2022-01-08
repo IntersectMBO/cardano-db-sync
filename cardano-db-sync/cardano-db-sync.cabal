@@ -79,6 +79,7 @@ library
                         Cardano.DbSync.Era.Shelley.Genesis
                         Cardano.DbSync.Era.Shelley.Insert
                         Cardano.DbSync.Era.Shelley.Insert.Epoch
+                        Cardano.DbSync.Era.Shelley.Insert.Grouped
                         Cardano.DbSync.Era.Shelley.Offline
                         Cardano.DbSync.Era.Shelley.Offline.FetchQueue
                         Cardano.DbSync.Era.Shelley.Offline.Http
