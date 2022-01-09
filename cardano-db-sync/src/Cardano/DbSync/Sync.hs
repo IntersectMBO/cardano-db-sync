@@ -29,7 +29,7 @@ import           Cardano.Prelude hiding (Meta, Nat, option, (%))
 
 import           Control.Tracer (Tracer)
 
-import           Cardano.BM.Data.Tracer (ToLogObject (..))
+import           Cardano.BM.Data.Tracer (ToLogObject (..), ToObject)
 import           Cardano.BM.Trace (Trace, appendName, logError, logInfo)
 import qualified Cardano.BM.Trace as Logging
 
@@ -37,6 +37,8 @@ import           Cardano.Client.Subscription (subscribe)
 import qualified Cardano.Crypto as Crypto
 
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
+
+import           Cardano.Ledger.Crypto (StandardCrypto)
 
 import           Cardano.DbSync.Api
 import           Cardano.DbSync.Config
@@ -79,7 +81,6 @@ import           Ouroboros.Consensus.Network.NodeToClient (ClientCodecs, cChainS
                    cStateQueryCodec, cTxSubmissionCodec)
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
-import           Ouroboros.Consensus.Shelley.Protocol (StandardCrypto)
 
 import           Ouroboros.Network.Block (BlockNo (..), Point (..), Tip (..), blockNo, genesisPoint,
                    getTipBlockNo)
@@ -186,7 +187,7 @@ runSyncNodeClient metricsSetters env iomgr trce (SocketPath socketPath) = do
     errorPolicyTracer :: Tracer IO (WithAddr LocalAddress ErrorPolicyTrace)
     errorPolicyTracer = toLogObject $ appendName "ErrorPolicy" trce
 
-    muxTracer :: Show peer => Tracer IO (WithMuxBearer peer MuxTrace)
+    muxTracer :: (Show peer, ToObject peer) => Tracer IO (WithMuxBearer peer MuxTrace)
     muxTracer = toLogObject $ appendName "Mux" trce
 
     subscriptionTracer :: Tracer IO (Identity (SubscriptionTrace LocalAddress))
