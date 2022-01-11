@@ -395,6 +395,11 @@ share
     value               Text Maybe          sqltype=jsonb
     UniqueData          hash
 
+  ExtraKeyWitness
+    hash                ByteString          sqltype=hash28type
+    txId                TxId                OnDeleteCascade
+    UniqueWitness       hash
+
   -- -----------------------------------------------------------------------------------------------
   -- Update parameter proposals.
 
@@ -818,6 +823,11 @@ schemaDocs =
       DatumHash # "The Hash of the Plutus Data"
       DatumTxId # "The Tx table index for the transaction where this script first became available."
       DatumValue # "The actual data in json format"
+
+    ExtraKeyWitness --^ do
+      "A table containing transaction extra key witness hashes."
+      ExtraKeyWitnessHash # "The hash of the witness."
+      ExtraKeyWitnessTxId # "The id of the tx this witness belongs to."
 
     ParamProposal --^ do
       "A table containing block chain parameter change proposals."

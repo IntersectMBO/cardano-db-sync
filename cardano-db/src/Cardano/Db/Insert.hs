@@ -14,6 +14,7 @@ module Cardano.Db.Insert
   , insertEpochParam
   , insertEpochRewardTotalReceived
   , insertEpochSyncTime
+  , insertExtraKeyWitness
   , insertManyEpochStakes
   , insertManyRewards
   , insertManyTxIn
@@ -129,6 +130,9 @@ insertEpochRewardTotalReceived = insertCheckUnique "EpochRewardTotalReceived"
 
 insertEpochSyncTime :: (MonadBaseControl IO m, MonadIO m) => EpochSyncTime -> ReaderT SqlBackend m EpochSyncTimeId
 insertEpochSyncTime = insertReplace "EpochSyncTime"
+
+insertExtraKeyWitness :: (MonadBaseControl IO m, MonadIO m) => ExtraKeyWitness -> ReaderT SqlBackend m ExtraKeyWitnessId
+insertExtraKeyWitness = insertCheckUnique "ExtraKeyWitness"
 
 insertManyEpochStakes :: (MonadBaseControl IO m, MonadIO m) => [EpochStake] -> ReaderT SqlBackend m ()
 insertManyEpochStakes = insertManyUncheckedUnique "Many EpochStake"
