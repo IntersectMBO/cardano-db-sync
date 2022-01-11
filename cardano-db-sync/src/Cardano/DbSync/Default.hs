@@ -10,7 +10,7 @@ module Cardano.DbSync.Default
 
 import           Cardano.Prelude
 
-import           Cardano.BM.Trace (Trace, logDebug, logInfo)
+import           Cardano.BM.Trace (Trace, logInfo)
 
 import qualified Cardano.Db as DB
 
@@ -96,21 +96,9 @@ mkSnapshotMaybe
         => SyncEnv -> LedgerStateSnapshot -> BlockNo -> DB.SyncState
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 mkSnapshotMaybe env snapshot blkNo syncState =
-    case maybeFromStrict (lssNewEpoch snapshot) of
-      Just newEpoch -> do
-        liftIO $ logDebug (leTrace $ envLedger env) "Preparing for a snapshot"
-        let newEpochNo = Generic.neEpoch newEpoch
-        -- flush all volatile data
-        finalizeEpochBulkOps (envLedger env)
-        liftIO $ logDebug (leTrace $ envLedger env) "Taking a ledger a snapshot"
-        -- finally take a ledger snapshot
-        -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
-        liftIO $ saveCleanupState (envLedger env) (lssOldState snapshot) (Just $ newEpochNo - 1)
-      Nothing ->
-        when (timeToSnapshot syncState blkNo) .
-          whenM (isEmptyEpochBulkOps $ envLedger env) .
-            liftIO $ saveCleanupState (envLedger env) (lssOldState snapshot) Nothing
-
+    when (timeToSnapshot syncState blkNo) .
+      whenM (isEmptyEpochBulkOps $ envLedger env) .
+        liftIO $ saveCleanupState (envLedger env) (lssOldState snapshot) Nothing
   where
     timeToSnapshot :: DB.SyncState -> BlockNo -> Bool
     timeToSnapshot syncSt bNo =
