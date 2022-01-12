@@ -6,7 +6,7 @@ module Cardano.Db.Version
   ( gitRev
   ) where
 
-import           Cardano.Config.Git.RevFromGit (gitRevFromGit)
+import           Cardano.Db.RevFromGit (gitRevFromGit)
 import           Data.FileEmbed (dummySpaceWith)
 
 import           Data.Text (Text)
