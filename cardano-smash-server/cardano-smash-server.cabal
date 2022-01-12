@@ -109,7 +109,7 @@ executable cardano-smash-server
   other-modules:        Paths_cardano_smash_server
 
   build-depends:        base                            >= 4.14         && < 4.16
-                      , cardano-config
+                      , cardano-db
                       , cardano-smash-server
                       , cardano-prelude
                       , optparse-applicative

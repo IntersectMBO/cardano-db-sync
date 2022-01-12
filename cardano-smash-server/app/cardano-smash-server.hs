@@ -7,7 +7,7 @@ import           Prelude (read)
 import           Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative as Opt
 
-import           Cardano.Config.Git.Rev (gitRev)
+import           Cardano.Db (gitRev)
 
 import           Cardano.SMASH.Server.Config
 import           Cardano.SMASH.Server.Run
