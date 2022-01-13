@@ -23,7 +23,7 @@ import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Credential
 import           Cardano.Ledger.Era (Crypto)
 import           Cardano.Ledger.Shelley.LedgerState hiding (LedgerState)
-import           Cardano.Ledger.Shelley.TxBody hiding (TxIn)
+import           Cardano.Ledger.Shelley.TxBody
 import           Cardano.Ledger.Shelley.UTxO
 import           Cardano.Ledger.TxIn (TxIn (..))
 
@@ -39,7 +39,8 @@ resolveUTxOIndex :: forall era. (Crypto era ~ StandardCrypto, HasField "address"
                  -> Either ForgingError ((TxIn (Crypto era), Core.TxOut era), UTxOIndex)
 resolveUTxOIndex index st = toLeft $ case index of
     UTxOIndex n -> safeIndex n utxoPairs
-    UTxOAddress addr -> find (eq addr) utxoPairs
+    UTxOAddress addr -> find (hasAddr addr) utxoPairs
+    UTxOInput input -> find (hasInput input) utxoPairs
   where
     utxoPairs :: [(TxIn (Crypto era), Core.TxOut era)]
     utxoPairs = Map.toList $ unUTxO $ _utxo $ _utxoState $ esLState $
@@ -50,11 +51,12 @@ resolveUTxOIndex index st = toLeft $ case index of
       | n < length ls = Just $ ls !! n
       | True = Nothing
 
-    eq addr (_, txOut) = addr == getField @"address" txOut
+    hasAddr addr (_, txOut) = addr == getField @"address" txOut
+    hasInput inp (inp', _) = inp == inp'
 
     toLeft :: Maybe (TxIn (Crypto era), Core.TxOut era) -> Either ForgingError ((TxIn (Crypto era), Core.TxOut era), UTxOIndex)
     toLeft Nothing = Left $ CantFindUTxO index
-    toLeft (Just (txIn, txOut)) = Right ((txIn, txOut), UTxOAddress (getField @"address" txOut))
+    toLeft (Just  (txIn, txOut)) = Right ((txIn, txOut), UTxOInput txIn)
 
 resolveStakeCreds :: StakeIndex -> LedgerState (ShelleyBlock era) -> Either ForgingError (StakeCredential (Crypto era))
 resolveStakeCreds (StakeIndex n) st = Right $ rewardAccs !! n

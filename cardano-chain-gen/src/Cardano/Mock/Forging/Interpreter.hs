@@ -8,6 +8,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -23,9 +24,10 @@ module Cardano.Mock.Forging.Interpreter
   , registerAllStakeCreds
   , withAlonzoLedgerState
   , withShelleyLedgerState
+  , mkTxId
   ) where
 
-import           Cardano.Prelude (bimap)
+import           Cardano.Prelude (bimap, getField)
 
 import           Control.Monad
 import           Control.Monad.Except
@@ -65,7 +67,9 @@ import qualified Ouroboros.Consensus.TypeFamilyWrappers as Consensus
 import           Ouroboros.Consensus.Util.IOLike
 import           Ouroboros.Consensus.Util.Orphans ()
 
+import           Cardano.Ledger.Alonzo.Tx
 import qualified Cardano.Ledger.Shelley.API.Mempool as SL
+import qualified Cardano.Ledger.TxIn as SL
 
 import           Cardano.Mock.ChainDB
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
@@ -374,6 +378,10 @@ registerAllStakeCreds inter nodeId = do
       LedgerStateAlonzo sta -> either throwIO (pure . TxAlonzo) $ Alonzo.mkDCertTxPools sta
       _ -> throwIO UnexpectedEra
     forgeNext inter $ MockBlock [tx] nodeId
+
+mkTxId :: TxEra -> SL.TxId StandardCrypto
+mkTxId (TxAlonzo tx) =
+  SL.txid @(AlonzoEra StandardCrypto) (getField @"body" (SL.extractTx $ SL.unsafeMakeValidated tx))
 
 mkValidated :: TxEra -> Validated (Consensus.GenTx CardanoBlock)
 mkValidated (TxAlonzo tx) =

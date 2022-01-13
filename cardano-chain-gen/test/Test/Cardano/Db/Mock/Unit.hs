@@ -1,5 +1,7 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Test.Cardano.Db.Mock.Unit where
 
@@ -11,6 +13,7 @@ import           Control.Monad.Class.MonadSTM.Strict
 import           Data.ByteString (ByteString)
 import           Data.Text (Text)
 import           Data.Word (Word64)
+import           GHC.Records (HasField (..))
 
 import           Cardano.Ledger.Slot (BlockNo (..))
 
@@ -20,7 +23,9 @@ import           Ouroboros.Network.Block (blockNo, blockPoint)
 
 import qualified Cardano.Db as DB
 
+import           Cardano.Ledger.Shelley.API.Mempool
 import           Cardano.Ledger.Coin
+import qualified Cardano.Ledger.TxIn as SL
 import           Cardano.Ledger.Shelley.TxBody
 
 import           Cardano.DbSync.Era.Shelley.Generic.Block (blockHash)
@@ -29,6 +34,7 @@ import           Cardano.Mock.ChainSync.Server
 import           Cardano.Mock.Forging.Interpreter
 import           Cardano.Mock.Forging.Types
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
+import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
 
 import           Test.Tasty (TestTree, testGroup)
@@ -58,6 +64,8 @@ unitTests iom knownMigrations =
 --      , test "Mir Cert" mirReward
 --      , test "shelley rewards from multiple sources" rewardsShelley
       , test "consume same block" consumeSameBlock
+      , test "simple script lock" simpleScript
+      , test "unlock script in same block" unlockScriptSameBlock
       ]
   where
     test :: String -> (IOManager -> [(Text, Text)] -> Assertion) -> TestTree
@@ -364,7 +372,7 @@ mirReward =
       atomically $ addBlock mockServer blk
 
       -- first move to treasury from reserves
-      tx1 <- withAlonzoLedgerState interpreter $
+      tx1 <- withAlonzoLedgerState interpreter $ \_ ->
         Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))]
                          (Wdrl mempty)
       blk1 <- forgeNext interpreter $ MockBlock [TxAlonzo tx1] (NodeId 0)
@@ -423,7 +431,7 @@ consumeSameBlock =
       fillWithBlocksEqually interpreter mockServer 75
 
       tx0 <- withAlonzoLedgerState interpreter $  Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 20000 20000
-      tx1 <- withAlonzoLedgerState interpreter $  Alonzo.mkPaymentTx (UTxOIndex 1) (UTxOIndex 2) 10000 10000
+      tx1 <- withAlonzoLedgerState interpreter $  Alonzo.mkPaymentTx (UTxOIndex 1) (UTxOIndex 2) 10000 30000
       blk0 <- forgeNext interpreter $ MockBlock [TxAlonzo tx0, TxAlonzo tx1] (NodeId 1)
       atomically $ addBlock mockServer blk0
       assertBlockNoBackoff dbSync 76
@@ -433,9 +441,37 @@ consumeSameBlock =
 simpleScript :: IOManager -> [(Text, Text)] -> Assertion
 simpleScript =
     withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      blk <- registerAllStakeCreds interpreter (NodeId 0)
+      atomically $ addBlock mockServer blk
+      fillWithBlocksEqually interpreter mockServer 75
+
+      tx0 <- withAlonzoLedgerState interpreter $ Alonzo.mkLockByScriptTx (UTxOIndex 0) True 20000 20000
+      blk0 <- forgeNext interpreter $ MockBlock [TxAlonzo tx0] (NodeId 1)
+      atomically $ addBlock mockServer blk0
+      assertBlockNoBackoff dbSync 76
   where
     testLabel = "simpleScript"
 
+unlockScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion
+unlockScriptSameBlock =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      blk <- registerAllStakeCreds interpreter (NodeId 0)
+      atomically $ addBlock mockServer blk
+      fillWithBlocksEqually interpreter mockServer 75
+
+      tx0 <- withAlonzoLedgerState interpreter $ Alonzo.mkLockByScriptTx (UTxOIndex 0) True 20000 20000
+      let txId = mkTxId $ TxAlonzo tx0
+        -- SL.txid @(AlonzoEra StandardCrypto) (getField @"body" (extractTx tx0))
+          txIn1 = SL.TxIn txId 0
+      tx1 <- withAlonzoLedgerState interpreter $
+        Alonzo.mkUnlockScriptTx txIn1 (UTxOIndex 1) (UTxOIndex 2) True 20000 20000
+      blk0 <- forgeNext interpreter $ MockBlock [TxAlonzo tx0, TxAlonzo tx1] (NodeId 1)
+      atomically $ addBlock mockServer blk0
+      assertBlockNoBackoff dbSync 76
+  where
+    testLabel = "unlockScriptSameBlock"
 
 fillEpochEqually :: Interpreter -> ServerHandle IO CardanoBlock -> Assertion
 fillEpochEqually interpreter mockServer = do

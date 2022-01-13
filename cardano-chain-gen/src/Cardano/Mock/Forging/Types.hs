@@ -11,6 +11,7 @@ import           Ouroboros.Consensus.Shelley.Eras (AlonzoEra, ShelleyEra, Standa
 import           Cardano.Ledger.Address
 import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Credential
+import           Cardano.Ledger.TxIn (TxIn (..))
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
@@ -41,7 +42,7 @@ data ForgingError =
   | FingerprintDecodeError String
   deriving (Show, Exception)
 
-data UTxOIndex = UTxOIndex Int | UTxOAddress (Addr StandardCrypto)
+data UTxOIndex = UTxOIndex Int | UTxOAddress (Addr StandardCrypto) | UTxOInput (TxIn StandardCrypto)
     deriving (Show, Eq)
 
 data StakeIndex = StakeIndex Int | StakeAddress (StakeCredential StandardCrypto)

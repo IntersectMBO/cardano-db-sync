@@ -46,6 +46,7 @@ library
                         Cardano.Mock.ChainSync.State
                         Cardano.Mock.Forging.Interpreter
                         Cardano.Mock.Forging.Tx.Alonzo
+                        Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
                         Cardano.Mock.Forging.Tx.Generic
                         Cardano.Mock.Forging.Tx.Shelley
                         Cardano.Mock.Forging.Types
@@ -55,6 +56,7 @@ library
                       , aeson
                       , binary
                       , bytestring
+                      , cardano-api
                       , cardano-binary
                       , cardano-client
                       , cardano-crypto
@@ -97,6 +99,8 @@ library
                       , ouroboros-network-framework
                       , persistent
                       , persistent-postgresql
+                      , plutus-core
+                      , plutus-example
                       , pretty-show
                       , prometheus
                       , random-shuffle
@@ -172,6 +176,7 @@ test-suite cardano-chain-gen
                       , silently
                       , stm
                       , strict-containers
+                      , strict-stm
                       , tasty
                       , tasty-quickcheck
                       , text
