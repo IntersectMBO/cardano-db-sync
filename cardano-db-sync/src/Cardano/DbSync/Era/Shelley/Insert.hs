@@ -221,14 +221,15 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx grouped = 
                 , DB.txScriptSize = sum $ Generic.txScriptSizes tx
                 }
 
-    -- In the case of a second state script validation failure, these outputs have already beeb
-    -- switched to the collcateral outputs in place of the "successful transaction" outputs.
-    txOutsGrouped <- mapM (prepareTxOut tracer (txId, txHash)) (Generic.txOutputs tx)
+    if not (Generic.txValidContract tx) then do
+      let txIns = map (prepareTxIn txId []) resolvedInputs
+      pure $ grouped <> BlockGroupedData txIns []
 
-    -- The following operations only happen if the script passes stage 2 validation (or the tx has
-    -- no script).
-    inputs <- if not (Generic.txValidContract tx) then pure []
     else do
+      -- The following operations only happen if the script passes stage 2 validation (or the tx has
+      -- no script).
+      txOutsGrouped <- mapM (prepareTxOut tracer (txId, txHash)) (Generic.txOutputs tx)
+
       redeemers <- mapM (insertRedeemer tracer (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx)
 
       mapM_ (insertDatum tracer txId) (Generic.txData tx)
@@ -249,9 +250,8 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx grouped = 
       mapM_ (insertScript tracer txId) $ Generic.txScripts tx
 
       mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
-      pure txIns
 
-    pure $ grouped <> BlockGroupedData inputs txOutsGrouped
+      pure $ grouped <> BlockGroupedData txIns txOutsGrouped
 
 prepareTxOut
     :: (MonadBaseControl IO m, MonadIO m)
