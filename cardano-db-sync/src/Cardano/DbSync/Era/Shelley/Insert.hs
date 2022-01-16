@@ -34,6 +34,7 @@ import qualified Cardano.Db as DB
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Insert.Epoch
+import           Cardano.DbSync.Era.Shelley.Insert.Grouped
 import           Cardano.DbSync.Era.Shelley.Offline
 import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Era.Util (liftLookupFail, safeDecodeToJson)
@@ -65,7 +66,6 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import           Data.Group (invert)
-import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import           Data.Maybe.Strict (strictMaybeToMaybe)
 import qualified Data.Set as Set
@@ -112,7 +112,7 @@ insertShelleyBlock tracer lenv firstBlockOfEpoch blk lStateSnap details = do
     let zippedTx = zip [0 .. ] (Generic.blkTxs blk)
     let txInserter = insertTx tracer (leNetwork lenv) lStateSnap blkId (sdEpochNo details) (Generic.blkSlotNo blk)
     grouped <- foldM (\grouped (idx, tx) -> txInserter idx tx grouped) mempty zippedTx
-    insertTxGroupedData tracer grouped
+    insertBlockGroupedData tracer grouped
 
     liftIO $ do
       let epoch = unEpochNo (sdEpochNo details)
@@ -187,64 +187,11 @@ insertOnNewEpoch tracer blkId slotNo epochNo newEpoch = do
 
 -- -----------------------------------------------------------------------------
 
--- | Group data within the same block, to insert them together in batches
---
--- important NOTE: 'MaTxOut' is the only table referencing 'TxOut'. If any
--- other table references it in the future it has to be added here and delay its
--- insertion.
-data TxGroupedData = TxGroupedData
-  { groupedTxIn :: ![DB.TxIn]
-  , groupedTxOut :: ![(ExtendedTxOut, [MissingMaTxOut])]
-  }
-
--- | While we collect data, we don't have access yet to the 'TxOutId', since
--- it's inserted to the db later. So it's missing fields compared to DB.MaTxOut.
-data MissingMaTxOut = MissingMaTxOut
-  { mmtoIdent :: !DB.MultiAssetId
-  , mmtoQuantity :: !DbWord64
-  }
-
--- | 'TxOut' with its TxHash. The hash is used to resolve inputs which
--- reference outputs that are not inserted to the db yet.
-data ExtendedTxOut = ExtendedTxOut
-  { etoTxHash :: !ByteString
-  , etoTxOut :: !DB.TxOut
-  }
-
-instance Monoid TxGroupedData where
-  mempty = TxGroupedData [] []
-
-instance Semigroup TxGroupedData where
-  tgd1 <> tgd2 =
-    TxGroupedData (groupedTxIn tgd1 <> groupedTxIn tgd2)
-                  (groupedTxOut tgd1 <> groupedTxOut tgd2)
-
-insertTxGroupedData
-    :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> TxGroupedData
-    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertTxGroupedData _tracer grouped = do
-    txOutIds <- lift . DB.insertManyTxOut $ etoTxOut. fst <$> groupedTxOut grouped
-    let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> groupedTxOut grouped)
-    lift $ DB.insertManyMaTxOut maTxOuts
-    lift . DB.insertManyTxIn $ groupedTxIn grouped
-  where
-    mkmaTxOuts :: (DB.TxOutId, [MissingMaTxOut]) -> [DB.MaTxOut]
-    mkmaTxOuts (txOutId, mmtos) = map (mkmaTxOut txOutId) mmtos
-
-    mkmaTxOut :: DB.TxOutId -> MissingMaTxOut -> DB.MaTxOut
-    mkmaTxOut txOutId missingMaTx =
-      DB.MaTxOut
-        { DB.maTxOutIdent = mmtoIdent missingMaTx
-        , DB.maTxOutQuantity = mmtoQuantity missingMaTx
-        , DB.maTxOutTxOutId = txOutId
-        }
-
 insertTx
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> Ledger.Network -> LedgerStateSnapshot -> DB.BlockId -> EpochNo
-    -> SlotNo -> Word64 -> Generic.Tx -> TxGroupedData
-    -> ExceptT SyncNodeError (ReaderT SqlBackend m) TxGroupedData
+    -> SlotNo -> Word64 -> Generic.Tx -> BlockGroupedData
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) BlockGroupedData
 insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx grouped = do
     let fees = unCoin $ Generic.txFees tx
         outSum = unCoin $ Generic.txOutSum tx
@@ -274,15 +221,16 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx grouped = 
                 , DB.txScriptSize = sum $ Generic.txScriptSizes tx
                 }
 
-    -- In the case of a second state script validation failure, these outputs have already beeb
-    -- switched to the collcateral outputs in place of the "successful transaction" outputs.
-    txOutsGrouped <- mapM (prepareTxOut tracer (txId, txHash)) (Generic.txOutputs tx)
+    if not (Generic.txValidContract tx) then do
+      let txIns = map (prepareTxIn txId []) resolvedInputs
+      pure $ grouped <> BlockGroupedData txIns []
 
-    -- The following operations only happen if the script passes stage 2 validation (or the tx has
-    -- no script).
-    inputs <- if not (Generic.txValidContract tx) then pure []
     else do
-      redeemers <- mapM (insertRedeemer tracer txId) (Generic.txRedeemer tx)
+      -- The following operations only happen if the script passes stage 2 validation (or the tx has
+      -- no script).
+      txOutsGrouped <- mapM (prepareTxOut tracer (txId, txHash)) (Generic.txOutputs tx)
+
+      redeemers <- mapM (insertRedeemer tracer (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx)
 
       mapM_ (insertDatum tracer txId) (Generic.txData tx)
       -- Insert the transaction inputs and collateral inputs (Alonzo).
@@ -302,29 +250,8 @@ insertTx tracer network lStateSnap blkId epochNo slotNo blockIndex tx grouped = 
       mapM_ (insertScript tracer txId) $ Generic.txScripts tx
 
       mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
-      pure txIns
 
-    pure $ grouped <> TxGroupedData inputs txOutsGrouped
-
--- | If we can't resolve from the db, we fall back to the provided outputs
--- This happens the input consumes an output introduced in the same block.
-resolveTxInputs :: MonadIO m => [ExtendedTxOut] -> Generic.TxIn -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, DbLovelace)
-resolveTxInputs groupedOutputs txIn = fmap convert $ liftLookupFail "resolveTxInputs" $ do
-    qres <- queryResolveInput txIn
-    case qres of
-      Right ret -> pure $ Right ret
-      Left err ->
-        case List.find matches groupedOutputs of
-          Nothing -> pure $ Left err
-          Just eutxo -> pure $ Right (DB.txOutTxId (etoTxOut eutxo), DB.txOutValue (etoTxOut eutxo))
-  where
-    convert :: (DB.TxId, DbLovelace) -> (Generic.TxIn, DB.TxId, DbLovelace)
-    convert (txId, lovelace) = (txIn, txId, lovelace)
-
-    matches :: ExtendedTxOut -> Bool
-    matches eutxo =
-         Generic.txInHash txIn == etoTxHash eutxo
-      && Generic.txInIndex txIn == DB.txOutIndex (etoTxOut eutxo)
+      pure $ grouped <> BlockGroupedData txIns txOutsGrouped
 
 prepareTxOut
     :: (MonadBaseControl IO m, MonadIO m)
@@ -775,9 +702,9 @@ insertParamProposal tracer blkId txId pp = do
 
 insertRedeemer
   :: (MonadBaseControl IO m, MonadIO m)
-  => Trace IO Text -> DB.TxId -> Generic.TxRedeemer
+  => Trace IO Text -> [ExtendedTxOut] -> DB.TxId -> Generic.TxRedeemer
   -> ExceptT SyncNodeError (ReaderT SqlBackend m) (DB.RedeemerId, Generic.TxRedeemer)
-insertRedeemer tracer txId redeemer = do
+insertRedeemer tracer groupedOutputs txId redeemer = do
     tdId <- insertDatum tracer txId $ Generic.txRedeemerDatum redeemer
     scriptHash <- findScriptHash
     rid <- lift . DB.insertRedeemer $
@@ -808,7 +735,7 @@ insertRedeemer tracer txId redeemer = do
       case Generic.txRedeemerScriptHash redeemer of
         Nothing -> pure Nothing
         Just (Right bs) -> pure $ Just bs
-        Just (Left txIn) -> fst <$> liftLookupFail "insertRedeemer" (queryResolveInputCredentials txIn)
+        Just (Left txIn) -> resolveScriptHash groupedOutputs txIn
 
 insertDatum
   :: (MonadBaseControl IO m, MonadIO m)
