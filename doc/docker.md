@@ -13,9 +13,13 @@ cd cardano-db-sync
 ``` console
 docker-compose up -d && docker-compose logs -f
 ```
-### :tada
+### tada:tada:
 
 The PostgreSQL database is exposed on localhost port `5432`
+
+### To connect to PostgreSQL database:
+
+`$ psql -h 0.0.0.0 -p 5432 -U postgres -d cexplorer` (then enter secret password)
 
 ### To connect to another network:
 ```

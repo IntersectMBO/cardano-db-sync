@@ -12,6 +12,8 @@ services:
       - postgres_password
       - postgres_user
       - postgres_db
+    ports:
+      - ${POSTGRES_PORT:-5432}:5432
     volumes:
       - postgres:/var/lib/postgresql/data
     restart: on-failure
