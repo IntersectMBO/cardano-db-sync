@@ -8,6 +8,7 @@ module Cardano.DbSync.Era.Shelley.Query
   ( queryPoolHashId
   , queryStakeAddress
   , queryStakePoolKeyHash
+  , queryStakeRefPtr
   , queryStakeAddressRef
   , queryResolveInput
   , queryResolveInputCredentials
@@ -17,7 +18,7 @@ module Cardano.DbSync.Era.Shelley.Query
   , queryPoolUpdateByBlock
   ) where
 
-import           Cardano.Prelude hiding (from, maybeToEither, on)
+import           Cardano.Prelude hiding (Ptr, from, maybeToEither, on)
 
 import           Cardano.Db
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -35,6 +36,8 @@ import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), desc, fr
 import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
+
+{- HLINT ignore "Reduce duplication" -}
 
 
 queryPoolHashId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe PoolHashId)
@@ -82,14 +85,14 @@ queryStakeAddressRef addr =
           StakeRefBase cred -> do
             eres <- queryStakeAddress $ Ledger.serialiseRewardAcnt (Ledger.RewardAcnt nw cred)
             pure $ either (const Nothing) Just eres
-          StakeRefPtr (Ptr slotNo txIx certIx) -> queryStakeDelegation slotNo (fromIntegral txIx) (fromIntegral certIx)
+          StakeRefPtr ptr -> queryStakeDelegation ptr
           StakeRefNull -> pure Nothing
   where
     queryStakeDelegation
         :: MonadIO m
-        => SlotNo -> Natural -> Natural
+        => Ptr
         -> ReaderT SqlBackend m (Maybe StakeAddressId)
-    queryStakeDelegation (SlotNo slot) txIx certIx = do
+    queryStakeDelegation (Ptr (SlotNo slot) txIx certIx) = do
       res <- select . from $ \ (blk `InnerJoin` tx `InnerJoin` dlg) -> do
                 on (tx ^. TxId ==. dlg ^. DelegationTxId)
                 on (blk ^. BlockId ==. tx ^. TxBlockId)
@@ -120,6 +123,21 @@ queryStakeAddressIdPair cred@(Generic.StakeCred bs) = do
   where
     convert :: Value StakeAddressId -> (Generic.StakeCred, StakeAddressId)
     convert (Value said) = (cred, said)
+
+queryStakeRefPtr :: MonadIO m => Ptr -> ReaderT SqlBackend m (Maybe StakeAddressId)
+queryStakeRefPtr (Ptr (SlotNo slot) txIx certIx) = do
+  res <- select . from $ \ (sr `InnerJoin` tx `InnerJoin` blk) -> do
+            on (blk ^. BlockId ==. tx ^. TxBlockId)
+            on (sr ^. StakeRegistrationTxId ==. tx ^. TxId)
+            where_ (blk ^. BlockSlotNo ==. just (val slot))
+            where_ (tx ^. TxBlockIndex ==. val (fromIntegral txIx))
+            where_ (sr ^. StakeRegistrationCertIndex ==. val (fromIntegral certIx))
+            -- Need to order by DelegationSlotNo descending for correct behavior when there are two
+            -- or more delegation certificates in a single epoch.
+            orderBy [desc (blk ^. BlockSlotNo)]
+            limit 1
+            pure (sr ^. StakeRegistrationAddrId)
+  pure $ unValue <$> listToMaybe res
 
 queryPoolHashIdPair
     :: MonadIO m
