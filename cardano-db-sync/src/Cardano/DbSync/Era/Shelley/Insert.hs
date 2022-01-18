@@ -258,7 +258,7 @@ prepareTxOut
     => Trace IO Text -> (DB.TxId, ByteString) -> Generic.TxOut
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
 prepareTxOut tracer (txId, txHash) (Generic.TxOut index addr addrRaw value maMap dataHash) = do
-    mSaId <- lift $ insertStakeAddressRefIfMissing txId addr
+    mSaId <- lift $ insertStakeAddressRefIfMissing tracer txId addr
     let txOut = DB.TxOut
                   { DB.txOutTxId = txId
                   , DB.txOutIndex = index
@@ -449,9 +449,9 @@ insertStakeAddress txId rewardAddr =
 -- whether it is newly inserted or it is already there, we retrun the `StakeAddressId`.
 insertStakeAddressRefIfMissing
     :: (MonadBaseControl IO m, MonadIO m)
-    => DB.TxId -> Ledger.Addr StandardCrypto
+    => Trace IO Text -> DB.TxId -> Ledger.Addr StandardCrypto
     -> ReaderT SqlBackend m (Maybe DB.StakeAddressId)
-insertStakeAddressRefIfMissing txId addr =
+insertStakeAddressRefIfMissing trce txId addr =
     maybe insertSAR (pure . Just) =<< queryStakeAddressRef addr
   where
     insertSAR :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Maybe DB.StakeAddressId)
@@ -462,10 +462,11 @@ insertStakeAddressRefIfMissing txId addr =
           case sref of
             Ledger.StakeRefBase cred ->
               Just <$> insertStakeAddress txId (Shelley.RewardAcnt nw cred)
-            Ledger.StakeRefPtr {} ->
-              -- This happens when users pay to payment addresses that refer to a stake addresses
-              -- by pointer, but where the pointer does not refer to a registered stake address.
-              pure Nothing
+            Ledger.StakeRefPtr ptr -> do
+              mid <- queryStakeRefPtr ptr
+              when (isNothing mid) .
+                liftIO . logWarning trce $ "insertStakeRefIfMissing: query of " <> textShow ptr <> " returns Nothing"
+              pure mid
             Ledger.StakeRefNull -> pure Nothing
 
 insertPoolOwner
