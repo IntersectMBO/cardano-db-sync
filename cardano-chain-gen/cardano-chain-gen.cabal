@@ -68,6 +68,7 @@ library
                       , cardano-ledger-core
                       , cardano-ledger-shelley
                       , cardano-ledger-shelley-ma
+                      , cardano-ledger-shelley-test
                       , cardano-node
                       , cardano-prelude
                       , cardano-protocol-tpraos
@@ -167,6 +168,7 @@ test-suite cardano-chain-gen
                       , cardano-node
                       , cardano-prelude
                       , cardano-slotting
+                      , cardano-smash-server
                       , containers
                       , contra-tracer
                       , directory

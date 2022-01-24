@@ -1,3 +1,5 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NumericUnderscores  #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -9,15 +11,18 @@ module Test.Cardano.Db.Mock.Validate where
 import           Cardano.Db
 import           Control.Concurrent
 import           Control.Exception
+import           Control.Monad (forM_)
 import           Control.Monad.Logger (NoLoggingT)
 import           Control.Monad.Trans.Reader (ReaderT)
 import           Data.ByteString (ByteString)
+import           Data.Either (isRight)
 import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Text.Encoding
 import           Data.Word (Word64)
+import           GHC.Records (HasField (..))
 
 import           Database.Esqueleto.Legacy (InnerJoin (..), SqlExpr, countRows, from, on,
                    select, unValue, (^.), (==.))
@@ -26,7 +31,12 @@ import           Database.Persist.Sql (Entity, SqlBackend, entityVal)
 
 import qualified Cardano.Ledger.Address as Ledger
 import           Cardano.Ledger.BaseTypes
+import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Era
+
+import           Cardano.DbSync.Era.Shelley.Generic.Util
+
+import           Cardano.SMASH.Server.PoolDataLayer
 
 import           Ouroboros.Consensus.Cardano.Block
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
@@ -91,6 +101,16 @@ assertQuery env query check errMsg = do
     Right a | not (check a) -> pure $ Just $ errMsg a
     _ -> pure Nothing
 
+runQuery :: DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> IO a
+runQuery env query = do
+  ma <- try $ queryDBSync env query
+  case ma of
+    Left sqlErr | migrationNotDoneYet (decodeUtf8 $ sqlErrorMsg sqlErr) -> do
+      threadDelay 1_000_000
+      runQuery env query
+    Left err -> throwIO err
+    Right a -> pure a
+
 checkStillRuns :: DBSyncEnv -> IO ()
 checkStillRuns env = do
     ret <- pollDBSync env
@@ -102,6 +122,15 @@ checkStillRuns env = do
 migrationNotDoneYet :: Text -> Bool
 migrationNotDoneYet txt =
     Text.isPrefixOf "relation" txt && Text.isSuffixOf "does not exist" txt
+
+assertAddrValues :: (Crypto era ~ StandardCrypto, HasField "address" (Core.TxOut era) (Ledger.Addr (Crypto era)))
+                 => DBSyncEnv -> UTxOIndex era -> DbLovelace
+                 -> LedgerState (ShelleyBlock era) -> IO ()
+assertAddrValues env ix expected sta = do
+    let Right addr = resolveAddress ix sta
+    let addrBs = Ledger.serialiseAddr addr
+        q = queryAddressOutputs addrBs
+    assertEqBackoff env q expected defaultDelays "Unexpected Balance"
 
 assertCertCounts :: DBSyncEnv -> (Word64, Word64, Word64, Word64) -> IO ()
 assertCertCounts env expected =
@@ -198,3 +227,51 @@ assertScriptCert env expected =
       withdrawalScript <- fromIntegral . length <$> queryWithdrawalScript
       stakeAddressScript <- fromIntegral . length <$> queryStakeAddressScript
       pure (deregistrScript, delegScript, withdrawalScript, stakeAddressScript)
+
+assertPoolCounters :: DBSyncEnv -> (Word64, Word64, Word64, Word64, Word64, Word64) -> IO ()
+assertPoolCounters env expected =
+    assertEqBackoff env poolCountersQuery expected defaultDelays "Unexpected Pool counts"
+
+poolCountersQuery :: ReaderT SqlBackend (NoLoggingT IO) (Word64, Word64, Word64, Word64, Word64, Word64)
+poolCountersQuery = do
+      poolHash <- maybe 0 unValue . listToMaybe <$>
+                      (select . from $ \(_a :: SqlExpr (Entity PoolHash)) -> pure countRows)
+      poolMetadataRef <- maybe 0 unValue . listToMaybe <$>
+                  (select . from $ \(_a :: SqlExpr (Entity PoolMetadataRef)) -> pure countRows)
+      poolUpdate <- maybe 0 unValue . listToMaybe <$>
+                  (select . from $ \(_a :: SqlExpr (Entity PoolUpdate)) -> pure countRows)
+      poolOwner <- maybe 0 unValue . listToMaybe <$>
+                  (select . from $ \(_a :: SqlExpr (Entity PoolOwner)) -> pure countRows)
+      poolRetire <- maybe 0 unValue . listToMaybe <$>
+                  (select . from $ \(_a :: SqlExpr (Entity PoolRetire)) -> pure countRows)
+      poolRelay <- maybe 0 unValue . listToMaybe <$>
+                  (select . from $ \(_a :: SqlExpr (Entity PoolRelay)) -> pure countRows)
+      pure (poolHash, poolMetadataRef, poolUpdate, poolOwner, poolRetire, poolRelay)
+
+addPoolCounters :: Num a => (a,a,a,a,a,a) -> (a,a,a,a,a,a) -> (a,a,a,a,a,a)
+addPoolCounters (a,b,c,d,e,f) (a',b',c',d',e',f') = (a + a',b + b',c + c',d + d',e + e',f + f')
+
+assertPoolLayerCounters :: Crypto era ~ StandardCrypto
+                        => DBSyncEnv -> (Word64, Word64)
+                        -> [(PoolIndex, (Bool, Bool, Bool))]
+                        -> LedgerState (ShelleyBlock era)
+                        -> IO ()
+assertPoolLayerCounters env (expectedRetired, expectedDelisted) expResults st = do
+    retiredPools <- dlGetRetiredPools poolLayer
+    assertEqual ("Unexpected retired pools counter") (Right expectedRetired) (fromIntegral . length <$> retiredPools)
+
+    delistedPools <- dlGetDelistedPools poolLayer
+    assertEqual ("Unexpected delisted pools counter") expectedDelisted (fromIntegral $ length $ delistedPools)
+
+    forM_ expResults $ \(poolIndex, expected) -> do
+      let poolKeyHash = resolvePool poolIndex st
+      let poolHashBs = unKeyHashRaw poolKeyHash
+      let servantPoolId = dbToServantPoolId poolHashBs
+      isRetired <- (dlCheckRetiredPool poolLayer) servantPoolId
+      isDelisted <- (dlCheckDelistedPool poolLayer) servantPoolId
+      isGetPool <- isRight <$> (dlGetPool poolLayer) servantPoolId
+      assertEqual ("Unexpected result for pool " ++ show servantPoolId) expected (isRetired, isDelisted, isGetPool)
+  where
+    poolLayer = getPoolLayer env
+
+

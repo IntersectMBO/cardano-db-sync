@@ -66,6 +66,9 @@ withShelleyFindLeaderAndSubmitTx interpreter mockServer mkTxs = do
         tx <- mkTxs st
         pure [tx]
 
+getAlonzoLedgerState :: Interpreter -> IO (LedgerState (ShelleyBlock (AlonzoEra StandardCrypto)))
+getAlonzoLedgerState interpreter = withAlonzoLedgerState interpreter Right
+
 singleTx :: Functor t => t a -> t [a]
 singleTx m = fmap (\a -> [a]) m
 

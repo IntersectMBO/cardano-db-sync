@@ -55,3 +55,4 @@ data StakeIndex = StakeIndex Int | StakeAddress (StakeCredential StandardCrypto)
                 | StakeIndexPoolLeader PoolIndex | StakeIndexPoolMember Int PoolIndex
 
 data PoolIndex = PoolIndex Int | PoolIndexId (KeyHash 'StakePool StandardCrypto)
+               | PoolIndexNew Int

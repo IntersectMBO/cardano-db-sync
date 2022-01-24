@@ -7,9 +7,10 @@
 
 module Cardano.Mock.Forging.Tx.Alonzo where
 
-import           Cardano.Prelude hiding (length, (.))
+import           Cardano.Prelude hiding (length, undefined, (.))
 
 import qualified Data.Map.Strict as Map
+import           Data.Maybe (fromJust)
 import qualified Data.Maybe.Strict as Strict
 import           Data.Sequence.Strict (StrictSeq)
 import qualified Data.Sequence.Strict as StrictSeq
@@ -28,9 +29,11 @@ import           Cardano.Ledger.Coin
 import           Cardano.Ledger.Credential
 import           Cardano.Ledger.Era (Crypto)
 import           Cardano.Ledger.Hashes
+import           Cardano.Ledger.Keys
 import           Cardano.Ledger.Mary.Value
 import           Cardano.Ledger.Shelley.Metadata
-import           Cardano.Ledger.Shelley.TxBody (DCert (..), Wdrl (..))
+import           Cardano.Ledger.Shelley.TxBody (DCert (..), PoolMetadata (..),
+                   RewardAcnt (..), PoolParams (..), StakePoolRelay (..), Wdrl (..))
 import           Cardano.Ledger.ShelleyMA.Timelocks
 import           Cardano.Ledger.TxIn (TxIn (..), txid)
 
@@ -41,6 +44,8 @@ import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Tx.Generic
 import           Cardano.Mock.Forging.Types
+
+import           Test.Cardano.Ledger.Shelley.Utils
 
 type AlonzoUTxOIndex = UTxOIndex (AlonzoEra StandardCrypto)
 type AlonzoLedgerState = LedgerState (ShelleyBlock (AlonzoEra StandardCrypto))
@@ -188,6 +193,17 @@ mkSimpleDCertTx consDert st = do
       pure $ mkDCert cred
     mkDCertTx dcerts (Wdrl mempty)
 
+mkDCertPoolTx :: [([StakeIndex], PoolIndex,
+                  [StakeCredential StandardCrypto] -> KeyHash 'StakePool StandardCrypto -> DCert StandardCrypto)]
+              -> AlonzoLedgerState
+              -> Either ForgingError (ValidatedTx (AlonzoEra StandardCrypto))
+mkDCertPoolTx consDert st = do
+    dcerts <- forM consDert $ \(stakeIxs, poolIx, mkDCert) -> do
+      stakeCreds <- forM stakeIxs $ \ix -> resolveStakeCreds ix st
+      let poolId = resolvePool poolIx st
+      pure $ mkDCert stakeCreds poolId
+    mkDCertTx dcerts (Wdrl mempty)
+
 mkScriptDCertTx :: [(StakeIndex, Bool, StakeCredential StandardCrypto -> DCert StandardCrypto)]
                 -> Bool -> AlonzoLedgerState
                 -> Either ForgingError (ValidatedTx (AlonzoEra StandardCrypto))
@@ -224,6 +240,22 @@ mkSimpleTx valid txBody = ValidatedTx
     , wits = mempty
     , isValid = IsValid valid
     , auxiliaryData = maybeToStrictMaybe Nothing
+    }
+
+consPoolParams :: KeyHash 'StakePool StandardCrypto -> StakeCredential StandardCrypto
+               -> [KeyHash 'Staking StandardCrypto]
+               -> PoolParams StandardCrypto
+consPoolParams poolId rwCred owners =
+  PoolParams
+    { _poolId = poolId
+    , _poolVrf = hashVerKeyVRF . snd . mkVRFKeyPair $ RawSeed 0 0 0 0 0 -- undefined
+    , _poolPledge = Coin 1000
+    , _poolCost = Coin 10000
+    , _poolMargin = minBound
+    , _poolRAcnt = RewardAcnt Testnet rwCred
+    , _poolOwners = Set.fromList owners
+    , _poolRelays = StrictSeq.singleton $ SingleHostAddr Strict.SNothing Strict.SNothing Strict.SNothing
+    , _poolMD = Strict.SJust $ PoolMetadata (fromJust $ textToUrl "best.pool") "89237365492387654983275634298756"
     }
 
 mkScriptTx :: Bool -> [(RdmrPtr, (ScriptHash StandardCrypto, Core.Script (AlonzoEra StandardCrypto)))]

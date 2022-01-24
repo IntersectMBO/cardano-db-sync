@@ -23,13 +23,17 @@ import qualified Cardano.Crypto.Hash as Crypto
 
 import           Cardano.Ledger.Alonzo.Data
 import           Cardano.Ledger.Coin
+import           Cardano.Ledger.Credential
 import           Cardano.Ledger.Keys
 import           Cardano.Ledger.Mary.Value
 import           Cardano.Ledger.SafeHash
 import           Cardano.Ledger.Shelley.TxBody
-import           Cardano.Ledger.Slot (BlockNo (..))
+import           Cardano.Ledger.Slot (BlockNo (..), EpochNo)
 
 import           Cardano.DbSync.Era.Shelley.Generic.Block (blockHash)
+import           Cardano.DbSync.Era.Shelley.Generic.Util
+
+import           Cardano.SMASH.Server.PoolDataLayer
 
 import           Cardano.Mock.ChainSync.Server
 import           Cardano.Mock.Forging.Tx.Generic
@@ -40,7 +44,8 @@ import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
 import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
 
 import           Test.Tasty (TestTree, testGroup)
-import           Test.Tasty.HUnit (Assertion, assertBool, assertFailure, testCase)
+import           Test.Tasty.HUnit (Assertion, assertBool, assertEqual, assertFailure,
+                   testCase)
 
 import           Test.Cardano.Db.Mock.Config
 import           Test.Cardano.Db.Mock.Examples
@@ -65,12 +70,13 @@ unitTests iom knownMigrations =
 --      -- testing txs
 --      , test "simple tx" addSimpleTx
 --      , test "simple tx in Shelley era" addSimpleTxShelley
---      , test "consume same block" consumeSameBlock
+--      , test "consume utxo same block" consumeSameBlock
+--      -- testing stake addresses
 --      , test "(de)registrations" registrationTx
-      , test "(de)registrations in same block" registrationsSameBlock
-      , test "(de)registrations in same tx" registrationsSameTx
-      , test "stake address pointers" stakeAddressPtr
-      , test "stake address pointers deregistration" stakeAddressPtrDereg
+--      , test "(de)registrations in same block" registrationsSameBlock
+--      , test "(de)registrations in same tx" registrationsSameTx
+--      , test "stake address pointers" stakeAddressPtr
+--      , test "stake address pointers deregistration" stakeAddressPtrDereg
 --      -- testing rewards
 --      , test "rewards" simpleRewards
 --      , test "shelley rewards from multiple sources" rewardsShelley
@@ -99,6 +105,11 @@ unitTests iom knownMigrations =
 --      , test "mint simple multi asset" mintMultiAsset
 --      , test "mint many multi assets" mintMultiAssets
 --      , test "swap many multi assets" swapMultiAssets
+      -- testing pools and smash
+        , test "pool registration" poolReg
+        , test "pool deregistration" poolDeReg
+        , test "pool multiple deregistration" poolDeRegMany
+        , test "delist pool" poolDelist
       ]
   where
     test :: String -> (IOManager -> [(Text, Text)] -> Assertion) -> TestTree
@@ -418,8 +429,13 @@ stakeAddressPtrDereg =
         tx1 <- Alonzo.mkPaymentTx (UTxOIndex 2) (UTxOAddressNewWithPtr 0 ptr0) 20000 20000 st
         pure [tx0, tx1]
 
+    st <- getAlonzoLedgerState interpreter
     assertBlockNoBackoff dbSync 2
     assertCertCounts dbSync (2,1,0,0)
+    -- The 2 addresses have the same payment credentials and they reference the same
+    -- stake credentials, however they have
+    assertAddrValues dbSync (UTxOAddressNewWithPtr 0 ptr0) (DB.DbLovelace 40000) st
+    assertAddrValues dbSync (UTxOAddressNewWithPtr 0 ptr1) (DB.DbLovelace 20000) st
   where
     testLabel = "stakeAddressPtrDereg"
 
@@ -453,7 +469,7 @@ simpleRewards =
       -- The pool leaders take leader rewards with value 0
       assertRewardCount dbSync 3
 
-      st <- withAlonzoLedgerState interpreter Right
+      st <- getAlonzoLedgerState interpreter
       -- False indicates that we provide the full expected list of addresses with rewards.
       assertRewardCounts dbSync st False
           [ (StakeIndexPoolLeader (PoolIndex 0), (1,0,0,0,0))
@@ -545,7 +561,7 @@ rewardsDeregistration =
       a <- fillEpochs interpreter mockServer 3
       assertBlockNoBackoff dbSync (fromIntegral $ 3 + length a - 1)
 
-      st <- withAlonzoLedgerState interpreter Right
+      st <- getAlonzoLedgerState interpreter
 
       -- Now that pools are registered, we add a tx to fill the fees pot.
       -- Rewards will be distributed.
@@ -605,7 +621,7 @@ mirReward =
 
       _ <- fillUntilNextEpoch interpreter mockServer
 
-      st <- withAlonzoLedgerState interpreter Right
+      st <- getAlonzoLedgerState interpreter
       -- 2 mir rewards from treasury are sumed
       assertRewardCounts dbSync st True [(StakeIndex 1, (0,0,1,1,0))]
   where
@@ -667,7 +683,7 @@ mirRewardDereg =
 
       assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b) - 1)
       -- deregistration means empty rewards
-      st <- withAlonzoLedgerState interpreter Right
+      st <- getAlonzoLedgerState interpreter
       assertRewardCounts dbSync st False []
   where
     testLabel = "mirRewardDereg"
@@ -1049,12 +1065,205 @@ swapMultiAssets =
   where
     testLabel = "swapMultiAssets"
 
-{-}
-        mkMAssetsScriptTx [UTxOIndex 0, UTxOIndex 1] (UTxOIndex 2)
-        let mp1 = Map.fromList $ zip asetNames [0,1,2]
-        let val1 = Value 1 (Map.fromList $ zip (PolicyID <$> [alwaysMintScriptHash, alwaysMintScriptHash, alwaysSucceedsScriptStake]) [mp1,mp1,mp1]
-          [(UTxOIndexNew 0, val1), (UTxOIndexNew 1, val1)]
--}
+poolReg ::  IOManager -> [(Text, Text)] -> Assertion
+poolReg =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+
+      _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
+      assertBlockNoBackoff dbSync 0
+      initCounter <- runQuery dbSync poolCountersQuery
+      assertEqual "Unexpected init pool counter" (3,0,3,2,0,0) initCounter
+
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkDCertPoolTx
+          [( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
+           , PoolIndexNew 0
+           , \[rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId
+             -> DCertPool $ RegPool $ Alonzo.consPoolParams poolId rwCred [owner0, owner1])]
+
+      assertBlockNoBackoff dbSync 1
+      assertPoolCounters dbSync (addPoolCounters (1,1,1,2,0,1) initCounter)
+      st <- getAlonzoLedgerState interpreter
+      assertPoolLayerCounters dbSync (0,0) [(PoolIndexNew 0, (False, False, True))] st
+  where
+    testLabel = "poolReg"
+
+poolDeReg ::  IOManager -> [(Text, Text)] -> Assertion
+poolDeReg =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+
+      _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
+      assertBlockNoBackoff dbSync 0
+      initCounter <- runQuery dbSync poolCountersQuery
+      assertEqual "Unexpected init pool counter" (3,0,3,2,0,0) initCounter
+
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkDCertPoolTx
+          [ ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
+            , PoolIndexNew 0
+            , \[rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId
+             -> DCertPool $ RegPool $ Alonzo.consPoolParams poolId rwCred [owner0, owner1])
+
+          , ([], PoolIndexNew 0, \_ poolId -> DCertPool $ RetirePool poolId 1)
+          ]
+
+      assertBlockNoBackoff dbSync 1
+      assertPoolCounters dbSync (addPoolCounters (1,1,1,2,1,1) initCounter)
+
+      st <- getAlonzoLedgerState interpreter
+      -- Not retired yet, because epoch has not changed
+      assertPoolLayerCounters dbSync (0,0) [(PoolIndexNew 0, (False, False, True))] st
+
+      -- change epoch
+      a <- fillUntilNextEpoch interpreter mockServer
+
+      assertBlockNoBackoff dbSync (fromIntegral $ length a + 1)
+      -- these counters are the same
+      assertPoolCounters dbSync (addPoolCounters (1,1,1,2,1,1) initCounter)
+
+      -- the pool is now retired, since the epoch changed.
+      assertPoolLayerCounters dbSync (1,0) [(PoolIndexNew 0, (True, False, False))] st
+
+  where
+    testLabel = "poolDeReg"
+
+poolDeRegMany :: IOManager -> [(Text, Text)] -> Assertion
+poolDeRegMany =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+
+      _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
+      assertBlockNoBackoff dbSync 0
+      initCounter <- runQuery dbSync poolCountersQuery
+      assertEqual "Unexpected init pool counter" (3,0,3,2,0,0) initCounter
+
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkDCertPoolTx
+          [
+            -- register
+            ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
+            , PoolIndexNew 0
+            , \[rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId
+             -> DCertPool $ RegPool $ Alonzo.consPoolParams poolId rwCred [owner0, owner1])
+
+            -- de register
+          , ([], PoolIndexNew 0, mkPoolDereg 4)
+
+            -- register
+          , ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
+            , PoolIndexNew 0
+            , \[rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId
+             -> DCertPool $ RegPool $ Alonzo.consPoolParams poolId rwCred [owner0, owner1])
+
+            -- register with different owner and reward address
+          , ( [StakeIndexNew 2, StakeIndexNew 1, StakeIndexNew 0]
+            , PoolIndexNew 0
+            , \[rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId
+             -> DCertPool $ RegPool $ Alonzo.consPoolParams poolId rwCred [owner0, owner1])
+          ]
+
+      _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+        tx0 <- Alonzo.mkDCertPoolTx
+          [ -- register
+           ( [StakeIndexNew 2, StakeIndexNew 1, StakeIndexNew 2]
+            , PoolIndexNew 0
+            , \[rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId
+             -> DCertPool $ RegPool $ Alonzo.consPoolParams poolId rwCred [owner0, owner1])
+          ] st
+
+        tx1 <- Alonzo.mkDCertPoolTx
+          [ -- deregister
+            ([] :: [StakeIndex], PoolIndexNew 0, mkPoolDereg 4)
+
+            -- register
+          , ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
+            , PoolIndexNew 0
+            , \[rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId
+             -> DCertPool $ RegPool $ Alonzo.consPoolParams poolId rwCred [owner0, owner1])
+
+             -- deregister
+          ,  ([] :: [StakeIndex], PoolIndexNew 0, mkPoolDereg 1)
+          ] st
+        pure [tx0, tx1]
+
+      assertBlockNoBackoff dbSync 2
+      -- TODO fix PoolOwner and PoolRelay unique key
+      assertPoolCounters dbSync (addPoolCounters (1,1,5,7,3,5) initCounter)
+
+      st <- getAlonzoLedgerState interpreter
+      -- Not retired yet, because epoch has not changed
+      assertPoolLayerCounters dbSync (0,0) [(PoolIndexNew 0, (False, False, True))] st
+
+      -- change epoch
+      a <- fillUntilNextEpoch interpreter mockServer
+
+      assertBlockNoBackoff dbSync (fromIntegral $ length a + 2)
+      -- these counters are the same
+      assertPoolCounters dbSync (addPoolCounters (1,1,5,7,3,5) initCounter)
+
+      -- from all these certificates only the latest matters. So it will retire
+      -- on epoch 0
+      assertPoolLayerCounters dbSync (1,0) [(PoolIndexNew 0, (True, False, False))] st
+
+  where
+    testLabel = "poolDeRegMany"
+    mkPoolDereg :: EpochNo
+                -> [StakeCredential StandardCrypto]
+                -> KeyHash 'StakePool StandardCrypto
+                -> DCert StandardCrypto
+    mkPoolDereg epochNo _creds keyHash = DCertPool $ RetirePool keyHash epochNo
+
+poolDelist :: IOManager -> [(Text, Text)] -> Assertion
+poolDelist =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+
+      _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
+      assertBlockNoBackoff dbSync 0
+      initCounter <- runQuery dbSync poolCountersQuery
+      assertEqual "Unexpected init pool counter" (3,0,3,2,0,0) initCounter
+
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkDCertPoolTx
+          [( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
+           , PoolIndexNew 0
+           , \[rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId
+             -> DCertPool $ RegPool $ Alonzo.consPoolParams poolId rwCred [owner0, owner1])]
+
+      _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
+      assertBlockNoBackoff dbSync 2
+      st <- getAlonzoLedgerState interpreter
+      assertPoolLayerCounters dbSync (0,0) [(PoolIndexNew 0, (False, False, True))] st
+
+      let poolKeyHash = resolvePool (PoolIndexNew 0) st
+      let poolId = dbToServantPoolId $ unKeyHashRaw poolKeyHash
+      _ <- dlAddDelistedPool (getPoolLayer dbSync) poolId
+
+      -- This is not async, so we don't need to do exponential backoff
+      -- delisted not retired
+      assertPoolLayerCounters dbSync (0,1) [(PoolIndexNew 0, (False, True, True))] st
+
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkDCertPoolTx
+          [ ([], PoolIndexNew 0, \_ poolHash -> DCertPool $ RetirePool poolHash 1)]
+
+      _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
+      assertBlockNoBackoff dbSync 4
+      -- delisted and pending retirement
+      assertPoolLayerCounters dbSync (0,1) [(PoolIndexNew 0, (False, True, True))] st
+
+      a <- fillUntilNextEpoch interpreter mockServer
+
+      _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
+      assertBlockNoBackoff dbSync (fromIntegral $ 5 + length a)
+      -- delisted and retired
+      assertPoolLayerCounters dbSync (1,1) [(PoolIndexNew 0, (True, True, False))] st
+  where
+    testLabel = "poolDelist"
+
+
 hfBlockHash :: CardanoBlock -> ByteString
 hfBlockHash blk = case blk of
   BlockShelley sblk -> blockHash sblk

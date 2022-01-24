@@ -5,6 +5,7 @@
 module Cardano.Db.Query
   ( LookupFail (..)
   , queryAddressBalanceAtSlot
+  , queryAddressOutputs
   , queryGenesis
   , queryBlock
   , queryBlockCount
@@ -149,6 +150,17 @@ queryAddressBalanceAtSlot addr slotNo = do
                   where_ (txout ^. TxOutAddress ==. val addr)
                   pure $ sum_ (txout ^. TxOutValue)
         pure $ unValueSumAda (listToMaybe res)
+
+queryAddressOutputs :: MonadIO m => ByteString -> ReaderT SqlBackend m DbLovelace
+queryAddressOutputs addr = do
+    res <- select . from $ \txout -> do
+              where_ (txout ^. TxOutAddressRaw ==. val addr)
+              pure $ sum_ (txout ^. TxOutValue)
+    pure $ convert (listToMaybe res)
+  where
+    convert v = case unValue <$> v of
+      Just (Just x) -> x
+      _ -> DbLovelace 0
 
 queryGenesis :: MonadIO m => ReaderT SqlBackend m (Either LookupFail BlockId)
 queryGenesis = do

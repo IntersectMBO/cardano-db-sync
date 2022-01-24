@@ -42,6 +42,8 @@ import           Cardano.DbSync.Config.Types
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Types (MetricSetters (..))
 
+import           Cardano.SMASH.Server.PoolDataLayer
+
 import           Cardano.Mock.ChainSync.Server
 import           Cardano.Mock.Forging.Interpreter hiding (CardanoBlock)
 
@@ -115,6 +117,11 @@ getDBSyncPGPass = enpPGPassSource . dbSyncParams
 
 queryDBSync :: DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> IO a
 queryDBSync env q = DB.runWithConnectionNoLogging (getDBSyncPGPass env) q
+
+getPoolLayer :: DBSyncEnv -> PoolDataLayer
+getPoolLayer env = postgresqlPoolDataLayer
+                    nullTracer
+                    (enpPGPassSource $ dbSyncParams env)
 
 setupTestsDir :: FilePath -> IO ()
 setupTestsDir dir = do

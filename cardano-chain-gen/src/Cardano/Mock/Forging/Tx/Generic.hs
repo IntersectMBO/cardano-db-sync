@@ -40,6 +40,9 @@ import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Types
 
+import           Test.Cardano.Ledger.Shelley.Examples.Cast
+import           Test.Cardano.Ledger.Shelley.Utils
+
 resolveAddress :: forall era. (Crypto era ~ StandardCrypto, HasField "address" (Core.TxOut era) (Addr (Crypto era)))
                => UTxOIndex era -> LedgerState (ShelleyBlock era)
                -> Either ForgingError (Addr (Crypto era))
@@ -125,6 +128,7 @@ resolvePool :: (Crypto era ~ StandardCrypto)
 resolvePool pix st = case pix of
     PoolIndexId key -> key
     PoolIndex n -> _poolId $ poolParams !! n
+    PoolIndexNew n -> unregisteredPools !! n
   where
     poolParams = Map.elems $ _pParams $ _pstate $ _delegationState $ esLState $
         nesEs $ Consensus.shelleyLedgerState st
@@ -142,6 +146,9 @@ getPoolStakeCreds pparams =
      (getRwdCred (_poolRAcnt pparams)) :
       (KeyHashObj <$> Set.toList (_poolOwners pparams))
 
+vrfKeyHash :: Hash StandardCrypto (VerKeyVRF StandardCrypto)
+vrfKeyHash = hashVerKeyVRF . snd . mkVRFKeyPair $ RawSeed 0 0 0 0 0
+
 unregisteredStakeCredentials :: [StakeCredential StandardCrypto]
 unregisteredStakeCredentials =
   [ KeyHashObj $ KeyHash "000131350ac206583290486460934394208654903261221230945870"
@@ -154,4 +161,11 @@ unregisteredAddresses =
   [ KeyHashObj $ KeyHash "11121865734872361547862358673245672834567832456783245312"
   , KeyHashObj $ KeyHash "22221865734872361547862358673245672834567832456783245312"
   , KeyHashObj $ KeyHash "22221865734872361547862358673245672834567832456783245312"
+  ]
+
+unregisteredPools :: [KeyHash 'StakePool StandardCrypto]
+unregisteredPools =
+  [ KeyHash "11138475621387465239786593240875634298756324987562352435"
+  , KeyHash "222462543264795t3298745680239746523897456238974563298348"
+  , KeyHash "33323876542397465497834256329487563428975634827956348975"
   ]

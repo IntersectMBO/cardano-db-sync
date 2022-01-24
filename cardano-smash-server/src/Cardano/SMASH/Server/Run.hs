@@ -16,7 +16,7 @@ import           Network.Wai.Handler.Warp (defaultSettings, runSettings, setBefo
 
 import           Cardano.BM.Trace (Trace, logInfo)
 
-import           Cardano.Db (textShow)
+import           Cardano.Db (PGPassSource (..), textShow)
 
 import           Cardano.SMASH.Server.Api
 import           Cardano.SMASH.Server.Config
@@ -28,7 +28,7 @@ runSmashServer :: SmashServerConfig -> IO ()
 runSmashServer config = do
 
     let trce = sscTrace config
-    let poolDataLayer = postgresqlPoolDataLayer trce
+    let poolDataLayer = postgresqlPoolDataLayer trce PGPassDefaultEnv
 
     let settings =
           setPort (sscSmashPort config) $
