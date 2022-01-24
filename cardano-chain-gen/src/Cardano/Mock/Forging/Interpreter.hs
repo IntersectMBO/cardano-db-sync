@@ -7,7 +7,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -52,7 +51,7 @@ import           System.Directory
 import           Ouroboros.Consensus.Block hiding (blockMatchesHeader)
 import qualified Ouroboros.Consensus.Block as Block
 import           Ouroboros.Consensus.Cardano.Block (AlonzoEra,
-                   LedgerState(LedgerStateAlonzo, LedgerStateAllegra, LedgerStateMary, LedgerStateShelley),
+                   LedgerState (LedgerStateAllegra, LedgerStateAlonzo, LedgerStateMary, LedgerStateShelley),
                    ShelleyEra, StandardCrypto)
 import           Ouroboros.Consensus.Cardano.Node ()
 import           Ouroboros.Consensus.Config
@@ -217,7 +216,7 @@ addOrValidateSlot inter fingerprint blk =
     SearchSlots _ -> Right $ addSlot fingerprint (blockSlot blk)
     ValidateSlots -> case unconsFingerprint fingerprint of
       Nothing -> Left $ EmptyFingerprint (blockSlot blk) (iFingerFile inter)
-      Just (slotNo, fingerPrint') | slotNo == (blockSlot blk)
+      Just (slotNo, fingerPrint') | slotNo == blockSlot blk
         -> Right fingerPrint'
       Just (slotNo, fingerPrint')
         -- The validation here is unecessary, since we have used the slot to
@@ -236,7 +235,7 @@ forgeWithStakeCreds inter = do
 forgeNextAfter :: Interpreter -> Word64 -> [TxEra] -> IO CardanoBlock
 forgeNextAfter interpreter skipSlots txs' = do
     modifyMVar (iState interpreter) $ \st ->
-      pure $ (st { isSlot = isSlot st + SlotNo skipSlots }, ())
+      pure (st {isSlot = isSlot st + SlotNo skipSlots}, ())
     forgeNextFindLeader interpreter txs'
 
 forgeNextFindLeader :: Interpreter -> [TxEra] -> IO CardanoBlock

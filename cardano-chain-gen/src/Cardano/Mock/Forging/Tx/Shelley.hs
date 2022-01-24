@@ -16,8 +16,8 @@ import           Cardano.Ledger.BaseTypes
 import           Cardano.Ledger.Coin
 import           Cardano.Ledger.Credential
 import           Cardano.Ledger.Era (Crypto)
-import           Cardano.Ledger.Shelley.TxBody
 import           Cardano.Ledger.Shelley.Tx
+import           Cardano.Ledger.Shelley.TxBody
 
 import           Ouroboros.Consensus.Cardano.Block (LedgerState)
 import           Ouroboros.Consensus.Shelley.Eras (ShelleyEra, StandardCrypto)
@@ -60,7 +60,7 @@ mkDCertTx :: [DCert StandardCrypto] -> Wdrl StandardCrypto
           -> Either ForgingError ShelleyTx
 mkDCertTx certs wdrl = Right $ mkSimpleTx $ consCertTxBody certs wdrl
 
-mkSimpleDCertTx :: [(StakeIndex, (StakeCredential StandardCrypto -> DCert StandardCrypto))]
+mkSimpleDCertTx :: [(StakeIndex, StakeCredential StandardCrypto -> DCert StandardCrypto)]
                 -> ShelleyLedgerState
                 -> Either ForgingError ShelleyTx
 mkSimpleDCertTx consDert st = do

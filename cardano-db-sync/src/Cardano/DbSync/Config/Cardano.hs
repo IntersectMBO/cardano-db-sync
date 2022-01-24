@@ -37,7 +37,7 @@ import           Ouroboros.Consensus.Ledger.Basics (LedgerConfig)
 import qualified Ouroboros.Consensus.Mempool.TxLimits as TxLimits
 import           Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
-import           Ouroboros.Consensus.Shelley.Eras (StandardShelley, StandardCrypto)
+import           Ouroboros.Consensus.Shelley.Eras (StandardCrypto, StandardShelley)
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 
 

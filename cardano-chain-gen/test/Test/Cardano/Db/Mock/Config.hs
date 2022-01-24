@@ -4,7 +4,7 @@
 
 module Test.Cardano.Db.Mock.Config where
 
-import           Cardano.Prelude (ReaderT, stderr, panic)
+import           Cardano.Prelude (ReaderT, panic, stderr)
 
 import           Control.Concurrent.Async
 import           Control.Concurrent.STM (atomically)
@@ -77,7 +77,7 @@ data DBSyncEnv = DBSyncEnv
 
 mkDBSyncEnv :: SyncNodeParams -> IO () -> IO DBSyncEnv
 mkDBSyncEnv params runDBSync = do
-  runningVar <- atomically newEmptyTMVar
+  runningVar <- newEmptyTMVarIO
   pure $ DBSyncEnv
     { dbSyncParams = params
     , dbSyncForkDB = async runDBSync
@@ -116,7 +116,7 @@ getDBSyncPGPass :: DBSyncEnv -> DB.PGPassSource
 getDBSyncPGPass = enpPGPassSource . dbSyncParams
 
 queryDBSync :: DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> IO a
-queryDBSync env q = DB.runWithConnectionNoLogging (getDBSyncPGPass env) q
+queryDBSync env = DB.runWithConnectionNoLogging (getDBSyncPGPass env)
 
 getPoolLayer :: DBSyncEnv -> PoolDataLayer
 getPoolLayer env = postgresqlPoolDataLayer

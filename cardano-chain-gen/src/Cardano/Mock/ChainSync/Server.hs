@@ -31,17 +31,17 @@ import           Control.Concurrent (threadDelay)
 import           Control.Concurrent.Async
 import           Control.Exception (bracket)
 import           Control.Monad (forever)
-import           Control.Monad.Class.MonadSTM.Strict (MonadSTM(atomically), STM, StrictTVar,
-                   retry, modifyTVar, newTVarIO, readTVar, writeTVar)
+import           Control.Monad.Class.MonadSTM.Strict (MonadSTM (atomically), STM, StrictTVar,
+                   modifyTVar, newTVarIO, readTVar, retry, writeTVar)
 import           Control.Tracer (nullTracer)
-import           Data.Maybe (fromJust)
 import           Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.Map.Strict as Map
+import           Data.Maybe (fromJust)
 import           Data.Void (Void)
 
 import           Network.TypedProtocol.Core (Peer (..))
 
-import           Ouroboros.Consensus.Block (castPoint, Point, CodecConfig, HasHeader, StandardHash)
+import           Ouroboros.Consensus.Block (CodecConfig, HasHeader, Point, StandardHash, castPoint)
 import           Ouroboros.Consensus.Config (TopLevelConfig, configCodec)
 import           Ouroboros.Consensus.Ledger.Query (BlockQuery, ShowQuery)
 import           Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx)
@@ -61,7 +61,8 @@ import           Ouroboros.Consensus.Node.Tracers ()
 import           Ouroboros.Consensus.Storage.Serialisation (EncodeDisk (..))
 import           Ouroboros.Consensus.Util.Args ()
 
-import           Ouroboros.Network.Block (genesisPoint, Serialised (..), castTip, ChainUpdate(RollBack, AddBlock),  Tip, Serialised, HeaderHash, mkSerialised)
+import           Ouroboros.Network.Block (ChainUpdate (AddBlock, RollBack), HeaderHash,
+                   Serialised (..), Tip, castTip, genesisPoint, mkSerialised)
 import           Ouroboros.Network.Channel (Channel)
 import           Ouroboros.Network.ConnectionId (ConnectionId)
 import           Ouroboros.Network.Driver.Simple (runPeer)
@@ -72,15 +73,17 @@ import           Ouroboros.Network.Mux (MuxMode (..), OuroborosApplication)
 import           Ouroboros.Network.NodeToClient (NodeToClientVersionData (..))
 import qualified Ouroboros.Network.NodeToClient as NodeToClient
 import           Ouroboros.Network.NodeToNode (Versions)
-import           Ouroboros.Network.Protocol.ChainSync.Server (ChainSyncServer, ServerStNext(SendMsgRollForward, SendMsgRollBackward),  ServerStIdle (..), ChainSyncServer (..), ServerStIntersect (..), chainSyncServerPeer)
+import           Ouroboros.Network.Protocol.ChainSync.Server (ChainSyncServer (..),
+                   ServerStIdle (..), ServerStIntersect (..),
+                   ServerStNext (SendMsgRollBackward, SendMsgRollForward), chainSyncServerPeer)
 import           Ouroboros.Network.Protocol.Handshake.Version (simpleSingletonVersions)
 import           Ouroboros.Network.Snocket (LocalAddress, LocalSnocket, LocalSocket (..))
 import qualified Ouroboros.Network.Snocket as Snocket
-import           Ouroboros.Network.Util.ShowProxy (ShowProxy, Proxy(..))
+import           Ouroboros.Network.Util.ShowProxy (Proxy (..), ShowProxy)
 
-import           Cardano.Mock.ChainSync.State
 import           Cardano.Mock.Chain hiding (rollback)
 import           Cardano.Mock.ChainDB
+import           Cardano.Mock.ChainSync.State
 
 data ServerHandle m blk = ServerHandle
   { chainProducerState :: StrictTVar m (ChainProducerState blk)

@@ -6,8 +6,8 @@ import           Cardano.Slotting.Slot (SlotNo (..))
 
 import qualified Cardano.Ledger.Core as Core
 
-import           Ouroboros.Consensus.Ledger.Basics
 import           Ouroboros.Consensus.Cardano.Block (AlonzoEra, ShelleyEra, StandardCrypto)
+import           Ouroboros.Consensus.Ledger.Basics
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 
 import           Cardano.Mock.ChainSync.Server
@@ -69,9 +69,6 @@ withShelleyFindLeaderAndSubmitTx interpreter mockServer mkTxs = do
 getAlonzoLedgerState :: Interpreter -> IO (LedgerState (ShelleyBlock (AlonzoEra StandardCrypto)))
 getAlonzoLedgerState interpreter = withAlonzoLedgerState interpreter Right
 
-singleTx :: Functor t => t a -> t [a]
-singleTx m = fmap (\a -> [a]) m
-
 skipUntilNextEpoch :: Interpreter -> ServerHandle IO CardanoBlock -> [TxEra] -> IO CardanoBlock
 skipUntilNextEpoch interpreter mockServer txsEra = do
     slot <- getCurrentSlot interpreter
@@ -97,7 +94,7 @@ fillUntilNextEpoch interpreter mockServer = do
 -- | Returns number of blocks submitted
 fillEpochs :: Interpreter -> ServerHandle IO CardanoBlock -> Int -> IO [CardanoBlock]
 fillEpochs interpreter mockServer epochs = do
-    blks <- forM [1..epochs] $ \_ -> fillUntilNextEpoch interpreter mockServer
+    blks <- replicateM epochs $ fillUntilNextEpoch interpreter mockServer
     pure $ concat blks
 
 -- Proviging 30 in percentage will create number of blocks that aproximately fill 30% of epoch.
@@ -105,8 +102,7 @@ fillEpochs interpreter mockServer epochs = do
 fillEpochPercentage :: Interpreter -> ServerHandle IO CardanoBlock -> Int -> IO [CardanoBlock]
 fillEpochPercentage interpreter mockServer percentage = do
     let blocksToCreate = div (percentage * blocksPerEpoch) 100
-    blks <- forM [1..blocksToCreate] $ \_ -> forgeNextFindLeaderAndSubmit interpreter mockServer []
-    pure $ blks
+    replicateM blocksToCreate $forgeNextFindLeaderAndSubmit interpreter mockServer []
 
 registerAllStakeCreds :: Interpreter -> ServerHandle IO CardanoBlock -> IO CardanoBlock
 registerAllStakeCreds interpreter mockServer = do

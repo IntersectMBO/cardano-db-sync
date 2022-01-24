@@ -3,6 +3,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.Mock.Forging.Tx.Alonzo where
@@ -24,16 +25,16 @@ import           Cardano.Ledger.Alonzo.Tx
 import           Cardano.Ledger.Alonzo.TxBody
 import           Cardano.Ledger.Alonzo.TxWitness
 import           Cardano.Ledger.BaseTypes
-import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Coin
+import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Credential
 import           Cardano.Ledger.Era (Crypto)
 import           Cardano.Ledger.Hashes
 import           Cardano.Ledger.Keys
 import           Cardano.Ledger.Mary.Value
 import           Cardano.Ledger.Shelley.Metadata
-import           Cardano.Ledger.Shelley.TxBody (DCert (..), PoolMetadata (..), PoolCert (..),
-                   RewardAcnt (..), PoolParams (..), StakePoolRelay (..), Wdrl (..))
+import           Cardano.Ledger.Shelley.TxBody (DCert (..), PoolCert (..), PoolMetadata (..),
+                   PoolParams (..), RewardAcnt (..), StakePoolRelay (..), Wdrl (..))
 import           Cardano.Ledger.ShelleyMA.Timelocks
 import           Cardano.Ledger.TxIn (TxIn (..), txid)
 
@@ -130,7 +131,7 @@ mkUnlockScriptTx :: [AlonzoUTxOIndex] -> AlonzoUTxOIndex -> AlonzoUTxOIndex
                  -> Bool -> Integer -> Integer -> AlonzoLedgerState
                  -> Either ForgingError (ValidatedTx (AlonzoEra StandardCrypto))
 mkUnlockScriptTx inputIndex colInputIndex outputIndex succeeds amount fees sta = do
-    inputPairs <- fmap fst <$> mapM (\inp -> resolveUTxOIndex inp sta) inputIndex
+    inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) inputIndex
     (colInputPair, _) <- resolveUTxOIndex colInputIndex sta
     addr <- resolveAddress outputIndex sta
 
@@ -143,36 +144,46 @@ mkUnlockScriptTx inputIndex colInputIndex outputIndex succeeds amount fees sta =
 
 mkScriptInp :: (Word64, (TxIn (Crypto (AlonzoEra StandardCrypto)), Core.TxOut (AlonzoEra StandardCrypto)))
             -> Maybe (RdmrPtr, (ScriptHash StandardCrypto, Core.Script (AlonzoEra StandardCrypto)))
-mkScriptInp (n, (_txIn, txOut)) =
-    if addr == alwaysFailsScriptAddr then Just (RdmrPtr Spend n, (alwaysFailsScriptHash, alwaysFailsScript))
-    else if addr == alwaysSucceedsScriptAddr then Just (RdmrPtr Spend n, (alwaysSucceedsScriptHash, alwaysSucceedsScript))
-    else if addr == alwaysMintScriptAddr then Just (RdmrPtr Spend n, (alwaysMintScriptHash, alwaysMintScript))
-    else Nothing
+mkScriptInp (n, (_txIn, txOut))
+  | addr == alwaysFailsScriptAddr
+  = Just
+      (RdmrPtr Spend n, (alwaysFailsScriptHash, alwaysFailsScript))
+  | addr == alwaysSucceedsScriptAddr
+  = Just
+      (RdmrPtr Spend n, (alwaysSucceedsScriptHash, alwaysSucceedsScript))
+  | addr == alwaysMintScriptAddr
+  = Just (RdmrPtr Spend n, (alwaysMintScriptHash, alwaysMintScript))
+  | otherwise = Nothing
   where
-    addr = getField @"address" txOut
+      addr = getField @"address" txOut
 
 mkScriptMint :: Value StandardCrypto
              -> [(RdmrPtr, (ScriptHash StandardCrypto, Core.Script (AlonzoEra StandardCrypto)))]
 mkScriptMint (Value _ mp) = mapMaybe f $ zip [0..] (Map.keys mp)
   where
-    f (n, policyId) =
-      if policyID policyId == alwaysFailsScriptHash then Just (RdmrPtr Mint n, (alwaysFailsScriptHash, alwaysFailsScript))
-      else if policyID policyId == alwaysSucceedsScriptHash then Just (RdmrPtr Mint n, (alwaysSucceedsScriptHash, alwaysSucceedsScript))
-      else if policyID policyId == alwaysMintScriptHash then Just (RdmrPtr Mint n, (alwaysMintScriptHash, alwaysMintScript))
-      else Nothing
+    f (n, policyId)
+      | policyID policyId == alwaysFailsScriptHash
+      = Just (RdmrPtr Mint n, (alwaysFailsScriptHash, alwaysFailsScript))
+      | policyID policyId == alwaysSucceedsScriptHash
+      = Just
+          (RdmrPtr Mint n, (alwaysSucceedsScriptHash, alwaysSucceedsScript))
+      | policyID policyId == alwaysMintScriptHash
+      = Just (RdmrPtr Mint n, (alwaysMintScriptHash, alwaysMintScript))
+      | otherwise = Nothing
 
 mkMAssetsScriptTx :: [AlonzoUTxOIndex] -> AlonzoUTxOIndex
                   -> [(AlonzoUTxOIndex, Value StandardCrypto)]
                   -> Value StandardCrypto -> Bool -> Integer -> AlonzoLedgerState
                   -> Either ForgingError (ValidatedTx (AlonzoEra StandardCrypto))
 mkMAssetsScriptTx inputIndex colInputIndex outputIndex minted succeeds fees sta = do
-    inputPairs <- fmap fst <$> mapM (\inp -> resolveUTxOIndex inp sta) inputIndex
+    inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) inputIndex
     colInput <- Set.singleton . fst . fst <$> resolveUTxOIndex colInputIndex sta
     outps <- mapM mkOuts outputIndex
     let inpts = Set.fromList $ fst <$> inputPairs
 
     Right $ mkScriptTx succeeds
-      ((mapMaybe mkScriptInp $ zip [0..] inputPairs) ++ mkScriptMint minted)
+      (mapMaybe mkScriptInp (zip [0 .. ] inputPairs)
+        ++ mkScriptMint minted)
       $ consPaymentTxBody inpts colInput (StrictSeq.fromList outps) (Coin fees) minted
 
   where
@@ -184,7 +195,7 @@ mkDCertTx :: [DCert StandardCrypto] -> Wdrl StandardCrypto
           -> Either ForgingError (ValidatedTx (AlonzoEra StandardCrypto))
 mkDCertTx certs wdrl = Right $ mkSimpleTx True $ consCertTxBody certs wdrl
 
-mkSimpleDCertTx :: [(StakeIndex, (StakeCredential StandardCrypto -> DCert StandardCrypto))]
+mkSimpleDCertTx :: [(StakeIndex, StakeCredential StandardCrypto -> DCert StandardCrypto)]
                 -> AlonzoLedgerState
                 -> Either ForgingError (ValidatedTx (AlonzoEra StandardCrypto))
 mkSimpleDCertTx consDert st = do
@@ -278,7 +289,7 @@ mkScriptTx valid rdmrs txBody = ValidatedTx
     witnesses = mkWitnesses rdmrs [(hashData @(AlonzoEra StandardCrypto) plutusDataList, plutusDataList)]
 
 mkWitnesses :: [(RdmrPtr, (ScriptHash StandardCrypto, Core.Script (AlonzoEra StandardCrypto)))]
-            -> [(DataHash StandardCrypto, (Data (AlonzoEra StandardCrypto)))]
+            -> [(DataHash StandardCrypto, Data (AlonzoEra StandardCrypto))]
             -> TxWitness (AlonzoEra StandardCrypto)
 mkWitnesses rdmrs datas =
     TxWitness
@@ -288,7 +299,7 @@ mkWitnesses rdmrs datas =
       (TxDats $ Map.fromList datas)
       (Redeemers $ Map.fromList redeemers)
   where
-    redeemers = fmap (\rdmPtr -> (rdmPtr, (plutusDataList, ExUnits 100 100)))
+    redeemers = fmap (, (plutusDataList, ExUnits 100 100))
                     (fst <$> rdmrs)
 
 addMetadata :: ValidatedTx (AlonzoEra StandardCrypto) -> Word64

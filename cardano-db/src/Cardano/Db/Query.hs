@@ -792,14 +792,14 @@ queryScriptOutputs :: MonadIO m => ReaderT SqlBackend m [TxOut]
 queryScriptOutputs = do
     res <- select . from $ \tx_out -> do
         where_ (tx_out ^. TxOutAddressHasScript ==. val True)
-        pure $ tx_out
+        pure tx_out
     pure $ entityVal <$> res
 
 queryTxInRedeemer :: MonadIO m => ReaderT SqlBackend m [TxIn]
 queryTxInRedeemer = do
     res <- select . from $ \tx_in -> do
         where_ (isJust $ tx_in ^. TxInRedeemerId)
-        pure $ tx_in
+        pure tx_in
     pure $ entityVal <$> res
 
 -- | Gets all the 'TxIn' of invalid txs
@@ -815,7 +815,7 @@ queryInvalidTx :: MonadIO m => ReaderT SqlBackend m [Tx]
 queryInvalidTx = do
     res <- select . from $ \tx -> do
         where_ (tx ^. TxValidContract ==. val False)
-        pure $ tx
+        pure tx
     pure $ entityVal <$> res
 
 queryDeregistrationScript :: MonadIO m => ReaderT SqlBackend m [StakeDeregistration]

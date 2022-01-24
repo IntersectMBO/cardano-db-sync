@@ -39,8 +39,8 @@ import qualified Data.Text.IO as Text
 import           Data.Time.Clock (getCurrentTime)
 import           Data.Time.Format (defaultTimeLocale, formatTime, iso8601DateFormat)
 
-import           Database.Persist.Sql (SqlBackend, SqlPersistT, Single (..), entityVal, getMigration,
-                   rawExecute, rawSql, selectFirst)
+import           Database.Persist.Sql (Single (..), SqlBackend, SqlPersistT, entityVal,
+                   getMigration, rawExecute, rawSql, selectFirst)
 
 import           Cardano.Crypto.Hash (Blake2b_256, ByteString, Hash, hashToStringAsHex, hashWith)
 import           Cardano.Db.Migration.Haskell

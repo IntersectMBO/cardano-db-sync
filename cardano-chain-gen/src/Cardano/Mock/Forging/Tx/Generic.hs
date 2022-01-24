@@ -13,11 +13,11 @@ module Cardano.Mock.Forging.Tx.Generic
   , resolvePool
   ) where
 
-import           Cardano.Prelude hiding ((.), length)
+import           Cardano.Prelude hiding (length, (.))
 
 import           Data.List (nub)
-import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 
 import           Cardano.Ledger.Address
 import           Cardano.Ledger.BaseTypes
@@ -73,16 +73,15 @@ resolveUTxOIndex index st = toLeft $ case index of
     utxoPairs = Map.toList $ unUTxO $ _utxo $ _utxoState $ esLState $
         nesEs $ Consensus.shelleyLedgerState st
 
-    safeIndex :: Int -> [a] -> Maybe a
     safeIndex n ls
       | n < length ls = Just $ ls !! n
-      | True = Nothing
+      | otherwise = Nothing
 
     hasAddr addr (_, txOut) = addr == getField @"address" txOut
     hasInput inp (inp', _) = inp == inp'
 
     toLeft :: Maybe (TxIn (Crypto era), Core.TxOut era) -> Either ForgingError ((TxIn (Crypto era), Core.TxOut era), UTxOIndex era)
-    toLeft Nothing = Left $ CantFindUTxO
+    toLeft Nothing = Left CantFindUTxO
     toLeft (Just  (txIn, txOut)) = Right ((txIn, txOut), UTxOInput txIn)
 
 resolveStakeCreds :: (Crypto era ~ StandardCrypto)
@@ -113,9 +112,9 @@ resolveStakeCreds indx st = case indx of
       in poolMembers !! n
 
     findPoolParams :: PoolIndex -> PoolParams StandardCrypto
-    findPoolParams (PoolIndex n) = (Map.elems poolParams) !! n
+    findPoolParams (PoolIndex n) = Map.elems poolParams !! n
     findPoolParams (PoolIndexId pid) = poolParams Map.! pid
-    findPoolParams pix@(PoolIndexNew _) = poolParams Map.! (resolvePool pix st)
+    findPoolParams pix@(PoolIndexNew _) = poolParams Map.! resolvePool pix st
 
 resolvePool :: (Crypto era ~ StandardCrypto)
             => PoolIndex -> LedgerState (ShelleyBlock era)
@@ -138,8 +137,8 @@ allPoolStakeCert st =
 
 getPoolStakeCreds :: PoolParams c -> [StakeCredential c]
 getPoolStakeCreds pparams =
-     (getRwdCred (_poolRAcnt pparams)) :
-      (KeyHashObj <$> Set.toList (_poolOwners pparams))
+    getRwdCred (_poolRAcnt pparams)
+    : (KeyHashObj <$> Set.toList (_poolOwners pparams))
 
 unregisteredStakeCredentials :: [StakeCredential StandardCrypto]
 unregisteredStakeCredentials =

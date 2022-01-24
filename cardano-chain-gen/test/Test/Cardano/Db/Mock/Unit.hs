@@ -1,16 +1,15 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Test.Cardano.Db.Mock.Unit where
 
 import           Control.Concurrent
 import           Control.Exception
-import qualified Data.Map as Map
 import           Control.Monad
 import           Control.Monad.Class.MonadSTM.Strict
 import           Data.ByteString (ByteString)
+import qualified Data.Map as Map
 import           Data.Text (Text)
 
 import           Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
@@ -36,16 +35,15 @@ import           Cardano.DbSync.Era.Shelley.Generic.Util
 import           Cardano.SMASH.Server.PoolDataLayer
 
 import           Cardano.Mock.ChainSync.Server
-import           Cardano.Mock.Forging.Tx.Generic
 import           Cardano.Mock.Forging.Interpreter
-import           Cardano.Mock.Forging.Types
-import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
+import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
+import           Cardano.Mock.Forging.Tx.Generic
 import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
+import           Cardano.Mock.Forging.Types
 
 import           Test.Tasty (TestTree, testGroup)
-import           Test.Tasty.HUnit (Assertion, assertBool, assertEqual, assertFailure,
-                   testCase)
+import           Test.Tasty.HUnit (Assertion, assertBool, assertEqual, assertFailure, testCase)
 
 import           Test.Cardano.Db.Mock.Config
 import           Test.Cardano.Db.Mock.Examples
@@ -207,14 +205,14 @@ simpleRollback = do
 bigChain :: IOManager -> [(Text, Text)] -> Assertion
 bigChain =
     withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
-      _ <- forM (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
+      forM_ (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
       startDBSync dbSync
       assertBlockNoBackoff dbSync 100
 
       blks' <- forM (replicate 100 mockBlock1) (forgeNextAndSubmit interpreter mockServer)
       assertBlockNoBackoff dbSync 200
 
-      _ <- forM (replicate 5 mockBlock2) (forgeNextAndSubmit interpreter mockServer)
+      forM_ (replicate 5 mockBlock2) (forgeNextAndSubmit interpreter mockServer)
       assertBlockNoBackoff dbSync 205
 
       atomically $ rollback mockServer (blockPoint $ last blks')
@@ -225,14 +223,14 @@ bigChain =
 restartAndRollback :: IOManager -> [(Text, Text)] -> Assertion
 restartAndRollback =
     withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
-      _ <- forM (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
+      forM_ (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
       startDBSync dbSync
       assertBlockNoBackoff dbSync 100
 
       blks <- forM (replicate 100 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
       assertBlockNoBackoff dbSync 200
 
-      _ <- forM (replicate 5 mockBlock2) (forgeNextAndSubmit interpreter mockServer)
+      forM_ (replicate 5 mockBlock2) (forgeNextAndSubmit interpreter mockServer)
       assertBlockNoBackoff dbSync 205
 
       stopDBSync dbSync
@@ -253,11 +251,11 @@ rollbackFurther =
     -- and then syncs further. We add references to blocks 34 and 35, to
     -- validate later that one is deleted through cascade, but the other was not
     -- because a checkpoint was found.
-    let blockHash1 = hfBlockHash $ (blks !! 34)
+    let blockHash1 = hfBlockHash (blks !! 34)
     Right bid1 <- queryDBSync dbSync $ DB.queryBlockId blockHash1
     cm1 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel "{\"1\" : 1}" bid1
 
-    let blockHash2 = hfBlockHash $ (blks !! 35)
+    let blockHash2 = hfBlockHash (blks !! 35)
     Right bid2 <- queryDBSync dbSync $ DB.queryBlockId blockHash2
     cm2 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel "{\"2\" : 2}" bid2
 
@@ -357,11 +355,13 @@ registrationTx =
         Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)]
 
     -- We add interval or else the txs would have the same id
-    _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \st ->
-        Alonzo.addValidityInterval 1000 <$> Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)] st
+    _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer
+        (fmap (Alonzo.addValidityInterval 1000)
+           . Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)])
 
-    _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \st ->
-        Alonzo.addValidityInterval 2000 <$> Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)] st
+    _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer
+        (fmap (Alonzo.addValidityInterval 2000)
+           . Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)])
 
     assertBlockNoBackoff dbSync 3
     assertCertCounts dbSync (2,2,0,0)
@@ -483,10 +483,10 @@ consumeSameBlock =
 
       _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
         tx0 <- Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 20000 20000 st
-        let utxo0 = Alonzo.mkUTxOAlonzo tx0 !! 0
+        let utxo0 = head (Alonzo.mkUTxOAlonzo tx0)
         tx1 <- Alonzo.mkPaymentTx (UTxOPair utxo0) (UTxOIndex 2) 10000 500 st
         pure [tx0, tx1]
-      assertBlockNoBackoff dbSync $ 0
+      assertBlockNoBackoff dbSync 0
   where
     testLabel = "consumeSameBlock"
 
@@ -802,7 +802,7 @@ unlockScript =
       tx0 <- withAlonzoLedgerState interpreter $ Alonzo.mkLockByScriptTx (UTxOIndex 0) [True] 20000 20000
       _ <- forgeNextAndSubmit interpreter mockServer $ MockBlock [TxAlonzo tx0] (NodeId 1)
 
-      let utxo0 = Alonzo.mkUTxOAlonzo tx0 !! 0
+      let utxo0 = head (Alonzo.mkUTxOAlonzo tx0)
       _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
         Alonzo.mkUnlockScriptTx [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) True 10000 500
 
@@ -819,7 +819,7 @@ unlockScriptSameBlock =
 
       _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
         tx0 <- Alonzo.mkLockByScriptTx (UTxOIndex 0) [True] 20000 20000 st
-        let utxo0 = Alonzo.mkUTxOAlonzo tx0 !! 0
+        let utxo0 = head (Alonzo.mkUTxOAlonzo tx0)
         tx1 <- Alonzo.mkUnlockScriptTx [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) True 10000 500 st
         pure [tx0, tx1]
 
@@ -837,7 +837,7 @@ failedScript =
       tx0 <- withAlonzoLedgerState interpreter $ Alonzo.mkLockByScriptTx (UTxOIndex 0) [False] 20000 20000
       _ <- forgeNextAndSubmit interpreter mockServer $ MockBlock [TxAlonzo tx0] (NodeId 1)
 
-      let utxo0 = Alonzo.mkUTxOAlonzo tx0 !! 0
+      let utxo0 = head (Alonzo.mkUTxOAlonzo tx0)
       _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
         Alonzo.mkUnlockScriptTx [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) False 10000 500
 
@@ -854,7 +854,7 @@ failedScriptSameBlock =
 
       _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
         tx0 <- Alonzo.mkLockByScriptTx (UTxOIndex 0) [False] 20000 20000 st
-        let utxo0 = Alonzo.mkUTxOAlonzo tx0 !! 0
+        let utxo0 = head (Alonzo.mkUTxOAlonzo tx0)
         tx1 <- Alonzo.mkUnlockScriptTx [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) False 10000 500 st
         pure [tx0, tx1]
 
@@ -870,7 +870,7 @@ multipleScripts =
 
     tx0 <- withAlonzoLedgerState interpreter $ Alonzo.mkLockByScriptTx (UTxOIndex 0) [True, False, True] 20000 20000
     let utxo = Alonzo.mkUTxOAlonzo tx0
-        pair1 = utxo !! 0
+        pair1 = head utxo
         pair2 = utxo !! 2
     tx1 <- withAlonzoLedgerState interpreter $
         Alonzo.mkUnlockScriptTx [UTxOPair pair1, UTxOPair pair2] (UTxOIndex 1) (UTxOIndex 2) True 10000 500
@@ -891,7 +891,7 @@ multipleScriptsSameBlock =
     _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
       tx0 <- Alonzo.mkLockByScriptTx (UTxOIndex 0) [True, False, True] 20000 20000 st
       let utxo =  Alonzo.mkUTxOAlonzo tx0
-          pair1 = utxo !! 0
+          pair1 = head utxo
           pair2 = utxo !! 2
       tx1 <- Alonzo.mkUnlockScriptTx [UTxOPair pair1, UTxOPair pair2] (UTxOIndex 1) (UTxOIndex 2) True 10000 500 st
       pure [tx0, tx1]
@@ -911,7 +911,7 @@ multipleScriptsFailed =
 
     let utxos = Alonzo.mkUTxOAlonzo tx0
     tx1 <- withAlonzoLedgerState interpreter $
-        Alonzo.mkUnlockScriptTx (UTxOPair <$> [utxos !! 0, utxos !! 1, utxos !! 2]) (UTxOIndex 1) (UTxOIndex 2) False 10000 500
+        Alonzo.mkUnlockScriptTx (UTxOPair <$> [head utxos, utxos !! 1, utxos !! 2]) (UTxOIndex 1) (UTxOIndex 2) False 10000 500
     _ <- forgeNextAndSubmit interpreter mockServer $ MockBlock [TxAlonzo tx1] (NodeId 1)
 
     assertBlockNoBackoff dbSync 1
@@ -928,7 +928,7 @@ multipleScriptsFailedSameBlock =
       tx0 <- Alonzo.mkLockByScriptTx (UTxOIndex 0) [True, False, True] 20000 20000 st
 
       let utxos = tail $ Alonzo.mkUTxOAlonzo tx0
-      tx1 <- Alonzo.mkUnlockScriptTx (UTxOPair <$> [utxos !! 0, utxos !! 1, utxos !! 2]) (UTxOIndex 1) (UTxOIndex 2) False 10000 500 st
+      tx1 <- Alonzo.mkUnlockScriptTx (UTxOPair <$> [head utxos, utxos !! 1, utxos !! 2]) (UTxOIndex 1) (UTxOIndex 2) False 10000 500 st
       pure [tx0, tx1]
 
     assertBlockNoBackoff dbSync 0
@@ -1047,7 +1047,7 @@ mintMultiAsset =
     withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \st -> do
-        let val0 = Value 1 $ Map.singleton (PolicyID alwaysMintScriptHash) (Map.singleton (assetNames !! 0) 1)
+        let val0 = Value 1 $ Map.singleton (PolicyID alwaysMintScriptHash) (Map.singleton (head assetNames) 1)
         Alonzo.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, Value 10000 mempty)] val0 True 100 st
 
       assertBlockNoBackoff dbSync 0
@@ -1060,7 +1060,7 @@ mintMultiAssets =
     withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
-        let assets0 = Map.fromList [(assetNames !! 0,10), (assetNames !! 1,4)]
+        let assets0 = Map.fromList [(head assetNames,10), (assetNames !! 1,4)]
         let policy0 = PolicyID alwaysMintScriptHash
         let policy1 = PolicyID alwaysSucceedsScriptHash
         let val1 = Value 1 $ Map.fromList [(policy0, assets0), (policy1, assets0)]
@@ -1078,11 +1078,11 @@ swapMultiAssets =
     withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
-          let assetsMinted0 = Map.fromList [(assetNames !! 0, 10), (assetNames !! 1, 4)]
+          let assetsMinted0 = Map.fromList [(head assetNames, 10), (assetNames !! 1, 4)]
           let policy0 = PolicyID alwaysMintScriptHash
           let policy1 = PolicyID alwaysSucceedsScriptHash
           let mintValue0 = Value 100 $ Map.fromList [(policy0, assetsMinted0), (policy1, assetsMinted0)]
-          let assets0 = Map.fromList [(assetNames !! 0, 5), (assetNames !! 1, 2)]
+          let assets0 = Map.fromList [(head assetNames, 5), (assetNames !! 1, 2)]
           let outValue0 = Value 20 $ Map.fromList [(policy0, assets0), (policy1, assets0)]
 
           tx0 <- Alonzo.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1)
@@ -1090,7 +1090,7 @@ swapMultiAssets =
 
           let utxos = Alonzo.mkUTxOAlonzo tx0
           tx1 <- Alonzo.mkMAssetsScriptTx
-            [UTxOPair (utxos !! 0), UTxOPair (utxos !! 1), UTxOIndex 2]
+            [UTxOPair (head utxos), UTxOPair (utxos !! 1), UTxOIndex 2]
             (UTxOIndex 3)
             [ (UTxOAddress alwaysSucceedsScriptAddr, outValue0), (UTxOAddress alwaysMintScriptAddr, outValue0)
             , (UTxOAddressNew 0, outValue0), (UTxOAddressNew 0, outValue0)]

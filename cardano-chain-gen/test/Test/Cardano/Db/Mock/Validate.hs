@@ -1,10 +1,9 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE NumericUnderscores  #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Test.Cardano.Db.Mock.Validate where
 
@@ -14,6 +13,7 @@ import           Control.Exception
 import           Control.Monad (forM_)
 import           Control.Monad.Logger (NoLoggingT)
 import           Control.Monad.Trans.Reader (ReaderT)
+import           Data.Bifunctor (bimap, first)
 import           Data.ByteString (ByteString)
 import           Data.Either (isRight)
 import           Data.Map (Map)
@@ -24,10 +24,10 @@ import           Data.Text.Encoding
 import           Data.Word (Word64)
 import           GHC.Records (HasField (..))
 
-import           Database.Esqueleto.Legacy (InnerJoin (..), SqlExpr, countRows, from, on,
-                   select, unValue, (^.), (==.))
-import           Database.PostgreSQL.Simple (SqlError (..))
+import           Database.Esqueleto.Legacy (InnerJoin (..), SqlExpr, countRows, from, on, select,
+                   unValue, (==.), (^.))
 import           Database.Persist.Sql (Entity, SqlBackend, entityVal)
+import           Database.PostgreSQL.Simple (SqlError (..))
 
 import qualified Cardano.Ledger.Address as Ledger
 import           Cardano.Ledger.BaseTypes
@@ -160,7 +160,7 @@ assertRewardCounts env st filterAddr expected = do
     assertEqBackoff env (groupByAddress <$> q) expectedMap defaultDelays "Unexpected rewards count"
   where
     expectedMap :: Map ByteString (Word64, Word64, Word64, Word64, Word64)
-    expectedMap = Map.fromList $ fmap (\(stIx, expc) -> (mkDBStakeAddress stIx, expc)) expected
+    expectedMap = Map.fromList $ fmap (first mkDBStakeAddress) expected
 
     groupByAddress :: [(Reward, ByteString)] -> Map ByteString (Word64, Word64, Word64, Word64, Word64)
     groupByAddress rewards =
@@ -198,7 +198,7 @@ assertRewardCounts env st filterAddr expected = do
       res <- select . from $ \ (reward `InnerJoin` stake_addr) -> do
                 on (reward ^. RewardAddrId ==. stake_addr ^. StakeAddressId)
                 pure (reward, stake_addr ^. StakeAddressHashRaw)
-      pure $ fmap (\(rew,addr) -> (entityVal rew, unValue addr)) res
+      pure $ fmap (bimap entityVal unValue) res
 
 
 assertAlonzoCounts :: DBSyncEnv -> (Word64, Word64, Word64, Word64, Word64, Word64, Word64, Word64) -> IO ()
@@ -263,18 +263,18 @@ assertPoolLayerCounters :: Crypto era ~ StandardCrypto
                         -> IO ()
 assertPoolLayerCounters env (expectedRetired, expectedDelisted) expResults st = do
     retiredPools <- dlGetRetiredPools poolLayer
-    assertEqual ("Unexpected retired pools counter") (Right expectedRetired) (fromIntegral . length <$> retiredPools)
+    assertEqual "Unexpected retired pools counter" (Right expectedRetired) (fromIntegral . length <$> retiredPools)
 
     delistedPools <- dlGetDelistedPools poolLayer
-    assertEqual ("Unexpected delisted pools counter") expectedDelisted (fromIntegral $ length $ delistedPools)
+    assertEqual "Unexpected delisted pools counter" expectedDelisted (fromIntegral $ length delistedPools)
 
     forM_ expResults $ \(poolIndex, expected) -> do
       let poolKeyHash = resolvePool poolIndex st
       let poolHashBs = unKeyHashRaw poolKeyHash
       let servantPoolId = dbToServantPoolId poolHashBs
-      isRetired <- (dlCheckRetiredPool poolLayer) servantPoolId
-      isDelisted <- (dlCheckDelistedPool poolLayer) servantPoolId
-      isGetPool <- isRight <$> (dlGetPool poolLayer) servantPoolId
+      isRetired <- dlCheckRetiredPool poolLayer servantPoolId
+      isDelisted <- dlCheckDelistedPool poolLayer servantPoolId
+      isGetPool <- isRight <$> dlGetPool poolLayer servantPoolId
       assertEqual ("Unexpected result for pool " ++ show servantPoolId) expected (isRetired, isDelisted, isGetPool)
   where
     poolLayer = getPoolLayer env

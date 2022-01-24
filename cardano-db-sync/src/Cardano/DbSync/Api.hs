@@ -76,7 +76,7 @@ getSlotHash backend slotNo = DB.runDbIohkNoLogging backend $ DB.querySlotHash sl
 getDbLatestBlockInfo :: SqlBackend -> IO (Maybe TipInfo)
 getDbLatestBlockInfo backend = do
   runMaybeT $ do
-    block <- MaybeT $ DB.runDbIohkNoLogging backend $  DB.queryLatestBlock
+    block <- MaybeT $ DB.runDbIohkNoLogging backend DB.queryLatestBlock
     -- The EpochNo, SlotNo and BlockNo can only be zero for the Byron
     -- era, but we need to make the types match, hence `fromMaybe`.
     pure $ TipInfo
