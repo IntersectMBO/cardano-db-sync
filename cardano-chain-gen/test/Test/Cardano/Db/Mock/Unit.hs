@@ -56,60 +56,60 @@ unitTests :: IOManager -> [(Text, Text)] -> TestTree
 unitTests iom knownMigrations =
     testGroup "unit tests"
       [ test "simple forge blocks" forgeBlocks
---      , test "sync one block" addSimple
---      , test "sync small chain" addSimpleChain
---      , test "restart db-sync" restartDBSync
---      -- testing rollbacks
---      , test "simple rollback" simpleRollback
---      , test "sync bigger chain" bigChain
---      , test "rollback while db-sync is off" restartAndRollback
---      , test "rollback further" rollbackFurther
---      -- testing different configs
---      , test "genesis config without pool" configNoPools
---      , test "genesis config without stakes" configNoStakes
---      -- testing txs
---      , test "simple tx" addSimpleTx
---      , test "simple tx in Shelley era" addSimpleTxShelley
---      , test "consume utxo same block" consumeSameBlock
---      -- testing stake addresses
---      , test "(de)registrations" registrationTx
---      , test "(de)registrations in same block" registrationsSameBlock
---      , test "(de)registrations in same tx" registrationsSameTx
---      , test "stake address pointers" stakeAddressPtr
---      , test "stake address pointers deregistration" stakeAddressPtrDereg
---      -- testing rewards
---      , test "rewards" simpleRewards
---      , test "shelley rewards from multiple sources" rewardsShelley
---      , test "rewards with deregistration" rewardsDeregistration
---      , test "Mir Cert" mirReward
---      , test "Mir Cert Shelley" mirRewardShelley
---      , test "Mir Cert deregistration" mirRewardDereg
---      , test "test rewards empty last part of epoch" rewardsEmptyChainLast
---      , test "rollback on epoch boundary" rollbackBoundary
+      , test "sync one block" addSimple
+      , test "sync small chain" addSimpleChain
+      , test "restart db-sync" restartDBSync
+      -- testing rollbacks
+      , test "simple rollback" simpleRollback
+      , test "sync bigger chain" bigChain
+      , test "rollback while db-sync is off" restartAndRollback
+      , test "rollback further" rollbackFurther
+      -- testing different configs
+      , test "genesis config without pool" configNoPools
+      , test "genesis config without stakes" configNoStakes
+      -- testing txs
+      , test "simple tx" addSimpleTx
+      , test "simple tx in Shelley era" addSimpleTxShelley
+      , test "consume utxo same block" consumeSameBlock
+      -- testing stake addresses
+      , test "(de)registrations" registrationTx
+      , test "(de)registrations in same block" registrationsSameBlock
+      , test "(de)registrations in same tx" registrationsSameTx
+      , test "stake address pointers" stakeAddressPtr
+      , test "stake address pointers deregistration" stakeAddressPtrDereg
+      -- testing rewards
+      , test "rewards" simpleRewards
+      , test "shelley rewards from multiple sources" rewardsShelley
+      , test "rewards with deregistration" rewardsDeregistration
+      , test "Mir Cert" mirReward
+      , test "Mir Cert Shelley" mirRewardShelley
+      , test "Mir Cert deregistration" mirRewardDereg
+      , test "test rewards empty last part of epoch" rewardsEmptyChainLast
+      , test "rollback on epoch boundary" rollbackBoundary
       -- testing plutus scripts
---      , test "simple script lock" simpleScript
---      , test "unlock script in same block" unlockScriptSameBlock
---      , test "failed script" failedScript
---      , test "failed script in same block" failedScriptSameBlock
---      , test "multiple scripts unlocked" multipleScripts
---      , test "multiple scripts unlocked same block" multipleScriptsSameBlock
---      , test "multiple scripts failed" multipleScriptsFailed
---      , test "multiple scripts failed same block" multipleScriptsFailedSameBlock
---      , test "stake scripts" registrationScriptTx
---      , test "stake scripts deregistration" deregistrationScriptTx
---      , test "multiple stake scripts deregistration" deregistrationsScriptTxs
---      , test "multiple stake scripts deregistration in same tx" deregistrationsScriptTx
---      , test "multiple stake scripts deregistration in same tx missing redeemer 1" deregistrationsScriptTx'
---      , test "multiple stake scripts deregistration in same tx missing redeemer 2" deregistrationsScriptTx''
+      , test "simple script lock" simpleScript
+      , test "unlock script in same block" unlockScriptSameBlock
+      , test "failed script" failedScript
+      , test "failed script in same block" failedScriptSameBlock
+      , test "multiple scripts unlocked" multipleScripts
+      , test "multiple scripts unlocked same block" multipleScriptsSameBlock
+      , test "multiple scripts failed" multipleScriptsFailed
+      , test "multiple scripts failed same block" multipleScriptsFailedSameBlock
+      , test "stake scripts" registrationScriptTx
+      , test "stake scripts deregistration" deregistrationScriptTx
+      , test "multiple stake scripts deregistration" deregistrationsScriptTxs
+      , test "multiple stake scripts deregistration in same tx" deregistrationsScriptTx
+      , test "multiple stake scripts deregistration in same tx missing redeemer 1" deregistrationsScriptTx'
+      , test "multiple stake scripts deregistration in same tx missing redeemer 2" deregistrationsScriptTx''
       -- testing MultiAssets scripts
---      , test "mint simple multi asset" mintMultiAsset
---      , test "mint many multi assets" mintMultiAssets
---      , test "swap many multi assets" swapMultiAssets
+      , test "mint simple multi asset" mintMultiAsset
+      , test "mint many multi assets" mintMultiAssets
+      , test "swap many multi assets" swapMultiAssets
       -- testing pools and smash
-        , test "pool registration" poolReg
-        , test "pool deregistration" poolDeReg
-        , test "pool multiple deregistration" poolDeRegMany
-        , test "delist pool" poolDelist
+      , test "pool registration" poolReg
+      , test "pool deregistration" poolDeReg
+      , test "pool multiple deregistration" poolDeRegMany
+      , test "delist pool" poolDelist
       ]
   where
     test :: String -> (IOManager -> [(Text, Text)] -> Assertion) -> TestTree
