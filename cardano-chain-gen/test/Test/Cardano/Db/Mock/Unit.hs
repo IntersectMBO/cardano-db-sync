@@ -1079,8 +1079,7 @@ poolReg =
         Alonzo.mkDCertPoolTx
           [( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
            , PoolIndexNew 0
-           , \[rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId
-             -> DCertPool $ RegPool $ Alonzo.consPoolParams poolId rwCred [owner0, owner1])]
+           , Alonzo.consPoolParamsTwoOwners)]
 
       assertBlockNoBackoff dbSync 1
       assertPoolCounters dbSync (addPoolCounters (1,1,1,2,0,1) initCounter)
@@ -1103,8 +1102,7 @@ poolDeReg =
         Alonzo.mkDCertPoolTx
           [ ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
             , PoolIndexNew 0
-            , \[rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId
-             -> DCertPool $ RegPool $ Alonzo.consPoolParams poolId rwCred [owner0, owner1])
+            , Alonzo.consPoolParamsTwoOwners)
 
           , ([], PoolIndexNew 0, \_ poolId -> DCertPool $ RetirePool poolId 1)
           ]
@@ -1145,8 +1143,7 @@ poolDeRegMany =
             -- register
             ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
             , PoolIndexNew 0
-            , \[rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId
-             -> DCertPool $ RegPool $ Alonzo.consPoolParams poolId rwCred [owner0, owner1])
+            , Alonzo.consPoolParamsTwoOwners)
 
             -- de register
           , ([], PoolIndexNew 0, mkPoolDereg 4)
@@ -1154,14 +1151,12 @@ poolDeRegMany =
             -- register
           , ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
             , PoolIndexNew 0
-            , \[rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId
-             -> DCertPool $ RegPool $ Alonzo.consPoolParams poolId rwCred [owner0, owner1])
+            , Alonzo.consPoolParamsTwoOwners)
 
             -- register with different owner and reward address
           , ( [StakeIndexNew 2, StakeIndexNew 1, StakeIndexNew 0]
             , PoolIndexNew 0
-            , \[rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId
-             -> DCertPool $ RegPool $ Alonzo.consPoolParams poolId rwCred [owner0, owner1])
+            , Alonzo.consPoolParamsTwoOwners)
           ]
 
       _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -1169,8 +1164,7 @@ poolDeRegMany =
           [ -- register
            ( [StakeIndexNew 2, StakeIndexNew 1, StakeIndexNew 2]
             , PoolIndexNew 0
-            , \[rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId
-             -> DCertPool $ RegPool $ Alonzo.consPoolParams poolId rwCred [owner0, owner1])
+            , Alonzo.consPoolParamsTwoOwners)
           ] st
 
         tx1 <- Alonzo.mkDCertPoolTx
@@ -1180,8 +1174,7 @@ poolDeRegMany =
             -- register
           , ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
             , PoolIndexNew 0
-            , \[rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId
-             -> DCertPool $ RegPool $ Alonzo.consPoolParams poolId rwCred [owner0, owner1])
+            , Alonzo.consPoolParamsTwoOwners)
 
              -- deregister
           ,  ([] :: [StakeIndex], PoolIndexNew 0, mkPoolDereg 1)
@@ -1229,8 +1222,7 @@ poolDelist =
         Alonzo.mkDCertPoolTx
           [( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
            , PoolIndexNew 0
-           , \[rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId
-             -> DCertPool $ RegPool $ Alonzo.consPoolParams poolId rwCred [owner0, owner1])]
+           , Alonzo.consPoolParamsTwoOwners)]
 
       _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
       assertBlockNoBackoff dbSync 2

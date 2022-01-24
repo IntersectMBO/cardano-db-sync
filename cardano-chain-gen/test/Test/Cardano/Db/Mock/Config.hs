@@ -191,9 +191,9 @@ withFullConfig config testLabel action iom migr = do
       mockServer <- forkServerThread @CardanoBlock iom (topLevelConfig cfg) initSt (NetworkMagic 42) $ unSocketPath (enpSocketPath $ syncNodeParams cfg)
       -- we dont fork dbsync here. Just prepare it as an action
       let dbsyncParams = syncNodeParams cfg
-      -- let trce = nullTracer
+      let trce = nullTracer
       -- Replace with this for better debugging of tests
-      trce <- configureLogging dbsyncParams "db-sync-node"
+      -- trce <- configureLogging dbsyncParams "db-sync-node"
       let dbsyncRun = runDbSync emptyMetricsSetters migr iom trce dbsyncParams True 75 75
       dbSync <- mkDBSyncEnv dbsyncParams dbsyncRun
       _ <- hSilence [stderr] $ DB.recreateDB (getDBSyncPGPass dbSync)

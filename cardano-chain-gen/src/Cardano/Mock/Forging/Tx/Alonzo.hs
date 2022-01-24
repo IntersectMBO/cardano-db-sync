@@ -32,7 +32,7 @@ import           Cardano.Ledger.Hashes
 import           Cardano.Ledger.Keys
 import           Cardano.Ledger.Mary.Value
 import           Cardano.Ledger.Shelley.Metadata
-import           Cardano.Ledger.Shelley.TxBody (DCert (..), PoolMetadata (..),
+import           Cardano.Ledger.Shelley.TxBody (DCert (..), PoolMetadata (..), PoolCert (..),
                    RewardAcnt (..), PoolParams (..), StakePoolRelay (..), Wdrl (..))
 import           Cardano.Ledger.ShelleyMA.Timelocks
 import           Cardano.Ledger.TxIn (TxIn (..), txid)
@@ -257,6 +257,13 @@ consPoolParams poolId rwCred owners =
     , _poolRelays = StrictSeq.singleton $ SingleHostAddr Strict.SNothing Strict.SNothing Strict.SNothing
     , _poolMD = Strict.SJust $ PoolMetadata (fromJust $ textToUrl "best.pool") "89237365492387654983275634298756"
     }
+
+consPoolParamsTwoOwners :: [StakeCredential StandardCrypto]
+                        -> KeyHash 'StakePool StandardCrypto
+                        -> DCert StandardCrypto
+consPoolParamsTwoOwners [rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId =
+    DCertPool $ RegPool $ consPoolParams poolId rwCred [owner0, owner1]
+consPoolParamsTwoOwners _ _ = panic "expected 2 pool owners"
 
 mkScriptTx :: Bool -> [(RdmrPtr, (ScriptHash StandardCrypto, Core.Script (AlonzoEra StandardCrypto)))]
            -> TxBody (AlonzoEra StandardCrypto)

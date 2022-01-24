@@ -127,10 +127,15 @@ assertAddrValues :: (Crypto era ~ StandardCrypto, HasField "address" (Core.TxOut
                  => DBSyncEnv -> UTxOIndex era -> DbLovelace
                  -> LedgerState (ShelleyBlock era) -> IO ()
 assertAddrValues env ix expected sta = do
-    let Right addr = resolveAddress ix sta
+    addr <- assertRight $ resolveAddress ix sta
     let addrBs = Ledger.serialiseAddr addr
         q = queryAddressOutputs addrBs
     assertEqBackoff env q expected defaultDelays "Unexpected Balance"
+
+assertRight :: Show err => Either err a -> IO a
+assertRight ei = case ei of
+  Right a -> pure a
+  Left err -> assertFailure (show err)
 
 assertCertCounts :: DBSyncEnv -> (Word64, Word64, Word64, Word64) -> IO ()
 assertCertCounts env expected =

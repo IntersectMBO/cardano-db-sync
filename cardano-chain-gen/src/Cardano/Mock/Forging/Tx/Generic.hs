@@ -19,8 +19,6 @@ import           Data.List (nub)
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
 
-import           Control.SetAlgebra
-
 import           Cardano.Ledger.Address
 import           Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.Core as Core
@@ -39,9 +37,6 @@ import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Types
-
-import           Test.Cardano.Ledger.Shelley.Examples.Cast
-import           Test.Cardano.Ledger.Shelley.Utils
 
 resolveAddress :: forall era. (Crypto era ~ StandardCrypto, HasField "address" (Core.TxOut era) (Addr (Crypto era)))
                => UTxOIndex era -> LedgerState (ShelleyBlock era)
@@ -108,7 +103,6 @@ resolveStakeCreds indx st = case indx of
         nesEs $ Consensus.shelleyLedgerState st
 
     delegations = _delegations dstate
-    pointers = _ptrs dstate
 
     dstate = _dstate $ _delegationState $ esLState $
         nesEs $ Consensus.shelleyLedgerState st
@@ -121,6 +115,7 @@ resolveStakeCreds indx st = case indx of
     findPoolParams :: PoolIndex -> PoolParams StandardCrypto
     findPoolParams (PoolIndex n) = (Map.elems poolParams) !! n
     findPoolParams (PoolIndexId pid) = poolParams Map.! pid
+    findPoolParams pix@(PoolIndexNew _) = poolParams Map.! (resolvePool pix st)
 
 resolvePool :: (Crypto era ~ StandardCrypto)
             => PoolIndex -> LedgerState (ShelleyBlock era)
@@ -145,9 +140,6 @@ getPoolStakeCreds :: PoolParams c -> [StakeCredential c]
 getPoolStakeCreds pparams =
      (getRwdCred (_poolRAcnt pparams)) :
       (KeyHashObj <$> Set.toList (_poolOwners pparams))
-
-vrfKeyHash :: Hash StandardCrypto (VerKeyVRF StandardCrypto)
-vrfKeyHash = hashVerKeyVRF . snd . mkVRFKeyPair $ RawSeed 0 0 0 0 0
 
 unregisteredStakeCredentials :: [StakeCredential StandardCrypto]
 unregisteredStakeCredentials =

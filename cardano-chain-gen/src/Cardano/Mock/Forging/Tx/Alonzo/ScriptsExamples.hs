@@ -4,8 +4,6 @@
 
 module Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples where
 
-import           Ouroboros.Consensus.Shelley.Eras (AlonzoEra)
-
 import           Cardano.Ledger.Address
 import           Cardano.Ledger.Alonzo
 import           Cardano.Ledger.Alonzo.Data
