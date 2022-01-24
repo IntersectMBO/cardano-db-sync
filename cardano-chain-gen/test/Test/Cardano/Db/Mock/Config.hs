@@ -194,7 +194,7 @@ withFullConfig config testLabel action iom migr = do
       let trce = nullTracer
       -- Replace with this for better debugging of tests
       -- trce <- configureLogging dbsyncParams "db-sync-node"
-      let dbsyncRun = runDbSync emptyMetricsSetters migr iom trce dbsyncParams True 75 75
+      let dbsyncRun = runDbSync emptyMetricsSetters migr iom trce dbsyncParams True 35 35
       dbSync <- mkDBSyncEnv dbsyncParams dbsyncRun
       _ <- hSilence [stderr] $ DB.recreateDB (getDBSyncPGPass dbSync)
       action interpreter mockServer dbSync

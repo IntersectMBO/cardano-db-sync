@@ -69,7 +69,7 @@ assertBlockNoBackoff env blockNo =
     assertEqBackoff env queryBlockHeight (Just blockNo) defaultDelays "Unexpected BlockNo"
 
 defaultDelays :: [Int]
-defaultDelays = [1,2,4,8,16,32,64]
+defaultDelays = [1,2,4,8,16,32,64,128]
 
 assertEqQuery :: (Eq a, Show a) => DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> a -> String -> IO ()
 assertEqQuery env query a msg = do

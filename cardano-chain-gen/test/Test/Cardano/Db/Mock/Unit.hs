@@ -55,62 +55,74 @@ import           Test.Cardano.Db.Mock.Validate
 unitTests :: IOManager -> [(Text, Text)] -> TestTree
 unitTests iom knownMigrations =
     testGroup "unit tests"
-      [ test "simple forge blocks" forgeBlocks
-      , test "sync one block" addSimple
-      , test "sync small chain" addSimpleChain
-      , test "restart db-sync" restartDBSync
-      -- testing rollbacks
-      , test "simple rollback" simpleRollback
-      , test "sync bigger chain" bigChain
-      , test "rollback while db-sync is off" restartAndRollback
-      , test "rollback further" rollbackFurther
-      -- testing different configs
-      , test "genesis config without pool" configNoPools
-      , test "genesis config without stakes" configNoStakes
-      -- testing txs
-      , test "simple tx" addSimpleTx
-      , test "simple tx in Shelley era" addSimpleTxShelley
-      , test "consume utxo same block" consumeSameBlock
-      -- testing stake addresses
-      , test "(de)registrations" registrationTx
-      , test "(de)registrations in same block" registrationsSameBlock
-      , test "(de)registrations in same tx" registrationsSameTx
-      , test "stake address pointers" stakeAddressPtr
-      , test "stake address pointers deregistration" stakeAddressPtrDereg
-      , test "stake address pointers. Use before registering." stakeAddressPtrUseBefore
-      -- testing rewards
-      , test "rewards" simpleRewards
-      , test "shelley rewards from multiple sources" rewardsShelley
-      , test "rewards with deregistration" rewardsDeregistration
-      , test "Mir Cert" mirReward
-      , test "Mir Cert Shelley" mirRewardShelley
-      , test "Mir Cert deregistration" mirRewardDereg
-      , test "test rewards empty last part of epoch" rewardsEmptyChainLast
-      , test "rollback on epoch boundary" rollbackBoundary
-      -- testing plutus scripts
-      , test "simple script lock" simpleScript
-      , test "unlock script in same block" unlockScriptSameBlock
-      , test "failed script" failedScript
-      , test "failed script in same block" failedScriptSameBlock
-      , test "multiple scripts unlocked" multipleScripts
-      , test "multiple scripts unlocked same block" multipleScriptsSameBlock
-      , test "multiple scripts failed" multipleScriptsFailed
-      , test "multiple scripts failed same block" multipleScriptsFailedSameBlock
-      , test "stake scripts" registrationScriptTx
-      , test "stake scripts deregistration" deregistrationScriptTx
-      , test "multiple stake scripts deregistration" deregistrationsScriptTxs
-      , test "multiple stake scripts deregistration in same tx" deregistrationsScriptTx
-      , test "multiple stake scripts deregistration in same tx missing redeemer 1" deregistrationsScriptTx'
-      , test "multiple stake scripts deregistration in same tx missing redeemer 2" deregistrationsScriptTx''
-      -- testing MultiAssets scripts
-      , test "mint simple multi asset" mintMultiAsset
-      , test "mint many multi assets" mintMultiAssets
-      , test "swap many multi assets" swapMultiAssets
-      -- testing pools and smash
-      , test "pool registration" poolReg
-      , test "pool deregistration" poolDeReg
-      , test "pool multiple deregistration" poolDeRegMany
-      , test "delist pool" poolDelist
+      [ testGroup "simple"
+          [ test "simple forge blocks" forgeBlocks
+          , test "sync one block" addSimple
+          , test "sync small chain" addSimpleChain
+          , test "restart db-sync" restartDBSync
+          ]
+      , testGroup "rollbacks"
+          [ test "simple rollback" simpleRollback
+          , test "sync bigger chain" bigChain
+          , test "rollback while db-sync is off" restartAndRollback
+          , test "rollback further" rollbackFurther
+          ]
+      , testGroup "different configs"
+          [ test "genesis config without pool" configNoPools
+          , test "genesis config without stakes" configNoStakes
+          ]
+      , testGroup "blocks with txs"
+          [ test "simple tx" addSimpleTx
+          , test "simple tx in Shelley era" addSimpleTxShelley
+          , test "consume utxo same block" consumeSameBlock
+          ]
+      , testGroup "stake addresses"
+          [ test "(de)registrations" registrationTx
+          , test "(de)registrations in same block" registrationsSameBlock
+          , test "(de)registrations in same tx" registrationsSameTx
+          , test "stake address pointers" stakeAddressPtr
+          , test "stake address pointers deregistration" stakeAddressPtrDereg
+          , test "stake address pointers. Use before registering." stakeAddressPtrUseBefore
+          ]
+      , testGroup "rewards"
+          [ test "rewards" simpleRewards
+          , test "shelley rewards from multiple sources" rewardsShelley
+          , test "rewards with deregistration" rewardsDeregistration
+          , test "Mir Cert" mirReward
+          , test "Mir Cert Shelley" mirRewardShelley
+          , test "Mir Cert deregistration" mirRewardDereg
+          , test "test rewards empty last part of epoch" rewardsEmptyChainLast
+          , test "rollback on epoch boundary" rollbackBoundary
+          ]
+      , testGroup "plutus spend scripts"
+          [ test "simple script lock" simpleScript
+          , test "unlock script in same block" unlockScriptSameBlock
+          , test "failed script" failedScript
+          , test "failed script in same block" failedScriptSameBlock
+          , test "multiple scripts unlocked" multipleScripts
+          , test "multiple scripts unlocked same block" multipleScriptsSameBlock
+          , test "multiple scripts failed" multipleScriptsFailed
+          , test "multiple scripts failed same block" multipleScriptsFailedSameBlock
+          ]
+      , testGroup "plutus cert scripts"
+          [ test "stake scripts" registrationScriptTx
+          , test "stake scripts deregistration" deregistrationScriptTx
+          , test "multiple stake scripts deregistration" deregistrationsScriptTxs
+          , test "multiple stake scripts deregistration in same tx" deregistrationsScriptTx
+          , test "multiple stake scripts deregistration in same tx missing redeemer 1" deregistrationsScriptTx'
+          , test "multiple stake scripts deregistration in same tx missing redeemer 2" deregistrationsScriptTx''
+          ]
+      , testGroup "MultiAssets plutus scripts"
+          [ test "mint simple multi asset" mintMultiAsset
+          , test "mint many multi assets" mintMultiAssets
+          , test "swap many multi assets" swapMultiAssets
+          ]
+      , testGroup "pools and smash"
+          [ test "pool registration" poolReg
+          , test "pool deregistration" poolDeReg
+          , test "pool multiple deregistration" poolDeRegMany
+          , test "delist pool" poolDelist
+          ]
       ]
   where
     test :: String -> (IOManager -> [(Text, Text)] -> Assertion) -> TestTree
@@ -233,33 +245,35 @@ restartAndRollback =
 rollbackFurther :: IOManager -> [(Text, Text)] -> Assertion
 rollbackFurther =
     withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
-    blks <- forM (replicate 151 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
+    blks <- replicateM 81 (forgeNextFindLeaderAndSubmit interpreter mockServer [])
     startDBSync dbSync
-    assertBlockNoBackoff dbSync 150
+    assertBlockNoBackoff dbSync 80
 
-    -- We want to test that db-sync rollbacks temporarily to block 99
-    -- and then syncs further. We add references to blocks 99 and 100, to
+    -- We want to test that db-sync rollbacks temporarily to block 34
+    -- and then syncs further. We add references to blocks 34 and 35, to
     -- validate later that one is deleted through cascade, but the other was not
     -- because a checkpoint was found.
-    let blockHash1 = hfBlockHash $ (blks !! 74)
+    let blockHash1 = hfBlockHash $ (blks !! 34)
     Right bid1 <- queryDBSync dbSync $ DB.queryBlockId blockHash1
     cm1 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel "{\"1\" : 1}" bid1
 
-    let blockHash2 = hfBlockHash $ (blks !! 75)
+    let blockHash2 = hfBlockHash $ (blks !! 35)
     Right bid2 <- queryDBSync dbSync $ DB.queryBlockId blockHash2
     cm2 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel "{\"2\" : 2}" bid2
 
-    assertEqQuery dbSync (tail <$> DB.queryCostModel) [cm1, cm2] "Unexpected CostModels"
+    -- Note that there is no epoch change, which would add a new entry, since we have
+    -- 80 blocks and not 100, which is the expected blocks/epoch. This also means there
+    -- no epoch snapshots
+    assertEqQuery dbSync DB.queryCostModel [cm1, cm2] "Unexpected CostModels"
 
-    -- server tells db-sync to rollback to point 150. However db-sync only has
-    -- a snapshot at block 99, so it will go there first. There is no proper way
+    -- server tells db-sync to rollback to point 50. However db-sync only has
+    -- a snapshot at block 34, so it will go there first. There is no proper way
     -- to test that db-sync temporarily is there, that's why we have this trick
     -- with references.
-    atomically $ rollback mockServer (blockPoint $ blks !! 100)
-    assertBlockNoBackoff dbSync 100
+    atomically $ rollback mockServer (blockPoint $ blks !! 50)
+    assertBlockNoBackoff dbSync 50
 
-    -- tail to get rid of the genesis entry
-    assertEqQuery dbSync (tail <$> DB.queryCostModel) [cm1] "Unexpected CostModel"
+    assertEqQuery dbSync DB.queryCostModel [cm1] "Unexpected CostModel"
   where
     testLabel = "rollbackFurther"
 
