@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 
 module Cardano.Mock.Forging.Types where
@@ -11,6 +12,7 @@ import           Ouroboros.Consensus.Shelley.Eras (AlonzoEra, ShelleyEra, Standa
 import           Cardano.Ledger.Address
 import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Credential
+import           Cardano.Ledger.Keys
 import           Cardano.Ledger.TxIn (TxIn (..))
 
 import           Cardano.Slotting.Slot (SlotNo (..))
@@ -32,20 +34,24 @@ data ForgingError =
     WentTooFar
   | ForecastError SlotNo OutsideForecastRange
   | NonExistantNode NodeId
-  | CantFindUTxO UTxOIndex
+  | CantFindUTxO
+  | CantFindStake
   | ExpectedAlonzoState
   | ExpectedShelleyState
   | UnexpectedEra
-  | EmptyFingerprint SlotNo
-  | FailedToValidateSlot SlotNo Int
+  | EmptyFingerprint SlotNo FilePath
+  | FailedToValidateSlot SlotNo Int FilePath
   | NotExpectedSlotNo SlotNo SlotNo Int
   | FingerprintDecodeError String
   deriving (Show, Exception)
 
-data UTxOIndex = UTxOIndex Int | UTxOAddress (Addr StandardCrypto) | UTxOInput (TxIn StandardCrypto)
-    deriving (Show, Eq)
+data UTxOIndex era = UTxOIndex Int | UTxOAddress (Addr StandardCrypto) | UTxOInput (TxIn StandardCrypto)
+                   | UTxOPair (TxIn StandardCrypto, Core.TxOut era)
+                   | UTxOAddressNew Int | UTxOAddressNewWithStake Int StakeIndex
+                   | UTxOAddressNewWithPtr Int Ptr
 
 data StakeIndex = StakeIndex Int | StakeAddress (StakeCredential StandardCrypto)
-                | PoolAccount PoolIndex
+                | StakeIndexNew Int | StakeIndexScript Bool
+                | StakeIndexPoolLeader PoolIndex | StakeIndexPoolMember Int PoolIndex
 
-data PoolIndex = PoolIndex Int | PoolId
+data PoolIndex = PoolIndex Int | PoolIndexId (KeyHash 'StakePool StandardCrypto)

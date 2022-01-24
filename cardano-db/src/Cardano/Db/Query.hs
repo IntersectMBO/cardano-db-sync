@@ -65,6 +65,14 @@ module Cardano.Db.Query
   , queryReservedTickers
   , queryDelistedPools
   , queryPoolOfflineFetchError
+  , queryScriptOutputs
+  , queryTxInRedeemer
+  , queryTxInFailedTx
+  , queryInvalidTx
+  , queryDeregistrationScript
+  , queryDelegationScript
+  , queryWithdrawalScript
+  , queryStakeAddressScript
   , existsDelistedPool
   , existsPoolHash
   , existsPoolHashId
@@ -767,6 +775,64 @@ queryPoolOfflineFetchError poolHash (Just fromTime) = do
     pure $ fmap extract res
   where
     extract (fetchErr, metadataHash) = (entityVal fetchErr, unValue metadataHash)
+
+queryScriptOutputs :: MonadIO m => ReaderT SqlBackend m [TxOut]
+queryScriptOutputs = do
+    res <- select . from $ \tx_out -> do
+        where_ (tx_out ^. TxOutAddressHasScript ==. val True)
+        pure $ tx_out
+    pure $ entityVal <$> res
+
+queryTxInRedeemer :: MonadIO m => ReaderT SqlBackend m [TxIn]
+queryTxInRedeemer = do
+    res <- select . from $ \tx_in -> do
+        where_ (isJust $ tx_in ^. TxInRedeemerId)
+        pure $ tx_in
+    pure $ entityVal <$> res
+
+-- | Gets all the 'TxIn' of invalid txs
+queryTxInFailedTx :: MonadIO m => ReaderT SqlBackend m [TxIn]
+queryTxInFailedTx = do
+    res <- select . from $ \ (tx_in `InnerJoin` tx) -> do
+            on (tx_in ^. TxInTxInId ==. tx ^. TxId)
+            where_ (tx ^. TxValidContract ==. val False)
+            pure tx_in
+    pure $ entityVal <$> res
+
+queryInvalidTx :: MonadIO m => ReaderT SqlBackend m [Tx]
+queryInvalidTx = do
+    res <- select . from $ \tx -> do
+        where_ (tx ^. TxValidContract ==. val False)
+        pure $ tx
+    pure $ entityVal <$> res
+
+queryDeregistrationScript :: MonadIO m => ReaderT SqlBackend m [StakeDeregistration]
+queryDeregistrationScript = do
+    res <- select . from $ \ dereg -> do
+            where_ (isJust $ dereg ^. StakeDeregistrationRedeemerId)
+            pure dereg
+    pure $ entityVal <$> res
+
+queryDelegationScript :: MonadIO m => ReaderT SqlBackend m [Delegation]
+queryDelegationScript = do
+    res <- select . from $ \ deleg -> do
+            where_ (isJust $ deleg ^. DelegationRedeemerId)
+            pure deleg
+    pure $ entityVal <$> res
+
+queryWithdrawalScript :: MonadIO m => ReaderT SqlBackend m [Withdrawal]
+queryWithdrawalScript = do
+    res <- select . from $ \ wtdr -> do
+            where_ (isJust $ wtdr ^. WithdrawalRedeemerId)
+            pure wtdr
+    pure $ entityVal <$> res
+
+queryStakeAddressScript :: MonadIO m => ReaderT SqlBackend m [StakeAddress]
+queryStakeAddressScript = do
+    res <- select . from $ \ st_addr -> do
+            where_ (isJust $ st_addr ^. StakeAddressScriptHash)
+            pure st_addr
+    pure $ entityVal <$> res
 
 existsDelistedPool :: MonadIO m => ByteString -> ReaderT SqlBackend m Bool
 existsDelistedPool ph = do

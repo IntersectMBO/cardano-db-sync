@@ -105,6 +105,7 @@ library
                       , prometheus
                       , random-shuffle
                       , serialise
+                      , set-algebra
                       , small-steps
                       , split
                       , stm
@@ -146,6 +147,7 @@ test-suite cardano-chain-gen
   other-modules:        Test.Cardano.Db.Mock.Config
                         Test.Cardano.Db.Mock.Examples
                         Test.Cardano.Db.Mock.Unit
+                        Test.Cardano.Db.Mock.UnifiedApi
                         Test.Cardano.Db.Mock.Validate
 
   build-depends:        async
@@ -154,6 +156,7 @@ test-suite cardano-chain-gen
                       , cardano-api
                       , cardano-cli
                       , cardano-config
+                      , cardano-crypto-class
                       , cardano-db
                       , cardano-db-sync
                       , cardano-chain-gen
@@ -167,6 +170,7 @@ test-suite cardano-chain-gen
                       , containers
                       , contra-tracer
                       , directory
+                      , esqueleto
                       , extra
                       , filepath
                       , mtl

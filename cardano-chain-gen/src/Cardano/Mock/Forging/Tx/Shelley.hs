@@ -14,8 +14,9 @@ import qualified Data.Set as Set
 
 import           Cardano.Ledger.BaseTypes
 import           Cardano.Ledger.Coin
+import           Cardano.Ledger.Credential
 import           Cardano.Ledger.Era (Crypto)
-import           Cardano.Ledger.Shelley.TxBody hiding (TxIn)
+import           Cardano.Ledger.Shelley.TxBody
 import           Cardano.Ledger.Shelley.Tx
 
 import           Ouroboros.Consensus.Cardano.Block (LedgerState)
@@ -27,10 +28,13 @@ import           Cardano.Slotting.Slot (SlotNo (..))
 import           Cardano.Mock.Forging.Tx.Generic
 import           Cardano.Mock.Forging.Types
 
+type ShelleyUTxOIndex = UTxOIndex (ShelleyEra StandardCrypto)
+type ShelleyLedgerState = LedgerState (ShelleyBlock (ShelleyEra StandardCrypto))
+type ShelleyTx = Tx (ShelleyEra StandardCrypto)
 
-mkPaymentTx :: UTxOIndex -> UTxOIndex -> Integer -> Integer
-            -> LedgerState (ShelleyBlock (ShelleyEra StandardCrypto))
-            -> Either ForgingError (Tx (ShelleyEra StandardCrypto))
+mkPaymentTx :: ShelleyUTxOIndex -> ShelleyUTxOIndex -> Integer -> Integer
+            -> ShelleyLedgerState
+            -> Either ForgingError ShelleyTx
 mkPaymentTx inputIndex outputIndex amount fees st = do
     (inputPair, _) <- resolveUTxOIndex inputIndex st
     (outputPair, _ ) <- resolveUTxOIndex outputIndex st
@@ -42,15 +46,28 @@ mkPaymentTx inputIndex outputIndex amount fees st = do
 
     Right $ mkSimpleTx $ consPaymentTxBody input (StrictSeq.fromList [output, change]) (Coin fees)
 
-mkDCertTxPools :: LedgerState (ShelleyBlock (ShelleyEra StandardCrypto))
-               -> Either ForgingError (Tx (ShelleyEra StandardCrypto))
+mkDCertTxPools :: ShelleyLedgerState
+               -> Either ForgingError ShelleyTx
 mkDCertTxPools sta = Right $ mkSimpleTx $ consCertTxBody (allPoolStakeCert sta) (Wdrl mempty)
 
-mkSimpleTx :: TxBody (ShelleyEra StandardCrypto) -> Tx (ShelleyEra StandardCrypto)
+mkSimpleTx :: TxBody (ShelleyEra StandardCrypto) -> ShelleyTx
 mkSimpleTx txBody = Tx
     txBody
     mempty
     (maybeToStrictMaybe Nothing)
+
+mkDCertTx :: [DCert StandardCrypto] -> Wdrl StandardCrypto
+          -> Either ForgingError ShelleyTx
+mkDCertTx certs wdrl = Right $ mkSimpleTx $ consCertTxBody certs wdrl
+
+mkSimpleDCertTx :: [(StakeIndex, (StakeCredential StandardCrypto -> DCert StandardCrypto))]
+                -> ShelleyLedgerState
+                -> Either ForgingError ShelleyTx
+mkSimpleDCertTx consDert st = do
+    dcerts <- forM consDert $ \(stakeIndex, mkDCert) -> do
+      cred <- resolveStakeCreds stakeIndex st
+      pure $ mkDCert cred
+    mkDCertTx dcerts (Wdrl mempty)
 
 consPaymentTxBody :: Set (TxIn (Crypto (ShelleyEra StandardCrypto)))
                   -> StrictSeq (TxOut (ShelleyEra StandardCrypto))

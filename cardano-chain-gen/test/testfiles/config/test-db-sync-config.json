@@ -21,7 +21,7 @@
     },
     "mapBackends": {},
     "mapSeverity": {
-      "db-sync-node": "Warning",
+      "db-sync-node": "Error",
       "db-sync-node.Mux": "Error",
       "db-sync-node.Subscription": "Error"
     },

@@ -12,25 +12,30 @@ import           Control.Monad
 import           Control.Monad.Class.MonadSTM.Strict
 import           Data.ByteString (ByteString)
 import           Data.Text (Text)
-import           Data.Word (Word64)
-
-import           Cardano.Ledger.Slot (BlockNo (..))
 
 import           Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
 
-import           Ouroboros.Network.Block (blockNo, blockPoint)
+import           Ouroboros.Network.Block (blockNo, blockPoint, blockSlot)
 
 import qualified Cardano.Db as DB
 
+import qualified Cardano.Crypto.Hash as Crypto
+
+import           Cardano.Ledger.Alonzo.Data
 import           Cardano.Ledger.Coin
-import qualified Cardano.Ledger.TxIn as SL
+import           Cardano.Ledger.Keys
+import           Cardano.Ledger.Mary.Value
+import           Cardano.Ledger.SafeHash
 import           Cardano.Ledger.Shelley.TxBody
+import           Cardano.Ledger.Slot (BlockNo (..))
 
 import           Cardano.DbSync.Era.Shelley.Generic.Block (blockHash)
 
 import           Cardano.Mock.ChainSync.Server
+import           Cardano.Mock.Forging.Tx.Generic
 import           Cardano.Mock.Forging.Interpreter
 import           Cardano.Mock.Forging.Types
+import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
 import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
 
@@ -39,31 +44,61 @@ import           Test.Tasty.HUnit (Assertion, assertBool, assertFailure, testCas
 
 import           Test.Cardano.Db.Mock.Config
 import           Test.Cardano.Db.Mock.Examples
+import           Test.Cardano.Db.Mock.UnifiedApi
 import           Test.Cardano.Db.Mock.Validate
 
 unitTests :: IOManager -> [(Text, Text)] -> TestTree
 unitTests iom knownMigrations =
     testGroup "unit tests"
       [ test "simple forge blocks" forgeBlocks
---      , test "test rewards empty last part of epoch" rewardsEmptyChainLast
 --      , test "sync one block" addSimple
 --      , test "sync small chain" addSimpleChain
 --      , test "restart db-sync" restartDBSync
+--      -- testing rollbacks
 --      , test "simple rollback" simpleRollback
 --      , test "sync bigger chain" bigChain
 --      , test "rollback while db-sync is off" restartAndRollback
 --      , test "rollback further" rollbackFurther
+--      -- testing different configs
 --      , test "genesis config without pool" configNoPools
 --      , test "genesis config without stakes" configNoStakes
+--      -- testing txs
 --      , test "simple tx" addSimpleTx
 --      , test "simple tx in Shelley era" addSimpleTxShelley
+--      , test "consume same block" consumeSameBlock
+--      , test "(de)registrations" registrationTx
+      , test "(de)registrations in same block" registrationsSameBlock
+      , test "(de)registrations in same tx" registrationsSameTx
+      , test "stake address pointers" stakeAddressPtr
+      , test "stake address pointers deregistration" stakeAddressPtrDereg
+--      -- testing rewards
 --      , test "rewards" simpleRewards
---      , test "Mir Cert" mirReward
 --      , test "shelley rewards from multiple sources" rewardsShelley
-      , test "consume same block" consumeSameBlock
-      , test "simple script lock" simpleScript
-      , test "unlock script in same block" unlockScriptSameBlock
-      , test "failed script" failedScript
+--      , test "rewards with deregistration" rewardsDeregistration
+--      , test "Mir Cert" mirReward
+--      , test "Mir Cert Shelley" mirRewardShelley
+--      , test "Mir Cert deregistration" mirRewardDereg
+--      , test "test rewards empty last part of epoch" rewardsEmptyChainLast
+--      , test "rollback on epoch boundary" rollbackBoundary
+      -- testing plutus scripts
+--      , test "simple script lock" simpleScript
+--      , test "unlock script in same block" unlockScriptSameBlock
+--      , test "failed script" failedScript
+--      , test "failed script in same block" failedScriptSameBlock
+--      , test "multiple scripts unlocked" multipleScripts
+--      , test "multiple scripts unlocked same block" multipleScriptsSameBlock
+--      , test "multiple scripts failed" multipleScriptsFailed
+--      , test "multiple scripts failed same block" multipleScriptsFailedSameBlock
+--      , test "stake scripts" registrationScriptTx
+--      , test "stake scripts deregistration" deregistrationScriptTx
+--      , test "multiple stake scripts deregistration" deregistrationsScriptTxs
+--      , test "multiple stake scripts deregistration in same tx" deregistrationsScriptTx
+--      , test "multiple stake scripts deregistration in same tx missing redeemer 1" deregistrationsScriptTx'
+--      , test "multiple stake scripts deregistration in same tx missing redeemer 2" deregistrationsScriptTx''
+      -- testing MultiAssets scripts
+--      , test "mint simple multi asset" mintMultiAsset
+--      , test "mint many multi assets" mintMultiAssets
+--      , test "swap many multi assets" swapMultiAssets
       ]
   where
     test :: String -> (IOManager -> [(Text, Text)] -> Assertion) -> TestTree
@@ -87,9 +122,9 @@ forgeBlocks = do
 addSimple :: IOManager -> [(Text, Text)] -> Assertion
 addSimple =
     withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
-      -- translate the block to a real Cardano block.
-      blk <- forgeNext interpreter mockBlock0
-      atomically $ addBlock mockServer blk
+      -- Given a mock block, translate it into a real block and submit it to the
+      -- chainsync server
+      _ <- forgeNextAndSubmit interpreter mockServer mockBlock0
       -- start db-sync and let it sync
       startDBSync dbSync
       assertBlockNoBackoff dbSync 0
@@ -116,9 +151,7 @@ addSimpleChain =
 restartDBSync :: IOManager -> [(Text, Text)] -> Assertion
 restartDBSync =
     withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
-      -- translate the block to a real Cardano block.
-      blk <- forgeNext interpreter mockBlock0
-      atomically $ addBlock mockServer blk
+      _ <- forgeNextAndSubmit interpreter mockServer mockBlock0
       -- start db-sync and let it sync
       startDBSync dbSync
       assertBlockNoBackoff dbSync 0
@@ -150,17 +183,14 @@ simpleRollback = do
 bigChain :: IOManager -> [(Text, Text)] -> Assertion
 bigChain =
     withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
-      blks <- forM (replicate 101 mockBlock0) (forgeNext interpreter)
-      atomically $ forM_ blks $ addBlock mockServer
+      _ <- forM (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
       startDBSync dbSync
       assertBlockNoBackoff dbSync 100
 
-      blks' <- forM (replicate 100 mockBlock1) (forgeNext interpreter)
-      atomically $ forM_ blks' $ addBlock mockServer
+      blks' <- forM (replicate 100 mockBlock1) (forgeNextAndSubmit interpreter mockServer)
       assertBlockNoBackoff dbSync 200
 
-      blks'' <- forM (replicate 5 mockBlock2) (forgeNext interpreter)
-      atomically $ forM_ blks'' $ addBlock mockServer
+      _ <- forM (replicate 5 mockBlock2) (forgeNextAndSubmit interpreter mockServer)
       assertBlockNoBackoff dbSync 205
 
       atomically $ rollback mockServer (blockPoint $ last blks')
@@ -168,25 +198,21 @@ bigChain =
   where
     testLabel = "bigChain"
 
-
 restartAndRollback :: IOManager -> [(Text, Text)] -> Assertion
 restartAndRollback =
     withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
-      blks <- forM (replicate 101 mockBlock0) (forgeNext interpreter)
-      atomically $ forM_ blks $ addBlock mockServer
+      _ <- forM (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
       startDBSync dbSync
       assertBlockNoBackoff dbSync 100
 
-      blks' <- forM (replicate 100 mockBlock0) (forgeNext interpreter)
-      atomically $ forM_ blks' $ addBlock mockServer
+      blks <- forM (replicate 100 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
       assertBlockNoBackoff dbSync 200
 
-      blks'' <- forM (replicate 5 mockBlock2) (forgeNext interpreter)
-      atomically $ forM_ blks'' $ addBlock mockServer
+      _ <- forM (replicate 5 mockBlock2) (forgeNextAndSubmit interpreter mockServer)
       assertBlockNoBackoff dbSync 205
 
       stopDBSync dbSync
-      atomically $ rollback mockServer (blockPoint $ last blks')
+      atomically $ rollback mockServer (blockPoint $ last blks)
       startDBSync dbSync
       assertBlockNoBackoff dbSync 200
   where
@@ -195,33 +221,33 @@ restartAndRollback =
 rollbackFurther :: IOManager -> [(Text, Text)] -> Assertion
 rollbackFurther =
     withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
-    blks <- forM (replicate 201 mockBlock0) (forgeNext interpreter)
-    atomically $ forM_ blks $ addBlock mockServer
+    blks <- forM (replicate 151 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
     startDBSync dbSync
-    assertBlockNoBackoff dbSync 200
+    assertBlockNoBackoff dbSync 150
 
     -- We want to test that db-sync rollbacks temporarily to block 99
     -- and then syncs further. We add references to blocks 99 and 100, to
     -- validate later that one is deleted through cascade, but the other was not
     -- because a checkpoint was found.
-    let blockHash1 = hfBlockHash $ (blks !! 99)
+    let blockHash1 = hfBlockHash $ (blks !! 74)
     Right bid1 <- queryDBSync dbSync $ DB.queryBlockId blockHash1
     cm1 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel "{\"1\" : 1}" bid1
 
-    let blockHash2 = hfBlockHash $ (blks !! 100)
+    let blockHash2 = hfBlockHash $ (blks !! 75)
     Right bid2 <- queryDBSync dbSync $ DB.queryBlockId blockHash2
     cm2 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel "{\"2\" : 2}" bid2
 
-    assertEqQuery dbSync DB.queryCostModel [cm1, cm2] "Unexpected CostModels"
+    assertEqQuery dbSync (tail <$> DB.queryCostModel) [cm1, cm2] "Unexpected CostModels"
 
-    -- server tells db-sync to rollback to point 150. However db-sync only haa
+    -- server tells db-sync to rollback to point 150. However db-sync only has
     -- a snapshot at block 99, so it will go there first. There is no proper way
     -- to test that db-sync temporarily is there, that's why we have this trick
     -- with references.
-    atomically $ rollback mockServer (blockPoint $ blks !! 150)
-    assertBlockNoBackoff dbSync 150
+    atomically $ rollback mockServer (blockPoint $ blks !! 100)
+    assertBlockNoBackoff dbSync 100
 
-    assertEqQuery dbSync DB.queryCostModel [cm1] "Unexpected CostModel"
+    -- tail to get rid of the genesis entry
+    assertEqQuery dbSync (tail <$> DB.queryCostModel) [cm1] "Unexpected CostModel"
   where
     testLabel = "rollbackFurther"
 
@@ -232,9 +258,11 @@ configNoPools =
       assertBlocksCount dbSync 2
       assertTxCount dbSync 6
       stopDBSync dbSync
-      -- Nothing changes, so polling assertions don't help here
+      startDBSync  dbSync
+      -- Nothing changes, so polling assertions doesn't help here
       -- We have to pause and check if anything crashed.
       threadDelay 3_000_000
+      checkStillRuns dbSync
       assertBlocksCount dbSync 2 -- 2 genesis blocks
       assertTxCount dbSync 6
   where
@@ -252,6 +280,7 @@ configNoStakes =
       -- Nothing changes, so polling assertions don't help here
       -- We have to pause and check if anything crashed.
       threadDelay 3_000_000
+      checkStillRuns dbSync
       assertBlocksCount dbSync 2
       assertTxCount dbSync 7
       -- A pool with no stakes can't create a block.
@@ -260,7 +289,7 @@ configNoStakes =
         Right _ -> assertFailure "should fail"
         Left WentTooFar -> pure ()
         -- TODO add an option to disable fingerprint validation for tests like this.
-        Left (EmptyFingerprint _) -> pure ()
+        Left (EmptyFingerprint _ _) -> pure ()
         Left err -> assertFailure $ "got " <> show err <> " instead of WentTooFar"
   where
     testLabel = "configNoStakes"
@@ -269,11 +298,9 @@ addSimpleTx :: IOManager -> [(Text, Text)] -> Assertion
 addSimpleTx =
     withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
       -- translate the block to a real Cardano block.
-      tx0 <- withAlonzoLedgerState interpreter $  Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
-      blk <- forgeNext interpreter $ MockBlock [TxAlonzo tx0] (NodeId 0)
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+              Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 500
 
-      atomically $ addBlock mockServer blk
-      -- start db-sync and let it sync
       startDBSync  dbSync
       assertBlockNoBackoff dbSync 0
   where
@@ -283,45 +310,172 @@ addSimpleTxShelley :: IOManager -> [(Text, Text)] -> Assertion
 addSimpleTxShelley =
     withFullConfig "config-shelley" testLabel $ \interpreter mockServer dbSync -> do
       -- translate the block to a real Cardano block.
-      tx0 <- withShelleyLedgerState interpreter $ Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
-      blk <- forgeNext interpreter $ MockBlock [TxShelley tx0] (NodeId 0)
+      _ <- withShelleyFindLeaderAndSubmitTx interpreter mockServer $
+            Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 500
 
-      atomically $ addBlock mockServer blk
       -- start db-sync and let it sync
       startDBSync  dbSync
       assertBlockNoBackoff dbSync 0
   where
     testLabel = "addSimpleTxShelley"
 
+registrationTx :: IOManager -> [(Text, Text)] -> Assertion
+registrationTx =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+
+    _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)]
+
+    _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)]
+
+    -- We add interval or else the txs would have the same id
+    _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \st ->
+        Alonzo.addValidityInterval 1000 <$> Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)] st
+
+    _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \st ->
+        Alonzo.addValidityInterval 2000 <$> Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)] st
+
+    assertBlockNoBackoff dbSync 3
+    assertCertCounts dbSync (2,2,0,0)
+  where
+    testLabel = "registrationTx"
+
+registrationsSameBlock :: IOManager -> [(Text, Text)] -> Assertion
+registrationsSameBlock =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+
+    _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+        tx0 <- Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)] st
+        tx1 <- Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)] st
+        tx2 <- Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)] st
+        tx3 <- Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)] st
+        Right [tx0, tx1, Alonzo.addValidityInterval 1000 tx2, Alonzo.addValidityInterval 2000 tx3]
+
+    assertBlockNoBackoff dbSync 0
+    assertCertCounts dbSync (2,2,0,0)
+  where
+    testLabel = "registrationsSameBlock"
+
+registrationsSameTx :: IOManager -> [(Text, Text)] -> Assertion
+registrationsSameTx =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+
+    _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkSimpleDCertTx [ (StakeIndexNew 1, DCertDeleg . RegKey)
+                               , (StakeIndexNew 1, DCertDeleg . DeRegKey)
+                               , (StakeIndexNew 1, DCertDeleg . RegKey)
+                               , (StakeIndexNew 1, DCertDeleg . DeRegKey)]
+
+    assertBlockNoBackoff dbSync 0
+    assertCertCounts dbSync (2,2,0,0)
+  where
+    testLabel = "registrationsSameTx"
+
+stakeAddressPtr :: IOManager -> [(Text, Text)] -> Assertion
+stakeAddressPtr =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+
+    tx <- withAlonzoLedgerState interpreter $
+        Alonzo.mkSimpleDCertTx [ (StakeIndexNew 1, DCertDeleg . RegKey)]
+    blk <- forgeNextFindLeaderAndSubmit interpreter mockServer [TxAlonzo tx]
+
+    let ptr = Ptr (blockSlot blk) 0 0
+
+    _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+      Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr) 20000 20000
+
+    assertBlockNoBackoff dbSync 1
+    assertCertCounts dbSync (1,0,0,0)
+  where
+    testLabel = "stakeAddressPtr"
+
+stakeAddressPtrDereg :: IOManager -> [(Text, Text)] -> Assertion
+stakeAddressPtrDereg =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+
+    blk <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkSimpleDCertTx [ (StakeIndexNew 0, DCertDeleg . RegKey)]
+
+    let ptr0 = Ptr (blockSlot blk) 0 0
+
+    blk' <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+      tx0 <- Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr0) 20000 20000 st
+      tx1 <- Alonzo.mkSimpleDCertTx [ (StakeIndexNew 0, DCertDeleg . DeRegKey)
+                                    , (StakeIndexNew 0, DCertDeleg . RegKey) ]
+                                    st
+      pure [tx0, tx1]
+
+    let ptr1 = Ptr (blockSlot blk') 1 1
+
+    _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+        tx0 <- Alonzo.mkPaymentTx (UTxOIndex 1) (UTxOAddressNewWithPtr 0 ptr1) 20000 20000 st
+        tx1 <- Alonzo.mkPaymentTx (UTxOIndex 2) (UTxOAddressNewWithPtr 0 ptr0) 20000 20000 st
+        pure [tx0, tx1]
+
+    assertBlockNoBackoff dbSync 2
+    assertCertCounts dbSync (2,1,0,0)
+  where
+    testLabel = "stakeAddressPtrDereg"
+
+consumeSameBlock :: IOManager -> [(Text, Text)] -> Assertion
+consumeSameBlock =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+
+      _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+        tx0 <- Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 20000 20000 st
+        let utxo0 = Alonzo.mkUTxOAlonzo tx0 !! 0
+        tx1 <- Alonzo.mkPaymentTx (UTxOPair utxo0) (UTxOIndex 2) 10000 500 st
+        pure [tx0, tx1]
+      assertBlockNoBackoff dbSync $ 0
+  where
+    testLabel = "consumeSameBlock"
+
 simpleRewards :: IOManager -> [(Text, Text)] -> Assertion
 simpleRewards =
     withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
-      blk <- registerAllStakeCreds interpreter (NodeId 0)
-      atomically $ addBlock mockServer blk
+      _ <- registerAllStakeCreds interpreter mockServer
+
       -- Pools are not registered yet, this takes 2 epochs. So fees of this tx
       -- should not create any rewards.
-      tx0 <- withAlonzoLedgerState interpreter $  Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
-      blk0 <- forgeNext interpreter $ MockBlock [TxAlonzo tx0] (NodeId 1)
-      atomically $ addBlock mockServer blk0
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
 
-      fillEpochEqually interpreter mockServer
-      fillEpochEqually interpreter mockServer
-      fillEpochEqually interpreter mockServer
+      a <- fillEpochs interpreter mockServer 3
+      assertBlockNoBackoff dbSync (fromIntegral $ 2 + length a - 1)
+
+      -- The pool leaders take leader rewards with value 0
+      assertRewardCount dbSync 3
+
+      st <- withAlonzoLedgerState interpreter Right
+      -- False indicates that we provide the full expected list of addresses with rewards.
+      assertRewardCounts dbSync st False
+          [ (StakeIndexPoolLeader (PoolIndex 0), (1,0,0,0,0))
+          , (StakeIndexPoolLeader (PoolIndex 1), (1,0,0,0,0))
+          , (StakeIndexPoolLeader (PoolIndex 2), (1,0,0,0,0))]
 
       -- Now that pools are registered, we add a tx to fill the fees pot.
       -- Rewards will be distributed.
-      tx1 <- withAlonzoLedgerState interpreter $  Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
-      blk1 <- forgeNext interpreter $ MockBlock [TxAlonzo tx1] (NodeId 1)
-      atomically $ addBlock mockServer blk1
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
 
-      fillEpochEqually interpreter mockServer
-      fillEpochEqually interpreter mockServer
-      fillEpochEqually interpreter mockServer
+      b <- fillEpochs interpreter mockServer 3
 
-      assertBlockNoBackoff dbSync (6 * 150 + 2)
+      assertBlockNoBackoff dbSync (fromIntegral $ 1 + length a + 1 + length b)
       assertRewardCount dbSync 17
-
+      assertRewardCounts dbSync st True
+          -- 2 pool leaders also delegate to pools.
+          [ (StakeIndexPoolLeader (PoolIndexId $ KeyHash "9f1b441b9b781b3c3abb43b25679dc17dbaaf116dddca1ad09dc1de0"), (4,0,0,0,0))
+          , (StakeIndexPoolLeader (PoolIndexId $ KeyHash "5af582399de8c226391bfd21424f34d0b053419c4d93975802b7d107"), (4,1,0,0,0))
+          , (StakeIndexPoolLeader (PoolIndexId $ KeyHash "58eef2925db2789f76ea057c51069e52c5e0a44550f853c6cdf620f8"), (4,1,0,0,0))
+          , (StakeIndexPoolMember 0 (PoolIndex 0), (0,1,0,0,0))
+          , (StakeIndexPoolMember 0 (PoolIndex 1), (0,1,0,0,0))
+          ]
   where
     testLabel = "simpleRewards"
 
@@ -337,136 +491,288 @@ rewardsShelley :: IOManager -> [(Text, Text)] -> Assertion
 rewardsShelley =
     withFullConfig "config-shelley" testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
-      blk <- registerAllStakeCreds interpreter (NodeId 0)
-      atomically $ addBlock mockServer blk
-      tx0 <- withShelleyLedgerState interpreter $  Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
-      blk0 <- forgeNext interpreter $ MockBlock [TxShelley tx0] (NodeId 1)
-      atomically $ addBlock mockServer blk0
+      _ <- registerAllStakeCreds interpreter mockServer
 
-      fillEpochEqually interpreter mockServer
-      fillEpochEqually interpreter mockServer
-      fillEpochEqually interpreter mockServer
+      _ <- withShelleyFindLeaderAndSubmitTx interpreter mockServer $
+        Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
 
-      tx1 <- withShelleyLedgerState interpreter $  Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
-      blk1 <- forgeNext interpreter $ MockBlock [TxShelley tx1] (NodeId 1)
-      atomically $ addBlock mockServer blk1
+      a <- fillEpochs interpreter mockServer 3
+      assertRewardCount dbSync 3
 
-      fillEpochEqually interpreter mockServer
-      fillEpochEqually interpreter mockServer
-      fillEpochEqually interpreter mockServer
+      _ <- withShelleyFindLeaderAndSubmitTx interpreter mockServer $
+        Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
 
-      assertBlockNoBackoff dbSync (6 * 150 + 2)
+      b <- fillEpochs interpreter mockServer 3
+
+      assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + 2)
+      st <- withShelleyLedgerState interpreter Right
       -- Note we have 2 rewards less compared to Alonzo era
       assertRewardCount dbSync 15
+      assertRewardCounts dbSync st True
+          -- Here we dont' have both leader and member rewards.
+          [ (StakeIndexPoolLeader (PoolIndexId $ KeyHash "9f1b441b9b781b3c3abb43b25679dc17dbaaf116dddca1ad09dc1de0"), (4,0,0,0,0))
+          , (StakeIndexPoolLeader (PoolIndexId $ KeyHash "5af582399de8c226391bfd21424f34d0b053419c4d93975802b7d107"), (4,0,0,0,0))
+          , (StakeIndexPoolLeader (PoolIndexId $ KeyHash "58eef2925db2789f76ea057c51069e52c5e0a44550f853c6cdf620f8"), (4,0,0,0,0))
+          , (StakeIndexPoolMember 0 (PoolIndex 0), (0,1,0,0,0))
+          , (StakeIndexPoolMember 0 (PoolIndex 1), (0,1,0,0,0))
+          ]
 
   where
     testLabel = "rewardsShelley"
+
+rewardsDeregistration :: IOManager -> [(Text, Text)] -> Assertion
+rewardsDeregistration =
+    withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkDepositTxPools (UTxOIndex 1) 20000
+
+      -- first move to treasury from reserves
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
+        Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty)
+
+      _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+            -- register the stake address and delegate to a pool
+        let poolId = resolvePool (PoolIndex 0) st
+        tx1 <- Alonzo.mkSimpleDCertTx
+                    [ (StakeIndexNew 1, DCertDeleg . RegKey)
+                    , (StakeIndexNew 1, \stCred -> DCertDeleg $ Delegate $ Delegation stCred poolId) ]
+                    st
+            -- send some funds to the address so
+        tx2 <- Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithStake 0 (StakeIndexNew 1)) 100000 5000 st
+        Right [tx1, tx2]
+
+      a <- fillEpochs interpreter mockServer 3
+      assertBlockNoBackoff dbSync (fromIntegral $ 3 + length a - 1)
+
+      st <- withAlonzoLedgerState interpreter Right
+
+      -- Now that pools are registered, we add a tx to fill the fees pot.
+      -- Rewards will be distributed.
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
+
+      b <- fillEpochs interpreter mockServer 2
+
+      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length a + length b - 1)
+      assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,1,0,0,0))]
+
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ Alonzo.mkPaymentTx (UTxOIndex 1) (UTxOIndex 0) 10000 10000
+
+      c <- fillEpochs interpreter mockServer 2
+
+      assertBlockNoBackoff dbSync (fromIntegral $ 5 + length a + length b + length c - 1)
+      assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,2,0,0,0))]
+
+      d <- fillEpochs interpreter mockServer 1
+      e <- fillEpochPercentage interpreter mockServer 85
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+          Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)]
+
+      f <- fillUntilNextEpoch interpreter mockServer
+
+      assertBlockNoBackoff dbSync (fromIntegral $ 6 + length (a <> b <> c <> d <> e <> f) - 1)
+      assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,2,0,0,0))]
+
+      g <- fillEpochs interpreter mockServer 2
+      -- TODO: the last field should be 1. There should be some deposit refund
+      assertBlockNoBackoff dbSync (fromIntegral $ 6 + length (a <> b <> c <> d <> e <> f <> g) - 1)
+      assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,2,0,0,0))]
+
+  where
+    testLabel = "rewardsDeregistration"
 
 mirReward :: IOManager -> [(Text, Text)] -> Assertion
 mirReward =
     withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
-      blk <- registerAllStakeCreds interpreter (NodeId 0)
-      atomically $ addBlock mockServer blk
+      _ <- registerAllStakeCreds interpreter mockServer
 
       -- first move to treasury from reserves
-      tx1 <- withAlonzoLedgerState interpreter $ \_ ->
-        Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))]
-                         (Wdrl mempty)
-      blk1 <- forgeNext interpreter $ MockBlock [TxAlonzo tx1] (NodeId 0)
-      atomically $ addBlock mockServer blk1
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
+        Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty)
 
-      fillEpochEqually interpreter mockServer
-      fillWithBlocksEqually interpreter mockServer 75
+      _ <- fillEpochPercentage interpreter mockServer 50
 
       -- mir from treasury
-      tx2 <- withAlonzoLedgerState interpreter $ Alonzo.mkSimpleDCertTx (StakeIndex 1)
-        (\cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 1000))))
-      tx3 <- withAlonzoLedgerState interpreter $ Alonzo.mkSimpleDCertTx (StakeIndex 1)
-        (\cred -> DCertMir $ MIRCert ReservesMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 1000))))
-      blk2 <- forgeNext interpreter $ MockBlock [TxAlonzo tx2, TxAlonzo tx3] (NodeId 1)
-      atomically $ addBlock mockServer blk2
+      _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+        tx1 <- Alonzo.mkSimpleDCertTx [(StakeIndex 1,
+          \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 100))))] st
+        tx2 <- Alonzo.mkSimpleDCertTx [(StakeIndex 1,
+          \cred -> DCertMir $ MIRCert ReservesMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 200))))] st
+        tx3 <- Alonzo.mkSimpleDCertTx [(StakeIndex 1,
+          \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 300))))] st
+        pure [tx1, tx2, tx3]
 
-      fillEpochEqually interpreter mockServer
-      assertRewardCount dbSync 1
+      _ <- fillUntilNextEpoch interpreter mockServer
+
+      st <- withAlonzoLedgerState interpreter Right
+      -- 2 mir rewards from treasury are sumed
+      assertRewardCounts dbSync st True [(StakeIndex 1, (0,0,1,1,0))]
   where
     testLabel = "mirReward"
+
+mirRewardShelley :: IOManager -> [(Text, Text)] -> Assertion
+mirRewardShelley =
+    withFullConfig "config-shelley" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      _ <- registerAllStakeCreds interpreter mockServer
+
+      -- first move to treasury from reserves
+      _ <- withShelleyFindLeaderAndSubmitTx interpreter mockServer $
+        const $ Shelley.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))]
+                         (Wdrl mempty)
+
+      a <- fillEpochPercentage interpreter mockServer 50
+
+      -- mir from treasury
+      _ <- withShelleyFindLeaderAndSubmitTx  interpreter mockServer $ Shelley.mkSimpleDCertTx
+        [(StakeIndex 1, \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 100))))]
+
+      b <- fillUntilNextEpoch interpreter mockServer
+
+      st <- withShelleyLedgerState interpreter Right
+      -- TODO: is this correct? It looks like there are no rewards.
+      assertBlockNoBackoff dbSync (fromIntegral $ 3 + length a + length b - 1)
+      assertRewardCounts dbSync st True []
+  where
+    testLabel = "mirRewardShelley"
+
+
+mirRewardDereg :: IOManager -> [(Text, Text)] -> Assertion
+mirRewardDereg =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      _ <- registerAllStakeCreds interpreter mockServer
+
+      -- first move to treasury from reserves
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
+        Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty)
+
+      a <- fillUntilNextEpoch interpreter mockServer
+
+      -- mir from treasury
+      _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+        tx1 <- Alonzo.mkSimpleDCertTx [(StakeIndex 1,
+          \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 100))))] st
+        tx2 <- Alonzo.mkSimpleDCertTx [(StakeIndex 1,
+          \cred -> DCertMir $ MIRCert ReservesMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 200))))] st
+        tx3 <- Alonzo.mkSimpleDCertTx [(StakeIndex 1,
+          \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 300))))] st
+        pure [tx1, tx2, tx3]
+
+      b <- fillEpochPercentage interpreter mockServer 20
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+          Alonzo.mkSimpleDCertTx [(StakeIndex 1, DCertDeleg . DeRegKey)]
+
+
+      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b) - 1)
+      -- deregistration means empty rewards
+      st <- withAlonzoLedgerState interpreter Right
+      assertRewardCounts dbSync st False []
+  where
+    testLabel = "mirRewardDereg"
 
 rewardsEmptyChainLast :: IOManager -> [(Text, Text)] -> Assertion
 rewardsEmptyChainLast =
     withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
-      blk <- registerAllStakeCreds interpreter (NodeId 0)
-      atomically $ addBlock mockServer blk
+      _ <- registerAllStakeCreds interpreter mockServer
 
-      fillEpochEqually interpreter mockServer
-      fillEpochEqually interpreter mockServer
-      -- Fill half an epoch
-      fillWithBlocksEqually interpreter mockServer 75
+      a <- fillEpochs interpreter mockServer 3
+      assertRewardCount dbSync 0
 
       -- Now that pools are registered, we add a tx to fill the fees pot.
       -- Rewards will be distributed.
-      tx1 <- withAlonzoLedgerState interpreter $  Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
-      blk1 <- forgeNext interpreter $ MockBlock [TxAlonzo tx1] (NodeId 1)
-      atomically $ addBlock mockServer blk1
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
 
-      fillEpochEqually interpreter mockServer
-      assertRewardCount dbSync 3
+      b <- fillUntilNextEpoch interpreter mockServer
+      assertRewardCount dbSync 6
+
+      c <- fillEpochPercentage interpreter mockServer 80
 
       -- Skip half an epoch
-      forgeNextAfterForecast interpreter mockServer (div 43200 2)
-      fillEpochEqually interpreter mockServer
-      assertRewardCount dbSync 14
+      _ <- skipUntilNextEpoch interpreter mockServer []
+      d <- fillUntilNextEpoch interpreter mockServer
+      assertBlockNoBackoff dbSync (fromIntegral $ 1 + length a + 1 + length b + length c + 1 + length d - 1)
+      assertRewardCount dbSync 17
   where
     testLabel = "rewardsEmptyChainLast"
 
-consumeSameBlock :: IOManager -> [(Text, Text)] -> Assertion
-consumeSameBlock =
+rollbackBoundary :: IOManager -> [(Text, Text)] -> Assertion
+rollbackBoundary =
     withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
-      blk <- registerAllStakeCreds interpreter (NodeId 0)
-      atomically $ addBlock mockServer blk
-      fillWithBlocksEqually interpreter mockServer 75
+      _ <- registerAllStakeCreds interpreter mockServer
+      _ <- fillEpochs interpreter mockServer 2
 
-      tx0 <- withAlonzoLedgerState interpreter $  Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 20000 20000
-      tx1 <- withAlonzoLedgerState interpreter $  Alonzo.mkPaymentTx (UTxOIndex 1) (UTxOIndex 2) 10000 30000
-      blk0 <- forgeNext interpreter $ MockBlock [TxAlonzo tx0, TxAlonzo tx1] (NodeId 1)
-      atomically $ addBlock mockServer blk0
-      assertBlockNoBackoff dbSync 76
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
+
+      blks <- forgeAndSubmitBlocks interpreter mockServer 50
+      blks' <- fillUntilNextEpoch interpreter mockServer
+
+      assertRewardCount dbSync 3
+      atomically $ rollback mockServer (blockPoint $ last blks)
+      forM_ blks' $ atomically . addBlock mockServer
+      assertRewardCount dbSync 3
   where
-    testLabel = "consumeSameBlock"
+    testLabel = "rollbackBoundary"
 
 simpleScript :: IOManager -> [(Text, Text)] -> Assertion
 simpleScript =
     withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
-      blk <- registerAllStakeCreds interpreter (NodeId 0)
-      atomically $ addBlock mockServer blk
-      fillWithBlocksEqually interpreter mockServer 75
+      _ <- registerAllStakeCreds interpreter mockServer
 
-      tx0 <- withAlonzoLedgerState interpreter $ Alonzo.mkLockByScriptTx (UTxOIndex 0) True 20000 20000
-      blk0 <- forgeNext interpreter $ MockBlock [TxAlonzo tx0] (NodeId 1)
-      atomically $ addBlock mockServer blk0
-      assertBlockNoBackoff dbSync 76
+      a <- fillUntilNextEpoch interpreter mockServer
+
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkLockByScriptTx (UTxOIndex 0) [True] 20000 20000
+
+      assertBlockNoBackoff dbSync (fromIntegral $ length a + 2 - 1)
+      assertEqQuery dbSync (fmap getOutFields <$> DB.queryScriptOutputs) [expectedFields] "Unexpected script outputs"
   where
     testLabel = "simpleScript"
+    getOutFields txOut = (DB.txOutAddress txOut, DB.txOutAddressHasScript txOut, DB.txOutValue txOut, DB.txOutDataHash txOut)
+    expectedFields = ( "addr_test1wpnlxv2xv9a9ucvnvzqakwepzl9ltx7jzgm53av2e9ncv4sysemm8" :: Text
+                     , True, DB.DbLovelace 20000
+                     , Just $ Crypto.hashToBytes (extractHash $ hashData plutusDataList))
+
+unlockScript :: IOManager -> [(Text, Text)] -> Assertion
+unlockScript =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      _ <- registerAllStakeCreds interpreter mockServer
+
+      -- We don't use withAlonzoFindLeaderAndSubmitTx here, because we want access to the tx.
+      tx0 <- withAlonzoLedgerState interpreter $ Alonzo.mkLockByScriptTx (UTxOIndex 0) [True] 20000 20000
+      _ <- forgeNextAndSubmit interpreter mockServer $ MockBlock [TxAlonzo tx0] (NodeId 1)
+
+      let utxo0 = Alonzo.mkUTxOAlonzo tx0 !! 0
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkUnlockScriptTx [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) True 10000 500
+
+      assertBlockNoBackoff dbSync 2
+      assertAlonzoCounts dbSync (1,1,1,1,1,1,0,0)
+  where
+    testLabel = "unlockScriptSameBlock"
 
 unlockScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 unlockScriptSameBlock =
     withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
-      blk <- registerAllStakeCreds interpreter (NodeId 0)
-      atomically $ addBlock mockServer blk
-      fillWithBlocksEqually interpreter mockServer 75
+      _ <- registerAllStakeCreds interpreter mockServer
 
-      tx0 <- withAlonzoLedgerState interpreter $ Alonzo.mkLockByScriptTx (UTxOIndex 0) True 20000 20000
-      let txId = mkTxId $ TxAlonzo tx0
-          txIn1 = SL.TxIn txId 0
-      tx1 <- withAlonzoLedgerState interpreter $
-        Alonzo.mkUnlockScriptTx txIn1 (UTxOIndex 1) (UTxOIndex 2) True 20000 20000
-      blk0 <- forgeNext interpreter $ MockBlock [TxAlonzo tx0, TxAlonzo tx1] (NodeId 1)
-      atomically $ addBlock mockServer blk0
-      assertBlockNoBackoff dbSync 76
+      _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+        tx0 <- Alonzo.mkLockByScriptTx (UTxOIndex 0) [True] 20000 20000 st
+        let utxo0 = Alonzo.mkUTxOAlonzo tx0 !! 0
+        tx1 <- Alonzo.mkUnlockScriptTx [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) True 10000 500 st
+        pure [tx0, tx1]
+
+      assertBlockNoBackoff dbSync 1
+      assertAlonzoCounts dbSync (1,1,1,1,1,1,0,0)
+
   where
     testLabel = "unlockScriptSameBlock"
 
@@ -474,64 +780,286 @@ failedScript :: IOManager -> [(Text, Text)] -> Assertion
 failedScript =
     withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
-      blk <- registerAllStakeCreds interpreter (NodeId 0)
-      atomically $ addBlock mockServer blk
-      fillWithBlocksEqually interpreter mockServer 75
 
-      tx0 <- withAlonzoLedgerState interpreter $ Alonzo.mkLockByScriptTx (UTxOIndex 0) False 20000 20000
-      let txId = mkTxId $ TxAlonzo tx0
-          txIn1 = SL.TxIn txId 0
-      tx1 <- withAlonzoLedgerState interpreter $
-        Alonzo.mkUnlockScriptTx txIn1 (UTxOIndex 1) (UTxOIndex 2) False 20000 20000
-      blk0 <- forgeNext interpreter $ MockBlock [TxAlonzo tx0, TxAlonzo tx1] (NodeId 1)
-      atomically $ addBlock mockServer blk0
-      assertBlockNoBackoff dbSync 76
+      tx0 <- withAlonzoLedgerState interpreter $ Alonzo.mkLockByScriptTx (UTxOIndex 0) [False] 20000 20000
+      _ <- forgeNextAndSubmit interpreter mockServer $ MockBlock [TxAlonzo tx0] (NodeId 1)
+
+      let utxo0 = Alonzo.mkUTxOAlonzo tx0 !! 0
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkUnlockScriptTx [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) False 10000 500
+
+      assertBlockNoBackoff dbSync 1
+      assertAlonzoCounts dbSync (0,0,0,0,1,0,1,1)
   where
     testLabel = "failedScript"
 
-fillEpochEqually :: Interpreter -> ServerHandle IO CardanoBlock -> Assertion
-fillEpochEqually interpreter mockServer = do
-    fillWithBlocksEqually interpreter mockServer 150
+failedScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion
+failedScriptSameBlock =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      _ <- registerAllStakeCreds interpreter mockServer
 
--- We can't skip many slots, before we start getting 'OutsideForecastRange' errors
-forgeNextAfterForecast :: Interpreter -> ServerHandle IO CardanoBlock
-                       -> Word64 -> IO ()
-forgeNextAfterForecast inter mockServer = go
+      _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+        tx0 <- Alonzo.mkLockByScriptTx (UTxOIndex 0) [False] 20000 20000 st
+        let utxo0 = Alonzo.mkUTxOAlonzo tx0 !! 0
+        tx1 <- Alonzo.mkUnlockScriptTx [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) False 10000 500 st
+        pure [tx0, tx1]
+
+      assertBlockNoBackoff dbSync 1
+      assertAlonzoCounts dbSync (0,0,0,0,1,0,1,1)
   where
-    go rest
-      | rest > 10000 = do
-          blk <- forgeNextAfter inter 10000 mockBlock0
-          atomically $ addBlock mockServer blk
-          go (rest - 10000)
-      | True = do
-          blk <- forgeNextAfter inter rest mockBlock0
-          atomically $ addBlock mockServer blk
-          pure ()
+    testLabel = "failedScriptSameBlock"
 
--- 43200 slots per epoch
--- It takes on average 3 * 20 = 60 slots to create a block from a predefined leader
--- We scip additional blocks since we don't need very dense chains.
--- With 'blocksToCreate' equal to 150 this fills more or less an epoch.
-fillWithBlocksEqually :: Interpreter -> ServerHandle IO CardanoBlock -> Int -> Assertion
-fillWithBlocksEqually interpreter mockServer blocksToCreate = do
-    blks0 <- forM (replicate thirdEpoch mockBlock0) (forgeNextAfter interpreter skipSlots)
-    atomically $ forM_ blks0 $ addBlock mockServer
+multipleScripts :: IOManager -> [(Text, Text)] -> Assertion
+multipleScripts =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
 
-    blks1 <- forM (replicate thirdEpoch mockBlock1) (forgeNextAfter interpreter skipSlots)
-    atomically $ forM_ blks1 $ addBlock mockServer
+    tx0 <- withAlonzoLedgerState interpreter $ Alonzo.mkLockByScriptTx (UTxOIndex 0) [True, False, True] 20000 20000
+    let utxo = Alonzo.mkUTxOAlonzo tx0
+        pair1 = utxo !! 0
+        pair2 = utxo !! 2
+    tx1 <- withAlonzoLedgerState interpreter $
+        Alonzo.mkUnlockScriptTx [UTxOPair pair1, UTxOPair pair2] (UTxOIndex 1) (UTxOIndex 2) True 10000 500
 
-    blks2 <- forM (replicate thirdEpoch mockBlock2) (forgeNextAfter interpreter skipSlots)
-    atomically $ forM_ blks2 $ addBlock mockServer
+    _ <- forgeNextAndSubmit interpreter mockServer $ MockBlock [TxAlonzo tx0] (NodeId 1)
+    _ <- forgeNextAndSubmit interpreter mockServer $ MockBlock [TxAlonzo tx1] (NodeId 1)
+
+    assertBlockNoBackoff dbSync 1
+    assertAlonzoCounts dbSync (1,2,1,1,3,2,0,0)
   where
-    thirdEpoch = div blocksToCreate 3
-    skipSlots = 228
+    testLabel = "multipleScripts"
 
+multipleScriptsSameBlock :: IOManager -> [(Text, Text)] -> Assertion
+multipleScriptsSameBlock =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+
+    _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+      tx0 <- Alonzo.mkLockByScriptTx (UTxOIndex 0) [True, False, True] 20000 20000 st
+      let utxo =  Alonzo.mkUTxOAlonzo tx0
+          pair1 = utxo !! 0
+          pair2 = utxo !! 2
+      tx1 <- Alonzo.mkUnlockScriptTx [UTxOPair pair1, UTxOPair pair2] (UTxOIndex 1) (UTxOIndex 2) True 10000 500 st
+      pure [tx0, tx1]
+
+    assertBlockNoBackoff dbSync 0
+    assertAlonzoCounts dbSync (1,2,1,1,3,2,0,0)
+  where
+    testLabel = "multipleScriptsSameBlock"
+
+multipleScriptsFailed :: IOManager -> [(Text, Text)] -> Assertion
+multipleScriptsFailed =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+
+    tx0 <- withAlonzoLedgerState interpreter $ Alonzo.mkLockByScriptTx (UTxOIndex 0) [True, False, True] 20000 20000
+    _ <- forgeNextAndSubmit interpreter mockServer $ MockBlock [TxAlonzo tx0] (NodeId 1)
+
+    let utxos = Alonzo.mkUTxOAlonzo tx0
+    tx1 <- withAlonzoLedgerState interpreter $
+        Alonzo.mkUnlockScriptTx (UTxOPair <$> [utxos !! 0, utxos !! 1, utxos !! 2]) (UTxOIndex 1) (UTxOIndex 2) False 10000 500
+    _ <- forgeNextAndSubmit interpreter mockServer $ MockBlock [TxAlonzo tx1] (NodeId 1)
+
+    assertBlockNoBackoff dbSync 1
+    assertAlonzoCounts dbSync (0,0,0,0,3,0,1,1)
+  where
+    testLabel = "multipleScriptsFailed"
+
+multipleScriptsFailedSameBlock :: IOManager -> [(Text, Text)] -> Assertion
+multipleScriptsFailedSameBlock =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+
+    _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+      tx0 <- Alonzo.mkLockByScriptTx (UTxOIndex 0) [True, False, True] 20000 20000 st
+
+      let utxos = tail $ Alonzo.mkUTxOAlonzo tx0
+      tx1 <- Alonzo.mkUnlockScriptTx (UTxOPair <$> [utxos !! 0, utxos !! 1, utxos !! 2]) (UTxOIndex 1) (UTxOIndex 2) False 10000 500 st
+      pure [tx0, tx1]
+
+    assertBlockNoBackoff dbSync 0
+    assertAlonzoCounts dbSync (0,0,0,0,3,0,1,1)
+  where
+    testLabel = "multipleScriptsFailedSameBlock"
+
+registrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
+registrationScriptTx =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+
+    _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkSimpleDCertTx [(StakeIndexScript True, DCertDeleg . RegKey)]
+    assertBlockNoBackoff dbSync 0
+    assertScriptCert dbSync (0,0,0,1)
+  where
+    testLabel = "registrationScriptTx"
+
+deregistrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
+deregistrationScriptTx =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+
+    _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+      tx0 <- Alonzo.mkSimpleDCertTx [(StakeIndexScript True, DCertDeleg . RegKey)] st
+      tx1 <- Alonzo.mkScriptDCertTx [(StakeIndexScript True, True, DCertDeleg . DeRegKey)] True st
+      pure [tx0, tx1]
+
+    assertBlockNoBackoff dbSync 0
+    assertScriptCert dbSync (1,0,0,1)
+  where
+    testLabel = "deregistrationScriptTx"
+
+deregistrationsScriptTxs :: IOManager -> [(Text, Text)] -> Assertion
+deregistrationsScriptTxs =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+
+    _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+      tx0 <- Alonzo.mkSimpleDCertTx [(StakeIndexScript True, DCertDeleg . RegKey)] st
+      tx1 <- Alonzo.mkScriptDCertTx [(StakeIndexScript True, True, DCertDeleg . DeRegKey)] True st
+      tx2 <- Alonzo.mkSimpleDCertTx [(StakeIndexScript True, DCertDeleg .   RegKey)] st
+      tx3 <- Alonzo.mkScriptDCertTx [(StakeIndexScript True, True, DCertDeleg . DeRegKey)] True st
+      pure [tx0, tx1, Alonzo.addValidityInterval 1000 tx2, Alonzo.addValidityInterval 2000 tx3]
+
+    assertBlockNoBackoff dbSync 0
+    assertScriptCert dbSync (2,0,0,1)
+    assertAlonzoCounts dbSync (1,2,1,0,0,0,0,0)
+  where
+    testLabel = "deregistrationsScriptTxs"
+
+deregistrationsScriptTx :: IOManager -> [(Text, Text)] -> Assertion
+deregistrationsScriptTx =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+
+    _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+      tx0 <- Alonzo.mkSimpleDCertTx [(StakeIndexScript True, DCertDeleg . RegKey)] st
+      tx1 <- Alonzo.mkScriptDCertTx [ (StakeIndexScript True, True, DCertDeleg . DeRegKey)
+                                    , (StakeIndexScript True, False, DCertDeleg .  RegKey)
+                                    , (StakeIndexScript True, True, DCertDeleg . DeRegKey)]
+                                    True st
+      pure [tx0, tx1]
+
+    assertBlockNoBackoff dbSync 0
+    assertScriptCert dbSync (2,0,0,1)
+    assertAlonzoCounts dbSync (1,2,1,0,0,0,0,0)
+  where
+    testLabel = "deregistrationsScriptTx"
+
+-- Like previous but missing a redeemer. This is a known ledger issue
+deregistrationsScriptTx' :: IOManager -> [(Text, Text)] -> Assertion
+deregistrationsScriptTx' =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+
+    _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+      tx0 <- Alonzo.mkSimpleDCertTx [(StakeIndexScript True, DCertDeleg . RegKey)] st
+      tx1 <- Alonzo.mkScriptDCertTx [ (StakeIndexScript True, False, DCertDeleg . DeRegKey)
+                               , (StakeIndexScript True, False, DCertDeleg .   RegKey)
+                               , (StakeIndexScript True, True, DCertDeleg . DeRegKey)]
+                               True st
+      pure [tx0, tx1]
+
+    assertBlockNoBackoff dbSync 0
+    -- TODO: This is a bug! The first field should be 2. However the deregistrations
+    -- are missing the redeemers
+    assertScriptCert dbSync (0,0,0,1)
+    assertAlonzoCounts dbSync (1,1,1,0,0,0,0,0)
+  where
+    testLabel = "deregistrationsScriptTx'"
+
+-- Like previous but missing the other redeemer. This is a known ledger issue
+deregistrationsScriptTx'' :: IOManager -> [(Text, Text)] -> Assertion
+deregistrationsScriptTx'' =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+
+    _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+      tx0 <- Alonzo.mkSimpleDCertTx [(StakeIndexScript True, DCertDeleg . RegKey)] st
+      tx1 <- Alonzo.mkScriptDCertTx [ (StakeIndexScript True, True, DCertDeleg . DeRegKey)
+                               , (StakeIndexScript True, False, DCertDeleg .   RegKey)
+                               , (StakeIndexScript True, False, DCertDeleg . DeRegKey)]
+                               True st
+      pure [tx0, tx1]
+
+    assertBlockNoBackoff dbSync 0
+    assertScriptCert dbSync (2,0,0,1)
+    assertAlonzoCounts dbSync (1,1,1,0,0,0,0,0)
+  where
+    testLabel = "deregistrationsScriptTx''"
+
+mintMultiAsset ::  IOManager -> [(Text, Text)] -> Assertion
+mintMultiAsset =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \st -> do
+        let val0 = Value 1 $ Map.singleton (PolicyID alwaysMintScriptHash) (Map.singleton (assetNames !! 0) 1)
+        Alonzo.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, Value 10000 mempty)] val0 True 100 st
+
+      assertBlockNoBackoff dbSync 0
+      assertAlonzoCounts dbSync (1,1,1,1,0,0,0,0)
+  where
+    testLabel = "mintMultiAsset"
+
+mintMultiAssets ::  IOManager -> [(Text, Text)] -> Assertion
+mintMultiAssets =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+        let assets0 = Map.fromList [(assetNames !! 0,10), (assetNames !! 1,4)]
+        let policy0 = PolicyID alwaysMintScriptHash
+        let policy1 = PolicyID alwaysSucceedsScriptHash
+        let val1 = Value 1 $ Map.fromList [(policy0, assets0), (policy1, assets0)]
+        tx0 <- Alonzo.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, Value 10000 mempty)] val1 True 100 st
+        tx1 <- Alonzo.mkMAssetsScriptTx [UTxOIndex 2] (UTxOIndex 3) [(UTxOAddressNew 0, Value 10000 mempty)] val1 True 200 st
+        pure [tx0, tx1]
+
+      assertBlockNoBackoff dbSync 0
+      assertAlonzoCounts dbSync (2,4,1,2,0,0,0,0)
+  where
+    testLabel = "mintMultiAssets"
+
+swapMultiAssets ::  IOManager -> [(Text, Text)] -> Assertion
+swapMultiAssets =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      _ <- withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+          let assetsMinted0 = Map.fromList [(assetNames !! 0, 10), (assetNames !! 1, 4)]
+          let policy0 = PolicyID alwaysMintScriptHash
+          let policy1 = PolicyID alwaysSucceedsScriptHash
+          let mintValue0 = Value 100 $ Map.fromList [(policy0, assetsMinted0), (policy1, assetsMinted0)]
+          let assets0 = Map.fromList [(assetNames !! 0, 5), (assetNames !! 1, 2)]
+          let outValue0 = Value 20 $ Map.fromList [(policy0, assets0), (policy1, assets0)]
+
+          tx0 <- Alonzo.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1)
+                  [(UTxOAddress alwaysSucceedsScriptAddr, outValue0), (UTxOAddress alwaysMintScriptAddr, outValue0)] mintValue0 True 100 st
+
+          let utxos = Alonzo.mkUTxOAlonzo tx0
+          tx1 <- Alonzo.mkMAssetsScriptTx
+            [UTxOPair (utxos !! 0), UTxOPair (utxos !! 1), UTxOIndex 2]
+            (UTxOIndex 3)
+            [ (UTxOAddress alwaysSucceedsScriptAddr, outValue0), (UTxOAddress alwaysMintScriptAddr, outValue0)
+            , (UTxOAddressNew 0, outValue0), (UTxOAddressNew 0, outValue0)]
+            mintValue0 True 200 st
+          pure [tx0, tx1]
+
+      assertBlockNoBackoff dbSync 0
+      assertAlonzoCounts dbSync (2,6,1,2,4,2,0,0)
+  where
+    testLabel = "swapMultiAssets"
+
+{-}
+        mkMAssetsScriptTx [UTxOIndex 0, UTxOIndex 1] (UTxOIndex 2)
+        let mp1 = Map.fromList $ zip asetNames [0,1,2]
+        let val1 = Value 1 (Map.fromList $ zip (PolicyID <$> [alwaysMintScriptHash, alwaysMintScriptHash, alwaysSucceedsScriptStake]) [mp1,mp1,mp1]
+          [(UTxOIndexNew 0, val1), (UTxOIndexNew 1, val1)]
+-}
 hfBlockHash :: CardanoBlock -> ByteString
 hfBlockHash blk = case blk of
   BlockShelley sblk -> blockHash sblk
   BlockAlonzo ablk -> blockHash ablk
   _ -> error "not supported block type"
-
 
 throwLeft :: Exception err => IO (Either err a) -> IO a
 throwLeft action = do

@@ -16,24 +16,30 @@ import           Cardano.Ledger.Credential
 import           Cardano.Ledger.Crypto (StandardCrypto)
 import           Cardano.Ledger.Era
 import           Cardano.Ledger.Hashes
+import           Cardano.Ledger.Mary.Value
 
-import           Cardano.PlutusExample.AlwaysSucceeds
+import           Cardano.PlutusExample.AlwaysSucceeds (alwaysSucceedsScriptShortBs)
+import           Cardano.PlutusExample.AlwaysFails (alwaysFailsScriptShortBs)
+import           Cardano.PlutusExample.MintingScript
 
 import qualified PlutusCore.Data as Plutus
 
-alwaysSuccedsScript :: Script (AlonzoEra StandardCrypto)
-alwaysSuccedsScript = PlutusScript PlutusV1 alwaysSucceedsScriptShortBs
+alwaysSucceedsScript :: Script (AlonzoEra StandardCrypto)
+alwaysSucceedsScript = PlutusScript PlutusV1 alwaysSucceedsScriptShortBs
 
 alwaysSucceedsScriptHash :: ScriptHash StandardCrypto
-alwaysSucceedsScriptHash = hashScript @(AlonzoEra StandardCrypto) alwaysSuccedsScript
+alwaysSucceedsScriptHash = hashScript @(AlonzoEra StandardCrypto) alwaysSucceedsScript
 
 -- addr_test1wpnlxv2xv9a9ucvnvzqakwepzl9ltx7jzgm53av2e9ncv4sysemm8
-alwaysSuccedsScriptAddr :: Addr StandardCrypto
-alwaysSuccedsScriptAddr = Addr Testnet (ScriptHashObj alwaysSucceedsScriptHash) StakeRefNull
+alwaysSucceedsScriptAddr :: Addr StandardCrypto
+alwaysSucceedsScriptAddr = Addr Testnet (ScriptHashObj alwaysSucceedsScriptHash) StakeRefNull
+
+alwaysSucceedsScriptStake :: StakeCredential StandardCrypto
+alwaysSucceedsScriptStake = ScriptHashObj $ alwaysSucceedsScriptHash
 
 
 alwaysFailsScript :: Script (AlonzoEra StandardCrypto)
-alwaysFailsScript = PlutusScript PlutusV1 alwaysSucceedsScriptShortBs
+alwaysFailsScript = PlutusScript PlutusV1 alwaysFailsScriptShortBs
 
 alwaysFailsScriptHash :: ScriptHash StandardCrypto
 alwaysFailsScriptHash = hashScript @(AlonzoEra StandardCrypto) alwaysFailsScript
@@ -42,5 +48,30 @@ alwaysFailsScriptHash = hashScript @(AlonzoEra StandardCrypto) alwaysFailsScript
 alwaysFailsScriptAddr :: Addr StandardCrypto
 alwaysFailsScriptAddr = Addr Testnet (ScriptHashObj alwaysFailsScriptHash) StakeRefNull
 
+alwaysFailsScriptStake :: StakeCredential StandardCrypto
+alwaysFailsScriptStake = ScriptHashObj $ alwaysFailsScriptHash
+
+
 plutusDataList :: Data (AlonzoEra StandardCrypto)
 plutusDataList = Data $ Plutus.List []
+
+
+alwaysMintScript :: Script (AlonzoEra StandardCrypto)
+alwaysMintScript = PlutusScript PlutusV1 mintingScriptShortBs
+
+alwaysMintScriptHash :: ScriptHash StandardCrypto
+alwaysMintScriptHash = hashScript @(AlonzoEra StandardCrypto) alwaysMintScript
+
+alwaysMintScriptAddr :: Addr StandardCrypto
+alwaysMintScriptAddr = Addr Testnet (ScriptHashObj alwaysMintScriptHash) StakeRefNull
+
+alwaysMintScriptStake :: StakeCredential StandardCrypto
+alwaysMintScriptStake = ScriptHashObj $ alwaysMintScriptHash
+
+
+assetNames :: [AssetName]
+assetNames =
+  [ AssetName "abc"
+  , AssetName "degwte"
+  , AssetName "w4yt4230\\0"
+  ]

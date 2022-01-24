@@ -1,9 +1,9 @@
 {
     "maxLovelaceSupply": 6000000,
-    "securityParam": 2160,
+    "securityParam": 10,
     "slotsPerKESPeriod": 129600,
     "updateQuorum": 5,
-    "activeSlotsCoeff": 5.0e-2,
+    "activeSlotsCoeff": 0.2,
     "protocolParams": {
         "minUTxOValue": 0,
         "eMax": 18,
@@ -42,7 +42,7 @@
     "genDelegs": { },
     "slotLength": 1,
     "systemStart": "2021-11-18T20:22:02Z",
-    "epochLength": 432000,
+    "epochLength": 500,
     "staking":{
         "pools": { },
         "stake": { }
