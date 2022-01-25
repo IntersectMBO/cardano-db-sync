@@ -3,10 +3,13 @@
 ## Quickstart
 
 ### Clone the repository
-
+Regular users should almost never attempt building and running from the `master` branch. Instead,
+they should build and run the latest release tag. The tags can be listed using the `git tag`
+command. Pre-release tags (eg things like `12.0.0-preX`) should also be avoided in most cases.
 ```
 git clone git@github.com:input-output-hk/cardano-db-sync.git
 cd cardano-db-sync
+git checkout <latest-official-tag> -b tag-<latest-official-tag>
 ```
 ### Start `cardano-node`, `postgresql`, and `cardano-db-sync` services using Docker
 
@@ -69,7 +72,7 @@ NETWORK=testnet docker-compose up && docker-compose logs -f
 Create a `pgpass-test` file with the credentials of (taken from config/secrets/postgres_* files):
 
 ``` shell
-echo "localhost:5432:cexplorer:postgres:v8hlDV0yMAHHlIurYupj" > config/pgpass-test   
+echo "localhost:5432:cexplorer:postgres:v8hlDV0yMAHHlIurYupj" > config/pgpass-test
 chmod 0600 config/pgpass-test
 ```
 

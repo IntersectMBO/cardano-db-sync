@@ -26,9 +26,13 @@ the db. If you want to to use a single database for more than one chain, you wil
 testnet `PGPASSFILE` is at `config/pgpass-testnet`.
 
 ### Set up and run a local node
+Regular users should almost never attempt building and running from the `master` branch. Instead,
+they should build and run the latest release tag. The tags can be listed using the `git tag`
+command. Pre-release tags (eg things like `12.0.0-preX`) should also be avoided in most cases.
 ```
 git clone https://github.com/input-output-hk/cardano-node
 cd cardano-node
+git checkout <latest-official-tag> -b tag-<latest-official-tag>
 nix-build -A scripts.mainnet.node -o mainnet-node-local
 ./mainnet-node-local
 ```
@@ -40,6 +44,7 @@ nix-build -A scripts.mainnet.node -o mainnet-node-local
 ```
 git clone https://github.com/input-output-hk/cardano-db-sync
 cd cardano-db-sync
+git checkout <latest-official-tag> -b tag-<latest-official-tag>
 cabal build cardano-db-sync
 PGPASSFILE=config/pgpass-mainnet cabal run cardano-db-sync -- \
     --config config/mainnet-config.yaml \
@@ -55,12 +60,12 @@ find . -name cardano-db-sync -executable -type f
 ./dist-newstyle/build/x86_64-linux/ghc-8.10.4/cardano-db-sync-12.0.0/build/cardano-db-sync/cardano-db-sync
 ```
 
-
 - with nix:
 
 ```
 git clone https://github.com/input-output-hk/cardano-db-sync
 cd cardano-db-sync
+git checkout <latest-official-tag> -b tag-<latest-official-tag>
 nix-build -A cardano-db-sync -o db-sync-node
 PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh --createdb
 PGPASSFILE=config/pgpass-mainnet db-sync-node/bin/cardano-db-sync \
