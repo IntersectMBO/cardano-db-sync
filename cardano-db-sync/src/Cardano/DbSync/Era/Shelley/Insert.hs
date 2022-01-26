@@ -373,7 +373,7 @@ insertPoolRegister _tracer mlStateSnap network (EpochNo epoch) blkId txId idx pa
                         , DB.poolUpdateRegisteredTxId = txId
                         }
 
-    mapM_ (insertPoolOwner network poolHashId txId) $ toList (Shelley._poolOwners params)
+    mapM_ (insertPoolOwner network poolUpdateId txId) $ toList (Shelley._poolOwners params)
     mapM_ (insertPoolRelay poolUpdateId) $ toList (Shelley._poolRelays params)
 
   where
@@ -476,15 +476,14 @@ insertStakeAddressRefIfMissing trce txId addr =
 
 insertPoolOwner
     :: (MonadBaseControl IO m, MonadIO m)
-    => Ledger.Network -> DB.PoolHashId -> DB.TxId -> Ledger.KeyHash 'Ledger.Staking StandardCrypto
+    => Ledger.Network -> DB.PoolUpdateId -> DB.TxId -> Ledger.KeyHash 'Ledger.Staking StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolOwner network poolHashId txId skh = do
+insertPoolOwner network poolUpdateId txId skh = do
   saId <- lift $ insertStakeAddress txId (Shelley.RewardAcnt network (Ledger.KeyHashObj skh))
   void . lift . DB.insertPoolOwner $
     DB.PoolOwner
       { DB.poolOwnerAddrId = saId
-      , DB.poolOwnerPoolHashId = poolHashId
-      , DB.poolOwnerRegisteredTxId = txId
+      , DB.poolOwnerPoolUpdateId = poolUpdateId
       }
 
 insertStakeRegistration

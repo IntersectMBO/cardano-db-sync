@@ -197,7 +197,6 @@ share
     deriving Eq
 
   -- -----------------------------------------------------------------------------------------------
-  -- A Pool can have more than one owner, so we have a PoolOwner table that references this one.
 
   PoolMetadataRef
     poolId              PoolHashId
@@ -219,11 +218,11 @@ share
     registeredTxId      TxId                OnDeleteCascade     -- Slot number in which the pool was registered.
     UniquePoolUpdate    registeredTxId certIndex
 
+  -- A Pool can have more than one owner, so we have a PoolOwner table.
   PoolOwner
     addrId              StakeAddressId      OnDeleteCascade
-    poolHashId          PoolHashId          OnDeleteCascade
-    registeredTxId      TxId                OnDeleteCascade     -- Slot number in which the owner was registered.
-    UniquePoolOwner     addrId poolHashId registeredTxId
+    poolUpdateId        PoolUpdateId        OnDeleteCascade
+    UniquePoolOwner     addrId poolUpdateId
 
   PoolRetire
     hashId              PoolHashId          OnDeleteCascade
@@ -673,8 +672,7 @@ schemaDocs =
     PoolOwner --^ do
       "A table containing pool owners."
       PoolOwnerAddrId # "The StakeAddress table index for the pool owner's stake address."
-      PoolOwnerPoolHashId # "The PoolHash table index for the pool."
-      PoolOwnerRegisteredTxId # "The Tx table index of the transaction where this pool owner was registered."
+      PoolOwnerPoolUpdateId # "The PoolUpdate table index for the pool."
 
     PoolRetire --^ do
       "A table containing information about pools retiring."

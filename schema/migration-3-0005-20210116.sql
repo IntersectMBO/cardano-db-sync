@@ -10,7 +10,6 @@ BEGIN
     -- Some of them are intentional commented out, because they already exist.
     CREATE INDEX idx_delegation_pool_hash_id ON delegation(pool_hash_id) ;
     CREATE INDEX idx_epoch_stake_pool_id ON epoch_stake(pool_id) ;
-    CREATE INDEX idx_pool_owner_pool_hash_id ON pool_owner(pool_hash_id) ;
     CREATE INDEX idx_pool_retire_hash_id ON pool_retire(hash_id) ;
     --    CREATE INDEX idx_pool_update_hash_id ON pool_update(hash_id) ;
     CREATE INDEX idx_reward_pool_id ON reward(pool_id) ;
@@ -25,7 +24,6 @@ BEGIN
     CREATE INDEX idx_ma_tx_mint_tx_id ON ma_tx_mint(tx_id) ;
     CREATE INDEX idx_param_proposal_registered_tx_id ON param_proposal(registered_tx_id) ;
     CREATE INDEX idx_pool_metadata_ref_registered_tx_id ON pool_metadata_ref(registered_tx_id) ;
-    CREATE INDEX idx_pool_owner_registered_tx_id ON pool_owner(registered_tx_id) ;
     CREATE INDEX idx_pool_retire_announced_tx_id ON pool_retire(announced_tx_id) ;
     CREATE INDEX idx_pool_update_registered_tx_id ON pool_update(registered_tx_id) ;
     CREATE INDEX idx_reserve_tx_id ON reserve(tx_id) ;

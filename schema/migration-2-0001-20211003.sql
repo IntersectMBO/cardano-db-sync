@@ -59,7 +59,6 @@ BEGIN
     EXECUTE 'ALTER TABLE "pool_update" ADD CONSTRAINT "pool_update_meta_id_fkey" FOREIGN KEY("meta_id") REFERENCES "pool_metadata_ref"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
     EXECUTE 'ALTER TABLE "pool_update" ADD CONSTRAINT "pool_update_registered_tx_id_fkey" FOREIGN KEY("registered_tx_id") REFERENCES "tx"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
     EXECUTE 'CREATe TABLE "pool_owner"("id" SERIAL8  PRIMARY KEY UNIQUE,"addr_id" INT8 NOT NULL,"pool_hash_id" INT8 NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
-    EXECUTE 'ALTER TABLE "pool_owner" ADD CONSTRAINT "unique_pool_owner" UNIQUE("addr_id","pool_hash_id","registered_tx_id")' ;
     EXECUTE 'ALTER TABLE "pool_owner" ADD CONSTRAINT "pool_owner_addr_id_fkey" FOREIGN KEY("addr_id") REFERENCES "stake_address"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
     EXECUTE 'ALTER TABLE "pool_owner" ADD CONSTRAINT "pool_owner_pool_hash_id_fkey" FOREIGN KEY("pool_hash_id") REFERENCES "pool_hash"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
     EXECUTE 'ALTER TABLE "pool_owner" ADD CONSTRAINT "pool_owner_registered_tx_id_fkey" FOREIGN KEY("registered_tx_id") REFERENCES "tx"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
