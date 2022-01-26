@@ -77,6 +77,7 @@ unitTests iom knownMigrations =
       , test "(de)registrations in same tx" registrationsSameTx
       , test "stake address pointers" stakeAddressPtr
       , test "stake address pointers deregistration" stakeAddressPtrDereg
+      , test "stake address pointers. Use before registering." stakeAddressPtrUseBefore
       -- testing rewards
       , test "rewards" simpleRewards
       , test "shelley rewards from multiple sources" rewardsShelley
@@ -391,9 +392,8 @@ stakeAddressPtr =
     withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
     startDBSync  dbSync
 
-    tx <- withAlonzoLedgerState interpreter $
+    blk <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
         Alonzo.mkSimpleDCertTx [ (StakeIndexNew 1, DCertDeleg . RegKey)]
-    blk <- forgeNextFindLeaderAndSubmit interpreter mockServer [TxAlonzo tx]
 
     let ptr = Ptr (blockSlot blk) 0 0
 
@@ -438,6 +438,29 @@ stakeAddressPtrDereg =
     assertAddrValues dbSync (UTxOAddressNewWithPtr 0 ptr1) (DB.DbLovelace 20000) st
   where
     testLabel = "stakeAddressPtrDereg"
+
+stakeAddressPtrUseBefore :: IOManager -> [(Text, Text)] -> Assertion
+stakeAddressPtrUseBefore =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+
+      first use this stake credential
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkPaymentTx (UTxOIndex 1) (UTxOAddressNewWithStake 0 (StakeIndexNew 1)) 10000 500
+
+        -- and then register it
+      blk <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkSimpleDCertTx [ (StakeIndexNew 1, DCertDeleg . RegKey)]
+
+      let ptr = Ptr (blockSlot blk) 0 0
+
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr) 20000 20000
+
+      assertBlockNoBackoff dbSync 1
+      assertCertCounts dbSync (1,0,0,0)
+  where
+    testLabel = "stakeAddressPtrUseBefore"
 
 consumeSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 consumeSameBlock =
