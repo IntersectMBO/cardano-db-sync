@@ -147,8 +147,6 @@ BEGIN
     EXECUTE 'CREATe TABLE "reserved_pool_ticker"("id" SERIAL8  PRIMARY KEY UNIQUE,"name" VARCHAR NOT NULL,"pool_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "reserved_pool_ticker" ADD CONSTRAINT "unique_reserved_pool_ticker" UNIQUE("name")' ;
     EXECUTE 'ALTER TABLE "reserved_pool_ticker" ADD CONSTRAINT "reserved_pool_ticker_pool_id_fkey" FOREIGN KEY("pool_id") REFERENCES "pool_hash"("id") ON DELETE RESTRICT  ON UPDATE RESTRICT' ;
-    EXECUTE 'CREATe TABLE "admin_user"("id" SERIAL8  PRIMARY KEY UNIQUE,"username" VARCHAR NOT NULL,"password" VARCHAR NOT NULL)' ;
-    EXECUTE 'ALTER TABLE "admin_user" ADD CONSTRAINT "unique_admin_user" UNIQUE("username")' ;
     -- Hand written SQL statements can be added here.
     UPDATE schema_version SET stage_two = next_version ;
     RAISE NOTICE 'DB has been migrated to stage_two version %', next_version ;
