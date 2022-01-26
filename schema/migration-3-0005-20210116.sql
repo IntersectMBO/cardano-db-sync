@@ -29,7 +29,7 @@ BEGIN
     CREATE INDEX idx_pool_retire_announced_tx_id ON pool_retire(announced_tx_id) ;
     CREATE INDEX idx_pool_update_registered_tx_id ON pool_update(registered_tx_id) ;
     CREATE INDEX idx_reserve_tx_id ON reserve(tx_id) ;
-    CREATE INDEX idx_stake_address_registered_tx_id ON stake_address(registered_tx_id) ;
+    CREATE INDEX idx_stake_address_registered_tx_id ON stake_address(tx_id) ;
     CREATE INDEX idx_stake_deregistration_tx_id ON stake_deregistration(tx_id) ;
     CREATE INDEX idx_stake_registration_tx_id ON stake_registration(tx_id) ;
     CREATE INDEX idx_treasury_tx_id ON treasury(tx_id) ;

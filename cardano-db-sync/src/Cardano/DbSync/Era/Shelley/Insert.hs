@@ -442,7 +442,7 @@ insertStakeAddress txId rewardAddr =
       { DB.stakeAddressHashRaw = Ledger.serialiseRewardAcnt rewardAddr
       , DB.stakeAddressView = Generic.renderRewardAcnt rewardAddr
       , DB.stakeAddressScriptHash = Generic.getCredentialScriptHash $ Ledger.getRwdCred rewardAddr
-      , DB.stakeAddressRegisteredTxId = txId
+      , DB.stakeAddressTxId = txId
       }
 
 -- | Insert a stake address if it is not already in the `stake_address` table. Regardless of

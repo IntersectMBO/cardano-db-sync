@@ -121,7 +121,7 @@ share
     hashRaw             ByteString          sqltype=addr29type
     view                Text
     scriptHash          ByteString Maybe    sqltype=hash28type
-    registeredTxId      TxId                OnDeleteCascade     -- Only used for rollback.
+    txId                TxId                OnDeleteCascade     -- Only used for rollback.
     UniqueStakeAddress  hashRaw
 
   TxOut
@@ -594,7 +594,7 @@ schemaDocs =
       StakeAddressHashRaw # "The raw bytes of the stake address hash."
       StakeAddressView # "The Bech32 encoded version of the stake address."
       StakeAddressScriptHash # "The script hash, in case this address is locked by a script."
-      StakeAddressRegisteredTxId # "The Tx table index of the transaction in which this address was registered."
+      StakeAddressTxId # "The Tx table index of the transaction in which this address first appeared."
 
     TxOut --^ do
       "A table for transaction outputs."
