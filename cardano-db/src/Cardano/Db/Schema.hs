@@ -211,7 +211,7 @@ share
     certIndex           Word16
     vrfKeyHash          ByteString          sqltype=hash32type
     pledge              DbLovelace          sqltype=lovelace
-    rewardAddr          ByteString          sqltype=addr29type
+    rewardAddrId        StakeAddressId      OnDeleteCascade
     activeEpochNo       Word64
     metaId              PoolMetadataRefId Maybe OnDeleteCascade
     margin              Double                                  -- sqltype=percentage????
@@ -663,7 +663,7 @@ schemaDocs =
       PoolUpdateCertIndex # "The index of this pool update within the certificates of this transaction."
       PoolUpdateVrfKeyHash # "The hash of the pool's VRF key."
       PoolUpdatePledge # "The amount (in Lovelace) the pool owner pledges to the pool."
-      PoolUpdateRewardAddr # "The pool's rewards address."
+      PoolUpdateRewardAddrId # "The StakeAddress table index of this pool's rewards address."
       PoolUpdateActiveEpochNo # "The epoch number where this update becomes active."
       PoolUpdateMetaId # "The PoolMetadataRef table index this pool update refers to."
       PoolUpdateMargin # "The margin (as a percentage) this pool charges."

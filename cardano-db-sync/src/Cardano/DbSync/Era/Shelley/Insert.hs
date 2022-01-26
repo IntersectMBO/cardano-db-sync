@@ -358,13 +358,14 @@ insertPoolRegister _tracer mlStateSnap network (EpochNo epoch) blkId txId idx pa
 
     epochActivationDelay <- mkEpochActivationDelay poolHashId
 
+    saId <- lift $ insertStakeAddress txId (adjustNetworkTag $ Shelley._poolRAcnt params)
     poolUpdateId <- lift . DB.insertPoolUpdate $
                       DB.PoolUpdate
                         { DB.poolUpdateHashId = poolHashId
                         , DB.poolUpdateCertIndex = idx
                         , DB.poolUpdateVrfKeyHash = Crypto.hashToBytes (Shelley._poolVrf params)
                         , DB.poolUpdatePledge = Generic.coinToDbLovelace (Shelley._poolPledge params)
-                        , DB.poolUpdateRewardAddr = Generic.serialiseRewardAcntWithNetwork network (Shelley._poolRAcnt params)
+                        , DB.poolUpdateRewardAddrId = saId
                         , DB.poolUpdateActiveEpochNo = epoch + epochActivationDelay
                         , DB.poolUpdateMetaId = mdId
                         , DB.poolUpdateMargin = realToFrac $ Ledger.unboundRational (Shelley._poolMargin params)
@@ -389,6 +390,10 @@ insertPoolRegister _tracer mlStateSnap network (EpochNo epoch) blkId txId idx pa
             otherUpdates <- lift $ queryPoolUpdateByBlock blkId poolHashId
             pure $ if otherUpdates then 3 else 2
 
+    -- Ignore the network in the `RewardAcnt` and use the provided one instead.
+    -- This is a workaround for https://github.com/input-output-hk/cardano-db-sync/issues/546
+    adjustNetworkTag :: Ledger.RewardAcnt StandardCrypto -> Ledger.RewardAcnt StandardCrypto
+    adjustNetworkTag (Shelley.RewardAcnt _ cred) = (Shelley.RewardAcnt network cred)
 
 insertPoolHash
     :: forall m . (MonadBaseControl IO m, MonadIO m)
