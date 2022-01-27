@@ -5,6 +5,7 @@
 module Cardano.Db.Query
   ( LookupFail (..)
   , queryAddressBalanceAtSlot
+  , queryAddressOutputs
   , queryGenesis
   , queryBlock
   , queryBlockCount
@@ -21,7 +22,10 @@ module Cardano.Db.Query
   , queryDepositUpToBlockNo
   , queryEpochEntry
   , queryEpochNo
+  , queryRewardCount
+  , queryRewards
   , queryEpochRewardCount
+  , queryRewardsSpend
   , queryFeesUpToBlockNo
   , queryFeesUpToSlotNo
   , queryGenesisSupply
@@ -52,6 +56,7 @@ module Cardano.Db.Query
   , queryUtxoAtBlockNo
   , queryUtxoAtSlotNo
   , queryWithdrawalsUpToBlockNo
+  , queryCostModel
   , queryAdaPots
   , queryPoolOfflineData
   , queryPoolRegister
@@ -61,6 +66,14 @@ module Cardano.Db.Query
   , queryReservedTickers
   , queryDelistedPools
   , queryPoolOfflineFetchError
+  , queryScriptOutputs
+  , queryTxInRedeemer
+  , queryTxInFailedTx
+  , queryInvalidTx
+  , queryDeregistrationScript
+  , queryDelegationScript
+  , queryWithdrawalScript
+  , queryStakeAddressScript
   , existsDelistedPool
   , existsPoolHash
   , existsPoolHashId
@@ -105,7 +118,7 @@ import           Database.Esqueleto.Legacy (Entity (..), From, InnerJoin (..), L
                    entityKey, entityVal, exists, from, in_, isNothing, just, limit, max_, min_,
                    notExists, not_, on, orderBy, select, subList_select, sum_, unSqlBackendKey,
                    unValue, val, where_, (&&.), (<=.), (==.), (>.), (>=.), (^.), (||.))
-import           Database.Persist.Sql (SqlBackend, selectList)
+import           Database.Persist.Sql (SelectOpt (Asc), SqlBackend, selectList)
 
 import           Cardano.Db.Error
 import           Cardano.Db.Schema
@@ -137,6 +150,17 @@ queryAddressBalanceAtSlot addr slotNo = do
                   where_ (txout ^. TxOutAddress ==. val addr)
                   pure $ sum_ (txout ^. TxOutValue)
         pure $ unValueSumAda (listToMaybe res)
+
+queryAddressOutputs :: MonadIO m => ByteString -> ReaderT SqlBackend m DbLovelace
+queryAddressOutputs addr = do
+    res <- select . from $ \txout -> do
+              where_ (txout ^. TxOutAddressRaw ==. val addr)
+              pure $ sum_ (txout ^. TxOutValue)
+    pure $ convert (listToMaybe res)
+  where
+    convert v = case unValue <$> v of
+      Just (Just x) -> x
+      _ -> DbLovelace 0
 
 queryGenesis :: MonadIO m => ReaderT SqlBackend m (Either LookupFail BlockId)
 queryGenesis = do
@@ -187,14 +211,14 @@ queryBlockNo blkNo = do
   pure $ fmap entityVal (listToMaybe res)
 
 -- | Get the current block height.
-queryBlockHeight :: MonadIO m => ReaderT SqlBackend m Word64
+queryBlockHeight :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
 queryBlockHeight = do
   res <- select . from $ \ blk -> do
           where_ (isJust $ blk ^. BlockBlockNo)
           orderBy [desc (blk ^. BlockBlockNo)]
           limit 1
           pure (blk ^. BlockBlockNo)
-  pure $ fromMaybe 0 (unValue =<< listToMaybe res)
+  pure $ unValue =<< listToMaybe res
 
 -- | Get the latest 'Block' associated with the given hash, skipping any EBBs.
 queryMainBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail Block)
@@ -335,12 +359,33 @@ queryCurrentEpochNo = do
               pure $ max_ (blk ^. BlockEpochNo)
     pure $ join (unValue =<< listToMaybe res)
 
+queryRewardCount :: MonadIO m => ReaderT SqlBackend m Word64
+queryRewardCount = do
+  res <- select . from $ \ (_rwds :: SqlExpr (Entity Reward)) ->
+            pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
+
 queryEpochRewardCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
 queryEpochRewardCount epochNum = do
   res <- select . from $ \ rwds -> do
             where_ (rwds ^. RewardSpendableEpoch ==. val epochNum)
             pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
+
+queryRewardsSpend :: MonadIO m => Word64 -> ReaderT SqlBackend m [Reward]
+queryRewardsSpend epochNum = do
+  res <- select . from $ \ rwds -> do
+            where_ (rwds ^. RewardSpendableEpoch ==. val epochNum)
+            pure rwds
+  pure $ entityVal <$> res
+
+
+queryRewards :: MonadIO m => Word64 -> ReaderT SqlBackend m [Reward]
+queryRewards epochNum = do
+  res <- select . from $ \ rwds -> do
+            where_ (rwds ^. RewardEarnedEpoch ==. val epochNum)
+            pure rwds
+  pure $ entityVal <$> res
 
 -- | Get the fees paid in all block from genesis up to and including the specified block.
 queryFeesUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
@@ -629,6 +674,10 @@ queryWithdrawalsUpToBlockNo blkNo = do
             pure $ sum_ (withDraw ^. WithdrawalAmount)
   pure $ unValueSumAda (listToMaybe res)
 
+queryCostModel :: MonadIO m => ReaderT SqlBackend m [CostModelId]
+queryCostModel =
+  fmap entityKey <$> selectList [] [Asc CostModelId]
+
 queryAdaPots :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe AdaPots)
 queryAdaPots blkId = do
   res <- select . from $ \ adaPots -> do
@@ -738,6 +787,64 @@ queryPoolOfflineFetchError poolHash (Just fromTime) = do
     pure $ fmap extract res
   where
     extract (fetchErr, metadataHash) = (entityVal fetchErr, unValue metadataHash)
+
+queryScriptOutputs :: MonadIO m => ReaderT SqlBackend m [TxOut]
+queryScriptOutputs = do
+    res <- select . from $ \tx_out -> do
+        where_ (tx_out ^. TxOutAddressHasScript ==. val True)
+        pure tx_out
+    pure $ entityVal <$> res
+
+queryTxInRedeemer :: MonadIO m => ReaderT SqlBackend m [TxIn]
+queryTxInRedeemer = do
+    res <- select . from $ \tx_in -> do
+        where_ (isJust $ tx_in ^. TxInRedeemerId)
+        pure tx_in
+    pure $ entityVal <$> res
+
+-- | Gets all the 'TxIn' of invalid txs
+queryTxInFailedTx :: MonadIO m => ReaderT SqlBackend m [TxIn]
+queryTxInFailedTx = do
+    res <- select . from $ \ (tx_in `InnerJoin` tx) -> do
+            on (tx_in ^. TxInTxInId ==. tx ^. TxId)
+            where_ (tx ^. TxValidContract ==. val False)
+            pure tx_in
+    pure $ entityVal <$> res
+
+queryInvalidTx :: MonadIO m => ReaderT SqlBackend m [Tx]
+queryInvalidTx = do
+    res <- select . from $ \tx -> do
+        where_ (tx ^. TxValidContract ==. val False)
+        pure tx
+    pure $ entityVal <$> res
+
+queryDeregistrationScript :: MonadIO m => ReaderT SqlBackend m [StakeDeregistration]
+queryDeregistrationScript = do
+    res <- select . from $ \ dereg -> do
+            where_ (isJust $ dereg ^. StakeDeregistrationRedeemerId)
+            pure dereg
+    pure $ entityVal <$> res
+
+queryDelegationScript :: MonadIO m => ReaderT SqlBackend m [Delegation]
+queryDelegationScript = do
+    res <- select . from $ \ deleg -> do
+            where_ (isJust $ deleg ^. DelegationRedeemerId)
+            pure deleg
+    pure $ entityVal <$> res
+
+queryWithdrawalScript :: MonadIO m => ReaderT SqlBackend m [Withdrawal]
+queryWithdrawalScript = do
+    res <- select . from $ \ wtdr -> do
+            where_ (isJust $ wtdr ^. WithdrawalRedeemerId)
+            pure wtdr
+    pure $ entityVal <$> res
+
+queryStakeAddressScript :: MonadIO m => ReaderT SqlBackend m [StakeAddress]
+queryStakeAddressScript = do
+    res <- select . from $ \ st_addr -> do
+            where_ (isJust $ st_addr ^. StakeAddressScriptHash)
+            pure st_addr
+    pure $ entityVal <$> res
 
 existsDelistedPool :: MonadIO m => ByteString -> ReaderT SqlBackend m Bool
 existsDelistedPool ph = do

@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -42,6 +43,7 @@ import           Cardano.Slotting.Slot (EpochNo (..))
 
 
 import           Control.Monad.Class.MonadSTM.Strict (putTMVar, tryTakeTMVar)
+import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
@@ -55,26 +57,24 @@ import           Ouroboros.Network.Block (blockNo)
 
 
 insertDefaultBlock
-    :: SyncEnv -> [BlockDetails]
+    :: SyncEnv -> [CardanoBlock]
     -> IO (Either SyncNodeError ())
-insertDefaultBlock env blockDetails =
+insertDefaultBlock env blocks =
     DB.runDbIohkLogging backend tracer .
       runExceptT $ do
-        traverse_ insertDetails blockDetails
-        when (soptExtended $ envOptions env) $
-          traverse_ (ExceptT . epochInsert tracer) blockDetails
+        traverse_ insertDetails blocks
   where
     tracer = getTrace env
     backend = envBackend env
 
     insertDetails
-        :: (MonadBaseControl IO m, MonadIO m)
-        => BlockDetails -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-    insertDetails (BlockDetails cblk details) = do
+        :: CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
+    insertDetails cblk = do
       -- Calculate the new ledger state to pass to the DB insert functions but do not yet
       -- update ledgerStateVar.
       let lenv = envLedger env
-      lStateSnap <- liftIO $ applyBlock (envLedger env) cblk details
+      lStateSnap <- liftIO $ applyBlock (envLedger env) cblk
+      let !details = lssSlotDetails lStateSnap
       mkSnapshotMaybe env lStateSnap (blockNo cblk) (isSyncedWithinSeconds details 600)
       handleLedgerEvents tracer (envLedger env) (lssPoint lStateSnap) (lssEvents lStateSnap)
       let firstBlockOfEpoch = hasEpochStartEvent (lssEvents lStateSnap)
@@ -90,6 +90,8 @@ insertDefaultBlock env blockDetails =
         BlockAlonzo blk -> do
           let pp = getAlonzoPParams $ lssState lStateSnap
           newExceptT $ insertShelleyBlock tracer lenv firstBlockOfEpoch (Generic.fromAlonzoBlock pp blk) lStateSnap details
+      when (soptExtended $ envOptions env) .
+        newExceptT $ epochInsert tracer (BlockDetails cblk details)
 
 mkSnapshotMaybe
         :: (MonadBaseControl IO m, MonadIO m)
@@ -115,8 +117,8 @@ mkSnapshotMaybe env snapshot blkNo syncState =
     timeToSnapshot :: DB.SyncState -> BlockNo -> Bool
     timeToSnapshot syncSt bNo =
       case (syncSt, unBlockNo bNo) of
-        (DB.SyncFollowing, bno) -> bno `mod` 500 == 0
-        (DB.SyncLagging, bno) -> bno `mod` 10000 == 0
+        (DB.SyncFollowing, bno) -> bno `mod` snapshotEveryFollowing (envOptions env) == 0
+        (DB.SyncLagging, bno) -> bno `mod` snapshotEveryLagging (envOptions env) == 0
 
 -- -------------------------------------------------------------------------------------------------
 

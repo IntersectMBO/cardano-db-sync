@@ -18,7 +18,7 @@ import           Database.Persist.Sql (SqlBackend)
 validateAllPoolsHaveOwners :: IO ()
 validateAllPoolsHaveOwners = do
   putStrF "All pools have owners : "
-  count <- runDbNoLogging queryPoolsWithoutOwners
+  count <- runDbNoLoggingEnv queryPoolsWithoutOwners
   if count == 0
     then putStrLn $ greenText "ok"
     else putStrLn $ redText ("Failed, " ++ show count ++ " pools are without owners.")

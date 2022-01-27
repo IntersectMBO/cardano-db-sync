@@ -27,7 +27,7 @@ import           Text.Printf (printf)
 
 reportLatestStakeRewards :: [Text] -> IO ()
 reportLatestStakeRewards saddr = do
-    xs <- catMaybes <$> runDbNoLogging (mapM queryLatestStakeRewards saddr)
+    xs <- catMaybes <$> runDbNoLoggingEnv (mapM queryLatestStakeRewards saddr)
     renderRewards xs
 
 -- -------------------------------------------------------------------------------------------------
@@ -47,7 +47,7 @@ queryLatestStakeRewards :: MonadIO m => Text -> ReaderT SqlBackend m (Maybe Epoc
 queryLatestStakeRewards address = do
     maxEpoch <- queryMaxEpochRewardNo
     mdel <- queryDelegation maxEpoch
-    maybe (pure Nothing) (fmap2 Just queryRewards) mdel
+    maybe (pure Nothing) (fmap2 Just queryReward) mdel
   where
     queryDelegation
         :: MonadIO m
@@ -63,11 +63,11 @@ queryLatestStakeRewards address = do
                 pure (es ^. EpochStakeAddrId, es ^. EpochStakeEpochNo, epoch ^.EpochEndTime, es ^. EpochStakeAmount)
       pure $ fmap unValue4 (listToMaybe res)
 
-    queryRewards
+    queryReward
         :: MonadIO m
         => (StakeAddressId, Word64, UTCTime, DbLovelace)
         -> ReaderT SqlBackend m EpochReward
-    queryRewards (saId, en, date, DbLovelace delegated) = do
+    queryReward (saId, en, date, DbLovelace delegated) = do
       res <- select . from $ \ (saddr `InnerJoin` reward `InnerJoin` epoch) -> do
                 on (epoch ^. EpochNo ==. reward ^. RewardEarnedEpoch)
                 on (saddr ^. StakeAddressId ==. reward ^. RewardAddrId)

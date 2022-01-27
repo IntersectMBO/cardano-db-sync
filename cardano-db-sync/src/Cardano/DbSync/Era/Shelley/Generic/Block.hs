@@ -12,6 +12,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Block
   , fromMaryBlock
   , fromAlonzoBlock
 
+  , blockHash
   , slotLeaderHash
   ) where
 

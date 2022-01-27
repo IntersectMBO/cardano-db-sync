@@ -217,7 +217,7 @@ share
     margin              Double                                  -- sqltype=percentage????
     fixedCost           DbLovelace          sqltype=lovelace
     registeredTxId      TxId                OnDeleteCascade     -- Slot number in which the pool was registered.
-    UniquePoolUpdate    hashId registeredTxId
+    UniquePoolUpdate    registeredTxId certIndex
 
   PoolOwner
     addrId              StakeAddressId      OnDeleteCascade
@@ -230,7 +230,7 @@ share
     certIndex           Word16
     announcedTxId       TxId                OnDeleteCascade     -- Slot number in which the pool announced it was retiring.
     retiringEpoch       Word64              sqltype=uinteger    -- Epoch number in which the pool will retire.
-    UniquePoolRetiring  hashId announcedTxId
+    UniquePoolRetiring  announcedTxId certIndex
 
   PoolRelay
     updateId            PoolUpdateId        OnDeleteCascade
@@ -253,7 +253,7 @@ share
     certIndex           Word16
     epochNo             Word64              sqltype=uinteger
     txId                TxId                OnDeleteCascade
-    UniqueStakeRegistration addrId txId
+    UniqueStakeRegistration txId certIndex
 
   -- When was a staking key/script deregistered
   StakeDeregistration
@@ -262,7 +262,7 @@ share
     epochNo             Word64              sqltype=uinteger
     txId                TxId                OnDeleteCascade
     redeemerId          RedeemerId Maybe    OnDeleteCascade
-    UniqueStakeDeregistration addrId txId
+    UniqueStakeDeregistration txId certIndex
 
   Delegation
     addrId              StakeAddressId      OnDeleteCascade
@@ -272,7 +272,7 @@ share
     txId                TxId                OnDeleteCascade
     slotNo              Word64              sqltype=uinteger
     redeemerId          RedeemerId Maybe    OnDeleteCascade
-    UniqueDelegation    addrId poolHashId txId
+    UniqueDelegation    txId certIndex
 
   TxMetadata
     key                 DbWord64            sqltype=word64type
@@ -299,6 +299,7 @@ share
     -- for the purposes of an uniqueness constraint.
     -- Use of "!force" attribute on the end of the line disables this check.
     UniqueReward        addrId type earnedEpoch poolId !force
+    deriving Show
 
   Withdrawal
     addrId              StakeAddressId      OnDeleteCascade
@@ -320,14 +321,14 @@ share
     certIndex           Word16
     amount              DbInt65             sqltype=int65type
     txId                TxId                OnDeleteCascade
-    UniqueTreasury      addrId txId
+    UniqueTreasury      txId certIndex
 
   Reserve
     addrId              StakeAddressId      OnDeleteCascade
     certIndex           Word16
     amount              DbInt65             sqltype=int65type
     txId                TxId                OnDeleteCascade
-    UniqueReserves      addrId txId
+    UniqueReserves      txId certIndex
 
   PotTransfer
     certIndex           Word16

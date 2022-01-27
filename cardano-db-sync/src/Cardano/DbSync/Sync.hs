@@ -36,9 +36,7 @@ import qualified Cardano.BM.Trace as Logging
 import           Cardano.Client.Subscription (subscribe)
 import qualified Cardano.Crypto as Crypto
 
-import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
-
-import           Cardano.Ledger.Crypto (StandardCrypto)
+import           Cardano.Slotting.Slot (EpochNo (..), WithOrigin (..))
 
 import           Cardano.DbSync.Api
 import           Cardano.DbSync.Config
@@ -48,8 +46,6 @@ import           Cardano.DbSync.Epoch
 import           Cardano.DbSync.Era
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Metrics
-import           Cardano.DbSync.StateQuery (StateQueryTMVar, getSlotDetails, localStateQueryHandler,
-                   newStateQueryTMVar)
 import           Cardano.DbSync.Tracing.ToObjectOrphans ()
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
@@ -59,7 +55,6 @@ import qualified Codec.CBOR.Term as CBOR
 import           Control.Monad.Trans.Except.Exit (orDie)
 
 import qualified Data.ByteString.Lazy as BSL
-import           Data.Functor.Contravariant (contramap)
 import qualified Data.Text as Text
 
 import           Database.Persist.Sql (SqlBackend)
@@ -72,10 +67,8 @@ import           Ouroboros.Network.Driver.Simple (runPipelinedPeer)
 
 import           Ouroboros.Consensus.Block.Abstract (CodecConfig)
 import           Ouroboros.Consensus.Byron.Node ()
-import           Ouroboros.Consensus.Cardano.Block (CardanoEras)
 import           Ouroboros.Consensus.Cardano.Node ()
 import           Ouroboros.Consensus.Config (configCodec)
-import           Ouroboros.Consensus.HardFork.History.Qry (Interpreter)
 import qualified Ouroboros.Consensus.HardFork.Simple as HardFork
 import           Ouroboros.Consensus.Network.NodeToClient (ClientCodecs, cChainSyncCodec,
                    cStateQueryCodec, cTxSubmissionCodec)
@@ -88,8 +81,8 @@ import           Ouroboros.Network.Mux (MuxPeer (..), RunMiniProtocol (..))
 import           Ouroboros.Network.NodeToClient (ClientSubscriptionParams (..), ConnectionId,
                    ErrorPolicyTrace (..), Handshake, IOManager, LocalAddress,
                    NetworkSubscriptionTracers (..), NodeToClientProtocols (..), TraceSendRecv,
-                   WithAddr (..), localSnocket, localTxSubmissionPeerNull, networkErrorPolicies,
-                   withIOManager)
+                   WithAddr (..), localSnocket, localStateQueryPeerNull, localTxSubmissionPeerNull,
+                   networkErrorPolicies)
 import qualified Ouroboros.Network.NodeToClient.Version as Network
 
 import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined
@@ -100,7 +93,6 @@ import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined
 import           Ouroboros.Network.Protocol.ChainSync.PipelineDecision (MkPipelineDecision,
                    PipelineDecision (..), pipelineDecisionLowHighMark, runPipelineDecision)
 import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
-import           Ouroboros.Network.Protocol.LocalStateQuery.Client (localStateQueryClientPeer)
 import qualified Ouroboros.Network.Snocket as Snocket
 import           Ouroboros.Network.Subscription (SubscriptionTrace)
 
@@ -111,11 +103,13 @@ runSyncNode
     :: MetricSetters
     -> Trace IO Text
     -> SqlBackend
+    -> IOManager
     -> Bool
+    -> Word64
+    -> Word64
     -> SyncNodeParams
     -> IO ()
-runSyncNode metricsSetters trce backend extendedOpt enp =
-  withIOManager $ \iomgr -> do
+runSyncNode metricsSetters trce backend iomgr aop snEveryFollowing snEveryLagging enp = do
 
     let configFile = enpConfigFile enp
     enc <- readSyncNodeConfig configFile
@@ -136,7 +130,9 @@ runSyncNode metricsSetters trce backend extendedOpt enp =
 
       case genCfg of
           GenesisCardano {} -> do
-            syncEnv <- ExceptT $ mkSyncEnvFromConfig trce backend (mkSyncOptions extendedOpt) (enpLedgerStateDir enp) genCfg
+            syncEnv <- ExceptT $ mkSyncEnvFromConfig trce backend
+              (SyncOptions (enpExtended enp) aop snEveryLagging snEveryFollowing)
+              (enpLedgerStateDir enp) genCfg
             liftIO $ epochStartup syncEnv
             liftIO $ runSyncNodeClient metricsSetters syncEnv iomgr trce (enpSocketPath enp)
   where
@@ -156,7 +152,6 @@ runSyncNodeClient
     -> SocketPath
     -> IO ()
 runSyncNodeClient metricsSetters env iomgr trce (SocketPath socketPath) = do
-  queryVar <- newStateQueryTMVar
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   void $ subscribe
     (localSnocket iomgr)
@@ -164,7 +159,7 @@ runSyncNodeClient metricsSetters env iomgr trce (SocketPath socketPath) = do
     (envNetworkMagic env)
     networkSubscriptionTracers
     clientSubscriptionParams
-    (dbSyncProtocols trce env metricsSetters queryVar)
+    (dbSyncProtocols trce env metricsSetters)
   where
     codecConfig :: CodecConfig CardanoBlock
     codecConfig = configCodec $ Consensus.pInfoConfig (leProtocolInfo $ envLedger env)
@@ -200,11 +195,10 @@ runSyncNodeClient metricsSetters env iomgr trce (SocketPath socketPath) = do
 
 dbSyncProtocols
     :: Trace IO Text -> SyncEnv -> MetricSetters
-    -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
     -> Network.NodeToClientVersion -> ClientCodecs CardanoBlock IO
     -> ConnectionId LocalAddress
     -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols trce env metricsSetters queryVar version codecs _connectionId =
+dbSyncProtocols trce env metricsSetters version codecs _connectionId =
     NodeToClientProtocols
       { localChainSyncProtocol = localChainSyncPtcl
       , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -223,14 +217,18 @@ dbSyncProtocols trce env metricsSetters queryVar version codecs _connectionId =
           logError trce versionErrorMsg
           throwIO $ ErrorCall (Text.unpack versionErrorMsg)
 
+        -- The Db thread is not forked at this point, so we can use
+        -- the connection here. A connection cannot be used concurrently by many
+        -- threads
         latestPoints <- getLatestPoints env
-        currentTip <- getCurrentTipBlockNo
-        logDbState trce
+        currentTip <- getCurrentTipBlockNo env
+        logDbState env
+        -- communication channel between datalayer thread and chainsync-client thread
         actionQueue <- newDbActionQueue
 
         race_
             (race
-                (runDbThread trce env metricsSetters actionQueue)
+                (runDbThread env metricsSetters actionQueue)
                 (runOfflineFetchThread trce (envLedger env))
                 )
             (runPipelinedPeer
@@ -238,7 +236,7 @@ dbSyncProtocols trce env metricsSetters queryVar version codecs _connectionId =
                 (cChainSyncCodec codecs)
                 channel
                 (chainSyncClientPeerPipelined
-                    $ chainSyncClient metricsSetters trce env queryVar latestPoints currentTip actionQueue)
+                    $ chainSyncClient metricsSetters trce latestPoints currentTip actionQueue)
             )
 
         atomically $ writeDbActionQueue actionQueue DbFinish
@@ -256,9 +254,9 @@ dbSyncProtocols trce env metricsSetters queryVar version codecs _connectionId =
     localStateQuery :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
     localStateQuery =
       InitiatorProtocolOnly $ MuxPeer
-        (contramap (Text.pack . show) . toLogObject $ appendName "local-state-query" trce)
+        Logging.nullTracer
         (cStateQueryCodec codecs)
-        (localStateQueryClientPeer (localStateQueryHandler queryVar))
+        localStateQueryPeerNull
 
     versionErrorMsg :: Text
     versionErrorMsg = Text.concat
@@ -271,31 +269,6 @@ dbSyncProtocols trce env metricsSetters queryVar version codecs _connectionId =
 
     minVersion :: Network.NodeToClientVersion
     minVersion = Network.NodeToClientV_8
-
-logDbState :: Trace IO Text -> IO ()
-logDbState trce = do
-    mblk <- getDbLatestBlockInfo
-    case mblk of
-      Nothing -> logInfo trce "Cardano.Db is empty"
-      Just tip ->
-          logInfo trce $ Text.concat
-                  [ "Cardano.Db tip is at "
-                  , showTip tip
-                  ]
-  where
-    showTip :: TipInfo -> Text
-    showTip tipInfo =
-      mconcat
-        [ "slot ", textShow (unSlotNo $ bSlotNo tipInfo)
-        , ", block ", textShow (unBlockNo $ bBlockNo tipInfo)
-        ]
-
-getCurrentTipBlockNo :: IO (WithOrigin BlockNo)
-getCurrentTipBlockNo = do
-    maybeTip <- getDbLatestBlockInfo
-    case maybeTip of
-      Just tip -> pure $ At (bBlockNo tip)
-      Nothing -> pure Origin
 
 -- | 'ChainSyncClient' which traces received blocks and ignores when it
 -- receives a request to rollbackwar.  A real wallet client should:
@@ -313,13 +286,11 @@ getCurrentTipBlockNo = do
 chainSyncClient
     :: MetricSetters
     -> Trace IO Text
-    -> SyncEnv
-    -> StateQueryTMVar CardanoBlock (Interpreter (CardanoEras StandardCrypto))
     -> [Point CardanoBlock]
     -> WithOrigin BlockNo
     -> DbActionQueue
     -> ChainSyncClientPipelined CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-chainSyncClient metricsSetters trce env queryVar latestPoints currentTip actionQueue = do
+chainSyncClient metricsSetters trce latestPoints currentTip actionQueue = do
     ChainSyncClientPipelined $ pure $ clientPipelinedStIdle currentTip latestPoints
   where
     clientPipelinedStIdle
@@ -377,9 +348,8 @@ chainSyncClient metricsSetters trce env queryVar latestPoints currentTip actionQ
 
                 setNodeBlockHeight metricsSetters (getTipBlockNo tip)
 
-                details <- getSlotDetails trce env queryVar (cardanoBlockSlotNo blk)
                 newSize <- atomically $ do
-                                writeDbActionQueue actionQueue $ mkDbApply blk details
+                                writeDbActionQueue actionQueue $ mkDbApply blk
                                 lengthDbActionQueue actionQueue
 
                 setDbQueueLength metricsSetters newSize
@@ -389,8 +359,7 @@ chainSyncClient metricsSetters trce env queryVar latestPoints currentTip actionQ
               logException trce "recvMsgRollBackward: " $ do
                 -- This will get the current tip rather than what we roll back to
                 -- but will only be incorrect for a short time span.
-                mPoints <- waitRollback actionQueue point
-                newTip <- getDbTipBlockNo
+                (mPoints, newTip) <- waitRollback actionQueue point
                 pure $ finish newTip tip mPoints
         }
 

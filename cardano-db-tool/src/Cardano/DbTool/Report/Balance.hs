@@ -24,7 +24,7 @@ import           Database.Persist.Sql (SqlBackend)
 
 reportBalance :: [Text] -> IO ()
 reportBalance saddr = do
-  xs <- catMaybes <$> runDbNoLogging (mapM queryStakeAddressBalance saddr)
+  xs <- catMaybes <$> runDbNoLoggingEnv (mapM queryStakeAddressBalance saddr)
   renderBalances xs
 
 -- -------------------------------------------------------------------------------------------------
@@ -60,7 +60,7 @@ queryStakeAddressBalance address = do
     queryBalance saId = do
       inputs <- queryInputs saId
       (outputs, fees, deposit) <- queryOutputs saId
-      rewards <- queryRewards saId
+      rewards <- queryRewardsSum saId
       withdrawals <- queryWithdrawals saId
       pure $ Balance
                 { balAddressId = saId
@@ -81,8 +81,8 @@ queryStakeAddressBalance address = do
                 pure (sum_ (txo ^. TxOutValue))
       pure $ unValueSumAda (listToMaybe res)
 
-    queryRewards :: MonadIO m => StakeAddressId -> ReaderT SqlBackend m Ada
-    queryRewards saId = do
+    queryRewardsSum :: MonadIO m => StakeAddressId -> ReaderT SqlBackend m Ada
+    queryRewardsSum saId = do
       -- This query does not run unless we are pretty close to the chain tip.
       -- Therefore to get current rewards, we limit the cacluation to current epoch minus 2.
       currentEpoch <- queryLatestEpochNo

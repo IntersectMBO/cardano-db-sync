@@ -3,7 +3,7 @@ module Test.IO.Cardano.Db.Migration where
 
 import           Cardano.Db (LogFileDir (..), MigrationDir (..), MigrationValidate (..),
                    MigrationValidateError (..), MigrationVersion (..), SchemaVersion (..),
-                   getMigrationScripts, querySchemaVersion, readPGPassFileEnv, runDbNoLogging,
+                   getMigrationScripts, querySchemaVersion, readPGPassDefault, runDbNoLoggingEnv,
                    runMigrations, validateMigrations)
 import           Control.Monad (unless, when)
 import           Control.Monad.Trans.Except (runExceptT)
@@ -116,7 +116,7 @@ invalidHashMigrationValidate' = do
 migrationTest :: IO ()
 migrationTest = do
   let schemaDir = MigrationDir "../schema"
-  pgConfig <- readPGPassFileEnv Nothing
+  pgConfig <- readPGPassDefault
   runMigrations pgConfig True schemaDir (Just $ LogFileDir "/tmp")
   expected <- readSchemaVersion schemaDir
   actual <- getDbSchemaVersion
@@ -147,7 +147,7 @@ migrationScriptNameTest = do
 
 getDbSchemaVersion :: IO SchemaVersion
 getDbSchemaVersion =
-  runDbNoLogging $
+  runDbNoLoggingEnv $
     fromMaybe (error "getDbSchemaVersion: Nothing") <$> querySchemaVersion
 
 readSchemaVersion :: MigrationDir -> IO SchemaVersion
