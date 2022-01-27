@@ -21,6 +21,7 @@ module Cardano.Db.Query
   , queryDepositUpToBlockNo
   , queryEpochEntry
   , queryEpochNo
+  , queryRewardCount
   , queryEpochRewardCount
   , queryFeesUpToBlockNo
   , queryFeesUpToSlotNo
