@@ -453,6 +453,7 @@ select sum (value) / 1000000 as script_locked from tx_out as tx_outer where
 ```sql
 select tx.id as tx_id, tx.fee as fees, SUM(redeemer.fee) as script_fees, SUM(redeemer.unit_mem) as units_mem,
        SUM (redeemer.unit_steps) as units_steps, tx.valid_contract as valid, count(redeemer.id) scripts, tx.script_size
+       from tx join redeemer on tx.id = redeemer.tx_id group by tx.id;
  tx_id | fees     |script_fees |units_mem |units_steps| valid|scripts|script_size
  ------+----------+------------+----------+-----------+------+-------+-----------
  11812 |200193089 |  200000000 | 100000000|  100000000| t    |      1|         92
