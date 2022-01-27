@@ -59,7 +59,6 @@ BEGIN
     EXECUTE 'ALTER TABLE "pool_update" ADD CONSTRAINT "pool_update_meta_id_fkey" FOREIGN KEY("meta_id") REFERENCES "pool_metadata_ref"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
     EXECUTE 'ALTER TABLE "pool_update" ADD CONSTRAINT "pool_update_registered_tx_id_fkey" FOREIGN KEY("registered_tx_id") REFERENCES "tx"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
     EXECUTE 'CREATe TABLE "pool_owner"("id" SERIAL8  PRIMARY KEY UNIQUE,"addr_id" INT8 NOT NULL,"pool_hash_id" INT8 NOT NULL,"registered_tx_id" INT8 NOT NULL)' ;
-    EXECUTE 'ALTER TABLE "pool_owner" ADD CONSTRAINT "unique_pool_owner" UNIQUE("addr_id","pool_hash_id","registered_tx_id")' ;
     EXECUTE 'ALTER TABLE "pool_owner" ADD CONSTRAINT "pool_owner_addr_id_fkey" FOREIGN KEY("addr_id") REFERENCES "stake_address"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
     EXECUTE 'ALTER TABLE "pool_owner" ADD CONSTRAINT "pool_owner_pool_hash_id_fkey" FOREIGN KEY("pool_hash_id") REFERENCES "pool_hash"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
     EXECUTE 'ALTER TABLE "pool_owner" ADD CONSTRAINT "pool_owner_registered_tx_id_fkey" FOREIGN KEY("registered_tx_id") REFERENCES "tx"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
@@ -147,8 +146,6 @@ BEGIN
     EXECUTE 'CREATe TABLE "reserved_pool_ticker"("id" SERIAL8  PRIMARY KEY UNIQUE,"name" VARCHAR NOT NULL,"pool_id" INT8 NOT NULL)' ;
     EXECUTE 'ALTER TABLE "reserved_pool_ticker" ADD CONSTRAINT "unique_reserved_pool_ticker" UNIQUE("name")' ;
     EXECUTE 'ALTER TABLE "reserved_pool_ticker" ADD CONSTRAINT "reserved_pool_ticker_pool_id_fkey" FOREIGN KEY("pool_id") REFERENCES "pool_hash"("id") ON DELETE RESTRICT  ON UPDATE RESTRICT' ;
-    EXECUTE 'CREATe TABLE "admin_user"("id" SERIAL8  PRIMARY KEY UNIQUE,"username" VARCHAR NOT NULL,"password" VARCHAR NOT NULL)' ;
-    EXECUTE 'ALTER TABLE "admin_user" ADD CONSTRAINT "unique_admin_user" UNIQUE("username")' ;
     -- Hand written SQL statements can be added here.
     UPDATE schema_version SET stage_two = next_version ;
     RAISE NOTICE 'DB has been migrated to stage_two version %', next_version ;

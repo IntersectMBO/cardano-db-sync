@@ -121,7 +121,7 @@ share
     hashRaw             ByteString          sqltype=addr29type
     view                Text
     scriptHash          ByteString Maybe    sqltype=hash28type
-    registeredTxId      TxId                OnDeleteCascade     -- Only used for rollback.
+    txId                TxId                OnDeleteCascade     -- Only used for rollback.
     UniqueStakeAddress  hashRaw
 
   TxOut
@@ -197,7 +197,6 @@ share
     deriving Eq
 
   -- -----------------------------------------------------------------------------------------------
-  -- A Pool can have more than one owner, so we have a PoolOwner table that references this one.
 
   PoolMetadataRef
     poolId              PoolHashId
@@ -211,7 +210,7 @@ share
     certIndex           Word16
     vrfKeyHash          ByteString          sqltype=hash32type
     pledge              DbLovelace          sqltype=lovelace
-    rewardAddr          ByteString          sqltype=addr29type
+    rewardAddrId        StakeAddressId      OnDeleteCascade
     activeEpochNo       Word64
     metaId              PoolMetadataRefId Maybe OnDeleteCascade
     margin              Double                                  -- sqltype=percentage????
@@ -219,11 +218,11 @@ share
     registeredTxId      TxId                OnDeleteCascade     -- Slot number in which the pool was registered.
     UniquePoolUpdate    registeredTxId certIndex
 
+  -- A Pool can have more than one owner, so we have a PoolOwner table.
   PoolOwner
     addrId              StakeAddressId      OnDeleteCascade
-    poolHashId          PoolHashId          OnDeleteCascade
-    registeredTxId      TxId                OnDeleteCascade     -- Slot number in which the owner was registered.
-    UniquePoolOwner     addrId poolHashId registeredTxId
+    poolUpdateId        PoolUpdateId        OnDeleteCascade
+    UniquePoolOwner     addrId poolUpdateId
 
   PoolRetire
     hashId              PoolHashId          OnDeleteCascade
@@ -594,7 +593,7 @@ schemaDocs =
       StakeAddressHashRaw # "The raw bytes of the stake address hash."
       StakeAddressView # "The Bech32 encoded version of the stake address."
       StakeAddressScriptHash # "The script hash, in case this address is locked by a script."
-      StakeAddressRegisteredTxId # "The Tx table index of the transaction in which this address was registered."
+      StakeAddressTxId # "The Tx table index of the transaction in which this address first appeared."
 
     TxOut --^ do
       "A table for transaction outputs."
@@ -663,7 +662,7 @@ schemaDocs =
       PoolUpdateCertIndex # "The index of this pool update within the certificates of this transaction."
       PoolUpdateVrfKeyHash # "The hash of the pool's VRF key."
       PoolUpdatePledge # "The amount (in Lovelace) the pool owner pledges to the pool."
-      PoolUpdateRewardAddr # "The pool's rewards address."
+      PoolUpdateRewardAddrId # "The StakeAddress table index of this pool's rewards address."
       PoolUpdateActiveEpochNo # "The epoch number where this update becomes active."
       PoolUpdateMetaId # "The PoolMetadataRef table index this pool update refers to."
       PoolUpdateMargin # "The margin (as a percentage) this pool charges."
@@ -673,8 +672,7 @@ schemaDocs =
     PoolOwner --^ do
       "A table containing pool owners."
       PoolOwnerAddrId # "The StakeAddress table index for the pool owner's stake address."
-      PoolOwnerPoolHashId # "The PoolHash table index for the pool."
-      PoolOwnerRegisteredTxId # "The Tx table index of the transaction where this pool owner was registered."
+      PoolOwnerPoolUpdateId # "The PoolUpdate table index for the pool."
 
     PoolRetire --^ do
       "A table containing information about pools retiring."

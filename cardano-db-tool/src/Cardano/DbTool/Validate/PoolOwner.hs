@@ -30,8 +30,8 @@ validateAllPoolsHaveOwners = do
 
 queryPoolsWithoutOwners :: MonadIO m => ReaderT SqlBackend m Int
 queryPoolsWithoutOwners = do
-    res <- select . from $ \ phash -> do
+    res <- select . from $ \ pupd -> do
               where_ . notExists . from $ \ powner -> do
-                where_ (phash ^. PoolHashId ==. powner ^. PoolOwnerPoolHashId)
+                where_ (pupd ^. PoolUpdateId ==. powner ^. PoolOwnerPoolUpdateId)
               pure countRows
     pure $ maybe 0 unValue (listToMaybe res)

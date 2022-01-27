@@ -358,13 +358,14 @@ insertPoolRegister _tracer mlStateSnap network (EpochNo epoch) blkId txId idx pa
 
     epochActivationDelay <- mkEpochActivationDelay poolHashId
 
+    saId <- lift $ insertStakeAddress txId (adjustNetworkTag $ Shelley._poolRAcnt params)
     poolUpdateId <- lift . DB.insertPoolUpdate $
                       DB.PoolUpdate
                         { DB.poolUpdateHashId = poolHashId
                         , DB.poolUpdateCertIndex = idx
                         , DB.poolUpdateVrfKeyHash = Crypto.hashToBytes (Shelley._poolVrf params)
                         , DB.poolUpdatePledge = Generic.coinToDbLovelace (Shelley._poolPledge params)
-                        , DB.poolUpdateRewardAddr = Generic.serialiseRewardAcntWithNetwork network (Shelley._poolRAcnt params)
+                        , DB.poolUpdateRewardAddrId = saId
                         , DB.poolUpdateActiveEpochNo = epoch + epochActivationDelay
                         , DB.poolUpdateMetaId = mdId
                         , DB.poolUpdateMargin = realToFrac $ Ledger.unboundRational (Shelley._poolMargin params)
@@ -372,7 +373,7 @@ insertPoolRegister _tracer mlStateSnap network (EpochNo epoch) blkId txId idx pa
                         , DB.poolUpdateRegisteredTxId = txId
                         }
 
-    mapM_ (insertPoolOwner network poolHashId txId) $ toList (Shelley._poolOwners params)
+    mapM_ (insertPoolOwner network poolUpdateId txId) $ toList (Shelley._poolOwners params)
     mapM_ (insertPoolRelay poolUpdateId) $ toList (Shelley._poolRelays params)
 
   where
@@ -389,6 +390,10 @@ insertPoolRegister _tracer mlStateSnap network (EpochNo epoch) blkId txId idx pa
             otherUpdates <- lift $ queryPoolUpdateByBlock blkId poolHashId
             pure $ if otherUpdates then 3 else 2
 
+    -- Ignore the network in the `RewardAcnt` and use the provided one instead.
+    -- This is a workaround for https://github.com/input-output-hk/cardano-db-sync/issues/546
+    adjustNetworkTag :: Ledger.RewardAcnt StandardCrypto -> Ledger.RewardAcnt StandardCrypto
+    adjustNetworkTag (Shelley.RewardAcnt _ cred) = Shelley.RewardAcnt network cred
 
 insertPoolHash
     :: forall m . (MonadBaseControl IO m, MonadIO m)
@@ -442,7 +447,7 @@ insertStakeAddress txId rewardAddr =
       { DB.stakeAddressHashRaw = Ledger.serialiseRewardAcnt rewardAddr
       , DB.stakeAddressView = Generic.renderRewardAcnt rewardAddr
       , DB.stakeAddressScriptHash = Generic.getCredentialScriptHash $ Ledger.getRwdCred rewardAddr
-      , DB.stakeAddressRegisteredTxId = txId
+      , DB.stakeAddressTxId = txId
       }
 
 -- | Insert a stake address if it is not already in the `stake_address` table. Regardless of
@@ -471,15 +476,14 @@ insertStakeAddressRefIfMissing trce txId addr =
 
 insertPoolOwner
     :: (MonadBaseControl IO m, MonadIO m)
-    => Ledger.Network -> DB.PoolHashId -> DB.TxId -> Ledger.KeyHash 'Ledger.Staking StandardCrypto
+    => Ledger.Network -> DB.PoolUpdateId -> DB.TxId -> Ledger.KeyHash 'Ledger.Staking StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolOwner network poolHashId txId skh = do
+insertPoolOwner network poolUpdateId txId skh = do
   saId <- lift $ insertStakeAddress txId (Shelley.RewardAcnt network (Ledger.KeyHashObj skh))
   void . lift . DB.insertPoolOwner $
     DB.PoolOwner
       { DB.poolOwnerAddrId = saId
-      , DB.poolOwnerPoolHashId = poolHashId
-      , DB.poolOwnerRegisteredTxId = txId
+      , DB.poolOwnerPoolUpdateId = poolUpdateId
       }
 
 insertStakeRegistration
