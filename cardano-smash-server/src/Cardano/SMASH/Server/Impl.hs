@@ -101,10 +101,13 @@ getPoolOfflineMetadata (ServerEnv trce dataLayer) poolId poolMetaHash =
       throwIO $ err403 {errBody = LBS.fromStrict $ Text.encodeUtf8 msg}
 
     isRetired <- dlCheckRetiredPool dataLayer poolId
-    when isRetired $ do
-      let msg = Text.unwords ["Pool", getPoolId poolId, "is retired"]
-      logWarning trce msg
-      throwIO err404 {errBody = LBS.fromStrict $ Text.encodeUtf8 msg}
+    case isRetired of
+      Right True -> do
+        let msg = Text.unwords ["Pool", getPoolId poolId, "is retired"]
+        logWarning trce msg
+        throwIO err404 {errBody = LBS.fromStrict $ Text.encodeUtf8 msg}
+      Left err -> throwIO $ err404 {errBody = encode err}
+      Right False -> pure ()
 
     mmetadata <- dlGetPoolMetadata dataLayer poolId poolMetaHash
     case mmetadata of

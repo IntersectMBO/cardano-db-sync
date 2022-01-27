@@ -36,7 +36,7 @@ data PoolDataLayer =
     , dlRemoveDelistedPool      :: PoolId -> IO (Either DBFail PoolId)
 
     , dlAddRetiredPool          :: PoolId -> Word64 -> IO (Either DBFail PoolId) -- testing mode
-    , dlCheckRetiredPool        :: PoolId -> IO Bool
+    , dlCheckRetiredPool        :: PoolId -> IO (Either DBFail Bool)
     , dlGetRetiredPools         :: IO (Either DBFail [PoolId])
 
     , dlGetFetchErrors          :: PoolId -> Maybe UTCTime -> IO (Either DBFail [PoolFetchError])
@@ -89,7 +89,7 @@ postgresqlPoolDataLayer tracer pgsource = PoolDataLayer {
   , dlAddRetiredPool = \_ _ -> panic "dlAddRetiredPool not defined. Will be used only for testing"
   , dlCheckRetiredPool = \poolId -> do
       actions <- getCertActions tracer pgsource (Just poolId)
-      pure $ not $ isRegistered (servantToDbPoolId poolId) actions
+      pure $ not <$> isRegistered (servantToDbPoolId poolId) actions
   , dlGetRetiredPools = do
       ls <- filterRetired <$> getCertActions tracer pgsource Nothing
       pure $ Right $ dbToServantPoolId <$> ls
@@ -161,11 +161,11 @@ filterRegistered (mEpochNo, certs) =
       Db.Retirement retEpochNo -> Just retEpochNo > mEpochNo
       _ -> True
 
-isRegistered :: ByteString -> (Maybe Word64, Map ByteString Db.PoolCertAction) -> Bool
+isRegistered :: ByteString -> (Maybe Word64, Map ByteString Db.PoolCertAction) -> Either DBFail Bool
 isRegistered pid (mEpochNo, certs) = case Map.lookup pid certs of
-  Nothing -> False
-  Just (Db.Retirement retEpochNo) -> Just retEpochNo > mEpochNo
-  Just (Db.Register _) -> True
+  Nothing -> Left RecordDoesNotExist
+  Just (Db.Retirement retEpochNo) -> Right $ Just retEpochNo > mEpochNo
+  Just (Db.Register _) -> Right True
 
 servantToDbPoolId :: PoolId -> ByteString
 servantToDbPoolId pid =
