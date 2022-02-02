@@ -1,4 +1,4 @@
-module Test.Cardano.Db.Mock.UnifiedApi where
+module Cardano.Mock.UnifiedApi where
 
 import           Control.Monad.Class.MonadSTM.Strict
 

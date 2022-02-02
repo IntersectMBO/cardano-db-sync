@@ -2,7 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Test.Cardano.Db.Mock.Config where
+module Cardano.Mock.Db.Config where
 
 import           Cardano.Prelude (ReaderT, panic, stderr)
 

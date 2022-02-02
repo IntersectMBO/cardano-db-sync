@@ -5,7 +5,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Test.Cardano.Db.Mock.Validate where
+module Cardano.Mock.Db.Validate where
 
 import           Cardano.Db
 import           Control.Concurrent
@@ -42,10 +42,10 @@ import           Cardano.SMASH.Server.Types
 import           Ouroboros.Consensus.Cardano.Block
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 
+import           Cardano.Mock.Db.Config
 import           Cardano.Mock.Forging.Tx.Generic
 import           Cardano.Mock.Forging.Types
 
-import           Test.Cardano.Db.Mock.Config
 
 import           Test.Tasty.HUnit
 
