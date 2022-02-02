@@ -36,6 +36,8 @@ import           Cardano.SMASH.Server.PoolDataLayer
 import           Cardano.SMASH.Server.Types
 
 import           Cardano.Mock.ChainSync.Server
+import           Cardano.Mock.Db.Validate
+import           Cardano.Mock.Db.Config
 import           Cardano.Mock.Forging.Examples
 import           Cardano.Mock.Forging.Interpreter
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
@@ -43,14 +45,12 @@ import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Tx.Generic
 import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
 import           Cardano.Mock.Forging.Types
+import           Cardano.Mock.UnifiedApi
 
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (Assertion, assertBool, assertEqual, assertFailure, testCase)
 
-import           Test.Cardano.Db.Mock.Config
 import           Test.Cardano.Db.Mock.Examples
-import           Test.Cardano.Db.Mock.UnifiedApi
-import           Test.Cardano.Db.Mock.Validate
 
 unitTests :: IOManager -> [(Text, Text)] -> TestTree
 unitTests iom knownMigrations =

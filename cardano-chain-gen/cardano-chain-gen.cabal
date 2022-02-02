@@ -44,6 +44,8 @@ library
                         Cardano.Mock.ChainDB
                         Cardano.Mock.ChainSync.Server
                         Cardano.Mock.ChainSync.State
+                        Cardano.Mock.Db.Config
+                        Cardano.Mock.Db.Validate
                         Cardano.Mock.Forging.Examples
                         Cardano.Mock.Forging.Interpreter
                         Cardano.Mock.Forging.Tx.Alonzo
@@ -51,6 +53,7 @@ library
                         Cardano.Mock.Forging.Tx.Generic
                         Cardano.Mock.Forging.Tx.Shelley
                         Cardano.Mock.Forging.Types
+                        Cardano.Mock.UnifiedApi
 
   build-depends:        base                            >= 4.14         && < 4.16
                       , async
@@ -64,6 +67,10 @@ library
                       , cardano-crypto-class
                       , cardano-crypto-praos
                       , cardano-crypto-wrapper
+                      , cardano-cli
+                      , cardano-db
+                      , cardano-db-sync
+                      , cardano-smash-server
                       , cardano-ledger-alonzo
                       , cardano-ledger-byron
                       , cardano-ledger-core
@@ -91,6 +98,7 @@ library
                       , memory
                       , mtl
                       , monad-control
+                      , monad-logger
                       , network-mux
                       , nothunks
                       , ouroboros-consensus
@@ -103,11 +111,13 @@ library
                       , persistent-postgresql
                       , plutus-core
                       , plutus-example
+                      , postgresql-simple
                       , pretty-show
                       , prometheus
                       , random-shuffle
                       , serialise
                       , set-algebra
+                      , silently
                       , small-steps
                       , split
                       , stm
@@ -115,6 +125,7 @@ library
                       , strict-containers
                       , strict-stm
                       , swagger2
+                      , tasty-hunit
                       , text
                       , text-ansi
                       , time
@@ -147,11 +158,8 @@ test-suite cardano-chain-gen
   other-modules:        Paths_cardano_chain_gen
                         MigrationValidations
 
-  other-modules:        Test.Cardano.Db.Mock.Config
-                        Test.Cardano.Db.Mock.Examples
+  other-modules:        Test.Cardano.Db.Mock.Examples
                         Test.Cardano.Db.Mock.Unit
-                        Test.Cardano.Db.Mock.UnifiedApi
-                        Test.Cardano.Db.Mock.Validate
 
   build-depends:        async
                       , base                            >= 4.12         && < 4.15
