@@ -188,6 +188,7 @@ test-suite cardano-chain-gen
                       , tasty-quickcheck
                       , text
                       , transformers
+                      , transformers-except
                       , tree-diff
                       , tasty-hunit
                       , monad-logger

@@ -40,6 +40,8 @@ import           Cardano.DbSync.Tracing.ToObjectOrphans ()
 import           Cardano.DbSync.Types
 
 import           Control.Monad.Extra (whenJust)
+import           Control.Monad.Trans.Except.Exit (orDie)
+import           Control.Monad.Trans.Except.Extra (newExceptT)
 
 import           Ouroboros.Network.NodeToClient (IOManager, withIOManager)
 
@@ -57,12 +59,12 @@ runDbSyncNode metricsSetters knownMigrations params =
 
     runDbSync metricsSetters knownMigrations iomgr trce params aop 500 10000
 
-runDbSync :: MetricSetters -> [(Text, Text)] -> IOManager -> Trace IO Text
-          -> SyncNodeParams -> Bool -> Word64 -> Word64 -> IO ()
+runDbSync
+    :: MetricSetters -> [(Text, Text)] -> IOManager -> Trace IO Text
+    -> SyncNodeParams -> Bool -> Word64 -> Word64 -> IO ()
 runDbSync metricsSetters knownMigrations iomgr trce params aop snEveryFollowing snEveryLagging = do
-
     -- Read the PG connection info
-    pgConfig <- Db.readPGPass (enpPGPassSource params)
+    pgConfig <- orDie Db.renderPGPassError $ newExceptT (Db.readPGPass $ enpPGPassSource params)
 
     orDieWithLog Db.renderMigrationValidateError trce $
       Db.validateMigrations dbMigrationDir knownMigrations

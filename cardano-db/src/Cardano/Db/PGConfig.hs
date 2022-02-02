@@ -3,6 +3,7 @@
 
 module Cardano.Db.PGConfig
   ( PGConfig (..)
+  , PGPassError (..)
   , PGPassFile (..)
   , PGPassSource (..)
   , parsePGConfig
@@ -11,22 +12,27 @@ module Cardano.Db.PGConfig
   , readPGPassFileEnv
   , readPGPassFile
   , readPGPassFileExit
+  , renderPGPassError
   , toConnectionString
   ) where
+
+import           Cardano.Db.Text
 
 import           Control.Exception (IOException)
 import qualified Control.Exception as Exception
 
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
+import           Data.Text (Text)
+import qualified Data.Text as Text
 
 import           Database.Persist.Postgresql (ConnectionString)
 
 import           System.Environment (lookupEnv, setEnv)
 import           System.Posix.User (getEffectiveUserName)
 
-data PGPassSource =
-    PGPassDefaultEnv
+data PGPassSource
+  = PGPassDefaultEnv
   | PGPassEnv String
   | PGPassCached PGConfig
 
@@ -53,67 +59,88 @@ toConnectionString pgc =
     , "password=", pgcPassword pgc
     ]
 
-readPGPassDefault :: IO PGConfig
+readPGPassDefault :: IO (Either PGPassError PGConfig)
 readPGPassDefault = readPGPass PGPassDefaultEnv
 
 -- | Read the PostgreSQL configuration from the file at the location specified by the
 -- '$PGPASSFILE' environment variable.
-readPGPass :: PGPassSource -> IO PGConfig
+readPGPass :: PGPassSource -> IO (Either PGPassError PGConfig)
 readPGPass source = case source of
   PGPassDefaultEnv -> readPGPassFileEnv "PGPASSFILE"
   PGPassEnv name -> readPGPassFileEnv name
-  PGPassCached config -> pure config
+  PGPassCached config -> pure $ Right config
 
-readPGPassFileEnv :: String -> IO PGConfig
+readPGPassFileEnv :: String -> IO (Either PGPassError PGConfig)
 readPGPassFileEnv name = do
   mpath <- lookupEnv name
   case mpath of
     Just fp -> readPGPassFileExit (PGPassFile fp)
-    Nothing -> error $ mconcat [ "Environment variable '", name, " not set." ]
+    Nothing -> pure $ Left (EnvVarableNotSet name)
 
 -- | Read the PostgreSQL configuration from the specified file.
-readPGPassFile :: PGPassFile -> IO (Maybe PGConfig)
+readPGPassFile :: PGPassFile -> IO (Either PGPassError PGConfig)
 readPGPassFile (PGPassFile fpath) = do
     ebs <- Exception.try $ BS.readFile fpath
     case ebs of
-      Left e -> pure $ handler e
+      Left err -> pure $ Left (FailedToReadPGPassFile fpath err)
       Right bs -> extract bs
   where
-    handler :: IOException -> Maybe a
-    handler = const Nothing
-
-    extract :: ByteString -> IO (Maybe PGConfig)
+    extract :: ByteString -> IO (Either PGPassError PGConfig)
     extract bs =
       case BS.lines bs of
         (b:_) -> parsePGConfig b
-        _ -> pure Nothing
+        _ -> pure $ Left (FailedToParsePGPassConfig bs)
 
-parsePGConfig :: ByteString -> IO (Maybe PGConfig)
+parsePGConfig :: ByteString -> IO (Either PGPassError PGConfig)
 parsePGConfig bs =
     case BS.split ':' bs of
-      [h, pt, d, u, pwd] -> Just <$> replaceUser (PGConfig h pt d u pwd)
-      _ -> pure Nothing
+      [h, pt, d, u, pwd] -> replaceUser (PGConfig h pt d u pwd)
+      _ -> pure $ Left (FailedToParsePGPassConfig bs)
   where
-    replaceUser :: PGConfig -> IO PGConfig
+    replaceUser :: PGConfig -> IO (Either PGPassError PGConfig)
     replaceUser pgc
-      | pgcUser pgc /= "*" = pure pgc
+      | pgcUser pgc /= "*" = pure $ Right pgc
       | otherwise = do
           euser <- Exception.try getEffectiveUserName
           case euser of
-            Left (_ :: IOException) ->
-              error "readPGPassFile: User in pgpass file was specified as '*' but getEffectiveUserName failed."
+            Left (err :: IOException) ->
+              pure $ Left (UserFailed err)
             Right user ->
-              pure $ pgc { pgcUser = BS.pack user }
+              pure $ Right (pgc { pgcUser = BS.pack user })
 
 
 -- | Read 'PGPassFile' into 'PGConfig'.
 -- If it fails it will raise an error.
 -- If it succeeds, it will set the 'PGPASSFILE' environment variable.
-readPGPassFileExit :: PGPassFile -> IO PGConfig
+readPGPassFileExit :: PGPassFile -> IO (Either PGPassError PGConfig)
 readPGPassFileExit pgpassfile@(PGPassFile fpath) = do
-  mc <- readPGPassFile pgpassfile
-  case mc of
-    Nothing -> error $ "Not able to read PGPassFile at " ++ show fpath ++ "."
-    Just pgc -> do
+  epgp <- readPGPassFile pgpassfile
+  case epgp of
+    Left err -> pure $ Left err
+    Right pgc -> do
       setEnv "PGPASSFILE" fpath
-      pure pgc
+      pure $ Right pgc
+
+data PGPassError
+  = EnvVarableNotSet String
+  | UserFailed IOException
+  | FailedToReadPGPassFile FilePath IOException
+  | FailedToParsePGPassConfig ByteString
+
+renderPGPassError :: PGPassError -> Text
+renderPGPassError pge =
+  case pge of
+    EnvVarableNotSet str ->
+      mconcat [ "Environment variable '", Text.pack str, " not set." ]
+    UserFailed err ->
+      mconcat
+        [ "readPGPassFile: User in pgpass file was specified as '*' but "
+        , "getEffectiveUserName failed with ", textShow err
+        ]
+    FailedToReadPGPassFile fpath err ->
+      mconcat
+        [ "Not able to read PGPassFile at ", textShow fpath, ".", "Failed with "
+        , textShow err
+        ]
+    FailedToParsePGPassConfig bs ->
+      "Failed to parse config from " <> textShow bs

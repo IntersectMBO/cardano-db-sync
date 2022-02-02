@@ -90,6 +90,7 @@ library
                       , template-haskell
                       , time
                       , transformers
+                      , transformers-except
                       -- This is never intended to run on non-POSIX systems.
                       , unix
                       , wide-word
@@ -165,6 +166,7 @@ test-suite test-db
                       , text
                       , time
                       , transformers
+                      , transformers-except
 
 executable gen-schema-docs
   default-language:     Haskell2010

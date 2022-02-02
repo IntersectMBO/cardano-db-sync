@@ -10,9 +10,12 @@ import           Control.Concurrent.Async
 import           Control.Concurrent.STM (atomically)
 import           Control.Concurrent.STM.TMVar
 import           Control.Exception (SomeException, bracket)
+import           Control.Monad (void)
 import           Control.Monad.Extra (eitherM)
 import           Control.Monad.Logger (NoLoggingT)
-import           Control.Monad.Trans.Except (runExceptT)
+import           Control.Monad.Trans.Except.Exit (orDie)
+import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
+
 import           Control.Tracer (nullTracer)
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -33,7 +36,7 @@ import           Cardano.CLI.Shelley.Run.Genesis as CLI
 import           Cardano.Node.Protocol.Shelley (readLeaderCredentials)
 import           Cardano.Node.Types (ProtocolFilepaths (..))
 
-import qualified Cardano.Db as DB
+import qualified Cardano.Db as Db
 
 import           Cardano.DbSync
 import           Cardano.DbSync.Config
@@ -103,7 +106,7 @@ stopDBSyncIfRunning env = do
     Just a -> do
       cancel a
       -- make it empty
-      _ <- atomically $ takeTMVar (dbSyncThreadVar env)
+      void . atomically $ takeTMVar (dbSyncThreadVar env)
       pure ()
 
 startDBSync :: DBSyncEnv -> IO ()
@@ -127,11 +130,11 @@ withDBSyncEnv :: IO DBSyncEnv -> (DBSyncEnv -> IO a) -> IO a
 withDBSyncEnv mkEnv action = do
   bracket mkEnv stopDBSyncIfRunning action
 
-getDBSyncPGPass :: DBSyncEnv -> DB.PGPassSource
+getDBSyncPGPass :: DBSyncEnv -> Db.PGPassSource
 getDBSyncPGPass = enpPGPassSource . dbSyncParams
 
 queryDBSync :: DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> IO a
-queryDBSync env = DB.runWithConnectionNoLogging (getDBSyncPGPass env)
+queryDBSync env = Db.runWithConnectionNoLogging (getDBSyncPGPass env)
 
 getPoolLayer :: DBSyncEnv -> PoolDataLayer
 getPoolLayer env = postgresqlPoolDataLayer
@@ -170,13 +173,13 @@ mkShelleyCredentials bulkFile = do
 -- | staticDir can be shared by tests running in parallel. mutableDir not.
 mkSyncNodeParams :: FilePath -> FilePath -> IO SyncNodeParams
 mkSyncNodeParams staticDir mutableDir = do
-  pgconfig <- DB.readPGPassDefault
+  pgconfig <- orDie Db.renderPGPassError $ newExceptT Db.readPGPassDefault
   pure $ SyncNodeParams
     { enpConfigFile = ConfigFile $ staticDir </> "test-db-sync-config.json"
     , enpSocketPath = SocketPath $ mutableDir </> ".socket"
     , enpLedgerStateDir = LedgerStateDir $ mutableDir </> "ledger-states"
     , enpMigrationDir = MigrationDir "../schema"
-    , enpPGPassSource = DB.PGPassCached pgconfig
+    , enpPGPassSource = Db.PGPassCached pgconfig
     , enpExtended = True
     , enpMaybeRollback = Nothing
     }
@@ -209,7 +212,7 @@ withFullConfig config testLabel action iom migr = do
         $ \mockServer ->
           -- we dont fork dbsync here. Just prepare it as an action
           withDBSyncEnv (mkDBSyncEnv dbsyncParams dbsyncRun) $ \dbSync -> do
-            _ <- hSilence [stderr] $ DB.recreateDB (getDBSyncPGPass dbSync)
+            _ <- hSilence [stderr] $ Db.recreateDB (getDBSyncPGPass dbSync)
             action interpreter mockServer dbSync
   where
     configDir = mkConfigDir config
