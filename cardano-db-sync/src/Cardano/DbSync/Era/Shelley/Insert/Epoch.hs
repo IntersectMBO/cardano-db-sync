@@ -38,6 +38,7 @@ import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Control.Monad.Class.MonadSTM.Strict (flushTBQueue, isEmptyTBQueue, readTVar,
                    writeTBQueue, writeTVar)
+import           Control.Monad.Extra (mapMaybeM)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (hoistEither)
 
@@ -191,20 +192,34 @@ insertRewards epoch icache rewardsChunk = do
     lift $ DB.insertManyRewards dbRewards
   where
     mkRewards
-        :: MonadBaseControl IO m
+        :: (MonadBaseControl IO m, MonadIO m)
         => (Generic.StakeCred, Set Generic.Reward)
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.Reward]
     mkRewards (saddr, rset) = do
       saId <- hoistEither $ lookupStakeAddrIdPair "insertRewards StakePool" saddr icache
-      forM (Set.toList rset) $ \ rwd ->
-        pure $ DB.Reward
-                  { DB.rewardAddrId = saId
-                  , DB.rewardType = Generic.rewardSource rwd
-                  , DB.rewardAmount = Generic.coinToDbLovelace (Generic.rewardAmount rwd)
-                  , DB.rewardEarnedEpoch = earnedEpoch (Generic.rewardSource rwd)
-                  , DB.rewardSpendableEpoch = spendableEpoch (Generic.rewardSource rwd)
-                  , DB.rewardPoolId = lookupPoolIdPairMaybe (Generic.rewardPool rwd) icache
-                  }
+      mapMaybeM (prepareReward saId) (Set.toList rset)
+
+    -- For rewards with a null pool, the reward unique key doesn't work.
+    -- So we need to manually check that it's not already in the db.
+    -- This can happen on rollbacks.
+    prepareReward
+        :: (MonadBaseControl IO m, MonadIO m)
+        => DB.StakeAddressId -> Generic.Reward
+        -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe DB.Reward)
+    prepareReward saId rwd = do
+        let rwdDb = DB.Reward
+                    { DB.rewardAddrId = saId
+                    , DB.rewardType = Generic.rewardSource rwd
+                    , DB.rewardAmount = Generic.coinToDbLovelace (Generic.rewardAmount rwd)
+                    , DB.rewardEarnedEpoch = earnedEpoch (Generic.rewardSource rwd)
+                    , DB.rewardSpendableEpoch = spendableEpoch (Generic.rewardSource rwd)
+                    , DB.rewardPoolId = lookupPoolIdPairMaybe (Generic.rewardPool rwd) icache
+                    }
+        case DB.rewardPoolId rwdDb of
+          Just _ -> pure $ Just rwdDb
+          Nothing -> do
+            exists <- lift $ DB.queryNullPoolRewardExists rwdDb
+            if exists then pure Nothing else pure (Just rwdDb)
 
     -- The earnedEpoch and spendableEpoch functions have been tweaked to match the logic of the ledger.
     earnedEpoch :: DB.RewardSource -> Word64
