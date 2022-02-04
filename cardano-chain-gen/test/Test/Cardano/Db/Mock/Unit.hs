@@ -87,6 +87,7 @@ unitTests iom knownMigrations =
           , test "shelley rewards from multiple sources" rewardsShelley
           , test "rewards with deregistration" rewardsDeregistration
           , test "Mir Cert" mirReward
+          , test "Mir rollback" mirRewardRollback
           , test "Mir Cert Shelley" mirRewardShelley
           , test "Mir Cert deregistration" mirRewardDereg
           , test "test rewards empty last part of epoch" rewardsEmptyChainLast
@@ -663,6 +664,47 @@ mirReward =
       assertRewardCounts dbSync st True [(StakeIndex 1, (0,0,1,1,0))]
   where
     testLabel = "mirReward"
+
+mirRewardRollback :: IOManager -> [(Text, Text)] -> Assertion
+mirRewardRollback =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      _ <- registerAllStakeCreds interpreter mockServer
+
+      -- first move to treasury from reserves
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
+        Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty)
+
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkSimpleDCertTx [ (StakeIndexNew 1, DCertDeleg . RegKey) ]
+
+      a <- fillUntilNextEpoch interpreter mockServer
+      b <- fillEpochPercentage interpreter mockServer 5
+      -- mir from treasury
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkSimpleDCertTx [(StakeIndexNew 1,
+          \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 1000))))]
+      c <- fillEpochPercentage interpreter mockServer 50
+      d <- fillUntilNextEpoch interpreter mockServer
+
+      st <- getAlonzoLedgerState interpreter
+      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c <> d) - 1)
+      assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,0,0,1,0))]
+
+      atomically $ rollback mockServer (blockPoint $ last c)
+      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c) - 1)
+      assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,0,0,1,0))]
+      stopDBSync dbSync
+      startDBSync dbSync
+      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c) - 1)
+      assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,0,0,1,0))]
+
+      forM_ d $ atomically . addBlock mockServer
+      e <- fillEpochPercentage interpreter mockServer 5
+      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c <> d <> e) - 1)
+      assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,0,0,1,0))]
+  where
+    testLabel = "mirRewardRollback"
 
 mirRewardShelley :: IOManager -> [(Text, Text)] -> Assertion
 mirRewardShelley =

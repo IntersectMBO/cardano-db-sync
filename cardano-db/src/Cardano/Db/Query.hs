@@ -24,6 +24,7 @@ module Cardano.Db.Query
   , queryEpochNo
   , queryRewardCount
   , queryRewards
+  , queryNullPoolRewardExists
   , queryEpochRewardCount
   , queryRewardsSpend
   , queryFeesUpToBlockNo
@@ -386,6 +387,16 @@ queryRewards epochNum = do
             where_ (rwds ^. RewardEarnedEpoch ==. val epochNum)
             pure rwds
   pure $ entityVal <$> res
+
+queryNullPoolRewardExists :: MonadIO m => Reward -> ReaderT SqlBackend m Bool
+queryNullPoolRewardExists newRwd = do
+  res <- select . from $ \ rwd -> do
+            where_ (rwd ^. RewardAddrId ==. val (rewardAddrId newRwd))
+            where_ (rwd ^. RewardType ==. val (rewardType newRwd))
+            where_ (rwd ^. RewardEarnedEpoch ==. val (rewardEarnedEpoch newRwd))
+            limit 1
+            pure (rwd ^. RewardId)
+  pure $ not (null res)
 
 -- | Get the fees paid in all block from genesis up to and including the specified block.
 queryFeesUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
