@@ -83,7 +83,7 @@ queryPoolFetchRetry _now = do
                 pure
                     ( pofe ^. PoolOfflineFetchErrorFetchTime
                     , pofe ^. PoolOfflineFetchErrorPmrId
-                    , ph ^. PoolHashView
+                    , pmr ^. PoolMetadataRefUrl
                     , pmr ^. PoolMetadataRefHash
                     , ph ^. PoolHashId
                     , pofe ^. PoolOfflineFetchErrorRetryCount
