@@ -100,7 +100,8 @@ runOfflineFetchThread trce lenv = do
       threadDelay 60_000_000 -- 60 second sleep
       xs <- blockingFlushTBQueue (leOfflineWorkQueue lenv)
       manager <- Http.newManager tlsManagerSettings
-      mapM_ (queueInsert <=< fetchOfflineData trce manager) xs
+      now <- liftIO Time.getPOSIXTime
+      mapM_ (queueInsert <=< fetchOfflineData trce manager now) xs
   where
     queueInsert :: FetchResult -> IO ()
     queueInsert = atomically . writeTBQueue (leOfflineResultQueue lenv)
@@ -116,8 +117,8 @@ blockingFlushTBQueue queue = do
     pure $ x : xs
 
 
-fetchOfflineData :: Trace IO Text -> Http.Manager -> PoolFetchRetry -> IO FetchResult
-fetchOfflineData _tracer manager pfr =
+fetchOfflineData :: Trace IO Text -> Http.Manager -> Time.POSIXTime -> PoolFetchRetry -> IO FetchResult
+fetchOfflineData _tracer manager time pfr =
     convert <<$>> runExceptT $ do
       request <- handleExceptT wrapHttpException
                     $ Http.parseRequest (Text.unpack $ unPoolUrl poolMetadataUrl)
@@ -161,7 +162,7 @@ fetchOfflineData _tracer manager pfr =
             ResultError $
               DB.PoolOfflineFetchError
                 { DB.poolOfflineFetchErrorPoolId = pfrPoolHashId pfr
-                , DB.poolOfflineFetchErrorFetchTime = Time.posixSecondsToUTCTime (retryFetchTime $ pfrRetry pfr)
+                , DB.poolOfflineFetchErrorFetchTime = Time.posixSecondsToUTCTime time
                 , DB.poolOfflineFetchErrorPmrId = pfrReferenceId pfr
                 , DB.poolOfflineFetchErrorFetchError = renderFetchError err
                 , DB.poolOfflineFetchErrorRetryCount = retryCount (pfrRetry pfr)
