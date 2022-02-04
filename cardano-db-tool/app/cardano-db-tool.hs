@@ -7,6 +7,9 @@ import           Cardano.DbSync.Config.Types hiding (CmdVersion, LogFileDir)
 import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Control.Applicative (optional)
+import           Control.Monad.Trans.Except.Exit (orDie)
+import           Control.Monad.Trans.Except.Extra (newExceptT)
+
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
@@ -53,7 +56,7 @@ runCommand cmd =
     CmdReport report -> runReport report
     CmdRollback slotNo -> runRollback slotNo
     CmdRunMigrations mdir mldir -> do
-        pgConfig <- readPGPass PGPassDefaultEnv
+        pgConfig <- orDie renderPGPassError $ newExceptT (readPGPass PGPassDefaultEnv)
         runMigrations pgConfig False mdir mldir
     CmdUtxoSetAtBlock blkid -> utxoSetAtSlot blkid
     CmdPrepareSnapshot pargs -> runPrepareSnapshot pargs

@@ -86,10 +86,17 @@ let
       }
       {
         packages.cardano-db.components.tests.test-db = {
-          build-tools = [ buildPackages.postgresql ];
-          inherit preCheck;
-          inherit postCheck;
-        };
+            build-tools = [ buildPackages.postgresql ];
+            inherit preCheck;
+            inherit postCheck;
+          };
+      }
+      {
+        packages.cardano-chain-gen.components.tests.cardano-chain-gen = {
+            build-tools = [ buildPackages.postgresql ];
+            inherit preCheck;
+            inherit postCheck;
+          };
       }
       {
         packages.cardano-db-sync.components.exes.cardano-db-sync = {
@@ -123,21 +130,25 @@ let
             !pkgs.stdenv.hostPlatform.isMusl;
           packages.cardano-node.flags.systemd =
             !pkgs.stdenv.hostPlatform.isMusl;
-        }
-      )
+        })
       {
         packages.cardano-db-sync.package.extraSrcFiles = [ "../schema/*.sql" ];
+        packages.cardano-chain-gen.package.extraSrcFiles =
+          [ "../schema/*.sql" ];
       }
       ({ pkgs, ... }: {
         packages = lib.genAttrs [ "cardano-config" "cardano-db" ] (_: {
-          components.library.build-tools = [ pkgs.buildPackages.buildPackages.gitMinimal ];
+          components.library.build-tools =
+            [ pkgs.buildPackages.buildPackages.gitMinimal ];
         });
       })
-      ({ pkgs, ...}: {
+      ({ pkgs, ... }: {
         # Use the VRF fork of libsodium when building cardano-node
-        packages = lib.genAttrs [ "cardano-crypto-praos" "cardano-crypto-class" ] (_: {
-          components.library.pkgconfig = lib.mkForce [ [ pkgs.libsodium-vrf ] ];
-        });
+        packages =
+          lib.genAttrs [ "cardano-crypto-praos" "cardano-crypto-class" ] (_: {
+            components.library.pkgconfig =
+              lib.mkForce [ [ pkgs.libsodium-vrf ] ];
+          });
       })
     ];
   };

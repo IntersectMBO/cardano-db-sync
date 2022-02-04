@@ -29,6 +29,8 @@ import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Logger (LogLevel (..), LogSource, LoggingT, NoLoggingT,
                    defaultLogStr, runLoggingT, runNoLoggingT, runStdoutLoggingT)
 import           Control.Monad.Trans.Control (MonadBaseControl)
+import           Control.Monad.Trans.Except.Exit (orDie)
+import           Control.Monad.Trans.Except.Extra (newExceptT)
 import           Control.Monad.Trans.Reader (ReaderT)
 import           Control.Monad.Trans.Resource (MonadUnliftIO)
 import           Control.Tracer (traceWith)
@@ -58,9 +60,9 @@ import           System.Log.FastLogger (LogStr, fromLogStr)
 -- | Run a DB action logging via the provided Handle.
 runDbHandleLogger :: Handle -> PGPassSource -> ReaderT SqlBackend (LoggingT IO) a -> IO a
 runDbHandleLogger logHandle source dbAction = do
-    pgconf <- readPGPass source
+    pgconfig <- orDie renderPGPassError $ newExceptT (readPGPass source)
     runHandleLoggerT .
-      withPostgresqlPool (toConnectionString pgconf) defPoolCount $ \pool ->
+      withPostgresqlPool (toConnectionString pgconfig) defPoolCount $ \pool ->
         Pool.withResource pool $ \backend ->
           -- The 'runSqlConnWithIsolation' function starts a transaction, runs the 'dbAction'
           -- and then commits the transaction.
@@ -74,23 +76,20 @@ runDbHandleLogger logHandle source dbAction = do
     logOut loc src level msg =
       BS.hPutStrLn logHandle . fromLogStr $ defaultLogStr loc src level msg
 
-runWithConnectionLogging :: PGPassSource
-                         -> Trace IO Text
-                         -> ReaderT SqlBackend (LoggingT IO) a
-                         -> IO a
+runWithConnectionLogging
+    :: PGPassSource -> Trace IO Text -> ReaderT SqlBackend (LoggingT IO) a -> IO a
 runWithConnectionLogging source tracer dbAction = do
-  pgconf <- readPGPass source
+  pgconfig <- orDie renderPGPassError $ newExceptT (readPGPass source)
   runIohkLogging tracer .
-    withPostgresqlConn (toConnectionString pgconf) $ \backend ->
+    withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
       runSqlConnWithIsolation dbAction backend Serializable
 
-runWithConnectionNoLogging :: PGPassSource
-                           -> ReaderT SqlBackend (NoLoggingT IO) a
-                           -> IO a
+runWithConnectionNoLogging
+    :: PGPassSource -> ReaderT SqlBackend (NoLoggingT IO) a -> IO a
 runWithConnectionNoLogging source dbAction = do
-  pgconf <- readPGPass source
+  pgconfig <- orDie renderPGPassError $ newExceptT (readPGPass source)
   runNoLoggingT .
-    withPostgresqlConn (toConnectionString pgconf) $ \backend ->
+    withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
       runSqlConnWithIsolation dbAction backend Serializable
 
 
@@ -132,12 +131,11 @@ runDbNoLoggingEnv :: (MonadBaseControl IO m, MonadUnliftIO m)
                   -> m a
 runDbNoLoggingEnv = runDbNoLogging PGPassDefaultEnv
 
-runDbNoLogging :: (MonadBaseControl IO m, MonadUnliftIO m)
-               => PGPassSource
-               -> ReaderT SqlBackend (NoLoggingT m) a
-               -> m a
+runDbNoLogging
+    :: (MonadBaseControl IO m, MonadUnliftIO m)
+    => PGPassSource -> ReaderT SqlBackend (NoLoggingT m) a -> m a
 runDbNoLogging source action = do
-  pgconfig <- liftIO $ readPGPass source
+  pgconfig <- liftIO . orDie renderPGPassError $ newExceptT (readPGPass source)
   runNoLoggingT .
     withPostgresqlPool (toConnectionString pgconfig) defPoolCount $ \pool ->
       Pool.withResource pool $ \backend ->
@@ -146,7 +144,7 @@ runDbNoLogging source action = do
 -- | Run a DB action with stdout logging. Mainly for debugging.
 runDbStdoutLogging :: PGPassSource -> ReaderT SqlBackend (LoggingT IO) b -> IO b
 runDbStdoutLogging source action = do
-  pgconfig <- readPGPass source
+  pgconfig <- orDie renderPGPassError $ newExceptT (readPGPass source)
   runStdoutLoggingT .
     withPostgresqlPool (toConnectionString pgconfig) defPoolCount $ \pool ->
       Pool.withResource pool $ \backend ->
@@ -154,13 +152,13 @@ runDbStdoutLogging source action = do
 
 getBackendGhci :: IO SqlBackend
 getBackendGhci = do
-  pgconfig <- readPGPass PGPassDefaultEnv
+  pgconfig <- orDie renderPGPassError $ newExceptT (readPGPass PGPassDefaultEnv)
   connection <- connectPostgreSQL (toConnectionString pgconfig)
   openSimpleConn (defaultOutput stdout) connection
 
 ghciDebugQuery :: SqlSelect a r => SqlQuery a -> IO ()
 ghciDebugQuery query = do
-  pgconfig <- readPGPass PGPassDefaultEnv
+  pgconfig <- orDie renderPGPassError $ newExceptT (readPGPass PGPassDefaultEnv)
   runStdoutLoggingT . withPostgresqlPool (toConnectionString pgconfig) defPoolCount $ \pool ->
     Pool.withResource pool $ \backend -> do
       let (sql,params) = toRawSql SELECT (backend, initialIdentState) query

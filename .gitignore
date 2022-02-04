@@ -8,3 +8,5 @@ launch_*
 cabal.project.local
 gen/
 /.vscode
+
+cardano-chain-gen/test/testfiles/temp/

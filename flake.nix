@@ -14,7 +14,7 @@
 
   outputs = { self, iohkNix, haskellNix, nixpkgs, utils, customConfig, ... }:
     let
-      inherit (haskellNix.internal) config;
+      inherit (haskellNix) config;
       inherit (nixpkgs) lib;
       inherit (lib)
         systems mapAttrs recursiveUpdate mkDefault optionalAttrs nameValuePair

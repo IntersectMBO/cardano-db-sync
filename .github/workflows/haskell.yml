@@ -150,8 +150,10 @@ jobs:
 
         echo "Executable found at: $cardano_db_sync_exe"
         chmod 600 config/pgpass-mainnet
+        chmod 600 cardano-chain-gen/test/testfiles/pgpass-testing
 
         PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh --createdb
+        PGPASSFILE=cardano-chain-gen/test/testfiles/pgpass-testing scripts/postgresql-setup.sh --createdb
 
     - name: Run tests
       run: cabal test all -j1

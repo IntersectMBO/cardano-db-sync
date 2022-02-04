@@ -1,12 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Test.IO.Cardano.Db.Migration where
+module Test.IO.Cardano.Db.Migration
+  ( tests
+  ) where
 
 import           Cardano.Db (LogFileDir (..), MigrationDir (..), MigrationValidate (..),
                    MigrationValidateError (..), MigrationVersion (..), SchemaVersion (..),
-                   getMigrationScripts, querySchemaVersion, readPGPassDefault, runDbNoLoggingEnv,
-                   runMigrations, validateMigrations)
+                   getMigrationScripts, querySchemaVersion, readPGPassDefault, renderPGPassError,
+                   runDbNoLoggingEnv, runMigrations, validateMigrations)
 import           Control.Monad (unless, when)
-import           Control.Monad.Trans.Except (runExceptT)
+import           Control.Monad.Trans.Except.Exit (orDie)
+import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
 
 import qualified Data.List as List
 import qualified Data.List.Extra as List
@@ -116,7 +119,7 @@ invalidHashMigrationValidate' = do
 migrationTest :: IO ()
 migrationTest = do
   let schemaDir = MigrationDir "../schema"
-  pgConfig <- readPGPassDefault
+  pgConfig <- orDie renderPGPassError $ newExceptT readPGPassDefault
   runMigrations pgConfig True schemaDir (Just $ LogFileDir "/tmp")
   expected <- readSchemaVersion schemaDir
   actual <- getDbSchemaVersion
