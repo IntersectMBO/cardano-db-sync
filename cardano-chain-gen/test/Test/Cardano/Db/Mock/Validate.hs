@@ -37,6 +37,7 @@ import           Cardano.Ledger.Era
 import           Cardano.DbSync.Era.Shelley.Generic.Util
 
 import           Cardano.SMASH.Server.PoolDataLayer
+import           Cardano.SMASH.Server.Types
 
 import           Ouroboros.Consensus.Cardano.Block
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
@@ -258,7 +259,7 @@ addPoolCounters (a,b,c,d,e,f) (a',b',c',d',e',f') = (a + a',b + b',c + c',d + d'
 
 assertPoolLayerCounters :: Crypto era ~ StandardCrypto
                         => DBSyncEnv -> (Word64, Word64)
-                        -> [(PoolIndex, (Bool, Bool, Bool))]
+                        -> [(PoolIndex, (Either DBFail Bool, Bool, Bool))]
                         -> LedgerState (ShelleyBlock era)
                         -> IO ()
 assertPoolLayerCounters env (expectedRetired, expectedDelisted) expResults st = do

@@ -33,6 +33,7 @@ import           Cardano.DbSync.Era.Shelley.Generic.Block (blockHash)
 import           Cardano.DbSync.Era.Shelley.Generic.Util
 
 import           Cardano.SMASH.Server.PoolDataLayer
+import           Cardano.SMASH.Server.Types
 
 import           Cardano.Mock.ChainSync.Server
 import           Cardano.Mock.Forging.Interpreter
@@ -118,6 +119,7 @@ unitTests iom knownMigrations =
           ]
       , testGroup "pools and smash"
           [ test "pool registration" poolReg
+          , test "quey pool that's not registered" nonexistantPoolQuery
           , test "pool deregistration" poolDeReg
           , test "pool multiple deregistration" poolDeRegMany
           , test "delist pool" poolDelist
@@ -1165,9 +1167,24 @@ poolReg =
       assertBlockNoBackoff dbSync 1
       assertPoolCounters dbSync (addPoolCounters (1,1,1,2,0,1) initCounter)
       st <- getAlonzoLedgerState interpreter
-      assertPoolLayerCounters dbSync (0,0) [(PoolIndexNew 0, (False, False, True))] st
+      assertPoolLayerCounters dbSync (0,0) [(PoolIndexNew 0, (Right False, False, True))] st
   where
     testLabel = "poolReg"
+
+-- Issue https://github.com/input-output-hk/cardano-db-sync/issues/997
+nonexistantPoolQuery ::  IOManager -> [(Text, Text)] -> Assertion
+nonexistantPoolQuery =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+
+      _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
+      assertBlockNoBackoff dbSync 0
+
+      st <- getAlonzoLedgerState interpreter
+      assertPoolLayerCounters dbSync (0,0) [(PoolIndexNew 0, (Left RecordDoesNotExist, False, False))] st
+
+  where
+    testLabel = "nonexistantPoolQuery"
 
 poolDeReg ::  IOManager -> [(Text, Text)] -> Assertion
 poolDeReg =
@@ -1193,7 +1210,7 @@ poolDeReg =
 
       st <- getAlonzoLedgerState interpreter
       -- Not retired yet, because epoch has not changed
-      assertPoolLayerCounters dbSync (0,0) [(PoolIndexNew 0, (False, False, True))] st
+      assertPoolLayerCounters dbSync (0,0) [(PoolIndexNew 0, (Right False, False, True))] st
 
       -- change epoch
       a <- fillUntilNextEpoch interpreter mockServer
@@ -1203,7 +1220,7 @@ poolDeReg =
       assertPoolCounters dbSync (addPoolCounters (1,1,1,2,1,1) initCounter)
 
       -- the pool is now retired, since the epoch changed.
-      assertPoolLayerCounters dbSync (1,0) [(PoolIndexNew 0, (True, False, False))] st
+      assertPoolLayerCounters dbSync (1,0) [(PoolIndexNew 0, (Right True, False, False))] st
 
   where
     testLabel = "poolDeReg"
@@ -1268,7 +1285,7 @@ poolDeRegMany =
 
       st <- getAlonzoLedgerState interpreter
       -- Not retired yet, because epoch has not changed
-      assertPoolLayerCounters dbSync (0,0) [(PoolIndexNew 0, (False, False, True))] st
+      assertPoolLayerCounters dbSync (0,0) [(PoolIndexNew 0, (Right False, False, True))] st
 
       -- change epoch
       a <- fillUntilNextEpoch interpreter mockServer
@@ -1279,7 +1296,7 @@ poolDeRegMany =
 
       -- from all these certificates only the latest matters. So it will retire
       -- on epoch 0
-      assertPoolLayerCounters dbSync (1,0) [(PoolIndexNew 0, (True, False, False))] st
+      assertPoolLayerCounters dbSync (1,0) [(PoolIndexNew 0, (Right True, False, False))] st
 
   where
     testLabel = "poolDeRegMany"
@@ -1308,7 +1325,7 @@ poolDelist =
       _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
       assertBlockNoBackoff dbSync 2
       st <- getAlonzoLedgerState interpreter
-      assertPoolLayerCounters dbSync (0,0) [(PoolIndexNew 0, (False, False, True))] st
+      assertPoolLayerCounters dbSync (0,0) [(PoolIndexNew 0, (Right False, False, True))] st
 
       let poolKeyHash = resolvePool (PoolIndexNew 0) st
       let poolId = dbToServantPoolId $ unKeyHashRaw poolKeyHash
@@ -1316,7 +1333,7 @@ poolDelist =
 
       -- This is not async, so we don't need to do exponential backoff
       -- delisted not retired
-      assertPoolLayerCounters dbSync (0,1) [(PoolIndexNew 0, (False, True, True))] st
+      assertPoolLayerCounters dbSync (0,1) [(PoolIndexNew 0, (Right False, True, True))] st
 
       _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
         Alonzo.mkDCertPoolTx
@@ -1325,14 +1342,14 @@ poolDelist =
       _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
       assertBlockNoBackoff dbSync 4
       -- delisted and pending retirement
-      assertPoolLayerCounters dbSync (0,1) [(PoolIndexNew 0, (False, True, True))] st
+      assertPoolLayerCounters dbSync (0,1) [(PoolIndexNew 0, (Right False, True, True))] st
 
       a <- fillUntilNextEpoch interpreter mockServer
 
       _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
       assertBlockNoBackoff dbSync (fromIntegral $ 5 + length a)
       -- delisted and retired
-      assertPoolLayerCounters dbSync (1,1) [(PoolIndexNew 0, (True, True, False))] st
+      assertPoolLayerCounters dbSync (1,1) [(PoolIndexNew 0, (Right True, True, False))] st
   where
     testLabel = "poolDelist"
 
