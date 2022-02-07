@@ -7,6 +7,7 @@ import           Cardano.DbSync.Config.Types hiding (CmdVersion, LogFileDir)
 import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Control.Applicative (optional)
+import           Control.Monad (unless)
 import           Control.Monad.Trans.Except.Exit (orDie)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
@@ -57,7 +58,9 @@ runCommand cmd =
     CmdRollback slotNo -> runRollback slotNo
     CmdRunMigrations mdir mldir -> do
         pgConfig <- orDie renderPGPassError $ newExceptT (readPGPass PGPassDefaultEnv)
-        runMigrations pgConfig False mdir mldir
+        unofficial <- runMigrations pgConfig False mdir mldir
+        unless (null unofficial) $
+          putStrLn $ "Unofficial migration scripts found: " ++ show unofficial
     CmdUtxoSetAtBlock blkid -> utxoSetAtSlot blkid
     CmdPrepareSnapshot pargs -> runPrepareSnapshot pargs
     CmdValidateDb -> runDbValidation

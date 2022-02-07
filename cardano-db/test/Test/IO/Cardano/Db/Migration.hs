@@ -25,7 +25,7 @@ tests =
   testGroup "Migration"
     [ testCase "Migration script names do not clash" migrationScriptNameTest
     , testCase "Migration is idempotent" migrationTest
-    , testCase "Migration validation - unknown migration found" unknownMigrationValidate
+    , testCase "Migration validation - unknown official migration found" unknownMigrationValidate
     , testCase "Migration validation - mismatched hash for migration" invalidHashMigrationValidate
     , testCase "Migration validation - mismatched hash for migration 2" invalidHashMigrationValidate'
     ]
@@ -120,7 +120,7 @@ migrationTest :: IO ()
 migrationTest = do
   let schemaDir = MigrationDir "../schema"
   pgConfig <- orDie renderPGPassError $ newExceptT readPGPassDefault
-  runMigrations pgConfig True schemaDir (Just $ LogFileDir "/tmp")
+  _ <-runMigrations pgConfig True schemaDir (Just $ LogFileDir "/tmp")
   expected <- readSchemaVersion schemaDir
   actual <- getDbSchemaVersion
   unless (expected == actual) $
