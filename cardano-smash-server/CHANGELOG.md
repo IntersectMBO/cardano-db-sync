@@ -1,7 +1,13 @@
 # Revision history for cardano-smash-server
 
+## 12.0.2
+* Fix PoolOfflineFetchError URL entry (#697).
+
 ## 12.0.1
-* Fix metadata hash in served JSON. 
+* No changes.
+
+## 12.0.1
+* Fix metadata hash in served JSON.
 
 
 ## 12.0.0

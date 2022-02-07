@@ -1,5 +1,8 @@
 # Revision history for cardano-db
 
+## 12.0.2
+* Fix PoolOfflineFetchError URL entry (#697).
+
 ## 12.0.1
 * No changes.
 
