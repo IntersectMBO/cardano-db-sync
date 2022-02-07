@@ -93,6 +93,7 @@ unitTests iom knownMigrations =
           , test "Mir Cert deregistration" mirRewardDereg
           , test "test rewards empty last part of epoch" rewardsEmptyChainLast
           , test "rollback on epoch boundary" rollbackBoundary
+          , test "single MIR Cert multiple outputs" singleMIRCertMultiOut
           ]
       , testGroup "plutus spend scripts"
           [ test "simple script lock" simpleScript
@@ -817,6 +818,29 @@ rollbackBoundary =
       assertRewardCount dbSync 3
   where
     testLabel = "rollbackBoundary"
+
+singleMIRCertMultiOut :: IOManager -> [(Text, Text)] -> Assertion
+singleMIRCertMultiOut =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync dbSync
+
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
+            Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty)
+
+      a <- fillUntilNextEpoch interpreter mockServer
+
+      _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \ state -> do
+            stakeAddr0 <- resolveStakeCreds (StakeIndex 0) state
+            stakeAddr1 <- resolveStakeCreds (StakeIndex 1) state
+            let saMIR = StakeAddressesMIR (Map.fromList [(stakeAddr0, DeltaCoin 10), (stakeAddr1, DeltaCoin 20)])
+            Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR saMIR, DCertMir $ MIRCert TreasuryMIR saMIR] (Wdrl mempty)
+
+      b <- fillUntilNextEpoch interpreter mockServer
+
+      assertBlockNoBackoff dbSync (1 + length a + length b)
+      assertRewardCount dbSync 4
+  where
+    testLabel = "singleMIRCertMultiOut"
 
 simpleScript :: IOManager -> [(Text, Text)] -> Assertion
 simpleScript =
