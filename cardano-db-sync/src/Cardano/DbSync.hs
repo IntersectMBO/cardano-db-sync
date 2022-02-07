@@ -26,6 +26,7 @@ import           Cardano.Prelude hiding (Nat, option, (%))
 
 import           Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 
+import           Cardano.Db (textShow)
 import qualified Cardano.Db as Db
 
 import           Cardano.DbSync.Rollback (unsafeRollback)
@@ -72,7 +73,9 @@ runDbSync metricsSetters knownMigrations iomgr trce params aop snEveryFollowing 
     logInfo trce "Schema migration files validated"
     logInfo trce "Running database migrations"
 
-    Db.runMigrations pgConfig True dbMigrationDir (Just $ Db.LogFileDir "/tmp")
+    unofficial <- Db.runMigrations pgConfig True dbMigrationDir (Just $ Db.LogFileDir "/tmp")
+    unless (null unofficial) $
+      logWarning trce $ "Unofficial migration scripts found: " <> textShow unofficial
 
     let connectionString = Db.toConnectionString pgConfig
 

@@ -4,8 +4,9 @@ import           Cardano.Crypto.Hash
 import           Control.Monad (foldM, forM)
 
 import qualified Data.ByteString.Char8 as BS
-
+import           Data.Char (isDigit)
 import qualified Data.List as List
+import           Data.Maybe (fromMaybe)
 
 import           Distribution.PackageDescription (extraSrcFiles)
 import           Distribution.Simple (UserHooks (..), defaultMainWithHooks, simpleUserHooks)
@@ -16,6 +17,9 @@ import           Distribution.Verbosity (normal)
 
 import           System.Directory (listDirectory)
 import           System.FilePath (pathSeparator, takeDirectory, takeExtension, takeFileName)
+
+import           Text.Read (readMaybe)
+
 
 main :: IO ()
 main = defaultMainWithHooks generateHooks
@@ -37,8 +41,11 @@ main = defaultMainWithHooks generateHooks
 generateMigrations :: LocalBuildInfo -> FilePath -> FilePath -> IO ()
 generateMigrations locInfo srcDir outDir = do
     -- Given the migrationDirectories (usually just a single directory)
-    collectMigrationSql <- forM migrationDirectories $ \path -> do
-      fmap (\x -> path <> [pathSeparator] <> x ) <$> listDirectory path
+    collectMigrationSql <-
+      forM migrationDirectories $ \path -> do
+        fmap (\x -> path <> [pathSeparator] <> x )
+          . filter isOfficialMigrationFile
+          <$> listDirectory path
 
     createDirectoryIfMissingVerbose normal True "gen"
     sqls <- forM (concat collectMigrationSql) build
@@ -64,22 +71,36 @@ generateMigrations locInfo srcDir outDir = do
 
     buildMigrationModule :: [(String, FilePath)] -> IO ()
     buildMigrationModule sqls =
-      let buildLine (hashedFile, filepath) = "    KnownMigration \"" ++ hashedFile ++ "\" \"" ++ filepath ++ "\"" in
+      let buildLine (hashedFile, filepath) = "KnownMigration \"" ++ hashedFile ++ "\" \"" ++ filepath ++ "\"" in
 
       rewriteFileEx normal "gen/MigrationValidations.hs" $
         unlines
-          [ "{-# LANGUAGE OverloadedStrings #-}",
-            "module MigrationValidations where",
-            "",
-            "import Prelude",
-            "import Data.Text",
-            "data KnownMigration = KnownMigration { hash :: Text, filepath :: Text } deriving (Eq, Show)",
-            "",
-            "knownMigrations :: [KnownMigration]",
-            "knownMigrations = [ ",
-            (List.intercalate ",\n" . fmap buildLine $ sqls) ++ "]"
+          [ "{-# LANGUAGE OverloadedStrings #-}"
+          , "module MigrationValidations where"
+          , ""
+          , "import Prelude"
+          , "import Data.Text"
+          , ""
+          , "data KnownMigration = KnownMigration { hash :: Text, filepath :: Text } deriving (Eq, Show)"
+          , ""
+          , "-- 'Known' migrations is limited to stages 1, 2 and 3 and only these are validated."
+          , "-- Migrations with stages < 1 or > 3 are not validated but will be applied."
+          , ""
+          , "knownMigrations :: [KnownMigration]"
+          , "knownMigrations = "
+          , "  [ " ++ (List.intercalate "\n  , " . fmap buildLine $ sqls)
+          , "  ]"
           ]
 
-
-
-
+-- We only care about "official" migrations, with a `mvStage` version >=1 and <= 3.
+isOfficialMigrationFile :: FilePath -> Bool
+isOfficialMigrationFile fn =
+    let stage = readStageFromFilename (takeFileName fn)
+     in takeExtension fn == ".sql" && stage >= 1 && stage <= 3
+  where
+    -- Reimplement part of `parseMigrationVersionFromFile` because that function is not avaliable
+    -- here. Defaults to a stage value of `0`.
+    readStageFromFilename :: String -> Int
+    readStageFromFilename str =
+      case takeWhile isDigit . drop 1 $ dropWhile (/= '-') str of
+        stage -> fromMaybe 0 $ readMaybe stage
