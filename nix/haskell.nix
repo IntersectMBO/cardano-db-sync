@@ -19,10 +19,10 @@ let
   preCheck = ''
     echo pre-check
     initdb --encoding=UTF8 --locale=en_US.UTF-8 --username=postgres $NIX_BUILD_TOP/db-dir
-    postgres -D $NIX_BUILD_TOP/db-dir -k /tmp &
+    postgres -D $NIX_BUILD_TOP/db-dir -k $TMP &
     PSQL_PID=$!
     sleep 10
-    if (echo '\q' | psql -h /tmp postgres postgres); then
+    if (echo '\q' | psql -h $TMP postgres postgres); then
       echo "PostgreSQL server is verified to be started."
     else
       echo "Failed to connect to local PostgreSQL server."
@@ -32,10 +32,10 @@ let
     DBUSER=nixbld
     DBNAME=nixbld
     export PGPASSFILE=$NIX_BUILD_TOP/pgpass
-    echo "/tmp:5432:$DBUSER:$DBUSER:*" > $PGPASSFILE
+    echo "$TMP:5432:$DBUSER:$DBUSER:*" > $PGPASSFILE
     cp -vir ${../schema} ../schema
     chmod 600 $PGPASSFILE
-    psql -h /tmp postgres postgres <<EOF
+    psql -h $TMP postgres postgres <<EOF
       create role $DBUSER with createdb login password '$DBPASS';
       alter user $DBUSER with superuser;
       create database $DBNAME with owner = $DBUSER;
@@ -50,7 +50,7 @@ let
     NAME=db_schema.sql
     mkdir -p $out/nix-support
     echo "Dumping schema to db_schema.sql"
-    pg_dump -h /tmp -s $DBNAME > $out/$NAME
+    pg_dump -h $TMP -s $DBNAME > $out/$NAME
     echo "Adding to build products..."
     echo "file binary-dist $out/$NAME" > $out/nix-support/hydra-build-products
   '';

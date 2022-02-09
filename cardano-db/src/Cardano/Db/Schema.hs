@@ -320,14 +320,14 @@ share
     certIndex           Word16
     amount              DbInt65             sqltype=int65type
     txId                TxId                OnDeleteCascade
-    UniqueTreasury      txId certIndex
+    UniqueTreasury      addrId txId certIndex
 
   Reserve
     addrId              StakeAddressId      OnDeleteCascade
     certIndex           Word16
     amount              DbInt65             sqltype=int65type
     txId                TxId                OnDeleteCascade
-    UniqueReserves      txId certIndex
+    UniqueReserves      addrId txId certIndex
 
   PotTransfer
     certIndex           Word16
