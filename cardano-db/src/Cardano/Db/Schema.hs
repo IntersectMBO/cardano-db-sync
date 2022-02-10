@@ -564,7 +564,7 @@ schemaDocs =
       BlockBlockNo # "The block number."
       BlockPreviousId # "The Block table index of the previous block."
       BlockSlotLeaderId # "The SlotLeader table index of the creator of this block."
-      BlockSize # "The block size (in bytes)."
+      BlockSize # "The block size (in bytes). Note, this size value is not expected to be the same as the sum of the tx sizes due to the fact that txs being stored in segwit format and oddities in the CBOR encoding."
       BlockTime # "The block time (UTCTime)."
       BlockTxCount # "The number of transactions in this block."
       BlockProtoMajor # "The block's major protocol number."
