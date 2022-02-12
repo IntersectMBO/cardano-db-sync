@@ -22,6 +22,8 @@ module Cardano.Mock.ChainSync.Server
   , addBlock
   , rollback
   , readChain
+  , blockServing
+  , unBlockServing
   , withIOManager
   ) where
 
@@ -32,8 +34,9 @@ import           Control.Concurrent (threadDelay)
 import           Control.Concurrent.Async
 import           Control.Exception (bracket)
 import           Control.Monad (forever)
-import           Control.Monad.Class.MonadSTM.Strict (MonadSTM (atomically), STM, StrictTVar,
-                   modifyTVar, newTVarIO, readTVar, retry, writeTVar)
+import           Control.Monad.Class.MonadSTM.Strict (MonadSTM (atomically), STM, StrictTMVar,
+                   StrictTVar, modifyTVar, newTMVarIO, newTVarIO, putTMVar, readTMVar, readTVar, retry,
+                   takeTMVar, writeTVar)
 import           Control.Tracer (nullTracer)
 import           Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.Map.Strict as Map
@@ -88,6 +91,7 @@ import           Cardano.Mock.ChainSync.State
 data ServerHandle m blk = ServerHandle
   { chainProducerState :: StrictTVar m (ChainProducerState blk)
   , threadHandle :: Async ()
+  , blocking :: StrictTMVar m ()
   }
 
 replaceGenesis :: MonadSTM m => ServerHandle m blk -> State blk -> STM m ()
@@ -114,6 +118,13 @@ rollback handle point =
 stopServer :: ServerHandle m blk -> IO ()
 stopServer = cancel . threadHandle
 
+blockServing :: MonadSTM m => ServerHandle m blk -> STM m ()
+blockServing handle =
+  takeTMVar (blocking handle)
+
+unBlockServing :: MonadSTM m => ServerHandle m blk -> STM m ()
+unBlockServing handle = putTMVar (blocking handle) ()
+
 type MockServerConstraint blk =
     ( SerialiseNodeToClientConstraints blk
     , ShowQuery (BlockQuery blk)
@@ -138,8 +149,9 @@ forkServerThread
     -> IO (ServerHandle IO blk)
 forkServerThread iom config initSt networkMagic path = do
     chainSt <- newTVarIO $ initChainProducerState config initSt
-    thread <- async $ runLocalServer iom (configCodec config) networkMagic path chainSt
-    pure $ ServerHandle chainSt thread
+    lock <- newTMVarIO ()
+    thread <- async $ runLocalServer iom (configCodec config) networkMagic path chainSt lock
+    pure $ ServerHandle chainSt thread lock
 
 withServerHandle
     :: forall blk a. MockServerConstraint blk
@@ -161,8 +173,9 @@ runLocalServer
     -> NetworkMagic
     -> FilePath
     -> StrictTVar IO (ChainProducerState blk)
+    -> StrictTMVar IO ()
     -> IO ()
-runLocalServer iom codecConfig networkMagic localDomainSock chainProducerState =
+runLocalServer iom codecConfig networkMagic localDomainSock chainProducerState lockServing =
     withSnocket iom localDomainSock $ \ localSocket localSnocket -> do
       networkState <- NodeToClient.newNetworkMutableState
       _ <- NodeToClient.withServer
@@ -170,27 +183,26 @@ runLocalServer iom codecConfig networkMagic localDomainSock chainProducerState =
              NodeToClient.nullNetworkServerTracers -- debuggingNetworkServerTracers
              networkState
              localSocket
-             (versions chainProducerState)
+             versions
              NodeToClient.networkErrorPolicies
       pure ()
 
   where
-    versions :: StrictTVar IO (ChainProducerState blk)
-             -> Versions NodeToClientVersion
+    versions :: Versions NodeToClientVersion
                          NodeToClientVersionData
                          (OuroborosApplication 'ResponderMode LocalAddress ByteString IO Void ())
-    versions state =
+    versions =
       let version = fromJust $ snd $ latestReleasedNodeVersion (Proxy @blk)
           allVersions = supportedNodeToClientVersions (Proxy @blk)
           blockVersion = fromJust $ Map.lookup version allVersions
       in simpleSingletonVersions
             version
             (NodeToClientVersionData networkMagic)
-            (NTC.responder version $ mkApps state version blockVersion (NTC.defaultCodecs codecConfig blockVersion version))
+            (NTC.responder version $ mkApps version blockVersion (NTC.defaultCodecs codecConfig blockVersion version))
 
-    mkApps :: StrictTVar IO (ChainProducerState blk) -> NodeToClientVersion -> BlockNodeToClientVersion blk -> DefaultCodecs blk IO
+    mkApps :: NodeToClientVersion -> BlockNodeToClientVersion blk -> DefaultCodecs blk IO
            -> NTC.Apps IO localPeer ByteString ByteString ByteString ByteString ()
-    mkApps state _version blockVersion Codecs {..}  =
+    mkApps _version blockVersion Codecs {..}  =
         Apps
           { aChainSyncServer = chainSyncServer'
           , aTxSubmissionServer = txSubmitServer
@@ -208,7 +220,7 @@ runLocalServer iom codecConfig networkMagic localDomainSock chainProducerState =
             cChainSyncCodec
             channel
             $ chainSyncServerPeer
-            $ chainSyncServer state codecConfig blockVersion
+            $ chainSyncServer chainProducerState lockServing codecConfig blockVersion
 
         txSubmitServer
           :: localPeer
@@ -250,10 +262,11 @@ chainSyncServer
         , EncodeDisk blk blk
         )
     => StrictTVar m (ChainProducerState blk)
+    -> StrictTMVar m ()
     -> CodecConfig blk
     -> BlockNodeToClientVersion blk
     -> ChainSyncServer (Serialised blk) (Point blk) (Tip blk) m ()
-chainSyncServer state codec _blockVersion =
+chainSyncServer state lockServing codec _blockVersion =
     ChainSyncServer $ idle <$> newFollower
   where
     idle :: FollowerId -> ServerStIdle (Serialised blk) (Point blk) (Tip blk) m ()
@@ -271,6 +284,7 @@ chainSyncServer state codec _blockVersion =
                       -> m (Either (ServerStNext (Serialised blk) (Point blk) (Tip blk) m ())
                                 (m (ServerStNext (Serialised blk) (Point blk) (Tip blk) m ())))
     handleRequestNext r = do
+      atomically $ readTMVar lockServing
       mupdate <- tryReadChainUpdate r
       case mupdate of
         Just update -> pure (Left  (sendNext r update))

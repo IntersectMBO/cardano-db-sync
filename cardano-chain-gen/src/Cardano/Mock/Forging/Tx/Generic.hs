@@ -11,6 +11,9 @@ module Cardano.Mock.Forging.Tx.Generic
   , resolveUTxOIndex
   , resolveStakeCreds
   , resolvePool
+  , createStakeCredentials
+  , createPaymentCredentials
+  , mkDummyScriptHash
   ) where
 
 import           Cardano.Prelude hiding (length, (.))
@@ -24,7 +27,9 @@ import           Cardano.Ledger.Address
 import           Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Credential
+import           Cardano.Ledger.Crypto (ADDRHASH)
 import           Cardano.Ledger.Era (Crypto)
+import           Cardano.Ledger.Hashes
 import           Cardano.Ledger.Keys
 import           Cardano.Ledger.Shelley.LedgerState hiding (LedgerState)
 import           Cardano.Ledger.Shelley.TxBody
@@ -38,6 +43,8 @@ import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Types
+
+import           Test.Cardano.Ledger.Shelley.Examples.Consensus
 
 resolveAddress :: forall era. (Crypto era ~ StandardCrypto, HasField "address" (Core.TxOut era) (Addr (Crypto era)))
                => UTxOIndex era -> LedgerState (ShelleyBlock era)
@@ -161,3 +168,14 @@ unregisteredPools =
   , KeyHash "222462543264795t3298745680239746523897456238974563298348"
   , KeyHash "33323876542397465497834256329487563428975634827956348975"
   ]
+
+createStakeCredentials :: Int -> [StakeCredential StandardCrypto]
+createStakeCredentials n =
+  fmap (KeyHashObj . KeyHash . mkDummyHash (Proxy @(ADDRHASH StandardCrypto))) [1..n]
+
+createPaymentCredentials :: Int -> [PaymentCredential StandardCrypto]
+createPaymentCredentials n =
+  fmap (KeyHashObj . KeyHash . mkDummyHash (Proxy @(ADDRHASH StandardCrypto))) [1..n]
+
+mkDummyScriptHash :: Int -> ScriptHash StandardCrypto
+mkDummyScriptHash n = ScriptHash $ mkDummyHash (Proxy @(ADDRHASH StandardCrypto)) n

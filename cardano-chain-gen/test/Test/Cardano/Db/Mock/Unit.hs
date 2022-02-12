@@ -37,7 +37,8 @@ import           Cardano.SMASH.Server.Types
 
 import           Cardano.Mock.ChainSync.Server
 import           Cardano.Mock.Db.Validate
-import           Cardano.Mock.Db.Config
+import           Cardano.Mock.Db.Config hiding (withFullConfig)
+import qualified Cardano.Mock.Db.Config as Config
 import           Cardano.Mock.Forging.Interpreter
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
@@ -132,6 +133,14 @@ unitTests iom knownMigrations =
 
 defaultConfigDir ::  FilePath
 defaultConfigDir = "config"
+
+rootTestDir :: FilePath
+rootTestDir = "test/testfiles"
+
+withFullConfig :: FilePath -> FilePath
+               -> (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO ())
+               -> IOManager -> [(Text, Text)] -> IO ()
+withFullConfig = Config.withFullConfig rootTestDir
 
 forgeBlocks :: IOManager -> [(Text, Text)] -> Assertion
 forgeBlocks = do

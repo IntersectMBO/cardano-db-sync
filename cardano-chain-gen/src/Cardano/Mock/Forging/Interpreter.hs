@@ -18,6 +18,7 @@ module Cardano.Mock.Forging.Interpreter
   , NodeId (..)
   , initInterpreter
   , withInterpreter
+  , finalizeFingerprint
   , forgeNextFindLeader
   , forgeNext
   , forgeNextAfter

@@ -258,3 +258,10 @@ source-repository-package
   tag: 297cd9db5074339a2fb2e5ae7d0780debb670c63
   --sha256: 1zcwry3y5rmd9lgxy89wsb3k4kpffqji35dc7ghzbz603y1gy24g
 
+source-repository-package
+  type: git
+  location: https://github.com/kderme/criterion
+  tag: 7e7f32d214b2565dfc1acbb63ae7bab4b2e6d986
+  subdir:
+    .
+    criterion-measurement

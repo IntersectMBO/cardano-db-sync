@@ -10,3 +10,4 @@ gen/
 /.vscode
 
 cardano-chain-gen/test/testfiles/temp/
+cardano-chain-gen/bench/benchfiles/temp/

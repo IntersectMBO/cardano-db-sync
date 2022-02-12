@@ -208,3 +208,55 @@ test-suite cardano-chain-gen
                       , persistent
                       , plutus-example
                       , postgresql-simple
+
+benchmark cardano-chain
+  type:                 exitcode-stdio-1.0
+  default-language:     Haskell2010
+  main-is:              Main.hs
+  hs-source-dirs:       gen
+  hs-source-dirs:       bench
+
+  ghc-options:          -Wall
+                        -Wcompat
+                        -fwarn-redundant-constraints
+                        -fwarn-incomplete-patterns
+                        -fwarn-unused-imports
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+                        -Wno-unsafe
+                        -threaded
+                        -rtsopts
+                        -with-rtsopts=-N4
+
+  autogen-modules:      Paths_cardano_chain_gen
+                        MigrationValidations
+  other-modules:        Paths_cardano_chain_gen
+                        MigrationValidations
+
+  other-modules:        Cardano.Db.Bench
+  build-depends:        async
+                      , base                            >= 4.12
+                      , bytestring
+                      , containers
+                      , criterion
+                      , deepseq
+                      , directory
+                      , filepath
+                      , split
+                      , strict-stm
+                      , tasty
+                      , tasty-hunit
+                      , text
+                      , cardano-prelude
+                      , cardano-chain-gen
+                      , cardano-db
+                      , cardano-db-sync
+                      , cardano-crypto-class
+                      , cardano-ledger-alonzo
+                      , cardano-ledger-core
+                      , cardano-ledger-shelley
+                      , cardano-ledger-shelley-ma
+                      , cardano-slotting
+                      , io-classes
+                      , ouroboros-consensus-cardano
+                      , ouroboros-network

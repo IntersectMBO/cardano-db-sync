@@ -50,20 +50,17 @@ import           Cardano.SMASH.Server.PoolDataLayer
 import           Cardano.Mock.ChainSync.Server
 import           Cardano.Mock.Forging.Interpreter hiding (CardanoBlock)
 
-rootTestDir :: FilePath
-rootTestDir = "test/testfiles"
+mkMutableDir :: FilePath -> FilePath -> FilePath
+mkMutableDir rootTestDir testLabel = rootTestDir </> "temp" </> testLabel
 
-mkMutableDir :: FilePath -> FilePath
-mkMutableDir testLabel = rootTestDir </> "temp" </> testLabel
+mkConfigDir :: FilePath -> FilePath -> FilePath
+mkConfigDir rootTestDir config = rootTestDir </> config
 
-mkConfigDir :: FilePath -> FilePath
-mkConfigDir config = rootTestDir </> config
+fingerprintRoot :: FilePath -> FilePath
+fingerprintRoot rootTestDir = rootTestDir </> "fingerprint"
 
-fingerprintRoot :: FilePath
-fingerprintRoot = rootTestDir </> "fingerprint"
-
-mkFingerPrint :: FilePath -> FilePath
-mkFingerPrint testLabel = fingerprintRoot </> testLabel
+mkFingerPrint :: FilePath -> FilePath -> FilePath
+mkFingerPrint rootTestDir testLabel = fingerprintRoot rootTestDir </> testLabel
 
 data Config = Config
     { topLevelConfig :: TopLevelConfig CardanoBlock
@@ -192,17 +189,17 @@ emptyMetricsSetters = MetricSetters
   , metricsSetDbSlotHeight = \_ -> pure ()
   }
 
-withFullConfig :: FilePath -> FilePath
+withFullConfig :: FilePath -> FilePath -> FilePath
                -> (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO ())
                -> IOManager -> [(Text, Text)] -> IO ()
-withFullConfig config testLabel action iom migr = do
+withFullConfig rootTestDir config testLabel action iom migr = do
     recreateDir mutableDir
     cfg <- mkConfig configDir mutableDir
-    fingerFile <- prepareFingerprintFile testLabel
+    fingerFile <- prepareFingerprintFile rootTestDir testLabel
     let dbsyncParams = syncNodeParams cfg
-    let trce = nullTracer
+    -- let trce = nullTracer
     -- Replace with this for better debugging of tests
-    -- trce <- configureLogging dbsyncParams "db-sync-node"
+    trce <- configureLogging dbsyncParams "db-sync-node"
     let dbsyncRun = runDbSync emptyMetricsSetters migr iom trce dbsyncParams True 35 35
     let initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
     withInterpreter (protocolInfoForging cfg) nullTracer fingerFile $ \interpreter -> do
@@ -215,15 +212,47 @@ withFullConfig config testLabel action iom migr = do
             _ <- hSilence [stderr] $ Db.recreateDB (getDBSyncPGPass dbSync)
             action interpreter mockServer dbSync
   where
-    configDir = mkConfigDir config
-    mutableDir =  mkMutableDir testLabel
+    configDir = mkConfigDir rootTestDir config
+    mutableDir =  mkMutableDir rootTestDir testLabel
 
-prepareFingerprintFile :: FilePath -> IO FilePath
-prepareFingerprintFile testLabel = do
-    createDirectoryIfMissing True fingerprintRoot
+-- Same as 'withFullConfig' but doesn't use the bracket style. Can be used with
+-- 'cleanFullConfig' to cleanup the env.
+mkFullConfig :: FilePath -> FilePath -> FilePath
+             -> IOManager -> [(Text, Text)]
+             -> IO (Interpreter, ServerHandle IO CardanoBlock, DBSyncEnv)
+mkFullConfig rootTestDir config testLabel iom migr = do
+    recreateDir mutableDir
+    cfg <- mkConfig configDir mutableDir
+    fingerFile <- prepareFingerprintFile rootTestDir testLabel
+    let dbsyncParams = syncNodeParams cfg
+    let trce = nullTracer
+    -- Replace with this for better debugging of tests
+    -- trce <- configureLogging dbsyncParams "db-sync-node"
+    let dbsyncRun = runDbSync emptyMetricsSetters migr iom trce dbsyncParams True 35 35
+    let initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
+    interpreter <- initInterpreter (protocolInfoForging cfg) nullTracer fingerFile
+    serverHandle <- forkServerThread @CardanoBlock iom (topLevelConfig cfg) initSt (NetworkMagic 42)
+                      (unSocketPath (enpSocketPath $ syncNodeParams cfg))
+    dbSync <- mkDBSyncEnv dbsyncParams dbsyncRun
+    _ <- hSilence [stderr] $ Db.recreateDB (getDBSyncPGPass dbSync)
+    pure (interpreter, serverHandle, dbSync)
+  where
+    configDir = mkConfigDir rootTestDir config
+    mutableDir =  mkMutableDir rootTestDir testLabel
+
+cleanFullConfig :: (Interpreter, ServerHandle IO CardanoBlock, DBSyncEnv)
+                -> IO ()
+cleanFullConfig (interpreter, serverHandle, dbSync) = do
+    stopDBSyncIfRunning dbSync
+    stopServer serverHandle
+    finalizeFingerprint interpreter
+
+prepareFingerprintFile :: FilePath -> FilePath -> IO FilePath
+prepareFingerprintFile rootTestDir testLabel = do
+    createDirectoryIfMissing True (fingerprintRoot rootTestDir)
     pure fingerprintFile
   where
-    fingerprintFile = mkFingerPrint testLabel
+    fingerprintFile = mkFingerPrint rootTestDir testLabel
 
 recreateDir :: FilePath -> IO ()
 recreateDir path = do
