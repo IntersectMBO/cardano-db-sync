@@ -65,6 +65,10 @@ assertRewardCount :: DBSyncEnv -> Word64 -> IO ()
 assertRewardCount env n =
     assertEqBackoff env queryRewardCount n defaultDelays "Unexpected rewards count"
 
+assertBlockNo :: DBSyncEnv -> Maybe Int -> [Int] -> IO ()
+assertBlockNo env mBlockNo delays =
+    assertEqBackoff env queryBlockHeight (fromIntegral <$> mBlockNo) delays "Unexpected BlockNo"
+
 assertBlockNoBackoff :: DBSyncEnv -> Int -> IO ()
 assertBlockNoBackoff = assertBlockNoBackoffTimes defaultDelays
 

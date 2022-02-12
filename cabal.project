@@ -258,3 +258,11 @@ source-repository-package
   tag: 297cd9db5074339a2fb2e5ae7d0780debb670c63
   --sha256: 1zcwry3y5rmd9lgxy89wsb3k4kpffqji35dc7ghzbz603y1gy24g
 
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/criterion-2
+  --sha256: 189brk8lpmjgsy32yin6ps0v34wvs971bkw92d5w8r4jsi7wwndc
+  tag: 4a99389084cba4eabd3149f37adee2a394d065a9
+  subdir:
+    .
+    criterion-measurement

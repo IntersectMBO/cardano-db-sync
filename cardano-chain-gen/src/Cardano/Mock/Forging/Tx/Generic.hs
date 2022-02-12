@@ -29,7 +29,7 @@ import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Credential
 import           Cardano.Ledger.Crypto (ADDRHASH)
 import           Cardano.Ledger.Era (Crypto)
-import           Cardano.Ledger.Hashes (ScriptHash (ScriptHash))
+import           Cardano.Ledger.Hashes
 import           Cardano.Ledger.Keys
 import           Cardano.Ledger.Shelley.LedgerState hiding (LedgerState)
 import           Cardano.Ledger.Shelley.TxBody
@@ -44,7 +44,7 @@ import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Types
 
-import           Test.Cardano.Ledger.Shelley.Examples.Consensus (mkDummyHash)
+import           Test.Cardano.Ledger.Shelley.Examples.Consensus
 
 resolveAddress :: forall era. (Crypto era ~ StandardCrypto, HasField "address" (Core.TxOut era) (Addr (Crypto era)))
                => UTxOIndex era -> LedgerState (ShelleyBlock era)
