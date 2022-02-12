@@ -63,7 +63,7 @@ let
     modules = [
       {
         # Stamp executables with the git revision
-        packages = lib.genAttrs [ "cardano-db-sync" ] (name: {
+        packages = lib.genAttrs [ "cardano-db-sync" "cardano-smash-server" "cardano-db-tool" ] (name: {
           components.exes.${name}.postInstall = ''
             ${setGitRev}
           '';
