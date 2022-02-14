@@ -65,7 +65,6 @@ import           Ouroboros.Consensus.Util.Args ()
 import           Ouroboros.Network.Block (ChainUpdate (AddBlock, RollBack), HeaderHash,
                    Serialised (..), Tip, castTip, genesisPoint, mkSerialised)
 import           Ouroboros.Network.Channel (Channel)
-import           Ouroboros.Network.ConnectionId (ConnectionId)
 import           Ouroboros.Network.Driver.Simple (runPeer)
 import           Ouroboros.Network.IOManager (IOManager)
 import qualified Ouroboros.Network.IOManager as IOManager
@@ -190,14 +189,20 @@ runLocalServer iom codecConfig networkMagic localDomainSock chainProducerState =
             (NTC.responder version $ mkApps state version blockVersion (NTC.defaultCodecs codecConfig blockVersion version))
 
     mkApps :: StrictTVar IO (ChainProducerState blk) -> NodeToClientVersion -> BlockNodeToClientVersion blk -> DefaultCodecs blk IO
-           -> NTC.Apps IO (ConnectionId addrNTC) ByteString ByteString ByteString ()
-    mkApps state _version blockVersion Codecs {..}  = Apps {..}
+           -> NTC.Apps IO localPeer ByteString ByteString ByteString ByteString ()
+    mkApps state _version blockVersion Codecs {..}  =
+        Apps
+          { aChainSyncServer = chainSyncServer'
+          , aTxSubmissionServer = txSubmitServer
+          , aStateQueryServer = stateQueryServer
+          , aTxMonitorServer = txMonitorServer
+          }
       where
-        aChainSyncServer
+        chainSyncServer'
           :: localPeer
           -> Channel IO ByteString
           -> IO ((), Maybe ByteString)
-        aChainSyncServer _them channel =
+        chainSyncServer' _them channel =
           runPeer
             nullTracer -- TODO add a tracer!
             cChainSyncCodec
@@ -205,22 +210,33 @@ runLocalServer iom codecConfig networkMagic localDomainSock chainProducerState =
             $ chainSyncServerPeer
             $ chainSyncServer state codecConfig blockVersion
 
-        aTxSubmissionServer
+        txSubmitServer
           :: localPeer
           -> Channel IO ByteString
           -> IO ((), Maybe ByteString)
-        aTxSubmissionServer _them channel =
+        txSubmitServer _them channel =
           runPeer
             nullTracer
             cTxSubmissionCodec
             channel
             (Effect (forever $ threadDelay 3_600_000_000))
 
-        aStateQueryServer
+        stateQueryServer
           :: localPeer
           -> Channel IO ByteString
           -> IO ((), Maybe ByteString)
-        aStateQueryServer _them channel =
+        stateQueryServer _them channel =
+          runPeer
+            nullTracer
+            cStateQueryCodec
+            channel
+            (Effect (forever $ threadDelay 3_600_000_000))
+
+        txMonitorServer
+          :: localPeer
+          -> Channel IO ByteString
+          -> IO ((), Maybe ByteString)
+        txMonitorServer _them channel =
           runPeer
             nullTracer
             cStateQueryCodec

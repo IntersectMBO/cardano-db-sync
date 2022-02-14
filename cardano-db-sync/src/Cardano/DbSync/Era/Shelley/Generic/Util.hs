@@ -62,8 +62,7 @@ import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 
-import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardCrypto, StandardMary,
-                   StandardShelley)
+import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 
 annotateStakingCred :: Ledger.Network -> Ledger.StakeCredential era -> Ledger.RewardAcnt era
@@ -127,19 +126,8 @@ partitionMIRTargets =
         Shelley.StakeAddressesMIR x -> (x : xs, ys)
         Shelley.SendToOppositePotMIR y -> (xs, y : ys)
 
-type family LedgerEraToApiEra ledgerera where
-  LedgerEraToApiEra StandardShelley = Api.ShelleyEra
-  LedgerEraToApiEra StandardAllegra = Api.AllegraEra
-  LedgerEraToApiEra StandardMary = Api.MaryEra
-
-renderAddress
-    :: forall era ledgerera.
-       LedgerEraToApiEra ledgerera ~ era
-    => Api.ShelleyLedgerEra era ~ ledgerera
-    => Api.IsShelleyBasedEra era
-    => ledgerera ~ StandardShelley
-    => Ledger.Addr StandardCrypto -> Text
-renderAddress addr = Api.serialiseAddress (Api.fromShelleyAddr addr :: Api.AddressInEra era)
+renderAddress :: Ledger.Addr StandardCrypto -> Text
+renderAddress = Api.serialiseAddress . Api.fromShelleyAddrToAny
 
 renderCostModel :: CostModel -> Text
 renderCostModel (CostModel x) = textShow x
