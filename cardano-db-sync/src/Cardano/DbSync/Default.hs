@@ -1,14 +1,18 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 module Cardano.DbSync.Default
   ( insertDefaultBlock
   , rollbackToPoint
   ) where
 
 
+import qualified Cardano.Api as API
+import           Cardano.Api.Shelley (BlockInMode (..), fromConsensusBlock)
 import           Cardano.Prelude
 
 import           Cardano.BM.Trace (Trace, logDebug, logInfo)
@@ -16,6 +20,7 @@ import           Cardano.BM.Trace (Trace, logDebug, logInfo)
 import qualified Cardano.Db as DB
 
 import           Cardano.DbSync.Api
+import           Cardano.DbSync.Config.Types
 import           Cardano.DbSync.Epoch
 import           Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import           Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
@@ -52,7 +57,6 @@ import qualified Data.Set as Set
 
 import           Database.Persist.Sql (SqlBackend)
 
-import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import           Ouroboros.Network.Block (blockNo)
 
 
@@ -78,20 +82,34 @@ insertDefaultBlock env blocks =
       mkSnapshotMaybe env lStateSnap (blockNo cblk) (isSyncedWithinSeconds details 600)
       handleLedgerEvents tracer (envLedger env) (lssPoint lStateSnap) (lssEvents lStateSnap)
       let firstBlockOfEpoch = hasEpochStartEvent (lssEvents lStateSnap)
-      case cblk of
-        BlockByron blk ->
-          newExceptT $ insertByronBlock tracer firstBlockOfEpoch blk details
-        BlockShelley blk ->
-          newExceptT $ insertShelleyBlock tracer lenv firstBlockOfEpoch (Generic.fromShelleyBlock blk) lStateSnap details
-        BlockAllegra blk ->
-          newExceptT $ insertShelleyBlock tracer lenv firstBlockOfEpoch (Generic.fromAllegraBlock blk) lStateSnap details
-        BlockMary blk ->
-          newExceptT $ insertShelleyBlock tracer lenv firstBlockOfEpoch (Generic.fromMaryBlock blk) lStateSnap details
-        BlockAlonzo blk -> do
-          let pp = getAlonzoPParams $ lssState lStateSnap
-          newExceptT $ insertShelleyBlock tracer lenv firstBlockOfEpoch (Generic.fromAlonzoBlock pp blk) lStateSnap details
+      -- This can be made configurable but we are really only interested in CardanoMode
+      let cMode = fromSyncProtocol $ envProtocol env
+          bInMode = fromConsensusBlock cMode cblk
+      newExceptT $ insertBlock tracer firstBlockOfEpoch bInMode details lenv lStateSnap
       when (soptExtended $ envOptions env) .
         newExceptT $ epochInsert tracer (BlockDetails cblk details)
+
+-- Handle all block insertion in a single function
+insertBlock
+  :: (MonadBaseControl IO m, MonadIO m)
+  => Trace IO Text -> Bool -> BlockInMode mode -> SlotDetails
+  -> LedgerEnv -> LedgerStateSnapshot -> ReaderT SqlBackend m (Either SyncNodeError ())
+insertBlock tracer firstBlockOfEpoch (BlockInMode blk _) details lenv lStateSnap =
+  case blk of
+    API.ByronBlock bb -> insertByronBlock tracer firstBlockOfEpoch bb details
+    API.ShelleyBlock sbe _ ->
+      insertShelleyBlock tracer lenv firstBlockOfEpoch (toGenericShelleyBasedBlock sbe blk lStateSnap) lStateSnap details
+
+toGenericShelleyBasedBlock
+  :: API.ShelleyBasedEra era
+  -> API.Block era
+  -> LedgerStateSnapshot
+  -> Generic.Block
+toGenericShelleyBasedBlock sbe b lStateSnap =
+  let pp = getAlonzoPParams $ lssState lStateSnap
+  in Generic.fromShelleyBasedBlock pp sbe b
+
+
 
 mkSnapshotMaybe
         :: (MonadBaseControl IO m, MonadIO m)

@@ -83,9 +83,9 @@ insertShelleyBlock
 insertShelleyBlock tracer lenv firstBlockOfEpoch blk lStateSnap details = do
   runExceptT $ do
     pbid <- case Generic.blkPreviousHash blk of
-      Nothing -> liftLookupFail (renderInsertName (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
-      Just pHash -> liftLookupFail (renderInsertName (Generic.blkEra blk)) $ DB.queryBlockId pHash
-    mPhid <- lift $ queryPoolHashId (Generic.blkCreatorPoolHash blk)
+      Nothing -> liftLookupFail (renderInsertName (toBlockEra $ Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
+      Just pHash -> liftLookupFail (renderInsertName (toBlockEra $ Generic.blkEra blk)) $ DB.queryBlockId pHash
+    mPhid <- lift $ queryPoolHashId (Generic.blkSlotLeader blk)
 
     slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (Generic.blkSlotLeader blk) mPhid
     blkId <- lift . DB.insertBlock $
@@ -122,12 +122,12 @@ insertShelleyBlock tracer lenv firstBlockOfEpoch blk lStateSnap details = do
       when (followingClosely && slotWithinEpoch /= 0 && unBlockNo (Generic.blkBlockNo blk) `mod` 20 == 0) $ do
         logInfo tracer $
           mconcat
-            [ renderInsertName (Generic.blkEra blk), ": continuing epoch ", textShow epoch
+            [ renderInsertName (toBlockEra $ Generic.blkEra blk), ": continuing epoch ", textShow epoch
             , " (slot ", textShow slotWithinEpoch , "/"
             , textShow (unEpochSize $ sdEpochSize details), ")"
             ]
       logger followingClosely tracer $ mconcat
-        [ renderInsertName (Generic.blkEra blk), ": epoch "
+        [ renderInsertName (toBlockEra $ Generic.blkEra blk), ": epoch "
         , textShow (unEpochNo $ sdEpochNo details)
         , ", slot ", textShow (unSlotNo $ Generic.blkSlotNo blk)
         , ", block ", textShow (unBlockNo $ Generic.blkBlockNo blk)

@@ -32,8 +32,10 @@ module Cardano.DbSync.Config.Types
   , adjustGenesisFilePath
   , adjustNodeConfigFilePath
   , pcNodeConfigFilePath
+  , fromSyncProtocol
   ) where
 
+import qualified Cardano.Api as Api
 import           Cardano.Prelude
 
 import qualified Cardano.BM.Configuration as Logging
@@ -120,10 +122,14 @@ data SyncNodeParams = SyncNodeParams
   , enpMaybeRollback :: !(Maybe SlotNo)
   }
 
+-- TODO: Write function SyncProtocol -> ConsensusMode mode
 -- May have other constructors when we are preparing for a HFC event.
 data SyncProtocol
   = SyncProtocolCardano
   deriving Show
+
+fromSyncProtocol :: SyncProtocol -> Api.ConsensusMode Api.CardanoMode
+fromSyncProtocol SyncProtocolCardano = Api.CardanoMode
 
 data SyncNodeConfig = SyncNodeConfig
   { dncNetworkName :: !NetworkName

@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE GADTs #-}
 module Cardano.DbSync.Types
   ( BlockDetails (..)
   , BlockEra (..)
@@ -13,10 +14,12 @@ module Cardano.DbSync.Types
   , MetricSetters (..)
   , PoolFetchRetry (..)
   , Retry (..)
+  , toBlockEra
   ) where
 
 import           Cardano.Prelude hiding (Meta)
 
+import qualified Cardano.Api as Api
 import           Cardano.Db (PoolHashId, PoolMetaHash, PoolMetadataRefId, PoolOfflineData,
                    PoolOfflineFetchError, PoolUrl)
 
@@ -45,6 +48,12 @@ data BlockEra
   | Alonzo
   deriving (Eq, Show)
 
+toBlockEra :: Api.AnyCardanoEra -> BlockEra
+toBlockEra (Api.AnyCardanoEra Api.ByronEra) = Byron
+toBlockEra (Api.AnyCardanoEra Api.ShelleyEra) = Shelley
+toBlockEra (Api.AnyCardanoEra Api.AllegraEra) = Allegra
+toBlockEra (Api.AnyCardanoEra Api.MaryEra) = Mary
+toBlockEra (Api.AnyCardanoEra Api.AlonzoEra) = Alonzo
 
 -- | Slot within an Epoch.
 newtype EpochSlot = EpochSlot
