@@ -70,8 +70,8 @@ import           Ouroboros.Consensus.Byron.Node ()
 import           Ouroboros.Consensus.Cardano.Node ()
 import           Ouroboros.Consensus.Config (configCodec)
 import qualified Ouroboros.Consensus.HardFork.Simple as HardFork
-import           Ouroboros.Consensus.Network.NodeToClient (ClientCodecs, cChainSyncCodec,
-                   cStateQueryCodec, cTxSubmissionCodec)
+import           Ouroboros.Consensus.Network.NodeToClient (ClientCodecs, Codecs' (..),
+                   cChainSyncCodec, cStateQueryCodec, cTxSubmissionCodec)
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 
@@ -81,8 +81,8 @@ import           Ouroboros.Network.Mux (MuxPeer (..), RunMiniProtocol (..))
 import           Ouroboros.Network.NodeToClient (ClientSubscriptionParams (..), ConnectionId,
                    ErrorPolicyTrace (..), Handshake, IOManager, LocalAddress,
                    NetworkSubscriptionTracers (..), NodeToClientProtocols (..), TraceSendRecv,
-                   WithAddr (..), localSnocket, localStateQueryPeerNull, localTxSubmissionPeerNull,
-                   networkErrorPolicies)
+                   WithAddr (..), localSnocket, localStateQueryPeerNull, localTxMonitorPeerNull,
+                   localTxSubmissionPeerNull, networkErrorPolicies)
 import qualified Ouroboros.Network.NodeToClient.Version as Network
 
 import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined
@@ -203,6 +203,8 @@ dbSyncProtocols trce env metricsSetters version codecs _connectionId =
       { localChainSyncProtocol = localChainSyncPtcl
       , localTxSubmissionProtocol = dummylocalTxSubmit
       , localStateQueryProtocol = localStateQuery
+      , localTxMonitorProtocol =
+          InitiatorProtocolOnly $ MuxPeer Logging.nullTracer (cTxMonitorCodec codecs) localTxMonitorPeerNull
       }
   where
     localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync CardanoBlock(Point CardanoBlock) (Tip CardanoBlock)))

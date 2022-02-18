@@ -143,13 +143,17 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: 814df2c146f5d56f8c35a681fe75e85b905aed5d
-  --sha256: 1hr00wqzmcyc3x0kp2hyw78rfmimf6z4zd4vv85b9zv3nqbjgrik
+  tag: 5d8d9513f22beb0addc32634fdc8f4c9eeff3662
+  --sha256: 112m8mxcpb7jl16cqdv2dw0vn1jfqj7swva8wlgw7q08gmcic0zq
   subdir:
     cardano-api
     cardano-cli
+    cardano-git-rev
     cardano-node
     plutus-example
+    trace-dispatcher
+    trace-forward
+    trace-resources
 
 source-repository-package
   type: git
@@ -190,8 +194,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/ouroboros-network
-  tag: d2d219a86cda42787325bb8c20539a75c2667132
-  --sha256: 18xk7r0h2pxrbx76d6flsxifh0a9rz1cj1rjqs1pbs5kdmy8b7kx
+  tag: 4fac197b6f0d2ff60dc3486c593b68dc00969fbf
+  --sha256: 1b43vbdsr9m3ry1kgag2p2ixpv54gw7a4vvmndxl6knqg8qbsb8b
   subdir:
     cardano-client
     io-sim
@@ -241,3 +245,16 @@ source-repository-package
   location: https://github.com/input-output-hk/cardano-config
   tag: e9de7a2cf70796f6ff26eac9f9540184ded0e4e6
   --sha256: 1wm1c99r5zvz22pdl8nhkp13falvqmj8dgkm8fxskwa9ydqz01ld
+
+source-repository-package
+  type: git
+  location: https://github.com/HeinrichApfelmus/threepenny-gui
+  tag: e3bb8283fc7d2e8aa374eea29426002e8dcd67a8
+  --sha256: 0nf836b552asgpwn2gxwl7yd7ssdhb1wkvdqz6s4dpzqnlpyivx9
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/ekg-forward
+  tag: 297cd9db5074339a2fb2e5ae7d0780debb670c63
+  --sha256: 1zcwry3y5rmd9lgxy89wsb3k4kpffqji35dc7ghzbz603y1gy24g
+
