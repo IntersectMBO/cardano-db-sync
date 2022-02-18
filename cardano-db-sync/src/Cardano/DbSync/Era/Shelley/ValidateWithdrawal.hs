@@ -1,5 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+
 module Cardano.DbSync.Era.Shelley.ValidateWithdrawal
   ( validateRewardWithdrawals
   ) where
@@ -20,16 +22,14 @@ import           Data.Fixed (Micro)
 import qualified Data.List as List
 import           Data.Text (Text)
 
-import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), asc, distinct, from,
-                   groupBy, having, on, orderBy, select, sum_, unValue, val, where_, (<.), (==.),
-                   (^.))
+import           Database.Esqueleto.Experimental (SqlBackend, Value (Value), asc, distinct, from,
+                   groupBy, having, innerJoin, on, orderBy, select, sum_, table, unValue, val,
+                   where_, (:&) ((:&)), (<.), (==.), (^.))
 
-import           Database.Persist.Sql (SqlBackend)
-
+{- HLINT ignore "Fuse on/on" -}
 
 -- For any stake address which has seen a withdrawal, the sum of the withdrawals for that address
 -- should be less than or equal to the sum of the rewards for that address.
-
 validateRewardWithdrawals
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> EpochNo -> ReaderT SqlBackend m ()
@@ -75,22 +75,26 @@ validateAccounting addrId = do
 -- Get all stake addresses with have seen a withdrawal, and return them in shuffled order.
 queryWithdrawalAddresses :: MonadIO m => ReaderT SqlBackend m [Db.StakeAddressId]
 queryWithdrawalAddresses = do
-  res <- select . distinct . from $ \ wd -> do
-            orderBy [asc (wd ^. Db.WithdrawalAddrId)]
-            pure (wd ^. Db.WithdrawalAddrId)
+  res <- select . distinct $ do
+    wd <- from $ table @Db.Withdrawal
+    orderBy [asc (wd ^. Db.WithdrawalAddrId)]
+    pure (wd ^. Db.WithdrawalAddrId)
   pure $ map unValue res
 
 queryAddressInfo :: MonadIO m => Db.StakeAddressId -> ReaderT SqlBackend m AddressInfo
 queryAddressInfo addrId = do
-    rwds <- select . from $ \ rwd -> do
-              where_ (rwd ^. Db.RewardAddrId ==. val addrId)
-              pure (sum_ $ rwd ^. Db.RewardAmount)
-    wdls <- select . from $ \ wdl -> do
-              where_ (wdl ^. Db.WithdrawalAddrId ==. val addrId)
-              pure (sum_ (wdl ^. Db.WithdrawalAmount))
-    view <- select . from $ \ saddr -> do
-              where_ (saddr ^. Db.StakeAddressId ==. val addrId)
-              pure (saddr ^. Db.StakeAddressView)
+    rwds <- select $ do
+      rwd <- from $ table @Db.Reward
+      where_ (rwd ^. Db.RewardAddrId ==. val addrId)
+      pure (sum_ $ rwd ^. Db.RewardAmount)
+    wdls <- select $ do
+      wdl <- from $ table @Db.Withdrawal
+      where_ (wdl ^. Db.WithdrawalAddrId ==. val addrId)
+      pure (sum_ (wdl ^. Db.WithdrawalAmount))
+    view <- select $ do
+      saddr <- from $ table @Db.StakeAddress
+      where_ (saddr ^. Db.StakeAddressId ==. val addrId)
+      pure (saddr ^. Db.StakeAddressView)
     pure $ convert (Db.listToMaybe rwds) (Db.listToMaybe wdls) (Db.listToMaybe view)
   where
     convert :: Maybe (Value (Maybe Micro)) -> Maybe (Value (Maybe Micro)) -> Maybe (Value Text) -> AddressInfo
@@ -104,14 +108,18 @@ queryAddressInfo addrId = do
 -- A stake address state is bad if sum rewards < sum withdrawals
 queryBadWithdrawals :: MonadIO m => ReaderT SqlBackend m [AddressInfo]
 queryBadWithdrawals = do
-    res <- select . from $ \ (rwd `InnerJoin` wdrl `InnerJoin` sa) -> do
-              on (rwd ^. Db.RewardAddrId ==. sa ^. Db.StakeAddressId)
-              on (rwd ^. Db.RewardAddrId ==. wdrl ^. Db.WithdrawalAddrId)
-              groupBy (sa ^. Db.StakeAddressId)
-              let sumReward = sum_ (rwd ^. Db.RewardAmount)
-                  sumWithdraw = sum_ (wdrl ^. Db.WithdrawalAmount)
-              having (sumReward <. sumWithdraw)
-              pure (sa ^. Db.StakeAddressView, sumReward, sumWithdraw)
+    res <- select $ do
+      (rwd :& sa :& wdrl) <-
+        from $ table @Db.Reward
+        `innerJoin` table @Db.StakeAddress
+        `on` (\(rwd :& sa) -> rwd ^. Db.RewardAddrId ==. sa ^. Db.StakeAddressId)
+        `innerJoin` table @Db.Withdrawal
+        `on` (\(rwd :& _sa :& wdrl) -> rwd ^. Db.RewardAddrId ==. wdrl ^. Db.WithdrawalAddrId)
+      groupBy (sa ^. Db.StakeAddressId)
+      let sumReward = sum_ (rwd ^. Db.RewardAmount)
+          sumWithdraw = sum_ (wdrl ^. Db.WithdrawalAmount)
+      having (sumReward <. sumWithdraw)
+      pure (sa ^. Db.StakeAddressView, sumReward, sumWithdraw)
     pure $ List.sort (map convert res)
   where
     convert :: (Value Text, Value (Maybe Micro), Value (Maybe Micro)) -> AddressInfo
@@ -121,4 +129,3 @@ queryBadWithdrawals = do
         , aiSumRewards  = Db.unValueSumAda (Just rwdTotal)
         , aiSumWithdrawals = Db.unValueSumAda (Just wdrlTotal)
         }
-

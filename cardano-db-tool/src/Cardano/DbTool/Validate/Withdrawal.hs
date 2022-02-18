@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+
 module Cardano.DbTool.Validate.Withdrawal
   ( validateWithdrawals
   ) where
@@ -15,10 +17,8 @@ import           Data.Fixed (Micro)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 
-import           Database.Esqueleto.Legacy (Value (..), distinct, from, select, sum_, unValue, val,
-                   where_, (==.), (^.))
-
-import           Database.Persist.Sql (SqlBackend)
+import           Database.Esqueleto.Experimental (SqlBackend, Value (..), distinct, from, select,
+                   sum_, table, unValue, val, where_, (==.), (^.))
 
 import           System.Random.Shuffle (shuffleM)
 
@@ -62,21 +62,24 @@ validateAccounting addrId = do
 -- Get all stake addresses with have seen a withdrawal, and return them in shuffled order.
 queryWithdrawalAddresses :: MonadIO m => ReaderT SqlBackend m [StakeAddressId]
 queryWithdrawalAddresses = do
-  res <- select . distinct . from $ \ wd ->
-            pure (wd ^. WithdrawalAddrId)
+  res <- select . distinct $ do
+    wd <- from (table @Withdrawal)
+    pure (wd ^. WithdrawalAddrId)
   liftIO $ shuffleM (map unValue res)
 
 queryAddressInfo :: MonadIO m => StakeAddressId -> ReaderT SqlBackend m AddressInfo
 queryAddressInfo addrId = do
-    rwds <- select . from $ \ rwd -> do
+    rwds <- select $ from (table @Reward) >>= \ rwd -> do
               where_ (rwd ^. RewardAddrId ==. val addrId)
               pure (sum_ $ rwd ^. RewardAmount)
-    wdls <- select . from $ \ wdl -> do
-              where_ (wdl ^. WithdrawalAddrId ==. val addrId)
-              pure (sum_ (wdl ^. WithdrawalAmount))
-    view <- select . from $ \ saddr -> do
-              where_ (saddr ^. StakeAddressId ==. val addrId)
-              pure (saddr ^. StakeAddressView)
+    wdls <- select $ do
+      wdl <- from (table @Withdrawal)
+      where_ (wdl ^. WithdrawalAddrId ==. val addrId)
+      pure (sum_ (wdl ^. WithdrawalAmount))
+    view <- select $ do
+      saddr <- from $ table @StakeAddress
+      where_ (saddr ^. StakeAddressId ==. val addrId)
+      pure (saddr ^. StakeAddressView)
     pure $ convert (listToMaybe rwds) (listToMaybe wdls) (listToMaybe view)
   where
     convert :: Maybe (Value (Maybe Micro)) -> Maybe (Value (Maybe Micro)) -> Maybe (Value Text) -> AddressInfo

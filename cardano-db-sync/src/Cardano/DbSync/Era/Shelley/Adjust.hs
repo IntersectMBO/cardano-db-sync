@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbSync.Era.Shelley.Adjust
   ( adjustEpochRewards
@@ -20,10 +21,9 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 
 import qualified Data.List.Extra as List
 
-import           Database.Esqueleto.Legacy (InnerJoin (..), delete, from, in_, notExists, on,
-                   select, val, valList, where_, (&&.), (==.), (>.), (^.))
-
-import           Database.Persist.Sql (SqlBackend)
+import           Database.Esqueleto.Experimental (SqlBackend, delete, from, in_, innerJoin,
+                   notExists, on, select, table, val, valList, where_, (&&.), (:&) ((:&)), (==.),
+                   (>.), (^.))
 
 -- Hlint warns about another version of this operator.
 {- HLINT ignore "Redundant ^." -}
@@ -55,7 +55,8 @@ adjustEpochRewards tracer epochNo = do
 
 deleteOrphanedRewards :: MonadIO m => EpochNo -> [Db.StakeAddressId] -> ReaderT SqlBackend m ()
 deleteOrphanedRewards (EpochNo epochNo) xs =
-  delete . from $ \ rwd -> do
+  delete  $ do
+    rwd <- from $ table @Db.Reward
     where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
     where_ (rwd ^. Db.RewardAddrId `in_` valList xs)
 
@@ -63,19 +64,26 @@ deleteOrphanedRewards (EpochNo epochNo) xs =
 queryOrphanedRewards :: MonadIO m => EpochNo -> ReaderT SqlBackend m ([Db.StakeAddressId], Db.Ada)
 queryOrphanedRewards (EpochNo epochNo) = do
     -- Get payments to addresses that have never been registered.
-    res1 <- select . from $ \ rwd -> do
-              where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
-              where_ (notExists . from $ \reg ->
-                where_ (reg ^. Db.StakeRegistrationAddrId ==. rwd ^. Db.RewardAddrId))
-              pure (rwd ^. Db.RewardAddrId, rwd ^. Db.RewardAmount)
+    res1 <- select $ do
+      rwd <- from $ table @Db.Reward
+      where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
+      where_ (notExists $ do
+              reg <- from $ table @Db.StakeRegistration
+              where_ (reg ^. Db.StakeRegistrationAddrId ==. rwd ^. Db.RewardAddrId))
+      pure (rwd ^. Db.RewardAddrId, rwd ^. Db.RewardAmount)
     -- Get payments to addresses that have been registered but are now deregistered.
-    res2 <- select . from $ \ (dereg `InnerJoin` rwd) -> do
-              on (dereg ^. Db.StakeDeregistrationAddrId ==. rwd ^. Db.RewardAddrId)
-              where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
-              where_ (notExists . from $ \reg ->
-                where_ (reg ^. Db.StakeRegistrationAddrId ==. dereg ^. Db.StakeDeregistrationAddrId
+    res2 <- select $ do
+
+      (dereg :& rwd) <-
+        from $ table @Db.StakeDeregistration
+        `innerJoin` table @Db.Reward
+        `on` (\(dereg :& rwd) -> dereg ^. Db.StakeDeregistrationAddrId ==. rwd ^. Db.RewardAddrId)
+      where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
+      where_ (notExists $ do
+                 reg <- from $ table @Db.StakeRegistration
+                 where_ (reg ^. Db.StakeRegistrationAddrId ==. dereg ^. Db.StakeDeregistrationAddrId
                           &&. reg ^. Db.StakeRegistrationTxId >. dereg ^. Db.StakeDeregistrationTxId))
-              pure (dereg ^. Db.StakeDeregistrationAddrId, rwd ^. Db.RewardAmount)
+      pure (dereg ^. Db.StakeDeregistrationAddrId, rwd ^. Db.RewardAmount)
     pure $ convert (map Db.unValue2 $ res1 ++ res2)
   where
     convert :: [(Db.StakeAddressId, Db.DbLovelace)] -> ([Db.StakeAddressId], Db.Ada)

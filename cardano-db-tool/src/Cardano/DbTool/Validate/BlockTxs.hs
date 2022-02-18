@@ -1,3 +1,6 @@
+{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE TypeApplications #-}
+
 module Cardano.DbTool.Validate.BlockTxs
   ( validateEpochBlockTxs
   ) where
@@ -13,10 +16,9 @@ import           Control.Monad.Trans.Reader (ReaderT)
 import           Data.Either (lefts)
 import           Data.Word (Word64)
 
-import           Database.Esqueleto.Legacy (InnerJoin (..), Value (..), countRows, from, just, on,
-                   select, unValue, val, where_, (==.), (^.))
-
-import           Database.Persist.Sql (SqlBackend)
+import           Database.Esqueleto.Experimental (SqlBackend, Value (Value), countRows, from,
+                   innerJoin, just, on, select, table, type (:&) ((:&)), unValue, val, where_,
+                   (==.), (^.))
 
 import qualified System.Random as Random
 
@@ -66,17 +68,21 @@ validateBlockCount (blockNo, txCountExpected) = do
 -- This queries by BlockNo, the one in Cardano.Db.Query queries by BlockId.
 queryBlockTxCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
 queryBlockTxCount blockNo = do
-  res <- select . from $ \ (blk `InnerJoin` tx) -> do
-            on (blk ^. BlockId ==. tx ^. TxBlockId)
-            where_ (blk ^. BlockBlockNo ==. just (val blockNo))
-            pure countRows
+  res <- select $ do
+    (blk :& _tx) <-
+      from $ table @Block
+      `innerJoin` table @Tx
+      `on` (\(blk :& tx) -> blk ^. BlockId ==. tx ^. TxBlockId)
+    where_ (blk ^. BlockBlockNo ==. just (val blockNo))
+    pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
 queryEpochBlockNumbers :: MonadIO m => Word64 -> ReaderT SqlBackend m [(Word64, Word64)]
 queryEpochBlockNumbers epoch = do
-    res <- select . from $ \ blk -> do
-              where_ (blk ^. BlockEpochNo ==. just (val epoch))
-              pure (blk ^. BlockBlockNo, blk ^. BlockTxCount)
+    res <- select $ do
+      blk <- from $ table @Block
+      where_ (blk ^. BlockEpochNo ==. just (val epoch))
+      pure (blk ^. BlockBlockNo, blk ^. BlockTxCount)
     pure $ map convert res
   where
     convert :: (Value (Maybe Word64), Value Word64) -> (Word64, Word64)
