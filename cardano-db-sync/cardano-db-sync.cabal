@@ -45,6 +45,7 @@ library
   exposed-modules:      Cardano.DbSync
 
                         Cardano.DbSync.Api
+                        Cardano.DbSync.Cache
                         Cardano.DbSync.Config
                         Cardano.DbSync.Config.Alonzo
                         Cardano.DbSync.Config.Byron

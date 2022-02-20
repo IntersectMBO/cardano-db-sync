@@ -30,6 +30,7 @@ import qualified Cardano.Ledger.Shelley.Genesis as Shelley
 
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
 
+import           Cardano.DbSync.Cache
 import           Cardano.DbSync.Config.Cardano
 import           Cardano.DbSync.Config.Shelley
 import           Cardano.DbSync.Config.Types
@@ -55,6 +56,7 @@ data SyncEnv = SyncEnv
   , envSystemStart :: !SystemStart
   , envBackend :: !SqlBackend
   , envOptions :: !SyncOptions
+  , envCache :: !Cache
   , envLedger :: !LedgerEnv
   }
 
@@ -118,12 +120,14 @@ mkSyncEnv
     -> IO SyncEnv
 mkSyncEnv trce backend syncOptions protoInfo nw nwMagic systemStart dir stableEpochSlot = do
   ledgerEnv <- mkLedgerEnv trce protoInfo dir nw stableEpochSlot systemStart (soptAbortOnInvalid syncOptions)
+  cache <- newEmptyCache
   pure $ SyncEnv
           { envProtocol = SyncProtocolCardano
           , envNetworkMagic = nwMagic
           , envSystemStart = systemStart
           , envBackend = backend
           , envOptions = syncOptions
+          , envCache = cache
           , envLedger = ledgerEnv
           }
 

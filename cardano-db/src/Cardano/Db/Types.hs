@@ -39,13 +39,9 @@ module Cardano.Db.Types
   , word64ToAda
   ) where
 
-import qualified Cardano.Crypto.Hash as Crypto
-
 import           Cardano.Ledger.Coin (DeltaCoin (..))
-import           Cardano.Ledger.Crypto (StandardCrypto)
-import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..))
+import           Cardano.Ledger.Mary.Value (AssetName (..))
 import           Cardano.Ledger.Shelley.Rewards as Shelley
-import qualified Cardano.Ledger.Shelley.Scripts as Shelley
 
 import qualified Codec.Binary.Bech32 as Bech32
 
@@ -95,10 +91,10 @@ newtype AssetFingerprint = AssetFingerprint
   { unAssetFingerprint :: Text
   } deriving (Eq, Show)
 
-mkAssetFingerprint :: PolicyID StandardCrypto -> AssetName -> AssetFingerprint
-mkAssetFingerprint (PolicyID (Shelley.ScriptHash h)) (AssetName name) =
+mkAssetFingerprint :: ByteString -> AssetName -> AssetFingerprint
+mkAssetFingerprint policyId (AssetName name) =
     AssetFingerprint . Bech32.encodeLenient hrp . Bech32.dataPartFromBytes . ByteArray.convert
-      $ Crypto.Hash.hash @_ @Blake2b_160 (Crypto.hashToBytes h <> name)
+      $ Crypto.Hash.hash @_ @Blake2b_160 (policyId <> name)
   where
     hrp :: Bech32.HumanReadablePart
     hrp =
