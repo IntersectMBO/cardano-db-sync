@@ -1,3 +1,3 @@
-[
-  ./cardano-db-sync-service.nix
+[ ./cardano-db-sync-service.nix
+  ./smash-service.nix
 ]

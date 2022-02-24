@@ -16,7 +16,6 @@ packages:
   cardano-db
   cardano-db/test
   cardano-db-sync
-  cardano-db-sync-extended
 
 package cardano-db-sync
   ghc-options: -Wall -Werror -fwarn-redundant-constraints

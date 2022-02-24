@@ -1,3 +1,1 @@
-self: {
-  withHoogle = true;
-}
+self: { withHoogle = true; }
