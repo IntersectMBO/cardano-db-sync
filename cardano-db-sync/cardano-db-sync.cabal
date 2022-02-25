@@ -98,6 +98,7 @@ library
 
                         Cardano.DbSync.Metrics
 
+                        Cardano.DbSync.Cache
                         Cardano.DbSync.Cache.LRU
                         Cardano.DbSync.Default
                         Cardano.DbSync.Epoch
