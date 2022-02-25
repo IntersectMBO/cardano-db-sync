@@ -98,6 +98,7 @@ library
 
                         Cardano.DbSync.Metrics
 
+                        Cardano.DbSync.Cache.LRU
                         Cardano.DbSync.Default
                         Cardano.DbSync.Epoch
 
@@ -164,6 +165,7 @@ library
                       , persistent-postgresql
                       , pretty-show
                       , prometheus
+                      , psqueues
                       , random-shuffle
                       , small-steps
                       , split
