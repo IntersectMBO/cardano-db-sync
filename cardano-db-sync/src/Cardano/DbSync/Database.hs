@@ -138,7 +138,7 @@ runRollbacksDB
     :: SyncEnv -> CardanoPoint
     -> ExceptT SyncNodeError IO ()
 runRollbacksDB env point =
-  newExceptT $ rollbackToPoint (envBackend env) (getTrace env) point
+  newExceptT $ rollbackToPoint env point
 
 insertBlockList
     :: SyncEnv -> [CardanoBlock]

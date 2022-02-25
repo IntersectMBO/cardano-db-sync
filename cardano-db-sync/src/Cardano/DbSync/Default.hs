@@ -72,7 +72,6 @@ insertDefaultBlock env blocks =
     insertDetails cblk = do
       -- Calculate the new ledger state to pass to the DB insert functions but do not yet
       -- update ledgerStateVar.
-      let lenv = envLedger env
       lStateSnap <- liftIO $ applyBlock (envLedger env) cblk
       let !details = lssSlotDetails lStateSnap
       mkSnapshotMaybe env lStateSnap (blockNo cblk) (isSyncedWithinSeconds details 600)
@@ -80,16 +79,16 @@ insertDefaultBlock env blocks =
       let firstBlockOfEpoch = hasEpochStartEvent (lssEvents lStateSnap)
       case cblk of
         BlockByron blk ->
-          newExceptT $ insertByronBlock tracer firstBlockOfEpoch blk details
+          newExceptT $ insertByronBlock env firstBlockOfEpoch blk details
         BlockShelley blk ->
-          newExceptT $ insertShelleyBlock tracer lenv firstBlockOfEpoch (Generic.fromShelleyBlock blk) lStateSnap details
+          newExceptT $ insertShelleyBlock env firstBlockOfEpoch (Generic.fromShelleyBlock blk) lStateSnap details
         BlockAllegra blk ->
-          newExceptT $ insertShelleyBlock tracer lenv firstBlockOfEpoch (Generic.fromAllegraBlock blk) lStateSnap details
+          newExceptT $ insertShelleyBlock env firstBlockOfEpoch (Generic.fromAllegraBlock blk) lStateSnap details
         BlockMary blk ->
-          newExceptT $ insertShelleyBlock tracer lenv firstBlockOfEpoch (Generic.fromMaryBlock blk) lStateSnap details
+          newExceptT $ insertShelleyBlock env firstBlockOfEpoch (Generic.fromMaryBlock blk) lStateSnap details
         BlockAlonzo blk -> do
           let pp = getAlonzoPParams $ lssState lStateSnap
-          newExceptT $ insertShelleyBlock tracer lenv firstBlockOfEpoch (Generic.fromAlonzoBlock pp blk) lStateSnap details
+          newExceptT $ insertShelleyBlock env firstBlockOfEpoch (Generic.fromAlonzoBlock pp blk) lStateSnap details
       when (soptExtended $ envOptions env) .
         newExceptT $ epochInsert tracer (BlockDetails cblk details)
 
