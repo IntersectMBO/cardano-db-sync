@@ -1,3 +1,4 @@
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -16,12 +17,12 @@ module Cardano.DbSync.Api
   , logDbState
   ) where
 
-import           Cardano.Prelude hiding ((.))
+import           Cardano.Prelude
 
 import           Cardano.BM.Trace (Trace, logInfo)
 
 import qualified Cardano.Chain.Genesis as Byron
-import           Cardano.Crypto.ProtocolMagic
+import           Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 
 import qualified Cardano.Db as DB
 
@@ -30,6 +31,7 @@ import qualified Cardano.Ledger.Shelley.Genesis as Shelley
 
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
 
+import           Cardano.DbSync.Cache
 import           Cardano.DbSync.Config.Cardano
 import           Cardano.DbSync.Config.Shelley
 import           Cardano.DbSync.Config.Types
@@ -55,21 +57,22 @@ data SyncEnv = SyncEnv
   , envSystemStart :: !SystemStart
   , envBackend :: !SqlBackend
   , envOptions :: !SyncOptions
+  , envCache :: !Cache
   , envLedger :: !LedgerEnv
   }
 
 data SyncOptions = SyncOptions
-  { soptExtended :: Bool
-  , soptAbortOnInvalid :: Bool
-  , snapshotEveryFollowing :: Word64
-  , snapshotEveryLagging :: Word64
+  { soptExtended :: !Bool
+  , soptAbortOnInvalid :: !Bool
+  , snapshotEveryFollowing :: !Word64
+  , snapshotEveryLagging :: !Word64
   }
 
 getTrace :: SyncEnv -> Trace IO Text
-getTrace env = leTrace (envLedger env)
+getTrace = leTrace . envLedger
 
 getSlotHash :: SqlBackend -> SlotNo -> IO [(SlotNo, ByteString)]
-getSlotHash backend slotNo = DB.runDbIohkNoLogging backend $ DB.querySlotHash slotNo
+getSlotHash backend = DB.runDbIohkNoLogging backend . DB.querySlotHash
 
 getDbLatestBlockInfo :: SqlBackend -> IO (Maybe TipInfo)
 getDbLatestBlockInfo backend = do
@@ -107,10 +110,10 @@ logDbState env = do
 
 getCurrentTipBlockNo :: SyncEnv -> IO (WithOrigin BlockNo)
 getCurrentTipBlockNo env = do
-    maybeTip <- getDbLatestBlockInfo (envBackend env)
-    case maybeTip of
-      Just tip -> pure $ At (bBlockNo tip)
-      Nothing -> pure Origin
+  maybeTip <- getDbLatestBlockInfo (envBackend env)
+  case maybeTip of
+    Just tip -> pure $ At (bBlockNo tip)
+    Nothing -> pure Origin
 
 mkSyncEnv
     :: Trace IO Text -> SqlBackend -> SyncOptions -> ProtocolInfo IO CardanoBlock -> Ledger.Network
@@ -118,42 +121,44 @@ mkSyncEnv
     -> IO SyncEnv
 mkSyncEnv trce backend syncOptions protoInfo nw nwMagic systemStart dir stableEpochSlot = do
   ledgerEnv <- mkLedgerEnv trce protoInfo dir nw stableEpochSlot systemStart (soptAbortOnInvalid syncOptions)
+  cache <- newEmptyCache 200000
   pure $ SyncEnv
           { envProtocol = SyncProtocolCardano
           , envNetworkMagic = nwMagic
           , envSystemStart = systemStart
           , envBackend = backend
           , envOptions = syncOptions
+          , envCache = cache
           , envLedger = ledgerEnv
           }
 
 mkSyncEnvFromConfig :: Trace IO Text -> SqlBackend -> SyncOptions -> LedgerStateDir -> GenesisConfig -> IO (Either SyncNodeError SyncEnv)
 mkSyncEnvFromConfig trce backend syncOptions dir genCfg =
-    case genCfg of
-      GenesisCardano _ bCfg sCfg _
-        | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
-            pure . Left . NECardanoConfig $
-              mconcat
-                [ "ProtocolMagicId ", DB.textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
-                , " /= ", DB.textShow (Shelley.sgNetworkMagic $ scConfig sCfg)
-                ]
-        | Byron.gdStartTime (Byron.configGenesisData bCfg) /= Shelley.sgSystemStart (scConfig sCfg) ->
-            pure . Left . NECardanoConfig $
-              mconcat
-                [ "SystemStart ", DB.textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
-                , " /= ", DB.textShow (Shelley.sgSystemStart $ scConfig sCfg)
-                ]
-        | otherwise ->
-            Right <$> mkSyncEnv trce backend syncOptions (mkProtocolInfoCardano genCfg []) (Shelley.sgNetworkId $ scConfig sCfg)
-                        (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
-                        (SystemStart .Byron.gdStartTime $ Byron.configGenesisData bCfg)
-                        dir (calculateStableEpochSlot $ scConfig sCfg)
+  case genCfg of
+    GenesisCardano _ bCfg sCfg _
+      | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
+          pure . Left . NECardanoConfig $
+            mconcat
+              [ "ProtocolMagicId ", DB.textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+              , " /= ", DB.textShow (Shelley.sgNetworkMagic $ scConfig sCfg)
+              ]
+      | Byron.gdStartTime (Byron.configGenesisData bCfg) /= Shelley.sgSystemStart (scConfig sCfg) ->
+          pure . Left . NECardanoConfig $
+            mconcat
+              [ "SystemStart ", DB.textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
+              , " /= ", DB.textShow (Shelley.sgSystemStart $ scConfig sCfg)
+              ]
+      | otherwise ->
+          Right <$> mkSyncEnv trce backend syncOptions (mkProtocolInfoCardano genCfg []) (Shelley.sgNetworkId $ scConfig sCfg)
+                      (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+                      (SystemStart .Byron.gdStartTime $ Byron.configGenesisData bCfg)
+                      dir (calculateStableEpochSlot $ scConfig sCfg)
 
 
 getLatestPoints :: SyncEnv -> IO [CardanoPoint]
 getLatestPoints env = do
-    files <- listLedgerStateFilesOrdered $ leDir (envLedger env)
-    verifyFilePoints env files
+  files <- listLedgerStateFilesOrdered $ leDir (envLedger env)
+  verifyFilePoints env files
 
 verifyFilePoints :: SyncEnv -> [LedgerStateFile] -> IO [CardanoPoint]
 verifyFilePoints env files =
