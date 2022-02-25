@@ -199,7 +199,7 @@ share
   -- -----------------------------------------------------------------------------------------------
 
   PoolMetadataRef
-    poolId              PoolHashId
+    poolId              PoolHashId          OnDeleteCascade
     url                 Text
     hash                ByteString          sqltype=hash32type
     registeredTxId      TxId                OnDeleteCascade     -- Only used for rollback.
@@ -352,13 +352,13 @@ share
     UniqueMultiAsset    policy name
 
   MaTxMint
-    ident               MultiAssetId
+    ident               MultiAssetId        OnDeleteCascade
     quantity            DbInt65             sqltype=int65type
     txId                TxId                OnDeleteCascade
     UniqueMaTxMint      ident txId
 
   MaTxOut
-    ident               MultiAssetId
+    ident               MultiAssetId        OnDeleteCascade
     quantity            DbWord64            sqltype=word64type
     txOutId             TxOutId             OnDeleteCascade
     UniqueMaTxOut       ident txOutId
