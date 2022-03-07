@@ -78,7 +78,7 @@ PGPASSFILE=config/pgpass-mainnet db-sync-node/bin/cardano-db-sync \
 
 ### Run two chains with a single PostgreSQL instance
 
-By running two `cardano-node`s and using two databases within a singe PostgresSQL instance it is
+By running two `cardano-node`s and using two databases within a single PostgresSQL instance it is
 possible to sync two (or more chains).
 
 The two nodes might be run in separate terminals using:
