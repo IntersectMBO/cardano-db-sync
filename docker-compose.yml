@@ -1,4 +1,4 @@
-version: "3.5"
+version: "3.9"
 
 services:
   postgres:
@@ -17,6 +17,13 @@ services:
     volumes:
       - postgres:/var/lib/postgresql/data
     restart: on-failure
+    healthcheck:
+      # Use pg_isready to check postgres is running. Substitute different
+      # user `postgres` if you've setup differently to config/pgpass-mainnet
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     logging:
       driver: "json-file"
       options:
@@ -31,6 +38,13 @@ services:
       - node-db:/data/db
       - node-ipc:/ipc
     restart: on-failure
+    healthcheck:
+      # Ping the EKG port to see if it responds.
+      # Assuming if EKG isn't up then the rest of cardano-node isn't either.
+      test: ["CMD-SHELL", "curl -f 127.0.0.1:12788 || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 5
     logging:
       driver: "json-file"
       options:
@@ -46,8 +60,11 @@ services:
       - RESTORE_SNAPSHOT=${RESTORE_SNAPSHOT:-}
       - RESTORE_RECREATE_DB=N
     depends_on:
-      - cardano-node
-      - postgres
+      # Depend on both services to be healthy before starting.
+      cardano-node:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     secrets:
       - postgres_password
       - postgres_user
