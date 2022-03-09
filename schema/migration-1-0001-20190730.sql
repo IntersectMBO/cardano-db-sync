@@ -13,7 +13,7 @@ BEGIN
     EXECUTE 'CREATE DOMAIN lovelace AS numeric (20, 0) CHECK (VALUE >= 0 AND VALUE <= 18446744073709551615);';
 
     EXECUTE 'CREATE DOMAIN txindex AS smallint CHECK (VALUE >= 0);';
-    EXECUTE 'CREATE DOMAIN uinteger AS integer CHECK (VALUE >= 0);';
+    EXECUTE 'CREATE DOMAIN word31type AS integer CHECK (VALUE >= 0);';
 
     -- Blocks, transactions and merkle roots use a 32 byte hash.
     EXECUTE 'CREATE DOMAIN hash32type AS bytea CHECK (octet_length (VALUE) = 32);';
