@@ -44,6 +44,7 @@ nix-build -A scripts.mainnet.node -o mainnet-node-local
 ```
 git clone https://github.com/input-output-hk/cardano-db-sync
 cd cardano-db-sync
+PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh --createdb
 git checkout <latest-official-tag> -b tag-<latest-official-tag>
 cabal build cardano-db-sync
 PGPASSFILE=config/pgpass-mainnet cabal run cardano-db-sync -- \
