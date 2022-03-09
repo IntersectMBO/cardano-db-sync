@@ -82,17 +82,17 @@ share
   -- only NULL for the genesis block.
   Block
     hash                ByteString          sqltype=hash32type
-    epochNo             Word64 Maybe        sqltype=uinteger
-    slotNo              Word64 Maybe        sqltype=uinteger
-    epochSlotNo         Word64 Maybe        sqltype=uinteger
-    blockNo             Word64 Maybe        sqltype=uinteger
+    epochNo             Word64 Maybe        sqltype=word31type
+    slotNo              Word64 Maybe        sqltype=word31type
+    epochSlotNo         Word64 Maybe        sqltype=word31type
+    blockNo             Word64 Maybe        sqltype=word31type
     previousId          BlockId Maybe       OnDeleteCascade
     slotLeaderId        SlotLeaderId        OnDeleteCascade
-    size                Word64              sqltype=uinteger
+    size                Word64              sqltype=word31type
     time                UTCTime             sqltype=timestamp
     txCount             Word64
-    protoMajor          Word16              sqltype=uinteger
-    protoMinor          Word16              sqltype=uinteger
+    protoMajor          Word16              sqltype=word31type
+    protoMinor          Word16              sqltype=word31type
     -- Shelley specific
     vrfKey              Text Maybe
     opCert              ByteString Maybe    sqltype=hash32type
@@ -102,11 +102,11 @@ share
   Tx
     hash                ByteString          sqltype=hash32type
     blockId             BlockId             OnDeleteCascade     -- This type is the primary key for the 'block' table.
-    blockIndex          Word64              sqltype=uinteger    -- The index of this transaction within the block.
+    blockIndex          Word64              sqltype=word31type    -- The index of this transaction within the block.
     outSum              DbLovelace          sqltype=lovelace
     fee                 DbLovelace          sqltype=lovelace
     deposit             Int64                                   -- Needs to allow negaitve values.
-    size                Word64              sqltype=uinteger
+    size                Word64              sqltype=word31type
 
     -- New for Allega
     invalidBefore       DbWord64 Maybe      sqltype=word64type
@@ -114,7 +114,7 @@ share
 
     -- New for Alonzo
     validContract       Bool                                    -- False if the contract is invalid, True otherwise.
-    scriptSize          Word64              sqltype=uinteger
+    scriptSize          Word64              sqltype=word31type
     UniqueTx            hash
 
   StakeAddress          -- Can be an address of a script hash
@@ -171,9 +171,9 @@ share
   Epoch
     outSum              Word128             sqltype=word128type
     fees                DbLovelace          sqltype=lovelace
-    txCount             Word64              sqltype=uinteger
-    blkCount            Word64              sqltype=uinteger
-    no                  Word64              sqltype=uinteger
+    txCount             Word64              sqltype=word31type
+    blkCount            Word64              sqltype=word31type
+    no                  Word64              sqltype=word31type
     startTime           UTCTime             sqltype=timestamp
     endTime             UTCTime             sqltype=timestamp
     UniqueEpoch         no
@@ -184,8 +184,8 @@ share
   -- The treasury and rewards fields will be correct for the whole epoch, but all other
   -- fields change block by block.
   AdaPots
-    slotNo              Word64              sqltype=uinteger
-    epochNo             Word64              sqltype=uinteger
+    slotNo              Word64              sqltype=word31type
+    epochNo             Word64              sqltype=word31type
     treasury            DbLovelace          sqltype=lovelace
     reserves            DbLovelace          sqltype=lovelace
     rewards             DbLovelace          sqltype=lovelace
@@ -228,7 +228,7 @@ share
     hashId              PoolHashId          OnDeleteCascade
     certIndex           Word16
     announcedTxId       TxId                OnDeleteCascade     -- Slot number in which the pool announced it was retiring.
-    retiringEpoch       Word64              sqltype=uinteger    -- Epoch number in which the pool will retire.
+    retiringEpoch       Word64              sqltype=word31type    -- Epoch number in which the pool will retire.
     UniquePoolRetiring  announcedTxId certIndex
 
   PoolRelay
@@ -250,7 +250,7 @@ share
   StakeRegistration
     addrId              StakeAddressId      OnDeleteCascade
     certIndex           Word16
-    epochNo             Word64              sqltype=uinteger
+    epochNo             Word64              sqltype=word31type
     txId                TxId                OnDeleteCascade
     UniqueStakeRegistration txId certIndex
 
@@ -258,7 +258,7 @@ share
   StakeDeregistration
     addrId              StakeAddressId      OnDeleteCascade
     certIndex           Word16
-    epochNo             Word64              sqltype=uinteger
+    epochNo             Word64              sqltype=word31type
     txId                TxId                OnDeleteCascade
     redeemerId          RedeemerId Maybe    OnDeleteCascade
     UniqueStakeDeregistration txId certIndex
@@ -269,7 +269,7 @@ share
     poolHashId          PoolHashId          OnDeleteCascade
     activeEpochNo       Word64
     txId                TxId                OnDeleteCascade
-    slotNo              Word64              sqltype=uinteger
+    slotNo              Word64              sqltype=word31type
     redeemerId          RedeemerId Maybe    OnDeleteCascade
     UniqueDelegation    txId certIndex
 
@@ -312,7 +312,7 @@ share
     addrId              StakeAddressId      OnDeleteCascade
     poolId              PoolHashId          OnDeleteCascade
     amount              DbLovelace          sqltype=lovelace
-    epochNo             Word64              sqltype=uinteger
+    epochNo             Word64              sqltype=word31type
     UniqueStake         epochNo addrId poolId
 
   Treasury
@@ -375,7 +375,7 @@ share
     unitSteps           Word64              sqltype=word63type
     fee                 DbLovelace          sqltype=lovelace
     purpose             ScriptPurpose       sqltype=scriptpurposetype
-    index               Word64              sqltype=uinteger
+    index               Word64              sqltype=word31type
     scriptHash          ByteString Maybe    sqltype=hash28type
     datumId             DatumId             OnDeleteCascade
     UniqueRedeemer      txId purpose index
@@ -386,7 +386,7 @@ share
     type                ScriptType          sqltype=scripttype
     json                Text Maybe          sqltype=jsonb
     bytes               ByteString Maybe    sqltype=bytea
-    serialisedSize      Word64 Maybe        sqltype=uinteger
+    serialisedSize      Word64 Maybe        sqltype=word31type
     UniqueScript        hash
 
   Datum
@@ -404,7 +404,7 @@ share
   -- Update parameter proposals.
 
   ParamProposal
-    epochNo             Word64              sqltype=uinteger
+    epochNo             Word64              sqltype=word31type
     key                 ByteString          sqltype=hash28type
     minFeeA             Word64 Maybe        sqltype=word64type
     minFeeB             Word64 Maybe        sqltype=word64type
@@ -420,8 +420,8 @@ share
     treasuryGrowthRate  Double Maybe        -- sqltype=interval
     decentralisation    Double Maybe        -- sqltype=interval
     entropy             ByteString Maybe    sqltype=hash32type
-    protocolMajor       Word16 Maybe        sqltype=uinteger
-    protocolMinor       Word16 Maybe        sqltype=uinteger
+    protocolMajor       Word16 Maybe        sqltype=word31type
+    protocolMinor       Word16 Maybe        sqltype=word31type
     minUtxoValue        DbLovelace Maybe    sqltype=lovelace
     minPoolCost         DbLovelace Maybe    sqltype=lovelace
 
@@ -434,30 +434,30 @@ share
     maxBlockExMem       DbWord64 Maybe      sqltype=word64type
     maxBlockExSteps     DbWord64 Maybe      sqltype=word64type
     maxValSize          DbWord64 Maybe      sqltype=word64type
-    collateralPercent   Word16 Maybe        sqltype=uinteger
-    maxCollateralInputs Word16 Maybe        sqltype=uinteger
+    collateralPercent   Word16 Maybe        sqltype=word31type
+    maxCollateralInputs Word16 Maybe        sqltype=word31type
 
     registeredTxId      TxId                OnDeleteCascade    -- Slot number in which update registered.
     UniqueParamProposal key registeredTxId
 
   EpochParam
-    epochNo             Word64              sqltype=uinteger
-    minFeeA             Word64              sqltype=uinteger
-    minFeeB             Word64              sqltype=uinteger
-    maxBlockSize        Word64              sqltype=uinteger
-    maxTxSize           Word64              sqltype=uinteger
-    maxBhSize           Word64              sqltype=uinteger
+    epochNo             Word64              sqltype=word31type
+    minFeeA             Word64              sqltype=word31type
+    minFeeB             Word64              sqltype=word31type
+    maxBlockSize        Word64              sqltype=word31type
+    maxTxSize           Word64              sqltype=word31type
+    maxBhSize           Word64              sqltype=word31type
     keyDeposit          DbLovelace          sqltype=lovelace
     poolDeposit         DbLovelace          sqltype=lovelace
-    maxEpoch            Word64              sqltype=uinteger
-    optimalPoolCount    Word64              sqltype=uinteger
+    maxEpoch            Word64              sqltype=word31type
+    optimalPoolCount    Word64              sqltype=word31type
     influence           Double              -- sqltype=rational
     monetaryExpandRate  Double              -- sqltype=interval
     treasuryGrowthRate  Double              -- sqltype=interval
     decentralisation    Double              -- sqltype=interval
     entropy             ByteString Maybe    sqltype=hash32type
-    protocolMajor       Word16              sqltype=uinteger
-    protocolMinor       Word16              sqltype=uinteger
+    protocolMajor       Word16              sqltype=word31type
+    protocolMinor       Word16              sqltype=word31type
     minUtxoValue        DbLovelace          sqltype=lovelace
     minPoolCost         DbLovelace          sqltype=lovelace
 
@@ -472,8 +472,8 @@ share
     maxBlockExMem       DbWord64 Maybe      sqltype=word64type
     maxBlockExSteps     DbWord64 Maybe      sqltype=word64type
     maxValSize          DbWord64 Maybe      sqltype=word64type
-    collateralPercent   Word16 Maybe        sqltype=uinteger
-    maxCollateralInputs Word16 Maybe        sqltype=uinteger
+    collateralPercent   Word16 Maybe        sqltype=word31type
+    maxCollateralInputs Word16 Maybe        sqltype=word31type
 
     blockId             BlockId             OnDeleteCascade      -- The first block where these parameters are valid.
     UniqueEpochParam    epochNo blockId
@@ -504,7 +504,7 @@ share
     fetchTime           UTCTime             sqltype=timestamp
     pmrId               PoolMetadataRefId   OnDeleteCascade
     fetchError          Text
-    retryCount          Word                sqltype=uinteger
+    retryCount          Word                sqltype=word31type
     UniquePoolOfflineFetchError poolId fetchTime retryCount
     deriving Show
 
@@ -513,7 +513,7 @@ share
   -- from the ledger state, but *before* orphaned rewards are removed from the
   -- Reward table.
   EpochRewardTotalReceived
-    earnedEpoch         Word64              sqltype=uinteger
+    earnedEpoch         Word64              sqltype=word31type
     amount              DbLovelace          sqltype=lovelace
     UniqueEpochRewardTotalReceived earnedEpoch
 
