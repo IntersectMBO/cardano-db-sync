@@ -83,7 +83,7 @@ share
   Block
     hash                ByteString          sqltype=hash32type
     epochNo             Word64 Maybe        sqltype=word31type
-    slotNo              Word64 Maybe        sqltype=word31type
+    slotNo              Word64 Maybe        sqltype=word63type
     epochSlotNo         Word64 Maybe        sqltype=word31type
     blockNo             Word64 Maybe        sqltype=word31type
     previousId          BlockId Maybe       OnDeleteCascade
@@ -184,7 +184,7 @@ share
   -- The treasury and rewards fields will be correct for the whole epoch, but all other
   -- fields change block by block.
   AdaPots
-    slotNo              Word64              sqltype=word31type
+    slotNo              Word64              sqltype=word63type
     epochNo             Word64              sqltype=word31type
     treasury            DbLovelace          sqltype=lovelace
     reserves            DbLovelace          sqltype=lovelace
@@ -269,7 +269,7 @@ share
     poolHashId          PoolHashId          OnDeleteCascade
     activeEpochNo       Word64
     txId                TxId                OnDeleteCascade
-    slotNo              Word64              sqltype=word31type
+    slotNo              Word64              sqltype=word63type
     redeemerId          RedeemerId Maybe    OnDeleteCascade
     UniqueDelegation    txId certIndex
 
