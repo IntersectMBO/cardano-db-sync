@@ -36,8 +36,10 @@ other programs will also start using these.
 * `LETotalRewards` should include all payments to stake addresses for a given epoch. That means
   all staking rewards (member and owner), all MIR payments and all stake pool deposit refunds.
 * `LEDeltaReward` should only ever contain pool membership or pool ownership rewards.
+* `LEDeltaReward` may contain rewards to stake addresses that have been de-registered.
 * The sum of all `LEDeltaReward`, `LEMirTransfer` and `LERetiredPools` amounts for an epoch should
   always be the same as the sum of `LETotalRewards` event amounts for that epoch.
+* `LETotalRewards` will not contain rewards to stake addresses that have been de-registered.
 * The `LETotalRewards` must be the last reward related event for a given epoch to be emitted from
   the ledger.
 * For the Shelley Era (ie after Byron and before Mary), for the `LETotalRewards` event, all staking
