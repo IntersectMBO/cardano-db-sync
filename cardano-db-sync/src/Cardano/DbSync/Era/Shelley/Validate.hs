@@ -105,6 +105,7 @@ queryRewardMap (EpochNo epochNo) = do
         `on` (\(rwd :& saddr) ->
                 rwd ^. Db.RewardAddrId ==. saddr ^. Db.StakeAddressId)
       where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
+      where_ (not_ $ rwd ^. Db.RewardType ==. val Db.RwdDepositRefund)
       orderBy [desc (saddr ^. Db.StakeAddressHashRaw)]
       pure (saddr ^. Db.StakeAddressHashRaw, rwd ^. Db.RewardType, rwd ^. Db.RewardAmount)
 
