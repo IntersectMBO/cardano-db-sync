@@ -3,6 +3,7 @@
 ## Quickstart
 
 ### Clone the repository
+
 Regular users should almost never attempt building and running from the `master` branch. Instead,
 they should build and run the latest release tag. The tags can be listed using the `git tag`
 command. Pre-release tags (eg things like `12.0.0-preX`) should also be avoided in most cases.
@@ -30,6 +31,7 @@ NETWORK=testnet docker-compose up && docker-compose logs -f
 ```
 
 ### Take control
+
 Excluding the `NETWORK` ENV will simply just call the `cardano-db-sync` executable
 as the entrypoint, so you must pass a command and
 arguments in this case to provide config at runtime. The `--schema-dir` argument is preset,
