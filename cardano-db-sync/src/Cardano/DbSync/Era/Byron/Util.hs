@@ -15,6 +15,8 @@ module Cardano.DbSync.Era.Byron.Util
   , blockNumber
   , blockPayload
   , blockPreviousHash
+  , ebbPrevHash
+  , prevHash
   , epochNumber
   , genesisToHeaderHash
   , protocolVersion
@@ -40,6 +42,7 @@ import qualified Cardano.Chain.Slotting as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Chain.Update as Byron
 
+import qualified Ouroboros.Consensus.Byron.Ledger.Block as Byron
 
 import qualified Cardano.Db as DB
 
@@ -91,8 +94,19 @@ blockPayload :: Byron.ABlock a -> [Byron.TxAux]
 blockPayload =
   Byron.unTxPayload . Byron.bodyTxPayload . Byron.blockBody
 
-blockPreviousHash :: Byron.ABlock a -> Byron.HeaderHash
-blockPreviousHash = Byron.headerPrevHash . Byron.blockHeader
+blockPreviousHash :: Byron.ABlock a -> ByteString
+blockPreviousHash = unHeaderHash . Byron.headerPrevHash . Byron.blockHeader
+
+ebbPrevHash :: Byron.ABoundaryBlock a -> ByteString
+ebbPrevHash bblock =
+  case Byron.boundaryPrevHash (Byron.boundaryHeader bblock) of
+    Left gh -> genesisToHeaderHash gh
+    Right hh -> unHeaderHash hh
+
+prevHash :: Byron.ByronBlock -> ByteString
+prevHash blk = case Byron.byronBlockRaw blk of
+  Byron.ABOBBlock ablk -> blockPreviousHash ablk
+  Byron.ABOBBoundary abblk -> ebbPrevHash abblk
 
 epochNumber :: Byron.ABlock ByteString -> Word64 -> Word64
 epochNumber blk slotsPerEpoch =
