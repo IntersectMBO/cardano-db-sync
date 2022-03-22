@@ -57,6 +57,7 @@ module Cardano.Db.Query
   , queryTxOutCount
   , queryTxOutValue
   , queryTxOutCredentials
+  , queryEpochStakeCount
   , queryUtxoAtBlockNo
   , queryUtxoAtSlotNo
   , queryWithdrawalsUpToBlockNo
@@ -742,6 +743,13 @@ queryUtxoAtBlockId blkid = do
       (out, Value (Just hash')) -> Just (entityVal out, hash')
       (_, Value Nothing) -> Nothing
 
+queryEpochStakeCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
+queryEpochStakeCount epoch = do
+  res <- select $ do
+    epochStake <- from $ table @ EpochStake
+    where_ (epochStake ^. EpochStakeEpochNo ==. val epoch)
+    pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
 
 queryUtxoAtBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m [(TxOut, ByteString)]
 queryUtxoAtBlockNo blkNo = do

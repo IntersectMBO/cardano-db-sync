@@ -4,6 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -32,11 +33,11 @@ module Cardano.DbSync.LedgerState
   , getAlonzoPParams
   ) where
 
-import           Prelude (String, id)
+import           Prelude (String, fail, id)
 
 import           Cardano.BM.Trace (Trace, logInfo, logWarning)
 
-import           Cardano.Binary (DecoderError)
+import           Cardano.Binary (Decoder, DecoderError, Encoding, FromCBOR (..), ToCBOR (..))
 import qualified Cardano.Binary as Serialize
 
 import qualified Cardano.Db as DB
@@ -130,8 +131,6 @@ import           System.Mem (performMajorGC)
 data BulkOperation
   = BulkRewardChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, Set Generic.Reward)]
   | BulkRewardReport !EpochNo !CardanoPoint !Int !Coin
-  | BulkStakeDistChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, (Coin, StakePoolKeyHash))]
-  | BulkStakeDistReport !EpochNo !CardanoPoint !Int
 
 data IndexCache = IndexCache
   { icAddressCache :: !(Map StakeCred DB.StakeAddressId)
@@ -161,20 +160,53 @@ data LedgerEnv = LedgerEnv
   , leStableEpochSlot :: !EpochSlot
   }
 
+-- TODO this is unstable in terms of restarts and we should try to remove it.
 data LedgerEventState = LedgerEventState
   { lesInitialized :: !Bool
   , lesEpochNo :: !(Maybe EpochNo)
   , lesLastRewardsEpoch :: !(Maybe EpochNo)
-  , lesLastStateDistEpoch :: !(Maybe EpochNo)
   , lesLastAdded :: !CardanoPoint
   }
 
 topLevelConfig :: LedgerEnv -> TopLevelConfig CardanoBlock
 topLevelConfig = Consensus.pInfoConfig . leProtocolInfo
 
-newtype CardanoLedgerState = CardanoLedgerState
+data CardanoLedgerState = CardanoLedgerState
   { clsState :: ExtLedgerState CardanoBlock
+  , clsEpochBlockNo :: EpochBlockNo
   }
+
+-- The height of the block in the current Epoch. We maintain this
+-- data next to the ledger state and store it in the same blob file.
+data EpochBlockNo = GenesisEpochBlockNo | EBBEpochBlockNo | EpochBlockNo Word64
+
+instance ToCBOR EpochBlockNo where
+  toCBOR GenesisEpochBlockNo = toCBOR (0 :: Word8)
+  toCBOR EBBEpochBlockNo = toCBOR (1 :: Word8)
+  toCBOR (EpochBlockNo n) =
+      toCBOR (2 :: Word8) <> toCBOR n
+
+instance FromCBOR EpochBlockNo where
+  fromCBOR = do
+    tag :: Word8 <- fromCBOR
+    case tag of
+      0 -> pure GenesisEpochBlockNo
+      1 -> pure EBBEpochBlockNo
+      2 -> EpochBlockNo <$> fromCBOR
+      n -> fail $ "unexpected EpochBlockNo value " <> show n
+
+encodeCardanoLedgerState :: (ExtLedgerState CardanoBlock -> Encoding)
+                         -> CardanoLedgerState -> Encoding
+encodeCardanoLedgerState encodeExt cls = mconcat
+    [ encodeExt (clsState cls)
+    , toCBOR (clsEpochBlockNo cls)
+    ]
+
+decodeCardanoLedgerState :: (forall s. Decoder s (ExtLedgerState CardanoBlock))
+                         -> (forall s. Decoder s CardanoLedgerState)
+decodeCardanoLedgerState decodeExt = do
+    ldgrState <- decodeExt
+    CardanoLedgerState ldgrState <$> fromCBOR
 
 data LedgerStateFile = LedgerStateFile
   { lsfSlotNo :: !SlotNo
@@ -189,6 +221,7 @@ data LedgerStateSnapshot = LedgerStateSnapshot
   , lssNewEpoch :: !(Strict.Maybe Generic.NewEpoch) -- Only Just for a single block at the epoch boundary
   , lssSlotDetails :: !SlotDetails
   , lssPoint :: !CardanoPoint
+  , lssStakeSlice :: !Generic.StakeSliceRes
   , lssEvents :: ![LedgerEvent]
   }
 
@@ -259,7 +292,6 @@ mkLedgerEnv trce protocolInfo dir nw stableEpochSlot systemStart aop = do
         { lesInitialized = False
         , lesEpochNo = Nothing
         , lesLastRewardsEpoch = Nothing
-        , lesLastStateDistEpoch = Nothing
         , lesLastAdded = GenesisPoint
         }
 
@@ -267,6 +299,7 @@ mkLedgerEnv trce protocolInfo dir nw stableEpochSlot systemStart aop = do
 initCardanoLedgerState :: Consensus.ProtocolInfo IO CardanoBlock -> CardanoLedgerState
 initCardanoLedgerState pInfo = CardanoLedgerState
       { clsState = Consensus.pInfoInitLedger pInfo
+      , clsEpochBlockNo = GenesisEpochBlockNo
       }
 
 -- TODO make this type safe. We make the assumption here that the first message of
@@ -291,18 +324,22 @@ applyBlock env blk = do
       ledgerDB <- readStateUnsafe env
       let oldState = ledgerDbCurrent ledgerDB
       let !result = applyBlk (ExtLedgerCfg (topLevelConfig env)) blk (clsState oldState)
-      let !newState = oldState { clsState = lrResult result }
-      details <- getSlotDetails env (ledgerState $ clsState newState) time (cardanoBlockSlotNo blk)
+      let !newLedgerState = lrResult result
+      details <- getSlotDetails env (ledgerState newLedgerState) time (cardanoBlockSlotNo blk)
+      let !newEpoch = mkNewEpoch (clsState oldState) newLedgerState
+      let !newEpochBlockNo = applyToEpochBlockNo (isJust $ blockIsEBB blk) (isJust newEpoch) (clsEpochBlockNo oldState)
+      let !newState = CardanoLedgerState newLedgerState newEpochBlockNo
       let !ledgerDB' = pushLedgerDB ledgerDB newState
       writeTVar (leStateVar env) (Just ledgerDB')
       oldEventState <- readTVar (leEventState env)
-      events <- generateEvents env oldEventState  details newState (blockPoint blk)
+      events <- generateEvents env oldEventState details newState (blockPoint blk)
       pure $ LedgerStateSnapshot
                 { lssState = newState
                 , lssOldState = oldState
-                , lssNewEpoch = maybeToStrict $ mkNewEpoch oldState newState
+                , lssNewEpoch = maybeToStrict newEpoch
                 , lssSlotDetails = details
                 , lssPoint = blockPoint blk
+                , lssStakeSlice = stakeSlice newState details
                 , lssEvents = events ++ mapMaybe (convertAuxLedgerEvent (leNetwork env)) (lrEvents result)
                 }
   where
@@ -315,7 +352,7 @@ applyBlock env blk = do
         Left err -> panic err
         Right result -> result
 
-    mkNewEpoch :: CardanoLedgerState -> CardanoLedgerState -> Maybe Generic.NewEpoch
+    mkNewEpoch :: ExtLedgerState CardanoBlock -> ExtLedgerState CardanoBlock -> Maybe Generic.NewEpoch
     mkNewEpoch oldState newState =
       if ledgerEpochNo env newState /= ledgerEpochNo env oldState + 1
         then Nothing
@@ -325,8 +362,29 @@ applyBlock env blk = do
               { Generic.neEpoch = ledgerEpochNo env newState
               , Generic.neIsEBB = isJust $ blockIsEBB blk
               , Generic.neAdaPots = maybeToStrict $ getAdaPots newState
-              , Generic.neEpochUpdate = Generic.epochUpdate (clsState newState)
+              , Generic.neEpochUpdate = Generic.epochUpdate newState
               }
+
+    applyToEpochBlockNo :: Bool -> Bool -> EpochBlockNo -> EpochBlockNo
+    applyToEpochBlockNo True _ _ = EBBEpochBlockNo
+    applyToEpochBlockNo _ True _ = EpochBlockNo 0
+    applyToEpochBlockNo _ _ (EpochBlockNo n) = EpochBlockNo (n + 1)
+    applyToEpochBlockNo _ _ GenesisEpochBlockNo = EpochBlockNo 0
+    applyToEpochBlockNo _ _ EBBEpochBlockNo = EpochBlockNo 0
+
+    stakeSliceMinSize :: Word64
+    stakeSliceMinSize = 2000
+
+    stakeSlice :: CardanoLedgerState -> SlotDetails -> Generic.StakeSliceRes
+    stakeSlice cls details = case clsEpochBlockNo cls of
+      EpochBlockNo n -> Generic.getStakeSlice
+                          (leProtocolInfo env)
+                          (leNetwork env)
+                          (sdEpochNo details)
+                          n
+                          stakeSliceMinSize
+                          (clsState cls)
+      _ -> Generic.NoSlices
 
 generateEvents :: LedgerEnv -> LedgerEventState -> SlotDetails -> CardanoLedgerState -> CardanoPoint -> STM [LedgerEvent]
 generateEvents env oldEventState details cls pnt = do
@@ -334,7 +392,6 @@ generateEvents env oldEventState details cls pnt = do
     pure $ catMaybes
             [ newEpochEvent
             , LedgerRewards details <$> rewards
-            , LedgerStakeDist <$> stakeDist
             ]
   where
     currentEpochNo :: EpochNo
@@ -359,21 +416,8 @@ generateEvents env oldEventState details cls pnt = do
             then mkRewards
             else Nothing
 
-
     mkRewards :: Maybe Generic.Rewards
     mkRewards = Generic.epochRewards (leNetwork env) (sdEpochNo details) (clsState cls)
-
-    stakeDist :: Maybe Generic.StakeDist
-    stakeDist =
-      case lesLastStateDistEpoch oldEventState of
-        Nothing -> mkStakeDist
-        Just oldStakeEpoch ->
-          if oldStakeEpoch < currentEpochNo
-            then mkStakeDist
-            else Nothing
-
-    mkStakeDist :: Maybe Generic.StakeDist
-    mkStakeDist = Generic.epochStakeDist (leNetwork env) (sdEpochNo details) (clsState cls)
 
     newEventState :: LedgerEventState
     newEventState =
@@ -384,19 +428,15 @@ generateEvents env oldEventState details cls pnt = do
             if isJust rewards
               then Just currentEpochNo
               else lesLastRewardsEpoch oldEventState
-        , lesLastStateDistEpoch =
-            if isJust stakeDist
-              then Just currentEpochNo
-              else lesLastStateDistEpoch oldEventState
         , lesLastAdded =
-            if isNothing rewards && isNothing stakeDist
+            if isNothing rewards
               then lesLastAdded oldEventState
               else pnt
         }
 
-saveCurrentLedgerState :: LedgerEnv -> ExtLedgerState CardanoBlock -> Maybe EpochNo -> IO ()
+saveCurrentLedgerState :: LedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
 saveCurrentLedgerState env ledger mEpochNo = do
-    case mkLedgerStateFilename (leDir env) ledger mEpochNo of
+    case mkLedgerStateFilename (leDir env) (clsState ledger) mEpochNo of
       Origin -> pure () -- we don't store genesis
       At file -> do
         exists <- doesFileExist file
@@ -406,11 +446,12 @@ saveCurrentLedgerState env ledger mEpochNo = do
         else do
           LBS.writeFile file $
             Serialize.serializeEncoding $
-              Consensus.encodeExtLedgerState
-                 (encodeDisk codecConfig)
-                 (encodeDisk codecConfig)
-                 (encodeDisk codecConfig)
-                 ledger
+              encodeCardanoLedgerState
+                (Consensus.encodeExtLedgerState
+                   (encodeDisk codecConfig)
+                   (encodeDisk codecConfig)
+                   (encodeDisk codecConfig))
+                ledger
           logInfo (leTrace env) $ mconcat ["Took a ledger snapshot at ", Text.pack file]
   where
     codecConfig :: CodecConfig CardanoBlock
@@ -423,7 +464,7 @@ mkLedgerStateFilename dir ledger mEpochNo = lsfFilePath . dbPointToFileName dir 
 saveCleanupState :: LedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
 saveCleanupState env ledger mEpochNo = do
   let st = clsState ledger
-  saveCurrentLedgerState env st mEpochNo
+  saveCurrentLedgerState env ledger mEpochNo
   cleanupLedgerStateFiles env $
     fromWithOrigin (SlotNo 0) (ledgerTipSlot $ ledgerState st)
 
@@ -639,9 +680,9 @@ loadLedgerStateFromFile config delete lsf = do
     mst <- safeReadFile (lsfFilePath lsf)
     case mst of
       Left err -> when delete (safeRemoveFile $ lsfFilePath lsf) >> pure (Left err)
-      Right st -> pure . Right $ CardanoLedgerState { clsState = st }
+      Right st -> pure $ Right st
   where
-    safeReadFile :: FilePath -> IO (Either Text (ExtLedgerState CardanoBlock))
+    safeReadFile :: FilePath -> IO (Either Text CardanoLedgerState)
     safeReadFile fp = do
       mbs <- Exception.try $ BS.readFile fp
       case mbs of
@@ -654,15 +695,20 @@ loadLedgerStateFromFile config delete lsf = do
     codecConfig :: CodecConfig CardanoBlock
     codecConfig = configCodec config
 
-    decode :: ByteString -> Either DecoderError (ExtLedgerState CardanoBlock)
-    decode =
+    decode :: ByteString -> Either DecoderError CardanoLedgerState
+    decode = do
       Serialize.decodeFullDecoder
           "Ledger state file"
-          (Consensus.decodeExtLedgerState
-            (decodeDisk codecConfig)
-            (decodeDisk codecConfig)
-            (decodeDisk codecConfig))
+          decodeState
         . LBS.fromStrict
+
+    decodeState :: (forall s. Decoder s CardanoLedgerState)
+    decodeState =
+      decodeCardanoLedgerState $
+        Consensus.decodeExtLedgerState
+          (decodeDisk codecConfig)
+          (decodeDisk codecConfig)
+          (decodeDisk codecConfig)
 
 -- Get a list of the ledger state files order most recent
 listLedgerStateFilesOrdered :: LedgerStateDir -> IO [LedgerStateFile]
@@ -702,18 +748,18 @@ getPoolParamsShelley lState =
 
 -- We only compute 'AdaPots' for later eras. This is a time consuming
 -- function and we only want to run it on epoch boundaries.
-getAdaPots :: CardanoLedgerState -> Maybe Shelley.AdaPots
+getAdaPots :: ExtLedgerState CardanoBlock -> Maybe Shelley.AdaPots
 getAdaPots st =
-    case ledgerState $ clsState st of
+    case ledgerState st of
       LedgerStateByron _ -> Nothing
       LedgerStateShelley sts -> Just $ totalAdaPots sts
       LedgerStateAllegra sta -> Just $ totalAdaPots sta
       LedgerStateMary stm -> Just $ totalAdaPots stm
       LedgerStateAlonzo sta -> Just $ totalAdaPots sta
 
-ledgerEpochNo :: LedgerEnv -> CardanoLedgerState -> EpochNo
+ledgerEpochNo :: LedgerEnv -> ExtLedgerState CardanoBlock -> EpochNo
 ledgerEpochNo env cls =
-    case ledgerTipSlot (ledgerState (clsState cls)) of
+    case ledgerTipSlot (ledgerState cls) of
       Origin -> 0 -- An empty chain is in epoch 0
       NotOrigin slot ->
         case runExcept $ epochInfoEpoch epochInfo slot of
@@ -721,7 +767,7 @@ ledgerEpochNo env cls =
           Right en -> en
   where
     epochInfo :: EpochInfo (Except Consensus.PastHorizonException)
-    epochInfo = epochInfoLedger (configLedger $ topLevelConfig env) (hardForkLedgerStatePerEra . ledgerState $ clsState cls)
+    epochInfo = epochInfoLedger (configLedger $ topLevelConfig env) (hardForkLedgerStatePerEra $ ledgerState cls)
 
 -- Like 'Consensus.tickThenReapply' but also checks that the previous hash from the block matches
 -- the head hash of the ledger state.

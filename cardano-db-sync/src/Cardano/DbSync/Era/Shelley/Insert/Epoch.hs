@@ -15,7 +15,7 @@ module Cardano.DbSync.Era.Shelley.Insert.Epoch
   , insertEpochInterleaved
   , insertPoolDepositRefunds
   , postEpochRewards
-  , postEpochStake
+  , insertStakeSlice
   ) where
 
 import           Cardano.Prelude
@@ -36,8 +36,8 @@ import           Cardano.DbSync.Util
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
-import           Control.Monad.Class.MonadSTM.Strict (flushTBQueue, isEmptyTBQueue, readTVar,
-                   writeTBQueue, writeTVar)
+import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, flushTBQueue, isEmptyTBQueue,
+                   readTVar, readTVarIO, writeTBQueue, writeTVar)
 import           Control.Monad.Extra (mapMaybeM)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (hoistEither)
@@ -93,19 +93,7 @@ insertEpochInterleaved tracer bop =
       BulkRewardReport epochNo _ rewardCount total -> do
         liftIO $ reportRewards epochNo rewardCount
         lift $ insertEpochRewardTotalReceived epochNo total
-      BulkStakeDistChunk epochNo _ icache sDistChunk ->
-        insertEpochStake tracer icache epochNo sDistChunk
-      BulkStakeDistReport epochNo _ count ->
-        liftIO $ reportStakeDist epochNo count
   where
-    reportStakeDist :: EpochNo -> Int -> IO ()
-    reportStakeDist epochNo count =
-      logInfo tracer $
-        mconcat
-          [ "insertEpochInterleaved: Epoch ", textShow (unEpochNo epochNo)
-          , ", ", textShow count, " stake addresses"
-          ]
-
     reportRewards :: EpochNo -> Int -> IO ()
     reportRewards epochNo rewardCount =
       logInfo tracer $
@@ -127,18 +115,6 @@ postEpochRewards lenv rwds point = do
     writeTBQueue (leBulkOpQueue lenv) $
       BulkRewardReport epochNo point (length $ Generic.rwdRewards rwds) (sumRewardTotal $ Generic.rwdRewards rwds)
 
-postEpochStake
-     :: (MonadBaseControl IO m, MonadIO m)
-     => LedgerEnv -> Generic.StakeDist -> CardanoPoint
-     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-postEpochStake lenv smap point = do
-  icache <- lift $ updateIndexCache lenv (Generic.stakeDistStakeCreds smap) (Generic.stakeDistPoolHashKeys smap)
-  liftIO . atomically $ do
-    let epochNo = Generic.sdistEpochNo smap
-    forM_ (chunksOf 1000 $ Map.toList (Generic.sdistStakeMap smap)) $ \stakeChunk ->
-      writeTBQueue (leBulkOpQueue lenv) $ BulkStakeDistChunk epochNo point icache stakeChunk
-    writeTBQueue (leBulkOpQueue lenv) $ BulkStakeDistReport epochNo point (length $ Generic.sdistStakeMap smap)
-
 isEmptyEpochBulkOps
      :: MonadIO m
      => LedgerEnv
@@ -159,12 +135,26 @@ insertEpochRewardTotalReceived epochNo total =
       , DB.epochRewardTotalReceivedAmount = Generic.coinToDbLovelace total
       }
 
+insertStakeSlice
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> StrictTVar IO IndexCache -> Generic.StakeSliceRes
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+insertStakeSlice _ _ Generic.NoSlices = pure ()
+insertStakeSlice tracer cacheVar (Generic.Slice slice finalSlice) = do
+    cache <- liftIO $ readTVarIO cacheVar
+    -- cache TVar is not updated. We just use a slice here.
+    cacheSlice <- lift $ modifyCache (Generic.stakeDistStakeCreds slice) (Generic.stakeDistPoolHashKeys slice) cache
+    insertEpochStake cacheSlice (Generic.sliceEpochNo slice) (Map.toList $ Generic.sliceDistr slice)
+    when finalSlice $ do
+      size <- lift $ DB.queryEpochStakeCount (unEpochNo $ Generic.sliceEpochNo slice)
+      liftIO . logInfo tracer $ mconcat ["Inserted ", show size, " EpochStake for ", show (Generic.sliceEpochNo slice)]
+
 insertEpochStake
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> IndexCache -> EpochNo
+    => IndexCache -> EpochNo
     -> [(Generic.StakeCred, (Shelley.Coin, Generic.StakePoolKeyHash))]
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertEpochStake _tracer icache epochNo stakeChunk = do
+insertEpochStake icache epochNo stakeChunk = do
     dbStakes <- mapM mkStake stakeChunk
     lift $ DB.insertManyEpochStakes dbStakes
   where
@@ -292,21 +282,22 @@ updateIndexCache
     -> ReaderT SqlBackend m IndexCache
 updateIndexCache lenv screds pkhs = do
     oldCache <- liftIO . atomically $ readTVar (leIndexCache lenv)
-    newIndexCache <- createNewCache oldCache
+    newIndexCache <- modifyCache screds pkhs oldCache
     liftIO . atomically $ writeTVar (leIndexCache lenv) newIndexCache
     pure newIndexCache
-  where
-    createNewCache
-        :: (MonadBaseControl IO m, MonadIO m)
-        => IndexCache -> ReaderT SqlBackend m IndexCache
-    createNewCache oldCache = do
-      newAddresses <- newAddressCache (icAddressCache oldCache)
-      newPools <- newPoolCache (icPoolCache oldCache)
-      pure $ IndexCache
-                { icAddressCache = newAddresses
-                , icPoolCache = newPools
-                }
 
+modifyCache
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Set Generic.StakeCred -> Set Generic.StakePoolKeyHash
+    -> IndexCache -> ReaderT SqlBackend m IndexCache
+modifyCache screds pkhs oldCache = do
+    newAddresses <- newAddressCache (icAddressCache oldCache)
+    newPools <- newPoolCache (icPoolCache oldCache)
+    pure $ IndexCache
+              { icAddressCache = newAddresses
+              , icPoolCache = newPools
+              }
+  where
     newAddressCache
         :: (MonadBaseControl IO m, MonadIO m)
         => Map Generic.StakeCred DB.StakeAddressId
