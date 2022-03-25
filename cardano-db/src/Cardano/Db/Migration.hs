@@ -171,7 +171,7 @@ createMigration source (MigrationDir migdir) = do
     create :: ReaderT SqlBackend (NoLoggingT IO) (Maybe (MigrationVersion, Text))
     create = do
       ver <- getSchemaVersion
-      statements <- getMigration migrateCardanoDb
+      statements <- filterMigrations <$> getMigration migrateCardanoDb
       if null statements
         then pure Nothing
         else do
@@ -213,6 +213,14 @@ createMigration source (MigrationDir migdir) = do
           -- which Persistent migrations are generated.
           let (SchemaVersion _ stage2 _) = entityVal x
           pure $ MigrationVersion 2 stage2 0
+
+filterMigrations :: [Text] -> [Text]
+filterMigrations =
+    filter keepMigration
+  where
+    keepMigration :: Text -> Bool
+    keepMigration txt =
+      not (Text.isInfixOf "ADD CONSTRAINT" txt && Text.isInfixOf "FOREIGN KEY" txt && Text.isInfixOf "REFERENCES" txt)
 
 recreateDB ::  PGPassSource -> IO ()
 recreateDB pgpass = do
