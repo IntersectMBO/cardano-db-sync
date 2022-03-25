@@ -45,6 +45,7 @@ library
                         Cardano.Mock.ChainSync.Server
                         Cardano.Mock.ChainSync.State
                         Cardano.Mock.Forging.Crypto
+                        Cardano.Mock.Forging.Examples
                         Cardano.Mock.Forging.Interpreter
                         Cardano.Mock.Forging.Tx.Alonzo
                         Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples

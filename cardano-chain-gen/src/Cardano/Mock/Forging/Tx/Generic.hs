@@ -11,10 +11,14 @@ module Cardano.Mock.Forging.Tx.Generic
   , resolveUTxOIndex
   , resolveStakeCreds
   , resolvePool
+  , createStakeCredentials
+  , createPaymentCredentials
+  , mkDummyScriptHash
   ) where
 
 import           Cardano.Prelude hiding (length, (.))
 
+import           Data.Coerce (coerce)
 import qualified Data.Compact.SplitMap as SplitMap
 import           Data.List (nub)
 import           Data.List.Extra ((!?))
@@ -26,7 +30,9 @@ import           Cardano.Ledger.Address
 import           Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Credential
+import           Cardano.Ledger.Crypto (ADDRHASH)
 import           Cardano.Ledger.Era (Crypto)
+import           Cardano.Ledger.Hashes (ScriptHash (ScriptHash))
 import           Cardano.Ledger.Keys
 import           Cardano.Ledger.Shelley.LedgerState hiding (LedgerState)
 import           Cardano.Ledger.Shelley.TxBody
@@ -37,6 +43,10 @@ import           Ouroboros.Consensus.Cardano.Block (LedgerState)
 import           Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
+
+import           Cardano.Binary (ToCBOR (..))
+import           Cardano.Crypto.Hash (HashAlgorithm)
+import qualified Cardano.Crypto.Hash as Hash
 
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Types
@@ -163,3 +173,17 @@ unregisteredPools =
   , KeyHash "222462543264795t3298745680239746523897456238974563298348"
   , KeyHash "33323876542397465497834256329487563428975634827956348975"
   ]
+
+createStakeCredentials :: Int -> [StakeCredential StandardCrypto]
+createStakeCredentials n =
+  fmap (KeyHashObj . KeyHash . mkDummyHash (Proxy @(ADDRHASH StandardCrypto))) [1..n]
+
+createPaymentCredentials :: Int -> [PaymentCredential StandardCrypto]
+createPaymentCredentials n =
+  fmap (KeyHashObj . KeyHash . mkDummyHash (Proxy @(ADDRHASH StandardCrypto))) [1..n]
+
+mkDummyScriptHash :: Int -> ScriptHash StandardCrypto
+mkDummyScriptHash n = ScriptHash $ mkDummyHash (Proxy @(ADDRHASH StandardCrypto)) n
+
+mkDummyHash :: forall h a. HashAlgorithm h => Proxy h -> Int -> Hash.Hash h a
+mkDummyHash _ = coerce . hashWithSerialiser @h toCBOR

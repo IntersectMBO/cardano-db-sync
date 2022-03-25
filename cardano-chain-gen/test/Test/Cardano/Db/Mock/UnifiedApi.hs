@@ -1,6 +1,7 @@
 module Test.Cardano.Db.Mock.UnifiedApi
   ( forgeNextAndSubmit
   , forgeNextFindLeaderAndSubmit
+  , forgeNextSkipSlotsFindLeaderAndSubmit
   , forgeAndSubmitBlocks
   , withAlonzoFindLeaderAndSubmit
   , withAlonzoFindLeaderAndSubmitTx
@@ -14,6 +15,7 @@ module Test.Cardano.Db.Mock.UnifiedApi
   , registerAllStakeCreds
   ) where
 
+import           Data.Word (Word64)
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
@@ -40,6 +42,12 @@ forgeNextAndSubmit inter mockServer testBlock = do
 forgeNextFindLeaderAndSubmit :: Interpreter -> ServerHandle IO CardanoBlock -> [TxEra] -> IO CardanoBlock
 forgeNextFindLeaderAndSubmit interpreter mockServer txs'  = do
     blk <- forgeNextFindLeader interpreter txs'
+    atomically $ addBlock mockServer blk
+    pure blk
+
+forgeNextSkipSlotsFindLeaderAndSubmit :: Interpreter -> ServerHandle IO CardanoBlock -> Word64 -> [TxEra] -> IO CardanoBlock
+forgeNextSkipSlotsFindLeaderAndSubmit interpreter mockServer skipSlots txs'  = do
+    blk <- forgeNextAfter interpreter skipSlots txs'
     atomically $ addBlock mockServer blk
     pure blk
 
