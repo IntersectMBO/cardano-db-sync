@@ -25,7 +25,7 @@ import           Data.Word (Word64)
 import           GHC.Records (HasField (..))
 
 import           Database.Esqueleto.Legacy (InnerJoin (..), SqlExpr, countRows, from, on, select,
-                   unValue, (==.), (^.))
+                   unValue, val, where_, (==.), (^.))
 import           Database.Persist.Sql (Entity, SqlBackend, entityVal)
 import           Database.PostgreSQL.Simple (SqlError (..))
 
@@ -66,8 +66,11 @@ assertRewardCount env n =
     assertEqBackoff env queryRewardCount n defaultDelays "Unexpected rewards count"
 
 assertBlockNoBackoff :: DBSyncEnv -> Int -> IO ()
-assertBlockNoBackoff env blockNo =
-    assertEqBackoff env queryBlockHeight (Just $ fromIntegral blockNo) defaultDelays "Unexpected BlockNo"
+assertBlockNoBackoff = assertBlockNoBackoffTimes defaultDelays
+
+assertBlockNoBackoffTimes :: [Int] -> DBSyncEnv ->  Int -> IO ()
+assertBlockNoBackoffTimes times env blockNo =
+    assertEqBackoff env queryBlockHeight (Just $ fromIntegral blockNo) times "Unexpected BlockNo"
 
 defaultDelays :: [Int]
 defaultDelays = [1,2,4,8,16,32,64,128]
@@ -201,6 +204,24 @@ assertRewardCounts env st filterAddr expected = do
                 pure (reward, stake_addr ^. StakeAddressHashRaw)
       pure $ fmap (bimap entityVal unValue) res
 
+assertEpochStake :: DBSyncEnv -> Word64 -> IO ()
+assertEpochStake env expected =
+    assertEqBackoff env q expected defaultDelays "Unexpected epoch stake counts"
+  where
+    q =
+      maybe 0 unValue . listToMaybe <$>
+          (select . from $ \(_a :: SqlExpr (Entity EpochStake)) -> pure countRows)
+
+assertEpochStakeEpoch :: DBSyncEnv -> Word64 -> Word64 -> IO ()
+assertEpochStakeEpoch env e expected =
+    assertEqBackoff env q expected defaultDelays "Unexpected epoch stake counts"
+  where
+    q =
+      maybe 0 unValue . listToMaybe <$>
+          (select . from $ \(a :: SqlExpr (Entity EpochStake)) -> do
+            where_ (a ^. EpochStakeEpochNo ==. val e)
+            pure countRows
+          )
 
 assertAlonzoCounts :: DBSyncEnv -> (Word64, Word64, Word64, Word64, Word64, Word64, Word64, Word64) -> IO ()
 assertAlonzoCounts env expected =
