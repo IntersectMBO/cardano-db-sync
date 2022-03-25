@@ -58,7 +58,16 @@ select slot_no from block where block_no is not null
 select pg_size_pretty (pg_database_size ('cexplorer'));
  pg_size_pretty
 ----------------
- 4067 MB
+ 116 GB
+(1 row)
+```
+
+### Size of the cexplorer database table
+```sql
+select pg_size_pretty (pg_total_relation_size ('block'));
+ pg_size_pretty
+----------------
+ 2760 MB
 (1 row)
 ```
 
@@ -84,8 +93,8 @@ transactions.
 
 To find out how far behind `db-sync` is:
 ```sql
-select now () - max (time) as behind_by from block ; 
-       behind_by        
+select now () - max (time) as behind_by from block ;
+       behind_by
 ------------------------
  4 days 20:59:39.134497
 (1 row)

@@ -51,8 +51,8 @@ lengthDbActionQueue (DbActionQueue q) = STM.lengthTBQueue q
 newDbActionQueue :: IO DbActionQueue
 newDbActionQueue =
     -- Use an odd number here so that the db_tip_height metric increments by this odd number
-    -- when syncing, instead of incrementing by say 2000.
-    DbActionQueue <$> TBQ.newTBQueueIO 2117
+    -- when syncing, instead of incrementing by say 100.
+    DbActionQueue <$> TBQ.newTBQueueIO 117
 
 writeDbActionQueue :: DbActionQueue -> DbAction -> STM ()
 writeDbActionQueue (DbActionQueue q) = TBQ.writeTBQueue q
