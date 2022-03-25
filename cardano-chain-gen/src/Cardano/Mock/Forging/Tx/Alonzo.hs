@@ -10,7 +10,7 @@
 
 module Cardano.Mock.Forging.Tx.Alonzo where
 
-import           Cardano.Prelude hiding ((.))
+import           Cardano.Prelude hiding (sum, (.))
 
 import qualified Data.Map.Strict as Map
 import           Data.Maybe (fromJust)
@@ -115,6 +115,24 @@ mkPaymentTx inputIndex outputIndex amount fees sta = do
         TxOut addr' (Value inputValue _) _ = snd inputPair
         change = TxOut addr' (valueFromList (fromIntegral $ fromIntegral inputValue - amount - fees) []) Strict.SNothing
     Right $ mkSimpleTx True $ consPaymentTxBody input mempty (StrictSeq.fromList [output, change]) (Coin fees) mempty
+
+mkPaymentTx' :: AlonzoUTxOIndex
+             -> [(AlonzoUTxOIndex, Value StandardCrypto)]
+             -> AlonzoLedgerState
+             -> Either ForgingError (ValidatedTx (AlonzoEra StandardCrypto))
+mkPaymentTx' inputIndex outputIndex sta = do
+    inputPair <- fst <$> resolveUTxOIndex inputIndex sta
+    outps <- mapM mkOuts outputIndex
+
+    let inps = Set.singleton $ fst inputPair
+        TxOut addr' (Value inputValue _) _ = snd inputPair
+        outValue = sum ((\ (Value vl _) -> vl) . snd <$> outputIndex)
+        change = TxOut addr' (valueFromList (fromIntegral $ fromIntegral inputValue - outValue) []) Strict.SNothing
+    Right $ mkSimpleTx True $ consPaymentTxBody inps mempty (StrictSeq.fromList $ outps ++ [change]) (Coin 0) mempty
+  where
+    mkOuts (outIx, vl) = do
+        addr <- resolveAddress outIx sta
+        Right $ TxOut addr vl Strict.SNothing
 
 mkLockByScriptTx :: AlonzoUTxOIndex -> [Bool] -> Integer -> Integer
                  -> AlonzoLedgerState
