@@ -55,7 +55,7 @@ on the same machine are:
 * Ensure that the machine has sufficient IOPS (Input/Output Operations per Second). Ie it should be
   60k IOPS or better. Lower IOPS ratings will result in slower sync times and/or falling behind the
   chain tip.
-* 80 Gigabytes or more of disk storage (preferably SSD which are 2-5 times faster than
+* 160 Gigabytes or more of disk storage (preferably SSD which are 2-5 times faster than
   electro-mechanical disks).
 
 The recommended configuration is to have the `db-sync` and the PostgreSQL server on the same
