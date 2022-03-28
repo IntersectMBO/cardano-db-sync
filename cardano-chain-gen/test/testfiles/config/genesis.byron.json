@@ -26,6 +26,6 @@
         { "summand": "155381000000000" , "multiplier": "43946000000" }
     , "unlockStakeEpoch": "18446744073709551615"
     }
-, "protocolConsts": { "k": 216 , "protocolMagic": 42 }
+, "protocolConsts": { "k": 10 , "protocolMagic": 42 }
 , "avvmDistr": {}
 }

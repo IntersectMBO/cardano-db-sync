@@ -36,20 +36,22 @@ import           Cardano.SMASH.Server.PoolDataLayer
 import           Cardano.SMASH.Server.Types
 
 import           Cardano.Mock.ChainSync.Server
+import           Cardano.Mock.Db.Validate
+import           Cardano.Mock.Db.Config hiding (withFullConfig)
+import qualified Cardano.Mock.Db.Config as Config
+import           Cardano.Mock.Forging.Examples
 import           Cardano.Mock.Forging.Interpreter
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Tx.Generic
 import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
 import           Cardano.Mock.Forging.Types
+import           Cardano.Mock.UnifiedApi
 
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (Assertion, assertBool, assertEqual, assertFailure, testCase)
 
-import           Test.Cardano.Db.Mock.Config
 import           Test.Cardano.Db.Mock.Examples
-import           Test.Cardano.Db.Mock.UnifiedApi
-import           Test.Cardano.Db.Mock.Validate
 
 unitTests :: IOManager -> [(Text, Text)] -> TestTree
 unitTests iom knownMigrations =
@@ -95,6 +97,14 @@ unitTests iom knownMigrations =
           , test "rollback on epoch boundary" rollbackBoundary
           , test "single MIR Cert multiple outputs" singleMIRCertMultiOut
           ]
+      , testGroup "stake distribution"
+          [ test "stake distribution from genesis" stakeDistGenesis
+          , test "2000 delegations" delegations2000
+          , test "2001 delegations" delegations2001
+          , test "8000 delegations" delegations8000
+          , test "many delegations" delegationsMany
+          , test "many delegations, not dense chain" delegationsManyNotDense
+          ]
       , testGroup "plutus spend scripts"
           [ test "simple script lock" simpleScript
           , test "unlock script in same block" unlockScriptSameBlock
@@ -132,6 +142,14 @@ unitTests iom knownMigrations =
 
 defaultConfigDir ::  FilePath
 defaultConfigDir = "config"
+
+rootTestDir :: FilePath
+rootTestDir = "test/testfiles"
+
+withFullConfig :: FilePath -> FilePath
+               -> (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO ())
+               -> IOManager -> [(Text, Text)] -> IO ()
+withFullConfig = Config.withFullConfig rootTestDir
 
 forgeBlocks :: IOManager -> [(Text, Text)] -> Assertion
 forgeBlocks = do
@@ -841,6 +859,129 @@ singleMIRCertMultiOut =
       assertRewardCount dbSync 4
   where
     testLabel = "singleMIRCertMultiOut"
+
+stakeDistGenesis :: IOManager -> [(Text, Text)] -> Assertion
+stakeDistGenesis =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync dbSync
+      a <- fillUntilNextEpoch interpreter mockServer
+      assertBlockNoBackoff dbSync (fromIntegral $ length a - 1)
+      -- There are 5 delegations in genesis
+      assertEpochStake dbSync 5
+  where
+    testLabel = "stakeDistGenesis"
+
+delegations2000 :: IOManager -> [(Text, Text)] -> Assertion
+delegations2000 =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync dbSync
+      a <- delegateAndSendBlocks 1995 interpreter
+      forM_ a $ atomically . addBlock mockServer
+      b <- fillUntilNextEpoch interpreter mockServer
+      c <- fillUntilNextEpoch interpreter mockServer
+
+      assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + length c - 1)
+      -- There are exactly 2000 entries on the second epoch, 5 from genesis and 1995 manually added
+      assertEpochStakeEpoch dbSync 2 2000
+
+      _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
+      assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + length c)
+      assertEpochStakeEpoch dbSync 2 2000
+  where
+    testLabel = "delegations2000"
+
+delegations2001 :: IOManager -> [(Text, Text)] -> Assertion
+delegations2001 =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync dbSync
+      a <- delegateAndSendBlocks 1996 interpreter
+      forM_ a $ atomically . addBlock mockServer
+      b <- fillUntilNextEpoch interpreter mockServer
+      c <- fillUntilNextEpoch interpreter mockServer
+
+      assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + length c - 1)
+      -- The first block of epoch inserts 2000 out of 2001 epoch distribution.
+      assertEpochStakeEpoch dbSync 2 2000
+      -- The remaining entry is inserted on the next block.
+      _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
+      assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + length c)
+      assertEpochStakeEpoch dbSync 2 2001
+  where
+    testLabel = "delegations2001"
+
+delegations8000 :: IOManager -> [(Text, Text)] -> Assertion
+delegations8000 =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync dbSync
+      a <- delegateAndSendBlocks 7995 interpreter
+      forM_ a $ atomically . addBlock mockServer
+      b <- fillEpochs interpreter mockServer 3
+
+      assertBlockNoBackoff dbSync (fromIntegral $ length a + length b - 1)
+      assertEpochStakeEpoch dbSync 3 2000
+
+      _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
+      assertEpochStakeEpoch dbSync 3 4000
+
+      _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
+      assertEpochStakeEpoch dbSync 3 6000
+
+      _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
+      assertEpochStakeEpoch dbSync 3 8000
+
+      _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
+      assertEpochStakeEpoch dbSync 3 8000
+  where
+    testLabel = "delegations8000"
+
+delegationsMany :: IOManager -> [(Text, Text)] -> Assertion
+delegationsMany =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync dbSync
+      a <- delegateAndSendBlocks 40000 interpreter
+      forM_ a $ atomically . addBlock mockServer
+      b <- fillEpochs interpreter mockServer 5
+
+      -- too long. We cannot use default delays
+      assertBlockNoBackoffTimes (repeat 10) dbSync (fromIntegral $ length a + length b - 1)
+      -- The slice size here is
+      -- 1 + div (delegationsLen * 5) expectedBlocks = 2001
+      -- instead of 2000, because there are many delegations
+      assertEpochStakeEpoch dbSync 7 2001
+
+      _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
+      assertEpochStakeEpoch dbSync 7 4002
+
+      _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
+      assertEpochStakeEpoch dbSync 7 6003
+  where
+    testLabel = "delegationsMany"
+
+delegationsManyNotDense :: IOManager -> [(Text, Text)] -> Assertion
+delegationsManyNotDense =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync dbSync
+      a <- delegateAndSendBlocks 40000 interpreter
+      forM_ a $ atomically . addBlock mockServer
+      b <- fillEpochs interpreter mockServer 5
+
+      -- too long. We cannot use default delays
+      assertBlockNoBackoffTimes (repeat 10) dbSync (fromIntegral $ length a + length b - 1)
+      -- The slice size here is
+      -- 1 + div (delegationsLen * 5) expectedBlocks = 2001
+      -- instead of 2000, because there are many delegations
+      assertEpochStakeEpoch dbSync 7 2001
+
+      -- Blocks come on average every 5 slots. If we skip 15 slots before each block,
+      -- we are expected to get only 1/4 of the expected blocks. The adjusted slices
+      -- should still be long enough to cover everything.
+      replicateM_ 40 $
+        forgeNextSkipSlotsFindLeaderAndSubmit interpreter mockServer 15 []
+
+      -- Even if the chain is not dense, all distributions are inserted.
+      assertEpochStakeEpoch dbSync 7 40005
+  where
+    testLabel = "delegationsManyNotDense"
 
 simpleScript :: IOManager -> [(Text, Text)] -> Assertion
 simpleScript =

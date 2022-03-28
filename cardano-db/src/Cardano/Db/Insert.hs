@@ -19,7 +19,6 @@ module Cardano.Db.Insert
   , insertManyRewards
   , insertManyTxIn
   , insertMaTxMint
-  , insertMaTxOut
   , insertManyMaTxOut
   , insertMeta
   , insertMultiAsset
@@ -73,7 +72,7 @@ import           Data.Proxy (Proxy (..))
 import           Data.Text (Text)
 import qualified Data.Text as Text
 
-import           Database.Persist.Class (AtLeastOneUniqueKey, PersistEntityBackend, checkUnique,
+import           Database.Persist.Class (AtLeastOneUniqueKey, PersistEntityBackend, PersistEntity, checkUnique,
                    insert, insertBy, replaceUnique)
 import           Database.Persist.EntityDef.Internal (entityDB, entityUniques)
 import           Database.Persist.Sql (OnlyOneUniqueKey, PersistRecordBackend, SqlBackend,
@@ -145,9 +144,6 @@ insertManyTxIn = insertManyUncheckedUnique "Many TxIn"
 
 insertMaTxMint :: (MonadBaseControl IO m, MonadIO m) => MaTxMint -> ReaderT SqlBackend m MaTxMintId
 insertMaTxMint = insertCheckUnique "insertMaTxMint"
-
-insertMaTxOut :: (MonadBaseControl IO m, MonadIO m) => MaTxOut -> ReaderT SqlBackend m MaTxOutId
-insertMaTxOut = insertCheckUnique "insertMaTxOut"
 
 insertManyMaTxOut :: (MonadBaseControl IO m, MonadIO m) => [MaTxOut] -> ReaderT SqlBackend m ()
 insertManyMaTxOut = insertManyUncheckedUnique "Many MaTxOut"
@@ -273,6 +269,40 @@ insertMany'
 insertMany' vtype records = handle exceptHandler (insertMany records)
   where
     exceptHandler :: SqlError -> ReaderT SqlBackend m [Key record]
+    exceptHandler e =
+      liftIO $ throwIO (DbInsertException vtype e)
+
+-- Used to benchmark tables without unique keys.
+_insertManyNoUnique
+    :: forall m record.
+        ( MonadBaseControl IO m
+        , MonadIO m
+        , PersistEntity record
+        )
+    => String -> [record] -> ReaderT SqlBackend m ()
+_insertManyNoUnique vtype records =
+    unless (null records) $
+      handle exceptHandler (rawExecute query values)
+  where
+    query :: Text
+    query =
+      Text.concat
+        [ "INSERT INTO "
+        , unEntityNameDB (entityDB . entityDef $ records)
+        , " (", Util.commaSeparated fieldNames
+        , ") VALUES "
+        ,  Util.commaSeparated . replicate (length records)
+             . Util.parenWrapped . Util.commaSeparated $ placeholders
+        ]
+
+    values :: [PersistValue]
+    values = concatMap (map toPersistValue . toPersistFields) records
+
+    fieldNames, placeholders :: [Text]
+    (fieldNames, placeholders) =
+      unzip (Util.mkInsertPlaceholders (entityDef (Proxy @record)) escapeFieldName)
+
+    exceptHandler :: SqlError -> ReaderT SqlBackend m a
     exceptHandler e =
       liftIO $ throwIO (DbInsertException vtype e)
 

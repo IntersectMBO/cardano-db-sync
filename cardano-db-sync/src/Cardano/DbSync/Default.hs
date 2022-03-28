@@ -23,7 +23,7 @@ import           Cardano.DbSync.Era.Shelley.Adjust (adjustEpochRewards)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
 import           Cardano.DbSync.Era.Shelley.Insert.Epoch (finalizeEpochBulkOps, forceInsertRewards,
-                   insertPoolDepositRefunds, isEmptyEpochBulkOps, postEpochRewards, postEpochStake)
+                   insertPoolDepositRefunds, isEmptyEpochBulkOps, postEpochRewards)
 import           Cardano.DbSync.Era.Shelley.Validate (validateEpochRewards)
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState (LedgerEvent (..), LedgerStateSnapshot (..), applyBlock,
@@ -153,12 +153,6 @@ handleLedgerEvents tracer lenv point =
             , show (unEpochNo $ Generic.rwdEpoch rwds), " ", renderPoint point
             ]
           postEpochRewards lenv rwds point
-        LedgerStakeDist sdist -> do
-          liftIO . logInfo tracer $ mconcat
-            [ "Handling ", show (Map.size (Generic.sdistStakeMap sdist)), " stakes for epoch "
-            , show (unEpochNo $ Generic.sdistEpochNo sdist), " ", renderPoint point
-            ]
-          postEpochStake lenv sdist point
         LedgerRewardDist rwd ->
           lift $ stashPoolRewards tracer lenv rwd
         LedgerMirDist md ->

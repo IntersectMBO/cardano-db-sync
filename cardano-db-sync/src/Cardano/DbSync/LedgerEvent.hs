@@ -54,7 +54,6 @@ data LedgerEvent
   = LedgerNewEpoch !EpochNo !SyncState
   | LedgerStartAtEpoch !EpochNo
   | LedgerRewards !SlotDetails !Generic.Rewards
-  | LedgerStakeDist !Generic.StakeDist
 
   | LedgerRewardDist !Generic.Rewards
   | LedgerMirDist !Generic.Rewards
