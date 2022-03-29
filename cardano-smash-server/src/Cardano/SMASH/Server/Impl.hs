@@ -18,9 +18,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import           Data.Version (showVersion)
 
-import           Servant (Handler (..), Header, Headers, Server, err400, err403, err404, errBody,
-                   (:<|>) (..))
-import           Servant.API.ResponseHeaders (addHeader)
+import           Servant (Handler (..), Server, err400, err403, err404, errBody, (:<|>) (..))
 import           Servant.Swagger (toSwagger)
 
 import           Cardano.Db (textShow)
@@ -88,9 +86,9 @@ getPoolOfflineMetadata
     :: ServerEnv
     -> PoolId
     -> PoolMetadataHash
-    -> Handler (Headers '[Header "Cache-Control" Text] (ApiResult DBFail PoolMetadataRaw))
+    -> Handler (ApiResult DBFail PoolMetadataRaw)
 getPoolOfflineMetadata (ServerEnv trce dataLayer) poolId poolMetaHash =
-  fmap (addHeader $ cacheControlHeader NoCache) . convertIOToHandler $ do
+  convertIOToHandler $ do
 
     isDelisted <- dlCheckDelistedPool dataLayer poolId
 
@@ -270,19 +268,3 @@ throwDBFailException trce dbFail = do
 -- | Natural transformation from @IO@ to @Handler@.
 convertIOToHandler :: IO a -> Handler a
 convertIOToHandler = Handler . ExceptT . try
-
-
--- | Cache control header.
-data CacheControl
-    = NoCache
-    | CacheSeconds Int
-    | CacheOneHour
-    | CacheOneDay
-
--- | Render the cache control header.
-cacheControlHeader :: CacheControl -> Text
-cacheControlHeader NoCache = "no-store"
-cacheControlHeader (CacheSeconds sec) = "max-age=" <> show sec
-cacheControlHeader CacheOneHour = cacheControlHeader $ CacheSeconds (60 * 60)
-cacheControlHeader CacheOneDay = cacheControlHeader $ CacheSeconds (24 * 60 * 60)
-

@@ -24,8 +24,8 @@ import           Data.Aeson (FromJSON, ToJSON (..), eitherDecode, encode, object
 import           Data.Swagger (Swagger (..))
 
 import           Network.Wai (Request, lazyRequestBody)
-import           Servant (BasicAuth, Capture, Get, HasServer (..), Header, Headers, JSON, Patch,
-                   Post, QueryParam, ReqBody, (:<|>) (..), (:>))
+import           Servant (BasicAuth, Capture, Get, HasServer (..), JSON, Patch, Post, QueryParam,
+                   ReqBody, (:<|>) (..), (:>))
 import           Servant.Server (err400)
 import           Servant.Server.Internal (DelayedIO, addBodyCheck, delayedFailFatal, errBody,
                    withRequest)
@@ -71,7 +71,7 @@ type ApiRes verb a = verb '[JSON] (ApiResult DBFail a)
 type BasicAuthURL = BasicAuth "smash" User
 
 -- GET api/v1/metadata/{hash}
-type OfflineMetadataAPI = "api" :> APIVersion :> "metadata" :> Capture "id" PoolId :> Capture "hash" PoolMetadataHash :> Get '[JSON] (Headers '[Header "Cache-Control" Text] (ApiResult DBFail PoolMetadataRaw))
+type OfflineMetadataAPI = "api" :> APIVersion :> "metadata" :> Capture "id" PoolId :> Capture "hash" PoolMetadataHash :> ApiRes Get PoolMetadataRaw
 
 -- GET api/v1/status
 type HealthStatusAPI = "api" :> APIVersion :> "status" :> ApiRes Get HealthStatus
