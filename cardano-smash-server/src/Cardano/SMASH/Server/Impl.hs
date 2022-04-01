@@ -232,7 +232,7 @@ fetchPolicies :: ServerEnv -> User -> SmashURL -> Handler (ApiResult DBFail Poli
 fetchPolicies dataLayer _user = fetchPolicies' dataLayer
 #endif
 
--- |General fetch policies function.
+-- | General fetch policies function.
 fetchPolicies' :: ServerEnv -> SmashURL -> Handler (ApiResult DBFail PolicyResult)
 fetchPolicies' (ServerEnv trce dataLayer) smashURL =
   convertIOToHandler $ do
@@ -259,7 +259,7 @@ fetchPolicies' (ServerEnv trce dataLayer) smashURL =
         Left httpClientErr -> pure . ApiResult . Left . UnknownError $ renderHttpClientError httpClientErr
         Right policyResult' -> pure . ApiResult . Right $ policyResult'
 
--- Generic throwing of exception when something goes bad.
+-- | Generic throwing of exception when something goes bad.
 throwDBFailException ::Trace IO Text -> DBFail -> IO (ApiResult DBFail a)
 throwDBFailException trce dbFail = do
     logWarning trce $ textShow dbFail

@@ -1,11 +1,19 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Cardano.SMASH.Server.Config where
+module Cardano.SMASH.Server.Config
+  ( ApplicationUser (..)
+  , ApplicationUsers (..)
+  , SmashServerConfig (..)
+  , SmashServerParams(..)
+
+  , defaultSmashPort
+  , paramsToConfig
+  ) where
 
 import           Cardano.Prelude
 
-import           Data.Aeson
+import           Data.Aeson (FromJSON (..), ToJSON (..))
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
@@ -59,6 +67,7 @@ newtype ApplicationUsers = ApplicationUsers [ApplicationUser]
 instance ToJSON ApplicationUsers
 instance FromJSON ApplicationUsers
 
+-- Load application users from a file.
 readAppUsers :: Maybe FilePath -> IO ApplicationUsers
 readAppUsers mPath = case mPath of
   Nothing -> pure $ ApplicationUsers []
@@ -69,6 +78,7 @@ readAppUsers mPath = case mPath of
       Right users -> pure $ ApplicationUsers users
       Left err -> throwIO $ userError $ Text.unpack err
 
+-- Parse application user as username,password
 parseAppUser :: Text -> Either Text ApplicationUser
 parseAppUser line = case Text.breakOn "," line of
     (user, commaPswd)

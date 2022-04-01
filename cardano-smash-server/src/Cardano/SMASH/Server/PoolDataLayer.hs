@@ -1,7 +1,13 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Cardano.SMASH.Server.PoolDataLayer where
+module Cardano.SMASH.Server.PoolDataLayer
+  ( PoolDataLayer (..)
+  , postgresqlPoolDataLayer
+  , filterRegistered
+  , createCachedPoolDataLayer
+  , dbToServantPoolId
+  ) where
 
 
 import           Cardano.Prelude
