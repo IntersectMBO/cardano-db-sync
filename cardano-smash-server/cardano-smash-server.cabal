@@ -69,8 +69,11 @@ library
                       , containers
                       , http-conduit
                       , iohk-monitoring
+                      , monad-logger
                       , network-uri
+                      , persistent-postgresql
                       , quiet
+                      , resource-pool
                       , servant
                       , servant-server
                       , servant-swagger

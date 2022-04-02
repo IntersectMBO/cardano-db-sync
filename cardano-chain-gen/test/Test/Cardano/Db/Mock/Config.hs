@@ -13,7 +13,7 @@ import           Control.Concurrent.STM.TMVar (TMVar, newEmptyTMVarIO, takeTMVar
 import           Control.Exception (SomeException, bracket)
 import           Control.Monad (void)
 import           Control.Monad.Extra (eitherM)
-import           Control.Monad.Logger (NoLoggingT)
+import           Control.Monad.Logger (NoLoggingT, runNoLoggingT)
 import           Control.Monad.Trans.Except.Exit (orDie)
 import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
 
@@ -24,6 +24,7 @@ import           System.Directory (createDirectoryIfMissing, removePathForcibly)
 import           System.FilePath.Posix ((</>))
 import           System.IO.Silently (hSilence)
 
+import           Database.Persist.Postgresql (createPostgresqlPool)
 import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Config (TopLevelConfig)
@@ -138,10 +139,13 @@ getDBSyncPGPass = enpPGPassSource . dbSyncParams
 queryDBSync :: DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> IO a
 queryDBSync env = Db.runWithConnectionNoLogging (getDBSyncPGPass env)
 
-getPoolLayer :: DBSyncEnv -> PoolDataLayer
-getPoolLayer env = postgresqlPoolDataLayer
+getPoolLayer :: DBSyncEnv -> IO PoolDataLayer
+getPoolLayer env = do
+  pgconfig <- orDie Db.renderPGPassError $ newExceptT $ Db.readPGPass (enpPGPassSource $ dbSyncParams env)
+  pool <- runNoLoggingT $ createPostgresqlPool (Db.toConnectionString pgconfig) 1 -- Pool size as config?
+  pure $ postgresqlPoolDataLayer
                     nullTracer
-                    (enpPGPassSource $ dbSyncParams env)
+                    pool
 
 setupTestsDir :: FilePath -> IO ()
 setupTestsDir dir = do

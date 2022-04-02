@@ -1353,7 +1353,8 @@ poolDelist =
 
       let poolKeyHash = resolvePool (PoolIndexNew 0) st
       let poolId = dbToServantPoolId $ unKeyHashRaw poolKeyHash
-      _ <- dlAddDelistedPool (getPoolLayer dbSync) poolId
+      poolLayer <- getPoolLayer dbSync
+      _ <- dlAddDelistedPool poolLayer poolId
 
       -- This is not async, so we don't need to do exponential backoff
       -- delisted not retired

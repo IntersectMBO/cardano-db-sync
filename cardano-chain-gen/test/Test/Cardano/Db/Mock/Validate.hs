@@ -263,6 +263,7 @@ assertPoolLayerCounters :: Crypto era ~ StandardCrypto
                         -> LedgerState (ShelleyBlock era)
                         -> IO ()
 assertPoolLayerCounters env (expectedRetired, expectedDelisted) expResults st = do
+    poolLayer <- getPoolLayer env
     retiredPools <- dlGetRetiredPools poolLayer
     assertEqual "Unexpected retired pools counter" (Right expectedRetired) (fromIntegral . length <$> retiredPools)
 
@@ -277,7 +278,6 @@ assertPoolLayerCounters env (expectedRetired, expectedDelisted) expResults st = 
       isDelisted <- dlCheckDelistedPool poolLayer servantPoolId
       isGetPool <- isRight <$> dlGetPool poolLayer servantPoolId
       assertEqual ("Unexpected result for pool " ++ show servantPoolId) expected (isRetired, isDelisted, isGetPool)
-  where
-    poolLayer = getPoolLayer env
+
 
 

@@ -16,7 +16,9 @@ import           Network.Wai.Handler.Warp (defaultSettings, runSettings, setBefo
 
 import           Cardano.BM.Trace (Trace, logInfo)
 
-import           Cardano.Db (PGPassSource (..), textShow)
+import           Cardano.Db (PGPassSource (PGPassDefaultEnv), readPGPass, renderPGPassError,
+                   textShow, toConnectionString)
+import qualified Cardano.Db as Db
 
 import           Cardano.SMASH.Server.Api
 import           Cardano.SMASH.Server.Config
@@ -24,19 +26,27 @@ import           Cardano.SMASH.Server.Impl
 import           Cardano.SMASH.Server.PoolDataLayer
 import           Cardano.SMASH.Server.Types
 
+import           Control.Monad.Trans.Except.Exit (orDie)
+import           Control.Monad.Trans.Except.Extra (newExceptT)
+import           Database.Persist.Postgresql
+
 runSmashServer :: SmashServerConfig -> IO ()
 runSmashServer config = do
 
     let trce = sscTrace config
-    let poolDataLayer = postgresqlPoolDataLayer trce PGPassDefaultEnv
-
     let settings =
           setPort (sscSmashPort config) $
           setBeforeMainLoop
             (logInfo trce $ "SMASH listening on port " <> textShow (sscSmashPort config))
           defaultSettings
 
-    runSettings settings =<< mkApp (sscTrace config) poolDataLayer (sscAdmins config)
+    pgconfig <- orDie renderPGPassError $ newExceptT (readPGPass PGPassDefaultEnv)
+    pool <- Db.runIohkLogging trce $ createPostgresqlPool (toConnectionString pgconfig) 10 -- Pool size as config?
+    -- TODO Prefer to use withPostgresqlPool here!
+    -- withPostgresqlPool (toConnectionString pgconfig) 1 $ \pool -> do
+    let poolDataLayer = postgresqlPoolDataLayer trce pool
+    app <- mkApp (sscTrace config) poolDataLayer (sscAdmins config)
+    runSettings settings app
 
 mkApp :: Trace IO Text -> PoolDataLayer -> ApplicationUsers -> IO Application
 mkApp trce dataLayer appUsers = do
