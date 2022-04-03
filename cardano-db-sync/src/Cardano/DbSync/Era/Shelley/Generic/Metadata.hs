@@ -24,6 +24,7 @@ import qualified Cardano.Ledger.Shelley.Metadata as Shelley
 import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as ShelleyMa
 
 import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Key as Aeson
 import qualified Data.Aeson.Text as Aeson.Text
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Map.Strict as Map
@@ -67,7 +68,7 @@ metadataValueToJsonNoSchema = conv
     conv (TxMetaText txt) = Aeson.String txt
     conv (TxMetaList  vs) = Aeson.Array (Vector.fromList (map conv vs))
     conv (TxMetaMap  kvs) = Aeson.object
-                              [ (convKey k, conv v)
+                              [ (Aeson.fromText $ convKey k, conv v)
                               | (k, v) <- kvs ]
 
     -- Metadata allows any value as a key, not just string as JSON does.

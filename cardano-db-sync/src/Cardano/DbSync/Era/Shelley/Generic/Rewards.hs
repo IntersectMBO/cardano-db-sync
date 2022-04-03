@@ -182,7 +182,7 @@ getInstantaneousRewards network lstate =
 
     instRwds :: Shelley.InstantaneousRewards (Crypto era)
     instRwds =
-      Shelley._irwd . Shelley._dstate . Shelley._delegationState
+      Shelley._irwd . Shelley.dpsDState . Shelley.lsDPState
         . Shelley.esLState . Shelley.nesEs $ Consensus.shelleyLedgerState lstate
 
 -- -------------------------------------------------------------------------------------------------

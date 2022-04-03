@@ -16,19 +16,15 @@ import           Cardano.Ledger.Era
 import           Cardano.Ledger.Hashes
 import           Cardano.Ledger.Mary.Value
 
-import           Cardano.PlutusExample.AlwaysFails (alwaysFailsScriptShortBs)
-import           Cardano.PlutusExample.AlwaysSucceeds (alwaysSucceedsScriptShortBs)
-import           Cardano.PlutusExample.MintingScript
-
+import qualified Plutus.V1.Ledger.Examples as Plutus
 import qualified PlutusCore.Data as Plutus
 
 alwaysSucceedsScript :: Script (AlonzoEra StandardCrypto)
-alwaysSucceedsScript = PlutusScript PlutusV1 alwaysSucceedsScriptShortBs
+alwaysSucceedsScript = PlutusScript PlutusV1 (Plutus.alwaysSucceedingNAryFunction 0)
 
 alwaysSucceedsScriptHash :: ScriptHash StandardCrypto
 alwaysSucceedsScriptHash = hashScript @(AlonzoEra StandardCrypto) alwaysSucceedsScript
 
--- addr_test1wpnlxv2xv9a9ucvnvzqakwepzl9ltx7jzgm53av2e9ncv4sysemm8
 alwaysSucceedsScriptAddr :: Addr StandardCrypto
 alwaysSucceedsScriptAddr = Addr Testnet (ScriptHashObj alwaysSucceedsScriptHash) StakeRefNull
 
@@ -37,7 +33,7 @@ alwaysSucceedsScriptStake = ScriptHashObj alwaysSucceedsScriptHash
 
 
 alwaysFailsScript :: Script (AlonzoEra StandardCrypto)
-alwaysFailsScript = PlutusScript PlutusV1 alwaysFailsScriptShortBs
+alwaysFailsScript = PlutusScript PlutusV1 (Plutus.alwaysFailingNAryFunction 0)
 
 alwaysFailsScriptHash :: ScriptHash StandardCrypto
 alwaysFailsScriptHash = hashScript @(AlonzoEra StandardCrypto) alwaysFailsScript
@@ -55,7 +51,7 @@ plutusDataList = Data $ Plutus.List []
 
 
 alwaysMintScript :: Script (AlonzoEra StandardCrypto)
-alwaysMintScript = PlutusScript PlutusV1 mintingScriptShortBs
+alwaysMintScript = PlutusScript PlutusV1 (Plutus.alwaysFailingNAryFunction 1)
 
 alwaysMintScriptHash :: ScriptHash StandardCrypto
 alwaysMintScriptHash = hashScript @(AlonzoEra StandardCrypto) alwaysMintScript

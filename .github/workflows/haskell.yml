@@ -102,6 +102,63 @@ jobs:
         sudo apt-get -y remove --purge software-properties-common
         sudo apt-get -y autoremove
 
+    - name: Install secp256k1 (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get -y install autoconf automake libtool
+        mkdir secp256k1-sources
+        cd secp256k1-sources
+        git clone https://github.com/bitcoin-core/secp256k1.git
+        cd secp256k1
+        git reset --hard $SECP256K1_REF
+        ./autogen.sh
+        ./configure --prefix=/usr --enable-module-schnorrsig --enable-experimental
+        make
+        make check
+        sudo make install
+        cd ../..
+
+    - name: Install secp256k1 (MacOS)
+      if: matrix.os == 'macos-latest' || matrix.os == 'macos-11'
+      run: |
+        brew install autoconf automake libtool
+        mkdir secp256k1-sources
+        cd secp256k1-sources
+        git clone https://github.com/bitcoin-core/secp256k1.git
+        cd secp256k1
+        git reset --hard $SECP256K1_REF
+        ./autogen.sh
+        ./configure --enable-module-schnorrsig --enable-experimental
+        make
+        make check
+        make install
+
+    - name: Install secp256k1 (Windows)
+      if: matrix.os == 'windows-latest'
+      env:
+        RUNNER_TEMP: ${{ runner.temp }}
+      run: |
+        echo "RUNNER_TEMP=$RUNNER_TEMP"
+        cd "$RUNNER_TEMP"
+        RUNNER_TEMP_FWD="$(echo "$RUNNER_TEMP" | sed 's|\\|/|g')"
+        curl -Ls \
+          --connect-timeout 5 \
+          --max-time 10 \
+          --retry 5 \
+          --retry-delay 0 \
+          --retry-max-time 40 \
+          https://hydra.iohk.io/job/Cardano/haskell-nix/windows-secp256k1/latest/download/1 -o secp256k1.zip
+        mkdir secp256k1
+        cd secp256k1
+        unzip ../secp256k1.zip
+        cd ..
+        export PKG_CONFIG_PATH="$PKG_CONFIG_PATH;$(readlink -f secp256k1/lib/pkgconfig | sed 's|^/d|D:|g' | tr / '\\')"
+        echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+        echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH" >> $GITHUB_ENV
+        export SECP256K1_PATH="$(readlink -f secp256k1/bin | sed 's|^/d|D:|g' | tr / '\\')"
+        echo "SECP256K1_PATH=$SECP256K1_PATH"
+        echo "$SECP256K1_PATH" >> $GITHUB_PATH
+
     - name: Cabal update
       run: cabal update
 

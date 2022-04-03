@@ -1,6 +1,9 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Cardano.Mock.Forging.Tx.Shelley where
 
@@ -12,6 +15,7 @@ import           Data.Sequence.Strict (StrictSeq)
 import qualified Data.Sequence.Strict as StrictSeq
 import qualified Data.Set as Set
 
+import           Cardano.Ledger.Address
 import           Cardano.Ledger.BaseTypes
 import           Cardano.Ledger.Coin
 import           Cardano.Ledger.Credential
@@ -31,6 +35,9 @@ import           Cardano.Mock.Forging.Types
 type ShelleyUTxOIndex = UTxOIndex (ShelleyEra StandardCrypto)
 type ShelleyLedgerState = LedgerState (ShelleyBlock (ShelleyEra StandardCrypto))
 type ShelleyTx = Tx (ShelleyEra StandardCrypto)
+
+instance HasField "address" (TxOut (ShelleyEra StandardCrypto)) (Addr StandardCrypto) where
+    getField (TxOut addr _) = addr
 
 mkPaymentTx :: ShelleyUTxOIndex -> ShelleyUTxOIndex -> Integer -> Integer
             -> ShelleyLedgerState

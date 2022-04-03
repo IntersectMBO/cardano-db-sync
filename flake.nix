@@ -2,13 +2,21 @@
   description = "cardano-db-sync";
 
   inputs = {
+    nixpkgs.follows = "haskellNix/nixpkgs-unstable";
+    hackageNix = {
+      url = "github:input-output-hk/hackage.nix";
+      flake = false;
+    };
+    nixTools = {
+      url = "github:input-output-hk/nix-tools";
+      flake = false;
+    };
     haskellNix.url = "github:input-output-hk/haskell.nix";
+    utils.url = "github:numtide/flake-utils";
     iohkNix = {
       url = "github:input-output-hk/iohk-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nixpkgs.follows = "haskellNix/nixpkgs-2111";
-    utils.url = "github:numtide/flake-utils";
     customConfig = { url = "path:./custom-config"; };
   };
 
