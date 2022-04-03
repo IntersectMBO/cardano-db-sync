@@ -19,7 +19,7 @@ import           Cardano.Ledger.Credential (Credential)
 import           Cardano.Ledger.Era (Crypto)
 import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import qualified Cardano.Ledger.Shelley.EpochBoundary as Shelley
-import qualified Cardano.Ledger.Shelley.LedgerState as Shelley hiding (_delegations)
+import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 

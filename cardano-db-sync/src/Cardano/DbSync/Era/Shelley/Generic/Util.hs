@@ -20,7 +20,6 @@ module Cardano.DbSync.Era.Shelley.Generic.Util
   , nonceToBytes
   , partitionMIRTargets
   , renderAddress
-  , renderLanguageCostModel
   , renderRewardAcnt
   , stakingCredHash
   , unitIntervalToDouble
@@ -40,8 +39,6 @@ import           Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as Db
 
 import qualified Cardano.Ledger.Address as Ledger
-import           Cardano.Ledger.Alonzo.Language (Language)
-import           Cardano.Ledger.Alonzo.Scripts (CostModel (..))
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Credential as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
@@ -52,14 +49,11 @@ import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import           Cardano.Ledger.Coin (Coin (..), DeltaCoin)
 import qualified Cardano.Ledger.SafeHash as Ledger
 
-import           Cardano.DbSync.Util
-
 import qualified Data.Binary.Put as Binary
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.List as List
-import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
@@ -128,12 +122,6 @@ partitionMIRTargets =
 
 renderAddress :: Ledger.Addr StandardCrypto -> Text
 renderAddress = Api.serialiseAddress . Api.fromShelleyAddrToAny
-
-renderCostModel :: CostModel -> Text
-renderCostModel (CostModel x) = textShow x
-
-renderLanguageCostModel :: Map Language CostModel -> Text
-renderLanguageCostModel mlc = textShow $ Map.map renderCostModel mlc
 
 renderRewardAcnt :: Ledger.RewardAcnt StandardCrypto -> Text
 renderRewardAcnt = Api.serialiseAddress . Api.fromShelleyStakeAddr

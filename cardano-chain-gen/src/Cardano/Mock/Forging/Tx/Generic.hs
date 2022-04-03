@@ -15,10 +15,12 @@ module Cardano.Mock.Forging.Tx.Generic
 
 import           Cardano.Prelude hiding (length, (.))
 
+import qualified Data.Compact.SplitMap as SplitMap
 import           Data.List (nub)
 import           Data.List.Extra ((!?))
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
+import qualified Data.UMap as UMap
 
 import           Cardano.Ledger.Address
 import           Cardano.Ledger.BaseTypes
@@ -71,7 +73,7 @@ resolveUTxOIndex index st = toLeft $ case index of
       find (hasAddr addr) utxoPairs
   where
     utxoPairs :: [(TxIn (Crypto era), Core.TxOut era)]
-    utxoPairs = Map.toList $ unUTxO $ _utxo $ _utxoState $ esLState $
+    utxoPairs = SplitMap.toList $ unUTxO $ _utxo $ lsUTxOState $ esLState $
         nesEs $ Consensus.shelleyLedgerState st
 
     hasAddr addr (_, txOut) = addr == getField @"address" txOut
@@ -85,27 +87,27 @@ resolveStakeCreds :: (Crypto era ~ StandardCrypto)
                   => StakeIndex -> LedgerState (ShelleyBlock era)
                   -> Either ForgingError (StakeCredential StandardCrypto)
 resolveStakeCreds indx st = case indx of
-    StakeIndex n -> toEither $ rewardAccs !? n
+    StakeIndex n -> toEither $ fst <$> (rewardAccs !? n)
     StakeAddress addr -> Right addr
     StakeIndexNew n -> toEither $ unregisteredStakeCredentials !? n
     StakeIndexScript bl -> Right $ if bl then alwaysSucceedsScriptStake else alwaysFailsScriptStake
     StakeIndexPoolLeader poolIndex -> Right $ getRwdCred $  _poolRAcnt $ findPoolParams poolIndex
     StakeIndexPoolMember n poolIndex -> Right $ resolvePoolMember n poolIndex
   where
-    rewardAccs = Map.keys $ _rewards $ _dstate $ _delegationState $ esLState $
+    rewardAccs = Map.toList $ UMap.rewView $ _unified $ dpsDState $ lsDPState $ esLState $
         nesEs $ Consensus.shelleyLedgerState st
 
-    poolParams = _pParams $ _pstate $ _delegationState $ esLState $
+    poolParams = _pParams $ dpsPState $ lsDPState $ esLState $
         nesEs $ Consensus.shelleyLedgerState st
 
-    delegations = _delegations dstate
+    delegs = UMap.delView $ _unified dstate
 
-    dstate = _dstate $ _delegationState $ esLState $
+    dstate = dpsDState $ lsDPState $ esLState $
         nesEs $ Consensus.shelleyLedgerState st
 
     resolvePoolMember n poolIndex =
       let poolId = _poolId (findPoolParams poolIndex)
-          poolMembers = Map.keys $ Map.filter (== poolId) delegations
+          poolMembers = Map.keys $ Map.filter (== poolId) delegs
       in poolMembers !! n
 
     findPoolParams :: PoolIndex -> PoolParams StandardCrypto
@@ -125,14 +127,14 @@ resolvePool pix st = case pix of
     PoolIndex n -> _poolId $ poolParams !! n
     PoolIndexNew n -> unregisteredPools !! n
   where
-    poolParams = Map.elems $ _pParams $ _pstate $ _delegationState $ esLState $
+    poolParams = Map.elems $ _pParams $ dpsPState $ lsDPState $ esLState $
         nesEs $ Consensus.shelleyLedgerState st
 
 allPoolStakeCert :: LedgerState (ShelleyBlock era) -> [DCert (Crypto era)]
 allPoolStakeCert st =
     DCertDeleg . RegKey <$> nub creds
   where
-    poolParms = Map.elems $ _pParams $ _pstate $ _delegationState $
+    poolParms = Map.elems $ _pParams $ dpsPState $ lsDPState $
       esLState $ nesEs $ Consensus.shelleyLedgerState st
     creds = concatMap getPoolStakeCreds poolParms
 

@@ -23,6 +23,7 @@ import           Cardano.Prelude hiding (Ptr, from, maybeToEither, on)
 
 import           Cardano.Db
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
+import           Cardano.Ledger.BaseTypes
 
 import qualified Cardano.Ledger.Address as Ledger
 import           Cardano.Ledger.Credential (Ptr (..), StakeReference (..))
@@ -98,7 +99,7 @@ queryStakeAddressRef addr =
         :: MonadIO m
         => Ptr
         -> ReaderT SqlBackend m (Maybe StakeAddressId)
-    queryStakeDelegation (Ptr (SlotNo slot) txIx certIx) = do
+    queryStakeDelegation (Ptr (SlotNo slot) (TxIx txIx) (CertIx certIx)) = do
       res <- select $ do
         (dlg :& tx :& blk) <-
           from $ table @Delegation
@@ -109,7 +110,7 @@ queryStakeAddressRef addr =
 
         where_ (blk ^. BlockSlotNo ==. just (val slot))
         where_ (tx ^. TxBlockIndex ==. val (fromIntegral txIx))
-        where_ (dlg ^. DelegationCertIndex ==. val (fromIntegral certIx))
+        where_ (dlg ^. DelegationCertIndex ==. val certIx)
         -- Need to order by BlockSlotNo descending for correct behavior when there are two
         -- or more delegation certificates in a single epoch.
         orderBy [desc (blk ^. BlockSlotNo)]
@@ -138,7 +139,7 @@ queryStakeAddressIdPair cred@(Generic.StakeCred bs) = do
     convert (Value said) = (cred, said)
 
 queryStakeRefPtr :: MonadIO m => Ptr -> ReaderT SqlBackend m (Maybe StakeAddressId)
-queryStakeRefPtr (Ptr (SlotNo slot) txIx certIx) = do
+queryStakeRefPtr (Ptr (SlotNo slot) (TxIx txIx) (CertIx certIx)) = do
   res <- select $ do
     (blk :& tx :& sr) <-
       from $ table @Block

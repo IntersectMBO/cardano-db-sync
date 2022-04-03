@@ -47,14 +47,15 @@ import           Cardano.Ledger.Alonzo.Tx (ValidatedTx (..))
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
 import qualified Cardano.Ledger.Alonzo.TxWitness as Ledger
+import           Cardano.Ledger.BaseTypes
 import           Cardano.Ledger.Coin (Coin (..))
+import qualified Cardano.Ledger.CompactAddress as Ledger
 import qualified Cardano.Ledger.Core as Ledger
 import qualified Cardano.Ledger.Era as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
 import qualified Cardano.Ledger.Mary as Mary
 import           Cardano.Ledger.Mary.Value (AssetName, PolicyID, Value (..))
 import qualified Cardano.Ledger.SafeHash as Ledger
-import qualified Cardano.Ledger.Shelley.CompactAddr as Ledger
 import           Cardano.Ledger.Shelley.Scripts (ScriptHash)
 import qualified Cardano.Ledger.Shelley.Scripts as Shelley
 import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
@@ -68,7 +69,6 @@ import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
-import           Data.Maybe.Strict (strictMaybeToMaybe)
 import           Data.MemoBytes (MemoBytes (..))
 import           Data.Sequence.Strict (StrictSeq)
 import qualified Data.Set as Set
@@ -588,10 +588,10 @@ fromAlonzoTx pp (blkIndex, tx) =
 -- -------------------------------------------------------------------------------------------------
 
 fromTxIn :: Maybe Word64 -> ShelleyTx.TxIn StandardCrypto -> TxIn
-fromTxIn setIndex (ShelleyTx.TxIn (ShelleyTx.TxId txid) index) =
+fromTxIn setIndex (ShelleyTx.TxIn (ShelleyTx.TxId txid) (TxIx w16)) =
   TxIn
     { txInHash = Crypto.hashToBytes $ Ledger.extractHash txid
-    , txInIndex = fromIntegral index
+    , txInIndex = fromIntegral w16
     , txInRedeemerIndex = setIndex
     }
 

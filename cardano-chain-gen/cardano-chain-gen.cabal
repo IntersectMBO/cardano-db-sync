@@ -44,6 +44,7 @@ library
                         Cardano.Mock.ChainDB
                         Cardano.Mock.ChainSync.Server
                         Cardano.Mock.ChainSync.State
+                        Cardano.Mock.Forging.Crypto
                         Cardano.Mock.Forging.Interpreter
                         Cardano.Mock.Forging.Tx.Alonzo
                         Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
@@ -63,17 +64,18 @@ library
                       , cardano-crypto-class
                       , cardano-crypto-praos
                       , cardano-crypto-wrapper
+                      , cardano-data
                       , cardano-ledger-alonzo
                       , cardano-ledger-byron
                       , cardano-ledger-core
                       , cardano-ledger-shelley
                       , cardano-ledger-shelley-ma
-                      , cardano-ledger-shelley-test
                       , cardano-node
                       , cardano-prelude
                       , cardano-protocol-tpraos
                       , cardano-slotting
                       , cborg
+                      , compact-map
                       , containers
                       , contra-tracer
                       , directory
@@ -101,7 +103,7 @@ library
                       , persistent
                       , persistent-postgresql
                       , plutus-core
-                      , plutus-example
+                      , plutus-ledger-api
                       , pretty-show
                       , prometheus
                       , random-shuffle
@@ -198,5 +200,4 @@ test-suite cardano-chain-gen
                       , ouroboros-network
                       , ouroboros-network-framework
                       , persistent
-                      , plutus-example
                       , postgresql-simple

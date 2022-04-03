@@ -27,7 +27,9 @@ import           Cardano.Ledger.Shelley.Rules.Epoch (EpochEvent (PoolReapEvent))
 import           Cardano.Ledger.Shelley.Rules.Mir (MirEvent (..))
 import           Cardano.Ledger.Shelley.Rules.NewEpoch (NewEpochEvent (..))
 import           Cardano.Ledger.Shelley.Rules.PoolReap (PoolreapEvent (..))
-import           Cardano.Ledger.Shelley.Rules.Tick (TickEvent (..))
+import           Cardano.Ledger.Shelley.Rules.Rupd (RupdEvent(RupdEvent))
+import           Cardano.Ledger.Shelley.Rules.Tick (TickEvent (NewEpochEvent))
+import qualified Cardano.Ledger.Shelley.Rules.Tick as Tick
 
 import           Cardano.Prelude hiding (All)
 
@@ -56,7 +58,9 @@ data LedgerEvent
   | LedgerRewards !SlotDetails !Generic.Rewards
   | LedgerStakeDist !Generic.StakeDist
 
-  | LedgerRewardDist !Generic.Rewards
+  | LedgerTotalRewards !Generic.Rewards
+  | LedgerDeltaRewards !Generic.Rewards
+  | LedgerIncrementalRewards !Generic.Rewards
   | LedgerMirDist !Generic.Rewards
   | LedgerPoolReap !EpochNo !(Map (Ledger.StakeCredential StandardCrypto) (Map (KeyHash 'StakePool StandardCrypto) Coin))
   deriving Eq
@@ -83,12 +87,15 @@ instance
     , Event (Ledger.EraRule "MIR" ledgerera) ~ MirEvent ledgerera
     , Event (Ledger.EraRule "EPOCH" ledgerera) ~ EpochEvent ledgerera
     , Event (Ledger.EraRule "POOLREAP" ledgerera) ~ PoolreapEvent ledgerera
+    , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent (Crypto ledgerera)
     ) =>
   ConvertLedgerEvent (ShelleyBlock ledgerera)
   where
     toLedgerEvent nw evt =
       case unwrapLedgerEvent evt of
-        LERewards e m -> Just $ LedgerRewardDist (convertPoolRewards nw e m)
+        LETotalRewards e m -> Just $ LedgerTotalRewards (convertPoolRewards nw e m)
+        LEDeltaReward e m -> Just $ LedgerDeltaRewards (convertPoolRewards nw e m)
+        LEIncrementalReward e m -> Just $ LedgerIncrementalRewards (convertPoolRewards nw e m)
         LEMirTransfer rp tp _rtt _ttr -> Just $ LedgerMirDist (convertMirRewards nw rp tp)
         LERetiredPools r _u en -> Just $ LedgerPoolReap en r
         ShelleyLedgerEventBBODY {} -> Nothing
@@ -150,16 +157,39 @@ mapBimap fk fa = Map.fromAscList . map (bimap fk fa) . Map.toAscList
 --------------------------------------------------------------------------------
 -- Patterns for event access. Why aren't these in ledger-specs?
 
-pattern LERewards
+pattern LETotalRewards
     :: ( Crypto ledgerera ~ StandardCrypto
        , Event (Ledger.EraRule "TICK" ledgerera) ~ TickEvent ledgerera
        , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera
        )
     => EpochNo -> Map (Ledger.StakeCredential StandardCrypto) (Set (Ledger.Reward StandardCrypto))
     -> AuxLedgerEvent (LedgerState (ShelleyBlock ledgerera))
-pattern LERewards e m <-
+pattern LETotalRewards e m <-
   ShelleyLedgerEventTICK
-    (NewEpochEvent (RewardEvent e m))
+    (NewEpochEvent (TotalRewardEvent e m))
+
+pattern LEDeltaReward
+    :: ( Crypto ledgerera ~ StandardCrypto
+       , Event (Ledger.EraRule "TICK" ledgerera) ~ TickEvent ledgerera
+       , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera
+       , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent (Crypto ledgerera)
+       )
+    => EpochNo -> Map (Ledger.StakeCredential StandardCrypto) (Set (Ledger.Reward StandardCrypto))
+    -> AuxLedgerEvent (LedgerState (ShelleyBlock ledgerera))
+pattern LEDeltaReward e m <-
+  ShelleyLedgerEventTICK
+    (NewEpochEvent (DeltaRewardEvent (RupdEvent e m)))
+
+pattern LEIncrementalReward
+    :: ( Crypto ledgerera ~ StandardCrypto
+       , Event (Ledger.EraRule "TICK" ledgerera) ~ TickEvent ledgerera
+       , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent (Crypto ledgerera)
+       )
+    => EpochNo -> Map (Ledger.StakeCredential StandardCrypto) (Set (Ledger.Reward StandardCrypto))
+    -> AuxLedgerEvent (LedgerState (ShelleyBlock ledgerera))
+pattern LEIncrementalReward e m <-
+  ShelleyLedgerEventTICK
+    (Tick.RupdEvent (RupdEvent e m))
 
 pattern LEMirTransfer
     :: ( Crypto ledgerera ~ StandardCrypto

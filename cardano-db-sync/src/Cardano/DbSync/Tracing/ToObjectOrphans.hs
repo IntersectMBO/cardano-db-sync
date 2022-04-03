@@ -24,9 +24,9 @@ instance HasTextFormatter (TraceSendRecv (ChainSync blk (Point blk) (Tip blk))) 
 
 instance ToObject ByronBlock where
   toObject _verb msg =
-    mkObject [ "kind" .= ("ByronBlock" :: String)
-             , "event" .= show msg
-             ]
+    mconcat [ "kind" .= ("ByronBlock" :: String)
+            , "event" .= show msg
+            ]
 
 instance Transformable Text IO (TraceSendRecv (ChainSync blk (Point blk) (Tip blk))) where
   trTransformer = trStructuredText

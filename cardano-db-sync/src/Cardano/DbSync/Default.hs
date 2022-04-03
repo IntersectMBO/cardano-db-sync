@@ -153,13 +153,17 @@ handleLedgerEvents tracer lenv point =
             , show (unEpochNo $ Generic.rwdEpoch rwds), " ", renderPoint point
             ]
           postEpochRewards lenv rwds point
+
+        LedgerDeltaRewards _ -> pure ()
+        LedgerIncrementalRewards _rew -> pure ()
+
         LedgerStakeDist sdist -> do
           liftIO . logInfo tracer $ mconcat
             [ "Handling ", show (Map.size (Generic.sdistStakeMap sdist)), " stakes for epoch "
             , show (unEpochNo $ Generic.sdistEpochNo sdist), " ", renderPoint point
             ]
           postEpochStake lenv sdist point
-        LedgerRewardDist rwd ->
+        LedgerTotalRewards rwd ->
           lift $ stashPoolRewards tracer lenv rwd
         LedgerMirDist md ->
           lift $ stashMirRewards tracer lenv md

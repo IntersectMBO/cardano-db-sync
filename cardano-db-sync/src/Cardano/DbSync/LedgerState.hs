@@ -697,7 +697,7 @@ getPoolParamsShelley
     => LedgerState (ShelleyBlock era)
     -> Set.Set (KeyHash 'StakePool StandardCrypto)
 getPoolParamsShelley lState =
-  Map.keysSet $ Shelley._pParams $ Shelley._pstate $ Shelley._delegationState
+  Map.keysSet $ Shelley._pParams $ Shelley.dpsPState $ Shelley.lsDPState
               $ Shelley.esLState $ Shelley.nesEs $ Consensus.shelleyLedgerState lState
 
 -- We only compute 'AdaPots' for later eras. This is a time consuming

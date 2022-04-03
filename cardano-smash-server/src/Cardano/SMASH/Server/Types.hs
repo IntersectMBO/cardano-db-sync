@@ -324,7 +324,7 @@ instance MimeUnrender OctetStream PoolMetadataRaw where
 -- Here we are usingg the unsafe encoding since we already have the JSON format
 -- from the database.
 instance ToJSON PoolMetadataRaw where
-    toJSON (PoolMetadataRaw metadata) = toJSON metadata
+    toJSON (PoolMetadataRaw metadata) = Aeson.String $ decodeUtf8 metadata
     toEncoding (PoolMetadataRaw metadata) = unsafeToEncoding $ BSB.byteString metadata
 
 instance ToSchema PoolMetadataRaw where
