@@ -11,19 +11,19 @@ module Cardano.DbSync.Default
 
 import           Cardano.Prelude
 
-import           Cardano.BM.Trace (Trace, logDebug, logInfo)
+import           Cardano.BM.Trace (logDebug, logInfo)
 
 import qualified Cardano.Db as DB
 
 import           Cardano.DbSync.Api
+import           Cardano.DbSync.Cache
 import           Cardano.DbSync.Epoch
 import           Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import           Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
-import           Cardano.DbSync.Era.Shelley.Adjust (adjustEpochRewards)
+import           Cardano.DbSync.Era.Shelley.Adjust (deleteRewards)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
-import           Cardano.DbSync.Era.Shelley.Insert.Epoch (finalizeEpochBulkOps, forceInsertRewards,
-                   insertPoolDepositRefunds, isEmptyEpochBulkOps, postEpochRewards)
+import           Cardano.DbSync.Era.Shelley.Insert.Epoch (insertPoolDepositRefunds, insertRewards)
 import           Cardano.DbSync.Era.Shelley.Validate (validateEpochRewards)
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState (LedgerEvent (..), LedgerStateSnapshot (..), applyBlock,
@@ -42,7 +42,6 @@ import           Cardano.Slotting.Block (BlockNo (..))
 import           Cardano.Slotting.Slot (EpochNo (..))
 
 
-import           Control.Monad.Class.MonadSTM.Strict (putTMVar, tryTakeTMVar)
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
@@ -75,7 +74,7 @@ insertDefaultBlock env blocks =
       lStateSnap <- liftIO $ applyBlock (envLedger env) cblk
       let !details = lssSlotDetails lStateSnap
       mkSnapshotMaybe env lStateSnap (blockNo cblk) (isSyncedWithinSeconds details 600)
-      handleLedgerEvents tracer (envLedger env) (lssPoint lStateSnap) (lssEvents lStateSnap)
+      handleLedgerEvents env (sdEpochNo details) (lssEvents lStateSnap)
       let firstBlockOfEpoch = hasEpochStartEvent (lssEvents lStateSnap)
       case cblk of
         BlockByron blk ->
@@ -101,16 +100,13 @@ mkSnapshotMaybe env snapshot blkNo syncState =
       Just newEpoch -> do
         liftIO $ logDebug (leTrace $ envLedger env) "Preparing for a snapshot"
         let newEpochNo = Generic.neEpoch newEpoch
-        -- flush all volatile data
-        finalizeEpochBulkOps (envLedger env)
         liftIO $ logDebug (leTrace $ envLedger env) "Taking a ledger a snapshot"
         -- finally take a ledger snapshot
         -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
         liftIO $ saveCleanupState (envLedger env) (lssOldState snapshot) (Just $ newEpochNo - 1)
       Nothing ->
-        when (timeToSnapshot syncState blkNo) .
-          whenM (isEmptyEpochBulkOps $ envLedger env) .
-            liftIO $ saveCleanupState (envLedger env) (lssOldState snapshot) Nothing
+        when (timeToSnapshot syncState blkNo) $
+          liftIO $ saveCleanupState (envLedger env) (lssOldState snapshot) Nothing
 
   where
     timeToSnapshot :: DB.SyncState -> BlockNo -> Bool
@@ -123,11 +119,20 @@ mkSnapshotMaybe env snapshot blkNo syncState =
 
 handleLedgerEvents
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> LedgerEnv -> CardanoPoint -> [LedgerEvent]
+    => SyncEnv -> EpochNo -> [LedgerEvent]
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-handleLedgerEvents tracer lenv point =
+handleLedgerEvents env currentEpochNo@(EpochNo curEpoch) =
     mapM_ handler
   where
+    tracer = getTrace env
+    lenv = envLedger env
+    cache = envCache env
+
+    subFromCurrentEpoch :: Word64 -> EpochNo
+    subFromCurrentEpoch m =
+      if unEpochNo currentEpochNo >= m then EpochNo $ unEpochNo currentEpochNo - m
+      else EpochNo 0
+
     handler
         :: (MonadBaseControl IO m, MonadIO m)
         => LedgerEvent -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
@@ -136,32 +141,32 @@ handleLedgerEvents tracer lenv point =
         LedgerNewEpoch en ss -> do
           lift $ do
             insertEpochSyncTime en ss (leEpochSyncTime lenv)
-            adjustEpochRewards tracer en
-          finalizeEpochBulkOps lenv
-          -- Commit everything in the db *AFTER* the epoch rewards have been inserted, the orphaned
-          -- rewards removed and the bulk operations finalized.
-          lift DB.transactionCommit
+          stats <- liftIO $ textShowStats cache
+          liftIO . logInfo tracer $ stats
           liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo en)
         LedgerStartAtEpoch en ->
           -- This is different from the previous case in that the db-sync started
           -- in this epoch, for example after a restart, instead of after an epoch boundary.
           liftIO . logInfo tracer $ "Starting at epoch " <> textShow (unEpochNo en)
-        LedgerRewards _details rwds -> do
-          liftIO . logInfo tracer $ mconcat
-            [ "Handling ", show (Map.size (Generic.rwdRewards rwds)), " rewards for epoch "
-            , show (unEpochNo $ Generic.rwdEpoch rwds), " ", renderPoint point
-            ]
-          postEpochRewards lenv rwds point
-
-        LedgerDeltaRewards _ -> pure ()
-        LedgerIncrementalRewards _rew -> pure ()
-
-        LedgerTotalRewards rwd ->
-          lift $ stashPoolRewards tracer lenv rwd
-        LedgerMirDist md ->
-          lift $ stashMirRewards tracer lenv md
+        LedgerDeltaRewards rwd -> do
+          let rewards = Map.toList $ Generic.rwdRewards rwd
+          insertRewards (subFromCurrentEpoch 2) currentEpochNo cache (Map.toList $ Generic.rwdRewards rwd)
+          -- This event is only created when it's not empty, so we don't need to check for null here.
+          liftIO . logInfo tracer $ "Inserted " <> show (length rewards) <> " Delta rewards"
+        LedgerIncrementalRewards rwd -> do
+          let rewards = Map.toList $ Generic.rwdRewards rwd
+          insertRewards (subFromCurrentEpoch 1) (EpochNo $ curEpoch + 1) cache rewards
+        LedgerRestrainedRewards e rwd creds -> do
+          lift $ deleteRewards tracer cache e rwd creds
+        LedgerTotalRewards rwd -> do
+          lift $ validateEpochRewards tracer (subFromCurrentEpoch 2) rwd
+        LedgerMirDist rwd -> do
+          let rewards = Map.toList rwd
+          insertRewards (subFromCurrentEpoch 1) currentEpochNo cache rewards
+          unless (null rewards) $
+            liftIO . logInfo tracer $ "Inserted " <> show (length rewards) <> " Mir rewards"
         LedgerPoolReap en drs ->
-          insertPoolDepositRefunds lenv (Generic.Rewards en $ convertPoolDepositReunds (leNetwork lenv) drs)
+          insertPoolDepositRefunds env (Generic.Rewards en $ convertPoolDepositReunds (leNetwork lenv) drs)
 
 convertPoolDepositReunds
     :: Network -> Map (StakeCredential StandardCrypto) (Map (KeyHash 'StakePool StandardCrypto) Coin)
@@ -190,33 +195,3 @@ hasEpochStartEvent = any isNewEpoch
         LedgerNewEpoch {} -> True
         LedgerStartAtEpoch {} -> True
         _otherwise -> False
-
--- -------------------------------------------------------------------------------------------------
--- These two functions must handle being called in either order.
-stashPoolRewards
-    :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> LedgerEnv -> Generic.Rewards
-    -> ReaderT SqlBackend m ()
-stashPoolRewards tracer lenv rmap = do
-  mMirRwd <- liftIO . atomically $ tryTakeTMVar (leMirRewards lenv)
-  case mMirRwd of
-    Nothing ->
-      liftIO . atomically $ putTMVar (lePoolRewards lenv) rmap
-    Just mirMap -> do
-      let totalRwds = Generic.mergeRewards rmap mirMap
-      forceInsertRewards tracer lenv totalRwds
-      validateEpochRewards tracer (Generic.mergeRewards rmap mirMap)
-
-stashMirRewards
-    :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> LedgerEnv -> Generic.Rewards
-    -> ReaderT SqlBackend m ()
-stashMirRewards tracer lenv mirMap = do
-  mRwds <- liftIO . atomically $ tryTakeTMVar (lePoolRewards lenv)
-  case mRwds of
-    Nothing ->
-      liftIO . atomically $ putTMVar (leMirRewards lenv) mirMap
-    Just rmap -> do
-      let totalRwds = Generic.mergeRewards rmap mirMap
-      forceInsertRewards tracer lenv totalRwds
-      validateEpochRewards tracer totalRwds

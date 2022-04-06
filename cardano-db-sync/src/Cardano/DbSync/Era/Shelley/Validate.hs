@@ -15,6 +15,7 @@ import           Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 import           Cardano.Db (DbLovelace, RewardSource)
 import qualified Cardano.Db as Db
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
+import           Cardano.DbSync.Era.Shelley.Insert.Epoch
 import           Cardano.DbSync.Era.Shelley.ValidateWithdrawal (validateRewardWithdrawals)
 import           Cardano.DbSync.Util (panicAbort, plusCoin, textShow)
 
@@ -29,7 +30,6 @@ import qualified Data.List.Extra as List
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
-
 import           Database.Esqueleto.Experimental (InnerJoin (InnerJoin), SqlBackend, Value (Value),
                    desc, from, not_, on, orderBy, select, sum_, table, val, where_, (:&) ((:&)),
                    (==.), (^.))
@@ -38,9 +38,9 @@ import           Database.Esqueleto.Experimental (InnerJoin (InnerJoin), SqlBack
 
 validateEpochRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Generic.Rewards
+    => Trace IO Text -> EpochNo -> Generic.Rewards
     -> ReaderT SqlBackend m ()
-validateEpochRewards tracer rmap = do
+validateEpochRewards tracer earnedEpochNo rmap = do
     actual <- queryEpochRewardTotal (Generic.rwdEpoch rmap)
     if actual /= expected
         then do
@@ -50,7 +50,8 @@ validateEpochRewards tracer rmap = do
                       , textShow expected , " ADA but got " , textShow actual, " ADA"
                       ]
           logFullRewardMap tracer rmap
-        else
+        else do
+          insertEpochRewardTotalReceived earnedEpochNo (Db.DbLovelace expectedw64)
           liftIO . logInfo tracer $ mconcat
                       [ "validateEpochRewards: total rewards that become spendable in epoch "
                       , textShow (unEpochNo $ Generic.rwdEpoch rmap), " is ", textShow actual
@@ -58,10 +59,13 @@ validateEpochRewards tracer rmap = do
                       ]
     validateRewardWithdrawals tracer (Generic.rwdEpoch rmap)
   where
+    expectedw64 :: Word64
+    expectedw64 = fromIntegral . sum
+      $ map (unCoin . Set.foldl' foldfunc (Coin 0)) (Map.elems $ Generic.rwdRewards rmap)
+
     expected :: Db.Ada
     expected =
-      Db.word64ToAda . fromIntegral . sum
-        $ map (unCoin . Set.foldl' foldfunc (Coin 0)) (Map.elems $ Generic.rwdRewards rmap)
+      Db.word64ToAda expectedw64
 
     foldfunc :: Coin -> Generic.Reward -> Coin
     foldfunc coin rwd = plusCoin coin (Generic.rewardAmount rwd)
@@ -78,6 +82,8 @@ queryEpochRewardTotal (EpochNo epochNo) = do
             -- For ... reasons ... pool deposit refunds are put into the rewards account
             -- but are not considered part of the total rewards for an epoch.
     where_ (not_ $ rwd ^. Db.RewardType ==. val Db.RwdDepositRefund)
+    where_ (not_ $ rwd ^. Db.RewardType ==. val Db.RwdTreasury)
+    where_ (not_ $ rwd ^. Db.RewardType ==. val Db.RwdReserves)
     pure (sum_ $ rwd ^. Db.RewardAmount)
   pure $ Db.unValueSumAda (listToMaybe res)
 
@@ -105,6 +111,9 @@ queryRewardMap (EpochNo epochNo) = do
         `on` (\(rwd :& saddr) ->
                 rwd ^. Db.RewardAddrId ==. saddr ^. Db.StakeAddressId)
       where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
+      where_ (not_ $ rwd ^. Db.RewardType ==. val Db.RwdDepositRefund)
+      where_ (not_ $ rwd ^. Db.RewardType ==. val Db.RwdTreasury)
+      where_ (not_ $ rwd ^. Db.RewardType ==. val Db.RwdReserves)
       orderBy [desc (saddr ^. Db.StakeAddressHashRaw)]
       pure (saddr ^. Db.StakeAddressHashRaw, rwd ^. Db.RewardType, rwd ^. Db.RewardAmount)
 

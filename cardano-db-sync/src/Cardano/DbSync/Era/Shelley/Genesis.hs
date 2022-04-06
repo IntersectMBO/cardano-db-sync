@@ -18,6 +18,8 @@ import           Cardano.BM.Trace (Trace, logError, logInfo)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
+import           Cardano.Slotting.Slot (EpochNo (..))
+
 import qualified Cardano.Db as DB
 
 import           Cardano.DbSync.Cache
@@ -264,9 +266,12 @@ insertStaking tracer cache blkId genesis = do
               , DB.txScriptSize = 0
               }
   let params = zip [0..] $ Map.elems (sgsPools $ sgStaking genesis)
-  forM_ params $ uncurry (insertPoolRegister tracer (Left 2) (sgNetworkId genesis) 0 blkId txId)
+  let network = sgNetworkId genesis
+  forM_ params $ uncurry (insertPoolRegister tracer uninitiatedCache (Left 2) network 0 blkId txId)
   let stakes = zip [0..] $ Map.toList (sgsStake $ sgStaking genesis)
-  forM_ stakes $ \(n, (keyStaking, keyPool)) -> insertDelegation cache (sgNetworkId genesis) 0 0 txId n Nothing (KeyHashObj keyStaking) [] keyPool
+  forM_ stakes $ \(n, (keyStaking, keyPool)) -> do
+    insertStakeRegistration (EpochNo 0) txId (2 * n) (Generic.annotateStakingCred network (KeyHashObj keyStaking))
+    insertDelegation cache network 0 0 txId (2 * n + 1) Nothing (KeyHashObj keyStaking) [] keyPool
 
 -- -----------------------------------------------------------------------------
 

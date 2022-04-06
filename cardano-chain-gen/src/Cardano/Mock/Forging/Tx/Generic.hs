@@ -185,5 +185,6 @@ createPaymentCredentials n =
 mkDummyScriptHash :: Int -> ScriptHash StandardCrypto
 mkDummyScriptHash n = ScriptHash $ mkDummyHash (Proxy @(ADDRHASH StandardCrypto)) n
 
+{-# ANN module ("HLint: ignore Avoid restricted function" :: Text) #-}
 mkDummyHash :: forall h a. HashAlgorithm h => Proxy h -> Int -> Hash.Hash h a
 mkDummyHash _ = coerce . hashWithSerialiser @h toCBOR

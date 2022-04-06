@@ -4,7 +4,7 @@
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbSync.Era.Shelley.Adjust
-  ( adjustEpochRewards
+  ( deleteRewards
   ) where
 
 import           Cardano.Prelude hiding (from, groupBy, on)
@@ -13,17 +13,19 @@ import           Cardano.BM.Trace (Trace, logInfo)
 
 import qualified Cardano.Db as Db
 
-import           Cardano.DbSync.Util
+import           Cardano.DbSync.Cache
+import qualified Cardano.DbSync.Era.Shelley.Generic.Rewards as Generic
+import           Cardano.DbSync.Era.Shelley.Generic.StakeCred
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Control.Monad.Trans.Control (MonadBaseControl)
 
-import qualified Data.List.Extra as List
+import qualified Data.Map as Map
+import qualified Data.Set as Set
 
-import           Database.Esqueleto.Experimental (SqlBackend, delete, from, in_, innerJoin,
-                   notExists, on, select, table, val, valList, where_, (&&.), (:&) ((:&)), (==.),
-                   (>.), (^.))
+import           Database.Esqueleto.Experimental (SqlBackend, delete, from, in_, table, val,
+                   valList, where_, (==.), (^.))
 
 -- Hlint warns about another version of this operator.
 {- HLINT ignore "Redundant ^." -}
@@ -36,55 +38,44 @@ import           Database.Esqueleto.Experimental (SqlBackend, delete, from, in_,
 -- been de-registered and not reregistered and then delete all rewards for those addresses and that
 -- epoch.
 
-adjustEpochRewards
+deleteRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> EpochNo
+    => Trace IO Text -> Cache -> EpochNo -> Generic.Rewards
+    -> Set StakeCred
     -> ReaderT SqlBackend m ()
-adjustEpochRewards tracer epochNo = do
-  when (epochNo >= 2) $ do
-    (addrs, ada) <- queryOrphanedRewards epochNo
-    unless (null addrs) $ do
-      liftIO . logInfo tracer $ mconcat
-                  [ "adjustEpochRewards: starting epoch ", textShow (unEpochNo epochNo), ", "
-                  , textShow (length addrs), " orphaned rewards removed ("
-                  , textShow ada, " ADA)"
-                  ]
-      deleteOrphanedRewards epochNo addrs
+deleteRewards tracer cache epochNo rwds creds = do
+  let eraIgnored = Map.toList $ Generic.rwdRewards rwds
+  liftIO . logInfo tracer $ mconcat
+    [ "Removing ", if null eraIgnored then "" else Db.textShow (length eraIgnored) <> " rewards and "
+    , show (length creds), " orphaned rewards"]
+  forM_ eraIgnored $ \(cred, rewards)->
+    forM_ (Set.toList rewards) $ \rwd ->
+      deleteReward cache epochNo (cred, rwd)
+  crds <- rights <$> forM (Set.toList creds) (queryStakeAddrWithCache cache DontCacheNew)
+  deleteOrphanedRewards epochNo crds
 
--- ------------------------------------------------------------------------------------------------
+deleteReward
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Cache -> EpochNo -> (StakeCred, Generic.Reward)
+    -> ReaderT SqlBackend m ()
+deleteReward cache epochNo (cred, rwd) = do
+  mAddrId <- queryStakeAddrWithCache cache DontCacheNew cred
+  eiPoolId <- case Generic.rewardPool rwd of
+    Nothing -> pure $ Left $ Db.DbLookupMessage "deleteReward.queryPoolKeyWithCache"
+    Just poolHash -> queryPoolKeyWithCache cache DontCacheNew poolHash
+  case (mAddrId, eiPoolId) of
+    (Right addrId, Right poolId) -> do
+      delete $ do
+        rwdDb <- from $ table @Db.Reward
+        where_ (rwdDb ^. Db.RewardAddrId ==. val addrId)
+        where_ (rwdDb ^. Db.RewardType ==. val (Generic.rewardSource rwd))
+        where_ (rwdDb ^. Db.RewardSpendableEpoch ==. val (unEpochNo epochNo))
+        where_ (rwdDb ^. Db.RewardPoolId ==. val (Just poolId))
+    _ -> pure ()
 
 deleteOrphanedRewards :: MonadIO m => EpochNo -> [Db.StakeAddressId] -> ReaderT SqlBackend m ()
 deleteOrphanedRewards (EpochNo epochNo) xs =
-  delete  $ do
+  delete $ do
     rwd <- from $ table @Db.Reward
     where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
     where_ (rwd ^. Db.RewardAddrId `in_` valList xs)
-
--- Uses TxId as a proxy for BlockNo.
-queryOrphanedRewards :: MonadIO m => EpochNo -> ReaderT SqlBackend m ([Db.StakeAddressId], Db.Ada)
-queryOrphanedRewards (EpochNo epochNo) = do
-    -- Get payments to addresses that have never been registered.
-    res1 <- select $ do
-      rwd <- from $ table @Db.Reward
-      where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
-      where_ (notExists $ do
-              reg <- from $ table @Db.StakeRegistration
-              where_ (reg ^. Db.StakeRegistrationAddrId ==. rwd ^. Db.RewardAddrId))
-      pure (rwd ^. Db.RewardAddrId, rwd ^. Db.RewardAmount)
-    -- Get payments to addresses that have been registered but are now deregistered.
-    res2 <- select $ do
-
-      (dereg :& rwd) <-
-        from $ table @Db.StakeDeregistration
-        `innerJoin` table @Db.Reward
-        `on` (\(dereg :& rwd) -> dereg ^. Db.StakeDeregistrationAddrId ==. rwd ^. Db.RewardAddrId)
-      where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
-      where_ (notExists $ do
-                 reg <- from $ table @Db.StakeRegistration
-                 where_ (reg ^. Db.StakeRegistrationAddrId ==. dereg ^. Db.StakeDeregistrationAddrId
-                          &&. reg ^. Db.StakeRegistrationTxId >. dereg ^. Db.StakeDeregistrationTxId))
-      pure (dereg ^. Db.StakeDeregistrationAddrId, rwd ^. Db.RewardAmount)
-    pure $ convert (map Db.unValue2 $ res1 ++ res2)
-  where
-    convert :: [(Db.StakeAddressId, Db.DbLovelace)] -> ([Db.StakeAddressId], Db.Ada)
-    convert xs = (List.nubOrd (map fst xs), Db.word64ToAda . sum $ map (Db.unDbLovelace . snd) xs)

@@ -169,7 +169,6 @@ library
                       , psqueues
                       , random-shuffle
                       , small-steps
-                      , split
                       , stm
                       , strict
                       , strict-containers
