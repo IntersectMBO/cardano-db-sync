@@ -154,8 +154,8 @@ assertCertCounts env expected =
                     (select . from $ \(_a :: SqlExpr (Entity Delegation)) -> pure countRows)
       withdrawal <- maybe 0 unValue . listToMaybe <$>
                     (select . from $ \(_a :: SqlExpr (Entity Withdrawal)) -> pure countRows)
-      -- We deduct the initial delegation in the genesis
-      pure (registr, deregistr, deleg - 5, withdrawal)
+      -- We deduct the initial registration and delegation in the genesis
+      pure (registr - 5, deregistr, deleg - 5, withdrawal)
 
 assertRewardCounts :: (Crypto era ~ StandardCrypto)
                    => DBSyncEnv -> LedgerState (ShelleyBlock era) -> Bool

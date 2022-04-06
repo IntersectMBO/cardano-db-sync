@@ -86,7 +86,7 @@ unitTests iom knownMigrations =
           , test "stake address pointers. Use before registering." stakeAddressPtrUseBefore
           ]
       , testGroup "rewards"
-          [ test "rewards" simpleRewards
+          [ test "rewards simple" simpleRewards
           , test "shelley rewards from multiple sources" rewardsShelley
           , test "rewards with deregistration" rewardsDeregistration
           , test "Mir Cert" mirReward

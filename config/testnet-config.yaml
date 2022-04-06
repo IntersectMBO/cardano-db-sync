@@ -12,7 +12,7 @@ EnableLogging: True
 # config, it will likely lead to db-sync throwing up weird error messages from
 # the consensus layer.
 # The path to the node config file is relative to this config file.
-NodeConfigFile: ../../cardano-node/configuration/cardano/testnet-config.json
+NodeConfigFile: /nix/store/5b6pry15w93fv0r0x9rc3r1ii5871lvr-config-0-0.json
 
 # ------------------------------------------------------------------------------
 # Logging configuration follows.

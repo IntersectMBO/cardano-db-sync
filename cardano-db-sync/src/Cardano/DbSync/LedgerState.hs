@@ -10,8 +10,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.DbSync.LedgerState
-  ( BulkOperation (..)
-  , CardanoLedgerState (..)
+  ( CardanoLedgerState (..)
   , IndexCache (..)
   , LedgerEnv (..)
   , LedgerEvent (..)
@@ -43,7 +42,6 @@ import qualified Cardano.Binary as Serialize
 import qualified Cardano.Db as DB
 
 import qualified Cardano.Ledger.BaseTypes as Ledger
-import           Cardano.Ledger.Coin (Coin)
 import           Cardano.Ledger.Core (PParams)
 import           Cardano.Ledger.Era (Crypto)
 import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
@@ -83,8 +81,8 @@ import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import           Data.Time.Clock (UTCTime, getCurrentTime)
 
-import           Ouroboros.Consensus.Block (CodecConfig, Point (..), WithOrigin (..), blockHash,
-                   blockIsEBB, blockPoint, blockPrevHash, pointSlot)
+import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockHash, blockIsEBB,
+                   blockPoint, blockPrevHash, pointSlot)
 import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardAlonzo,
@@ -126,12 +124,6 @@ import           System.Mem (performMajorGC)
 {- HLINT ignore "Reduce duplication" -}
 {- HLINT ignore "Use readTVarIO" -}
 
--- 'CardanoPoint' indicates at which point the 'BulkOperation' became available.
--- It is only used in case of a rollback.
-data BulkOperation
-  = BulkRewardChunk !EpochNo !CardanoPoint !IndexCache ![(StakeCred, Set Generic.Reward)]
-  | BulkRewardReport !EpochNo !CardanoPoint !Int !Coin
-
 data IndexCache = IndexCache
   { icAddressCache :: !(Map StakeCred DB.StakeAddressId)
   , icPoolCache :: !(Map StakePoolKeyHash DB.PoolHashId)
@@ -152,8 +144,6 @@ data LedgerEnv = LedgerEnv
   -- The following do not really have anything to do with maintaining ledger
   -- state. They are here due to the ongoing headaches around the split between
   -- `cardano-sync` and `cardano-db-sync`.
-  , leIndexCache :: !(StrictTVar IO IndexCache)
-  , leBulkOpQueue :: !(TBQueue IO BulkOperation)
   , leOfflineWorkQueue :: !(TBQueue IO PoolFetchRetry)
   , leOfflineResultQueue :: !(TBQueue IO FetchResult)
   , leEpochSyncTime :: !(StrictTVar IO UTCTime)
@@ -164,8 +154,6 @@ data LedgerEnv = LedgerEnv
 data LedgerEventState = LedgerEventState
   { lesInitialized :: !Bool
   , lesEpochNo :: !(Maybe EpochNo)
-  , lesLastRewardsEpoch :: !(Maybe EpochNo)
-  , lesLastAdded :: !CardanoPoint
   }
 
 topLevelConfig :: LedgerEnv -> TopLevelConfig CardanoBlock
@@ -256,11 +244,9 @@ mkLedgerEnv
 mkLedgerEnv trce protocolInfo dir nw stableEpochSlot systemStart aop = do
     svar <- newTVarIO Nothing
     evar <- newTVarIO initLedgerEventState
-    ivar <- newTVarIO $ IndexCache mempty mempty
     intervar <- newTVarIO Nothing
     -- 2.5 days worth of slots. If we try to stick more than this number of
     -- items in the queue, bad things are likely to happen.
-    boq <- newTBQueueIO 10800
     owq <- newTBQueueIO 100
     orq <- newTBQueueIO 100
     est <- newTVarIO =<< getCurrentTime
@@ -278,8 +264,6 @@ mkLedgerEnv trce protocolInfo dir nw stableEpochSlot systemStart aop = do
       , leEventState = evar
       , lePoolRewards = prvar
       , leMirRewards = mrvar
-      , leIndexCache = ivar
-      , leBulkOpQueue = boq
       , leOfflineWorkQueue = owq
       , leOfflineResultQueue  = orq
       , leEpochSyncTime = est
@@ -291,8 +275,6 @@ mkLedgerEnv trce protocolInfo dir nw stableEpochSlot systemStart aop = do
       LedgerEventState
         { lesInitialized = False
         , lesEpochNo = Nothing
-        , lesLastRewardsEpoch = Nothing
-        , lesLastAdded = GenesisPoint
         }
 
 
@@ -332,7 +314,7 @@ applyBlock env blk = do
       let !ledgerDB' = pushLedgerDB ledgerDB newState
       writeTVar (leStateVar env) (Just ledgerDB')
       oldEventState <- readTVar (leEventState env)
-      events <- generateEvents env oldEventState details newState (blockPoint blk)
+      events <- generateEvents env oldEventState details
       pure $ LedgerStateSnapshot
                 { lssState = newState
                 , lssOldState = oldState
@@ -340,7 +322,7 @@ applyBlock env blk = do
                 , lssSlotDetails = details
                 , lssPoint = blockPoint blk
                 , lssStakeSlice = stakeSlice newState details
-                , lssEvents = events ++ mapMaybe (convertAuxLedgerEvent (leNetwork env)) (lrEvents result)
+                , lssEvents = sort $ events ++ mapMaybe (convertAuxLedgerEvent (leNetwork env)) (lrEvents result)
                 }
   where
     applyBlk
@@ -386,12 +368,11 @@ applyBlock env blk = do
                           (clsState cls)
       _ -> Generic.NoSlices
 
-generateEvents :: LedgerEnv -> LedgerEventState -> SlotDetails -> CardanoLedgerState -> CardanoPoint -> STM [LedgerEvent]
-generateEvents env oldEventState details cls pnt = do
+generateEvents :: LedgerEnv -> LedgerEventState -> SlotDetails -> STM [LedgerEvent]
+generateEvents env oldEventState details = do
     writeTVar (leEventState env) newEventState
     pure $ catMaybes
             [ newEpochEvent
-            , LedgerRewards details <$> rewards
             ]
   where
     currentEpochNo :: EpochNo
@@ -406,32 +387,11 @@ generateEvents env oldEventState details cls pnt = do
             then Just $ LedgerNewEpoch currentEpochNo (getSyncStatus details)
             else Nothing
 
-    -- Want the rewards event to be delivered once only, on a single slot.
-    rewards :: Maybe Generic.Rewards
-    rewards =
-      case lesLastRewardsEpoch oldEventState of
-        Nothing -> mkRewards
-        Just oldRewardEpoch ->
-          if sdEpochSlot details >= leStableEpochSlot env && oldRewardEpoch < currentEpochNo
-            then mkRewards
-            else Nothing
-
-    mkRewards :: Maybe Generic.Rewards
-    mkRewards = Generic.epochRewards (leNetwork env) (sdEpochNo details) (clsState cls)
-
     newEventState :: LedgerEventState
     newEventState =
       LedgerEventState
         { lesInitialized = True
         , lesEpochNo = Just currentEpochNo
-        , lesLastRewardsEpoch =
-            if isJust rewards
-              then Just currentEpochNo
-              else lesLastRewardsEpoch oldEventState
-        , lesLastAdded =
-            if isNothing rewards
-              then lesLastAdded oldEventState
-              else pnt
         }
 
 saveCurrentLedgerState :: LedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()

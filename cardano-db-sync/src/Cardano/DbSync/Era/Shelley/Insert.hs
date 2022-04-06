@@ -9,10 +9,10 @@
 
 module Cardano.DbSync.Era.Shelley.Insert
   ( insertShelleyBlock
-  , postEpochRewards
 
   -- These are exported for data in Shelley Genesis
   , insertPoolRegister
+  , insertStakeRegistration
   , insertDelegation
   , insertStakeAddressRefIfMissing
   ) where
@@ -61,10 +61,10 @@ import           Cardano.DbSync.Util
 import           Cardano.Slotting.Block (BlockNo (..))
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
 
-import           Control.Monad.Class.MonadSTM.Strict (tryReadTBQueue)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
+import           Data.Either.Extra (eitherToMaybe)
 import           Data.Group (invert)
 import qualified Data.Map.Strict as Map
 import           Data.Maybe.Strict (strictMaybeToMaybe)
@@ -87,7 +87,7 @@ insertShelleyBlock env firstBlockOfEpoch blk lStateSnap details = do
       Just pHash -> queryPrevBlockWithCache (renderInsertName (Generic.blkEra blk)) cache pHash
     mPhid <- lift $ queryPoolKeyWithCache cache CacheNew (Generic.StakePoolKeyHash $ Generic.blkCreatorPoolHash blk)
 
-    slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (Generic.blkSlotLeader blk) (rightToJust mPhid)
+    slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
     blkId <- lift . insertBlockAndCache cache $
                   DB.Block
                     { DB.blockHash = Generic.blkHash blk
@@ -137,11 +137,7 @@ insertShelleyBlock env firstBlockOfEpoch blk lStateSnap details = do
     whenJust (lssNewEpoch lStateSnap) $ \ newEpoch -> do
       insertOnNewEpoch tracer blkId (Generic.blkSlotNo blk) (sdEpochNo details) newEpoch
 
-    insertStakeSlice tracer (leIndexCache lenv) (lssStakeSlice lStateSnap)
-
-    mbop <- liftIO . atomically $ tryReadTBQueue (leBulkOpQueue lenv)
-    whenJust (maybeToStrict mbop) $ \ bop ->
-      insertEpochInterleaved tracer bop
+    insertStakeSlice env (lssStakeSlice lStateSnap)
 
     when (unBlockNo (Generic.blkBlockNo blk) `mod` offlineModBase == 0) .
       lift $ do
@@ -172,11 +168,13 @@ insertShelleyBlock env firstBlockOfEpoch blk lStateSnap details = do
         SyncFollowing -> 10
         SyncLagging -> 2000
 
-    rightToJust (Right a) = Just a
-    rightToJust _ = Nothing
-
+    lenv :: LedgerEnv
     lenv = envLedger env
+
+    tracer :: Trace IO Text
     tracer = getTrace env
+
+    cache :: Cache
     cache = envCache env
 
 -- -----------------------------------------------------------------------------
