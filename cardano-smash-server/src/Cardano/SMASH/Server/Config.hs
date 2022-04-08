@@ -8,6 +8,7 @@ module Cardano.SMASH.Server.Config
   , SmashServerParams(..)
 
   , defaultSmashPort
+  , defaultSmashPool
   , paramsToConfig
   ) where
 
@@ -30,25 +31,32 @@ data SmashServerParams = SmashServerParams
   { sspSmashPort :: !Int
   , sspConfigFile :: !FilePath -- config is only used for the logging parameters.
   , sspAdminUsers :: !(Maybe FilePath)
+  , sspSmashPool :: !Int
   }
 
 defaultSmashPort :: Int
 defaultSmashPort = 3100
 
+defaultSmashPool :: Int
+defaultSmashPool = 5
+
 paramsToConfig :: SmashServerParams -> IO SmashServerConfig
 paramsToConfig params = do
   appUsers <- readAppUsers $ sspAdminUsers params
   tracer <- configureLogging (sspConfigFile params) "smash-server"
+
   pure $ SmashServerConfig
     { sscSmashPort = sspSmashPort params
     , sscTrace = tracer
     , sscAdmins = appUsers
+    , sspPsqlPool = sspSmashPool params
     }
 
 data SmashServerConfig = SmashServerConfig
   { sscSmashPort :: Int
   , sscTrace :: Trace IO Text
   , sscAdmins :: ApplicationUsers
+  , sspPsqlPool :: Int
   }
 
 -- A data type we use to store user credentials.
