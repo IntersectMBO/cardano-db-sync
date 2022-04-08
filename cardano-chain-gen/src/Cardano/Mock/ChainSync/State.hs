@@ -18,9 +18,9 @@ import           Control.Exception (assert)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 
-import           Ouroboros.Consensus.Block
-import           Ouroboros.Consensus.Config
-import           Ouroboros.Consensus.Ledger.SupportsProtocol
+import           Ouroboros.Consensus.Block (HasHeader, HeaderHash, Point, blockPoint, castPoint)
+import           Ouroboros.Consensus.Config (TopLevelConfig)
+import           Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol)
 
 import           Ouroboros.Network.Block (ChainUpdate (..))
 
@@ -79,9 +79,9 @@ rollbackState p (ChainProducerState c cflrst cfid) = do
   where
     rollbackFollower flrst@FollowerState { followerPoint = p' }
       | Chain.pointIsAfter p' (castPoint p) (cchain c)
-      = flrst { followerPoint = castPoint p, followerNext = FollowerBackTo }
+        = flrst { followerPoint = castPoint p, followerNext = FollowerBackTo }
       | otherwise
-      = flrst
+        = flrst
 
 -- | Get the recorded state of a chain consumer. The 'FollowerId' is assumed to
 -- exist.
