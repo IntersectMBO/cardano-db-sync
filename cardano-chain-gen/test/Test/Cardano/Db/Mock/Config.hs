@@ -142,7 +142,7 @@ queryDBSync env = Db.runWithConnectionNoLogging (getDBSyncPGPass env)
 getPoolLayer :: DBSyncEnv -> IO PoolDataLayer
 getPoolLayer env = do
   pgconfig <- orDie Db.renderPGPassError $ newExceptT $ Db.readPGPass (enpPGPassSource $ dbSyncParams env)
-  pool <- runNoLoggingT $ createPostgresqlPool (Db.toConnectionString pgconfig) 1 -- Pool size as config?
+  pool <- runNoLoggingT $ createPostgresqlPool (Db.toConnectionString pgconfig) 1 -- Pool size of 1 for tests
   pure $ postgresqlPoolDataLayer
                     nullTracer
                     pool

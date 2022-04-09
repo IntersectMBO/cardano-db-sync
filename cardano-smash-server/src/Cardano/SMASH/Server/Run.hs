@@ -28,7 +28,7 @@ import           Cardano.SMASH.Server.Types
 
 import           Control.Monad.Trans.Except.Exit (orDie)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
-import           Database.Persist.Postgresql
+import           Database.Persist.Postgresql (withPostgresqlPool)
 
 runSmashServer :: SmashServerConfig -> IO ()
 runSmashServer config = do
@@ -41,12 +41,10 @@ runSmashServer config = do
           defaultSettings
 
     pgconfig <- orDie renderPGPassError $ newExceptT (readPGPass PGPassDefaultEnv)
-    pool <- Db.runIohkLogging trce $ createPostgresqlPool (toConnectionString pgconfig) 10 -- Pool size as config?
-    -- TODO Prefer to use withPostgresqlPool here!
-    -- withPostgresqlPool (toConnectionString pgconfig) 1 $ \pool -> do
-    let poolDataLayer = postgresqlPoolDataLayer trce pool
-    app <- mkApp (sscTrace config) poolDataLayer (sscAdmins config)
-    runSettings settings app
+    Db.runIohkLogging trce $ withPostgresqlPool (toConnectionString pgconfig) defaultSmashPool $ \pool -> do
+      let poolDataLayer = postgresqlPoolDataLayer trce pool
+      app <- liftIO $ mkApp (sscTrace config) poolDataLayer (sscAdmins config)
+      liftIO $ runSettings settings app
 
 mkApp :: Trace IO Text -> PoolDataLayer -> ApplicationUsers -> IO Application
 mkApp trce dataLayer appUsers = do

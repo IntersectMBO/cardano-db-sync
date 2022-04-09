@@ -27,6 +27,7 @@ import           Cardano.Db (textShow)
 
 import           System.IO.Error
 
+-- | SMASH Server cli parameters
 data SmashServerParams = SmashServerParams
   { sspSmashPort :: !Int
   , sspConfigFile :: !FilePath -- config is only used for the logging parameters.
@@ -34,12 +35,15 @@ data SmashServerParams = SmashServerParams
   , sspSmashPool :: !Int
   }
 
+-- | Default Port for SMASH
 defaultSmashPort :: Int
 defaultSmashPort = 3100
 
+-- | Default size of the Postgres connection pool
 defaultSmashPool :: Int
 defaultSmashPool = 5
 
+-- | Convert cli parameters to SMASH configuration
 paramsToConfig :: SmashServerParams -> IO SmashServerConfig
 paramsToConfig params = do
   appUsers <- readAppUsers $ sspAdminUsers params
@@ -52,6 +56,7 @@ paramsToConfig params = do
     , sspPsqlPool = sspSmashPool params
     }
 
+-- | SMASH Server configuration
 data SmashServerConfig = SmashServerConfig
   { sscSmashPort :: Int
   , sscTrace :: Trace IO Text
@@ -59,7 +64,7 @@ data SmashServerConfig = SmashServerConfig
   , sspPsqlPool :: Int
   }
 
--- A data type we use to store user credentials.
+-- | A data type we use to store user credentials.
 data ApplicationUser = ApplicationUser
     { username :: !Text
     , password :: !Text
@@ -68,7 +73,7 @@ data ApplicationUser = ApplicationUser
 instance ToJSON ApplicationUser
 instance FromJSON ApplicationUser
 
--- A list of users with special rights.
+-- | A list of users with special rights.
 newtype ApplicationUsers = ApplicationUsers [ApplicationUser]
     deriving (Eq, Show, Generic)
 

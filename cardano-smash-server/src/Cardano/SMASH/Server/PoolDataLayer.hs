@@ -29,7 +29,6 @@ import           Database.Persist.Postgresql
 
 {- HLINT ignore "Reduce duplication" -}
 
--- TODO Why have this as a record with functions?
 data PoolDataLayer =
   PoolDataLayer
     { dlGetPoolMetadata         :: PoolId -> PoolMetadataHash -> IO (Either DBFail (TickerName, PoolMetadataRaw))
