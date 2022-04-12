@@ -120,7 +120,7 @@ unitTests iom knownMigrations =
           ]
       , testGroup "pools and smash"
           [ test "pool registration" poolReg
-          , test "quey pool that's not registered" nonexistantPoolQuery
+          , test "query pool that's not registered" nonexistantPoolQuery
           , test "pool deregistration" poolDeReg
           , test "pool multiple deregistration" poolDeRegMany
           , test "delist pool" poolDelist
@@ -140,8 +140,8 @@ forgeBlocks = do
       _block1 <- forgeNext interpreter mockBlock1
       block2 <- forgeNext interpreter mockBlock2
       let blkNo = blockNo block2
-      assertBool (show blkNo <> " /= " <> "2")
-        $ blkNo == BlockNo 2
+      assertBool (show blkNo <> " /= " <> "3")
+        $ blkNo == BlockNo 3
   where
     testLabel = "forgeBlocks"
 
@@ -153,7 +153,7 @@ addSimple =
       _ <- forgeNextAndSubmit interpreter mockServer mockBlock0
       -- start db-sync and let it sync
       startDBSync dbSync
-      assertBlockNoBackoff dbSync 0
+      assertBlockNoBackoff dbSync 1
   where
     testLabel = "addSimple"
 
@@ -170,7 +170,7 @@ addSimpleChain =
       -- add more blocks
       atomically $ addBlock mockServer blk1
       atomically $ addBlock mockServer blk2
-      assertBlockNoBackoff dbSync 2
+      assertBlockNoBackoff dbSync 3
   where
     testLabel = "addSimpleChain"
 
@@ -180,12 +180,12 @@ restartDBSync =
       _ <- forgeNextAndSubmit interpreter mockServer mockBlock0
       -- start db-sync and let it sync
       startDBSync dbSync
-      assertBlockNoBackoff dbSync 0
+      assertBlockNoBackoff dbSync 1
 
       stopDBSync dbSync
       -- The server sees a separate client here
       startDBSync dbSync
-      assertBlockNoBackoff dbSync 0
+      assertBlockNoBackoff dbSync 1
   where
     testLabel = "restartDBSync"
 
@@ -199,10 +199,10 @@ simpleRollback = do
       startDBSync dbSync
       atomically $ addBlock mockServer blk1
       atomically $ addBlock mockServer blk2
-      assertBlockNoBackoff dbSync 2
+      assertBlockNoBackoff dbSync 3
 
       atomically $ rollback mockServer (blockPoint blk1)
-      assertBlockNoBackoff dbSync 1
+      assertBlockNoBackoff dbSync 2
   where
     testLabel = "simpleRollback"
 
@@ -211,16 +211,16 @@ bigChain =
     withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
       forM_ (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
       startDBSync dbSync
-      assertBlockNoBackoff dbSync 100
+      assertBlockNoBackoff dbSync 101
 
       blks' <- forM (replicate 100 mockBlock1) (forgeNextAndSubmit interpreter mockServer)
-      assertBlockNoBackoff dbSync 200
+      assertBlockNoBackoff dbSync 201
 
       forM_ (replicate 5 mockBlock2) (forgeNextAndSubmit interpreter mockServer)
-      assertBlockNoBackoff dbSync 205
+      assertBlockNoBackoff dbSync 206
 
       atomically $ rollback mockServer (blockPoint $ last blks')
-      assertBlockNoBackoff dbSync 200
+      assertBlockNoBackoff dbSync 201
   where
     testLabel = "bigChain"
 
@@ -229,25 +229,26 @@ restartAndRollback =
     withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
       forM_ (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
       startDBSync dbSync
-      assertBlockNoBackoff dbSync 100
+      assertBlockNoBackoff dbSync 101
 
       blks <- forM (replicate 100 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
-      assertBlockNoBackoff dbSync 200
+      assertBlockNoBackoff dbSync 201
 
       forM_ (replicate 5 mockBlock2) (forgeNextAndSubmit interpreter mockServer)
-      assertBlockNoBackoff dbSync 205
+      assertBlockNoBackoff dbSync 206
 
       stopDBSync dbSync
       atomically $ rollback mockServer (blockPoint $ last blks)
       startDBSync dbSync
-      assertBlockNoBackoff dbSync 200
+      assertBlockNoBackoff dbSync 201
   where
     testLabel = "restartAndRollback"
 
+-- wibble
 rollbackFurther :: IOManager -> [(Text, Text)] -> Assertion
 rollbackFurther =
-    withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
-    blks <- replicateM 81 (forgeNextFindLeaderAndSubmit interpreter mockServer [])
+  withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    blks <- replicateM 80 (forgeNextFindLeaderAndSubmit interpreter mockServer [])
     startDBSync dbSync
     assertBlockNoBackoff dbSync 80
 
@@ -255,11 +256,11 @@ rollbackFurther =
     -- and then syncs further. We add references to blocks 34 and 35, to
     -- validate later that one is deleted through cascade, but the other was not
     -- because a checkpoint was found.
-    let blockHash1 = hfBlockHash (blks !! 34)
+    let blockHash1 = hfBlockHash (blks !! 33)
     Right bid1 <- queryDBSync dbSync $ DB.queryBlockId blockHash1
     cm1 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel "{\"1\" : 1}" bid1
 
-    let blockHash2 = hfBlockHash (blks !! 35)
+    let blockHash2 = hfBlockHash (blks !! 34)
     Right bid2 <- queryDBSync dbSync $ DB.queryBlockId blockHash2
     cm2 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel "{\"2\" : 2}" bid2
 
@@ -273,7 +274,7 @@ rollbackFurther =
     -- to test that db-sync temporarily is there, that's why we have this trick
     -- with references.
     atomically $ rollback mockServer (blockPoint $ blks !! 50)
-    assertBlockNoBackoff dbSync 50
+    assertBlockNoBackoff dbSync 51
 
     assertEqQuery dbSync DB.queryCostModel [cm1] "Unexpected CostModel"
   where
@@ -330,7 +331,7 @@ addSimpleTx =
               Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 500
 
       startDBSync  dbSync
-      assertBlockNoBackoff dbSync 0
+      assertBlockNoBackoff dbSync 1
   where
     testLabel = "addSimpleTx"
 
@@ -343,7 +344,7 @@ addSimpleTxShelley =
 
       -- start db-sync and let it sync
       startDBSync  dbSync
-      assertBlockNoBackoff dbSync 0
+      assertBlockNoBackoff dbSync 1
   where
     testLabel = "addSimpleTxShelley"
 
@@ -367,7 +368,7 @@ registrationTx =
         (fmap (Alonzo.addValidityInterval 2000)
            . Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)])
 
-    assertBlockNoBackoff dbSync 3
+    assertBlockNoBackoff dbSync 4
     assertCertCounts dbSync (2,2,0,0)
   where
     testLabel = "registrationTx"
@@ -384,7 +385,7 @@ registrationsSameBlock =
         tx3 <- Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)] st
         Right [tx0, tx1, Alonzo.addValidityInterval 1000 tx2, Alonzo.addValidityInterval 2000 tx3]
 
-    assertBlockNoBackoff dbSync 0
+    assertBlockNoBackoff dbSync 1
     assertCertCounts dbSync (2,2,0,0)
   where
     testLabel = "registrationsSameBlock"
@@ -400,7 +401,7 @@ registrationsSameTx =
                                , (StakeIndexNew 1, DCertDeleg . RegKey)
                                , (StakeIndexNew 1, DCertDeleg . DeRegKey)]
 
-    assertBlockNoBackoff dbSync 0
+    assertBlockNoBackoff dbSync 1
     assertCertCounts dbSync (2,2,0,0)
   where
     testLabel = "registrationsSameTx"
@@ -418,7 +419,7 @@ stakeAddressPtr =
     _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
       Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr) 20000 20000
 
-    assertBlockNoBackoff dbSync 1
+    assertBlockNoBackoff dbSync 2
     assertCertCounts dbSync (1,0,0,0)
   where
     testLabel = "stakeAddressPtr"
@@ -448,7 +449,7 @@ stakeAddressPtrDereg =
         pure [tx0, tx1]
 
     st <- getAlonzoLedgerState interpreter
-    assertBlockNoBackoff dbSync 2
+    assertBlockNoBackoff dbSync 3
     assertCertCounts dbSync (2,1,0,0)
     -- The 2 addresses have the same payment credentials and they reference the same
     -- stake credentials, however they have
@@ -475,7 +476,7 @@ stakeAddressPtrUseBefore =
       _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
         Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr) 20000 20000
 
-      assertBlockNoBackoff dbSync 2
+      assertBlockNoBackoff dbSync 3
       assertCertCounts dbSync (1,0,0,0)
   where
     testLabel = "stakeAddressPtrUseBefore"
@@ -490,7 +491,7 @@ consumeSameBlock =
         let utxo0 = head (Alonzo.mkUTxOAlonzo tx0)
         tx1 <- Alonzo.mkPaymentTx (UTxOPair utxo0) (UTxOIndex 2) 10000 500 st
         pure [tx0, tx1]
-      assertBlockNoBackoff dbSync 0
+      assertBlockNoBackoff dbSync 1
   where
     testLabel = "consumeSameBlock"
 
@@ -505,7 +506,7 @@ simpleRewards =
       _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
 
       a <- fillEpochs interpreter mockServer 3
-      assertBlockNoBackoff dbSync (fromIntegral $ 2 + length a - 1)
+      assertBlockNoBackoff dbSync (fromIntegral $ 2 + length a)
 
       -- The pool leaders take leader rewards with value 0
       assertRewardCount dbSync 3
@@ -523,7 +524,7 @@ simpleRewards =
 
       b <- fillEpochs interpreter mockServer 3
 
-      assertBlockNoBackoff dbSync (fromIntegral $ 1 + length a + 1 + length b)
+      assertBlockNoBackoff dbSync (fromIntegral $ 1 + length a + 2 + length b)
       assertRewardCount dbSync 17
       assertRewardCounts dbSync st True
           -- 2 pool leaders also delegate to pools.
@@ -561,7 +562,7 @@ rewardsShelley =
 
       b <- fillEpochs interpreter mockServer 3
 
-      assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + 2)
+      assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + 3)
       st <- withShelleyLedgerState interpreter Right
       -- Note we have 2 rewards less compared to Alonzo era
       assertRewardCount dbSync 15
@@ -600,7 +601,7 @@ rewardsDeregistration =
         Right [tx1, tx2]
 
       a <- fillEpochs interpreter mockServer 3
-      assertBlockNoBackoff dbSync (fromIntegral $ 3 + length a - 1)
+      assertBlockNoBackoff dbSync (fromIntegral $ 3 + length a)
 
       st <- getAlonzoLedgerState interpreter
 
@@ -610,14 +611,14 @@ rewardsDeregistration =
 
       b <- fillEpochs interpreter mockServer 2
 
-      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length a + length b - 1)
+      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length a + length b)
       assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,1,0,0,0))]
 
       _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ Alonzo.mkPaymentTx (UTxOIndex 1) (UTxOIndex 0) 10000 10000
 
       c <- fillEpochs interpreter mockServer 2
 
-      assertBlockNoBackoff dbSync (fromIntegral $ 5 + length a + length b + length c - 1)
+      assertBlockNoBackoff dbSync (fromIntegral $ 5 + length a + length b + length c)
       assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,2,0,0,0))]
 
       d <- fillEpochs interpreter mockServer 1
@@ -627,12 +628,12 @@ rewardsDeregistration =
 
       f <- fillUntilNextEpoch interpreter mockServer
 
-      assertBlockNoBackoff dbSync (fromIntegral $ 6 + length (a <> b <> c <> d <> e <> f) - 1)
+      assertBlockNoBackoff dbSync (fromIntegral $ 6 + length (a <> b <> c <> d <> e <> f))
       assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,2,0,0,0))]
 
       g <- fillEpochs interpreter mockServer 2
       -- TODO: the last field should be 1. There should be some deposit refund
-      assertBlockNoBackoff dbSync (fromIntegral $ 6 + length (a <> b <> c <> d <> e <> f <> g) - 1)
+      assertBlockNoBackoff dbSync (fromIntegral $ 6 + length (a <> b <> c <> d <> e <> f <> g))
       assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,2,0,0,0))]
 
   where
@@ -691,20 +692,20 @@ mirRewardRollback =
       d <- fillUntilNextEpoch interpreter mockServer
 
       st <- getAlonzoLedgerState interpreter
-      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c <> d) - 1)
+      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c <> d))
       assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,0,0,1,0))]
 
       atomically $ rollback mockServer (blockPoint $ last c)
-      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c) - 1)
+      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c))
       assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,0,0,1,0))]
       stopDBSync dbSync
       startDBSync dbSync
-      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c) - 1)
+      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c))
       assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,0,0,1,0))]
 
       forM_ d $ atomically . addBlock mockServer
       e <- fillEpochPercentage interpreter mockServer 5
-      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c <> d <> e) - 1)
+      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c <> d <> e))
       assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,0,0,1,0))]
   where
     testLabel = "mirRewardRollback"
@@ -730,7 +731,7 @@ mirRewardShelley =
 
       st <- withShelleyLedgerState interpreter Right
       -- TODO: is this correct? It looks like there are no rewards.
-      assertBlockNoBackoff dbSync (fromIntegral $ 3 + length a + length b - 1)
+      assertBlockNoBackoff dbSync (fromIntegral $ 3 + length a + length b)
       assertRewardCounts dbSync st True []
   where
     testLabel = "mirRewardShelley"
@@ -762,8 +763,7 @@ mirRewardDereg =
       _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
           Alonzo.mkSimpleDCertTx [(StakeIndex 1, DCertDeleg . DeRegKey)]
 
-
-      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b) - 1)
+      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b))
       -- deregistration means empty rewards
       st <- getAlonzoLedgerState interpreter
       assertRewardCounts dbSync st False []
@@ -777,7 +777,7 @@ rewardsEmptyChainLast =
       _ <- registerAllStakeCreds interpreter mockServer
 
       a <- fillEpochs interpreter mockServer 3
-      assertRewardCount dbSync 0
+      assertRewardCount dbSync 3
 
       -- Now that pools are registered, we add a tx to fill the fees pot.
       -- Rewards will be distributed.
@@ -792,7 +792,7 @@ rewardsEmptyChainLast =
       -- Skip half an epoch
       _ <- skipUntilNextEpoch interpreter mockServer []
       d <- fillUntilNextEpoch interpreter mockServer
-      assertBlockNoBackoff dbSync (fromIntegral $ 1 + length a + 1 + length b + length c + 1 + length d - 1)
+      assertBlockNoBackoff dbSync (fromIntegral $ 1 + length a + 1 + length b + length c + 1 + length d)
       assertRewardCount dbSync 17
   where
     testLabel = "rewardsEmptyChainLast"
@@ -812,9 +812,9 @@ rollbackBoundary =
 
       assertRewardCount dbSync 3
       atomically $ rollback mockServer (blockPoint $ last blks)
-      assertBlockNoBackoff dbSync (2 + length a + length blks - 1)
+      assertBlockNoBackoff dbSync (2 + length a + length blks)
       forM_ blks' $ atomically . addBlock mockServer
-      assertBlockNoBackoff dbSync (2 + length a + length blks + length blks' - 1)
+      assertBlockNoBackoff dbSync (2 + length a + length blks + length blks')
       assertRewardCount dbSync 3
   where
     testLabel = "rollbackBoundary"
@@ -837,7 +837,7 @@ singleMIRCertMultiOut =
 
       b <- fillUntilNextEpoch interpreter mockServer
 
-      assertBlockNoBackoff dbSync (1 + length a + length b)
+      assertBlockNoBackoff dbSync (2 + length a + length b)
       assertRewardCount dbSync 4
   where
     testLabel = "singleMIRCertMultiOut"
@@ -853,7 +853,7 @@ simpleScript =
       _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
         Alonzo.mkLockByScriptTx (UTxOIndex 0) [True] 20000 20000
 
-      assertBlockNoBackoff dbSync (fromIntegral $ length a + 2 - 1)
+      assertBlockNoBackoff dbSync (fromIntegral $ length a + 2)
       assertEqQuery dbSync (fmap getOutFields <$> DB.queryScriptOutputs) [expectedFields] "Unexpected script outputs"
   where
     testLabel = "simpleScript"
@@ -876,7 +876,7 @@ unlockScript =
       _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
         Alonzo.mkUnlockScriptTx [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) True 10000 500
 
-      assertBlockNoBackoff dbSync 2
+      assertBlockNoBackoff dbSync 3
       assertAlonzoCounts dbSync (1,1,1,1,1,1,0,0)
   where
     testLabel = "unlockScriptSameBlock"
@@ -893,7 +893,7 @@ unlockScriptSameBlock =
         tx1 <- Alonzo.mkUnlockScriptTx [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) True 10000 500 st
         pure [tx0, tx1]
 
-      assertBlockNoBackoff dbSync 1
+      assertBlockNoBackoff dbSync 2
       assertAlonzoCounts dbSync (1,1,1,1,1,1,0,0)
 
   where
@@ -911,7 +911,7 @@ failedScript =
       _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
         Alonzo.mkUnlockScriptTx [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) False 10000 500
 
-      assertBlockNoBackoff dbSync 1
+      assertBlockNoBackoff dbSync 2
       assertAlonzoCounts dbSync (0,0,0,0,1,0,1,1)
   where
     testLabel = "failedScript"
@@ -928,7 +928,7 @@ failedScriptSameBlock =
         tx1 <- Alonzo.mkUnlockScriptTx [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) False 10000 500 st
         pure [tx0, tx1]
 
-      assertBlockNoBackoff dbSync 1
+      assertBlockNoBackoff dbSync 2
       assertAlonzoCounts dbSync (0,0,0,0,1,0,1,1)
   where
     testLabel = "failedScriptSameBlock"
@@ -948,7 +948,7 @@ multipleScripts =
     _ <- forgeNextAndSubmit interpreter mockServer $ MockBlock [TxAlonzo tx0] (NodeId 1)
     _ <- forgeNextAndSubmit interpreter mockServer $ MockBlock [TxAlonzo tx1] (NodeId 1)
 
-    assertBlockNoBackoff dbSync 1
+    assertBlockNoBackoff dbSync 2
     assertAlonzoCounts dbSync (1,2,1,1,3,2,0,0)
   where
     testLabel = "multipleScripts"
@@ -966,7 +966,7 @@ multipleScriptsSameBlock =
       tx1 <- Alonzo.mkUnlockScriptTx [UTxOPair pair1, UTxOPair pair2] (UTxOIndex 1) (UTxOIndex 2) True 10000 500 st
       pure [tx0, tx1]
 
-    assertBlockNoBackoff dbSync 0
+    assertBlockNoBackoff dbSync 1
     assertAlonzoCounts dbSync (1,2,1,1,3,2,0,0)
   where
     testLabel = "multipleScriptsSameBlock"
@@ -984,7 +984,7 @@ multipleScriptsFailed =
         Alonzo.mkUnlockScriptTx (UTxOPair <$> [head utxos, utxos !! 1, utxos !! 2]) (UTxOIndex 1) (UTxOIndex 2) False 10000 500
     _ <- forgeNextAndSubmit interpreter mockServer $ MockBlock [TxAlonzo tx1] (NodeId 1)
 
-    assertBlockNoBackoff dbSync 1
+    assertBlockNoBackoff dbSync 2
     assertAlonzoCounts dbSync (0,0,0,0,3,0,1,1)
   where
     testLabel = "multipleScriptsFailed"
@@ -1001,7 +1001,7 @@ multipleScriptsFailedSameBlock =
       tx1 <- Alonzo.mkUnlockScriptTx (UTxOPair <$> [head utxos, utxos !! 1, utxos !! 2]) (UTxOIndex 1) (UTxOIndex 2) False 10000 500 st
       pure [tx0, tx1]
 
-    assertBlockNoBackoff dbSync 0
+    assertBlockNoBackoff dbSync 1
     assertAlonzoCounts dbSync (0,0,0,0,3,0,1,1)
   where
     testLabel = "multipleScriptsFailedSameBlock"
@@ -1013,7 +1013,7 @@ registrationScriptTx =
 
     _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
         Alonzo.mkSimpleDCertTx [(StakeIndexScript True, DCertDeleg . RegKey)]
-    assertBlockNoBackoff dbSync 0
+    assertBlockNoBackoff dbSync 1
     assertScriptCert dbSync (0,0,0,1)
   where
     testLabel = "registrationScriptTx"
@@ -1028,7 +1028,7 @@ deregistrationScriptTx =
       tx1 <- Alonzo.mkScriptDCertTx [(StakeIndexScript True, True, DCertDeleg . DeRegKey)] True st
       pure [tx0, tx1]
 
-    assertBlockNoBackoff dbSync 0
+    assertBlockNoBackoff dbSync 1
     assertScriptCert dbSync (1,0,0,1)
   where
     testLabel = "deregistrationScriptTx"
@@ -1045,7 +1045,7 @@ deregistrationsScriptTxs =
       tx3 <- Alonzo.mkScriptDCertTx [(StakeIndexScript True, True, DCertDeleg . DeRegKey)] True st
       pure [tx0, tx1, Alonzo.addValidityInterval 1000 tx2, Alonzo.addValidityInterval 2000 tx3]
 
-    assertBlockNoBackoff dbSync 0
+    assertBlockNoBackoff dbSync 1
     assertScriptCert dbSync (2,0,0,1)
     assertAlonzoCounts dbSync (1,2,1,0,0,0,0,0)
   where
@@ -1064,7 +1064,7 @@ deregistrationsScriptTx =
                                     True st
       pure [tx0, tx1]
 
-    assertBlockNoBackoff dbSync 0
+    assertBlockNoBackoff dbSync 1
     assertScriptCert dbSync (2,0,0,1)
     assertAlonzoCounts dbSync (1,2,1,0,0,0,0,0)
   where
@@ -1084,7 +1084,7 @@ deregistrationsScriptTx' =
                                True st
       pure [tx0, tx1]
 
-    assertBlockNoBackoff dbSync 0
+    assertBlockNoBackoff dbSync 1
     -- TODO: This is a bug! The first field should be 2. However the deregistrations
     -- are missing the redeemers
     assertScriptCert dbSync (0,0,0,1)
@@ -1106,7 +1106,7 @@ deregistrationsScriptTx'' =
                                True st
       pure [tx0, tx1]
 
-    assertBlockNoBackoff dbSync 0
+    assertBlockNoBackoff dbSync 1
     assertScriptCert dbSync (2,0,0,1)
     assertAlonzoCounts dbSync (1,1,1,0,0,0,0,0)
   where
@@ -1120,7 +1120,7 @@ mintMultiAsset =
         let val0 = Value 1 $ Map.singleton (PolicyID alwaysMintScriptHash) (Map.singleton (head assetNames) 1)
         Alonzo.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, Value 10000 mempty)] val0 True 100 st
 
-      assertBlockNoBackoff dbSync 0
+      assertBlockNoBackoff dbSync 1
       assertAlonzoCounts dbSync (1,1,1,1,0,0,0,0)
   where
     testLabel = "mintMultiAsset"
@@ -1138,7 +1138,7 @@ mintMultiAssets =
         tx1 <- Alonzo.mkMAssetsScriptTx [UTxOIndex 2] (UTxOIndex 3) [(UTxOAddressNew 0, Value 10000 mempty)] val1 True 200 st
         pure [tx0, tx1]
 
-      assertBlockNoBackoff dbSync 0
+      assertBlockNoBackoff dbSync 1
       assertAlonzoCounts dbSync (2,4,1,2,0,0,0,0)
   where
     testLabel = "mintMultiAssets"
@@ -1167,7 +1167,7 @@ swapMultiAssets =
             mintValue0 True 200 st
           pure [tx0, tx1]
 
-      assertBlockNoBackoff dbSync 0
+      assertBlockNoBackoff dbSync 1
       assertAlonzoCounts dbSync (2,6,1,2,4,2,0,0)
   where
     testLabel = "swapMultiAssets"
@@ -1178,7 +1178,7 @@ poolReg =
       startDBSync  dbSync
 
       _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
-      assertBlockNoBackoff dbSync 0
+      assertBlockNoBackoff dbSync 1
       initCounter <- runQuery dbSync poolCountersQuery
       assertEqual "Unexpected init pool counter" (3,0,3,2,0,0) initCounter
 
@@ -1188,7 +1188,7 @@ poolReg =
            , PoolIndexNew 0
            , Alonzo.consPoolParamsTwoOwners)]
 
-      assertBlockNoBackoff dbSync 1
+      assertBlockNoBackoff dbSync 2
       assertPoolCounters dbSync (addPoolCounters (1,1,1,2,0,1) initCounter)
       st <- getAlonzoLedgerState interpreter
       assertPoolLayerCounters dbSync (0,0) [(PoolIndexNew 0, (Right False, False, True))] st
@@ -1202,7 +1202,7 @@ nonexistantPoolQuery =
       startDBSync  dbSync
 
       _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
-      assertBlockNoBackoff dbSync 0
+      assertBlockNoBackoff dbSync 1
 
       st <- getAlonzoLedgerState interpreter
       assertPoolLayerCounters dbSync (0,0) [(PoolIndexNew 0, (Left RecordDoesNotExist, False, False))] st
@@ -1216,7 +1216,7 @@ poolDeReg =
       startDBSync  dbSync
 
       _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
-      assertBlockNoBackoff dbSync 0
+      assertBlockNoBackoff dbSync 1
       initCounter <- runQuery dbSync poolCountersQuery
       assertEqual "Unexpected init pool counter" (3,0,3,2,0,0) initCounter
 
@@ -1229,7 +1229,7 @@ poolDeReg =
           , ([], PoolIndexNew 0, \_ poolId -> DCertPool $ RetirePool poolId 1)
           ]
 
-      assertBlockNoBackoff dbSync 1
+      assertBlockNoBackoff dbSync 2
       assertPoolCounters dbSync (addPoolCounters (1,1,1,2,1,1) initCounter)
 
       st <- getAlonzoLedgerState interpreter
@@ -1239,7 +1239,7 @@ poolDeReg =
       -- change epoch
       a <- fillUntilNextEpoch interpreter mockServer
 
-      assertBlockNoBackoff dbSync (fromIntegral $ length a + 1)
+      assertBlockNoBackoff dbSync (fromIntegral $ length a + 2)
       -- these counters are the same
       assertPoolCounters dbSync (addPoolCounters (1,1,1,2,1,1) initCounter)
 
@@ -1255,7 +1255,7 @@ poolDeRegMany =
       startDBSync  dbSync
 
       _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
-      assertBlockNoBackoff dbSync 0
+      assertBlockNoBackoff dbSync 1
       initCounter <- runQuery dbSync poolCountersQuery
       assertEqual "Unexpected init pool counter" (3,0,3,2,0,0) initCounter
 
@@ -1303,7 +1303,7 @@ poolDeRegMany =
           ] st
         pure [tx0, tx1]
 
-      assertBlockNoBackoff dbSync 2
+      assertBlockNoBackoff dbSync 3
       -- TODO fix PoolOwner and PoolRelay unique key
       assertPoolCounters dbSync (addPoolCounters (1,1,5,10,3,5) initCounter)
 
@@ -1314,7 +1314,7 @@ poolDeRegMany =
       -- change epoch
       a <- fillUntilNextEpoch interpreter mockServer
 
-      assertBlockNoBackoff dbSync (fromIntegral $ length a + 2)
+      assertBlockNoBackoff dbSync (fromIntegral $ length a + 3)
       -- these counters are the same
       assertPoolCounters dbSync (addPoolCounters (1,1,5,10,3,5) initCounter)
 
@@ -1336,7 +1336,7 @@ poolDelist =
       startDBSync  dbSync
 
       _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
-      assertBlockNoBackoff dbSync 0
+      assertBlockNoBackoff dbSync 1
       initCounter <- runQuery dbSync poolCountersQuery
       assertEqual "Unexpected init pool counter" (3,0,3,2,0,0) initCounter
 
@@ -1347,7 +1347,7 @@ poolDelist =
            , Alonzo.consPoolParamsTwoOwners)]
 
       _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
-      assertBlockNoBackoff dbSync 2
+      assertBlockNoBackoff dbSync 3
       st <- getAlonzoLedgerState interpreter
       assertPoolLayerCounters dbSync (0,0) [(PoolIndexNew 0, (Right False, False, True))] st
 
@@ -1364,14 +1364,14 @@ poolDelist =
           [ ([], PoolIndexNew 0, \_ poolHash -> DCertPool $ RetirePool poolHash 1)]
 
       _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
-      assertBlockNoBackoff dbSync 4
+      assertBlockNoBackoff dbSync 5
       -- delisted and pending retirement
       assertPoolLayerCounters dbSync (0,1) [(PoolIndexNew 0, (Right False, True, True))] st
 
       a <- fillUntilNextEpoch interpreter mockServer
 
       _ <- forgeNextFindLeaderAndSubmit interpreter mockServer []
-      assertBlockNoBackoff dbSync (fromIntegral $ 5 + length a)
+      assertBlockNoBackoff dbSync (fromIntegral $ 5 + length a + 1)
       -- delisted and retired
       assertPoolLayerCounters dbSync (1,1) [(PoolIndexNew 0, (Right True, True, False))] st
   where
@@ -1379,10 +1379,11 @@ poolDelist =
 
 
 hfBlockHash :: CardanoBlock -> ByteString
-hfBlockHash blk = case blk of
-  BlockShelley sblk -> blockHash sblk
-  BlockAlonzo ablk -> blockHash ablk
-  _ -> error "not supported block type"
+hfBlockHash blk =
+  case blk of
+    BlockShelley sblk -> blockHash sblk
+    BlockAlonzo ablk -> blockHash ablk
+    _ -> error "not supported block type"
 
 throwLeft :: Exception err => IO (Either err a) -> IO a
 throwLeft action = do

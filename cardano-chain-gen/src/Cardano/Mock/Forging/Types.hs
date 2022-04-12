@@ -1,7 +1,16 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 
-module Cardano.Mock.Forging.Types where
+module Cardano.Mock.Forging.Types
+  ( CardanoBlock
+  , ForgingError (..)
+  , MockBlock (..)
+  , NodeId (..)
+  , PoolIndex (..)
+  , StakeIndex (..)
+  , TxEra (..)
+  , UTxOIndex (..)
+  ) where
 
 import           Control.Exception
 
@@ -20,39 +29,50 @@ import           Cardano.Slotting.Slot (SlotNo (..))
 type CardanoBlock = HardForkBlock (CardanoEras StandardCrypto)
 
 data MockBlock = MockBlock
-  { txs :: [TxEra]
-  , node :: NodeId
+  { txs :: ![TxEra]
+  , node :: !NodeId
   }
 
-data TxEra = TxAlonzo (Core.Tx (AlonzoEra StandardCrypto))
-           | TxShelley (Core.Tx (ShelleyEra StandardCrypto))
+data TxEra
+  = TxAlonzo !(Core.Tx (AlonzoEra StandardCrypto))
+  | TxShelley !(Core.Tx (ShelleyEra StandardCrypto))
 
 newtype NodeId = NodeId { unNodeId :: Int }
   deriving Show
 
-data ForgingError =
-    WentTooFar
-  | ForecastError SlotNo OutsideForecastRange
-  | NonExistantNode NodeId
+data ForgingError
+  = WentTooFar
+  | ForecastError !SlotNo !OutsideForecastRange
+  | NonExistantNode !NodeId
   | CantFindUTxO
   | CantFindStake
   | ExpectedAlonzoState
   | ExpectedShelleyState
   | UnexpectedEra
-  | EmptyFingerprint SlotNo FilePath
-  | FailedToValidateSlot SlotNo Int FilePath
-  | NotExpectedSlotNo SlotNo SlotNo Int
-  | FingerprintDecodeError String
+  | EmptyFingerprint !SlotNo !FilePath
+  | FailedToValidateSlot !SlotNo !Int !FilePath
+  | NotExpectedSlotNo !SlotNo !SlotNo !Int
+  | FingerprintDecodeError !String
   deriving (Show, Exception)
 
-data UTxOIndex era = UTxOIndex Int | UTxOAddress (Addr StandardCrypto) | UTxOInput (TxIn StandardCrypto)
-                   | UTxOPair (TxIn StandardCrypto, Core.TxOut era)
-                   | UTxOAddressNew Int | UTxOAddressNewWithStake Int StakeIndex
-                   | UTxOAddressNewWithPtr Int Ptr
+data UTxOIndex era
+  = UTxOIndex Int
+  | UTxOAddress !(Addr StandardCrypto)
+  | UTxOInput !(TxIn StandardCrypto)
+  | UTxOPair !(TxIn StandardCrypto, Core.TxOut era)
+  | UTxOAddressNew !Int
+  | UTxOAddressNewWithStake !Int !StakeIndex
+  | UTxOAddressNewWithPtr !Int !Ptr
 
-data StakeIndex = StakeIndex Int | StakeAddress (StakeCredential StandardCrypto)
-                | StakeIndexNew Int | StakeIndexScript Bool
-                | StakeIndexPoolLeader PoolIndex | StakeIndexPoolMember Int PoolIndex
+data StakeIndex
+  = StakeIndex !Int
+  | StakeAddress !(StakeCredential StandardCrypto)
+  | StakeIndexNew !Int
+  | StakeIndexScript !Bool
+  | StakeIndexPoolLeader !PoolIndex
+  | StakeIndexPoolMember !Int !PoolIndex
 
-data PoolIndex = PoolIndex Int | PoolIndexId (KeyHash 'StakePool StandardCrypto)
-               | PoolIndexNew Int
+data PoolIndex
+  = PoolIndex !Int
+  | PoolIndexId !(KeyHash 'StakePool StandardCrypto)
+  | PoolIndexNew !Int

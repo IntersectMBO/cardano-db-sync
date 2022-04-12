@@ -6,9 +6,10 @@ module Test.Cardano.Db.Mock.Config where
 
 import           Cardano.Prelude (ReaderT, panic, stderr)
 
-import           Control.Concurrent.Async
+import           Control.Concurrent.Async (Async, async, cancel, poll)
 import           Control.Concurrent.STM (atomically)
-import           Control.Concurrent.STM.TMVar
+import           Control.Concurrent.STM.TMVar (TMVar, newEmptyTMVarIO, takeTMVar, tryPutTMVar,
+                   tryReadTMVar)
 import           Control.Exception (SomeException, bracket)
 import           Control.Monad (void)
 import           Control.Monad.Extra (eitherM)
@@ -19,20 +20,21 @@ import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
 import           Control.Tracer (nullTracer)
 import           Data.Text (Text)
 import qualified Data.Text as Text
-import           System.Directory
+import           System.Directory (createDirectoryIfMissing, removePathForcibly)
 import           System.FilePath.Posix ((</>))
-import           System.IO.Silently
+import           System.IO.Silently (hSilence)
 
 import           Database.Persist.Sql (SqlBackend)
 
-import           Ouroboros.Consensus.Config
+import           Ouroboros.Consensus.Config (TopLevelConfig)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import           Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import           Ouroboros.Consensus.Shelley.Node (TPraosLeaderCredentials)
 
-import           Cardano.Api
-import           Cardano.CLI.Shelley.Commands as CLI
-import           Cardano.CLI.Shelley.Run.Genesis as CLI
+import           Cardano.Api (NetworkId (..), NetworkMagic (..))
+import           Cardano.CLI.Shelley.Commands (GenesisCmd (..))
+import qualified Cardano.CLI.Shelley.Commands as CLI
+import qualified Cardano.CLI.Shelley.Run.Genesis as CLI
 import           Cardano.Node.Protocol.Shelley (readLeaderCredentials)
 import           Cardano.Node.Types (ProtocolFilepaths (..))
 
@@ -48,7 +50,7 @@ import           Cardano.DbSync.Types (MetricSetters (..))
 import           Cardano.SMASH.Server.PoolDataLayer
 
 import           Cardano.Mock.ChainSync.Server
-import           Cardano.Mock.Forging.Interpreter hiding (CardanoBlock)
+import           Cardano.Mock.Forging.Interpreter
 
 rootTestDir :: FilePath
 rootTestDir = "test/testfiles"
@@ -200,9 +202,10 @@ withFullConfig config testLabel action iom migr = do
     cfg <- mkConfig configDir mutableDir
     fingerFile <- prepareFingerprintFile testLabel
     let dbsyncParams = syncNodeParams cfg
-    let trce = nullTracer
-    -- Replace with this for better debugging of tests
-    -- trce <- configureLogging dbsyncParams "db-sync-node"
+    -- Set to True to disable logging, False to enable it.
+    trce <- if True
+              then pure nullTracer
+              else configureLogging dbsyncParams "db-sync-node"
     let dbsyncRun = runDbSync emptyMetricsSetters migr iom trce dbsyncParams True 35 35
     let initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
     withInterpreter (protocolInfoForging cfg) nullTracer fingerFile $ \interpreter -> do

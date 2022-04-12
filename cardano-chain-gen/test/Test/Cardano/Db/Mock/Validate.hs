@@ -79,7 +79,7 @@ assertEqQuery env query a msg = do
 assertEqBackoff :: (Eq a, Show a) => DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> a -> [Int] -> String -> IO ()
 assertEqBackoff env query a delays msg = do
     checkStillRuns env
-    assertBackoff env query delays (== a) (\a' -> msg <> ": " <> show a' <> " /= " <> show a)
+    assertBackoff env query delays (== a) (\a' -> msg <> ": got " <> show a' <> " expected " <> show a)
 
 assertBackoff :: DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> [Int] -> (a -> Bool) -> (a -> String) -> IO ()
 assertBackoff env query delays check errMsg = go delays
