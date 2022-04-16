@@ -41,7 +41,7 @@ runSmashServer config = do
           defaultSettings
 
     pgconfig <- orDie renderPGPassError $ newExceptT (readPGPass PGPassDefaultEnv)
-    Db.runIohkLogging trce $ withPostgresqlPool (toConnectionString pgconfig) defaultSmashPool $ \pool -> do
+    Db.runIohkLogging trce $ withPostgresqlPool (toConnectionString pgconfig) (sscSmashPort config) $ \pool -> do
       let poolDataLayer = postgresqlPoolDataLayer trce pool
       app <- liftIO $ mkApp (sscTrace config) poolDataLayer (sscAdmins config)
       liftIO $ runSettings settings app
