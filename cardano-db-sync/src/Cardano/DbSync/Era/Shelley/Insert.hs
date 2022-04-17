@@ -44,6 +44,7 @@ import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Coin as Ledger
+import           Cardano.Ledger.Credential (Ptr (Ptr))
 import qualified Cardano.Ledger.Credential as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
 import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..), Value (..))
@@ -481,8 +482,10 @@ insertStakeAddressRefIfMissing trce cache txId addr =
               Just <$> insertStakeAddress txId (Shelley.RewardAcnt nw cred)
             Ledger.StakeRefPtr ptr -> do
               mid <- queryStakeRefPtr ptr
-              when (isNothing mid) .
-                liftIO . logWarning trce $ "insertStakeRefIfMissing: query of " <> textShow ptr <> " returns Nothing"
+              when (isNothing mid) $ do
+                let Ptr sl txIx cIx = ptr
+                liftIO . logWarning trce $ "insertStakeRefIfMissing: query of " <> textShow ptr <> " ("
+                    <> textShow sl <> " " <> textShow txIx <> " " <> textShow cIx <>") returns Nothing"
               pure mid
             Ledger.StakeRefNull -> pure Nothing
 
