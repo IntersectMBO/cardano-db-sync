@@ -69,7 +69,6 @@ library
                       , containers
                       , http-conduit
                       , iohk-monitoring
-                      , monad-logger
                       , network-uri
                       , persistent-postgresql
                       , quiet
