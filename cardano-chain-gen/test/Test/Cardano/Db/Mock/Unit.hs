@@ -94,6 +94,7 @@ unitTests iom knownMigrations =
           , test "Mir Cert Shelley" mirRewardShelley
           , test "Mir Cert deregistration" mirRewardDereg
           , test "test rewards empty last part of epoch" rewardsEmptyChainLast
+          , test "test delta rewards" rewardsDelta
           , test "rollback on epoch boundary" rollbackBoundary
           , test "single MIR Cert multiple outputs" singleMIRCertMultiOut
           ]
@@ -523,7 +524,7 @@ simpleRewards =
 
       st <- getAlonzoLedgerState interpreter
       -- False indicates that we provide the full expected list of addresses with rewards.
-      assertRewardCounts dbSync st False
+      assertRewardCounts dbSync st False (Just 3)
           [ (StakeIndexPoolLeader (PoolIndex 0), (1,0,0,0,0))
           , (StakeIndexPoolLeader (PoolIndex 1), (1,0,0,0,0))
           , (StakeIndexPoolLeader (PoolIndex 2), (1,0,0,0,0))]
@@ -532,15 +533,15 @@ simpleRewards =
       -- Rewards will be distributed.
       _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
 
-      b <- fillEpochs interpreter mockServer 3
+      b <- fillEpochs interpreter mockServer 2
 
       assertBlockNoBackoff dbSync (fromIntegral $ 1 + length a + 2 + length b)
-      assertRewardCount dbSync 17
-      assertRewardCounts dbSync st True
+      assertRewardCount dbSync 14
+      assertRewardCounts dbSync st True (Just 5)
           -- 2 pool leaders also delegate to pools.
-          [ (StakeIndexPoolLeader (PoolIndexId $ KeyHash "9f1b441b9b781b3c3abb43b25679dc17dbaaf116dddca1ad09dc1de0"), (4,0,0,0,0))
-          , (StakeIndexPoolLeader (PoolIndexId $ KeyHash "5af582399de8c226391bfd21424f34d0b053419c4d93975802b7d107"), (4,1,0,0,0))
-          , (StakeIndexPoolLeader (PoolIndexId $ KeyHash "58eef2925db2789f76ea057c51069e52c5e0a44550f853c6cdf620f8"), (4,1,0,0,0))
+          [ (StakeIndexPoolLeader (PoolIndexId $ KeyHash "9f1b441b9b781b3c3abb43b25679dc17dbaaf116dddca1ad09dc1de0"), (1,0,0,0,0))
+          , (StakeIndexPoolLeader (PoolIndexId $ KeyHash "5af582399de8c226391bfd21424f34d0b053419c4d93975802b7d107"), (1,1,0,0,0))
+          , (StakeIndexPoolLeader (PoolIndexId $ KeyHash "58eef2925db2789f76ea057c51069e52c5e0a44550f853c6cdf620f8"), (1,1,0,0,0))
           , (StakeIndexPoolMember 0 (PoolIndex 0), (0,1,0,0,0))
           , (StakeIndexPoolMember 0 (PoolIndex 1), (0,1,0,0,0))
           ]
@@ -570,17 +571,17 @@ rewardsShelley =
       _ <- withShelleyFindLeaderAndSubmitTx interpreter mockServer $
         Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
 
-      b <- fillEpochs interpreter mockServer 3
+      b <- fillEpochs interpreter mockServer 2
 
       assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + 3)
       st <- withShelleyLedgerState interpreter Right
       -- Note we have 2 rewards less compared to Alonzo era
-      assertRewardCount dbSync 15
-      assertRewardCounts dbSync st True
+      assertRewardCount dbSync 12
+      assertRewardCounts dbSync st True (Just 5)
           -- Here we dont' have both leader and member rewards.
-          [ (StakeIndexPoolLeader (PoolIndexId $ KeyHash "9f1b441b9b781b3c3abb43b25679dc17dbaaf116dddca1ad09dc1de0"), (4,0,0,0,0))
-          , (StakeIndexPoolLeader (PoolIndexId $ KeyHash "5af582399de8c226391bfd21424f34d0b053419c4d93975802b7d107"), (4,0,0,0,0))
-          , (StakeIndexPoolLeader (PoolIndexId $ KeyHash "58eef2925db2789f76ea057c51069e52c5e0a44550f853c6cdf620f8"), (4,0,0,0,0))
+          [ (StakeIndexPoolLeader (PoolIndexId $ KeyHash "9f1b441b9b781b3c3abb43b25679dc17dbaaf116dddca1ad09dc1de0"), (1,0,0,0,0))
+          , (StakeIndexPoolLeader (PoolIndexId $ KeyHash "5af582399de8c226391bfd21424f34d0b053419c4d93975802b7d107"), (1,0,0,0,0))
+          , (StakeIndexPoolLeader (PoolIndexId $ KeyHash "58eef2925db2789f76ea057c51069e52c5e0a44550f853c6cdf620f8"), (1,0,0,0,0))
           , (StakeIndexPoolMember 0 (PoolIndex 0), (0,1,0,0,0))
           , (StakeIndexPoolMember 0 (PoolIndex 1), (0,1,0,0,0))
           ]
@@ -622,14 +623,14 @@ rewardsDeregistration =
       b <- fillEpochs interpreter mockServer 2
 
       assertBlockNoBackoff dbSync (fromIntegral $ 4 + length a + length b)
-      assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,1,0,0,0))]
+      assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,1,0,0,0))]
 
       _ <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ Alonzo.mkPaymentTx (UTxOIndex 1) (UTxOIndex 0) 10000 10000
 
       c <- fillEpochs interpreter mockServer 2
 
       assertBlockNoBackoff dbSync (fromIntegral $ 5 + length a + length b + length c)
-      assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,2,0,0,0))]
+      assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,2,0,0,0))]
 
       d <- fillEpochs interpreter mockServer 1
       e <- fillEpochPercentage interpreter mockServer 85
@@ -639,12 +640,12 @@ rewardsDeregistration =
       f <- fillUntilNextEpoch interpreter mockServer
 
       assertBlockNoBackoff dbSync (fromIntegral $ 6 + length (a <> b <> c <> d <> e <> f))
-      assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,2,0,0,0))]
+      -- stays at 2, since it's deregistered.
+      assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,2,0,0,0))]
 
       g <- fillEpochs interpreter mockServer 2
-      -- TODO: the last field should be 1. There should be some deposit refund
       assertBlockNoBackoff dbSync (fromIntegral $ 6 + length (a <> b <> c <> d <> e <> f <> g))
-      assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,2,0,0,0))]
+      assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,2,0,0,0))]
 
   where
     testLabel = "rewardsDeregistration"
@@ -675,7 +676,7 @@ mirReward =
 
       st <- getAlonzoLedgerState interpreter
       -- 2 mir rewards from treasury are sumed
-      assertRewardCounts dbSync st True [(StakeIndex 1, (0,0,1,1,0))]
+      assertRewardCounts dbSync st True Nothing [(StakeIndex 1, (0,0,1,1,0))]
   where
     testLabel = "mirReward"
 
@@ -703,20 +704,20 @@ mirRewardRollback =
 
       st <- getAlonzoLedgerState interpreter
       assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c <> d))
-      assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,0,0,1,0))]
+      assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,0,0,1,0))]
 
       atomically $ rollback mockServer (blockPoint $ last c)
       assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c))
-      assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,0,0,1,0))]
+      assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,0,0,1,0))]
       stopDBSync dbSync
       startDBSync dbSync
       assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c))
-      assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,0,0,1,0))]
+      assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,0,0,1,0))]
 
       forM_ d $ atomically . addBlock mockServer
       e <- fillEpochPercentage interpreter mockServer 5
       assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c <> d <> e))
-      assertRewardCounts dbSync st True [(StakeIndexNew 1, (0,0,0,1,0))]
+      assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,0,0,1,0))]
   where
     testLabel = "mirRewardRollback"
 
@@ -726,23 +727,23 @@ mirRewardShelley =
       startDBSync  dbSync
       _ <- registerAllStakeCreds interpreter mockServer
 
-      -- first move to treasury from reserves
+      -- TODO test that this has no effect. You can't send funds between reserves and
+      -- treasury before protocol version 5.
       _ <- withShelleyFindLeaderAndSubmitTx interpreter mockServer $
         const $ Shelley.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))]
                          (Wdrl mempty)
 
       a <- fillEpochPercentage interpreter mockServer 50
 
-      -- mir from treasury
+      -- mir from reserves
       _ <- withShelleyFindLeaderAndSubmitTx  interpreter mockServer $ Shelley.mkSimpleDCertTx
-        [(StakeIndex 1, \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 100))))]
+        [(StakeIndex 1, \cred -> DCertMir $ MIRCert ReservesMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 100))))]
 
       b <- fillUntilNextEpoch interpreter mockServer
 
       st <- withShelleyLedgerState interpreter Right
-      -- TODO: is this correct? It looks like there are no rewards.
       assertBlockNoBackoff dbSync (fromIntegral $ 3 + length a + length b)
-      assertRewardCounts dbSync st True []
+      assertRewardCounts dbSync st False Nothing [(StakeIndex 1, (0,0,1,0,0))]
   where
     testLabel = "mirRewardShelley"
 
@@ -776,7 +777,7 @@ mirRewardDereg =
       assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b))
       -- deregistration means empty rewards
       st <- getAlonzoLedgerState interpreter
-      assertRewardCounts dbSync st False []
+      assertRewardCounts dbSync st False Nothing []
   where
     testLabel = "mirRewardDereg"
 
@@ -797,15 +798,44 @@ rewardsEmptyChainLast =
       b <- fillUntilNextEpoch interpreter mockServer
       assertRewardCount dbSync 6
 
-      c <- fillEpochPercentage interpreter mockServer 80
+      c <- fillEpochPercentage interpreter mockServer 68
 
-      -- Skip half an epoch
+      -- Skip a percentage of the epoch epoch
       _ <- skipUntilNextEpoch interpreter mockServer []
       d <- fillUntilNextEpoch interpreter mockServer
       assertBlockNoBackoff dbSync (fromIntegral $ 1 + length a + 1 + length b + length c + 1 + length d)
       assertRewardCount dbSync 17
   where
     testLabel = "rewardsEmptyChainLast"
+
+rewardsDelta :: IOManager -> [(Text, Text)] -> Assertion
+rewardsDelta =
+    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      -- These delegation push the computation of the 3 leader
+      -- rewards toward the 8k/f slot, so it can be delayed even more
+      -- with the missing blocks and create the delta reward.
+      -- This trick may break at some point in the future.
+      a <- delegateAndSendBlocks 1000 interpreter
+      forM_ a $ atomically . addBlock mockServer
+      _ <- registerAllStakeCreds interpreter mockServer
+      b <- fillEpochs interpreter mockServer 3
+      assertRewardCount dbSync 3
+
+      c <- fillUntilNextEpoch interpreter mockServer
+      assertRewardCount dbSync 6
+
+      d <- fillEpochPercentage interpreter mockServer 68
+      assertRewardCount dbSync 6
+
+      -- Skip a percentage of the epoch epoch
+      _ <- skipUntilNextEpoch interpreter mockServer []
+      assertBlockNoBackoff dbSync (fromIntegral $ 1 + length a + length b + length c + 1 + length d)
+      -- These are delta rewards aka rewards that were added at the epoch boundary, because the reward
+      -- update was not complete on time, due to missing blocks.
+      assertRewardCount dbSync 9
+  where
+    testLabel = "rewardsDelta"
 
 rollbackBoundary :: IOManager -> [(Text, Text)] -> Assertion
 rollbackBoundary =

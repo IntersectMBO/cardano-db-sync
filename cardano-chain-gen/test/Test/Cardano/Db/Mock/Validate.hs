@@ -158,9 +158,9 @@ assertCertCounts env expected =
       pure (registr - 5, deregistr, deleg - 5, withdrawal)
 
 assertRewardCounts :: (Crypto era ~ StandardCrypto)
-                   => DBSyncEnv -> LedgerState (ShelleyBlock era) -> Bool
+                   => DBSyncEnv -> LedgerState (ShelleyBlock era) -> Bool -> Maybe Word64
                    -> [(StakeIndex, (Word64, Word64, Word64, Word64, Word64))] -> IO ()
-assertRewardCounts env st filterAddr expected = do
+assertRewardCounts env st filterAddr mEpoch expected = do
     assertEqBackoff env (groupByAddress <$> q) expectedMap defaultDelays "Unexpected rewards count"
   where
     expectedMap :: Map ByteString (Word64, Word64, Word64, Word64, Word64)
@@ -198,9 +198,14 @@ assertRewardCounts env st filterAddr expected = do
               -> Map ByteString (Word64, Word64, Word64, Word64, Word64)
     updateMap (rew, addr) res = Map.alter (Just . updateAddrCounters rew) addr res
 
+    filterEpoch rw = case mEpoch of
+      Nothing -> val True
+      Just e -> rw ^. RewardSpendableEpoch ==. val e
+
     q = do
       res <- select . from $ \ (reward `InnerJoin` stake_addr) -> do
                 on (reward ^. RewardAddrId ==. stake_addr ^. StakeAddressId)
+                where_ (filterEpoch reward)
                 pure (reward, stake_addr ^. StakeAddressHashRaw)
       pure $ fmap (bimap entityVal unValue) res
 
