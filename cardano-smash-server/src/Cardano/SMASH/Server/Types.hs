@@ -1,11 +1,28 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Cardano.SMASH.Server.Types where
+module Cardano.SMASH.Server.Types
+  ( ApiResult (..)
+  , DBFail (..)
+  , HealthStatus (..)
+  , PolicyResult (..)
+  , PoolFetchError (..)
+  , PoolId (..)
+  , PoolMetaHash (..)
+  , PoolMetadataHash (..)
+  , PoolMetadataRaw (..)
+  , SmashURL (..)
+  , TickerName (..)
+  , TimeStringFormat (..)
+  , UniqueTicker (..)
+  , User (..)
+  , UserValidity (..)
+  ) where
 
 import           Cardano.Prelude
 
@@ -26,7 +43,7 @@ import           Data.Time.Format (defaultTimeLocale, formatTime, parseTimeM)
 import           Network.URI (URI, parseURI)
 import           Servant (FromHttpApiData (..), MimeUnrender (..), OctetStream)
 
-import           Cardano.Db
+import           Cardano.Db (LookupFail (..), PoolMetaHash (..), renderLookupFail)
 
 import           Cardano.Api (AsType (..), Hash, deserialiseFromBech32, deserialiseFromRawBytesHex,
                    serialiseToRawBytes)
@@ -113,11 +130,6 @@ instance FromJSON PoolMetadataHash where
         poolHash <- o .: "poolHash"
         pure $ PoolMetadataHash poolHash
 
--- Converting the basic type to a strong one.
--- Presumes the user knows what he is doing, NOT TYPE SAFE!
-bytestringToPoolMetaHash :: ByteString -> PoolMetadataHash
-bytestringToPoolMetaHash = PoolMetadataHash . decodeUtf8 . B16.encode
-
 instance ToSchema PoolMetadataHash
 
 instance ToParamSchema PoolMetadataHash
@@ -141,7 +153,7 @@ instance (ToJSON err, ToJSON a) => ToJSON (ApiResult err a) where
     toEncoding (ApiResult (Right result)) = toEncoding result
 
 
--- |The data for returning the health check for SMASH.
+-- | The data for returning the health check for SMASH.
 data HealthStatus = HealthStatus
     { hsStatus  :: !Text
     , hsVersion :: !Text
@@ -166,7 +178,6 @@ instance FromJSON HealthStatus where
 
 instance ToSchema HealthStatus
 
-
 data PolicyResult = PolicyResult
     { prSmashURL :: !SmashURL
     , prHealthStatus :: !HealthStatus
@@ -186,7 +197,7 @@ instance ToJSON PolicyResult where
 instance ToSchema PolicyResult
 
 
--- |Fetch error for the specific @PoolId@ and the @PoolMetadataHash@.
+-- | Fetch error for the specific @PoolId@ and the @PoolMetadataHash@.
 data PoolFetchError = PoolFetchError !Time.POSIXTime !PoolId !PoolMetadataHash !Text !Word
   deriving (Eq, Show, Generic)
 
@@ -272,12 +283,11 @@ instance FromJSON TickerName where
 instance FromHttpApiData TickerName where
     parseUrlPiece tickerName = validateTickerName tickerName
 
--- |Util.
 eitherToMonadFail :: MonadFail m => Either Text a -> m a
 eitherToMonadFail (Left err)  = fail $ toS err
 eitherToMonadFail (Right val) = pure val
 
--- |The validation for the ticker name we can reuse.
+-- | The validation for the ticker name we can reuse.
 validateTickerName :: Text -> Either Text TickerName
 validateTickerName name =  do
     let tickerLen = length name
@@ -330,16 +340,14 @@ instance ToJSON PoolMetadataRaw where
 instance ToSchema PoolMetadataRaw where
     declareNamedSchema _ = pure (NamedSchema (Just "RawPoolMetadata") mempty)
 
--- |Specific time string format.
+-- | Specific time string format.
 newtype TimeStringFormat = TimeStringFormat { unTimeStringFormat :: UTCTime }
     deriving (Eq, Show, Generic)
 
 instance FromHttpApiData TimeStringFormat where
-    --parseQueryParam :: Text -> Either Text a
+    parseQueryParam :: Text -> Either Text TimeStringFormat
     parseQueryParam queryParam =
         let timeFormat = "%d.%m.%Y"
-
-            --parsedTime :: UTCTime <- parseTimeM False defaultTimeLocale "%d.%m.%Y %T" "04.03.2010 16:05:21"
             parsedTime = parseTimeM False defaultTimeLocale timeFormat $ toS queryParam
         in  TimeStringFormat <$> parsedTime
 

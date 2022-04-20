@@ -53,6 +53,7 @@ pSmashServerParams =
     <$> asum [pSmashPort, pure defaultSmashPort]
     <*> pSmashConfig
     <*> optional pSmashUserFile
+    <*> asum [pSmashPool, pure defaultSmashPool]
 
 pSmashUserFile :: Parser FilePath
 pSmashUserFile =
@@ -77,7 +78,16 @@ pSmashPort :: Parser Int
 pSmashPort =
   read <$> Opt.strOption
     ( Opt.long "port"
-    <> Opt.help "Port for the smash web app server. Default is 3100."
+    <> Opt.help ("Port for the smash web app server. Default is " <> show defaultSmashPort <> ".")
+    <> Opt.completer (Opt.bashCompleter "port")
+    <> Opt.metavar "PORT"
+    )
+
+pSmashPool :: Parser Int
+pSmashPool =
+  read <$> Opt.strOption
+    ( Opt.long "pool"
+    <> Opt.help ("Postgres connection pool size for the smash web app server. Default is " <> show defaultSmashPool <> ".")
     <> Opt.completer (Opt.bashCompleter "port")
     <> Opt.metavar "PORT"
     )

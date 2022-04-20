@@ -16,6 +16,9 @@ module Cardano.Db.Run
   , transactionCommit
   , runWithConnectionLogging
   , runWithConnectionNoLogging
+
+  -- * Connection Pool variants
+  , runPoolDbIohkLogging
   ) where
 
 import           Cardano.BM.Data.LogItem (LOContent (..), LogObject (..), PrivacyAnnotation (..),
@@ -27,7 +30,7 @@ import           Cardano.Db.PGConfig
 
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Logger (LogLevel (..), LogSource, LoggingT, NoLoggingT,
-                   defaultLogStr, runLoggingT, runNoLoggingT, runStdoutLoggingT)
+                   defaultLogStr, defaultOutput, runLoggingT, runNoLoggingT, runStdoutLoggingT)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Exit (orDie)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
@@ -36,7 +39,6 @@ import           Control.Monad.Trans.Resource (MonadUnliftIO)
 import           Control.Tracer (traceWith)
 
 import qualified Data.ByteString.Char8 as BS
-import qualified Data.Pool as Pool
 import           Data.Text (Text)
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Lazy.Builder as LazyText
@@ -46,10 +48,10 @@ import           Database.Esqueleto.Experimental (SqlQuery)
 import           Database.Esqueleto.Internal.Internal (Mode (SELECT), SqlSelect, initialIdentState,
                    toRawSql)
 
-import           Database.Persist.Postgresql (SqlBackend, openSimpleConn, withPostgresqlConn,
-                   withPostgresqlPool)
+import           Data.Pool (Pool (..))
+import           Database.Persist.Postgresql (SqlBackend, openSimpleConn, withPostgresqlConn)
 import           Database.Persist.Sql (IsolationLevel (..), runSqlConnWithIsolation,
-                   transactionSaveWithIsolation)
+                   runSqlPoolWithIsolation, transactionSaveWithIsolation)
 import           Database.PostgreSQL.Simple (connectPostgreSQL)
 
 import           Language.Haskell.TH.Syntax (Loc)
@@ -62,8 +64,7 @@ runDbHandleLogger :: Handle -> PGPassSource -> ReaderT SqlBackend (LoggingT IO) 
 runDbHandleLogger logHandle source dbAction = do
     pgconfig <- orDie renderPGPassError $ newExceptT (readPGPass source)
     runHandleLoggerT .
-      withPostgresqlPool (toConnectionString pgconfig) defPoolCount $ \pool ->
-        Pool.withResource pool $ \backend ->
+      withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
           -- The 'runSqlConnWithIsolation' function starts a transaction, runs the 'dbAction'
           -- and then commits the transaction.
           runSqlConnWithIsolation dbAction backend Serializable
@@ -92,11 +93,15 @@ runWithConnectionNoLogging source dbAction = do
     withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
       runSqlConnWithIsolation dbAction backend Serializable
 
-
 -- | Run a DB action logging via iohk-monitoring-framework.
 runDbIohkLogging :: MonadUnliftIO m => SqlBackend -> Trace IO Text -> ReaderT SqlBackend (LoggingT m) b -> m b
 runDbIohkLogging backend tracer dbAction = do
     runIohkLogging tracer $ runSqlConnWithIsolation dbAction backend Serializable
+
+-- | Run a DB action using a Pool via iohk-monitoring-framework.
+runPoolDbIohkLogging :: MonadUnliftIO m => Pool SqlBackend -> Trace IO Text -> ReaderT SqlBackend (LoggingT m) b -> m b
+runPoolDbIohkLogging backend tracer dbAction = do
+    runIohkLogging tracer $ runSqlPoolWithIsolation dbAction backend Serializable
 
 -- | Run a DB action logging via iohk-monitoring-framework.
 runDbIohkNoLogging :: MonadUnliftIO m => SqlBackend -> ReaderT SqlBackend (NoLoggingT m) a -> m a
@@ -137,8 +142,7 @@ runDbNoLogging
 runDbNoLogging source action = do
   pgconfig <- liftIO . orDie renderPGPassError $ newExceptT (readPGPass source)
   runNoLoggingT .
-    withPostgresqlPool (toConnectionString pgconfig) defPoolCount $ \pool ->
-      Pool.withResource pool $ \backend ->
+    withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
         runSqlConnWithIsolation action backend Serializable
 
 -- | Run a DB action with stdout logging. Mainly for debugging.
@@ -146,8 +150,7 @@ runDbStdoutLogging :: PGPassSource -> ReaderT SqlBackend (LoggingT IO) b -> IO b
 runDbStdoutLogging source action = do
   pgconfig <- orDie renderPGPassError $ newExceptT (readPGPass source)
   runStdoutLoggingT .
-    withPostgresqlPool (toConnectionString pgconfig) defPoolCount $ \pool ->
-      Pool.withResource pool $ \backend ->
+    withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
         runSqlConnWithIsolation action backend Serializable
 
 getBackendGhci :: IO SqlBackend
@@ -159,8 +162,8 @@ getBackendGhci = do
 ghciDebugQuery :: SqlSelect a r => SqlQuery a -> IO ()
 ghciDebugQuery query = do
   pgconfig <- orDie renderPGPassError $ newExceptT (readPGPass PGPassDefaultEnv)
-  runStdoutLoggingT . withPostgresqlPool (toConnectionString pgconfig) defPoolCount $ \pool ->
-    Pool.withResource pool $ \backend -> do
+  runStdoutLoggingT .
+    withPostgresqlConn (toConnectionString pgconfig) $ \backend -> do
       let (sql,params) = toRawSql SELECT (backend, initialIdentState) query
       liftIO $ do
         LazyText.putStr $ LazyText.toLazyText sql
@@ -169,16 +172,3 @@ ghciDebugQuery query = do
 transactionCommit :: MonadIO m => ReaderT SqlBackend m ()
 transactionCommit = transactionSaveWithIsolation Serializable
 
--- -------------------------------------------------------------------------------------------------
-
--- from Control.Monad.Logger, wasnt exported
-defaultOutput :: Handle -> Loc -> LogSource -> LogLevel -> LogStr -> IO ()
-defaultOutput h loc src level msg =
-    BS.hPutStr h $ logStrBS loc src level msg
-  where
-    logStrBS :: Loc -> LogSource -> LogLevel -> LogStr -> BS.ByteString
-    logStrBS a b c d = fromLogStr $ defaultLogStr a b c d
-
--- Currently have two threads operating on the database, so 10 should be more than enough.
-defPoolCount :: Int
-defPoolCount = 10

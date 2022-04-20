@@ -1,11 +1,20 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Cardano.SMASH.Server.Config where
+module Cardano.SMASH.Server.Config
+  ( ApplicationUser (..)
+  , ApplicationUsers (..)
+  , SmashServerConfig (..)
+  , SmashServerParams(..)
+
+  , defaultSmashPort
+  , defaultSmashPool
+  , paramsToConfig
+  ) where
 
 import           Cardano.Prelude
 
-import           Data.Aeson
+import           Data.Aeson (FromJSON (..), ToJSON (..))
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
@@ -18,32 +27,44 @@ import           Cardano.Db (textShow)
 
 import           System.IO.Error
 
+-- | SMASH Server cli parameters
 data SmashServerParams = SmashServerParams
   { sspSmashPort :: !Int
   , sspConfigFile :: !FilePath -- config is only used for the logging parameters.
   , sspAdminUsers :: !(Maybe FilePath)
+  , sspSmashPool :: !Int
   }
 
+-- | Default Port for SMASH
 defaultSmashPort :: Int
 defaultSmashPort = 3100
 
+-- | Default size of the Postgres connection pool
+defaultSmashPool :: Int
+defaultSmashPool = 5
+
+-- | Convert cli parameters to SMASH configuration
 paramsToConfig :: SmashServerParams -> IO SmashServerConfig
 paramsToConfig params = do
   appUsers <- readAppUsers $ sspAdminUsers params
   tracer <- configureLogging (sspConfigFile params) "smash-server"
+
   pure $ SmashServerConfig
     { sscSmashPort = sspSmashPort params
     , sscTrace = tracer
     , sscAdmins = appUsers
+    , sspPsqlPool = sspSmashPool params
     }
 
+-- | SMASH Server configuration
 data SmashServerConfig = SmashServerConfig
   { sscSmashPort :: Int
   , sscTrace :: Trace IO Text
   , sscAdmins :: ApplicationUsers
+  , sspPsqlPool :: Int
   }
 
--- A data type we use to store user credentials.
+-- | A data type we use to store user credentials.
 data ApplicationUser = ApplicationUser
     { username :: !Text
     , password :: !Text
@@ -52,13 +73,14 @@ data ApplicationUser = ApplicationUser
 instance ToJSON ApplicationUser
 instance FromJSON ApplicationUser
 
--- A list of users with special rights.
+-- | A list of users with special rights.
 newtype ApplicationUsers = ApplicationUsers [ApplicationUser]
     deriving (Eq, Show, Generic)
 
 instance ToJSON ApplicationUsers
 instance FromJSON ApplicationUsers
 
+-- Load application users from a file.
 readAppUsers :: Maybe FilePath -> IO ApplicationUsers
 readAppUsers mPath = case mPath of
   Nothing -> pure $ ApplicationUsers []
@@ -69,6 +91,7 @@ readAppUsers mPath = case mPath of
       Right users -> pure $ ApplicationUsers users
       Left err -> throwIO $ userError $ Text.unpack err
 
+-- Parse application user as username,password
 parseAppUser :: Text -> Either Text ApplicationUser
 parseAppUser line = case Text.breakOn "," line of
     (user, commaPswd)
