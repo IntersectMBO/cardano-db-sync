@@ -158,9 +158,7 @@ insertShelleyBlock env firstBlockOfEpoch blk lStateSnap details = do
 
     renderInsertName :: Generic.BlockEra -> Text
     renderInsertName eraName =
-      case eraName of
-        Generic.Shelley -> "insertShelleyBlock"
-        other -> mconcat [ "insertShelleyBlock(", textShow other, ")" ]
+      mconcat ["Insert ",  textShow eraName, " Block"]
 
     offlineModBase :: Word64
     offlineModBase =

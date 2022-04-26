@@ -291,7 +291,7 @@ queryBlocksAfterSlot slotNo = do
 
 -- | Calculate the Epoch table entry for the specified epoch.
 -- When syncing the chain or filling an empty table, this is called at each epoch boundary to
--- calculate the Epcoh entry for the last epoch.
+-- calculate the Epoch entry for the last epoch.
 -- When following the chain, this is called for each new block of the current epoch.
 queryCalcEpochEntry :: MonadIO m => Word64 -> ReaderT SqlBackend m Epoch
 queryCalcEpochEntry epochNum = do

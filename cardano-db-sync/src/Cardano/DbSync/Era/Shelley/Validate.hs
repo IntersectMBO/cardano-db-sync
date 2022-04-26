@@ -45,7 +45,7 @@ validateEpochRewards tracer earnedEpochNo rmap = do
     if actual /= expected
         then do
           liftIO . logWarning tracer $ mconcat
-                      [ "validateEpochRewards: rewards spendable in epoch "
+                      [ "Validate Epoch Rewards: rewards spendable in epoch "
                       , textShow (unEpochNo $ Generic.rwdEpoch rmap), " expected total of "
                       , textShow expected , " ADA but got " , textShow actual, " ADA"
                       ]
@@ -53,7 +53,7 @@ validateEpochRewards tracer earnedEpochNo rmap = do
         else do
           insertEpochRewardTotalReceived earnedEpochNo (Db.DbLovelace expectedw64)
           liftIO . logInfo tracer $ mconcat
-                      [ "validateEpochRewards: total rewards that become spendable in epoch "
+                      [ "Validate Epoch Rewards: total rewards that become spendable in epoch "
                       , textShow (unEpochNo $ Generic.rwdEpoch rmap), " is ", textShow actual
                       , " ADA"
                       ]
