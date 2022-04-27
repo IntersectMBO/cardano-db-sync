@@ -23,8 +23,8 @@ import           Ouroboros.Network.Block (BlockNo (..))
 import           System.Metrics.Prometheus.Concurrent.RegistryT (RegistryT (..), registerGauge,
                    runRegistryT, unRegistryT)
 import           System.Metrics.Prometheus.Http.Scrape (serveMetricsT)
-import           System.Metrics.Prometheus.Metric.Gauge (Gauge)
 import qualified System.Metrics.Prometheus.Metric.Gauge as Gauge
+import           System.Metrics.Prometheus.Metric.Gauge (Gauge)
 
 data Metrics = Metrics
   { mNodeBlockHeight :: !Gauge
