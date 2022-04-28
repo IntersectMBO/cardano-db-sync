@@ -48,8 +48,12 @@ prop_roundtrip_Ada_via_JSON =
 prop_AssetFingerprint :: Property
 prop_AssetFingerprint =
     H.withTests 1 . H.property $
-      mapM_ (\(p, a, f) -> mkAssetFingerprint p a === f) testVectors
+      mapM_ (\(p, a, f) -> mkAssetFingerprint (unScriptHash $ policyID p) a === f) testVectors
   where
+
+    unScriptHash :: Ledger.ScriptHash StandardCrypto -> ByteString
+    unScriptHash (Ledger.ScriptHash h) = Crypto.hashToBytes h
+
     testVectors :: [(PolicyID StandardCrypto, AssetName, AssetFingerprint)]
     testVectors =
       [ ( mkPolicyId "7eae28af2208be856f7a119668ae52a49b73725e326dc16579dcc373"

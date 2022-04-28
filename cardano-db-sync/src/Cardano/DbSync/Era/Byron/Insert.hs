@@ -12,8 +12,8 @@ module Cardano.DbSync.Era.Byron.Insert
 
 import           Cardano.Prelude
 
-import           Cardano.BM.Trace (Trace, logDebug, logInfo)
 import           Cardano.Binary (serialize')
+import           Cardano.BM.Trace (Trace, logDebug, logInfo)
 
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (firstExceptT)
@@ -25,8 +25,8 @@ import qualified Cardano.Binary as Binary
 -- qualified.
 import qualified Cardano.Chain.Block as Byron hiding (blockHash)
 import qualified Cardano.Chain.Common as Byron
-import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Chain.Update as Byron hiding (protocolVersion)
+import qualified Cardano.Chain.UTxO as Byron
 
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
 
@@ -44,6 +44,8 @@ import qualified Data.Text.Encoding as Text
 import           Database.Persist.Sql (SqlBackend)
 
 import qualified Cardano.Db as DB
+import           Cardano.DbSync.Api
+import           Cardano.DbSync.Cache
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Util
@@ -58,37 +60,39 @@ data ValueFee = ValueFee
 
 insertByronBlock
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Bool -> ByronBlock -> SlotDetails
+    => SyncEnv -> Bool -> ByronBlock -> SlotDetails
     -> ReaderT SqlBackend m (Either SyncNodeError ())
-insertByronBlock tracer firstBlockOfEpoch blk details = do
-  res <- runExceptT $
-            case byronBlockRaw blk of
-              Byron.ABOBBlock ablk -> insertABlock tracer firstBlockOfEpoch ablk details
-              Byron.ABOBBoundary abblk -> insertABOBBoundary tracer abblk details
-  -- Serializiing things during syncing can drastically slow down full sync
-  -- times (ie 10x or more).
-  when (getSyncStatus details == SyncFollowing)
-    DB.transactionCommit
-  pure res
+insertByronBlock env firstBlockOfEpoch blk details = do
+    res <- runExceptT $
+              case byronBlockRaw blk of
+                Byron.ABOBBlock ablk -> insertABlock tracer cache firstBlockOfEpoch ablk details
+                Byron.ABOBBoundary abblk -> insertABOBBoundary tracer cache abblk details
+    -- Serializing things during syncing can drastically slow down full sync
+    -- times (ie 10x or more).
+    when (getSyncStatus details == SyncFollowing)
+      DB.transactionCommit
+    pure res
+  where
+    tracer :: Trace IO Text
+    tracer = getTrace env
 
+    cache :: Cache
+    cache = envCache env
 
 insertABOBBoundary
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Byron.ABoundaryBlock ByteString -> SlotDetails
+    => Trace IO Text -> Cache -> Byron.ABoundaryBlock ByteString -> SlotDetails
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertABOBBoundary tracer blk details = do
+insertABOBBoundary tracer cache blk details = do
   -- Will not get called in the OBFT part of the Byron era.
-  let prevHash = case Byron.boundaryPrevHash (Byron.boundaryHeader blk) of
-                    Left gh -> Byron.genesisToHeaderHash gh
-                    Right hh -> Byron.unHeaderHash hh
-  pbid <- liftLookupFail "insertABOBBoundary" $ DB.queryBlockId prevHash
+  pbid <- queryPrevBlockWithCache "insertABOBBoundary" cache (Byron.ebbPrevHash blk)
   slid <- lift . DB.insertSlotLeader $
                   DB.SlotLeader
                     { DB.slotLeaderHash = BS.replicate 28 '\0'
                     , DB.slotLeaderPoolHashId = Nothing
                     , DB.slotLeaderDescription = "Epoch boundary slot leader"
                     }
-  void . lift . DB.insertBlock $
+  void . lift . insertBlockAndCache cache $
             DB.Block
               { DB.blockHash = Byron.unHeaderHash $ Byron.boundaryHashAnnotated blk
               , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
@@ -120,12 +124,12 @@ insertABOBBoundary tracer blk details = do
 
 insertABlock
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Bool -> Byron.ABlock ByteString -> SlotDetails
+    => Trace IO Text -> Cache -> Bool -> Byron.ABlock ByteString -> SlotDetails
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertABlock tracer firstBlockOfEpoch blk details = do
-    pbid <- liftLookupFail "insertABlock" $ DB.queryBlockId (Byron.unHeaderHash $ Byron.blockPreviousHash blk)
+insertABlock tracer cache firstBlockOfEpoch blk details = do
+    pbid <- queryPrevBlockWithCache "insertABlock" cache (Byron.blockPreviousHash blk)
     slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
-    blkId <- lift . DB.insertBlock $
+    blkId <- lift . insertBlockAndCache cache $
                   DB.Block
                     { DB.blockHash = Byron.blockHash blk
                     , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)

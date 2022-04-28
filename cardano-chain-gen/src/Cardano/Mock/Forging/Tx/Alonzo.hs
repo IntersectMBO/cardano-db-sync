@@ -6,9 +6,11 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 module Cardano.Mock.Forging.Tx.Alonzo where
 
-import           Cardano.Prelude hiding ((.))
+import           Cardano.Prelude hiding (sum, (.))
 
 import qualified Data.Map.Strict as Map
 import           Data.Maybe (fromJust)
@@ -19,6 +21,9 @@ import qualified Data.Set as Set
 
 import           Cardano.Slotting.Slot
 
+import           Cardano.Crypto.VRF
+
+import           Cardano.Ledger.Address
 import           Cardano.Ledger.Alonzo.Data
 import           Cardano.Ledger.Alonzo.Scripts
 import           Cardano.Ledger.Alonzo.Tx
@@ -34,7 +39,7 @@ import           Cardano.Ledger.Keys
 import           Cardano.Ledger.Mary.Value
 import           Cardano.Ledger.Shelley.Metadata
 import           Cardano.Ledger.Shelley.TxBody (DCert (..), PoolCert (..), PoolMetadata (..),
-                   PoolParams (..), RewardAcnt (..), StakePoolRelay (..), Wdrl (..))
+                   PoolParams (..), StakePoolRelay (..), Wdrl (..))
 import           Cardano.Ledger.ShelleyMA.Timelocks
 import           Cardano.Ledger.TxIn (TxIn (..), txid)
 
@@ -42,14 +47,16 @@ import           Ouroboros.Consensus.Cardano.Block (LedgerState)
 import           Ouroboros.Consensus.Shelley.Eras (AlonzoEra, StandardCrypto)
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 
+import           Cardano.Mock.Forging.Crypto
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Tx.Generic
 import           Cardano.Mock.Forging.Types
 
-import           Test.Cardano.Ledger.Shelley.Utils
-
 type AlonzoUTxOIndex = UTxOIndex (AlonzoEra StandardCrypto)
 type AlonzoLedgerState = LedgerState (ShelleyBlock (AlonzoEra StandardCrypto))
+
+instance HasField "address" (TxOut (AlonzoEra StandardCrypto)) (Addr StandardCrypto) where
+    getField (TxOut addr _ _) = addr
 
 consTxBody :: Set (TxIn (Crypto (AlonzoEra StandardCrypto)))
            -> Set (TxIn (Crypto (AlonzoEra StandardCrypto)))
@@ -108,6 +115,24 @@ mkPaymentTx inputIndex outputIndex amount fees sta = do
         TxOut addr' (Value inputValue _) _ = snd inputPair
         change = TxOut addr' (valueFromList (fromIntegral $ fromIntegral inputValue - amount - fees) []) Strict.SNothing
     Right $ mkSimpleTx True $ consPaymentTxBody input mempty (StrictSeq.fromList [output, change]) (Coin fees) mempty
+
+mkPaymentTx' :: AlonzoUTxOIndex
+             -> [(AlonzoUTxOIndex, Value StandardCrypto)]
+             -> AlonzoLedgerState
+             -> Either ForgingError (ValidatedTx (AlonzoEra StandardCrypto))
+mkPaymentTx' inputIndex outputIndex sta = do
+    inputPair <- fst <$> resolveUTxOIndex inputIndex sta
+    outps <- mapM mkOuts outputIndex
+
+    let inps = Set.singleton $ fst inputPair
+        TxOut addr' (Value inputValue _) _ = snd inputPair
+        outValue = sum ((\ (Value vl _) -> vl) . snd <$> outputIndex)
+        change = TxOut addr' (valueFromList (fromIntegral $ fromIntegral inputValue - outValue) []) Strict.SNothing
+    Right $ mkSimpleTx True $ consPaymentTxBody inps mempty (StrictSeq.fromList $ outps ++ [change]) (Coin 0) mempty
+  where
+    mkOuts (outIx, vl) = do
+        addr <- resolveAddress outIx sta
+        Right $ TxOut addr vl Strict.SNothing
 
 mkLockByScriptTx :: AlonzoUTxOIndex -> [Bool] -> Integer -> Integer
                  -> AlonzoLedgerState
@@ -311,7 +336,7 @@ addMetadata tx n = tx { auxiliaryData = Strict.SJust $ AuxiliaryData mp mempty}
 mkUTxOAlonzo :: ValidatedTx (AlonzoEra StandardCrypto) -> [(TxIn StandardCrypto, TxOut (AlonzoEra StandardCrypto))]
 mkUTxOAlonzo tx =
     [ (TxIn transId idx, out)
-    | (out, idx) <- zip (toList $ getField @"outputs" (getField @"body" tx)) [0 ..]
+    | (out, idx) <- zip (toList $ getField @"outputs" (getField @"body" tx)) (TxIx <$> [0 ..])
     ]
   where
     transId = txid $ getField @"body" tx

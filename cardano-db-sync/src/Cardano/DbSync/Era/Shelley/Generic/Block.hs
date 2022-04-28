@@ -14,6 +14,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Block
 
   , blockHash
   , slotLeaderHash
+  , blockPrevHash
   ) where
 
 import qualified Cardano.Api.Shelley as Api

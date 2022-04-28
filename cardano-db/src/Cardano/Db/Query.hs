@@ -14,6 +14,7 @@ module Cardano.Db.Query
   , queryBlockCount
   , queryBlockHeight
   , queryBlockId
+  , queryBlockNoId
   , queryBlockSlotNo
   , queryBlockNo
   , queryMainBlock
@@ -57,6 +58,7 @@ module Cardano.Db.Query
   , queryTxOutCount
   , queryTxOutValue
   , queryTxOutCredentials
+  , queryEpochStakeCount
   , queryUtxoAtBlockNo
   , queryUtxoAtSlotNo
   , queryWithdrawalsUpToBlockNo
@@ -78,6 +80,7 @@ module Cardano.Db.Query
   , queryDelegationScript
   , queryWithdrawalScript
   , queryStakeAddressScript
+  , queryStakeAddressIdsAfter
   , existsDelistedPool
   , existsPoolHash
   , existsPoolHashId
@@ -212,6 +215,15 @@ queryBlockId hash = do
     where_ (blk ^. BlockHash ==. val hash)
     pure $ blk ^. BlockId
   pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
+
+-- | Get the 'BlockId' associated with the given hash.
+queryBlockNoId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail (BlockId, Maybe Word64))
+queryBlockNoId hash = do
+  res <- select $ do
+    blk <- from $ table @Block
+    where_ (blk ^. BlockHash ==. val hash)
+    pure (blk ^. BlockId, blk ^. BlockBlockNo)
+  pure $ maybeToEither (DbLookupBlockHash hash) unValue2 (listToMaybe res)
 
 -- | Get the 'SlotNo' associated with the given hash.
 queryBlockSlotNo :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail (Maybe Word64))
@@ -742,6 +754,13 @@ queryUtxoAtBlockId blkid = do
       (out, Value (Just hash')) -> Just (entityVal out, hash')
       (_, Value Nothing) -> Nothing
 
+queryEpochStakeCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
+queryEpochStakeCount epoch = do
+  res <- select $ do
+    epochStake <- from $ table @ EpochStake
+    where_ (epochStake ^. EpochStakeEpochNo ==. val epoch)
+    pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
 
 queryUtxoAtBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m [(TxOut, ByteString)]
 queryUtxoAtBlockNo blkNo = do
@@ -983,6 +1002,20 @@ queryStakeAddressScript = do
       where_ (isJust $ st_addr ^. StakeAddressScriptHash)
       pure st_addr
     pure $ entityVal <$> res
+
+queryStakeAddressIdsAfter :: MonadIO m => Word64 -> ReaderT SqlBackend m [StakeAddressId]
+queryStakeAddressIdsAfter blockNo = do
+    res <- select $ do
+      (_tx :& blk :& st_addr) <-
+        from $ table @Tx
+        `innerJoin` table @Block
+        `on` (\(tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
+        `innerJoin` table @StakeAddress
+        `on` (\(tx :& _blk :& st_addr) -> tx ^. TxId  ==. st_addr ^. StakeAddressTxId)
+      where_ (isJust $ blk ^. BlockBlockNo)
+      where_ (blk ^. BlockBlockNo >. val (Just blockNo))
+      pure (st_addr ^. StakeAddressId)
+    pure $ unValue <$> res
 
 existsDelistedPool :: MonadIO m => ByteString -> ReaderT SqlBackend m Bool
 existsDelistedPool ph = do

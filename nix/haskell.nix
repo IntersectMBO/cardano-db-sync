@@ -80,7 +80,6 @@ let
         enableLibraryProfiling = profiling;
 
         packages.plutus-ledger.doHaddock = false;
-        packages.plutus-example.doHaddock = false;
       }
       {
         packages = lib.genAttrs projectPackages (name: {

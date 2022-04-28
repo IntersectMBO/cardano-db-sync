@@ -65,6 +65,7 @@ import           Ouroboros.Consensus.Block (BlockForging, BlockNo (..), BlockPro
 import qualified Ouroboros.Consensus.Block as Block
 import           Ouroboros.Consensus.Cardano.Block (AlonzoEra, LedgerState (..), ShelleyEra,
                    StandardCrypto)
+import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Config (TopLevelConfig, configConsensus, configLedger,
                    topLevelConfigLedger)
 import           Ouroboros.Consensus.Forecast (Forecast (..))

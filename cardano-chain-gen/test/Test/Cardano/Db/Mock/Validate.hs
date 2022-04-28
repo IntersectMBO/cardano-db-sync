@@ -25,7 +25,7 @@ import           Data.Word (Word64)
 import           GHC.Records (HasField (..))
 
 import           Database.Esqueleto.Legacy (InnerJoin (..), SqlExpr, countRows, from, on, select,
-                   unValue, (==.), (^.))
+                   unValue, val, where_, (==.), (^.))
 import           Database.Persist.Sql (Entity, SqlBackend, entityVal)
 import           Database.PostgreSQL.Simple (SqlError (..))
 
@@ -66,8 +66,11 @@ assertRewardCount env n =
     assertEqBackoff env queryRewardCount n defaultDelays "Unexpected rewards count"
 
 assertBlockNoBackoff :: DBSyncEnv -> Int -> IO ()
-assertBlockNoBackoff env blockNo =
-    assertEqBackoff env queryBlockHeight (Just $ fromIntegral blockNo) defaultDelays "Unexpected BlockNo"
+assertBlockNoBackoff = assertBlockNoBackoffTimes defaultDelays
+
+assertBlockNoBackoffTimes :: [Int] -> DBSyncEnv ->  Int -> IO ()
+assertBlockNoBackoffTimes times env blockNo =
+    assertEqBackoff env queryBlockHeight (Just $ fromIntegral blockNo) times "Unexpected BlockNo"
 
 defaultDelays :: [Int]
 defaultDelays = [1,2,4,8,16,32,64,128]
@@ -151,13 +154,13 @@ assertCertCounts env expected =
                     (select . from $ \(_a :: SqlExpr (Entity Delegation)) -> pure countRows)
       withdrawal <- maybe 0 unValue . listToMaybe <$>
                     (select . from $ \(_a :: SqlExpr (Entity Withdrawal)) -> pure countRows)
-      -- We deduct the initial delegation in the genesis
-      pure (registr, deregistr, deleg - 5, withdrawal)
+      -- We deduct the initial registration and delegation in the genesis
+      pure (registr - 5, deregistr, deleg - 5, withdrawal)
 
 assertRewardCounts :: (Crypto era ~ StandardCrypto)
-                   => DBSyncEnv -> LedgerState (ShelleyBlock era) -> Bool
+                   => DBSyncEnv -> LedgerState (ShelleyBlock era) -> Bool -> Maybe Word64
                    -> [(StakeIndex, (Word64, Word64, Word64, Word64, Word64))] -> IO ()
-assertRewardCounts env st filterAddr expected = do
+assertRewardCounts env st filterAddr mEpoch expected = do
     assertEqBackoff env (groupByAddress <$> q) expectedMap defaultDelays "Unexpected rewards count"
   where
     expectedMap :: Map ByteString (Word64, Word64, Word64, Word64, Word64)
@@ -195,12 +198,35 @@ assertRewardCounts env st filterAddr expected = do
               -> Map ByteString (Word64, Word64, Word64, Word64, Word64)
     updateMap (rew, addr) res = Map.alter (Just . updateAddrCounters rew) addr res
 
+    filterEpoch rw = case mEpoch of
+      Nothing -> val True
+      Just e -> rw ^. RewardSpendableEpoch ==. val e
+
     q = do
       res <- select . from $ \ (reward `InnerJoin` stake_addr) -> do
                 on (reward ^. RewardAddrId ==. stake_addr ^. StakeAddressId)
+                where_ (filterEpoch reward)
                 pure (reward, stake_addr ^. StakeAddressHashRaw)
       pure $ fmap (bimap entityVal unValue) res
 
+assertEpochStake :: DBSyncEnv -> Word64 -> IO ()
+assertEpochStake env expected =
+    assertEqBackoff env q expected defaultDelays "Unexpected epoch stake counts"
+  where
+    q =
+      maybe 0 unValue . listToMaybe <$>
+          (select . from $ \(_a :: SqlExpr (Entity EpochStake)) -> pure countRows)
+
+assertEpochStakeEpoch :: DBSyncEnv -> Word64 -> Word64 -> IO ()
+assertEpochStakeEpoch env e expected =
+    assertEqBackoff env q expected defaultDelays "Unexpected epoch stake counts"
+  where
+    q =
+      maybe 0 unValue . listToMaybe <$>
+          (select . from $ \(a :: SqlExpr (Entity EpochStake)) -> do
+            where_ (a ^. EpochStakeEpochNo ==. val e)
+            pure countRows
+          )
 
 assertAlonzoCounts :: DBSyncEnv -> (Word64, Word64, Word64, Word64, Word64, Word64, Word64, Word64) -> IO ()
 assertAlonzoCounts env expected =

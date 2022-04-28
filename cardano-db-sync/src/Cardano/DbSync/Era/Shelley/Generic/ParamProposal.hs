@@ -113,7 +113,7 @@ convertAlonzoParamProposal  epochNo (key, pmap) =
 
     -- New for Alonzo.
     , pppCoinsPerUtxoWord = strictMaybeToMaybe (Alonzo._coinsPerUTxOWord pmap)
-    , pppCostmdls = strictMaybeToMaybe (Alonzo._costmdls pmap)
+    , pppCostmdls = strictMaybeToMaybe (Alonzo.unCostModels <$> Alonzo._costmdls pmap)
     , pppPriceMem = Ledger.unboundRational . Alonzo.prMem <$> strictMaybeToMaybe (Alonzo._prices pmap)
     , pppPriceStep = Ledger.unboundRational . Alonzo.prSteps <$> strictMaybeToMaybe (Alonzo._prices pmap)
     , pppMaxTxExMem = fromIntegral . Alonzo.exUnitsMem <$> strictMaybeToMaybe (Alonzo._maxTxExUnits pmap)
