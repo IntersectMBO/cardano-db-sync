@@ -35,6 +35,7 @@ import           Database.Esqueleto.Experimental (InnerJoin (InnerJoin), SqlBack
                    (==.), (^.))
 
 {- HLINT ignore "Fuse on/on" -}
+{- HLINT ignore "Reduce duplication" -}
 
 validateEpochRewards
     :: (MonadBaseControl IO m, MonadIO m)

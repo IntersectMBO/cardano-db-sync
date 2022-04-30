@@ -53,6 +53,8 @@ import           Test.Cardano.Db.Mock.Examples
 import           Test.Cardano.Db.Mock.UnifiedApi
 import           Test.Cardano.Db.Mock.Validate
 
+{- HLINT ignore "Reduce duplication" -}
+
 unitTests :: IOManager -> [(Text, Text)] -> TestTree
 unitTests iom knownMigrations =
     testGroup "unit tests"
