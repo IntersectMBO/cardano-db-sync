@@ -74,6 +74,12 @@ library
                         Cardano.DbSync.Era.Shelley.Generic.Metadata
                         Cardano.DbSync.Era.Shelley.Generic.ParamProposal
                         Cardano.DbSync.Era.Shelley.Generic.Tx
+                        Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra
+                        Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
+--                        Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage
+                        Cardano.DbSync.Era.Shelley.Generic.Tx.Mary
+                        Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
+                        Cardano.DbSync.Era.Shelley.Generic.Tx.Types
                         Cardano.DbSync.Era.Shelley.Generic.Util
                         Cardano.DbSync.Era.Shelley.Generic.Witness
                         Cardano.DbSync.Era.Shelley.Genesis
@@ -128,6 +134,7 @@ library
                       , cardano-data
                       , cardano-db
                       , cardano-ledger-alonzo
+--                      , cardano-ledger-babbage
                       , cardano-ledger-byron
                       , cardano-ledger-core
                       , cardano-ledger-shelley

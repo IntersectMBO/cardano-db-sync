@@ -32,6 +32,7 @@ import           Cardano.DbSync.Rollback (rollbackToPoint)
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
+import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
 import           Cardano.Ledger.BaseTypes (Network)
 import           Cardano.Ledger.Coin (Coin (..))
 import           Cardano.Ledger.Credential (StakeCredential)
@@ -86,8 +87,8 @@ insertDefaultBlock env blocks =
         BlockMary blk ->
           newExceptT $ insertShelleyBlock env firstBlockOfEpoch (Generic.fromMaryBlock blk) lStateSnap details
         BlockAlonzo blk -> do
-          let pp = getAlonzoPParams $ lssState lStateSnap
-          newExceptT $ insertShelleyBlock env firstBlockOfEpoch (Generic.fromAlonzoBlock pp blk) lStateSnap details
+          let prices = Alonzo._prices $ getAlonzoPParams $ lssState lStateSnap
+          newExceptT $ insertShelleyBlock env firstBlockOfEpoch (Generic.fromAlonzoBlock prices blk) lStateSnap details
       when (soptExtended $ envOptions env) .
         newExceptT $ epochInsert tracer (BlockDetails cblk details)
 
