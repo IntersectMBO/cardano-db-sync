@@ -785,6 +785,7 @@ insertDatum tracer txId txd = do
       { DB.datumHash = Generic.txDatumHash txd
       , DB.datumTxId = txId
       , DB.datumValue = value
+      , DB.datumBytes = Generic.txDatumBytes txd
       }
 
 insertTxMetadata

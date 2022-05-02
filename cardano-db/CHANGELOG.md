@@ -2,6 +2,7 @@
 
 ## Next
 * Add `extra_key_witness` table for storing `requiredSigners` (transaction extra key witnesses).
+* Add `txDatumBytes` field to `datum` table with CBOR serialized Datum
 
 ## 12.0.1
 * No changes.
