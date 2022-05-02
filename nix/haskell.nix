@@ -78,6 +78,10 @@ let
         # split data output for ekg to reduce closure size
         packages.ekg.components.library.enableSeparateDataOutput = true;
         enableLibraryProfiling = profiling;
+
+        # plugin failures
+        packages.plutus-ledger.doHaddock = false;
+        packages.plutus-example.doHaddock = false;
       }
       {
         packages = lib.genAttrs projectPackages (name: {

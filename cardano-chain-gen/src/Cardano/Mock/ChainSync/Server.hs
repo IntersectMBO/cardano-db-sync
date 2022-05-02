@@ -45,7 +45,7 @@ import           Network.TypedProtocol.Core (Peer (..))
 import           Ouroboros.Consensus.Block (CodecConfig, HasHeader, Point, StandardHash, castPoint)
 import           Ouroboros.Consensus.Config (TopLevelConfig, configCodec)
 import           Ouroboros.Consensus.Ledger.Query (BlockQuery, ShowQuery)
-import           Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx)
+import           Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx, TxId)
 import           Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol)
 import           Ouroboros.Consensus.Network.NodeToClient (Apps (..), Codecs' (..), DefaultCodecs)
 import qualified Ouroboros.Consensus.Network.NodeToClient as NTC
@@ -125,6 +125,7 @@ type MockServerConstraint blk =
     , ShowProxy blk
     , HasHeader blk
     , ShowProxy (GenTx blk)
+    , ShowProxy (TxId (GenTx blk))
     , SupportedNetworkProtocolVersion blk
     , EncodeDisk blk blk
     )
@@ -190,7 +191,7 @@ runLocalServer iom codecConfig networkMagic localDomainSock chainProducerState =
             (NTC.responder version $ mkApps state version blockVersion (NTC.defaultCodecs codecConfig blockVersion version))
 
     mkApps :: StrictTVar IO (ChainProducerState blk) -> NodeToClientVersion -> BlockNodeToClientVersion blk -> DefaultCodecs blk IO
-           -> NTC.Apps IO (ConnectionId addrNTC) ByteString ByteString ByteString ()
+           -> NTC.Apps IO (ConnectionId addrNTC) ByteString ByteString ByteString ByteString ()
     mkApps state _version blockVersion Codecs {..}  = Apps {..}
       where
         aChainSyncServer
@@ -204,6 +205,17 @@ runLocalServer iom codecConfig networkMagic localDomainSock chainProducerState =
             channel
             $ chainSyncServerPeer
             $ chainSyncServer state codecConfig blockVersion
+
+        aTxMonitorServer
+          :: localPeer
+          -> Channel IO ByteString
+          -> IO ((), Maybe ByteString)
+        aTxMonitorServer _them channel =
+          runPeer
+            nullTracer
+            cTxMonitorCodec
+            channel
+            (Effect (forever $ threadDelay 3_600_000_000))
 
         aTxSubmissionServer
           :: localPeer

@@ -139,7 +139,7 @@ renderAddress
     => Api.IsShelleyBasedEra era
     => ledgerera ~ StandardShelley
     => Ledger.Addr StandardCrypto -> Text
-renderAddress addr = Api.serialiseAddress (Api.fromShelleyAddr addr :: Api.AddressInEra era)
+renderAddress addr = Api.serialiseAddress (Api.fromShelleyAddrIsSbe addr :: Api.AddressInEra era)
 
 renderCostModel :: CostModel -> Text
 renderCostModel (CostModel x) = textShow x

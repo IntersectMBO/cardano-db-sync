@@ -71,7 +71,7 @@ import           Ouroboros.Consensus.Cardano.Node ()
 import           Ouroboros.Consensus.Config (configCodec)
 import qualified Ouroboros.Consensus.HardFork.Simple as HardFork
 import           Ouroboros.Consensus.Network.NodeToClient (ClientCodecs, cChainSyncCodec,
-                   cStateQueryCodec, cTxSubmissionCodec)
+                   cStateQueryCodec, cTxMonitorCodec, cTxSubmissionCodec)
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 
@@ -81,8 +81,8 @@ import           Ouroboros.Network.Mux (MuxPeer (..), RunMiniProtocol (..))
 import           Ouroboros.Network.NodeToClient (ClientSubscriptionParams (..), ConnectionId,
                    ErrorPolicyTrace (..), Handshake, IOManager, LocalAddress,
                    NetworkSubscriptionTracers (..), NodeToClientProtocols (..), TraceSendRecv,
-                   WithAddr (..), localSnocket, localStateQueryPeerNull, localTxSubmissionPeerNull,
-                   networkErrorPolicies)
+                   WithAddr (..), localSnocket, localStateQueryPeerNull, localTxMonitorPeerNull,
+                   localTxSubmissionPeerNull, networkErrorPolicies)
 import qualified Ouroboros.Network.NodeToClient.Version as Network
 
 import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined
@@ -201,6 +201,7 @@ dbSyncProtocols
 dbSyncProtocols trce env metricsSetters version codecs _connectionId =
     NodeToClientProtocols
       { localChainSyncProtocol = localChainSyncPtcl
+      , localTxMonitorProtocol = dummylocalTxMonitor
       , localTxSubmissionProtocol = dummylocalTxSubmit
       , localStateQueryProtocol = localStateQuery
       }
@@ -244,6 +245,12 @@ dbSyncProtocols trce env metricsSetters version codecs _connectionId =
         -- client application do not care about them (it's only important if one
         -- would like to restart a protocol on the same mux and thus bearer).
         pure ((), Nothing)
+
+    dummylocalTxMonitor :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
+    dummylocalTxMonitor = InitiatorProtocolOnly $ MuxPeer
+        Logging.nullTracer
+        (cTxMonitorCodec codecs)
+        localTxMonitorPeerNull
 
     dummylocalTxSubmit :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
     dummylocalTxSubmit = InitiatorProtocolOnly $ MuxPeer

@@ -16,9 +16,9 @@ import           Cardano.Ledger.Era
 import           Cardano.Ledger.Hashes
 import           Cardano.Ledger.Mary.Value
 
-import           Cardano.PlutusExample.AlwaysFails (alwaysFailsScriptShortBs)
-import           Cardano.PlutusExample.AlwaysSucceeds (alwaysSucceedsScriptShortBs)
-import           Cardano.PlutusExample.MintingScript
+import           PlutusExample.AlwaysFails (alwaysFailsScriptShortBs)
+import           PlutusExample.AlwaysSucceeds (alwaysSucceedsScriptShortBs)
+import           PlutusExample.MintingScript
 
 import qualified PlutusCore.Data as Plutus
 
