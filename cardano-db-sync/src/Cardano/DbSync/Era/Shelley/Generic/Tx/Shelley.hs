@@ -55,8 +55,8 @@ fromShelleyTx (blkIndex, tx) =
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
                             . Shelley.unWdrl $ Shelley._wdrls (ShelleyTx.body tx)
       , txMetadata = fromShelleyMetadata <$> strictMaybeToMaybe (getField @"auxiliaryData" tx)
-      , txCertificates = zipWith (TxCertificate Nothing) [0..] (toList . Shelley._certs $ ShelleyTx.body tx)
-      , txWithdrawals = map (mkTxWithdrawal Nothing) (Map.toList . Shelley.unWdrl . Shelley._wdrls $ ShelleyTx.body tx)
+      , txCertificates = zipWith mkTxCertificate [0..] (toList . Shelley._certs $ ShelleyTx.body tx)
+      , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . Shelley._wdrls $ ShelleyTx.body tx)
       , txParamProposal = maybe [] (convertParamProposal (Shelley Standard)) $ strictMaybeToMaybe (ShelleyTx._txUpdate $ ShelleyTx.body tx)
       , txMint = mempty       -- Shelley does not support multi-assets
       , txRedeemer = []       -- Shelley does not support redeemers
@@ -113,10 +113,18 @@ fromTxIn (ShelleyTx.TxIn (ShelleyTx.TxId txid) (TxIx w16)) =
 txHashId :: (Ledger.Crypto era ~ StandardCrypto, ShelleyBasedEra era) => ShelleyTx.Tx era -> ByteString
 txHashId = Crypto.hashToBytes . Ledger.extractHash . Ledger.hashAnnotated . ShelleyTx.body
 
-mkTxWithdrawal :: Maybe Word64 -> (Shelley.RewardAcnt StandardCrypto, Coin) -> TxWithdrawal
-mkTxWithdrawal rIndex (ra, c) =
+mkTxWithdrawal :: (Shelley.RewardAcnt StandardCrypto, Coin) -> TxWithdrawal
+mkTxWithdrawal (ra, c) =
   TxWithdrawal
-    { txwRedeemerIndex = rIndex
+    { txwRedeemerIndex = Nothing
     , txwRewardAccount = ra
     , txwAmount = c
+    }
+
+mkTxCertificate :: Word16 -> Shelley.DCert StandardCrypto -> TxCertificate
+mkTxCertificate ix dcert =
+  TxCertificate
+    { txcRedeemerIndex = Nothing
+    , txcIndex = ix
+    , txcCert = dcert
     }

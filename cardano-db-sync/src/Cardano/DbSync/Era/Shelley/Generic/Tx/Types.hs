@@ -39,7 +39,7 @@ data Tx = Tx
   , txWithdrawals :: ![TxWithdrawal]
   , txParamProposal :: ![ParamProposal]
   , txMint :: !(Value StandardCrypto)
-  , txRedeemer :: [TxRedeemer]
+  , txRedeemer :: [(Word64, TxRedeemer)]
   , txData :: [TxDatum]
   , txScriptSizes :: [Word64] -- this contains only the sizes of plutus scripts in witnesses
   , txScripts :: [TxScript]

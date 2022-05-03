@@ -28,7 +28,7 @@ import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardMary
 import           Cardano.DbSync.Era.Shelley.Generic.Metadata
 import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (mkTxScript)
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (fromTxIn, mkTxWithdrawal, txHashId)
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (fromTxIn, mkTxCertificate, mkTxWithdrawal, txHashId)
 import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
@@ -49,8 +49,8 @@ fromMaryTx (blkIndex, tx) =
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
                             . Shelley.unWdrl $ ShelleyMa.wdrls (unTxBodyRaw tx)
       , txMetadata = fromMaryMetadata <$> txMeta tx
-      , txCertificates = zipWith (TxCertificate Nothing) [0..] (toList . ShelleyMa.certs $ unTxBodyRaw tx)
-      , txWithdrawals = map (mkTxWithdrawal Nothing) (Map.toList . Shelley.unWdrl . ShelleyMa.wdrls $ unTxBodyRaw tx)
+      , txCertificates = zipWith mkTxCertificate [0..] (toList . ShelleyMa.certs $ unTxBodyRaw tx)
+      , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . ShelleyMa.wdrls $ unTxBodyRaw tx)
       , txParamProposal = maybe [] (convertParamProposal (Mary Standard)) $ strictMaybeToMaybe (ShelleyMa.update $ unTxBodyRaw tx)
       , txMint = ShelleyMa.mint $ unTxBodyRaw tx
       , txRedeemer = []       -- Mary does not support redeemers
@@ -75,7 +75,8 @@ fromMaryTx (blkIndex, tx) =
         , txOutDataHash = mempty -- Mary does not support plutus data
         }
       where
-        ShelleyTx.TxOutCompact (Ledger.UnsafeCompactAddr bs) _ = txOut
+        Ledger.UnsafeCompactAddr bs = Ledger.getTxOutCompactAddr txOut
+
         -- This pattern match also does the deserialisation of the address
         ShelleyTx.TxOut addr (Value ada maMap) = txOut
 

@@ -27,6 +27,7 @@ module Cardano.DbSync.Util
   , tipBlockNo
   , traverseMEither
   , whenJust
+  , mlookup
   ) where
 
 import           Cardano.Prelude hiding (catch)
@@ -50,6 +51,7 @@ import qualified Data.ByteArray
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.List as List
 import qualified Data.Strict.Maybe as Strict
+import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 import           Data.Text.ANSI (red)
 import qualified Data.Text.Encoding as Text
@@ -197,3 +199,6 @@ whenJust ma f =
 thrd3 :: (a, b, c) -> c
 thrd3 (_, _, c) = c
 
+mlookup :: Ord k => Maybe k -> Map k a -> Maybe a
+mlookup Nothing _ = Nothing
+mlookup (Just k) mp = Map.lookup k mp
