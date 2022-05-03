@@ -455,7 +455,7 @@ share
     monetaryExpandRate  Double              -- sqltype=interval
     treasuryGrowthRate  Double              -- sqltype=interval
     decentralisation    Double              -- sqltype=interval
-    entropy             ByteString Maybe    sqltype=hash32type
+    extraEntropy        ByteString Maybe    sqltype=hash32type
     protocolMajor       Word16              sqltype=word31type
     protocolMinor       Word16              sqltype=word31type
     minUtxoValue        DbLovelace          sqltype=lovelace
@@ -879,7 +879,7 @@ schemaDocs =
       EpochParamMonetaryExpandRate # "The monetary expansion rate."
       EpochParamTreasuryGrowthRate # "The treasury growth rate."
       EpochParamDecentralisation # "The decentralisation parameter (1 fully centralised, 0 fully decentralised)."
-      EpochParamEntropy # "The 32 byte string of extra random-ness to be added into the protocol's entropy pool."
+      EpochParamExtraEntropy # "The 32 byte string of extra random-ness to be added into the protocol's entropy pool."
       EpochParamProtocolMajor # "The protocol major number."
       EpochParamProtocolMinor # "The protocol minor number."
       EpochParamMinUtxoValue # "The minimum value of a UTxO entry."

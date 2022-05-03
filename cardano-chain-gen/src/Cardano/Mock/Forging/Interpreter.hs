@@ -63,27 +63,30 @@ import           Ouroboros.Consensus.Block (BlockForging, BlockNo (..), BlockPro
                    ForgeStateInfo, ShouldForge (..), SlotNo (..), blockNo, blockSlot,
                    checkShouldForge)
 import qualified Ouroboros.Consensus.Block as Block
-import           Ouroboros.Consensus.Cardano.Block (AlonzoEra, LedgerState (..), ShelleyEra,
-                   StandardCrypto)
+import           Ouroboros.Consensus.Cardano.Block (AlonzoEra, LedgerState (..), ShelleyEra)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Config (TopLevelConfig, configConsensus, configLedger,
                    topLevelConfigLedger)
 import           Ouroboros.Consensus.Forecast (Forecast (..))
+import           Ouroboros.Consensus.HardFork.Combinator.Ledger ()
 import qualified Ouroboros.Consensus.HardFork.Combinator.AcrossEras as Consensus
 import qualified Ouroboros.Consensus.HardFork.Combinator.Mempool as Consensus
 import           Ouroboros.Consensus.HeaderValidation (headerStateChainDep)
 import           Ouroboros.Consensus.Ledger.Abstract (TickedLedgerState, applyChainTick)
-import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState, Ticked, headerState,
-                   ledgerState)
+import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState, headerState, ledgerState)
 import           Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx, Validated,
                    WhetherToIntervene (..), applyTx)
-import           Ouroboros.Consensus.Ledger.SupportsProtocol (ledgerViewForecastAt)
+import           Ouroboros.Consensus.Ledger.SupportsProtocol
 import           Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo, pInfoBlockForging,
                    pInfoConfig, pInfoInitLedger)
 import           Ouroboros.Consensus.Protocol.Abstract (ChainDepState, IsLeader, LedgerView,
                    tickChainDepState)
+import           Ouroboros.Consensus.Protocol.Praos.Translate ()
+import           Ouroboros.Consensus.Protocol.TPraos
+import           Ouroboros.Consensus.Shelley.HFEras ()
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock, shelleyLedgerState)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Mempool as Consensus
+import           Ouroboros.Consensus.Shelley.Ledger.SupportsProtocol ()
 import qualified Ouroboros.Consensus.TypeFamilyWrappers as Consensus
 import           Ouroboros.Consensus.Util.IOLike (Exception, NoThunks, StrictMVar, modifyMVar,
                    newMVar, readMVar, swapMVar)
@@ -378,7 +381,7 @@ getCurrentSlot :: Interpreter -> IO SlotNo
 getCurrentSlot interp = istSlot <$> readMVar (interpState interp)
 
 withAlonzoLedgerState
-    :: Interpreter -> (LedgerState (ShelleyBlock (AlonzoEra StandardCrypto)) -> Either ForgingError a)
+    :: Interpreter -> (LedgerState (ShelleyBlock (TPraos StandardCrypto) (AlonzoEra StandardCrypto)) -> Either ForgingError a)
     -> IO a
 withAlonzoLedgerState inter mk = do
   st <- getCurrentLedgerState inter
@@ -389,7 +392,7 @@ withAlonzoLedgerState inter mk = do
     _ -> throwIO ExpectedAlonzoState
 
 withShelleyLedgerState
-    :: Interpreter -> (LedgerState (ShelleyBlock (ShelleyEra StandardCrypto)) -> Either ForgingError a)
+    :: Interpreter -> (LedgerState (ShelleyBlock (TPraos StandardCrypto) (ShelleyEra StandardCrypto)) -> Either ForgingError a)
     -> IO a
 withShelleyLedgerState inter mk = do
   st <- getCurrentLedgerState inter

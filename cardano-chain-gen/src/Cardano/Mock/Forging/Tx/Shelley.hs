@@ -24,6 +24,7 @@ import           Cardano.Ledger.Shelley.Tx
 import           Cardano.Ledger.Shelley.TxBody
 
 import           Ouroboros.Consensus.Cardano.Block (LedgerState)
+import           Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import           Ouroboros.Consensus.Shelley.Eras (ShelleyEra, StandardCrypto)
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 
@@ -33,7 +34,7 @@ import           Cardano.Mock.Forging.Tx.Generic
 import           Cardano.Mock.Forging.Types
 
 type ShelleyUTxOIndex = UTxOIndex (ShelleyEra StandardCrypto)
-type ShelleyLedgerState = LedgerState (ShelleyBlock (ShelleyEra StandardCrypto))
+type ShelleyLedgerState = LedgerState (ShelleyBlock (TPraos StandardCrypto) (ShelleyEra StandardCrypto))
 type ShelleyTx = Tx (ShelleyEra StandardCrypto)
 
 instance HasField "address" (TxOut (ShelleyEra StandardCrypto)) (Addr StandardCrypto) where

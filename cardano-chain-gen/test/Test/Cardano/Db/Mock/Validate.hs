@@ -129,7 +129,7 @@ migrationNotDoneYet txt =
 
 assertAddrValues :: (Crypto era ~ StandardCrypto, HasField "address" (Core.TxOut era) (Ledger.Addr (Crypto era)))
                  => DBSyncEnv -> UTxOIndex era -> DbLovelace
-                 -> LedgerState (ShelleyBlock era) -> IO ()
+                 -> LedgerState (ShelleyBlock p era) -> IO ()
 assertAddrValues env ix expected sta = do
     addr <- assertRight $ resolveAddress ix sta
     let addrBs = Ledger.serialiseAddr addr
@@ -158,7 +158,7 @@ assertCertCounts env expected =
       pure (registr - 5, deregistr, deleg - 5, withdrawal)
 
 assertRewardCounts :: (Crypto era ~ StandardCrypto)
-                   => DBSyncEnv -> LedgerState (ShelleyBlock era) -> Bool -> Maybe Word64
+                   => DBSyncEnv -> LedgerState (ShelleyBlock p era) -> Bool -> Maybe Word64
                    -> [(StakeIndex, (Word64, Word64, Word64, Word64, Word64))] -> IO ()
 assertRewardCounts env st filterAddr mEpoch expected = do
     assertEqBackoff env (groupByAddress <$> q) expectedMap defaultDelays "Unexpected rewards count"
@@ -286,7 +286,7 @@ addPoolCounters (a,b,c,d,e,f) (a',b',c',d',e',f') = (a + a',b + b',c + c',d + d'
 assertPoolLayerCounters :: Crypto era ~ StandardCrypto
                         => DBSyncEnv -> (Word64, Word64)
                         -> [(PoolIndex, (Either DBFail Bool, Bool, Bool))]
-                        -> LedgerState (ShelleyBlock era)
+                        -> LedgerState (ShelleyBlock p era)
                         -> IO ()
 assertPoolLayerCounters env (expectedRetired, expectedDelisted) expResults st = do
     poolLayer <- getPoolLayer env

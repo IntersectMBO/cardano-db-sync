@@ -74,6 +74,7 @@ epochInsert trce (BlockDetails cblk details) = do
     BlockAllegra {} -> epochUpdate
     BlockMary {} -> epochUpdate
     BlockAlonzo {} -> epochUpdate
+    BlockBabbage {} -> epochUpdate
   where
     -- What we do here is completely independent of Shelley/Allegra/Mary eras.
     epochUpdate :: ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())

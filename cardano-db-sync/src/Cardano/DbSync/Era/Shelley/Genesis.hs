@@ -40,7 +40,6 @@ import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import qualified Cardano.Ledger.Shelley.UTxO as Shelley
 
 import qualified Data.ByteString.Char8 as BS
-import qualified Data.Compact.SplitMap as SplitMap
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 import           Data.Time.Clock (UTCTime (..))
@@ -297,7 +296,7 @@ genesisTxoAssocList =
 
 genesisUtxOs :: ShelleyGenesis StandardShelley -> [(ShelleyTx.TxIn (Crypto StandardShelley), Shelley.TxOut StandardShelley)]
 genesisUtxOs =
-    SplitMap.toList . Shelley.unUTxO . Shelley.genesisUTxO
+    Map.toList . Shelley.unUTxO . Shelley.genesisUTxO
 
 configStartTime :: ShelleyGenesis StandardShelley -> UTCTime
 configStartTime = roundToMillseconds . Shelley.sgSystemStart

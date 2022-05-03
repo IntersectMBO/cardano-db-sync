@@ -5,7 +5,6 @@ module Cardano.DbSync.Types
   , BlockEra (..)
   , CardanoBlock
   , CardanoPoint
-  , CardanoProtocol
   , EpochSlot (..)
   , FetchResult (..)
   , SlotDetails (..)
@@ -20,7 +19,7 @@ import           Cardano.Prelude hiding (Meta)
 import           Cardano.Db (PoolHashId, PoolMetaHash, PoolMetadataRefId, PoolOfflineData,
                    PoolOfflineFetchError, PoolUrl)
 
-import           Cardano.DbSync.Config.Types (CardanoBlock, CardanoProtocol)
+import           Cardano.DbSync.Config.Types (CardanoBlock)
 
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
 

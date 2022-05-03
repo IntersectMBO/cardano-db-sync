@@ -100,7 +100,8 @@ parsePoolId poolId =
         -- e5cb8a89cabad2cb22ea85423bcbbe270f292be3dbe838948456d3ae
         pHexStakePoolId :: Text -> Maybe (Hash StakePoolKey)
         pHexStakePoolId =
-            deserialiseFromRawBytesHex (AsHash AsStakePoolKey) . BS.pack . toS
+          either (const Nothing) Just
+            . deserialiseFromRawBytesHex (AsHash AsStakePoolKey) . BS.pack . toS
 
         -- pool1uh9c4zw2htfvkgh2s4prhja7yu8jj2lrm05r39yy2mf6uqqegn6
         pBech32StakePoolId :: Text -> Maybe (Hash StakePoolKey)

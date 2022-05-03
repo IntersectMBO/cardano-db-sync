@@ -76,7 +76,7 @@ library
                       , cardano-protocol-tpraos
                       , cardano-slotting
                       , cborg
-                      , compact-map
+                      , vector-map
                       , containers
                       , contra-tracer
                       , directory
@@ -98,6 +98,7 @@ library
                       , ouroboros-consensus
                       , ouroboros-consensus-byron
                       , ouroboros-consensus-cardano
+                      , ouroboros-consensus-protocol
                       , ouroboros-consensus-shelley
                       , ouroboros-network
                       , ouroboros-network-framework
@@ -197,6 +198,7 @@ test-suite cardano-chain-gen
                       , monad-logger
                       , ouroboros-consensus
                       , ouroboros-consensus-cardano
+                      , ouroboros-consensus-protocol
                       , ouroboros-consensus-shelley
                       , ouroboros-network
                       , ouroboros-network-framework

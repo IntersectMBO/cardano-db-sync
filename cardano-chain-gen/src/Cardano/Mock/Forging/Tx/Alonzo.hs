@@ -44,6 +44,7 @@ import           Cardano.Ledger.ShelleyMA.Timelocks
 import           Cardano.Ledger.TxIn (TxIn (..), txid)
 
 import           Ouroboros.Consensus.Cardano.Block (LedgerState)
+import           Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import           Ouroboros.Consensus.Shelley.Eras (AlonzoEra, StandardCrypto)
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 
@@ -53,7 +54,7 @@ import           Cardano.Mock.Forging.Tx.Generic
 import           Cardano.Mock.Forging.Types
 
 type AlonzoUTxOIndex = UTxOIndex (AlonzoEra StandardCrypto)
-type AlonzoLedgerState = LedgerState (ShelleyBlock (AlonzoEra StandardCrypto))
+type AlonzoLedgerState = LedgerState (ShelleyBlock (TPraos StandardCrypto) (AlonzoEra StandardCrypto))
 
 instance HasField "address" (TxOut (AlonzoEra StandardCrypto)) (Addr StandardCrypto) where
     getField (TxOut addr _ _) = addr

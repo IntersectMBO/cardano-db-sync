@@ -54,6 +54,9 @@ data NodeConfig = NodeConfig
 
   -- Alonzo hardfok parameters
   , ncAlonzoHardFork :: !Shelley.TriggerHardFork
+
+  -- Babbage hardfok parameters
+  , ncBabbageHardFork :: !Shelley.TriggerHardFork
   }
 
 parseNodeConfig :: ByteString -> NodeConfig
@@ -90,6 +93,8 @@ instance FromJSON NodeConfig where
           <*> parseMaryHardForkEpoch o
 
           <*> parseAlonzoHardForkEpoch o
+
+          <*> parseBabbageHardForkEpoch o
 
       parseByronProtocolVersion :: Object -> Parser Byron.ProtocolVersion
       parseByronProtocolVersion o =
@@ -130,4 +135,11 @@ instance FromJSON NodeConfig where
         asum
           [ Shelley.TriggerHardForkAtEpoch <$> o .: "TestAlonzoHardForkAtEpoch"
           , pure $ Shelley.TriggerHardForkAtVersion 5 -- Mainnet default
+          ]
+
+      parseBabbageHardForkEpoch :: Object -> Parser Shelley.TriggerHardFork
+      parseBabbageHardForkEpoch o =
+        asum
+          [ Shelley.TriggerHardForkAtEpoch <$> o .: "TestBabbageHardForkAtEpoch"
+          , pure $ Shelley.TriggerHardForkAtVersion 7 -- Mainnet default
           ]

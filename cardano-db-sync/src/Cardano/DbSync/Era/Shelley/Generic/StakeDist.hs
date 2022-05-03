@@ -32,8 +32,8 @@ import           Cardano.DbSync.Era.Shelley.Generic.StakeCred
 import           Cardano.DbSync.Era.Shelley.Generic.StakePoolKeyHash
 import           Cardano.DbSync.Types
 
-import           Data.Compact.VMap (VB, VMap (..), VP)
-import qualified Data.Compact.VMap as VMap
+import           Data.VMap (VB, VMap (..), VP)
+import qualified Data.VMap as VMap
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Vector.Generic as VG
@@ -82,10 +82,11 @@ getStakeSlice pInfo network epoch sliceIndex minSliceSize els =
     LedgerStateAllegra als -> genericStakeSlice pInfo network epoch sliceIndex minSliceSize als
     LedgerStateMary mls -> genericStakeSlice pInfo network epoch sliceIndex minSliceSize mls
     LedgerStateAlonzo als -> genericStakeSlice pInfo network epoch sliceIndex minSliceSize als
+    LedgerStateBabbage bls -> genericStakeSlice pInfo network epoch sliceIndex minSliceSize bls
 
-genericStakeSlice :: forall era c blk. (c ~ Crypto era, ConsensusProtocol (BlockProtocol blk))
+genericStakeSlice :: forall era c blk p. (c ~ Crypto era, ConsensusProtocol (BlockProtocol blk))
                   => ProtocolInfo IO blk -> Ledger.Network -> EpochNo -> Word64 -> Word64
-                  -> LedgerState (ShelleyBlock era) -> StakeSliceRes
+                  -> LedgerState (ShelleyBlock p era) -> StakeSliceRes
 genericStakeSlice pInfo network epoch sliceIndex minSliceSize lstate
     | index > delegationsLen = NoSlices
     | index == delegationsLen = Slice (emptySlice epoch) True

@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.DbSync.Era.Shelley.Generic.ParamProposal
@@ -19,6 +20,8 @@ import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import           Cardano.Ledger.BaseTypes (UnitInterval, strictMaybeToMaybe)
 import qualified Cardano.Ledger.BaseTypes as Ledger
+import           Cardano.Ledger.Babbage (BabbageEra)
+import qualified Cardano.Ledger.Babbage.PParams as Babbage
 import           Cardano.Ledger.Coin (Coin)
 import qualified Cardano.Ledger.Keys as Ledger
 import           Cardano.Ledger.Shelley (ShelleyEra)
@@ -71,6 +74,7 @@ convertParamProposal witness (Shelley.Update pp epoch) =
     Allegra {} -> allegraOrMaryParamProposal epoch pp
     Mary {} -> allegraOrMaryParamProposal epoch pp
     Alonzo {} -> alonzoParamProposal epoch pp
+    Babbage {} -> babbageParamProposal epoch pp
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -86,10 +90,49 @@ shelleyParamProposal :: EpochNo -> Shelley.ProposedPPUpdates (ShelleyEra c) -> [
 shelleyParamProposal epochNo (Shelley.ProposedPPUpdates umap) =
     map (convertShelleyParamProposal epochNo) $ Map.toList umap
 
+babbageParamProposal :: EpochNo -> Shelley.ProposedPPUpdates (BabbageEra c) -> [ParamProposal]
+babbageParamProposal epochNo (Shelley.ProposedPPUpdates umap) =
+    map (convertBabbageParamProposal epochNo) $ Map.toList umap
+
 -- -------------------------------------------------------------------------------------------------
 
+convertBabbageParamProposal :: EpochNo -> (Ledger.KeyHash genesis crypto, Babbage.PParamsUpdate era) -> ParamProposal
+convertBabbageParamProposal epochNo (key, pmap) =
+  ParamProposal
+    { pppEpochNo = epochNo
+    , pppKey = unKeyHashRaw key
+    , pppMinFeeA = strictMaybeToMaybe (Babbage._minfeeA pmap)
+    , pppMinFeeB = strictMaybeToMaybe (Babbage._minfeeB pmap)
+    , pppMaxBlockSize = strictMaybeToMaybe (Babbage._maxBBSize pmap)
+    , pppMaxTxSize = strictMaybeToMaybe (Babbage._maxTxSize pmap)
+    , pppMaxBhSize = strictMaybeToMaybe (Babbage._maxBHSize pmap)
+    , pppKeyDeposit = strictMaybeToMaybe (Babbage._keyDeposit pmap)
+    , pppPoolDeposit = strictMaybeToMaybe (Babbage._poolDeposit pmap)
+    , pppMaxEpoch = strictMaybeToMaybe (Babbage._eMax pmap)
+    , pppOptimalPoolCount = strictMaybeToMaybe (Babbage._nOpt pmap)
+    , pppInfluence = Ledger.unboundRational <$> strictMaybeToMaybe (Babbage._a0 pmap)
+    , pppMonetaryExpandRate = strictMaybeToMaybe (Babbage._rho pmap)
+    , pppTreasuryGrowthRate = strictMaybeToMaybe (Babbage._tau pmap)
+    , pppDecentralisation = Nothing -- Removed in Babbage
+    , pppEntropy = Nothing -- Removed in Babbage
+    , pppProtocolVersion = strictMaybeToMaybe (Babbage._protocolVersion pmap)
+    , pppMinUtxoValue = Nothing -- Removed in Alonzo
+    , pppMinPoolCost = strictMaybeToMaybe (Babbage._minPoolCost pmap)
+    , pppCoinsPerUtxoWord = strictMaybeToMaybe (Babbage._coinsPerUTxOByte pmap)
+    , pppCostmdls = strictMaybeToMaybe (Alonzo.unCostModels <$> Babbage._costmdls pmap)
+    , pppPriceMem = Ledger.unboundRational . Alonzo.prMem <$> strictMaybeToMaybe (Babbage._prices pmap)
+    , pppPriceStep = Ledger.unboundRational . Alonzo.prSteps <$> strictMaybeToMaybe (Babbage._prices pmap)
+    , pppMaxTxExMem = fromIntegral . Alonzo.exUnitsMem <$> strictMaybeToMaybe (Babbage._maxTxExUnits pmap)
+    , pppMaxTxExSteps = fromIntegral . Alonzo.exUnitsSteps <$> strictMaybeToMaybe (Babbage._maxTxExUnits pmap)
+    , pppMaxBlockExMem = fromIntegral . Alonzo.exUnitsMem <$> strictMaybeToMaybe (Babbage._maxBlockExUnits pmap)
+    , pppMaxBlockExSteps = fromIntegral . Alonzo.exUnitsSteps <$> strictMaybeToMaybe (Babbage._maxBlockExUnits pmap)
+    , pppMaxValSize = strictMaybeToMaybe (Babbage._maxValSize pmap)
+    , pppCollateralPercentage = strictMaybeToMaybe (Babbage._collateralPercentage pmap)
+    , pppMaxCollateralInputs = strictMaybeToMaybe (Babbage._maxCollateralInputs pmap)
+    }
+
 convertAlonzoParamProposal :: EpochNo -> (Ledger.KeyHash genesis crypto, Alonzo.PParamsUpdate era) -> ParamProposal
-convertAlonzoParamProposal  epochNo (key, pmap) =
+convertAlonzoParamProposal epochNo (key, pmap) =
   ParamProposal
     { pppEpochNo = epochNo
     , pppKey = unKeyHashRaw key
