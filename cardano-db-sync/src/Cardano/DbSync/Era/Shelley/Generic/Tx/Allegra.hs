@@ -52,8 +52,8 @@ fromAllegraTx (blkIndex, tx) =
       , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
                             . Shelley.unWdrl $ ShelleyMa.wdrls rawTxBody
       , txMetadata = fromAllegraMetadata <$> txMeta tx
-      , txCertificates = zipWith (TxCertificate Nothing) [0..] (toList $ ShelleyMa.certs rawTxBody)
-      , txWithdrawals = map (mkTxWithdrawal Nothing) (Map.toList . Shelley.unWdrl $ ShelleyMa.wdrls rawTxBody)
+      , txCertificates = zipWith mkTxCertificate [0..] (toList $ ShelleyMa.certs rawTxBody)
+      , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl $ ShelleyMa.wdrls rawTxBody)
       , txParamProposal = maybe [] (convertParamProposal (Allegra Standard)) $ strictMaybeToMaybe (ShelleyMa.update rawTxBody)
       , txMint = mempty       -- Allegra does not support Multi-Assets
       , txRedeemer = []       -- Allegra does not support redeemers
