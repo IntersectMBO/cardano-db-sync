@@ -76,7 +76,7 @@ library
                         Cardano.DbSync.Era.Shelley.Generic.Tx
                         Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra
                         Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
---                        Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage
+                        Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage
                         Cardano.DbSync.Era.Shelley.Generic.Tx.Mary
                         Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
                         Cardano.DbSync.Era.Shelley.Generic.Tx.Types
@@ -129,12 +129,11 @@ library
                       , cardano-client
                       , cardano-crypto
                       , cardano-crypto-class
-                      , cardano-crypto-praos
                       , cardano-crypto-wrapper
                       , cardano-data
                       , cardano-db
                       , cardano-ledger-alonzo
---                      , cardano-ledger-babbage
+                      , cardano-ledger-babbage
                       , cardano-ledger-byron
                       , cardano-ledger-core
                       , cardano-ledger-shelley
@@ -144,7 +143,7 @@ library
                       , cardano-protocol-tpraos
                       , cardano-slotting
                       , cborg
-                      , compact-map
+                      , vector-map
                       , containers
                       , contra-tracer
                       , directory

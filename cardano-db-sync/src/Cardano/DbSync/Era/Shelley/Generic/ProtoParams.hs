@@ -11,6 +11,8 @@ import qualified Cardano.Ledger.Alonzo as Alonzo
 import           Cardano.Ledger.Alonzo.Language (Language)
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
+import qualified Cardano.Ledger.Babbage as Babbage
+import qualified Cardano.Ledger.Babbage.PParams as Babbage
 import           Cardano.Ledger.BaseTypes (UnitInterval)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
@@ -20,8 +22,7 @@ import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Cardano.DbSync.Types
 
-import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardAllegra,
-                   StandardAlonzo, StandardCrypto, StandardMary, StandardShelley)
+import           Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
 
 import           Ouroboros.Consensus.Cardano (Nonce (..))
 import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
@@ -69,24 +70,62 @@ epochProtoParams lstate =
       LedgerStateAllegra als -> Just $ allegraProtoParams als
       LedgerStateMary mls -> Just $ maryProtoParams mls
       LedgerStateAlonzo als -> Just $ alonzoProtoParams als
+      LedgerStateBabbage bls -> Just $ babbageProtoParams bls
 
-allegraProtoParams :: LedgerState (ShelleyBlock StandardAllegra) -> ProtoParams
+allegraProtoParams :: LedgerState (ShelleyBlock p StandardAllegra) -> ProtoParams
 allegraProtoParams =
   fromShelleyParams . Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState
 
-alonzoProtoParams :: LedgerState (ShelleyBlock StandardAlonzo) -> ProtoParams
+alonzoProtoParams :: LedgerState (ShelleyBlock p StandardAlonzo) -> ProtoParams
 alonzoProtoParams =
   fromAlonzoParams . Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState
 
-maryProtoParams :: LedgerState (ShelleyBlock StandardMary) -> ProtoParams
+babbageProtoParams :: LedgerState (ShelleyBlock p StandardBabbage) -> ProtoParams
+babbageProtoParams =
+  fromBabbageParams . Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState
+
+maryProtoParams :: LedgerState (ShelleyBlock p StandardMary) -> ProtoParams
 maryProtoParams =
   fromShelleyParams . Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState
 
-shelleyProtoParams :: LedgerState (ShelleyBlock StandardShelley) -> ProtoParams
+shelleyProtoParams :: LedgerState (ShelleyBlock p StandardShelley) -> ProtoParams
 shelleyProtoParams =
   fromShelleyParams . Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState
 
 -- -------------------------------------------------------------------------------------------------
+
+fromBabbageParams :: Babbage.PParams (Babbage.BabbageEra StandardCrypto) -> ProtoParams
+fromBabbageParams params =
+  ProtoParams
+    { ppMinfeeA = Babbage._minfeeA params
+    , ppMinfeeB = Babbage._minfeeB params
+    , ppMaxBBSize = Babbage._maxBBSize params
+    , ppMaxTxSize = Babbage._maxTxSize params
+    , ppMaxBHSize = Babbage._maxBHSize params
+    , ppKeyDeposit = Babbage._keyDeposit params
+    , ppPoolDeposit = Babbage._poolDeposit params
+    , ppMaxEpoch = Babbage._eMax params
+    , ppOptialPoolCount = Babbage._nOpt params
+    , ppInfluence = Ledger.unboundRational $ Babbage._a0 params
+    , ppMonetaryExpandRate = Babbage._rho params
+    , ppTreasuryGrowthRate = Babbage._tau params
+    , ppDecentralisation = minBound -- can't change in Babbage
+    , ppExtraEntropy = NeutralNonce -- no extra entropy in Babbage
+    , ppProtocolVersion = Babbage._protocolVersion params
+    , ppMinUTxOValue = Babbage._coinsPerUTxOByte params
+    , ppMinPoolCost = Babbage._minPoolCost params
+    , ppCoinsPerUtxoWord = Just $ Babbage._coinsPerUTxOByte params
+    , ppCostmdls = Just $ Alonzo.unCostModels $ Babbage._costmdls params
+    , ppPriceMem = Just . Ledger.unboundRational $ Alonzo.prMem (Babbage._prices params)
+    , ppPriceStep = Just . Ledger.unboundRational $ Alonzo.prSteps (Babbage._prices params)
+    , ppMaxTxExMem = Just . fromIntegral $ Alonzo.exUnitsMem (Babbage._maxTxExUnits params)
+    , ppMaxTxExSteps = Just . fromIntegral $ Alonzo.exUnitsSteps (Babbage._maxTxExUnits params)
+    , ppMaxBlockExMem = Just . fromIntegral $ Alonzo.exUnitsMem (Babbage._maxBlockExUnits params)
+    , ppMaxBlockExSteps = Just . fromIntegral $ Alonzo.exUnitsSteps (Babbage._maxBlockExUnits params)
+    , ppMaxValSize = Just $ Babbage._maxValSize params
+    , ppCollateralPercentage = Just $ Babbage._collateralPercentage params
+    , ppMaxCollateralInputs = Just $ Babbage._maxCollateralInputs params
+    }
 
 fromAlonzoParams :: Alonzo.PParams (Alonzo.AlonzoEra StandardCrypto) -> ProtoParams
 fromAlonzoParams params =
@@ -103,7 +142,7 @@ fromAlonzoParams params =
     , ppInfluence = Ledger.unboundRational $ Alonzo._a0 params
     , ppMonetaryExpandRate = Alonzo._rho params
     , ppTreasuryGrowthRate = Alonzo._tau params
-    , ppDecentralisation  = Alonzo._d params
+    , ppDecentralisation = Alonzo._d params
     , ppExtraEntropy = Alonzo._extraEntropy params
     , ppProtocolVersion = Alonzo._protocolVersion params
     , ppMinUTxOValue = Alonzo._coinsPerUTxOWord params
@@ -136,7 +175,7 @@ fromShelleyParams params =
     , ppInfluence = Ledger.unboundRational $ Shelley._a0 params
     , ppMonetaryExpandRate = Shelley._rho params
     , ppTreasuryGrowthRate = Shelley._tau params
-    , ppDecentralisation  = Shelley._d params
+    , ppDecentralisation = Shelley._d params
     , ppExtraEntropy = Shelley._extraEntropy params
     , ppProtocolVersion = Shelley._protocolVersion params
     , ppMinUTxOValue = Shelley._minUTxOValue params

@@ -14,7 +14,7 @@ module Cardano.Mock.Forging.Types
 
 import           Control.Exception
 
-import           Ouroboros.Consensus.Cardano.Block (CardanoEras, HardForkBlock)
+import qualified Ouroboros.Consensus.Cardano.Block as Consensus
 import           Ouroboros.Consensus.Forecast
 import           Ouroboros.Consensus.Shelley.Eras (AlonzoEra, ShelleyEra, StandardCrypto)
 
@@ -26,7 +26,7 @@ import           Cardano.Ledger.TxIn (TxIn (..))
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
-type CardanoBlock = HardForkBlock (CardanoEras StandardCrypto)
+type CardanoBlock = Consensus.CardanoBlock StandardCrypto
 
 data MockBlock = MockBlock
   { txs :: ![TxEra]

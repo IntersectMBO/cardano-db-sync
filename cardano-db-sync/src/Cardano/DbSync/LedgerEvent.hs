@@ -100,7 +100,7 @@ instance
     , Event (Ledger.EraRule "POOLREAP" ledgerera) ~ PoolreapEvent ledgerera
     , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent (Crypto ledgerera)
     ) =>
-  ConvertLedgerEvent (ShelleyBlock ledgerera)
+  ConvertLedgerEvent (ShelleyBlock p ledgerera)
   where
     toLedgerEvent nw evt =
       case unwrapLedgerEvent evt of
@@ -176,7 +176,7 @@ pattern LERestraintRewards
        )
     => EpochNo -> Map (Ledger.StakeCredential StandardCrypto) (Set (Ledger.Reward StandardCrypto))
     -> Set (Ledger.StakeCredential StandardCrypto)
-    -> AuxLedgerEvent (LedgerState (ShelleyBlock ledgerera))
+    -> AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
 pattern LERestraintRewards e m creds <-
   ShelleyLedgerEventTICK
     (NewEpochEvent (RestrainedRewards e m creds))
@@ -187,7 +187,7 @@ pattern LETotalRewards
        , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera
        )
     => EpochNo -> Map (Ledger.StakeCredential StandardCrypto) (Set (Ledger.Reward StandardCrypto))
-    -> AuxLedgerEvent (LedgerState (ShelleyBlock ledgerera))
+    -> AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
 pattern LETotalRewards e m <-
   ShelleyLedgerEventTICK
     (NewEpochEvent (TotalRewardEvent e m))
@@ -199,7 +199,7 @@ pattern LEDeltaReward
        , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent (Crypto ledgerera)
        )
     => EpochNo -> Map (Ledger.StakeCredential StandardCrypto) (Set (Ledger.Reward StandardCrypto))
-    -> AuxLedgerEvent (LedgerState (ShelleyBlock ledgerera))
+    -> AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
 pattern LEDeltaReward e m <-
   ShelleyLedgerEventTICK
     (NewEpochEvent (DeltaRewardEvent (RupdEvent e m)))
@@ -210,7 +210,7 @@ pattern LEIncrementalReward
        , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent (Crypto ledgerera)
        )
     => EpochNo -> Map (Ledger.StakeCredential StandardCrypto) (Set (Ledger.Reward StandardCrypto))
-    -> AuxLedgerEvent (LedgerState (ShelleyBlock ledgerera))
+    -> AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
 pattern LEIncrementalReward e m <-
   ShelleyLedgerEventTICK
     (Tick.RupdEvent (RupdEvent e m))
@@ -223,7 +223,7 @@ pattern LEMirTransfer
        )
     => Map (Ledger.StakeCredential StandardCrypto) Coin -> Map (Ledger.StakeCredential StandardCrypto) Coin
     -> DeltaCoin -> DeltaCoin
-    -> AuxLedgerEvent (LedgerState (ShelleyBlock ledgerera))
+    -> AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
 pattern LEMirTransfer rp tp rtt ttr <-
   ShelleyLedgerEventTICK
     ( NewEpochEvent
@@ -245,7 +245,7 @@ pattern LERetiredPools
   => Map (Ledger.StakeCredential StandardCrypto) (Map (KeyHash 'StakePool StandardCrypto) Coin)
   -> Map (Ledger.StakeCredential StandardCrypto) (Map (KeyHash 'StakePool StandardCrypto) Coin)
   -> EpochNo
-  -> AuxLedgerEvent (LedgerState (ShelleyBlock ledgerera))
+  -> AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
 pattern LERetiredPools r u e <-
   ShelleyLedgerEventTICK
     ( NewEpochEvent

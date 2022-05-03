@@ -30,7 +30,7 @@ import           Cardano.Prelude hiding (Meta, Nat, option, (%))
 import           Control.Tracer (Tracer)
 
 import           Cardano.BM.Data.Tracer (ToLogObject (..), ToObject)
-import           Cardano.BM.Trace (Trace, appendName, logError, logInfo)
+import           Cardano.BM.Trace (Trace, appendName, logInfo)
 import qualified Cardano.BM.Trace as Logging
 
 import           Cardano.Client.Subscription (subscribe)
@@ -55,7 +55,6 @@ import qualified Codec.CBOR.Term as CBOR
 import           Control.Monad.Trans.Except.Exit (orDie)
 
 import qualified Data.ByteString.Lazy as BSL
-import qualified Data.Text as Text
 
 import           Database.Persist.Sql (SqlBackend)
 
@@ -198,7 +197,7 @@ dbSyncProtocols
     -> Network.NodeToClientVersion -> ClientCodecs CardanoBlock IO
     -> ConnectionId LocalAddress
     -> NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols trce env metricsSetters version codecs _connectionId =
+dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
     NodeToClientProtocols
       { localChainSyncProtocol = localChainSyncPtcl
       , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -214,10 +213,6 @@ dbSyncProtocols trce env metricsSetters version codecs _connectionId =
     localChainSyncPtcl = InitiatorProtocolOnly $ MuxPeerRaw $ \channel ->
       liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
         logInfo trce "Starting chainSyncClient"
-
-        when (version < minVersion) $ do
-          logError trce versionErrorMsg
-          throwIO $ ErrorCall (Text.unpack versionErrorMsg)
 
         -- The Db thread is not forked at this point, so we can use
         -- the connection here. A connection cannot be used concurrently by many
@@ -259,18 +254,6 @@ dbSyncProtocols trce env metricsSetters version codecs _connectionId =
         Logging.nullTracer
         (cStateQueryCodec codecs)
         localStateQueryPeerNull
-
-    versionErrorMsg :: Text
-    versionErrorMsg = Text.concat
-        [ "The cardano-node version is too old. Please upgrade to a compatible "
-        , "cardano-node version. The db-sync requires a node that supports "
-        , textShow minVersion
-        , ", the one in use only supports "
-        , textShow version
-        ]
-
-    minVersion :: Network.NodeToClientVersion
-    minVersion = Network.NodeToClientV_8
 
 -- | 'ChainSyncClient' which traces received blocks and ignores when it
 -- receives a request to rollbackwar.  A real wallet client should:

@@ -61,6 +61,9 @@ import qualified Data.Time.Clock as Time
 import           Text.Show.Pretty (ppShow)
 
 import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
+import           Ouroboros.Consensus.Protocol.Praos.Translate ()
+import           Ouroboros.Consensus.Shelley.HFEras ()
+import           Ouroboros.Consensus.Shelley.Ledger.SupportsProtocol ()
 import           Ouroboros.Network.Block (BlockNo (..), Tip, blockSlot, getPoint, getTipBlockNo)
 import qualified Ouroboros.Network.Point as Point
 

@@ -30,6 +30,7 @@ module Cardano.DbSync.LedgerState
   , ledgerTipBlockNo
   , getPoolParams
   , getAlonzoPParams
+  , getBabbagePParams
   ) where
 
 import           Prelude (String, fail, id)
@@ -86,7 +87,7 @@ import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockH
 import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardAlonzo,
-                   StandardCrypto)
+                   StandardBabbage, StandardCrypto)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Config (TopLevelConfig (..), configCodec, configLedger)
 import           Ouroboros.Consensus.HardFork.Abstract
@@ -697,10 +698,11 @@ getPoolParams st =
       LedgerStateAllegra sts -> getPoolParamsShelley sts
       LedgerStateMary sts -> getPoolParamsShelley sts
       LedgerStateAlonzo ats -> getPoolParamsShelley ats
+      LedgerStateBabbage bts -> getPoolParamsShelley bts
 
 getPoolParamsShelley
-    :: forall era. (Crypto era ~ StandardCrypto)
-    => LedgerState (ShelleyBlock era)
+    :: forall p era. (Crypto era ~ StandardCrypto)
+    => LedgerState (ShelleyBlock p era)
     -> Set.Set (KeyHash 'StakePool StandardCrypto)
 getPoolParamsShelley lState =
   Map.keysSet $ Shelley._pParams $ Shelley.dpsPState $ Shelley.lsDPState
@@ -716,6 +718,7 @@ getAdaPots st =
       LedgerStateAllegra sta -> Just $ totalAdaPots sta
       LedgerStateMary stm -> Just $ totalAdaPots stm
       LedgerStateAlonzo sta -> Just $ totalAdaPots sta
+      LedgerStateBabbage stb -> Just $ totalAdaPots stb
 
 ledgerEpochNo :: LedgerEnv -> ExtLedgerState CardanoBlock -> EpochNo
 ledgerEpochNo env cls =
@@ -749,8 +752,8 @@ tickThenReapplyCheckHash cfg block lsb =
                   ]
 
 totalAdaPots
-    :: forall era. UsesValue era
-    => LedgerState (ShelleyBlock era)
+    :: forall p era. UsesValue era
+    => LedgerState (ShelleyBlock p era)
     -> Shelley.AdaPots
 totalAdaPots = Shelley.totalAdaPotsES . Shelley.nesEs . Consensus.shelleyLedgerState
 
@@ -763,6 +766,13 @@ getAlonzoPParams cls =
   case ledgerState $ clsState cls of
     LedgerStateAlonzo als -> esPp $ Shelley.nesEs $ Consensus.shelleyLedgerState als
     _ -> panic "Expected LedgerStateAlonzo after an Alonzo Block"
+
+-- | This will fail if the state is not a 'LedgerStateBabbage'
+getBabbagePParams :: CardanoLedgerState -> PParams StandardBabbage
+getBabbagePParams cls =
+  case ledgerState $ clsState cls of
+    LedgerStateBabbage bls -> esPp $ Shelley.nesEs $ Consensus.shelleyLedgerState bls
+    _ -> panic "Expected LedgerStateBabbage after an Babbage Block"
 
 -- | This should be exposed by 'consensus'.
 ledgerTipBlockNo :: ExtLedgerState blk -> WithOrigin BlockNo

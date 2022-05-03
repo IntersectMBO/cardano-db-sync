@@ -69,7 +69,7 @@ library
                       , cardano-ledger-shelley
                       , cardano-prelude
                       , cardano-slotting
-                      , compact-map
+                      , vector-map
                       , containers
                       , esqueleto
                       , extra

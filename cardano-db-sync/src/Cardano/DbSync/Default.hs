@@ -27,12 +27,13 @@ import           Cardano.DbSync.Era.Shelley.Insert.Epoch (insertPoolDepositRefun
 import           Cardano.DbSync.Era.Shelley.Validate (validateEpochRewards)
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState (LedgerEvent (..), LedgerStateSnapshot (..), applyBlock,
-                   getAlonzoPParams, saveCleanupState)
+                   getAlonzoPParams, getBabbagePParams, saveCleanupState)
 import           Cardano.DbSync.Rollback (rollbackToPoint)
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
+import qualified Cardano.Ledger.Babbage.PParams as Babbage
 import           Cardano.Ledger.BaseTypes (Network)
 import           Cardano.Ledger.Coin (Coin (..))
 import           Cardano.Ledger.Credential (StakeCredential)
@@ -89,6 +90,9 @@ insertDefaultBlock env blocks =
         BlockAlonzo blk -> do
           let prices = Alonzo._prices $ getAlonzoPParams $ lssState lStateSnap
           newExceptT $ insertShelleyBlock env firstBlockOfEpoch (Generic.fromAlonzoBlock prices blk) lStateSnap details
+        BlockBabbage blk -> do
+          let prices = Babbage._prices $ getBabbagePParams $ lssState lStateSnap
+          newExceptT $ insertShelleyBlock env firstBlockOfEpoch (Generic.fromBabbageBlock prices blk) lStateSnap details
       when (soptExtended $ envOptions env) .
         newExceptT $ epochInsert tracer (BlockDetails cblk details)
 

@@ -7,10 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.DbSync.Config.Types
-  ( AllegraToMary
-  , ByronToShelley
-  , CardanoBlock
-  , CardanoProtocol
+  ( CardanoBlock
   , ConfigFile (..)
   , SyncCommand (..)
   , SyncNodeParams (..)
@@ -22,12 +19,10 @@ module Cardano.DbSync.Config.Types
   , SyncNodeConfig (..)
   , SyncPreConfig (..)
   , LedgerStateDir (..)
-  , MaryToAlonzo
   , CardanoInterpreter
   , LogFileDir (..)
   , NetworkName (..)
   , NodeConfigFile (..)
-  , ShelleyToAllegra
   , SocketPath (..)
   , adjustGenesisFilePath
   , adjustNodeConfigFilePath
@@ -46,7 +41,6 @@ import qualified Cardano.Crypto.Hash as Crypto
 
 import           Cardano.Db (MigrationDir, PGPassSource (..))
 
-import           Cardano.Ledger.Allegra (AllegraEra)
 import           Cardano.Ledger.Crypto (StandardCrypto)
 
 import           Cardano.Slotting.Slot (SlotNo (..))
@@ -56,49 +50,33 @@ import qualified Data.Aeson as Aeson
 import           Data.Aeson.Types (Parser, typeMismatch)
 
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
-import           Ouroboros.Consensus.Cardano.Block (AlonzoEra, MaryEra, ShelleyEra)
 import qualified Ouroboros.Consensus.Cardano.Block as Cardano
-import qualified Ouroboros.Consensus.Cardano.CanHardFork as Shelley
-import           Ouroboros.Consensus.Cardano.Node (ProtocolTransitionParamsShelleyBased)
-import qualified Ouroboros.Consensus.HardFork.Combinator.Basics as Cardano
+import           Ouroboros.Consensus.Cardano.CanHardFork (TriggerHardFork (..))
 import qualified Ouroboros.Consensus.HardFork.History as History
-import           Ouroboros.Consensus.Shelley.Eras (StandardShelley)
-import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Shelley
+import           Ouroboros.Consensus.Protocol.Praos (Praos)
+import           Ouroboros.Consensus.Protocol.TPraos (TPraos)
+import           Ouroboros.Consensus.Shelley.Eras (StandardAllegra, StandardAlonzo, StandardBabbage,
+                   StandardMary, StandardShelley)
+import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 
 newtype LogFileDir = LogFileDir
   { unLogFileDir :: FilePath
   }
 
+type TPraosStandard = TPraos StandardCrypto
+type PraosStandard = Praos StandardCrypto
+
 type CardanoBlock =
         Cardano.HardForkBlock
             (Cardano.CardanoEras StandardCrypto)
 
-type CardanoProtocol =
-        Cardano.HardForkProtocol
-            '[ ByronBlock
-            , Shelley.ShelleyBlock StandardShelley
-            , Shelley.ShelleyBlock Cardano.StandardAllegra
-            , Shelley.ShelleyBlock Cardano.StandardMary
-            ]
-
-type ByronToShelley =
-        ProtocolTransitionParamsShelleyBased (ShelleyEra StandardCrypto)
-
-type ShelleyToAllegra =
-        ProtocolTransitionParamsShelleyBased (AllegraEra StandardCrypto)
-
-type AllegraToMary =
-        ProtocolTransitionParamsShelleyBased (MaryEra StandardCrypto)
-
-type MaryToAlonzo =
-        ProtocolTransitionParamsShelleyBased (AlonzoEra StandardCrypto)
-
 type CardanoInterpreter = History.Interpreter
            '[ ByronBlock
-            , Shelley.ShelleyBlock StandardShelley
-            , Shelley.ShelleyBlock Cardano.StandardAllegra
-            , Shelley.ShelleyBlock Cardano.StandardMary
-            , Shelley.ShelleyBlock Cardano.StandardAlonzo
+            , ShelleyBlock TPraosStandard StandardShelley
+            , ShelleyBlock TPraosStandard StandardAllegra
+            , ShelleyBlock TPraosStandard StandardMary
+            , ShelleyBlock TPraosStandard StandardAlonzo
+            , ShelleyBlock PraosStandard StandardBabbage
             ]
 
 newtype ConfigFile = ConfigFile
@@ -144,10 +122,11 @@ data SyncNodeConfig = SyncNodeConfig
   , dncByronSoftwareVersion :: !Byron.SoftwareVersion
   , dncByronProtocolVersion :: !Byron.ProtocolVersion
 
-  , dncShelleyHardFork :: !Shelley.TriggerHardFork
-  , dncAllegraHardFork :: !Shelley.TriggerHardFork
-  , dncMaryHardFork :: !Shelley.TriggerHardFork
-  , dncAlonzoHardFork :: !Shelley.TriggerHardFork
+  , dncShelleyHardFork :: !TriggerHardFork
+  , dncAllegraHardFork :: !TriggerHardFork
+  , dncMaryHardFork :: !TriggerHardFork
+  , dncAlonzoHardFork :: !TriggerHardFork
+  , dncBabbageHardFork :: !TriggerHardFork
   }
 
 data SyncPreConfig = SyncPreConfig

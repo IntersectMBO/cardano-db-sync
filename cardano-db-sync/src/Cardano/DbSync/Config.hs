@@ -95,6 +95,7 @@ coalesceConfig pcfg ncfg adjustGenesisPath = do
           , dncAllegraHardFork = ncAllegraHardFork ncfg
           , dncMaryHardFork = ncMaryHardFork ncfg
           , dncAlonzoHardFork = ncAlonzoHardFork ncfg
+          , dncBabbageHardFork = ncBabbageHardFork ncfg
           }
 
 mkAdjustPath :: SyncPreConfig -> (FilePath -> FilePath)

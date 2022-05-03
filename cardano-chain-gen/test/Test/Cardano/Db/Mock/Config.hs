@@ -30,7 +30,7 @@ import           Database.Persist.Sql (SqlBackend)
 import           Ouroboros.Consensus.Config (TopLevelConfig)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import           Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
-import           Ouroboros.Consensus.Shelley.Node (TPraosLeaderCredentials)
+import           Ouroboros.Consensus.Shelley.Node (ShelleyLeaderCredentials)
 
 import           Cardano.Api (NetworkId (..), NetworkMagic (..))
 import           Cardano.CLI.Shelley.Commands (GenesisCmd (..))
@@ -163,7 +163,7 @@ mkConfig staticDir mutableDir = do
     syncPars <- mkSyncNodeParams staticDir mutableDir
     pure $ Config (Consensus.pInfoConfig pInfoDbSync) pInfoDbSync pInfoForger syncPars
 
-mkShelleyCredentials :: FilePath -> IO [TPraosLeaderCredentials StandardCrypto]
+mkShelleyCredentials :: FilePath -> IO [ShelleyLeaderCredentials StandardCrypto]
 mkShelleyCredentials bulkFile = do
     eitherM (panic . textShow) pure $ runExceptT $ readLeaderCredentials (Just protFiles)
   where
