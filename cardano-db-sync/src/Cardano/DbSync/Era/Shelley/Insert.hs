@@ -264,8 +264,9 @@ prepareTxOut
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> Cache -> (DB.TxId, ByteString) -> Generic.TxOut
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
-prepareTxOut tracer cache (txId, txHash) (Generic.TxOut index addr addrRaw value maMap dataHash) = do
+prepareTxOut tracer cache (txId, txHash) (Generic.TxOut index addr addrRaw value maMap _mScript dt) = do
     mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache txId addr
+    -- whenJust (maybeToStrict mScript) $ insertScript tracer txId
     let txOut = DB.TxOut
                   { DB.txOutTxId = txId
                   , DB.txOutIndex = index
@@ -275,7 +276,7 @@ prepareTxOut tracer cache (txId, txHash) (Generic.TxOut index addr addrRaw value
                   , DB.txOutPaymentCred = Generic.maybePaymentCred addr
                   , DB.txOutStakeAddressId = mSaId
                   , DB.txOutValue = Generic.coinToDbLovelace value
-                  , DB.txOutDataHash = dataHash
+                  , DB.txOutDataHash = Generic.getTxOutDatumHash dt
                   }
     let eutxo = ExtendedTxOut txHash txOut
     maTxOuts <- prepareMaTxOuts tracer cache maMap

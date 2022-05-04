@@ -46,14 +46,15 @@ fromShelleyTx (blkIndex, tx) =
       , txSize = fromIntegral $ getField @"txsize" tx
       , txValidContract = True
       , txInputs = map fromTxIn (toList . Shelley._inputs $ ShelleyTx.body tx)
-      , txCollateralInputs = [] -- Shelley does not have collateral inputs
+      , txCollateralInputs = []  -- Shelley does not have collateral inputs
+      , txReferenceInputs = []   -- Shelley does not have reference inputs
       , txOutputs = outputs
+      , txCollateralOutputs = [] -- Shelley does not have collateral outputs
       , txFees = Shelley._txfee (ShelleyTx.body tx)
       , txOutSum = sumOutputs outputs
       , txInvalidBefore = Nothing
       , txInvalidHereafter = Just $ Shelley._ttl (ShelleyTx.body tx)
-      , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
-                            . Shelley.unWdrl $ Shelley._wdrls (ShelleyTx.body tx)
+      , txWithdrawalSum = getWithdrawalSum $ Shelley._wdrls (ShelleyTx.body tx)
       , txMetadata = fromShelleyMetadata <$> strictMaybeToMaybe (getField @"auxiliaryData" tx)
       , txCertificates = zipWith mkTxCertificate [0..] (toList . Shelley._certs $ ShelleyTx.body tx)
       , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . Shelley._wdrls $ ShelleyTx.body tx)
@@ -94,7 +95,8 @@ fromTxOut index txOut =
     , txOutAddressRaw = SBS.fromShort bs
     , txOutAdaValue = ada
     , txOutMaValue = mempty  -- Shelley does not support multi-assets
-    , txOutDataHash = mempty -- Shelley does not support plutus data
+    , txOutScript = Nothing
+    , txOutDatum = NoDatum   -- Shelley does not support plutus data
     }
   where
     ShelleyTx.TxOutCompact (Ledger.UnsafeCompactAddr bs) _ = txOut
@@ -112,6 +114,9 @@ fromTxIn (ShelleyTx.TxIn (ShelleyTx.TxId txid) (TxIx w16)) =
 
 txHashId :: (Ledger.Crypto era ~ StandardCrypto, ShelleyBasedEra era) => ShelleyTx.Tx era -> ByteString
 txHashId = Crypto.hashToBytes . Ledger.extractHash . Ledger.hashAnnotated . ShelleyTx.body
+
+getWithdrawalSum :: Shelley.Wdrl StandardCrypto -> Coin
+getWithdrawalSum = Coin . sum . map unCoin . Map.elems . Shelley.unWdrl
 
 mkTxWithdrawal :: (Shelley.RewardAcnt StandardCrypto, Coin) -> TxWithdrawal
 mkTxWithdrawal (ra, c) =

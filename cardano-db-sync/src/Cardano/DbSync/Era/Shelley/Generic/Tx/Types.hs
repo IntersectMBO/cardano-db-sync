@@ -28,7 +28,9 @@ data Tx = Tx
   , txValidContract :: !Bool
   , txInputs :: ![TxIn]
   , txCollateralInputs :: ![TxIn]
+  , txReferenceInputs :: ![TxIn]
   , txOutputs :: ![TxOut]
+  , txCollateralOutputs :: ![TxOut]
   , txFees :: !Coin
   , txOutSum :: !Coin
   , txInvalidBefore :: !(Maybe SlotNo)
@@ -63,7 +65,7 @@ data TxIn = TxIn
   { txInHash :: !ByteString
   , txInIndex :: !Word16
   , txInRedeemerIndex :: !(Maybe Word64) -- This only has a meaning for Alonzo.
-  }
+  } deriving Show
 
 data TxOut = TxOut
   { txOutIndex :: !Word16
@@ -71,7 +73,8 @@ data TxOut = TxOut
   , txOutAddressRaw :: !ByteString
   , txOutAdaValue :: !Coin
   , txOutMaValue :: !(Map (PolicyID StandardCrypto) (Map AssetName Integer))
-  , txOutDataHash :: !(Maybe ByteString)
+  , txOutScript :: Maybe TxScript
+  , txOutDatum :: !TxOutDatum
   }
 
 data TxRedeemer = TxRedeemer
@@ -96,6 +99,17 @@ data TxDatum = TxDatum
   { txDatumHash :: !ByteString
   , txDatumValue :: !ByteString -- we turn this into json later.
   }
+
+data TxOutDatum = InlineDatum TxDatum | DatumHash ByteString | NoDatum
+
+getTxOutDatumHash :: TxOutDatum -> Maybe ByteString
+getTxOutDatumHash (InlineDatum txDatum) = Just $ txDatumHash txDatum
+getTxOutDatumHash (DatumHash hsh) = Just hsh
+getTxOutDatumHash NoDatum = Nothing
+
+getMaybeDatumHash :: Maybe ByteString -> TxOutDatum
+getMaybeDatumHash Nothing = NoDatum
+getMaybeDatumHash (Just hsh) = DatumHash hsh
 
 sumOutputs :: [TxOut] -> Coin
 sumOutputs = Coin . sum . map (unCoin . txOutAdaValue)

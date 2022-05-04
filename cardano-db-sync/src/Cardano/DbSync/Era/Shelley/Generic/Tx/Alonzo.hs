@@ -25,6 +25,7 @@ import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.CompactAddress as Ledger
 import qualified Cardano.Ledger.Core as Ledger
 import qualified Cardano.Ledger.Era as Ledger
+import qualified Cardano.Ledger.Hashes as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
 import           Cardano.Ledger.Mary.Value (Value (..), policyID)
 import qualified Cardano.Ledger.SafeHash as Ledger
@@ -49,7 +50,9 @@ import           Cardano.Db (ScriptType (..))
 import           Cardano.DbSync.Era.Shelley.Generic.Metadata
 import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Generic.Util
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (fromTxIn, mkTxCertificate, mkTxWithdrawal)
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (fromTxIn, getWithdrawalSum,
+                   mkTxCertificate, mkTxWithdrawal)
 import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
@@ -66,19 +69,20 @@ fromAlonzoTx prices (blkIndex, tx) =
             then map fromTxIn . toList $ getField @"collateral" txBody
             else Map.elems $ rmInps finalMaps
       , txCollateralInputs = map fromTxIn . toList $ getField @"collateral" txBody
+      , txReferenceInputs = []  -- Alonzo does not have reference inputs
       , txOutputs =
           if not isValid2
             then []
             else outputs
+      , txCollateralOutputs = [] -- Alonzo does not have collateral outputs
       , txFees = getField @"txfee" txBody
       , txOutSum =
           if not isValid2
             then Coin 0
             else sumOutputs outputs
-      , txInvalidBefore = strictMaybeToMaybe . ShelleyMa.invalidBefore $ getField @"vldt" txBody
-      , txInvalidHereafter = strictMaybeToMaybe . ShelleyMa.invalidHereafter $ getField @"vldt" txBody
-      , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
-                            . Shelley.unWdrl $ getField @"wdrls" txBody
+      , txInvalidBefore = invalidBefore
+      , txInvalidHereafter = invalidAfter
+      , txWithdrawalSum = getWithdrawalSum $ getField @"wdrls" txBody
       , txMetadata = fromAlonzoMetadata <$> strictMaybeToMaybe (getField @"auxiliaryData" tx)
       , txCertificates = snd <$> rmCerts finalMaps
       , txWithdrawals = Map.elems $ rmWdrl finalMaps
@@ -103,7 +107,8 @@ fromAlonzoTx prices (blkIndex, tx) =
         , txOutAddressRaw = SBS.fromShort caddr
         , txOutAdaValue = Coin ada
         , txOutMaValue = maMap
-        , txOutDataHash = getDataHash <$> strictMaybeToMaybe mDataHash
+        , txOutScript = Nothing
+        , txOutDatum = getMaybeDatumHash $ dataHashToBytes <$> strictMaybeToMaybe mDataHash
         }
       where
         Ledger.UnsafeCompactAddr caddr = Ledger.getTxOutCompactAddr txOut
@@ -125,10 +130,11 @@ fromAlonzoTx prices (blkIndex, tx) =
       case Alonzo.isValid tx of
         Alonzo.IsValid x -> x
 
+    (invalidBefore, invalidAfter) = getInterval txBody
+
 getScripts ::
     forall era.
     ( Ledger.Crypto era ~ StandardCrypto, Ledger.Era era
---    , Ledger.Witnesses era ~ Alonzo.Witnesses era
     , HasField "txscripts" (Ledger.Witnesses era) (Map (ScriptHash StandardCrypto) (Alonzo.Script era))
     , Ledger.Script era ~ Alonzo.Script era
     , Ledger.AuxiliaryData era ~ Alonzo.AuxiliaryData era
@@ -165,7 +171,7 @@ resolveRedeemers prices tx =
 
     withdrawalsNoRedeemers :: Map (Shelley.RewardAcnt StandardCrypto) TxWithdrawal
     withdrawalsNoRedeemers =
-      Map.mapWithKey (\acnt coin -> mkTxWithdrawal (acnt, coin))
+      Map.mapWithKey (curry mkTxWithdrawal)
         $ Shelley.unWdrl $ getField @"wdrls" txBody
 
     txCertsNoRedeemers :: [(Shelley.DCert StandardCrypto, TxCertificate)]
@@ -195,7 +201,7 @@ resolveRedeemers prices tx =
           Just (Alonzo.Minting policyId) -> (rdmrMps, Just $ Right $ unScriptHash $ policyID policyId)
           Just (Alonzo.Spending txIn) -> handleTxInPtr rdmrIx txIn rdmrMps
           Just (Alonzo.Rewarding rwdAcnt) -> handleRewardPtr rdmrIx rwdAcnt rdmrMps
-          Just (prp@(Alonzo.Certifying dcert)) -> case strictMaybeToMaybe (Alonzo.rdptr txBody prp) of
+          Just prp@(Alonzo.Certifying dcert) -> case strictMaybeToMaybe (Alonzo.rdptr txBody prp) of
             Just ptr' | ptr == ptr' -> handleCertPtr rdmrIx dcert rdmrMps
             _ -> (rdmrMps, Nothing)
           Nothing -> (rdmrMps, Nothing)
@@ -207,7 +213,7 @@ resolveRedeemers prices tx =
           , txRedeemerPurpose = tag
           , txRedeemerIndex = index
           , txRedeemerScriptHash = mScript
-          , txRedeemerDatum = TxDatum (getDataHash $ Alonzo.hashData dt) (encodeData dt)
+          , txRedeemerDatum = TxDatum (dataHashToBytes $ Alonzo.hashData dt) (encodeData dt)
           }
 
 handleTxInPtr :: Word64 -> ShelleyTx.TxIn StandardCrypto -> RedeemerMaps -> (RedeemerMaps, Maybe (Either TxIn ByteString))
@@ -294,8 +300,8 @@ txDataWitness ::
 txDataWitness tx =
     mkTxDatum <$> Map.toList (Alonzo.unTxDats $ Alonzo.txdats' (getField @"wits" tx))
 
-mkTxDatum :: (Ledger.SafeHash StandardCrypto a, Alonzo.Data era) -> TxDatum
-mkTxDatum (dataHash, dt) = TxDatum (getDataHash dataHash) (encodeData dt)
+mkTxDatum :: (Ledger.DataHash StandardCrypto, Alonzo.Data era) -> TxDatum
+mkTxDatum (dataHash, dt) = TxDatum (dataHashToBytes dataHash) (encodeData dt)
 
 extraKeyWits :: HasField "reqSignerHashes" (Ledger.TxBody era) (Set (Ledger.KeyHash d c))
               => Ledger.TxBody era -> [ByteString]
@@ -303,8 +309,8 @@ extraKeyWits txBody = Set.toList $
   Set.map (\(Ledger.KeyHash h) -> Crypto.hashToBytes h) $
   getField @"reqSignerHashes" txBody
 
-getDataHash :: Ledger.SafeHash crypto a -> ByteString
-getDataHash dataHash = Crypto.hashToBytes (Ledger.extractHash dataHash)
+dataHashToBytes :: Ledger.DataHash crypto -> ByteString
+dataHashToBytes dataHash = Crypto.hashToBytes (Ledger.extractHash dataHash)
 
 elemAtSet :: forall a. Ord a => Word64 -> Set a -> Maybe a
 elemAtSet n set =
