@@ -10,14 +10,20 @@ jobs:
       run:
         shell: bash
 
+    env:
+      # From cardano-base
+      # see https://github.com/input-output-hk/cardano-base/blob/master/.github/workflows/haskell.yml
+      SECP256K1_REF: ac83be33d0956faf6b7f61a60ab524ef7d6a473a
+
     strategy:
       fail-fast: false
       matrix:
+        cabal: ["3.4"]
         ghc: ["8.10.7"]
-        os: [ubuntu-latest, macos-latest, macos-11]
+        os: [ubuntu-latest, macos-latest]
 
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
 
     - name: Select build directory
       run: |
@@ -56,7 +62,7 @@ jobs:
         sudo pg_ctlcluster 14 main start
 
     - name: Install Postgres support (MacOS)
-      if: matrix.os == 'macos-latest' || matrix.os == 'macos-11'
+      if: matrix.os == 'macos-latest'
       run: |
         brew install postgres libpq openssl@1.1
         brew services start postgresql
@@ -71,22 +77,14 @@ jobs:
         ls -al || true
 
     - name: Install libsodium
-      if: matrix.os == 'macos-latest' || matrix.os == 'macos-11'
+      if: matrix.os == 'macos-latest'
       run: brew install libsodium
 
     - uses: haskell/actions/setup@v1
       id: setup-haskell
       with:
         ghc-version: ${{ matrix.ghc }}
-        cabal-version: ${{ env.CABAL_VERSION }}
-
-    - name: MacOS cabal setup work-around
-      if: matrix.os == 'macos-latest' || matrix.os == 'macos-11'
-      run: |
-        echo insecure >> $HOME/.curlrc
-        ghcup install cabal 3.4.0.0
-        ghcup set cabal 3.4.0.0
-        rm $HOME/.curlrc
+        cabal-version: ${{ matrix.cabal }}
 
     - name: Haskell versions
       run: |
@@ -119,7 +117,7 @@ jobs:
         cd ../..
 
     - name: Install secp256k1 (MacOS)
-      if: matrix.os == 'macos-latest' || matrix.os == 'macos-11'
+      if: matrix.os == 'macos-latest'
       run: |
         brew install autoconf automake libtool
         mkdir secp256k1-sources
@@ -190,7 +188,7 @@ jobs:
       run: cabal build all --only-dependencies
 
     - name: Build dependencies OSX
-      if: matrix.os == 'macos-latest' || matrix.os == 'macos-11'
+      if: matrix.os == 'macos-latest'
       run: |
         PKG_CONFIG_PATH="/usr/local/opt/openssl@1.1/lib/pkgconfig" cabal build all --only-dependencies
 
