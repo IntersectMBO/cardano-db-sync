@@ -19,7 +19,7 @@ import qualified Data.List as List
 
 import           Cardano.BM.Trace (Trace)
 
-import           Cardano.Db (DbLovelace (..))
+import           Cardano.Db (DbLovelace (..), textShow)
 import qualified Cardano.Db as DB
 
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -96,7 +96,7 @@ resolveTxInputs
   => [ExtendedTxOut]
   -> Generic.TxIn
   -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, DbLovelace)
-resolveTxInputs groupedOutputs txIn = fmap convert $ liftLookupFail "resolveTxInputs" $ do
+resolveTxInputs groupedOutputs txIn = fmap convert $ liftLookupFail ("resolveTxInputs " <> textShow txIn <> " ") $ do
     qres <- queryResolveInput txIn
     case qres of
       Right ret -> pure $ Right ret

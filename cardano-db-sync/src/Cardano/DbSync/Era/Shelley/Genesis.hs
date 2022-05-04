@@ -228,7 +228,7 @@ insertTxOuts trce blkId (ShelleyTx.TxIn txInId _, txOut) = do
               , DB.txOutPaymentCred = Generic.maybePaymentCred (txOutAddress txOut)
               , DB.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
               , DB.txOutValue = Generic.coinToDbLovelace (txOutCoin txOut)
-              , DB.txOutDataHash = Nothing -- No data hash in Shelley Genesis
+              , DB.txOutDataHash = Nothing -- No output datum in Shelley Genesis
               }
   where
     txOutAddress :: Shelley.TxOut StandardShelley -> Ledger.Addr StandardCrypto

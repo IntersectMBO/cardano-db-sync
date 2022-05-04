@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TypeApplications #-}
@@ -7,9 +8,12 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra where
 
 import           Cardano.Prelude
 
+import           Cardano.Slotting.Slot (SlotNo (..))
+
 import qualified Cardano.Ledger.Allegra as Allegra
 import           Cardano.Ledger.BaseTypes
 import           Cardano.Ledger.Coin (Coin (..))
+import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Era as Ledger
 import           Cardano.Ledger.Shelley.Scripts (ScriptHash)
 import qualified Cardano.Ledger.Shelley.Tx as Shelley
@@ -43,14 +47,15 @@ fromAllegraTx (blkIndex, tx) =
       , txSize = fromIntegral $ getField @"txsize" tx
       , txValidContract = True
       , txInputs = map fromTxIn (toList $ ShelleyMa.inputs rawTxBody)
-      , txCollateralInputs = [] -- Allegra does not have collateral inputs
+      , txCollateralInputs = []  -- Allegra does not have collateral inputs
+      , txReferenceInputs = []   -- Allegra does not have reference inputs
       , txOutputs = outputs
+      , txCollateralOutputs = [] -- Allegra does not have collateral outputs
       , txFees = ShelleyMa.txfee rawTxBody
       , txOutSum = sumOutputs outputs
-      , txInvalidBefore = strictMaybeToMaybe . ShelleyMa.invalidBefore $ ShelleyMa.vldt rawTxBody
-      , txInvalidHereafter = strictMaybeToMaybe . ShelleyMa.invalidHereafter $ ShelleyMa.vldt rawTxBody
-      , txWithdrawalSum = Coin . sum . map unCoin . Map.elems
-                            . Shelley.unWdrl $ ShelleyMa.wdrls rawTxBody
+      , txInvalidBefore = invalidBefore
+      , txInvalidHereafter = invalidAfter
+      , txWithdrawalSum = getWithdrawalSum $ ShelleyMa.wdrls rawTxBody
       , txMetadata = fromAllegraMetadata <$> txMeta tx
       , txCertificates = zipWith mkTxCertificate [0..] (toList $ ShelleyMa.certs rawTxBody)
       , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl $ ShelleyMa.wdrls rawTxBody)
@@ -81,6 +86,8 @@ fromAllegraTx (blkIndex, tx) =
         <$> (Map.toList (Shelley.scriptWits $ getField @"wits" tx)
             ++ getAuxScripts (getField @"auxiliaryData" tx))
 
+    (invalidBefore, invalidAfter) = getInterval $ getField @"body" tx
+
 getAuxScripts
     :: ShelleyMa.StrictMaybe (Allegra.AuxiliaryData StandardAllegra)
     -> [(ScriptHash StandardCrypto, Allegra.Script StandardAllegra)]
@@ -100,3 +107,13 @@ mkTxScript (hsh, script) = TxScript
         $ Api.fromAllegraTimelock Api.TimeLocksInSimpleScriptV2 script
     , txScriptCBOR = Nothing
     }
+
+getInterval
+    :: HasField "vldt" (Core.TxBody era) ShelleyMa.ValidityInterval
+    => Core.TxBody era -> (Maybe SlotNo, Maybe SlotNo)
+getInterval txBody =
+    ( strictMaybeToMaybe $ ShelleyMa.invalidBefore interval
+    , strictMaybeToMaybe $ ShelleyMa.invalidHereafter interval
+    )
+  where
+    interval = getField @"vldt" txBody
