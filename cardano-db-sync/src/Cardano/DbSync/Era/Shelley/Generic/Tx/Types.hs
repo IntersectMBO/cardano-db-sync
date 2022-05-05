@@ -31,7 +31,7 @@ data Tx = Tx
   , txReferenceInputs :: ![TxIn]
   , txOutputs :: ![TxOut]
   , txCollateralOutputs :: ![TxOut]
-  , txFees :: !Coin
+  , txFees :: !(Maybe Coin)
   , txOutSum :: !Coin
   , txInvalidBefore :: !(Maybe SlotNo)
   , txInvalidHereafter :: !(Maybe SlotNo)
@@ -42,7 +42,7 @@ data Tx = Tx
   , txParamProposal :: ![ParamProposal]
   , txMint :: !(Value StandardCrypto)
   , txRedeemer :: [(Word64, TxRedeemer)]
-  , txData :: [TxDatum]
+  , txData :: [PlutusData]
   , txScriptSizes :: [Word64] -- this contains only the sizes of plutus scripts in witnesses
   , txScripts :: [TxScript]
   , txScriptsFee :: Coin -- fees for plutus scripts
@@ -84,7 +84,7 @@ data TxRedeemer = TxRedeemer
   , txRedeemerFee :: !Coin
   , txRedeemerIndex :: !Word64
   , txRedeemerScriptHash :: Maybe (Either TxIn ByteString)
-  , txRedeemerDatum :: TxDatum
+  , txRedeemerData :: PlutusData
   }
 
 data TxScript = TxScript
@@ -95,15 +95,19 @@ data TxScript = TxScript
   , txScriptCBOR :: Maybe ByteString
   }
 
-data TxDatum = TxDatum
-  { txDatumHash :: !ByteString
-  , txDatumValue :: !ByteString -- we turn this into json later.
+data PlutusData = PlutusData
+  { txDataHash :: !ByteString
+  , txDataValue :: !ByteString -- we turn this into json later.
   }
 
-data TxOutDatum = InlineDatum TxDatum | DatumHash ByteString | NoDatum
+data TxOutDatum = InlineDatum PlutusData | DatumHash ByteString | NoDatum
+
+whenInlineDatum :: Monad m => TxOutDatum -> (PlutusData -> m a) -> m (Maybe a)
+whenInlineDatum (InlineDatum pd) f = Just <$> f pd
+whenInlineDatum _ _ = pure Nothing
 
 getTxOutDatumHash :: TxOutDatum -> Maybe ByteString
-getTxOutDatumHash (InlineDatum txDatum) = Just $ txDatumHash txDatum
+getTxOutDatumHash (InlineDatum txDatum) = Just $ txDataHash txDatum
 getTxOutDatumHash (DatumHash hsh) = Just hsh
 getTxOutDatumHash NoDatum = Nothing
 

@@ -69,13 +69,16 @@ fromAlonzoTx prices (blkIndex, tx) =
             then map fromTxIn . toList $ getField @"collateral" txBody
             else Map.elems $ rmInps finalMaps
       , txCollateralInputs = map fromTxIn . toList $ getField @"collateral" txBody
-      , txReferenceInputs = []  -- Alonzo does not have reference inputs
+      , txReferenceInputs = [] -- Alonzo does not have reference inputs
       , txOutputs =
           if not isValid2
             then []
             else outputs
       , txCollateralOutputs = [] -- Alonzo does not have collateral outputs
-      , txFees = getField @"txfee" txBody
+      , txFees =
+          if not isValid2
+            then Nothing
+            else Just $ getField @"txfee" txBody
       , txOutSum =
           if not isValid2
             then Coin 0
@@ -213,7 +216,7 @@ resolveRedeemers prices tx =
           , txRedeemerPurpose = tag
           , txRedeemerIndex = index
           , txRedeemerScriptHash = mScript
-          , txRedeemerDatum = TxDatum (dataHashToBytes $ Alonzo.hashData dt) (encodeData dt)
+          , txRedeemerData = PlutusData (dataHashToBytes $ Alonzo.hashData dt) (encodeData dt)
           }
 
 handleTxInPtr :: Word64 -> ShelleyTx.TxIn StandardCrypto -> RedeemerMaps -> (RedeemerMaps, Maybe (Either TxIn ByteString))
@@ -296,12 +299,12 @@ encodeData dt = LBS.toStrict $ Aeson.encode $
 
 txDataWitness ::
     (HasField "wits" tx (Alonzo.TxWitness era), Ledger.Crypto era ~ StandardCrypto)
-    => tx -> [TxDatum]
+    => tx -> [PlutusData]
 txDataWitness tx =
-    mkTxDatum <$> Map.toList (Alonzo.unTxDats $ Alonzo.txdats' (getField @"wits" tx))
+    mkTxData <$> Map.toList (Alonzo.unTxDats $ Alonzo.txdats' (getField @"wits" tx))
 
-mkTxDatum :: (Ledger.DataHash StandardCrypto, Alonzo.Data era) -> TxDatum
-mkTxDatum (dataHash, dt) = TxDatum (dataHashToBytes dataHash) (encodeData dt)
+mkTxData :: (Ledger.DataHash StandardCrypto, Alonzo.Data era) -> PlutusData
+mkTxData (dataHash, dt) = PlutusData (dataHashToBytes dataHash) (encodeData dt)
 
 extraKeyWits :: HasField "reqSignerHashes" (Ledger.TxBody era) (Set (Ledger.KeyHash d c))
               => Ledger.TxBody era -> [ByteString]

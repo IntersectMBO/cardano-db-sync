@@ -27,6 +27,7 @@ module Cardano.DbSync.Util
   , tipBlockNo
   , traverseMEither
   , whenJust
+  , whenMaybe
   , mlookup
   ) where
 
@@ -198,6 +199,10 @@ whenJust ma f =
   case ma of
     Strict.Nothing -> pure ()
     Strict.Just a -> f a
+
+whenMaybe :: Monad m => Maybe a -> (a -> m b) -> m (Maybe b)
+whenMaybe (Just a) f = Just <$> f a
+whenMaybe Nothing _f = pure Nothing
 
 thrd3 :: (a, b, c) -> c
 thrd3 (_, _, c) = c
