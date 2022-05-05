@@ -229,6 +229,8 @@ insertTxOut _tracer txId index txout =
               , DB.txOutStakeAddressId = Nothing -- Byron does not have a stake address.
               , DB.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
               , DB.txOutDataHash = Nothing
+              , DB.txOutInlineDatumId = Nothing
+              , DB.txOutReferenceScriptId = Nothing
               }
 
 

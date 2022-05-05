@@ -55,6 +55,6 @@ initialSupplyTest =
                   }
     _ <- insertTxIn (TxIn tx1Id (head tx0Ids) 0 Nothing)
     let addr = mkAddressHash bid1 tx1Id
-    _ <- insertTxOut $ TxOut tx1Id 0 (Text.pack addr) (BS.pack addr) False Nothing Nothing (DbLovelace 500000000) Nothing
+    _ <- insertTxOut $ TxOut tx1Id 0 (Text.pack addr) (BS.pack addr) False Nothing Nothing (DbLovelace 500000000) Nothing Nothing Nothing
     supply1 <- queryTotalSupply
     assertBool ("Total supply should be < " ++ show supply0) (supply1 < supply0)

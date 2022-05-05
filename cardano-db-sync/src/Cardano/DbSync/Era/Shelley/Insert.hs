@@ -200,11 +200,11 @@ insertTx
     -> SlotNo -> Word64 -> Generic.Tx -> BlockGroupedData
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) BlockGroupedData
 insertTx tracer cache network lStateSnap blkId epochNo slotNo blockIndex tx grouped = do
-    let fees = unCoin $ Generic.txFees tx
-        outSum = unCoin $ Generic.txOutSum tx
-        withdrawalSum = unCoin $ Generic.txWithdrawalSum tx
+    let outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
+        withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
     resolvedInputs <- mapM (resolveTxInputs (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
-    let inSum = fromIntegral $ sum $ map (unDbLovelace . thrd3) resolvedInputs
+    let inSum = sum $ map (unDbLovelace . thrd3) resolvedInputs
+    let fees = maybe inSum (fromIntegral . unCoin) (Generic.txFees tx)
     let txHash = Generic.txHash tx
     -- Insert transaction and get txId from the DB.
     txId <- lift . DB.insertTx $
@@ -212,11 +212,8 @@ insertTx tracer cache network lStateSnap blkId epochNo slotNo blockIndex tx grou
                 { DB.txHash = txHash
                 , DB.txBlockId = blkId
                 , DB.txBlockIndex = blockIndex
-                , DB.txOutSum = DB.DbLovelace (fromIntegral outSum)
-                , DB.txFee =
-                    if not (Generic.txValidContract tx)
-                      then DB.DbLovelace (fromIntegral inSum)
-                      else DB.DbLovelace (fromIntegral . unCoin $ Generic.txFees tx)
+                , DB.txOutSum = DB.DbLovelace outSum
+                , DB.txFee = DB.DbLovelace $ fromIntegral fees
                 , DB.txDeposit =
                     if not (Generic.txValidContract tx)
                       then 0
@@ -229,8 +226,10 @@ insertTx tracer cache network lStateSnap blkId epochNo slotNo blockIndex tx grou
                 }
 
     if not (Generic.txValidContract tx) then do
+      txOutsGrouped <- mapM (prepareTxOut tracer cache (txId, txHash)) (Generic.txOutputs tx)
+
       let txIns = map (prepareTxIn txId Map.empty) resolvedInputs
-      pure $ grouped <> BlockGroupedData txIns []
+      pure $ grouped <> BlockGroupedData txIns txOutsGrouped
 
     else do
       -- The following operations only happen if the script passes stage 2 validation (or the tx has
@@ -243,6 +242,10 @@ insertTx tracer cache network lStateSnap blkId epochNo slotNo blockIndex tx grou
       -- Insert the transaction inputs and collateral inputs (Alonzo).
       let txIns = map (prepareTxIn txId redeemers) resolvedInputs
       mapM_ (insertCollateralTxIn tracer txId) (Generic.txCollateralInputs tx)
+
+      mapM_ (insertReferenceTxIn tracer txId) (Generic.txReferenceInputs tx)
+
+      mapM_ (inertCollateralTxOut tracer cache (txId, txHash)) (Generic.txCollateralOutputs tx)
 
       whenJust (maybeToStrict $ Generic.txMetadata tx) $ \ md ->
         insertTxMetadata tracer txId md
@@ -264,9 +267,10 @@ prepareTxOut
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> Cache -> (DB.TxId, ByteString) -> Generic.TxOut
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
-prepareTxOut tracer cache (txId, txHash) (Generic.TxOut index addr addrRaw value maMap _mScript dt) = do
+prepareTxOut tracer cache (txId, txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
     mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache txId addr
-    -- whenJust (maybeToStrict mScript) $ insertScript tracer txId
+    mDatumId <- Generic.whenInlineDatum dt $ insertDatum tracer txId
+    mScriptId <- whenMaybe mScript $ insertScript tracer txId
     let txOut = DB.TxOut
                   { DB.txOutTxId = txId
                   , DB.txOutIndex = index
@@ -277,10 +281,41 @@ prepareTxOut tracer cache (txId, txHash) (Generic.TxOut index addr addrRaw value
                   , DB.txOutStakeAddressId = mSaId
                   , DB.txOutValue = Generic.coinToDbLovelace value
                   , DB.txOutDataHash = Generic.getTxOutDatumHash dt
+                  , DB.txOutInlineDatumId = mDatumId
+                  , DB.txOutReferenceScriptId = mScriptId
                   }
     let eutxo = ExtendedTxOut txHash txOut
     maTxOuts <- prepareMaTxOuts tracer cache maMap
     pure (eutxo, maTxOuts)
+  where
+    hasScript :: Bool
+    hasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
+
+inertCollateralTxOut
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> Cache -> (DB.TxId, ByteString) -> Generic.TxOut
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+inertCollateralTxOut tracer cache (txId, _txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
+    mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache txId addr
+    mDatumId <- Generic.whenInlineDatum dt $ insertDatum tracer txId
+    mScriptId <- whenMaybe mScript $ insertScript tracer txId
+    _ <- lift . DB.insertCollateralTxOut $
+                DB.CollateralTxOut
+                  { DB.collateralTxOutTxId = txId
+                  , DB.collateralTxOutIndex = index
+                  , DB.collateralTxOutAddress = Generic.renderAddress addr
+                  , DB.collateralTxOutAddressRaw = addrRaw
+                  , DB.collateralTxOutAddressHasScript = hasScript
+                  , DB.collateralTxOutPaymentCred = Generic.maybePaymentCred addr
+                  , DB.collateralTxOutStakeAddressId = mSaId
+                  , DB.collateralTxOutValue = Generic.coinToDbLovelace value
+                  , DB.collateralTxOutDataHash = Generic.getTxOutDatumHash dt
+                  , DB.collateralTxOutMultiAssetsDescr = textShow maMap
+                  , DB.collateralTxOutInlineDatumId = mDatumId
+                  , DB.collateralTxOutReferenceScriptId = mScriptId
+                  }
+    pure ()
+    -- TODO: Is there any reason to add new tables for collateral multi-assets/multi-asset-outputs
   where
     hasScript :: Bool
     hasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
@@ -308,6 +343,19 @@ insertCollateralTxIn _tracer txInId (Generic.TxIn txId index _) = do
               { DB.collateralTxInTxInId = txInId
               , DB.collateralTxInTxOutId = txOutId
               , DB.collateralTxInTxOutIndex = fromIntegral index
+              }
+
+insertReferenceTxIn
+    :: (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text -> DB.TxId -> Generic.TxIn
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+insertReferenceTxIn _tracer txInId (Generic.TxIn txId index _) = do
+  txOutId <- liftLookupFail "insertReferenceTxIn" $ DB.queryTxId txId
+  void . lift . DB.insertReferenceTxIn $
+            DB.ReferenceTxIn
+              { DB.referenceTxInTxInId = txInId
+              , DB.referenceTxInTxOutId = txOutId
+              , DB.referenceTxInTxOutIndex = fromIntegral index
               }
 
 insertCertificate
@@ -724,7 +772,7 @@ insertRedeemer
   => Trace IO Text -> [ExtendedTxOut] -> DB.TxId -> (Word64, Generic.TxRedeemer)
   -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Word64, DB.RedeemerId)
 insertRedeemer tracer groupedOutputs txId (rix, redeemer) = do
-    tdId <- insertDatum tracer txId $ Generic.txRedeemerDatum redeemer
+    tdId <- insertRedeemerData tracer txId $ Generic.txRedeemerData redeemer
     scriptHash <- findScriptHash
     rid <- lift . DB.insertRedeemer $
               DB.Redeemer
@@ -735,7 +783,7 @@ insertRedeemer tracer groupedOutputs txId (rix, redeemer) = do
                 , DB.redeemerPurpose = mkPurpose $ Generic.txRedeemerPurpose redeemer
                 , DB.redeemerIndex = Generic.txRedeemerIndex redeemer
                 , DB.redeemerScriptHash = scriptHash
-                , DB.redeemerDatumId = tdId
+                , DB.redeemerRedeemerDataId = tdId
                 }
     pure (rix, rid)
   where
@@ -758,15 +806,26 @@ insertRedeemer tracer groupedOutputs txId (rix, redeemer) = do
 
 insertDatum
   :: (MonadBaseControl IO m, MonadIO m)
-  => Trace IO Text -> DB.TxId -> Generic.TxDatum
+  => Trace IO Text -> DB.TxId -> Generic.PlutusData
   -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.DatumId
 insertDatum tracer txId txd = do
-    value <- safeDecodeToJson tracer "insertDatum" $ Generic.txDatumValue txd
-
+    value <- safeDecodeToJson tracer "insertDatum" $ Generic.txDataValue txd
     lift . DB.insertDatum $ DB.Datum
-      { DB.datumHash = Generic.txDatumHash txd
+      { DB.datumHash = Generic.txDataHash txd
       , DB.datumTxId = txId
       , DB.datumValue = value
+      }
+
+insertRedeemerData
+  :: (MonadBaseControl IO m, MonadIO m)
+  => Trace IO Text -> DB.TxId -> Generic.PlutusData
+  -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.RedeemerDataId
+insertRedeemerData tracer txId txd = do
+    value <- safeDecodeToJson tracer "insertRedeemerData" $ Generic.txDataValue txd
+    lift . DB.insertRedeemerData $ DB.RedeemerData
+      { DB.redeemerDataHash = Generic.txDataHash txd
+      , DB.redeemerDataTxId = txId
+      , DB.redeemerDataValue = value
       }
 
 insertTxMetadata
@@ -904,25 +963,25 @@ insertMultiAsset
     => Cache -> PolicyID StandardCrypto -> AssetName
     -> ReaderT SqlBackend m DB.MultiAssetId
 insertMultiAsset cache (PolicyID pol) a@(AssetName aName) = do
-  mId <- queryMAWithCache cache policy a
-  case mId of
-    Just maId -> pure maId
-    Nothing -> DB.insertMultiAssetUnchecked $
-                DB.MultiAsset
-                  { DB.multiAssetPolicy = policy
-                  , DB.multiAssetName = aName
-                  , DB.multiAssetFingerprint = DB.unAssetFingerprint (DB.mkAssetFingerprint policy a)
-                  }
+    mId <- queryMAWithCache cache policy a
+    case mId of
+      Just maId -> pure maId
+      Nothing -> DB.insertMultiAssetUnchecked $
+                  DB.MultiAsset
+                    { DB.multiAssetPolicy = policy
+                    , DB.multiAssetName = aName
+                    , DB.multiAssetFingerprint = DB.unAssetFingerprint (DB.mkAssetFingerprint policy a)
+                    }
   where
     policy = Generic.unScriptHash pol
 
 insertScript
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.TxId -> Generic.TxScript
-    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+    -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.ScriptId
 insertScript tracer txId script = do
     json <- scriptConvert script
-    void . lift . DB.insertScript $
+    lift . DB.insertScript $
       DB.Script
         { DB.scriptTxId = txId
         , DB.scriptHash = Generic.txScriptHash script

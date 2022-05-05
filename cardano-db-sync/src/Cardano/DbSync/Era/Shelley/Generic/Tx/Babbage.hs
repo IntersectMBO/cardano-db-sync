@@ -59,8 +59,8 @@ fromBabbageTx prices (blkIndex, tx) =
           collOutputs
       , txFees =
           if not isValid2
-            then fromMaybe (Coin 0) (strictMaybeToMaybe $ getField @"totalCollateral" txBody)
-            else getField @"txfee" txBody
+            then Just $ fromMaybe (Coin 0) (strictMaybeToMaybe $ getField @"totalCollateral" txBody)
+            else Just $ getField @"txfee" txBody
       , txOutSum =
           if not isValid2
             then sumOutputs collOutputs
@@ -137,6 +137,6 @@ fromScript scr = mkTxScript (Ledger.hashScript @era scr, scr)
 fromDatum :: (Ledger.Crypto era ~ StandardCrypto, Ledger.Era era) => Babbage.Datum era -> TxOutDatum
 fromDatum Babbage.NoDatum = NoDatum
 fromDatum (Babbage.DatumHash hdh) = DatumHash $ dataHashToBytes hdh
-fromDatum (Babbage.Datum binaryData) = InlineDatum $ mkTxDatum (Alonzo.hashData plutusData, plutusData)
+fromDatum (Babbage.Datum binaryData) = InlineDatum $ mkTxData (Alonzo.hashData plutusData, plutusData)
   where
     plutusData = Alonzo.binaryDataToData binaryData
