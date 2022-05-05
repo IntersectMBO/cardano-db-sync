@@ -86,6 +86,7 @@ module Cardano.Db.Query
   , existsPoolHashId
   , existsPoolMetadataRefId
   , existsScript
+  , queryDatumId
 
   , entityPair
   , isJust
@@ -1062,6 +1063,15 @@ existsScript hash = do
     limit 1
     pure (scripts ^. ScriptHash)
   pure $ not (null res)
+
+queryDatumId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe DatumId)
+queryDatumId hash = do
+  res <- select $ do
+    datums <- from $ table @Datum
+    where_ (datums ^. DatumHash ==. val hash)
+    limit 1
+    pure (datums ^. DatumId)
+  pure $ fmap unValue (listToMaybe res)
 
 -- -----------------------------------------------------------------------------
 -- SqlQuery predicates

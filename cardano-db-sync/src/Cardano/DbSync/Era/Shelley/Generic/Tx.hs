@@ -151,8 +151,8 @@ data TxScript = TxScript
 
 data TxDatum = TxDatum
   { txDatumHash :: !ByteString
-  , txDatumValue :: !ByteString -- we turn this into json later.
-  , txDatumBytes :: !ByteString
+  , txDatumValue :: ByteString -- we turn this into json later.
+  , txDatumBytes :: ByteString
   }
 
 fromAllegraTx :: (Word64, ShelleyTx.Tx StandardAllegra) -> Tx

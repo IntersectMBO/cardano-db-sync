@@ -779,14 +779,18 @@ insertDatum
   => Trace IO Text -> DB.TxId -> Generic.TxDatum
   -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.DatumId
 insertDatum tracer txId txd = do
-    value <- safeDecodeToJson tracer "insertDatum" $ Generic.txDatumValue txd
+    mPrev <- lift $ DB.queryDatumId $ Generic.txDatumHash txd
+    case mPrev of
+      Just prevId -> pure prevId
+      Nothing -> do
+        value <- safeDecodeToJson tracer "insertDatum" $ Generic.txDatumValue txd
 
-    lift . DB.insertDatum $ DB.Datum
-      { DB.datumHash = Generic.txDatumHash txd
-      , DB.datumTxId = txId
-      , DB.datumValue = value
-      , DB.datumBytes = Generic.txDatumBytes txd
-      }
+        lift . DB.insertDatum $ DB.Datum
+          { DB.datumHash = Generic.txDatumHash txd
+          , DB.datumTxId = txId
+          , DB.datumValue = value
+          , DB.datumBytes = Generic.txDatumBytes txd
+          }
 
 insertTxMetadata
     :: (MonadBaseControl IO m, MonadIO m)
