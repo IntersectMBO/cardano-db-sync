@@ -940,16 +940,18 @@ insertScript
     => Trace IO Text -> DB.TxId -> Generic.TxScript
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertScript tracer txId script = do
-    json <- scriptConvert script
-    void . lift . DB.insertScript $
-      DB.Script
-        { DB.scriptTxId = txId
-        , DB.scriptHash = Generic.txScriptHash script
-        , DB.scriptType = Generic.txScriptType script
-        , DB.scriptSerialisedSize = Generic.txScriptPlutusSize script
-        , DB.scriptJson = json
-        , DB.scriptBytes = Generic.txScriptCBOR script
-        }
+    exists <- lift $ DB.existsScript $ Generic.txScriptHash script
+    unless exists $ do
+      json <- scriptConvert script
+      void . lift . DB.insertScript $
+        DB.Script
+          { DB.scriptTxId = txId
+          , DB.scriptHash = Generic.txScriptHash script
+          , DB.scriptType = Generic.txScriptType script
+          , DB.scriptSerialisedSize = Generic.txScriptPlutusSize script
+          , DB.scriptJson = json
+          , DB.scriptBytes = Generic.txScriptCBOR script
+          }
   where
     scriptConvert :: MonadIO m => Generic.TxScript -> m (Maybe Text)
     scriptConvert s =

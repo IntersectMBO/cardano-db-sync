@@ -85,6 +85,7 @@ module Cardano.Db.Query
   , existsPoolHash
   , existsPoolHashId
   , existsPoolMetadataRefId
+  , existsScript
 
   , entityPair
   , isJust
@@ -1051,6 +1052,15 @@ existsPoolMetadataRefId pmrid = do
     where_ (pmr  ^. PoolMetadataRefId ==. val pmrid)
     limit 1
     pure (pmr  ^. PoolMetadataRefId)
+  pure $ not (null res)
+
+existsScript :: MonadIO m => ByteString -> ReaderT SqlBackend m Bool
+existsScript hash = do
+  res <- select $ do
+    scripts <- from $ table @Script
+    where_ (scripts ^. ScriptHash ==. val hash)
+    limit 1
+    pure (scripts ^. ScriptHash)
   pure $ not (null res)
 
 -- -----------------------------------------------------------------------------
