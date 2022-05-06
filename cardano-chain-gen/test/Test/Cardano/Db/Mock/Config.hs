@@ -44,9 +44,8 @@ import qualified Cardano.Db as Db
 import           Cardano.DbSync
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Config.Cardano
-import           Cardano.DbSync.Config.Types
 import           Cardano.DbSync.Error
-import           Cardano.DbSync.Types (MetricSetters (..))
+import           Cardano.DbSync.Types (CardanoBlock, MetricSetters (..))
 
 import           Cardano.SMASH.Server.PoolDataLayer
 

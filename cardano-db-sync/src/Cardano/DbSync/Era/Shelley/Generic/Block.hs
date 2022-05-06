@@ -50,7 +50,6 @@ import           Cardano.Slotting.Slot (SlotNo (..))
 import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlonzo, StandardBabbage,
                    StandardMary, StandardShelley)
 import           Ouroboros.Consensus.Protocol.TPraos
-import           Ouroboros.Consensus.Protocol.Praos (Praos)
 import qualified Ouroboros.Consensus.Protocol.Praos.Header as Praos
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra, ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
@@ -75,7 +74,7 @@ data Block = Block
   }
 
 
-fromAllegraBlock :: ShelleyBlock (TPraos StandardCrypto) StandardAllegra -> Block
+fromAllegraBlock :: ShelleyBlock TPraosStandard StandardAllegra -> Block
 fromAllegraBlock blk =
   Block
     { blkEra = Allegra
@@ -92,7 +91,7 @@ fromAllegraBlock blk =
     , blkTxs = map fromAllegraTx (blockTxs blk)
     }
 
-fromShelleyBlock :: ShelleyBlock (TPraos StandardCrypto) StandardShelley -> Block
+fromShelleyBlock :: ShelleyBlock TPraosStandard StandardShelley -> Block
 fromShelleyBlock blk =
   Block
     { blkEra = Shelley
@@ -109,7 +108,7 @@ fromShelleyBlock blk =
     , blkTxs = map fromShelleyTx (blockTxs blk)
     }
 
-fromMaryBlock :: ShelleyBlock (TPraos StandardCrypto) StandardMary -> Block
+fromMaryBlock :: ShelleyBlock TPraosStandard StandardMary -> Block
 fromMaryBlock blk =
   Block
     { blkEra = Mary
@@ -126,7 +125,7 @@ fromMaryBlock blk =
     , blkTxs = map fromMaryTx (blockTxs blk)
     }
 
-fromAlonzoBlock :: Prices -> ShelleyBlock (TPraos StandardCrypto) StandardAlonzo -> Block
+fromAlonzoBlock :: Prices -> ShelleyBlock TPraosStandard StandardAlonzo -> Block
 fromAlonzoBlock prices blk =
   Block
     { blkEra = Alonzo
@@ -143,10 +142,10 @@ fromAlonzoBlock prices blk =
     , blkTxs = map (fromAlonzoTx prices) (alonzoBlockTxs blk)
     }
 
-fromBabbageBlock :: Prices -> ShelleyBlock (Praos StandardCrypto) StandardBabbage -> Block
+fromBabbageBlock :: Prices -> ShelleyBlock PraosStandard StandardBabbage -> Block
 fromBabbageBlock prices blk =
   Block
-    { blkEra = Alonzo
+    { blkEra = Babbage
     , blkHash = blockHash blk
     , blkPreviousHash = blockPrevHash blk
     , blkSlotLeader = blockIssuer blk
@@ -185,28 +184,28 @@ blockPrevHash blk =
     TPraos.GenesisHash -> Nothing
     TPraos.BlockHash (TPraos.HashHeader h) -> Just $ Crypto.hashToBytes h
 
-blockOpCertKeyTPraos :: ShelleyBlock (TPraos StandardCrypto) era -> ByteString
+blockOpCertKeyTPraos :: ShelleyBlock TPraosStandard era -> ByteString
 blockOpCertKeyTPraos = KES.rawSerialiseVerKeyKES . TPraos.ocertVkHot . blockOpCertTPraos
 
-blockOpCertKeyPraos :: ShelleyBlock (Praos StandardCrypto) era -> ByteString
+blockOpCertKeyPraos :: ShelleyBlock PraosStandard era -> ByteString
 blockOpCertKeyPraos = KES.rawSerialiseVerKeyKES . TPraos.ocertVkHot . blockOpCertPraos
 
-blockOpCertCounterTPraos :: ShelleyBlock (TPraos StandardCrypto) era -> Word64
+blockOpCertCounterTPraos :: ShelleyBlock TPraosStandard era -> Word64
 blockOpCertCounterTPraos = TPraos.ocertN . blockOpCertTPraos
 
-blockOpCertCounterPraos :: ShelleyBlock (Praos StandardCrypto) era -> Word64
+blockOpCertCounterPraos :: ShelleyBlock PraosStandard era -> Word64
 blockOpCertCounterPraos = TPraos.ocertN . blockOpCertPraos
 
-blockOpCertTPraos :: ShelleyBlock (TPraos StandardCrypto) era -> TPraos.OCert StandardCrypto
+blockOpCertTPraos :: ShelleyBlock TPraosStandard era -> TPraos.OCert StandardCrypto
 blockOpCertTPraos = TPraos.bheaderOCert . TPraos.bhbody . blockHeader
 
-blockOpCertPraos :: ShelleyBlock (Praos StandardCrypto) era -> TPraos.OCert StandardCrypto
+blockOpCertPraos :: ShelleyBlock PraosStandard era -> TPraos.OCert StandardCrypto
 blockOpCertPraos = Praos.hbOCert . getHeaderBodyPraos . blockHeader
 
-blockProtoVersionTPraos :: ShelleyBlock (TPraos StandardCrypto) era -> Ledger.ProtVer
+blockProtoVersionTPraos :: ShelleyBlock TPraosStandard era -> Ledger.ProtVer
 blockProtoVersionTPraos = TPraos.bprotver . TPraos.bhbody . blockHeader
 
-blockProtoVersionPraos :: ShelleyBlock (Praos StandardCrypto) era -> Ledger.ProtVer
+blockProtoVersionPraos :: ShelleyBlock PraosStandard era -> Ledger.ProtVer
 blockProtoVersionPraos = Praos.hbProtVer . getHeaderBodyPraos . blockHeader
 
 blockSize :: ShelleyBasedEra era => ShelleyBlock p era -> Word64
@@ -224,10 +223,10 @@ blockTxs = zip [0 ..] . unTxSeq . Ledger.bbody . Consensus.shelleyBlockRaw
 blockVrfKeyView :: VerKeyVRF StandardCrypto -> Text
 blockVrfKeyView = Api.serialiseToBech32 . Api.VrfVerificationKey
 
-blockVrfVkTPraos :: ShelleyBlock (TPraos StandardCrypto) era -> VerKeyVRF StandardCrypto
+blockVrfVkTPraos :: ShelleyBlock TPraosStandard era -> VerKeyVRF StandardCrypto
 blockVrfVkTPraos = TPraos.bheaderVrfVk . TPraos.bhbody . blockHeader
 
-blockVrfVkPraos :: ShelleyBlock (Praos StandardCrypto) era -> VerKeyVRF StandardCrypto
+blockVrfVkPraos :: ShelleyBlock PraosStandard era -> VerKeyVRF StandardCrypto
 blockVrfVkPraos = Praos.hbVrfVk . getHeaderBodyPraos . blockHeader
 
 getHeaderBodyPraos :: Crypto c => Praos.Header c -> Praos.HeaderBody c

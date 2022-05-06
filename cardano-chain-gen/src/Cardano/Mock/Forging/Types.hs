@@ -3,6 +3,8 @@
 
 module Cardano.Mock.Forging.Types
   ( CardanoBlock
+  , TPraosStandard
+  , PraosStandard
   , ForgingError (..)
   , MockBlock (..)
   , NodeId (..)
@@ -16,6 +18,8 @@ import           Control.Exception
 
 import qualified Ouroboros.Consensus.Cardano.Block as Consensus
 import           Ouroboros.Consensus.Forecast
+import           Ouroboros.Consensus.Protocol.Praos (Praos)
+import           Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import           Ouroboros.Consensus.Shelley.Eras (AlonzoEra, ShelleyEra, StandardCrypto)
 
 import           Cardano.Ledger.Address
@@ -25,6 +29,9 @@ import           Cardano.Ledger.Keys
 import           Cardano.Ledger.TxIn (TxIn (..))
 
 import           Cardano.Slotting.Slot (SlotNo (..))
+
+type TPraosStandard = TPraos StandardCrypto
+type PraosStandard = Praos StandardCrypto
 
 type CardanoBlock = Consensus.CardanoBlock StandardCrypto
 
@@ -46,6 +53,7 @@ data ForgingError
   | NonExistantNode !NodeId
   | CantFindUTxO
   | CantFindStake
+  | ExpectedBabbageState
   | ExpectedAlonzoState
   | ExpectedShelleyState
   | UnexpectedEra

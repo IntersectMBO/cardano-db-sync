@@ -58,7 +58,7 @@ forgeAndSubmitBlocks interpreter mockServer blocksToCreate = do
 
 withAlonzoFindLeaderAndSubmit
     :: Interpreter -> ServerHandle IO CardanoBlock
-    -> (LedgerState (ShelleyBlock (TPraos StandardCrypto) (AlonzoEra StandardCrypto)) -> Either ForgingError [Core.Tx (AlonzoEra StandardCrypto)])
+    -> (LedgerState (ShelleyBlock TPraosStandard (AlonzoEra StandardCrypto)) -> Either ForgingError [Core.Tx (AlonzoEra StandardCrypto)])
     -> IO CardanoBlock
 withAlonzoFindLeaderAndSubmit interpreter mockServer mkTxs = do
     alTxs <- withAlonzoLedgerState interpreter mkTxs
@@ -66,7 +66,7 @@ withAlonzoFindLeaderAndSubmit interpreter mockServer mkTxs = do
 
 withAlonzoFindLeaderAndSubmitTx
     :: Interpreter -> ServerHandle IO CardanoBlock
-    -> (LedgerState (ShelleyBlock (TPraos StandardCrypto) (AlonzoEra StandardCrypto)) -> Either ForgingError (Core.Tx (AlonzoEra StandardCrypto)))
+    -> (LedgerState (ShelleyBlock TPraosStandard (AlonzoEra StandardCrypto)) -> Either ForgingError (Core.Tx (AlonzoEra StandardCrypto)))
     -> IO CardanoBlock
 withAlonzoFindLeaderAndSubmitTx interpreter mockServer mkTxs = do
     withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -75,7 +75,7 @@ withAlonzoFindLeaderAndSubmitTx interpreter mockServer mkTxs = do
 
 withShelleyFindLeaderAndSubmit
     :: Interpreter -> ServerHandle IO CardanoBlock
-    -> (LedgerState (ShelleyBlock (TPraos StandardCrypto) (ShelleyEra StandardCrypto)) -> Either ForgingError [Core.Tx (ShelleyEra StandardCrypto)])
+    -> (LedgerState (ShelleyBlock TPraosStandard (ShelleyEra StandardCrypto)) -> Either ForgingError [Core.Tx (ShelleyEra StandardCrypto)])
     -> IO CardanoBlock
 withShelleyFindLeaderAndSubmit interpreter mockServer mkTxs = do
     alTxs <- withShelleyLedgerState interpreter mkTxs
@@ -83,14 +83,14 @@ withShelleyFindLeaderAndSubmit interpreter mockServer mkTxs = do
 
 withShelleyFindLeaderAndSubmitTx
     :: Interpreter -> ServerHandle IO CardanoBlock
-    -> (LedgerState (ShelleyBlock (TPraos StandardCrypto) (ShelleyEra StandardCrypto)) -> Either ForgingError (Core.Tx (ShelleyEra StandardCrypto)))
+    -> (LedgerState (ShelleyBlock TPraosStandard (ShelleyEra StandardCrypto)) -> Either ForgingError (Core.Tx (ShelleyEra StandardCrypto)))
     -> IO CardanoBlock
 withShelleyFindLeaderAndSubmitTx interpreter mockServer mkTxs = do
     withShelleyFindLeaderAndSubmit interpreter mockServer $ \st -> do
         tx <- mkTxs st
         pure [tx]
 
-getAlonzoLedgerState :: Interpreter -> IO (LedgerState (ShelleyBlock (TPraos StandardCrypto) (AlonzoEra StandardCrypto)))
+getAlonzoLedgerState :: Interpreter -> IO (LedgerState (ShelleyBlock TPraosStandard (AlonzoEra StandardCrypto)))
 getAlonzoLedgerState interpreter = withAlonzoLedgerState interpreter Right
 
 skipUntilNextEpoch :: Interpreter -> ServerHandle IO CardanoBlock -> [TxEra] -> IO CardanoBlock

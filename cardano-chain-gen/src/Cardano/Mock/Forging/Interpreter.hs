@@ -24,6 +24,7 @@ module Cardano.Mock.Forging.Interpreter
   , getCurrentEpoch
   , getCurrentSlot
   , forgeWithStakeCreds
+  , withBabbageLedgerState
   , withAlonzoLedgerState
   , withShelleyLedgerState
   , mkTxId
@@ -63,7 +64,7 @@ import           Ouroboros.Consensus.Block (BlockForging, BlockNo (..), BlockPro
                    ForgeStateInfo, ShouldForge (..), SlotNo (..), blockNo, blockSlot,
                    checkShouldForge)
 import qualified Ouroboros.Consensus.Block as Block
-import           Ouroboros.Consensus.Cardano.Block (AlonzoEra, LedgerState (..), ShelleyEra)
+import           Ouroboros.Consensus.Cardano.Block (AlonzoEra, BabbageEra, LedgerState (..), ShelleyEra)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Config (TopLevelConfig, configConsensus, configLedger,
                    topLevelConfigLedger)
@@ -375,13 +376,25 @@ getCurrentEpoch inter = do
       LedgerStateAllegra st -> pure $ nesEL $ shelleyLedgerState st
       LedgerStateMary st -> pure $ nesEL $ shelleyLedgerState st
       LedgerStateAlonzo st -> pure $ nesEL $ shelleyLedgerState st
+      LedgerStateBabbage st -> pure $ nesEL $ shelleyLedgerState st
       _ -> throwIO UnexpectedEra
 
 getCurrentSlot :: Interpreter -> IO SlotNo
 getCurrentSlot interp = istSlot <$> readMVar (interpState interp)
 
+withBabbageLedgerState
+    :: Interpreter -> (LedgerState (ShelleyBlock PraosStandard (BabbageEra StandardCrypto)) -> Either ForgingError a)
+    -> IO a
+withBabbageLedgerState inter mk = do
+  st <- getCurrentLedgerState inter
+  case ledgerState st of
+    LedgerStateBabbage sta -> case mk sta of
+      Right a -> pure a
+      Left err -> throwIO err
+    _ -> throwIO ExpectedBabbageState
+
 withAlonzoLedgerState
-    :: Interpreter -> (LedgerState (ShelleyBlock (TPraos StandardCrypto) (AlonzoEra StandardCrypto)) -> Either ForgingError a)
+    :: Interpreter -> (LedgerState (ShelleyBlock TPraosStandard (AlonzoEra StandardCrypto)) -> Either ForgingError a)
     -> IO a
 withAlonzoLedgerState inter mk = do
   st <- getCurrentLedgerState inter
@@ -392,7 +405,7 @@ withAlonzoLedgerState inter mk = do
     _ -> throwIO ExpectedAlonzoState
 
 withShelleyLedgerState
-    :: Interpreter -> (LedgerState (ShelleyBlock (TPraos StandardCrypto) (ShelleyEra StandardCrypto)) -> Either ForgingError a)
+    :: Interpreter -> (LedgerState (ShelleyBlock TPraosStandard (ShelleyEra StandardCrypto)) -> Either ForgingError a)
     -> IO a
 withShelleyLedgerState inter mk = do
   st <- getCurrentLedgerState inter

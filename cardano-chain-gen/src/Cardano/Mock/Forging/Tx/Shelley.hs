@@ -34,7 +34,7 @@ import           Cardano.Mock.Forging.Tx.Generic
 import           Cardano.Mock.Forging.Types
 
 type ShelleyUTxOIndex = UTxOIndex (ShelleyEra StandardCrypto)
-type ShelleyLedgerState = LedgerState (ShelleyBlock (TPraos StandardCrypto) (ShelleyEra StandardCrypto))
+type ShelleyLedgerState = LedgerState (ShelleyBlock TPraosStandard (ShelleyEra StandardCrypto))
 type ShelleyTx = Tx (ShelleyEra StandardCrypto)
 
 instance HasField "address" (TxOut (ShelleyEra StandardCrypto)) (Addr StandardCrypto) where

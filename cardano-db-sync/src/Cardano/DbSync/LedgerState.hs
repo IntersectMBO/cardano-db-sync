@@ -58,7 +58,7 @@ import           Cardano.DbSync.Era.Shelley.Generic.StakeCred
 import           Cardano.DbSync.Era.Shelley.Generic.StakePoolKeyHash
 import           Cardano.DbSync.LedgerEvent
 import           Cardano.DbSync.StateQuery
-import           Cardano.DbSync.Types hiding (CardanoBlock)
+import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
 import           Cardano.Prelude hiding (atomically)
