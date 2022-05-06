@@ -24,6 +24,7 @@ import           Cardano.DbSync.Config.Byron
 import           Cardano.DbSync.Config.Shelley
 import           Cardano.DbSync.Config.Types
 import           Cardano.DbSync.Error
+import           Cardano.DbSync.Types
 
 import           Control.Monad.Trans.Except (ExceptT)
 

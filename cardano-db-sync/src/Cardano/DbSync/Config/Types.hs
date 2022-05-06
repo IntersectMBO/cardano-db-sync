@@ -7,8 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.DbSync.Config.Types
-  ( CardanoBlock
-  , ConfigFile (..)
+  ( ConfigFile (..)
   , SyncCommand (..)
   , SyncNodeParams (..)
   , SyncProtocol (..)
@@ -19,7 +18,6 @@ module Cardano.DbSync.Config.Types
   , SyncNodeConfig (..)
   , SyncPreConfig (..)
   , LedgerStateDir (..)
-  , CardanoInterpreter
   , LogFileDir (..)
   , NetworkName (..)
   , NodeConfigFile (..)
@@ -41,43 +39,17 @@ import qualified Cardano.Crypto.Hash as Crypto
 
 import           Cardano.Db (MigrationDir, PGPassSource (..))
 
-import           Cardano.Ledger.Crypto (StandardCrypto)
-
 import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Data.Aeson (FromJSON (..), Object, Value (..), (.:), (.:?))
 import qualified Data.Aeson as Aeson
 import           Data.Aeson.Types (Parser, typeMismatch)
 
-import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
-import qualified Ouroboros.Consensus.Cardano.Block as Cardano
 import           Ouroboros.Consensus.Cardano.CanHardFork (TriggerHardFork (..))
-import qualified Ouroboros.Consensus.HardFork.History as History
-import           Ouroboros.Consensus.Protocol.Praos (Praos)
-import           Ouroboros.Consensus.Protocol.TPraos (TPraos)
-import           Ouroboros.Consensus.Shelley.Eras (StandardAllegra, StandardAlonzo, StandardBabbage,
-                   StandardMary, StandardShelley)
-import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 
 newtype LogFileDir = LogFileDir
   { unLogFileDir :: FilePath
   }
-
-type TPraosStandard = TPraos StandardCrypto
-type PraosStandard = Praos StandardCrypto
-
-type CardanoBlock =
-        Cardano.HardForkBlock
-            (Cardano.CardanoEras StandardCrypto)
-
-type CardanoInterpreter = History.Interpreter
-           '[ ByronBlock
-            , ShelleyBlock TPraosStandard StandardShelley
-            , ShelleyBlock TPraosStandard StandardAllegra
-            , ShelleyBlock TPraosStandard StandardMary
-            , ShelleyBlock TPraosStandard StandardAlonzo
-            , ShelleyBlock PraosStandard StandardBabbage
-            ]
 
 newtype ConfigFile = ConfigFile
   { unConfigFile :: FilePath
