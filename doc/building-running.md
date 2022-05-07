@@ -26,6 +26,7 @@ the db. If you want to to use a single database for more than one chain, you wil
 testnet `PGPASSFILE` is at `config/pgpass-testnet`.
 
 ### Set up and run a local node
+
 Regular users should almost never attempt building and running from the `master` branch. Instead,
 they should build and run the latest release tag. The tags can be listed using the `git tag`
 command. Pre-release tags (eg things like `12.0.0-preX`) should also be avoided in most cases.
@@ -39,6 +40,20 @@ nix-build -A scripts.mainnet.node -o mainnet-node-local
 
 ### Set up and run the db-sync node
 
+- Install secp256k1 library as a prerequisite for building with cabal:
+
+``` shell
+./scripts/secp256k1-setup.sh ac83be33d0956faf6b7f61a60ab524ef7d6a473a
+# Check ./github/workflows/haskell.yml to validate the git sha above.
+
+# On Linux
+sudo make install 
+
+# On OSX
+make install 
+
+```
+
 - with cabal:
 
 ```
@@ -46,6 +61,7 @@ git clone https://github.com/input-output-hk/cardano-db-sync
 cd cardano-db-sync
 PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh --createdb
 git checkout <latest-official-tag> -b tag-<latest-official-tag>
+
 cabal build cardano-db-sync
 PGPASSFILE=config/pgpass-mainnet cabal run cardano-db-sync -- \
     --config config/mainnet-config.yaml \

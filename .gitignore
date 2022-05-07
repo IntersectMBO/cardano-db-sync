@@ -10,3 +10,4 @@ gen/
 /.vscode
 
 cardano-chain-gen/test/testfiles/temp/
+/secp256k1/
