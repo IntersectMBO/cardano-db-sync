@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Test.Cardano.Db.Mock.Unit where
 
@@ -141,12 +142,12 @@ unitTests iom knownMigrations =
     test :: String -> (IOManager -> [(Text, Text)] -> Assertion) -> TestTree
     test str action = testCase str (action iom knownMigrations)
 
-defaultConfigDir ::  FilePath
-defaultConfigDir = "config"
+alonzoConfigDir ::  FilePath
+alonzoConfigDir = "config-alonzo"
 
 forgeBlocks :: IOManager -> [(Text, Text)] -> Assertion
 forgeBlocks = do
-    withFullConfig defaultConfigDir testLabel $ \interpreter _mockServer _dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter _mockServer _dbSync -> do
       _block0 <- forgeNext interpreter mockBlock0
       _block1 <- forgeNext interpreter mockBlock1
       block2 <- forgeNext interpreter mockBlock2
@@ -158,7 +159,7 @@ forgeBlocks = do
 
 addSimple :: IOManager -> [(Text, Text)] -> Assertion
 addSimple =
-    withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       -- Given a mock block, translate it into a real block and submit it to the
       -- chainsync server
       void $ forgeNextAndSubmit interpreter mockServer mockBlock0
@@ -170,7 +171,7 @@ addSimple =
 
 addSimpleChain :: IOManager -> [(Text, Text)] -> Assertion
 addSimpleChain =
-    withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       -- translate the blocks to real Cardano blocks.
       blk0 <- forgeNext interpreter mockBlock0
       blk1 <- forgeNext interpreter mockBlock1
@@ -187,7 +188,7 @@ addSimpleChain =
 
 restartDBSync :: IOManager -> [(Text, Text)] -> Assertion
 restartDBSync =
-    withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       void $ forgeNextAndSubmit interpreter mockServer mockBlock0
       -- start db-sync and let it sync
       startDBSync dbSync
@@ -202,7 +203,7 @@ restartDBSync =
 
 simpleRollback :: IOManager -> [(Text, Text)] -> Assertion
 simpleRollback = do
-    withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       blk0 <- forgeNext interpreter mockBlock0
       blk1 <- forgeNext interpreter mockBlock1
       blk2 <- forgeNext interpreter mockBlock2
@@ -219,7 +220,7 @@ simpleRollback = do
 
 bigChain :: IOManager -> [(Text, Text)] -> Assertion
 bigChain =
-    withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       forM_ (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
       startDBSync dbSync
       assertBlockNoBackoff dbSync 101
@@ -237,7 +238,7 @@ bigChain =
 
 restartAndRollback :: IOManager -> [(Text, Text)] -> Assertion
 restartAndRollback =
-    withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       forM_ (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
       startDBSync dbSync
       assertBlockNoBackoff dbSync 101
@@ -258,7 +259,7 @@ restartAndRollback =
 -- wibble
 rollbackFurther :: IOManager -> [(Text, Text)] -> Assertion
 rollbackFurther =
-  withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     blks <- replicateM 80 (forgeNextFindLeaderAndSubmit interpreter mockServer [])
     startDBSync dbSync
     assertBlockNoBackoff dbSync 80
@@ -336,7 +337,7 @@ configNoStakes =
 
 addSimpleTx :: IOManager -> [(Text, Text)] -> Assertion
 addSimpleTx =
-    withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       -- translate the block to a real Cardano block.
       void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
               Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 500
@@ -361,7 +362,7 @@ addSimpleTxShelley =
 
 registrationTx :: IOManager -> [(Text, Text)] -> Assertion
 registrationTx =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync  dbSync
 
     void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
@@ -386,7 +387,7 @@ registrationTx =
 
 registrationsSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 registrationsSameBlock =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync  dbSync
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -403,7 +404,7 @@ registrationsSameBlock =
 
 registrationsSameTx :: IOManager -> [(Text, Text)] -> Assertion
 registrationsSameTx =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync  dbSync
 
     void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
@@ -419,7 +420,7 @@ registrationsSameTx =
 
 stakeAddressPtr :: IOManager -> [(Text, Text)] -> Assertion
 stakeAddressPtr =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync  dbSync
 
     blk <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
@@ -437,7 +438,7 @@ stakeAddressPtr =
 
 stakeAddressPtrDereg :: IOManager -> [(Text, Text)] -> Assertion
 stakeAddressPtrDereg =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync  dbSync
 
     blk <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
@@ -471,7 +472,7 @@ stakeAddressPtrDereg =
 
 stakeAddressPtrUseBefore :: IOManager -> [(Text, Text)] -> Assertion
 stakeAddressPtrUseBefore =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
 
       -- first use this stake credential
@@ -494,7 +495,7 @@ stakeAddressPtrUseBefore =
 
 consumeSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 consumeSameBlock =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
 
       void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -508,7 +509,7 @@ consumeSameBlock =
 
 simpleRewards :: IOManager -> [(Text, Text)] -> Assertion
 simpleRewards =
-    withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       void $ registerAllStakeCreds interpreter mockServer
 
@@ -591,7 +592,7 @@ rewardsShelley =
 
 rewardsDeregistration :: IOManager -> [(Text, Text)] -> Assertion
 rewardsDeregistration =
-    withFullConfig defaultConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
         Alonzo.mkDepositTxPools (UTxOIndex 1) 20000
@@ -652,7 +653,7 @@ rewardsDeregistration =
 
 mirReward :: IOManager -> [(Text, Text)] -> Assertion
 mirReward =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       void $ registerAllStakeCreds interpreter mockServer
 
@@ -682,7 +683,7 @@ mirReward =
 
 mirRewardRollback :: IOManager -> [(Text, Text)] -> Assertion
 mirRewardRollback =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       void $ registerAllStakeCreds interpreter mockServer
 
@@ -750,7 +751,7 @@ mirRewardShelley =
 
 mirRewardDereg :: IOManager -> [(Text, Text)] -> Assertion
 mirRewardDereg =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       void $ registerAllStakeCreds interpreter mockServer
 
@@ -783,7 +784,7 @@ mirRewardDereg =
 
 rewardsEmptyChainLast :: IOManager -> [(Text, Text)] -> Assertion
 rewardsEmptyChainLast =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       void $ registerAllStakeCreds interpreter mockServer
 
@@ -810,7 +811,7 @@ rewardsEmptyChainLast =
 
 rewardsDelta :: IOManager -> [(Text, Text)] -> Assertion
 rewardsDelta =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       -- These delegation push the computation of the 3 leader
       -- rewards toward the 8k/f slot, so it can be delayed even more
@@ -839,7 +840,7 @@ rewardsDelta =
 
 rollbackBoundary :: IOManager -> [(Text, Text)] -> Assertion
 rollbackBoundary =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       void $ registerAllStakeCreds interpreter mockServer
       a <- fillEpochs interpreter mockServer 2
@@ -861,7 +862,7 @@ rollbackBoundary =
 
 singleMIRCertMultiOut :: IOManager -> [(Text, Text)] -> Assertion
 singleMIRCertMultiOut =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync dbSync
 
       void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
@@ -884,7 +885,7 @@ singleMIRCertMultiOut =
 
 stakeDistGenesis :: IOManager -> [(Text, Text)] -> Assertion
 stakeDistGenesis =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync dbSync
       a <- fillUntilNextEpoch interpreter mockServer
       assertBlockNoBackoff dbSync (fromIntegral $ length a)
@@ -895,7 +896,7 @@ stakeDistGenesis =
 
 delegations2000 :: IOManager -> [(Text, Text)] -> Assertion
 delegations2000 =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync dbSync
       a <- delegateAndSendBlocks 1995 interpreter
       forM_ a $ atomically . addBlock mockServer
@@ -914,7 +915,7 @@ delegations2000 =
 
 delegations2001 :: IOManager -> [(Text, Text)] -> Assertion
 delegations2001 =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync dbSync
       a <- delegateAndSendBlocks 1996 interpreter
       forM_ a $ atomically . addBlock mockServer
@@ -933,7 +934,7 @@ delegations2001 =
 
 delegations8000 :: IOManager -> [(Text, Text)] -> Assertion
 delegations8000 =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync dbSync
       a <- delegateAndSendBlocks 7995 interpreter
       forM_ a $ atomically . addBlock mockServer
@@ -958,7 +959,7 @@ delegations8000 =
 
 delegationsMany :: IOManager -> [(Text, Text)] -> Assertion
 delegationsMany =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync dbSync
       a <- delegateAndSendBlocks 40000 interpreter
       forM_ a $ atomically . addBlock mockServer
@@ -981,7 +982,7 @@ delegationsMany =
 
 delegationsManyNotDense :: IOManager -> [(Text, Text)] -> Assertion
 delegationsManyNotDense =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync dbSync
       a <- delegateAndSendBlocks 40000 interpreter
       forM_ a $ atomically . addBlock mockServer
@@ -1007,7 +1008,7 @@ delegationsManyNotDense =
 
 simpleScript :: IOManager -> [(Text, Text)] -> Assertion
 simpleScript =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       void $ registerAllStakeCreds interpreter mockServer
 
@@ -1023,11 +1024,11 @@ simpleScript =
     getOutFields txOut = (DB.txOutAddress txOut, DB.txOutAddressHasScript txOut, DB.txOutValue txOut, DB.txOutDataHash txOut)
     expectedFields = ( renderAddress alwaysSucceedsScriptAddr
                      , True, DB.DbLovelace 20000
-                     , Just $ Crypto.hashToBytes (extractHash $ hashData plutusDataList))
+                     , Just $ Crypto.hashToBytes (extractHash $ hashData @StandardAlonzo plutusDataList))
 
 unlockScript :: IOManager -> [(Text, Text)] -> Assertion
 unlockScript =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       void $ registerAllStakeCreds interpreter mockServer
 
@@ -1046,7 +1047,7 @@ unlockScript =
 
 unlockScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 unlockScriptSameBlock =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       void $ registerAllStakeCreds interpreter mockServer
 
@@ -1064,7 +1065,7 @@ unlockScriptSameBlock =
 
 failedScript :: IOManager -> [(Text, Text)] -> Assertion
 failedScript =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
 
       tx0 <- withAlonzoLedgerState interpreter $ Alonzo.mkLockByScriptTx (UTxOIndex 0) [False] 20000 20000
@@ -1081,7 +1082,7 @@ failedScript =
 
 failedScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 failedScriptSameBlock =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       void $ registerAllStakeCreds interpreter mockServer
 
@@ -1098,7 +1099,7 @@ failedScriptSameBlock =
 
 multipleScripts :: IOManager -> [(Text, Text)] -> Assertion
 multipleScripts =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync  dbSync
 
     tx0 <- withAlonzoLedgerState interpreter $ Alonzo.mkLockByScriptTx (UTxOIndex 0) [True, False, True] 20000 20000
@@ -1118,7 +1119,7 @@ multipleScripts =
 
 multipleScriptsSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 multipleScriptsSameBlock =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync  dbSync
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -1136,7 +1137,7 @@ multipleScriptsSameBlock =
 
 multipleScriptsFailed :: IOManager -> [(Text, Text)] -> Assertion
 multipleScriptsFailed =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync  dbSync
 
     tx0 <- withAlonzoLedgerState interpreter $ Alonzo.mkLockByScriptTx (UTxOIndex 0) [True, False, True] 20000 20000
@@ -1154,7 +1155,7 @@ multipleScriptsFailed =
 
 multipleScriptsFailedSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 multipleScriptsFailedSameBlock =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync  dbSync
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -1171,7 +1172,7 @@ multipleScriptsFailedSameBlock =
 
 registrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
 registrationScriptTx =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync  dbSync
 
     void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
@@ -1183,7 +1184,7 @@ registrationScriptTx =
 
 deregistrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
 deregistrationScriptTx =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync  dbSync
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -1198,7 +1199,7 @@ deregistrationScriptTx =
 
 deregistrationsScriptTxs :: IOManager -> [(Text, Text)] -> Assertion
 deregistrationsScriptTxs =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync  dbSync
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -1216,7 +1217,7 @@ deregistrationsScriptTxs =
 
 deregistrationsScriptTx :: IOManager -> [(Text, Text)] -> Assertion
 deregistrationsScriptTx =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync  dbSync
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -1237,7 +1238,7 @@ deregistrationsScriptTx =
 -- Like previous but missing a redeemer. This is a known ledger issue
 deregistrationsScriptTx' :: IOManager -> [(Text, Text)] -> Assertion
 deregistrationsScriptTx' =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync  dbSync
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -1259,7 +1260,7 @@ deregistrationsScriptTx' =
 -- Like previous but missing the other redeemer. This is a known ledger issue
 deregistrationsScriptTx'' :: IOManager -> [(Text, Text)] -> Assertion
 deregistrationsScriptTx'' =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync  dbSync
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -1278,7 +1279,7 @@ deregistrationsScriptTx'' =
 
 mintMultiAsset ::  IOManager -> [(Text, Text)] -> Assertion
 mintMultiAsset =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \st -> do
         let val0 = Value 1 $ Map.singleton (PolicyID alwaysMintScriptHash) (Map.singleton (head assetNames) 1)
@@ -1291,7 +1292,7 @@ mintMultiAsset =
 
 mintMultiAssets ::  IOManager -> [(Text, Text)] -> Assertion
 mintMultiAssets =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
         let assets0 = Map.fromList [(head assetNames,10), (assetNames !! 1,4)]
@@ -1309,7 +1310,7 @@ mintMultiAssets =
 
 swapMultiAssets ::  IOManager -> [(Text, Text)] -> Assertion
 swapMultiAssets =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
           let assetsMinted0 = Map.fromList [(head assetNames, 10), (assetNames !! 1, 4)]
@@ -1338,7 +1339,7 @@ swapMultiAssets =
 
 poolReg ::  IOManager -> [(Text, Text)] -> Assertion
 poolReg =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
 
       void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
@@ -1364,7 +1365,7 @@ poolReg =
 -- Issue https://github.com/input-output-hk/cardano-db-sync/issues/997
 nonexistantPoolQuery ::  IOManager -> [(Text, Text)] -> Assertion
 nonexistantPoolQuery =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
 
       void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
@@ -1378,7 +1379,7 @@ nonexistantPoolQuery =
 
 poolDeReg ::  IOManager -> [(Text, Text)] -> Assertion
 poolDeReg =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
 
       void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
@@ -1417,7 +1418,7 @@ poolDeReg =
 
 poolDeRegMany :: IOManager -> [(Text, Text)] -> Assertion
 poolDeRegMany =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
 
       void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
@@ -1499,7 +1500,7 @@ poolDeRegMany =
 
 poolDelist :: IOManager -> [(Text, Text)] -> Assertion
 poolDelist =
-    withFullConfig "config" testLabel $ \interpreter mockServer dbSync -> do
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
 
       void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
