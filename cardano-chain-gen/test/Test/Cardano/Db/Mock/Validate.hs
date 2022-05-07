@@ -22,7 +22,6 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Text.Encoding
 import           Data.Word (Word64)
-import           GHC.Records (HasField (..))
 
 import           Database.Esqueleto.Legacy (InnerJoin (..), SqlExpr, countRows, from, on, select,
                    unValue, val, where_, (==.), (^.))
@@ -31,7 +30,6 @@ import           Database.PostgreSQL.Simple (SqlError (..))
 
 import qualified Cardano.Ledger.Address as Ledger
 import           Cardano.Ledger.BaseTypes
-import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Era
 
 import           Cardano.DbSync.Era.Shelley.Generic.Util
@@ -127,7 +125,7 @@ migrationNotDoneYet :: Text -> Bool
 migrationNotDoneYet txt =
     Text.isPrefixOf "relation" txt && Text.isSuffixOf "does not exist" txt
 
-assertAddrValues :: (Crypto era ~ StandardCrypto, HasField "address" (Core.TxOut era) (Ledger.Addr (Crypto era)))
+assertAddrValues :: (Crypto era ~ StandardCrypto, Era era)
                  => DBSyncEnv -> UTxOIndex era -> DbLovelace
                  -> LedgerState (ShelleyBlock p era) -> IO ()
 assertAddrValues env ix expected sta = do

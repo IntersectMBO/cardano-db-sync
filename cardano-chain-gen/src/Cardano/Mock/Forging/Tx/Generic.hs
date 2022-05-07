@@ -30,7 +30,7 @@ import           Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Credential
 import           Cardano.Ledger.Crypto (ADDRHASH)
-import           Cardano.Ledger.Era (Crypto)
+import           Cardano.Ledger.Era (Crypto, Era (..))
 import           Cardano.Ledger.Hashes (ScriptHash (ScriptHash))
 import           Cardano.Ledger.Keys
 import           Cardano.Ledger.Shelley.LedgerState hiding (LedgerState)
@@ -50,7 +50,7 @@ import qualified Cardano.Crypto.Hash as Hash
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Types
 
-resolveAddress :: forall era p. (Crypto era ~ StandardCrypto, HasField "address" (Core.TxOut era) (Addr (Crypto era)))
+resolveAddress :: forall era p. (Crypto era ~ StandardCrypto, Era era)
                => UTxOIndex era -> LedgerState (ShelleyBlock p era)
                -> Either ForgingError (Addr (Crypto era))
 resolveAddress index st = case index of
@@ -61,9 +61,9 @@ resolveAddress index st = case index of
     UTxOAddress addr -> Right addr
     UTxOAddressNewWithPtr n ptr ->
       Right $ Addr Testnet (unregisteredAddresses !! n) (StakeRefPtr ptr)
-    _ -> getField @"address" . snd . fst <$> resolveUTxOIndex index st
+    _ -> getTxOutAddr . snd . fst <$> resolveUTxOIndex index st
 
-resolveUTxOIndex :: forall era p. (Crypto era ~ StandardCrypto, HasField "address" (Core.TxOut era) (Addr (Crypto era)))
+resolveUTxOIndex :: forall era p. (Crypto era ~ StandardCrypto, Era era)
                  => UTxOIndex era -> LedgerState (ShelleyBlock p era)
                  -> Either ForgingError ((TxIn (Crypto era), Core.TxOut era), UTxOIndex era)
 resolveUTxOIndex index st = toLeft $ case index of
@@ -85,7 +85,7 @@ resolveUTxOIndex index st = toLeft $ case index of
     utxoPairs = Map.toList $ unUTxO $ _utxo $ lsUTxOState $ esLState $
         nesEs $ Consensus.shelleyLedgerState st
 
-    hasAddr addr (_, txOut) = addr == getField @"address" txOut
+    hasAddr addr (_, txOut) = addr == getTxOutAddr txOut
     hasInput inp (inp', _) = inp == inp'
 
     toLeft :: Maybe (TxIn (Crypto era), Core.TxOut era) -> Either ForgingError ((TxIn (Crypto era), Core.TxOut era), UTxOIndex era)
