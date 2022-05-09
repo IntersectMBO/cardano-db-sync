@@ -1,4 +1,4 @@
-module Cardano.Mock.Forging.Examples where
+module Cardano.Mock.Forging.Tx.Alonzo.Scenarios where
 
 import           Cardano.Prelude hiding (length, (.))
 

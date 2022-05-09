@@ -45,11 +45,12 @@ library
                         Cardano.Mock.ChainSync.Server
                         Cardano.Mock.ChainSync.State
                         Cardano.Mock.Forging.Crypto
-                        Cardano.Mock.Forging.Examples
                         Cardano.Mock.Forging.Interpreter
                         Cardano.Mock.Forging.Tx.Alonzo
+                        Cardano.Mock.Forging.Tx.Alonzo.Scenarios
                         Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
                         Cardano.Mock.Forging.Tx.Babbage
+                        Cardano.Mock.Forging.Tx.Babbage.Scenarios
                         Cardano.Mock.Forging.Tx.Generic
                         Cardano.Mock.Forging.Tx.Shelley
                         Cardano.Mock.Forging.Types
@@ -154,7 +155,8 @@ test-suite cardano-chain-gen
 
   other-modules:        Test.Cardano.Db.Mock.Config
                         Test.Cardano.Db.Mock.Examples
-                        Test.Cardano.Db.Mock.Unit
+                        Test.Cardano.Db.Mock.Unit.Alonzo
+                        Test.Cardano.Db.Mock.Unit.Babbage
                         Test.Cardano.Db.Mock.UnifiedApi
                         Test.Cardano.Db.Mock.Validate
 
