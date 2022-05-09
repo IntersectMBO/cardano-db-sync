@@ -115,13 +115,13 @@ function list_views {
 
 function create_migration {
 	echo "To create a migration:"
-	echo "cabal run create-migration --mdir schema/"
+	echo "cabal run cardano-db-tool -- create-migration --mdir schema/"
 	exit 0
 }
 
 function run_migrations {
 	echo "To run migrations:"
-	echo "cabal run cardano-db-tool run-migrations --mdir schema/ --ldir ."
+	echo "cabal run cardano-db-tool -- run-migrations --mdir schema/ --ldir ."
 	echo "You probably do not need to do this."
 	exit 0
 }
