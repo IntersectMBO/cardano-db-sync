@@ -44,7 +44,6 @@ import           Cardano.Ledger.ShelleyMA.Timelocks
 import           Cardano.Ledger.TxIn (TxIn (..), txid)
 
 import           Ouroboros.Consensus.Cardano.Block (LedgerState)
-import           Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import           Ouroboros.Consensus.Shelley.Eras (StandardBabbage, StandardCrypto)
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 

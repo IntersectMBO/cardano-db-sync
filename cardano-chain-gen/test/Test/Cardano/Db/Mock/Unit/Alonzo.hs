@@ -3,9 +3,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Test.Cardano.Db.Mock.Unit where
+module Test.Cardano.Db.Mock.Unit.Alonzo where
 
-import           Control.Concurrent
 import           Control.Exception
 import           Control.Monad
 import           Control.Monad.Class.MonadSTM.Strict
@@ -38,16 +37,15 @@ import           Cardano.SMASH.Server.PoolDataLayer
 import           Cardano.SMASH.Server.Types
 
 import           Cardano.Mock.ChainSync.Server
-import           Cardano.Mock.Forging.Examples
 import           Cardano.Mock.Forging.Interpreter
+import           Cardano.Mock.Forging.Tx.Alonzo.Scenarios
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Tx.Generic
-import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
 import           Cardano.Mock.Forging.Types
 
 import           Test.Tasty (TestTree, testGroup)
-import           Test.Tasty.HUnit (Assertion, assertBool, assertEqual, assertFailure, testCase)
+import           Test.Tasty.HUnit (Assertion, assertBool, assertEqual, testCase)
 
 import           Test.Cardano.Db.Mock.Config
 import           Test.Cardano.Db.Mock.Examples
@@ -56,7 +54,7 @@ import           Test.Cardano.Db.Mock.Validate
 
 unitTests :: IOManager -> [(Text, Text)] -> TestTree
 unitTests iom knownMigrations =
-    testGroup "unit tests"
+    testGroup "Alonzo unit tests"
       [ testGroup "simple"
           [ test "simple forge blocks" forgeBlocks
           , test "sync one block" addSimple
@@ -69,13 +67,8 @@ unitTests iom knownMigrations =
           , test "rollback while db-sync is off" restartAndRollback
           , test "rollback further" rollbackFurther
           ]
-      , testGroup "different configs"
-          [ test "genesis config without pool" configNoPools
-          , test "genesis config without stakes" configNoStakes
-          ]
       , testGroup "blocks with txs"
           [ test "simple tx" addSimpleTx
-          , test "simple tx in Shelley era" addSimpleTxShelley
           , test "consume utxo same block" consumeSameBlock
           ]
       , testGroup "stake addresses"
@@ -88,11 +81,9 @@ unitTests iom knownMigrations =
           ]
       , testGroup "rewards"
           [ test "rewards simple" simpleRewards
-          , test "shelley rewards from multiple sources" rewardsShelley
           , test "rewards with deregistration" rewardsDeregistration
           , test "Mir Cert" mirReward
           , test "Mir rollback" mirRewardRollback
-          , test "Mir Cert Shelley" mirRewardShelley
           , test "Mir Cert deregistration" mirRewardDereg
           , test "test rewards empty last part of epoch" rewardsEmptyChainLast
           , test "test delta rewards" rewardsDelta
@@ -155,7 +146,7 @@ forgeBlocks = do
       assertBool (show blkNo <> " /= " <> "3")
         $ blkNo == BlockNo 3
   where
-    testLabel = "forgeBlocks"
+    testLabel = "forgeBlocks-alonzo"
 
 addSimple :: IOManager -> [(Text, Text)] -> Assertion
 addSimple =
@@ -167,7 +158,7 @@ addSimple =
       startDBSync dbSync
       assertBlockNoBackoff dbSync 1
   where
-    testLabel = "addSimple"
+    testLabel = "addSimple-alonzo"
 
 addSimpleChain :: IOManager -> [(Text, Text)] -> Assertion
 addSimpleChain =
@@ -184,7 +175,7 @@ addSimpleChain =
       atomically $ addBlock mockServer blk2
       assertBlockNoBackoff dbSync 3
   where
-    testLabel = "addSimpleChain"
+    testLabel = "addSimpleChain-alonzo"
 
 restartDBSync :: IOManager -> [(Text, Text)] -> Assertion
 restartDBSync =
@@ -199,7 +190,7 @@ restartDBSync =
       startDBSync dbSync
       assertBlockNoBackoff dbSync 1
   where
-    testLabel = "restartDBSync"
+    testLabel = "restartDBSync-alonzo"
 
 simpleRollback :: IOManager -> [(Text, Text)] -> Assertion
 simpleRollback = do
@@ -216,25 +207,25 @@ simpleRollback = do
       atomically $ rollback mockServer (blockPoint blk1)
       assertBlockNoBackoff dbSync 2
   where
-    testLabel = "simpleRollback"
+    testLabel = "simpleRollback-alonzo"
 
 bigChain :: IOManager -> [(Text, Text)] -> Assertion
 bigChain =
     withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       forM_ (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
       startDBSync dbSync
-      assertBlockNoBackoff dbSync 101
+      assertBlockNoBackoff dbSync 100
 
       blks' <- forM (replicate 100 mockBlock1) (forgeNextAndSubmit interpreter mockServer)
-      assertBlockNoBackoff dbSync 201
+      assertBlockNoBackoff dbSync 200
 
       forM_ (replicate 5 mockBlock2) (forgeNextAndSubmit interpreter mockServer)
-      assertBlockNoBackoff dbSync 206
+      assertBlockNoBackoff dbSync 205
 
       atomically $ rollback mockServer (blockPoint $ last blks')
-      assertBlockNoBackoff dbSync 201
+      assertBlockNoBackoff dbSync 200
   where
-    testLabel = "bigChain"
+    testLabel = "bigChain-alonzo"
 
 restartAndRollback :: IOManager -> [(Text, Text)] -> Assertion
 restartAndRollback =
@@ -254,7 +245,7 @@ restartAndRollback =
       startDBSync dbSync
       assertBlockNoBackoff dbSync 201
   where
-    testLabel = "restartAndRollback"
+    testLabel = "restartAndRollback-alonzo"
 
 -- wibble
 rollbackFurther :: IOManager -> [(Text, Text)] -> Assertion
@@ -290,50 +281,7 @@ rollbackFurther =
 
     assertEqQuery dbSync DB.queryCostModel [cm1] "Unexpected CostModel"
   where
-    testLabel = "rollbackFurther"
-
-configNoPools :: IOManager -> [(Text, Text)] -> Assertion
-configNoPools =
-    withFullConfig "config2" testLabel $ \_ _ dbSync -> do
-      startDBSync  dbSync
-      assertBlocksCount dbSync 2
-      assertTxCount dbSync 6
-      stopDBSync dbSync
-      startDBSync  dbSync
-      -- Nothing changes, so polling assertions doesn't help here
-      -- We have to pause and check if anything crashed.
-      threadDelay 3_000_000
-      checkStillRuns dbSync
-      assertBlocksCount dbSync 2 -- 2 genesis blocks
-      assertTxCount dbSync 6
-  where
-    testLabel = "configNoPools"
-
-
-configNoStakes :: IOManager -> [(Text, Text)] -> Assertion
-configNoStakes =
-    withFullConfig "config3" testLabel $ \interpreter _ dbSync -> do
-      startDBSync  dbSync
-      assertBlocksCount dbSync 2
-      assertTxCount dbSync 7
-      stopDBSync dbSync
-      startDBSync dbSync
-      -- Nothing changes, so polling assertions don't help here
-      -- We have to pause and check if anything crashed.
-      threadDelay 3_000_000
-      checkStillRuns dbSync
-      assertBlocksCount dbSync 2
-      assertTxCount dbSync 7
-      -- A pool with no stakes can't create a block.
-      eblk <- try $ forgeNext interpreter mockBlock0
-      case eblk of
-        Right _ -> assertFailure "should fail"
-        Left WentTooFar -> pure ()
-        -- TODO add an option to disable fingerprint validation for tests like this.
-        Left (EmptyFingerprint _ _) -> pure ()
-        Left err -> assertFailure $ "got " <> show err <> " instead of WentTooFar"
-  where
-    testLabel = "configNoStakes"
+    testLabel = "rollbackFurther-alonzo"
 
 addSimpleTx :: IOManager -> [(Text, Text)] -> Assertion
 addSimpleTx =
@@ -345,20 +293,7 @@ addSimpleTx =
       startDBSync  dbSync
       assertBlockNoBackoff dbSync 1
   where
-    testLabel = "addSimpleTx"
-
-addSimpleTxShelley :: IOManager -> [(Text, Text)] -> Assertion
-addSimpleTxShelley =
-    withFullConfig "config-shelley" testLabel $ \interpreter mockServer dbSync -> do
-      -- translate the block to a real Cardano block.
-      void $ withShelleyFindLeaderAndSubmitTx interpreter mockServer $
-            Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 500
-
-      -- start db-sync and let it sync
-      startDBSync  dbSync
-      assertBlockNoBackoff dbSync 1
-  where
-    testLabel = "addSimpleTxShelley"
+    testLabel = "addSimpleTx-alonzo"
 
 registrationTx :: IOManager -> [(Text, Text)] -> Assertion
 registrationTx =
@@ -383,7 +318,7 @@ registrationTx =
     assertBlockNoBackoff dbSync 4
     assertCertCounts dbSync (2,2,0,0)
   where
-    testLabel = "registrationTx"
+    testLabel = "registrationTx-alonzo"
 
 registrationsSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 registrationsSameBlock =
@@ -400,7 +335,7 @@ registrationsSameBlock =
     assertBlockNoBackoff dbSync 1
     assertCertCounts dbSync (2,2,0,0)
   where
-    testLabel = "registrationsSameBlock"
+    testLabel = "registrationsSameBlock-alonzo"
 
 registrationsSameTx :: IOManager -> [(Text, Text)] -> Assertion
 registrationsSameTx =
@@ -416,7 +351,7 @@ registrationsSameTx =
     assertBlockNoBackoff dbSync 1
     assertCertCounts dbSync (2,2,0,0)
   where
-    testLabel = "registrationsSameTx"
+    testLabel = "registrationsSameTx-alonzo"
 
 stakeAddressPtr :: IOManager -> [(Text, Text)] -> Assertion
 stakeAddressPtr =
@@ -434,7 +369,7 @@ stakeAddressPtr =
     assertBlockNoBackoff dbSync 2
     assertCertCounts dbSync (1,0,0,0)
   where
-    testLabel = "stakeAddressPtr"
+    testLabel = "stakeAddressPtr-alonzo"
 
 stakeAddressPtrDereg :: IOManager -> [(Text, Text)] -> Assertion
 stakeAddressPtrDereg =
@@ -468,7 +403,7 @@ stakeAddressPtrDereg =
     assertAddrValues dbSync (UTxOAddressNewWithPtr 0 ptr0) (DB.DbLovelace 40000) st
     assertAddrValues dbSync (UTxOAddressNewWithPtr 0 ptr1) (DB.DbLovelace 20000) st
   where
-    testLabel = "stakeAddressPtrDereg"
+    testLabel = "stakeAddressPtrDereg-alonzo"
 
 stakeAddressPtrUseBefore :: IOManager -> [(Text, Text)] -> Assertion
 stakeAddressPtrUseBefore =
@@ -491,7 +426,7 @@ stakeAddressPtrUseBefore =
       assertBlockNoBackoff dbSync 3
       assertCertCounts dbSync (1,0,0,0)
   where
-    testLabel = "stakeAddressPtrUseBefore"
+    testLabel = "stakeAddressPtrUseBefore-alonzo"
 
 consumeSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 consumeSameBlock =
@@ -505,7 +440,7 @@ consumeSameBlock =
         pure [tx0, tx1]
       assertBlockNoBackoff dbSync 1
   where
-    testLabel = "consumeSameBlock"
+    testLabel = "consumeSameBlock-alonzo"
 
 simpleRewards :: IOManager -> [(Text, Text)] -> Assertion
 simpleRewards =
@@ -547,48 +482,7 @@ simpleRewards =
           , (StakeIndexPoolMember 0 (PoolIndex 1), (0,1,0,0,0))
           ]
   where
-    testLabel = "simpleRewards"
-
--- This test is the same as the previous, but in Shelley era. Rewards result
--- should be different because of the old Shelley bug.
--- https://github.com/input-output-hk/cardano-db-sync/issues/959
---
--- The differenece in rewards is triggered when a reward address of a pool A
--- delegates to a pool B and is not an owner of pool B. In this case it receives
--- leader rewards from pool A and member rewards from pool B. In this test, we
--- have 2 instances of this case, one where A = B and one where A /= B.
-rewardsShelley :: IOManager -> [(Text, Text)] -> Assertion
-rewardsShelley =
-    withFullConfig "config-shelley" testLabel $ \interpreter mockServer dbSync -> do
-      startDBSync  dbSync
-      void $ registerAllStakeCreds interpreter mockServer
-
-      void $ withShelleyFindLeaderAndSubmitTx interpreter mockServer $
-        Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
-
-      a <- fillEpochs interpreter mockServer 3
-      assertRewardCount dbSync 3
-
-      void $ withShelleyFindLeaderAndSubmitTx interpreter mockServer $
-        Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
-
-      b <- fillEpochs interpreter mockServer 2
-
-      assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + 3)
-      st <- withShelleyLedgerState interpreter Right
-      -- Note we have 2 rewards less compared to Alonzo era
-      assertRewardCount dbSync 12
-      assertRewardCounts dbSync st True (Just 5)
-          -- Here we dont' have both leader and member rewards.
-          [ (StakeIndexPoolLeader (PoolIndexId $ KeyHash "9f1b441b9b781b3c3abb43b25679dc17dbaaf116dddca1ad09dc1de0"), (1,0,0,0,0))
-          , (StakeIndexPoolLeader (PoolIndexId $ KeyHash "5af582399de8c226391bfd21424f34d0b053419c4d93975802b7d107"), (1,0,0,0,0))
-          , (StakeIndexPoolLeader (PoolIndexId $ KeyHash "58eef2925db2789f76ea057c51069e52c5e0a44550f853c6cdf620f8"), (1,0,0,0,0))
-          , (StakeIndexPoolMember 0 (PoolIndex 0), (0,1,0,0,0))
-          , (StakeIndexPoolMember 0 (PoolIndex 1), (0,1,0,0,0))
-          ]
-
-  where
-    testLabel = "rewardsShelley"
+    testLabel = "simpleRewards-alonzo"
 
 rewardsDeregistration :: IOManager -> [(Text, Text)] -> Assertion
 rewardsDeregistration =
@@ -649,7 +543,7 @@ rewardsDeregistration =
       assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,2,0,0,0))]
 
   where
-    testLabel = "rewardsDeregistration"
+    testLabel = "rewardsDeregistration-alonzo"
 
 mirReward :: IOManager -> [(Text, Text)] -> Assertion
 mirReward =
@@ -679,7 +573,7 @@ mirReward =
       -- 2 mir rewards from treasury are sumed
       assertRewardCounts dbSync st True Nothing [(StakeIndex 1, (0,0,1,1,0))]
   where
-    testLabel = "mirReward"
+    testLabel = "mirReward-alonzo"
 
 mirRewardRollback :: IOManager -> [(Text, Text)] -> Assertion
 mirRewardRollback =
@@ -720,34 +614,7 @@ mirRewardRollback =
       assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c <> d <> e))
       assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,0,0,1,0))]
   where
-    testLabel = "mirRewardRollback"
-
-mirRewardShelley :: IOManager -> [(Text, Text)] -> Assertion
-mirRewardShelley =
-    withFullConfig "config-shelley" testLabel $ \interpreter mockServer dbSync -> do
-      startDBSync  dbSync
-      void $ registerAllStakeCreds interpreter mockServer
-
-      -- TODO test that this has no effect. You can't send funds between reserves and
-      -- treasury before protocol version 5.
-      void $ withShelleyFindLeaderAndSubmitTx interpreter mockServer $
-        const $ Shelley.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))]
-                         (Wdrl mempty)
-
-      a <- fillEpochPercentage interpreter mockServer 50
-
-      -- mir from reserves
-      void $ withShelleyFindLeaderAndSubmitTx  interpreter mockServer $ Shelley.mkSimpleDCertTx
-        [(StakeIndex 1, \cred -> DCertMir $ MIRCert ReservesMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 100))))]
-
-      b <- fillUntilNextEpoch interpreter mockServer
-
-      st <- withShelleyLedgerState interpreter Right
-      assertBlockNoBackoff dbSync (fromIntegral $ 3 + length a + length b)
-      assertRewardCounts dbSync st False Nothing [(StakeIndex 1, (0,0,1,0,0))]
-  where
-    testLabel = "mirRewardShelley"
-
+    testLabel = "mirRewardRollback-alonzo"
 
 mirRewardDereg :: IOManager -> [(Text, Text)] -> Assertion
 mirRewardDereg =
@@ -780,7 +647,7 @@ mirRewardDereg =
       st <- getAlonzoLedgerState interpreter
       assertRewardCounts dbSync st False Nothing []
   where
-    testLabel = "mirRewardDereg"
+    testLabel = "mirRewardDereg-alonzo"
 
 rewardsEmptyChainLast :: IOManager -> [(Text, Text)] -> Assertion
 rewardsEmptyChainLast =
@@ -807,7 +674,7 @@ rewardsEmptyChainLast =
       assertBlockNoBackoff dbSync (fromIntegral $ 1 + length a + 1 + length b + length c + 1 + length d)
       assertRewardCount dbSync 17
   where
-    testLabel = "rewardsEmptyChainLast"
+    testLabel = "rewardsEmptyChainLast-alonzo"
 
 rewardsDelta :: IOManager -> [(Text, Text)] -> Assertion
 rewardsDelta =
@@ -836,7 +703,7 @@ rewardsDelta =
       -- update was not complete on time, due to missing blocks.
       assertRewardCount dbSync 9
   where
-    testLabel = "rewardsDelta"
+    testLabel = "rewardsDelta-alonzo"
 
 rollbackBoundary :: IOManager -> [(Text, Text)] -> Assertion
 rollbackBoundary =
@@ -858,7 +725,7 @@ rollbackBoundary =
       assertBlockNoBackoff dbSync (2 + length a + length blks + length blks')
       assertRewardCount dbSync 3
   where
-    testLabel = "rollbackBoundary"
+    testLabel = "rollbackBoundary-alonzo"
 
 singleMIRCertMultiOut :: IOManager -> [(Text, Text)] -> Assertion
 singleMIRCertMultiOut =
@@ -881,7 +748,7 @@ singleMIRCertMultiOut =
       assertBlockNoBackoff dbSync (2 + length a + length b)
       assertRewardCount dbSync 4
   where
-    testLabel = "singleMIRCertMultiOut"
+    testLabel = "singleMIRCertMultiOut-alonzo"
 
 stakeDistGenesis :: IOManager -> [(Text, Text)] -> Assertion
 stakeDistGenesis =
@@ -892,7 +759,7 @@ stakeDistGenesis =
       -- There are 5 delegations in genesis
       assertEpochStake dbSync 5
   where
-    testLabel = "stakeDistGenesis"
+    testLabel = "stakeDistGenesis-alonzo"
 
 delegations2000 :: IOManager -> [(Text, Text)] -> Assertion
 delegations2000 =
@@ -911,7 +778,7 @@ delegations2000 =
       assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + length c + 1)
       assertEpochStakeEpoch dbSync 2 2000
   where
-    testLabel = "delegations2000"
+    testLabel = "delegations2000-alonzo"
 
 delegations2001 :: IOManager -> [(Text, Text)] -> Assertion
 delegations2001 =
@@ -930,7 +797,7 @@ delegations2001 =
       assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + length c + 1)
       assertEpochStakeEpoch dbSync 2 2001
   where
-    testLabel = "delegations2001"
+    testLabel = "delegations2001-alonzo"
 
 delegations8000 :: IOManager -> [(Text, Text)] -> Assertion
 delegations8000 =
@@ -955,7 +822,7 @@ delegations8000 =
       void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
       assertEpochStakeEpoch dbSync 3 8000
   where
-    testLabel = "delegations8000"
+    testLabel = "delegations8000-alonzo"
 
 delegationsMany :: IOManager -> [(Text, Text)] -> Assertion
 delegationsMany =
@@ -978,7 +845,7 @@ delegationsMany =
       void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
       assertEpochStakeEpoch dbSync 7 6003
   where
-    testLabel = "delegationsMany"
+    testLabel = "delegationsMany-alonzo"
 
 delegationsManyNotDense :: IOManager -> [(Text, Text)] -> Assertion
 delegationsManyNotDense =
@@ -1004,7 +871,7 @@ delegationsManyNotDense =
       -- Even if the chain is sparse, all distributions are inserted.
       assertEpochStakeEpoch dbSync 7 40005
   where
-    testLabel = "delegationsManyNotDense"
+    testLabel = "delegationsManyNotDense-alonzo"
 
 simpleScript :: IOManager -> [(Text, Text)] -> Assertion
 simpleScript =
@@ -1020,7 +887,7 @@ simpleScript =
       assertBlockNoBackoff dbSync (fromIntegral $ length a + 2)
       assertEqQuery dbSync (fmap getOutFields <$> DB.queryScriptOutputs) [expectedFields] "Unexpected script outputs"
   where
-    testLabel = "simpleScript"
+    testLabel = "simpleScript-alonzo"
     getOutFields txOut = (DB.txOutAddress txOut, DB.txOutAddressHasScript txOut, DB.txOutValue txOut, DB.txOutDataHash txOut)
     expectedFields = ( renderAddress alwaysSucceedsScriptAddr
                      , True, DB.DbLovelace 20000
@@ -1043,7 +910,7 @@ unlockScript =
       assertBlockNoBackoff dbSync 3
       assertAlonzoCounts dbSync (1,1,1,1,1,1,0,0)
   where
-    testLabel = "unlockScriptSameBlock"
+    testLabel = "unlockScript-alonzo"
 
 unlockScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 unlockScriptSameBlock =
@@ -1061,7 +928,7 @@ unlockScriptSameBlock =
       assertAlonzoCounts dbSync (1,1,1,1,1,1,0,0)
 
   where
-    testLabel = "unlockScriptSameBlock"
+    testLabel = "unlockScriptSameBlock-alonzo"
 
 failedScript :: IOManager -> [(Text, Text)] -> Assertion
 failedScript =
@@ -1078,7 +945,7 @@ failedScript =
       assertBlockNoBackoff dbSync 2
       assertAlonzoCounts dbSync (0,0,0,0,1,0,1,1)
   where
-    testLabel = "failedScript"
+    testLabel = "failedScript-alonzo"
 
 failedScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 failedScriptSameBlock =
@@ -1095,7 +962,7 @@ failedScriptSameBlock =
       assertBlockNoBackoff dbSync 2
       assertAlonzoCounts dbSync (0,0,0,0,1,0,1,1)
   where
-    testLabel = "failedScriptSameBlock"
+    testLabel = "failedScriptSameBlock-alonzo"
 
 multipleScripts :: IOManager -> [(Text, Text)] -> Assertion
 multipleScripts =
@@ -1115,7 +982,7 @@ multipleScripts =
     assertBlockNoBackoff dbSync 2
     assertAlonzoCounts dbSync (1,2,1,1,3,2,0,0)
   where
-    testLabel = "multipleScripts"
+    testLabel = "multipleScripts-alonzo"
 
 multipleScriptsSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 multipleScriptsSameBlock =
@@ -1133,7 +1000,7 @@ multipleScriptsSameBlock =
     assertBlockNoBackoff dbSync 1
     assertAlonzoCounts dbSync (1,2,1,1,3,2,0,0)
   where
-    testLabel = "multipleScriptsSameBlock"
+    testLabel = "multipleScriptsSameBlock-alonzo"
 
 multipleScriptsFailed :: IOManager -> [(Text, Text)] -> Assertion
 multipleScriptsFailed =
@@ -1151,7 +1018,7 @@ multipleScriptsFailed =
     assertBlockNoBackoff dbSync 2
     assertAlonzoCounts dbSync (0,0,0,0,3,0,1,1)
   where
-    testLabel = "multipleScriptsFailed"
+    testLabel = "multipleScriptsFailed-alonzo"
 
 multipleScriptsFailedSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 multipleScriptsFailedSameBlock =
@@ -1168,7 +1035,7 @@ multipleScriptsFailedSameBlock =
     assertBlockNoBackoff dbSync 1
     assertAlonzoCounts dbSync (0,0,0,0,3,0,1,1)
   where
-    testLabel = "multipleScriptsFailedSameBlock"
+    testLabel = "multipleScriptsFailedSameBlock-alonzo"
 
 registrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
 registrationScriptTx =
@@ -1180,7 +1047,7 @@ registrationScriptTx =
     assertBlockNoBackoff dbSync 1
     assertScriptCert dbSync (0,0,0,1)
   where
-    testLabel = "registrationScriptTx"
+    testLabel = "registrationScriptTx-alonzo"
 
 deregistrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
 deregistrationScriptTx =
@@ -1195,7 +1062,7 @@ deregistrationScriptTx =
     assertBlockNoBackoff dbSync 1
     assertScriptCert dbSync (1,0,0,1)
   where
-    testLabel = "deregistrationScriptTx"
+    testLabel = "deregistrationScriptTx-alonzo"
 
 deregistrationsScriptTxs :: IOManager -> [(Text, Text)] -> Assertion
 deregistrationsScriptTxs =
@@ -1213,7 +1080,7 @@ deregistrationsScriptTxs =
     assertScriptCert dbSync (2,0,0,1)
     assertAlonzoCounts dbSync (1,2,1,0,0,0,0,0)
   where
-    testLabel = "deregistrationsScriptTxs"
+    testLabel = "deregistrationsScriptTxs-alonzo"
 
 deregistrationsScriptTx :: IOManager -> [(Text, Text)] -> Assertion
 deregistrationsScriptTx =
@@ -1233,7 +1100,7 @@ deregistrationsScriptTx =
     assertScriptCert dbSync (2,0,0,1)
     assertAlonzoCounts dbSync (1,2,1,0,0,0,0,0)
   where
-    testLabel = "deregistrationsScriptTx"
+    testLabel = "deregistrationsScriptTx-alonzo"
 
 -- Like previous but missing a redeemer. This is a known ledger issue
 deregistrationsScriptTx' :: IOManager -> [(Text, Text)] -> Assertion
@@ -1255,7 +1122,7 @@ deregistrationsScriptTx' =
     assertScriptCert dbSync (0,0,0,1)
     assertAlonzoCounts dbSync (1,1,1,0,0,0,0,0)
   where
-    testLabel = "deregistrationsScriptTx'"
+    testLabel = "deregistrationsScriptTx'-alonzo"
 
 -- Like previous but missing the other redeemer. This is a known ledger issue
 deregistrationsScriptTx'' :: IOManager -> [(Text, Text)] -> Assertion
@@ -1275,7 +1142,7 @@ deregistrationsScriptTx'' =
     assertScriptCert dbSync (2,0,0,1)
     assertAlonzoCounts dbSync (1,1,1,0,0,0,0,0)
   where
-    testLabel = "deregistrationsScriptTx''"
+    testLabel = "deregistrationsScriptTx''-alonzo"
 
 mintMultiAsset ::  IOManager -> [(Text, Text)] -> Assertion
 mintMultiAsset =
@@ -1288,7 +1155,7 @@ mintMultiAsset =
       assertBlockNoBackoff dbSync 1
       assertAlonzoCounts dbSync (1,1,1,1,0,0,0,0)
   where
-    testLabel = "mintMultiAsset"
+    testLabel = "mintMultiAsset-alonzo"
 
 mintMultiAssets ::  IOManager -> [(Text, Text)] -> Assertion
 mintMultiAssets =
@@ -1306,7 +1173,7 @@ mintMultiAssets =
       assertBlockNoBackoff dbSync 1
       assertAlonzoCounts dbSync (2,4,1,2,0,0,0,0)
   where
-    testLabel = "mintMultiAssets"
+    testLabel = "mintMultiAssets-alonzo"
 
 swapMultiAssets ::  IOManager -> [(Text, Text)] -> Assertion
 swapMultiAssets =
@@ -1335,7 +1202,7 @@ swapMultiAssets =
       assertBlockNoBackoff dbSync 1
       assertAlonzoCounts dbSync (2,6,1,2,4,2,0,0)
   where
-    testLabel = "swapMultiAssets"
+    testLabel = "swapMultiAssets-alonzo"
 
 poolReg ::  IOManager -> [(Text, Text)] -> Assertion
 poolReg =
@@ -1360,7 +1227,7 @@ poolReg =
       st <- getAlonzoLedgerState interpreter
       assertPoolLayerCounters dbSync (0,0) [(PoolIndexNew 0, (Right False, False, True))] st
   where
-    testLabel = "poolReg"
+    testLabel = "poolReg-alonzo"
 
 -- Issue https://github.com/input-output-hk/cardano-db-sync/issues/997
 nonexistantPoolQuery ::  IOManager -> [(Text, Text)] -> Assertion
@@ -1375,7 +1242,7 @@ nonexistantPoolQuery =
       assertPoolLayerCounters dbSync (0,0) [(PoolIndexNew 0, (Left RecordDoesNotExist, False, False))] st
 
   where
-    testLabel = "nonexistantPoolQuery"
+    testLabel = "nonexistantPoolQuery-alonzo"
 
 poolDeReg ::  IOManager -> [(Text, Text)] -> Assertion
 poolDeReg =
@@ -1414,7 +1281,7 @@ poolDeReg =
       assertPoolLayerCounters dbSync (1,0) [(PoolIndexNew 0, (Right True, False, False))] st
 
   where
-    testLabel = "poolDeReg"
+    testLabel = "poolDeReg-alonzo"
 
 poolDeRegMany :: IOManager -> [(Text, Text)] -> Assertion
 poolDeRegMany =
@@ -1492,7 +1359,7 @@ poolDeRegMany =
       assertPoolLayerCounters dbSync (1,0) [(PoolIndexNew 0, (Right True, False, False))] st
 
   where
-    testLabel = "poolDeRegMany"
+    testLabel = "poolDeRegMany-alonzo"
     mkPoolDereg
         :: EpochNo -> [StakeCredential StandardCrypto] -> KeyHash 'StakePool StandardCrypto
         -> DCert StandardCrypto
@@ -1546,7 +1413,7 @@ poolDelist =
       -- delisted and retired
       assertPoolLayerCounters dbSync (1,1) [(PoolIndexNew 0, (Right True, True, False))] st
   where
-    testLabel = "poolDelist"
+    testLabel = "poolDelist-alonzo"
 
 
 hfBlockHash :: CardanoBlock -> ByteString

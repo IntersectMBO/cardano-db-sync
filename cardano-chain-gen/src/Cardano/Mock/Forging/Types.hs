@@ -20,7 +20,8 @@ import qualified Ouroboros.Consensus.Cardano.Block as Consensus
 import           Ouroboros.Consensus.Forecast
 import           Ouroboros.Consensus.Protocol.Praos (Praos)
 import           Ouroboros.Consensus.Protocol.TPraos (TPraos)
-import           Ouroboros.Consensus.Shelley.Eras (AlonzoEra, ShelleyEra, StandardCrypto)
+import           Ouroboros.Consensus.Shelley.Eras (StandardAlonzo, StandardBabbage,
+                   StandardShelley, StandardCrypto)
 
 import           Cardano.Ledger.Address
 import qualified Cardano.Ledger.Core as Core
@@ -41,8 +42,9 @@ data MockBlock = MockBlock
   }
 
 data TxEra
-  = TxAlonzo !(Core.Tx (AlonzoEra StandardCrypto))
-  | TxShelley !(Core.Tx (ShelleyEra StandardCrypto))
+  = TxAlonzo !(Core.Tx StandardAlonzo)
+  | TxBabbage !(Core.Tx StandardBabbage)
+  | TxShelley !(Core.Tx StandardShelley)
 
 newtype NodeId = NodeId { unNodeId :: Int }
   deriving Show

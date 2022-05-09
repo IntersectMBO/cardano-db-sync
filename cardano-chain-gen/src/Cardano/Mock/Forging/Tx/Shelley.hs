@@ -24,7 +24,6 @@ import           Cardano.Ledger.Shelley.Tx
 import           Cardano.Ledger.Shelley.TxBody
 
 import           Ouroboros.Consensus.Cardano.Block (LedgerState)
-import           Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import           Ouroboros.Consensus.Shelley.Eras (ShelleyEra, StandardCrypto)
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 

@@ -55,6 +55,7 @@ import qualified Cardano.Ledger.TxIn as Ledger
 
 import           Cardano.Mock.ChainDB
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
+import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
 import           Cardano.Mock.Forging.Types
 
@@ -64,7 +65,7 @@ import           Ouroboros.Consensus.Block (BlockForging, BlockNo (..), BlockPro
                    ForgeStateInfo, ShouldForge (..), SlotNo (..), blockNo, blockSlot,
                    checkShouldForge)
 import qualified Ouroboros.Consensus.Block as Block
-import           Ouroboros.Consensus.Cardano.Block (AlonzoEra, BabbageEra, LedgerState (..), ShelleyEra)
+import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardAlonzo, StandardBabbage, StandardShelley)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Config (TopLevelConfig, configConsensus, configLedger,
                    topLevelConfigLedger)
@@ -246,6 +247,7 @@ forgeWithStakeCreds inter = do
   tx <- case ledgerState st of
           LedgerStateShelley sts -> either throwIO (pure . TxShelley) $ Shelley.mkDCertTxPools sts
           LedgerStateAlonzo sta -> either throwIO (pure . TxAlonzo) $ Alonzo.mkDCertTxPools sta
+          LedgerStateBabbage stb -> either throwIO (pure . TxBabbage) $ Babbage.mkDCertTxPools stb
           _ -> throwIO UnexpectedEra
   forgeNextFindLeader inter [tx]
 
@@ -383,7 +385,7 @@ getCurrentSlot :: Interpreter -> IO SlotNo
 getCurrentSlot interp = istSlot <$> readMVar (interpState interp)
 
 withBabbageLedgerState
-    :: Interpreter -> (LedgerState (ShelleyBlock PraosStandard (BabbageEra StandardCrypto)) -> Either ForgingError a)
+    :: Interpreter -> (LedgerState (ShelleyBlock PraosStandard StandardBabbage) -> Either ForgingError a)
     -> IO a
 withBabbageLedgerState inter mk = do
   st <- getCurrentLedgerState inter
@@ -394,7 +396,7 @@ withBabbageLedgerState inter mk = do
     _ -> throwIO ExpectedBabbageState
 
 withAlonzoLedgerState
-    :: Interpreter -> (LedgerState (ShelleyBlock TPraosStandard (AlonzoEra StandardCrypto)) -> Either ForgingError a)
+    :: Interpreter -> (LedgerState (ShelleyBlock TPraosStandard StandardAlonzo) -> Either ForgingError a)
     -> IO a
 withAlonzoLedgerState inter mk = do
   st <- getCurrentLedgerState inter
@@ -405,7 +407,7 @@ withAlonzoLedgerState inter mk = do
     _ -> throwIO ExpectedAlonzoState
 
 withShelleyLedgerState
-    :: Interpreter -> (LedgerState (ShelleyBlock TPraosStandard (ShelleyEra StandardCrypto)) -> Either ForgingError a)
+    :: Interpreter -> (LedgerState (ShelleyBlock TPraosStandard StandardShelley) -> Either ForgingError a)
     -> IO a
 withShelleyLedgerState inter mk = do
   st <- getCurrentLedgerState inter
@@ -418,8 +420,9 @@ withShelleyLedgerState inter mk = do
 mkTxId :: TxEra -> Ledger.TxId StandardCrypto
 mkTxId txe =
   case txe of
-    TxAlonzo tx -> Ledger.txid @(AlonzoEra StandardCrypto) (getField @"body" tx)
-    TxShelley tx -> Ledger.txid @(ShelleyEra StandardCrypto) (getField @"body" tx)
+    TxAlonzo tx -> Ledger.txid @StandardAlonzo (getField @"body" tx)
+    TxBabbage tx -> Ledger.txid @StandardBabbage (getField @"body" tx)
+    TxShelley tx -> Ledger.txid @StandardShelley (getField @"body" tx)
 
 mkValidated :: TxEra -> Validated (Consensus.GenTx CardanoBlock)
 mkValidated txe =
@@ -430,13 +433,18 @@ mkValidated txe =
           (S (S (S (S (Z (Consensus.WrapValidatedGenTx
             (Consensus.mkShelleyValidatedTx $ Ledger.unsafeMakeValidated tx)
         )))))))
-
     TxShelley tx ->
       Consensus.HardForkValidatedGenTx
         (Consensus.OneEraValidatedGenTx
           (S (Z (Consensus.WrapValidatedGenTx
             (Consensus.mkShelleyValidatedTx $ Ledger.unsafeMakeValidated tx)
         ))))
+    TxBabbage tx ->
+      Consensus.HardForkValidatedGenTx
+        (Consensus.OneEraValidatedGenTx
+          (S (S (S (S (S (Z (Consensus.WrapValidatedGenTx
+            (Consensus.mkShelleyValidatedTx $ Ledger.unsafeMakeValidated tx)
+        ))))))))
 
 mkForecast
     :: TopLevelConfig CardanoBlock -> ExtLedgerState CardanoBlock
