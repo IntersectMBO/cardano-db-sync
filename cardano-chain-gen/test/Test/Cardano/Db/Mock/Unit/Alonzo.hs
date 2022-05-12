@@ -1,5 +1,4 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -82,6 +81,7 @@ unitTests iom knownMigrations =
       , testGroup "rewards"
           [ test "rewards simple" simpleRewards
           , test "rewards with deregistration" rewardsDeregistration
+          , test "rewards with reregistration. Fixed in Babbage." rewardsReregistration
           , test "Mir Cert" mirReward
           , test "Mir rollback" mirRewardRollback
           , test "Mir Cert deregistration" mirRewardDereg
@@ -212,18 +212,18 @@ simpleRollback = do
 bigChain :: IOManager -> [(Text, Text)] -> Assertion
 bigChain =
     withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
-      forM_ (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
+      replicateM_ 101 (forgeNextFindLeaderAndSubmit interpreter mockServer [])
       startDBSync dbSync
-      assertBlockNoBackoff dbSync 100
+      assertBlockNoBackoff dbSync 101
 
-      blks' <- forM (replicate 100 mockBlock1) (forgeNextAndSubmit interpreter mockServer)
-      assertBlockNoBackoff dbSync 200
+      blks' <- replicateM 100 (forgeNextFindLeaderAndSubmit interpreter mockServer [])
+      assertBlockNoBackoff dbSync 201
 
-      forM_ (replicate 5 mockBlock2) (forgeNextAndSubmit interpreter mockServer)
-      assertBlockNoBackoff dbSync 205
+      replicateM_ 5 (forgeNextFindLeaderAndSubmit interpreter mockServer [])
+      assertBlockNoBackoff dbSync 206
 
       atomically $ rollback mockServer (blockPoint $ last blks')
-      assertBlockNoBackoff dbSync 200
+      assertBlockNoBackoff dbSync 201
   where
     testLabel = "bigChain-alonzo"
 
@@ -544,6 +544,64 @@ rewardsDeregistration =
 
   where
     testLabel = "rewardsDeregistration-alonzo"
+
+-- This is a fix of the reward issue fix in Babbage described in the Babbage specs
+-- If a stake address is deregistered during the reward computation initialisation,
+-- and is registered later it doesn't receive rewards before Babbage. It does receive
+-- on Babbage. See the same test on Alonzo.
+rewardsReregistration :: IOManager -> [(Text, Text)] -> Assertion
+rewardsReregistration =
+    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkDepositTxPools (UTxOIndex 1) 20000
+
+      -- first move to treasury from reserves
+      void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
+        Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty)
+
+      void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
+            -- register the stake address and delegate to a pool
+        let poolId = resolvePool (PoolIndex 0) st
+        tx1 <- Alonzo.mkSimpleDCertTx
+                    [ (StakeIndexNew 1, DCertDeleg . RegKey)
+                    , (StakeIndexNew 1, \stCred -> DCertDeleg $ Delegate $ Delegation stCred poolId) ]
+                    st
+            -- send some funds to the address so
+        tx2 <- Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithStake 0 (StakeIndexNew 1)) 100000 5000 st
+        Right [tx1, tx2]
+
+      a <- fillEpochs interpreter mockServer 3
+      assertBlockNoBackoff dbSync (fromIntegral $ 3 + length a)
+
+      st <- getAlonzoLedgerState interpreter
+
+      -- Now that pools are registered, we add a tx to fill the fees pot.
+      -- Rewards will be distributed.
+      void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
+
+      b <- fillEpochs interpreter mockServer 2
+
+      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length a + length b)
+      assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,1,0,0,0))]
+
+      void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ Alonzo.mkPaymentTx (UTxOIndex 1) (UTxOIndex 0) 10000 10000
+
+      b' <- fillEpochs interpreter mockServer 1
+      c <- fillEpochPercentage interpreter mockServer 10
+      -- deregister before the 40% of the epoch
+      void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+          Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)]
+      d <- fillEpochPercentage interpreter mockServer 60
+      -- register after 40% and before epoch boundary.
+      void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+          Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)]
+      e <- fillUntilNextEpoch interpreter mockServer
+      assertBlockNoBackoff dbSync (fromIntegral $ 7 + length (a <> b <> b' <> c <> d <> e))
+      -- This is 2 in Babbage
+      assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,1,0,0,0))]
+  where
+    testLabel = "rewardsReregistration-Alonzo"
 
 mirReward :: IOManager -> [(Text, Text)] -> Assertion
 mirReward =

@@ -33,7 +33,6 @@ import           Cardano.Ledger.BaseTypes
 import           Cardano.Ledger.Coin
 import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Credential
-import           Cardano.Ledger.Era
 import           Cardano.Ledger.Hashes
 import           Cardano.Ledger.Keys
 import           Cardano.Ledger.Mary.Value
@@ -41,7 +40,7 @@ import           Cardano.Ledger.Shelley.Metadata
 import           Cardano.Ledger.Shelley.TxBody (DCert (..), PoolCert (..), PoolMetadata (..),
                    PoolParams (..), StakePoolRelay (..), Wdrl (..))
 import           Cardano.Ledger.ShelleyMA.Timelocks
-import           Cardano.Ledger.TxIn (TxIn (..), txid)
+import           Cardano.Ledger.TxIn (TxIn (..), txid, TxId)
 
 import           Ouroboros.Consensus.Cardano.Block (LedgerState)
 import           Ouroboros.Consensus.Shelley.Eras (StandardBabbage, StandardCrypto)
@@ -51,25 +50,30 @@ import           Cardano.Mock.Forging.Crypto
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Tx.Generic
 import           Cardano.Mock.Forging.Types
+import Cardano.Ledger.Babbage.Collateral (collOuts)
+import Cardano.Ledger.Shelley.UTxO
+-- import qualified Data.Maybe as Strict
 
 type BabbageUTxOIndex = UTxOIndex StandardBabbage
 type BabbageLedgerState = LedgerState (ShelleyBlock PraosStandard StandardBabbage)
 
 consTxBody :: Set (TxIn StandardCrypto)
            -> Set (TxIn StandardCrypto)
+           -> Set (TxIn StandardCrypto)
            -> StrictSeq (TxOut StandardBabbage)
+           -> StrictMaybe (TxOut StandardBabbage)
            -> Coin
            -> Value StandardCrypto
            -> [DCert StandardCrypto]
            -> Wdrl StandardCrypto
            -> TxBody StandardBabbage
-consTxBody ins cols outs fees minted certs wdrl =
+consTxBody ins cols ref outs collOut fees minted certs wdrl =
     TxBody
       ins
       cols
-      mempty
+      ref
       outs
-      Strict.SNothing
+      collOut
       Strict.SNothing
       (StrictSeq.fromList certs)
       wdrl
@@ -95,13 +99,18 @@ addValidityInterval slotNo tx =
 
 consPaymentTxBody :: Set (TxIn StandardCrypto)
                   -> Set (TxIn StandardCrypto)
+                  -> Set (TxIn StandardCrypto)
                   -> StrictSeq (TxOut StandardBabbage)
+                  -> StrictMaybe (TxOut StandardBabbage)
                   -> Coin -> Value StandardCrypto
                   -> TxBody StandardBabbage
-consPaymentTxBody ins cols outs fees minted = consTxBody ins cols outs fees minted mempty (Wdrl mempty)
+consPaymentTxBody ins cols ref outs colOut fees minted = consTxBody ins cols ref outs colOut fees minted mempty (Wdrl mempty)
 
-consCertTxBody :: [DCert StandardCrypto] -> Wdrl StandardCrypto -> TxBody StandardBabbage
-consCertTxBody = consTxBody mempty mempty mempty (Coin 0) mempty
+consCertTxBody :: Maybe (TxIn StandardCrypto) -> [DCert StandardCrypto] -> Wdrl StandardCrypto -> TxBody StandardBabbage
+consCertTxBody ref = consTxBody mempty mempty (toSet ref) mempty Strict.SNothing (Coin 0) mempty
+  where
+    toSet Nothing = mempty
+    toSet (Just a) = Set.singleton a
 
 mkPaymentTx :: BabbageUTxOIndex -> BabbageUTxOIndex -> Integer -> Integer
             -> BabbageLedgerState
@@ -114,7 +123,7 @@ mkPaymentTx inputIndex outputIndex amount fees sta = do
         output = TxOut addr (valueFromList (fromIntegral amount) []) NoDatum Strict.SNothing
         TxOut addr' (Value inputValue _) _ _ = snd inputPair
         change = TxOut addr' (valueFromList (fromIntegral $ fromIntegral inputValue - amount - fees) []) NoDatum Strict.SNothing
-    Right $ mkSimpleTx True $ consPaymentTxBody input mempty (StrictSeq.fromList [output, change]) (Coin fees) mempty
+    Right $ mkSimpleTx True $ consPaymentTxBody input mempty mempty (StrictSeq.fromList [output, change]) Strict.SNothing (Coin fees) mempty
 
 mkPaymentTx' :: BabbageUTxOIndex
              -> [(BabbageUTxOIndex, Value StandardCrypto)]
@@ -128,29 +137,54 @@ mkPaymentTx' inputIndex outputIndex sta = do
         TxOut addr' (Value inputValue _) _ _ = snd inputPair
         outValue = sum ((\ (Value vl _) -> vl) . snd <$> outputIndex)
         change = TxOut addr' (valueFromList (fromIntegral $ fromIntegral inputValue - outValue) []) NoDatum Strict.SNothing
-    Right $ mkSimpleTx True $ consPaymentTxBody inps mempty (StrictSeq.fromList $ outps ++ [change]) (Coin 0) mempty
+    Right $ mkSimpleTx True $ consPaymentTxBody inps mempty mempty (StrictSeq.fromList $ outps ++ [change]) Strict.SNothing (Coin 0) mempty
   where
     mkOuts (outIx, vl) = do
         addr <- resolveAddress outIx sta
         Right $ TxOut addr vl NoDatum Strict.SNothing
 
-mkLockByScriptTx :: BabbageUTxOIndex -> [Bool] -> Integer -> Integer
+data TxOutScriptType = TxOutNoInline Bool -- nothing is inlined, like in Alonzo
+                     | TxOutInline Bool Bool ReferenceScript -- validScript, inlineDatum, reference script
+
+data ReferenceScript = NoReferenceScript | ReferenceScript Bool
+
+scriptSucceeds :: TxOutScriptType -> Bool
+scriptSucceeds (TxOutNoInline sc) = sc
+scriptSucceeds (TxOutInline sc _ _) = sc
+
+hasInlineDatum :: TxOutScriptType -> Bool
+hasInlineDatum (TxOutNoInline _) = False
+hasInlineDatum (TxOutInline _ inl _) = inl
+
+getInlineScript :: TxOutScriptType -> StrictMaybe Bool
+getInlineScript (TxOutNoInline _) = Strict.SNothing
+getInlineScript (TxOutInline _ _ rs) = case rs of
+  NoReferenceScript -> Strict.SNothing
+  ReferenceScript rs' -> Strict.SJust rs'
+
+mkLockByScriptTx :: BabbageUTxOIndex -> [TxOutScriptType] -> Integer -> Integer
                  -> BabbageLedgerState
                  -> Either ForgingError (ValidatedTx StandardBabbage)
-mkLockByScriptTx inputIndex spendable amount fees sta = do
+mkLockByScriptTx inputIndex txOutTypes amount fees sta = do
     (inputPair, _) <- resolveUTxOIndex inputIndex sta
 
     let input = Set.singleton $ fst inputPair
-        outs = mkOut <$> spendable
+        outs = mkOutFromType amount <$> txOutTypes
         TxOut addr' (Value inputValue _) _ _ = snd inputPair
         change = TxOut addr' (valueFromList (fromIntegral $ fromIntegral inputValue - amount - fees) []) NoDatum Strict.SNothing
     -- No witnesses are necessary when the outputs is a script address. Only when it's consumed.
-    Right $ mkSimpleTx True $ consPaymentTxBody input mempty (StrictSeq.fromList $ outs <> [change]) (Coin fees) mempty
-  where
-    datahash = hashData @StandardBabbage plutusDataList
-    mkOut sp =
-        let outAddress = if sp then alwaysSucceedsScriptAddr else alwaysFailsScriptAddr
-        in TxOut outAddress (valueFromList (fromIntegral amount) []) (DatumHash datahash) Strict.SNothing
+    Right $ mkSimpleTx True $ consPaymentTxBody input mempty mempty (StrictSeq.fromList $ outs <> [change]) Strict.SNothing (Coin fees) mempty
+
+mkOutFromType :: Integer -> TxOutScriptType -> TxOut StandardBabbage
+mkOutFromType amount txOutType =
+    let outAddress = if scriptSucceeds txOutType then alwaysSucceedsScriptAddr else alwaysFailsScriptAddr
+        datahash = hashData @StandardBabbage plutusDataList
+        dt = if hasInlineDatum txOutType then Datum (dataToBinaryData plutusDataList) else DatumHash datahash
+        scpt = case getInlineScript txOutType of
+          Strict.SNothing -> Strict.SNothing
+          Strict.SJust True -> Strict.SJust alwaysSucceedsScript
+          Strict.SJust False -> Strict.SJust alwaysFailsScript
+    in TxOut outAddress (valueFromList (fromIntegral amount) []) dt scpt
 
 mkUnlockScriptTx :: [BabbageUTxOIndex] -> BabbageUTxOIndex -> BabbageUTxOIndex
                  -> Bool -> Integer -> Integer -> BabbageLedgerState
@@ -165,60 +199,82 @@ mkUnlockScriptTx inputIndex colInputIndex outputIndex succeeds amount fees sta =
         output = TxOut addr (valueFromList (fromIntegral amount) []) NoDatum Strict.SNothing
     Right $ mkScriptTx succeeds
       (mapMaybe mkScriptInp $ zip [0..] inputPairs)
-      $ consPaymentTxBody inpts colInput (StrictSeq.fromList [output]) (Coin fees) mempty
+      $ consPaymentTxBody inpts colInput mempty (StrictSeq.fromList [output]) Strict.SNothing (Coin fees) mempty
+
+mkUnlockScriptTxBabbage :: [BabbageUTxOIndex] -> BabbageUTxOIndex -> BabbageUTxOIndex
+                        -> [BabbageUTxOIndex] -> Bool
+                        -> Bool -> Integer -> Integer -> BabbageLedgerState
+                        -> Either ForgingError (ValidatedTx StandardBabbage)
+mkUnlockScriptTxBabbage inputIndex colInputIndex outputIndex refInput compl succeeds amount fees sta = do
+    inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) inputIndex
+    refInputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) refInput
+    (colInputPair, _) <- resolveUTxOIndex colInputIndex sta
+    addr <- resolveAddress outputIndex sta
+
+    let inpts = Set.fromList $ fst <$> inputPairs
+        colOut =  maybeToStrictMaybe $ mkOutFromType amount <$> collTxOutType
+        refInpts = Set.fromList $ fst <$> refInputPairs
+        colInput = Set.singleton $ fst colInputPair
+        output = TxOut addr (valueFromList (fromIntegral amount) []) NoDatum Strict.SNothing
+    Right $ mkScriptTx succeeds
+      (mapMaybe mkScriptInp $ zip [0..] inputPairs)
+      $ consPaymentTxBody inpts colInput refInpts (StrictSeq.fromList [output]) colOut (Coin fees) mempty
+  where
+    collTxOutType = if compl then Just $ TxOutInline True True (ReferenceScript True)
+                    else Just $ TxOutNoInline True
 
 mkScriptInp :: (Word64, (TxIn StandardCrypto, Core.TxOut StandardBabbage))
-            -> Maybe (RdmrPtr, (ScriptHash StandardCrypto, Core.Script StandardBabbage))
-mkScriptInp (n, (_txIn, txOut))
-  | addr == alwaysFailsScriptAddr
-  = Just
-      (RdmrPtr Spend n, (alwaysFailsScriptHash, alwaysFailsScript))
-  | addr == alwaysSucceedsScriptAddr
-  = Just
-      (RdmrPtr Spend n, (alwaysSucceedsScriptHash, alwaysSucceedsScript))
-  | addr == alwaysMintScriptAddr
-  = Just (RdmrPtr Spend n, (alwaysMintScriptHash, alwaysMintScript))
-  | otherwise = Nothing
-  where
-      addr = getTxOutAddr txOut
+            -> Maybe (RdmrPtr, Maybe (ScriptHash StandardCrypto, Core.Script StandardBabbage))
+mkScriptInp (n, (_txIn, TxOut addr _ _ mscr)) =
+    case mscr of
+      Strict.SNothing | addr == alwaysFailsScriptAddr ->
+        Just (RdmrPtr Spend n, Just (alwaysFailsScriptHash, alwaysFailsScript))
+      Strict.SNothing | addr == alwaysSucceedsScriptAddr ->
+        Just (RdmrPtr Spend n, Just (alwaysSucceedsScriptHash, alwaysSucceedsScript))
+      Strict.SNothing | addr == alwaysMintScriptAddr ->
+        Just (RdmrPtr Spend n, Just (alwaysMintScriptHash, alwaysMintScript))
+      Strict.SJust _ ->
+        Just (RdmrPtr Spend n, Nothing)
+      _ -> Nothing
 
 mkScriptMint :: Value StandardCrypto
-             -> [(RdmrPtr, (ScriptHash StandardCrypto, Core.Script StandardBabbage))]
+             -> [(RdmrPtr, Maybe (ScriptHash StandardCrypto, Core.Script StandardBabbage))]
 mkScriptMint (Value _ mp) = mapMaybe f $ zip [0..] (Map.keys mp)
   where
     f (n, policyId)
       | policyID policyId == alwaysFailsScriptHash
-      = Just (RdmrPtr Mint n, (alwaysFailsScriptHash, alwaysFailsScript))
+      = Just (RdmrPtr Mint n, Just (alwaysFailsScriptHash, alwaysFailsScript))
       | policyID policyId == alwaysSucceedsScriptHash
       = Just
-          (RdmrPtr Mint n, (alwaysSucceedsScriptHash, alwaysSucceedsScript))
+          (RdmrPtr Mint n, Just (alwaysSucceedsScriptHash, alwaysSucceedsScript))
       | policyID policyId == alwaysMintScriptHash
-      = Just (RdmrPtr Mint n, (alwaysMintScriptHash, alwaysMintScript))
+      = Just (RdmrPtr Mint n, Just (alwaysMintScriptHash, alwaysMintScript))
       | otherwise = Nothing
 
 mkMAssetsScriptTx :: [BabbageUTxOIndex] -> BabbageUTxOIndex
-                  -> [(BabbageUTxOIndex, Value StandardCrypto)]
+                  -> [(BabbageUTxOIndex, Value StandardCrypto)] -> [BabbageUTxOIndex]
                   -> Value StandardCrypto -> Bool -> Integer -> BabbageLedgerState
                   -> Either ForgingError (ValidatedTx StandardBabbage)
-mkMAssetsScriptTx inputIndex colInputIndex outputIndex minted succeeds fees sta = do
+mkMAssetsScriptTx inputIndex colInputIndex outputIndex refInput minted succeeds fees sta = do
     inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) inputIndex
+    refInputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) refInput
     colInput <- Set.singleton . fst . fst <$> resolveUTxOIndex colInputIndex sta
     outps <- mapM mkOuts outputIndex
     let inpts = Set.fromList $ fst <$> inputPairs
-
+        refInpts = Set.fromList $ fst <$> refInputPairs
     Right $ mkScriptTx succeeds
       (mapMaybe mkScriptInp (zip [0 .. ] inputPairs)
         ++ mkScriptMint minted)
-      $ consPaymentTxBody inpts colInput (StrictSeq.fromList outps) (Coin fees) minted
+      $ consPaymentTxBody inpts colInput refInpts (StrictSeq.fromList outps) Strict.SNothing (Coin fees) minted
 
   where
     mkOuts (outIx, vl) = do
         addr <- resolveAddress outIx sta
         Right $ TxOut addr vl (DatumHash (hashData @StandardBabbage plutusDataList)) Strict.SNothing
 
-mkDCertTx :: [DCert StandardCrypto] -> Wdrl StandardCrypto
+mkDCertTx :: [DCert StandardCrypto] -> Wdrl StandardCrypto -> Maybe (TxIn StandardCrypto)
           -> Either ForgingError (ValidatedTx StandardBabbage)
-mkDCertTx certs wdrl = Right $ mkSimpleTx True $ consCertTxBody certs wdrl
+mkDCertTx certs wdrl ref = Right $ mkSimpleTx True $ consCertTxBody ref certs wdrl
 
 mkSimpleDCertTx :: [(StakeIndex, StakeCredential StandardCrypto -> DCert StandardCrypto)]
                 -> BabbageLedgerState
@@ -227,7 +283,7 @@ mkSimpleDCertTx consDert st = do
     dcerts <- forM consDert $ \(stakeIndex, mkDCert) -> do
       cred <- resolveStakeCreds stakeIndex st
       pure $ mkDCert cred
-    mkDCertTx dcerts (Wdrl mempty)
+    mkDCertTx dcerts (Wdrl mempty) Nothing
 
 mkDCertPoolTx :: [([StakeIndex], PoolIndex,
                   [StakeCredential StandardCrypto] -> KeyHash 'StakePool StandardCrypto -> DCert StandardCrypto)]
@@ -238,7 +294,7 @@ mkDCertPoolTx consDert st = do
       stakeCreds <- forM stakeIxs $ \ix -> resolveStakeCreds ix st
       let poolId = resolvePool poolIx st
       pure $ mkDCert stakeCreds poolId
-    mkDCertTx dcerts (Wdrl mempty)
+    mkDCertTx dcerts (Wdrl mempty) Nothing
 
 mkScriptDCertTx :: [(StakeIndex, Bool, StakeCredential StandardCrypto -> DCert StandardCrypto)]
                 -> Bool -> BabbageLedgerState
@@ -248,12 +304,12 @@ mkScriptDCertTx consDert valid st = do
       cred <- resolveStakeCreds stakeIndex st
       pure $ mkDCert cred
     Right $ mkScriptTx valid (mapMaybe prepareRedeemer $ zip [0..] consDert)
-              $ consCertTxBody dcerts (Wdrl mempty)
+              $ consCertTxBody Nothing dcerts (Wdrl mempty)
   where
     prepareRedeemer (n, (StakeIndexScript bl, addRedeemer, _)) =
         if not addRedeemer then Nothing else Just $
-        if bl then (RdmrPtr Cert n, (alwaysFailsScriptHash, alwaysFailsScript))
-              else (RdmrPtr Cert n, (alwaysSucceedsScriptHash, alwaysSucceedsScript))
+        if bl then (RdmrPtr Cert n, Just (alwaysFailsScriptHash, alwaysFailsScript))
+              else (RdmrPtr Cert n, Just (alwaysSucceedsScriptHash, alwaysSucceedsScript))
     prepareRedeemer _ = Nothing
 
 mkDepositTxPools :: BabbageUTxOIndex -> Integer -> BabbageLedgerState
@@ -264,11 +320,11 @@ mkDepositTxPools inputIndex deposit sta = do
   let input = Set.singleton $ fst inputPair
       TxOut addr' (Value inputValue _) _ _ = snd inputPair
       change = TxOut addr' (valueFromList (fromIntegral $ fromIntegral inputValue - deposit) []) NoDatum Strict.SNothing
-  Right $ mkSimpleTx True $ consTxBody input mempty (StrictSeq.fromList [change]) (Coin 0) mempty (allPoolStakeCert sta) (Wdrl mempty)
+  Right $ mkSimpleTx True $ consTxBody input mempty mempty (StrictSeq.fromList [change]) Strict.SNothing (Coin 0) mempty (allPoolStakeCert sta) (Wdrl mempty)
 
 mkDCertTxPools :: BabbageLedgerState
                -> Either ForgingError (ValidatedTx StandardBabbage)
-mkDCertTxPools sta = Right $ mkSimpleTx True $ consCertTxBody (allPoolStakeCert sta) (Wdrl mempty)
+mkDCertTxPools sta = Right $ mkSimpleTx True $ consCertTxBody Nothing (allPoolStakeCert sta) (Wdrl mempty)
 
 mkSimpleTx :: Bool -> TxBody StandardBabbage -> ValidatedTx StandardBabbage
 mkSimpleTx valid txBody = ValidatedTx
@@ -301,7 +357,7 @@ consPoolParamsTwoOwners [rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId =
     DCertPool $ RegPool $ consPoolParams poolId rwCred [owner0, owner1]
 consPoolParamsTwoOwners _ _ = panic "expected 2 pool owners"
 
-mkScriptTx :: Bool -> [(RdmrPtr, (ScriptHash StandardCrypto, Core.Script StandardBabbage))]
+mkScriptTx :: Bool -> [(RdmrPtr, Maybe (ScriptHash StandardCrypto, Core.Script StandardBabbage))]
            -> TxBody StandardBabbage
            -> ValidatedTx StandardBabbage
 mkScriptTx valid rdmrs txBody = ValidatedTx
@@ -313,14 +369,14 @@ mkScriptTx valid rdmrs txBody = ValidatedTx
   where
     witnesses = mkWitnesses rdmrs [(hashData @StandardBabbage plutusDataList, plutusDataList)]
 
-mkWitnesses :: [(RdmrPtr, (ScriptHash StandardCrypto, Core.Script StandardBabbage))]
+mkWitnesses :: [(RdmrPtr, Maybe (ScriptHash StandardCrypto, Core.Script StandardBabbage))]
             -> [(DataHash StandardCrypto, Data StandardBabbage)]
             -> TxWitness StandardBabbage
 mkWitnesses rdmrs datas =
     TxWitness
       mempty
       mempty
-      (Map.fromList $ snd <$> rdmrs)
+      (Map.fromList $ mapMaybe snd rdmrs)
       (TxDats $ Map.fromList datas)
       (Redeemers $ Map.fromList redeemers)
   where
@@ -333,13 +389,17 @@ addMetadata tx n = tx { auxiliaryData = Strict.SJust $ AuxiliaryData mp mempty}
   where
     mp = Map.singleton n $ List []
 
-mkUTxOAlonzo :: ValidatedTx StandardBabbage -> [(TxIn StandardCrypto, TxOut StandardBabbage)]
-mkUTxOAlonzo tx =
-    [ (TxIn transId idx, out)
+mkUTxOBabbage :: ValidatedTx StandardBabbage -> [(TxIn StandardCrypto, TxOut StandardBabbage)]
+mkUTxOBabbage tx =
+    [ (TxIn (mkTxHash tx) idx, out)
     | (out, idx) <- zip (toList $ getField @"outputs" (getField @"body" tx)) (TxIx <$> [0 ..])
     ]
-  where
-    transId = txid $ getField @"body" tx
+
+mkUTxOCollBabbage :: ValidatedTx StandardBabbage -> [(TxIn StandardCrypto, TxOut StandardBabbage)]
+mkUTxOCollBabbage tx = Map.toList $ unUTxO $ collOuts $ getField @"body" tx
+
+mkTxHash :: ValidatedTx StandardBabbage -> TxId StandardCrypto
+mkTxHash = txid . getField @"body"
 
 emptyTxBody :: TxBody StandardBabbage
 emptyTxBody = TxBody

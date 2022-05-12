@@ -50,7 +50,7 @@ newtype NodeId = NodeId { unNodeId :: Int }
   deriving Show
 
 data ForgingError
-  = WentTooFar
+  = WentTooFar !SlotNo
   | ForecastError !SlotNo !OutsideForecastRange
   | NonExistantNode !NodeId
   | CantFindUTxO

@@ -2,6 +2,7 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
 module Test.Cardano.Db.Mock.Unit.Babbage where
 
@@ -90,6 +91,7 @@ unitTests iom knownMigrations =
           [ test "rewards simple" simpleRewards
           , test "shelley rewards from multiple sources" rewardsShelley
           , test "rewards with deregistration" rewardsDeregistration
+          , test "rewards with reregistration. Fixed in Babbage." rewardsReregistration
           , test "Mir Cert" mirReward
           , test "Mir rollback" mirRewardRollback
           , test "Mir Cert Shelley" mirRewardShelley
@@ -136,6 +138,19 @@ unitTests iom knownMigrations =
           , test "pool deregistration" poolDeReg
           , test "pool multiple deregistration" poolDeRegMany
           , test "delist pool" poolDelist
+          ]
+      , testGroup "Babbage inline and reference"
+          [ test "spend inline datum" unlockDatumOutput
+          , test "spend inline datum same block" unlockDatumOutputSameBlock
+          , test "spend reference script" spendRefScript
+          , test "spend reference script same block" spendRefScriptSameBlock
+          , test "spend collateral output of invalid tx" spendCollateralOutput
+          , test "spend collateral output of invalid tx same block" spendCollateralOutputSameBlock
+          , test "reference input to output which is not spent" referenceInputUnspend
+          , test "supply and run script which is both reference and in witnesses" supplyScriptsTwoWays
+          , test "supply and run script which is both reference and in witnesses same block" supplyScriptsTwoWaysSameBlock
+          , test "reference script as minting" referenceMintingScript
+          , test "reference script as delegation" referenceDelegation
           ]
       ]
   where
@@ -328,7 +343,7 @@ configNoStakes =
       eblk <- try $ forgeNext interpreter mockBlock0
       case eblk of
         Right _ -> assertFailure "should fail"
-        Left WentTooFar -> pure ()
+        Left WentTooFar {} -> pure ()
         -- TODO add an option to disable fingerprint validation for tests like this.
         Left (EmptyFingerprint _ _) -> pure ()
         Left err -> assertFailure $ "got " <> show err <> " instead of WentTooFar"
@@ -500,7 +515,7 @@ consumeSameBlock =
 
       void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
         tx0 <- Babbage.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 20000 20000 st
-        let utxo0 = head (Babbage.mkUTxOAlonzo tx0)
+        let utxo0 = head (Babbage.mkUTxOBabbage tx0)
         tx1 <- Babbage.mkPaymentTx (UTxOPair utxo0) (UTxOIndex 2) 10000 500 st
         pure [tx0, tx1]
       assertBlockNoBackoff dbSync 1
@@ -599,7 +614,7 @@ rewardsDeregistration =
 
       -- first move to treasury from reserves
       void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-        Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty)
+        Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty) Nothing
 
       void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
             -- register the stake address and delegate to a pool
@@ -651,6 +666,64 @@ rewardsDeregistration =
   where
     testLabel = "rewardsDeregistration"
 
+-- This is a fix of the reward issue fix in Babbage described in the Babbage specs
+-- If a stake address is deregistered during the reward computation initialisation,
+-- and is registered later it doesn't receive rewards before Babbage. It does receive
+-- on Babbage. See the same test on Alonzo.
+rewardsReregistration :: IOManager -> [(Text, Text)] -> Assertion
+rewardsReregistration =
+    withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
+        Babbage.mkDepositTxPools (UTxOIndex 1) 20000
+
+      -- first move to treasury from reserves
+      void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
+        Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty) Nothing
+
+      void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
+            -- register the stake address and delegate to a pool
+        let poolId = resolvePool (PoolIndex 0) st
+        tx1 <- Babbage.mkSimpleDCertTx
+                    [ (StakeIndexNew 1, DCertDeleg . RegKey)
+                    , (StakeIndexNew 1, \stCred -> DCertDeleg $ Delegate $ Delegation stCred poolId) ]
+                    st
+            -- send some funds to the address so
+        tx2 <- Babbage.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithStake 0 (StakeIndexNew 1)) 100000 5000 st
+        Right [tx1, tx2]
+
+      a <- fillEpochs interpreter mockServer 3
+      assertBlockNoBackoff dbSync (fromIntegral $ 3 + length a)
+
+      st <- getBabbageLedgerState interpreter
+
+      -- Now that pools are registered, we add a tx to fill the fees pot.
+      -- Rewards will be distributed.
+      void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ Babbage.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
+
+      b <- fillEpochs interpreter mockServer 2
+
+      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length a + length b)
+      assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,1,0,0,0))]
+
+      void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ Babbage.mkPaymentTx (UTxOIndex 1) (UTxOIndex 0) 10000 10000
+
+      b' <- fillEpochs interpreter mockServer 1
+      c <- fillEpochPercentage interpreter mockServer 10
+      -- deregister before the 40% of the epoch
+      void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
+          Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)]
+      d <- fillEpochPercentage interpreter mockServer 60
+      -- register after 40% and before epoch boundary.
+      void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
+          Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)]
+      e <- fillUntilNextEpoch interpreter mockServer
+      assertBlockNoBackoff dbSync (fromIntegral $ 7 + length (a <> b <> b' <> c <> d <> e))
+      -- This is 1 in Alonzo
+      assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,2,0,0,0))]
+  where
+    testLabel = "rewardsReregistration"
+
 mirReward :: IOManager -> [(Text, Text)] -> Assertion
 mirReward =
     withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
@@ -659,7 +732,7 @@ mirReward =
 
       -- first move to treasury from reserves
       void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-        Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty)
+        Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty) Nothing
 
       void $ fillEpochPercentage interpreter mockServer 50
 
@@ -689,7 +762,7 @@ mirRewardRollback =
 
       -- first move to treasury from reserves
       void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-        Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty)
+        Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty) Nothing
 
       void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
         Babbage.mkSimpleDCertTx [ (StakeIndexNew 1, DCertDeleg . RegKey) ]
@@ -757,7 +830,7 @@ mirRewardDereg =
 
       -- first move to treasury from reserves
       void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-        Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty)
+        Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty) Nothing
 
       a <- fillUntilNextEpoch interpreter mockServer
 
@@ -790,6 +863,7 @@ rewardsEmptyChainLast =
 
       a <- fillEpochs interpreter mockServer 3
       assertRewardCount dbSync 3
+      assertCurrentEpoch dbSync 3
 
       -- Now that pools are registered, we add a tx to fill the fees pot.
       -- Rewards will be distributed.
@@ -798,12 +872,15 @@ rewardsEmptyChainLast =
 
       b <- fillUntilNextEpoch interpreter mockServer
       assertRewardCount dbSync 6
+      assertCurrentEpoch dbSync 4
 
-      c <- fillEpochPercentage interpreter mockServer 68
-
+      c <- fillEpochPercentage interpreter mockServer 90
+      assertCurrentEpoch dbSync 4
       -- Skip a percentage of the epoch epoch
       void $ skipUntilNextEpoch interpreter mockServer []
+      assertCurrentEpoch dbSync 5
       d <- fillUntilNextEpoch interpreter mockServer
+      assertCurrentEpoch dbSync 6
       assertBlockNoBackoff dbSync (fromIntegral $ 1 + length a + 1 + length b + length c + 1 + length d)
       assertRewardCount dbSync 17
   where
@@ -866,7 +943,7 @@ singleMIRCertMultiOut =
       startDBSync dbSync
 
       void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-            Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty)
+            Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty) Nothing
 
       a <- fillUntilNextEpoch interpreter mockServer
 
@@ -874,7 +951,7 @@ singleMIRCertMultiOut =
             stakeAddr0 <- resolveStakeCreds (StakeIndex 0) state
             stakeAddr1 <- resolveStakeCreds (StakeIndex 1) state
             let saMIR = StakeAddressesMIR (Map.fromList [(stakeAddr0, DeltaCoin 10), (stakeAddr1, DeltaCoin 20)])
-            Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR saMIR, DCertMir $ MIRCert TreasuryMIR saMIR] (Wdrl mempty)
+            Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR saMIR, DCertMir $ MIRCert TreasuryMIR saMIR] (Wdrl mempty) Nothing
 
       b <- fillUntilNextEpoch interpreter mockServer
 
@@ -1015,7 +1092,7 @@ simpleScript =
       a <- fillUntilNextEpoch interpreter mockServer
 
       void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkLockByScriptTx (UTxOIndex 0) [True] 20000 20000
+        Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutNoInline True] 20000 20000
 
       assertBlockNoBackoff dbSync (fromIntegral $ length a + 2)
       assertEqQuery dbSync (fmap getOutFields <$> DB.queryScriptOutputs) [expectedFields] "Unexpected script outputs"
@@ -1033,10 +1110,10 @@ unlockScript =
       void $ registerAllStakeCreds interpreter mockServer
 
       -- We don't use withBabbageFindLeaderAndSubmitTx here, because we want access to the tx.
-      tx0 <- withBabbageLedgerState interpreter $ Babbage.mkLockByScriptTx (UTxOIndex 0) [True] 20000 20000
+      tx0 <- withBabbageLedgerState interpreter $ Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutNoInline True] 20000 20000
       void $ forgeNextAndSubmit interpreter mockServer $ MockBlock [TxBabbage tx0] (NodeId 1)
 
-      let utxo0 = head (Babbage.mkUTxOAlonzo tx0)
+      let utxo0 = head (Babbage.mkUTxOBabbage tx0)
       void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
         Babbage.mkUnlockScriptTx [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) True 10000 500
 
@@ -1052,8 +1129,8 @@ unlockScriptSameBlock =
       void $ registerAllStakeCreds interpreter mockServer
 
       void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
-        tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0) [True] 20000 20000 st
-        let utxo0 = head (Babbage.mkUTxOAlonzo tx0)
+        tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutNoInline True] 20000 20000 st
+        let utxo0 = head (Babbage.mkUTxOBabbage tx0)
         tx1 <- Babbage.mkUnlockScriptTx [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) True 10000 500 st
         pure [tx0, tx1]
 
@@ -1068,10 +1145,10 @@ failedScript =
     withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
 
-      tx0 <- withBabbageLedgerState interpreter $ Babbage.mkLockByScriptTx (UTxOIndex 0) [False] 20000 20000
+      tx0 <- withBabbageLedgerState interpreter $ Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutNoInline False] 20000 20000
       void $ forgeNextAndSubmit interpreter mockServer $ MockBlock [TxBabbage tx0] (NodeId 1)
 
-      let utxo0 = head (Babbage.mkUTxOAlonzo tx0)
+      let utxo0 = head (Babbage.mkUTxOBabbage tx0)
       void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
         Babbage.mkUnlockScriptTx [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) False 10000 500
 
@@ -1087,8 +1164,8 @@ failedScriptSameBlock =
       void $ registerAllStakeCreds interpreter mockServer
 
       void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
-        tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0) [False] 20000 20000 st
-        let utxo0 = head (Babbage.mkUTxOAlonzo tx0)
+        tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutNoInline False] 20000 20000 st
+        let utxo0 = head (Babbage.mkUTxOBabbage tx0)
         tx1 <- Babbage.mkUnlockScriptTx [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) False 10000 500 st
         pure [tx0, tx1]
 
@@ -1102,8 +1179,8 @@ multipleScripts =
     withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
     startDBSync  dbSync
 
-    tx0 <- withBabbageLedgerState interpreter $ Babbage.mkLockByScriptTx (UTxOIndex 0) [True, False, True] 20000 20000
-    let utxo = Babbage.mkUTxOAlonzo tx0
+    tx0 <- withBabbageLedgerState interpreter $ Babbage.mkLockByScriptTx (UTxOIndex 0) (Babbage.TxOutNoInline <$> [True, False, True]) 20000 20000
+    let utxo = Babbage.mkUTxOBabbage tx0
         pair1 = head utxo
         pair2 = utxo !! 2
     tx1 <- withBabbageLedgerState interpreter $
@@ -1123,8 +1200,8 @@ multipleScriptsSameBlock =
     startDBSync  dbSync
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
-      tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0) [True, False, True] 20000 20000 st
-      let utxo =  Babbage.mkUTxOAlonzo tx0
+      tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0) (Babbage.TxOutNoInline <$> [True, False, True]) 20000 20000 st
+      let utxo =  Babbage.mkUTxOBabbage tx0
           pair1 = head utxo
           pair2 = utxo !! 2
       tx1 <- Babbage.mkUnlockScriptTx [UTxOPair pair1, UTxOPair pair2] (UTxOIndex 1) (UTxOIndex 2) True 10000 500 st
@@ -1140,10 +1217,10 @@ multipleScriptsFailed =
     withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
     startDBSync  dbSync
 
-    tx0 <- withBabbageLedgerState interpreter $ Babbage.mkLockByScriptTx (UTxOIndex 0) [True, False, True] 20000 20000
+    tx0 <- withBabbageLedgerState interpreter $ Babbage.mkLockByScriptTx (UTxOIndex 0) (Babbage.TxOutNoInline <$> [True, False, True]) 20000 20000
     void $ forgeNextAndSubmit interpreter mockServer $ MockBlock [TxBabbage tx0] (NodeId 1)
 
-    let utxos = Babbage.mkUTxOAlonzo tx0
+    let utxos = Babbage.mkUTxOBabbage tx0
     tx1 <- withBabbageLedgerState interpreter $
         Babbage.mkUnlockScriptTx (UTxOPair <$> [head utxos, utxos !! 1, utxos !! 2]) (UTxOIndex 1) (UTxOIndex 2) False 10000 500
     void $ forgeNextAndSubmit interpreter mockServer $ MockBlock [TxBabbage tx1] (NodeId 1)
@@ -1159,9 +1236,9 @@ multipleScriptsFailedSameBlock =
     startDBSync  dbSync
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
-      tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0) [True, False, True] 20000 20000 st
+      tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0) (Babbage.TxOutNoInline <$> [True, False, True]) 20000 20000 st
 
-      let utxos = tail $ Babbage.mkUTxOAlonzo tx0
+      let utxos = tail $ Babbage.mkUTxOBabbage tx0
       tx1 <- Babbage.mkUnlockScriptTx (UTxOPair <$> [head utxos, utxos !! 1, utxos !! 2]) (UTxOIndex 1) (UTxOIndex 2) False 10000 500 st
       pure [tx0, tx1]
 
@@ -1283,7 +1360,7 @@ mintMultiAsset =
       startDBSync  dbSync
       void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \st -> do
         let val0 = Value 1 $ Map.singleton (PolicyID alwaysMintScriptHash) (Map.singleton (head assetNames) 1)
-        Babbage.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, Value 10000 mempty)] val0 True 100 st
+        Babbage.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, Value 10000 mempty)] [] val0 True 100 st
 
       assertBlockNoBackoff dbSync 1
       assertAlonzoCounts dbSync (1,1,1,1,0,0,0,0)
@@ -1299,8 +1376,8 @@ mintMultiAssets =
         let policy0 = PolicyID alwaysMintScriptHash
         let policy1 = PolicyID alwaysSucceedsScriptHash
         let val1 = Value 1 $ Map.fromList [(policy0, assets0), (policy1, assets0)]
-        tx0 <- Babbage.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, Value 10000 mempty)] val1 True 100 st
-        tx1 <- Babbage.mkMAssetsScriptTx [UTxOIndex 2] (UTxOIndex 3) [(UTxOAddressNew 0, Value 10000 mempty)] val1 True 200 st
+        tx0 <- Babbage.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, Value 10000 mempty)] [] val1 True 100 st
+        tx1 <- Babbage.mkMAssetsScriptTx [UTxOIndex 2] (UTxOIndex 3) [(UTxOAddressNew 0, Value 10000 mempty)] [] val1 True 200 st
         pure [tx0, tx1]
 
       assertBlockNoBackoff dbSync 1
@@ -1321,15 +1398,15 @@ swapMultiAssets =
           let outValue0 = Value 20 $ Map.fromList [(policy0, assets0), (policy1, assets0)]
 
           tx0 <- Babbage.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1)
-                  [(UTxOAddress alwaysSucceedsScriptAddr, outValue0), (UTxOAddress alwaysMintScriptAddr, outValue0)] mintValue0 True 100 st
+                  [(UTxOAddress alwaysSucceedsScriptAddr, outValue0), (UTxOAddress alwaysMintScriptAddr, outValue0)] [] mintValue0 True 100 st
 
-          let utxos = Babbage.mkUTxOAlonzo tx0
+          let utxos = Babbage.mkUTxOBabbage tx0
           tx1 <- Babbage.mkMAssetsScriptTx
             [UTxOPair (head utxos), UTxOPair (utxos !! 1), UTxOIndex 2]
             (UTxOIndex 3)
             [ (UTxOAddress alwaysSucceedsScriptAddr, outValue0), (UTxOAddress alwaysMintScriptAddr, outValue0)
             , (UTxOAddressNew 0, outValue0), (UTxOAddressNew 0, outValue0)]
-            mintValue0 True 200 st
+            [] mintValue0 True 200 st
           pure [tx0, tx1]
 
       assertBlockNoBackoff dbSync 1
@@ -1548,6 +1625,260 @@ poolDelist =
   where
     testLabel = "poolDelist"
 
+unlockDatumOutput :: IOManager -> [(Text, Text)] -> Assertion
+unlockDatumOutput =
+    withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      void $ registerAllStakeCreds interpreter mockServer
+
+      -- We don't use withBabbageFindLeaderAndSubmitTx here, because we want access to the tx.
+      tx0 <- withBabbageLedgerState interpreter
+        $ Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutInline True True Babbage.NoReferenceScript] 20000 20000
+      void $ forgeNextAndSubmit interpreter mockServer $ MockBlock [TxBabbage tx0] (NodeId 1)
+
+      let utxo0 = head (Babbage.mkUTxOBabbage tx0)
+      void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
+        Babbage.mkUnlockScriptTxBabbage [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) [UTxOPair utxo0] False True 10000 500
+
+      assertBlockNoBackoff dbSync 3
+      assertBabbageCounts dbSync (1,1,1,1,1,1,0,0,1,1,1,1,0)
+  where
+    testLabel = "unlockDatumOutput"
+
+unlockDatumOutputSameBlock :: IOManager -> [(Text, Text)] -> Assertion
+unlockDatumOutputSameBlock =
+    withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      void $ registerAllStakeCreds interpreter mockServer
+
+      -- We try to make this test as crazy as possible, by keeping inputs and outputs in the same blocks, using unnecessary reference
+      -- inputs and adding unnnecessary fields to the collateral output.
+      txs' <- withBabbageLedgerState interpreter $ \st -> do
+        tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0)
+                [Babbage.TxOutInline True True Babbage.NoReferenceScript, Babbage.TxOutInline True False (Babbage.ReferenceScript False)]
+                20000 20000 st
+        let utxo0 = head (Babbage.mkUTxOBabbage tx0)
+        tx1 <- Babbage.mkUnlockScriptTxBabbage [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2)
+          [UTxOPair utxo0, UTxOIndex 2] True True 10000 500 st
+        pure [tx0, tx1]
+      void $ forgeNextAndSubmit interpreter mockServer $ MockBlock (TxBabbage <$> txs') (NodeId 1)
+
+      assertBlockNoBackoff dbSync 2
+      assertBabbageCounts dbSync (2,1,1,1,2,1,0,0,1,2,1,1,1)
+  where
+    testLabel = "unlockDatumOutputSameBlock"
+
+spendRefScript :: IOManager -> [(Text, Text)] -> Assertion
+spendRefScript =
+    withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      void $ registerAllStakeCreds interpreter mockServer
+
+      -- We don't use withBabbageFindLeaderAndSubmitTx here, because we want access to the tx.
+      tx0 <- withBabbageLedgerState interpreter
+        $ Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutInline True False (Babbage.ReferenceScript True)] 20000 20000
+      void $ forgeNextAndSubmit interpreter mockServer $ MockBlock [TxBabbage tx0] (NodeId 1)
+
+      let utxo0 = head (Babbage.mkUTxOBabbage tx0)
+      void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
+        Babbage.mkUnlockScriptTxBabbage [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) [UTxOPair utxo0] False True 10000 500
+
+      assertBlockNoBackoff dbSync 3
+      assertBabbageCounts dbSync (1,1,1,1,2,1,0,0,1,1,1,0,1)
+  where
+    testLabel = "spendRefScript"
+
+spendRefScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion
+spendRefScriptSameBlock =
+    withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      void $ registerAllStakeCreds interpreter mockServer
+
+      txs' <- withBabbageLedgerState interpreter $ \st -> do
+        tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0)
+                [ Babbage.TxOutInline True False (Babbage.ReferenceScript True)
+                , Babbage.TxOutInline True False (Babbage.ReferenceScript False)]
+                20000 20000 st
+        let utxo0 = head (Babbage.mkUTxOBabbage tx0)
+        tx1 <- Babbage.mkUnlockScriptTxBabbage [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2)
+          [UTxOPair utxo0, UTxOIndex 2] True True 10000 500 st
+        pure [tx0, tx1]
+      void $ forgeNextAndSubmit interpreter mockServer $ MockBlock (TxBabbage <$> txs') (NodeId 1)
+
+      assertBlockNoBackoff dbSync 2
+      assertBabbageCounts dbSync (2,1,1,1,2,1,0,0,1,2,1,0,2)
+  where
+    testLabel = "spendRefScriptSameBlock"
+
+spendCollateralOutput :: IOManager -> [(Text, Text)] -> Assertion
+spendCollateralOutput =
+    withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      void $ registerAllStakeCreds interpreter mockServer
+
+      tx0 <- withBabbageLedgerState interpreter
+        $ Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutNoInline False] 20000 20000
+      void $ forgeNextFindLeaderAndSubmit interpreter mockServer [TxBabbage tx0]
+
+      -- tx fails so its collateral output become actual output.
+      let utxo0 = head (Babbage.mkUTxOBabbage tx0)
+      tx1 <- withBabbageLedgerState interpreter $
+        Babbage.mkUnlockScriptTxBabbage [UTxOInput (fst utxo0)] (UTxOIndex 1) (UTxOIndex 2) [UTxOPair utxo0] True False 10000 500
+      void $ forgeNextFindLeaderAndSubmit interpreter mockServer [TxBabbage tx1]
+      assertBlockNoBackoff dbSync 3
+
+      let utxo1 = head (Babbage.mkUTxOCollBabbage tx1)
+      tx2 <- withBabbageLedgerState interpreter $
+        Babbage.mkUnlockScriptTxBabbage [UTxOPair utxo1] (UTxOIndex 3) (UTxOIndex 4) [UTxOPair utxo1] False True 10000 500
+      void $ forgeNextFindLeaderAndSubmit interpreter mockServer [TxBabbage tx2]
+
+      assertBlockNoBackoff dbSync 4
+      assertBabbageCounts dbSync (1,1,1,1,2,1,1,1,1,1,1,1,1)
+  where
+    testLabel = "spendCollateralOutput"
+
+spendCollateralOutputSameBlock :: IOManager -> [(Text, Text)] -> Assertion
+spendCollateralOutputSameBlock =
+    withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      void $ registerAllStakeCreds interpreter mockServer
+
+      txs' <- withBabbageLedgerState interpreter $ \st -> do
+        tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutNoInline False] 20000 20000 st
+
+        -- tx fails so its collateral output become actual output.
+        let utxo0 = head (Babbage.mkUTxOBabbage tx0)
+        tx1 <- Babbage.mkUnlockScriptTxBabbage [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) [UTxOPair utxo0] True False 10000 500 st
+        let utxo1 = head (Babbage.mkUTxOCollBabbage tx1)
+        tx2 <- Babbage.mkUnlockScriptTxBabbage [UTxOPair utxo1] (UTxOIndex 3) (UTxOIndex 4) [UTxOPair utxo1] False True 10000 500 st
+        pure [tx0, tx1, tx2]
+      void $ forgeNextFindLeaderAndSubmit interpreter mockServer (TxBabbage <$> txs')
+
+      assertBlockNoBackoff dbSync 2
+      assertBabbageCounts dbSync (1,1,1,1,2,1,1,1,1,1,1,1,1)
+  where
+    testLabel = "spendCollateralOutputSameBlock"
+
+referenceInputUnspend :: IOManager -> [(Text, Text)] -> Assertion
+referenceInputUnspend =
+    withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      void $ registerAllStakeCreds interpreter mockServer
+
+      txs' <- withBabbageLedgerState interpreter $ \st -> do
+        tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0)
+                [ Babbage.TxOutInline True True (Babbage.ReferenceScript True)
+                , Babbage.TxOutInline True True (Babbage.ReferenceScript True)]
+                20000 20000 st
+
+        let (utxo0 : utxo1 : _)  = Babbage.mkUTxOBabbage tx0
+        -- use a reference to an input which is not spend.
+        tx1 <- Babbage.mkUnlockScriptTxBabbage [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) [UTxOPair utxo1] False True 10000 500 st
+        pure [tx0, tx1]
+      void $ forgeNextFindLeaderAndSubmit interpreter mockServer (TxBabbage <$> txs')
+
+      assertBlockNoBackoff dbSync 2
+      assertBabbageCounts dbSync (1,1,1,1,2,1,0,0,1,1,1,2,2)
+  where
+    testLabel = "referenceInputUnspend"
+
+supplyScriptsTwoWays :: IOManager -> [(Text, Text)] -> Assertion
+supplyScriptsTwoWays =
+    withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      void $ registerAllStakeCreds interpreter mockServer
+
+      tx0 <- withBabbageLedgerState interpreter
+        $ Babbage.mkLockByScriptTx (UTxOIndex 0)
+                [ Babbage.TxOutInline True True (Babbage.ReferenceScript True)
+                , Babbage.TxOutNoInline True]
+                20000 20000
+      void $ forgeNextFindLeaderAndSubmit interpreter mockServer [TxBabbage tx0]
+
+      let (utxo0 : utxo1 : _)  = Babbage.mkUTxOBabbage tx0
+      -- use a reference to an input which is not spend.
+      tx1 <- withBabbageLedgerState interpreter $
+        Babbage.mkUnlockScriptTxBabbage [UTxOPair utxo0, UTxOPair utxo1] (UTxOIndex 1) (UTxOIndex 2) [UTxOPair utxo0] False True 10000 500
+      void $ forgeNextFindLeaderAndSubmit interpreter mockServer [TxBabbage tx1]
+
+      assertBlockNoBackoff dbSync 3
+      assertBabbageCounts dbSync (1,2,1,1,2,2,0,0,1,1,1,1,1)
+  where
+    testLabel = "supplyScriptsTwoWays"
+
+supplyScriptsTwoWaysSameBlock :: IOManager -> [(Text, Text)] -> Assertion
+supplyScriptsTwoWaysSameBlock =
+    withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      void $ registerAllStakeCreds interpreter mockServer
+
+      txs' <- withBabbageLedgerState interpreter $ \st -> do
+        -- one script referenced and one for the witnesses
+        tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0)
+                [ Babbage.TxOutInline True True (Babbage.ReferenceScript True)
+                , Babbage.TxOutNoInline True]
+                20000 20000 st
+
+        let (utxo0 : utxo1 : _)  = Babbage.mkUTxOBabbage tx0
+        -- use a reference to an input which is not spend.
+        tx1 <- Babbage.mkUnlockScriptTxBabbage [UTxOPair utxo0, UTxOPair utxo1] (UTxOIndex 1) (UTxOIndex 2) [UTxOPair utxo0] False True 10000 500 st
+        pure [tx0, tx1]
+      void $ forgeNextFindLeaderAndSubmit interpreter mockServer (TxBabbage <$> txs')
+
+      assertBlockNoBackoff dbSync 2
+      assertBabbageCounts dbSync (1,2,1,1,2,2,0,0,1,1,1,1,1)
+  where
+    testLabel = "supplyScriptsTwoWaysSameBlock"
+
+referenceMintingScript :: IOManager -> [(Text, Text)] -> Assertion
+referenceMintingScript =
+    withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      void $ registerAllStakeCreds interpreter mockServer
+
+      txs' <- withBabbageLedgerState interpreter $ \st -> do
+        -- one script referenced and one for the witnesses
+        tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0)
+                [ Babbage.TxOutInline True True (Babbage.ReferenceScript True)]
+                20000 20000 st
+
+        let utxo0 = head $ Babbage.mkUTxOBabbage tx0
+        -- use a reference to an output which has a minting script.
+        let val0 = Value 1 $ Map.singleton (PolicyID alwaysSucceedsScriptHash) (Map.singleton (head assetNames) 1)
+        tx1 <- Babbage.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1)
+          [(UTxOAddressNew 0, Value 10000 mempty)] [UTxOPair utxo0] val0 True 100 st
+        pure [tx0, tx1]
+      void $ forgeNextFindLeaderAndSubmit interpreter mockServer (TxBabbage <$> txs')
+
+      assertBlockNoBackoff dbSync 2
+      assertBabbageCounts dbSync (1,1,1,1,1,0,0,0,1,1,0,1,1)
+  where
+    testLabel = "referenceMintingScript"
+
+referenceDelegation :: IOManager -> [(Text, Text)] -> Assertion
+referenceDelegation =
+    withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      void $ registerAllStakeCreds interpreter mockServer
+
+      txs' <- withBabbageLedgerState interpreter $ \st -> do
+        -- one script referenced and one for the witnesses
+        tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0)
+                [ Babbage.TxOutInline True True (Babbage.ReferenceScript True)]
+                20000 20000 st
+
+        let utxo0 = head $ Babbage.mkUTxOBabbage tx0
+        -- use a reference to an output which has a minting script.
+        let val0 = Value 1 $ Map.singleton (PolicyID alwaysSucceedsScriptHash) (Map.singleton (head assetNames) 1)
+        tx1 <- Babbage.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1)
+          [(UTxOAddressNew 0, Value 10000 mempty)] [UTxOPair utxo0] val0 True 100 st
+        pure [tx0, tx1]
+      void $ forgeNextFindLeaderAndSubmit interpreter mockServer (TxBabbage <$> txs')
+
+      assertBlockNoBackoff dbSync 2
+      assertBabbageCounts dbSync (1,1,1,1,1,0,0,0,1,1,0,1,1)
+  where
+    testLabel = "referenceDelegation"
 
 hfBlockHash :: CardanoBlock -> ByteString
 hfBlockHash blk =

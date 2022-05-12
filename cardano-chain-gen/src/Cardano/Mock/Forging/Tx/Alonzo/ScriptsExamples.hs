@@ -18,9 +18,8 @@ import           Cardano.Ledger.Crypto (StandardCrypto)
 import           Cardano.Ledger.Era
 import           Cardano.Ledger.Hashes
 import           Cardano.Ledger.Mary.Value
-import           Cardano.Ledger.SafeHash
 
-import           Ouroboros.Consensus.Cardano.Block (LedgerState, StandardAlonzo)
+import           Ouroboros.Consensus.Cardano.Block (StandardAlonzo)
 
 import qualified Plutus.V1.Ledger.Examples as Plutus
 import qualified PlutusCore.Data as Plutus
@@ -38,7 +37,7 @@ alwaysSucceedsScriptStake :: StakeCredential StandardCrypto
 alwaysSucceedsScriptStake = ScriptHashObj alwaysSucceedsScriptHash
 
 
-alwaysFailsScript ::  forall era. Crypto era ~ StandardCrypto => Script era
+alwaysFailsScript ::  forall era. Script era
 alwaysFailsScript = PlutusScript PlutusV1 (Plutus.alwaysFailingNAryFunction 0)
 
 alwaysFailsScriptHash :: ScriptHash StandardCrypto

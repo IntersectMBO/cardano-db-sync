@@ -298,7 +298,7 @@ forgeNextLeaders interpreter txes possibleLeaders = do
         :: InterpreterState -> [BlockForging IO CardanoBlock] -> Int -> SlotNo -> Bool
         -> IO (CardanoBlock, Fingerprint)
     trySlots interState blockForgings numberOfTries currentSlot searching = do
-      when (numberOfTries > 140) (throwIO WentTooFar)
+      when (numberOfTries > 140) (throwIO $ WentTooFar currentSlot)
       mproof <- tryAllForging interpreter interState currentSlot blockForgings
       case mproof of
         Nothing ->
