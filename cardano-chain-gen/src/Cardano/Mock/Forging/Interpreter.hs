@@ -49,6 +49,7 @@ import           Data.Word (Word64)
 import           GHC.Generics (Generic)
 
 import           Cardano.Ledger.Alonzo.Tx
+import           Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Shelley.API.Mempool as Ledger
 import           Cardano.Ledger.Shelley.LedgerState (NewEpochState (..))
 import qualified Cardano.Ledger.TxIn as Ledger
@@ -79,7 +80,7 @@ import           Ouroboros.Consensus.Ledger.Abstract (TickedLedgerState, applyCh
 import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState, headerState, ledgerState)
 import           Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx, Validated,
                    WhetherToIntervene (..), applyTx)
-import           Ouroboros.Consensus.Ledger.SupportsProtocol
+import           Ouroboros.Consensus.Ledger.SupportsProtocol (ledgerViewForecastAt)
 import           Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo, pInfoBlockForging,
                    pInfoConfig, pInfoInitLedger)
 import           Ouroboros.Consensus.Protocol.Abstract (ChainDepState, IsLeader, LedgerView,
@@ -87,7 +88,7 @@ import           Ouroboros.Consensus.Protocol.Abstract (ChainDepState, IsLeader,
 import           Ouroboros.Consensus.Protocol.Praos.Translate ()
 import           Ouroboros.Consensus.Protocol.TPraos ()
 import           Ouroboros.Consensus.Shelley.HFEras ()
-import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock, shelleyLedgerState)
+import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock, Ticked, shelleyLedgerState)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Mempool as Consensus
 import           Ouroboros.Consensus.Shelley.Ledger.SupportsProtocol ()
 import qualified Ouroboros.Consensus.TypeFamilyWrappers as Consensus
@@ -299,7 +300,7 @@ forgeNextLeaders interpreter txes possibleLeaders = do
         :: InterpreterState -> [BlockForging IO CardanoBlock] -> Int -> SlotNo -> Bool
         -> IO (CardanoBlock, Fingerprint)
     trySlots interState blockForgings numberOfTries currentSlot searching = do
-      when (numberOfTries > 140) (throwIO WentTooFar)
+      when (numberOfTries > 140) (throwIO $ WentTooFar currentSlot)
       mproof <- tryAllForging interpreter interState currentSlot blockForgings
       case mproof of
         Nothing ->

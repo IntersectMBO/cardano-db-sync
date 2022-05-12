@@ -47,6 +47,8 @@ import           Test.Cardano.Db.Mock.Config
 
 import           Test.Tasty.HUnit
 
+{- HLINT ignore "Reduce duplication" -}
+
 assertBlocksCount :: DBSyncEnv -> Word -> IO ()
 assertBlocksCount env n = do
     assertEqBackoff env queryBlockCount n defaultDelays "Unexpected block count"
@@ -124,6 +126,12 @@ checkStillRuns env = do
 migrationNotDoneYet :: Text -> Bool
 migrationNotDoneYet txt =
     Text.isPrefixOf "relation" txt && Text.isSuffixOf "does not exist" txt
+
+assertCurrentEpoch :: DBSyncEnv -> Word64 -> IO ()
+assertCurrentEpoch env expected =
+    assertEqBackoff env q (Just expected) defaultDelays "Unexpected epoch stake counts"
+  where
+    q = queryCurrentEpochNo
 
 assertAddrValues :: (Crypto era ~ StandardCrypto, Era era)
                  => DBSyncEnv -> UTxOIndex era -> DbLovelace
@@ -246,6 +254,36 @@ assertAlonzoCounts env expected =
 
       pure ( scripts, redeemers, datums, colInputs, scriptOutputs, redeemerTxIn, invalidTx
            , txIninvalidTx)
+
+assertBabbageCounts :: DBSyncEnv -> (Word64, Word64, Word64, Word64, Word64, Word64, Word64, Word64, Word64, Word64, Word64, Word64, Word64) -> IO ()
+assertBabbageCounts env expected =
+    assertEqBackoff env q expected defaultDelays "Unexpected Babbage counts"
+  where
+    q = do
+      scripts <- maybe 0 unValue . listToMaybe <$>
+                    (select . from $ \(_a :: SqlExpr (Entity Script)) -> pure countRows)
+      redeemers <- maybe 0 unValue . listToMaybe <$>
+                    (select . from $ \(_a :: SqlExpr (Entity Redeemer)) -> pure countRows)
+      datums <- maybe 0 unValue . listToMaybe <$>
+                    (select . from $ \(_a :: SqlExpr (Entity Datum)) -> pure countRows)
+      colInputs <- maybe 0 unValue . listToMaybe <$>
+              (select . from $ \(_a :: SqlExpr (Entity CollateralTxIn)) -> pure countRows)
+      scriptOutputs <- fromIntegral . length <$> queryScriptOutputs
+      redeemerTxIn <- fromIntegral . length <$> queryTxInRedeemer
+      invalidTx <- fromIntegral . length <$> queryInvalidTx
+      txIninvalidTx <- fromIntegral . length <$> queryTxInFailedTx
+      redeemerData <- maybe 0 unValue . listToMaybe <$>
+                    (select . from $ \(_a :: SqlExpr (Entity RedeemerData)) -> pure countRows)
+      referenceTxIn <- maybe 0 unValue . listToMaybe <$>
+                    (select . from $ \(_a :: SqlExpr (Entity ReferenceTxIn)) -> pure countRows)
+      collTxOut <- maybe 0 unValue . listToMaybe <$>
+                    (select . from $ \(_a :: SqlExpr (Entity CollateralTxOut)) -> pure countRows)
+      inlineDatum <- maybe 0 unValue . listToMaybe <$>
+                    (select . from $ \txOut -> where_ (isJust (txOut ^. TxOutInlineDatumId)) >> pure countRows)
+      referenceScript <- maybe 0 unValue . listToMaybe <$>
+                    (select . from $ \txOut -> where_ (isJust (txOut ^. TxOutReferenceScriptId)) >> pure countRows)
+      pure ( scripts, redeemers, datums, colInputs, scriptOutputs, redeemerTxIn, invalidTx
+           , txIninvalidTx, redeemerData, referenceTxIn, collTxOut, inlineDatum, referenceScript)
 
 assertScriptCert :: DBSyncEnv -> (Word64, Word64, Word64, Word64) -> IO ()
 assertScriptCert env expected =
