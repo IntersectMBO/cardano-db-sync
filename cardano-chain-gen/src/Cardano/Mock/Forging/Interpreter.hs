@@ -65,13 +65,14 @@ import           Ouroboros.Consensus.Block (BlockForging, BlockNo (..), BlockPro
                    ForgeStateInfo, ShouldForge (..), SlotNo (..), blockNo, blockSlot,
                    checkShouldForge)
 import qualified Ouroboros.Consensus.Block as Block
-import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardAlonzo, StandardBabbage, StandardShelley)
+import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardAlonzo,
+                   StandardBabbage, StandardShelley)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Config (TopLevelConfig, configConsensus, configLedger,
                    topLevelConfigLedger)
 import           Ouroboros.Consensus.Forecast (Forecast (..))
-import           Ouroboros.Consensus.HardFork.Combinator.Ledger ()
 import qualified Ouroboros.Consensus.HardFork.Combinator.AcrossEras as Consensus
+import           Ouroboros.Consensus.HardFork.Combinator.Ledger ()
 import qualified Ouroboros.Consensus.HardFork.Combinator.Mempool as Consensus
 import           Ouroboros.Consensus.HeaderValidation (headerStateChainDep)
 import           Ouroboros.Consensus.Ledger.Abstract (TickedLedgerState, applyChainTick)

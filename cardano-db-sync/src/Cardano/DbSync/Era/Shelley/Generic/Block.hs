@@ -47,10 +47,10 @@ import qualified Cardano.Protocol.TPraos.OCert as TPraos
 import           Cardano.DbSync.Types
 import           Cardano.Slotting.Slot (SlotNo (..))
 
-import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlonzo, StandardBabbage,
-                   StandardMary, StandardShelley)
-import           Ouroboros.Consensus.Protocol.TPraos
+import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlonzo,
+                   StandardBabbage, StandardMary, StandardShelley)
 import qualified Ouroboros.Consensus.Protocol.Praos.Header as Praos
+import           Ouroboros.Consensus.Protocol.TPraos
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra, ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
 import           Ouroboros.Consensus.Shelley.Protocol.Abstract

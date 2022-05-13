@@ -24,7 +24,8 @@ import           Cardano.Slotting.Slot (SlotNo (..))
 
 import qualified Cardano.Ledger.Core as Core
 
-import           Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardBabbage, StandardShelley)
+import           Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardBabbage,
+                   StandardShelley)
 import           Ouroboros.Consensus.Ledger.Basics (LedgerState)
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 

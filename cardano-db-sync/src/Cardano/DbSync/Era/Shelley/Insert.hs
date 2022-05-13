@@ -83,8 +83,8 @@ insertShelleyBlock
 insertShelleyBlock env firstBlockOfEpoch blk lStateSnap details = do
   runExceptT $ do
     pbid <- case Generic.blkPreviousHash blk of
-      Nothing -> liftLookupFail (renderInsertName (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
-      Just pHash -> queryPrevBlockWithCache (renderInsertName (Generic.blkEra blk)) cache pHash
+      Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
+      Just pHash -> queryPrevBlockWithCache (renderErrorMessage (Generic.blkEra blk)) cache pHash
     mPhid <- lift $ queryPoolKeyWithCache cache CacheNew (Generic.StakePoolKeyHash $ Generic.blkSlotLeader blk)
 
     slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
@@ -158,6 +158,10 @@ insertShelleyBlock env firstBlockOfEpoch blk lStateSnap details = do
 
     renderInsertName :: Generic.BlockEra -> Text
     renderInsertName eraName =
+      mconcat ["Insert ",  textShow eraName, " Block"]
+
+    renderErrorMessage :: Generic.BlockEra -> Text
+    renderErrorMessage eraName =
       case eraName of
         Generic.Shelley -> "insertShelleyBlock"
         other -> mconcat [ "insertShelleyBlock(", textShow other, ")" ]

@@ -53,7 +53,7 @@ validateEpochRewards tracer earnedEpochNo rmap = do
         else do
           insertEpochRewardTotalReceived earnedEpochNo (Db.DbLovelace expectedw64)
           liftIO . logInfo tracer $ mconcat
-                      [ "validateEpochRewards: total rewards that become spendable in epoch "
+                      [ "Validate Epoch Rewards: total rewards that become spendable in epoch "
                       , textShow (unEpochNo $ Generic.rwdEpoch rmap), " is ", textShow actual
                       , " ADA"
                       ]

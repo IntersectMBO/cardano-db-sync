@@ -37,8 +37,8 @@ import           Cardano.SMASH.Server.Types
 
 import           Cardano.Mock.ChainSync.Server
 import           Cardano.Mock.Forging.Interpreter
-import           Cardano.Mock.Forging.Tx.Alonzo.Scenarios
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
+import           Cardano.Mock.Forging.Tx.Alonzo.Scenarios
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Tx.Generic
 import           Cardano.Mock.Forging.Types

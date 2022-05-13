@@ -12,7 +12,7 @@ import           Cardano.Ledger.Alonzo.Data
 import           Cardano.Ledger.Alonzo.Language
 import           Cardano.Ledger.Alonzo.Scripts
 import           Cardano.Ledger.BaseTypes
-import  qualified Cardano.Ledger.Core as Core
+import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Credential
 import           Cardano.Ledger.Crypto (StandardCrypto)
 import           Cardano.Ledger.Era

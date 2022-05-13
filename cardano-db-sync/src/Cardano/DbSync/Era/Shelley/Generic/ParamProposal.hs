@@ -17,10 +17,10 @@ import qualified Cardano.Ledger.Alonzo as Alonzo
 import           Cardano.Ledger.Alonzo.Language (Language)
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
-import           Cardano.Ledger.BaseTypes (UnitInterval, strictMaybeToMaybe)
-import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Babbage (BabbageEra)
 import qualified Cardano.Ledger.Babbage.PParams as Babbage
+import           Cardano.Ledger.BaseTypes (UnitInterval, strictMaybeToMaybe)
+import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin)
 import qualified Cardano.Ledger.Keys as Ledger
 import           Cardano.Ledger.Shelley (ShelleyEra)

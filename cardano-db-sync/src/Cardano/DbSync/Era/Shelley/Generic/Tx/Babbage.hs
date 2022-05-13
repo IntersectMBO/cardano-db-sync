@@ -32,9 +32,9 @@ import           Ouroboros.Consensus.Shelley.Eras (StandardBabbage, StandardCryp
 
 import           Cardano.DbSync.Era.Shelley.Generic.Metadata
 import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
 import           Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (getWithdrawalSum, fromTxIn)
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (fromTxIn, getWithdrawalSum)
 import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
 

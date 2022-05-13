@@ -24,8 +24,8 @@ import           Ouroboros.Consensus.Cardano.Block (HardForkState (..))
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import qualified Ouroboros.Consensus.HeaderValidation as Consensus
 import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
-import qualified Ouroboros.Consensus.Protocol.TPraos as Consensus
 import           Ouroboros.Consensus.Protocol.Praos as Consensus
+import qualified Ouroboros.Consensus.Protocol.TPraos as Consensus
 
 data NewEpoch = NewEpoch
   { neEpoch :: !EpochNo

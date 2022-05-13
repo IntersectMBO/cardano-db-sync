@@ -20,8 +20,8 @@ import qualified Ouroboros.Consensus.Cardano.Block as Consensus
 import           Ouroboros.Consensus.Forecast
 import           Ouroboros.Consensus.Protocol.Praos (Praos)
 import           Ouroboros.Consensus.Protocol.TPraos (TPraos)
-import           Ouroboros.Consensus.Shelley.Eras (StandardAlonzo, StandardBabbage,
-                   StandardShelley, StandardCrypto)
+import           Ouroboros.Consensus.Shelley.Eras (StandardAlonzo, StandardBabbage, StandardCrypto,
+                   StandardShelley)
 
 import           Cardano.Ledger.Address
 import qualified Cardano.Ledger.Core as Core

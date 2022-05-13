@@ -26,9 +26,9 @@ import           Cardano.Crypto.VRF
 import           Cardano.Ledger.Address
 import           Cardano.Ledger.Alonzo.Data
 import           Cardano.Ledger.Alonzo.Scripts
+import           Cardano.Ledger.Alonzo.TxWitness
 import           Cardano.Ledger.Babbage.Tx
 import           Cardano.Ledger.Babbage.TxBody
-import           Cardano.Ledger.Alonzo.TxWitness
 import           Cardano.Ledger.BaseTypes
 import           Cardano.Ledger.Coin
 import qualified Cardano.Ledger.Core as Core
@@ -40,18 +40,18 @@ import           Cardano.Ledger.Shelley.Metadata
 import           Cardano.Ledger.Shelley.TxBody (DCert (..), PoolCert (..), PoolMetadata (..),
                    PoolParams (..), StakePoolRelay (..), Wdrl (..))
 import           Cardano.Ledger.ShelleyMA.Timelocks
-import           Cardano.Ledger.TxIn (TxIn (..), txid, TxId)
+import           Cardano.Ledger.TxIn (TxId, TxIn (..), txid)
 
 import           Ouroboros.Consensus.Cardano.Block (LedgerState)
 import           Ouroboros.Consensus.Shelley.Eras (StandardBabbage, StandardCrypto)
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 
+import           Cardano.Ledger.Babbage.Collateral (collOuts)
+import           Cardano.Ledger.Shelley.UTxO
 import           Cardano.Mock.Forging.Crypto
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Tx.Generic
 import           Cardano.Mock.Forging.Types
-import Cardano.Ledger.Babbage.Collateral (collOuts)
-import Cardano.Ledger.Shelley.UTxO
 -- import qualified Data.Maybe as Strict
 
 type BabbageUTxOIndex = UTxOIndex StandardBabbage
