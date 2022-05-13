@@ -11,7 +11,6 @@
 
 module Cardano.DbSync.LedgerState
   ( CardanoLedgerState (..)
-  , IndexCache (..)
   , LedgerEnv (..)
   , LedgerEvent (..)
   , LedgerStateSnapshot (..)
@@ -40,8 +39,6 @@ import           Cardano.BM.Trace (Trace, logInfo, logWarning)
 import           Cardano.Binary (Decoder, DecoderError, Encoding, FromCBOR (..), ToCBOR (..))
 import qualified Cardano.Binary as Serialize
 
-import qualified Cardano.Db as DB
-
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Core (PParams)
 import           Cardano.Ledger.Era (Crypto)
@@ -54,8 +51,6 @@ import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import           Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Cardano.Util as Cardano
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import           Cardano.DbSync.Era.Shelley.Generic.StakeCred
-import           Cardano.DbSync.Era.Shelley.Generic.StakePoolKeyHash
 import           Cardano.DbSync.LedgerEvent
 import           Cardano.DbSync.StateQuery
 import           Cardano.DbSync.Types
@@ -68,8 +63,8 @@ import           Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..), fromWithOrigin)
 
 import qualified Control.Exception as Exception
-import           Control.Monad.Class.MonadSTM.Strict (StrictTMVar, StrictTVar, TBQueue, atomically,
-                   newEmptyTMVarIO, newTBQueueIO, newTVarIO, readTVar, writeTVar)
+import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, TBQueue, atomically, newTBQueueIO,
+                   newTVarIO, readTVar, writeTVar)
 
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
@@ -125,11 +120,6 @@ import           System.Mem (performMajorGC)
 {- HLINT ignore "Reduce duplication" -}
 {- HLINT ignore "Use readTVarIO" -}
 
-data IndexCache = IndexCache
-  { icAddressCache :: !(Map StakeCred DB.StakeAddressId)
-  , icPoolCache :: !(Map StakePoolKeyHash DB.PoolHashId)
-  }
-
 data LedgerEnv = LedgerEnv
   { leTrace :: Trace IO Text
   , leProtocolInfo :: !(Consensus.ProtocolInfo IO CardanoBlock)
@@ -140,8 +130,6 @@ data LedgerEnv = LedgerEnv
   , leInterpreter :: !(StrictTVar IO (Maybe CardanoInterpreter))
   , leStateVar :: !(StrictTVar IO (Maybe LedgerDB))
   , leEventState :: !(StrictTVar IO LedgerEventState)
-  , lePoolRewards :: !(StrictTMVar IO Generic.Rewards)
-  , leMirRewards :: !(StrictTMVar IO Generic.Rewards)
   -- The following do not really have anything to do with maintaining ledger
   -- state. They are here due to the ongoing headaches around the split between
   -- `cardano-sync` and `cardano-db-sync`.
@@ -251,8 +239,6 @@ mkLedgerEnv trce protocolInfo dir nw stableEpochSlot systemStart aop = do
     owq <- newTBQueueIO 100
     orq <- newTBQueueIO 100
     est <- newTVarIO =<< getCurrentTime
-    prvar <- newEmptyTMVarIO
-    mrvar <- newEmptyTMVarIO
     pure LedgerEnv
       { leTrace = trce
       , leProtocolInfo = protocolInfo
@@ -263,8 +249,6 @@ mkLedgerEnv trce protocolInfo dir nw stableEpochSlot systemStart aop = do
       , leInterpreter = intervar
       , leStateVar = svar
       , leEventState = evar
-      , lePoolRewards = prvar
-      , leMirRewards = mrvar
       , leOfflineWorkQueue = owq
       , leOfflineResultQueue  = orq
       , leEpochSyncTime = est
@@ -494,9 +478,9 @@ cleanupLedgerStateFiles env slotNo = do
     -- Remove invalid (ie SlotNo >= current) ledger state files (occurs on rollback).
     deleteAndLogFiles env "invalid" invalid
     -- Remove all but 6 most recent state files.
-    deleteAndLogStateFile env "valid" (List.drop 6 valid)
+    deleteAndLogStateFile env "old" (List.drop 6 valid)
     -- Remove all but 6 most recent epoch boundary state files.
-    deleteAndLogStateFile env "epoch boundary" (List.drop 6 epochBoundary)
+    deleteAndLogStateFile env "old epoch boundary" (List.drop 6 epochBoundary)
   where
     groupFiles :: LedgerStateFile
                -> ([LedgerStateFile], [LedgerStateFile], [FilePath])
@@ -557,9 +541,15 @@ deleteNewerFiles env point = do
       deleteAndLogStateFile env "newer" newerFiles
 
 deleteAndLogFiles :: LedgerEnv -> Text -> [FilePath] -> IO ()
-deleteAndLogFiles env descr files = unless (null files) $ do
-  logInfo (leTrace env) $ mconcat ["Removing ", descr, " files ", textShow files]
-  mapM_ safeRemoveFile files
+deleteAndLogFiles env descr files =
+  case files of
+    [] -> pure ()
+    [fl] -> do
+      logInfo (leTrace env) $ mconcat ["Removing ", descr, " file ", Text.pack fl]
+      safeRemoveFile fl
+    _ -> do
+      logInfo (leTrace env) $ mconcat ["Removing ", descr, " files ", textShow files]
+      mapM_ safeRemoveFile files
 
 deleteAndLogStateFile :: LedgerEnv -> Text -> [LedgerStateFile] -> IO ()
 deleteAndLogStateFile env descr lsfs = deleteAndLogFiles env descr (lsfFilePath <$> lsfs)

@@ -32,7 +32,7 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Block as Ledger
 import           Cardano.Ledger.Core (Witnesses)
 import qualified Cardano.Ledger.Core as Ledger
-import           Cardano.Ledger.Crypto (Crypto, StandardCrypto)
+import           Cardano.Ledger.Crypto (Crypto)
 import           Cardano.Ledger.Era (SupportsSegWit (..))
 import qualified Cardano.Ledger.Era as Ledger
 import           Cardano.Ledger.Keys (VerKeyVRF, hashKey)
@@ -50,6 +50,7 @@ import           Cardano.Slotting.Slot (SlotNo (..))
 import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlonzo,
                    StandardBabbage, StandardMary, StandardShelley)
 import qualified Ouroboros.Consensus.Protocol.Praos.Header as Praos
+import           Ouroboros.Consensus.Protocol.TPraos
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra, ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
 import           Ouroboros.Consensus.Shelley.Protocol.Abstract
