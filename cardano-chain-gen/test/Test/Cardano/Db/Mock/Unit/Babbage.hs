@@ -40,6 +40,7 @@ import           Cardano.SMASH.Server.Types
 
 import           Cardano.Mock.ChainSync.Server
 import           Cardano.Mock.Forging.Interpreter
+import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import           Cardano.Mock.Forging.Tx.Babbage.Scenarios
@@ -151,6 +152,12 @@ unitTests iom knownMigrations =
           , test "supply and run script which is both reference and in witnesses same block" supplyScriptsTwoWaysSameBlock
           , test "reference script as minting" referenceMintingScript
           , test "reference script as delegation" referenceDelegation
+          ]
+        , testGroup "Hard Fork"
+          [ test "fork from Alonzo to Babbage fixed epoch" forkFixedEpoch
+          , test "fork from Alonzo to Babbage and rollback" rollbackFork
+--          TODO fix this test.
+--          , test "fork from Alonzo to Babbage using proposal" forkWithProposal
           ]
       ]
   where
@@ -1880,6 +1887,65 @@ referenceDelegation =
   where
     testLabel = "referenceDelegation"
 
+forkFixedEpoch :: IOManager -> [(Text, Text)] -> Assertion
+forkFixedEpoch =
+    withFullConfig "config-hf-epoch1" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 500
+
+      a <- fillEpochs interpreter mockServer 2
+      void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
+        Babbage.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 500
+
+      b <- fillUntilNextEpoch interpreter mockServer
+
+      assertBlockNoBackoff dbSync $ 2 + length (a <> b)
+  where
+    testLabel = "forkFixedEpoch"
+
+rollbackFork :: IOManager -> [(Text, Text)] -> Assertion
+rollbackFork =
+    withFullConfig "config-hf-epoch1" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 500
+      a <- fillUntilNextEpoch interpreter mockServer
+      b <- fillEpochPercentage interpreter mockServer 85
+      c <- fillUntilNextEpoch interpreter mockServer
+      blk <- withBabbageFindLeaderAndSubmitTx interpreter mockServer $
+        Babbage.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 500
+
+      assertBlockNoBackoff dbSync $ 2 + length (a <> b <> c)
+      atomically $ rollback mockServer (blockPoint $ last b)
+
+      forM_ (c <> [blk]) $ atomically . addBlock mockServer
+
+      assertBlockNoBackoff dbSync $ 2 + length (a <> b <> c)
+  where
+    testLabel = "rollbackFork"
+{-
+forkWithProposal :: IOManager -> [(Text, Text)] -> Assertion
+forkWithProposal =
+    withFullConfig "config-hf-epoch1" testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
+        Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 500
+
+      blk <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ const $
+        Right Alonzo.mkHFTx
+      print blk
+
+      a <- fillEpochs interpreter mockServer 2
+      st <- getAlonzoLedgerState interpreter
+      print st
+--      void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
+--        Babbage.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 500
+
+      assertBlockNoBackoff dbSync $ 2 + length a
+  where
+    testLabel = "forkWithProposal"
+-}
 hfBlockHash :: CardanoBlock -> ByteString
 hfBlockHash blk =
   case blk of

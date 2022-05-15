@@ -25,6 +25,7 @@ import           Cardano.Crypto.VRF
 
 import           Cardano.Ledger.Address
 import           Cardano.Ledger.Alonzo.Data
+import           Cardano.Ledger.Alonzo.PParams
 import           Cardano.Ledger.Alonzo.Scripts
 import           Cardano.Ledger.Alonzo.Tx
 import           Cardano.Ledger.Alonzo.TxBody
@@ -38,6 +39,7 @@ import           Cardano.Ledger.Hashes
 import           Cardano.Ledger.Keys
 import           Cardano.Ledger.Mary.Value
 import           Cardano.Ledger.Shelley.Metadata
+import           Cardano.Ledger.Shelley.PParams hiding (emptyPParamsUpdate, _protocolVersion)
 import           Cardano.Ledger.Shelley.TxBody (DCert (..), PoolCert (..), PoolMetadata (..),
                    PoolParams (..), StakePoolRelay (..), Wdrl (..))
 import           Cardano.Ledger.ShelleyMA.Timelocks
@@ -78,6 +80,14 @@ consTxBody ins cols outs fees minted certs wdrl =
       Strict.SNothing
       Strict.SNothing
       (Strict.SJust Testnet)
+
+mkHFTx :: ValidatedTx StandardAlonzo
+mkHFTx =
+    mkSimpleTx True $ TxBody a b c d e f n (Strict.SJust upd) i j k l m
+  where
+    TxBody a b c d e f n _ i j k l m = emptyTxBody
+    upd = Update (ProposedPPUpdates $ Map.singleton (unregisteredGenesisKeys !! 0) pparams) (EpochNo 1)
+    pparams = emptyPParamsUpdate {_protocolVersion = Strict.SJust $ ProtVer 7 0}
 
 addValidityInterval :: SlotNo
                     -> ValidatedTx StandardAlonzo

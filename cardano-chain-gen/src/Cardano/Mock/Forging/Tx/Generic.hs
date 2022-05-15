@@ -14,6 +14,7 @@ module Cardano.Mock.Forging.Tx.Generic
   , createStakeCredentials
   , createPaymentCredentials
   , mkDummyScriptHash
+  , unregisteredGenesisKeys
   ) where
 
 import           Cardano.Prelude hiding (length, (.))
@@ -168,6 +169,13 @@ unregisteredAddresses =
 
 unregisteredPools :: [KeyHash 'StakePool StandardCrypto]
 unregisteredPools =
+  [ KeyHash "11138475621387465239786593240875634298756324987562352435"
+  , KeyHash "222462543264795t3298745680239746523897456238974563298348"
+  , KeyHash "33323876542397465497834256329487563428975634827956348975"
+  ]
+
+unregisteredGenesisKeys :: [KeyHash 'Genesis StandardCrypto]
+unregisteredGenesisKeys =
   [ KeyHash "11138475621387465239786593240875634298756324987562352435"
   , KeyHash "222462543264795t3298745680239746523897456238974563298348"
   , KeyHash "33323876542397465497834256329487563428975634827956348975"
