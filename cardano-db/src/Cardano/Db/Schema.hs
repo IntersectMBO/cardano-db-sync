@@ -574,7 +574,8 @@ schemaDocs =
       SchemaVersionStageThree # "Set up database views, indices etc."
 
     PoolHash --^ do
-      "A table for every unique pool key hash. The `id` field of this table is used as foreign keys in other tables."
+      "A table for every unique pool key hash. The `id` field of this table is used as foreign keys in other tables.\
+        \ The existance of an entry doesn't mean the pool is registered or in fact that is was ever registered."
       PoolHashHashRaw # "The raw bytes of the pool hash."
       PoolHashView # "The Bech32 encoding of the pool hash."
 
@@ -618,7 +619,9 @@ schemaDocs =
       TxScriptSize # "The sum of the script sizes (in bytes) of scripts in the transaction."
 
     StakeAddress --^ do
-      "A table of unique stake addresses. Can be an actual address or a script hash."
+      "A table of unique stake addresses. Can be an actual address or a script hash. \
+        \ The existance of an entry doesn't mean the address is registered or in fact that is was ever registered.\
+        \ For example a pool update may contain a stake address which was never registered."
       StakeAddressHashRaw # "The raw bytes of the stake address hash."
       StakeAddressView # "The Bech32 encoded version of the stake address."
       StakeAddressScriptHash # "The script hash, in case this address is locked by a script."
