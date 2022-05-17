@@ -66,7 +66,9 @@ import qualified Control.Exception as Exception
 import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, TBQueue, atomically, newTBQueueIO,
                    newTVarIO, readTVar, writeTVar)
 
+-- import           Codec.CBOR.Write (toBuilder)
 import qualified Data.ByteString.Base16 as Base16
+-- import           Data.ByteString.Builder as BB
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
@@ -127,8 +129,8 @@ data LedgerEnv = LedgerEnv
   , leNetwork :: !Ledger.Network
   , leSystemStart :: !SystemStart
   , leAbortOnPanic :: !Bool
-  , leInterpreter :: !(StrictTVar IO (Maybe CardanoInterpreter))
-  , leStateVar :: !(StrictTVar IO (Maybe LedgerDB))
+  , leInterpreter :: !(StrictTVar IO (Strict.Maybe CardanoInterpreter))
+  , leStateVar :: !(StrictTVar IO (Strict.Maybe LedgerDB))
   , leEventState :: !(StrictTVar IO LedgerEventState)
   -- The following do not really have anything to do with maintaining ledger
   -- state. They are here due to the ongoing headaches around the split between
@@ -142,20 +144,20 @@ data LedgerEnv = LedgerEnv
 -- TODO this is unstable in terms of restarts and we should try to remove it.
 data LedgerEventState = LedgerEventState
   { lesInitialized :: !Bool
-  , lesEpochNo :: !(Maybe EpochNo)
+  , lesEpochNo :: !(Strict.Maybe EpochNo)
   }
 
 topLevelConfig :: LedgerEnv -> TopLevelConfig CardanoBlock
 topLevelConfig = Consensus.pInfoConfig . leProtocolInfo
 
 data CardanoLedgerState = CardanoLedgerState
-  { clsState :: ExtLedgerState CardanoBlock
-  , clsEpochBlockNo :: EpochBlockNo
+  { clsState :: !(ExtLedgerState CardanoBlock)
+  , clsEpochBlockNo :: !EpochBlockNo
   }
 
 -- The height of the block in the current Epoch. We maintain this
 -- data next to the ledger state and store it in the same blob file.
-data EpochBlockNo = GenesisEpochBlockNo | EBBEpochBlockNo | EpochBlockNo Word64
+data EpochBlockNo = GenesisEpochBlockNo | EBBEpochBlockNo | EpochBlockNo !Word64
 
 instance ToCBOR EpochBlockNo where
   toCBOR GenesisEpochBlockNo = toCBOR (0 :: Word8)
@@ -218,6 +220,8 @@ pruneLedgerDb :: Word64 -> LedgerDB -> LedgerDB
 pruneLedgerDb k db =
   db { ledgerDbCheckpoints = AS.anchorNewest k (ledgerDbCheckpoints db) }
 
+{-# INLINE pruneLedgerDb #-}
+
 instance Anchorable (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState where
   asAnchor = id
   getAnchorMeasure _ = getTipSlot . clsState
@@ -231,9 +235,9 @@ mkLedgerEnv
     -> Ledger.Network -> EpochSlot -> SystemStart -> Bool
     -> IO LedgerEnv
 mkLedgerEnv trce protocolInfo dir nw stableEpochSlot systemStart aop = do
-    svar <- newTVarIO Nothing
+    svar <- newTVarIO Strict.Nothing
     evar <- newTVarIO initLedgerEventState
-    intervar <- newTVarIO Nothing
+    intervar <- newTVarIO Strict.Nothing
     -- 2.5 days worth of slots. If we try to stick more than this number of
     -- items in the queue, bad things are likely to happen.
     owq <- newTBQueueIO 100
@@ -259,7 +263,7 @@ mkLedgerEnv trce protocolInfo dir nw stableEpochSlot systemStart aop = do
     initLedgerEventState =
       LedgerEventState
         { lesInitialized = False
-        , lesEpochNo = Nothing
+        , lesEpochNo = Strict.Nothing
         }
 
 
@@ -275,8 +279,8 @@ readStateUnsafe :: LedgerEnv -> STM LedgerDB
 readStateUnsafe env = do
     mState <- readTVar $ leStateVar env
     case mState of
-      Nothing -> panic "LedgerState.readStateUnsafe: Ledger state is not found"
-      Just st -> pure st
+      Strict.Nothing -> panic "LedgerState.readStateUnsafe: Ledger state is not found"
+      Strict.Just st -> pure st
 
 -- The function 'tickThenReapply' does zero validation, so add minimal validation ('blockPrevHash'
 -- matches the tip hash of the 'LedgerState'). This was originally for debugging but the check is
@@ -288,18 +292,17 @@ applyBlock env blk = do
     -- is fine.
     time <- getCurrentTime
     atomically $ do
-      ledgerDB <- readStateUnsafe env
+      !ledgerDB <- readStateUnsafe env
       let oldState = ledgerDbCurrent ledgerDB
       let !result = applyBlk (ExtLedgerCfg (topLevelConfig env)) blk (clsState oldState)
       let !newLedgerState = lrResult result
-      details <- getSlotDetails env (ledgerState newLedgerState) time (cardanoBlockSlotNo blk)
+      !details <- getSlotDetails env (ledgerState newLedgerState) time (cardanoBlockSlotNo blk)
       let !newEpoch = mkNewEpoch (clsState oldState) newLedgerState
       let !newEpochBlockNo = applyToEpochBlockNo (isJust $ blockIsEBB blk) (isJust newEpoch) (clsEpochBlockNo oldState)
       let !newState = CardanoLedgerState newLedgerState newEpochBlockNo
       let !ledgerDB' = pushLedgerDB ledgerDB newState
-      writeTVar (leStateVar env) (Just ledgerDB')
-      oldEventState <- readTVar (leEventState env)
-      events <- generateEvents env oldEventState details
+      writeTVar (leStateVar env) (Strict.Just ledgerDB')
+      !events <- generateNewEpochEvents env details
       pure $ LedgerStateSnapshot
                 { lssState = newState
                 , lssOldState = oldState
@@ -353,21 +356,20 @@ applyBlock env blk = do
                           (clsState cls)
       _ -> Generic.NoSlices
 
-generateEvents :: LedgerEnv -> LedgerEventState -> SlotDetails -> STM [LedgerEvent]
-generateEvents env oldEventState details = do
+generateNewEpochEvents :: LedgerEnv -> SlotDetails -> STM [LedgerEvent]
+generateNewEpochEvents env details = do
+    !oldEventState <- readTVar (leEventState env)
     writeTVar (leEventState env) newEventState
-    pure $ catMaybes
-            [ newEpochEvent
-            ]
+    pure $ maybeToList (newEpochEvent oldEventState)
   where
     currentEpochNo :: EpochNo
     currentEpochNo = sdEpochNo details
 
-    newEpochEvent :: Maybe LedgerEvent
-    newEpochEvent =
+    newEpochEvent :: LedgerEventState -> Maybe LedgerEvent
+    newEpochEvent oldEventState =
       case lesEpochNo oldEventState of
-        Nothing -> Just $ LedgerStartAtEpoch currentEpochNo
-        Just oldEpoch ->
+        Strict.Nothing -> Just $ LedgerStartAtEpoch currentEpochNo
+        Strict.Just oldEpoch ->
           if currentEpochNo == 1 + oldEpoch
             then Just $ LedgerNewEpoch currentEpochNo (getSyncStatus details)
             else Nothing
@@ -376,7 +378,7 @@ generateEvents env oldEventState details = do
     newEventState =
       LedgerEventState
         { lesInitialized = True
-        , lesEpochNo = Just currentEpochNo
+        , lesEpochNo = Strict.Just currentEpochNo
         }
 
 saveCurrentLedgerState :: LedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
@@ -389,6 +391,8 @@ saveCurrentLedgerState env ledger mEpochNo = do
           logInfo (leTrace env) $ mconcat
             ["File ", Text.pack file, " exists"]
         else do
+          -- TODO: write the builder directly.
+          -- BB.writeFile file $ toBuilder $
           LBS.writeFile file $
             Serialize.serializeEncoding $
               encodeCardanoLedgerState
@@ -401,6 +405,7 @@ saveCurrentLedgerState env ledger mEpochNo = do
   where
     codecConfig :: CodecConfig CardanoBlock
     codecConfig = configCodec (topLevelConfig env)
+
 
 mkLedgerStateFilename :: LedgerStateDir -> ExtLedgerState CardanoBlock -> Maybe EpochNo -> WithOrigin FilePath
 mkLedgerStateFilename dir ledger mEpochNo = lsfFilePath . dbPointToFileName dir mEpochNo
@@ -503,12 +508,12 @@ loadLedgerAtPoint env point = do
         -- Ledger states are growing to become very big in memory.
         -- Before parsing the new ledger state we need to make sure the old states
         -- are or can be garbage collected.
-        writeLedgerState env Nothing
+        writeLedgerState env Strict.Nothing
         performMajorGC
         mst <- findStateFromPoint env point
         case mst of
           Right st -> do
-            writeLedgerState env (Just . LedgerDB $ AS.Empty st)
+            writeLedgerState env (Strict.Just . LedgerDB $ AS.Empty st)
             logInfo (leTrace env) $ mconcat [ "Found snapshot file for ", renderPoint point ]
             pure $ Right st
           Left lsfs -> pure $ Left lsfs
@@ -517,15 +522,16 @@ loadLedgerAtPoint env point = do
         let ledgerDB' = LedgerDB anchoredSeq'
         let st = ledgerDbCurrent ledgerDB'
         deleteNewerFiles env point
-        writeLedgerState env $ Just ledgerDB'
+        writeLedgerState env $ Strict.Just ledgerDB'
         pure $ Right st
   where
     rollbackLedger
-        :: Maybe LedgerDB
+        :: Strict.Maybe LedgerDB
         -> Maybe (AnchoredSeq (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState)
-    rollbackLedger mLedgerDB = do
-      ledgerDB <- mLedgerDB
-      AS.rollback (pointSlot point) (const True) (ledgerDbCheckpoints ledgerDB)
+    rollbackLedger mLedgerDB = case mLedgerDB of
+      Strict.Nothing -> Nothing
+      Strict.Just ledgerDB ->
+        AS.rollback (pointSlot point) (const True) (ledgerDbCheckpoints ledgerDB)
 
 deleteNewerFiles :: LedgerEnv -> CardanoPoint -> IO ()
 deleteNewerFiles env point = do
@@ -673,7 +679,7 @@ listLedgerStateFilesOrdered dir = do
     revSlotNoOrder :: LedgerStateFile -> LedgerStateFile -> Ordering
     revSlotNoOrder a b = compare (lsfSlotNo b) (lsfSlotNo a)
 
-writeLedgerState :: LedgerEnv -> Maybe LedgerDB -> IO ()
+writeLedgerState :: LedgerEnv -> Strict.Maybe LedgerDB -> IO ()
 writeLedgerState env mLedgerDb = atomically $ writeTVar (leStateVar env) mLedgerDb
 
 -- | Remove given file path and ignore any IOEXceptions.
@@ -772,10 +778,10 @@ getSlotDetails :: LedgerEnv -> LedgerState CardanoBlock -> UTCTime -> SlotNo -> 
 getSlotDetails env st time slot = do
     minter <- readTVar $ leInterpreter env
     details <- case minter of
-      Just inter -> case queryWith inter of
+      Strict.Just inter -> case queryWith inter of
         Left _ -> queryNewInterpreter
         Right sd -> pure sd
-      Nothing -> queryNewInterpreter
+      Strict.Nothing -> queryNewInterpreter
     pure $ details { sdCurrentTime = time }
   where
     hfConfig = configLedger $ Consensus.pInfoConfig (leProtocolInfo env)
@@ -786,7 +792,7 @@ getSlotDetails env st time slot = do
       in case queryWith inter of
         Left err -> throwSTM err
         Right sd -> do
-          writeTVar (leInterpreter env) (Just inter)
+          writeTVar (leInterpreter env) (Strict.Just inter)
           pure sd
 
     queryWith :: CardanoInterpreter -> Either History.PastHorizonException SlotDetails

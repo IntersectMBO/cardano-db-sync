@@ -11,6 +11,7 @@
 module Cardano.DbSync.LedgerEvent
   ( LedgerEvent (..)
   , convertAuxLedgerEvent
+  , convertPoolRewards
   ) where
 
 import           Cardano.Db hiding (EpochNo, epochNo)
@@ -41,6 +42,7 @@ import           Control.State.Transition (Event)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import           Data.SOP.Strict (All, K (..), hcmap, hcollapse)
+import qualified Data.Strict.Maybe as Strict
 
 import           Ouroboros.Consensus.Byron.Ledger.Block (ByronBlock)
 import           Ouroboros.Consensus.Cardano.Block (CardanoEras, HardForkBlock)
@@ -57,7 +59,7 @@ data LedgerEvent
   | LedgerIncrementalRewards !Generic.Rewards
   | LedgerDeltaRewards !Generic.Rewards
   | LedgerRestrainedRewards !EpochNo !Generic.Rewards !(Set Generic.StakeCred)
-  | LedgerTotalRewards !Generic.Rewards
+  | LedgerTotalRewards !EpochNo !(Map (Ledger.StakeCredential StandardCrypto) (Set (Ledger.Reward StandardCrypto)))
   | LedgerStartAtEpoch !EpochNo
   | LedgerNewEpoch !EpochNo !SyncState
   deriving Eq
@@ -104,7 +106,7 @@ instance
   where
     toLedgerEvent nw evt =
       case unwrapLedgerEvent evt of
-        LETotalRewards e m -> Just $ LedgerTotalRewards (convertPoolRewards nw e m)
+        LETotalRewards e m -> Just $ LedgerTotalRewards e m
         LERestraintRewards e m creds ->
           Just $ LedgerRestrainedRewards e (convertPoolRewards nw e m) (Set.map (Generic.toStakeCred nw) creds)
         LEDeltaReward e m ->
@@ -142,7 +144,7 @@ convertMirRewards nw resPay trePay =
       Set.singleton $
         Generic.Reward
           { Generic.rewardSource = src
-          , Generic.rewardPool = Nothing
+          , Generic.rewardPool = Strict.Nothing
           , Generic.rewardAmount = coin
           }
 
@@ -160,7 +162,7 @@ convertPoolRewards network epochNum rmap =
       Generic.Reward
         { Generic.rewardSource = rewardTypeToSource $ Ledger.rewardType sr
         , Generic.rewardAmount = Ledger.rewardAmount sr
-        , Generic.rewardPool = Just $ Generic.toStakePoolKeyHash (Ledger.rewardPool sr)
+        , Generic.rewardPool = Strict.Just $ Generic.toStakePoolKeyHash (Ledger.rewardPool sr)
         }
 
 mapBimap :: Ord k2 => (k1 -> k2) -> (a1 -> a2) -> Map k1 a1 -> Map k2 a2

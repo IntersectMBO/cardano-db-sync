@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -15,11 +16,14 @@ import           Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 import           Cardano.Db (DbLovelace, RewardSource)
 import qualified Cardano.Db as Db
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import           Cardano.DbSync.Era.Shelley.Insert.Epoch
-import           Cardano.DbSync.Era.Shelley.ValidateWithdrawal (validateRewardWithdrawals)
-import           Cardano.DbSync.Util (panicAbort, plusCoin, textShow)
+import           Cardano.DbSync.LedgerEvent
+import           Cardano.DbSync.Util (textShow)
 
 import           Cardano.Ledger.Coin (Coin (..))
+import qualified Cardano.Ledger.Credential as Ledger
+import           Cardano.Ledger.Crypto (StandardCrypto)
+import qualified Cardano.Ledger.Shelley.Rewards as Ledger
+import           Cardano.Ledger.Shelley.API (Network)
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
@@ -31,61 +35,36 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
 import           Database.Esqueleto.Experimental (InnerJoin (InnerJoin), SqlBackend, Value (Value),
-                   desc, from, not_, on, orderBy, select, sum_, table, val, where_, (:&) ((:&)),
+                   desc, from, not_, on, orderBy, select, table, val, where_, (:&) ((:&)),
                    (==.), (^.))
 
 {- HLINT ignore "Fuse on/on" -}
 
 validateEpochRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> EpochNo -> Generic.Rewards
+    => Trace IO Text -> Network -> EpochNo -> EpochNo -> (Map (Ledger.StakeCredential StandardCrypto) (Set (Ledger.Reward StandardCrypto)))
     -> ReaderT SqlBackend m ()
-validateEpochRewards tracer earnedEpochNo rmap = do
-    actual <- queryEpochRewardTotal (Generic.rwdEpoch rmap)
-    if actual /= expected
+validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
+    actualCount <- Db.queryNormalEpochRewardCount (unEpochNo spendableEpochNo)
+    if actualCount /= expectedCount
         then do
           liftIO . logWarning tracer $ mconcat
                       [ "validateEpochRewards: rewards spendable in epoch "
-                      , textShow (unEpochNo $ Generic.rwdEpoch rmap), " expected total of "
-                      , textShow expected , " ADA but got " , textShow actual, " ADA"
+                      , textShow (unEpochNo spendableEpochNo), " expected total of "
+                      , textShow expectedCount , " but got " , textShow actualCount
                       ]
-          logFullRewardMap tracer rmap
+          logFullRewardMap tracer (convertPoolRewards network spendableEpochNo rmap)
         else do
-          insertEpochRewardTotalReceived earnedEpochNo (Db.DbLovelace expectedw64)
           liftIO . logInfo tracer $ mconcat
                       [ "Validate Epoch Rewards: total rewards that become spendable in epoch "
-                      , textShow (unEpochNo $ Generic.rwdEpoch rmap), " is ", textShow actual
-                      , " ADA"
+                      , textShow (unEpochNo spendableEpochNo), " are ", textShow actualCount
                       ]
-    validateRewardWithdrawals tracer (Generic.rwdEpoch rmap)
   where
-    expectedw64 :: Word64
-    expectedw64 = fromIntegral . sum
-      $ map (unCoin . Set.foldl' foldfunc (Coin 0)) (Map.elems $ Generic.rwdRewards rmap)
-
-    expected :: Db.Ada
-    expected =
-      Db.word64ToAda expectedw64
-
-    foldfunc :: Coin -> Generic.Reward -> Coin
-    foldfunc coin rwd = plusCoin coin (Generic.rewardAmount rwd)
+    expectedCount :: Word64
+    expectedCount = fromIntegral . sum
+      $ map Set.size (Map.elems rmap)
 
 -- -------------------------------------------------------------------------------------------------
-
-queryEpochRewardTotal
-    :: (MonadBaseControl IO m, MonadIO m)
-    => EpochNo -> ReaderT SqlBackend m Db.Ada
-queryEpochRewardTotal (EpochNo epochNo) = do
-  res <- select $ do
-    rwd <- from $ table @Db.Reward
-    where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
-            -- For ... reasons ... pool deposit refunds are put into the rewards account
-            -- but are not considered part of the total rewards for an epoch.
-    where_ (not_ $ rwd ^. Db.RewardType ==. val Db.RwdDepositRefund)
-    where_ (not_ $ rwd ^. Db.RewardType ==. val Db.RwdTreasury)
-    where_ (not_ $ rwd ^. Db.RewardType ==. val Db.RwdReserves)
-    pure (sum_ $ rwd ^. Db.RewardAmount)
-  pure $ Db.unValueSumAda (listToMaybe res)
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -137,7 +116,6 @@ diffRewardMap tracer dbMap ledgerMap = do
     when (Map.size diffMap > 0) $ do
       logError tracer "diffRewardMap:"
       mapM_ (logError tracer . render) $ Map.toList diffMap
-      panicAbort "Rewards differ between ledger and db-sync."
   where
     keys :: [Generic.StakeCred]
     keys = List.nubOrd (Map.keys dbMap ++ Map.keys ledgerMap)

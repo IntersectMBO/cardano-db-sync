@@ -60,7 +60,7 @@ library
 
   build-depends:
                         aeson
-                      , base                         >=4.7   && <5
+                      , base                        >= 4.14         && < 4.16
                       , base16-bytestring
                       , bytestring
                       , cardano-api

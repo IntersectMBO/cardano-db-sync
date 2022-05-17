@@ -21,8 +21,9 @@ import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Control.Monad.Trans.Control (MonadBaseControl)
 
-import qualified Data.Map as Map
+import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
+import qualified Data.Strict.Maybe as Strict
 
 import           Database.Esqueleto.Experimental (SqlBackend, delete, from, in_, table, val,
                    valList, where_, (==.), (^.))
@@ -61,8 +62,8 @@ deleteReward
 deleteReward cache epochNo (cred, rwd) = do
   mAddrId <- queryStakeAddrWithCache cache DontCacheNew cred
   eiPoolId <- case Generic.rewardPool rwd of
-    Nothing -> pure $ Left $ Db.DbLookupMessage "deleteReward.queryPoolKeyWithCache"
-    Just poolHash -> queryPoolKeyWithCache cache DontCacheNew poolHash
+    Strict.Nothing -> pure $ Left $ Db.DbLookupMessage "deleteReward.queryPoolKeyWithCache"
+    Strict.Just poolHash -> queryPoolKeyWithCache cache DontCacheNew poolHash
   case (mAddrId, eiPoolId) of
     (Right addrId, Right poolId) -> do
       delete $ do

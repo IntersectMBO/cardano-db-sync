@@ -50,8 +50,10 @@ import           Control.Monad.Trans.Except.Extra (newExceptT)
 
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
+import qualified Data.Strict.Maybe as Strict
 
-import           Database.Persist.Sql (SqlBackend)
+import           Database.Persist.SqlBackend.Internal.StatementCache
+import           Database.Persist.SqlBackend.Internal
 
 import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import           Ouroboros.Network.Block (blockNo)
@@ -73,7 +75,7 @@ insertDefaultBlock env blocks =
     insertDetails cblk = do
       -- Calculate the new ledger state to pass to the DB insert functions but do not yet
       -- update ledgerStateVar.
-      lStateSnap <- liftIO $ applyBlock (envLedger env) cblk
+      !lStateSnap <- liftIO $ applyBlock (envLedger env) cblk
       let !details = lssSlotDetails lStateSnap
       mkSnapshotMaybe env lStateSnap (blockNo cblk) (isSyncedWithinSeconds details 600)
       handleLedgerEvents env (sdEpochNo details) (lssEvents lStateSnap)
@@ -132,6 +134,7 @@ handleLedgerEvents env currentEpochNo@(EpochNo curEpoch) =
     tracer = getTrace env
     lenv = envLedger env
     cache = envCache env
+    ntw = leNetwork lenv
 
     subFromCurrentEpoch :: Word64 -> EpochNo
     subFromCurrentEpoch m =
@@ -146,6 +149,9 @@ handleLedgerEvents env currentEpochNo@(EpochNo curEpoch) =
         LedgerNewEpoch en ss -> do
           lift $ do
             insertEpochSyncTime en ss (leEpochSyncTime lenv)
+          sqlBackend <- lift ask
+          persistantCacheSize <- liftIO $ statementCacheSize $ connStmtMap sqlBackend
+          liftIO . logInfo tracer $ "Persistant SQL Statement Cache size is " <> textShow persistantCacheSize
           stats <- liftIO $ textShowStats cache
           liftIO . logInfo tracer $ stats
           liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo en)
@@ -163,12 +169,12 @@ handleLedgerEvents env currentEpochNo@(EpochNo curEpoch) =
           insertRewards (subFromCurrentEpoch 1) (EpochNo $ curEpoch + 1) cache rewards
         LedgerRestrainedRewards e rwd creds -> do
           lift $ adjustEpochRewards tracer cache e rwd creds
-        LedgerTotalRewards rwd -> do
-          lift $ validateEpochRewards tracer (subFromCurrentEpoch 2) rwd
+        LedgerTotalRewards _e rwd -> do
+          lift $ validateEpochRewards tracer ntw (subFromCurrentEpoch 2) currentEpochNo rwd
         LedgerMirDist rwd -> do
-          let rewards = Map.toList rwd
-          insertRewards (subFromCurrentEpoch 1) currentEpochNo cache rewards
-          unless (null rewards) $
+          unless (Map.null rwd) $ do
+            let rewards = Map.toList rwd
+            insertRewards (subFromCurrentEpoch 1) currentEpochNo cache rewards
             liftIO . logInfo tracer $ "Inserted " <> show (length rewards) <> " Mir rewards"
         LedgerPoolReap en drs ->
           insertPoolDepositRefunds env (Generic.Rewards en $ convertPoolDepositReunds (leNetwork lenv) drs)
@@ -183,7 +189,7 @@ convertPoolDepositReunds nw =
     convert (kh, coin) =
       Generic.Reward
         { Generic.rewardSource = DB.RwdDepositRefund
-        , Generic.rewardPool = Just (Generic.toStakePoolKeyHash kh)
+        , Generic.rewardPool = Strict.Just (Generic.toStakePoolKeyHash kh)
         , Generic.rewardAmount = coin
         }
 

@@ -8,8 +8,6 @@
 module Cardano.DbSync.Era.Shelley.Generic.StakeDist
   ( StakeSliceRes (..)
   , StakeSlice (..)
-  , stakeDistPoolHashKeys
-  , stakeDistStakeCreds
   , getSecurityParameter
   , getStakeSlice
   ) where
@@ -35,7 +33,6 @@ import           Cardano.DbSync.Types
 import           Data.VMap (VB, VMap (..), VP)
 import qualified Data.VMap as VMap
 import qualified Data.Map.Strict as Map
-import qualified Data.Set as Set
 import qualified Data.Vector.Generic as VG
 
 import           Ouroboros.Consensus.Block
@@ -49,7 +46,7 @@ import           Ouroboros.Consensus.Shelley.Ledger
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 
 data StakeSliceRes =
-    Slice StakeSlice Bool -- True if this is the final slice for this epoch. Can be used for logging.
+    Slice !StakeSlice !Bool -- True if this is the final slice for this epoch. Can be used for logging.
   | NoSlices
 
 data StakeSlice = StakeSlice
@@ -154,10 +151,3 @@ genericStakeSlice pInfo network epoch sliceIndex minSliceSize lstate
 
     convertStakePoolkeyHash :: KeyHash 'StakePool c -> StakePoolKeyHash
     convertStakePoolkeyHash (KeyHash h) = StakePoolKeyHash $ hashToBytes h
-
--- Use Set because they guarantee unique elements.
-stakeDistPoolHashKeys :: StakeSlice -> Set StakePoolKeyHash
-stakeDistPoolHashKeys = Set.fromList . map snd . Map.elems . sliceDistr
-
-stakeDistStakeCreds :: StakeSlice -> Set StakeCred
-stakeDistStakeCreds = Map.keysSet . sliceDistr

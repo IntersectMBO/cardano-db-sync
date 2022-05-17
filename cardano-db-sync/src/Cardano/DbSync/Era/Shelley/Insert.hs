@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -204,14 +205,14 @@ insertTx
     -> SlotNo -> Word64 -> Generic.Tx -> BlockGroupedData
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) BlockGroupedData
 insertTx tracer cache network lStateSnap blkId epochNo slotNo blockIndex tx grouped = do
-    let outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
-        withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
-    resolvedInputs <- mapM (resolveTxInputs (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
-    let inSum = sum $ map (unDbLovelace . thrd3) resolvedInputs
-    let fees = maybe inSum (fromIntegral . unCoin) (Generic.txFees tx)
-    let txHash = Generic.txHash tx
+    let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
+        !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
+    !resolvedInputs <- mapM (resolveTxInputs (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
+    let !inSum = sum $ map (unDbLovelace . thrd3) resolvedInputs
+    let !fees = maybe inSum (fromIntegral . unCoin) (Generic.txFees tx)
+    let !txHash = Generic.txHash tx
     -- Insert transaction and get txId from the DB.
-    txId <- lift . DB.insertTx $
+    !txId <- lift . DB.insertTx $
               DB.Tx
                 { DB.txHash = txHash
                 , DB.txBlockId = blkId
@@ -230,21 +231,20 @@ insertTx tracer cache network lStateSnap blkId epochNo slotNo blockIndex tx grou
                 }
 
     if not (Generic.txValidContract tx) then do
-      txOutsGrouped <- mapM (prepareTxOut tracer cache (txId, txHash)) (Generic.txOutputs tx)
+      !txOutsGrouped <- mapM (prepareTxOut tracer cache (txId, txHash)) (Generic.txOutputs tx)
 
-      let txIns = map (prepareTxIn txId Map.empty) resolvedInputs
+      let !txIns = map (prepareTxIn txId Map.empty) resolvedInputs
       pure $ grouped <> BlockGroupedData txIns txOutsGrouped
 
     else do
       -- The following operations only happen if the script passes stage 2 validation (or the tx has
       -- no script).
-      txOutsGrouped <- mapM (prepareTxOut tracer cache (txId, txHash)) (Generic.txOutputs tx)
+      !txOutsGrouped <- mapM (prepareTxOut tracer cache (txId, txHash)) (Generic.txOutputs tx)
 
-      redeemers <- Map.fromList <$> mapM (insertRedeemer tracer (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx)
+      !redeemers <- Map.fromList <$> mapM (insertRedeemer tracer (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx)
 
       mapM_ (insertDatum tracer txId) (Generic.txData tx)
-      -- Insert the transaction inputs and collateral inputs (Alonzo).
-      let txIns = map (prepareTxIn txId redeemers) resolvedInputs
+
       mapM_ (insertCollateralTxIn tracer txId) (Generic.txCollateralInputs tx)
 
       mapM_ (insertReferenceTxIn tracer txId) (Generic.txReferenceInputs tx)
@@ -265,6 +265,7 @@ insertTx tracer cache network lStateSnap blkId epochNo slotNo blockIndex tx grou
 
       mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
 
+      let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
       pure $ grouped <> BlockGroupedData txIns txOutsGrouped
 
 prepareTxOut
@@ -275,7 +276,7 @@ prepareTxOut tracer cache (txId, txHash) (Generic.TxOut index addr addrRaw value
     mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache txId addr
     mDatumId <- Generic.whenInlineDatum dt $ insertDatum tracer txId
     mScriptId <- whenMaybe mScript $ insertScript tracer txId
-    let txOut = DB.TxOut
+    let !txOut = DB.TxOut
                   { DB.txOutTxId = txId
                   , DB.txOutIndex = index
                   , DB.txOutAddress = Generic.renderAddress addr
@@ -288,8 +289,8 @@ prepareTxOut tracer cache (txId, txHash) (Generic.TxOut index addr addrRaw value
                   , DB.txOutInlineDatumId = mDatumId
                   , DB.txOutReferenceScriptId = mScriptId
                   }
-    let eutxo = ExtendedTxOut txHash txOut
-    maTxOuts <- prepareMaTxOuts tracer cache maMap
+    let !eutxo = ExtendedTxOut txHash txOut
+    !maTxOuts <- prepareMaTxOuts tracer cache maMap
     pure (eutxo, maTxOuts)
   where
     hasScript :: Bool
