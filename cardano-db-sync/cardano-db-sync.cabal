@@ -160,6 +160,7 @@ library
                       , memory
                       , monad-control
                       , monad-logger
+                      , mtl
                       , network-mux
                       , ouroboros-consensus
                       , ouroboros-consensus-byron

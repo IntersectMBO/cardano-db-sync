@@ -6,14 +6,14 @@ module Cardano.DbSync.Era.Shelley.Generic.Rewards
   ( Reward (..)
   , Rewards (..)
   , elemCount
-  , rewardsPoolHashKeys
-  , rewardsStakeCreds
   , totalAda
   ) where
 
 import           Cardano.Prelude
 
 import           Cardano.Db (Ada, RewardSource (..), word64ToAda)
+
+import qualified Data.Strict.Maybe as Strict
 
 import           Cardano.Ledger.Coin (Coin (..))
 
@@ -29,7 +29,7 @@ import           Ouroboros.Consensus.Cardano.CanHardFork ()
 
 data Reward = Reward
   { rewardSource :: !RewardSource
-  , rewardPool :: !(Maybe StakePoolKeyHash)
+  , rewardPool :: !(Strict.Maybe StakePoolKeyHash)
   , rewardAmount :: !Coin
   } deriving (Eq, Ord, Show)
 
@@ -43,14 +43,6 @@ data Rewards = Rewards
 
 elemCount :: Rewards -> Int
 elemCount = sum . map Set.size . Map.elems . rwdRewards
-
-rewardsPoolHashKeys :: Rewards -> Set StakePoolKeyHash
-rewardsPoolHashKeys rwds =
-  Set.fromList . mapMaybe rewardPool
-    $ concatMap Set.toList (Map.elems $ rwdRewards rwds)
-
-rewardsStakeCreds :: Rewards -> Set StakeCred
-rewardsStakeCreds = Map.keysSet . rwdRewards
 
 totalAda :: Rewards -> Ada
 totalAda rwds =

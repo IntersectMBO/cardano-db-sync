@@ -37,6 +37,7 @@ import           Control.Monad.Trans.Control (MonadBaseControl)
 
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
+import qualified Data.Strict.Maybe as Strict
 
 import           Database.Persist.Sql (SqlBackend)
 
@@ -131,9 +132,9 @@ insertRewards earnedEpoch spendableEpoch cache rewardsChunk = do
             if exists then pure Nothing else pure (Just rwdDb)
 
     queryPool :: (MonadBaseControl IO m, MonadIO m)
-              => Maybe Generic.StakePoolKeyHash -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe DB.PoolHashId)
-    queryPool Nothing = pure Nothing
-    queryPool (Just poolHash) =
+              => Strict.Maybe Generic.StakePoolKeyHash -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe DB.PoolHashId)
+    queryPool Strict.Nothing = pure Nothing
+    queryPool (Strict.Just poolHash) =
       Just <$> liftLookupFail "insertRewards.queryPoolKeyWithCache" (queryPoolKeyWithCache cache CacheNew poolHash)
 
 insertPoolDepositRefunds
