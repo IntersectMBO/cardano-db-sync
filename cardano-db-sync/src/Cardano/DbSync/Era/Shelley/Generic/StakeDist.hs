@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
@@ -72,7 +73,7 @@ getSecurityParameter =  maxRollbacks . configSecurityParam . pInfoConfig
 getStakeSlice :: ConsensusProtocol (BlockProtocol blk)
               => ProtocolInfo IO blk -> Ledger.Network
               -> EpochNo -> Word64 -> Word64 -> ExtLedgerState CardanoBlock -> StakeSliceRes
-getStakeSlice pInfo network epoch sliceIndex minSliceSize els =
+getStakeSlice pInfo network epoch !sliceIndex !minSliceSize els =
   case ledgerState els of
     LedgerStateByron _ -> NoSlices
     LedgerStateShelley sls -> genericStakeSlice pInfo network epoch sliceIndex minSliceSize sls

@@ -121,6 +121,7 @@ mkSyncEnv
     -> IO SyncEnv
 mkSyncEnv trce backend syncOptions protoInfo nw nwMagic systemStart dir stableEpochSlot = do
   ledgerEnv <- mkLedgerEnv trce protoInfo dir nw stableEpochSlot systemStart (soptAbortOnInvalid syncOptions)
+                 (snapshotEveryFollowing syncOptions) (snapshotEveryLagging syncOptions)
   cache <- newEmptyCache 200000
   pure $ SyncEnv
           { envProtocol = SyncProtocolCardano

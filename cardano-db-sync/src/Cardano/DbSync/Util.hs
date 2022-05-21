@@ -24,7 +24,6 @@ module Cardano.DbSync.Util
   , textPrettyShow
   , textShow
   , thrd3
-  , tipBlockNo
   , traverseMEither
   , whenJust
   , whenMaybe
@@ -35,14 +34,14 @@ import           Cardano.Prelude hiding (catch)
 
 import           Cardano.BM.Trace (Trace, logError, logInfo)
 
-import           Cardano.Db (SyncState (..), textShow)
+import           Cardano.Db (textShow)
 
 import           Cardano.Ledger.Coin (Coin (..))
 
 import           Cardano.DbSync.Config.Types ()
 import           Cardano.DbSync.Types
 
-import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..), withOrigin)
+import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
 
 import           Control.Exception.Lifted (catch)
 import           Control.Monad.Trans.Control (MonadBaseControl)
@@ -65,7 +64,7 @@ import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
 import           Ouroboros.Consensus.Protocol.Praos.Translate ()
 import           Ouroboros.Consensus.Shelley.HFEras ()
 import           Ouroboros.Consensus.Shelley.Ledger.SupportsProtocol ()
-import           Ouroboros.Network.Block (BlockNo (..), Tip, blockSlot, getPoint, getTipBlockNo)
+import           Ouroboros.Network.Block (blockSlot, getPoint)
 import qualified Ouroboros.Network.Point as Point
 
 import           System.Environment (lookupEnv)
@@ -90,9 +89,6 @@ isSyncedWithinSeconds sd target =
 
 textPrettyShow :: Show a => a -> Text
 textPrettyShow = Text.pack . ppShow
-
-tipBlockNo :: Tip blk -> BlockNo
-tipBlockNo tip = withOrigin (BlockNo 0) identity (getTipBlockNo tip)
 
 -- | Run a function of type `a -> m (Either e ())` over a list and return
 -- the first `e` or `()`.

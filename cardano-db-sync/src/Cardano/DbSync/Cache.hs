@@ -59,7 +59,7 @@ type StakePoolCache = Map StakePoolKeyHash DB.PoolHashId
 -- insertions, where the cache has not been initiated yet.
 data Cache
   = UninitiatedCache
-  | Cache CacheInternal
+  | Cache !CacheInternal
 
 data CacheNew
   = CacheNew

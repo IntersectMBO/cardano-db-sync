@@ -24,7 +24,7 @@ import           Data.IORef (IORef, atomicWriteIORef, newIORef, readIORef)
 import           Database.Esqueleto.Experimental (SqlBackend, desc, from, limit, orderBy, replace,
                    select, table, unValue, val, where_, (==.), (^.))
 
-import           Cardano.Db (EntityField (..), EpochId, SyncState (..))
+import           Cardano.Db (EntityField (..), EpochId)
 import qualified Cardano.Db as DB
 
 import           Cardano.DbSync.Api

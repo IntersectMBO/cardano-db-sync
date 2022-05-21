@@ -28,7 +28,7 @@ import           Cardano.BM.Trace (Trace, logDebug, logInfo, logWarning)
 
 import qualified Cardano.Crypto.Hash as Crypto
 
-import           Cardano.Db (DbLovelace (..), DbWord64 (..), SyncState (..))
+import           Cardano.Db (DbLovelace (..), DbWord64 (..))
 import qualified Cardano.Db as DB
 
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -46,6 +46,7 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Coin as Ledger
 import qualified Cardano.Ledger.Credential as Ledger
+import           Cardano.Ledger.Keys
 import qualified Cardano.Ledger.Keys as Ledger
 import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..), Value (..))
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
@@ -55,7 +56,6 @@ import           Cardano.DbSync.Api
 import           Cardano.DbSync.Cache
 import           Cardano.DbSync.Era.Shelley.Generic.StakePoolKeyHash
 import           Cardano.DbSync.Error
-import           Cardano.DbSync.LedgerState
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
@@ -69,7 +69,7 @@ import           Data.Either.Extra (eitherToMaybe)
 import           Data.Group (invert)
 import qualified Data.Map.Strict as Map
 import           Data.Maybe.Strict (strictMaybeToMaybe)
-import qualified Data.Set as Set
+import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text.Encoding as Text
 
 import           Database.Persist.Sql (SqlBackend)
@@ -78,11 +78,14 @@ import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 {- HLINT ignore "Reduce duplication" -}
 
+type IsPoolMember = Ledger.KeyHash 'StakePool StandardCrypto -> Bool
+
 insertShelleyBlock
     :: (MonadBaseControl IO m, MonadIO m)
-    => SyncEnv -> Bool -> Generic.Block -> LedgerStateSnapshot -> SlotDetails
+    => SyncEnv -> Bool -> Generic.Block -> SlotDetails
+    -> IsPoolMember -> Strict.Maybe Generic.NewEpoch -> Generic.StakeSliceRes
     -> ReaderT SqlBackend m (Either SyncNodeError ())
-insertShelleyBlock env firstBlockOfEpoch blk lStateSnap details = do
+insertShelleyBlock env firstBlockOfEpoch blk details isMember mNewEpoch stakeSlice = do
   runExceptT $ do
     pbid <- case Generic.blkPreviousHash blk of
       Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
@@ -112,7 +115,7 @@ insertShelleyBlock env firstBlockOfEpoch blk lStateSnap details = do
                     }
 
     let zippedTx = zip [0 .. ] (Generic.blkTxs blk)
-    let txInserter = insertTx tracer cache (leNetwork lenv) lStateSnap blkId (sdEpochNo details) (Generic.blkSlotNo blk)
+    let txInserter = insertTx tracer cache (leNetwork lenv) isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
     grouped <- foldM (\grouped (idx, tx) -> txInserter idx tx grouped) mempty zippedTx
     insertBlockGroupedData tracer grouped
 
@@ -136,10 +139,10 @@ insertShelleyBlock env firstBlockOfEpoch blk lStateSnap details = do
         , ", hash ", renderByteArray (Generic.blkHash blk)
         ]
 
-    whenJust (lssNewEpoch lStateSnap) $ \ newEpoch -> do
+    whenJust mNewEpoch $ \ newEpoch -> do
       insertOnNewEpoch tracer blkId (Generic.blkSlotNo blk) (sdEpochNo details) newEpoch
 
-    insertStakeSlice env (lssStakeSlice lStateSnap)
+    insertStakeSlice env stakeSlice
 
     when (unBlockNo (Generic.blkBlockNo blk) `mod` offlineModBase == 0) .
       lift $ do
@@ -202,10 +205,10 @@ insertOnNewEpoch tracer blkId slotNo epochNo newEpoch = do
 
 insertTx
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Cache -> Ledger.Network -> LedgerStateSnapshot -> DB.BlockId -> EpochNo
+    => Trace IO Text -> Cache -> Ledger.Network -> IsPoolMember -> DB.BlockId -> EpochNo
     -> SlotNo -> Word64 -> Generic.Tx -> BlockGroupedData
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) BlockGroupedData
-insertTx tracer cache network lStateSnap blkId epochNo slotNo blockIndex tx grouped = do
+insertTx tracer cache network isMember blkId epochNo slotNo blockIndex tx grouped = do
     let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
         !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
     !resolvedInputs <- mapM (resolveTxInputs (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
@@ -255,7 +258,7 @@ insertTx tracer cache network lStateSnap blkId epochNo slotNo blockIndex tx grou
       whenJust (maybeToStrict $ Generic.txMetadata tx) $ \ md ->
         insertTxMetadata tracer txId md
 
-      mapM_ (insertCertificate tracer cache lStateSnap network blkId txId epochNo slotNo redeemers) $ Generic.txCertificates tx
+      mapM_ (insertCertificate tracer cache isMember network blkId txId epochNo slotNo redeemers) $ Generic.txCertificates tx
       mapM_ (insertWithdrawals tracer txId redeemers) $ Generic.txWithdrawals tx
 
       mapM_ (insertParamProposal tracer blkId txId) $ Generic.txParamProposal tx
@@ -366,14 +369,14 @@ insertReferenceTxIn _tracer txInId (Generic.TxIn txId index _) = do
 
 insertCertificate
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Cache -> LedgerStateSnapshot -> Ledger.Network -> DB.BlockId -> DB.TxId -> EpochNo -> SlotNo
+    => Trace IO Text -> Cache -> IsPoolMember -> Ledger.Network -> DB.BlockId -> DB.TxId -> EpochNo -> SlotNo
     -> Map Word64 DB.RedeemerId
     -> Generic.TxCertificate
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertCertificate tracer cache lStateSnap network blkId txId epochNo slotNo redeemers (Generic.TxCertificate ridx idx cert) =
+insertCertificate tracer cache isMember network blkId txId epochNo slotNo redeemers (Generic.TxCertificate ridx idx cert) =
   case cert of
     Shelley.DCertDeleg deleg -> insertDelegCert tracer cache network txId idx mRedeemerId epochNo slotNo deleg
-    Shelley.DCertPool pool -> insertPoolCert tracer cache lStateSnap network epochNo blkId txId idx pool
+    Shelley.DCertPool pool -> insertPoolCert tracer cache isMember network epochNo blkId txId idx pool
     Shelley.DCertMir mir -> insertMirCert tracer cache network txId idx mir
     Shelley.DCertGenesis _gen -> do
         -- TODO : Low priority
@@ -384,11 +387,11 @@ insertCertificate tracer cache lStateSnap network blkId txId epochNo slotNo rede
 
 insertPoolCert
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Cache -> LedgerStateSnapshot -> Ledger.Network -> EpochNo -> DB.BlockId -> DB.TxId -> Word16 -> Shelley.PoolCert StandardCrypto
+    => Trace IO Text -> Cache -> IsPoolMember -> Ledger.Network -> EpochNo -> DB.BlockId -> DB.TxId -> Word16 -> Shelley.PoolCert StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolCert tracer cache lStateSnap network epoch blkId txId idx pCert =
+insertPoolCert tracer cache isMember network epoch blkId txId idx pCert =
   case pCert of
-    Shelley.RegPool pParams -> insertPoolRegister tracer cache (Right lStateSnap) network epoch blkId txId idx pParams
+    Shelley.RegPool pParams -> insertPoolRegister tracer cache isMember network epoch blkId txId idx pParams
     Shelley.RetirePool keyHash epochNum -> insertPoolRetire txId cache epochNum idx keyHash
 
 insertDelegCert
@@ -404,9 +407,9 @@ insertDelegCert _tracer cache network txId idx mRedeemerId epochNo slotNo dCert 
 
 insertPoolRegister
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Cache -> Either Word64 LedgerStateSnapshot -> Ledger.Network -> EpochNo -> DB.BlockId -> DB.TxId -> Word16 -> Shelley.PoolParams StandardCrypto
+    => Trace IO Text -> Cache -> IsPoolMember -> Ledger.Network -> EpochNo -> DB.BlockId -> DB.TxId -> Word16 -> Shelley.PoolParams StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolRegister _tracer cache mlStateSnap network (EpochNo epoch) blkId txId idx params = do
+insertPoolRegister _tracer cache isMember network (EpochNo epoch) blkId txId idx params = do
     poolHashId <- lift $ insertPoolKeyWithCache cache CacheNew (Shelley._poolId params)
     mdId <- case strictMaybeToMaybe $ Shelley._poolMD params of
               Just md -> Just <$> insertMetaDataRef poolHashId txId md
@@ -435,11 +438,9 @@ insertPoolRegister _tracer cache mlStateSnap network (EpochNo epoch) blkId txId 
   where
     mkEpochActivationDelay :: MonadIO m => DB.PoolHashId -> ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
     mkEpochActivationDelay poolHashId =
-      case mlStateSnap of
-        Left n -> pure n
-        Right lStateSnap -> if Set.member (Shelley._poolId params) $ getPoolParams (lssOldState lStateSnap)
-          then pure 3
-          else do
+      if isMember (Shelley._poolId params)
+      then pure 3
+      else do
             -- if the pool is not registered at the end of the previous block, check for
             -- other registrations at the current block. If this is the first registration
             -- then it's +2, else it's +3.
