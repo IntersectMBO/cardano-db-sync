@@ -14,7 +14,7 @@ module Cardano.DbSync.LedgerEvent
   , convertPoolRewards
   ) where
 
-import           Cardano.Db hiding (EpochNo, epochNo)
+import           Cardano.Db hiding (EpochNo, SyncState, epochNo)
 
 import           Cardano.Ledger.Coin (Coin (..), DeltaCoin (..))
 import qualified Cardano.Ledger.Core as Ledger
@@ -35,6 +35,8 @@ import qualified Cardano.Ledger.Shelley.Rules.Tick as Tick
 import           Cardano.Prelude hiding (All)
 
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
+import           Cardano.DbSync.Types
+
 import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Control.State.Transition (Event)

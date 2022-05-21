@@ -30,7 +30,7 @@ import qualified Cardano.Chain.UTxO as Byron
 
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
 
-import           Cardano.Db (DbLovelace (..), SyncState (..))
+import           Cardano.Db (DbLovelace (..))
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 
 import           Cardano.DbSync.Types

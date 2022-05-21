@@ -70,7 +70,7 @@ data Block = Block
   , blkVrfKey :: !Text
   , blkOpCert :: !ByteString
   , blkOpCertCounter :: !Word64
-  , blkTxs :: ![Tx]
+  , blkTxs :: [Tx] -- intentionally left lazy to delay the tx transformation
   }
 
 
@@ -219,7 +219,6 @@ blockTxs
     => ShelleyBlock p era -> [(Word64, Shelley.Tx era)]
 blockTxs = zip [0 ..] . unTxSeq . Ledger.bbody . Consensus.shelleyBlockRaw
 
--- (ShelleyBasedEra era, VRF (Crypto era) ~ PraosVRF) =>
 blockVrfKeyView :: VerKeyVRF StandardCrypto -> Text
 blockVrfKeyView = Api.serialiseToBech32 . Api.VrfVerificationKey
 

@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+
 module Cardano.DbSync.Types
   ( BlockDetails (..)
   , BlockEra (..)
@@ -10,6 +11,7 @@ module Cardano.DbSync.Types
   , FetchResult (..)
   , SlotDetails (..)
   , TipInfo (..)
+  , SyncState (..)
   , TPraosStandard
   , MetricSetters (..)
   , PoolFetchRetry (..)
@@ -108,6 +110,9 @@ data MetricSetters = MetricSetters
   , metricsSetDbBlockHeight :: BlockNo -> IO ()
   , metricsSetDbSlotHeight :: SlotNo -> IO ()
   }
+
+data SyncState = SyncLagging | SyncFollowing
+  deriving (Eq, Show)
 
 data PoolFetchRetry = PoolFetchRetry
   { pfrPoolHashId :: !PoolHashId

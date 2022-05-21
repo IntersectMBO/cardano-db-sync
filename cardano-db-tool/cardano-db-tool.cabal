@@ -71,6 +71,7 @@ library
                       , cardano-slotting
                       , vector-map
                       , containers
+                      , contra-tracer
                       , esqueleto
                       , extra
                       , ouroboros-consensus

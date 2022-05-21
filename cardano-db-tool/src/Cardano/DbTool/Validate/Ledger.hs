@@ -7,6 +7,7 @@ import           Control.Monad (when)
 import           Control.Monad.Trans.Except.Exit (orDie)
 import           Data.Text (Text)
 import qualified Data.Text as Text
+import           Control.Tracer (nullTracer)
 import           Prelude
 
 import qualified Cardano.Db as DB
@@ -19,10 +20,9 @@ import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState
 import           Cardano.DbSync.Tracing.ToObjectOrphans ()
 
-import           Cardano.Slotting.Slot (SlotNo (..))
-
 import           Ouroboros.Consensus.Cardano.Node ()
 import           Ouroboros.Consensus.Ledger.Extended
+import           Ouroboros.Network.Block
 import           Ouroboros.Network.NodeToClient (withIOManager)
 
 data LedgerValidationParams = LedgerValidationParams
@@ -50,7 +50,8 @@ validate params genCfg slotNo ledgerFiles =
       let ledgerSlot = lsfSlotNo ledgerFile
       if ledgerSlot <= slotNo
         then do
-          Right state <- loadLedgerStateFromFile (mkTopLevelConfig genCfg) False ledgerFile
+          -- TODO fix GenesisPoint. This is only used for logging
+          Right state <- loadLedgerStateFromFile nullTracer (mkTopLevelConfig genCfg) False GenesisPoint ledgerFile
           validateBalance ledgerSlot (vpAddressUtxo params) state
         else do
           when logFailure . putStrLn $ redText "Ledger is newer than DB. Trying an older ledger."

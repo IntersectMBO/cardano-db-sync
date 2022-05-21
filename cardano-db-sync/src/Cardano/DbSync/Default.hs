@@ -4,14 +4,14 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Cardano.DbSync.Default
-  ( insertDefaultBlock
+  ( insertListBlocks
   , rollbackToPoint
   ) where
 
 
 import           Cardano.Prelude
 
-import           Cardano.BM.Trace (logDebug, logInfo)
+import           Cardano.BM.Trace (logInfo)
 
 import qualified Cardano.Db as DB
 
@@ -26,23 +26,19 @@ import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
 import           Cardano.DbSync.Era.Shelley.Insert.Epoch (insertPoolDepositRefunds, insertRewards)
 import           Cardano.DbSync.Era.Shelley.Validate (validateEpochRewards)
 import           Cardano.DbSync.Error
-import           Cardano.DbSync.LedgerState (LedgerEvent (..), LedgerStateSnapshot (..), applyBlock,
-                   getAlonzoPParams, getBabbagePParams, saveCleanupState)
+import           Cardano.DbSync.LedgerState (LedgerEvent (..), ApplyResult (..), applyBlockAndSnapshot)
 import           Cardano.DbSync.Rollback (rollbackToPoint)
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
-import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
-import qualified Cardano.Ledger.Babbage.PParams as Babbage
+import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
 import           Cardano.Ledger.BaseTypes (Network)
 import           Cardano.Ledger.Coin (Coin (..))
 import           Cardano.Ledger.Credential (StakeCredential)
 import           Cardano.Ledger.Crypto (StandardCrypto)
 import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 
-import           Cardano.Slotting.Block (BlockNo (..))
 import           Cardano.Slotting.Slot (EpochNo (..))
-
 
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Control (MonadBaseControl)
@@ -56,79 +52,64 @@ import           Database.Persist.SqlBackend.Internal.StatementCache
 import           Database.Persist.SqlBackend.Internal
 
 import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
-import           Ouroboros.Network.Block (blockNo)
 
 
-insertDefaultBlock
+insertListBlocks
     :: SyncEnv -> [CardanoBlock]
     -> IO (Either SyncNodeError ())
-insertDefaultBlock env blocks =
+insertListBlocks env blocks = do
     DB.runDbIohkLogging backend tracer .
       runExceptT $ do
-        traverse_ insertDetails blocks
+        traverse_ (applyAndInsert env) blocks
   where
     tracer = getTrace env
     backend = envBackend env
 
-    insertDetails
-        :: CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
-    insertDetails cblk = do
-      -- Calculate the new ledger state to pass to the DB insert functions but do not yet
-      -- update ledgerStateVar.
-      !lStateSnap <- liftIO $ applyBlock (envLedger env) cblk
-      let !details = lssSlotDetails lStateSnap
-      mkSnapshotMaybe env lStateSnap (blockNo cblk) (isSyncedWithinSeconds details 600)
-      handleLedgerEvents env (sdEpochNo details) (lssEvents lStateSnap)
-      let firstBlockOfEpoch = hasEpochStartEvent (lssEvents lStateSnap)
-      case cblk of
-        BlockByron blk ->
-          newExceptT $ insertByronBlock env firstBlockOfEpoch blk details
-        BlockShelley blk ->
-          newExceptT $ insertShelleyBlock env firstBlockOfEpoch (Generic.fromShelleyBlock blk) lStateSnap details
-        BlockAllegra blk ->
-          newExceptT $ insertShelleyBlock env firstBlockOfEpoch (Generic.fromAllegraBlock blk) lStateSnap details
-        BlockMary blk ->
-          newExceptT $ insertShelleyBlock env firstBlockOfEpoch (Generic.fromMaryBlock blk) lStateSnap details
-        BlockAlonzo blk -> do
-          let prices = Alonzo._prices $ getAlonzoPParams $ lssState lStateSnap
-          newExceptT $ insertShelleyBlock env firstBlockOfEpoch (Generic.fromAlonzoBlock prices blk) lStateSnap details
-        BlockBabbage blk -> do
-          let prices = Babbage._prices $ getBabbagePParams $ lssState lStateSnap
-          newExceptT $ insertShelleyBlock env firstBlockOfEpoch (Generic.fromBabbageBlock prices blk) lStateSnap details
-      when (soptExtended $ envOptions env) .
-        newExceptT $ epochInsert tracer (BlockDetails cblk details)
-
-mkSnapshotMaybe
-        :: (MonadBaseControl IO m, MonadIO m)
-        => SyncEnv -> LedgerStateSnapshot -> BlockNo -> DB.SyncState
-        -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-mkSnapshotMaybe env snapshot blkNo syncState =
-    case maybeFromStrict (lssNewEpoch snapshot) of
-      Just newEpoch -> do
-        liftIO $ logDebug (leTrace $ envLedger env) "Preparing for a snapshot"
-        let newEpochNo = Generic.neEpoch newEpoch
-        liftIO $ logDebug (leTrace $ envLedger env) "Taking a ledger a snapshot"
-        -- finally take a ledger snapshot
-        -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
-        liftIO $ saveCleanupState (envLedger env) (lssOldState snapshot) (Just $ newEpochNo - 1)
-      Nothing ->
-        when (timeToSnapshot syncState blkNo) $
-          liftIO $ saveCleanupState (envLedger env) (lssOldState snapshot) Nothing
-
+applyAndInsert
+    :: SyncEnv -> CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
+applyAndInsert env cblk = do
+    !applyResult <- liftIO $ applyBlockAndSnapshot (envLedger env) cblk
+    let !details = apSlotDetails applyResult
+    insertLedgerEvents env (sdEpochNo details) (apEvents applyResult)
+    insertEpoch details
+    let firstBlockOfEpoch = hasEpochStartEvent (apEvents applyResult)
+    let isMember = \poolId -> Set.member poolId (apPoolsRegistered applyResult)
+    case cblk of
+      BlockByron blk ->
+        newExceptT $ insertByronBlock env firstBlockOfEpoch blk details
+      BlockShelley blk -> newExceptT $
+        insertShelleyBlock env firstBlockOfEpoch (Generic.fromShelleyBlock blk)
+          details isMember (apNewEpoch applyResult) (apStakeSlice applyResult)
+      BlockAllegra blk -> newExceptT $
+        insertShelleyBlock env firstBlockOfEpoch (Generic.fromAllegraBlock blk)
+          details isMember (apNewEpoch applyResult) (apStakeSlice applyResult)
+      BlockMary blk -> newExceptT $
+        insertShelleyBlock env firstBlockOfEpoch (Generic.fromMaryBlock blk)
+          details isMember (apNewEpoch applyResult) (apStakeSlice applyResult)
+      BlockAlonzo blk -> newExceptT $
+        insertShelleyBlock env firstBlockOfEpoch (Generic.fromAlonzoBlock (getPrices applyResult) blk)
+          details isMember (apNewEpoch applyResult) (apStakeSlice applyResult)
+      BlockBabbage blk -> newExceptT $
+        insertShelleyBlock env firstBlockOfEpoch (Generic.fromBabbageBlock (getPrices applyResult) blk)
+          details isMember (apNewEpoch applyResult) (apStakeSlice applyResult)
   where
-    timeToSnapshot :: DB.SyncState -> BlockNo -> Bool
-    timeToSnapshot syncSt bNo =
-      case (syncSt, unBlockNo bNo) of
-        (DB.SyncFollowing, bno) -> bno `mod` snapshotEveryFollowing (envOptions env) == 0
-        (DB.SyncLagging, bno) -> bno `mod` snapshotEveryLagging (envOptions env) == 0
+    tracer = getTrace env
+
+    insertEpoch details = when (soptExtended $ envOptions env) .
+      newExceptT $ epochInsert tracer (BlockDetails cblk details)
+
+    getPrices :: ApplyResult -> Ledger.Prices
+    getPrices applyResult = case apPrices applyResult of
+      Strict.Just pr -> pr
+      Strict.Nothing -> Ledger.Prices minBound minBound
 
 -- -------------------------------------------------------------------------------------------------
 
-handleLedgerEvents
+insertLedgerEvents
     :: (MonadBaseControl IO m, MonadIO m)
     => SyncEnv -> EpochNo -> [LedgerEvent]
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-handleLedgerEvents env currentEpochNo@(EpochNo curEpoch) =
+insertLedgerEvents env currentEpochNo@(EpochNo curEpoch) =
     mapM_ handler
   where
     tracer = getTrace env
@@ -141,6 +122,10 @@ handleLedgerEvents env currentEpochNo@(EpochNo curEpoch) =
       if unEpochNo currentEpochNo >= m then EpochNo $ unEpochNo currentEpochNo - m
       else EpochNo 0
 
+    toSyncState :: SyncState -> DB.SyncState
+    toSyncState SyncLagging = DB.SyncLagging
+    toSyncState SyncFollowing = DB.SyncFollowing
+
     handler
         :: (MonadBaseControl IO m, MonadIO m)
         => LedgerEvent -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
@@ -148,7 +133,7 @@ handleLedgerEvents env currentEpochNo@(EpochNo curEpoch) =
       case ev of
         LedgerNewEpoch en ss -> do
           lift $ do
-            insertEpochSyncTime en ss (leEpochSyncTime lenv)
+            insertEpochSyncTime en (toSyncState ss) (leEpochSyncTime lenv)
           sqlBackend <- lift ask
           persistantCacheSize <- liftIO $ statementCacheSize $ connStmtMap sqlBackend
           liftIO . logInfo tracer $ "Persistant SQL Statement Cache size is " <> textShow persistantCacheSize
@@ -176,8 +161,9 @@ handleLedgerEvents env currentEpochNo@(EpochNo curEpoch) =
             let rewards = Map.toList rwd
             insertRewards (subFromCurrentEpoch 1) currentEpochNo cache rewards
             liftIO . logInfo tracer $ "Inserted " <> show (length rewards) <> " Mir rewards"
-        LedgerPoolReap en drs ->
-          insertPoolDepositRefunds env (Generic.Rewards en $ convertPoolDepositReunds (leNetwork lenv) drs)
+        LedgerPoolReap en drs -> do
+          unless (Map.null drs) $ do
+            insertPoolDepositRefunds env (Generic.Rewards en $ convertPoolDepositReunds (leNetwork lenv) drs)
 
 convertPoolDepositReunds
     :: Network -> Map (StakeCredential StandardCrypto) (Map (KeyHash 'StakePool StandardCrypto) Coin)

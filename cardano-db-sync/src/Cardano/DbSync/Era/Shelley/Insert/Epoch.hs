@@ -142,7 +142,11 @@ insertPoolDepositRefunds
     => SyncEnv -> Generic.Rewards
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolDepositRefunds env refunds = do
-  insertRewards (Generic.rwdEpoch refunds) (Generic.rwdEpoch refunds) (envCache env) (Map.toList $ Generic.rwdRewards refunds)
+    insertRewards (Generic.rwdEpoch refunds) (Generic.rwdEpoch refunds) (envCache env) (Map.toList rwds)
+    liftIO . logInfo tracer $ "Inserted " <> show (Generic.elemCount refunds) <> " deposit refund rewards"
+  where
+    tracer = getTrace env
+    rwds = Generic.rwdRewards refunds
 
 sumRewardTotal :: Map Generic.StakeCred (Set Generic.Reward) -> Shelley.Coin
 sumRewardTotal =

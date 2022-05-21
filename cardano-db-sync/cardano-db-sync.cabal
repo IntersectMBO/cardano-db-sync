@@ -208,7 +208,8 @@ executable cardano-db-sync
                         -Wunused-packages
                         -Wno-unsafe
                         -threaded
-                        -with-rtsopts=-N3
+                        -rtsopts
+                        "-with-rtsopts=-T -A16m -N3 --disable-delayed-os-memory-return"
 
   autogen-modules:      Paths_cardano_db_sync
                         MigrationValidations
