@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -23,7 +24,6 @@ import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Crypto.KES.Class as KES
 
 import           Cardano.DbSync.Era.Shelley.Generic.Tx
-import           Cardano.DbSync.Era.Shelley.Generic.Util
 
 import           Cardano.Ledger.Alonzo ()
 import           Cardano.Ledger.Alonzo.Scripts (Prices)
@@ -34,7 +34,7 @@ import qualified Cardano.Ledger.Core as Ledger
 import           Cardano.Ledger.Crypto (Crypto)
 import           Cardano.Ledger.Era (SupportsSegWit (..))
 import qualified Cardano.Ledger.Era as Ledger
-import           Cardano.Ledger.Keys (VerKeyVRF, hashKey)
+import           Cardano.Ledger.Keys (KeyHash, KeyRole (..), VerKeyVRF, hashKey)
 import           Cardano.Ledger.SafeHash (SafeToHash)
 import qualified Cardano.Ledger.Shelley.BlockChain as Shelley
 import qualified Cardano.Ledger.Shelley.Tx as Shelley
@@ -62,7 +62,7 @@ data Block = Block
   { blkEra :: !BlockEra
   , blkHash :: !ByteString
   , blkPreviousHash :: !(Maybe ByteString) -- Nothing is used for first block after Genesis.
-  , blkSlotLeader :: !ByteString
+  , blkSlotLeader :: !(KeyHash 'BlockIssuer StandardCrypto)
   , blkSlotNo :: !SlotNo
   , blkBlockNo :: !BlockNo
   , blkSize :: !Word64
@@ -231,8 +231,10 @@ blockVrfVkPraos = Praos.hbVrfVk . getHeaderBodyPraos . blockHeader
 getHeaderBodyPraos :: Crypto c => Praos.Header c -> Praos.HeaderBody c
 getHeaderBodyPraos (Praos.Header headerBody _) = headerBody
 
-blockIssuer :: (ShelleyProtocol p, Crypto (ProtoCrypto p)) => ShelleyBlock p era -> ByteString
-blockIssuer = unKeyHashRaw . hashKey . pHeaderIssuer . blockHeader
+blockIssuer
+    :: (ShelleyProtocol p, Crypto (ProtoCrypto p), ProtoCrypto p ~ crypto)
+    => ShelleyBlock p era -> KeyHash 'BlockIssuer crypto
+blockIssuer = hashKey . pHeaderIssuer . blockHeader
 
 slotNumber :: ShelleyProtocol p => ShelleyBlock p era -> SlotNo
 slotNumber = pHeaderSlot . blockHeader

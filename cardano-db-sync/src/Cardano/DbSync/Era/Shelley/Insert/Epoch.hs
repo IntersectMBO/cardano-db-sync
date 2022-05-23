@@ -22,6 +22,7 @@ import           Cardano.BM.Trace (Trace, logInfo)
 
 import qualified Cardano.Db as DB
 
+import           Cardano.Ledger.BaseTypes (Network)
 import qualified Cardano.Ledger.Coin as Shelley
 
 import           Cardano.DbSync.Api
@@ -29,6 +30,7 @@ import           Cardano.DbSync.Cache
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 import           Cardano.DbSync.Error
+import           Cardano.DbSync.Types
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
@@ -60,7 +62,7 @@ insertStakeSlice
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertStakeSlice _ Generic.NoSlices = pure ()
 insertStakeSlice env (Generic.Slice slice finalSlice) = do
-    insertEpochStake (envCache env) (Generic.sliceEpochNo slice) (Map.toList $ Generic.sliceDistr slice)
+    insertEpochStake (envCache env) network (Generic.sliceEpochNo slice) (Map.toList $ Generic.sliceDistr slice)
     when finalSlice $ do
       size <- lift $ DB.queryEpochStakeCount (unEpochNo $ Generic.sliceEpochNo slice)
       liftIO . logInfo tracer $ mconcat ["Inserted ", show size, " EpochStake for ", show (Generic.sliceEpochNo slice)]
@@ -68,21 +70,24 @@ insertStakeSlice env (Generic.Slice slice finalSlice) = do
     tracer :: Trace IO Text
     tracer = getTrace env
 
+    network :: Network
+    network = leNetwork $ envLedger env
+
 insertEpochStake
     :: (MonadBaseControl IO m, MonadIO m)
-    => Cache -> EpochNo
-    -> [(Generic.StakeCred, (Shelley.Coin, Generic.StakePoolKeyHash))]
+    => Cache -> Network -> EpochNo
+    -> [(StakeCred, (Shelley.Coin, PoolKeyHash))]
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertEpochStake cache epochNo stakeChunk = do
+insertEpochStake cache nw epochNo stakeChunk = do
     dbStakes <- mapM mkStake stakeChunk
     lift $ DB.insertManyEpochStakes dbStakes
   where
     mkStake
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Generic.StakeCred, (Shelley.Coin, Generic.StakePoolKeyHash))
+        => (StakeCred, (Shelley.Coin, PoolKeyHash))
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.EpochStake
     mkStake (saddr, (coin, pool)) = do
-      saId <- liftLookupFail "insertEpochStake.queryStakeAddrWithCache" $ queryStakeAddrWithCache cache CacheNew saddr
+      saId <- liftLookupFail "insertEpochStake.queryStakeAddrWithCache" $ queryStakeAddrWithCache cache CacheNew nw saddr
       poolId <- liftLookupFail "insertEpochStake.queryPoolKeyWithCache" $ queryPoolKeyWithCache cache CacheNew pool
       pure $
         DB.EpochStake
@@ -94,18 +99,18 @@ insertEpochStake cache epochNo stakeChunk = do
 
 insertRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => EpochNo -> EpochNo -> Cache -> [(Generic.StakeCred, Set Generic.Reward)]
+    => Network -> EpochNo -> EpochNo -> Cache -> [(StakeCred, Set Generic.Reward)]
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertRewards earnedEpoch spendableEpoch cache rewardsChunk = do
+insertRewards nw earnedEpoch spendableEpoch cache rewardsChunk = do
     dbRewards <- concatMapM mkRewards rewardsChunk
     lift $ DB.insertManyRewards dbRewards
   where
     mkRewards
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Generic.StakeCred, Set Generic.Reward)
+        => (StakeCred, Set Generic.Reward)
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.Reward]
     mkRewards (saddr, rset) = do
-      saId <- liftLookupFail "insertRewards.queryStakeAddrWithCache" $ queryStakeAddrWithCache cache CacheNew saddr
+      saId <- liftLookupFail "insertRewards.queryStakeAddrWithCache" $ queryStakeAddrWithCache cache CacheNew nw saddr
       mapMaybeM (prepareReward saId) (Set.toList rset)
 
     -- For rewards with a null pool, the reward unique key doesn't work.
@@ -132,23 +137,24 @@ insertRewards earnedEpoch spendableEpoch cache rewardsChunk = do
             if exists then pure Nothing else pure (Just rwdDb)
 
     queryPool :: (MonadBaseControl IO m, MonadIO m)
-              => Strict.Maybe Generic.StakePoolKeyHash -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe DB.PoolHashId)
+              => Strict.Maybe PoolKeyHash -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe DB.PoolHashId)
     queryPool Strict.Nothing = pure Nothing
     queryPool (Strict.Just poolHash) =
       Just <$> liftLookupFail "insertRewards.queryPoolKeyWithCache" (queryPoolKeyWithCache cache CacheNew poolHash)
 
 insertPoolDepositRefunds
     :: (MonadBaseControl IO m, MonadIO m)
-    => SyncEnv -> Generic.Rewards
+    => SyncEnv -> EpochNo -> Generic.Rewards
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolDepositRefunds env refunds = do
-    insertRewards (Generic.rwdEpoch refunds) (Generic.rwdEpoch refunds) (envCache env) (Map.toList rwds)
+insertPoolDepositRefunds env epochNo refunds = do
+    insertRewards nw epochNo epochNo (envCache env) (Map.toList rwds)
     liftIO . logInfo tracer $ "Inserted " <> show (Generic.elemCount refunds) <> " deposit refund rewards"
   where
     tracer = getTrace env
     rwds = Generic.rwdRewards refunds
+    nw = leNetwork $ envLedger env
 
-sumRewardTotal :: Map Generic.StakeCred (Set Generic.Reward) -> Shelley.Coin
+sumRewardTotal :: Map StakeCred (Set Generic.Reward) -> Shelley.Coin
 sumRewardTotal =
     Shelley.Coin . Map.foldl' sumCoin 0
   where

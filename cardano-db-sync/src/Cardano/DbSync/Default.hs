@@ -32,11 +32,6 @@ import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
-import           Cardano.Ledger.BaseTypes (Network)
-import           Cardano.Ledger.Coin (Coin (..))
-import           Cardano.Ledger.Credential (StakeCredential)
-import           Cardano.Ledger.Crypto (StandardCrypto)
-import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
@@ -144,44 +139,26 @@ insertLedgerEvents env currentEpochNo@(EpochNo curEpoch) =
           -- This is different from the previous case in that the db-sync started
           -- in this epoch, for example after a restart, instead of after an epoch boundary.
           liftIO . logInfo tracer $ "Starting at epoch " <> textShow (unEpochNo en)
-        LedgerDeltaRewards rwd -> do
+        LedgerDeltaRewards _e rwd -> do
           let rewards = Map.toList $ Generic.rwdRewards rwd
-          insertRewards (subFromCurrentEpoch 2) currentEpochNo cache (Map.toList $ Generic.rwdRewards rwd)
+          insertRewards ntw (subFromCurrentEpoch 2) currentEpochNo cache (Map.toList $ Generic.rwdRewards rwd)
           -- This event is only created when it's not empty, so we don't need to check for null here.
           liftIO . logInfo tracer $ "Inserted " <> show (length rewards) <> " Delta rewards"
-        LedgerIncrementalRewards rwd -> do
+        LedgerIncrementalRewards _ rwd -> do
           let rewards = Map.toList $ Generic.rwdRewards rwd
-          insertRewards (subFromCurrentEpoch 1) (EpochNo $ curEpoch + 1) cache rewards
+          insertRewards ntw (subFromCurrentEpoch 1) (EpochNo $ curEpoch + 1) cache rewards
         LedgerRestrainedRewards e rwd creds -> do
-          lift $ adjustEpochRewards tracer cache e rwd creds
+          lift $ adjustEpochRewards tracer ntw cache e rwd creds
         LedgerTotalRewards _e rwd -> do
           lift $ validateEpochRewards tracer ntw (subFromCurrentEpoch 2) currentEpochNo rwd
         LedgerMirDist rwd -> do
           unless (Map.null rwd) $ do
             let rewards = Map.toList rwd
-            insertRewards (subFromCurrentEpoch 1) currentEpochNo cache rewards
+            insertRewards ntw (subFromCurrentEpoch 1) currentEpochNo cache rewards
             liftIO . logInfo tracer $ "Inserted " <> show (length rewards) <> " Mir rewards"
         LedgerPoolReap en drs -> do
-          unless (Map.null drs) $ do
-            insertPoolDepositRefunds env (Generic.Rewards en $ convertPoolDepositReunds (leNetwork lenv) drs)
-
-convertPoolDepositReunds
-    :: Network -> Map (StakeCredential StandardCrypto) (Map (KeyHash 'StakePool StandardCrypto) Coin)
-    -> Map Generic.StakeCred (Set Generic.Reward)
-convertPoolDepositReunds nw =
-    mapBimap (Generic.toStakeCred nw) (Set.fromList . map convert . Map.toList)
-  where
-    convert :: (KeyHash 'StakePool StandardCrypto, Coin) -> Generic.Reward
-    convert (kh, coin) =
-      Generic.Reward
-        { Generic.rewardSource = DB.RwdDepositRefund
-        , Generic.rewardPool = Strict.Just (Generic.toStakePoolKeyHash kh)
-        , Generic.rewardAmount = coin
-        }
-
-mapBimap :: Ord k2 => (k1 -> k2) -> (a1 -> a2) -> Map k1 a1 -> Map k2 a2
-mapBimap fk fa = Map.fromAscList . map (bimap fk fa) . Map.toAscList
-
+          unless (Map.null $ Generic.rwdRewards drs) $ do
+            insertPoolDepositRefunds env en drs
 
 hasEpochStartEvent :: [LedgerEvent] -> Bool
 hasEpochStartEvent = any isNewEpoch

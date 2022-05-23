@@ -15,7 +15,9 @@ import qualified Cardano.Db as Db
 
 import           Cardano.DbSync.Cache
 import qualified Cardano.DbSync.Era.Shelley.Generic.Rewards as Generic
-import           Cardano.DbSync.Era.Shelley.Generic.StakeCred
+import           Cardano.DbSync.Types
+
+import           Cardano.Ledger.BaseTypes (Network)
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
@@ -41,26 +43,26 @@ import           Database.Esqueleto.Experimental (SqlBackend, delete, from, in_,
 
 adjustEpochRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Cache -> EpochNo -> Generic.Rewards
+    => Trace IO Text -> Network -> Cache -> EpochNo -> Generic.Rewards
     -> Set StakeCred
     -> ReaderT SqlBackend m ()
-adjustEpochRewards tracer cache epochNo rwds creds = do
+adjustEpochRewards tracer nw cache epochNo rwds creds = do
   let eraIgnored = Map.toList $ Generic.rwdRewards rwds
   liftIO . logInfo tracer $ mconcat
     [ "Removing ", if null eraIgnored then "" else Db.textShow (length eraIgnored) <> " rewards and "
     , show (length creds), " orphaned rewards"]
   forM_ eraIgnored $ \(cred, rewards)->
     forM_ (Set.toList rewards) $ \rwd ->
-      deleteReward cache epochNo (cred, rwd)
-  crds <- rights <$> forM (Set.toList creds) (queryStakeAddrWithCache cache DontCacheNew)
+      deleteReward nw cache epochNo (cred, rwd)
+  crds <- rights <$> forM (Set.toList creds) (queryStakeAddrWithCache cache DontCacheNew nw)
   deleteOrphanedRewards epochNo crds
 
 deleteReward
     :: (MonadBaseControl IO m, MonadIO m)
-    => Cache -> EpochNo -> (StakeCred, Generic.Reward)
+    => Network -> Cache -> EpochNo -> (StakeCred, Generic.Reward)
     -> ReaderT SqlBackend m ()
-deleteReward cache epochNo (cred, rwd) = do
-  mAddrId <- queryStakeAddrWithCache cache DontCacheNew cred
+deleteReward nw cache epochNo (cred, rwd) = do
+  mAddrId <- queryStakeAddrWithCache cache DontCacheNew nw cred
   eiPoolId <- case Generic.rewardPool rwd of
     Strict.Nothing -> pure $ Left $ Db.DbLookupMessage "deleteReward.queryPoolKeyWithCache"
     Strict.Just poolHash -> queryPoolKeyWithCache cache DontCacheNew poolHash

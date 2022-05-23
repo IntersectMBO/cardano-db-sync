@@ -55,7 +55,6 @@ import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 
 import           Cardano.DbSync.Api
 import           Cardano.DbSync.Cache
-import           Cardano.DbSync.Era.Shelley.Generic.StakePoolKeyHash
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
@@ -77,7 +76,7 @@ import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
-type IsPoolMember = Ledger.KeyHash 'StakePool StandardCrypto -> Bool
+type IsPoolMember = PoolKeyHash -> Bool
 
 insertShelleyBlock
     :: (MonadBaseControl IO m, MonadIO m)
@@ -89,9 +88,9 @@ insertShelleyBlock env firstBlockOfEpoch blk details isMember mNewEpoch stakeSli
     pbid <- case Generic.blkPreviousHash blk of
       Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
       Just pHash -> queryPrevBlockWithCache (renderErrorMessage (Generic.blkEra blk)) cache pHash
-    mPhid <- lift $ queryPoolKeyWithCache cache CacheNew (Generic.StakePoolKeyHash $ Generic.blkSlotLeader blk)
+    mPhid <- lift $ queryPoolKeyWithCache cache CacheNew $ coerceKeyRole $ Generic.blkSlotLeader blk
 
-    slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
+    slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (Generic.unKeyHashRaw $ Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
     blkId <- lift . insertBlockAndCache cache $
                   DB.Block
                     { DB.blockHash = Generic.blkHash blk
@@ -258,7 +257,7 @@ insertTx tracer cache network isMember blkId epochNo slotNo blockIndex tx groupe
         insertTxMetadata tracer txId md
 
       mapM_ (insertCertificate tracer cache isMember network blkId txId epochNo slotNo redeemers) $ Generic.txCertificates tx
-      mapM_ (insertWithdrawals tracer txId redeemers) $ Generic.txWithdrawals tx
+      mapM_ (insertWithdrawals tracer cache txId redeemers) $ Generic.txWithdrawals tx
 
       mapM_ (insertParamProposal tracer blkId txId) $ Generic.txParamProposal tx
 
@@ -456,7 +455,7 @@ insertPoolRetire
     => DB.TxId -> Cache -> EpochNo -> Word16 -> Ledger.KeyHash 'Ledger.StakePool StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRetire txId cache epochNum idx keyHash = do
-  poolId <- liftLookupFail "insertPoolRetire" $ queryPoolKeyWithCache cache CacheNew (toStakePoolKeyHash keyHash)
+  poolId <- liftLookupFail "insertPoolRetire" $ queryPoolKeyWithCache cache CacheNew keyHash
   void . lift . DB.insertPoolRetire $
     DB.PoolRetire
       { DB.poolRetireHashId = poolId
@@ -479,41 +478,32 @@ insertMetaDataRef poolId txId md =
       , DB.poolMetadataRefRegisteredTxId = txId
       }
 
-insertStakeAddressAux
-    :: (MonadBaseControl IO m, MonadIO m)
-    => Maybe (Cache, CacheNew) -> DB.TxId -> Shelley.RewardAcnt StandardCrypto
-    -> ReaderT SqlBackend m DB.StakeAddressId
-insertStakeAddressAux mcache txId rewardAddr = do
-    case mcache of
-      Just (cache, cacheNew) -> do
-        eiAddrId <- queryStakeAddrWithCache cache cacheNew (Generic.StakeCred stakeCred)
-        case eiAddrId of
-          Left _ -> doInsert
-          Right addrId -> pure addrId
-      Nothing -> doInsert
-  where
-    stakeCred = Ledger.serialiseRewardAcnt rewardAddr
-  -- If the address already esists in the table, it will not be inserted again (due to
-  -- the uniqueness constraint) but the function will return the 'StakeAddressId'.
-    doInsert = DB.insertStakeAddress $
-      DB.StakeAddress
-        { DB.stakeAddressHashRaw = stakeCred
-        , DB.stakeAddressView = Generic.renderRewardAcnt rewardAddr
-        , DB.stakeAddressScriptHash = Generic.getCredentialScriptHash $ Ledger.getRwdCred rewardAddr
-        , DB.stakeAddressTxId = txId
-        }
-
-insertStakeAddress
-    :: (MonadBaseControl IO m, MonadIO m)
-    => DB.TxId -> Shelley.RewardAcnt StandardCrypto
-    -> ReaderT SqlBackend m DB.StakeAddressId
-insertStakeAddress = insertStakeAddressAux Nothing
-
 insertStakeAddressWithCache
     :: (MonadBaseControl IO m, MonadIO m)
     => Cache -> CacheNew -> DB.TxId -> Shelley.RewardAcnt StandardCrypto
     -> ReaderT SqlBackend m DB.StakeAddressId
-insertStakeAddressWithCache cache cacheNew = insertStakeAddressAux (Just (cache, cacheNew))
+insertStakeAddressWithCache cache cacheNew txId rewardAddr = do
+    eiAddrId <- queryRewardAccountWithCacheRetBs cache cacheNew rewardAddr
+    case eiAddrId of
+      Left (_err, bs) -> insertStakeAddress txId rewardAddr (Just bs)
+      Right addrId -> pure addrId
+
+-- If the address already esists in the table, it will not be inserted again (due to
+-- the uniqueness constraint) but the function will return the 'StakeAddressId'.
+insertStakeAddress
+    :: (MonadBaseControl IO m, MonadIO m)
+    => DB.TxId -> Shelley.RewardAcnt StandardCrypto -> Maybe ByteString
+    -> ReaderT SqlBackend m DB.StakeAddressId
+insertStakeAddress txId rewardAddr stakeCredBs =
+    DB.insertStakeAddress $
+      DB.StakeAddress
+        { DB.stakeAddressHashRaw = addrBs
+        , DB.stakeAddressView = Generic.renderRewardAcnt rewardAddr
+        , DB.stakeAddressScriptHash = Generic.getCredentialScriptHash $ Ledger.getRwdCred rewardAddr
+        , DB.stakeAddressTxId = txId
+        }
+  where
+    addrBs = fromMaybe (Ledger.serialiseRewardAcnt rewardAddr) stakeCredBs
 
 -- | Insert a stake address if it is not already in the `stake_address` table. Regardless of
 -- whether it is newly inserted or it is already there, we retrun the `StakeAddressId`.
@@ -521,37 +511,16 @@ insertStakeAddressRefIfMissing
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> Cache -> DB.TxId -> Ledger.Addr StandardCrypto
     -> ReaderT SqlBackend m (Maybe DB.StakeAddressId)
-insertStakeAddressRefIfMissing trce cache txId addr =
-    maybe insertSAR (pure . Just) =<< queryStakeAddressRef
-  where
-    insertSAR :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Maybe DB.StakeAddressId)
-    insertSAR =
-      case addr of
-        Ledger.AddrBootstrap {} -> pure Nothing
-        Ledger.Addr nw _pcred sref ->
-          case sref of
-            Ledger.StakeRefBase cred ->
-              Just <$> insertStakeAddress txId (Shelley.RewardAcnt nw cred)
-            Ledger.StakeRefPtr ptr -> do
-              mid <- queryStakeRefPtr ptr
-              when (isNothing mid) .
-                liftIO . logWarning trce $ "insertStakeRefIfMissing: query of " <> textShow ptr <> " returns Nothing"
-              pure mid
-            Ledger.StakeRefNull -> pure Nothing
-
-    queryStakeAddressRef
-        :: MonadIO m
-        => ReaderT SqlBackend m (Maybe DB.StakeAddressId)
-    queryStakeAddressRef =
-        case addr of
-          Ledger.AddrBootstrap {} -> pure Nothing
-          Ledger.Addr nw _pcred sref ->
-            case sref of
-              Ledger.StakeRefBase cred -> do
-                eres <- queryStakeAddrWithCache cache DontCacheNew $ Generic.StakeCred $ Ledger.serialiseRewardAcnt (Ledger.RewardAcnt nw cred)
-                pure $ either (const Nothing) Just eres
-              Ledger.StakeRefPtr ptr -> queryStakeDelegation ptr
-              Ledger.StakeRefNull -> pure Nothing
+insertStakeAddressRefIfMissing _trce cache txId addr =
+    case addr of
+      Ledger.AddrBootstrap {} -> pure Nothing
+      Ledger.Addr nw _pcred sref ->
+        case sref of
+          Ledger.StakeRefBase cred -> do
+            Just <$> insertStakeAddressWithCache cache DontCacheNew txId (Shelley.RewardAcnt nw cred)
+          Ledger.StakeRefPtr ptr -> do
+            queryStakeRefPtr ptr
+          Ledger.StakeRefNull -> pure Nothing
 
 insertPoolOwner
     :: (MonadBaseControl IO m, MonadIO m)
@@ -573,7 +542,7 @@ insertStakeRegistration epochNo txId idx rewardAccount = do
   -- We by-pass the cache here It's likely it won't hit.
   -- We don't store to the cache yet, since there are many addrresses
   -- which are registered and never used.
-  saId <- lift $ insertStakeAddress txId rewardAccount
+  saId <- lift $ insertStakeAddress txId rewardAccount Nothing
   void . lift . DB.insertStakeRegistration $
     DB.StakeRegistration
       { DB.stakeRegistrationAddrId = saId
@@ -586,10 +555,10 @@ insertStakeDeregistration
     :: (MonadBaseControl IO m, MonadIO m)
     => Cache -> Ledger.Network -> EpochNo -> DB.TxId
     -> Word16 -> Maybe DB.RedeemerId
-    -> Ledger.StakeCredential StandardCrypto
+    -> StakeCred
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertStakeDeregistration cache network epochNo txId idx mRedeemerId cred = do
-    scId <- liftLookupFail "insertStakeDeregistration" $ queryStakeAddrWithCache cache EvictAndReturn (Generic.toStakeCred network cred)
+    scId <- liftLookupFail "insertStakeDeregistration" $ queryStakeAddrWithCache cache EvictAndReturn network cred
     void . lift . DB.insertStakeDeregistration $
       DB.StakeDeregistration
         { DB.stakeDeregistrationAddrId = scId
@@ -602,12 +571,12 @@ insertStakeDeregistration cache network epochNo txId idx mRedeemerId cred = do
 insertDelegation
     :: (MonadBaseControl IO m, MonadIO m)
     => Cache -> Ledger.Network -> EpochNo -> SlotNo -> DB.TxId -> Word16 -> Maybe DB.RedeemerId
-    -> Ledger.StakeCredential StandardCrypto
+    -> StakeCred
     -> Ledger.KeyHash 'Ledger.StakePool StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertDelegation cache network (EpochNo epoch) slotNo txId idx mRedeemerId cred poolkh = do
-    addrId <- liftLookupFail "insertDelegation" $ queryStakeAddrWithCache cache CacheNew (Generic.toStakeCred network cred)
-    poolHashId <-liftLookupFail "insertDelegation" $ queryPoolKeyWithCache cache CacheNew (toStakePoolKeyHash poolkh)
+    addrId <- liftLookupFail "insertDelegation" $ queryStakeAddrWithCache cache CacheNew network cred
+    poolHashId <-liftLookupFail "insertDelegation" $ queryPoolKeyWithCache cache CacheNew poolkh
     void . lift . DB.insertDelegation $
       DB.Delegation
         { DB.delegationAddrId = addrId
@@ -638,7 +607,7 @@ insertMirCert _tracer cache network txId idx mcert = do
   where
     insertMirReserves
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Ledger.StakeCredential StandardCrypto, Ledger.DeltaCoin)
+        => (StakeCred, Ledger.DeltaCoin)
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     insertMirReserves (cred, dcoin) = do
       addrId <- lift . insertStakeAddressWithCache cache CacheNew txId $ Generic.annotateStakingCred network cred
@@ -652,7 +621,7 @@ insertMirCert _tracer cache network txId idx mcert = do
 
     insertMirTreasury
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Ledger.StakeCredential StandardCrypto, Ledger.DeltaCoin)
+        => (StakeCred, Ledger.DeltaCoin)
         -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     insertMirTreasury (cred, dcoin) = do
       addrId <- lift . insertStakeAddressWithCache cache CacheNew txId $ Generic.annotateStakingCred network cred
@@ -678,12 +647,12 @@ insertMirCert _tracer cache network txId idx mcert = do
 
 insertWithdrawals
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> Map Word64 DB.RedeemerId
+    => Trace IO Text -> Cache -> DB.TxId -> Map Word64 DB.RedeemerId
     -> Generic.TxWithdrawal
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertWithdrawals _tracer txId redeemers txWdrl = do
+insertWithdrawals _tracer cache txId redeemers txWdrl = do
     addrId <- liftLookupFail "insertWithdrawals" $
-      queryStakeAddress $ Ledger.serialiseRewardAcnt $ Generic.txwRewardAccount txWdrl
+      queryRewardAccountWithCache cache CacheNew $ Generic.txwRewardAccount txWdrl
     void . lift . DB.insertWithdrawal $
       DB.Withdrawal
         { DB.withdrawalAddrId = addrId
@@ -968,18 +937,16 @@ insertMultiAsset
     :: (MonadBaseControl IO m, MonadIO m)
     => Cache -> PolicyID StandardCrypto -> AssetName
     -> ReaderT SqlBackend m DB.MultiAssetId
-insertMultiAsset cache (PolicyID pol) a@(AssetName aName) = do
+insertMultiAsset cache policy a@(AssetName aName) = do
     mId <- queryMAWithCache cache policy a
     case mId of
-      Just maId -> pure maId
-      Nothing -> DB.insertMultiAssetUnchecked $
+      Right maId -> pure maId
+      Left (policyBs) -> DB.insertMultiAssetUnchecked $
                   DB.MultiAsset
-                    { DB.multiAssetPolicy = policy
+                    { DB.multiAssetPolicy = policyBs
                     , DB.multiAssetName = aName
-                    , DB.multiAssetFingerprint = DB.unAssetFingerprint (DB.mkAssetFingerprint policy a)
+                    , DB.multiAssetFingerprint = DB.unAssetFingerprint (DB.mkAssetFingerprint policyBs a)
                     }
-  where
-    policy = Generic.unScriptHash pol
 
 insertScript
     :: (MonadBaseControl IO m, MonadIO m)

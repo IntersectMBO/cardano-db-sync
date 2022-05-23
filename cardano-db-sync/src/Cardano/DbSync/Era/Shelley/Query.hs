@@ -13,8 +13,6 @@ module Cardano.DbSync.Era.Shelley.Query
   , queryResolveInput
   , queryResolveInputCredentials
 
-  , queryStakeAddressIdPair
-  , queryPoolHashIdPair
   , queryPoolUpdateByBlock
   ) where
 
@@ -84,17 +82,6 @@ queryResolveInputCredentials :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend 
 queryResolveInputCredentials txIn = do
     queryTxOutCredentials (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
 
-queryStakeAddressIdPair :: MonadIO m => Generic.StakeCred -> ReaderT SqlBackend m (Maybe (Generic.StakeCred, StakeAddressId))
-queryStakeAddressIdPair cred@(Generic.StakeCred bs) = do
-    res <- select $ do
-      saddr <- from $ table @StakeAddress
-      where_ (saddr ^. StakeAddressHashRaw ==. val bs)
-      pure $ saddr ^. StakeAddressId
-    pure $ convert <$> listToMaybe res
-  where
-    convert :: Value StakeAddressId -> (Generic.StakeCred, StakeAddressId)
-    convert (Value said) = (cred, said)
-
 queryStakeRefPtr :: MonadIO m => Ptr -> ReaderT SqlBackend m (Maybe StakeAddressId)
 queryStakeRefPtr (Ptr (SlotNo slot) (TxIx txIx) (CertIx certIx)) = do
   res <- select $ do
@@ -114,20 +101,6 @@ queryStakeRefPtr (Ptr (SlotNo slot) (TxIx txIx) (CertIx certIx)) = do
     limit 1
     pure (sr ^. StakeRegistrationAddrId)
   pure $ unValue <$> listToMaybe res
-
-queryPoolHashIdPair
-    :: MonadIO m
-    => Generic.StakePoolKeyHash
-    -> ReaderT SqlBackend m (Maybe (Generic.StakePoolKeyHash, PoolHashId))
-queryPoolHashIdPair pkh = do
-    res <- select $ do
-      pool <- from $ table @PoolHash
-      where_ (pool ^. PoolHashHashRaw ==. val (Generic.unStakePoolKeyHash pkh))
-      pure $ pool ^. PoolHashId
-    pure $ convert <$> listToMaybe res
-  where
-    convert :: Value PoolHashId -> (Generic.StakePoolKeyHash, PoolHashId)
-    convert (Value phid) = (pkh, phid)
 
 -- Check if there are other PoolUpdates in the same blocks for the same pool
 queryPoolUpdateByBlock :: MonadIO m => BlockId -> PoolHashId -> ReaderT SqlBackend m Bool

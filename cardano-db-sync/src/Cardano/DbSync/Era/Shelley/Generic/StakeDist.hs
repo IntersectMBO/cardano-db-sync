@@ -16,9 +16,6 @@ module Cardano.DbSync.Era.Shelley.Generic.StakeDist
 import           Cardano.Prelude
 import           Prelude (id)
 
-import           Cardano.Crypto.Hash (hashToBytes)
-
-import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Compactible as Ledger
 import           Cardano.Ledger.Credential (Credential)
@@ -27,8 +24,6 @@ import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import qualified Cardano.Ledger.Shelley.EpochBoundary as Shelley
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 
-import           Cardano.DbSync.Era.Shelley.Generic.StakeCred
-import           Cardano.DbSync.Era.Shelley.Generic.StakePoolKeyHash
 import           Cardano.DbSync.Types
 
 import           Data.VMap (VB, VMap (..), VP)
@@ -37,7 +32,7 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Vector.Generic as VG
 
 import           Ouroboros.Consensus.Block
-import           Ouroboros.Consensus.Cardano.Block (LedgerState (..))
+import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
 import           Ouroboros.Consensus.Config
 import           Ouroboros.Consensus.HardFork.Combinator
 import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
@@ -52,7 +47,7 @@ data StakeSliceRes =
 
 data StakeSlice = StakeSlice
   { sliceEpochNo :: !EpochNo
-  , sliceDistr :: !(Map StakeCred (Coin, StakePoolKeyHash))
+  , sliceDistr :: !(Map StakeCred (Coin, PoolKeyHash))
   } deriving Eq
 
 emptySlice :: EpochNo -> StakeSlice
@@ -71,21 +66,21 @@ getSecurityParameter =  maxRollbacks . configSecurityParam . pInfoConfig
 -- until the size of delegations grows up to 8.6M, in which case, the size of slices
 -- will be adjusted.
 getStakeSlice :: ConsensusProtocol (BlockProtocol blk)
-              => ProtocolInfo IO blk -> Ledger.Network
+              => ProtocolInfo IO blk
               -> EpochNo -> Word64 -> Word64 -> ExtLedgerState CardanoBlock -> StakeSliceRes
-getStakeSlice pInfo network epoch !sliceIndex !minSliceSize els =
+getStakeSlice pInfo epoch !sliceIndex !minSliceSize els =
   case ledgerState els of
     LedgerStateByron _ -> NoSlices
-    LedgerStateShelley sls -> genericStakeSlice pInfo network epoch sliceIndex minSliceSize sls
-    LedgerStateAllegra als -> genericStakeSlice pInfo network epoch sliceIndex minSliceSize als
-    LedgerStateMary mls -> genericStakeSlice pInfo network epoch sliceIndex minSliceSize mls
-    LedgerStateAlonzo als -> genericStakeSlice pInfo network epoch sliceIndex minSliceSize als
-    LedgerStateBabbage bls -> genericStakeSlice pInfo network epoch sliceIndex minSliceSize bls
+    LedgerStateShelley sls -> genericStakeSlice pInfo epoch sliceIndex minSliceSize sls
+    LedgerStateAllegra als -> genericStakeSlice pInfo epoch sliceIndex minSliceSize als
+    LedgerStateMary mls -> genericStakeSlice pInfo epoch sliceIndex minSliceSize mls
+    LedgerStateAlonzo als -> genericStakeSlice pInfo epoch sliceIndex minSliceSize als
+    LedgerStateBabbage bls -> genericStakeSlice pInfo epoch sliceIndex minSliceSize bls
 
-genericStakeSlice :: forall era c blk p. (c ~ Crypto era, ConsensusProtocol (BlockProtocol blk))
-                  => ProtocolInfo IO blk -> Ledger.Network -> EpochNo -> Word64 -> Word64
+genericStakeSlice :: forall era c blk p. (c ~ StandardCrypto, Crypto era ~ c, ConsensusProtocol (BlockProtocol blk))
+                  => ProtocolInfo IO blk -> EpochNo -> Word64 -> Word64
                   -> LedgerState (ShelleyBlock p era) -> StakeSliceRes
-genericStakeSlice pInfo network epoch sliceIndex minSliceSize lstate
+genericStakeSlice pInfo epoch sliceIndex minSliceSize lstate
     | index > delegationsLen = NoSlices
     | index == delegationsLen = Slice (emptySlice epoch) True
     | index + epochSliceSize > delegationsLen = Slice (mkSlice (delegationsLen - index)) True
@@ -146,9 +141,6 @@ genericStakeSlice pInfo network epoch sliceIndex minSliceSize lstate
         delegationsSliced :: VMap VB VB (Credential 'Staking c) (KeyHash 'StakePool c)
         delegationsSliced = VMap $ VG.slice (fromIntegral index) (fromIntegral size) delegations
 
-        distribution :: Map StakeCred (Coin, StakePoolKeyHash)
-        distribution = Map.mapKeys (toStakeCred network) $ VMap.toMap $
-          VMap.mapMaybe id $ VMap.mapWithKey (\k p -> (, convertStakePoolkeyHash p) <$> lookupStake k) delegationsSliced
-
-    convertStakePoolkeyHash :: KeyHash 'StakePool c -> StakePoolKeyHash
-    convertStakePoolkeyHash (KeyHash h) = StakePoolKeyHash $ hashToBytes h
+        distribution :: Map StakeCred (Coin, PoolKeyHash)
+        distribution = VMap.toMap $
+          VMap.mapMaybe id $ VMap.mapWithKey (\k p -> (, p) <$> lookupStake k) delegationsSliced

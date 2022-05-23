@@ -17,10 +17,10 @@ import           Cardano.Db (DbLovelace, RewardSource)
 import qualified Cardano.Db as Db
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.LedgerEvent
+import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util (textShow)
 
 import           Cardano.Ledger.Coin (Coin (..))
-import qualified Cardano.Ledger.Credential as Ledger
 import           Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Shelley.Rewards as Ledger
 import           Cardano.Ledger.Shelley.API (Network)
@@ -42,7 +42,7 @@ import           Database.Esqueleto.Experimental (InnerJoin (InnerJoin), SqlBack
 
 validateEpochRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Network -> EpochNo -> EpochNo -> (Map (Ledger.StakeCredential StandardCrypto) (Set (Ledger.Reward StandardCrypto)))
+    => Trace IO Text -> Network -> EpochNo -> EpochNo -> (Map StakeCred (Set (Ledger.Reward StandardCrypto)))
     -> ReaderT SqlBackend m ()
 validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
     actualCount <- Db.queryNormalEpochRewardCount (unEpochNo spendableEpochNo)
@@ -53,7 +53,7 @@ validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
                       , textShow (unEpochNo spendableEpochNo), " expected total of "
                       , textShow expectedCount , " but got " , textShow actualCount
                       ]
-          logFullRewardMap tracer (convertPoolRewards network spendableEpochNo rmap)
+          logFullRewardMap tracer spendableEpochNo network (convertPoolRewards rmap)
         else do
           liftIO . logInfo tracer $ mconcat
                       [ "Validate Epoch Rewards: total rewards that become spendable in epoch "
@@ -66,22 +66,20 @@ validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
 
 -- -------------------------------------------------------------------------------------------------
 
--- -------------------------------------------------------------------------------------------------
-
 logFullRewardMap
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Generic.Rewards -> ReaderT SqlBackend m ()
-logFullRewardMap tracer ledgerMap = do
-    dbMap <- queryRewardMap $ Generic.rwdEpoch ledgerMap
+    => Trace IO Text -> EpochNo -> Network -> Generic.Rewards -> ReaderT SqlBackend m ()
+logFullRewardMap tracer epochNo network ledgerMap = do
+    dbMap <- queryRewardMap epochNo
     when (Map.size dbMap > 0 && Map.size (Generic.rwdRewards ledgerMap) > 0) $
-      liftIO $ diffRewardMap tracer dbMap (Map.map convert $ Generic.rwdRewards ledgerMap)
+      liftIO $ diffRewardMap tracer network dbMap (Map.mapKeys (Generic.stakingCredHash network) $ Map.map convert $ Generic.rwdRewards ledgerMap)
   where
     convert :: Set Generic.Reward -> [(RewardSource, Coin)]
     convert = map (\rwd -> (Generic.rewardSource rwd, Generic.rewardAmount rwd)) . Set.toList
 
 queryRewardMap
     :: (MonadBaseControl IO m, MonadIO m)
-    => EpochNo -> ReaderT SqlBackend m (Map Generic.StakeCred [(RewardSource, DbLovelace)])
+    => EpochNo -> ReaderT SqlBackend m (Map ByteString [(RewardSource, DbLovelace)])
 queryRewardMap (EpochNo epochNo) = do
     res <- select $ do
       (rwd :& saddr) <-
@@ -99,34 +97,34 @@ queryRewardMap (EpochNo epochNo) = do
     pure . Map.fromList . map collapse $ List.groupOn fst (map convert res)
 
   where
-    convert :: (Value ByteString, Value RewardSource, Value DbLovelace) -> (Generic.StakeCred, (RewardSource, DbLovelace))
-    convert (Value cred, Value source, Value amount) = (Generic.StakeCred cred, (source, amount))
+    convert :: (Value ByteString, Value RewardSource, Value DbLovelace) -> (ByteString, (RewardSource, DbLovelace))
+    convert (Value cred, Value source, Value amount) = (cred, (source, amount))
 
-    collapse :: [(Generic.StakeCred, (RewardSource, DbLovelace))] -> (Generic.StakeCred, [(RewardSource, DbLovelace)])
+    collapse :: [(ByteString, (RewardSource, DbLovelace))] -> (ByteString, [(RewardSource, DbLovelace)])
     collapse xs =
       case xs of
         [] -> panic "queryRewardMap.collapse: Unexpected empty list" -- Impossible
         x:_ -> (fst x, List.sort $ map snd xs)
 
 diffRewardMap
-    :: Trace IO Text -> Map Generic.StakeCred [(RewardSource, DbLovelace)]
-    -> Map Generic.StakeCred [(RewardSource, Coin)]
+    :: Trace IO Text -> Network -> Map ByteString [(RewardSource, DbLovelace)]
+    -> Map ByteString [(RewardSource, Coin)]
     -> IO ()
-diffRewardMap tracer dbMap ledgerMap = do
+diffRewardMap tracer _nw dbMap ledgerMap = do
     when (Map.size diffMap > 0) $ do
       logError tracer "diffRewardMap:"
       mapM_ (logError tracer . render) $ Map.toList diffMap
   where
-    keys :: [Generic.StakeCred]
+    keys :: [ByteString]
     keys = List.nubOrd (Map.keys dbMap ++ Map.keys ledgerMap)
 
-    diffMap :: Map Generic.StakeCred ([(RewardSource, DbLovelace)], [(RewardSource, Coin)])
+    diffMap :: Map ByteString ([(RewardSource, DbLovelace)], [(RewardSource, Coin)])
     diffMap = List.foldl' mkDiff mempty keys
 
     mkDiff
-        :: Map Generic.StakeCred ([(RewardSource, DbLovelace)], [(RewardSource, Coin)])
-        -> Generic.StakeCred
-        -> Map Generic.StakeCred ([(RewardSource, DbLovelace)], [(RewardSource, Coin)])
+        :: Map ByteString ([(RewardSource, DbLovelace)], [(RewardSource, Coin)])
+        -> ByteString
+        -> Map ByteString ([(RewardSource, DbLovelace)], [(RewardSource, Coin)])
     mkDiff !acc addr =
         case (Map.lookup addr dbMap, Map.lookup addr ledgerMap) of
           (Just xs, Just ys) ->
@@ -137,5 +135,5 @@ diffRewardMap tracer dbMap ledgerMap = do
           (Just xs, Nothing) -> Map.insert addr (xs, []) acc
           (Nothing, Nothing) -> acc
 
-    render :: (Generic.StakeCred,  ([(RewardSource, DbLovelace)], [(RewardSource, Coin)])) -> Text
+    render :: (ByteString,  ([(RewardSource, DbLovelace)], [(RewardSource, Coin)])) -> Text
     render (cred, (xs, ys)) = mconcat [ "  ", show cred, ": ", show xs, " /= ", show ys ]

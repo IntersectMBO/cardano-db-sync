@@ -18,11 +18,9 @@ import           Cardano.Db hiding (EpochNo, SyncState, epochNo)
 
 import           Cardano.Ledger.Coin (Coin (..), DeltaCoin (..))
 import qualified Cardano.Ledger.Core as Ledger
-import qualified Cardano.Ledger.Credential as Ledger
 import           Cardano.Ledger.Crypto (StandardCrypto)
 import           Cardano.Ledger.Era (Crypto)
-import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
-import           Cardano.Ledger.Shelley.API (InstantaneousRewards (..), Network)
+import           Cardano.Ledger.Shelley.API (InstantaneousRewards (..))
 import qualified Cardano.Ledger.Shelley.Rewards as Ledger
 import           Cardano.Ledger.Shelley.Rules.Epoch (EpochEvent (PoolReapEvent))
 import           Cardano.Ledger.Shelley.Rules.Mir (MirEvent (..))
@@ -56,12 +54,12 @@ import           Ouroboros.Consensus.TypeFamilyWrappers
 
 
 data LedgerEvent
-  = LedgerMirDist !(Map Generic.StakeCred (Set Generic.Reward))
-  | LedgerPoolReap !EpochNo !(Map (Ledger.StakeCredential StandardCrypto) (Map (KeyHash 'StakePool StandardCrypto) Coin))
-  | LedgerIncrementalRewards !Generic.Rewards
-  | LedgerDeltaRewards !Generic.Rewards
-  | LedgerRestrainedRewards !EpochNo !Generic.Rewards !(Set Generic.StakeCred)
-  | LedgerTotalRewards !EpochNo !(Map (Ledger.StakeCredential StandardCrypto) (Set (Ledger.Reward StandardCrypto)))
+  = LedgerMirDist !(Map StakeCred (Set Generic.Reward))
+  | LedgerPoolReap !EpochNo !Generic.Rewards
+  | LedgerIncrementalRewards !EpochNo !Generic.Rewards
+  | LedgerDeltaRewards !EpochNo !Generic.Rewards
+  | LedgerRestrainedRewards !EpochNo !Generic.Rewards !(Set StakeCred)
+  | LedgerTotalRewards !EpochNo !(Map StakeCred (Set (Ledger.Reward StandardCrypto)))
   | LedgerStartAtEpoch !EpochNo
   | LedgerNewEpoch !EpochNo !SyncState
   deriving Eq
@@ -80,8 +78,8 @@ toOrdering ev = case ev of
   LedgerStartAtEpoch {} -> 6
   LedgerNewEpoch {} -> 7
 
-convertAuxLedgerEvent :: Network -> OneEraLedgerEvent (CardanoEras StandardCrypto) -> Maybe LedgerEvent
-convertAuxLedgerEvent nw = toLedgerEvent nw . wrappedAuxLedgerEvent
+convertAuxLedgerEvent :: OneEraLedgerEvent (CardanoEras StandardCrypto) -> Maybe LedgerEvent
+convertAuxLedgerEvent = toLedgerEvent . wrappedAuxLedgerEvent
 
 wrappedAuxLedgerEvent
     :: OneEraLedgerEvent (CardanoEras StandardCrypto)
@@ -90,10 +88,10 @@ wrappedAuxLedgerEvent =
   WrapLedgerEvent @(HardForkBlock (CardanoEras StandardCrypto))
 
 class ConvertLedgerEvent blk where
-  toLedgerEvent :: Network -> WrapLedgerEvent blk -> Maybe LedgerEvent
+  toLedgerEvent :: WrapLedgerEvent blk -> Maybe LedgerEvent
 
 instance ConvertLedgerEvent ByronBlock where
-  toLedgerEvent _ _ = Nothing
+  toLedgerEvent _ = Nothing
 
 instance
     ( Crypto ledgerera ~ StandardCrypto
@@ -106,40 +104,55 @@ instance
     ) =>
   ConvertLedgerEvent (ShelleyBlock p ledgerera)
   where
-    toLedgerEvent nw evt =
+    toLedgerEvent evt =
       case unwrapLedgerEvent evt of
         LETotalRewards e m -> Just $ LedgerTotalRewards e m
         LERestraintRewards e m creds ->
-          Just $ LedgerRestrainedRewards e (convertPoolRewards nw e m) (Set.map (Generic.toStakeCred nw) creds)
+          Just $ LedgerRestrainedRewards e (convertPoolRewards m) creds
         LEDeltaReward e m ->
-          Just $ LedgerDeltaRewards (convertPoolRewards nw e m)
+          Just $ LedgerDeltaRewards e (convertPoolRewards m)
         LEIncrementalReward e m ->
-          Just $ LedgerIncrementalRewards (convertPoolRewards nw e m)
-        LEMirTransfer rp tp _rtt _ttr -> Just $ LedgerMirDist (convertMirRewards nw rp tp)
-        LERetiredPools r _u en -> Just $ LedgerPoolReap en r
+          Just $ LedgerIncrementalRewards e (convertPoolRewards m)
+        LEMirTransfer rp tp _rtt _ttr -> Just $ LedgerMirDist (convertMirRewards rp tp)
+        LERetiredPools r _u en -> Just $ LedgerPoolReap en (convertPoolDepositRefunds r)
         ShelleyLedgerEventBBODY {} -> Nothing
         ShelleyLedgerEventTICK {} -> Nothing
 
 instance All ConvertLedgerEvent xs => ConvertLedgerEvent (HardForkBlock xs) where
-  toLedgerEvent nw =
+  toLedgerEvent =
     hcollapse
-      . hcmap (Proxy @ ConvertLedgerEvent) (K . toLedgerEvent nw)
+      . hcmap (Proxy @ ConvertLedgerEvent) (K . toLedgerEvent)
       . getOneEraLedgerEvent
       . unwrapLedgerEvent
 
 --------------------------------------------------------------------------------
 
+convertPoolDepositRefunds
+    :: Map StakeCred (Map PoolKeyHash Coin)
+    -> Generic.Rewards
+convertPoolDepositRefunds rwds =
+    Generic.Rewards $
+      Map.map (Set.fromList . map convert . Map.toList) rwds
+  where
+    convert :: (PoolKeyHash, Coin) -> Generic.Reward
+    convert (kh, coin) =
+      Generic.Reward
+        { Generic.rewardSource = RwdDepositRefund
+        , Generic.rewardPool = Strict.Just kh
+        , Generic.rewardAmount = coin
+        }
+
 convertMirRewards
-    :: Network -> Map (Ledger.StakeCredential StandardCrypto) Coin -> Map (Ledger.StakeCredential StandardCrypto) Coin
-    -> Map Generic.StakeCred (Set Generic.Reward)
-convertMirRewards nw resPay trePay =
+    :: Map StakeCred Coin -> Map StakeCred Coin
+    -> Map StakeCred (Set Generic.Reward)
+convertMirRewards resPay trePay =
     Map.unionWith Set.union (convertResPay resPay) (convertTrePay trePay)
   where
-    convertResPay :: Map (Ledger.StakeCredential StandardCrypto) Coin -> Map Generic.StakeCred (Set Generic.Reward)
-    convertResPay = mapBimap (Generic.toStakeCred nw) (mkPayment RwdReserves)
+    convertResPay :: Map StakeCred Coin -> Map StakeCred (Set Generic.Reward)
+    convertResPay = Map.map (mkPayment RwdReserves)
 
-    convertTrePay :: Map (Ledger.StakeCredential StandardCrypto) Coin -> Map Generic.StakeCred (Set Generic.Reward)
-    convertTrePay = mapBimap (Generic.toStakeCred nw) (mkPayment RwdTreasury)
+    convertTrePay :: Map StakeCred Coin -> Map StakeCred (Set Generic.Reward)
+    convertTrePay = Map.map (mkPayment RwdTreasury)
 
     mkPayment :: RewardSource -> Coin -> Set Generic.Reward
     mkPayment src coin =
@@ -151,24 +164,19 @@ convertMirRewards nw resPay trePay =
           }
 
 convertPoolRewards
-    :: Network -> EpochNo -> Map (Ledger.StakeCredential StandardCrypto) (Set (Ledger.Reward StandardCrypto))
+    :: Map StakeCred (Set (Ledger.Reward StandardCrypto))
     -> Generic.Rewards
-convertPoolRewards network epochNum rmap =
-  Generic.Rewards
-    { Generic.rwdEpoch = epochNum
-    , Generic.rwdRewards = mapBimap (Generic.toStakeCred network) (Set.map convertReward) rmap
-    }
+convertPoolRewards rmap =
+  Generic.Rewards $
+    map (Set.map convertReward) rmap
   where
     convertReward :: Ledger.Reward StandardCrypto -> Generic.Reward
     convertReward sr =
       Generic.Reward
         { Generic.rewardSource = rewardTypeToSource $ Ledger.rewardType sr
         , Generic.rewardAmount = Ledger.rewardAmount sr
-        , Generic.rewardPool = Strict.Just $ Generic.toStakePoolKeyHash (Ledger.rewardPool sr)
+        , Generic.rewardPool = Strict.Just $ Ledger.rewardPool sr
         }
-
-mapBimap :: Ord k2 => (k1 -> k2) -> (a1 -> a2) -> Map k1 a1 -> Map k2 a2
-mapBimap fk fa = Map.fromAscList . map (bimap fk fa) . Map.toAscList
 
 --------------------------------------------------------------------------------
 -- Patterns for event access. Why aren't these in ledger-specs?
@@ -178,8 +186,8 @@ pattern LERestraintRewards
        , Event (Ledger.EraRule "TICK" ledgerera) ~ TickEvent ledgerera
        , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera
        )
-    => EpochNo -> Map (Ledger.StakeCredential StandardCrypto) (Set (Ledger.Reward StandardCrypto))
-    -> Set (Ledger.StakeCredential StandardCrypto)
+    => EpochNo -> Map StakeCred (Set (Ledger.Reward StandardCrypto))
+    -> Set StakeCred
     -> AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
 pattern LERestraintRewards e m creds <-
   ShelleyLedgerEventTICK
@@ -190,7 +198,7 @@ pattern LETotalRewards
        , Event (Ledger.EraRule "TICK" ledgerera) ~ TickEvent ledgerera
        , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera
        )
-    => EpochNo -> Map (Ledger.StakeCredential StandardCrypto) (Set (Ledger.Reward StandardCrypto))
+    => EpochNo -> Map StakeCred (Set (Ledger.Reward StandardCrypto))
     -> AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
 pattern LETotalRewards e m <-
   ShelleyLedgerEventTICK
@@ -202,7 +210,7 @@ pattern LEDeltaReward
        , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera
        , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent (Crypto ledgerera)
        )
-    => EpochNo -> Map (Ledger.StakeCredential StandardCrypto) (Set (Ledger.Reward StandardCrypto))
+    => EpochNo -> Map StakeCred (Set (Ledger.Reward StandardCrypto))
     -> AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
 pattern LEDeltaReward e m <-
   ShelleyLedgerEventTICK
@@ -213,7 +221,7 @@ pattern LEIncrementalReward
        , Event (Ledger.EraRule "TICK" ledgerera) ~ TickEvent ledgerera
        , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent (Crypto ledgerera)
        )
-    => EpochNo -> Map (Ledger.StakeCredential StandardCrypto) (Set (Ledger.Reward StandardCrypto))
+    => EpochNo -> Map StakeCred (Set (Ledger.Reward StandardCrypto))
     -> AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
 pattern LEIncrementalReward e m <-
   ShelleyLedgerEventTICK
@@ -225,7 +233,7 @@ pattern LEMirTransfer
        , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera
        , Event (Ledger.EraRule "MIR" ledgerera) ~ MirEvent ledgerera
        )
-    => Map (Ledger.StakeCredential StandardCrypto) Coin -> Map (Ledger.StakeCredential StandardCrypto) Coin
+    => Map StakeCred Coin -> Map StakeCred Coin
     -> DeltaCoin -> DeltaCoin
     -> AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
 pattern LEMirTransfer rp tp rtt ttr <-
@@ -246,8 +254,8 @@ pattern LERetiredPools
      , Event (Ledger.EraRule "EPOCH" ledgerera) ~ EpochEvent ledgerera
      , Event (Ledger.EraRule "POOLREAP" ledgerera) ~ PoolreapEvent ledgerera
      )
-  => Map (Ledger.StakeCredential StandardCrypto) (Map (KeyHash 'StakePool StandardCrypto) Coin)
-  -> Map (Ledger.StakeCredential StandardCrypto) (Map (KeyHash 'StakePool StandardCrypto) Coin)
+  => Map StakeCred (Map PoolKeyHash Coin)
+  -> Map StakeCred (Map PoolKeyHash Coin)
   -> EpochNo
   -> AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
 pattern LERetiredPools r u e <-

@@ -28,6 +28,7 @@ module Cardano.DbSync.Util
   , whenJust
   , whenMaybe
   , mlookup
+  , whenRight
   ) where
 
 import           Cardano.Prelude hiding (catch)
@@ -206,3 +207,9 @@ thrd3 (_, _, c) = c
 mlookup :: Ord k => Maybe k -> Map k a -> Maybe a
 mlookup Nothing _ = Nothing
 mlookup (Just k) mp = Map.lookup k mp
+
+whenRight :: Applicative m => Either e a -> (a -> m ()) -> m ()
+whenRight ma f =
+  case ma of
+    Right a -> f a
+    Left _ -> pure ()
