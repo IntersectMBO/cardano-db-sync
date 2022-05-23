@@ -68,9 +68,7 @@ library
                         Cardano.DbSync.Era.Shelley.Generic.EpochUpdate
                         Cardano.DbSync.Era.Shelley.Generic.ProtoParams
                         Cardano.DbSync.Era.Shelley.Generic.Rewards
-                        Cardano.DbSync.Era.Shelley.Generic.StakeCred
                         Cardano.DbSync.Era.Shelley.Generic.StakeDist
-                        Cardano.DbSync.Era.Shelley.Generic.StakePoolKeyHash
                         Cardano.DbSync.Era.Shelley.Generic.Metadata
                         Cardano.DbSync.Era.Shelley.Generic.ParamProposal
                         Cardano.DbSync.Era.Shelley.Generic.Tx
@@ -147,6 +145,7 @@ library
                       , containers
                       , contra-tracer
                       , directory
+                      , either
                       , esqueleto
                       , extra
                       , filepath

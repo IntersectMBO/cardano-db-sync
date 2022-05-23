@@ -37,7 +37,6 @@ import           Cardano.Ledger.Alonzo.Scripts
 import qualified Cardano.Ledger.Babbage.PParams as Babbage
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Era (Crypto)
-import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
 import           Cardano.Ledger.Shelley.Constraints (UsesValue)
 import           Cardano.Ledger.Shelley.LedgerState (EpochState (..))
@@ -192,7 +191,7 @@ data LedgerStateFile = LedgerStateFile
 -- The result of applying a new block. This includes all the data that insertions require.
 data ApplyResult = ApplyResult
   { apPrices :: !(Strict.Maybe Prices) -- prices after the block application
-  , apPoolsRegistered :: !(Set.Set (KeyHash 'StakePool StandardCrypto)) -- registered before the block application
+  , apPoolsRegistered :: !(Set.Set PoolKeyHash) -- registered before the block application
   , apNewEpoch :: !(Strict.Maybe Generic.NewEpoch) -- Only Just for a single block at the epoch boundary
   , apSlotDetails :: !SlotDetails
   , apPoint :: !CardanoPoint
@@ -304,6 +303,7 @@ applyBlock env blk = do
       let !ledgerDB' = pushLedgerDB ledgerDB newState
       writeTVar (leStateVar env) (Strict.Just ledgerDB')
       !events <- generateNewEpochEvents env details
+      let !ledgerEvents = mapMaybe convertAuxLedgerEvent (lrEvents result)
       let !appResult = ApplyResult
             { apPrices = getPrices newState
             , apPoolsRegistered = getRegisteredPools oldState
@@ -311,7 +311,7 @@ applyBlock env blk = do
             , apSlotDetails = details
             , apPoint = blockPoint blk
             , apStakeSlice = stakeSlice newState details
-            , apEvents = sort $ events ++ mapMaybe (convertAuxLedgerEvent (leNetwork env)) (lrEvents result)
+            , apEvents = sort $ events ++ ledgerEvents
             }
       pure (oldState, appResult)
   where
@@ -351,7 +351,6 @@ applyBlock env blk = do
     stakeSlice cls details = case clsEpochBlockNo cls of
       EpochBlockNo n -> Generic.getStakeSlice
                           (leProtocolInfo env)
-                          (leNetwork env)
                           (sdEpochNo details)
                           n
                           stakeSliceMinSize
@@ -720,7 +719,7 @@ writeLedgerState env mLedgerDb = atomically $ writeTVar (leStateVar env) mLedger
 safeRemoveFile :: FilePath -> IO ()
 safeRemoveFile fp = handle (\(_ :: IOException) -> pure ()) $ removeFile fp
 
-getRegisteredPools :: CardanoLedgerState -> Set.Set (KeyHash 'StakePool StandardCrypto)
+getRegisteredPools :: CardanoLedgerState -> Set.Set PoolKeyHash
 getRegisteredPools st =
     case ledgerState $ clsState st of
       LedgerStateByron _ -> Set.empty
@@ -733,7 +732,7 @@ getRegisteredPools st =
 getRegisteredPoolShelley
     :: forall p era. (Crypto era ~ StandardCrypto)
     => LedgerState (ShelleyBlock p era)
-    -> Set.Set (KeyHash 'StakePool StandardCrypto)
+    -> Set.Set PoolKeyHash
 getRegisteredPoolShelley lState =
   Map.keysSet $ Shelley._pParams $ Shelley.dpsPState $ Shelley.lsDPState
               $ Shelley.esLState $ Shelley.nesEs $ Consensus.shelleyLedgerState lState
