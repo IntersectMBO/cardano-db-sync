@@ -508,9 +508,10 @@ share
     UniqueEpochParam    epochNo blockId
 
   CostModel
+    hash                ByteString          sqltype=hash32type
     costs               Text                sqltype=jsonb
     blockId             BlockId             OnDeleteCascade
-    UniqueCostModel     costs
+    UniqueCostModel     hash
 
   -- -----------------------------------------------------------------------------------------------
   -- Pool offline (ie not on the blockchain) data.
@@ -962,6 +963,7 @@ schemaDocs =
 
     CostModel --^ do
       "CostModel for EpochParam and ParamProposal."
+      CostModelHash # "The hash of cost model. It ensures uniqueness of entries."
       CostModelCosts # "The actual costs formatted as json."
       CostModelBlockId # "The first block where these costs were introduced. This is only used for rollbacks."
 
