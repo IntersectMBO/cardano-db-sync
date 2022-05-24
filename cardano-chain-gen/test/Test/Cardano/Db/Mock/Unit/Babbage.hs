@@ -11,6 +11,7 @@ import           Control.Exception
 import           Control.Monad
 import           Control.Monad.Class.MonadSTM.Strict
 import           Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
 import qualified Data.Map as Map
 import           Data.Text (Text)
 
@@ -292,11 +293,11 @@ rollbackFurther =
     -- because a checkpoint was found.
     let blockHash1 = hfBlockHash (blks !! 33)
     Right bid1 <- queryDBSync dbSync $ DB.queryBlockId blockHash1
-    cm1 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel "{\"1\" : 1}" bid1
+    cm1 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel (BS.pack $ replicate 32 1) "{\"1\" : 1}" bid1
 
     let blockHash2 = hfBlockHash (blks !! 34)
     Right bid2 <- queryDBSync dbSync $ DB.queryBlockId blockHash2
-    cm2 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel "{\"2\" : 2}" bid2
+    cm2 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel (BS.pack $ replicate 32 2) "{\"2\" : 2}" bid2
 
     -- Note that there is no epoch change, which would add a new entry, since we have
     -- 80 blocks and not 100, which is the expected blocks/epoch. This also means there

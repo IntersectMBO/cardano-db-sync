@@ -69,7 +69,6 @@ library
                       , cardano-ledger-shelley
                       , cardano-prelude
                       , cardano-slotting
-                      , vector-map
                       , containers
                       , contra-tracer
                       , esqueleto

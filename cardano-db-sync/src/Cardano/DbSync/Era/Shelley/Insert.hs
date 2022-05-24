@@ -6,6 +6,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -27,7 +28,8 @@ import           Cardano.Api.Shelley (TxMetadataValue (..), makeTransactionMetad
 
 import           Cardano.BM.Trace (Trace, logDebug, logInfo, logWarning)
 
-import qualified Cardano.Crypto.Hash as Crypto
+import           Cardano.Crypto.Hash (hashToBytes)
+import qualified Cardano.Crypto.Hashing as Crypto
 
 import           Cardano.Db (DbLovelace (..), DbWord64 (..))
 import qualified Cardano.Db as DB
@@ -420,7 +422,7 @@ insertPoolRegister _tracer cache isMember network (EpochNo epoch) blkId txId idx
                       DB.PoolUpdate
                         { DB.poolUpdateHashId = poolHashId
                         , DB.poolUpdateCertIndex = idx
-                        , DB.poolUpdateVrfKeyHash = Crypto.hashToBytes (Shelley._poolVrf params)
+                        , DB.poolUpdateVrfKeyHash = hashToBytes (Shelley._poolVrf params)
                         , DB.poolUpdatePledge = Generic.coinToDbLovelace (Shelley._poolPledge params)
                         , DB.poolUpdateRewardAddrId = saId
                         , DB.poolUpdateActiveEpochNo = epoch + epochActivationDelay
@@ -700,8 +702,8 @@ insertParamProposal
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.BlockId -> DB.TxId -> ParamProposal
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertParamProposal tracer blkId txId pp = do
-  cmId <- maybe (pure Nothing) (fmap Just . insertCostModel tracer blkId) (pppCostmdls pp)
+insertParamProposal _tracer blkId txId pp = do
+  cmId <- maybe (pure Nothing) (fmap Just . insertCostModel blkId) (pppCostmdls pp)
   void . lift . DB.insertParamProposal $
     DB.ParamProposal
       { DB.paramProposalRegisteredTxId = txId
@@ -829,21 +831,22 @@ insertTxMetadata tracer txId metadata =
 
 insertCostModel
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.BlockId -> Map Language Ledger.CostModel
+    => DB.BlockId -> Map Language Ledger.CostModel
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.CostModelId
-insertCostModel _tracer blkId cms =
-  lift . DB.insertCostModel $
-    DB.CostModel
-      { DB.costModelCosts = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode cms
-      , DB.costModelBlockId = blkId
-      }
+insertCostModel blkId cms =
+    lift . DB.insertCostModel $
+      DB.CostModel
+        { DB.costModelHash = Crypto.abstractHashToBytes $ Crypto.serializeCborHash cms
+        , DB.costModelCosts = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode cms
+        , DB.costModelBlockId = blkId
+        }
 
 insertEpochParam
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> DB.BlockId -> EpochNo -> Generic.ProtoParams -> Ledger.Nonce
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertEpochParam tracer blkId (EpochNo epoch) params nonce = do
-  cmId <- maybe (pure Nothing) (fmap Just . insertCostModel tracer blkId) (Generic.ppCostmdls params)
+insertEpochParam _tracer blkId (EpochNo epoch) params nonce = do
+  cmId <- maybe (pure Nothing) (fmap Just . insertCostModel blkId) (Generic.ppCostmdls params)
   void . lift . DB.insertEpochParam $
     DB.EpochParam
       { DB.epochParamEpochNo = epoch
