@@ -26,10 +26,10 @@ import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 
 import           Cardano.DbSync.Types
 
-import           Data.VMap (VB, VMap (..), VP)
-import qualified Data.VMap as VMap
 import qualified Data.Map.Strict as Map
 import qualified Data.Vector.Generic as VG
+import           Data.VMap (VB, VMap (..), VP)
+import qualified Data.VMap as VMap
 
 import           Ouroboros.Consensus.Block
 import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)

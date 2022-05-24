@@ -34,7 +34,7 @@ data Reward = Reward
 -- Shelley/Allegra/Mary. This is a huge pain in the neck for `db-sync` so we define a
 -- generic one instead.
 newtype Rewards = Rewards
-  { rwdRewards :: (Map StakeCred (Set Reward))
+  { rwdRewards :: Map StakeCred (Set Reward)
   } deriving (Eq, Show)
 
 elemCount :: Rewards -> Int

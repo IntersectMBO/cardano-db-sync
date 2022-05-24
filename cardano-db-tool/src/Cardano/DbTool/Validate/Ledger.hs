@@ -5,9 +5,9 @@ module Cardano.DbTool.Validate.Ledger
 
 import           Control.Monad (when)
 import           Control.Monad.Trans.Except.Exit (orDie)
+import           Control.Tracer (nullTracer)
 import           Data.Text (Text)
 import qualified Data.Text as Text
-import           Control.Tracer (nullTracer)
 import           Prelude
 
 import qualified Cardano.Db as DB

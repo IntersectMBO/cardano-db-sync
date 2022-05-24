@@ -10,7 +10,7 @@
 
 module Cardano.Mock.Forging.Tx.Alonzo where
 
-import           Cardano.Prelude hiding (sum, (.))
+import           Cardano.Prelude hiding (head, sum, (.))
 
 import qualified Data.Map.Strict as Map
 import           Data.Maybe (fromJust)
@@ -39,7 +39,7 @@ import           Cardano.Ledger.Hashes
 import           Cardano.Ledger.Keys
 import           Cardano.Ledger.Mary.Value
 import           Cardano.Ledger.Shelley.Metadata
-import           Cardano.Ledger.Shelley.PParams hiding (emptyPParamsUpdate, _protocolVersion)
+import           Cardano.Ledger.Shelley.PParams hiding (_protocolVersion, emptyPParamsUpdate)
 import           Cardano.Ledger.Shelley.TxBody (DCert (..), PoolCert (..), PoolMetadata (..),
                    PoolParams (..), StakePoolRelay (..), Wdrl (..))
 import           Cardano.Ledger.ShelleyMA.Timelocks
@@ -86,7 +86,7 @@ mkHFTx =
     mkSimpleTx True $ TxBody a b c d e f n (Strict.SJust upd) i j k l m
   where
     TxBody a b c d e f n _ i j k l m = emptyTxBody
-    upd = Update (ProposedPPUpdates $ Map.singleton (unregisteredGenesisKeys !! 0) pparams) (EpochNo 1)
+    upd = Update (ProposedPPUpdates $ Map.singleton (head unregisteredGenesisKeys) pparams) (EpochNo 1)
     pparams = emptyPParamsUpdate {_protocolVersion = Strict.SJust $ ProtVer 7 0}
 
 addValidityInterval :: SlotNo

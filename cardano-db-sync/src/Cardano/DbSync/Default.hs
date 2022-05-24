@@ -26,7 +26,8 @@ import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
 import           Cardano.DbSync.Era.Shelley.Insert.Epoch (insertPoolDepositRefunds, insertRewards)
 import           Cardano.DbSync.Era.Shelley.Validate (validateEpochRewards)
 import           Cardano.DbSync.Error
-import           Cardano.DbSync.LedgerState (LedgerEvent (..), ApplyResult (..), applyBlockAndSnapshot)
+import           Cardano.DbSync.LedgerState (ApplyResult (..), LedgerEvent (..),
+                   applyBlockAndSnapshot)
 import           Cardano.DbSync.Rollback (rollbackToPoint)
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
@@ -43,8 +44,8 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
 
-import           Database.Persist.SqlBackend.Internal.StatementCache
 import           Database.Persist.SqlBackend.Internal
+import           Database.Persist.SqlBackend.Internal.StatementCache
 
 import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 

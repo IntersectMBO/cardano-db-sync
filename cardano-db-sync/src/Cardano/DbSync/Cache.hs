@@ -340,7 +340,8 @@ queryMAWithCache cache policyId asset =
   case  cache of
     UninitiatedCache -> do
       let !bs = Generic.unScriptHash $ policyID policyId
-      fmap (maybe (Left bs) Right) $ DB.queryMultiAssetId bs (unAssetName asset)
+      maybe (Left bs) Right
+        <$> DB.queryMultiAssetId bs (unAssetName asset)
     Cache ci -> do
       mp <- liftIO $ readTVarIO (cMultiAssets ci)
       case LRU.lookup (policyId, asset) mp of
@@ -352,7 +353,8 @@ queryMAWithCache cache policyId asset =
           liftIO $ missMAssets (cStats ci)
           -- miss. The lookup doesn't change the cache on a miss.
           let !bs = Generic.unScriptHash $ policyID policyId
-          maId <- fmap (maybe (Left bs) Right) $ DB.queryMultiAssetId bs (unAssetName asset)
+          maId <- maybe (Left bs) Right
+            <$> DB.queryMultiAssetId bs (unAssetName asset)
           whenRight maId $
             liftIO . atomically . modifyTVar (cMultiAssets ci) . LRU.insert (policyId, asset)
           pure maId

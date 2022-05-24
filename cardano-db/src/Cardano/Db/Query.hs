@@ -125,8 +125,8 @@ import           Database.Esqueleto.Experimental (Entity, From, PersistEntity, P
                    SqlBackend, SqlExpr, SqlQuery, Value (Value, unValue), ValueList, count,
                    countRows, desc, entityKey, entityVal, exists, from, in_, innerJoin, isNothing,
                    just, leftJoin, limit, max_, min_, notExists, not_, on, orderBy, select,
-                   subList_select, sum_, table, type (:&) ((:&)), unSqlBackendKey, val, valList, where_,
-                   (&&.), (<=.), (==.), (>.), (>=.), (?.), (^.), (||.))
+                   subList_select, sum_, table, type (:&) ((:&)), unSqlBackendKey, val, valList,
+                   where_, (&&.), (<=.), (==.), (>.), (>=.), (?.), (^.), (||.))
 import           Database.Esqueleto.Experimental.From (ToFrom (..))
 import           Database.Persist.Class.PersistQuery (selectList)
 
@@ -447,7 +447,7 @@ queryNormalEpochRewardCount epochNum = do
   res <- select $ do
     rwd <- from $ table @Reward
     where_ (rwd ^. RewardSpendableEpoch ==. val epochNum)
-    where_ (rwd ^. RewardType `in_` (valList [RwdMember, RwdLeader]))
+    where_ (rwd ^. RewardType `in_` valList [RwdMember, RwdLeader])
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 

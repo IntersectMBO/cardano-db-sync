@@ -22,8 +22,8 @@ import           Cardano.DbSync.Util (textShow)
 
 import           Cardano.Ledger.Coin (Coin (..))
 import           Cardano.Ledger.Crypto (StandardCrypto)
-import qualified Cardano.Ledger.Shelley.Rewards as Ledger
 import           Cardano.Ledger.Shelley.API (Network)
+import qualified Cardano.Ledger.Shelley.Rewards as Ledger
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
@@ -35,14 +35,14 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
 import           Database.Esqueleto.Experimental (InnerJoin (InnerJoin), SqlBackend, Value (Value),
-                   desc, from, not_, on, orderBy, select, table, val, where_, (:&) ((:&)),
-                   (==.), (^.))
+                   desc, from, not_, on, orderBy, select, table, val, where_, (:&) ((:&)), (==.),
+                   (^.))
 
 {- HLINT ignore "Fuse on/on" -}
 
 validateEpochRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Network -> EpochNo -> EpochNo -> (Map StakeCred (Set (Ledger.Reward StandardCrypto)))
+    => Trace IO Text -> Network -> EpochNo -> EpochNo -> Map StakeCred (Set (Ledger.Reward StandardCrypto))
     -> ReaderT SqlBackend m ()
 validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
     actualCount <- Db.queryNormalEpochRewardCount (unEpochNo spendableEpochNo)

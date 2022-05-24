@@ -6,9 +6,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
 
 module Cardano.DbSync.Era.Shelley.Insert
   ( insertShelleyBlock
@@ -49,8 +47,8 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Coin as Ledger
 import qualified Cardano.Ledger.Credential as Ledger
-import qualified Cardano.Ledger.Keys as Ledger
 import           Cardano.Ledger.Keys
+import qualified Cardano.Ledger.Keys as Ledger
 import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..), Value (..))
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
@@ -944,7 +942,7 @@ insertMultiAsset cache policy a@(AssetName aName) = do
     mId <- queryMAWithCache cache policy a
     case mId of
       Right maId -> pure maId
-      Left (policyBs) -> DB.insertMultiAssetUnchecked $
+      Left policyBs -> DB.insertMultiAssetUnchecked $
                   DB.MultiAsset
                     { DB.multiAssetPolicy = policyBs
                     , DB.multiAssetName = aName

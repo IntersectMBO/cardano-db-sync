@@ -265,7 +265,7 @@ insertStaking tracer cache blkId genesis = do
               }
   let params = zip [0..] $ Map.elems (sgsPools $ sgStaking genesis)
   let network = sgNetworkId genesis
-  forM_ params $ uncurry (insertPoolRegister tracer uninitiatedCache (\_ -> False) network 0 blkId txId)
+  forM_ params $ uncurry (insertPoolRegister tracer uninitiatedCache (const False) network 0 blkId txId)
   let stakes = zip [0..] $ Map.toList (sgsStake $ sgStaking genesis)
   forM_ stakes $ \(n, (keyStaking, keyPool)) -> do
     insertStakeRegistration (EpochNo 0) txId (2 * n) (Generic.annotateStakingCred network (KeyHashObj keyStaking))
