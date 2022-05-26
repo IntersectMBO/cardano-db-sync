@@ -729,7 +729,7 @@ insertParamProposal _tracer blkId txId pp = do
 
       -- New for Alonzo
 
-      , DB.paramProposalCoinsPerUtxoWord = Generic.coinToDbLovelace <$> pppCoinsPerUtxoWord pp
+      , DB.paramProposalCoinsPerUtxoSize = Generic.coinToDbLovelace <$> pppCoinsPerUtxo pp
       , DB.paramProposalCostModelId = cmId
       , DB.paramProposalPriceMem = realToFrac <$> pppPriceMem pp
       , DB.paramProposalPriceStep = realToFrac <$> pppPriceStep pp
@@ -867,7 +867,7 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce = do
       , DB.epochParamMinUtxoValue = Generic.coinToDbLovelace (Generic.ppMinUTxOValue params)
       , DB.epochParamMinPoolCost = Generic.coinToDbLovelace (Generic.ppMinPoolCost params)
       , DB.epochParamNonce = Generic.nonceToBytes nonce
-      , DB.epochParamCoinsPerUtxoWord = Generic.coinToDbLovelace <$> Generic.ppCoinsPerUtxoWord params
+      , DB.epochParamCoinsPerUtxoSize = Generic.coinToDbLovelace <$> Generic.ppCoinsPerUtxo params
       , DB.epochParamCostModelId = cmId
       , DB.epochParamPriceMem = realToFrac <$> Generic.ppPriceMem params
       , DB.epochParamPriceStep = realToFrac <$> Generic.ppPriceStep params
