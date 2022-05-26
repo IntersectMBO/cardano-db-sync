@@ -1,7 +1,28 @@
 # Revision history for cardano-db-sync
 
 ## Next
+* Reduction in memory usage.
+* HF integration. Schema changes for new Babbage fields. (#1081).
+* Improved logging. It includes some performance statistics.
+* Used pulsing rewards coming from new ledger events. Also incremental stake slices.
+* Extended the caches.
+* `BulkOperations` which affected memory usage and rollbacks are removed.
+* Removed "no-store" from metadata caching for smash (#1075)
+* Added connection pools for smash, instead of opening a connection for each request. Configurable with `--pool` for admins.
+* Reduced the blocks it takes for prometheus block height to be updated.
+* Add docker healthchecks for postgres and cardano-node.
+* Fix unique keys of `reserves`, `treasury`, `pool_update`, `pool_retire`, `stake_registration`, `stake_deregistration`, `delegation` (#1051).
+* Allow to add additional migrations (indexes and views) (#1044).
+* Fix smash server error "Pool is retired" for pool that don't exist. (#997)
+* Fix duplicate instant rewards (#981).
+* Add multiple unit tests.
+* `pool_owner` now references `pool_update` instead of `pool_hash` and `tx` (#986).
+* Fix handling of StakeRefPtr (#1024).
 * Store `requiredSigners` (transaction extra key witnesses).
+* outputs, inputs and multi asset outputs are stored in batched grouped by blocks, instead of one by one.
+* Fix parameter_proposal.max_block_size (#965).
+* Remove plugin System, merges 3 packages `cardano-db-sync-extended`, `cardano-sync` and `cardano-db-sync` into the last.
+* fixes on testnets that fork directly to Shelley (#953).
 
 ## 12.0.2
 * Fix PoolOfflineFetchError URL entry (#697).

@@ -626,7 +626,8 @@ schemaDocs =
       StakeAddressHashRaw # "The raw bytes of the stake address hash."
       StakeAddressView # "The Bech32 encoded version of the stake address."
       StakeAddressScriptHash # "The script hash, in case this address is locked by a script."
-      StakeAddressTxId # "The Tx table index of the transaction in which this address first appeared."
+      StakeAddressTxId # "The Tx table index of the transaction in which this address first appeared.\
+        \ New in v13: Renamed from registered_tx_id."
 
     TxOut --^ do
       "A table for transaction outputs."
@@ -718,7 +719,7 @@ schemaDocs =
       PoolUpdateCertIndex # "The index of this pool update within the certificates of this transaction."
       PoolUpdateVrfKeyHash # "The hash of the pool's VRF key."
       PoolUpdatePledge # "The amount (in Lovelace) the pool owner pledges to the pool."
-      PoolUpdateRewardAddrId # "The StakeAddress table index of this pool's rewards address."
+      PoolUpdateRewardAddrId # "The StakeAddress table index of this pool's rewards address. New in v13: Replaced reward_addr."
       PoolUpdateActiveEpochNo # "The epoch number where this update becomes active."
       PoolUpdateMetaId # "The PoolMetadataRef table index this pool update refers to."
       PoolUpdateMargin # "The margin (as a percentage) this pool charges."
@@ -728,7 +729,7 @@ schemaDocs =
     PoolOwner --^ do
       "A table containing pool owners."
       PoolOwnerAddrId # "The StakeAddress table index for the pool owner's stake address."
-      PoolOwnerPoolUpdateId # "The PoolUpdate table index for the pool."
+      PoolOwnerPoolUpdateId # "The PoolUpdate table index for the pool. New in v13."
 
     PoolRetire --^ do
       "A table containing information about pools retiring."
@@ -966,7 +967,7 @@ schemaDocs =
 
     CostModel --^ do
       "CostModel for EpochParam and ParamProposal."
-      CostModelHash # "The hash of cost model. It ensures uniqueness of entries."
+      CostModelHash # "The hash of cost model. It ensures uniqueness of entries. New in v13."
       CostModelCosts # "The actual costs formatted as json."
       CostModelBlockId # "The first block where these costs were introduced. This is only used for rollbacks."
 
