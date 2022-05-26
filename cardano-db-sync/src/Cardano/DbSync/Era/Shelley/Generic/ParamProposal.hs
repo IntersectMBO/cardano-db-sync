@@ -53,7 +53,7 @@ data ParamProposal = ParamProposal
   , pppMinPoolCost :: !(Maybe Coin)
 
   -- New for Alonzo.
-  , pppCoinsPerUtxoWord :: !(Maybe Coin)
+  , pppCoinsPerUtxo :: !(Maybe Coin)
   , pppCostmdls :: !(Maybe (Map Language Alonzo.CostModel))
   , pppPriceMem :: !(Maybe Rational)
   , pppPriceStep :: !(Maybe Rational)
@@ -117,7 +117,7 @@ convertBabbageParamProposal epochNo (key, pmap) =
     , pppProtocolVersion = strictMaybeToMaybe (Babbage._protocolVersion pmap)
     , pppMinUtxoValue = Nothing -- Removed in Alonzo
     , pppMinPoolCost = strictMaybeToMaybe (Babbage._minPoolCost pmap)
-    , pppCoinsPerUtxoWord = strictMaybeToMaybe (Babbage._coinsPerUTxOByte pmap)
+    , pppCoinsPerUtxo = strictMaybeToMaybe (Babbage._coinsPerUTxOByte pmap)
     , pppCostmdls = strictMaybeToMaybe (Alonzo.unCostModels <$> Babbage._costmdls pmap)
     , pppPriceMem = Ledger.unboundRational . Alonzo.prMem <$> strictMaybeToMaybe (Babbage._prices pmap)
     , pppPriceStep = Ledger.unboundRational . Alonzo.prSteps <$> strictMaybeToMaybe (Babbage._prices pmap)
@@ -154,7 +154,7 @@ convertAlonzoParamProposal epochNo (key, pmap) =
     , pppMinPoolCost = strictMaybeToMaybe (Alonzo._minPoolCost pmap)
 
     -- New for Alonzo.
-    , pppCoinsPerUtxoWord = strictMaybeToMaybe (Alonzo._coinsPerUTxOWord pmap)
+    , pppCoinsPerUtxo = strictMaybeToMaybe (Alonzo._coinsPerUTxOWord pmap)
     , pppCostmdls = strictMaybeToMaybe (Alonzo.unCostModels <$> Alonzo._costmdls pmap)
     , pppPriceMem = Ledger.unboundRational . Alonzo.prMem <$> strictMaybeToMaybe (Alonzo._prices pmap)
     , pppPriceStep = Ledger.unboundRational . Alonzo.prSteps <$> strictMaybeToMaybe (Alonzo._prices pmap)
@@ -191,7 +191,7 @@ convertShelleyParamProposal epochNo (key, pmap) =
     , pppMinPoolCost = strictMaybeToMaybe (Shelley._minPoolCost pmap)
 
     -- The following are Alonzo related, hence Nothing.
-    , pppCoinsPerUtxoWord = Nothing
+    , pppCoinsPerUtxo = Nothing
     , pppCostmdls = Nothing
     , pppPriceMem = Nothing
     , pppPriceStep = Nothing
