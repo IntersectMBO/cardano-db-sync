@@ -1,6 +1,6 @@
 # Revision history for cardano-db
 
-## Next
+## 13.0.0
 * Add `extra_key_witness` table for storing `requiredSigners` (transaction extra key witnesses).
 
 ## 12.0.2
