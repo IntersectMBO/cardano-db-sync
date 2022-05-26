@@ -581,7 +581,7 @@ schemaDocs =
       PoolHashView # "The Bech32 encoding of the pool hash."
 
     SlotLeader --^ do
-      "Every unique slot leader (ie an entity that mines a block)."
+      "Every unique slot leader (ie an entity that mines a block). It could be a pool or a leader defined in genesis."
       SlotLeaderHash # "The hash of of the block producer identifier."
       SlotLeaderPoolHashId # "If the slot leader is a pool, an index into the `PoolHash` table."
       SlotLeaderDescription # "An auto-generated description of the slot leader."
@@ -659,21 +659,21 @@ schemaDocs =
 
     TxIn --^ do
       "A table for transaction inputs."
-      TxInTxInId # "The Tx table index of the transaction that contains this transaction input"
-      TxInTxOutId # "The Tx table index of the transaction that contains this transaction output."
+      TxInTxInId # "The Tx table index of the transaction that contains this transaction input."
+      TxInTxOutId # "The Tx table index of the transaction that contains the referenced transaction output."
       TxInTxOutIndex # "The index within the transaction outputs."
       TxInRedeemerId # "The Redeemer table index which is used to validate this input."
 
     CollateralTxIn --^ do
       "A table for transaction collateral inputs."
       CollateralTxInTxInId # "The Tx table index of the transaction that contains this transaction input"
-      CollateralTxInTxOutId # "The Tx table index of the transaction that contains this transaction output."
+      CollateralTxInTxOutId # "The Tx table index of the transaction that contains the referenced transaction output."
       CollateralTxInTxOutIndex # "The index within the transaction outputs."
 
     ReferenceTxIn --^ do
       "A table for reference transaction inputs. New in v13."
       ReferenceTxInTxInId # "The Tx table index of the transaction that contains this transaction input"
-      ReferenceTxInTxOutId # "The Tx table index of the transaction that contains this transaction output."
+      ReferenceTxInTxOutId # "The Tx table index of the transaction that contains the referenced output."
       ReferenceTxInTxOutIndex # "The index within the transaction outputs."
 
     Meta --^ do
@@ -778,15 +778,17 @@ schemaDocs =
       TxMetadataTxId # "The Tx table index of the transaction where this metadata was included."
 
     Reward --^ do
-      "A table for rewards earned by staking. The rewards earned in epoch `N` are added in this\
-        \ table when they are calculated during epoch `N + 1` but are not spendable until after the\
-        \ start of epoch `N + 2`."
+      "A table for earned rewards. It includes 5 types of rewards. The rewards are inserted incrementally and\
+        \ this procedure is finalised when the spendable epoch comes. Before the epoch comes, some entries\
+        \ may be missing."
       RewardAddrId # "The StakeAddress table index for the stake address that earned the reward."
-      RewardType # "The source of the rewards; pool `member`, pool `leader`, `treasury` or `reserves` payment."
+      RewardType # "The source of the rewards; pool `member`, pool `leader`, `treasury` or `reserves` payment and pool deposits `refunds`"
       RewardAmount # "The reward amount (in Lovelace)."
-      RewardEarnedEpoch # "The epoch in which the reward was earned."
+      RewardEarnedEpoch # "The epoch in which the reward was earned. For `pool` and `leader` rewards spendable in epoch `N`, this will be\
+        \ `N - 2`, for `treasury` and `reserves` `N - 1` and for `refund` N."
+      RewardSpendableEpoch # "The epoch in which the reward is actually distributed and can be spent."
       RewardPoolId # "The PoolHash table index for the pool the stake address was delegated to when\
-            \ the reward is earned. Will be NULL for payments from the treasury or the reserves."
+            \ the reward is earned or for the pool that there is a deposit refund. Will be NULL for payments from the treasury or the reserves."
 
     Withdrawal --^ do
       "A table for withdrawals from a reward account."
@@ -796,7 +798,8 @@ schemaDocs =
       WithdrawalRedeemerId # "The Redeemer table index that is related with this withdrawal."
 
     EpochStake --^ do
-      "A table containing the epoch stake distribution for each epoch."
+      "A table containing the epoch stake distribution for each epoch. This is inserted incrementally in the first blocks of the epoch.\
+        \ The stake distribution is extracted from the `set` snapshot of the ledger. See Shelley specs Sec. 11.2 for more details."
       EpochStakeAddrId # "The StakeAddress table index for the stake address for this EpochStake entry."
       EpochStakePoolId # "The PoolHash table index for the pool this entry is delegated to."
       EpochStakeAmount # "The amount (in Lovelace) being staked."
@@ -806,7 +809,7 @@ schemaDocs =
       "A table for payments from the treasury to a StakeAddress. Note: Before protocol version 5.0\
       \ (Alonzo) if more than one payment was made to a stake address in a single epoch, only the\
       \ last payment was kept and earlier ones removed. For protocol version 5.0 and later, they\
-      \ are summed."
+      \ are summed and produce a single reward with type `treasury`."
       TreasuryAddrId # "The StakeAddress table index for the stake address for this Treasury entry."
       TreasuryCertIndex # "The index of this payment certificate within the certificates of this transaction."
       TreasuryAmount # "The payment amount (in Lovelace)."
@@ -816,7 +819,7 @@ schemaDocs =
       "A table for payments from the reserves to a StakeAddress. Note: Before protocol version 5.0\
       \ (Alonzo) if more than one payment was made to a stake address in a single epoch, only the\
       \ last payment was kept and earlier ones removed. For protocol version 5.0 and later, they\
-      \ are summed."
+      \ are summed and produce a single reward with type `reserves`"
       ReserveAddrId # "The StakeAddress table index for the stake address for this Treasury entry."
       ReserveCertIndex # "The index of this payment certificate within the certificates of this transaction."
       ReserveAmount # "The payment amount (in Lovelace)."
