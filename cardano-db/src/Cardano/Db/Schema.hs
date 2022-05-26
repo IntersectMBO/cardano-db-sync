@@ -539,15 +539,6 @@ share
     deriving Show
 
   --------------------------------------------------------------------------
-  -- Currently this table contains the total rewards for an epoch extracted
-  -- from the ledger state, but *before* orphaned rewards are removed from the
-  -- Reward table.
-  EpochRewardTotalReceived
-    earnedEpoch         Word64              sqltype=word31type
-    amount              DbLovelace          sqltype=lovelace
-    UniqueEpochRewardTotalReceived earnedEpoch
-
-  --------------------------------------------------------------------------
   -- A table containing a managed list of reserved ticker names.
   -- For now they are grouped under the specific hash of the pool.
   ReservedPoolTicker
@@ -987,13 +978,6 @@ schemaDocs =
       PoolOfflineFetchErrorPmrId # "The PoolMetadataRef table index for this offline data."
       PoolOfflineFetchErrorFetchError # "The text of the error."
       PoolOfflineFetchErrorRetryCount # "The number of retries."
-
-    EpochRewardTotalReceived --^ do
-      "This table is used to help validate the accounting of rewards. It contains the total reward \
-        \ amount for each epoch received from the ledger state and includes orphaned rewards that \
-        \ are later removed from the Reward table."
-      EpochRewardTotalReceivedEarnedEpoch # "The epoch in which the reward was earned."
-      EpochRewardTotalReceivedAmount # "The total rewards for the epoch in Lovelace."
 
     ReservedPoolTicker --^ do
       "A table containing a managed list of reserved ticker names."

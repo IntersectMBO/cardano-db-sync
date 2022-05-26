@@ -2,6 +2,7 @@
 
 ## Next
 * Reduction in memory usage.
+* Removed `epoch_reward_total_received`.
 * HF integration. Schema changes for new Babbage fields. (#1081).
 * Improved logging. It includes some performance statistics.
 * Used pulsing rewards coming from new ledger events. Also incremental stake slices.
