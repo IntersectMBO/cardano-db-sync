@@ -35,7 +35,7 @@ git clone https://github.com/input-output-hk/cardano-node
 cd cardano-node
 git checkout <latest-official-tag> -b tag-<latest-official-tag>
 nix-build -A scripts.mainnet.node -o mainnet-node-local
-./mainnet-node-local
+./mainnet-node-local/bin/cardano-node-mainnet
 ```
 
 ### Set up and run the db-sync node
