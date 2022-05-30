@@ -67,6 +67,7 @@ data SyncNodeParams = SyncNodeParams
   , enpMigrationDir :: !MigrationDir
   , enpPGPassSource :: !PGPassSource
   , enpExtended :: !Bool
+  , enpHasCache :: !Bool
   , enpMaybeRollback :: !(Maybe SlotNo)
   }
 
