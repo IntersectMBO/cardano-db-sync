@@ -506,10 +506,10 @@ cleanupLedgerStateFiles env slotNo = do
     let (epochBoundary, valid, invalid) = foldr groupFiles ([], [], []) files
     -- Remove invalid (ie SlotNo >= current) ledger state files (occurs on rollback).
     deleteAndLogFiles env "invalid" invalid
-    -- Remove all but 6 most recent state files.
-    deleteAndLogStateFile env "old" (List.drop 6 valid)
-    -- Remove all but 6 most recent epoch boundary state files.
-    deleteAndLogStateFile env "old epoch boundary" (List.drop 6 epochBoundary)
+    -- Remove all but 4 most recent state files.
+    deleteAndLogStateFile env "old" (List.drop 4 valid)
+    -- Remove all but 2 most recent epoch boundary state files.
+    deleteAndLogStateFile env "old epoch boundary" (List.drop 2 epochBoundary)
   where
     groupFiles :: LedgerStateFile
                -> ([LedgerStateFile], [LedgerStateFile], [FilePath])
