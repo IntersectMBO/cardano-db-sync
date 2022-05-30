@@ -186,6 +186,7 @@ mkSyncNodeParams staticDir mutableDir = do
     , enpMigrationDir = MigrationDir "../schema"
     , enpPGPassSource = Db.PGPassCached pgconfig
     , enpExtended = True
+    , enpHasCache = True
     , enpMaybeRollback = Nothing
     }
 
