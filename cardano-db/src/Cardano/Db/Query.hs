@@ -47,6 +47,9 @@ module Cardano.Db.Query
   , queryNetworkName
   , queryPreviousSlotNo
   , querySchemaVersion
+  , queryScript
+  , queryDatum
+  , queryRedeemerData
   , querySelectCount
   , querySlotHash
   , querySlotNosGreaterThan
@@ -599,6 +602,30 @@ querySchemaVersion = do
     limit 1
     pure (sch ^. SchemaVersionStageOne, sch ^. SchemaVersionStageTwo, sch ^. SchemaVersionStageThree)
   pure $ uncurry3 SchemaVersion . unValue3 <$> listToMaybe res
+
+queryScript :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe ScriptId)
+queryScript hsh = do
+  xs <- select $ do
+      script <- from $ table @Script
+      where_ (script ^. ScriptHash ==. val hsh)
+      pure (script ^. ScriptId)
+  pure $ unValue <$> listToMaybe xs
+
+queryDatum :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe DatumId)
+queryDatum hsh = do
+  xs <- select $ do
+      datum <- from $ table @Datum
+      where_ (datum ^. DatumHash ==. val hsh)
+      pure (datum ^. DatumId)
+  pure $ unValue <$> listToMaybe xs
+
+queryRedeemerData :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe RedeemerDataId)
+queryRedeemerData hsh = do
+  xs <- select $ do
+      rdmrDt <- from $ table @RedeemerData
+      where_ (rdmrDt ^. RedeemerDataHash ==. val hsh)
+      pure (rdmrDt ^. RedeemerDataId)
+  pure $ unValue <$> listToMaybe xs
 
 -- | Count the number of rows that match the select with the supplied predicate.
 querySelectCount :: forall table table' m . (MonadIO m, PersistEntity table, ToFrom (From (SqlExpr (Entity table))) table')

@@ -101,6 +101,8 @@ data TxRedeemer = TxRedeemer
   , txRedeemerData :: PlutusData
   }
 
+-- Fields are intentionally left lazy, to avoid transformation if the entry already
+-- exists in db.
 data TxScript = TxScript
   { txScriptHash :: !ByteString
   , txScriptType :: ScriptType
@@ -109,9 +111,11 @@ data TxScript = TxScript
   , txScriptCBOR :: Maybe ByteString
   }
 
+-- Fields are intentionally left lazy, to avoid transformation if the entry already
+-- exists in db.
 data PlutusData = PlutusData
   { txDataHash :: !ByteString
-  , txDataValue :: !ByteString -- we turn this into json later.
+  , txDataValue :: ByteString -- we turn this into json later.
   }
 
 data TxOutDatum = InlineDatum PlutusData | DatumHash ByteString | NoDatum

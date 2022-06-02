@@ -786,24 +786,32 @@ insertDatum
   => Trace IO Text -> DB.TxId -> Generic.PlutusData
   -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.DatumId
 insertDatum tracer txId txd = do
-    value <- safeDecodeToJson tracer "insertDatum" $ Generic.txDataValue txd
-    lift . DB.insertDatum $ DB.Datum
-      { DB.datumHash = Generic.txDataHash txd
-      , DB.datumTxId = txId
-      , DB.datumValue = value
-      }
+    mDatumId <- lift $ DB.queryDatum $ Generic.txDataHash txd
+    case mDatumId of
+      Just datumId -> pure datumId
+      Nothing -> do
+        value <- safeDecodeToJson tracer "insertDatum" $ Generic.txDataValue txd
+        lift . DB.insertDatum $ DB.Datum
+          { DB.datumHash = Generic.txDataHash txd
+          , DB.datumTxId = txId
+          , DB.datumValue = value
+          }
 
 insertRedeemerData
   :: (MonadBaseControl IO m, MonadIO m)
   => Trace IO Text -> DB.TxId -> Generic.PlutusData
   -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.RedeemerDataId
 insertRedeemerData tracer txId txd = do
-    value <- safeDecodeToJson tracer "insertRedeemerData" $ Generic.txDataValue txd
-    lift . DB.insertRedeemerData $ DB.RedeemerData
-      { DB.redeemerDataHash = Generic.txDataHash txd
-      , DB.redeemerDataTxId = txId
-      , DB.redeemerDataValue = value
-      }
+    mRedeemerDataId <- lift $ DB.queryRedeemerData $ Generic.txDataHash txd
+    case mRedeemerDataId of
+      Just redeemerDataId -> pure redeemerDataId
+      Nothing -> do
+        value <- safeDecodeToJson tracer "insertRedeemerData" $ Generic.txDataValue txd
+        lift . DB.insertRedeemerData $ DB.RedeemerData
+          { DB.redeemerDataHash = Generic.txDataHash txd
+          , DB.redeemerDataTxId = txId
+          , DB.redeemerDataValue = value
+          }
 
 insertTxMetadata
     :: (MonadBaseControl IO m, MonadIO m)
@@ -956,16 +964,20 @@ insertScript
     => Trace IO Text -> DB.TxId -> Generic.TxScript
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.ScriptId
 insertScript tracer txId script = do
-    json <- scriptConvert script
-    lift . DB.insertScript $
-      DB.Script
-        { DB.scriptTxId = txId
-        , DB.scriptHash = Generic.txScriptHash script
-        , DB.scriptType = Generic.txScriptType script
-        , DB.scriptSerialisedSize = Generic.txScriptPlutusSize script
-        , DB.scriptJson = json
-        , DB.scriptBytes = Generic.txScriptCBOR script
-        }
+    mScriptId <- lift $ DB.queryScript $ Generic.txScriptHash script
+    case mScriptId of
+      Just scriptId -> pure scriptId
+      Nothing -> do
+        json <- scriptConvert script
+        lift . DB.insertScript $
+          DB.Script
+            { DB.scriptTxId = txId
+            , DB.scriptHash = Generic.txScriptHash script
+            , DB.scriptType = Generic.txScriptType script
+            , DB.scriptSerialisedSize = Generic.txScriptPlutusSize script
+            , DB.scriptJson = json
+            , DB.scriptBytes = Generic.txScriptCBOR script
+            }
   where
     scriptConvert :: MonadIO m => Generic.TxScript -> m (Maybe Text)
     scriptConvert s =
