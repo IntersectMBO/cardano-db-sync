@@ -546,6 +546,27 @@ select redeemer.tx_id as tx_id, redeemer.unit_mem, redeemer.unit_steps, redeemer
  asset1mu7h997yyvzrppdwjzhpex6u7khrucspxvjjuw | \x69b30e43bc5401bb34d0b12bd06cd9b537f33065aa49df7e8652739d | \x4c51           |     2 |     1 | 21000000000000 | 2021-02-03 20:22:23
 
 ```
+
+### Get blocks with 0 transactions and the pools that forged it
+```sql
+select distinct on(block.hash) block.hash as block_hash , epoch_no, tx_count, pool_hash.hash_raw as pool_hash,
+                               pool_update.pledge, pool_update.active_epoch_no, pool_metadata_ref.url, pool_offline_data.ticker_name  
+  from block join slot_leader on block.slot_leader_id = slot_leader.id
+    join pool_hash on slot_leader.pool_hash_id = pool_hash.id 
+    join pool_update on pool_update.hash_id = pool_hash.id 
+    left join pool_metadata_ref on pool_update.meta_id = pool_metadata_ref.id 
+    left join pool_offline_data on pool_offline_data.pmr_id = pool_metadata_ref.id  
+  where tx_count = 0 and epoch_no > 150  
+  order by block.hash, pool_update.active_epoch_no desc;
+
+
+                             block_hash                             | epoch_no | tx_count |                         pool_hash                          |     pledge      | active_epoch_no |                               url                                | ticker_name 
+--------------------------------------------------------------------+----------+----------+------------------------------------------------------------+-----------------+-----------------+------------------------------------------------------------------+-------------
+ \x0000f4b44d1484d7280f087c1df94f068a02e23570e8ed9eb5c0dd980d4c46c1 |      165 |        0 | \xe402f5894b8a7073f198bb0710d6294f2ac354ede2577b5ce15159a4 |     50000000000 |             137 | https://www.canadastakes.ca/metadata/can1-testnet-metadata.json  | 
+ \x0001715520d185accd550c7b6c0811a2589e778e6408ffcd75b0f83f4f45c2c0 |      153 |        0 | \xacfd479740bde8289885694e69e3494f7dcbcfdca540aead48c5d653 |  64000000000000 |             100 |                                                                  | 
+ \x00044646beb7d24dce8cd74408c76b9816453a451fc030c42cc9961be55932d9 |      163 |        0 | \x1e2191487bed3de4bf440d5ff80bdae31d7f22798d3a93444302acb3 |  64000000000000 |             100 |                                                                  | 
+ \x000732a2f62e289930c2779559a975566395dcf0cf32130f3852a6e031d13d61 |      154 |        0 | \xd9dc497e633c2f1c665467e1ed7a93e4f8541bfbabe1cc31818fb20f |   1000000000000 |             131 | https://www.uniquestaking.com/pool/uniq9/1ecf39ad-4f3c-4043      | 
+```
 ---
 
 [Query.hs]: https://github.com/input-output-hk/cardano-db-sync/blob/master/cardano-db/src/Cardano/Db/Query.hs
