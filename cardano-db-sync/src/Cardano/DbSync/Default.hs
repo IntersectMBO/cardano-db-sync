@@ -129,7 +129,7 @@ insertLedgerEvents env currentEpochNo@(EpochNo curEpoch) =
       case ev of
         LedgerNewEpoch en ss -> do
           lift $ do
-            insertEpochSyncTime en (toSyncState ss) (leEpochSyncTime lenv)
+            insertEpochSyncTime en (toSyncState ss) (envEpochSyncTime env)
           sqlBackend <- lift ask
           persistantCacheSize <- liftIO $ statementCacheSize $ connStmtMap sqlBackend
           liftIO . logInfo tracer $ "Persistant SQL Statement Cache size is " <> textShow persistantCacheSize
