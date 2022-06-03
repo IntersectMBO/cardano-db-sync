@@ -4,7 +4,23 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples where
+module Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
+  ( alwaysSucceedsScript
+  , alwaysSucceedsScriptHash
+  , alwaysSucceedsScriptAddr
+  , alwaysSucceedsScriptStake
+  , alwaysFailsScript
+  , alwaysFailsScriptHash
+  , alwaysFailsScriptAddr
+  , alwaysFailsScriptStake
+  , plutusDataList
+  , alwaysMintScript
+  , alwaysMintScriptHash
+  , alwaysMintScriptAddr
+  , alwaysMintScriptStake
+  , scriptHash
+  , assetNames
+  ) where
 
 import           Cardano.Ledger.Address
 import           Cardano.Ledger.Alonzo

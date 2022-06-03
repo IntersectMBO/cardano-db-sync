@@ -3,7 +3,15 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley where
+module Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
+  ( fromShelleyTx
+  , fromTxIn
+  , fromTxOut
+  , mkTxWithdrawal
+  , mkTxCertificate
+  , calcWithdrawalSum
+  , txHashId
+  ) where
 
 import           Cardano.Prelude
 
@@ -51,10 +59,10 @@ fromShelleyTx (blkIndex, tx) =
       , txOutputs = outputs
       , txCollateralOutputs = [] -- Shelley does not have collateral outputs
       , txFees = Just $ Shelley._txfee (ShelleyTx.body tx)
-      , txOutSum = sumOutputs outputs
+      , txOutSum = sumTxOutCoin outputs
       , txInvalidBefore = Nothing
       , txInvalidHereafter = Just $ Shelley._ttl (ShelleyTx.body tx)
-      , txWithdrawalSum = getWithdrawalSum $ Shelley._wdrls (ShelleyTx.body tx)
+      , txWithdrawalSum = calcWithdrawalSum $ Shelley._wdrls (ShelleyTx.body tx)
       , txMetadata = fromShelleyMetadata <$> strictMaybeToMaybe (getField @"auxiliaryData" tx)
       , txCertificates = zipWith mkTxCertificate [0..] (toList . Shelley._certs $ ShelleyTx.body tx)
       , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . Shelley._wdrls $ ShelleyTx.body tx)
@@ -115,8 +123,8 @@ fromTxIn (ShelleyTx.TxIn (ShelleyTx.TxId txid) (TxIx w16)) =
 txHashId :: (Ledger.Crypto era ~ StandardCrypto, ShelleyBasedEra era) => ShelleyTx.Tx era -> ByteString
 txHashId = Crypto.hashToBytes . Ledger.extractHash . Ledger.hashAnnotated . ShelleyTx.body
 
-getWithdrawalSum :: Shelley.Wdrl StandardCrypto -> Coin
-getWithdrawalSum = Coin . sum . map unCoin . Map.elems . Shelley.unWdrl
+calcWithdrawalSum :: Shelley.Wdrl StandardCrypto -> Coin
+calcWithdrawalSum = Coin . sum . map unCoin . Map.elems . Shelley.unWdrl
 
 mkTxWithdrawal :: (Shelley.RewardAcnt StandardCrypto, Coin) -> TxWithdrawal
 mkTxWithdrawal (ra, c) =

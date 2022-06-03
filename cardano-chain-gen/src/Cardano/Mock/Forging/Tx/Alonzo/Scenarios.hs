@@ -1,4 +1,6 @@
-module Cardano.Mock.Forging.Tx.Alonzo.Scenarios where
+module Cardano.Mock.Forging.Tx.Alonzo.Scenarios
+  ( delegateAndSendBlocks
+  ) where
 
 import           Cardano.Prelude hiding (length, (.))
 

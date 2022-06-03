@@ -5,7 +5,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage where
+module Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage
+  ( fromBabbageTx
+  ) where
 
 import           Cardano.Prelude
 
@@ -34,7 +36,7 @@ import           Cardano.DbSync.Era.Shelley.Generic.Metadata
 import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
 import           Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (fromTxIn, getWithdrawalSum)
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (calcWithdrawalSum, fromTxIn)
 import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
@@ -63,11 +65,11 @@ fromBabbageTx prices (blkIndex, tx) =
             else Just $ getField @"txfee" txBody
       , txOutSum =
           if not isValid2
-            then sumOutputs collOutputs
-            else sumOutputs outputs
+            then sumTxOutCoin collOutputs
+            else sumTxOutCoin outputs
       , txInvalidBefore = invalidBefore
       , txInvalidHereafter = invalidAfter
-      , txWithdrawalSum = getWithdrawalSum $ getField @"wdrls" txBody
+      , txWithdrawalSum = calcWithdrawalSum $ getField @"wdrls" txBody
       , txMetadata = fromAlonzoMetadata <$> strictMaybeToMaybe (getField @"auxiliaryData" tx)
       , txCertificates = snd <$> rmCerts finalMaps
       , txWithdrawals = Map.elems $ rmWdrl finalMaps
@@ -135,8 +137,10 @@ fromScript
 fromScript scr = mkTxScript (Ledger.hashScript @era scr, scr)
 
 fromDatum :: (Ledger.Crypto era ~ StandardCrypto, Ledger.Era era) => Babbage.Datum era -> TxOutDatum
-fromDatum Babbage.NoDatum = NoDatum
-fromDatum (Babbage.DatumHash hdh) = DatumHash $ dataHashToBytes hdh
-fromDatum (Babbage.Datum binaryData) = InlineDatum $ mkTxData (Alonzo.hashData plutusData, plutusData)
-  where
-    plutusData = Alonzo.binaryDataToData binaryData
+fromDatum bdat =
+    case bdat of
+      Babbage.NoDatum -> NoDatum
+      Babbage.DatumHash hdh -> DatumHash $ dataHashToBytes hdh
+      Babbage.Datum binaryData ->
+        let plutusData = Alonzo.binaryDataToData binaryData
+         in InlineDatum $ mkTxData (Alonzo.hashData plutusData, plutusData)

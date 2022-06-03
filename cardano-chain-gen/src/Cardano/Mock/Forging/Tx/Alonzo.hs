@@ -8,7 +8,35 @@
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Cardano.Mock.Forging.Tx.Alonzo where
+module Cardano.Mock.Forging.Tx.Alonzo
+  ( consTxBody
+  , mkHFTx
+  , addValidityInterval
+  , consPaymentTxBody
+  , consCertTxBody
+  , mkPaymentTx
+  , mkPaymentTx'
+  , mkLockByScriptTx
+  , mkUnlockScriptTx
+  , mkScriptInp
+  , mkScriptMint
+  , mkMAssetsScriptTx
+  , mkDCertTx
+  , mkSimpleDCertTx
+  , mkDCertPoolTx
+  , mkScriptDCertTx
+  , mkDepositTxPools
+  , mkDCertTxPools
+  , mkSimpleTx
+  , consPoolParams
+  , consPoolParamsTwoOwners
+  , mkScriptTx
+  , mkWitnesses
+  , addMetadata
+  , mkUTxOAlonzo
+  , emptyTxBody
+  , emptyTx
+  ) where
 
 import           Cardano.Prelude hiding (sum, (.))
 

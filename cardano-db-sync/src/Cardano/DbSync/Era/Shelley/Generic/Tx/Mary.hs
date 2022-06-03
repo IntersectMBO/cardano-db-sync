@@ -3,7 +3,9 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Cardano.DbSync.Era.Shelley.Generic.Tx.Mary where
+module Cardano.DbSync.Era.Shelley.Generic.Tx.Mary
+  ( fromMaryTx
+  ) where
 
 import           Cardano.Prelude
 
@@ -28,7 +30,7 @@ import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardMary
 import           Cardano.DbSync.Era.Shelley.Generic.Metadata
 import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval, mkTxScript)
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (fromTxIn, getWithdrawalSum,
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (calcWithdrawalSum, fromTxIn,
                    mkTxCertificate, mkTxWithdrawal, txHashId)
 import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
@@ -46,10 +48,10 @@ fromMaryTx (blkIndex, tx) =
       , txOutputs = outputs
       , txCollateralOutputs = [] -- Mary does not have collateral outputs
       , txFees = Just $ ShelleyMa.txfee (unTxBodyRaw tx)
-      , txOutSum = sumOutputs outputs
+      , txOutSum = sumTxOutCoin outputs
       , txInvalidBefore = invalidBefore
       , txInvalidHereafter = invalidAfter
-      , txWithdrawalSum = getWithdrawalSum $ ShelleyMa.wdrls (unTxBodyRaw tx)
+      , txWithdrawalSum = calcWithdrawalSum $ ShelleyMa.wdrls (unTxBodyRaw tx)
       , txMetadata = fromMaryMetadata <$> txMeta tx
       , txCertificates = zipWith mkTxCertificate [0..] (toList . ShelleyMa.certs $ unTxBodyRaw tx)
       , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . ShelleyMa.wdrls $ unTxBodyRaw tx)

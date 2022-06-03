@@ -4,7 +4,11 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra where
+module Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra
+  ( fromAllegraTx
+  , getInterval
+  , mkTxScript
+  ) where
 
 import           Cardano.Prelude
 
@@ -52,10 +56,10 @@ fromAllegraTx (blkIndex, tx) =
       , txOutputs = outputs
       , txCollateralOutputs = [] -- Allegra does not have collateral outputs
       , txFees = Just $ ShelleyMa.txfee rawTxBody
-      , txOutSum = sumOutputs outputs
+      , txOutSum = sumTxOutCoin outputs
       , txInvalidBefore = invalidBefore
       , txInvalidHereafter = invalidAfter
-      , txWithdrawalSum = getWithdrawalSum $ ShelleyMa.wdrls rawTxBody
+      , txWithdrawalSum = calcWithdrawalSum $ ShelleyMa.wdrls rawTxBody
       , txMetadata = fromAllegraMetadata <$> txMeta tx
       , txCertificates = zipWith mkTxCertificate [0..] (toList $ ShelleyMa.certs rawTxBody)
       , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl $ ShelleyMa.wdrls rawTxBody)

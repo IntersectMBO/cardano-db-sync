@@ -4,7 +4,9 @@
 {-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
-module Test.Cardano.Db.Mock.Unit.Babbage where
+module Test.Cardano.Db.Mock.Unit.Babbage
+  ( unitTests
+  ) where
 
 import           Control.Concurrent
 import           Control.Exception
@@ -1113,25 +1115,6 @@ simpleScript =
                      , True, DB.DbLovelace 20000
                      , Just $ Crypto.hashToBytes (extractHash $ hashData @StandardBabbage plutusDataList))
 
-unlockScript :: IOManager -> [(Text, Text)] -> Assertion
-unlockScript =
-    withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
-      startDBSync  dbSync
-      void $ registerAllStakeCreds interpreter mockServer
-
-      -- We don't use withBabbageFindLeaderAndSubmitTx here, because we want access to the tx.
-      tx0 <- withBabbageLedgerState interpreter $ Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutNoInline True] 20000 20000
-      void $ forgeNextAndSubmit interpreter mockServer $ MockBlock [TxBabbage tx0] (NodeId 1)
-
-      let utxo0 = head (Babbage.mkUTxOBabbage tx0)
-      void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkUnlockScriptTx [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) True 10000 500
-
-      assertBlockNoBackoff dbSync 3
-      assertAlonzoCounts dbSync (1,1,1,1,1,1,0,0)
-  where
-    testLabel = "unlockScript"
-
 unlockScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 unlockScriptSameBlock =
     withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
@@ -1146,7 +1129,6 @@ unlockScriptSameBlock =
 
       assertBlockNoBackoff dbSync 2
       assertAlonzoCounts dbSync (1,1,1,1,1,1,0,0)
-
   where
     testLabel = "unlockScriptSameBlock"
 
@@ -1927,28 +1909,7 @@ rollbackFork =
       assertBlockNoBackoff dbSync $ 2 + length (a <> b <> c)
   where
     testLabel = "rollbackFork"
-{-
-forkWithProposal :: IOManager -> [(Text, Text)] -> Assertion
-forkWithProposal =
-    withFullConfig "config-hf-epoch1" testLabel $ \interpreter mockServer dbSync -> do
-      startDBSync  dbSync
-      void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
-        Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 500
 
-      blk <- withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ const $
-        Right Alonzo.mkHFTx
-      print blk
-
-      a <- fillEpochs interpreter mockServer 2
-      st <- getAlonzoLedgerState interpreter
-      print st
---      void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
---        Babbage.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 500
-
-      assertBlockNoBackoff dbSync $ 2 + length a
-  where
-    testLabel = "forkWithProposal"
--}
 hfBlockHash :: CardanoBlock -> ByteString
 hfBlockHash blk =
   case blk of
@@ -1956,10 +1917,3 @@ hfBlockHash blk =
     BlockAlonzo ablk -> blockHash ablk
     BlockBabbage ablk -> blockHash ablk
     _ -> error "hfBlockHash: unsupported block type"
-
-throwLeft :: Exception err => IO (Either err a) -> IO a
-throwLeft action = do
-  ma <- action
-  case ma of
-    Left err -> throwIO err
-    Right a -> pure a

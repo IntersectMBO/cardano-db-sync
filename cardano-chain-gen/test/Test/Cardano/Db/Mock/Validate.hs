@@ -5,14 +5,52 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Test.Cardano.Db.Mock.Validate where
+module Test.Cardano.Db.Mock.Validate
+  ( assertBlocksCount
+  , assertBlocksCountDetailed
+  , assertTxCount
+  , assertRewardCount
+  , assertBlockNoBackoff
+  , assertBlockNoBackoffTimes
+  , assertEqQuery
+  , assertEqBackoff
+  , assertBackoff
+  , assertQuery
+  , assertBabbageCounts
+  , assertPoolLayerCounters
+  , runQuery
+  , addPoolCounters
+  , assertCurrentEpoch
+  , assertAddrValues
+  , assertRight
+  , assertCertCounts
+  , assertRewardCounts
+  , assertEpochStake
+  , assertEpochStakeEpoch
+  , assertAlonzoCounts
+  , assertScriptCert
+  , assertPoolCounters
+  , poolCountersQuery
+  , checkStillRuns
+  ) where
 
 import           Cardano.Db
+
+import           Cardano.DbSync.Era.Shelley.Generic.Util
+
+import qualified Cardano.Ledger.Address as Ledger
+import           Cardano.Ledger.BaseTypes
+import           Cardano.Ledger.Era
+
+import           Cardano.SMASH.Server.PoolDataLayer
+import           Cardano.SMASH.Server.Types
+
 import           Control.Concurrent
 import           Control.Exception
 import           Control.Monad (forM_)
 import           Control.Monad.Logger (NoLoggingT)
 import           Control.Monad.Trans.Reader (ReaderT)
+
 import           Data.Bifunctor (bimap, first)
 import           Data.ByteString (ByteString)
 import           Data.Either (isRight)
@@ -28,15 +66,6 @@ import           Database.Esqueleto.Legacy (InnerJoin (..), SqlExpr, countRows, 
 import           Database.Persist.Sql (Entity, SqlBackend, entityVal)
 import           Database.PostgreSQL.Simple (SqlError (..))
 
-import qualified Cardano.Ledger.Address as Ledger
-import           Cardano.Ledger.BaseTypes
-import           Cardano.Ledger.Era
-
-import           Cardano.DbSync.Era.Shelley.Generic.Util
-
-import           Cardano.SMASH.Server.PoolDataLayer
-import           Cardano.SMASH.Server.Types
-
 import           Ouroboros.Consensus.Cardano.Block
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 
@@ -45,7 +74,7 @@ import           Cardano.Mock.Forging.Types
 
 import           Test.Cardano.Db.Mock.Config
 
-import           Test.Tasty.HUnit
+import           Test.Tasty.HUnit (assertEqual, assertFailure)
 
 {- HLINT ignore "Reduce duplication" -}
 
@@ -143,9 +172,10 @@ assertAddrValues env ix expected sta = do
     assertEqBackoff env q expected defaultDelays "Unexpected Balance"
 
 assertRight :: Show err => Either err a -> IO a
-assertRight ei = case ei of
-  Right a -> pure a
-  Left err -> assertFailure (show err)
+assertRight ei =
+  case ei of
+    Right a -> pure a
+    Left err -> assertFailure (show err)
 
 assertCertCounts :: DBSyncEnv -> (Word64, Word64, Word64, Word64) -> IO ()
 assertCertCounts env expected =

@@ -1,6 +1,20 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Generic.Tx.Types where
+module Cardano.DbSync.Era.Shelley.Generic.Tx.Types
+  ( Tx (..)
+  , TxCertificate (..)
+  , TxWithdrawal (..)
+  , TxIn (..)
+  , TxOut (..)
+  , TxRedeemer (..)
+  , TxScript (..)
+  , PlutusData (..)
+  , TxOutDatum (..)
+  , whenInlineDatum
+  , getTxOutDatumHash
+  , getMaybeDatumHash
+  , sumTxOutCoin
+  ) where
 
 import           Cardano.Prelude
 
@@ -115,5 +129,5 @@ getMaybeDatumHash :: Maybe ByteString -> TxOutDatum
 getMaybeDatumHash Nothing = NoDatum
 getMaybeDatumHash (Just hsh) = DatumHash hsh
 
-sumOutputs :: [TxOut] -> Coin
-sumOutputs = Coin . sum . map (unCoin . txOutAdaValue)
+sumTxOutCoin :: [TxOut] -> Coin
+sumTxOutCoin = Coin . sum . map (unCoin . txOutAdaValue)

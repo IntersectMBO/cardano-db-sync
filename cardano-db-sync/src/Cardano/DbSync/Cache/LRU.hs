@@ -1,10 +1,21 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Cache.LRU where
+module Cardano.DbSync.Cache.LRU
+  ( LRUCache (..)
+  , empty
+  , cleanup
+  , trim
+  , insert
+  , lookup
+  , getSize
+  , getCapacity
+  ) where
+
+import           Cardano.Prelude hiding (empty)
 
 import           Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as OrdPSQ
-import           Data.Word (Word64)
 
 -- Inspired by https://jaspervdj.be/posts/2015-02-24-lru-cache.html
 -- We use Maps based on Ord instead of Hash, to avoid hash collision attacks.

@@ -1,11 +1,19 @@
-
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Cardano.Mock.ChainDB where
+module Cardano.Mock.ChainDB
+  ( ChainDB (..)
+  , initChainDB
+  , headTip
+  , currentState
+  , replaceGenesisDB
+  , extendChainDB
+  , findFirstPoint
+  , rollbackChainDB
+  ) where
 
 import           Ouroboros.Consensus.Block
 import           Ouroboros.Consensus.Config
@@ -33,35 +41,31 @@ instance Eq (Chain block) => Eq (ChainDB block) where
 instance Show (Chain block) => Show (ChainDB block) where
   show = show . cchain
 
-initChainDB :: TopLevelConfig block
-            -> State block
-            -> ChainDB block
+initChainDB :: TopLevelConfig block -> State block -> ChainDB block
 initChainDB config st = ChainDB config (Genesis st)
 
 headTip :: HasHeader block => ChainDB block -> Tip block
-headTip chainDB = case cchain chainDB of
-  Genesis _ -> TipGenesis
-  (_ :> (b, _)) -> Tip (blockSlot b) (blockHash b) (blockNo b)
+headTip chainDB =
+  case cchain chainDB of
+    Genesis _ -> TipGenesis
+    (_ :> (b, _)) -> Tip (blockSlot b) (blockHash b) (blockNo b)
 
 currentState :: ChainDB block -> State block
-currentState chainDB = case cchain chainDB of
-  Genesis st -> st
-  _ :> (_, st) -> st
+currentState chainDB =
+  case cchain chainDB of
+    Genesis st -> st
+    _ :> (_, st) -> st
 
 replaceGenesisDB :: ChainDB block -> State block -> ChainDB block
 replaceGenesisDB chainDB st = chainDB {cchain = Genesis st}
 
 extendChainDB :: LedgerSupportsProtocol block => ChainDB block -> block -> ChainDB block
-extendChainDB chainDB blk = chainDB {cchain = chain :> (blk, st)}
-  where
-    !chain = cchain chainDB
-    !st = tickThenReapply (Consensus.ExtLedgerCfg $ chainConfig chainDB) blk (getTipState chain)
+extendChainDB chainDB blk = do
+  let !chain = cchain chainDB
+      !st = tickThenReapply (Consensus.ExtLedgerCfg $ chainConfig chainDB) blk (getTipState chain)
+   in chainDB {cchain = chain :> (blk, st)}
 
-findFirstPoint
-  :: HasHeader block
-  => [Point block]
-  -> ChainDB block
-  -> Maybe (Point block)
+findFirstPoint :: HasHeader block => [Point block] -> ChainDB block -> Maybe (Point block)
 findFirstPoint points chainDB = findFirstPointChain points (cchain chainDB)
 
 rollbackChainDB :: HasHeader block => ChainDB block -> Point block -> Maybe (ChainDB block)

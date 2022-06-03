@@ -8,7 +8,45 @@
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Cardano.Mock.Forging.Tx.Babbage where
+module Cardano.Mock.Forging.Tx.Babbage
+  ( BabbageUTxOIndex
+  , BabbageLedgerState
+  , TxOutScriptType (..)
+  , ReferenceScript (..)
+  , consTxBody
+  , addValidityInterval
+  , consPaymentTxBody
+  , consCertTxBody
+  , mkPaymentTx
+  , mkPaymentTx'
+  , scriptSucceeds
+  , hasInlineDatum
+  , getInlineScript
+  , mkLockByScriptTx
+  , mkOutFromType
+  , mkUnlockScriptTx
+  , mkUnlockScriptTxBabbage
+  , mkScriptInp
+  , mkScriptMint
+  , mkMAssetsScriptTx
+  , mkDCertTx
+  , mkSimpleDCertTx
+  , mkDCertPoolTx
+  , mkScriptDCertTx
+  , mkDepositTxPools
+  , mkDCertTxPools
+  , mkSimpleTx
+  , consPoolParams
+  , consPoolParamsTwoOwners
+  , mkScriptTx
+  , mkWitnesses
+  , addMetadata
+  , mkUTxOBabbage
+  , mkUTxOCollBabbage
+  , mkTxHash
+  , emptyTxBody
+  , emptyTx
+  ) where
 
 import           Cardano.Prelude hiding (sum, (.))
 
@@ -52,10 +90,17 @@ import           Cardano.Mock.Forging.Crypto
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Tx.Generic
 import           Cardano.Mock.Forging.Types
--- import qualified Data.Maybe as Strict
 
 type BabbageUTxOIndex = UTxOIndex StandardBabbage
 type BabbageLedgerState = LedgerState (ShelleyBlock PraosStandard StandardBabbage)
+
+data TxOutScriptType
+  = TxOutNoInline Bool -- nothing is inlined, like in Alonzo
+  | TxOutInline Bool Bool ReferenceScript -- validScript, inlineDatum, reference script
+
+data ReferenceScript
+  = NoReferenceScript
+  | ReferenceScript Bool
 
 consTxBody :: Set (TxIn StandardCrypto)
            -> Set (TxIn StandardCrypto)
@@ -143,24 +188,26 @@ mkPaymentTx' inputIndex outputIndex sta = do
         addr <- resolveAddress outIx sta
         Right $ TxOut addr vl NoDatum Strict.SNothing
 
-data TxOutScriptType = TxOutNoInline Bool -- nothing is inlined, like in Alonzo
-                     | TxOutInline Bool Bool ReferenceScript -- validScript, inlineDatum, reference script
-
-data ReferenceScript = NoReferenceScript | ReferenceScript Bool
-
 scriptSucceeds :: TxOutScriptType -> Bool
-scriptSucceeds (TxOutNoInline sc) = sc
-scriptSucceeds (TxOutInline sc _ _) = sc
+scriptSucceeds st =
+  case st of
+    TxOutNoInline sc -> sc
+    TxOutInline sc _ _ -> sc
 
 hasInlineDatum :: TxOutScriptType -> Bool
-hasInlineDatum (TxOutNoInline _) = False
-hasInlineDatum (TxOutInline _ inl _) = inl
+hasInlineDatum st =
+  case st of
+    TxOutNoInline {} -> False
+    TxOutInline _ inl _ -> inl
 
 getInlineScript :: TxOutScriptType -> StrictMaybe Bool
-getInlineScript (TxOutNoInline _) = Strict.SNothing
-getInlineScript (TxOutInline _ _ rs) = case rs of
-  NoReferenceScript -> Strict.SNothing
-  ReferenceScript rs' -> Strict.SJust rs'
+getInlineScript st =
+  case st of
+    TxOutNoInline {} -> Strict.SNothing
+    TxOutInline _ _ rs ->
+      case rs of
+        NoReferenceScript -> Strict.SNothing
+        ReferenceScript rs' -> Strict.SJust rs'
 
 mkLockByScriptTx :: BabbageUTxOIndex -> [TxOutScriptType] -> Integer -> Integer
                  -> BabbageLedgerState

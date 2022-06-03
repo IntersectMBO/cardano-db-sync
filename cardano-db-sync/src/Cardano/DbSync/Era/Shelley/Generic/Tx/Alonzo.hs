@@ -6,11 +6,37 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo where
+module Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
+  ( fromAlonzoTx
+  , dataHashToBytes
+  , mkTxData
+  , mkTxScript
+  , resolveRedeemers
+  , extraKeyWits
+  , getPlutusSizes
+  , getScripts
+  , txDataWitness
+  , rmWdrl
+  , rmCerts
+  , rmInps
+  ) where
 
 import           Cardano.Prelude
 
+import qualified Cardano.Api.Shelley as Api
+
 import qualified Cardano.Crypto.Hash as Crypto
+
+import           Cardano.Db (ScriptType (..))
+
+import           Cardano.DbSync.Era.Shelley.Generic.Metadata
+import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (calcWithdrawalSum, fromTxIn,
+                   mkTxCertificate, mkTxWithdrawal)
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
+import           Cardano.DbSync.Era.Shelley.Generic.Util
+import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
@@ -43,19 +69,6 @@ import qualified Data.Set as Set
 
 import           Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardCrypto)
 
-import qualified Cardano.Api.Shelley as Api
-
-import           Cardano.Db (ScriptType (..))
-
-import           Cardano.DbSync.Era.Shelley.Generic.Metadata
-import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (fromTxIn, getWithdrawalSum,
-                   mkTxCertificate, mkTxWithdrawal)
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
-import           Cardano.DbSync.Era.Shelley.Generic.Util
-import           Cardano.DbSync.Era.Shelley.Generic.Witness
-
 
 fromAlonzoTx :: Alonzo.Prices -> (Word64, Ledger.Tx StandardAlonzo) -> Tx
 fromAlonzoTx prices (blkIndex, tx) =
@@ -82,10 +95,10 @@ fromAlonzoTx prices (blkIndex, tx) =
       , txOutSum =
           if not isValid2
             then Coin 0
-            else sumOutputs outputs
+            else sumTxOutCoin outputs
       , txInvalidBefore = invalidBefore
       , txInvalidHereafter = invalidAfter
-      , txWithdrawalSum = getWithdrawalSum $ getField @"wdrls" txBody
+      , txWithdrawalSum = calcWithdrawalSum $ getField @"wdrls" txBody
       , txMetadata = fromAlonzoMetadata <$> strictMaybeToMaybe (getField @"auxiliaryData" tx)
       , txCertificates = snd <$> rmCerts finalMaps
       , txWithdrawals = Map.elems $ rmWdrl finalMaps
@@ -314,13 +327,6 @@ extraKeyWits txBody = Set.toList $
 
 dataHashToBytes :: Ledger.DataHash crypto -> ByteString
 dataHashToBytes dataHash = Crypto.hashToBytes (Ledger.extractHash dataHash)
-
-elemAtSet :: forall a. Ord a => Word64 -> Set a -> Maybe a
-elemAtSet n set =
-    snd <$> find (\(index, _a) -> index == Just n) (Set.toList setWithIndexes)
-  where
-    setWithIndexes :: Set (Maybe Word64, a)
-    setWithIndexes = Set.map (\a -> (strictMaybeToMaybe $ Alonzo.indexOf a set, a)) set
 
 scriptHashAcnt :: Shelley.RewardAcnt StandardCrypto -> Maybe ByteString
 scriptHashAcnt rewardAddr = getCredentialScriptHash $ Ledger.getRwdCred rewardAddr

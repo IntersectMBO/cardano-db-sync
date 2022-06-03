@@ -2,9 +2,47 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Test.Cardano.Db.Mock.Config where
+module Test.Cardano.Db.Mock.Config
+  ( Config (..)
+  , DBSyncEnv (..)
+  , emptyMetricsSetters
+  , fingerprintRoot
+  , getDBSyncPGPass
+  , getPoolLayer
+  , mkConfig
+  , mkConfigDir
+  , mkFingerPrint
+  , mkMutableDir
+  , mkDBSyncEnv
+  , mkShelleyCredentials
+  , mkSyncNodeParams
+  , pollDBSync
+  , prepareFingerprintFile
+  , queryDBSync
+  , recreateDir
+  , rootTestDir
+  , setupTestsDir
+  , stopDBSync
+  , stopDBSyncIfRunning
+  , startDBSync
+  , withDBSyncEnv
+  , withFullConfig
+  ) where
 
 import           Cardano.Prelude (ReaderT, panic, stderr)
+
+import qualified Cardano.Db as Db
+
+import           Cardano.DbSync
+import           Cardano.DbSync.Config
+import           Cardano.DbSync.Config.Cardano
+import           Cardano.DbSync.Error
+import           Cardano.DbSync.Types (CardanoBlock, MetricSetters (..))
+
+import           Cardano.Mock.ChainSync.Server
+import           Cardano.Mock.Forging.Interpreter
+
+import           Cardano.SMASH.Server.PoolDataLayer
 
 import           Control.Concurrent.Async (Async, async, cancel, poll)
 import           Control.Concurrent.STM (atomically)
@@ -39,18 +77,19 @@ import qualified Cardano.CLI.Shelley.Run.Genesis as CLI
 import           Cardano.Node.Protocol.Shelley (readLeaderCredentials)
 import           Cardano.Node.Types (ProtocolFilepaths (..))
 
-import qualified Cardano.Db as Db
 
-import           Cardano.DbSync
-import           Cardano.DbSync.Config
-import           Cardano.DbSync.Config.Cardano
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.Types (CardanoBlock, MetricSetters (..))
+data Config = Config
+    { topLevelConfig :: TopLevelConfig CardanoBlock
+    , protocolInfo :: Consensus.ProtocolInfo IO CardanoBlock
+    , protocolInfoForging :: Consensus.ProtocolInfo IO CardanoBlock
+    , syncNodeParams :: SyncNodeParams
+    }
 
-import           Cardano.SMASH.Server.PoolDataLayer
-
-import           Cardano.Mock.ChainSync.Server
-import           Cardano.Mock.Forging.Interpreter
+data DBSyncEnv = DBSyncEnv
+    { dbSyncParams :: SyncNodeParams
+    , dbSyncForkDB :: IO (Async ())
+    , dbSyncThreadVar :: TMVar (Async ())
+    }
 
 rootTestDir :: FilePath
 rootTestDir = "test/testfiles"
@@ -66,19 +105,6 @@ fingerprintRoot = rootTestDir </> "fingerprint"
 
 mkFingerPrint :: FilePath -> FilePath
 mkFingerPrint testLabel = fingerprintRoot </> testLabel
-
-data Config = Config
-    { topLevelConfig :: TopLevelConfig CardanoBlock
-    , protocolInfo :: Consensus.ProtocolInfo IO CardanoBlock
-    , protocolInfoForging :: Consensus.ProtocolInfo IO CardanoBlock
-    , syncNodeParams :: SyncNodeParams
-    }
-
-data DBSyncEnv = DBSyncEnv
-    { dbSyncParams :: SyncNodeParams
-    , dbSyncForkDB :: IO (Async ())
-    , dbSyncThreadVar :: TMVar (Async ())
-    }
 
 mkDBSyncEnv :: SyncNodeParams -> IO () -> IO DBSyncEnv
 mkDBSyncEnv params runDBSync = do

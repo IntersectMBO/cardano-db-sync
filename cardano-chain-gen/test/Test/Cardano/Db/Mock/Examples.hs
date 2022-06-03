@@ -1,4 +1,8 @@
-module Test.Cardano.Db.Mock.Examples where
+module Test.Cardano.Db.Mock.Examples
+  ( mockBlock0
+  , mockBlock1
+  , mockBlock2
+  ) where
 
 import           Cardano.Mock.Forging.Types
 

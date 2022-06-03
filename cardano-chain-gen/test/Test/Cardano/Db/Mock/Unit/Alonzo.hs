@@ -2,23 +2,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Test.Cardano.Db.Mock.Unit.Alonzo where
+module Test.Cardano.Db.Mock.Unit.Alonzo
+  ( unitTests
+  ) where
 
-import           Control.Exception
-import           Control.Monad
-import           Control.Monad.Class.MonadSTM.Strict
-import           Data.ByteString (ByteString)
-import qualified Data.ByteString as BS
-import qualified Data.Map as Map
-import           Data.Text (Text)
-
-import           Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
-
-import           Ouroboros.Network.Block (blockNo, blockPoint, blockSlot)
+import qualified Cardano.Crypto.Hash as Crypto
 
 import qualified Cardano.Db as DB
 
-import qualified Cardano.Crypto.Hash as Crypto
+import           Cardano.DbSync.Era.Shelley.Generic.Block (blockHash)
+import           Cardano.DbSync.Era.Shelley.Generic.Util
 
 import           Cardano.Ledger.Alonzo.Data
 import           Cardano.Ledger.BaseTypes
@@ -30,12 +23,6 @@ import           Cardano.Ledger.SafeHash
 import           Cardano.Ledger.Shelley.TxBody
 import           Cardano.Ledger.Slot (BlockNo (..), EpochNo)
 
-import           Cardano.DbSync.Era.Shelley.Generic.Block (blockHash)
-import           Cardano.DbSync.Era.Shelley.Generic.Util
-
-import           Cardano.SMASH.Server.PoolDataLayer
-import           Cardano.SMASH.Server.Types
-
 import           Cardano.Mock.ChainSync.Server
 import           Cardano.Mock.Forging.Interpreter
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
@@ -43,6 +30,21 @@ import           Cardano.Mock.Forging.Tx.Alonzo.Scenarios
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Tx.Generic
 import           Cardano.Mock.Forging.Types
+
+import           Cardano.SMASH.Server.PoolDataLayer
+import           Cardano.SMASH.Server.Types
+
+import           Control.Monad
+import           Control.Monad.Class.MonadSTM.Strict
+
+import           Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
+import qualified Data.Map as Map
+import           Data.Text (Text)
+
+import           Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
+
+import           Ouroboros.Network.Block (blockNo, blockPoint, blockSlot)
 
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (Assertion, assertBool, assertEqual, testCase)
@@ -954,8 +956,8 @@ simpleScript =
                      , True, DB.DbLovelace 20000
                      , Just $ Crypto.hashToBytes (extractHash $ hashData @StandardAlonzo plutusDataList))
 
-unlockScript :: IOManager -> [(Text, Text)] -> Assertion
-unlockScript =
+_unlockScript :: IOManager -> [(Text, Text)] -> Assertion
+_unlockScript =
     withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       void $ registerAllStakeCreds interpreter mockServer
@@ -1483,10 +1485,3 @@ hfBlockHash blk =
     BlockShelley sblk -> blockHash sblk
     BlockAlonzo ablk -> blockHash ablk
     _ -> error "hfBlockHash: unsupported block type"
-
-throwLeft :: Exception err => IO (Either err a) -> IO a
-throwLeft action = do
-  ma <- action
-  case ma of
-    Left err -> throwIO err
-    Right a -> pure a
