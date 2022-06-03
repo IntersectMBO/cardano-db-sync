@@ -134,7 +134,7 @@ runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConn
       case genCfg of
           GenesisCardano {} -> do
             syncEnv <- ExceptT $ mkSyncEnvFromConfig trce dbConnString
-              (SyncOptions (enpExtended enp) aop (enpHasCache enp) snEveryFollowing snEveryLagging)
+              (SyncOptions (enpExtended enp) aop (enpHasCache enp) (enpHasLedger enp) snEveryFollowing snEveryLagging)
               (enpLedgerStateDir enp) genCfg
             liftIO $ runSyncNodeClient metricsSetters syncEnv iomgr trce (enpSocketPath enp)
   where

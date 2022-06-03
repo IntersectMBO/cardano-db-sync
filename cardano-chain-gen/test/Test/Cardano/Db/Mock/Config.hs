@@ -213,6 +213,7 @@ mkSyncNodeParams staticDir mutableDir = do
     , enpPGPassSource = Db.PGPassCached pgconfig
     , enpExtended = True
     , enpHasCache = True
+    , enpHasLedger = True
     , enpMaybeRollback = Nothing
     }
 
