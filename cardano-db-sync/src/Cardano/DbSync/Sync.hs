@@ -45,6 +45,7 @@ import           Cardano.DbSync.DbAction
 import           Cardano.DbSync.Epoch
 import           Cardano.DbSync.Era
 import           Cardano.DbSync.Error
+import           Cardano.DbSync.LocalStateQuery
 import           Cardano.DbSync.Metrics
 import           Cardano.DbSync.Tracing.ToObjectOrphans ()
 import           Cardano.DbSync.Types
@@ -55,6 +56,8 @@ import qualified Codec.CBOR.Term as CBOR
 import           Control.Monad.Trans.Except.Exit (orDie)
 
 import qualified Data.ByteString.Lazy as BSL
+import           Data.Functor.Contravariant (contramap)
+import qualified Data.Text as Text
 
 import           Database.Persist.Sql (SqlBackend)
 
@@ -92,6 +95,7 @@ import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined
 import           Ouroboros.Network.Protocol.ChainSync.PipelineDecision (MkPipelineDecision,
                    PipelineDecision (..), pipelineDecisionLowHighMark, runPipelineDecision)
 import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
+import           Ouroboros.Network.Protocol.LocalStateQuery.Client (localStateQueryClientPeer)
 import qualified Ouroboros.Network.Snocket as Snocket
 import           Ouroboros.Network.Subscription (SubscriptionTrace)
 
@@ -251,9 +255,9 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
     localStateQuery :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
     localStateQuery =
       InitiatorProtocolOnly $ MuxPeer
-        Logging.nullTracer
+        (if hasLedgerState env then Logging.nullTracer else contramap (Text.pack . show) . toLogObject $ appendName "local-state-query" trce)
         (cStateQueryCodec codecs)
-        localStateQueryPeerNull
+        (if hasLedgerState env then localStateQueryPeerNull else localStateQueryClientPeer (localStateQueryHandler (envNoLedgerEnv env)))
 
 -- | 'ChainSyncClient' which traces received blocks and ignores when it
 -- receives a request to rollbackwar.  A real wallet client should:

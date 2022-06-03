@@ -27,7 +27,8 @@ import           Cardano.DbSync.Era.Shelley.Insert.Epoch (insertPoolDepositRefun
 import           Cardano.DbSync.Era.Shelley.Validate (validateEpochRewards)
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState (ApplyResult (..), LedgerEvent (..),
-                   applyBlockAndSnapshot)
+                   applyBlockAndSnapshot, defaultApplyResult)
+import           Cardano.DbSync.LocalStateQuery
 import           Cardano.DbSync.Rollback (rollbackToPoint)
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
@@ -64,7 +65,7 @@ insertListBlocks env blocks = do
 applyAndInsert
     :: SyncEnv -> CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 applyAndInsert env cblk = do
-    !applyResult <- liftIO $ applyBlockAndSnapshot (envLedger env) cblk
+    !applyResult <- liftIO mkApplyResult
     let !details = apSlotDetails applyResult
     insertLedgerEvents env (sdEpochNo details) (apEvents applyResult)
     insertEpoch details
@@ -98,6 +99,14 @@ applyAndInsert env cblk = do
     getPrices applyResult = case apPrices applyResult of
       Strict.Just pr -> pr
       Strict.Nothing -> Ledger.Prices minBound minBound
+
+    mkApplyResult :: IO ApplyResult
+    mkApplyResult = do
+      if hasLedgerState env then
+        applyBlockAndSnapshot (envLedger env) cblk
+      else do
+        slotDetails <- getSlotDetailsNode (envNoLedgerEnv env) (cardanoBlockSlotNo cblk)
+        pure $ defaultApplyResult slotDetails
 
 -- -------------------------------------------------------------------------------------------------
 

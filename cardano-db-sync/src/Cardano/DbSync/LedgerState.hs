@@ -15,6 +15,7 @@ module Cardano.DbSync.LedgerState
   , LedgerEvent (..)
   , ApplyResult (..)
   , LedgerStateFile (..)
+  , defaultApplyResult
   , mkLedgerEnv
   , applyBlockAndSnapshot
   , listLedgerStateFilesOrdered
@@ -74,7 +75,7 @@ import qualified Data.Text as Text
 import           Data.Time.Clock (UTCTime, diffUTCTime, getCurrentTime)
 
 import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockHash, blockIsEBB,
-                   blockPoint, blockPrevHash, pointSlot)
+                   blockPrevHash, pointSlot)
 import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
@@ -187,10 +188,19 @@ data ApplyResult = ApplyResult
   , apPoolsRegistered :: !(Set.Set PoolKeyHash) -- registered before the block application
   , apNewEpoch :: !(Strict.Maybe Generic.NewEpoch) -- Only Just for a single block at the epoch boundary
   , apSlotDetails :: !SlotDetails
-  , apPoint :: !CardanoPoint
   , apStakeSlice :: !Generic.StakeSliceRes
   , apEvents :: ![LedgerEvent]
   }
+
+defaultApplyResult :: SlotDetails -> ApplyResult
+defaultApplyResult slotDetails = ApplyResult
+    { apPrices = Strict.Nothing
+    , apPoolsRegistered = Set.empty
+    , apNewEpoch = Strict.Nothing
+    , apSlotDetails = slotDetails
+    , apStakeSlice = Generic.NoSlices
+    , apEvents = []
+    }
 
 newtype LedgerDB = LedgerDB
   { ledgerDbCheckpoints :: AnchoredSeq (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState
@@ -293,7 +303,6 @@ applyBlock env blk = do
             , apPoolsRegistered = getRegisteredPools oldState
             , apNewEpoch = maybeToStrict newEpoch
             , apSlotDetails = details
-            , apPoint = blockPoint blk
             , apStakeSlice = stakeSlice newState details
             , apEvents = sort $ events ++ ledgerEvents
             }

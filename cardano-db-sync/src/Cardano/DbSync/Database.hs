@@ -89,7 +89,9 @@ runActions env actions = do
             pure Done
         ([], DbRollBackToPoint pt resultVar : ys) -> do
             runRollbacksDB env pt
-            points <- lift $ rollbackLedger env pt
+            points <- if hasLedgerState env
+              then lift $ rollbackLedger env pt
+              else pure Nothing
             blockNo <- lift $ getDbTipBlockNo env
             lift $ atomically $ putTMVar resultVar (points, blockNo)
             dbAction Continue ys

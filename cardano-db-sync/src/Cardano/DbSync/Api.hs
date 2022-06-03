@@ -1,5 +1,6 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbSync.Api
@@ -9,6 +10,7 @@ module Cardano.DbSync.Api
   , mkSyncEnvFromConfig
   , verifyFilePoints
   , getTrace
+  , hasLedgerState
   , getLatestPoints
   , getSlotHash
   , getDbLatestBlockInfo
@@ -37,6 +39,7 @@ import           Cardano.DbSync.Config.Shelley
 import           Cardano.DbSync.Config.Types
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState
+import           Cardano.DbSync.LocalStateQuery
 import           Cardano.DbSync.Types
 
 import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, TBQueue, newTBQueueIO, newTVarIO)
@@ -63,6 +66,7 @@ data SyncEnv = SyncEnv
   , envOfflineWorkQueue :: !(TBQueue IO PoolFetchRetry)
   , envOfflineResultQueue :: !(TBQueue IO FetchResult)
   , envEpochSyncTime :: !(StrictTVar IO UTCTime)
+  , envNoLedgerEnv :: !NoLedgerStateEnv -- only used when configured without ledger state.
   , envLedger :: !LedgerEnv
   }
 
@@ -80,6 +84,9 @@ getTrace = leTrace . envLedger
 
 getSlotHash :: SqlBackend -> SlotNo -> IO [(SlotNo, ByteString)]
 getSlotHash backend = DB.runDbIohkNoLogging backend . DB.querySlotHash
+
+hasLedgerState :: SyncEnv -> Bool
+hasLedgerState = soptLedger . envOptions
 
 getDbLatestBlockInfo :: SqlBackend -> IO (Maybe TipInfo)
 getDbLatestBlockInfo backend = do
@@ -133,6 +140,7 @@ mkSyncEnv trce backend syncOptions protoInfo nw nwMagic systemStart dir = do
   owq <- newTBQueueIO 100
   orq <- newTBQueueIO 100
   epochSyncTime <- newTVarIO =<< getCurrentTime
+  noLegdState <- mkNoLedgerStateEnv trce systemStart
   pure $ SyncEnv
           { envProtocol = SyncProtocolCardano
           , envNetworkMagic = nwMagic
@@ -143,6 +151,7 @@ mkSyncEnv trce backend syncOptions protoInfo nw nwMagic systemStart dir = do
           , envOfflineWorkQueue = owq
           , envOfflineResultQueue = orq
           , envEpochSyncTime = epochSyncTime
+          , envNoLedgerEnv = noLegdState
           , envLedger = ledgerEnv
           }
 
@@ -171,8 +180,16 @@ mkSyncEnvFromConfig trce backend syncOptions dir genCfg =
 
 getLatestPoints :: SyncEnv -> IO [CardanoPoint]
 getLatestPoints env = do
-  files <- listLedgerStateFilesOrdered $ leDir (envLedger env)
-  verifyFilePoints env files
+    if hasLedgerState env then do
+      files <- listLedgerStateFilesOrdered $ leDir (envLedger env)
+      verifyFilePoints env files
+    else do
+      -- Brings the 5 latest.
+      lastPoints <- DB.runDbIohkNoLogging (envBackend env) DB.queryLatestPoints
+      pure $ mapMaybe convert' lastPoints
+  where
+    convert' (Nothing, _) = Nothing
+    convert' (Just slot, bs) = convert (SlotNo slot) bs
 
 verifyFilePoints :: SyncEnv -> [LedgerStateFile] -> IO [CardanoPoint]
 verifyFilePoints env files =
@@ -183,12 +200,12 @@ verifyFilePoints env files =
         hashes <- getSlotHash (envBackend env) (lsfSlotNo lsf)
         let valid  = find (\(_, h) -> lsfHash lsf == hashToAnnotation h) hashes
         case valid of
-          Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convert (slot, hash)
+          Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convert slot hash
           _ -> pure Nothing
 
-    convert :: (SlotNo, ByteString) -> Maybe CardanoPoint
-    convert (slot, hashBlob) =
-      Point . Point.block slot <$> convertHashBlob hashBlob
-
+convert :: SlotNo -> ByteString -> Maybe CardanoPoint
+convert slot hashBlob =
+    Point . Point.block slot <$> convertHashBlob hashBlob
+  where
     convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
     convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)
