@@ -41,9 +41,11 @@ import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState
 import           Cardano.DbSync.Types
 
-import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, newTVarIO, readTVarIO, writeTVar)
+import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, TBQueue, newTBQueueIO, newTVarIO,
+                   readTVarIO, writeTVar)
 import           Control.Monad.Trans.Maybe (MaybeT (..))
 import qualified Data.Strict.Maybe as Strict
+import           Data.Time.Clock (UTCTime, getCurrentTime)
 
 import           Database.Persist.Postgresql (ConnectionString)
 import           Database.Persist.Sql (SqlBackend)
@@ -64,6 +66,9 @@ data SyncEnv = SyncEnv
   , envBackend :: !(StrictTVar IO (Strict.Maybe SqlBackend))
   , envOptions :: !SyncOptions
   , envCache :: !Cache
+  , envOfflineWorkQueue :: !(TBQueue IO PoolFetchRetry)
+  , envOfflineResultQueue :: !(TBQueue IO FetchResult)
+  , envEpochSyncTime :: !(StrictTVar IO UTCTime)
   , envLedger :: !LedgerEnv
   }
 
@@ -139,13 +144,16 @@ getCurrentTipBlockNo env = do
 
 mkSyncEnv
     :: Trace IO Text -> ConnectionString -> SyncOptions -> ProtocolInfo IO CardanoBlock -> Ledger.Network
-    -> NetworkMagic -> SystemStart -> LedgerStateDir -> EpochSlot
+    -> NetworkMagic -> SystemStart -> LedgerStateDir
     -> IO SyncEnv
-mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir stableEpochSlot = do
-  ledgerEnv <- mkLedgerEnv trce protoInfo dir nw stableEpochSlot systemStart (soptAbortOnInvalid syncOptions)
+mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir = do
+  ledgerEnv <- mkLedgerEnv trce protoInfo dir nw systemStart (soptAbortOnInvalid syncOptions)
                  (snapshotEveryFollowing syncOptions) (snapshotEveryLagging syncOptions)
   cache <- if soptCache syncOptions then newEmptyCache 100000 else pure uninitiatedCache
   backendVar <- newTVarIO Strict.Nothing
+  owq <- newTBQueueIO 100
+  orq <- newTBQueueIO 100
+  epochSyncTime <- newTVarIO =<< getCurrentTime
   pure $ SyncEnv
           { envProtocol = SyncProtocolCardano
           , envNetworkMagic = nwMagic
@@ -154,6 +162,9 @@ mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir stable
           , envBackend = backendVar
           , envOptions = syncOptions
           , envCache = cache
+          , envOfflineWorkQueue = owq
+          , envOfflineResultQueue = orq
+          , envEpochSyncTime = epochSyncTime
           , envLedger = ledgerEnv
           }
 
@@ -177,7 +188,7 @@ mkSyncEnvFromConfig trce connSring syncOptions dir genCfg =
           Right <$> mkSyncEnv trce connSring syncOptions (mkProtocolInfoCardano genCfg []) (Shelley.sgNetworkId $ scConfig sCfg)
                       (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
                       (SystemStart .Byron.gdStartTime $ Byron.configGenesisData bCfg)
-                      dir (calculateStableEpochSlot $ scConfig sCfg)
+                      dir
 
 
 getLatestPoints :: SyncEnv -> IO [CardanoPoint]
@@ -204,22 +215,3 @@ verifyFilePoints env files =
 
     convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
     convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)
-
--- -------------------------------------------------------------------------------------------------
--- This is incredibly suboptimal. It should work, for now, but may break at some future time and
--- when it is wrong then data in `db-sync` will simply be wrong and we do not have any way of
--- detecting that it is wrong.
---
--- An epoch is `10 k / f` long, and the stability window is `3 k / f` so the time from the start
--- of the epoch to start of the stability window is `7 k / f`.
---
--- Hopefully lower level libraries will be able to provide us with something better than this soon.
-calculateStableEpochSlot :: Shelley.ShelleyGenesis era -> EpochSlot
-calculateStableEpochSlot cfg =
-    EpochSlot $ ceiling (7.0 * secParam / actSlotCoeff)
-  where
-    secParam :: Double
-    secParam = fromIntegral $ Shelley.sgSecurityParam cfg
-
-    actSlotCoeff :: Double
-    actSlotCoeff = fromRational (Ledger.unboundRational $ Shelley.sgActiveSlotsCoeff cfg)

@@ -57,8 +57,8 @@ import           Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..), fromWithOrigin)
 
 import qualified Control.Exception as Exception
-import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, TBQueue, atomically, newTBQueueIO,
-                   newTVarIO, readTVar, writeTVar)
+import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, atomically, newTVarIO, readTVar,
+                   writeTVar)
 
 -- import           Codec.CBOR.Write (toBuilder)
 import qualified Data.ByteString.Base16 as Base16
@@ -126,13 +126,6 @@ data LedgerEnv = LedgerEnv
   , leInterpreter :: !(StrictTVar IO (Strict.Maybe CardanoInterpreter))
   , leStateVar :: !(StrictTVar IO (Strict.Maybe LedgerDB))
   , leEventState :: !(StrictTVar IO LedgerEventState)
-  -- The following do not really have anything to do with maintaining ledger
-  -- state. They are here due to the ongoing headaches around the split between
-  -- `cardano-sync` and `cardano-db-sync`.
-  , leOfflineWorkQueue :: !(TBQueue IO PoolFetchRetry)
-  , leOfflineResultQueue :: !(TBQueue IO FetchResult)
-  , leEpochSyncTime :: !(StrictTVar IO UTCTime)
-  , leStableEpochSlot :: !EpochSlot
   }
 
 -- TODO this is unstable in terms of restarts and we should try to remove it.
@@ -227,17 +220,12 @@ ledgerDbCurrent = either id id . AS.head . ledgerDbCheckpoints
 
 mkLedgerEnv
     :: Trace IO Text -> Consensus.ProtocolInfo IO CardanoBlock -> LedgerStateDir
-    -> Ledger.Network -> EpochSlot -> SystemStart -> Bool -> Word64 -> Word64
+    -> Ledger.Network -> SystemStart -> Bool -> Word64 -> Word64
     -> IO LedgerEnv
-mkLedgerEnv trce protocolInfo dir nw stableEpochSlot systemStart aop snapshotEveryFollowing snapshotEveryLagging = do
+mkLedgerEnv trce protocolInfo dir nw systemStart aop snapshotEveryFollowing snapshotEveryLagging = do
     svar <- newTVarIO Strict.Nothing
     evar <- newTVarIO initLedgerEventState
     intervar <- newTVarIO Strict.Nothing
-    -- 2.5 days worth of slots. If we try to stick more than this number of
-    -- items in the queue, bad things are likely to happen.
-    owq <- newTBQueueIO 100
-    orq <- newTBQueueIO 100
-    est <- newTVarIO =<< getCurrentTime
     pure LedgerEnv
       { leTrace = trce
       , leProtocolInfo = protocolInfo
@@ -250,10 +238,6 @@ mkLedgerEnv trce protocolInfo dir nw stableEpochSlot systemStart aop snapshotEve
       , leInterpreter = intervar
       , leStateVar = svar
       , leEventState = evar
-      , leOfflineWorkQueue = owq
-      , leOfflineResultQueue  = orq
-      , leEpochSyncTime = est
-      , leStableEpochSlot = stableEpochSlot
       }
   where
     initLedgerEventState :: LedgerEventState
