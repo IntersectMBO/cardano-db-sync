@@ -65,6 +65,7 @@ pRunDbSyncNode =
     <*> pPGPassSource
     <*> pExtended
     <*> pHasCache
+    <*> pHasLedger
     <*> optional pSlotNo
 
 pConfigFile :: Parser ConfigFile
@@ -111,6 +112,13 @@ pHasCache =
   Opt.flag True False
     ( Opt.long "disable-cache"
     <> Opt.help "Disables the db-sync caches. Reduces memory usage but it takes longer to sync."
+    )
+
+pHasLedger ::  Parser Bool
+pHasLedger =
+  Opt.flag True False
+    ( Opt.long "disable-ledger"
+    <> Opt.help "Disables the leger state. Drastically reduces memory usage and it syncs faster, but some data are missing."
     )
 
 pSocketPath :: Parser SocketPath
