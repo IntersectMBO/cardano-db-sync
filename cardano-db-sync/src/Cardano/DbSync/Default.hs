@@ -69,7 +69,7 @@ applyAndInsert env cblk = do
     insertLedgerEvents env (sdEpochNo details) (apEvents applyResult)
     insertEpoch details
     let firstBlockOfEpoch = hasEpochStartEvent (apEvents applyResult)
-    let isMember = \poolId -> Set.member poolId (apPoolsRegistered applyResult)
+    let isMember poolId = Set.member poolId (apPoolsRegistered applyResult)
     case cblk of
       BlockByron blk ->
         newExceptT $ insertByronBlock env firstBlockOfEpoch blk details
@@ -129,7 +129,7 @@ insertLedgerEvents env currentEpochNo@(EpochNo curEpoch) =
       case ev of
         LedgerNewEpoch en ss -> do
           lift $ do
-            insertEpochSyncTime en (toSyncState ss) (leEpochSyncTime lenv)
+            insertEpochSyncTime en (toSyncState ss) (envEpochSyncTime env)
           sqlBackend <- lift ask
           persistantCacheSize <- liftIO $ statementCacheSize $ connStmtMap sqlBackend
           liftIO . logInfo tracer $ "Persistant SQL Statement Cache size is " <> textShow persistantCacheSize

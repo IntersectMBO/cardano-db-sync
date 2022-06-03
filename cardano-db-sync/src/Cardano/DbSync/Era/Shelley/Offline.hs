@@ -39,7 +39,7 @@ import qualified Cardano.Crypto.Hash.Class as Crypto
 import           Cardano.Db
 import qualified Cardano.Db as DB
 
-import           Cardano.DbSync.LedgerState
+import           Cardano.DbSync.Api
 import           Cardano.DbSync.Util
 
 import           Database.Persist.Sql (SqlBackend)
@@ -93,18 +93,18 @@ insertOfflineResults trce resultQueue = do
         ResultError {} -> True
 
 
-runOfflineFetchThread :: Trace IO Text -> LedgerEnv -> IO ()
-runOfflineFetchThread trce lenv = do
+runOfflineFetchThread :: Trace IO Text -> SyncEnv -> IO ()
+runOfflineFetchThread trce env = do
     logInfo trce "Running Offline fetch thread"
     forever $ do
       threadDelay 60_000_000 -- 60 second sleep
-      xs <- blockingFlushTBQueue (leOfflineWorkQueue lenv)
+      xs <- blockingFlushTBQueue (envOfflineWorkQueue env)
       manager <- Http.newManager tlsManagerSettings
       now <- liftIO Time.getPOSIXTime
       mapM_ (queueInsert <=< fetchOfflineData trce manager now) xs
   where
     queueInsert :: FetchResult -> IO ()
-    queueInsert = atomically . writeTBQueue (leOfflineResultQueue lenv)
+    queueInsert = atomically . writeTBQueue (envOfflineResultQueue env)
 
 -- -------------------------------------------------------------------------------------------------
 

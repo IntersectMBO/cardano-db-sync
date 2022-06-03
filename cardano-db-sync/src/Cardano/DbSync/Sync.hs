@@ -226,7 +226,7 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
         race_
             (race
                 (runDbThread env metricsSetters actionQueue)
-                (runOfflineFetchThread trce (envLedger env))
+                (runOfflineFetchThread trce env)
                 )
             (runPipelinedPeer
                 localChainSyncTracer

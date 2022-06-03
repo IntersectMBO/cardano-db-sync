@@ -146,8 +146,8 @@ insertShelleyBlock env firstBlockOfEpoch blk details isMember mNewEpoch stakeSli
 
     when (unBlockNo (Generic.blkBlockNo blk) `mod` offlineModBase == 0) .
       lift $ do
-        insertOfflineResults tracer (leOfflineResultQueue lenv)
-        loadOfflineWorkQueue tracer (leOfflineWorkQueue lenv)
+        insertOfflineResults tracer (envOfflineResultQueue env)
+        loadOfflineWorkQueue tracer (envOfflineWorkQueue env)
 
     when (getSyncStatus details == SyncFollowing) $
       -- Serializiing things during syncing can drastically slow down full sync
