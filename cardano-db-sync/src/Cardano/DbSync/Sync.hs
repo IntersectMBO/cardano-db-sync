@@ -130,7 +130,7 @@ runSyncNode metricsSetters trce backend iomgr aop snEveryFollowing snEveryLaggin
       case genCfg of
           GenesisCardano {} -> do
             syncEnv <- ExceptT $ mkSyncEnvFromConfig trce backend
-              (SyncOptions (enpExtended enp) aop (enpHasCache enp) snEveryFollowing snEveryLagging)
+              (SyncOptions (enpExtended enp) aop (enpHasCache enp) (enpHasLedger enp) snEveryFollowing snEveryLagging)
               (enpLedgerStateDir enp) genCfg
             liftIO $ epochStartup syncEnv
             liftIO $ runSyncNodeClient metricsSetters syncEnv iomgr trce (enpSocketPath enp)
@@ -298,8 +298,8 @@ chainSyncClient metricsSetters trce latestPoints currentTip actionQueue = do
 
     goTip :: MkPipelineDecision -> Nat n -> WithOrigin BlockNo -> Tip CardanoBlock -> Maybe [CardanoPoint]
           -> ClientPipelinedStIdle n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-    goTip mkPipelineDecision n clientTip serverTip mPoint =
-      go mkPipelineDecision n clientTip (getTipBlockNo serverTip) mPoint
+    goTip mkPipelineDecision n clientTip serverTip =
+      go mkPipelineDecision n clientTip (getTipBlockNo serverTip)
 
     go :: MkPipelineDecision -> Nat n -> WithOrigin BlockNo -> WithOrigin BlockNo -> Maybe [CardanoPoint]
         -> ClientPipelinedStIdle n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()

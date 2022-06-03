@@ -65,6 +65,7 @@ data SyncOptions = SyncOptions
   { soptExtended :: !Bool
   , soptAbortOnInvalid :: !Bool
   , soptCache :: !Bool
+  , soptLedger :: !Bool
   , snapshotEveryFollowing :: !Word64
   , snapshotEveryLagging :: !Word64
   }
