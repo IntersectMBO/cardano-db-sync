@@ -416,12 +416,14 @@ share
     hash                ByteString          sqltype=hash32type
     txId                TxId                OnDeleteCascade
     value               Text Maybe          sqltype=jsonb
+    bytes               ByteString          sqltype=bytea
     UniqueDatum         hash
 
   RedeemerData
     hash                ByteString          sqltype=hash32type
     txId                TxId                OnDeleteCascade
     value               Text Maybe          sqltype=jsonb
+    bytes               ByteString          sqltype=bytea
     UniqueRedeemerData  hash
 
   ExtraKeyWitness
@@ -872,13 +874,15 @@ schemaDocs =
       "A table containing Plutus Datum, found in witnesses or inlined in outputs"
       DatumHash # "The Hash of the Datum"
       DatumTxId # "The Tx table index for the transaction where this script first became available."
-      DatumValue # "The actual data in json format"
+      DatumValue # "The actual data in JSON format (detailed schema)"
+      DatumBytes # "The actual data in CBOR format"
 
     RedeemerData --^ do
       "A table containing Plutus Redeemer Data. These are always referenced by at least one redeemer. New in v13: split from datum table."
       RedeemerDataHash # "The Hash of the Plutus Data"
       RedeemerDataTxId # "The Tx table index for the transaction where this script first became available."
-      RedeemerDataValue # "The actual data in json format"
+      RedeemerDataValue # "The actual data in JSON format (detailed schema)"
+      RedeemerDataBytes # "The actual data in CBOR format"
 
     ExtraKeyWitness --^ do
       "A table containing transaction extra key witness hashes."

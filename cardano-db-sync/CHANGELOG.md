@@ -1,6 +1,8 @@
 # Revision history for cardano-db-sync
 
 ## Next
+
+* Store CBOR serialized `Datum` and `Redeemer` via `bytes` field
 * Store `requiredSigners` (transaction extra key witnesses).
 
 ## 12.0.2

@@ -116,6 +116,7 @@ data TxScript = TxScript
 data PlutusData = PlutusData
   { txDataHash :: !ByteString
   , txDataValue :: ByteString -- we turn this into json later.
+  , txDataBytes :: ByteString
   }
 
 data TxOutDatum = InlineDatum PlutusData | DatumHash ByteString | NoDatum

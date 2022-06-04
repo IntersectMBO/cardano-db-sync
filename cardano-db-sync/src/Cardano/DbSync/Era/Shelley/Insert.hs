@@ -795,6 +795,7 @@ insertDatum tracer txId txd = do
           { DB.datumHash = Generic.txDataHash txd
           , DB.datumTxId = txId
           , DB.datumValue = value
+          , DB.datumBytes = Generic.txDataBytes txd
           }
 
 insertRedeemerData
@@ -811,6 +812,7 @@ insertRedeemerData tracer txId txd = do
           { DB.redeemerDataHash = Generic.txDataHash txd
           , DB.redeemerDataTxId = txId
           , DB.redeemerDataValue = value
+          , DB.redeemerDataBytes = Generic.txDataBytes txd
           }
 
 insertTxMetadata
