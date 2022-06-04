@@ -1,6 +1,7 @@
 # Revision history for cardano-db-sync
 
 ## Next
+* Store CBOR serialized `Datum` and `Redeemer` via `bytes` field
 * Reduction in memory usage.
 * Removed `epoch_reward_total_received`.
 * HF integration. Schema changes for new Babbage fields. (#1081).
