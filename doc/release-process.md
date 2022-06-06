@@ -12,6 +12,7 @@ The rationale for this specific release process is:
 
 The process:
 
+* Make sure the latest release branch has had its changes cherry picked to `master`.
 * Devs make a branch named eg `release/12.0.x`.
 * Update version numbers in all cabal files.
 * Write the change log entries.
