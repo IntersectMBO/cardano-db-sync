@@ -1,5 +1,8 @@
 # Revision history for cardano-db-tool
 
+## 12.0.2
+* No changes.
+
 ## 12.0.1
 * No changes.
 

@@ -49,7 +49,7 @@ data ProtoParams = ProtoParams
   , ppMinPoolCost :: !Coin
 
   -- New for Alonzo.
-  , ppCoinsPerUtxoWord :: !(Maybe Coin)
+  , ppCoinsPerUtxo :: !(Maybe Coin)
   , ppCostmdls :: !(Maybe (Map Language Alonzo.CostModel))
   , ppPriceMem :: !(Maybe Rational)
   , ppPriceStep :: !(Maybe Rational)
@@ -114,7 +114,7 @@ fromBabbageParams params =
     , ppProtocolVersion = Babbage._protocolVersion params
     , ppMinUTxOValue = Babbage._coinsPerUTxOByte params
     , ppMinPoolCost = Babbage._minPoolCost params
-    , ppCoinsPerUtxoWord = Just $ Babbage._coinsPerUTxOByte params
+    , ppCoinsPerUtxo = Just $ Babbage._coinsPerUTxOByte params
     , ppCostmdls = Just $ Alonzo.unCostModels $ Babbage._costmdls params
     , ppPriceMem = Just . Ledger.unboundRational $ Alonzo.prMem (Babbage._prices params)
     , ppPriceStep = Just . Ledger.unboundRational $ Alonzo.prSteps (Babbage._prices params)
@@ -147,7 +147,7 @@ fromAlonzoParams params =
     , ppProtocolVersion = Alonzo._protocolVersion params
     , ppMinUTxOValue = Alonzo._coinsPerUTxOWord params
     , ppMinPoolCost = Alonzo._minPoolCost params
-    , ppCoinsPerUtxoWord = Just $ Alonzo._coinsPerUTxOWord params
+    , ppCoinsPerUtxo = Just $ Alonzo._coinsPerUTxOWord params
     , ppCostmdls = Just $ Alonzo.unCostModels $ Alonzo._costmdls params
     , ppPriceMem = Just . Ledger.unboundRational $ Alonzo.prMem (Alonzo._prices params)
     , ppPriceStep = Just . Ledger.unboundRational $ Alonzo.prSteps (Alonzo._prices params)
@@ -180,7 +180,7 @@ fromShelleyParams params =
     , ppProtocolVersion = Shelley._protocolVersion params
     , ppMinUTxOValue = Shelley._minUTxOValue params
     , ppMinPoolCost = Shelley._minPoolCost params
-    , ppCoinsPerUtxoWord = Nothing
+    , ppCoinsPerUtxo = Nothing
     , ppCostmdls = Nothing
     , ppPriceMem = Nothing
     , ppPriceStep = Nothing

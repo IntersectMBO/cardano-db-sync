@@ -12,7 +12,6 @@ module Cardano.DbSync.Era.Shelley.Insert.Epoch
   ( insertRewards
   , insertPoolDepositRefunds
   , insertStakeSlice
-  , insertEpochRewardTotalReceived
   , sumRewardTotal
   ) where
 
@@ -44,17 +43,6 @@ import qualified Data.Strict.Maybe as Strict
 import           Database.Persist.Sql (SqlBackend)
 
 {- HLINT ignore "Use readTVarIO" -}
-
-insertEpochRewardTotalReceived
-    :: (MonadBaseControl IO m, MonadIO m)
-    => EpochNo -> DB.DbLovelace
-    -> ReaderT SqlBackend m ()
-insertEpochRewardTotalReceived epochNo total =
-  void . DB.insertEpochRewardTotalReceived $
-    DB.EpochRewardTotalReceived
-      { DB.epochRewardTotalReceivedEarnedEpoch = unEpochNo epochNo
-      , DB.epochRewardTotalReceivedAmount = total
-      }
 
 insertStakeSlice
     :: (MonadBaseControl IO m, MonadIO m)
