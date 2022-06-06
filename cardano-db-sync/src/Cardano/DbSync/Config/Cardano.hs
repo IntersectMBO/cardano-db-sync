@@ -13,23 +13,22 @@ module Cardano.DbSync.Config.Cardano
   ) where
 
 import qualified Cardano.Chain.Genesis as Byron
-import qualified Cardano.Chain.Update as Byron
 import           Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 
 import qualified Cardano.Crypto.Hash.Class as Crypto
 
 import           Cardano.Ledger.Alonzo.Genesis (AlonzoGenesis)
-import qualified Cardano.Ledger.BaseTypes as Ledger
 
 import           Cardano.DbSync.Config.Alonzo
 import           Cardano.DbSync.Config.Byron
 import           Cardano.DbSync.Config.Shelley
 import           Cardano.DbSync.Config.Types
 import           Cardano.DbSync.Error
+import           Cardano.DbSync.Types
 
 import           Control.Monad.Trans.Except (ExceptT)
 
-import           Ouroboros.Consensus.Cardano (Nonce (..))
+import           Ouroboros.Consensus.Cardano (Nonce (..), ProtVer (ProtVer))
 import qualified Ouroboros.Consensus.Cardano as Consensus
 import qualified Ouroboros.Consensus.Cardano.Node as Consensus
 import           Ouroboros.Consensus.Config (TopLevelConfig (..))
@@ -39,6 +38,7 @@ import           Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import           Ouroboros.Consensus.Shelley.Eras (StandardCrypto, StandardShelley)
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
+import qualified Ouroboros.Consensus.Shelley.Node.Praos as Consensus
 
 
 -- Usually only one constructor, but may have two when we are preparing for a HFC event.
@@ -77,7 +77,7 @@ mkTopLevelConfig cfg = Consensus.pInfoConfig $ mkProtocolInfoCardano cfg []
 -- wrong. This really needs to be a done a different way.
 -- mkProtocolCardano :: GenesisConfig -> Protocol m CardanoBlock CardanoProtocol
 mkProtocolInfoCardano :: GenesisConfig
-                      -> [Consensus.TPraosLeaderCredentials StandardCrypto] -- this is not empty only in tests
+                      -> [Consensus.ShelleyLeaderCredentials StandardCrypto] -- this is not empty only in tests
                       -> ProtocolInfo IO CardanoBlock
 mkProtocolInfoCardano ge shelleyCred =
   case ge of
@@ -97,31 +97,30 @@ mkProtocolInfoCardano ge shelleyCred =
             , Consensus.shelleyBasedLeaderCredentials = shelleyCred
             }
           Consensus.ProtocolParamsShelley
-            { Consensus.shelleyProtVer = shelleyProtVer dnc
+            { Consensus.shelleyProtVer = ProtVer 3 0
             , Consensus.shelleyMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
             }
           Consensus.ProtocolParamsAllegra
-            { Consensus.allegraProtVer = shelleyProtVer dnc
+            { Consensus.allegraProtVer = ProtVer 4 0
             , Consensus.allegraMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
             }
           Consensus.ProtocolParamsMary
-            { Consensus.maryProtVer = shelleyProtVer dnc
+            { Consensus.maryProtVer = ProtVer 5 0
             , Consensus.maryMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
             }
           Consensus.ProtocolParamsAlonzo
-            { Consensus.alonzoProtVer = shelleyProtVer dnc
+            { Consensus.alonzoProtVer = ProtVer 6 0
             , Consensus.alonzoMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
+            }
+          Consensus.ProtocolParamsBabbage
+            { Consensus.babbageProtVer = ProtVer 7 0
+            , Consensus.babbageMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
             }
           (Consensus.ProtocolTransitionParamsShelleyBased () $ dncShelleyHardFork dnc)
           (Consensus.ProtocolTransitionParamsShelleyBased () $ dncAllegraHardFork dnc)
           (Consensus.ProtocolTransitionParamsShelleyBased () $ dncMaryHardFork dnc)
           (Consensus.ProtocolTransitionParamsShelleyBased alonzoGenesis $ dncAlonzoHardFork dnc)
+          (Consensus.ProtocolTransitionParamsShelleyBased alonzoGenesis $ dncBabbageHardFork dnc)
 
 shelleyPraosNonce :: ShelleyConfig -> Nonce
 shelleyPraosNonce sCfg = Nonce (Crypto.castHash . unGenesisHashShelley $ scGenesisHash sCfg)
-
-shelleyProtVer :: SyncNodeConfig -> Ledger.ProtVer
-shelleyProtVer dnc =
-  let bver = dncByronProtocolVersion dnc in
-  Ledger.ProtVer (fromIntegral $ Byron.pvMajor bver) (fromIntegral $ Byron.pvMinor bver)
-

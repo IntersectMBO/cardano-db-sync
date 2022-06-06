@@ -20,6 +20,9 @@ import           Cardano.Prelude
 import           Cardano.Api.Shelley (TxMetadataValue (..))
 
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
+import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
+import qualified Cardano.Ledger.Core as Core
+import           Cardano.Ledger.Era (Era)
 import qualified Cardano.Ledger.Shelley.Metadata as Shelley
 import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as ShelleyMa
 
@@ -34,7 +37,7 @@ import qualified Data.Text.Lazy as Text.Lazy
 import           Data.Tuple.Extra (both)
 import qualified Data.Vector as Vector
 
-import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlonzo, StandardMary)
+import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardMary)
 
 -- This module should not even exist. The only reason it does is because functionality
 -- that was in cardano-node commit 0dc6efa467a0fdae7aba7c5bcd5c657e189c8f19 and being
@@ -45,9 +48,9 @@ fromAllegraMetadata :: ShelleyMa.AuxiliaryData StandardAllegra -> Map Word64 TxM
 fromAllegraMetadata (ShelleyMa.AuxiliaryData mdMap _scripts) =
   Map.map fromMetadatum mdMap
 
-fromAlonzoMetadata :: Alonzo.AuxiliaryData StandardAlonzo -> Map Word64 TxMetadataValue
-fromAlonzoMetadata (Alonzo.AuxiliaryData mdMap _scripts) =
-  Map.map fromMetadatum mdMap
+fromAlonzoMetadata :: (Era era, Core.Script era ~ Alonzo.Script era) => Alonzo.AuxiliaryData era -> Map Word64 TxMetadataValue
+fromAlonzoMetadata aux =
+  Map.map fromMetadatum $ Alonzo.txMD aux
 
 fromShelleyMetadata :: Shelley.Metadata era -> Map Word64 TxMetadataValue
 fromShelleyMetadata (Shelley.Metadata mdMap) =

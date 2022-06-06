@@ -15,7 +15,8 @@ import           Cardano.Mock.ChainSync.Server
 
 import           Test.Tasty
 
-import           Test.Cardano.Db.Mock.Unit
+import qualified Test.Cardano.Db.Mock.Unit.Alonzo as Alonzo
+import qualified Test.Cardano.Db.Mock.Unit.Babbage as Babbage
 
 main :: IO ()
 main = do
@@ -32,7 +33,9 @@ tests iom = do
     pure $
       testGroup
         "cardano-chain-gen"
-          [ unitTests iom knownMigrationsPlain
+          [
+            Babbage.unitTests iom knownMigrationsPlain
+          , Alonzo.unitTests iom knownMigrationsPlain
           ]
   where
     knownMigrationsPlain :: [(Text, Text)]

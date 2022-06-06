@@ -1,6 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -30,7 +31,6 @@ import           Cardano.Ledger.Compactible
 import           Cardano.Ledger.Val
 import           Cardano.Prelude
 
-import qualified Data.Compact.SplitMap as SplitMap
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 
@@ -49,8 +49,9 @@ ledgerAddrBalance addr lsc =
       LedgerStateAllegra st -> getShelleyBalance addr $ getUTxO st
       LedgerStateMary st -> getShelleyBalance addr $ getUTxO st
       LedgerStateAlonzo st -> getAlonzoBalance addr $ getUTxO st
+      LedgerStateBabbage _st -> panic "undefined Babbage ledgerAddrBalance"
   where
-    getUTxO :: LedgerState (ShelleyBlock era) -> Shelley.UTxO era
+    getUTxO :: LedgerState (ShelleyBlock p era) -> Shelley.UTxO era
     getUTxO = Shelley._utxo . Shelley.lsUTxOState . Shelley.esLState . Shelley.nesEs . shelleyLedgerState
 
 getByronBalance :: Text -> Byron.UTxO -> Either Text Word64
@@ -71,7 +72,7 @@ getShelleyBalance
     => Text -> Shelley.UTxO era -> Either Text Word64
 getShelleyBalance addrText utxo = do
     caddr <- covertToCompactAddress addrText
-    Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue caddr) (SplitMap.elems $ Shelley.unUTxO utxo)
+    Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue caddr) (Map.elems $ Shelley.unUTxO utxo)
   where
     compactTxOutValue :: CompactAddr (Crypto era) -> Ledger.TxOut era -> Maybe Coin
     compactTxOutValue caddr (Shelley.TxOutCompact scaddr v) =
@@ -82,7 +83,7 @@ getShelleyBalance addrText utxo = do
 getAlonzoBalance :: Text -> Shelley.UTxO (AlonzoEra StandardCrypto) -> Either Text Word64
 getAlonzoBalance addrText utxo = do
     caddr <- covertToCompactAddress addrText
-    Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue caddr) (SplitMap.elems $ Shelley.unUTxO utxo)
+    Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue caddr) (Map.elems $ Shelley.unUTxO utxo)
   where
     compactTxOutValue
       :: CompactAddr (Crypto (AlonzoEra StandardCrypto)) -> Alonzo.TxOut (AlonzoEra StandardCrypto) -> Maybe Coin

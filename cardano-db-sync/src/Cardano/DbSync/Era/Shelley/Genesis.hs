@@ -40,7 +40,6 @@ import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import qualified Cardano.Ledger.Shelley.UTxO as Shelley
 
 import qualified Data.ByteString.Char8 as BS
-import qualified Data.Compact.SplitMap as SplitMap
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 import           Data.Time.Clock (UTCTime (..))
@@ -229,7 +228,9 @@ insertTxOuts trce blkId (ShelleyTx.TxIn txInId _, txOut) = do
               , DB.txOutPaymentCred = Generic.maybePaymentCred (txOutAddress txOut)
               , DB.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
               , DB.txOutValue = Generic.coinToDbLovelace (txOutCoin txOut)
-              , DB.txOutDataHash = Nothing -- No data hash in Shelley Genesis
+              , DB.txOutDataHash = Nothing -- No output datum in Shelley Genesis
+              , DB.txOutInlineDatumId = Nothing
+              , DB.txOutReferenceScriptId = Nothing
               }
   where
     txOutAddress :: Shelley.TxOut StandardShelley -> Ledger.Addr StandardCrypto
@@ -264,11 +265,11 @@ insertStaking tracer cache blkId genesis = do
               }
   let params = zip [0..] $ Map.elems (sgsPools $ sgStaking genesis)
   let network = sgNetworkId genesis
-  forM_ params $ uncurry (insertPoolRegister tracer uninitiatedCache (Left 2) network 0 blkId txId)
+  forM_ params $ uncurry (insertPoolRegister tracer uninitiatedCache (const False) network 0 blkId txId)
   let stakes = zip [0..] $ Map.toList (sgsStake $ sgStaking genesis)
   forM_ stakes $ \(n, (keyStaking, keyPool)) -> do
     insertStakeRegistration (EpochNo 0) txId (2 * n) (Generic.annotateStakingCred network (KeyHashObj keyStaking))
-    insertDelegation cache network 0 0 txId (2 * n + 1) Nothing (KeyHashObj keyStaking) [] keyPool
+    insertDelegation cache network 0 0 txId (2 * n + 1) Nothing (KeyHashObj keyStaking) keyPool
 
 -- -----------------------------------------------------------------------------
 
@@ -297,7 +298,7 @@ genesisTxoAssocList =
 
 genesisUtxOs :: ShelleyGenesis StandardShelley -> [(ShelleyTx.TxIn (Crypto StandardShelley), Shelley.TxOut StandardShelley)]
 genesisUtxOs =
-    SplitMap.toList . Shelley.unUTxO . Shelley.genesisUTxO
+    Map.toList . Shelley.unUTxO . Shelley.genesisUTxO
 
 configStartTime :: ShelleyGenesis StandardShelley -> UTCTime
 configStartTime = roundToMillseconds . Shelley.sgSystemStart

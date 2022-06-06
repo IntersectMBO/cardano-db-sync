@@ -28,6 +28,7 @@ module Cardano.Db.Query
   , queryEpochNo
   , queryRewardCount
   , queryRewards
+  , queryNormalEpochRewardCount
   , queryNullPoolRewardExists
   , queryEpochRewardCount
   , queryRewardsSpend
@@ -124,8 +125,8 @@ import           Database.Esqueleto.Experimental (Entity, From, PersistEntity, P
                    SqlBackend, SqlExpr, SqlQuery, Value (Value, unValue), ValueList, count,
                    countRows, desc, entityKey, entityVal, exists, from, in_, innerJoin, isNothing,
                    just, leftJoin, limit, max_, min_, notExists, not_, on, orderBy, select,
-                   subList_select, sum_, table, type (:&) ((:&)), unSqlBackendKey, val, where_,
-                   (&&.), (<=.), (==.), (>.), (>=.), (?.), (^.), (||.))
+                   subList_select, sum_, table, type (:&) ((:&)), unSqlBackendKey, val, valList,
+                   where_, (&&.), (<=.), (==.), (>.), (>=.), (?.), (^.), (||.))
 import           Database.Esqueleto.Experimental.From (ToFrom (..))
 import           Database.Persist.Class.PersistQuery (selectList)
 
@@ -136,6 +137,7 @@ import           Database.Persist.Types (SelectOpt (Asc))
 
 {- HLINT ignore "Redundant ^." -}
 {- HLINT ignore "Fuse on/on" -}
+{- HLINT ignore "Reduce duplication" -}
 
 -- If you squint, these Esqueleto queries almost look like SQL queries.
 
@@ -291,7 +293,7 @@ queryBlocksAfterSlot slotNo = do
 
 -- | Calculate the Epoch table entry for the specified epoch.
 -- When syncing the chain or filling an empty table, this is called at each epoch boundary to
--- calculate the Epcoh entry for the last epoch.
+-- calculate the Epoch entry for the last epoch.
 -- When following the chain, this is called for each new block of the current epoch.
 queryCalcEpochEntry :: MonadIO m => Word64 -> ReaderT SqlBackend m Epoch
 queryCalcEpochEntry epochNum = do
@@ -438,6 +440,17 @@ queryRewards epochNum = do
     where_ (rwds ^. RewardEarnedEpoch ==. val epochNum)
     pure rwds
   pure $ entityVal <$> res
+
+queryNormalEpochRewardCount
+    :: MonadIO m
+    => Word64 -> ReaderT SqlBackend m Word64
+queryNormalEpochRewardCount epochNum = do
+  res <- select $ do
+    rwd <- from $ table @Reward
+    where_ (rwd ^. RewardSpendableEpoch ==. val epochNum)
+    where_ (rwd ^. RewardType `in_` valList [RwdMember, RwdLeader])
+    pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
 
 queryNullPoolRewardExists :: MonadIO m => Reward -> ReaderT SqlBackend m Bool
 queryNullPoolRewardExists newRwd = do

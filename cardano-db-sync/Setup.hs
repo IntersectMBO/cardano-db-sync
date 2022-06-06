@@ -1,4 +1,3 @@
-module Main where
 
 import           Cardano.Crypto.Hash
 import           Control.Monad (foldM, forM)
@@ -76,15 +75,18 @@ generateMigrations locInfo srcDir outDir = do
       rewriteFileEx normal "gen/MigrationValidations.hs" $
         unlines
           [ "{-# LANGUAGE OverloadedStrings #-}"
-          , "module MigrationValidations where"
+          , "module MigrationValidations"
+          , "  ( KnownMigration (..)"
+          , "  , knownMigrations"
+          , "  ) where"
           , ""
           , "import Prelude"
           , "import Data.Text"
           , ""
-          , "data KnownMigration = KnownMigration { hash :: Text, filepath :: Text } deriving (Eq, Show)"
-          , ""
-          , "-- 'Known' migrations is limited to stages 1, 2 and 3 and only these are validated."
-          , "-- Migrations with stages < 1 or > 3 are not validated but will be applied."
+          , "data KnownMigration = KnownMigration"
+          , "  { hash :: !Text"
+          , "  , filepath :: !Text"
+          , "  } deriving (Eq, Show)"
           , ""
           , "knownMigrations :: [KnownMigration]"
           , "knownMigrations = "

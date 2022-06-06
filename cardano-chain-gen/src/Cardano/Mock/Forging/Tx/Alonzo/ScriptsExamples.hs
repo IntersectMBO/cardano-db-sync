@@ -1,8 +1,26 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples where
+module Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
+  ( alwaysSucceedsScript
+  , alwaysSucceedsScriptHash
+  , alwaysSucceedsScriptAddr
+  , alwaysSucceedsScriptStake
+  , alwaysFailsScript
+  , alwaysFailsScriptHash
+  , alwaysFailsScriptAddr
+  , alwaysFailsScriptStake
+  , plutusDataList
+  , alwaysMintScript
+  , alwaysMintScriptHash
+  , alwaysMintScriptAddr
+  , alwaysMintScriptStake
+  , scriptHash
+  , assetNames
+  ) where
 
 import           Cardano.Ledger.Address
 import           Cardano.Ledger.Alonzo
@@ -10,20 +28,23 @@ import           Cardano.Ledger.Alonzo.Data
 import           Cardano.Ledger.Alonzo.Language
 import           Cardano.Ledger.Alonzo.Scripts
 import           Cardano.Ledger.BaseTypes
+import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Credential
 import           Cardano.Ledger.Crypto (StandardCrypto)
 import           Cardano.Ledger.Era
 import           Cardano.Ledger.Hashes
 import           Cardano.Ledger.Mary.Value
 
+import           Ouroboros.Consensus.Cardano.Block (StandardAlonzo)
+
 import qualified Plutus.V1.Ledger.Examples as Plutus
 import qualified PlutusCore.Data as Plutus
 
-alwaysSucceedsScript :: Script (AlonzoEra StandardCrypto)
+alwaysSucceedsScript :: forall era. Script era
 alwaysSucceedsScript = PlutusScript PlutusV1 (Plutus.alwaysSucceedingNAryFunction 0)
 
 alwaysSucceedsScriptHash :: ScriptHash StandardCrypto
-alwaysSucceedsScriptHash = hashScript @(AlonzoEra StandardCrypto) alwaysSucceedsScript
+alwaysSucceedsScriptHash = scriptHash @StandardAlonzo alwaysSucceedsScript
 
 alwaysSucceedsScriptAddr :: Addr StandardCrypto
 alwaysSucceedsScriptAddr = Addr Testnet (ScriptHashObj alwaysSucceedsScriptHash) StakeRefNull
@@ -32,11 +53,11 @@ alwaysSucceedsScriptStake :: StakeCredential StandardCrypto
 alwaysSucceedsScriptStake = ScriptHashObj alwaysSucceedsScriptHash
 
 
-alwaysFailsScript :: Script (AlonzoEra StandardCrypto)
+alwaysFailsScript :: forall era. Script era
 alwaysFailsScript = PlutusScript PlutusV1 (Plutus.alwaysFailingNAryFunction 0)
 
 alwaysFailsScriptHash :: ScriptHash StandardCrypto
-alwaysFailsScriptHash = hashScript @(AlonzoEra StandardCrypto) alwaysFailsScript
+alwaysFailsScriptHash = scriptHash @StandardAlonzo alwaysFailsScript
 
 -- addr_test1wrqvvu0m5jpkgxn3hwfd829hc5kfp0cuq83tsvgk44752dsz4mvrk
 alwaysFailsScriptAddr :: Addr StandardCrypto
@@ -45,16 +66,14 @@ alwaysFailsScriptAddr = Addr Testnet (ScriptHashObj alwaysFailsScriptHash) Stake
 alwaysFailsScriptStake :: StakeCredential StandardCrypto
 alwaysFailsScriptStake = ScriptHashObj alwaysFailsScriptHash
 
-
-plutusDataList :: Data (AlonzoEra StandardCrypto)
+plutusDataList :: forall era. Data era
 plutusDataList = Data $ Plutus.List []
 
-
-alwaysMintScript :: Script (AlonzoEra StandardCrypto)
+alwaysMintScript :: forall era. Script era
 alwaysMintScript = PlutusScript PlutusV1 (Plutus.alwaysFailingNAryFunction 1)
 
 alwaysMintScriptHash :: ScriptHash StandardCrypto
-alwaysMintScriptHash = hashScript @(AlonzoEra StandardCrypto) alwaysMintScript
+alwaysMintScriptHash = scriptHash @StandardAlonzo alwaysMintScript
 
 alwaysMintScriptAddr :: Addr StandardCrypto
 alwaysMintScriptAddr = Addr Testnet (ScriptHashObj alwaysMintScriptHash) StakeRefNull
@@ -62,6 +81,14 @@ alwaysMintScriptAddr = Addr Testnet (ScriptHashObj alwaysMintScriptHash) StakeRe
 alwaysMintScriptStake :: StakeCredential StandardCrypto
 alwaysMintScriptStake = ScriptHashObj alwaysMintScriptHash
 
+scriptHash
+    :: forall era.
+    ( Crypto era ~ StandardCrypto
+    , Core.Script era ~ Script era
+    , ValidateScript era
+    )
+    => Script era -> ScriptHash StandardCrypto
+scriptHash = hashScript @era
 
 assetNames :: [AssetName]
 assetNames =

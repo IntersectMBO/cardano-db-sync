@@ -5,14 +5,52 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Test.Cardano.Db.Mock.Validate where
+module Test.Cardano.Db.Mock.Validate
+  ( assertBlocksCount
+  , assertBlocksCountDetailed
+  , assertTxCount
+  , assertRewardCount
+  , assertBlockNoBackoff
+  , assertBlockNoBackoffTimes
+  , assertEqQuery
+  , assertEqBackoff
+  , assertBackoff
+  , assertQuery
+  , assertBabbageCounts
+  , assertPoolLayerCounters
+  , runQuery
+  , addPoolCounters
+  , assertCurrentEpoch
+  , assertAddrValues
+  , assertRight
+  , assertCertCounts
+  , assertRewardCounts
+  , assertEpochStake
+  , assertEpochStakeEpoch
+  , assertAlonzoCounts
+  , assertScriptCert
+  , assertPoolCounters
+  , poolCountersQuery
+  , checkStillRuns
+  ) where
 
 import           Cardano.Db
+
+import           Cardano.DbSync.Era.Shelley.Generic.Util
+
+import qualified Cardano.Ledger.Address as Ledger
+import           Cardano.Ledger.BaseTypes
+import           Cardano.Ledger.Era
+
+import           Cardano.SMASH.Server.PoolDataLayer
+import           Cardano.SMASH.Server.Types
+
 import           Control.Concurrent
 import           Control.Exception
 import           Control.Monad (forM_)
 import           Control.Monad.Logger (NoLoggingT)
 import           Control.Monad.Trans.Reader (ReaderT)
+
 import           Data.Bifunctor (bimap, first)
 import           Data.ByteString (ByteString)
 import           Data.Either (isRight)
@@ -22,22 +60,11 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Text.Encoding
 import           Data.Word (Word64)
-import           GHC.Records (HasField (..))
 
 import           Database.Esqueleto.Legacy (InnerJoin (..), SqlExpr, countRows, from, on, select,
                    unValue, val, where_, (==.), (^.))
 import           Database.Persist.Sql (Entity, SqlBackend, entityVal)
 import           Database.PostgreSQL.Simple (SqlError (..))
-
-import qualified Cardano.Ledger.Address as Ledger
-import           Cardano.Ledger.BaseTypes
-import qualified Cardano.Ledger.Core as Core
-import           Cardano.Ledger.Era
-
-import           Cardano.DbSync.Era.Shelley.Generic.Util
-
-import           Cardano.SMASH.Server.PoolDataLayer
-import           Cardano.SMASH.Server.Types
 
 import           Ouroboros.Consensus.Cardano.Block
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
@@ -47,7 +74,9 @@ import           Cardano.Mock.Forging.Types
 
 import           Test.Cardano.Db.Mock.Config
 
-import           Test.Tasty.HUnit
+import           Test.Tasty.HUnit (assertEqual, assertFailure)
+
+{- HLINT ignore "Reduce duplication" -}
 
 assertBlocksCount :: DBSyncEnv -> Word -> IO ()
 assertBlocksCount env n = do
@@ -127,9 +156,15 @@ migrationNotDoneYet :: Text -> Bool
 migrationNotDoneYet txt =
     Text.isPrefixOf "relation" txt && Text.isSuffixOf "does not exist" txt
 
-assertAddrValues :: (Crypto era ~ StandardCrypto, HasField "address" (Core.TxOut era) (Ledger.Addr (Crypto era)))
+assertCurrentEpoch :: DBSyncEnv -> Word64 -> IO ()
+assertCurrentEpoch env expected =
+    assertEqBackoff env q (Just expected) defaultDelays "Unexpected epoch stake counts"
+  where
+    q = queryCurrentEpochNo
+
+assertAddrValues :: (Crypto era ~ StandardCrypto, Era era)
                  => DBSyncEnv -> UTxOIndex era -> DbLovelace
-                 -> LedgerState (ShelleyBlock era) -> IO ()
+                 -> LedgerState (ShelleyBlock p era) -> IO ()
 assertAddrValues env ix expected sta = do
     addr <- assertRight $ resolveAddress ix sta
     let addrBs = Ledger.serialiseAddr addr
@@ -137,9 +172,10 @@ assertAddrValues env ix expected sta = do
     assertEqBackoff env q expected defaultDelays "Unexpected Balance"
 
 assertRight :: Show err => Either err a -> IO a
-assertRight ei = case ei of
-  Right a -> pure a
-  Left err -> assertFailure (show err)
+assertRight ei =
+  case ei of
+    Right a -> pure a
+    Left err -> assertFailure (show err)
 
 assertCertCounts :: DBSyncEnv -> (Word64, Word64, Word64, Word64) -> IO ()
 assertCertCounts env expected =
@@ -158,7 +194,7 @@ assertCertCounts env expected =
       pure (registr - 5, deregistr, deleg - 5, withdrawal)
 
 assertRewardCounts :: (Crypto era ~ StandardCrypto)
-                   => DBSyncEnv -> LedgerState (ShelleyBlock era) -> Bool -> Maybe Word64
+                   => DBSyncEnv -> LedgerState (ShelleyBlock p era) -> Bool -> Maybe Word64
                    -> [(StakeIndex, (Word64, Word64, Word64, Word64, Word64))] -> IO ()
 assertRewardCounts env st filterAddr mEpoch expected = do
     assertEqBackoff env (groupByAddress <$> q) expectedMap defaultDelays "Unexpected rewards count"
@@ -249,6 +285,36 @@ assertAlonzoCounts env expected =
       pure ( scripts, redeemers, datums, colInputs, scriptOutputs, redeemerTxIn, invalidTx
            , txIninvalidTx)
 
+assertBabbageCounts :: DBSyncEnv -> (Word64, Word64, Word64, Word64, Word64, Word64, Word64, Word64, Word64, Word64, Word64, Word64, Word64) -> IO ()
+assertBabbageCounts env expected =
+    assertEqBackoff env q expected defaultDelays "Unexpected Babbage counts"
+  where
+    q = do
+      scripts <- maybe 0 unValue . listToMaybe <$>
+                    (select . from $ \(_a :: SqlExpr (Entity Script)) -> pure countRows)
+      redeemers <- maybe 0 unValue . listToMaybe <$>
+                    (select . from $ \(_a :: SqlExpr (Entity Redeemer)) -> pure countRows)
+      datums <- maybe 0 unValue . listToMaybe <$>
+                    (select . from $ \(_a :: SqlExpr (Entity Datum)) -> pure countRows)
+      colInputs <- maybe 0 unValue . listToMaybe <$>
+              (select . from $ \(_a :: SqlExpr (Entity CollateralTxIn)) -> pure countRows)
+      scriptOutputs <- fromIntegral . length <$> queryScriptOutputs
+      redeemerTxIn <- fromIntegral . length <$> queryTxInRedeemer
+      invalidTx <- fromIntegral . length <$> queryInvalidTx
+      txIninvalidTx <- fromIntegral . length <$> queryTxInFailedTx
+      redeemerData <- maybe 0 unValue . listToMaybe <$>
+                    (select . from $ \(_a :: SqlExpr (Entity RedeemerData)) -> pure countRows)
+      referenceTxIn <- maybe 0 unValue . listToMaybe <$>
+                    (select . from $ \(_a :: SqlExpr (Entity ReferenceTxIn)) -> pure countRows)
+      collTxOut <- maybe 0 unValue . listToMaybe <$>
+                    (select . from $ \(_a :: SqlExpr (Entity CollateralTxOut)) -> pure countRows)
+      inlineDatum <- maybe 0 unValue . listToMaybe <$>
+                    (select . from $ \txOut -> where_ (isJust (txOut ^. TxOutInlineDatumId)) >> pure countRows)
+      referenceScript <- maybe 0 unValue . listToMaybe <$>
+                    (select . from $ \txOut -> where_ (isJust (txOut ^. TxOutReferenceScriptId)) >> pure countRows)
+      pure ( scripts, redeemers, datums, colInputs, scriptOutputs, redeemerTxIn, invalidTx
+           , txIninvalidTx, redeemerData, referenceTxIn, collTxOut, inlineDatum, referenceScript)
+
 assertScriptCert :: DBSyncEnv -> (Word64, Word64, Word64, Word64) -> IO ()
 assertScriptCert env expected =
     assertEqBackoff env q expected defaultDelays "Unexpected Script Stake counts"
@@ -286,7 +352,7 @@ addPoolCounters (a,b,c,d,e,f) (a',b',c',d',e',f') = (a + a',b + b',c + c',d + d'
 assertPoolLayerCounters :: Crypto era ~ StandardCrypto
                         => DBSyncEnv -> (Word64, Word64)
                         -> [(PoolIndex, (Either DBFail Bool, Bool, Bool))]
-                        -> LedgerState (ShelleyBlock era)
+                        -> LedgerState (ShelleyBlock p era)
                         -> IO ()
 assertPoolLayerCounters env (expectedRetired, expectedDelisted) expResults st = do
     poolLayer <- getPoolLayer env

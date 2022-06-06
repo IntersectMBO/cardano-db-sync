@@ -14,12 +14,12 @@ module Cardano.Mock.Forging.Tx.Generic
   , createStakeCredentials
   , createPaymentCredentials
   , mkDummyScriptHash
+  , unregisteredGenesisKeys
   ) where
 
 import           Cardano.Prelude hiding (length, (.))
 
 import           Data.Coerce (coerce)
-import qualified Data.Compact.SplitMap as SplitMap
 import           Data.List (nub)
 import           Data.List.Extra ((!?))
 import qualified Data.Map.Strict as Map
@@ -31,7 +31,7 @@ import           Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Credential
 import           Cardano.Ledger.Crypto (ADDRHASH)
-import           Cardano.Ledger.Era (Crypto)
+import           Cardano.Ledger.Era (Crypto, Era (..))
 import           Cardano.Ledger.Hashes (ScriptHash (ScriptHash))
 import           Cardano.Ledger.Keys
 import           Cardano.Ledger.Shelley.LedgerState hiding (LedgerState)
@@ -51,8 +51,8 @@ import qualified Cardano.Crypto.Hash as Hash
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Types
 
-resolveAddress :: forall era. (Crypto era ~ StandardCrypto, HasField "address" (Core.TxOut era) (Addr (Crypto era)))
-               => UTxOIndex era -> LedgerState (ShelleyBlock era)
+resolveAddress :: forall era p. (Crypto era ~ StandardCrypto, Era era)
+               => UTxOIndex era -> LedgerState (ShelleyBlock p era)
                -> Either ForgingError (Addr (Crypto era))
 resolveAddress index st = case index of
     UTxOAddressNew n -> Right $ Addr Testnet (unregisteredAddresses !! n) StakeRefNull
@@ -62,10 +62,10 @@ resolveAddress index st = case index of
     UTxOAddress addr -> Right addr
     UTxOAddressNewWithPtr n ptr ->
       Right $ Addr Testnet (unregisteredAddresses !! n) (StakeRefPtr ptr)
-    _ -> getField @"address" . snd . fst <$> resolveUTxOIndex index st
+    _ -> getTxOutAddr . snd . fst <$> resolveUTxOIndex index st
 
-resolveUTxOIndex :: forall era. (Crypto era ~ StandardCrypto, HasField "address" (Core.TxOut era) (Addr (Crypto era)))
-                 => UTxOIndex era -> LedgerState (ShelleyBlock era)
+resolveUTxOIndex :: forall era p. (Crypto era ~ StandardCrypto, Era era)
+                 => UTxOIndex era -> LedgerState (ShelleyBlock p era)
                  -> Either ForgingError ((TxIn (Crypto era), Core.TxOut era), UTxOIndex era)
 resolveUTxOIndex index st = toLeft $ case index of
     UTxOIndex n -> utxoPairs !? n
@@ -83,10 +83,10 @@ resolveUTxOIndex index st = toLeft $ case index of
       find (hasAddr addr) utxoPairs
   where
     utxoPairs :: [(TxIn (Crypto era), Core.TxOut era)]
-    utxoPairs = SplitMap.toList $ unUTxO $ _utxo $ lsUTxOState $ esLState $
+    utxoPairs = Map.toList $ unUTxO $ _utxo $ lsUTxOState $ esLState $
         nesEs $ Consensus.shelleyLedgerState st
 
-    hasAddr addr (_, txOut) = addr == getField @"address" txOut
+    hasAddr addr (_, txOut) = addr == getTxOutAddr txOut
     hasInput inp (inp', _) = inp == inp'
 
     toLeft :: Maybe (TxIn (Crypto era), Core.TxOut era) -> Either ForgingError ((TxIn (Crypto era), Core.TxOut era), UTxOIndex era)
@@ -94,7 +94,7 @@ resolveUTxOIndex index st = toLeft $ case index of
     toLeft (Just  (txIn, txOut)) = Right ((txIn, txOut), UTxOInput txIn)
 
 resolveStakeCreds :: (Crypto era ~ StandardCrypto)
-                  => StakeIndex -> LedgerState (ShelleyBlock era)
+                  => StakeIndex -> LedgerState (ShelleyBlock p era)
                   -> Either ForgingError (StakeCredential StandardCrypto)
 resolveStakeCreds indx st = case indx of
     StakeIndex n -> toEither $ fst <$> (rewardAccs !? n)
@@ -130,7 +130,7 @@ resolveStakeCreds indx st = case indx of
     toEither (Just a) = Right a
 
 resolvePool :: (Crypto era ~ StandardCrypto)
-            => PoolIndex -> LedgerState (ShelleyBlock era)
+            => PoolIndex -> LedgerState (ShelleyBlock p era)
             -> KeyHash 'StakePool StandardCrypto
 resolvePool pix st = case pix of
     PoolIndexId key -> key
@@ -140,7 +140,7 @@ resolvePool pix st = case pix of
     poolParams = Map.elems $ _pParams $ dpsPState $ lsDPState $ esLState $
         nesEs $ Consensus.shelleyLedgerState st
 
-allPoolStakeCert :: LedgerState (ShelleyBlock era) -> [DCert (Crypto era)]
+allPoolStakeCert :: LedgerState (ShelleyBlock p era) -> [DCert (Crypto era)]
 allPoolStakeCert st =
     DCertDeleg . RegKey <$> nub creds
   where
@@ -169,6 +169,13 @@ unregisteredAddresses =
 
 unregisteredPools :: [KeyHash 'StakePool StandardCrypto]
 unregisteredPools =
+  [ KeyHash "11138475621387465239786593240875634298756324987562352435"
+  , KeyHash "222462543264795t3298745680239746523897456238974563298348"
+  , KeyHash "33323876542397465497834256329487563428975634827956348975"
+  ]
+
+unregisteredGenesisKeys :: [KeyHash 'Genesis StandardCrypto]
+unregisteredGenesisKeys =
   [ KeyHash "11138475621387465239786593240875634298756324987562352435"
   , KeyHash "222462543264795t3298745680239746523897456238974563298348"
   , KeyHash "33323876542397465497834256329487563428975634827956348975"

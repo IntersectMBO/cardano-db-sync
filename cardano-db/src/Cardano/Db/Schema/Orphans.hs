@@ -2,7 +2,7 @@
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Cardano.Db.Schema.Orphans where
+module Cardano.Db.Schema.Orphans () where
 
 import           Cardano.Db.Types (DbInt65 (..), DbLovelace (..), DbWord64 (..), RewardSource,
                    ScriptPurpose, ScriptType (..), SyncState, readDbInt65, readRewardSource,

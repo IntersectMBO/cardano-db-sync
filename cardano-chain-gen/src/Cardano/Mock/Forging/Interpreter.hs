@@ -24,6 +24,7 @@ module Cardano.Mock.Forging.Interpreter
   , getCurrentEpoch
   , getCurrentSlot
   , forgeWithStakeCreds
+  , withBabbageLedgerState
   , withAlonzoLedgerState
   , withShelleyLedgerState
   , mkTxId
@@ -48,12 +49,14 @@ import           Data.Word (Word64)
 import           GHC.Generics (Generic)
 
 import           Cardano.Ledger.Alonzo.Tx
+import           Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Shelley.API.Mempool as Ledger
 import           Cardano.Ledger.Shelley.LedgerState (NewEpochState (..))
 import qualified Cardano.Ledger.TxIn as Ledger
 
 import           Cardano.Mock.ChainDB
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
+import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
 import           Cardano.Mock.Forging.Types
 
@@ -63,18 +66,18 @@ import           Ouroboros.Consensus.Block (BlockForging, BlockNo (..), BlockPro
                    ForgeStateInfo, ShouldForge (..), SlotNo (..), blockNo, blockSlot,
                    checkShouldForge)
 import qualified Ouroboros.Consensus.Block as Block
-import           Ouroboros.Consensus.Cardano.Block (AlonzoEra, LedgerState (..), ShelleyEra,
-                   StandardCrypto)
+import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardAlonzo,
+                   StandardBabbage, StandardShelley)
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
 import           Ouroboros.Consensus.Config (TopLevelConfig, configConsensus, configLedger,
                    topLevelConfigLedger)
 import           Ouroboros.Consensus.Forecast (Forecast (..))
 import qualified Ouroboros.Consensus.HardFork.Combinator.AcrossEras as Consensus
+import           Ouroboros.Consensus.HardFork.Combinator.Ledger ()
 import qualified Ouroboros.Consensus.HardFork.Combinator.Mempool as Consensus
 import           Ouroboros.Consensus.HeaderValidation (headerStateChainDep)
 import           Ouroboros.Consensus.Ledger.Abstract (TickedLedgerState, applyChainTick)
-import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState, Ticked, headerState,
-                   ledgerState)
+import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState, headerState, ledgerState)
 import           Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx, Validated,
                    WhetherToIntervene (..), applyTx)
 import           Ouroboros.Consensus.Ledger.SupportsProtocol (ledgerViewForecastAt)
@@ -82,8 +85,12 @@ import           Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo, pInfoBlock
                    pInfoConfig, pInfoInitLedger)
 import           Ouroboros.Consensus.Protocol.Abstract (ChainDepState, IsLeader, LedgerView,
                    tickChainDepState)
-import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock, shelleyLedgerState)
+import           Ouroboros.Consensus.Protocol.Praos.Translate ()
+import           Ouroboros.Consensus.Protocol.TPraos ()
+import           Ouroboros.Consensus.Shelley.HFEras ()
+import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock, Ticked, shelleyLedgerState)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Mempool as Consensus
+import           Ouroboros.Consensus.Shelley.Ledger.SupportsProtocol ()
 import qualified Ouroboros.Consensus.TypeFamilyWrappers as Consensus
 import           Ouroboros.Consensus.Util.IOLike (Exception, NoThunks, StrictMVar, modifyMVar,
                    newMVar, readMVar, swapMVar)
@@ -242,6 +249,7 @@ forgeWithStakeCreds inter = do
   tx <- case ledgerState st of
           LedgerStateShelley sts -> either throwIO (pure . TxShelley) $ Shelley.mkDCertTxPools sts
           LedgerStateAlonzo sta -> either throwIO (pure . TxAlonzo) $ Alonzo.mkDCertTxPools sta
+          LedgerStateBabbage stb -> either throwIO (pure . TxBabbage) $ Babbage.mkDCertTxPools stb
           _ -> throwIO UnexpectedEra
   forgeNextFindLeader inter [tx]
 
@@ -292,7 +300,7 @@ forgeNextLeaders interpreter txes possibleLeaders = do
         :: InterpreterState -> [BlockForging IO CardanoBlock] -> Int -> SlotNo -> Bool
         -> IO (CardanoBlock, Fingerprint)
     trySlots interState blockForgings numberOfTries currentSlot searching = do
-      when (numberOfTries > 140) (throwIO WentTooFar)
+      when (numberOfTries > 140) (throwIO $ WentTooFar currentSlot)
       mproof <- tryAllForging interpreter interState currentSlot blockForgings
       case mproof of
         Nothing ->
@@ -372,13 +380,25 @@ getCurrentEpoch inter = do
       LedgerStateAllegra st -> pure $ nesEL $ shelleyLedgerState st
       LedgerStateMary st -> pure $ nesEL $ shelleyLedgerState st
       LedgerStateAlonzo st -> pure $ nesEL $ shelleyLedgerState st
+      LedgerStateBabbage st -> pure $ nesEL $ shelleyLedgerState st
       _ -> throwIO UnexpectedEra
 
 getCurrentSlot :: Interpreter -> IO SlotNo
 getCurrentSlot interp = istSlot <$> readMVar (interpState interp)
 
+withBabbageLedgerState
+    :: Interpreter -> (LedgerState (ShelleyBlock PraosStandard StandardBabbage) -> Either ForgingError a)
+    -> IO a
+withBabbageLedgerState inter mk = do
+  st <- getCurrentLedgerState inter
+  case ledgerState st of
+    LedgerStateBabbage sta -> case mk sta of
+      Right a -> pure a
+      Left err -> throwIO err
+    _ -> throwIO ExpectedBabbageState
+
 withAlonzoLedgerState
-    :: Interpreter -> (LedgerState (ShelleyBlock (AlonzoEra StandardCrypto)) -> Either ForgingError a)
+    :: Interpreter -> (LedgerState (ShelleyBlock TPraosStandard StandardAlonzo) -> Either ForgingError a)
     -> IO a
 withAlonzoLedgerState inter mk = do
   st <- getCurrentLedgerState inter
@@ -389,7 +409,7 @@ withAlonzoLedgerState inter mk = do
     _ -> throwIO ExpectedAlonzoState
 
 withShelleyLedgerState
-    :: Interpreter -> (LedgerState (ShelleyBlock (ShelleyEra StandardCrypto)) -> Either ForgingError a)
+    :: Interpreter -> (LedgerState (ShelleyBlock TPraosStandard StandardShelley) -> Either ForgingError a)
     -> IO a
 withShelleyLedgerState inter mk = do
   st <- getCurrentLedgerState inter
@@ -402,8 +422,9 @@ withShelleyLedgerState inter mk = do
 mkTxId :: TxEra -> Ledger.TxId StandardCrypto
 mkTxId txe =
   case txe of
-    TxAlonzo tx -> Ledger.txid @(AlonzoEra StandardCrypto) (getField @"body" tx)
-    TxShelley tx -> Ledger.txid @(ShelleyEra StandardCrypto) (getField @"body" tx)
+    TxAlonzo tx -> Ledger.txid @StandardAlonzo (getField @"body" tx)
+    TxBabbage tx -> Ledger.txid @StandardBabbage (getField @"body" tx)
+    TxShelley tx -> Ledger.txid @StandardShelley (getField @"body" tx)
 
 mkValidated :: TxEra -> Validated (Consensus.GenTx CardanoBlock)
 mkValidated txe =
@@ -414,13 +435,18 @@ mkValidated txe =
           (S (S (S (S (Z (Consensus.WrapValidatedGenTx
             (Consensus.mkShelleyValidatedTx $ Ledger.unsafeMakeValidated tx)
         )))))))
-
     TxShelley tx ->
       Consensus.HardForkValidatedGenTx
         (Consensus.OneEraValidatedGenTx
           (S (Z (Consensus.WrapValidatedGenTx
             (Consensus.mkShelleyValidatedTx $ Ledger.unsafeMakeValidated tx)
         ))))
+    TxBabbage tx ->
+      Consensus.HardForkValidatedGenTx
+        (Consensus.OneEraValidatedGenTx
+          (S (S (S (S (S (Z (Consensus.WrapValidatedGenTx
+            (Consensus.mkShelleyValidatedTx $ Ledger.unsafeMakeValidated tx)
+        ))))))))
 
 mkForecast
     :: TopLevelConfig CardanoBlock -> ExtLedgerState CardanoBlock

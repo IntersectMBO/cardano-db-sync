@@ -30,7 +30,7 @@ import qualified Cardano.Chain.UTxO as Byron
 
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
 
-import           Cardano.Db (DbLovelace (..), SyncState (..))
+import           Cardano.Db (DbLovelace (..))
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 
 import           Cardano.DbSync.Types
@@ -229,6 +229,8 @@ insertTxOut _tracer txId index txout =
               , DB.txOutStakeAddressId = Nothing -- Byron does not have a stake address.
               , DB.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
               , DB.txOutDataHash = Nothing
+              , DB.txOutInlineDatumId = Nothing
+              , DB.txOutReferenceScriptId = Nothing
               }
 
 

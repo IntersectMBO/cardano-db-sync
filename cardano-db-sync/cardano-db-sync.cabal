@@ -68,12 +68,16 @@ library
                         Cardano.DbSync.Era.Shelley.Generic.EpochUpdate
                         Cardano.DbSync.Era.Shelley.Generic.ProtoParams
                         Cardano.DbSync.Era.Shelley.Generic.Rewards
-                        Cardano.DbSync.Era.Shelley.Generic.StakeCred
                         Cardano.DbSync.Era.Shelley.Generic.StakeDist
-                        Cardano.DbSync.Era.Shelley.Generic.StakePoolKeyHash
                         Cardano.DbSync.Era.Shelley.Generic.Metadata
                         Cardano.DbSync.Era.Shelley.Generic.ParamProposal
                         Cardano.DbSync.Era.Shelley.Generic.Tx
+                        Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra
+                        Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
+                        Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage
+                        Cardano.DbSync.Era.Shelley.Generic.Tx.Mary
+                        Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
+                        Cardano.DbSync.Era.Shelley.Generic.Tx.Types
                         Cardano.DbSync.Era.Shelley.Generic.Util
                         Cardano.DbSync.Era.Shelley.Generic.Witness
                         Cardano.DbSync.Era.Shelley.Genesis
@@ -123,11 +127,11 @@ library
                       , cardano-client
                       , cardano-crypto
                       , cardano-crypto-class
-                      , cardano-crypto-praos
                       , cardano-crypto-wrapper
                       , cardano-data
                       , cardano-db
                       , cardano-ledger-alonzo
+                      , cardano-ledger-babbage
                       , cardano-ledger-byron
                       , cardano-ledger-core
                       , cardano-ledger-shelley
@@ -137,10 +141,11 @@ library
                       , cardano-protocol-tpraos
                       , cardano-slotting
                       , cborg
-                      , compact-map
+                      , vector-map
                       , containers
                       , contra-tracer
                       , directory
+                      , either
                       , esqueleto
                       , extra
                       , filepath
@@ -154,6 +159,7 @@ library
                       , memory
                       , monad-control
                       , monad-logger
+                      , mtl
                       , network-mux
                       , ouroboros-consensus
                       , ouroboros-consensus-byron
@@ -201,7 +207,8 @@ executable cardano-db-sync
                         -Wunused-packages
                         -Wno-unsafe
                         -threaded
-                        -with-rtsopts=-N3
+                        -rtsopts
+                        "-with-rtsopts=-A16m -N3 --disable-delayed-os-memory-return"
 
   autogen-modules:      Paths_cardano_db_sync
                         MigrationValidations

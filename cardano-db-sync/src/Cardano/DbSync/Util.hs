@@ -24,23 +24,25 @@ module Cardano.DbSync.Util
   , textPrettyShow
   , textShow
   , thrd3
-  , tipBlockNo
   , traverseMEither
   , whenJust
+  , whenMaybe
+  , mlookup
+  , whenRight
   ) where
 
 import           Cardano.Prelude hiding (catch)
 
 import           Cardano.BM.Trace (Trace, logError, logInfo)
 
-import           Cardano.Db (SyncState (..), textShow)
+import           Cardano.Db (textShow)
 
 import           Cardano.Ledger.Coin (Coin (..))
 
 import           Cardano.DbSync.Config.Types ()
 import           Cardano.DbSync.Types
 
-import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..), withOrigin)
+import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
 
 import           Control.Exception.Lifted (catch)
 import           Control.Monad.Trans.Control (MonadBaseControl)
@@ -49,6 +51,7 @@ import           Data.ByteArray (ByteArrayAccess)
 import qualified Data.ByteArray
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.List as List
+import qualified Data.Map.Strict as Map
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import           Data.Text.ANSI (red)
@@ -59,7 +62,10 @@ import qualified Data.Time.Clock as Time
 import           Text.Show.Pretty (ppShow)
 
 import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
-import           Ouroboros.Network.Block (BlockNo (..), Tip, blockSlot, getPoint, getTipBlockNo)
+import           Ouroboros.Consensus.Protocol.Praos.Translate ()
+import           Ouroboros.Consensus.Shelley.HFEras ()
+import           Ouroboros.Consensus.Shelley.Ledger.SupportsProtocol ()
+import           Ouroboros.Network.Block (blockSlot, getPoint)
 import qualified Ouroboros.Network.Point as Point
 
 import           System.Environment (lookupEnv)
@@ -84,9 +90,6 @@ isSyncedWithinSeconds sd target =
 
 textPrettyShow :: Show a => a -> Text
 textPrettyShow = Text.pack . ppShow
-
-tipBlockNo :: Tip blk -> BlockNo
-tipBlockNo tip = withOrigin (BlockNo 0) identity (getTipBlockNo tip)
 
 -- | Run a function of type `a -> m (Either e ())` over a list and return
 -- the first `e` or `()`.
@@ -194,6 +197,19 @@ whenJust ma f =
     Strict.Nothing -> pure ()
     Strict.Just a -> f a
 
+whenMaybe :: Monad m => Maybe a -> (a -> m b) -> m (Maybe b)
+whenMaybe (Just a) f = Just <$> f a
+whenMaybe Nothing _f = pure Nothing
+
 thrd3 :: (a, b, c) -> c
 thrd3 (_, _, c) = c
 
+mlookup :: Ord k => Maybe k -> Map k a -> Maybe a
+mlookup Nothing _ = Nothing
+mlookup (Just k) mp = Map.lookup k mp
+
+whenRight :: Applicative m => Either e a -> (a -> m ()) -> m ()
+whenRight ma f =
+  case ma of
+    Right a -> f a
+    Left _ -> pure ()

@@ -1,4 +1,6 @@
-module Cardano.Db.Text ( textShow ) where
+module Cardano.Db.Text
+  ( textShow
+  ) where
 
 import           Data.Text (Text)
 import qualified Data.Text as Text

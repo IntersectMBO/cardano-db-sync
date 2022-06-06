@@ -144,7 +144,7 @@ insertBlockList
     :: SyncEnv -> [CardanoBlock]
     -> ExceptT SyncNodeError IO ()
 insertBlockList env blks =
-  newExceptT $ insertDefaultBlock env blks
+  newExceptT $ insertListBlocks env blks
 
 -- | Split the DbAction list into a prefix containing blocks to apply and a postfix.
 spanDbApply :: [DbAction] -> ([CardanoBlock], [DbAction])

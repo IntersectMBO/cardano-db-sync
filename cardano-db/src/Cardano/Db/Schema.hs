@@ -134,7 +134,24 @@ share
     stakeAddressId      StakeAddressId Maybe OnDeleteCascade
     value               DbLovelace          sqltype=lovelace
     dataHash            ByteString Maybe    sqltype=hash32type
+    inlineDatumId       DatumId Maybe       OnDeleteCascade
+    referenceScriptId   ScriptId Maybe      OnDeleteCascade
     UniqueTxout         txId index          -- The (tx_id, index) pair must be unique.
+
+  CollateralTxOut
+    txId                TxId                OnDeleteCascade     -- This type is the primary key for the 'tx' table.
+    index               Word16              sqltype=txindex
+    address             Text
+    addressRaw          ByteString
+    addressHasScript    Bool
+    paymentCred         ByteString Maybe    sqltype=hash28type
+    stakeAddressId      StakeAddressId Maybe OnDeleteCascade
+    value               DbLovelace          sqltype=lovelace
+    dataHash            ByteString Maybe    sqltype=hash32type
+    multiAssetsDescr    Text
+    inlineDatumId       DatumId Maybe       OnDeleteCascade
+    referenceScriptId   ScriptId Maybe      OnDeleteCascade
+    UniqueColTxout      txId index          -- The (tx_id, index) pair must be unique.
 
   TxIn
     txInId              TxId                OnDeleteCascade     -- The transaction where this is used as an input.
@@ -148,6 +165,12 @@ share
     txOutId             TxId                OnDeleteCascade     -- The transaction where this was created as an output.
     txOutIndex          Word16              sqltype=txindex
     UniqueColTxin       txInId txOutId txOutIndex
+
+  ReferenceTxIn
+    txInId              TxId                OnDeleteCascade     -- The transaction where this is used as an input.
+    txOutId             TxId                OnDeleteCascade     -- The transaction where this was created as an output.
+    txOutIndex          Word16              sqltype=txindex
+    UniqueRefTxin       txInId txOutId txOutIndex
 
   -- A table containing metadata about the chain. There will probably only ever be one
   -- row in this table.
@@ -377,7 +400,7 @@ share
     purpose             ScriptPurpose       sqltype=scriptpurposetype
     index               Word64              sqltype=word31type
     scriptHash          ByteString Maybe    sqltype=hash28type
-    datumId             DatumId             OnDeleteCascade
+    redeemerDataId      RedeemerDataId      OnDeleteCascade
     UniqueRedeemer      txId purpose index
 
   Script
@@ -393,7 +416,13 @@ share
     hash                ByteString          sqltype=hash32type
     txId                TxId                OnDeleteCascade
     value               Text Maybe          sqltype=jsonb
-    UniqueData          hash
+    UniqueDatum         hash
+
+  RedeemerData
+    hash                ByteString          sqltype=hash32type
+    txId                TxId                OnDeleteCascade
+    value               Text Maybe          sqltype=jsonb
+    UniqueRedeemerData  hash
 
   ExtraKeyWitness
     hash                ByteString          sqltype=hash28type
@@ -455,7 +484,7 @@ share
     monetaryExpandRate  Double              -- sqltype=interval
     treasuryGrowthRate  Double              -- sqltype=interval
     decentralisation    Double              -- sqltype=interval
-    entropy             ByteString Maybe    sqltype=hash32type
+    extraEntropy        ByteString Maybe    sqltype=hash32type
     protocolMajor       Word16              sqltype=word31type
     protocolMinor       Word16              sqltype=word31type
     minUtxoValue        DbLovelace          sqltype=lovelace
@@ -479,9 +508,10 @@ share
     UniqueEpochParam    epochNo blockId
 
   CostModel
+    hash                ByteString          sqltype=hash32type
     costs               Text                sqltype=jsonb
     blockId             BlockId             OnDeleteCascade
-    UniqueCostModel     costs
+    UniqueCostModel     hash
 
   -- -----------------------------------------------------------------------------------------------
   -- Pool offline (ie not on the blockchain) data.
@@ -545,7 +575,8 @@ schemaDocs =
       SchemaVersionStageThree # "Set up database views, indices etc."
 
     PoolHash --^ do
-      "A table for every unique pool key hash. The `id` field of this table is used as foreign keys in other tables."
+      "A table for every unique pool key hash. The `id` field of this table is used as foreign keys in other tables.\
+        \ The existance of an entry doesn't mean the pool is registered or in fact that is was ever registered."
       PoolHashHashRaw # "The raw bytes of the pool hash."
       PoolHashView # "The Bech32 encoding of the pool hash."
 
@@ -589,7 +620,9 @@ schemaDocs =
       TxScriptSize # "The sum of the script sizes (in bytes) of scripts in the transaction."
 
     StakeAddress --^ do
-      "A table of unique stake addresses. Can be an actual address or a script hash."
+      "A table of unique stake addresses. Can be an actual address or a script hash. \
+        \ The existance of an entry doesn't mean the address is registered or in fact that is was ever registered.\
+        \ For example a pool update may contain a stake address which was never registered."
       StakeAddressHashRaw # "The raw bytes of the stake address hash."
       StakeAddressView # "The Bech32 encoded version of the stake address."
       StakeAddressScriptHash # "The script hash, in case this address is locked by a script."
@@ -606,6 +639,23 @@ schemaDocs =
       TxOutStakeAddressId # "The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses)."
       TxOutValue # "The output value (in Lovelace) of the transaction output."
       TxOutDataHash # "The hash of the transaction output datum. (NULL for Txs without scripts)."
+      TxOutInlineDatumId # "The inline datum of the output, if it has one. New in v13."
+      TxOutReferenceScriptId # "The reference script of the output, if it has one. New in v13."
+
+    CollateralTxOut --^ do
+      "A table for transaction collateral outputs. New in v13."
+      CollateralTxOutTxId # "The Tx table index of the transaction that contains this transaction output."
+      CollateralTxOutIndex # "The index of this transaction output with the transaction."
+      CollateralTxOutAddress # "The human readable encoding of the output address. Will be Base58 for Byron era addresses and Bech32 for Shelley era."
+      CollateralTxOutAddressRaw # "The raw binary address."
+      CollateralTxOutAddressHasScript # "Flag which shows if this address is locked by a script."
+      CollateralTxOutPaymentCred # "The payment credential part of the Shelley address. (NULL for Byron addresses). For a script-locked address, this is the script hash."
+      CollateralTxOutStakeAddressId # "The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses)."
+      CollateralTxOutValue # "The output value (in Lovelace) of the transaction output."
+      CollateralTxOutDataHash # "The hash of the transaction output datum. (NULL for Txs without scripts)."
+      CollateralTxOutMultiAssetsDescr # "This is a description of the multiassets in collateral output. Since the output is not really created, we don't need to add them in separate tables."
+      CollateralTxOutInlineDatumId # "The inline datum of the output, if it has one. New in v13."
+      CollateralTxOutReferenceScriptId # "The reference script of the output, if it has one. New in v13."
 
     TxIn --^ do
       "A table for transaction inputs."
@@ -619,6 +669,12 @@ schemaDocs =
       CollateralTxInTxInId # "The Tx table index of the transaction that contains this transaction input"
       CollateralTxInTxOutId # "The Tx table index of the transaction that contains this transaction output."
       CollateralTxInTxOutIndex # "The index within the transaction outputs."
+
+    ReferenceTxIn --^ do
+      "A table for reference transaction inputs. New in v13."
+      ReferenceTxInTxInId # "The Tx table index of the transaction that contains this transaction input"
+      ReferenceTxInTxOutId # "The Tx table index of the transaction that contains this transaction output."
+      ReferenceTxInTxOutIndex # "The index within the transaction outputs."
 
     Meta --^ do
       "A table containing metadata about the chain. There will probably only ever be one row in this table."
@@ -807,9 +863,10 @@ schemaDocs =
       RedeemerPurpose # "What kind pf validation this redeemer is used for. It can be one of 'spend', 'mint', 'cert', 'reward'."
       RedeemerIndex # "The index of the redeemer pointer in the transaction."
       RedeemerScriptHash # "The script hash this redeemer is used for."
+      RedeemerRedeemerDataId # "The data related to this redeemer. New in v13: renamed from datum_id."
 
     Script --^ do
-      "A table containing scripts available in the blockchain, found in witnesses or auxdata of transactions."
+      "A table containing scripts available, found in witnesses, inlined in outputs (reference outputs) or auxdata of transactions."
       ScriptTxId # "The Tx table index for the transaction where this script first became available."
       ScriptHash # "The Hash of the Script."
       ScriptType # "The type of the script. This is currenttly either 'timelock' or 'plutus'."
@@ -818,10 +875,16 @@ schemaDocs =
       ScriptSerialisedSize # "The size of the CBOR serialised script, if it is a Plutus script."
 
     Datum --^ do
-      "A table containing Plutus Data available in the blockchain, found in redeemers or witnesses"
-      DatumHash # "The Hash of the Plutus Data"
+      "A table containing Plutus Datum, found in witnesses or inlined in outputs"
+      DatumHash # "The Hash of the Datum"
       DatumTxId # "The Tx table index for the transaction where this script first became available."
       DatumValue # "The actual data in json format"
+
+    RedeemerData --^ do
+      "A table containing Plutus Redeemer Data. These are always referenced by at least one redeemer. New in v13: split from datum table."
+      RedeemerDataHash # "The Hash of the Plutus Data"
+      RedeemerDataTxId # "The Tx table index for the transaction where this script first became available."
+      RedeemerDataValue # "The actual data in json format"
 
     ExtraKeyWitness --^ do
       "A table containing transaction extra key witness hashes."
@@ -879,7 +942,7 @@ schemaDocs =
       EpochParamMonetaryExpandRate # "The monetary expansion rate."
       EpochParamTreasuryGrowthRate # "The treasury growth rate."
       EpochParamDecentralisation # "The decentralisation parameter (1 fully centralised, 0 fully decentralised)."
-      EpochParamEntropy # "The 32 byte string of extra random-ness to be added into the protocol's entropy pool."
+      EpochParamExtraEntropy # "The 32 byte string of extra random-ness to be added into the protocol's entropy pool. New in v13: renamed from entopy."
       EpochParamProtocolMajor # "The protocol major number."
       EpochParamProtocolMinor # "The protocol minor number."
       EpochParamMinUtxoValue # "The minimum value of a UTxO entry."
@@ -900,6 +963,7 @@ schemaDocs =
 
     CostModel --^ do
       "CostModel for EpochParam and ParamProposal."
+      CostModelHash # "The hash of cost model. It ensures uniqueness of entries."
       CostModelCosts # "The actual costs formatted as json."
       CostModelBlockId # "The first block where these costs were introduced. This is only used for rollbacks."
 

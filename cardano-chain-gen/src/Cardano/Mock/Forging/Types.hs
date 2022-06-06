@@ -3,6 +3,8 @@
 
 module Cardano.Mock.Forging.Types
   ( CardanoBlock
+  , TPraosStandard
+  , PraosStandard
   , ForgingError (..)
   , MockBlock (..)
   , NodeId (..)
@@ -14,9 +16,12 @@ module Cardano.Mock.Forging.Types
 
 import           Control.Exception
 
-import           Ouroboros.Consensus.Cardano.Block (CardanoEras, HardForkBlock)
+import qualified Ouroboros.Consensus.Cardano.Block as Consensus
 import           Ouroboros.Consensus.Forecast
-import           Ouroboros.Consensus.Shelley.Eras (AlonzoEra, ShelleyEra, StandardCrypto)
+import           Ouroboros.Consensus.Protocol.Praos (Praos)
+import           Ouroboros.Consensus.Protocol.TPraos (TPraos)
+import           Ouroboros.Consensus.Shelley.Eras (StandardAlonzo, StandardBabbage, StandardCrypto,
+                   StandardShelley)
 
 import           Cardano.Ledger.Address
 import qualified Cardano.Ledger.Core as Core
@@ -26,7 +31,10 @@ import           Cardano.Ledger.TxIn (TxIn (..))
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
-type CardanoBlock = HardForkBlock (CardanoEras StandardCrypto)
+type TPraosStandard = TPraos StandardCrypto
+type PraosStandard = Praos StandardCrypto
+
+type CardanoBlock = Consensus.CardanoBlock StandardCrypto
 
 data MockBlock = MockBlock
   { txs :: ![TxEra]
@@ -34,18 +42,20 @@ data MockBlock = MockBlock
   }
 
 data TxEra
-  = TxAlonzo !(Core.Tx (AlonzoEra StandardCrypto))
-  | TxShelley !(Core.Tx (ShelleyEra StandardCrypto))
+  = TxAlonzo !(Core.Tx StandardAlonzo)
+  | TxBabbage !(Core.Tx StandardBabbage)
+  | TxShelley !(Core.Tx StandardShelley)
 
 newtype NodeId = NodeId { unNodeId :: Int }
   deriving Show
 
 data ForgingError
-  = WentTooFar
+  = WentTooFar !SlotNo
   | ForecastError !SlotNo !OutsideForecastRange
   | NonExistantNode !NodeId
   | CantFindUTxO
   | CantFindStake
+  | ExpectedBabbageState
   | ExpectedAlonzoState
   | ExpectedShelleyState
   | UnexpectedEra

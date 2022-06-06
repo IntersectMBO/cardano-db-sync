@@ -45,10 +45,12 @@ library
                         Cardano.Mock.ChainSync.Server
                         Cardano.Mock.ChainSync.State
                         Cardano.Mock.Forging.Crypto
-                        Cardano.Mock.Forging.Examples
                         Cardano.Mock.Forging.Interpreter
                         Cardano.Mock.Forging.Tx.Alonzo
+                        Cardano.Mock.Forging.Tx.Alonzo.Scenarios
                         Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
+                        Cardano.Mock.Forging.Tx.Babbage
+                        Cardano.Mock.Forging.Tx.Babbage.Scenarios
                         Cardano.Mock.Forging.Tx.Generic
                         Cardano.Mock.Forging.Tx.Shelley
                         Cardano.Mock.Forging.Types
@@ -67,6 +69,7 @@ library
                       , cardano-crypto-wrapper
                       , cardano-data
                       , cardano-ledger-alonzo
+                      , cardano-ledger-babbage
                       , cardano-ledger-byron
                       , cardano-ledger-core
                       , cardano-ledger-shelley
@@ -76,7 +79,7 @@ library
                       , cardano-protocol-tpraos
                       , cardano-slotting
                       , cborg
-                      , compact-map
+                      , vector-map
                       , containers
                       , contra-tracer
                       , directory
@@ -98,6 +101,7 @@ library
                       , ouroboros-consensus
                       , ouroboros-consensus-byron
                       , ouroboros-consensus-cardano
+                      , ouroboros-consensus-protocol
                       , ouroboros-consensus-shelley
                       , ouroboros-network
                       , ouroboros-network-framework
@@ -151,7 +155,8 @@ test-suite cardano-chain-gen
 
   other-modules:        Test.Cardano.Db.Mock.Config
                         Test.Cardano.Db.Mock.Examples
-                        Test.Cardano.Db.Mock.Unit
+                        Test.Cardano.Db.Mock.Unit.Alonzo
+                        Test.Cardano.Db.Mock.Unit.Babbage
                         Test.Cardano.Db.Mock.UnifiedApi
                         Test.Cardano.Db.Mock.Validate
 
@@ -197,6 +202,7 @@ test-suite cardano-chain-gen
                       , monad-logger
                       , ouroboros-consensus
                       , ouroboros-consensus-cardano
+                      , ouroboros-consensus-protocol
                       , ouroboros-consensus-shelley
                       , ouroboros-network
                       , ouroboros-network-framework

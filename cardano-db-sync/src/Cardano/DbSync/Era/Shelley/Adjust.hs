@@ -15,14 +15,17 @@ import qualified Cardano.Db as Db
 
 import           Cardano.DbSync.Cache
 import qualified Cardano.DbSync.Era.Shelley.Generic.Rewards as Generic
-import           Cardano.DbSync.Era.Shelley.Generic.StakeCred
+import           Cardano.DbSync.Types
+
+import           Cardano.Ledger.BaseTypes (Network)
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Control.Monad.Trans.Control (MonadBaseControl)
 
-import qualified Data.Map as Map
+import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
+import qualified Data.Strict.Maybe as Strict
 
 import           Database.Esqueleto.Experimental (SqlBackend, delete, from, in_, table, val,
                    valList, where_, (==.), (^.))
@@ -40,29 +43,29 @@ import           Database.Esqueleto.Experimental (SqlBackend, delete, from, in_,
 
 adjustEpochRewards
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Cache -> EpochNo -> Generic.Rewards
+    => Trace IO Text -> Network -> Cache -> EpochNo -> Generic.Rewards
     -> Set StakeCred
     -> ReaderT SqlBackend m ()
-adjustEpochRewards tracer cache epochNo rwds creds = do
-  let eraIgnored = Map.toList $ Generic.rwdRewards rwds
+adjustEpochRewards tracer nw cache epochNo rwds creds = do
+  let eraIgnored = Map.toList $ Generic.unRewards rwds
   liftIO . logInfo tracer $ mconcat
     [ "Removing ", if null eraIgnored then "" else Db.textShow (length eraIgnored) <> " rewards and "
     , show (length creds), " orphaned rewards"]
   forM_ eraIgnored $ \(cred, rewards)->
     forM_ (Set.toList rewards) $ \rwd ->
-      deleteReward cache epochNo (cred, rwd)
-  crds <- rights <$> forM (Set.toList creds) (queryStakeAddrWithCache cache DontCacheNew)
+      deleteReward nw cache epochNo (cred, rwd)
+  crds <- rights <$> forM (Set.toList creds) (queryStakeAddrWithCache cache DontCacheNew nw)
   deleteOrphanedRewards epochNo crds
 
 deleteReward
     :: (MonadBaseControl IO m, MonadIO m)
-    => Cache -> EpochNo -> (StakeCred, Generic.Reward)
+    => Network -> Cache -> EpochNo -> (StakeCred, Generic.Reward)
     -> ReaderT SqlBackend m ()
-deleteReward cache epochNo (cred, rwd) = do
-  mAddrId <- queryStakeAddrWithCache cache DontCacheNew cred
+deleteReward nw cache epochNo (cred, rwd) = do
+  mAddrId <- queryStakeAddrWithCache cache DontCacheNew nw cred
   eiPoolId <- case Generic.rewardPool rwd of
-    Nothing -> pure $ Left $ Db.DbLookupMessage "deleteReward.queryPoolKeyWithCache"
-    Just poolHash -> queryPoolKeyWithCache cache DontCacheNew poolHash
+    Strict.Nothing -> pure $ Left $ Db.DbLookupMessage "deleteReward.queryPoolKeyWithCache"
+    Strict.Just poolHash -> queryPoolKeyWithCache cache DontCacheNew poolHash
   case (mAddrId, eiPoolId) of
     (Right addrId, Right poolId) -> do
       delete $ do

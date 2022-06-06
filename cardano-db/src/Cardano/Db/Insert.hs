@@ -9,6 +9,7 @@ module Cardano.Db.Insert
   ( insertAdaPots
   , insertBlock
   , insertCollateralTxIn
+  , insertReferenceTxIn
   , insertDelegation
   , insertEpoch
   , insertEpochParam
@@ -43,11 +44,13 @@ module Cardano.Db.Insert
   , insertTxIn
   , insertTxMetadata
   , insertTxOut
+  , insertCollateralTxOut
   , insertManyTxOut
   , insertWithdrawal
   , insertRedeemer
   , insertCostModel
   , insertDatum
+  , insertRedeemerData
   , insertCheckPoolOfflineData
   , insertCheckPoolOfflineFetchError
   , insertReservedPoolTicker
@@ -115,6 +118,9 @@ insertBlockChecked = insertCheckUnique "Block"
 
 insertCollateralTxIn :: (MonadBaseControl IO m, MonadIO m) => CollateralTxIn -> ReaderT SqlBackend m CollateralTxInId
 insertCollateralTxIn = insertUnchecked "CollateralTxIn"
+
+insertReferenceTxIn :: (MonadBaseControl IO m, MonadIO m) => ReferenceTxIn -> ReaderT SqlBackend m ReferenceTxInId
+insertReferenceTxIn = insertUnchecked "ReferenceTxIn"
 
 insertDelegation :: (MonadBaseControl IO m, MonadIO m) => Delegation -> ReaderT SqlBackend m DelegationId
 insertDelegation = insertCheckUnique "Delegation"
@@ -218,6 +224,9 @@ insertTxMetadata = insertCheckUnique "TxMetadata"
 insertTxOut :: (MonadBaseControl IO m, MonadIO m) => TxOut -> ReaderT SqlBackend m TxOutId
 insertTxOut = insertUnchecked "TxOut"
 
+insertCollateralTxOut :: (MonadBaseControl IO m, MonadIO m) => CollateralTxOut -> ReaderT SqlBackend m CollateralTxOutId
+insertCollateralTxOut = insertUnchecked "CollateralTxOut"
+
 insertManyTxOut :: (MonadBaseControl IO m, MonadIO m) => [TxOut] -> ReaderT SqlBackend m [TxOutId]
 insertManyTxOut = insertMany' "TxOut"
 
@@ -232,6 +241,9 @@ insertCostModel = insertCheckUnique "CostModel"
 
 insertDatum :: (MonadBaseControl IO m, MonadIO m) => Datum -> ReaderT SqlBackend m DatumId
 insertDatum = insertCheckUnique "Datum"
+
+insertRedeemerData :: (MonadBaseControl IO m, MonadIO m) => RedeemerData -> ReaderT SqlBackend m RedeemerDataId
+insertRedeemerData = insertCheckUnique "RedeemerData"
 
 insertCheckPoolOfflineData :: (MonadBaseControl IO m, MonadIO m) => PoolOfflineData -> ReaderT SqlBackend m ()
 insertCheckPoolOfflineData pod = do

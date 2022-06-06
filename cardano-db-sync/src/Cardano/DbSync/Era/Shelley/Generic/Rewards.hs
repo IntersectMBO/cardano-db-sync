@@ -5,22 +5,19 @@
 module Cardano.DbSync.Era.Shelley.Generic.Rewards
   ( Reward (..)
   , Rewards (..)
-  , elemCount
-  , rewardsPoolHashKeys
-  , rewardsStakeCreds
-  , totalAda
+  , rewardsCount
+  , rewardsTotalAda
   ) where
 
 import           Cardano.Prelude
 
 import           Cardano.Db (Ada, RewardSource (..), word64ToAda)
 
+import           Cardano.DbSync.Types
+
+import qualified Data.Strict.Maybe as Strict
+
 import           Cardano.Ledger.Coin (Coin (..))
-
-import           Cardano.Slotting.Slot (EpochNo (..))
-
-import           Cardano.DbSync.Era.Shelley.Generic.StakeCred
-import           Cardano.DbSync.Era.Shelley.Generic.StakePoolKeyHash
 
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
@@ -29,31 +26,22 @@ import           Ouroboros.Consensus.Cardano.CanHardFork ()
 
 data Reward = Reward
   { rewardSource :: !RewardSource
-  , rewardPool :: !(Maybe StakePoolKeyHash)
+  , rewardPool :: !(Strict.Maybe PoolKeyHash)
   , rewardAmount :: !Coin
   } deriving (Eq, Ord, Show)
 
 -- The `ledger-specs` code defines a `RewardUpdate` type that is parameterised over
 -- Shelley/Allegra/Mary. This is a huge pain in the neck for `db-sync` so we define a
 -- generic one instead.
-data Rewards = Rewards
-  { rwdEpoch :: !EpochNo
-  , rwdRewards :: !(Map StakeCred (Set Reward))
+newtype Rewards = Rewards
+  { unRewards :: Map StakeCred (Set Reward)
   } deriving (Eq, Show)
 
-elemCount :: Rewards -> Int
-elemCount = sum . map Set.size . Map.elems . rwdRewards
+rewardsCount :: Rewards -> Int
+rewardsCount = sum . map Set.size . Map.elems . unRewards
 
-rewardsPoolHashKeys :: Rewards -> Set StakePoolKeyHash
-rewardsPoolHashKeys rwds =
-  Set.fromList . mapMaybe rewardPool
-    $ concatMap Set.toList (Map.elems $ rwdRewards rwds)
-
-rewardsStakeCreds :: Rewards -> Set StakeCred
-rewardsStakeCreds = Map.keysSet . rwdRewards
-
-totalAda :: Rewards -> Ada
-totalAda rwds =
+rewardsTotalAda :: Rewards -> Ada
+rewardsTotalAda rwds =
   word64ToAda . fromIntegral . sum
     . concatMap (map (unCoin . rewardAmount) . Set.toList)
-    $ Map.elems (rwdRewards rwds)
+    $ Map.elems (unRewards rwds)

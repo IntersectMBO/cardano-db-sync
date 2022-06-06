@@ -6,7 +6,6 @@ BEGIN
   IF next_version <= 8 THEN
 
     CREATE INDEX IF NOT EXISTS idx_datum_tx_id ON datum (tx_id) ;
-    CREATE INDEX IF NOT EXISTS idx_redeemer_datum_id ON redeemer (datum_id) ;
     CREATE INDEX IF NOT EXISTS idx_extra_key_witness_tx_id ON extra_key_witness (tx_id) ;
     CREATE INDEX IF NOT EXISTS idx_cost_model_block_id ON cost_model (block_id) ;
     CREATE INDEX IF NOT EXISTS idx_param_proposal_cost_model_id ON param_proposal (cost_model_id) ;

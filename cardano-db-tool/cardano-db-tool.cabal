@@ -69,8 +69,8 @@ library
                       , cardano-ledger-shelley
                       , cardano-prelude
                       , cardano-slotting
-                      , compact-map
                       , containers
+                      , contra-tracer
                       , esqueleto
                       , extra
                       , ouroboros-consensus
