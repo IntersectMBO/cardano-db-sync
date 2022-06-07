@@ -216,7 +216,7 @@ resolveRedeemers prices tx =
           , txRedeemerPurpose = tag
           , txRedeemerIndex = index
           , txRedeemerScriptHash = mScript
-          , txRedeemerData = PlutusData (dataHashToBytes $ Alonzo.hashData dt) (encodeData dt)
+          , txRedeemerData = mkTxData (Alonzo.hashData dt, dt)
           }
 
 handleTxInPtr :: Word64 -> ShelleyTx.TxIn StandardCrypto -> RedeemerMaps -> (RedeemerMaps, Maybe (Either TxIn ByteString))
@@ -293,10 +293,6 @@ getPlutusScriptSize script =
     Alonzo.TimelockScript {} ->  Nothing
     Alonzo.PlutusScript _lang sbs -> Just $ fromIntegral (SBS.length sbs)
 
-encodeData :: Alonzo.Data era -> ByteString
-encodeData dt = LBS.toStrict $ Aeson.encode $
-    Api.scriptDataToJson Api.ScriptDataJsonDetailedSchema $ Api.fromAlonzoData dt
-
 txDataWitness ::
     (HasField "wits" tx (Alonzo.TxWitness era), Ledger.Crypto era ~ StandardCrypto)
     => tx -> [PlutusData]
@@ -304,7 +300,17 @@ txDataWitness tx =
     mkTxData <$> Map.toList (Alonzo.unTxDats $ Alonzo.txdats' (getField @"wits" tx))
 
 mkTxData :: (Ledger.DataHash StandardCrypto, Alonzo.Data era) -> PlutusData
-mkTxData (dataHash, dt) = PlutusData (dataHashToBytes dataHash) (encodeData dt)
+mkTxData (dataHash, dt) = PlutusData (dataHashToBytes dataHash) (jsonData dt) (cborData dt)
+  where
+    jsonData :: Alonzo.Data era -> ByteString
+    jsonData =
+          LBS.toStrict
+        . Aeson.encode
+        . Api.scriptDataToJson Api.ScriptDataJsonDetailedSchema
+        . Api.fromAlonzoData
+
+    cborData :: Alonzo.Data era -> ByteString
+    cborData = Api.serialiseToCBOR . Api.fromAlonzoData
 
 extraKeyWits :: HasField "reqSignerHashes" (Ledger.TxBody era) (Set (Ledger.KeyHash d c))
               => Ledger.TxBody era -> [ByteString]
