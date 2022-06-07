@@ -17,6 +17,7 @@ The process:
 * Update version numbers in all cabal files.
 * Write the change log entries.
 * Update the `docker-compose.yml` file to point at the new release and specify the node version.
+* Run `cabal run gen-schema-docs > doc/schema.md` to update the schema documentation.
 * Devs then do a full sync of mainnet to make sure everything is still fine.
 * Dev then does a pre-release tag named something like `12.0.1-preX`.
 * QA tests the pre-release tag.

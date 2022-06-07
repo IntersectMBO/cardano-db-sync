@@ -64,6 +64,7 @@ pRunDbSyncNode =
     <*> pMigrationDir
     <*> pPGPassSource
     <*> pExtended
+    <*> pHasCache
     <*> optional pSlotNo
 
 pConfigFile :: Parser ConfigFile
@@ -103,6 +104,13 @@ pExtended =
   Opt.flag True False
     ( Opt.long "no-epoch-table"
     <> Opt.help "Makes epoch table remain empty"
+    )
+
+pHasCache :: Parser Bool
+pHasCache =
+  Opt.flag True False
+    ( Opt.long "disable-cache"
+    <> Opt.help "Disables the db-sync caches. Reduces memory usage but it takes longer to sync."
     )
 
 pSocketPath :: Parser SocketPath

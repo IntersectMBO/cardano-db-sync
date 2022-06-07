@@ -64,6 +64,7 @@ data SyncEnv = SyncEnv
 data SyncOptions = SyncOptions
   { soptExtended :: !Bool
   , soptAbortOnInvalid :: !Bool
+  , soptCache :: !Bool
   , snapshotEveryFollowing :: !Word64
   , snapshotEveryLagging :: !Word64
   }
@@ -122,7 +123,7 @@ mkSyncEnv
 mkSyncEnv trce backend syncOptions protoInfo nw nwMagic systemStart dir stableEpochSlot = do
   ledgerEnv <- mkLedgerEnv trce protoInfo dir nw stableEpochSlot systemStart (soptAbortOnInvalid syncOptions)
                  (snapshotEveryFollowing syncOptions) (snapshotEveryLagging syncOptions)
-  cache <- newEmptyCache 200000
+  cache <- if soptCache syncOptions then newEmptyCache 100000 else pure uninitiatedCache
   pure $ SyncEnv
           { envProtocol = SyncProtocolCardano
           , envNetworkMagic = nwMagic
