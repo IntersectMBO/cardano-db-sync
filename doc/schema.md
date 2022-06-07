@@ -1,6 +1,6 @@
 # Schema Documentation for cardano-db-sync
 
-Schema version: 12.0.0
+Schema version: 13.0.0
 
 ### `schema_version`
 
@@ -17,7 +17,7 @@ The version of the database schema. Schema versioning is split into three stages
 
 ### `pool_hash`
 
-A table for every unique pool key hash. The `id` field of this table is used as foreign keys in other tables.
+A table for every unique pool key hash. The `id` field of this table is used as foreign keys in other tables. The existance of an entry doesn't mean the pool is registered or in fact that is was ever registered.
 
 * Primary Id: `id`
 
@@ -29,7 +29,7 @@ A table for every unique pool key hash. The `id` field of this table is used as 
 
 ### `slot_leader`
 
-Every unique slot leader (ie an entity that mines a block).
+Every unique slot leader (ie an entity that mines a block). It could be a pool or a leader defined in genesis.
 
 * Primary Id: `id`
 
@@ -50,17 +50,17 @@ A table for blocks on the chain.
 |-|-|-|
 | `id` | integer (64) |  |
 | `hash` | hash32type | The hash identifier of the block. |
-| `epoch_no` | uinteger | The epoch number. |
-| `slot_no` | uinteger | The slot number. |
-| `epoch_slot_no` | uinteger | The slot number within an epoch (resets to zero at the start of each epoch). |
-| `block_no` | uinteger | The block number. |
+| `epoch_no` | word31type | The epoch number. |
+| `slot_no` | word63type | The slot number. |
+| `epoch_slot_no` | word31type | The slot number within an epoch (resets to zero at the start of each epoch). |
+| `block_no` | word31type | The block number. |
 | `previous_id` | integer (64) | The Block table index of the previous block. |
 | `slot_leader_id` | integer (64) | The SlotLeader table index of the creator of this block. |
-| `size` | uinteger | The block size (in bytes). |
+| `size` | word31type | The block size (in bytes). Note, this size value is not expected to be the same as the sum of the tx sizes due to the fact that txs being stored in segwit format and oddities in the CBOR encoding. |
 | `time` | timestamp | The block time (UTCTime). |
 | `tx_count` | integer (64) | The number of transactions in this block. |
-| `proto_major` | uinteger | The block's major protocol number. |
-| `proto_minor` | uinteger | The block's major protocol number. |
+| `proto_major` | word31type | The block's major protocol number. |
+| `proto_minor` | word31type | The block's major protocol number. |
 | `vrf_key` | string | The VRF key of the creator of this block. |
 | `op_cert` | hash32type | The hash of the operational certificate of the block producer. |
 | `op_cert_counter` | word63type | The value of the counter used to produce the operational certificate. |
@@ -76,19 +76,19 @@ A table for transactions within a block on the chain.
 | `id` | integer (64) |  |
 | `hash` | hash32type | The hash identifier of the transaction. |
 | `block_id` | integer (64) | The Block table index of the block that contains this transaction. |
-| `block_index` | uinteger | The index of this transaction with the block (zero based). |
+| `block_index` | word31type | The index of this transaction with the block (zero based). |
 | `out_sum` | lovelace | The sum of the transaction outputs (in Lovelace). |
 | `fee` | lovelace | The fees paid for this transaction. |
 | `deposit` | integer (64) | Deposit (or deposit refund) in this transaction. Deposits are positive, refunds negative. |
-| `size` | uinteger | The size of the transaction in bytes. |
+| `size` | word31type | The size of the transaction in bytes. |
 | `invalid_before` | word64type | Transaction in invalid before this slot number. |
 | `invalid_hereafter` | word64type | Transaction in invalid at or after this slot number. |
 | `valid_contract` | boolean | False if the contract is invalid. True if the contract is valid or there is no contract. |
-| `script_size` | uinteger | The sum of the script sizes (in bytes) of scripts in the transaction. |
+| `script_size` | word31type | The sum of the script sizes (in bytes) of scripts in the transaction. |
 
 ### `stake_address`
 
-A table of unique stake addresses. Can be an actual address or a script hash.
+A table of unique stake addresses. Can be an actual address or a script hash.  The existance of an entry doesn't mean the address is registered or in fact that is was ever registered. For example a pool update may contain a stake address which was never registered.
 
 * Primary Id: `id`
 
@@ -98,7 +98,7 @@ A table of unique stake addresses. Can be an actual address or a script hash.
 | `hash_raw` | addr29type | The raw bytes of the stake address hash. |
 | `view` | string | The Bech32 encoded version of the stake address. |
 | `script_hash` | hash28type | The script hash, in case this address is locked by a script. |
-| `registered_tx_id` | integer (64) | The Tx table index of the transaction in which this address was registered. |
+| `tx_id` | integer (64) | The Tx table index of the transaction in which this address first appeared. New in v13: Renamed from registered_tx_id. |
 
 ### `tx_out`
 
@@ -118,6 +118,30 @@ A table for transaction outputs.
 | `stake_address_id` | integer (64) | The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses). |
 | `value` | lovelace | The output value (in Lovelace) of the transaction output. |
 | `data_hash` | hash32type | The hash of the transaction output datum. (NULL for Txs without scripts). |
+| `inline_datum_id` | integer (64) | The inline datum of the output, if it has one. New in v13. |
+| `reference_script_id` | integer (64) | The reference script of the output, if it has one. New in v13. |
+
+### `collateral_tx_out`
+
+A table for transaction collateral outputs. New in v13.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `tx_id` | integer (64) | The Tx table index of the transaction that contains this transaction output. |
+| `index` | txindex | The index of this transaction output with the transaction. |
+| `address` | string | The human readable encoding of the output address. Will be Base58 for Byron era addresses and Bech32 for Shelley era. |
+| `address_raw` | blob | The raw binary address. |
+| `address_has_script` | boolean | Flag which shows if this address is locked by a script. |
+| `payment_cred` | hash28type | The payment credential part of the Shelley address. (NULL for Byron addresses). For a script-locked address, this is the script hash. |
+| `stake_address_id` | integer (64) | The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses). |
+| `value` | lovelace | The output value (in Lovelace) of the transaction output. |
+| `data_hash` | hash32type | The hash of the transaction output datum. (NULL for Txs without scripts). |
+| `multi_assets_descr` | string | This is a description of the multiassets in collateral output. Since the output is not really created, we don't need to add them in separate tables. |
+| `inline_datum_id` | integer (64) | The inline datum of the output, if it has one. New in v13. |
+| `reference_script_id` | integer (64) | The reference script of the output, if it has one. New in v13. |
 
 ### `tx_in`
 
@@ -128,8 +152,8 @@ A table for transaction inputs.
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `tx_in_id` | integer (64) | The Tx table index of the transaction that contains this transaction input |
-| `tx_out_id` | integer (64) | The Tx table index of the transaction that contains this transaction output. |
+| `tx_in_id` | integer (64) | The Tx table index of the transaction that contains this transaction input. |
+| `tx_out_id` | integer (64) | The Tx table index of the transaction that contains the referenced transaction output. |
 | `tx_out_index` | txindex | The index within the transaction outputs. |
 | `redeemer_id` | integer (64) | The Redeemer table index which is used to validate this input. |
 
@@ -143,7 +167,20 @@ A table for transaction collateral inputs.
 |-|-|-|
 | `id` | integer (64) |  |
 | `tx_in_id` | integer (64) | The Tx table index of the transaction that contains this transaction input |
-| `tx_out_id` | integer (64) | The Tx table index of the transaction that contains this transaction output. |
+| `tx_out_id` | integer (64) | The Tx table index of the transaction that contains the referenced transaction output. |
+| `tx_out_index` | txindex | The index within the transaction outputs. |
+
+### `reference_tx_in`
+
+A table for reference transaction inputs. New in v13.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `tx_in_id` | integer (64) | The Tx table index of the transaction that contains this transaction input |
+| `tx_out_id` | integer (64) | The Tx table index of the transaction that contains the referenced output. |
 | `tx_out_index` | txindex | The index within the transaction outputs. |
 
 ### `meta`
@@ -170,9 +207,9 @@ Aggregation of data within an epoch.
 | `id` | integer (64) |  |
 | `out_sum` | word128type | The sum of the transaction output values (in Lovelace) in this epoch. |
 | `fees` | lovelace | The sum of the fees (in Lovelace) in this epoch. |
-| `tx_count` | uinteger | The number of transactions in this epoch. |
-| `blk_count` | uinteger | The number of blocks in this epoch. |
-| `no` | uinteger | The epoch number. |
+| `tx_count` | word31type | The number of transactions in this epoch. |
+| `blk_count` | word31type | The number of blocks in this epoch. |
+| `no` | word31type | The epoch number. |
 | `start_time` | timestamp | The epoch start time. |
 | `end_time` | timestamp | The epoch end time. |
 
@@ -186,8 +223,8 @@ The treasury and rewards fields will be correct for the whole epoch, but all oth
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `slot_no` | uinteger | The slot number where this AdaPots snapshot was taken. |
-| `epoch_no` | uinteger | The epoch number where this AdaPots snapshot was taken. |
+| `slot_no` | word63type | The slot number where this AdaPots snapshot was taken. |
+| `epoch_no` | word31type | The epoch number where this AdaPots snapshot was taken. |
 | `treasury` | lovelace | The amount (in Lovelace) in the treasury pot. |
 | `reserves` | lovelace | The amount (in Lovelace) in the reserves pot. |
 | `rewards` | lovelace | The amount (in Lovelace) in the rewards pot. |
@@ -223,7 +260,7 @@ An on-chain pool update.
 | `cert_index` | integer (32) | The index of this pool update within the certificates of this transaction. |
 | `vrf_key_hash` | hash32type | The hash of the pool's VRF key. |
 | `pledge` | lovelace | The amount (in Lovelace) the pool owner pledges to the pool. |
-| `reward_addr` | addr29type | The pool's rewards address. |
+| `reward_addr_id` | integer (64) | The StakeAddress table index of this pool's rewards address. New in v13: Replaced reward_addr. |
 | `active_epoch_no` | integer (64) | The epoch number where this update becomes active. |
 | `meta_id` | integer (64) | The PoolMetadataRef table index this pool update refers to. |
 | `margin` | double | The margin (as a percentage) this pool charges. |
@@ -240,8 +277,7 @@ A table containing pool owners.
 |-|-|-|
 | `id` | integer (64) |  |
 | `addr_id` | integer (64) | The StakeAddress table index for the pool owner's stake address. |
-| `pool_hash_id` | integer (64) | The PoolHash table index for the pool. |
-| `registered_tx_id` | integer (64) | The Tx table index of the transaction where this pool owner was registered. |
+| `pool_update_id` | integer (64) | The PoolUpdate table index for the pool. New in v13. |
 
 ### `pool_retire`
 
@@ -255,7 +291,7 @@ A table containing information about pools retiring.
 | `hash_id` | integer (64) | The PoolHash table index of the pool this retirement refers to. |
 | `cert_index` | integer (32) | The index of this pool retirement within the certificates of this transaction. |
 | `announced_tx_id` | integer (64) | The Tx table index of the transaction where this pool retirement was announced. |
-| `retiring_epoch` | uinteger | The epoch where this pool retires. |
+| `retiring_epoch` | word31type | The epoch where this pool retires. |
 
 ### `pool_relay`
 
@@ -284,7 +320,7 @@ A table containing stake address registrations.
 | `id` | integer (64) |  |
 | `addr_id` | integer (64) | The StakeAddress table index for the stake address. |
 | `cert_index` | integer (32) | The index of this stake registration within the certificates of this transaction. |
-| `epoch_no` | uinteger | The epoch in which the registration took place. |
+| `epoch_no` | word31type | The epoch in which the registration took place. |
 | `tx_id` | integer (64) | The Tx table index of the transaction where this stake address was registered. |
 
 ### `stake_deregistration`
@@ -298,7 +334,7 @@ A table containing stake address deregistrations.
 | `id` | integer (64) |  |
 | `addr_id` | integer (64) | The StakeAddress table index for the stake address. |
 | `cert_index` | integer (32) | The index of this stake deregistration within the certificates of this transaction. |
-| `epoch_no` | uinteger | The epoch in which the deregistration took place. |
+| `epoch_no` | word31type | The epoch in which the deregistration took place. |
 | `tx_id` | integer (64) | The Tx table index of the transaction where this stake address was deregistered. |
 | `redeemer_id` | integer (64) | The Redeemer table index that is related with this certificate. |
 
@@ -316,7 +352,7 @@ A table containing delegations from a stake address to a stake pool.
 | `pool_hash_id` | integer (64) | The PoolHash table index for the pool being delegated to. |
 | `active_epoch_no` | integer (64) | The epoch number where this delegation becomes active. |
 | `tx_id` | integer (64) | The Tx table index of the transaction that contained this delegation. |
-| `slot_no` | uinteger | The slot number of the block that contained this delegation. |
+| `slot_no` | word63type | The slot number of the block that contained this delegation. |
 | `redeemer_id` | integer (64) | The Redeemer table index that is related with this certificate. |
 
 ### `tx_metadata`
@@ -335,7 +371,7 @@ A table for metadata attached to a transaction.
 
 ### `reward`
 
-A table for rewards earned by staking. The rewards earned in epoch `N` are added in this table when they are calculated during epoch `N + 1` but are not spendable until after the start of epoch `N + 2`.
+A table for earned rewards. It includes 5 types of rewards. The rewards are inserted incrementally and this procedure is finalised when the spendable epoch comes. Before the epoch comes, some entries may be missing.
 
 * Primary Id: `id`
 
@@ -343,11 +379,11 @@ A table for rewards earned by staking. The rewards earned in epoch `N` are added
 |-|-|-|
 | `id` | integer (64) |  |
 | `addr_id` | integer (64) | The StakeAddress table index for the stake address that earned the reward. |
-| `type` | rewardtype | The source of the rewards; pool `member`, pool `leader`, `treasury` or `reserves` payment. |
+| `type` | rewardtype | The source of the rewards; pool `member`, pool `leader`, `treasury` or `reserves` payment and pool deposits `refunds` |
 | `amount` | lovelace | The reward amount (in Lovelace). |
-| `earned_epoch` | integer (64) | The epoch in which the reward was earned. |
-| `spendable_epoch` | integer (64) |  |
-| `pool_id` | integer (64) | The PoolHash table index for the pool the stake address was delegated to when the reward is earned. Will be NULL for payments from the treasury or the reserves. |
+| `earned_epoch` | integer (64) | The epoch in which the reward was earned. For `pool` and `leader` rewards spendable in epoch `N`, this will be `N - 2`, for `treasury` and `reserves` `N - 1` and for `refund` N. |
+| `spendable_epoch` | integer (64) | The epoch in which the reward is actually distributed and can be spent. |
+| `pool_id` | integer (64) | The PoolHash table index for the pool the stake address was delegated to when the reward is earned or for the pool that there is a deposit refund. Will be NULL for payments from the treasury or the reserves. |
 
 ### `withdrawal`
 
@@ -365,7 +401,7 @@ A table for withdrawals from a reward account.
 
 ### `epoch_stake`
 
-A table containing the epoch stake distribution for each epoch.
+A table containing the epoch stake distribution for each epoch. This is inserted incrementally in the first blocks of the epoch. The stake distribution is extracted from the `set` snapshot of the ledger. See Shelley specs Sec. 11.2 for more details.
 
 * Primary Id: `id`
 
@@ -375,11 +411,11 @@ A table containing the epoch stake distribution for each epoch.
 | `addr_id` | integer (64) | The StakeAddress table index for the stake address for this EpochStake entry. |
 | `pool_id` | integer (64) | The PoolHash table index for the pool this entry is delegated to. |
 | `amount` | lovelace | The amount (in Lovelace) being staked. |
-| `epoch_no` | uinteger | The epoch number. |
+| `epoch_no` | word31type | The epoch number. |
 
 ### `treasury`
 
-A table for payments from the treasury to a StakeAddress. Note: Before protocol version 5.0 (Alonzo) if more than one payment was made to a stake address in a single epoch, only the last payment was kept and earlier ones removed. For protocol version 5.0 and later, they are summed.
+A table for payments from the treasury to a StakeAddress. Note: Before protocol version 5.0 (Alonzo) if more than one payment was made to a stake address in a single epoch, only the last payment was kept and earlier ones removed. For protocol version 5.0 and later, they are summed and produce a single reward with type `treasury`.
 
 * Primary Id: `id`
 
@@ -393,7 +429,7 @@ A table for payments from the treasury to a StakeAddress. Note: Before protocol 
 
 ### `reserve`
 
-A table for payments from the reserves to a StakeAddress. Note: Before protocol version 5.0 (Alonzo) if more than one payment was made to a stake address in a single epoch, only the last payment was kept and earlier ones removed. For protocol version 5.0 and later, they are summed.
+A table for payments from the reserves to a StakeAddress. Note: Before protocol version 5.0 (Alonzo) if more than one payment was made to a stake address in a single epoch, only the last payment was kept and earlier ones removed. For protocol version 5.0 and later, they are summed and produce a single reward with type `reserves`
 
 * Primary Id: `id`
 
@@ -485,13 +521,13 @@ A table containing redeemers. A redeemer is provided for all items that are vali
 | `unit_steps` | word63type | The budget in Cpu steps to run a script. |
 | `fee` | lovelace | The budget in fees to run a script. The fees depend on the ExUnits and the current prices. |
 | `purpose` | scriptpurposetype | What kind pf validation this redeemer is used for. It can be one of 'spend', 'mint', 'cert', 'reward'. |
-| `index` | uinteger | The index of the redeemer pointer in the transaction. |
+| `index` | word31type | The index of the redeemer pointer in the transaction. |
 | `script_hash` | hash28type | The script hash this redeemer is used for. |
-| `datum_id` | integer (64) |  |
+| `redeemer_data_id` | integer (64) | The data related to this redeemer. New in v13: renamed from datum_id. |
 
 ### `script`
 
-A table containing scripts available in the blockchain, found in witnesses or auxdata of transactions.
+A table containing scripts available, found in witnesses, inlined in outputs (reference outputs) or auxdata of transactions.
 
 * Primary Id: `id`
 
@@ -503,11 +539,25 @@ A table containing scripts available in the blockchain, found in witnesses or au
 | `type` | scripttype | The type of the script. This is currenttly either 'timelock' or 'plutus'. |
 | `json` | jsonb | JSON representation of the timelock script, null for other script types |
 | `bytes` | bytea | CBOR encoded plutus script data, null for other script types |
-| `serialised_size` | uinteger | The size of the CBOR serialised script, if it is a Plutus script. |
+| `serialised_size` | word31type | The size of the CBOR serialised script, if it is a Plutus script. |
 
 ### `datum`
 
-A table containing Plutus Data available in the blockchain, found in redeemers or witnesses
+A table containing Plutus Datum, found in witnesses or inlined in outputs
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `hash` | hash32type | The Hash of the Datum |
+| `tx_id` | integer (64) | The Tx table index for the transaction where this script first became available. |
+| `value` | jsonb | The actual data in JSON format (detailed schema) |
+| `bytes` | bytea | The actual data in CBOR format. New in v13 |
+
+### `redeemer_data`
+
+A table containing Plutus Redeemer Data. These are always referenced by at least one redeemer. New in v13: split from datum table.
 
 * Primary Id: `id`
 
@@ -516,7 +566,20 @@ A table containing Plutus Data available in the blockchain, found in redeemers o
 | `id` | integer (64) |  |
 | `hash` | hash32type | The Hash of the Plutus Data |
 | `tx_id` | integer (64) | The Tx table index for the transaction where this script first became available. |
-| `value` | jsonb | The actual data in json format |
+| `value` | jsonb | The actual data in JSON format (detailed schema) |
+| `bytes` | bytea | The actual data in CBOR format. New in v13 |
+
+### `extra_key_witness`
+
+A table containing transaction extra key witness hashes.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `hash` | hash28type | The hash of the witness. |
+| `tx_id` | integer (64) | The id of the tx this witness belongs to. |
 
 ### `param_proposal`
 
@@ -527,7 +590,7 @@ A table containing block chain parameter change proposals.
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `epoch_no` | uinteger | The epoch for which this parameter proposal in intended to become active. |
+| `epoch_no` | word31type | The epoch for which this parameter proposal in intended to become active. |
 | `key` | hash28type | The hash of the crypto key used to sign this proposal. |
 | `min_fee_a` | word64type | The 'a' parameter to calculate the minimum transaction fee. |
 | `min_fee_b` | word64type | The 'b' parameter to calculate the minimum transaction fee. |
@@ -543,11 +606,11 @@ A table containing block chain parameter change proposals.
 | `treasury_growth_rate` | double | The treasury growth rate. |
 | `decentralisation` | double | The decentralisation parameter (1 fully centralised, 0 fully decentralised). |
 | `entropy` | hash32type | The 32 byte string of extra random-ness to be added into the protocol's entropy pool. |
-| `protocol_major` | uinteger | The protocol major number. |
-| `protocol_minor` | uinteger | The protocol minor number. |
+| `protocol_major` | word31type | The protocol major number. |
+| `protocol_minor` | word31type | The protocol minor number. |
 | `min_utxo_value` | lovelace | The minimum value of a UTxO entry. |
 | `min_pool_cost` | lovelace | The minimum pool cost. |
-| `coins_per_utxo_word` | lovelace | The cost per UTxO word. |
+| `coins_per_utxo_size` | lovelace | For Alonzo this is the cost per UTxO word. For Babbage and later per UTxO byte. New in v13: Renamed from coins_per_utxo_word. |
 | `cost_model_id` | integer (64) | The CostModel table index for the proposal. |
 | `price_mem` | double | The per word cost of script memory usage. |
 | `price_step` | double | The cost of script execution step usage. |
@@ -556,8 +619,8 @@ A table containing block chain parameter change proposals.
 | `max_block_ex_mem` | word64type | The maximum number of execution memory allowed to be used in a single block. |
 | `max_block_ex_steps` | word64type | The maximum number of execution steps allowed to be used in a single block. |
 | `max_val_size` | word64type | The maximum Val size. |
-| `collateral_percent` | uinteger | The percentage of the txfee which must be provided as collateral when including non-native scripts. |
-| `max_collateral_inputs` | uinteger | The maximum number of collateral inputs allowed in a transaction. |
+| `collateral_percent` | word31type | The percentage of the txfee which must be provided as collateral when including non-native scripts. |
+| `max_collateral_inputs` | word31type | The maximum number of collateral inputs allowed in a transaction. |
 | `registered_tx_id` | integer (64) | The Tx table index for the transaction that contains this parameter proposal. |
 
 ### `epoch_param`
@@ -569,27 +632,27 @@ The accepted protocol parameters for an epoch.
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `epoch_no` | uinteger | The first epoch for which these parameters are valid. |
-| `min_fee_a` | uinteger | The 'a' parameter to calculate the minimum transaction fee. |
-| `min_fee_b` | uinteger | The 'b' parameter to calculate the minimum transaction fee. |
-| `max_block_size` | uinteger | The maximum block size (in bytes). |
-| `max_tx_size` | uinteger | The maximum transaction size (in bytes). |
-| `max_bh_size` | uinteger | The maximum block header size (in bytes). |
+| `epoch_no` | word31type | The first epoch for which these parameters are valid. |
+| `min_fee_a` | word31type | The 'a' parameter to calculate the minimum transaction fee. |
+| `min_fee_b` | word31type | The 'b' parameter to calculate the minimum transaction fee. |
+| `max_block_size` | word31type | The maximum block size (in bytes). |
+| `max_tx_size` | word31type | The maximum transaction size (in bytes). |
+| `max_bh_size` | word31type | The maximum block header size (in bytes). |
 | `key_deposit` | lovelace | The amount (in Lovelace) require for a deposit to register a StakeAddress. |
 | `pool_deposit` | lovelace | The amount (in Lovelace) require for a deposit to register a stake pool. |
-| `max_epoch` | uinteger | The maximum number of epochs in the future that a pool retirement is allowed to be scheduled for. |
-| `optimal_pool_count` | uinteger | The optimal number of stake pools. |
+| `max_epoch` | word31type | The maximum number of epochs in the future that a pool retirement is allowed to be scheduled for. |
+| `optimal_pool_count` | word31type | The optimal number of stake pools. |
 | `influence` | double | The influence of the pledge on a stake pool's probability on minting a block. |
 | `monetary_expand_rate` | double | The monetary expansion rate. |
 | `treasury_growth_rate` | double | The treasury growth rate. |
 | `decentralisation` | double | The decentralisation parameter (1 fully centralised, 0 fully decentralised). |
-| `entropy` | hash32type | The 32 byte string of extra random-ness to be added into the protocol's entropy pool. |
-| `protocol_major` | uinteger | The protocol major number. |
-| `protocol_minor` | uinteger | The protocol minor number. |
+| `extra_entropy` | hash32type | The 32 byte string of extra random-ness to be added into the protocol's entropy pool. New in v13: renamed from entopy. |
+| `protocol_major` | word31type | The protocol major number. |
+| `protocol_minor` | word31type | The protocol minor number. |
 | `min_utxo_value` | lovelace | The minimum value of a UTxO entry. |
 | `min_pool_cost` | lovelace | The minimum pool cost. |
 | `nonce` | hash32type | The nonce value for this epoch. |
-| `coins_per_utxo_word` | lovelace | The cost per UTxO word. |
+| `coins_per_utxo_size` | lovelace | For Alonzo this is the cost per UTxO word. For Babbage and later per UTxO byte. New in v13: Renamed from coins_per_utxo_word. |
 | `cost_model_id` | integer (64) | The CostModel table index for the params. |
 | `price_mem` | double | The per word cost of script memory usage. |
 | `price_step` | double | The cost of script execution step usage. |
@@ -598,8 +661,8 @@ The accepted protocol parameters for an epoch.
 | `max_block_ex_mem` | word64type | The maximum number of execution memory allowed to be used in a single block. |
 | `max_block_ex_steps` | word64type | The maximum number of execution steps allowed to be used in a single block. |
 | `max_val_size` | word64type | The maximum Val size. |
-| `collateral_percent` | uinteger | The percentage of the txfee which must be provided as collateral when including non-native scripts. |
-| `max_collateral_inputs` | uinteger | The maximum number of collateral inputs allowed in a transaction. |
+| `collateral_percent` | word31type | The percentage of the txfee which must be provided as collateral when including non-native scripts. |
+| `max_collateral_inputs` | word31type | The maximum number of collateral inputs allowed in a transaction. |
 | `block_id` | integer (64) | The Block table index for the first block where these parameters are valid. |
 
 ### `cost_model`
@@ -611,6 +674,7 @@ CostModel for EpochParam and ParamProposal.
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
+| `hash` | hash32type | The hash of cost model. It ensures uniqueness of entries. New in v13. |
 | `costs` | jsonb | The actual costs formatted as json. |
 | `block_id` | integer (64) | The first block where these costs were introduced. This is only used for rollbacks. |
 
@@ -643,19 +707,7 @@ A table containing pool offline data fetch errors.
 | `fetch_time` | timestamp | The UTC time stamp of the error. |
 | `pmr_id` | integer (64) | The PoolMetadataRef table index for this offline data. |
 | `fetch_error` | string | The text of the error. |
-| `retry_count` | uinteger | The number of retries. |
-
-### `epoch_reward_total_received`
-
-This table is used to help validate the accounting of rewards. It contains the total reward  amount for each epoch received from the ledger state and includes orphaned rewards that  are later removed from the Reward table.
-
-* Primary Id: `id`
-
-| Column name | Type | Description |
-|-|-|-|
-| `id` | integer (64) |  |
-| `earned_epoch` | uinteger | The epoch in which the reward was earned. |
-| `amount` | lovelace | The total rewards for the epoch in Lovelace. |
+| `retry_count` | word31type | The number of retries. |
 
 ### `reserved_pool_ticker`
 
