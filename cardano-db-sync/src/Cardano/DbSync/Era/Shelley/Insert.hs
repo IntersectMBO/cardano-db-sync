@@ -950,15 +950,15 @@ insertMultiAsset
     :: (MonadBaseControl IO m, MonadIO m)
     => Cache -> PolicyID StandardCrypto -> AssetName
     -> ReaderT SqlBackend m DB.MultiAssetId
-insertMultiAsset cache policy a@(AssetName aName) = do
-    mId <- queryMAWithCache cache policy a
+insertMultiAsset cache policy aName = do
+    mId <- queryMAWithCache cache policy aName
     case mId of
       Right maId -> pure maId
-      Left policyBs -> DB.insertMultiAssetUnchecked $
+      Left (policyBs, assetNameBs) -> DB.insertMultiAssetUnchecked $
                   DB.MultiAsset
                     { DB.multiAssetPolicy = policyBs
-                    , DB.multiAssetName = aName
-                    , DB.multiAssetFingerprint = DB.unAssetFingerprint (DB.mkAssetFingerprint policyBs a)
+                    , DB.multiAssetName = assetNameBs
+                    , DB.multiAssetFingerprint = DB.unAssetFingerprint (DB.mkAssetFingerprint policyBs assetNameBs)
                     }
 
 insertScript

@@ -74,6 +74,7 @@ import           Cardano.Ledger.Credential
 import           Cardano.Ledger.Hashes
 import           Cardano.Ledger.Keys
 import           Cardano.Ledger.Mary.Value
+import           Cardano.Ledger.Serialization
 import           Cardano.Ledger.Shelley.Metadata
 import           Cardano.Ledger.Shelley.TxBody (DCert (..), PoolCert (..), PoolMetadata (..),
                    PoolParams (..), StakePoolRelay (..), Wdrl (..))
@@ -117,8 +118,8 @@ consTxBody ins cols ref outs collOut fees minted certs wdrl =
       ins
       cols
       ref
-      outs
-      collOut
+      (fmap (`Sized` 0) outs)
+      (fmap (`Sized` 0) collOut)
       Strict.SNothing
       (StrictSeq.fromList certs)
       wdrl

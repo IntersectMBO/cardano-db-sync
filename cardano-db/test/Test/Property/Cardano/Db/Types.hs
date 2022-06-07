@@ -21,6 +21,7 @@ import qualified Data.Aeson as Aeson
 import           Data.Bifunctor (first)
 import qualified Data.ByteString.Base16 as Base16
 import           Data.ByteString.Char8 (ByteString)
+import qualified Data.ByteString.Short as SBS
 import           Data.Either (fromRight)
 import           Data.Int (Int64)
 import           Data.Maybe (fromMaybe)
@@ -48,11 +49,14 @@ prop_roundtrip_Ada_via_JSON =
 prop_AssetFingerprint :: Property
 prop_AssetFingerprint =
     H.withTests 1 . H.property $
-      mapM_ (\(p, a, f) -> mkAssetFingerprint (unScriptHash $ policyID p) a === f) testVectors
+      mapM_ (\(p, a, f) -> mkAssetFingerprint (unScriptHash $ policyID p) (unAssetName a) === f) testVectors
   where
 
     unScriptHash :: Ledger.ScriptHash StandardCrypto -> ByteString
     unScriptHash (Ledger.ScriptHash h) = Crypto.hashToBytes h
+
+    unAssetName :: AssetName -> ByteString
+    unAssetName = SBS.fromShort . assetName
 
     testVectors :: [(PolicyID StandardCrypto, AssetName, AssetFingerprint)]
     testVectors =
@@ -96,7 +100,7 @@ prop_AssetFingerprint =
         . fromRight (error "mkPolicyId:Base16") . Base16.decode
 
     hexAssetName :: ByteString -> AssetName
-    hexAssetName = AssetName . fromRight (error "hexAssetName") . Base16.decode
+    hexAssetName = AssetName . SBS.toShort . fromRight (error "hexAssetName") . Base16.decode
 
 
 prop_roundtrip_DbInt65_PersistField :: Property
