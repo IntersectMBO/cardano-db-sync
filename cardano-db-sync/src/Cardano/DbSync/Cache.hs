@@ -335,12 +335,13 @@ insertPoolKeyWithCache cache cacheNew pHash =
           pure phId
 
 queryMAWithCache :: MonadIO m => Cache -> PolicyID StandardCrypto -> AssetName
-                 -> ReaderT SqlBackend m (Either ByteString DB.MultiAssetId)
+                 -> ReaderT SqlBackend m (Either (ByteString, ByteString) DB.MultiAssetId)
 queryMAWithCache cache policyId asset =
   case  cache of
     UninitiatedCache -> do
-      let !bs = Generic.unScriptHash $ policyID policyId
-      maybe (Left bs) Right <$> DB.queryMultiAssetId bs (unAssetName asset)
+      let !policyBs = Generic.unScriptHash $ policyID policyId
+      let !assetNameBs = Generic.unAssetName asset
+      maybe (Left (policyBs, assetNameBs)) Right <$> DB.queryMultiAssetId policyBs assetNameBs
     Cache ci -> do
       mp <- liftIO $ readTVarIO (cMultiAssets ci)
       case LRU.lookup (policyId, asset) mp of
@@ -351,8 +352,9 @@ queryMAWithCache cache policyId asset =
         Nothing -> do
           liftIO $ missMAssets (cStats ci)
           -- miss. The lookup doesn't change the cache on a miss.
-          let !bs = Generic.unScriptHash $ policyID policyId
-          maId <- maybe (Left bs) Right <$> DB.queryMultiAssetId bs (unAssetName asset)
+          let !policyBs = Generic.unScriptHash $ policyID policyId
+          let !assetNameBs = Generic.unAssetName asset
+          maId <- maybe (Left (policyBs, assetNameBs)) Right <$> DB.queryMultiAssetId policyBs assetNameBs
           whenRight maId $
             liftIO . atomically . modifyTVar (cMultiAssets ci) . LRU.insert (policyId, asset)
           pure maId
@@ -393,7 +395,3 @@ insertBlockAndCache cache block =
         missPrevBlock (cStats ci)
         atomically $ writeTVar (cPrevBlock ci) $ Just (bid, DB.blockHash block)
       pure bid
-
--- It is completely ***INSANE*** that we even need to do something like this.
-unAssetName :: AssetName -> ByteString
-unAssetName (AssetName a) = a
