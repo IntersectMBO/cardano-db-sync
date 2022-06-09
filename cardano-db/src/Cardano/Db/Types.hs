@@ -142,7 +142,8 @@ data ScriptPurpose
 data ScriptType
   = MultiSig
   | Timelock
-  | Plutus
+  | PlutusV1
+  | PlutusV2
   deriving (Eq, Generic, Show)
 
 data PoolCertAction
@@ -267,14 +268,16 @@ renderScriptType st =
   case st of
     MultiSig -> "multisig"
     Timelock -> "timelock"
-    Plutus -> "plutus"
+    PlutusV1 -> "plutusV1"
+    PlutusV2 -> "plutusV2"
 
 readScriptType :: String -> ScriptType
 readScriptType str =
   case str of
     "multisig" -> MultiSig
     "timelock" -> Timelock
-    "plutus" -> Plutus
+    "plutusV1" -> PlutusV1
+    "plutusV2" -> PlutusV2
     _other -> error $ "readScriptType: Unknown ScriptType " ++ str
 
 word64ToAda :: Word64 -> Ada
