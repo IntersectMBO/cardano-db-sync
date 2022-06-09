@@ -70,7 +70,7 @@ services:
       - postgres_user
       - postgres_db
     volumes:
-      - db-sync-data:/var/lib/cdbsync
+      - db-sync-data:/var/lib/cexplorer
       - node-ipc:/node-ipc
     restart: on-failure
     logging:
