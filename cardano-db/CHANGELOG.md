@@ -1,6 +1,7 @@
 # Revision history for cardano-db
 
 ## Next
+* Drop `Plutus` `ScriptType` in favor of `PlutusV1` and `PlutusV2`
 * Add `extra_key_witness` table for storing `requiredSigners` (transaction extra key witnesses).
 
 ## 12.0.2

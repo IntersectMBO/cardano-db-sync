@@ -2,6 +2,7 @@
 
 ## Next
 
+* Handle `PlutusV1` and `PlutusV2` scripts as seperate script types, removing old `Plutus` type
 * Store CBOR serialized `Datum` and `Redeemer` via `bytes` field
 * Store `requiredSigners` (transaction extra key witnesses).
 
