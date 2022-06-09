@@ -3,6 +3,7 @@
 ## 13.0.0
 * Reduction in memory usage.
 * Reduction in sync-time
+* Handle `PlutusV1` and `PlutusV2` scripts as seperate script types, removing old `Plutus` type
 * Store CBOR serialized `Datum` and `Redeemer` via `bytes` field
 * HF integration. Schema changes for new Babbage fields. (#1081).
 * Improved logging. It includes some performance statistics.
