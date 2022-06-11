@@ -138,3 +138,37 @@ inputoutput/cardano-db-sync   066b747a8bfd3791b06ea46c2e793f83ed64967f   f34b029
 # Run this as
 $ docker run inputoutput/cardano-db-sync:066b747a8bfd3791b06ea46c2e793f83ed64967f
 ```
+
+## Running SMASH with docker-compose 
+
+Edit the docker-compose.yml to add a listening port for the postgres container
+e.g.
+
+``` yaml
+services:
+  postgres:
+    ...
+    restart: on-failure
+    ports:
+      - "5432:5432"
+    logging:
+    ...
+```
+
+Follow the instructions from `Restore from Snapshot` and wait until the snapshot has restored.
+Create a `pgpass-local` file with the credentials of (taken from config/secrets/postgres_* files):
+
+``` shell
+echo "localhost:5432:cexplorer:postgres:v8hlDV0yMAHHlIurYupj" > config/pgpass-local   
+chmod 0600 config/pgpass-local
+```
+
+Run SMASH-server
+
+``` shell
+PGPASSFILE=config/pgpass-test cabal exec -- cardano-smash-server \
+     --config config/mainnet-config.yaml \
+     --port 3100
+```
+
+See [smash documentation](doc/smash.sh) for querying the SMASH-server
