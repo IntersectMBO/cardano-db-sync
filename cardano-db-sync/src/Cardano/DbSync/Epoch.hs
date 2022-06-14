@@ -27,7 +27,6 @@ import           Database.Esqueleto.Experimental (SqlBackend, desc, from, limit,
 import           Cardano.Db (EntityField (..), EpochId)
 import qualified Cardano.Db as DB
 
-import           Cardano.DbSync.Api
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
@@ -44,11 +43,9 @@ import           System.IO.Unsafe (unsafePerformIO)
 --    updated on each new block.
 --
 -- When in syncing mode, the row for the current epoch being synced may be incorrect.
-epochStartup :: SyncEnv -> IO ()
-epochStartup env =
-  when (soptExtended $ envOptions env) $ do
-    let trce = getTrace env
-    let backend = envBackend env
+epochStartup :: Bool -> Trace IO Text -> SqlBackend -> IO ()
+epochStartup isExtended trce backend =
+  when isExtended $ do
     DB.runDbIohkLogging backend trce $ do
       liftIO . logInfo trce $ "epochStartup: Checking"
       mlbe <- queryLatestEpochNo
