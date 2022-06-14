@@ -33,10 +33,10 @@ import           Ouroboros.Network.Point
 -- Rollbacks are done in an Era generic way based on the 'Point' we are
 -- rolling back to.
 rollbackToPoint :: SyncEnv -> CardanoPoint -> IO (Either SyncNodeError ())
-rollbackToPoint env point =
+rollbackToPoint env point = do
+    backend <- getBackend env
     DB.runDbIohkNoLogging backend $ runExceptT action
   where
-    backend = envBackend env
     trce = getTrace env
     cache = envCache env
 

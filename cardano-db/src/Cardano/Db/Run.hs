@@ -49,7 +49,8 @@ import           Database.Esqueleto.Internal.Internal (Mode (SELECT), SqlSelect,
                    toRawSql)
 
 import           Data.Pool (Pool (..))
-import           Database.Persist.Postgresql (SqlBackend, openSimpleConn, withPostgresqlConn)
+import           Database.Persist.Postgresql (ConnectionString, SqlBackend, openSimpleConn,
+                   withPostgresqlConn)
 import           Database.Persist.Sql (IsolationLevel (..), runSqlConnWithIsolation,
                    runSqlPoolWithIsolation, transactionSaveWithIsolation)
 import           Database.PostgreSQL.Simple (connectPostgreSQL)
@@ -78,11 +79,10 @@ runDbHandleLogger logHandle source dbAction = do
       BS.hPutStrLn logHandle . fromLogStr $ defaultLogStr loc src level msg
 
 runWithConnectionLogging
-    :: PGPassSource -> Trace IO Text -> ReaderT SqlBackend (LoggingT IO) a -> IO a
-runWithConnectionLogging source tracer dbAction = do
-  pgconfig <- orDie renderPGPassError $ newExceptT (readPGPass source)
+    :: ConnectionString -> Trace IO Text -> ReaderT SqlBackend (LoggingT IO) a -> IO a
+runWithConnectionLogging dbConnString tracer dbAction = do
   runIohkLogging tracer .
-    withPostgresqlConn (toConnectionString pgconfig) $ \backend ->
+    withPostgresqlConn dbConnString $ \backend ->
       runSqlConnWithIsolation dbAction backend Serializable
 
 runWithConnectionNoLogging

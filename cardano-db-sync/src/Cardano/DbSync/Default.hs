@@ -54,12 +54,12 @@ insertListBlocks
     :: SyncEnv -> [CardanoBlock]
     -> IO (Either SyncNodeError ())
 insertListBlocks env blocks = do
+    backend <- getBackend env
     DB.runDbIohkLogging backend tracer .
       runExceptT $ do
         traverse_ (applyAndInsert env) blocks
   where
     tracer = getTrace env
-    backend = envBackend env
 
 applyAndInsert
     :: SyncEnv -> CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
@@ -69,7 +69,7 @@ applyAndInsert env cblk = do
     insertLedgerEvents env (sdEpochNo details) (apEvents applyResult)
     insertEpoch details
     let firstBlockOfEpoch = hasEpochStartEvent (apEvents applyResult)
-    let isMember = \poolId -> Set.member poolId (apPoolsRegistered applyResult)
+    let isMember poolId = Set.member poolId (apPoolsRegistered applyResult)
     case cblk of
       BlockByron blk ->
         newExceptT $ insertByronBlock env firstBlockOfEpoch blk details
