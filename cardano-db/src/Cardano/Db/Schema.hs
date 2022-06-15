@@ -396,7 +396,7 @@ share
     txId                TxId                OnDeleteCascade
     unitMem             Word64              sqltype=word63type
     unitSteps           Word64              sqltype=word63type
-    fee                 DbLovelace          sqltype=lovelace
+    fee                 DbLovelace Maybe    sqltype=lovelace
     purpose             ScriptPurpose       sqltype=scriptpurposetype
     index               Word64              sqltype=word31type
     scriptHash          ByteString Maybe    sqltype=hash28type
@@ -855,7 +855,8 @@ schemaDocs =
       RedeemerTxId # "The Tx table index that contains this redeemer."
       RedeemerUnitMem # "The budget in Memory to run a script."
       RedeemerUnitSteps # "The budget in Cpu steps to run a script."
-      RedeemerFee # "The budget in fees to run a script. The fees depend on the ExUnits and the current prices."
+      RedeemerFee # "The budget in fees to run a script. The fees depend on the ExUnits and the current prices.\
+                        \ Is null when --disable-ledger is enabled. New in v13: became nullable."
       RedeemerPurpose # "What kind pf validation this redeemer is used for. It can be one of 'spend', 'mint', 'cert', 'reward'."
       RedeemerIndex # "The index of the redeemer pointer in the transaction."
       RedeemerScriptHash # "The script hash this redeemer is used for."
