@@ -71,8 +71,8 @@ import qualified Data.Set as Set
 import           Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardCrypto)
 
 
-fromAlonzoTx :: Alonzo.Prices -> (Word64, Ledger.Tx StandardAlonzo) -> Tx
-fromAlonzoTx prices (blkIndex, tx) =
+fromAlonzoTx :: Maybe Alonzo.Prices -> (Word64, Ledger.Tx StandardAlonzo) -> Tx
+fromAlonzoTx mprices (blkIndex, tx) =
     Tx
       { txHash = Crypto.hashToBytes . Ledger.extractHash $ Ledger.hashAnnotated txBody
       , txBlockIndex = blkIndex
@@ -109,7 +109,6 @@ fromAlonzoTx prices (blkIndex, tx) =
       , txData = txDataWitness tx
       , txScriptSizes = getPlutusSizes tx
       , txScripts = getScripts tx
-      , txScriptsFee = minFees
       , txExtraKeyWitnesses = extraKeyWits txBody
       }
   where
@@ -136,10 +135,7 @@ fromAlonzoTx prices (blkIndex, tx) =
     txBody :: Ledger.TxBody StandardAlonzo
     txBody = getField @"body" tx
 
-    minFees :: Coin
-    minFees = txscriptfee prices $ Alonzo.totExUnits tx
-
-    (finalMaps, redeemers) = resolveRedeemers prices tx
+    (finalMaps, redeemers) = resolveRedeemers mprices tx
 
     -- This is true if second stage contract validation passes or there are no contracts.
     isValid2 :: Bool
@@ -179,8 +175,8 @@ resolveRedeemers ::
       HasField "certs" (Ledger.TxBody era) (StrictSeq (Shelley.DCert StandardCrypto)),
       HasField "txrdmrs" (Ledger.Witnesses era) (Alonzo.Redeemers era)
     ) =>
-    Alonzo.Prices -> Ledger.Tx era -> (RedeemerMaps, [(Word64, TxRedeemer)])
-resolveRedeemers prices tx =
+    Maybe Alonzo.Prices -> Ledger.Tx era -> (RedeemerMaps, [(Word64, TxRedeemer)])
+resolveRedeemers mprices tx =
     mkRdmrAndUpdateRec (initRedeemersMaps, [])
       $ zip [0..] $ Map.toList (Alonzo.unRedeemers (getField @"txrdmrs" (getField @"wits" tx)))
   where
@@ -226,7 +222,7 @@ resolveRedeemers prices tx =
         txRdmr = TxRedeemer
           { txRedeemerMem = fromIntegral $ exUnitsMem exUnits
           , txRedeemerSteps = fromIntegral $ exUnitsSteps exUnits
-          , txRedeemerFee = txscriptfee prices exUnits
+          , txRedeemerFee = (`txscriptfee` exUnits) <$> mprices
           , txRedeemerPurpose = tag
           , txRedeemerIndex = index
           , txRedeemerScriptHash = mScript

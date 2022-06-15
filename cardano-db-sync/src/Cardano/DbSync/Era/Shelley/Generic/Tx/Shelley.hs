@@ -72,7 +72,6 @@ fromShelleyTx (blkIndex, tx) =
       , txData = []
       , txScriptSizes = []    -- Shelley does not support plutus scripts
       , txScripts = scripts
-      , txScriptsFee = Coin 0 -- Shelley does not support plutus scripts
       , txExtraKeyWitnesses = []
       }
   where
