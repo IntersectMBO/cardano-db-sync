@@ -1,8 +1,10 @@
 # Revision history for cardano-db-sync
 
 ## 13.0.0
+* Added `--disable-ledger` flag, which significantly reduces memory usage. Read more at `doc/configuration.md`.
 * Reduction in memory usage.
 * Reduction in sync-time.
+* Added `--disable-cache` flag, which slightly reduces memory usage. Read more at `doc/configuration.md`.
 * Handle `PlutusV1` and `PlutusV2` scripts as seperate script types, removing old `Plutus` type
 * Store CBOR serialized `Datum` and `Redeemer` via `bytes` field
 * HF integration. Schema changes for new Babbage fields. (#1081).

@@ -4,7 +4,7 @@ The initial design of db-sync was an one fit all approach, where it would serve 
 
 ### --disable-ledger
 
-One of the features of db-sync that uses the most recourses is that it maintains a ledger state and it replays all the ledger rules. This is the only way to get historic rewards an other things that are not included in the blocks, like historic stake distribution, ada pots, epoch params etc. The flag --disable-ledger provides the option to turn off these feauture an significantly reduces usage of memory (by up to 10GB) and sync time.
+One of the features of db-sync that uses the most recourses is that it maintains a ledger state and it replays all the ledger rules. This is the only way to get historic rewards an other things that are not included in the blocks, like historic stake distribution, ada pots, epoch params etc. The flag --disable-ledger provides the option to turn off these feauture an significantly reduces usage of memory (by up to 10GB on mainnet) and sync time.
 
 When this flag is enables, some feautures are missing and some db tables are left empty:
 - `redeemer.fee` is left null
@@ -12,3 +12,18 @@ When this flag is enables, some feautures are missing and some db tables are lef
 - `epoch_stake` table is left empty
 - `ada_pots` table is left empty
 - `epoch_param` table is left empty
+
+Released snapshots are compatible with this options. There could be some small inconsistencies though, since the snapshots are created using the option. So the above data may exist up to the slot/epoch of the snapshot creation and missing afterwards. The simplest way to fix this, is to delete the existing data. Since this is still an experimental feauture, db-sync doesn't do anything automatinally, since we don't know how users want to use the feature.
+Some queries someone may want to run after restoring a snapshot:
+
+```sql
+update redeemer set fee = null;
+delete from reward;
+delete from epoch_stake;
+delete from ada_pots;
+delete from epoch_param;
+```
+
+### --disable-cache
+
+This disables the application level caches of db-sync. It reduces memory usage by a bit, but increases sync time. Usually this flag is not worth it, unless there are some pretty big memory issues.
