@@ -17,6 +17,16 @@ import           System.IO (IOMode (..), withFile)
 import           System.Process (readProcessWithExitCode)
 
 
+-- There are a number of reasons why we generate schema documentation like this.
+--   * Having the schema docs with the schema definition in the Haskell file means that the schema
+--     documentation library will error out if a field is deleted from the schema but not the
+--     documentation. If a field is added but not documented, the documentation library will still
+--     add it to the generated documentation but with a blank comment.
+--   * Schema documentation can be generated at any time, but the updated `doc/schema.md` file
+--     should only be committed as part of the release process, so that documentation in the Github
+--     matches the schema version people are likley to be running in the field.
+
+
 main :: IO ()
 main = do
     args <- getArgs
@@ -50,6 +60,10 @@ docHeader branchName =
               [ " (from branch **", branchName
               , "** which may not accurately reflect the version number)"
               ]
+    , "\n"
+    , "**Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema.hs\
+        \ by the command `cabal run -- gen-schema-docs doc/schema.md`. This document should only be updated\
+        \ during the release process and updated on the release branch."
     , "\n"
     ]
 
