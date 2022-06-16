@@ -37,6 +37,7 @@ module Cardano.Db.Query
   , queryGenesisSupply
   , queryShelleyGenesisSupply
   , queryLatestBlock
+  , queryLatestPoints
   , queryLatestCachedEpochNo
   , queryLatestEpochNo
   , queryLatestBlockId
@@ -551,6 +552,16 @@ queryLatestBlock = do
     limit 1
     pure blk
   pure $ fmap entityVal (listToMaybe res)
+
+queryLatestPoints :: MonadIO m => ReaderT SqlBackend m [(Maybe Word64, ByteString)]
+queryLatestPoints = do
+  res <- select $ do
+    blk <- from $ table @Block
+    where_ (isJust $ blk ^. BlockSlotNo)
+    orderBy [desc (blk ^. BlockSlotNo)]
+    limit 5
+    pure (blk ^. BlockSlotNo, blk ^. BlockHash)
+  pure $ fmap unValue2 res
 
 queryLatestCachedEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
 queryLatestCachedEpochNo = do

@@ -15,6 +15,7 @@ module Cardano.DbSync.LedgerState
   , LedgerEvent (..)
   , ApplyResult (..)
   , LedgerStateFile (..)
+  , defaultApplyResult
   , mkLedgerEnv
   , applyBlockAndSnapshot
   , listLedgerStateFilesOrdered
@@ -57,8 +58,8 @@ import           Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
 import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..), fromWithOrigin)
 
 import qualified Control.Exception as Exception
-import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, TBQueue, atomically, newTBQueueIO,
-                   newTVarIO, readTVar, writeTVar)
+import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, atomically, newTVarIO, readTVar,
+                   writeTVar)
 
 -- import           Codec.CBOR.Write (toBuilder)
 import qualified Data.ByteString.Base16 as Base16
@@ -74,7 +75,7 @@ import qualified Data.Text as Text
 import           Data.Time.Clock (UTCTime, diffUTCTime, getCurrentTime)
 
 import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockHash, blockIsEBB,
-                   blockPoint, blockPrevHash, pointSlot)
+                   blockPrevHash, pointSlot)
 import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
@@ -125,20 +126,6 @@ data LedgerEnv = LedgerEnv
   , leSnapshotEveryLagging :: !Word64
   , leInterpreter :: !(StrictTVar IO (Strict.Maybe CardanoInterpreter))
   , leStateVar :: !(StrictTVar IO (Strict.Maybe LedgerDB))
-  , leEventState :: !(StrictTVar IO LedgerEventState)
-  -- The following do not really have anything to do with maintaining ledger
-  -- state. They are here due to the ongoing headaches around the split between
-  -- `cardano-sync` and `cardano-db-sync`.
-  , leOfflineWorkQueue :: !(TBQueue IO PoolFetchRetry)
-  , leOfflineResultQueue :: !(TBQueue IO FetchResult)
-  , leEpochSyncTime :: !(StrictTVar IO UTCTime)
-  , leStableEpochSlot :: !EpochSlot
-  }
-
--- TODO this is unstable in terms of restarts and we should try to remove it.
-data LedgerEventState = LedgerEventState
-  { lesInitialized :: !Bool
-  , lesEpochNo :: !(Strict.Maybe EpochNo)
   }
 
 topLevelConfig :: LedgerEnv -> TopLevelConfig CardanoBlock
@@ -194,10 +181,19 @@ data ApplyResult = ApplyResult
   , apPoolsRegistered :: !(Set.Set PoolKeyHash) -- registered before the block application
   , apNewEpoch :: !(Strict.Maybe Generic.NewEpoch) -- Only Just for a single block at the epoch boundary
   , apSlotDetails :: !SlotDetails
-  , apPoint :: !CardanoPoint
   , apStakeSlice :: !Generic.StakeSliceRes
   , apEvents :: ![LedgerEvent]
   }
+
+defaultApplyResult :: SlotDetails -> ApplyResult
+defaultApplyResult slotDetails = ApplyResult
+    { apPrices = Strict.Nothing
+    , apPoolsRegistered = Set.empty
+    , apNewEpoch = Strict.Nothing
+    , apSlotDetails = slotDetails
+    , apStakeSlice = Generic.NoSlices
+    , apEvents = []
+    }
 
 newtype LedgerDB = LedgerDB
   { ledgerDbCheckpoints :: AnchoredSeq (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState
@@ -227,17 +223,11 @@ ledgerDbCurrent = either id id . AS.head . ledgerDbCheckpoints
 
 mkLedgerEnv
     :: Trace IO Text -> Consensus.ProtocolInfo IO CardanoBlock -> LedgerStateDir
-    -> Ledger.Network -> EpochSlot -> SystemStart -> Bool -> Word64 -> Word64
+    -> Ledger.Network -> SystemStart -> Bool -> Word64 -> Word64
     -> IO LedgerEnv
-mkLedgerEnv trce protocolInfo dir nw stableEpochSlot systemStart aop snapshotEveryFollowing snapshotEveryLagging = do
+mkLedgerEnv trce protocolInfo dir nw systemStart aop snapshotEveryFollowing snapshotEveryLagging = do
     svar <- newTVarIO Strict.Nothing
-    evar <- newTVarIO initLedgerEventState
     intervar <- newTVarIO Strict.Nothing
-    -- 2.5 days worth of slots. If we try to stick more than this number of
-    -- items in the queue, bad things are likely to happen.
-    owq <- newTBQueueIO 100
-    orq <- newTBQueueIO 100
-    est <- newTVarIO =<< getCurrentTime
     pure LedgerEnv
       { leTrace = trce
       , leProtocolInfo = protocolInfo
@@ -249,19 +239,7 @@ mkLedgerEnv trce protocolInfo dir nw stableEpochSlot systemStart aop snapshotEve
       , leSnapshotEveryLagging = snapshotEveryLagging
       , leInterpreter = intervar
       , leStateVar = svar
-      , leEventState = evar
-      , leOfflineWorkQueue = owq
-      , leOfflineResultQueue  = orq
-      , leEpochSyncTime = est
-      , leStableEpochSlot = stableEpochSlot
       }
-  where
-    initLedgerEventState :: LedgerEventState
-    initLedgerEventState =
-      LedgerEventState
-        { lesInitialized = False
-        , lesEpochNo = Strict.Nothing
-        }
 
 
 initCardanoLedgerState :: Consensus.ProtocolInfo IO CardanoBlock -> CardanoLedgerState
@@ -302,16 +280,14 @@ applyBlock env blk = do
       let !newState = CardanoLedgerState newLedgerState newEpochBlockNo
       let !ledgerDB' = pushLedgerDB ledgerDB newState
       writeTVar (leStateVar env) (Strict.Just ledgerDB')
-      !events <- generateNewEpochEvents env details
       let !ledgerEvents = mapMaybe convertAuxLedgerEvent (lrEvents result)
       let !appResult = ApplyResult
             { apPrices = getPrices newState
             , apPoolsRegistered = getRegisteredPools oldState
             , apNewEpoch = maybeToStrict newEpoch
             , apSlotDetails = details
-            , apPoint = blockPoint blk
             , apStakeSlice = stakeSlice newState details
-            , apEvents = sort $ events ++ ledgerEvents
+            , apEvents = ledgerEvents
             }
       pure (oldState, appResult)
   where
@@ -356,31 +332,6 @@ applyBlock env blk = do
                           stakeSliceMinSize
                           (clsState cls)
       _ -> Generic.NoSlices
-
-generateNewEpochEvents :: LedgerEnv -> SlotDetails -> STM [LedgerEvent]
-generateNewEpochEvents env details = do
-    !oldEventState <- readTVar (leEventState env)
-    writeTVar (leEventState env) newEventState
-    pure $ maybeToList (newEpochEvent oldEventState)
-  where
-    currentEpochNo :: EpochNo
-    currentEpochNo = sdEpochNo details
-
-    newEpochEvent :: LedgerEventState -> Maybe LedgerEvent
-    newEpochEvent oldEventState =
-      case lesEpochNo oldEventState of
-        Strict.Nothing -> Just $ LedgerStartAtEpoch currentEpochNo
-        Strict.Just oldEpoch ->
-          if currentEpochNo == 1 + oldEpoch
-            then Just $ LedgerNewEpoch currentEpochNo (getSyncStatus details)
-            else Nothing
-
-    newEventState :: LedgerEventState
-    newEventState =
-      LedgerEventState
-        { lesInitialized = True
-        , lesEpochNo = Strict.Just currentEpochNo
-        }
 
 storeSnapshotAndCleanupMaybe
         :: LedgerEnv -> CardanoLedgerState -> ApplyResult -> BlockNo -> SyncState

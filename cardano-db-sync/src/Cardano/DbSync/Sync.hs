@@ -38,6 +38,8 @@ import qualified Cardano.Crypto as Crypto
 
 import           Cardano.Slotting.Slot (EpochNo (..), WithOrigin (..))
 
+import qualified Cardano.Db as Db
+
 import           Cardano.DbSync.Api
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Database
@@ -45,6 +47,7 @@ import           Cardano.DbSync.DbAction
 import           Cardano.DbSync.Epoch
 import           Cardano.DbSync.Era
 import           Cardano.DbSync.Error
+import           Cardano.DbSync.LocalStateQuery
 import           Cardano.DbSync.Metrics
 import           Cardano.DbSync.Tracing.ToObjectOrphans ()
 import           Cardano.DbSync.Types
@@ -55,8 +58,10 @@ import qualified Codec.CBOR.Term as CBOR
 import           Control.Monad.Trans.Except.Exit (orDie)
 
 import qualified Data.ByteString.Lazy as BSL
+import           Data.Functor.Contravariant (contramap)
+import qualified Data.Text as Text
 
-import           Database.Persist.Sql (SqlBackend)
+import           Database.Persist.Postgresql (ConnectionString, withPostgresqlConn)
 
 import           Network.Mux (MuxTrace, WithMuxBearer)
 import           Network.Mux.Types (MuxMode (..))
@@ -92,6 +97,7 @@ import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined
 import           Ouroboros.Network.Protocol.ChainSync.PipelineDecision (MkPipelineDecision,
                    PipelineDecision (..), pipelineDecisionLowHighMark, runPipelineDecision)
 import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
+import           Ouroboros.Network.Protocol.LocalStateQuery.Client (localStateQueryClientPeer)
 import qualified Ouroboros.Network.Snocket as Snocket
 import           Ouroboros.Network.Subscription (SubscriptionTrace)
 
@@ -101,14 +107,14 @@ import           System.Directory (createDirectoryIfMissing)
 runSyncNode
     :: MetricSetters
     -> Trace IO Text
-    -> SqlBackend
     -> IOManager
     -> Bool
     -> Word64
     -> Word64
+    -> ConnectionString
     -> SyncNodeParams
     -> IO ()
-runSyncNode metricsSetters trce backend iomgr aop snEveryFollowing snEveryLagging enp = do
+runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConnString enp = do
 
     let configFile = enpConfigFile enp
     enc <- readSyncNodeConfig configFile
@@ -125,14 +131,15 @@ runSyncNode metricsSetters trce backend iomgr aop snEveryFollowing snEveryLaggin
 
       -- If the DB is empty it will be inserted, otherwise it will be validated (to make
       -- sure we are on the right chain).
-      insertValidateGenesisDist trce backend (dncNetworkName enc) genCfg (useShelleyInit enc)
+      lift $ Db.runIohkLogging trce $ withPostgresqlConn dbConnString $ \backend -> do
+        lift $ orDie renderSyncNodeError $ insertValidateGenesisDist trce backend (dncNetworkName enc) genCfg (useShelleyInit enc)
+        liftIO $ epochStartup (enpExtended enp) trce backend
 
       case genCfg of
           GenesisCardano {} -> do
-            syncEnv <- ExceptT $ mkSyncEnvFromConfig trce backend
-              (SyncOptions (enpExtended enp) aop (enpHasCache enp) snEveryFollowing snEveryLagging)
+            syncEnv <- ExceptT $ mkSyncEnvFromConfig trce dbConnString
+              (SyncOptions (enpExtended enp) aop (enpHasCache enp) (enpHasLedger enp) snEveryFollowing snEveryLagging)
               (enpLedgerStateDir enp) genCfg
-            liftIO $ epochStartup syncEnv
             liftIO $ runSyncNodeClient metricsSetters syncEnv iomgr trce (enpSocketPath enp)
   where
     useShelleyInit :: SyncNodeConfig -> Bool
@@ -212,35 +219,37 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
     localChainSyncPtcl :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
     localChainSyncPtcl = InitiatorProtocolOnly $ MuxPeerRaw $ \channel ->
       liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
-        logInfo trce "Starting chainSyncClient"
+        Db.runIohkLogging trce $ withPostgresqlConn (envConnString env) $ \backend -> liftIO $ do
+          replaceConnection env backend
+          logInfo trce "Starting chainSyncClient"
 
-        -- The Db thread is not forked at this point, so we can use
-        -- the connection here. A connection cannot be used concurrently by many
-        -- threads
-        latestPoints <- getLatestPoints env
-        currentTip <- getCurrentTipBlockNo env
-        logDbState env
-        -- communication channel between datalayer thread and chainsync-client thread
-        actionQueue <- newDbActionQueue
+          -- The Db thread is not forked at this point, so we can use
+          -- the connection here. A connection cannot be used concurrently by many
+          -- threads
+          latestPoints <- getLatestPoints env
+          currentTip <- getCurrentTipBlockNo env
+          logDbState env
+          -- communication channel between datalayer thread and chainsync-client thread
+          actionQueue <- newDbActionQueue
 
-        race_
-            (race
-                (runDbThread env metricsSetters actionQueue)
-                (runOfflineFetchThread trce (envLedger env))
-                )
-            (runPipelinedPeer
-                localChainSyncTracer
-                (cChainSyncCodec codecs)
-                channel
-                (chainSyncClientPeerPipelined
-                    $ chainSyncClient metricsSetters trce latestPoints currentTip actionQueue)
-            )
+          race_
+              (race
+                  (runDbThread env metricsSetters actionQueue)
+                  (runOfflineFetchThread trce env)
+                  )
+              (runPipelinedPeer
+                  localChainSyncTracer
+                  (cChainSyncCodec codecs)
+                  channel
+                  (chainSyncClientPeerPipelined
+                      $ chainSyncClient metricsSetters trce latestPoints currentTip actionQueue)
+              )
 
-        atomically $ writeDbActionQueue actionQueue DbFinish
-        -- We should return leftover bytes returned by 'runPipelinedPeer', but
-        -- client application do not care about them (it's only important if one
-        -- would like to restart a protocol on the same mux and thus bearer).
-        pure ((), Nothing)
+          atomically $ writeDbActionQueue actionQueue DbFinish
+          -- We should return leftover bytes returned by 'runPipelinedPeer', but
+          -- client application do not care about them (it's only important if one
+          -- would like to restart a protocol on the same mux and thus bearer).
+          pure ((), Nothing)
 
     dummylocalTxSubmit :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
     dummylocalTxSubmit = InitiatorProtocolOnly $ MuxPeer
@@ -251,9 +260,9 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
     localStateQuery :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
     localStateQuery =
       InitiatorProtocolOnly $ MuxPeer
-        Logging.nullTracer
+        (if hasLedgerState env then Logging.nullTracer else contramap (Text.pack . show) . toLogObject $ appendName "local-state-query" trce)
         (cStateQueryCodec codecs)
-        localStateQueryPeerNull
+        (if hasLedgerState env then localStateQueryPeerNull else localStateQueryClientPeer (localStateQueryHandler (envNoLedgerEnv env)))
 
 -- | 'ChainSyncClient' which traces received blocks and ignores when it
 -- receives a request to rollbackwar.  A real wallet client should:
@@ -298,8 +307,8 @@ chainSyncClient metricsSetters trce latestPoints currentTip actionQueue = do
 
     goTip :: MkPipelineDecision -> Nat n -> WithOrigin BlockNo -> Tip CardanoBlock -> Maybe [CardanoPoint]
           -> ClientPipelinedStIdle n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-    goTip mkPipelineDecision n clientTip serverTip mPoint =
-      go mkPipelineDecision n clientTip (getTipBlockNo serverTip) mPoint
+    goTip mkPipelineDecision n clientTip serverTip =
+      go mkPipelineDecision n clientTip (getTipBlockNo serverTip)
 
     go :: MkPipelineDecision -> Nat n -> WithOrigin BlockNo -> WithOrigin BlockNo -> Maybe [CardanoPoint]
         -> ClientPipelinedStIdle n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()

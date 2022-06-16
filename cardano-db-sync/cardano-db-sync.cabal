@@ -109,6 +109,7 @@ library
 
                         Cardano.DbSync.Rollback
 
+                        Cardano.DbSync.LocalStateQuery
                         Cardano.DbSync.StateQuery
                         Cardano.DbSync.Sync
                         Cardano.DbSync.Tracing.ToObjectOrphans

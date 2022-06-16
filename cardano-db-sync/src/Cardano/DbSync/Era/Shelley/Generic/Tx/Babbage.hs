@@ -14,7 +14,6 @@ import           Cardano.Prelude
 import qualified Cardano.Crypto.Hash as Crypto
 
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
-import           Cardano.Ledger.Alonzo.Scripts (txscriptfee)
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import           Cardano.Ledger.Alonzo.Tx (ValidatedTx (..))
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
@@ -40,8 +39,8 @@ import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (calcWithdrawalSu
 import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
-fromBabbageTx :: Alonzo.Prices -> (Word64, Ledger.Tx StandardBabbage) -> Tx
-fromBabbageTx prices (blkIndex, tx) =
+fromBabbageTx :: Maybe Alonzo.Prices -> (Word64, Ledger.Tx StandardBabbage) -> Tx
+fromBabbageTx mprices (blkIndex, tx) =
     Tx
       { txHash = Crypto.hashToBytes . Ledger.extractHash $ Ledger.hashAnnotated txBody
       , txBlockIndex = blkIndex
@@ -79,7 +78,6 @@ fromBabbageTx prices (blkIndex, tx) =
       , txData = txDataWitness tx
       , txScriptSizes = getPlutusSizes tx
       , txScripts = getScripts tx
-      , txScriptsFee = minFees
       , txExtraKeyWitnesses = extraKeyWits txBody
       }
   where
@@ -115,16 +113,13 @@ fromBabbageTx prices (blkIndex, tx) =
     txBody :: Ledger.TxBody StandardBabbage
     txBody = getField @"body" tx
 
-    minFees :: Coin
-    minFees = txscriptfee prices $ Alonzo.totExUnits tx
-
     -- This is true if second stage contract validation passes.
     isValid2 :: Bool
     isValid2 =
       case Alonzo.isValid tx of
         Alonzo.IsValid x -> x
 
-    (finalMaps, redeemers) = resolveRedeemers prices tx
+    (finalMaps, redeemers) = resolveRedeemers mprices tx
     (invalidBefore, invalidAfter) = getInterval txBody
 
 

@@ -27,7 +27,8 @@ import           Cardano.DbSync.Era.Shelley.Insert.Epoch (insertPoolDepositRefun
 import           Cardano.DbSync.Era.Shelley.Validate (validateEpochRewards)
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState (ApplyResult (..), LedgerEvent (..),
-                   applyBlockAndSnapshot)
+                   applyBlockAndSnapshot, defaultApplyResult)
+import           Cardano.DbSync.LocalStateQuery
 import           Cardano.DbSync.Rollback (rollbackToPoint)
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
@@ -54,22 +55,24 @@ insertListBlocks
     :: SyncEnv -> [CardanoBlock]
     -> IO (Either SyncNodeError ())
 insertListBlocks env blocks = do
+    backend <- getBackend env
     DB.runDbIohkLogging backend tracer .
       runExceptT $ do
         traverse_ (applyAndInsert env) blocks
   where
     tracer = getTrace env
-    backend = envBackend env
 
 applyAndInsert
     :: SyncEnv -> CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 applyAndInsert env cblk = do
-    !applyResult <- liftIO $ applyBlockAndSnapshot (envLedger env) cblk
+    !applyRes <- liftIO mkApplyResult
+    !epochEvents <- liftIO $ atomically $ generateNewEpochEvents env (apSlotDetails applyRes)
+    let !applyResult = applyRes { apEvents = sort $ epochEvents <> apEvents applyRes}
     let !details = apSlotDetails applyResult
     insertLedgerEvents env (sdEpochNo details) (apEvents applyResult)
     insertEpoch details
     let firstBlockOfEpoch = hasEpochStartEvent (apEvents applyResult)
-    let isMember = \poolId -> Set.member poolId (apPoolsRegistered applyResult)
+    let isMember poolId = Set.member poolId (apPoolsRegistered applyResult)
     case cblk of
       BlockByron blk ->
         newExceptT $ insertByronBlock env firstBlockOfEpoch blk details
@@ -94,10 +97,19 @@ applyAndInsert env cblk = do
     insertEpoch details = when (soptExtended $ envOptions env) .
       newExceptT $ epochInsert tracer (BlockDetails cblk details)
 
-    getPrices :: ApplyResult -> Ledger.Prices
+    getPrices :: ApplyResult -> Maybe Ledger.Prices
     getPrices applyResult = case apPrices applyResult of
-      Strict.Just pr -> pr
-      Strict.Nothing -> Ledger.Prices minBound minBound
+      Strict.Just pr -> Just pr
+      Strict.Nothing | hasLedgerState env -> Just $ Ledger.Prices minBound minBound
+      Strict.Nothing -> Nothing
+
+    mkApplyResult :: IO ApplyResult
+    mkApplyResult = do
+      if hasLedgerState env then
+        applyBlockAndSnapshot (envLedger env) cblk
+      else do
+        slotDetails <- getSlotDetailsNode (envNoLedgerEnv env) (cardanoBlockSlotNo cblk)
+        pure $ defaultApplyResult slotDetails
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -129,7 +141,7 @@ insertLedgerEvents env currentEpochNo@(EpochNo curEpoch) =
       case ev of
         LedgerNewEpoch en ss -> do
           lift $ do
-            insertEpochSyncTime en (toSyncState ss) (leEpochSyncTime lenv)
+            insertEpochSyncTime en (toSyncState ss) (envEpochSyncTime env)
           sqlBackend <- lift ask
           persistantCacheSize <- liftIO $ statementCacheSize $ connStmtMap sqlBackend
           liftIO . logInfo tracer $ "Persistant SQL Statement Cache size is " <> textShow persistantCacheSize

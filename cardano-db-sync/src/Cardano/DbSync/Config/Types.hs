@@ -68,6 +68,7 @@ data SyncNodeParams = SyncNodeParams
   , enpPGPassSource :: !PGPassSource
   , enpExtended :: !Bool
   , enpHasCache :: !Bool
+  , enpHasLedger :: !Bool
   , enpMaybeRollback :: !(Maybe SlotNo)
   }
 
@@ -156,8 +157,8 @@ pcNodeConfigFilePath = unNodeConfigFile . pcNodeConfigFile
 -- -------------------------------------------------------------------------------------------------
 
 instance FromJSON SyncPreConfig where
-  parseJSON o =
-    Aeson.withObject "top-level" parseGenSyncNodeConfig o
+  parseJSON =
+    Aeson.withObject "top-level" parseGenSyncNodeConfig
 
 parseGenSyncNodeConfig :: Object -> Parser SyncPreConfig
 parseGenSyncNodeConfig o =

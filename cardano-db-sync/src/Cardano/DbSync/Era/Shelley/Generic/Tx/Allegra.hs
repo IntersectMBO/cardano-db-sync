@@ -16,7 +16,6 @@ import           Cardano.Slotting.Slot (SlotNo (..))
 
 import qualified Cardano.Ledger.Allegra as Allegra
 import           Cardano.Ledger.BaseTypes
-import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Era as Ledger
 import           Cardano.Ledger.Shelley.Scripts (ScriptHash)
@@ -69,7 +68,6 @@ fromAllegraTx (blkIndex, tx) =
       , txData = []
       , txScriptSizes = []    -- Allegra does not support plutus scripts
       , txScripts = scripts
-      , txScriptsFee = Coin 0 -- Allegra does not support plutus scripts
       , txExtraKeyWitnesses = []
       }
   where

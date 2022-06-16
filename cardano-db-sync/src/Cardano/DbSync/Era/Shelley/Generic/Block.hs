@@ -125,8 +125,8 @@ fromMaryBlock blk =
     , blkTxs = map fromMaryTx (blockTxs blk)
     }
 
-fromAlonzoBlock :: Prices -> ShelleyBlock TPraosStandard StandardAlonzo -> Block
-fromAlonzoBlock prices blk =
+fromAlonzoBlock :: Maybe Prices -> ShelleyBlock TPraosStandard StandardAlonzo -> Block
+fromAlonzoBlock mprices blk =
   Block
     { blkEra = Alonzo
     , blkHash = blockHash blk
@@ -139,11 +139,11 @@ fromAlonzoBlock prices blk =
     , blkVrfKey = blockVrfKeyView $ blockVrfVkTPraos blk
     , blkOpCert = blockOpCertKeyTPraos blk
     , blkOpCertCounter = blockOpCertCounterTPraos blk
-    , blkTxs = map (fromAlonzoTx prices) (alonzoBlockTxs blk)
+    , blkTxs = map (fromAlonzoTx mprices) (alonzoBlockTxs blk)
     }
 
-fromBabbageBlock :: Prices -> ShelleyBlock PraosStandard StandardBabbage -> Block
-fromBabbageBlock prices blk =
+fromBabbageBlock :: Maybe Prices -> ShelleyBlock PraosStandard StandardBabbage -> Block
+fromBabbageBlock mprices blk =
   Block
     { blkEra = Babbage
     , blkHash = blockHash blk
@@ -156,7 +156,7 @@ fromBabbageBlock prices blk =
     , blkVrfKey = blockVrfKeyView $ blockVrfVkPraos blk
     , blkOpCert = blockOpCertKeyPraos blk
     , blkOpCertCounter = blockOpCertCounterPraos blk
-    , blkTxs = map (fromBabbageTx prices) (babbageBlockTxs blk)
+    , blkTxs = map (fromBabbageTx mprices) (babbageBlockTxs blk)
     }
 
 -- -------------------------------------------------------------------------------------------------

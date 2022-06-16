@@ -146,8 +146,8 @@ insertShelleyBlock env firstBlockOfEpoch blk details isMember mNewEpoch stakeSli
 
     when (unBlockNo (Generic.blkBlockNo blk) `mod` offlineModBase == 0) .
       lift $ do
-        insertOfflineResults tracer (leOfflineResultQueue lenv)
-        loadOfflineWorkQueue tracer (leOfflineWorkQueue lenv)
+        insertOfflineResults tracer (envOfflineResultQueue env)
+        loadOfflineWorkQueue tracer (envOfflineWorkQueue env)
 
     when (getSyncStatus details == SyncFollowing) $
       -- Serializiing things during syncing can drastically slow down full sync
@@ -756,7 +756,7 @@ insertRedeemer tracer groupedOutputs txId (rix, redeemer) = do
                 { DB.redeemerTxId = txId
                 , DB.redeemerUnitMem = Generic.txRedeemerMem redeemer
                 , DB.redeemerUnitSteps = Generic.txRedeemerSteps redeemer
-                , DB.redeemerFee = DB.DbLovelace (fromIntegral . unCoin $ Generic.txRedeemerFee redeemer)
+                , DB.redeemerFee = DB.DbLovelace . fromIntegral . unCoin <$> Generic.txRedeemerFee redeemer
                 , DB.redeemerPurpose = mkPurpose $ Generic.txRedeemerPurpose redeemer
                 , DB.redeemerIndex = Generic.txRedeemerIndex redeemer
                 , DB.redeemerScriptHash = scriptHash
@@ -950,15 +950,15 @@ insertMultiAsset
     :: (MonadBaseControl IO m, MonadIO m)
     => Cache -> PolicyID StandardCrypto -> AssetName
     -> ReaderT SqlBackend m DB.MultiAssetId
-insertMultiAsset cache policy a@(AssetName aName) = do
-    mId <- queryMAWithCache cache policy a
+insertMultiAsset cache policy aName = do
+    mId <- queryMAWithCache cache policy aName
     case mId of
       Right maId -> pure maId
-      Left policyBs -> DB.insertMultiAssetUnchecked $
+      Left (policyBs, assetNameBs) -> DB.insertMultiAssetUnchecked $
                   DB.MultiAsset
                     { DB.multiAssetPolicy = policyBs
-                    , DB.multiAssetName = aName
-                    , DB.multiAssetFingerprint = DB.unAssetFingerprint (DB.mkAssetFingerprint policyBs a)
+                    , DB.multiAssetName = assetNameBs
+                    , DB.multiAssetFingerprint = DB.unAssetFingerprint (DB.mkAssetFingerprint policyBs assetNameBs)
                     }
 
 insertScript

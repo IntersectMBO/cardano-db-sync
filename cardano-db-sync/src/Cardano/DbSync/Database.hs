@@ -62,7 +62,8 @@ runDbThread env metricsSetters queue = do
 
       eNextState <- runExceptT $ runActions env xs
 
-      mBlock <- getDbLatestBlockInfo (envBackend env)
+      backend <- getBackend env
+      mBlock <- getDbLatestBlockInfo backend
       whenJust mBlock $ \ block -> do
         setDbBlockHeight metricsSetters $ bBlockNo block
         setDbSlotHeight metricsSetters $ bSlotNo block
@@ -89,7 +90,9 @@ runActions env actions = do
             pure Done
         ([], DbRollBackToPoint pt resultVar : ys) -> do
             runRollbacksDB env pt
-            points <- lift $ rollbackLedger env pt
+            points <- if hasLedgerState env
+              then lift $ rollbackLedger env pt
+              else pure Nothing
             blockNo <- lift $ getDbTipBlockNo env
             lift $ atomically $ putTMVar resultVar (points, blockNo)
             dbAction Continue ys
@@ -102,7 +105,8 @@ runActions env actions = do
 rollbackLedger :: SyncEnv -> CardanoPoint -> IO (Maybe [CardanoPoint])
 rollbackLedger env point = do
     mst <- loadLedgerAtPoint (envLedger env) point
-    dbTipInfo <- getDbLatestBlockInfo (envBackend env)
+    backend <- getBackend env
+    dbTipInfo <- getDbLatestBlockInfo backend
     case mst of
       Right st -> do
         checkDBWithState point dbTipInfo

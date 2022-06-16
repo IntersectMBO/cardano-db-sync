@@ -59,7 +59,6 @@ data Tx = Tx
   , txData :: [PlutusData]
   , txScriptSizes :: [Word64] -- this contains only the sizes of plutus scripts in witnesses
   , txScripts :: [TxScript]
-  , txScriptsFee :: Coin -- fees for plutus scripts
   , txExtraKeyWitnesses :: ![ByteString]
   }
 
@@ -95,7 +94,7 @@ data TxRedeemer = TxRedeemer
   { txRedeemerMem :: !Word64
   , txRedeemerSteps :: !Word64
   , txRedeemerPurpose :: !Tag
-  , txRedeemerFee :: !Coin
+  , txRedeemerFee :: !(Maybe Coin)
   , txRedeemerIndex :: !Word64
   , txRedeemerScriptHash :: Maybe (Either TxIn ByteString)
   , txRedeemerData :: PlutusData

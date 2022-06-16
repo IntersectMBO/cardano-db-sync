@@ -40,7 +40,6 @@ module Cardano.Db.Types
   ) where
 
 import           Cardano.Ledger.Coin (DeltaCoin (..))
-import           Cardano.Ledger.Mary.Value (AssetName (..))
 import           Cardano.Ledger.Shelley.Rewards as Shelley
 
 import qualified Codec.Binary.Bech32 as Bech32
@@ -91,10 +90,10 @@ newtype AssetFingerprint = AssetFingerprint
   { unAssetFingerprint :: Text
   } deriving (Eq, Show)
 
-mkAssetFingerprint :: ByteString -> AssetName -> AssetFingerprint
-mkAssetFingerprint policyId (AssetName name) =
+mkAssetFingerprint :: ByteString -> ByteString -> AssetFingerprint
+mkAssetFingerprint policyBs assetNameBs =
     AssetFingerprint . Bech32.encodeLenient hrp . Bech32.dataPartFromBytes . ByteArray.convert
-      $ Crypto.Hash.hash @_ @Blake2b_160 (policyId <> name)
+      $ Crypto.Hash.hash @_ @Blake2b_160 (policyBs <> assetNameBs)
   where
     hrp :: Bech32.HumanReadablePart
     hrp =
@@ -143,7 +142,8 @@ data ScriptPurpose
 data ScriptType
   = MultiSig
   | Timelock
-  | Plutus
+  | PlutusV1
+  | PlutusV2
   deriving (Eq, Generic, Show)
 
 data PoolCertAction
@@ -268,14 +268,16 @@ renderScriptType st =
   case st of
     MultiSig -> "multisig"
     Timelock -> "timelock"
-    Plutus -> "plutus"
+    PlutusV1 -> "plutusV1"
+    PlutusV2 -> "plutusV2"
 
 readScriptType :: String -> ScriptType
 readScriptType str =
   case str of
     "multisig" -> MultiSig
     "timelock" -> Timelock
-    "plutus" -> Plutus
+    "plutusV1" -> PlutusV1
+    "plutusV2" -> PlutusV2
     _other -> error $ "readScriptType: Unknown ScriptType " ++ str
 
 word64ToAda :: Word64 -> Ada

@@ -1,5 +1,7 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbSync.Api
@@ -7,13 +9,17 @@ module Cardano.DbSync.Api
   , LedgerEnv (..)
   , SyncOptions (..)
   , mkSyncEnvFromConfig
+  , replaceConnection
   , verifyFilePoints
   , getTrace
+  , getBackend
+  , hasLedgerState
   , getLatestPoints
   , getSlotHash
   , getDbLatestBlockInfo
   , getDbTipBlockNo
   , getCurrentTipBlockNo
+  , generateNewEpochEvents
   , logDbState
   ) where
 
@@ -37,10 +43,17 @@ import           Cardano.DbSync.Config.Shelley
 import           Cardano.DbSync.Config.Types
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState
+import           Cardano.DbSync.LocalStateQuery
 import           Cardano.DbSync.Types
+import           Cardano.DbSync.Util
 
+import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, TBQueue, newTBQueueIO, newTVarIO,
+                   readTVar, readTVarIO, writeTVar)
 import           Control.Monad.Trans.Maybe (MaybeT (..))
+import qualified Data.Strict.Maybe as Strict
+import           Data.Time.Clock (UTCTime, getCurrentTime)
 
+import           Database.Persist.Postgresql (ConnectionString)
 import           Database.Persist.Sql (SqlBackend)
 
 import           Ouroboros.Consensus.Block.Abstract (HeaderHash, fromRawHash)
@@ -55,9 +68,15 @@ data SyncEnv = SyncEnv
   { envProtocol :: !SyncProtocol
   , envNetworkMagic :: !NetworkMagic
   , envSystemStart :: !SystemStart
-  , envBackend :: !SqlBackend
+  , envConnString :: ConnectionString
+  , envBackend :: !(StrictTVar IO (Strict.Maybe SqlBackend))
   , envOptions :: !SyncOptions
   , envCache :: !Cache
+  , envOfflineWorkQueue :: !(TBQueue IO PoolFetchRetry)
+  , envOfflineResultQueue :: !(TBQueue IO FetchResult)
+  , envEpochState :: !(StrictTVar IO EpochState)
+  , envEpochSyncTime :: !(StrictTVar IO UTCTime)
+  , envNoLedgerEnv :: !NoLedgerStateEnv -- only used when configured without ledger state.
   , envLedger :: !LedgerEnv
   }
 
@@ -65,15 +84,67 @@ data SyncOptions = SyncOptions
   { soptExtended :: !Bool
   , soptAbortOnInvalid :: !Bool
   , soptCache :: !Bool
+  , soptLedger :: !Bool
   , snapshotEveryFollowing :: !Word64
   , snapshotEveryLagging :: !Word64
   }
+
+replaceConnection :: SyncEnv -> SqlBackend -> IO ()
+replaceConnection env sqlBackend = do
+  atomically $ writeTVar (envBackend env) $ Strict.Just sqlBackend
+
+data EpochState = EpochState
+  { esInitialized :: !Bool
+  , esEpochNo :: !(Strict.Maybe EpochNo)
+  }
+
+initEpochState :: EpochState
+initEpochState =
+    EpochState
+      { esInitialized = False
+      , esEpochNo = Strict.Nothing
+      }
+
+generateNewEpochEvents :: SyncEnv -> SlotDetails -> STM [LedgerEvent]
+generateNewEpochEvents env details = do
+    !oldEpochState <- readTVar (envEpochState env)
+    writeTVar (envEpochState env) newEpochState
+    pure $ maybeToList (newEpochEvent oldEpochState)
+  where
+    currentEpochNo :: EpochNo
+    currentEpochNo = sdEpochNo details
+
+    newEpochEvent :: EpochState -> Maybe LedgerEvent
+    newEpochEvent oldEpochState =
+      case esEpochNo oldEpochState of
+        Strict.Nothing -> Just $ LedgerStartAtEpoch currentEpochNo
+        Strict.Just oldEpoch ->
+          if currentEpochNo == 1 + oldEpoch
+            then Just $ LedgerNewEpoch currentEpochNo (getSyncStatus details)
+            else Nothing
+
+    newEpochState :: EpochState
+    newEpochState =
+      EpochState
+        { esInitialized = True
+        , esEpochNo = Strict.Just currentEpochNo
+        }
 
 getTrace :: SyncEnv -> Trace IO Text
 getTrace = leTrace . envLedger
 
 getSlotHash :: SqlBackend -> SlotNo -> IO [(SlotNo, ByteString)]
 getSlotHash backend = DB.runDbIohkNoLogging backend . DB.querySlotHash
+
+getBackend :: SyncEnv -> IO SqlBackend
+getBackend env = do
+    mBackend <- readTVarIO $ envBackend env
+    case mBackend of
+      Strict.Just conn -> pure conn
+      Strict.Nothing -> panic "sql connection not initiated"
+
+hasLedgerState :: SyncEnv -> Bool
+hasLedgerState = soptLedger . envOptions
 
 getDbLatestBlockInfo :: SqlBackend -> IO (Maybe TipInfo)
 getDbLatestBlockInfo backend = do
@@ -90,14 +161,16 @@ getDbLatestBlockInfo backend = do
 
 getDbTipBlockNo :: SyncEnv -> IO (Point.WithOrigin BlockNo)
 getDbTipBlockNo env = do
-  maybeTip <- getDbLatestBlockInfo (envBackend env)
+  backend <- getBackend env
+  maybeTip <- getDbLatestBlockInfo backend
   case maybeTip of
     Just tip -> pure $ Point.At (bBlockNo tip)
     Nothing -> pure Point.Origin
 
 logDbState :: SyncEnv -> IO ()
 logDbState env = do
-    mblk <- getDbLatestBlockInfo (envBackend env)
+    backend <- getBackend env
+    mblk <- getDbLatestBlockInfo backend
     case mblk of
       Nothing -> logInfo (getTrace env) "Cardano.Db is empty"
       Just tip -> logInfo (getTrace env) $ mconcat [ "Cardano.Db tip is at ", showTip tip ]
@@ -111,31 +184,44 @@ logDbState env = do
 
 getCurrentTipBlockNo :: SyncEnv -> IO (WithOrigin BlockNo)
 getCurrentTipBlockNo env = do
-  maybeTip <- getDbLatestBlockInfo (envBackend env)
+  backend <- getBackend env
+  maybeTip <- getDbLatestBlockInfo backend
   case maybeTip of
     Just tip -> pure $ At (bBlockNo tip)
     Nothing -> pure Origin
 
 mkSyncEnv
-    :: Trace IO Text -> SqlBackend -> SyncOptions -> ProtocolInfo IO CardanoBlock -> Ledger.Network
-    -> NetworkMagic -> SystemStart -> LedgerStateDir -> EpochSlot
+    :: Trace IO Text -> ConnectionString -> SyncOptions -> ProtocolInfo IO CardanoBlock -> Ledger.Network
+    -> NetworkMagic -> SystemStart -> LedgerStateDir
     -> IO SyncEnv
-mkSyncEnv trce backend syncOptions protoInfo nw nwMagic systemStart dir stableEpochSlot = do
-  ledgerEnv <- mkLedgerEnv trce protoInfo dir nw stableEpochSlot systemStart (soptAbortOnInvalid syncOptions)
+mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir = do
+  ledgerEnv <- mkLedgerEnv trce protoInfo dir nw systemStart (soptAbortOnInvalid syncOptions)
                  (snapshotEveryFollowing syncOptions) (snapshotEveryLagging syncOptions)
   cache <- if soptCache syncOptions then newEmptyCache 100000 else pure uninitiatedCache
+  backendVar <- newTVarIO Strict.Nothing
+  owq <- newTBQueueIO 100
+  orq <- newTBQueueIO 100
+  epochVar <- newTVarIO initEpochState
+  epochSyncTime <- newTVarIO =<< getCurrentTime
+  noLegdState <- mkNoLedgerStateEnv trce systemStart
   pure $ SyncEnv
           { envProtocol = SyncProtocolCardano
           , envNetworkMagic = nwMagic
           , envSystemStart = systemStart
-          , envBackend = backend
+          , envConnString = connSring
+          , envBackend = backendVar
           , envOptions = syncOptions
           , envCache = cache
+          , envOfflineWorkQueue = owq
+          , envOfflineResultQueue = orq
+          , envEpochState = epochVar
+          , envEpochSyncTime = epochSyncTime
+          , envNoLedgerEnv = noLegdState
           , envLedger = ledgerEnv
           }
 
-mkSyncEnvFromConfig :: Trace IO Text -> SqlBackend -> SyncOptions -> LedgerStateDir -> GenesisConfig -> IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce backend syncOptions dir genCfg =
+mkSyncEnvFromConfig :: Trace IO Text -> ConnectionString -> SyncOptions -> LedgerStateDir -> GenesisConfig -> IO (Either SyncNodeError SyncEnv)
+mkSyncEnvFromConfig trce connSring syncOptions dir genCfg =
   case genCfg of
     GenesisCardano _ bCfg sCfg _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -151,16 +237,25 @@ mkSyncEnvFromConfig trce backend syncOptions dir genCfg =
               , " /= ", DB.textShow (Shelley.sgSystemStart $ scConfig sCfg)
               ]
       | otherwise ->
-          Right <$> mkSyncEnv trce backend syncOptions (mkProtocolInfoCardano genCfg []) (Shelley.sgNetworkId $ scConfig sCfg)
+          Right <$> mkSyncEnv trce connSring syncOptions (mkProtocolInfoCardano genCfg []) (Shelley.sgNetworkId $ scConfig sCfg)
                       (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
                       (SystemStart .Byron.gdStartTime $ Byron.configGenesisData bCfg)
-                      dir (calculateStableEpochSlot $ scConfig sCfg)
+                      dir
 
 
 getLatestPoints :: SyncEnv -> IO [CardanoPoint]
 getLatestPoints env = do
-  files <- listLedgerStateFilesOrdered $ leDir (envLedger env)
-  verifyFilePoints env files
+    if hasLedgerState env then do
+      files <- listLedgerStateFilesOrdered $ leDir (envLedger env)
+      verifyFilePoints env files
+    else do
+      -- Brings the 5 latest.
+      dbBackend <- getBackend env
+      lastPoints <- DB.runDbIohkNoLogging dbBackend DB.queryLatestPoints
+      pure $ mapMaybe convert' lastPoints
+  where
+    convert' (Nothing, _) = Nothing
+    convert' (Just slot, bs) = convert (SlotNo slot) bs
 
 verifyFilePoints :: SyncEnv -> [LedgerStateFile] -> IO [CardanoPoint]
 verifyFilePoints env files =
@@ -168,34 +263,16 @@ verifyFilePoints env files =
   where
     validLedgerFileToPoint :: LedgerStateFile -> IO (Maybe CardanoPoint)
     validLedgerFileToPoint lsf = do
-        hashes <- getSlotHash (envBackend env) (lsfSlotNo lsf)
+        backend <- getBackend env
+        hashes <- getSlotHash backend (lsfSlotNo lsf)
         let valid  = find (\(_, h) -> lsfHash lsf == hashToAnnotation h) hashes
         case valid of
-          Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convert (slot, hash)
+          Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convert slot hash
           _ -> pure Nothing
 
-    convert :: (SlotNo, ByteString) -> Maybe CardanoPoint
-    convert (slot, hashBlob) =
-      Point . Point.block slot <$> convertHashBlob hashBlob
-
+convert :: SlotNo -> ByteString -> Maybe CardanoPoint
+convert slot hashBlob =
+    Point . Point.block slot <$> convertHashBlob hashBlob
+  where
     convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
     convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)
-
--- -------------------------------------------------------------------------------------------------
--- This is incredibly suboptimal. It should work, for now, but may break at some future time and
--- when it is wrong then data in `db-sync` will simply be wrong and we do not have any way of
--- detecting that it is wrong.
---
--- An epoch is `10 k / f` long, and the stability window is `3 k / f` so the time from the start
--- of the epoch to start of the stability window is `7 k / f`.
---
--- Hopefully lower level libraries will be able to provide us with something better than this soon.
-calculateStableEpochSlot :: Shelley.ShelleyGenesis era -> EpochSlot
-calculateStableEpochSlot cfg =
-    EpochSlot $ ceiling (7.0 * secParam / actSlotCoeff)
-  where
-    secParam :: Double
-    secParam = fromIntegral $ Shelley.sgSecurityParam cfg
-
-    actSlotCoeff :: Double
-    actSlotCoeff = fromRational (Ledger.unboundRational $ Shelley.sgActiveSlotsCoeff cfg)

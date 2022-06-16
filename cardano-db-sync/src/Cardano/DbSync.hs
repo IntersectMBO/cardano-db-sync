@@ -46,8 +46,6 @@ import           Control.Monad.Trans.Except.Extra (newExceptT)
 
 import           Ouroboros.Network.NodeToClient (IOManager, withIOManager)
 
-import           Database.Persist.Postgresql (withPostgresqlConn)
-
 runDbSyncNode :: MetricSetters -> [(Text, Text)] -> SyncNodeParams -> IO ()
 runDbSyncNode metricsSetters knownMigrations params =
   withIOManager $ \iomgr -> do
@@ -79,13 +77,10 @@ runDbSync metricsSetters knownMigrations iomgr trce params aop snEveryFollowing 
 
     let connectionString = Db.toConnectionString pgConfig
 
-    Db.runIohkLogging trce $ withPostgresqlConn connectionString $ \backend ->
-      lift $ do
-        -- For testing and debugging.
-        whenJust (enpMaybeRollback params) $ \ slotNo ->
-          void $ unsafeRollback trce pgConfig slotNo
-
-        runSyncNode metricsSetters trce backend iomgr aop snEveryFollowing snEveryLagging params
+    -- For testing and debugging.
+    whenJust (enpMaybeRollback params) $ \ slotNo ->
+      void $ unsafeRollback trce pgConfig slotNo
+    runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging connectionString params
 
   where
     dbMigrationDir :: Db.MigrationDir

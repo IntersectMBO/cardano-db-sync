@@ -27,6 +27,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Util
   , unKeyHashView
   , unScriptHash
   , unTxHash
+  , unAssetName
   ) where
 
 import           Cardano.Prelude
@@ -42,6 +43,7 @@ import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Credential as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
+import           Cardano.Ledger.Mary.Value (AssetName (..))
 import qualified Cardano.Ledger.Shelley.Scripts as Shelley
 import           Cardano.Ledger.Shelley.Tx (TxId (..))
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
@@ -53,6 +55,7 @@ import qualified Data.Binary.Put as Binary
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
+import qualified Data.ByteString.Short as SBS
 import qualified Data.List as List
 import qualified Data.Text.Encoding as Text
 
@@ -143,3 +146,6 @@ unScriptHash (Shelley.ScriptHash h) = Crypto.hashToBytes h
 
 unTxHash :: TxId era -> ByteString
 unTxHash (TxId txid) = Crypto.hashToBytes $ Ledger.extractHash txid
+
+unAssetName :: AssetName -> ByteString
+unAssetName = SBS.fromShort . assetName

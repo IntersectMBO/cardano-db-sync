@@ -61,7 +61,6 @@ fromMaryTx (blkIndex, tx) =
       , txData = []
       , txScriptSizes = []    -- Mary does not support plutus scripts
       , txScripts = scripts
-      , txScriptsFee = Coin 0 -- Mary does not support plutus scripts
       , txExtraKeyWitnesses = []
       }
   where
