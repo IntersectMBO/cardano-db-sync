@@ -67,7 +67,7 @@ fromMaryTx (blkIndex, tx) =
     outputs :: [TxOut]
     outputs = zipWith fromTxOut [0 .. ] $ toList (ShelleyMa.outputs $ unTxBodyRaw tx)
 
-    fromTxOut :: Word16 -> ShelleyTx.TxOut StandardMary -> TxOut
+    fromTxOut :: Word64 -> ShelleyTx.TxOut StandardMary -> TxOut
     fromTxOut index txOut =
       TxOut
         { txOutIndex = index

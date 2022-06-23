@@ -60,6 +60,7 @@ import           Test.Cardano.Db.Mock.UnifiedApi
 import           Test.Cardano.Db.Mock.Validate
 
 {- HLINT ignore "Reduce duplication" -}
+{- HLINT ignore "Use underscore" -}
 
 unitTests :: IOManager -> [(Text, Text)] -> TestTree
 unitTests iom knownMigrations =
@@ -103,7 +104,7 @@ unitTests iom knownMigrations =
           , test "Mir Cert Shelley" mirRewardShelley
           , test "Mir Cert deregistration" mirRewardDereg
           , test "test rewards empty last part of epoch" rewardsEmptyChainLast
-          , test "test delta rewards" rewardsDelta
+--        , test "test delta rewards" rewardsDelta -- We disable the test. See in the test for more.
           , test "rollback on epoch boundary" rollbackBoundary
           , test "single MIR Cert multiple outputs" singleMIRCertMultiOut
           ]
@@ -898,8 +899,12 @@ rewardsEmptyChainLast =
   where
     testLabel = "rewardsEmptyChainLast"
 
-rewardsDelta :: IOManager -> [(Text, Text)] -> Assertion
-rewardsDelta =
+
+-- It is almost impossible to create a delta event. This event is created when there is
+-- a big gap in the chain. But with current changes to ledger such big gaps cannot exist.
+-- So we disable this test.
+_rewardsDelta :: IOManager -> [(Text, Text)] -> Assertion
+_rewardsDelta =
     withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       -- These delegation push the computation of the 3 leader
@@ -1673,7 +1678,7 @@ spendRefScript =
 
       let utxo0 = head (Babbage.mkUTxOBabbage tx0)
       void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkUnlockScriptTxBabbage [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) [UTxOPair utxo0] False True 10000 500
+        Babbage.mkUnlockScriptTxBabbage [UTxOPair utxo0] (UTxOIndex 1) (UTxOAddress alwaysSucceedsScriptAddr) [UTxOPair utxo0] False True 10000 500
 
       assertBlockNoBackoff dbSync 3
       assertBabbageCounts dbSync (1,1,1,1,2,1,0,0,1,1,1,0,1)
@@ -1721,7 +1726,7 @@ spendCollateralOutput =
 
       let utxo1 = head (Babbage.mkUTxOCollBabbage tx1)
       tx2 <- withBabbageLedgerState interpreter $
-        Babbage.mkUnlockScriptTxBabbage [UTxOPair utxo1] (UTxOIndex 3) (UTxOIndex 4) [UTxOPair utxo1] False True 10000 500
+        Babbage.mkUnlockScriptTxBabbage [UTxOPair utxo1] (UTxOIndex 3) (UTxOIndex 1) [UTxOPair utxo1] False True 10000 500
       void $ forgeNextFindLeaderAndSubmit interpreter mockServer [TxBabbage tx2]
 
       assertBlockNoBackoff dbSync 4
