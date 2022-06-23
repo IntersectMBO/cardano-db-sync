@@ -94,7 +94,7 @@ fromShelleyTx (blkIndex, tx) =
 getOutputs :: ShelleyTx.Tx StandardShelley -> [TxOut]
 getOutputs tx = zipWith fromTxOut [0 .. ] $ toList (Shelley._outputs $ ShelleyTx.body tx)
 
-fromTxOut :: (Value era ~ Coin, Ledger.Crypto era ~ StandardCrypto, Ledger.Era era) => Word16 -> ShelleyTx.TxOut era -> TxOut
+fromTxOut :: (Value era ~ Coin, Ledger.Crypto era ~ StandardCrypto, Ledger.Era era) => Word64 -> ShelleyTx.TxOut era -> TxOut
 fromTxOut index txOut =
   TxOut
     { txOutIndex = index
@@ -112,10 +112,10 @@ fromTxOut index txOut =
 
 
 fromTxIn :: ShelleyTx.TxIn StandardCrypto -> TxIn
-fromTxIn (ShelleyTx.TxIn (ShelleyTx.TxId txid) (TxIx w16)) =
+fromTxIn (ShelleyTx.TxIn (ShelleyTx.TxId txid) (TxIx w64)) =
   TxIn
     { txInHash = Crypto.hashToBytes $ Ledger.extractHash txid
-    , txInIndex = fromIntegral w16
+    , txInIndex = w64
     , txInRedeemerIndex = Nothing
     }
 

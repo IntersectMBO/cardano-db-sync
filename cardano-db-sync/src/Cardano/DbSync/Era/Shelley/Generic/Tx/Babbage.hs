@@ -81,7 +81,7 @@ fromBabbageTx mprices (blkIndex, tx) =
       , txExtraKeyWitnesses = extraKeyWits txBody
       }
   where
-    fromTxOut :: Word16 -> Babbage.TxOut StandardBabbage -> TxOut
+    fromTxOut :: Word64 -> Babbage.TxOut StandardBabbage -> TxOut
     fromTxOut index txOut =
         TxOut
           { txOutIndex = index
@@ -108,7 +108,7 @@ fromBabbageTx mprices (blkIndex, tx) =
       where
         collIndex = case txIxFromIntegral (length outputs) of
           Just (TxIx i) -> i
-          Nothing -> maxBound :: Word16
+          Nothing -> fromIntegral (maxBound :: Word16)
 
     txBody :: Ledger.TxBody StandardBabbage
     txBody = getField @"body" tx
