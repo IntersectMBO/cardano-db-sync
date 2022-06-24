@@ -40,8 +40,14 @@ delete from ada_pots;
 delete from epoch_param;
 ```
 
-### --disable-cache
+### --disable-cache : Experimental
 
 This disables the application level caches of db-sync. It reduces memory usage by a bit, but
 increases sync time. Usually this flag is not worth it, unless there are some pretty big memory
 issues.
+
+## --disable-epoch : Experimental
+
+With this option the epoch table is left empty. Mostly left for historical reasons, since it
+provides a negligible improvement in sync time.
+
