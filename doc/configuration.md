@@ -33,3 +33,6 @@ delete from epoch_param;
 
 This flag disables the application level caches of db-sync. It slightly reduces memory usage but increases the syncing time. This flag is worth using only when experiencing significant memory issues.
 
+## --disable-epoch : Experimental
+
+With this option the epoch table is left empty. Mostly left for historical reasons, since it provides a negligible improvement in sync time.
