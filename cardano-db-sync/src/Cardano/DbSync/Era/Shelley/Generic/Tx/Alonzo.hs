@@ -115,7 +115,7 @@ fromAlonzoTx mprices (blkIndex, tx) =
     outputs :: [TxOut]
     outputs = zipWith fromTxOut [0 .. ] $ toList $ getField @"outputs" txBody
 
-    fromTxOut :: Word16 -> Alonzo.TxOut StandardAlonzo -> TxOut
+    fromTxOut :: Word64 -> Alonzo.TxOut StandardAlonzo -> TxOut
     fromTxOut index txOut =
       TxOut
         { txOutIndex = index

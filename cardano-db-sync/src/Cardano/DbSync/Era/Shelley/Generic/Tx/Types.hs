@@ -76,12 +76,12 @@ data TxWithdrawal = TxWithdrawal
 
 data TxIn = TxIn
   { txInHash :: !ByteString
-  , txInIndex :: !Word16
+  , txInIndex :: !Word64
   , txInRedeemerIndex :: !(Maybe Word64) -- This only has a meaning for Alonzo.
   } deriving Show
 
 data TxOut = TxOut
-  { txOutIndex :: !Word16
+  { txOutIndex :: !Word64
   , txOutAddress :: !(Ledger.Addr StandardCrypto)
   , txOutAddressRaw :: !ByteString
   , txOutAdaValue :: !Coin
