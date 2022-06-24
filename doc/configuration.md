@@ -19,7 +19,7 @@ Released snapshots are compatible with these options. Since the snapshots are cr
 
 Warning: This will irreversibly delete data from existing snapshots.
 
-Here are the exact queries db-sync with this falg will run after restoring a snapshot:
+Here are the exact queries db-sync with this flag will run after restoring a snapshot:
 
 ```sql
 update redeemer set fee = null;
@@ -33,6 +33,6 @@ delete from epoch_param;
 
 This flag disables the application level caches of db-sync. It slightly reduces memory usage but increases the syncing time. This flag is worth using only when experiencing significant memory issues.
 
-## --disable-epoch : Experimental
+### --disable-epoch : Experimental
 
 With this option the epoch table is left empty. Mostly left for historical reasons, since it provides a negligible improvement in sync time.
