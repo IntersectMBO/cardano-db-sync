@@ -30,7 +30,9 @@ slot/epoch of the snapshot creation and missing afterwards. The simplest way to 
 delete the existing data. Since this is still an experimental feauture, db-sync doesn't do anything
 automatically, since we don't know how users want to use the feature.
 
-Some queries someone may want to run after restoring a snapshot:
+Warning: This will irreversibly delete data from existing snapshots.
+
+Here are the exact queries db-sync with this flag will run after restoring a snapshot:
 
 ```sql
 update redeemer set fee = null;
@@ -46,7 +48,7 @@ This disables the application level caches of db-sync. It reduces memory usage b
 increases sync time. Usually this flag is not worth it, unless there are some pretty big memory
 issues.
 
-## --disable-epoch : Experimental
+### --disable-epoch : Experimental
 
 With this option the epoch table is left empty. Mostly left for historical reasons, since it
 provides a negligible improvement in sync time.
