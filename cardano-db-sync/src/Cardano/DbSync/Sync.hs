@@ -132,6 +132,9 @@ runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConn
       -- If the DB is empty it will be inserted, otherwise it will be validated (to make
       -- sure we are on the right chain).
       lift $ Db.runIohkLogging trce $ withPostgresqlConn dbConnString $ \backend -> do
+        liftIO $ unless (enpHasLedger enp) $ do
+          logInfo trce "Migrating to a no ledger schema"
+          Db.noLedgerMigrations backend trce
         lift $ orDie renderSyncNodeError $ insertValidateGenesisDist trce backend (dncNetworkName enc) genCfg (useShelleyInit enc)
         liftIO $ epochStartup (enpExtended enp) trce backend
 

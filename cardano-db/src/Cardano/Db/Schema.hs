@@ -126,7 +126,7 @@ share
 
   TxOut
     txId                TxId                OnDeleteCascade     -- This type is the primary key for the 'tx' table.
-    index               Word16              sqltype=txindex
+    index               Word64              sqltype=txindex
     address             Text
     addressRaw          ByteString
     addressHasScript    Bool
@@ -140,7 +140,7 @@ share
 
   CollateralTxOut
     txId                TxId                OnDeleteCascade     -- This type is the primary key for the 'tx' table.
-    index               Word16              sqltype=txindex
+    index               Word64              sqltype=txindex
     address             Text
     addressRaw          ByteString
     addressHasScript    Bool
@@ -156,20 +156,20 @@ share
   TxIn
     txInId              TxId                OnDeleteCascade     -- The transaction where this is used as an input.
     txOutId             TxId                OnDeleteCascade     -- The transaction where this was created as an output.
-    txOutIndex          Word16              sqltype=txindex
+    txOutIndex          Word64              sqltype=txindex
     redeemerId          RedeemerId Maybe    OnDeleteCascade
     UniqueTxin          txOutId txOutIndex
 
   CollateralTxIn
     txInId              TxId                OnDeleteCascade     -- The transaction where this is used as an input.
     txOutId             TxId                OnDeleteCascade     -- The transaction where this was created as an output.
-    txOutIndex          Word16              sqltype=txindex
+    txOutIndex          Word64              sqltype=txindex
     UniqueColTxin       txInId txOutId txOutIndex
 
   ReferenceTxIn
     txInId              TxId                OnDeleteCascade     -- The transaction where this is used as an input.
     txOutId             TxId                OnDeleteCascade     -- The transaction where this was created as an output.
-    txOutIndex          Word16              sqltype=txindex
+    txOutIndex          Word64              sqltype=txindex
     UniqueRefTxin       txInId txOutId txOutIndex
 
   -- A table containing metadata about the chain. There will probably only ever be one

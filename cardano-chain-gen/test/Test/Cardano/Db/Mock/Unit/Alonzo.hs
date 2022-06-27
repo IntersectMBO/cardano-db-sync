@@ -91,7 +91,7 @@ unitTests iom knownMigrations =
           , test "Mir rollback" mirRewardRollback
           , test "Mir Cert deregistration" mirRewardDereg
           , test "test rewards empty last part of epoch" rewardsEmptyChainLast
-          , test "test delta rewards" rewardsDelta
+--        , test "test delta rewards" rewardsDelta -- See the same test on Babbage for the reason it was disabled.
           , test "rollback on epoch boundary" rollbackBoundary
           , test "single MIR Cert multiple outputs" singleMIRCertMultiOut
           ]
@@ -455,7 +455,7 @@ simpleRewards =
 
       -- Pools are not registered yet, this takes 2 epochs. So fees of this tx
       -- should not create any rewards.
-      void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
+      void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ Alonzo.mkPaymentTx (UTxOIndex 2) (UTxOIndex 1) 10000 10000
 
       a <- fillEpochs interpreter mockServer 3
       assertBlockNoBackoff dbSync (fromIntegral $ 2 + length a)
@@ -472,7 +472,7 @@ simpleRewards =
 
       -- Now that pools are registered, we add a tx to fill the fees pot.
       -- Rewards will be distributed.
-      void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ Alonzo.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
+      void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ Alonzo.mkPaymentTx (UTxOIndex 2) (UTxOIndex 1) 10000 10000
 
       b <- fillEpochs interpreter mockServer 2
 
@@ -739,8 +739,8 @@ rewardsEmptyChainLast =
   where
     testLabel = "rewardsEmptyChainLast-alonzo"
 
-rewardsDelta :: IOManager -> [(Text, Text)] -> Assertion
-rewardsDelta =
+_rewardsDelta :: IOManager -> [(Text, Text)] -> Assertion
+_rewardsDelta =
     withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       -- These delegation push the computation of the 3 leader

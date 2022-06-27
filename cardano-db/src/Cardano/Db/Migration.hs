@@ -16,6 +16,7 @@ module Cardano.Db.Migration
   , validateMigrations
   , hashMigrations
   , renderMigrationValidateError
+  , noLedgerMigrations
   ) where
 
 import           Control.Exception (SomeException, handle)
@@ -43,6 +44,7 @@ import           Data.Time.Format (defaultTimeLocale, formatTime, iso8601DateFor
 import           Database.Persist.Sql (Single (..), SqlBackend, SqlPersistT, entityVal,
                    getMigration, rawExecute, rawSql, selectFirst)
 
+import           Cardano.BM.Trace (Trace)
 import           Cardano.Crypto.Hash (Blake2b_256, ByteString, Hash, hashToStringAsHex, hashWith)
 import           Cardano.Db.Migration.Haskell
 import           Cardano.Db.Migration.Version
@@ -283,4 +285,11 @@ isOfficialMigrationFile fn =
       case takeWhile isDigit . drop 1 $ dropWhile (/= '-') str of
         stage -> fromMaybe 0 $ readMaybe stage
 
-
+noLedgerMigrations :: SqlBackend -> Trace IO Text -> IO ()
+noLedgerMigrations backend trce = do
+  void $ runDbIohkLogging backend trce $ do
+    rawExecute "update redeemer set fee = null" []
+    rawExecute "delete from reward" []
+    rawExecute "delete from epoch_stake" []
+    rawExecute "delete from ada_pots" []
+    rawExecute "delete from epoch_param" []

@@ -103,7 +103,7 @@ pPGPassSource =
 pExtended :: Parser Bool
 pExtended =
   Opt.flag True False
-    ( Opt.long "no-epoch-table"
+    ( Opt.long "disable-epoch"
     <> Opt.help "Makes epoch table remain empty"
     )
 

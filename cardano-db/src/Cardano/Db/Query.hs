@@ -123,7 +123,7 @@ import           Data.Ratio (numerator)
 import           Data.Text (Text)
 import           Data.Time.Clock (UTCTime (..))
 import           Data.Tuple.Extra (uncurry3)
-import           Data.Word (Word16, Word64)
+import           Data.Word (Word64)
 
 import           Database.Esqueleto.Experimental (Entity, From, PersistEntity, PersistField,
                    SqlBackend, SqlExpr, SqlQuery, Value (Value, unValue), ValueList, count,
@@ -756,7 +756,7 @@ queryTxOutCount = do
   pure $ maybe 0 unValue (listToMaybe res)
 
 -- | Give a (tx hash, index) pair, return the TxOut value.
-queryTxOutValue :: MonadIO m => (ByteString, Word16) -> ReaderT SqlBackend m (Either LookupFail (TxId, DbLovelace))
+queryTxOutValue :: MonadIO m => (ByteString, Word64) -> ReaderT SqlBackend m (Either LookupFail (TxId, DbLovelace))
 queryTxOutValue (hash, index) = do
   res <- select $ do
     (tx :& txOut) <- from $ table @Tx
@@ -767,7 +767,7 @@ queryTxOutValue (hash, index) = do
   pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
 
 -- | Give a (tx hash, index) pair, return the TxOut Credentials.
-queryTxOutCredentials :: MonadIO m => (ByteString, Word16) -> ReaderT SqlBackend m (Either LookupFail (Maybe ByteString, Bool))
+queryTxOutCredentials :: MonadIO m => (ByteString, Word64) -> ReaderT SqlBackend m (Either LookupFail (Maybe ByteString, Bool))
 queryTxOutCredentials (hash, index) = do
   res <- select $ do
     (tx :& txOut) <- from $ table @Tx
