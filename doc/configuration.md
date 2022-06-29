@@ -28,6 +28,10 @@ When this flag is enabled, some features are missing and some DB tables are left
 - `ada_pots` table is left empty
 - `epoch_param` table is left empty
 
+Warning: Running db-sync with this flag and then restarting it without the flag will cause crashes and should be avoided.
+
+Known issues: When this flag in enabled, the `--state-dir` option still needs to be provided, even though db-sync will completely ignore it.
+
 Released snapshots are compatible with these options. Since the snapshots are created without the
 option, there still can be some minor inconsistencies. The above data may exist up to the slot/epoch
 of the snapshot creation and can be missing afterward. To fix this, when db-sync is initiated with
