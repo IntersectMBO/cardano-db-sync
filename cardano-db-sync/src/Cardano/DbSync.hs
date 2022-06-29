@@ -44,7 +44,12 @@ import           Control.Monad.Extra (whenJust)
 import           Control.Monad.Trans.Except.Exit (orDie)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
+import qualified Data.Text as Text
+import           Data.Version (showVersion)
+
 import           Ouroboros.Network.NodeToClient (IOManager, withIOManager)
+
+import           Paths_cardano_db_sync (version)
 
 runDbSyncNode :: MetricSetters -> [(Text, Text)] -> SyncNodeParams -> IO ()
 runDbSyncNode metricsSetters knownMigrations params =
@@ -52,9 +57,7 @@ runDbSyncNode metricsSetters knownMigrations params =
     trce <- configureLogging params "db-sync-node"
 
     aop <- readAbortOnPanic
-    if aop
-      then logWarning trce "Enviroment variable DbSyncAbortOnPanic: True"
-      else logInfo trce "Enviroment variable DbSyncAbortOnPanic: False"
+    startupReport trce aop params
 
     runDbSync metricsSetters knownMigrations iomgr trce params aop 500 10000
 
@@ -98,3 +101,11 @@ orDieWithLog render trce e = do
       panic errorStr
     Right () -> pure ()
 
+startupReport :: Trace IO Text -> Bool -> SyncNodeParams -> IO ()
+startupReport trce aop params = do
+  logWarning trce $ mconcat ["Version number: ", Text.pack (showVersion version)]
+  logWarning trce $ mconcat ["Git hash: ", Db.gitRev]
+  logWarning trce $ mconcat ["Option disable-ledger: ", textShow (not $ enpHasLedger params)]
+  logWarning trce $ mconcat ["Option disable-cache: ", textShow (not $ enpHasCache params)]
+  logWarning trce $ mconcat ["Option disable-epoch: ", textShow (not $ enpExtended params)]
+  logWarning trce $ mconcat ["Enviroment variable DbSyncAbortOnPanic: ", textShow aop]
