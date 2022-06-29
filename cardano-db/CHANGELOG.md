@@ -1,7 +1,8 @@
 # Revision history for cardano-db
 
-## Next
+## 13.0.0
 * Add `extra_key_witness` table for storing `requiredSigners` (transaction extra key witnesses).
+* Drop `Plutus` `ScriptType` in favor of `PlutusV1` and `PlutusV2`
 
 ## 12.0.2
 * Fix PoolOfflineFetchError URL entry (#697).
