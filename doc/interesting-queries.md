@@ -460,10 +460,10 @@ select sum (value) / 1000000 as script_locked from tx_out as tx_outer where
 
 ### Get information about script tx's
 ```sql
-select tx.id as tx_id, tx.fee as fees, SUM(redeemer.fee) as script_fees, SUM(redeemer.unit_mem) as units_mem,
-       SUM (redeemer.unit_steps) as units_steps, tx.valid_contract as valid, count(redeemer.id) scripts, tx.script_size
+select tx.id as tx_id, tx.fee as fees, SUM(redeemer.fee) as script_fees, SUM(redeemer.unit_mem) as unit_mem,
+       SUM (redeemer.unit_steps) as unit_steps, tx.valid_contract as valid, count(redeemer.id) scripts, tx.script_size
        from tx join redeemer on tx.id = redeemer.tx_id group by tx.id;
- tx_id | fees     |script_fees |units_mem |units_steps| valid|scripts|script_size
+ tx_id | fees     |script_fees |unit_mem |unit_steps| valid|scripts|script_size
  ------+----------+------------+----------+-----------+------+-------+-----------
  11812 |200193089 |  200000000 | 100000000|  100000000| t    |      1|         92
  11909 |  5000000 |    4000000 |   2000000|    2000000| f    |      1|        565
@@ -491,12 +491,12 @@ select SUM(value)/1000000 as lost_amount
 
 ### Get all uses of a spend script and how much ada it unlocked from an output
 ```sql
-select tx.id as tx_id, tx_out.value as tx_out_value, redeemer.units_mem, redeemer.units_steps, redeemer.fee, redeemer.purpose
+select tx.id as tx_id, tx_out.value as tx_out_value, redeemer.unit_mem, redeemer.unit_steps, redeemer.fee, redeemer.purpose
   from tx join redeemer on redeemer.tx_id = tx.id
   join tx_in on tx_in.redeemer_id = redeemer.id
   join tx_out on tx_in.tx_out_id = tx_out.tx_id and tx_in.tx_out_index = tx_out.index
     where redeemer.script_hash = '\x8a08f851b22e5c54de087be307eeab3b5c8588a8cea8319867c786e0';
- tx_id | tx_out_value |  units_mem  | units_steps |    fee     | purpose
+ tx_id | tx_out_value |  unit_mem  | unit_steps |    fee     | purpose
 -------+--------------+-------------+-------------+------------+---------
  10184 |    200000000 |    70000000 |    70000000 |  140000000 | spend
  11680 |   1000000000 |   700000000 |   700000000 | 1400000000 | spend
@@ -509,11 +509,11 @@ select tx.id as tx_id, tx_out.value as tx_out_value, redeemer.units_mem, redeeme
 
 ### Get all mint scripts
 ```sql
-select redeemer.tx_id as tx_id, redeemer.units_mem, redeemer.units_steps, redeemer.fee as redeemer_fee, redeemer.purpose, ma_tx_mint.policy, ma_tx_mint.name, ma_tx_mint.quantity
+select redeemer.tx_id as tx_id, redeemer.unit_mem, redeemer.unit_steps, redeemer.fee as redeemer_fee, redeemer.purpose, ma_tx_mint.policy, ma_tx_mint.name, ma_tx_mint.quantity
   from redeemer join ma_tx_mint on redeemer.script_hash = ma_tx_mint.policy
   and redeemer.tx_id = ma_tx_mint.tx_id
     where purpose = 'mint';
-tx_id |units_mem|units_steps|redeemer_fee|purpose|                      policy                               |      name      | quantity
+tx_id |unit_mem|unit_steps|redeemer_fee|purpose|                      policy                               |      name      | quantity
 ------+---------+-----------+------------+-------+-----------------------------------------------------------+----------------+----------
  11728|700000000|700000000  |1400000000  |mint   |\x3f216fc1b7a9cdfa2ee964f44a6718e108fb131d36011e3fdbfcfd21 | \x7161636f696e |5
  17346|700000000|700000000  |1400000000  |mint   |\x3f216fc1b7a9cdfa2ee964f44a6718e108fb131d36011e3fdbfcfd21 | \x7161636f696e |5
