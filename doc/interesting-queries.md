@@ -509,14 +509,14 @@ select tx.id as tx_id, tx_out.value as tx_out_value, redeemer.unit_mem, redeemer
 
 ### Get all mint scripts
 ```sql
-SELECT r.*, ma.policy::text FROM redeemer r 
+SELECT r.*, ma.policy::text, ma.name FROM redeemer r 
 LEFT JOIN multi_asset ma ON ma.policy=r.script_hash
 WHERE r.purpose='mint' 
-   id    |  tx_id  | unit_mem | unit_steps |  fee  | purpose | index |                        script_hash                         | redeemer_data_id |                           policy          
----------+---------+----------+------------+-------+---------+-------+------------------------------------------------------------+------------------+------------------------------------------------------------
- 1519481 | 4938710 |   109343 |   57817244 | 10478 | mint    |     0 | \x6d5320dfdd08f317134ae444a9540aac95b89e8b1d8983365942787f |                5 | \x6d5320dfdd08f317134ae444a9540aac95b89e8b1d8983365942787f
- 1519495 | 4938733 |   109343 |   57817244 | 10478 | mint    |     0 | \x6d5320dfdd08f317134ae444a9540aac95b89e8b1d8983365942787f |                5 | \x6d5320dfdd08f317134ae444a9540aac95b89e8b1d8983365942787f
-(2 rows)
+   id    |  tx_id  | unit_mem | unit_steps |  fee  | purpose | index |                        script_hash                         | redeemer_data_id |                           policy                           |  name
+---------+---------+----------+------------+-------+---------+-------+------------------------------------------------------------+------------------+------------------------------------------------------------+--------
+ 1519481 | 4938710 |   109343 |   57817244 | 10478 | mint    |     0 | \x6d5320dfdd08f317134ae444a9540aac95b89e8b1d8983365942787f |                5 | \x6d5320dfdd08f317134ae444a9540aac95b89e8b1d8983365942787f | \x4759
+ 1519495 | 4938733 |   109343 |   57817244 | 10478 | mint    |     0 | \x6d5320dfdd08f317134ae444a9540aac95b89e8b1d8983365942787f |                5 | \x6d5320dfdd08f317134ae444a9540aac95b89e8b1d8983365942787f | \x4759
+
 
 
 ```
