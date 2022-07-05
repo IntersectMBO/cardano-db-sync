@@ -460,10 +460,10 @@ select sum (value) / 1000000 as script_locked from tx_out as tx_outer where
 
 ### Get information about script tx's
 ```sql
-select tx.id as tx_id, tx.fee as fees, SUM(redeemer.fee) as script_fees, SUM(redeemer.unit_mem) as units_mem,
-       SUM (redeemer.unit_steps) as units_steps, tx.valid_contract as valid, count(redeemer.id) scripts, tx.script_size
+select tx.id as tx_id, tx.fee as fees, SUM(redeemer.fee) as script_fees, SUM(redeemer.unit_mem) as unit_mem,
+       SUM (redeemer.unit_steps) as unit_steps, tx.valid_contract as valid, count(redeemer.id) scripts, tx.script_size
        from tx join redeemer on tx.id = redeemer.tx_id group by tx.id;
- tx_id | fees     |script_fees |units_mem |units_steps| valid|scripts|script_size
+ tx_id | fees     |script_fees |unit_mem  |unit_steps | valid|scripts|script_size
  ------+----------+------------+----------+-----------+------+-------+-----------
  11812 |200193089 |  200000000 | 100000000|  100000000| t    |      1|         92
  11909 |  5000000 |    4000000 |   2000000|    2000000| f    |      1|        565
@@ -491,12 +491,12 @@ select SUM(value)/1000000 as lost_amount
 
 ### Get all uses of a spend script and how much ada it unlocked from an output
 ```sql
-select tx.id as tx_id, tx_out.value as tx_out_value, redeemer.units_mem, redeemer.units_steps, redeemer.fee, redeemer.purpose
+select tx.id as tx_id, tx_out.value as tx_out_value, redeemer.unit_mem, redeemer.unit_steps, redeemer.fee, redeemer.purpose
   from tx join redeemer on redeemer.tx_id = tx.id
   join tx_in on tx_in.redeemer_id = redeemer.id
   join tx_out on tx_in.tx_out_id = tx_out.tx_id and tx_in.tx_out_index = tx_out.index
     where redeemer.script_hash = '\x8a08f851b22e5c54de087be307eeab3b5c8588a8cea8319867c786e0';
- tx_id | tx_out_value |  units_mem  | units_steps |    fee     | purpose
+ tx_id | tx_out_value |  unit_mem   | unit_steps  |    fee     | purpose
 -------+--------------+-------------+-------------+------------+---------
  10184 |    200000000 |    70000000 |    70000000 |  140000000 | spend
  11680 |   1000000000 |   700000000 |   700000000 | 1400000000 | spend
@@ -509,15 +509,41 @@ select tx.id as tx_id, tx_out.value as tx_out_value, redeemer.units_mem, redeeme
 
 ### Get all mint scripts
 ```sql
-select redeemer.tx_id as tx_id, redeemer.units_mem, redeemer.units_steps, redeemer.fee as redeemer_fee, redeemer.purpose, ma_tx_mint.policy, ma_tx_mint.name, ma_tx_mint.quantity
-  from redeemer join ma_tx_mint on redeemer.script_hash = ma_tx_mint.policy
-  and redeemer.tx_id = ma_tx_mint.tx_id
-    where purpose = 'mint';
-tx_id |units_mem|units_steps|redeemer_fee|purpose|                      policy                               |      name      | quantity
-------+---------+-----------+------------+-------+-----------------------------------------------------------+----------------+----------
- 11728|700000000|700000000  |1400000000  |mint   |\x3f216fc1b7a9cdfa2ee964f44a6718e108fb131d36011e3fdbfcfd21 | \x7161636f696e |5
- 17346|700000000|700000000  |1400000000  |mint   |\x3f216fc1b7a9cdfa2ee964f44a6718e108fb131d36011e3fdbfcfd21 | \x7161636f696e |5
-(2 rows)
+select redeemer.tx_id as tx_id, redeemer.unit_mem, redeemer.unit_steps, redeemer.fee as redeemer_fee, redeemer.purpose, multi_asset.policy, multi_asset.name, ma_tx_mint.quantity
+  from redeemer
+    join multi_asset on redeemer.script_hash = multi_asset.policy
+    join ma_tx_mint on ma_tx_mint.ident = multi_asset.id and redeemer.tx_id = ma_tx_mint.tx_id
+      where purpose = 'mint';
+ tx_id  | unit_mem | unit_steps | redeemer_fee | purpose |                           policy                           |           name           | quantity
+--------+----------+------------+--------------+---------+------------------------------------------------------------+--------------------------+----------
+ 572051 |   994524 |  365737701 |        83754 | mint    | \xfda1b6b487bee2e7f64ecf24d24b1224342484c0195ee1b7b943db50 | \x506c75747573436f696e   |      100
+ 572074 |   994524 |  365737701 |        83754 | mint    | \xfda1b6b487bee2e7f64ecf24d24b1224342484c0195ee1b7b943db50 | \x506c75747573436f696e32 |      100
+
+```
+
+### Get all assets with quantities and count of mints
+```sql
+ SELECT
+    multi_asset.fingerprint,
+    multi_asset.policy,
+    multi_asset.name,
+    a.ident,
+    a.cnt mints,
+    a.quantity,
+    block."time" AS created
+   FROM ( SELECT ma_tx_mint.ident,
+            sum(ma_tx_mint.quantity::numeric) AS quantity,
+            count(*) AS cnt,
+            min(ma_tx_mint.tx_id) AS mtx
+           FROM ma_tx_mint
+          GROUP BY ma_tx_mint.ident) a
+     LEFT JOIN multi_asset ON multi_asset.id = a.ident
+     LEFT JOIN tx ON tx.id = a.mtx
+     LEFT JOIN block ON block.id = tx.block_id;
+                      fingerprint                  |                           policy                           |       name       | ident | mints |    quantity    |       created
+----------------------------------------------+------------------------------------------------------------+------------------+-------+-------+----------------+---------------------
+ asset1jtqefvdycrenq2ly6ct8rwcu5e58va432vj586 | \x476039a0949cf0b22f6a800f56780184c44533887ca6e821007840c3 | \x6e7574636f696e |     1 |     1 |              1 | 2021-02-03 20:20:46
+ asset1mu7h997yyvzrppdwjzhpex6u7khrucspxvjjuw | \x69b30e43bc5401bb34d0b12bd06cd9b537f33065aa49df7e8652739d | \x4c51           |     2 |     1 | 21000000000000 | 2021-02-03 20:22:23
 
 ```
 ---
