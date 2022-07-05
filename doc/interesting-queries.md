@@ -509,15 +509,41 @@ select tx.id as tx_id, tx_out.value as tx_out_value, redeemer.unit_mem, redeemer
 
 ### Get all mint scripts
 ```sql
-SELECT r.*, ma.policy::text, ma.name FROM redeemer r 
-LEFT JOIN multi_asset ma ON ma.policy=r.script_hash
-WHERE r.purpose='mint' 
-   id    |  tx_id  | unit_mem | unit_steps |  fee  | purpose | index |                        script_hash                         | redeemer_data_id |                           policy                           |  name
----------+---------+----------+------------+-------+---------+-------+------------------------------------------------------------+------------------+------------------------------------------------------------+--------
- 1519481 | 4938710 |   109343 |   57817244 | 10478 | mint    |     0 | \x6d5320dfdd08f317134ae444a9540aac95b89e8b1d8983365942787f |                5 | \x6d5320dfdd08f317134ae444a9540aac95b89e8b1d8983365942787f | \x4759
- 1519495 | 4938733 |   109343 |   57817244 | 10478 | mint    |     0 | \x6d5320dfdd08f317134ae444a9540aac95b89e8b1d8983365942787f |                5 | \x6d5320dfdd08f317134ae444a9540aac95b89e8b1d8983365942787f | \x4759
+select redeemer.tx_id as tx_id, redeemer.unit_mem, redeemer.unit_steps, redeemer.fee as redeemer_fee, redeemer.purpose, multi_asset.policy, multi_asset.name, ma_tx_mint.quantity
+  from redeemer 
+    join multi_asset on redeemer.script_hash = multi_asset.policy 
+    join ma_tx_mint on ma_tx_mint.ident = multi_asset.id and redeemer.tx_id = ma_tx_mint.tx_id 
+      where purpose = 'mint'; 
+ tx_id  | unit_mem | unit_steps | redeemer_fee | purpose |                           policy                           |           name           | quantity
+--------+----------+------------+--------------+---------+------------------------------------------------------------+--------------------------+----------
+ 572051 |   994524 |  365737701 |        83754 | mint    | \xfda1b6b487bee2e7f64ecf24d24b1224342484c0195ee1b7b943db50 | \x506c75747573436f696e   |      100
+ 572074 |   994524 |  365737701 |        83754 | mint    | \xfda1b6b487bee2e7f64ecf24d24b1224342484c0195ee1b7b943db50 | \x506c75747573436f696e32 |      100
 
+```
 
+### Get all assets with quantities and count of mints
+```sql
+ SELECT 
+    multi_asset.fingerprint,
+    multi_asset.policy,
+    multi_asset.name,
+    a.ident,
+    a.cnt mints,
+    a.quantity,
+    block."time" AS created
+   FROM ( SELECT ma_tx_mint.ident,
+            sum(ma_tx_mint.quantity::numeric) AS quantity,
+            count(*) AS cnt,
+            min(ma_tx_mint.tx_id) AS mtx
+           FROM ma_tx_mint
+          GROUP BY ma_tx_mint.ident) a
+     LEFT JOIN multi_asset ON multi_asset.id = a.ident
+     LEFT JOIN tx ON tx.id = a.mtx
+     LEFT JOIN block ON block.id = tx.block_id;
+                      fingerprint                  |                           policy                           |       name       | ident | mints |    quantity    |       created
+----------------------------------------------+------------------------------------------------------------+------------------+-------+-------+----------------+---------------------
+ asset1jtqefvdycrenq2ly6ct8rwcu5e58va432vj586 | \x476039a0949cf0b22f6a800f56780184c44533887ca6e821007840c3 | \x6e7574636f696e |     1 |     1 |              1 | 2021-02-03 20:20:46
+ asset1mu7h997yyvzrppdwjzhpex6u7khrucspxvjjuw | \x69b30e43bc5401bb34d0b12bd06cd9b537f33065aa49df7e8652739d | \x4c51           |     2 |     1 | 21000000000000 | 2021-02-03 20:22:23
 
 ```
 ---
