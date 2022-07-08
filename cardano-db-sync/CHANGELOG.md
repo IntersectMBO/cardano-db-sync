@@ -1,5 +1,8 @@
 # Revision history for cardano-db-sync
 
+## 13.0.1
+* Ensure Babbage TxOut decoder can't fail due to malformed Ptr. This bug manifests itself if db-sync is running in the Babbage era and shuts down, it has to re-sync from an Alonzo snapshot, or from Genesis if it doesn't exist. (#1181)
+
 ## 13.0.0
 * Added `--disable-ledger` flag, which significantly reduces memory usage. Read more at `doc/configuration.md`.
 * Reduction in memory usage.
