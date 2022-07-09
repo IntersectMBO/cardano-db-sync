@@ -7,15 +7,15 @@
 # NB - The last matching pattern takes precedence
 
 # /doc folder and README.* needs to be owned by @docs-access
-doc                          @docs-access
-Readme.*                     @docs-access
+doc                          @input-output-hk/docs-access
+Readme.*                     @input-output-hk/docs-access
 
-.buildkite                   @devops
-.github                      @devops
-config                       @devops
-nix                          @devops
-*.nix                        @devops
-bors.toml                    @devops
-nix-shell.project            @devops
-docker-compose.yml           @devops
-scripts/postgresql-setup.sh  @devops
+.buildkite                   @input-output-hk/devops
+.github                      @input-output-hk/devops
+config                       @input-output-hk/devops
+nix                          @input-output-hk/devops
+*.nix                        @input-output-hk/devops
+bors.toml                    @input-output-hk/devops
+nix-shell.project            @input-output-hk/devops
+docker-compose.yml           @input-output-hk/devops
+scripts/postgresql-setup.sh  @input-output-hk/devops
