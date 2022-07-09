@@ -10,6 +10,7 @@ import           Test.Tasty (defaultMain, testGroup)
 
 import qualified Test.IO.Cardano.Db.Insert
 import qualified Test.IO.Cardano.Db.Migration
+import qualified Test.IO.Cardano.Db.PGConfig
 import qualified Test.IO.Cardano.Db.Rollback
 import qualified Test.IO.Cardano.Db.TotalSupply
 
@@ -31,5 +32,6 @@ main = do
       , Test.IO.Cardano.Db.Insert.tests
       , Test.IO.Cardano.Db.TotalSupply.tests
       , Test.IO.Cardano.Db.Rollback.tests
+      , Test.IO.Cardano.Db.PGConfig.tests
       ]
 
