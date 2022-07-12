@@ -569,4 +569,46 @@ select distinct on(block.hash) block.hash as block_hash , epoch_no, tx_count, po
 ```
 ---
 
+### Query all delegators and some basic info
+```sql
+ SELECT sa.view AS address,
+    nh.view AS delegated_now_poolid,
+    d.active_epoch_no delegated_now_epoch,
+    oh.view AS delegated_before_poolid,
+    od.active_epoch_no AS delegated_before_epoch,
+    d.addr_id,
+    br."time" AS stake_key_registered
+   FROM ( SELECT max(delegation.id) AS id
+           FROM delegation
+          GROUP BY delegation.addr_id) a
+     LEFT JOIN delegation d ON d.id = a.id
+     LEFT JOIN tx txn ON txn.id = d.tx_id
+     LEFT JOIN block bn ON bn.id = txn.block_id
+     LEFT JOIN stake_address sa ON sa.id = d.addr_id
+     LEFT JOIN stake_deregistration de ON de.addr_id = d.addr_id AND de.id = (( SELECT max(stake_deregistration.id) AS max
+           FROM stake_deregistration
+          WHERE stake_deregistration.addr_id = d.addr_id))
+     LEFT JOIN stake_registration re ON re.addr_id = d.addr_id AND re.id = (( SELECT max(stake_registration.id) AS max
+           FROM stake_registration
+          WHERE stake_registration.addr_id = d.addr_id))
+     LEFT JOIN delegation od ON od.addr_id = d.addr_id AND od.id = (( SELECT max(delegation.id) AS max
+           FROM delegation
+          WHERE delegation.addr_id = d.addr_id AND NOT delegation.pool_hash_id = d.pool_hash_id))
+     LEFT JOIN tx txo ON txo.id = od.tx_id
+     LEFT JOIN block bo ON bo.id = txo.block_id
+     LEFT JOIN pool_hash nh ON nh.id = d.pool_hash_id
+     LEFT JOIN pool_hash oh ON oh.id = od.pool_hash_id
+     LEFT JOIN tx txr ON txr.id = re.tx_id
+     LEFT JOIN block br ON br.id = txr.block_id
+  WHERE (de.tx_id < re.tx_id OR de.* IS NULL);
+
+
+                           address                           |                   delegated_now_poolid                   | delegated_now_epoch |                 delegated_before_poolid                  | delegated_before_epoch | addr_id | stake_key_registered
+-------------------------------------------------------------+----------------------------------------------------------+---------------------+----------------------------------------------------------+------------------------+---------+----------------------
+ stake1u9ylzsgxaa6xctf4juup682ar3juj85n8tx3hthnljg47zctvm3rc | pool1pu5jlj4q9w9jlxeu370a3c9myx47md5j5m2str0naunn2q3lkdy |                 210 |                                                          |                        |       1 | 2020-07-29 22:41:31
+ stake1u8mt5gqclkq0swmvzx9lvq4jgwsnx9yh030yrxwqwllu0mq2m0l4n | pool1qqqqzyqf8mlm70883zht60n4q6uqxg4a8x266sewv8ad2grkztl |                 317 | pool1qqqz9vlskay2gv3ec5pyck8c2tq9ty7dpfm60x8shvapguhcemt |                    211 |       3 | 2020-08-06 20:00:11
+```
+---
+
+
 [Query.hs]: https://github.com/input-output-hk/cardano-db-sync/blob/master/cardano-db/src/Cardano/Db/Query.hs
