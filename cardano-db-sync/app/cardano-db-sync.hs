@@ -3,8 +3,7 @@
 
 import           Cardano.Prelude
 
-
-import           Cardano.Db (MigrationDir (..), PGPassSource (PGPassDefaultEnv), gitRev)
+import           Cardano.Db (MigrationDir (..), PGPassSource (PGPassDefaultEnv, PGPassEnv), gitRev)
 
 import           Cardano.DbSync (runDbSyncNode)
 import           Cardano.DbSync.Config
@@ -95,10 +94,13 @@ pMigrationDir =
     <> Opt.metavar "FILEPATH"
     )
 
--- TODO support more options here
 pPGPassSource :: Parser PGPassSource
 pPGPassSource =
-  pure PGPassDefaultEnv
+  Opt.option (PGPassEnv <$> Opt.str)
+  (  Opt.long "pg-pass-env"
+  <> Opt.help "Alternative env variable to use, defaults to PGPASSFILE env variable."
+  <> Opt.value PGPassDefaultEnv
+  <> Opt.metavar "ENV")
 
 pExtended :: Parser Bool
 pExtended =

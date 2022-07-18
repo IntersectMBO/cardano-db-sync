@@ -137,6 +137,7 @@ let
         packages.cardano-db-sync.package.extraSrcFiles = [ "../schema/*.sql" ];
         packages.cardano-chain-gen.package.extraSrcFiles =
           [ "../schema/*.sql" ];
+        packages.cardano-db.package.extraSrcFiles = ["../config/pgpass-testnet"];
       }
       ({ pkgs, ... }: {
         packages = lib.genAttrs [ "cardano-config" "cardano-db" ] (_: {
