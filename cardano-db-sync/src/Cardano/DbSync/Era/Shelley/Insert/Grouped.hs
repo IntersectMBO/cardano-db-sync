@@ -25,10 +25,10 @@ import qualified Cardano.Db as DB
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Era.Util
-
 import           Cardano.DbSync.Error
 
 import           Database.Persist.Sql (SqlBackend)
+
 
 -- | Group data within the same block, to insert them together in batches
 --
@@ -96,7 +96,8 @@ resolveTxInputs
   => [ExtendedTxOut]
   -> Generic.TxIn
   -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, DbLovelace)
-resolveTxInputs groupedOutputs txIn = fmap convert $ liftLookupFail ("resolveTxInputs " <> textShow txIn <> " ") $ do
+resolveTxInputs groupedOutputs txIn =
+  fmap convert $ liftLookupFail ("resolveTxInputs " <> textShow txIn <> " ") $ do
     qres <- queryResolveInput txIn
     case qres of
       Right ret -> pure $ Right ret
@@ -113,19 +114,21 @@ resolveScriptHash
   => [ExtendedTxOut]
   -> Generic.TxIn
   -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe ByteString)
-resolveScriptHash groupedOutputs txIn = liftLookupFail "resolveScriptHash" $ do
-  qres <- fmap fst <$> queryResolveInputCredentials txIn
-  case qres of
-      Right ret -> pure $ Right ret
-      Left err ->
-        case resolveInMemory txIn groupedOutputs of
-          Nothing -> pure $ Left err
-          Just eutxo -> pure $ Right $ DB.txOutPaymentCred $ etoTxOut eutxo
+resolveScriptHash groupedOutputs txIn =
+  liftLookupFail "resolveScriptHash" $ do
+    qres <- fmap fst <$> queryResolveInputCredentials txIn
+    case qres of
+        Right ret -> pure $ Right ret
+        Left err ->
+          case resolveInMemory txIn groupedOutputs of
+            Nothing -> pure $ Left err
+            Just eutxo -> pure $ Right $ DB.txOutPaymentCred $ etoTxOut eutxo
 
 resolveInMemory :: Generic.TxIn -> [ExtendedTxOut] -> Maybe ExtendedTxOut
-resolveInMemory txIn = List.find matches
+resolveInMemory txIn =
+    List.find matches
   where
     matches :: ExtendedTxOut -> Bool
     matches eutxo =
-         Generic.txInHash txIn == etoTxHash eutxo
-      && Generic.txInIndex txIn == DB.txOutIndex (etoTxOut eutxo)
+      Generic.txInHash txIn == etoTxHash eutxo
+        && Generic.txInIndex txIn == fromIntegral (DB.txOutIndex $ etoTxOut eutxo)

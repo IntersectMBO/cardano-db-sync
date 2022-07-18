@@ -8,6 +8,7 @@
 module Cardano.Db.Insert
   ( insertAdaPots
   , insertBlock
+  , insertBlockChecked
   , insertCollateralTxIn
   , insertReferenceTxIn
   , insertDelegation
@@ -56,7 +57,6 @@ module Cardano.Db.Insert
   , insertDelistedPool
 
   -- Export mainly for testing.
-  , insertBlockChecked
   , insertCheckUnique
   , insertManyUncheckedUnique
   , insertUnchecked
@@ -128,7 +128,7 @@ insertEpoch :: (MonadBaseControl IO m, MonadIO m) => Epoch -> ReaderT SqlBackend
 insertEpoch = insertUnchecked "Epoch"
 
 insertEpochParam :: (MonadBaseControl IO m, MonadIO m) => EpochParam -> ReaderT SqlBackend m EpochParamId
-insertEpochParam = insertUnchecked "EpochParam"
+insertEpochParam = insertCheckUnique "EpochParam"
 
 insertEpochSyncTime :: (MonadBaseControl IO m, MonadIO m) => EpochSyncTime -> ReaderT SqlBackend m EpochSyncTimeId
 insertEpochSyncTime = insertReplace "EpochSyncTime"

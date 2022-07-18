@@ -87,7 +87,7 @@ queryAtSlot :: Word64 -> IO (Ada, [(TxOut, ByteString)], Ada, Either LookupFail 
 queryAtSlot slotNo =
   -- Run the following queries in a single transaction.
   runDbNoLoggingEnv $ do
-    (,,,) <$> queryGenesisSupply
+    (,,,) <$> queryByronGenesisSupply
             <*> queryUtxoAtSlotNo slotNo
             <*> queryFeesUpToSlotNo slotNo
              <*> querySlotUtcTime slotNo

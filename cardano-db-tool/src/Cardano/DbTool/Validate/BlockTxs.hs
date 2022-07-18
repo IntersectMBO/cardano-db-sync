@@ -14,11 +14,11 @@ import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.Either (lefts)
+import           Data.Int (Int64)
 import           Data.Word (Word64)
 
-import           Database.Esqueleto.Experimental (SqlBackend, Value (Value), countRows, from,
-                   innerJoin, just, on, select, table, type (:&) ((:&)), unValue, val, where_,
-                   (==.), (^.))
+import           Database.Esqueleto.Experimental (SqlBackend, countRows, from, innerJoin, just, on,
+                   select, table, type (:&) ((:&)), unValue, val, where_, (==.), (^.))
 
 import qualified System.Random as Random
 
@@ -33,7 +33,7 @@ validateEpochBlockTxs = do
 -- -----------------------------------------------------------------------------
 
 data ValidateError = ValidateError
-  { veBlockNo :: !Word64
+  { veBlockNo :: !Int64
   , veTxCountActual :: !Word64
   , veTxCountExpected :: !Word64
   }
@@ -58,7 +58,7 @@ validateBlockTxs epoch = do
                             ++ " but got " ++ show (veTxCountActual ve)
                             )
 
-validateBlockCount :: MonadIO m => (Word64, Word64) -> ReaderT SqlBackend m (Either ValidateError ())
+validateBlockCount :: MonadIO m => (Int64, Word64) -> ReaderT SqlBackend m (Either ValidateError ())
 validateBlockCount (blockNo, txCountExpected) = do
   txCountActual <- queryBlockTxCount blockNo
   pure $ if txCountActual == txCountExpected
@@ -66,27 +66,21 @@ validateBlockCount (blockNo, txCountExpected) = do
           else Left $ ValidateError blockNo txCountActual txCountExpected
 
 -- This queries by BlockNo, the one in Cardano.Db.Query queries by BlockId.
-queryBlockTxCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
+queryBlockTxCount :: MonadIO m => Int64 -> ReaderT SqlBackend m Word64
 queryBlockTxCount blockNo = do
   res <- select $ do
     (blk :& _tx) <-
       from $ table @Block
       `innerJoin` table @Tx
-      `on` (\(blk :& tx) -> blk ^. BlockId ==. tx ^. TxBlockId)
-    where_ (blk ^. BlockBlockNo ==. just (val blockNo))
+      `on` (\(blk :& tx) -> blk ^. BlockBlockNo ==. tx ^. TxBlockNo)
+    where_ (blk ^. BlockBlockNo ==. val (fromIntegral blockNo))
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
-queryEpochBlockNumbers :: MonadIO m => Word64 -> ReaderT SqlBackend m [(Word64, Word64)]
+queryEpochBlockNumbers :: MonadIO m => Word64 -> ReaderT SqlBackend m [(Int64, Word64)]
 queryEpochBlockNumbers epoch = do
     res <- select $ do
       blk <- from $ table @Block
       where_ (blk ^. BlockEpochNo ==. just (val epoch))
       pure (blk ^. BlockBlockNo, blk ^. BlockTxCount)
-    pure $ map convert res
-  where
-    convert :: (Value (Maybe Word64), Value Word64) -> (Word64, Word64)
-    convert (Value ma, Value b) =
-      case ma of
-        Nothing -> (0, b) -- The block does not have transactions.
-        Just a -> (a, b)
+    pure $ map unValue2 res

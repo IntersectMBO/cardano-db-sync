@@ -79,42 +79,43 @@ import           Test.Tasty.HUnit (assertEqual, assertFailure)
 {- HLINT ignore "Reduce duplication" -}
 
 assertBlocksCount :: DBSyncEnv -> Word -> IO ()
-assertBlocksCount env n = do
-    assertEqBackoff env queryBlockCount n defaultDelays "Unexpected block count"
+assertBlocksCount env n =
+  assertEqBackoff env queryBlockCount n defaultDelays "Unexpected block count"
 
 assertBlocksCountDetailed :: DBSyncEnv -> Word -> [Int] -> IO ()
 assertBlocksCountDetailed env n delays = do
-    assertEqBackoff env queryBlockCount n delays "Unexpected block count"
+  assertEqBackoff env queryBlockCount n delays "Unexpected block count"
 
 assertTxCount :: DBSyncEnv -> Word -> IO ()
-assertTxCount env n = do
-    assertEqBackoff env queryTxCount n defaultDelays "Unexpected tx count"
+assertTxCount env n =
+  assertEqBackoff env queryTxCount n defaultDelays "Unexpected tx count"
 
 assertRewardCount :: DBSyncEnv -> Word64 -> IO ()
 assertRewardCount env n =
-    assertEqBackoff env queryRewardCount n defaultDelays "Unexpected rewards count"
+  assertEqBackoff env queryRewardCount n defaultDelays "Unexpected rewards count"
 
 assertBlockNoBackoff :: DBSyncEnv -> Int -> IO ()
 assertBlockNoBackoff = assertBlockNoBackoffTimes defaultDelays
 
 assertBlockNoBackoffTimes :: [Int] -> DBSyncEnv ->  Int -> IO ()
 assertBlockNoBackoffTimes times env blockNo =
-    assertEqBackoff env queryBlockHeight (Just $ fromIntegral blockNo) times "Unexpected BlockNo"
+  assertEqBackoff env queryBlockHeight (Just $ fromIntegral blockNo) times "Unexpected BlockNo"
 
 defaultDelays :: [Int]
 defaultDelays = [1,2,4,8,16,32,64,128]
 
 assertEqQuery :: (Eq a, Show a) => DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> a -> String -> IO ()
-assertEqQuery env query a msg = do
-    assertEqBackoff env query a defaultDelays msg
+assertEqQuery env query a =
+  assertEqBackoff env query a defaultDelays
 
 assertEqBackoff :: (Eq a, Show a) => DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> a -> [Int] -> String -> IO ()
 assertEqBackoff env query a delays msg = do
-    checkStillRuns env
-    assertBackoff env query delays (== a) (\a' -> msg <> ": got " <> show a' <> " expected " <> show a)
+  checkStillRuns env
+  assertBackoff env query delays (== a) (\a' -> msg <> ": got " <> show a' <> " expected " <> show a)
 
 assertBackoff :: DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> [Int] -> (a -> Bool) -> (a -> String) -> IO ()
-assertBackoff env query delays check errMsg = go delays
+assertBackoff env query delays check errMsg =
+    go delays
   where
     go ds = do
       q <- assertQuery env query check errMsg
@@ -146,15 +147,15 @@ runQuery env query = do
 
 checkStillRuns :: DBSyncEnv -> IO ()
 checkStillRuns env = do
-    ret <- pollDBSync env
-    case ret of
-      Nothing -> pure ()
-      Just (Right ()) -> throwIO $ userError "dbsync has stopped"
-      Just (Left err) -> throwIO err
+  ret <- pollDBSync env
+  case ret of
+    Nothing -> pure ()
+    Just (Right ()) -> throwIO $ userError "dbsync has stopped"
+    Just (Left err) -> throwIO err
 
 migrationNotDoneYet :: Text -> Bool
 migrationNotDoneYet txt =
-    Text.isPrefixOf "relation" txt && Text.isSuffixOf "does not exist" txt
+  Text.isPrefixOf "relation" txt && Text.isSuffixOf "does not exist" txt
 
 assertCurrentEpoch :: DBSyncEnv -> Word64 -> IO ()
 assertCurrentEpoch env expected =
@@ -162,20 +163,18 @@ assertCurrentEpoch env expected =
   where
     q = queryCurrentEpochNo
 
-assertAddrValues :: (Crypto era ~ StandardCrypto, Era era)
-                 => DBSyncEnv -> UTxOIndex era -> DbLovelace
-                 -> LedgerState (ShelleyBlock p era) -> IO ()
+assertAddrValues
+    :: (Crypto era ~ StandardCrypto, Era era)
+    => DBSyncEnv -> UTxOIndex era -> DbLovelace -> LedgerState (ShelleyBlock p era)
+    -> IO ()
 assertAddrValues env ix expected sta = do
-    addr <- assertRight $ resolveAddress ix sta
-    let addrBs = Ledger.serialiseAddr addr
-        q = queryAddressOutputs addrBs
-    assertEqBackoff env q expected defaultDelays "Unexpected Balance"
+  addr <- assertRight $ resolveAddress ix sta
+  let addrBs = Ledger.serialiseAddr addr
+      q = queryAddressOutputs addrBs
+  assertEqBackoff env q expected defaultDelays "Unexpected Balance"
 
 assertRight :: Show err => Either err a -> IO a
-assertRight ei =
-  case ei of
-    Right a -> pure a
-    Left err -> assertFailure (show err)
+assertRight = either (assertFailure . show) pure
 
 assertCertCounts :: DBSyncEnv -> (Word64, Word64, Word64, Word64) -> IO ()
 assertCertCounts env expected =
@@ -190,12 +189,14 @@ assertCertCounts env expected =
                     (select . from $ \(_a :: SqlExpr (Entity Delegation)) -> pure countRows)
       withdrawal <- maybe 0 unValue . listToMaybe <$>
                     (select . from $ \(_a :: SqlExpr (Entity Withdrawal)) -> pure countRows)
-      -- We deduct the initial registration and delegation in the genesis
-      pure (registr - 5, deregistr, deleg - 5, withdrawal)
+      -- Originally, the initial registration and delegation in the genesis we subtracted, but that
+      -- only made debugging more difficult when something goes wrong.
+      pure (registr, deregistr, deleg, withdrawal)
 
-assertRewardCounts :: (Crypto era ~ StandardCrypto)
-                   => DBSyncEnv -> LedgerState (ShelleyBlock p era) -> Bool -> Maybe Word64
-                   -> [(StakeIndex, (Word64, Word64, Word64, Word64, Word64))] -> IO ()
+assertRewardCounts
+    :: (Crypto era ~ StandardCrypto)
+    => DBSyncEnv -> LedgerState (ShelleyBlock p era) -> Bool -> Maybe Word64
+    -> [(StakeIndex, (Word64, Word64, Word64, Word64, Word64))] -> IO ()
 assertRewardCounts env st filterAddr mEpoch expected = do
     assertEqBackoff env (groupByAddress <$> q) expectedMap defaultDelays "Unexpected rewards count"
   where
@@ -205,11 +206,13 @@ assertRewardCounts env st filterAddr mEpoch expected = do
     groupByAddress :: [(Reward, ByteString)] -> Map ByteString (Word64, Word64, Word64, Word64, Word64)
     groupByAddress rewards =
       let res = foldr updateMap Map.empty rewards
-      in if filterAddr then Map.filterWithKey (\k _ -> Map.member k expectedMap) res
-         else res
+      in if filterAddr
+            then Map.filterWithKey (\k _ -> Map.member k expectedMap) res
+            else res
 
     mkDBStakeAddress :: StakeIndex -> ByteString
-    mkDBStakeAddress stIx = case resolveStakeCreds stIx st of
+    mkDBStakeAddress stIx =
+      case resolveStakeCreds stIx st of
         Left _ -> error "could not resolve StakeIndex"
         Right cred -> Ledger.serialiseRewardAcnt $ Ledger.RewardAcnt Testnet cred
 
@@ -222,7 +225,8 @@ assertRewardCounts env st filterAddr mEpoch expected = do
     updateCounters :: Reward
                    -> (Word64, Word64, Word64, Word64, Word64)
                    -> (Word64, Word64, Word64, Word64, Word64)
-    updateCounters reward (a,b,c,d,e) = case rewardType reward of
+    updateCounters reward (a,b,c,d,e) =
+      case rewardType reward of
         RwdLeader ->        (a+1, b,   c  , d   , e  )
         RwdMember ->        (a  , b+1, c  , d   , e  )
         RwdReserves ->      (a  , b,   c+1, d   , e  )
@@ -234,9 +238,10 @@ assertRewardCounts env st filterAddr mEpoch expected = do
               -> Map ByteString (Word64, Word64, Word64, Word64, Word64)
     updateMap (rew, addr) res = Map.alter (Just . updateAddrCounters rew) addr res
 
-    filterEpoch rw = case mEpoch of
-      Nothing -> val True
-      Just e -> rw ^. RewardSpendableEpoch ==. val e
+    filterEpoch rw =
+      case mEpoch of
+        Nothing -> val True
+        Just e -> rw ^. RewardSpendableEpoch ==. val e
 
     q = do
       res <- select . from $ \ (reward `InnerJoin` stake_addr) -> do
@@ -297,7 +302,7 @@ assertBabbageCounts env expected =
       datums <- maybe 0 unValue . listToMaybe <$>
                     (select . from $ \(_a :: SqlExpr (Entity Datum)) -> pure countRows)
       colInputs <- maybe 0 unValue . listToMaybe <$>
-              (select . from $ \(_a :: SqlExpr (Entity CollateralTxIn)) -> pure countRows)
+                    (select . from $ \(_a :: SqlExpr (Entity CollateralTxIn)) -> pure countRows)
       scriptOutputs <- fromIntegral . length <$> queryScriptOutputs
       redeemerTxIn <- fromIntegral . length <$> queryTxInRedeemer
       invalidTx <- fromIntegral . length <$> queryInvalidTx
@@ -328,48 +333,44 @@ assertScriptCert env expected =
 
 assertPoolCounters :: DBSyncEnv -> (Word64, Word64, Word64, Word64, Word64, Word64) -> IO ()
 assertPoolCounters env expected =
-    assertEqBackoff env poolCountersQuery expected defaultDelays "Unexpected Pool counts"
+  assertEqBackoff env poolCountersQuery expected defaultDelays "Unexpected Pool counts"
 
 poolCountersQuery :: ReaderT SqlBackend (NoLoggingT IO) (Word64, Word64, Word64, Word64, Word64, Word64)
 poolCountersQuery = do
-      poolHash <- maybe 0 unValue . listToMaybe <$>
-                      (select . from $ \(_a :: SqlExpr (Entity PoolHash)) -> pure countRows)
-      poolMetadataRef <- maybe 0 unValue . listToMaybe <$>
-                  (select . from $ \(_a :: SqlExpr (Entity PoolMetadataRef)) -> pure countRows)
-      poolUpdate <- maybe 0 unValue . listToMaybe <$>
-                  (select . from $ \(_a :: SqlExpr (Entity PoolUpdate)) -> pure countRows)
-      poolOwner <- maybe 0 unValue . listToMaybe <$>
-                  (select . from $ \(_a :: SqlExpr (Entity PoolOwner)) -> pure countRows)
-      poolRetire <- maybe 0 unValue . listToMaybe <$>
-                  (select . from $ \(_a :: SqlExpr (Entity PoolRetire)) -> pure countRows)
-      poolRelay <- maybe 0 unValue . listToMaybe <$>
-                  (select . from $ \(_a :: SqlExpr (Entity PoolRelay)) -> pure countRows)
-      pure (poolHash, poolMetadataRef, poolUpdate, poolOwner, poolRetire, poolRelay)
+  poolHash <- maybe 0 unValue . listToMaybe <$>
+                (select . from $ \(_a :: SqlExpr (Entity PoolHash)) -> pure countRows)
+  poolMetadataRef <- maybe 0 unValue . listToMaybe <$>
+                (select . from $ \(_a :: SqlExpr (Entity PoolMetadataRef)) -> pure countRows)
+  poolUpdate <- maybe 0 unValue . listToMaybe <$>
+                (select . from $ \(_a :: SqlExpr (Entity PoolUpdate)) -> pure countRows)
+  poolOwner <- maybe 0 unValue . listToMaybe <$>
+                (select . from $ \(_a :: SqlExpr (Entity PoolOwner)) -> pure countRows)
+  poolRetire <- maybe 0 unValue . listToMaybe <$>
+                (select . from $ \(_a :: SqlExpr (Entity PoolRetire)) -> pure countRows)
+  poolRelay <- maybe 0 unValue . listToMaybe <$>
+                (select . from $ \(_a :: SqlExpr (Entity PoolRelay)) -> pure countRows)
+  pure (poolHash, poolMetadataRef, poolUpdate, poolOwner, poolRetire, poolRelay)
 
 addPoolCounters :: Num a => (a,a,a,a,a,a) -> (a,a,a,a,a,a) -> (a,a,a,a,a,a)
 addPoolCounters (a,b,c,d,e,f) (a',b',c',d',e',f') = (a + a',b + b',c + c',d + d',e + e',f + f')
 
-assertPoolLayerCounters :: Crypto era ~ StandardCrypto
-                        => DBSyncEnv -> (Word64, Word64)
-                        -> [(PoolIndex, (Either DBFail Bool, Bool, Bool))]
-                        -> LedgerState (ShelleyBlock p era)
-                        -> IO ()
+assertPoolLayerCounters
+    :: Crypto era ~ StandardCrypto
+    => DBSyncEnv -> (Word64, Word64) -> [(PoolIndex, (Either DBFail Bool, Bool, Bool))]
+    -> LedgerState (ShelleyBlock p era) -> IO ()
 assertPoolLayerCounters env (expectedRetired, expectedDelisted) expResults st = do
-    poolLayer <- getPoolLayer env
-    retiredPools <- dlGetRetiredPools poolLayer
-    assertEqual "Unexpected retired pools counter" (Right expectedRetired) (fromIntegral . length <$> retiredPools)
+  poolLayer <- getPoolLayer env
+  retiredPools <- dlGetRetiredPools poolLayer
+  assertEqual "Unexpected retired pools counter" (Right expectedRetired) (fromIntegral . length <$> retiredPools)
 
-    delistedPools <- dlGetDelistedPools poolLayer
-    assertEqual "Unexpected delisted pools counter" expectedDelisted (fromIntegral $ length delistedPools)
+  delistedPools <- dlGetDelistedPools poolLayer
+  assertEqual "Unexpected delisted pools counter" expectedDelisted (fromIntegral $ length delistedPools)
 
-    forM_ expResults $ \(poolIndex, expected) -> do
-      let poolKeyHash = resolvePool poolIndex st
-      let poolHashBs = unKeyHashRaw poolKeyHash
-      let servantPoolId = dbToServantPoolId poolHashBs
-      isRetired <- dlCheckRetiredPool poolLayer servantPoolId
-      isDelisted <- dlCheckDelistedPool poolLayer servantPoolId
-      isGetPool <- isRight <$> dlGetPool poolLayer servantPoolId
-      assertEqual ("Unexpected result for pool " ++ show servantPoolId) expected (isRetired, isDelisted, isGetPool)
-
-
-
+  forM_ expResults $ \(poolIndex, expected) -> do
+    let poolKeyHash = resolvePool poolIndex st
+    let poolHashBs = unKeyHashRaw poolKeyHash
+    let servantPoolId = dbToServantPoolId poolHashBs
+    isRetired <- dlCheckRetiredPool poolLayer servantPoolId
+    isDelisted <- dlCheckDelistedPool poolLayer servantPoolId
+    isGetPool <- isRight <$> dlGetPool poolLayer servantPoolId
+    assertEqual ("Unexpected result for pool " ++ show servantPoolId) expected (isRetired, isDelisted, isGetPool)

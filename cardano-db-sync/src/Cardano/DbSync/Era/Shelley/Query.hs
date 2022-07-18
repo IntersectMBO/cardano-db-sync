@@ -20,16 +20,18 @@ import           Cardano.Prelude hiding (Ptr, from, maybeToEither, on)
 
 import           Cardano.Db
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import           Cardano.Ledger.BaseTypes
+import           Cardano.DbSync.Util
+
+import           Cardano.Ledger.BaseTypes (CertIx (..), TxIx (..))
 
 import           Cardano.Ledger.Credential (Ptr (..))
 
-import           Cardano.DbSync.Util
-
+import           Cardano.Slotting.Block (BlockNo (..))
 import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Database.Esqueleto.Experimental (SqlBackend, Value (..), desc, from, innerJoin,
                    just, limit, on, orderBy, select, table, val, where_, (:&) ((:&)), (==.), (^.))
+
 
 {- HLINT ignore "Fuse on/on" -}
 
@@ -58,20 +60,21 @@ queryStakeDelegation
     -> ReaderT SqlBackend m (Maybe StakeAddressId)
 queryStakeDelegation (Ptr (SlotNo slot) (TxIx txIx) (CertIx certIx)) = do
   res <- select $ do
-    (dlg :& tx :& blk) <-
-      from $ table @Delegation
-      `innerJoin` table @Tx
-      `on` (\(dlg :& tx) -> tx ^. TxId ==. dlg ^. DelegationTxId)
-      `innerJoin` table @Block
-      `on` (\(_dlg :& tx :& blk) -> blk ^. BlockId ==. tx ^. TxBlockId)
-    where_ (blk ^. BlockSlotNo ==. just (val slot))
-    where_ (tx ^. TxBlockIndex ==. val (fromIntegral txIx))
-    where_ (dlg ^. DelegationCertIndex ==. val (fromIntegral certIx))
-    -- Need to order by BlockSlotNo descending for correct behavior when there are two
-    -- or more delegation certificates in a single epoch.
-    orderBy [desc (blk ^. BlockSlotNo)]
-    limit 1
-    pure (dlg ^. DelegationAddrId)
+          (dlg :& tx :& blk) <-
+              from $ table @Delegation
+                `innerJoin` table @Tx
+                  `on` (\(dlg :& tx) -> tx ^. TxBlockNo ==. dlg ^. DelegationBlockNo)
+              `innerJoin` table @Block
+                `on` (\(_dlg :& tx :& blk) -> blk ^. BlockBlockNo ==. tx ^. TxBlockNo)
+          where_ (blk ^. BlockSlotNo ==. just (val slot))
+          where_ (tx ^. TxBlockIndex ==. val (fromIntegral txIx))
+          where_ (dlg ^. DelegationCertIndex ==. val (fromIntegral certIx))
+          -- Need to order by BlockSlotNo descending for correct behavior when there are two
+          -- or more delegation certificates in a single epoch.
+          orderBy [desc (blk ^. BlockSlotNo)]
+          limit 1
+          pure (dlg ^. DelegationAddrId)
+
   pure $ unValue <$> listToMaybe res
 
 queryResolveInput :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (TxId, DbLovelace))
@@ -88,9 +91,9 @@ queryStakeRefPtr (Ptr (SlotNo slot) (TxIx txIx) (CertIx certIx)) = do
     (blk :& tx :& sr) <-
       from $ table @Block
       `innerJoin` table @Tx
-      `on` (\(blk :& tx) -> blk ^. BlockId ==. tx ^. TxBlockId)
+      `on` (\(blk :& tx) -> blk ^. BlockBlockNo ==. tx ^. TxBlockNo)
       `innerJoin` table @StakeRegistration
-      `on` (\(_blk :& tx :& sr) -> sr ^. StakeRegistrationTxId ==. tx ^. TxId)
+      `on` (\(_blk :& tx :& sr) -> sr ^. StakeRegistrationBlockNo ==. tx ^. TxBlockNo)
 
     where_ (blk ^. BlockSlotNo ==. just (val slot))
     where_ (tx ^. TxBlockIndex ==. val (fromIntegral txIx))
@@ -103,17 +106,17 @@ queryStakeRefPtr (Ptr (SlotNo slot) (TxIx txIx) (CertIx certIx)) = do
   pure $ unValue <$> listToMaybe res
 
 -- Check if there are other PoolUpdates in the same blocks for the same pool
-queryPoolUpdateByBlock :: MonadIO m => BlockId -> PoolHashId -> ReaderT SqlBackend m Bool
-queryPoolUpdateByBlock blkId poolHashId = do
+queryPoolUpdateByBlock :: MonadIO m => BlockNo -> PoolHashId -> ReaderT SqlBackend m Bool
+queryPoolUpdateByBlock (BlockNo blkNo) poolHashId = do
     res <- select $ do
       (blk :& _tx :& poolUpdate) <-
         from $ table @Block
         `innerJoin` table @Tx
-        `on` (\(blk :& tx) -> blk ^. BlockId ==. tx ^. TxBlockId)
+        `on` (\(blk :& tx) -> blk ^. BlockBlockNo ==. tx ^. TxBlockNo)
         `innerJoin` table @PoolUpdate
         `on` (\(_blk :& tx :& poolUpdate) -> tx ^. TxId ==. poolUpdate ^. PoolUpdateRegisteredTxId)
       where_ (poolUpdate ^. PoolUpdateHashId ==. val poolHashId)
-      where_ (blk ^. BlockId ==. val blkId)
+      where_ (blk ^. BlockBlockNo ==. val (fromIntegral blkNo))
       limit 1
       pure (blk ^. BlockEpochNo)
     pure $ not (null res)

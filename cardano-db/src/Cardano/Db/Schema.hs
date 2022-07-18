@@ -21,6 +21,7 @@ import           Cardano.Db.Schema.Orphans ()
 
 import           Cardano.Db.Types (DbInt65, DbLovelace, DbWord64, RewardSource, ScriptPurpose,
                    ScriptType, SyncState)
+import           Cardano.Slotting.Block (BlockNo (..))
 
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Int (Int64)
@@ -70,7 +71,7 @@ share
 
   SlotLeader
     hash                ByteString          sqltype=hash28type
-    poolHashId          PoolHashId Maybe    OnDeleteCascade   -- This will be non-null when a block is mined by a pool.
+    poolHashId          PoolHashId Maybe                      -- This will be non-null when a block is mined by a pool.
     description         Text                                  -- Description of the Slots leader.
     UniqueSlotLeader    hash
 
@@ -80,14 +81,16 @@ share
   -- of the schema definition.
   -- All NULL-able fields other than 'epochNo' are NULL for EBBs, whereas 'epochNo' is
   -- only NULL for the genesis block.
+  -- The `blockNo` for all epoch boundary blocks is `0`. The Byron genesis block has a block number
+  -- of `-1` and the Shelley genesis block has a block number of `-2`.
+  -- The first block containing transactions in the Byron era is `1`, so using `0` for EBBs is safe.
   Block
     hash                ByteString          sqltype=hash32type
     epochNo             Word64 Maybe        sqltype=word31type
     slotNo              Word64 Maybe        sqltype=word63type
     epochSlotNo         Word64 Maybe        sqltype=word31type
-    blockNo             Word64 Maybe        sqltype=word31type
-    previousId          BlockId Maybe       OnDeleteCascade
-    slotLeaderId        SlotLeaderId        OnDeleteCascade
+    blockNo             Int64               -- sqltype=bigint
+    slotLeaderId        SlotLeaderId
     size                Word64              sqltype=word31type
     time                UTCTime             sqltype=timestamp
     txCount             Word64
@@ -101,7 +104,7 @@ share
 
   Tx
     hash                ByteString          sqltype=hash32type
-    blockId             BlockId             OnDeleteCascade     -- This type is the primary key for the 'block' table.
+    blockNo             Int64               -- sqltype=bigint
     blockIndex          Word64              sqltype=word31type    -- The index of this transaction within the block.
     outSum              DbLovelace          sqltype=lovelace
     fee                 DbLovelace          sqltype=lovelace
@@ -121,21 +124,22 @@ share
     hashRaw             ByteString          sqltype=addr29type
     view                Text
     scriptHash          ByteString Maybe    sqltype=hash28type
-    txId                TxId                OnDeleteCascade     -- Only used for rollback.
+    blockNo             Int64               -- sqltype=bigint
     UniqueStakeAddress  hashRaw
 
   TxOut
-    txId                TxId                OnDeleteCascade     -- This type is the primary key for the 'tx' table.
-    index               Word64              sqltype=txindex
+    txId                TxId
+    index               Word16              sqltype=txindex
     address             Text
     addressRaw          ByteString
     addressHasScript    Bool
     paymentCred         ByteString Maybe    sqltype=hash28type
-    stakeAddressId      StakeAddressId Maybe OnDeleteCascade
+    stakeAddressId      StakeAddressId Maybe
     value               DbLovelace          sqltype=lovelace
     dataHash            ByteString Maybe    sqltype=hash32type
     inlineDatumId       DatumId Maybe       OnDeleteCascade
     referenceScriptId   ScriptId Maybe      OnDeleteCascade
+    blockNo             Int64               -- sqltype=bigint
     UniqueTxout         txId index          -- The (tx_id, index) pair must be unique.
 
   CollateralTxOut
@@ -154,16 +158,18 @@ share
     UniqueColTxout      txId index          -- The (tx_id, index) pair must be unique.
 
   TxIn
-    txInId              TxId                OnDeleteCascade     -- The transaction where this is used as an input.
-    txOutId             TxId                OnDeleteCascade     -- The transaction where this was created as an output.
-    txOutIndex          Word64              sqltype=txindex
-    redeemerId          RedeemerId Maybe    OnDeleteCascade
+    txInId              TxId
+    txOutId             TxId
+    txOutIndex          Word16              sqltype=txindex
+    redeemerId          RedeemerId Maybe
+    blockNo             Int64               -- sqltype=bigint
     UniqueTxin          txOutId txOutIndex
 
   CollateralTxIn
-    txInId              TxId                OnDeleteCascade     -- The transaction where this is used as an input.
-    txOutId             TxId                OnDeleteCascade     -- The transaction where this was created as an output.
-    txOutIndex          Word64              sqltype=txindex
+    txInId              TxId
+    txOutId             TxId
+    txOutIndex          Word16              sqltype=txindex
+    blockNo             Int64               -- sqltype=bigint
     UniqueColTxin       txInId txOutId txOutIndex
 
   ReferenceTxIn
@@ -187,10 +193,7 @@ share
   -- The Epoch table is an aggregation of data in the 'Block' table, but is kept in this form
   -- because having it as a 'VIEW' is incredibly slow and inefficient.
 
-  -- The 'outsum' type in the PostgreSQL world is 'bigint >= 0' so it will error out if an
-  -- overflow (sum of tx outputs in an epoch) is detected. 'maxBound :: Int` is big enough to
-  -- hold 204 times the total Lovelace distribution. The chance of that much being transacted
-  -- in a single epoch is relatively low.
+  -- The 'outsum' type in the PostgreSQL world is a `Word128` to avoid possibility of overflow.
   Epoch
     outSum              Word128             sqltype=word128type
     fees                DbLovelace          sqltype=lovelace
@@ -215,47 +218,47 @@ share
     utxo                DbLovelace          sqltype=lovelace
     deposits            DbLovelace          sqltype=lovelace
     fees                DbLovelace          sqltype=lovelace
-    blockId             BlockId             OnDeleteCascade
-    UniqueAdaPots       blockId
+    blockNo             Word64              sqltype=word63type
+    UniqueAdaPots       blockNo
     deriving Eq
 
   -- -----------------------------------------------------------------------------------------------
 
   PoolMetadataRef
-    poolId              PoolHashId          OnDeleteCascade
+    poolId              PoolHashId
     url                 Text
     hash                ByteString          sqltype=hash32type
-    registeredTxId      TxId                OnDeleteCascade     -- Only used for rollback.
+    registeredTxId      TxId
     UniquePoolMetadataRef poolId url hash
 
   PoolUpdate
-    hashId              PoolHashId          OnDeleteCascade
+    hashId              PoolHashId
     certIndex           Word16
     vrfKeyHash          ByteString          sqltype=hash32type
     pledge              DbLovelace          sqltype=lovelace
-    rewardAddrId        StakeAddressId      OnDeleteCascade
+    rewardAddrId        StakeAddressId
     activeEpochNo       Word64
-    metaId              PoolMetadataRefId Maybe OnDeleteCascade
+    metaId              PoolMetadataRefId Maybe
     margin              Double                                  -- sqltype=percentage????
     fixedCost           DbLovelace          sqltype=lovelace
-    registeredTxId      TxId                OnDeleteCascade     -- Slot number in which the pool was registered.
+    registeredTxId      TxId
     UniquePoolUpdate    registeredTxId certIndex
 
   -- A Pool can have more than one owner, so we have a PoolOwner table.
   PoolOwner
-    addrId              StakeAddressId      OnDeleteCascade
-    poolUpdateId        PoolUpdateId        OnDeleteCascade
+    addrId              StakeAddressId
+    poolUpdateId        PoolUpdateId
     UniquePoolOwner     addrId poolUpdateId
 
   PoolRetire
-    hashId              PoolHashId          OnDeleteCascade
+    hashId              PoolHashId
     certIndex           Word16
-    announcedTxId       TxId                OnDeleteCascade     -- Slot number in which the pool announced it was retiring.
+    announcedTxId       TxId
     retiringEpoch       Word64              sqltype=word31type    -- Epoch number in which the pool will retire.
     UniquePoolRetiring  announcedTxId certIndex
 
   PoolRelay
-    updateId            PoolUpdateId        OnDeleteCascade
+    updateId            PoolUpdateId
     ipv4                Text Maybe
     ipv6                Text Maybe
     dnsName             Text Maybe
@@ -271,36 +274,39 @@ share
 
   -- When was a staking key/script registered
   StakeRegistration
-    addrId              StakeAddressId      OnDeleteCascade
+    addrId              StakeAddressId
+    txId                TxId
     certIndex           Word16
     epochNo             Word64              sqltype=word31type
-    txId                TxId                OnDeleteCascade
+    blockNo             Int64               -- sqltype=bigint      -- For rollbacks.
     UniqueStakeRegistration txId certIndex
 
   -- When was a staking key/script deregistered
   StakeDeregistration
-    addrId              StakeAddressId      OnDeleteCascade
+    addrId              StakeAddressId
+    txId                TxId
     certIndex           Word16
     epochNo             Word64              sqltype=word31type
-    txId                TxId                OnDeleteCascade
-    redeemerId          RedeemerId Maybe    OnDeleteCascade
+    blockNo             Int64               -- sqltype=bigint      -- For rollbanks.
+    redeemerId          RedeemerId Maybe
     UniqueStakeDeregistration txId certIndex
 
   Delegation
-    addrId              StakeAddressId      OnDeleteCascade
+    addrId              StakeAddressId
     certIndex           Word16
-    poolHashId          PoolHashId          OnDeleteCascade
+    poolHashId          PoolHashId
     activeEpochNo       Word64
-    txId                TxId                OnDeleteCascade
+    blockNo             Int64               -- sqltype=bigint
     slotNo              Word64              sqltype=word63type
-    redeemerId          RedeemerId Maybe    OnDeleteCascade
-    UniqueDelegation    txId certIndex
+    redeemerId          RedeemerId Maybe
+    UniqueDelegation    blockNo certIndex
 
   TxMetadata
     key                 DbWord64            sqltype=word64type
     json                Text Maybe          sqltype=jsonb
     bytes               ByteString          sqltype=bytea
-    txId                TxId                OnDeleteCascade
+    txId                TxId
+    blockNo             Word64              sqltype=word63type
     UniqueTxMetadata    key txId
 
   -- -----------------------------------------------------------------------------------------------
@@ -310,12 +316,12 @@ share
   -- epoch in which the reward was earned.
   -- This table should never get rolled back.
   Reward
-    addrId              StakeAddressId      OnDeleteCascade
+    addrId              StakeAddressId
     type                RewardSource        sqltype=rewardtype
     amount              DbLovelace          sqltype=lovelace
     earnedEpoch         Word64
     spendableEpoch      Word64
-    poolId              PoolHashId Maybe    OnDeleteCascade
+    poolId              PoolHashId Maybe
     -- Usually NULLables are not allowed in a uniqueness constraint. The semantics of how NULL
     -- interacts with those constraints is non-trivial:  two NULL values are not considered equal
     -- for the purposes of an uniqueness constraint.
@@ -324,40 +330,43 @@ share
     deriving Show
 
   Withdrawal
-    addrId              StakeAddressId      OnDeleteCascade
+    addrId              StakeAddressId
     amount              DbLovelace          sqltype=lovelace
-    redeemerId          RedeemerId Maybe    OnDeleteCascade
-    txId                TxId                OnDeleteCascade
+    redeemerId          RedeemerId Maybe
+    txId                TxId
+    blockNo             Int64               -- sqltype=bigint
     UniqueWithdrawal    addrId txId
 
   -- This table should never get rolled back.
   EpochStake
-    addrId              StakeAddressId      OnDeleteCascade
-    poolId              PoolHashId          OnDeleteCascade
+    addrId              StakeAddressId
+    poolId              PoolHashId
     amount              DbLovelace          sqltype=lovelace
     epochNo             Word64              sqltype=word31type
     UniqueStake         epochNo addrId poolId
 
   Treasury
-    addrId              StakeAddressId      OnDeleteCascade
+    addrId              StakeAddressId
+    txId                TxId
     certIndex           Word16
     amount              DbInt65             sqltype=int65type
-    txId                TxId                OnDeleteCascade
-    UniqueTreasury      addrId txId certIndex
+    blockNo             Int64               -- sqltype=bigint      -- Block number containing the tx
+    UniqueTreasury      addrId blockNo txId certIndex
 
   Reserve
-    addrId              StakeAddressId      OnDeleteCascade
+    addrId              StakeAddressId
+    txId                TxId
     certIndex           Word16
     amount              DbInt65             sqltype=int65type
-    txId                TxId                OnDeleteCascade
-    UniqueReserves      addrId txId certIndex
+    blockNo             Int64               -- sqltype=bigint      -- Block number containing the tx
+    UniqueReserves      addrId blockNo txId certIndex
 
   PotTransfer
     certIndex           Word16
     treasury            DbInt65             sqltype=int65type
     reserves            DbInt65             sqltype=int65type
-    txId                TxId                OnDeleteCascade
-    UniquePotTransfer   txId certIndex
+    blockNo             Int64               -- sqltype=bigint      -- Block number containing the tx
+    UniquePotTransfer   blockNo certIndex
 
   EpochSyncTime
     no                  Word64
@@ -375,15 +384,15 @@ share
     UniqueMultiAsset    policy name
 
   MaTxMint
-    ident               MultiAssetId        OnDeleteCascade
+    ident               MultiAssetId
     quantity            DbInt65             sqltype=int65type
-    txId                TxId                OnDeleteCascade
+    txId                TxId
     UniqueMaTxMint      ident txId
 
   MaTxOut
-    ident               MultiAssetId        OnDeleteCascade
+    ident               MultiAssetId
     quantity            DbWord64            sqltype=word64type
-    txOutId             TxOutId             OnDeleteCascade
+    txOutId             TxOutId
     UniqueMaTxOut       ident txOutId
 
   -- -----------------------------------------------------------------------------------------------
@@ -393,7 +402,7 @@ share
   -- Word64/word63type is safe here. Similarly, `maxBound :: Int64` if unit step would be an
   -- *enormous* amount a memory which would cost a fortune.
   Redeemer
-    txId                TxId                OnDeleteCascade
+    txId                TxId
     unitMem             Word64              sqltype=word63type
     unitSteps           Word64              sqltype=word63type
     fee                 DbLovelace Maybe    sqltype=lovelace
@@ -404,7 +413,7 @@ share
     UniqueRedeemer      txId purpose index
 
   Script
-    txId                TxId                OnDeleteCascade
+    txId                TxId
     hash                ByteString          sqltype=hash28type
     type                ScriptType          sqltype=scripttype
     json                Text Maybe          sqltype=jsonb
@@ -414,7 +423,7 @@ share
 
   Datum
     hash                ByteString          sqltype=hash32type
-    txId                TxId                OnDeleteCascade
+    txId                TxId
     value               Text Maybe          sqltype=jsonb
     bytes               ByteString          sqltype=bytea
     UniqueDatum         hash
@@ -428,7 +437,7 @@ share
 
   ExtraKeyWitness
     hash                ByteString          sqltype=hash28type
-    txId                TxId                OnDeleteCascade
+    txId                TxId
     UniqueWitness       hash
 
   -- -----------------------------------------------------------------------------------------------
@@ -457,7 +466,7 @@ share
     minPoolCost         DbLovelace Maybe    sqltype=lovelace
 
     coinsPerUtxoSize    DbLovelace Maybe    sqltype=lovelace
-    costModelId         CostModelId Maybe   OnDeleteCascade
+    costModelId         CostModelId Maybe
     priceMem            Double Maybe        -- sqltype=rational
     priceStep           Double Maybe        -- sqltype=rational
     maxTxExMem          DbWord64 Maybe      sqltype=word64type
@@ -468,8 +477,8 @@ share
     collateralPercent   Word16 Maybe        sqltype=word31type
     maxCollateralInputs Word16 Maybe        sqltype=word31type
 
-    registeredTxId      TxId                OnDeleteCascade    -- Slot number in which update registered.
-    UniqueParamProposal key registeredTxId
+    blockNo             Int64               -- sqltype=bigint
+    UniqueParamProposal key blockNo
 
   EpochParam
     epochNo             Word64              sqltype=word31type
@@ -494,8 +503,8 @@ share
 
     nonce               ByteString Maybe    sqltype=hash32type
 
-    coinsPerUtxoSize    DbLovelace Maybe    sqltype=lovelace
-    costModelId         CostModelId Maybe   OnDeleteCascade
+    coinsPerUtxoWord    DbLovelace Maybe    sqltype=lovelace
+    costModelId         CostModelId Maybe
     priceMem            Double Maybe        -- sqltype=rational
     priceStep           Double Maybe        -- sqltype=rational
     maxTxExMem          DbWord64 Maybe      sqltype=word64type
@@ -505,26 +514,24 @@ share
     maxValSize          DbWord64 Maybe      sqltype=word64type
     collateralPercent   Word16 Maybe        sqltype=word31type
     maxCollateralInputs Word16 Maybe        sqltype=word31type
-
-    blockId             BlockId             OnDeleteCascade      -- The first block where these parameters are valid.
-    UniqueEpochParam    epochNo blockId
+    UniqueEpochParam    epochNo
 
   CostModel
     hash                ByteString          sqltype=hash32type
     costs               Text                sqltype=jsonb
-    blockId             BlockId             OnDeleteCascade
+    blockNo             Int64               -- sqltype=bigint
     UniqueCostModel     hash
 
   -- -----------------------------------------------------------------------------------------------
   -- Pool offline (ie not on the blockchain) data.
 
   PoolOfflineData
-    poolId              PoolHashId          OnDeleteCascade
+    poolId              PoolHashId
     tickerName          Text
     hash                ByteString          sqltype=hash32type
     json                Text                sqltype=jsonb
     bytes               ByteString          sqltype=bytea
-    pmrId               PoolMetadataRefId   OnDeleteCascade
+    pmrId               PoolMetadataRefId
     UniquePoolOfflineData  poolId hash
     deriving Show
 
@@ -532,9 +539,9 @@ share
   -- TODO(KS): Debatable whether we need to persist this between migrations!
 
   PoolOfflineFetchError
-    poolId              PoolHashId          OnDeleteCascade
+    poolId              PoolHashId
     fetchTime           UTCTime             sqltype=timestamp
-    pmrId               PoolMetadataRefId   OnDeleteCascade
+    pmrId               PoolMetadataRefId
     fetchError          Text
     retryCount          Word                sqltype=word31type
     UniquePoolOfflineFetchError poolId fetchTime retryCount
@@ -554,6 +561,16 @@ share
     UniqueDelistedPool  hashRaw
 
   |]
+
+-- | Block numbers in SQL land are represented as the SQL `bigint` type, which is a 64 bit
+-- signed integer. Official on-chain block numbers are always positive, but we need values to
+-- represent valid block numbers for the Byron (-1) and Shelley (-2) genesis blocks as below.
+
+byronGenesisBlockNo :: BlockNo
+byronGenesisBlockNo = BlockNo (maxBound :: Word64)  -- maxBound is stored in the DB as -1
+
+shelleyGenesisBlockNo :: BlockNo
+shelleyGenesisBlockNo = byronGenesisBlockNo - 1     -- This will be -2
 
 deriving instance Eq (Unique EpochSyncTime)
 
@@ -586,7 +603,6 @@ schemaDocs =
       BlockSlotNo # "The slot number."
       BlockEpochSlotNo # "The slot number within an epoch (resets to zero at the start of each epoch)."
       BlockBlockNo # "The block number."
-      BlockPreviousId # "The Block table index of the previous block."
       BlockSlotLeaderId # "The SlotLeader table index of the creator of this block."
       BlockSize # "The block size (in bytes). Note, this size value is not expected to be the same as the sum of the tx sizes due to the fact that txs being stored in segwit format and oddities in the CBOR encoding."
       BlockTime # "The block time (UTCTime)."
@@ -601,7 +617,7 @@ schemaDocs =
     Tx --^ do
       "A table for transactions within a block on the chain."
       TxHash # "The hash identifier of the transaction."
-      TxBlockId # "The Block table index of the block that contains this transaction."
+      TxBlockNo # "The Block number of the block that contains this transaction."
       TxBlockIndex # "The index of this transaction with the block (zero based)."
       TxOutSum # "The sum of the transaction outputs (in Lovelace)."
       TxFee # "The fees paid for this transaction."
@@ -619,8 +635,7 @@ schemaDocs =
       StakeAddressHashRaw # "The raw bytes of the stake address hash."
       StakeAddressView # "The Bech32 encoded version of the stake address."
       StakeAddressScriptHash # "The script hash, in case this address is locked by a script."
-      StakeAddressTxId # "The Tx table index of the transaction in which this address first appeared.\
-        \ New in v13: Renamed from registered_tx_id."
+      StakeAddressBlockNo # "The block number in which this address first appeared."
 
     TxOut --^ do
       "A table for transaction outputs."
@@ -697,7 +712,7 @@ schemaDocs =
       AdaPotsUtxo # "The amount (in Lovelace) in the UTxO set."
       AdaPotsDeposits # "The amount (in Lovelace) in the deposit pot."
       AdaPotsFees # "The amount (in Lovelace) in the fee pot."
-      AdaPotsBlockId # "The Block table index of the block for which this snapshot was taken."
+      AdaPotsBlockNo # "The block number of the block for which this snapshot was taken."
 
     PoolMetadataRef --^ do
       "An on-chain reference to off-chain pool metadata."
@@ -744,14 +759,14 @@ schemaDocs =
       StakeRegistrationAddrId # "The StakeAddress table index for the stake address."
       StakeRegistrationCertIndex # "The index of this stake registration within the certificates of this transaction."
       StakeRegistrationEpochNo # "The epoch in which the registration took place."
-      StakeRegistrationTxId # "The Tx table index of the transaction where this stake address was registered."
+      StakeRegistrationBlockNo # "The block number containing the transaction where this stake address was registered."
 
     StakeDeregistration --^ do
       "A table containing stake address deregistrations."
       StakeDeregistrationAddrId # "The StakeAddress table index for the stake address."
       StakeDeregistrationCertIndex # "The index of this stake deregistration within the certificates of this transaction."
       StakeDeregistrationEpochNo # "The epoch in which the deregistration took place."
-      StakeDeregistrationTxId # "The Tx table index of the transaction where this stake address was deregistered."
+      StakeDeregistrationBlockNo # "The block number containing the transaction where this stake address was deregistered."
       StakeDeregistrationRedeemerId # "The Redeemer table index that is related with this certificate."
 
     Delegation --^ do
@@ -760,7 +775,7 @@ schemaDocs =
       DelegationCertIndex # "The index of this delegation within the certificates of this transaction."
       DelegationPoolHashId # "The PoolHash table index for the pool being delegated to."
       DelegationActiveEpochNo # "The epoch number where this delegation becomes active."
-      DelegationTxId # "The Tx table index of the transaction that contained this delegation."
+      DelegationBlockNo # "The block number containing the transaction that contained this delegation."
       DelegationSlotNo # "The slot number of the block that contained this delegation."
       DelegationRedeemerId # "The Redeemer table index that is related with this certificate."
 
@@ -807,7 +822,7 @@ schemaDocs =
       TreasuryAddrId # "The StakeAddress table index for the stake address for this Treasury entry."
       TreasuryCertIndex # "The index of this payment certificate within the certificates of this transaction."
       TreasuryAmount # "The payment amount (in Lovelace)."
-      TreasuryTxId # "The Tx table index for the transaction that contains this payment."
+      TreasuryBlockNo # "The block number containing the transaction that contains this payment."
 
     Reserve --^ do
       "A table for payments from the reserves to a StakeAddress. Note: Before protocol version 5.0\
@@ -817,14 +832,14 @@ schemaDocs =
       ReserveAddrId # "The StakeAddress table index for the stake address for this Treasury entry."
       ReserveCertIndex # "The index of this payment certificate within the certificates of this transaction."
       ReserveAmount # "The payment amount (in Lovelace)."
-      ReserveTxId # "The Tx table index for the transaction that contains this payment."
+      ReserveBlockNo # "The block number containing the transaction that contains this payment."
 
     PotTransfer --^ do
       "A table containing transfers between the reserves pot and the treasury pot."
       PotTransferCertIndex # "The index of this transfer certificate within the certificates of this transaction."
       PotTransferTreasury # "The amount (in Lovelace) the treasury balance changes by."
       PotTransferReserves # "The amount (in Lovelace) the reserves balance changes by."
-      PotTransferTxId # "The Tx table index for the transaction that contains this transfer."
+      PotTransferBlockNo # "The block number containing the transaction that contains this transfer."
 
     EpochSyncTime --^ do
       "A table containing the time required to fully sync an epoch."
@@ -924,7 +939,7 @@ schemaDocs =
       ParamProposalMaxValSize # "The maximum Val size."
       ParamProposalCollateralPercent # "The percentage of the txfee which must be provided as collateral when including non-native scripts."
       ParamProposalMaxCollateralInputs # "The maximum number of collateral inputs allowed in a transaction."
-      ParamProposalRegisteredTxId # "The Tx table index for the transaction that contains this parameter proposal."
+      ParamProposalBlockNo # "The block number containing the transaction that contains this parameter proposal."
 
     EpochParam --^ do
       "The accepted protocol parameters for an epoch."
@@ -948,7 +963,7 @@ schemaDocs =
       EpochParamMinUtxoValue # "The minimum value of a UTxO entry."
       EpochParamMinPoolCost # "The minimum pool cost."
       EpochParamNonce # "The nonce value for this epoch."
-      EpochParamCoinsPerUtxoSize # "For Alonzo this is the cost per UTxO word. For Babbage and later per UTxO byte. New in v13: Renamed from coins_per_utxo_word."
+      EpochParamCoinsPerUtxoWord # "For Alonzo this is the cost per UTxO word. For Babbage and later per UTxO byte. New in v13: Renamed from coins_per_utxo_word."
       EpochParamCostModelId # "The CostModel table index for the params."
       EpochParamPriceMem # "The per word cost of script memory usage."
       EpochParamPriceStep # "The cost of script execution step usage."
@@ -959,13 +974,12 @@ schemaDocs =
       EpochParamMaxValSize # "The maximum Val size."
       EpochParamCollateralPercent # "The percentage of the txfee which must be provided as collateral when including non-native scripts."
       EpochParamMaxCollateralInputs # "The maximum number of collateral inputs allowed in a transaction."
-      EpochParamBlockId # "The Block table index for the first block where these parameters are valid."
 
     CostModel --^ do
       "CostModel for EpochParam and ParamProposal."
       CostModelHash # "The hash of cost model. It ensures uniqueness of entries. New in v13."
       CostModelCosts # "The actual costs formatted as json."
-      CostModelBlockId # "The first block where these costs were introduced. This is only used for rollbacks."
+      CostModelBlockNo # "The block number where these costs were introduced. This is only used for rollbacks."
 
     PoolOfflineData --^ do
       "The pool offline (ie not on chain) for a stake pool."

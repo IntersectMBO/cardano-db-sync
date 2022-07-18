@@ -15,6 +15,7 @@ module Cardano.DbSync.LedgerState
   , LedgerEvent (..)
   , ApplyResult (..)
   , LedgerStateFile (..)
+  , applyBlock
   , defaultApplyResult
   , mkLedgerEnv
   , applyBlockAndSnapshot
@@ -24,6 +25,7 @@ module Cardano.DbSync.LedgerState
   , loadLedgerAtPoint
   , hashToAnnotation
   , getHeaderHash
+  , saveCleanupState
   ) where
 
 import           Prelude (String, fail, id)
@@ -138,7 +140,10 @@ data CardanoLedgerState = CardanoLedgerState
 
 -- The height of the block in the current Epoch. We maintain this
 -- data next to the ledger state and store it in the same blob file.
-data EpochBlockNo = GenesisEpochBlockNo | EBBEpochBlockNo | EpochBlockNo !Word64
+data EpochBlockNo
+  = GenesisEpochBlockNo
+  | EBBEpochBlockNo
+  | EpochBlockNo !Word64
 
 instance ToCBOR EpochBlockNo where
   toCBOR GenesisEpochBlockNo = toCBOR (0 :: Word8)
@@ -155,9 +160,9 @@ instance FromCBOR EpochBlockNo where
       2 -> EpochBlockNo <$> fromCBOR
       n -> fail $ "unexpected EpochBlockNo value " <> show n
 
-encodeCardanoLedgerState :: (ExtLedgerState CardanoBlock -> Encoding)
-                         -> CardanoLedgerState -> Encoding
-encodeCardanoLedgerState encodeExt cls = mconcat
+encodeCardanoLedgerState :: (ExtLedgerState CardanoBlock -> Encoding) -> CardanoLedgerState -> Encoding
+encodeCardanoLedgerState encodeExt cls =
+  mconcat
     [ encodeExt (clsState cls)
     , toCBOR (clsEpochBlockNo cls)
     ]
@@ -243,10 +248,11 @@ mkLedgerEnv trce protocolInfo dir nw systemStart aop snapshotEveryFollowing snap
 
 
 initCardanoLedgerState :: Consensus.ProtocolInfo IO CardanoBlock -> CardanoLedgerState
-initCardanoLedgerState pInfo = CardanoLedgerState
-      { clsState = Consensus.pInfoInitLedger pInfo
-      , clsEpochBlockNo = GenesisEpochBlockNo
-      }
+initCardanoLedgerState pInfo =
+  CardanoLedgerState
+    { clsState = Consensus.pInfoInitLedger pInfo
+    , clsEpochBlockNo = GenesisEpochBlockNo
+    }
 
 -- TODO make this type safe. We make the assumption here that the first message of
 -- the chainsync protocol is 'RollbackTo'.
@@ -324,14 +330,12 @@ applyBlock env blk = do
     stakeSliceMinSize = 2000
 
     stakeSlice :: CardanoLedgerState -> SlotDetails -> Generic.StakeSliceRes
-    stakeSlice cls details = case clsEpochBlockNo cls of
-      EpochBlockNo n -> Generic.getStakeSlice
-                          (leProtocolInfo env)
-                          (sdEpochNo details)
-                          n
-                          stakeSliceMinSize
-                          (clsState cls)
-      _ -> Generic.NoSlices
+    stakeSlice cls details =
+      case clsEpochBlockNo cls of
+        EpochBlockNo n ->
+          Generic.getStakeSlice (leProtocolInfo env) (sdEpochNo details) n
+            stakeSliceMinSize (clsState cls)
+        _ -> Generic.NoSlices
 
 storeSnapshotAndCleanupMaybe
         :: LedgerEnv -> CardanoLedgerState -> ApplyResult -> BlockNo -> SyncState
@@ -383,7 +387,8 @@ saveCurrentLedgerState env ledger mEpochNo = do
 
 
 mkLedgerStateFilename :: LedgerStateDir -> ExtLedgerState CardanoBlock -> Maybe EpochNo -> WithOrigin FilePath
-mkLedgerStateFilename dir ledger mEpochNo = lsfFilePath . dbPointToFileName dir mEpochNo
+mkLedgerStateFilename dir ledger mEpochNo =
+  lsfFilePath . dbPointToFileName dir mEpochNo
     <$> getPoint (ledgerTipPoint (Proxy @CardanoBlock) (ledgerState ledger))
 
 saveCleanupState :: LedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()

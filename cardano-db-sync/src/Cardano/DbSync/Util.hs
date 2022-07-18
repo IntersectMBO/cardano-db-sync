@@ -205,8 +205,7 @@ thrd3 :: (a, b, c) -> c
 thrd3 (_, _, c) = c
 
 mlookup :: Ord k => Maybe k -> Map k a -> Maybe a
-mlookup Nothing _ = Nothing
-mlookup (Just k) mp = Map.lookup k mp
+mlookup mKey mp = (`Map.lookup` mp) =<< mKey
 
 whenRight :: Applicative m => Either e a -> (a -> m ()) -> m ()
 whenRight ma f =

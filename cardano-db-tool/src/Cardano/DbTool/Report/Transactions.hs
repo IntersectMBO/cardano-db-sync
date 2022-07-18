@@ -90,7 +90,7 @@ queryInputs saId = do
         `innerJoin` table @TxOut
         `on` (\(tx :& txOut) -> txOut ^. TxOutTxId ==. tx ^. TxId)
         `innerJoin` table @Block
-        `on` (\(tx :& _txOut :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
+        `on` (\(tx :& _txOut :& blk) -> tx ^. TxBlockNo ==. blk ^. BlockBlockNo)
       where_ (txOut ^. TxOutStakeAddressId ==. just (val saId))
       pure (tx ^. TxHash, blk ^. BlockTime, txOut ^. TxOutValue)
 
@@ -99,7 +99,7 @@ queryInputs saId = do
       (tx :& blk :& wdrl) <-
         from $ table @Tx
         `innerJoin` table @Block
-        `on` (\(tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
+        `on` (\(tx :& blk) -> tx ^. TxBlockNo ==. blk ^. BlockBlockNo)
         `innerJoin` table @Withdrawal
         `on` (\(tx :& _blk :& wdrl) -> wdrl ^. WithdrawalTxId ==. tx ^. TxId)
       where_ (wdrl ^. WithdrawalAddrId ==. val saId)
@@ -143,7 +143,7 @@ queryOutputs saId = do
         `innerJoin` table @Tx
         `on` (\(_txOut :& _txInTx :& txIn :& txOutTx) -> txOutTx ^. TxId ==. txIn ^. TxInTxInId)
         `innerJoin` table @Block
-        `on` (\(_txOut :& _txInTx :& _txIn :& txOutTx :& blk) -> txOutTx ^. TxBlockId ==. blk ^. BlockId)
+        `on` (\(_txOut :& _txInTx :& _txIn :& txOutTx :& blk) -> txOutTx ^. TxBlockNo ==. blk ^. BlockBlockNo)
 
       where_ (txOut ^. TxOutStakeAddressId ==. just (val saId))
       pure (txOutTx ^. TxHash, blk ^. BlockTime, txOut ^. TxOutValue)

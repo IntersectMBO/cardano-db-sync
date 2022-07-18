@@ -35,6 +35,7 @@ import           Cardano.DbSync.Era.Util (liftLookupFail)
 
 import           Cardano.DbSync.Types
 
+import           Cardano.Slotting.Block (BlockNo (..))
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
 
 import qualified Data.ByteString.Char8 as BS
@@ -65,7 +66,7 @@ insertByronBlock
 insertByronBlock env firstBlockOfEpoch blk details = do
     res <- runExceptT $
               case byronBlockRaw blk of
-                Byron.ABOBBlock ablk -> insertABlock tracer cache firstBlockOfEpoch ablk details
+                Byron.ABOBBlock ablk -> insertABlock tracer firstBlockOfEpoch ablk details
                 Byron.ABOBBoundary abblk -> insertABOBBoundary tracer cache abblk details
     -- Serializing things during syncing can drastically slow down full sync
     -- times (ie 10x or more).
@@ -85,7 +86,6 @@ insertABOBBoundary
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertABOBBoundary tracer cache blk details = do
   -- Will not get called in the OBFT part of the Byron era.
-  pbid <- queryPrevBlockWithCache "insertABOBBoundary" cache (Byron.ebbPrevHash blk)
   slid <- lift . DB.insertSlotLeader $
                   DB.SlotLeader
                     { DB.slotLeaderHash = BS.replicate 28 '\0'
@@ -99,8 +99,7 @@ insertABOBBoundary tracer cache blk details = do
               -- No slotNo for a boundary block
               , DB.blockSlotNo = Nothing
               , DB.blockEpochSlotNo = Nothing
-              , DB.blockBlockNo = Nothing
-              , DB.blockPreviousId = Just pbid
+              , DB.blockBlockNo = 0
               , DB.blockSlotLeaderId = slid
               , DB.blockSize = fromIntegral $ Byron.boundaryBlockLength blk
               , DB.blockTime = sdSlotTime details
@@ -124,19 +123,18 @@ insertABOBBoundary tracer cache blk details = do
 
 insertABlock
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Cache -> Bool -> Byron.ABlock ByteString -> SlotDetails
+    => Trace IO Text -> Bool -> Byron.ABlock ByteString -> SlotDetails
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertABlock tracer cache firstBlockOfEpoch blk details = do
-    pbid <- queryPrevBlockWithCache "insertABlock" cache (Byron.blockPreviousHash blk)
+insertABlock tracer firstBlockOfEpoch blk details = do
     slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
-    blkId <- lift . insertBlockAndCache cache $
+    let blkNo = Byron.blockNumber blk
+    void . lift . DB.insertBlock $
                   DB.Block
                     { DB.blockHash = Byron.blockHash blk
                     , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
                     , DB.blockSlotNo = Just $ Byron.slotNumber blk
                     , DB.blockEpochSlotNo = Just $ unEpochSlot (sdEpochSlot details)
-                    , DB.blockBlockNo = Just $ Byron.blockNumber blk
-                    , DB.blockPreviousId = Just pbid
+                    , DB.blockBlockNo = fromIntegral blkNo
                     , DB.blockSlotLeaderId = slid
                     , DB.blockSize = fromIntegral $ Byron.blockLength blk
                     , DB.blockTime = sdSlotTime details
@@ -149,14 +147,14 @@ insertABlock tracer cache firstBlockOfEpoch blk details = do
                     , DB.blockOpCertCounter = Nothing
                     }
 
-    zipWithM_ (insertTx tracer blkId) (Byron.blockPayload blk) [ 0 .. ]
+    zipWithM_ (insertTx tracer (BlockNo blkNo)) (Byron.blockPayload blk) [ 0 .. ]
 
     liftIO $ do
       let epoch = unEpochNo (sdEpochNo details)
           slotWithinEpoch = unEpochSlot (sdEpochSlot details)
           followingClosely = getSyncStatus details == SyncFollowing
 
-      when (followingClosely && slotWithinEpoch /= 0 && Byron.blockNumber blk `mod` 20 == 0) $ do
+      when (followingClosely && slotWithinEpoch /= 0 && blkNo `mod` 20 == 0) $ do
         logInfo tracer $
           mconcat
             [ "insertByronBlock: continuing epoch ", textShow epoch
@@ -166,7 +164,7 @@ insertABlock tracer cache firstBlockOfEpoch blk details = do
       logger followingClosely tracer $ mconcat
         [ "insertByronBlock: epoch ", textShow (unEpochNo $ sdEpochNo details)
         , ", slot ", textShow (Byron.slotNumber blk)
-        , ", block ", textShow (Byron.blockNumber blk)
+        , ", block ", textShow blkNo
         , ", hash ", renderByteArray (Byron.blockHash blk)
         ]
   where
@@ -180,15 +178,15 @@ insertABlock tracer cache firstBlockOfEpoch blk details = do
 
 insertTx
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.BlockId -> Byron.TxAux -> Word64
+    => Trace IO Text -> BlockNo -> Byron.TxAux -> Word64
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertTx tracer blkId tx blockIndex = do
+insertTx tracer blkNo tx blockIndex = do
     resolvedInputs <- mapM resolveTxInputs (toList $ Byron.txInputs (Byron.taTx tx))
     valFee <- firstExceptT annotateTx $ ExceptT $ pure (calculateTxFee (Byron.taTx tx) resolvedInputs)
     txId <- lift . DB.insertTx $
               DB.Tx
                 { DB.txHash = Byron.unTxHash $ Crypto.serializeCborHash (Byron.taTx tx)
-                , DB.txBlockId = blkId
+                , DB.txBlockNo = fromIntegral $ unBlockNo blkNo
                 , DB.txBlockIndex = blockIndex
                 , DB.txOutSum = vfValue valFee
                 , DB.txFee = vfFee valFee
@@ -204,8 +202,8 @@ insertTx tracer blkId tx blockIndex = do
 
     -- Insert outputs for a transaction before inputs in case the inputs for this transaction
     -- references the output (not sure this can even happen).
-    lift $ zipWithM_ (insertTxOut tracer txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
-    mapMVExceptT (insertTxIn tracer txId) resolvedInputs
+    lift $ zipWithM_ (insertTxOut tracer blkNo txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
+    mapMVExceptT (insertTxIn tracer blkNo txId) resolvedInputs
   where
     annotateTx :: SyncNodeError -> SyncNodeError
     annotateTx ee =
@@ -215,9 +213,9 @@ insertTx tracer blkId tx blockIndex = do
 
 insertTxOut
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> Word32 -> Byron.TxOut
+    => Trace IO Text -> BlockNo -> DB.TxId -> Word32 -> Byron.TxOut
     -> ReaderT SqlBackend m ()
-insertTxOut _tracer txId index txout =
+insertTxOut _tracer blkNo txId index txout =
   void . DB.insertTxOut $
             DB.TxOut
               { DB.txOutTxId = txId
@@ -231,20 +229,22 @@ insertTxOut _tracer txId index txout =
               , DB.txOutDataHash = Nothing
               , DB.txOutInlineDatumId = Nothing
               , DB.txOutReferenceScriptId = Nothing
+              , DB.txOutBlockNo = fromIntegral $ unBlockNo blkNo
               }
 
 
 insertTxIn
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.TxId -> (Byron.TxIn, DB.TxId, DbLovelace)
+    => Trace IO Text -> BlockNo -> DB.TxId -> (Byron.TxIn, DB.TxId, DbLovelace)
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertTxIn _tracer txInId (Byron.TxInUtxo _txHash inIndex, txOutId, _lovelace) = do
+insertTxIn _tracer blkNo txInId (Byron.TxInUtxo _txHash inIndex, txOutId, _lovelace) = do
   void . lift . DB.insertTxIn $
             DB.TxIn
               { DB.txInTxInId = txInId
               , DB.txInTxOutId = txOutId
               , DB.txInTxOutIndex = fromIntegral inIndex
               , DB.txInRedeemerId = Nothing
+              , DB.txInBlockNo = fromIntegral $ unBlockNo blkNo
               }
 
 -- -----------------------------------------------------------------------------
