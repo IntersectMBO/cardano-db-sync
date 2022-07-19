@@ -140,6 +140,7 @@ test-suite test-db
                         Test.IO.Cardano.Db.Rollback
                         Test.IO.Cardano.Db.TotalSupply
                         Test.IO.Cardano.Db.Util
+                        Test.IO.Cardano.Db.PGConfig
 
   ghc-options:          -Wall
                         -Werror

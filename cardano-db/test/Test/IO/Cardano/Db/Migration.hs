@@ -120,7 +120,7 @@ migrationTest :: IO ()
 migrationTest = do
   let schemaDir = MigrationDir "../schema"
   pgConfig <- orDie renderPGPassError $ newExceptT readPGPassDefault
-  _ <-runMigrations pgConfig True schemaDir (Just $ LogFileDir "/tmp")
+  _ <- runMigrations pgConfig True schemaDir (Just $ LogFileDir "/tmp")
   expected <- readSchemaVersion schemaDir
   actual <- getDbSchemaVersion
   unless (expected == actual) $
