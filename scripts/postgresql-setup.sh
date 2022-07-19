@@ -138,7 +138,8 @@ function create_snapshot {
 	echo $"Working directory: ${tmp_dir}"
 	pg_dump --no-owner --schema=public "${PGDATABASE}" > "${tmp_dir}/$1.sql"
 	cp "$ledger_file" "$tmp_dir/$(basename "${ledger_file}")"
-	tar zcvf "${tgz_file}.tmp" --directory "${tmp_dir}" "${dbfile}" "$(basename "${ledger_file}")"
+	tar zcvf - --directory "${tmp_dir}" "${dbfile}" "$(basename "${ledger_file}")" \
+	| tee "${tgz_file}.tmp" | sha256sum | sed -e "s/-/${tgz_file}/" > "${tgz_file}.sha256sum"
 	mv "${tgz_file}.tmp" "${tgz_file}"
 	rm -rf "${tmp_dir}"
 	if test "$(gzip --test "${tgz_file}")" ; then
@@ -146,7 +147,7 @@ function create_snapshot {
 	  echo "It is not safe to drop the database and restore using this file."
 	  exit 1
 	  fi
-	echo "Created ${tgz_file}"
+	echo "Created ${tgz_file} + .sha256sum"
 }
 
 function restore_snapshot {
