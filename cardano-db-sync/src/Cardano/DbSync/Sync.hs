@@ -293,7 +293,7 @@ chainSyncClient metricsSetters trce latestPoints currentTip actionQueue = do
     clientPipelinedStIdle
         :: WithOrigin BlockNo -> [CardanoPoint]
         -> ClientPipelinedStIdle 'Z CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-    clientPipelinedStIdle clintTip points =
+    clientPipelinedStIdle clientTip points =
       -- Notify the core node about the our latest points at which we are
       -- synchronised.  This client is not persistent and thus it just
       -- synchronises from the genesis block.  A real implementation should send
@@ -301,8 +301,8 @@ chainSyncClient metricsSetters trce latestPoints currentTip actionQueue = do
       SendMsgFindIntersect
         (if null points then [genesisPoint] else points)
         ClientPipelinedStIntersect
-          { recvMsgIntersectFound = \ _hdr tip -> pure $ go policy Zero clintTip (getTipBlockNo tip) Nothing
-          , recvMsgIntersectNotFound = \tip -> pure $ goTip policy Zero clintTip tip Nothing
+          { recvMsgIntersectFound = \ _hdr tip -> pure $ go policy Zero clientTip (getTipBlockNo tip) Nothing
+          , recvMsgIntersectNotFound = \tip -> pure $ goTip policy Zero clientTip tip Nothing
           }
 
     policy :: MkPipelineDecision

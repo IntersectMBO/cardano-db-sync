@@ -27,6 +27,7 @@ import           Cardano.DbSync.Default
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState
 import           Cardano.DbSync.Metrics
+import           Cardano.DbSync.Rollback (rollbackToPoint)
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util hiding (whenJust)
 
@@ -89,7 +90,7 @@ runActions env actions = do
         ([], DbFinish:_) -> do
             pure Done
         ([], DbRollBackToPoint pt resultVar : ys) -> do
-            runRollbacksDB env pt
+            newExceptT $ rollbackToPoint env pt
             points <- if hasLedgerState env
               then lift $ rollbackLedger env pt
               else pure Nothing
@@ -97,7 +98,7 @@ runActions env actions = do
             lift $ atomically $ putTMVar resultVar (points, blockNo)
             dbAction Continue ys
         (ys, zs) -> do
-          insertBlockList env ys
+          newExceptT $ insertListBlocks env ys
           if null zs
             then pure Continue
             else dbAction Continue zs
@@ -118,7 +119,6 @@ rollbackLedger env point = do
       Left lsfs ->
         Just <$> verifyFilePoints env lsfs
   where
-
     checkDBWithState :: CardanoPoint -> Maybe TipInfo -> IO ()
     checkDBWithState pnt dbTipInfo =
       if compareTips pnt dbTipInfo
@@ -134,21 +134,9 @@ compareTips = go
   where
     go (Point Origin) Nothing = True
     go (Point (At blk)) (Just tip) =
-         getHeaderHash (blockPointHash blk) == bHash tip
-      && blockPointSlot blk == bSlotNo tip
+        getHeaderHash (blockPointHash blk) == bHash tip
+          && blockPointSlot blk == bSlotNo tip
     go  _ _ = False
-
-runRollbacksDB
-    :: SyncEnv -> CardanoPoint
-    -> ExceptT SyncNodeError IO ()
-runRollbacksDB env point =
-  newExceptT $ rollbackToPoint env point
-
-insertBlockList
-    :: SyncEnv -> [CardanoBlock]
-    -> ExceptT SyncNodeError IO ()
-insertBlockList env blks =
-  newExceptT $ insertListBlocks env blks
 
 -- | Split the DbAction list into a prefix containing blocks to apply and a postfix.
 spanDbApply :: [DbAction] -> ([CardanoBlock], [DbAction])
