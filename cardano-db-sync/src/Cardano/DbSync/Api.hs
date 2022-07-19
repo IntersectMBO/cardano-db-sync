@@ -50,6 +50,7 @@ import           Cardano.DbSync.Util
 import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, TBQueue, newTBQueueIO, newTVarIO,
                    readTVar, readTVarIO, writeTVar)
 import           Control.Monad.Trans.Maybe (MaybeT (..))
+
 import qualified Data.Strict.Maybe as Strict
 import           Data.Time.Clock (UTCTime, getCurrentTime)
 
@@ -162,8 +163,8 @@ getDbLatestBlockInfo backend = do
 getDbTipBlockNo :: SyncEnv -> IO (Point.WithOrigin BlockNo)
 getDbTipBlockNo env =
   getBackend env >>=
-    getDbLatestBlockInfo >>=
-    maybe (pure Point.Origin) (pure . Point.At . bBlockNo)
+    getDbLatestBlockInfo <&>
+    maybe Point.Origin (Point.At . bBlockNo)
 
 logDbState :: SyncEnv -> IO ()
 logDbState env = do
