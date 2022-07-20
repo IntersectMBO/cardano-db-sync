@@ -188,7 +188,7 @@ pLedgerStateDir :: Parser LedgerStateDir
 pLedgerStateDir =
   LedgerStateDir <$> Opt.strOption
     (  Opt.long "state-dir"
-    <> Opt.help "The directory for persistung ledger state."
+    <> Opt.help "The directory for persisting ledger state."
     <> Opt.completer (Opt.bashCompleter "directory")
     <> Opt.metavar "FILEPATH"
     )

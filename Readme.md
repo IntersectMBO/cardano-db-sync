@@ -72,6 +72,7 @@ possible solutions.
 
 * [BuildingRunning][BuildingRunning]: Building and running the db-sync node.
 * [Docker][Docker]: Instruction for docker-compose, and building the images using nix.
+* [ERD][ERD]: The entity relationship diagram.
 * [Example SQL queries][ExampleQueries]: Some example SQL and Haskell/Esqueleto queries.
 * [PoolOfflineData][PoolOfflineData]: Explanation of how stake pool offline data is retried.
 * [Schema Documentation][Schema Documentation]: The database schema documentation.
@@ -83,6 +84,7 @@ possible solutions.
 [BuildingRunning]: doc/building-running.md
 [DB Schema]: https://hydra.iohk.io/job/Cardano/cardano-db-sync/native.haskellPackages.cardano-db.checks.test-db.x86_64-linux/latest/download/1
 [Docker]: doc/docker.md
+[ERD]: doc/ERG>png
 [ExampleQueries]: doc/interesting-queries.md
 [PostgresView]: https://www.postgresql.org/docs/current/sql-createview.html
 [PoolOfflineData]: doc/pool-offline-data.md
