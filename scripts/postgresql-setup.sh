@@ -8,6 +8,19 @@ IFS=$'\n\t'
 
 progname="$0"
 
+case "$(uname)" in
+  Linux)
+    # Linux tools have long names for these options.
+    recursive="--recursive"
+    directory="--directory"
+    force="--force"
+    ;;
+  *)
+    # These shoud work on any POSIX system
+    recursive="-r"
+    directory="-d"
+    force="-f"
+  esac
 
 function die {
 	echo "$1"
@@ -134,14 +147,14 @@ function create_snapshot {
 	tgz_file=$1.tgz
 	dbfile=$1.sql
 	ledger_file=$2
-	tmp_dir=$(mktemp --directory -t db-sync-snapshot-XXXXXXXXXX)
+	tmp_dir=$(mktemp "${directory}" -t db-sync-snapshot-XXXXXXXXXX)
 	echo $"Working directory: ${tmp_dir}"
 	pg_dump --no-owner --schema=public "${PGDATABASE}" > "${tmp_dir}/$1.sql"
 	cp "$ledger_file" "$tmp_dir/$(basename "${ledger_file}")"
-	tar zcvf - --directory "${tmp_dir}" "${dbfile}" "$(basename "${ledger_file}")" \
-	| tee "${tgz_file}.tmp" | sha256sum | sed -e "s/-/${tgz_file}/" > "${tgz_file}.sha256sum"
+	tar zcvf - --directory "${tmp_dir}" "${dbfile}" "$(basename "${ledger_file}")" | tee "${tgz_file}.tmp" \
+	| sha256sum | head -c 64 | sed -e "s/$/  ${tgz_file}\n/" > "${tgz_file}.sha256sum"
 	mv "${tgz_file}.tmp" "${tgz_file}"
-	rm -rf "${tmp_dir}"
+	rm "${recursive}" "${force}" "${tmp_dir}"
 	if test "$(gzip --test "${tgz_file}")" ; then
 	  echo "Gzip reports the snapshot file as being corrupt."
 	  echo "It is not safe to drop the database and restore using this file."
@@ -156,13 +169,13 @@ function restore_snapshot {
 	  echo "Ledger state directory ($2) is not empty. Please empty it and then retry."
 	  exit 1
 	  fi
-	tmp_dir=$(mktemp --directory -t db-sync-snapshot-XXXXXXXXXX)
+	tmp_dir=$(mktemp "${directory}" -t db-sync-snapshot-XXXXXXXXXX)
 	tar -zxvf "$1" --directory "$tmp_dir"
 	db_file=$(find "$tmp_dir/" -iname "*.sql")
 	lstate_file=$(find "${tmp_dir}/" -iname "*.lstate")
 	mv "${lstate_file}" "$2"
 	psql --dbname="${PGDATABASE}" -f "${db_file}"
-	rm --recursive "${tmp_dir}"
+	rm "${recursive}" "${tmp_dir}"
 }
 
 function usage_exit {
@@ -252,7 +265,7 @@ case "${1:-""}" in
 		check_pgpass_file
 		check_db_exists
 		if test $# -ne 3 ; then
-		  echo "Expecting exactly 2 more arguments, the snapshot file name template and the ledger state directory."
+		  echo "Expecting exactly 2 more arguments, the snapshot file name template and the ledger state file."
 		  exit 1
 		  fi
 		if test -z "$2" ; then
@@ -260,7 +273,11 @@ case "${1:-""}" in
 		  exit 1
 		  fi
 		if test -z "$3" ; then
-		  echo "Third argument should be the ledger state directory."
+		  echo "Third argument should be the ledger state file."
+		  exit 1
+		  fi
+		if test -d "$3" ; then
+		  echo "Third argument is a directory and expecting a file."
 		  exit 1
 		  fi
 		create_snapshot "$2" "$3"
