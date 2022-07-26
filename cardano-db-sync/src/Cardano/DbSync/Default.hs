@@ -5,7 +5,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Cardano.DbSync.Default
   ( insertListBlocks
-  , rollbackToPoint
   ) where
 
 
@@ -29,7 +28,6 @@ import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState (ApplyResult (..), LedgerEvent (..),
                    applyBlockAndSnapshot, defaultApplyResult)
 import           Cardano.DbSync.LocalStateQuery
-import           Cardano.DbSync.Rollback (rollbackToPoint)
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 

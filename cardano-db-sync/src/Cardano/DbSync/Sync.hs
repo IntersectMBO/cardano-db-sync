@@ -30,13 +30,13 @@ import           Cardano.Prelude hiding (Meta, Nat, option, (%))
 import           Control.Tracer (Tracer)
 
 import           Cardano.BM.Data.Tracer (ToLogObject (..), ToObject)
-import           Cardano.BM.Trace (Trace, appendName, logInfo)
+import           Cardano.BM.Trace (Trace, appendName, logError, logInfo)
 import qualified Cardano.BM.Trace as Logging
 
 import           Cardano.Client.Subscription (subscribe)
 import qualified Cardano.Crypto as Crypto
 
-import           Cardano.Slotting.Slot (EpochNo (..), WithOrigin (..))
+import           Cardano.Slotting.Slot (EpochNo (..), WithOrigin (..), withOriginToMaybe)
 
 import qualified Cardano.Db as Db
 
@@ -231,6 +231,15 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
           -- threads
           latestPoints <- getLatestPoints env
           currentTip <- getCurrentTipBlockNo env
+
+          when (null latestPoints && currentTip /= Origin) $ do
+            logError trce $ mconcat
+                                [ "No ledger state files found, but current tip is "
+                                , textShow (withOriginToMaybe currentTip)
+                                ]
+            logError trce "This will require that the database is rolled back to genesis."
+            panicAbort "This is probably not what you want."
+
           logDbState env
           -- communication channel between datalayer thread and chainsync-client thread
           actionQueue <- newDbActionQueue
@@ -293,7 +302,7 @@ chainSyncClient metricsSetters trce latestPoints currentTip actionQueue = do
     clientPipelinedStIdle
         :: WithOrigin BlockNo -> [CardanoPoint]
         -> ClientPipelinedStIdle 'Z CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-    clientPipelinedStIdle clintTip points =
+    clientPipelinedStIdle clientTip points =
       -- Notify the core node about the our latest points at which we are
       -- synchronised.  This client is not persistent and thus it just
       -- synchronises from the genesis block.  A real implementation should send
@@ -301,8 +310,8 @@ chainSyncClient metricsSetters trce latestPoints currentTip actionQueue = do
       SendMsgFindIntersect
         (if null points then [genesisPoint] else points)
         ClientPipelinedStIntersect
-          { recvMsgIntersectFound = \ _hdr tip -> pure $ go policy Zero clintTip (getTipBlockNo tip) Nothing
-          , recvMsgIntersectNotFound = \tip -> pure $ goTip policy Zero clintTip tip Nothing
+          { recvMsgIntersectFound = \ _hdr tip -> pure $ go policy Zero clientTip (getTipBlockNo tip) Nothing
+          , recvMsgIntersectNotFound = \tip -> pure $ goTip policy Zero clientTip tip Nothing
           }
 
     policy :: MkPipelineDecision

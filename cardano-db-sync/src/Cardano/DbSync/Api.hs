@@ -50,6 +50,7 @@ import           Cardano.DbSync.Util
 import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, TBQueue, newTBQueueIO, newTVarIO,
                    readTVar, readTVarIO, writeTVar)
 import           Control.Monad.Trans.Maybe (MaybeT (..))
+
 import qualified Data.Strict.Maybe as Strict
 import           Data.Time.Clock (UTCTime, getCurrentTime)
 
@@ -160,12 +161,10 @@ getDbLatestBlockInfo backend = do
             }
 
 getDbTipBlockNo :: SyncEnv -> IO (Point.WithOrigin BlockNo)
-getDbTipBlockNo env = do
-  backend <- getBackend env
-  maybeTip <- getDbLatestBlockInfo backend
-  case maybeTip of
-    Just tip -> pure $ Point.At (bBlockNo tip)
-    Nothing -> pure Point.Origin
+getDbTipBlockNo env =
+  getBackend env >>=
+    getDbLatestBlockInfo <&>
+    maybe Point.Origin (Point.At . bBlockNo)
 
 logDbState :: SyncEnv -> IO ()
 logDbState env = do
@@ -245,17 +244,18 @@ mkSyncEnvFromConfig trce connSring syncOptions dir genCfg =
 
 getLatestPoints :: SyncEnv -> IO [CardanoPoint]
 getLatestPoints env = do
-    if hasLedgerState env then do
-      files <- listLedgerStateFilesOrdered $ leDir (envLedger env)
-      verifyFilePoints env files
-    else do
-      -- Brings the 5 latest.
-      dbBackend <- getBackend env
-      lastPoints <- DB.runDbIohkNoLogging dbBackend DB.queryLatestPoints
-      pure $ mapMaybe convert' lastPoints
+    if hasLedgerState env
+      then do
+        files <- listLedgerStateFilesOrdered $ leDir (envLedger env)
+        verifyFilePoints env files
+      else do
+        -- Brings the 5 latest.
+        dbBackend <- getBackend env
+        lastPoints <- DB.runDbIohkNoLogging dbBackend DB.queryLatestPoints
+        pure $ mapMaybe convert lastPoints
   where
-    convert' (Nothing, _) = Nothing
-    convert' (Just slot, bs) = convert (SlotNo slot) bs
+    convert (Nothing, _) = Nothing
+    convert (Just slot, bs) = convertToPoint (SlotNo slot) bs
 
 verifyFilePoints :: SyncEnv -> [LedgerStateFile] -> IO [CardanoPoint]
 verifyFilePoints env files =
@@ -267,11 +267,11 @@ verifyFilePoints env files =
         hashes <- getSlotHash backend (lsfSlotNo lsf)
         let valid  = find (\(_, h) -> lsfHash lsf == hashToAnnotation h) hashes
         case valid of
-          Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convert slot hash
+          Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convertToPoint slot hash
           _ -> pure Nothing
 
-convert :: SlotNo -> ByteString -> Maybe CardanoPoint
-convert slot hashBlob =
+convertToPoint :: SlotNo -> ByteString -> Maybe CardanoPoint
+convertToPoint slot hashBlob =
     Point . Point.block slot <$> convertHashBlob hashBlob
   where
     convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
