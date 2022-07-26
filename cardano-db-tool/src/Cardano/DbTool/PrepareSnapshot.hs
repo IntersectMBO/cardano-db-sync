@@ -18,6 +18,7 @@ import           Ouroboros.Network.Block hiding (blockHash)
 
 import           Paths_cardano_db_tool (version)
 
+import           System.Info (arch, os)
 import           System.IO (hFlush, stdout)
 
 newtype PrepareSnapshotArgs = PrepareSnapshotArgs
@@ -93,12 +94,16 @@ runPrepareSnapshotAux firstTry args = do
           majorStr = case mMajor of
                         Nothing -> ""
                         Just majorV -> "schema-" ++ show majorV
+          cmdStr = "Create a snapshot with:\n"
+                      ++ case os of
+                          "freebsd" -> "     cardano-db-sync-pgsql-setup"
+                          _otherwise -> "     scripts/postgresql-setup.sh"
+                      ++ " --create-snapshot db-sync-snapshot-"
       putStrLn $ concat
-        [ "Create a snapshot with:\n"
-        , "    scripts/postgresql-setup.sh --create-snapshot db-sync-snapshot-"
+        [ cmdStr
         , majorStr
         , "-block-"
         , show bblockNo
-        , "-x86_64 "
+        , "-" ++ arch ++ " "
         , fp
         ]
