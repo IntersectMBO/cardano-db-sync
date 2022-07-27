@@ -21,15 +21,10 @@ BEGIN
     --    CREATE INDEX idx_tx_block_id ON tx(block_id) ;
     CREATE INDEX idx_delegation_tx_block_no ON delegation(block_no) ;
     CREATE INDEX idx_ma_tx_mint_tx_id ON ma_tx_mint(tx_id) ;
-    CREATE INDEX idx_param_proposal_block_no ON param_proposal(block_no) ;
     CREATE INDEX idx_pool_metadata_ref_registered_tx_id ON pool_metadata_ref(registered_tx_id) ;
     CREATE INDEX idx_pool_retire_announced_tx_id ON pool_retire(announced_tx_id) ;
     CREATE INDEX idx_pool_update_registered_tx_id ON pool_update(registered_tx_id) ;
-    CREATE INDEX idx_reserve_block_no ON reserve(block_no) ;
-    CREATE INDEX idx_stake_address_block_no ON stake_address(block_no) ;
-    CREATE INDEX idx_stake_deregistration_block_no ON stake_deregistration(block_no) ;
-    CREATE INDEX idx_stake_registration_block_no ON stake_registration(block_no) ;
-    CREATE INDEX idx_treasury_block_no ON treasury(block_no) ;
+
     CREATE INDEX idx_tx_in_tx_in_id ON tx_in(tx_in_id) ;
     CREATE INDEX idx_tx_in_tx_out_id ON tx_in(tx_out_id) ;
     CREATE INDEX idx_tx_metadata_tx_id ON tx_metadata(tx_id) ;
@@ -47,6 +42,23 @@ BEGIN
     CREATE INDEX idx_ma_tx_out_tx_out_id ON ma_tx_out(tx_out_id) ;
     CREATE INDEX idx_pool_update_meta_id ON pool_update(meta_id) ;
     CREATE INDEX idx_pool_relay_update_id ON pool_relay(update_id) ;
+
+	CREATE INDEX idx_block_block_no ON block(block_no) ;
+	CREATE INDEX IF NOT EXISTS idx_tx_block_no ON tx(block_no);
+	CREATE INDEX idx_tx_out_block_no ON tx_out(block_no) ;
+	CREATE INDEX idx_tx_in_block_no ON tx_in(block_no) ;
+	CREATE INDEX idx_collateral_tx_in_block_no ON collateral_tx_in(block_no) ;
+	CREATE INDEX idx_ada_pots_block_no ON ada_pots(block_no) ;
+	CREATE INDEX idx_stake_registration_block_no ON stake_registration(block_no) ;
+	CREATE INDEX idx_stake_deregistration_block_no ON stake_deregistration(block_no) ;
+	CREATE INDEX idx_delegation_block_no ON delegation(block_no) ;
+	CREATE INDEX idx_tx_metadata_block_no ON tx_metadata(block_no) ;
+	CREATE INDEX idx_withdrawal_block_no ON withdrawal(block_no) ;
+	CREATE INDEX idx_treasury_block_no ON treasury(block_no) ;
+    CREATE INDEX idx_reserve_block_no ON reserve(block_no) ;
+    CREATE INDEX idx_pot_transfer_block_no ON pot_transfer(block_no) ;
+    CREATE INDEX idx_param_proposal_block_no ON param_proposal(block_no) ;
+    CREATE INDEX idx_cost_model_block_no ON cost_model(block_no) ;
 
     UPDATE schema_version SET stage_three = 5 ;
     RAISE NOTICE 'DB has been migrated to stage_three version %', next_version ;
