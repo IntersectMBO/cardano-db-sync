@@ -48,6 +48,9 @@ deleteAfterBlockNo blockNo = do
     delete $ from (table @TxIn) >>= \ txi -> where_ (nonGenesisBlockNo $ txi ^. TxInBlockNo)
     delete $ from (table @TxOut) >>= \ txo -> where_ (nonGenesisBlockNo $ txo ^. TxOutBlockNo)
     delete $ from (table @Withdrawal) >>= \ w -> where_ (nonGenesisBlockNo $ w ^. WithdrawalBlockNo)
+    delete $ from (table @CollateralTxOut) >>= \ cto -> where_ (nonGenesisBlockNo $ cto ^. CollateralTxOutBlockNo)
+    delete $ from (table @ReferenceTxIn) >>= \ rti -> where_ (nonGenesisBlockNo $ rti ^. ReferenceTxInBlockNo)
+    delete $ from (table @RedeemerData) >>= \ rd -> where_ (nonGenesisBlockNo $ rd ^.  RedeemerDataBlockNo)
 
     transactionCommit
     pure $ isNonZero count

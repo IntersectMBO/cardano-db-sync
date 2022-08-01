@@ -137,24 +137,25 @@ share
     stakeAddressId      StakeAddressId Maybe
     value               DbLovelace          sqltype=lovelace
     dataHash            ByteString Maybe    sqltype=hash32type
-    inlineDatumId       DatumId Maybe       OnDeleteCascade
-    referenceScriptId   ScriptId Maybe      OnDeleteCascade
+    inlineDatumId       DatumId Maybe
+    referenceScriptId   ScriptId Maybe
     blockNo             Int64               -- sqltype=bigint
     UniqueTxout         txId index          -- The (tx_id, index) pair must be unique.
 
   CollateralTxOut
-    txId                TxId                OnDeleteCascade     -- This type is the primary key for the 'tx' table.
+    txId                TxId
     index               Word64              sqltype=txindex
     address             Text
     addressRaw          ByteString
     addressHasScript    Bool
     paymentCred         ByteString Maybe    sqltype=hash28type
-    stakeAddressId      StakeAddressId Maybe OnDeleteCascade
+    stakeAddressId      StakeAddressId Maybe
     value               DbLovelace          sqltype=lovelace
     dataHash            ByteString Maybe    sqltype=hash32type
     multiAssetsDescr    Text
-    inlineDatumId       DatumId Maybe       OnDeleteCascade
-    referenceScriptId   ScriptId Maybe      OnDeleteCascade
+    inlineDatumId       DatumId Maybe
+    referenceScriptId   ScriptId Maybe
+    blockNo             Int64               -- sqltype=bigint
     UniqueColTxout      txId index          -- The (tx_id, index) pair must be unique.
 
   TxIn
@@ -173,9 +174,10 @@ share
     UniqueColTxin       txInId txOutId txOutIndex
 
   ReferenceTxIn
-    txInId              TxId                OnDeleteCascade     -- The transaction where this is used as an input.
-    txOutId             TxId                OnDeleteCascade     -- The transaction where this was created as an output.
+    txInId              TxId                                    -- The transaction where this is used as an input.
+    txOutId             TxId                                    -- The transaction where this was created as an output.
     txOutIndex          Word64              sqltype=txindex
+    blockNo             Int64               -- sqltype=bigint
     UniqueRefTxin       txInId txOutId txOutIndex
 
   -- A table containing metadata about the chain. There will probably only ever be one
@@ -409,7 +411,7 @@ share
     purpose             ScriptPurpose       sqltype=scriptpurposetype
     index               Word64              sqltype=word31type
     scriptHash          ByteString Maybe    sqltype=hash28type
-    redeemerDataId      RedeemerDataId      OnDeleteCascade
+    redeemerDataId      RedeemerDataId
     UniqueRedeemer      txId purpose index
 
   Script
@@ -430,9 +432,10 @@ share
 
   RedeemerData
     hash                ByteString          sqltype=hash32type
-    txId                TxId                OnDeleteCascade
+    txId                TxId
     value               Text Maybe          sqltype=jsonb
     bytes               ByteString          sqltype=bytea
+    blockNo             Int64               -- sqltype=bigint
     UniqueRedeemerData  hash
 
   ExtraKeyWitness

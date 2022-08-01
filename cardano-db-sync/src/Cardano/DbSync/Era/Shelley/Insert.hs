@@ -234,7 +234,7 @@ insertTx tracer cache network isMember blkNo epochNo slotNo blockIndex tx groupe
       else do
         -- The following operations only happen if the script passes stage 2 validation (or the tx
         -- has no script).
-        !redeemers <- Map.fromList <$> mapM (insertRedeemer tracer (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx)
+        !redeemers <- Map.fromList <$> mapM (insertRedeemer tracer blkNo (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx)
 
         mapM_ (insertDatum tracer txId) (Generic.txData tx)
         -- Insert the transaction inputs and collateral inputs (Alonzo).
@@ -308,8 +308,8 @@ inertCollateralTxOut tracer cache blkNo (txId, _txHash) (Generic.TxOut index add
                   , DB.collateralTxOutMultiAssetsDescr = textShow maMap
                   , DB.collateralTxOutInlineDatumId = mDatumId
                   , DB.collateralTxOutReferenceScriptId = mScriptId
+                  , DB.collateralTxOutBlockNo = fromIntegral $ unBlockNo blkNo
                   }
-    pure ()
     -- TODO: Is there any reason to add new tables for collateral multi-assets/multi-asset-outputs
   where
     hasScript :: Bool
@@ -346,13 +346,14 @@ insertReferenceTxIn
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> BlockNo -> DB.TxId -> Generic.TxIn
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertReferenceTxIn _tracer _blkNo txInId (Generic.TxIn txId index _) = do
+insertReferenceTxIn _tracer blkNo txInId (Generic.TxIn txId index _) = do
   txOutId <- liftLookupFail "insertReferenceTxIn" $ DB.queryTxId txId
   void . lift . DB.insertReferenceTxIn $
             DB.ReferenceTxIn
               { DB.referenceTxInTxInId = txInId
               , DB.referenceTxInTxOutId = txOutId
               , DB.referenceTxInTxOutIndex = fromIntegral index
+              , DB.referenceTxInBlockNo = fromIntegral $ unBlockNo blkNo
               }
 
 insertCertificate
@@ -740,10 +741,10 @@ insertParamProposal _tracer blkNo pp = do
 
 insertRedeemer
   :: (MonadBaseControl IO m, MonadIO m)
-  => Trace IO Text -> [ExtendedTxOut] -> DB.TxId -> (Word64, Generic.TxRedeemer)
+  => Trace IO Text -> BlockNo -> [ExtendedTxOut] -> DB.TxId -> (Word64, Generic.TxRedeemer)
   -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Word64, DB.RedeemerId)
-insertRedeemer tracer groupedOutputs txId (rix, redeemer) = do
-    tdId <- insertRedeemerData tracer txId $ Generic.txRedeemerData redeemer
+insertRedeemer tracer blkNo groupedOutputs txId (rix, redeemer) = do
+    tdId <- insertRedeemerData tracer blkNo txId $ Generic.txRedeemerData redeemer
     scriptHash <- findScriptHash
     rid <- lift . DB.insertRedeemer $
               DB.Redeemer
@@ -794,9 +795,9 @@ insertDatum tracer txId txd = do
 
 insertRedeemerData
   :: (MonadBaseControl IO m, MonadIO m)
-  => Trace IO Text -> DB.TxId -> Generic.PlutusData
+  => Trace IO Text -> BlockNo -> DB.TxId -> Generic.PlutusData
   -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.RedeemerDataId
-insertRedeemerData tracer txId txd = do
+insertRedeemerData tracer blkNo txId txd = do
     mRedeemerDataId <- lift $ DB.queryRedeemerData $ Generic.txDataHash txd
     case mRedeemerDataId of
       Just redeemerDataId -> pure redeemerDataId
@@ -807,6 +808,7 @@ insertRedeemerData tracer txId txd = do
           , DB.redeemerDataTxId = txId
           , DB.redeemerDataValue = value
           , DB.redeemerDataBytes = Generic.txDataBytes txd
+          , DB.redeemerDataBlockNo = fromIntegral $ unBlockNo blkNo
           }
 
 insertTxMetadata
