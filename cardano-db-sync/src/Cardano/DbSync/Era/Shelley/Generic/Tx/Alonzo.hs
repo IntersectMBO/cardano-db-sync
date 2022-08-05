@@ -287,12 +287,7 @@ mkTxScript (hsh, script) =
     plutusCborScript =
       case script of
         Alonzo.TimelockScript {} -> Nothing
-        -- The serialization in cardano-api ignores the script version tag,
-        -- but we handle both cases properly for posterity.
-        Alonzo.PlutusScript Alonzo.PlutusV1 s ->
-          Just . Api.serialiseToCBOR . Api.PlutusScript Api.PlutusScriptV1 $ Api.PlutusScriptSerialised s
-        Alonzo.PlutusScript Alonzo.PlutusV2 s ->
-          Just . Api.serialiseToCBOR . Api.PlutusScript Api.PlutusScriptV2 $ Api.PlutusScriptSerialised s
+        plutusScript -> Just $ Ledger.originalBytes plutusScript
 
 getPlutusSizes ::
     ( HasField "wits" tx (Alonzo.TxWitness era)
@@ -315,7 +310,7 @@ txDataWitness tx =
     mkTxData <$> Map.toList (Alonzo.unTxDats $ Alonzo.txdats' (getField @"wits" tx))
 
 mkTxData :: (Ledger.DataHash StandardCrypto, Alonzo.Data era) -> PlutusData
-mkTxData (dataHash, dt) = PlutusData (dataHashToBytes dataHash) (jsonData dt) (cborData dt)
+mkTxData (dataHash, dt) = PlutusData (dataHashToBytes dataHash) (jsonData dt) (Ledger.originalBytes dt)
   where
     jsonData :: Alonzo.Data era -> ByteString
     jsonData =
@@ -323,9 +318,6 @@ mkTxData (dataHash, dt) = PlutusData (dataHashToBytes dataHash) (jsonData dt) (c
         . Aeson.encode
         . Api.scriptDataToJson Api.ScriptDataJsonDetailedSchema
         . Api.fromAlonzoData
-
-    cborData :: Alonzo.Data era -> ByteString
-    cborData = Api.serialiseToCBOR . Api.fromAlonzoData
 
 extraKeyWits :: HasField "reqSignerHashes" (Ledger.TxBody era) (Set (Ledger.KeyHash d c))
               => Ledger.TxBody era -> [ByteString]
