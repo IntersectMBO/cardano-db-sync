@@ -1,5 +1,8 @@
 # Revision history for cardano-db-sync
 
+## 13.0.4
+* Bump to the latest node release.
+
 ## 13.0.3
 * Integrated the fix for the missused minfee function in ledger (https://github.com/input-output-hk/cardano-ledger/pull/2938)
 

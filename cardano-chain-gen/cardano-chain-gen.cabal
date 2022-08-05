@@ -3,7 +3,7 @@ cabal-version:          2.4
 -- http://haskell.org/cabal/users-guide/
 
 name:                   cardano-chain-gen
-version:                13.0.3
+version:                13.0.4
 synopsis:               A fake chain generator for testing cardano DB sync.
 description:            A fake chain generator for testing cardano DB sync.
 homepage:               https://github.com/input-output-hk/cardano-db-sync
