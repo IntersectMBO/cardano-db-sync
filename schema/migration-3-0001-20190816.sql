@@ -24,5 +24,5 @@ create view utxo_view as select
   from tx_out
 	left outer join tx_in on tx_out.tx_id = tx_in.tx_out_id and tx_out.index = tx_in.tx_out_index
 	left outer join tx on tx.id = tx_out.tx_id
-	left outer join block on tx.block_id = block.id
+	left outer join block on tx.block_no = block.block_no
   where tx_in.tx_in_id is null and block.epoch_no is not null ;

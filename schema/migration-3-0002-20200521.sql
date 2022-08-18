@@ -10,23 +10,13 @@ BEGIN
     -- Without these indices 'cardano-db-tool validate' will put a heavy load
     -- on Postgres.
 
-    CREATE INDEX idx_block_slot_no
-    ON block(slot_no);
+    CREATE INDEX idx_block_slot_no ON block(slot_no);
 
-    CREATE INDEX idx_block_block_no
-    ON block(block_no);
+    CREATE INDEX idx_block_epoch_no ON block(epoch_no);
 
-    CREATE INDEX idx_block_epoch_no
-    ON block(epoch_no);
+    CREATE INDEX idx_tx_block_no ON tx(block_no);
 
-    CREATE INDEX idx_block_previous_id
-    ON block(previous_id);
-
-    CREATE INDEX idx_tx_block_id
-    ON tx(block_id);
-
-    CREATE INDEX idx_tx_in_source_tx
-    ON tx_in(tx_in_id);
+    CREATE INDEX idx_tx_in_source_tx ON tx_in(tx_in_id);
 
     -- -------------------------------------------------------------------------
 

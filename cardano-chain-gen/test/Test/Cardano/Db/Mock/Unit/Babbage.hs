@@ -151,7 +151,7 @@ unitTests iom knownMigrations =
           , test "spend inline datum same block" unlockDatumOutputSameBlock
           , test "spend reference script" spendRefScript
           , test "spend reference script same block" spendRefScriptSameBlock
-          , test "spend collateral output of invalid tx" spendCollateralOutput
+          , test "Erik spend collateral output of invalid tx" spendCollateralOutput
           , test "spend collateral output of invalid tx same block" spendCollateralOutputSameBlock
           , test "reference input to output which is not spent" referenceInputUnspend
           , test "supply and run script which is both reference and in witnesses" supplyScriptsTwoWays
@@ -280,7 +280,7 @@ restartAndRollback =
       stopDBSync dbSync
       atomically $ rollback mockServer (blockPoint $ last blks)
       startDBSync dbSync
-      assertBlockNoBackoff dbSync 201
+      assertBlockNoBackoff dbSync 206
   where
     testLabel = "restartAndRollback"
 
@@ -296,13 +296,13 @@ rollbackFurther =
     -- and then syncs further. We add references to blocks 34 and 35, to
     -- validate later that one is deleted through cascade, but the other was not
     -- because a checkpoint was found.
-    let blockHash1 = hfBlockHash (blks !! 33)
-    Right bid1 <- queryDBSync dbSync $ DB.queryBlockId blockHash1
-    cm1 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel (BS.pack $ replicate 32 1) "{\"1\" : 1}" bid1
+    let block1 = blks !! 33
+    void $ queryDBSync dbSync $ DB.queryBlockId (hfBlockHash block1)
+    cm1 <- queryDBSync dbSync . DB.insertCostModel $ DB.CostModel (BS.replicate 32 1) "{\"1\" : 1}" (fromIntegral . unBlockNo $ hfBlockNo block1)
 
-    let blockHash2 = hfBlockHash (blks !! 34)
-    Right bid2 <- queryDBSync dbSync $ DB.queryBlockId blockHash2
-    cm2 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel (BS.pack $ replicate 32 2) "{\"2\" : 2}" bid2
+    let block2 = blks !! 34
+    void $ queryDBSync dbSync $ DB.queryBlockId (hfBlockHash block2)
+    cm2 <- queryDBSync dbSync . DB.insertCostModel $ DB.CostModel (BS.replicate 32 2) "{\"2\" : 2}" (fromIntegral . unBlockNo $ hfBlockNo block2)
 
     -- Note that there is no epoch change, which would add a new entry, since we have
     -- 80 blocks and not 100, which is the expected blocks/epoch. This also means there
@@ -409,7 +409,7 @@ registrationTx =
            . Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)])
 
     assertBlockNoBackoff dbSync 4
-    assertCertCounts dbSync (2,2,0,0)
+    assertCertCounts dbSync (7, 2, 5, 0)
   where
     testLabel = "registrationTx"
 
@@ -426,7 +426,7 @@ registrationsSameBlock =
         Right [tx0, tx1, Babbage.addValidityInterval 1000 tx2, Babbage.addValidityInterval 2000 tx3]
 
     assertBlockNoBackoff dbSync 1
-    assertCertCounts dbSync (2,2,0,0)
+    assertCertCounts dbSync (7, 2, 5, 0)
   where
     testLabel = "registrationsSameBlock"
 
@@ -436,13 +436,15 @@ registrationsSameTx =
     startDBSync  dbSync
 
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkSimpleDCertTx [ (StakeIndexNew 1, DCertDeleg . RegKey)
-                               , (StakeIndexNew 1, DCertDeleg . DeRegKey)
-                               , (StakeIndexNew 1, DCertDeleg . RegKey)
-                               , (StakeIndexNew 1, DCertDeleg . DeRegKey)]
+            Babbage.mkSimpleDCertTx
+              [ (StakeIndexNew 1, DCertDeleg . RegKey)
+              , (StakeIndexNew 1, DCertDeleg . DeRegKey)
+              , (StakeIndexNew 1, DCertDeleg . RegKey)
+              , (StakeIndexNew 1, DCertDeleg . DeRegKey)
+              ]
 
     assertBlockNoBackoff dbSync 1
-    assertCertCounts dbSync (2,2,0,0)
+    assertCertCounts dbSync (7, 2, 5, 0)
   where
     testLabel = "registrationsSameTx"
 
@@ -460,7 +462,7 @@ stakeAddressPtr =
       Babbage.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr) 20000 20000
 
     assertBlockNoBackoff dbSync 2
-    assertCertCounts dbSync (1,0,0,0)
+    assertCertCounts dbSync (6, 0, 5, 0)
   where
     testLabel = "stakeAddressPtr"
 
@@ -476,9 +478,9 @@ stakeAddressPtrDereg =
 
     blk' <- withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
       tx0 <- Babbage.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr0) 20000 20000 st
-      tx1 <- Babbage.mkSimpleDCertTx [ (StakeIndexNew 0, DCertDeleg . DeRegKey)
-                                    , (StakeIndexNew 0, DCertDeleg . RegKey) ]
-                                    st
+      tx1 <- Babbage.mkSimpleDCertTx
+                [(StakeIndexNew 0, DCertDeleg . DeRegKey), (StakeIndexNew 0, DCertDeleg . RegKey)]
+                st
       pure [tx0, tx1]
 
     let ptr1 = Ptr (blockSlot blk') (TxIx 1) (CertIx 1)
@@ -490,7 +492,7 @@ stakeAddressPtrDereg =
 
     st <- getBabbageLedgerState interpreter
     assertBlockNoBackoff dbSync 3
-    assertCertCounts dbSync (2,1,0,0)
+    assertCertCounts dbSync (7, 1, 5, 0)
     -- The 2 addresses have the same payment credentials and they reference the same
     -- stake credentials, however they have
     assertAddrValues dbSync (UTxOAddressNewWithPtr 0 ptr0) (DB.DbLovelace 40000) st
@@ -517,7 +519,7 @@ stakeAddressPtrUseBefore =
         Babbage.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr) 20000 20000
 
       assertBlockNoBackoff dbSync 3
-      assertCertCounts dbSync (1,0,0,0)
+      assertCertCounts dbSync (6, 0, 5, 0)
   where
     testLabel = "stakeAddressPtrUseBefore"
 
@@ -634,7 +636,8 @@ rewardsDeregistration =
         let poolId = resolvePool (PoolIndex 0) st
         tx1 <- Babbage.mkSimpleDCertTx
                     [ (StakeIndexNew 1, DCertDeleg . RegKey)
-                    , (StakeIndexNew 1, \stCred -> DCertDeleg $ Delegate $ Delegation stCred poolId) ]
+                    , (StakeIndexNew 1, \stCred -> DCertDeleg $ Delegate $ Delegation stCred poolId)
+                    ]
                     st
             -- send some funds to the address so
         tx2 <- Babbage.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithStake 0 (StakeIndexNew 1)) 100000 5000 st
@@ -699,7 +702,8 @@ rewardsReregistration =
         let poolId = resolvePool (PoolIndex 0) st
         tx1 <- Babbage.mkSimpleDCertTx
                     [ (StakeIndexNew 1, DCertDeleg . RegKey)
-                    , (StakeIndexNew 1, \stCred -> DCertDeleg $ Delegate $ Delegation stCred poolId) ]
+                    , (StakeIndexNew 1, \stCred -> DCertDeleg $ Delegate $ Delegation stCred poolId)
+                    ]
                     st
             -- send some funds to the address so
         tx2 <- Babbage.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithStake 0 (StakeIndexNew 1)) 100000 5000 st
@@ -725,11 +729,11 @@ rewardsReregistration =
       c <- fillEpochPercentage interpreter mockServer 10
       -- deregister before the 40% of the epoch
       void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-          Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)]
+                Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)]
       d <- fillEpochPercentage interpreter mockServer 60
       -- register after 40% and before epoch boundary.
       void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-          Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)]
+                Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)]
       e <- fillUntilNextEpoch interpreter mockServer
       assertBlockNoBackoff dbSync (fromIntegral $ 7 + length (a <> b <> b' <> c <> d <> e))
       -- This is 1 in Alonzo
@@ -752,11 +756,11 @@ mirReward =
       -- mir from treasury
       void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
         tx1 <- Babbage.mkSimpleDCertTx [(StakeIndex 1,
-          \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 100))))] st
+                \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 100))))] st
         tx2 <- Babbage.mkSimpleDCertTx [(StakeIndex 1,
-          \cred -> DCertMir $ MIRCert ReservesMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 200))))] st
+                \cred -> DCertMir $ MIRCert ReservesMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 200))))] st
         tx3 <- Babbage.mkSimpleDCertTx [(StakeIndex 1,
-          \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 300))))] st
+                \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 300))))] st
         pure [tx1, tx2, tx3]
 
       void $ fillUntilNextEpoch interpreter mockServer
@@ -1713,23 +1717,25 @@ spendCollateralOutput =
       startDBSync  dbSync
       void $ registerAllStakeCreds interpreter mockServer
 
-      tx0 <- withBabbageLedgerState interpreter
-        $ Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutNoInline False] 20000 20000
+      tx0 <- withBabbageLedgerState interpreter $
+                Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutNoInline False] 20000 20000
       void $ forgeNextFindLeaderAndSubmit interpreter mockServer [TxBabbage tx0]
 
       -- tx fails so its collateral output become actual output.
       let utxo0 = head (Babbage.mkUTxOBabbage tx0)
       tx1 <- withBabbageLedgerState interpreter $
-        Babbage.mkUnlockScriptTxBabbage [UTxOInput (fst utxo0)] (UTxOIndex 1) (UTxOIndex 2) [UTxOPair utxo0] True False 10000 500
+                Babbage.mkUnlockScriptTxBabbage
+                  [UTxOInput (fst utxo0)] (UTxOIndex 1) (UTxOIndex 2) [UTxOPair utxo0] True False 10000 500
       void $ forgeNextFindLeaderAndSubmit interpreter mockServer [TxBabbage tx1]
-      assertBlockNoBackoff dbSync 3
 
       let utxo1 = head (Babbage.mkUTxOCollBabbage tx1)
       tx2 <- withBabbageLedgerState interpreter $
-        Babbage.mkUnlockScriptTxBabbage [UTxOPair utxo1] (UTxOIndex 3) (UTxOIndex 1) [UTxOPair utxo1] False True 10000 500
+                Babbage.mkUnlockScriptTxBabbage
+                  [UTxOPair utxo1] (UTxOIndex 3) (UTxOIndex 1) [UTxOPair utxo1] False True 12000 600
       void $ forgeNextFindLeaderAndSubmit interpreter mockServer [TxBabbage tx2]
 
       assertBlockNoBackoff dbSync 4
+      assertTxCount dbSync 15
       assertBabbageCounts dbSync (1,1,1,1,2,1,1,1,1,1,1,1,1)
   where
     testLabel = "spendCollateralOutput"
@@ -1922,3 +1928,11 @@ hfBlockHash blk =
     BlockAlonzo ablk -> blockHash ablk
     BlockBabbage ablk -> blockHash ablk
     _ -> error "hfBlockHash: unsupported block type"
+
+hfBlockNo :: CardanoBlock -> BlockNo
+hfBlockNo blk =
+  case blk of
+    BlockShelley sblk -> blockNo sblk
+    BlockAlonzo ablk -> blockNo ablk
+    BlockBabbage bblk -> blockNo bblk
+    _ -> error "hfBlockNo: unsupported block type"

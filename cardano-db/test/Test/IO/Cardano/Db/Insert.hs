@@ -9,16 +9,14 @@ import           Control.Monad (void)
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
 
-import           Data.Time.Clock
-
 import           Cardano.Db
+
+import           Cardano.Slotting.Block (BlockNo (..))
 
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (testCase)
 
 import           Test.IO.Cardano.Db.Util
-
-import           Database.Persist.Sql (Entity, delete, selectList)
 
 
 tests :: TestTree
@@ -27,7 +25,6 @@ tests =
     [ testCase "Insert zeroth block" insertZeroTest
     , testCase "Insert first block" insertFirstTest
     , testCase "Insert twice" insertTwice
-    , testCase "Insert foreign key missing" insertForeignKeyMissing
     ]
 
 insertZeroTest :: IO ()
@@ -52,55 +49,22 @@ insertFirstTest =
     void $ deleteCascadeBlock (blockOne slid)
     -- Insert the same block twice.
     bid0 <- insertBlockChecked (blockZero slid)
-    bid1 <- insertBlockChecked $ (\b -> b { blockPreviousId = Just bid0 }) (blockOne slid)
+    bid1 <- insertBlockChecked $ (\b -> b { blockBlockNo = 1 }) (blockOne slid)
     assertBool (show bid0 ++ " == " ++ show bid1) (bid0 /= bid1)
 
 insertTwice :: IO ()
 insertTwice =
   runDbNoLoggingEnv $ do
     slid <- insertSlotLeader testSlotLeader
-    bid <- insertBlockChecked (blockZero slid)
-    let adaPots = adaPotsZero bid
+    void $ insertBlockChecked (blockZero slid)
+    let adaPots = adaPotsZero 0
     _ <- insertAdaPots adaPots
-    Just pots0 <- queryAdaPots bid
+    Just pots0 <- queryAdaPots 0
     -- Insert with same Unique key, different first field
-    _ <- insertAdaPots (adaPots {adaPotsSlotNo = 1 + adaPotsSlotNo adaPots})
-    Just pots0' <- queryAdaPots bid
+    _ <- insertAdaPots (adaPots { adaPotsSlotNo = 1 + adaPotsSlotNo adaPots })
+    Just pots0' <- queryAdaPots 0
     assertBool (show (adaPotsSlotNo pots0) ++ " /= " ++ show (adaPotsSlotNo pots0'))
       (adaPotsSlotNo pots0 == adaPotsSlotNo pots0')
-
-insertForeignKeyMissing :: IO ()
-insertForeignKeyMissing = do
-  time <- getCurrentTime
-  runDbNoLoggingEnv $ do
-    slid <- insertSlotLeader testSlotLeader
-    bid <- insertBlockChecked (blockZero slid)
-    txid <- insertTx (txZero bid)
-    phid <- insertPoolHash poolHash0
-    pmrid <- insertPoolMetadataRef $ poolMetadataRef txid phid
-    let fe = poolOfflineFetchError phid pmrid time
-    insertCheckPoolOfflineFetchError fe
-
-    count0 <- poolOfflineFetchErrorCount
-    assertBool (show count0 ++ "/= 1") (count0 == 1)
-
-    -- Delete the foreign key. This will cascade delete OfflineFetchErrorCount
-    delete pmrid
-    count1 <- poolOfflineFetchErrorCount
-    assertBool (show count1 ++ "/= 0") (count1 == 0)
-
-    -- The references check will fail below will fail, so the insertion
-    -- will not be attempted
-    insertCheckPoolOfflineFetchError fe
-
-    count2 <- poolOfflineFetchErrorCount
-    assertBool (show count2 ++ "/= 0") (count2 == 0)
-
-
-  where
-    poolOfflineFetchErrorCount = do
-      ls :: [Entity PoolOfflineFetchError] <- selectList [] []
-      pure $ length ls
 
 blockZero :: SlotLeaderId -> Block
 blockZero slid =
@@ -109,8 +73,7 @@ blockZero slid =
     , blockEpochNo = Just 0
     , blockSlotNo = Just 0
     , blockEpochSlotNo = Just 0
-    , blockBlockNo = Just 0
-    , blockPreviousId = Nothing
+    , blockBlockNo = 0
     , blockSlotLeaderId = slid
     , blockSize = 42
     , blockTime = dummyUTCTime
@@ -130,8 +93,7 @@ blockOne slid =
     , blockEpochNo = Just 0
     , blockSlotNo = Just 1
     , blockEpochSlotNo = Just 1
-    , blockBlockNo = Just 1
-    , blockPreviousId = Nothing
+    , blockBlockNo = 1
     , blockSlotLeaderId = slid
     , blockSize = 42
     , blockTime = dummyUTCTime
@@ -143,8 +105,8 @@ blockOne slid =
     , blockOpCertCounter = Nothing
     }
 
-adaPotsZero :: BlockId -> AdaPots
-adaPotsZero bid =
+adaPotsZero :: BlockNo -> AdaPots
+adaPotsZero (BlockNo blkNo) =
   AdaPots
     { adaPotsSlotNo = 0
     , adaPotsEpochNo = 0
@@ -154,49 +116,7 @@ adaPotsZero bid =
     , adaPotsUtxo = DbLovelace 0
     , adaPotsDeposits = DbLovelace 0
     , adaPotsFees = DbLovelace 0
-    , adaPotsBlockId = bid
-    }
-
-txZero :: BlockId -> Tx
-txZero bid =
-  Tx
-    { txHash = mkHash 32 '2'
-    , txBlockId = bid
-    , txBlockIndex = 0
-    , txOutSum = DbLovelace 0
-    , txFee = DbLovelace 0
-    , txDeposit = 0
-    , txSize = 0
-    , txInvalidBefore = Nothing
-    , txInvalidHereafter = Nothing
-    , txValidContract = True
-    , txScriptSize = 0
-    }
-
-poolHash0 :: PoolHash
-poolHash0 =
-  PoolHash
-    { poolHashHashRaw = mkHash 28 '0'
-    , poolHashView = "best pool"
-    }
-
-poolMetadataRef :: TxId -> PoolHashId -> PoolMetadataRef
-poolMetadataRef txid phid =
-  PoolMetadataRef
-    { poolMetadataRefPoolId = phid
-    , poolMetadataRefUrl = "best.pool.com"
-    , poolMetadataRefHash = mkHash 32 '4'
-    , poolMetadataRefRegisteredTxId = txid
-    }
-
-poolOfflineFetchError :: PoolHashId -> PoolMetadataRefId -> UTCTime -> PoolOfflineFetchError
-poolOfflineFetchError phid pmrid time =
-  PoolOfflineFetchError
-    { poolOfflineFetchErrorPoolId = phid
-    , poolOfflineFetchErrorFetchTime = time
-    , poolOfflineFetchErrorPmrId = pmrid
-    , poolOfflineFetchErrorFetchError = "too good"
-    , poolOfflineFetchErrorRetryCount = 5
+    , adaPotsBlockNo = blkNo
     }
 
 mkHash :: Int -> Char -> ByteString

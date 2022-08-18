@@ -111,7 +111,7 @@ queryTestTxIds :: MonadIO m => ReaderT SqlBackend m (Word64, Word64)
 queryTestTxIds = do
   -- Exclude all 'faked' generated TxId values from the genesis block (block_id == 1).
   lower <- select $ from (table @Tx) >>= \ tx -> do
-              where_ (tx ^. TxBlockId >. val (toSqlKey 1))
+              where_ (tx ^. TxBlockNo >. val 1)
               pure (tx ^. TxId)
   upper <- select $ from (table @Tx) >> pure countRows
   pure (maybe 0 (unTxId . unValue) (listToMaybe lower), maybe 0 unValue (listToMaybe upper))

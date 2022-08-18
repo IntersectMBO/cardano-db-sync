@@ -10,14 +10,14 @@ import           Cardano.Db hiding (queryBlockTxCount)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
+import           Data.Int (Int64)
 import qualified Data.List as List
 import qualified Data.List.Extra as List
-import           Data.Maybe (mapMaybe)
 import           Data.Time.Clock (UTCTime)
 import qualified Data.Time.Clock as Time
 import           Data.Word (Word64)
 
-import           Database.Esqueleto.Experimental (SqlBackend, asc, desc, from, just, limit, orderBy,
+import           Database.Esqueleto.Experimental (SqlBackend, asc, desc, from, limit, orderBy,
                    select, table, unValue, val, where_, (>.), (^.))
 
 import qualified System.Random as Random
@@ -42,16 +42,16 @@ validateBlockTimesInPast = do
       then putStrLn $ greenText "ok"
       else error $ redText (reportFailures xs)
   where
-    reportFailures :: [(Maybe Word64, Maybe Word64, UTCTime)] -> String
+    reportFailures :: [(Maybe Word64, Int64, UTCTime)] -> String
     reportFailures xs =
       mconcat
         [ "\nThere are ", show (length xs), " blocks with time stamps in the future.\n"
         , "First future block is: ", showFirst (head xs)
         ]
 
-    showFirst :: (Maybe Word64, Maybe Word64, UTCTime) -> String
-    showFirst (mEpoch, mBlockNo, time) =
-      mconcat [ "epoch ", show mEpoch, " block ", show mBlockNo, " time ", show time ]
+    showFirst :: (Maybe Word64, Int64, UTCTime) -> String
+    showFirst (mEpoch, blockNo, time) =
+      mconcat [ "epoch ", show mEpoch, " block ", show blockNo, " time ", show time ]
 
 validataBlockNosContiguous :: Word64 -> IO ()
 validataBlockNosContiguous blkCount = do
@@ -66,7 +66,7 @@ validataBlockNosContiguous blkCount = do
     testBlocks :: Word64
     testBlocks = 100000
 
-    checkContinguous :: [Word64] -> Maybe [Word64]
+    checkContinguous :: [Int64] -> Maybe [Int64]
     checkContinguous xs =
       case xs of
         (a : b : ys) -> if a + 1 == b
@@ -89,29 +89,27 @@ validateTimestampsOrdered blkCount = do
 
 -- -------------------------------------------------------------------------------------------------
 
-queryBlockNoList :: MonadIO m => Word64 -> Word64 -> ReaderT SqlBackend m [Word64]
+queryBlockNoList :: MonadIO m => Word64 -> Word64 -> ReaderT SqlBackend m [Int64]
 queryBlockNoList start count = do
   res <- select $ do
     blk <- from $ table @Block
-    where_ (isJust (blk ^. BlockBlockNo))
-    where_ (blk ^. BlockBlockNo >. just (val start))
+    where_ (blk ^. BlockBlockNo >. val (fromIntegral start))
     orderBy [asc (blk ^. BlockBlockNo)]
     limit (fromIntegral count)
     pure (blk ^. BlockBlockNo)
-  pure $ mapMaybe unValue res
+  pure $ map unValue res
 
 queryBlockTimestamps :: MonadIO m => Word64 -> Word64 -> ReaderT SqlBackend m [UTCTime]
 queryBlockTimestamps start count = do
   res <- select $ do
     blk <- from $ table @Block
-    where_ (isJust (blk ^. BlockBlockNo))
-    where_ (blk ^. BlockBlockNo >. just (val start))
+    where_ (blk ^. BlockBlockNo >. val (fromIntegral start))
     orderBy [asc (blk ^. BlockBlockNo)]
     limit (fromIntegral count)
     pure (blk ^. BlockTime)
   pure $ map unValue res
 
-queryBlocksTimeAfters :: MonadIO m => UTCTime -> ReaderT SqlBackend m [(Maybe Word64, Maybe Word64, UTCTime)]
+queryBlocksTimeAfters :: MonadIO m => UTCTime -> ReaderT SqlBackend m [(Maybe Word64, Int64, UTCTime)]
 queryBlocksTimeAfters now = do
   res <- select $ do
     blk <- from $ table @Block

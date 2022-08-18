@@ -32,7 +32,7 @@ module Cardano.Mock.Forging.Interpreter
 
 import           Cardano.Prelude (bimap, getField, throwIO)
 
-import           Control.Monad (forM, when)
+import           Control.Monad (forM, void, when)
 import           Control.Monad.Except (runExcept)
 import           Control.Tracer (Tracer)
 
@@ -271,20 +271,20 @@ forgeNext interpreter testBlock =
 
 forgeNextLeaders :: Interpreter -> [TxEra] -> [BlockForging IO CardanoBlock] -> IO CardanoBlock
 forgeNextLeaders interpreter txes possibleLeaders = do
-        interState <- getCurrentInterpreterState interpreter
-        (blk, fingerprint) <- tryOrValidateSlot interState possibleLeaders
-        let !chain' = extendChainDB (istChain interState) blk
-        let !newSt = currentState chain'
-        let newInterState =
-              InterpreterState
-                { istChain = chain'
-                , istForecast = mkForecast cfg newSt
-                , istSlot = blockSlot blk + 1
-                , istNextBlockNo = blockNo blk + 1
-                , istFingerprint = fingerprint
-                }
-        _ <- swapMVar (interpState interpreter) newInterState
-        pure blk
+    interState <- getCurrentInterpreterState interpreter
+    (blk, fingerprint) <- tryOrValidateSlot interState possibleLeaders
+    let !chain' = extendChainDB (istChain interState) blk
+    let !newSt = currentState chain'
+    let newInterState =
+          InterpreterState
+            { istChain = chain'
+            , istForecast = mkForecast cfg newSt
+            , istSlot = blockSlot blk + 1
+            , istNextBlockNo = blockNo blk + 1
+            , istFingerprint = fingerprint
+            }
+    void $ swapMVar (interpState interpreter) newInterState
+    pure blk
   where
     cfg :: TopLevelConfig CardanoBlock
     cfg = interpTopLeverConfig interpreter

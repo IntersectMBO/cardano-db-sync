@@ -154,7 +154,7 @@ data PoolCertAction
 -- | A Unique identifier for a certificate in the
 -- blockchain. Ord instance gives a chronological order.
 data CertNo = CertNo
-  { ciBlockNo :: !(Maybe Word64)
+  { ciBlockNo :: !Word64
   , ciTxIndex :: !Word64
   , ciCertIndex :: !Word16
   } deriving (Eq, Ord, Show)

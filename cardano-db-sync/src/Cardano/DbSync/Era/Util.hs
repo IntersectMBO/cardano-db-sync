@@ -21,20 +21,12 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Error as Text
 
-liftLookupFail :: Monad m => Text -> m (Either DB.LookupFail a) -> ExceptT SyncNodeError m a
-liftLookupFail loc =
-  firstExceptT (\lf -> NEError $ loc <> DB.renderLookupFail lf) . newExceptT
-
-safeDecodeUtf8 :: ByteString -> IO (Either Text.UnicodeException Text)
-safeDecodeUtf8 bs
-    | BS.any isNullChar bs = pure $ Left (Text.DecodeError (BS.unpack bs) (Just 0))
-    | otherwise = try $ evaluate (Text.decodeUtf8With Text.strictDecode bs)
-  where
-    isNullChar :: Char -> Bool
-    isNullChar ch = ord ch == 0
-
 containsUnicodeNul :: Text -> Bool
 containsUnicodeNul = Text.isInfixOf "\\u000"
+
+liftLookupFail :: Monad m => Text -> m (Either DB.LookupFail a) -> ExceptT SyncNodeError m a
+liftLookupFail loc =
+  firstExceptT (\lf -> NEError $ mconcat [loc, " ", DB.renderLookupFail lf]) . newExceptT
 
 safeDecodeToJson :: MonadIO m => Trace IO Text -> Text -> ByteString -> m (Maybe Text)
 safeDecodeToJson tracer tracePrefix x = do
@@ -53,3 +45,11 @@ safeDecodeToJson tracer tracePrefix x = do
             pure Nothing
           else
             pure $ Just json
+
+safeDecodeUtf8 :: ByteString -> IO (Either Text.UnicodeException Text)
+safeDecodeUtf8 bs
+    | BS.any isNullChar bs = pure $ Left (Text.DecodeError (BS.unpack bs) (Just 0))
+    | otherwise = try $ evaluate (Text.decodeUtf8With Text.strictDecode bs)
+  where
+    isNullChar :: Char -> Bool
+    isNullChar ch = ord ch == 0

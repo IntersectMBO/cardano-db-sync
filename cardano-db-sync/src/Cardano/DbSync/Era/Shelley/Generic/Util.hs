@@ -98,7 +98,7 @@ mkSlotLeader :: ByteString -> Maybe Db.PoolHashId -> Db.SlotLeader
 mkSlotLeader slHash mPoolId =
   let short = Text.decodeUtf8 (Base16.encode $ BS.take 8 slHash)
       slName = case mPoolId of
-                Nothing -> "ShelleyGenesis-" <> short
+                Nothing -> "ShelleyGenesisKey-" <> short
                 Just _ -> "Pool-" <> short
   in Db.SlotLeader slHash mPoolId slName
 

@@ -26,12 +26,13 @@ import           Cardano.DbSync.Era.Util (liftLookupFail)
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Util
 
+import           Cardano.Slotting.Block (BlockNo (..))
+
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Map.Strict as Map
-import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
 import           Database.Persist.Sql (SqlBackend)
@@ -77,16 +78,15 @@ insertValidateGenesisDist backend tracer (NetworkName networkName) cfg = do
                             DB.SlotLeader
                               { DB.slotLeaderHash = BS.take 28 $ configGenesisHash cfg
                               , DB.slotLeaderPoolHashId = Nothing
-                              , DB.slotLeaderDescription = "Genesis slot leader"
+                              , DB.slotLeaderDescription = "Byron Genesis slot leader"
                               }
-            bid <- lift . DB.insertBlock $
+            void . lift . DB.insertBlock $
                       DB.Block
                         { DB.blockHash = configGenesisHash cfg
                         , DB.blockEpochNo = Nothing
                         , DB.blockSlotNo = Nothing
                         , DB.blockEpochSlotNo = Nothing
-                        , DB.blockBlockNo = Nothing
-                        , DB.blockPreviousId = Nothing
+                        , DB.blockBlockNo = fromIntegral $ unBlockNo DB.byronGenesisBlockNo
                         , DB.blockSlotLeaderId = slid
                         , DB.blockSize = 0
                         , DB.blockTime = Byron.configStartTime cfg
@@ -99,7 +99,7 @@ insertValidateGenesisDist backend tracer (NetworkName networkName) cfg = do
                         , DB.blockOpCert = Nothing
                         , DB.blockOpCertCounter = Nothing
                         }
-            lift $ mapM_ (insertTxOuts bid) $ genesisTxos cfg
+            lift $ mapM_ (insertTxOuts DB.byronGenesisBlockNo) $ genesisTxos cfg
             liftIO . logInfo tracer $ "Initial genesis distribution populated. Hash "
                             <> renderByteArray (configGenesisHash cfg)
 
@@ -111,41 +111,42 @@ validateGenesisDistribution
     :: (MonadBaseControl IO m, MonadIO m)
     => Trace IO Text -> Text -> Byron.Config -> DB.BlockId
     -> ReaderT SqlBackend m (Either SyncNodeError ())
-validateGenesisDistribution tracer networkName cfg bid =
+validateGenesisDistribution tracer networkName cfg _bid =
   runExceptT $ do
-    meta <- liftLookupFail "validateGenesisDistribution" DB.queryMeta
+    meta <- liftLookupFail "Byron.validateGenesisDistribution" DB.queryMeta
 
     when (DB.metaStartTime meta /= Byron.configStartTime cfg) $
-      dbSyncNodeError $ Text.concat
-            [ "Mismatch chain start time. Config value "
+      dbSyncNodeError $ mconcat
+            [ "Byron: Mismatch chain start time. Config value "
             , textShow (Byron.configStartTime cfg)
             , " does not match DB value of ", textShow (DB.metaStartTime meta)
             ]
 
     when (DB.metaNetworkName meta /= networkName) $
-          dbSyncNodeError $ Text.concat
-              [ "validateGenesisDistribution: Provided network name "
+          dbSyncNodeError $ mconcat
+              [ "Byron.validateGenesisDistribution: Provided network name "
               , networkName
               , " does not match DB value "
               , DB.metaNetworkName meta
               ]
 
-    txCount <- lift $ DB.queryBlockTxCount bid
-    let expectedTxCount = fromIntegral $length (genesisTxos cfg)
+    txCount <- lift DB.queryByronGenesisTxCount
+    let expectedTxCount = fromIntegral $ length (genesisTxos cfg)
     when (txCount /= expectedTxCount) $
-      dbSyncNodeError $ Text.concat
-              [ "validateGenesisDistribution: Expected initial block to have "
+      dbSyncNodeError $ mconcat
+              [ "Byron.validateGenesisDistribution: Expected initial block to have "
               , textShow expectedTxCount
-              , " but got "
+              , " transactinons but got "
               , textShow txCount
               ]
-    totalSupply <- lift DB.queryGenesisSupply
+
+    totalSupply <- lift DB.queryByronGenesisSupply
     case DB.word64ToAda <$> configGenesisSupply cfg of
-      Left err -> dbSyncNodeError $ "validateGenesisDistribution: " <> textShow err
+      Left err -> dbSyncNodeError $ "Byron.validateGenesisDistribution: " <> textShow err
       Right expectedSupply ->
         when (expectedSupply /= totalSupply) $
-          dbSyncNodeError  $ Text.concat
-                [ "validateGenesisDistribution: Expected total supply to be "
+          dbSyncNodeError  $ mconcat
+                [ "Byron.validateGenesisDistribution: Expected total supply to be "
                 , DB.renderAda expectedSupply
                 , " but got "
                 , DB.renderAda totalSupply
@@ -156,14 +157,14 @@ validateGenesisDistribution tracer networkName cfg bid =
 
 -- -----------------------------------------------------------------------------
 
-insertTxOuts :: (MonadBaseControl IO m, MonadIO m) => DB.BlockId -> (Byron.Address, Byron.Lovelace) -> ReaderT SqlBackend m ()
-insertTxOuts blkId (address, value) = do
+insertTxOuts :: (MonadBaseControl IO m, MonadIO m) => BlockNo -> (Byron.Address, Byron.Lovelace) -> ReaderT SqlBackend m ()
+insertTxOuts (BlockNo blkNo) (address, value) = do
   -- Each address/value pair of the initial coin distribution comes from an artifical transaction
   -- with a hash generated by hashing the address.
   txId <- DB.insertTx $
             DB.Tx
               { DB.txHash = Byron.unTxHash $ txHashOfAddress address
-              , DB.txBlockId = blkId
+              , DB.txBlockNo = fromIntegral blkNo
               , DB.txBlockIndex = 0
               , DB.txOutSum = DB.DbLovelace (Byron.unsafeGetLovelace value)
               , DB.txFee = DB.DbLovelace 0
@@ -187,6 +188,7 @@ insertTxOuts blkId (address, value) = do
               , DB.txOutDataHash = Nothing
               , DB.txOutInlineDatumId = Nothing
               , DB.txOutReferenceScriptId = Nothing
+              , DB.txOutBlockNo = fromIntegral blkNo
               }
 
 -- -----------------------------------------------------------------------------

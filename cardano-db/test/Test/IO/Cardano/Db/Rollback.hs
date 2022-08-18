@@ -5,18 +5,18 @@ module Test.IO.Cardano.Db.Rollback
   ( tests
   ) where
 
-import           Cardano.Slotting.Slot (SlotNo (..))
+import           Cardano.Db
+import           Cardano.Slotting.Block (BlockNo (..))
 
 import           Control.Monad (void)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Reader (ReaderT)
 
+import           Data.Int (Int64)
 import           Data.Word (Word64)
 
 import           Database.Persist.Sql (SqlBackend)
-
-import           Cardano.Db
 
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (testCase)
@@ -35,7 +35,7 @@ rollbackTest :: IO ()
 rollbackTest =
   runDbNoLoggingEnv $ do
     -- Delete the blocks if they exist.
-    deleteAllBlocksCascade
+    deleteEverything
     setupBlockCount <- queryBlockCount
     assertBool ("Block on setup is " ++ show setupBlockCount ++ " but should be 0.") $ setupBlockCount == 0
     -- Set up state before rollback and assert expected counts.
@@ -49,14 +49,14 @@ rollbackTest =
     beforeTxInCount <- queryTxInCount
     assertBool ("TxIn count before rollback is " ++ show beforeTxInCount ++ " but should be 1.") $ beforeTxInCount == 1
     -- Rollback a set of blocks.
-    latestSlotNo <- queryLatestSlotNo
-    Just pSlotNo <- queryWalkChain 5 latestSlotNo
-    void $ deleteCascadeSlotNo (SlotNo pSlotNo)
+    latestBlockNo <- queryLatestBlockNo
+    let pBlockNo = queryWalkChain 5 (BlockNo $ latestBlockNo - 1)
+    void $ deleteAfterBlockNo (BlockNo pBlockNo)
     -- Assert the expected final state.
     afterBlocks <- queryBlockCount
-    assertBool ("Block count after rollback is " ++ show afterBlocks ++ " but should be 10") $ afterBlocks == 4
+    assertBool ("Block count after rollback is " ++ show afterBlocks ++ " but should be 4") $ afterBlocks == 4
     afterTxCount <- queryTxCount
-    assertBool ("Tx count after rollback is " ++ show afterTxCount ++ " but should be 10") $ afterTxCount == 1
+    assertBool ("Tx count after rollback is " ++ show afterTxCount ++ " but should be 1") $ afterTxCount == 1
     afterTxOutCount <- queryTxOutCount
     assertBool ("TxOut count after rollback is " ++ show afterTxOutCount ++ " but should be 1.") $ afterTxOutCount == 1
     afterTxInCount <- queryTxInCount
@@ -64,42 +64,35 @@ rollbackTest =
 
 -- -----------------------------------------------------------------------------
 
-queryWalkChain :: (MonadBaseControl IO m, MonadIO m) => Int -> Word64 -> ReaderT SqlBackend m (Maybe Word64)
-queryWalkChain count blkNo
-  | count <= 0 = pure $ Just blkNo
-  | otherwise = do
-      mpBlkNo <- queryPreviousSlotNo blkNo
-      case mpBlkNo of
-        Nothing -> pure Nothing
-        Just pBlkNo -> queryWalkChain (count - 1) pBlkNo
+queryWalkChain :: Word64 -> BlockNo -> Word64
+queryWalkChain count (BlockNo blkNo) =
+  if blkNo > count then blkNo - count else blkNo
 
-
-createAndInsertBlocks :: (MonadBaseControl IO m, MonadIO m) => Word64 -> ReaderT SqlBackend m ()
+createAndInsertBlocks :: (MonadBaseControl IO m, MonadIO m) => Int64 -> ReaderT SqlBackend m ()
 createAndInsertBlocks blockCount =
-    void $ loop (0, Nothing, Nothing)
+    void $ loop (0, Nothing)
   where
     loop
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Word64, Maybe BlockId, Maybe TxId)
-        -> ReaderT SqlBackend m (Word64, Maybe BlockId, Maybe TxId)
-    loop (indx, mPrevId, mOutId) =
+        => (Int64, Maybe TxId)
+        -> ReaderT SqlBackend m (Word64, Maybe TxId)
+    loop (indx, mOutId) =
       if indx < blockCount
-        then loop =<< createAndInsert (indx, mPrevId, mOutId)
-        else pure (0, Nothing, Nothing)
+        then loop =<< createAndInsert (indx, mOutId)
+        else pure (0, Nothing)
 
     createAndInsert
         :: (MonadBaseControl IO m, MonadIO m)
-        => (Word64, Maybe BlockId, Maybe TxId)
-        -> ReaderT SqlBackend m (Word64, Maybe BlockId, Maybe TxId)
-    createAndInsert (indx, mPrevId, mTxOutId) = do
+        => (Int64, Maybe TxId)
+        -> ReaderT SqlBackend m (Int64, Maybe TxId)
+    createAndInsert (blkNo, mTxOutId) = do
         slid <- insertSlotLeader testSlotLeader
         let newBlock = Block
-                        { blockHash = mkBlockHash indx
+                        { blockHash = mkBlockHash blkNo
                         , blockEpochNo = Just 0
-                        , blockSlotNo = Just indx
-                        , blockEpochSlotNo = Just indx
-                        , blockBlockNo = Just indx
-                        , blockPreviousId = mPrevId
+                        , blockSlotNo = Just (fromIntegral blkNo)
+                        , blockEpochSlotNo = Just (fromIntegral blkNo)
+                        , blockBlockNo = fromIntegral blkNo
                         , blockSlotLeaderId = slid
                         , blockSize = 42
                         , blockTime = dummyUTCTime
@@ -111,21 +104,22 @@ createAndInsertBlocks blockCount =
                         , blockOpCertCounter = Nothing
                         }
 
-        blkId <- insertBlock newBlock
-        newMTxOutId <- if indx /= 0
-                      then pure mTxOutId
-                      else do
-                        txId <- insertTx $ Tx (mkTxHash blkId 0) blkId 0 (DbLovelace 0) (DbLovelace 0) 0 12 Nothing Nothing True 0
-                        void $ insertTxOut (mkTxOut blkId txId)
-                        pure $ Just txId
-        case (indx, mTxOutId) of
+        void $ insertBlock newBlock
+        newMTxOutId <-
+                if blkNo /= 0
+                  then pure mTxOutId
+                  else do
+                    txId <- insertTx $ Tx (mkTxHash blkNo 0) blkNo 0 (DbLovelace 0) (DbLovelace 0) 0 12 Nothing Nothing True 0
+                    void $ insertTxOut (mkTxOut blkNo txId)
+                    pure $ Just txId
+        case (blkNo, mTxOutId) of
             (8, Just txOutId) -> do
                 -- Insert Txs here to test that they are cascade deleted when the blocks
                 -- they are associcated with are deleted.
 
-                txId <- head <$> mapM insertTx (mkTxs blkId 8)
-                void $ insertTxIn (TxIn txId txOutId 0 Nothing)
-                void $ insertTxOut (mkTxOut blkId txId)
+                txId <- head <$> mapM insertTx (mkTxs blkNo 8)
+                void $ insertTxIn (TxIn txId txOutId 0 Nothing blkNo)
+                void $ insertTxOut (mkTxOut blkNo txId)
             _ -> pure ()
-        pure (indx + 1, Just blkId, newMTxOutId)
+        pure (blkNo + 1, newMTxOutId)
 
