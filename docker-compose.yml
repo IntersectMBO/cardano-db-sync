@@ -59,6 +59,9 @@ services:
       - POSTGRES_PORT=5432
       - RESTORE_SNAPSHOT=${RESTORE_SNAPSHOT:-}
       - RESTORE_RECREATE_DB=N
+      - DISABLE_LEDGER=${DISABLE_LEDGER:-}
+      - DISABLE_CACHE=${DISABLE_CACHE:-}
+      - DISABLE_EPOCH=${DISABLE_EPOCH:-}
     depends_on:
       # Depend on both services to be healthy before starting.
       cardano-node:

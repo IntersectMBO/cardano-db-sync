@@ -66,7 +66,19 @@ To download and restore a snapshot include `RESTORE_SNAPSHOT`:
 ```
 RESTORE_SNAPSHOT=https://update-cardano-mainnet.iohk.io/cardano-db-sync/db-sync-snapshot-schema-10-block-6014140-x86_64.tgz \
 NETWORK=testnet docker-compose up && docker-compose logs -f
+```
 
+## Disable options
+
+Consult the configuration [docs](docs/configuration.md) for what these options mean, assuming you have read that
+they can be accessed via env variables passed to docker-compose. Leave out any that do not make sense, eg if
+you just want to disable the ledger use `DISABLE_LEDGER=--disable-ledger docker-compose up`.
+
+``` shell
+DISABLE_LEDGER=--disable-ledger \
+DISABLE_CACHE=--disable-cache \
+DISABLE_EPOCH=--disable-epoch \
+docker-compose up
 ```
 
 ## Running Tests with Docker Postgres
