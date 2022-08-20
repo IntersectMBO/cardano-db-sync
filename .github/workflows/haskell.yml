@@ -36,7 +36,7 @@ jobs:
         sudo apt-get install -y libpq-dev libpq5 net-tools postgresql
         sudo pg_ctlcluster 14 main start
 
-    - name: Install Postgres support (MacOS)
+    - name: Install Postgres support (macOS)
       if: matrix.os == 'macos-latest'
       run: |
         brew install postgres libpq openssl@1.1
@@ -70,8 +70,7 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get -y install libsodium23 libsodium-dev
-        sudo apt-get -y install libsystemd0 libsystemd-dev
+        sudo apt-get -y install libsodium23 libsodium-dev libsystemd0 libsystemd-dev
         sudo apt-get -y remove --purge software-properties-common
         sudo apt-get -y autoremove
 
@@ -81,7 +80,7 @@ jobs:
         sudo apt-get -y install autoconf automake libtool
         ./scripts/secp256k1-setup.sh $SECP256K1_REF
 
-    - name: Install secp256k1 (MacOS)
+    - name: Install secp256k1 (macOS)
       if: matrix.os == 'macos-latest'
       run: |
         brew install autoconf automake libtool
@@ -91,7 +90,7 @@ jobs:
       run: cabal update
 
     - name: Cabal Configure
-      run: cabal configure --write-ghc-environment-files=always
+      run: cabal configure --enable-tests --write-ghc-environment-files=always
 
     - name: Configure to use libsodium
       run: |
@@ -117,7 +116,7 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: cabal build all --only-dependencies
 
-    - name: Build dependencies OSX
+    - name: Build dependencies macOS
       if: matrix.os == 'macos-latest'
       run: |
         PKG_CONFIG_PATH="/usr/local/opt/openssl@1.1/lib/pkgconfig" cabal build all --only-dependencies

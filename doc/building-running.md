@@ -1,8 +1,8 @@
-**Validated: 2020/02/19**
+**Validated: 2022/08/20**
 
 # Building and Running the Cardano DB Sync Node
 
-The cardano-db-sync node is built and tested to run on Linux. It may run on Mac OS X or Windows but
+The cardano-db-sync node is built and tested to run on Linux. It may run on macOS or Windows but
 that is unsupported.
 
 Running the db sync node will require Nix and either multiple terminals or a multi terminal
@@ -47,7 +47,7 @@ nix-build -A scripts.mainnet.node -o mainnet-node-local
 # On Linux
 sudo make install 
 
-# On OSX
+# On macOS
 make install 
 
 ```
@@ -74,6 +74,10 @@ to find `cardano-db-sync` executable location use:
 find . -name cardano-db-sync -executable -type f
 ./dist-newstyle/build/x86_64-linux/ghc-8.10.4/cardano-db-sync-12.0.0/build/cardano-db-sync/cardano-db-sync
 ```
+
+On macOS `brew install postgresl openssl@1.1` and extend PKG_CONFIG_PATH with
+`PKG_CONFIG_PATH=/usr/local/opt/postgresql/lib/pkgconfig:/usr/local/opt/openssl/lib/pkgconfig cabal build all`
+when running cabal build
 
 - with nix:
 
