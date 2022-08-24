@@ -28,7 +28,7 @@ order them in the correct order for applying to the database.
 Whenever the Haskell schema definition in `Cardano.Db.Schema` is updated, a schema migration can
 be generated using the command:
 ```
-export PGPASSFILE=config/pgpass-testnet
+export PGPASSFILE=config/pgpass-mainnet
 cabal run cardano-db-tool -- create-migration --mdir schema/
 ```
 which will only generate a migration if one is needed. It is usually best to run the test suite
