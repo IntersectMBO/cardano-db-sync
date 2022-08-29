@@ -14,13 +14,23 @@ case "$(uname)" in
     recursive="--recursive"
     directory="--directory"
     force="--force"
+    test="--test"
     ;;
   *)
     # These shoud work on any POSIX system
     recursive="-r"
     directory="-d"
     force="-f"
+    test="-t"
   esac
+
+# This should work on all Linux variants as well as FreeBSD.
+numcores=$(getconf _NPROCESSORS_ONLN)
+if test "${numcores}" -le 2 ; then
+  numcores=1
+else
+  numcores=$(( numcores - 1 ))
+  fi
 
 function die {
 	echo "$1"
@@ -145,18 +155,20 @@ function dump_schema {
 
 function create_snapshot {
 	tgz_file=$1.tgz
-	dbfile=$1.sql
 	ledger_file=$2
 	tmp_dir=$(mktemp "${directory}" -t db-sync-snapshot-XXXXXXXXXX)
 	echo $"Working directory: ${tmp_dir}"
-	pg_dump --no-owner --schema=public "${PGDATABASE}" > "${tmp_dir}/$1.sql"
-	cp "$ledger_file" "$tmp_dir/$(basename "${ledger_file}")"
-	tar zcvf - --directory "${tmp_dir}" "${dbfile}" "$(basename "${ledger_file}")" | tee "${tgz_file}.tmp" \
-	| sha256sum | head -c 64 | sed -e "s/$/  ${tgz_file}\n/" > "${tgz_file}.sha256sum"
+	pg_dump --no-owner --schema=public --jobs="${numcores}" "${PGDATABASE}" --format=directory --file="${tmp_dir}/db/"
+	lstate_gz_file=$(basename "${ledger_file}").gz
+	gzip --to-stdout "${ledger_file}" > "${tmp_dir}/$(basename "${ledger_file}").gz"
+	tree "${tmp_dir}"
+	# Use plain tar here because the database dump files and the ledger state file are already gzipped.
+	tar cvf - --directory "${tmp_dir}" "db" "${lstate_gz_file}" | tee "${tgz_file}.tmp" \
+		| sha256sum | head -c 64 | sed -e "s/$/  ${tgz_file}\n/" > "${tgz_file}.sha256sum"
 	mv "${tgz_file}.tmp" "${tgz_file}"
 	rm "${recursive}" "${force}" "${tmp_dir}"
-	if test "$(gzip --test "${tgz_file}")" ; then
-	  echo "Gzip reports the snapshot file as being corrupt."
+	if test "$(tar "${test}" --file "${tgz_file}")" ; then
+	  echo "Tar reports the snapshot file as being corrupt."
 	  echo "It is not safe to drop the database and restore using this file."
 	  exit 1
 	  fi
@@ -170,11 +182,21 @@ function restore_snapshot {
 	  exit 1
 	  fi
 	tmp_dir=$(mktemp "${directory}" -t db-sync-snapshot-XXXXXXXXXX)
-	tar -zxvf "$1" --directory "$tmp_dir"
-	db_file=$(find "$tmp_dir/" -iname "*.sql")
-	lstate_file=$(find "${tmp_dir}/" -iname "*.lstate")
-	mv "${lstate_file}" "$2"
-	psql --dbname="${PGDATABASE}" -f "${db_file}"
+	tar xvf "$1" --directory "$tmp_dir"
+	if test -d "${tmp_dir}/db/" ; then
+	  # New pg_dump format
+	  lstate_gz_file=$(find "${tmp_dir}/" -iname "*.lstate.gz")
+	  lstate_file=$(basename "${lstate_gz_file}" | sed 's/.gz$//')
+	  gunzip --to-stdout "${lstate_gz_file}" > "$2/${lstate_file}"
+	  drop_db
+	  pg_restore --jobs="${numcores}" --format=directory --dbname=cexplorer "${tmp_dir}/db/"
+	else
+	  # Old snapshot format produced by this script
+	  db_file=$(find "${tmp_dir}/" -iname "*.sql")
+      lstate_file=$(find "${tmp_dir}/" -iname "*.lstate")
+      mv "${lstate_file}" "$2"
+      psql --dbname="${PGDATABASE}" -f "${db_file}"
+	  fi
 	rm "${recursive}" "${tmp_dir}"
 }
 
