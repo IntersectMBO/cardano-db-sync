@@ -58,6 +58,7 @@ rollbackToPoint env point = do
         -- 'length xs' here gives an approximation of the blocks deleted. An approximation
         -- is good enough, since it is only used to decide on the best policy and is not
         -- important for correctness.
+        -- We need to first cleanup the cache and then delete the blocks from db.
         lift $ rollbackCache cache mBlockNo (fromIntegral $ length xs)
         deleted <- lift $ DB.deleteCascadeAfter prevId
         liftIO . logInfo trce $
