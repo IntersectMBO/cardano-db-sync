@@ -120,6 +120,7 @@ unitTests iom knownMigrations =
           [ test "simple script lock" simpleScript
           , test "unlock script in same block" unlockScriptSameBlock
           , test "failed script" failedScript
+          , test "failed script fees" failedScriptFees
           , test "failed script in same block" failedScriptSameBlock
           , test "multiple scripts unlocked" multipleScripts
           , test "multiple scripts unlocked same block" multipleScriptsSameBlock
@@ -1153,6 +1154,24 @@ failedScript =
       assertAlonzoCounts dbSync (0,0,0,0,1,0,1,1)
   where
     testLabel = "failedScript"
+
+failedScriptFees :: IOManager -> [(Text, Text)] -> Assertion
+failedScriptFees =
+    withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+
+      tx0 <- withBabbageLedgerState interpreter $ Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutNoInline False] 20000 20000
+      void $ forgeNextAndSubmit interpreter mockServer $ MockBlock [TxBabbage tx0] (NodeId 1)
+
+      let utxo0 = head (Babbage.mkUTxOBabbage tx0)
+      void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
+        Babbage.mkUnlockScriptTx [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2) False 10000 500
+
+      assertBlockNoBackoff dbSync 2
+      assertAlonzoCounts dbSync (0,0,0,0,1,0,1,1)
+      assertNonZeroFeesContract dbSync
+  where
+    testLabel = "failedScriptFees"
 
 failedScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 failedScriptSameBlock =
