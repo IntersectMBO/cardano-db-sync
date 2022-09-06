@@ -51,6 +51,7 @@ deleteAfterBlockNo blockNo = do
     delete $ from (table @CollateralTxOut) >>= \ cto -> where_ (nonGenesisBlockNo $ cto ^. CollateralTxOutBlockNo)
     delete $ from (table @ReferenceTxIn) >>= \ rti -> where_ (nonGenesisBlockNo $ rti ^. ReferenceTxInBlockNo)
     delete $ from (table @RedeemerData) >>= \ rd -> where_ (nonGenesisBlockNo $ rd ^.  RedeemerDataBlockNo)
+    delete $ from (table @StakeAddress) >>= \ sa -> where_ (nonGenesisBlockNo $ sa ^.  StakeAddressBlockNo)
 
     transactionCommit
     pure $ isNonZero count
