@@ -220,7 +220,7 @@ share
     utxo                DbLovelace          sqltype=lovelace
     deposits            DbLovelace          sqltype=lovelace
     fees                DbLovelace          sqltype=lovelace
-    blockNo             Word64              sqltype=word63type
+    blockNo             Int64               -- sqltype=bigint
     UniqueAdaPots       blockNo
     deriving Eq
 
@@ -308,7 +308,7 @@ share
     json                Text Maybe          sqltype=jsonb
     bytes               ByteString          sqltype=bytea
     txId                TxId
-    blockNo             Word64              sqltype=word63type
+    blockNo             Int64               -- sqltype=bigint
     UniqueTxMetadata    key txId
 
   -- -----------------------------------------------------------------------------------------------

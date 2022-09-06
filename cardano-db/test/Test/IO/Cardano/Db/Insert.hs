@@ -116,7 +116,7 @@ adaPotsZero (BlockNo blkNo) =
     , adaPotsUtxo = DbLovelace 0
     , adaPotsDeposits = DbLovelace 0
     , adaPotsFees = DbLovelace 0
-    , adaPotsBlockNo = blkNo
+    , adaPotsBlockNo = fromIntegral blkNo
     }
 
 mkHash :: Int -> Char -> ByteString
