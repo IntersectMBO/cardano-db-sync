@@ -14,6 +14,7 @@ jobs:
       # From cardano-base
       # see https://github.com/input-output-hk/cardano-base/blob/master/.github/workflows/haskell.yml
       SECP256K1_REF: ac83be33d0956faf6b7f61a60ab524ef7d6a473a
+      PKG_CONFIG_PATH: ${{ matrix.os == 'macos-latest' && '/usr/local/opt/postgresql@14/lib/postgresql@14/pkgconfig:/usr/local/opt/openssl/lib/pkgconfig' || '' }}
 
     strategy:
       fail-fast: false
@@ -39,7 +40,7 @@ jobs:
     - name: Install Postgres support (MacOS)
       if: matrix.os == 'macos-latest'
       run: |
-        brew install postgres libpq openssl@1.1
+        brew install postgresql@14 libpq openssl@1.1
         brew services start postgresql
         sudo mkdir -p /var/run/postgresql/
         sudo ln -s /tmp/.s.PGSQL.5432 /var/run/postgresql/.s.PGSQL.5432
@@ -120,7 +121,7 @@ jobs:
     - name: Build dependencies OSX
       if: matrix.os == 'macos-latest'
       run: |
-        PKG_CONFIG_PATH="/usr/local/opt/openssl@1.1/lib/pkgconfig" cabal build all --only-dependencies
+        cabal build all --only-dependencies
 
     - name: Build
       run: cabal build all
