@@ -52,6 +52,9 @@ deleteAfterBlockNo blockNo = do
     delete $ from (table @ReferenceTxIn) >>= \ rti -> where_ (nonGenesisBlockNo $ rti ^. ReferenceTxInBlockNo)
     delete $ from (table @RedeemerData) >>= \ rd -> where_ (nonGenesisBlockNo $ rd ^.  RedeemerDataBlockNo)
     delete $ from (table @StakeAddress) >>= \ sa -> where_ (nonGenesisBlockNo $ sa ^.  StakeAddressBlockNo)
+    delete $ from (table @AdaPots) >>= \ ap -> where_ (nonGenesisBlockNo $ ap ^.  AdaPotsBlockNo)
+    delete $ from (table @TxMetadata) >>= \ tmd -> where_ (nonGenesisBlockNo $ tmd ^.  TxMetadataBlockNo)
+    delete $ from (table @PotTransfer) >>= \ pt -> where_ (nonGenesisBlockNo $ pt ^.  PotTransferBlockNo)
 
     transactionCommit
     pure $ isNonZero count
