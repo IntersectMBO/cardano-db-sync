@@ -870,7 +870,7 @@ queryAdaPots :: MonadIO m => BlockNo -> ReaderT SqlBackend m (Maybe AdaPots)
 queryAdaPots (BlockNo blkNo) = do
   res <- select $ do
     adaPots <- from $ table @AdaPots
-    where_ (adaPots  ^. AdaPotsBlockNo ==. val blkNo)
+    where_ (adaPots  ^. AdaPotsBlockNo ==. val (fromIntegral blkNo))
     pure adaPots
   pure $ fmap entityVal (listToMaybe res)
 

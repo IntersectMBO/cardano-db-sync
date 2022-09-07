@@ -193,3 +193,27 @@ executable gen-schema-docs
                       , persistent-documentation
                       , process
                       , text
+
+test-suite schema-rollback
+  default-language:     Haskell2010
+  type:                 exitcode-stdio-1.0
+  main-is:              schema-rollback.hs
+  hs-source-dirs:       test
+
+  ghc-options:          -Wall
+                        -Werror
+                        -Wcompat
+                        -Wredundant-constraints
+                        -Wincomplete-patterns
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+                        -Wunused-imports
+                        -Wunused-packages
+
+  build-depends:        base                            >= 4.14         && < 4.16
+                      , ansi-terminal
+                      , bytestring
+                      , cardano-db
+                      , directory
+                      , filepath
+                      , text
