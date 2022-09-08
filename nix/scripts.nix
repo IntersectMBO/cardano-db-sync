@@ -2,10 +2,6 @@
 let
   inherit (pkgs) lib cardanoLib;
   inherit (pkgs.commonLib) evalService;
-  blacklistedEnvs =
-    [ "selfnode" "shelley_selfnode" "latency-tests" "mainnet-ci" ];
-  environments = lib.filterAttrs (k: v: (!builtins.elem k blacklistedEnvs))
-    cardanoLib.environments;
   mkScript = envConfig:
     let
       service = evalService {
@@ -32,4 +28,4 @@ let
         passthru = { inherit service; };
       };
     };
-in cardanoLib.forEnvironmentsCustom mkScript environments
+in cardanoLib.forEnvironments mkScript
