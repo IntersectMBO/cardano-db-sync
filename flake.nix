@@ -3,24 +3,26 @@
 
   inputs = {
     nixpkgs.follows = "haskellNix/nixpkgs-unstable";
-    hackageNix = {
-      url = "github:input-output-hk/hackage.nix";
-      flake = false;
-    };
-    nixTools = {
-      url = "github:input-output-hk/nix-tools";
-      flake = false;
-    };
     haskellNix.url = "github:input-output-hk/haskell.nix";
     utils.url = "github:numtide/flake-utils";
     iohkNix = {
       url = "github:input-output-hk/iohk-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    cardano-world = {
+      url = "github:input-output-hk/cardano-world";
+      inputs = {
+        cardano-db-sync.follows = "/";
+      };
+    };
+    flake-compat = {
+      url = "github:input-output-hk/flake-compat/fixes";
+      flake = false;
+    };
     customConfig = { url = "path:./custom-config"; };
   };
 
-  outputs = { self, iohkNix, haskellNix, nixpkgs, utils, customConfig, ... }:
+  outputs = { self, iohkNix, cardano-world, haskellNix, nixpkgs, utils, customConfig, ... }:
     let
       inherit (haskellNix) config;
       inherit (nixpkgs) lib;
@@ -37,7 +39,6 @@
         haskellNix.overlay
         iohkNix.overlays.haskell-nix-extra
         iohkNix.overlays.crypto
-        iohkNix.overlays.cardano-lib
         iohkNix.overlays.utils
         (final: prev: {
           customConfig =
@@ -45,6 +46,12 @@
             customConfig.outputs;
           gitrev = self.rev or "dirty";
           commonLib = lib // iohkNix.lib;
+          cardanoLib = rec {
+            inherit (cardano-world.${final.system}.cardano) environments;
+            forEnvironments = f: lib.mapAttrs
+              (name: env: f (env // { inherit name; }))
+              environments;
+          };
         })
         (import ./nix/pkgs.nix)
       ];
