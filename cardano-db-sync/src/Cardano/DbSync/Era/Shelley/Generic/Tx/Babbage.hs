@@ -60,7 +60,7 @@ fromBabbageTx mprices (blkIndex, tx) =
           collOutputs
       , txFees =
           if not isValid2
-            then Just $ fromMaybe (Coin 0) (strictMaybeToMaybe $ getField @"totalCollateral" txBody)
+            then strictMaybeToMaybe $ getField @"totalCollateral" txBody
             else Just $ getField @"txfee" txBody
       , txOutSum =
           if not isValid2
