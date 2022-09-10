@@ -31,10 +31,15 @@ with pkgs; with commonLib;
         enable = true;
         environment = "mainnet";
         package = config.services.cardano-db-sync.dbSyncPkgs.cardanoDbSyncProject.hsPkgs.cardano-node.components.exes.cardano-node;
-	      topology = cardanoLib.mkEdgeTopology {
-          port = 3001;
-          edgeNodes = [ "127.0.0.1" ];
-        };
+	      topology = builtins.toFile "topology.yaml" (builtins.toJSON {
+          Producers = [
+            {
+              addr = "127.0.0.1" ;
+              port = 3001;
+              valency = 1;
+            }
+          ];
+        });
       };
       systemd.services.cardano-node.serviceConfig.Restart = lib.mkForce "no";
       systemd.services.cardano-db-sync.serviceConfig.SupplementaryGroups = "cardano-node";

@@ -112,11 +112,11 @@ in {
       };
       explorerConfig = lib.mkOption {
         type = lib.types.attrs;
-        default = cfg.environment.explorerConfig;
+        default = cfg.environment.dbSyncConfig;
       };
       logConfig = lib.mkOption {
         type = lib.types.attrs;
-        default = self.cardanoLib.defaultExplorerLogConfig;
+        default = {};
       };
       socketPath = lib.mkOption {
         type = lib.types.nullOr lib.types.path;
