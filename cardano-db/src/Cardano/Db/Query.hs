@@ -1078,13 +1078,8 @@ queryStakeAddressScript = do
 queryStakeAddressIdsAfter :: MonadIO m => Word64 -> ReaderT SqlBackend m [StakeAddressId]
 queryStakeAddressIdsAfter blockNo = do
     res <- select $ do
-      (_tx :& blk :& st_addr) <-
-        from $ table @Tx
-        `innerJoin` table @Block
-        `on` (\(tx :& blk) -> tx ^. TxBlockNo ==. blk ^. BlockBlockNo)
-        `innerJoin` table @StakeAddress
-        `on` (\(tx :& _blk :& st_addr) -> tx ^. TxBlockNo  ==. st_addr ^. StakeAddressBlockNo)
-      where_ (blk ^. BlockBlockNo >. val (fromIntegral blockNo))
+      st_addr <- from $ table @StakeAddress
+      where_ (st_addr ^. StakeAddressBlockNo >. val (fromIntegral blockNo))
       pure (st_addr ^. StakeAddressId)
     pure $ unValue <$> res
 
