@@ -28,6 +28,7 @@ module Test.Cardano.Db.Mock.Validate
   , assertEpochStake
   , assertEpochStakeEpoch
   , assertNonZeroFeesContract
+  , assertDatumCBOR
   , assertAlonzoCounts
   , assertScriptCert
   , assertPoolCounters
@@ -273,6 +274,15 @@ assertNonZeroFeesContract env =
     q = maybe 0 unValue . listToMaybe <$> (select . from $ \tx -> do
           where_ (tx  ^. TxFee ==. val (DbLovelace 0))
           where_ (tx ^. TxValidContract ==. val False)
+          pure countRows)
+
+assertDatumCBOR :: DBSyncEnv -> ByteString -> IO ()
+assertDatumCBOR env bs =
+    assertEqBackoff env q 1 defaultDelays "Datum bytes not found"
+  where
+    q :: ReaderT SqlBackend (NoLoggingT IO) Word64
+    q = maybe 0 unValue . listToMaybe <$> (select . from $ \datum -> do
+          where_ (datum ^. DatumBytes ==. val bs)
           pure countRows)
 
 assertAlonzoCounts :: DBSyncEnv -> (Word64, Word64, Word64, Word64, Word64, Word64, Word64, Word64) -> IO ()
