@@ -20,7 +20,15 @@ module Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
   , alwaysMintScriptStake
   , scriptHash
   , assetNames
+  , plutusData2
+  , plutusDataEncLen
+  , plutusDataEncIndef
   ) where
+
+import           Codec.CBOR.Write (toStrictByteString)
+import           Codec.Serialise
+import           Codec.Serialise.Encoding
+import           Data.ByteString.Short
 
 import           Cardano.Ledger.Address
 import           Cardano.Ledger.Alonzo
@@ -96,3 +104,12 @@ assetNames =
   , AssetName "degwte"
   , AssetName "w4yt4230\\0"
   ]
+
+plutusData2 :: [Plutus.Data]
+plutusData2 = [Plutus.I 0, Plutus.I 1]
+
+plutusDataEncLen :: ShortByteString
+plutusDataEncLen = toShort $ toStrictByteString $ mconcat (encodeListLen 2 : (encode <$> plutusData2))
+
+plutusDataEncIndef :: ShortByteString
+plutusDataEncIndef = toShort $ toStrictByteString $ encodeList plutusData2
