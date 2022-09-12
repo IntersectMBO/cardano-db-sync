@@ -10,13 +10,20 @@ let
         ref = s.original.ref or "master";
       };
   in {
-    "haskell.nix" = compat flakeLock.haskellNix;
-    "iohk-nix" = compat flakeLock.iohkNix;
+    "haskell.nix" = compat flakeLock.${flakeLock.root.inputs.haskellNix};
+    "iohk-nix" = compat flakeLock.${flakeLock.root.inputs.iohkNix};
+    "cardano-world" = compat flakeLock.${flakeLock.root.inputs.cardano-world};
+    "flake-compat" = compat flakeLock.${flakeLock.root.inputs.flake-compat};
   };
   sources = flakeSources // sourcesOverride;
   iohkNix = import sources.iohk-nix { inherit system; };
+  flake-compat = import sources.flake-compat;
   haskellNix = import sources."haskell.nix" { inherit system sourcesOverride; };
   nixpkgs = haskellNix.sources.nixpkgs-unstable;
+  cardano-world = flake-compat {
+    inherit pkgs;
+    src = sources.cardano-world;
+  };
 
   # for inclusion in pkgs:
   overlays =
@@ -39,7 +46,12 @@ let
             lib.recursiveUpdate (import ../custom-config pkgs.customConfig)
             customConfig;
 
-          inherit (pkgs.iohkNix) cardanoLib;
+          cardanoLib = rec {
+            inherit (cardano-world.defaultNix.${pkgs.system}.cardano) environments;
+            forEnvironments = f: lib.mapAttrs
+              (name: env: f (env // { inherit name; }))
+              environments;
+          };
           # commonLib: mix pkgs.lib with iohk-nix utils and our own:
           commonLib = lib // cardanoLib // iohk-nix.lib // import ./util.nix {
             inherit haskell-nix;

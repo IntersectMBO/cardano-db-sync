@@ -3,7 +3,7 @@
 let
   inherit (lib) types;
   cfg = config.services.smash;
-  inherit (cfg.dbSyncPkgs) iohkNix;
+  inherit (cfg.dbSyncPkgs) cardanoLib;
   smashConfig = cfg.explorerConfig // {
     inherit (cfg.nodeConfig) ByronGenesisFile ShelleyGenesisFile ByronGenesisHash ShelleyGenesisHash Protocol RequiresNetworkMagic;
   };
@@ -39,7 +39,7 @@ in {
       };
       explorerConfig = lib.mkOption {
         type = types.attrs;
-        default = cfg.environment.explorerConfig;
+        default = cfg.environment.dbSyncConfig;
       };
       nodeConfig = lib.mkOption {
         type = types.attrs;
@@ -47,11 +47,11 @@ in {
       };
       environment = lib.mkOption {
         type = types.nullOr types.attrs;
-        default = iohkNix.cardanoLib.environments.${cfg.environmentName};
+        default = cardanoLib.environments.${cfg.environmentName};
       };
       logConfig = lib.mkOption {
         type = types.attrs;
-        default = iohkNix.cardanoLib.defaultExplorerLogConfig;
+        default = {};
       };
       environmentName = lib.mkOption {
         type = types.str;
