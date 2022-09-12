@@ -216,9 +216,9 @@ rollbackStakeAddr ci mBlockNo nBlocks = do
         then liftIO $ atomically $ writeTVar (cStakeCreds ci) Map.empty
         else do
           initMp <- liftIO $ readTVarIO (cStakeCreds ci)
-          stakeAddrIds <- DB.queryStakeAddressIdsAfter blockNo
-          let stakeAddrIdsSet = Set.fromList stakeAddrIds
-          let !mp = Map.filter (`Set.member` stakeAddrIdsSet) initMp
+          stakeAddrIdsToDelete <- DB.queryStakeAddressIdsAfter blockNo
+          let stakeAddrIdsSetToDelete = Set.fromList stakeAddrIdsToDelete
+          let !mp = Map.filter (`Set.notMember` stakeAddrIdsSetToDelete) initMp
           liftIO $ atomically $ writeTVar (cStakeCreds ci) mp
 
 queryRewardAccountWithCache
