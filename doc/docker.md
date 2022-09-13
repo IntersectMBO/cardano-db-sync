@@ -26,8 +26,12 @@ The PostgreSQL database is exposed on localhost port `5432`
 `$ psql -h 0.0.0.0 -p 5432 -U postgres -d cexplorer` (then enter secret password)
 
 ### To connect to another network:
+
+To connect to different network (preprod or preview) use `NETWORK` environment variable:
+
+
 ```
-NETWORK=testnet docker-compose up && docker-compose logs -f
+NETWORK=preprod docker-compose up && docker-compose logs -f
 ```
 
 ### Take control
@@ -57,7 +61,7 @@ docker load -i $(nix-build -A dockerImage --no-out-link)
 ## Restore from Snapshot
 
 Restoring a database by running from gensis can take a number of hours, snapshots are provided for
-both networks (Mainnet and Testnet) to restore the postgres database. See the
+Mainnet to restore the postgres database. See the
 [latest releases](https://github.com/input-output-hk/cardano-db-sync/releases) for a recent snapshot
 matched with the `cardano-db-sync` version.
 
@@ -65,8 +69,20 @@ To download and restore a snapshot include `RESTORE_SNAPSHOT`:
 
 ```
 RESTORE_SNAPSHOT=https://update-cardano-mainnet.iohk.io/cardano-db-sync/db-sync-snapshot-schema-10-block-6014140-x86_64.tgz \
-NETWORK=testnet docker-compose up && docker-compose logs -f
+docker-compose up && docker-compose logs -f
+```
 
+## Disable options
+
+Consult the configuration [docs](docs/configuration.md) for what these options mean, assuming you have read that
+they can be accessed via env variables passed to docker-compose. Leave out any that do not make sense, eg if
+you just want to disable the ledger use `DISABLE_LEDGER=--disable-ledger docker-compose up`.
+
+``` shell
+DISABLE_LEDGER=--disable-ledger \
+DISABLE_CACHE=--disable-cache \
+DISABLE_EPOCH=--disable-epoch \
+docker-compose up
 ```
 
 ## Running Tests with Docker Postgres
@@ -139,7 +155,7 @@ inputoutput/cardano-db-sync   066b747a8bfd3791b06ea46c2e793f83ed64967f   f34b029
 $ docker run inputoutput/cardano-db-sync:066b747a8bfd3791b06ea46c2e793f83ed64967f
 ```
 
-## Running SMASH with docker-compose 
+## Running SMASH with docker-compose
 
 Edit the docker-compose.yml to add a listening port for the postgres container
 e.g.

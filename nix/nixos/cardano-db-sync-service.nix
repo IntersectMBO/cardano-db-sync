@@ -200,7 +200,8 @@ in {
           --config ${configFile} \
           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
           --schema-dir ${self.schema or (self.src + "/schema")} \
-          --state-dir ${cfg.stateDir}
+          --state-dir ${cfg.stateDir} \
+          $DISABLE_LEDGER $DISABLE_CACHE $DISABLE_EPOCH
       '';
     };
     systemd.services.cardano-db-sync = {
