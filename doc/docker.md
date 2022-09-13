@@ -72,19 +72,10 @@ NETWORK=testnet docker-compose up && docker-compose logs -f
 
 Consult the configuration [docs](docs/configuration.md) for what these options mean, assuming you have read that
 they can be accessed via env variables passed to docker-compose. Leave out any that do not make sense, eg if
-you just want to disable the ledger use `DISABLE_LEDGER=--disable-ledger docker-compose up`.
+you just want to disable the ledger use `EXTRA_DB_SYNC_ARGS=--disable-ledger docker-compose up`.
 
 ``` shell
-DISABLE_LEDGER=--disable-ledger \
-DISABLE_CACHE=--disable-cache \
-DISABLE_EPOCH=--disable-epoch \
-docker-compose up
-```
-
-Note: those docker variables will be replaced with a unique `EXTRA_DB_SYNC_ARGS` env variable in upcoming docker images. Though if you are using docker compose, this can be used already:
-
-``` shell
-EXTRA_DB_SYNC_ARGS="--disable-ledger --disable-cache" \
+EXTRA_DB_SYNC_ARGS="--disable-ledger --disable-cache --disable-epoch" \
 docker-compose up
 ```
 
