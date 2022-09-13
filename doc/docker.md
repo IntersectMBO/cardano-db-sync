@@ -81,6 +81,13 @@ DISABLE_EPOCH=--disable-epoch \
 docker-compose up
 ```
 
+Note: those docker variables will be replaced with a unique `EXTRA_DB_SYNC_ARGS` env variable in upcoming docker images. Though if you are using docker compose, this can be used already:
+
+``` shell
+EXTRA_DB_SYNC_ARGS="--disable-ledger --disable-cache" \
+docker-compose up
+```
+
 ## Running Tests with Docker Postgres
 
 Create a `pgpass-test` file with the credentials of (taken from config/secrets/postgres_* files):
@@ -151,7 +158,7 @@ inputoutput/cardano-db-sync   066b747a8bfd3791b06ea46c2e793f83ed64967f   f34b029
 $ docker run inputoutput/cardano-db-sync:066b747a8bfd3791b06ea46c2e793f83ed64967f
 ```
 
-## Running SMASH with docker-compose 
+## Running SMASH with docker-compose
 
 Edit the docker-compose.yml to add a listening port for the postgres container
 e.g.
@@ -171,7 +178,7 @@ Follow the instructions from `Restore from Snapshot` and wait until the snapshot
 Create a `pgpass-local` file with the credentials of (taken from config/secrets/postgres_* files):
 
 ``` shell
-echo "localhost:5432:cexplorer:postgres:v8hlDV0yMAHHlIurYupj" > config/pgpass-local   
+echo "localhost:5432:cexplorer:postgres:v8hlDV0yMAHHlIurYupj" > config/pgpass-local
 chmod 0600 config/pgpass-local
 ```
 
