@@ -59,7 +59,9 @@ services:
       - POSTGRES_PORT=5432
       - RESTORE_SNAPSHOT=${RESTORE_SNAPSHOT:-}
       - RESTORE_RECREATE_DB=N
-      - DISABLE_LEDGER=${DISABLE_LEDGER:-}
+      - EXTRA_DB_SYNC_ARGS=${EXTRA_DB_SYNC_ARGS:-}
+      # TODO: remove for next image release:
+      - DISABLE_LEDGER=${EXTRA_DB_SYNC_ARGS:-}
       - DISABLE_CACHE=${DISABLE_CACHE:-}
       - DISABLE_EPOCH=${DISABLE_EPOCH:-}
     depends_on:
