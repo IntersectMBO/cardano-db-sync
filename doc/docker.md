@@ -76,12 +76,10 @@ docker-compose up && docker-compose logs -f
 
 Consult the configuration [docs](docs/configuration.md) for what these options mean, assuming you have read that
 they can be accessed via env variables passed to docker-compose. Leave out any that do not make sense, eg if
-you just want to disable the ledger use `DISABLE_LEDGER=--disable-ledger docker-compose up`.
+you just want to disable the ledger use `EXTRA_DB_SYNC_ARGS=--disable-ledger docker-compose up`.
 
 ``` shell
-DISABLE_LEDGER=--disable-ledger \
-DISABLE_CACHE=--disable-cache \
-DISABLE_EPOCH=--disable-epoch \
+EXTRA_DB_SYNC_ARGS="--disable-ledger --disable-cache --disable-epoch" \
 docker-compose up
 ```
 
@@ -175,7 +173,7 @@ Follow the instructions from `Restore from Snapshot` and wait until the snapshot
 Create a `pgpass-local` file with the credentials of (taken from config/secrets/postgres_* files):
 
 ``` shell
-echo "localhost:5432:cexplorer:postgres:v8hlDV0yMAHHlIurYupj" > config/pgpass-local   
+echo "localhost:5432:cexplorer:postgres:v8hlDV0yMAHHlIurYupj" > config/pgpass-local
 chmod 0600 config/pgpass-local
 ```
 

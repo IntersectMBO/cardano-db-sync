@@ -52,16 +52,14 @@ services:
         max-file: "10"
 
   cardano-db-sync:
-    image: inputoutput/cardano-db-sync:13.0.5
+    image: inputoutput/cardano-db-sync:13.0.5-extra-args
     environment:
       - NETWORK=${NETWORK:-mainnet}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - RESTORE_SNAPSHOT=${RESTORE_SNAPSHOT:-}
       - RESTORE_RECREATE_DB=N
-      - DISABLE_LEDGER=${DISABLE_LEDGER:-}
-      - DISABLE_CACHE=${DISABLE_CACHE:-}
-      - DISABLE_EPOCH=${DISABLE_EPOCH:-}
+      - EXTRA_DB_SYNC_ARGS=${EXTRA_DB_SYNC_ARGS:-}
     depends_on:
       # Depend on both services to be healthy before starting.
       cardano-node:
