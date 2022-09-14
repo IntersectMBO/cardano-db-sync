@@ -14,6 +14,7 @@ import           Control.Monad
 import           Control.Monad.Class.MonadSTM.Strict
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Short as SBS
 import qualified Data.Map as Map
 import           Data.Text (Text)
 
@@ -151,6 +152,7 @@ unitTests iom knownMigrations =
       , testGroup "Babbage inline and reference"
           [ test "spend inline datum" unlockDatumOutput
           , test "spend inline datum same block" unlockDatumOutputSameBlock
+          , test "inline datum with non canonical CBOR" inlineDatumCBOR
           , test "spend reference script" spendRefScript
           , test "spend reference script same block" spendRefScriptSameBlock
           , test "Erik spend collateral output of invalid tx" spendCollateralOutput
@@ -1675,7 +1677,7 @@ unlockDatumOutput =
 
       -- We don't use withBabbageFindLeaderAndSubmitTx here, because we want access to the tx.
       tx0 <- withBabbageLedgerState interpreter
-        $ Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutInline True True Babbage.NoReferenceScript] 20000 20000
+        $ Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutInline True Babbage.InlineDatum Babbage.NoReferenceScript] 20000 20000
       void $ forgeNextAndSubmit interpreter mockServer $ MockBlock [TxBabbage tx0] (NodeId 1)
 
       let utxo0 = head (Babbage.mkUTxOBabbage tx0)
@@ -1697,7 +1699,7 @@ unlockDatumOutputSameBlock =
       -- inputs and adding unnnecessary fields to the collateral output.
       txs' <- withBabbageLedgerState interpreter $ \st -> do
         tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0)
-                [Babbage.TxOutInline True True Babbage.NoReferenceScript, Babbage.TxOutInline True False (Babbage.ReferenceScript False)]
+                [Babbage.TxOutInline True Babbage.InlineDatum Babbage.NoReferenceScript, Babbage.TxOutInline True Babbage.NotInlineDatum (Babbage.ReferenceScript False)]
                 20000 20000 st
         let utxo0 = head (Babbage.mkUTxOBabbage tx0)
         tx1 <- Babbage.mkUnlockScriptTxBabbage [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2)
@@ -1710,6 +1712,22 @@ unlockDatumOutputSameBlock =
   where
     testLabel = "unlockDatumOutputSameBlock"
 
+inlineDatumCBOR :: IOManager -> [(Text, Text)] -> Assertion
+inlineDatumCBOR =
+    withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      void $ registerAllStakeCreds interpreter mockServer
+
+      -- We don't use withBabbageFindLeaderAndSubmitTx here, because we want access to the tx.
+      tx0 <- withBabbageLedgerState interpreter
+        $ Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutInline True (Babbage.InlineDatumCBOR plutusDataEncLen) Babbage.NoReferenceScript] 20000 20000
+      void $ forgeNextAndSubmit interpreter mockServer $ MockBlock [TxBabbage tx0] (NodeId 1)
+
+      assertBlockNoBackoff dbSync 2
+      assertDatumCBOR dbSync $ SBS.fromShort plutusDataEncLen
+  where
+    testLabel = "inlineDatumCBOR"
+
 spendRefScript :: IOManager -> [(Text, Text)] -> Assertion
 spendRefScript =
     withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
@@ -1718,7 +1736,7 @@ spendRefScript =
 
       -- We don't use withBabbageFindLeaderAndSubmitTx here, because we want access to the tx.
       tx0 <- withBabbageLedgerState interpreter
-        $ Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutInline True False (Babbage.ReferenceScript True)] 20000 20000
+        $ Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutInline True Babbage.NotInlineDatum (Babbage.ReferenceScript True)] 20000 20000
       void $ forgeNextAndSubmit interpreter mockServer $ MockBlock [TxBabbage tx0] (NodeId 1)
 
       let utxo0 = head (Babbage.mkUTxOBabbage tx0)
@@ -1738,8 +1756,8 @@ spendRefScriptSameBlock =
 
       txs' <- withBabbageLedgerState interpreter $ \st -> do
         tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0)
-                [ Babbage.TxOutInline True False (Babbage.ReferenceScript True)
-                , Babbage.TxOutInline True False (Babbage.ReferenceScript False)]
+                [ Babbage.TxOutInline True Babbage.NotInlineDatum (Babbage.ReferenceScript True)
+                , Babbage.TxOutInline True Babbage.NotInlineDatum (Babbage.ReferenceScript False)]
                 20000 20000 st
         let utxo0 = head (Babbage.mkUTxOBabbage tx0)
         tx1 <- Babbage.mkUnlockScriptTxBabbage [UTxOPair utxo0] (UTxOIndex 1) (UTxOIndex 2)
@@ -1811,8 +1829,8 @@ referenceInputUnspend =
 
       txs' <- withBabbageLedgerState interpreter $ \st -> do
         tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0)
-                [ Babbage.TxOutInline True True (Babbage.ReferenceScript True)
-                , Babbage.TxOutInline True True (Babbage.ReferenceScript True)]
+                [ Babbage.TxOutInline True Babbage.InlineDatum (Babbage.ReferenceScript True)
+                , Babbage.TxOutInline True Babbage.InlineDatum (Babbage.ReferenceScript True)]
                 20000 20000 st
 
         let (utxo0 : utxo1 : _)  = Babbage.mkUTxOBabbage tx0
@@ -1834,7 +1852,7 @@ supplyScriptsTwoWays =
 
       tx0 <- withBabbageLedgerState interpreter
         $ Babbage.mkLockByScriptTx (UTxOIndex 0)
-                [ Babbage.TxOutInline True True (Babbage.ReferenceScript True)
+                [ Babbage.TxOutInline True Babbage.InlineDatum (Babbage.ReferenceScript True)
                 , Babbage.TxOutNoInline True]
                 20000 20000
       void $ forgeNextFindLeaderAndSubmit interpreter mockServer [TxBabbage tx0]
@@ -1859,7 +1877,7 @@ supplyScriptsTwoWaysSameBlock =
       txs' <- withBabbageLedgerState interpreter $ \st -> do
         -- one script referenced and one for the witnesses
         tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0)
-                [ Babbage.TxOutInline True True (Babbage.ReferenceScript True)
+                [ Babbage.TxOutInline True Babbage.InlineDatum (Babbage.ReferenceScript True)
                 , Babbage.TxOutNoInline True]
                 20000 20000 st
 
@@ -1883,7 +1901,7 @@ referenceMintingScript =
       txs' <- withBabbageLedgerState interpreter $ \st -> do
         -- one script referenced and one for the witnesses
         tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0)
-                [ Babbage.TxOutInline True True (Babbage.ReferenceScript True)]
+                [ Babbage.TxOutInline True Babbage.InlineDatum (Babbage.ReferenceScript True)]
                 20000 20000 st
 
         let utxo0 = head $ Babbage.mkUTxOBabbage tx0
@@ -1908,7 +1926,7 @@ referenceDelegation =
       txs' <- withBabbageLedgerState interpreter $ \st -> do
         -- one script referenced and one for the witnesses
         tx0 <- Babbage.mkLockByScriptTx (UTxOIndex 0)
-                [ Babbage.TxOutInline True True (Babbage.ReferenceScript True)]
+                [ Babbage.TxOutInline True Babbage.InlineDatum (Babbage.ReferenceScript True)]
                 20000 20000 st
 
         let utxo0 = head $ Babbage.mkUTxOBabbage tx0
