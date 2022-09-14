@@ -66,7 +66,17 @@ To download and restore a snapshot include `RESTORE_SNAPSHOT`:
 ```
 RESTORE_SNAPSHOT=https://update-cardano-mainnet.iohk.io/cardano-db-sync/db-sync-snapshot-schema-10-block-6014140-x86_64.tgz \
 NETWORK=testnet docker-compose up && docker-compose logs -f
+```
 
+## Disable options
+
+Consult the configuration [docs](docs/configuration.md) for what these options mean, assuming you have read that
+they can be accessed via env variables passed to docker-compose. Leave out any that do not make sense, eg if
+you just want to disable the ledger use `EXTRA_DB_SYNC_ARGS=--disable-ledger docker-compose up`.
+
+``` shell
+EXTRA_DB_SYNC_ARGS="--disable-ledger --disable-cache --disable-epoch" \
+docker-compose up
 ```
 
 ## Running Tests with Docker Postgres
@@ -139,7 +149,7 @@ inputoutput/cardano-db-sync   066b747a8bfd3791b06ea46c2e793f83ed64967f   f34b029
 $ docker run inputoutput/cardano-db-sync:066b747a8bfd3791b06ea46c2e793f83ed64967f
 ```
 
-## Running SMASH with docker-compose 
+## Running SMASH with docker-compose
 
 Edit the docker-compose.yml to add a listening port for the postgres container
 e.g.
@@ -159,7 +169,7 @@ Follow the instructions from `Restore from Snapshot` and wait until the snapshot
 Create a `pgpass-local` file with the credentials of (taken from config/secrets/postgres_* files):
 
 ``` shell
-echo "localhost:5432:cexplorer:postgres:v8hlDV0yMAHHlIurYupj" > config/pgpass-local   
+echo "localhost:5432:cexplorer:postgres:v8hlDV0yMAHHlIurYupj" > config/pgpass-local
 chmod 0600 config/pgpass-local
 ```
 

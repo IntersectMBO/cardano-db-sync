@@ -200,8 +200,8 @@ in {
           --config ${configFile} \
           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
           --schema-dir ${self.schema or (self.src + "/schema")} \
-          --state-dir ${cfg.stateDir}
-      '';
+          --state-dir ${cfg.stateDir} \
+          ''${EXTRA_DB_SYNC_ARGS:-}'';
     };
     systemd.services.cardano-db-sync = {
       wantedBy = [ "multi-user.target" ];
