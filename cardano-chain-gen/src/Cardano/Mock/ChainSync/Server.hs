@@ -4,7 +4,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -136,9 +135,9 @@ forkServerThread
     -> NetworkMagic
     -> FilePath
     -> IO (ServerHandle IO blk)
-forkServerThread iom config initSt networkMagic path = do
+forkServerThread iom config initSt netMagic path = do
     chainSt <- newTVarIO $ initChainProducerState config initSt
-    thread <- async $ runLocalServer iom (configCodec config) networkMagic path chainSt
+    thread <- async $ runLocalServer iom (configCodec config) netMagic path chainSt
     pure $ ServerHandle chainSt thread
 
 withServerHandle
@@ -150,8 +149,8 @@ withServerHandle
     -> FilePath
     -> (ServerHandle IO blk -> IO a)
     -> IO a
-withServerHandle iom config initSt networkMagic path =
-    bracket (forkServerThread iom config initSt networkMagic path) stopServer
+withServerHandle iom config initSt netMagic path =
+    bracket (forkServerThread iom config initSt netMagic path) stopServer
 
 -- | Must be called from the main thread
 runLocalServer
@@ -162,7 +161,7 @@ runLocalServer
     -> FilePath
     -> StrictTVar IO (ChainProducerState blk)
     -> IO ()
-runLocalServer iom codecConfig networkMagic localDomainSock chainProducerState =
+runLocalServer iom codecConfig netMagic localDomainSock chainProdState =
     withSnocket iom localDomainSock $ \ localSocket localSnocket -> do
       networkState <- NodeToClient.newNetworkMutableState
       _ <- NodeToClient.withServer
@@ -170,7 +169,7 @@ runLocalServer iom codecConfig networkMagic localDomainSock chainProducerState =
              NodeToClient.nullNetworkServerTracers -- debuggingNetworkServerTracers
              networkState
              localSocket
-             (versions chainProducerState)
+             (versions chainProdState)
              NodeToClient.networkErrorPolicies
       pure ()
 
@@ -185,12 +184,12 @@ runLocalServer iom codecConfig networkMagic localDomainSock chainProducerState =
           blockVersion = fromJust $ Map.lookup version allVersions
       in simpleSingletonVersions
             version
-            (NodeToClientVersionData networkMagic)
+            (NodeToClientVersionData netMagic)
             (NTC.responder version $ mkApps state version blockVersion (NTC.defaultCodecs codecConfig blockVersion version))
 
     mkApps :: StrictTVar IO (ChainProducerState blk) -> NodeToClientVersion -> BlockNodeToClientVersion blk -> DefaultCodecs blk IO
            -> NTC.Apps IO localPeer ByteString ByteString ByteString ByteString ()
-    mkApps state _version blockVersion Codecs {..}  =
+    mkApps state _version blockVersion codecs  =
         Apps
           { aChainSyncServer = chainSyncServer'
           , aTxSubmissionServer = txSubmitServer
@@ -205,7 +204,7 @@ runLocalServer iom codecConfig networkMagic localDomainSock chainProducerState =
         chainSyncServer' _them channel =
           runPeer
             nullTracer -- TODO add a tracer!
-            cChainSyncCodec
+            (cChainSyncCodec codecs)
             channel
             $ chainSyncServerPeer
             $ chainSyncServer state codecConfig blockVersion
@@ -217,7 +216,7 @@ runLocalServer iom codecConfig networkMagic localDomainSock chainProducerState =
         txSubmitServer _them channel =
           runPeer
             nullTracer
-            cTxSubmissionCodec
+            (cTxSubmissionCodec codecs)
             channel
             (Effect (forever $ threadDelay 3_600_000_000))
 
@@ -228,7 +227,7 @@ runLocalServer iom codecConfig networkMagic localDomainSock chainProducerState =
         stateQueryServer _them channel =
           runPeer
             nullTracer
-            cStateQueryCodec
+            (cStateQueryCodec codecs)
             channel
             (Effect (forever $ threadDelay 3_600_000_000))
 
@@ -239,7 +238,7 @@ runLocalServer iom codecConfig networkMagic localDomainSock chainProducerState =
         txMonitorServer _them channel =
           runPeer
             nullTracer
-            cStateQueryCodec
+            (cStateQueryCodec codecs)
             channel
             (Effect (forever $ threadDelay 3_600_000_000))
 
