@@ -76,6 +76,7 @@ unitTests iom knownMigrations =
           , test "sync bigger chain" bigChain
           , test "rollback while db-sync is off" restartAndRollback
           , test "rollback further" rollbackFurther
+          , test "rollback stake address cache" stakeAddressRollback
           ]
       , testGroup "different configs"
           [ test "genesis config without pool" configNoPools
@@ -320,6 +321,27 @@ rollbackFurther =
     assertEqQuery dbSync DB.queryCostModel [cm1] "Unexpected CostModel"
   where
     testLabel = "rollbackFurther"
+
+stakeAddressRollback :: IOManager -> [(Text, Text)] -> Assertion
+stakeAddressRollback =
+  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+    blk <- forgeNextFindLeaderAndSubmit interpreter mockServer []
+    blk' <- withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
+      let poolId = resolvePool (PoolIndex 0) st
+      tx1 <- Babbage.mkSimpleDCertTx
+              [ (StakeIndexNew 1, DCertDeleg . RegKey)
+              , (StakeIndexNew 1, \stCred -> DCertDeleg $ Delegate $ Delegation stCred poolId) ]
+              st
+      Right [tx1]
+    assertBlockNoBackoff dbSync 2
+    atomically $ rollback mockServer (blockPoint blk)
+    assertBlockNoBackoff dbSync 1
+    atomically $ addBlock mockServer blk'
+    void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
+    assertBlockNoBackoff dbSync 3
+  where
+    testLabel = "stakeAddressRollback"
 
 configNoPools :: IOManager -> [(Text, Text)] -> Assertion
 configNoPools =
