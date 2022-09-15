@@ -173,7 +173,7 @@ setupTestsDir :: FilePath -> IO ()
 setupTestsDir dir = do
   eitherM (panic . textShow) pure $ runExceptT $
     CLI.runGenesisCmd $ GenesisCreateStaked
-      (CLI.GenesisDir dir) 3 3 3 3 Nothing (Just 3000000) 3000000 (Testnet $ NetworkMagic 42) 1 3 0
+      (CLI.GenesisDir dir) 3 3 3 3 Nothing (Just 3000000) 3000000 (Testnet $ NetworkMagic 42) 1 3 0 Nothing
 
 mkConfig :: FilePath -> FilePath -> IO Config
 mkConfig staticDir mutableDir = do

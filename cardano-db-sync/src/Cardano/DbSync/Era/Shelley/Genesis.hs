@@ -41,6 +41,7 @@ import           Cardano.Slotting.Block (BlockNo (..))
 import           Cardano.Slotting.Slot (EpochNo (..))
 
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.ListMap as ListMap
 import qualified Data.Map.Strict as Map
 import           Data.Time.Clock (UTCTime (..))
 import qualified Data.Time.Clock as Time
@@ -71,7 +72,7 @@ insertValidateGenesisDist backend tracer networkName cfg shelleyInitiation = do
       else newExceptT $ DB.runDbIohkNoLogging backend insertAction
   where
     hasInitialFunds :: Bool
-    hasInitialFunds = not $ Map.null $ sgInitialFunds cfg
+    hasInitialFunds = not $ Map.null $ ListMap.toMap $ sgInitialFunds cfg
 
     hasStakes :: Bool
     hasStakes = sgStaking cfg /= emptyGenesisStaking
@@ -261,10 +262,10 @@ insertStaking tracer cache blkNo genesis = do
               , DB.txValidContract = True
               , DB.txScriptSize = 0
               }
-  let params = zip [0..] $ Map.elems (sgsPools $ sgStaking genesis)
+  let params = zip [0..] $ ListMap.elems (sgsPools $ sgStaking genesis)
   let network = sgNetworkId genesis
   forM_ params $ uncurry (insertPoolRegister tracer uninitiatedCache (const False) network 0 blkNo txId)
-  let stakes = zip [0..] $ Map.toList (sgsStake $ sgStaking genesis)
+  let stakes = zip [0..] $ ListMap.toList (sgsStake $ sgStaking genesis)
   forM_ stakes $ \(n, (keyStaking, keyPool)) -> do
     insertStakeRegistration (EpochNo 0) blkNo txId (2 * n) (Generic.annotateStakingCred network (KeyHashObj keyStaking))
     insertDelegation cache network 0 0 blkNo (2 * n + 1) Nothing (KeyHashObj keyStaking) keyPool

@@ -77,6 +77,7 @@ import qualified Data.Text as Text
 
 import           Database.Persist.Class (AtLeastOneUniqueKey, PersistEntityBackend, checkUnique,
                    insert, insertBy, replaceUnique)
+import           Database.Persist.Class.PersistEntity (SafeToInsert)
 import           Database.Persist.EntityDef.Internal (entityDB, entityUniques)
 import           Database.Persist.Sql (OnlyOneUniqueKey, PersistRecordBackend, SqlBackend,
                    UniqueDef, entityDef, insertMany, rawExecute, rawSql, toPersistFields,
@@ -276,6 +277,7 @@ insertMany'
         ( MonadBaseControl IO m
         , MonadIO m
         , PersistRecordBackend record SqlBackend
+        , SafeToInsert record
         )
     => String -> [record] -> ReaderT SqlBackend m [Key record]
 insertMany' vtype records = handle exceptHandler (insertMany records)
@@ -375,6 +377,7 @@ insertReplace
         , MonadBaseControl IO m
         , MonadIO m
         , PersistRecordBackend record SqlBackend
+        , SafeToInsert record
         )
     => String -> record -> ReaderT SqlBackend m (Key record)
 insertReplace vtype record =
@@ -398,6 +401,7 @@ insertUnchecked
        , MonadIO m
        , MonadBaseControl IO m
        , PersistEntityBackend record ~ SqlBackend
+       , SafeToInsert record
        )
     => String -> record -> ReaderT SqlBackend m (Key record)
 insertUnchecked vtype =
