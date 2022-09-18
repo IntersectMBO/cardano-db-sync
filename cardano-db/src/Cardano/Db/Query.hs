@@ -12,6 +12,7 @@ module Cardano.Db.Query
   , queryGenesis
   , queryBlock
   , queryBlockCount
+  , queryBlockCountAfterBlockNo
   , queryBlockHeight
   , queryBlockId
   , queryBlockNoId
@@ -43,18 +44,21 @@ module Cardano.Db.Query
   , queryLatestBlockId
   , queryLatestBlockNo
   , queryLatestSlotNo
+  , queryPreviousSlotNo
   , queryMeta
   , queryMultiAssetId
   , queryNetworkName
-  , queryPreviousSlotNo
+  , querySlotNosGreaterThan
+  , queryLastSlotNoGreaterThan
+  , queryCountSlotNosGreaterThan
+  , queryLastSlotNo
+  , queryCountSlotNo
   , querySchemaVersion
   , queryScript
   , queryDatum
   , queryRedeemerData
   , querySelectCount
   , querySlotHash
-  , querySlotNosGreaterThan
-  , querySlotNos
   , querySlotUtcTime
   , queryTotalSupply
   , queryTxCount
@@ -108,7 +112,6 @@ module Cardano.Db.Query
   , unValue4
   , unValueSumAda
   ) where
-
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
@@ -231,6 +234,16 @@ queryBlockNoId hash = do
     pure (blk ^. BlockId, blk ^. BlockBlockNo)
   pure $ maybeToEither (DbLookupBlockHash hash) unValue2 (listToMaybe res)
 
+-- | Count the number of blocks in the Block table after a 'BlockNo'.
+queryBlockCountAfterBlockNo :: MonadIO m => Word64 -> Bool -> ReaderT SqlBackend m Word
+queryBlockCountAfterBlockNo blockNo queryEq = do
+  res <- select $ do
+    blk <- from $ table @ Block
+    where_ (if queryEq then blk ^. BlockBlockNo >=. just (val (fromIntegral blockNo))
+                       else blk ^. BlockBlockNo >.  just (val (fromIntegral blockNo)))
+    pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
+
 -- | Get the 'SlotNo' associated with the given hash.
 queryBlockSlotNo :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail (Maybe Word64))
 queryBlockSlotNo hash = do
@@ -240,13 +253,13 @@ queryBlockSlotNo hash = do
     pure $ blk ^. BlockSlotNo
   pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
 
-queryBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Block)
+queryBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe BlockId)
 queryBlockNo blkNo = do
   res <- select $ do
     blk <- from $ table @Block
     where_ (blk ^. BlockBlockNo ==. just (val blkNo))
-    pure blk
-  pure $ fmap entityVal (listToMaybe res)
+    pure (blk ^. BlockId)
+  pure $ fmap unValue (listToMaybe res)
 
 -- | Get the current block height.
 queryBlockHeight :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
@@ -694,16 +707,45 @@ querySlotNosGreaterThan slotNo = do
     pure (blk ^. BlockSlotNo)
   pure $ mapMaybe (fmap SlotNo . unValue) res
 
--- | Like 'querySlotNosGreaterThan', but returns all slots in the same order.
-querySlotNos :: MonadIO m => ReaderT SqlBackend m [SlotNo]
-querySlotNos = do
+queryLastSlotNoGreaterThan :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe SlotNo)
+queryLastSlotNoGreaterThan slotNo = do
   res <- select $ do
     blk <- from $ table @Block
+    -- Want all BlockNos where the block satisfies this predicate.
+    where_ (blk ^. BlockSlotNo >. just (val slotNo))
     -- Return them in descending order so we can delete the highest numbered
     -- ones first.
     orderBy [desc (blk ^. BlockSlotNo)]
+    limit 1
     pure (blk ^. BlockSlotNo)
-  pure $ mapMaybe (fmap SlotNo . unValue) res
+  pure $ listToMaybe $ mapMaybe (fmap SlotNo . unValue) res
+
+queryCountSlotNosGreaterThan :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
+queryCountSlotNosGreaterThan slotNo = do
+  res <- select $ do
+    blk <- from $ table @Block
+    where_ (blk ^. BlockSlotNo >. just (val slotNo))
+    pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
+
+-- | Like 'queryLastSlotNoGreaterThan', but returns all slots in the same order.
+queryLastSlotNo :: MonadIO m => ReaderT SqlBackend m (Maybe SlotNo)
+queryLastSlotNo = do
+  res <- select $ do
+    blk <- from $ table @Block
+    orderBy [desc (blk ^. BlockSlotNo)]
+    limit 1
+    pure (blk ^. BlockSlotNo)
+  pure $ listToMaybe $ mapMaybe (fmap SlotNo . unValue) res
+
+-- | Like 'queryCountSlotNosGreaterThan', but returns all slots in the same order.
+queryCountSlotNo :: MonadIO m => ReaderT SqlBackend m Word64
+queryCountSlotNo = do
+  res <- select $ do
+    blk <- from $ table @Block
+    orderBy [desc (blk ^. BlockSlotNo)]
+    pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
 
 -- | Calculate the slot time (as UTCTime) for a given slot number.
 -- This will fail if the slot is empty.
@@ -1054,8 +1096,8 @@ queryStakeAddressScript = do
       pure st_addr
     pure $ entityVal <$> res
 
-queryStakeAddressIdsAfter :: MonadIO m => Word64 -> ReaderT SqlBackend m [StakeAddressId]
-queryStakeAddressIdsAfter blockNo = do
+queryStakeAddressIdsAfter :: MonadIO m => Word64 -> Bool -> ReaderT SqlBackend m [StakeAddressId]
+queryStakeAddressIdsAfter blockNo queryEq = do
     res <- select $ do
       (_tx :& blk :& st_addr) <-
         from $ table @Tx
@@ -1064,7 +1106,8 @@ queryStakeAddressIdsAfter blockNo = do
         `innerJoin` table @StakeAddress
         `on` (\(tx :& _blk :& st_addr) -> tx ^. TxId  ==. st_addr ^. StakeAddressTxId)
       where_ (isJust $ blk ^. BlockBlockNo)
-      where_ (blk ^. BlockBlockNo >. val (Just blockNo))
+      where_ (if queryEq then blk ^. BlockBlockNo >=. val (Just blockNo) 
+                         else blk ^. BlockBlockNo >.  val (Just blockNo))
       pure (st_addr ^. StakeAddressId)
     pure $ unValue <$> res
 

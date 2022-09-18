@@ -22,12 +22,12 @@ import qualified Control.Concurrent.STM.TBQueue as TBQ
 
 import           Control.Monad.Class.MonadSTM.Strict (StrictTMVar, newEmptyTMVarIO, takeTMVar)
 
-import           Ouroboros.Network.Block (BlockNo)
+import           Ouroboros.Network.Block (BlockNo, Tip (..))
 import qualified Ouroboros.Network.Point as Point
 
 data DbAction
   = DbApplyBlock !CardanoBlock
-  | DbRollBackToPoint !CardanoPoint (StrictTMVar IO (Maybe [CardanoPoint], Point.WithOrigin BlockNo))
+  | DbRollBackToPoint !CardanoPoint !(Tip CardanoBlock) (StrictTMVar IO (Maybe [CardanoPoint], Point.WithOrigin BlockNo))
   | DbFinish
 
 newtype DbActionQueue = DbActionQueue
@@ -39,10 +39,10 @@ mkDbApply = DbApplyBlock
 
 -- | This simulates a synhronous operations, since the thread waits for the db
 -- worker thread to finish the rollback.
-waitRollback :: DbActionQueue -> CardanoPoint -> IO (Maybe [CardanoPoint], Point.WithOrigin BlockNo)
-waitRollback queue point = do
+waitRollback :: DbActionQueue -> CardanoPoint -> Tip CardanoBlock -> IO (Maybe [CardanoPoint], Point.WithOrigin BlockNo)
+waitRollback queue point serverTip = do
     resultVar <- newEmptyTMVarIO
-    atomically $ writeDbActionQueue queue $ DbRollBackToPoint point resultVar
+    atomically $ writeDbActionQueue queue $ DbRollBackToPoint point serverTip resultVar
     atomically $ takeTMVar resultVar
 
 lengthDbActionQueue :: DbActionQueue -> STM Natural

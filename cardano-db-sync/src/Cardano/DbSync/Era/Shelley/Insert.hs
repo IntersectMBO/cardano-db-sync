@@ -85,7 +85,7 @@ insertShelleyBlock
     => SyncEnv -> Bool -> Generic.Block -> SlotDetails
     -> IsPoolMember -> Strict.Maybe Generic.NewEpoch -> Generic.StakeSliceRes
     -> ReaderT SqlBackend m (Either SyncNodeError ())
-insertShelleyBlock env firstBlockOfEpoch blk details isMember mNewEpoch stakeSlice = do
+insertShelleyBlock env shouldLog blk details isMember mNewEpoch stakeSlice = do
   runExceptT $ do
     pbid <- case Generic.blkPreviousHash blk of
       Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
@@ -156,7 +156,7 @@ insertShelleyBlock env firstBlockOfEpoch blk details isMember mNewEpoch stakeSli
   where
     logger :: Bool -> Trace IO a -> a -> IO ()
     logger followingClosely
-      | firstBlockOfEpoch = logInfo
+      | shouldLog = logInfo
       | followingClosely = logInfo
       | unBlockNo (Generic.blkBlockNo blk) `mod` 5000 == 0 = logInfo
       | otherwise = logDebug

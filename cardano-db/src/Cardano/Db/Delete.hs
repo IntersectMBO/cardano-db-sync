@@ -19,7 +19,6 @@ import           Cardano.Db.Schema
 
 import           Ouroboros.Network.Block (BlockNo (..))
 
-
 -- | Delete a block if it exists. Returns 'True' if it did exist and has been
 -- deleted and 'False' if it did not exist.
 deleteCascadeBlock :: MonadIO m => Block -> ReaderT SqlBackend m Bool
@@ -30,10 +29,13 @@ deleteCascadeBlock block = do
 
 -- | Delete a block after the specified 'BlockId'. Returns 'True' if it did exist and has been
 -- deleted and 'False' if it did not exist.
-deleteCascadeAfter :: MonadIO m => BlockId -> ReaderT SqlBackend m Bool
-deleteCascadeAfter bid = do
+deleteCascadeAfter :: MonadIO m => BlockId -> Bool -> ReaderT SqlBackend m Bool
+deleteCascadeAfter bid deleteEq = do
   -- Genesis artificial blocks are not deleted (Byron or Shelley) since they have null epoch
-  keys <- selectKeysList [ BlockPreviousId ==. Just bid, BlockEpochNo !=. Nothing ] []
+  keys <- 
+    if deleteEq 
+      then selectKeysList [ BlockId ==. bid, BlockEpochNo !=. Nothing ] []
+      else selectKeysList [ BlockPreviousId ==. Just bid, BlockEpochNo !=. Nothing ] []
   mapM_ delete keys
   pure $ not (null keys)
 
