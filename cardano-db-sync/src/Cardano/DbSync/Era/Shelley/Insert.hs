@@ -86,7 +86,7 @@ insertShelleyBlock
     => SyncEnv -> Bool -> Generic.Block -> SlotDetails
     -> IsPoolMember -> Strict.Maybe Generic.NewEpoch -> Generic.StakeSliceRes
     -> ReaderT SqlBackend m (Either SyncNodeError ())
-insertShelleyBlock env firstBlockOfEpoch blk details isMember mNewEpoch stakeSlice = do
+insertShelleyBlock env shouldLog blk details isMember mNewEpoch stakeSlice = do
   runExceptT $ do
     mPhid <- lift $ queryPoolKeyWithCache cache CacheNew $ coerceKeyRole $ Generic.blkSlotLeader blk
     slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (Generic.unKeyHashRaw $ Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
@@ -152,7 +152,7 @@ insertShelleyBlock env firstBlockOfEpoch blk details isMember mNewEpoch stakeSli
   where
     logger :: Bool -> Trace IO a -> a -> IO ()
     logger followingClosely
-      | firstBlockOfEpoch = logInfo
+      | shouldLog = logInfo
       | followingClosely = logInfo
       | unBlockNo (Generic.blkBlockNo blk) `mod` 5000 == 0 = logInfo
       | otherwise = logDebug

@@ -89,11 +89,17 @@ runActions env actions = do
       case spanDbApply xs of
         ([], DbFinish:_) -> do
             pure Done
-        ([], DbRollBackToPoint pt resultVar : ys) -> do
-            newExceptT $ rollbackToPoint env pt
+        ([], DbRollBackToPoint pt serverTip resultVar : ys) -> do
+            deletedAllBlocks <- newExceptT $ rollbackToPoint env pt serverTip
             points <- if hasLedgerState env
               then lift $ rollbackLedger env pt
               else pure Nothing
+            -- Ledger state always rollbacks at least back to the 'point' given by the Node.
+            -- It needs to rollback even further, if 'points' is not 'Nothing'.
+            -- The db may not rollback to the Node point.
+            case (deletedAllBlocks, points) of
+              (True, Nothing) -> liftIO $ setConsistentLevel env Consistent
+              _ -> liftIO $ setConsistentLevel env DBAheadOfLedger
             blockNo <- lift $ getDbTipBlockNo env
             lift $ atomically $ putTMVar resultVar (points, blockNo)
             dbAction Continue ys

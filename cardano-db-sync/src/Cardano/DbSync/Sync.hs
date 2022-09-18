@@ -224,6 +224,7 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
       liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
         Db.runIohkLogging trce $ withPostgresqlConn (envConnString env) $ \backend -> liftIO $ do
           replaceConnection env backend
+          setConsistentLevel env Unchecked
           logInfo trce "Starting chainSyncClient"
 
           -- The Db thread is not forked at this point, so we can use
@@ -310,8 +311,8 @@ chainSyncClient metricsSetters trce latestPoints currentTip actionQueue = do
       SendMsgFindIntersect
         (if null points then [genesisPoint] else points)
         ClientPipelinedStIntersect
-          { recvMsgIntersectFound = \ _hdr tip -> pure $ go policy Zero clientTip (getTipBlockNo tip) Nothing
-          , recvMsgIntersectNotFound = \tip -> pure $ goTip policy Zero clientTip tip Nothing
+          { recvMsgIntersectFound = \ _hdr tip -> pure $ goTip policy Zero clientTip tip Nothing
+          , recvMsgIntersectNotFound = \tip    -> pure $ goTip policy Zero clientTip tip Nothing
           }
 
     policy :: MkPipelineDecision
@@ -365,7 +366,7 @@ chainSyncClient metricsSetters trce latestPoints currentTip actionQueue = do
               logException trce "recvMsgRollBackward: " $ do
                 -- This will get the current tip rather than what we roll back to
                 -- but will only be incorrect for a short time span.
-                (mPoints, newTip) <- waitRollback actionQueue point
+                (mPoints, newTip) <- waitRollback actionQueue point tip
                 pure $ finish newTip tip mPoints
         }
 

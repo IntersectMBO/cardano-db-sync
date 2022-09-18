@@ -25,11 +25,10 @@ import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
 import           Cardano.DbSync.Era.Shelley.Insert.Epoch (insertPoolDepositRefunds, insertRewards)
 import           Cardano.DbSync.Era.Shelley.Validate (validateEpochRewards)
 import           Cardano.DbSync.Error
-
 import           Cardano.DbSync.LedgerState (ApplyResult (..), LedgerEvent (..),
                    applyBlockAndSnapshot, defaultApplyResult)
 import           Cardano.DbSync.LocalStateQuery
-
+import           Cardano.DbSync.Rollback
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
@@ -41,6 +40,7 @@ import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
+import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
@@ -49,6 +49,8 @@ import           Database.Persist.SqlBackend.Internal
 import           Database.Persist.SqlBackend.Internal.StatementCache
 
 import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
+import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
+import           Ouroboros.Network.Block (blockHash, blockNo, getHeaderFields)
 
 
 insertListBlocks
@@ -58,38 +60,68 @@ insertListBlocks env blocks = do
     backend <- getBackend env
     DB.runDbIohkLogging backend tracer .
       runExceptT $ do
-        traverse_ (applyAndInsert env) blocks
+        traverse_ (applyAndInsertBlockMaybe env) blocks
   where
     tracer = getTrace env
 
-applyAndInsert
+applyAndInsertBlockMaybe
     :: SyncEnv -> CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
-applyAndInsert env cblk = do
+applyAndInsertBlockMaybe env cblk = do
     !applyRes <- liftIO mkApplyResult
+    bl <- liftIO $ isConsistent env
+    if bl then
+      -- In the usual case it will be consistent so we don't need to do any queries. Just insert the block
+      insertBlock env cblk applyRes False
+    else do
+      blockIsInDbAlready <- lift (isRight <$> DB.queryBlockHash (SBS.fromShort . Consensus.getOneEraHash $ blockHash cblk))
+      -- If the block is already in db, do nothing. If not, delete all blocks with greater 'BlockNo' or
+      -- equal, insert the block and restore consistency between ledger and db.
+      unless blockIsInDbAlready $ do
+        liftIO . logInfo tracer $
+          mconcat
+           [ "Received block which is not in the db ", textShow (getHeaderFields cblk)
+           , " Time to restore consistency."]
+        rollbackFromBlockNo env (blockNo cblk)
+        insertBlock env cblk applyRes True
+        liftIO $ setConsistentLevel env Consistent
+  where
+    tracer = getTrace env
+
+    mkApplyResult :: IO ApplyResult
+    mkApplyResult = do
+      if hasLedgerState env then
+        applyBlockAndSnapshot (envLedger env) cblk
+      else do
+        slotDetails <- getSlotDetailsNode (envNoLedgerEnv env) (cardanoBlockSlotNo cblk)
+        pure $ defaultApplyResult slotDetails
+
+insertBlock
+    :: SyncEnv -> CardanoBlock -> ApplyResult -> Bool -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
+insertBlock env cblk applyRes logBlock = do
     !epochEvents <- liftIO $ atomically $ generateNewEpochEvents env (apSlotDetails applyRes)
     let !applyResult = applyRes { apEvents = sort $ epochEvents <> apEvents applyRes}
     let !details = apSlotDetails applyResult
     insertLedgerEvents env (sdEpochNo details) (apEvents applyResult)
     insertEpoch details
-    let firstBlockOfEpoch = hasEpochStartEvent (apEvents applyResult)
+    let shouldLog = hasEpochStartEvent (apEvents applyResult) || logBlock
     let isMember poolId = Set.member poolId (apPoolsRegistered applyResult)
     case cblk of
       BlockByron blk ->
-        newExceptT $ insertByronBlock env firstBlockOfEpoch blk details
+        newExceptT $ insertByronBlock env shouldLog blk details
       BlockShelley blk -> newExceptT $
-        insertShelleyBlock env firstBlockOfEpoch (Generic.fromShelleyBlock blk)
+        insertShelleyBlock env shouldLog (Generic.fromShelleyBlock blk)
           details isMember (apNewEpoch applyResult) (apStakeSlice applyResult)
       BlockAllegra blk -> newExceptT $
-        insertShelleyBlock env firstBlockOfEpoch (Generic.fromAllegraBlock blk)
+        insertShelleyBlock env shouldLog (Generic.fromAllegraBlock blk)
           details isMember (apNewEpoch applyResult) (apStakeSlice applyResult)
       BlockMary blk -> newExceptT $
-        insertShelleyBlock env firstBlockOfEpoch (Generic.fromMaryBlock blk)
+        insertShelleyBlock env shouldLog (Generic.fromMaryBlock blk)
           details isMember (apNewEpoch applyResult) (apStakeSlice applyResult)
       BlockAlonzo blk -> newExceptT $
-        insertShelleyBlock env firstBlockOfEpoch (Generic.fromAlonzoBlock (getPrices applyResult) blk)
+        insertShelleyBlock env shouldLog (Generic.fromAlonzoBlock (getPrices applyResult) blk)
           details isMember (apNewEpoch applyResult) (apStakeSlice applyResult)
       BlockBabbage blk -> newExceptT $
-        insertShelleyBlock env firstBlockOfEpoch (Generic.fromBabbageBlock (getPrices applyResult) blk)
+        insertShelleyBlock env shouldLog (Generic.fromBabbageBlock (getPrices applyResult) blk)
           details isMember (apNewEpoch applyResult) (apStakeSlice applyResult)
   where
     tracer = getTrace env
@@ -102,14 +134,6 @@ applyAndInsert env cblk = do
       Strict.Just pr -> Just pr
       Strict.Nothing | hasLedgerState env -> Just $ Ledger.Prices minBound minBound
       Strict.Nothing -> Nothing
-
-    mkApplyResult :: IO ApplyResult
-    mkApplyResult = do
-      if hasLedgerState env then
-        applyBlockAndSnapshot (envLedger env) cblk
-      else do
-        slotDetails <- getSlotDetailsNode (envNoLedgerEnv env) (cardanoBlockSlotNo cblk)
-        pure $ defaultApplyResult slotDetails
 
 -- -------------------------------------------------------------------------------------------------
 

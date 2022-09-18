@@ -8,6 +8,9 @@ module Cardano.DbSync.Api
   ( SyncEnv (..)
   , LedgerEnv (..)
   , SyncOptions (..)
+  , ConsistentLevel (..)
+  , setConsistentLevel
+  , isConsistent
   , mkSyncEnvFromConfig
   , replaceConnection
   , verifyFilePoints
@@ -71,6 +74,7 @@ data SyncEnv = SyncEnv
   , envSystemStart :: !SystemStart
   , envConnString :: ConnectionString
   , envBackend :: !(StrictTVar IO (Strict.Maybe SqlBackend))
+  , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)
   , envOptions :: !SyncOptions
   , envCache :: !Cache
   , envOfflineWorkQueue :: !(TBQueue IO PoolFetchRetry)
@@ -80,6 +84,21 @@ data SyncEnv = SyncEnv
   , envNoLedgerEnv :: !NoLedgerStateEnv -- only used when configured without ledger state.
   , envLedger :: !LedgerEnv
   }
+
+data ConsistentLevel = Consistent | DBAheadOfLedger | Unchecked
+  deriving (Show, Eq)
+
+setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
+setConsistentLevel env cst = do
+    logInfo (getTrace env) $ "Setting ConsistencyLevel to " <> textShow cst
+    atomically $ writeTVar (envConsistentLevel env) cst
+
+isConsistent :: SyncEnv -> IO Bool
+isConsistent env = do
+    cst <- readTVarIO (envConsistentLevel env)
+    case cst of
+      Consistent -> pure True
+      _ -> pure False
 
 data SyncOptions = SyncOptions
   { soptExtended :: !Bool
@@ -198,6 +217,7 @@ mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir = do
                  (snapshotEveryFollowing syncOptions) (snapshotEveryLagging syncOptions)
   cache <- if soptCache syncOptions then newEmptyCache 100000 else pure uninitiatedCache
   backendVar <- newTVarIO Strict.Nothing
+  consistentLevelVar <- newTVarIO Unchecked
   owq <- newTBQueueIO 100
   orq <- newTBQueueIO 100
   epochVar <- newTVarIO initEpochState
@@ -210,6 +230,7 @@ mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir = do
           , envConnString = connSring
           , envBackend = backendVar
           , envOptions = syncOptions
+          , envConsistentLevel = consistentLevelVar
           , envCache = cache
           , envOfflineWorkQueue = owq
           , envOfflineResultQueue = orq

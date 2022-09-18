@@ -12,6 +12,7 @@ module Cardano.Db.Query
   , queryGenesis
   , queryBlock
   , queryBlockCount
+  , queryBlockCountAfterBlockNo
   , queryBlockHash
   , queryBlockHeight
   , queryBlockId
@@ -216,6 +217,16 @@ queryBlockCount :: MonadIO m => ReaderT SqlBackend m Word
 queryBlockCount = do
   res <- select $ do
     _blk <- from $ table @ Block
+    pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
+
+-- | Count the number of blocks in the Block table after a 'BlockNo'.
+queryBlockCountAfterBlockNo :: MonadIO m => Word64 -> Bool -> ReaderT SqlBackend m Word
+queryBlockCountAfterBlockNo blockNo queryEq = do
+  res <- select $ do
+    blk <- from $ table @ Block
+    where_ (if queryEq then blk ^. BlockBlockNo >=. val (fromIntegral blockNo)
+                       else blk ^. BlockBlockNo >.  val (fromIntegral blockNo))
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
@@ -1077,11 +1088,12 @@ queryStakeAddressScript = do
       pure st_addr
     pure $ entityVal <$> res
 
-queryStakeAddressIdsAfter :: MonadIO m => Word64 -> ReaderT SqlBackend m [StakeAddressId]
-queryStakeAddressIdsAfter blockNo = do
+queryStakeAddressIdsAfter :: MonadIO m => Word64 -> Bool -> ReaderT SqlBackend m [StakeAddressId]
+queryStakeAddressIdsAfter blockNo queryEq = do
     res <- select $ do
       st_addr <- from $ table @StakeAddress
-      where_ (st_addr ^. StakeAddressBlockNo >. val (fromIntegral blockNo))
+      where_ (if queryEq then st_addr ^. StakeAddressBlockNo >=. val (fromIntegral blockNo)
+                         else st_addr ^. StakeAddressBlockNo >.  val (fromIntegral blockNo))
       pure (st_addr ^. StakeAddressId)
     pure $ unValue <$> res
 
