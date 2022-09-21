@@ -108,6 +108,8 @@ module Cardano.Db.Query
   , unValue2
   , unValue3
   , unValue4
+  , unValue5
+  , unValue6
   , unValueSumAda
   ) where
 
@@ -1209,3 +1211,6 @@ unValue4 (a, b, c, d) = (unValue a, unValue b, unValue c, unValue d)
 
 unValue5 :: (Value a, Value b, Value c, Value d, Value e) -> (a, b, c, d, e)
 unValue5 (a, b, c, d, e) = (unValue a, unValue b, unValue c, unValue d, unValue e)
+
+unValue6 :: (Value a, Value b, Value c, Value d, Value e, Value f) -> (a, b, c, d, e, f)
+unValue6 (a, b, c, d, e, f) = (unValue a, unValue b, unValue c, unValue d, unValue e, unValue f)

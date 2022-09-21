@@ -82,6 +82,7 @@ library
                       , random
                       , random-shuffle
                       , text
+                      , text-icu
                       , time
                       , transformers
                       , transformers-except
