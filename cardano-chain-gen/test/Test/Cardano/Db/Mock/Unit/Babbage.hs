@@ -972,10 +972,12 @@ rollbackBoundary =
 
       assertRewardCount dbSync 3
       atomically $ rollback mockServer (blockPoint $ last blks)
-      assertBlockNoBackoff dbSync (2 + length a + length blks)
+      assertBlockNoBackoff dbSync (2 + length a + length blks + length blks')
       forM_ blks' $ atomically . addBlock mockServer
       assertBlockNoBackoff dbSync (2 + length a + length blks + length blks')
       assertRewardCount dbSync 3
+      blks'' <- fillUntilNextEpoch interpreter mockServer
+      assertBlockNoBackoff dbSync (2 + length a + length blks + length blks' + length blks'')
   where
     testLabel = "rollbackBoundary"
 
