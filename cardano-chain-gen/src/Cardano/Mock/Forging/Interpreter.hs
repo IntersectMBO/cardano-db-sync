@@ -19,6 +19,7 @@ module Cardano.Mock.Forging.Interpreter
   , forgeNextFindLeader
   , forgeNext
   , forgeNextAfter
+  , rollbackInterpreter
   , getCurrentInterpreterState
   , getCurrentLedgerState
   , getCurrentEpoch
@@ -62,9 +63,8 @@ import           Cardano.Mock.Forging.Types
 
 import           NoThunks.Class (OnlyCheckWhnfNamed (..))
 
-import           Ouroboros.Consensus.Block (BlockForging, BlockNo (..), BlockProtocol, EpochNo,
-                   ForgeStateInfo, ShouldForge (..), SlotNo (..), blockNo, blockSlot,
-                   checkShouldForge)
+import           Ouroboros.Consensus.Block (BlockForging, BlockProtocol, EpochNo, ForgeStateInfo,
+                   ShouldForge (..), checkShouldForge)
 import qualified Ouroboros.Consensus.Block as Block
 import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardAlonzo,
                    StandardBabbage, StandardShelley)
@@ -95,6 +95,7 @@ import qualified Ouroboros.Consensus.TypeFamilyWrappers as Consensus
 import           Ouroboros.Consensus.Util.IOLike (Exception, NoThunks, StrictMVar, modifyMVar,
                    newMVar, readMVar, swapMVar)
 import           Ouroboros.Consensus.Util.Orphans ()
+import           Ouroboros.Network.Block
 
 import           System.Directory (doesPathExist)
 
@@ -365,6 +366,30 @@ tryAllForging interpreter interState currentSlot xs = do
           pure Nothing
         NotLeader -> do
           pure Nothing
+
+rollbackInterpreter :: Interpreter -> CardanoPoint -> IO ()
+rollbackInterpreter interpreter pnt = do
+    interState <- getCurrentInterpreterState interpreter
+    !chain' <- case rollbackChainDB (istChain interState) pnt of
+          Just c -> pure c
+          Nothing -> throwIO RollbackFailed
+    let newSt = currentState chain'
+    let tip = headTip chain'
+    let (nextSlot, nextBlock) = case tip of
+          TipGenesis -> (SlotNo 0, BlockNo 1)
+          Tip slt _ blkNo -> (slt + 1, blkNo + 1)
+    let !newInterState =
+          InterpreterState
+            { istChain = chain'
+            , istForecast = mkForecast cfg newSt
+            , istSlot = nextSlot
+            , istNextBlockNo = nextBlock
+            , istFingerprint = istFingerprint interState
+            }
+    void $ swapMVar (interpState interpreter) newInterState
+  where
+    cfg :: TopLevelConfig CardanoBlock
+    cfg = interpTopLeverConfig interpreter
 
 getCurrentInterpreterState :: Interpreter -> IO  InterpreterState
 getCurrentInterpreterState = readMVar . interpState

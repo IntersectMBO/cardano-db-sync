@@ -3,6 +3,7 @@
 
 module Cardano.Mock.Forging.Types
   ( CardanoBlock
+  , CardanoPoint
   , TPraosStandard
   , PraosStandard
   , ForgingError (..)
@@ -22,6 +23,7 @@ import           Ouroboros.Consensus.Protocol.Praos (Praos)
 import           Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import           Ouroboros.Consensus.Shelley.Eras (StandardAlonzo, StandardBabbage, StandardCrypto,
                    StandardShelley)
+import           Ouroboros.Network.Block (Point)
 
 import           Cardano.Ledger.Address
 import qualified Cardano.Ledger.Core as Core
@@ -35,6 +37,8 @@ type TPraosStandard = TPraos StandardCrypto
 type PraosStandard = Praos StandardCrypto
 
 type CardanoBlock = Consensus.CardanoBlock StandardCrypto
+
+type CardanoPoint = Point CardanoBlock
 
 data MockBlock = MockBlock
   { txs :: ![TxEra]
@@ -63,6 +67,7 @@ data ForgingError
   | FailedToValidateSlot !SlotNo !Int !FilePath
   | NotExpectedSlotNo !SlotNo !SlotNo !Int
   | FingerprintDecodeError !String
+  | RollbackFailed
   deriving (Show, Exception)
 
 data UTxOIndex era
