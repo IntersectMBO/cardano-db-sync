@@ -574,7 +574,7 @@ findStateFromPoint env point = do
       logWarning (leTrace env) $
         case lsfs of
           [] -> "Rollback failed. No more ledger state files."
-          (x:_) -> mconcat [ "Rolling back further to slot ", textShow (unSlotNo $ lsfSlotNo x) ]
+          (x:_) -> mconcat [ "Needs to Rollback further to slot ", textShow (unSlotNo $ lsfSlotNo x) ]
 
 -- Splits the files based on the comparison with the given point. It will return
 -- a list of newer files, a file at the given point if found and a list of older

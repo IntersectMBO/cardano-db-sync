@@ -76,8 +76,8 @@ runPrepareSnapshotAux firstTry args = do
 
     runRollback :: SlotNo -> IO ()
     runRollback slot = runDbNoLoggingEnv $ do
-      mSlot <- queryLastSlotNoGreaterThan $ unSlotNo slot
-      mapM_ deleteCascadeSlotNo mSlot
+      slots <- querySlotNosGreaterThan $ unSlotNo slot
+      mapM_ deleteCascadeSlotNo slots
 
     printNewerSnapshots :: [LedgerStateFile] -> IO ()
     printNewerSnapshots newerFiles = do

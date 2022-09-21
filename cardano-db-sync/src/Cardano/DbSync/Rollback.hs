@@ -76,9 +76,9 @@ rollbackToPoint env point serverTip = do
     action :: MonadIO m => ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
     action = do
         (mSlotNo, nBlocks) <- lift $ slotsToDelete (pointSlot point)
+        (prevId, mBlockNo) <- liftLookupFail "Rollback.rollbackToPoint" $ queryBlock point
 
         if nBlocks <= 50 || not (hasLedgerState env) then do
-          (prevId, mBlockNo) <- liftLookupFail "Rollback.rollbackToPoint" $ queryBlock point
           liftIO . logInfo trce $ "Rolling back to " <> renderPoint point
           whenJust (maybeToStrict mSlotNo) $ \slotNo ->
           -- there may be more deleted blocks than slots, because ebbs don't have
@@ -105,9 +105,9 @@ rollbackToPoint env point serverTip = do
         else do
           liftIO . logInfo trce $
             mconcat
-              [ "Delaying rollback of ", textShow nBlocks, " blocks after back to "
-              , renderPoint point
-              , ". Applying blocks up to current node ", textShow serverTip
+              [ "Delaying delete of ", textShow nBlocks, " blocks after "
+              , textShow mBlockNo, " while rolling back to (" , renderPoint point
+              , "). Applying blocks until a new block is found. The node is currently at ", textShow serverTip
               ]
           pure False
 
