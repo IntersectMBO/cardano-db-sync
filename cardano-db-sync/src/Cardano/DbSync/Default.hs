@@ -79,8 +79,8 @@ applyAndInsertBlockMaybe env cblk = do
       unless blockIsInDbAlready $ do
         liftIO . logInfo tracer $
           mconcat
-           [ "Received block which is not in the db ", textShow (getHeaderFields cblk)
-           , " Time to restore consistency."]
+           [ "Received block which is not in the db with ", textShow (getHeaderFields cblk)
+           , ". Time to restore consistency."]
         rollbackFromBlockNo env (blockNo cblk)
         insertBlock env cblk applyRes True
         liftIO $ setConsistentLevel env Consistent

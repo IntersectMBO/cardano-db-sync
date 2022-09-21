@@ -10,6 +10,7 @@ module Cardano.DbSync.Api
   , SyncOptions (..)
   , ConsistentLevel (..)
   , setConsistentLevel
+  , getConsistentLevel
   , isConsistent
   , mkSyncEnvFromConfig
   , replaceConnection
@@ -93,9 +94,13 @@ setConsistentLevel env cst = do
     logInfo (getTrace env) $ "Setting ConsistencyLevel to " <> textShow cst
     atomically $ writeTVar (envConsistentLevel env) cst
 
+getConsistentLevel :: SyncEnv -> IO ConsistentLevel
+getConsistentLevel env =
+    readTVarIO (envConsistentLevel env)
+
 isConsistent :: SyncEnv -> IO Bool
 isConsistent env = do
-    cst <- readTVarIO (envConsistentLevel env)
+    cst <- getConsistentLevel env
     case cst of
       Consistent -> pure True
       _ -> pure False

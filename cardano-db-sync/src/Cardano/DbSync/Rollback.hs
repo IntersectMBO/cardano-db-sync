@@ -79,9 +79,9 @@ rollbackToPoint env point serverTip = do
         else do
           liftIO . logInfo trce $
             mconcat
-              [ "Delaying rollback of ", textShow nBlocks, " blocks after "
-              , textShow blkNo, " back to " , renderPoint point
-              , ". Applying blocks up to current node ", textShow serverTip
+              [ "Delaying delete of ", textShow nBlocks, " blocks after "
+              , textShow blkNo, " while rolling back to (" , renderPoint point
+              , "). Applying blocks until a new block is found. The node is currently at ", textShow serverTip
               ]
           pure False
 

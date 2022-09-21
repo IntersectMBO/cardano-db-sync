@@ -39,8 +39,6 @@ import           Ouroboros.Consensus.Ledger.Extended
 import           Ouroboros.Network.Block (Point (..))
 import           Ouroboros.Network.Point (blockPointHash, blockPointSlot)
 
-import           System.IO.Error
-
 data NextState
   = Continue
   | Done
@@ -89,17 +87,24 @@ runActions env actions = do
       case spanDbApply xs of
         ([], DbFinish:_) -> do
             pure Done
-        ([], DbRollBackToPoint pt serverTip resultVar : ys) -> do
-            deletedAllBlocks <- newExceptT $ rollbackToPoint env pt serverTip
+        ([], DbRollBackToPoint chainSyncPoint serverTip resultVar : ys) -> do
+            deletedAllBlocks <- newExceptT $ rollbackToPoint env chainSyncPoint serverTip
             points <- if hasLedgerState env
-              then lift $ rollbackLedger env pt
+              then lift $ rollbackLedger env chainSyncPoint
               else pure Nothing
             -- Ledger state always rollbacks at least back to the 'point' given by the Node.
             -- It needs to rollback even further, if 'points' is not 'Nothing'.
             -- The db may not rollback to the Node point.
             case (deletedAllBlocks, points) of
-              (True, Nothing) -> liftIO $ setConsistentLevel env Consistent
-              _ -> liftIO $ setConsistentLevel env DBAheadOfLedger
+              (True, Nothing) -> do
+                liftIO $ setConsistentLevel env Consistent
+                liftIO $ validateConsistentLevel env chainSyncPoint
+              (False, Nothing) -> do
+                liftIO $ setConsistentLevel env DBAheadOfLedger
+                liftIO $ validateConsistentLevel env chainSyncPoint
+              _ ->
+                -- No need to validate here
+                liftIO $ setConsistentLevel env DBAheadOfLedger
             blockNo <- lift $ getDbTipBlockNo env
             lift $ atomically $ putTMVar resultVar (points, blockNo)
             dbAction Continue ys
@@ -112,37 +117,49 @@ runActions env actions = do
 rollbackLedger :: SyncEnv -> CardanoPoint -> IO (Maybe [CardanoPoint])
 rollbackLedger env point = do
     mst <- loadLedgerAtPoint (envLedger env) point
-    backend <- getBackend env
-    dbTipInfo <- getDbLatestBlockInfo backend
     case mst of
       Right st -> do
-        checkDBWithState point dbTipInfo
         let statePoint = headerStatePoint $ headerState $ clsState st
-        -- This check should always succeed, since 'loadLedgerAtPoint' returns succesfully.
-        -- we just leave it here for extra validation.
-        checkDBWithState statePoint dbTipInfo
+        -- This is an extra validation that should always succeed.
+        unless (point == statePoint) $
+          logAndPanic (getTrace env) $ mconcat
+            [ "Ledger ", textShow statePoint
+            , " and ChainSync ", textShow point , " don't match."
+            ]
         pure Nothing
       Left lsfs ->
         Just <$> verifyFilePoints env lsfs
-  where
-    checkDBWithState :: CardanoPoint -> Maybe TipInfo -> IO ()
-    checkDBWithState pnt dbTipInfo =
-      if compareTips pnt dbTipInfo
-        then pure ()
-        else throwIO . userError $
-                mconcat
-                    [ "Ledger state point ", show pnt, " and db tip "
-                    , show dbTipInfo, " don't match"
-                    ]
 
-compareTips :: CardanoPoint -> Maybe TipInfo -> Bool
-compareTips = go
-  where
-    go (Point Origin) Nothing = True
-    go (Point (At blk)) (Just tip) =
-        getHeaderHash (blockPointHash blk) == bHash tip
-          && blockPointSlot blk == bSlotNo tip
-    go  _ _ = False
+-- | This not only checks that the ledger and ChainSync points are equal, but also that the
+-- 'Consistent' Level is correct based on the db tip.
+validateConsistentLevel :: SyncEnv -> CardanoPoint -> IO ()
+validateConsistentLevel env stPoint = do
+    backend <- getBackend env
+    dbTipInfo <- getDbLatestBlockInfo backend
+    cLevel <- getConsistentLevel env
+    compareTips stPoint dbTipInfo cLevel
+
+    where
+      compareTips _ dbTip Unchecked =
+        logAndPanic tracer $
+          "Found Unchecked Consistent Level. " <> showContext dbTip Unchecked
+      compareTips (Point Origin) Nothing Consistent = pure ()
+      compareTips (Point Origin) _ DBAheadOfLedger = pure ()
+      compareTips (Point (At blk)) (Just tip) Consistent
+          | getHeaderHash (blockPointHash blk) == bHash tip
+            && blockPointSlot blk == bSlotNo tip = pure ()
+      compareTips (Point (At blk)) (Just tip) DBAheadOfLedger
+          | blockPointSlot blk <= bSlotNo tip = pure ()
+      compareTips  _ dbTip cLevel =
+          logAndPanic tracer $
+            "Unexpected Consistent Level. " <> showContext dbTip cLevel
+
+      tracer = getTrace env
+      showContext dbTip cLevel = mconcat
+        [ "Ledger state point is ", textShow stPoint
+        , ". DB Tip is ", textShow dbTip
+        , ". Consistent Level is ", textShow cLevel
+        ]
 
 -- | Split the DbAction list into a prefix containing blocks to apply and a postfix.
 spanDbApply :: [DbAction] -> ([CardanoBlock], [DbAction])
