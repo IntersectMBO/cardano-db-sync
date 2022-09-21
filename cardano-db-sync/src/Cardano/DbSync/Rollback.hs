@@ -35,8 +35,8 @@ deleteBlocks env blkNo deleteEq nBlocks = do
     unless (nBlocks == 0) $
       liftIO . logInfo trce $
           mconcat
-            [ "Deleting ", textShow nBlocks, " blocks after "
-            , if deleteEq then " or equal to " else ""
+            [ "Deleting ", textShow nBlocks, " blocks "
+            , if deleteEq then "starting from " else "after "
             , textShow blkNo
             ]
     -- We need to first cleanup the cache and then delete the blocks from db.

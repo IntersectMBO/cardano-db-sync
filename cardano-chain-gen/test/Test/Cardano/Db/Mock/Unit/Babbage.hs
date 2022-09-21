@@ -77,6 +77,9 @@ unitTests iom knownMigrations =
           , test "sync bigger chain" bigChain
           , test "rollback while db-sync is off" restartAndRollback
           , test "rollback further" rollbackFurther
+          , test "big rollbacks executed lazily" lazyRollback
+          , test "lazy rollback on restart" lazyRollbackRestart
+          , test "rollback while rollbacking" doubleRollback
           , test "rollback stake address cache" stakeAddressRollback
           ]
       , testGroup "different configs"
@@ -323,6 +326,66 @@ rollbackFurther =
     assertEqQuery dbSync DB.queryCostModel [cm1] "Unexpected CostModel"
   where
     testLabel = "rollbackFurther"
+
+lazyRollback :: IOManager -> [(Text, Text)] -> Assertion
+lazyRollback =
+  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+    lastBlk <- last <$> forgeAndSubmitBlocks interpreter mockServer 200
+    void $ forgeAndSubmitBlocks interpreter mockServer 70
+    assertBlockNoBackoff dbSync 270
+    rollbackTo interpreter mockServer (blockPoint lastBlk)
+    -- Here we create the fork.
+    void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
+        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)]
+    void $ forgeAndSubmitBlocks interpreter mockServer 40
+    assertBlockNoBackoff dbSync 241
+  where
+    testLabel = "lazyRollback"
+
+lazyRollbackRestart :: IOManager -> [(Text, Text)] -> Assertion
+lazyRollbackRestart =
+  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+    lastBlk <- last <$> forgeAndSubmitBlocks interpreter mockServer 220
+    void $ forgeAndSubmitBlocks interpreter mockServer 60
+    assertBlockNoBackoff dbSync 280
+
+    stopDBSync dbSync
+    rollbackTo interpreter mockServer (blockPoint lastBlk)
+
+    startDBSync  dbSync
+    -- Here we create the fork.
+    void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
+        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)]
+    void $ forgeAndSubmitBlocks interpreter mockServer 30
+    assertBlockNoBackoff dbSync 251
+  where
+    testLabel = "lazyRollbackRestart"
+
+doubleRollback :: IOManager -> [(Text, Text)] -> Assertion
+doubleRollback =
+  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+    lastBlk1 <- last <$> forgeAndSubmitBlocks interpreter mockServer 150
+    lastBlk2 <- last <$> forgeAndSubmitBlocks interpreter mockServer 100
+    void $ forgeAndSubmitBlocks interpreter mockServer 100
+    assertBlockNoBackoff dbSync 350
+
+    rollbackTo interpreter mockServer (blockPoint lastBlk2)
+    -- Here we create the fork.
+    void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
+        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)]
+    void $ forgeAndSubmitBlocks interpreter mockServer 50
+
+    rollbackTo interpreter mockServer (blockPoint lastBlk1)
+    void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $
+        Babbage.mkSimpleDCertTx [(StakeIndexNew 0, DCertDeleg . RegKey)]
+    void $ forgeAndSubmitBlocks interpreter mockServer 50
+
+    assertBlockNoBackoff dbSync 201
+  where
+    testLabel = "doubleRollback"
 
 stakeAddressRollback :: IOManager -> [(Text, Text)] -> Assertion
 stakeAddressRollback =
