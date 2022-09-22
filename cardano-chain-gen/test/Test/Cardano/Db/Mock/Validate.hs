@@ -155,8 +155,11 @@ checkStillRuns env = do
       Just (Left err) -> throwIO err
 
 migrationNotDoneYet :: Text -> Bool
-migrationNotDoneYet txt =
-    Text.isPrefixOf "relation" txt && Text.isSuffixOf "does not exist" txt
+migrationNotDoneYet =
+  Text.isPrefixOf "relation"
+
+-- migrationNotDoneYet txt =
+--     Text.isPrefixOf "relation" txt && Text.isSuffixOf "does not exist" txt
 
 assertCurrentEpoch :: DBSyncEnv -> Word64 -> IO ()
 assertCurrentEpoch env expected =

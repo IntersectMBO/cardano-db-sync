@@ -440,9 +440,9 @@ mkWitnesses rdmrs datas =
     redeemers = fmap (, (plutusDataList, ExUnits 100 100))
                     (fst <$> rdmrs)
 
-addMetadata :: ValidatedTx StandardBabbage -> Word64
+addMetadata :: Word64 -> ValidatedTx StandardBabbage
             -> ValidatedTx StandardBabbage
-addMetadata tx n = tx { auxiliaryData = Strict.SJust $ AuxiliaryData mp mempty}
+addMetadata n tx = tx { auxiliaryData = Strict.SJust $ AuxiliaryData mp mempty}
   where
     mp = Map.singleton n $ List []
 

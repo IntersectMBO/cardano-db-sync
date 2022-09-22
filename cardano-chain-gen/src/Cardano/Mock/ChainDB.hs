@@ -13,6 +13,8 @@ module Cardano.Mock.ChainDB
   , extendChainDB
   , findFirstPoint
   , rollbackChainDB
+  , findPointByBlockNo
+  , currentBlockNo
   ) where
 
 import           Ouroboros.Consensus.Block
@@ -72,3 +74,11 @@ rollbackChainDB :: HasHeader block => ChainDB block -> Point block -> Maybe (Cha
 rollbackChainDB chainDB p = do
   chain <- rollback (cchain chainDB) p
   Just $ chainDB { cchain = chain}
+
+findPointByBlockNo :: HasHeader block => ChainDB block -> BlockNo -> Maybe (Point block)
+findPointByBlockNo chainDB =
+  findFirstPointByBlockNo (cchain chainDB)
+
+currentBlockNo :: HasHeader block => ChainDB block -> Maybe BlockNo
+currentBlockNo chainDB =
+  currentTipBlockNo (cchain chainDB)

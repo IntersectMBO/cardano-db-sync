@@ -14,7 +14,9 @@ import           MigrationValidations (KnownMigration (..), knownMigrations)
 import           Cardano.Mock.ChainSync.Server
 
 import           Test.Tasty
+import           Test.Tasty.QuickCheck (testProperty)
 
+import qualified Test.Cardano.Db.Mock.Property.Property as Property
 import qualified Test.Cardano.Db.Mock.Unit.Alonzo as Alonzo
 import qualified Test.Cardano.Db.Mock.Unit.Babbage as Babbage
 
@@ -34,7 +36,8 @@ tests iom = do
       testGroup
         "cardano-chain-gen"
           [
-            Babbage.unitTests iom knownMigrationsPlain
+            testProperty "QSM" $ Property.prop_empty_blocks iom knownMigrationsPlain
+          , Babbage.unitTests iom knownMigrationsPlain
           , Alonzo.unitTests iom knownMigrationsPlain
           ]
   where

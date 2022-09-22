@@ -12,13 +12,15 @@ module Cardano.Mock.Chain
   , rollback
   , findFirstPointChain
   , pointIsAfter
+  , findFirstPointByBlockNo
+  , currentTipBlockNo
   ) where
 
 import           Ouroboros.Consensus.Block
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
 
 import qualified Ouroboros.Network.AnchoredFragment as AF
-import           Ouroboros.Network.Block (genesisPoint)
+import           Ouroboros.Network.Block
 
 -- | This looks a lot like the 'Chain' defined in Ouroboros.Network.MockChain.Chain
 -- but this version includes also the ledger states.
@@ -114,3 +116,18 @@ toNewestFirst = foldChain (flip (:)) []
 foldChain :: (a -> b -> a) -> a -> Chain b -> a
 foldChain _blk gen (Genesis _st) = gen
 foldChain  blk gen (c :> (b, _)) = blk (foldChain blk gen c) b
+
+findFirstPointByBlockNo
+  :: HasHeader block
+  => Chain block
+  -> BlockNo
+  -> Maybe (Point block)
+findFirstPointByBlockNo c blkNo = case c of
+  Genesis _ -> Nothing
+  (_ :> (b, _)) | blockNo b == blkNo -> Just $ blockPoint b
+  (c' :> _) -> findFirstPointByBlockNo c' blkNo
+
+currentTipBlockNo :: HasHeader block => Chain block -> Maybe BlockNo
+currentTipBlockNo c = case c of
+  Genesis _ -> Nothing
+  (_ :> (b, _)) -> Just $ blockNo b
