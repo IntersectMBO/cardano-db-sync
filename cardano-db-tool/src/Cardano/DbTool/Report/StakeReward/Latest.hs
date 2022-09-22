@@ -3,7 +3,8 @@
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbTool.Report.StakeReward.Latest
-  ( reportLatestStakeRewards
+  ( reportEpochStakeRewards
+  , reportLatestStakeRewards
   ) where
 
 import           Cardano.Db
@@ -30,6 +31,11 @@ import           Text.Printf (printf)
 
 {- HLINT ignore "Fuse on/on" -}
 
+reportEpochStakeRewards :: Word64 -> [Text] -> IO ()
+reportEpochStakeRewards epochNum saddr = do
+    xs <- catMaybes <$> runDbNoLoggingEnv (mapM (queryEpochStakeRewards epochNum) saddr)
+    renderRewards xs
+
 reportLatestStakeRewards :: [Text] -> IO ()
 reportLatestStakeRewards saddr = do
     xs <- catMaybes <$> runDbNoLoggingEnv (mapM queryLatestStakeRewards saddr)
@@ -48,6 +54,11 @@ data EpochReward = EpochReward
   , erDelegated :: !Ada
   , erPercent :: !Double
   }
+
+queryEpochStakeRewards :: MonadIO m => Word64 -> Text -> ReaderT SqlBackend m (Maybe EpochReward)
+queryEpochStakeRewards epochNum address = do
+    mdel <- queryDelegation address epochNum
+    maybe (pure Nothing) ((fmap . fmap) Just (queryReward address)) mdel
 
 queryLatestStakeRewards :: MonadIO m => Text -> ReaderT SqlBackend m (Maybe EpochReward)
 queryLatestStakeRewards address = do
