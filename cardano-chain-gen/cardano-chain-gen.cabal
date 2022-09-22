@@ -155,6 +155,7 @@ test-suite cardano-chain-gen
 
   other-modules:        Test.Cardano.Db.Mock.Config
                         Test.Cardano.Db.Mock.Examples
+                        Test.Cardano.Db.Mock.Property.Property
                         Test.Cardano.Db.Mock.Unit.Alonzo
                         Test.Cardano.Db.Mock.Unit.Babbage
                         Test.Cardano.Db.Mock.UnifiedApi
@@ -209,3 +210,5 @@ test-suite cardano-chain-gen
                       , persistent
                       , persistent-postgresql
                       , postgresql-simple
+                      , QuickCheck
+                      , quickcheck-state-machine

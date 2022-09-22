@@ -63,8 +63,8 @@ data ForgingError
   | ExpectedAlonzoState
   | ExpectedShelleyState
   | UnexpectedEra
-  | EmptyFingerprint !SlotNo !FilePath
-  | FailedToValidateSlot !SlotNo !Int !FilePath
+  | EmptyFingerprint !SlotNo !(Maybe FilePath)
+  | FailedToValidateSlot !SlotNo !(Maybe Int) !(Maybe FilePath)
   | NotExpectedSlotNo !SlotNo !SlotNo !Int
   | FingerprintDecodeError !String
   | RollbackFailed

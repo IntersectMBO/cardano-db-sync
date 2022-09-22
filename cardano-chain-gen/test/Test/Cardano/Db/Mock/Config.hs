@@ -27,6 +27,7 @@ module Test.Cardano.Db.Mock.Config
   , startDBSync
   , withDBSyncEnv
   , withFullConfig
+  , withFullConfig'
   ) where
 
 import           Cardano.Prelude (ReaderT, panic, stderr)
@@ -225,12 +226,18 @@ emptyMetricsSetters =
 
 withFullConfig
     :: FilePath -> FilePath
-    -> (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO ())
-    -> IOManager -> [(Text, Text)] -> IO ()
-withFullConfig config testLabel action iom migr = do
+    -> (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a)
+    -> IOManager -> [(Text, Text)] -> IO a
+withFullConfig = withFullConfig' True
+
+withFullConfig'
+    :: Bool -> FilePath -> FilePath
+    -> (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a)
+    -> IOManager -> [(Text, Text)] -> IO a
+withFullConfig' hasFingerprint config testLabel action iom migr = do
     recreateDir mutableDir
     cfg <- mkConfig configDir mutableDir
-    fingerFile <- prepareFingerprintFile testLabel
+    fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabel else pure Nothing
     let dbsyncParams = syncNodeParams cfg
     -- Set to True to disable logging, False to enable it.
     trce <- if True
