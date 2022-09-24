@@ -34,13 +34,11 @@ module Cardano.Db.Types
   , renderScriptPurpose
   , renderScriptType
   , renderSyncState
-  , rewardTypeToSource
   , showRewardSource
   , word64ToAda
   ) where
 
 import           Cardano.Ledger.Coin (DeltaCoin (..))
-import           Cardano.Ledger.Shelley.Rewards as Shelley
 
 import qualified Codec.Binary.Bech32 as Bech32
 
@@ -230,12 +228,6 @@ renderSyncState ss =
   case ss of
     SyncFollowing -> "following"
     SyncLagging -> "lagging"
-
-rewardTypeToSource :: Shelley.RewardType -> RewardSource
-rewardTypeToSource rt =
-  case rt of
-    Shelley.LeaderReward -> RwdLeader
-    Shelley.MemberReward -> RwdMember
 
 renderScriptPurpose :: ScriptPurpose -> Text
 renderScriptPurpose ss =

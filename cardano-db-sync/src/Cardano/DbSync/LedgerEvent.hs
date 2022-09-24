@@ -35,6 +35,7 @@ import           Cardano.Prelude hiding (All)
 
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Types
+import           Cardano.DbSync.Util
 
 import           Cardano.Slotting.Slot (EpochNo (..))
 
