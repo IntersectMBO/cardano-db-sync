@@ -21,6 +21,7 @@ module Cardano.DbSync.Util
   , renderByteArray
   , renderPoint
   , renderSlotList
+  , rewardTypeToSource
   , textPrettyShow
   , textShow
   , thrd3
@@ -35,9 +36,11 @@ import           Cardano.Prelude hiding (catch)
 
 import           Cardano.BM.Trace (Trace, logError, logInfo)
 
-import           Cardano.Db (textShow)
+import           Cardano.Db (RewardSource (..), textShow)
 
 import           Cardano.Ledger.Coin (Coin (..))
+import qualified Cardano.Ledger.Shelley.Rewards as Shelley
+
 
 import           Cardano.DbSync.Config.Types ()
 import           Cardano.DbSync.Types
@@ -182,6 +185,12 @@ renderSlotList xs
   | length xs < 10 = textShow (map unSlotNo xs)
   | otherwise =
       mconcat [ "[", textShow (unSlotNo $ List.head xs), "..", textShow (unSlotNo $ List.last xs), "]" ]
+
+rewardTypeToSource :: Shelley.RewardType -> RewardSource
+rewardTypeToSource rt =
+  case rt of
+    Shelley.LeaderReward -> RwdLeader
+    Shelley.MemberReward -> RwdMember
 
 maybeFromStrict :: Strict.Maybe a -> Maybe a
 maybeFromStrict Strict.Nothing = Nothing
