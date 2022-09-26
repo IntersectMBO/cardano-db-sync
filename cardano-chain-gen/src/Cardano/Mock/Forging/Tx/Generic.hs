@@ -15,6 +15,7 @@ module Cardano.Mock.Forging.Tx.Generic
   , createPaymentCredentials
   , mkDummyScriptHash
   , unregisteredGenesisKeys
+  , mkDummyHash
   ) where
 
 import           Cardano.Prelude hiding (length, (.))
