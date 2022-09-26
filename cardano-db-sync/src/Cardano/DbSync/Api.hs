@@ -14,7 +14,7 @@ module Cardano.DbSync.Api
   , isConsistent
   , mkSyncEnvFromConfig
   , replaceConnection
-  , verifyFilePoints
+  , verifySnapshotPoint
   , getTrace
   , getBackend
   , hasLedgerState
@@ -60,7 +60,7 @@ import           Data.Time.Clock (UTCTime, getCurrentTime)
 import           Database.Persist.Postgresql (ConnectionString)
 import           Database.Persist.Sql (SqlBackend)
 
-import           Ouroboros.Consensus.Block.Abstract (HeaderHash, fromRawHash)
+import           Ouroboros.Consensus.Block.Abstract (HeaderHash, Point (..), fromRawHash)
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import           Ouroboros.Network.Block (BlockNo (..), Point (..))
@@ -271,30 +271,41 @@ mkSyncEnvFromConfig trce connSring syncOptions dir genCfg =
 
 getLatestPoints :: SyncEnv -> IO [CardanoPoint]
 getLatestPoints env = do
-    if hasLedgerState env then do
-      files <- listLedgerStateFilesOrdered $ leDir (envLedger env)
-      verifyFilePoints env files
-    else do
-      -- Brings the 5 latest.
-      dbBackend <- getBackend env
-      lastPoints <- DB.runDbIohkNoLogging dbBackend DB.queryLatestPoints
-      pure $ mapMaybe convert' lastPoints
+    if hasLedgerState env
+      then do
+        snapshotPoints <- listKnownSnapshots $ envLedger env
+        verifySnapshotPoint env snapshotPoints
+      else do
+        -- Brings the 5 latest.
+        dbBackend <- getBackend env
+        lastPoints <- DB.runDbIohkNoLogging dbBackend DB.queryLatestPoints
+        pure $ mapMaybe convert' lastPoints
   where
     convert' (Nothing, _) = Nothing
     convert' (Just slot, bs) = convert (SlotNo slot) bs
 
-verifyFilePoints :: SyncEnv -> [LedgerStateFile] -> IO [CardanoPoint]
-verifyFilePoints env files =
-    catMaybes <$> mapM validLedgerFileToPoint files
+verifySnapshotPoint :: SyncEnv -> [SnapshotPoint] -> IO [CardanoPoint]
+verifySnapshotPoint env snapPoints =
+    catMaybes <$> mapM validLedgerFileToPoint snapPoints
   where
-    validLedgerFileToPoint :: LedgerStateFile -> IO (Maybe CardanoPoint)
-    validLedgerFileToPoint lsf = do
+    validLedgerFileToPoint :: SnapshotPoint -> IO (Maybe CardanoPoint)
+    validLedgerFileToPoint (OnDisk lsf) = do
         backend <- getBackend env
         hashes <- getSlotHash backend (lsfSlotNo lsf)
         let valid  = find (\(_, h) -> lsfHash lsf == hashToAnnotation h) hashes
         case valid of
           Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convert slot hash
           _ -> pure Nothing
+    validLedgerFileToPoint (InMemory pnt) = do
+        case pnt of
+          GenesisPoint -> pure Nothing
+          BlockPoint slotNo hsh -> do
+            backend <- getBackend env
+            hashes <- getSlotHash backend slotNo
+            let valid  = find (\(_, dbHash) -> getHeaderHash hsh == dbHash) hashes
+            case valid of
+              Just (dbSlotNo, _) | slotNo == dbSlotNo -> pure $ Just pnt
+              _ -> pure Nothing
 
 convert :: SlotNo -> ByteString -> Maybe CardanoPoint
 convert slot hashBlob =
