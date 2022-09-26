@@ -116,7 +116,9 @@ let
             configureFlags = [
               "--ghc-option=-optl=-lssl"
               "--ghc-option=-optl=-lcrypto"
+              "--ghc-option=-optl=-lstdc++" # used by icu, but not referenced m(
               "--ghc-option=-optl=-L${pkgs.openssl.out}/lib"
+              "--ghc-option=-optl=-L${(pkgs.icu.overrideAttrs (old: { configureFlags = old.configureFlags ++ [ "--enable-static" "--disable-shared" ]; })).out}/lib"
             ];
           };
         in {
