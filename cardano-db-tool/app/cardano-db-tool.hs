@@ -219,7 +219,10 @@ pReport =
     pReward :: Parser Report
     pReward =
       Opt.subparser $ mconcat
-        [ Opt.command "latest"
+        [ Opt.command "epoch"
+            $ Opt.info (ReportEpochRewards <$> pEpochNo <*> pStakeAddress)
+                (Opt.progDesc "Report the rewards fof the gievn epoch and stake address (or addresses)")
+        , Opt.command "latest"
             $ Opt.info (ReportLatestRewards <$> pStakeAddress)
                 (Opt.progDesc "Report the latest epoch rewards for a given stake address (or addresses)")
         , Opt.command "history"
@@ -234,3 +237,11 @@ pReport =
             (  Opt.long "stake-address"
             <> Opt.help "Either a single stake address or a comma separated list."
             )
+
+    pEpochNo :: Parser Word64
+    pEpochNo =
+      Opt.option Opt.auto $ mconcat
+        [ Opt.long "epoch"
+        , Opt.metavar "WORD"
+        , Opt.help "The epoch number."
+        ]
