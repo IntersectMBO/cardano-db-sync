@@ -16,9 +16,9 @@ module Test.Cardano.Db.Mock.Property.Property
     ( prop_empty_blocks
     ) where
 
+import           Control.Monad (void, when)
 import           Control.Monad.Class.MonadSTM.Strict (MonadSTM (atomically))
 import           Data.Foldable
-import           Data.Maybe (fromJust)
 import           Data.Text (Text)
 import           Data.TreeDiff (defaultExprViaShow)
 import           GHC.Generics (Generic, Generic1)
@@ -35,7 +35,8 @@ import           Test.Cardano.Db.Mock.Validate
 
 import           Ouroboros.Network.Block hiding (RollBack)
 
-import           Test.QuickCheck (Gen, Property, frequency, (===))
+import           Test.QuickCheck (Gen, Property, frequency, noShrinking, verbose, withMaxSuccess,
+                   (===))
 import           Test.QuickCheck.Monadic (monadicIO, run)
 
 import           Test.StateMachine
@@ -101,7 +102,8 @@ transition m cmd resp = case (cmd, resp) of
     (StartDBSync, _) | dbSynsIsOn m ->
         error "Tried to start started DBSync"
     (StartDBSync, _) ->
-        Model (serverTip m) (dbSyncTip m) True
+        -- 'serverTip' here is not a type. When db-sync starts it sync to the same point as the server
+        Model (serverTip m) (serverTip m) True
     (AssertBlockNo _, _) ->
         m
   where
@@ -132,8 +134,11 @@ semantics interpreter mockServer dbSync cmd = case cmd of
             Just pnt -> Unit <$> rollbackTo interpreter mockServer pnt
     StopDBSync -> Unit <$> stopDBSync dbSync
     StartDBSync -> Unit <$> startDBSync dbSync
-    AssertBlockNo Nothing -> Unit <$> assertBlocksCount dbSync 2
-    AssertBlockNo (Just n) -> Unit <$> assertBlockNoBackoff dbSync (fromIntegral $ unBlockNo n)
+    AssertBlockNo mBlkNo -> runAssert dbSync mBlkNo
+
+runAssert :: DBSyncEnv -> Maybe BlockNo -> IO (Response Concrete)
+runAssert dbSync Nothing = Unit <$> assertBlocksCount dbSync 2
+runAssert dbSync (Just n) = Unit <$> assertBlockNoBackoff dbSync (fromIntegral $ unBlockNo n)
 
 mock :: Model Symbolic -> Command Symbolic -> GenSym (Response Symbolic)
 mock m cmd = case cmd of
@@ -148,13 +153,16 @@ mock m cmd = case cmd of
 createBlock :: Int -> Interpreter -> ServerHandle IO CardanoBlock -> IO CardanoBlock
 createBlock n interpreter mockServer = case n of
     0 -> forgeNextFindLeaderAndSubmit interpreter mockServer []
-    _ -> withBabbageFindLeaderAndSubmit interpreter mockServer $ \_ -> Right [addMetadata (fromIntegral n) emptyTx]
+    _ -> do
+        nextBlockNo <- getNextBlockNo interpreter
+        withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
+            mkDummyRegisterTx n (fromIntegral $ unBlockNo nextBlockNo)
 
 generator :: Model Symbolic -> Maybe (Gen (Command Symbolic))
-generator m            = Just $ frequency
-  [ (if isOn then 90 else 0, genRollForward m)
-  , (if not canRollback then 0 else if isOn then 10 else 0, genRollBack m)
-  , (if isOn then 10 else  0, genStopDBSync m)
+generator m = Just $ frequency
+  [ (if isOn then 90 else 20, genRollForward m)
+  , (if not canRollback then 0 else if isOn then 10 else 20, genRollBack m)
+  , (if isOn then 30 else  0, genStopDBSync m)
   , (if isOn then  0 else 60, genStartDBSync m)
   , (if isOn then 30 else 0, genAssertBlockNo m)
   ]
@@ -166,13 +174,16 @@ generator m            = Just $ frequency
       Just _ -> True
 
 genRollForward :: Model Symbolic -> Gen (Command Symbolic)
-genRollForward _ = RollForward <$> frequency [(60, pure 0), (30, pure 1), (10, pure 2)]
+genRollForward _ = RollForward <$> frequency [(60, pure 0), (30, pure 1), (20, pure 2)]
 
 genRollBack :: Model Symbolic -> Gen (Command Symbolic)
-genRollBack m = RollBack <$> frequency [(10, pure Nothing), (90, Just <$> rollbackPrev)]
+genRollBack m = case serverTip m of
+    Nothing -> pure $ RollBack Nothing
+    Just 0 -> pure $ RollBack Nothing -- probably can't happen
+    Just 1 -> pure $ RollBack Nothing
+    Just srvTip -> RollBack <$> frequency [(10, pure Nothing), (90, Just <$> rollbackPrev srvTip)]
   where
-    srvTip = fromJust (error "Server on Genesis") (serverTip m)
-    rollbackPrev = frequency $ zip [1..(fromIntegral (unBlockNo srvTip) - 1)] (pure <$> [1.. (srvTip - 1)])
+    rollbackPrev srvTip = frequency $ zip [1..(fromIntegral (unBlockNo srvTip) - 1)] (pure <$> [1.. (srvTip - 1)])
 
 genStopDBSync :: Model Symbolic -> Gen (Command Symbolic)
 genStopDBSync _ = pure StopDBSync
@@ -200,9 +211,12 @@ sm interpreter mockServer dbSync = StateMachine initModel transition preconditio
          Nothing generator shrinker (semantics interpreter mockServer dbSync) mock noCleanup
 
 prop_empty_blocks :: IOManager -> [(Text, Text)] -> Property
-prop_empty_blocks iom knownMigrations = forAllCommands smSymbolic Nothing $ \cmds -> monadicIO $ do
-    (hist, _model, res) <- run $ runAction $ \interpreter mockServer dbSync -> do
-       runCommands' (sm interpreter mockServer dbSync) cmds
+prop_empty_blocks iom knownMigrations = withMaxSuccess 100 $ noShrinking $ verbose $ forAllCommands smSymbolic (Just 20) $ \cmds -> monadicIO $ do
+    (hist, res) <- run $ runAction $ \interpreter mockServer dbSync -> do
+      (hist, model, res) <- runCommands' (sm interpreter mockServer dbSync) cmds
+      when (dbSynsIsOn model) $
+        void $ runAssert dbSync (dbSyncTip model)
+      pure (hist, res)
     prettyCommands smSymbolic hist (checkCommandNames cmds (res === Ok))
   where
     smSymbolic = sm (error "inter") (error "mockServer") (error "dbSync")

@@ -23,6 +23,7 @@ module Cardano.Mock.Forging.Interpreter
   , getCurrentInterpreterState
   , getCurrentLedgerState
   , getCurrentEpoch
+  , getNextBlockNo
   , getCurrentSlot
   , forgeWithStakeCreds
   , withBabbageLedgerState
@@ -400,6 +401,10 @@ getCurrentInterpreterState = readMVar . interpState
 
 getCurrentLedgerState :: Interpreter -> IO (ExtLedgerState CardanoBlock)
 getCurrentLedgerState = fmap (currentState . istChain) . getCurrentInterpreterState
+
+getNextBlockNo :: Interpreter -> IO BlockNo
+getNextBlockNo inter =
+    istNextBlockNo <$> getCurrentInterpreterState inter
 
 getCurrentEpoch :: Interpreter -> IO EpochNo
 getCurrentEpoch inter = do
