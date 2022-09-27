@@ -59,6 +59,7 @@ import           Control.Monad.Trans.Except.Exit (orDie)
 
 import qualified Data.ByteString.Lazy as BSL
 import           Data.Functor.Contravariant (contramap)
+import qualified Data.List as List
 import qualified Data.Text as Text
 
 import           Database.Persist.Postgresql (ConnectionString, withPostgresqlConn)
@@ -231,6 +232,13 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
           -- the connection here. A connection cannot be used concurrently by many
           -- threads
           latestPoints <- getLatestPoints env
+          let (inMemory, onDisk) = List.span snd latestPoints
+          logInfo trce $ mconcat
+            [ "Suggesting intersection points from memory: "
+            , textShow (fst <$> inMemory)
+            , " and from disk: "
+            , textShow (fst <$> onDisk)
+            ]
           currentTip <- getCurrentTipBlockNo env
 
           when (null latestPoints && currentTip /= Origin) $ do
@@ -255,7 +263,7 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
                   (cChainSyncCodec codecs)
                   channel
                   (chainSyncClientPeerPipelined
-                      $ chainSyncClient metricsSetters trce latestPoints currentTip actionQueue)
+                      $ chainSyncClient metricsSetters trce (fst <$> latestPoints) currentTip actionQueue)
               )
 
           atomically $ writeDbActionQueue actionQueue DbFinish

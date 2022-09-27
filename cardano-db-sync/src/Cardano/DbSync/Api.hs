@@ -2,6 +2,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbSync.Api
@@ -268,7 +269,8 @@ mkSyncEnvFromConfig trce connSring syncOptions dir genCfg =
                       dir
 
 
-getLatestPoints :: SyncEnv -> IO [CardanoPoint]
+-- | 'True' is for in memory points and 'False' for on disk
+getLatestPoints :: SyncEnv -> IO [(CardanoPoint, Bool)]
 getLatestPoints env = do
     if hasLedgerState env
       then do
@@ -283,11 +285,11 @@ getLatestPoints env = do
     convert (Nothing, _) = Nothing
     convert (Just slot, bs) = convertToPoint (SlotNo slot) bs
 
-verifySnapshotPoint :: SyncEnv -> [SnapshotPoint] -> IO [CardanoPoint]
+verifySnapshotPoint :: SyncEnv -> [SnapshotPoint] -> IO [(CardanoPoint, Bool)]
 verifySnapshotPoint env snapPoints =
     catMaybes <$> mapM validLedgerFileToPoint snapPoints
   where
-    validLedgerFileToPoint :: SnapshotPoint -> IO (Maybe CardanoPoint)
+    validLedgerFileToPoint :: SnapshotPoint -> IO (Maybe (CardanoPoint, Bool))
     validLedgerFileToPoint (OnDisk lsf) = do
         backend <- getBackend env
         hashes <- getSlotHash backend (lsfSlotNo lsf)
@@ -303,12 +305,12 @@ verifySnapshotPoint env snapPoints =
             hashes <- getSlotHash backend slotNo
             let valid  = find (\(_, dbHash) -> getHeaderHash hsh == dbHash) hashes
             case valid of
-              Just (dbSlotNo, _) | slotNo == dbSlotNo -> pure $ Just pnt
+              Just (dbSlotNo, _) | slotNo == dbSlotNo -> pure $ Just (pnt, True)
               _ -> pure Nothing
 
-convertToPoint :: SlotNo -> ByteString -> Maybe CardanoPoint
+convertToPoint :: SlotNo -> ByteString -> Maybe (CardanoPoint, Bool)
 convertToPoint slot hashBlob =
-    Point . Point.block slot <$> convertHashBlob hashBlob
+    (, False) . Point . Point.block slot <$> convertHashBlob hashBlob
   where
     convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
     convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)
