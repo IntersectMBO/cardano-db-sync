@@ -127,7 +127,7 @@ rollbackLedger env point = do
             ]
         pure Nothing
       Left lsfs ->
-        Just <$> verifySnapshotPoint env (OnDisk <$> lsfs)
+        Just . fmap fst <$> verifySnapshotPoint env (OnDisk <$> lsfs)
 
 -- | This not only checks that the ledger and ChainSync points are equal, but also that the
 -- 'Consistent' Level is correct based on the db tip.
