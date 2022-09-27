@@ -13,6 +13,7 @@ module Cardano.Mock.ChainSync.Server
     forkServerThread
   , withServerHandle
   , stopServer
+  , restartServer
 
     -- * ServerHandle api
   , ServerHandle (..)
@@ -85,9 +86,12 @@ import           Cardano.Mock.Chain hiding (rollback)
 import           Cardano.Mock.ChainDB
 import           Cardano.Mock.ChainSync.State
 
+{- HLINT ignore "Use readTVarIO" -}
+
 data ServerHandle m blk = ServerHandle
   { chainProducerState :: StrictTVar m (ChainProducerState blk)
-  , threadHandle :: Async ()
+  , threadHandle :: StrictTVar m (Async ())
+  , forkAgain :: m (Async ())
   }
 
 replaceGenesis :: MonadSTM m => ServerHandle m blk -> State blk -> STM m ()
@@ -111,8 +115,16 @@ rollback handle point =
       Nothing -> error $ "point " <> show point <> " not in chain"
       Just st' -> st'
 
-stopServer :: ServerHandle m blk -> IO ()
-stopServer = cancel . threadHandle
+restartServer :: ServerHandle IO blk -> IO ()
+restartServer sh = do
+    stopServer sh
+    thread <- forkAgain sh
+    atomically $ writeTVar (threadHandle sh) thread
+
+stopServer :: ServerHandle IO blk -> IO ()
+stopServer sh = do
+    srvThread <- atomically $ readTVar $ threadHandle sh
+    cancel srvThread
 
 type MockServerConstraint blk =
     ( SerialiseNodeToClientConstraints blk
@@ -138,8 +150,10 @@ forkServerThread
     -> IO (ServerHandle IO blk)
 forkServerThread iom config initSt networkMagic path = do
     chainSt <- newTVarIO $ initChainProducerState config initSt
-    thread <- async $ runLocalServer iom (configCodec config) networkMagic path chainSt
-    pure $ ServerHandle chainSt thread
+    let runThread = async $ runLocalServer iom (configCodec config) networkMagic path chainSt
+    thread <- runThread
+    threadVar <- newTVarIO thread
+    pure $ ServerHandle chainSt threadVar runThread
 
 withServerHandle
     :: forall blk a. MockServerConstraint blk
