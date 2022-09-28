@@ -26,7 +26,7 @@ module Cardano.DbSync.Util
   , textShow
   , thrd3
   , traverseMEither
-  , whenJust
+  , whenStrictJust
   , whenMaybe
   , mlookup
   , whenRight
@@ -197,8 +197,8 @@ maybeToStrict :: Maybe a -> Strict.Maybe a
 maybeToStrict Nothing = Strict.Nothing
 maybeToStrict (Just a) = Strict.Just a
 
-whenJust :: Applicative m => Strict.Maybe a -> (a -> m ()) -> m ()
-whenJust ma f =
+whenStrictJust :: Applicative m => Strict.Maybe a -> (a -> m ()) -> m ()
+whenStrictJust ma f =
   case ma of
     Strict.Nothing -> pure ()
     Strict.Just a -> f a

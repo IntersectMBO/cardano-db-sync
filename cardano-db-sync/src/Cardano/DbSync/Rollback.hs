@@ -34,7 +34,7 @@ rollbackFromBlockNo :: MonadIO m => SyncEnv -> BlockNo -> ExceptT SyncNodeError 
 rollbackFromBlockNo env blkNo = do
     nBlocks <- lift $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
     mBlockId <- lift $ DB.queryBlockNo (unBlockNo blkNo)
-    whenJust (maybeToStrict mBlockId) $ \blockId -> do
+    whenStrictJust (maybeToStrict mBlockId) $ \blockId -> do
       liftIO . logInfo trce $
         mconcat
           [ "Deleting ", textShow nBlocks, " blocks after "
@@ -80,7 +80,7 @@ rollbackToPoint env point serverTip = do
 
         if nBlocks <= 50 || not (hasLedgerState env) then do
           liftIO . logInfo trce $ "Rolling back to " <> renderPoint point
-          whenJust (maybeToStrict mSlotNo) $ \slotNo ->
+          whenStrictJust (maybeToStrict mSlotNo) $ \slotNo ->
           -- there may be more deleted blocks than slots, because ebbs don't have
           -- a slot. We can only make an estimation here.
             liftIO . logInfo trce $

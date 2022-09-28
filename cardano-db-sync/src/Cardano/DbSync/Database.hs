@@ -28,7 +28,7 @@ import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState
 import           Cardano.DbSync.Metrics
 import           Cardano.DbSync.Types
-import           Cardano.DbSync.Util hiding (whenJust)
+import           Cardano.DbSync.Util
 
 import           Cardano.Slotting.Slot (WithOrigin (..))
 
