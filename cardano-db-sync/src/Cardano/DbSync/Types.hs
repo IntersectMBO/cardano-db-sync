@@ -126,7 +126,7 @@ data PoolFetchRetry = PoolFetchRetry
   { pfrPoolHashId :: !PoolHashId
   , pfrReferenceId :: !PoolMetadataRefId
   , pfrPoolUrl :: !PoolUrl
-  , pfrPoolMDHash :: !PoolMetaHash
+  , pfrPoolMDHash :: !(Maybe PoolMetaHash)
   , pfrRetry :: !Retry
   } deriving (Show)
 

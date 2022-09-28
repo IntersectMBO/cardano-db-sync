@@ -123,6 +123,7 @@ library
                       , binary
                       , bytestring
                       , base16-bytestring
+                      , case-insensitive
                       , cardano-api
                       , cardano-binary
                       , cardano-client
