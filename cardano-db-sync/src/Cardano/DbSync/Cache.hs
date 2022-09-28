@@ -200,8 +200,8 @@ newEmptyCache maCapacity =
 -- NOTE: For 'StakeAddresses' we use a mixed approach. If the rollback is long we just drop
 -- everything, since it is very rare. If not, we query all the StakeAddressesId of blocks
 -- that wil be deleted.
-rollbackCache :: MonadIO m => Cache -> BlockNo -> Word64 -> ReaderT SqlBackend m ()
-rollbackCache cache (BlockNo blkNo) nBlocks =
+rollbackCache :: MonadIO m => Cache -> BlockNo -> Bool -> Word64 -> ReaderT SqlBackend m ()
+rollbackCache cache (BlockNo blkNo) deleteEq nBlocks =
   case cache of
     UninitiatedCache -> pure ()
     Cache ci -> do
@@ -209,15 +209,15 @@ rollbackCache cache (BlockNo blkNo) nBlocks =
         atomically $ writeTVar (cPools ci) Map.empty
         atomically $ modifyTVar (cMultiAssets ci) LRU.cleanup
         atomically $ writeTVar (cPrevBlock ci) Nothing
-      rollbackStakeAddr ci blkNo nBlocks
+      rollbackStakeAddr ci blkNo deleteEq nBlocks
 
-rollbackStakeAddr :: MonadIO m => CacheInternal -> Word64 -> Word64 -> ReaderT SqlBackend m ()
-rollbackStakeAddr ci blkNo nBlocks = do
+rollbackStakeAddr :: MonadIO m => CacheInternal -> Word64 -> Bool -> Word64 -> ReaderT SqlBackend m ()
+rollbackStakeAddr ci blkNo deleteEq nBlocks = do
   if nBlocks > 600
     then liftIO $ atomically $ writeTVar (cStakeCreds ci) Map.empty
     else do
       initMp <- liftIO $ readTVarIO (cStakeCreds ci)
-      stakeAddrIdsToDelete <- DB.queryStakeAddressIdsAfter blkNo
+      stakeAddrIdsToDelete <- DB.queryStakeAddressIdsAfter blkNo deleteEq
       let stakeAddrIdsSetToDelete = Set.fromList stakeAddrIdsToDelete
       let !mp = Map.filter (`Set.notMember` stakeAddrIdsSetToDelete) initMp
       liftIO $ atomically $ writeTVar (cStakeCreds ci) mp

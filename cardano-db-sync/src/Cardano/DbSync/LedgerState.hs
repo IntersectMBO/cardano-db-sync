@@ -15,11 +15,13 @@ module Cardano.DbSync.LedgerState
   , LedgerEvent (..)
   , ApplyResult (..)
   , LedgerStateFile (..)
+  , SnapshotPoint (..)
   , applyBlock
   , defaultApplyResult
   , mkLedgerEnv
   , applyBlockAndSnapshot
   , listLedgerStateFilesOrdered
+  , listKnownSnapshots
   , loadLedgerStateFromFile
   , findLedgerStateFile
   , loadLedgerAtPoint
@@ -57,7 +59,8 @@ import           Cardano.Prelude hiding (atomically)
 import           Cardano.Slotting.Block (BlockNo (..))
 
 import           Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
-import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..), fromWithOrigin)
+import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..), at,
+                   fromWithOrigin)
 
 import qualified Control.Exception as Exception
 import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, atomically, newTVarIO, readTVar,
@@ -76,8 +79,8 @@ import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import           Data.Time.Clock (UTCTime, diffUTCTime, getCurrentTime)
 
-import           Ouroboros.Consensus.Block (CodecConfig, WithOrigin (..), blockHash, blockIsEBB,
-                   blockPrevHash, pointSlot)
+import           Ouroboros.Consensus.Block (CodecConfig, Point (..), WithOrigin (..), blockHash,
+                   blockIsEBB, blockPrevHash, castPoint, pointSlot)
 import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
@@ -88,8 +91,8 @@ import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
 import           Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import           Ouroboros.Consensus.HardFork.Combinator.State (epochInfoLedger)
 import qualified Ouroboros.Consensus.HardFork.History as History
-import           Ouroboros.Consensus.Ledger.Abstract (LedgerResult (..), getTipSlot, ledgerTipHash,
-                   ledgerTipPoint, ledgerTipSlot, tickThenReapplyLedgerResult)
+import           Ouroboros.Consensus.Ledger.Abstract (LedgerResult (..), getTip, getTipSlot,
+                   ledgerTipHash, ledgerTipPoint, ledgerTipSlot, tickThenReapplyLedgerResult)
 import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerCfg (..), ExtLedgerState (..))
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
@@ -579,7 +582,7 @@ findStateFromPoint env point = do
       logWarning (leTrace env) $
         case lsfs of
           [] -> "Rollback failed. No more ledger state files."
-          (x:_) -> mconcat [ "Rolling back further to slot ", textShow (unSlotNo $ lsfSlotNo x) ]
+          (x:_) -> mconcat [ "Needs to Rollback further to slot ", textShow (unSlotNo $ lsfSlotNo x) ]
 
 -- Splits the files based on the comparison with the given point. It will return
 -- a list of newer files, a file at the given point if found and a list of older
@@ -655,6 +658,34 @@ loadLedgerStateFromFile tracer config delete point lsf = do
           (decodeDisk codecConfig)
           (decodeDisk codecConfig)
           (decodeDisk codecConfig)
+
+data SnapshotPoint = OnDisk LedgerStateFile | InMemory CardanoPoint
+
+getSlotNoSnapshot :: SnapshotPoint -> WithOrigin SlotNo
+getSlotNoSnapshot (OnDisk lsf) = at $ lsfSlotNo lsf
+getSlotNoSnapshot (InMemory cp) = pointSlot cp
+
+listKnownSnapshots :: LedgerEnv -> IO [SnapshotPoint]
+listKnownSnapshots env = do
+    inMem <- fmap InMemory <$> listMemorySnapshots env
+    onDisk <- fmap OnDisk <$> listLedgerStateFilesOrdered (leDir env)
+    pure $ reverse $ List.sortOn getSlotNoSnapshot $ inMem <> onDisk
+
+listMemorySnapshots :: LedgerEnv -> IO [CardanoPoint]
+listMemorySnapshots env = do
+    mState <- atomically $ readTVar $ leStateVar env
+    case mState of
+      Strict.Nothing -> pure []
+      Strict.Just ledgerDB -> pure $ filter notGenesis
+        (castPoint . getTip . clsState <$> getEdgePoints ledgerDB)
+  where
+    getEdgePoints ldb =
+      case AS.toNewestFirst $ ledgerDbCheckpoints ldb of
+        [] -> []
+        [a] -> [a]
+        ls -> [List.head ls, List.last ls]
+    notGenesis GenesisPoint = False
+    notGenesis (BlockPoint _ _) = True
 
 -- Get a list of the ledger state files order most recent
 listLedgerStateFilesOrdered :: LedgerStateDir -> IO [LedgerStateFile]

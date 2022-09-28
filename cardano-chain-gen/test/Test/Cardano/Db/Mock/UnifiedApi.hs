@@ -15,6 +15,7 @@ module Test.Cardano.Db.Mock.UnifiedApi
   , fillUntilNextEpoch
   , fillEpochs
   , fillEpochPercentage
+  , rollbackTo
   , registerAllStakeCreds
   ) where
 
@@ -156,6 +157,11 @@ fillEpochPercentage :: Interpreter -> ServerHandle IO CardanoBlock -> Int -> IO 
 fillEpochPercentage interpreter mockServer percentage = do
   let blocksToCreate = div (percentage * blocksPerEpoch) 100
   replicateM blocksToCreate $forgeNextFindLeaderAndSubmit interpreter mockServer []
+
+rollbackTo :: Interpreter -> ServerHandle IO CardanoBlock -> CardanoPoint -> IO ()
+rollbackTo interpreter mockServer point = do
+    rollbackInterpreter interpreter point
+    atomically $ rollback mockServer point
 
 registerAllStakeCreds :: Interpreter -> ServerHandle IO CardanoBlock -> IO CardanoBlock
 registerAllStakeCreds interpreter mockServer = do

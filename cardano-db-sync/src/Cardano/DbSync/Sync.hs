@@ -59,6 +59,7 @@ import           Control.Monad.Trans.Except.Exit (orDie)
 
 import qualified Data.ByteString.Lazy as BSL
 import           Data.Functor.Contravariant (contramap)
+import qualified Data.List as List
 import qualified Data.Text as Text
 
 import           Database.Persist.Postgresql (ConnectionString, withPostgresqlConn)
@@ -224,12 +225,20 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
       liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
         Db.runIohkLogging trce $ withPostgresqlConn (envConnString env) $ \backend -> liftIO $ do
           replaceConnection env backend
+          setConsistentLevel env Unchecked
           logInfo trce "Starting chainSyncClient"
 
           -- The Db thread is not forked at this point, so we can use
           -- the connection here. A connection cannot be used concurrently by many
           -- threads
           latestPoints <- getLatestPoints env
+          let (inMemory, onDisk) = List.span snd latestPoints
+          logInfo trce $ mconcat
+            [ "Suggesting intersection points from memory: "
+            , textShow (fst <$> inMemory)
+            , " and from disk: "
+            , textShow (fst <$> onDisk)
+            ]
           currentTip <- getCurrentTipBlockNo env
 
           when (null latestPoints && currentTip /= Origin) $ do
@@ -254,7 +263,7 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
                   (cChainSyncCodec codecs)
                   channel
                   (chainSyncClientPeerPipelined
-                      $ chainSyncClient metricsSetters trce latestPoints currentTip actionQueue)
+                      $ chainSyncClient metricsSetters trce (fst <$> latestPoints) currentTip actionQueue)
               )
 
           atomically $ writeDbActionQueue actionQueue DbFinish
@@ -310,8 +319,8 @@ chainSyncClient metricsSetters trce latestPoints currentTip actionQueue = do
       SendMsgFindIntersect
         (if null points then [genesisPoint] else points)
         ClientPipelinedStIntersect
-          { recvMsgIntersectFound = \ _hdr tip -> pure $ go policy Zero clientTip (getTipBlockNo tip) Nothing
-          , recvMsgIntersectNotFound = \tip -> pure $ goTip policy Zero clientTip tip Nothing
+          { recvMsgIntersectFound = \ _hdr tip -> pure $ goTip policy Zero clientTip tip Nothing
+          , recvMsgIntersectNotFound = \tip    -> pure $ goTip policy Zero clientTip tip Nothing
           }
 
     policy :: MkPipelineDecision
@@ -365,7 +374,7 @@ chainSyncClient metricsSetters trce latestPoints currentTip actionQueue = do
               logException trce "recvMsgRollBackward: " $ do
                 -- This will get the current tip rather than what we roll back to
                 -- but will only be incorrect for a short time span.
-                (mPoints, newTip) <- waitRollback actionQueue point
+                (mPoints, newTip) <- waitRollback actionQueue point tip
                 pure $ finish newTip tip mPoints
         }
 

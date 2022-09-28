@@ -671,11 +671,11 @@ mirRewardRollback =
       assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,0,0,1,0))]
 
       atomically $ rollback mockServer (blockPoint $ last c)
-      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c))
+      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c <> d))
       assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,0,0,1,0))]
       stopDBSync dbSync
       startDBSync dbSync
-      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c))
+      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c <> d))
       assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,0,0,1,0))]
 
       forM_ d $ atomically . addBlock mockServer
@@ -790,10 +790,12 @@ rollbackBoundary =
 
       assertRewardCount dbSync 3
       atomically $ rollback mockServer (blockPoint $ last blks)
-      assertBlockNoBackoff dbSync (2 + length a + length blks)
+      assertBlockNoBackoff dbSync (2 + length a + length blks + length blks')
       forM_ blks' $ atomically . addBlock mockServer
       assertBlockNoBackoff dbSync (2 + length a + length blks + length blks')
       assertRewardCount dbSync 3
+      blks'' <- fillUntilNextEpoch interpreter mockServer
+      assertBlockNoBackoff dbSync (2 + length a + length blks + length blks' + length blks'')
   where
     testLabel = "rollbackBoundary-alonzo"
 

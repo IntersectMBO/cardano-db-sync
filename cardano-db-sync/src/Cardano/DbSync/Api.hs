@@ -2,15 +2,20 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbSync.Api
   ( SyncEnv (..)
   , LedgerEnv (..)
   , SyncOptions (..)
+  , ConsistentLevel (..)
+  , setConsistentLevel
+  , getConsistentLevel
+  , isConsistent
   , mkSyncEnvFromConfig
   , replaceConnection
-  , verifyFilePoints
+  , verifySnapshotPoint
   , getTrace
   , getBackend
   , hasLedgerState
@@ -57,7 +62,7 @@ import           Data.Time.Clock (UTCTime, getCurrentTime)
 import           Database.Persist.Postgresql (ConnectionString)
 import           Database.Persist.Sql (SqlBackend)
 
-import           Ouroboros.Consensus.Block.Abstract (HeaderHash, fromRawHash)
+import           Ouroboros.Consensus.Block.Abstract (HeaderHash, Point (..), fromRawHash)
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import           Ouroboros.Network.Block (BlockNo (..), Point (..))
@@ -71,6 +76,7 @@ data SyncEnv = SyncEnv
   , envSystemStart :: !SystemStart
   , envConnString :: ConnectionString
   , envBackend :: !(StrictTVar IO (Strict.Maybe SqlBackend))
+  , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)
   , envOptions :: !SyncOptions
   , envCache :: !Cache
   , envOfflineWorkQueue :: !(TBQueue IO PoolFetchRetry)
@@ -80,6 +86,25 @@ data SyncEnv = SyncEnv
   , envNoLedgerEnv :: !NoLedgerStateEnv -- only used when configured without ledger state.
   , envLedger :: !LedgerEnv
   }
+
+data ConsistentLevel = Consistent | DBAheadOfLedger | Unchecked
+  deriving (Show, Eq)
+
+setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
+setConsistentLevel env cst = do
+    logInfo (getTrace env) $ "Setting ConsistencyLevel to " <> textShow cst
+    atomically $ writeTVar (envConsistentLevel env) cst
+
+getConsistentLevel :: SyncEnv -> IO ConsistentLevel
+getConsistentLevel env =
+    readTVarIO (envConsistentLevel env)
+
+isConsistent :: SyncEnv -> IO Bool
+isConsistent env = do
+    cst <- getConsistentLevel env
+    case cst of
+      Consistent -> pure True
+      _ -> pure False
 
 data SyncOptions = SyncOptions
   { soptExtended :: !Bool
@@ -198,6 +223,7 @@ mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir = do
                  (snapshotEveryFollowing syncOptions) (snapshotEveryLagging syncOptions)
   cache <- if soptCache syncOptions then newEmptyCache 100000 else pure uninitiatedCache
   backendVar <- newTVarIO Strict.Nothing
+  consistentLevelVar <- newTVarIO Unchecked
   owq <- newTBQueueIO 100
   orq <- newTBQueueIO 100
   epochVar <- newTVarIO initEpochState
@@ -210,6 +236,7 @@ mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir = do
           , envConnString = connSring
           , envBackend = backendVar
           , envOptions = syncOptions
+          , envConsistentLevel = consistentLevelVar
           , envCache = cache
           , envOfflineWorkQueue = owq
           , envOfflineResultQueue = orq
@@ -242,12 +269,13 @@ mkSyncEnvFromConfig trce connSring syncOptions dir genCfg =
                       dir
 
 
-getLatestPoints :: SyncEnv -> IO [CardanoPoint]
+-- | 'True' is for in memory points and 'False' for on disk
+getLatestPoints :: SyncEnv -> IO [(CardanoPoint, Bool)]
 getLatestPoints env = do
     if hasLedgerState env
       then do
-        files <- listLedgerStateFilesOrdered $ leDir (envLedger env)
-        verifyFilePoints env files
+        snapshotPoints <- listKnownSnapshots $ envLedger env
+        verifySnapshotPoint env snapshotPoints
       else do
         -- Brings the 5 latest.
         dbBackend <- getBackend env
@@ -257,22 +285,32 @@ getLatestPoints env = do
     convert (Nothing, _) = Nothing
     convert (Just slot, bs) = convertToPoint (SlotNo slot) bs
 
-verifyFilePoints :: SyncEnv -> [LedgerStateFile] -> IO [CardanoPoint]
-verifyFilePoints env files =
-    catMaybes <$> mapM validLedgerFileToPoint files
+verifySnapshotPoint :: SyncEnv -> [SnapshotPoint] -> IO [(CardanoPoint, Bool)]
+verifySnapshotPoint env snapPoints =
+    catMaybes <$> mapM validLedgerFileToPoint snapPoints
   where
-    validLedgerFileToPoint :: LedgerStateFile -> IO (Maybe CardanoPoint)
-    validLedgerFileToPoint lsf = do
+    validLedgerFileToPoint :: SnapshotPoint -> IO (Maybe (CardanoPoint, Bool))
+    validLedgerFileToPoint (OnDisk lsf) = do
         backend <- getBackend env
         hashes <- getSlotHash backend (lsfSlotNo lsf)
         let valid  = find (\(_, h) -> lsfHash lsf == hashToAnnotation h) hashes
         case valid of
           Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convertToPoint slot hash
           _ -> pure Nothing
+    validLedgerFileToPoint (InMemory pnt) = do
+        case pnt of
+          GenesisPoint -> pure Nothing
+          BlockPoint slotNo hsh -> do
+            backend <- getBackend env
+            hashes <- getSlotHash backend slotNo
+            let valid  = find (\(_, dbHash) -> getHeaderHash hsh == dbHash) hashes
+            case valid of
+              Just (dbSlotNo, _) | slotNo == dbSlotNo -> pure $ Just (pnt, True)
+              _ -> pure Nothing
 
-convertToPoint :: SlotNo -> ByteString -> Maybe CardanoPoint
+convertToPoint :: SlotNo -> ByteString -> Maybe (CardanoPoint, Bool)
 convertToPoint slot hashBlob =
-    Point . Point.block slot <$> convertHashBlob hashBlob
+    (, False) . Point . Point.block slot <$> convertHashBlob hashBlob
   where
     convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
     convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)

@@ -23,15 +23,15 @@ import           Data.ByteString (ByteString)
 import           Data.Int (Int64)
 
 import           Database.Esqueleto.Experimental (SqlExpr, Value, delete, deleteCount, from, just,
-                   table, val, where_, (==.), (>.), (^.))
+                   table, val, where_, (==.), (>.), (>=.), (^.))
 
 import           Database.Persist.Sql (SqlBackend)
 
 
 -- | Delete all blocks with a block number greater than or equal to the supplied `BlockNo`.
 -- Returns 'True' if any blocks were deleted and 'False' if none were found.
-deleteAfterBlockNo :: MonadIO m => BlockNo -> ReaderT SqlBackend m Bool
-deleteAfterBlockNo blockNo = do
+deleteAfterBlockNo :: MonadIO m => BlockNo -> Bool -> ReaderT SqlBackend m Bool
+deleteAfterBlockNo blockNo deleteEq = do
     count <- deleteCount $ do
               blk <- from $ table @Block
               where_ (nonGenesisBlockNo $ blk ^. BlockBlockNo)
@@ -64,7 +64,10 @@ deleteAfterBlockNo blockNo = do
 
     -- Byron and Shelley genesis blocks have block nos of -1 and -2 repectively.
     nonGenesisBlockNo :: SqlExpr (Value Int64) -> SqlExpr (Value Bool)
-    nonGenesisBlockNo expr = expr >. val blkNo
+    nonGenesisBlockNo expr =
+      if deleteEq
+      then expr >=. val blkNo
+      else expr >. val blkNo
 
 
 deleteEverything :: MonadIO m => ReaderT SqlBackend m ()

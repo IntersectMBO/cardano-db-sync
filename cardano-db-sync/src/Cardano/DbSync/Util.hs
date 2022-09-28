@@ -16,6 +16,7 @@ module Cardano.DbSync.Util
   , maybeToStrict
   , nullMetricSetters
   , panicAbort
+  , logAndPanic
   , plusCoin
   , readAbortOnPanic
   , renderByteArray
@@ -160,6 +161,11 @@ panicAbort msg = do
     threadDelay 100000 -- 0.1 seconds
     mapM_ (Text.putStrLn . red) [ "panic abort:", msg ]
     exitImmediately (ExitFailure 1)
+
+logAndPanic :: Trace IO Text -> Text -> IO ()
+logAndPanic tracer msg = do
+    logError tracer msg
+    panic msg
 
 plusCoin :: Coin -> Coin -> Coin
 plusCoin (Coin a) (Coin b) = Coin (a + b)
