@@ -71,6 +71,8 @@ unitTests iom knownMigrations =
           , test "sync one block" addSimple
           , test "restart db-sync" restartDBSync
           , test "sync small chain" addSimpleChain
+          , test "node restart" nodeRestart
+          , test "node restart boundary" nodeRestartBoundary
           ]
       , testGroup "rollbacks"
           [ test "simple rollback" simpleRollback
@@ -220,6 +222,35 @@ addSimpleChain =
       assertBlockNoBackoff dbSync 3
   where
     testLabel = "addSimpleChain"
+
+nodeRestart :: IOManager -> [(Text, Text)] -> Assertion
+nodeRestart =
+    withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync dbSync
+      void $ forgeAndSubmitBlocks interpreter mockServer 5
+      assertBlockNoBackoff dbSync 5
+
+      restartServer mockServer
+
+      void $ forgeAndSubmitBlocks interpreter mockServer 5
+      assertBlockNoBackoff dbSync 10
+  where
+    testLabel = "nodeRestart"
+
+nodeRestartBoundary :: IOManager -> [(Text, Text)] -> Assertion
+nodeRestartBoundary =
+    withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync dbSync
+      blks <- fillUntilNextEpoch interpreter mockServer
+      assertBlockNoBackoff dbSync $ length blks
+
+      restartServer mockServer
+
+      void $ forgeAndSubmitBlocks interpreter mockServer 5
+      assertBlockNoBackoff dbSync $ 5 + length blks
+
+  where
+    testLabel = "nodeRestartBoundary"
 
 restartDBSync :: IOManager -> [(Text, Text)] -> Assertion
 restartDBSync =
