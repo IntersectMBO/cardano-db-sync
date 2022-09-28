@@ -20,6 +20,13 @@ module Cardano.DbSync
 
   , runDbSyncNode
   , runDbSync
+
+  -- For testing and debugging
+  , FetchError (..)
+  , SimplifiedPoolOfflineData (..)
+  , httpGetPoolOfflineData
+  , parsePoolUrl
+  , renderFetchError
   ) where
 
 import           Cardano.Prelude hiding (Nat, option, (%))
@@ -29,6 +36,9 @@ import           Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 import           Cardano.Db (textShow)
 import qualified Cardano.Db as Db
 
+import           Cardano.DbSync.Era.Shelley.Offline.Http (FetchError (..),
+                   SimplifiedPoolOfflineData (..), httpGetPoolOfflineData, parsePoolUrl,
+                   renderFetchError, spodJson)
 import           Cardano.DbSync.Rollback (unsafeRollback)
 import           Cardano.DbSync.Util (readAbortOnPanic)
 
