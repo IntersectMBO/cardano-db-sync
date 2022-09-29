@@ -75,7 +75,6 @@ library
                       , memory
                       , monad-control
                       , monad-logger
-                      , ouroboros-network
                       , persistent
                       , persistent-documentation
                       , persistent-postgresql

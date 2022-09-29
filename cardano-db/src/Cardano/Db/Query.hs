@@ -9,32 +9,24 @@ module Cardano.Db.Query
   ( LookupFail (..)
   , queryAddressBalanceAtSlot
   , queryAddressOutputs
-  , queryGenesis
   , queryBlock
   , queryBlockCount
   , queryBlockCountAfterBlockNo
   , queryBlockHeight
   , queryBlockId
   , queryBlockNoId
-  , queryBlockSlotNo
   , queryBlockNo
-  , queryMainBlock
   , queryBlockTxCount
-  , queryBlocksAfterSlot
   , queryCalcEpochEntry
-  , queryCheckPoints
   , queryCurrentEpochNo
   , queryDepositUpToBlockNo
   , queryEpochEntry
-  , queryEpochNo
   , queryRewardCount
-  , queryRewards
   , queryNormalEpochRewardCount
   , queryNullPoolRewardExists
-  , queryEpochRewardCount
-  , queryRewardsSpend
   , queryFeesUpToBlockNo
   , queryFeesUpToSlotNo
+  , queryGenesis
   , queryGenesisSupply
   , queryShelleyGenesisSupply
   , queryLatestBlock
@@ -47,7 +39,6 @@ module Cardano.Db.Query
   , queryPreviousSlotNo
   , queryMeta
   , queryMultiAssetId
-  , queryNetworkName
   , querySlotNosGreaterThan
   , queryLastSlotNoGreaterThan
   , queryCountSlotNosGreaterThan
@@ -63,7 +54,6 @@ module Cardano.Db.Query
   , queryRedeemerDataPage
   , queryRedeemerDataCount
   , queryRedeemerDataInfo
-  , querySelectCount
   , querySlotHash
   , querySlotUtcTime
   , queryTotalSupply
@@ -122,7 +112,7 @@ module Cardano.Db.Query
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
-import           Control.Monad.Extra (join, mapMaybeM, whenJust)
+import           Control.Monad.Extra (join, whenJust)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
@@ -136,13 +126,12 @@ import           Data.Time.Clock (UTCTime (..))
 import           Data.Tuple.Extra (uncurry3)
 import           Data.Word (Word64)
 
-import           Database.Esqueleto.Experimental (Entity, From, PersistEntity, PersistField,
-                   SqlBackend, SqlExpr, SqlQuery, Value (Value, unValue), ValueList, asc, count,
-                   countRows, desc, entityKey, entityVal, exists, from, in_, innerJoin, isNothing,
-                   just, leftJoin, limit, max_, min_, notExists, not_, offset, on, orderBy, select,
-                   subList_select, sum_, table, type (:&) ((:&)), unSqlBackendKey, val, valList,
-                   where_, (&&.), (<=.), (==.), (>.), (>=.), (?.), (^.), (||.))
-import           Database.Esqueleto.Experimental.From (ToFrom (..))
+import           Database.Esqueleto.Experimental (Entity (..), PersistField, SqlBackend, SqlExpr,
+                   SqlQuery, Value (Value, unValue), ValueList, asc, count, countRows, desc,
+                   asc, entityVal, exists, from, in_, innerJoin, isNothing, just, leftJoin, limit,
+                   max_, min_, notExists, not_, on, offset, orderBy, select, subList_select, sum_,
+                   table, type (:&) ((:&)), unSqlBackendKey, val, valList, where_, (&&.), (<=.),
+                   (==.), (>.), (>=.), (?.), (^.), (||.))
 import           Database.Persist.Class.PersistQuery (selectList)
 
 import           Cardano.Db.Error
@@ -253,14 +242,6 @@ queryBlockCountAfterBlockNo blockNo queryEq = do
   pure $ maybe 0 unValue (listToMaybe res)
 
 -- | Get the 'SlotNo' associated with the given hash.
-queryBlockSlotNo :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail (Maybe Word64))
-queryBlockSlotNo hash = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (blk ^. BlockHash ==. val hash)
-    pure $ blk ^. BlockSlotNo
-  pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
-
 queryBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe BlockId)
 queryBlockNo blkNo = do
   res <- select $ do
@@ -280,39 +261,12 @@ queryBlockHeight = do
     pure (blk ^. BlockBlockNo)
   pure $ unValue =<< listToMaybe res
 
--- | Get the latest 'Block' associated with the given hash, skipping any EBBs.
-queryMainBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail Block)
-queryMainBlock hash = do
-    res <- select  $ do
-      blk <- from $ table @Block
-      where_ (blk ^. BlockHash ==. val hash)
-      pure $ blk ^. BlockId
-    maybe (pure $ Left (DbLookupBlockHash hash)) queryMainBlockId (unValue <$> listToMaybe res)
-  where
-    queryMainBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m (Either LookupFail Block)
-    queryMainBlockId blkid = do
-      res <- select $ do
-        blk <- from $ table @Block
-        where_ (isJust (blk ^. BlockBlockNo) &&. blk ^. BlockId <=. val blkid)
-        orderBy [desc (blk ^. BlockSlotNo)]
-        limit 1
-        pure blk
-      pure $ maybeToEither (DbLookupBlockId $ unBlockId blkid) entityVal (listToMaybe res)
-
 -- | Get the number of transactions in the specified block.
 queryBlockTxCount :: MonadIO m => BlockId -> ReaderT SqlBackend m Word64
 queryBlockTxCount blkId = do
   res <- select $ do
     tx <- from $ table @Tx
     where_ (tx ^. TxBlockId ==. val blkId)
-    pure countRows
-  pure $ maybe 0 unValue (listToMaybe res)
-
-queryBlocksAfterSlot :: MonadIO m => Word64 -> ReaderT SqlBackend m Int
-queryBlocksAfterSlot slotNo = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (blk ^. BlockSlotNo >. just (val slotNo))
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
@@ -373,32 +327,6 @@ queryCalcEpochEntry epochNum = do
     defaultUTCTime :: UTCTime
     defaultUTCTime = read "2000-01-01 00:00:00.000000 UTC"
 
-queryCheckPoints :: MonadIO m => Word64 -> ReaderT SqlBackend m [(Word64, ByteString)]
-queryCheckPoints limitCount = do
-    latest <- select $ do
-      blk <- from $ table @Block
-      where_ (isJust $ blk ^. BlockSlotNo)
-      orderBy [desc (blk ^. BlockSlotNo)]
-      limit (fromIntegral limitCount)
-      pure (blk ^. BlockSlotNo)
-    case mapMaybe unValue latest of
-      [] -> pure []
-      xs -> mapMaybeM querySpacing xs
-  where
-    querySpacing :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe (Word64, ByteString))
-    querySpacing blkNo = do
-       rows <- select $ do
-         blk <- from $ table @Block
-         where_ (blk ^. BlockSlotNo ==. just (val blkNo))
-         pure (blk ^. BlockSlotNo, blk ^. BlockHash)
-       pure $ convert =<< listToMaybe rows
-
-    convert :: (Value (Maybe Word64), Value ByteString) -> Maybe (Word64, ByteString)
-    convert (va, vb) =
-      case (unValue va, unValue vb) of
-        (Nothing, _ ) -> Nothing
-        (Just a, b) -> Just (a, b)
-
 queryDepositUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
 queryDepositUpToBlockNo blkNo = do
   res <- select $ do
@@ -418,16 +346,6 @@ queryEpochEntry epochNum = do
       pure epoch
     pure $ maybeToEither (DbLookupEpochNo epochNum) entityVal (listToMaybe res)
 
--- | Get the Epoch number for a given block. Returns '0' for the genesis block
--- even though the DB entry for the genesis block is 'NULL'.
-queryEpochNo :: MonadIO m => BlockId -> ReaderT SqlBackend m (Either LookupFail (Maybe Word64))
-queryEpochNo blkId = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (blk ^. BlockId ==. val blkId)
-    pure $ blk ^. BlockEpochNo
-  pure $ maybeToEither (DbLookupBlockId $ unBlockId blkId) unValue (listToMaybe res)
-
 queryCurrentEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
 queryCurrentEpochNo = do
     res <- select $ do
@@ -441,30 +359,6 @@ queryRewardCount = do
     _ <- from $ table @Reward
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
-
-queryEpochRewardCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
-queryEpochRewardCount epochNum = do
-  res <- select $ do
-    rwds <- from $ table @Reward
-    where_ (rwds ^. RewardSpendableEpoch ==. val epochNum)
-    pure countRows
-  pure $ maybe 0 unValue (listToMaybe res)
-
-queryRewardsSpend :: MonadIO m => Word64 -> ReaderT SqlBackend m [Reward]
-queryRewardsSpend epochNum = do
-  res <- select $ do
-    rwds <- from $ table @Reward
-    where_ (rwds ^. RewardSpendableEpoch ==. val epochNum)
-    pure rwds
-  pure $ entityVal <$> res
-
-queryRewards :: MonadIO m => Word64 -> ReaderT SqlBackend m [Reward]
-queryRewards epochNum = do
-  res <- select $ do
-    rwds <- from $ table @Reward
-    where_ (rwds ^. RewardEarnedEpoch ==. val epochNum)
-    pure rwds
-  pure $ entityVal <$> res
 
 queryNormalEpochRewardCount
     :: MonadIO m
@@ -721,16 +615,6 @@ queryRedeemerDataInfo rdmDataId = do
     pure (prevBlock ^. BlockHash, prevBlock ^. BlockSlotNo)
   pure $ unValue2 <$> listToMaybe res
 
--- | Count the number of rows that match the select with the supplied predicate.
-querySelectCount :: forall table table' m . (MonadIO m, PersistEntity table, ToFrom (From (SqlExpr (Entity table))) table')
-                 => (table' -> SqlQuery ()) -> ReaderT SqlBackend m Word
-querySelectCount predicate = do
-  xs <- select $ do
-    x <- from (table @table)
-    predicate x
-    pure countRows
-  pure $ maybe 0 unValue (listToMaybe xs)
-
 querySlotHash :: MonadIO m => SlotNo -> ReaderT SqlBackend m [(SlotNo, ByteString)]
 querySlotHash slotNo = do
   res <- select $ do
@@ -755,14 +639,6 @@ queryMultiAssetId policy assetName = do
     ma <- from $ table @MultiAsset
     where_ (ma ^. MultiAssetPolicy ==. val policy &&. ma ^. MultiAssetName ==. val assetName)
     pure (ma ^. MultiAssetId)
-  pure $ unValue <$> listToMaybe res
-
--- | Get the network name from the Meta table.
-queryNetworkName :: MonadIO m => ReaderT SqlBackend m (Maybe Text)
-queryNetworkName = do
-  res <- select $ do
-    meta <- from $ table @Meta
-    pure (meta ^. MetaNetworkName)
   pure $ unValue <$> listToMaybe res
 
 querySlotNosGreaterThan :: MonadIO m => Word64 -> ReaderT SqlBackend m [SlotNo]
