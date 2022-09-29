@@ -9,31 +9,22 @@ module Cardano.Db.Query
   ( LookupFail (..)
   , queryAddressBalanceAtSlot
   , queryAddressOutputs
-  , queryGenesis
   , queryBlock
   , queryBlockCount
   , queryBlockCountAfterBlockNo
   , queryBlockHash
   , queryBlockHeight
   , queryBlockId
-  , queryBlockSlotNo
-  , queryMainBlock
   , queryBlockTxCount
-  , queryBlocksAfterSlot
   , queryByronGenesisSupply
   , queryByronGenesisTxCount
   , queryCalcEpochEntry
-  , queryCheckPoints
   , queryCurrentEpochNo
   , queryDepositUpToBlockNo
   , queryEpochEntry
-  , queryEpochNo
   , queryRewardCount
-  , queryRewards
   , queryNormalEpochRewardCount
   , queryNullPoolRewardExists
-  , queryEpochRewardCount
-  , queryRewardsSpend
   , queryFeesUpToBlockNo
   , queryFeesUpToSlotNo
   , queryShelleyGenesisSupply
@@ -42,25 +33,20 @@ module Cardano.Db.Query
   , queryLatestPoints
   , queryLatestCachedEpochNo
   , queryLatestEpochNo
-  , queryLatestBlockId
   , queryLatestBlockNo
   , queryLatestSlotNo
   , queryMeta
   , queryMultiAssetId
-  , queryNetworkName
-  , queryPreviousSlotNo
   , querySchemaVersion
   , queryScript
   , queryDatum
   , queryRedeemerData
-  , querySelectCount
   , querySlotHash
   , querySlotNosGreaterThan
   , querySlotNos
   , querySlotUtcTime
   , queryTotalSupply
   , queryTxCount
-  , queryTxCountByBlockNo
   , queryTxId
   , queryTxInCount
   , queryTxOutCount
@@ -118,7 +104,7 @@ module Cardano.Db.Query
 import           Cardano.Slotting.Block (BlockNo (..))
 import           Cardano.Slotting.Slot (SlotNo (..))
 
-import           Control.Monad.Extra (join, mapMaybeM, whenJust)
+import           Control.Monad.Extra (join, whenJust)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
@@ -132,13 +118,12 @@ import           Data.Time.Clock (UTCTime (..))
 import           Data.Tuple.Extra (uncurry3)
 import           Data.Word (Word16, Word64)
 
-import           Database.Esqueleto.Experimental (Entity, From, PersistEntity, PersistField,
-                   SqlBackend, SqlExpr, SqlQuery, Value (Value, unValue), ValueList, count,
-                   countRows, desc, entityKey, entityVal, exists, from, in_, innerJoin, isNothing,
-                   just, leftJoin, limit, max_, min_, notExists, not_, on, orderBy, select,
-                   subList_select, sum_, table, type (:&) ((:&)), unSqlBackendKey, val, valList,
-                   where_, (&&.), (+.), (<=.), (==.), (>.), (>=.), (?.), (^.), (||.))
-import           Database.Esqueleto.Experimental.From (ToFrom (..))
+import           Database.Esqueleto.Experimental (Entity, PersistField, SqlBackend, SqlExpr,
+                   SqlQuery, Value (Value, unValue), ValueList, count, countRows, desc, entityKey,
+                   entityVal, exists, from, in_, innerJoin, isNothing, just, leftJoin, limit, max_,
+                   min_, notExists, not_, on, orderBy, select, subList_select, sum_, table,
+                   type (:&) ((:&)), unSqlBackendKey, val, valList, where_, (&&.), (<=.), (==.),
+                   (>.), (>=.), (?.), (^.), (||.))
 import           Database.Persist.Class.PersistQuery (selectList)
 
 import           Cardano.Db.Error
@@ -193,16 +178,6 @@ queryAddressOutputs addr = do
       Just (Just x) -> x
       _ -> DbLovelace 0
 
-queryGenesis :: MonadIO m => ReaderT SqlBackend m (Either LookupFail BlockId)
-queryGenesis = do
-  res <- select $ do
-            blk <- from (table @Block)
-            where_ (isNothing (blk ^. BlockEpochNo))
-            pure $ blk ^. BlockId
-  case res of
-    [blk] -> pure $ Right (unValue blk)
-    _ -> pure $ Left DBMultipleGenesis
-
 -- | Get the 'Block' associated with the given hash.
 queryBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail Block)
 queryBlock hash = do
@@ -229,15 +204,6 @@ queryBlockCountAfterBlockNo blockNo queryEq = do
                        else blk ^. BlockBlockNo >.  val (fromIntegral blockNo))
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
-
--- | Get the 'SlotNo' associated with the given hash.
-queryBlockSlotNo :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail (Maybe Word64))
-queryBlockSlotNo hash = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (blk ^. BlockHash ==. val hash)
-    pure $ blk ^. BlockSlotNo
-  pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
 
 -- | Get the 'BlockNo' associated with the given hash.
 queryBlockHash :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail BlockNo)
@@ -268,25 +234,6 @@ queryBlockId hash = do
             pure $ blk ^. BlockId
   pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
 
--- | Get the latest 'Block' associated with the given hash, skipping any EBBs.
-queryMainBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail Block)
-queryMainBlock hash = do
-    res <- select  $ do
-              blk <- from $ table @Block
-              where_ (blk ^. BlockHash ==. val hash)
-              pure $ blk ^. BlockId
-    maybe (pure $ Left (DbLookupBlockHash hash)) queryMainBlockId (unValue <$> listToMaybe res)
-  where
-    queryMainBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m (Either LookupFail Block)
-    queryMainBlockId blkid = do
-      res <- select $ do
-        blk <- from $ table @Block
-        where_ (blk ^. BlockId <=. val blkid)
-        orderBy [desc (blk ^. BlockSlotNo)]
-        limit 1
-        pure blk
-      pure $ maybeToEither (DbLookupBlockId $ unBlockId blkid) entityVal (listToMaybe res)
-
 -- | Get the number of transactions in the specified block.
 queryBlockTxCount :: MonadIO m => BlockId -> ReaderT SqlBackend m Word64
 queryBlockTxCount blkId = do
@@ -296,14 +243,6 @@ queryBlockTxCount blkId = do
                             `on` (\(tx :& blk) -> tx ^. TxBlockNo ==. blk ^. BlockBlockNo)
             where_ (blk ^. BlockId ==. val blkId)
             pure countRows
-  pure $ maybe 0 unValue (listToMaybe res)
-
-queryBlocksAfterSlot :: MonadIO m => Word64 -> ReaderT SqlBackend m Int
-queryBlocksAfterSlot slotNo = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (blk ^. BlockSlotNo >. just (val slotNo))
-    pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
 -- | Return the total Genesis coin supply.
@@ -386,32 +325,6 @@ queryCalcEpochEntry epochNum = do
     defaultUTCTime :: UTCTime
     defaultUTCTime = read "2000-01-01 00:00:00.000000 UTC"
 
-queryCheckPoints :: MonadIO m => Word64 -> ReaderT SqlBackend m [(Word64, ByteString)]
-queryCheckPoints limitCount = do
-    latest <- select $ do
-      blk <- from $ table @Block
-      where_ (isJust $ blk ^. BlockSlotNo)
-      orderBy [desc (blk ^. BlockSlotNo)]
-      limit (fromIntegral limitCount)
-      pure (blk ^. BlockSlotNo)
-    case mapMaybe unValue latest of
-      [] -> pure []
-      xs -> mapMaybeM querySpacing xs
-  where
-    querySpacing :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe (Word64, ByteString))
-    querySpacing blkNo = do
-       rows <- select $ do
-         blk <- from $ table @Block
-         where_ (blk ^. BlockSlotNo ==. just (val blkNo))
-         pure (blk ^. BlockSlotNo, blk ^. BlockHash)
-       pure $ convert =<< listToMaybe rows
-
-    convert :: (Value (Maybe Word64), Value ByteString) -> Maybe (Word64, ByteString)
-    convert (va, vb) =
-      case (unValue va, unValue vb) of
-        (Nothing, _ ) -> Nothing
-        (Just a, b) -> Just (a, b)
-
 queryDepositUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
 queryDepositUpToBlockNo blkNo = do
   res <- select $ do
@@ -431,16 +344,6 @@ queryEpochEntry epochNum = do
       pure epoch
     pure $ maybeToEither (DbLookupEpochNo epochNum) entityVal (listToMaybe res)
 
--- | Get the Epoch number for a given block. Returns '0' for the genesis block
--- even though the DB entry for the genesis block is 'NULL'.
-queryEpochNo :: MonadIO m => BlockId -> ReaderT SqlBackend m (Either LookupFail (Maybe Word64))
-queryEpochNo blkId = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (blk ^. BlockId ==. val blkId)
-    pure $ blk ^. BlockEpochNo
-  pure $ maybeToEither (DbLookupBlockId $ unBlockId blkId) unValue (listToMaybe res)
-
 queryCurrentEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
 queryCurrentEpochNo = do
     res <- select $ do
@@ -454,30 +357,6 @@ queryRewardCount = do
     _ <- from $ table @Reward
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
-
-queryEpochRewardCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
-queryEpochRewardCount epochNum = do
-  res <- select $ do
-    rwds <- from $ table @Reward
-    where_ (rwds ^. RewardSpendableEpoch ==. val epochNum)
-    pure countRows
-  pure $ maybe 0 unValue (listToMaybe res)
-
-queryRewardsSpend :: MonadIO m => Word64 -> ReaderT SqlBackend m [Reward]
-queryRewardsSpend epochNum = do
-  res <- select $ do
-    rwds <- from $ table @Reward
-    where_ (rwds ^. RewardSpendableEpoch ==. val epochNum)
-    pure rwds
-  pure $ entityVal <$> res
-
-queryRewards :: MonadIO m => Word64 -> ReaderT SqlBackend m [Reward]
-queryRewards epochNum = do
-  res <- select $ do
-    rwds <- from $ table @Reward
-    where_ (rwds ^. RewardEarnedEpoch ==. val epochNum)
-    pure rwds
-  pure $ entityVal <$> res
 
 queryNormalEpochRewardCount
     :: MonadIO m
@@ -546,16 +425,6 @@ queryShelleyGenesisTxCount = do
           pure (blk ^. BlockTxCount)
   pure $ maybe 0 unValue (listToMaybe res)
 
--- | Get 'BlockId' of the latest block.
-queryLatestBlockId :: MonadIO m => ReaderT SqlBackend m (Maybe BlockId)
-queryLatestBlockId = do
-  res <- select $ do
-    blk <- from $ table @Block
-    orderBy [desc (blk ^. BlockSlotNo)]
-    limit 1
-    pure (blk ^. BlockId)
-  pure $ fmap unValue (listToMaybe res)
-
 -- | Get the 'BlockNo' of the latest block.
 queryLatestBlockNo :: MonadIO m => ReaderT SqlBackend m Word64
 queryLatestBlockNo = do
@@ -617,18 +486,6 @@ queryLatestSlotNo = do
     pure $ blk ^. BlockSlotNo
   pure $ fromMaybe 0 (unValue =<< listToMaybe res)
 
--- | Given a 'SlotNo' return the 'SlotNo' of the previous block.
-queryPreviousSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Word64)
-queryPreviousSlotNo slotNo = do
-  res <- select $ do
-            (blk :& pblk) <-
-                from $ table @Block
-                `innerJoin` table @Block
-                `on` (\(blk :& pblk) -> blk ^. BlockBlockNo ==. (pblk ^. BlockBlockNo +. val 1))
-            where_ (blk ^. BlockSlotNo ==. just (val slotNo))
-            pure $ pblk ^. BlockSlotNo
-  pure $ unValue =<< listToMaybe res
-
 querySchemaVersion :: MonadIO m => ReaderT SqlBackend m (Maybe SchemaVersion)
 querySchemaVersion = do
   res <- select $ do
@@ -662,16 +519,6 @@ queryRedeemerData hsh = do
       pure (rdmrDt ^. RedeemerDataId)
   pure $ unValue <$> listToMaybe xs
 
--- | Count the number of rows that match the select with the supplied predicate.
-querySelectCount :: forall table table' m . (MonadIO m, PersistEntity table, ToFrom (From (SqlExpr (Entity table))) table')
-                 => (table' -> SqlQuery ()) -> ReaderT SqlBackend m Word
-querySelectCount predicate = do
-  xs <- select $ do
-    x <- from (table @table)
-    predicate x
-    pure countRows
-  pure $ maybe 0 unValue (listToMaybe xs)
-
 querySlotHash :: MonadIO m => SlotNo -> ReaderT SqlBackend m [(SlotNo, ByteString)]
 querySlotHash slotNo = do
   res <- select $ do
@@ -696,14 +543,6 @@ queryMultiAssetId policy assetName = do
     ma <- from $ table @MultiAsset
     where_ (ma ^. MultiAssetPolicy ==. val policy &&. ma ^. MultiAssetName ==. val assetName)
     pure (ma ^. MultiAssetId)
-  pure $ unValue <$> listToMaybe res
-
--- | Get the network name from the Meta table.
-queryNetworkName :: MonadIO m => ReaderT SqlBackend m (Maybe Text)
-queryNetworkName = do
-  res <- select $ do
-    meta <- from $ table @Meta
-    pure (meta ^. MetaNetworkName)
   pure $ unValue <$> listToMaybe res
 
 querySlotNosGreaterThan :: MonadIO m => Word64 -> ReaderT SqlBackend m [SlotNo]
@@ -756,14 +595,6 @@ queryTxCount = do
   res <- select $ do
     _ <- from $ table @Tx
     pure countRows
-  pure $ maybe 0 unValue (listToMaybe res)
-
-queryTxCountByBlockNo :: MonadIO m => BlockNo -> ReaderT SqlBackend m Word
-queryTxCountByBlockNo (BlockNo blkNo) = do
-  res <- select $ do
-            tx <- from $ table @Tx
-            where_ (tx ^. TxBlockNo ==. val (fromIntegral blkNo))
-            pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
 -- | Get the 'TxId' associated with the given hash.

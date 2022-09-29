@@ -4,7 +4,6 @@ module Cardano.Db.Delete
   , deleteEverything
   , deleteCascadeBlock
   , deleteCascadeAfter
-  , deleteCascadeBlockNo
   , deleteCascadeSlotNo
   , deleteDelistedPool
   ) where
@@ -104,15 +103,6 @@ deleteCascadeAfter (BlockNo blkNo) = do
     deleteCount $ do
       blk <- from $ table @Block
       where_ (isJust $ blk ^. BlockEpochNo)
-      where_ (blk ^. BlockBlockNo ==. val (fromIntegral blkNo))
-
--- | Delete a block if it exists. Returns 'True' if it did exist and has been
--- deleted and 'False' if it did not exist.
-deleteCascadeBlockNo :: MonadIO m => BlockNo -> ReaderT SqlBackend m Bool
-deleteCascadeBlockNo (BlockNo blkNo) = do
-  isNonZero <$$>
-    deleteCount $ do
-      blk <- from $ table @Block
       where_ (blk ^. BlockBlockNo ==. val (fromIntegral blkNo))
 
 -- | Delete a block if it exists. Returns 'True' if it did exist and has been
