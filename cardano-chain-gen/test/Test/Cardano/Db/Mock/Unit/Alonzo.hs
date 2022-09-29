@@ -33,7 +33,6 @@ import           Cardano.Mock.Forging.Types
 
 import           Cardano.SMASH.Server.PoolDataLayer
 import           Cardano.SMASH.Server.Types
-
 import           Control.Monad
 import           Control.Monad.Class.MonadSTM.Strict
 
