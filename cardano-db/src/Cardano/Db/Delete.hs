@@ -11,19 +11,14 @@ module Cardano.Db.Delete
 import           Cardano.Db.Query (isJust)
 import           Cardano.Db.Run (transactionCommit)
 import           Cardano.Db.Schema
-
 import           Cardano.Slotting.Block (BlockNo (..))
 import           Cardano.Slotting.Slot (SlotNo (..))
-
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
-
 import           Data.ByteString (ByteString)
 import           Data.Int (Int64)
-
 import           Database.Esqueleto.Experimental (SqlExpr, Value, delete, deleteCount, from, just,
                    table, val, where_, (==.), (>.), (>=.), (^.))
-
 import           Database.Persist.Sql (SqlBackend)
 
 

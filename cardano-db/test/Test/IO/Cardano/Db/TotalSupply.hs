@@ -5,17 +5,13 @@ module Test.IO.Cardano.Db.TotalSupply
   ) where
 
 import           Cardano.Db
-
 import           Control.Monad (void)
-
 import qualified Data.ByteString.Char8 as BS
 import           Data.Int (Int64)
 import qualified Data.Text as Text
-
+import           Test.IO.Cardano.Db.Util
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (testCase)
-
-import           Test.IO.Cardano.Db.Util
 
 tests :: TestTree
 tests =

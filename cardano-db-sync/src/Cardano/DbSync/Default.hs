@@ -7,13 +7,8 @@ module Cardano.DbSync.Default
   ( insertListBlocks
   ) where
 
-
-import           Cardano.Prelude
-
 import           Cardano.BM.Trace (logInfo)
-
 import qualified Cardano.Db as DB
-
 import           Cardano.DbSync.Api
 import           Cardano.DbSync.Cache
 import           Cardano.DbSync.Epoch
@@ -31,23 +26,18 @@ import           Cardano.DbSync.LocalStateQuery
 import           Cardano.DbSync.Rollback
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
-
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
-
+import           Cardano.Prelude
 import           Cardano.Slotting.Slot (EpochNo (..))
-
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
-
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
-
 import           Database.Persist.SqlBackend.Internal
 import           Database.Persist.SqlBackend.Internal.StatementCache
-
 import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
 import           Ouroboros.Network.Block (blockHash, blockNo, getHeaderFields)

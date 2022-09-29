@@ -8,16 +8,14 @@ module Cardano.DbTool.Validate.AdaPots
 
 import           Cardano.Db
 import           Cardano.DbTool.Validate.Util
-
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
-
 import qualified Data.List as List
 import qualified Data.List.Extra as List
 import           Data.Word (Word64)
-
 import           Database.Esqueleto.Experimental (Entity (..), SqlBackend, Value (..), from, select,
                    table, (^.))
+
 
 -- | Validate that for all epochs, the sum of the AdaPots values are always the
 -- same.

@@ -7,8 +7,13 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Mary
   ( fromMaryTx
   ) where
 
-import           Cardano.Prelude
-
+import           Cardano.DbSync.Era.Shelley.Generic.Metadata
+import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval, mkTxScript)
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (calcWithdrawalSum, fromTxIn,
+                   mkTxCertificate, mkTxWithdrawal, txHashId)
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
+import           Cardano.DbSync.Era.Shelley.Generic.Witness
 import           Cardano.Ledger.BaseTypes
 import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.CompactAddress as Ledger
@@ -20,20 +25,11 @@ import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as ShelleyMa
 import qualified Cardano.Ledger.ShelleyMA.TxBody as ShelleyMa
-
+import           Cardano.Prelude
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import           Data.MemoBytes (MemoBytes (..))
-
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardMary)
-
-import           Cardano.DbSync.Era.Shelley.Generic.Metadata
-import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval, mkTxScript)
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (calcWithdrawalSum, fromTxIn,
-                   mkTxCertificate, mkTxWithdrawal, txHashId)
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
-import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
 fromMaryTx :: (Word64, ShelleyTx.Tx StandardMary) -> Tx
 fromMaryTx (blkIndex, tx) =

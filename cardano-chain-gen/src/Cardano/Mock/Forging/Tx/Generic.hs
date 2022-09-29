@@ -18,15 +18,9 @@ module Cardano.Mock.Forging.Tx.Generic
   , mkDummyHash
   ) where
 
-import           Cardano.Prelude hiding (length, (.))
-
-import           Data.Coerce (coerce)
-import           Data.List (nub)
-import           Data.List.Extra ((!?))
-import qualified Data.Map.Strict as Map
-import qualified Data.Set as Set
-import qualified Data.UMap as UMap
-
+import           Cardano.Binary (ToCBOR (..))
+import           Cardano.Crypto.Hash (HashAlgorithm)
+import qualified Cardano.Crypto.Hash as Hash
 import           Cardano.Ledger.Address
 import           Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.Core as Core
@@ -39,18 +33,20 @@ import           Cardano.Ledger.Shelley.LedgerState hiding (LedgerState)
 import           Cardano.Ledger.Shelley.TxBody
 import           Cardano.Ledger.Shelley.UTxO
 import           Cardano.Ledger.TxIn (TxIn (..))
-
+import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
+import           Cardano.Mock.Forging.Types
+import           Cardano.Prelude hiding (length, (.))
+import           Data.Coerce (coerce)
+import           Data.List (nub)
+import           Data.List.Extra ((!?))
+import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
+import qualified Data.UMap as UMap
 import           Ouroboros.Consensus.Cardano.Block (LedgerState)
 import           Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 
-import           Cardano.Binary (ToCBOR (..))
-import           Cardano.Crypto.Hash (HashAlgorithm)
-import qualified Cardano.Crypto.Hash as Hash
-
-import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
-import           Cardano.Mock.Forging.Types
 
 resolveAddress :: forall era p. (Crypto era ~ StandardCrypto, Era era)
                => UTxOIndex era -> LedgerState (ShelleyBlock p era)

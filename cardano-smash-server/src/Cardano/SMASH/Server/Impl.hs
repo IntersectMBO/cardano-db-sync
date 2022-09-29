@@ -6,29 +6,23 @@ module Cardano.SMASH.Server.Impl
   , server
   ) where
 
-import           Cardano.Prelude hiding (Handler)
-
 import           Cardano.BM.Trace
-
-import           Data.Aeson (encode)
-import qualified Data.ByteString.Lazy as LBS
-
-import           Data.Swagger (Contact (..), Info (..), License (..), Swagger (..), URL (..))
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
-import           Data.Version (showVersion)
-
-import           Servant (Handler (..), Server, err400, err403, err404, errBody, (:<|>) (..))
-import           Servant.Swagger (toSwagger)
-
 import           Cardano.Db (textShow)
-
+import           Cardano.Prelude hiding (Handler)
 import           Cardano.SMASH.Server.Api
 import           Cardano.SMASH.Server.FetchPolicies
 import           Cardano.SMASH.Server.PoolDataLayer
 import           Cardano.SMASH.Server.Types
-
+import           Data.Aeson (encode)
+import qualified Data.ByteString.Lazy as LBS
+import           Data.Swagger (Contact (..), Info (..), License (..), Swagger (..), URL (..))
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+import           Data.Version (showVersion)
 import           Paths_cardano_smash_server (version)
+import           Servant (Handler (..), Server, err400, err403, err404, errBody, (:<|>) (..))
+import           Servant.Swagger (toSwagger)
+
 
 data ServerEnv = ServerEnv
     { seTrace :: Trace IO Text

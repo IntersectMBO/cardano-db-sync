@@ -5,19 +5,15 @@ module Cardano.Db.Migration.Haskell
   ( runHaskellMigration
   ) where
 
-import           Control.Exception (SomeException, handle)
-import           Control.Monad.Logger (MonadLogger)
-import           Control.Monad.Trans.Reader (ReaderT)
-
-import           Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
-
-import           Database.Persist.Sql (SqlBackend)
-
 import           Cardano.Db.Migration.Version
 import           Cardano.Db.PGConfig
 import           Cardano.Db.Run
-
+import           Control.Exception (SomeException, handle)
+import           Control.Monad.Logger (MonadLogger)
+import           Control.Monad.Trans.Reader (ReaderT)
+import           Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
+import           Database.Persist.Sql (SqlBackend)
 import           System.Exit (exitFailure)
 import           System.IO (Handle, hClose, hFlush, hPutStrLn, stdout)
 

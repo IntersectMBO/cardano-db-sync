@@ -8,7 +8,6 @@ module Cardano.Db.Version
 
 import           Cardano.Db.RevFromGit (gitRevFromGit)
 import           Data.FileEmbed (dummySpaceWith)
-
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text

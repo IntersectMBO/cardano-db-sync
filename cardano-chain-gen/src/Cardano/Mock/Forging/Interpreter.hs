@@ -32,12 +32,20 @@ module Cardano.Mock.Forging.Interpreter
   , mkTxId
   ) where
 
+import           Cardano.Ledger.Alonzo.Tx
+import           Cardano.Ledger.Crypto (StandardCrypto)
+import qualified Cardano.Ledger.Shelley.API.Mempool as Ledger
+import           Cardano.Ledger.Shelley.LedgerState (NewEpochState (..))
+import qualified Cardano.Ledger.TxIn as Ledger
+import           Cardano.Mock.ChainDB
+import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
+import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
+import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
+import           Cardano.Mock.Forging.Types
 import           Cardano.Prelude (bimap, getField, throwIO)
-
 import           Control.Monad (forM, void, when)
 import           Control.Monad.Except (runExcept)
 import           Control.Tracer (Tracer)
-
 import           Data.Aeson (FromJSON, ToJSON, eitherDecodeFileStrict, encodeFile)
 import qualified Data.List as List
 import           Data.Map.Strict (Map)
@@ -47,23 +55,8 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           Data.Word (Word64)
-
 import           GHC.Generics (Generic)
-
-import           Cardano.Ledger.Alonzo.Tx
-import           Cardano.Ledger.Crypto (StandardCrypto)
-import qualified Cardano.Ledger.Shelley.API.Mempool as Ledger
-import           Cardano.Ledger.Shelley.LedgerState (NewEpochState (..))
-import qualified Cardano.Ledger.TxIn as Ledger
-
-import           Cardano.Mock.ChainDB
-import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
-import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
-import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
-import           Cardano.Mock.Forging.Types
-
 import           NoThunks.Class (OnlyCheckWhnfNamed (..))
-
 import           Ouroboros.Consensus.Block (BlockForging, BlockProtocol, EpochNo, ForgeStateInfo,
                    ShouldForge (..), checkShouldForge)
 import qualified Ouroboros.Consensus.Block as Block
@@ -97,7 +90,6 @@ import           Ouroboros.Consensus.Util.IOLike (Exception, NoThunks, StrictMVa
                    newMVar, readMVar, swapMVar)
 import           Ouroboros.Consensus.Util.Orphans ()
 import           Ouroboros.Network.Block
-
 import           System.Directory (doesPathExist)
 
 data Interpreter = Interpreter

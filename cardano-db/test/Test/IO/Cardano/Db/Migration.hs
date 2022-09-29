@@ -10,12 +10,10 @@ import           Cardano.Db (LogFileDir (..), MigrationDir (..), MigrationValida
 import           Control.Monad (unless, when)
 import           Control.Monad.Trans.Except.Exit (orDie)
 import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
-
 import qualified Data.List as List
 import qualified Data.List.Extra as List
 import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
-
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (testCase)
 

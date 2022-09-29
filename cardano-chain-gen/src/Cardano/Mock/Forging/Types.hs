@@ -15,8 +15,13 @@ module Cardano.Mock.Forging.Types
   , UTxOIndex (..)
   ) where
 
+import           Cardano.Ledger.Address
+import qualified Cardano.Ledger.Core as Core
+import           Cardano.Ledger.Credential
+import           Cardano.Ledger.Keys
+import           Cardano.Ledger.TxIn (TxIn (..))
+import           Cardano.Slotting.Slot (SlotNo (..))
 import           Control.Exception
-
 import qualified Ouroboros.Consensus.Cardano.Block as Consensus
 import           Ouroboros.Consensus.Forecast
 import           Ouroboros.Consensus.Protocol.Praos (Praos)
@@ -25,13 +30,6 @@ import           Ouroboros.Consensus.Shelley.Eras (StandardAlonzo, StandardBabba
                    StandardShelley)
 import           Ouroboros.Network.Block (Point)
 
-import           Cardano.Ledger.Address
-import qualified Cardano.Ledger.Core as Core
-import           Cardano.Ledger.Credential
-import           Cardano.Ledger.Keys
-import           Cardano.Ledger.TxIn (TxIn (..))
-
-import           Cardano.Slotting.Slot (SlotNo (..))
 
 type TPraosStandard = TPraos StandardCrypto
 type PraosStandard = Praos StandardCrypto

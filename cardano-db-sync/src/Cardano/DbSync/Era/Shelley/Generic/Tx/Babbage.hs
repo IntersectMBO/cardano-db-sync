@@ -9,10 +9,14 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage
   ( fromBabbageTx
   ) where
 
-import           Cardano.Prelude
-
 import qualified Cardano.Crypto.Hash as Crypto
-
+import           Cardano.DbSync.Era.Shelley.Generic.Metadata
+import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (calcWithdrawalSum, fromTxIn)
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
+import           Cardano.DbSync.Era.Shelley.Generic.Witness
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import           Cardano.Ledger.Alonzo.Tx (ValidatedTx (..))
@@ -25,19 +29,10 @@ import qualified Cardano.Ledger.Core as Ledger
 import qualified Cardano.Ledger.Era as Ledger
 import           Cardano.Ledger.Mary.Value (Value (..))
 import qualified Cardano.Ledger.SafeHash as Ledger
-
+import           Cardano.Prelude
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
-
 import           Ouroboros.Consensus.Shelley.Eras (StandardBabbage, StandardCrypto)
-
-import           Cardano.DbSync.Era.Shelley.Generic.Metadata
-import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (calcWithdrawalSum, fromTxIn)
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
-import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
 fromBabbageTx :: Maybe Alonzo.Prices -> (Word64, Ledger.Tx StandardBabbage) -> Tx
 fromBabbageTx mprices (blkIndex, tx) =

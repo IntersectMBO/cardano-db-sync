@@ -11,24 +11,16 @@ module Cardano.DbSync.LocalStateQuery
   ) where
 
 import           Cardano.BM.Trace (Trace, logInfo)
-
-import           Cardano.Prelude hiding (atomically, (.))
-
-import           Cardano.Slotting.Slot (SlotNo (..))
-
-import           Cardano.Ledger.Crypto (StandardCrypto)
-
 import           Cardano.Db (textShow)
-
 import           Cardano.DbSync.StateQuery
 import           Cardano.DbSync.Types
-
+import           Cardano.Ledger.Crypto (StandardCrypto)
+import           Cardano.Prelude hiding (atomically, (.))
+import           Cardano.Slotting.Slot (SlotNo (..))
 import           Control.Monad.Class.MonadSTM.Strict (StrictTMVar, StrictTVar, atomically,
                    newEmptyTMVarIO, newTVarIO, putTMVar, readTVar, takeTMVar, writeTVar)
-
 import qualified Data.Strict.Maybe as Strict
 import           Data.Time.Clock (getCurrentTime)
-
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Cardano.Block (BlockQuery (QueryHardFork), CardanoEras)
 import           Ouroboros.Consensus.Cardano.Node ()
@@ -37,13 +29,13 @@ import           Ouroboros.Consensus.HardFork.Combinator.Ledger.Query
 import           Ouroboros.Consensus.HardFork.History.Qry (Interpreter, PastHorizonException,
                    interpretQuery)
 import           Ouroboros.Consensus.Ledger.Query (Query (..))
-
 import           Ouroboros.Network.Block (Point (..))
 import           Ouroboros.Network.Protocol.LocalStateQuery.Client (ClientStAcquired (..),
                    ClientStAcquiring (..), ClientStIdle (..), ClientStQuerying (..),
                    LocalStateQueryClient (..))
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as StateQuery
 import           Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
+
 
 data NoLedgerStateEnv = NoLedgerStateEnv
   { nlsTracer :: Trace IO Text

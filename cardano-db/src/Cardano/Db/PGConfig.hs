@@ -17,17 +17,13 @@ module Cardano.Db.PGConfig
   ) where
 
 import           Cardano.Db.Text
-
 import           Control.Exception (IOException)
 import qualified Control.Exception as Exception
-
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
 import           Data.Text (Text)
 import qualified Data.Text as Text
-
 import           Database.Persist.Postgresql (ConnectionString)
-
 import           System.Environment (lookupEnv, setEnv)
 import           System.Posix.User (getEffectiveUserName)
 

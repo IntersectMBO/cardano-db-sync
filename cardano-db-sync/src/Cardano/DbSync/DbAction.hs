@@ -12,18 +12,15 @@ module Cardano.DbSync.DbAction
   , waitRollback
   ) where
 
-import           Cardano.Prelude
-
 import           Cardano.DbSync.Types
-
+import           Cardano.Prelude
 import qualified Control.Concurrent.STM as STM
 import           Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as TBQ
-
 import           Control.Monad.Class.MonadSTM.Strict (StrictTMVar, newEmptyTMVarIO, takeTMVar)
-
 import           Ouroboros.Network.Block (BlockNo, Tip (..))
 import qualified Ouroboros.Network.Point as Point
+
 
 data DbAction
   = DbApplyBlock !CardanoBlock

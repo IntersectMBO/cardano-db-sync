@@ -1,26 +1,19 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-import           Cardano.Prelude
-
 import           Cardano.Db (MigrationDir (..), PGPassSource (PGPassDefaultEnv, PGPassEnv), gitRev)
-
 import           Cardano.DbSync (runDbSyncNode)
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Metrics (withMetricSetters)
-
+import           Cardano.Prelude
 import           Cardano.Slotting.Slot (SlotNo (..))
-
 import           Data.String (String)
 import qualified Data.Text as Text
 import           Data.Version (showVersion)
-
+import           MigrationValidations (KnownMigration (..), knownMigrations)
 import           Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative as Opt
-
-import           MigrationValidations (KnownMigration (..), knownMigrations)
 import           Paths_cardano_db_sync (version)
-
 import           System.Info (arch, compilerName, compilerVersion, os)
 
 

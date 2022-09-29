@@ -21,14 +21,9 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
   , rmInps
   ) where
 
-import           Cardano.Prelude
-
 import qualified Cardano.Api.Shelley as Api
-
 import qualified Cardano.Crypto.Hash as Crypto
-
 import           Cardano.Db (ScriptType (..))
-
 import           Cardano.DbSync.Era.Shelley.Generic.Metadata
 import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
@@ -37,7 +32,6 @@ import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (calcWithdrawalSu
 import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import           Cardano.DbSync.Era.Shelley.Generic.Util
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
-
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Language as Alonzo
@@ -60,14 +54,13 @@ import           Cardano.Ledger.Shelley.Scripts (ScriptHash)
 import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import qualified Cardano.Ledger.ShelleyMA.TxBody as ShelleyMa
-
+import           Cardano.Prelude
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import           Data.Sequence.Strict (StrictSeq)
 import qualified Data.Set as Set
-
 import           Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardCrypto)
 
 

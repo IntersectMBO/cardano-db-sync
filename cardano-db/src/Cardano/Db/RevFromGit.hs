@@ -3,9 +3,7 @@ module Cardano.Db.RevFromGit
   ) where
 
 import           Control.Exception (catch)
-
 import qualified Language.Haskell.TH as TH
-
 import           System.Exit (ExitCode (..))
 import           System.IO (hPutStrLn, stderr)
 import           System.IO.Error (isDoesNotExistError)

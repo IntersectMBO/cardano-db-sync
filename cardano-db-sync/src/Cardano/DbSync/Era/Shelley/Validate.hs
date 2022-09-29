@@ -9,34 +9,28 @@ module Cardano.DbSync.Era.Shelley.Validate
   ( validateEpochRewards
   ) where
 
-import           Cardano.Prelude hiding (from, on)
-
 import           Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
-
 import           Cardano.Db (DbLovelace, RewardSource)
 import qualified Cardano.Db as Db
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.LedgerEvent
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util (textShow)
-
 import           Cardano.Ledger.Coin (Coin (..))
 import           Cardano.Ledger.Crypto (StandardCrypto)
 import           Cardano.Ledger.Shelley.API (Network)
 import qualified Cardano.Ledger.Shelley.Rewards as Ledger
-
+import           Cardano.Prelude hiding (from, on)
 import           Cardano.Slotting.Slot (EpochNo (..))
-
 import           Control.Monad.Trans.Control (MonadBaseControl)
-
 import qualified Data.List as List
 import qualified Data.List.Extra as List
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-
 import           Database.Esqueleto.Experimental (InnerJoin (InnerJoin), SqlBackend, Value (Value),
                    desc, from, not_, on, orderBy, select, table, val, where_, (:&) ((:&)), (==.),
                    (^.))
+
 
 {- HLINT ignore "Fuse on/on" -}
 {- HLINT ignore "Reduce duplication" -}

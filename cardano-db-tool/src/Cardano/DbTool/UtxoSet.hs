@@ -4,21 +4,18 @@ module Cardano.DbTool.UtxoSet
   ) where
 
 import           Cardano.Chain.Common (decodeAddressBase58, isRedeemAddress)
-
-import           Data.Time.Clock (UTCTime)
-import           Data.Word (Word64)
-
 import           Cardano.Db
-
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
-
+import           Data.Time.Clock (UTCTime)
+import           Data.Word (Word64)
 import           System.Exit (exitSuccess)
 import           System.IO (IOMode (..), withFile)
+
 
 utxoSetAtSlot :: Word64 -> IO ()
 utxoSetAtSlot slotNo = do

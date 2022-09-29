@@ -6,25 +6,22 @@ module Cardano.DbSync.Era.Shelley.ValidateWithdrawal
   ( validateRewardWithdrawals
   ) where
 
-import           Control.Monad.IO.Class (MonadIO, liftIO)
-import           Control.Monad.Trans.Control (MonadBaseControl)
-import           Control.Monad.Trans.Reader (ReaderT)
-
 import           Cardano.BM.Trace (Trace, logError)
-
 import           Cardano.Db (Ada (..))
 import qualified Cardano.Db as Db
 import           Cardano.DbSync.Util
 import           Cardano.Slotting.Slot (EpochNo (..))
-
+import           Control.Monad.IO.Class (MonadIO, liftIO)
+import           Control.Monad.Trans.Control (MonadBaseControl)
+import           Control.Monad.Trans.Reader (ReaderT)
 import           Data.Either (partitionEithers)
 import           Data.Fixed (Micro)
 import qualified Data.List as List
 import           Data.Text (Text)
-
 import           Database.Esqueleto.Experimental (SqlBackend, Value (Value), asc, distinct, from,
                    groupBy, having, innerJoin, on, orderBy, select, sum_, table, unValue, val,
                    where_, (:&) ((:&)), (<.), (==.), (^.))
+
 
 {- HLINT ignore "Fuse on/on" -}
 

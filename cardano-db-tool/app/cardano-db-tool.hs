@@ -1,28 +1,23 @@
 {-# LANGUAGE OverloadedStrings #-}
+
 import           Cardano.Db
-import           Cardano.DbTool
-
 import           Cardano.DbSync.Config.Types hiding (CmdVersion, LogFileDir)
-
+import           Cardano.DbTool
 import           Cardano.Slotting.Slot (SlotNo (..))
-
 import           Control.Applicative (optional)
 import           Control.Monad (unless)
 import           Control.Monad.Trans.Except.Exit (orDie)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
-
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           Data.Version (showVersion)
 import           Data.Word (Word64)
-
 import           Options.Applicative (Parser, ParserInfo, ParserPrefs)
 import qualified Options.Applicative as Opt
-
 import           Paths_cardano_db_tool (version)
-
 import           System.Info (arch, compilerName, compilerVersion, os)
+
 
 main :: IO ()
 main = do

@@ -10,33 +10,26 @@ module Cardano.DbSync.Era.Byron.Genesis
   ( insertValidateGenesisDist
   ) where
 
-import           Cardano.Prelude
-
-import qualified Cardano.Binary as Binary
 import           Cardano.BM.Trace (Trace, logInfo)
+import qualified Cardano.Binary as Binary
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Crypto as Crypto
-
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Util
-
+import           Cardano.Prelude
 import           Cardano.Slotting.Block (BlockNo (..))
-
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
-
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
-
 import           Database.Persist.Sql (SqlBackend)
-
 import           Paths_cardano_db_sync (version)
 
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.

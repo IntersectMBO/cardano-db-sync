@@ -7,21 +7,16 @@ module Test.IO.Cardano.Db.Rollback
 
 import           Cardano.Db
 import           Cardano.Slotting.Block (BlockNo (..))
-
 import           Control.Monad (void)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Reader (ReaderT)
-
 import           Data.Int (Int64)
 import           Data.Word (Word64)
-
 import           Database.Persist.Sql (SqlBackend)
-
+import           Test.IO.Cardano.Db.Util
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (testCase)
-
-import           Test.IO.Cardano.Db.Util
 
 
 tests :: TestTree

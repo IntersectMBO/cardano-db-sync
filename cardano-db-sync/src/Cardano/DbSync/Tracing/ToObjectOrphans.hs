@@ -6,13 +6,11 @@
 
 module Cardano.DbSync.Tracing.ToObjectOrphans () where
 
+import           Cardano.BM.Data.Tracer
+import           Cardano.Tracing.OrphanInstances.Network ()
 import           Data.Aeson ((.=))
 import           Data.Text (Text)
 import qualified Data.Text as Text
-
-import           Cardano.BM.Data.Tracer
-import           Cardano.Tracing.OrphanInstances.Network ()
-
 import           Ouroboros.Consensus.Byron.Ledger.Block (ByronBlock)
 import           Ouroboros.Network.Block (Point (..), Tip (..))
 import           Ouroboros.Network.NodeToNode (TraceSendRecv (..))

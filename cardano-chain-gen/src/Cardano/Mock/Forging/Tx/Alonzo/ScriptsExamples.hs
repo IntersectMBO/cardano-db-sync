@@ -25,11 +25,6 @@ module Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
   , plutusDataEncIndef
   ) where
 
-import           Codec.CBOR.Write (toStrictByteString)
-import           Codec.Serialise
-import           Codec.Serialise.Encoding
-import           Data.ByteString.Short
-
 import           Cardano.Ledger.Address
 import           Cardano.Ledger.Alonzo
 import           Cardano.Ledger.Alonzo.Data
@@ -42,11 +37,14 @@ import           Cardano.Ledger.Crypto (StandardCrypto)
 import           Cardano.Ledger.Era
 import           Cardano.Ledger.Hashes
 import           Cardano.Ledger.Mary.Value
-
+import           Codec.CBOR.Write (toStrictByteString)
+import           Codec.Serialise
+import           Codec.Serialise.Encoding
+import           Data.ByteString.Short
 import           Ouroboros.Consensus.Cardano.Block (StandardAlonzo)
-
 import qualified Plutus.V1.Ledger.Examples as Plutus
 import qualified PlutusCore.Data as Plutus
+
 
 alwaysSucceedsScript :: forall era. Script era
 alwaysSucceedsScript = PlutusScript PlutusV1 (Plutus.alwaysSucceedingNAryFunction 0)

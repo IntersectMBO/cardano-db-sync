@@ -15,9 +15,9 @@ module Test.IO.Cardano.Db.Util
   , unTxId
   ) where
 
+import           Cardano.Db
 import           Control.Monad (unless)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
-
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
 import           Data.Int (Int64)
@@ -25,9 +25,6 @@ import qualified Data.Text as Text
 import           Data.Time.Calendar (Day (..))
 import           Data.Time.Clock (UTCTime (..))
 import           Data.Word (Word64)
-
-import           Cardano.Db
-
 import           Text.Printf (printf)
 
 

@@ -29,21 +29,7 @@ module Cardano.DbSync.Cache
   , textShowStats
   ) where
 
-import           Cardano.Prelude
-
-import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, modifyTVar, newTVarIO, readTVarIO,
-                   writeTVar)
-import           Control.Monad.Trans.Control (MonadBaseControl)
-import           Data.Either.Combinators
-import qualified Data.Map.Strict as Map
-import qualified Data.Set as Set
-
-import qualified Cardano.Ledger.Address as Ledger
-import           Cardano.Ledger.BaseTypes (Network)
-import           Cardano.Ledger.Mary.Value
-
 import qualified Cardano.Db as DB
-
 import           Cardano.DbSync.Cache.LRU (LRUCache)
 import qualified Cardano.DbSync.Cache.LRU as LRU
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
@@ -51,12 +37,20 @@ import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Era.Util
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Types
-
+import qualified Cardano.Ledger.Address as Ledger
+import           Cardano.Ledger.BaseTypes (Network)
 import           Cardano.Ledger.Crypto (StandardCrypto)
-
+import           Cardano.Ledger.Mary.Value
+import           Cardano.Prelude
 import           Cardano.Slotting.Block (BlockNo (..))
-
+import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, modifyTVar, newTVarIO, readTVarIO,
+                   writeTVar)
+import           Control.Monad.Trans.Control (MonadBaseControl)
+import           Data.Either.Combinators
+import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import           Database.Persist.Postgresql (SqlBackend)
+
 
 type StakeAddrCache = Map StakeCred DB.StakeAddressId
 type StakePoolCache = Map PoolKeyHash DB.PoolHashId

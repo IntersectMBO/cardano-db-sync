@@ -5,21 +5,16 @@ module Cardano.DbTool.Validate.BlockTxs
   ( validateEpochBlockTxs
   ) where
 
-import           Cardano.DbTool.Validate.Util
-
 import           Cardano.Db hiding (queryBlockTxCount)
-
+import           Cardano.DbTool.Validate.Util
 import           Control.Monad (forM_, when)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
-
 import           Data.Either (lefts)
 import           Data.Int (Int64)
 import           Data.Word (Word64)
-
 import           Database.Esqueleto.Experimental (SqlBackend, countRows, from, innerJoin, just, on,
                    select, table, type (:&) ((:&)), unValue, val, where_, (==.), (^.))
-
 import qualified System.Random as Random
 
 

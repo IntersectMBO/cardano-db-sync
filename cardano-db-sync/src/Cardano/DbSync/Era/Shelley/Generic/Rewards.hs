@@ -9,20 +9,15 @@ module Cardano.DbSync.Era.Shelley.Generic.Rewards
   , rewardsTotalAda
   ) where
 
-import           Cardano.Prelude
-
 import           Cardano.Db (Ada, RewardSource (..), word64ToAda)
-
 import           Cardano.DbSync.Types
-
-import qualified Data.Strict.Maybe as Strict
-
 import           Cardano.Ledger.Coin (Coin (..))
-
+import           Cardano.Prelude
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-
+import qualified Data.Strict.Maybe as Strict
 import           Ouroboros.Consensus.Cardano.CanHardFork ()
+
 
 data Reward = Reward
   { rewardSource :: !RewardSource

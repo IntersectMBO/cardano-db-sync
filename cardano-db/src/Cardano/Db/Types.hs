@@ -39,12 +39,9 @@ module Cardano.Db.Types
   ) where
 
 import           Cardano.Ledger.Coin (DeltaCoin (..))
-
 import qualified Codec.Binary.Bech32 as Bech32
-
 import           Crypto.Hash (Blake2b_160)
 import qualified Crypto.Hash
-
 import           Data.Aeson.Encoding (unsafeToEncoding)
 import           Data.Aeson.Types (FromJSON (..), ToJSON (..))
 import qualified Data.Aeson.Types as Aeson
@@ -57,9 +54,7 @@ import           Data.Scientific (Scientific)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Word (Word16, Word64)
-
 import           GHC.Generics (Generic)
-
 import           Quiet (Quiet (..))
 
 

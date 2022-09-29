@@ -9,31 +9,22 @@ module Cardano.DbSync.Epoch
   , epochInsert
   ) where
 
-import           Cardano.Prelude hiding (from, on, replace)
-
 import           Cardano.BM.Trace (Trace, logError, logInfo)
-
 import qualified Cardano.Chain.Block as Byron
-import           Cardano.Slotting.Slot (EpochNo (..))
-
-import           Control.Monad.Logger (LoggingT)
-import           Control.Monad.Trans.Control (MonadBaseControl)
-
-import           Data.IORef (IORef, atomicWriteIORef, newIORef, readIORef)
-
-import           Database.Esqueleto.Experimental (SqlBackend, desc, from, limit, orderBy, replace,
-                   select, table, unValue, val, where_, (==.), (^.))
-
 import           Cardano.Db (EntityField (..), EpochId)
 import qualified Cardano.Db as DB
-
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
-
+import           Cardano.Prelude hiding (from, on, replace)
+import           Cardano.Slotting.Slot (EpochNo (..))
+import           Control.Monad.Logger (LoggingT)
+import           Control.Monad.Trans.Control (MonadBaseControl)
+import           Data.IORef (IORef, atomicWriteIORef, newIORef, readIORef)
+import           Database.Esqueleto.Experimental (SqlBackend, desc, from, limit, orderBy, replace,
+                   select, table, unValue, val, where_, (==.), (^.))
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
-
 import           System.IO.Unsafe (unsafePerformIO)
 
 -- Populating the Epoch table has two mode:

@@ -3,12 +3,9 @@ module Cardano.DbTool.Validate.TotalSupply
   ( validateTotalSupplyDecreasing
   ) where
 
-import           Cardano.DbTool.Validate.Util
-
-import           Data.Word (Word64)
-
 import           Cardano.Db
-
+import           Cardano.DbTool.Validate.Util
+import           Data.Word (Word64)
 import           System.Random (randomRIO)
 
 

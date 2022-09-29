@@ -27,24 +27,17 @@ module Cardano.DbSync.Config.Types
   , pcNodeConfigFilePath
   ) where
 
-import           Cardano.Prelude
-
 import qualified Cardano.BM.Configuration as Logging
 import qualified Cardano.BM.Data.Configuration as Logging
-
 import qualified Cardano.Chain.Update as Byron
-
 import           Cardano.Crypto (RequiresNetworkMagic (..))
 import qualified Cardano.Crypto.Hash as Crypto
-
 import           Cardano.Db (MigrationDir, PGPassSource (..))
-
+import           Cardano.Prelude
 import           Cardano.Slotting.Slot (SlotNo (..))
-
 import           Data.Aeson (FromJSON (..), Object, Value (..), (.:), (.:?))
 import qualified Data.Aeson as Aeson
 import           Data.Aeson.Types (Parser, typeMismatch)
-
 import           Ouroboros.Consensus.Cardano.CanHardFork (TriggerHardFork (..))
 
 newtype LogFileDir = LogFileDir

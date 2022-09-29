@@ -18,20 +18,16 @@ module Cardano.DbSync.Era.Shelley.Insert
   , insertStakeAddressRefIfMissing
   ) where
 
-import           Cardano.Prelude
-
 import           Cardano.Api (SerialiseAsCBOR (..))
 import           Cardano.Api.Shelley (TxMetadataValue (..), makeTransactionMetadata,
                    metadataValueToJsonNoSchema)
-
 import           Cardano.BM.Trace (Trace, logDebug, logInfo, logWarning)
-
 import           Cardano.Crypto.Hash (hashToBytes)
 import qualified Cardano.Crypto.Hashing as Crypto
-
 import           Cardano.Db (DbLovelace (..), DbWord64 (..))
 import qualified Cardano.Db as DB
-
+import           Cardano.DbSync.Api
+import           Cardano.DbSync.Cache
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Insert.Epoch
@@ -39,7 +35,9 @@ import           Cardano.DbSync.Era.Shelley.Insert.Grouped
 import           Cardano.DbSync.Era.Shelley.Offline
 import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Era.Util (liftLookupFail, safeDecodeToJson)
-
+import           Cardano.DbSync.Error
+import           Cardano.DbSync.Types
+import           Cardano.DbSync.Util
 import qualified Cardano.Ledger.Address as Ledger
 import           Cardano.Ledger.Alonzo.Language (Language)
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
@@ -52,18 +50,10 @@ import qualified Cardano.Ledger.Keys as Ledger
 import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..), Value (..))
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
-
-import           Cardano.DbSync.Api
-import           Cardano.DbSync.Cache
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.Types
-import           Cardano.DbSync.Util
-
-import           Control.Monad.Trans.Control (MonadBaseControl)
-
+import           Cardano.Prelude
 import           Cardano.Slotting.Block (BlockNo (..))
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
-
+import           Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import           Data.Either.Extra (eitherToMaybe)
@@ -72,10 +62,9 @@ import qualified Data.Map.Strict as Map
 import           Data.Maybe.Strict (strictMaybeToMaybe)
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text.Encoding as Text
-
 import           Database.Persist.Sql (SqlBackend)
-
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
+
 
 {- HLINT ignore "Reduce duplication" -}
 

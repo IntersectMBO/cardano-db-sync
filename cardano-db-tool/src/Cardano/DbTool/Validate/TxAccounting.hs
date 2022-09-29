@@ -6,25 +6,21 @@ module Cardano.DbTool.Validate.TxAccounting
   ( validateTxAccounting
   ) where
 
-import           Cardano.DbTool.Validate.Util
-
 import           Cardano.Db
-
+import           Cardano.DbTool.Validate.Util
 import           Control.Monad (replicateM, when)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans.Except.Extra (left, runExceptT)
 import           Control.Monad.Trans.Reader (ReaderT)
-
 import           Data.Int (Int64)
 import qualified Data.List as List
 import           Data.Word (Word64)
-
 import           Database.Esqueleto.Experimental (Entity (entityVal), SqlBackend,
                    Value (Value, unValue), countRows, from, innerJoin, on, select, table, toSqlKey,
                    type (:&) ((:&)), val, where_, (==.), (>.), (^.))
-
 import qualified System.Random as Random
+
 
 {- HLINT ignore "Fuse on/on" -}
 

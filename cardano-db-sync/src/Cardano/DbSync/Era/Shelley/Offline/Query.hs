@@ -1,30 +1,26 @@
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbSync.Era.Shelley.Offline.Query
   ( queryOfflinePoolData
   ) where
 
-import           Cardano.Prelude hiding (from, groupBy, on, retry)
-
-import           Cardano.DbSync.Era.Shelley.Offline.FetchQueue (newRetry, retryAgain)
-
-import           Data.Time (UTCTime)
-import           Data.Time.Clock.POSIX (POSIXTime)
-import qualified Data.Time.Clock.POSIX as Time
-
 import           Cardano.Db
                    (EntityField (PoolHashId, PoolHashView, PoolMetadataRefHash, PoolMetadataRefId, PoolMetadataRefPoolId, PoolMetadataRefUrl, PoolOfflineDataPmrId, PoolOfflineFetchErrorFetchTime, PoolOfflineFetchErrorId, PoolOfflineFetchErrorPmrId, PoolOfflineFetchErrorPoolId, PoolOfflineFetchErrorRetryCount),
                    PoolHash, PoolHashId, PoolMetaHash (PoolMetaHash), PoolMetadataRef,
                    PoolMetadataRefId, PoolOfflineData, PoolOfflineFetchError,
                    PoolOfflineFetchErrorId, PoolUrl (PoolUrl))
+import           Cardano.DbSync.Era.Shelley.Offline.FetchQueue (newRetry, retryAgain)
 import           Cardano.DbSync.Types (PoolFetchRetry (..))
-
+import           Cardano.Prelude hiding (from, groupBy, on, retry)
+import           Data.Time (UTCTime)
+import           Data.Time.Clock.POSIX (POSIXTime)
+import qualified Data.Time.Clock.POSIX as Time
 import           Database.Esqueleto.Experimental (SqlBackend, SqlExpr, Value (..), ValueList, desc,
                    from, groupBy, in_, innerJoin, just, max_, notExists, on, orderBy, select,
                    subList_select, table, where_, (:&) ((:&)), (==.), (^.))
 import           System.Random.Shuffle (shuffleM)
+
 
 {- HLINT ignore "Fuse on/on" -}
 

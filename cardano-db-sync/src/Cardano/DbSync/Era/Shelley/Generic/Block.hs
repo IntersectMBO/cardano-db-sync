@@ -19,13 +19,10 @@ module Cardano.DbSync.Era.Shelley.Generic.Block
   ) where
 
 import qualified Cardano.Api.Shelley as Api
-
 import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Crypto.KES.Class as KES
-
 import           Cardano.DbSync.Era.Shelley.Generic.Tx
 import           Cardano.DbSync.Types
-
 import           Cardano.Ledger.Alonzo ()
 import           Cardano.Ledger.Alonzo.Scripts (Prices)
 import qualified Cardano.Ledger.BaseTypes as Ledger
@@ -39,14 +36,10 @@ import           Cardano.Ledger.Keys (KeyHash, KeyRole (..), VerKeyVRF, hashKey)
 import           Cardano.Ledger.SafeHash (SafeToHash)
 import qualified Cardano.Ledger.Shelley.BlockChain as Shelley
 import qualified Cardano.Ledger.Shelley.Tx as Shelley
-
 import           Cardano.Prelude
-
 import qualified Cardano.Protocol.TPraos.BHeader as TPraos
 import qualified Cardano.Protocol.TPraos.OCert as TPraos
-
 import           Cardano.Slotting.Slot (SlotNo (..))
-
 import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlonzo,
                    StandardBabbage, StandardMary, StandardShelley)
 import qualified Ouroboros.Consensus.Protocol.Praos.Header as Praos
@@ -55,8 +48,8 @@ import qualified Ouroboros.Consensus.Protocol.Praos.Header as Praos
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra, ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
 import           Ouroboros.Consensus.Shelley.Protocol.Abstract
-
 import           Ouroboros.Network.Block (BlockNo (..))
+
 
 data Block = Block
   { blkEra :: !BlockEra

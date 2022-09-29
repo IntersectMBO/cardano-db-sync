@@ -16,19 +16,14 @@ module Cardano.DbSync.Era.Shelley.Query
   , queryPoolUpdateByBlock
   ) where
 
-import           Cardano.Prelude hiding (Ptr, from, maybeToEither, on)
-
 import           Cardano.Db
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Util
-
 import           Cardano.Ledger.BaseTypes (CertIx (..), TxIx (..))
-
 import           Cardano.Ledger.Credential (Ptr (..))
-
+import           Cardano.Prelude hiding (Ptr, from, maybeToEither, on)
 import           Cardano.Slotting.Block (BlockNo (..))
 import           Cardano.Slotting.Slot (SlotNo (..))
-
 import           Database.Esqueleto.Experimental (SqlBackend, Value (..), desc, from, innerJoin,
                    just, limit, on, orderBy, select, table, val, where_, (:&) ((:&)), (==.), (^.))
 

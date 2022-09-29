@@ -16,31 +16,27 @@ module Test.Cardano.Db.Mock.Property.Property
     ( prop_empty_blocks
     ) where
 
+import           Cardano.Mock.Chain
+import           Cardano.Mock.ChainSync.Server
+import           Cardano.Mock.Forging.Interpreter
+import           Cardano.Mock.Forging.Tx.Babbage
+import           Cardano.Mock.Forging.Types
 import           Control.Monad (void, when)
 import           Control.Monad.Class.MonadSTM.Strict (MonadSTM (atomically))
 import           Data.Foldable
 import           Data.Text (Text)
 import           Data.TreeDiff (defaultExprViaShow)
 import           GHC.Generics (Generic, Generic1)
-
-import           Cardano.Mock.Chain
-import           Cardano.Mock.ChainSync.Server
-import           Cardano.Mock.Forging.Interpreter
-import           Cardano.Mock.Forging.Tx.Babbage
-import           Cardano.Mock.Forging.Types
-
+import           Ouroboros.Network.Block hiding (RollBack)
 import           Test.Cardano.Db.Mock.Config
 import           Test.Cardano.Db.Mock.UnifiedApi
 import           Test.Cardano.Db.Mock.Validate
-
-import           Ouroboros.Network.Block hiding (RollBack)
-
 import           Test.QuickCheck (Gen, Property, frequency, noShrinking, withMaxSuccess, (===))
 import           Test.QuickCheck.Monadic (monadicIO, run)
-
 import           Test.StateMachine
 import           Test.StateMachine.Sequential (runCommands')
 import qualified Test.StateMachine.Types.Rank2 as Rank2
+
 
 data Command r
     = RollForward Int

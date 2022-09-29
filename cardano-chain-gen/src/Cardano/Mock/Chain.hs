@@ -18,9 +18,9 @@ module Cardano.Mock.Chain
 
 import           Ouroboros.Consensus.Block
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
-
 import qualified Ouroboros.Network.AnchoredFragment as AF
 import           Ouroboros.Network.Block
+
 
 -- | This looks a lot like the 'Chain' defined in Ouroboros.Network.MockChain.Chain
 -- but this version includes also the ledger states.

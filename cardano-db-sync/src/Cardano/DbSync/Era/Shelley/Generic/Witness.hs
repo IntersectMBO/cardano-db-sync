@@ -11,7 +11,6 @@ import           Cardano.Ledger.Alonzo (AlonzoEra)
 import           Cardano.Ledger.Babbage (BabbageEra)
 import           Cardano.Ledger.Mary (MaryEra)
 import           Cardano.Ledger.Shelley (ShelleyEra)
-
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 

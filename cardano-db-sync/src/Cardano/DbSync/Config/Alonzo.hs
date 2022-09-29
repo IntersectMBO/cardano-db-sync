@@ -8,25 +8,20 @@ module Cardano.DbSync.Config.Alonzo
   ) where
 
 
+import           Cardano.Api.Orphans ()
 import qualified Cardano.Crypto.Hash as Crypto
-
 import           Cardano.Db (textShow)
-
 import           Cardano.DbSync.Config.Types
 import           Cardano.DbSync.Error
-
+import           Cardano.Ledger.Alonzo.Genesis
 import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans.Except.Extra (firstExceptT, handleIOExceptT, hoistEither, left)
-
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-
-import           Cardano.Api.Orphans ()
-import           Cardano.Ledger.Alonzo.Genesis
 
 readAlonzoGenesisConfig
     :: SyncNodeConfig

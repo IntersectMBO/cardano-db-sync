@@ -1,24 +1,19 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-import           Cardano.Prelude
-import           Prelude (read)
-
-import           Options.Applicative (Parser, ParserInfo)
-import qualified Options.Applicative as Opt
-
 import           Cardano.Db (gitRev)
-
+import           Cardano.Prelude
 import           Cardano.SMASH.Server.Config
 import           Cardano.SMASH.Server.Run
-
 import           Data.String (String)
 import qualified Data.Text as Text
 import           Data.Version (showVersion)
-
+import           Options.Applicative (Parser, ParserInfo)
+import qualified Options.Applicative as Opt
 import           Paths_cardano_smash_server (version)
-
+import           Prelude (read)
 import           System.Info (arch, compilerName, compilerVersion, os)
+
 
 main :: IO ()
 main = do

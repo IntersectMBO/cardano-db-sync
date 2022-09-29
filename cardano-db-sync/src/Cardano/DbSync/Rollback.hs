@@ -8,26 +8,21 @@ module Cardano.DbSync.Rollback
   , unsafeRollback
   ) where
 
-import           Cardano.Prelude
-import qualified Data.ByteString.Short as SBS
-
 import           Cardano.BM.Trace (Trace, logInfo)
-
 import qualified Cardano.Db as DB
-
 import           Cardano.DbSync.Api
 import           Cardano.DbSync.Cache
 import           Cardano.DbSync.Era.Util
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
-
+import           Cardano.Prelude
+import qualified Data.ByteString.Short as SBS
 import           Database.Persist.Sql (SqlBackend)
-
 import           Ouroboros.Consensus.HardFork.Combinator.AcrossEras (getOneEraHash)
-
 import           Ouroboros.Network.Block
 import           Ouroboros.Network.Point
+
 
 -- | The decision to delete blocks has been taken and this executes it.
 deleteBlocks :: MonadIO m => SyncEnv -> BlockNo -> Bool -> Word64 -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()

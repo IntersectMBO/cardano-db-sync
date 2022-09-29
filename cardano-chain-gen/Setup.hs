@@ -1,18 +1,14 @@
 
 import           Cardano.Crypto.Hash
 import           Control.Monad (foldM, forM)
-
 import qualified Data.ByteString.Char8 as BS
-
 import qualified Data.List as List
-
 import           Distribution.PackageDescription (extraSrcFiles)
 import           Distribution.Simple (UserHooks (..), defaultMainWithHooks, simpleUserHooks)
 import           Distribution.Simple.BuildPaths (autogenPackageModulesDir)
 import           Distribution.Simple.LocalBuildInfo (LocalBuildInfo (..))
 import           Distribution.Simple.Utils (createDirectoryIfMissingVerbose, rewriteFileEx)
 import           Distribution.Verbosity (normal)
-
 import           System.Directory (listDirectory)
 import           System.FilePath (pathSeparator, takeDirectory, takeExtension, takeFileName)
 

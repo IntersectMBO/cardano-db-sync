@@ -3,13 +3,10 @@ module Cardano.DbTool.Validate.EpochTable
   ( validateEpochTable
   ) where
 
-import           Cardano.DbTool.Validate.Util
-
-import           Control.Monad (when)
-
-import           Data.Word (Word64)
-
 import           Cardano.Db
+import           Cardano.DbTool.Validate.Util
+import           Control.Monad (when)
+import           Data.Word (Word64)
 
 
 -- | Validate that the total supply is decreasing.

@@ -25,21 +25,12 @@ module Cardano.DbSync.Sync
   , runSyncNode
   ) where
 
-import           Cardano.Prelude hiding (Meta, Nat, option, (%))
-
-import           Control.Tracer (Tracer)
-
 import           Cardano.BM.Data.Tracer (ToLogObject (..), ToObject)
 import           Cardano.BM.Trace (Trace, appendName, logError, logInfo)
 import qualified Cardano.BM.Trace as Logging
-
 import           Cardano.Client.Subscription (subscribe)
 import qualified Cardano.Crypto as Crypto
-
-import           Cardano.Slotting.Slot (EpochNo (..), WithOrigin (..), withOriginToMaybe)
-
 import qualified Cardano.Db as Db
-
 import           Cardano.DbSync.Api
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Database
@@ -52,24 +43,19 @@ import           Cardano.DbSync.Metrics
 import           Cardano.DbSync.Tracing.ToObjectOrphans ()
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
-
+import           Cardano.Prelude hiding (Meta, Nat, option, (%))
+import           Cardano.Slotting.Slot (EpochNo (..), WithOrigin (..), withOriginToMaybe)
 import qualified Codec.CBOR.Term as CBOR
-
 import           Control.Monad.Trans.Except.Exit (orDie)
-
+import           Control.Tracer (Tracer)
 import qualified Data.ByteString.Lazy as BSL
 import           Data.Functor.Contravariant (contramap)
 import qualified Data.List as List
 import qualified Data.Text as Text
-
 import           Database.Persist.Postgresql (ConnectionString, withPostgresqlConn)
-
 import           Network.Mux (MuxTrace, WithMuxBearer)
 import           Network.Mux.Types (MuxMode (..))
-
 import           Network.TypedProtocol.Pipelined (N (..), Nat (Succ, Zero))
-import           Ouroboros.Network.Driver.Simple (runPipelinedPeer)
-
 import           Ouroboros.Consensus.Block.Abstract (CodecConfig)
 import           Ouroboros.Consensus.Byron.Node ()
 import           Ouroboros.Consensus.Cardano.Node ()
@@ -79,9 +65,9 @@ import           Ouroboros.Consensus.Network.NodeToClient (ClientCodecs, Codecs'
                    cChainSyncCodec, cStateQueryCodec, cTxSubmissionCodec)
 import           Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
-
 import           Ouroboros.Network.Block (BlockNo (..), Point (..), Tip (..), blockNo, genesisPoint,
                    getTipBlockNo)
+import           Ouroboros.Network.Driver.Simple (runPipelinedPeer)
 import           Ouroboros.Network.Mux (MuxPeer (..), RunMiniProtocol (..))
 import           Ouroboros.Network.NodeToClient (ClientSubscriptionParams (..), ConnectionId,
                    ErrorPolicyTrace (..), Handshake, IOManager, LocalAddress,
@@ -89,7 +75,6 @@ import           Ouroboros.Network.NodeToClient (ClientSubscriptionParams (..), 
                    WithAddr (..), localSnocket, localStateQueryPeerNull, localTxMonitorPeerNull,
                    localTxSubmissionPeerNull, networkErrorPolicies)
 import qualified Ouroboros.Network.NodeToClient.Version as Network
-
 import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined
                    (ChainSyncClientPipelined (..), ClientPipelinedStIdle (..),
                    ClientPipelinedStIntersect (..), ClientStNext (..), chainSyncClientPeerPipelined,
@@ -101,7 +86,6 @@ import           Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
 import           Ouroboros.Network.Protocol.LocalStateQuery.Client (localStateQueryClientPeer)
 import qualified Ouroboros.Network.Snocket as Snocket
 import           Ouroboros.Network.Subscription (SubscriptionTrace)
-
 import           System.Directory (createDirectoryIfMissing)
 
 

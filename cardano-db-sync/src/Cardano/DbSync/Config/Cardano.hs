@@ -13,21 +13,16 @@ module Cardano.DbSync.Config.Cardano
   ) where
 
 import qualified Cardano.Chain.Genesis as Byron
-import           Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
-
 import qualified Cardano.Crypto.Hash.Class as Crypto
-
-import           Cardano.Ledger.Alonzo.Genesis (AlonzoGenesis)
-
+import           Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import           Cardano.DbSync.Config.Alonzo
 import           Cardano.DbSync.Config.Byron
 import           Cardano.DbSync.Config.Shelley
 import           Cardano.DbSync.Config.Types
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Types
-
+import           Cardano.Ledger.Alonzo.Genesis (AlonzoGenesis)
 import           Control.Monad.Trans.Except (ExceptT)
-
 import           Ouroboros.Consensus.Cardano (Nonce (..), ProtVer (ProtVer))
 import qualified Ouroboros.Consensus.Cardano as Consensus
 import qualified Ouroboros.Consensus.Cardano.Node as Consensus

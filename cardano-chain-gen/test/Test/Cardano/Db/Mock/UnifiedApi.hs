@@ -19,25 +19,19 @@ module Test.Cardano.Db.Mock.UnifiedApi
   , registerAllStakeCreds
   ) where
 
-import           Data.Word (Word64)
-
 import           Cardano.Ledger.Alonzo (AlonzoEra)
 import qualified Cardano.Ledger.Core as Core
-
 import           Cardano.Mock.ChainSync.Server
 import           Cardano.Mock.Forging.Interpreter
 import           Cardano.Mock.Forging.Types
-
 import           Cardano.Slotting.Slot (SlotNo (..))
-
 import           Control.Monad (forM, replicateM)
 import           Control.Monad.Class.MonadSTM.Strict (atomically)
-
+import           Data.Word (Word64)
 import           Ouroboros.Consensus.Cardano.Block (ShelleyEra, StandardAlonzo, StandardBabbage,
                    StandardCrypto)
 import           Ouroboros.Consensus.Ledger.Basics (LedgerState)
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
-
 
 
 forgeNextAndSubmit :: Interpreter -> ServerHandle IO CardanoBlock -> MockBlock -> IO CardanoBlock

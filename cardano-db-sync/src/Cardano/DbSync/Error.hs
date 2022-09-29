@@ -12,20 +12,17 @@ module Cardano.DbSync.Error
   , renderSyncNodeError
   ) where
 
-import           Cardano.Prelude
-
 import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
-
+import qualified Cardano.DbSync.Era.Byron.Util as Byron
+import           Cardano.DbSync.Util
+import           Cardano.Prelude
 import           Control.Monad.Trans.Except.Extra (left)
-
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
-import qualified Cardano.DbSync.Era.Byron.Util as Byron
-import           Cardano.DbSync.Util
 
 data SyncInvariant
   = EInvInOut !Word64 !Word64

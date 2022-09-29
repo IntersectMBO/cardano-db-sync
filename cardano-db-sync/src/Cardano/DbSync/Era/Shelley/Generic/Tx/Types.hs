@@ -16,23 +16,17 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Types
   , sumTxOutCoin
   ) where
 
-import           Cardano.Prelude
-
-import           Cardano.Slotting.Slot (SlotNo (..))
-
+import           Cardano.Api.Shelley (TxMetadataValue (..))
+import           Cardano.Db (ScriptType (..))
+import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import qualified Cardano.Ledger.Address as Ledger
 import           Cardano.Ledger.Alonzo.Scripts (Tag (..))
 import           Cardano.Ledger.Coin (Coin (..))
 import           Cardano.Ledger.Mary.Value (AssetName, PolicyID, Value)
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
-
+import           Cardano.Prelude
+import           Cardano.Slotting.Slot (SlotNo (..))
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
-
-import           Cardano.Api.Shelley (TxMetadataValue (..))
-
-import           Cardano.Db (ScriptType (..))
-
-import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 
 
 data Tx = Tx

@@ -8,18 +8,15 @@ module Cardano.DbTool.Report.StakeReward.History
 
 import           Cardano.Db
 import           Cardano.DbTool.Report.Display
-
 import           Control.Monad (join)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
-
 import qualified Data.List as List
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           Data.Time.Clock (UTCTime)
 import           Data.Word (Word64)
-
 import           Database.Esqueleto.Experimental (SqlBackend, Value (..), asc, desc, from,
                    innerJoin, max_, on, orderBy, select, table, type (:&) ((:&)), unSqlBackendKey,
                    val, where_, (<=.), (==.), (^.))

@@ -17,13 +17,6 @@ module Cardano.Mock.Forging.Tx.Shelley
   ) where
 
 
-import           Cardano.Prelude
-
-import qualified Data.Maybe.Strict as Strict
-import           Data.Sequence.Strict (StrictSeq)
-import qualified Data.Sequence.Strict as StrictSeq
-import qualified Data.Set as Set
-
 import           Cardano.Ledger.Address
 import           Cardano.Ledger.BaseTypes
 import           Cardano.Ledger.Coin
@@ -31,15 +24,18 @@ import           Cardano.Ledger.Credential
 import           Cardano.Ledger.Era (Crypto)
 import           Cardano.Ledger.Shelley.Tx
 import           Cardano.Ledger.Shelley.TxBody
-
+import           Cardano.Mock.Forging.Tx.Generic
+import           Cardano.Mock.Forging.Types
+import           Cardano.Prelude
+import           Cardano.Slotting.Slot (SlotNo (..))
+import qualified Data.Maybe.Strict as Strict
+import           Data.Sequence.Strict (StrictSeq)
+import qualified Data.Sequence.Strict as StrictSeq
+import qualified Data.Set as Set
 import           Ouroboros.Consensus.Cardano.Block (LedgerState)
 import           Ouroboros.Consensus.Shelley.Eras (ShelleyEra, StandardCrypto)
 import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 
-import           Cardano.Slotting.Slot (SlotNo (..))
-
-import           Cardano.Mock.Forging.Tx.Generic
-import           Cardano.Mock.Forging.Types
 
 type ShelleyUTxOIndex = UTxOIndex (ShelleyEra StandardCrypto)
 type ShelleyLedgerState = LedgerState (ShelleyBlock TPraosStandard (ShelleyEra StandardCrypto))

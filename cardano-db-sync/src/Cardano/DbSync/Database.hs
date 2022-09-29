@@ -13,14 +13,7 @@ module Cardano.DbSync.Database
   , writeDbActionQueue
   ) where
 
-import           Cardano.Prelude hiding (atomically)
-
 import           Cardano.BM.Trace (logDebug, logError, logInfo)
-
-import           Control.Monad.Class.MonadSTM.Strict
-import           Control.Monad.Extra (whenJust)
-import           Control.Monad.Trans.Except.Extra (newExceptT)
-
 import           Cardano.DbSync.Api
 import           Cardano.DbSync.DbAction
 import           Cardano.DbSync.Default
@@ -30,14 +23,16 @@ import           Cardano.DbSync.Metrics
 import           Cardano.DbSync.Rollback (rollbackToPoint)
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util hiding (whenJust)
-
+import           Cardano.Prelude hiding (atomically)
 import           Cardano.Slotting.Slot (WithOrigin (..))
-
+import           Control.Monad.Class.MonadSTM.Strict
+import           Control.Monad.Extra (whenJust)
+import           Control.Monad.Trans.Except.Extra (newExceptT)
 import           Ouroboros.Consensus.HeaderValidation hiding (TipInfo)
 import           Ouroboros.Consensus.Ledger.Extended
-
 import           Ouroboros.Network.Block (Point (..))
 import           Ouroboros.Network.Point (blockPointHash, blockPointSlot)
+
 
 data NextState
   = Continue

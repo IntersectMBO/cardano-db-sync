@@ -28,20 +28,10 @@ module Cardano.DbSync.Api
   , logDbState
   ) where
 
-import           Cardano.Prelude
-
 import           Cardano.BM.Trace (Trace, logInfo)
-
 import qualified Cardano.Chain.Genesis as Byron
 import           Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
-
 import qualified Cardano.Db as DB
-
-import qualified Cardano.Ledger.BaseTypes as Ledger
-import qualified Cardano.Ledger.Shelley.Genesis as Shelley
-
-import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
-
 import           Cardano.DbSync.Cache
 import           Cardano.DbSync.Config.Cardano
 import           Cardano.DbSync.Config.Shelley
@@ -51,17 +41,17 @@ import           Cardano.DbSync.LedgerState
 import           Cardano.DbSync.LocalStateQuery
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
-
+import qualified Cardano.Ledger.BaseTypes as Ledger
+import qualified Cardano.Ledger.Shelley.Genesis as Shelley
+import           Cardano.Prelude
+import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
 import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, TBQueue, newTBQueueIO, newTVarIO,
                    readTVar, readTVarIO, writeTVar)
 import           Control.Monad.Trans.Maybe (MaybeT (..))
-
 import qualified Data.Strict.Maybe as Strict
 import           Data.Time.Clock (UTCTime, getCurrentTime)
-
 import           Database.Persist.Postgresql (ConnectionString)
 import           Database.Persist.Sql (SqlBackend)
-
 import           Ouroboros.Consensus.Block.Abstract (HeaderHash, Point (..), fromRawHash)
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import           Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)

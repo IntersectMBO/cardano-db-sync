@@ -10,10 +10,14 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra
   , mkTxScript
   ) where
 
-import           Cardano.Prelude
-
-import           Cardano.Slotting.Slot (SlotNo (..))
-
+import qualified Cardano.Api.Shelley as Api
+import           Cardano.Db (ScriptType (..))
+import           Cardano.DbSync.Era.Shelley.Generic.Metadata
+import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
+import           Cardano.DbSync.Era.Shelley.Generic.Util
+import           Cardano.DbSync.Era.Shelley.Generic.Witness
 import qualified Cardano.Ledger.Allegra as Allegra
 import           Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.Core as Core
@@ -23,24 +27,13 @@ import qualified Cardano.Ledger.Shelley.Tx as Shelley
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as ShelleyMa
 import qualified Cardano.Ledger.ShelleyMA.TxBody as ShelleyMa
-
+import           Cardano.Prelude
+import           Cardano.Slotting.Slot (SlotNo (..))
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
 import           Data.MemoBytes (MemoBytes (..))
-
 import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardCrypto)
-
-import qualified Cardano.Api.Shelley as Api
-
-import           Cardano.Db (ScriptType (..))
-
-import           Cardano.DbSync.Era.Shelley.Generic.Metadata
-import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
-import           Cardano.DbSync.Era.Shelley.Generic.Util
-import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
 fromAllegraTx :: (Word64, Shelley.Tx StandardAllegra) -> Tx
 fromAllegraTx (blkIndex, tx) =

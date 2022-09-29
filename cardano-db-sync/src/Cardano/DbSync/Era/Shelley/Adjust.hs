@@ -7,28 +7,21 @@ module Cardano.DbSync.Era.Shelley.Adjust
   ( adjustEpochRewards
   ) where
 
-import           Cardano.Prelude hiding (from, groupBy, on)
-
 import           Cardano.BM.Trace (Trace, logInfo)
-
 import qualified Cardano.Db as Db
-
 import           Cardano.DbSync.Cache
 import qualified Cardano.DbSync.Era.Shelley.Generic.Rewards as Generic
 import           Cardano.DbSync.Types
-
 import           Cardano.Ledger.BaseTypes (Network)
-
+import           Cardano.Prelude hiding (from, groupBy, on)
 import           Cardano.Slotting.Slot (EpochNo (..))
-
 import           Control.Monad.Trans.Control (MonadBaseControl)
-
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
-
 import           Database.Esqueleto.Experimental (SqlBackend, delete, from, in_, table, val,
                    valList, where_, (==.), (^.))
+
 
 -- Hlint warns about another version of this operator.
 {- HLINT ignore "Redundant ^." -}

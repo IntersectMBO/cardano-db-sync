@@ -12,7 +12,6 @@ import           Cardano.Prelude
 
 import           Cardano.DbSync.Era.Shelley.Generic.Util (unKeyHashRaw)
 import           Cardano.DbSync.Era.Shelley.Generic.Witness (Witness (..))
-
 import qualified Cardano.Ledger.Alonzo as Alonzo
 import           Cardano.Ledger.Alonzo.Language (Language)
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
@@ -26,9 +25,7 @@ import qualified Cardano.Ledger.Keys as Ledger
 import           Cardano.Ledger.Shelley (ShelleyEra)
 import qualified Cardano.Ledger.Shelley.PParams as Shelley
 import qualified Cardano.Ledger.ShelleyMA as ShelleyMA
-
 import           Cardano.Slotting.Slot (EpochNo (..))
-
 import qualified Data.Map.Strict as Map
 
 data ParamProposal = ParamProposal

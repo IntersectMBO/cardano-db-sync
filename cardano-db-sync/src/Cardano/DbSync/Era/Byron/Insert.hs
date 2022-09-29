@@ -10,47 +10,32 @@ module Cardano.DbSync.Era.Byron.Insert
   ( insertByronBlock
   ) where
 
-import           Cardano.Prelude
-
-import           Cardano.Binary (serialize')
 import           Cardano.BM.Trace (Trace, logDebug, logInfo)
-
-import           Control.Monad.Trans.Control (MonadBaseControl)
-import           Control.Monad.Trans.Except.Extra (firstExceptT)
-
+import           Cardano.Binary (serialize')
 import qualified Cardano.Binary as Binary
-
--- Import all 'cardano-ledger' functions and data types qualified so they do not
--- clash with the Cardano.Db functions and data types which are also imported
--- qualified.
 import qualified Cardano.Chain.Block as Byron hiding (blockHash)
 import qualified Cardano.Chain.Common as Byron
-import qualified Cardano.Chain.Update as Byron hiding (protocolVersion)
 import qualified Cardano.Chain.UTxO as Byron
-
+import qualified Cardano.Chain.Update as Byron hiding (protocolVersion)
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
-
 import           Cardano.Db (DbLovelace (..))
-import           Cardano.DbSync.Era.Util (liftLookupFail)
-
-import           Cardano.DbSync.Types
-
-import           Cardano.Slotting.Block (BlockNo (..))
-import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
-
-import qualified Data.ByteString.Char8 as BS
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
-
-import           Database.Persist.Sql (SqlBackend)
-
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Api
 import           Cardano.DbSync.Cache
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
+import           Cardano.DbSync.Era.Util (liftLookupFail)
 import           Cardano.DbSync.Error
+import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
-
+import           Cardano.Prelude
+import           Cardano.Slotting.Block (BlockNo (..))
+import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
+import           Control.Monad.Trans.Control (MonadBaseControl)
+import           Control.Monad.Trans.Except.Extra (firstExceptT)
+import qualified Data.ByteString.Char8 as BS
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+import           Database.Persist.Sql (SqlBackend)
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 
 -- Trivial local data type for use in place of a tuple.

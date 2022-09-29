@@ -26,8 +26,10 @@ module Cardano.Mock.ChainSync.Server
   ) where
 
 
+import           Cardano.Mock.Chain hiding (rollback)
+import           Cardano.Mock.ChainDB
+import           Cardano.Mock.ChainSync.State
 import           Codec.Serialise.Class (Serialise)
-
 import           Control.Concurrent (threadDelay)
 import           Control.Concurrent.Async
 import           Control.Exception (bracket)
@@ -39,9 +41,7 @@ import           Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.Map.Strict as Map
 import           Data.Maybe (fromJust)
 import           Data.Void (Void)
-
 import           Network.TypedProtocol.Core (Peer (..))
-
 import           Ouroboros.Consensus.Block (CodecConfig, HasHeader, Point, StandardHash, castPoint)
 import           Ouroboros.Consensus.Config (TopLevelConfig, configCodec)
 import           Ouroboros.Consensus.Ledger.Query (BlockQuery, ShowQuery)
@@ -61,7 +61,6 @@ import           Ouroboros.Consensus.Node.Run (SerialiseNodeToClientConstraints)
 import           Ouroboros.Consensus.Node.Tracers ()
 import           Ouroboros.Consensus.Storage.Serialisation (EncodeDisk (..))
 import           Ouroboros.Consensus.Util.Args ()
-
 import           Ouroboros.Network.Block (ChainUpdate (AddBlock, RollBack), HeaderHash,
                    Serialised (..), Tip, castTip, genesisPoint, mkSerialised)
 import           Ouroboros.Network.Channel (Channel)
@@ -81,9 +80,6 @@ import           Ouroboros.Network.Snocket (LocalAddress, LocalSnocket, LocalSoc
 import qualified Ouroboros.Network.Snocket as Snocket
 import           Ouroboros.Network.Util.ShowProxy (Proxy (..), ShowProxy)
 
-import           Cardano.Mock.Chain hiding (rollback)
-import           Cardano.Mock.ChainDB
-import           Cardano.Mock.ChainSync.State
 
 {- HLINT ignore "Use readTVarIO" -}
 

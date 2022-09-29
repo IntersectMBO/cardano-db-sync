@@ -12,20 +12,18 @@ module Cardano.SMASH.Server.Config
   , paramsToConfig
   ) where
 
+import qualified Cardano.BM.Configuration.Model as Logging
+import qualified Cardano.BM.Setup as Logging
+import           Cardano.BM.Trace (Trace)
+import           Cardano.Db (textShow)
 import           Cardano.Prelude
-
 import           Data.Aeson (FromJSON (..), ToJSON (..))
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import qualified Data.Yaml as Yaml
-
-import qualified Cardano.BM.Configuration.Model as Logging
-import qualified Cardano.BM.Setup as Logging
-import           Cardano.BM.Trace (Trace)
-import           Cardano.Db (textShow)
-
 import           System.IO.Error
+
 
 -- | SMASH Server cli parameters
 data SmashServerParams = SmashServerParams
@@ -100,7 +98,7 @@ parseAppUser line = case Text.breakOn "," line of
       -> Right $ ApplicationUser (prepareCred user) (prepareCred passwd)
     _ -> Left "Credentials need to be supplied in the form: username,password"
   where
-    prepareCred name = Text.strip name
+    prepareCred = Text.strip
 
 configureLogging :: FilePath -> Text -> IO (Trace IO Text)
 configureLogging fp loggingName = do

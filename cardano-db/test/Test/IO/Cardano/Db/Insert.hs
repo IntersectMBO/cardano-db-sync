@@ -4,19 +4,14 @@ module Test.IO.Cardano.Db.Insert
   ( tests
   ) where
 
+import           Cardano.Db
+import           Cardano.Slotting.Block (BlockNo (..))
 import           Control.Monad (void)
-
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
-
-import           Cardano.Db
-
-import           Cardano.Slotting.Block (BlockNo (..))
-
+import           Test.IO.Cardano.Db.Util
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (testCase)
-
-import           Test.IO.Cardano.Db.Util
 
 
 tests :: TestTree

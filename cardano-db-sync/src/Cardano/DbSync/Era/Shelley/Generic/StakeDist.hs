@@ -13,9 +13,7 @@ module Cardano.DbSync.Era.Shelley.Generic.StakeDist
   , getStakeSlice
   ) where
 
-import           Cardano.Prelude
-import           Prelude (id)
-
+import           Cardano.DbSync.Types
 import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Compactible as Ledger
 import           Cardano.Ledger.Credential (Credential)
@@ -23,14 +21,11 @@ import           Cardano.Ledger.Era (Crypto)
 import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import qualified Cardano.Ledger.Shelley.EpochBoundary as Shelley
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
-
-import           Cardano.DbSync.Types
-
+import           Cardano.Prelude
 import qualified Data.Map.Strict as Map
-import qualified Data.Vector.Generic as VG
 import           Data.VMap (VB, VMap (..), VP)
 import qualified Data.VMap as VMap
-
+import qualified Data.Vector.Generic as VG
 import           Ouroboros.Consensus.Block
 import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
 import           Ouroboros.Consensus.Config
@@ -40,6 +35,8 @@ import           Ouroboros.Consensus.Node.ProtocolInfo
 import           Ouroboros.Consensus.Protocol.Abstract
 import           Ouroboros.Consensus.Shelley.Ledger
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
+import           Prelude (id)
+
 
 data StakeSliceRes =
     Slice !StakeSlice !Bool -- True if this is the final slice for this epoch. Can be used for logging.

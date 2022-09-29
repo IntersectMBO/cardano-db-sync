@@ -3,15 +3,13 @@ module Cardano.DbTool.Validate.PoolOwner
   ( validateAllPoolsHaveOwners
   ) where
 
-import           Cardano.DbTool.Validate.Util
-
 import           Cardano.Db
-
+import           Cardano.DbTool.Validate.Util
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
-
 import           Database.Esqueleto.Experimental (SqlBackend, Value (..), countRows, from,
                    notExists, select, table, unValue, where_, (==.), (^.))
+
 
 validateAllPoolsHaveOwners :: IO ()
 validateAllPoolsHaveOwners = do

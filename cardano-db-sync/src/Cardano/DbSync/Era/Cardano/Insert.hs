@@ -5,21 +5,15 @@ module Cardano.DbSync.Era.Cardano.Insert
   ( insertEpochSyncTime
   ) where
 
-import qualified Cardano.Db as Db
-
-import           Cardano.Prelude hiding (STM, atomically)
-
-import           Cardano.Slotting.Slot (EpochNo (..))
-
 import           Cardano.Db (SyncState)
-
+import qualified Cardano.Db as Db
+import           Cardano.Prelude hiding (STM, atomically)
+import           Cardano.Slotting.Slot (EpochNo (..))
 import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, STM, StrictTVar, atomically,
                    readTVar, writeTVar)
 import           Control.Monad.Trans.Control (MonadBaseControl)
-
 import           Data.Time.Clock (UTCTime)
 import qualified Data.Time.Clock as Time
-
 import           Database.Persist.Sql (SqlBackend)
 
 

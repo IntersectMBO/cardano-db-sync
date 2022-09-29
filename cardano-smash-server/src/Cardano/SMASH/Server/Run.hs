@@ -7,28 +7,22 @@ module Cardano.SMASH.Server.Run
   , runAppStubbed
   ) where
 
-import           Cardano.Prelude
-
-import           Servant (Application, BasicAuthCheck (..), BasicAuthData (..),
-                   BasicAuthResult (..), Context (..), serveWithContext)
-
-import           Network.Wai.Handler.Warp (defaultSettings, runSettings, setBeforeMainLoop, setPort)
-
 import           Cardano.BM.Trace (Trace, logInfo)
-
 import           Cardano.Db (PGPassSource (PGPassDefaultEnv), readPGPass, renderPGPassError,
                    textShow, toConnectionString)
 import qualified Cardano.Db as Db
-
+import           Cardano.Prelude
 import           Cardano.SMASH.Server.Api
 import           Cardano.SMASH.Server.Config
 import           Cardano.SMASH.Server.Impl
 import           Cardano.SMASH.Server.PoolDataLayer
 import           Cardano.SMASH.Server.Types
-
 import           Control.Monad.Trans.Except.Exit (orDie)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 import           Database.Persist.Postgresql (withPostgresqlPool)
+import           Network.Wai.Handler.Warp (defaultSettings, runSettings, setBeforeMainLoop, setPort)
+import           Servant (Application, BasicAuthCheck (..), BasicAuthData (..),
+                   BasicAuthResult (..), Context (..), serveWithContext)
 
 runSmashServer :: SmashServerConfig -> IO ()
 runSmashServer config = do

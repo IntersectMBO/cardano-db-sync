@@ -14,18 +14,16 @@ module Cardano.Mock.ChainSync.State
   , followerInstruction
   ) where
 
+import qualified Cardano.Mock.Chain as Chain
+import           Cardano.Mock.ChainDB
 import           Control.Exception (assert)
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-
 import           Ouroboros.Consensus.Block (HasHeader, HeaderHash, Point, blockPoint, castPoint)
 import           Ouroboros.Consensus.Config (TopLevelConfig)
 import           Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol)
-
 import           Ouroboros.Network.Block (ChainUpdate (..))
 
-import qualified Cardano.Mock.Chain as Chain
-import           Cardano.Mock.ChainDB
 
 data ChainProducerState block = ChainProducerState
   { chainDB        :: ChainDB block

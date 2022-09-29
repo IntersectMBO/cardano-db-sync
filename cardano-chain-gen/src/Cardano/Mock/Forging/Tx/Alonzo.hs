@@ -38,20 +38,7 @@ module Cardano.Mock.Forging.Tx.Alonzo
   , emptyTx
   ) where
 
-import           Cardano.Prelude hiding (sum, (.))
-
-import qualified Data.List as List
-import qualified Data.Map.Strict as Map
-import           Data.Maybe (fromJust)
-import qualified Data.Maybe.Strict as Strict
-import           Data.Sequence.Strict (StrictSeq)
-import qualified Data.Sequence.Strict as StrictSeq
-import qualified Data.Set as Set
-
-import           Cardano.Slotting.Slot
-
 import           Cardano.Crypto.VRF
-
 import           Cardano.Ledger.Address
 import           Cardano.Ledger.Alonzo.Data
 import           Cardano.Ledger.Alonzo.PParams
@@ -73,15 +60,23 @@ import           Cardano.Ledger.Shelley.TxBody (DCert (..), PoolCert (..), PoolM
                    PoolParams (..), StakePoolRelay (..), Wdrl (..))
 import           Cardano.Ledger.ShelleyMA.Timelocks
 import           Cardano.Ledger.TxIn (TxIn (..), txid)
-
-import           Ouroboros.Consensus.Cardano.Block (LedgerState, StandardAlonzo)
-import           Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
-import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
-
 import           Cardano.Mock.Forging.Crypto
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Tx.Generic
 import           Cardano.Mock.Forging.Types
+import           Cardano.Prelude hiding (sum, (.))
+import           Cardano.Slotting.Slot
+import qualified Data.List as List
+import qualified Data.Map.Strict as Map
+import           Data.Maybe (fromJust)
+import qualified Data.Maybe.Strict as Strict
+import           Data.Sequence.Strict (StrictSeq)
+import qualified Data.Sequence.Strict as StrictSeq
+import qualified Data.Set as Set
+import           Ouroboros.Consensus.Cardano.Block (LedgerState, StandardAlonzo)
+import           Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
+import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
+
 
 type AlonzoUTxOIndex = UTxOIndex StandardAlonzo
 type AlonzoLedgerState = LedgerState (ShelleyBlock TPraosStandard StandardAlonzo)

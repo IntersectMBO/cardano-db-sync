@@ -14,20 +14,14 @@ module Cardano.DbSync.Config.Node
 -- be easier and faster to just parse out the bits we need here.
 
 import qualified Cardano.Chain.Update as Byron
-
 import           Cardano.Crypto (RequiresNetworkMagic (..))
-
 import           Cardano.Db (textShow)
-
 import           Cardano.DbSync.Config.Types
-
 import           Cardano.Prelude
-
 import           Data.Aeson (FromJSON (..), Object, (.:), (.:?))
 import qualified Data.Aeson as Aeson
 import           Data.Aeson.Types (Parser)
 import qualified Data.Yaml as Yaml
-
 import qualified Ouroboros.Consensus.Cardano.CanHardFork as Shelley
 
 data NodeConfig = NodeConfig
@@ -68,8 +62,8 @@ parseNodeConfig bs =
 -- -------------------------------------------------------------------------------------------------
 
 instance FromJSON NodeConfig where
-  parseJSON v =
-      Aeson.withObject "NodeConfig" parse v
+  parseJSON =
+      Aeson.withObject "NodeConfig" parse
     where
       parse :: Object -> Parser NodeConfig
       parse o =

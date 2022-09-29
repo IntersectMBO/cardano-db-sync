@@ -11,22 +11,14 @@ module Cardano.DbSync.Era.Shelley.Genesis
   ( insertValidateGenesisDist
   ) where
 
-import           Cardano.Prelude
-
 import           Cardano.BM.Trace (Trace, logError, logInfo)
-
-import           Control.Monad.Trans.Control (MonadBaseControl)
-import           Control.Monad.Trans.Except.Extra (newExceptT)
-
 import qualified Cardano.Db as DB
-
 import           Cardano.DbSync.Cache
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import           Cardano.DbSync.Era.Shelley.Insert
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Util
-
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.Coin as Ledger
 import           Cardano.Ledger.Credential (Credential (KeyHashObj))
@@ -36,21 +28,19 @@ import           Cardano.Ledger.Shelley.Scripts ()
 import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import qualified Cardano.Ledger.Shelley.UTxO as Shelley
-
+import           Cardano.Prelude
 import           Cardano.Slotting.Block (BlockNo (..))
 import           Cardano.Slotting.Slot (EpochNo (..))
-
+import           Control.Monad.Trans.Control (MonadBaseControl)
+import           Control.Monad.Trans.Except.Extra (newExceptT)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Map.Strict as Map
 import           Data.Time.Clock (UTCTime (..))
 import qualified Data.Time.Clock as Time
-
 import           Database.Persist.Sql (SqlBackend)
-
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShelley)
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..), ShelleyGenesisStaking (..),
                    emptyGenesisStaking)
-
 import           Paths_cardano_db_sync (version)
 
 

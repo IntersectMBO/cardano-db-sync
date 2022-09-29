@@ -24,33 +24,28 @@ module Cardano.SMASH.Server.Types
   , UserValidity (..)
   ) where
 
+import           Cardano.Api (AsType (..), Hash, deserialiseFromBech32, deserialiseFromRawBytesHex,
+                   serialiseToRawBytes)
+import           Cardano.Api.Shelley (StakePoolKey)
+import           Cardano.Db (LookupFail (..), PoolMetaHash (..), renderLookupFail)
 import           Cardano.Prelude
-
 import           Control.Monad.Fail (fail)
-
 import           Data.Aeson (FromJSON (..), ToJSON (..), object, withObject, (.:), (.=))
 import qualified Data.Aeson as Aeson
 import           Data.Aeson.Encoding (unsafeToEncoding)
 import qualified Data.Aeson.Types ()
+import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Builder as BSB
+import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Swagger (NamedSchema (..), ToParamSchema (..), ToSchema (..))
 import           Data.Time.Clock (UTCTime)
 import qualified Data.Time.Clock.POSIX as Time
 import           Data.Time.Format (defaultTimeLocale, formatTime, parseTimeM)
-
-
 import           Network.URI (URI, parseURI)
+import           Quiet (Quiet (..))
 import           Servant (FromHttpApiData (..), MimeUnrender (..), OctetStream)
 
-import           Cardano.Db (LookupFail (..), PoolMetaHash (..), renderLookupFail)
-
-import           Cardano.Api (AsType (..), Hash, deserialiseFromBech32, deserialiseFromRawBytesHex,
-                   serialiseToRawBytes)
-import           Cardano.Api.Shelley (StakePoolKey)
-import qualified Data.ByteString.Base16 as B16
-import qualified Data.ByteString.Char8 as BS
-import           Quiet (Quiet (..))
 
 -- | The stake pool identifier. It is the hash of the stake pool operator's
 -- vkey.
@@ -79,7 +74,7 @@ instance ToParamSchema PoolId
 instance ToSchema PoolId
 
 instance FromHttpApiData PoolId where
-    parseUrlPiece poolId = parsePoolId poolId
+    parseUrlPiece = parsePoolId
 
 -- Currently deserializing from safe types, unwrapping and wrapping it up again.
 -- The underlying DB representation is HEX.
@@ -282,7 +277,7 @@ instance FromJSON TickerName where
         eitherToMonadFail $ validateTickerName name
 
 instance FromHttpApiData TickerName where
-    parseUrlPiece tickerName = validateTickerName tickerName
+    parseUrlPiece = validateTickerName
 
 eitherToMonadFail :: MonadFail m => Either Text a -> m a
 eitherToMonadFail (Left err)  = fail $ toS err

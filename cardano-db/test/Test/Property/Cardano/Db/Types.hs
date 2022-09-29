@@ -8,15 +8,11 @@ module Test.Property.Cardano.Db.Types
   ) where
 
 import           Cardano.Chain.Common (maxLovelaceVal)
-
 import qualified Cardano.Crypto.Hash as Crypto
-
 import           Cardano.Db
-
 import           Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Hashes as Ledger
 import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..))
-
 import qualified Data.Aeson as Aeson
 import           Data.Bifunctor (first)
 import qualified Data.ByteString.Base16 as Base16
@@ -29,15 +25,12 @@ import           Data.Ratio ((%))
 import qualified Data.Text as Text
 import           Data.WideWord.Word128 (Word128 (..))
 import           Data.Word (Word64)
-
 import           Database.Persist.Class (PersistField (..))
 import           Database.Persist.Types (PersistValue (..))
-
 import           Hedgehog (Gen, Property, discover, (===))
 import qualified Hedgehog as H
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
-
 import           Numeric.Natural (Natural)
 
 prop_roundtrip_Ada_via_JSON :: Property

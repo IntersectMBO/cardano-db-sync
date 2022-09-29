@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Cardano.DbSync.Era
@@ -8,18 +7,15 @@ module Cardano.DbSync.Era
   , insertValidateGenesisDist
   ) where
 
-import           Cardano.Prelude
-
 import           Cardano.BM.Data.Trace (Trace)
-
 import           Cardano.DbSync.Config
-import           Cardano.DbSync.Error
-
 import qualified Cardano.DbSync.Era.Byron.Genesis as Byron
 import qualified Cardano.DbSync.Era.Shelley.Genesis as Shelley
 import           Cardano.DbSync.Era.Shelley.Offline as X
-
+import           Cardano.DbSync.Error
+import           Cardano.Prelude
 import           Database.Persist.Sql (SqlBackend)
+
 
 insertValidateGenesisDist
     :: Trace IO Text -> SqlBackend -> NetworkName -> GenesisConfig -> Bool

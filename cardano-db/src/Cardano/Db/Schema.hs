@@ -18,18 +18,15 @@
 module Cardano.Db.Schema where
 
 import           Cardano.Db.Schema.Orphans ()
-
 import           Cardano.Db.Types (DbInt65, DbLovelace, DbWord64, RewardSource, ScriptPurpose,
                    ScriptType, SyncState)
 import           Cardano.Slotting.Block (BlockNo (..))
-
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Int (Int64)
 import           Data.Text (Text)
 import           Data.Time.Clock (UTCTime)
 import           Data.WideWord.Word128 (Word128)
 import           Data.Word (Word16, Word64)
-
 import           Database.Persist.Class (Unique)
 import           Database.Persist.Documentation (deriveShowFields, document, (#), (--^))
 import           Database.Persist.EntityDef.Internal (EntityDef (..))

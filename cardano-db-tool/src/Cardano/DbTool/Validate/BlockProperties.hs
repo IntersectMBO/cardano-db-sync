@@ -3,24 +3,20 @@ module Cardano.DbTool.Validate.BlockProperties
   ( validateBlockProperties
   ) where
 
-import           Cardano.DbTool.Validate.Util
-
 import           Cardano.Db hiding (queryBlockTxCount)
-
+import           Cardano.DbTool.Validate.Util
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
-
 import           Data.Int (Int64)
 import qualified Data.List as List
 import qualified Data.List.Extra as List
 import           Data.Time.Clock (UTCTime)
 import qualified Data.Time.Clock as Time
 import           Data.Word (Word64)
-
 import           Database.Esqueleto.Experimental (SqlBackend, asc, desc, from, limit, orderBy,
                    select, table, unValue, val, where_, (>.), (^.))
-
 import qualified System.Random as Random
+
 
 {- HLINT ignore "Reduce duplication" -}
 

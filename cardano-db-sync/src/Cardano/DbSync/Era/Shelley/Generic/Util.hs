@@ -30,27 +30,21 @@ module Cardano.DbSync.Era.Shelley.Generic.Util
   , unAssetName
   ) where
 
-import           Cardano.Prelude
-
 import qualified Cardano.Api.Shelley as Api
-
 import qualified Cardano.Crypto.Hash as Crypto
-
 import           Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as Db
-
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
+import           Cardano.Ledger.Coin (Coin (..), DeltaCoin)
 import qualified Cardano.Ledger.Credential as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
 import           Cardano.Ledger.Mary.Value (AssetName (..))
+import qualified Cardano.Ledger.SafeHash as Ledger
 import qualified Cardano.Ledger.Shelley.Scripts as Shelley
 import           Cardano.Ledger.Shelley.Tx (TxId (..))
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
-
-import           Cardano.Ledger.Coin (Coin (..), DeltaCoin)
-import qualified Cardano.Ledger.SafeHash as Ledger
-
+import           Cardano.Prelude
 import qualified Data.Binary.Put as Binary
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
@@ -58,7 +52,6 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
 import qualified Data.List as List
 import qualified Data.Text.Encoding as Text
-
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 

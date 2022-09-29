@@ -26,31 +26,22 @@ module Cardano.DbSync.Era.Byron.Util
   , unTxHash
   ) where
 
-import           Cardano.Prelude hiding (catch)
-
 import           Cardano.Binary (Raw)
-import qualified Cardano.Crypto as Crypto
-import qualified Cardano.Crypto.Wallet as Crypto
-
--- Import all 'cardano-ledger' functions and data types qualified so they do not
--- clash with the Cardano.Db functions and data types which are also imported
--- qualified.
 import qualified Cardano.Chain.Block as Byron
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Chain.Slotting as Byron
-import qualified Cardano.Chain.Update as Byron
 import qualified Cardano.Chain.UTxO as Byron
-
-import qualified Ouroboros.Consensus.Byron.Ledger.Block as Byron
-
+import qualified Cardano.Chain.Update as Byron
+import qualified Cardano.Crypto as Crypto
+import qualified Cardano.Crypto.Wallet as Crypto
 import qualified Cardano.Db as DB
-
+import           Cardano.Prelude hiding (catch)
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Text.Encoding as Text
-
+import qualified Ouroboros.Consensus.Byron.Ledger.Block as Byron
 
 
 boundaryEpochNumber :: Byron.ABoundaryBlock ByteString -> Word64

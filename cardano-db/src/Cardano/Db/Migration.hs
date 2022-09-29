@@ -19,6 +19,14 @@ module Cardano.Db.Migration
   , noLedgerMigrations
   ) where
 
+import           Cardano.BM.Trace (Trace)
+import           Cardano.Crypto.Hash (Blake2b_256, ByteString, Hash, hashToStringAsHex, hashWith)
+import           Cardano.Db.Migration.Haskell
+import           Cardano.Db.Migration.Version
+import           Cardano.Db.PGConfig
+import           Cardano.Db.Run
+import           Cardano.Db.Schema
+import           Cardano.Db.Text
 import           Control.Exception (SomeException, handle)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class (liftIO)
@@ -26,7 +34,6 @@ import           Control.Monad.Logger (NoLoggingT)
 import           Control.Monad.Trans.Except (ExceptT, throwE)
 import           Control.Monad.Trans.Reader (ReaderT)
 import           Control.Monad.Trans.Resource (runResourceT)
-
 import qualified Data.ByteString.Char8 as BS
 import           Data.Char (isDigit)
 import           Data.Conduit.Binary (sinkHandle)
@@ -40,25 +47,13 @@ import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           Data.Time.Clock (getCurrentTime)
 import           Data.Time.Format (defaultTimeLocale, formatTime, iso8601DateFormat)
-
 import           Database.Persist.Sql (Single (..), SqlBackend, SqlPersistT, entityVal,
                    getMigration, rawExecute, rawSql, selectFirst)
-
-import           Cardano.BM.Trace (Trace)
-import           Cardano.Crypto.Hash (Blake2b_256, ByteString, Hash, hashToStringAsHex, hashWith)
-import           Cardano.Db.Migration.Haskell
-import           Cardano.Db.Migration.Version
-import           Cardano.Db.PGConfig
-import           Cardano.Db.Run
-import           Cardano.Db.Schema
-import           Cardano.Db.Text
-
 import           System.Directory (listDirectory)
 import           System.Exit (ExitCode (..), exitFailure)
 import           System.FilePath (takeExtension, takeFileName, (</>))
 import           System.IO (Handle, IOMode (AppendMode), hFlush, hPrint, hPutStrLn, stdout,
                    withFile)
-
 import           Text.Read (readMaybe)
 
 newtype MigrationDir

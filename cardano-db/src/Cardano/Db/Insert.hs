@@ -61,19 +61,18 @@ module Cardano.Db.Insert
   , insertUnchecked
   ) where
 
-
+import           Cardano.Db.Query
+import           Cardano.Db.Schema
 import           Control.Exception.Lifted (Exception, handle, throwIO)
 import           Control.Monad (unless, void, when)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Reader (ReaderT)
-
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.List.NonEmpty as NonEmpty
 import           Data.Proxy (Proxy (..))
 import           Data.Text (Text)
 import qualified Data.Text as Text
-
 import           Database.Persist.Class (AtLeastOneUniqueKey, PersistEntityBackend, checkUnique,
                    insert, insertBy, replaceUnique)
 import           Database.Persist.EntityDef.Internal (entityDB, entityUniques)
@@ -84,9 +83,6 @@ import qualified Database.Persist.Sql.Util as Util
 import           Database.Persist.Types (ConstraintNameDB (..), EntityNameDB (..), FieldNameDB (..),
                    PersistValue, entityKey)
 import           Database.PostgreSQL.Simple (SqlError)
-
-import           Cardano.Db.Query
-import           Cardano.Db.Schema
 
 
 -- The original naive way of inserting rows into Postgres was:

@@ -15,32 +15,25 @@ module Cardano.DbSync.Era.Shelley.Insert.Epoch
   , sumRewardTotal
   ) where
 
-import           Cardano.Prelude
-
 import           Cardano.BM.Trace (Trace, logInfo)
-
 import qualified Cardano.Db as DB
-
-import           Cardano.Ledger.BaseTypes (Network)
-import qualified Cardano.Ledger.Coin as Shelley
-
 import           Cardano.DbSync.Api
 import           Cardano.DbSync.Cache
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Util (liftLookupFail)
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Types
-
+import           Cardano.Ledger.BaseTypes (Network)
+import qualified Cardano.Ledger.Coin as Shelley
+import           Cardano.Prelude
 import           Cardano.Slotting.Slot (EpochNo (..))
-
 import           Control.Monad.Extra (mapMaybeM)
 import           Control.Monad.Trans.Control (MonadBaseControl)
-
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
-
 import           Database.Persist.Sql (SqlBackend)
+
 
 {- HLINT ignore "Use readTVarIO" -}
 

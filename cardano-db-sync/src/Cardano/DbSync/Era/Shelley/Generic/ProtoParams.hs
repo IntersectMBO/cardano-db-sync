@@ -5,8 +5,7 @@ module Cardano.DbSync.Era.Shelley.Generic.ProtoParams
   , epochProtoParams
   ) where
 
-import           Cardano.Prelude
-
+import           Cardano.DbSync.Types
 import qualified Cardano.Ledger.Alonzo as Alonzo
 import           Cardano.Ledger.Alonzo.Language (Language)
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
@@ -18,16 +17,14 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import qualified Cardano.Ledger.Shelley.PParams as Shelley
+import           Cardano.Prelude
 import           Cardano.Slotting.Slot (EpochNo (..))
-
-import           Cardano.DbSync.Types
-
-import           Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
-
 import           Ouroboros.Consensus.Cardano (Nonce (..))
+import           Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
 import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
+
 
 data ProtoParams = ProtoParams
   { ppMinfeeA :: !Natural

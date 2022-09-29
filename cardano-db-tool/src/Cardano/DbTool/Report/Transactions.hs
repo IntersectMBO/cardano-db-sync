@@ -7,11 +7,9 @@ module Cardano.DbTool.Report.Transactions
 
 import           Cardano.Db
 import           Cardano.DbTool.Report.Display
-
 import           Control.Monad (forM_)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
-
 import qualified Data.ByteString.Base16 as Base16
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.List as List
@@ -21,10 +19,10 @@ import           Data.Text (Text)
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.IO as Text
 import           Data.Time.Clock (UTCTime)
-
 import           Database.Esqueleto.Experimental (SqlBackend, Value (Value, unValue), from,
                    innerJoin, just, on, select, table, type (:&) ((:&)), val, where_, (&&.), (==.),
                    (^.))
+
 
 {- HLINT ignore "Redundant ^." -}
 {- HLINT ignore "Fuse on/on" -}

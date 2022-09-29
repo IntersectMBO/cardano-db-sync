@@ -100,14 +100,14 @@ module Cardano.Db.Query
   , unValueSumAda
   ) where
 
-
+import           Cardano.Db.Error
+import           Cardano.Db.Schema
+import           Cardano.Db.Types
 import           Cardano.Slotting.Block (BlockNo (..))
 import           Cardano.Slotting.Slot (SlotNo (..))
-
 import           Control.Monad.Extra (join, whenJust)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
-
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Fixed (Micro)
 import           Data.Int (Int64)
@@ -117,7 +117,6 @@ import           Data.Text (Text)
 import           Data.Time.Clock (UTCTime (..))
 import           Data.Tuple.Extra (uncurry3)
 import           Data.Word (Word16, Word64)
-
 import           Database.Esqueleto.Experimental (Entity, PersistField, SqlBackend, SqlExpr,
                    SqlQuery, Value (Value, unValue), ValueList, count, countRows, desc, entityKey,
                    entityVal, exists, from, in_, innerJoin, isNothing, just, leftJoin, limit, max_,
@@ -125,10 +124,6 @@ import           Database.Esqueleto.Experimental (Entity, PersistField, SqlBacke
                    type (:&) ((:&)), unSqlBackendKey, val, valList, where_, (&&.), (<=.), (==.),
                    (>.), (>=.), (?.), (^.), (||.))
 import           Database.Persist.Class.PersistQuery (selectList)
-
-import           Cardano.Db.Error
-import           Cardano.Db.Schema
-import           Cardano.Db.Types
 import           Database.Persist.Types (SelectOpt (Asc))
 
 {- HLINT ignore "Redundant ^." -}

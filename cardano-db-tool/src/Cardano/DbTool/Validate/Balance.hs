@@ -10,30 +10,25 @@ module Cardano.DbTool.Validate.Balance
   ) where
 
 import qualified Cardano.Api.Shelley as Api
-
 import qualified Cardano.Chain.Block as Byron
 import           Cardano.Chain.Common (CompactAddress, Lovelace, decodeAddressBase58, sumLovelace,
                    toCompactAddress, unsafeGetLovelace)
 import qualified Cardano.Chain.UTxO as Byron
-
 import           Cardano.Ledger.Address (BootstrapAddress (..))
 import           Cardano.Ledger.Alonzo (AlonzoEra)
 import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
 import           Cardano.Ledger.CompactAddress (CompactAddr, compactAddr)
+import           Cardano.Ledger.Compactible
 import qualified Cardano.Ledger.Core as Ledger
 import           Cardano.Ledger.Era (Crypto)
 import           Cardano.Ledger.Shelley.API (Addr (..), Coin (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import qualified Cardano.Ledger.Shelley.UTxO as Shelley
-
-import           Cardano.Ledger.Compactible
 import           Cardano.Ledger.Val
 import           Cardano.Prelude
-
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
-
 import           Ouroboros.Consensus.Byron.Ledger
 import           Ouroboros.Consensus.Cardano.Block (CardanoBlock, LedgerState (..), StandardCrypto)
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)

@@ -2,7 +2,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -11,20 +10,16 @@ module Cardano.DbSync.StateQuery
   ( querySlotDetails
   ) where
 
-import           Cardano.Prelude
-
-import           Data.Time.Clock (UTCTime (..), addUTCTime)
-
-import           Cardano.Slotting.Slot (SlotNo (..))
-
 import           Cardano.DbSync.Types
-
+import           Cardano.Prelude
+import           Cardano.Slotting.Slot (SlotNo (..))
+import           Data.Time.Clock (UTCTime (..), addUTCTime)
 import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (RelativeTime (..),
                    SystemStart (..))
 import           Ouroboros.Consensus.Cardano.Node ()
 import           Ouroboros.Consensus.HardFork.History.Qry (Expr (..), Qry, qryFromExpr,
                    slotToEpoch')
--- -------------------------------------------------------------------------------------------------
+
 
 -- TODO: Switch back to the old version of this when this is fixed:
 -- https://github.com/input-output-hk/cardano-db-sync/issues/276

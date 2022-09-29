@@ -1,22 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-import           Prelude
-
 import           Control.Monad (when)
-
 import           Data.Maybe (isNothing)
-
-import           Test.Tasty (defaultMain, testGroup)
-
+import           Prelude
+import           System.Directory (getCurrentDirectory)
+import           System.Environment (lookupEnv, setEnv)
+import           System.FilePath ((</>))
 import qualified Test.IO.Cardano.Db.Insert
 import qualified Test.IO.Cardano.Db.Migration
 import qualified Test.IO.Cardano.Db.PGConfig
 import qualified Test.IO.Cardano.Db.Rollback
 import qualified Test.IO.Cardano.Db.TotalSupply
-
-import           System.Directory (getCurrentDirectory)
-import           System.Environment (lookupEnv, setEnv)
-import           System.FilePath ((</>))
+import           Test.Tasty (defaultMain, testGroup)
 
 main :: IO ()
 main = do

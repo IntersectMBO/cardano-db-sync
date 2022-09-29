@@ -8,15 +8,13 @@ module Cardano.SMASH.Server.FetchPolicies
   ) where
 
 import           Cardano.Prelude
-
-import           Control.Monad.Trans.Except.Extra
-
 import           Cardano.SMASH.Server.Types (HealthStatus, PolicyResult (..), PoolId, SmashURL (..))
+import           Control.Monad.Trans.Except.Extra
 import           Data.Aeson (FromJSON, parseJSON)
 import           Data.Aeson.Types (parseEither)
-
 import           Network.HTTP.Simple (Request, getResponseBody, getResponseStatusCode,
                    httpJSONEither, parseRequestThrow)
+
 
 -- |The possible errors for the http client.
 data HttpClientError

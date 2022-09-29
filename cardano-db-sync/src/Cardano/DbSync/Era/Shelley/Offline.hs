@@ -11,39 +11,29 @@ module Cardano.DbSync.Era.Shelley.Offline
   , runOfflineFetchThread
   ) where
 
-import           Cardano.Prelude
-
 import           Cardano.BM.Trace (Trace, logInfo)
-
+import qualified Cardano.Crypto.Hash.Blake2b as Crypto
+import qualified Cardano.Crypto.Hash.Class as Crypto
+import           Cardano.Db
+import qualified Cardano.Db as DB
+import           Cardano.DbSync.Api
 import           Cardano.DbSync.Era.Shelley.Offline.Http
 import           Cardano.DbSync.Era.Shelley.Offline.Query
 import           Cardano.DbSync.Era.Shelley.Offline.Types
-
 import           Cardano.DbSync.Types
-
+import           Cardano.DbSync.Util
+import           Cardano.Prelude
 import           Control.Monad.Class.MonadSTM.Strict (TBQueue, flushTBQueue, isEmptyTBQueue,
                    readTBQueue, writeTBQueue)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (handleExceptT, left)
-
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import           Data.Time.Clock.POSIX (POSIXTime)
 import qualified Data.Time.Clock.POSIX as Time
-
-import qualified Cardano.Crypto.Hash.Blake2b as Crypto
-import qualified Cardano.Crypto.Hash.Class as Crypto
-
-import           Cardano.Db
-import qualified Cardano.Db as DB
-
-import           Cardano.DbSync.Api
-import           Cardano.DbSync.Util
-
 import           Database.Persist.Sql (SqlBackend)
-
 import           Network.HTTP.Client (HttpException (..))
 import qualified Network.HTTP.Client as Http
 import           Network.HTTP.Client.TLS (tlsManagerSettings)

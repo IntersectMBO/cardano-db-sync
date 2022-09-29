@@ -6,14 +6,13 @@ module Cardano.Mock.Forging.Crypto
   , mkSeedFromWords
   ) where
 
-import           Data.Typeable (Proxy (Proxy))
-import           Data.Word (Word64)
-
 import           Cardano.Binary (ToCBOR (..))
 import           Cardano.Crypto.Hash (Blake2b_256, hashToBytes, hashWithSerialiser)
 import           Cardano.Crypto.Seed (Seed, mkSeedFromBytes)
 import           Cardano.Crypto.VRF (SignKeyVRF, VRFAlgorithm, VerKeyVRF, deriveVerKeyVRF,
                    genKeyVRF)
+import           Data.Typeable (Proxy (Proxy))
+import           Data.Word (Word64)
 
 
 instance ToCBOR RawSeed where

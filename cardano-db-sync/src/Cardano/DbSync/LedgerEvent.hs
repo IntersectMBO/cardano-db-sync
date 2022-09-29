@@ -16,7 +16,9 @@ module Cardano.DbSync.LedgerEvent
   ) where
 
 import           Cardano.Db hiding (EpochNo, SyncState, epochNo)
-
+import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
+import           Cardano.DbSync.Types
+import           Cardano.DbSync.Util
 import           Cardano.Ledger.Coin (Coin (..), DeltaCoin (..))
 import qualified Cardano.Ledger.Core as Ledger
 import           Cardano.Ledger.Crypto (StandardCrypto)
@@ -30,22 +32,13 @@ import           Cardano.Ledger.Shelley.Rules.PoolReap (PoolreapEvent (..))
 import           Cardano.Ledger.Shelley.Rules.Rupd (RupdEvent (RupdEvent))
 import           Cardano.Ledger.Shelley.Rules.Tick (TickEvent (NewEpochEvent))
 import qualified Cardano.Ledger.Shelley.Rules.Tick as Tick
-
 import           Cardano.Prelude hiding (All)
-
-import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import           Cardano.DbSync.Types
-import           Cardano.DbSync.Util
-
 import           Cardano.Slotting.Slot (EpochNo (..))
-
 import           Control.State.Transition (Event)
-
 import qualified Data.Map.Strict as Map
-import qualified Data.Set as Set
 import           Data.SOP.Strict (All, K (..), hcmap, hcollapse)
+import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
-
 import           Ouroboros.Consensus.Byron.Ledger.Block (ByronBlock)
 import           Ouroboros.Consensus.Cardano.Block (CardanoEras, HardForkBlock)
 import           Ouroboros.Consensus.HardFork.Combinator.AcrossEras (OneEraLedgerEvent,

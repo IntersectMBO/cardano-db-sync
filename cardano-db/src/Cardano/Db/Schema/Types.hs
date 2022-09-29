@@ -10,13 +10,9 @@ module Cardano.Db.Schema.Types
   ) where
 
 import           Data.ByteString.Char8 (ByteString)
-
 import           Data.Text (Text)
-
 import           GHC.Generics (Generic)
-
 import           Quiet (Quiet (..))
-
 
 newtype Address -- Length of 28/56/94 bytes enforced by Postgres.
   = Address { unAddress :: ByteString }

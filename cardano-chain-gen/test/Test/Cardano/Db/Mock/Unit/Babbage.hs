@@ -8,24 +8,10 @@ module Test.Cardano.Db.Mock.Unit.Babbage
   ( unitTests
   ) where
 
-import           Control.Concurrent
-import           Control.Exception
-import           Control.Monad
-import           Control.Monad.Class.MonadSTM.Strict
-import           Data.ByteString (ByteString)
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Short as SBS
-import qualified Data.Map as Map
-import           Data.Text (Text)
-
-import           Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
-
-import           Ouroboros.Network.Block (blockNo, blockPoint, blockSlot)
-
-import qualified Cardano.Db as DB
-
 import qualified Cardano.Crypto.Hash as Crypto
-
+import qualified Cardano.Db as DB
+import           Cardano.DbSync.Era.Shelley.Generic.Block (blockHash)
+import           Cardano.DbSync.Era.Shelley.Generic.Util
 import           Cardano.Ledger.Alonzo.Data
 import           Cardano.Ledger.BaseTypes
 import           Cardano.Ledger.Coin
@@ -35,13 +21,6 @@ import           Cardano.Ledger.Mary.Value
 import           Cardano.Ledger.SafeHash
 import           Cardano.Ledger.Shelley.TxBody
 import           Cardano.Ledger.Slot (BlockNo (..), EpochNo)
-
-import           Cardano.DbSync.Era.Shelley.Generic.Block (blockHash)
-import           Cardano.DbSync.Era.Shelley.Generic.Util
-
-import           Cardano.SMASH.Server.PoolDataLayer
-import           Cardano.SMASH.Server.Types
-
 import           Cardano.Mock.ChainSync.Server
 import           Cardano.Mock.Forging.Interpreter
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
@@ -51,14 +30,26 @@ import           Cardano.Mock.Forging.Tx.Babbage.Scenarios
 import           Cardano.Mock.Forging.Tx.Generic
 import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
 import           Cardano.Mock.Forging.Types
-
-import           Test.Tasty (TestTree, testGroup)
-import           Test.Tasty.HUnit (Assertion, assertBool, assertEqual, assertFailure, testCase)
-
+import           Cardano.SMASH.Server.PoolDataLayer
+import           Cardano.SMASH.Server.Types
+import           Control.Concurrent
+import           Control.Exception
+import           Control.Monad
+import           Control.Monad.Class.MonadSTM.Strict
+import           Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Short as SBS
+import qualified Data.Map as Map
+import           Data.Text (Text)
+import           Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
+import           Ouroboros.Network.Block (blockNo, blockPoint, blockSlot)
 import           Test.Cardano.Db.Mock.Config
 import           Test.Cardano.Db.Mock.Examples
 import           Test.Cardano.Db.Mock.UnifiedApi
 import           Test.Cardano.Db.Mock.Validate
+import           Test.Tasty (TestTree, testGroup)
+import           Test.Tasty.HUnit (Assertion, assertBool, assertEqual, assertFailure, testCase)
+
 
 {- HLINT ignore "Reduce duplication" -}
 {- HLINT ignore "Use underscore" -}

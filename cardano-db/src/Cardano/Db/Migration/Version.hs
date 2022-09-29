@@ -12,7 +12,6 @@ import qualified Data.List as List
 import qualified Data.List.Extra as List
 import qualified Data.Time.Calendar as Time
 import qualified Data.Time.Clock as Time
-
 import           Text.Printf (printf)
 import           Text.Read (readMaybe)
 

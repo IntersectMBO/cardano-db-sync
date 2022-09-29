@@ -1,16 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import           Cardano.Db (schemaDocs)
-
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           Data.Version (showVersion)
-
 import           Database.Persist.Documentation (markdownTableRenderer, render)
-
 import           Paths_cardano_db (version)
-
 import           System.Environment (getArgs, getProgName)
 import           System.Exit (ExitCode (..))
 import           System.IO (IOMode (..), withFile)

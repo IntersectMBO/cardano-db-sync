@@ -49,24 +49,12 @@ module Cardano.Mock.Forging.Tx.Babbage
   , emptyTx
   ) where
 
-import           Cardano.Prelude hiding (sum, (.))
-
-import           Data.ByteString.Short (ShortByteString)
-import qualified Data.Map.Strict as Map
-import           Data.Maybe (fromJust)
-import qualified Data.Maybe.Strict as Strict
-import           Data.Sequence.Strict (StrictSeq)
-import qualified Data.Sequence.Strict as StrictSeq
-import qualified Data.Set as Set
-
-import           Cardano.Slotting.Slot
-
 import           Cardano.Crypto.VRF
-
 import           Cardano.Ledger.Address
 import           Cardano.Ledger.Alonzo.Data
 import           Cardano.Ledger.Alonzo.Scripts
 import           Cardano.Ledger.Alonzo.TxWitness
+import           Cardano.Ledger.Babbage.Collateral (collOuts)
 import           Cardano.Ledger.Babbage.Tx
 import           Cardano.Ledger.Babbage.TxBody
 import           Cardano.Ledger.BaseTypes
@@ -81,19 +69,26 @@ import           Cardano.Ledger.Serialization
 import           Cardano.Ledger.Shelley.Metadata
 import           Cardano.Ledger.Shelley.TxBody (DCert (..), DelegCert (..), PoolCert (..),
                    PoolMetadata (..), PoolParams (..), StakePoolRelay (..), Wdrl (..))
+import           Cardano.Ledger.Shelley.UTxO
 import           Cardano.Ledger.ShelleyMA.Timelocks
 import           Cardano.Ledger.TxIn (TxId, TxIn (..), txid)
-
-import           Ouroboros.Consensus.Cardano.Block (LedgerState)
-import           Ouroboros.Consensus.Shelley.Eras (StandardBabbage, StandardCrypto)
-import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
-
-import           Cardano.Ledger.Babbage.Collateral (collOuts)
-import           Cardano.Ledger.Shelley.UTxO
 import           Cardano.Mock.Forging.Crypto
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Tx.Generic
 import           Cardano.Mock.Forging.Types
+import           Cardano.Prelude hiding (sum, (.))
+import           Cardano.Slotting.Slot
+import           Data.ByteString.Short (ShortByteString)
+import qualified Data.Map.Strict as Map
+import           Data.Maybe (fromJust)
+import qualified Data.Maybe.Strict as Strict
+import           Data.Sequence.Strict (StrictSeq)
+import qualified Data.Sequence.Strict as StrictSeq
+import qualified Data.Set as Set
+import           Ouroboros.Consensus.Cardano.Block (LedgerState)
+import           Ouroboros.Consensus.Shelley.Eras (StandardBabbage, StandardCrypto)
+import           Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
+
 
 type BabbageUTxOIndex = UTxOIndex StandardBabbage
 type BabbageLedgerState = LedgerState (ShelleyBlock PraosStandard StandardBabbage)

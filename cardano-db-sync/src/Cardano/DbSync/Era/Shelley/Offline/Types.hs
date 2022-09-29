@@ -11,9 +11,7 @@ module Cardano.DbSync.Era.Shelley.Offline.Types
   ) where
 
 import           Cardano.Prelude
-
 import           Control.Monad.Fail (fail)
-
 import           Data.Aeson (FromJSON (..), Object, ToJSON (..), object, withObject, (.:), (.=))
 import           Data.Aeson.Types (Parser)
 import           Data.Swagger (ToSchema (..))

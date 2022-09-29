@@ -22,25 +22,21 @@ module Cardano.DbSync.Config
   , configureLogging
   ) where
 
-import           Cardano.Prelude
-
+import qualified Cardano.BM.Configuration.Model as Logging
 import qualified Cardano.BM.Setup as Logging
 import           Cardano.BM.Trace (Trace)
 import qualified Cardano.BM.Trace as Logging
-
-import qualified Cardano.BM.Configuration.Model as Logging
-
 import           Cardano.DbSync.Config.Cardano
 import           Cardano.DbSync.Config.Node
 import           Cardano.DbSync.Config.Shelley
 import           Cardano.DbSync.Config.Types
 import           Cardano.DbSync.Util
-
+import           Cardano.Prelude
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import qualified Data.Yaml as Yaml
-
 import           System.FilePath (takeDirectory, (</>))
+
 
 configureLogging :: SyncNodeParams -> Text -> IO (Trace IO Text)
 configureLogging params loggingName = do

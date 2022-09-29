@@ -9,11 +9,9 @@ module Cardano.DbTool.Report.StakeReward.Latest
 
 import           Cardano.Db
 import           Cardano.DbTool.Report.Display
-
 import           Control.Monad (join)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
-
 import qualified Data.List as List
 import           Data.Maybe (catMaybes)
 import           Data.Ord (Down (..))
@@ -22,12 +20,11 @@ import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           Data.Time.Clock (UTCTime)
 import           Data.Word (Word64)
-
 import           Database.Esqueleto.Experimental (SqlBackend, Value (..), asc, desc, from,
                    innerJoin, limit, max_, on, orderBy, select, table, type (:&) ((:&)),
                    unSqlBackendKey, val, where_, (<=.), (==.), (^.))
-
 import           Text.Printf (printf)
+
 
 {- HLINT ignore "Fuse on/on" -}
 

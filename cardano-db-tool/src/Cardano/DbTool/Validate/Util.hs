@@ -10,7 +10,6 @@ module Cardano.DbTool.Validate.Util
   ) where
 
 import           Cardano.Db
-
 import           System.Console.ANSI (setSGRCode)
 import           System.Console.ANSI.Types (Color (..), ColorIntensity (..), ConsoleLayer (..),
                    SGR (..))

@@ -7,19 +7,16 @@ module Cardano.DbSync.Era.Util
     , safeDecodeToJson
     ) where
 
-import           Cardano.Prelude
-
-import           Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT)
-
 import           Cardano.BM.Trace (Trace, logWarning)
 import qualified Cardano.Db as DB
-
 import           Cardano.DbSync.Error
-
+import           Cardano.Prelude
+import           Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Error as Text
+
 
 containsUnicodeNul :: Text -> Bool
 containsUnicodeNul = Text.isInfixOf "\\u000"

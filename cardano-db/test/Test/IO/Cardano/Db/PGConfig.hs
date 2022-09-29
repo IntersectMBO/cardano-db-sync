@@ -8,12 +8,12 @@ import           Cardano.Db (PGConfig (..), PGPassSource (..), readPGPass, rende
 import           Control.Monad (unless)
 import           Control.Monad.Trans.Except.Exit (orDie)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
-
 import           System.Directory (getCurrentDirectory)
 import           System.Environment
 import           System.FilePath ((</>))
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (testCase)
+
 
 tests :: TestTree
 tests =

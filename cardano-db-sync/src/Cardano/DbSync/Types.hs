@@ -21,20 +21,15 @@ module Cardano.DbSync.Types
   , Retry (..)
   ) where
 
-import           Cardano.Prelude hiding (Meta)
-
 import           Cardano.Db (PoolHashId, PoolMetaHash, PoolMetadataRefId, PoolOfflineData,
                    PoolOfflineFetchError, PoolUrl)
-
 import qualified Cardano.Ledger.Credential as Ledger
 import           Cardano.Ledger.Crypto (StandardCrypto)
 import           Cardano.Ledger.Keys
-
+import           Cardano.Prelude hiding (Meta)
 import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
-
 import           Data.Time.Clock (UTCTime)
 import           Data.Time.Clock.POSIX (POSIXTime)
-
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import qualified Ouroboros.Consensus.Cardano.Block as Cardano
 import qualified Ouroboros.Consensus.HardFork.History as History
@@ -44,6 +39,7 @@ import           Ouroboros.Consensus.Shelley.Eras (StandardAllegra, StandardAlon
                    StandardMary, StandardShelley)
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import           Ouroboros.Network.Block (BlockNo, Point)
+
 
 type TPraosStandard = TPraos StandardCrypto
 type PraosStandard = Praos StandardCrypto

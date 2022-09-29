@@ -7,19 +7,17 @@ module Cardano.DbTool.Report.Balance
 
 import           Cardano.Db
 import           Cardano.DbTool.Report.Display
-
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
-
 import           Data.Fixed (Micro)
 import qualified Data.List as List
 import           Data.Maybe (catMaybes)
 import           Data.Ord (Down (..))
 import           Data.Text (Text)
 import qualified Data.Text.IO as Text
-
 import           Database.Esqueleto.Experimental (SqlBackend, Value (..), from, innerJoin, just, on,
                    select, sum_, table, type (:&) ((:&)), val, where_, (&&.), (<=.), (==.), (^.))
+
 
 {- HLINT ignore "Redundant ^." -}
 {- HLINT ignore "Fuse on/on" -}

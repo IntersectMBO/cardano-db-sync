@@ -33,24 +33,16 @@ module Cardano.DbSync.Util
   , whenRight
   ) where
 
-import           Cardano.Prelude hiding (catch)
-
 import           Cardano.BM.Trace (Trace, logError, logInfo)
-
 import           Cardano.Db (RewardSource (..), textShow)
-
-import           Cardano.Ledger.Coin (Coin (..))
-import qualified Cardano.Ledger.Shelley.Rewards as Shelley
-
-
 import           Cardano.DbSync.Config.Types ()
 import           Cardano.DbSync.Types
-
+import           Cardano.Ledger.Coin (Coin (..))
+import qualified Cardano.Ledger.Shelley.Rewards as Shelley
+import           Cardano.Prelude hiding (catch)
 import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
-
 import           Control.Exception.Lifted (catch)
 import           Control.Monad.Trans.Control (MonadBaseControl)
-
 import           Data.ByteArray (ByteArrayAccess)
 import qualified Data.ByteArray
 import qualified Data.ByteString.Base16 as Base16
@@ -62,18 +54,16 @@ import           Data.Text.ANSI (red)
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.IO as Text
 import qualified Data.Time.Clock as Time
-
-import           Text.Show.Pretty (ppShow)
-
 import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
 import           Ouroboros.Consensus.Protocol.Praos.Translate ()
 import           Ouroboros.Consensus.Shelley.HFEras ()
 import           Ouroboros.Consensus.Shelley.Ledger.SupportsProtocol ()
 import           Ouroboros.Network.Block (blockSlot, getPoint)
 import qualified Ouroboros.Network.Point as Point
-
 import           System.Environment (lookupEnv)
 import           System.Posix.Process (exitImmediately)
+import           Text.Show.Pretty (ppShow)
+
 
 cardanoBlockSlotNo :: CardanoBlock -> SlotNo
 cardanoBlockSlotNo = blockSlot

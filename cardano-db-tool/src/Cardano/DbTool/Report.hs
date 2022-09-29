@@ -9,7 +9,6 @@ import           Cardano.DbTool.Report.StakeReward (reportEpochStakeRewards,
                    reportLatestStakeRewards, reportStakeRewardHistory)
 import           Cardano.DbTool.Report.Synced as X
 import           Cardano.DbTool.Report.Transactions (reportTransactions)
-
 import           Data.Text (Text)
 import           Data.Word (Word64)
 

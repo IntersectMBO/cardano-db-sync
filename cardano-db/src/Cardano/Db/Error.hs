@@ -7,7 +7,6 @@ module Cardano.Db.Error
   , renderLookupFail
   ) where
 
-
 import qualified Data.ByteString.Base16 as Base16
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Text (Text)

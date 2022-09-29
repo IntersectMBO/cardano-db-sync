@@ -17,15 +17,14 @@ module Cardano.Mock.ChainDB
   , currentBlockNo
   ) where
 
+import           Cardano.Mock.Chain
 import           Ouroboros.Consensus.Block
 import           Ouroboros.Consensus.Config
 import           Ouroboros.Consensus.Ledger.Abstract
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
 import           Ouroboros.Consensus.Ledger.SupportsProtocol
-
 import           Ouroboros.Network.Block (Tip (..))
 
-import           Cardano.Mock.Chain
 
 -- | Thin layer around 'Chain' that knows how to apply blocks and maintain
 -- new and old states. The state here, which is the 'Chain', is not a MVar,

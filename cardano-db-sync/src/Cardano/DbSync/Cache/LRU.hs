@@ -13,7 +13,6 @@ module Cardano.DbSync.Cache.LRU
   ) where
 
 import           Cardano.Prelude hiding (empty)
-
 import           Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as OrdPSQ
 

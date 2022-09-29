@@ -8,15 +8,11 @@ module Cardano.DbSync.Era.Shelley.Offline.Http
   , renderFetchError
   ) where
 
-import           Cardano.Prelude
-
-import           Control.Monad.Trans.Except.Extra (handleExceptT, hoistEither)
-
 import           Cardano.Db (PoolUrl (..), textShow)
-
+import           Cardano.Prelude
+import           Control.Monad.Trans.Except.Extra (handleExceptT, hoistEither)
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as Text
-
 import           Network.HTTP.Client (HttpException (..))
 import qualified Network.HTTP.Client as Http
 import qualified Network.HTTP.Types.Status as Http

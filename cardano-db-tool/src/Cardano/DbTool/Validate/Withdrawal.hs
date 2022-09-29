@@ -5,22 +5,18 @@ module Cardano.DbTool.Validate.Withdrawal
   ( validateWithdrawals
   ) where
 
-import           Cardano.DbTool.Validate.Util
-
 import           Cardano.Db
-
+import           Cardano.DbTool.Validate.Util
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Reader (ReaderT)
-
 import           Data.Either (partitionEithers)
 import           Data.Fixed (Micro)
 import           Data.Text (Text)
 import qualified Data.Text as Text
-
 import           Database.Esqueleto.Experimental (SqlBackend, Value (..), distinct, from, select,
                    sum_, table, unValue, val, where_, (==.), (^.))
-
 import           System.Random.Shuffle (shuffleM)
+
 
 -- For any stake address which has seen a withdrawal, the sum of the withdrawals for that address
 -- should be less than or equal to the sum of the rewards for that address.

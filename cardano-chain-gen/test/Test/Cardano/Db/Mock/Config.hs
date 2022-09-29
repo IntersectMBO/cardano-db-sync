@@ -30,21 +30,22 @@ module Test.Cardano.Db.Mock.Config
   , withFullConfig'
   ) where
 
-import           Cardano.Prelude (ReaderT, panic, stderr)
-
+import           Cardano.Api (NetworkId (..), NetworkMagic (..))
+import           Cardano.CLI.Shelley.Commands (GenesisCmd (..))
+import qualified Cardano.CLI.Shelley.Commands as CLI
+import qualified Cardano.CLI.Shelley.Run.Genesis as CLI
 import qualified Cardano.Db as Db
-
 import           Cardano.DbSync
 import           Cardano.DbSync.Config
 import           Cardano.DbSync.Config.Cardano
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Types (CardanoBlock, MetricSetters (..))
-
 import           Cardano.Mock.ChainSync.Server
 import           Cardano.Mock.Forging.Interpreter
-
+import           Cardano.Node.Protocol.Shelley (readLeaderCredentials)
+import           Cardano.Node.Types (ProtocolFilepaths (..))
+import           Cardano.Prelude (ReaderT, panic, stderr)
 import           Cardano.SMASH.Server.PoolDataLayer
-
 import           Control.Concurrent.Async (Async, async, cancel, poll)
 import           Control.Concurrent.STM (atomically)
 import           Control.Concurrent.STM.TMVar (TMVar, newEmptyTMVarIO, takeTMVar, tryPutTMVar,
@@ -55,28 +56,18 @@ import           Control.Monad.Extra (eitherM)
 import           Control.Monad.Logger (NoLoggingT, runNoLoggingT)
 import           Control.Monad.Trans.Except.Exit (orDie)
 import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
-
 import           Control.Tracer (nullTracer)
 import           Data.Text (Text)
 import qualified Data.Text as Text
-import           System.Directory (createDirectoryIfMissing, removePathForcibly)
-import           System.FilePath.Posix ((</>))
-import           System.IO.Silently (hSilence)
-
 import           Database.Persist.Postgresql (createPostgresqlPool)
 import           Database.Persist.Sql (SqlBackend)
-
 import           Ouroboros.Consensus.Config (TopLevelConfig)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import           Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import           Ouroboros.Consensus.Shelley.Node (ShelleyLeaderCredentials)
-
-import           Cardano.Api (NetworkId (..), NetworkMagic (..))
-import           Cardano.CLI.Shelley.Commands (GenesisCmd (..))
-import qualified Cardano.CLI.Shelley.Commands as CLI
-import qualified Cardano.CLI.Shelley.Run.Genesis as CLI
-import           Cardano.Node.Protocol.Shelley (readLeaderCredentials)
-import           Cardano.Node.Types (ProtocolFilepaths (..))
+import           System.Directory (createDirectoryIfMissing, removePathForcibly)
+import           System.FilePath.Posix ((</>))
+import           System.IO.Silently (hSilence)
 
 
 data Config = Config

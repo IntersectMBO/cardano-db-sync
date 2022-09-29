@@ -11,22 +11,16 @@ module Cardano.DbSync.Era.Shelley.Insert.Grouped
     , resolveScriptHash
     ) where
 
-import           Cardano.Prelude
-
-import           Control.Monad.Trans.Control (MonadBaseControl)
-
-import qualified Data.List as List
-
 import           Cardano.BM.Trace (Trace)
-
 import           Cardano.Db (DbLovelace (..), textShow)
 import qualified Cardano.Db as DB
-
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import           Cardano.DbSync.Era.Shelley.Query
 import           Cardano.DbSync.Era.Util
 import           Cardano.DbSync.Error
-
+import           Cardano.Prelude
+import           Control.Monad.Trans.Control (MonadBaseControl)
+import qualified Data.List as List
 import           Database.Persist.Sql (SqlBackend)
 
 

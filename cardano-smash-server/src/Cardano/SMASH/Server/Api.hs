@@ -18,21 +18,18 @@ module Cardano.SMASH.Server.Api
 
 
 import           Cardano.Prelude
-import           Prelude (String)
-
+import           Cardano.SMASH.Server.Types
 import           Data.Aeson (FromJSON, ToJSON (..), eitherDecode, encode, object, (.=))
 import           Data.Swagger (Swagger (..))
-
 import           Network.Wai (Request, lazyRequestBody)
+import           Prelude (String)
 import           Servant (BasicAuth, Capture, Get, HasServer (..), JSON, Patch, Post, QueryParam,
                    ReqBody, (:<|>) (..), (:>))
 import           Servant.Server (err400)
 import           Servant.Server.Internal (DelayedIO, addBodyCheck, delayedFailFatal, errBody,
                    withRequest)
-
 import           Servant.Swagger (HasSwagger (..))
 
-import           Cardano.SMASH.Server.Types
 
 -- Showing errors as JSON. To be reused when we need more general error handling.
 
