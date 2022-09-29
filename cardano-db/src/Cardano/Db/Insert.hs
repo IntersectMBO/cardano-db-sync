@@ -19,7 +19,6 @@ module Cardano.Db.Insert
   , insertManyRewards
   , insertManyTxIn
   , insertMaTxMint
-  , insertMaTxOut
   , insertManyMaTxOut
   , insertMeta
   , insertMultiAsset
@@ -147,9 +146,6 @@ insertManyTxIn = insertManyUncheckedUnique "Many TxIn"
 
 insertMaTxMint :: (MonadBaseControl IO m, MonadIO m) => MaTxMint -> ReaderT SqlBackend m MaTxMintId
 insertMaTxMint = insertCheckUnique "insertMaTxMint"
-
-insertMaTxOut :: (MonadBaseControl IO m, MonadIO m) => MaTxOut -> ReaderT SqlBackend m MaTxOutId
-insertMaTxOut = insertCheckUnique "insertMaTxOut"
 
 insertManyMaTxOut :: (MonadBaseControl IO m, MonadIO m) => [MaTxOut] -> ReaderT SqlBackend m ()
 insertManyMaTxOut = insertManyUncheckedUnique "Many MaTxOut"
