@@ -117,6 +117,9 @@ rollback handle point =
 restartServer :: ServerHandle IO blk -> IO ()
 restartServer sh = do
     stopServer sh
+    -- TODO not sure why, but this delay is necessary. Without it reconnection doesn't happen
+    -- some times.
+    threadDelay 1_000_000
     thread <- forkAgain sh
     atomically $ writeTVar (threadHandle sh) thread
 

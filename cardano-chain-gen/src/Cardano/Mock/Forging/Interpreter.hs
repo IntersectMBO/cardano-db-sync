@@ -23,6 +23,7 @@ module Cardano.Mock.Forging.Interpreter
   , getCurrentInterpreterState
   , getCurrentLedgerState
   , getCurrentEpoch
+  , getNextBlockNo
   , getCurrentSlot
   , forgeWithStakeCreds
   , withBabbageLedgerState
@@ -105,7 +106,7 @@ data Interpreter = Interpreter
   , interpTracerForge :: !(Tracer IO (ForgeStateInfo CardanoBlock))
   , interpTopLeverConfig :: !(TopLevelConfig CardanoBlock)
   , interpFingerMode :: !FingerprintMode
-  , interpFingerFile :: !FilePath
+  , interpFingerFile :: !(Maybe FilePath)
   }
 
 data InterpreterState = InterpreterState
@@ -115,7 +116,7 @@ data InterpreterState = InterpreterState
   -- ^ The first slot to try the next block
   , istNextBlockNo :: !BlockNo
   -- ^ the block number of the block to be forged
-  , istFingerprint :: Fingerprint
+  , istFingerprint :: Maybe Fingerprint
   -- ^ newest first list of slots where blocks were succesfully produced.
   } deriving Generic
     deriving NoThunks via OnlyCheckWhnfNamed "InterpreterState" InterpreterState
@@ -131,6 +132,7 @@ data InterpreterState = InterpreterState
 data FingerprintMode
   = SearchSlots !FilePath
   | ValidateSlots
+  | NoFingerprintMode
 
 newtype Fingerprint
   = Fingerprint [Word64]
@@ -142,31 +144,32 @@ deriving instance NoThunks (Forecast a)
 
 deriving instance Generic (Forecast a)
 
-mkFingerprint :: FilePath -> IO (FingerprintMode, Fingerprint)
-mkFingerprint path = do
+mkFingerprint :: Maybe FilePath -> IO (FingerprintMode, Maybe Fingerprint)
+mkFingerprint Nothing = pure (NoFingerprintMode, Nothing)
+mkFingerprint (Just path) = do
   fileExists <- doesPathExist path
   if fileExists
     then do
       mfingerPrint <- eitherDecodeFileStrict path
-      (ValidateSlots,) <$> either (throwIO . FingerprintDecodeError) pure mfingerPrint
+      (ValidateSlots,) <$> either (throwIO . FingerprintDecodeError) (pure . Just) mfingerPrint
     else
-      pure (SearchSlots path, emptyFingerprint)
+      pure (SearchSlots path, Just emptyFingerprint)
 
-isSearchingMode :: FingerprintMode -> Bool
-isSearchingMode fm =
+isNotValidatingMode :: FingerprintMode -> Bool
+isNotValidatingMode fm =
   case fm of
-    SearchSlots {} -> True
-    _ -> False
+    ValidateSlots -> False
+    _ -> True
 
 -- | Given the current slot, return the slot to test and the next 'Fingerprint'
-getFingerTipSlot :: Interpreter -> Fingerprint -> SlotNo -> Either ForgingError SlotNo
-getFingerTipSlot interpreter fingerprint currentSlotNo =
+getFingerTipSlot :: Interpreter -> Maybe Fingerprint -> SlotNo -> Either ForgingError SlotNo
+getFingerTipSlot interpreter mFingerprint currentSlotNo =
   case interpFingerMode interpreter of
-    SearchSlots {} -> Right currentSlotNo
-    ValidateSlots ->
+    ValidateSlots | Just fingerprint <- mFingerprint ->
       case fst <$> unconsFingerprint fingerprint of
         Nothing -> Left $ EmptyFingerprint currentSlotNo (interpFingerFile interpreter)
         Just slotNo -> Right slotNo
+    _ -> Right currentSlotNo
 
 addSlot :: Fingerprint -> SlotNo -> Fingerprint
 addSlot (Fingerprint slots) slot = Fingerprint (unSlotNo slot : slots)
@@ -187,18 +190,18 @@ finalizeFingerprint :: Interpreter -> IO ()
 finalizeFingerprint inter = do
   interState <- getCurrentInterpreterState inter
   case interpFingerMode inter of
-    SearchSlots fp -> encodeFile fp $ reverseFingerprint (istFingerprint interState)
-    ValidateSlots -> pure ()
+    SearchSlots fp | Just fingerprint <- istFingerprint interState -> encodeFile fp $ reverseFingerprint fingerprint
+    _ -> pure ()
 
 initInterpreter
-    :: ProtocolInfo IO CardanoBlock -> Tracer IO (ForgeStateInfo CardanoBlock) -> FilePath
+    :: ProtocolInfo IO CardanoBlock -> Tracer IO (ForgeStateInfo CardanoBlock) -> Maybe FilePath
     -> IO Interpreter
-initInterpreter pinfo traceForge fingerprintFile = do
+initInterpreter pinfo traceForge mFingerprintFile = do
   forging <- pInfoBlockForging pinfo
   let topLeverCfg = pInfoConfig pinfo
   let initSt = pInfoInitLedger pinfo
   let ledgerView = mkForecast topLeverCfg initSt
-  (mode, fingerprint) <- mkFingerprint fingerprintFile
+  (mode, fingerprint) <- mkFingerprint mFingerprintFile
   stvar <- newMVar $
             InterpreterState
               { istChain = initChainDB topLeverCfg initSt
@@ -214,11 +217,11 @@ initInterpreter pinfo traceForge fingerprintFile = do
           , interpTracerForge = traceForge
           , interpTopLeverConfig = topLeverCfg
           , interpFingerMode = mode
-          , interpFingerFile = fingerprintFile
+          , interpFingerFile = mFingerprintFile
           }
 
 withInterpreter
-    :: ProtocolInfo IO CardanoBlock -> Tracer IO (ForgeStateInfo CardanoBlock) -> FilePath
+    :: ProtocolInfo IO CardanoBlock -> Tracer IO (ForgeStateInfo CardanoBlock) -> Maybe FilePath
     -> (Interpreter -> IO a)
     -> IO a
 withInterpreter p t f action = do
@@ -228,21 +231,23 @@ withInterpreter p t f action = do
   pure a
 
 addOrValidateSlot
-    :: Interpreter -> Fingerprint -> CardanoBlock
-    -> Either ForgingError Fingerprint
-addOrValidateSlot interp fingerprint blk =
+    :: Interpreter -> Maybe Fingerprint -> CardanoBlock
+    -> Either ForgingError (Maybe Fingerprint)
+addOrValidateSlot interp mFingerprint blk =
   case interpFingerMode interp of
-    SearchSlots _ -> Right $ addSlot fingerprint (blockSlot blk)
-    ValidateSlots ->
+    SearchSlots _ | Just fingerprint <- mFingerprint ->
+      Right $ Just $ addSlot fingerprint (blockSlot blk)
+    ValidateSlots | Just fingerprint <- mFingerprint ->
       case unconsFingerprint fingerprint of
         Nothing -> Left $ EmptyFingerprint (blockSlot blk) (interpFingerFile interp)
         Just (slotNo, fingerPrint') ->
           if slotNo == blockSlot blk
-            then Right fingerPrint'
+            then Right (Just fingerPrint')
             else
               -- The validation here is unecessary, since we have used the slot to
               -- forge the block. But we do it nontheless as a sanity check.
               Left $ NotExpectedSlotNo (blockSlot blk) slotNo (lengthSlots fingerPrint')
+    _ -> Right Nothing
 
 forgeWithStakeCreds :: Interpreter -> IO CardanoBlock
 forgeWithStakeCreds inter = do
@@ -291,15 +296,15 @@ forgeNextLeaders interpreter txes possibleLeaders = do
     cfg = interpTopLeverConfig interpreter
 
     tryOrValidateSlot
-        :: InterpreterState -> [BlockForging IO CardanoBlock] -> IO (CardanoBlock, Fingerprint)
+        :: InterpreterState -> [BlockForging IO CardanoBlock] -> IO (CardanoBlock, Maybe Fingerprint)
     tryOrValidateSlot interState blockForgings = do
       currentSlot <- throwLeftIO $
                         getFingerTipSlot interpreter (istFingerprint interState) (istSlot interState)
-      trySlots interState blockForgings 0 currentSlot (isSearchingMode $ interpFingerMode interpreter)
+      trySlots interState blockForgings 0 currentSlot (isNotValidatingMode $ interpFingerMode interpreter)
 
     trySlots
         :: InterpreterState -> [BlockForging IO CardanoBlock] -> Int -> SlotNo -> Bool
-        -> IO (CardanoBlock, Fingerprint)
+        -> IO (CardanoBlock, Maybe  Fingerprint)
     trySlots interState blockForgings numberOfTries currentSlot searching = do
       when (numberOfTries > 140) (throwIO $ WentTooFar currentSlot)
       mproof <- tryAllForging interpreter interState currentSlot blockForgings
@@ -307,7 +312,7 @@ forgeNextLeaders interpreter txes possibleLeaders = do
         Nothing ->
           if searching
             then trySlots interState blockForgings (numberOfTries + 1) (currentSlot + 1) searching
-            else throwIO $ FailedToValidateSlot currentSlot (lengthSlots $ istFingerprint interState) (interpFingerFile interpreter)
+            else throwIO $ FailedToValidateSlot currentSlot (lengthSlots <$> istFingerprint interState) (interpFingerFile interpreter)
         Just (proof, blockForging) -> do
           -- Tick the ledger state for the 'SlotNo' we're producing a block for
           let tickedLedgerSt :: Ticked (LedgerState CardanoBlock)
@@ -396,6 +401,10 @@ getCurrentInterpreterState = readMVar . interpState
 
 getCurrentLedgerState :: Interpreter -> IO (ExtLedgerState CardanoBlock)
 getCurrentLedgerState = fmap (currentState . istChain) . getCurrentInterpreterState
+
+getNextBlockNo :: Interpreter -> IO BlockNo
+getNextBlockNo inter =
+    istNextBlockNo <$> getCurrentInterpreterState inter
 
 getCurrentEpoch :: Interpreter -> IO EpochNo
 getCurrentEpoch inter = do

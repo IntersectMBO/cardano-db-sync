@@ -31,6 +31,7 @@ module Cardano.Mock.Forging.Tx.Babbage
   , mkMAssetsScriptTx
   , mkDCertTx
   , mkSimpleDCertTx
+  , mkDummyRegisterTx
   , mkDCertPoolTx
   , mkScriptDCertTx
   , mkDepositTxPools
@@ -72,13 +73,14 @@ import           Cardano.Ledger.BaseTypes
 import           Cardano.Ledger.Coin
 import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Credential
+import           Cardano.Ledger.Crypto (ADDRHASH)
 import           Cardano.Ledger.Hashes
 import           Cardano.Ledger.Keys
 import           Cardano.Ledger.Mary.Value
 import           Cardano.Ledger.Serialization
 import           Cardano.Ledger.Shelley.Metadata
-import           Cardano.Ledger.Shelley.TxBody (DCert (..), PoolCert (..), PoolMetadata (..),
-                   PoolParams (..), StakePoolRelay (..), Wdrl (..))
+import           Cardano.Ledger.Shelley.TxBody (DCert (..), DelegCert (..), PoolCert (..),
+                   PoolMetadata (..), PoolParams (..), StakePoolRelay (..), Wdrl (..))
 import           Cardano.Ledger.ShelleyMA.Timelocks
 import           Cardano.Ledger.TxIn (TxId, TxIn (..), txid)
 
@@ -342,6 +344,11 @@ mkSimpleDCertTx consDert st = do
       pure $ mkDCert cred
     mkDCertTx dcerts (Wdrl mempty) Nothing
 
+mkDummyRegisterTx :: Int -> Int -> Either ForgingError (ValidatedTx StandardBabbage)
+mkDummyRegisterTx n m =
+  mkDCertTx (DCertDeleg . RegKey . KeyHashObj . KeyHash . mkDummyHash (Proxy @(ADDRHASH StandardCrypto)) . fromIntegral <$> [n, m])
+            (Wdrl mempty) Nothing
+
 mkDCertPoolTx :: [([StakeIndex], PoolIndex,
                   [StakeCredential StandardCrypto] -> KeyHash 'StakePool StandardCrypto -> DCert StandardCrypto)]
               -> BabbageLedgerState
@@ -440,11 +447,11 @@ mkWitnesses rdmrs datas =
     redeemers = fmap (, (plutusDataList, ExUnits 100 100))
                     (fst <$> rdmrs)
 
-addMetadata :: ValidatedTx StandardBabbage -> Word64
+addMetadata :: Word64 -> Word64 -> ValidatedTx StandardBabbage
             -> ValidatedTx StandardBabbage
-addMetadata tx n = tx { auxiliaryData = Strict.SJust $ AuxiliaryData mp mempty}
+addMetadata n m tx = tx { auxiliaryData = Strict.SJust $ AuxiliaryData mp mempty}
   where
-    mp = Map.singleton n $ List []
+    mp = Map.fromList [(n, List []), (m , List [])]
 
 mkUTxOBabbage :: ValidatedTx StandardBabbage -> [(TxIn StandardCrypto, TxOut StandardBabbage)]
 mkUTxOBabbage tx =
