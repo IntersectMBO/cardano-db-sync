@@ -8,7 +8,6 @@
 module Cardano.Db.Insert
   ( insertAdaPots
   , insertBlock
-  , insertBlockChecked
   , insertCollateralTxIn
   , insertReferenceTxIn
   , insertDelegation
@@ -54,11 +53,6 @@ module Cardano.Db.Insert
   , insertCheckPoolOfflineFetchError
   , insertReservedPoolTicker
   , insertDelistedPool
-
-  -- Export mainly for testing.
-  , insertCheckUnique
-  , insertManyUncheckedUnique
-  , insertUnchecked
   ) where
 
 import           Cardano.Db.Query
@@ -106,9 +100,6 @@ insertAdaPots = insertCheckUnique "AdaPots"
 
 insertBlock :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
 insertBlock = insertUnchecked "Block"
-
-insertBlockChecked :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
-insertBlockChecked = insertCheckUnique "Block"
 
 insertCollateralTxIn :: (MonadBaseControl IO m, MonadIO m) => CollateralTxIn -> ReaderT SqlBackend m CollateralTxInId
 insertCollateralTxIn = insertUnchecked "CollateralTxIn"

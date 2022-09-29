@@ -3,7 +3,7 @@ module Cardano.DbTool.Validate.BlockProperties
   ( validateBlockProperties
   ) where
 
-import           Cardano.Db hiding (queryBlockTxCount)
+import           Cardano.Db
 import           Cardano.DbTool.Validate.Util
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)

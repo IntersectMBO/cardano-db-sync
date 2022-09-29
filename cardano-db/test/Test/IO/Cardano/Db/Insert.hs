@@ -31,8 +31,8 @@ insertZeroTest =
     void $ deleteCascadeBlock (blockZero slid)
     -- Insert the same block twice. The first should be successful (resulting
     -- in a 'Right') and the second should return the same value in a 'Left'.
-    bid0 <- insertBlockChecked (blockZero slid)
-    bid1 <- insertBlockChecked (blockZero slid)
+    bid0 <- insertBlock (blockZero slid)
+    bid1 <- insertBlock (blockZero slid)
     assertBool (show bid0 ++ " /= " ++ show bid1) (bid0 == bid1)
 
 
@@ -43,15 +43,15 @@ insertFirstTest =
     slid <- insertSlotLeader testSlotLeader
     void $ deleteCascadeBlock (blockOne slid)
     -- Insert the same block twice.
-    bid0 <- insertBlockChecked (blockZero slid)
-    bid1 <- insertBlockChecked $ (\b -> b { blockBlockNo = 1 }) (blockOne slid)
+    bid0 <- insertBlock (blockZero slid)
+    bid1 <- insertBlock $ (\b -> b { blockBlockNo = 1 }) (blockOne slid)
     assertBool (show bid0 ++ " == " ++ show bid1) (bid0 /= bid1)
 
 insertTwice :: IO ()
 insertTwice =
   runDbNoLoggingEnv $ do
     slid <- insertSlotLeader testSlotLeader
-    void $ insertBlockChecked (blockZero slid)
+    void $ insertBlock (blockZero slid)
     let adaPots = adaPotsZero 0
     _ <- insertAdaPots adaPots
     Just pots0 <- queryAdaPots 0

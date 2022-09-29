@@ -27,6 +27,7 @@ import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Tx.Generic
 import           Cardano.Mock.Forging.Types
 import           Cardano.SMASH.Server.PoolDataLayer
+import           Cardano.SMASH.Server.Types
 import           Cardano.Slotting.Block (BlockNo (..))
 import           Control.Monad
 import           Control.Monad.Class.MonadSTM.Strict
