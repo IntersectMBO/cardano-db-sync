@@ -11,7 +11,6 @@ module Cardano.DbSync.Era.Shelley.Query
   , queryStakeRefPtr
   , queryResolveInput
   , queryResolveInputCredentials
-
   , queryPoolUpdateByBlock
   ) where
 
