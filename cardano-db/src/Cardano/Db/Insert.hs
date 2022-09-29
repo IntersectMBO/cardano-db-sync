@@ -56,9 +56,6 @@ module Cardano.Db.Insert
 
   -- Export mainly for testing.
   , insertBlockChecked
-  , insertCheckUnique
-  , insertManyUncheckedUnique
-  , insertUnchecked
   ) where
 
 
@@ -110,9 +107,6 @@ insertAdaPots = insertCheckUnique "AdaPots"
 
 insertBlock :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
 insertBlock = insertUnchecked "Block"
-
-insertBlockChecked :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
-insertBlockChecked = insertCheckUnique "Block"
 
 insertCollateralTxIn :: (MonadBaseControl IO m, MonadIO m) => CollateralTxIn -> ReaderT SqlBackend m CollateralTxInId
 insertCollateralTxIn = insertUnchecked "CollateralTxIn"
@@ -420,3 +414,8 @@ onlyOneUniqueDef prxy =
     case entityUniques (entityDef prxy) of
         [uniq] -> uniq
         _ -> error "impossible due to OnlyOneUniqueKey constraint"
+
+-- Used in tests
+
+insertBlockChecked :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
+insertBlockChecked = insertCheckUnique "Block"
