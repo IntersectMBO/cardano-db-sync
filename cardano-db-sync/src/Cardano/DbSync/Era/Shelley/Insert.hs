@@ -135,7 +135,7 @@ insertShelleyBlock env shouldLog blk details isMember mNewEpoch stakeSlice = do
         , ", hash ", renderByteArray (Generic.blkHash blk)
         ]
 
-    whenJust mNewEpoch $ \ newEpoch ->
+    whenStrictJust mNewEpoch $ \ newEpoch ->
       insertOnNewEpoch tracer (Generic.blkBlockNo blk) (Generic.blkSlotNo blk) (sdEpochNo details) newEpoch
 
     insertStakeSlice env stakeSlice
@@ -183,9 +183,9 @@ insertOnNewEpoch
     => Trace IO Text -> BlockNo -> SlotNo -> EpochNo -> Generic.NewEpoch
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertOnNewEpoch tracer blkNo slotNo epochNo newEpoch = do
-    whenJust (Generic.euProtoParams epochUpdate) $ \ params ->
+    whenStrictJust (Generic.euProtoParams epochUpdate) $ \ params ->
       insertEpochParam tracer blkNo epochNo params (Generic.euNonce epochUpdate)
-    whenJust (Generic.neAdaPots newEpoch) $ \pots ->
+    whenStrictJust (Generic.neAdaPots newEpoch) $ \pots ->
       insertPots blkNo slotNo epochNo pots
   where
     epochUpdate :: Generic.EpochUpdate
@@ -242,7 +242,7 @@ insertTx tracer cache network isMember blkNo epochNo slotNo blockIndex tx groupe
         let txIns = map (prepareTxIn blkNo txId redeemers) resolvedInputs
         mapM_ (insertCollateralTxIn tracer blkNo txId) (Generic.txCollateralInputs tx)
 
-        whenJust (maybeToStrict $ Generic.txMetadata tx) $ \ md ->
+        whenStrictJust (maybeToStrict $ Generic.txMetadata tx) $ \ md ->
           insertTxMetadata tracer blkNo txId md
 
         mapM_ (insertCertificate tracer cache isMember network blkNo txId epochNo slotNo redeemers) $ Generic.txCertificates tx

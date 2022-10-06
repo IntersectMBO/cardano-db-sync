@@ -123,6 +123,7 @@ library
                       , binary
                       , bytestring
                       , base16-bytestring
+                      , case-insensitive
                       , cardano-api
                       , cardano-binary
                       , cardano-client
@@ -223,3 +224,68 @@ executable cardano-db-sync
                       , cardano-slotting
                       , optparse-applicative
                       , text
+
+executable http-get-json-metadata
+  default-language:     Haskell2010
+  main-is:              http-get-json-metadata.hs
+  hs-source-dirs:       app
+
+  ghc-options:          -O2
+                        -Wall
+                        -Werror
+                        -Wcompat
+                        -Wredundant-constraints
+                        -Wincomplete-patterns
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+                        -Wunused-imports
+                        -Wunused-packages
+                        -Wno-unsafe
+                        -threaded
+                        -rtsopts
+                        "-with-rtsopts=-A16m -N3 --disable-delayed-os-memory-return"
+
+  build-depends:        base
+                      , ansi-terminal
+                      , base16-bytestring
+                      , bytestring
+                      , cardano-db
+                      , cardano-db-sync
+                      , http-client
+                      , http-client-tls
+                      , text
+                      , transformers
+                      , transformers-except
+
+executable test-http-get-json-metadata
+  default-language:     Haskell2010
+  main-is:              test-http-get-json-metadata.hs
+  hs-source-dirs:       app
+
+  ghc-options:          -O2
+                        -Wall
+                        -Werror
+                        -Wcompat
+                        -Wredundant-constraints
+                        -Wincomplete-patterns
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+                        -Wunused-imports
+                        -Wunused-packages
+                        -Wno-unsafe
+                        -threaded
+                        -rtsopts
+                        "-with-rtsopts=-A16m -N3 --disable-delayed-os-memory-return"
+
+  build-depends:        base
+                      , bytestring
+                      , cardano-db
+                      , cardano-db-sync
+                      , esqueleto
+                      , extra
+                      , http-client
+                      , http-client-tls
+                      , persistent
+                      , text
+                      , transformers
+                      , transformers-except

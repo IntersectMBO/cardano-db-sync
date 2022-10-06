@@ -17,37 +17,25 @@ import           Cardano.BM.Trace (Trace, logInfo)
 
 import           Cardano.DbSync.Era.Shelley.Offline.Http
 import           Cardano.DbSync.Era.Shelley.Offline.Query
-import           Cardano.DbSync.Era.Shelley.Offline.Types
 
 import           Cardano.DbSync.Types
 
 import           Control.Monad.Class.MonadSTM.Strict (TBQueue, flushTBQueue, isEmptyTBQueue,
                    readTBQueue, writeTBQueue)
 import           Control.Monad.Trans.Control (MonadBaseControl)
-import           Control.Monad.Trans.Except.Extra (handleExceptT, left)
 
-import qualified Data.Aeson as Aeson
-import qualified Data.ByteString.Lazy as LBS
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
 import           Data.Time.Clock.POSIX (POSIXTime)
 import qualified Data.Time.Clock.POSIX as Time
-
-import qualified Cardano.Crypto.Hash.Blake2b as Crypto
-import qualified Cardano.Crypto.Hash.Class as Crypto
 
 import           Cardano.Db
 import qualified Cardano.Db as DB
 
 import           Cardano.DbSync.Api
-import           Cardano.DbSync.Util
 
 import           Database.Persist.Sql (SqlBackend)
 
-import           Network.HTTP.Client (HttpException (..))
 import qualified Network.HTTP.Client as Http
 import           Network.HTTP.Client.TLS (tlsManagerSettings)
-import qualified Network.HTTP.Types.Status as Http
 
 
 loadOfflineWorkQueue
@@ -120,44 +108,22 @@ blockingFlushTBQueue queue = do
 fetchOfflineData :: Trace IO Text -> Http.Manager -> Time.POSIXTime -> PoolFetchRetry -> IO FetchResult
 fetchOfflineData _tracer manager time pfr =
     convert <<$>> runExceptT $ do
-      request <- handleExceptT wrapHttpException
-                    $ Http.parseRequest (Text.unpack $ unPoolUrl poolMetadataUrl)
-
-      (respBS, status) <- httpGet512BytesMax poolMetadataUrl request manager
-
-      when (Http.statusCode status /= 200) .
-        left $ FEHttpResponse poolMetadataUrl (Http.statusCode status)
-
-      decodedMetadata <-
-            case Aeson.eitherDecode' (LBS.fromStrict respBS) of
-              Left err -> left $ FEJsonDecodeFail poolMetadataUrl (Text.pack err)
-              Right res -> pure res
-
-      let metadataHash = Crypto.digest (Proxy :: Proxy Crypto.Blake2b_256) respBS
-          expectedHash = unPoolMetaHash (pfrPoolMDHash pfr)
-
-      when (PoolMetaHash metadataHash /= pfrPoolMDHash pfr) .
-        left $ FEHashMismatch poolMetadataUrl (renderByteArray expectedHash) (renderByteArray metadataHash)
-
-      pure $ DB.PoolOfflineData
-                { DB.poolOfflineDataPoolId = pfrPoolHashId pfr
-                , DB.poolOfflineDataTickerName = unPoolTicker $ pomTicker decodedMetadata
-                , DB.poolOfflineDataHash = metadataHash
-                , DB.poolOfflineDataBytes = respBS
-                  -- Instead of inserting the `respBS` here, we encode the JSON and then store that.
-                  -- This is necessary because the PostgreSQL JSON parser can reject some ByteStrings
-                  -- that the Aeson parser accepts.
-                , DB.poolOfflineDataJson = Text.decodeUtf8 $ LBS.toStrict (Aeson.encode decodedMetadata)
-                , DB.poolOfflineDataPmrId = pfrReferenceId pfr
-                }
+      request <- parsePoolUrl $ pfrPoolUrl pfr
+      httpGetPoolOfflineData manager request (pfrPoolUrl pfr) (pfrPoolMDHash pfr)
   where
-    poolMetadataUrl :: PoolUrl
-    poolMetadataUrl = pfrPoolUrl pfr
-
-    convert :: Either FetchError DB.PoolOfflineData -> FetchResult
+    convert :: Either FetchError SimplifiedPoolOfflineData -> FetchResult
     convert eres =
       case eres of
-        Right md -> ResultMetadata md
+        Right smd ->
+            ResultMetadata $
+              DB.PoolOfflineData
+                { DB.poolOfflineDataPoolId = pfrPoolHashId pfr
+                , DB.poolOfflineDataTickerName = spodTickerName smd
+                , DB.poolOfflineDataHash = spodHash smd
+                , DB.poolOfflineDataBytes = spodBytes smd
+                , DB.poolOfflineDataJson = spodJson smd
+                , DB.poolOfflineDataPmrId = pfrReferenceId pfr
+                }
         Left err ->
             ResultError $
               DB.PoolOfflineFetchError
@@ -167,6 +133,3 @@ fetchOfflineData _tracer manager time pfr =
                 , DB.poolOfflineFetchErrorFetchError = renderFetchError err
                 , DB.poolOfflineFetchErrorRetryCount = retryCount (pfrRetry pfr)
                 }
-
-    wrapHttpException :: HttpException -> FetchError
-    wrapHttpException err = FEUrlParseFail poolMetadataUrl (textShow err)

@@ -1,5 +1,4 @@
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbSync.Era.Shelley.Offline.Query
@@ -76,7 +75,7 @@ queryNewPoolFetch now = do
         { pfrPoolHashId = phId
         , pfrReferenceId = pmrId
         , pfrPoolUrl = PoolUrl url
-        , pfrPoolMDHash = PoolMetaHash pmh
+        , pfrPoolMDHash = Just $ PoolMetaHash pmh
         , pfrRetry = newRetry now
         }
 
@@ -121,6 +120,6 @@ queryPoolFetchRetry _now = do
         { pfrPoolHashId = phId
         , pfrReferenceId = pmrId
         , pfrPoolUrl = PoolUrl url
-        , pfrPoolMDHash = PoolMetaHash pmh
+        , pfrPoolMDHash = Just $ PoolMetaHash pmh
         , pfrRetry = retryAgain (Time.utcTimeToPOSIXSeconds time) rCount
         }
