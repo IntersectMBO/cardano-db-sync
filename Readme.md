@@ -84,7 +84,7 @@ possible solutions.
 [BuildingRunning]: doc/building-running.md
 [DB Schema]: https://hydra.iohk.io/job/Cardano/cardano-db-sync/native.haskellPackages.cardano-db.checks.test-db.x86_64-linux/latest/download/1
 [Docker]: doc/docker.md
-[ERD]: doc/ERG>png
+[ERD]: doc/ERD.png
 [ExampleQueries]: doc/interesting-queries.md
 [PostgresView]: https://www.postgresql.org/docs/current/sql-createview.html
 [PoolOfflineData]: doc/pool-offline-data.md
