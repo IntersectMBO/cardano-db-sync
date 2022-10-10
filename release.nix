@@ -41,7 +41,10 @@
 , sourcesOverride ? { }
 
   # Import pkgs, including IOHK common nix lib
-, pkgs ? import ./nix { inherit sourcesOverride; }
+, pkgs ? import ./nix {
+  inherit sourcesOverride;
+  system = __head supportedSystems;
+}
 
 }:
 
