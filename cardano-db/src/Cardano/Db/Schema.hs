@@ -15,6 +15,8 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
+
 module Cardano.Db.Schema where
 
 import           Cardano.Db.Schema.Orphans ()
