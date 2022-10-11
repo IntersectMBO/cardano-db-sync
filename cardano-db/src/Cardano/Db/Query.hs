@@ -742,8 +742,7 @@ queryLastSlotNo = do
 queryCountSlotNo :: MonadIO m => ReaderT SqlBackend m Word64
 queryCountSlotNo = do
   res <- select $ do
-    blk <- from $ table @Block
-    orderBy [desc (blk ^. BlockSlotNo)]
+    _ <- from $ table @Block
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 

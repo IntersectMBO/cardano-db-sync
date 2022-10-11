@@ -31,7 +31,7 @@ module Cardano.Mock.Forging.Interpreter
   , mkTxId
   ) where
 
-import           Cardano.Prelude (bimap, getField, throwIO)
+import           Cardano.Prelude (bimap, getField, throwIO, void)
 
 import           Control.Monad (forM, when)
 import           Control.Monad.Except (runExcept)
