@@ -56,7 +56,13 @@ module Cardano.Db.Query
   , querySchemaVersion
   , queryScript
   , queryDatum
+  , queryDatumPage
+  , queryDatumCount
+  , querydatumInfo
   , queryRedeemerData
+  , queryRedeemerDataPage
+  , queryRedeemerDataCount
+  , queryRedeemerDataInfo
   , querySelectCount
   , querySlotHash
   , querySlotUtcTime
@@ -121,6 +127,7 @@ import           Control.Monad.Trans.Reader (ReaderT)
 
 import           Data.ByteString.Char8 (ByteString)
 import           Data.Fixed (Micro)
+import           Data.Int (Int64)
 import           Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import           Data.Ratio (numerator)
 import           Data.Text (Text)
@@ -129,9 +136,9 @@ import           Data.Tuple.Extra (uncurry3)
 import           Data.Word (Word64)
 
 import           Database.Esqueleto.Experimental (Entity, From, PersistEntity, PersistField,
-                   SqlBackend, SqlExpr, SqlQuery, Value (Value, unValue), ValueList, count,
+                   SqlBackend, SqlExpr, SqlQuery, Value (Value, unValue), ValueList, asc, count,
                    countRows, desc, entityKey, entityVal, exists, from, in_, innerJoin, isNothing,
-                   just, leftJoin, limit, max_, min_, notExists, not_, on, orderBy, select,
+                   just, leftJoin, limit, max_, min_, notExists, not_, offset, on, orderBy, select,
                    subList_select, sum_, table, type (:&) ((:&)), unSqlBackendKey, val, valList,
                    where_, (&&.), (<=.), (==.), (>.), (>=.), (?.), (^.), (||.))
 import           Database.Esqueleto.Experimental.From (ToFrom (..))
@@ -643,6 +650,37 @@ queryDatum hsh = do
       pure (datum ^. DatumId)
   pure $ unValue <$> listToMaybe xs
 
+queryDatumPage :: MonadIO m => Int64 -> Int64 -> ReaderT SqlBackend m [Entity Datum]
+queryDatumPage ofs lmt =
+  select $ do
+      datum <- from $ table @Datum
+      orderBy [asc (datum ^. DatumId)]
+      limit lmt
+      offset ofs
+      pure datum
+
+queryDatumCount :: MonadIO m => ReaderT SqlBackend m Word64
+queryDatumCount = do
+  xs <- select $ do
+    _ <- from $ table @Datum
+    pure countRows
+  pure $ maybe 0 unValue (listToMaybe xs)
+
+querydatumInfo :: MonadIO m => DatumId -> ReaderT SqlBackend m (Maybe (ByteString, Maybe Word64))
+querydatumInfo datumId = do
+  res <- select $ do
+    (_blk :& _tx :& datum :& prevBlock) <-
+      from $ table @Block
+      `innerJoin` table @Tx
+      `on` (\(blk :& tx) -> tx ^. TxBlockId ==. blk ^. BlockId)
+      `innerJoin` table @Datum
+      `on` (\(_blk :& tx :& datum) -> datum ^. DatumTxId ==. tx ^. TxId)
+      `innerJoin` table @Block
+      `on` (\(blk :& _tx :& _datum :& prevBlk) -> blk ^. BlockPreviousId ==. just (prevBlk ^. BlockId))
+    where_ (datum ^. DatumId ==. val datumId)
+    pure (prevBlock ^. BlockHash, prevBlock ^. BlockSlotNo)
+  pure $ unValue2 <$> listToMaybe res
+
 queryRedeemerData :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe RedeemerDataId)
 queryRedeemerData hsh = do
   xs <- select $ do
@@ -650,6 +688,37 @@ queryRedeemerData hsh = do
       where_ (rdmrDt ^. RedeemerDataHash ==. val hsh)
       pure (rdmrDt ^. RedeemerDataId)
   pure $ unValue <$> listToMaybe xs
+
+queryRedeemerDataPage :: MonadIO m => Int64 -> Int64 -> ReaderT SqlBackend m [Entity RedeemerData]
+queryRedeemerDataPage ofs lmt =
+  select $ do
+      redeemerData <- from $ table @RedeemerData
+      orderBy [asc (redeemerData ^. RedeemerDataId)]
+      limit lmt
+      offset ofs
+      pure redeemerData
+
+queryRedeemerDataCount :: MonadIO m => ReaderT SqlBackend m Word64
+queryRedeemerDataCount = do
+  xs <- select $ do
+    _ <- from $ table @RedeemerData
+    pure countRows
+  pure $ maybe 0 unValue (listToMaybe xs)
+
+queryRedeemerDataInfo :: MonadIO m => RedeemerDataId -> ReaderT SqlBackend m (Maybe (ByteString, Maybe Word64))
+queryRedeemerDataInfo rdmDataId = do
+  res <- select $ do
+    (_blk :& _tx :& rdmData :& prevBlock) <-
+      from $ table @Block
+      `innerJoin` table @Tx
+      `on` (\(blk :& tx) -> tx ^. TxBlockId ==. blk ^. BlockId)
+      `innerJoin` table @RedeemerData
+      `on` (\(_blk :& tx :& rdmData) -> rdmData ^. RedeemerDataTxId ==. tx ^. TxId)
+      `innerJoin` table @Block
+      `on` (\(blk :& _tx :& _rdmData :& prevBlk) -> blk ^. BlockPreviousId ==. just (prevBlk ^. BlockId))
+    where_ (rdmData ^. RedeemerDataId ==. val rdmDataId)
+    pure (prevBlock ^. BlockHash, prevBlock ^. BlockSlotNo)
+  pure $ unValue2 <$> listToMaybe res
 
 -- | Count the number of rows that match the select with the supplied predicate.
 querySelectCount :: forall table table' m . (MonadIO m, PersistEntity table, ToFrom (From (SqlExpr (Entity table))) table')
