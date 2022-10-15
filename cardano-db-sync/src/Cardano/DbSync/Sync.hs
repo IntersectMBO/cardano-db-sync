@@ -7,6 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE NumericUnderscores #-}
 
 module Cardano.DbSync.Sync
   ( ConfigFile (..)
@@ -26,6 +27,7 @@ module Cardano.DbSync.Sync
   ) where
 
 import           Cardano.Prelude hiding (Meta, Nat, option, (%))
+import           Prelude (error)
 
 import           Control.Tracer (Tracer)
 
@@ -49,6 +51,7 @@ import           Cardano.DbSync.Era
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.LocalStateQuery
 import           Cardano.DbSync.Metrics
+import           Cardano.DbSync.Fix.PlutusDataBytes
 import           Cardano.DbSync.Tracing.ToObjectOrphans ()
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
@@ -90,6 +93,9 @@ import           Ouroboros.Network.NodeToClient (ClientSubscriptionParams (..), 
                    localTxSubmissionPeerNull, networkErrorPolicies)
 import qualified Ouroboros.Network.NodeToClient.Version as Network
 
+import           Ouroboros.Network.Driver (runPeer)
+import           Ouroboros.Network.Protocol.ChainSync.Client (ChainSyncClient)
+import qualified Ouroboros.Network.Protocol.ChainSync.Client as Client
 import           Ouroboros.Network.Protocol.ChainSync.ClientPipelined
                    (ChainSyncClientPipelined (..), ClientPipelinedStIdle (..),
                    ClientPipelinedStIntersect (..), ClientStNext (..), chainSyncClientPeerPipelined,
@@ -227,6 +233,13 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
           replaceConnection env backend
           setConsistentLevel env Unchecked
           logInfo trce "Starting chainSyncClient"
+
+          fd <- getWrongPlutusData env
+          _ <- runPeer
+                 localChainSyncTracer
+                 (cChainSyncCodec codecs)
+                 channel
+                 (Client.chainSyncClientPeer $ chainSyncClientFix env fd)
 
           -- The Db thread is not forked at this point, so we can use
           -- the connection here. A connection cannot be used concurrently by many
@@ -391,3 +404,45 @@ drainThePipe n0 client = go n0
               { recvMsgRollForward  = \_hdr _tip -> pure $ go n'
               , recvMsgRollBackward = \_pt  _tip -> pure $ go n'
               }
+
+chainSyncClientFix :: SyncEnv -> FixData -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+chainSyncClientFix env fixData = Client.ChainSyncClient $ do
+    liftIO $ logInfo tracer "Starting chainsync to fix Plutus Data. This will update database values in tables datum and redeemer_data."
+    clientStIdle True (sizeFixData fixData) fixData
+  where
+    tracer = getTrace env
+
+    updateSizeAndLog :: Int -> Int -> IO Int
+    updateSizeAndLog lastSize currentSize = do
+      let diffSize = lastSize - currentSize
+      if lastSize >= currentSize && diffSize >= 200_000 then do
+        logInfo tracer $ mconcat ["Fixed ", textShow (sizeFixData fixData - currentSize), " Plutus Data"]
+        pure currentSize
+      else pure lastSize
+
+    clientStIdle :: Bool -> Int -> FixData -> IO (Client.ClientStIdle CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ())
+    clientStIdle shouldLog lastSize fds = do
+      case spanOnNextPoint fds of
+        Nothing -> pure $ Client.SendMsgDone ()
+        Just (point, fdOnPoint, fdRest) -> do
+          when shouldLog $
+            logInfo tracer $ mconcat ["Starting fixing Plutus Data ", textShow point]
+          newLastSize <- updateSizeAndLog lastSize (sizeFixData fds)
+          pure $ Client.SendMsgFindIntersect
+                   [point]
+                   (Client.ClientStIntersect
+                     { Client.recvMsgIntersectFound = \ _pnt _tip -> Client.ChainSyncClient $
+                         pure $ Client.SendMsgRequestNext (clientStNext newLastSize fdOnPoint fdRest) (pure $ clientStNext newLastSize fdOnPoint fdRest)
+                     , Client.recvMsgIntersectNotFound = \_tip -> error "recvMsgIntersectNotFound"
+                     })
+
+    clientStNext :: Int -> FixData -> FixData -> Client.ClientStNext CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+    clientStNext lastSize fdOnPoint fdRest =
+      Client.ClientStNext
+        { Client.recvMsgRollForward = \blk _tip -> Client.ChainSyncClient $ do
+            fixPlutusData env blk fdOnPoint
+            clientStIdle False lastSize fdRest
+
+        , Client.recvMsgRollBackward = \_point _tip -> Client.ChainSyncClient $
+            pure $ Client.SendMsgRequestNext (clientStNext lastSize fdOnPoint fdRest) (pure $ clientStNext lastSize fdOnPoint fdRest)
+        }
