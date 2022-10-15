@@ -26,6 +26,7 @@ module Cardano.DbSync.Api
   , getCurrentTipBlockNo
   , generateNewEpochEvents
   , logDbState
+  , convertToPoint
   ) where
 
 import           Cardano.Prelude
@@ -284,7 +285,7 @@ getLatestPoints env = do
         pure $ mapMaybe convert lastPoints
   where
     convert (Nothing, _) = Nothing
-    convert (Just slot, bs) = convertToPoint (SlotNo slot) bs
+    convert (Just slot, bs) = convertToDiskPoint (SlotNo slot) bs
 
 verifySnapshotPoint :: SyncEnv -> [SnapshotPoint] -> IO [(CardanoPoint, Bool)]
 verifySnapshotPoint env snapPoints =
@@ -296,7 +297,7 @@ verifySnapshotPoint env snapPoints =
         hashes <- getSlotHash backend (lsfSlotNo lsf)
         let valid  = find (\(_, h) -> lsfHash lsf == hashToAnnotation h) hashes
         case valid of
-          Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convertToPoint slot hash
+          Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convertToDiskPoint slot hash
           _ -> pure Nothing
     validLedgerFileToPoint (InMemory pnt) = do
         case pnt of
@@ -309,9 +310,12 @@ verifySnapshotPoint env snapPoints =
               Just (dbSlotNo, _) | slotNo == dbSlotNo -> pure $ Just (pnt, True)
               _ -> pure Nothing
 
-convertToPoint :: SlotNo -> ByteString -> Maybe (CardanoPoint, Bool)
+convertToDiskPoint :: SlotNo -> ByteString -> Maybe (CardanoPoint, Bool)
+convertToDiskPoint slot hashBlob = (, False) <$> convertToPoint slot hashBlob
+
+convertToPoint :: SlotNo -> ByteString -> Maybe CardanoPoint
 convertToPoint slot hashBlob =
-    (, False) . Point . Point.block slot <$> convertHashBlob hashBlob
+    Point . Point.block slot <$> convertHashBlob hashBlob
   where
     convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
     convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)
