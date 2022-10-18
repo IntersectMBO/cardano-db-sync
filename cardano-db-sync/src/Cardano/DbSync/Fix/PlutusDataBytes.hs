@@ -63,6 +63,9 @@ data FixPlutusData = FixPlutusData
   , fpdPrevPoint :: CardanoPoint
   } deriving Show
 
+nullData :: FixData -> Bool
+nullData fd = null (fdDatum fd) && null (fdRedeemerData fd)
+
 sizeFixData :: FixData -> Int
 sizeFixData fd = length (fdDatum fd) + length (fdRedeemerData fd)
 

@@ -69,6 +69,8 @@ data SyncNodeParams = SyncNodeParams
   , enpExtended :: !Bool
   , enpHasCache :: !Bool
   , enpHasLedger :: !Bool
+  , enpSkipFix :: !Bool
+  , enpOnlyFix :: !Bool
   , enpMaybeRollback :: !(Maybe SlotNo)
   }
 
