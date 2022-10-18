@@ -112,6 +112,8 @@ data SyncOptions = SyncOptions
   , soptAbortOnInvalid :: !Bool
   , soptCache :: !Bool
   , soptLedger :: !Bool
+  , soptSkipFix :: !Bool
+  , soptOnlyFix :: !Bool
   , snapshotEveryFollowing :: !Word64
   , snapshotEveryLagging :: !Word64
   }

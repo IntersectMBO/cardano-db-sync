@@ -65,6 +65,8 @@ pRunDbSyncNode =
     <*> pExtended
     <*> pHasCache
     <*> pHasLedger
+    <*> pSkipFix
+    <*> pOnlyFix
     <*> optional pSlotNo
 
 pConfigFile :: Parser ConfigFile
@@ -107,6 +109,20 @@ pExtended =
   Opt.flag True False
     ( Opt.long "disable-epoch"
     <> Opt.help "Makes epoch table remain empty"
+    )
+
+pSkipFix :: Parser Bool
+pSkipFix =
+  Opt.flag False True
+    ( Opt.long "skip-plutus-data-fix"
+    <> Opt.help "Disables the db-sync fix procedure for the wrong datum and redeemer_data bytes."
+    )
+
+pOnlyFix :: Parser Bool
+pOnlyFix =
+  Opt.flag False True
+    ( Opt.long "only-plutus-data-fix"
+    <> Opt.help "Runs only the db-sync fix procedure for the wrong datum and redeemer_data bytes and exits."
     )
 
 pHasCache :: Parser Bool
