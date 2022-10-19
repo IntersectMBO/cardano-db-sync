@@ -71,8 +71,8 @@ import           Data.Proxy (Proxy (..))
 import           Data.Text (Text)
 import qualified Data.Text as Text
 
-import           Database.Persist.Class (AtLeastOneUniqueKey, PersistEntityBackend, checkUnique,
-                   insert, insertBy, replaceUnique)
+import           Database.Persist.Class (AtLeastOneUniqueKey, PersistEntityBackend, PersistEntity,
+                   checkUnique, insert, insertBy, replaceUnique, )
 import           Database.Persist.EntityDef.Internal (entityDB, entityUniques)
 import           Database.Persist.Sql (OnlyOneUniqueKey, PersistRecordBackend, SqlBackend,
                    UniqueDef, entityDef, insertMany, rawExecute, rawSql, toPersistFields,
@@ -99,8 +99,8 @@ import           Cardano.Db.Schema
 -- One alternative is to just use `insert` but that fails on some uniquness constraints on some
 -- tables (about 6 out of a total of 25+).
 --
--- Instead we use `insertUnchecked` for tables where uniqueness constraints are unlikley to be hit
--- and `insertChecked` for tables where the uniqueness constraint might can be hit.
+-- Instead we use `insertUnchecked` for tables where there is no uniqueness constraints
+-- and `insertChecked` for tables where the uniqueness constraint might hit.
 
 insertAdaPots :: (MonadBaseControl IO m, MonadIO m) => AdaPots -> ReaderT SqlBackend m AdaPotsId
 insertAdaPots = insertCheckUnique "AdaPots"
@@ -115,7 +115,7 @@ insertReferenceTxIn :: (MonadBaseControl IO m, MonadIO m) => ReferenceTxIn -> Re
 insertReferenceTxIn = insertUnchecked "ReferenceTxIn"
 
 insertDelegation :: (MonadBaseControl IO m, MonadIO m) => Delegation -> ReaderT SqlBackend m DelegationId
-insertDelegation = insertCheckUnique "Delegation"
+insertDelegation = insertUnchecked "Delegation"
 
 insertEpoch :: (MonadBaseControl IO m, MonadIO m) => Epoch -> ReaderT SqlBackend m EpochId
 insertEpoch = insertUnchecked "Epoch"
@@ -127,7 +127,7 @@ insertEpochSyncTime :: (MonadBaseControl IO m, MonadIO m) => EpochSyncTime -> Re
 insertEpochSyncTime = insertReplace "EpochSyncTime"
 
 insertExtraKeyWitness :: (MonadBaseControl IO m, MonadIO m) => ExtraKeyWitness -> ReaderT SqlBackend m ExtraKeyWitnessId
-insertExtraKeyWitness = insertCheckUnique "ExtraKeyWitness"
+insertExtraKeyWitness = insertUnchecked "ExtraKeyWitness"
 
 insertManyEpochStakes :: (MonadBaseControl IO m, MonadIO m) => [EpochStake] -> ReaderT SqlBackend m ()
 insertManyEpochStakes = insertManyUncheckedUnique "Many EpochStake"
@@ -139,10 +139,10 @@ insertManyTxIn :: (MonadBaseControl IO m, MonadIO m) => [TxIn] -> ReaderT SqlBac
 insertManyTxIn = insertManyUncheckedUnique "Many TxIn"
 
 insertMaTxMint :: (MonadBaseControl IO m, MonadIO m) => MaTxMint -> ReaderT SqlBackend m MaTxMintId
-insertMaTxMint = insertCheckUnique "insertMaTxMint"
+insertMaTxMint = insertUnchecked "insertMaTxMint"
 
 insertManyMaTxOut :: (MonadBaseControl IO m, MonadIO m) => [MaTxOut] -> ReaderT SqlBackend m ()
-insertManyMaTxOut = insertManyUncheckedUnique "Many MaTxOut"
+insertManyMaTxOut = void . insertMany' "Many MaTxOut"
 
 insertMeta :: (MonadBaseControl IO m, MonadIO m) => Meta -> ReaderT SqlBackend m MetaId
 insertMeta = insertCheckUnique "Meta"
@@ -166,7 +166,7 @@ insertPoolMetadataRef :: (MonadBaseControl IO m, MonadIO m) => PoolMetadataRef -
 insertPoolMetadataRef = insertCheckUnique "PoolMetadataRef"
 
 insertPoolOwner :: (MonadBaseControl IO m, MonadIO m) => PoolOwner -> ReaderT SqlBackend m PoolOwnerId
-insertPoolOwner = insertCheckUnique "PoolOwner"
+insertPoolOwner = insertUnchecked "PoolOwner"
 
 insertPoolRelay :: (MonadBaseControl IO m, MonadIO m) => PoolRelay -> ReaderT SqlBackend m PoolRelayId
 insertPoolRelay = insertUnchecked "PoolRelay"
@@ -175,7 +175,7 @@ insertPoolRetire :: (MonadBaseControl IO m, MonadIO m) => PoolRetire -> ReaderT 
 insertPoolRetire = insertUnchecked "PoolRetire"
 
 insertPoolUpdate :: (MonadBaseControl IO m, MonadIO m) => PoolUpdate -> ReaderT SqlBackend m PoolUpdateId
-insertPoolUpdate = insertCheckUnique "PoolUpdate"
+insertPoolUpdate = insertUnchecked "PoolUpdate"
 
 insertReserve :: (MonadBaseControl IO m, MonadIO m) => Reserve -> ReaderT SqlBackend m ReserveId
 insertReserve = insertUnchecked "Reserve"
@@ -205,7 +205,7 @@ insertTxIn :: (MonadBaseControl IO m, MonadIO m) => TxIn -> ReaderT SqlBackend m
 insertTxIn = insertUnchecked "TxIn"
 
 insertTxMetadata :: (MonadBaseControl IO m, MonadIO m) => TxMetadata -> ReaderT SqlBackend m TxMetadataId
-insertTxMetadata = insertCheckUnique "TxMetadata"
+insertTxMetadata = insertUnchecked "TxMetadata"
 
 insertTxOut :: (MonadBaseControl IO m, MonadIO m) => TxOut -> ReaderT SqlBackend m TxOutId
 insertTxOut = insertUnchecked "TxOut"
@@ -220,7 +220,7 @@ insertWithdrawal :: (MonadBaseControl IO m, MonadIO m) => Withdrawal  -> ReaderT
 insertWithdrawal = insertUnchecked "Withdrawal"
 
 insertRedeemer :: (MonadBaseControl IO m, MonadIO m) => Redeemer -> ReaderT SqlBackend m RedeemerId
-insertRedeemer = insertCheckUnique "Redeemer"
+insertRedeemer = insertUnchecked "Redeemer"
 
 insertCostModel :: (MonadBaseControl IO m, MonadIO m) => CostModel -> ReaderT SqlBackend m CostModelId
 insertCostModel = insertCheckUnique "CostModel"
@@ -384,11 +384,10 @@ insertReplace vtype record =
 -- even tables with uniqueness constraints, especially block, tx and many others, where
 -- uniqueness is enforced by the ledger.
 insertUnchecked
-    :: ( AtLeastOneUniqueKey record
-       , MonadIO m
+    :: ( MonadIO m
        , MonadBaseControl IO m
        , PersistEntityBackend record ~ SqlBackend
-       )
+       , PersistEntity record)
     => String -> record -> ReaderT SqlBackend m (Key record)
 insertUnchecked vtype =
     handle exceptHandler . insert
