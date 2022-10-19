@@ -151,7 +151,6 @@ share
     multiAssetsDescr    Text
     inlineDatumId       DatumId Maybe       OnDeleteCascade
     referenceScriptId   ScriptId Maybe      OnDeleteCascade
-    UniqueColTxout      txId index          -- The (tx_id, index) pair must be unique.
 
   TxIn
     txInId              TxId                OnDeleteCascade     -- The transaction where this is used as an input.
@@ -164,13 +163,11 @@ share
     txInId              TxId                OnDeleteCascade     -- The transaction where this is used as an input.
     txOutId             TxId                OnDeleteCascade     -- The transaction where this was created as an output.
     txOutIndex          Word64              sqltype=txindex
-    UniqueColTxin       txInId txOutId txOutIndex
 
   ReferenceTxIn
     txInId              TxId                OnDeleteCascade     -- The transaction where this is used as an input.
     txOutId             TxId                OnDeleteCascade     -- The transaction where this was created as an output.
     txOutIndex          Word64              sqltype=txindex
-    UniqueRefTxin       txInId txOutId txOutIndex
 
   -- A table containing metadata about the chain. There will probably only ever be one
   -- row in this table.
@@ -179,10 +176,6 @@ share
     networkName         Text
     version             Text
     UniqueMeta          startTime
-
-
-  -- The following are tables used my specific 'plugins' to the regular cardano-db-sync node
-  -- functionality. In the regular cardano-db-sync node these tables will be empty.
 
   -- The Epoch table is an aggregation of data in the 'Block' table, but is kept in this form
   -- because having it as a 'VIEW' is incredibly slow and inefficient.
@@ -239,20 +232,17 @@ share
     margin              Double                                  -- sqltype=percentage????
     fixedCost           DbLovelace          sqltype=lovelace
     registeredTxId      TxId                OnDeleteCascade     -- Slot number in which the pool was registered.
-    UniquePoolUpdate    registeredTxId certIndex
 
   -- A Pool can have more than one owner, so we have a PoolOwner table.
   PoolOwner
     addrId              StakeAddressId      OnDeleteCascade
     poolUpdateId        PoolUpdateId        OnDeleteCascade
-    UniquePoolOwner     addrId poolUpdateId
 
   PoolRetire
     hashId              PoolHashId          OnDeleteCascade
     certIndex           Word16
     announcedTxId       TxId                OnDeleteCascade     -- Slot number in which the pool announced it was retiring.
     retiringEpoch       Word64              sqltype=word31type    -- Epoch number in which the pool will retire.
-    UniquePoolRetiring  announcedTxId certIndex
 
   PoolRelay
     updateId            PoolUpdateId        OnDeleteCascade
@@ -261,11 +251,6 @@ share
     dnsName             Text Maybe
     dnsSrvName          Text Maybe
     port                Word16 Maybe
-    -- Usually NULLables are not allowed in a uniqueness constraint. The semantics of how NULL
-    -- interacts with those constraints is non-trivial:  two NULL values are not considered equal
-    -- for the purposes of an uniqueness constraint.
-    -- Use of "!force" attribute on the end of the line disables this check.
-    UniquePoolRelay     updateId ipv4 ipv6 dnsName !force
 
   -- -----------------------------------------------------------------------------------------------
 
@@ -275,7 +260,6 @@ share
     certIndex           Word16
     epochNo             Word64              sqltype=word31type
     txId                TxId                OnDeleteCascade
-    UniqueStakeRegistration txId certIndex
 
   -- When was a staking key/script deregistered
   StakeDeregistration
@@ -284,7 +268,6 @@ share
     epochNo             Word64              sqltype=word31type
     txId                TxId                OnDeleteCascade
     redeemerId          RedeemerId Maybe    OnDeleteCascade
-    UniqueStakeDeregistration txId certIndex
 
   Delegation
     addrId              StakeAddressId      OnDeleteCascade
@@ -294,14 +277,12 @@ share
     txId                TxId                OnDeleteCascade
     slotNo              Word64              sqltype=word63type
     redeemerId          RedeemerId Maybe    OnDeleteCascade
-    UniqueDelegation    txId certIndex
 
   TxMetadata
     key                 DbWord64            sqltype=word64type
     json                Text Maybe          sqltype=jsonb
     bytes               ByteString          sqltype=bytea
     txId                TxId                OnDeleteCascade
-    UniqueTxMetadata    key txId
 
   -- -----------------------------------------------------------------------------------------------
   -- Reward, Stake and Treasury need to be obtained from the ledger state.
@@ -328,7 +309,6 @@ share
     amount              DbLovelace          sqltype=lovelace
     redeemerId          RedeemerId Maybe    OnDeleteCascade
     txId                TxId                OnDeleteCascade
-    UniqueWithdrawal    addrId txId
 
   -- This table should never get rolled back.
   EpochStake
@@ -343,21 +323,18 @@ share
     certIndex           Word16
     amount              DbInt65             sqltype=int65type
     txId                TxId                OnDeleteCascade
-    UniqueTreasury      addrId txId certIndex
 
   Reserve
     addrId              StakeAddressId      OnDeleteCascade
     certIndex           Word16
     amount              DbInt65             sqltype=int65type
     txId                TxId                OnDeleteCascade
-    UniqueReserves      addrId txId certIndex
 
   PotTransfer
     certIndex           Word16
     treasury            DbInt65             sqltype=int65type
     reserves            DbInt65             sqltype=int65type
     txId                TxId                OnDeleteCascade
-    UniquePotTransfer   txId certIndex
 
   EpochSyncTime
     no                  Word64
@@ -378,13 +355,11 @@ share
     ident               MultiAssetId        OnDeleteCascade
     quantity            DbInt65             sqltype=int65type
     txId                TxId                OnDeleteCascade
-    UniqueMaTxMint      ident txId
 
   MaTxOut
     ident               MultiAssetId        OnDeleteCascade
     quantity            DbWord64            sqltype=word64type
     txOutId             TxOutId             OnDeleteCascade
-    UniqueMaTxOut       ident txOutId
 
   -- -----------------------------------------------------------------------------------------------
   -- Scripts related tables.
@@ -401,7 +376,6 @@ share
     index               Word64              sqltype=word31type
     scriptHash          ByteString Maybe    sqltype=hash28type
     redeemerDataId      RedeemerDataId      OnDeleteCascade
-    UniqueRedeemer      txId purpose index
 
   Script
     txId                TxId                OnDeleteCascade
@@ -429,7 +403,6 @@ share
   ExtraKeyWitness
     hash                ByteString          sqltype=hash28type
     txId                TxId                OnDeleteCascade
-    UniqueWitness       hash
 
   -- -----------------------------------------------------------------------------------------------
   -- Update parameter proposals.
@@ -469,7 +442,6 @@ share
     maxCollateralInputs Word16 Maybe        sqltype=word31type
 
     registeredTxId      TxId                OnDeleteCascade    -- Slot number in which update registered.
-    UniqueParamProposal key registeredTxId
 
   EpochParam
     epochNo             Word64              sqltype=word31type
@@ -507,7 +479,6 @@ share
     maxCollateralInputs Word16 Maybe        sqltype=word31type
 
     blockId             BlockId             OnDeleteCascade      -- The first block where these parameters are valid.
-    UniqueEpochParam    epochNo blockId
 
   CostModel
     hash                ByteString          sqltype=hash32type
