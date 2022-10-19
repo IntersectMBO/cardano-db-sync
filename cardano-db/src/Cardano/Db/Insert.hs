@@ -133,8 +133,8 @@ insertEpochParam = insertCheckUnique "EpochParam"
 insertEpochSyncTime :: (MonadBaseControl IO m, MonadIO m) => EpochSyncTime -> ReaderT SqlBackend m EpochSyncTimeId
 insertEpochSyncTime = insertReplace "EpochSyncTime"
 
-insertExtraKeyWitness :: (MonadBaseControl IO m, MonadIO m) => ExtraKeyWitness -> ReaderT SqlBackend m ExtraKeyWitnessId
-insertExtraKeyWitness = insertCheckUnique "ExtraKeyWitness"
+insertExtraKeyWitness :: (MonadIO m) => ExtraKeyWitness -> ReaderT SqlBackend m ExtraKeyWitnessId
+insertExtraKeyWitness = insert
 
 insertManyEpochStakes :: (MonadBaseControl IO m, MonadIO m) => [EpochStake] -> ReaderT SqlBackend m ()
 insertManyEpochStakes = insertManyUncheckedUnique "Many EpochStake"
