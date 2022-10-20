@@ -11,8 +11,8 @@ module Cardano.Db.Query
   -- queries used by db-sync
   , queryBlockCount
   , queryBlockCountAfterBlockNo
-  , queryBlockHash
-  , queryBlockId
+  , queryBlockHashBlockNo
+  , queryBlock
   , queryByronGenesisSupply
   , queryByronGenesisTxCount
   , queryCalcEpochEntry
@@ -23,7 +23,6 @@ module Cardano.Db.Query
   , queryShelleyGenesisTxCount
   , queryLatestBlock
   , queryLatestPoints
-  , queryLatestEpochNo
   , queryMeta
   , queryMultiAssetId
   , queryScript
@@ -31,14 +30,15 @@ module Cardano.Db.Query
   , queryRedeemerData
   , querySlotHash
   , queryTotalSupply
-  , queryTxCount
-  , queryTxId
+  , queryTx
   , queryTxOutValue
   , queryTxOutCredentials
   , queryEpochStakeCount
   , queryStakeAddressIdsAfter
   , existsPoolHashId
   , existsPoolMetadataRefId
+  , queryLatestEpochNo
+  , queryEpochId
 
   -- queries used in smash
   , queryPoolOfflineData
@@ -67,6 +67,7 @@ module Cardano.Db.Query
   , queryUtxoAtSlotNo
   , queryWithdrawalsUpToBlockNo
   , queryAdaPots
+  , queryLatestBlockEpochNo
 
   -- queries used only in tests
   , queryAddressBalanceAtSlot
@@ -84,6 +85,7 @@ module Cardano.Db.Query
   , queryDelegationScript
   , queryWithdrawalScript
   , queryStakeAddressScript
+  , queryTxCount
 
   -- utils
   , entityPair
@@ -120,12 +122,11 @@ import           Data.Text (Text)
 import           Data.Time.Clock (UTCTime (..))
 import           Data.Tuple.Extra (uncurry3)
 import           Data.Word (Word16, Word64)
-import           Database.Esqueleto.Experimental (Entity, PersistField, SqlBackend, SqlExpr,
-                   SqlQuery, Value (Value, unValue), ValueList, count, countRows, desc, entityKey,
-                   entityVal, from, in_, innerJoin, isNothing, just, leftJoin, limit, max_, min_,
-                   notExists, not_, on, orderBy, select, subList_select, sum_, table,
-                   type (:&) ((:&)), unSqlBackendKey, val, valList, where_, (&&.), (<=.), (==.),
-                   (>.), (>=.), (?.), (^.), (||.))
+import           Database.Esqueleto.Experimental (Entity (..), PersistField, SqlBackend, SqlExpr,
+                   SqlQuery, Value (Value, unValue), ValueList, count, countRows, desc, from, in_,
+                   innerJoin, isNothing, just, leftJoin, limit, max_, min_, notExists, not_, on,
+                   orderBy, select, subList_select, sum_, table, type (:&) ((:&)), unSqlBackendKey,
+                   val, valList, where_, (&&.), (<=.), (==.), (>.), (>=.), (?.), (^.), (||.))
 import           Database.Persist.Class.PersistQuery (selectList)
 import           Database.Persist.Types (SelectOpt (Asc))
 
@@ -139,8 +140,14 @@ import           Database.Persist.Types (SelectOpt (Asc))
 -- during syncing, then by smash, by tools and finally by test. This is useful to make sure we have
 -- all the necessary indexes during syncing, but not more than that, based on the queries db-sync
 -- does.
+--
+-- Names of queries follow the following pattern: A query that brings the Primary Key given the
+-- Unique Key are simple named by the table name, eg queryBlock. Otherwise queries should mention
+-- what is the argument and what is returned, eg queryBlockHashBlockNo. Also queries should be
+-- documented with the Index and Unique Key they need to be fast.
 
 -- | Count the number of blocks in the Block table.
+--   Needs no indexes.
 queryBlockCount :: MonadIO m => ReaderT SqlBackend m Word
 queryBlockCount = do
   res <- select $ do
@@ -149,6 +156,7 @@ queryBlockCount = do
   pure $ maybe 0 unValue (listToMaybe res)
 
 -- | Count the number of blocks in the Block table after a 'BlockNo'.
+--   Needs an index in BlockBlockNo.
 queryBlockCountAfterBlockNo :: MonadIO m => Word64 -> Bool -> ReaderT SqlBackend m Word
 queryBlockCountAfterBlockNo blockNo queryEq = do
   res <- select $ do
@@ -159,16 +167,19 @@ queryBlockCountAfterBlockNo blockNo queryEq = do
   pure $ maybe 0 unValue (listToMaybe res)
 
 -- | Get the 'BlockNo' associated with the given hash.
-queryBlockHash :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail BlockNo)
-queryBlockHash hash = do
+--   Needs an index in BlockHash.
+queryBlockHashBlockNo :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail BlockNo)
+queryBlockHashBlockNo hash = do
   res <- select $ do
             blk <- from $ table @Block
             where_ (blk ^. BlockHash ==. val hash)
             pure $ blk ^. BlockBlockNo
   pure $ maybeToEither (DbLookupBlockHash hash) (BlockNo . fromIntegral) (unValue <$> listToMaybe res)
 
-queryBlockId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail BlockId)
-queryBlockId hash = do
+-- | Needs a Unique Key on BlockHash.
+--   Needs Primary Id BlockId
+queryBlock :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail BlockId)
+queryBlock hash = do
   res <- select $ do
             blk <- from $ table @Block
             where_ (blk ^. BlockHash ==. val hash)
@@ -183,7 +194,6 @@ queryByronGenesisSupply = do
               from $ table @Tx
                 `innerJoin` table @TxOut
                   `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. TxOutTxId)
-          -- Assume the Byron genesis block is block number 1 (which it should be).
           where_ (tx ^. TxBlockNo ==. val (fromIntegral $ unBlockNo byronGenesisBlockNo))
           pure $ sum_ (txOut ^. TxOutValue)
   pure $ unValueSumAda (listToMaybe res)
@@ -255,6 +265,7 @@ queryCalcEpochEntry epochNum = do
     defaultUTCTime :: UTCTime
     defaultUTCTime = read "2000-01-01 00:00:00.000000 UTC"
 
+-- | Needs an index in BlockEpochNo
 queryCurrentEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
 queryCurrentEpochNo = do
     res <- select $ do
@@ -262,6 +273,7 @@ queryCurrentEpochNo = do
       pure $ max_ (blk ^. BlockEpochNo)
     pure $ join (unValue =<< listToMaybe res)
 
+-- | Needs an index in RewardSpendableEpoch
 queryNormalEpochRewardCount
     :: MonadIO m
     => Word64 -> ReaderT SqlBackend m Word64
@@ -273,6 +285,7 @@ queryNormalEpochRewardCount epochNum = do
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
+-- | This is executed just for MIR rewards, ie rewards without a pool.
 queryNullPoolRewardExists :: MonadIO m => Reward -> ReaderT SqlBackend m Bool
 queryNullPoolRewardExists newRwd = do
   res <- select $ do
@@ -306,6 +319,7 @@ queryShelleyGenesisTxCount = do
   pure $ maybe 0 unValue (listToMaybe res)
 
 -- | Get the latest block.
+--   Needs an index on BlockSlotNo. Can be switched to need index in BlockBlockNo.
 queryLatestBlock :: MonadIO m => ReaderT SqlBackend m (Maybe Block)
 queryLatestBlock = do
   res <- select $ do
@@ -316,6 +330,7 @@ queryLatestBlock = do
     pure blk
   pure $ fmap entityVal (listToMaybe res)
 
+-- | Needs an index in BlockSlotNo. Can be switched to need inex in BlockBlockNo.
 queryLatestPoints :: MonadIO m => ReaderT SqlBackend m [(Maybe Word64, ByteString)]
 queryLatestPoints = do
   res <- select $ do
@@ -326,18 +341,9 @@ queryLatestPoints = do
     pure (blk ^. BlockSlotNo, blk ^. BlockHash)
   pure $ fmap unValue2 res
 
-queryLatestEpochNo :: MonadIO m => ReaderT SqlBackend m Word64
-queryLatestEpochNo = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (isJust $ blk ^. BlockSlotNo)
-    orderBy [desc (blk ^. BlockEpochNo)]
-    limit 1
-    pure (blk ^. BlockEpochNo)
-  pure $ fromMaybe 0 (unValue =<< listToMaybe res)
-
 {-# INLINABLE queryMeta #-}
 -- | Get the network metadata.
+--   Needs no Index
 queryMeta :: MonadIO m => ReaderT SqlBackend m (Either LookupFail Meta)
 queryMeta = do
   res <- select . from $ table @Meta
@@ -346,6 +352,7 @@ queryMeta = do
             [m] -> Right $ entityVal m
             _ -> Left DbMetaMultipleRows
 
+-- | Needs Unique Key on (MultiAssetPolicy, MultiAssetName)
 queryMultiAssetId :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe MultiAssetId)
 queryMultiAssetId policy assetName = do
   res <- select $ do
@@ -354,6 +361,7 @@ queryMultiAssetId policy assetName = do
     pure (ma ^. MultiAssetId)
   pure $ unValue <$> listToMaybe res
 
+-- | Needs an Index on ScriptHash
 queryScript :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe ScriptId)
 queryScript hsh = do
   xs <- select $ do
@@ -362,6 +370,7 @@ queryScript hsh = do
       pure (script ^. ScriptId)
   pure $ unValue <$> listToMaybe xs
 
+-- | Needs Unique Key on DatumHash
 queryDatum :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe DatumId)
 queryDatum hsh = do
   xs <- select $ do
@@ -370,6 +379,7 @@ queryDatum hsh = do
       pure (datum ^. DatumId)
   pure $ unValue <$> listToMaybe xs
 
+-- | Needs Unique Key on RedeemerDataHash
 queryRedeemerData :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe RedeemerDataId)
 queryRedeemerData hsh = do
   xs <- select $ do
@@ -378,6 +388,7 @@ queryRedeemerData hsh = do
       pure (rdmrDt ^. RedeemerDataId)
   pure $ unValue <$> listToMaybe xs
 
+-- | Needs Unique Key on BlockSlotNo
 querySlotHash :: MonadIO m => SlotNo -> ReaderT SqlBackend m [(SlotNo, ByteString)]
 querySlotHash slotNo = do
   res <- select $ do
@@ -389,6 +400,7 @@ querySlotHash slotNo = do
 -- | Get the current total supply of Lovelace. This only returns the on-chain supply which
 -- does not include staking rewards that have not yet been withdrawn. Before wihdrawal
 -- rewards are part of the ledger state and hence not on chain.
+-- Needs index on TxOutTxId, TxInTxOutId, TxOutIndex, TxInTxOutIndex
 queryTotalSupply :: MonadIO m => ReaderT SqlBackend m Ada
 queryTotalSupply = do
     res <- select $ do
@@ -397,17 +409,10 @@ queryTotalSupply = do
       pure $ sum_ (txOut ^. TxOutValue)
     pure $ unValueSumAda (listToMaybe res)
 
--- | Count the number of transactions in the Tx table.
-queryTxCount :: MonadIO m => ReaderT SqlBackend m Word
-queryTxCount = do
-  res <- select $ do
-    _ <- from $ table @Tx
-    pure countRows
-  pure $ maybe 0 unValue (listToMaybe res)
-
 -- | Get the 'TxId' associated with the given hash.
-queryTxId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail TxId)
-queryTxId hash = do
+--   Needs a Unique Key on TxHash
+queryTx :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail TxId)
+queryTx hash = do
   res <- select $ do
     tx <- from $ table @Tx
     where_ (tx ^. TxHash ==. val hash)
@@ -415,6 +420,8 @@ queryTxId hash = do
   pure $ maybeToEither (DbLookupTxHash hash) entityKey (listToMaybe res)
 
 -- | Give a (tx hash, index) pair, return the TxOut value.
+--   Needs an Index on TxOutTxId, TxOutIndex, TxHash
+-- | Needs Primary Id TxId
 queryTxOutValue :: MonadIO m => (ByteString, Word64) -> ReaderT SqlBackend m (Either LookupFail (TxId, DbLovelace))
 queryTxOutValue (hash, index) = do
   res <- select $ do
@@ -426,6 +433,8 @@ queryTxOutValue (hash, index) = do
   pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
 
 -- | Give a (tx hash, index) pair, return the TxOut Credentials.
+--   Needs an Index on TxOutTxId, TxOutIndex, TxHash
+-- | Needs Primary Id TxId
 queryTxOutCredentials :: MonadIO m => (ByteString, Word64) -> ReaderT SqlBackend m (Either LookupFail (Maybe ByteString, Bool))
 queryTxOutCredentials (hash, index) = do
   res <- select $ do
@@ -436,6 +445,7 @@ queryTxOutCredentials (hash, index) = do
     pure (txOut ^. TxOutPaymentCred, txOut ^. TxOutAddressHasScript)
   pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
 
+-- | Needs an Index on EpochStakeEpochNo
 queryEpochStakeCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
 queryEpochStakeCount epoch = do
   res <- select $ do
@@ -444,6 +454,8 @@ queryEpochStakeCount epoch = do
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
+-- | Needs an Index on StakeAddressBlockNo
+--   Needs Primary Id StakeAddressId
 queryStakeAddressIdsAfter :: MonadIO m => Word64 -> Bool -> ReaderT SqlBackend m [StakeAddressId]
 queryStakeAddressIdsAfter blockNo queryEq = do
     res <- select $ do
@@ -453,6 +465,7 @@ queryStakeAddressIdsAfter blockNo queryEq = do
       pure (st_addr ^. StakeAddressId)
     pure $ unValue <$> res
 
+-- | Needs Primary Id PoolHashId
 existsPoolHashId :: MonadIO m => PoolHashId -> ReaderT SqlBackend m Bool
 existsPoolHashId phid = do
   res <- select $ do
@@ -462,6 +475,7 @@ existsPoolHashId phid = do
     pure (poolHash ^. PoolHashId)
   pure $ not (null res)
 
+-- | Needs Primary Id PoolMetadataRefId
 existsPoolMetadataRefId :: MonadIO m => PoolMetadataRefId -> ReaderT SqlBackend m Bool
 existsPoolMetadataRefId pmrid = do
   res <- select $ do
@@ -471,6 +485,26 @@ existsPoolMetadataRefId pmrid = do
     pure (pmr  ^. PoolMetadataRefId)
   pure $ not (null res)
 
+-- | Get the epoch number of the most recent epoch in the Epoch table.
+--   Needs Unique Key EpochNo
+queryLatestEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
+queryLatestEpochNo = do
+  res <- select $ do
+    epoch <- from $ table @Epoch
+    orderBy [desc (epoch ^. EpochNo)]
+    limit 1
+    pure (epoch ^. EpochNo)
+  pure $ unValue <$> listToMaybe res
+
+-- | Get the PostgreSQL row index (EpochId) that matches the given epoch number.
+--   Needs Unique Key EpochNo
+queryEpochId :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe EpochId)
+queryEpochId epochNum = do
+  res <- select $ do
+    epoch <- from $ table @Epoch
+    where_ (epoch ^. EpochNo ==. val epochNum)
+    pure (epoch ^. EpochId)
+  pure $ unValue <$> listToMaybe res
 
 {--------------------------------------------
   Queries use in SMASH
@@ -803,8 +837,18 @@ queryUtxoAtBlockId blkid = do
       (out, Value (Just hash')) -> Just (entityVal out, hash')
       (_, Value Nothing) -> Nothing
 
+queryLatestBlockEpochNo :: MonadIO m => ReaderT SqlBackend m Word64
+queryLatestBlockEpochNo = do
+  res <- select $ do
+    blk <- from $ table @Block
+    where_ (isJust $ blk ^. BlockSlotNo)
+    orderBy [desc (blk ^. BlockEpochNo)]
+    limit 1
+    pure (blk ^. BlockEpochNo)
+  pure $ fromMaybe 0 (unValue =<< listToMaybe res)
+
 {-----------------------
-  Queries use in tests
+  Queries used in tests
 ------------------------}
 
 queryAddressBalanceAtSlot :: MonadIO m => Text -> Word64 -> ReaderT SqlBackend m Ada
@@ -951,6 +995,14 @@ queryStakeAddressScript = do
       pure st_addr
     pure $ entityVal <$> res
 
+-- | Count the number of transactions in the Tx table.
+queryTxCount :: MonadIO m => ReaderT SqlBackend m Word
+queryTxCount = do
+  res <- select $ do
+    _ <- from $ table @Tx
+    pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
+
 -- -----------------------------------------------------------------------------
 -- SqlQuery predicates
 
@@ -959,6 +1011,7 @@ isJust :: PersistField a => SqlExpr (Value (Maybe a)) -> SqlExpr (Value Bool)
 isJust = not_ . isNothing
 
 -- A predicate that filters out spent 'TxOut' entries.
+-- Needs index on TxOutTxId, TxInTxOutId, TxOutIndex, TxInTxOutIndex
 {-# INLINABLE txOutUnspentP #-}
 txOutUnspentP :: SqlExpr (Entity TxOut) -> SqlQuery ()
 txOutUnspentP txOut =

@@ -9,11 +9,12 @@ import           Cardano.Slotting.Block (BlockNo (..))
 import           Control.Monad (void)
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
+import           Data.Either (fromRight)
 import           Test.IO.Cardano.Db.Util
 import           Test.Tasty (TestTree, testGroup)
 import           Test.Tasty.HUnit (testCase)
 
-
+-- TODO: redo these tests so that the db is cleaned between each test.
 tests :: TestTree
 tests =
   testGroup "Insert"
@@ -27,31 +28,24 @@ insertZeroTest =
   runDbNoLoggingEnv $ do
     -- Delete the blocks if they exist.
     slid <- insertSlotLeader testSlotLeader
-    void $ deleteCascadeBlock (blockOne slid)
-    void $ deleteCascadeBlock (blockZero slid)
-    -- Insert the same block twice. The first should be successful (resulting
-    -- in a 'Right') and the second should return the same value in a 'Left'.
-    bid0 <- insertBlock (blockZero slid)
-    bid1 <- insertBlock (blockZero slid)
-    assertBool (show bid0 ++ " /= " ++ show bid1) (bid0 == bid1)
+    -- Insert a block and query it with its hash
+    let blk = blockZero slid
+    _ <- insertBlock blk
+    blockNo <- unBlockNo . fromRight (error "Failed to find block hash") <$> queryBlockHashBlockNo (blockHash blk)
+    assertBool (show (blockBlockNo blk) ++ " /= " ++ show blockNo) (blockBlockNo blk == fromIntegral blockNo)
 
 
 insertFirstTest :: IO ()
 insertFirstTest =
   runDbNoLoggingEnv $ do
-    -- Delete the block if it exists.
-    slid <- insertSlotLeader testSlotLeader
-    void $ deleteCascadeBlock (blockOne slid)
     -- Insert the same block twice.
-    bid0 <- insertBlock (blockZero slid)
     bid1 <- insertBlock $ (\b -> b { blockBlockNo = 1 }) (blockOne slid)
+    blockNo <- unBlockNo . fromRight (error "Failed to find block hash") <$> queryBlockHashBlockNo (blockHash blk)
     assertBool (show bid0 ++ " == " ++ show bid1) (bid0 /= bid1)
 
 insertTwice :: IO ()
 insertTwice =
   runDbNoLoggingEnv $ do
-    slid <- insertSlotLeader testSlotLeader
-    void $ insertBlock (blockZero slid)
     let adaPots = adaPotsZero 0
     _ <- insertAdaPots adaPots
     Just pots0 <- queryAdaPots 0

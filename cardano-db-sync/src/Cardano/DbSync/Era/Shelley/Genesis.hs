@@ -71,7 +71,7 @@ insertValidateGenesisDist backend tracer networkName cfg shelleyInitiation = do
 
     insertAction :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either SyncNodeError ())
     insertAction = do
-      ebid <- DB.queryBlockId (configGenesisHash cfg)
+      ebid <- DB.queryBlock (configGenesisHash cfg)
       case ebid of
         Right _ -> validateGenesisDistribution tracer networkName cfg expectedTxCount
         Left _ ->

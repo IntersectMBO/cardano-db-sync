@@ -2,7 +2,6 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbSync.Epoch
   ( epochStartup
@@ -11,7 +10,7 @@ module Cardano.DbSync.Epoch
 
 import           Cardano.BM.Trace (Trace, logError, logInfo)
 import qualified Cardano.Chain.Block as Byron
-import           Cardano.Db (EntityField (..), EpochId)
+import           Cardano.Db (EpochId)
 import qualified Cardano.Db as DB
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Types
@@ -21,8 +20,7 @@ import           Cardano.Slotting.Slot (EpochNo (..))
 import           Control.Monad.Logger (LoggingT)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Data.IORef (IORef, atomicWriteIORef, newIORef, readIORef)
-import           Database.Esqueleto.Experimental (SqlBackend, desc, from, limit, orderBy, replace,
-                   select, table, unValue, val, where_, (==.), (^.))
+import           Database.Esqueleto.Experimental (SqlBackend, replace)
 import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import           System.IO.Unsafe (unsafePerformIO)
@@ -39,7 +37,7 @@ epochStartup isExtended trce backend =
   when isExtended $ do
     DB.runDbIohkLogging backend trce $ do
       liftIO . logInfo trce $ "epochStartup: Checking"
-      mlbe <- queryLatestEpochNo
+      mlbe <- DB.queryLatestEpochNo
       case mlbe of
         Nothing ->
           pure ()
@@ -103,7 +101,7 @@ latestCachedEpochVar = unsafePerformIO $ newIORef Nothing -- Gets updated later.
 
 updateEpochNum :: (MonadBaseControl IO m, MonadIO m) => Word64 -> Trace IO Text -> ReaderT SqlBackend m (Either SyncNodeError ())
 updateEpochNum epochNum trce = do
-    mid <- queryEpochId epochNum
+    mid <- DB.queryEpochId epochNum
     res <- maybe insertEpoch updateEpoch mid
     liftIO $ atomicWriteIORef latestCachedEpochVar (Just epochNum)
     pure res
@@ -122,21 +120,3 @@ updateEpochNum epochNum trce = do
 
 -- -------------------------------------------------------------------------------------------------
 
--- | Get the PostgreSQL row index (EpochId) that matches the given epoch number.
-queryEpochId :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe EpochId)
-queryEpochId epochNum = do
-  res <- select $ do
-    epoch <- from $ table @DB.Epoch
-    where_ (epoch ^. DB.EpochNo ==. val epochNum)
-    pure (epoch ^. EpochId)
-  pure $ unValue <$> listToMaybe res
-
--- | Get the epoch number of the most recent epoch in the Epoch table.
-queryLatestEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
-queryLatestEpochNo = do
-  res <- select $ do
-    epoch <- from $ table @DB.Epoch
-    orderBy [desc (epoch ^. DB.EpochNo)]
-    limit 1
-    pure (epoch ^. DB.EpochNo)
-  pure $ unValue <$> listToMaybe res

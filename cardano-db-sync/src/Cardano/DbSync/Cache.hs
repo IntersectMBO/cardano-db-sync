@@ -358,7 +358,7 @@ queryPrevBlockWithCache :: MonadIO m => Text -> Cache -> ByteString
                         -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.BlockId
 queryPrevBlockWithCache msg cache hsh =
   case cache of
-    UninitiatedCache -> liftLookupFail msg $ DB.queryBlockId hsh
+    UninitiatedCache -> liftLookupFail msg $ DB.queryBlock hsh
     Cache ci -> do
       mCachedPrev <- liftIO $ readTVarIO (cPrevBlock ci)
       case mCachedPrev of
@@ -376,7 +376,7 @@ queryPrevBlockWithCache msg cache hsh =
         => CacheInternal -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.BlockId
     queryFromDb ci = do
       liftIO $ missPrevBlock (cStats ci)
-      liftLookupFail msg $ DB.queryBlockId hsh
+      liftLookupFail msg $ DB.queryBlock hsh
 
 insertBlockAndCache
     :: (MonadIO m, MonadBaseControl IO m)

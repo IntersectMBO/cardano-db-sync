@@ -67,15 +67,14 @@ import qualified Data.List.NonEmpty as NonEmpty
 import           Data.Proxy (Proxy (..))
 import           Data.Text (Text)
 import qualified Data.Text as Text
-import           Database.Persist.Class (AtLeastOneUniqueKey, PersistEntityBackend, checkUnique,
-                   insert, insertBy, replaceUnique)
+import           Database.Persist.Class hiding (onlyOneUniqueDef)
+import           Database.Persist.Class.PersistEntity
 import           Database.Persist.EntityDef.Internal (entityDB, entityUniques)
-import           Database.Persist.Sql (OnlyOneUniqueKey, PersistRecordBackend, SqlBackend,
-                   UniqueDef, entityDef, insertMany, rawExecute, rawSql, toPersistFields,
-                   toPersistValue, uniqueDBName, uniqueFields)
+import           Database.Persist.Sql (SqlBackend, UniqueDef, rawExecute, rawSql, uniqueDBName,
+                   uniqueFields)
 import qualified Database.Persist.Sql.Util as Util
 import           Database.Persist.Types (ConstraintNameDB (..), EntityNameDB (..), FieldNameDB (..),
-                   PersistValue, entityKey)
+                   PersistValue)
 import           Database.PostgreSQL.Simple (SqlError)
 
 
@@ -95,8 +94,12 @@ import           Database.PostgreSQL.Simple (SqlError)
 -- Instead we use `insertUnchecked` for tables where uniqueness constraints are unlikley to be hit
 -- and `insertChecked` for tables where the uniqueness constraint might can be hit.
 
+{--------------------------------------------
+  Queries using Unique Keys in SMASH
+----------------------------------------------}
+
 insertAdaPots :: (MonadBaseControl IO m, MonadIO m) => AdaPots -> ReaderT SqlBackend m AdaPotsId
-insertAdaPots = insertCheckUnique "AdaPots"
+insertAdaPots = insertUnchecked "AdaPots"
 
 insertBlock :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
 insertBlock = insertUnchecked "Block"
@@ -108,7 +111,7 @@ insertReferenceTxIn :: (MonadBaseControl IO m, MonadIO m) => ReferenceTxIn -> Re
 insertReferenceTxIn = insertUnchecked "ReferenceTxIn"
 
 insertDelegation :: (MonadBaseControl IO m, MonadIO m) => Delegation -> ReaderT SqlBackend m DelegationId
-insertDelegation = insertCheckUnique "Delegation"
+insertDelegation = insertUnchecked "Delegation"
 
 insertEpoch :: (MonadBaseControl IO m, MonadIO m) => Epoch -> ReaderT SqlBackend m EpochId
 insertEpoch = insertUnchecked "Epoch"
@@ -377,9 +380,9 @@ insertReplace vtype record =
 -- even tables with uniqueness constraints, especially block, tx and many others, where
 -- uniqueness is enforced by the ledger.
 insertUnchecked
-    :: ( AtLeastOneUniqueKey record
-       , MonadIO m
+    :: ( MonadIO m
        , MonadBaseControl IO m
+       , PersistEntity record
        , PersistEntityBackend record ~ SqlBackend
        )
     => String -> record -> ReaderT SqlBackend m (Key record)

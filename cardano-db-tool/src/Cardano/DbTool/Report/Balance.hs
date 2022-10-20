@@ -87,7 +87,7 @@ queryStakeAddressBalance address = do
     queryRewardsSum saId = do
       -- This query does not run unless we are pretty close to the chain tip.
       -- Therefore to get current rewards, we limit the cacluation to current epoch minus 2.
-      currentEpoch <- queryLatestEpochNo
+      currentEpoch <- queryLatestBlockEpochNo
       res <- select $ do
         rwd <- from $ table @Reward
         where_ (rwd ^. RewardAddrId ==. val saId)

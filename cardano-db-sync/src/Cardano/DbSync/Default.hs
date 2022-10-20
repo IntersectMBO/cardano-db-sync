@@ -63,7 +63,7 @@ applyAndInsertBlockMaybe env cblk = do
       -- In the usual case it will be consistent so we don't need to do any queries. Just insert the block
       insertBlock env cblk applyRes False
     else do
-      blockIsInDbAlready <- lift (isRight <$> DB.queryBlockHash (SBS.fromShort . Consensus.getOneEraHash $ blockHash cblk))
+      blockIsInDbAlready <- lift (isRight <$> DB.queryBlockHashBlockNo (SBS.fromShort . Consensus.getOneEraHash $ blockHash cblk))
       -- If the block is already in db, do nothing. If not, delete all blocks with greater 'BlockNo' or
       -- equal, insert the block and restore consistency between ledger and db.
       unless blockIsInDbAlready $ do

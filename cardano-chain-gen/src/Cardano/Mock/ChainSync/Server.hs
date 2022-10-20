@@ -110,6 +110,7 @@ rollback handle point =
       Nothing -> error $ "point " <> show point <> " not in chain"
       Just st' -> st'
 
+-- TODO Clean up the ChainProducerState state
 restartServer :: ServerHandle IO blk -> IO ()
 restartServer sh = do
     stopServer sh

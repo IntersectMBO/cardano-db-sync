@@ -84,7 +84,7 @@ rollbackToPoint env point serverTip = do
     queryBlockNo pnt =
       case getPoint pnt of
         Origin -> pure $ Right 0
-        At blk -> DB.queryBlockHash (SBS.fromShort . getOneEraHash $ blockPointHash blk)
+        At blk -> DB.queryBlockHashBlockNo (SBS.fromShort . getOneEraHash $ blockPointHash blk)
 
 -- For testing and debugging.
 unsafeRollback :: Trace IO Text -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeError ())

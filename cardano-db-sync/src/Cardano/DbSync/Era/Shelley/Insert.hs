@@ -323,7 +323,7 @@ insertCollateralTxIn
     => Trace IO Text -> BlockNo -> DB.TxId -> Generic.TxIn
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertCollateralTxIn _tracer blkNo txInId (Generic.TxIn txId index _) = do
-  txOutId <- liftLookupFail "insertCollateralTxIn" $ DB.queryTxId txId
+  txOutId <- liftLookupFail "insertCollateralTxIn" $ DB.queryTx txId
   void . lift . DB.insertCollateralTxIn $
             DB.CollateralTxIn
               { DB.collateralTxInTxInId = txInId
@@ -337,7 +337,7 @@ insertReferenceTxIn
     => Trace IO Text -> BlockNo -> DB.TxId -> Generic.TxIn
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertReferenceTxIn _tracer blkNo txInId (Generic.TxIn txId index _) = do
-  txOutId <- liftLookupFail "insertReferenceTxIn" $ DB.queryTxId txId
+  txOutId <- liftLookupFail "insertReferenceTxIn" $ DB.queryTx txId
   void . lift . DB.insertReferenceTxIn $
             DB.ReferenceTxIn
               { DB.referenceTxInTxInId = txInId

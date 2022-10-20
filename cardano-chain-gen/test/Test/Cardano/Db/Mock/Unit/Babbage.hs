@@ -326,11 +326,11 @@ rollbackFurther =
     -- validate later that one is deleted through cascade, but the other was not
     -- because a checkpoint was found.
     let block1 = blks !! 33
-    void $ queryDBSync dbSync $ DB.queryBlockId (hfBlockHash block1)
+    void $ queryDBSync dbSync $ DB.queryBlock (hfBlockHash block1)
     cm1 <- queryDBSync dbSync . DB.insertCostModel $ DB.CostModel (BS.replicate 32 1) "{\"1\" : 1}" (fromIntegral . unBlockNo $ hfBlockNo block1)
 
     let block2 = blks !! 34
-    void $ queryDBSync dbSync $ DB.queryBlockId (hfBlockHash block2)
+    void $ queryDBSync dbSync $ DB.queryBlock (hfBlockHash block2)
     cm2 <- queryDBSync dbSync . DB.insertCostModel $ DB.CostModel (BS.replicate 32 2) "{\"2\" : 2}" (fromIntegral . unBlockNo $ hfBlockNo block2)
 
     -- Note that there is no epoch change, which would add a new entry, since we have

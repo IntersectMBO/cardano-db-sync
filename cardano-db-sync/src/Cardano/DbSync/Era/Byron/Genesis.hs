@@ -46,7 +46,7 @@ insertValidateGenesisDist backend tracer (NetworkName networkName) cfg = do
   where
     insertAction :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either SyncNodeError ())
     insertAction = do
-      ebid <- DB.queryBlockId (configGenesisHash cfg)
+      ebid <- DB.queryBlock (configGenesisHash cfg)
       case ebid of
         Right bid -> validateGenesisDistribution tracer networkName cfg bid
         Left _ ->
