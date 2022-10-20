@@ -441,7 +441,6 @@ share
   ExtraKeyWitness
     hash                ByteString          sqltype=hash28type
     txId                TxId
-    UniqueWitness       hash
 
   -- -----------------------------------------------------------------------------------------------
   -- Update parameter proposals.
