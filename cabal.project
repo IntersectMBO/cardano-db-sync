@@ -7,6 +7,8 @@ packages:
   cardano-db-tool
   cardano-smash-server
   cardano-chain-gen
+--  ../persistent/persistent-postgresql
+--  ../persistent/persistent
 
 constraints:
     libsystemd-journal >= 1.4.4

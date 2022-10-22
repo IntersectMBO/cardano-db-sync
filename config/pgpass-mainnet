@@ -1,1 +1,1 @@
-/var/run/postgresql:5432:cexplorer:*:*
+/var/run/postgresql:5432:mainnet:*:*
