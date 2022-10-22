@@ -70,7 +70,7 @@ share
 
   SlotLeader
     hash                ByteString          sqltype=hash28type
-    poolHashId          PoolHashId Maybe    OnDeleteCascade   -- This will be non-null when a block is mined by a pool.
+    poolHashId          PoolHashId Maybe    noreference       -- This will be non-null when a block is mined by a pool.
     description         Text                                  -- Description of the Slots leader.
     UniqueSlotLeader    hash
 
@@ -87,7 +87,7 @@ share
     epochSlotNo         Word64 Maybe        sqltype=word31type
     blockNo             Word64 Maybe        sqltype=word31type
     previousId          BlockId Maybe       OnDeleteCascade
-    slotLeaderId        SlotLeaderId        OnDeleteCascade
+    slotLeaderId        SlotLeaderId        noreference
     size                Word64              sqltype=word31type
     time                UTCTime             sqltype=timestamp
     txCount             Word64
@@ -131,11 +131,11 @@ share
     addressRaw          ByteString
     addressHasScript    Bool
     paymentCred         ByteString Maybe    sqltype=hash28type
-    stakeAddressId      StakeAddressId Maybe OnDeleteCascade
+    stakeAddressId      StakeAddressId Maybe noreference
     value               DbLovelace          sqltype=lovelace
     dataHash            ByteString Maybe    sqltype=hash32type
-    inlineDatumId       DatumId Maybe       OnDeleteCascade
-    referenceScriptId   ScriptId Maybe      OnDeleteCascade
+    inlineDatumId       DatumId Maybe       noreference
+    referenceScriptId   ScriptId Maybe      noreference
     UniqueTxout         txId index          -- The (tx_id, index) pair must be unique.
 
   CollateralTxOut
@@ -145,30 +145,30 @@ share
     addressRaw          ByteString
     addressHasScript    Bool
     paymentCred         ByteString Maybe    sqltype=hash28type
-    stakeAddressId      StakeAddressId Maybe OnDeleteCascade
+    stakeAddressId      StakeAddressId Maybe noreference
     value               DbLovelace          sqltype=lovelace
     dataHash            ByteString Maybe    sqltype=hash32type
     multiAssetsDescr    Text
-    inlineDatumId       DatumId Maybe       OnDeleteCascade
-    referenceScriptId   ScriptId Maybe      OnDeleteCascade
+    inlineDatumId       DatumId Maybe       noreference
+    referenceScriptId   ScriptId Maybe      noreference
     UniqueColTxout      txId index          -- The (tx_id, index) pair must be unique.
 
   TxIn
     txInId              TxId                OnDeleteCascade     -- The transaction where this is used as an input.
-    txOutId             TxId                OnDeleteCascade     -- The transaction where this was created as an output.
+    txOutId             TxId                noreference         -- The transaction where this was created as an output.
     txOutIndex          Word64              sqltype=txindex
-    redeemerId          RedeemerId Maybe    OnDeleteCascade
+    redeemerId          RedeemerId Maybe    noreference
     UniqueTxin          txOutId txOutIndex
 
   CollateralTxIn
     txInId              TxId                OnDeleteCascade     -- The transaction where this is used as an input.
-    txOutId             TxId                OnDeleteCascade     -- The transaction where this was created as an output.
+    txOutId             TxId                noreference     -- The transaction where this was created as an output.
     txOutIndex          Word64              sqltype=txindex
     UniqueColTxin       txInId txOutId txOutIndex
 
   ReferenceTxIn
     txInId              TxId                OnDeleteCascade     -- The transaction where this is used as an input.
-    txOutId             TxId                OnDeleteCascade     -- The transaction where this was created as an output.
+    txOutId             TxId                noreference         -- The transaction where this was created as an output.
     txOutIndex          Word64              sqltype=txindex
     UniqueRefTxin       txInId txOutId txOutIndex
 
@@ -215,35 +215,33 @@ share
     UniqueAdaPots       blockId
     deriving Eq
 
-  -- -----------------------------------------------------------------------------------------------
-
   PoolMetadataRef
-    poolId              PoolHashId          OnDeleteCascade
+    poolId              PoolHashId          noreference
     url                 Text
     hash                ByteString          sqltype=hash32type
     registeredTxId      TxId                OnDeleteCascade     -- Only used for rollback.
     UniquePoolMetadataRef poolId url hash
 
   PoolUpdate
-    hashId              PoolHashId          OnDeleteCascade
+    hashId              PoolHashId          noreference
     certIndex           Word16
     vrfKeyHash          ByteString          sqltype=hash32type
     pledge              DbLovelace          sqltype=lovelace
-    rewardAddrId        StakeAddressId      OnDeleteCascade
+    rewardAddrId        StakeAddressId      noreference
     activeEpochNo       Word64
-    metaId              PoolMetadataRefId Maybe OnDeleteCascade
+    metaId              PoolMetadataRefId Maybe noreference
     margin              Double                                  -- sqltype=percentage????
     fixedCost           DbLovelace          sqltype=lovelace
     registeredTxId      TxId                OnDeleteCascade     -- Slot number in which the pool was registered.
 
   -- A Pool can have more than one owner, so we have a PoolOwner table.
   PoolOwner
-    addrId              StakeAddressId      OnDeleteCascade
+    addrId              StakeAddressId      noreference
     poolUpdateId        PoolUpdateId        OnDeleteCascade
     UniquePoolOwner     addrId poolUpdateId
 
   PoolRetire
-    hashId              PoolHashId          OnDeleteCascade
+    hashId              PoolHashId          noreference
     certIndex           Word16
     announcedTxId       TxId                OnDeleteCascade     -- Slot number in which the pool announced it was retiring.
     retiringEpoch       Word64              sqltype=word31type    -- Epoch number in which the pool will retire.
@@ -256,31 +254,28 @@ share
     dnsSrvName          Text Maybe
     port                Word16 Maybe
 
-  -- -----------------------------------------------------------------------------------------------
-
-  -- When was a staking key/script registered
   StakeRegistration
-    addrId              StakeAddressId      OnDeleteCascade
+    addrId              StakeAddressId      noreference
     certIndex           Word16
     epochNo             Word64              sqltype=word31type
     txId                TxId                OnDeleteCascade
 
   -- When was a staking key/script deregistered
   StakeDeregistration
-    addrId              StakeAddressId      OnDeleteCascade
+    addrId              StakeAddressId      noreference
     certIndex           Word16
     epochNo             Word64              sqltype=word31type
     txId                TxId                OnDeleteCascade
-    redeemerId          RedeemerId Maybe    OnDeleteCascade
+    redeemerId          RedeemerId Maybe    noreference
 
   Delegation
-    addrId              StakeAddressId      OnDeleteCascade
+    addrId              StakeAddressId      noreference
     certIndex           Word16
-    poolHashId          PoolHashId          OnDeleteCascade
+    poolHashId          PoolHashId          noreference
     activeEpochNo       Word64
     txId                TxId                OnDeleteCascade
     slotNo              Word64              sqltype=word63type
-    redeemerId          RedeemerId Maybe    OnDeleteCascade
+    redeemerId          RedeemerId Maybe    noreference
 
   TxMetadata
     key                 DbWord64            sqltype=word64type
@@ -309,9 +304,9 @@ share
     deriving Show
 
   Withdrawal
-    addrId              StakeAddressId      OnDeleteCascade
+    addrId              StakeAddressId      noreference
     amount              DbLovelace          sqltype=lovelace
-    redeemerId          RedeemerId Maybe    OnDeleteCascade
+    redeemerId          RedeemerId Maybe    noreference
     txId                TxId                OnDeleteCascade
 
   -- This table should never get rolled back.
@@ -323,13 +318,13 @@ share
     UniqueStake         epochNo addrId poolId
 
   Treasury
-    addrId              StakeAddressId      OnDeleteCascade
+    addrId              StakeAddressId      noreference
     certIndex           Word16
     amount              DbInt65             sqltype=int65type
     txId                TxId                OnDeleteCascade
 
   Reserve
-    addrId              StakeAddressId      OnDeleteCascade
+    addrId              StakeAddressId      noreference
     certIndex           Word16
     amount              DbInt65             sqltype=int65type
     txId                TxId                OnDeleteCascade
@@ -356,18 +351,15 @@ share
     UniqueMultiAsset    policy name
 
   MaTxMint
-    ident               MultiAssetId        OnDeleteCascade
+    ident               MultiAssetId        noreference
     quantity            DbInt65             sqltype=int65type
     txId                TxId                OnDeleteCascade
 
   MaTxOut
-    ident               MultiAssetId        OnDeleteCascade
+    ident               MultiAssetId        noreference
     quantity            DbWord64            sqltype=word64type
     txOutId             TxOutId             OnDeleteCascade
 
-  -- -----------------------------------------------------------------------------------------------
-  -- Scripts related tables.
-  --
   -- Unit step is in picosends, and `maxBound :: Int64` picoseconds is over 100 days, so using
   -- Word64/word63type is safe here. Similarly, `maxBound :: Int64` if unit step would be an
   -- *enormous* amount a memory which would cost a fortune.
@@ -379,7 +371,7 @@ share
     purpose             ScriptPurpose       sqltype=scriptpurposetype
     index               Word64              sqltype=word31type
     scriptHash          ByteString Maybe    sqltype=hash28type
-    redeemerDataId      RedeemerDataId      OnDeleteCascade
+    redeemerDataId      RedeemerDataId      noreference
 
   Script
     txId                TxId                OnDeleteCascade
@@ -408,9 +400,6 @@ share
     hash                ByteString          sqltype=hash28type
     txId                TxId                OnDeleteCascade
 
-  -- -----------------------------------------------------------------------------------------------
-  -- Update parameter proposals.
-
   ParamProposal
     epochNo             Word64              sqltype=word31type
     key                 ByteString          sqltype=hash28type
@@ -434,7 +423,7 @@ share
     minPoolCost         DbLovelace Maybe    sqltype=lovelace
 
     coinsPerUtxoSize    DbLovelace Maybe    sqltype=lovelace
-    costModelId         CostModelId Maybe   OnDeleteCascade
+    costModelId         CostModelId Maybe   noreference
     priceMem            Double Maybe        -- sqltype=rational
     priceStep           Double Maybe        -- sqltype=rational
     maxTxExMem          DbWord64 Maybe      sqltype=word64type
@@ -445,7 +434,7 @@ share
     collateralPercent   Word16 Maybe        sqltype=word31type
     maxCollateralInputs Word16 Maybe        sqltype=word31type
 
-    registeredTxId      TxId                OnDeleteCascade    -- Slot number in which update registered.
+    registeredTxId      TxId                OnDeleteCascade
 
   EpochParam
     epochNo             Word64              sqltype=word31type
@@ -471,7 +460,7 @@ share
     nonce               ByteString Maybe    sqltype=hash32type
 
     coinsPerUtxoSize    DbLovelace Maybe    sqltype=lovelace
-    costModelId         CostModelId Maybe   OnDeleteCascade
+    costModelId         CostModelId Maybe   noreference
     priceMem            Double Maybe        -- sqltype=rational
     priceStep           Double Maybe        -- sqltype=rational
     maxTxExMem          DbWord64 Maybe      sqltype=word64type
