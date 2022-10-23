@@ -15,6 +15,11 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
+-- This allows us to ignore name shadow warnings in the TH generated code.
+-- For some reason these warnings only occur when this package is used as a
+-- `source-reposository-package` in a `cabal.project` file.
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
+
 module Cardano.Db.Schema where
 
 import           Cardano.Db.Schema.Orphans ()
