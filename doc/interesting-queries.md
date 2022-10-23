@@ -362,7 +362,7 @@ from the treasury. These can be coalesced into single query via an SQL `union` o
 ```sql
 select addr_id, amount, NULL as reward_epoch_no, tx_id as treasury_tx_id from treasury
     union
-    select addr_id, amount, epoch as reward_epoch_no, NULL as treasury_tx_id from reward ;
+    select addr_id, amount, earned_epoch as reward_epoch_no, NULL as treasury_tx_id from reward ;
  addr_id |    amount     | reward_epoch_no | treasury_tx_id
 ---------+---------------+-----------------+----------------
        3 |       1071786 |             216 |
