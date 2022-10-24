@@ -48,6 +48,7 @@ share
   [ mkPersist sqlSettings
   , mkMigrate "migrateCardanoDb"
   , mkEntityDefList "entityDefs"
+--  , mkDeleteCascade sqlSettings
   , deriveShowFields
   ]
   [persistLowerCase|
