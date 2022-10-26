@@ -36,7 +36,6 @@ import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, modifyTVar, ne
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Data.Either.Combinators
 import qualified Data.Map.Strict as Map
-import qualified Data.Set as Set
 
 import qualified Cardano.Ledger.Address as Ledger
 import           Cardano.Ledger.BaseTypes (Network)
@@ -188,38 +187,19 @@ newEmptyCache maCapacity =
 -- of an entry or even a wrong entry id, if the entry is reinserted on a different
 -- id after the rollback.
 --
--- IMPORTANT NOTE: we rely here on the fact that 'MultiAsset' and 'PoolHash'
+-- IMPORTANT NOTE: we rely here on the fact that 'MultiAsset', 'StakeAddress' and 'PoolHash'
 -- tables don't have an ON DELETE reference and as a result are not cleaned up in
 -- case of a rollback. If this changes in the future, it is necessary that their
 -- cached values are also cleaned up.
 --
 -- NOTE: BlockId is cleaned up on rollbacks, since it may get reinserted on
 -- a different id.
--- NOTE: For 'StakeAddresses' we use a mixed approach. If the rollback is long we just drop
--- everything, since it is very rare. If not, we query all the StakeAddressesId of blocks
--- that wil be deleted.
-rollbackCache :: MonadIO m => Cache -> Maybe Word64 -> Bool -> Word64 -> ReaderT SqlBackend m ()
-rollbackCache UninitiatedCache _ _ _ = pure ()
-rollbackCache (Cache cache) mBlockNo deleteEq nBlocks = do
+-- NOTE: Other tables are not cleaned up since they are not rollbacked.
+rollbackCache :: MonadIO m => Cache -> ReaderT SqlBackend m ()
+rollbackCache UninitiatedCache = pure ()
+rollbackCache (Cache cache) = do
   liftIO $ do
-    atomically $ writeTVar (cPools cache) Map.empty
-    atomically $ modifyTVar (cMultiAssets cache) LRU.cleanup
     atomically $ writeTVar (cPrevBlock cache) Nothing
-  rollbackStakeAddr cache mBlockNo deleteEq nBlocks
-
-rollbackStakeAddr :: MonadIO m => CacheInternal -> Maybe Word64 -> Bool -> Word64 -> ReaderT SqlBackend m ()
-rollbackStakeAddr ci mBlockNo deleteEq nBlocks = do
-  case mBlockNo of
-    Nothing -> liftIO $ atomically $ writeTVar (cStakeCreds ci) Map.empty
-    Just blockNo ->
-      if nBlocks > 600
-        then liftIO $ atomically $ writeTVar (cStakeCreds ci) Map.empty
-        else do
-          initMp <- liftIO $ readTVarIO (cStakeCreds ci)
-          stakeAddrIdsToDelete <- DB.queryStakeAddressIdsAfter blockNo deleteEq
-          let stakeAddrIdsSetToDelete = Set.fromList stakeAddrIdsToDelete
-          let !mp = Map.filter (`Set.notMember` stakeAddrIdsSetToDelete) initMp
-          liftIO $ atomically $ writeTVar (cStakeCreds ci) mp
 
 queryRewardAccountWithCache
     :: forall m. MonadIO m => Cache -> CacheNew -> Ledger.RewardAcnt StandardCrypto

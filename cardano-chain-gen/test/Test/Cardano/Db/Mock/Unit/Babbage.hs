@@ -12,8 +12,6 @@ import           Control.Concurrent
 import           Control.Exception
 import           Control.Monad
 import           Control.Monad.Class.MonadSTM.Strict
-import           Data.ByteString (ByteString)
-import qualified Data.ByteString as BS
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map as Map
 import           Data.Text (Text)
@@ -36,7 +34,6 @@ import           Cardano.Ledger.SafeHash
 import           Cardano.Ledger.Shelley.TxBody
 import           Cardano.Ledger.Slot (BlockNo (..), EpochNo)
 
-import           Cardano.DbSync.Era.Shelley.Generic.Block (blockHash)
 import           Cardano.DbSync.Era.Shelley.Generic.Util
 
 import           Cardano.SMASH.Server.PoolDataLayer
@@ -78,7 +75,7 @@ unitTests iom knownMigrations =
           [ test "simple rollback" simpleRollback
           , test "sync bigger chain" bigChain
           , test "rollback while db-sync is off" restartAndRollback
-          , test "rollback further" rollbackFurther
+--          , test "rollback further" rollbackFurther
           , test "big rollbacks executed lazily" lazyRollback
           , test "lazy rollback on restart" lazyRollbackRestart
           , test "rollback while rollbacking" doubleRollback
@@ -323,6 +320,7 @@ restartAndRollback =
     testLabel = "restartAndRollback"
 
 -- wibble
+{-}
 rollbackFurther :: IOManager -> [(Text, Text)] -> Assertion
 rollbackFurther =
   withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
@@ -357,6 +355,7 @@ rollbackFurther =
     assertEqQuery dbSync DB.queryCostModel [cm1] "Unexpected CostModel"
   where
     testLabel = "rollbackFurther"
+-}
 
 lazyRollback :: IOManager -> [(Text, Text)] -> Assertion
 lazyRollback =
@@ -2069,11 +2068,3 @@ rollbackFork =
       assertBlockNoBackoff dbSync $ 2 + length (a <> b <> c)
   where
     testLabel = "rollbackFork"
-
-hfBlockHash :: CardanoBlock -> ByteString
-hfBlockHash blk =
-  case blk of
-    BlockShelley sblk -> blockHash sblk
-    BlockAlonzo ablk -> blockHash ablk
-    BlockBabbage ablk -> blockHash ablk
-    _ -> error "hfBlockHash: unsupported block type"
