@@ -103,7 +103,7 @@ import           Cardano.Db.Schema
 -- and `insertChecked` for tables where the uniqueness constraint might hit.
 
 insertAdaPots :: (MonadBaseControl IO m, MonadIO m) => AdaPots -> ReaderT SqlBackend m AdaPotsId
-insertAdaPots = insertCheckUnique "AdaPots"
+insertAdaPots = insertUnchecked "AdaPots"
 
 insertBlock :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
 insertBlock = insertUnchecked "Block"
@@ -136,7 +136,7 @@ insertManyRewards :: (MonadBaseControl IO m, MonadIO m) => [Reward] -> ReaderT S
 insertManyRewards = insertManyUncheckedUnique "Many Rewards"
 
 insertManyTxIn :: (MonadBaseControl IO m, MonadIO m) => [TxIn] -> ReaderT SqlBackend m ()
-insertManyTxIn = insertManyUncheckedUnique "Many TxIn"
+insertManyTxIn = void . insertMany' "Many TxIn"
 
 insertMaTxMint :: (MonadBaseControl IO m, MonadIO m) => MaTxMint -> ReaderT SqlBackend m MaTxMintId
 insertMaTxMint = insertUnchecked "insertMaTxMint"

@@ -41,7 +41,7 @@ rollbackFromBlockNo env blkNo = do
           , " or equal to "
           , textShow blkNo
           ]
-      lift $ rollbackCache cache (Just $ unBlockNo blkNo) True (fromIntegral nBlocks)
+      lift $ rollbackCache cache
       deleted <- lift $ DB.deleteCascadeAfter blockId True
       liftIO . logInfo trce $
                 if deleted
@@ -95,7 +95,7 @@ rollbackToPoint env point serverTip = do
           -- is good enough, since it is only used to decide on the best policy and is not
           -- important for correctness.
           -- We need to first cleanup the cache and then delete the blocks from db.
-          lift $ rollbackCache cache mBlockNo False (fromIntegral nBlocks)
+          lift $ rollbackCache cache
           deleted <- lift $ DB.deleteCascadeAfter prevId False
           liftIO . logInfo trce $
                     if deleted
