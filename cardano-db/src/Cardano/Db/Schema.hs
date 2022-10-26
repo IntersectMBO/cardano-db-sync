@@ -122,7 +122,6 @@ share
     hashRaw             ByteString          sqltype=addr29type
     view                Text
     scriptHash          ByteString Maybe    sqltype=hash28type
-    txId                TxId                OnDeleteCascade     -- Only used for rollback.
     UniqueStakeAddress  hashRaw
 
   TxOut
@@ -291,12 +290,12 @@ share
   -- epoch in which the reward was earned.
   -- This table should never get rolled back.
   Reward
-    addrId              StakeAddressId      OnDeleteCascade
+    addrId              StakeAddressId      noreference
     type                RewardSource        sqltype=rewardtype
     amount              DbLovelace          sqltype=lovelace
     earnedEpoch         Word64
     spendableEpoch      Word64
-    poolId              PoolHashId Maybe    OnDeleteCascade
+    poolId              PoolHashId Maybe    noreference
     -- Usually NULLables are not allowed in a uniqueness constraint. The semantics of how NULL
     -- interacts with those constraints is non-trivial:  two NULL values are not considered equal
     -- for the purposes of an uniqueness constraint.
@@ -312,8 +311,8 @@ share
 
   -- This table should never get rolled back.
   EpochStake
-    addrId              StakeAddressId      OnDeleteCascade
-    poolId              PoolHashId          OnDeleteCascade
+    addrId              StakeAddressId      noreference
+    poolId              PoolHashId          noreference
     amount              DbLovelace          sqltype=lovelace
     epochNo             Word64              sqltype=word31type
     UniqueStake         epochNo addrId poolId
@@ -484,7 +483,7 @@ share
   -- Pool offline (ie not on the blockchain) data.
 
   PoolOfflineData
-    poolId              PoolHashId          OnDeleteCascade
+    poolId              PoolHashId          noreference
     tickerName          Text
     hash                ByteString          sqltype=hash32type
     json                Text                sqltype=jsonb
@@ -497,7 +496,7 @@ share
   -- TODO(KS): Debatable whether we need to persist this between migrations!
 
   PoolOfflineFetchError
-    poolId              PoolHashId          OnDeleteCascade
+    poolId              PoolHashId          noreference
     fetchTime           UTCTime             sqltype=timestamp
     pmrId               PoolMetadataRefId   OnDeleteCascade
     fetchError          Text
@@ -579,13 +578,10 @@ schemaDocs =
 
     StakeAddress --^ do
       "A table of unique stake addresses. Can be an actual address or a script hash. \
-        \ The existance of an entry doesn't mean the address is registered or in fact that is was ever registered.\
-        \ For example a pool update may contain a stake address which was never registered."
+        \ The existance of an entry doesn't mean the address is registered or in fact that is was ever registered."
       StakeAddressHashRaw # "The raw bytes of the stake address hash."
       StakeAddressView # "The Bech32 encoded version of the stake address."
       StakeAddressScriptHash # "The script hash, in case this address is locked by a script."
-      StakeAddressTxId # "The Tx table index of the transaction in which this address first appeared.\
-        \ New in v13: Renamed from registered_tx_id."
 
     TxOut --^ do
       "A table for transaction outputs."

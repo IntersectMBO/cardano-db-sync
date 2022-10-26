@@ -49,7 +49,6 @@ module Cardano.Db.Query
   , queryTxOutValue
   , queryTxOutCredentials
   , queryEpochStakeCount
-  , queryStakeAddressIdsAfter
   , existsPoolHashId
   , existsPoolMetadataRefId
 
@@ -605,21 +604,6 @@ queryEpochStakeCount epoch = do
     where_ (epochStake ^. EpochStakeEpochNo ==. val epoch)
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
-
-queryStakeAddressIdsAfter :: MonadIO m => Word64 -> Bool -> ReaderT SqlBackend m [StakeAddressId]
-queryStakeAddressIdsAfter blockNo queryEq = do
-    res <- select $ do
-      (_tx :& blk :& st_addr) <-
-        from $ table @Tx
-        `innerJoin` table @Block
-        `on` (\(tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
-        `innerJoin` table @StakeAddress
-        `on` (\(tx :& _blk :& st_addr) -> tx ^. TxId  ==. st_addr ^. StakeAddressTxId)
-      where_ (isJust $ blk ^. BlockBlockNo)
-      where_ (if queryEq then blk ^. BlockBlockNo >=. val (Just blockNo)
-                         else blk ^. BlockBlockNo >.  val (Just blockNo))
-      pure (st_addr ^. StakeAddressId)
-    pure $ unValue <$> res
 
 existsPoolHashId :: MonadIO m => PoolHashId -> ReaderT SqlBackend m Bool
 existsPoolHashId phid = do
