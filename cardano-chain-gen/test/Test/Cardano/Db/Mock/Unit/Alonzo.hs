@@ -10,7 +10,6 @@ import qualified Cardano.Crypto.Hash as Crypto
 
 import qualified Cardano.Db as DB
 
-import           Cardano.DbSync.Era.Shelley.Generic.Block (blockHash)
 import           Cardano.DbSync.Era.Shelley.Generic.Util
 
 import           Cardano.Ledger.Alonzo.Data
@@ -37,8 +36,6 @@ import           Cardano.SMASH.Server.Types
 import           Control.Monad
 import           Control.Monad.Class.MonadSTM.Strict
 
-import           Data.ByteString (ByteString)
-import qualified Data.ByteString as BS
 import qualified Data.Map as Map
 import           Data.Text (Text)
 
@@ -69,7 +66,7 @@ unitTests iom knownMigrations =
           [ test "simple rollback" simpleRollback
           , test "sync bigger chain" bigChain
           , test "rollback while db-sync is off" restartAndRollback
-          , test "rollback further" rollbackFurther
+--          , test "rollback further" rollbackFurther
           ]
       , testGroup "blocks with txs"
           [ test "simple tx" addSimpleTx
@@ -253,6 +250,7 @@ restartAndRollback =
     testLabel = "restartAndRollback-alonzo"
 
 -- wibble
+{-}
 rollbackFurther :: IOManager -> [(Text, Text)] -> Assertion
 rollbackFurther =
   withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
@@ -287,6 +285,7 @@ rollbackFurther =
     assertEqQuery dbSync DB.queryCostModel [cm1] "Unexpected CostModel"
   where
     testLabel = "rollbackFurther-alonzo"
+-}
 
 addSimpleTx :: IOManager -> [(Text, Text)] -> Assertion
 addSimpleTx =
@@ -1479,11 +1478,3 @@ poolDelist =
       assertPoolLayerCounters dbSync (1,1) [(PoolIndexNew 0, (Right True, True, False))] st
   where
     testLabel = "poolDelist-alonzo"
-
-
-hfBlockHash :: CardanoBlock -> ByteString
-hfBlockHash blk =
-  case blk of
-    BlockShelley sblk -> blockHash sblk
-    BlockAlonzo ablk -> blockHash ablk
-    _ -> error "hfBlockHash: unsupported block type"
