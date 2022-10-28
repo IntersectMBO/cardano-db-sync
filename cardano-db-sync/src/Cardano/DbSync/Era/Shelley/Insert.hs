@@ -497,13 +497,12 @@ insertStakeAddress
     :: (MonadBaseControl IO m, MonadIO m)
     => DB.TxId -> Shelley.RewardAcnt StandardCrypto -> Maybe ByteString
     -> ReaderT SqlBackend m DB.StakeAddressId
-insertStakeAddress txId rewardAddr stakeCredBs =
+insertStakeAddress _txId rewardAddr stakeCredBs =
     DB.insertStakeAddress $
       DB.StakeAddress
         { DB.stakeAddressHashRaw = addrBs
         , DB.stakeAddressView = Generic.renderRewardAcnt rewardAddr
         , DB.stakeAddressScriptHash = Generic.getCredentialScriptHash $ Ledger.getRwdCred rewardAddr
-        , DB.stakeAddressTxId = txId
         }
   where
     addrBs = fromMaybe (Ledger.serialiseRewardAcnt rewardAddr) stakeCredBs
@@ -844,12 +843,11 @@ insertCostModel
     :: (MonadBaseControl IO m, MonadIO m)
     => DB.BlockId -> Map Language Ledger.CostModel
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.CostModelId
-insertCostModel blkId cms =
+insertCostModel _blkId cms =
     lift . DB.insertCostModel $
       DB.CostModel
         { DB.costModelHash = Crypto.abstractHashToBytes $ Crypto.serializeCborHash cms
         , DB.costModelCosts = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode cms
-        , DB.costModelBlockId = blkId
         }
 
 insertEpochParam

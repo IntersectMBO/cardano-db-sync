@@ -158,7 +158,6 @@ share
     txOutId             TxId                noreference         -- The transaction where this was created as an output.
     txOutIndex          Word64              sqltype=txindex
     redeemerId          RedeemerId Maybe    noreference
-    UniqueTxin          txOutId txOutIndex
 
   CollateralTxIn
     txInId              TxId                OnDeleteCascade     -- The transaction where this is used as an input.
@@ -212,7 +211,6 @@ share
     deposits            DbLovelace          sqltype=lovelace
     fees                DbLovelace          sqltype=lovelace
     blockId             BlockId             OnDeleteCascade
-    UniqueAdaPots       blockId
     deriving Eq
 
   PoolMetadataRef
@@ -476,7 +474,6 @@ share
   CostModel
     hash                ByteString          sqltype=hash32type
     costs               Text                sqltype=jsonb
-    blockId             BlockId             OnDeleteCascade
     UniqueCostModel     hash
 
   -- -----------------------------------------------------------------------------------------------
@@ -926,7 +923,6 @@ schemaDocs =
       "CostModel for EpochParam and ParamProposal."
       CostModelHash # "The hash of cost model. It ensures uniqueness of entries. New in v13."
       CostModelCosts # "The actual costs formatted as json."
-      CostModelBlockId # "The first block where these costs were introduced. This is only used for rollbacks."
 
     PoolOfflineData --^ do
       "The pool offline (ie not on chain) for a stake pool."
