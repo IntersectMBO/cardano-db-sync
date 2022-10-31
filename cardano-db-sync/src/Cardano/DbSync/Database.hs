@@ -27,6 +27,7 @@ import           Cardano.DbSync.Default
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.LedgerState
 import           Cardano.DbSync.Metrics
+import           Cardano.DbSync.Rollback
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
@@ -87,7 +88,7 @@ runActions env actions = do
         ([], DbFinish:_) -> do
             pure Done
         ([], DbRollBackToPoint chainSyncPoint serverTip resultVar : ys) -> do
-            deletedAllBlocks <- newExceptT $ rollbackToPoint env chainSyncPoint serverTip
+            deletedAllBlocks <- newExceptT $ prepareRollback env chainSyncPoint serverTip
             points <- if hasLedgerState env
               then lift $ rollbackLedger env chainSyncPoint
               else pure Nothing
