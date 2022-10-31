@@ -5,7 +5,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Cardano.DbSync.Default
   ( insertListBlocks
-  , rollbackToPoint
   ) where
 
 
