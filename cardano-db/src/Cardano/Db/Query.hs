@@ -11,7 +11,7 @@ module Cardano.Db.Query
   -- queries used by db-sync
   , queryBlockCount
   , queryBlockCountAfterBlockNo
-  , queryBlockNoId
+  , queryBlockHashBlockNo
   , queryBlockNo
   , queryBlockTxCount
   , queryBlockId
@@ -28,9 +28,7 @@ module Cardano.Db.Query
   , queryLatestBlockId
   , queryLatestSlotNo
   , queryMeta
-  , queryLastSlotNoGreaterThan
   , queryCountSlotNosGreaterThan
-  , queryLastSlotNo
   , queryCountSlotNo
   , queryScript
   , queryDatum
@@ -182,14 +180,14 @@ queryBlockCountAfterBlockNo blockNo queryEq = do
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
--- | Get the 'BlockId' associated with the given hash.
-queryBlockNoId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail (BlockId, Maybe Word64))
-queryBlockNoId hash = do
+-- | Get the 'BlockNo' associated with the given hash.
+queryBlockHashBlockNo :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail (Maybe Word64))
+queryBlockHashBlockNo hash = do
   res <- select $ do
     blk <- from $ table @Block
     where_ (blk ^. BlockHash ==. val hash)
-    pure (blk ^. BlockId, blk ^. BlockBlockNo)
-  pure $ maybeToEither (DbLookupBlockHash hash) unValue2 (listToMaybe res)
+    pure $ blk ^. BlockBlockNo
+  pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
 
 -- | Get the 'SlotNo' associated with the given hash.
 queryBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe BlockId)
@@ -508,19 +506,6 @@ queryMultiAssetId policy assetName = do
     pure (ma ^. MultiAssetId)
   pure $ unValue <$> listToMaybe res
 
-queryLastSlotNoGreaterThan :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe SlotNo)
-queryLastSlotNoGreaterThan slotNo = do
-  res <- select $ do
-    blk <- from $ table @Block
-    -- Want all BlockNos where the block satisfies this predicate.
-    where_ (blk ^. BlockSlotNo >. just (val slotNo))
-    -- Return them in descending order so we can delete the highest numbered
-    -- ones first.
-    orderBy [desc (blk ^. BlockSlotNo)]
-    limit 1
-    pure (blk ^. BlockSlotNo)
-  pure $ listToMaybe $ mapMaybe (fmap SlotNo . unValue) res
-
 queryCountSlotNosGreaterThan :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
 queryCountSlotNosGreaterThan slotNo = do
   res <- select $ do
@@ -528,16 +513,6 @@ queryCountSlotNosGreaterThan slotNo = do
     where_ (blk ^. BlockSlotNo >. just (val slotNo))
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
-
--- | Like 'queryLastSlotNoGreaterThan', but returns all slots in the same order.
-queryLastSlotNo :: MonadIO m => ReaderT SqlBackend m (Maybe SlotNo)
-queryLastSlotNo = do
-  res <- select $ do
-    blk <- from $ table @Block
-    orderBy [desc (blk ^. BlockSlotNo)]
-    limit 1
-    pure (blk ^. BlockSlotNo)
-  pure $ listToMaybe $ mapMaybe (fmap SlotNo . unValue) res
 
 -- | Like 'queryCountSlotNosGreaterThan', but returns all slots in the same order.
 queryCountSlotNo :: MonadIO m => ReaderT SqlBackend m Word64
