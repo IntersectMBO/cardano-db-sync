@@ -75,7 +75,7 @@ unitTests iom knownMigrations =
           [ test "simple rollback" simpleRollback
           , test "sync bigger chain" bigChain
           , test "rollback while db-sync is off" restartAndRollback
---          , test "rollback further" rollbackFurther
+--          , test "rollback further" rollbackFurther disabled
           , test "big rollbacks executed lazily" lazyRollback
           , test "lazy rollback on restart" lazyRollbackRestart
           , test "rollback while rollbacking" doubleRollback
@@ -104,7 +104,7 @@ unitTests iom knownMigrations =
           , test "rewards with deregistration" rewardsDeregistration
           , test "rewards with reregistration. Fixed in Babbage." rewardsReregistration
           , test "Mir Cert" mirReward
-          , test "Mir rollback" mirRewardRollback
+--          , test "Mir rollback" mirRewardRollback
           , test "Mir Cert Shelley" mirRewardShelley
           , test "Mir Cert deregistration" mirRewardDereg
           , test "test rewards empty last part of epoch" rewardsEmptyChainLast
@@ -277,7 +277,7 @@ simpleRollback = do
       assertBlockNoBackoff dbSync 3
 
       atomically $ rollback mockServer (blockPoint blk1)
-      assertBlockNoBackoff dbSync 2
+      assertBlockNoBackoff dbSync 3 -- rollbacks effects are now delayed
   where
     testLabel = "simpleRollback"
 
@@ -295,7 +295,7 @@ bigChain =
       assertBlockNoBackoff dbSync 206
 
       atomically $ rollback mockServer (blockPoint $ last blks')
-      assertBlockNoBackoff dbSync 201
+      assertBlockNoBackoff dbSync 206
   where
     testLabel = "bigChain"
 
@@ -315,7 +315,7 @@ restartAndRollback =
       stopDBSync dbSync
       atomically $ rollback mockServer (blockPoint $ last blks)
       startDBSync dbSync
-      assertBlockNoBackoff dbSync 201
+      assertBlockNoBackoff dbSync 206
   where
     testLabel = "restartAndRollback"
 
@@ -334,11 +334,13 @@ rollbackFurther =
     -- because a checkpoint was found.
     let blockHash1 = hfBlockHash (blks !! 33)
     Right bid1 <- queryDBSync dbSync $ DB.queryBlockId blockHash1
-    cm1 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel (BS.pack $ replicate 32 1) "{\"1\" : 1}" bid1
+    cm1 <- queryDBSync dbSync $ DB.insertAdaPots $
+      DB.AdaPots 0 1 (DB.DbLovelace 0) (DB.DbLovelace 0) (DB.DbLovelace 0) (DB.DbLovelace 0) (DB.DbLovelace 0) (DB.DbLovelace 0) bid1
 
     let blockHash2 = hfBlockHash (blks !! 34)
     Right bid2 <- queryDBSync dbSync $ DB.queryBlockId blockHash2
-    cm2 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel (BS.pack $ replicate 32 2) "{\"2\" : 2}" bid2
+    cm2 <- queryDBSync dbSync $ DB.insertAdaPots $
+      DB.AdaPots 0 1 (DB.DbLovelace 0) (DB.DbLovelace 0) (DB.DbLovelace 0) (DB.DbLovelace 0) (DB.DbLovelace 0) (DB.DbLovelace 0) bid2
 
     -- Note that there is no epoch change, which would add a new entry, since we have
     -- 80 blocks and not 100, which is the expected blocks/epoch. This also means there
@@ -422,7 +424,7 @@ stakeAddressRollback =
   withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
     startDBSync  dbSync
     blk <- forgeNextFindLeaderAndSubmit interpreter mockServer []
-    blk' <- withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
+    void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
       let poolId = resolvePool (PoolIndex 0) st
       tx1 <- Babbage.mkSimpleDCertTx
               [ (StakeIndexNew 1, DCertDeleg . RegKey)
@@ -430,9 +432,10 @@ stakeAddressRollback =
               st
       Right [tx1]
     assertBlockNoBackoff dbSync 2
-    atomically $ rollback mockServer (blockPoint blk)
-    assertBlockNoBackoff dbSync 1
-    atomically $ addBlock mockServer blk'
+    rollbackTo interpreter mockServer (blockPoint blk)
+    void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
+      Babbage.mkDummyRegisterTx 1 2
+    assertBlockNoBackoff dbSync 2
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
     assertBlockNoBackoff dbSync 3
   where
@@ -885,8 +888,8 @@ mirReward =
   where
     testLabel = "mirReward"
 
-mirRewardRollback :: IOManager -> [(Text, Text)] -> Assertion
-mirRewardRollback =
+_mirRewardRollback :: IOManager -> [(Text, Text)] -> Assertion
+_mirRewardRollback =
     withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       void $ registerAllStakeCreds interpreter mockServer
@@ -911,17 +914,17 @@ mirRewardRollback =
       assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c <> d))
       assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,0,0,1,0))]
 
-      atomically $ rollback mockServer (blockPoint $ last c)
-      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c))
-      assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,0,0,1,0))]
+      rollbackTo interpreter mockServer (blockPoint $ last c)
+      void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
+        Babbage.mkDummyRegisterTx 1 1
+      d' <- fillUntilNextEpoch interpreter mockServer
       stopDBSync dbSync
       startDBSync dbSync
-      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c))
+      assertBlockNoBackoff dbSync (fromIntegral $ 5 + length (a <> b <> c <> d'))
       assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,0,0,1,0))]
 
-      forM_ d $ atomically . addBlock mockServer
       e <- fillEpochPercentage interpreter mockServer 5
-      assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c <> d <> e))
+      assertBlockNoBackoff dbSync (fromIntegral $ 5 + length (a <> b <> c <> d' <> e))
       assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0,0,0,1,0))]
   where
     testLabel = "mirRewardRollback"
