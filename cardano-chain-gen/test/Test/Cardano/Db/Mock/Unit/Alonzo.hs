@@ -10,7 +10,6 @@ import qualified Cardano.Crypto.Hash as Crypto
 
 import qualified Cardano.Db as DB
 
-import           Cardano.DbSync.Era.Shelley.Generic.Block (blockHash)
 import           Cardano.DbSync.Era.Shelley.Generic.Util
 
 import           Cardano.Ledger.Alonzo.Data
@@ -36,8 +35,6 @@ import           Cardano.SMASH.Server.Types
 import           Control.Monad
 import           Control.Monad.Class.MonadSTM.Strict
 
-import           Data.ByteString (ByteString)
-import qualified Data.ByteString as BS
 import qualified Data.Map as Map
 import           Data.Text (Text)
 
@@ -63,12 +60,6 @@ unitTests iom knownMigrations =
           , test "sync one block" addSimple
           , test "restart db-sync" restartDBSync
           , test "sync small chain" addSimpleChain
-          ]
-      , testGroup "rollbacks"
-          [ test "simple rollback" simpleRollback
-          , test "sync bigger chain" bigChain
-          , test "rollback while db-sync is off" restartAndRollback
-          , test "rollback further" rollbackFurther
           ]
       , testGroup "blocks with txs"
           [ test "simple tx" addSimpleTx
@@ -195,97 +186,6 @@ restartDBSync =
       assertBlockNoBackoff dbSync 1
   where
     testLabel = "restartDBSync-alonzo"
-
-simpleRollback :: IOManager -> [(Text, Text)] -> Assertion
-simpleRollback = do
-    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
-      blk0 <- forgeNext interpreter mockBlock0
-      blk1 <- forgeNext interpreter mockBlock1
-      blk2 <- forgeNext interpreter mockBlock2
-      atomically $ addBlock mockServer blk0
-      startDBSync dbSync
-      atomically $ addBlock mockServer blk1
-      atomically $ addBlock mockServer blk2
-      assertBlockNoBackoff dbSync 3
-
-      atomically $ rollback mockServer (blockPoint blk1)
-      assertBlockNoBackoff dbSync 2
-  where
-    testLabel = "simpleRollback-alonzo"
-
-bigChain :: IOManager -> [(Text, Text)] -> Assertion
-bigChain =
-    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
-      replicateM_ 101 (forgeNextFindLeaderAndSubmit interpreter mockServer [])
-      startDBSync dbSync
-      assertBlockNoBackoff dbSync 101
-
-      blks' <- replicateM 100 (forgeNextFindLeaderAndSubmit interpreter mockServer [])
-      assertBlockNoBackoff dbSync 201
-
-      replicateM_ 5 (forgeNextFindLeaderAndSubmit interpreter mockServer [])
-      assertBlockNoBackoff dbSync 206
-
-      atomically $ rollback mockServer (blockPoint $ last blks')
-      assertBlockNoBackoff dbSync 201
-  where
-    testLabel = "bigChain-alonzo"
-
-restartAndRollback :: IOManager -> [(Text, Text)] -> Assertion
-restartAndRollback =
-    withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
-      forM_ (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
-      startDBSync dbSync
-      assertBlockNoBackoff dbSync 101
-
-      blks <- forM (replicate 100 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
-      assertBlockNoBackoff dbSync 201
-
-      forM_ (replicate 5 mockBlock2) (forgeNextAndSubmit interpreter mockServer)
-      assertBlockNoBackoff dbSync 206
-
-      stopDBSync dbSync
-      atomically $ rollback mockServer (blockPoint $ last blks)
-      startDBSync dbSync
-      assertBlockNoBackoff dbSync 201
-  where
-    testLabel = "restartAndRollback-alonzo"
-
--- wibble
-rollbackFurther :: IOManager -> [(Text, Text)] -> Assertion
-rollbackFurther =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
-    blks <- replicateM 80 (forgeNextFindLeaderAndSubmit interpreter mockServer [])
-    startDBSync dbSync
-    assertBlockNoBackoff dbSync 80
-
-    -- We want to test that db-sync rollbacks temporarily to block 34
-    -- and then syncs further. We add references to blocks 34 and 35, to
-    -- validate later that one is deleted through cascade, but the other was not
-    -- because a checkpoint was found.
-    let blockHash1 = hfBlockHash (blks !! 33)
-    Right bid1 <- queryDBSync dbSync $ DB.queryBlockId blockHash1
-    cm1 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel (BS.pack $ replicate 32 1) "{\"1\" : 1}" bid1
-
-    let blockHash2 = hfBlockHash (blks !! 34)
-    Right bid2 <- queryDBSync dbSync $ DB.queryBlockId blockHash2
-    cm2 <- queryDBSync dbSync $ DB.insertCostModel $ DB.CostModel (BS.pack $ replicate 32 2) "{\"2\" : 2}" bid2
-
-    -- Note that there is no epoch change, which would add a new entry, since we have
-    -- 80 blocks and not 100, which is the expected blocks/epoch. This also means there
-    -- no epoch snapshots
-    assertEqQuery dbSync DB.queryCostModel [cm1, cm2] "Unexpected CostModels"
-
-    -- server tells db-sync to rollback to point 50. However db-sync only has
-    -- a snapshot at block 34, so it will go there first. There is no proper way
-    -- to test that db-sync temporarily is there, that's why we have this trick
-    -- with references.
-    atomically $ rollback mockServer (blockPoint $ blks !! 50)
-    assertBlockNoBackoff dbSync 51
-
-    assertEqQuery dbSync DB.queryCostModel [cm1] "Unexpected CostModel"
-  where
-    testLabel = "rollbackFurther-alonzo"
 
 addSimpleTx :: IOManager -> [(Text, Text)] -> Assertion
 addSimpleTx =
@@ -1478,11 +1378,3 @@ poolDelist =
       assertPoolLayerCounters dbSync (1,1) [(PoolIndexNew 0, (Right True, True, False))] st
   where
     testLabel = "poolDelist-alonzo"
-
-
-hfBlockHash :: CardanoBlock -> ByteString
-hfBlockHash blk =
-  case blk of
-    BlockShelley sblk -> blockHash sblk
-    BlockAlonzo ablk -> blockHash ablk
-    _ -> error "hfBlockHash: unsupported block type"
