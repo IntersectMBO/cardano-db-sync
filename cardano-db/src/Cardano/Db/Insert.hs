@@ -21,7 +21,6 @@ module Cardano.Db.Insert
   , insertMaTxMint
   , insertManyMaTxOut
   , insertMeta
-  , insertMultiAsset
   , insertMultiAssetUnchecked
   , insertParamProposal
   , insertPotTransfer
@@ -49,6 +48,7 @@ module Cardano.Db.Insert
   , insertCostModel
   , insertDatum
   , insertRedeemerData
+  , insertReverseIndex
   , insertCheckPoolOfflineData
   , insertCheckPoolOfflineFetchError
   , insertReservedPoolTicker
@@ -135,20 +135,17 @@ insertManyEpochStakes = insertManyUncheckedUnique "Many EpochStake"
 insertManyRewards :: (MonadBaseControl IO m, MonadIO m) => [Reward] -> ReaderT SqlBackend m ()
 insertManyRewards = insertManyUncheckedUnique "Many Rewards"
 
-insertManyTxIn :: (MonadBaseControl IO m, MonadIO m) => [TxIn] -> ReaderT SqlBackend m ()
-insertManyTxIn = void . insertMany' "Many TxIn"
+insertManyTxIn :: (MonadBaseControl IO m, MonadIO m) => [TxIn] -> ReaderT SqlBackend m [TxInId]
+insertManyTxIn = insertMany' "Many TxIn"
 
 insertMaTxMint :: (MonadBaseControl IO m, MonadIO m) => MaTxMint -> ReaderT SqlBackend m MaTxMintId
 insertMaTxMint = insertUnchecked "insertMaTxMint"
 
-insertManyMaTxOut :: (MonadBaseControl IO m, MonadIO m) => [MaTxOut] -> ReaderT SqlBackend m ()
-insertManyMaTxOut = void . insertMany' "Many MaTxOut"
+insertManyMaTxOut :: (MonadBaseControl IO m, MonadIO m) => [MaTxOut] -> ReaderT SqlBackend m [MaTxOutId]
+insertManyMaTxOut = insertMany' "Many MaTxOut"
 
 insertMeta :: (MonadBaseControl IO m, MonadIO m) => Meta -> ReaderT SqlBackend m MetaId
 insertMeta = insertCheckUnique "Meta"
-
-insertMultiAsset :: (MonadBaseControl IO m, MonadIO m) => MultiAsset -> ReaderT SqlBackend m MultiAssetId
-insertMultiAsset = insertCheckUnique "MultiAsset"
 
 insertMultiAssetUnchecked :: (MonadBaseControl IO m, MonadIO m) => MultiAsset -> ReaderT SqlBackend m MultiAssetId
 insertMultiAssetUnchecked = insertUnchecked "MultiAsset"
@@ -230,6 +227,9 @@ insertDatum = insertCheckUnique "Datum"
 
 insertRedeemerData :: (MonadBaseControl IO m, MonadIO m) => RedeemerData -> ReaderT SqlBackend m RedeemerDataId
 insertRedeemerData = insertCheckUnique "RedeemerData"
+
+insertReverseIndex :: (MonadBaseControl IO m, MonadIO m) => ReverseIndex -> ReaderT SqlBackend m ReverseIndexId
+insertReverseIndex = insertUnchecked "ReverseIndex"
 
 insertCheckPoolOfflineData :: (MonadBaseControl IO m, MonadIO m) => PoolOfflineData -> ReaderT SqlBackend m ()
 insertCheckPoolOfflineData pod = do

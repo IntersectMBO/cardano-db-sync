@@ -18,17 +18,13 @@ import           Ouroboros.Network.Block hiding (blockHash)
 import           Paths_cardano_db_tool (version)
 
 import           System.Info (arch, os)
-import           System.IO (hFlush, stdout)
 
 newtype PrepareSnapshotArgs = PrepareSnapshotArgs
   { unPrepareSnapshotArgs :: LedgerStateDir
   }
 
 runPrepareSnapshot :: PrepareSnapshotArgs -> IO ()
-runPrepareSnapshot = runPrepareSnapshotAux True
-
-runPrepareSnapshotAux :: Bool -> PrepareSnapshotArgs -> IO ()
-runPrepareSnapshotAux firstTry args = do
+runPrepareSnapshot args = do
     ledgerFiles <- listLedgerStateFilesOrdered (unPrepareSnapshotArgs args)
     mblock <- runDbNoLoggingEnv queryLatestBlock
     case mblock of
@@ -49,36 +45,17 @@ runPrepareSnapshotAux firstTry args = do
                 , " (full ", show (Base16.encode bHash), ")"
                 , " and the closest ledger state file is at "
                 , show (lsfSlotNo file), " ", show (lsfHash file)
+                , ". DBSync no longer requires them to match and "
+                , "no rollback will be performed."
                 ]
-              if firstTry then do
-                interactiveRollback $ lsfSlotNo file
-                runPrepareSnapshotAux False args
-              else
-                putStrLn "After a rollback the db is in sync with no ledger state file"
+              let bblockNo = fromMaybe 0 $ blockBlockNo block
+              printCreateSnapshot bblockNo (lsfFilePath file)
             (_, []) ->
-              putStrLn "No ledger state file matches the db tip. You need to run db-sync before creating a snapshot"
+              putStrLn "No ledger state file before the tip found. Snapshots without ledger are not supported yet."
 
       _ -> do
             putStrLn "The db is empty. You need to sync from genesis and then create a snapshot."
   where
-    interactiveRollback :: SlotNo -> IO ()
-    interactiveRollback slot = do
-      putStr $ "Do you want to rollback the db to " ++ show slot  ++ " (Y/n): "
-      hFlush stdout
-      input <- getLine
-      case input of
-        "n" -> pure ()
-        _ -> do
-          putStrLn $ "Rolling back to " ++ show slot
-          runRollback slot
-          putStrLn "Rolling back done. Revalidating from scratch"
-          putStrLn ""
-
-    runRollback :: SlotNo -> IO ()
-    runRollback slot = runDbNoLoggingEnv $ do
-      slots <- querySlotNosGreaterThan $ unSlotNo slot
-      mapM_ deleteCascadeSlotNo slots
-
     printNewerSnapshots :: [LedgerStateFile] -> IO ()
     printNewerSnapshots newerFiles = do
       unless (null newerFiles) $
