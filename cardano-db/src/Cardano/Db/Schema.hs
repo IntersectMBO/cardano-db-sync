@@ -118,6 +118,10 @@ share
     scriptSize          Word64              sqltype=word31type
     UniqueTx            hash
 
+  ReverseIndex
+    blockId             BlockId             OnDeleteCascade
+    minIds              Text
+
   StakeAddress          -- Can be an address of a script hash
     hashRaw             ByteString          sqltype=addr29type
     view                Text
