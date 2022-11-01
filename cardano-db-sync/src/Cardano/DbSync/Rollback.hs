@@ -1,7 +1,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TupleSections #-}
 
 module Cardano.DbSync.Rollback
   ( prepareRollback
@@ -34,6 +33,7 @@ import           Ouroboros.Network.Point
 -- rolling back to.
 rollbackFromBlockNo :: MonadIO m => SyncEnv -> BlockNo -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 rollbackFromBlockNo env blkNo = do
+    lift $ rollbackCache cache
     nBlocks <- lift $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
     mBlockId <- lift $ DB.queryBlockNo (unBlockNo blkNo)
     whenStrictJust (maybeToStrict mBlockId) $ \blockId -> do
@@ -43,12 +43,8 @@ rollbackFromBlockNo env blkNo = do
           , " or equal to "
           , textShow blkNo
           ]
-      lift $ rollbackCache cache
-      deleted <- lift $ DB.deleteCascadeAfter blockId True
-      liftIO . logInfo trce $
-                if deleted
-                  then "Blocks deleted"
-                  else "No blocks need to be deleted"
+      liftLookupFail "Rollback.rollbackFromBlockNo" $ DB.deleteBlocksBlockId blockId
+      liftIO . logInfo trce $ "Blocks deleted"
   where
     trce = getTrace env
     cache = envCache env
@@ -92,4 +88,4 @@ prepareRollback env point serverTip = do
 unsafeRollback :: Trace IO Text -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeError ())
 unsafeRollback trce config slotNo = do
   logInfo trce $ "Forced rollback to slot " <> textShow (unSlotNo slotNo)
-  Right <$> DB.runDbNoLogging (DB.PGPassCached config) (void $ DB.deleteCascadeSlotNo slotNo)
+  Right <$> DB.runDbNoLogging (DB.PGPassCached config) (void $ DB.deleteBlocksSlotNo slotNo)

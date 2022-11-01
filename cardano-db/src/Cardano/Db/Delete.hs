@@ -1,49 +1,108 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Cardano.Db.Delete
-  ( deleteCascadeBlock
-  , deleteCascadeAfter
-  , deleteCascadeSlotNo
+  ( deleteBlocksSlotNo
   , deleteDelistedPool
+  , deleteBlocksBlockId
+  , deleteBlock
   ) where
 
 import           Cardano.Slotting.Slot (SlotNo (..))
 
+import           Control.Monad.Extra (whenJust)
 import           Control.Monad.IO.Class (MonadIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
-import           Database.Persist.Sql (SqlBackend, delete, selectKeysList, (!=.), (==.))
-
+import           Database.Esqueleto.Experimental (PersistEntity, PersistField, persistIdField)
+import           Database.Persist.Sql (PersistEntityBackend, SqlBackend, delete, selectKeysList, (==.), (>=.))
+import           Database.Persist.Class.PersistQuery (deleteWhere)
 import           Data.ByteString (ByteString)
 
+import           Cardano.Db.MinId
+import           Cardano.Db.Query
 import           Cardano.Db.Schema
+import           Cardano.Db.Text
 
 -- | Delete a block if it exists. Returns 'True' if it did exist and has been
 -- deleted and 'False' if it did not exist.
-deleteCascadeBlock :: MonadIO m => Block -> ReaderT SqlBackend m Bool
-deleteCascadeBlock block = do
-  keys <- selectKeysList [ BlockHash ==. blockHash block ] []
-  mapM_ delete keys
-  pure $ not (null keys)
+deleteBlocksSlotNo :: MonadIO m => SlotNo -> ReaderT SqlBackend m Bool
+deleteBlocksSlotNo (SlotNo slotNo) = do
+  mBlockId <- queryBlockSlotNo slotNo
+  case mBlockId of
+    Nothing -> pure False
+    Just blockId -> do
+      mDel <- deleteBlocksBlockId blockId
+      pure $ either (const False) (const True) mDel
 
--- | Delete a block after the specified 'BlockId'. Returns 'True' if it did exist and has been
--- deleted and 'False' if it did not exist.
-deleteCascadeAfter :: MonadIO m => BlockId -> Bool -> ReaderT SqlBackend m Bool
-deleteCascadeAfter bid deleteEq = do
-  -- Genesis artificial blocks are not deleted (Byron or Shelley) since they have null epoch
-  keys <- 
-    if deleteEq 
-      then selectKeysList [ BlockId ==. bid, BlockEpochNo !=. Nothing ] []
-      else selectKeysList [ BlockPreviousId ==. Just bid, BlockEpochNo !=. Nothing ] []
-  mapM_ delete keys
-  pure $ not (null keys)
+deleteBlocksBlockId :: MonadIO m => BlockId -> (ReaderT SqlBackend m) (Either LookupFail ())
+deleteBlocksBlockId blockId = do
+    mRollBackId <- queryReverseIndexBlockId blockId
+    case mRollBackId of
+      Nothing -> pure $ Left $ DbLookupMessage $ "Failed to find RollbackIndex for " <> textShow blockId
+      Just rlbId -> do
+        infos <- fmap textToMinId <$> queryMinIdsAfterReverseIndex rlbId
+        let minIds = mconcat infos
+        deleteTablesAfterBlockId blockId (minTxId minIds) (minTxInId minIds) (minTxOutId minIds) (minMaTxOutId minIds)
+        pure $ Right ()
 
--- | Delete a block if it exists. Returns 'True' if it did exist and has been
--- deleted and 'False' if it did not exist.
-deleteCascadeSlotNo :: MonadIO m => SlotNo -> ReaderT SqlBackend m Bool
-deleteCascadeSlotNo (SlotNo slotNo) = do
-  keys <- selectKeysList [ BlockSlotNo ==. Just slotNo ] []
-  mapM_ delete keys
-  pure $ not (null keys)
+deleteTablesAfterBlockId :: MonadIO m => BlockId -> Maybe TxId -> Maybe TxInId -> Maybe TxOutId -> Maybe MaTxOutId -> ReaderT SqlBackend m ()
+deleteTablesAfterBlockId blkId mtxId mtxInId mtxOutId mmaTxOutId = do
+    deleteWhere [AdaPotsBlockId >=. blkId]
+    deleteWhere [ReverseIndexBlockId >=. blkId]
+    deleteWhere [EpochParamBlockId >=. blkId]
+    deleteTablesAfterTxId mtxId mtxInId mtxOutId mmaTxOutId
+    deleteWhere [BlockId >=. blkId]
+
+deleteTablesAfterTxId :: MonadIO m => Maybe TxId -> Maybe TxInId -> Maybe TxOutId -> Maybe MaTxOutId -> ReaderT SqlBackend m ()
+deleteTablesAfterTxId mtxId mtxInId mtxOutId mmaTxOutId = do
+    whenJust mtxInId $ \txInId -> deleteWhere [TxInId >=. txInId]
+    whenJust mmaTxOutId $ \maTxOutId -> deleteWhere [MaTxOutId >=. maTxOutId]
+    whenJust mtxOutId $ \txOutId -> deleteWhere [TxOutId >=. txOutId]
+
+    whenJust mtxId $ \txId -> do
+      queryFirstAndDeleteAfter CollateralTxOutTxId txId
+      queryFirstAndDeleteAfter CollateralTxInTxInId txId
+      queryFirstAndDeleteAfter ReferenceTxInTxInId txId
+      queryFirstAndDeleteAfter PoolRetireAnnouncedTxId txId
+      queryFirstAndDeleteAfter StakeRegistrationTxId txId
+      queryFirstAndDeleteAfter StakeDeregistrationTxId txId
+      queryFirstAndDeleteAfter DelegationTxId txId
+      queryFirstAndDeleteAfter TxMetadataTxId txId
+      queryFirstAndDeleteAfter WithdrawalTxId txId
+      queryFirstAndDeleteAfter TreasuryTxId txId
+      queryFirstAndDeleteAfter ReserveTxId txId
+      queryFirstAndDeleteAfter PotTransferTxId txId
+      queryFirstAndDeleteAfter MaTxMintTxId txId
+      queryFirstAndDeleteAfter RedeemerTxId txId
+      queryFirstAndDeleteAfter ScriptTxId txId
+      queryFirstAndDeleteAfter DatumTxId txId
+      queryFirstAndDeleteAfter RedeemerDataTxId txId
+      queryFirstAndDeleteAfter ExtraKeyWitnessTxId txId
+      queryFirstAndDeleteAfter ParamProposalRegisteredTxId txId
+      minPmr <- queryMinRefId PoolMetadataRefRegisteredTxId txId
+      whenJust minPmr $ \pmrId -> do
+        queryFirstAndDeleteAfter PoolOfflineDataPmrId pmrId
+        queryFirstAndDeleteAfter PoolOfflineFetchErrorPmrId pmrId
+        deleteWhere [PoolMetadataRefId >=. pmrId]
+      minPoolUpdate <- queryMinRefId PoolUpdateRegisteredTxId txId
+      whenJust minPoolUpdate $ \puid -> do
+        queryFirstAndDeleteAfter PoolOwnerPoolUpdateId puid
+        queryFirstAndDeleteAfter PoolRelayUpdateId puid
+        deleteWhere [PoolUpdateId >=. puid]
+      deleteWhere [TxId >=. txId]
+
+queryFirstAndDeleteAfter
+  :: forall m record field. (MonadIO m, PersistEntity record, PersistField field, PersistEntityBackend record ~ SqlBackend)
+  => EntityField record field -> field -> ReaderT SqlBackend m ()
+queryFirstAndDeleteAfter txIdField txId = do
+    mRecordId <- queryMinRefId txIdField txId
+    whenJust mRecordId $ \recordId ->
+      deleteWhere [persistIdField @record >=. recordId]
 
 -- | Delete a delisted pool if it exists. Returns 'True' if it did exist and has been
 -- deleted and 'False' if it did not exist.
@@ -52,3 +111,14 @@ deleteDelistedPool poolHash = do
   keys <- selectKeysList [ DelistedPoolHashRaw ==. poolHash ] []
   mapM_ delete keys
   pure $ not (null keys)
+
+-- | Delete a block if it exists. Returns 'True' if it did exist and has been
+-- deleted and 'False' if it did not exist.
+deleteBlock :: MonadIO m => Block -> ReaderT SqlBackend m Bool
+deleteBlock block = do
+  mBlockId <- listToMaybe <$> selectKeysList [ BlockHash ==. blockHash block ] []
+  case mBlockId of
+    Nothing -> pure False
+    Just blockId -> do
+      mDel <- deleteBlocksBlockId blockId
+      pure $ either (const False) (const True) mDel

@@ -16,6 +16,7 @@ import           Cardano.Db.Error as X
 import           Cardano.Db.Insert as X
 import           Cardano.Db.Migration as X
 import           Cardano.Db.Migration.Version as X
+import           Cardano.Db.MinId as X
 import           Cardano.Db.PGConfig as X
 import           Cardano.Db.Query as X
 import           Cardano.Db.Run as X

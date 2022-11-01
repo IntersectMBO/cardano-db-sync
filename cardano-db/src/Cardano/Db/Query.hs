@@ -13,6 +13,9 @@ module Cardano.Db.Query
   , queryBlockCountAfterBlockNo
   , queryBlockHashBlockNo
   , queryBlockNo
+  , queryBlockSlotNo
+  , queryReverseIndexBlockId
+  , queryMinIdsAfterReverseIndex
   , queryBlockTxCount
   , queryBlockId
   , queryCalcEpochEntry
@@ -47,6 +50,7 @@ module Cardano.Db.Query
   , queryTxOutValue
   , queryTxOutCredentials
   , queryEpochStakeCount
+  , queryMinRefId
   , existsPoolHashId
   , existsPoolMetadataRefId
 
@@ -128,10 +132,10 @@ import           Data.Time.Clock (UTCTime (..))
 import           Data.Tuple.Extra (uncurry3)
 import           Data.Word (Word64)
 
-import           Database.Esqueleto.Experimental (Entity (..), PersistField, SqlBackend, SqlExpr,
+import           Database.Esqueleto.Experimental (Entity (..), PersistEntity, PersistField, SqlBackend, SqlExpr,
                    SqlQuery, Value (Value, unValue), ValueList, count, countRows, desc, entityKey,
                    entityVal, from, in_, innerJoin, isNothing, just, leftJoin, limit, max_, min_,
-                   notExists, not_, on, orderBy, select, subList_select, sum_, table,
+                   notExists, not_, on, orderBy, persistIdField, select, subList_select, sum_, table,
                    type (:&) ((:&)), unSqlBackendKey, val, valList, where_, (&&.), (<=.), (==.),
                    (>.), (>=.), (?.), (^.), (||.), offset, asc)
 import           Database.Persist.Class.PersistQuery (selectList)
@@ -179,7 +183,6 @@ queryBlockHashBlockNo hash = do
     pure $ blk ^. BlockBlockNo
   pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
 
--- | Get the 'SlotNo' associated with the given hash.
 queryBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe BlockId)
 queryBlockNo blkNo = do
   res <- select $ do
@@ -187,6 +190,31 @@ queryBlockNo blkNo = do
     where_ (blk ^. BlockBlockNo ==. just (val blkNo))
     pure (blk ^. BlockId)
   pure $ fmap unValue (listToMaybe res)
+
+queryBlockSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe BlockId)
+queryBlockSlotNo slotNo = do
+  res <- select $ do
+    blk <- from $ table @Block
+    where_ (blk ^. BlockSlotNo ==. just (val slotNo))
+    pure (blk ^. BlockId)
+  pure $ fmap unValue (listToMaybe res)
+
+queryReverseIndexBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe ReverseIndexId)
+queryReverseIndexBlockId blockId = do
+  res <- select $ do
+    rl <- from $ table @ReverseIndex
+    where_ (rl ^. ReverseIndexBlockId ==. val blockId)
+    pure $ rl ^. ReverseIndexId
+  pure $ fmap unValue (listToMaybe res)
+
+queryMinIdsAfterReverseIndex :: MonadIO m => ReverseIndexId -> ReaderT SqlBackend m [Text]
+queryMinIdsAfterReverseIndex rollbackId = do
+  res <- select $ do
+    rl <- from $ table @ReverseIndex
+    where_ (rl ^. ReverseIndexId >=. val rollbackId)
+    orderBy [desc (rl ^. ReverseIndexId)]
+    pure $ rl ^. ReverseIndexMinIds
+  pure $ fmap unValue res
 
 -- | Get the number of transactions in the specified block.
 queryBlockTxCount :: MonadIO m => BlockId -> ReaderT SqlBackend m Word64
@@ -570,6 +598,18 @@ queryEpochStakeCount epoch = do
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
+queryMinRefId
+  :: forall m field record. (MonadIO m, PersistEntity record, PersistField field)
+  => EntityField record field -> field -> ReaderT SqlBackend m (Maybe (Key record))
+queryMinRefId txIdField txId = do
+  res <- select $ do
+    rec <- from $ table @record
+    where_ (rec ^. txIdField >=. val txId)
+    orderBy [asc (rec ^. txIdField)]
+    limit 1
+    pure $ rec ^. persistIdField
+  pure $ unValue <$> listToMaybe res
+
 existsPoolHashId :: MonadIO m => PoolHashId -> ReaderT SqlBackend m Bool
 existsPoolHashId phid = do
   res <- select $ do
@@ -588,7 +628,6 @@ existsPoolMetadataRefId pmrid = do
     limit 1
     pure (pmr  ^. PoolMetadataRefId)
   pure $ not (null res)
-
 
 {--------------------------------------------
   Queries use in SMASH

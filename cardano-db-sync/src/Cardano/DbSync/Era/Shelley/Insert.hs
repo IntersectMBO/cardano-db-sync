@@ -117,7 +117,8 @@ insertShelleyBlock env shouldLog blk details isMember mNewEpoch stakeSlice = do
     let zippedTx = zip [0 .. ] (Generic.blkTxs blk)
     let txInserter = insertTx tracer cache (leNetwork lenv) isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
     grouped <- foldM (\grouped (idx, tx) -> txInserter idx tx grouped) mempty zippedTx
-    insertBlockGroupedData tracer grouped
+    minIds <- insertBlockGroupedData tracer grouped
+    insertReverseIndex blkId minIds
 
     liftIO $ do
       let epoch = unEpochNo (sdEpochNo details)
@@ -239,7 +240,7 @@ insertTx tracer cache network isMember blkId epochNo slotNo blockIndex tx groupe
       !txOutsGrouped <- mapM (prepareTxOut tracer cache (txId, txHash)) (Generic.txOutputs tx)
 
       let !txIns = map (prepareTxIn txId Map.empty) resolvedInputs
-      pure $ grouped <> BlockGroupedData txIns txOutsGrouped
+      pure $ grouped <> BlockGroupedData (Just txId) txIns txOutsGrouped
 
     else do
       -- The following operations only happen if the script passes stage 2 validation (or the tx has
@@ -271,7 +272,7 @@ insertTx tracer cache network isMember blkId epochNo slotNo blockIndex tx groupe
       mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
-      pure $ grouped <> BlockGroupedData txIns txOutsGrouped
+      pure $ grouped <> BlockGroupedData (Just txId) txIns txOutsGrouped
 
 prepareTxOut
     :: (MonadBaseControl IO m, MonadIO m)
