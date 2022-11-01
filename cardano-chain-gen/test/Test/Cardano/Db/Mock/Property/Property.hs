@@ -19,6 +19,7 @@ module Test.Cardano.Db.Mock.Property.Property
 import           Control.Monad (void, when)
 import           Control.Monad.Class.MonadSTM.Strict (MonadSTM (atomically))
 import           Data.Foldable
+import qualified Data.List as List
 import           Data.Text (Text)
 import           Data.TreeDiff (defaultExprViaShow)
 import           GHC.Generics (Generic, Generic1)
@@ -56,18 +57,39 @@ deriving stock instance Show (Command Symbolic)
 deriving stock instance Show (Command Concrete)
 
 data Model r = Model
-    { serverTip :: Maybe BlockNo
-    , dbSyncTip :: Maybe BlockNo
+    { serverChain :: [Int]
+    , dbSyncChain :: [Int]
+    , eventualDbSyncChain :: [Int]
     , dbSynsIsOn :: Bool
     , dbSynsHasSynced :: Bool -- This is used just to avoid restarting the node too early.
     }
     deriving stock (Generic, Show)
 
+serverTip :: Model r -> Maybe BlockNo
+serverTip m = case serverChain m of
+    [] -> Nothing
+    ls -> Just $ BlockNo $ fromIntegral $ length ls
+
+dbSyncTip :: Model r -> Maybe BlockNo
+dbSyncTip m = case dbSyncChain m of
+    [] -> Nothing
+    ls ->
+          let tp = fromIntegral $ length ls
+              tp' = fromIntegral $ length eventualDbSyncChain m
+          in fst <$> Just (BlockNo tp, BlockNo tp') -- TODO return both and fix
+
+rollbackChain :: Maybe BlockNo -> [Int] -> [Int]
+rollbackChain Nothing _ = []
+rollbackChain (Just blkNo) ls
+    | len <- fromIntegral (unBlockNo blkNo), length ls >= len
+    =  take len ls
+rollbackChain _ _ = error "failed to rollback"
+
 instance ToExpr (Model Symbolic)
 instance ToExpr (Model Concrete)
 
 initModel :: Model r
-initModel = Model Nothing Nothing False False
+initModel = Model [] [] False False
 
 instance ToExpr BlockNo where
     toExpr = defaultExprViaShow
@@ -83,17 +105,25 @@ deriving stock instance Show (Response Symbolic)
 deriving stock instance Read (Response Symbolic)
 deriving stock instance Show (Response Concrete)
 
+transitionConsistency :: [Int] -> [Int] -> [Int]
+transitionConsistency sChain dbChain =
+    if sChain `List.isPrefixOf` dbChain
+    then dbChain
+    else sChain
+
 transition :: Model r -> Command r -> Response r -> Model r
 transition m cmd resp = case (cmd, resp) of
     (_, Error msg) -> error msg
-    (RollForward _, _) | dbSynsIsOn m ->
-        m { serverTip = nextTip $ serverTip m, dbSyncTip = nextTip $ dbSyncTip m}
-    (RollForward _, _) ->
-        m { serverTip = nextTip $ serverTip m}
-    (RollBack blkNo, _) | dbSynsIsOn m ->
-        m { serverTip = blkNo, dbSyncTip = blkNo }
+    (RollForward n, _) | dbSynsIsOn m ->
+        let serverChain' = serverChain m ++ [n]
+            dbSyncChain' = transitionConsistency serverChain' (dbSyncChain m)
+        in m { serverChain = serverChain'
+             , dbSyncChain = dbSyncChain'
+             }
+    (RollForward n, _) ->
+        m { serverChain = serverChain m ++ [n] }
     (RollBack blkNo, _) ->
-        m { serverTip = blkNo }
+        m { serverChain = rollbackChain blkNo (serverChain m) }
     (StopDBSync, _) | dbSynsIsOn m ->
         m { dbSynsIsOn = False }
     (StopDBSync, _) ->
@@ -101,14 +131,13 @@ transition m cmd resp = case (cmd, resp) of
     (StartDBSync, _) | dbSynsIsOn m ->
         error "Tried to start started DBSync"
     (StartDBSync, _) ->
-        m { dbSyncTip = serverTip m, dbSynsIsOn = True , dbSynsHasSynced = False }
+        m { dbSyncChain = transitionConsistency (serverChain m) (dbSyncChain m)
+          , dbSynsIsOn = True
+          , dbSynsHasSynced = False }
     (RestartNode, _) ->
         m
     (AssertBlockNo _, _) ->
         m { dbSynsHasSynced = True}
-  where
-    nextTip Nothing = Just $ BlockNo 1
-    nextTip (Just b) = Just $ b + 1
 
 precondition :: Model Symbolic -> Command Symbolic -> Logic
 precondition m cmd = case cmd of
