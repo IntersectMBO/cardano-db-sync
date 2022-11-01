@@ -51,7 +51,7 @@ rollbackTest =
     -- Rollback a set of blocks.
     latestSlotNo <- queryLatestSlotNo
     Just pSlotNo <- queryWalkChain 5 latestSlotNo
-    void $ deleteCascadeSlotNo (SlotNo pSlotNo)
+    void $ deleteBlocksSlotNo (SlotNo pSlotNo)
     -- Assert the expected final state.
     afterBlocks <- queryBlockCount
     assertBool ("Block count after rollback is " ++ show afterBlocks ++ " but should be 10") $ afterBlocks == 4
