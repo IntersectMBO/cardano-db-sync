@@ -54,8 +54,8 @@ data ValidateError = ValidateError
   }
 
 randomTxIds :: Int -> (Word64, Word64) -> IO [Word64]
-randomTxIds c (minTxId, maxIxId) =
-  List.sort <$> replicateM c (Random.randomRIO (minTxId, maxIxId))
+randomTxIds c (minTxId', maxIxId) =
+  List.sort <$> replicateM c (Random.randomRIO (minTxId', maxIxId))
 
 reportError :: ValidateError -> String
 reportError ve =

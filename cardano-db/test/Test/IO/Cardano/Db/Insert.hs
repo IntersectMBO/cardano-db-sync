@@ -35,8 +35,8 @@ insertZeroTest =
   runDbNoLoggingEnv $ do
     -- Delete the blocks if they exist.
     slid <- insertSlotLeader testSlotLeader
-    void $ deleteCascadeBlock (blockOne slid)
-    void $ deleteCascadeBlock (blockZero slid)
+    void $ deleteBlock (blockOne slid)
+    void $ deleteBlock (blockZero slid)
     -- Insert the same block twice. The first should be successful (resulting
     -- in a 'Right') and the second should return the same value in a 'Left'.
     bid0 <- insertBlockChecked (blockZero slid)
@@ -49,7 +49,7 @@ insertFirstTest =
   runDbNoLoggingEnv $ do
     -- Delete the block if it exists.
     slid <- insertSlotLeader testSlotLeader
-    void $ deleteCascadeBlock (blockOne slid)
+    void $ deleteBlock (blockOne slid)
     -- Insert the same block twice.
     bid0 <- insertBlockChecked (blockZero slid)
     bid1 <- insertBlockChecked $ (\b -> b { blockPreviousId = Just bid0 }) (blockOne slid)
