@@ -32,6 +32,7 @@ library
                         -Wunused-packages
 
   exposed-modules:      Cardano.Db
+                        Cardano.Db.Old.V13_0
 
   other-modules:        Cardano.Db.Delete
                         Cardano.Db.Error
@@ -41,6 +42,8 @@ library
                         Cardano.Db.Migration.Haskell
                         Cardano.Db.Migration.Version
                         Cardano.Db.MinId
+                        Cardano.Db.Old.V13_0.Schema
+                        Cardano.Db.Old.V13_0.Query
                         Cardano.Db.Query
                         Cardano.Db.Run
                         Cardano.Db.RevFromGit
@@ -49,7 +52,6 @@ library
                         Cardano.Db.Schema.Orphans
                         Cardano.Db.Text
                         Cardano.Db.Types
-                        Cardano.Db.Update
                         Cardano.Db.Version
 
   build-depends:        aeson
