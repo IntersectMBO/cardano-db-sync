@@ -65,7 +65,7 @@ import           Data.Functor.Contravariant (contramap)
 import qualified Data.List as List
 import qualified Data.Text as Text
 
-import           Database.Persist.Postgresql (ConnectionString, withPostgresqlConn)
+import           Database.Persist.Postgresql (ConnectionString, SqlBackend, withPostgresqlConn)
 
 import           Network.Mux (MuxTrace, WithMuxBearer)
 import           Network.Mux.Types (MuxMode (..))
@@ -110,6 +110,7 @@ import           Ouroboros.Network.Subscription (SubscriptionTrace)
 
 import           System.Directory (createDirectoryIfMissing)
 
+import           Cardano.Db (runDbIohkLogging)
 
 runSyncNode
     :: MetricSetters
@@ -135,6 +136,9 @@ runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConn
     orDie renderSyncNodeError $ do
       genCfg <- readCardanoGenesisConfig enc
       logProtocolMagicId trce $ genesisProtocolMagicId genCfg
+      syncEnv <- ExceptT $ mkSyncEnvFromConfig trce dbConnString
+        (SyncOptions (enpExtended enp) aop (enpHasCache enp) (enpHasLedger enp) (enpSkipFix enp) (enpOnlyFix enp) snEveryFollowing snEveryLagging)
+        (enpLedgerStateDir enp) genCfg
 
       -- If the DB is empty it will be inserted, otherwise it will be validated (to make
       -- sure we are on the right chain).
@@ -147,9 +151,7 @@ runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConn
 
       case genCfg of
           GenesisCardano {} -> do
-            syncEnv <- ExceptT $ mkSyncEnvFromConfig trce dbConnString
-              (SyncOptions (enpExtended enp) aop (enpHasCache enp) (enpHasLedger enp) (enpSkipFix enp) (enpOnlyFix enp) snEveryFollowing snEveryLagging)
-              (enpLedgerStateDir enp) genCfg
+
             liftIO $ runSyncNodeClient metricsSetters syncEnv iomgr trce (enpSocketPath enp)
   where
     useShelleyInit :: SyncNodeConfig -> Bool
@@ -232,16 +234,24 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
         Db.runIohkLogging trce $ withPostgresqlConn (envConnString env) $ \backend -> liftIO $ do
           replaceConnection env backend
           setConsistentLevel env Unchecked
-          unless (soptSkipFix $ envOptions env) $ do
-            fd <- getWrongPlutusData env
+
+          isFixed <- getIsSyncFixed env
+          let skipFix = soptSkipFix $ envOptions env
+          let onlyFix = soptOnlyFix $ envOptions env
+          if onlyFix || (not isFixed && not skipFix) then do
+            when (onlyFix && isFixed) $ logInfo trce "Running once more to validate"
+            fd <- runDbIohkLogging backend (getTrace env) $ getWrongPlutusData (getTrace env)
             unless (nullData fd) $
               void $ runPeer
                       localChainSyncTracer
                       (cChainSyncCodec codecs)
                       channel
-                      (Client.chainSyncClientPeer $ chainSyncClientFix env fd)
+                      (Client.chainSyncClientPeer $
+                        chainSyncClientFix backend (getTrace env) fd)
+            when (onlyFix && isFixed) exitSuccess
+            setIsFixed env
 
-          unless (soptOnlyFix $ envOptions env) $ do
+          else do
             -- The Db thread is not forked at this point, so we can use
             -- the connection here. A connection cannot be used concurrently by many
             -- threads
@@ -408,18 +418,17 @@ drainThePipe n0 client = go n0
               , recvMsgRollBackward = \_pt  _tip -> pure $ go n'
               }
 
-chainSyncClientFix :: SyncEnv -> FixData -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-chainSyncClientFix env fixData = Client.ChainSyncClient $ do
+chainSyncClientFix
+    :: SqlBackend -> Trace IO Text -> FixData -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+chainSyncClientFix backend tracer fixData = Client.ChainSyncClient $ do
     liftIO $ logInfo tracer "Starting chainsync to fix Plutus Data. This will update database values in tables datum and redeemer_data."
     clientStIdle True (sizeFixData fixData) fixData
   where
-    tracer = getTrace env
-
     updateSizeAndLog :: Int -> Int -> IO Int
     updateSizeAndLog lastSize currentSize = do
       let diffSize = lastSize - currentSize
       if lastSize >= currentSize && diffSize >= 200_000 then do
-        logInfo tracer $ mconcat ["Fixed ", textShow (sizeFixData fixData - currentSize), " Plutus Data"]
+        liftIO $ logInfo tracer $ mconcat ["Fixed ", textShow (sizeFixData fixData - currentSize), " Plutus Data"]
         pure currentSize
       else pure lastSize
 
@@ -431,8 +440,8 @@ chainSyncClientFix env fixData = Client.ChainSyncClient $ do
           pure $ Client.SendMsgDone ()
         Just (point, fdOnPoint, fdRest) -> do
           when shouldLog $
-            logInfo tracer $ mconcat ["Starting fixing Plutus Data ", textShow point]
-          newLastSize <- updateSizeAndLog lastSize (sizeFixData fds)
+            liftIO $ logInfo tracer $ mconcat ["Starting fixing Plutus Data ", textShow point]
+          newLastSize <- liftIO $ updateSizeAndLog lastSize (sizeFixData fds)
           pure $ Client.SendMsgFindIntersect
                    [point]
                    (Client.ClientStIntersect
@@ -445,7 +454,7 @@ chainSyncClientFix env fixData = Client.ChainSyncClient $ do
     clientStNext lastSize fdOnPoint fdRest =
       Client.ClientStNext
         { Client.recvMsgRollForward = \blk _tip -> Client.ChainSyncClient $ do
-            fixPlutusData env blk fdOnPoint
+            runDbIohkLogging backend tracer $ fixPlutusData tracer blk fdOnPoint
             clientStIdle False lastSize fdRest
 
         , Client.recvMsgRollBackward = \_point _tip -> Client.ChainSyncClient $
