@@ -13,6 +13,8 @@ module Cardano.DbSync.Api
   , setConsistentLevel
   , getConsistentLevel
   , isConsistent
+  , getIsSyncFixed
+  , setIsFixed
   , mkSyncEnvFromConfig
   , replaceConnection
   , verifySnapshotPoint
@@ -78,6 +80,7 @@ data SyncEnv = SyncEnv
   , envConnString :: ConnectionString
   , envBackend :: !(StrictTVar IO (Strict.Maybe SqlBackend))
   , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)
+  , envIsFixed :: !(StrictTVar IO Bool)
   , envOptions :: !SyncOptions
   , envCache :: !Cache
   , envOfflineWorkQueue :: !(TBQueue IO PoolFetchRetry)
@@ -106,6 +109,13 @@ isConsistent env = do
     case cst of
       Consistent -> pure True
       _ -> pure False
+
+getIsSyncFixed :: SyncEnv -> IO Bool
+getIsSyncFixed = readTVarIO . envIsFixed
+
+setIsFixed :: SyncEnv -> IO ()
+setIsFixed env =
+  atomically $ writeTVar (envIsFixed env) True
 
 data SyncOptions = SyncOptions
   { soptExtended :: !Bool
@@ -227,6 +237,7 @@ mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir = do
   cache <- if soptCache syncOptions then newEmptyCache 100000 else pure uninitiatedCache
   backendVar <- newTVarIO Strict.Nothing
   consistentLevelVar <- newTVarIO Unchecked
+  fixDataVar <- newTVarIO False
   owq <- newTBQueueIO 100
   orq <- newTBQueueIO 100
   epochVar <- newTVarIO initEpochState
@@ -240,6 +251,7 @@ mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir = do
           , envBackend = backendVar
           , envOptions = syncOptions
           , envConsistentLevel = consistentLevelVar
+          , envIsFixed = fixDataVar
           , envCache = cache
           , envOfflineWorkQueue = owq
           , envOfflineResultQueue = orq
