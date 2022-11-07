@@ -36,7 +36,8 @@ import qualified Cardano.Ledger.Babbage.TxBody as Babbage
 import qualified Cardano.Ledger.Core as Ledger
 import qualified Cardano.Ledger.Era as Ledger
 
-import qualified Cardano.Db as DB
+import           Cardano.Db (textShow)
+import qualified Cardano.Db.Old.V13_0 as DB_V_13_0
 
 import           Cardano.BM.Trace (Trace, logInfo, logWarning)
 
@@ -88,25 +89,27 @@ getNextPointList fds = case fds of
     [] -> Nothing
     fd : _ -> Just $ fpdPrevPoint fd
 
-getWrongPlutusData :: SyncEnv -> IO FixData
-getWrongPlutusData env = do
-    dbBackend <- getBackend env
-    liftIO $ logInfo (getTrace env) $ mconcat
+getWrongPlutusData ::
+       (MonadBaseControl IO m, MonadIO m)
+    => Trace IO Text
+    -> ReaderT SqlBackend m FixData
+getWrongPlutusData tracer = do
+    liftIO $ logInfo tracer $ mconcat
       [ "Starting the fixing Plutus Data bytes procedure. This may take a couple hours on mainnet if there are wrong values."
       , " You can skip it using --skip-plutus-data-fix."
       , " It will fix Datum and RedeemerData with wrong bytes. See more in Issue #1214 and #1278."
       , " This procedure makes resyncing unnecessary."
       ]
-    datumList <- DB.runDbIohkNoLogging dbBackend $
+    datumList <-
       findWrongPlutusData
-        (getTrace env) "Datum"
-        DB.queryDatumCount DB.queryDatumPage (fmap f . DB.querydatumInfo . entityKey)
-        (DB.datumHash . entityVal) (DB.datumBytes . entityVal)
-    redeemerDataList <- DB.runDbIohkNoLogging dbBackend $
+        tracer "Datum"
+        DB_V_13_0.queryDatumCount DB_V_13_0.queryDatumPage (fmap f . DB_V_13_0.querydatumInfo . entityKey)
+        (DB_V_13_0.datumHash . entityVal) (DB_V_13_0.datumBytes . entityVal)
+    redeemerDataList <-
       findWrongPlutusData
-        (getTrace env) "RedeemerData"
-        DB.queryRedeemerDataCount DB.queryRedeemerDataPage (fmap f . DB.queryRedeemerDataInfo . entityKey)
-        (DB.redeemerDataHash . entityVal) (DB.redeemerDataBytes . entityVal)
+        tracer "RedeemerData"
+        DB_V_13_0.queryRedeemerDataCount DB_V_13_0.queryRedeemerDataPage (fmap f . DB_V_13_0.queryRedeemerDataInfo . entityKey)
+        (DB_V_13_0.redeemerDataHash . entityVal) (DB_V_13_0.redeemerDataBytes . entityVal)
     pure $ FixData datumList redeemerDataList
   where
     f queryRes = do
@@ -122,7 +125,7 @@ findWrongPlutusData ::
     -> Text
     -> m Word64 -- query count
     -> (Int64 -> Int64 -> m [a]) -- query a page
-    -> (a -> m (Maybe CardanoPoint)) -- get point and previous block point
+    -> (a -> m (Maybe CardanoPoint)) -- get previous block point
     -> (a -> ByteString) -- get the hash
     -> (a -> ByteString) -- get the stored bytes
     -> m [FixPlutusData]
@@ -131,11 +134,11 @@ findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes = do
       ["Trying to find ", tableName, " with wrong bytes"]
     count <- qCount
     liftIO $ logInfo tracer $ mconcat
-      ["There are ", DB.textShow count, " ", tableName, ". Need to scan them all."]
+      ["There are ", textShow count, " ", tableName, ". Need to scan them all."]
     datums <- findRec False 0 []
     liftIO $ logInfo tracer $
       Text.concat
-        [ "Found ", DB.textShow (length datums), " ", tableName
+        [ "Found ", textShow (length datums), " ", tableName
         , " with mismatch between bytes and hash."
         ]
     pure datums
@@ -143,14 +146,14 @@ findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes = do
     findRec :: Bool -> Int64 -> [[FixPlutusData]] -> m [FixPlutusData]
     findRec printedSome offset acc = do
       when (mod offset (10 * limit) == 0 && offset > 0) $
-        liftIO $ logInfo tracer $ mconcat ["Checked ", DB.textShow offset, " ", tableName]
+        liftIO $ logInfo tracer $ mconcat ["Checked ", textShow offset, " ", tableName]
       ls <- qPage offset limit
       ls' <- filterM checkValidBytes ls
       ls'' <- mapMaybeM convertToFixPlutusData ls'
       newPrintedSome <- if null ls' || printedSome then pure printedSome else do
         liftIO $ logInfo tracer $ Text.concat
           [ "Found some wrong values already. The oldest ones are (hash, bytes): "
-          , DB.textShow $ (\a -> (bsBase16Encode $ getHash a, bsBase16Encode $ getBytes a)) <$> take 5 ls'
+          , textShow $ (\a -> (bsBase16Encode $ getHash a, bsBase16Encode $ getBytes a)) <$> take 5 ls'
           ]
         pure True
       let !newAcc = ls'' : acc
@@ -162,7 +165,7 @@ findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes = do
     checkValidBytes a = case mHashedBytes of
         Left msg -> do
           liftIO $ logWarning tracer $
-            Text.concat ["Invalid Binary Data for hash ", DB.textShow actualHash , ": ", Text.pack msg]
+            Text.concat ["Invalid Binary Data for hash ", textShow actualHash , ": ", Text.pack msg]
           pure False
         Right hashedBytes -> pure $ hashedBytes /= actualHash
       where
@@ -183,35 +186,32 @@ findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes = do
 
     limit = 100_000
 
-fixPlutusData :: SyncEnv -> CardanoBlock -> FixData -> IO ()
-fixPlutusData env cblk fds = do
-    dbBackend <- liftIO $ getBackend env
-    DB.runDbIohkNoLogging dbBackend $ do
-      mapM_ (fixData True) $ fdDatum fds
-      mapM_ (fixData False) $ fdRedeemerData fds
+fixPlutusData :: MonadIO m => Trace IO Text -> CardanoBlock -> FixData -> ReaderT SqlBackend m ()
+fixPlutusData tracer cblk fds = do
+    mapM_ (fixData True) $ fdDatum fds
+    mapM_ (fixData False) $ fdRedeemerData fds
   where
     fixData :: MonadIO m => Bool -> FixPlutusData -> ReaderT SqlBackend m ()
     fixData isDatum fd = do
       case Map.lookup (fpdHash fd) correctBytesMap of
         Nothing -> pure ()
         Just correctBytes | isDatum -> do
-          mDatumId <- DB.queryDatum $ fpdHash fd
+          mDatumId <- DB_V_13_0.queryDatum $ fpdHash fd
           case mDatumId of
             Just datumId ->
-              DB.upateDatumBytes datumId correctBytes
+              DB_V_13_0.upateDatumBytes datumId correctBytes
             Nothing ->
               liftIO $ logWarning tracer $ mconcat
                 ["Datum", " not found in block"]
         Just correctBytes -> do
-          mRedeemerDataId <- DB.queryRedeemerData $ fpdHash fd
+          mRedeemerDataId <- DB_V_13_0.queryRedeemerData $ fpdHash fd
           case mRedeemerDataId of
             Just redeemerDataId ->
-              DB.upateRedeemerDataBytes redeemerDataId correctBytes
+              DB_V_13_0.upateRedeemerDataBytes redeemerDataId correctBytes
             Nothing ->
               liftIO $ logWarning tracer $ mconcat
                 ["RedeemerData", " not found in block"]
 
-    tracer = getTrace env
     correctBytesMap = Map.union (scrapDatumsBlock cblk) (scrapRedeemerDataBlock cblk)
 
 scrapDatumsBlock :: CardanoBlock -> Map ByteString ByteString
