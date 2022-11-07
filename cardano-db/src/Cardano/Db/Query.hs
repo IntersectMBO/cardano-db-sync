@@ -198,13 +198,17 @@ queryBlockSlotNo slotNo = do
     pure (blk ^. BlockId)
   pure $ fmap unValue (listToMaybe res)
 
-queryReverseIndexBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe ReverseIndexId)
+queryReverseIndexBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m [Maybe Text]
 queryReverseIndexBlockId blockId = do
   res <- select $ do
-    rl <- from $ table @ReverseIndex
-    where_ (rl ^. ReverseIndexBlockId ==. val blockId)
-    pure $ rl ^. ReverseIndexId
-  pure $ fmap unValue (listToMaybe res)
+    (blk :& ridx) <-
+      from $ table @Block
+      `leftJoin` table @ReverseIndex
+      `on` (\(blk :& ridx) -> just (blk ^. BlockId) ==. ridx ?. ReverseIndexBlockId)
+    where_ (blk ^. BlockId >=. val blockId)
+    orderBy [asc (blk ^. BlockId)]
+    pure $ ridx ?. ReverseIndexMinIds
+  pure $ fmap unValue res
 
 queryMinIdsAfterReverseIndex :: MonadIO m => ReverseIndexId -> ReaderT SqlBackend m [Text]
 queryMinIdsAfterReverseIndex rollbackId = do
