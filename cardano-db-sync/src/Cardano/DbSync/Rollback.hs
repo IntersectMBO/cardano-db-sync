@@ -43,7 +43,7 @@ rollbackFromBlockNo env blkNo = do
           , " or equal to "
           , textShow blkNo
           ]
-      liftLookupFail "Rollback.rollbackFromBlockNo" $ DB.deleteBlocksBlockId blockId
+      lift $ DB.deleteBlocksBlockId trce blockId
       liftIO . logInfo trce $ "Blocks deleted"
   where
     trce = getTrace env
@@ -88,4 +88,4 @@ prepareRollback env point serverTip = do
 unsafeRollback :: Trace IO Text -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeError ())
 unsafeRollback trce config slotNo = do
   logInfo trce $ "Forced rollback to slot " <> textShow (unSlotNo slotNo)
-  Right <$> DB.runDbNoLogging (DB.PGPassCached config) (void $ DB.deleteBlocksSlotNo slotNo)
+  Right <$> DB.runDbNoLogging (DB.PGPassCached config) (void $ DB.deleteBlocksSlotNo trce slotNo)
