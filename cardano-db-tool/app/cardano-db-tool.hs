@@ -76,7 +76,7 @@ runCreateMigration mdir = do
 
 runRollback :: SlotNo -> IO ()
 runRollback slotNo =
-  print =<< runDbNoLoggingEnv (deleteBlocksSlotNo slotNo)
+  print =<< runDbNoLoggingEnv (deleteBlocksSlotNoNoTrace slotNo)
 
 runVersionCommand :: IO ()
 runVersionCommand = do
