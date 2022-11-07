@@ -155,6 +155,16 @@ applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (ve
           Nothing -> pure ()
           Just logFilename -> putStrLn $ "\nErrors in file: " ++ logFilename ++ "\n"
         exitFailure
+{-}
+migrateIndexes :: IO ()
+migrateIndexes = pure ()
+
+migrateSyncFix :: IO ()
+migrateSyncFix = pure ()
+
+isSyncFixed :: IO Bool
+isSyncFixed = pure False
+-}
 
 -- | Create a database migration (using functionality built into Persistent). If no
 -- migration is needed return 'Nothing' otherwise return the migration as 'Text'.

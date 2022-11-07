@@ -44,6 +44,7 @@ import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
+-- import qualified Data.Text as Text
 
 import           Database.Persist.SqlBackend.Internal
 import           Database.Persist.SqlBackend.Internal.StatementCache
@@ -97,13 +98,14 @@ applyAndInsertBlockMaybe env cblk = do
 
 insertBlock
     :: SyncEnv -> CardanoBlock -> ApplyResult -> Bool -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
-insertBlock env cblk applyRes logBlock = do
+insertBlock env cblk applyRes firstAfterRollback = do
     !epochEvents <- liftIO $ atomically $ generateNewEpochEvents env (apSlotDetails applyRes)
     let !applyResult = applyRes { apEvents = sort $ epochEvents <> apEvents applyRes}
     let !details = apSlotDetails applyResult
+--    when firstAfterRollback $ migrateIndexesMaybe env details
     insertLedgerEvents env (sdEpochNo details) (apEvents applyResult)
     insertEpoch details
-    let shouldLog = hasEpochStartEvent (apEvents applyResult) || logBlock
+    let shouldLog = hasEpochStartEvent (apEvents applyResult) || firstAfterRollback
     let isMember poolId = Set.member poolId (apPoolsRegistered applyResult)
     case cblk of
       BlockByron blk ->
@@ -169,6 +171,10 @@ insertLedgerEvents env currentEpochNo@(EpochNo curEpoch) =
           sqlBackend <- lift ask
           persistantCacheSize <- liftIO $ statementCacheSize $ connStmtMap sqlBackend
           liftIO . logInfo tracer $ "Persistant SQL Statement Cache size is " <> textShow persistantCacheSize
+--          persistantTimes <- liftIO $ statementCacheGetTimes $ connStmtMap sqlBackend
+--          liftIO $ writeFile ("/home/kostas/bench/" <> show (unEpochNo en)) $
+--            Text.unlines $ fmap (\(q,st) -> textShow st <> " " <> q) $
+--              sortOn (\(_, (tm, _)) -> tm) $ Map.toList persistantTimes
           stats <- liftIO $ textShowStats cache
           liftIO . logInfo tracer $ stats
           liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo en)
@@ -206,3 +212,12 @@ hasEpochStartEvent = any isNewEpoch
         LedgerNewEpoch {} -> True
         LedgerStartAtEpoch {} -> True
         _otherwise -> False
+{-}
+migrateIndexesMaybe :: SyncEnv -> SlotDetails -> ReaderT SqlBackend (LoggingT IO) ()
+migrateIndexesMaybe env sd = when isWithinHalfHour sd $ do
+    logInfo trce "Close to the tip. Restoring indexes."
+    runMigrationSynced
+  where
+    isWithinHalfHour = isSyncedWithinSeconds sd 1800
+    trce = getTrace env
+-}
