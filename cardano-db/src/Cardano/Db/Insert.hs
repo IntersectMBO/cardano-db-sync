@@ -99,8 +99,8 @@ import           Cardano.Db.Schema
 -- One alternative is to just use `insert` but that fails on some uniquness constraints on some
 -- tables (about 6 out of a total of 25+).
 --
--- Instead we use `insertUnchecked` for tables where uniqueness constraints are unlikley to be hit
--- and `insertChecked` for tables where the uniqueness constraint might can be hit.
+-- Instead we use `insertUnchecked` for tables where there is no uniqueness constraints
+-- and `insertChecked` for tables where the uniqueness constraint might hit.
 
 insertAdaPots :: (MonadBaseControl IO m, MonadIO m) => AdaPots -> ReaderT SqlBackend m AdaPotsId
 insertAdaPots = insertUnchecked "AdaPots"
