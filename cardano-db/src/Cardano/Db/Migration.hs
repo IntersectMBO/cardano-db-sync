@@ -4,6 +4,7 @@
 module Cardano.Db.Migration
   ( MigrationDir (..)
   , LogFileDir (..)
+  , MigrationToRun (..)
   , applyMigration
   , createMigration
   , getMigrationScripts
@@ -23,7 +24,6 @@ import           Control.Exception (SomeException, handle)
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Logger (NoLoggingT)
-import           Control.Monad.Trans.Except (ExceptT, throwE)
 import           Control.Monad.Trans.Reader (ReaderT)
 import           Control.Monad.Trans.Resource (runResourceT)
 
@@ -34,7 +34,7 @@ import           Data.Conduit.Process (sourceCmdWithConsumer)
 import           Data.Either (partitionEithers)
 import           Data.List ((\\))
 import qualified Data.List as List
-import           Data.Maybe (fromMaybe, listToMaybe)
+import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
@@ -49,6 +49,7 @@ import           Cardano.Crypto.Hash (Blake2b_256, ByteString, Hash, hashToStrin
 import           Cardano.Db.Migration.Haskell
 import           Cardano.Db.Migration.Version
 import           Cardano.Db.PGConfig
+import           Cardano.Db.Query
 import           Cardano.Db.Run
 import           Cardano.Db.Schema
 import           Cardano.Db.Text
@@ -63,6 +64,7 @@ import           Text.Read (readMaybe)
 
 newtype MigrationDir
   = MigrationDir FilePath
+  deriving Show
 
 newtype LogFileDir
   = LogFileDir FilePath
@@ -77,44 +79,85 @@ data MigrationValidateError = UnknownMigrationsFound
   , extraMigrations :: [MigrationValidate]
   } deriving (Eq, Show)
 
+data MigrationToRun = Initial | Full | Fix | Indexes
+
 -- | Run the migrations in the provided 'MigrationDir' and write date stamped log file
 -- to 'LogFileDir'. It returns a list of file names of all non-official schema migration files.
-runMigrations :: PGConfig -> Bool -> MigrationDir -> Maybe LogFileDir -> IO [FilePath]
-runMigrations pgconfig quiet migrationDir mLogfiledir = do
-    scripts <- getMigrationScripts migrationDir
-    case mLogfiledir of
-      Nothing -> do
+runMigrations :: PGConfig -> Bool -> MigrationDir -> Maybe LogFileDir -> MigrationToRun -> IO (Bool, [FilePath])
+runMigrations pgconfig quiet migrationDir mLogfiledir mToRun = do
+    allScripts <- getMigrationScripts migrationDir
+    ranAll <- case (mLogfiledir, allScripts) of
+      (_, []) ->
+        error $ "Empty schema dir " ++ show migrationDir
+      (Nothing, schema : scripts) -> do
         putStrLn "Running:"
-        forM_ scripts $ applyMigration migrationDir quiet pgconfig Nothing stdout
+        applyMigration' Nothing stdout schema
+        (scripts', ranAll) <- filterMigrations scripts
+        forM_ scripts' $ applyMigration' Nothing stdout
         putStrLn "Success!"
-      Just logfiledir -> do
+        pure ranAll
+      (Just logfiledir, schema : scripts) -> do
         logFilename <- genLogFilename logfiledir
         withFile logFilename AppendMode $ \logHandle -> do
           unless quiet $ putStrLn "Running:"
-          forM_ scripts $ applyMigration migrationDir quiet pgconfig (Just logFilename) logHandle
+          applyMigration' (Just logFilename) logHandle schema
+          (scripts', ranAll) <- filterMigrations scripts
+          forM_ scripts' $ applyMigration' (Just logFilename) logHandle
           unless quiet $ putStrLn "Success!"
-    pure $ map (takeFileName . snd) (filter isUnofficialMigration scripts)
+          pure ranAll
+    pure (ranAll, map (takeFileName . snd) (filter isUnofficialMigration allScripts))
   where
+    isUnofficialMigration :: (MigrationVersion, FilePath) -> Bool
+    isUnofficialMigration (mv, _) = mvStage mv < 1 || mvStage mv > 4
+
     genLogFilename :: LogFileDir -> IO FilePath
     genLogFilename (LogFileDir logdir) =
       (logdir </>)
         . formatTime defaultTimeLocale ("migrate-" ++ iso8601DateFormat (Just "%H%M%S") ++ ".log")
         <$> getCurrentTime
 
-    isUnofficialMigration :: (MigrationVersion, FilePath) -> Bool
-    isUnofficialMigration (mv, _) = mvStage mv < 1 || mvStage mv > 3
+    applyMigration' = applyMigration migrationDir quiet pgconfig
+
+    filterMigrations :: [(MigrationVersion, FilePath)] -> IO ([(MigrationVersion, FilePath)], Bool)
+    filterMigrations scripts = case mToRun of
+        Full -> do
+          mVersion <- runWithConnectionNoLogging (PGPassCached pgconfig) querySchemaVersion
+          case mVersion of
+            Just (SchemaVersion _ v _) | v == hardCoded3_0 -> do
+              pure (filter (not . filterFix) scripts, False)
+            _ -> pure (scripts, True)
+        Initial -> do
+          mVersion <- runWithConnectionNoLogging (PGPassCached pgconfig) querySchemaVersion
+          case mVersion of
+            Just (SchemaVersion _ v _) | v == hardCoded3_0 -> do
+              pure (filter (\m -> not $ filterFix m || filterIndexes m) scripts, False)
+            _ -> pure (filter (not . filterIndexes) scripts, True)
+        Fix -> pure (filter filterFix scripts, False)
+        Indexes -> pure (filter filterIndexes scripts, False)
+
+    filterFix (mv, _) = mvStage mv == 2 && mvVersion mv > hardCoded3_0
+    filterIndexes (mv, _) = mvStage mv == 4
+
+hardCoded3_0 :: Int
+hardCoded3_0 = 19
 
 -- Build hash for each file found in a directory.
-validateMigrations :: MigrationDir -> [(Text, Text)] -> ExceptT MigrationValidateError IO ()
+validateMigrations :: MigrationDir -> [(Text, Text)] -> IO (Maybe (MigrationValidateError, Bool))
 validateMigrations migrationDir knownMigrations = do
     let knownMigs = uncurry MigrationValidate <$> knownMigrations
     scripts <- filter (isOfficialMigrationFile . Text.unpack . mvFilepath) <$> liftIO (hashMigrations migrationDir)
-    when (scripts /= knownMigs) $
-      throwE $ UnknownMigrationsFound
-          { missingMigrations = knownMigs \\ scripts -- Migrations missing at runtime that were present at compilation time
-          , extraMigrations = scripts \\ knownMigs   -- Migrations found at runtime that were missing at compilation time
-          }
-
+    if scripts == knownMigs
+    then pure Nothing
+    else do
+      let missingMigr = knownMigs \\ scripts
+      let extraMigr = scripts \\ knownMigs
+      let unknown = UnknownMigrationsFound
+            { missingMigrations = missingMigr -- Migrations missing at runtime that were present at compilation time
+            , extraMigrations = extraMigr   -- Migrations found at runtime that were missing at compilation time
+            }
+      pure $ Just (unknown, all stage4 $ missingMigr <> extraMigr)
+  where
+    stage4 = (== 4) . readStageFromFilename . Text.unpack . mvFilepath
 
 applyMigration :: MigrationDir -> Bool -> PGConfig -> Maybe FilePath -> Handle -> (MigrationVersion, FilePath) -> IO ()
 applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (version, script) = do
@@ -275,15 +318,16 @@ renderMigrationValidateError = \case
 
 isOfficialMigrationFile :: FilePath -> Bool
 isOfficialMigrationFile fn =
-    let stage = readStageFromFilename (takeFileName fn)
-     in takeExtension fn == ".sql" && stage >= 1 && stage <= 3
+    takeExtension fn == ".sql" && stage >= 1 && stage <= 4
   where
-    -- Reimplement part of `parseMigrationVersionFromFile` because that function is not avaliable
-    -- here. Defaults to a stage value of `0`.
-    readStageFromFilename :: String -> Int
-    readStageFromFilename str =
-      case takeWhile isDigit . drop 1 $ dropWhile (/= '-') str of
-        stage -> fromMaybe 0 $ readMaybe stage
+    stage = readStageFromFilename fn
+
+-- Reimplement part of `parseMigrationVersionFromFile` because that function is not avaliable
+-- here. Defaults to a stage value of `0`.
+readStageFromFilename :: FilePath -> Int
+readStageFromFilename fn =
+  case takeWhile isDigit . drop 1 $ dropWhile (/= '-') (takeFileName fn) of
+    stage -> fromMaybe 0 $ readMaybe stage
 
 noLedgerMigrations :: SqlBackend -> Trace IO Text -> IO ()
 noLedgerMigrations backend trce = do
