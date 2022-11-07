@@ -214,6 +214,7 @@ mkSyncNodeParams staticDir mutableDir = do
     , enpHasLedger = True
     , enpSkipFix = True
     , enpOnlyFix = False
+    , enpForceIndexes = False
     , enpMaybeRollback = Nothing
     }
 

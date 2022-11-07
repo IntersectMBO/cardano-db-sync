@@ -120,9 +120,11 @@ runSyncNode
     -> Word64
     -> Word64
     -> ConnectionString
+    -> Bool
+    -> RunMigration
     -> SyncNodeParams
     -> IO ()
-runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConnString enp = do
+runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConnString ranAll runMigration enp = do
 
     let configFile = enpConfigFile enp
     enc <- readSyncNodeConfig configFile
@@ -138,7 +140,7 @@ runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConn
       logProtocolMagicId trce $ genesisProtocolMagicId genCfg
       syncEnv <- ExceptT $ mkSyncEnvFromConfig trce dbConnString
         (SyncOptions (enpExtended enp) aop (enpHasCache enp) (enpHasLedger enp) (enpSkipFix enp) (enpOnlyFix enp) snEveryFollowing snEveryLagging)
-        (enpLedgerStateDir enp) genCfg
+        (enpLedgerStateDir enp) genCfg ranAll (enpForceIndexes enp) runMigration
 
       -- If the DB is empty it will be inserted, otherwise it will be validated (to make
       -- sure we are on the right chain).
@@ -248,10 +250,11 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
                       channel
                       (Client.chainSyncClientPeer $
                         chainSyncClientFix backend (getTrace env) fd)
-            when (onlyFix && isFixed) exitSuccess
-            setIsFixed env
+            setIsFixedAndMigrate env
+            when onlyFix exitSuccess
 
           else do
+            when skipFix $ setIsFixedAndMigrate env
             -- The Db thread is not forked at this point, so we can use
             -- the connection here. A connection cannot be used concurrently by many
             -- threads

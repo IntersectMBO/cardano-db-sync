@@ -58,7 +58,7 @@ runCommand cmd =
     CmdRollback slotNo -> runRollback slotNo
     CmdRunMigrations mdir mldir -> do
         pgConfig <- orDie renderPGPassError $ newExceptT (readPGPass PGPassDefaultEnv)
-        unofficial <- runMigrations pgConfig False mdir mldir
+        unofficial <- runMigrations pgConfig False mdir mldir Initial
         unless (null unofficial) $
           putStrLn $ "Unofficial migration scripts found: " ++ show unofficial
     CmdUtxoSetAtBlock blkid -> utxoSetAtSlot blkid
