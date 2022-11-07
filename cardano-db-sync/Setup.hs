@@ -94,11 +94,11 @@ generateMigrations locInfo srcDir outDir = do
           , "  ]"
           ]
 
--- We only care about "official" migrations, with a `mvStage` version >=1 and <= 3.
+-- We only care about "official" migrations, with a `mvStage` version >=1 and <= 4.
 isOfficialMigrationFile :: FilePath -> Bool
 isOfficialMigrationFile fn =
     let stage = readStageFromFilename (takeFileName fn)
-     in takeExtension fn == ".sql" && stage >= 1 && stage <= 3
+     in takeExtension fn == ".sql" && stage >= 1 && stage <= 4
   where
     -- Reimplement part of `parseMigrationVersionFromFile` because that function is not avaliable
     -- here. Defaults to a stage value of `0`.

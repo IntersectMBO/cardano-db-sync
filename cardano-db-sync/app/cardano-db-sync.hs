@@ -67,6 +67,7 @@ pRunDbSyncNode =
     <*> pHasLedger
     <*> pSkipFix
     <*> pOnlyFix
+    <*> pForceIndexes
     <*> optional pSlotNo
 
 pConfigFile :: Parser ConfigFile
@@ -116,6 +117,13 @@ pSkipFix =
   Opt.flag False True
     ( Opt.long "skip-plutus-data-fix"
     <> Opt.help "Disables the db-sync fix procedure for the wrong datum and redeemer_data bytes."
+    )
+
+pForceIndexes ::  Parser Bool
+pForceIndexes =
+  Opt.flag False True
+    ( Opt.long "force-indexes"
+    <> Opt.help "Forces the Index creation at the start of db-sync. Normally they're create later."
     )
 
 pOnlyFix :: Parser Bool
