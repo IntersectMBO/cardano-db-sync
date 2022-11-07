@@ -31,7 +31,6 @@ import           Data.Text (Text)
 import           Cardano.Db.MinId
 import           Cardano.Db.Query hiding (isJust)
 import           Cardano.Db.Schema
-import           Cardano.Db.Text
 
 deleteBlocksSlotNoNoTrace :: MonadIO m => SlotNo -> ReaderT SqlBackend m Bool
 deleteBlocksSlotNoNoTrace = deleteBlocksSlotNo nullTracer
@@ -50,24 +49,20 @@ deleteBlocksSlotNo trce (SlotNo slotNo) = do
 -- | Delete starting from a 'BlockId'.
 deleteBlocksBlockId :: MonadIO m => Trace IO Text -> BlockId -> ReaderT SqlBackend m ()
 deleteBlocksBlockId trce blockId = do
-    blockIds <- undefined blockId -- TODO
-    (cminIds, completed) <- findMinIdsRec blockIds mempty
-    minIds <- if completed then pure cminIds else completeMinId blockId cminIds
-    deleteTablesAfterBlockId blockId (minTxId minIds) (minTxInId minIds) (minTxOutId minIds) (minMaTxOutId minIds)
+    mMinIds <- fmap (textToMinId =<<) <$> queryReverseIndexBlockId blockId
+    (cminIds, completed) <- findMinIdsRec mMinIds mempty
+    mTxId <- queryMinRefId TxBlockId blockId
+    minIds <- if completed then pure cminIds else completeMinId mTxId cminIds
+    deleteTablesAfterBlockId blockId mTxId minIds
 
   where
-    findMinIdsRec :: MonadIO m => [BlockId] -> MinIds -> ReaderT SqlBackend m (MinIds, Bool)
+    findMinIdsRec :: MonadIO m => [Maybe MinIds] -> MinIds -> ReaderT SqlBackend m (MinIds, Bool)
     findMinIdsRec [] minIds = pure (minIds, True)
-    findMinIdsRec (blkId : rest) minIds = do
-      mMinIds <- fmap textToMinId <$> undefined blkId -- TODO
+    findMinIdsRec (mMinIds : rest) minIds =
       case mMinIds of
         Nothing -> do
-          liftIO $ logWarning trce $
-            mconcat
-              [ "Failed to find ReverseInex for "
-              , textShow (unBlockId blkId)
-              , ". Deletion may take longer."
-              ]
+          liftIO $ logWarning trce
+            "Failed to find ReverseInex. Deletion may take longer."
           pure (minIds, False)
         Just minIdDB -> do
           let minIds' = minIds <> minIdDB
@@ -75,11 +70,10 @@ deleteBlocksBlockId trce blockId = do
           then pure (minIds', True)
           else findMinIdsRec rest minIds'
 
-    isComplete (MinIds m1 m2 m3 m4) = and [isJust m1, isJust m2, isJust m3, isJust m4]
+    isComplete (MinIds m1 m2 m3) = isJust m1 && isJust m2 && isJust m3
 
-completeMinId :: MonadIO m => BlockId -> MinIds -> ReaderT SqlBackend m MinIds
-completeMinId blkId minIds = do
-    mTxId <- queryMinRefId TxBlockId blkId
+completeMinId :: MonadIO m => Maybe TxId -> MinIds -> ReaderT SqlBackend m MinIds
+completeMinId mTxId minIds = do
     case mTxId of
       Nothing -> pure mempty
       Just txId -> do
@@ -88,14 +82,14 @@ completeMinId blkId minIds = do
         mMaTxOutId <- case mTxOutId of
           Nothing -> pure Nothing
           Just txOutId -> whenNothingQueryMinRefId (minMaTxOutId minIds) MaTxOutTxOutId txOutId
-        pure $ MinIds (Just txId) mTxInId mTxOutId mMaTxOutId
+        pure $ MinIds mTxInId mTxOutId mMaTxOutId
 
-deleteTablesAfterBlockId :: MonadIO m => BlockId -> Maybe TxId -> Maybe TxInId -> Maybe TxOutId -> Maybe MaTxOutId -> ReaderT SqlBackend m ()
-deleteTablesAfterBlockId blkId mtxId mtxInId mtxOutId mmaTxOutId = do
+deleteTablesAfterBlockId :: MonadIO m => BlockId -> Maybe TxId -> MinIds -> ReaderT SqlBackend m ()
+deleteTablesAfterBlockId blkId mtxId minIds = do
     deleteWhere [AdaPotsBlockId >=. blkId]
     deleteWhere [ReverseIndexBlockId >=. blkId]
     deleteWhere [EpochParamBlockId >=. blkId]
-    deleteTablesAfterTxId mtxId mtxInId mtxOutId mmaTxOutId
+    deleteTablesAfterTxId mtxId (minTxInId minIds) (minTxOutId minIds) (minMaTxOutId minIds)
     deleteWhere [BlockId >=. blkId]
 
 deleteTablesAfterTxId :: MonadIO m => Maybe TxId -> Maybe TxInId -> Maybe TxOutId -> Maybe MaTxOutId -> ReaderT SqlBackend m ()

@@ -8,38 +8,35 @@ import           Cardano.Db.Schema
 import           Cardano.Db.Text
 import qualified Data.Text as Text
 import           Database.Persist.Sql (SqlBackend, ToBackendKey, fromSqlKey, toSqlKey)
-import           Prelude (error)
 
 data MinIds = MinIds
-  { minTxId :: Maybe TxId
-  , minTxInId :: Maybe TxInId
+  { minTxInId :: Maybe TxInId
   , minTxOutId :: Maybe TxOutId
   , minMaTxOutId :: Maybe MaTxOutId
   }
 
 instance Monoid MinIds where
-  mempty = MinIds Nothing Nothing Nothing Nothing
+  mempty = MinIds Nothing Nothing Nothing
 
 instance Semigroup MinIds where
   mn1 <> mn2 =
     MinIds
-        { minTxId = minJust (minTxId mn1) (minTxId mn2)
-        , minTxInId = minJust (minTxInId mn1) (minTxInId mn2)
+        { minTxInId = minJust (minTxInId mn1) (minTxInId mn2)
         , minTxOutId = minJust (minTxOutId mn1) (minTxOutId mn2)
         , minMaTxOutId = minJust (minMaTxOutId mn1) (minMaTxOutId mn2)
         }
 
-textToMinId :: Text -> MinIds
+textToMinId :: Text -> Maybe MinIds
 textToMinId txt =
     case Text.split (== ':') txt of
-      [tminTxId, tminTxInId, tminTxOutId, tminMaTxOutId] ->
-        MinIds
-          { minTxId = toSqlKey <$> readKey tminTxId
-          , minTxInId = toSqlKey <$> readKey tminTxInId
-          , minTxOutId = toSqlKey <$> readKey tminTxOutId
-          , minMaTxOutId = toSqlKey <$> readKey tminMaTxOutId
-          }
-      _ -> error $ "Failed to parse MinIds: " <> Text.unpack txt
+      [tminTxInId, tminTxOutId, tminMaTxOutId] ->
+        Just $
+          MinIds
+            { minTxInId = toSqlKey <$> readKey tminTxInId
+            , minTxOutId = toSqlKey <$> readKey tminTxOutId
+            , minMaTxOutId = toSqlKey <$> readKey tminMaTxOutId
+            }
+      _ -> Nothing
   where
     readKey :: Text -> Maybe Int64
     readKey "" = Nothing
@@ -48,8 +45,7 @@ textToMinId txt =
 minIdsToText :: MinIds -> Text
 minIdsToText minIds =
     Text.intercalate ":"
-      [ fromKey $ minTxId minIds
-      , fromKey $ minTxInId minIds
+      [ fromKey $ minTxInId minIds
       , fromKey $ minTxOutId minIds
       , fromKey $ minMaTxOutId minIds
       ]
