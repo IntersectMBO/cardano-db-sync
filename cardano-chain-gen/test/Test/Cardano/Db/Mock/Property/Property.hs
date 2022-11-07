@@ -75,7 +75,7 @@ dbSyncTip m = case dbSyncChain m of
     [] -> Nothing
     ls ->
           let tp = fromIntegral $ length ls
-              tp' = fromIntegral $ length eventualDbSyncChain m
+              tp' = fromIntegral $ length $ eventualDbSyncChain m
           in fst <$> Just (BlockNo tp, BlockNo tp') -- TODO return both and fix
 
 rollbackChain :: Maybe BlockNo -> [Int] -> [Int]
@@ -89,7 +89,7 @@ instance ToExpr (Model Symbolic)
 instance ToExpr (Model Concrete)
 
 initModel :: Model r
-initModel = Model [] [] False False
+initModel = Model [] [] [] False False
 
 instance ToExpr BlockNo where
     toExpr = defaultExprViaShow
