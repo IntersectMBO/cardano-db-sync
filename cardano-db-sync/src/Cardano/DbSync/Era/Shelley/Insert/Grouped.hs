@@ -20,7 +20,7 @@ import qualified Data.List as List
 
 import           Cardano.BM.Trace (Trace)
 
-import           Cardano.Db (DbLovelace (..), minIdsToText, minJust, textShow)
+import           Cardano.Db (DbLovelace (..), minIdsToText, textShow)
 import qualified Cardano.Db as DB
 
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -43,8 +43,7 @@ import           Database.Persist.Sql (SqlBackend)
 -- other table references it in the future it has to be added here and delay its
 -- insertion.
 data BlockGroupedData = BlockGroupedData
-  { groupedTxId :: !(Maybe DB.TxId)
-  , groupedTxIn :: ![DB.TxIn]
+  { groupedTxIn :: ![DB.TxIn]
   , groupedTxOut :: ![(ExtendedTxOut, [MissingMaTxOut])]
   }
 
@@ -63,12 +62,11 @@ data ExtendedTxOut = ExtendedTxOut
   }
 
 instance Monoid BlockGroupedData where
-  mempty = BlockGroupedData Nothing [] []
+  mempty = BlockGroupedData [] []
 
 instance Semigroup BlockGroupedData where
   tgd1 <> tgd2 =
-    BlockGroupedData (minJust (groupedTxId tgd1) (groupedTxId tgd2))
-                     (groupedTxIn tgd1 <> groupedTxIn tgd2)
+    BlockGroupedData (groupedTxIn tgd1 <> groupedTxIn tgd2)
                      (groupedTxOut tgd1 <> groupedTxOut tgd2)
 
 insertBlockGroupedData
@@ -80,7 +78,7 @@ insertBlockGroupedData _tracer grouped = do
     let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> groupedTxOut grouped)
     maTxOutIds <- lift $ DB.insertManyMaTxOut maTxOuts
     txInId <- lift . DB.insertManyTxIn $ groupedTxIn grouped
-    pure $ DB.MinIds (groupedTxId grouped) (minimumMaybe txInId) (minimumMaybe txOutIds) (minimumMaybe maTxOutIds)
+    pure $ DB.MinIds (minimumMaybe txInId) (minimumMaybe txOutIds) (minimumMaybe maTxOutIds)
   where
     mkmaTxOuts :: (DB.TxOutId, [MissingMaTxOut]) -> [DB.MaTxOut]
     mkmaTxOuts (txOutId, mmtos) = mkmaTxOut txOutId <$> mmtos

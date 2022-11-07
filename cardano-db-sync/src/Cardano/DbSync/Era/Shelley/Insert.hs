@@ -240,7 +240,7 @@ insertTx tracer cache network isMember blkId epochNo slotNo blockIndex tx groupe
       !txOutsGrouped <- mapM (prepareTxOut tracer cache (txId, txHash)) (Generic.txOutputs tx)
 
       let !txIns = map (prepareTxIn txId Map.empty) resolvedInputs
-      pure $ grouped <> BlockGroupedData (Just txId) txIns txOutsGrouped
+      pure $ grouped <> BlockGroupedData txIns txOutsGrouped
 
     else do
       -- The following operations only happen if the script passes stage 2 validation (or the tx has
@@ -272,7 +272,7 @@ insertTx tracer cache network isMember blkId epochNo slotNo blockIndex tx groupe
       mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
-      pure $ grouped <> BlockGroupedData (Just txId) txIns txOutsGrouped
+      pure $ grouped <> BlockGroupedData txIns txOutsGrouped
 
 prepareTxOut
     :: (MonadBaseControl IO m, MonadIO m)
