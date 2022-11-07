@@ -4,12 +4,12 @@ module Test.IO.Cardano.Db.Migration
   ) where
 
 import           Cardano.Db (LogFileDir (..), MigrationDir (..), MigrationValidate (..),
-                   MigrationValidateError (..), MigrationVersion (..), SchemaVersion (..),
-                   getMigrationScripts, querySchemaVersion, readPGPassDefault, renderPGPassError,
-                   runDbNoLoggingEnv, runMigrations, validateMigrations)
+                   MigrationValidateError (..), MigrationVersion (..), MigrationToRun (..),
+                   SchemaVersion (..), getMigrationScripts, querySchemaVersion, readPGPassDefault,
+                   renderPGPassError, runDbNoLoggingEnv, runMigrations, validateMigrations)
 import           Control.Monad (unless, when)
 import           Control.Monad.Trans.Except.Exit (orDie)
-import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
+import           Control.Monad.Trans.Except.Extra (newExceptT)
 
 import qualified Data.List as List
 import qualified Data.List.Extra as List
@@ -32,8 +32,8 @@ tests =
 
 unknownMigrationValidate :: IO ()
 unknownMigrationValidate = do
-  result <- runExceptT $ validateMigrations testSchemaDir knownTestMigrations
-  unless (result == expected) $
+  result <- validateMigrations testSchemaDir knownTestMigrations
+  unless (result == Just (expected, False)) $
     error $ mconcat
             [ "Schema version mismatch. Expected "
             , show expected
@@ -42,9 +42,9 @@ unknownMigrationValidate = do
             , "."
             ]
   where
-    expected :: Either MigrationValidateError ()
+    expected :: MigrationValidateError
     expected =
-      Left $ UnknownMigrationsFound
+             UnknownMigrationsFound
                 { missingMigrations =
                     [ MigrationValidate
                       { mvHash = "hash"
@@ -62,8 +62,8 @@ unknownMigrationValidate = do
 
 invalidHashMigrationValidate :: IO ()
 invalidHashMigrationValidate = do
-  result <- runExceptT $ validateMigrations testSchemaDir knownTestMigrations
-  unless (result == expected) $
+  result <- validateMigrations testSchemaDir knownTestMigrations
+  unless (result == Just (expected, False)) $
     error $ mconcat
             [ "Schema version mismatch. Expected "
             , show expected
@@ -72,9 +72,9 @@ invalidHashMigrationValidate = do
             , "."
             ]
   where
-    expected  :: Either MigrationValidateError ()
+    expected :: MigrationValidateError
     expected =
-      Left $ UnknownMigrationsFound
+             UnknownMigrationsFound
                 { missingMigrations =
                     [ MigrationValidate
                       { mvHash = "hash"
@@ -92,8 +92,8 @@ invalidHashMigrationValidate = do
 invalidHashMigrationValidate' :: IO ()
 invalidHashMigrationValidate' = do
   let emptyMigrations = []                   -- No known migrations from compiling
-  result <- runExceptT $ validateMigrations testSchemaDir emptyMigrations
-  unless (result == expected) $
+  result <- validateMigrations testSchemaDir emptyMigrations
+  unless (result == Just (expected, False)) $
     error $ mconcat
             [ "Schema version mismatch. Expected "
             , show expected
@@ -102,9 +102,9 @@ invalidHashMigrationValidate' = do
             , "."
             ]
   where
-    expected  :: Either MigrationValidateError ()
+    expected :: MigrationValidateError
     expected =
-      Left $ UnknownMigrationsFound
+             UnknownMigrationsFound
                 { missingMigrations = []
                 , extraMigrations =
                     [ MigrationValidate
@@ -120,7 +120,7 @@ migrationTest :: IO ()
 migrationTest = do
   let schemaDir = MigrationDir "../schema"
   pgConfig <- orDie renderPGPassError $ newExceptT readPGPassDefault
-  _ <-runMigrations pgConfig True schemaDir (Just $ LogFileDir "/tmp")
+  _ <- runMigrations pgConfig True schemaDir (Just $ LogFileDir "/tmp") Initial
   expected <- readSchemaVersion schemaDir
   actual <- getDbSchemaVersion
   unless (expected == actual) $

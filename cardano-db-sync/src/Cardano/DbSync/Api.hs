@@ -10,11 +10,13 @@ module Cardano.DbSync.Api
   , LedgerEnv (..)
   , SyncOptions (..)
   , ConsistentLevel (..)
+  , RunMigration
   , setConsistentLevel
   , getConsistentLevel
   , isConsistent
   , getIsSyncFixed
-  , setIsFixed
+  , setIsFixedAndMigrate
+  , runIndexMigrationsMaybe
   , mkSyncEnvFromConfig
   , replaceConnection
   , verifySnapshotPoint
@@ -77,9 +79,11 @@ data SyncEnv = SyncEnv
   , envNetworkMagic :: !NetworkMagic
   , envSystemStart :: !SystemStart
   , envConnString :: ConnectionString
+  , envRunDelayedMigration :: RunMigration
   , envBackend :: !(StrictTVar IO (Strict.Maybe SqlBackend))
   , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)
   , envIsFixed :: !(StrictTVar IO Bool)
+  , envIndexes :: !(StrictTVar IO Bool)
   , envOptions :: !SyncOptions
   , envCache :: !Cache
   , envOfflineWorkQueue :: !(TBQueue IO PoolFetchRetry)
@@ -89,6 +93,8 @@ data SyncEnv = SyncEnv
   , envNoLedgerEnv :: !NoLedgerStateEnv -- only used when configured without ledger state.
   , envLedger :: !LedgerEnv
   }
+
+type RunMigration = DB.MigrationToRun -> IO ()
 
 data ConsistentLevel = Consistent | DBAheadOfLedger | Unchecked
   deriving (Show, Eq)
@@ -112,9 +118,24 @@ isConsistent env = do
 getIsSyncFixed :: SyncEnv -> IO Bool
 getIsSyncFixed = readTVarIO . envIsFixed
 
-setIsFixed :: SyncEnv -> IO ()
-setIsFixed env =
+setIsFixedAndMigrate :: SyncEnv -> IO ()
+setIsFixedAndMigrate env = do
+  envRunDelayedMigration env DB.Fix
   atomically $ writeTVar (envIsFixed env) True
+
+runIndexMigrationsMaybe :: SyncEnv -> IO ()
+runIndexMigrationsMaybe env = do
+    haveRan <- readTVarIO $ envIndexes env
+    unless haveRan $ do
+      logInfo trce $
+        mconcat
+          [ "Creating migrations. This may take a while."
+          , " Setting a higher maintenance_work_mem from Postgres usually speeds up this process."
+          ]
+      envRunDelayedMigration env DB.Indexes
+      atomically $ writeTVar (envIndexes env) True
+  where
+    trce = getTrace env
 
 data SyncOptions = SyncOptions
   { soptExtended :: !Bool
@@ -230,15 +251,16 @@ getCurrentTipBlockNo env = do
 
 mkSyncEnv
     :: Trace IO Text -> ConnectionString -> SyncOptions -> ProtocolInfo IO CardanoBlock -> Ledger.Network
-    -> NetworkMagic -> SystemStart -> LedgerStateDir
+    -> NetworkMagic -> SystemStart -> LedgerStateDir -> Bool -> Bool -> RunMigration
     -> IO SyncEnv
-mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir = do
+mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir ranAll forcedIndexes runMigration = do
   ledgerEnv <- mkLedgerEnv trce protoInfo dir nw systemStart (soptAbortOnInvalid syncOptions)
                  (snapshotEveryFollowing syncOptions) (snapshotEveryLagging syncOptions)
   cache <- if soptCache syncOptions then newEmptyCache 100000 else pure uninitiatedCache
   backendVar <- newTVarIO Strict.Nothing
   consistentLevelVar <- newTVarIO Unchecked
-  fixDataVar <- newTVarIO False
+  fixDataVar <- newTVarIO ranAll
+  indexesVar <- newTVarIO forcedIndexes
   owq <- newTBQueueIO 100
   orq <- newTBQueueIO 100
   epochVar <- newTVarIO initEpochState
@@ -249,10 +271,12 @@ mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir = do
           , envNetworkMagic = nwMagic
           , envSystemStart = systemStart
           , envConnString = connSring
+          , envRunDelayedMigration = runMigration
           , envBackend = backendVar
           , envOptions = syncOptions
           , envConsistentLevel = consistentLevelVar
           , envIsFixed = fixDataVar
+          , envIndexes = indexesVar
           , envCache = cache
           , envOfflineWorkQueue = owq
           , envOfflineResultQueue = orq
@@ -262,8 +286,17 @@ mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir = do
           , envLedger = ledgerEnv
           }
 
-mkSyncEnvFromConfig :: Trace IO Text -> ConnectionString -> SyncOptions -> LedgerStateDir -> GenesisConfig -> IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce connSring syncOptions dir genCfg =
+mkSyncEnvFromConfig
+    :: Trace IO Text
+    -> ConnectionString
+    -> SyncOptions
+    -> LedgerStateDir
+    -> GenesisConfig
+    -> Bool
+    -> Bool
+    -> RunMigration
+    -> IO (Either SyncNodeError SyncEnv)
+mkSyncEnvFromConfig trce connSring syncOptions dir genCfg ranAll forcedIndexes runMigration =
   case genCfg of
     GenesisCardano _ bCfg sCfg _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -282,7 +315,7 @@ mkSyncEnvFromConfig trce connSring syncOptions dir genCfg =
           Right <$> mkSyncEnv trce connSring syncOptions (mkProtocolInfoCardano genCfg []) (Shelley.sgNetworkId $ scConfig sCfg)
                       (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
                       (SystemStart .Byron.gdStartTime $ Byron.configGenesisData bCfg)
-                      dir
+                      dir ranAll forcedIndexes runMigration
 
 
 -- | 'True' is for in memory points and 'False' for on disk
