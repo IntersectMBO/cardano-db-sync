@@ -72,6 +72,47 @@ RESTORE_SNAPSHOT=https://update-cardano-mainnet.iohk.io/cardano-db-sync/db-sync-
 docker-compose up && docker-compose logs -f
 ```
 
+### Set folder where to download snapshot
+
+The snapshot is downloaded in current working directory. Setting the working directory should allow to choose where the download is done.
+
+For `docker-compose`:
+
+```yaml
+cardano-db-sync:
+    image: inputoutput/cardano-db-sync:13.0.5
+    ... 
+    working_dir: /var/lib/cexplorer
+    volumes:
+      - db-sync-data:/var/lib/cexplorer
+      - node-ipc:/node-ipc
+    restart: on-failure
+    ...
+```
+After starting `docker-compose` the snapshot file should be downloaded to specified directory 
+which exact location can be found by using `docker volume inspect` command:
+
+```sh
+docker volume inspect cardano-db-sync_db-sync-data
+[
+    {
+        "CreatedAt": "2022-11-08T12:44:55+01:00",
+        "Driver": "local",
+        "Labels": {
+            "com.docker.compose.project": "cardano-db-sync",
+            "com.docker.compose.version": "1.29.2",
+            "com.docker.compose.volume": "db-sync-data"
+        },
+        "Mountpoint": "/var/snap/docker/common/var-lib-docker/volumes/cardano-db-sync_db-sync-data/_data",
+        "Name": "cardano-db-sync_db-sync-data",
+        "Options": null,
+        "Scope": "local"
+    }
+]
+```
+
+for `docker` use `--workdir=`.
+
 ## Disable options
 
 Consult the configuration [docs](docs/configuration.md) for what these options mean, assuming you have read that
