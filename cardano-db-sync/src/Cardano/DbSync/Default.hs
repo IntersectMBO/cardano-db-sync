@@ -102,7 +102,7 @@ insertBlock env cblk applyRes firstAfterRollback = do
     !epochEvents <- liftIO $ atomically $ generateNewEpochEvents env (apSlotDetails applyRes)
     let !applyResult = applyRes { apEvents = sort $ epochEvents <> apEvents applyRes}
     let !details = apSlotDetails applyResult
---    when firstAfterRollback $ migrateIndexesMaybe env details
+    liftIO $ migrateIndexesMaybe env details
     insertLedgerEvents env (sdEpochNo details) (apEvents applyResult)
     insertEpoch details
     let shouldLog = hasEpochStartEvent (apEvents applyResult) || firstAfterRollback
@@ -212,12 +212,9 @@ hasEpochStartEvent = any isNewEpoch
         LedgerNewEpoch {} -> True
         LedgerStartAtEpoch {} -> True
         _otherwise -> False
-{-}
-migrateIndexesMaybe :: SyncEnv -> SlotDetails -> ReaderT SqlBackend (LoggingT IO) ()
-migrateIndexesMaybe env sd = when isWithinHalfHour sd $ do
-    logInfo trce "Close to the tip. Restoring indexes."
-    runMigrationSynced
+
+migrateIndexesMaybe :: SyncEnv -> SlotDetails -> IO ()
+migrateIndexesMaybe env sd = when isWithinHalfHour $ do
+    runIndexMigrationsMaybe env
   where
-    isWithinHalfHour = isSyncedWithinSeconds sd 1800
-    trce = getTrace env
--}
+    isWithinHalfHour = isSyncedWithinSeconds sd 1800 == SyncFollowing

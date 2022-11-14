@@ -78,38 +78,45 @@ runDbSync metricsSetters knownMigrations iomgr trce params aop snEveryFollowing 
     -- Read the PG connection info
     pgConfig <- orDie Db.renderPGPassError $ newExceptT (Db.readPGPass $ enpPGPassSource params)
 
-    orDieWithLog Db.renderMigrationValidateError trce $
-      Db.validateMigrations dbMigrationDir knownMigrations
+    mErrors <- liftIO $ Db.validateMigrations dbMigrationDir knownMigrations
+    whenJust mErrors $ \(unknown, allStage4) ->
+      if allStage4 then
+        logWarning trce $ Db.renderMigrationValidateError unknown
+      else do
+        let msg = Db.renderMigrationValidateError unknown
+        logError trce msg
+        panic msg
 
     logInfo trce "Schema migration files validated"
     logInfo trce "Running database migrations"
 
-    unofficial <- Db.runMigrations pgConfig True dbMigrationDir (Just $ Db.LogFileDir "/tmp")
+    let runMigration = Db.runMigrations pgConfig True dbMigrationDir (Just $ Db.LogFileDir "/tmp")
+    (ranAll, unofficial) <- if enpForceIndexes params then runMigration Db.Initial else runMigration Db.Full
     unless (null unofficial) $
       logWarning trce $ "Unofficial migration scripts found: " <> textShow unofficial
+
+    if ranAll then
+      logInfo trce "Some migrations were not executed. They need to run when syncing has started."
+    else
+      logInfo trce "All migrations were executed"
+
+    if enpForceIndexes params then
+      logInfo trce "New user indexes were not created. They may be created later if necessary."
+    else
+      logInfo trce "All user indexes were created"
 
     let connectionString = Db.toConnectionString pgConfig
 
     -- For testing and debugging.
     whenJust (enpMaybeRollback params) $ \ slotNo ->
       void $ unsafeRollback trce pgConfig slotNo
-    runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging connectionString params
+    runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging connectionString ranAll (void . runMigration) params
 
   where
     dbMigrationDir :: Db.MigrationDir
     dbMigrationDir = enpMigrationDir params
 
 -- -------------------------------------------------------------------------------------------------
-
--- Log error to Trace and panic.
-orDieWithLog :: (t -> Text) -> Trace IO Text -> ExceptT t IO () -> IO ()
-orDieWithLog render trce e = do
-  runExceptT e >>= \case
-    Left errors -> do
-      let errorStr = render errors
-      liftIO $ logError trce errorStr
-      panic errorStr
-    Right () -> pure ()
 
 startupReport :: Trace IO Text -> Bool -> SyncNodeParams -> IO ()
 startupReport trce aop params = do
