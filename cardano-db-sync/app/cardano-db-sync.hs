@@ -123,7 +123,7 @@ pForceIndexes ::  Parser Bool
 pForceIndexes =
   Opt.flag False True
     ( Opt.long "force-indexes"
-    <> Opt.help "Forces the Index creation at the start of db-sync. Normally they're create later."
+    <> Opt.help "Forces the Index creation at the start of db-sync. Normally they're created later."
     )
 
 pOnlyFix :: Parser Bool
