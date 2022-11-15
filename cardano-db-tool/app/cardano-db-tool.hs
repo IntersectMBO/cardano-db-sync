@@ -7,7 +7,7 @@ import           Cardano.DbSync.Config.Types hiding (CmdVersion, LogFileDir)
 import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Control.Applicative (optional)
-import           Control.Monad (unless)
+import           Control.Monad (unless, void, when)
 import           Control.Monad.Trans.Except.Exit (orDie)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
@@ -43,7 +43,7 @@ data Command
   = CmdCreateMigration !MigrationDir
   | CmdReport !Report
   | CmdRollback !SlotNo
-  | CmdRunMigrations !MigrationDir !(Maybe LogFileDir)
+  | CmdRunMigrations !MigrationDir !Bool !Bool !(Maybe LogFileDir)
   | CmdUtxoSetAtBlock !Word64
   | CmdPrepareSnapshot !PrepareSnapshotArgs
   | CmdValidateDb
@@ -56,11 +56,15 @@ runCommand cmd =
     CmdCreateMigration mdir -> runCreateMigration mdir
     CmdReport report -> runReport report
     CmdRollback slotNo -> runRollback slotNo
-    CmdRunMigrations mdir mldir -> do
+    CmdRunMigrations mdir forceIndexes mockFix mldir -> do
         pgConfig <- orDie renderPGPassError $ newExceptT (readPGPass PGPassDefaultEnv)
-        unofficial <- runMigrations pgConfig False mdir mldir Initial
+        unofficial <- snd <$> runMigrations pgConfig False mdir mldir Initial
         unless (null unofficial) $
           putStrLn $ "Unofficial migration scripts found: " ++ show unofficial
+        when forceIndexes $
+          void $ runMigrations pgConfig False mdir mldir Indexes
+        when mockFix $
+          void $ runMigrations pgConfig False mdir mldir Fix
     CmdUtxoSetAtBlock blkid -> utxoSetAtSlot blkid
     CmdPrepareSnapshot pargs -> runPrepareSnapshot pargs
     CmdValidateDb -> runDbValidation
@@ -105,7 +109,14 @@ pCommand =
             (Opt.progDesc "Rollback the database to the block with the provided slot number.")
     , Opt.command "run-migrations"
         $ Opt.info pRunMigrations
-            (Opt.progDesc "Run the database migrations (which are idempotent).")
+            (Opt.progDesc $
+              mconcat
+                ["Run the database migrations (which are idempotent)."
+                , " By default this only runs the initial migrations that db-sync"
+                , " runs when it starts. You can force and mock other migrations"
+                , " but this is not advised in the general case."
+                ]
+            )
     , Opt.command "utxo-set"
         $ Opt.info pUtxoSetAtBlock
             (Opt.progDesc "Get UTxO set at specified BlockNo.")
@@ -129,7 +140,11 @@ pCommand =
 
     pRunMigrations :: Parser Command
     pRunMigrations =
-      CmdRunMigrations <$> pMigrationDir <*> optional pLogFileDir
+      CmdRunMigrations
+        <$> pMigrationDir
+        <*> pForceIndexes
+        <*> pMockFix
+        <*> optional pLogFileDir
 
     pRollback :: Parser Command
     pRollback =
@@ -166,6 +181,31 @@ pLogFileDir =
     (  Opt.long "ldir"
     <> Opt.help "The directory to write the log to."
     <> Opt.completer (Opt.bashCompleter "directory")
+    )
+
+pForceIndexes :: Parser Bool
+pForceIndexes =
+  Opt.flag False True
+    ( Opt.long "force-indexes"
+      <> Opt.help
+          ( mconcat
+              [ "Forces the creation of all indexes."
+              , " Normally they are created by db-sync when it reaches"
+              , " the tip of the chain."
+              ]
+          )
+    )
+
+pMockFix :: Parser Bool
+pMockFix =
+  Opt.flag False True
+    ( Opt.long "mock-fix"
+    <> Opt.help
+        ( mconcat
+            [ "Mocks the execution of the fix chainsync procedure"
+            , " By using this flag, db-sync later won't run the fixing procedures."
+            ]
+        )
     )
 
 pValidateLedgerParams :: Parser LedgerValidationParams
