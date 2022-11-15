@@ -5,8 +5,9 @@ DECLARE
   next_version int ;
 BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
-  IF next_version = 3 THEN
-    EXECUTE 'ALTER TABLE "extra_key_witness" DROP CONSTRAINT "unique_witness"' ;
+  IF next_version = 18 THEN
+    EXECUTE 'ALTER TABLE "datum" ADD COLUMN "bytes" bytea NOT NULL' ;
+    EXECUTE 'ALTER TABLE "redeemer_data" ADD COLUMN "bytes" bytea NOT NULL' ;
     -- Hand written SQL statements can be added here.
     UPDATE schema_version SET stage_two = next_version ;
     RAISE NOTICE 'DB has been migrated to stage_two version %', next_version ;
