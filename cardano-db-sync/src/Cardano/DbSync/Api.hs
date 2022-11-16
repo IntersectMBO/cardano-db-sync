@@ -16,7 +16,8 @@ module Cardano.DbSync.Api
   , isConsistent
   , getIsSyncFixed
   , setIsFixedAndMigrate
-  , runIndexMigrationsMaybe
+  , getRanIndexes
+  , runIndexMigrations
   , mkSyncEnvFromConfig
   , replaceConnection
   , verifySnapshotPoint
@@ -124,8 +125,12 @@ setIsFixedAndMigrate env = do
   envRunDelayedMigration env DB.Fix
   atomically $ writeTVar (envIsFixed env) True
 
-runIndexMigrationsMaybe :: SyncEnv -> IO ()
-runIndexMigrationsMaybe env = do
+getRanIndexes :: SyncEnv -> IO Bool
+getRanIndexes env = do
+    readTVarIO $ envIndexes env
+
+runIndexMigrations :: SyncEnv -> IO ()
+runIndexMigrations env = do
     haveRan <- readTVarIO $ envIndexes env
     unless haveRan $ do
       logInfo trce $
