@@ -261,11 +261,11 @@ readStateUnsafe env = do
       Strict.Nothing -> panic "LedgerState.readStateUnsafe: Ledger state is not found"
       Strict.Just st -> pure st
 
-applyBlockAndSnapshot :: LedgerEnv -> CardanoBlock -> IO ApplyResult
+applyBlockAndSnapshot :: LedgerEnv -> CardanoBlock -> IO (ApplyResult, Bool)
 applyBlockAndSnapshot env blk = do
     (oldState, appResult) <- applyBlock env blk
-    storeSnapshotAndCleanupMaybe env oldState appResult (blockNo blk) (isSyncedWithinSeconds (apSlotDetails appResult) 600)
-    pure appResult
+    tookSnapshot <- storeSnapshotAndCleanupMaybe env oldState appResult (blockNo blk) (isSyncedWithinSeconds (apSlotDetails appResult) 600)
+    pure (appResult, tookSnapshot)
 
 -- The function 'tickThenReapply' does zero validation, so add minimal validation ('blockPrevHash'
 -- matches the tip hash of the 'LedgerState'). This was originally for debugging but the check is
@@ -339,16 +339,20 @@ applyBlock env blk = do
 
 storeSnapshotAndCleanupMaybe
         :: LedgerEnv -> CardanoLedgerState -> ApplyResult -> BlockNo -> SyncState
-        -> IO ()
+        -> IO Bool
 storeSnapshotAndCleanupMaybe env oldState appResult blkNo syncState =
     case maybeFromStrict (apNewEpoch appResult) of
       Just newEpoch -> do
         let newEpochNo = Generic.neEpoch newEpoch
         -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
         liftIO $ saveCleanupState env oldState (Just $ newEpochNo - 1)
+        pure True
       Nothing ->
-        when (timeToSnapshot syncState blkNo) $
+        if timeToSnapshot syncState blkNo then do
           liftIO $ saveCleanupState env oldState Nothing
+          pure True
+        else
+          pure False
 
   where
     timeToSnapshot :: SyncState -> BlockNo -> Bool

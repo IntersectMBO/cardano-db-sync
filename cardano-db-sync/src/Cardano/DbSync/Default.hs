@@ -68,11 +68,11 @@ insertListBlocks env blocks = do
 applyAndInsertBlockMaybe
     :: SyncEnv -> CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 applyAndInsertBlockMaybe env cblk = do
-    !applyRes <- liftIO mkApplyResult
+    (!applyRes, !tookSnapshot) <- liftIO mkApplyResult
     bl <- liftIO $ isConsistent env
     if bl then
       -- In the usual case it will be consistent so we don't need to do any queries. Just insert the block
-      insertBlock env cblk applyRes False
+      insertBlock env cblk applyRes False tookSnapshot
     else do
       blockIsInDbAlready <- lift (isRight <$> DB.queryBlockId (SBS.fromShort . Consensus.getOneEraHash $ blockHash cblk))
       -- If the block is already in db, do nothing. If not, delete all blocks with greater 'BlockNo' or
@@ -83,48 +83,49 @@ applyAndInsertBlockMaybe env cblk = do
            [ "Received block which is not in the db with ", textShow (getHeaderFields cblk)
            , ". Time to restore consistency."]
         rollbackFromBlockNo env (blockNo cblk)
-        insertBlock env cblk applyRes True
+        insertBlock env cblk applyRes True tookSnapshot
         liftIO $ setConsistentLevel env Consistent
   where
     tracer = getTrace env
 
-    mkApplyResult :: IO ApplyResult
+    mkApplyResult :: IO (ApplyResult, Bool)
     mkApplyResult = do
       if hasLedgerState env then
         applyBlockAndSnapshot (envLedger env) cblk
       else do
         slotDetails <- getSlotDetailsNode (envNoLedgerEnv env) (cardanoBlockSlotNo cblk)
-        pure $ defaultApplyResult slotDetails
+        pure (defaultApplyResult slotDetails, False)
 
 insertBlock
-    :: SyncEnv -> CardanoBlock -> ApplyResult -> Bool -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
-insertBlock env cblk applyRes firstAfterRollback = do
+    :: SyncEnv -> CardanoBlock -> ApplyResult -> Bool -> Bool
+    -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
+insertBlock env cblk applyRes firstAfterRollback tookSnapshot = do
     !epochEvents <- liftIO $ atomically $ generateNewEpochEvents env (apSlotDetails applyRes)
     let !applyResult = applyRes { apEvents = sort $ epochEvents <> apEvents applyRes}
     let !details = apSlotDetails applyResult
-    liftIO $ migrateIndexesMaybe env details
+    let !withinTwoMin = isWithinTwoMin details
+    let !withinHalfHour = isWithinHalfHour details
     insertLedgerEvents env (sdEpochNo details) (apEvents applyResult)
     insertEpoch details
     let shouldLog = hasEpochStartEvent (apEvents applyResult) || firstAfterRollback
     let isMember poolId = Set.member poolId (apPoolsRegistered applyResult)
+    let insertShelley blk =
+          insertShelleyBlock env shouldLog withinTwoMin withinHalfHour blk
+            details isMember (apNewEpoch applyResult) (apStakeSlice applyResult)
     case cblk of
-      BlockByron blk ->
-        newExceptT $ insertByronBlock env shouldLog blk details
-      BlockShelley blk -> newExceptT $
-        insertShelleyBlock env shouldLog (Generic.fromShelleyBlock blk)
-          details isMember (apNewEpoch applyResult) (apStakeSlice applyResult)
-      BlockAllegra blk -> newExceptT $
-        insertShelleyBlock env shouldLog (Generic.fromAllegraBlock blk)
-          details isMember (apNewEpoch applyResult) (apStakeSlice applyResult)
-      BlockMary blk -> newExceptT $
-        insertShelleyBlock env shouldLog (Generic.fromMaryBlock blk)
-          details isMember (apNewEpoch applyResult) (apStakeSlice applyResult)
-      BlockAlonzo blk -> newExceptT $
-        insertShelleyBlock env shouldLog (Generic.fromAlonzoBlock (getPrices applyResult) blk)
-          details isMember (apNewEpoch applyResult) (apStakeSlice applyResult)
-      BlockBabbage blk -> newExceptT $
-        insertShelleyBlock env shouldLog (Generic.fromBabbageBlock (getPrices applyResult) blk)
-          details isMember (apNewEpoch applyResult) (apStakeSlice applyResult)
+      BlockByron blk -> newExceptT $
+        insertByronBlock env shouldLog blk details
+      BlockShelley blk -> newExceptT $ insertShelley $
+        Generic.fromShelleyBlock blk
+      BlockAllegra blk -> newExceptT $ insertShelley $
+        Generic.fromAllegraBlock blk
+      BlockMary blk -> newExceptT $ insertShelley $
+        Generic.fromMaryBlock blk
+      BlockAlonzo blk -> newExceptT $ insertShelley $
+        Generic.fromAlonzoBlock (getPrices applyResult) blk
+      BlockBabbage blk -> newExceptT $ insertShelley $
+        Generic.fromBabbageBlock (getPrices applyResult) blk
+    lift $ commitOrIndexes withinTwoMin withinHalfHour
   where
     tracer = getTrace env
 
@@ -136,6 +137,26 @@ insertBlock env cblk applyRes firstAfterRollback = do
       Strict.Just pr -> Just pr
       Strict.Nothing | hasLedgerState env -> Just $ Ledger.Prices minBound minBound
       Strict.Nothing -> Nothing
+
+    commitOrIndexes :: Bool -> Bool -> ReaderT SqlBackend (LoggingT IO) ()
+    commitOrIndexes withinTwoMin withinHalfHour = do
+      commited <-
+        if withinTwoMin || tookSnapshot then do
+          DB.transactionCommit
+          pure True
+        else
+          pure False
+      when withinHalfHour $ do
+        ranIndexes <- liftIO $ getRanIndexes env
+        unless ranIndexes $ do
+          unless commited DB.transactionCommit
+          liftIO $ runIndexMigrations env
+
+    isWithinTwoMin :: SlotDetails -> Bool
+    isWithinTwoMin sd = isSyncedWithinSeconds sd 120 == SyncFollowing
+
+    isWithinHalfHour :: SlotDetails -> Bool
+    isWithinHalfHour sd = isSyncedWithinSeconds sd 1800 == SyncFollowing
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -208,9 +229,3 @@ hasEpochStartEvent = any isNewEpoch
         LedgerNewEpoch {} -> True
         LedgerStartAtEpoch {} -> True
         _otherwise -> False
-
-migrateIndexesMaybe :: SyncEnv -> SlotDetails -> IO ()
-migrateIndexesMaybe env sd = when isWithinHalfHour $ do
-    runIndexMigrationsMaybe env
-  where
-    isWithinHalfHour = isSyncedWithinSeconds sd 1800 == SyncFollowing
