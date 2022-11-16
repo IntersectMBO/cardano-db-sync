@@ -82,10 +82,10 @@ type IsPoolMember = PoolKeyHash -> Bool
 
 insertShelleyBlock
     :: (MonadBaseControl IO m, MonadIO m)
-    => SyncEnv -> Bool -> Generic.Block -> SlotDetails
+    => SyncEnv -> Bool -> Bool -> Bool -> Generic.Block -> SlotDetails
     -> IsPoolMember -> Strict.Maybe Generic.NewEpoch -> Generic.StakeSliceRes
     -> ReaderT SqlBackend m (Either SyncNodeError ())
-insertShelleyBlock env shouldLog blk details isMember mNewEpoch stakeSlice = do
+insertShelleyBlock env shouldLog withinTwoMins withinHalfHour blk details isMember mNewEpoch stakeSlice = do
   runExceptT $ do
     pbid <- case Generic.blkPreviousHash blk of
       Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
@@ -118,21 +118,21 @@ insertShelleyBlock env shouldLog blk details isMember mNewEpoch stakeSlice = do
     let txInserter = insertTx tracer cache (leNetwork lenv) isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
     grouped <- foldM (\grouped (idx, tx) -> txInserter idx tx grouped) mempty zippedTx
     minIds <- insertBlockGroupedData tracer grouped
-    insertReverseIndex blkId minIds
+    when withinHalfHour $
+      insertReverseIndex blkId minIds
 
     liftIO $ do
       let epoch = unEpochNo (sdEpochNo details)
           slotWithinEpoch = unEpochSlot (sdEpochSlot details)
-          followingClosely = getSyncStatus details == SyncFollowing
 
-      when (followingClosely && slotWithinEpoch /= 0 && unBlockNo (Generic.blkBlockNo blk) `mod` 20 == 0) $ do
+      when (withinTwoMins && slotWithinEpoch /= 0 && unBlockNo (Generic.blkBlockNo blk) `mod` 20 == 0) $ do
         logInfo tracer $
           mconcat
             [ renderInsertName (Generic.blkEra blk), ": continuing epoch ", textShow epoch
             , " (slot ", textShow slotWithinEpoch , "/"
             , textShow (unEpochSize $ sdEpochSize details), ")"
             ]
-      logger followingClosely tracer $ mconcat
+      logger tracer $ mconcat
         [ renderInsertName (Generic.blkEra blk), ": epoch "
         , textShow (unEpochNo $ sdEpochNo details)
         , ", slot ", textShow (unSlotNo $ Generic.blkSlotNo blk)
@@ -150,15 +150,11 @@ insertShelleyBlock env shouldLog blk details isMember mNewEpoch stakeSlice = do
         insertOfflineResults tracer (envOfflineResultQueue env)
         loadOfflineWorkQueue tracer (envOfflineWorkQueue env)
 
-    when (getSyncStatus details == SyncFollowing) $
-      -- Serializiing things during syncing can drastically slow down full sync
-      -- times (ie 10x or more).
-      lift DB.transactionCommit
   where
-    logger :: Bool -> Trace IO a -> a -> IO ()
-    logger followingClosely
+    logger :: Trace IO a -> a -> IO ()
+    logger
       | shouldLog = logInfo
-      | followingClosely = logInfo
+      | withinTwoMins = logInfo
       | unBlockNo (Generic.blkBlockNo blk) `mod` 5000 == 0 = logInfo
       | otherwise = logDebug
 
@@ -173,10 +169,7 @@ insertShelleyBlock env shouldLog blk details isMember mNewEpoch stakeSlice = do
         other -> mconcat [ "insertShelleyBlock(", textShow other, ")" ]
 
     offlineModBase :: Word64
-    offlineModBase =
-      case getSyncStatus details of
-        SyncFollowing -> 10
-        SyncLagging -> 2000
+    offlineModBase = if withinTwoMins then 10 else 2000
 
     lenv :: LedgerEnv
     lenv = envLedger env
