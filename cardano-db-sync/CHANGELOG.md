@@ -1,5 +1,21 @@
 # Revision history for cardano-db-sync
 
+## 13.1.0.0
+* Avoids rollbacks on restarts, making them way faster [#1190]
+* Syncing speed is increased
+* Allows to migrate from previous 13.x releases without resync [#1172]
+* Creates a procedure that fixes old values related to plutus data [#1214] as the first step of migration [#1278]
+* Removes many unique keys that were never used [#1087]
+* Delays the creation of most indexes while syncing. They are created when syncing is almost complete [#1293]
+* Removed all foreign keys [#1082]
+* Reworked the way that rollback works, using reverse indexes.
+* Aded a new `reverse_index` table to speed up rollbacks
+* Added `skip-plutus-data-fix`, `only-plutus-data-fix`, `force-indexes` flags to `cardano-db-sync`
+* Added `force-indexes`, `mock-fix` flags for `cardano-db-tool`
+* Fixed Stake Pool metadata fetch error exceeded 512 bytes [#1270]
+* Snapshot creation no longer rollbacks to the ledger snapshot file, so it's faster
+* Columns `stake_address.tx_id`, `cost_model.block_id` are removed
+
 ## 13.0.5
 * Fixed an issue where `StakeAdress` cache was not cleaned up properly and could cause crashes [#1222]
 * Fixed an issue where fees for txs with phase 2 failure which din't include the total_collateral fields appeared to be 0 [#1242]
