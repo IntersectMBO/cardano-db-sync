@@ -35,7 +35,7 @@ rollbackTest :: IO ()
 rollbackTest =
   runDbNoLoggingEnv $ do
     -- Delete the blocks if they exist.
-    deleteAllBlocksCascade
+    deleteAllBlocks
     setupBlockCount <- queryBlockCount
     assertBool ("Block on setup is " ++ show setupBlockCount ++ " but should be 0.") $ setupBlockCount == 0
     -- Set up state before rollback and assert expected counts.
