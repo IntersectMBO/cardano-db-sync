@@ -572,6 +572,12 @@ schemaDocs =
       TxValidContract # "False if the contract is invalid. True if the contract is valid or there is no contract."
       TxScriptSize # "The sum of the script sizes (in bytes) of scripts in the transaction."
 
+    ReverseIndex --^ do
+      "A table for reverse indexes for the minimum input output and multi asset output related with\
+        \ this block. New in v13.1"
+      ReverseIndexBlockId # "The Block table index related with these indexes"
+      ReverseIndexMinIds # "The Reverse indexes associated with this block, as Text separated by :"
+
     StakeAddress --^ do
       "A table of unique stake addresses. Can be an actual address or a script hash. \
         \ The existance of an entry doesn't mean the address is registered or in fact that is was ever registered."
