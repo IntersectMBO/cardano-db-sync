@@ -10,7 +10,11 @@ module Cardano.Db.Delete
   , deleteBlocksSlotNoNoTrace
   , deleteDelistedPool
   , deleteBlocksBlockId
+  , deleteBlocksBlockIdNotrace
   , deleteBlock
+
+  -- for testing
+  , queryFirstAndDeleteAfter
   ) where
 
 import           Cardano.Slotting.Slot (SlotNo (..))
@@ -45,6 +49,9 @@ deleteBlocksSlotNo trce (SlotNo slotNo) = do
     Just blockId -> do
       deleteBlocksBlockId trce blockId
       pure True
+
+deleteBlocksBlockIdNotrace :: MonadIO m =>  BlockId -> ReaderT SqlBackend m ()
+deleteBlocksBlockIdNotrace = deleteBlocksBlockId nullTracer
 
 -- | Delete starting from a 'BlockId'.
 deleteBlocksBlockId :: MonadIO m => Trace IO Text -> BlockId -> ReaderT SqlBackend m ()

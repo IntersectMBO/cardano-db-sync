@@ -18,7 +18,7 @@ import           Test.Tasty.HUnit (testCase)
 
 import           Test.IO.Cardano.Db.Util
 
-import           Database.Persist.Sql (Entity, delete, selectList)
+import           Database.Persist.Sql (Entity, deleteWhere, selectList, (>=.))
 
 
 tests :: TestTree
@@ -33,6 +33,7 @@ tests =
 insertZeroTest :: IO ()
 insertZeroTest =
   runDbNoLoggingEnv $ do
+    deleteAllBlocks
     -- Delete the blocks if they exist.
     slid <- insertSlotLeader testSlotLeader
     void $ deleteBlock (blockOne slid)
@@ -47,6 +48,7 @@ insertZeroTest =
 insertFirstTest :: IO ()
 insertFirstTest =
   runDbNoLoggingEnv $ do
+    deleteAllBlocks
     -- Delete the block if it exists.
     slid <- insertSlotLeader testSlotLeader
     void $ deleteBlock (blockOne slid)
@@ -58,6 +60,7 @@ insertFirstTest =
 insertTwice :: IO ()
 insertTwice =
   runDbNoLoggingEnv $ do
+    deleteAllBlocks
     slid <- insertSlotLeader testSlotLeader
     bid <- insertBlockChecked (blockZero slid)
     let adaPots = adaPotsZero bid
@@ -73,6 +76,7 @@ insertForeignKeyMissing :: IO ()
 insertForeignKeyMissing = do
   time <- getCurrentTime
   runDbNoLoggingEnv $ do
+    deleteAllBlocks
     slid <- insertSlotLeader testSlotLeader
     bid <- insertBlockChecked (blockZero slid)
     txid <- insertTx (txZero bid)
@@ -84,8 +88,9 @@ insertForeignKeyMissing = do
     count0 <- poolOfflineFetchErrorCount
     assertBool (show count0 ++ "/= 1") (count0 == 1)
 
-    -- Delete the foreign key. This will cascade delete OfflineFetchErrorCount
-    delete pmrid
+    -- Delete all OfflineFetchErrorCount after pmrid
+    queryFirstAndDeleteAfter PoolOfflineFetchErrorPmrId pmrid
+    deleteWhere [PoolMetadataRefId >=. pmrid]
     count1 <- poolOfflineFetchErrorCount
     assertBool (show count1 ++ "/= 0") (count1 == 0)
 
