@@ -3,7 +3,7 @@
 
 module Test.IO.Cardano.Db.Util
   ( assertBool
-  , deleteAllBlocksCascade
+  , deleteAllBlocks
   , dummyUTCTime
   , mkAddressHash
   , mkBlock
@@ -17,6 +17,7 @@ module Test.IO.Cardano.Db.Util
   ) where
 
 import           Control.Monad (unless)
+import           Control.Monad.Extra (whenJust)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Reader (ReaderT)
 
@@ -27,7 +28,7 @@ import           Data.Time.Calendar (Day (..))
 import           Data.Time.Clock (UTCTime (..))
 import           Data.Word (Word64)
 
-import           Database.Persist.Sql (SqlBackend, delete, selectKeysList)
+import           Database.Persist.Sql (SqlBackend)
 
 import           Cardano.Db
 
@@ -38,10 +39,10 @@ assertBool :: MonadIO m => String -> Bool -> m ()
 assertBool msg bool =
   liftIO $ unless bool (error msg)
 
-deleteAllBlocksCascade :: MonadIO m => ReaderT SqlBackend m ()
-deleteAllBlocksCascade = do
-  (keys :: [BlockId]) <- selectKeysList [] []
-  mapM_ delete keys
+deleteAllBlocks :: MonadIO m => ReaderT SqlBackend m ()
+deleteAllBlocks = do
+    mblkId <- queryMinBlock
+    whenJust mblkId deleteBlocksBlockIdNotrace
 
 dummyUTCTime :: UTCTime
 dummyUTCTime = UTCTime (ModifiedJulianDay 0) 0

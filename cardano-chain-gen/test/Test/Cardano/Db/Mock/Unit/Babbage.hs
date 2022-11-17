@@ -888,8 +888,8 @@ mirReward =
   where
     testLabel = "mirReward"
 
-mirRewardRollback :: IOManager -> [(Text, Text)] -> Assertion
-mirRewardRollback =
+_mirRewardRollback :: IOManager -> [(Text, Text)] -> Assertion
+_mirRewardRollback =
     withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       void $ registerAllStakeCreds interpreter mockServer

@@ -92,6 +92,7 @@ module Cardano.Db.Query
   , queryStakeAddressScript
   , querySchemaVersion
   , queryPreviousSlotNo
+  , queryMinBlock
 
   -- utils
   , entityPair
@@ -1038,6 +1039,15 @@ queryPreviousSlotNo slotNo = do
     where_ (blk ^. BlockSlotNo ==. just (val slotNo))
     pure $ pblk ^. BlockSlotNo
   pure $ unValue =<< listToMaybe res
+
+queryMinBlock :: MonadIO m => ReaderT SqlBackend m (Maybe BlockId)
+queryMinBlock = do
+  res <- select $ do
+    blk <- from $ table @Block
+    orderBy [asc (blk ^. BlockId)]
+    limit 1
+    pure $ blk ^. BlockId
+  pure $ unValue <$> listToMaybe res
 
 -- -----------------------------------------------------------------------------
 -- SqlQuery predicates

@@ -104,7 +104,7 @@ assertBlockNoBackoffTimes times env blockNo =
     assertEqBackoff env queryBlockHeight (Just $ fromIntegral blockNo) times "Unexpected BlockNo"
 
 defaultDelays :: [Int]
-defaultDelays = [1,2,4,8,16,32,64,128]
+defaultDelays = [1,2,4,8,16,32,64,128, 256]
 
 assertEqQuery :: (Eq a, Show a) => DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> a -> String -> IO ()
 assertEqQuery env query a msg = do
@@ -131,7 +131,9 @@ assertQuery :: DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> (a -> Bool) 
 assertQuery env query check errMsg = do
   ma <- try $ queryDBSync env query
   case ma of
-    Left sqlErr | migrationNotDoneYet (decodeUtf8 $ sqlErrorMsg sqlErr) -> pure $ Just $ show sqlErr
+    Left sqlErr | migrationNotDoneYet (decodeUtf8 $ sqlErrorMsg sqlErr) -> do
+      threadDelay 1_000_000
+      pure $ Just $ show sqlErr
     Left err -> throwIO err
     Right a | not (check a) -> pure $ Just $ errMsg a
     _ -> pure Nothing
