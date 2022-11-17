@@ -25,7 +25,7 @@ initialSupplyTest :: IO ()
 initialSupplyTest =
   runDbNoLoggingEnv $ do
     -- Delete the blocks if they exist.
-    deleteAllBlocksCascade
+    deleteAllBlocks
 
     -- Set up initial supply.
     slid <- insertSlotLeader testSlotLeader

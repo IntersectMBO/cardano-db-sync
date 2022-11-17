@@ -163,7 +163,6 @@ readSchemaVersion migrationDir = do
       case mvStage mv of
         1 -> SchemaVersion (max (mvVersion mv) a) b c
         2 -> SchemaVersion a (max (mvVersion mv) b) c
-        3 -> SchemaVersion a b (max (mvVersion mv) c)
         _otherwise -> SchemaVersion a b c
 
     -- Ignore all migrations with version numbers of 9000 or above.
