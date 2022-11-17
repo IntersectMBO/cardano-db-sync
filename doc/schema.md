@@ -1,6 +1,7 @@
+Up to date
 # Schema Documentation for cardano-db-sync
 
-Schema version: 13.0.0
+Schema version: 13.1.0.0 (from branch **kderme/migrations** which may not accurately reflect the version number)
 **Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema.hs by the command `cabal run -- gen-schema-docs doc/schema.md`. This document should only be updated during the release process and updated on the release branch.
 
 ### `schema_version`
@@ -87,9 +88,21 @@ A table for transactions within a block on the chain.
 | `valid_contract` | boolean | False if the contract is invalid. True if the contract is valid or there is no contract. |
 | `script_size` | word31type | The sum of the script sizes (in bytes) of scripts in the transaction. |
 
+### `reverse_index`
+
+A table for reverse indexes for the minimum input output and multi asset output related with this block. New in v13.1
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `block_id` | integer (64) | The Block table index related with these indexes |
+| `min_ids` | string | The Reverse indexes associated with this block, as Text separated by : |
+
 ### `stake_address`
 
-A table of unique stake addresses. Can be an actual address or a script hash.  The existance of an entry doesn't mean the address is registered or in fact that is was ever registered. For example a pool update may contain a stake address which was never registered.
+A table of unique stake addresses. Can be an actual address or a script hash.  The existance of an entry doesn't mean the address is registered or in fact that is was ever registered.
 
 * Primary Id: `id`
 
@@ -99,7 +112,6 @@ A table of unique stake addresses. Can be an actual address or a script hash.  T
 | `hash_raw` | addr29type | The raw bytes of the stake address hash. |
 | `view` | string | The Bech32 encoded version of the stake address. |
 | `script_hash` | hash28type | The script hash, in case this address is locked by a script. |
-| `tx_id` | integer (64) | The Tx table index of the transaction in which this address first appeared. New in v13: Renamed from registered_tx_id. |
 
 ### `tx_out`
 
@@ -677,7 +689,6 @@ CostModel for EpochParam and ParamProposal.
 | `id` | integer (64) |  |
 | `hash` | hash32type | The hash of cost model. It ensures uniqueness of entries. New in v13. |
 | `costs` | jsonb | The actual costs formatted as json. |
-| `block_id` | integer (64) | The first block where these costs were introduced. This is only used for rollbacks. |
 
 ### `pool_offline_data`
 
