@@ -260,7 +260,7 @@ mkSyncEnv
 mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir ranAll forcedIndexes runMigration = do
   ledgerEnv <- mkLedgerEnv trce protoInfo dir nw systemStart (soptAbortOnInvalid syncOptions)
                  (snapshotEveryFollowing syncOptions) (snapshotEveryLagging syncOptions)
-  cache <- if soptCache syncOptions then newEmptyCache 100000 else pure uninitiatedCache
+  cache <- if soptCache syncOptions then newEmptyCache 250000 else pure uninitiatedCache
   backendVar <- newTVarIO Strict.Nothing
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO ranAll
