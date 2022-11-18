@@ -133,12 +133,8 @@ runIndexMigrations :: SyncEnv -> IO ()
 runIndexMigrations env = do
     haveRan <- readTVarIO $ envIndexes env
     unless haveRan $ do
-      logInfo trce $
-        mconcat
-          [ "Creating migrations. This may take a while."
-          , " Setting a higher maintenance_work_mem from Postgres usually speeds up this process."
-          ]
       envRunDelayedMigration env DB.Indexes
+      logInfo trce "Indexes were created"
       atomically $ writeTVar (envIndexes env) True
   where
     trce = getTrace env
