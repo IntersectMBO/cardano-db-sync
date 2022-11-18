@@ -11,6 +11,7 @@ module Cardano.Db.Migration
   , runMigrations
   , recreateDB
   , dropTables
+  , getMaintenancePsqlConf
 
   , MigrationValidate (..)
   , MigrationValidateError (..)
@@ -80,6 +81,7 @@ data MigrationValidateError = UnknownMigrationsFound
   } deriving (Eq, Show)
 
 data MigrationToRun = Initial | Full | Fix | Indexes
+  deriving (Show, Eq)
 
 -- | Run the migrations in the provided 'MigrationDir' and write date stamped log file
 -- to 'LogFileDir'. It returns a list of file names of all non-official schema migration files.
@@ -155,9 +157,10 @@ validateMigrations migrationDir knownMigrations = do
             { missingMigrations = missingMigr -- Migrations missing at runtime that were present at compilation time
             , extraMigrations = extraMigr   -- Migrations found at runtime that were missing at compilation time
             }
-      pure $ Just (unknown, all stage4 $ missingMigr <> extraMigr)
+      pure $ Just (unknown, all stage4 missingMigr && all stage3or4 extraMigr)
   where
     stage4 = (== 4) . readStageFromFilename . Text.unpack . mvFilepath
+    stage3or4 = flip elem [3,4] . readStageFromFilename . Text.unpack . mvFilepath
 
 applyMigration :: MigrationDir -> Bool -> PGConfig -> Maybe FilePath -> Handle -> (MigrationVersion, FilePath) -> IO ()
 applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (version, script) = do
@@ -257,11 +260,30 @@ createMigration source (MigrationDir migdir) = do
           let (SchemaVersion _ stage2 _) = entityVal x
           pure $ MigrationVersion 2 stage2 0
 
-recreateDB ::  PGPassSource -> IO ()
+recreateDB :: PGPassSource -> IO ()
 recreateDB pgpass = do
     runWithConnectionNoLogging pgpass $ do
       rawExecute "drop schema if exists public cascade" []
       rawExecute "create schema public" []
+
+getMaintenancePsqlConf :: PGConfig -> IO Text
+getMaintenancePsqlConf pgconfig = runWithConnectionNoLogging (PGPassCached pgconfig) $ do
+    mem <- showMaintenanceWorkMem
+    workers <- showMaxParallelMaintenanceWorkers
+    pure $ mconcat
+      [ "Found maintenance_work_mem="
+      , mconcat mem, ", "
+      , "max_parallel_maintenance_workers="
+      , mconcat workers
+      ]
+
+showMaintenanceWorkMem :: ReaderT SqlBackend (NoLoggingT IO) [Text]
+showMaintenanceWorkMem =
+  fmap unSingle <$> rawSql "show maintenance_work_mem" []
+
+showMaxParallelMaintenanceWorkers :: ReaderT SqlBackend (NoLoggingT IO) [Text]
+showMaxParallelMaintenanceWorkers =
+  fmap unSingle <$> rawSql "show max_parallel_maintenance_workers" []
 
 -- This doesn't clean the DOMAIN, so droppping the schema is a better alternative
 -- for a proper cleanup
