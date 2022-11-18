@@ -1,7 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -79,8 +78,8 @@ runDbSync metricsSetters knownMigrations iomgr trce params aop snEveryFollowing 
     pgConfig <- orDie Db.renderPGPassError $ newExceptT (Db.readPGPass $ enpPGPassSource params)
 
     mErrors <- liftIO $ Db.validateMigrations dbMigrationDir knownMigrations
-    whenJust mErrors $ \(unknown, allStage4) ->
-      if allStage4 then
+    whenJust mErrors $ \(unknown, stage4orNewStage3) ->
+      if stage4orNewStage3 then
         logWarning trce $ Db.renderMigrationValidateError unknown
       else do
         let msg = Db.renderMigrationValidateError unknown
@@ -88,22 +87,26 @@ runDbSync metricsSetters knownMigrations iomgr trce params aop snEveryFollowing 
         panic msg
 
     logInfo trce "Schema migration files validated"
-    logInfo trce "Running database migrations"
 
-    let runMigration = Db.runMigrations pgConfig True dbMigrationDir (Just $ Db.LogFileDir "/tmp")
+    let runMigration mode = do
+          msg <- Db.getMaintenancePsqlConf pgConfig
+          logInfo trce $ "Running database migrations in mode " <> textShow mode
+          logInfo trce msg
+          when (mode `elem` [Db.Indexes, Db.Full]) $ logWarning trce indexesMsg
+          Db.runMigrations pgConfig True dbMigrationDir (Just $ Db.LogFileDir "/tmp") mode
     (ranAll, unofficial) <- if enpForceIndexes params then runMigration Db.Full else runMigration Db.Initial
     unless (null unofficial) $
       logWarning trce $ "Unofficial migration scripts found: " <> textShow unofficial
 
     if ranAll then
-      logInfo trce "Some migrations were not executed. They need to run when syncing has started."
-    else
       logInfo trce "All migrations were executed"
+    else
+      logInfo trce "Some migrations were not executed. They need to run when syncing has started."
 
     if enpForceIndexes params then
-      logInfo trce "New user indexes were not created. They may be created later if necessary."
-    else
       logInfo trce "All user indexes were created"
+    else
+      logInfo trce "New user indexes were not created. They may be created later if necessary."
 
     let connectionString = Db.toConnectionString pgConfig
 
@@ -116,13 +119,26 @@ runDbSync metricsSetters knownMigrations iomgr trce params aop snEveryFollowing 
     dbMigrationDir :: Db.MigrationDir
     dbMigrationDir = enpMigrationDir params
 
+    indexesMsg :: Text
+    indexesMsg =
+        mconcat
+          [ "Creating Indexes. This may take a while."
+          , " Setting a higher maintenance_work_mem from Postgres usually speeds up this process."
+          , " These indexes are not used by db-sync but are meant for clients. If you want to skip"
+          , " some of these indexes, you can stop db-sync, delete or modify any migration-4-* files"
+          , " in the schema directory and restart it."
+          ]
+
 -- -------------------------------------------------------------------------------------------------
 
 startupReport :: Trace IO Text -> Bool -> SyncNodeParams -> IO ()
 startupReport trce aop params = do
-  logWarning trce $ mconcat ["Version number: ", Text.pack (showVersion version)]
-  logWarning trce $ mconcat ["Git hash: ", Db.gitRev]
-  logWarning trce $ mconcat ["Option disable-ledger: ", textShow (not $ enpHasLedger params)]
-  logWarning trce $ mconcat ["Option disable-cache: ", textShow (not $ enpHasCache params)]
-  logWarning trce $ mconcat ["Option disable-epoch: ", textShow (not $ enpExtended params)]
-  logWarning trce $ mconcat ["Enviroment variable DbSyncAbortOnPanic: ", textShow aop]
+  logInfo trce $ mconcat ["Version number: ", Text.pack (showVersion version)]
+  logInfo trce $ mconcat ["Git hash: ", Db.gitRev]
+  logInfo trce $ mconcat ["Option disable-ledger: ", textShow (not $ enpHasLedger params)]
+  logInfo trce $ mconcat ["Option disable-cache: ", textShow (not $ enpHasCache params)]
+  logInfo trce $ mconcat ["Option disable-epoch: ", textShow (not $ enpExtended params)]
+  logInfo trce $ mconcat ["Option skip-plutus-data-fix: ", textShow (enpSkipFix params)]
+  logInfo trce $ mconcat ["Option only-plutus-data-fix: ", textShow (enpOnlyFix params)]
+  logInfo trce $ mconcat ["Option force-indexes: ", textShow (enpForceIndexes params)]
+  logInfo trce $ mconcat ["Enviroment variable DbSyncAbortOnPanic: ", textShow aop]
