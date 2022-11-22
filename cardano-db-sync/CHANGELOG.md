@@ -1,5 +1,8 @@
 # Revision history for cardano-db-sync
 
+## 13.0.6
+* Bump iohk-nix to fetch the correct config for preview and preprod respin
+
 ## 13.0.5
 * Fixed an issue where `StakeAdress` cache was not cleaned up properly and could cause crashes [#1222]
 * Fixed an issue where fees for txs with phase 2 failure which din't include the total_collateral fields appeared to be 0 [#1242]
