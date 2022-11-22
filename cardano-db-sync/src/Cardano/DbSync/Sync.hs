@@ -241,7 +241,6 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
           let skipFix = soptSkipFix $ envOptions env
           let onlyFix = soptOnlyFix $ envOptions env
           if onlyFix || (not isFixed && not skipFix) then do
-            when (onlyFix && isFixed) $ logInfo trce "Running once more to validate"
             fd <- runDbIohkLogging backend (getTrace env) $ getWrongPlutusData (getTrace env)
             unless (nullData fd) $
               void $ runPeer
@@ -251,7 +250,7 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
                       (Client.chainSyncClientPeer $
                         chainSyncClientFix backend (getTrace env) fd)
             setIsFixedAndMigrate env
-            when onlyFix exitSuccess
+            when onlyFix $ panic "All Good! This error is only thrown to exit db-sync." -- TODO fix.
 
           else do
             when skipFix $ setIsFixedAndMigrate env
