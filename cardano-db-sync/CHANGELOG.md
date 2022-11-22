@@ -10,11 +10,12 @@
 * Removed all foreign keys [#1082]
 * Reworked the way that rollback works, using reverse indexes.
 * Aded a new `reverse_index` table to speed up rollbacks
-* Added `skip-plutus-data-fix`, `only-plutus-data-fix`, `force-indexes` flags to `cardano-db-sync`
-* Added `force-indexes`, `mock-fix` flags for `cardano-db-tool`
+* Added experimental flags `skip-plutus-data-fix`, `only-plutus-data-fix`, `force-indexes` to `cardano-db-sync`
+* Added experimental flags `force-indexes`, `mock-fix` for `cardano-db-tool run-migrations` command
 * Fixed Stake Pool metadata fetch error exceeded 512 bytes [#1270]
 * Snapshot creation no longer rollbacks to the ledger snapshot file, so it's faster
 * Columns `stake_address.tx_id`, `cost_model.block_id` are removed
+* Bump iohk-nix to fetch the correct config for preview and preprod respin
 
 ## 13.0.5
 * Fixed an issue where `StakeAdress` cache was not cleaned up properly and could cause crashes [#1222]
