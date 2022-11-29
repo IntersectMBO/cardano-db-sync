@@ -16,6 +16,7 @@ services:
       - ${POSTGRES_PORT:-5432}:5432
     volumes:
       - postgres:/var/lib/postgresql/data
+      - ${PWD}/scripts/docker:/docker-entrypoint-initdb.d
     restart: on-failure
     healthcheck:
       # Use pg_isready to check postgres is running. Substitute different
