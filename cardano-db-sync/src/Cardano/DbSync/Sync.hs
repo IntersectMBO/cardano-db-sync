@@ -27,12 +27,11 @@ module Cardano.DbSync.Sync
   ) where
 
 import           Cardano.Prelude hiding (Meta, Nat, option, (%))
-import           Prelude (error)
 
 import           Control.Tracer (Tracer)
 
 import           Cardano.BM.Data.Tracer (ToLogObject (..), ToObject)
-import           Cardano.BM.Trace (Trace, appendName, logInfo)
+import           Cardano.BM.Trace (Trace, appendName, logInfo, logWarning)
 import qualified Cardano.BM.Trace as Logging
 
 import           Cardano.Client.Subscription (subscribe)
@@ -444,13 +443,20 @@ chainSyncClientFix backend tracer fixData = Client.ChainSyncClient $ do
           when shouldLog $
             liftIO $ logInfo tracer $ mconcat ["Starting fixing Plutus Data ", textShow point]
           newLastSize <- liftIO $ updateSizeAndLog lastSize (sizeFixData fds)
-          pure $ Client.SendMsgFindIntersect
-                   [point]
-                   (Client.ClientStIntersect
+          let clientStIntersect =
+                Client.ClientStIntersect
                      { Client.recvMsgIntersectFound = \ _pnt _tip -> Client.ChainSyncClient $
                          pure $ Client.SendMsgRequestNext (clientStNext newLastSize fdOnPoint fdRest) (pure $ clientStNext newLastSize fdOnPoint fdRest)
-                     , Client.recvMsgIntersectNotFound = \_tip -> error "recvMsgIntersectNotFound"
-                     })
+                     , Client.recvMsgIntersectNotFound = \tip -> Client.ChainSyncClient $ do
+                          liftIO $ logWarning tracer $ mconcat
+                                [ "Node can't find block ", textShow point
+                                , ". It's probably behind, at "
+                                , textShow tip, ". Sleeping for 3 mins and retrying.."
+                                ]
+                          threadDelay $ 180 * 1_000_000
+                          pure $ Client.SendMsgFindIntersect [point] clientStIntersect
+                     }
+          pure $ Client.SendMsgFindIntersect [point] clientStIntersect
 
     clientStNext :: Int -> FixData -> FixData -> Client.ClientStNext CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
     clientStNext lastSize fdOnPoint fdRest =
