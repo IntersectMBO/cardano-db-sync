@@ -18,7 +18,7 @@ import           Data.Text (Text)
 
 import           Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
 
-import           Ouroboros.Network.Block (blockNo, blockPoint, blockSlot)
+import           Ouroboros.Network.Block (blockNo, blockPoint, blockSlot, genesisPoint)
 
 import qualified Cardano.Db as DB
 
@@ -80,6 +80,8 @@ unitTests iom knownMigrations =
           , test "lazy rollback on restart" lazyRollbackRestart
           , test "rollback while rollbacking" doubleRollback
           , test "rollback stake address cache" stakeAddressRollback
+          , test "rollback change order of txs" rollbackChangeTxOrder
+          , test "rollback full tx" rollbackFullTx
           ]
       , testGroup "different configs"
           [ test "genesis config without pool" configNoPools
@@ -127,6 +129,7 @@ unitTests iom knownMigrations =
           , test "failed script fees" failedScriptFees
           , test "failed script in same block" failedScriptSameBlock
           , test "multiple scripts unlocked" multipleScripts
+          , test "multiple scripts unlocked rollback" multipleScriptsRollback
           , test "multiple scripts unlocked same block" multipleScriptsSameBlock
           , test "multiple scripts failed" multipleScriptsFailed
           , test "multiple scripts failed same block" multipleScriptsFailedSameBlock
@@ -158,6 +161,7 @@ unitTests iom knownMigrations =
           , test "spend reference script" spendRefScript
           , test "spend reference script same block" spendRefScriptSameBlock
           , test "spend collateral output of invalid tx" spendCollateralOutput
+          , test "spend collateral output of invalid tx rollback" spendCollateralOutputRollback
           , test "spend collateral output of invalid tx same block" spendCollateralOutputSameBlock
           , test "reference input to output which is not spent" referenceInputUnspend
           , test "supply and run script which is both reference and in witnesses" supplyScriptsTwoWays
@@ -440,6 +444,50 @@ stakeAddressRollback =
     assertBlockNoBackoff dbSync 3
   where
     testLabel = "stakeAddressRollback"
+
+rollbackChangeTxOrder :: IOManager -> [(Text, Text)] -> Assertion
+rollbackChangeTxOrder =
+  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+    blk0 <- forgeNextFindLeaderAndSubmit interpreter mockServer []
+    st <- getBabbageLedgerState interpreter
+    let Right tx0 = Babbage.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 500 st
+    let Right tx1 = Babbage.mkPaymentTx (UTxOIndex 2) (UTxOIndex 3) 10000 500 st
+    let Right tx2 = Babbage.mkPaymentTx (UTxOIndex 4) (UTxOIndex 5) 10000 500 st
+
+    void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \_st ->
+            Right [tx0, tx1]
+    assertBlockNoBackoff dbSync 2
+    assertTxCount dbSync 13
+    rollbackTo interpreter mockServer $ blockPoint blk0
+    void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \_st ->
+            Right [tx1, tx0, tx2]
+    assertBlockNoBackoff dbSync 2
+    assertTxCount dbSync 14
+  where
+    testLabel = "rollbackChangeTxOrder"
+
+rollbackFullTx :: IOManager -> [(Text, Text)] -> Assertion
+rollbackFullTx =
+  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+    blk0 <- forgeNextFindLeaderAndSubmit interpreter mockServer []
+    void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
+        tx0 <- Babbage.mkFullTx 0 100 st
+        tx1 <- Babbage.mkFullTx 1 200 st
+        pure [tx0, tx1]
+    assertBlockNoBackoff dbSync 2
+    assertTxCount dbSync 13
+    rollbackTo interpreter mockServer $ blockPoint blk0
+    void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
+        tx0 <- Babbage.mkFullTx 0 100 st
+        tx1 <- Babbage.mkFullTx 1 200 st
+        tx2 <- Babbage.mkFullTx 2 200 st
+        pure [tx1, tx2, tx0]
+    assertBlockNoBackoff dbSync 2
+    assertTxCount dbSync 14
+  where
+    testLabel = "rollbackFullTx"
 
 configNoPools :: IOManager -> [(Text, Text)] -> Assertion
 configNoPools =
@@ -1332,6 +1380,36 @@ multipleScripts =
   where
     testLabel = "multipleScripts"
 
+multipleScriptsRollback :: IOManager -> [(Text, Text)] -> Assertion
+multipleScriptsRollback =
+    withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync  dbSync
+
+    tx0 <- withBabbageLedgerState interpreter $ Babbage.mkLockByScriptTx (UTxOIndex 0) (Babbage.TxOutNoInline <$> [True, False, True]) 20000 20000
+    let utxo = Babbage.mkUTxOBabbage tx0
+        pair1 = head utxo
+        pair2 = utxo !! 2
+    tx1 <- withBabbageLedgerState interpreter $
+        Babbage.mkUnlockScriptTx [UTxOPair pair1, UTxOPair pair2] (UTxOIndex 1) (UTxOIndex 2) True 10000 500
+
+    void $ forgeNextAndSubmit interpreter mockServer $ MockBlock [TxBabbage tx0] (NodeId 1)
+    void $ forgeNextAndSubmit interpreter mockServer $ MockBlock [TxBabbage tx1] (NodeId 1)
+
+    assertBlockNoBackoff dbSync 2
+    assertAlonzoCounts dbSync (1,2,1,1,3,2,0,0)
+
+    rollbackTo interpreter mockServer genesisPoint
+    void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
+
+    void $ forgeNextAndSubmit interpreter mockServer $ MockBlock [TxBabbage tx0] (NodeId 1)
+    void $ forgeNextAndSubmit interpreter mockServer $ MockBlock [TxBabbage tx1] (NodeId 1)
+    assertBlockNoBackoff dbSync 3
+
+    assertAlonzoCounts dbSync (1,2,1,1,3,2,0,0)
+  where
+    testLabel = "multipleScriptsRollback"
+
+
 multipleScriptsSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 multipleScriptsSameBlock =
     withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
@@ -1890,6 +1968,38 @@ spendCollateralOutput =
       assertBabbageCounts dbSync (1,1,1,1,2,1,1,1,1,1,1,1,1)
   where
     testLabel = "spendCollateralOutput"
+
+spendCollateralOutputRollback :: IOManager -> [(Text, Text)] -> Assertion
+spendCollateralOutputRollback =
+    withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+      startDBSync  dbSync
+      blk0 <- registerAllStakeCreds interpreter mockServer
+      action interpreter mockServer dbSync 0
+      rollbackTo interpreter mockServer (blockPoint blk0)
+      void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
+      action interpreter mockServer dbSync 1
+  where
+    testLabel = "spendCollateralOutputRollback"
+    action interpreter mockServer dbSync n = do
+
+      tx0 <- withBabbageLedgerState interpreter
+        $ Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutNoInline False] 20000 20000
+      void $ forgeNextFindLeaderAndSubmit interpreter mockServer [TxBabbage tx0]
+
+      -- tx fails so its collateral output become actual output.
+      let utxo0 = head (Babbage.mkUTxOBabbage tx0)
+      tx1 <- withBabbageLedgerState interpreter $
+        Babbage.mkUnlockScriptTxBabbage [UTxOInput (fst utxo0)] (UTxOIndex 1) (UTxOIndex 2) [UTxOPair utxo0] True False 10000 500
+      void $ forgeNextFindLeaderAndSubmit interpreter mockServer [TxBabbage tx1]
+      assertBlockNoBackoff dbSync $ n + 3
+
+      let utxo1 = head (Babbage.mkUTxOCollBabbage tx1)
+      tx2 <- withBabbageLedgerState interpreter $
+        Babbage.mkUnlockScriptTxBabbage [UTxOPair utxo1] (UTxOIndex 3) (UTxOIndex 1) [UTxOPair utxo1] False True 10000 500
+      void $ forgeNextFindLeaderAndSubmit interpreter mockServer [TxBabbage tx2]
+
+      assertBlockNoBackoff dbSync $ n + 4
+      assertBabbageCounts dbSync (1,1,1,1,2,1,1,1,1,1,1,1,1)
 
 spendCollateralOutputSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 spendCollateralOutputSameBlock =

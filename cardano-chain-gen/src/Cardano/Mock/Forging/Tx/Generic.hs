@@ -16,6 +16,11 @@ module Cardano.Mock.Forging.Tx.Generic
   , mkDummyScriptHash
   , unregisteredGenesisKeys
   , mkDummyHash
+  , unregisteredKeyHash
+  , unregisteredWitnessKey
+  , unregisteredAddresses
+  , unregisteredStakeCredentials
+  , unregisteredPools
   ) where
 
 import           Cardano.Prelude hiding (length, (.))
@@ -161,6 +166,20 @@ unregisteredStakeCredentials =
   , KeyHashObj $ KeyHash "22236827154873624578632414768234573268457923654973246472"
   ]
 
+unregisteredKeyHash :: [KeyHash 'Staking StandardCrypto]
+unregisteredKeyHash =
+  [ KeyHash "000131350ac206583290486460934394208654903261221230945870"
+  , KeyHash "11130293748658946834096854968435096854309685490386453861"
+  , KeyHash "22236827154873624578632414768234573268457923654973246472"
+  ]
+
+unregisteredWitnessKey :: [KeyHash 'Witness StandardCrypto]
+unregisteredWitnessKey =
+  [ KeyHash "000131350ac206583290486460934394208654903261221230945870"
+  , KeyHash "11130293748658946834096854968435096854309685490386453861"
+  , KeyHash "22236827154873624578632414768234573268457923654973246472"
+  ]
+
 unregisteredAddresses :: [PaymentCredential StandardCrypto]
 unregisteredAddresses =
   [ KeyHashObj $ KeyHash "11121865734872361547862358673245672834567832456783245312"
@@ -171,14 +190,14 @@ unregisteredAddresses =
 unregisteredPools :: [KeyHash 'StakePool StandardCrypto]
 unregisteredPools =
   [ KeyHash "11138475621387465239786593240875634298756324987562352435"
-  , KeyHash "222462543264795t3298745680239746523897456238974563298348"
+  , KeyHash "22246254326479503298745680239746523897456238974563298348"
   , KeyHash "33323876542397465497834256329487563428975634827956348975"
   ]
 
 unregisteredGenesisKeys :: [KeyHash 'Genesis StandardCrypto]
 unregisteredGenesisKeys =
   [ KeyHash "11138475621387465239786593240875634298756324987562352435"
-  , KeyHash "222462543264795t3298745680239746523897456238974563298348"
+  , KeyHash "22246254326479503298745680239746523897456238974563298348"
   , KeyHash "33323876542397465497834256329487563428975634827956348975"
   ]
 

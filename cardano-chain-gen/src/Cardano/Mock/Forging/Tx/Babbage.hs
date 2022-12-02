@@ -45,6 +45,7 @@ module Cardano.Mock.Forging.Tx.Babbage
   , mkUTxOBabbage
   , mkUTxOCollBabbage
   , mkTxHash
+  , mkFullTx
   , emptyTxBody
   , emptyTx
   ) where
@@ -65,8 +66,10 @@ import           Cardano.Crypto.VRF
 
 import           Cardano.Ledger.Address
 import           Cardano.Ledger.Alonzo.Data
+import           Cardano.Ledger.Alonzo.Language
 import           Cardano.Ledger.Alonzo.Scripts
 import           Cardano.Ledger.Alonzo.TxWitness
+import           Cardano.Ledger.Babbage.PParams
 import           Cardano.Ledger.Babbage.Tx
 import           Cardano.Ledger.Babbage.TxBody
 import           Cardano.Ledger.BaseTypes
@@ -79,8 +82,9 @@ import           Cardano.Ledger.Keys
 import           Cardano.Ledger.Mary.Value
 import           Cardano.Ledger.Serialization
 import           Cardano.Ledger.Shelley.Metadata
-import           Cardano.Ledger.Shelley.TxBody (DCert (..), DelegCert (..), PoolCert (..),
-                   PoolMetadata (..), PoolParams (..), StakePoolRelay (..), Wdrl (..))
+import           Cardano.Ledger.Shelley.PParams hiding (emptyPParamsUpdate)
+import           Cardano.Ledger.Shelley.TxBody (DCert (..), Delegation (..), DelegCert (..), MIRCert (..), MIRPot (..),
+                   PoolCert (..), MIRTarget (..), PoolMetadata (..), PoolParams (..), StakePoolRelay (..), Wdrl (..))
 import           Cardano.Ledger.ShelleyMA.Timelocks
 import           Cardano.Ledger.TxIn (TxId, TxIn (..), txid)
 
@@ -94,6 +98,8 @@ import           Cardano.Mock.Forging.Crypto
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Tx.Generic
 import           Cardano.Mock.Forging.Types
+
+import qualified Plutus.V1.Ledger.EvaluationContext as PV1
 
 type BabbageUTxOIndex = UTxOIndex StandardBabbage
 type BabbageLedgerState = LedgerState (ShelleyBlock PraosStandard StandardBabbage)
@@ -491,3 +497,99 @@ emptyTx = ValidatedTx
     , isValid = IsValid True
     , auxiliaryData = maybeToStrictMaybe Nothing
     }
+
+mkFullTx
+  :: Int -> Integer -> BabbageLedgerState
+  -> Either ForgingError (ValidatedTx StandardBabbage)
+mkFullTx n m sta = do
+    inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) inps
+    let rdmrs = mapMaybe mkScriptInp $ zip [0..] inputPairs
+    let witnesses = mkWitnesses rdmrs [(hashData @StandardBabbage plutusDataList, plutusDataList)]
+    refInputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) refInps
+    colInput <- Set.singleton . fst . fst <$> resolveUTxOIndex colInps sta
+    Right $ ValidatedTx
+      { body = txBody (mkInps inputPairs) (mkInps refInputPairs) colInput
+      , wits = witnesses
+      , isValid = IsValid True
+      , auxiliaryData = Strict.SJust auxiliaryData'
+      }
+  where
+    mkInps ins = Set.fromList $ fst <$> ins
+    txBody ins cols ref =
+      TxBody
+        ins cols ref (fmap (`Sized` 0) outs) (fmap (`Sized` 0) collOut)
+        Strict.SNothing (StrictSeq.fromList certs) wthdr (Coin m)
+        (ValidityInterval Strict.SNothing Strict.SNothing)
+        (Strict.SJust updates) witKeys minted
+        Strict.SNothing Strict.SNothing (Strict.SJust Testnet)
+    inps = [UTxOIndex $ n * 3 + 0]
+    refInps = [UTxOIndex $ n * 3 + 1]
+    colInps = UTxOIndex $ n * 3 + 2
+    policy0 = PolicyID alwaysMintScriptHash
+    policy1 = PolicyID alwaysSucceedsScriptHash
+    assets0 = Map.fromList [(Prelude.head assetNames, 5), (assetNames !! 1, 2)]
+    outValue0 = Value 20 $ Map.fromList [(policy0, assets0), (policy1, assets0)]
+    addr0 = Addr Testnet (Prelude.head unregisteredAddresses) (StakeRefBase $ Prelude.head unregisteredStakeCredentials)
+    addr2 = Addr Testnet (ScriptHashObj alwaysFailsScriptHash) (StakeRefBase $ unregisteredStakeCredentials !! 2)
+    out0, out1, out2 :: TxOut StandardBabbage
+    out0 = TxOut addr0 outValue0 (DatumHash (hashData @StandardBabbage plutusDataList)) (Strict.SJust alwaysFailsScript)
+    out1 = TxOut alwaysSucceedsScriptAddr outValue0 (DatumHash (hashData @StandardBabbage plutusDataList)) Strict.SNothing
+    out2 = TxOut addr2 outValue0 (DatumHash (hashData @StandardBabbage plutusDataList)) (Strict.SJust alwaysFailsScript)
+    outs = StrictSeq.fromList [out0, out1]
+    collOut = Strict.SJust out2
+    assetsMinted0 = Map.fromList [(Prelude.head assetNames, 10), (assetNames !! 1, 4)]
+    minted = Value 100 $ Map.fromList [(policy0, assetsMinted0), (policy1, assetsMinted0)]
+    poolParams0 = consPoolParams
+                   (Prelude.head unregisteredPools)
+                   (unregisteredStakeCredentials !! 2)
+                   [unregisteredKeyHash !! 1, unregisteredKeyHash !! 2]
+    poolParams1 = consPoolParams
+                   (unregisteredPools !! 2)
+                   (unregisteredStakeCredentials !! 2)
+                   [unregisteredKeyHash !! 1, unregisteredKeyHash !! 2]
+
+    certs = [ DCertDeleg $ RegKey $ Prelude.head unregisteredStakeCredentials
+            , DCertPool $ RegPool poolParams0
+            , DCertPool $ RegPool poolParams1
+            , DCertPool $ RetirePool (Prelude.head unregisteredPools) (EpochNo 0)
+            , DCertDeleg $ DeRegKey $ unregisteredStakeCredentials !! 2
+            , DCertDeleg $ Delegate $ Delegation (unregisteredStakeCredentials !! 1) (unregisteredPools !! 2)
+            , DCertMir $ MIRCert ReservesMIR (StakeAddressesMIR $ Map.fromList
+                [ (Prelude.head unregisteredStakeCredentials, DeltaCoin 100)
+                , (unregisteredStakeCredentials !! 2, DeltaCoin 200)
+                ])
+            , DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR $ Map.fromList
+                [ (Prelude.head unregisteredStakeCredentials, DeltaCoin 100)
+                , (unregisteredStakeCredentials !! 2, DeltaCoin 200)
+                ])
+            , DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR $ Coin 300)
+            ]
+
+    wthdr = Wdrl $ Map.fromList
+              [ (RewardAcnt Testnet (unregisteredStakeCredentials !! 1), Coin 100)
+              , (RewardAcnt Testnet (unregisteredStakeCredentials !! 1), Coin 100)
+              ]
+
+    witKeys = Set.fromList
+                [ unregisteredWitnessKey !! 1
+                , unregisteredWitnessKey !! 2
+                ]
+
+    auxiliaryData' = AuxiliaryData auxiliaryDataMap auxiliaryDataScripts
+    auxiliaryDataMap = Map.fromList [(1, List []), (2 , List [])]
+    auxiliaryDataScripts = StrictSeq.fromList [alwaysFailsScript]
+
+    costModels = CostModels $ Map.fromList [(PlutusV2, testingCostModelV2)]
+    paramsUpdate = emptyPParamsUpdate {_costmdls = Strict.SJust costModels}
+    proposed :: ProposedPPUpdates StandardBabbage
+    proposed = ProposedPPUpdates $ Map.fromList
+        [ (unregisteredGenesisKeys !! 1, paramsUpdate)
+        , (unregisteredGenesisKeys !! 2, paramsUpdate)
+        ]
+    updates :: Update StandardBabbage
+    updates = Update proposed (EpochNo 0)
+
+testingCostModelV2 :: CostModel
+testingCostModelV2 =
+  fromRight (error "testingCostModelV2 is not well-formed") $
+    mkCostModel PlutusV2 PV1.costModelParamsForTesting -- TODO use PV2 when it exists
