@@ -541,7 +541,7 @@ queryMinRefId txIdField txId = do
   res <- select $ do
     rec <- from $ table @record
     where_ (rec ^. txIdField >=. val txId)
-    orderBy [asc (rec ^. txIdField)]
+    orderBy [asc (rec ^. persistIdField)]
     limit 1
     pure $ rec ^. persistIdField
   pure $ unValue <$> listToMaybe res
