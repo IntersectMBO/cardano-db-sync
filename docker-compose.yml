@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   postgres:
-    image: postgres:11.5-alpine
+    image: postgres:11.18-alpine
     environment:
       - POSTGRES_LOGGING=true
       - POSTGRES_DB_FILE=/run/secrets/postgres_db
@@ -24,6 +24,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    command: ${POSTGRES_ARGS:--c maintenance_work_mem=1GB -c max_parallel_maintenance_workers=4}
     logging:
       driver: "json-file"
       options:
