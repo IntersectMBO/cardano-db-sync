@@ -25,6 +25,38 @@ The PostgreSQL database is exposed on localhost port `5432`
 
 `$ psql -h 0.0.0.0 -p 5432 -U postgres -d cexplorer` (then enter secret password)
 
+### To change PostgreSQL settings:
+
+Release `13.1.0.0` introduced new flag `POSTGRES_ARGS` inside 
+[docker-compose.yml](https://github.com/input-output-hk/cardano-db-sync/blob/master/docker-compose.yml) file wih
+reccomended default values for `maintenance_work_mem` and `max_parallel_maintenance_workers` parameters.
+
+- default start
+```sh
+docker compose up && docker-compose logs -f
+
+docker ps | grep postgres
+CONTAINER ID   IMAGE                             COMMAND                  CREATED         STATUS                            PORTS                                       NAMES
+fe5fa531761a   postgres:11.18-alpine             "docker-entrypoint.s…"   8 seconds ago   Up 7 seconds (health: starting)   0.0.0.0:5432->5432/tcp, :::5432->5432/tcp   cardano-db-sync-postgres-1
+
+docker exec -it fe5fa531761a bash
+fe5fa531761a:/# psql -U postgres -c "SHOW ALL" | grep maintenance
+ maintenance_work_mem                   | 1GB                                        | Sets the maximum memory to be used for maintenance operations.
+ max_parallel_maintenance_workers       | 4                                          | Sets the maximum number of parallel processes per maintenance operation.
+```
+- setting custom values through `POSTGRES_ARGS`:
+```sh
+export POSTGRES_ARGS="-c maintenance_work_mem=2GB -c max_parallel_maintenance_workers=8"
+docker compose up && docker-compose logs -f
+
+docker exec -it b73d677399de bash
+b73d677399de:/# psql -U postgres -c "SHOW ALL" | grep maintenance
+ maintenance_work_mem                   | 2GB                                        | Sets the maximum memory to be used for maintenance operations.
+ max_parallel_maintenance_workers       | 8                                          | Sets the maximum number of parallel processes per maintenance operation.
+```
+
+`SHOW` displays the current setting of run-time parameters. Be aware that it can differ from the values in `postgresql.conf`.
+
 ### To connect to another network:
 
 To connect to different network (preprod or preview) use `NETWORK` environment variable:
