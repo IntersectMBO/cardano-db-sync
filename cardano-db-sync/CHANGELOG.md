@@ -16,6 +16,7 @@
 * Snapshot creation no longer rollbacks to the ledger snapshot file, so it's faster
 * Columns `stake_address.tx_id`, `cost_model.block_id` are removed
 * Bump iohk-nix to fetch the correct config for preview and preprod respin
+* Added new flag `POSTGRES_ARGS` (wih reccomended default values) to `docker-compose.yml` for customization of database settings
 
 ## 13.0.5
 * Fixed an issue where `StakeAdress` cache was not cleaned up properly and could cause crashes [#1222]
