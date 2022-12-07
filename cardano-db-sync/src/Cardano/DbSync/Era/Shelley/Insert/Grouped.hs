@@ -131,4 +131,4 @@ resolveInMemory txIn =
     matches :: ExtendedTxOut -> Bool
     matches eutxo =
       Generic.txInHash txIn == etoTxHash eutxo
-        && Generic.txInIndex txIn == fromIntegral (DB.txOutIndex $ etoTxOut eutxo)
+        && Generic.txInIndex txIn == DB.txOutIndex (etoTxOut eutxo)

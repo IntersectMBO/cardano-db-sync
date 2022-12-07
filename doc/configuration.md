@@ -32,7 +32,7 @@ Warning: Running db-sync with this flag and then restarting it without the flag 
 
 Known issues: When this flag in enabled, the `--state-dir` option still needs to be provided, even though db-sync will completely ignore it.
 
-If used this docker, this flag can be provided as an extra flag to docker image.
+If used with docker, this flag can be provided as an extra flag to docker image.
 
 Released snapshots are compatible with these options. Since the snapshots are created without the
 option, there still can be some minor inconsistencies. The above data may exist up to the slot/epoch
