@@ -45,8 +45,13 @@ data TestParams = TestParams
 
 genTestParameters :: IO TestParams
 genTestParameters = do
-  latest <- runDbNoLoggingEnv queryLatestBlockNo
-  TestParams <$> randomRIO (1, latest - 1) <*> runDbNoLoggingEnv queryByronGenesisSupply
+  mlatest <- runDbNoLoggingEnv queryLatestBlockNo
+  case mlatest of
+    Nothing -> error "Cardano.DbTool.Validation: Empty database"
+    Just latest ->
+      TestParams
+          <$> randomRIO (1, latest - 1)
+          <*> runDbNoLoggingEnv queryGenesisSupply
 
 
 queryInitialSupply :: Word64 -> IO Accounting

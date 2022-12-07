@@ -182,7 +182,7 @@ getDbLatestBlockInfo backend = do
             { bHash = DB.blockHash block
             , bEpochNo = EpochNo . fromMaybe 0 $ DB.blockEpochNo block
             , bSlotNo = SlotNo . fromMaybe 0 $ DB.blockSlotNo block
-            , bBlockNo = BlockNo . fromIntegral $ DB.blockBlockNo block
+            , bBlockNo = BlockNo . fromMaybe 0 $ DB.blockBlockNo block
             }
 
 getDbTipBlockNo :: SyncEnv -> IO (Point.WithOrigin BlockNo)

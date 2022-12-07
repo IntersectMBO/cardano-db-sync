@@ -3,6 +3,7 @@ module Cardano.DbTool.PrepareSnapshot
   , runPrepareSnapshot
   ) where
 
+import           Cardano.Prelude (Word64, fromMaybe)
 import           Control.Monad
 
 import           Cardano.Db
@@ -10,7 +11,6 @@ import           Cardano.DbSync.Config.Types hiding (LogFileDir)
 import           Cardano.DbSync.LedgerState
 
 import qualified Data.ByteString.Base16 as Base16
-import           Data.Int (Int64)
 import           Data.Version (versionBranch)
 
 import           Ouroboros.Network.Block hiding (blockHash)
@@ -38,7 +38,7 @@ runPrepareSnapshotAux firstTry args = do
         printNewerSnapshots newerFiles
         case (mfile, olderFiles) of
             (Just file, _) -> do
-              let bblockNo = blockBlockNo block
+              let bblockNo = fromMaybe 0 $ blockBlockNo block
               printCreateSnapshot bblockNo (lsfFilePath file)
             (_, file : _) -> do
                 -- We couldn't find the tip of the db, so we return a list of
@@ -87,7 +87,7 @@ runPrepareSnapshotAux firstTry args = do
           , show newerFiles, "\n"
           ]
 
-    printCreateSnapshot :: Int64 -> FilePath -> IO ()
+    printCreateSnapshot :: Word64 -> FilePath -> IO ()
     printCreateSnapshot bblockNo fp = do
       let mMajor = listToMaybe $ versionBranch version
           majorStr = case mMajor of

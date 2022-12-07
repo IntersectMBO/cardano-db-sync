@@ -52,9 +52,7 @@ import           Cardano.DbSync.Era.Util
 import           Cardano.DbSync.Error
 import           Cardano.DbSync.Types
 
-import           Cardano.Ledger.Crypto (StandardCrypto)
-
-import           Cardano.Slotting.Block (BlockNo (..))
+import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 import           Database.Persist.Postgresql (SqlBackend)
 
@@ -200,27 +198,28 @@ newEmptyCache maCapacity =
 -- NOTE: For 'StakeAddresses' we use a mixed approach. If the rollback is long we just drop
 -- everything, since it is very rare. If not, we query all the StakeAddressesId of blocks
 -- that wil be deleted.
-rollbackCache :: MonadIO m => Cache -> BlockNo -> Bool -> Word64 -> ReaderT SqlBackend m ()
-rollbackCache cache (BlockNo blkNo) deleteEq nBlocks =
-  case cache of
-    UninitiatedCache -> pure ()
-    Cache ci -> do
-      liftIO $ do
-        atomically $ writeTVar (cPools ci) Map.empty
-        atomically $ modifyTVar (cMultiAssets ci) LRU.cleanup
-        atomically $ writeTVar (cPrevBlock ci) Nothing
-      rollbackStakeAddr ci blkNo deleteEq nBlocks
+rollbackCache :: MonadIO m => Cache -> Maybe Word64 -> Bool -> Word64 -> ReaderT SqlBackend m ()
+rollbackCache UninitiatedCache _ _ _ = pure ()
+rollbackCache (Cache cache) mBlockNo deleteEq nBlocks = do
+  liftIO $ do
+    atomically $ writeTVar (cPools cache) Map.empty
+    atomically $ modifyTVar (cMultiAssets cache) LRU.cleanup
+    atomically $ writeTVar (cPrevBlock cache) Nothing
+  rollbackStakeAddr cache mBlockNo deleteEq nBlocks
 
-rollbackStakeAddr :: MonadIO m => CacheInternal -> Word64 -> Bool -> Word64 -> ReaderT SqlBackend m ()
-rollbackStakeAddr ci blkNo deleteEq nBlocks = do
-  if nBlocks > 600
-    then liftIO $ atomically $ writeTVar (cStakeCreds ci) Map.empty
-    else do
-      initMp <- liftIO $ readTVarIO (cStakeCreds ci)
-      stakeAddrIdsToDelete <- DB.queryStakeAddressIdsAfter blkNo deleteEq
-      let stakeAddrIdsSetToDelete = Set.fromList stakeAddrIdsToDelete
-      let !mp = Map.filter (`Set.notMember` stakeAddrIdsSetToDelete) initMp
-      liftIO $ atomically $ writeTVar (cStakeCreds ci) mp
+rollbackStakeAddr :: MonadIO m => CacheInternal -> Maybe Word64 -> Bool -> Word64 -> ReaderT SqlBackend m ()
+rollbackStakeAddr ci mBlockNo deleteEq nBlocks = do
+  case mBlockNo of
+    Nothing -> liftIO $ atomically $ writeTVar (cStakeCreds ci) Map.empty
+    Just blockNo ->
+      if nBlocks > 600
+        then liftIO $ atomically $ writeTVar (cStakeCreds ci) Map.empty
+        else do
+          initMp <- liftIO $ readTVarIO (cStakeCreds ci)
+          stakeAddrIdsToDelete <- DB.queryStakeAddressIdsAfter blockNo deleteEq
+          let stakeAddrIdsSetToDelete = Set.fromList stakeAddrIdsToDelete
+          let !mp = Map.filter (`Set.notMember` stakeAddrIdsSetToDelete) initMp
+          liftIO $ atomically $ writeTVar (cStakeCreds ci) mp
 
 queryRewardAccountWithCache
     :: forall m. MonadIO m => Cache -> CacheNew -> Ledger.RewardAcnt StandardCrypto

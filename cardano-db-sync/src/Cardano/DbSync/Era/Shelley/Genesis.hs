@@ -18,6 +18,8 @@ import           Cardano.BM.Trace (Trace, logError, logInfo)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 
+import           Cardano.Slotting.Slot (EpochNo (..))
+
 import qualified Cardano.Db as DB
 
 import           Cardano.DbSync.Cache
@@ -37,11 +39,9 @@ import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import qualified Cardano.Ledger.Shelley.UTxO as Shelley
 
-import           Cardano.Slotting.Block (BlockNo (..))
-import           Cardano.Slotting.Slot (EpochNo (..))
-
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Map.Strict as Map
+import qualified Data.Text as Text
 import           Data.Time.Clock (UTCTime (..))
 import qualified Data.Time.Clock as Time
 
@@ -83,7 +83,7 @@ insertValidateGenesisDist backend tracer networkName cfg shelleyInitiation = do
     insertAction = do
       ebid <- DB.queryBlockId (configGenesisHash cfg)
       case ebid of
-        Right _ -> validateGenesisDistribution tracer networkName cfg expectedTxCount
+        Right bid -> validateGenesisDistribution tracer networkName cfg bid expectedTxCount
         Left _ ->
           runExceptT $ do
             liftIO $ logInfo tracer "Inserting Shelley Genesis distribution"
@@ -118,13 +118,16 @@ insertValidateGenesisDist backend tracer networkName cfg shelleyInitiation = do
                 -- since this configuration is used for networks which start from Shelley.
                 -- This means the previous block will have two blocks after it, resulting in a
                 -- tree format, which is unavoidable.
-                void . lift . DB.insertBlock $
+                pid <- lift DB.queryLatestBlockId
+                liftIO $ logInfo tracer $ textShow pid
+                bid <- lift . DB.insertBlock $
                           DB.Block
                             { DB.blockHash = configGenesisHash cfg
                             , DB.blockEpochNo = Nothing
                             , DB.blockSlotNo = Nothing
                             , DB.blockEpochSlotNo = Nothing
-                            , DB.blockBlockNo = fromIntegral $ unBlockNo DB.shelleyGenesisBlockNo
+                            , DB.blockBlockNo = Nothing
+                            , DB.blockPreviousId = pid
                             , DB.blockSlotLeaderId = slid
                             , DB.blockSize = 0
                             , DB.blockTime = configStartTime cfg
@@ -137,51 +140,51 @@ insertValidateGenesisDist backend tracer networkName cfg shelleyInitiation = do
                             , DB.blockOpCert = Nothing
                             , DB.blockOpCertCounter = Nothing
                             }
-                lift $ mapM_ (insertTxOuts tracer DB.shelleyGenesisBlockNo) $ genesisUtxOs cfg
+                lift $ mapM_ (insertTxOuts tracer bid) $ genesisUtxOs cfg
                 liftIO . logInfo tracer $ "Initial genesis distribution populated. Hash "
                                 <> renderByteArray (configGenesisHash cfg)
                 when hasStakes $
-                  insertStaking tracer uninitiatedCache 0 cfg
+                  insertStaking tracer uninitiatedCache bid cfg
                 supply <- lift DB.queryTotalSupply
                 liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
 validateGenesisDistribution
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Text -> ShelleyGenesis StandardShelley -> Word64
+    => Trace IO Text -> Text -> ShelleyGenesis StandardShelley -> DB.BlockId -> Word64
     -> ReaderT SqlBackend m (Either SyncNodeError ())
-validateGenesisDistribution tracer networkName cfg expectedTxCount =
+validateGenesisDistribution tracer networkName cfg bid expectedTxCount =
   runExceptT $ do
     liftIO $ logInfo tracer "Validating Genesis distribution"
     meta <- liftLookupFail "Shelley.validateGenesisDistribution" DB.queryMeta
 
     when (DB.metaStartTime meta /= configStartTime cfg) $
-      dbSyncNodeError $ mconcat
+      dbSyncNodeError $ Text.concat
             [ "Shelley: Mismatch chain start time. Config value "
             , textShow (configStartTime cfg)
             , " does not match DB value of ", textShow (DB.metaStartTime meta)
             ]
 
     when (DB.metaNetworkName meta /= networkName) $
-      dbSyncNodeError $ mconcat
+      dbSyncNodeError $ Text.concat
             [ "Shelley.validateGenesisDistribution: Provided network name "
             , networkName
             , " does not match DB value "
             , DB.metaNetworkName meta
             ]
 
-    txCount <- lift DB.queryShelleyGenesisTxCount
+    txCount <- lift $ DB.queryBlockTxCount bid
     when (txCount /= expectedTxCount) $
-      dbSyncNodeError $ mconcat
+      dbSyncNodeError $ Text.concat
               [ "Shelley.validateGenesisDistribution: Expected initial block to have "
               , textShow expectedTxCount
-              , " transactions but got "
+              , " but got "
               , textShow txCount
               ]
     totalSupply <- lift DB.queryShelleyGenesisSupply
     let expectedSupply = configGenesisSupply cfg
     when (expectedSupply /= totalSupply) $
-      dbSyncNodeError  $ mconcat
+      dbSyncNodeError  $ Text.concat
          [ "Shelley.validateGenesisDistribution: Expected total supply to be "
          , textShow expectedSupply
          , " but got "
@@ -195,15 +198,15 @@ validateGenesisDistribution tracer networkName cfg expectedTxCount =
 
 insertTxOuts
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> BlockNo -> (ShelleyTx.TxIn (Crypto StandardShelley), Shelley.TxOut StandardShelley)
+    => Trace IO Text -> DB.BlockId -> (ShelleyTx.TxIn (Crypto StandardShelley), Shelley.TxOut StandardShelley)
     -> ReaderT SqlBackend m ()
-insertTxOuts trce blkNo (ShelleyTx.TxIn txInId _, txOut) = do
+insertTxOuts trce blkId (ShelleyTx.TxIn txInId _, txOut) = do
   -- Each address/value pair of the initial coin distribution comes from an artifical transaction
   -- with a hash generated by hashing the address.
   txId <- DB.insertTx $
             DB.Tx
               { DB.txHash = Generic.unTxHash txInId
-              , DB.txBlockNo = fromIntegral $ unBlockNo blkNo
+              , DB.txBlockId = blkId
               , DB.txBlockIndex = 0
               , DB.txOutSum = Generic.coinToDbLovelace (txOutCoin txOut)
               , DB.txFee = DB.DbLovelace 0
@@ -214,7 +217,7 @@ insertTxOuts trce blkNo (ShelleyTx.TxIn txInId _, txOut) = do
               , DB.txValidContract = True
               , DB.txScriptSize = 0
               }
-  void $ insertStakeAddressRefIfMissing trce uninitiatedCache blkNo (txOutAddress txOut)
+  _ <- insertStakeAddressRefIfMissing trce uninitiatedCache txId (txOutAddress txOut)
   void . DB.insertTxOut $
             DB.TxOut
               { DB.txOutTxId = txId
@@ -228,7 +231,6 @@ insertTxOuts trce blkNo (ShelleyTx.TxIn txInId _, txOut) = do
               , DB.txOutDataHash = Nothing -- No output datum in Shelley Genesis
               , DB.txOutInlineDatumId = Nothing
               , DB.txOutReferenceScriptId = Nothing
-              , DB.txOutBlockNo = fromIntegral $ unBlockNo blkNo
               }
   where
     txOutAddress :: Shelley.TxOut StandardShelley -> Ledger.Addr StandardCrypto
@@ -242,15 +244,15 @@ insertTxOuts trce blkNo (ShelleyTx.TxIn txInId _, txOut) = do
 -- Insert pools and delegations coming from Genesis.
 insertStaking
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Cache -> BlockNo -> ShelleyGenesis StandardShelley
+    => Trace IO Text -> Cache -> DB.BlockId -> ShelleyGenesis StandardShelley
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertStaking tracer cache blkNo genesis = do
+insertStaking tracer cache blkId genesis = do
   -- All Genesis staking comes from an artifical transaction
   -- with a hash generated by hashing the address.
   txId <- lift $ DB.insertTx $
             DB.Tx
               { DB.txHash = configGenesisStakingHash
-              , DB.txBlockNo = fromIntegral $ unBlockNo blkNo
+              , DB.txBlockId = blkId
               , DB.txBlockIndex = 0
               , DB.txOutSum = DB.DbLovelace 0
               , DB.txFee = DB.DbLovelace 0
@@ -263,11 +265,11 @@ insertStaking tracer cache blkNo genesis = do
               }
   let params = zip [0..] $ Map.elems (sgsPools $ sgStaking genesis)
   let network = sgNetworkId genesis
-  forM_ params $ uncurry (insertPoolRegister tracer uninitiatedCache (const False) network 0 blkNo txId)
+  forM_ params $ uncurry (insertPoolRegister tracer uninitiatedCache (const False) network 0 blkId txId)
   let stakes = zip [0..] $ Map.toList (sgsStake $ sgStaking genesis)
   forM_ stakes $ \(n, (keyStaking, keyPool)) -> do
-    insertStakeRegistration (EpochNo 0) blkNo txId (2 * n) (Generic.annotateStakingCred network (KeyHashObj keyStaking))
-    insertDelegation cache network 0 0 blkNo (2 * n + 1) Nothing (KeyHashObj keyStaking) keyPool
+    insertStakeRegistration (EpochNo 0) txId (2 * n) (Generic.annotateStakingCred network (KeyHashObj keyStaking))
+    insertDelegation cache network 0 0 txId (2 * n + 1) Nothing (KeyHashObj keyStaking) keyPool
 
 -- -----------------------------------------------------------------------------
 

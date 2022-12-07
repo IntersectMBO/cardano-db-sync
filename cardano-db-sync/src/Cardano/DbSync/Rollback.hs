@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
 
 module Cardano.DbSync.Rollback
   ( rollbackToPoint
@@ -29,34 +30,26 @@ import           Ouroboros.Consensus.HardFork.Combinator.AcrossEras (getOneEraHa
 import           Ouroboros.Network.Block
 import           Ouroboros.Network.Point
 
--- | The decision to delete blocks has been taken and this executes it.
-deleteBlocks :: MonadIO m => SyncEnv -> BlockNo -> Bool -> Word64 -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-deleteBlocks env blkNo deleteEq nBlocks = do
-    unless (nBlocks == 0) $
+rollbackFromBlockNo :: MonadIO m => SyncEnv -> BlockNo -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+rollbackFromBlockNo env blkNo = do
+    nBlocks <- lift $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
+    mBlockId <- lift $ DB.queryBlockNo (unBlockNo blkNo)
+    whenStrictJust (maybeToStrict mBlockId) $ \blockId -> do
       liftIO . logInfo trce $
-          mconcat
-            [ "Deleting ", textShow nBlocks, " blocks "
-            , if deleteEq then "starting from " else "after "
-            , textShow blkNo
-            ]
-    -- We need to first cleanup the cache and then delete the blocks from db.
-    lift $ rollbackCache cache blkNo deleteEq nBlocks
-    deleted <- lift $ DB.deleteAfterBlockNo blkNo deleteEq
-    liftIO . logInfo trce $
+        mconcat
+          [ "Deleting ", textShow nBlocks, " blocks after "
+          , " or equal to "
+          , textShow blkNo
+          ]
+      lift $ rollbackCache cache (Just $ unBlockNo blkNo) True (fromIntegral nBlocks)
+      deleted <- lift $ DB.deleteCascadeAfter blockId True
+      liftIO . logInfo trce $
                 if deleted
                   then "Blocks deleted"
                   else "No blocks need to be deleted"
   where
-    trce :: Trace IO Text
     trce = getTrace env
-
-    cache :: Cache
     cache = envCache env
-
-rollbackFromBlockNo :: MonadIO m => SyncEnv -> BlockNo -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-rollbackFromBlockNo env blkNo = do
-    nBlocks <- lift $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
-    deleteBlocks env blkNo True (fromIntegral nBlocks)
 
 -- Rollbacks are done in an Era generic way based on the 'Point' we are
 -- rolling back to.
@@ -65,31 +58,67 @@ rollbackToPoint env point serverTip = do
     backend <- getBackend env
     DB.runDbIohkNoLogging backend $ runExceptT action
   where
-    trce :: Trace IO Text
     trce = getTrace env
+    cache = envCache env
+
+    slotsToDelete :: MonadIO m => WithOrigin SlotNo -> ReaderT SqlBackend m (Maybe SlotNo, Word64)
+    slotsToDelete wosl =
+      case wosl of
+        Origin -> do
+          mSlotNo <- DB.queryLastSlotNo
+          countSlotNos <- DB.queryCountSlotNo
+          pure (mSlotNo, countSlotNos)
+        At sl -> do
+          mSlotNo <- DB.queryLastSlotNoGreaterThan (unSlotNo sl)
+          countSlotNos <- DB.queryCountSlotNosGreaterThan (unSlotNo sl)
+          pure (mSlotNo, countSlotNos)
 
     action :: MonadIO m => ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
     action = do
-        blkNo <- liftLookupFail "Rollback.rollbackToPoint.queryBlockNo" $ queryBlockNo point
-        nBlocks <- lift $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) False
+        (mSlotNo, nBlocks) <- lift $ slotsToDelete (pointSlot point)
+        (prevId, mBlockNo) <- liftLookupFail "Rollback.rollbackToPoint" $ queryBlock point
+
         if nBlocks <= 50 || not (hasLedgerState env) then do
           liftIO . logInfo trce $ "Rolling back to " <> renderPoint point
-          deleteBlocks env blkNo False (fromIntegral nBlocks)
+          whenStrictJust (maybeToStrict mSlotNo) $ \slotNo ->
+          -- there may be more deleted blocks than slots, because ebbs don't have
+          -- a slot. We can only make an estimation here.
+            liftIO . logInfo trce $
+                mconcat
+                  [ "Deleting ", textShow nBlocks, " blocks up to slot "
+                  , textShow (unSlotNo slotNo)
+                  ]
+          -- We delete the block right after the point we rollback to. This delete
+          -- should cascade to the rest of the chain.
+
+          -- 'length xs' here gives an approximation of the blocks deleted. An approximation
+          -- is good enough, since it is only used to decide on the best policy and is not
+          -- important for correctness.
+          -- We need to first cleanup the cache and then delete the blocks from db.
+          lift $ rollbackCache cache mBlockNo False (fromIntegral nBlocks)
+          deleted <- lift $ DB.deleteCascadeAfter prevId False
+          liftIO . logInfo trce $
+                    if deleted
+                      then "Blocks deleted"
+                      else "No blocks need to be deleted"
           pure True
         else do
           liftIO . logInfo trce $
             mconcat
               [ "Delaying delete of ", textShow nBlocks, " blocks after "
-              , textShow blkNo, " while rolling back to (" , renderPoint point
+              , textShow mBlockNo, " while rolling back to (" , renderPoint point
               , "). Applying blocks until a new block is found. The node is currently at ", textShow serverTip
               ]
           pure False
 
-    queryBlockNo :: MonadIO m => Point CardanoBlock -> ReaderT SqlBackend m (Either DB.LookupFail BlockNo)
-    queryBlockNo pnt =
-      case getPoint pnt of
-        Origin -> pure $ Right 0
-        At blk -> DB.queryBlockHash (SBS.fromShort . getOneEraHash $ blockPointHash blk)
+queryBlock :: MonadIO m => Point CardanoBlock
+           -> ReaderT SqlBackend m (Either DB.LookupFail (DB.BlockId, Maybe Word64))
+queryBlock pnt = do
+  case getPoint pnt of
+    Origin ->
+      fmap (, Nothing) <$> DB.queryGenesis
+    At blkPoint ->
+      DB.queryBlockNoId (SBS.fromShort . getOneEraHash $ blockPointHash blkPoint)
 
 -- For testing and debugging.
 unsafeRollback :: Trace IO Text -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeError ())
