@@ -19,10 +19,14 @@
       url = "github:input-output-hk/flake-compat/fixes";
       flake = false;
     };
+    CHaP = {
+      url = "github:input-output-hk/cardano-haskell-packages?ref=repo";
+      flake = false;
+    };
     customConfig = { url = "path:./custom-config"; };
   };
 
-  outputs = { self, iohkNix, cardano-world, haskellNix, nixpkgs, utils, customConfig, ... }:
+  outputs = { self, iohkNix, cardano-world, haskellNix, CHaP, nixpkgs, utils, customConfig, ... }:
     let
       inherit (haskellNix) config;
       inherit (nixpkgs) lib;
