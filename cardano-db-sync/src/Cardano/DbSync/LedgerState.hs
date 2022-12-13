@@ -34,8 +34,6 @@ import Cardano.BM.Trace (Trace, logInfo, logWarning)
 import Cardano.Binary (Decoder, DecoderError, Encoding, FromCBOR (..), ToCBOR (..))
 import qualified Cardano.Binary as Serialize
 
--- import           Cardano.Ledger.Shelley.Constraints (UsesValue)
-
 import Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Cardano.Util as Cardano
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -47,9 +45,8 @@ import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
 import Cardano.Ledger.Alonzo.Scripts
 import qualified Cardano.Ledger.Babbage.PParams as Babbage
 import qualified Cardano.Ledger.BaseTypes as Ledger
-import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Era (Crypto)
-import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
+import Cardano.Ledger.Shelley.AdaPots (AdaPots)
 import Cardano.Ledger.Shelley.LedgerState (EpochState (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Prelude hiding (atomically)
@@ -310,14 +307,14 @@ applyBlock env blk = do
     !ledgerDB <- readStateUnsafe env
     let oldState = ledgerDbCurrent ledgerDB
     let !result = applyBlk (ExtLedgerCfg (topLevelConfig env)) blk (clsState oldState)
+    let !ledgerEvents = mapMaybe convertAuxLedgerEvent (lrEvents result)
     let !newLedgerState = lrResult result
     !details <- getSlotDetails env (ledgerState newLedgerState) time (cardanoBlockSlotNo blk)
-    let !newEpoch = mkNewEpoch (clsState oldState) newLedgerState
+    let !newEpoch = mkNewEpoch (clsState oldState) newLedgerState (findAdaPots ledgerEvents)
     let !newEpochBlockNo = applyToEpochBlockNo (isJust $ blockIsEBB blk) (isJust newEpoch) (clsEpochBlockNo oldState)
     let !newState = CardanoLedgerState newLedgerState newEpochBlockNo
     let !ledgerDB' = pushLedgerDB ledgerDB newState
     writeTVar (leStateVar env) (Strict.Just ledgerDB')
-    let !ledgerEvents = mapMaybe convertAuxLedgerEvent (lrEvents result)
     let !appResult =
           ApplyResult
             { apPrices = getPrices newState
@@ -339,8 +336,8 @@ applyBlock env blk = do
         Left err -> panic err
         Right result -> result
 
-    mkNewEpoch :: ExtLedgerState CardanoBlock -> ExtLedgerState CardanoBlock -> Maybe Generic.NewEpoch
-    mkNewEpoch oldState newState =
+    mkNewEpoch :: ExtLedgerState CardanoBlock -> ExtLedgerState CardanoBlock -> Maybe AdaPots -> Maybe Generic.NewEpoch
+    mkNewEpoch oldState newState mPots =
       if ledgerEpochNo env newState /= ledgerEpochNo env oldState + 1
         then Nothing
         else
@@ -348,7 +345,7 @@ applyBlock env blk = do
             Generic.NewEpoch
               { Generic.neEpoch = ledgerEpochNo env newState
               , Generic.neIsEBB = isJust $ blockIsEBB blk
-              , Generic.neAdaPots = maybeToStrict $ getAdaPots newState
+              , Generic.neAdaPots = maybeToStrict mPots
               , Generic.neEpochUpdate = Generic.epochUpdate newState
               }
 
@@ -793,18 +790,6 @@ getRegisteredPoolShelley lState =
             Shelley.nesEs $
               Consensus.shelleyLedgerState lState
 
--- We only compute 'AdaPots' for later eras. This is a time consuming
--- function and we only want to run it on epoch boundaries.
-getAdaPots :: ExtLedgerState CardanoBlock -> Maybe Shelley.AdaPots
-getAdaPots st =
-  case ledgerState st of
-    LedgerStateByron _ -> Nothing
-    LedgerStateShelley sts -> Just $ totalAdaPots sts
-    LedgerStateAllegra sta -> Just $ totalAdaPots sta
-    LedgerStateMary stm -> Just $ totalAdaPots stm
-    LedgerStateAlonzo sta -> Just $ totalAdaPots sta
-    LedgerStateBabbage stb -> Just $ totalAdaPots stb
-
 ledgerEpochNo :: LedgerEnv -> ExtLedgerState CardanoBlock -> EpochNo
 ledgerEpochNo env cls =
   case ledgerTipSlot (ledgerState cls) of
@@ -840,13 +825,6 @@ tickThenReapplyCheckHash cfg block lsb =
           , renderByteArray (SBS.fromShort . Consensus.getOneEraHash $ blockHash block)
           , "."
           ]
-
-totalAdaPots ::
-  forall p era.
-  Core.EraTxOut era =>
-  LedgerState (ShelleyBlock p era) ->
-  Shelley.AdaPots
-totalAdaPots = Shelley.totalAdaPotsES . Shelley.nesEs . Consensus.shelleyLedgerState
 
 getHeaderHash :: HeaderHash CardanoBlock -> ByteString
 getHeaderHash bh = SBS.fromShort (Consensus.getOneEraHash bh)
@@ -891,3 +869,10 @@ getPrices st = case ledgerState $ clsState st of
           Shelley.nesEs $
             Consensus.shelleyLedgerState bls
   _ -> Strict.Nothing
+
+findAdaPots :: [LedgerEvent] -> Maybe AdaPots
+findAdaPots = go
+  where
+    go [] = Nothing
+    go (LedgerAdaPots p: _) = Just p
+    go (_ : rest) = go rest
