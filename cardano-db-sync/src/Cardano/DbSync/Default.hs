@@ -250,6 +250,8 @@ insertLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
           lift $ adjustEpochRewards tracer ntw cache e rwd creds
         LedgerTotalRewards _e rwd -> do
           lift $ validateEpochRewards tracer ntw (subFromCurrentEpoch 2) currentEpochNo rwd
+        LedgerAdaPots _ ->
+          pure () -- These are handled separately by insertBlock
         LedgerMirDist rwd -> do
           unless (Map.null rwd) $ do
             let rewards = Map.toList rwd
