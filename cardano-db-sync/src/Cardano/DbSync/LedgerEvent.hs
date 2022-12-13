@@ -15,12 +15,13 @@ module Cardano.DbSync.LedgerEvent
   , ledgerEventName
   ) where
 
-import           Cardano.Db hiding (EpochNo, SyncState, epochNo)
+import           Cardano.Db hiding (AdaPots, EpochNo, SyncState, epochNo)
 
 import           Cardano.Ledger.Coin (Coin (..), DeltaCoin (..))
 import qualified Cardano.Ledger.Core as Ledger
 import           Cardano.Ledger.Crypto (StandardCrypto)
 import           Cardano.Ledger.Era (Crypto)
+import           Cardano.Ledger.Shelley.AdaPots
 import           Cardano.Ledger.Shelley.API (InstantaneousRewards (..))
 import qualified Cardano.Ledger.Shelley.Rewards as Ledger
 import           Cardano.Ledger.Shelley.Rules.Epoch (EpochEvent (PoolReapEvent))
@@ -62,6 +63,7 @@ data LedgerEvent
   | LedgerDeltaRewards !EpochNo !Generic.Rewards
   | LedgerRestrainedRewards !EpochNo !Generic.Rewards !(Set StakeCred)
   | LedgerTotalRewards !EpochNo !(Map StakeCred (Set (Ledger.Reward StandardCrypto)))
+  | LedgerAdaPots !AdaPots
   | LedgerStartAtEpoch !EpochNo
   | LedgerNewEpoch !EpochNo !SyncState
   deriving Eq
@@ -77,8 +79,9 @@ toOrdering ev = case ev of
   LedgerDeltaRewards {} -> 3
   LedgerRestrainedRewards {} -> 4
   LedgerTotalRewards {} -> 5
-  LedgerStartAtEpoch {} -> 6
-  LedgerNewEpoch {} -> 7
+  LedgerAdaPots {} -> 6
+  LedgerStartAtEpoch {} -> 7
+  LedgerNewEpoch {} -> 8
 
 convertAuxLedgerEvent :: OneEraLedgerEvent (CardanoEras StandardCrypto) -> Maybe LedgerEvent
 convertAuxLedgerEvent = toLedgerEvent . wrappedAuxLedgerEvent
@@ -92,6 +95,7 @@ ledgerEventName le =
     LedgerDeltaRewards {} -> "LedgerDeltaRewards"
     LedgerRestrainedRewards {} -> "LedgerRestrainedRewards"
     LedgerTotalRewards {} -> "LedgerTotalRewards"
+    LedgerAdaPots {} -> "LedgerAdaPots"
     LedgerStartAtEpoch {} -> "LedgerStartAtEpoch"
     LedgerNewEpoch {} -> "LedgerNewEpoch"
 
@@ -129,6 +133,7 @@ instance
           Just $ LedgerIncrementalRewards e (convertPoolRewards m)
         LEMirTransfer rp tp _rtt _ttr -> Just $ LedgerMirDist (convertMirRewards rp tp)
         LERetiredPools r _u en -> Just $ LedgerPoolReap en (convertPoolDepositRefunds r)
+        LEAdaPots p -> Just $ LedgerAdaPots p
         ShelleyLedgerEventBBODY {} -> Nothing
         ShelleyLedgerEventTICK {} -> Nothing
 
@@ -260,6 +265,18 @@ pattern LEMirTransfer rp tp rtt ttr <-
               )
           )
       )
+
+pattern LEAdaPots
+    :: ( Crypto ledgerera ~ StandardCrypto
+       , Event (Ledger.EraRule "TICK" ledgerera) ~ TickEvent ledgerera
+       , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera
+       , Event (Ledger.EraRule "MIR" ledgerera) ~ MirEvent ledgerera
+       )
+    => AdaPots
+    -> AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
+pattern LEAdaPots pots <-
+  ShelleyLedgerEventTICK
+    (NewEpochEvent (TotalAdaPotsEvent pots))
 
 pattern LERetiredPools
   :: ( Crypto ledgerera ~ StandardCrypto
