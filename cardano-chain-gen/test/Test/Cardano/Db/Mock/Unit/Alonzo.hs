@@ -34,7 +34,7 @@ import           Cardano.SMASH.Server.PoolDataLayer
 import           Cardano.SMASH.Server.Types
 
 import           Control.Monad
-import           Control.Monad.Class.MonadSTM.Strict
+import           Control.Concurrent.Class.MonadSTM.Strict
 
 import qualified Data.Map as Map
 import           Data.Text (Text)
@@ -1114,8 +1114,8 @@ mintMultiAsset =
     withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
       startDBSync  dbSync
       void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \st -> do
-        let val0 = Value 1 $ Map.singleton (PolicyID alwaysMintScriptHash) (Map.singleton (head assetNames) 1)
-        Alonzo.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, Value 10000 mempty)] val0 True 100 st
+        let val0 = MaryValue 1 $ Map.singleton (PolicyID alwaysMintScriptHash) (Map.singleton (head assetNames) 1)
+        Alonzo.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, MaryValue 10000 mempty)] val0 True 100 st
 
       assertBlockNoBackoff dbSync 1
       assertAlonzoCounts dbSync (1,1,1,1,0,0,0,0)
@@ -1130,9 +1130,9 @@ mintMultiAssets =
         let assets0 = Map.fromList [(head assetNames,10), (assetNames !! 1,4)]
         let policy0 = PolicyID alwaysMintScriptHash
         let policy1 = PolicyID alwaysSucceedsScriptHash
-        let val1 = Value 1 $ Map.fromList [(policy0, assets0), (policy1, assets0)]
-        tx0 <- Alonzo.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, Value 10000 mempty)] val1 True 100 st
-        tx1 <- Alonzo.mkMAssetsScriptTx [UTxOIndex 2] (UTxOIndex 3) [(UTxOAddressNew 0, Value 10000 mempty)] val1 True 200 st
+        let val1 = MaryValue 1 $ Map.fromList [(policy0, assets0), (policy1, assets0)]
+        tx0 <- Alonzo.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, MaryValue 10000 mempty)] val1 True 100 st
+        tx1 <- Alonzo.mkMAssetsScriptTx [UTxOIndex 2] (UTxOIndex 3) [(UTxOAddressNew 0, MaryValue 10000 mempty)] val1 True 200 st
         pure [tx0, tx1]
 
       assertBlockNoBackoff dbSync 1
@@ -1148,9 +1148,9 @@ swapMultiAssets =
           let assetsMinted0 = Map.fromList [(head assetNames, 10), (assetNames !! 1, 4)]
           let policy0 = PolicyID alwaysMintScriptHash
           let policy1 = PolicyID alwaysSucceedsScriptHash
-          let mintValue0 = Value 100 $ Map.fromList [(policy0, assetsMinted0), (policy1, assetsMinted0)]
+          let mintValue0 = MaryValue 100 $ Map.fromList [(policy0, assetsMinted0), (policy1, assetsMinted0)]
           let assets0 = Map.fromList [(head assetNames, 5), (assetNames !! 1, 2)]
-          let outValue0 = Value 20 $ Map.fromList [(policy0, assets0), (policy1, assets0)]
+          let outValue0 = MaryValue 20 $ Map.fromList [(policy0, assets0), (policy1, assets0)]
 
           tx0 <- Alonzo.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1)
                   [(UTxOAddress alwaysSucceedsScriptAddr, outValue0), (UTxOAddress alwaysMintScriptAddr, outValue0)] mintValue0 True 100 st

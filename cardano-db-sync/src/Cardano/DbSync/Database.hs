@@ -17,7 +17,7 @@ import           Cardano.Prelude hiding (atomically)
 
 import           Cardano.BM.Trace (logDebug, logError, logInfo)
 
-import           Control.Monad.Class.MonadSTM.Strict
+import           Control.Concurrent.Class.MonadSTM.Strict
 import           Control.Monad.Extra (whenJust)
 import           Control.Monad.Trans.Except.Extra (newExceptT)
 

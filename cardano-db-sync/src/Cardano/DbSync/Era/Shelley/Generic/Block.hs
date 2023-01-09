@@ -32,13 +32,10 @@ import           Cardano.Ledger.Alonzo ()
 import           Cardano.Ledger.Alonzo.Scripts (Prices)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Block as Ledger
-import           Cardano.Ledger.Core (Witnesses)
 import qualified Cardano.Ledger.Core as Ledger
 import           Cardano.Ledger.Crypto (Crypto, StandardCrypto)
-import           Cardano.Ledger.Era (SupportsSegWit (..))
-import qualified Cardano.Ledger.Era as Ledger
+import           Cardano.Ledger.Era (EraSegWits (..))
 import           Cardano.Ledger.Keys (KeyHash, KeyRole (..), VerKeyVRF, hashKey)
-import           Cardano.Ledger.SafeHash (SafeToHash)
 import qualified Cardano.Ledger.Shelley.BlockChain as Shelley
 import qualified Cardano.Ledger.Shelley.Tx as Shelley
 
@@ -52,8 +49,6 @@ import           Cardano.Slotting.Slot (SlotNo (..))
 import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlonzo,
                    StandardBabbage, StandardMary, StandardShelley)
 import qualified Ouroboros.Consensus.Protocol.Praos.Header as Praos
--- import           Ouroboros.Consensus.Protocol.TPraos (TPraosStandardCrypto)
--- import           Ouroboros.Consensus.Shelley.Protocol.Crypto (TPraosStandardCrypto)
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra, ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
 import           Ouroboros.Consensus.Shelley.Protocol.Abstract
@@ -215,10 +210,10 @@ blockSize = fromIntegral . Shelley.bBodySize . Ledger.bbody . Consensus.shelleyB
 
 blockTxs
     :: ( ShelleyBasedEra era
-        , Ledger.TxSeq era ~ Shelley.TxSeq era
-        , SafeToHash (Witnesses era)
+        , Ledger.TxSeq era ~ Shelley.ShelleyTxSeq era
+        , Ledger.Tx era ~ Shelley.ShelleyTx era
         )
-    => ShelleyBlock p era -> [(Word64, Shelley.Tx era)]
+    => ShelleyBlock p era -> [(Word64, Shelley.ShelleyTx era)]
 blockTxs = zip [0 ..] . unTxSeq . Ledger.bbody . Consensus.shelleyBlockRaw
 
 blockVrfKeyView :: VerKeyVRF StandardCrypto -> Text
@@ -242,6 +237,9 @@ slotNumber :: ShelleyProtocol p => ShelleyBlock p era -> SlotNo
 slotNumber = pHeaderSlot . blockHeader
 
 unTxSeq
-    :: (ShelleyBasedEra era, SafeToHash (Witnesses era))
-    => Shelley.TxSeq era -> [Shelley.Tx era]
-unTxSeq (Shelley.TxSeq txSeq) = toList txSeq
+    :: ( ShelleyBasedEra era
+       , Ledger.TxSeq era ~ Shelley.ShelleyTxSeq era
+       , Ledger.Tx era ~ Shelley.ShelleyTx era
+       )
+    => Shelley.ShelleyTxSeq era -> [Shelley.ShelleyTx era]
+unTxSeq = toList . Ledger.fromTxSeq

@@ -58,8 +58,9 @@ import           Cardano.DbSync.LocalStateQuery
 import           Cardano.DbSync.Types
 import           Cardano.DbSync.Util
 
-import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, TBQueue, newTBQueueIO, newTVarIO,
+import           Control.Concurrent.Class.MonadSTM.Strict (StrictTVar, newTBQueueIO, newTVarIO,
                    readTVar, readTVarIO, writeTVar)
+import           Control.Concurrent.Class.MonadSTM.Strict.TBQueue (StrictTBQueue)
 import           Control.Monad.Trans.Maybe (MaybeT (..))
 
 import qualified Data.Strict.Maybe as Strict
@@ -88,8 +89,8 @@ data SyncEnv = SyncEnv
   , envIndexes :: !(StrictTVar IO Bool)
   , envOptions :: !SyncOptions
   , envCache :: !Cache
-  , envOfflineWorkQueue :: !(TBQueue IO PoolFetchRetry)
-  , envOfflineResultQueue :: !(TBQueue IO FetchResult)
+  , envOfflineWorkQueue :: !(StrictTBQueue IO PoolFetchRetry)
+  , envOfflineResultQueue :: !(StrictTBQueue IO FetchResult)
   , envEpochState :: !(StrictTVar IO EpochState)
   , envEpochSyncTime :: !(StrictTVar IO UTCTime)
   , envNoLedgerEnv :: !NoLedgerStateEnv -- only used when configured without ledger state.

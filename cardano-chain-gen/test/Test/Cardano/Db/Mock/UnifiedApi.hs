@@ -31,7 +31,7 @@ import           Cardano.Mock.Forging.Types
 import           Cardano.Slotting.Slot (SlotNo (..))
 
 import           Control.Monad (forM, replicateM)
-import           Control.Monad.Class.MonadSTM.Strict (atomically)
+import           Control.Concurrent.Class.MonadSTM.Strict (atomically)
 
 import           Ouroboros.Consensus.Cardano.Block (ShelleyEra, StandardAlonzo, StandardBabbage,
                    StandardCrypto)

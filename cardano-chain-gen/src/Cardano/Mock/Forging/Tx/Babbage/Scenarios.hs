@@ -36,7 +36,7 @@ delegateAndSendBlocks n interpreter = do
     sendBlocks <- forM (chunksOf 500 addresses) $ \blockAddresses -> do
       blockTxs <- withBabbageLedgerState interpreter $ \st ->
         forM (chunksOf 10 blockAddresses) $ \txAddresses ->
-          Babbage.mkPaymentTx' utxoIndex (fmap (\addr -> (UTxOAddress addr, Value 1 mempty)) txAddresses) st
+          Babbage.mkPaymentTx' utxoIndex (fmap (\addr -> (UTxOAddress addr, MaryValue 1 mempty)) txAddresses) st
       forgeNextFindLeader interpreter (TxBabbage <$> blockTxs)
     pure $ registerBlocks <> delegateBlocks <> sendBlocks
   where

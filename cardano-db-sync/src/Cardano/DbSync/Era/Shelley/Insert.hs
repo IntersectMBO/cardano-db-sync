@@ -43,13 +43,14 @@ import           Cardano.DbSync.Era.Util (liftLookupFail, safeDecodeToJson)
 import qualified Cardano.Ledger.Address as Ledger
 import           Cardano.Ledger.Alonzo.Language (Language)
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
+import           Cardano.Ledger.BaseTypes (strictMaybeToMaybe)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Coin as Ledger
 import qualified Cardano.Ledger.Credential as Ledger
 import           Cardano.Ledger.Keys
 import qualified Cardano.Ledger.Keys as Ledger
-import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..), Value (..))
+import           Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..), MaryValue (..))
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 
@@ -68,7 +69,6 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import           Data.Either.Extra (eitherToMaybe)
 import           Data.Group (invert)
 import qualified Data.Map.Strict as Map
-import           Data.Maybe.Strict (strictMaybeToMaybe)
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text.Encoding as Text
 
@@ -888,9 +888,9 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce = do
 
 insertMaTxMint
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Cache -> DB.TxId -> Value StandardCrypto
+    => Trace IO Text -> Cache -> DB.TxId -> MaryValue StandardCrypto
     -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertMaTxMint _tracer cache txId (Value _adaShouldAlwaysBeZeroButWeDoNotCheck mintMap) =
+insertMaTxMint _tracer cache txId (MaryValue _adaShouldAlwaysBeZeroButWeDoNotCheck mintMap) =
     mapM_ (lift . insertOuter) $ Map.toList mintMap
   where
     insertOuter

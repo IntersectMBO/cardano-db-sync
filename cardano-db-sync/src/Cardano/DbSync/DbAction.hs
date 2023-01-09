@@ -20,7 +20,7 @@ import qualified Control.Concurrent.STM as STM
 import           Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as TBQ
 
-import           Control.Monad.Class.MonadSTM.Strict (StrictTMVar, newEmptyTMVarIO, takeTMVar)
+import           Control.Concurrent.Class.MonadSTM.Strict (StrictTMVar, newEmptyTMVarIO, takeTMVar)
 
 import           Ouroboros.Network.Block (BlockNo, Tip (..))
 import qualified Ouroboros.Network.Point as Point

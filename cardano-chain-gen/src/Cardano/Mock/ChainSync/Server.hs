@@ -32,7 +32,7 @@ import           Control.Concurrent (threadDelay)
 import           Control.Concurrent.Async
 import           Control.Exception (bracket)
 import           Control.Monad (forever)
-import           Control.Monad.Class.MonadSTM.Strict (MonadSTM (atomically), STM, StrictTVar,
+import           Control.Concurrent.Class.MonadSTM.Strict (MonadSTM (atomically), STM, StrictTVar,
                    modifyTVar, newTVarIO, readTVar, retry, writeTVar)
 import           Control.Tracer (nullTracer)
 import           Data.ByteString.Lazy.Char8 (ByteString)

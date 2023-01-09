@@ -41,9 +41,10 @@ import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
 import           Cardano.Ledger.Alonzo.Scripts
 import qualified Cardano.Ledger.Babbage.PParams as Babbage
 import qualified Cardano.Ledger.BaseTypes as Ledger
+import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Era (Crypto)
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
-import           Cardano.Ledger.Shelley.Constraints (UsesValue)
+-- import           Cardano.Ledger.Shelley.Constraints (UsesValue)
 import           Cardano.Ledger.Shelley.LedgerState (EpochState (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 
@@ -63,7 +64,7 @@ import           Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (.
                    fromWithOrigin)
 
 import qualified Control.Exception as Exception
-import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, atomically, newTVarIO, readTVar,
+import           Control.Concurrent.Class.MonadSTM.Strict (StrictTVar, atomically, newTVarIO, readTVar,
                    writeTVar)
 
 -- import           Codec.CBOR.Write (toBuilder)
@@ -772,7 +773,7 @@ tickThenReapplyCheckHash cfg block lsb =
                   ]
 
 totalAdaPots
-    :: forall p era. UsesValue era
+    :: forall p era. Core.EraTxOut era
     => LedgerState (ShelleyBlock p era)
     -> Shelley.AdaPots
 totalAdaPots = Shelley.totalAdaPotsES . Shelley.nesEs . Consensus.shelleyLedgerState

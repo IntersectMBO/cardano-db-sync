@@ -20,7 +20,7 @@ import           Cardano.DbSync.Era.Shelley.Offline.Query
 
 import           Cardano.DbSync.Types
 
-import           Control.Monad.Class.MonadSTM.Strict (TBQueue, flushTBQueue, isEmptyTBQueue,
+import           Control.Concurrent.Class.MonadSTM.Strict (StrictTBQueue, flushTBQueue, isEmptyTBQueue,
                    readTBQueue, writeTBQueue)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 
@@ -40,7 +40,7 @@ import           Network.HTTP.Client.TLS (tlsManagerSettings)
 
 loadOfflineWorkQueue
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> TBQueue IO PoolFetchRetry -> ReaderT SqlBackend m ()
+    => Trace IO Text -> StrictTBQueue IO PoolFetchRetry -> ReaderT SqlBackend m ()
 loadOfflineWorkQueue _trce workQueue =
     -- If we try to write the to queue when it is full it will block. Therefore only add more to
     -- the queue if it is empty.
@@ -57,7 +57,7 @@ loadOfflineWorkQueue _trce workQueue =
 
 insertOfflineResults
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> TBQueue IO FetchResult -> ReaderT SqlBackend m ()
+    => Trace IO Text -> StrictTBQueue IO FetchResult -> ReaderT SqlBackend m ()
 insertOfflineResults trce resultQueue = do
     res <- liftIO . atomically $ flushTBQueue resultQueue
     let fetchErrors = length $ filter isFetchError res
@@ -97,7 +97,7 @@ runOfflineFetchThread trce env = do
 -- -------------------------------------------------------------------------------------------------
 
 -- Blocks on an empty queue, but gets all elements in the queue if there is more than one.
-blockingFlushTBQueue :: TBQueue IO a -> IO [a]
+blockingFlushTBQueue :: StrictTBQueue IO a -> IO [a]
 blockingFlushTBQueue queue = do
   atomically $ do
     x <- readTBQueue queue

@@ -78,6 +78,7 @@ library
                       , cardano-prelude
                       , cardano-protocol-tpraos
                       , cardano-slotting
+                      , cardano-strict-containers
                       , cborg
                       , vector-map
                       , containers
@@ -96,6 +97,7 @@ library
                       , memory
                       , mtl
                       , monad-control
+                      , microlens
                       , network-mux
                       , nothunks
                       , ouroboros-consensus
@@ -118,7 +120,7 @@ library
                       , split
                       , stm
                       , strict
-                      , strict-containers
+--                      , strict-containers
                       , strict-stm
                       , swagger2
                       , text
