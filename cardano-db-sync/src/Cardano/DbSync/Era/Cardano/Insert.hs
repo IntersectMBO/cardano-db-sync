@@ -13,7 +13,7 @@ import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Cardano.Db (SyncState)
 
-import           Control.Monad.Class.MonadSTM.Strict (MonadSTM, STM, StrictTVar, atomically,
+import           Control.Concurrent.Class.MonadSTM.Strict (MonadSTM, STM, StrictTVar, atomically,
                    readTVar, writeTVar)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 

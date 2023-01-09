@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
   ( fromShelleyTx
@@ -20,7 +19,8 @@ import qualified Cardano.Crypto.Hash as Crypto
 import           Cardano.Ledger.BaseTypes
 import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.CompactAddress as Ledger
-import           Cardano.Ledger.Core (Value)
+import           Cardano.Ledger.Core (EraTxOut, Value)
+import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Era as Ledger
 import qualified Cardano.Ledger.SafeHash as Ledger
 import           Cardano.Ledger.Shelley.Scripts (ScriptHash)
@@ -32,6 +32,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
+import           Lens.Micro
 
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShelley)
 import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra)
@@ -46,14 +47,14 @@ import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import           Cardano.DbSync.Era.Shelley.Generic.Util
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
-fromShelleyTx :: (Word64, ShelleyTx.Tx StandardShelley) -> Tx
+fromShelleyTx :: (Word64, ShelleyTx.ShelleyTx StandardShelley) -> Tx
 fromShelleyTx (blkIndex, tx) =
     Tx
       { txHash = txHashId tx
       , txBlockIndex = blkIndex
-      , txSize = fromIntegral $ getField @"txsize" tx
+      , txSize = fromIntegral $ tx ^. Core.sizeTxF
       , txValidContract = True
-      , txInputs = map fromTxIn (toList . Shelley._inputs $ ShelleyTx.body tx)
+      , txInputs = map fromTxIn (toList . Shelley._inputs $  tx ^. Core.bodyTxL) -- ShelleyTx.body tx)
       , txCollateralInputs = []  -- Shelley does not have collateral inputs
       , txReferenceInputs = []   -- Shelley does not have reference inputs
       , txOutputs = outputs
@@ -63,7 +64,7 @@ fromShelleyTx (blkIndex, tx) =
       , txInvalidBefore = Nothing
       , txInvalidHereafter = Just $ Shelley._ttl (ShelleyTx.body tx)
       , txWithdrawalSum = calcWithdrawalSum $ Shelley._wdrls (ShelleyTx.body tx)
-      , txMetadata = fromShelleyMetadata <$> strictMaybeToMaybe (getField @"auxiliaryData" tx)
+      , txMetadata = fromShelleyMetadata <$> strictMaybeToMaybe (tx ^. Core.auxDataTxL)
       , txCertificates = zipWith mkTxCertificate [0..] (toList . Shelley._certs $ ShelleyTx.body tx)
       , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . Shelley._wdrls $ ShelleyTx.body tx)
       , txParamProposal = maybe [] (convertParamProposal (Shelley Standard)) $ strictMaybeToMaybe (ShelleyTx._txUpdate $ ShelleyTx.body tx)
@@ -80,7 +81,7 @@ fromShelleyTx (blkIndex, tx) =
 
     scripts :: [TxScript]
     scripts =
-      mkTxScript <$> Map.toList (ShelleyTx.scriptWits $ getField @"wits" tx)
+      mkTxScript <$> Map.toList (ShelleyTx.txwitsScript tx)
 
     mkTxScript :: (ScriptHash StandardCrypto, Shelley.MultiSig StandardCrypto) -> TxScript
     mkTxScript (hsh, script) = TxScript
@@ -91,24 +92,22 @@ fromShelleyTx (blkIndex, tx) =
       , txScriptCBOR = Nothing
       }
 
-getOutputs :: ShelleyTx.Tx StandardShelley -> [TxOut]
+getOutputs :: ShelleyTx.ShelleyTx StandardShelley -> [TxOut]
 getOutputs tx = zipWith fromTxOut [0 .. ] $ toList (Shelley._outputs $ ShelleyTx.body tx)
 
-fromTxOut :: (Value era ~ Coin, Ledger.Crypto era ~ StandardCrypto, Ledger.Era era) => Word64 -> ShelleyTx.TxOut era -> TxOut
+fromTxOut :: (EraTxOut era, Value era ~ Coin, Ledger.Crypto era ~ StandardCrypto) => Word64 -> Core.TxOut era -> TxOut
 fromTxOut index txOut =
   TxOut
     { txOutIndex = index
-    , txOutAddress = addr
+    , txOutAddress = txOut ^. Core.addrTxOutL
     , txOutAddressRaw = SBS.fromShort bs
-    , txOutAdaValue = ada
+    , txOutAdaValue = txOut ^. Core.valueTxOutL
     , txOutMaValue = mempty  -- Shelley does not support multi-assets
     , txOutScript = Nothing
     , txOutDatum = NoDatum   -- Shelley does not support plutus data
     }
   where
-    ShelleyTx.TxOutCompact (Ledger.UnsafeCompactAddr bs) _ = txOut
-    -- This pattern match also does the deserialisation of the address
-    ShelleyTx.TxOut addr ada = txOut
+    Ledger.UnsafeCompactAddr bs = txOut ^. Core.compactAddrTxOutL
 
 
 fromTxIn :: ShelleyTx.TxIn StandardCrypto -> TxIn
@@ -119,7 +118,7 @@ fromTxIn (ShelleyTx.TxIn (ShelleyTx.TxId txid) (TxIx w64)) =
     , txInRedeemerIndex = Nothing
     }
 
-txHashId :: (Ledger.Crypto era ~ StandardCrypto, ShelleyBasedEra era) => ShelleyTx.Tx era -> ByteString
+txHashId :: (Ledger.Crypto era ~ StandardCrypto, ShelleyBasedEra era) => ShelleyTx.ShelleyTx era -> ByteString
 txHashId = Crypto.hashToBytes . Ledger.extractHash . Ledger.hashAnnotated . ShelleyTx.body
 
 calcWithdrawalSum :: Shelley.Wdrl StandardCrypto -> Coin
@@ -134,9 +133,9 @@ mkTxWithdrawal (ra, c) =
     }
 
 mkTxCertificate :: Word16 -> Shelley.DCert StandardCrypto -> TxCertificate
-mkTxCertificate ix dcert =
+mkTxCertificate idx dcert =
   TxCertificate
     { txcRedeemerIndex = Nothing
-    , txcIndex = ix
+    , txcIndex = idx
     , txcCert = dcert
     }

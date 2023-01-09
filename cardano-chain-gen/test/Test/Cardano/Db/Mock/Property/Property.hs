@@ -16,7 +16,7 @@ module Test.Cardano.Db.Mock.Property.Property
     ( prop_empty_blocks
     ) where
 
-import           Control.Monad.Class.MonadSTM.Strict (MonadSTM (atomically))
+import           Control.Concurrent.Class.MonadSTM.Strict (MonadSTM (atomically))
 import           Data.Foldable
 import           Data.Maybe (isJust)
 import           Data.Text (Text)

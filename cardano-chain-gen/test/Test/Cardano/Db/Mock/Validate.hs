@@ -42,6 +42,7 @@ import           Cardano.DbSync.Era.Shelley.Generic.Util
 
 import qualified Cardano.Ledger.Address as Ledger
 import           Cardano.Ledger.BaseTypes
+import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Era
 
 import           Cardano.SMASH.Server.PoolDataLayer
@@ -169,7 +170,7 @@ assertCurrentEpoch env expected =
   where
     q = queryCurrentEpochNo
 
-assertAddrValues :: (Crypto era ~ StandardCrypto, Era era)
+assertAddrValues :: (Crypto era ~ StandardCrypto, Core.EraTxOut era)
                  => DBSyncEnv -> UTxOIndex era -> DbLovelace
                  -> LedgerState (ShelleyBlock p era) -> IO ()
 assertAddrValues env ix expected sta = do

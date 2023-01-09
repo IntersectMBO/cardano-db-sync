@@ -23,7 +23,7 @@ import           Cardano.Db (textShow)
 import           Cardano.DbSync.StateQuery
 import           Cardano.DbSync.Types
 
-import           Control.Monad.Class.MonadSTM.Strict (StrictTMVar, StrictTVar, atomically,
+import           Control.Concurrent.Class.MonadSTM.Strict (StrictTMVar, StrictTVar, atomically,
                    newEmptyTMVarIO, newTVarIO, putTMVar, readTVar, takeTMVar, writeTVar)
 
 import qualified Data.Strict.Maybe as Strict

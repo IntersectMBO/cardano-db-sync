@@ -9,9 +9,8 @@ repository cardano-haskell-packages
     c00aae8461a256275598500ea0e187588c35a5d5d7454fb57eac18d9edb86a56
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
-index-state: 2022-09-27T00:00:00Z
-index-state: cardano-haskell-packages 2022-10-25T20:00:00Z
--- index-state: cardano-haskell-packages 2022-11-10T17:31:44Z
+index-state: 2022-11-11T00:00:00Z
+index-state: cardano-haskell-packages 2022-11-12T20:00:00Z
 
 packages:
   cardano-db
@@ -32,27 +31,8 @@ constraints:
   , network >= 3.1.1.0
   , HSOpenSSL >= 0.11.7.2
   , algebraic-graphs < 0.7
-  , protolude < 0.3.1
-    -- TODO: these should be set in cabal files, but avoiding setting them in lower dependencies for initial CHaP release
-  , cardano-prelude == 0.1.0.0
-  , base-deriving-via == 0.1.0.0
+  , protolude >= 0.3.2
   , cardano-binary  == 1.5.0
-  , cardano-binary-test == 1.3.0
-  , cardano-crypto-class  == 2.0.0.0.1
-  , cardano-crypto-praos  == 2.0.0.0.1
-  , cardano-crypto-tests  == 2.0.0.0.1
-  , cardano-slotting  == 0.1.0.0
-  , measures == 0.1.0.0
-  , orphans-deriving-via == 0.1.0.0
-  , strict-containers == 0.1.0.0
-  , plutus-core == 1.0.0.1
-  , plutus-ledger-api == 1.0.0.1
-  , plutus-tx == 1.0.0.0
-  , plutus-tx-plugin == 1.0.0.0
-  , prettyprinter-configurable == 0.1.0.0
-  , plutus-ghc-stub == 8.6.5
-  , word-array == 0.1.0.0
-  , word-array == 0.1.0.0
 
 package cardano-db
   ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields -Wunused-imports -Wunused-packages
@@ -81,9 +61,12 @@ tests: True
 test-show-details: direct
 
 allow-newer:
-  *:aeson,
+  ekg:aeson,
+  ekg-json:aeson,
+  threepenny-gui:aeson,
   monoidal-containers:aeson,
-  size-based:template-haskell
+  size-based:template-haskell,
+  snap-server:attoparsec,
 
 -- ---------------------------------------------------------
 
@@ -95,8 +78,8 @@ allow-newer:
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: ebc7be471b30e5931b35f9bbc236d21c375b91bb
-  --sha256: 1j01m2cp2vdcl26zx9xmipr551v3b2rz9kfn9ik8byfwj1z7652r
+  tag: 7bd6944879b933d4389f6f2cb317016710c97245
+  --sha256: 1djw8xd8cn3jhvhgxqkmrimz4q61iwvaha179wf1v79mkdkcb53g
   subdir:
     cardano-api
     cardano-cli
@@ -114,15 +97,28 @@ source-repository-package
 
 source-repository-package
   type: git
-  location: https://github.com/haskell-works/hw-aeson
-  tag: 6dc309ff4260c71d9a18c220cbae8aa1dfe2a02e
-  --sha256: 08zxzkk1fy8xrvl46lhzmpyisizl0nzl1n00g417vc0l170wsr9j
+  location: https://github.com/denisshevchenko/threepenny-gui
+  tag: 4ec92ded05ccf59ba4a874be4b404ac1b6d666b6
+  --sha256: 00fvvaf4ir4hskq4a6gggbh2wmdvy8j8kn6s4m1p1vlh8m8mq514
 
+-- And has the adjustments for the ledger refactor
 source-repository-package
-  type: git
-  location: https://github.com/HeinrichApfelmus/threepenny-gui
-  tag: e3bb8283fc7d2e8aa374eea29426002e8dcd67a8
-  --sha256: 0nf836b552asgpwn2gxwl7yd7ssdhb1wkvdqz6s4dpzqnlpyivx9
+   type: git
+   location: https://github.com/input-output-hk/ouroboros-network
+   tag: 72863b0fc78abdc2b8e29f0dda96c06da3dd11d0
+   --sha256: 0qwvx04l9q3h7acb0a3b8iarqcn5bkqhwaplbga5pvryqp3lhn00
+   subdir:
+     monoidal-synchronisation
+     network-mux
+     ouroboros-consensus
+     ouroboros-consensus-byron
+     ouroboros-consensus-cardano
+     ouroboros-consensus-protocol
+     ouroboros-consensus-shelley
+     ouroboros-network
+     ouroboros-network-framework
+     ouroboros-network-testing
+     ouroboros-consensus-cardano-tools
 
 source-repository-package
   type: git

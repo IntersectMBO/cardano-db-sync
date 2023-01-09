@@ -94,7 +94,7 @@ shelleyProtoParams =
 
 -- -------------------------------------------------------------------------------------------------
 
-fromBabbageParams :: Babbage.PParams (Babbage.BabbageEra StandardCrypto) -> ProtoParams
+fromBabbageParams :: Babbage.BabbagePParams (Babbage.BabbageEra StandardCrypto) -> ProtoParams
 fromBabbageParams params =
   ProtoParams
     { ppMinfeeA = Babbage._minfeeA params
@@ -127,7 +127,7 @@ fromBabbageParams params =
     , ppMaxCollateralInputs = Just $ Babbage._maxCollateralInputs params
     }
 
-fromAlonzoParams :: Alonzo.PParams (Alonzo.AlonzoEra StandardCrypto) -> ProtoParams
+fromAlonzoParams :: Alonzo.AlonzoPParams (Alonzo.AlonzoEra StandardCrypto) -> ProtoParams
 fromAlonzoParams params =
   ProtoParams
     { ppMinfeeA = Alonzo._minfeeA params
@@ -160,7 +160,7 @@ fromAlonzoParams params =
     , ppMaxCollateralInputs = Just $ Alonzo._maxCollateralInputs params
     }
 
-fromShelleyParams :: Shelley.PParams' Identity era -> ProtoParams
+fromShelleyParams :: Shelley.ShelleyPParams era -> ProtoParams
 fromShelleyParams params =
   ProtoParams
     { ppMinfeeA = Shelley._minfeeA params

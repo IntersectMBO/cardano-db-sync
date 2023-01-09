@@ -31,6 +31,7 @@ import           Cardano.DbSync.Util
 
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.Coin as Ledger
+import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Credential (Credential (KeyHashObj))
 import           Cardano.Ledger.Era (Crypto)
 import qualified Cardano.Ledger.Shelley.Genesis as Shelley
@@ -40,14 +41,16 @@ import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import qualified Cardano.Ledger.Shelley.UTxO as Shelley
 
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.ListMap as ListMap
 import qualified Data.Map.Strict as Map
+import           Lens.Micro
 import qualified Data.Text as Text
 import           Data.Time.Clock (UTCTime (..))
 import qualified Data.Time.Clock as Time
 
 import           Database.Persist.Sql (SqlBackend)
 
-import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShelley)
+import           Ouroboros.Consensus.Cardano.Block (StandardShelley)
 import           Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..), ShelleyGenesisStaking (..),
                    emptyGenesisStaking)
 
@@ -71,13 +74,13 @@ insertValidateGenesisDist backend tracer networkName cfg shelleyInitiation = do
       else newExceptT $ DB.runDbIohkNoLogging backend insertAction
   where
     hasInitialFunds :: Bool
-    hasInitialFunds = not $ Map.null $ sgInitialFunds cfg
+    hasInitialFunds = not $ null $ ListMap.unListMap $ sgInitialFunds cfg
 
     hasStakes :: Bool
     hasStakes = sgStaking cfg /= emptyGenesisStaking
 
     expectedTxCount :: Word64
-    expectedTxCount = fromIntegral $ length (genesisTxos cfg) + if hasStakes then 1 else 0
+    expectedTxCount = fromIntegral $ genesisUTxOSize cfg + if hasStakes then 1 else 0
 
     insertAction :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either SyncNodeError ())
     insertAction = do
@@ -198,7 +201,7 @@ validateGenesisDistribution tracer networkName cfg bid expectedTxCount =
 
 insertTxOuts
     :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> DB.BlockId -> (ShelleyTx.TxIn (Crypto StandardShelley), Shelley.TxOut StandardShelley)
+    => Trace IO Text -> DB.BlockId -> (ShelleyTx.TxIn (Crypto StandardShelley), Shelley.ShelleyTxOut StandardShelley)
     -> ReaderT SqlBackend m ()
 insertTxOuts trce blkId (ShelleyTx.TxIn txInId _, txOut) = do
   -- Each address/value pair of the initial coin distribution comes from an artifical transaction
@@ -208,7 +211,7 @@ insertTxOuts trce blkId (ShelleyTx.TxIn txInId _, txOut) = do
               { DB.txHash = Generic.unTxHash txInId
               , DB.txBlockId = blkId
               , DB.txBlockIndex = 0
-              , DB.txOutSum = Generic.coinToDbLovelace (txOutCoin txOut)
+              , DB.txOutSum = Generic.coinToDbLovelace (txOut ^. Core.valueTxOutL)
               , DB.txFee = DB.DbLovelace 0
               , DB.txDeposit = 0
               , DB.txSize = 0 -- Genesis distribution address to not have a size.
@@ -217,29 +220,25 @@ insertTxOuts trce blkId (ShelleyTx.TxIn txInId _, txOut) = do
               , DB.txValidContract = True
               , DB.txScriptSize = 0
               }
-  _ <- insertStakeAddressRefIfMissing trce uninitiatedCache txId (txOutAddress txOut)
+  _ <- insertStakeAddressRefIfMissing trce uninitiatedCache txId (txOut ^. Core.addrTxOutL)
   void . DB.insertTxOut $
             DB.TxOut
               { DB.txOutTxId = txId
               , DB.txOutIndex = 0
-              , DB.txOutAddress = Generic.renderAddress (txOutAddress txOut)
-              , DB.txOutAddressRaw = Ledger.serialiseAddr (txOutAddress txOut)
-              , DB.txOutAddressHasScript = hasScript (txOutAddress txOut)
-              , DB.txOutPaymentCred = Generic.maybePaymentCred (txOutAddress txOut)
+              , DB.txOutAddress = Generic.renderAddress addr
+              , DB.txOutAddressRaw = Ledger.serialiseAddr addr
+              , DB.txOutAddressHasScript = hasScript
+              , DB.txOutPaymentCred = Generic.maybePaymentCred addr
               , DB.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
-              , DB.txOutValue = Generic.coinToDbLovelace (txOutCoin txOut)
+              , DB.txOutValue = Generic.coinToDbLovelace (txOut ^. Core.valueTxOutL)
               , DB.txOutDataHash = Nothing -- No output datum in Shelley Genesis
               , DB.txOutInlineDatumId = Nothing
               , DB.txOutReferenceScriptId = Nothing
               }
   where
-    txOutAddress :: Shelley.TxOut StandardShelley -> Ledger.Addr StandardCrypto
-    txOutAddress (Shelley.TxOut out _) = out
+    addr = txOut ^. Core.addrTxOutL
 
-    txOutCoin :: Shelley.TxOut StandardShelley -> Ledger.Coin
-    txOutCoin (Shelley.TxOut _ coin) = coin
-
-    hasScript addr = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
+    hasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
 
 -- Insert pools and delegations coming from Genesis.
 insertStaking
@@ -263,10 +262,10 @@ insertStaking tracer cache blkId genesis = do
               , DB.txValidContract = True
               , DB.txScriptSize = 0
               }
-  let params = zip [0..] $ Map.elems (sgsPools $ sgStaking genesis)
+  let params = zip [0..] $ ListMap.elems $ sgsPools $ sgStaking genesis
   let network = sgNetworkId genesis
   forM_ params $ uncurry (insertPoolRegister tracer uninitiatedCache (const False) network 0 blkId txId)
-  let stakes = zip [0..] $ Map.toList (sgsStake $ sgStaking genesis)
+  let stakes = zip [0..] $ ListMap.toList (sgsStake $ sgStaking genesis)
   forM_ stakes $ \(n, (keyStaking, keyPool)) -> do
     insertStakeRegistration (EpochNo 0) txId (2 * n) (Generic.annotateStakingCred network (KeyHashObj keyStaking))
     insertDelegation cache network 0 0 txId (2 * n + 1) Nothing (KeyHashObj keyStaking) keyPool
@@ -284,19 +283,19 @@ configGenesisStakingHash =  BS.take 32 ("Shelley Genesis Staking Tx Hash " <> BS
 
 configGenesisSupply :: ShelleyGenesis StandardShelley -> DB.Ada
 configGenesisSupply =
-  DB.word64ToAda . fromIntegral . sum . map (Ledger.unCoin . snd) . genesisTxoAssocList
+  DB.word64ToAda . fromIntegral . sum . map Ledger.unCoin . genesisTxoAssocList
 
-genesisTxos :: ShelleyGenesis StandardShelley -> [Shelley.TxOut StandardShelley]
-genesisTxos = map (uncurry Shelley.TxOut) . genesisTxoAssocList
+genesisUTxOSize :: ShelleyGenesis StandardShelley -> Int
+genesisUTxOSize = length . genesisUtxOs
 
-genesisTxoAssocList :: ShelleyGenesis StandardShelley -> [(Ledger.Addr StandardCrypto, Ledger.Coin)]
+genesisTxoAssocList :: ShelleyGenesis StandardShelley -> [Ledger.Coin]
 genesisTxoAssocList =
     map (unTxOut . snd) . genesisUtxOs
   where
-    unTxOut :: Shelley.TxOut StandardShelley -> (Ledger.Addr StandardCrypto, Ledger.Coin)
-    unTxOut (Shelley.TxOut addr amount) = (addr, amount)
+    unTxOut :: Shelley.ShelleyTxOut StandardShelley -> Ledger.Coin
+    unTxOut txOut = txOut ^. Core.valueTxOutL
 
-genesisUtxOs :: ShelleyGenesis StandardShelley -> [(ShelleyTx.TxIn (Crypto StandardShelley), Shelley.TxOut StandardShelley)]
+genesisUtxOs :: ShelleyGenesis StandardShelley -> [(ShelleyTx.TxIn (Crypto StandardShelley), Shelley.ShelleyTxOut StandardShelley)]
 genesisUtxOs =
     Map.toList . Shelley.unUTxO . Shelley.genesisUTxO
 

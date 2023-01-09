@@ -31,7 +31,7 @@ module Cardano.DbSync.Cache
 
 import           Cardano.Prelude
 
-import           Control.Monad.Class.MonadSTM.Strict (StrictTVar, modifyTVar, newTVarIO, readTVarIO,
+import           Control.Concurrent.Class.MonadSTM.Strict (StrictTVar, modifyTVar, newTVarIO, readTVarIO,
                    writeTVar)
 import           Control.Monad.Trans.Control (MonadBaseControl)
 import           Data.Either.Combinators

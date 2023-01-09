@@ -67,8 +67,8 @@ getByronBalance addrText utxo = do
         else Nothing
 
 getShelleyBalance
-    :: forall era. (Crypto era ~ StandardCrypto, Ledger.TxOut era ~ Shelley.TxOut era)
-    => Compactible (Ledger.Value era) => Val (Ledger.Value era)
+    :: forall era. (Crypto era ~ StandardCrypto, Ledger.TxOut era ~ Shelley.ShelleyTxOut era)
+    => Val (Ledger.Value era)
     => Text -> Shelley.UTxO era -> Either Text Word64
 getShelleyBalance addrText utxo = do
     caddr <- covertToCompactAddress addrText
@@ -86,7 +86,7 @@ getAlonzoBalance addrText utxo = do
     Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue caddr) (Map.elems $ Shelley.unUTxO utxo)
   where
     compactTxOutValue
-      :: CompactAddr (Crypto (AlonzoEra StandardCrypto)) -> Alonzo.TxOut (AlonzoEra StandardCrypto) -> Maybe Coin
+      :: CompactAddr (Crypto (AlonzoEra StandardCrypto)) -> Alonzo.AlonzoTxOut (AlonzoEra StandardCrypto) -> Maybe Coin
     compactTxOutValue caddr txOut =
       let (scaddr, val) = case txOut of
                             Alonzo.TxOutCompact a v -> (a, v)

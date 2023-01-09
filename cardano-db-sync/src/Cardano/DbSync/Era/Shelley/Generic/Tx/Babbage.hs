@@ -15,19 +15,19 @@ import qualified Cardano.Crypto.Hash as Crypto
 
 import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
-import           Cardano.Ledger.Alonzo.Tx (ValidatedTx (..))
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Babbage.TxBody as Babbage
 import           Cardano.Ledger.BaseTypes
 import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.CompactAddress as Ledger
-import qualified Cardano.Ledger.Core as Ledger
+import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Era as Ledger
-import           Cardano.Ledger.Mary.Value (Value (..))
+import           Cardano.Ledger.Mary.Value (MaryValue (..))
 import qualified Cardano.Ledger.SafeHash as Ledger
 
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
+import           Lens.Micro
 
 import           Ouroboros.Consensus.Shelley.Eras (StandardBabbage, StandardCrypto)
 
@@ -39,19 +39,19 @@ import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (calcWithdrawalSu
 import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
-fromBabbageTx :: Maybe Alonzo.Prices -> (Word64, Ledger.Tx StandardBabbage) -> Tx
+fromBabbageTx :: Maybe Alonzo.Prices -> (Word64, Core.Tx StandardBabbage) -> Tx
 fromBabbageTx mprices (blkIndex, tx) =
     Tx
       { txHash = Crypto.hashToBytes . Ledger.extractHash $ Ledger.hashAnnotated txBody
       , txBlockIndex = blkIndex
-      , txSize = fromIntegral $ getField @"txsize" tx
+      , txSize = fromIntegral $ tx ^. Core.sizeTxF
       , txValidContract = isValid2
       , txInputs =
           if not isValid2
-            then map fromTxIn . toList $ getField @"collateral" txBody
+            then map fromTxIn . toList $ Babbage.collateralInputs' txBody
             else Map.elems $ rmInps finalMaps
-      , txCollateralInputs = map fromTxIn . toList $ getField @"collateral" txBody
-      , txReferenceInputs = map fromTxIn . toList $ getField @"referenceInputs" txBody
+      , txCollateralInputs = map fromTxIn . toList $ Babbage.collateralInputs' txBody
+      , txReferenceInputs = map fromTxIn . toList $ Babbage.referenceInputs' txBody
       , txOutputs =
           if not isValid2
             then collOutputs
@@ -60,20 +60,20 @@ fromBabbageTx mprices (blkIndex, tx) =
           collOutputs
       , txFees =
           if not isValid2
-            then strictMaybeToMaybe $ getField @"totalCollateral" txBody
-            else Just $ getField @"txfee" txBody
+            then strictMaybeToMaybe $ Babbage.totalCollateral' txBody
+            else Just $ Babbage.txfee' txBody
       , txOutSum =
           if not isValid2
             then sumTxOutCoin collOutputs
             else sumTxOutCoin outputs
       , txInvalidBefore = invalidBefore
       , txInvalidHereafter = invalidAfter
-      , txWithdrawalSum = calcWithdrawalSum $ getField @"wdrls" txBody
+      , txWithdrawalSum = calcWithdrawalSum $ Babbage.wdrls' txBody
       , txMetadata = fromAlonzoMetadata <$> strictMaybeToMaybe (getField @"auxiliaryData" tx)
       , txCertificates = snd <$> rmCerts finalMaps
       , txWithdrawals = Map.elems $ rmWdrl finalMaps
-      , txParamProposal = maybe [] (convertParamProposal (Babbage Standard)) $ strictMaybeToMaybe (getField @"update" txBody)
-      , txMint = getField @"mint" txBody
+      , txParamProposal = maybe [] (convertParamProposal (Babbage Standard)) $ strictMaybeToMaybe (Babbage.update' txBody)
+      , txMint = Babbage.mint' txBody
       , txRedeemer = redeemers
       , txData = txDataWitness tx
       , txScriptSizes = getPlutusSizes tx
@@ -81,39 +81,39 @@ fromBabbageTx mprices (blkIndex, tx) =
       , txExtraKeyWitnesses = extraKeyWits txBody
       }
   where
-    fromTxOut :: Word64 -> Babbage.TxOut StandardBabbage -> TxOut
+    txBody :: Core.TxBody StandardBabbage
+    txBody = tx ^. Core.bodyTxL
+
+    outputs :: [TxOut]
+    outputs = zipWith fromTxOut [0 .. ] $ toList (Babbage.outputs' txBody)
+
+    fromTxOut :: Word64 -> Babbage.BabbageTxOut StandardBabbage -> TxOut
     fromTxOut index txOut =
         TxOut
           { txOutIndex = index
-          , txOutAddress = addr
-          , txOutAddressRaw = SBS.fromShort caddr
+          , txOutAddress = txOut ^. Core.addrTxOutL
+          , txOutAddressRaw = SBS.fromShort bs
           , txOutAdaValue = Coin ada
           , txOutMaValue = maMap
           , txOutScript = fromScript <$> strictMaybeToMaybe mScript
           , txOutDatum = fromDatum datum
           }
       where
-        Ledger.UnsafeCompactAddr caddr = Ledger.getTxOutCompactAddr txOut
-
-        -- This pattern match also does the deserialisation of the address
-        Babbage.TxOut addr (Value ada maMap) datum mScript = txOut
-
-    outputs :: [TxOut]
-    outputs = zipWith fromTxOut [0 .. ] $ toList $ getField @"outputs" txBody
+        Ledger.UnsafeCompactAddr bs = txOut ^. Core.compactAddrTxOutL
+        MaryValue ada maMap = txOut ^. Core.valueTxOutL
+        datum = txOut ^. Babbage.datumTxOutL
+        mScript = txOut ^. Babbage.referenceScriptTxOutL
 
     -- TODO when collateral output is used as output, its index is not 0, but length of outputs
     -- even though it is the unique output of the tx.
     collOutputs :: [TxOut]
-    collOutputs = zipWith fromTxOut [collIndex .. ] . toList $ getField @"collateralReturn" txBody
+    collOutputs = zipWith fromTxOut [collIndex .. ] . toList $ Babbage.collateralReturn' txBody
 
     collIndex :: Word64
     collIndex =
       case txIxFromIntegral (length outputs) of
         Just (TxIx i) -> i
         Nothing -> fromIntegral (maxBound :: Word16)
-
-    txBody :: Ledger.TxBody StandardBabbage
-    txBody = getField @"body" tx
 
     -- This is true if second stage contract validation passes.
     isValid2 :: Bool
@@ -122,16 +122,17 @@ fromBabbageTx mprices (blkIndex, tx) =
         Alonzo.IsValid x -> x
 
     (finalMaps, redeemers) = resolveRedeemers mprices tx
-    (invalidBefore, invalidAfter) = getInterval txBody
+    (invalidBefore, invalidAfter) = getInterval $ Babbage.vldt' txBody
 
 
 fromScript
     :: forall era.
     ( Ledger.Crypto era ~ StandardCrypto
-    , Ledger.Script era ~ Alonzo.Script era
-    , Ledger.ValidateScript era)
-    => Ledger.Script era -> TxScript
-fromScript scr = mkTxScript (Ledger.hashScript @era scr, scr)
+    , Core.Script era ~ Alonzo.AlonzoScript era
+    , Core.EraScript era
+    )
+    => Alonzo.AlonzoScript era -> TxScript
+fromScript scr = mkTxScript (Core.hashScript @era scr, scr)
 
 fromDatum :: (Ledger.Crypto era ~ StandardCrypto, Ledger.Era era) => Babbage.Datum era -> TxOutDatum
 fromDatum bdat =

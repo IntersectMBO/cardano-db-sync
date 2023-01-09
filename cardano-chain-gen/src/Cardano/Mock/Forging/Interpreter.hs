@@ -32,7 +32,7 @@ module Cardano.Mock.Forging.Interpreter
   , mkTxId
   ) where
 
-import           Cardano.Prelude (bimap, getField, throwIO)
+import           Cardano.Prelude (bimap, throwIO)
 
 import           Control.Monad (forM, void, when)
 import           Control.Monad.Except (runExcept)
@@ -47,10 +47,12 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           Data.Word (Word64)
+import           Lens.Micro
 
 import           GHC.Generics (Generic)
 
-import           Cardano.Ledger.Alonzo.Tx
+import           Cardano.Ledger.Block (txid)
+import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Shelley.API.Mempool as Ledger
 import           Cardano.Ledger.Shelley.LedgerState (NewEpochState (..))
@@ -456,9 +458,9 @@ withShelleyLedgerState inter mk = do
 mkTxId :: TxEra -> Ledger.TxId StandardCrypto
 mkTxId txe =
   case txe of
-    TxAlonzo tx -> Ledger.txid @StandardAlonzo (getField @"body" tx)
-    TxBabbage tx -> Ledger.txid @StandardBabbage (getField @"body" tx)
-    TxShelley tx -> Ledger.txid @StandardShelley (getField @"body" tx)
+    TxAlonzo tx -> txid @StandardAlonzo (tx ^. Core.bodyTxL)
+    TxBabbage tx -> txid @StandardBabbage (tx ^. Core.bodyTxL)
+    TxShelley tx -> txid @StandardShelley (tx ^. Core.bodyTxL)
 
 mkValidated :: TxEra -> Validated (Consensus.GenTx CardanoBlock)
 mkValidated txe =

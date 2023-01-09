@@ -44,11 +44,11 @@ import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardMar
 -- used here in db-sync was drastically changed and then the changed version was not
 -- exported.
 
-fromAllegraMetadata :: ShelleyMa.AuxiliaryData StandardAllegra -> Map Word64 TxMetadataValue
-fromAllegraMetadata (ShelleyMa.AuxiliaryData mdMap _scripts) =
+fromAllegraMetadata :: ShelleyMa.MAAuxiliaryData StandardAllegra -> Map Word64 TxMetadataValue
+fromAllegraMetadata (ShelleyMa.MAAuxiliaryData mdMap _scripts) =
   Map.map fromMetadatum mdMap
 
-fromAlonzoMetadata :: (Era era, Core.Script era ~ Alonzo.Script era) => Alonzo.AuxiliaryData era -> Map Word64 TxMetadataValue
+fromAlonzoMetadata :: (Era era, Core.Script era ~ Alonzo.AlonzoScript era) => Alonzo.AlonzoAuxiliaryData era -> Map Word64 TxMetadataValue
 fromAlonzoMetadata aux =
   Map.map fromMetadatum $ Alonzo.txMD aux
 
@@ -56,8 +56,8 @@ fromShelleyMetadata :: Shelley.Metadata era -> Map Word64 TxMetadataValue
 fromShelleyMetadata (Shelley.Metadata mdMap) =
   Map.map fromMetadatum mdMap
 
-fromMaryMetadata :: ShelleyMa.AuxiliaryData StandardMary -> Map Word64 TxMetadataValue
-fromMaryMetadata (ShelleyMa.AuxiliaryData mdMap _scripts) =
+fromMaryMetadata :: ShelleyMa.MAAuxiliaryData StandardMary -> Map Word64 TxMetadataValue
+fromMaryMetadata (ShelleyMa.MAAuxiliaryData mdMap _scripts) =
   Map.map fromMetadatum mdMap
 
 metadataValueToJsonNoSchema :: TxMetadataValue -> Aeson.Value

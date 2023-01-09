@@ -23,13 +23,15 @@ import qualified Data.Maybe.Strict as Strict
 import           Data.Sequence.Strict (StrictSeq)
 import qualified Data.Sequence.Strict as StrictSeq
 import qualified Data.Set as Set
+import           Lens.Micro
 
-import           Cardano.Ledger.Address
 import           Cardano.Ledger.BaseTypes
 import           Cardano.Ledger.Coin
+import qualified Cardano.Ledger.Core as Core
 import           Cardano.Ledger.Credential
 import           Cardano.Ledger.Era (Crypto)
-import           Cardano.Ledger.Shelley.Tx
+import           Cardano.Ledger.Shelley.Tx hiding (ShelleyTx)
+import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
 import           Cardano.Ledger.Shelley.TxBody
 
 import           Ouroboros.Consensus.Cardano.Block (LedgerState)
@@ -43,10 +45,10 @@ import           Cardano.Mock.Forging.Types
 
 type ShelleyUTxOIndex = UTxOIndex (ShelleyEra StandardCrypto)
 type ShelleyLedgerState = LedgerState (ShelleyBlock TPraosStandard (ShelleyEra StandardCrypto))
-type ShelleyTx = Tx (ShelleyEra StandardCrypto)
+type ShelleyTx = ShelleyTx.ShelleyTx (ShelleyEra StandardCrypto)
 
-instance HasField "address" (TxOut (ShelleyEra StandardCrypto)) (Addr StandardCrypto) where
-    getField (TxOut addr _) = addr
+-- instance HasField "address" (TxOut (ShelleyEra StandardCrypto)) (Addr StandardCrypto) where
+--     getField (TxOut addr _) = addr
 
 mkPaymentTx
     :: ShelleyUTxOIndex -> ShelleyUTxOIndex -> Integer -> Integer -> ShelleyLedgerState
@@ -55,18 +57,19 @@ mkPaymentTx inputIndex outputIndex amount fees st = do
     (inputPair, _) <- resolveUTxOIndex inputIndex st
     (outputPair, _ ) <- resolveUTxOIndex outputIndex st
     let input = Set.singleton $ fst inputPair
-        TxOut addr _ = snd outputPair
-        output = TxOut addr (Coin amount)
-        TxOut addr' (Coin inputValue) = snd inputPair
-        change = TxOut addr' $ Coin (inputValue - amount - fees)
+        addr = snd outputPair ^. Core.addrTxOutL
+        output = ShelleyTxOut addr (Coin amount)
+        addr' = snd inputPair ^. Core.addrTxOutL
+        Coin inputValue = snd inputPair ^. Core.valueTxOutL
+        change = ShelleyTxOut addr' $ Coin (inputValue - amount - fees)
 
     Right $ mkSimpleTx $ consPaymentTxBody input (StrictSeq.fromList [output, change]) (Coin fees)
 
 mkDCertTxPools :: ShelleyLedgerState -> Either ForgingError ShelleyTx
 mkDCertTxPools sta = Right $ mkSimpleTx $ consCertTxBody (allPoolStakeCert sta) (Wdrl mempty)
 
-mkSimpleTx :: TxBody (ShelleyEra StandardCrypto) -> ShelleyTx
-mkSimpleTx txBody = Tx
+mkSimpleTx :: ShelleyTxBody (ShelleyEra StandardCrypto) -> ShelleyTx
+mkSimpleTx txBody = ShelleyTx.ShelleyTx
     txBody
     mempty
     (maybeToStrictMaybe Nothing)
@@ -84,18 +87,18 @@ mkSimpleDCertTx consDert st = do
     mkDCertTx dcerts (Wdrl mempty)
 
 consPaymentTxBody
-    :: Set (TxIn (Crypto (ShelleyEra StandardCrypto))) -> StrictSeq (TxOut (ShelleyEra StandardCrypto))
-    -> Coin -> TxBody (ShelleyEra StandardCrypto)
+    :: Set (TxIn (Crypto (ShelleyEra StandardCrypto))) -> StrictSeq (ShelleyTxOut (ShelleyEra StandardCrypto))
+    -> Coin -> ShelleyTxBody (ShelleyEra StandardCrypto)
 consPaymentTxBody ins outs fees = consTxBody ins outs fees mempty (Wdrl mempty)
 
-consCertTxBody :: [DCert StandardCrypto] -> Wdrl StandardCrypto -> TxBody (ShelleyEra StandardCrypto)
+consCertTxBody :: [DCert StandardCrypto] -> Wdrl StandardCrypto -> ShelleyTxBody (ShelleyEra StandardCrypto)
 consCertTxBody = consTxBody mempty mempty (Coin 0)
 
 consTxBody
-    :: Set (TxIn (Crypto (ShelleyEra StandardCrypto))) -> StrictSeq (TxOut (ShelleyEra StandardCrypto))
-    -> Coin -> [DCert StandardCrypto] -> Wdrl StandardCrypto -> TxBody (ShelleyEra StandardCrypto)
+    :: Set (TxIn (Crypto (ShelleyEra StandardCrypto))) -> StrictSeq (ShelleyTxOut (ShelleyEra StandardCrypto))
+    -> Coin -> [DCert StandardCrypto] -> Wdrl StandardCrypto -> ShelleyTxBody (ShelleyEra StandardCrypto)
 consTxBody ins outs fees certs wdrl =
-    TxBody
+    ShelleyTxBody
       ins
       outs
       (StrictSeq.fromList certs)

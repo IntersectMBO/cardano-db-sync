@@ -95,7 +95,7 @@ babbageParamProposal epochNo (Shelley.ProposedPPUpdates umap) =
 
 -- -------------------------------------------------------------------------------------------------
 
-convertBabbageParamProposal :: EpochNo -> (Ledger.KeyHash genesis crypto, Babbage.PParamsUpdate era) -> ParamProposal
+convertBabbageParamProposal :: EpochNo -> (Ledger.KeyHash genesis crypto, Babbage.BabbagePParamsUpdate era) -> ParamProposal
 convertBabbageParamProposal epochNo (key, pmap) =
   ParamProposal
     { pppEpochNo = epochNo
@@ -130,7 +130,7 @@ convertBabbageParamProposal epochNo (key, pmap) =
     , pppMaxCollateralInputs = strictMaybeToMaybe (Babbage._maxCollateralInputs pmap)
     }
 
-convertAlonzoParamProposal :: EpochNo -> (Ledger.KeyHash genesis crypto, Alonzo.PParamsUpdate era) -> ParamProposal
+convertAlonzoParamProposal :: EpochNo -> (Ledger.KeyHash genesis crypto, Alonzo.AlonzoPParamsUpdate era) -> ParamProposal
 convertAlonzoParamProposal epochNo (key, pmap) =
   ParamProposal
     { pppEpochNo = epochNo
@@ -167,7 +167,7 @@ convertAlonzoParamProposal epochNo (key, pmap) =
     , pppMaxCollateralInputs = strictMaybeToMaybe (Alonzo._maxCollateralInputs pmap)
     }
 
-convertShelleyParamProposal :: EpochNo -> (Ledger.KeyHash genesis crypto, Shelley.PParams' Ledger.StrictMaybe era) -> ParamProposal
+convertShelleyParamProposal :: EpochNo -> (Ledger.KeyHash genesis crypto, Shelley.ShelleyPParamsUpdate era) -> ParamProposal
 convertShelleyParamProposal epochNo (key, pmap) =
   ParamProposal
     { pppEpochNo = epochNo

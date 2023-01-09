@@ -48,7 +48,7 @@ import           Ouroboros.Consensus.Cardano.Block (StandardAlonzo)
 import qualified Plutus.V1.Ledger.Examples as Plutus
 import qualified PlutusCore.Data as Plutus
 
-alwaysSucceedsScript :: forall era. Script era
+alwaysSucceedsScript :: forall era. AlonzoScript era
 alwaysSucceedsScript = PlutusScript PlutusV1 (Plutus.alwaysSucceedingNAryFunction 0)
 
 alwaysSucceedsScriptHash :: ScriptHash StandardCrypto
@@ -61,7 +61,7 @@ alwaysSucceedsScriptStake :: StakeCredential StandardCrypto
 alwaysSucceedsScriptStake = ScriptHashObj alwaysSucceedsScriptHash
 
 
-alwaysFailsScript :: forall era. Script era
+alwaysFailsScript :: forall era. AlonzoScript era
 alwaysFailsScript = PlutusScript PlutusV1 (Plutus.alwaysFailingNAryFunction 0)
 
 alwaysFailsScriptHash :: ScriptHash StandardCrypto
@@ -77,7 +77,7 @@ alwaysFailsScriptStake = ScriptHashObj alwaysFailsScriptHash
 plutusDataList :: forall era. Data era
 plutusDataList = Data $ Plutus.List []
 
-alwaysMintScript :: forall era. Script era
+alwaysMintScript :: forall era. AlonzoScript era
 alwaysMintScript = PlutusScript PlutusV1 (Plutus.alwaysFailingNAryFunction 1)
 
 alwaysMintScriptHash :: ScriptHash StandardCrypto
@@ -92,11 +92,11 @@ alwaysMintScriptStake = ScriptHashObj alwaysMintScriptHash
 scriptHash
     :: forall era.
     ( Crypto era ~ StandardCrypto
-    , Core.Script era ~ Script era
-    , ValidateScript era
+    , Core.Script era ~ AlonzoScript era
+    , Core.EraScript era
     )
-    => Script era -> ScriptHash StandardCrypto
-scriptHash = hashScript @era
+    => AlonzoScript era -> ScriptHash StandardCrypto
+scriptHash = Core.hashScript @era
 
 assetNames :: [AssetName]
 assetNames =

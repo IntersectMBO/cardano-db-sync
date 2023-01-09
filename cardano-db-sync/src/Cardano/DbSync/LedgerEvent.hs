@@ -23,12 +23,12 @@ import           Cardano.Ledger.Crypto (StandardCrypto)
 import           Cardano.Ledger.Era (Crypto)
 import           Cardano.Ledger.Shelley.API (InstantaneousRewards (..))
 import qualified Cardano.Ledger.Shelley.Rewards as Ledger
-import           Cardano.Ledger.Shelley.Rules.Epoch (EpochEvent (PoolReapEvent))
-import           Cardano.Ledger.Shelley.Rules.Mir (MirEvent (..))
-import           Cardano.Ledger.Shelley.Rules.NewEpoch (NewEpochEvent (..))
-import           Cardano.Ledger.Shelley.Rules.PoolReap (PoolreapEvent (..))
+import           Cardano.Ledger.Shelley.Rules.Epoch (ShelleyEpochEvent (PoolReapEvent))
+import           Cardano.Ledger.Shelley.Rules.Mir (ShelleyMirEvent (..))
+import           Cardano.Ledger.Shelley.Rules.NewEpoch (ShelleyNewEpochEvent (..))
+import           Cardano.Ledger.Shelley.Rules.PoolReap (ShelleyPoolreapEvent (..))
 import           Cardano.Ledger.Shelley.Rules.Rupd (RupdEvent (RupdEvent))
-import           Cardano.Ledger.Shelley.Rules.Tick (TickEvent (NewEpochEvent))
+import           Cardano.Ledger.Shelley.Rules.Tick (ShelleyTickEvent (NewEpochEvent))
 import qualified Cardano.Ledger.Shelley.Rules.Tick as Tick
 
 import           Cardano.Prelude hiding (All)
@@ -109,11 +109,11 @@ instance ConvertLedgerEvent ByronBlock where
 
 instance
     ( Crypto ledgerera ~ StandardCrypto
-    , Event (Ledger.EraRule "TICK" ledgerera) ~ TickEvent ledgerera
-    , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera
-    , Event (Ledger.EraRule "MIR" ledgerera) ~ MirEvent ledgerera
-    , Event (Ledger.EraRule "EPOCH" ledgerera) ~ EpochEvent ledgerera
-    , Event (Ledger.EraRule "POOLREAP" ledgerera) ~ PoolreapEvent ledgerera
+    , Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
+    , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ ShelleyNewEpochEvent ledgerera
+    , Event (Ledger.EraRule "MIR" ledgerera) ~ ShelleyMirEvent ledgerera
+    , Event (Ledger.EraRule "EPOCH" ledgerera) ~ ShelleyEpochEvent ledgerera
+    , Event (Ledger.EraRule "POOLREAP" ledgerera) ~ ShelleyPoolreapEvent ledgerera
     , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent (Crypto ledgerera)
     ) =>
   ConvertLedgerEvent (ShelleyBlock p ledgerera)
@@ -197,8 +197,8 @@ convertPoolRewards rmap =
 
 pattern LERestraintRewards
     :: ( Crypto ledgerera ~ StandardCrypto
-       , Event (Ledger.EraRule "TICK" ledgerera) ~ TickEvent ledgerera
-       , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera
+       , Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
+       , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ ShelleyNewEpochEvent ledgerera
        )
     => EpochNo -> Map StakeCred (Set (Ledger.Reward StandardCrypto))
     -> Set StakeCred
@@ -209,8 +209,8 @@ pattern LERestraintRewards e m creds <-
 
 pattern LETotalRewards
     :: ( Crypto ledgerera ~ StandardCrypto
-       , Event (Ledger.EraRule "TICK" ledgerera) ~ TickEvent ledgerera
-       , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera
+       , Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
+       , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ ShelleyNewEpochEvent ledgerera
        )
     => EpochNo -> Map StakeCred (Set (Ledger.Reward StandardCrypto))
     -> AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
@@ -220,8 +220,8 @@ pattern LETotalRewards e m <-
 
 pattern LEDeltaReward
     :: ( Crypto ledgerera ~ StandardCrypto
-       , Event (Ledger.EraRule "TICK" ledgerera) ~ TickEvent ledgerera
-       , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera
+       , Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
+       , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ ShelleyNewEpochEvent ledgerera
        , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent (Crypto ledgerera)
        )
     => EpochNo -> Map StakeCred (Set (Ledger.Reward StandardCrypto))
@@ -232,7 +232,7 @@ pattern LEDeltaReward e m <-
 
 pattern LEIncrementalReward
     :: ( Crypto ledgerera ~ StandardCrypto
-       , Event (Ledger.EraRule "TICK" ledgerera) ~ TickEvent ledgerera
+       , Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
        , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent (Crypto ledgerera)
        )
     => EpochNo -> Map StakeCred (Set (Ledger.Reward StandardCrypto))
@@ -243,9 +243,9 @@ pattern LEIncrementalReward e m <-
 
 pattern LEMirTransfer
     :: ( Crypto ledgerera ~ StandardCrypto
-       , Event (Ledger.EraRule "TICK" ledgerera) ~ TickEvent ledgerera
-       , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera
-       , Event (Ledger.EraRule "MIR" ledgerera) ~ MirEvent ledgerera
+       , Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
+       , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ ShelleyNewEpochEvent ledgerera
+       , Event (Ledger.EraRule "MIR" ledgerera) ~ ShelleyMirEvent ledgerera
        )
     => Map StakeCred Coin -> Map StakeCred Coin
     -> DeltaCoin -> DeltaCoin
@@ -263,10 +263,10 @@ pattern LEMirTransfer rp tp rtt ttr <-
 
 pattern LERetiredPools
   :: ( Crypto ledgerera ~ StandardCrypto
-     , Event (Ledger.EraRule "TICK" ledgerera) ~ TickEvent ledgerera
-     , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ NewEpochEvent ledgerera
-     , Event (Ledger.EraRule "EPOCH" ledgerera) ~ EpochEvent ledgerera
-     , Event (Ledger.EraRule "POOLREAP" ledgerera) ~ PoolreapEvent ledgerera
+     , Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
+     , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ ShelleyNewEpochEvent ledgerera
+     , Event (Ledger.EraRule "EPOCH" ledgerera) ~ ShelleyEpochEvent ledgerera
+     , Event (Ledger.EraRule "POOLREAP" ledgerera) ~ ShelleyPoolreapEvent ledgerera
      )
   => Map StakeCred (Map PoolKeyHash Coin)
   -> Map StakeCred (Map PoolKeyHash Coin)

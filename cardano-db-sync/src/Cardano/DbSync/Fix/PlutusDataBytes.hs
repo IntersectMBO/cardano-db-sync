@@ -26,6 +26,7 @@ import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.Word (Word64)
 import           GHC.Records (HasField(getField))
+import           Lens.Micro
 
 import           Cardano.Slotting.Slot (SlotNo(..))
 
@@ -33,7 +34,7 @@ import qualified Cardano.Ledger.Alonzo.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Alonzo.TxWitness as Alonzo
 import qualified Cardano.Ledger.Babbage.TxBody as Babbage
-import qualified Cardano.Ledger.Core as Ledger
+import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Era as Ledger
 
 import           Cardano.Db (textShow)
@@ -223,7 +224,7 @@ scrapDatumsBlock cblk = case cblk of
     BlockAllegra _  -> error "No Datums in Allegra"
     BlockMary _ -> error "No Datums in Mary"
 
-scrapDatumsTxBabbage :: Ledger.Tx StandardBabbage -> Map ByteString ByteString
+scrapDatumsTxBabbage :: Core.Tx StandardBabbage -> Map ByteString ByteString
 scrapDatumsTxBabbage tx =
     Map.fromList $ fmap mkTuple $
       witnessData <> outputData <> collOutputData
@@ -231,17 +232,17 @@ scrapDatumsTxBabbage tx =
     mkTuple pd = (txDataHash pd, txDataBytes pd)
     witnessData = txDataWitness tx
     txBody = getField @"body" tx
-    outputData = mapMaybe getDatumOutput $ toList $ getField @"outputs" txBody
-    collOutputData = mapMaybe getDatumOutput $ toList $ getField @"collateralReturn" txBody
+    outputData = mapMaybe getDatumOutput $ toList $ Babbage.outputs' txBody
+    collOutputData = mapMaybe getDatumOutput $ toList $ Babbage.collateralReturn' txBody
 
-    getDatumOutput :: Babbage.TxOut StandardBabbage -> Maybe PlutusData
-    getDatumOutput txOut = case txOut of
-        Babbage.TxOut _addr _val (Babbage.Datum binaryData) _mScript ->
+    getDatumOutput :: Babbage.BabbageTxOut StandardBabbage -> Maybe PlutusData
+    getDatumOutput txOut = case txOut ^. Babbage.datumTxOutL of
+        Babbage.Datum binaryData ->
           let plutusData = Alonzo.binaryDataToData binaryData
           in Just $ mkTxData (Alonzo.hashData plutusData, plutusData)
         _ -> Nothing
 
-scrapDatumsTxAlonzo :: Ledger.Tx StandardAlonzo -> Map ByteString ByteString
+scrapDatumsTxAlonzo :: Core.Tx StandardAlonzo -> Map ByteString ByteString
 scrapDatumsTxAlonzo tx =
     Map.fromList $ fmap mkTuple witnessData
   where
@@ -258,12 +259,13 @@ scrapRedeemerDataBlock cblk = case cblk of
     BlockMary _ -> error "No RedeemerData in Mary"
 
 scrapRedeemerDataTx :: forall era.
-    ( Ledger.Crypto era ~ StandardCrypto, Ledger.Era era,
-      HasField "txrdmrs" (Ledger.Witnesses era) (Alonzo.Redeemers era)
+    ( Ledger.Crypto era ~ StandardCrypto
+    , Alonzo.AlonzoEraWitnesses era
+    , Core.EraTx era
     )
-    => Ledger.Tx era -> Map ByteString ByteString
+    => Core.Tx era -> Map ByteString ByteString
 scrapRedeemerDataTx tx =
-    Map.fromList $ mkTuple . fst <$> Map.elems (Alonzo.unRedeemers (getField @"txrdmrs" (getField @"wits" tx)))
+    Map.fromList $ mkTuple . fst <$> Map.elems (Alonzo.unRedeemers (tx ^. (Core.witsTxL . Alonzo.rdmrsWitsL)))
   where
     mkTuple dt = mkTuple' $ mkTxData (Alonzo.hashData dt, dt)
     mkTuple' pd = (txDataHash pd, txDataBytes pd)

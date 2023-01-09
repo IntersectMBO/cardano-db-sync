@@ -31,6 +31,7 @@ import           Data.List.Extra ((!?))
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.UMap as UMap
+import           Lens.Micro
 
 import           Cardano.Ledger.Address
 import           Cardano.Ledger.BaseTypes
@@ -57,7 +58,7 @@ import qualified Cardano.Crypto.Hash as Hash
 import           Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import           Cardano.Mock.Forging.Types
 
-resolveAddress :: forall era p. (Crypto era ~ StandardCrypto, Era era)
+resolveAddress :: forall era p. (Crypto era ~ StandardCrypto, Core.EraTxOut era)
                => UTxOIndex era -> LedgerState (ShelleyBlock p era)
                -> Either ForgingError (Addr (Crypto era))
 resolveAddress index st = case index of
@@ -68,9 +69,9 @@ resolveAddress index st = case index of
     UTxOAddress addr -> Right addr
     UTxOAddressNewWithPtr n ptr ->
       Right $ Addr Testnet (unregisteredAddresses !! n) (StakeRefPtr ptr)
-    _ -> getTxOutAddr . snd . fst <$> resolveUTxOIndex index st
+    _ -> (^. Core.addrTxOutL) . snd . fst <$> resolveUTxOIndex index st
 
-resolveUTxOIndex :: forall era p. (Crypto era ~ StandardCrypto, Era era)
+resolveUTxOIndex :: forall era p. (Crypto era ~ StandardCrypto, Core.EraTxOut era)
                  => UTxOIndex era -> LedgerState (ShelleyBlock p era)
                  -> Either ForgingError ((TxIn (Crypto era), Core.TxOut era), UTxOIndex era)
 resolveUTxOIndex index st = toLeft $ case index of
@@ -92,7 +93,7 @@ resolveUTxOIndex index st = toLeft $ case index of
     utxoPairs = Map.toList $ unUTxO $ _utxo $ lsUTxOState $ esLState $
         nesEs $ Consensus.shelleyLedgerState st
 
-    hasAddr addr (_, txOut) = addr == getTxOutAddr txOut
+    hasAddr addr (_, txOut) = addr == txOut ^. Core.addrTxOutL
     hasInput inp (inp', _) = inp == inp'
 
     toLeft :: Maybe (TxIn (Crypto era), Core.TxOut era) -> Either ForgingError ((TxIn (Crypto era), Core.TxOut era), UTxOIndex era)

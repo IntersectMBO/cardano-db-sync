@@ -23,7 +23,7 @@ import           Cardano.Slotting.Slot (SlotNo (..))
 import qualified Cardano.Ledger.Address as Ledger
 import           Cardano.Ledger.Alonzo.Scripts (Tag (..))
 import           Cardano.Ledger.Coin (Coin (..))
-import           Cardano.Ledger.Mary.Value (AssetName, PolicyID, Value)
+import           Cardano.Ledger.Mary.Value (AssetName, MaryValue, PolicyID)
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
@@ -54,7 +54,7 @@ data Tx = Tx
   , txCertificates :: ![TxCertificate]
   , txWithdrawals :: ![TxWithdrawal]
   , txParamProposal :: ![ParamProposal]
-  , txMint :: !(Value StandardCrypto)
+  , txMint :: !(MaryValue StandardCrypto)
   , txRedeemer :: [(Word64, TxRedeemer)]
   , txData :: [PlutusData]
   , txScriptSizes :: [Word64] -- this contains only the sizes of plutus scripts in witnesses

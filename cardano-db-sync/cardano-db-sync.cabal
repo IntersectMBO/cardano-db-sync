@@ -160,6 +160,7 @@ library
                       , io-classes
                       , lifted-base
                       , memory
+                      , microlens
                       , monad-control
                       , monad-logger
                       , mtl
@@ -180,8 +181,7 @@ library
                       , small-steps
                       , stm
                       , strict
-                      , strict-containers
-                      , strict-stm
+                      , strict-stm ==0.2.0.0
                       , swagger2
                       , text
                       , time

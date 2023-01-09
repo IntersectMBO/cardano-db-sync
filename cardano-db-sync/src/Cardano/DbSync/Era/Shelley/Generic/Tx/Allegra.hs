@@ -2,6 +2,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra
@@ -17,17 +19,17 @@ import           Cardano.Slotting.Slot (SlotNo (..))
 import qualified Cardano.Ledger.Allegra as Allegra
 import           Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.Core as Core
-import qualified Cardano.Ledger.Era as Ledger
 import           Cardano.Ledger.Shelley.Scripts (ScriptHash)
 import qualified Cardano.Ledger.Shelley.Tx as Shelley
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as ShelleyMa
 import qualified Cardano.Ledger.ShelleyMA.TxBody as ShelleyMa
+import qualified Cardano.Ledger.ShelleyMA.Timelocks as ShelleyMa
 
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
-import           Data.MemoBytes (MemoBytes (..))
+import           Lens.Micro
 
 import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardCrypto)
 
@@ -42,27 +44,27 @@ import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import           Cardano.DbSync.Era.Shelley.Generic.Util
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
-fromAllegraTx :: (Word64, Shelley.Tx StandardAllegra) -> Tx
+fromAllegraTx :: (Word64, Shelley.ShelleyTx StandardAllegra) -> Tx
 fromAllegraTx (blkIndex, tx) =
     Tx
       { txHash = txHashId tx
       , txBlockIndex = blkIndex
-      , txSize = fromIntegral $ getField @"txsize" tx
+      , txSize = fromIntegral $ tx ^. Core.sizeTxF
       , txValidContract = True
-      , txInputs = map fromTxIn (toList $ ShelleyMa.inputs rawTxBody)
+      , txInputs = map fromTxIn (toList $ ShelleyMa.inputs' txBody)
       , txCollateralInputs = []  -- Allegra does not have collateral inputs
       , txReferenceInputs = []   -- Allegra does not have reference inputs
       , txOutputs = outputs
       , txCollateralOutputs = [] -- Allegra does not have collateral outputs
-      , txFees = Just $ ShelleyMa.txfee rawTxBody
+      , txFees = Just $ ShelleyMa.txfee' txBody
       , txOutSum = sumTxOutCoin outputs
       , txInvalidBefore = invalidBefore
       , txInvalidHereafter = invalidAfter
-      , txWithdrawalSum = calcWithdrawalSum $ ShelleyMa.wdrls rawTxBody
-      , txMetadata = fromAllegraMetadata <$> txMeta tx
-      , txCertificates = zipWith mkTxCertificate [0..] (toList $ ShelleyMa.certs rawTxBody)
-      , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl $ ShelleyMa.wdrls rawTxBody)
-      , txParamProposal = maybe [] (convertParamProposal (Allegra Standard)) $ strictMaybeToMaybe (ShelleyMa.update rawTxBody)
+      , txWithdrawalSum = calcWithdrawalSum $ ShelleyMa.wdrls' txBody
+      , txMetadata = fromAllegraMetadata <$> strictMaybeToMaybe (tx ^. Core.auxDataTxL)
+      , txCertificates = zipWith mkTxCertificate [0..] (toList $ ShelleyMa.certs' txBody)
+      , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl $ ShelleyMa.wdrls' txBody)
+      , txParamProposal = maybe [] (convertParamProposal (Allegra Standard)) $ strictMaybeToMaybe (ShelleyMa.update' txBody)
       , txMint = mempty       -- Allegra does not support Multi-Assets
       , txRedeemer = []       -- Allegra does not support redeemers
       , txData = []
@@ -71,35 +73,30 @@ fromAllegraTx (blkIndex, tx) =
       , txExtraKeyWitnesses = []
       }
   where
+    txBody :: ShelleyMa.MATxBody StandardAllegra
+    txBody = tx ^. Core.bodyTxL
+
     outputs :: [TxOut]
-    outputs = zipWith fromTxOut [0 .. ] $ toList (ShelleyMa.outputs rawTxBody)
-
-    txMeta :: Shelley.Tx StandardAllegra -> Maybe (ShelleyMa.AuxiliaryData StandardAllegra)
-    txMeta (Shelley.Tx _body _wit md) = strictMaybeToMaybe md
-
-    rawTxBody :: ShelleyMa.TxBodyRaw StandardAllegra
-    rawTxBody =
-      case tx of
-        (Shelley.Tx (ShelleyMa.TxBodyConstr txBody) _wit _md) -> memotype txBody
+    outputs = zipWith fromTxOut [0 .. ] $ toList (ShelleyMa.outputs' txBody)
 
     scripts :: [TxScript]
     scripts =
       mkTxScript
-        <$> (Map.toList (Shelley.scriptWits $ getField @"wits" tx)
-            ++ getAuxScripts (getField @"auxiliaryData" tx))
+        <$> (Map.toList (tx ^. (Core.witsTxL . Core.scriptWitsL))
+            ++ getAuxScripts (tx ^. Core.auxDataTxL))
 
-    (invalidBefore, invalidAfter) = getInterval $ getField @"body" tx
+    (invalidBefore, invalidAfter) = getInterval $ ShelleyMa.vldt' txBody
 
 getAuxScripts
-    :: ShelleyMa.StrictMaybe (Allegra.AuxiliaryData StandardAllegra)
-    -> [(ScriptHash StandardCrypto, Allegra.Script StandardAllegra)]
+    :: ShelleyMa.StrictMaybe (ShelleyMa.MAAuxiliaryData (Allegra.AllegraEra StandardCrypto))
+    -> [(ScriptHash StandardCrypto, ShelleyMa.Timelock StandardCrypto)]
 getAuxScripts maux =
   case strictMaybeToMaybe maux of
     Nothing -> []
-    Just (ShelleyMa.AuxiliaryData _ scrs) ->
-      map (\scr -> (Ledger.hashScript @StandardAllegra scr, scr)) $ toList scrs
+    Just (ShelleyMa.AuxiliaryData' _ scrs) ->
+      map (\scr -> (Core.hashScript @(Allegra.AllegraEra StandardCrypto) scr, scr)) $ toList scrs
 
-mkTxScript :: (ScriptHash StandardCrypto, Allegra.Script StandardAllegra) -> TxScript
+mkTxScript :: (ScriptHash StandardCrypto, ShelleyMa.Timelock StandardCrypto) -> TxScript
 mkTxScript (hsh, script) = TxScript
     { txScriptHash = unScriptHash hsh
     , txScriptType = Timelock
@@ -111,11 +108,8 @@ mkTxScript (hsh, script) = TxScript
     }
 
 getInterval
-    :: HasField "vldt" (Core.TxBody era) ShelleyMa.ValidityInterval
-    => Core.TxBody era -> (Maybe SlotNo, Maybe SlotNo)
-getInterval txBody =
+    :: ShelleyMa.ValidityInterval -> (Maybe SlotNo, Maybe SlotNo)
+getInterval interval =
     ( strictMaybeToMaybe $ ShelleyMa.invalidBefore interval
     , strictMaybeToMaybe $ ShelleyMa.invalidHereafter interval
     )
-  where
-    interval = getField @"vldt" txBody

@@ -12,18 +12,19 @@ import           Cardano.Prelude
 import           Cardano.Ledger.BaseTypes
 import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.CompactAddress as Ledger
-import qualified Cardano.Ledger.Era as Ledger
+import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Mary as Mary
-import           Cardano.Ledger.Mary.Value (Value (..))
+import           Cardano.Ledger.Mary.Value (MaryValue (..))
 import           Cardano.Ledger.Shelley.Scripts (ScriptHash)
 import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as ShelleyMa
+import qualified Cardano.Ledger.ShelleyMA.Timelocks as ShelleyMa
 import qualified Cardano.Ledger.ShelleyMA.TxBody as ShelleyMa
 
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
-import           Data.MemoBytes (MemoBytes (..))
+import           Lens.Micro
 
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardMary)
 
@@ -35,28 +36,28 @@ import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (calcWithdrawalSu
 import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
-fromMaryTx :: (Word64, ShelleyTx.Tx StandardMary) -> Tx
+fromMaryTx :: (Word64, ShelleyTx.ShelleyTx StandardMary) -> Tx
 fromMaryTx (blkIndex, tx) =
     Tx
       { txHash = txHashId tx
       , txBlockIndex = blkIndex
-      , txSize = fromIntegral $ getField @"txsize" tx
+      , txSize = fromIntegral $ tx ^. Core.sizeTxF
       , txValidContract = True
-      , txInputs = map fromTxIn (toList . ShelleyMa.inputs $ unTxBodyRaw tx)
+      , txInputs = map fromTxIn (toList $ ShelleyMa.inputs' txBody)
       , txCollateralInputs = []  -- Mary does not have collateral inputs
       , txReferenceInputs = []   -- Mary does not have reference inputs
       , txOutputs = outputs
       , txCollateralOutputs = [] -- Mary does not have collateral outputs
-      , txFees = Just $ ShelleyMa.txfee (unTxBodyRaw tx)
+      , txFees = Just $ ShelleyMa.txfee' txBody
       , txOutSum = sumTxOutCoin outputs
       , txInvalidBefore = invalidBefore
       , txInvalidHereafter = invalidAfter
-      , txWithdrawalSum = calcWithdrawalSum $ ShelleyMa.wdrls (unTxBodyRaw tx)
-      , txMetadata = fromMaryMetadata <$> txMeta tx
-      , txCertificates = zipWith mkTxCertificate [0..] (toList . ShelleyMa.certs $ unTxBodyRaw tx)
-      , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . ShelleyMa.wdrls $ unTxBodyRaw tx)
-      , txParamProposal = maybe [] (convertParamProposal (Mary Standard)) $ strictMaybeToMaybe (ShelleyMa.update $ unTxBodyRaw tx)
-      , txMint = ShelleyMa.mint $ unTxBodyRaw tx
+      , txWithdrawalSum = calcWithdrawalSum $ ShelleyMa.wdrls' txBody
+      , txMetadata = fromMaryMetadata <$> strictMaybeToMaybe (tx ^. Core.auxDataTxL)
+      , txCertificates = zipWith mkTxCertificate [0..] (toList $ ShelleyMa.certs' txBody)
+      , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl $ ShelleyMa.wdrls' txBody)
+      , txParamProposal = maybe [] (convertParamProposal (Mary Standard)) $ strictMaybeToMaybe (ShelleyMa.update' txBody)
+      , txMint = ShelleyMa.mint' txBody
       , txRedeemer = []       -- Mary does not support redeemers
       , txData = []
       , txScriptSizes = []    -- Mary does not support plutus scripts
@@ -64,14 +65,17 @@ fromMaryTx (blkIndex, tx) =
       , txExtraKeyWitnesses = []
       }
   where
-    outputs :: [TxOut]
-    outputs = zipWith fromTxOut [0 .. ] $ toList (ShelleyMa.outputs $ unTxBodyRaw tx)
+    txBody :: ShelleyMa.MATxBody StandardMary
+    txBody = tx ^. Core.bodyTxL
 
-    fromTxOut :: Word64 -> ShelleyTx.TxOut StandardMary -> TxOut
+    outputs :: [TxOut]
+    outputs = zipWith fromTxOut [0 .. ] $ toList (ShelleyMa.outputs' txBody)
+
+    fromTxOut :: Word64 -> ShelleyTx.ShelleyTxOut StandardMary -> TxOut
     fromTxOut index txOut =
       TxOut
         { txOutIndex = index
-        , txOutAddress = addr
+        , txOutAddress = txOut ^. Core.addrTxOutL
         , txOutAddressRaw = SBS.fromShort bs
         , txOutAdaValue = Coin ada
         , txOutMaValue = maMap
@@ -79,30 +83,23 @@ fromMaryTx (blkIndex, tx) =
         , txOutDatum = NoDatum -- Mary does not support plutus data
         }
       where
-        Ledger.UnsafeCompactAddr bs = Ledger.getTxOutCompactAddr txOut
+        Ledger.UnsafeCompactAddr bs = txOut ^. Core.compactAddrTxOutL
 
-        -- This pattern match also does the deserialisation of the address
-        ShelleyTx.TxOut addr (Value ada maMap) = txOut
-
-    txMeta :: ShelleyTx.Tx StandardMary -> Maybe (ShelleyMa.AuxiliaryData StandardMary)
-    txMeta (ShelleyTx.Tx _body _wit md) = strictMaybeToMaybe md
-
-    unTxBodyRaw :: ShelleyTx.Tx StandardMary -> ShelleyMa.TxBodyRaw StandardMary
-    unTxBodyRaw (ShelleyTx.Tx (ShelleyMa.TxBodyConstr txBody) _wit _md) = memotype txBody
+        MaryValue ada maMap = txOut ^. Core.valueTxOutL
 
     scripts :: [TxScript]
     scripts =
       mkTxScript -- Mary and Allegra have the same kind of scripts
-        <$> (Map.toList (ShelleyTx.scriptWits $ getField @"wits" tx)
-            ++ getAuxScripts (getField @"auxiliaryData" tx))
+        <$> (Map.toList (tx ^. (Core.witsTxL . Core.scriptWitsL))
+            ++ getAuxScripts (tx ^. Core.auxDataTxL))
 
-    getAuxScripts
-        :: ShelleyMa.StrictMaybe (ShelleyMa.AuxiliaryData StandardMary)
-        -> [(ScriptHash StandardCrypto, Mary.Script StandardMary)]
-    getAuxScripts maux =
-      case strictMaybeToMaybe maux of
-        Nothing -> []
-        Just (ShelleyMa.AuxiliaryData _ scrs) ->
-          map (\scr -> (Ledger.hashScript @StandardMary scr, scr)) $ toList scrs
+    (invalidBefore, invalidAfter) = getInterval $ ShelleyMa.vldt' txBody
 
-    (invalidBefore, invalidAfter) = getInterval $ getField @"body" tx
+getAuxScripts
+    :: ShelleyMa.StrictMaybe (ShelleyMa.MAAuxiliaryData (Mary.MaryEra StandardCrypto))
+    -> [(ScriptHash StandardCrypto, ShelleyMa.Timelock StandardCrypto)]
+getAuxScripts maux =
+  case strictMaybeToMaybe maux of
+    Nothing -> []
+    Just (ShelleyMa.AuxiliaryData' _ scrs) ->
+      map (\scr -> (Core.hashScript @(Mary.MaryEra StandardCrypto) scr, scr)) $ toList scrs
