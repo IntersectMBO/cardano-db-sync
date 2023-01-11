@@ -17,33 +17,30 @@ import qualified Cardano.Ledger.Mary as Mary
 import           Cardano.Ledger.Mary.Value (MaryValue (..))
 import           Cardano.Ledger.Shelley.Scripts (ScriptHash)
 import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
-import qualified Cardano.Ledger.Shelley.TxBody as Shelley
-import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as ShelleyMa
-import qualified Cardano.Ledger.ShelleyMA.Timelocks as ShelleyMa
+import           Cardano.Ledger.ShelleyMA.AuxiliaryData (MAAuxiliaryData (AuxiliaryData'))
+import           Cardano.Ledger.ShelleyMA.Timelocks (Timelock)
 import qualified Cardano.Ledger.ShelleyMA.TxBody as ShelleyMa
 
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
-import           Lens.Micro
+import           Lens.Micro ((^.))
 
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardMary)
 
 import           Cardano.DbSync.Era.Shelley.Generic.Metadata
-import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval, mkTxScript)
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (calcWithdrawalSum, fromTxIn,
-                   mkTxCertificate, mkTxWithdrawal, txHashId)
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
-fromMaryTx :: (Word64, ShelleyTx.ShelleyTx StandardMary) -> Tx
+fromMaryTx :: (Word64, Core.Tx StandardMary) -> Tx
 fromMaryTx (blkIndex, tx) =
     Tx
       { txHash = txHashId tx
       , txBlockIndex = blkIndex
-      , txSize = fromIntegral $ tx ^. Core.sizeTxF
+      , txSize = getTxSize tx
       , txValidContract = True
-      , txInputs = map fromTxIn (toList $ ShelleyMa.inputs' txBody)
+      , txInputs = mkTxIn txBody
       , txCollateralInputs = []  -- Mary does not have collateral inputs
       , txReferenceInputs = []   -- Mary does not have reference inputs
       , txOutputs = outputs
@@ -52,11 +49,11 @@ fromMaryTx (blkIndex, tx) =
       , txOutSum = sumTxOutCoin outputs
       , txInvalidBefore = invalidBefore
       , txInvalidHereafter = invalidAfter
-      , txWithdrawalSum = calcWithdrawalSum $ ShelleyMa.wdrls' txBody
-      , txMetadata = fromMaryMetadata <$> strictMaybeToMaybe (tx ^. Core.auxDataTxL)
-      , txCertificates = zipWith mkTxCertificate [0..] (toList $ ShelleyMa.certs' txBody)
-      , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl $ ShelleyMa.wdrls' txBody)
-      , txParamProposal = maybe [] (convertParamProposal (Mary Standard)) $ strictMaybeToMaybe (ShelleyMa.update' txBody)
+      , txWithdrawalSum = calcWithdrawalSum txBody
+      , txMetadata = fromMaryMetadata <$> getTxMetadata tx
+      , txCertificates = mkTxCertificates txBody
+      , txWithdrawals = mkTxWithdrawals txBody
+      , txParamProposal = mkTxParamProposal (Mary Standard) txBody
       , txMint = ShelleyMa.mint' txBody
       , txRedeemer = []       -- Mary does not support redeemers
       , txData = []
@@ -65,7 +62,7 @@ fromMaryTx (blkIndex, tx) =
       , txExtraKeyWitnesses = []
       }
   where
-    txBody :: ShelleyMa.MATxBody StandardMary
+    txBody :: Core.TxBody StandardMary
     txBody = tx ^. Core.bodyTxL
 
     outputs :: [TxOut]
@@ -84,7 +81,6 @@ fromMaryTx (blkIndex, tx) =
         }
       where
         Ledger.UnsafeCompactAddr bs = txOut ^. Core.compactAddrTxOutL
-
         MaryValue ada maMap = txOut ^. Core.valueTxOutL
 
     scripts :: [TxScript]
@@ -96,10 +92,10 @@ fromMaryTx (blkIndex, tx) =
     (invalidBefore, invalidAfter) = getInterval $ ShelleyMa.vldt' txBody
 
 getAuxScripts
-    :: ShelleyMa.StrictMaybe (ShelleyMa.MAAuxiliaryData (Mary.MaryEra StandardCrypto))
-    -> [(ScriptHash StandardCrypto, ShelleyMa.Timelock StandardCrypto)]
+    :: StrictMaybe (MAAuxiliaryData (Mary.MaryEra StandardCrypto))
+    -> [(ScriptHash StandardCrypto, Timelock StandardCrypto)]
 getAuxScripts maux =
   case strictMaybeToMaybe maux of
     Nothing -> []
-    Just (ShelleyMa.AuxiliaryData' _ scrs) ->
+    Just (AuxiliaryData' _ scrs) ->
       map (\scr -> (Core.hashScript @(Mary.MaryEra StandardCrypto) scr, scr)) $ toList scrs
