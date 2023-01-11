@@ -1,34 +1,36 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Adjust
-  ( adjustEpochRewards
-  ) where
+module Cardano.DbSync.Era.Shelley.Adjust (
+  adjustEpochRewards,
+) where
 
-import           Cardano.Prelude hiding (from, groupBy, on)
-
-import           Cardano.BM.Trace (Trace, logInfo)
-
+import Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Db as Db
-
-import           Cardano.DbSync.Cache
+import Cardano.DbSync.Cache
 import qualified Cardano.DbSync.Era.Shelley.Generic.Rewards as Generic
-import           Cardano.DbSync.Types
-
-import           Cardano.Ledger.BaseTypes (Network)
-
-import           Cardano.Slotting.Slot (EpochNo (..))
-
-import           Control.Monad.Trans.Control (MonadBaseControl)
-
+import Cardano.DbSync.Types
+import Cardano.Ledger.BaseTypes (Network)
+import Cardano.Prelude hiding (from, groupBy, on)
+import Cardano.Slotting.Slot (EpochNo (..))
+import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
-
-import           Database.Esqueleto.Experimental (SqlBackend, delete, from, in_, table, val,
-                   valList, where_, (==.), (^.))
+import Database.Esqueleto.Experimental (
+  SqlBackend,
+  delete,
+  from,
+  in_,
+  table,
+  val,
+  valList,
+  where_,
+  (==.),
+  (^.),
+ )
 
 -- Hlint warns about another version of this operator.
 {- HLINT ignore "Redundant ^." -}
@@ -41,26 +43,37 @@ import           Database.Esqueleto.Experimental (SqlBackend, delete, from, in_,
 -- been de-registered and not reregistered and then delete all rewards for those addresses and that
 -- epoch.
 
-adjustEpochRewards
-    :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> Network -> Cache -> EpochNo -> Generic.Rewards
-    -> Set StakeCred
-    -> ReaderT SqlBackend m ()
+adjustEpochRewards ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
+  Network ->
+  Cache ->
+  EpochNo ->
+  Generic.Rewards ->
+  Set StakeCred ->
+  ReaderT SqlBackend m ()
 adjustEpochRewards tracer nw cache epochNo rwds creds = do
   let eraIgnored = Map.toList $ Generic.unRewards rwds
-  liftIO . logInfo tracer $ mconcat
-    [ "Removing ", if null eraIgnored then "" else Db.textShow (length eraIgnored) <> " rewards and "
-    , show (length creds), " orphaned rewards"]
-  forM_ eraIgnored $ \(cred, rewards)->
+  liftIO . logInfo tracer $
+    mconcat
+      [ "Removing "
+      , if null eraIgnored then "" else Db.textShow (length eraIgnored) <> " rewards and "
+      , show (length creds)
+      , " orphaned rewards"
+      ]
+  forM_ eraIgnored $ \(cred, rewards) ->
     forM_ (Set.toList rewards) $ \rwd ->
       deleteReward nw cache epochNo (cred, rwd)
   crds <- rights <$> forM (Set.toList creds) (queryStakeAddrWithCache cache DontCacheNew nw)
   deleteOrphanedRewards epochNo crds
 
-deleteReward
-    :: (MonadBaseControl IO m, MonadIO m)
-    => Network -> Cache -> EpochNo -> (StakeCred, Generic.Reward)
-    -> ReaderT SqlBackend m ()
+deleteReward ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  Network ->
+  Cache ->
+  EpochNo ->
+  (StakeCred, Generic.Reward) ->
+  ReaderT SqlBackend m ()
 deleteReward nw cache epochNo (cred, rwd) = do
   mAddrId <- queryStakeAddrWithCache cache DontCacheNew nw cred
   eiPoolId <- case Generic.rewardPool rwd of

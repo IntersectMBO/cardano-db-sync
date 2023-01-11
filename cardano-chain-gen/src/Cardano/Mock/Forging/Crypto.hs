@@ -1,20 +1,23 @@
 {-# LANGUAGE TypeApplications #-}
 
-module Cardano.Mock.Forging.Crypto
-  ( RawSeed (..)
-  , mkVRFKeyPair
-  , mkSeedFromWords
-  ) where
+module Cardano.Mock.Forging.Crypto (
+  RawSeed (..),
+  mkVRFKeyPair,
+  mkSeedFromWords,
+) where
 
-import           Data.Typeable (Proxy (Proxy))
-import           Data.Word (Word64)
-
-import           Cardano.Binary (ToCBOR (..))
-import           Cardano.Crypto.Hash (Blake2b_256, hashToBytes, hashWithSerialiser)
-import           Cardano.Crypto.Seed (Seed, mkSeedFromBytes)
-import           Cardano.Crypto.VRF (SignKeyVRF, VRFAlgorithm, VerKeyVRF, deriveVerKeyVRF,
-                   genKeyVRF)
-
+import Cardano.Binary (ToCBOR (..))
+import Cardano.Crypto.Hash (Blake2b_256, hashToBytes, hashWithSerialiser)
+import Cardano.Crypto.Seed (Seed, mkSeedFromBytes)
+import Cardano.Crypto.VRF (
+  SignKeyVRF,
+  VRFAlgorithm,
+  VerKeyVRF,
+  deriveVerKeyVRF,
+  genKeyVRF,
+ )
+import Data.Typeable (Proxy (Proxy))
+import Data.Word (Word64)
 
 instance ToCBOR RawSeed where
   toCBOR (RawSeed w1 w2 w3 w4 w5) = toCBOR (w1, w2, w3, w4, w5)

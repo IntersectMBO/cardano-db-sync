@@ -1,33 +1,32 @@
 {-# LANGUAGE StrictData #-}
-module Cardano.DbTool.Validate.TotalSupply
-  ( validateTotalSupplyDecreasing
-  ) where
 
-import           Cardano.DbTool.Validate.Util
+module Cardano.DbTool.Validate.TotalSupply (
+  validateTotalSupplyDecreasing,
+) where
 
-import           Data.Word (Word64)
-
-import           Cardano.Db
-
-import           System.Random (randomRIO)
-
+import Cardano.Db
+import Cardano.DbTool.Validate.Util
+import Data.Word (Word64)
+import System.Random (randomRIO)
 
 -- | Validate that the total supply is decreasing.
 -- This is only true for the Byron error where transaction fees are burnt.
 validateTotalSupplyDecreasing :: IO ()
 validateTotalSupplyDecreasing = do
-    test <- genTestParameters
+  test <- genTestParameters
 
-    putStrF $ "Total supply + fees + deposit - withdrawals at block " ++ show (testBlockNo test)
-            ++ " is same as genesis supply: "
+  putStrF $
+    "Total supply + fees + deposit - withdrawals at block "
+      ++ show (testBlockNo test)
+      ++ " is same as genesis supply: "
 
-    accounting <- queryInitialSupply (testBlockNo test)
+  accounting <- queryInitialSupply (testBlockNo test)
 
-    let total = accSupply accounting + accFees accounting + accDeposit accounting - accWithdrawals accounting
+  let total = accSupply accounting + accFees accounting + accDeposit accounting - accWithdrawals accounting
 
-    if genesisSupply test == total
-      then putStrLn $ greenText "ok"
-      else error $ redText (show (genesisSupply test) ++ " /= " ++ show total)
+  if genesisSupply test == total
+    then putStrLn $ greenText "ok"
+    else error $ redText (show (genesisSupply test) ++ " /= " ++ show total)
 
 -- -----------------------------------------------------------------------------
 
@@ -50,9 +49,8 @@ genTestParameters = do
     Nothing -> error "Cardano.DbTool.Validation: Empty database"
     Just latest ->
       TestParams
-          <$> randomRIO (1, latest - 1)
-          <*> runDbNoLoggingEnv queryGenesisSupply
-
+        <$> randomRIO (1, latest - 1)
+        <*> runDbNoLoggingEnv queryGenesisSupply
 
 queryInitialSupply :: Word64 -> IO Accounting
 queryInitialSupply blkNo =

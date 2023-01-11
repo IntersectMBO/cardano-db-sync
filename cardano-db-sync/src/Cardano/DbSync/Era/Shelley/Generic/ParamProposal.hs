@@ -1,34 +1,30 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Generic.ParamProposal
-  ( ParamProposal (..)
-  , convertParamProposal
-  ) where
+module Cardano.DbSync.Era.Shelley.Generic.ParamProposal (
+  ParamProposal (..),
+  convertParamProposal,
+) where
 
-import           Cardano.Prelude
-
-import           Cardano.DbSync.Era.Shelley.Generic.Util (unKeyHashRaw)
-import           Cardano.DbSync.Era.Shelley.Generic.Witness (Witness (..))
-
+import Cardano.DbSync.Era.Shelley.Generic.Util (unKeyHashRaw)
+import Cardano.DbSync.Era.Shelley.Generic.Witness (Witness (..))
 import qualified Cardano.Ledger.Alonzo as Alonzo
-import           Cardano.Ledger.Alonzo.Language (Language)
+import Cardano.Ledger.Alonzo.Language (Language)
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
-import           Cardano.Ledger.Babbage (BabbageEra)
+import Cardano.Ledger.Babbage (BabbageEra)
 import qualified Cardano.Ledger.Babbage.PParams as Babbage
-import           Cardano.Ledger.BaseTypes (UnitInterval, strictMaybeToMaybe)
+import Cardano.Ledger.BaseTypes (UnitInterval, strictMaybeToMaybe)
 import qualified Cardano.Ledger.BaseTypes as Ledger
-import           Cardano.Ledger.Coin (Coin)
+import Cardano.Ledger.Coin (Coin)
 import qualified Cardano.Ledger.Keys as Ledger
-import           Cardano.Ledger.Shelley (ShelleyEra)
+import Cardano.Ledger.Shelley (ShelleyEra)
 import qualified Cardano.Ledger.Shelley.PParams as Shelley
 import qualified Cardano.Ledger.ShelleyMA as ShelleyMA
-
-import           Cardano.Slotting.Slot (EpochNo (..))
-
+import Cardano.Prelude
+import Cardano.Slotting.Slot (EpochNo (..))
 import qualified Data.Map.Strict as Map
 
 data ParamProposal = ParamProposal
@@ -51,9 +47,8 @@ data ParamProposal = ParamProposal
   , pppProtocolVersion :: !(Maybe Ledger.ProtVer)
   , pppMinUtxoValue :: !(Maybe Coin)
   , pppMinPoolCost :: !(Maybe Coin)
-
-  -- New for Alonzo.
-  , pppCoinsPerUtxo :: !(Maybe Coin)
+  , -- New for Alonzo.
+    pppCoinsPerUtxo :: !(Maybe Coin)
   , pppCostmdls :: !(Maybe (Map Language Alonzo.CostModel))
   , pppPriceMem :: !(Maybe Rational)
   , pppPriceStep :: !(Maybe Rational)
@@ -79,19 +74,19 @@ convertParamProposal witness (Shelley.Update pp epoch) =
 
 allegraOrMaryParamProposal :: EpochNo -> Shelley.ProposedPPUpdates (ShelleyMA.ShelleyMAEra a c) -> [ParamProposal]
 allegraOrMaryParamProposal epochNo (Shelley.ProposedPPUpdates umap) =
-    map (convertShelleyParamProposal epochNo) $ Map.toList umap
+  map (convertShelleyParamProposal epochNo) $ Map.toList umap
 
 alonzoParamProposal :: EpochNo -> Shelley.ProposedPPUpdates (Alonzo.AlonzoEra c) -> [ParamProposal]
 alonzoParamProposal epochNo (Shelley.ProposedPPUpdates umap) =
-    map (convertAlonzoParamProposal epochNo) $ Map.toList umap
+  map (convertAlonzoParamProposal epochNo) $ Map.toList umap
 
 shelleyParamProposal :: EpochNo -> Shelley.ProposedPPUpdates (ShelleyEra c) -> [ParamProposal]
 shelleyParamProposal epochNo (Shelley.ProposedPPUpdates umap) =
-    map (convertShelleyParamProposal epochNo) $ Map.toList umap
+  map (convertShelleyParamProposal epochNo) $ Map.toList umap
 
 babbageParamProposal :: EpochNo -> Shelley.ProposedPPUpdates (BabbageEra c) -> [ParamProposal]
 babbageParamProposal epochNo (Shelley.ProposedPPUpdates umap) =
-    map (convertBabbageParamProposal epochNo) $ Map.toList umap
+  map (convertBabbageParamProposal epochNo) $ Map.toList umap
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -152,9 +147,8 @@ convertAlonzoParamProposal epochNo (key, pmap) =
     , pppProtocolVersion = strictMaybeToMaybe (Alonzo._protocolVersion pmap)
     , pppMinUtxoValue = Nothing -- Removed in Alonzo
     , pppMinPoolCost = strictMaybeToMaybe (Alonzo._minPoolCost pmap)
-
-    -- New for Alonzo.
-    , pppCoinsPerUtxo = strictMaybeToMaybe (Alonzo._coinsPerUTxOWord pmap)
+    , -- New for Alonzo.
+      pppCoinsPerUtxo = strictMaybeToMaybe (Alonzo._coinsPerUTxOWord pmap)
     , pppCostmdls = strictMaybeToMaybe (Alonzo.unCostModels <$> Alonzo._costmdls pmap)
     , pppPriceMem = Ledger.unboundRational . Alonzo.prMem <$> strictMaybeToMaybe (Alonzo._prices pmap)
     , pppPriceStep = Ledger.unboundRational . Alonzo.prSteps <$> strictMaybeToMaybe (Alonzo._prices pmap)
@@ -189,9 +183,8 @@ convertShelleyParamProposal epochNo (key, pmap) =
     , pppProtocolVersion = strictMaybeToMaybe (Shelley._protocolVersion pmap)
     , pppMinUtxoValue = strictMaybeToMaybe (Shelley._minUTxOValue pmap)
     , pppMinPoolCost = strictMaybeToMaybe (Shelley._minPoolCost pmap)
-
-    -- The following are Alonzo related, hence Nothing.
-    , pppCoinsPerUtxo = Nothing
+    , -- The following are Alonzo related, hence Nothing.
+      pppCoinsPerUtxo = Nothing
     , pppCostmdls = Nothing
     , pppPriceMem = Nothing
     , pppPriceStep = Nothing

@@ -1,13 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Cardano.DbTool.Report.Display
-  ( leftPad
-  , rightPad
-  , separator
-  , spaces
-  ) where
+
+module Cardano.DbTool.Report.Display (
+  leftPad,
+  rightPad,
+  separator,
+  spaces,
+) where
 
 import qualified Data.List as List
-import           Data.Text (Text)
+import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.ICU as ICU
 

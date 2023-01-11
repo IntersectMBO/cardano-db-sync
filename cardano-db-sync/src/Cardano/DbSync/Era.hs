@@ -3,27 +3,27 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Cardano.DbSync.Era
-  ( module X
-  , insertValidateGenesisDist
-  ) where
+module Cardano.DbSync.Era (
+  module X,
+  insertValidateGenesisDist,
+) where
 
-import           Cardano.Prelude
-
-import           Cardano.BM.Data.Trace (Trace)
-
-import           Cardano.DbSync.Config
-import           Cardano.DbSync.Error
-
+import Cardano.BM.Data.Trace (Trace)
+import Cardano.DbSync.Config
 import qualified Cardano.DbSync.Era.Byron.Genesis as Byron
 import qualified Cardano.DbSync.Era.Shelley.Genesis as Shelley
-import           Cardano.DbSync.Era.Shelley.Offline as X
+import Cardano.DbSync.Era.Shelley.Offline as X
+import Cardano.DbSync.Error
+import Cardano.Prelude
+import Database.Persist.Sql (SqlBackend)
 
-import           Database.Persist.Sql (SqlBackend)
-
-insertValidateGenesisDist
-    :: Trace IO Text -> SqlBackend -> NetworkName -> GenesisConfig -> Bool
-    -> ExceptT SyncNodeError IO ()
+insertValidateGenesisDist ::
+  Trace IO Text ->
+  SqlBackend ->
+  NetworkName ->
+  GenesisConfig ->
+  Bool ->
+  ExceptT SyncNodeError IO ()
 insertValidateGenesisDist trce backend nname genCfg shelleyInitiation =
   case genCfg of
     GenesisCardano _ bCfg sCfg _aCfg -> do

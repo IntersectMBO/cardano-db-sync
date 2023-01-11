@@ -5,86 +5,104 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Cardano.Db.Insert
-  ( insertAdaPots
-  , insertBlock
-  , insertCollateralTxIn
-  , insertReferenceTxIn
-  , insertDelegation
-  , insertEpoch
-  , insertEpochParam
-  , insertEpochSyncTime
-  , insertExtraKeyWitness
-  , insertManyEpochStakes
-  , insertManyRewards
-  , insertManyTxIn
-  , insertMaTxMint
-  , insertManyMaTxOut
-  , insertMeta
-  , insertMultiAssetUnchecked
-  , insertParamProposal
-  , insertPotTransfer
-  , insertPoolHash
-  , insertPoolMetadataRef
-  , insertPoolOwner
-  , insertPoolRelay
-  , insertPoolRetire
-  , insertPoolUpdate
-  , insertReserve
-  , insertScript
-  , insertSlotLeader
-  , insertStakeAddress
-  , insertStakeDeregistration
-  , insertStakeRegistration
-  , insertTreasury
-  , insertTx
-  , insertTxIn
-  , insertTxMetadata
-  , insertTxOut
-  , insertCollateralTxOut
-  , insertManyTxOut
-  , insertWithdrawal
-  , insertRedeemer
-  , insertCostModel
-  , insertDatum
-  , insertRedeemerData
-  , insertReverseIndex
-  , insertCheckPoolOfflineData
-  , insertCheckPoolOfflineFetchError
-  , insertReservedPoolTicker
-  , insertDelistedPool
-
+module Cardano.Db.Insert (
+  insertAdaPots,
+  insertBlock,
+  insertCollateralTxIn,
+  insertReferenceTxIn,
+  insertDelegation,
+  insertEpoch,
+  insertEpochParam,
+  insertEpochSyncTime,
+  insertExtraKeyWitness,
+  insertManyEpochStakes,
+  insertManyRewards,
+  insertManyTxIn,
+  insertMaTxMint,
+  insertManyMaTxOut,
+  insertMeta,
+  insertMultiAssetUnchecked,
+  insertParamProposal,
+  insertPotTransfer,
+  insertPoolHash,
+  insertPoolMetadataRef,
+  insertPoolOwner,
+  insertPoolRelay,
+  insertPoolRetire,
+  insertPoolUpdate,
+  insertReserve,
+  insertScript,
+  insertSlotLeader,
+  insertStakeAddress,
+  insertStakeDeregistration,
+  insertStakeRegistration,
+  insertTreasury,
+  insertTx,
+  insertTxIn,
+  insertTxMetadata,
+  insertTxOut,
+  insertCollateralTxOut,
+  insertManyTxOut,
+  insertWithdrawal,
+  insertRedeemer,
+  insertCostModel,
+  insertDatum,
+  insertRedeemerData,
+  insertReverseIndex,
+  insertCheckPoolOfflineData,
+  insertCheckPoolOfflineFetchError,
+  insertReservedPoolTicker,
+  insertDelistedPool,
   -- Export mainly for testing.
-  , insertBlockChecked
-  ) where
+  insertBlockChecked,
+) where
 
-
-import           Control.Exception.Lifted (Exception, handle, throwIO)
-import           Control.Monad (unless, void, when)
-import           Control.Monad.IO.Class (MonadIO, liftIO)
-import           Control.Monad.Trans.Control (MonadBaseControl)
-import           Control.Monad.Trans.Reader (ReaderT)
-
+import Cardano.Db.Query
+import Cardano.Db.Schema
+import Control.Exception.Lifted (Exception, handle, throwIO)
+import Control.Monad (unless, void, when)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Reader (ReaderT)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.List.NonEmpty as NonEmpty
-import           Data.Proxy (Proxy (..))
-import           Data.Text (Text)
+import Data.Proxy (Proxy (..))
+import Data.Text (Text)
 import qualified Data.Text as Text
-
-import           Database.Persist.Class (AtLeastOneUniqueKey, PersistEntityBackend, PersistEntity,
-                   SafeToInsert, checkUnique, insert, insertBy, replaceUnique)
-import           Database.Persist.EntityDef.Internal (entityDB, entityUniques)
-import           Database.Persist.Sql (OnlyOneUniqueKey, PersistRecordBackend, SqlBackend,
-                   UniqueDef, entityDef, insertMany, rawExecute, rawSql, toPersistFields,
-                   toPersistValue, uniqueDBName, uniqueFields)
+import Database.Persist.Class (
+  AtLeastOneUniqueKey,
+  PersistEntity,
+  PersistEntityBackend,
+  SafeToInsert,
+  checkUnique,
+  insert,
+  insertBy,
+  replaceUnique,
+ )
+import Database.Persist.EntityDef.Internal (entityDB, entityUniques)
+import Database.Persist.Sql (
+  OnlyOneUniqueKey,
+  PersistRecordBackend,
+  SqlBackend,
+  UniqueDef,
+  entityDef,
+  insertMany,
+  rawExecute,
+  rawSql,
+  toPersistFields,
+  toPersistValue,
+  uniqueDBName,
+  uniqueFields,
+ )
 import qualified Database.Persist.Sql.Util as Util
-import           Database.Persist.Types (ConstraintNameDB (..), EntityNameDB (..), FieldNameDB (..),
-                   PersistValue, entityKey)
-import           Database.PostgreSQL.Simple (SqlError)
-
-import           Cardano.Db.Query
-import           Cardano.Db.Schema
-
+import Database.Persist.Types (
+  ConstraintNameDB (..),
+  EntityNameDB (..),
+  FieldNameDB (..),
+  PersistValue,
+  entityKey,
+ )
+import Database.PostgreSQL.Simple (SqlError)
 
 -- The original naive way of inserting rows into Postgres was:
 --
@@ -213,7 +231,7 @@ insertCollateralTxOut = insertUnchecked "CollateralTxOut"
 insertManyTxOut :: (MonadBaseControl IO m, MonadIO m) => [TxOut] -> ReaderT SqlBackend m [TxOutId]
 insertManyTxOut = insertMany' "TxOut"
 
-insertWithdrawal :: (MonadBaseControl IO m, MonadIO m) => Withdrawal  -> ReaderT SqlBackend m WithdrawalId
+insertWithdrawal :: (MonadBaseControl IO m, MonadIO m) => Withdrawal -> ReaderT SqlBackend m WithdrawalId
 insertWithdrawal = insertUnchecked "Withdrawal"
 
 insertRedeemer :: (MonadBaseControl IO m, MonadIO m) => Redeemer -> ReaderT SqlBackend m RedeemerId
@@ -257,44 +275,52 @@ insertDelistedPool = insertCheckUnique "DelistedPool"
 
 data DbInsertException
   = DbInsertException String SqlError
-  deriving Show
+  deriving (Show)
 
 instance Exception DbInsertException
 
-insertMany'
-    :: forall m record.
-        ( MonadBaseControl IO m
-        , MonadIO m
-        , PersistRecordBackend record SqlBackend
-        , SafeToInsert record
-        )
-    => String -> [record] -> ReaderT SqlBackend m [Key record]
+insertMany' ::
+  forall m record.
+  ( MonadBaseControl IO m
+  , MonadIO m
+  , PersistRecordBackend record SqlBackend
+  , SafeToInsert record
+  ) =>
+  String ->
+  [record] ->
+  ReaderT SqlBackend m [Key record]
 insertMany' vtype records = handle exceptHandler (insertMany records)
   where
     exceptHandler :: SqlError -> ReaderT SqlBackend m [Key record]
     exceptHandler e =
       liftIO $ throwIO (DbInsertException vtype e)
 
-insertManyUncheckedUnique
-    :: forall m record.
-        ( MonadBaseControl IO m
-        , MonadIO m
-        , OnlyOneUniqueKey record
-        )
-    => String -> [record] -> ReaderT SqlBackend m ()
+insertManyUncheckedUnique ::
+  forall m record.
+  ( MonadBaseControl IO m
+  , MonadIO m
+  , OnlyOneUniqueKey record
+  ) =>
+  String ->
+  [record] ->
+  ReaderT SqlBackend m ()
 insertManyUncheckedUnique vtype records =
-    unless (null records) $
-      handle exceptHandler (rawExecute query values)
+  unless (null records) $
+    handle exceptHandler (rawExecute query values)
   where
     query :: Text
     query =
       Text.concat
         [ "INSERT INTO "
         , unEntityNameDB (entityDB . entityDef $ records)
-        , " (", Util.commaSeparated fieldNames
+        , " ("
+        , Util.commaSeparated fieldNames
         , ") VALUES "
-        ,  Util.commaSeparated . replicate (length records)
-             . Util.parenWrapped . Util.commaSeparated $ placeholders
+        , Util.commaSeparated
+            . replicate (length records)
+            . Util.parenWrapped
+            . Util.commaSeparated
+            $ placeholders
         , " ON CONFLICT ON CONSTRAINT "
         , unConstraintNameDB (uniqueDBName $ onlyOneUniqueDef (Proxy @record))
         , " DO NOTHING"
@@ -313,34 +339,41 @@ insertManyUncheckedUnique vtype records =
 
 -- Insert, getting PostgreSQL to check the uniqueness constaint. If it is violated,
 -- simply returns the Key, without changing anything.
-insertCheckUnique
-    :: forall m record.
-        ( MonadBaseControl IO m
-        , MonadIO m
-        , OnlyOneUniqueKey record
-        , PersistRecordBackend record SqlBackend
-        )
-    => String -> record -> ReaderT SqlBackend m (Key record)
+insertCheckUnique ::
+  forall m record.
+  ( MonadBaseControl IO m
+  , MonadIO m
+  , OnlyOneUniqueKey record
+  , PersistRecordBackend record SqlBackend
+  ) =>
+  String ->
+  record ->
+  ReaderT SqlBackend m (Key record)
 insertCheckUnique vtype record = do
-    res <- handle exceptHandler $ rawSql query values
-    case res of
-      [ident] -> pure ident
-      _other -> error $ mconcat [ "insertCheckUnique: Inserting ", vtype, " failed with ", show res ]
+  res <- handle exceptHandler $ rawSql query values
+  case res of
+    [ident] -> pure ident
+    _other -> error $ mconcat ["insertCheckUnique: Inserting ", vtype, " failed with ", show res]
   where
     query :: Text
     query =
       Text.concat
         [ "INSERT INTO "
         , unEntityNameDB (entityDB . entityDef $ Just record)
-        , " (", Util.commaSeparated fieldNames
-        , ") VALUES (", Util.commaSeparated placeholders
+        , " ("
+        , Util.commaSeparated fieldNames
+        , ") VALUES ("
+        , Util.commaSeparated placeholders
         , ") ON CONFLICT ON CONSTRAINT "
         , unConstraintNameDB (uniqueDBName $ onlyOneUniqueDef (Proxy @record))
-        -- An update is necessary, to force Postgres to return the Id. 'EXCLUDED'
-        -- is used for the new row. 'dummyUpdateField' is a part of the Unique key
-        -- so even if it is updated with the new value on conflict, no actual
-        -- effect will take place.
-        , " DO UPDATE SET ", dummyUpdateField, " = EXCLUDED.", dummyUpdateField
+        , -- An update is necessary, to force Postgres to return the Id. 'EXCLUDED'
+          -- is used for the new row. 'dummyUpdateField' is a part of the Unique key
+          -- so even if it is updated with the new value on conflict, no actual
+          -- effect will take place.
+          " DO UPDATE SET "
+        , dummyUpdateField
+        , " = EXCLUDED."
+        , dummyUpdateField
         , " RETURNING id ;"
         ]
 
@@ -359,24 +392,26 @@ insertCheckUnique vtype record = do
     dummyUpdateField :: Text
     dummyUpdateField = escapeFieldName . snd . NonEmpty.head . uniqueFields $ onlyOneUniqueDef (Proxy @record)
 
-insertReplace
-    :: forall m record.
-        ( AtLeastOneUniqueKey record
-        , Eq (Unique record)
-        , MonadBaseControl IO m
-        , MonadIO m
-        , PersistRecordBackend record SqlBackend
-        , SafeToInsert record
-        )
-    => String -> record -> ReaderT SqlBackend m (Key record)
+insertReplace ::
+  forall m record.
+  ( AtLeastOneUniqueKey record
+  , Eq (Unique record)
+  , MonadBaseControl IO m
+  , MonadIO m
+  , PersistRecordBackend record SqlBackend
+  , SafeToInsert record
+  ) =>
+  String ->
+  record ->
+  ReaderT SqlBackend m (Key record)
 insertReplace vtype record =
-    handle exceptHandler $ do
-      eres <- insertBy record
-      case eres of
-        Right rid -> pure rid
-        Left rec -> do
-          mres <- replaceUnique (entityKey rec) record
-          maybe (pure $ entityKey rec) (const . pure $ entityKey rec) mres
+  handle exceptHandler $ do
+    eres <- insertBy record
+    case eres of
+      Right rid -> pure rid
+      Left rec -> do
+        mres <- replaceUnique (entityKey rec) record
+        maybe (pure $ entityKey rec) (const . pure $ entityKey rec) mres
   where
     exceptHandler :: SqlError -> ReaderT SqlBackend m a
     exceptHandler e =
@@ -385,37 +420,39 @@ insertReplace vtype record =
 -- Insert without checking uniqueness constraints. This should be safe for most tables
 -- even tables with uniqueness constraints, especially block, tx and many others, where
 -- uniqueness is enforced by the ledger.
-insertUnchecked
-    :: ( MonadIO m
-       , MonadBaseControl IO m
-       , PersistEntityBackend record ~ SqlBackend
-       , SafeToInsert record
-       , PersistEntity record)
-    => String -> record -> ReaderT SqlBackend m (Key record)
+insertUnchecked ::
+  ( MonadIO m
+  , MonadBaseControl IO m
+  , PersistEntityBackend record ~ SqlBackend
+  , SafeToInsert record
+  , PersistEntity record
+  ) =>
+  String ->
+  record ->
+  ReaderT SqlBackend m (Key record)
 insertUnchecked vtype =
-    handle exceptHandler . insert
+  handle exceptHandler . insert
   where
     exceptHandler :: MonadIO m => SqlError -> ReaderT SqlBackend m a
     exceptHandler e =
       liftIO $ throwIO (DbInsertException vtype e)
 
-
 -- This is cargo culted from Persistent because it is not exported.
 escapeFieldName :: FieldNameDB -> Text
 escapeFieldName (FieldNameDB s) =
-    Text.pack $ '"' : go (Text.unpack s) ++ "\""
+  Text.pack $ '"' : go (Text.unpack s) ++ "\""
   where
     go "" = ""
-    go ('"':xs) = "\"\"" ++ go xs
-    go (x:xs) = x : go xs
+    go ('"' : xs) = "\"\"" ++ go xs
+    go (x : xs) = x : go xs
 
 -- This is cargo culted from Persistent because it is not exported.
 -- https://github.com/yesodweb/persistent/issues/1194
 onlyOneUniqueDef :: OnlyOneUniqueKey record => proxy record -> UniqueDef
 onlyOneUniqueDef prxy =
-    case entityUniques (entityDef prxy) of
-        [uniq] -> uniq
-        _ -> error "impossible due to OnlyOneUniqueKey constraint"
+  case entityUniques (entityDef prxy) of
+    [uniq] -> uniq
+    _ -> error "impossible due to OnlyOneUniqueKey constraint"
 
 -- Used in tests
 

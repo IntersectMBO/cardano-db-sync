@@ -1,25 +1,21 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Cardano.Db.Migration.Haskell
-  ( runHaskellMigration
-  ) where
+module Cardano.Db.Migration.Haskell (
+  runHaskellMigration,
+) where
 
-import           Control.Exception (SomeException, handle)
-import           Control.Monad.Logger (MonadLogger)
-import           Control.Monad.Trans.Reader (ReaderT)
-
-import           Data.Map.Strict (Map)
+import Cardano.Db.Migration.Version
+import Cardano.Db.PGConfig
+import Cardano.Db.Run
+import Control.Exception (SomeException, handle)
+import Control.Monad.Logger (MonadLogger)
+import Control.Monad.Trans.Reader (ReaderT)
+import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-
-import           Database.Persist.Sql (SqlBackend)
-
-import           Cardano.Db.Migration.Version
-import           Cardano.Db.PGConfig
-import           Cardano.Db.Run
-
-import           System.Exit (exitFailure)
-import           System.IO (Handle, hClose, hFlush, hPutStrLn, stdout)
+import Database.Persist.Sql (SqlBackend)
+import System.Exit (exitFailure)
+import System.IO (Handle, hClose, hFlush, hPutStrLn, stdout)
 
 -- | Run a migration written in Haskell (eg one that cannot easily be done in SQL).
 -- The Haskell migration is paired with an SQL migration and uses the same MigrationVersion
@@ -32,17 +28,16 @@ import           System.IO (Handle, hClose, hFlush, hPutStrLn, stdout)
 --   2. Haskell migration 'MigrationVersion 2 8 20190731' populates new column from data already
 --      in the database.
 --   3. 'migration-2-0009-20190731.sql' makes the new column NOT NULL.
-
 runHaskellMigration :: PGPassSource -> Handle -> MigrationVersion -> IO ()
 runHaskellMigration source logHandle mversion =
-    case Map.lookup mversion migrationMap of
-      Nothing -> pure ()
-      Just action -> do
-        hPutStrLn logHandle $ "Running : migration-" ++ renderMigrationVersion mversion ++ ".hs"
-        putStr $ "    migration-" ++ renderMigrationVersion mversion ++ ".hs  ... "
-        hFlush stdout
-        handle handler $ runDbHandleLogger logHandle source action
-        putStrLn "ok"
+  case Map.lookup mversion migrationMap of
+    Nothing -> pure ()
+    Just action -> do
+      hPutStrLn logHandle $ "Running : migration-" ++ renderMigrationVersion mversion ++ ".hs"
+      putStr $ "    migration-" ++ renderMigrationVersion mversion ++ ".hs  ... "
+      hFlush stdout
+      handle handler $ runDbHandleLogger logHandle source action
+      putStrLn "ok"
   where
     handler :: SomeException -> IO a
     handler e = do
@@ -56,7 +51,7 @@ runHaskellMigration source logHandle mversion =
 migrationMap :: MonadLogger m => Map MigrationVersion (ReaderT SqlBackend m ())
 migrationMap =
   Map.fromList
-    [ ( MigrationVersion 2 1 20190731, migration0001 )
+    [ (MigrationVersion 2 1 20190731, migration0001)
     ]
 
 --------------------------------------------------------------------------------
@@ -67,4 +62,3 @@ migration0001 =
   pure ()
 
 --------------------------------------------------------------------------------
-

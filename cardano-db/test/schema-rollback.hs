@@ -1,22 +1,23 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-import           Cardano.Db (gitRev)
-
-import           Control.Monad (when)
-
-import           Data.ByteString.Char8 (ByteString)
+import Cardano.Db (gitRev)
+import Control.Monad (when)
+import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
-import           Data.Char (isAlpha, isSpace)
+import Data.Char (isAlpha, isSpace)
 import qualified Data.List as List
-import           Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe)
 import qualified Data.Text.IO as Text
-
-import           System.Console.ANSI (setSGRCode)
-import           System.Console.ANSI.Types (Color (..), ColorIntensity (..), ConsoleLayer (..),
-                   SGR (..))
-import           System.Directory (getCurrentDirectory, setCurrentDirectory)
-import           System.Exit (exitFailure)
-import           System.FilePath (joinPath, splitPath)
+import System.Console.ANSI (setSGRCode)
+import System.Console.ANSI.Types (
+  Color (..),
+  ColorIntensity (..),
+  ConsoleLayer (..),
+  SGR (..),
+ )
+import System.Directory (getCurrentDirectory, setCurrentDirectory)
+import System.Exit (exitFailure)
+import System.FilePath (joinPath, splitPath)
 
 main :: IO ()
 main = do
@@ -40,10 +41,11 @@ main = do
 
 findTablesWithBlockNo :: IO [ByteString]
 findTablesWithBlockNo = do
-    xs <- mapMaybe removeCommentsAndEmpty . getSchema <$> BS.readFile "cardano-db/src/Cardano/Db/Schema.hs"
-    when (length xs < 10) $
-      error $ "Expected at least 10 lines of schema definition, but got only " ++ show (length xs)
-    pure . map tdName . filter hasBlockNoColumn $ splitTableDefs xs
+  xs <- mapMaybe removeCommentsAndEmpty . getSchema <$> BS.readFile "cardano-db/src/Cardano/Db/Schema.hs"
+  when (length xs < 10) $
+    error $
+      "Expected at least 10 lines of schema definition, but got only " ++ show (length xs)
+  pure . map tdName . filter hasBlockNoColumn $ splitTableDefs xs
   where
     -- Extract just the schema defintion of the file.
     getSchema :: ByteString -> [ByteString]
@@ -56,18 +58,18 @@ findTablesWithBlockNo = do
 data TableDef = TableDef
   { tdName :: ByteString
   , tdColumns :: [ByteString]
-  } deriving (Show)
-
+  }
+  deriving (Show)
 
 splitTableDefs :: [ByteString] -> [TableDef]
 splitTableDefs =
-    List.sortOn tdName . recurse
+  List.sortOn tdName . recurse
   where
     recurse :: [ByteString] -> [TableDef]
     recurse [] = []
-    recurse (x:xs) =
+    recurse (x : xs) =
       let (h, t) = List.break isTableName xs
-      in TableDef (BS.strip x) h : recurse t
+       in TableDef (BS.strip x) h : recurse t
 
     -- Return True if the line is a table name (two leading spaces).
     isTableName :: ByteString -> Bool
@@ -75,7 +77,7 @@ splitTableDefs =
 
 hasBlockNoColumn :: TableDef -> Bool
 hasBlockNoColumn =
-    List.any isBlockNo . tdColumns
+  List.any isBlockNo . tdColumns
   where
     isBlockNo :: ByteString -> Bool
     isBlockNo bs = "blockNo" `BS.isInfixOf` bs && "Int64" `BS.isInfixOf` bs
@@ -85,9 +87,11 @@ hasBlockNoColumn =
 
 findTablesWithDelete :: IO [ByteString]
 findTablesWithDelete =
-    List.sort . mapMaybe getTableName
-      . mapMaybe removeCommentsAndEmpty . getDeleteAfterBlockNo
-      <$> BS.readFile "cardano-db/src/Cardano/Db/Delete.hs"
+  List.sort
+    . mapMaybe getTableName
+    . mapMaybe removeCommentsAndEmpty
+    . getDeleteAfterBlockNo
+    <$> BS.readFile "cardano-db/src/Cardano/Db/Delete.hs"
   where
     getDeleteAfterBlockNo :: ByteString -> [ByteString]
     getDeleteAfterBlockNo =
@@ -128,8 +132,7 @@ redText s = codeRed ++ s ++ codeReset
 -- Remove comments and then remove empty lines.
 removeCommentsAndEmpty :: ByteString -> Maybe ByteString
 removeCommentsAndEmpty bs =
-   let start = fst $ BS.breakSubstring "--" bs
+  let start = fst $ BS.breakSubstring "--" bs
    in if BS.null (BS.strip start)
         then Nothing
         else Just start
-

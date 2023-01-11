@@ -1,40 +1,44 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Epoch
-  ( epochStartup
-  , epochInsert
-  ) where
+module Cardano.DbSync.Epoch (
+  epochStartup,
+  epochInsert,
+) where
 
-import           Cardano.Prelude hiding (from, on, replace)
-
-import           Cardano.BM.Trace (Trace, logError, logInfo)
-
+import Cardano.BM.Trace (Trace, logError, logInfo)
 import qualified Cardano.Chain.Block as Byron
-import           Cardano.Slotting.Slot (EpochNo (..))
-
-import           Control.Monad.Logger (LoggingT)
-import           Control.Monad.Trans.Control (MonadBaseControl)
-
-import           Data.IORef (IORef, atomicWriteIORef, newIORef, readIORef)
-
-import           Database.Esqueleto.Experimental (SqlBackend, desc, from, limit, orderBy, replace,
-                   select, table, unValue, val, where_, (==.), (^.))
-
-import           Cardano.Db (EntityField (..), EpochId)
+import Cardano.Db (EntityField (..), EpochId)
 import qualified Cardano.Db as DB
-
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.Types
-import           Cardano.DbSync.Util
-
-import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
-import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
-
-import           System.IO.Unsafe (unsafePerformIO)
+import Cardano.DbSync.Error
+import Cardano.DbSync.Types
+import Cardano.DbSync.Util
+import Cardano.Prelude hiding (from, on, replace)
+import Cardano.Slotting.Slot (EpochNo (..))
+import Control.Monad.Logger (LoggingT)
+import Control.Monad.Trans.Control (MonadBaseControl)
+import Data.IORef (IORef, atomicWriteIORef, newIORef, readIORef)
+import Database.Esqueleto.Experimental (
+  SqlBackend,
+  desc,
+  from,
+  limit,
+  orderBy,
+  replace,
+  select,
+  table,
+  unValue,
+  val,
+  where_,
+  (==.),
+  (^.),
+ )
+import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
+import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
+import System.IO.Unsafe (unsafePerformIO)
 
 -- Populating the Epoch table has two mode:
 --  * SyncLagging: when the node is far behind the chain tip and is just updating the DB. In this
@@ -77,15 +81,17 @@ epochInsert trce (BlockDetails cblk details) = do
     epochUpdate :: ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
     epochUpdate = do
       when (sdSlotTime details > sdCurrentTime details) $
-        liftIO . logError trce $ mconcat
-          [ "Slot time '", textShow (sdSlotTime details) ,  "' is in the future" ]
+        liftIO . logError trce $
+          mconcat
+            ["Slot time '", textShow (sdSlotTime details), "' is in the future"]
       insertBlock trce details
 
 -- -------------------------------------------------------------------------------------------------
 
-insertBlock
-    :: Trace IO Text -> SlotDetails
-    -> ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
+insertBlock ::
+  Trace IO Text ->
+  SlotDetails ->
+  ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
 insertBlock trce details = do
   mLatestCachedEpoch <- liftIO $ readIORef latestCachedEpochVar
   let lastCachedEpoch = fromMaybe 0 mLatestCachedEpoch
@@ -94,7 +100,8 @@ insertBlock trce details = do
   -- These cases are listed from the least likey to occur to the most
   -- likley to keep the logic sane.
 
-  if  | epochNum > 0 && isNothing mLatestCachedEpoch ->
+  if
+      | epochNum > 0 && isNothing mLatestCachedEpoch ->
           updateEpochNum 0 trce
       | epochNum >= lastCachedEpoch + 2 ->
           updateEpochNum (lastCachedEpoch + 1) trce
@@ -112,10 +119,10 @@ latestCachedEpochVar = unsafePerformIO $ newIORef Nothing -- Gets updated later.
 
 updateEpochNum :: (MonadBaseControl IO m, MonadIO m) => Word64 -> Trace IO Text -> ReaderT SqlBackend m (Either SyncNodeError ())
 updateEpochNum epochNum trce = do
-    mid <- queryEpochId epochNum
-    res <- maybe insertEpoch updateEpoch mid
-    liftIO $ atomicWriteIORef latestCachedEpochVar (Just epochNum)
-    pure res
+  mid <- queryEpochId epochNum
+  res <- maybe insertEpoch updateEpoch mid
+  liftIO $ atomicWriteIORef latestCachedEpochVar (Just epochNum)
+  pure res
   where
     updateEpoch :: MonadIO m => EpochId -> ReaderT SqlBackend m (Either SyncNodeError ())
     updateEpoch epochId = do

@@ -1,20 +1,19 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Cache.LRU
-  ( LRUCache (..)
-  , empty
-  , cleanup
-  , trim
-  , insert
-  , lookup
-  , getSize
-  , getCapacity
-  ) where
+module Cardano.DbSync.Cache.LRU (
+  LRUCache (..),
+  empty,
+  cleanup,
+  trim,
+  insert,
+  lookup,
+  getSize,
+  getCapacity,
+) where
 
-import           Cardano.Prelude hiding (empty)
-
-import           Data.OrdPSQ (OrdPSQ)
+import Cardano.Prelude hiding (empty)
+import Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as OrdPSQ
 
 -- Inspired by https://jaspervdj.be/posts/2015-02-24-lru-cache.html
@@ -27,14 +26,16 @@ data LRUCache k v = LRUCache
   }
 
 empty :: Word64 -> LRUCache k v
-empty capacity = LRUCache
+empty capacity =
+  LRUCache
     { cCapacity = capacity
     , cTick = 0
     , cQueue = OrdPSQ.empty
     }
 
 cleanup :: LRUCache k v -> LRUCache k v
-cleanup cache = cache
+cleanup cache =
+  cache
     { cTick = 0
     , cQueue = OrdPSQ.empty
     }
@@ -43,7 +44,7 @@ trim :: Ord k => LRUCache k v -> LRUCache k v
 trim cache
   | cTick cache == maxBound = empty (cCapacity cache)
   | fromIntegral (OrdPSQ.size $ cQueue cache) > cCapacity cache =
-      cache { cQueue = OrdPSQ.deleteMin (cQueue cache) }
+      cache {cQueue = OrdPSQ.deleteMin (cQueue cache)}
   | otherwise = cache
 
 insert :: Ord k => k -> v -> LRUCache k v -> LRUCache k v
@@ -60,12 +61,12 @@ lookup :: Ord k => k -> LRUCache k v -> Maybe (v, LRUCache k v)
 lookup k c =
   case OrdPSQ.alter lookupAndBump k (cQueue c) of
     (Nothing, _) -> Nothing
-    (Just x, q)  ->
-        let !c' = trim $ c {cTick = cTick c + 1, cQueue = q}
-        in Just (x, c')
+    (Just x, q) ->
+      let !c' = trim $ c {cTick = cTick c + 1, cQueue = q}
+       in Just (x, c')
   where
-    lookupAndBump Nothing       = (Nothing, Nothing)
-    lookupAndBump (Just (_, x)) = (Just x,  Just (cTick c, x))
+    lookupAndBump Nothing = (Nothing, Nothing)
+    lookupAndBump (Just (_, x)) = (Just x, Just (cTick c, x))
 
 getSize :: LRUCache k v -> Int
 getSize = OrdPSQ.size . cQueue

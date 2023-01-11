@@ -1,33 +1,44 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Query
-  ( queryPoolHashId
-  , queryStakeAddress
-  , queryStakeRefPtr
-  , queryResolveInput
-  , queryResolveInputCredentials
-  , queryPoolUpdateByBlock
-  ) where
+module Cardano.DbSync.Era.Shelley.Query (
+  queryPoolHashId,
+  queryStakeAddress,
+  queryStakeRefPtr,
+  queryResolveInput,
+  queryResolveInputCredentials,
+  queryPoolUpdateByBlock,
+) where
 
-import           Cardano.Prelude hiding (Ptr, from, maybeToEither, on)
-
-import           Cardano.Db
+import Cardano.Db
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import           Cardano.DbSync.Util
-
-import           Cardano.Ledger.BaseTypes (CertIx (..), TxIx (..))
-import           Cardano.Ledger.Credential (Ptr (..))
-
-import           Cardano.Slotting.Slot (SlotNo (..))
-
-import           Database.Esqueleto.Experimental (SqlBackend, Value (..), desc, from, innerJoin,
-                   just, limit, on, orderBy, select, table, val, where_, (:&) ((:&)), (==.), (^.))
-
+import Cardano.DbSync.Util
+import Cardano.Ledger.BaseTypes (CertIx (..), TxIx (..))
+import Cardano.Ledger.Credential (Ptr (..))
+import Cardano.Prelude hiding (Ptr, from, maybeToEither, on)
+import Cardano.Slotting.Slot (SlotNo (..))
+import Database.Esqueleto.Experimental (
+  SqlBackend,
+  Value (..),
+  desc,
+  from,
+  innerJoin,
+  just,
+  limit,
+  on,
+  orderBy,
+  select,
+  table,
+  val,
+  where_,
+  (:&) ((:&)),
+  (==.),
+  (^.),
+ )
 
 {- HLINT ignore "Fuse on/on" -}
 
@@ -39,10 +50,10 @@ queryPoolHashId hash = do
     pure (phash ^. PoolHashId)
   pure $ unValue <$> listToMaybe res
 
-queryStakeAddress
-    :: MonadIO m
-    => ByteString
-    -> ReaderT SqlBackend m (Either LookupFail StakeAddressId)
+queryStakeAddress ::
+  MonadIO m =>
+  ByteString ->
+  ReaderT SqlBackend m (Either LookupFail StakeAddressId)
 queryStakeAddress addr = do
   res <- select $ do
     saddr <- from $ table @StakeAddress
@@ -56,17 +67,18 @@ queryResolveInput txIn =
 
 queryResolveInputCredentials :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (Maybe ByteString, Bool))
 queryResolveInputCredentials txIn = do
-    queryTxOutCredentials (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
+  queryTxOutCredentials (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
 
 queryStakeRefPtr :: MonadIO m => Ptr -> ReaderT SqlBackend m (Maybe StakeAddressId)
 queryStakeRefPtr (Ptr (SlotNo slot) (TxIx txIx) (CertIx certIx)) = do
   res <- select $ do
     (blk :& tx :& sr) <-
-      from $ table @Block
-      `innerJoin` table @Tx
-      `on` (\(blk :& tx) -> blk ^. BlockId ==. tx ^. TxBlockId)
-      `innerJoin` table @StakeRegistration
-      `on` (\(_blk :& tx :& sr) -> sr ^. StakeRegistrationTxId ==. tx ^. TxId)
+      from
+        $ table @Block
+          `innerJoin` table @Tx
+        `on` (\(blk :& tx) -> blk ^. BlockId ==. tx ^. TxBlockId)
+          `innerJoin` table @StakeRegistration
+        `on` (\(_blk :& tx :& sr) -> sr ^. StakeRegistrationTxId ==. tx ^. TxId)
 
     where_ (blk ^. BlockSlotNo ==. just (val slot))
     where_ (tx ^. TxBlockIndex ==. val (fromIntegral txIx))
@@ -81,15 +93,16 @@ queryStakeRefPtr (Ptr (SlotNo slot) (TxIx txIx) (CertIx certIx)) = do
 -- Check if there are other PoolUpdates in the same blocks for the same pool
 queryPoolUpdateByBlock :: MonadIO m => BlockId -> PoolHashId -> ReaderT SqlBackend m Bool
 queryPoolUpdateByBlock blkId poolHashId = do
-    res <- select $ do
-      (blk :& _tx :& poolUpdate) <-
-        from $ table @Block
-        `innerJoin` table @Tx
+  res <- select $ do
+    (blk :& _tx :& poolUpdate) <-
+      from
+        $ table @Block
+          `innerJoin` table @Tx
         `on` (\(blk :& tx) -> blk ^. BlockId ==. tx ^. TxBlockId)
-        `innerJoin` table @PoolUpdate
+          `innerJoin` table @PoolUpdate
         `on` (\(_blk :& tx :& poolUpdate) -> tx ^. TxId ==. poolUpdate ^. PoolUpdateRegisteredTxId)
-      where_ (poolUpdate ^. PoolUpdateHashId ==. val poolHashId)
-      where_ (blk ^. BlockId ==. val blkId)
-      limit 1
-      pure (blk ^. BlockEpochNo)
-    pure $ not (null res)
+    where_ (poolUpdate ^. PoolUpdateHashId ==. val poolHashId)
+    where_ (blk ^. BlockId ==. val blkId)
+    limit 1
+    pure (blk ^. BlockEpochNo)
+  pure $ not (null res)

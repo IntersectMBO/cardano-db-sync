@@ -1,21 +1,19 @@
-module Cardano.Db.RevFromGit
-  ( gitRevFromGit
-  ) where
+module Cardano.Db.RevFromGit (
+  gitRevFromGit,
+) where
 
-import           Control.Exception (catch)
-
+import Control.Exception (catch)
 import qualified Language.Haskell.TH as TH
-
-import           System.Exit (ExitCode (..))
-import           System.IO (hPutStrLn, stderr)
-import           System.IO.Error (isDoesNotExistError)
-import           System.Process (readProcessWithExitCode)
+import System.Exit (ExitCode (..))
+import System.IO (hPutStrLn, stderr)
+import System.IO.Error (isDoesNotExistError)
+import System.Process (readProcessWithExitCode)
 
 -- | Git revision found by running git rev-parse. If git could not be
 -- executed, then this will be an empty string.
 gitRevFromGit :: TH.Q TH.Exp
 gitRevFromGit =
-    TH.LitE . TH.StringL <$> TH.runIO runGitRevParse
+  TH.LitE . TH.StringL <$> TH.runIO runGitRevParse
   where
     runGitRevParse :: IO String
     runGitRevParse = do

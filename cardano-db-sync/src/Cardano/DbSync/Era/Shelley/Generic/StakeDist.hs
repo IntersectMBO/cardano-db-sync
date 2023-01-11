@@ -2,60 +2,59 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Generic.StakeDist
-  ( StakeSliceRes (..)
-  , StakeSlice (..)
-  , getSecurityParameter
-  , getStakeSlice
-  ) where
+module Cardano.DbSync.Era.Shelley.Generic.StakeDist (
+  StakeSliceRes (..),
+  StakeSlice (..),
+  getSecurityParameter,
+  getStakeSlice,
+) where
 
-import           Cardano.Prelude
-import           Prelude (id)
-
-import           Cardano.Ledger.Coin (Coin (..))
+import Cardano.DbSync.Types
+import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Compactible as Ledger
-import           Cardano.Ledger.Credential (Credential)
-import           Cardano.Ledger.Era (Crypto)
-import           Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
+import Cardano.Ledger.Credential (Credential)
+import Cardano.Ledger.Era (Crypto)
+import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import qualified Cardano.Ledger.Shelley.EpochBoundary as Shelley
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
-
-import           Cardano.DbSync.Types
-
+import Cardano.Prelude
 import qualified Data.Map.Strict as Map
-import qualified Data.Vector.Generic as VG
-import           Data.VMap (VB, VMap (..), VP)
+import Data.VMap (VB, VMap (..), VP)
 import qualified Data.VMap as VMap
-
-import           Ouroboros.Consensus.Block
-import           Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
-import           Ouroboros.Consensus.Config
-import           Ouroboros.Consensus.HardFork.Combinator
-import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
-import           Ouroboros.Consensus.Node.ProtocolInfo
-import           Ouroboros.Consensus.Protocol.Abstract
-import           Ouroboros.Consensus.Shelley.Ledger
+import qualified Data.Vector.Generic as VG
+import Ouroboros.Consensus.Block
+import Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
+import Ouroboros.Consensus.Config
+import Ouroboros.Consensus.HardFork.Combinator
+import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
+import Ouroboros.Consensus.Node.ProtocolInfo
+import Ouroboros.Consensus.Protocol.Abstract
+import Ouroboros.Consensus.Shelley.Ledger
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
+import Prelude (id)
 
-data StakeSliceRes =
-    Slice !StakeSlice !Bool -- True if this is the final slice for this epoch. Can be used for logging.
+data StakeSliceRes
+  = Slice !StakeSlice !Bool -- True if this is the final slice for this epoch. Can be used for logging.
   | NoSlices
 
 data StakeSlice = StakeSlice
   { sliceEpochNo :: !EpochNo
   , sliceDistr :: !(Map StakeCred (Coin, PoolKeyHash))
-  } deriving Eq
+  }
+  deriving (Eq)
 
 emptySlice :: EpochNo -> StakeSlice
 emptySlice epoch = StakeSlice epoch Map.empty
 
-getSecurityParameter :: ConsensusProtocol (BlockProtocol blk)
-                     => ProtocolInfo IO blk -> Word64
-getSecurityParameter =  maxRollbacks . configSecurityParam . pInfoConfig
+getSecurityParameter ::
+  ConsensusProtocol (BlockProtocol blk) =>
+  ProtocolInfo IO blk ->
+  Word64
+getSecurityParameter = maxRollbacks . configSecurityParam . pInfoConfig
 
 -- 'sliceIndex' can match the epochBlockNo for every block.
 --
@@ -65,9 +64,14 @@ getSecurityParameter =  maxRollbacks . configSecurityParam . pInfoConfig
 -- On mainnet, for a value minSliceSize = 2000, it will be used as the actual size of slices
 -- until the size of delegations grows up to 8.6M, in which case, the size of slices
 -- will be adjusted.
-getStakeSlice :: ConsensusProtocol (BlockProtocol blk)
-              => ProtocolInfo IO blk
-              -> EpochNo -> Word64 -> Word64 -> ExtLedgerState CardanoBlock -> StakeSliceRes
+getStakeSlice ::
+  ConsensusProtocol (BlockProtocol blk) =>
+  ProtocolInfo IO blk ->
+  EpochNo ->
+  Word64 ->
+  Word64 ->
+  ExtLedgerState CardanoBlock ->
+  StakeSliceRes
 getStakeSlice pInfo epoch !sliceIndex !minSliceSize els =
   case ledgerState els of
     LedgerStateByron _ -> NoSlices
@@ -77,14 +81,20 @@ getStakeSlice pInfo epoch !sliceIndex !minSliceSize els =
     LedgerStateAlonzo als -> genericStakeSlice pInfo epoch sliceIndex minSliceSize als
     LedgerStateBabbage bls -> genericStakeSlice pInfo epoch sliceIndex minSliceSize bls
 
-genericStakeSlice :: forall era c blk p. (c ~ StandardCrypto, Crypto era ~ c, ConsensusProtocol (BlockProtocol blk))
-                  => ProtocolInfo IO blk -> EpochNo -> Word64 -> Word64
-                  -> LedgerState (ShelleyBlock p era) -> StakeSliceRes
+genericStakeSlice ::
+  forall era c blk p.
+  (c ~ StandardCrypto, Crypto era ~ c, ConsensusProtocol (BlockProtocol blk)) =>
+  ProtocolInfo IO blk ->
+  EpochNo ->
+  Word64 ->
+  Word64 ->
+  LedgerState (ShelleyBlock p era) ->
+  StakeSliceRes
 genericStakeSlice pInfo epoch sliceIndex minSliceSize lstate
-    | index > delegationsLen = NoSlices
-    | index == delegationsLen = Slice (emptySlice epoch) True
-    | index + epochSliceSize > delegationsLen = Slice (mkSlice (delegationsLen - index)) True
-    | otherwise = Slice (mkSlice epochSliceSize) False
+  | index > delegationsLen = NoSlices
+  | index == delegationsLen = Slice (emptySlice epoch) True
+  | index + epochSliceSize > delegationsLen = Slice (mkSlice (delegationsLen - index)) True
+  | otherwise = Slice (mkSlice epochSliceSize) False
   where
     -- We use '_pstakeSet' here instead of '_pstateMark' because the stake addresses for the
     -- later may not have been added to the database yet. That means that when these values
@@ -92,8 +102,9 @@ genericStakeSlice pInfo epoch sliceIndex minSliceSize lstate
     -- epoch plus one.
 
     stakeSnapshot :: Shelley.SnapShot c
-    stakeSnapshot = Shelley._pstakeSet . Shelley.esSnapshots . Shelley.nesEs
-                $ Consensus.shelleyLedgerState lstate
+    stakeSnapshot =
+      Shelley._pstakeSet . Shelley.esSnapshots . Shelley.nesEs $
+        Consensus.shelleyLedgerState lstate
 
     delegations :: VMap.KVVector VB VB (Credential 'Staking c, KeyHash 'StakePool c)
     delegations = VMap.unVMap $ Shelley._delegations stakeSnapshot
@@ -112,7 +123,7 @@ genericStakeSlice pInfo epoch sliceIndex minSliceSize lstate
     -- after that will be empty.
     epochSliceSize :: Word64
     epochSliceSize =
-        max minSliceSize defaultEpochSliceSize
+      max minSliceSize defaultEpochSliceSize
       where
         -- On mainnet this is 2160
         k :: Word64
@@ -133,14 +144,16 @@ genericStakeSlice pInfo epoch sliceIndex minSliceSize lstate
 
     mkSlice :: Word64 -> StakeSlice
     mkSlice size =
-        StakeSlice
-          { sliceEpochNo = epoch
-          , sliceDistr = distribution
-          }
+      StakeSlice
+        { sliceEpochNo = epoch
+        , sliceDistr = distribution
+        }
       where
         delegationsSliced :: VMap VB VB (Credential 'Staking c) (KeyHash 'StakePool c)
         delegationsSliced = VMap $ VG.slice (fromIntegral index) (fromIntegral size) delegations
 
         distribution :: Map StakeCred (Coin, PoolKeyHash)
-        distribution = VMap.toMap $
-          VMap.mapMaybe id $ VMap.mapWithKey (\k p -> (, p) <$> lookupStake k) delegationsSliced
+        distribution =
+          VMap.toMap $
+            VMap.mapMaybe id $
+              VMap.mapWithKey (\k p -> (,p) <$> lookupStake k) delegationsSliced

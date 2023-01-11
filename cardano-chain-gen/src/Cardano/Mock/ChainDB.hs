@@ -4,28 +4,26 @@
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Cardano.Mock.ChainDB
-  ( ChainDB (..)
-  , initChainDB
-  , headTip
-  , currentState
-  , replaceGenesisDB
-  , extendChainDB
-  , findFirstPoint
-  , rollbackChainDB
-  , findPointByBlockNo
-  , currentBlockNo
-  ) where
+module Cardano.Mock.ChainDB (
+  ChainDB (..),
+  initChainDB,
+  headTip,
+  currentState,
+  replaceGenesisDB,
+  extendChainDB,
+  findFirstPoint,
+  rollbackChainDB,
+  findPointByBlockNo,
+  currentBlockNo,
+) where
 
-import           Ouroboros.Consensus.Block
-import           Ouroboros.Consensus.Config
-import           Ouroboros.Consensus.Ledger.Abstract
+import Cardano.Mock.Chain
+import Ouroboros.Consensus.Block
+import Ouroboros.Consensus.Config
+import Ouroboros.Consensus.Ledger.Abstract
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
-import           Ouroboros.Consensus.Ledger.SupportsProtocol
-
-import           Ouroboros.Network.Block (Tip (..))
-
-import           Cardano.Mock.Chain
+import Ouroboros.Consensus.Ledger.SupportsProtocol
+import Ouroboros.Network.Block (Tip (..))
 
 -- | Thin layer around 'Chain' that knows how to apply blocks and maintain
 -- new and old states. The state here, which is the 'Chain', is not a MVar,
@@ -73,7 +71,7 @@ findFirstPoint points chainDB = findFirstPointChain points (cchain chainDB)
 rollbackChainDB :: HasHeader block => ChainDB block -> Point block -> Maybe (ChainDB block)
 rollbackChainDB chainDB p = do
   chain <- rollback (cchain chainDB) p
-  Just $ chainDB { cchain = chain}
+  Just $ chainDB {cchain = chain}
 
 findPointByBlockNo :: HasHeader block => ChainDB block -> BlockNo -> Maybe (Point block)
 findPointByBlockNo chainDB =

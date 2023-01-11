@@ -1,35 +1,31 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Cardano.Db.PGConfig
-  ( PGConfig (..)
-  , PGPassError (..)
-  , PGPassFile (..)
-  , PGPassSource (..)
-  , parsePGConfig
-  , readPGPassDefault
-  , readPGPass
-  , readPGPassFileEnv
-  , readPGPassFile
-  , readPGPassFileExit
-  , renderPGPassError
-  , toConnectionString
-  ) where
+module Cardano.Db.PGConfig (
+  PGConfig (..),
+  PGPassError (..),
+  PGPassFile (..),
+  PGPassSource (..),
+  parsePGConfig,
+  readPGPassDefault,
+  readPGPass,
+  readPGPassFileEnv,
+  readPGPassFile,
+  readPGPassFileExit,
+  renderPGPassError,
+  toConnectionString,
+) where
 
-import           Cardano.Db.Text
-
-import           Control.Exception (IOException)
+import Cardano.Db.Text
+import Control.Exception (IOException)
 import qualified Control.Exception as Exception
-
-import           Data.ByteString.Char8 (ByteString)
+import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
-import           Data.Text (Text)
+import Data.Text (Text)
 import qualified Data.Text as Text
-
-import           Database.Persist.Postgresql (ConnectionString)
-
-import           System.Environment (lookupEnv, setEnv)
-import           System.Posix.User (getEffectiveUserName)
+import Database.Persist.Postgresql (ConnectionString)
+import System.Environment (lookupEnv, setEnv)
+import System.Posix.User (getEffectiveUserName)
 
 data PGPassSource
   = PGPassDefaultEnv
@@ -44,7 +40,8 @@ data PGConfig = PGConfig
   , pgcDbname :: ByteString
   , pgcUser :: ByteString
   , pgcPassword :: ByteString
-  } deriving Show
+  }
+  deriving (Show)
 
 newtype PGPassFile
   = PGPassFile FilePath
@@ -52,11 +49,20 @@ newtype PGPassFile
 toConnectionString :: PGConfig -> ConnectionString
 toConnectionString pgc =
   BS.concat
-    [ "host=", pgcHost pgc, " "
-    , "port=", pgcPort pgc, " "
-    , "user=", pgcUser pgc, " "
-    , "dbname=", pgcDbname pgc, " "
-    , "password=", pgcPassword pgc
+    [ "host="
+    , pgcHost pgc
+    , " "
+    , "port="
+    , pgcPort pgc
+    , " "
+    , "user="
+    , pgcUser pgc
+    , " "
+    , "dbname="
+    , pgcDbname pgc
+    , " "
+    , "password="
+    , pgcPassword pgc
     ]
 
 readPGPassDefault :: IO (Either PGPassError PGConfig)
@@ -80,22 +86,22 @@ readPGPassFileEnv name = do
 -- | Read the PostgreSQL configuration from the specified file.
 readPGPassFile :: PGPassFile -> IO (Either PGPassError PGConfig)
 readPGPassFile (PGPassFile fpath) = do
-    ebs <- Exception.try $ BS.readFile fpath
-    case ebs of
-      Left err -> pure $ Left (FailedToReadPGPassFile fpath err)
-      Right bs -> extract bs
+  ebs <- Exception.try $ BS.readFile fpath
+  case ebs of
+    Left err -> pure $ Left (FailedToReadPGPassFile fpath err)
+    Right bs -> extract bs
   where
     extract :: ByteString -> IO (Either PGPassError PGConfig)
     extract bs =
       case BS.lines bs of
-        (b:_) -> parsePGConfig b
+        (b : _) -> parsePGConfig b
         _ -> pure $ Left (FailedToParsePGPassConfig bs)
 
 parsePGConfig :: ByteString -> IO (Either PGPassError PGConfig)
 parsePGConfig bs =
-    case BS.split ':' bs of
-      [h, pt, d, u, pwd] -> replaceUser (PGConfig h pt d u pwd)
-      _ -> pure $ Left (FailedToParsePGPassConfig bs)
+  case BS.split ':' bs of
+    [h, pt, d, u, pwd] -> replaceUser (PGConfig h pt d u pwd)
+    _ -> pure $ Left (FailedToParsePGPassConfig bs)
   where
     replaceUser :: PGConfig -> IO (Either PGPassError PGConfig)
     replaceUser pgc
@@ -106,8 +112,7 @@ parsePGConfig bs =
             Left (err :: IOException) ->
               pure $ Left (UserFailed err)
             Right user ->
-              pure $ Right (pgc { pgcUser = BS.pack user })
-
+              pure $ Right (pgc {pgcUser = BS.pack user})
 
 -- | Read 'PGPassFile' into 'PGConfig'.
 -- If it fails it will raise an error.
@@ -131,15 +136,19 @@ renderPGPassError :: PGPassError -> Text
 renderPGPassError pge =
   case pge of
     EnvVarableNotSet str ->
-      mconcat [ "Environment variable '", Text.pack str, " not set." ]
+      mconcat ["Environment variable '", Text.pack str, " not set."]
     UserFailed err ->
       mconcat
         [ "readPGPassFile: User in pgpass file was specified as '*' but "
-        , "getEffectiveUserName failed with ", textShow err
+        , "getEffectiveUserName failed with "
+        , textShow err
         ]
     FailedToReadPGPassFile fpath err ->
       mconcat
-        [ "Not able to read PGPassFile at ", textShow fpath, ".", "Failed with "
+        [ "Not able to read PGPassFile at "
+        , textShow fpath
+        , "."
+        , "Failed with "
         , textShow err
         ]
     FailedToParsePGPassConfig bs ->

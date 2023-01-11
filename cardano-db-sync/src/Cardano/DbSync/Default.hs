@@ -1,77 +1,75 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Cardano.DbSync.Default
-  ( insertListBlocks
-  ) where
+{-# LANGUAGE NoImplicitPrelude #-}
 
+module Cardano.DbSync.Default (
+  insertListBlocks,
+) where
 
-import           Cardano.Prelude
-
-import           Cardano.BM.Trace (logInfo)
-
+import Cardano.BM.Trace (logInfo)
 import qualified Cardano.Db as DB
-
-import           Cardano.DbSync.Api
-import           Cardano.DbSync.Cache
-import           Cardano.DbSync.Epoch
-import           Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
-import           Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
-import           Cardano.DbSync.Era.Shelley.Adjust (adjustEpochRewards)
+import Cardano.DbSync.Api
+import Cardano.DbSync.Cache
+import Cardano.DbSync.Epoch
+import Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
+import Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
+import Cardano.DbSync.Era.Shelley.Adjust (adjustEpochRewards)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import           Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
-import           Cardano.DbSync.Era.Shelley.Insert.Epoch (insertPoolDepositRefunds, insertRewards)
-import           Cardano.DbSync.Era.Shelley.Validate (validateEpochRewards)
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.LedgerState (ApplyResult (..), LedgerEvent (..),
-                   applyBlockAndSnapshot, defaultApplyResult)
-import           Cardano.DbSync.LocalStateQuery
-import           Cardano.DbSync.Rollback
-import           Cardano.DbSync.Types
-import           Cardano.DbSync.Util
-
+import Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
+import Cardano.DbSync.Era.Shelley.Insert.Epoch (insertPoolDepositRefunds, insertRewards)
+import Cardano.DbSync.Era.Shelley.Validate (validateEpochRewards)
+import Cardano.DbSync.Error
+import Cardano.DbSync.LedgerState (
+  ApplyResult (..),
+  LedgerEvent (..),
+  applyBlockAndSnapshot,
+  defaultApplyResult,
+ )
+import Cardano.DbSync.LocalStateQuery
+import Cardano.DbSync.Rollback
+import Cardano.DbSync.Types
+import Cardano.DbSync.Util
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
-
-import           Cardano.Slotting.Slot (EpochNo (..))
-
-import           Control.Monad.Logger (LoggingT)
-import           Control.Monad.Trans.Control (MonadBaseControl)
-import           Control.Monad.Trans.Except.Extra (newExceptT)
-
+import Cardano.Prelude
+import Cardano.Slotting.Slot (EpochNo (..))
+import Control.Monad.Logger (LoggingT)
+import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Except.Extra (newExceptT)
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
+
 -- import qualified Data.Text as Text
 
-import           Database.Persist.SqlBackend.Internal
-import           Database.Persist.SqlBackend.Internal.StatementCache
-
-import           Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
+import Database.Persist.SqlBackend.Internal
+import Database.Persist.SqlBackend.Internal.StatementCache
+import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
-import           Ouroboros.Network.Block (blockHash, blockNo, getHeaderFields)
+import Ouroboros.Network.Block (blockHash, blockNo, getHeaderFields)
 
-
-insertListBlocks
-    :: SyncEnv -> [CardanoBlock]
-    -> IO (Either SyncNodeError ())
+insertListBlocks ::
+  SyncEnv ->
+  [CardanoBlock] ->
+  IO (Either SyncNodeError ())
 insertListBlocks env blocks = do
-    backend <- getBackend env
-    DB.runDbIohkLogging backend tracer .
-      runExceptT $ do
-        traverse_ (applyAndInsertBlockMaybe env) blocks
+  backend <- getBackend env
+  DB.runDbIohkLogging backend tracer
+    . runExceptT
+    $ do
+      traverse_ (applyAndInsertBlockMaybe env) blocks
   where
     tracer = getTrace env
 
-applyAndInsertBlockMaybe
-    :: SyncEnv -> CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
+applyAndInsertBlockMaybe ::
+  SyncEnv -> CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 applyAndInsertBlockMaybe env cblk = do
-    (!applyRes, !tookSnapshot) <- liftIO mkApplyResult
-    bl <- liftIO $ isConsistent env
-    if bl then
-      -- In the usual case it will be consistent so we don't need to do any queries. Just insert the block
+  (!applyRes, !tookSnapshot) <- liftIO mkApplyResult
+  bl <- liftIO $ isConsistent env
+  if bl
+    then -- In the usual case it will be consistent so we don't need to do any queries. Just insert the block
       insertBlock env cblk applyRes False tookSnapshot
     else do
       blockIsInDbAlready <- lift (isRight <$> DB.queryBlockId (SBS.fromShort . Consensus.getOneEraHash $ blockHash cblk))
@@ -80,8 +78,10 @@ applyAndInsertBlockMaybe env cblk = do
       unless blockIsInDbAlready $ do
         liftIO . logInfo tracer $
           mconcat
-           [ "Received block which is not in the db with ", textShow (getHeaderFields cblk)
-           , ". Time to restore consistency."]
+            [ "Received block which is not in the db with "
+            , textShow (getHeaderFields cblk)
+            , ". Time to restore consistency."
+            ]
         rollbackFromBlockNo env (blockNo cblk)
         insertBlock env cblk applyRes True tookSnapshot
         liftIO $ setConsistentLevel env Consistent
@@ -90,47 +90,72 @@ applyAndInsertBlockMaybe env cblk = do
 
     mkApplyResult :: IO (ApplyResult, Bool)
     mkApplyResult = do
-      if hasLedgerState env then
-        applyBlockAndSnapshot (envLedger env) cblk
-      else do
-        slotDetails <- getSlotDetailsNode (envNoLedgerEnv env) (cardanoBlockSlotNo cblk)
-        pure (defaultApplyResult slotDetails, False)
+      if hasLedgerState env
+        then applyBlockAndSnapshot (envLedger env) cblk
+        else do
+          slotDetails <- getSlotDetailsNode (envNoLedgerEnv env) (cardanoBlockSlotNo cblk)
+          pure (defaultApplyResult slotDetails, False)
 
-insertBlock
-    :: SyncEnv -> CardanoBlock -> ApplyResult -> Bool -> Bool
-    -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
+insertBlock ::
+  SyncEnv ->
+  CardanoBlock ->
+  ApplyResult ->
+  Bool ->
+  Bool ->
+  ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 insertBlock env cblk applyRes firstAfterRollback tookSnapshot = do
-    !epochEvents <- liftIO $ atomically $ generateNewEpochEvents env (apSlotDetails applyRes)
-    let !applyResult = applyRes { apEvents = sort $ epochEvents <> apEvents applyRes}
-    let !details = apSlotDetails applyResult
-    let !withinTwoMin = isWithinTwoMin details
-    let !withinHalfHour = isWithinHalfHour details
-    insertLedgerEvents env (sdEpochNo details) (apEvents applyResult)
-    insertEpoch details
-    let shouldLog = hasEpochStartEvent (apEvents applyResult) || firstAfterRollback
-    let isMember poolId = Set.member poolId (apPoolsRegistered applyResult)
-    let insertShelley blk =
-          insertShelleyBlock env shouldLog withinTwoMin withinHalfHour blk
-            details isMember (apNewEpoch applyResult) (apStakeSlice applyResult)
-    case cblk of
-      BlockByron blk -> newExceptT $
+  !epochEvents <- liftIO $ atomically $ generateNewEpochEvents env (apSlotDetails applyRes)
+  let !applyResult = applyRes {apEvents = sort $ epochEvents <> apEvents applyRes}
+  let !details = apSlotDetails applyResult
+  let !withinTwoMin = isWithinTwoMin details
+  let !withinHalfHour = isWithinHalfHour details
+  insertLedgerEvents env (sdEpochNo details) (apEvents applyResult)
+  insertEpoch details
+  let shouldLog = hasEpochStartEvent (apEvents applyResult) || firstAfterRollback
+  let isMember poolId = Set.member poolId (apPoolsRegistered applyResult)
+  let insertShelley blk =
+        insertShelleyBlock
+          env
+          shouldLog
+          withinTwoMin
+          withinHalfHour
+          blk
+          details
+          isMember
+          (apNewEpoch applyResult)
+          (apStakeSlice applyResult)
+  case cblk of
+    BlockByron blk ->
+      newExceptT $
         insertByronBlock env shouldLog blk details
-      BlockShelley blk -> newExceptT $ insertShelley $
-        Generic.fromShelleyBlock blk
-      BlockAllegra blk -> newExceptT $ insertShelley $
-        Generic.fromAllegraBlock blk
-      BlockMary blk -> newExceptT $ insertShelley $
-        Generic.fromMaryBlock blk
-      BlockAlonzo blk -> newExceptT $ insertShelley $
-        Generic.fromAlonzoBlock (getPrices applyResult) blk
-      BlockBabbage blk -> newExceptT $ insertShelley $
-        Generic.fromBabbageBlock (getPrices applyResult) blk
-    lift $ commitOrIndexes withinTwoMin withinHalfHour
+    BlockShelley blk ->
+      newExceptT $
+        insertShelley $
+          Generic.fromShelleyBlock blk
+    BlockAllegra blk ->
+      newExceptT $
+        insertShelley $
+          Generic.fromAllegraBlock blk
+    BlockMary blk ->
+      newExceptT $
+        insertShelley $
+          Generic.fromMaryBlock blk
+    BlockAlonzo blk ->
+      newExceptT $
+        insertShelley $
+          Generic.fromAlonzoBlock (getPrices applyResult) blk
+    BlockBabbage blk ->
+      newExceptT $
+        insertShelley $
+          Generic.fromBabbageBlock (getPrices applyResult) blk
+  lift $ commitOrIndexes withinTwoMin withinHalfHour
   where
     tracer = getTrace env
 
-    insertEpoch details = when (soptExtended $ envOptions env) .
-      newExceptT $ epochInsert tracer (BlockDetails cblk details)
+    insertEpoch details =
+      when (soptExtended $ envOptions env)
+        . newExceptT
+        $ epochInsert tracer (BlockDetails cblk details)
 
     getPrices :: ApplyResult -> Maybe Ledger.Prices
     getPrices applyResult = case apPrices applyResult of
@@ -141,11 +166,11 @@ insertBlock env cblk applyRes firstAfterRollback tookSnapshot = do
     commitOrIndexes :: Bool -> Bool -> ReaderT SqlBackend (LoggingT IO) ()
     commitOrIndexes withinTwoMin withinHalfHour = do
       commited <-
-        if withinTwoMin || tookSnapshot then do
-          DB.transactionCommit
-          pure True
-        else
-          pure False
+        if withinTwoMin || tookSnapshot
+          then do
+            DB.transactionCommit
+            pure True
+          else pure False
       when withinHalfHour $ do
         ranIndexes <- liftIO $ getRanIndexes env
         unless ranIndexes $ do
@@ -160,12 +185,14 @@ insertBlock env cblk applyRes firstAfterRollback tookSnapshot = do
 
 -- -------------------------------------------------------------------------------------------------
 
-insertLedgerEvents
-    :: (MonadBaseControl IO m, MonadIO m)
-    => SyncEnv -> EpochNo -> [LedgerEvent]
-    -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+insertLedgerEvents ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
+  EpochNo ->
+  [LedgerEvent] ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertLedgerEvents env currentEpochNo@(EpochNo curEpoch) =
-    mapM_ handler
+  mapM_ handler
   where
     tracer = getTrace env
     lenv = envLedger env
@@ -174,16 +201,18 @@ insertLedgerEvents env currentEpochNo@(EpochNo curEpoch) =
 
     subFromCurrentEpoch :: Word64 -> EpochNo
     subFromCurrentEpoch m =
-      if unEpochNo currentEpochNo >= m then EpochNo $ unEpochNo currentEpochNo - m
-      else EpochNo 0
+      if unEpochNo currentEpochNo >= m
+        then EpochNo $ unEpochNo currentEpochNo - m
+        else EpochNo 0
 
     toSyncState :: SyncState -> DB.SyncState
     toSyncState SyncLagging = DB.SyncLagging
     toSyncState SyncFollowing = DB.SyncFollowing
 
-    handler
-        :: (MonadBaseControl IO m, MonadIO m)
-        => LedgerEvent -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+    handler ::
+      (MonadBaseControl IO m, MonadIO m) =>
+      LedgerEvent ->
+      ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     handler ev =
       case ev of
         LedgerNewEpoch en ss -> do

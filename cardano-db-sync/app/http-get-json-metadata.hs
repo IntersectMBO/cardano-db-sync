@@ -1,35 +1,39 @@
 {-# LANGUAGE OverloadedStrings #-}
-import           Cardano.Db (PoolMetaHash (..), PoolUrl (..))
 
-import           Cardano.DbSync (FetchError (..), SimplifiedPoolOfflineData (..),
-                   httpGetPoolOfflineData, parsePoolUrl, renderFetchError)
-
-import           Control.Monad.IO.Class (liftIO)
-import           Control.Monad.Trans.Except (ExceptT)
-import           Control.Monad.Trans.Except.Exit (orDie)
-
+import Cardano.Db (PoolMetaHash (..), PoolUrl (..))
+import Cardano.DbSync (
+  FetchError (..),
+  SimplifiedPoolOfflineData (..),
+  httpGetPoolOfflineData,
+  parsePoolUrl,
+  renderFetchError,
+ )
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Except (ExceptT)
+import Control.Monad.Trans.Except.Exit (orDie)
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
-
 import qualified Network.HTTP.Client as Http
-import           Network.HTTP.Client.TLS (tlsManagerSettings)
-
-import           System.Console.ANSI (setSGRCode)
-import           System.Console.ANSI.Types (Color (..), ColorIntensity (..), ConsoleLayer (..),
-                   SGR (..))
-
-import           System.Environment (getArgs, getProgName)
-import           System.Exit (exitFailure)
+import Network.HTTP.Client.TLS (tlsManagerSettings)
+import System.Console.ANSI (setSGRCode)
+import System.Console.ANSI.Types (
+  Color (..),
+  ColorIntensity (..),
+  ConsoleLayer (..),
+  SGR (..),
+ )
+import System.Environment (getArgs, getProgName)
+import System.Exit (exitFailure)
 
 main :: IO ()
 main = do
-    xs <- getArgs
-    case xs of
-      [url] -> runHttpGet (PoolUrl $ Text.pack url) Nothing
-      [url, hash] -> runHttpGet (PoolUrl $ Text.pack url) (Just $ parseHash hash)
-      _otherwise -> usageExit
+  xs <- getArgs
+  case xs of
+    [url] -> runHttpGet (PoolUrl $ Text.pack url) Nothing
+    [url, hash] -> runHttpGet (PoolUrl $ Text.pack url) (Just $ parseHash hash)
+    _otherwise -> usageExit
   where
     parseHash :: String -> PoolMetaHash
     parseHash str =
@@ -42,8 +46,9 @@ main = do
 usageExit :: IO ()
 usageExit = do
   name <- getProgName
-  mapM_ putStrLn
-    [  "\nUsage:"
+  mapM_
+    putStrLn
+    [ "\nUsage:"
     , "    " ++ name ++ "<pool metadata utl>"
     , "    " ++ name ++ "<pool metadata utl> <metadata hash in hex>"
     , ""
@@ -55,7 +60,7 @@ usageExit = do
 
 runHttpGet :: PoolUrl -> Maybe PoolMetaHash -> IO ()
 runHttpGet poolUrl mHash =
-    reportSuccess =<< orDie renderFetchError httpGet
+  reportSuccess =<< orDie renderFetchError httpGet
   where
     httpGet :: ExceptT FetchError IO SimplifiedPoolOfflineData
     httpGet = do
@@ -70,7 +75,7 @@ runHttpGet poolUrl mHash =
         Just ct ->
           if "application/json" `BS.isInfixOf` ct
             then putStrLn $ greenText "Success"
-            else putStrLn $  orangeText ("Warning: This should be 'application/json'\nContent-type: " ++ BS.unpack ct)
+            else putStrLn $ orangeText ("Warning: This should be 'application/json'\nContent-type: " ++ BS.unpack ct)
       Text.putStrLn $ spodJson spod
 
 -- ------------------------------------------------------------------------------------------------
@@ -89,4 +94,3 @@ greenText s = codeGreen ++ s ++ codeReset
 
 orangeText :: String -> String
 orangeText s = codeYellow ++ s ++ codeReset
-

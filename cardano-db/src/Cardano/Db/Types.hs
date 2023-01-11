@@ -6,97 +6,93 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Cardano.Db.Types
-  ( Ada (..)
-  , AssetFingerprint (..)
-  , DbLovelace (..)
-  , DbInt65 (..)
-  , DbWord64 (..)
-  , RewardSource (..)
-  , SyncState (..)
-  , ScriptPurpose (..)
-  , ScriptType (..)
-  , PoolCertAction (..)
-  , CertNo (..)
-  , PoolCert (..)
-  , deltaCoinToDbInt65
-  , integerToDbInt65
-  , lovelaceToAda
-  , mkAssetFingerprint
-  , renderAda
-  , scientificToAda
-  , readDbInt65
-  , showDbInt65
-  , readRewardSource
-  , readScriptPurpose
-  , readScriptType
-  , readSyncState
-  , renderScriptPurpose
-  , renderScriptType
-  , renderSyncState
-  , showRewardSource
-  , word64ToAda
-  ) where
+module Cardano.Db.Types (
+  Ada (..),
+  AssetFingerprint (..),
+  DbLovelace (..),
+  DbInt65 (..),
+  DbWord64 (..),
+  RewardSource (..),
+  SyncState (..),
+  ScriptPurpose (..),
+  ScriptType (..),
+  PoolCertAction (..),
+  CertNo (..),
+  PoolCert (..),
+  deltaCoinToDbInt65,
+  integerToDbInt65,
+  lovelaceToAda,
+  mkAssetFingerprint,
+  renderAda,
+  scientificToAda,
+  readDbInt65,
+  showDbInt65,
+  readRewardSource,
+  readScriptPurpose,
+  readScriptType,
+  readSyncState,
+  renderScriptPurpose,
+  renderScriptType,
+  renderSyncState,
+  showRewardSource,
+  word64ToAda,
+) where
 
-import           Cardano.Ledger.Coin (DeltaCoin (..))
-
+import Cardano.Ledger.Coin (DeltaCoin (..))
 import qualified Codec.Binary.Bech32 as Bech32
-
-import           Crypto.Hash (Blake2b_160)
+import Crypto.Hash (Blake2b_160)
 import qualified Crypto.Hash
-
-import           Data.Aeson.Encoding (unsafeToEncoding)
-import           Data.Aeson.Types (FromJSON (..), ToJSON (..))
+import Data.Aeson.Encoding (unsafeToEncoding)
+import Data.Aeson.Types (FromJSON (..), ToJSON (..))
 import qualified Data.Aeson.Types as Aeson
 import qualified Data.ByteArray as ByteArray
-import           Data.ByteString (ByteString)
+import Data.ByteString (ByteString)
 import qualified Data.ByteString.Builder as Builder
-import           Data.Either (fromRight)
-import           Data.Fixed (Micro, showFixed)
-import           Data.Scientific (Scientific)
-import           Data.Text (Text)
+import Data.Either (fromRight)
+import Data.Fixed (Micro, showFixed)
+import Data.Scientific (Scientific)
+import Data.Text (Text)
 import qualified Data.Text as Text
-import           Data.Word (Word16, Word64)
-
-import           GHC.Generics (Generic)
-
-import           Quiet (Quiet (..))
-
+import Data.Word (Word16, Word64)
+import GHC.Generics (Generic)
+import Quiet (Quiet (..))
 
 newtype Ada = Ada
   { unAda :: Micro
-  } deriving (Eq, Num, Ord, Generic)
+  }
+  deriving (Eq, Num, Ord, Generic)
 
 instance FromJSON Ada where
   parseJSON =
     Aeson.withScientific "Ada" (pure . scientificToAda)
 
 instance ToJSON Ada where
-    --toJSON (Ada ada) = Data.Aeson.Types.Number $ fromRational $ toRational ada
-    -- `Number` results in it becoming `7.3112484749601107e10` while the old explorer is returning `73112484749.601107`
-    toEncoding (Ada ada) =
-        unsafeToEncoding $   -- convert ByteString to Aeson's Encoding
-        Builder.string8 $         -- convert String to ByteString using Latin1 encoding
-        showFixed True ada   -- convert Micro to String chopping off trailing zeros
+  -- toJSON (Ada ada) = Data.Aeson.Types.Number $ fromRational $ toRational ada
+  -- `Number` results in it becoming `7.3112484749601107e10` while the old explorer is returning `73112484749.601107`
+  toEncoding (Ada ada) =
+    unsafeToEncoding $ -- convert ByteString to Aeson's Encoding
+      Builder.string8 $ -- convert String to ByteString using Latin1 encoding
+        showFixed True ada -- convert Micro to String chopping off trailing zeros
 
-    toJSON = error "Ada.toJSON not supported due to numeric issues. Use toEncoding instead."
+  toJSON = error "Ada.toJSON not supported due to numeric issues. Use toEncoding instead."
 
 instance Show Ada where
-    show (Ada ada) = showFixed True ada
+  show (Ada ada) = showFixed True ada
 
 newtype AssetFingerprint = AssetFingerprint
   { unAssetFingerprint :: Text
-  } deriving (Eq, Show)
+  }
+  deriving (Eq, Show)
 
 mkAssetFingerprint :: ByteString -> ByteString -> AssetFingerprint
 mkAssetFingerprint policyBs assetNameBs =
-    AssetFingerprint . Bech32.encodeLenient hrp . Bech32.dataPartFromBytes . ByteArray.convert
-      $ Crypto.Hash.hash @_ @Blake2b_160 (policyBs <> assetNameBs)
+  AssetFingerprint . Bech32.encodeLenient hrp . Bech32.dataPartFromBytes . ByteArray.convert $
+    Crypto.Hash.hash @_ @Blake2b_160 (policyBs <> assetNameBs)
   where
     hrp :: Bech32.HumanReadablePart
     hrp =
-      fromRight (error "mkAssetFingerprint: Bad human readable part") -- Should never happen
-        $ Bech32.humanReadablePartFromText "asset"
+      fromRight (error "mkAssetFingerprint: Bad human readable part") $ -- Should never happen
+        Bech32.humanReadablePartFromText "asset"
 
 -- This is horrible. Need a 'Word64' with an extra sign bit.
 data DbInt65
@@ -105,14 +101,12 @@ data DbInt65
   deriving (Eq, Generic, Show)
 
 -- Newtype wrapper around Word64 so we can hand define a PersistentField instance.
-newtype DbLovelace
-  = DbLovelace { unDbLovelace :: Word64 }
+newtype DbLovelace = DbLovelace {unDbLovelace :: Word64}
   deriving (Eq, Generic, Ord)
   deriving (Read, Show) via (Quiet DbLovelace)
 
 -- Newtype wrapper around Word64 so we can hand define a PersistentField instance.
-newtype DbWord64
-  = DbWord64 { unDbWord64 :: Word64 }
+newtype DbWord64 = DbWord64 {unDbWord64 :: Word64}
   deriving (Eq, Generic)
   deriving (Read, Show) via (Quiet DbWord64)
 
@@ -126,8 +120,8 @@ data RewardSource
   deriving (Bounded, Enum, Eq, Ord, Show)
 
 data SyncState
-  = SyncLagging         -- Local tip is lagging the global chain tip.
-  | SyncFollowing       -- Local tip is following global chain tip.
+  = SyncLagging -- Local tip is lagging the global chain tip.
+  | SyncFollowing -- Local tip is following global chain tip.
   deriving (Eq, Show)
 
 data ScriptPurpose
@@ -145,7 +139,7 @@ data ScriptType
   deriving (Eq, Generic, Show)
 
 data PoolCertAction
-  = Retirement !Word64   -- retirement epoch
+  = Retirement !Word64 -- retirement epoch
   | Register !ByteString -- metadata hash
   deriving (Eq, Show)
 
@@ -155,13 +149,15 @@ data CertNo = CertNo
   { ciBlockNo :: !(Maybe Word64)
   , ciTxIndex :: !Word64
   , ciCertIndex :: !Word16
-  } deriving (Eq, Ord, Show)
+  }
+  deriving (Eq, Ord, Show)
 
 data PoolCert = PoolCert
   { pcHash :: !ByteString
   , pcCertAction :: !PoolCertAction
   , pcCertNo :: !CertNo
-  } deriving (Eq, Show)
+  }
+  deriving (Eq, Show)
 
 instance Ord PoolCert where
   compare a b = compare (pcCertNo a) (pcCertNo b)
@@ -192,7 +188,7 @@ scientificToAda s =
 readDbInt65 :: String -> DbInt65
 readDbInt65 str =
   case str of
-    ('-':rest) -> NegInt65 $ read rest
+    ('-' : rest) -> NegInt65 $ read rest
     _other -> PosInt65 $ read str
 
 showDbInt65 :: DbInt65 -> String

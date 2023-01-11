@@ -1,21 +1,23 @@
-module Cardano.DbTool.Validate.Util
-  ( codeGreen
-  , codeRed
-  , codeReset
-  , fmap2
-  , greenText
-  , redText
-  , putStrF
-  , utxoSetSum
-  ) where
+module Cardano.DbTool.Validate.Util (
+  codeGreen,
+  codeRed,
+  codeReset,
+  fmap2,
+  greenText,
+  redText,
+  putStrF,
+  utxoSetSum,
+) where
 
-import           Cardano.Db
-
-import           System.Console.ANSI (setSGRCode)
-import           System.Console.ANSI.Types (Color (..), ColorIntensity (..), ConsoleLayer (..),
-                   SGR (..))
-import           System.IO (hFlush, stdout)
-
+import Cardano.Db
+import System.Console.ANSI (setSGRCode)
+import System.Console.ANSI.Types (
+  Color (..),
+  ColorIntensity (..),
+  ConsoleLayer (..),
+  SGR (..),
+ )
+import System.IO (hFlush, stdout)
 
 codeGreen :: String
 codeGreen = setSGRCode [SetColor Foreground Vivid Green]

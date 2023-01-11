@@ -1,21 +1,28 @@
 {-# LANGUAGE TypeApplications #-}
-module Cardano.DbTool.Report.Synced
-  ( assertFullySynced
-  ) where
+
+module Cardano.DbTool.Report.Synced (
+  assertFullySynced,
+) where
 
 import qualified Cardano.Db as Db
-
-import           Control.Monad (when)
-import           Control.Monad.IO.Class (MonadIO)
-import           Control.Monad.Trans.Reader (ReaderT)
-
-import           Data.Time.Clock (NominalDiffTime, UTCTime)
+import Control.Monad (when)
+import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.Trans.Reader (ReaderT)
+import Data.Time.Clock (NominalDiffTime, UTCTime)
 import qualified Data.Time.Clock as Time
-
-import           Database.Esqueleto.Experimental (SqlBackend, desc, from, limit, orderBy, select,
-                   table, unValue, where_, (^.))
-
-import           System.Exit (exitFailure)
+import Database.Esqueleto.Experimental (
+  SqlBackend,
+  desc,
+  from,
+  limit,
+  orderBy,
+  select,
+  table,
+  unValue,
+  where_,
+  (^.),
+ )
+import System.Exit (exitFailure)
 
 assertFullySynced :: IO ()
 assertFullySynced = do

@@ -1,28 +1,24 @@
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.DbAction
-  ( DbAction (..)
-  , DbActionQueue (..)
-  , blockingFlushDbActionQueue
-  , lengthDbActionQueue
-  , mkDbApply
-  , newDbActionQueue
-  , writeDbActionQueue
-  , waitRollback
-  ) where
+module Cardano.DbSync.DbAction (
+  DbAction (..),
+  DbActionQueue (..),
+  blockingFlushDbActionQueue,
+  lengthDbActionQueue,
+  mkDbApply,
+  newDbActionQueue,
+  writeDbActionQueue,
+  waitRollback,
+) where
 
-import           Cardano.Prelude
-
-import           Cardano.DbSync.Types
-
+import Cardano.DbSync.Types
+import Cardano.Prelude
+import Control.Concurrent.Class.MonadSTM.Strict (StrictTMVar, newEmptyTMVarIO, takeTMVar)
 import qualified Control.Concurrent.STM as STM
-import           Control.Concurrent.STM.TBQueue (TBQueue)
+import Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as TBQ
-
-import           Control.Concurrent.Class.MonadSTM.Strict (StrictTMVar, newEmptyTMVarIO, takeTMVar)
-
-import           Ouroboros.Network.Block (BlockNo, Tip (..))
+import Ouroboros.Network.Block (BlockNo, Tip (..))
 import qualified Ouroboros.Network.Point as Point
 
 data DbAction
@@ -41,18 +37,18 @@ mkDbApply = DbApplyBlock
 -- worker thread to finish the rollback.
 waitRollback :: DbActionQueue -> CardanoPoint -> Tip CardanoBlock -> IO (Maybe [CardanoPoint], Point.WithOrigin BlockNo)
 waitRollback queue point serverTip = do
-    resultVar <- newEmptyTMVarIO
-    atomically $ writeDbActionQueue queue $ DbRollBackToPoint point serverTip resultVar
-    atomically $ takeTMVar resultVar
+  resultVar <- newEmptyTMVarIO
+  atomically $ writeDbActionQueue queue $ DbRollBackToPoint point serverTip resultVar
+  atomically $ takeTMVar resultVar
 
 lengthDbActionQueue :: DbActionQueue -> STM Natural
 lengthDbActionQueue (DbActionQueue q) = STM.lengthTBQueue q
 
 newDbActionQueue :: IO DbActionQueue
 newDbActionQueue =
-    -- Use an odd number here so that the db_tip_height metric increments by this odd number
-    -- when syncing, instead of incrementing by say 100.
-    DbActionQueue <$> TBQ.newTBQueueIO 117
+  -- Use an odd number here so that the db_tip_height metric increments by this odd number
+  -- when syncing, instead of incrementing by say 100.
+  DbActionQueue <$> TBQ.newTBQueueIO 117
 
 writeDbActionQueue :: DbActionQueue -> DbAction -> STM ()
 writeDbActionQueue (DbActionQueue q) = TBQ.writeTBQueue q

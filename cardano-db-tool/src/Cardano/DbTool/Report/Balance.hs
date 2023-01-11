@@ -1,25 +1,39 @@
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
-module Cardano.DbTool.Report.Balance
-  ( reportBalance
-  ) where
 
-import           Cardano.Db
-import           Cardano.DbTool.Report.Display
+module Cardano.DbTool.Report.Balance (
+  reportBalance,
+) where
 
-import           Control.Monad.IO.Class (MonadIO)
-import           Control.Monad.Trans.Reader (ReaderT)
-
-import           Data.Fixed (Micro)
+import Cardano.Db
+import Cardano.DbTool.Report.Display
+import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.Trans.Reader (ReaderT)
+import Data.Fixed (Micro)
 import qualified Data.List as List
-import           Data.Maybe (catMaybes)
-import           Data.Ord (Down (..))
-import           Data.Text (Text)
+import Data.Maybe (catMaybes)
+import Data.Ord (Down (..))
+import Data.Text (Text)
 import qualified Data.Text.IO as Text
-
-import           Database.Esqueleto.Experimental (SqlBackend, Value (..), from, innerJoin, just, on,
-                   select, sum_, table, type (:&) ((:&)), val, where_, (&&.), (<=.), (==.), (^.))
+import Database.Esqueleto.Experimental (
+  SqlBackend,
+  Value (..),
+  from,
+  innerJoin,
+  just,
+  on,
+  select,
+  sum_,
+  table,
+  val,
+  where_,
+  (&&.),
+  (<=.),
+  (==.),
+  (^.),
+  type (:&) ((:&)),
+ )
 
 {- HLINT ignore "Redundant ^." -}
 {- HLINT ignore "Fuse on/on" -}
@@ -43,13 +57,12 @@ data Balance = Balance
   , balTotal :: !Ada
   }
 
-
 queryStakeAddressBalance :: MonadIO m => Text -> ReaderT SqlBackend m (Maybe Balance)
 queryStakeAddressBalance address = do
-    mSaId <- queryStakeAddressId
-    case mSaId of
-      Nothing -> pure Nothing
-      Just saId -> Just <$> queryBalance saId
+  mSaId <- queryStakeAddressId
+  case mSaId of
+    Nothing -> pure Nothing
+    Just saId -> Just <$> queryBalance saId
   where
     queryStakeAddressId :: MonadIO m => ReaderT SqlBackend m (Maybe StakeAddressId)
     queryStakeAddressId = do
@@ -65,17 +78,18 @@ queryStakeAddressBalance address = do
       (outputs, fees, deposit) <- queryOutputs saId
       rewards <- queryRewardsSum saId
       withdrawals <- queryWithdrawals saId
-      pure $ Balance
-                { balAddressId = saId
-                , balAddress = address
-                , balInputs = inputs
-                , balOutputs = outputs
-                , balFees  = fees
-                , balDeposit = deposit
-                , balRewards = rewards
-                , balWithdrawals  = withdrawals
-                , balTotal = inputs - outputs + rewards - withdrawals
-                }
+      pure $
+        Balance
+          { balAddressId = saId
+          , balAddress = address
+          , balInputs = inputs
+          , balOutputs = outputs
+          , balFees = fees
+          , balDeposit = deposit
+          , balRewards = rewards
+          , balWithdrawals = withdrawals
+          , balTotal = inputs - outputs + rewards - withdrawals
+          }
 
     queryInputs :: MonadIO m => StakeAddressId -> ReaderT SqlBackend m Ada
     queryInputs saId = do
@@ -109,11 +123,12 @@ queryStakeAddressBalance address = do
     queryOutputs saId = do
       res <- select $ do
         (txOut :& tx :& _txIn) <-
-          from $ table @TxOut
-          `innerJoin` table @Tx
-          `on` (\(txOut :& tx) -> txOut ^. TxOutTxId ==. tx ^. TxId)
-          `innerJoin` table @TxIn
-          `on` (\(txOut :& tx :& txIn) -> txIn ^. TxInTxOutId ==. tx ^. TxId &&. txIn ^. TxInTxOutIndex ==. txOut ^. TxOutIndex)
+          from
+            $ table @TxOut
+              `innerJoin` table @Tx
+            `on` (\(txOut :& tx) -> txOut ^. TxOutTxId ==. tx ^. TxId)
+              `innerJoin` table @TxIn
+            `on` (\(txOut :& tx :& txIn) -> txIn ^. TxInTxOutId ==. tx ^. TxId &&. txIn ^. TxInTxOutIndex ==. txOut ^. TxOutIndex)
         where_ (txOut ^. TxOutStakeAddressId ==. just (val saId))
         pure (sum_ (txOut ^. TxOutValue), sum_ (tx ^. TxFee), sum_ (tx ^. TxDeposit))
       pure $ maybe (0, 0, 0) convert (listToMaybe res)
@@ -124,20 +139,20 @@ queryStakeAddressBalance address = do
 
 renderBalances :: [Balance] -> IO ()
 renderBalances xs = do
-    putStrLn "                       stake_address                         |     balance"
-    putStrLn "-------------------------------------------------------------+----------------"
-    mapM_ renderReward (List.sortOn (Down . balTotal) xs)
-    putStrLn "-------------------------------------------------------------+----------------"
-    putStr   "                          total                              | "
-    Text.putStrLn $ leftPad 14 (renderAda . sum $ map balTotal xs)
-    putStrLn ""
+  putStrLn "                       stake_address                         |     balance"
+  putStrLn "-------------------------------------------------------------+----------------"
+  mapM_ renderReward (List.sortOn (Down . balTotal) xs)
+  putStrLn "-------------------------------------------------------------+----------------"
+  putStr "                          total                              | "
+  Text.putStrLn $ leftPad 14 (renderAda . sum $ map balTotal xs)
+  putStrLn ""
   where
     renderReward :: Balance -> IO ()
     renderReward b =
-      Text.putStrLn $ mconcat
-        [ " "
-        , balAddress b
-        , separator
-        , leftPad 14 (renderAda $ balTotal b)
-        ]
-
+      Text.putStrLn $
+        mconcat
+          [ " "
+          , balAddress b
+          , separator
+          , leftPad 14 (renderAda $ balTotal b)
+          ]

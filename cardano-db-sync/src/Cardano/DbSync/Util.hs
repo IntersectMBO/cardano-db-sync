@@ -1,57 +1,49 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Util
-  ( cardanoBlockSlotNo
-  , fmap3
-  , getSyncStatus
-  , isSyncedWithinSeconds
-  , liftedLogException
-  , logActionDuration
-  , logException
-  , maybeFromStrict
-  , maybeToStrict
-  , nullMetricSetters
-  , panicAbort
-  , logAndPanic
-  , plusCoin
-  , readAbortOnPanic
-  , renderByteArray
-  , renderPoint
-  , renderSlotList
-  , rewardTypeToSource
-  , textPrettyShow
-  , textShow
-  , thrd3
-  , traverseMEither
-  , whenStrictJust
-  , whenMaybe
-  , mlookup
-  , whenRight
-  ) where
+module Cardano.DbSync.Util (
+  cardanoBlockSlotNo,
+  fmap3,
+  getSyncStatus,
+  isSyncedWithinSeconds,
+  liftedLogException,
+  logActionDuration,
+  logException,
+  maybeFromStrict,
+  maybeToStrict,
+  nullMetricSetters,
+  panicAbort,
+  logAndPanic,
+  plusCoin,
+  readAbortOnPanic,
+  renderByteArray,
+  renderPoint,
+  renderSlotList,
+  rewardTypeToSource,
+  textPrettyShow,
+  textShow,
+  thrd3,
+  traverseMEither,
+  whenStrictJust,
+  whenMaybe,
+  mlookup,
+  whenRight,
+) where
 
-import           Cardano.Prelude hiding (catch)
-
-import           Cardano.BM.Trace (Trace, logError, logInfo)
-
-import           Cardano.Db (RewardSource (..), textShow)
-
-import           Cardano.Ledger.Coin (Coin (..))
+import Cardano.BM.Trace (Trace, logError, logInfo)
+import Cardano.Db (RewardSource (..), textShow)
+import Cardano.DbSync.Config.Types ()
+import Cardano.DbSync.Types
+import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Shelley.Rewards as Shelley
-
-
-import           Cardano.DbSync.Config.Types ()
-import           Cardano.DbSync.Types
-
-import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
-
-import           Control.Exception.Lifted (catch)
-import           Control.Monad.Trans.Control (MonadBaseControl)
-
-import           Data.ByteArray (ByteArrayAccess)
+import Cardano.Prelude hiding (catch)
+import Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
+import Control.Exception.Lifted (catch)
+import Control.Monad.Trans.Control (MonadBaseControl)
+import Data.ByteArray (ByteArrayAccess)
 import qualified Data.ByteArray
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.List as List
@@ -61,18 +53,15 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.IO as Text
 import qualified Data.Time.Clock as Time
-
-import           Text.Show.Pretty (ppShow)
-
-import           Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
-import           Ouroboros.Consensus.Protocol.Praos.Translate ()
-import           Ouroboros.Consensus.Shelley.HFEras ()
-import           Ouroboros.Consensus.Shelley.Ledger.SupportsProtocol ()
-import           Ouroboros.Network.Block (blockSlot, getPoint)
+import Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
+import Ouroboros.Consensus.Protocol.Praos.Translate ()
+import Ouroboros.Consensus.Shelley.HFEras ()
+import Ouroboros.Consensus.Shelley.Ledger.SupportsProtocol ()
+import Ouroboros.Network.Block (blockSlot, getPoint)
 import qualified Ouroboros.Network.Point as Point
-
-import           System.Environment (lookupEnv)
-import           System.Posix.Process (exitImmediately)
+import System.Environment (lookupEnv)
+import System.Posix.Process (exitImmediately)
+import Text.Show.Pretty (ppShow)
 
 cardanoBlockSlotNo :: CardanoBlock -> SlotNo
 cardanoBlockSlotNo = blockSlot
@@ -87,7 +76,7 @@ isSyncedWithinSeconds :: SlotDetails -> Word -> SyncState
 isSyncedWithinSeconds sd target =
   -- diffUTCTime returns seconds.
   let secDiff = ceiling (Time.diffUTCTime (sdCurrentTime sd) (sdSlotTime sd)) :: Int
-  in if fromIntegral (abs secDiff) <= target
+   in if fromIntegral (abs secDiff) <= target
         then SyncFollowing
         else SyncLagging
 
@@ -101,14 +90,13 @@ traverseMEither :: Monad m => (a -> m (Either e ())) -> [a] -> m (Either e ())
 traverseMEither action xs = do
   case xs of
     [] -> pure $ Right ()
-    (y:ys) ->
+    (y : ys) ->
       action y >>= either (pure . Left) (const $ traverseMEither action ys)
-
 
 -- | Needed when debugging disappearing exceptions.
 liftedLogException :: (MonadBaseControl IO m, MonadIO m) => Trace IO Text -> Text -> m a -> m a
 liftedLogException tracer txt action =
-    action `catch` logger
+  action `catch` logger
   where
     logger :: MonadIO m => SomeException -> m a
     logger e =
@@ -123,7 +111,7 @@ logActionDuration tracer label action = do
   before <- liftIO Time.getCurrentTime
   a <- action
   after <- liftIO Time.getCurrentTime
-  liftIO . logInfo tracer $ mconcat [ label, ": duration ", textShow (Time.diffUTCTime after before) ]
+  liftIO . logInfo tracer $ mconcat [label, ": duration ", textShow (Time.diffUTCTime after before)]
   pure a
 
 -- | ouroboros-network catches 'SomeException' and if a 'nullTracer' is passed into that
@@ -132,7 +120,7 @@ logActionDuration tracer label action = do
 -- logged (instead of silently swallowed) and then rethrown.
 logException :: Trace IO Text -> Text -> IO a -> IO a
 logException tracer txt action =
-    action `catch` logger
+  action `catch` logger
   where
     logger :: SomeException -> IO a
     logger e = do
@@ -158,13 +146,13 @@ panicAbort :: Text -> IO ()
 panicAbort msg = do
   whenM readAbortOnPanic $ do
     threadDelay 100000 -- 0.1 seconds
-    mapM_ Text.putStrLn [ "panic abort:", msg ]
+    mapM_ Text.putStrLn ["panic abort:", msg]
     exitImmediately (ExitFailure 1)
 
 logAndPanic :: Trace IO Text -> Text -> IO ()
 logAndPanic tracer msg = do
-    logError tracer msg
-    panic msg
+  logError tracer msg
+  panic msg
 
 plusCoin :: Coin -> Coin -> Coin
 plusCoin (Coin a) (Coin b) = Coin (a + b)
@@ -180,16 +168,19 @@ renderPoint :: CardanoPoint -> Text
 renderPoint point =
   case getPoint point of
     Origin -> "genesis"
-    At blk -> mconcat
-                [ "slot ", textShow (unSlotNo $ Point.blockPointSlot blk), ", hash "
-                , renderByteArray $ toRawHash (Proxy @CardanoBlock) (Point.blockPointHash blk)
-                ]
+    At blk ->
+      mconcat
+        [ "slot "
+        , textShow (unSlotNo $ Point.blockPointSlot blk)
+        , ", hash "
+        , renderByteArray $ toRawHash (Proxy @CardanoBlock) (Point.blockPointHash blk)
+        ]
 
 renderSlotList :: [SlotNo] -> Text
 renderSlotList xs
   | length xs < 10 = textShow (map unSlotNo xs)
   | otherwise =
-      mconcat [ "[", textShow (unSlotNo $ List.head xs), "..", textShow (unSlotNo $ List.last xs), "]" ]
+      mconcat ["[", textShow (unSlotNo $ List.head xs), "..", textShow (unSlotNo $ List.last xs), "]"]
 
 rewardTypeToSource :: Shelley.RewardType -> RewardSource
 rewardTypeToSource rt =
