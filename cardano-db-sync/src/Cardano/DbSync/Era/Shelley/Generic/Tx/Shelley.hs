@@ -1,14 +1,23 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
   ( fromShelleyTx
+  , getTxSize
+  , mkTxIn
   , fromTxIn
-  , fromTxOut
+  , mkTxOut
+  , mkTxWithdrawals
   , mkTxWithdrawal
+  , mkTxCertificates
   , mkTxCertificate
   , calcWithdrawalSum
+  , getTxMetadata
+  , mkTxParamProposal
   , txHashId
   ) where
 
@@ -16,15 +25,13 @@ import           Cardano.Prelude
 
 import qualified Cardano.Crypto.Hash as Crypto
 
-import           Cardano.Ledger.BaseTypes
+import           Cardano.Ledger.BaseTypes (TxIx (..), strictMaybeToMaybe)
 import           Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.CompactAddress as Ledger
-import           Cardano.Ledger.Core (EraTxOut, Value)
 import qualified Cardano.Ledger.Core as Core
-import qualified Cardano.Ledger.Era as Ledger
+import           Cardano.Ledger.Era (Crypto)
 import qualified Cardano.Ledger.SafeHash as Ledger
-import           Cardano.Ledger.Shelley.Scripts (ScriptHash)
-import qualified Cardano.Ledger.Shelley.Scripts as Shelley
+import           Cardano.Ledger.Shelley.Scripts (MultiSig, ScriptHash)
 import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 
@@ -32,10 +39,9 @@ import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
-import           Lens.Micro
+import           Lens.Micro ((^.))
 
 import           Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShelley)
-import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra)
 
 import qualified Cardano.Api.Shelley as Api
 
@@ -47,27 +53,27 @@ import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import           Cardano.DbSync.Era.Shelley.Generic.Util
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
-fromShelleyTx :: (Word64, ShelleyTx.ShelleyTx StandardShelley) -> Tx
+fromShelleyTx :: (Word64, Core.Tx StandardShelley) -> Tx
 fromShelleyTx (blkIndex, tx) =
     Tx
       { txHash = txHashId tx
       , txBlockIndex = blkIndex
-      , txSize = fromIntegral $ tx ^. Core.sizeTxF
+      , txSize = getTxSize tx
       , txValidContract = True
-      , txInputs = map fromTxIn (toList . Shelley._inputs $  tx ^. Core.bodyTxL) -- ShelleyTx.body tx)
+      , txInputs = mkTxIn txBody
       , txCollateralInputs = []  -- Shelley does not have collateral inputs
       , txReferenceInputs = []   -- Shelley does not have reference inputs
       , txOutputs = outputs
       , txCollateralOutputs = [] -- Shelley does not have collateral outputs
-      , txFees = Just $ Shelley._txfee (ShelleyTx.body tx)
+      , txFees = Just $ Shelley._txfee txBody
       , txOutSum = sumTxOutCoin outputs
       , txInvalidBefore = Nothing
-      , txInvalidHereafter = Just $ Shelley._ttl (ShelleyTx.body tx)
-      , txWithdrawalSum = calcWithdrawalSum $ Shelley._wdrls (ShelleyTx.body tx)
-      , txMetadata = fromShelleyMetadata <$> strictMaybeToMaybe (tx ^. Core.auxDataTxL)
-      , txCertificates = zipWith mkTxCertificate [0..] (toList . Shelley._certs $ ShelleyTx.body tx)
-      , txWithdrawals = map mkTxWithdrawal (Map.toList . Shelley.unWdrl . Shelley._wdrls $ ShelleyTx.body tx)
-      , txParamProposal = maybe [] (convertParamProposal (Shelley Standard)) $ strictMaybeToMaybe (ShelleyTx._txUpdate $ ShelleyTx.body tx)
+      , txInvalidHereafter = Just $ Shelley._ttl txBody
+      , txWithdrawalSum = calcWithdrawalSum txBody
+      , txMetadata = fromShelleyMetadata <$> getTxMetadata tx
+      , txCertificates = mkTxCertificates txBody
+      , txWithdrawals = mkTxWithdrawals txBody
+      , txParamProposal = mkTxParamProposal (Shelley Standard) txBody
       , txMint = mempty       -- Shelley does not support multi-assets
       , txRedeemer = []       -- Shelley does not support redeemers
       , txData = []
@@ -76,14 +82,17 @@ fromShelleyTx (blkIndex, tx) =
       , txExtraKeyWitnesses = []
       }
   where
+    txBody :: Core.TxBody StandardShelley
+    txBody = tx ^. Core.bodyTxL
+
     outputs :: [TxOut]
-    outputs = getOutputs tx
+    outputs = mkTxOut txBody
 
     scripts :: [TxScript]
     scripts =
       mkTxScript <$> Map.toList (ShelleyTx.txwitsScript tx)
 
-    mkTxScript :: (ScriptHash StandardCrypto, Shelley.MultiSig StandardCrypto) -> TxScript
+    mkTxScript :: (ScriptHash StandardCrypto, MultiSig StandardCrypto) -> TxScript
     mkTxScript (hsh, script) = TxScript
       { txScriptHash = unScriptHash hsh
       , txScriptType = MultiSig
@@ -92,23 +101,23 @@ fromShelleyTx (blkIndex, tx) =
       , txScriptCBOR = Nothing
       }
 
-getOutputs :: ShelleyTx.ShelleyTx StandardShelley -> [TxOut]
-getOutputs tx = zipWith fromTxOut [0 .. ] $ toList (Shelley._outputs $ ShelleyTx.body tx)
-
-fromTxOut :: (EraTxOut era, Value era ~ Coin, Ledger.Crypto era ~ StandardCrypto) => Word64 -> Core.TxOut era -> TxOut
-fromTxOut index txOut =
-  TxOut
-    { txOutIndex = index
-    , txOutAddress = txOut ^. Core.addrTxOutL
-    , txOutAddressRaw = SBS.fromShort bs
-    , txOutAdaValue = txOut ^. Core.valueTxOutL
-    , txOutMaValue = mempty  -- Shelley does not support multi-assets
-    , txOutScript = Nothing
-    , txOutDatum = NoDatum   -- Shelley does not support plutus data
-    }
+mkTxOut
+  :: forall era. (Core.EraTxBody era, Core.Value era ~ Coin, Crypto era ~ StandardCrypto)
+  => Core.TxBody era -> [TxOut]
+mkTxOut txBody = zipWith fromTxOut [0 .. ] $ toList (txBody ^. Core.outputsTxBodyL)
   where
-    Ledger.UnsafeCompactAddr bs = txOut ^. Core.compactAddrTxOutL
-
+    fromTxOut index txOut =
+      TxOut
+        { txOutIndex = index
+        , txOutAddress = txOut ^. Core.addrTxOutL
+        , txOutAddressRaw = SBS.fromShort bs
+        , txOutAdaValue = txOut ^. Core.valueTxOutL
+        , txOutMaValue = mempty  -- Shelley does not support multi-assets
+        , txOutScript = Nothing
+        , txOutDatum = NoDatum   -- Shelley does not support plutus data
+        }
+      where
+        Ledger.UnsafeCompactAddr bs = txOut ^. Core.compactAddrTxOutL
 
 fromTxIn :: ShelleyTx.TxIn StandardCrypto -> TxIn
 fromTxIn (ShelleyTx.TxIn (ShelleyTx.TxId txid) (TxIx w64)) =
@@ -118,11 +127,31 @@ fromTxIn (ShelleyTx.TxIn (ShelleyTx.TxId txid) (TxIx w64)) =
     , txInRedeemerIndex = Nothing
     }
 
-txHashId :: (Ledger.Crypto era ~ StandardCrypto, ShelleyBasedEra era) => ShelleyTx.ShelleyTx era -> ByteString
-txHashId = Crypto.hashToBytes . Ledger.extractHash . Ledger.hashAnnotated . ShelleyTx.body
+txHashId :: (Crypto era ~ StandardCrypto, Core.EraTx era) => Core.Tx era -> ByteString
+txHashId tx = Crypto.hashToBytes $ Ledger.extractHash $ Ledger.hashAnnotated (tx ^. Core.bodyTxL)
 
-calcWithdrawalSum :: Shelley.Wdrl StandardCrypto -> Coin
-calcWithdrawalSum = Coin . sum . map unCoin . Map.elems . Shelley.unWdrl
+getTxSize :: Core.EraTx era => Core.Tx era -> Word64
+getTxSize tx = fromIntegral $ tx ^. Core.sizeTxF
+
+mkTxIn
+  :: (Core.EraTxBody era, Crypto era ~ StandardCrypto)
+  => Core.TxBody era -> [TxIn]
+mkTxIn txBody = map fromTxIn $ toList $ txBody ^. Core.inputsTxBodyL
+
+calcWithdrawalSum
+  :: (Shelley.ShelleyEraTxBody era, Crypto era ~ StandardCrypto)
+  => Core.TxBody era -> Coin
+calcWithdrawalSum bd =
+  Coin $ sum $ map unCoin $ Map.elems $ Shelley.unWdrl $ bd ^. Shelley.wdrlsTxBodyL
+
+getTxMetadata :: Core.EraTx era => Core.Tx era -> Maybe (Core.AuxiliaryData era)
+getTxMetadata tx = strictMaybeToMaybe (tx ^. Core.auxDataTxL)
+
+mkTxWithdrawals
+    :: (Shelley.ShelleyEraTxBody era, Crypto era ~ StandardCrypto)
+    => Core.TxBody era -> [TxWithdrawal]
+mkTxWithdrawals bd =
+    map mkTxWithdrawal $ Map.toList $ Shelley.unWdrl $ bd ^. Shelley.wdrlsTxBodyL
 
 mkTxWithdrawal :: (Shelley.RewardAcnt StandardCrypto, Coin) -> TxWithdrawal
 mkTxWithdrawal (ra, c) =
@@ -131,6 +160,18 @@ mkTxWithdrawal (ra, c) =
     , txwRewardAccount = ra
     , txwAmount = c
     }
+
+mkTxParamProposal
+    :: Shelley.ShelleyEraTxBody era
+    => Witness era -> Core.TxBody era -> [ParamProposal]
+mkTxParamProposal witness txBody =
+    maybe [] (convertParamProposal witness) $ strictMaybeToMaybe (txBody ^. Shelley.updateTxBodyL)
+
+mkTxCertificates
+    :: (Shelley.ShelleyEraTxBody era, Crypto era ~ StandardCrypto)
+    => Core.TxBody era -> [TxCertificate]
+mkTxCertificates bd =
+    zipWith mkTxCertificate [0..] $ toList $ bd ^. Shelley.certsTxBodyL
 
 mkTxCertificate :: Word16 -> Shelley.DCert StandardCrypto -> TxCertificate
 mkTxCertificate idx dcert =

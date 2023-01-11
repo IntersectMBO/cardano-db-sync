@@ -9,6 +9,7 @@
 module Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
   ( fromAlonzoTx
   , dataHashToBytes
+  , mkCollTxIn
   , mkTxData
   , mkTxScript
   , resolveRedeemers
@@ -30,20 +31,19 @@ import qualified Cardano.Crypto.Hash as Crypto
 import           Cardano.Db (ScriptType (..))
 
 import           Cardano.DbSync.Era.Shelley.Generic.Metadata
-import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import           Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
-import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (calcWithdrawalSum, fromTxIn,
-                   mkTxCertificate, mkTxWithdrawal)
+import           Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import           Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import           Cardano.DbSync.Era.Shelley.Generic.Util
 import           Cardano.DbSync.Era.Shelley.Generic.Witness
 
 import qualified Cardano.Ledger.Address as Ledger
-import qualified Cardano.Ledger.Alonzo.Data as Alonzo
+import           Cardano.Ledger.Alonzo.Data (AlonzoAuxiliaryData (..))
 import qualified Cardano.Ledger.Alonzo.Language as Alonzo
 import           Cardano.Ledger.Alonzo.Scripts (ExUnits (..), txscriptfee)
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
+import           Cardano.Ledger.Alonzo.TxBody (AlonzoEraTxBody, AlonzoTxOut)
 import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
 import qualified Cardano.Ledger.Alonzo.TxWitness as Alonzo
 import           Cardano.Ledger.BaseTypes
@@ -73,15 +73,15 @@ import           Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardCryp
 fromAlonzoTx :: Maybe Alonzo.Prices -> (Word64, Core.Tx StandardAlonzo) -> Tx
 fromAlonzoTx mprices (blkIndex, tx) =
     Tx
-      { txHash = Crypto.hashToBytes . Ledger.extractHash $ Ledger.hashAnnotated txBody
+      { txHash = txHashId tx
       , txBlockIndex = blkIndex
       , txSize = fromIntegral $ tx ^. Core.sizeTxF
       , txValidContract = isValid2
       , txInputs =
           if not isValid2
-            then map fromTxIn . toList $ Alonzo.collateral' txBody
+            then collInputs
             else Map.elems $ rmInps finalMaps
-      , txCollateralInputs = map fromTxIn . toList $ Alonzo.collateral' txBody
+      , txCollateralInputs = collInputs
       , txReferenceInputs = [] -- Alonzo does not have reference inputs
       , txOutputs =
           if not isValid2
@@ -98,11 +98,11 @@ fromAlonzoTx mprices (blkIndex, tx) =
             else sumTxOutCoin outputs
       , txInvalidBefore = invalidBefore
       , txInvalidHereafter = invalidAfter
-      , txWithdrawalSum = calcWithdrawalSum $ Alonzo.wdrls' txBody
-      , txMetadata = fromAlonzoMetadata <$> strictMaybeToMaybe (getField @"auxiliaryData" tx)
+      , txWithdrawalSum = calcWithdrawalSum txBody
+      , txMetadata = fromAlonzoMetadata <$> getTxMetadata tx
       , txCertificates = snd <$> rmCerts finalMaps
       , txWithdrawals = Map.elems $ rmWdrl finalMaps
-      , txParamProposal = maybe [] (convertParamProposal (Alonzo Standard)) $ strictMaybeToMaybe (Alonzo.update' txBody)
+      , txParamProposal = mkTxParamProposal (Alonzo Standard) txBody
       , txMint = Alonzo.mint' txBody
       , txRedeemer = redeemers
       , txData = txDataWitness tx
@@ -117,7 +117,7 @@ fromAlonzoTx mprices (blkIndex, tx) =
     outputs :: [TxOut]
     outputs = zipWith fromTxOut [0 .. ] $ toList (Alonzo.outputs' txBody)
 
-    fromTxOut :: Word64 -> Alonzo.AlonzoTxOut StandardAlonzo -> TxOut
+    fromTxOut :: Word64 -> AlonzoTxOut StandardAlonzo -> TxOut
     fromTxOut index txOut =
       TxOut
         { txOutIndex = index
@@ -143,11 +143,16 @@ fromAlonzoTx mprices (blkIndex, tx) =
 
     (invalidBefore, invalidAfter) = getInterval $ Alonzo.vldt' txBody
 
+    collInputs = mkCollTxIn txBody
+
+mkCollTxIn :: (Ledger.Crypto era ~ StandardCrypto, AlonzoEraTxBody era) => Core.TxBody era -> [TxIn]
+mkCollTxIn txBody = map fromTxIn . toList $ txBody ^. Alonzo.collateralInputsTxBodyL
+
 getScripts ::
     forall era.
     ( Ledger.Crypto era ~ StandardCrypto
     , Core.Script era ~ Alonzo.AlonzoScript era
-    , Core.AuxiliaryData era ~ Alonzo.AlonzoAuxiliaryData era
+    , Core.AuxiliaryData era ~ AlonzoAuxiliaryData era
     , Core.EraWitnesses era
     , Core.EraTx era
     ) => Core.Tx era -> [TxScript]
@@ -157,12 +162,12 @@ getScripts tx =
           ++ getAuxScripts (tx ^. Core.auxDataTxL))
   where
     getAuxScripts
-        :: ShelleyMa.StrictMaybe (Alonzo.AlonzoAuxiliaryData era)
+        :: ShelleyMa.StrictMaybe (AlonzoAuxiliaryData era)
         -> [(ScriptHash StandardCrypto, Alonzo.AlonzoScript era)]
     getAuxScripts maux =
       case strictMaybeToMaybe maux of
         Nothing -> []
-        Just (Alonzo.AlonzoAuxiliaryData' _ scrs) ->
+        Just (AlonzoAuxiliaryData' _ scrs) ->
           map (\scr -> (Core.hashScript @era scr, scr)) $ toList scrs
 
 resolveRedeemers ::
@@ -302,10 +307,10 @@ getPlutusScriptSize script =
     Alonzo.PlutusScript _lang sbs -> Just $ fromIntegral (SBS.length sbs)
 
 txDataWitness ::
-    (HasField "wits" tx (Alonzo.TxWitness era), Ledger.Crypto era ~ StandardCrypto)
-    => tx -> [PlutusData]
+    (Core.Witnesses era ~ Alonzo.TxWitness era, Core.EraTx era, Ledger.Crypto era ~ StandardCrypto)
+    => Core.Tx era -> [PlutusData]
 txDataWitness tx =
-    mkTxData <$> Map.toList (Alonzo.unTxDats $ Alonzo.txdats' (getField @"wits" tx))
+    mkTxData <$> Map.toList (Alonzo.unTxDats $ Alonzo.txdats' (tx ^. Core.witsTxL))
 
 mkTxData :: (Ledger.DataHash StandardCrypto, Alonzo.Data era) -> PlutusData
 mkTxData (dataHash, dt) = PlutusData (dataHashToBytes dataHash) (jsonData dt) (Ledger.originalBytes dt)
@@ -317,7 +322,7 @@ mkTxData (dataHash, dt) = PlutusData (dataHashToBytes dataHash) (jsonData dt) (L
         . Api.scriptDataToJson Api.ScriptDataJsonDetailedSchema
         . Api.fromAlonzoData
 
-extraKeyWits :: Alonzo.AlonzoEraTxBody era
+extraKeyWits :: AlonzoEraTxBody era
               => Core.TxBody era -> [ByteString]
 extraKeyWits txBody = Set.toList $
   Set.map (\(Ledger.KeyHash h) -> Crypto.hashToBytes h) $
