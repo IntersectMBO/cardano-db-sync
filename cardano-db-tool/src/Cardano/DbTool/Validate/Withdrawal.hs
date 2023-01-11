@@ -1,26 +1,33 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Cardano.DbTool.Validate.Withdrawal
-  ( validateWithdrawals
-  ) where
+module Cardano.DbTool.Validate.Withdrawal (
+  validateWithdrawals,
+) where
 
-import           Cardano.DbTool.Validate.Util
-
-import           Cardano.Db
-
-import           Control.Monad.IO.Class (MonadIO, liftIO)
-import           Control.Monad.Trans.Reader (ReaderT)
-
-import           Data.Either (partitionEithers)
-import           Data.Fixed (Micro)
-import           Data.Text (Text)
+import Cardano.Db
+import Cardano.DbTool.Validate.Util
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Trans.Reader (ReaderT)
+import Data.Either (partitionEithers)
+import Data.Fixed (Micro)
+import Data.Text (Text)
 import qualified Data.Text as Text
-
-import           Database.Esqueleto.Experimental (SqlBackend, Value (..), distinct, from, select,
-                   sum_, table, unValue, val, where_, (==.), (^.))
-
-import           System.Random.Shuffle (shuffleM)
+import Database.Esqueleto.Experimental (
+  SqlBackend,
+  Value (..),
+  distinct,
+  from,
+  select,
+  sum_,
+  table,
+  unValue,
+  val,
+  where_,
+  (==.),
+  (^.),
+ )
+import System.Random.Shuffle (shuffleM)
 
 -- For any stake address which has seen a withdrawal, the sum of the withdrawals for that address
 -- should be less than or equal to the sum of the rewards for that address.
@@ -40,22 +47,29 @@ data AddressInfo = AddressInfo
   , aiStakeAddress :: !Text
   , aiSumRewards :: !Ada
   , aiSumWithdrawals :: !Ada
-  } deriving Show
+  }
+  deriving (Show)
 
 reportError :: AddressInfo -> String
 reportError ai =
   mconcat
-    [ "  ", Text.unpack (aiStakeAddress ai), " rewards are ", show (aiSumRewards ai)
-    , " ADA and withdrawals are ", show (aiSumWithdrawals ai), " ADA"
+    [ "  "
+    , Text.unpack (aiStakeAddress ai)
+    , " rewards are "
+    , show (aiSumRewards ai)
+    , " ADA and withdrawals are "
+    , show (aiSumWithdrawals ai)
+    , " ADA"
     ]
 
 -- For a given StakeAddressId, validate that sum rewards >= sum withdrawals.
-validateAccounting :: MonadIO m => StakeAddressId -> ReaderT SqlBackend m  (Either AddressInfo ())
+validateAccounting :: MonadIO m => StakeAddressId -> ReaderT SqlBackend m (Either AddressInfo ())
 validateAccounting addrId = do
-   ai <- queryAddressInfo addrId
-   pure $ if aiSumRewards ai < aiSumWithdrawals ai
-            then Left ai
-            else Right ()
+  ai <- queryAddressInfo addrId
+  pure $
+    if aiSumRewards ai < aiSumWithdrawals ai
+      then Left ai
+      else Right ()
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -69,24 +83,26 @@ queryWithdrawalAddresses = do
 
 queryAddressInfo :: MonadIO m => StakeAddressId -> ReaderT SqlBackend m AddressInfo
 queryAddressInfo addrId = do
-    rwds <- select $ from (table @Reward) >>= \ rwd -> do
-              where_ (rwd ^. RewardAddrId ==. val addrId)
-              pure (sum_ $ rwd ^. RewardAmount)
-    wdls <- select $ do
-      wdl <- from (table @Withdrawal)
-      where_ (wdl ^. WithdrawalAddrId ==. val addrId)
-      pure (sum_ (wdl ^. WithdrawalAmount))
-    view <- select $ do
-      saddr <- from $ table @StakeAddress
-      where_ (saddr ^. StakeAddressId ==. val addrId)
-      pure (saddr ^. StakeAddressView)
-    pure $ convert (listToMaybe rwds) (listToMaybe wdls) (listToMaybe view)
+  rwds <-
+    select $
+      from (table @Reward) >>= \rwd -> do
+        where_ (rwd ^. RewardAddrId ==. val addrId)
+        pure (sum_ $ rwd ^. RewardAmount)
+  wdls <- select $ do
+    wdl <- from (table @Withdrawal)
+    where_ (wdl ^. WithdrawalAddrId ==. val addrId)
+    pure (sum_ (wdl ^. WithdrawalAmount))
+  view <- select $ do
+    saddr <- from $ table @StakeAddress
+    where_ (saddr ^. StakeAddressId ==. val addrId)
+    pure (saddr ^. StakeAddressView)
+  pure $ convert (listToMaybe rwds) (listToMaybe wdls) (listToMaybe view)
   where
     convert :: Maybe (Value (Maybe Micro)) -> Maybe (Value (Maybe Micro)) -> Maybe (Value Text) -> AddressInfo
     convert rAmount wAmount mview =
-        AddressInfo
-          { aiStakeAddressId = addrId
-          , aiStakeAddress  = maybe "unknown" unValue mview
-          , aiSumRewards = unValueSumAda rAmount
-          , aiSumWithdrawals = unValueSumAda wAmount
-          }
+      AddressInfo
+        { aiStakeAddressId = addrId
+        , aiStakeAddress = maybe "unknown" unValue mview
+        , aiSumRewards = unValueSumAda rAmount
+        , aiSumWithdrawals = unValueSumAda wAmount
+        }

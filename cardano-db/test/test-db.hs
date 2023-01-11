@@ -1,22 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-import           Prelude
-
-import           Control.Monad (when)
-
-import           Data.Maybe (isNothing)
-
-import           Test.Tasty (defaultMain, testGroup)
-
+import Control.Monad (when)
+import Data.Maybe (isNothing)
+import System.Directory (getCurrentDirectory)
+import System.Environment (lookupEnv, setEnv)
+import System.FilePath ((</>))
 import qualified Test.IO.Cardano.Db.Insert
 import qualified Test.IO.Cardano.Db.Migration
 import qualified Test.IO.Cardano.Db.PGConfig
 import qualified Test.IO.Cardano.Db.Rollback
 import qualified Test.IO.Cardano.Db.TotalSupply
-
-import           System.Directory (getCurrentDirectory)
-import           System.Environment (lookupEnv, setEnv)
-import           System.FilePath ((</>))
+import Test.Tasty (defaultMain, testGroup)
+import Prelude
 
 main :: IO ()
 main = do
@@ -27,11 +22,11 @@ main = do
     setEnv "PGPASSFILE" (currentDir </> "../config/pgpass-mainnet")
 
   defaultMain $
-    testGroup "Database"
+    testGroup
+      "Database"
       [ Test.IO.Cardano.Db.Migration.tests
       , Test.IO.Cardano.Db.Insert.tests
       , Test.IO.Cardano.Db.TotalSupply.tests
       , Test.IO.Cardano.Db.Rollback.tests
       , Test.IO.Cardano.Db.PGConfig.tests
       ]
-

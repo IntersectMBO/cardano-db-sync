@@ -1,31 +1,27 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Cardano.SMASH.Server.Config
-  ( ApplicationUser (..)
-  , ApplicationUsers (..)
-  , SmashServerConfig (..)
-  , SmashServerParams(..)
+module Cardano.SMASH.Server.Config (
+  ApplicationUser (..),
+  ApplicationUsers (..),
+  SmashServerConfig (..),
+  SmashServerParams (..),
+  defaultSmashPort,
+  defaultSmashPool,
+  paramsToConfig,
+) where
 
-  , defaultSmashPort
-  , defaultSmashPool
-  , paramsToConfig
-  ) where
-
-import           Cardano.Prelude
-
-import           Data.Aeson (FromJSON (..), ToJSON (..))
+import qualified Cardano.BM.Configuration.Model as Logging
+import qualified Cardano.BM.Setup as Logging
+import Cardano.BM.Trace (Trace)
+import Cardano.Db (textShow)
+import Cardano.Prelude
+import Data.Aeson (FromJSON (..), ToJSON (..))
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import qualified Data.Yaml as Yaml
-
-import qualified Cardano.BM.Configuration.Model as Logging
-import qualified Cardano.BM.Setup as Logging
-import           Cardano.BM.Trace (Trace)
-import           Cardano.Db (textShow)
-
-import           System.IO.Error
+import System.IO.Error
 
 -- | SMASH Server cli parameters
 data SmashServerParams = SmashServerParams
@@ -49,12 +45,13 @@ paramsToConfig params = do
   appUsers <- readAppUsers $ sspAdminUsers params
   tracer <- configureLogging (sspConfigFile params) "smash-server"
 
-  pure $ SmashServerConfig
-    { sscSmashPort = sspSmashPort params
-    , sscTrace = tracer
-    , sscAdmins = appUsers
-    , sspPsqlPool = sspSmashPool params
-    }
+  pure $
+    SmashServerConfig
+      { sscSmashPort = sspSmashPort params
+      , sscTrace = tracer
+      , sscAdmins = appUsers
+      , sspPsqlPool = sspSmashPool params
+      }
 
 -- | SMASH Server configuration
 data SmashServerConfig = SmashServerConfig
@@ -66,18 +63,21 @@ data SmashServerConfig = SmashServerConfig
 
 -- | A data type we use to store user credentials.
 data ApplicationUser = ApplicationUser
-    { username :: !Text
-    , password :: !Text
-    } deriving (Eq, Show, Generic)
+  { username :: !Text
+  , password :: !Text
+  }
+  deriving (Eq, Show, Generic)
 
 instance ToJSON ApplicationUser
+
 instance FromJSON ApplicationUser
 
 -- | A list of users with special rights.
 newtype ApplicationUsers = ApplicationUsers [ApplicationUser]
-    deriving (Eq, Show, Generic)
+  deriving (Eq, Show, Generic)
 
 instance ToJSON ApplicationUsers
+
 instance FromJSON ApplicationUsers
 
 -- Load application users from a file.
@@ -94,11 +94,11 @@ readAppUsers mPath = case mPath of
 -- Parse application user as username,password
 parseAppUser :: Text -> Either Text ApplicationUser
 parseAppUser line = case Text.breakOn "," line of
-    (user, commaPswd)
-      | not (Text.null commaPswd)
-      , passwd <- Text.tail commaPswd -- strip the comma
-      -> Right $ ApplicationUser (prepareCred user) (prepareCred passwd)
-    _ -> Left "Credentials need to be supplied in the form: username,password"
+  (user, commaPswd)
+    | not (Text.null commaPswd)
+    , passwd <- Text.tail commaPswd -> -- strip the comma
+        Right $ ApplicationUser (prepareCred user) (prepareCred passwd)
+  _ -> Left "Credentials need to be supplied in the form: username,password"
   where
     prepareCred name = Text.strip name
 
@@ -115,4 +115,4 @@ configureLogging fp loggingName = do
 readByteString :: FilePath -> Text -> IO ByteString
 readByteString fp cfgType =
   catch (BS.readFile fp) $ \(_ :: IOException) ->
-    panic $ mconcat [ "Cannot find the ", cfgType, " configuration file at : ", Text.pack fp ]
+    panic $ mconcat ["Cannot find the ", cfgType, " configuration file at : ", Text.pack fp]

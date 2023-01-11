@@ -1,56 +1,49 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
-
+{-# LANGUAGE NoImplicitPrelude #-}
 -- Need this because both ghc-8.6.5 and ghc-8.10.2 incorrectly warns about a redundant constraint
 -- in the definition of renderAddress.
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
-module Cardano.DbSync.Era.Shelley.Generic.Util
-  ( annotateStakingCred
-  , coinToDbLovelace
-  , getPaymentCred
-  , hasCredScript
-  , getCredentialScriptHash
-  , maybePaymentCred
-  , mkSlotLeader
-  , nonceToBytes
-  , partitionMIRTargets
-  , renderAddress
-  , renderRewardAcnt
-  , stakingCredHash
-  , unitIntervalToDouble
-  , unKeyHashRaw
-  , unKeyHashView
-  , unScriptHash
-  , unTxHash
-  , unAssetName
-  ) where
-
-import           Cardano.Prelude
+module Cardano.DbSync.Era.Shelley.Generic.Util (
+  annotateStakingCred,
+  coinToDbLovelace,
+  getPaymentCred,
+  hasCredScript,
+  getCredentialScriptHash,
+  maybePaymentCred,
+  mkSlotLeader,
+  nonceToBytes,
+  partitionMIRTargets,
+  renderAddress,
+  renderRewardAcnt,
+  stakingCredHash,
+  unitIntervalToDouble,
+  unKeyHashRaw,
+  unKeyHashView,
+  unScriptHash,
+  unTxHash,
+  unAssetName,
+) where
 
 import qualified Cardano.Api.Shelley as Api
-
 import qualified Cardano.Crypto.Hash as Crypto
-
-import           Cardano.Db (DbLovelace (..))
+import Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as Db
-
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
+import Cardano.Ledger.Coin (Coin (..), DeltaCoin)
 import qualified Cardano.Ledger.Credential as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
-import           Cardano.Ledger.Mary.Value (AssetName (..))
-import qualified Cardano.Ledger.Shelley.Scripts as Shelley
-import           Cardano.Ledger.Shelley.Tx (TxId (..))
-import qualified Cardano.Ledger.Shelley.TxBody as Shelley
-
-import           Cardano.Ledger.Coin (Coin (..), DeltaCoin)
+import Cardano.Ledger.Mary.Value (AssetName (..))
 import qualified Cardano.Ledger.SafeHash as Ledger
-
+import qualified Cardano.Ledger.Shelley.Scripts as Shelley
+import Cardano.Ledger.Shelley.Tx (TxId (..))
+import qualified Cardano.Ledger.Shelley.TxBody as Shelley
+import Cardano.Prelude
 import qualified Data.Binary.Put as Binary
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
@@ -58,9 +51,7 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
 import qualified Data.List as List
 import qualified Data.Text.Encoding as Text
-
-import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
-
+import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 annotateStakingCred :: Ledger.Network -> Ledger.StakeCredential era -> Ledger.RewardAcnt era
 annotateStakingCred = Shelley.RewardAcnt
@@ -98,9 +89,9 @@ mkSlotLeader :: ByteString -> Maybe Db.PoolHashId -> Db.SlotLeader
 mkSlotLeader slHash mPoolId =
   let short = Text.decodeUtf8 (Base16.encode $ BS.take 8 slHash)
       slName = case mPoolId of
-                Nothing -> "ShelleyGenesisKey-" <> short
-                Just _ -> "Pool-" <> short
-  in Db.SlotLeader slHash mPoolId slName
+        Nothing -> "ShelleyGenesisKey-" <> short
+        Just _ -> "Pool-" <> short
+   in Db.SlotLeader slHash mPoolId slName
 
 nonceToBytes :: Ledger.Nonce -> Maybe ByteString
 nonceToBytes nonce =
@@ -108,16 +99,16 @@ nonceToBytes nonce =
     Ledger.Nonce hash -> Just $ Crypto.hashToBytes hash
     Ledger.NeutralNonce -> Nothing
 
-partitionMIRTargets
-    :: [Shelley.MIRTarget StandardCrypto]
-    -> ([Map (Ledger.Credential 'Ledger.Staking StandardCrypto) DeltaCoin], [Coin])
+partitionMIRTargets ::
+  [Shelley.MIRTarget StandardCrypto] ->
+  ([Map (Ledger.Credential 'Ledger.Staking StandardCrypto) DeltaCoin], [Coin])
 partitionMIRTargets =
-    List.foldl' foldfunc ([], [])
+  List.foldl' foldfunc ([], [])
   where
-    foldfunc
-        :: ([Map (Ledger.Credential 'Ledger.Staking StandardCrypto) DeltaCoin], [Coin])
-        -> Shelley.MIRTarget StandardCrypto
-        -> ([Map (Ledger.Credential 'Ledger.Staking StandardCrypto) DeltaCoin], [Coin])
+    foldfunc ::
+      ([Map (Ledger.Credential 'Ledger.Staking StandardCrypto) DeltaCoin], [Coin]) ->
+      Shelley.MIRTarget StandardCrypto ->
+      ([Map (Ledger.Credential 'Ledger.Staking StandardCrypto) DeltaCoin], [Coin])
     foldfunc (xs, ys) mt =
       case mt of
         Shelley.StakeAddressesMIR x -> (x : xs, ys)

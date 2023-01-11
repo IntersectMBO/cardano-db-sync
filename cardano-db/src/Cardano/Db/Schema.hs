@@ -17,24 +17,29 @@
 
 module Cardano.Db.Schema where
 
-import           Cardano.Db.Schema.Orphans ()
+import Cardano.Db.Schema.Orphans ()
+import Cardano.Db.Types (
+  DbInt65,
+  DbLovelace,
+  DbWord64,
+  RewardSource,
+  ScriptPurpose,
+  ScriptType,
+  SyncState,
+ )
+import Data.ByteString.Char8 (ByteString)
+import Data.Int (Int64)
+import Data.Text (Text)
+import Data.Time.Clock (UTCTime)
+import Data.WideWord.Word128 (Word128)
+import Data.Word (Word16, Word64)
+import Database.Persist.Class (Unique)
+import Database.Persist.Documentation (deriveShowFields, document, (#), (--^))
+import Database.Persist.EntityDef.Internal (EntityDef (..))
 
-import           Cardano.Db.Types (DbInt65, DbLovelace, DbWord64, RewardSource, ScriptPurpose,
-                   ScriptType, SyncState)
-
-import           Data.ByteString.Char8 (ByteString)
-import           Data.Int (Int64)
-import           Data.Text (Text)
-import           Data.Time.Clock (UTCTime)
-import           Data.WideWord.Word128 (Word128)
-import           Data.Word (Word16, Word64)
-
-import           Database.Persist.Class (Unique)
-import           Database.Persist.Documentation (deriveShowFields, document, (#), (--^))
-import           Database.Persist.EntityDef.Internal (EntityDef (..))
 -- Do not use explicit imports from this module as the imports can change
 -- from version to version due to changes to the TH code in Persistent.
-import           Database.Persist.TH
+import Database.Persist.TH
 
 -- In the schema definition we need to match Haskell types with with the
 -- custom type defined in PostgreSQL (via 'DOMAIN' statements). For the
@@ -522,14 +527,14 @@ schemaDocs =
   document entityDefs $ do
     SchemaVersion --^ do
       "The version of the database schema. Schema versioning is split into three stages as detailed\
-        \ below. This table should only ever have a single row."
+      \ below. This table should only ever have a single row."
       SchemaVersionStageOne # "Set up PostgreSQL data types (using SQL 'DOMAIN' statements)."
       SchemaVersionStageTwo # "Persistent generated migrations."
       SchemaVersionStageThree # "Set up database views, indices etc."
 
     PoolHash --^ do
       "A table for every unique pool key hash. The `id` field of this table is used as foreign keys in other tables.\
-        \ The existance of an entry doesn't mean the pool is registered or in fact that is was ever registered."
+      \ The existance of an entry doesn't mean the pool is registered or in fact that is was ever registered."
       PoolHashHashRaw # "The raw bytes of the pool hash."
       PoolHashView # "The Bech32 encoding of the pool hash."
 
@@ -574,13 +579,13 @@ schemaDocs =
 
     ReverseIndex --^ do
       "A table for reverse indexes for the minimum input output and multi asset output related with\
-        \ this block. New in v13.1"
+      \ this block. New in v13.1"
       ReverseIndexBlockId # "The Block table index related with these indexes"
       ReverseIndexMinIds # "The Reverse indexes associated with this block, as Text separated by :"
 
     StakeAddress --^ do
       "A table of unique stake addresses. Can be an actual address or a script hash. \
-        \ The existance of an entry doesn't mean the address is registered or in fact that is was ever registered."
+      \ The existance of an entry doesn't mean the address is registered or in fact that is was ever registered."
       StakeAddressHashRaw # "The raw bytes of the stake address hash."
       StakeAddressView # "The Bech32 encoded version of the stake address."
       StakeAddressScriptHash # "The script hash, in case this address is locked by a script."
@@ -650,8 +655,8 @@ schemaDocs =
 
     AdaPots --^ do
       "A table with all the different types of total balances (Shelley only).\n\
-        \The treasury and rewards fields will be correct for the whole epoch, but all other \
-        \fields change block by block."
+      \The treasury and rewards fields will be correct for the whole epoch, but all other \
+      \fields change block by block."
       AdaPotsSlotNo # "The slot number where this AdaPots snapshot was taken."
       AdaPotsEpochNo # "The epoch number where this AdaPots snapshot was taken."
       AdaPotsTreasury # "The amount (in Lovelace) in the treasury pot."
@@ -736,16 +741,18 @@ schemaDocs =
 
     Reward --^ do
       "A table for earned rewards. It includes 5 types of rewards. The rewards are inserted incrementally and\
-        \ this procedure is finalised when the spendable epoch comes. Before the epoch comes, some entries\
-        \ may be missing."
+      \ this procedure is finalised when the spendable epoch comes. Before the epoch comes, some entries\
+      \ may be missing."
       RewardAddrId # "The StakeAddress table index for the stake address that earned the reward."
       RewardType # "The source of the rewards; pool `member`, pool `leader`, `treasury` or `reserves` payment and pool deposits `refunds`"
       RewardAmount # "The reward amount (in Lovelace)."
-      RewardEarnedEpoch # "The epoch in which the reward was earned. For `pool` and `leader` rewards spendable in epoch `N`, this will be\
-        \ `N - 2`, for `treasury` and `reserves` `N - 1` and for `refund` N."
+      RewardEarnedEpoch
+        # "The epoch in which the reward was earned. For `pool` and `leader` rewards spendable in epoch `N`, this will be\
+          \ `N - 2`, for `treasury` and `reserves` `N - 1` and for `refund` N."
       RewardSpendableEpoch # "The epoch in which the reward is actually distributed and can be spent."
-      RewardPoolId # "The PoolHash table index for the pool the stake address was delegated to when\
-            \ the reward is earned or for the pool that there is a deposit refund. Will be NULL for payments from the treasury or the reserves."
+      RewardPoolId
+        # "The PoolHash table index for the pool the stake address was delegated to when\
+          \ the reward is earned or for the pool that there is a deposit refund. Will be NULL for payments from the treasury or the reserves."
 
     Withdrawal --^ do
       "A table for withdrawals from a reward account."
@@ -756,7 +763,7 @@ schemaDocs =
 
     EpochStake --^ do
       "A table containing the epoch stake distribution for each epoch. This is inserted incrementally in the first blocks of the epoch.\
-        \ The stake distribution is extracted from the `set` snapshot of the ledger. See Shelley specs Sec. 11.2 for more details."
+      \ The stake distribution is extracted from the `set` snapshot of the ledger. See Shelley specs Sec. 11.2 for more details."
       EpochStakeAddrId # "The StakeAddress table index for the stake address for this EpochStake entry."
       EpochStakePoolId # "The PoolHash table index for the pool this entry is delegated to."
       EpochStakeAmount # "The amount (in Lovelace) being staked."
@@ -792,8 +799,9 @@ schemaDocs =
     EpochSyncTime --^ do
       "A table containing the time required to fully sync an epoch."
       EpochSyncTimeNo # "The epoch number for this sync time."
-      EpochSyncTimeSeconds # "The time (in seconds) required to sync this epoch (may be NULL for an epoch\
-                                \ that was already partially synced when `db-sync` was started)."
+      EpochSyncTimeSeconds
+        # "The time (in seconds) required to sync this epoch (may be NULL for an epoch\
+          \ that was already partially synced when `db-sync` was started)."
       EpochSyncTimeState # "The sync state when the sync time is recorded (either 'lagging' or 'following')."
 
     MultiAsset --^ do
@@ -819,8 +827,9 @@ schemaDocs =
       RedeemerTxId # "The Tx table index that contains this redeemer."
       RedeemerUnitMem # "The budget in Memory to run a script."
       RedeemerUnitSteps # "The budget in Cpu steps to run a script."
-      RedeemerFee # "The budget in fees to run a script. The fees depend on the ExUnits and the current prices.\
-                        \ Is null when --disable-ledger is enabled. New in v13: became nullable."
+      RedeemerFee
+        # "The budget in fees to run a script. The fees depend on the ExUnits and the current prices.\
+          \ Is null when --disable-ledger is enabled. New in v13: became nullable."
       RedeemerPurpose # "What kind pf validation this redeemer is used for. It can be one of 'spend', 'mint', 'cert', 'reward'."
       RedeemerIndex # "The index of the redeemer pointer in the transaction."
       RedeemerScriptHash # "The script hash this redeemer is used for."
@@ -899,7 +908,7 @@ schemaDocs =
       EpochParamMaxBhSize # "The maximum block header size (in bytes)."
       EpochParamKeyDeposit # "The amount (in Lovelace) require for a deposit to register a StakeAddress."
       EpochParamPoolDeposit # "The amount (in Lovelace) require for a deposit to register a stake pool."
-      EpochParamMaxEpoch  # "The maximum number of epochs in the future that a pool retirement is allowed to be scheduled for."
+      EpochParamMaxEpoch # "The maximum number of epochs in the future that a pool retirement is allowed to be scheduled for."
       EpochParamOptimalPoolCount # "The optimal number of stake pools."
       EpochParamInfluence # "The influence of the pledge on a stake pool's probability on minting a block."
       EpochParamMonetaryExpandRate # "The monetary expansion rate."

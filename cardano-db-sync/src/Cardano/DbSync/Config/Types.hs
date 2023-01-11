@@ -2,50 +2,43 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Config.Types
-  ( ConfigFile (..)
-  , SyncCommand (..)
-  , SyncNodeParams (..)
-  , SyncProtocol (..)
-  , GenesisFile (..)
-  , GenesisHashShelley (..)
-  , GenesisHashByron (..)
-  , GenesisHashAlonzo (..)
-  , SyncNodeConfig (..)
-  , SyncPreConfig (..)
-  , LedgerStateDir (..)
-  , LogFileDir (..)
-  , NetworkName (..)
-  , NodeConfigFile (..)
-  , SocketPath (..)
-  , adjustGenesisFilePath
-  , adjustNodeConfigFilePath
-  , pcNodeConfigFilePath
-  ) where
-
-import           Cardano.Prelude
+module Cardano.DbSync.Config.Types (
+  ConfigFile (..),
+  SyncCommand (..),
+  SyncNodeParams (..),
+  SyncProtocol (..),
+  GenesisFile (..),
+  GenesisHashShelley (..),
+  GenesisHashByron (..),
+  GenesisHashAlonzo (..),
+  SyncNodeConfig (..),
+  SyncPreConfig (..),
+  LedgerStateDir (..),
+  LogFileDir (..),
+  NetworkName (..),
+  NodeConfigFile (..),
+  SocketPath (..),
+  adjustGenesisFilePath,
+  adjustNodeConfigFilePath,
+  pcNodeConfigFilePath,
+) where
 
 import qualified Cardano.BM.Configuration as Logging
 import qualified Cardano.BM.Data.Configuration as Logging
-
 import qualified Cardano.Chain.Update as Byron
-
-import           Cardano.Crypto (RequiresNetworkMagic (..))
+import Cardano.Crypto (RequiresNetworkMagic (..))
 import qualified Cardano.Crypto.Hash as Crypto
-
-import           Cardano.Db (MigrationDir, PGPassSource (..))
-
-import           Cardano.Slotting.Slot (SlotNo (..))
-
-import           Data.Aeson (FromJSON (..), Object, Value (..), (.:), (.:?))
+import Cardano.Db (MigrationDir, PGPassSource (..))
+import Cardano.Prelude
+import Cardano.Slotting.Slot (SlotNo (..))
+import Data.Aeson (FromJSON (..), Object, Value (..), (.:), (.:?))
 import qualified Data.Aeson as Aeson
-import           Data.Aeson.Types (Parser, typeMismatch)
-
-import           Ouroboros.Consensus.Cardano.CanHardFork (TriggerHardFork (..))
+import Data.Aeson.Types (Parser, typeMismatch)
+import Ouroboros.Consensus.Cardano.CanHardFork (TriggerHardFork (..))
 
 newtype LogFileDir = LogFileDir
   { unLogFileDir :: FilePath
@@ -78,7 +71,7 @@ data SyncNodeParams = SyncNodeParams
 -- May have other constructors when we are preparing for a HFC event.
 data SyncProtocol
   = SyncProtocolCardano
-  deriving Show
+  deriving (Show)
 
 data SyncNodeConfig = SyncNodeConfig
   { dncNetworkName :: !NetworkName
@@ -98,7 +91,6 @@ data SyncNodeConfig = SyncNodeConfig
   , dncAlonzoGenesisHash :: !GenesisHashAlonzo
   , dncByronSoftwareVersion :: !Byron.SoftwareVersion
   , dncByronProtocolVersion :: !Byron.ProtocolVersion
-
   , dncShelleyHardFork :: !TriggerHardFork
   , dncAllegraHardFork :: !TriggerHardFork
   , dncMaryHardFork :: !TriggerHardFork
@@ -117,36 +109,43 @@ data SyncPreConfig = SyncPreConfig
 
 newtype GenesisFile = GenesisFile
   { unGenesisFile :: FilePath
-  } deriving Show
+  }
+  deriving (Show)
 
 newtype GenesisHashByron = GenesisHashByron
   { unGenesisHashByron :: Text
-  } deriving newtype (Eq, Show)
+  }
+  deriving newtype (Eq, Show)
 
 newtype GenesisHashShelley = GenesisHashShelley
   { unGenesisHashShelley :: Crypto.Hash Crypto.Blake2b_256 ByteString
-  } deriving newtype (Eq, Show)
+  }
+  deriving newtype (Eq, Show)
 
 newtype GenesisHashAlonzo = GenesisHashAlonzo
   { unGenesisHashAlonzo :: Crypto.Hash Crypto.Blake2b_256 ByteString
-  } deriving newtype (Eq, Show)
-
+  }
+  deriving newtype (Eq, Show)
 
 newtype LedgerStateDir = LedgerStateDir
-  {  unLedgerStateDir :: FilePath
-  } deriving Show
+  { unLedgerStateDir :: FilePath
+  }
+  deriving (Show)
 
 newtype NetworkName = NetworkName
   { unNetworkName :: Text
-  } deriving Show
+  }
+  deriving (Show)
 
 newtype NodeConfigFile = NodeConfigFile
   { unNodeConfigFile :: FilePath
-  } deriving Show
+  }
+  deriving (Show)
 
 newtype SocketPath = SocketPath
   { unSocketPath :: FilePath
-  } deriving Show
+  }
+  deriving (Show)
 
 adjustGenesisFilePath :: (FilePath -> FilePath) -> GenesisFile -> GenesisFile
 adjustGenesisFilePath f (GenesisFile p) = GenesisFile (f p)

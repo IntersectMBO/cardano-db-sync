@@ -1,59 +1,56 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-module Cardano.DbSync.Era.Shelley.Generic.Block
-  ( Block (..)
-  , BlockEra (..)
-  , fromShelleyBlock
-  , fromAllegraBlock
-  , fromMaryBlock
-  , fromAlonzoBlock
-  , fromBabbageBlock
+{-# LANGUAGE NoImplicitPrelude #-}
 
-  , blockHash
-  , blockPrevHash
-  , alonzoBlockTxs
-  , babbageBlockTxs
-  ) where
+module Cardano.DbSync.Era.Shelley.Generic.Block (
+  Block (..),
+  BlockEra (..),
+  fromShelleyBlock,
+  fromAllegraBlock,
+  fromMaryBlock,
+  fromAlonzoBlock,
+  fromBabbageBlock,
+  blockHash,
+  blockPrevHash,
+  alonzoBlockTxs,
+  babbageBlockTxs,
+) where
 
 import qualified Cardano.Api.Shelley as Api
-
 import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Crypto.KES.Class as KES
-
-import           Cardano.DbSync.Era.Shelley.Generic.Tx
-import           Cardano.DbSync.Types
-
-import           Cardano.Ledger.Alonzo ()
-import           Cardano.Ledger.Alonzo.Scripts (Prices)
+import Cardano.DbSync.Era.Shelley.Generic.Tx
+import Cardano.DbSync.Types
+import Cardano.Ledger.Alonzo ()
+import Cardano.Ledger.Alonzo.Scripts (Prices)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Block as Ledger
 import qualified Cardano.Ledger.Core as Ledger
-import           Cardano.Ledger.Crypto (Crypto, StandardCrypto)
-import           Cardano.Ledger.Era (EraSegWits (..))
-import           Cardano.Ledger.Keys (KeyHash, KeyRole (..), VerKeyVRF, hashKey)
+import Cardano.Ledger.Crypto (Crypto, StandardCrypto)
+import Cardano.Ledger.Era (EraSegWits (..))
+import Cardano.Ledger.Keys (KeyHash, KeyRole (..), VerKeyVRF, hashKey)
 import qualified Cardano.Ledger.Shelley.BlockChain as Shelley
 import qualified Cardano.Ledger.Shelley.Tx as Shelley
-
-import           Cardano.Prelude
-
+import Cardano.Prelude
 import qualified Cardano.Protocol.TPraos.BHeader as TPraos
 import qualified Cardano.Protocol.TPraos.OCert as TPraos
-
-import           Cardano.Slotting.Slot (SlotNo (..))
-
-import           Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardAlonzo,
-                   StandardBabbage, StandardMary, StandardShelley)
+import Cardano.Slotting.Slot (SlotNo (..))
+import Ouroboros.Consensus.Cardano.Block (
+  StandardAllegra,
+  StandardAlonzo,
+  StandardBabbage,
+  StandardMary,
+  StandardShelley,
+ )
 import qualified Ouroboros.Consensus.Protocol.Praos.Header as Praos
-import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra, ShelleyBlock)
+import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra, ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
-import           Ouroboros.Consensus.Shelley.Protocol.Abstract
-
-import           Ouroboros.Network.Block (BlockNo (..))
+import Ouroboros.Consensus.Shelley.Protocol.Abstract
+import Ouroboros.Network.Block (BlockNo (..))
 
 data Block = Block
   { blkEra :: !BlockEra
@@ -69,7 +66,6 @@ data Block = Block
   , blkOpCertCounter :: !Word64
   , blkTxs :: [Tx] -- intentionally left lazy to delay the tx transformation
   }
-
 
 fromAllegraBlock :: ShelleyBlock TPraosStandard StandardAllegra -> Block
 fromAllegraBlock blk =
@@ -170,7 +166,8 @@ blockHeader = Ledger.bheader . Consensus.shelleyBlockRaw
 blockHash :: (ProtoCrypto p ~ StandardCrypto) => ShelleyBlock p era -> ByteString
 blockHash =
   Crypto.hashToBytes -- . Protocol.unHashHeader
-    . Consensus.unShelleyHash . Consensus.shelleyBlockHeaderHash
+    . Consensus.unShelleyHash
+    . Consensus.shelleyBlockHeaderHash
 
 blockNumber :: ShelleyProtocol p => ShelleyBlock p era -> BlockNo
 blockNumber = pHeaderBlock . blockHeader
@@ -208,12 +205,13 @@ blockProtoVersionPraos = Praos.hbProtVer . getHeaderBodyPraos . blockHeader
 blockSize :: ShelleyBasedEra era => ShelleyBlock p era -> Word64
 blockSize = fromIntegral . Shelley.bBodySize . Ledger.bbody . Consensus.shelleyBlockRaw
 
-blockTxs
-    :: ( ShelleyBasedEra era
-        , Ledger.TxSeq era ~ Shelley.ShelleyTxSeq era
-        , Ledger.Tx era ~ Shelley.ShelleyTx era
-        )
-    => ShelleyBlock p era -> [(Word64, Shelley.ShelleyTx era)]
+blockTxs ::
+  ( ShelleyBasedEra era
+  , Ledger.TxSeq era ~ Shelley.ShelleyTxSeq era
+  , Ledger.Tx era ~ Shelley.ShelleyTx era
+  ) =>
+  ShelleyBlock p era ->
+  [(Word64, Shelley.ShelleyTx era)]
 blockTxs = zip [0 ..] . unTxSeq . Ledger.bbody . Consensus.shelleyBlockRaw
 
 blockVrfKeyView :: VerKeyVRF StandardCrypto -> Text
@@ -228,18 +226,20 @@ blockVrfVkPraos = Praos.hbVrfVk . getHeaderBodyPraos . blockHeader
 getHeaderBodyPraos :: Crypto c => Praos.Header c -> Praos.HeaderBody c
 getHeaderBodyPraos (Praos.Header headerBody _) = headerBody
 
-blockIssuer
-    :: (ShelleyProtocol p, Crypto (ProtoCrypto p), ProtoCrypto p ~ crypto)
-    => ShelleyBlock p era -> KeyHash 'BlockIssuer crypto
+blockIssuer ::
+  (ShelleyProtocol p, Crypto (ProtoCrypto p), ProtoCrypto p ~ crypto) =>
+  ShelleyBlock p era ->
+  KeyHash 'BlockIssuer crypto
 blockIssuer = hashKey . pHeaderIssuer . blockHeader
 
 slotNumber :: ShelleyProtocol p => ShelleyBlock p era -> SlotNo
 slotNumber = pHeaderSlot . blockHeader
 
-unTxSeq
-    :: ( ShelleyBasedEra era
-       , Ledger.TxSeq era ~ Shelley.ShelleyTxSeq era
-       , Ledger.Tx era ~ Shelley.ShelleyTx era
-       )
-    => Shelley.ShelleyTxSeq era -> [Shelley.ShelleyTx era]
+unTxSeq ::
+  ( ShelleyBasedEra era
+  , Ledger.TxSeq era ~ Shelley.ShelleyTxSeq era
+  , Ledger.Tx era ~ Shelley.ShelleyTx era
+  ) =>
+  Shelley.ShelleyTxSeq era ->
+  [Shelley.ShelleyTx era]
 unTxSeq = toList . Ledger.fromTxSeq

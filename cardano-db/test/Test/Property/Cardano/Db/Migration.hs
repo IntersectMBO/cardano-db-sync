@@ -1,17 +1,15 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Test.Property.Cardano.Db.Migration
-  ( genMigrationVersion
-  , tests
-  ) where
+module Test.Property.Cardano.Db.Migration (
+  genMigrationVersion,
+  tests,
+) where
 
-import           Cardano.Db
-
-import           Hedgehog (Gen, Property, discover, (===))
+import Cardano.Db
+import Hedgehog (Gen, Property, discover, (===))
 import qualified Hedgehog as H
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
-
 
 prop_roundtrip_MigrationVersion :: Property
 prop_roundtrip_MigrationVersion =

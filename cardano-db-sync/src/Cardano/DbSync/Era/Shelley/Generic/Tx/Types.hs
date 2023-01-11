@@ -1,39 +1,32 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Generic.Tx.Types
-  ( Tx (..)
-  , TxCertificate (..)
-  , TxWithdrawal (..)
-  , TxIn (..)
-  , TxOut (..)
-  , TxRedeemer (..)
-  , TxScript (..)
-  , PlutusData (..)
-  , TxOutDatum (..)
-  , whenInlineDatum
-  , getTxOutDatumHash
-  , getMaybeDatumHash
-  , sumTxOutCoin
-  ) where
+module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
+  Tx (..),
+  TxCertificate (..),
+  TxWithdrawal (..),
+  TxIn (..),
+  TxOut (..),
+  TxRedeemer (..),
+  TxScript (..),
+  PlutusData (..),
+  TxOutDatum (..),
+  whenInlineDatum,
+  getTxOutDatumHash,
+  getMaybeDatumHash,
+  sumTxOutCoin,
+) where
 
-import           Cardano.Prelude
-
-import           Cardano.Slotting.Slot (SlotNo (..))
-
+import Cardano.Api.Shelley (TxMetadataValue (..))
+import Cardano.Db (ScriptType (..))
+import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import qualified Cardano.Ledger.Address as Ledger
-import           Cardano.Ledger.Alonzo.Scripts (Tag (..))
-import           Cardano.Ledger.Coin (Coin (..))
-import           Cardano.Ledger.Mary.Value (AssetName, MaryValue, PolicyID)
+import Cardano.Ledger.Alonzo.Scripts (Tag (..))
+import Cardano.Ledger.Coin (Coin (..))
+import Cardano.Ledger.Mary.Value (AssetName, MaryValue, PolicyID)
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
-
-import           Ouroboros.Consensus.Cardano.Block (StandardCrypto)
-
-import           Cardano.Api.Shelley (TxMetadataValue (..))
-
-import           Cardano.Db (ScriptType (..))
-
-import           Cardano.DbSync.Era.Shelley.Generic.ParamProposal
-
+import Cardano.Prelude
+import Cardano.Slotting.Slot (SlotNo (..))
+import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 data Tx = Tx
   { txHash :: !ByteString
@@ -78,7 +71,8 @@ data TxIn = TxIn
   { txInHash :: !ByteString
   , txInIndex :: !Word64
   , txInRedeemerIndex :: !(Maybe Word64) -- This only has a meaning for Alonzo.
-  } deriving Show
+  }
+  deriving (Show)
 
 data TxOut = TxOut
   { txOutIndex :: !Word64

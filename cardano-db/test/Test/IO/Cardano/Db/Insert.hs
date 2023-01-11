@@ -1,29 +1,24 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module Test.IO.Cardano.Db.Insert
-  ( tests
-  ) where
 
-import           Control.Monad (void)
+module Test.IO.Cardano.Db.Insert (
+  tests,
+) where
 
-import           Data.ByteString.Char8 (ByteString)
+import Cardano.Db
+import Control.Monad (void)
+import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
-
-import           Data.Time.Clock
-
-import           Cardano.Db
-
-import           Test.Tasty (TestTree, testGroup)
-import           Test.Tasty.HUnit (testCase)
-
-import           Test.IO.Cardano.Db.Util
-
-import           Database.Persist.Sql (Entity, deleteWhere, selectList, (>=.))
-
+import Data.Time.Clock
+import Database.Persist.Sql (Entity, deleteWhere, selectList, (>=.))
+import Test.IO.Cardano.Db.Util
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.HUnit (testCase)
 
 tests :: TestTree
 tests =
-  testGroup "Insert"
+  testGroup
+    "Insert"
     [ testCase "Insert zeroth block" insertZeroTest
     , testCase "Insert first block" insertFirstTest
     , testCase "Insert twice" insertTwice
@@ -44,7 +39,6 @@ insertZeroTest =
     bid1 <- insertBlockChecked (blockZero slid)
     assertBool (show bid0 ++ " /= " ++ show bid1) (bid0 == bid1)
 
-
 insertFirstTest :: IO ()
 insertFirstTest =
   runDbNoLoggingEnv $ do
@@ -54,7 +48,7 @@ insertFirstTest =
     void $ deleteBlock (blockOne slid)
     -- Insert the same block twice.
     bid0 <- insertBlockChecked (blockZero slid)
-    bid1 <- insertBlockChecked $ (\b -> b { blockPreviousId = Just bid0 }) (blockOne slid)
+    bid1 <- insertBlockChecked $ (\b -> b {blockPreviousId = Just bid0}) (blockOne slid)
     assertBool (show bid0 ++ " == " ++ show bid1) (bid0 /= bid1)
 
 insertTwice :: IO ()
@@ -69,7 +63,8 @@ insertTwice =
     -- Insert with same Unique key, different first field
     _ <- insertAdaPots (adaPots {adaPotsSlotNo = 1 + adaPotsSlotNo adaPots})
     Just pots0' <- queryAdaPots bid
-    assertBool (show (adaPotsSlotNo pots0) ++ " /= " ++ show (adaPotsSlotNo pots0'))
+    assertBool
+      (show (adaPotsSlotNo pots0) ++ " /= " ++ show (adaPotsSlotNo pots0'))
       (adaPotsSlotNo pots0 == adaPotsSlotNo pots0')
 
 insertForeignKeyMissing :: IO ()
@@ -100,8 +95,6 @@ insertForeignKeyMissing = do
 
     count2 <- poolOfflineFetchErrorCount
     assertBool (show count2 ++ "/= 0") (count2 == 0)
-
-
   where
     poolOfflineFetchErrorCount = do
       ls :: [Entity PoolOfflineFetchError] <- selectList [] []
@@ -126,7 +119,6 @@ blockZero slid =
     , blockOpCert = Nothing
     , blockOpCertCounter = Nothing
     }
-
 
 blockOne :: SlotLeaderId -> Block
 blockOne slid =
@@ -206,4 +198,3 @@ poolOfflineFetchError phid pmrid time =
 
 mkHash :: Int -> Char -> ByteString
 mkHash n = BS.pack . replicate n
-

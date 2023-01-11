@@ -1,27 +1,26 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Cardano.Db.Migration.Version
-  ( MigrationVersion (..)
-  , parseMigrationVersionFromFile
-  , nextMigrationVersion
-  , renderMigrationVersion
-  , renderMigrationVersionFile
-  ) where
+module Cardano.Db.Migration.Version (
+  MigrationVersion (..),
+  parseMigrationVersionFromFile,
+  nextMigrationVersion,
+  renderMigrationVersion,
+  renderMigrationVersionFile,
+) where
 
 import qualified Data.List as List
 import qualified Data.List.Extra as List
 import qualified Data.Time.Calendar as Time
 import qualified Data.Time.Clock as Time
-
-import           Text.Printf (printf)
-import           Text.Read (readMaybe)
+import Text.Printf (printf)
+import Text.Read (readMaybe)
 
 data MigrationVersion = MigrationVersion
   { mvStage :: Int
   , mvVersion :: Int
   , mvDate :: Int
-  } deriving (Eq, Ord, Show)
-
+  }
+  deriving (Eq, Ord, Show)
 
 parseMigrationVersionFromFile :: String -> Maybe MigrationVersion
 parseMigrationVersionFromFile str =
@@ -42,7 +41,8 @@ nextMigrationVersion (MigrationVersion _stage ver _date) = do
 
 renderMigrationVersion :: MigrationVersion -> String
 renderMigrationVersion mv =
-  List.intercalate "-"
+  List.intercalate
+    "-"
     [ printf "%d" (mvStage mv)
     , printf "%04d" (mvVersion mv)
     , show (mvDate mv)

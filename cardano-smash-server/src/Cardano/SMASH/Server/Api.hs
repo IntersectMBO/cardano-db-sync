@@ -5,34 +5,45 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# OPTIONS_GHC -fno-warn-missing-methods #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Cardano.SMASH.Server.Api
-  ( API
-  , DelistedPoolsAPI
-  , BasicAuthURL
-  , fullAPI
-  , smashApi
-  ) where
+module Cardano.SMASH.Server.Api (
+  API,
+  DelistedPoolsAPI,
+  BasicAuthURL,
+  fullAPI,
+  smashApi,
+) where
 
-
-import           Cardano.Prelude
-import           Prelude (String)
-
-import           Data.Aeson (FromJSON, ToJSON (..), eitherDecode, encode, object, (.=))
-import           Data.Swagger (Swagger (..))
-
-import           Network.Wai (Request, lazyRequestBody)
-import           Servant (BasicAuth, Capture, Get, HasServer (..), JSON, Patch, Post, QueryParam,
-                   ReqBody, (:<|>) (..), (:>))
-import           Servant.Server (err400)
-import           Servant.Server.Internal (DelayedIO, addBodyCheck, delayedFailFatal, errBody,
-                   withRequest)
-
-import           Servant.Swagger (HasSwagger (..))
-
-import           Cardano.SMASH.Server.Types
+import Cardano.Prelude
+import Cardano.SMASH.Server.Types
+import Data.Aeson (FromJSON, ToJSON (..), eitherDecode, encode, object, (.=))
+import Data.Swagger (Swagger (..))
+import Network.Wai (Request, lazyRequestBody)
+import Servant (
+  BasicAuth,
+  Capture,
+  Get,
+  HasServer (..),
+  JSON,
+  Patch,
+  Post,
+  QueryParam,
+  ReqBody,
+  (:<|>) (..),
+  (:>),
+ )
+import Servant.Server (err400)
+import Servant.Server.Internal (
+  DelayedIO,
+  addBodyCheck,
+  delayedFailFatal,
+  errBody,
+  withRequest,
+ )
+import Servant.Swagger (HasSwagger (..))
+import Prelude (String)
 
 -- Showing errors as JSON. To be reused when we need more general error handling.
 
@@ -42,7 +53,7 @@ instance (FromJSON a, HasServer api context) => HasServer (Body a :> api) contex
   type ServerT (Body a :> api) m = a -> ServerT api m
 
   route Proxy context subserver =
-      route (Proxy :: Proxy api) context (addBodyCheck subserver ctCheck bodyCheckRequest)
+    route (Proxy :: Proxy api) context (addBodyCheck subserver ctCheck bodyCheckRequest)
     where
       -- Don't check the content type specifically.
       ctCheck :: DelayedIO Request
@@ -53,13 +64,14 @@ instance (FromJSON a, HasServer api context) => HasServer (Body a :> api) contex
         body <- liftIO (lazyRequestBody request)
         case eitherDecode body of
           Left dbFail ->
-            delayedFailFatal err400 { errBody = encode dbFail }
+            delayedFailFatal err400 {errBody = encode dbFail}
           Right v ->
             pure v
 
 newtype BodyError = BodyError String
+
 instance ToJSON BodyError where
-    toJSON (BodyError b) = object ["error" .= b]
+  toJSON (BodyError b) = object ["error" .= b]
 
 -- |For api versioning.
 type APIVersion = "v1"
@@ -111,17 +123,18 @@ type RetiredPoolsAPI = "api" :> APIVersion :> "retired" :> ApiRes Get [PoolId]
 type CheckPoolAPI = "api" :> APIVersion :> "exists" :> Capture "poolId" PoolId :> ApiRes Get PoolId
 
 -- The full API.
-type SmashAPI =  OfflineMetadataAPI
-            :<|> HealthStatusAPI
-            :<|> ReservedTickersAPI
-            :<|> DelistedPoolsAPI
-            :<|> DelistPoolAPI
-            :<|> EnlistPoolAPI
-            :<|> FetchPoolErrorAPI
-            :<|> RetiredPoolsAPI
-            :<|> CheckPoolAPI
-            :<|> AddTickerAPI
-            :<|> FetchPoliciesAPI
+type SmashAPI =
+  OfflineMetadataAPI
+    :<|> HealthStatusAPI
+    :<|> ReservedTickersAPI
+    :<|> DelistedPoolsAPI
+    :<|> DelistPoolAPI
+    :<|> EnlistPoolAPI
+    :<|> FetchPoolErrorAPI
+    :<|> RetiredPoolsAPI
+    :<|> CheckPoolAPI
+    :<|> AddTickerAPI
+    :<|> FetchPoliciesAPI
 
 -- | API for serving @swagger.json@.
 type SwaggerAPI = "swagger.json" :> Get '[JSON] Swagger
@@ -138,9 +151,8 @@ smashApi = Proxy
 
 -- For now, we just ignore the @Body@ definition.
 instance (HasSwagger api) => HasSwagger (Body name :> api) where
-    toSwagger _ = toSwagger (Proxy :: Proxy api)
+  toSwagger _ = toSwagger (Proxy :: Proxy api)
 
 -- For now, we just ignore the @BasicAuth@ definition.
 instance (HasSwagger api) => HasSwagger (BasicAuth name typo :> api) where
-    toSwagger _ = toSwagger (Proxy :: Proxy api)
-
+  toSwagger _ = toSwagger (Proxy :: Proxy api)

@@ -1,20 +1,18 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-
-module Cardano.Db.Error
-  ( LookupFail (..)
-  , renderLookupFail
-  ) where
-
+module Cardano.Db.Error (
+  LookupFail (..),
+  renderLookupFail,
+) where
 
 import qualified Data.ByteString.Base16 as Base16
-import           Data.ByteString.Char8 (ByteString)
-import           Data.Text (Text)
+import Data.ByteString.Char8 (ByteString)
+import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-import           Data.Word (Word16, Word64)
-import           GHC.Generics
+import Data.Word (Word16, Word64)
+import GHC.Generics
 
 data LookupFail
   = DbLookupBlockHash !ByteString
@@ -37,15 +35,15 @@ renderLookupFail lf =
     DbLookupMessage txt -> txt
     DbLookupTxHash h -> "tx hash " <> base16encode h
     DbLookupTxOutPair h i ->
-        Text.concat [ "tx out pair (", base16encode h, ", ", textShow i, ")" ]
+      Text.concat ["tx out pair (", base16encode h, ", ", textShow i, ")"]
     DbLookupEpochNo e ->
-        Text.concat [ "epoch number ", textShow e ]
+      Text.concat ["epoch number ", textShow e]
     DbLookupSlotNo s ->
-        Text.concat [ "slot number ", textShow s ]
+      Text.concat ["slot number ", textShow s]
     DbMetaEmpty -> "Meta table is empty"
     DbMetaMultipleRows -> "Multiple rows in Meta table which should only contain one"
     DBMultipleGenesis ->
-        "Multiple Genesis blocks found. These are blocks without an EpochNo"
+      "Multiple Genesis blocks found. These are blocks without an EpochNo"
 
 base16encode :: ByteString -> Text
 base16encode = Text.decodeUtf8 . Base16.encode

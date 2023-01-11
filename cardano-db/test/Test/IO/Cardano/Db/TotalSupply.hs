@@ -1,25 +1,22 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Test.IO.Cardano.Db.TotalSupply
-  ( tests
-  ) where
+module Test.IO.Cardano.Db.TotalSupply (
+  tests,
+) where
 
-import           Cardano.Db
-
+import Cardano.Db
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
-
-import           Test.Tasty (TestTree, testGroup)
-import           Test.Tasty.HUnit (testCase)
-
-import           Test.IO.Cardano.Db.Util
+import Test.IO.Cardano.Db.Util
+import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.HUnit (testCase)
 
 tests :: TestTree
 tests =
-  testGroup "TotalSupply"
+  testGroup
+    "TotalSupply"
     [ testCase "Initial supply correct" initialSupplyTest
     ]
-
 
 initialSupplyTest :: IO ()
 initialSupplyTest =
@@ -39,20 +36,21 @@ initialSupplyTest =
 
     -- Spend from the Utxo set.
     bid1 <- insertBlock (mkBlock 1 slid)
-    tx1Id <- insertTx $
-                Tx
-                  { txHash = mkTxHash bid1 1
-                  , txBlockId = bid1
-                  , txBlockIndex = 0
-                  , txOutSum = DbLovelace 500000000
-                  , txFee = DbLovelace 100
-                  , txDeposit = 0
-                  , txSize = 123
-                  , txInvalidHereafter = Nothing
-                  , txInvalidBefore = Nothing
-                  , txValidContract = True
-                  , txScriptSize = 0
-                  }
+    tx1Id <-
+      insertTx $
+        Tx
+          { txHash = mkTxHash bid1 1
+          , txBlockId = bid1
+          , txBlockIndex = 0
+          , txOutSum = DbLovelace 500000000
+          , txFee = DbLovelace 100
+          , txDeposit = 0
+          , txSize = 123
+          , txInvalidHereafter = Nothing
+          , txInvalidBefore = Nothing
+          , txValidContract = True
+          , txScriptSize = 0
+          }
     _ <- insertTxIn (TxIn tx1Id (head tx0Ids) 0 Nothing)
     let addr = mkAddressHash bid1 tx1Id
     _ <- insertTxOut $ TxOut tx1Id 0 (Text.pack addr) (BS.pack addr) False Nothing Nothing (DbLovelace 500000000) Nothing Nothing Nothing

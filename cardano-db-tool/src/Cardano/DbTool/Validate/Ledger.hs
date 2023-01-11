@@ -1,29 +1,26 @@
-module Cardano.DbTool.Validate.Ledger
-  ( LedgerValidationParams (..)
-  , validateLedger
-  ) where
-
-import           Control.Monad (when)
-import           Control.Monad.Trans.Except.Exit (orDie)
-import           Control.Tracer (nullTracer)
-import           Data.Text (Text)
-import qualified Data.Text as Text
-import           Prelude
+module Cardano.DbTool.Validate.Ledger (
+  LedgerValidationParams (..),
+  validateLedger,
+) where
 
 import qualified Cardano.Db as DB
-import           Cardano.DbTool.Validate.Balance (ledgerAddrBalance)
-import           Cardano.DbTool.Validate.Util
-
-import           Cardano.DbSync.Config
-import           Cardano.DbSync.Config.Cardano
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.LedgerState
-import           Cardano.DbSync.Tracing.ToObjectOrphans ()
-
-import           Ouroboros.Consensus.Cardano.Node ()
-import           Ouroboros.Consensus.Ledger.Extended
-import           Ouroboros.Network.Block
-import           Ouroboros.Network.NodeToClient (withIOManager)
+import Cardano.DbSync.Config
+import Cardano.DbSync.Config.Cardano
+import Cardano.DbSync.Error
+import Cardano.DbSync.LedgerState
+import Cardano.DbSync.Tracing.ToObjectOrphans ()
+import Cardano.DbTool.Validate.Balance (ledgerAddrBalance)
+import Cardano.DbTool.Validate.Util
+import Control.Monad (when)
+import Control.Monad.Trans.Except.Exit (orDie)
+import Control.Tracer (nullTracer)
+import Data.Text (Text)
+import qualified Data.Text as Text
+import Ouroboros.Consensus.Cardano.Node ()
+import Ouroboros.Consensus.Ledger.Extended
+import Ouroboros.Network.Block
+import Ouroboros.Network.NodeToClient (withIOManager)
+import Prelude
 
 data LedgerValidationParams = LedgerValidationParams
   { vpConfigFile :: !ConfigFile
@@ -33,7 +30,7 @@ data LedgerValidationParams = LedgerValidationParams
 
 validateLedger :: LedgerValidationParams -> IO ()
 validateLedger params =
-  withIOManager $ \ _ -> do
+  withIOManager $ \_ -> do
     enc <- readSyncNodeConfig (vpConfigFile params)
     genCfg <- orDie renderSyncNodeError $ readCardanoGenesisConfig enc
     ledgerFiles <- listLedgerStateFilesOrdered (vpLedgerStateDir params)
@@ -42,7 +39,7 @@ validateLedger params =
 
 validate :: LedgerValidationParams -> GenesisConfig -> SlotNo -> [LedgerStateFile] -> IO ()
 validate params genCfg slotNo ledgerFiles =
-    go ledgerFiles True
+  go ledgerFiles True
   where
     go :: [LedgerStateFile] -> Bool -> IO ()
     go [] _ = putStrLn $ redText "No ledger found"
@@ -66,12 +63,27 @@ validateBalance slotNo addr st = do
     Right balanceLedger ->
       if balanceDB == balanceLedger
         then
-          putStrF $ concat
-            [ "DB and Ledger balance for address ", Text.unpack addr, " at slot ", show (unSlotNo slotNo)
-            , " match (", show balanceLedger, " ada) : ", greenText "ok", "\n"
-            ]
+          putStrF $
+            concat
+              [ "DB and Ledger balance for address "
+              , Text.unpack addr
+              , " at slot "
+              , show (unSlotNo slotNo)
+              , " match ("
+              , show balanceLedger
+              , " ada) : "
+              , greenText "ok"
+              , "\n"
+              ]
         else
-          error . redText $ concat
-            [ "failed: DB and Ledger balances for address ", Text.unpack addr, " don't match. "
-            , "DB value (", show balanceDB, ") /= ledger value (", show balanceLedger, ")."
-            ]
+          error . redText $
+            concat
+              [ "failed: DB and Ledger balances for address "
+              , Text.unpack addr
+              , " don't match. "
+              , "DB value ("
+              , show balanceDB
+              , ") /= ledger value ("
+              , show balanceLedger
+              , ")."
+              ]

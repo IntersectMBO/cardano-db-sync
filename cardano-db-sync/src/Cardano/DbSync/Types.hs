@@ -1,63 +1,71 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 
-module Cardano.DbSync.Types
-  ( BlockDetails (..)
-  , BlockEra (..)
-  , CardanoBlock
-  , CardanoPoint
-  , StakeCred
-  , PoolKeyHash
-  , CardanoInterpreter
-  , EpochSlot (..)
-  , FetchResult (..)
-  , SlotDetails (..)
-  , TipInfo (..)
-  , SyncState (..)
-  , TPraosStandard
-  , MetricSetters (..)
-  , PoolFetchRetry (..)
-  , PraosStandard
-  , Retry (..)
-  ) where
+module Cardano.DbSync.Types (
+  BlockDetails (..),
+  BlockEra (..),
+  CardanoBlock,
+  CardanoPoint,
+  StakeCred,
+  PoolKeyHash,
+  CardanoInterpreter,
+  EpochSlot (..),
+  FetchResult (..),
+  SlotDetails (..),
+  TipInfo (..),
+  SyncState (..),
+  TPraosStandard,
+  MetricSetters (..),
+  PoolFetchRetry (..),
+  PraosStandard,
+  Retry (..),
+) where
 
-import           Cardano.Prelude hiding (Meta)
-
-import           Cardano.Db (PoolHashId, PoolMetaHash, PoolMetadataRefId, PoolOfflineData,
-                   PoolOfflineFetchError, PoolUrl)
-
+import Cardano.Db (
+  PoolHashId,
+  PoolMetaHash,
+  PoolMetadataRefId,
+  PoolOfflineData,
+  PoolOfflineFetchError,
+  PoolUrl,
+ )
 import qualified Cardano.Ledger.Credential as Ledger
-import           Cardano.Ledger.Crypto (StandardCrypto)
-import           Cardano.Ledger.Keys
-
-import           Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
-
-import           Data.Time.Clock (UTCTime)
-import           Data.Time.Clock.POSIX (POSIXTime)
-
-import           Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
+import Cardano.Ledger.Crypto (StandardCrypto)
+import Cardano.Ledger.Keys
+import Cardano.Prelude hiding (Meta)
+import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
+import Data.Time.Clock (UTCTime)
+import Data.Time.Clock.POSIX (POSIXTime)
+import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import qualified Ouroboros.Consensus.Cardano.Block as Cardano
 import qualified Ouroboros.Consensus.HardFork.History as History
-import           Ouroboros.Consensus.Protocol.Praos (Praos)
-import           Ouroboros.Consensus.Protocol.TPraos (TPraos)
-import           Ouroboros.Consensus.Shelley.Eras (StandardAllegra, StandardAlonzo, StandardBabbage,
-                   StandardMary, StandardShelley)
-import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
-import           Ouroboros.Network.Block (BlockNo, Point)
+import Ouroboros.Consensus.Protocol.Praos (Praos)
+import Ouroboros.Consensus.Protocol.TPraos (TPraos)
+import Ouroboros.Consensus.Shelley.Eras (
+  StandardAllegra,
+  StandardAlonzo,
+  StandardBabbage,
+  StandardMary,
+  StandardShelley,
+ )
+import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
+import Ouroboros.Network.Block (BlockNo, Point)
 
 type TPraosStandard = TPraos StandardCrypto
+
 type PraosStandard = Praos StandardCrypto
 
 type CardanoBlock = Cardano.CardanoBlock StandardCrypto
 
-type CardanoInterpreter = History.Interpreter
-           '[ ByronBlock
-            , ShelleyBlock TPraosStandard StandardShelley
-            , ShelleyBlock TPraosStandard StandardAllegra
-            , ShelleyBlock TPraosStandard StandardMary
-            , ShelleyBlock TPraosStandard StandardAlonzo
-            , ShelleyBlock PraosStandard StandardBabbage
-            ]
+type CardanoInterpreter =
+  History.Interpreter
+    '[ ByronBlock
+     , ShelleyBlock TPraosStandard StandardShelley
+     , ShelleyBlock TPraosStandard StandardAllegra
+     , ShelleyBlock TPraosStandard StandardMary
+     , ShelleyBlock TPraosStandard StandardAlonzo
+     , ShelleyBlock PraosStandard StandardBabbage
+     ]
 
 type CardanoPoint = Point CardanoBlock
 
@@ -79,16 +87,16 @@ data BlockEra
   | Babbage
   deriving (Eq, Show)
 
-
 -- | Slot within an Epoch.
 newtype EpochSlot = EpochSlot
   { unEpochSlot :: Word64
-  } deriving (Eq, Ord, Show)
+  }
+  deriving (Eq, Ord, Show)
 
 data FetchResult
-    = ResultMetadata !PoolOfflineData
-    | ResultError !PoolOfflineFetchError
-    deriving Show
+  = ResultMetadata !PoolOfflineData
+  | ResultError !PoolOfflineFetchError
+  deriving (Show)
 
 data SlotDetails = SlotDetails
   { sdSlotTime :: !UTCTime
@@ -97,15 +105,17 @@ data SlotDetails = SlotDetails
   , sdSlotNo :: !SlotNo
   , sdEpochSlot :: !EpochSlot
   , sdEpochSize :: !EpochSize
-  } deriving (Eq, Show)
+  }
+  deriving (Eq, Show)
 
 -- The hash must be unique!
 data TipInfo = TipInfo
   { bHash :: !ByteString
   , bEpochNo :: !EpochNo
-  , bSlotNo  :: !SlotNo
+  , bSlotNo :: !SlotNo
   , bBlockNo :: !BlockNo
-  } deriving (Eq, Show)
+  }
+  deriving (Eq, Show)
 
 -- The metrics we use.
 -- Kept as a separate struct and do not put into environment because
@@ -128,11 +138,12 @@ data PoolFetchRetry = PoolFetchRetry
   , pfrPoolUrl :: !PoolUrl
   , pfrPoolMDHash :: !(Maybe PoolMetaHash)
   , pfrRetry :: !Retry
-  } deriving (Show)
-
+  }
+  deriving (Show)
 
 data Retry = Retry
   { retryFetchTime :: !POSIXTime -- Time last time time
   , retryRetryTime :: !POSIXTime -- Time to retry
   , retryCount :: !Word
-  } deriving (Eq, Show, Generic)
+  }
+  deriving (Eq, Show, Generic)

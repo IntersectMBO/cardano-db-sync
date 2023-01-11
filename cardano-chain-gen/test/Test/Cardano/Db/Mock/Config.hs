@@ -2,82 +2,77 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Test.Cardano.Db.Mock.Config
-  ( Config (..)
-  , DBSyncEnv (..)
-  , emptyMetricsSetters
-  , fingerprintRoot
-  , getDBSyncPGPass
-  , getPoolLayer
-  , mkConfig
-  , mkConfigDir
-  , mkFingerPrint
-  , mkMutableDir
-  , mkDBSyncEnv
-  , mkShelleyCredentials
-  , mkSyncNodeParams
-  , pollDBSync
-  , prepareFingerprintFile
-  , queryDBSync
-  , recreateDir
-  , rootTestDir
-  , setupTestsDir
-  , stopDBSync
-  , stopDBSyncIfRunning
-  , startDBSync
-  , withDBSyncEnv
-  , withFullConfig
-  , withFullConfig'
-  ) where
+module Test.Cardano.Db.Mock.Config (
+  Config (..),
+  DBSyncEnv (..),
+  emptyMetricsSetters,
+  fingerprintRoot,
+  getDBSyncPGPass,
+  getPoolLayer,
+  mkConfig,
+  mkConfigDir,
+  mkFingerPrint,
+  mkMutableDir,
+  mkDBSyncEnv,
+  mkShelleyCredentials,
+  mkSyncNodeParams,
+  pollDBSync,
+  prepareFingerprintFile,
+  queryDBSync,
+  recreateDir,
+  rootTestDir,
+  setupTestsDir,
+  stopDBSync,
+  stopDBSyncIfRunning,
+  startDBSync,
+  withDBSyncEnv,
+  withFullConfig,
+  withFullConfig',
+) where
 
-import           Cardano.Prelude (ReaderT, panic, stderr)
-
-import qualified Cardano.Db as Db
-
-import           Cardano.DbSync
-import           Cardano.DbSync.Config
-import           Cardano.DbSync.Config.Cardano
-import           Cardano.DbSync.Error
-import           Cardano.DbSync.Types (CardanoBlock, MetricSetters (..))
-
-import           Cardano.Mock.ChainSync.Server
-import           Cardano.Mock.Forging.Interpreter
-
-import           Cardano.SMASH.Server.PoolDataLayer
-
-import           Control.Concurrent.Async (Async, async, cancel, poll)
-import           Control.Concurrent.STM (atomically)
-import           Control.Concurrent.STM.TMVar (TMVar, newEmptyTMVarIO, takeTMVar, tryPutTMVar,
-                   tryReadTMVar)
-import           Control.Exception (SomeException, bracket)
-import           Control.Monad (void)
-import           Control.Monad.Extra (eitherM)
-import           Control.Monad.Logger (NoLoggingT, runNoLoggingT)
-import           Control.Monad.Trans.Except.Exit (orDie)
-import           Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
-
-import           Control.Tracer (nullTracer)
-import           Data.Text (Text)
-import qualified Data.Text as Text
-import           System.Directory (createDirectoryIfMissing, removePathForcibly)
-import           System.FilePath.Posix ((</>))
-import           System.IO.Silently (hSilence)
-
-import           Database.Persist.Postgresql (createPostgresqlPool)
-import           Database.Persist.Sql (SqlBackend)
-
-import           Ouroboros.Consensus.Config (TopLevelConfig)
-import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
-import           Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
-import           Ouroboros.Consensus.Shelley.Node (ShelleyLeaderCredentials)
-
-import           Cardano.Api (NetworkId (..), NetworkMagic (..))
-import           Cardano.CLI.Shelley.Commands (GenesisCmd (..))
+import Cardano.Api (NetworkId (..), NetworkMagic (..))
+import Cardano.CLI.Shelley.Commands (GenesisCmd (..))
 import qualified Cardano.CLI.Shelley.Commands as CLI
 import qualified Cardano.CLI.Shelley.Run.Genesis as CLI
-import           Cardano.Node.Protocol.Shelley (readLeaderCredentials)
-import           Cardano.Node.Types (ProtocolFilepaths (..))
-
+import qualified Cardano.Db as Db
+import Cardano.DbSync
+import Cardano.DbSync.Config
+import Cardano.DbSync.Config.Cardano
+import Cardano.DbSync.Error
+import Cardano.DbSync.Types (CardanoBlock, MetricSetters (..))
+import Cardano.Mock.ChainSync.Server
+import Cardano.Mock.Forging.Interpreter
+import Cardano.Node.Protocol.Shelley (readLeaderCredentials)
+import Cardano.Node.Types (ProtocolFilepaths (..))
+import Cardano.Prelude (ReaderT, panic, stderr)
+import Cardano.SMASH.Server.PoolDataLayer
+import Control.Concurrent.Async (Async, async, cancel, poll)
+import Control.Concurrent.STM (atomically)
+import Control.Concurrent.STM.TMVar (
+  TMVar,
+  newEmptyTMVarIO,
+  takeTMVar,
+  tryPutTMVar,
+  tryReadTMVar,
+ )
+import Control.Exception (SomeException, bracket)
+import Control.Monad (void)
+import Control.Monad.Extra (eitherM)
+import Control.Monad.Logger (NoLoggingT, runNoLoggingT)
+import Control.Monad.Trans.Except.Exit (orDie)
+import Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
+import Control.Tracer (nullTracer)
+import Data.Text (Text)
+import qualified Data.Text as Text
+import Database.Persist.Postgresql (createPostgresqlPool)
+import Database.Persist.Sql (SqlBackend)
+import Ouroboros.Consensus.Config (TopLevelConfig)
+import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
+import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
+import Ouroboros.Consensus.Shelley.Node (ShelleyLeaderCredentials)
+import System.Directory (createDirectoryIfMissing, removePathForcibly)
+import System.FilePath.Posix ((</>))
+import System.IO.Silently (hSilence)
 
 data Config = Config
   { topLevelConfig :: TopLevelConfig CardanoBlock
@@ -110,11 +105,12 @@ mkFingerPrint testLabel = fingerprintRoot </> testLabel
 mkDBSyncEnv :: SyncNodeParams -> IO () -> IO DBSyncEnv
 mkDBSyncEnv params runDBSync = do
   runningVar <- newEmptyTMVarIO
-  pure $ DBSyncEnv
-          { dbSyncParams = params
-          , dbSyncForkDB = async runDBSync
-          , dbSyncThreadVar = runningVar
-          }
+  pure $
+    DBSyncEnv
+      { dbSyncParams = params
+      , dbSyncForkDB = async runDBSync
+      , dbSyncThreadVar = runningVar
+      }
 
 stopDBSync :: DBSyncEnv -> IO ()
 stopDBSync env = do
@@ -166,19 +162,34 @@ getPoolLayer :: DBSyncEnv -> IO PoolDataLayer
 getPoolLayer env = do
   pgconfig <- orDie Db.renderPGPassError $ newExceptT $ Db.readPGPass (enpPGPassSource $ dbSyncParams env)
   pool <- runNoLoggingT $ createPostgresqlPool (Db.toConnectionString pgconfig) 1 -- Pool size of 1 for tests
-  pure $ postgresqlPoolDataLayer
-                    nullTracer
-                    pool
+  pure $
+    postgresqlPoolDataLayer
+      nullTracer
+      pool
 
 setupTestsDir :: FilePath -> IO ()
 setupTestsDir dir = do
-  eitherM (panic . textShow) pure $ runExceptT $
-    CLI.runGenesisCmd $ GenesisCreateStaked
-      (CLI.GenesisDir dir) 3 3 3 3 Nothing (Just 3000000) 3000000 (Testnet $ NetworkMagic 42) 1 3 0 Nothing
+  eitherM (panic . textShow) pure $
+    runExceptT $
+      CLI.runGenesisCmd $
+        GenesisCreateStaked
+          (CLI.GenesisDir dir)
+          3
+          3
+          3
+          3
+          Nothing
+          (Just 3000000)
+          3000000
+          (Testnet $ NetworkMagic 42)
+          1
+          3
+          0
+          Nothing
 
 mkConfig :: FilePath -> FilePath -> IO Config
 mkConfig staticDir mutableDir = do
-  config <- readSyncNodeConfig $ ConfigFile ( staticDir </> "test-db-sync-config.json")
+  config <- readSyncNodeConfig $ ConfigFile (staticDir </> "test-db-sync-config.json")
   genCfg <- either (error . Text.unpack . renderSyncNodeError) id <$> runExceptT (readCardanoGenesisConfig config)
   let pInfoDbSync = mkProtocolInfoCardano genCfg []
   creds <- mkShelleyCredentials $ staticDir </> "pools" </> "bulk1.creds"
@@ -188,35 +199,37 @@ mkConfig staticDir mutableDir = do
 
 mkShelleyCredentials :: FilePath -> IO [ShelleyLeaderCredentials StandardCrypto]
 mkShelleyCredentials bulkFile = do
-    eitherM (panic . textShow) pure $ runExceptT $ readLeaderCredentials (Just protFiles)
+  eitherM (panic . textShow) pure $ runExceptT $ readLeaderCredentials (Just protFiles)
   where
-    protFiles = ProtocolFilepaths
-      { byronCertFile = Nothing
-      , byronKeyFile = Nothing
-      , shelleyKESFile = Nothing
-      , shelleyVRFFile = Nothing
-      , shelleyCertFile = Nothing
-      , shelleyBulkCredsFile = Just bulkFile
-      }
+    protFiles =
+      ProtocolFilepaths
+        { byronCertFile = Nothing
+        , byronKeyFile = Nothing
+        , shelleyKESFile = Nothing
+        , shelleyVRFFile = Nothing
+        , shelleyCertFile = Nothing
+        , shelleyBulkCredsFile = Just bulkFile
+        }
 
 -- | staticDir can be shared by tests running in parallel. mutableDir not.
 mkSyncNodeParams :: FilePath -> FilePath -> IO SyncNodeParams
 mkSyncNodeParams staticDir mutableDir = do
   pgconfig <- orDie Db.renderPGPassError $ newExceptT Db.readPGPassDefault
-  pure $ SyncNodeParams
-    { enpConfigFile = ConfigFile $ staticDir </> "test-db-sync-config.json"
-    , enpSocketPath = SocketPath $ mutableDir </> ".socket"
-    , enpLedgerStateDir = LedgerStateDir $ mutableDir </> "ledger-states"
-    , enpMigrationDir = MigrationDir "../schema"
-    , enpPGPassSource = Db.PGPassCached pgconfig
-    , enpExtended = True
-    , enpHasCache = True
-    , enpHasLedger = True
-    , enpSkipFix = True
-    , enpOnlyFix = False
-    , enpForceIndexes = False
-    , enpMaybeRollback = Nothing
-    }
+  pure $
+    SyncNodeParams
+      { enpConfigFile = ConfigFile $ staticDir </> "test-db-sync-config.json"
+      , enpSocketPath = SocketPath $ mutableDir </> ".socket"
+      , enpLedgerStateDir = LedgerStateDir $ mutableDir </> "ledger-states"
+      , enpMigrationDir = MigrationDir "../schema"
+      , enpPGPassSource = Db.PGPassCached pgconfig
+      , enpExtended = True
+      , enpHasCache = True
+      , enpHasLedger = True
+      , enpSkipFix = True
+      , enpOnlyFix = False
+      , enpForceIndexes = False
+      , enpMaybeRollback = Nothing
+      }
 
 emptyMetricsSetters :: MetricSetters
 emptyMetricsSetters =
@@ -227,44 +240,56 @@ emptyMetricsSetters =
     , metricsSetDbSlotHeight = \_ -> pure ()
     }
 
-withFullConfig
-    :: FilePath -> FilePath
-    -> (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a)
-    -> IOManager -> [(Text, Text)] -> IO a
+withFullConfig ::
+  FilePath ->
+  FilePath ->
+  (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
+  IOManager ->
+  [(Text, Text)] ->
+  IO a
 withFullConfig = withFullConfig' True
 
-withFullConfig'
-    :: Bool -> FilePath -> FilePath
-    -> (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a)
-    -> IOManager -> [(Text, Text)] -> IO a
+withFullConfig' ::
+  Bool ->
+  FilePath ->
+  FilePath ->
+  (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
+  IOManager ->
+  [(Text, Text)] ->
+  IO a
 withFullConfig' hasFingerprint config testLabel action iom migr = do
-    recreateDir mutableDir
-    cfg <- mkConfig configDir mutableDir
-    fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabel else pure Nothing
-    let dbsyncParams = syncNodeParams cfg
-    -- Set to True to disable logging, False to enable it.
-    trce <- if True
-              then pure nullTracer
-              else configureLogging dbsyncParams "db-sync-node"
-    let dbsyncRun = runDbSync emptyMetricsSetters migr iom trce dbsyncParams True 35 35
-    let initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
-    withInterpreter (protocolInfoForging cfg) nullTracer fingerFile $ \interpreter -> do
-      -- TODO: get 42 from config
-      withServerHandle @CardanoBlock iom (topLevelConfig cfg) initSt (NetworkMagic 42)
-        (unSocketPath (enpSocketPath $ syncNodeParams cfg))
-        $ \mockServer ->
-          -- we dont fork dbsync here. Just prepare it as an action
-          withDBSyncEnv (mkDBSyncEnv dbsyncParams dbsyncRun) $ \dbSync -> do
-            void . hSilence [stderr] $ Db.recreateDB (getDBSyncPGPass dbSync)
-            action interpreter mockServer dbSync
+  recreateDir mutableDir
+  cfg <- mkConfig configDir mutableDir
+  fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabel else pure Nothing
+  let dbsyncParams = syncNodeParams cfg
+  -- Set to True to disable logging, False to enable it.
+  trce <-
+    if True
+      then pure nullTracer
+      else configureLogging dbsyncParams "db-sync-node"
+  let dbsyncRun = runDbSync emptyMetricsSetters migr iom trce dbsyncParams True 35 35
+  let initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
+  withInterpreter (protocolInfoForging cfg) nullTracer fingerFile $ \interpreter -> do
+    -- TODO: get 42 from config
+    withServerHandle @CardanoBlock
+      iom
+      (topLevelConfig cfg)
+      initSt
+      (NetworkMagic 42)
+      (unSocketPath (enpSocketPath $ syncNodeParams cfg))
+      $ \mockServer ->
+        -- we dont fork dbsync here. Just prepare it as an action
+        withDBSyncEnv (mkDBSyncEnv dbsyncParams dbsyncRun) $ \dbSync -> do
+          void . hSilence [stderr] $ Db.recreateDB (getDBSyncPGPass dbSync)
+          action interpreter mockServer dbSync
   where
     configDir = mkConfigDir config
-    mutableDir =  mkMutableDir testLabel
+    mutableDir = mkMutableDir testLabel
 
 prepareFingerprintFile :: FilePath -> IO FilePath
 prepareFingerprintFile testLabel = do
-    createDirectoryIfMissing True fingerprintRoot
-    pure fingerprintFile
+  createDirectoryIfMissing True fingerprintRoot
+  pure fingerprintFile
   where
     fingerprintFile = mkFingerPrint testLabel
 

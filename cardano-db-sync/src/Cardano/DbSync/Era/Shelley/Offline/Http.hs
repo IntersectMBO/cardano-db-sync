@@ -1,29 +1,26 @@
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Offline.Http
-  ( FetchError (..)
-  , SimplifiedPoolOfflineData (..)
-  , httpGetPoolOfflineData
-  , parsePoolUrl
-  , renderFetchError
-  ) where
-
-import           Cardano.Prelude
+module Cardano.DbSync.Era.Shelley.Offline.Http (
+  FetchError (..),
+  SimplifiedPoolOfflineData (..),
+  httpGetPoolOfflineData,
+  parsePoolUrl,
+  renderFetchError,
+) where
 
 import qualified Cardano.Crypto.Hash.Blake2b as Crypto
 import qualified Cardano.Crypto.Hash.Class as Crypto
-
-import           Cardano.Db (PoolMetaHash (..), PoolUrl (..), textShow)
-
-import           Cardano.DbSync.Era.Shelley.Offline.Types (PoolOfflineMetadata (..),
-                   PoolTicker (..))
-import           Cardano.DbSync.Util (renderByteArray)
-
-import           Control.Monad.Extra (whenJust)
-import           Control.Monad.Trans.Except.Extra (handleExceptT, hoistEither, left)
-
+import Cardano.Db (PoolMetaHash (..), PoolUrl (..), textShow)
+import Cardano.DbSync.Era.Shelley.Offline.Types (
+  PoolOfflineMetadata (..),
+  PoolTicker (..),
+ )
+import Cardano.DbSync.Util (renderByteArray)
+import Cardano.Prelude
+import Control.Monad.Extra (whenJust)
+import Control.Monad.Trans.Except.Extra (handleExceptT, hoistEither, left)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as LBS
@@ -31,11 +28,9 @@ import qualified Data.CaseInsensitive as CI
 import qualified Data.List as List
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-
-import           Network.HTTP.Client (HttpException (..))
+import Network.HTTP.Client (HttpException (..))
 import qualified Network.HTTP.Client as Http
 import qualified Network.HTTP.Types as Http
-
 
 -- |Fetch error for the HTTP client fetching the pool offline metadata.
 data FetchError
@@ -60,20 +55,24 @@ data SimplifiedPoolOfflineData = SimplifiedPoolOfflineData
   , spodContentType :: !(Maybe ByteString)
   }
 
-httpGetPoolOfflineData
-    :: Http.Manager -> Http.Request -> PoolUrl -> Maybe PoolMetaHash
-    -> ExceptT FetchError IO SimplifiedPoolOfflineData
+httpGetPoolOfflineData ::
+  Http.Manager ->
+  Http.Request ->
+  PoolUrl ->
+  Maybe PoolMetaHash ->
+  ExceptT FetchError IO SimplifiedPoolOfflineData
 httpGetPoolOfflineData manager request poolUrl mHash = do
-    res <- handleExceptT (convertHttpException poolUrl) httpGet
-    hoistEither res
+  res <- handleExceptT (convertHttpException poolUrl) httpGet
+  hoistEither res
   where
     httpGet :: IO (Either FetchError SimplifiedPoolOfflineData)
     httpGet =
       Http.withResponse request manager $ \responseBR -> do
         runExceptT $ do
           let status = Http.responseStatus responseBR
-          unless (Http.statusCode status == 200) .
-            left $ FEHttpResponse poolUrl (Http.statusCode status) (Text.decodeLatin1 $ Http.statusMessage status)
+          unless (Http.statusCode status == 200)
+            . left
+            $ FEHttpResponse poolUrl (Http.statusCode status) (Text.decodeLatin1 $ Http.statusMessage status)
 
           -- Read a maxiumm of 600 bytes and then later check if the length exceeds 512 bytes.
           respLBS <- liftIO $ Http.brReadSome (Http.responseBody responseBR) 600
@@ -90,39 +89,50 @@ httpGetPoolOfflineData manager request poolUrl mHash = do
                 then pure ()
                 else do
                   when ("text/html" `BS.isInfixOf` ct) $
-                    left $ FEBadContentTypeHtml poolUrl (Text.decodeLatin1 ct)
-                  unless ("application/json" `BS.isInfixOf` ct
-                            || "text/plain" `BS.isInfixOf` ct
-                            || "binary/octet-stream" `BS.isInfixOf` ct
-                            || "application/octet-stream" `BS.isInfixOf` ct
-                            || "application/binary" `BS.isInfixOf` ct
-                            ) .
-                    left $ FEBadContentType poolUrl (Text.decodeLatin1 ct)
+                    left $
+                      FEBadContentTypeHtml poolUrl (Text.decodeLatin1 ct)
+                  unless
+                    ( "application/json"
+                        `BS.isInfixOf` ct
+                        || "text/plain"
+                        `BS.isInfixOf` ct
+                        || "binary/octet-stream"
+                        `BS.isInfixOf` ct
+                        || "application/octet-stream"
+                        `BS.isInfixOf` ct
+                        || "application/binary"
+                        `BS.isInfixOf` ct
+                    )
+                    . left
+                    $ FEBadContentType poolUrl (Text.decodeLatin1 ct)
 
-          unless (BS.length respBS <= 512) .
-            left $ FEDataTooLong poolUrl
+          unless (BS.length respBS <= 512)
+            . left
+            $ FEDataTooLong poolUrl
 
           let metadataHash = Crypto.digest (Proxy :: Proxy Crypto.Blake2b_256) respBS
 
-          whenJust mHash $ \ (PoolMetaHash expectedHash) ->
-            when (metadataHash /= expectedHash) .
-              left $ FEHashMismatch poolUrl (renderByteArray expectedHash) (renderByteArray metadataHash)
+          whenJust mHash $ \(PoolMetaHash expectedHash) ->
+            when (metadataHash /= expectedHash)
+              . left
+              $ FEHashMismatch poolUrl (renderByteArray expectedHash) (renderByteArray metadataHash)
 
           decodedMetadata <-
-                case Aeson.eitherDecode' respLBS of
-                  Left err -> left $ FEJsonDecodeFail poolUrl (Text.pack err)
-                  Right res -> pure res
+            case Aeson.eitherDecode' respLBS of
+              Left err -> left $ FEJsonDecodeFail poolUrl (Text.pack err)
+              Right res -> pure res
 
-          pure $ SimplifiedPoolOfflineData
-                    { spodTickerName = unPoolTicker $ pomTicker decodedMetadata
-                    , spodHash = metadataHash
-                    , spodBytes = respBS
-                    -- Instead of inserting the `respBS` here, we encode the JSON and then store that.
-                    -- This is necessary because the PostgreSQL JSON parser can reject some ByteStrings
-                    -- that the Aeson parser accepts.
-                    , spodJson = Text.decodeUtf8 $ LBS.toStrict (Aeson.encode decodedMetadata)
-                    , spodContentType = mContentType
-                    }
+          pure $
+            SimplifiedPoolOfflineData
+              { spodTickerName = unPoolTicker $ pomTicker decodedMetadata
+              , spodHash = metadataHash
+              , spodBytes = respBS
+              , -- Instead of inserting the `respBS` here, we encode the JSON and then store that.
+                -- This is necessary because the PostgreSQL JSON parser can reject some ByteStrings
+                -- that the Aeson parser accepts.
+                spodJson = Text.decodeUtf8 $ LBS.toStrict (Aeson.encode decodedMetadata)
+              , spodContentType = mContentType
+              }
 
 -- | Is the provided ByteSring possibly JSON object?
 -- Ignoring any leading whitespace, if the ByteString starts with a '{` character it might possibly
@@ -136,13 +146,14 @@ isPossiblyJsonObject bs =
 
 parsePoolUrl :: PoolUrl -> ExceptT FetchError IO Http.Request
 parsePoolUrl poolUrl =
-    handleExceptT wrapHttpException $ applyContentType <$> Http.parseRequest (Text.unpack $ unPoolUrl poolUrl)
+  handleExceptT wrapHttpException $ applyContentType <$> Http.parseRequest (Text.unpack $ unPoolUrl poolUrl)
   where
     applyContentType :: Http.Request -> Http.Request
     applyContentType req =
-      req { Http.requestHeaders =
-              Http.requestHeaders req ++ [ ( CI.mk "content-type", "application/json" ) ]
-          }
+      req
+        { Http.requestHeaders =
+            Http.requestHeaders req ++ [(CI.mk "content-type", "application/json")]
+        }
 
     wrapHttpException :: HttpException -> FetchError
     wrapHttpException err = FEUrlParseFail poolUrl (textShow err)
@@ -152,31 +163,36 @@ renderFetchError fe =
   case fe of
     FEHashMismatch (PoolUrl url) xpt act ->
       mconcat
-        [ "Hash mismatch from when fetching metadata from ", url, ". Expected ", xpt
-        , " but got ", act, "."
+        [ "Hash mismatch from when fetching metadata from "
+        , url
+        , ". Expected "
+        , xpt
+        , " but got "
+        , act
+        , "."
         ]
     FEDataTooLong (PoolUrl url) ->
       mconcat
-        [ "Offline pool data when fetching metadata from ", url, " exceeded 512 bytes." ]
+        ["Offline pool data when fetching metadata from ", url, " exceeded 512 bytes."]
     FEUrlParseFail (PoolUrl url) err ->
       mconcat
-        [ "URL parse error from for ", url, " resulted in : ", err ]
+        ["URL parse error from for ", url, " resulted in : ", err]
     FEJsonDecodeFail (PoolUrl url) err ->
       mconcat
-        [ "JSON decode error from when fetching metadata from ", url, " resulted in : ", err ]
+        ["JSON decode error from when fetching metadata from ", url, " resulted in : ", err]
     FEHttpException (PoolUrl url) err ->
-      mconcat [ "HTTP Exception for ", url, " resulted in : ", err ]
+      mconcat ["HTTP Exception for ", url, " resulted in : ", err]
     FEHttpResponse (PoolUrl url) sc msg ->
-      mconcat [ "HTTP Response from ", url, " resulted in HTTP status code : ", textShow sc, " ", msg ]
+      mconcat ["HTTP Response from ", url, " resulted in HTTP status code : ", textShow sc, " ", msg]
     FEBadContentType (PoolUrl url) ct ->
-      mconcat [ "HTTP Response from ", url, ": expected JSON, but got : ", ct ]
+      mconcat ["HTTP Response from ", url, ": expected JSON, but got : ", ct]
     FEBadContentTypeHtml (PoolUrl url) ct ->
-      mconcat [ "HTTP Response from ", url, ": expected JSON, but got : ", ct ]
+      mconcat ["HTTP Response from ", url, ": expected JSON, but got : ", ct]
     FETimeout (PoolUrl url) ctx ->
-      mconcat [ "Timeout when fetching metadata from ", url, ": ", ctx ]
+      mconcat ["Timeout when fetching metadata from ", url, ": ", ctx]
     FEConnectionFailure (PoolUrl url) ->
       mconcat
-        [ "Connection failure when fetching metadata from ", url, "'." ]
+        ["Connection failure when fetching metadata from ", url, "'."]
     FEIOException err -> "IO Exception: " <> err
 
 -- -------------------------------------------------------------------------------------------------

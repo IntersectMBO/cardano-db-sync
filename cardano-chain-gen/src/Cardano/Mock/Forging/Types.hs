@@ -1,39 +1,41 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 
-module Cardano.Mock.Forging.Types
-  ( CardanoBlock
-  , CardanoPoint
-  , TPraosStandard
-  , PraosStandard
-  , ForgingError (..)
-  , MockBlock (..)
-  , NodeId (..)
-  , PoolIndex (..)
-  , StakeIndex (..)
-  , TxEra (..)
-  , UTxOIndex (..)
-  ) where
+module Cardano.Mock.Forging.Types (
+  CardanoBlock,
+  CardanoPoint,
+  TPraosStandard,
+  PraosStandard,
+  ForgingError (..),
+  MockBlock (..),
+  NodeId (..),
+  PoolIndex (..),
+  StakeIndex (..),
+  TxEra (..),
+  UTxOIndex (..),
+) where
 
-import           Control.Exception
-
-import qualified Ouroboros.Consensus.Cardano.Block as Consensus
-import           Ouroboros.Consensus.Forecast
-import           Ouroboros.Consensus.Protocol.Praos (Praos)
-import           Ouroboros.Consensus.Protocol.TPraos (TPraos)
-import           Ouroboros.Consensus.Shelley.Eras (StandardAlonzo, StandardBabbage, StandardCrypto,
-                   StandardShelley)
-import           Ouroboros.Network.Block (Point)
-
-import           Cardano.Ledger.Address
+import Cardano.Ledger.Address
 import qualified Cardano.Ledger.Core as Core
-import           Cardano.Ledger.Credential
-import           Cardano.Ledger.Keys
-import           Cardano.Ledger.TxIn (TxIn (..))
-
-import           Cardano.Slotting.Slot (SlotNo (..))
+import Cardano.Ledger.Credential
+import Cardano.Ledger.Keys
+import Cardano.Ledger.TxIn (TxIn (..))
+import Cardano.Slotting.Slot (SlotNo (..))
+import Control.Exception
+import qualified Ouroboros.Consensus.Cardano.Block as Consensus
+import Ouroboros.Consensus.Forecast
+import Ouroboros.Consensus.Protocol.Praos (Praos)
+import Ouroboros.Consensus.Protocol.TPraos (TPraos)
+import Ouroboros.Consensus.Shelley.Eras (
+  StandardAlonzo,
+  StandardBabbage,
+  StandardCrypto,
+  StandardShelley,
+ )
+import Ouroboros.Network.Block (Point)
 
 type TPraosStandard = TPraos StandardCrypto
+
 type PraosStandard = Praos StandardCrypto
 
 type CardanoBlock = Consensus.CardanoBlock StandardCrypto
@@ -50,8 +52,8 @@ data TxEra
   | TxBabbage !(Core.Tx StandardBabbage)
   | TxShelley !(Core.Tx StandardShelley)
 
-newtype NodeId = NodeId { unNodeId :: Int }
-  deriving Show
+newtype NodeId = NodeId {unNodeId :: Int}
+  deriving (Show)
 
 data ForgingError
   = WentTooFar !SlotNo

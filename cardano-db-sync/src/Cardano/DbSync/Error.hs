@@ -1,31 +1,27 @@
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Error
-  ( SyncInvariant (..)
-  , SyncNodeError (..)
-  , annotateInvariantTx
-  , bsBase16Encode
-  , dbSyncNodeError
-  , dbSyncInvariant
-  , renderSyncInvariant
-  , renderSyncNodeError
-  ) where
-
-import           Cardano.Prelude
+module Cardano.DbSync.Error (
+  SyncInvariant (..),
+  SyncNodeError (..),
+  annotateInvariantTx,
+  bsBase16Encode,
+  dbSyncNodeError,
+  dbSyncInvariant,
+  renderSyncInvariant,
+  renderSyncNodeError,
+) where
 
 import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
-
-import           Control.Monad.Trans.Except.Extra (left)
-
+import qualified Cardano.DbSync.Era.Byron.Util as Byron
+import Cardano.DbSync.Util
+import Cardano.Prelude
+import Control.Monad.Trans.Except.Extra (left)
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-
-import qualified Cardano.DbSync.Era.Byron.Util as Byron
-import           Cardano.DbSync.Util
 
 data SyncInvariant
   = EInvInOut !Word64 !Word64
@@ -57,23 +53,32 @@ renderSyncInvariant :: SyncInvariant -> Text
 renderSyncInvariant ei =
   case ei of
     EInvInOut inval outval ->
-      mconcat [ "input value ", textShow inval, " < output value ", textShow outval ]
+      mconcat ["input value ", textShow inval, " < output value ", textShow outval]
     EInvTxInOut tx inval outval ->
       mconcat
-        [ "tx ", bsBase16Encode (Byron.unTxHash $ Crypto.serializeCborHash tx)
-        , " : input value ", textShow inval, " < output value ", textShow outval
-        , "\n", textShow tx
+        [ "tx "
+        , bsBase16Encode (Byron.unTxHash $ Crypto.serializeCborHash tx)
+        , " : input value "
+        , textShow inval
+        , " < output value "
+        , textShow outval
+        , "\n"
+        , textShow tx
         ]
 
 renderSyncNodeError :: SyncNodeError -> Text
 renderSyncNodeError ne =
   case ne of
     NEError t -> "Error: " <> t
-    NEInvariant loc i -> mconcat [ loc, ": " <> renderSyncInvariant i ]
+    NEInvariant loc i -> mconcat [loc, ": " <> renderSyncInvariant i]
     NEBlockMismatch blkNo hashDb hashBlk ->
       mconcat
-        [ "Block mismatch for block number ", textShow blkNo, ", db has "
-        , bsBase16Encode hashDb, " but chain provided ", bsBase16Encode hashBlk
+        [ "Block mismatch for block number "
+        , textShow blkNo
+        , ", db has "
+        , bsBase16Encode hashDb
+        , " but chain provided "
+        , bsBase16Encode hashBlk
         ]
     NEIgnoreShelleyInitiation ->
       mconcat
@@ -82,20 +87,30 @@ renderSyncNodeError ne =
         ]
     NEByronConfig fp ce ->
       mconcat
-        [ "Failed reading Byron genesis file ", textShow fp, ": ", textShow ce
+        [ "Failed reading Byron genesis file "
+        , textShow fp
+        , ": "
+        , textShow ce
         ]
     NEShelleyConfig fp txt ->
       mconcat
-        [ "Failed reading Shelley genesis file ", textShow fp, ": ", txt
+        [ "Failed reading Shelley genesis file "
+        , textShow fp
+        , ": "
+        , txt
         ]
     NEAlonzoConfig fp txt ->
       mconcat
-        [ "Failed reading Alonzo genesis file ", textShow fp, ": ", txt
+        [ "Failed reading Alonzo genesis file "
+        , textShow fp
+        , ": "
+        , txt
         ]
     NECardanoConfig err ->
       mconcat
         [ "With Cardano protocol, Byron/Shelley config mismatch:\n"
-        , "   ", err
+        , "   "
+        , err
         ]
 
 bsBase16Encode :: ByteString -> Text

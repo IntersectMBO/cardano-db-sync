@@ -1,35 +1,28 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Insert.Grouped
-    ( BlockGroupedData (..)
-    , MissingMaTxOut (..)
-    , ExtendedTxOut (..)
-    , insertBlockGroupedData
-    , insertReverseIndex
-    , resolveTxInputs
-    , resolveScriptHash
-    ) where
+module Cardano.DbSync.Era.Shelley.Insert.Grouped (
+  BlockGroupedData (..),
+  MissingMaTxOut (..),
+  ExtendedTxOut (..),
+  insertBlockGroupedData,
+  insertReverseIndex,
+  resolveTxInputs,
+  resolveScriptHash,
+) where
 
-import           Cardano.Prelude
-
-import           Control.Monad.Trans.Control (MonadBaseControl)
-
-import qualified Data.List as List
-
-import           Cardano.BM.Trace (Trace)
-
-import           Cardano.Db (DbLovelace (..), minIdsToText, textShow)
+import Cardano.BM.Trace (Trace)
+import Cardano.Db (DbLovelace (..), minIdsToText, textShow)
 import qualified Cardano.Db as DB
-
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import           Cardano.DbSync.Era.Shelley.Query
-import           Cardano.DbSync.Era.Util
-import           Cardano.DbSync.Error
-
-import           Database.Persist.Sql (SqlBackend)
-
+import Cardano.DbSync.Era.Shelley.Query
+import Cardano.DbSync.Era.Util
+import Cardano.DbSync.Error
+import Cardano.Prelude
+import Control.Monad.Trans.Control (MonadBaseControl)
+import qualified Data.List as List
+import Database.Persist.Sql (SqlBackend)
 
 -- | Group data within the same block, to insert them together in batches
 --
@@ -66,19 +59,21 @@ instance Monoid BlockGroupedData where
 
 instance Semigroup BlockGroupedData where
   tgd1 <> tgd2 =
-    BlockGroupedData (groupedTxIn tgd1 <> groupedTxIn tgd2)
-                     (groupedTxOut tgd1 <> groupedTxOut tgd2)
+    BlockGroupedData
+      (groupedTxIn tgd1 <> groupedTxIn tgd2)
+      (groupedTxOut tgd1 <> groupedTxOut tgd2)
 
-insertBlockGroupedData
-    :: (MonadBaseControl IO m, MonadIO m)
-    => Trace IO Text -> BlockGroupedData
-    -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.MinIds
+insertBlockGroupedData ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
+  BlockGroupedData ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) DB.MinIds
 insertBlockGroupedData _tracer grouped = do
-    txOutIds <- lift . DB.insertManyTxOut $ etoTxOut. fst <$> groupedTxOut grouped
-    let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> groupedTxOut grouped)
-    maTxOutIds <- lift $ DB.insertManyMaTxOut maTxOuts
-    txInId <- lift . DB.insertManyTxIn $ groupedTxIn grouped
-    pure $ DB.MinIds (minimumMaybe txInId) (minimumMaybe txOutIds) (minimumMaybe maTxOutIds)
+  txOutIds <- lift . DB.insertManyTxOut $ etoTxOut . fst <$> groupedTxOut grouped
+  let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> groupedTxOut grouped)
+  maTxOutIds <- lift $ DB.insertManyMaTxOut maTxOuts
+  txInId <- lift . DB.insertManyTxIn $ groupedTxIn grouped
+  pure $ DB.MinIds (minimumMaybe txInId) (minimumMaybe txOutIds) (minimumMaybe maTxOutIds)
   where
     mkmaTxOuts :: (DB.TxOutId, [MissingMaTxOut]) -> [DB.MaTxOut]
     mkmaTxOuts (txOutId, mmtos) = mkmaTxOut txOutId <$> mmtos
@@ -91,23 +86,25 @@ insertBlockGroupedData _tracer grouped = do
         , DB.maTxOutTxOutId = txOutId
         }
 
-insertReverseIndex
-    :: (MonadBaseControl IO m, MonadIO m)
-    => DB.BlockId -> DB.MinIds -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+insertReverseIndex ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  DB.BlockId ->
+  DB.MinIds ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertReverseIndex blockId minIds =
-    void . lift . DB.insertReverseIndex $
-      DB.ReverseIndex
-        { DB.reverseIndexBlockId = blockId
-        , DB.reverseIndexMinIds = minIdsToText minIds
-        }
+  void . lift . DB.insertReverseIndex $
+    DB.ReverseIndex
+      { DB.reverseIndexBlockId = blockId
+      , DB.reverseIndexMinIds = minIdsToText minIds
+      }
 
 -- | If we can't resolve from the db, we fall back to the provided outputs
 -- This happens the input consumes an output introduced in the same block.
-resolveTxInputs
-  :: MonadIO m
-  => [ExtendedTxOut]
-  -> Generic.TxIn
-  -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, DbLovelace)
+resolveTxInputs ::
+  MonadIO m =>
+  [ExtendedTxOut] ->
+  Generic.TxIn ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, DbLovelace)
 resolveTxInputs groupedOutputs txIn =
   fmap convert $ liftLookupFail ("resolveTxInputs " <> textShow txIn <> " ") $ do
     qres <- queryResolveInput txIn
@@ -121,24 +118,24 @@ resolveTxInputs groupedOutputs txIn =
     convert :: (DB.TxId, DbLovelace) -> (Generic.TxIn, DB.TxId, DbLovelace)
     convert (txId, lovelace) = (txIn, txId, lovelace)
 
-resolveScriptHash
-  :: (MonadBaseControl IO m, MonadIO m)
-  => [ExtendedTxOut]
-  -> Generic.TxIn
-  -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe ByteString)
+resolveScriptHash ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  [ExtendedTxOut] ->
+  Generic.TxIn ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe ByteString)
 resolveScriptHash groupedOutputs txIn =
   liftLookupFail "resolveScriptHash" $ do
     qres <- fmap fst <$> queryResolveInputCredentials txIn
     case qres of
-        Right ret -> pure $ Right ret
-        Left err ->
-          case resolveInMemory txIn groupedOutputs of
-            Nothing -> pure $ Left err
-            Just eutxo -> pure $ Right $ DB.txOutPaymentCred $ etoTxOut eutxo
+      Right ret -> pure $ Right ret
+      Left err ->
+        case resolveInMemory txIn groupedOutputs of
+          Nothing -> pure $ Left err
+          Just eutxo -> pure $ Right $ DB.txOutPaymentCred $ etoTxOut eutxo
 
 resolveInMemory :: Generic.TxIn -> [ExtendedTxOut] -> Maybe ExtendedTxOut
 resolveInMemory txIn =
-    List.find matches
+  List.find matches
   where
     matches :: ExtendedTxOut -> Bool
     matches eutxo =
@@ -147,5 +144,5 @@ resolveInMemory txIn =
 
 minimumMaybe :: (Ord a, Foldable f) => f a -> Maybe a
 minimumMaybe xs
-  | null xs   = Nothing
+  | null xs = Nothing
   | otherwise = Just $ minimum xs

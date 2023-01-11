@@ -1,32 +1,29 @@
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RankNTypes #-}
-module Cardano.DbSync.Era.Shelley.Generic.ProtoParams
-  ( ProtoParams (..)
-  , epochProtoParams
-  ) where
+{-# LANGUAGE NoImplicitPrelude #-}
 
-import           Cardano.Prelude
+module Cardano.DbSync.Era.Shelley.Generic.ProtoParams (
+  ProtoParams (..),
+  epochProtoParams,
+) where
 
+import Cardano.DbSync.Types
 import qualified Cardano.Ledger.Alonzo as Alonzo
-import           Cardano.Ledger.Alonzo.Language (Language)
+import Cardano.Ledger.Alonzo.Language (Language)
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import qualified Cardano.Ledger.Babbage as Babbage
 import qualified Cardano.Ledger.Babbage.PParams as Babbage
-import           Cardano.Ledger.BaseTypes (UnitInterval)
+import Cardano.Ledger.BaseTypes (UnitInterval)
 import qualified Cardano.Ledger.BaseTypes as Ledger
-import           Cardano.Ledger.Coin (Coin (..))
+import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import qualified Cardano.Ledger.Shelley.PParams as Shelley
-import           Cardano.Slotting.Slot (EpochNo (..))
-
-import           Cardano.DbSync.Types
-
-import           Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
-
-import           Ouroboros.Consensus.Cardano (Nonce (..))
-import           Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
-import           Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
+import Cardano.Prelude
+import Cardano.Slotting.Slot (EpochNo (..))
+import Ouroboros.Consensus.Cardano (Nonce (..))
+import Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
+import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
+import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 
 data ProtoParams = ProtoParams
@@ -47,9 +44,8 @@ data ProtoParams = ProtoParams
   , ppProtocolVersion :: !Ledger.ProtVer
   , ppMinUTxOValue :: !Coin
   , ppMinPoolCost :: !Coin
-
-  -- New for Alonzo.
-  , ppCoinsPerUtxo :: !(Maybe Coin)
+  , -- New for Alonzo.
+    ppCoinsPerUtxo :: !(Maybe Coin)
   , ppCostmdls :: !(Maybe (Map Language Alonzo.CostModel))
   , ppPriceMem :: !(Maybe Rational)
   , ppPriceStep :: !(Maybe Rational)
@@ -64,13 +60,13 @@ data ProtoParams = ProtoParams
 
 epochProtoParams :: ExtLedgerState CardanoBlock -> Maybe ProtoParams
 epochProtoParams lstate =
-    case ledgerState lstate of
-      LedgerStateByron _ -> Nothing
-      LedgerStateShelley sls -> Just $ shelleyProtoParams sls
-      LedgerStateAllegra als -> Just $ allegraProtoParams als
-      LedgerStateMary mls -> Just $ maryProtoParams mls
-      LedgerStateAlonzo als -> Just $ alonzoProtoParams als
-      LedgerStateBabbage bls -> Just $ babbageProtoParams bls
+  case ledgerState lstate of
+    LedgerStateByron _ -> Nothing
+    LedgerStateShelley sls -> Just $ shelleyProtoParams sls
+    LedgerStateAllegra als -> Just $ allegraProtoParams als
+    LedgerStateMary mls -> Just $ maryProtoParams mls
+    LedgerStateAlonzo als -> Just $ alonzoProtoParams als
+    LedgerStateBabbage bls -> Just $ babbageProtoParams bls
 
 allegraProtoParams :: LedgerState (ShelleyBlock p StandardAllegra) -> ProtoParams
 allegraProtoParams =

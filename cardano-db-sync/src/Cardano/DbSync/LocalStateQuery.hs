@@ -2,48 +2,56 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Cardano.DbSync.LocalStateQuery
-  ( NoLedgerStateEnv (..)
-  , mkNoLedgerStateEnv
-  , getSlotDetailsNode
-  , localStateQueryHandler
-  , newStateQueryTMVar
-  ) where
+module Cardano.DbSync.LocalStateQuery (
+  NoLedgerStateEnv (..),
+  mkNoLedgerStateEnv,
+  getSlotDetailsNode,
+  localStateQueryHandler,
+  newStateQueryTMVar,
+) where
 
-import           Cardano.BM.Trace (Trace, logInfo)
-
-import           Cardano.Prelude hiding (atomically, (.))
-
-import           Cardano.Slotting.Slot (SlotNo (..))
-
-import           Cardano.Ledger.Crypto (StandardCrypto)
-
-import           Cardano.Db (textShow)
-
-import           Cardano.DbSync.StateQuery
-import           Cardano.DbSync.Types
-
-import           Control.Concurrent.Class.MonadSTM.Strict (StrictTMVar, StrictTVar, atomically,
-                   newEmptyTMVarIO, newTVarIO, putTMVar, readTVar, takeTMVar, writeTVar)
-
+import Cardano.BM.Trace (Trace, logInfo)
+import Cardano.Db (textShow)
+import Cardano.DbSync.StateQuery
+import Cardano.DbSync.Types
+import Cardano.Ledger.Crypto (StandardCrypto)
+import Cardano.Prelude hiding (atomically, (.))
+import Cardano.Slotting.Slot (SlotNo (..))
+import Control.Concurrent.Class.MonadSTM.Strict (
+  StrictTMVar,
+  StrictTVar,
+  atomically,
+  newEmptyTMVarIO,
+  newTVarIO,
+  putTMVar,
+  readTVar,
+  takeTMVar,
+  writeTVar,
+ )
 import qualified Data.Strict.Maybe as Strict
-import           Data.Time.Clock (getCurrentTime)
-
-import           Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
-import           Ouroboros.Consensus.Cardano.Block (BlockQuery (QueryHardFork), CardanoEras)
-import           Ouroboros.Consensus.Cardano.Node ()
-import           Ouroboros.Consensus.HardFork.Combinator.Ledger.Query
-                   (QueryHardFork (GetInterpreter))
-import           Ouroboros.Consensus.HardFork.History.Qry (Interpreter, PastHorizonException,
-                   interpretQuery)
-import           Ouroboros.Consensus.Ledger.Query (Query (..))
-
-import           Ouroboros.Network.Block (Point (..))
-import           Ouroboros.Network.Protocol.LocalStateQuery.Client (ClientStAcquired (..),
-                   ClientStAcquiring (..), ClientStIdle (..), ClientStQuerying (..),
-                   LocalStateQueryClient (..))
+import Data.Time.Clock (getCurrentTime)
+import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
+import Ouroboros.Consensus.Cardano.Block (BlockQuery (QueryHardFork), CardanoEras)
+import Ouroboros.Consensus.Cardano.Node ()
+import Ouroboros.Consensus.HardFork.Combinator.Ledger.Query (
+  QueryHardFork (GetInterpreter),
+ )
+import Ouroboros.Consensus.HardFork.History.Qry (
+  Interpreter,
+  PastHorizonException,
+  interpretQuery,
+ )
+import Ouroboros.Consensus.Ledger.Query (Query (..))
+import Ouroboros.Network.Block (Point (..))
+import Ouroboros.Network.Protocol.LocalStateQuery.Client (
+  ClientStAcquired (..),
+  ClientStAcquiring (..),
+  ClientStIdle (..),
+  ClientStQuerying (..),
+  LocalStateQueryClient (..),
+ )
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as StateQuery
-import           Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
+import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
 
 data NoLedgerStateEnv = NoLedgerStateEnv
   { nlsTracer :: Trace IO Text
@@ -54,7 +62,8 @@ data NoLedgerStateEnv = NoLedgerStateEnv
 
 newtype StateQueryTMVar blk result = StateQueryTMVar
   { unStateQueryTMVar ::
-      StrictTMVar IO
+      StrictTMVar
+        IO
         ( Query blk result
         , StrictTMVar IO (Either AcquireFailure result)
         )
@@ -72,19 +81,19 @@ newStateQueryTMVar = StateQueryTMVar <$> newEmptyTMVarIO
 -- Get the requested slot details using a history interpreter stashed in an IORef.
 -- If the history interpreter does not exist, get one.
 -- If the existing history interpreter returns an error, get a new one and try again.
-getSlotDetailsNode
-    :: NoLedgerStateEnv
-    -> SlotNo
-    -> IO SlotDetails
+getSlotDetailsNode ::
+  NoLedgerStateEnv ->
+  SlotNo ->
+  IO SlotDetails
 getSlotDetailsNode env slot = do
-    einterp1 <- maybe (getHistoryInterpreter env) pure =<< atomically (fromStrictMaybe <$> readTVar interVar)
-    case evalSlotDetails einterp1 of
-      Right sd -> insertCurrentTime sd
-      Left _ -> do
-        einterp2 <- getHistoryInterpreter env
-        case evalSlotDetails einterp2 of
-          Left err -> panic $ "getSlotDetailsNode: " <> textShow err
-          Right sd -> insertCurrentTime sd
+  einterp1 <- maybe (getHistoryInterpreter env) pure =<< atomically (fromStrictMaybe <$> readTVar interVar)
+  case evalSlotDetails einterp1 of
+    Right sd -> insertCurrentTime sd
+    Left _ -> do
+      einterp2 <- getHistoryInterpreter env
+      case evalSlotDetails einterp2 of
+        Left err -> panic $ "getSlotDetailsNode: " <> textShow err
+        Right sd -> insertCurrentTime sd
   where
     interVar = nlsHistoryInterpreterVar env
 
@@ -95,15 +104,15 @@ getSlotDetailsNode env slot = do
     insertCurrentTime :: SlotDetails -> IO SlotDetails
     insertCurrentTime sd = do
       time <- getCurrentTime
-      pure $ sd { sdCurrentTime = time }
+      pure $ sd {sdCurrentTime = time}
 
     fromStrictMaybe :: Strict.Maybe a -> Maybe a
     fromStrictMaybe (Strict.Just a) = Just a
     fromStrictMaybe Strict.Nothing = Nothing
 
-getHistoryInterpreter
-    :: NoLedgerStateEnv
-    -> IO CardanoInterpreter
+getHistoryInterpreter ::
+  NoLedgerStateEnv ->
+  IO CardanoInterpreter
 getHistoryInterpreter env = do
   respVar <- newEmptyTMVarIO
   atomically $ putTMVar reqVar (BlockQuery $ QueryHardFork GetInterpreter, respVar)
@@ -122,28 +131,29 @@ getHistoryInterpreter env = do
 
 -- This is called during the ChainSync setup and loops forever. Queries can be posted to
 -- it and responses retrieved via a TVar.
-localStateQueryHandler
-    :: forall a
-    . NoLedgerStateEnv -> LocalStateQueryClient CardanoBlock (Point CardanoBlock) (Query CardanoBlock) IO a
+localStateQueryHandler ::
+  forall a.
+  NoLedgerStateEnv ->
+  LocalStateQueryClient CardanoBlock (Point CardanoBlock) (Query CardanoBlock) IO a
 localStateQueryHandler env =
-    LocalStateQueryClient idleState
+  LocalStateQueryClient idleState
   where
     idleState :: IO (StateQuery.ClientStIdle CardanoBlock (Point CardanoBlock) (Query CardanoBlock) IO a)
     idleState = do
       (query, respVar) <- atomically $ takeTMVar reqVar
-      pure .
-        SendMsgAcquire Nothing $
-          ClientStAcquiring
-            { recvMsgAcquired =
-                pure . SendMsgQuery query $
-                  ClientStQuerying
-                    { recvMsgResult = \result -> do
-                        atomically $ putTMVar respVar (Right result)
-                        pure $ SendMsgRelease idleState
-                    }
-            , recvMsgFailure = \failure -> do
-                atomically $ putTMVar respVar (Left failure)
-                idleState
-            }
+      pure
+        . SendMsgAcquire Nothing
+        $ ClientStAcquiring
+          { recvMsgAcquired =
+              pure . SendMsgQuery query $
+                ClientStQuerying
+                  { recvMsgResult = \result -> do
+                      atomically $ putTMVar respVar (Right result)
+                      pure $ SendMsgRelease idleState
+                  }
+          , recvMsgFailure = \failure -> do
+              atomically $ putTMVar respVar (Left failure)
+              idleState
+          }
 
     reqVar = unStateQueryTMVar $ nlsQueryVar env

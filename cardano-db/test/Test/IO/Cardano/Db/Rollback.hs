@@ -1,35 +1,31 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Test.IO.Cardano.Db.Rollback
-  ( tests
-  ) where
+module Test.IO.Cardano.Db.Rollback (
+  tests,
+) where
 
-import           Cardano.Slotting.Slot (SlotNo (..))
+import Cardano.Db
+import Cardano.Slotting.Slot (SlotNo (..))
+import Control.Monad (void)
+import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Reader (ReaderT)
+import Data.Word (Word64)
+import Database.Persist.Sql (SqlBackend)
 
-import           Control.Monad (void)
-import           Control.Monad.IO.Class (MonadIO)
-import           Control.Monad.Trans.Control (MonadBaseControl)
-import           Control.Monad.Trans.Reader (ReaderT)
-
-import           Data.Word (Word64)
-
-import           Database.Persist.Sql (SqlBackend)
-
-import           Cardano.Db
-
-import           Test.Tasty (TestTree, testGroup)
 -- import           Test.Tasty.HUnit (testCase)
 
-import           Test.IO.Cardano.Db.Util
-
+import Test.IO.Cardano.Db.Util
+import Test.Tasty (TestTree, testGroup)
 
 tests :: TestTree
 tests =
-  testGroup "Rollback"
-    [ -- testCase "Can rollback" rollbackTest TODO: fix
-    ]
+  testGroup
+    "Rollback"
+    []
 
+-- testCase "Can rollback" rollbackTest TODO: fix
 
 _rollbackTest :: IO ()
 _rollbackTest =
@@ -73,59 +69,59 @@ queryWalkChain count blkNo
         Nothing -> pure Nothing
         Just pBlkNo -> queryWalkChain (count - 1) pBlkNo
 
-
 createAndInsertBlocks :: (MonadBaseControl IO m, MonadIO m) => Word64 -> ReaderT SqlBackend m ()
 createAndInsertBlocks blockCount =
-    void $ loop (0, Nothing, Nothing)
+  void $ loop (0, Nothing, Nothing)
   where
-    loop
-        :: (MonadBaseControl IO m, MonadIO m)
-        => (Word64, Maybe BlockId, Maybe TxId)
-        -> ReaderT SqlBackend m (Word64, Maybe BlockId, Maybe TxId)
+    loop ::
+      (MonadBaseControl IO m, MonadIO m) =>
+      (Word64, Maybe BlockId, Maybe TxId) ->
+      ReaderT SqlBackend m (Word64, Maybe BlockId, Maybe TxId)
     loop (indx, mPrevId, mOutId) =
       if indx < blockCount
         then loop =<< createAndInsert (indx, mPrevId, mOutId)
         else pure (0, Nothing, Nothing)
 
-    createAndInsert
-        :: (MonadBaseControl IO m, MonadIO m)
-        => (Word64, Maybe BlockId, Maybe TxId)
-        -> ReaderT SqlBackend m (Word64, Maybe BlockId, Maybe TxId)
+    createAndInsert ::
+      (MonadBaseControl IO m, MonadIO m) =>
+      (Word64, Maybe BlockId, Maybe TxId) ->
+      ReaderT SqlBackend m (Word64, Maybe BlockId, Maybe TxId)
     createAndInsert (indx, mPrevId, mTxOutId) = do
-        slid <- insertSlotLeader testSlotLeader
-        let newBlock = Block
-                        { blockHash = mkBlockHash indx
-                        , blockEpochNo = Just 0
-                        , blockSlotNo = Just indx
-                        , blockEpochSlotNo = Just indx
-                        , blockBlockNo = Just indx
-                        , blockPreviousId = mPrevId
-                        , blockSlotLeaderId = slid
-                        , blockSize = 42
-                        , blockTime = dummyUTCTime
-                        , blockTxCount = 0
-                        , blockProtoMajor = 1
-                        , blockProtoMinor = 0
-                        , blockVrfKey = Nothing
-                        , blockOpCert = Nothing
-                        , blockOpCertCounter = Nothing
-                        }
+      slid <- insertSlotLeader testSlotLeader
+      let newBlock =
+            Block
+              { blockHash = mkBlockHash indx
+              , blockEpochNo = Just 0
+              , blockSlotNo = Just indx
+              , blockEpochSlotNo = Just indx
+              , blockBlockNo = Just indx
+              , blockPreviousId = mPrevId
+              , blockSlotLeaderId = slid
+              , blockSize = 42
+              , blockTime = dummyUTCTime
+              , blockTxCount = 0
+              , blockProtoMajor = 1
+              , blockProtoMinor = 0
+              , blockVrfKey = Nothing
+              , blockOpCert = Nothing
+              , blockOpCertCounter = Nothing
+              }
 
-        blkId <- insertBlock newBlock
-        newMTxOutId <- if indx /= 0
-                      then pure mTxOutId
-                      else do
-                        txId <- insertTx $ Tx (mkTxHash blkId 0) blkId 0 (DbLovelace 0) (DbLovelace 0) 0 12 Nothing Nothing True 0
-                        void $ insertTxOut (mkTxOut blkId txId)
-                        pure $ Just txId
-        case (indx, mTxOutId) of
-            (8, Just txOutId) -> do
-                -- Insert Txs here to test that they are cascade deleted when the blocks
-                -- they are associcated with are deleted.
+      blkId <- insertBlock newBlock
+      newMTxOutId <-
+        if indx /= 0
+          then pure mTxOutId
+          else do
+            txId <- insertTx $ Tx (mkTxHash blkId 0) blkId 0 (DbLovelace 0) (DbLovelace 0) 0 12 Nothing Nothing True 0
+            void $ insertTxOut (mkTxOut blkId txId)
+            pure $ Just txId
+      case (indx, mTxOutId) of
+        (8, Just txOutId) -> do
+          -- Insert Txs here to test that they are cascade deleted when the blocks
+          -- they are associcated with are deleted.
 
-                txId <- head <$> mapM insertTx (mkTxs blkId 8)
-                void $ insertTxIn (TxIn txId txOutId 0 Nothing)
-                void $ insertTxOut (mkTxOut blkId txId)
-            _ -> pure ()
-        pure (indx + 1, Just blkId, newMTxOutId)
-
+          txId <- head <$> mapM insertTx (mkTxs blkId 8)
+          void $ insertTxIn (TxIn txId txOutId 0 Nothing)
+          void $ insertTxOut (mkTxOut blkId txId)
+        _ -> pure ()
+      pure (indx + 1, Just blkId, newMTxOutId)

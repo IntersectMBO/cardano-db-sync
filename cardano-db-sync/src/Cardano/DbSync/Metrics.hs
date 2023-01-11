@@ -1,30 +1,30 @@
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Metrics
-  ( Metrics (..)
-  , setNodeBlockHeight
-  , setDbQueueLength
-  , setDbBlockHeight
-  , setDbSlotHeight
-  , makeMetrics
-  , withMetricSetters
-  , withMetricsServer
-  ) where
+module Cardano.DbSync.Metrics (
+  Metrics (..),
+  setNodeBlockHeight,
+  setDbQueueLength,
+  setDbBlockHeight,
+  setDbSlotHeight,
+  makeMetrics,
+  withMetricSetters,
+  withMetricsServer,
+) where
 
-import           Cardano.Prelude
-
-import           Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..), fromWithOrigin)
-
-import           Cardano.DbSync.Types (MetricSetters (..))
-
-import           Ouroboros.Network.Block (BlockNo (..))
-
-import           System.Metrics.Prometheus.Concurrent.RegistryT (RegistryT (..), registerGauge,
-                   runRegistryT, unRegistryT)
-import           System.Metrics.Prometheus.Http.Scrape (serveMetricsT)
+import Cardano.DbSync.Types (MetricSetters (..))
+import Cardano.Prelude
+import Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..), fromWithOrigin)
+import Ouroboros.Network.Block (BlockNo (..))
+import System.Metrics.Prometheus.Concurrent.RegistryT (
+  RegistryT (..),
+  registerGauge,
+  runRegistryT,
+  unRegistryT,
+ )
+import System.Metrics.Prometheus.Http.Scrape (serveMetricsT)
+import System.Metrics.Prometheus.Metric.Gauge (Gauge)
 import qualified System.Metrics.Prometheus.Metric.Gauge as Gauge
-import           System.Metrics.Prometheus.Metric.Gauge (Gauge)
 
 data Metrics = Metrics
   { mNodeBlockHeight :: !Gauge
@@ -43,13 +43,13 @@ withMetricSetters prometheusPort action =
   withMetricsServer prometheusPort $ \metrics -> do
     action $
       MetricSetters
-        { metricsSetNodeBlockHeight = \ (BlockNo nodeHeight) ->
+        { metricsSetNodeBlockHeight = \(BlockNo nodeHeight) ->
             Gauge.set (fromIntegral nodeHeight) $ mNodeBlockHeight metrics
-        , metricsSetDbQueueLength = \ queuePostWrite ->
+        , metricsSetDbQueueLength = \queuePostWrite ->
             Gauge.set (fromIntegral queuePostWrite) $ mDbQueueLength metrics
-        , metricsSetDbBlockHeight = \ (BlockNo blockNo) ->
+        , metricsSetDbBlockHeight = \(BlockNo blockNo) ->
             Gauge.set (fromIntegral blockNo) $ mDbBlockHeight metrics
-        , metricsSetDbSlotHeight = \ (SlotNo slotNo) ->
+        , metricsSetDbSlotHeight = \(SlotNo slotNo) ->
             Gauge.set (fromIntegral slotNo) $ mDbSlotHeight metrics
         }
 
@@ -60,9 +60,9 @@ withMetricsServer port action = do
   -- least sucky way of doing it.
   (metrics, registry) <- runRegistryT $ (,) <$> makeMetrics <*> RegistryT ask
   bracket
-     (async $ runReaderT (unRegistryT $ serveMetricsT port []) registry)
-     cancel
-     (const $ action metrics)
+    (async $ runReaderT (unRegistryT $ serveMetricsT port []) registry)
+    cancel
+    (const $ action metrics)
 
 makeMetrics :: RegistryT IO Metrics
 makeMetrics =
@@ -71,7 +71,6 @@ makeMetrics =
     <*> registerGauge "cardano_db_sync_db_queue_length" mempty
     <*> registerGauge "cardano_db_sync_db_block_height" mempty
     <*> registerGauge "cardano_db_sync_db_slot_height" mempty
-
 
 setNodeBlockHeight :: MetricSetters -> WithOrigin BlockNo -> IO ()
 setNodeBlockHeight setters woBlkNo =

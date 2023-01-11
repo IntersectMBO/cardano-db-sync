@@ -4,47 +4,44 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
-  ( alwaysSucceedsScript
-  , alwaysSucceedsScriptHash
-  , alwaysSucceedsScriptAddr
-  , alwaysSucceedsScriptStake
-  , alwaysFailsScript
-  , alwaysFailsScriptHash
-  , alwaysFailsScriptAddr
-  , alwaysFailsScriptStake
-  , plutusDataList
-  , alwaysMintScript
-  , alwaysMintScriptHash
-  , alwaysMintScriptAddr
-  , alwaysMintScriptStake
-  , scriptHash
-  , assetNames
-  , plutusData2
-  , plutusDataEncLen
-  , plutusDataEncIndef
-  ) where
+module Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples (
+  alwaysSucceedsScript,
+  alwaysSucceedsScriptHash,
+  alwaysSucceedsScriptAddr,
+  alwaysSucceedsScriptStake,
+  alwaysFailsScript,
+  alwaysFailsScriptHash,
+  alwaysFailsScriptAddr,
+  alwaysFailsScriptStake,
+  plutusDataList,
+  alwaysMintScript,
+  alwaysMintScriptHash,
+  alwaysMintScriptAddr,
+  alwaysMintScriptStake,
+  scriptHash,
+  assetNames,
+  plutusData2,
+  plutusDataEncLen,
+  plutusDataEncIndef,
+) where
 
-import           Codec.CBOR.Write (toStrictByteString)
-import           Codec.Serialise
-import           Codec.Serialise.Encoding
-import           Data.ByteString.Short
-
-import           Cardano.Ledger.Address
-import           Cardano.Ledger.Alonzo
-import           Cardano.Ledger.Alonzo.Data
-import           Cardano.Ledger.Alonzo.Language
-import           Cardano.Ledger.Alonzo.Scripts
-import           Cardano.Ledger.BaseTypes
+import Cardano.Ledger.Address
+import Cardano.Ledger.Alonzo
+import Cardano.Ledger.Alonzo.Data
+import Cardano.Ledger.Alonzo.Language
+import Cardano.Ledger.Alonzo.Scripts
+import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.Core as Core
-import           Cardano.Ledger.Credential
-import           Cardano.Ledger.Crypto (StandardCrypto)
-import           Cardano.Ledger.Era
-import           Cardano.Ledger.Hashes
-import           Cardano.Ledger.Mary.Value
-
-import           Ouroboros.Consensus.Cardano.Block (StandardAlonzo)
-
+import Cardano.Ledger.Credential
+import Cardano.Ledger.Crypto (StandardCrypto)
+import Cardano.Ledger.Era
+import Cardano.Ledger.Hashes
+import Cardano.Ledger.Mary.Value
+import Codec.CBOR.Write (toStrictByteString)
+import Codec.Serialise
+import Codec.Serialise.Encoding
+import Data.ByteString.Short
+import Ouroboros.Consensus.Cardano.Block (StandardAlonzo)
 import qualified Plutus.V1.Ledger.Examples as Plutus
 import qualified PlutusCore.Data as Plutus
 
@@ -59,7 +56,6 @@ alwaysSucceedsScriptAddr = Addr Testnet (ScriptHashObj alwaysSucceedsScriptHash)
 
 alwaysSucceedsScriptStake :: StakeCredential StandardCrypto
 alwaysSucceedsScriptStake = ScriptHashObj alwaysSucceedsScriptHash
-
 
 alwaysFailsScript :: forall era. AlonzoScript era
 alwaysFailsScript = PlutusScript PlutusV1 (Plutus.alwaysFailingNAryFunction 0)
@@ -89,13 +85,14 @@ alwaysMintScriptAddr = Addr Testnet (ScriptHashObj alwaysMintScriptHash) StakeRe
 alwaysMintScriptStake :: StakeCredential StandardCrypto
 alwaysMintScriptStake = ScriptHashObj alwaysMintScriptHash
 
-scriptHash
-    :: forall era.
-    ( Crypto era ~ StandardCrypto
-    , Core.Script era ~ AlonzoScript era
-    , Core.EraScript era
-    )
-    => AlonzoScript era -> ScriptHash StandardCrypto
+scriptHash ::
+  forall era.
+  ( Crypto era ~ StandardCrypto
+  , Core.Script era ~ AlonzoScript era
+  , Core.EraScript era
+  ) =>
+  AlonzoScript era ->
+  ScriptHash StandardCrypto
 scriptHash = Core.hashScript @era
 
 assetNames :: [AssetName]
