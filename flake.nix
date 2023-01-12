@@ -39,6 +39,8 @@
       supportedSystems = import ./supported-systems.nix;
       defaultSystem = head supportedSystems;
 
+      inputMap = { "https://input-output-hk.github.io/cardano-haskell-packages" = CHaP; };
+
       overlays = [
         haskellNix.overlay
         iohkNix.overlays.haskell-nix-extra
@@ -57,7 +59,7 @@
               environments;
           };
         })
-        (import ./nix/pkgs.nix)
+        (import ./nix/pkgs.nix { inherit inputMap; })
       ];
 
     in eachSystem supportedSystems (system:
