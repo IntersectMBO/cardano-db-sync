@@ -7,12 +7,14 @@
   # Enable profiling
 , profiling ? config.haskellNix.profiling or false
   # Version info, to be passed when not building from a git work tree
-, gitrev }:
+, gitrev 
+  # Map from URLs to input, for custom hackage sources
+, inputMap }:
 let
 
   projectPackages = lib.attrNames (haskell-nix.haskellLib.selectProjectPackages
     (haskell-nix.cabalProject' {
-      inherit src;
+      inherit src inputMap;
       compiler-nix-name = compiler;
     }).hsPkgs);
 
@@ -58,7 +60,7 @@ let
   # This creates the Haskell package set.
   # https://input-output-hk.github.io/haskell.nix/user-guide/projects/
   pkgSet = haskell-nix.cabalProject' {
-    inherit src;
+    inherit src inputMap;
     compiler-nix-name = compiler;
     modules = [
       {
