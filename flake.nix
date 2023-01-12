@@ -19,7 +19,7 @@
       url = "github:input-output-hk/flake-compat/fixes";
       flake = false;
     };
-    customConfig = { url = "path:./custom-config"; };
+    customConfig = { url = "path:custom-config"; };
   };
 
   outputs = { self, iohkNix, cardano-world, haskellNix, nixpkgs, utils, customConfig, ... }:
