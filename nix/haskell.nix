@@ -148,11 +148,14 @@ let
       })
       ({ pkgs, ... }: {
         # Use the VRF fork of libsodium when building cardano-node
-        packages =
-          lib.genAttrs [ "cardano-crypto-praos" "cardano-crypto-class" ] (_: {
-            components.library.pkgconfig =
-              lib.mkForce [ [ pkgs.libsodium-vrf ] ];
-          });
+        packages = {
+          cardano-crypto-praos.components.library.pkgconfig = lib.mkForce [
+            [ pkgs.libsodium-vrf ]
+          ];
+          cardano-crypto-class.components.library.pkgconfig = lib.mkForce [
+            [ pkgs.libsodium-vrf pkgs.secp256k1 ]
+          ];
+        };
       })
     ];
   };
