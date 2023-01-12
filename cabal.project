@@ -122,26 +122,6 @@ allow-newer:
 
 source-repository-package
   type: git
-  location: https://github.com/input-output-hk/cardano-node
-  tag: ebc7be471b30e5931b35f9bbc236d21c375b91bb
-  --sha256: 1j01m2cp2vdcl26zx9xmipr551v3b2rz9kfn9ik8byfwj1z7652r
-  subdir:
-    cardano-api
-    cardano-cli
-    cardano-git-rev
-    cardano-node
-    trace-dispatcher
-    trace-forward
-    trace-resources
-
-source-repository-package
-  type: git
-  location: https://github.com/vshabanov/ekg-json
-  tag: 00ebe7211c981686e65730b7144fbf5350462608
-  --sha256: 1zvjm3pb38w0ijig5wk5mdkzcszpmlp5d4zxvks2jk1rkypi8gsm
-
-source-repository-package
-  type: git
   location: https://github.com/haskell-works/hw-aeson
   tag: 6dc309ff4260c71d9a18c220cbae8aa1dfe2a02e
   --sha256: 08zxzkk1fy8xrvl46lhzmpyisizl0nzl1n00g417vc0l170wsr9j
