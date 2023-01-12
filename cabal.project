@@ -75,38 +75,10 @@ package cryptonite
   flags: -support_rdrand
 
 -- ---------------------------------------------------------
--- Disable all tests by default
+-- Enable tests 
 
-tests: False
-
+tests: True
 test-show-details: direct
-
--- Then enable specific tests in this repo
-
-package cardano-db
-  tests: True
-
-package cardano-db-sync
-  tests: True
-
-package cardano-chain-gen
-  tests: True
-
--- These are needed because Nix is doing something crazy.
-package cardano-api
-  tests: False
-
-package cardano-node
-  tests: False
-
-package ouroboros-consensus-cardano-test
-  tests: False
-
-package goblins
-  tests: False
-
-package io-classes
-  tests: False
 
 allow-newer:
   *:aeson,
