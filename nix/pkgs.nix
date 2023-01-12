@@ -1,3 +1,4 @@
+{ inputMap }:
 # our packages overlay
 final: prev:
 with final;
@@ -14,7 +15,7 @@ in {
     name = "cardano-db-sync-schema";
   };
 
-  cardanoDbSyncProject = callPackage ./haskell.nix { inherit compiler; };
+  cardanoDbSyncProject = callPackage ./haskell.nix { inherit compiler inputMap; };
 
   cardanoDbSyncHaskellPackages = cardanoDbSyncProject.hsPkgs;
 
