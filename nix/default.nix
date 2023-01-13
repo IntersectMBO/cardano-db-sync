@@ -14,16 +14,20 @@ let
     "iohk-nix" = compat flakeLock.${flakeLock.root.inputs.iohkNix};
     "cardano-world" = compat flakeLock.${flakeLock.root.inputs.cardano-world};
     "flake-compat" = compat flakeLock.${flakeLock.root.inputs.flake-compat};
+    "CHaP" = compat flakeLock.${flakeLock.root.inputs.CHaP};
   };
   sources = flakeSources // sourcesOverride;
   iohkNix = import sources.iohk-nix { inherit system; };
   flake-compat = import sources.flake-compat;
   haskellNix = import sources."haskell.nix" { inherit system sourcesOverride; };
   nixpkgs = haskellNix.sources.nixpkgs-unstable;
+  CHaP = sources.CHaP;
   cardano-world = flake-compat {
     inherit pkgs;
     src = sources.cardano-world;
   };
+
+  inputMap = { "https://input-output-hk.github.io/cardano-haskell-packages" = CHaP; };
 
   # for inclusion in pkgs:
   overlays =
@@ -62,7 +66,7 @@ let
             };
         })
       # And, of course, our haskell-nix-ified cabal project:
-      (import ./pkgs.nix)
+      (import ./pkgs.nix { inherit inputMap; })
     ];
 
   pkgs = import nixpkgs {
