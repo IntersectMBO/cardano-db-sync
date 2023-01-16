@@ -45,9 +45,6 @@ let
         inherit (pkgs.cardanoDbSyncProject.projectModule) src;
       };
 
-      stylish-haskell = callPackage stylishHaskellCheck {
-        inherit (pkgs.cardanoDbSyncProject.projectModule) src;
-      };
     };
 
     shell = import ./shell.nix {
