@@ -184,7 +184,6 @@ library
                       , strict-stm
                       , swagger2
                       , text
-                      , text-ansi
                       , time
                       , transformers
                       , transformers-except
