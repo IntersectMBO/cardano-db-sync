@@ -58,7 +58,6 @@ import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
-import           Text.ANSI (red)
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.IO as Text
 import qualified Data.Time.Clock as Time
@@ -159,7 +158,7 @@ panicAbort :: Text -> IO ()
 panicAbort msg = do
   whenM readAbortOnPanic $ do
     threadDelay 100000 -- 0.1 seconds
-    mapM_ (Text.putStrLn . red) [ "panic abort:", msg ]
+    mapM_ Text.putStrLn [ "panic abort:", msg ]
     exitImmediately (ExitFailure 1)
 
 logAndPanic :: Trace IO Text -> Text -> IO ()
