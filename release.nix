@@ -78,7 +78,7 @@ let
   nonDefaultBuildSystems = tail supportedSystems;
   # Paths or prefixes of paths of derivations to build only on the default system (ie. linux on hydra):
   onlyBuildOnDefaultSystem =
-    [ [ "checks" "hlint" ] [ "checks" "stylish-haskell" ] [ "dockerImage" ] ];
+    [ [ "checks" "hlint" ] [ "dockerImage" ] ];
   # Paths or prefix of paths for which musl64 are disabled:
   noMusl64Build = [
     [ "shell" ]

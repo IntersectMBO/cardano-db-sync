@@ -26,7 +26,6 @@ let
       cabalWrapped
       ghcid
       hlint
-      stylish-haskell
       weeder
       nixWrapped
       pkgconfig

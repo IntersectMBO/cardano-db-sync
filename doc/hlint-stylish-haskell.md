@@ -1,10 +1,10 @@
-# Auto-running hlint and stylish-haskell on Commit
+# Auto-running hlint on Commit
 
-This document describes how to have `hlint` and `stylish-haskell` locally on every commit.
+This document describes how to have `hlint` locally on every commit.
 
 # Installing Them
 
-Installing these two is as simple as `cabal install hlint stylish-haskell` which will install them
+Installing this is as simple as `cabal install hlint` which will install them
 in `$HOME/.cabal/bin` which should then be added to your `PATH` environment variable.
 
 # Install the Git Pre-commit Hook

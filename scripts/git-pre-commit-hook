@@ -4,7 +4,7 @@
 # Haskell files you are about to commit. Sylish-haskell will modify the files
 # that need modification in place. Hlinf warnings are reported as that and
 # the commit is aborted, so you can fix it.
-# Obviously you need stylish-haskell and hlint on your path. The versions you
+# Obviously you need hlint on your path. The versions you
 # will need are the latest versions that were released before the Hackage
 # index-state specified in the cabal.project file.
 
@@ -52,13 +52,6 @@ for f in $files ; do
   done
 
 if test ${#hsfiles[@]} -gt 0 ; then
-  # echo "hsfiles:" "${hsfiles[@]}"
-  stylish-haskell -i "${hsfiles[@]}"
-  if test $? -ne 0 ; then
-    echo
-    echo "Commit aborted. Stylish Haskell failed."
-    exit 1
-    fi
   hlint "${hsfiles[@]}"
   if test $? -ne 0 ; then
     echo
@@ -66,7 +59,6 @@ if test ${#hsfiles[@]} -gt 0 ; then
     exit 1
     fi
 
-  # Need to add them if we want stylish-haskell changes to be commited.
   git add "${hsfiles[@]}"
   fi
 
