@@ -40,10 +40,6 @@ in {
     version = "3.2.7";
   };
 
-  stylish-haskell = haskell-nix.tool compiler "stylish-haskell" {
-    version = "latest";
-    modules = [{ reinstallableLibGhc = true; }];
-  };
 
   # systemd can't be statically linked:
   postgresql = (final.postgresql_11

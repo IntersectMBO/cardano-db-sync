@@ -85,9 +85,6 @@
             hlint = pkgs.callPackage pkgs.hlintCheck {
               inherit (pkgs.cardanoDbSyncProject.projectModule) src;
             };
-            stylish-haskell = pkgs.callPackage pkgs.stylishHaskellCheck {
-              inherit (pkgs.cardanoDbSyncProject.projectModule) src;
-            };
           };
 
         exes = collectExes flake.packages;
