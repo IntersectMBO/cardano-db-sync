@@ -106,7 +106,7 @@ import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (LedgerState)
 import Ouroboros.Consensus.Shelley.Eras (StandardBabbage, StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
-import qualified Plutus.V1.Ledger.EvaluationContext as PV1
+import qualified PlutusLedgerApi.Test.EvaluationContext as EvaluationContext
 
 type BabbageUTxOIndex = UTxOIndex StandardBabbage
 
@@ -714,4 +714,4 @@ mkFullTx n m sta = do
 testingCostModelV2 :: CostModel
 testingCostModelV2 =
   fromRight (error "testingCostModelV2 is not well-formed") $
-    mkCostModel PlutusV2 PV1.costModelParamsForTesting -- TODO use PV2 when it exists
+    mkCostModel PlutusV2 EvaluationContext.costModelParamsForTesting -- TODO use PV2 when it exists

@@ -145,7 +145,6 @@ getScripts ::
   ( Ledger.Crypto era ~ StandardCrypto
   , Core.Script era ~ Alonzo.AlonzoScript era
   , Core.AuxiliaryData era ~ AlonzoAuxiliaryData era
-  , Core.EraWitnesses era
   , Core.EraTx era
   ) =>
   Core.Tx era ->

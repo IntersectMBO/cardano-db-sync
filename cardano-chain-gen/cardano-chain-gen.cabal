@@ -1,6 +1,4 @@
-cabal-version:          2.4
-
--- http://haskell.org/cabal/users-guide/
+cabal-version:          3.0
 
 name:                   cardano-chain-gen
 version:                13.1.0.0
@@ -12,7 +10,7 @@ license:                Apache-2.0
 license-file:           LICENSE
 author:                 IOHK Engineering Team
 maintainer:             operations@iohk.io
-copyright:              (c) 2019 IOHK
+copyright:              2023 Input Output (Hong Kong) Ltd.
 category:               Cryptocurrency
 build-type:             Custom
 extra-source-files:     CHANGELOG.md
@@ -55,7 +53,7 @@ library
                         Cardano.Mock.Forging.Tx.Shelley
                         Cardano.Mock.Forging.Types
 
-  build-depends:        base                            >= 4.14         && < 4.16
+  build-depends:        base                            >= 4.14         && < 4.17
                       , async
                       , aeson
                       , binary
@@ -107,10 +105,9 @@ library
                       , ouroboros-consensus-shelley
                       , ouroboros-network
                       , ouroboros-network-framework
-                      , persistent
                       , persistent-postgresql
                       , plutus-core
-                      , plutus-ledger-api
+                      , plutus-ledger-api:{plutus-ledger-api, plutus-ledger-api-testlib} ^>=1.1
                       , pretty-show
                       , prometheus
                       , random-shuffle
@@ -120,7 +117,6 @@ library
                       , split
                       , stm
                       , strict
---                      , strict-containers
                       , strict-stm
                       , swagger2
                       , text
@@ -163,11 +159,11 @@ test-suite cardano-chain-gen
                         Test.Cardano.Db.Mock.Validate
 
   build-depends:        async
-                      , base                            >= 4.12         && < 4.15
+                      , base                            >= 4.14         && < 4.17
                       , bytestring
                       , cardano-api
                       , cardano-cli
-                      , cardano-config
+--                      , cardano-config
                       , cardano-crypto-class
                       , cardano-db
                       , cardano-db-sync
@@ -192,7 +188,6 @@ test-suite cardano-chain-gen
                       , ouroboros-network
                       , silently
                       , stm
-                      , strict-containers
                       , strict-stm
                       , tasty
                       , tasty-quickcheck

@@ -1,6 +1,4 @@
-cabal-version:          2.4
-
--- http://haskell.org/cabal/users-guide/
+cabal-version:          3.0
 
 name:                   cardano-db-sync
 version:                13.1.0.0
@@ -13,7 +11,7 @@ license:                Apache-2.0
 license-file:           LICENSE
 author:                 IOHK Engineering Team
 maintainer:             operations@iohk.io
-copyright:              (c) 2019 IOHK
+copyright:              2023 Input Output (Hong Kong) Ltd.
 category:               Cryptocurrency
 build-type:             Custom
 extra-source-files:     CHANGELOG.md
@@ -119,7 +117,7 @@ library
 
                         Paths_cardano_db_sync
 
-  build-depends:        base                            >= 4.14         && < 4.16
+  build-depends:        base                            >= 4.14         && < 4.17
                       , aeson
                       , binary
                       , bytestring
@@ -157,7 +155,6 @@ library
                       , http-client-tls
                       , http-types
                       , iohk-monitoring
-                      , io-classes
                       , lifted-base
                       , memory
                       , microlens
@@ -217,7 +214,7 @@ executable cardano-db-sync
   other-modules:        Paths_cardano_db_sync
                         MigrationValidations
 
-  build-depends:        base                            >= 4.14         && < 4.16
+  build-depends:        base                            >= 4.14         && < 4.17
                       , cardano-db
                       , cardano-db-sync
                       , cardano-prelude
@@ -285,7 +282,6 @@ executable test-http-get-json-metadata
                       , extra
                       , http-client
                       , http-client-tls
-                      , persistent
                       , text
                       , transformers
                       , transformers-except

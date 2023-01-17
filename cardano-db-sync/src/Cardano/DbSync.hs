@@ -52,7 +52,7 @@ import Cardano.DbSync.Sync (runSyncNode)
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util (readAbortOnPanic)
-import Cardano.Prelude hiding (Nat, option, (%))
+import Cardano.Prelude hiding (Nat, (%))
 import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Except.Exit (orDie)
 import Control.Monad.Trans.Except.Extra (newExceptT)

@@ -42,8 +42,8 @@ import Codec.Serialise
 import Codec.Serialise.Encoding
 import Data.ByteString.Short
 import Ouroboros.Consensus.Cardano.Block (StandardAlonzo)
-import qualified Plutus.V1.Ledger.Examples as Plutus
 import qualified PlutusCore.Data as Plutus
+import qualified PlutusLedgerApi.Test.Examples as Plutus
 
 alwaysSucceedsScript :: forall era. AlonzoScript era
 alwaysSucceedsScript = PlutusScript PlutusV1 (Plutus.alwaysSucceedingNAryFunction 0)
