@@ -179,3 +179,26 @@ jobs:
 
     - name: Run tests
       run: cabal test all -j1
+
+  fourmolu:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+
+    strategy:
+      fail-fast: false
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install fourmolu
+      run: |
+        mkdir -p "$HOME/.local/bin"
+        curl -sL https://github.com/fourmolu/fourmolu/releases/download/v0.10.1.0/fourmolu-0.10.1.0-linux-x86_64 -o "$HOME/.local/bin/fourmolu"
+        chmod a+x "$HOME/.local/bin/fourmolu"
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Run fourmolu
+      run: ./scripts/fourmolize.sh
