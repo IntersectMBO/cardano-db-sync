@@ -165,7 +165,6 @@ test-suite cardano-chain-gen
                       , bytestring
                       , cardano-api
                       , cardano-cli
-                      , cardano-config
                       , cardano-crypto-class
                       , cardano-db
                       , cardano-db-sync
