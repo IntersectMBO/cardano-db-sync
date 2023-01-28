@@ -1,5 +1,9 @@
 # Revision history for cardano-db-sync
 
+## 13.1.0.2
+* Upgrade dependencies and integrates a fix in ledger internal data structures.
+* Integrates Cardano Haskell Packages (CHaP)
+
 ## 13.1.0.0
 * Avoids rollbacks on restarts, making them way faster [#1190]
 * Syncing speed is increased

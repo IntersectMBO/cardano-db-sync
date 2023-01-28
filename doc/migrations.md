@@ -8,15 +8,15 @@ This is `a.b.c.d`. where
 different values.
 - `d`: no semantic change to the db.
 
-## Upgrading to 13.1.0.0
+## Upgrading to 13.1.0.x
 
-In order to upgrade from 13.0.x to 13.1.0.0 resyncing is not necessary and requires no special flags
+In order to upgrade from 13.0.x to 13.1.0.x resyncing is not necessary and requires no special flags
 from the user. DBSync will automatically spawn a fixing procedure, which fixes old values
 related to plutus data. After that schema migrations will run on top of the existing db.
 
-Release `13.1.0.0` uses 4 stages of migrations.
+Release `13.1.0.x` uses 4 stages of migrations.
 - `stage 1`: introduces basic postgres types. These cannot be modified or extended.
-- `stage 2`: introduces basic tables and their constraints. `13.1.0.0` brings many
+- `stage 2`: introduces basic tables and their constraints. `13.1.0.x` brings many
 changes here, as it removes foreign, unique keys and a few fields. These files cannot
 be modified or extended.
 - `stage 3`: introduces only the indexes necessary to db-sync. Having unecessary
