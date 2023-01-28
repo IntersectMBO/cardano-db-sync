@@ -48,7 +48,7 @@ import           Database.Esqueleto.Experimental (SqlQuery)
 import           Database.Esqueleto.Internal.Internal (Mode (SELECT), SqlSelect, initialIdentState,
                    toRawSql)
 
-import           Data.Pool (Pool (..))
+import           Data.Pool (Pool)
 import           Database.Persist.Postgresql (ConnectionString, SqlBackend, openSimpleConn,
                    withPostgresqlConn)
 import           Database.Persist.Sql (IsolationLevel (..), runSqlConnWithIsolation,
