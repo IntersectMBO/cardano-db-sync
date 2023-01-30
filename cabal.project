@@ -118,6 +118,9 @@ package cardano-smash-server
 package postgresql-libpq
    flags: +use-pkg-config
 
+package cardano-crypto-praos
+  flags: -external-libsodium-vrf
+
 package cryptonite
   -- Using RDRAND instead of /dev/urandom as an entropy source for key
   -- generation is dubious. Set the flag so we use /dev/urandom by default.
