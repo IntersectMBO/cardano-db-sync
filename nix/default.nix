@@ -10,6 +10,7 @@ let
         ref = s.original.ref or "master";
       };
   in {
+    nixpkgs = compat flakeLock.nixpkgs-unstable;
     "haskell.nix" = compat flakeLock.${flakeLock.root.inputs.haskellNix};
     "iohk-nix" = compat flakeLock.${flakeLock.root.inputs.iohkNix};
     "cardano-world" = compat flakeLock.${flakeLock.root.inputs.cardano-world};
@@ -19,11 +20,18 @@ let
   sources = flakeSources // sourcesOverride;
   iohkNix = import sources.iohk-nix { inherit system; };
   flake-compat = import sources.flake-compat;
-  haskellNix = import sources."haskell.nix" { inherit system sourcesOverride; };
+  haskellNix = import sources."haskell.nix" {
+    inherit system sourcesOverride;
+    pkgs = import sources.nixpkgs {
+      # In nixpkgs versions older than 21.05, if we don't explicitly pass
+      # in localSystem we will hit a code path that uses builtins.currentSystem,
+      # which breaks flake's pure evaluation.
+      localSystem = { inherit system; };
+    };
+  };
   nixpkgs = haskellNix.sources.nixpkgs-unstable;
   CHaP = sources.CHaP;
   cardano-world = flake-compat {
-    inherit pkgs;
     src = sources.cardano-world;
   };
 
@@ -70,8 +78,13 @@ let
     ];
 
   pkgs = import nixpkgs {
-    inherit system crossSystem overlays;
+    inherit crossSystem overlays;
     config = haskellNix.nixpkgsArgs.config // config;
+
+    # In nixpkgs versions older than 21.05, if we don't explicitly pass
+    # in localSystem we will hit a code path that uses builtins.currentSystem,
+    # which breaks flake's pure evaluation.
+    localSystem = { inherit system; };
   };
 
 in pkgs
