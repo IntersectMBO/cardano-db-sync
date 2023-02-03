@@ -8771,11 +8771,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1674063615,
-        "narHash": "sha256-xz/+7zO/O+2XrnxoFOjyEc72Sdy2ieQLpDq78XG15oI=",
+        "lastModified": 1675397182,
+        "narHash": "sha256-uVqKdtxUDSbLJfaHEs+t+wc9K4iMfPVmcYF5psbK4rI=",
         "owner": "input-output-hk",
         "repo": "iohk-nix",
-        "rev": "ccd5bf7d8168a0452d9ec504ea1b559ada7752df",
+        "rev": "03a6755865b7461b3b75dc34c3dd2d5e74920196",
         "type": "github"
       },
       "original": {

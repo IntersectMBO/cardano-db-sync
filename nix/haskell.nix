@@ -149,6 +149,7 @@ let
       ({ pkgs, ... }: {
         # Use the VRF fork of libsodium when building cardano-node
         packages = {
+          cardano-crypto-praos.flags.external-libsodium-vrf = true;
           cardano-crypto-praos.components.library.pkgconfig = lib.mkForce [
             [ pkgs.libsodium-vrf ]
           ];
