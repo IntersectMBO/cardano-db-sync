@@ -9,7 +9,7 @@ import Cardano.DbSync.LedgerState
 import Cardano.Prelude (Word64, fromMaybe)
 import Control.Monad
 import qualified Data.ByteString.Base16 as Base16
-import Data.Version (versionBranch)
+import Data.Version (makeVersion, showVersion, versionBranch)
 import Ouroboros.Network.Block hiding (blockHash)
 import Paths_cardano_db_tool (version)
 import System.Info (arch, os)
@@ -69,20 +69,18 @@ runPrepareSnapshot args = do
 
     printCreateSnapshot :: Word64 -> FilePath -> IO ()
     printCreateSnapshot bblockNo fp = do
-      let mMajor = listToMaybe $ versionBranch version
-          majorStr = case mMajor of
-            Nothing -> ""
-            Just majorV -> "schema-" ++ show majorV
+      let schemaVersion = makeVersion $ take 2 $ versionBranch version
           cmdStr =
             "Create a snapshot with:\n"
               ++ case os of
                 "freebsd" -> "     cardano-db-sync-pgsql-setup"
                 _otherwise -> "     scripts/postgresql-setup.sh"
-              ++ " --create-snapshot db-sync-snapshot-"
+              ++ " --create-snapshot db-sync-snapshot"
       putStrLn $
         concat
           [ cmdStr
-          , majorStr
+          , "-schema-"
+          , showVersion schemaVersion
           , "-block-"
           , show bblockNo
           , "-" ++ arch ++ " "
