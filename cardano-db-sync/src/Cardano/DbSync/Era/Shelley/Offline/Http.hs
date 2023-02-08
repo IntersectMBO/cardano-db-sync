@@ -156,7 +156,7 @@ parsePoolUrl poolUrl =
         }
 
     wrapHttpException :: HttpException -> FetchError
-    wrapHttpException err = FEUrlParseFail poolUrl (textShow err)
+    wrapHttpException err = FEHttpException poolUrl (textShow err)
 
 renderFetchError :: FetchError -> Text
 renderFetchError fe =
@@ -176,7 +176,7 @@ renderFetchError fe =
         ["Offline pool data when fetching metadata from ", url, " exceeded 512 bytes."]
     FEUrlParseFail (PoolUrl url) err ->
       mconcat
-        ["URL parse error from for ", url, " resulted in : ", err]
+        ["URL parse error for ", url, " resulted in : ", err]
     FEJsonDecodeFail (PoolUrl url) err ->
       mconcat
         ["JSON decode error from when fetching metadata from ", url, " resulted in : ", err]
