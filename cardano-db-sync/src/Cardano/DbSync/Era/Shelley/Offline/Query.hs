@@ -6,7 +6,7 @@ module Cardano.DbSync.Era.Shelley.Offline.Query (
 ) where
 
 import Cardano.Db (
-  EntityField (PoolHashId, PoolHashView, PoolMetadataRefHash, PoolMetadataRefId, PoolMetadataRefPoolId, PoolMetadataRefUrl, PoolOfflineDataPmrId, PoolOfflineFetchErrorFetchTime, PoolOfflineFetchErrorId, PoolOfflineFetchErrorPmrId, PoolOfflineFetchErrorPoolId, PoolOfflineFetchErrorRetryCount),
+  EntityField (PoolHashId, PoolMetadataRefHash, PoolMetadataRefId, PoolMetadataRefPoolId, PoolMetadataRefUrl, PoolOfflineDataPmrId, PoolOfflineFetchErrorFetchTime, PoolOfflineFetchErrorId, PoolOfflineFetchErrorPmrId, PoolOfflineFetchErrorPoolId, PoolOfflineFetchErrorRetryCount),
   PoolHash,
   PoolHashId,
   PoolMetaHash (PoolMetaHash),
@@ -15,7 +15,7 @@ import Cardano.Db (
   PoolOfflineData,
   PoolOfflineFetchError,
   PoolOfflineFetchErrorId,
-  PoolUrl (PoolUrl),
+  PoolUrl,
  )
 import Cardano.DbSync.Era.Shelley.Offline.FetchQueue (newRetry, retryAgain)
 import Cardano.DbSync.Types (PoolFetchRetry (..))
@@ -92,13 +92,13 @@ queryNewPoolFetch now = do
         pure $ max_ (pmr ^. PoolMetadataRefId)
 
     convert ::
-      (Value PoolHashId, Value PoolMetadataRefId, Value Text, Value ByteString) ->
+      (Value PoolHashId, Value PoolMetadataRefId, Value PoolUrl, Value ByteString) ->
       PoolFetchRetry
     convert (Value phId, Value pmrId, Value url, Value pmh) =
       PoolFetchRetry
         { pfrPoolHashId = phId
         , pfrReferenceId = pmrId
-        , pfrPoolUrl = PoolUrl url
+        , pfrPoolUrl = url
         , pfrPoolMDHash = Just $ PoolMetaHash pmh
         , pfrRetry = newRetry now
         }
@@ -120,7 +120,7 @@ queryPoolFetchRetry _now = do
     pure
       ( pofe ^. PoolOfflineFetchErrorFetchTime
       , pofe ^. PoolOfflineFetchErrorPmrId
-      , ph ^. PoolHashView
+      , pmr ^. PoolMetadataRefUrl
       , pmr ^. PoolMetadataRefHash
       , ph ^. PoolHashId
       , pofe ^. PoolOfflineFetchErrorRetryCount
@@ -138,13 +138,13 @@ queryPoolFetchRetry _now = do
         pure $ max_ (pofe ^. PoolOfflineFetchErrorId)
 
     convert ::
-      (Value UTCTime, Value PoolMetadataRefId, Value Text, Value ByteString, Value PoolHashId, Value Word) ->
+      (Value UTCTime, Value PoolMetadataRefId, Value PoolUrl, Value ByteString, Value PoolHashId, Value Word) ->
       PoolFetchRetry
     convert (Value time, Value pmrId, Value url, Value pmh, Value phId, Value rCount) =
       PoolFetchRetry
         { pfrPoolHashId = phId
         , pfrReferenceId = pmrId
-        , pfrPoolUrl = PoolUrl url
+        , pfrPoolUrl = url
         , pfrPoolMDHash = Just $ PoolMetaHash pmh
         , pfrRetry = retryAgain (Time.utcTimeToPOSIXSeconds time) rCount
         }

@@ -147,12 +147,12 @@ queryTestOfflineData = do
       )
   pure . organise $ map (convert . unValue4) res
   where
-    convert :: (Text, Text, ByteString, PoolHashId) -> (PoolHashId, TestOffline)
+    convert :: (Text, PoolUrl, ByteString, PoolHashId) -> (PoolHashId, TestOffline)
     convert (tname, url, hash, poolId) =
       ( poolId
       , TestOffline
           { toTicker = tname
-          , toUrl = PoolUrl url
+          , toUrl = url
           , toHash = PoolMetaHash hash
           }
       )

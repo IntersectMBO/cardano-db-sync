@@ -18,6 +18,9 @@
 module Cardano.Db.Schema where
 
 import Cardano.Db.Schema.Orphans ()
+import Cardano.Db.Schema.Types (
+  PoolUrl,
+ )
 import Cardano.Db.Types (
   DbInt65,
   DbLovelace,
@@ -220,7 +223,7 @@ share
 
   PoolMetadataRef
     poolId              PoolHashId          noreference
-    url                 Text
+    url                 PoolUrl             sqltype=varchar
     hash                ByteString          sqltype=hash32type
     registeredTxId      TxId                noreference     -- Only used for rollback.
     UniquePoolMetadataRef poolId url hash

@@ -26,7 +26,7 @@ import Cardano.Api.Shelley (
 import Cardano.BM.Trace (Trace, logDebug, logInfo, logWarning)
 import Cardano.Crypto.Hash (hashToBytes)
 import qualified Cardano.Crypto.Hashing as Crypto
-import Cardano.Db (DbLovelace (..), DbWord64 (..))
+import Cardano.Db (DbLovelace (..), DbWord64 (..), PoolUrl (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Cache
@@ -540,7 +540,7 @@ insertMetaDataRef poolId txId md =
   lift . DB.insertPoolMetadataRef $
     DB.PoolMetadataRef
       { DB.poolMetadataRefPoolId = poolId
-      , DB.poolMetadataRefUrl = Ledger.urlToText (Shelley._poolMDUrl md)
+      , DB.poolMetadataRefUrl = PoolUrl $ Ledger.urlToText (Shelley._poolMDUrl md)
       , DB.poolMetadataRefHash = Shelley._poolMDHash md
       , DB.poolMetadataRefRegisteredTxId = txId
       }
