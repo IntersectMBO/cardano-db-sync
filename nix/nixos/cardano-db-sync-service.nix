@@ -7,7 +7,7 @@ let
   configFile = __toFile "db-sync-config.json"
     (__toJSON (cfg.explorerConfig // cfg.logConfig));
   stateDirBase = "/var/lib/";
-  majorVersion = lib.versions.major cfg.package.version;
+  schemaVersion = lib.versions.majorMinor cfg.package.version;
 in {
   options = {
     services.cardano-db-sync = {
@@ -233,7 +233,7 @@ in {
         # Only take snapshot after service exited cleanly.
         if [ "$SERVICE_RESULT" = "success" ]; then
           EXISTING_SNAPSHOTS=()
-          for f in db-sync-snapshot-schema-${majorVersion}*.tgz; do
+          for f in db-sync-snapshot-schema-${schemaVersion}*.tgz; do
             if [ -f $f ]; then
               echo "A snapshot already exist for this version: $f"
               EXISTING_SNAPSHOTS+=( $f )
