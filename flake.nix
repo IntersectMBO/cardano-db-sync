@@ -59,6 +59,7 @@
               (name: env: f (env // { inherit name; }))
               environments;
           };
+          ciJobs = self.ciJobs.${final.system};
         })
         (import ./nix/pkgs.nix { inherit inputMap; })
       ];
@@ -137,6 +138,10 @@
           supportedSystems = [system];
         };
       } // tullia.fromSimple system (import ./nix/tullia.nix)) // {
+
+        # allows precise paths (avoid fallbacks) with nix build/eval:
+        outputs = self;
+
         overlay = final: prev:
           with self.legacyPackages.${final.system}; {
             inherit cardano-db-sync cardano-node dockerImage;

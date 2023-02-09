@@ -22,11 +22,12 @@ rec {
 
     command.text = config.preset.github.status.lib.reportBulk {
       bulk.text = ''
-        nix eval .#ciJobs --apply __attrNames --json |
+        nix eval .#outputs.ciJobs --apply __attrNames --json |
         nix-systems -i |
         jq 'with_entries(select(.value))' # filter out systems that we cannot build for
       '';
-      each.text = ''nix build -L .#ciJobs."$1".required'';
+      # have to go through legacyPackages instead of top-level attribute for compat with older nix (2.8):
+      each.text = ''nix build -L .#legacyPackages."$1".ciJobs.required'';
       skippedDescription = lib.escapeShellArg "No nix builder available for this system";
     };
 
