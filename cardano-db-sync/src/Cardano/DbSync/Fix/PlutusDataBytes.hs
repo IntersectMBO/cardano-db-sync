@@ -48,13 +48,13 @@ import Ouroboros.Consensus.Cardano.Block (HardForkBlock (BlockAllegra, BlockAlon
 import Ouroboros.Consensus.Shelley.Eras
 
 data FixData = FixData
-  { fdDatum :: [FixPlutusData]
-  , fdRedeemerData :: [FixPlutusData]
+  { fdDatum :: [FixPlutusInfo]
+  , fdRedeemerData :: [FixPlutusInfo]
   }
 
-data FixPlutusData = FixPlutusData
-  { fpdHash :: ByteString
-  , fpdPrevPoint :: CardanoPoint
+data FixPlutusInfo = FixPlutusInfo
+  { fpHash :: ByteString
+  , fpPrevPoint :: CardanoPoint
   }
   deriving (Show)
 
@@ -64,8 +64,8 @@ nullData fd = null (fdDatum fd) && null (fdRedeemerData fd)
 sizeFixData :: FixData -> Int
 sizeFixData fd = length (fdDatum fd) + length (fdRedeemerData fd)
 
-spanOnNextPoint :: FixData -> Maybe (CardanoPoint, FixData, FixData)
-spanOnNextPoint fd = case (getNextPointList (fdDatum fd), getNextPointList (fdRedeemerData fd)) of
+spanFDOnNextPoint :: FixData -> Maybe (CardanoPoint, FixData, FixData)
+spanFDOnNextPoint fd = case (getNextPointList (fdDatum fd), getNextPointList (fdRedeemerData fd)) of
   (Nothing, Nothing) -> Nothing
   (Just p, Nothing) -> Just $ spanOnPoint fd p
   (Nothing, Just p) -> Just $ spanOnPoint fd p
@@ -75,13 +75,13 @@ spanOnPoint :: FixData -> CardanoPoint -> (CardanoPoint, FixData, FixData)
 spanOnPoint fd point =
   (point, FixData datum rdmData, FixData datumRest rdmDataRest)
   where
-    (datum, datumRest) = span ((point ==) . fpdPrevPoint) (fdDatum fd)
-    (rdmData, rdmDataRest) = span ((point ==) . fpdPrevPoint) (fdRedeemerData fd)
+    (datum, datumRest) = span ((point ==) . fpPrevPoint) (fdDatum fd)
+    (rdmData, rdmDataRest) = span ((point ==) . fpPrevPoint) (fdRedeemerData fd)
 
-getNextPointList :: [FixPlutusData] -> Maybe CardanoPoint
+getNextPointList :: [FixPlutusInfo] -> Maybe CardanoPoint
 getNextPointList fds = case fds of
   [] -> Nothing
-  fd : _ -> Just $ fpdPrevPoint fd
+  fd : _ -> Just $ fpPrevPoint fd
 
 getWrongPlutusData ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -104,7 +104,8 @@ getWrongPlutusData tracer = do
       DB_V_13_0.queryDatumPage
       (fmap f . DB_V_13_0.querydatumInfo . entityKey)
       (DB_V_13_0.datumHash . entityVal)
-      (DB_V_13_0.datumBytes . entityVal)
+      (Just . getDatumBytes)
+      (hashPlutusData . getDatumBytes)
   redeemerDataList <-
     findWrongPlutusData
       tracer
@@ -113,7 +114,8 @@ getWrongPlutusData tracer = do
       DB_V_13_0.queryRedeemerDataPage
       (fmap f . DB_V_13_0.queryRedeemerDataInfo . entityKey)
       (DB_V_13_0.redeemerDataHash . entityVal)
-      (DB_V_13_0.redeemerDataBytes . entityVal)
+      (Just . getRedeemerDataBytes)
+      (hashPlutusData . getRedeemerDataBytes)
   pure $ FixData datumList redeemerDataList
   where
     f queryRes = do
@@ -121,6 +123,13 @@ getWrongPlutusData tracer = do
       prevSlotNo <- mPrevSlotNo
       prevPoint <- convertToPoint (SlotNo prevSlotNo) prevBlockHsh
       Just prevPoint
+
+    getDatumBytes = DB_V_13_0.datumBytes . entityVal
+    getRedeemerDataBytes = DB_V_13_0.redeemerDataBytes . entityVal
+
+    hashPlutusData a =
+      dataHashToBytes . Alonzo.hashBinaryData @StandardAlonzo <$>
+        Alonzo.makeBinaryData (SBS.toShort a)
 
 findWrongPlutusData ::
   forall a m.
@@ -131,9 +140,10 @@ findWrongPlutusData ::
   (Int64 -> Int64 -> m [a]) -> -- query a page
   (a -> m (Maybe CardanoPoint)) -> -- get previous block point
   (a -> ByteString) -> -- get the hash
-  (a -> ByteString) -> -- get the stored bytes
-  m [FixPlutusData]
-findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes = do
+  (a -> Maybe ByteString) -> -- get the stored bytes
+  (a -> Either String ByteString) -> -- hash the stored bytes
+  m [FixPlutusInfo]
+findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes hashBytes = do
   liftIO $
     logInfo tracer $
       mconcat
@@ -155,7 +165,9 @@ findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes = do
         ]
   pure datums
   where
-    findRec :: Bool -> Int64 -> [[FixPlutusData]] -> m [FixPlutusData]
+    showBytes = maybe "<Failed to show bytes>" bsBase16Encode
+
+    findRec :: Bool -> Int64 -> [[FixPlutusInfo]] -> m [FixPlutusInfo]
     findRec printedSome offset acc = do
       when (mod offset (10 * limit) == 0 && offset > 0) $
         liftIO $
@@ -163,7 +175,7 @@ findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes = do
             mconcat ["Checked ", textShow offset, " ", tableName]
       ls <- qPage offset limit
       ls' <- filterM checkValidBytes ls
-      ls'' <- mapMaybeM convertToFixPlutusData ls'
+      ls'' <- mapMaybeM convertToFixPlutusInfo ls'
       newPrintedSome <-
         if null ls' || printedSome
           then pure printedSome
@@ -172,7 +184,7 @@ findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes = do
               logInfo tracer $
                 Text.concat
                   [ "Found some wrong values already. The oldest ones are (hash, bytes): "
-                  , textShow $ (\a -> (bsBase16Encode $ getHash a, bsBase16Encode $ getBytes a)) <$> take 5 ls'
+                  , textShow $ (\a -> (bsBase16Encode $ getHash a, showBytes $ getBytes a)) <$> take 5 ls'
                   ]
             pure True
       let !newAcc = ls'' : acc
@@ -181,7 +193,7 @@ findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes = do
         else findRec newPrintedSome (offset + limit) newAcc
 
     checkValidBytes :: a -> m Bool
-    checkValidBytes a = case mHashedBytes of
+    checkValidBytes a = case hashBytes a of
       Left msg -> do
         liftIO $
           logWarning tracer $
@@ -189,21 +201,19 @@ findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes = do
         pure False
       Right hashedBytes -> pure $ hashedBytes /= actualHash
       where
-        bytes = getBytes a
         actualHash = getHash a
-        mHashedBytes = dataHashToBytes . Alonzo.hashBinaryData @StandardAlonzo <$> Alonzo.makeBinaryData (SBS.toShort bytes)
 
-    convertToFixPlutusData :: a -> m (Maybe FixPlutusData)
-    convertToFixPlutusData a = do
+    convertToFixPlutusInfo :: a -> m (Maybe FixPlutusInfo)
+    convertToFixPlutusInfo a = do
       mPoint <- qGetInfo a
       case mPoint of
         Nothing -> pure Nothing
         Just prevPoint ->
           pure $
             Just $
-              FixPlutusData
-                { fpdHash = getHash a
-                , fpdPrevPoint = prevPoint
+              FixPlutusInfo
+                { fpHash = getHash a
+                , fpPrevPoint = prevPoint
                 }
 
     limit = 100_000
@@ -213,12 +223,12 @@ fixPlutusData tracer cblk fds = do
   mapM_ (fixData True) $ fdDatum fds
   mapM_ (fixData False) $ fdRedeemerData fds
   where
-    fixData :: MonadIO m => Bool -> FixPlutusData -> ReaderT SqlBackend m ()
+    fixData :: MonadIO m => Bool -> FixPlutusInfo -> ReaderT SqlBackend m ()
     fixData isDatum fd = do
-      case Map.lookup (fpdHash fd) correctBytesMap of
+      case Map.lookup (fpHash fd) correctBytesMap of
         Nothing -> pure ()
         Just correctBytes | isDatum -> do
-          mDatumId <- DB_V_13_0.queryDatum $ fpdHash fd
+          mDatumId <- DB_V_13_0.queryDatum $ fpHash fd
           case mDatumId of
             Just datumId ->
               DB_V_13_0.upateDatumBytes datumId correctBytes
@@ -228,7 +238,7 @@ fixPlutusData tracer cblk fds = do
                   mconcat
                     ["Datum", " not found in block"]
         Just correctBytes -> do
-          mRedeemerDataId <- DB_V_13_0.queryRedeemerData $ fpdHash fd
+          mRedeemerDataId <- DB_V_13_0.queryRedeemerData $ fpHash fd
           case mRedeemerDataId of
             Just redeemerDataId ->
               DB_V_13_0.upateRedeemerDataBytes redeemerDataId correctBytes

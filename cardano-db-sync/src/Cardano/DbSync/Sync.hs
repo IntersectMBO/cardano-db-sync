@@ -39,6 +39,7 @@ import Cardano.DbSync.Epoch
 import Cardano.DbSync.Era
 import Cardano.DbSync.Error
 import Cardano.DbSync.Fix.PlutusDataBytes
+import Cardano.DbSync.Fix.PlutusScripts
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Metrics
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
@@ -282,6 +283,9 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
               setIsFixedAndMigrate env
               when onlyFix $ panic "All Good! This error is only thrown to exit db-sync." -- TODO fix.
             else do
+              ls <- runDbIohkLogging backend (getTrace env) $ getWrongPlutusScripts (getTrace env)
+              unless (nullPlutusScripts ls) $
+                logInfo trce $ "Found " <> textShow (sizeFixPlutusScripts ls)
               when skipFix $ setIsFixedAndMigrate env
               -- The Db thread is not forked at this point, so we can use
               -- the connection here. A connection cannot be used concurrently by many
@@ -489,7 +493,7 @@ chainSyncClientFix backend tracer fixData = Client.ChainSyncClient $ do
 
     clientStIdle :: Bool -> Int -> FixData -> IO (Client.ClientStIdle CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ())
     clientStIdle shouldLog lastSize fds = do
-      case spanOnNextPoint fds of
+      case spanFDOnNextPoint fds of
         Nothing -> do
           liftIO $ logInfo tracer "Finished chainsync to fix Plutus Data."
           pure $ Client.SendMsgDone ()
@@ -530,4 +534,64 @@ chainSyncClientFix backend tracer fixData = Client.ChainSyncClient $ do
             Client.ChainSyncClient $
               pure $
                 Client.SendMsgRequestNext (clientStNext lastSize fdOnPoint fdRest) (pure $ clientStNext lastSize fdOnPoint fdRest)
+        }
+
+_chainSyncClientFixScripts ::
+  SqlBackend -> Trace IO Text -> FixPlutusScripts -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+_chainSyncClientFixScripts backend tracer fps = Client.ChainSyncClient $ do
+  liftIO $ logInfo tracer "Starting chainsync to fix Plutus Scripts. This will update database values in tables script."
+  clientStIdle True (sizeFixPlutusScripts fps) fps
+  where
+    updateSizeAndLog :: Int -> Int -> IO Int
+    updateSizeAndLog lastSize currentSize = do
+      let diffSize = lastSize - currentSize
+      if lastSize >= currentSize && diffSize >= 200_000
+        then do
+          liftIO $ logInfo tracer $ mconcat ["Fixed ", textShow (sizeFixPlutusScripts fps - currentSize), " Plutus Scripts"]
+          pure currentSize
+        else pure lastSize
+
+    clientStIdle :: Bool -> Int -> FixPlutusScripts -> IO (Client.ClientStIdle CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ())
+    clientStIdle shouldLog lastSize fps' = do
+      case spanFPSOnNextPoint fps' of
+        Nothing -> do
+          liftIO $ logInfo tracer "Finished chainsync to fix Plutus Scripts."
+          pure $ Client.SendMsgDone ()
+        Just (point, fpsOnPoint, fpsRest) -> do
+          when shouldLog $
+            liftIO $
+              logInfo tracer $
+                mconcat ["Starting fixing Plutus Scripts ", textShow point]
+          newLastSize <- liftIO $ updateSizeAndLog lastSize (sizeFixPlutusScripts fps')
+          let clientStIntersect =
+                Client.ClientStIntersect
+                  { Client.recvMsgIntersectFound = \_pnt _tip ->
+                      Client.ChainSyncClient $
+                        pure $
+                          Client.SendMsgRequestNext (clientStNext newLastSize fpsOnPoint fpsRest) (pure $ clientStNext newLastSize fpsOnPoint fpsRest)
+                  , Client.recvMsgIntersectNotFound = \tip -> Client.ChainSyncClient $ do
+                      liftIO $
+                        logWarning tracer $
+                          mconcat
+                            [ "Node can't find block "
+                            , textShow point
+                            , ". It's probably behind, at "
+                            , textShow tip
+                            , ". Sleeping for 3 mins and retrying.."
+                            ]
+                      threadDelay $ 180 * 1_000_000
+                      pure $ Client.SendMsgFindIntersect [point] clientStIntersect
+                  }
+          pure $ Client.SendMsgFindIntersect [point] clientStIntersect
+
+    clientStNext :: Int -> FixPlutusScripts -> FixPlutusScripts -> Client.ClientStNext CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+    clientStNext lastSize fpsOnPoint fpsRest =
+      Client.ClientStNext
+        { Client.recvMsgRollForward = \blk _tip -> Client.ChainSyncClient $ do
+            runDbIohkLogging backend tracer $ fixPlutusScripts tracer blk fpsOnPoint
+            clientStIdle False lastSize fpsRest
+        , Client.recvMsgRollBackward = \_point _tip ->
+            Client.ChainSyncClient $
+              pure $
+                Client.SendMsgRequestNext (clientStNext lastSize fpsOnPoint fpsRest) (pure $ clientStNext lastSize fpsOnPoint fpsRest)
         }
