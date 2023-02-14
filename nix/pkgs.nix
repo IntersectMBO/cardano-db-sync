@@ -26,6 +26,8 @@ in {
     cardano-db-tool;
   inherit (cardanoDbSyncHaskellPackages.cardano-node.components.exes)
     cardano-node;
+  inherit (cardanoDbSyncHaskellPackages.cardano-cli.components.exes)
+    cardano-cli;
   inherit (cardanoDbSyncHaskellPackages.cardano-smash-server.components.exes)
     cardano-smash-server;
   cardano-smash-server-no-basic-auth = (cardanoDbSyncProject.appendModule {

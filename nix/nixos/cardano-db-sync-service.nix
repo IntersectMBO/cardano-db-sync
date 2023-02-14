@@ -171,7 +171,12 @@ in {
     };
   };
   config = lib.mkIf cfg.enable {
-    services.cardano-db-sync = let exec = "${cfg.package}/bin/${cfg.package.exeName}";
+    services.cardano-db-sync =
+      let exec = "${cfg.package}/bin/${cfg.package.exeName}";
+          cardano-cli-check = "cardano-cli query tip " +
+            (if (cfg.environment.nodeConfig.RequiresNetworkMagic == "RequiresNoMagic" )
+              then "--mainnet"
+              else "--testnet-magic $(jq '.networkMagic' ${cfg.environment.nodeConfig.ShelleyGenesisFile})");
     in {
       pgpass = builtins.toFile "pgpass" "${cfg.postgres.socketdir}:${
           toString cfg.postgres.port
@@ -194,6 +199,22 @@ in {
         ''}
 
         ${cfg.restoreSnapshotScript}
+
+        if [[ -n "''${WAIT_FOR_NODE_SYNC:-}" ]]
+        then
+          echo Waiting for $CARDANO_NODE_SOCKET_PATH
+          until [ -f "$CARDANO_NODE_SOCKET_PATH" ]; do
+            sleep 2
+          done
+          echo Waiting for cardano-node to sync over 99%
+          SYNC_PROGRESS=0
+          until [ "''${SYNC_PROGRESS%.*}" -ge "99" ]; do
+            NODE_STATUS="$(${cardano-cli-check} 2>/dev/null || true)"
+            SYNC_PROGRESS="$(jq -e -r '.syncProgress | tonumber | trunc' <<<"$NODE_STATUS" 2>/dev/null || true)"
+            echo "Waiting... Sync progress at $SYNC_PROGRESS"
+            sleep 2
+          done
+        fi
 
         mkdir -p log-dir
         exec ${exec} \

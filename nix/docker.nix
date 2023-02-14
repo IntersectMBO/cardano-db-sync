@@ -38,14 +38,14 @@
 { cardanoLib, dockerTools
 
 # The main contents of the image.
-, cardano-db-sync, scripts
+, cardano-cli, cardano-db-sync, scripts
 
 # Get the current commit
 , gitrev
 
 # Other things to include in the image.
-, bashInteractive, cacert, coreutils, curl, findutils, glibcLocales, gnutar
-, gzip, iana-etc, iproute, iputils, socat, utillinux, writeScript
+, bashInteractive, cacert, coreutils, curl, findutils, getconf, glibcLocales
+, gnutar, gzip, jq, iana-etc, iproute, iputils, socat, utillinux, writeScript
 , writeScriptBin, runCommand, runtimeShell, lib, libidn, libpqxx, postgresql
 
 , dbSyncRepoName ? "inputoutput/cardano-db-sync" }:
@@ -68,9 +68,11 @@ let
       curl # CLI tool for transferring files via URLs
       env-shim # Make /usr/bin/env available
       findutils # GNU find
+      getconf # get num cpus
       gnutar # GNU tar
       glibcLocales # Locale information for the GNU C Library
       gzip # Gnuzip
+      jq # JSON processor
       iana-etc # IANA protocol and port number assignments
       iproute # Utilities for controlling TCP/IP networking
       iputils # Useful utilities for Linux networking
@@ -79,6 +81,7 @@ let
       postgresql # A powerful, open source object-relational database system
       socat # Utility for bidirectional data transfer
       utillinux # System utilities for Linux
+      cardano-cli
     ];
     runAsRoot = ''
       #!${runtimeShell}
@@ -125,6 +128,7 @@ let
       export PGPASSFILE=/configuration/pgpass
       # set up /tmp (override with TMPDIR variable)
       mkdir -p -m 1777 /tmp
+
       if [[ -z "$NETWORK" ]]; then
         echo "Connecting to network specified in configuration.yaml"
         DBSYNC=${cardano-db-sync}/bin/cardano-db-sync
