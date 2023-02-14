@@ -100,7 +100,7 @@
         packages = project.exes // scripts // {
           # Built by `nix build .`
           default = project.exes.cardano-db-sync;
-          inherit (pkgs) dockerImage cardano-node cardano-smash-server-no-basic-auth;
+          inherit (pkgs) dockerImage cardano-node cardano-cli cardano-smash-server-no-basic-auth;
         } # Add checks to be able to build them individually:
         // (prefixNamesWith "checks/" checks);
 
@@ -168,7 +168,7 @@
             inherit ((import flake-compat {
           pkgs = final;
           inherit (final.cardanoDbSyncProject.hsPkgs.cardano-node) src;
-        }).defaultNix.packages.${final.system}) cardano-node;
+        }).defaultNix.packages.${final.system}) cardano-node cardano-cli;
             inherit (final.cardanoDbSyncProject.exes) cardano-db-sync cardano-smash-server cardano-db-tool;
           };
         nixosModules = {

@@ -171,7 +171,12 @@ in {
     };
   };
   config = lib.mkIf cfg.enable {
-    services.cardano-db-sync = let exec = "${cfg.package}/bin/${cfg.package.exeName}";
+    services.cardano-db-sync =
+      let exec = "${cfg.package}/bin/${cfg.package.exeName}";
+          cardano-cli-check = "cardano-cli query tip " +
+            (if (cfg.environment.nodeConfig.RequiresNetworkMagic == "RequiresNoMagic" )
+              then "--mainnet"
+              else "--testnet-magic $(jq '.networkMagic' ${cfg.environment.nodeConfig.ShelleyGenesisFile})");
     in {
       pgpass = builtins.toFile "pgpass" "${cfg.postgres.socketdir}:${
           toString cfg.postgres.port
@@ -194,6 +199,30 @@ in {
         ''}
 
         ${cfg.restoreSnapshotScript}
+
+        if [[ -n "''${WAIT_FOR_NODE_SYNC:-}" ]]
+        then
+          until [ -S $CARDANO_NODE_SOCKET_PATH ]; do
+            echo Waiting for $CARDANO_NODE_SOCKET_PATH
+            sleep 10
+          done
+          # from scripts/postgresql-setup.sh
+          export PGHOST=$(cut -d ":" -f 1 "''${PGPASSFILE}")
+          export PGPORT=$(cut -d ":" -f 2 "''${PGPASSFILE}")
+          export PGDATABASE=$(cut -d ":" -f 3 "''${PGPASSFILE}")
+          user=$(cut -d ":" -f 4 "''${PGPASSFILE}")
+          if [ "$user" != "*" ]; then
+            export PGUSER=$user
+          fi;
+          DB_MAX_BLOCK=$(psql -h $PGHOST $PGDATABASE -U $PGUSER -t -c 'select max (block_no) from block;')
+          NODE_CUR_BLOCK=0
+          while [ $NODE_CUR_BLOCK -lt $DB_MAX_BLOCK ]; do
+            NODE_STATUS="$(${cardano-cli-check} 2>/dev/null || true)"
+            NODE_CUR_BLOCK="$(jq -e -r '.block' <<<"$NODE_STATUS" 2>/dev/null || true)"
+            echo "Waiting... Sync progress at $NODE_CUR_BLOCK /$DB_MAX_BLOCK"
+            sleep 10
+          done
+        fi
 
         mkdir -p log-dir
         exec ${exec} \
