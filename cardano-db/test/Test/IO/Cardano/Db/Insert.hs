@@ -181,7 +181,7 @@ poolMetadataRef :: TxId -> PoolHashId -> PoolMetadataRef
 poolMetadataRef txid phid =
   PoolMetadataRef
     { poolMetadataRefPoolId = phid
-    , poolMetadataRefUrl = "best.pool.com"
+    , poolMetadataRefUrl = PoolUrl "best.pool.com"
     , poolMetadataRefHash = mkHash 32 '4'
     , poolMetadataRefRegisteredTxId = txid
     }

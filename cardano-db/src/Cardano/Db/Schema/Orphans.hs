@@ -3,6 +3,9 @@
 
 module Cardano.Db.Schema.Orphans () where
 
+import Cardano.Db.Schema.Types (
+  PoolUrl (..),
+ )
 import Cardano.Db.Types (
   DbInt65 (..),
   DbLovelace (..),
@@ -72,6 +75,13 @@ instance PersistField DbWord64 where
       else Left $ mconcat ["Failed to parse Haskell type DbWord64: ", Text.pack (show x)]
   fromPersistValue x =
     Left $ mconcat ["Failed to parse Haskell type DbWord64: ", Text.pack (show x)]
+
+instance PersistField PoolUrl where
+  toPersistValue = PersistText . unPoolUrl
+  fromPersistValue (PersistText txt) = Right $ PoolUrl txt
+  fromPersistValue (PersistByteString bs) = Right $ PoolUrl (Text.decodeLatin1 bs)
+  fromPersistValue x =
+    Left $ mconcat ["Failed to parse Haskell type PoolUrl: ", Text.pack (show x)]
 
 instance PersistField RewardSource where
   toPersistValue = PersistText . showRewardSource
