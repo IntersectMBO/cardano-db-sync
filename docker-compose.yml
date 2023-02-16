@@ -32,8 +32,10 @@ services:
         max-file: "10"
 
   cardano-node:
-    image: inputoutput/cardano-node:1.35.4
+    image: kranium/cardano-node:1.35.5-k8s
     environment:
+      - USE_SNAPSHOT=1
+      - SNAPSHOT_BASE_URL=https://testcdn.gikos.net/cardano-node-state
       - NETWORK=${NETWORK:-mainnet}
     volumes:
       - node-db:/data/db
@@ -53,18 +55,22 @@ services:
         max-file: "10"
 
   cardano-db-sync:
-    image: inputoutput/cardano-db-sync:13.1.0.0
+    image: kranium/cardano-db-sync:dev
     environment:
+      - WAIT_FOR_NODE_SYNC=1
       - NETWORK=${NETWORK:-mainnet}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
-      - RESTORE_SNAPSHOT=${RESTORE_SNAPSHOT:-}
+      - RESTORE_SNAPSHOT=https://testcdn.gikos.net/cardano-db-sync/13.1/db-sync-snapshot-schema-13.1-block-8377643-x86_64.tgz
       - RESTORE_RECREATE_DB=N
       - EXTRA_DB_SYNC_ARGS=${EXTRA_DB_SYNC_ARGS:-}
+      # FIXME: cant make below work inside the yaml, shell is OK
+      # - EXTRA_DB_SYNC_ARGS="--disable-ledger"
     depends_on:
       # Depend on both services to be healthy before starting.
-      cardano-node:
-        condition: service_healthy
+      # DISABLE when bootstrapping, so we can also download the db-sync snapshot
+      #cardano-node:
+      #  condition: service_healthy
       postgres:
         condition: service_healthy
     secrets:

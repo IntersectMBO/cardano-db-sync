@@ -48,7 +48,7 @@
 , gnutar, gzip, jq, iana-etc, iproute, iputils, socat, utillinux, writeScript
 , writeScriptBin, runCommand, runtimeShell, lib, libidn, libpqxx, postgresql
 
-, dbSyncRepoName ? "inputoutput/cardano-db-sync" }:
+, dbSyncRepoName ? "kranium/cardano-db-sync" }:
 
 let
 
