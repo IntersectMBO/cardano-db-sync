@@ -40,7 +40,7 @@ jobs:
     - name: Install Postgres support (macOS)
       if: matrix.os == 'macos-latest'
       run: |
-        brew install postgresql@14 libpq openssl@1.1
+        brew install postgresql@14 libpq openssl@1.1 pkg-config
         brew services start postgresql
         sudo mkdir -p /var/run/postgresql/
         sudo ln -s /tmp/.s.PGSQL.5432 /var/run/postgresql/.s.PGSQL.5432
@@ -71,7 +71,7 @@ jobs:
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get -y install libsodium23 libsodium-dev libsystemd0 libsystemd-dev
+        sudo apt-get -y install libsodium23 libsodium-dev libsystemd0 libsystemd-dev git
         sudo apt-get -y remove --purge software-properties-common
         sudo apt-get -y autoremove
 
@@ -107,7 +107,7 @@ jobs:
     - uses: actions/cache@v3
       name: Cache cabal store
       with:
-        path: | 
+        path: |
           ${{ steps.setup-haskell.outputs.cabal-store }}
           dist-newstyle
         key: cache-cabal-store-v1-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('dependencies.txt') }}
@@ -144,3 +144,23 @@ jobs:
 
     - name: Run tests
       run: cabal test all -j1
+
+    - name: Check that Schema Migrations are complete
+      run: |
+        PGPASSFILE=config/pgpass-mainnet cabal run cardano-db-tool -- run-migrations --mdir schema/ --ldir /tmp/
+        echo "A"
+        git --version
+        echo "B"
+        git status schema
+        echo "C"
+        git status schema | grep schema/migration > /tmp/schema.diff
+        echo "D"
+        echo "*************************************************************"
+        cat /tmp/schema.diff
+        echo "*************************************************************"
+        line_count="$(wc -l < /tmp/schema.diff)"
+        if test ${line_count} -ne 0 ; then
+          echo "Schema diff"
+          cat /tmp/schema.diff
+          exit 1
+          fi
