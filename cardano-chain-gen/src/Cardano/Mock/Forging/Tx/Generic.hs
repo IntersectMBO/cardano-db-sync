@@ -48,16 +48,14 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.UMap as UMap
 import Lens.Micro
-import Ouroboros.Consensus.Cardano.Block (LedgerState)
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
-import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 
 resolveAddress ::
   forall era p.
   (Crypto era ~ StandardCrypto, Core.EraTxOut era) =>
   UTxOIndex era ->
-  LedgerState (ShelleyBlock p era) ->
+  ShelleyLedger p era ->
   Either ForgingError (Addr (Crypto era))
 resolveAddress index st = case index of
   UTxOAddressNew n -> Right $ Addr Testnet (unregisteredAddresses !! n) StakeRefNull
@@ -73,7 +71,7 @@ resolveUTxOIndex ::
   forall era p.
   (Crypto era ~ StandardCrypto, Core.EraTxOut era) =>
   UTxOIndex era ->
-  LedgerState (ShelleyBlock p era) ->
+  ShelleyLedger p era ->
   Either ForgingError ((TxIn (Crypto era), Core.TxOut era), UTxOIndex era)
 resolveUTxOIndex index st = toLeft $ case index of
   UTxOIndex n -> utxoPairs !? n
@@ -110,7 +108,7 @@ resolveUTxOIndex index st = toLeft $ case index of
 resolveStakeCreds ::
   (Crypto era ~ StandardCrypto) =>
   StakeIndex ->
-  LedgerState (ShelleyBlock p era) ->
+  ShelleyLedger p era ->
   Either ForgingError (StakeCredential StandardCrypto)
 resolveStakeCreds indx st = case indx of
   StakeIndex n -> toEither $ fst <$> (rewardAccs !? n)
@@ -164,7 +162,7 @@ resolveStakeCreds indx st = case indx of
 resolvePool ::
   (Crypto era ~ StandardCrypto) =>
   PoolIndex ->
-  LedgerState (ShelleyBlock p era) ->
+  ShelleyLedger p era ->
   KeyHash 'StakePool StandardCrypto
 resolvePool pix st = case pix of
   PoolIndexId key -> key
@@ -180,7 +178,7 @@ resolvePool pix st = case pix of
                 nesEs $
                   Consensus.shelleyLedgerState st
 
-allPoolStakeCert :: LedgerState (ShelleyBlock p era) -> [DCert (Crypto era)]
+allPoolStakeCert :: ShelleyLedger p era -> [DCert (Crypto era)]
 allPoolStakeCert st =
   DCertDeleg . RegKey <$> nub creds
   where

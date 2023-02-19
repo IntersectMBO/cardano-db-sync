@@ -13,6 +13,7 @@ module Cardano.DbSync.Era.Shelley.Generic.StakeDist (
   getStakeSlice,
 ) where
 
+import Cardano.DbSync.LedgerState.ConsensusApi
 import Cardano.DbSync.Types
 import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Compactible as Ledger
@@ -29,7 +30,6 @@ import qualified Data.Vector.Generic as VG
 import Ouroboros.Consensus.Block
 import Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
 import Ouroboros.Consensus.Config
-import Ouroboros.Consensus.HardFork.Combinator
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import Ouroboros.Consensus.Node.ProtocolInfo
 import Ouroboros.Consensus.Protocol.Abstract
@@ -70,7 +70,7 @@ getStakeSlice ::
   EpochNo ->
   Word64 ->
   Word64 ->
-  ExtLedgerState CardanoBlock ->
+  ExtLedger ->
   StakeSliceRes
 getStakeSlice pInfo epoch !sliceIndex !minSliceSize els =
   case ledgerState els of
@@ -88,7 +88,7 @@ genericStakeSlice ::
   EpochNo ->
   Word64 ->
   Word64 ->
-  LedgerState (ShelleyBlock p era) ->
+  LedgerB (ShelleyBlock p era) ->
   StakeSliceRes
 genericStakeSlice pInfo epoch sliceIndex minSliceSize lstate
   | index > delegationsLen = NoSlices

@@ -85,7 +85,7 @@ import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 
 type AlonzoUTxOIndex = UTxOIndex StandardAlonzo
 
-type AlonzoLedgerState = LedgerState (ShelleyBlock TPraosStandard StandardAlonzo)
+type AlonzoLedgerState = ShelleyLedger TPraosStandard StandardAlonzo
 
 consTxBody ::
   Set (TxIn StandardCrypto) ->

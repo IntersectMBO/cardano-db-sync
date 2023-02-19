@@ -76,7 +76,6 @@ import Database.Esqueleto.Legacy (
 import Database.Persist.Sql (Entity, SqlBackend, entityVal)
 import Database.PostgreSQL.Simple (SqlError (..))
 import Ouroboros.Consensus.Cardano.Block
-import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 import Test.Cardano.Db.Mock.Config
 import Test.Tasty.HUnit (assertEqual, assertFailure)
 
@@ -176,7 +175,7 @@ assertAddrValues ::
   DBSyncEnv ->
   UTxOIndex era ->
   DbLovelace ->
-  LedgerState (ShelleyBlock p era) ->
+  ShelleyLedger p era ->
   IO ()
 assertAddrValues env ix expected sta = do
   addr <- assertRight $ resolveAddress ix sta
@@ -213,7 +212,7 @@ assertCertCounts env expected =
 assertRewardCounts ::
   (Crypto era ~ StandardCrypto) =>
   DBSyncEnv ->
-  LedgerState (ShelleyBlock p era) ->
+  ShelleyLedger p era ->
   Bool ->
   Maybe Word64 ->
   [(StakeIndex, (Word64, Word64, Word64, Word64, Word64))] ->
@@ -445,7 +444,7 @@ assertPoolLayerCounters ::
   DBSyncEnv ->
   (Word64, Word64) ->
   [(PoolIndex, (Either DBFail Bool, Bool, Bool))] ->
-  LedgerState (ShelleyBlock p era) ->
+  ShelleyLedger p era ->
   IO ()
 assertPoolLayerCounters env (expectedRetired, expectedDelisted) expResults st = do
   poolLayer <- getPoolLayer env

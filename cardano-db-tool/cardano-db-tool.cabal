@@ -78,6 +78,7 @@ library
                       , ouroboros-consensus-cardano
                       , ouroboros-consensus-shelley
                       , ouroboros-network
+                      , ouroboros-network-api
                       , persistent
                       , random
                       , random-shuffle

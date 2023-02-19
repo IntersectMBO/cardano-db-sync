@@ -18,6 +18,7 @@ module Cardano.Mock.Chain (
 
 import Ouroboros.Consensus.Block
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
+import Ouroboros.Consensus.Ledger.Tables
 import qualified Ouroboros.Network.AnchoredFragment as AF
 import Ouroboros.Network.Block
 
@@ -28,7 +29,7 @@ data Chain' block st
   | Chain' block st :> (block, st)
   deriving (Eq, Ord, Show, Functor)
 
-type State block = Consensus.ExtLedgerState block
+type State block = Consensus.ExtLedgerState block EmptyMK
 
 type Chain block = Chain' block (State block)
 

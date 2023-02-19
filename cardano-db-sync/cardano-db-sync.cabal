@@ -99,6 +99,7 @@ library
 
                         Cardano.DbSync.LedgerEvent
                         Cardano.DbSync.LedgerState
+                        Cardano.DbSync.LedgerState.ConsensusApi
 
                         Cardano.DbSync.Metrics
 
@@ -121,6 +122,7 @@ library
 
   build-depends:        base                            >= 4.14         && < 4.16
                       , aeson
+                      , anti-diff
                       , binary
                       , bytestring
                       , base16-bytestring
@@ -168,10 +170,13 @@ library
                       , ouroboros-consensus
                       , ouroboros-consensus-byron
                       , ouroboros-consensus-cardano
+                      , ouroboros-consensus-diffusion
                       , ouroboros-consensus-protocol
                       , ouroboros-consensus-shelley
                       , ouroboros-network
+                      , ouroboros-network-api
                       , ouroboros-network-framework
+                      , ouroboros-network-protocols
                       , persistent
                       , persistent-postgresql
                       , pretty-show

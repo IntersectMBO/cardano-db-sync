@@ -40,6 +40,7 @@ import Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Cardano.Util as Cardano
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.LedgerEvent
+import Cardano.DbSync.LedgerState.ConsensusApi
 import Cardano.DbSync.StateQuery
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
@@ -111,7 +112,6 @@ import Ouroboros.Consensus.Ledger.Abstract (
   ledgerTipHash,
   ledgerTipPoint,
   ledgerTipSlot,
-  tickThenReapplyLedgerResult,
  )
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerCfg (..), ExtLedgerState (..))
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
@@ -155,7 +155,7 @@ topLevelConfig :: LedgerEnv -> TopLevelConfig CardanoBlock
 topLevelConfig = Consensus.pInfoConfig . leProtocolInfo
 
 data CardanoLedgerState = CardanoLedgerState
-  { clsState :: !(ExtLedgerState CardanoBlock)
+  { clsState :: !ExtLedger
   , clsEpochBlockNo :: !EpochBlockNo
   }
 
@@ -181,7 +181,7 @@ instance FromCBOR EpochBlockNo where
       2 -> EpochBlockNo <$> fromCBOR
       n -> fail $ "unexpected EpochBlockNo value " <> show n
 
-encodeCardanoLedgerState :: (ExtLedgerState CardanoBlock -> Encoding) -> CardanoLedgerState -> Encoding
+encodeCardanoLedgerState :: (ExtLedger -> Encoding) -> CardanoLedgerState -> Encoding
 encodeCardanoLedgerState encodeExt cls =
   mconcat
     [ encodeExt (clsState cls)
@@ -189,7 +189,7 @@ encodeCardanoLedgerState encodeExt cls =
     ]
 
 decodeCardanoLedgerState ::
-  (forall s. Decoder s (ExtLedgerState CardanoBlock)) ->
+  (forall s. Decoder s ExtLedger) ->
   (forall s. Decoder s CardanoLedgerState)
 decodeCardanoLedgerState decodeExt = do
   ldgrState <- decodeExt
@@ -281,7 +281,7 @@ mkLedgerEnv trce protocolInfo dir nw systemStart aop snapshotEveryFollowing snap
 initCardanoLedgerState :: Consensus.ProtocolInfo IO CardanoBlock -> CardanoLedgerState
 initCardanoLedgerState pInfo =
   CardanoLedgerState
-    { clsState = Consensus.pInfoInitLedger pInfo
+    { clsState = initLedger pInfo
     , clsEpochBlockNo = GenesisEpochBlockNo
     }
 
@@ -296,9 +296,13 @@ readStateUnsafe env = do
 
 applyBlockAndSnapshot :: LedgerEnv -> CardanoBlock -> IO (ApplyResult, Bool)
 applyBlockAndSnapshot env blk = do
+  logInfo trce "Applying block"
   (oldState, appResult) <- applyBlock env blk
+  logInfo trce "Block applied"
   tookSnapshot <- storeSnapshotAndCleanupMaybe env oldState appResult (blockNo blk) (isSyncedWithinSeconds (apSlotDetails appResult) 600)
   pure (appResult, tookSnapshot)
+  where
+    trce = leTrace env
 
 -- The function 'tickThenReapply' does zero validation, so add minimal validation ('blockPrevHash'
 -- matches the tip hash of the 'LedgerState'). This was originally for debugging but the check is
@@ -332,14 +336,14 @@ applyBlock env blk = do
     applyBlk ::
       ExtLedgerCfg CardanoBlock ->
       CardanoBlock ->
-      ExtLedgerState CardanoBlock ->
-      LedgerResult (ExtLedgerState CardanoBlock) (ExtLedgerState CardanoBlock)
+      ExtLedger ->
+      LedgerResult (ExtLedgerState CardanoBlock) ExtLedger
     applyBlk cfg block lsb =
       case tickThenReapplyCheckHash cfg block lsb of
         Left err -> panic err
         Right result -> result
 
-    mkNewEpoch :: ExtLedgerState CardanoBlock -> ExtLedgerState CardanoBlock -> Maybe Generic.NewEpoch
+    mkNewEpoch :: ExtLedger -> ExtLedger -> Maybe Generic.NewEpoch
     mkNewEpoch oldState newState =
       if ledgerEpochNo env newState /= ledgerEpochNo env oldState + 1
         then Nothing
@@ -438,10 +442,10 @@ saveCurrentLedgerState env ledger mEpochNo = do
     codecConfig :: CodecConfig CardanoBlock
     codecConfig = configCodec (topLevelConfig env)
 
-mkLedgerStateFilename :: LedgerStateDir -> ExtLedgerState CardanoBlock -> Maybe EpochNo -> WithOrigin FilePath
+mkLedgerStateFilename :: LedgerStateDir -> ExtLedger -> Maybe EpochNo -> WithOrigin FilePath
 mkLedgerStateFilename dir ledger mEpochNo =
   lsfFilePath . dbPointToFileName dir mEpochNo
-    <$> getPoint (ledgerTipPoint (Proxy @CardanoBlock) (ledgerState ledger))
+    <$> getPoint (ledgerTipPoint @CardanoBlock (ledgerState ledger))
 
 saveCleanupState :: LedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
 saveCleanupState env ledger mEpochNo = do
@@ -782,7 +786,7 @@ getRegisteredPools st =
 getRegisteredPoolShelley ::
   forall p era.
   (Crypto era ~ StandardCrypto) =>
-  LedgerState (ShelleyBlock p era) ->
+  LedgerB (ShelleyBlock p era) ->
   Set.Set PoolKeyHash
 getRegisteredPoolShelley lState =
   Map.keysSet $
@@ -795,7 +799,7 @@ getRegisteredPoolShelley lState =
 
 -- We only compute 'AdaPots' for later eras. This is a time consuming
 -- function and we only want to run it on epoch boundaries.
-getAdaPots :: ExtLedgerState CardanoBlock -> Maybe Shelley.AdaPots
+getAdaPots :: ExtLedger -> Maybe Shelley.AdaPots
 getAdaPots st =
   case ledgerState st of
     LedgerStateByron _ -> Nothing
@@ -805,7 +809,7 @@ getAdaPots st =
     LedgerStateAlonzo sta -> Just $ totalAdaPots sta
     LedgerStateBabbage stb -> Just $ totalAdaPots stb
 
-ledgerEpochNo :: LedgerEnv -> ExtLedgerState CardanoBlock -> EpochNo
+ledgerEpochNo :: LedgerEnv -> ExtLedger -> EpochNo
 ledgerEpochNo env cls =
   case ledgerTipSlot (ledgerState cls) of
     Origin -> 0 -- An empty chain is in epoch 0
@@ -822,11 +826,11 @@ ledgerEpochNo env cls =
 tickThenReapplyCheckHash ::
   ExtLedgerCfg CardanoBlock ->
   CardanoBlock ->
-  ExtLedgerState CardanoBlock ->
-  Either Text (LedgerResult (ExtLedgerState CardanoBlock) (ExtLedgerState CardanoBlock))
+  ExtLedger ->
+  Either Text AppResult
 tickThenReapplyCheckHash cfg block lsb =
   if blockPrevHash block == ledgerTipHash (ledgerState lsb)
-    then Right $ tickThenReapplyLedgerResult cfg block lsb
+    then Right $ reapplyBlock cfg block lsb
     else
       Left $
         mconcat
@@ -844,14 +848,14 @@ tickThenReapplyCheckHash cfg block lsb =
 totalAdaPots ::
   forall p era.
   Core.EraTxOut era =>
-  LedgerState (ShelleyBlock p era) ->
+  LedgerB (ShelleyBlock p era) ->
   Shelley.AdaPots
 totalAdaPots = Shelley.totalAdaPotsES . Shelley.nesEs . Consensus.shelleyLedgerState
 
 getHeaderHash :: HeaderHash CardanoBlock -> ByteString
 getHeaderHash bh = SBS.fromShort (Consensus.getOneEraHash bh)
 
-getSlotDetails :: LedgerEnv -> LedgerState CardanoBlock -> UTCTime -> SlotNo -> STM SlotDetails
+getSlotDetails :: LedgerEnv -> Ledger -> UTCTime -> SlotNo -> STM SlotDetails
 getSlotDetails env st time slot = do
   minter <- readTVar $ leInterpreter env
   details <- case minter of

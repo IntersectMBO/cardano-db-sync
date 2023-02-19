@@ -43,7 +43,7 @@ import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
 import Cardano.Mock.Forging.Types
 import Cardano.Prelude (bimap, throwIO)
-import Control.Monad (forM, void, when)
+import Control.Monad (void, when)
 import Control.Monad.Except (runExcept)
 import Control.Tracer (Tracer)
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeFileStrict, encodeFile)
@@ -78,23 +78,19 @@ import Ouroboros.Consensus.Config (
   TopLevelConfig,
   configConsensus,
   configLedger,
-  topLevelConfigLedger,
  )
 import Ouroboros.Consensus.Forecast (Forecast (..))
 import qualified Ouroboros.Consensus.HardFork.Combinator.AcrossEras as Consensus
 import Ouroboros.Consensus.HardFork.Combinator.Ledger ()
 import qualified Ouroboros.Consensus.HardFork.Combinator.Mempool as Consensus
 import Ouroboros.Consensus.HeaderValidation (headerStateChainDep)
-import Ouroboros.Consensus.Ledger.Abstract (TickedLedgerState, applyChainTick)
+import Ouroboros.Consensus.Ledger.Abstract (applyChainTick)
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState, headerState, ledgerState)
 import Ouroboros.Consensus.Ledger.SupportsMempool (
-  ApplyTxErr,
-  GenTx,
   Validated,
-  WhetherToIntervene (..),
-  applyTx,
  )
 import Ouroboros.Consensus.Ledger.SupportsProtocol (ledgerViewForecastAt)
+import Ouroboros.Consensus.Ledger.Tables
 import Ouroboros.Consensus.Node.ProtocolInfo (
   ProtocolInfo,
   pInfoBlockForging,
@@ -172,6 +168,8 @@ deriving instance NoThunks (Forecast a)
 
 deriving instance Generic (Forecast a)
 
+type ExtLedger = ExtLedgerState CardanoBlock EmptyMK
+
 mkFingerprint :: Maybe FilePath -> IO (FingerprintMode, Maybe Fingerprint)
 mkFingerprint Nothing = pure (NoFingerprintMode, Nothing)
 mkFingerprint (Just path) = do
@@ -224,17 +222,18 @@ initInterpreter ::
   ProtocolInfo IO CardanoBlock ->
   Tracer IO (ForgeStateInfo CardanoBlock) ->
   Maybe FilePath ->
+  ApplyBlock CardanoBlock ->
   IO Interpreter
-initInterpreter pinfo traceForge mFingerprintFile = do
+initInterpreter pinfo traceForge mFingerprintFile reapply = do
   forging <- pInfoBlockForging pinfo
   let topLeverCfg = pInfoConfig pinfo
-  let initSt = pInfoInitLedger pinfo
+  let initSt = stowLedgerTables $ pInfoInitLedger pinfo
   let ledgerView = mkForecast topLeverCfg initSt
   (mode, fingerprint) <- mkFingerprint mFingerprintFile
   stvar <-
     newMVar $
       InterpreterState
-        { istChain = initChainDB topLeverCfg initSt
+        { istChain = initChainDB topLeverCfg initSt reapply
         , istForecast = ledgerView
         , istSlot = SlotNo 0
         , -- The first real Byron block (ie block that can contain txs) is number 1.
@@ -255,10 +254,11 @@ withInterpreter ::
   ProtocolInfo IO CardanoBlock ->
   Tracer IO (ForgeStateInfo CardanoBlock) ->
   Maybe FilePath ->
+  ApplyBlock CardanoBlock ->
   (Interpreter -> IO a) ->
   IO a
-withInterpreter p t f action = do
-  interp <- initInterpreter p t f
+withInterpreter p t f reapply action = do
+  interp <- initInterpreter p t f reapply
   a <- action interp
   finalizeFingerprint interp
   pure a
@@ -355,8 +355,8 @@ forgeNextLeaders interpreter txes possibleLeaders = do
             else throwIO $ FailedToValidateSlot currentSlot (lengthSlots <$> istFingerprint interState) (interpFingerFile interpreter)
         Just (proof, blockForging) -> do
           -- Tick the ledger state for the 'SlotNo' we're producing a block for
-          let tickedLedgerSt :: Ticked (LedgerState CardanoBlock)
-              !tickedLedgerSt =
+          --          let tickedLedgerSt :: Ticked1 (LedgerState CardanoBlock) DiffMK
+          let !tickedLedgerSt =
                 applyChainTick
                   (configLedger cfg)
                   currentSlot
@@ -372,19 +372,6 @@ forgeNextLeaders interpreter txes possibleLeaders = do
               proof
 
           (blk,) <$> throwLeftIO (addOrValidateSlot interpreter (istFingerprint interState) blk)
-
-    -- We will probably not use it and wait for ledger to provide a way to construct
-    -- Validated Tx in an unsafe way.
-    _applyTxs ::
-      [Consensus.GenTx CardanoBlock] ->
-      SlotNo ->
-      TickedLedgerState CardanoBlock ->
-      Either (ApplyTxErr CardanoBlock) [Validated (GenTx CardanoBlock)]
-    _applyTxs genTxs slotNo st =
-      runExcept
-        . forM genTxs
-        $ \tx ->
-          snd <$> applyTx (topLevelConfigLedger cfg) Intervene slotNo tx st
 
 tryAllForging ::
   Interpreter ->
@@ -465,7 +452,7 @@ rollbackInterpreter interpreter pnt = do
 getCurrentInterpreterState :: Interpreter -> IO InterpreterState
 getCurrentInterpreterState = readMVar . interpState
 
-getCurrentLedgerState :: Interpreter -> IO (ExtLedgerState CardanoBlock)
+getCurrentLedgerState :: Interpreter -> IO ExtLedger
 getCurrentLedgerState = fmap (currentState . istChain) . getCurrentInterpreterState
 
 getNextBlockNo :: Interpreter -> IO BlockNo
@@ -488,7 +475,7 @@ getCurrentSlot interp = istSlot <$> readMVar (interpState interp)
 
 withBabbageLedgerState ::
   Interpreter ->
-  (LedgerState (ShelleyBlock PraosStandard StandardBabbage) -> Either ForgingError a) ->
+  (LedgerState (ShelleyBlock PraosStandard StandardBabbage) EmptyMK -> Either ForgingError a) ->
   IO a
 withBabbageLedgerState inter mk = do
   st <- getCurrentLedgerState inter
@@ -500,7 +487,7 @@ withBabbageLedgerState inter mk = do
 
 withAlonzoLedgerState ::
   Interpreter ->
-  (LedgerState (ShelleyBlock TPraosStandard StandardAlonzo) -> Either ForgingError a) ->
+  (LedgerState (ShelleyBlock TPraosStandard StandardAlonzo) EmptyMK -> Either ForgingError a) ->
   IO a
 withAlonzoLedgerState inter mk = do
   st <- getCurrentLedgerState inter
@@ -512,7 +499,7 @@ withAlonzoLedgerState inter mk = do
 
 withShelleyLedgerState ::
   Interpreter ->
-  (LedgerState (ShelleyBlock TPraosStandard StandardShelley) -> Either ForgingError a) ->
+  (LedgerState (ShelleyBlock TPraosStandard StandardShelley) EmptyMK -> Either ForgingError a) ->
   IO a
 withShelleyLedgerState inter mk = do
   st <- getCurrentLedgerState inter
@@ -582,7 +569,7 @@ mkValidated txe =
 
 mkForecast ::
   TopLevelConfig CardanoBlock ->
-  ExtLedgerState CardanoBlock ->
+  ExtLedger ->
   Forecast (LedgerView (BlockProtocol CardanoBlock))
 mkForecast cfg st = ledgerViewForecastAt (configLedger cfg) (ledgerState st)
 

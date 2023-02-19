@@ -39,6 +39,7 @@ import Cardano.DbSync
 import Cardano.DbSync.Config
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Error
+import Cardano.DbSync.LedgerState.ConsensusApi
 import Cardano.DbSync.Types (CardanoBlock, MetricSetters (..))
 import Cardano.Mock.ChainSync.Server
 import Cardano.Mock.Forging.Interpreter
@@ -67,6 +68,8 @@ import qualified Data.Text as Text
 import Database.Persist.Postgresql (createPostgresqlPool)
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Config (TopLevelConfig)
+import Ouroboros.Consensus.Ledger.Basics
+import Ouroboros.Consensus.Ledger.Extended as Consensus
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Node (ShelleyLeaderCredentials)
@@ -262,19 +265,21 @@ withFullConfig' hasFingerprint config testLabel action iom migr = do
   cfg <- mkConfig configDir mutableDir
   fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabel else pure Nothing
   let dbsyncParams = syncNodeParams cfg
+  let reapply blk st = lrResult $ reapplyBlock (ExtLedgerCfg $ Consensus.pInfoConfig $ protocolInfo cfg) blk st
   -- Set to True to disable logging, False to enable it.
   trce <-
     if True
       then pure nullTracer
       else configureLogging dbsyncParams "db-sync-node"
   let dbsyncRun = runDbSync emptyMetricsSetters migr iom trce dbsyncParams True 35 35
-  let initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
-  withInterpreter (protocolInfoForging cfg) nullTracer fingerFile $ \interpreter -> do
+  let initSt = initLedger $ protocolInfo cfg
+  withInterpreter (protocolInfoForging cfg) nullTracer fingerFile reapply $ \interpreter -> do
     -- TODO: get 42 from config
     withServerHandle @CardanoBlock
       iom
       (topLevelConfig cfg)
       initSt
+      reapply
       (NetworkMagic 42)
       (unSocketPath (enpSocketPath $ syncNodeParams cfg))
       $ \mockServer ->

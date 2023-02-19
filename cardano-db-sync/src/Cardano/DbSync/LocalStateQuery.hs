@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -51,7 +52,7 @@ import Ouroboros.Network.Protocol.LocalStateQuery.Client (
   LocalStateQueryClient (..),
  )
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as StateQuery
-import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
+import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure, FootprintL (..))
 
 data NoLedgerStateEnv = NoLedgerStateEnv
   { nlsTracer :: Trace IO Text
@@ -64,7 +65,7 @@ newtype StateQueryTMVar blk result = StateQueryTMVar
   { unStateQueryTMVar ::
       StrictTMVar
         IO
-        ( Query blk result
+        ( Query blk 'SmallL result -- TODO(HD): is this correct?
         , StrictTMVar IO (Either AcquireFailure result)
         )
   }

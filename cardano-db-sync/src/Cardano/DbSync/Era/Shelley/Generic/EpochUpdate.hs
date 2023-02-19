@@ -7,7 +7,7 @@ module Cardano.DbSync.Era.Shelley.Generic.EpochUpdate (
 ) where
 
 import Cardano.DbSync.Era.Shelley.Generic.ProtoParams
-import Cardano.DbSync.Types
+import Cardano.DbSync.LedgerState.ConsensusApi
 import Cardano.DbSync.Util
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
@@ -35,7 +35,7 @@ data EpochUpdate = EpochUpdate
   , euNonce :: !Ledger.Nonce
   }
 
-epochUpdate :: ExtLedgerState CardanoBlock -> EpochUpdate
+epochUpdate :: ExtLedger -> EpochUpdate
 epochUpdate lstate =
   EpochUpdate
     { euProtoParams = maybeToStrict $ epochProtoParams lstate
@@ -44,7 +44,7 @@ epochUpdate lstate =
 
 -- -------------------------------------------------------------------------------------------------
 
-extractEpochNonce :: ExtLedgerState CardanoBlock -> Ledger.Nonce
+extractEpochNonce :: ExtLedger -> Ledger.Nonce
 extractEpochNonce extLedgerState =
   case Consensus.headerStateChainDep (headerState extLedgerState) of
     ChainDepStateByron _ -> Ledger.NeutralNonce

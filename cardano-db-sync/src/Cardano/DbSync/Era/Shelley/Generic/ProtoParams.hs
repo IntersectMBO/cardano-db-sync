@@ -6,7 +6,7 @@ module Cardano.DbSync.Era.Shelley.Generic.ProtoParams (
   epochProtoParams,
 ) where
 
-import Cardano.DbSync.Types
+import Cardano.DbSync.LedgerState.ConsensusApi
 import qualified Cardano.Ledger.Alonzo as Alonzo
 import Cardano.Ledger.Alonzo.Language (Language)
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
@@ -58,7 +58,7 @@ data ProtoParams = ProtoParams
   , ppMaxCollateralInputs :: !(Maybe Natural)
   }
 
-epochProtoParams :: ExtLedgerState CardanoBlock -> Maybe ProtoParams
+epochProtoParams :: ExtLedger -> Maybe ProtoParams
 epochProtoParams lstate =
   case ledgerState lstate of
     LedgerStateByron _ -> Nothing
@@ -68,23 +68,23 @@ epochProtoParams lstate =
     LedgerStateAlonzo als -> Just $ alonzoProtoParams als
     LedgerStateBabbage bls -> Just $ babbageProtoParams bls
 
-allegraProtoParams :: LedgerState (ShelleyBlock p StandardAllegra) -> ProtoParams
+allegraProtoParams :: LedgerB (ShelleyBlock p StandardAllegra) -> ProtoParams
 allegraProtoParams =
   fromShelleyParams . Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState
 
-alonzoProtoParams :: LedgerState (ShelleyBlock p StandardAlonzo) -> ProtoParams
+alonzoProtoParams :: LedgerB (ShelleyBlock p StandardAlonzo) -> ProtoParams
 alonzoProtoParams =
   fromAlonzoParams . Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState
 
-babbageProtoParams :: LedgerState (ShelleyBlock p StandardBabbage) -> ProtoParams
+babbageProtoParams :: LedgerB (ShelleyBlock p StandardBabbage) -> ProtoParams
 babbageProtoParams =
   fromBabbageParams . Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState
 
-maryProtoParams :: LedgerState (ShelleyBlock p StandardMary) -> ProtoParams
+maryProtoParams :: LedgerB (ShelleyBlock p StandardMary) -> ProtoParams
 maryProtoParams =
   fromShelleyParams . Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState
 
-shelleyProtoParams :: LedgerState (ShelleyBlock p StandardShelley) -> ProtoParams
+shelleyProtoParams :: LedgerB (ShelleyBlock p StandardShelley) -> ProtoParams
 shelleyProtoParams =
   fromShelleyParams . Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState
 

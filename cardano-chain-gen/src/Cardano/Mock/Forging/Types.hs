@@ -4,6 +4,7 @@
 module Cardano.Mock.Forging.Types (
   CardanoBlock,
   CardanoPoint,
+  ShelleyLedger,
   TPraosStandard,
   PraosStandard,
   ForgingError (..),
@@ -24,6 +25,7 @@ import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Exception
 import qualified Ouroboros.Consensus.Cardano.Block as Consensus
 import Ouroboros.Consensus.Forecast
+import Ouroboros.Consensus.Ledger.Tables
 import Ouroboros.Consensus.Protocol.Praos (Praos)
 import Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import Ouroboros.Consensus.Shelley.Eras (
@@ -32,6 +34,7 @@ import Ouroboros.Consensus.Shelley.Eras (
   StandardCrypto,
   StandardShelley,
  )
+import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 import Ouroboros.Network.Block (Point)
 
 type TPraosStandard = TPraos StandardCrypto
@@ -41,6 +44,8 @@ type PraosStandard = Praos StandardCrypto
 type CardanoBlock = Consensus.CardanoBlock StandardCrypto
 
 type CardanoPoint = Point CardanoBlock
+
+type ShelleyLedger p era = Consensus.LedgerState (ShelleyBlock p era) EmptyMK
 
 data MockBlock = MockBlock
   { txs :: ![TxEra]

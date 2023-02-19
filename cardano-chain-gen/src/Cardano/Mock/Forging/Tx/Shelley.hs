@@ -38,7 +38,7 @@ import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 
 type ShelleyUTxOIndex = UTxOIndex (ShelleyEra StandardCrypto)
 
-type ShelleyLedgerState = LedgerState (ShelleyBlock TPraosStandard (ShelleyEra StandardCrypto))
+type ShelleyLedgerState = ShelleyLedger TPraosStandard (ShelleyEra StandardCrypto)
 
 type ShelleyTx = ShelleyTx.ShelleyTx (ShelleyEra StandardCrypto)
 

@@ -32,7 +32,7 @@ import Network.HTTP.Client (HttpException (..))
 import qualified Network.HTTP.Client as Http
 import qualified Network.HTTP.Types as Http
 
--- |Fetch error for the HTTP client fetching the pool offline metadata.
+-- | Fetch error for the HTTP client fetching the pool offline metadata.
 data FetchError
   = FEHashMismatch !PoolUrl !Text !Text
   | FEDataTooLong !PoolUrl

@@ -20,6 +20,7 @@ import Cardano.Chain.Common (
   unsafeGetLovelace,
  )
 import qualified Cardano.Chain.UTxO as Byron
+import Cardano.DbSync.LedgerState.ConsensusApi
 import Cardano.Ledger.Address (BootstrapAddress (..))
 import Cardano.Ledger.Alonzo (AlonzoEra)
 import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
@@ -36,12 +37,12 @@ import Cardano.Prelude
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 import Ouroboros.Consensus.Byron.Ledger
-import Ouroboros.Consensus.Cardano.Block (CardanoBlock, LedgerState (..), StandardCrypto)
+import Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import Ouroboros.Consensus.Shelley.Ledger.Ledger
 
 -- Given an address, return it's current UTxO balance.
-ledgerAddrBalance :: Text -> LedgerState (CardanoBlock StandardCrypto) -> Either Text Word64
+ledgerAddrBalance :: Text -> Ledger -> Either Text Word64
 ledgerAddrBalance addr lsc =
   case lsc of
     LedgerStateByron st -> getByronBalance addr $ Byron.cvsUtxo $ byronLedgerState st
@@ -51,7 +52,7 @@ ledgerAddrBalance addr lsc =
     LedgerStateAlonzo st -> getAlonzoBalance addr $ getUTxO st
     LedgerStateBabbage _st -> panic "undefined Babbage ledgerAddrBalance"
   where
-    getUTxO :: LedgerState (ShelleyBlock p era) -> Shelley.UTxO era
+    getUTxO :: LedgerB (ShelleyBlock p era) -> Shelley.UTxO era
     getUTxO = Shelley._utxo . Shelley.lsUTxOState . Shelley.esLState . Shelley.nesEs . shelleyLedgerState
 
 getByronBalance :: Text -> Byron.UTxO -> Either Text Word64

@@ -165,11 +165,12 @@ forkServerThread ::
   IOManager ->
   TopLevelConfig blk ->
   State blk ->
+  ApplyBlock blk ->
   NetworkMagic ->
   FilePath ->
   IO (ServerHandle IO blk)
-forkServerThread iom config initSt netMagic path = do
-  chainSt <- newTVarIO $ initChainProducerState config initSt
+forkServerThread iom config initSt reApply netMagic path = do
+  chainSt <- newTVarIO $ initChainProducerState config initSt reApply
   let runThread = async $ runLocalServer iom (configCodec config) netMagic path chainSt
   thread <- runThread
   threadVar <- newTVarIO thread
@@ -181,12 +182,13 @@ withServerHandle ::
   IOManager ->
   TopLevelConfig blk ->
   State blk ->
+  ApplyBlock blk ->
   NetworkMagic ->
   FilePath ->
   (ServerHandle IO blk -> IO a) ->
   IO a
-withServerHandle iom config initSt netMagic path =
-  bracket (forkServerThread iom config initSt netMagic path) stopServer
+withServerHandle iom config initSt reApply netMagic path =
+  bracket (forkServerThread iom config initSt reApply netMagic path) stopServer
 
 -- | Must be called from the main thread
 runLocalServer ::

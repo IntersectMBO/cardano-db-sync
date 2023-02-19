@@ -6,6 +6,7 @@
 
 module Cardano.Mock.ChainDB (
   ChainDB (..),
+  ApplyBlock,
   initChainDB,
   headTip,
   currentState,
@@ -20,9 +21,6 @@ module Cardano.Mock.ChainDB (
 import Cardano.Mock.Chain
 import Ouroboros.Consensus.Block
 import Ouroboros.Consensus.Config
-import Ouroboros.Consensus.Ledger.Abstract
-import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
-import Ouroboros.Consensus.Ledger.SupportsProtocol
 import Ouroboros.Network.Block (Tip (..))
 
 -- | Thin layer around 'Chain' that knows how to apply blocks and maintain
@@ -33,6 +31,7 @@ import Ouroboros.Network.Block (Tip (..))
 data ChainDB block = ChainDB
   { chainConfig :: TopLevelConfig block
   , cchain :: Chain block
+  , creapply :: ApplyBlock block
   }
 
 instance Eq (Chain block) => Eq (ChainDB block) where
@@ -41,7 +40,13 @@ instance Eq (Chain block) => Eq (ChainDB block) where
 instance Show (Chain block) => Show (ChainDB block) where
   show = show . cchain
 
-initChainDB :: TopLevelConfig block -> State block -> ChainDB block
+type ApplyBlock block = block -> State block -> State block
+
+initChainDB ::
+  TopLevelConfig block ->
+  State block ->
+  ApplyBlock block ->
+  ChainDB block
 initChainDB config st = ChainDB config (Genesis st)
 
 headTip :: HasHeader block => ChainDB block -> Tip block
@@ -59,11 +64,12 @@ currentState chainDB =
 replaceGenesisDB :: ChainDB block -> State block -> ChainDB block
 replaceGenesisDB chainDB st = chainDB {cchain = Genesis st}
 
-extendChainDB :: LedgerSupportsProtocol block => ChainDB block -> block -> ChainDB block
+extendChainDB :: ChainDB block -> block -> ChainDB block
 extendChainDB chainDB blk = do
   let !chain = cchain chainDB
-      !st = tickThenReapply (Consensus.ExtLedgerCfg $ chainConfig chainDB) blk (getTipState chain)
-   in chainDB {cchain = chain :> (blk, st)}
+      !st = creapply chainDB blk (getTipState chain)
+   in -- lrResult $ reapplyBlock (Consensus.ExtLedgerCfg $ chainConfig chainDB) blk (getTipState chain)
+      chainDB {cchain = chain :> (blk, st)}
 
 findFirstPoint :: HasHeader block => [Point block] -> ChainDB block -> Maybe (Point block)
 findFirstPoint points chainDB = findFirstPointChain points (cchain chainDB)

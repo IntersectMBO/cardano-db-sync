@@ -110,7 +110,7 @@ import qualified Plutus.V1.Ledger.EvaluationContext as PV1
 
 type BabbageUTxOIndex = UTxOIndex StandardBabbage
 
-type BabbageLedgerState = LedgerState (ShelleyBlock PraosStandard StandardBabbage)
+type BabbageLedgerState = ShelleyLedger PraosStandard StandardBabbage
 
 data TxOutScriptType
   = TxOutNoInline Bool -- nothing is inlined, like in Alonzo

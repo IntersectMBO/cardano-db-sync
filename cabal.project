@@ -9,8 +9,10 @@ repository cardano-haskell-packages
     c00aae8461a256275598500ea0e187588c35a5d5d7454fb57eac18d9edb86a56
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
-index-state: 2022-11-11T00:00:00Z
-index-state: cardano-haskell-packages 2022-11-12T20:00:00Z
+index-state: 2022-12-11T00:00:00Z
+index-state:
+  , hackage.haskell.org 2022-12-11T00:00:00Z
+  , cardano-haskell-packages 2022-12-14T00:40:15Z
 
 packages:
   cardano-db
@@ -19,20 +21,40 @@ packages:
   cardano-db-tool
   cardano-smash-server
   cardano-chain-gen
+  ../ekg-forward-fork
 
 constraints:
-    persistent-postgresql >= 2.11.0.1
-  , hedgehog >= 1.0
+    hedgehog >= 1.0
   , bimap >= 0.4.0
   , libsystemd-journal >= 1.4.4
   , systemd >= 2.3.0
     -- systemd-2.3.0 requires at least network 3.1.1.0 but it doesn't declare
     -- that dependency
   , network >= 3.1.1.0
-  , HSOpenSSL >= 0.11.7.2
+  , HsOpenSSL == 0.11.7.2
   , algebraic-graphs < 0.7
   , protolude >= 0.3.2
-  , cardano-binary  == 1.5.0
+  , ekg-forward >= 0.2
+
+  -- TODO: these should be set in cabal files, but avoiding setting them in lower dependencies for initial CHaP release
+
+  -- Needed until ouroboros-network gets proper bounds
+  , byron-spec-chain == 0.1.1.1
+  , byron-spec-ledger == 0.1.1.1
+  , cardano-binary == 1.5.0.1
+  , cardano-ledger-alonzo == 0.1.1.1
+  , cardano-ledger-babbage == 0.1.1.1
+  , cardano-ledger-byron == 0.1.1.1
+  , cardano-ledger-byron-test == 1.4.1
+  , cardano-ledger-conway == 0.1.1.1
+  , cardano-ledger-core == 0.1.1.1
+  , cardano-ledger-pretty == 0.1.1.1
+  , cardano-ledger-shelley == 0.1.1.1
+  , cardano-ledger-shelley-ma == 0.1.1.1
+  , cardano-ledger-shelley-test == 0.1.1.1
+  , cardano-prelude == 0.1.0.1
+  , cardano-protocol-tpraos == 0.1.1.1
+  , hedgehog-extras >= 0.3.0.3
 
 package cardano-db
   ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields -Wunused-imports -Wunused-packages
@@ -61,6 +83,7 @@ tests: True
 test-show-details: direct
 
 allow-newer:
+  ekg:*,
   ekg:aeson,
   ekg-json:aeson,
   threepenny-gui:aeson,
@@ -78,7 +101,7 @@ allow-newer:
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: 7bd6944879b933d4389f6f2cb317016710c97245
+  tag: b8f6178aa5e5c38baee997e338d824b086ec54e7
   --sha256: 1djw8xd8cn3jhvhgxqkmrimz4q61iwvaha179wf1v79mkdkcb53g
   subdir:
     cardano-api
@@ -91,12 +114,6 @@ source-repository-package
 
 source-repository-package
   type: git
-  location: https://github.com/vshabanov/ekg-json
-  tag: 00ebe7211c981686e65730b7144fbf5350462608
-  --sha256: 1zvjm3pb38w0ijig5wk5mdkzcszpmlp5d4zxvks2jk1rkypi8gsm
-
-source-repository-package
-  type: git
   location: https://github.com/denisshevchenko/threepenny-gui
   tag: 4ec92ded05ccf59ba4a874be4b404ac1b6d666b6
   --sha256: 00fvvaf4ir4hskq4a6gggbh2wmdvy8j8kn6s4m1p1vlh8m8mq514
@@ -105,20 +122,46 @@ source-repository-package
 source-repository-package
    type: git
    location: https://github.com/input-output-hk/ouroboros-network
-   tag: 72863b0fc78abdc2b8e29f0dda96c06da3dd11d0
-   --sha256: 0qwvx04l9q3h7acb0a3b8iarqcn5bkqhwaplbga5pvryqp3lhn00
+   tag: ea8f657533b64ad3494d3695c945c8fb24c6a0f1
+   --sha256: 0bnj1xj5gajk6v46517sgzjcxdwyw5l5bmqhv37k8gcsyfads5hx
    subdir:
+     anti-diff
      monoidal-synchronisation
      network-mux
+     cardano-client
      ouroboros-consensus
      ouroboros-consensus-byron
      ouroboros-consensus-cardano
+     ouroboros-consensus-cardano-tools
+     ouroboros-consensus-diffusion
      ouroboros-consensus-protocol
      ouroboros-consensus-shelley
      ouroboros-network
+     ouroboros-network-api
      ouroboros-network-framework
+     ouroboros-network-mock
+     ouroboros-network-protocols
      ouroboros-network-testing
-     ouroboros-consensus-cardano-tools
+     semigroupoid
+
+-- And has the adjustments for the ledger refactor
+source-repository-package
+   type: git
+   location: https://github.com/input-output-hk/hedgehog-extras
+   tag: 9ea1845ca2036e7a1ae9fcebe393526540c5c233
+   --sha256: 1436dwmz9v6ky9kzgnr4flzlzjxwh2zjkds9fnayc1ddang6wwb6
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/haskell-lmdb
+  tag: 08e5c1572e98e599d60bb24a7b2569879a35a7b1
+  --sha256: 13sk1knypzd13cw09wpp9zj3j2cr999ay75aqq15k2zv9hmiszyn
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/lmdb-simple
+  tag: 04d371afc341be8ebf82e5fa084e5f7374392960
+  --sha256: 0a9kbf739vp6pvhclfj24l44rlqps9jrsk0n1kswr0yfcrbi7zm4
 
 source-repository-package
   type: git
