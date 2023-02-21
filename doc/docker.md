@@ -55,7 +55,8 @@ docker run \
 ## Build and load image using Nix
 
 ```
-docker load -i $(nix-build -A dockerImage --no-out-link)
+nix build .#dockerImage
+docker load -i ./result
 ```
 
 ## Restore from Snapshot
@@ -81,7 +82,7 @@ For `docker-compose`:
 ```yaml
 cardano-db-sync:
     image: inputoutput/cardano-db-sync:13.0.5
-    ... 
+    ...
     working_dir: /var/lib/cexplorer
     volumes:
       - db-sync-data:/var/lib/cexplorer
@@ -89,7 +90,7 @@ cardano-db-sync:
     restart: on-failure
     ...
 ```
-After starting `docker-compose` the snapshot file should be downloaded to specified directory 
+After starting `docker-compose` the snapshot file should be downloaded to specified directory
 which exact location can be found by using `docker volume inspect` command:
 
 ```sh
@@ -173,9 +174,8 @@ Prerequisites:
 Assuming you want a Linux x86 image run:
 
 ``` shell
-nix-build -A dockerImage --no-out-link \
---builders 'ssh://builder@x86_64-linux.example.com x86_64-linux' \
---argstr system x86_64-linux
+nix build .#legacyPackages.x86_64-linux.dockerImage \
+--builders 'ssh://builder@x86_64-linux.example.com x86_64-linux'
 ```
 
 At the end it will generate a `tar.gz` file

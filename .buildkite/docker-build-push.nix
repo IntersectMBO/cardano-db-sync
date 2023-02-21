@@ -5,7 +5,7 @@
 # There is a little bit of bash logic to replace the default repo and
 # tag from the nix-build (../nix/docker.nix).
 
-{ dbSyncPackages ?  import ../. {}
+{ dbSyncPackages ?  import ../nix {}
 
 # Build system's Nixpkgs. We use this so that we have the same docker
 # version as the docker daemon.
