@@ -1,28 +1,19 @@
 # ###########################################################################
 # Builds Haskell packages with Haskell.nix
 ############################################################################
-{ lib, stdenv, haskell-nix, buildPackages, src, config ? { }
-  # GHC attribute name
-, compiler ? config.haskellNix.compiler or "ghc8107"
-  # Enable profiling
-, profiling ? config.haskellNix.profiling or false
-  # Version info, to be passed when not building from a git work tree
-, gitrev 
+{ haskell-nix
   # Map from URLs to input, for custom hackage sources
 , inputMap }:
 let
 
-  projectPackages = lib.attrNames (haskell-nix.haskellLib.selectProjectPackages
-    (haskell-nix.cabalProject' {
-      inherit src inputMap;
-      compiler-nix-name = compiler;
-    }).hsPkgs);
+  inherit (haskell-nix) haskellLib;
 
   preCheck = ''
     echo pre-check
     initdb --encoding=UTF8 --locale=en_US.UTF-8 --username=postgres $NIX_BUILD_TOP/db-dir
-    postgres -D $NIX_BUILD_TOP/db-dir -k $TMP &
+    postgres -D $NIX_BUILD_TOP/db-dir -c listen_addresses="" -k $TMP &
     PSQL_PID=$!
+    echo $PSQL_PID > postgres.pid
     sleep 10
     if (echo '\q' | psql -h $TMP postgres postgres); then
       echo "PostgreSQL server is verified to be started."
@@ -31,8 +22,8 @@ let
       exit 2
     fi
     ls -ltrh $NIX_BUILD_TOP
-    DBUSER=nixbld
-    DBNAME=nixbld
+    DBUSER=$(whoami)
+    DBNAME=$DBUSER
     export PGPASSFILE=$NIX_BUILD_TOP/pgpass
     echo "$TMP:5432:$DBUSER:$DBUSER:*" > $PGPASSFILE
     cp -vir ${../schema} ../schema
@@ -48,29 +39,47 @@ let
 
   postCheck = ''
     echo post-check
-    DBNAME=nixbld
+    DBNAME=$(whoami)
     NAME=db_schema.sql
     mkdir -p $out/nix-support
     echo "Dumping schema to db_schema.sql"
     pg_dump -h $TMP -s $DBNAME > $out/$NAME
+    kill $(cat postgres.pid)
     echo "Adding to build products..."
     echo "file binary-dist $out/$NAME" > $out/nix-support/hydra-build-products
   '';
 
   # This creates the Haskell package set.
   # https://input-output-hk.github.io/haskell.nix/user-guide/projects/
-  pkgSet = haskell-nix.cabalProject' {
-    inherit src inputMap;
-    compiler-nix-name = compiler;
-    modules = [
-      {
-        # Stamp executables with the git revision
-        packages = lib.genAttrs [ "cardano-db-sync" "cardano-smash-server" "cardano-db-tool" ] (name: {
-          components.exes.${name}.postInstall = ''
-            ${setGitRev}
-          '';
-        });
-      }
+  project = haskell-nix.cabalProject' ({ pkgs, lib, config, ...}: {
+    inherit inputMap;
+    src = ../.;
+    compiler-nix-name = lib.mkDefault "ghc8107";
+    shell = {
+      name = "cabal-dev-shell";
+
+      # These programs will be available inside the nix-shell.
+      nativeBuildInputs = with pkgs.pkgsBuildBuild; [
+        haskell-nix.cabal-install.${config.compiler-nix-name}
+        ghcid
+        hlint
+        nix
+        pkgconfig
+        sqlite-interactive
+        tmux
+        git
+      ] ++ (with haskellPackages; [
+        weeder
+      ]);
+
+      withHoogle = lib.mkDefault true;
+    };
+    modules = let
+      rawProject = haskell-nix.cabalProject' (builtins.removeAttrs config [ "modules" ]);
+      projectPackages = haskellLib.selectProjectPackages rawProject.hsPkgs;
+      # deduce package names from the cabal project to avoid hard-coding them:
+      projectPackagesNames = lib.attrNames projectPackages;
+    in [
       {
         # Packages we wish to ignore version bounds of.
         # This is similar to jailbreakCabal, however it
@@ -79,25 +88,24 @@ let
 
         # split data output for ekg to reduce closure size
         packages.ekg.components.library.enableSeparateDataOutput = true;
-        enableLibraryProfiling = profiling;
 
         packages.plutus-ledger.doHaddock = false;
       }
       {
-        packages = lib.genAttrs projectPackages (name: {
+        packages = lib.genAttrs projectPackagesNames (name: {
           configureFlags = [ "--ghc-option=-Wall" "--ghc-option=-Werror" ];
         });
       }
       {
         packages.cardano-db.components.tests.test-db = {
-            build-tools = [ buildPackages.postgresql ];
+            build-tools = [ pkgs.pkgsBuildBuild.postgresql ];
             inherit preCheck;
             inherit postCheck;
           };
       }
       {
         packages.cardano-chain-gen.components.tests.cardano-chain-gen = {
-            build-tools = [ buildPackages.postgresql ];
+            build-tools = [ pkgs.pkgsBuildBuild.postgresql ];
             inherit preCheck;
             inherit postCheck;
           };
@@ -110,7 +118,7 @@ let
       }
       # Musl libc fully static build
       ({ pkgs, ... }:
-        lib.mkIf stdenv.hostPlatform.isMusl (let
+        lib.mkIf pkgs.stdenv.hostPlatform.isMusl (let
           # Module options which adds GHC flags and libraries for a fully static build
           fullyStaticOptions = {
             enableShared = false;
@@ -122,7 +130,12 @@ let
             ];
           };
         in {
-          packages = lib.genAttrs projectPackages (name: fullyStaticOptions);
+          packages = lib.genAttrs projectPackagesNames (name: fullyStaticOptions // {
+            # We don't build / run tests for musl.
+            components.tests = lib.genAttrs (lib.attrNames projectPackages.${name}.components.tests) (_: {
+              buildable = lib.mkForce false;
+            });
+          });
 
           # Haddock not working and not needed for cross builds
           doHaddock = false;
@@ -143,7 +156,7 @@ let
       ({ pkgs, ... }: {
         packages = lib.genAttrs [ "cardano-config" "cardano-db" ] (_: {
           components.library.build-tools =
-            [ pkgs.buildPackages.buildPackages.gitMinimal ];
+            [ pkgs.pkgsBuildBuild.gitMinimal ];
         });
       })
       ({ pkgs, ... }: {
@@ -159,10 +172,31 @@ let
         };
       })
     ];
-  };
-  # setGitRev is a postInstall script to stamp executables with
-  # version info. It uses the "gitrev" argument, if set. Otherwise,
-  # the revision is sourced from the local git work tree.
-  setGitRev = ''
-    ${buildPackages.haskellBuildUtils}/bin/set-git-rev "${gitrev}" $out/bin/*'';
-in pkgSet
+  });
+
+in project.appendOverlays [
+  haskellLib.projectOverlays.projectComponents
+  (final: prev: let inherit (final.pkgs) lib gitrev setGitRevForPaths; in {
+    profiled = final.appendModule {
+      modules = [{
+        enableLibraryProfiling = true;
+        enableProfiling = true;
+      }];
+    };
+    # add passthru and gitrev to hsPkgs:
+    hsPkgs = lib.mapAttrsRecursiveCond (v: !(lib.isDerivation v))
+      (path: value:
+        if (lib.isAttrs value)
+        then lib.recursiveUpdate value {
+            # Also add convenient passthru to some alternative compilation configurations:
+            passthru = {
+              profiled = lib.getAttrFromPath path final.profiled.hsPkgs;
+            };
+          }
+        else value)
+      (setGitRevForPaths gitrev [
+        "cardano-db-sync.components.exes.cardano-db-sync"
+        "cardano-smash-server.components.exes.cardano-smash-server"
+        "cardano-db-tool.components.exes.cardano-db-tool"] prev.hsPkgs);
+  })
+]

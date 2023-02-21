@@ -6,14 +6,16 @@
 #
 ############################################################################
 
-{ pkgs, project, exes, platform }:
+{ pkgs, project, version, exes, platform }:
 
 let
   lib = pkgs.lib;
-  name = "cardano-db-sync-${project.version}-${platform}";
+  name = "cardano-db-sync-${version}-${platform}";
 
 in pkgs.runCommand name {
-  buildInputs = with pkgs.buildPackages; [ zip haskellBuildUtils ];
+  buildInputs = with pkgs.buildPackages; [
+    haskellBuildUtils bintools nix zip
+  ];
 } ''
   mkdir -p $out release
   cd release
@@ -22,6 +24,10 @@ in pkgs.runCommand name {
     pkgs.lib.concatMapStringsSep " " (exe: "${exe}/bin/*") exes
   } ./
   chmod -R +w .
+
+  ${lib.optionalString (platform == "macos") (lib.concatMapStrings (exe: ''
+    rewrite-libs . ${exe}/bin/*
+  '') exes)}
 
   ${if (platform == "win64") then
     "zip -r $out/${name}.zip ."

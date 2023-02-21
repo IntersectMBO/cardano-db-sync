@@ -1,7 +1,8 @@
 { pkgs, ... }:
-with pkgs; with commonLib;
+with pkgs;
 {
   name = "smash-test";
+  hostPkgs = pkgs;
   nodes = {
     machine = { config, ... }: {
       nixpkgs.pkgs = pkgs;
@@ -29,8 +30,9 @@ with pkgs; with commonLib;
       };
       services.cardano-node = {
         enable = true;
+        inherit (cardanoLib) environments;
         environment = "mainnet";
-        package = config.services.cardano-db-sync.dbSyncPkgs.cardanoDbSyncProject.hsPkgs.cardano-node.components.exes.cardano-node;
+        package = cardano-node;
 	      topology = builtins.toFile "topology.yaml" (builtins.toJSON {
           Producers = [
             {
