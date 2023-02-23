@@ -76,7 +76,7 @@ getWrongPlutusScripts ::
     -> ReaderT SqlBackend m FixPlutusScripts
 getWrongPlutusScripts tracer = do
     liftIO $ logInfo tracer $ mconcat
-      [ "Starting the fixing Plutus Script procedure. This may take a couple hours on mainnet if there are wrong values."
+      [ "Starting the fixing Plutus Script procedure. This may take a couple minutes on mainnet if there are wrong values."
       , " You can skip it using --skip-plutus-script-fix."
       , " It will fix Script with wrong bytes. See more in Issue #1214 and #1348."
       , " This procedure makes resyncing unnecessary."

@@ -265,10 +265,10 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
           replaceConnection env backend
           setConsistentLevel env Unchecked
 
-          isFixed <- getIsSyncFixed env
+          fr <- getIsSyncFixed env
           let skipFix = soptSkipFix $ envOptions env
           let onlyFix = soptOnlyFix $ envOptions env
-          if onlyFix || (not isFixed && not skipFix)
+          if noneFixed fr && (onlyFix || not skipFix)
             then do
               fd <- runDbIohkLogging backend (getTrace env) $ getWrongPlutusData (getTrace env)
               unless (nullData fd) $
@@ -278,15 +278,28 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
                     (cChainSyncCodec codecs)
                     channel
                     ( Client.chainSyncClientPeer $
-                        chainSyncClientFix backend (getTrace env) fd
+                        chainSyncClientFixData backend (getTrace env) fd
                     )
-              setIsFixedAndMigrate env
-              when onlyFix $ panic "All Good! This error is only thrown to exit db-sync." -- TODO fix.
+              if onlyFix then do
+                setIsFixed env DataFixRan
+              else
+                setIsFixedAndMigrate env DataFixRan
+            else if isDataFixed fr && (onlyFix || not skipFix)
+              then do
+                ls <- runDbIohkLogging backend (getTrace env) $ getWrongPlutusScripts (getTrace env)
+                unless (nullPlutusScripts ls) $
+                  void $
+                    runPeer
+                      localChainSyncTracer
+                      (cChainSyncCodec codecs)
+                      channel
+                      ( Client.chainSyncClientPeer $
+                          chainSyncClientFixScripts backend (getTrace env) ls
+                      )
+                when onlyFix $ panic "All Good! This error is only thrown to exit db-sync" -- TODO fix.
+                setIsFixed env AllFixRan
             else do
-              ls <- runDbIohkLogging backend (getTrace env) $ getWrongPlutusScripts (getTrace env)
-              unless (nullPlutusScripts ls) $
-                logInfo trce $ "Found " <> textShow (sizeFixPlutusScripts ls)
-              when skipFix $ setIsFixedAndMigrate env
+              when skipFix $ setIsFixedAndMigrate env AllFixRan
               -- The Db thread is not forked at this point, so we can use
               -- the connection here. A connection cannot be used concurrently by many
               -- threads
@@ -476,9 +489,9 @@ drainThePipe n0 client = go n0
               , recvMsgRollBackward = \_pt _tip -> pure $ go n'
               }
 
-chainSyncClientFix ::
+chainSyncClientFixData ::
   SqlBackend -> Trace IO Text -> FixData -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-chainSyncClientFix backend tracer fixData = Client.ChainSyncClient $ do
+chainSyncClientFixData backend tracer fixData = Client.ChainSyncClient $ do
   liftIO $ logInfo tracer "Starting chainsync to fix Plutus Data. This will update database values in tables datum and redeemer_data."
   clientStIdle True (sizeFixData fixData) fixData
   where
@@ -536,9 +549,9 @@ chainSyncClientFix backend tracer fixData = Client.ChainSyncClient $ do
                 Client.SendMsgRequestNext (clientStNext lastSize fdOnPoint fdRest) (pure $ clientStNext lastSize fdOnPoint fdRest)
         }
 
-_chainSyncClientFixScripts ::
+chainSyncClientFixScripts ::
   SqlBackend -> Trace IO Text -> FixPlutusScripts -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-_chainSyncClientFixScripts backend tracer fps = Client.ChainSyncClient $ do
+chainSyncClientFixScripts backend tracer fps = Client.ChainSyncClient $ do
   liftIO $ logInfo tracer "Starting chainsync to fix Plutus Scripts. This will update database values in tables script."
   clientStIdle True (sizeFixPlutusScripts fps) fps
   where
