@@ -1,7 +1,6 @@
 status = [
   "buildkite/cardano-db-sync",
-  "ci/hydra-eval",
-  "ci/hydra-build:required",
+  "ci",
 ]
 timeout_sec = 7200
 required_approvals = 1

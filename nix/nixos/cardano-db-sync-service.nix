@@ -199,7 +199,7 @@ in {
         exec ${exec} \
           --config ${configFile} \
           --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-          --schema-dir ${self.schema or (self.src + "/schema")} \
+          --schema-dir ${self.schema} \
           --state-dir ${cfg.stateDir} \
           ''${EXTRA_DB_SYNC_ARGS:-}'';
     };
@@ -215,8 +215,8 @@ in {
         gzip
       ];
       preStart = ''
-        for x in {1..10}; do
-          nc -z localhost ${toString cfg.postgres.port} && break
+        for x in {1..60}; do
+          nc -z localhost ${toString cfg.postgres.port} && sleep 2 && break
           echo loop $x: waiting for postgresql 2 sec...
           sleep 2
         done

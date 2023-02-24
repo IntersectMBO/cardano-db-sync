@@ -89,7 +89,7 @@ cabal install cardano-smash-server
 - nix
 
 ```
-nix-build -A cardano-smash-server -o smash-server
+nix build .#cardano-smash-server -o smash-server
 ```
 
 ## How to run SMASH with the Cardano node and db-sync
@@ -243,5 +243,3 @@ It is possible that a pool unregisters, in which case all it's metadata will be 
 ```
 curl --verbose --header "Content-Type: application/json" http://localhost:3100/api/v1/retired
 ```
-
-

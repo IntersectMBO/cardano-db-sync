@@ -3,7 +3,8 @@
 #
 # To build and load into the Docker engine:
 #
-#   docker load -i $(nix-build -A dockerImage --no-out-link)
+#   nix build .#dockerImage
+#   docker load -i ./result
 #
 # To launch with pre-loaded configuration, using the NETWORK env.
 #

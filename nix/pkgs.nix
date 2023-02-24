@@ -1,45 +1,18 @@
-{ inputMap }:
 # our packages overlay
 final: prev:
 with final;
-let compiler = config.haskellNix.compiler or "ghc8107";
+let compiler = cardanoDbSyncProject.args.compiler-nix-name;
 in {
-  src = haskell-nix.haskellLib.cleanGit {
-    src = ../.;
-    name = "cardano-db-sync";
-  };
-
-  schema = haskell-nix.haskellLib.cleanGit {
-    src = ../.;
-    subDir = "schema";
-    name = "cardano-db-sync-schema";
-  };
-
-  cardanoDbSyncProject = callPackage ./haskell.nix { inherit compiler inputMap; };
 
   cardanoDbSyncHaskellPackages = cardanoDbSyncProject.hsPkgs;
 
-  # Grab the executable component of our package.
-  inherit (cardanoDbSyncHaskellPackages.cardano-db-sync.components.exes)
-    cardano-db-sync;
-  inherit (cardanoDbSyncHaskellPackages.cardano-db-tool.components.exes)
-    cardano-db-tool;
-  inherit (cardanoDbSyncHaskellPackages.cardano-node.components.exes)
-    cardano-node;
-  inherit (cardanoDbSyncHaskellPackages.cardano-smash-server.components.exes)
-    cardano-smash-server;
   cardano-smash-server-no-basic-auth = (cardanoDbSyncProject.appendModule {
     modules = [{packages.cardano-smash-server.flags.disable-basic-auth = true;}];
-  }).hsPkgs.cardano-smash-server.components.exes.cardano-smash-server;
-
-  cabal = haskell-nix.tool compiler "cabal" {
-    version = "latest";
-  };
+  }).exes.cardano-smash-server;
 
   hlint = haskell-nix.tool compiler "hlint" {
     version = "3.2.7";
   };
-
 
   # systemd can't be statically linked:
   postgresql = (final.postgresql_11

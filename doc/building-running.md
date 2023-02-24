@@ -32,8 +32,7 @@ command. Pre-release tags (eg things like `12.0.0-preX`) should also be avoided 
 git clone https://github.com/input-output-hk/cardano-node
 cd cardano-node
 git checkout <latest-official-tag> -b tag-<latest-official-tag>
-nix-build -A scripts.mainnet.node -o mainnet-node-local
-./mainnet-node-local/bin/cardano-node-mainnet
+nix run .#mainnet/node
 ```
 
 ### Set up and run the db-sync node
@@ -45,10 +44,10 @@ nix-build -A scripts.mainnet.node -o mainnet-node-local
 # Check ./github/workflows/haskell.yml to validate the git sha above.
 
 # On Linux
-sudo make install 
+sudo make install
 
 # On macOS
-make install 
+make install
 
 ```
 

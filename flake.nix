@@ -23,23 +23,32 @@
       url = "github:input-output-hk/cardano-haskell-packages?ref=repo";
       flake = false;
     };
-    customConfig = { url = "path:./custom-config"; };
+    # Custom user config (default: empty), eg.:
+    # { outputs = {...}: {
+    #   # Cutomize listeming port of node scripts:
+    #   nixosModules.cardano-node = {
+    #     services.cardano-node.port = 3002;
+    #   };
+    # };
+    customConfig.url = "github:input-output-hk/empty-flake";
+    tullia.url = "github:input-output-hk/tullia";
+    std.follows = "tullia/std";
   };
 
-  outputs = { self, iohkNix, cardano-world, haskellNix, CHaP, nixpkgs, utils, customConfig, ... }:
+  outputs = { self, iohkNix, cardano-world, haskellNix, CHaP, nixpkgs, utils, tullia, std, flake-compat, ... }@inputs:
     let
       inherit (haskellNix) config;
       inherit (nixpkgs) lib;
-      inherit (lib)
-        systems mapAttrs recursiveUpdate mkDefault optionalAttrs nameValuePair
-        attrNames getAttrs head;
-      inherit (utils.lib) eachSystem mkApp flattenTree;
-      inherit (iohkNix.lib) prefixNamesWith collectExes;
+      inherit (utils.lib) eachSystem flattenTree;
+      inherit (iohkNix.lib) prefixNamesWith;
 
       supportedSystems = import ./supported-systems.nix;
-      defaultSystem = head supportedSystems;
 
       inputMap = { "https://input-output-hk.github.io/cardano-haskell-packages" = CHaP; };
+
+      customConfig =
+        lib.recursiveUpdate (import ./nix/custom-config.nix customConfig)
+        inputs.customConfig;
 
       overlays = [
         haskellNix.overlay
@@ -47,9 +56,7 @@
         iohkNix.overlays.crypto
         iohkNix.overlays.utils
         (final: prev: {
-          customConfig =
-            recursiveUpdate (import ./custom-config final.customConfig)
-            customConfig.outputs;
+          inherit flake-compat customConfig;
           gitrev = self.rev or "dirty";
           commonLib = lib // iohkNix.lib;
           cardanoLib = rec {
@@ -58,84 +65,111 @@
               (name: env: f (env // { inherit name; }))
               environments;
           };
+          schema = ./schema;
+          ciJobs = self.ciJobs.${final.system};
         })
-        (import ./nix/pkgs.nix { inherit inputMap; })
+        (import ./nix/pkgs.nix)
+        self.overlay
       ];
 
     in eachSystem supportedSystems (system:
       let
         pkgs = import nixpkgs { inherit system overlays config; };
 
-        devShell = import ./shell.nix { inherit pkgs; };
+        inherit (pkgs.stdenv) hostPlatform;
 
-        flake = pkgs.cardanoDbSyncProject.flake { };
+        project = pkgs.cardanoDbSyncProject;
 
-        muslFlake = (import nixpkgs {
-          inherit system overlays config;
-          crossSystem = systems.examples.musl64;
-        }).cardanoDbSyncProject.flake { };
+        hlint = pkgs.callPackage pkgs.hlintCheck {
+          inherit (project.args) src;
+        };
+
+        nixosTests = import ./nix/nixos/tests {
+          inherit pkgs;
+        };
+
+        checks = project.flake'.checks // {
+          inherit hlint;
+        } // lib.optionalAttrs hostPlatform.isLinux (prefixNamesWith "nixosTests/" nixosTests);
+
+        # This is used by `nix develop` to open a devShell
+        devShells.default = project.shell;
 
         scripts = flattenTree pkgs.scripts;
 
-        checkNames = attrNames flake.checks;
+        packages = project.exes // scripts // {
+          # Built by `nix build .`
+          default = project.exes.cardano-db-sync;
+          inherit (pkgs) dockerImage cardano-node cardano-smash-server-no-basic-auth;
+        } # Add checks to be able to build them individually:
+        // (prefixNamesWith "checks/" checks);
 
-        checks =
-          # checks run on default system only;
-          optionalAttrs (system == defaultSystem) {
-            hlint = pkgs.callPackage pkgs.hlintCheck {
-              inherit (pkgs.cardanoDbSyncProject.projectModule) src;
-            };
+        ciJobs = lib.recursiveUpdate (project.flake {
+          crossPlatforms = p:
+            lib.optional hostPlatform.isLinux p.musl64;
+        }).ciJobs ({
+          packages = {
+            inherit scripts;
+            inherit (pkgs) cardano-node cardano-smash-server-no-basic-auth checkCabalProject;
           };
+        } // lib.optionalAttrs hostPlatform.isLinux {
+          inherit (pkgs) dockerImage;
+          checks = {
+            inherit nixosTests;
+            inherit hlint;
+          };
+          cardano-db-sync-linux = import ./nix/binary-release.nix {
+            inherit pkgs project;
+            inherit (packages.default.identifier) version;
+            platform = "linux";
+            exes = lib.collect lib.isDerivation project.projectCross.musl64.exes;
+          };
+        } // lib.optionalAttrs hostPlatform.isMacOS {
+          cardano-db-sync-macos = import ./nix/binary-release.nix {
+            inherit pkgs project;
+            inherit (packages.default.identifier) version;
+            platform = "macos";
+            exes = lib.collect lib.isDerivation project.exes;
+          };
+        });
 
-        exes = collectExes flake.packages;
-        exeNames = attrNames exes;
-        lazyCollectExe = p: getAttrs exeNames (collectExes p);
+      in {
 
-        packages = {
-          inherit (devShell) devops;
-          inherit (pkgs) cardano-db-sync cardano-node dockerImage;
-        } // exes // (prefixNamesWith "static/" (mapAttrs pkgs.rewriteStatic
-          (lazyCollectExe
-            (if system == "x86_64-darwin" then flake else muslFlake).packages)))
-          // scripts
-          # Add checks to be able to build them individually
-          // (prefixNamesWith "checks/" checks);
+        inherit checks devShells packages;
 
-      in recursiveUpdate flake {
-
-        inherit packages checks;
+        apps = {
+          checkCabalProject = { type = "app"; program = "${pkgs.checkCabalProject}"; };
+        };
 
         legacyPackages = pkgs;
 
-        # Built by `nix build .`
-        defaultPackage = flake.packages."cardano-db-sync:exe:cardano-db-sync";
+        ciJobs =
+          let
+            nonRequiredPaths = [
+              ".*musl\\.devShells\\..*"
+            ];
+          in
+          pkgs.callPackages iohkNix.utils.ciJobsAggregates
+            {
+              inherit ciJobs;
+              nonRequiredPaths = map (r: p: builtins.match r p != null) nonRequiredPaths;
+            } // ciJobs;
+      } // tullia.fromSimple system (import ./nix/tullia.nix)) // {
 
-        # Run by `nix run .`
-        defaultApp = flake.apps."cardano-db-sync:exe:cardano-db-sync";
+        # allows precise paths (avoid fallbacks) with nix build/eval:
+        outputs = self;
 
-        # This is used by `nix develop .` to open a devShell
-        inherit devShell;
-
-        apps = {
-          repl = mkApp {
-            drv = pkgs.writeShellScriptBin "repl" ''
-              confnix=$(mktemp)
-              echo "builtins.getFlake (toString $(git rev-parse --show-toplevel))" >$confnix
-              trap "rm $confnix" EXIT
-              nix repl $confnix
-            '';
-          };
-          cardano-node = {
-            type = "app";
-            program = pkgs.cardano-node.exePath;
-          };
-        } # nix run .#<exe>
-          // (collectExes flake.apps);
-
-      }) // {
         overlay = final: prev:
-          with self.legacyPackages.${final.system}; {
-            inherit cardano-db-sync cardano-node dockerImage;
+            {
+              cardanoDbSyncProject = (import ./nix/haskell.nix {
+                inherit (final) haskell-nix;
+                inherit inputMap;
+              }).appendModule customConfig.haskellNix;
+            inherit ((import flake-compat {
+          pkgs = final;
+          inherit (final.cardanoDbSyncProject.hsPkgs.cardano-node) src;
+        }).defaultNix.packages.${final.system}) cardano-node;
+            inherit (final.cardanoDbSyncProject.exes) cardano-db-sync cardano-smash-server cardano-db-tool;
           };
         nixosModules = {
           cardano-db-sync = { pkgs, lib, ... }: {
@@ -145,4 +179,9 @@
           };
         };
       };
+
+  nixConfig = {
+    extra-substituters = [ "https://cache.iog.io" ];
+    extra-trusted-public-keys = [ "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" ];
+  };
 }
