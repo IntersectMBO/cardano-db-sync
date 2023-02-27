@@ -73,7 +73,7 @@ newtype BodyError = BodyError String
 instance ToJSON BodyError where
   toJSON (BodyError b) = object ["error" .= b]
 
--- |For api versioning.
+-- | For api versioning.
 type APIVersion = "v1"
 
 -- | Shortcut for common api result types.

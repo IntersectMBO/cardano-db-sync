@@ -874,5 +874,5 @@ findAdaPots :: [LedgerEvent] -> Maybe AdaPots
 findAdaPots = go
   where
     go [] = Nothing
-    go (LedgerAdaPots p: _) = Just p
+    go (LedgerAdaPots p : _) = Just p
     go (_ : rest) = go rest

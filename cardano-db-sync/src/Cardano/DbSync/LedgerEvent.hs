@@ -23,8 +23,8 @@ import Cardano.Ledger.Coin (Coin (..), DeltaCoin (..))
 import qualified Cardano.Ledger.Core as Ledger
 import Cardano.Ledger.Crypto (StandardCrypto)
 import Cardano.Ledger.Era (Crypto)
-import Cardano.Ledger.Shelley.AdaPots
 import Cardano.Ledger.Shelley.API (InstantaneousRewards (..))
+import Cardano.Ledger.Shelley.AdaPots
 import qualified Cardano.Ledger.Shelley.Rewards as Ledger
 import Cardano.Ledger.Shelley.Rules.Epoch (ShelleyEpochEvent (PoolReapEvent))
 import Cardano.Ledger.Shelley.Rules.Mir (ShelleyMirEvent (..))

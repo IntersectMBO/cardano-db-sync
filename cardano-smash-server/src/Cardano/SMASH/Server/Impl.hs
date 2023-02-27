@@ -117,7 +117,7 @@ getPoolOfflineMetadata (ServerEnv trce dataLayer) poolId poolMetaHash =
             logWarning trce msg
             throwIO err404 -- ticker is reserved by another pool.
 
--- |Simple health status, there are ideas for improvement.
+-- | Simple health status, there are ideas for improvement.
 getHealthStatus :: Handler (ApiResult DBFail HealthStatus)
 getHealthStatus =
   pure . ApiResult . Right $
@@ -126,14 +126,14 @@ getHealthStatus =
       , hsVersion = toS $ showVersion version
       }
 
--- |Get all reserved tickers.
+-- | Get all reserved tickers.
 getReservedTickers :: ServerEnv -> Handler (ApiResult DBFail [UniqueTicker])
 getReservedTickers (ServerEnv _trce dataLayer) =
   convertIOToHandler $ do
     reservedTickers <- dlGetReservedTickers dataLayer
     pure . ApiResult . Right . map UniqueTicker $ reservedTickers
 
--- |Get all delisted pools
+-- | Get all delisted pools
 getDelistedPools :: ServerEnv -> Handler (ApiResult DBFail [PoolId])
 getDelistedPools (ServerEnv _trce dataLayer) =
   convertIOToHandler $ do
@@ -148,7 +148,7 @@ delistPool :: ServerEnv -> User -> PoolId -> Handler (ApiResult DBFail PoolId)
 delistPool env _user = delistPool' env
 #endif
 
--- |General delist pool.
+-- | General delist pool.
 delistPool' :: ServerEnv -> PoolId -> Handler (ApiResult DBFail PoolId)
 delistPool' (ServerEnv trce dataLayer) poolId =
   convertIOToHandler $ do
@@ -165,7 +165,7 @@ enlistPool :: ServerEnv -> User -> PoolId -> Handler (ApiResult DBFail PoolId)
 enlistPool env _user = enlistPool' env
 #endif
 
--- |General enlist pool function.
+-- | General enlist pool function.
 enlistPool' :: ServerEnv -> PoolId -> Handler (ApiResult DBFail PoolId)
 enlistPool' (ServerEnv trce dataLayer) poolId =
   convertIOToHandler $ do
