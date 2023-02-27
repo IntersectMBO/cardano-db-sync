@@ -1,5 +1,9 @@
 # Revision history for cardano-db-sync
 
+## Next
+* table `ada_pots`is populated from ledger events with slightly different values instead of the ledger.
+This is a c level breaking change without a migration.
+
 ## 13.1.0.0
 * Avoids rollbacks on restarts, making them way faster [#1190]
 * Syncing speed is increased
