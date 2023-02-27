@@ -12,7 +12,7 @@ import           Cardano.DbSync.Config.Types hiding (LogFileDir)
 import           Cardano.DbSync.LedgerState
 
 import qualified Data.ByteString.Base16 as Base16
-import           Data.Version (versionBranch)
+import           Data.Version (makeVersion, showVersion, versionBranch)
 
 import           Ouroboros.Network.Block hiding (blockHash)
 
@@ -65,14 +65,12 @@ runPrepareSnapshot args = do
 
     printCreateSnapshot :: Word64 -> FilePath -> IO ()
     printCreateSnapshot bblockNo fp = do
-      let mMajor = listToMaybe $ versionBranch version
-          majorStr = case mMajor of
-                        Nothing -> ""
-                        Just majorV -> "schema-" ++ show majorV
+      let schemaVersion = makeVersion $ take 2 $ versionBranch version
       putStrLn $ concat
         [ "Create a snapshot with:\n"
-        , "    scripts/postgresql-setup.sh --create-snapshot db-sync-snapshot-"
-        , majorStr
+        , "    scripts/postgresql-setup.sh --create-snapshot db-sync-snapshot"
+        , "-schema-"
+        , showVersion schemaVersion
         , "-block-"
         , show bblockNo
         , "-x86_64 "
