@@ -153,12 +153,10 @@ jobs:
         echo "B"
         git status schema
         echo "C"
-        git status schema
-        echo "D"
         git status schema | grep schema/migration
-        echo "E"
+        echo "D"
         git status schema | grep schema/migration > /tmp/schema.diff
-        echo "F"
+        echo "E"
         echo "*************************************************************"
         cat /tmp/schema.diff
         echo "*************************************************************"
