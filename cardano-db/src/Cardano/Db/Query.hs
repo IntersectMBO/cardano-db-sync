@@ -12,6 +12,7 @@ module Cardano.Db.Query (
   queryBlockCountAfterBlockNo,
   queryBlockHashBlockNo,
   queryBlockNo,
+  queryBlockNoAndEpoch,
   queryBlockSlotNo,
   queryReverseIndexBlockId,
   queryMinIdsAfterReverseIndex,
@@ -219,6 +220,21 @@ queryBlockNo blkNo = do
     where_ (blk ^. BlockBlockNo ==. just (val blkNo))
     pure (blk ^. BlockId)
   pure $ fmap unValue (listToMaybe res)
+
+queryBlockNoAndEpoch :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe (BlockId, Word64))
+queryBlockNoAndEpoch blkNo = do
+  res <- select $ do
+    blk <- from $ table @Block
+    where_ (blk ^. BlockBlockNo ==. just (val blkNo))
+    pure (blk ^. BlockId, blk ^. BlockEpochNo)
+  pure $ convert (listToMaybe res)
+  where
+  convert :: Maybe (Value (Key Block), Value (Maybe Word64)) -> Maybe (BlockId, Word64)
+  convert mr =
+    case mr of
+      Nothing -> Nothing
+      Just (_, Value Nothing) -> Nothing -- Should not ever happen.
+      Just (Value blkid, Value (Just epoch)) -> Just (blkid, epoch)
 
 queryBlockSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe BlockId)
 queryBlockSlotNo slotNo = do
