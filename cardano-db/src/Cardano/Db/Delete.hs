@@ -12,6 +12,7 @@ module Cardano.Db.Delete (
   deleteBlocksBlockId,
   deleteBlocksBlockIdNotrace,
   deleteBlock,
+  deleteEpochRows,
   -- for testing
   queryFirstAndDeleteAfter,
 ) where
@@ -27,6 +28,7 @@ import Control.Monad.Trans.Reader (ReaderT)
 import Data.ByteString (ByteString)
 import Data.Maybe (isJust)
 import Data.Text (Text)
+import Data.Word (Word64)
 import Database.Esqueleto.Experimental (PersistEntity, PersistField, persistIdField)
 import Database.Persist.Class.PersistQuery (deleteWhere)
 import Database.Persist.Sql (PersistEntityBackend, SqlBackend, delete, selectKeysList, (==.), (>=.))
@@ -174,3 +176,7 @@ deleteBlock block = do
     Just blockId -> do
       deleteBlocksBlockId nullTracer blockId
       pure True
+
+deleteEpochRows :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
+deleteEpochRows epochNum =
+  deleteWhere [EpochNo >=. epochNum]

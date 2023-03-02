@@ -110,7 +110,6 @@ insertBlock env cblk applyRes firstAfterRollback tookSnapshot = do
   let !withinTwoMin = isWithinTwoMin details
   let !withinHalfHour = isWithinHalfHour details
   insertLedgerEvents env (sdEpochNo details) (apEvents applyResult)
-  insertEpoch details
   let shouldLog = hasEpochStartEvent (apEvents applyResult) || firstAfterRollback
   let isMember poolId = Set.member poolId (apPoolsRegistered applyResult)
   let insertShelley blk =
@@ -148,6 +147,7 @@ insertBlock env cblk applyRes firstAfterRollback tookSnapshot = do
       newExceptT $
         insertShelley $
           Generic.fromBabbageBlock (getPrices applyResult) blk
+  insertEpoch details
   lift $ commitOrIndexes withinTwoMin withinHalfHour
   where
     tracer = getTrace env

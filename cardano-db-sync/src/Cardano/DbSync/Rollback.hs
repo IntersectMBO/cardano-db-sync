@@ -17,6 +17,7 @@ import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.Prelude
+import Control.Monad.Extra (whenJust)
 import qualified Data.ByteString.Short as SBS
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (getOneEraHash)
@@ -29,17 +30,18 @@ rollbackFromBlockNo :: MonadIO m => SyncEnv -> BlockNo -> ExceptT SyncNodeError 
 rollbackFromBlockNo env blkNo = do
   lift $ rollbackCache cache
   nBlocks <- lift $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
-  mBlockId <- lift $ DB.queryBlockNo (unBlockNo blkNo)
-  whenStrictJust (maybeToStrict mBlockId) $ \blockId -> do
+  mres <- lift $ DB.queryBlockNoAndEpoch (unBlockNo blkNo)
+  whenJust mres $ \ (blockId, epochNo) -> do
     liftIO . logInfo trce $
       mconcat
         [ "Deleting "
         , textShow nBlocks
-        , " blocks after "
-        , " or equal to "
+        , " numbered equal to or greater than "
         , textShow blkNo
         ]
-    lift $ DB.deleteBlocksBlockId trce blockId
+    lift $ do
+      DB.deleteBlocksBlockId trce blockId
+      DB.deleteEpochRows epochNo
     liftIO . logInfo trce $ "Blocks deleted"
   where
     trce = getTrace env
