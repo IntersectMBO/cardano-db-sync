@@ -56,8 +56,9 @@ jobs:
       if: matrix.os == 'macos-latest'
       run: brew install libsodium
 
-    - uses: haskell/actions/setup@v2
-      id: setup-haskell-cabal
+    - name: Install Haskell
+      uses: input-output-hk/setup-haskell@v1
+      id: setup-haskell
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: ${{ matrix.cabal }}
@@ -100,20 +101,54 @@ jobs:
           flags: -external-libsodium-vrf
         EOF
 
-    - name: Record dependencies
+    - name: Build dry run
       run: |
-        cat dist-newstyle/cache/plan.json | jq -r '."install-plan"[].id' | sort > dependencies.txt
+        # The tests call out to msys2 commands. We generally do not want to mix toolchains, so
+        # we are very deliberate about only adding msys64 to the path where absolutely necessary.
+        ${{ (runner.os == 'Windows' && '$env:PATH=("C:\msys64\mingw64\bin;{0}" -f $env:PATH)') || '' }}
+        cabal build all --dry-run --minimize-conflict-set
 
-    - uses: actions/cache@v3
-      name: Cache cabal store
+    # For users who fork cardano-node and want to define a writable cache, then can set up their own
+    # S3 bucket then define in their forked repository settings the following secrets:
+    #
+    #   AWS_ACCESS_KEY_ID
+    #   AWS_SECRET_ACCESS_KEY
+    #   BINARY_CACHE_URI
+    #   BINARY_CACHE_REGION
+    - name: Cabal cache over S3
+      uses: action-works/cabal-cache-s3@v1
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        BINARY_CACHE_URI: ${{ vars.BINARY_CACHE_URI }}
+        BINARY_CACHE_THREADS: ${{ vars.BINARY_CACHE_THREADS }}
+        BINARY_CACHE_REGION: ${{ vars.BINARY_CACHE_REGION }}
       with:
-        path: | 
-          ${{ steps.setup-haskell.outputs.cabal-store }}
-          dist-newstyle
-        key: cache-cabal-store-v1-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('dependencies.txt') }}
-        restore-keys: |
-          cache-cabal-store-v1-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('dependencies.txt') }}
-          cache-cabal-store-v1-${{ runner.os }}-${{ matrix.ghc }}-
+        region: ${{ env.BINARY_CACHE_REGION }}
+        dist-dir: dist-newstyle
+        store-path: ${{ steps.setup-haskell.outputs.cabal-store }}
+        threads: ${{ env.BINARY_CACHE_THREADS }}
+        archive-uri: ${{ env.BINARY_CACHE_URI }}/${{ env.CABAL_CACHE_VERSION }}/${{ runner.os }}
+        skip: "${{ env.BINARY_CACHE_URI == '' }}"
+
+    # It's important to ensure that people who fork this repository can not only successfully build in
+    # CI by default, but also have meaning cabal store caching.
+    #
+    # Because syncing with S3 requires credentials, we cannot rely on S3 for this. For this reason a
+    # https fallback is used. The https server mirrors the content of the S3 bucket. The https cabal
+    # store archive is read-only for security reasons.
+    #
+    # Users who fork this repository who want to have a writable cabal store archive are encouraged
+    # to set up their own S3 bucket.
+    - name: Cabal cache over HTTPS
+      uses: action-works/cabal-cache-s3@v1
+      with:
+        dist-dir: dist-newstyle
+        store-path: ${{ steps.setup-haskell.outputs.cabal-store }}
+        threads: 16
+        archive-uri: https://iohk.cache.haskellworks.io/${{ env.CABAL_CACHE_VERSION }}/${{ runner.os }}
+        skip: "${{ env.BINARY_CACHE_URI != '' }}"
+        enable-save: false
 
     - name: Build dependencies Linux
       if: matrix.os == 'ubuntu-latest'
