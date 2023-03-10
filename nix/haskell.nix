@@ -58,6 +58,12 @@ let
     shell = {
       name = "cabal-dev-shell";
 
+      tools = {
+        # HLS 1.9 has some build issues with 8.10 for some reason,
+        # we can update after moving to 9.2 completely
+        haskell-language-server = "1.8.0.0";
+      };
+
       # These programs will be available inside the nix-shell.
       nativeBuildInputs = with pkgs.pkgsBuildBuild; [
         haskell-nix.cabal-install.${config.compiler-nix-name}
