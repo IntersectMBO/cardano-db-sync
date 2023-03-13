@@ -30,7 +30,7 @@ When this flag is enabled, some features are missing and some DB tables are left
 
 Warning: Running db-sync with this flag and then restarting it without the flag will cause crashes and should be avoided.
 
-Known issues: When this flag in enabled, the `--state-dir` option still needs to be provided, even though db-sync will completely ignore it.
+When this flag in enabled together with the `--state-dir` option, it will error because db-sync no longer requires a ledger state directory if the ledger is disabled.
 
 If used with docker, this flag can be provided as an extra flag to docker image.
 

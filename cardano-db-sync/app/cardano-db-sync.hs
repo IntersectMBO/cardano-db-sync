@@ -9,6 +9,7 @@ import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
 import Data.String (String)
 import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
 import Data.Version (showVersion)
 import MigrationValidations (KnownMigration (..), knownMigrations)
 import Options.Applicative (Parser, ParserInfo)
@@ -22,10 +23,15 @@ main = do
   case cmd of
     CmdVersion -> runVersionCommand
     CmdRun params -> do
-      prometheusPort <- dncPrometheusPort <$> readSyncNodeConfig (enpConfigFile params)
-
-      withMetricSetters prometheusPort $ \metricsSetters ->
-        runDbSyncNode metricsSetters knownMigrationsPlain params
+      let hasLedgerStateDir = isJust $ enpMaybeLedgerStateDir params
+      -- if both --disable-ledger and --state-dir options are used at the same time report error
+      if hasLedgerStateDir && not (enpHasLedger params)
+        then Text.putStrLn $ "Error: --dissable-ledger and --state-dir cannot be used at the same time. "
+          <> "For more details view https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/configuration.md#--disable-ledger"
+        else do
+          prometheusPort <- dncPrometheusPort <$> readSyncNodeConfig (enpConfigFile params)
+          withMetricSetters prometheusPort $ \metricsSetters ->
+            runDbSyncNode metricsSetters knownMigrationsPlain params
   where
     knownMigrationsPlain :: [(Text, Text)]
     knownMigrationsPlain = (\x -> (hash x, filepath x)) <$> knownMigrations
