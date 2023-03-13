@@ -137,43 +137,46 @@ runSyncNode ::
   RunMigration ->
   SyncNodeParams ->
   IO ()
-runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConnString ranAll runMigration enp = do
-  let configFile = enpConfigFile enp
-  enc <- readSyncNodeConfig configFile
+runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConnString ranAll runMigration enp =
+  case enpMaybeLedgerStateDir enp of
+    Nothing -> pure ()
+    Just enpLedgerStateDir -> do
+      let configFile = enpConfigFile enp
+      enc <- readSyncNodeConfig configFile
 
-  createDirectoryIfMissing True (unLedgerStateDir $ enpLedgerStateDir enp)
+      createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
 
-  logInfo trce $ "Using byron genesis file from: " <> (show . unGenesisFile $ dncByronGenesisFile enc)
-  logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile enc)
-  logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile enc)
+      logInfo trce $ "Using byron genesis file from: " <> (show . unGenesisFile $ dncByronGenesisFile enc)
+      logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile enc)
+      logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile enc)
 
-  orDie renderSyncNodeError $ do
-    genCfg <- readCardanoGenesisConfig enc
-    logProtocolMagicId trce $ genesisProtocolMagicId genCfg
-    syncEnv <-
-      ExceptT $
-        mkSyncEnvFromConfig
-          trce
-          dbConnString
-          (SyncOptions (enpExtended enp) aop (enpHasCache enp) (enpHasLedger enp) (enpSkipFix enp) (enpOnlyFix enp) snEveryFollowing snEveryLagging)
-          (enpLedgerStateDir enp)
-          genCfg
-          ranAll
-          (enpForceIndexes enp)
-          runMigration
+      orDie renderSyncNodeError $ do
+        genCfg <- readCardanoGenesisConfig enc
+        logProtocolMagicId trce $ genesisProtocolMagicId genCfg
+        syncEnv <-
+          ExceptT $
+            mkSyncEnvFromConfig
+              trce
+              dbConnString
+              (SyncOptions (enpExtended enp) aop (enpHasCache enp) (enpHasLedger enp) (enpSkipFix enp) (enpOnlyFix enp) snEveryFollowing snEveryLagging)
+              enpLedgerStateDir
+              genCfg
+              ranAll
+              (enpForceIndexes enp)
+              runMigration
 
-    -- If the DB is empty it will be inserted, otherwise it will be validated (to make
-    -- sure we are on the right chain).
-    lift $ Db.runIohkLogging trce $ withPostgresqlConn dbConnString $ \backend -> do
-      liftIO $ unless (enpHasLedger enp) $ do
-        logInfo trce "Migrating to a no ledger schema"
-        Db.noLedgerMigrations backend trce
-      lift $ orDie renderSyncNodeError $ insertValidateGenesisDist trce backend (dncNetworkName enc) genCfg (useShelleyInit enc)
-      liftIO $ epochStartup (enpExtended enp) trce backend
+        -- If the DB is empty it will be inserted, otherwise it will be validated (to make
+        -- sure we are on the right chain).
+        lift $ Db.runIohkLogging trce $ withPostgresqlConn dbConnString $ \backend -> do
+          liftIO $ unless (enpHasLedger enp) $ do
+            logInfo trce "Migrating to a no ledger schema"
+            Db.noLedgerMigrations backend trce
+          lift $ orDie renderSyncNodeError $ insertValidateGenesisDist trce backend (dncNetworkName enc) genCfg (useShelleyInit enc)
+          liftIO $ epochStartup (enpExtended enp) trce backend
 
-    case genCfg of
-      GenesisCardano {} -> do
-        liftIO $ runSyncNodeClient metricsSetters syncEnv iomgr trce (enpSocketPath enp)
+        case genCfg of
+          GenesisCardano {} -> do
+            liftIO $ runSyncNodeClient metricsSetters syncEnv iomgr trce (enpSocketPath enp)
   where
     useShelleyInit :: SyncNodeConfig -> Bool
     useShelleyInit cfg =
