@@ -196,8 +196,7 @@ runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConn
         HardFork.TriggerHardForkAtEpoch (EpochNo 0) -> True
         _ -> False
 
--- -------------------------------------------------------------------------------------------------
-
+--- -------------------------------------------------------------------------------------------------
 runSyncNodeClient ::
   MetricSetters ->
   SyncEnv ->

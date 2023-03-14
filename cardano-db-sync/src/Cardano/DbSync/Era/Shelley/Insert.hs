@@ -266,7 +266,7 @@ insertTx tracer cache network isMember blkId epochNo slotNo blockIndex tx groupe
 
       mapM_ (insertReferenceTxIn tracer txId) (Generic.txReferenceInputs tx)
 
-      mapM_ (inertCollateralTxOut tracer cache (txId, txHash)) (Generic.txCollateralOutputs tx)
+      mapM_ (insertCollateralTxOut tracer cache (txId, txHash)) (Generic.txCollateralOutputs tx)
 
       txMetadata <- prepareTxMetadata tracer txId (Generic.txMetadata tx)
 
@@ -305,7 +305,7 @@ prepareTxOut tracer cache (txId, txHash) (Generic.TxOut index addr addrRaw value
           , DB.txOutPaymentCred = Generic.maybePaymentCred addr
           , DB.txOutStakeAddressId = mSaId
           , DB.txOutValue = Generic.coinToDbLovelace value
-          , DB.txOutDataHash = Generic.getTxOutDatumHash dt
+          , DB.txOutDataHash = Generic.dataHashToBytes <$> Generic.getTxOutDatumHash dt
           , DB.txOutInlineDatumId = mDatumId
           , DB.txOutReferenceScriptId = mScriptId
           }
@@ -316,14 +316,14 @@ prepareTxOut tracer cache (txId, txHash) (Generic.TxOut index addr addrRaw value
     hasScript :: Bool
     hasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
 
-inertCollateralTxOut ::
+insertCollateralTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   Cache ->
   (DB.TxId, ByteString) ->
   Generic.TxOut ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-inertCollateralTxOut tracer cache (txId, _txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
+insertCollateralTxOut tracer cache (txId, _txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
   mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache txId addr
   mDatumId <- Generic.whenInlineDatum dt $ insertDatum tracer txId
   mScriptId <- whenMaybe mScript $ insertScript tracer txId
@@ -338,7 +338,7 @@ inertCollateralTxOut tracer cache (txId, _txHash) (Generic.TxOut index addr addr
         , DB.collateralTxOutPaymentCred = Generic.maybePaymentCred addr
         , DB.collateralTxOutStakeAddressId = mSaId
         , DB.collateralTxOutValue = Generic.coinToDbLovelace value
-        , DB.collateralTxOutDataHash = Generic.getTxOutDatumHash dt
+        , DB.collateralTxOutDataHash = Generic.dataHashToBytes <$> Generic.getTxOutDatumHash dt
         , DB.collateralTxOutMultiAssetsDescr = textShow maMap
         , DB.collateralTxOutInlineDatumId = mDatumId
         , DB.collateralTxOutReferenceScriptId = mScriptId
@@ -888,14 +888,14 @@ insertDatum ::
   Generic.PlutusData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.DatumId
 insertDatum tracer txId txd = do
-  mDatumId <- lift $ DB.queryDatum $ Generic.txDataHash txd
+  mDatumId <- lift $ DB.queryDatum $ Generic.dataHashToBytes $ Generic.txDataHash txd
   case mDatumId of
     Just datumId -> pure datumId
     Nothing -> do
       value <- safeDecodeToJson tracer "insertDatum" $ Generic.txDataValue txd
       lift . DB.insertDatum $
         DB.Datum
-          { DB.datumHash = Generic.txDataHash txd
+          { DB.datumHash = Generic.dataHashToBytes $ Generic.txDataHash txd
           , DB.datumTxId = txId
           , DB.datumValue = value
           , DB.datumBytes = Generic.txDataBytes txd
@@ -908,14 +908,14 @@ insertRedeemerData ::
   Generic.PlutusData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.RedeemerDataId
 insertRedeemerData tracer txId txd = do
-  mRedeemerDataId <- lift $ DB.queryRedeemerData $ Generic.txDataHash txd
+  mRedeemerDataId <- lift $ DB.queryRedeemerData $ Generic.dataHashToBytes $ Generic.txDataHash txd
   case mRedeemerDataId of
     Just redeemerDataId -> pure redeemerDataId
     Nothing -> do
       value <- safeDecodeToJson tracer "insertRedeemerData" $ Generic.txDataValue txd
       lift . DB.insertRedeemerData $
         DB.RedeemerData
-          { DB.redeemerDataHash = Generic.txDataHash txd
+          { DB.redeemerDataHash = Generic.dataHashToBytes $ Generic.txDataHash txd
           , DB.redeemerDataTxId = txId
           , DB.redeemerDataValue = value
           , DB.redeemerDataBytes = Generic.txDataBytes txd

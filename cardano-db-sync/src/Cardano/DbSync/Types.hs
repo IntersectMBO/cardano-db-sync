@@ -8,6 +8,7 @@ module Cardano.DbSync.Types (
   CardanoPoint,
   StakeCred,
   PoolKeyHash,
+  DataHash,
   CardanoInterpreter,
   EpochSlot (..),
   FetchResult (..),
@@ -31,6 +32,7 @@ import Cardano.Db (
  )
 import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.Crypto (StandardCrypto)
+import qualified Cardano.Ledger.Hashes as Ledger
 import Cardano.Ledger.Keys
 import Cardano.Prelude hiding (Meta)
 import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
@@ -72,6 +74,8 @@ type CardanoPoint = Point CardanoBlock
 type StakeCred = Ledger.StakeCredential StandardCrypto
 
 type PoolKeyHash = KeyHash 'StakePool StandardCrypto
+
+type DataHash = Ledger.DataHash StandardCrypto
 
 data BlockDetails = BlockDetails
   { bdBlock :: !CardanoBlock

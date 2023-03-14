@@ -133,7 +133,7 @@ fromDatum :: (Ledger.Crypto era ~ StandardCrypto, Ledger.Era era) => Babbage.Dat
 fromDatum bdat =
   case bdat of
     Babbage.NoDatum -> NoDatum
-    Babbage.DatumHash hdh -> DatumHash $ dataHashToBytes hdh
+    Babbage.DatumHash hdh -> DatumHash hdh
     Babbage.Datum binaryData ->
       let plutusData = Alonzo.binaryDataToData binaryData
        in InlineDatum $ mkTxData (Alonzo.hashData plutusData, plutusData)
