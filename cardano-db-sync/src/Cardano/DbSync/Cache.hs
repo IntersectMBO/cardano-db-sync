@@ -243,6 +243,7 @@ rollbackCache UninitiatedCache = pure ()
 rollbackCache (Cache cache) = do
   liftIO $ do
     atomically $ writeTVar (cPrevBlock cache) Nothing
+    atomically $ modifyTVar (cDatum cache) LRU.cleanup
 
 queryRewardAccountWithCache ::
   forall m.
