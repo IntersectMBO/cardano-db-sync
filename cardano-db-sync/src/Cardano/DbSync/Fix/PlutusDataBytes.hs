@@ -255,7 +255,7 @@ scrapDatumsTxBabbage tx =
     fmap mkTuple $
       witnessData <> outputData <> collOutputData
   where
-    mkTuple pd = (txDataHash pd, txDataBytes pd)
+    mkTuple pd = (dataHashToBytes $ txDataHash pd, txDataBytes pd)
     witnessData = txDataWitness tx
     txBody = getField @"body" tx
     outputData = mapMaybe getDatumOutput $ toList $ Babbage.outputs' txBody
@@ -272,7 +272,7 @@ scrapDatumsTxAlonzo :: Core.Tx StandardAlonzo -> Map ByteString ByteString
 scrapDatumsTxAlonzo tx =
   Map.fromList $ fmap mkTuple witnessData
   where
-    mkTuple pd = (txDataHash pd, txDataBytes pd)
+    mkTuple pd = (dataHashToBytes $ txDataHash pd, txDataBytes pd)
     witnessData = txDataWitness tx
 
 scrapRedeemerDataBlock :: CardanoBlock -> Map ByteString ByteString
@@ -296,4 +296,4 @@ scrapRedeemerDataTx tx =
   Map.fromList $ mkTuple . fst <$> Map.elems (Alonzo.unRedeemers (tx ^. (Core.witsTxL . Alonzo.rdmrsWitsL)))
   where
     mkTuple dt = mkTuple' $ mkTxData (Alonzo.hashData dt, dt)
-    mkTuple' pd = (txDataHash pd, txDataBytes pd)
+    mkTuple' pd = (dataHashToBytes $ txDataHash pd, txDataBytes pd)
