@@ -23,7 +23,7 @@ module Cardano.DbSync.Api (
   verifySnapshotPoint,
   getTrace,
   getBackend,
-  hasLedgerState,
+  shouldUseLedger,
   getLatestPoints,
   getSlotHash,
   getDbLatestBlockInfo,
@@ -139,7 +139,7 @@ data SyncOptions = SyncOptions
   { soptExtended :: !Bool
   , soptAbortOnInvalid :: !Bool
   , soptCache :: !Bool
-  , soptLedger :: !Bool
+  , soptShouldUseLedger :: !Bool
   , soptSkipFix :: !Bool
   , soptOnlyFix :: !Bool
   , snapshotEveryFollowing :: !Word64
@@ -200,8 +200,8 @@ getBackend env = do
     Strict.Just conn -> pure conn
     Strict.Nothing -> panic "sql connection not initiated"
 
-hasLedgerState :: SyncEnv -> Bool
-hasLedgerState = soptLedger . envOptions
+shouldUseLedger :: SyncEnv -> Bool
+shouldUseLedger = soptShouldUseLedger . envOptions
 
 getDbLatestBlockInfo :: SqlBackend -> IO (Maybe TipInfo)
 getDbLatestBlockInfo backend = do
@@ -256,7 +256,7 @@ mkSyncEnv ::
   Ledger.Network ->
   NetworkMagic ->
   SystemStart ->
-  LedgerStateDir ->
+  Maybe LedgerStateDir ->
   Bool ->
   Bool ->
   RunMigration ->
@@ -307,7 +307,7 @@ mkSyncEnvFromConfig ::
   Trace IO Text ->
   ConnectionString ->
   SyncOptions ->
-  LedgerStateDir ->
+  Maybe LedgerStateDir ->
   GenesisConfig ->
   Bool ->
   Bool ->
@@ -317,40 +317,40 @@ mkSyncEnvFromConfig trce connSring syncOptions dir genCfg ranAll forcedIndexes r
   case genCfg of
     GenesisCardano _ bCfg sCfg _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
-          pure . Left . NECardanoConfig $
-            mconcat
-              [ "ProtocolMagicId "
-              , DB.textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
-              , " /= "
-              , DB.textShow (Shelley.sgNetworkMagic $ scConfig sCfg)
-              ]
+        pure . Left . NECardanoConfig $
+          mconcat
+            [ "ProtocolMagicId "
+            , DB.textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+            , " /= "
+            , DB.textShow (Shelley.sgNetworkMagic $ scConfig sCfg)
+            ]
       | Byron.gdStartTime (Byron.configGenesisData bCfg) /= Shelley.sgSystemStart (scConfig sCfg) ->
-          pure . Left . NECardanoConfig $
-            mconcat
-              [ "SystemStart "
-              , DB.textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
-              , " /= "
-              , DB.textShow (Shelley.sgSystemStart $ scConfig sCfg)
-              ]
+        pure . Left . NECardanoConfig $
+          mconcat
+            [ "SystemStart "
+            , DB.textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
+            , " /= "
+            , DB.textShow (Shelley.sgSystemStart $ scConfig sCfg)
+            ]
       | otherwise ->
-          Right
-            <$> mkSyncEnv
-              trce
-              connSring
-              syncOptions
-              (mkProtocolInfoCardano genCfg [])
-              (Shelley.sgNetworkId $ scConfig sCfg)
-              (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
-              (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
-              dir
-              ranAll
-              forcedIndexes
-              runMigration
+        Right
+          <$> mkSyncEnv
+            trce
+            connSring
+            syncOptions
+            (mkProtocolInfoCardano genCfg [])
+            (Shelley.sgNetworkId $ scConfig sCfg)
+            (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+            (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
+            dir
+            ranAll
+            forcedIndexes
+            runMigration
 
 -- | 'True' is for in memory points and 'False' for on disk
 getLatestPoints :: SyncEnv -> IO [(CardanoPoint, Bool)]
 getLatestPoints env = do
-  if hasLedgerState env
+  if shouldUseLedger env
     then do
       snapshotPoints <- listKnownSnapshots $ envLedger env
       verifySnapshotPoint env snapshotPoints

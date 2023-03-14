@@ -25,7 +25,7 @@ main = do
     CmdRun params -> do
       let hasLedgerStateDir = isJust $ enpMaybeLedgerStateDir params
       -- if both --disable-ledger and --state-dir options are used at the same time report error
-      if hasLedgerStateDir && not (enpHasLedger params)
+      if hasLedgerStateDir && not (enpShouldUseLedger params)
         then Text.putStrLn $ "Error: --dissable-ledger and --state-dir cannot be used at the same time. "
           <> "For more details view https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/configuration.md#--disable-ledger"
         else do
@@ -63,7 +63,7 @@ pRunDbSyncNode =
     <*> pPGPassSource
     <*> pExtended
     <*> pHasCache
-    <*> pHasLedger
+    <*> pUseLedger
     <*> pSkipFix
     <*> pOnlyFix
     <*> pForceIndexes
@@ -154,8 +154,8 @@ pHasCache =
         <> Opt.help "Disables the db-sync caches. Reduces memory usage but it takes longer to sync."
     )
 
-pHasLedger :: Parser Bool
-pHasLedger =
+pUseLedger :: Parser Bool
+pUseLedger =
   Opt.flag
     True
     False

@@ -90,7 +90,7 @@ applyAndInsertBlockMaybe env cblk = do
 
     mkApplyResult :: IO (ApplyResult, Bool)
     mkApplyResult = do
-      if hasLedgerState env
+      if shouldUseLedger env
         then applyBlockAndSnapshot (envLedger env) cblk
         else do
           slotDetails <- getSlotDetailsNode (envNoLedgerEnv env) (cardanoBlockSlotNo cblk)
@@ -160,7 +160,7 @@ insertBlock env cblk applyRes firstAfterRollback tookSnapshot = do
     getPrices :: ApplyResult -> Maybe Ledger.Prices
     getPrices applyResult = case apPrices applyResult of
       Strict.Just pr -> Just pr
-      Strict.Nothing | hasLedgerState env -> Just $ Ledger.Prices minBound minBound
+      Strict.Nothing | shouldUseLedger env -> Just $ Ledger.Prices minBound minBound
       Strict.Nothing -> Nothing
 
     commitOrIndexes :: Bool -> Bool -> ReaderT SqlBackend (LoggingT IO) ()

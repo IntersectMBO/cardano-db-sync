@@ -61,7 +61,7 @@ data SyncNodeParams = SyncNodeParams
   , enpPGPassSource :: !PGPassSource
   , enpExtended :: !Bool
   , enpHasCache :: !Bool
-  , enpHasLedger :: !Bool
+  , enpShouldUseLedger :: !Bool
   , enpSkipFix :: !Bool
   , enpOnlyFix :: !Bool
   , enpForceIndexes :: !Bool
