@@ -260,7 +260,7 @@ insertTx tracer cache network isMember blkId epochNo slotNo blockIndex tx groupe
 
       !redeemers <- Map.fromList <$> mapM (insertRedeemer tracer (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx)
 
-      mapM_ (insertDatum tracer txId) (Generic.txData tx)
+      mapM_ (insertDatum tracer cache txId) (Generic.txData tx)
 
       mapM_ (insertCollateralTxIn tracer txId) (Generic.txCollateralInputs tx)
 
@@ -293,7 +293,7 @@ prepareTxOut ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
 prepareTxOut tracer cache (txId, txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
   mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache txId addr
-  mDatumId <- Generic.whenInlineDatum dt $ insertDatum tracer txId
+  mDatumId <- Generic.whenInlineDatum dt $ insertDatum tracer cache txId
   mScriptId <- whenMaybe mScript $ insertScript tracer txId
   let !txOut =
         DB.TxOut
@@ -325,7 +325,7 @@ insertCollateralTxOut ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertCollateralTxOut tracer cache (txId, _txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
   mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache txId addr
-  mDatumId <- Generic.whenInlineDatum dt $ insertDatum tracer txId
+  mDatumId <- Generic.whenInlineDatum dt $ insertDatum tracer cache txId
   mScriptId <- whenMaybe mScript $ insertScript tracer txId
   _ <-
     lift . DB.insertCollateralTxOut $
@@ -884,16 +884,17 @@ insertRedeemer tracer groupedOutputs txId (rix, redeemer) = do
 insertDatum ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  Cache ->
   DB.TxId ->
   Generic.PlutusData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.DatumId
-insertDatum tracer txId txd = do
-  mDatumId <- lift $ DB.queryDatum $ Generic.dataHashToBytes $ Generic.txDataHash txd
+insertDatum tracer cache txId txd = do
+  mDatumId <- lift $ queryDatum cache $ Generic.txDataHash txd
   case mDatumId of
     Just datumId -> pure datumId
     Nothing -> do
       value <- safeDecodeToJson tracer "insertDatum" $ Generic.txDataValue txd
-      lift . DB.insertDatum $
+      lift $ insertDatumAndCache cache (Generic.txDataHash txd) $
         DB.Datum
           { DB.datumHash = Generic.dataHashToBytes $ Generic.txDataHash txd
           , DB.datumTxId = txId
