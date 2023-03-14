@@ -252,7 +252,7 @@ insertTx tracer cache network isMember blkId epochNo slotNo blockIndex tx groupe
       !txOutsGrouped <- mapM (prepareTxOut tracer cache (txId, txHash)) (Generic.txOutputs tx)
 
       let !txIns = map (prepareTxIn txId Map.empty) resolvedInputs
-      pure $ grouped <> BlockGroupedData txIns txOutsGrouped
+      pure $ grouped <> BlockGroupedData txIns txOutsGrouped []
     else do
       -- The following operations only happen if the script passes stage 2 validation (or the tx has
       -- no script).
@@ -268,8 +268,7 @@ insertTx tracer cache network isMember blkId epochNo slotNo blockIndex tx groupe
 
       mapM_ (inertCollateralTxOut tracer cache (txId, txHash)) (Generic.txCollateralOutputs tx)
 
-      whenStrictJust (maybeToStrict $ Generic.txMetadata tx) $ \md ->
-        insertTxMetadata tracer txId md
+      txMetadata <- prepareTxMetadata tracer txId (Generic.txMetadata tx)
 
       mapM_ (insertCertificate tracer cache isMember network blkId txId epochNo slotNo redeemers) $ Generic.txCertificates tx
       mapM_ (insertWithdrawals tracer cache txId redeemers) $ Generic.txWithdrawals tx
@@ -283,7 +282,7 @@ insertTx tracer cache network isMember blkId epochNo slotNo blockIndex tx groupe
       mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
-      pure $ grouped <> BlockGroupedData txIns txOutsGrouped
+      pure $ grouped <> BlockGroupedData txIns txOutsGrouped txMetadata
 
 prepareTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -922,25 +921,26 @@ insertRedeemerData tracer txId txd = do
           , DB.redeemerDataBytes = Generic.txDataBytes txd
           }
 
-insertTxMetadata ::
+prepareTxMetadata ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   DB.TxId ->
-  Map Word64 TxMetadataValue ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertTxMetadata tracer txId metadata =
-  mapM_ insert $ Map.toList metadata
+  Maybe (Map Word64 TxMetadataValue) ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.TxMetadata]
+prepareTxMetadata tracer txId mmetadata =
+  case mmetadata of
+    Nothing -> pure []
+    Just metadata -> mapM prepare $ Map.toList metadata
   where
-    insert ::
+    prepare ::
       (MonadBaseControl IO m, MonadIO m) =>
       (Word64, TxMetadataValue) ->
-      ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-    insert (key, md) = do
+      ExceptT SyncNodeError (ReaderT SqlBackend m) DB.TxMetadata
+    prepare (key, md) = do
       let jsonbs = LBS.toStrict $ Aeson.encode (metadataValueToJsonNoSchema md)
           singleKeyCBORMetadata = serialiseToCBOR $ makeTransactionMetadata (Map.singleton key md)
-      mjson <- safeDecodeToJson tracer "insertTxMetadata" jsonbs
-
-      void . lift . DB.insertTxMetadata $
+      mjson <- safeDecodeToJson tracer "prepareTxMetadata" jsonbs
+      pure
         DB.TxMetadata
           { DB.txMetadataKey = DbWord64 key
           , DB.txMetadataJson = mjson
