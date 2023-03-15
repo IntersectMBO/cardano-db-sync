@@ -52,7 +52,7 @@ pRunDbSyncNode =
   SyncNodeParams
     <$> pConfigFile
     <*> pSocketPath
-    <*> pLedgerStateDir
+    <*> optional pLedgerStateDir
     <*> pMigrationDir
     <*> pPGPassSource
     <*> pExtended
