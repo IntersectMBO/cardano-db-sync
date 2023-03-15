@@ -26,8 +26,13 @@ import Ouroboros.Network.Point
 
 -- Rollbacks are done in an Era generic way based on the 'Point' we are
 -- rolling back to.
-rollbackFromBlockNo :: MonadIO m => SyncEnv -> BlockNo -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-rollbackFromBlockNo env blkNo = do
+rollbackFromBlockNo ::
+  MonadIO m =>
+  SyncEnv ->
+  LedgerEnv ->
+  BlockNo ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+rollbackFromBlockNo syncEnv ledgerEnv blkNo = do
   lift $ rollbackCache cache
   nBlocks <- lift $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
   mres <- lift $ DB.queryBlockNoAndEpoch (unBlockNo blkNo)
@@ -44,15 +49,15 @@ rollbackFromBlockNo env blkNo = do
       DB.deleteEpochRows epochNo
     liftIO . logInfo trce $ "Blocks deleted"
   where
-    trce = getTrace env
-    cache = envCache env
+    trce = leTrace ledgerEnv
+    cache = envCache syncEnv
 
-prepareRollback :: SyncEnv -> CardanoPoint -> Tip CardanoBlock -> IO (Either SyncNodeError Bool)
-prepareRollback env point serverTip = do
-  backend <- getBackend env
+prepareRollback :: SyncEnv -> LedgerEnv -> CardanoPoint -> Tip CardanoBlock -> IO (Either SyncNodeError Bool)
+prepareRollback syncEnv ledgerEnv point serverTip = do
+  backend <- getBackend syncEnv
   DB.runDbIohkNoLogging backend $ runExceptT action
   where
-    trce = getTrace env
+    trce = leTrace ledgerEnv
 
     action :: MonadIO m => ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
     action = do

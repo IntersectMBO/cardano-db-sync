@@ -74,6 +74,7 @@ type IsPoolMember = PoolKeyHash -> Bool
 insertShelleyBlock ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
+  LedgerEnv ->
   Bool ->
   Bool ->
   Bool ->
@@ -83,7 +84,7 @@ insertShelleyBlock ::
   Strict.Maybe Generic.NewEpoch ->
   Generic.StakeSliceRes ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-insertShelleyBlock env shouldLog withinTwoMins withinHalfHour blk details isMember mNewEpoch stakeSlice = do
+insertShelleyBlock env ledgerEnv shouldLog withinTwoMins withinHalfHour blk details isMember mNewEpoch stakeSlice = do
   runExceptT $ do
     pbid <- case Generic.blkPreviousHash blk of
       Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
@@ -113,7 +114,7 @@ insertShelleyBlock env shouldLog withinTwoMins withinHalfHour blk details isMemb
           }
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
-    let txInserter = insertTx tracer cache (leNetwork lenv) isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
+    let txInserter = insertTx tracer cache (leNetwork ledgerEnv) isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
     grouped <- foldM (\grouped (idx, tx) -> txInserter idx tx grouped) mempty zippedTx
     minIds <- insertBlockGroupedData tracer grouped
     when withinHalfHour $
@@ -151,7 +152,7 @@ insertShelleyBlock env shouldLog withinTwoMins withinHalfHour blk details isMemb
     whenStrictJust mNewEpoch $ \newEpoch -> do
       insertOnNewEpoch tracer blkId (Generic.blkSlotNo blk) (sdEpochNo details) newEpoch
 
-    insertStakeSlice env stakeSlice
+    insertStakeSlice env ledgerEnv stakeSlice
 
     when (unBlockNo (Generic.blkBlockNo blk) `mod` offlineModBase == 0)
       . lift
@@ -179,11 +180,8 @@ insertShelleyBlock env shouldLog withinTwoMins withinHalfHour blk details isMemb
     offlineModBase :: Word64
     offlineModBase = if withinTwoMins then 10 else 2000
 
-    lenv :: LedgerEnv
-    lenv = envLedger env
-
     tracer :: Trace IO Text
-    tracer = getTrace env
+    tracer = leTrace ledgerEnv
 
     cache :: Cache
     cache = envCache env

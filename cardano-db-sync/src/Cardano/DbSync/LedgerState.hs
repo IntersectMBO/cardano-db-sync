@@ -295,9 +295,9 @@ readStateUnsafe env = do
     Strict.Just st -> pure st
 
 applyBlockAndSnapshot :: LedgerEnv -> CardanoBlock -> IO (ApplyResult, Bool)
-applyBlockAndSnapshot env blk = do
-  (oldState, appResult) <- applyBlock env blk
-  tookSnapshot <- storeSnapshotAndCleanupMaybe env oldState appResult (blockNo blk) (isSyncedWithinSeconds (apSlotDetails appResult) 600)
+applyBlockAndSnapshot ledgerEnv blk = do
+  (oldState, appResult) <- applyBlock ledgerEnv blk
+  tookSnapshot <- storeSnapshotAndCleanupMaybe ledgerEnv oldState appResult (blockNo blk) (isSyncedWithinSeconds (apSlotDetails appResult) 600)
   pure (appResult, tookSnapshot)
 
 -- The function 'tickThenReapply' does zero validation, so add minimal validation ('blockPrevHash'
