@@ -89,7 +89,7 @@ data SyncEnv = SyncEnv
   , envEpochState :: !(StrictTVar IO EpochState)
   , envEpochSyncTime :: !(StrictTVar IO UTCTime)
   , envNoLedgerEnv :: !NoLedgerStateEnv -- only used when configured without ledger state.
-  , envLedger :: !LedgerEnv
+  , envLedger :: !(Maybe LedgerEnv)
   }
 
 type RunMigration = DB.MigrationToRun -> IO ()
@@ -188,7 +188,10 @@ generateNewEpochEvents env details = do
         }
 
 getTrace :: SyncEnv -> Trace IO Text
-getTrace = leTrace . envLedger
+getTrace env =
+  case envLedger env of
+    Just eLedger -> leTrace eLedger
+    Nothing -> nlsTracer $ envNoLedgerEnv env
 
 getSlotHash :: SqlBackend -> SlotNo -> IO [(SlotNo, ByteString)]
 getSlotHash backend = DB.runDbIohkNoLogging backend . DB.querySlotHash
@@ -261,17 +264,20 @@ mkSyncEnv ::
   Bool ->
   RunMigration ->
   IO SyncEnv
-mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir ranAll forcedIndexes runMigration = do
-  ledgerEnv <-
-    mkLedgerEnv
-      trce
-      protoInfo
-      dir
-      nw
-      systemStart
-      (soptAbortOnInvalid syncOptions)
-      (snapshotEveryFollowing syncOptions)
-      (snapshotEveryLagging syncOptions)
+mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart maybeDir ranAll forcedIndexes runMigration = do
+  maybeLedgerEnv <-
+    case maybeDir of
+      Nothing -> pure Nothing
+      Just dir -> do
+        Just <$> mkLedgerEnv
+          trce
+          protoInfo
+          dir
+          nw
+          systemStart
+          (soptAbortOnInvalid syncOptions)
+          (snapshotEveryFollowing syncOptions)
+          (snapshotEveryLagging syncOptions)
   cache <- if soptCache syncOptions then newEmptyCache 250000 else pure uninitiatedCache
   backendVar <- newTVarIO Strict.Nothing
   consistentLevelVar <- newTVarIO Unchecked
@@ -300,7 +306,7 @@ mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir ranAll
       , envEpochState = epochVar
       , envEpochSyncTime = epochSyncTime
       , envNoLedgerEnv = noLegdState
-      , envLedger = ledgerEnv
+      , envLedger = maybeLedgerEnv
       }
 
 mkSyncEnvFromConfig ::
@@ -350,15 +356,15 @@ mkSyncEnvFromConfig trce connSring syncOptions dir genCfg ranAll forcedIndexes r
 -- | 'True' is for in memory points and 'False' for on disk
 getLatestPoints :: SyncEnv -> IO [(CardanoPoint, Bool)]
 getLatestPoints env = do
-  if shouldUseLedger env
-    then do
-      snapshotPoints <- listKnownSnapshots $ envLedger env
-      verifySnapshotPoint env snapshotPoints
-    else do
-      -- Brings the 5 latest.
-      dbBackend <- getBackend env
-      lastPoints <- DB.runDbIohkNoLogging dbBackend DB.queryLatestPoints
-      pure $ mapMaybe convert lastPoints
+  case envLedger env of
+    (Just eLedger) -> do
+          snapshotPoints <- listKnownSnapshots eLedger
+          verifySnapshotPoint env snapshotPoints
+    Nothing -> do
+          -- Brings the 5 latest.
+          dbBackend <- getBackend env
+          lastPoints <- DB.runDbIohkNoLogging dbBackend DB.queryLatestPoints
+          pure $ mapMaybe convert lastPoints
   where
     convert (Nothing, _) = Nothing
     convert (Just slot, bs) = convertToDiskPoint (SlotNo slot) bs

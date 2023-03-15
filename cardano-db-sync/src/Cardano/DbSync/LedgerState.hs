@@ -254,7 +254,7 @@ ledgerDbCurrent = either id id . AS.head . ledgerDbCheckpoints
 mkLedgerEnv ::
   Trace IO Text ->
   Consensus.ProtocolInfo IO CardanoBlock ->
-  Maybe LedgerStateDir ->
+  LedgerStateDir ->
   Ledger.Network ->
   SystemStart ->
   Bool ->

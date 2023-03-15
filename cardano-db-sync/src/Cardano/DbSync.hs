@@ -120,6 +120,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params aop snEveryFollowing 
   -- For testing and debugging.
   whenJust (enpMaybeRollback params) $ \slotNo ->
     void $ unsafeRollback trce pgConfig slotNo
+  -- After running the migrations we pass everything to runSyncNode
   runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging connectionString ranAll (void . runMigration) params
   where
     dbMigrationDir :: Db.MigrationDir

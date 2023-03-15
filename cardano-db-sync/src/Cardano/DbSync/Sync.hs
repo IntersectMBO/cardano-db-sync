@@ -138,11 +138,13 @@ runSyncNode ::
   RunMigration ->
   SyncNodeParams ->
   IO ()
-runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConnString ranAll runMigration enp = do
-  let configFile = enpConfigFile enp
+runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConnString ranAll runMigration syncNodeParams = do
+  let configFile = enpConfigFile syncNodeParams
+  let maybeLedgerDir = enpMaybeLedgerStateDir syncNodeParams
   enc <- readSyncNodeConfig configFile
 
-  whenJust (enpMaybeLedgerStateDir enp) $
+  -- if there is a ledger directory option present then create a new directory if it doesn't already exist
+  whenJust maybeLedgerDir $
     \enpLedgerStateDir -> do
       createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
 
@@ -150,6 +152,7 @@ runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConn
   logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile enc)
   logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile enc)
 
+  -- run our sync node
   orDie renderSyncNodeError $ do
     genCfg <- readCardanoGenesisConfig enc
     logProtocolMagicId trce $ genesisProtocolMagicId genCfg
@@ -158,11 +161,19 @@ runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConn
         mkSyncEnvFromConfig
           trce
           dbConnString
-          (SyncOptions (enpExtended enp) aop (enpHasCache enp) (enpShouldUseLedger enp) (enpSkipFix enp) (enpOnlyFix enp) snEveryFollowing snEveryLagging)
-          (enpMaybeLedgerStateDir enp)
+          (SyncOptions
+            (enpExtended syncNodeParams)
+            aop
+            (enpHasCache syncNodeParams)
+            (enpShouldUseLedger syncNodeParams)
+            (enpSkipFix syncNodeParams)
+            (enpOnlyFix syncNodeParams)
+            snEveryFollowing snEveryLagging
+          )
+          (enpMaybeLedgerStateDir syncNodeParams)
           genCfg
           ranAll
-          (enpForceIndexes enp)
+          (enpForceIndexes syncNodeParams)
           runMigration
 
     -- If the DB is empty it will be inserted, otherwise it will be validated (to make
@@ -171,15 +182,17 @@ runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConn
       Db.runIohkLogging trce $
         withPostgresqlConn dbConnString $ \backend -> do
           liftIO $
-            unless (enpShouldUseLedger enp) $ do
+            unless (enpShouldUseLedger syncNodeParams) $ do
               logInfo trce "Migrating to a no ledger schema"
               Db.noLedgerMigrations backend trce
           lift $ orDie renderSyncNodeError $ insertValidateGenesisDist trce backend (dncNetworkName enc) genCfg (useShelleyInit enc)
-          liftIO $ epochStartup (enpExtended enp) trce backend
+          liftIO $ epochStartup (enpExtended syncNodeParams) trce backend
 
-    case genCfg of
-      GenesisCardano {} -> do
-        liftIO $ runSyncNodeClient metricsSetters syncEnv iomgr trce (enpSocketPath enp)
+    case (genCfg, envLedger syncEnv) of
+      (GenesisCardano {}, Just ledgerEnv) -> do
+        liftIO $ runSyncNodeClient metricsSetters syncEnv ledgerEnv iomgr trce (enpSocketPath syncNodeParams)
+      -- ideally here we'd want to return an error of sorts?
+      (_, Nothing) -> pure ()
   where
     useShelleyInit :: SyncNodeConfig -> Bool
     useShelleyInit cfg =
@@ -192,11 +205,12 @@ runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConn
 runSyncNodeClient ::
   MetricSetters ->
   SyncEnv ->
+  LedgerEnv ->
   IOManager ->
   Trace IO Text ->
   SocketPath ->
   IO ()
-runSyncNodeClient metricsSetters env iomgr trce (SocketPath socketPath) = do
+runSyncNodeClient metricsSetters env ledgerEnv iomgr trce (SocketPath socketPath) = do
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   void $
     subscribe
@@ -205,10 +219,10 @@ runSyncNodeClient metricsSetters env iomgr trce (SocketPath socketPath) = do
       (envNetworkMagic env)
       networkSubscriptionTracers
       clientSubscriptionParams
-      (dbSyncProtocols trce env metricsSetters)
+      (dbSyncProtocols trce env ledgerEnv metricsSetters)
   where
     codecConfig :: CodecConfig CardanoBlock
-    codecConfig = configCodec $ Consensus.pInfoConfig (leProtocolInfo $ envLedger env)
+    codecConfig = configCodec $ Consensus.pInfoConfig (leProtocolInfo ledgerEnv)
 
     clientSubscriptionParams =
       ClientSubscriptionParams
@@ -246,12 +260,13 @@ runSyncNodeClient metricsSetters env iomgr trce (SocketPath socketPath) = do
 dbSyncProtocols ::
   Trace IO Text ->
   SyncEnv ->
+  LedgerEnv ->
   MetricSetters ->
   Network.NodeToClientVersion ->
   ClientCodecs CardanoBlock IO ->
   ConnectionId LocalAddress ->
   NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
+dbSyncProtocols trce env ledgerEnv metricsSetters _version codecs _connectionId =
   NodeToClientProtocols
     { localChainSyncProtocol = localChainSyncPtcl
     , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -311,7 +326,7 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
 
                   race_
                     ( race
-                        (runDbThread env metricsSetters actionQueue)
+                        (runDbThread env ledgerEnv metricsSetters actionQueue)
                         (runOfflineFetchThread trce env)
                     )
                     ( runPipelinedPeer
