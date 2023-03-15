@@ -252,7 +252,7 @@ insertTx tracer cache network isMember blkId epochNo slotNo blockIndex tx groupe
       !txOutsGrouped <- mapM (prepareTxOut tracer cache (txId, txHash)) (Generic.txOutputs tx)
 
       let !txIns = map (prepareTxIn txId Map.empty) resolvedInputs
-      pure $ grouped <> BlockGroupedData txIns txOutsGrouped []
+      pure $ grouped <> BlockGroupedData txIns txOutsGrouped [] []
     else do
       -- The following operations only happen if the script passes stage 2 validation (or the tx has
       -- no script).
@@ -275,14 +275,14 @@ insertTx tracer cache network isMember blkId epochNo slotNo blockIndex tx groupe
 
       mapM_ (insertParamProposal tracer blkId txId) $ Generic.txParamProposal tx
 
-      insertMaTxMint tracer cache txId $ Generic.txMint tx
+      maTxMint <- prepareMaTxMint tracer cache txId $ Generic.txMint tx
 
       mapM_ (insertScript tracer txId) $ Generic.txScripts tx
 
       mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
-      pure $ grouped <> BlockGroupedData txIns txOutsGrouped txMetadata
+      pure $ grouped <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint
 
 prepareTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -1007,31 +1007,31 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce = do
       , DB.epochParamBlockId = blkId
       }
 
-insertMaTxMint ::
+prepareMaTxMint ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   Cache ->
   DB.TxId ->
   MaryValue StandardCrypto ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertMaTxMint _tracer cache txId (MaryValue _adaShouldAlwaysBeZeroButWeDoNotCheck mintMap) =
-  mapM_ (lift . insertOuter) $ Map.toList mintMap
+  ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.MaTxMint]
+prepareMaTxMint _tracer cache txId (MaryValue _adaShouldAlwaysBeZeroButWeDoNotCheck mintMap) =
+  concatMapM (lift . prepareOuter) $ Map.toList mintMap
   where
-    insertOuter ::
+    prepareOuter ::
       (MonadBaseControl IO m, MonadIO m) =>
       (PolicyID StandardCrypto, Map AssetName Integer) ->
-      ReaderT SqlBackend m ()
-    insertOuter (policy, aMap) =
-      mapM_ (insertInner policy) $ Map.toList aMap
+      ReaderT SqlBackend m [DB.MaTxMint]
+    prepareOuter (policy, aMap) =
+      mapM (prepareInner policy) $ Map.toList aMap
 
-    insertInner ::
+    prepareInner ::
       (MonadBaseControl IO m, MonadIO m) =>
       PolicyID StandardCrypto ->
       (AssetName, Integer) ->
-      ReaderT SqlBackend m ()
-    insertInner policy (aname, amount) = do
+      ReaderT SqlBackend m DB.MaTxMint
+    prepareInner policy (aname, amount) = do
       maId <- insertMultiAsset cache policy aname
-      void . DB.insertMaTxMint $
+      pure $
         DB.MaTxMint
           { DB.maTxMintIdent = maId
           , DB.maTxMintQuantity = DB.integerToDbInt65 amount
