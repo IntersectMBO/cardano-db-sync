@@ -40,24 +40,25 @@ data NextState
 
 runDbThread ::
   SyncEnv ->
+  LedgerEnv ->
   MetricSetters ->
   DbActionQueue ->
   IO ()
-runDbThread env metricsSetters queue = do
+runDbThread syncEnv ledgerEnv metricsSetters queue = do
   logInfo trce "Running DB thread"
   logException trce "runDBThread: " loop
   logInfo trce "Shutting down DB thread"
   where
-    trce = getTrace env
+    trce = leTrace ledgerEnv
     loop = do
       xs <- blockingFlushDbActionQueue queue
 
       when (length xs > 1) $ do
         logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
 
-      eNextState <- runExceptT $ runActions env xs
+      eNextState <- runExceptT $ runActions syncEnv ledgerEnv xs
 
-      backend <- getBackend env
+      backend <- getBackend syncEnv
       mBlock <- getDbLatestBlockInfo backend
       whenJust mBlock $ \block -> do
         setDbBlockHeight metricsSetters $ bBlockNo block
@@ -72,9 +73,10 @@ runDbThread env metricsSetters queue = do
 -- and other operations are applied one-by-one.
 runActions ::
   SyncEnv ->
+  LedgerEnv ->
   [DbAction] ->
   ExceptT SyncNodeError IO NextState
-runActions syncEnv actions = do
+runActions env ledgerEnv actions = do
   dbAction Continue actions
   where
     dbAction :: NextState -> [DbAction] -> ExceptT SyncNodeError IO NextState
@@ -85,25 +87,22 @@ runActions syncEnv actions = do
         ([], DbFinish : _) -> do
           pure Done
         ([], DbRollBackToPoint chainSyncPoint serverTip resultVar : ys) -> do
-          deletedAllBlocks <- newExceptT $ prepareRollback syncEnv chainSyncPoint serverTip
-          points <-
-            if hasLedgerState syncEnv
-              then lift $ rollbackLedger syncEnv chainSyncPoint
-              else pure Nothing
+          deletedAllBlocks <- newExceptT $ prepareRollback env ledgerEnv chainSyncPoint serverTip
+          points <- liftIO $ rollbackLedger env ledgerEnv chainSyncPoint
           -- Ledger state always rollbacks at least back to the 'point' given by the Node.
           -- It needs to rollback even further, if 'points' is not 'Nothing'.
           -- The db may not rollback to the Node point.
           case (deletedAllBlocks, points) of
             (True, Nothing) -> do
-              liftIO $ setConsistentLevel syncEnv Consistent
-              liftIO $ validateConsistentLevel syncEnv chainSyncPoint
+              liftIO $ setConsistentLevel env ledgerEnv Consistent
+              liftIO $ validateConsistentLevel env ledgerEnv chainSyncPoint
             (False, Nothing) -> do
-              liftIO $ setConsistentLevel syncEnv DBAheadOfLedger
-              liftIO $ validateConsistentLevel syncEnv chainSyncPoint
-            _anyOtherOption ->
+              liftIO $ setConsistentLevel env ledgerEnv DBAheadOfLedger
+              liftIO $ validateConsistentLevel env ledgerEnv chainSyncPoint
+            _ ->
               -- No need to validate here
-              liftIO $ setConsistentLevel syncEnv DBAheadOfLedger
-          blockNo <- lift $ getDbTipBlockNo syncEnv
+              liftIO $ setConsistentLevel env ledgerEnv DBAheadOfLedger
+          blockNo <- lift $ getDbTipBlockNo env
           lift $ atomically $ putTMVar resultVar (points, blockNo)
           dbAction Continue ys
         (ys, zs) -> do
@@ -112,15 +111,15 @@ runActions syncEnv actions = do
             then pure Continue
             else dbAction Continue zs
 
-rollbackLedger :: SyncEnv -> CardanoPoint -> IO (Maybe [CardanoPoint])
-rollbackLedger env point = do
-  mst <- loadLedgerAtPoint (envLedger env) point
+rollbackLedger :: SyncEnv -> LedgerEnv ->CardanoPoint -> IO (Maybe [CardanoPoint])
+rollbackLedger syncEnv ledgerEnv point = do
+  mst <- loadLedgerAtPoint ledgerEnv point
   case mst of
     Right st -> do
       let statePoint = headerStatePoint $ headerState $ clsState st
       -- This is an extra validation that should always succeed.
       unless (point == statePoint) $
-        logAndPanic (getTrace env) $
+        logAndPanic (leTrace ledgerEnv) $
           mconcat
             [ "Ledger "
             , textShow statePoint
@@ -130,15 +129,15 @@ rollbackLedger env point = do
             ]
       pure Nothing
     Left lsfs ->
-      Just . fmap fst <$> verifySnapshotPoint env (OnDisk <$> lsfs)
+      Just . fmap fst <$> verifySnapshotPoint syncEnv (OnDisk <$> lsfs)
 
 -- | This not only checks that the ledger and ChainSync points are equal, but also that the
 -- 'Consistent' Level is correct based on the db tip.
-validateConsistentLevel :: SyncEnv -> CardanoPoint -> IO ()
-validateConsistentLevel env stPoint = do
-  backend <- getBackend env
+validateConsistentLevel :: SyncEnv -> LedgerEnv -> CardanoPoint -> IO ()
+validateConsistentLevel syncEnv ledgerEnv stPoint = do
+  backend <- getBackend syncEnv
   dbTipInfo <- getDbLatestBlockInfo backend
-  cLevel <- getConsistentLevel env
+  cLevel <- getConsistentLevel syncEnv
   compareTips stPoint dbTipInfo cLevel
   where
     compareTips _ dbTip Unchecked =
@@ -156,7 +155,7 @@ validateConsistentLevel env stPoint = do
       logAndPanic tracer $
         "Unexpected Consistent Level. " <> showContext dbTip cLevel
 
-    tracer = getTrace env
+    tracer = leTrace ledgerEnv
     showContext dbTip cLevel =
       mconcat
         [ "Ledger state point is "

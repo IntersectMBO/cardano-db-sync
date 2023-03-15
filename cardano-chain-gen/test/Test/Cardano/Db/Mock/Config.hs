@@ -219,7 +219,7 @@ mkSyncNodeParams staticDir mutableDir = do
     SyncNodeParams
       { enpConfigFile = ConfigFile $ staticDir </> "test-db-sync-config.json"
       , enpSocketPath = SocketPath $ mutableDir </> ".socket"
-      , enpLedgerStateDir = LedgerStateDir $ mutableDir </> "ledger-states"
+      , enpMaybeLedgerStateDir = LedgerStateDir $ mutableDir </> "ledger-states"
       , enpMigrationDir = MigrationDir "../schema"
       , enpPGPassSource = Db.PGPassCached pgconfig
       , enpExtended = True

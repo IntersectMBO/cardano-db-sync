@@ -54,14 +54,16 @@ insertListBlocks ::
   SyncEnv ->
   [CardanoBlock] ->
   IO (Either SyncNodeError ())
-insertListBlocks env blocks = do
-  backend <- getBackend env
-  DB.runDbIohkLogging backend tracer
-    . runExceptT
-    $ do
-      traverse_ (applyAndInsertBlockMaybe env) blocks
-  where
-    tracer = getTrace env
+insertListBlocks env blocks =
+  case envLedger env of
+    Just envL -> do
+      backend <- getBackend env
+      DB.runDbIohkLogging backend (leTrace envL)
+        . runExceptT
+        $ do
+          traverse_ (applyAndInsertBlockMaybe env) blocks
+    -- TODO: Vince: is this right???
+    Nothing -> pure $ Left $ NEError ""
 
 applyAndInsertBlockMaybe ::
   SyncEnv ->
@@ -70,31 +72,37 @@ applyAndInsertBlockMaybe ::
 applyAndInsertBlockMaybe env cblk = do
   (!applyRes, !tookSnapshot) <- liftIO mkApplyResult
   bl <- liftIO $ isConsistent env
-  if bl
-    then -- In the usual case it will be consistent so we don't need to do any queries. Just insert the block
-      insertBlock env cblk applyRes False tookSnapshot
-    else do
-      blockIsInDbAlready <- lift (isRight <$> DB.queryBlockId (SBS.fromShort . Consensus.getOneEraHash $ blockHash cblk))
-      -- If the block is already in db, do nothing. If not, delete all blocks with greater 'BlockNo' or
-      -- equal, insert the block and restore consistency between ledger and db.
-      unless blockIsInDbAlready $ do
-        liftIO . logInfo tracer $
-          mconcat
-            [ "Received block which is not in the db with "
-            , textShow (getHeaderFields cblk)
-            , ". Time to restore consistency."
-            ]
-        rollbackFromBlockNo env (blockNo cblk)
-        insertBlock env cblk applyRes True tookSnapshot
-        liftIO $ setConsistentLevel env Consistent
-  where
-    tracer = getTrace env
 
+  -- TODO: VINCE: not sure this is right but `logInfo (leTrace envL)` was needed and it can only be access
+  --              when there is a LedgerEnv.
+  case envLedger env of
+    Nothing -> pure ()
+    Just envL ->
+      if bl
+        then -- In the usual case it will be consistent so we don't need to do any queries. Just insert the block
+          insertBlock env envL cblk applyRes False tookSnapshot
+        else do
+          blockIsInDbAlready <- lift (isRight <$> DB.queryBlockId (SBS.fromShort . Consensus.getOneEraHash $ blockHash cblk))
+          -- If the block is already in db, do nothing. If not, delete all blocks with greater 'BlockNo' or
+          -- equal, insert the block and restore consistency between ledger and db.
+          unless blockIsInDbAlready $ do
+            liftIO . logInfo (leTrace envL) $
+              mconcat
+                [ "Received block which is not in the db with "
+                , textShow (getHeaderFields cblk)
+                , ". Time to restore consistency."
+                ]
+            rollbackFromBlockNo env envL (blockNo cblk)
+            insertBlock env envL cblk applyRes True tookSnapshot
+            liftIO $ setConsistentLevel env envL Consistent
+
+
+  where
     mkApplyResult :: IO (ApplyResult, Bool)
     mkApplyResult = do
-      if hasLedgerState env
-        then applyBlockAndSnapshot (envLedger env) cblk
-        else do
+      case envLedger env of
+        Just envL -> applyBlockAndSnapshot envL cblk
+        Nothing -> do
           slotDetails <- getSlotDetailsNode (envNoLedgerEnv env) (cardanoBlockSlotNo cblk)
           pure (defaultApplyResult slotDetails, False)
 
@@ -111,7 +119,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   let !details = apSlotDetails applyResult
   let !withinTwoMin = isWithinTwoMin details
   let !withinHalfHour = isWithinHalfHour details
-  insertLedgerEvents syncEnv (sdEpochNo details) (apEvents applyResult)
+  insertLedgerEvents syncEnv ledgerEnv (sdEpochNo details) (apEvents applyResult)
   let shouldLog = hasEpochStartEvent (apEvents applyResult) || firstAfterRollback
   let isMember poolId = Set.member poolId (apPoolsRegistered applyResult)
   let insertShelley blk =
@@ -128,7 +136,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   case cblk of
     BlockByron blk ->
       newExceptT $
-        insertByronBlock syncEnv shouldLog blk details
+        insertByronBlock syncEnv ledgerEnv shouldLog blk details
     BlockShelley blk ->
       newExceptT $
         insertShelley $
@@ -152,7 +160,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   insertEpoch details
   lift $ commitOrIndexes withinTwoMin withinHalfHour
   where
-    tracer = getTrace syncEnv
+    tracer = leTrace ledgerEnv
 
     insertEpoch details =
       when (soptExtended $ envOptions syncEnv)
@@ -177,7 +185,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
         ranIndexes <- liftIO $ getRanIndexes syncEnv
         unless ranIndexes $ do
           unless commited DB.transactionCommit
-          liftIO $ runIndexMigrations syncEnv
+          liftIO $ runIndexMigrations syncEnv ledgerEnv
 
     isWithinTwoMin :: SlotDetails -> Bool
     isWithinTwoMin sd = isSyncedWithinSeconds sd 120 == SyncFollowing
@@ -190,16 +198,16 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
 insertLedgerEvents ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
+  LedgerEnv ->
   EpochNo ->
   [LedgerEvent] ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertLedgerEvents env currentEpochNo@(EpochNo curEpoch) =
+insertLedgerEvents syncEnv ledgerEnv currentEpochNo@(EpochNo curEpoch) =
   mapM_ handler
   where
-    tracer = getTrace env
-    lenv = envLedger env
-    cache = envCache env
-    ntw = leNetwork lenv
+    tracer = leTrace ledgerEnv
+    cache = envCache syncEnv
+    ntw = leNetwork ledgerEnv
 
     subFromCurrentEpoch :: Word64 -> EpochNo
     subFromCurrentEpoch m =
@@ -219,7 +227,7 @@ insertLedgerEvents env currentEpochNo@(EpochNo curEpoch) =
       case ev of
         LedgerNewEpoch en ss -> do
           lift $ do
-            insertEpochSyncTime en (toSyncState ss) (envEpochSyncTime env)
+            insertEpochSyncTime en (toSyncState ss) (envEpochSyncTime syncEnv)
           sqlBackend <- lift ask
           persistantCacheSize <- liftIO $ statementCacheSize $ connStmtMap sqlBackend
           liftIO . logInfo tracer $ "Persistant SQL Statement Cache size is " <> textShow persistantCacheSize
@@ -249,7 +257,7 @@ insertLedgerEvents env currentEpochNo@(EpochNo curEpoch) =
             liftIO . logInfo tracer $ "Inserted " <> show (length rewards) <> " Mir rewards"
         LedgerPoolReap en drs -> do
           unless (Map.null $ Generic.unRewards drs) $ do
-            insertPoolDepositRefunds env en drs
+            insertPoolDepositRefunds syncEnv ledgerEnv en drs
 
 hasEpochStartEvent :: [LedgerEvent] -> Bool
 hasEpochStartEvent = any isNewEpoch
