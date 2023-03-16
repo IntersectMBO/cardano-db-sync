@@ -129,15 +129,13 @@ runSyncNode ::
   MetricSetters ->
   Trace IO Text ->
   IOManager ->
-  Bool ->
-  Word64 ->
-  Word64 ->
   ConnectionString ->
   Bool ->
   RunMigration ->
   SyncNodeParams ->
+  SyncOptions ->
   IO ()
-runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConnString ranAll runMigration syncNodeParams = do
+runSyncNode metricsSetters trce iomgr dbConnString ranAll runMigration syncNodeParams syncOptions = do
   let configFile = enpConfigFile syncNodeParams
       maybeLedgerDir = enpMaybeLedgerStateDir syncNodeParams
   syncNodeConfig <- readSyncNodeConfig configFile
@@ -187,18 +185,6 @@ runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConn
       case dncShelleyHardFork cfg of
         HardFork.TriggerHardForkAtEpoch (EpochNo 0) -> True
         _ -> False
-
-    insertOptions = defaultInsertOptions
-    syncOptions =
-      SyncOptions
-        (enpExtended syncNodeParams)
-        aop
-        (enpHasCache syncNodeParams)
-        (enpSkipFix syncNodeParams)
-        (enpOnlyFix syncNodeParams)
-        insertOptions
-        snEveryFollowing
-        snEveryLagging
 
 runSyncNodeClient ::
   MetricSetters ->

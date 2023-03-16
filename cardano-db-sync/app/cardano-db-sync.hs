@@ -80,6 +80,14 @@ pRunDbSyncNode =
     <*> pSkipFix
     <*> pOnlyFix
     <*> pForceIndexes
+    <*> pHasMultiAssets
+    <*> pHasMetadata
+    <*> pHasPlutusExtra
+    <*> pHasOfflineData
+    <*> pTurboMode
+    <*> pFullMode
+    <*> pure 500
+    <*> pure 10000
     <*> optional pSlotNo
 
 pConfigFile :: Parser ConfigFile
@@ -195,6 +203,60 @@ pSlotNo =
           <> Opt.help "Force a rollback to the specified slot (mainly for testing and debugging)."
           <> Opt.metavar "WORD"
       )
+
+pHasMultiAssets :: Parser Bool
+pHasMultiAssets =
+  Opt.flag
+    True
+    False
+    ( Opt.long "disable-multiassets"
+        <> Opt.help "Disables the multi assets tables and entries."
+    )
+
+pHasMetadata :: Parser Bool
+pHasMetadata =
+  Opt.flag
+    True
+    False
+    ( Opt.long "disable-metadata"
+        <> Opt.help "Disables the tx_metadata table."
+    )
+
+pHasPlutusExtra :: Parser Bool
+pHasPlutusExtra =
+  Opt.flag
+    True
+    False
+    ( Opt.long "disable-plutus-extra"
+        <> Opt.help "Disables most tables and entries related to plutus and scripts."
+    )
+
+pHasOfflineData :: Parser Bool
+pHasOfflineData =
+  Opt.flag
+    True
+    False
+    ( Opt.long "disable-offline-data"
+        <> Opt.help "Disables fetching pool offline metadata."
+    )
+
+pTurboMode :: Parser Bool
+pTurboMode =
+  Opt.flag
+    False
+    True
+    ( Opt.long "turbo"
+        <> Opt.help "Enables turbo mode, which make db-sync running much faster with limited functionality."
+    )
+
+pFullMode :: Parser Bool
+pFullMode =
+  Opt.flag
+    False
+    True
+    ( Opt.long "full"
+        <> Opt.help "Makes db-sync run with all possible functionalities."
+    )
 
 pVersionCommand :: Parser SyncCommand
 pVersionCommand =
