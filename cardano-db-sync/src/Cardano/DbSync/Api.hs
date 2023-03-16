@@ -13,7 +13,9 @@ module Cardano.DbSync.Api (
   InsertOptions (..),
   ConsistentLevel (..),
   RunMigration,
+  fullInsertOptions,
   defaultInsertOptions,
+  turboInsertOptions,
   setConsistentLevel,
   getConsistentLevel,
   isConsistent,
@@ -163,8 +165,14 @@ data InsertOptions = InsertOptions
   , ioOfflineData :: !Bool
   }
 
+fullInsertOptions :: InsertOptions
+fullInsertOptions = InsertOptions True True True True
+
 defaultInsertOptions :: InsertOptions
-defaultInsertOptions = InsertOptions True True True True
+defaultInsertOptions = fullInsertOptions
+
+turboInsertOptions :: InsertOptions
+turboInsertOptions = InsertOptions False False False False
 
 replaceConnection :: SyncEnv -> SqlBackend -> IO ()
 replaceConnection env sqlBackend = do

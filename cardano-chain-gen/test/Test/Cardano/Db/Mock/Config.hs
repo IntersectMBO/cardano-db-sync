@@ -228,6 +228,14 @@ mkSyncNodeParams staticDir mutableDir = do
       , enpSkipFix = True
       , enpOnlyFix = False
       , enpForceIndexes = False
+      , enpHasMultiAssets = True
+      , enpHasMetadata = True
+      , enpHasPlutusExtra = True
+      , enpHasOfflineData = True
+      , enpTurboMode = False
+      , enpFullMode = True
+      , enpSnEveryFollowing = 35
+      , enpSnEveryLagging = 35
       , enpMaybeRollback = Nothing
       }
 
@@ -267,7 +275,7 @@ withFullConfig' hasFingerprint config testLabel action iom migr = do
     if True
       then pure nullTracer
       else configureLogging dbsyncParams "db-sync-node"
-  let dbsyncRun = runDbSync emptyMetricsSetters migr iom trce dbsyncParams True 35 35
+  let dbsyncRun = runDbSync emptyMetricsSetters migr iom trce dbsyncParams True
   let initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
   withInterpreter (protocolInfoForging cfg) nullTracer fingerFile $ \interpreter -> do
     -- TODO: get 42 from config
