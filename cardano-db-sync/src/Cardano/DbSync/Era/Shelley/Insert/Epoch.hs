@@ -39,21 +39,20 @@ import Database.Persist.Sql (SqlBackend)
 insertStakeSlice ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
-  LedgerEnv ->
   Generic.StakeSliceRes ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertStakeSlice _ _ Generic.NoSlices = pure ()
-insertStakeSlice syncEnv ledgerEnv (Generic.Slice slice finalSlice) = do
+insertStakeSlice _ Generic.NoSlices = pure ()
+insertStakeSlice syncEnv (Generic.Slice slice finalSlice) = do
   insertEpochStake (envCache syncEnv) network (Generic.sliceEpochNo slice) (Map.toList $ Generic.sliceDistr slice)
   when finalSlice $ do
     size <- lift $ DB.queryEpochStakeCount (unEpochNo $ Generic.sliceEpochNo slice)
     liftIO . logInfo tracer $ mconcat ["Inserted ", show size, " EpochStake for ", show (Generic.sliceEpochNo slice)]
   where
     tracer :: Trace IO Text
-    tracer = leTrace ledgerEnv
+    tracer = getTrace syncEnv
 
     network :: Network
-    network = leNetwork ledgerEnv
+    network = getNetwork syncEnv
 
 insertEpochStake ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -137,17 +136,16 @@ insertRewards nw earnedEpoch spendableEpoch cache rewardsChunk = do
 insertPoolDepositRefunds ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
-  LedgerEnv ->
   EpochNo ->
   Generic.Rewards ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolDepositRefunds syncEnv ledgerEnv epochNo refunds = do
+insertPoolDepositRefunds syncEnv epochNo refunds = do
   insertRewards nw epochNo epochNo (envCache syncEnv) (Map.toList rwds)
   liftIO . logInfo tracer $ "Inserted " <> show (Generic.rewardsCount refunds) <> " deposit refund rewards"
   where
-    tracer = leTrace ledgerEnv
+    tracer = getTrace syncEnv
     rwds = Generic.unRewards refunds
-    nw = leNetwork ledgerEnv
+    nw = getNetwork syncEnv
 
 sumRewardTotal :: Map StakeCred (Set Generic.Reward) -> Shelley.Coin
 sumRewardTotal =

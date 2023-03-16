@@ -29,10 +29,9 @@ import Ouroboros.Network.Point
 rollbackFromBlockNo ::
   MonadIO m =>
   SyncEnv ->
-  LedgerEnv ->
   BlockNo ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-rollbackFromBlockNo syncEnv ledgerEnv blkNo = do
+rollbackFromBlockNo syncEnv blkNo = do
   lift $ rollbackCache cache
   nBlocks <- lift $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
   mres <- lift $ DB.queryBlockNoAndEpoch (unBlockNo blkNo)
@@ -49,15 +48,15 @@ rollbackFromBlockNo syncEnv ledgerEnv blkNo = do
       DB.deleteEpochRows epochNo
     liftIO . logInfo trce $ "Blocks deleted"
   where
-    trce = leTrace ledgerEnv
+    trce = getTrace syncEnv
     cache = envCache syncEnv
 
-prepareRollback :: SyncEnv -> LedgerEnv -> CardanoPoint -> Tip CardanoBlock -> IO (Either SyncNodeError Bool)
-prepareRollback syncEnv ledgerEnv point serverTip = do
+prepareRollback :: SyncEnv -> CardanoPoint -> Tip CardanoBlock -> IO (Either SyncNodeError Bool)
+prepareRollback syncEnv point serverTip = do
   backend <- getBackend syncEnv
   DB.runDbIohkNoLogging backend $ runExceptT action
   where
-    trce = leTrace ledgerEnv
+    trce = getTrace syncEnv
 
     action :: MonadIO m => ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
     action = do
