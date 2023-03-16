@@ -9,6 +9,7 @@ import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
 import Data.String (String)
 import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
 import Data.Version (showVersion)
 import MigrationValidations (KnownMigration (..), knownMigrations)
 import Options.Applicative (Parser, ParserInfo)
@@ -22,13 +23,26 @@ main = do
   case cmd of
     CmdVersion -> runVersionCommand
     CmdRun params -> do
-      prometheusPort <- dncPrometheusPort <$> readSyncNodeConfig (enpConfigFile params)
-
-      withMetricSetters prometheusPort $ \metricsSetters ->
-        runDbSyncNode metricsSetters knownMigrationsPlain params
+      let maybeLedgerStateDir = enpMaybeLedgerStateDir params
+      case (maybeLedgerStateDir, enpShouldUseLedger params) of
+        (Just _, True ) -> run params
+        (Nothing, False ) -> run params
+        (Just _, False ) -> Text.putStrLn $
+          "Error: Using `--dissable-ledger` doesn't require having a --state-dir. " <> moreDetails
+        (Nothing, True) -> Text.putStrLn $
+          "Error: If not using --state-dir then make sure to have --dissable-ledger. " <> moreDetails
   where
     knownMigrationsPlain :: [(Text, Text)]
     knownMigrationsPlain = (\x -> (hash x, filepath x)) <$> knownMigrations
+
+    moreDetails :: Text
+    moreDetails = "For more details view https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/configuration.md#--disable-ledger"
+
+    run :: SyncNodeParams -> IO ()
+    run prms = do
+      prometheusPort <- dncPrometheusPort <$> readSyncNodeConfig (enpConfigFile prms)
+      withMetricSetters prometheusPort $ \metricsSetters ->
+            runDbSyncNode metricsSetters knownMigrationsPlain prms
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -57,7 +71,7 @@ pRunDbSyncNode =
     <*> pPGPassSource
     <*> pExtended
     <*> pHasCache
-    <*> pHasLedger
+    <*> pUseLedger
     <*> pSkipFix
     <*> pOnlyFix
     <*> pForceIndexes
@@ -148,8 +162,8 @@ pHasCache =
         <> Opt.help "Disables the db-sync caches. Reduces memory usage but it takes longer to sync."
     )
 
-pHasLedger :: Parser Bool
-pHasLedger =
+pUseLedger :: Parser Bool
+pUseLedger =
   Opt.flag
     True
     False

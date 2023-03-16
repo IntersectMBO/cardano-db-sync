@@ -50,12 +50,11 @@ data ValueFee = ValueFee
 insertByronBlock ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
-  LedgerEnv ->
   Bool ->
   ByronBlock ->
   SlotDetails ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-insertByronBlock syncEnv ledgerEnv firstBlockOfEpoch blk details = do
+insertByronBlock syncEnv firstBlockOfEpoch blk details = do
   res <- runExceptT $
     case byronBlockRaw blk of
       Byron.ABOBBlock ablk -> insertABlock tracer cache firstBlockOfEpoch ablk details
@@ -68,7 +67,7 @@ insertByronBlock syncEnv ledgerEnv firstBlockOfEpoch blk details = do
   pure res
   where
     tracer :: Trace IO Text
-    tracer = leTrace ledgerEnv
+    tracer = getTrace syncEnv
 
     cache :: Cache
     cache = envCache syncEnv
