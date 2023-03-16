@@ -160,10 +160,11 @@ data InsertOptions = InsertOptions
   { ioMultiAssets :: !Bool
   , ioMetadata :: !Bool
   , ioPlutusExtra :: !Bool
+  , ioOfflineData :: !Bool
   }
 
 defaultInsertOptions :: InsertOptions
-defaultInsertOptions = InsertOptions True True True
+defaultInsertOptions = InsertOptions True True True True
 
 replaceConnection :: SyncEnv -> SqlBackend -> IO ()
 replaceConnection env sqlBackend = do

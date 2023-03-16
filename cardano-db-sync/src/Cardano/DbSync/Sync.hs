@@ -324,9 +324,9 @@ dbSyncProtocols trce syncEnv metricsSetters _version codecs _connectionId =
                   actionQueue <- newDbActionQueue
 
                   race_
-                    ( race
+                    ( concurrently
                         (runDbThread syncEnv metricsSetters actionQueue)
-                        (runOfflineFetchThread trce syncEnv)
+                        (runOfflineFetchThread syncEnv)
                     )
                     ( runPipelinedPeer
                         localChainSyncTracer
