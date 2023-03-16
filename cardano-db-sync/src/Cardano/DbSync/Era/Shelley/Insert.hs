@@ -153,12 +153,14 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
 
     insertStakeSlice syncEnv stakeSlice
 
-    when (unBlockNo (Generic.blkBlockNo blk) `mod` offlineModBase == 0)
+    when (ioOfflineData iopts && unBlockNo (Generic.blkBlockNo blk) `mod` offlineModBase == 0)
       . lift
       $ do
         insertOfflineResults tracer (envOfflineResultQueue syncEnv)
         loadOfflineWorkQueue tracer (envOfflineWorkQueue syncEnv)
   where
+    iopts = getInsertOptions env
+
     logger :: Trace IO a -> a -> IO ()
     logger
       | shouldLog = logInfo
