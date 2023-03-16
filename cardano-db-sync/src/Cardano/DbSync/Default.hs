@@ -139,16 +139,17 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
     BlockAlonzo blk ->
       newExceptT $
         insertShelley $
-          Generic.fromAlonzoBlock (getPrices applyResult) blk
+          Generic.fromAlonzoBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
     BlockBabbage blk ->
       newExceptT $
         insertShelley $
-          Generic.fromBabbageBlock (getPrices applyResult) blk
+          Generic.fromBabbageBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
   insertEpoch details
   lift $ commitOrIndexes withinTwoMin withinHalfHour
 
   where
     tracer = getTrace syncEnv
+    iopts = getInsertOptions env
 
     insertEpoch details =
       when (soptExtended $ envOptions syncEnv)

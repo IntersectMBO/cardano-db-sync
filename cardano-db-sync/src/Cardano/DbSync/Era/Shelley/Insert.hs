@@ -113,7 +113,7 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
           }
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
-    let txInserter = insertTx tracer cache (getNetwork syncEnv) isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
+    let txInserter = insertTx tracer cache (getInsertOptions env) (getNetwork syncEnv) isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
     grouped <- foldM (\grouped (idx, tx) -> txInserter idx tx grouped) mempty zippedTx
     minIds <- insertBlockGroupedData tracer grouped
     when withinHalfHour $
@@ -210,6 +210,7 @@ insertTx ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   Cache ->
+  InsertOptions ->
   Ledger.Network ->
   IsPoolMember ->
   DB.BlockId ->
@@ -219,7 +220,7 @@ insertTx ::
   Generic.Tx ->
   BlockGroupedData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) BlockGroupedData
-insertTx tracer cache network isMember blkId epochNo slotNo blockIndex tx grouped = do
+insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx grouped = do
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
       !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
   !resolvedInputs <- mapM (resolveTxInputs (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
@@ -249,35 +250,39 @@ insertTx tracer cache network isMember blkId epochNo slotNo blockIndex tx groupe
 
   if not (Generic.txValidContract tx)
     then do
-      !txOutsGrouped <- mapM (prepareTxOut tracer cache (txId, txHash)) (Generic.txOutputs tx)
+      !txOutsGrouped <- mapM (prepareTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
 
       let !txIns = map (prepareTxIn txId Map.empty) resolvedInputs
       pure $ grouped <> BlockGroupedData txIns txOutsGrouped [] []
     else do
       -- The following operations only happen if the script passes stage 2 validation (or the tx has
       -- no script).
-      !txOutsGrouped <- mapM (prepareTxOut tracer cache (txId, txHash)) (Generic.txOutputs tx)
+      !txOutsGrouped <- mapM (prepareTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
 
       !redeemers <- Map.fromList <$> mapM (insertRedeemer tracer (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx)
 
-      mapM_ (insertDatum tracer cache txId) (Generic.txData tx)
+      when (ioPlutusExtra iopts) $
+        mapM_ (insertDatum tracer cache txId) (Generic.txData tx)
 
       mapM_ (insertCollateralTxIn tracer txId) (Generic.txCollateralInputs tx)
 
       mapM_ (insertReferenceTxIn tracer txId) (Generic.txReferenceInputs tx)
 
-      mapM_ (insertCollateralTxOut tracer cache (txId, txHash)) (Generic.txCollateralOutputs tx)
+      mapM_ (insertCollateralTxOut tracer cache iopts (txId, txHash)) (Generic.txCollateralOutputs tx)
 
-      txMetadata <- prepareTxMetadata tracer txId (Generic.txMetadata tx)
+      txMetadata <- whenFalseMempty (ioMetadata iopts)
+        $ prepareTxMetadata tracer txId (Generic.txMetadata tx)
 
       mapM_ (insertCertificate tracer cache isMember network blkId txId epochNo slotNo redeemers) $ Generic.txCertificates tx
       mapM_ (insertWithdrawals tracer cache txId redeemers) $ Generic.txWithdrawals tx
 
       mapM_ (insertParamProposal tracer blkId txId) $ Generic.txParamProposal tx
 
-      maTxMint <- prepareMaTxMint tracer cache txId $ Generic.txMint tx
+      maTxMint <- whenFalseMempty (ioMetadata iopts)
+        $ prepareMaTxMint tracer cache txId $ Generic.txMint tx
 
-      mapM_ (insertScript tracer txId) $ Generic.txScripts tx
+      when (ioPlutusExtra iopts) $
+        mapM_ (insertScript tracer txId) $ Generic.txScripts tx
 
       mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
 
@@ -288,13 +293,16 @@ prepareTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   Cache ->
+  InsertOptions ->
   (DB.TxId, ByteString) ->
   Generic.TxOut ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
-prepareTxOut tracer cache (txId, txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
+prepareTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
   mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache txId addr
-  mDatumId <- Generic.whenInlineDatum dt $ insertDatum tracer cache txId
-  mScriptId <- whenMaybe mScript $ insertScript tracer txId
+  mDatumId <- whenFalseEmpty (ioPlutusExtra iopts) Nothing
+    $ Generic.whenInlineDatum dt $ insertDatum tracer cache txId
+  mScriptId <- whenFalseEmpty (ioPlutusExtra iopts) Nothing
+    $ whenMaybe mScript $ insertScript tracer txId
   let !txOut =
         DB.TxOut
           { DB.txOutTxId = txId
@@ -310,7 +318,7 @@ prepareTxOut tracer cache (txId, txHash) (Generic.TxOut index addr addrRaw value
           , DB.txOutReferenceScriptId = mScriptId
           }
   let !eutxo = ExtendedTxOut txHash txOut
-  !maTxOuts <- prepareMaTxOuts tracer cache maMap
+  !maTxOuts <- whenFalseMempty (ioMultiAssets iopts) $ prepareMaTxOuts tracer cache maMap
   pure (eutxo, maTxOuts)
   where
     hasScript :: Bool
@@ -320,13 +328,16 @@ insertCollateralTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   Cache ->
+  InsertOptions ->
   (DB.TxId, ByteString) ->
   Generic.TxOut ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertCollateralTxOut tracer cache (txId, _txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
+insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
   mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache txId addr
-  mDatumId <- Generic.whenInlineDatum dt $ insertDatum tracer cache txId
-  mScriptId <- whenMaybe mScript $ insertScript tracer txId
+  mDatumId <- whenFalseEmpty (ioPlutusExtra iopts) Nothing
+                $ Generic.whenInlineDatum dt $ insertDatum tracer cache txId
+  mScriptId <- whenFalseEmpty (ioPlutusExtra iopts) Nothing
+    $ whenMaybe mScript $ insertScript tracer txId
   _ <-
     lift . DB.insertCollateralTxOut $
       DB.CollateralTxOut
