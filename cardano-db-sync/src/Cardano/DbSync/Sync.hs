@@ -157,15 +157,7 @@ runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConn
         mkSyncEnvFromConfig
           trce
           dbConnString
-          ( SyncOptions
-              (enpExtended syncNodeParams)
-              aop
-              (enpHasCache syncNodeParams)
-              (enpSkipFix syncNodeParams)
-              (enpOnlyFix syncNodeParams)
-              snEveryFollowing
-              snEveryLagging
-          )
+          syncOptions
           (enpMaybeLedgerStateDir syncNodeParams)
           (enpShouldUseLedger syncNodeParams)
           genCfg
@@ -196,7 +188,18 @@ runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConn
         HardFork.TriggerHardForkAtEpoch (EpochNo 0) -> True
         _ -> False
 
---- -------------------------------------------------------------------------------------------------
+    insertOptions = defaultInsertOptions
+    syncOptions =
+      SyncOptions
+        (enpExtended syncNodeParams)
+        aop
+        (enpHasCache syncNodeParams)
+        (enpSkipFix syncNodeParams)
+        (enpOnlyFix syncNodeParams)
+        insertOptions
+        snEveryFollowing
+        snEveryLagging
+
 runSyncNodeClient ::
   MetricSetters ->
   SyncEnv ->

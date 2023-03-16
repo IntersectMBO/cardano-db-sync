@@ -62,8 +62,8 @@ import qualified Data.Set as Set
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardCrypto)
 
-fromAlonzoTx :: Maybe Alonzo.Prices -> (Word64, Core.Tx StandardAlonzo) -> Tx
-fromAlonzoTx mprices (blkIndex, tx) =
+fromAlonzoTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardAlonzo) -> Tx
+fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
     , txBlockIndex = blkIndex
@@ -125,7 +125,7 @@ fromAlonzoTx mprices (blkIndex, tx) =
         MaryValue ada maMap = txOut ^. Core.valueTxOutL
         mDataHash = txOut ^. Alonzo.dataHashTxOutL
 
-    (finalMaps, redeemers) = resolveRedeemers mprices tx
+    (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx
 
     -- This is true if second stage contract validation passes or there are no contracts.
     isValid2 :: Bool
@@ -172,11 +172,13 @@ resolveRedeemers ::
   , Shelley.ShelleyEraTxBody era
   , Core.EraTx era
   ) =>
+  Bool ->
   Maybe Alonzo.Prices ->
   Core.Tx era ->
   (RedeemerMaps, [(Word64, TxRedeemer)])
-resolveRedeemers mprices tx =
-  mkRdmrAndUpdateRec (initRedeemersMaps, []) $
+resolveRedeemers ioExtraPlutus mprices tx =
+  if not ioExtraPlutus then (initRedeemersMaps, [])
+  else mkRdmrAndUpdateRec (initRedeemersMaps, []) $
     zip [0 ..] $
       Map.toList (Alonzo.unRedeemers (tx ^. (Core.witsTxL . Alonzo.rdmrsWitsL)))
   where

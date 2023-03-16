@@ -10,8 +10,10 @@ module Cardano.DbSync.Api (
   SyncEnv (..),
   LedgerEnv (..),
   SyncOptions (..),
+  InsertOptions (..),
   ConsistentLevel (..),
   RunMigration,
+  defaultInsertOptions,
   setConsistentLevel,
   getConsistentLevel,
   isConsistent,
@@ -23,6 +25,7 @@ module Cardano.DbSync.Api (
   replaceConnection,
   verifySnapshotPoint,
   getBackend,
+  getInsertOptions,
   getTrace,
   getTopLevelConfig,
   getNetwork,
@@ -148,9 +151,19 @@ data SyncOptions = SyncOptions
   , soptCache :: !Bool
   , soptSkipFix :: !Bool
   , soptOnlyFix :: !Bool
+  , soptInsertOptions :: !InsertOptions
   , snapshotEveryFollowing :: !Word64
   , snapshotEveryLagging :: !Word64
   }
+
+data InsertOptions = InsertOptions
+  { ioMultiAssets :: !Bool
+  , ioMetadata :: !Bool
+  , ioPlutusExtra :: !Bool
+  }
+
+defaultInsertOptions :: InsertOptions
+defaultInsertOptions = InsertOptions True True True
 
 replaceConnection :: SyncEnv -> SqlBackend -> IO ()
 replaceConnection env sqlBackend = do
@@ -210,6 +223,9 @@ getNetwork sEnv =
   case envLedgerEnv sEnv of
     HasLedger hasLedgerEnv -> leNetwork hasLedgerEnv
     NoLedger noLedgerEnv -> nleNetwork noLedgerEnv
+
+getInsertOptions :: SyncEnv -> InsertOptions
+getInsertOptions = soptInsertOptions . envOptions
 
 getSlotHash :: SqlBackend -> SlotNo -> IO [(SlotNo, ByteString)]
 getSlotHash backend = DB.runDbIohkNoLogging backend . DB.querySlotHash
