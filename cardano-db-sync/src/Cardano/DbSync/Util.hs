@@ -31,6 +31,8 @@ module Cardano.DbSync.Util (
   whenMaybe,
   mlookup,
   whenRight,
+  whenFalseEmpty,
+  whenFalseMempty,
 ) where
 
 import Cardano.BM.Trace (Trace, logError, logInfo)
@@ -217,3 +219,11 @@ whenRight ma f =
   case ma of
     Right a -> f a
     Left _ -> pure ()
+
+whenFalseEmpty :: Applicative m => Bool -> a -> m a -> m a
+whenFalseEmpty flag a mkAs =
+  if flag then mkAs else pure a
+
+whenFalseMempty :: (Monoid a, Applicative m) => Bool -> m a -> m a
+whenFalseMempty flag mkAs =
+  if flag then mkAs else pure mempty
