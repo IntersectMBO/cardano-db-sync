@@ -3,8 +3,8 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.DbSync.LocalStateQuery (
-  NoLedgerStateEnv (..),
-  mkNoLedgerStateEnv,
+  NoLedgerEnv (..),
+  mkNoLedgerEnv,
   getSlotDetailsNode,
   localStateQueryHandler,
   newStateQueryTMVar,
@@ -52,12 +52,16 @@ import Ouroboros.Network.Protocol.LocalStateQuery.Client (
  )
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as StateQuery
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
+import qualified Cardano.Ledger.BaseTypes as Ledger
+import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 
-data NoLedgerStateEnv = NoLedgerStateEnv
-  { nlsTracer :: Trace IO Text
-  , nlsSystemStart :: !SystemStart
-  , nlsQueryVar :: StateQueryTMVar CardanoBlock CardanoInterpreter
-  , nlsHistoryInterpreterVar :: StrictTVar IO (Strict.Maybe CardanoInterpreter)
+data NoLedgerEnv = NoLedgerEnv
+  { nleTracer :: Trace IO Text
+  , nleSystemStart :: !SystemStart
+  , nleQueryVar :: StateQueryTMVar CardanoBlock CardanoInterpreter
+  , nleHistoryInterpreterVar :: StrictTVar IO (Strict.Maybe CardanoInterpreter)
+  , nleNetwork :: !Ledger.Network
+  , nleProtocolInfo :: !(Consensus.ProtocolInfo IO CardanoBlock)
   }
 
 newtype StateQueryTMVar blk result = StateQueryTMVar
@@ -69,11 +73,11 @@ newtype StateQueryTMVar blk result = StateQueryTMVar
         )
   }
 
-mkNoLedgerStateEnv :: Trace IO Text -> SystemStart -> IO NoLedgerStateEnv
-mkNoLedgerStateEnv trce systemStart = do
+mkNoLedgerEnv :: Trace IO Text -> Consensus.ProtocolInfo IO CardanoBlock -> Ledger.Network -> SystemStart -> IO NoLedgerEnv
+mkNoLedgerEnv trce protoInfo network systemStart = do
   qVar <- newStateQueryTMVar
   interVar <- newTVarIO Strict.Nothing
-  pure $ NoLedgerStateEnv trce systemStart qVar interVar
+  pure $ NoLedgerEnv trce systemStart qVar interVar network protoInfo
 
 newStateQueryTMVar :: IO (StateQueryTMVar blk result)
 newStateQueryTMVar = StateQueryTMVar <$> newEmptyTMVarIO
@@ -82,7 +86,7 @@ newStateQueryTMVar = StateQueryTMVar <$> newEmptyTMVarIO
 -- If the history interpreter does not exist, get one.
 -- If the existing history interpreter returns an error, get a new one and try again.
 getSlotDetailsNode ::
-  NoLedgerStateEnv ->
+  NoLedgerEnv ->
   SlotNo ->
   IO SlotDetails
 getSlotDetailsNode env slot = do
@@ -95,11 +99,11 @@ getSlotDetailsNode env slot = do
         Left err -> panic $ "getSlotDetailsNode: " <> textShow err
         Right sd -> insertCurrentTime sd
   where
-    interVar = nlsHistoryInterpreterVar env
+    interVar = nleHistoryInterpreterVar env
 
     evalSlotDetails :: Interpreter (CardanoEras StandardCrypto) -> Either PastHorizonException SlotDetails
     evalSlotDetails interp =
-      interpretQuery interp (querySlotDetails (nlsSystemStart env) slot)
+      interpretQuery interp (querySlotDetails (nleSystemStart env) slot)
 
     insertCurrentTime :: SlotDetails -> IO SlotDetails
     insertCurrentTime sd = do
@@ -111,7 +115,7 @@ getSlotDetailsNode env slot = do
     fromStrictMaybe Strict.Nothing = Nothing
 
 getHistoryInterpreter ::
-  NoLedgerStateEnv ->
+  NoLedgerEnv ->
   IO CardanoInterpreter
 getHistoryInterpreter env = do
   respVar <- newEmptyTMVarIO
@@ -125,15 +129,15 @@ getHistoryInterpreter env = do
       atomically $ writeTVar interVar $ Strict.Just interp
       pure interp
   where
-    reqVar = unStateQueryTMVar $ nlsQueryVar env
-    interVar = nlsHistoryInterpreterVar env
-    tracer = nlsTracer env
+    reqVar = unStateQueryTMVar $ nleQueryVar env
+    interVar = nleHistoryInterpreterVar env
+    tracer = nleTracer env
 
 -- This is called during the ChainSync setup and loops forever. Queries can be posted to
 -- it and responses retrieved via a TVar.
 localStateQueryHandler ::
   forall a.
-  NoLedgerStateEnv ->
+  NoLedgerEnv ->
   LocalStateQueryClient CardanoBlock (Point CardanoBlock) (Query CardanoBlock) IO a
 localStateQueryHandler env =
   LocalStateQueryClient idleState
@@ -156,4 +160,4 @@ localStateQueryHandler env =
               idleState
           }
 
-    reqVar = unStateQueryTMVar $ nlsQueryVar env
+    reqVar = unStateQueryTMVar $ nleQueryVar env

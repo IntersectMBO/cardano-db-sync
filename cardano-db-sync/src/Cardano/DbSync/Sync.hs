@@ -47,6 +47,7 @@ import Cardano.DbSync.Util
 import Cardano.Prelude hiding (Meta, Nat, option, (%))
 import Cardano.Slotting.Slot (EpochNo (..), WithOrigin (..))
 import qualified Codec.CBOR.Term as CBOR
+import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Except.Exit (orDie)
 import Control.Tracer (Tracer)
 import qualified Data.ByteString.Lazy as BSL
@@ -70,7 +71,6 @@ import Ouroboros.Consensus.Network.NodeToClient (
   cTxSubmissionCodec,
  )
 import Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
-import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Network.Block (
   BlockNo (..),
   Point (..),
@@ -124,7 +124,6 @@ import Ouroboros.Network.Protocol.LocalStateQuery.Client (localStateQueryClientP
 import qualified Ouroboros.Network.Snocket as Snocket
 import Ouroboros.Network.Subscription (SubscriptionTrace)
 import System.Directory (createDirectoryIfMissing)
-import Control.Monad.Extra (whenJust)
 
 runSyncNode ::
   MetricSetters ->
@@ -158,15 +157,16 @@ runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConn
         mkSyncEnvFromConfig
           trce
           dbConnString
-          (SyncOptions
-            (enpExtended syncNodeParams)
-            aop
-            (enpHasCache syncNodeParams)
-            (enpHasLedger syncNodeParams)
-            (enpSkipFix syncNodeParams)
-            (enpOnlyFix syncNodeParams)
-            snEveryFollowing
-            snEveryLagging)
+          ( SyncOptions
+              (enpExtended syncNodeParams)
+              aop
+              (enpHasCache syncNodeParams)
+              (enpShouldUseLedger syncNodeParams)
+              (enpSkipFix syncNodeParams)
+              (enpOnlyFix syncNodeParams)
+              snEveryFollowing
+              snEveryLagging
+          )
           (enpMaybeLedgerStateDir syncNodeParams)
           genCfg
           ranAll
@@ -175,17 +175,19 @@ runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConn
 
     -- If the DB is empty it will be inserted, otherwise it will be validated (to make
     -- sure we are on the right chain).
-    lift $ Db.runIohkLogging trce $ withPostgresqlConn dbConnString $ \backend -> do
-      liftIO $ unless (enpHasLedger syncNodeParams) $ do
-        logInfo trce "Migrating to a no ledger schema"
-        Db.noLedgerMigrations backend trce
-      lift $ orDie renderSyncNodeError $ insertValidateGenesisDist trce backend (dncNetworkName syncNodeConfig) genCfg (useShelleyInit syncNodeConfig)
-      liftIO $ epochStartup (enpExtended syncNodeParams) trce backend
-    -- TODO: Vince: a lot of the downstream functions require LedgerEnv but is this right?
-    whenJust (envLedger syncEnv) $ \ledgerEnv ->
-      case genCfg of
-        GenesisCardano {} -> do
-          liftIO $ runSyncNodeClient metricsSetters syncEnv ledgerEnv iomgr trce (enpSocketPath syncNodeParams)
+    lift $
+      Db.runIohkLogging trce $
+        withPostgresqlConn dbConnString $ \backend -> do
+          liftIO $
+            unless (enpShouldUseLedger syncNodeParams) $ do
+              logInfo trce "Migrating to a no ledger schema"
+              Db.noLedgerMigrations backend trce
+          lift $ orDie renderSyncNodeError $ insertValidateGenesisDist trce backend (dncNetworkName syncNodeConfig) genCfg (useShelleyInit syncNodeConfig)
+          liftIO $ epochStartup (enpExtended syncNodeParams) trce backend
+    -- TODO: Vince: a lot of the downstream functions require HasLedgerEnv but is this right?
+    case genCfg of
+      GenesisCardano {} -> do
+        liftIO $ runSyncNodeClient metricsSetters syncEnv iomgr trce (enpSocketPath syncNodeParams)
   where
     useShelleyInit :: SyncNodeConfig -> Bool
     useShelleyInit cfg =
@@ -198,12 +200,11 @@ runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConn
 runSyncNodeClient ::
   MetricSetters ->
   SyncEnv ->
-  LedgerEnv ->
   IOManager ->
   Trace IO Text ->
   SocketPath ->
   IO ()
-runSyncNodeClient metricsSetters env ledgerEnv iomgr trce (SocketPath socketPath) = do
+runSyncNodeClient metricsSetters env iomgr trce (SocketPath socketPath) = do
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   void $
     subscribe
@@ -212,10 +213,10 @@ runSyncNodeClient metricsSetters env ledgerEnv iomgr trce (SocketPath socketPath
       (envNetworkMagic env)
       networkSubscriptionTracers
       clientSubscriptionParams
-      (dbSyncProtocols trce env ledgerEnv metricsSetters)
+      (dbSyncProtocols trce env metricsSetters)
   where
     codecConfig :: CodecConfig CardanoBlock
-    codecConfig = configCodec $ Consensus.pInfoConfig (leProtocolInfo ledgerEnv)
+    codecConfig = configCodec $ getTopLevelConfig env
 
     clientSubscriptionParams =
       ClientSubscriptionParams
@@ -253,13 +254,12 @@ runSyncNodeClient metricsSetters env ledgerEnv iomgr trce (SocketPath socketPath
 dbSyncProtocols ::
   Trace IO Text ->
   SyncEnv ->
-  LedgerEnv ->
   MetricSetters ->
   Network.NodeToClientVersion ->
   ClientCodecs CardanoBlock IO ->
   ConnectionId LocalAddress ->
   NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols trce env ledgerEnv metricsSetters _version codecs _connectionId =
+dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
   NodeToClientProtocols
     { localChainSyncProtocol = localChainSyncPtcl
     , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -271,70 +271,75 @@ dbSyncProtocols trce env ledgerEnv metricsSetters _version codecs _connectionId 
     localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync CardanoBlock (Point CardanoBlock) (Tip CardanoBlock)))
     localChainSyncTracer = toLogObject $ appendName "ChainSync" trce
 
+    tracer :: Trace IO Text
+    tracer = getTrace env
+
     localChainSyncPtcl :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
-    localChainSyncPtcl = InitiatorProtocolOnly $ MuxPeerRaw $ \channel ->
-      liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
-        Db.runIohkLogging trce $ withPostgresqlConn (envConnString env) $ \backend -> liftIO $ do
-          replaceConnection env backend
-          setConsistentLevel env ledgerEnv Unchecked
+    localChainSyncPtcl = InitiatorProtocolOnly $
+      MuxPeerRaw $ \channel ->
+        liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
+          Db.runIohkLogging trce $
+            withPostgresqlConn (envConnString env) $ \backend -> liftIO $ do
+              replaceConnection env backend
+              setConsistentLevel env Unchecked
 
-          isFixed <- getIsSyncFixed env
-          let skipFix = soptSkipFix $ envOptions env
-          let onlyFix = soptOnlyFix $ envOptions env
-          if onlyFix || (not isFixed && not skipFix)
-            then do
-              fd <- runDbIohkLogging backend (leTrace ledgerEnv) $ getWrongPlutusData (leTrace ledgerEnv)
-              unless (nullData fd) $
-                void $
-                  runPeer
-                    localChainSyncTracer
-                    (cChainSyncCodec codecs)
-                    channel
-                    ( Client.chainSyncClientPeer $
-                        chainSyncClientFix backend (leTrace ledgerEnv) fd
+              isFixed <- getIsSyncFixed env
+              let skipFix = soptSkipFix $ envOptions env
+              let onlyFix = soptOnlyFix $ envOptions env
+              if onlyFix || (not isFixed && not skipFix)
+                then do
+                  fd <- runDbIohkLogging backend tracer $ getWrongPlutusData tracer
+                  unless (nullData fd) $
+                    void $
+                      runPeer
+                        localChainSyncTracer
+                        (cChainSyncCodec codecs)
+                        channel
+                        ( Client.chainSyncClientPeer $
+                            chainSyncClientFix backend tracer fd
+                        )
+                  setIsFixedAndMigrate env
+                  when onlyFix $ panic "All Good! This error is only thrown to exit db-sync." -- TODO fix.
+                else do
+                  when skipFix $ setIsFixedAndMigrate env
+                  -- The Db thread is not forked at this point, so we can use
+                  -- the connection here. A connection cannot be used concurrently by many
+                  -- threads
+                  logInfo trce "Starting chainSyncClient"
+                  latestPoints <- getLatestPoints env
+                  let (inMemory, onDisk) = List.span snd latestPoints
+                  logInfo trce $
+                    mconcat
+                      [ "Suggesting intersection points from memory: "
+                      , textShow (fst <$> inMemory)
+                      , " and from disk: "
+                      , textShow (fst <$> onDisk)
+                      ]
+                  currentTip <- getCurrentTipBlockNo env
+                  logDbState env
+                  -- communication channel between datalayer thread and chainsync-client thread
+                  actionQueue <- newDbActionQueue
+
+                  race_
+                    ( race
+                        (runDbThread env metricsSetters actionQueue)
+                        (runOfflineFetchThread trce env)
                     )
-              setIsFixedAndMigrate env
-              when onlyFix $ panic "All Good! This error is only thrown to exit db-sync." -- TODO fix.
-            else do
-              when skipFix $ setIsFixedAndMigrate env
-              -- The Db thread is not forked at this point, so we can use
-              -- the connection here. A connection cannot be used concurrently by many
-              -- threads
-              logInfo trce "Starting chainSyncClient"
-              latestPoints <- getLatestPoints env
-              let (inMemory, onDisk) = List.span snd latestPoints
-              logInfo trce $
-                mconcat
-                  [ "Suggesting intersection points from memory: "
-                  , textShow (fst <$> inMemory)
-                  , " and from disk: "
-                  , textShow (fst <$> onDisk)
-                  ]
-              currentTip <- getCurrentTipBlockNo env
-              logDbState env ledgerEnv
-              -- communication channel between datalayer thread and chainsync-client thread
-              actionQueue <- newDbActionQueue
-
-              race_
-                ( race
-                    (runDbThread env ledgerEnv metricsSetters actionQueue)
-                    (runOfflineFetchThread trce env)
-                )
-                ( runPipelinedPeer
-                    localChainSyncTracer
-                    (cChainSyncCodec codecs)
-                    channel
-                    ( chainSyncClientPeerPipelined $
-                        chainSyncClient metricsSetters trce (fst <$> latestPoints) currentTip actionQueue
+                    ( runPipelinedPeer
+                        localChainSyncTracer
+                        (cChainSyncCodec codecs)
+                        channel
+                        ( chainSyncClientPeerPipelined $
+                            chainSyncClient metricsSetters trce (fst <$> latestPoints) currentTip actionQueue
+                        )
                     )
-                )
 
-              atomically $ writeDbActionQueue actionQueue DbFinish
-              -- We should return leftover bytes returned by 'runPipelinedPeer', but
-              -- client application do not care about them (it's only important if one
-              -- would like to restart a protocol on the same mux and thus bearer).
-              pure ()
-        pure ((), Nothing)
+                  atomically $ writeDbActionQueue actionQueue DbFinish
+                  -- We should return leftover bytes returned by 'runPipelinedPeer', but
+                  -- client application do not care about them (it's only important if one
+                  -- would like to restart a protocol on the same mux and thus bearer).
+                  pure ()
+          pure ((), Nothing)
 
     dummylocalTxSubmit :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
     dummylocalTxSubmit =
@@ -346,11 +351,19 @@ dbSyncProtocols trce env ledgerEnv metricsSetters _version codecs _connectionId 
 
     localStateQuery :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
     localStateQuery =
-      InitiatorProtocolOnly $
-        MuxPeer
-          (if isJust $ envLedger env then Logging.nullTracer else contramap (Text.pack . show) . toLogObject $ appendName "local-state-query" trce)
-          (cStateQueryCodec codecs)
-          (if isJust $ envLedger env then localStateQueryPeerNull else localStateQueryClientPeer (localStateQueryHandler (envNoLedgerEnv env)))
+      case envLedgerEnv env of
+        HasLedger _ ->
+          InitiatorProtocolOnly $
+            MuxPeer
+              Logging.nullTracer
+              (cStateQueryCodec codecs)
+              localStateQueryPeerNull
+        NoLedger nle ->
+          InitiatorProtocolOnly $
+            MuxPeer
+              (contramap (Text.pack . show) . toLogObject $ appendName "local-state-query" trce)
+              (cStateQueryCodec codecs)
+              (localStateQueryClientPeer $ localStateQueryHandler nle)
 
 
 -- | 'ChainSyncClient' which traces received blocks and ignores when it

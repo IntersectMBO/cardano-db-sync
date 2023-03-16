@@ -141,7 +141,7 @@ startupReport :: Trace IO Text -> Bool -> SyncNodeParams -> IO ()
 startupReport trce aop params = do
   logInfo trce $ mconcat ["Version number: ", Text.pack (showVersion version)]
   logInfo trce $ mconcat ["Git hash: ", Db.gitRev]
-  logInfo trce $ mconcat ["Option disable-ledger: ", textShow (not $ enpHasLedger params)]
+  logInfo trce $ mconcat ["Option disable-ledger: ", textShow (not $ enpShouldUseLedger params)]
   logInfo trce $ mconcat ["Option disable-cache: ", textShow (not $ enpHasCache params)]
   logInfo trce $ mconcat ["Option disable-epoch: ", textShow (not $ enpExtended params)]
   logInfo trce $ mconcat ["Option skip-plutus-data-fix: ", textShow (enpSkipFix params)]
