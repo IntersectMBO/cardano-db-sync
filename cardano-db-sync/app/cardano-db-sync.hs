@@ -9,13 +9,13 @@ import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
 import Data.String (String)
 import qualified Data.Text as Text
-import qualified Data.Text.IO as Text
 import Data.Version (showVersion)
 import MigrationValidations (KnownMigration (..), knownMigrations)
 import Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative as Opt
 import Paths_cardano_db_sync (version)
 import System.Info (arch, compilerName, compilerVersion, os)
+import GHC.Base (error)
 
 main :: IO ()
 main = do
@@ -27,19 +27,21 @@ main = do
       case (maybeLedgerStateDir, enpShouldUseLedger params) of
         (Just _, True ) -> run params
         (Nothing, False ) -> run params
-        (Just _, False ) -> Text.putStrLn $
-          "Error: Using `--dissable-ledger` doesn't require having a --state-dir. " <> moreDetailsDisableLedger
-        (Nothing, True) -> Text.putStrLn $
-          "Error: If not using --state-dir then make sure to have --dissable-ledger. " <> moreDetailsStateDir
+        (Just _, False ) -> error disableLedgerErrorMsg
+        (Nothing, True) -> error stateDirErrorMsg
   where
     knownMigrationsPlain :: [(Text, Text)]
     knownMigrationsPlain = (\x -> (hash x, filepath x)) <$> knownMigrations
 
-    moreDetailsDisableLedger :: Text
-    moreDetailsDisableLedger = "For more details view https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/configuration.md#--disable-ledger"
+    disableLedgerErrorMsg :: [Char]
+    disableLedgerErrorMsg =
+         "Error: Using `--disable-ledger` doesn't require having a --state-dir. "
+      <> "For more details view https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/configuration.md#--disable-ledger"
 
-    moreDetailsStateDir :: Text
-    moreDetailsStateDir = "For more details view https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/syncing-and-rollbacks.md#ledger-state"
+    stateDirErrorMsg :: [Char]
+    stateDirErrorMsg =
+         "Error: If not using --state-dir then make sure to have --disable-ledger. "
+      <> "For more details view https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/syncing-and-rollbacks.md#ledger-state"
 
     run :: SyncNodeParams -> IO ()
     run prms = do
