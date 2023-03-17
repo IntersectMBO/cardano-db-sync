@@ -149,7 +149,6 @@ data SyncOptions = SyncOptions
   { soptExtended :: !Bool
   , soptAbortOnInvalid :: !Bool
   , soptCache :: !Bool
-  , soptUseLedger :: !Bool
   , soptSkipFix :: !Bool
   , soptOnlyFix :: !Bool
   , snapshotEveryFollowing :: !Word64
@@ -226,7 +225,10 @@ getBackend env = do
     Strict.Nothing -> panic "sql connection not initiated"
 
 hasLedgerState :: SyncEnv -> Bool
-hasLedgerState = soptUseLedger . envOptions
+hasLedgerState syncEnv =
+  case envLedgerEnv syncEnv of
+    HasLedger _ -> True
+    NoLedger _ -> False
 
 getDbLatestBlockInfo :: SqlBackend -> IO (Maybe TipInfo)
 getDbLatestBlockInfo backend = do
@@ -283,11 +285,12 @@ mkSyncEnv ::
   NetworkMagic ->
   SystemStart ->
   Maybe LedgerStateDir ->
+  Bool -> -- shouldUseLedger
   Bool ->
   Bool ->
   RunMigration ->
   IO SyncEnv
-mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart maybeLedgerDir ranAll forcedIndexes runMigration = do
+mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart maybeLedgerDir shouldUseLedger ranAll forcedIndexes runMigration = do
   cache <- if soptCache syncOptions then newEmptyCache 250000 else pure uninitiatedCache
   backendVar <- newTVarIO Strict.Nothing
   consistentLevelVar <- newTVarIO Unchecked
@@ -298,7 +301,7 @@ mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart maybeLedge
   epochVar <- newTVarIO initEpochState
   epochSyncTime <- newTVarIO =<< getCurrentTime
   ledgerEnvType <-
-    case (maybeLedgerDir, soptUseLedger syncOptions) of
+    case (maybeLedgerDir, shouldUseLedger) of
       (Just dir, True) ->
         HasLedger
           <$> mkHasLedgerEnv
@@ -339,12 +342,13 @@ mkSyncEnvFromConfig ::
   ConnectionString ->
   SyncOptions ->
   Maybe LedgerStateDir ->
+  Bool -> -- shouldUseLedger
   GenesisConfig ->
   Bool ->
   Bool ->
   RunMigration ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce connSring syncOptions maybeLedgerDir genCfg ranAll forcedIndexes runMigration =
+mkSyncEnvFromConfig trce connSring syncOptions maybeLedgerDir shouldUseLedger genCfg ranAll forcedIndexes runMigration =
   case genCfg of
     GenesisCardano _ bCfg sCfg _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -374,6 +378,7 @@ mkSyncEnvFromConfig trce connSring syncOptions maybeLedgerDir genCfg ranAll forc
             (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
             (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
             maybeLedgerDir
+            shouldUseLedger
             ranAll
             forcedIndexes
             runMigration

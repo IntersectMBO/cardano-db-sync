@@ -161,17 +161,18 @@ runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConn
               (enpExtended syncNodeParams)
               aop
               (enpHasCache syncNodeParams)
-              (enpShouldUseLedger syncNodeParams)
               (enpSkipFix syncNodeParams)
               (enpOnlyFix syncNodeParams)
               snEveryFollowing
               snEveryLagging
           )
           (enpMaybeLedgerStateDir syncNodeParams)
+          (enpShouldUseLedger syncNodeParams)
           genCfg
           ranAll
           (enpForceIndexes syncNodeParams)
           runMigration
+
 
     -- If the DB is empty it will be inserted, otherwise it will be validated (to make
     -- sure we are on the right chain).
