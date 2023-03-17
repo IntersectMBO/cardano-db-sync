@@ -133,7 +133,6 @@ rollbackLedger syncEnv point =
             pure Nothing
           Left lsfs ->
             Just . fmap fst <$> verifySnapshotPoint syncEnv (OnDisk <$> lsfs)
-    -- TODO: Vince
     NoLedger _ -> pure Nothing
 
 -- | This not only checks that the ledger and ChainSync points are equal, but also that the

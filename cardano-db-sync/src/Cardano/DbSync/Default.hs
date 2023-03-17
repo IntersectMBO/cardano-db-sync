@@ -54,14 +54,14 @@ insertListBlocks ::
   SyncEnv ->
   [CardanoBlock] ->
   IO (Either SyncNodeError ())
-insertListBlocks env blocks = do
-  backend <- getBackend env
+insertListBlocks synEnv blocks = do
+  backend <- getBackend synEnv
   DB.runDbIohkLogging backend tracer
     . runExceptT
     $ do
-      traverse_ (applyAndInsertBlockMaybe env) blocks
+      traverse_ (applyAndInsertBlockMaybe synEnv) blocks
   where
-    tracer = getTrace env
+    tracer = getTrace synEnv
 
 applyAndInsertBlockMaybe ::
   SyncEnv -> CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()

@@ -89,21 +89,21 @@ getSlotDetailsNode ::
   NoLedgerEnv ->
   SlotNo ->
   IO SlotDetails
-getSlotDetailsNode env slot = do
-  einterp1 <- maybe (getHistoryInterpreter env) pure =<< atomically (fromStrictMaybe <$> readTVar interVar)
+getSlotDetailsNode nlEnv slot = do
+  einterp1 <- maybe (getHistoryInterpreter nlEnv) pure =<< atomically (fromStrictMaybe <$> readTVar interVar)
   case evalSlotDetails einterp1 of
     Right sd -> insertCurrentTime sd
     Left _ -> do
-      einterp2 <- getHistoryInterpreter env
+      einterp2 <- getHistoryInterpreter nlEnv
       case evalSlotDetails einterp2 of
         Left err -> panic $ "getSlotDetailsNode: " <> textShow err
         Right sd -> insertCurrentTime sd
   where
-    interVar = nleHistoryInterpreterVar env
+    interVar = nleHistoryInterpreterVar nlEnv
 
     evalSlotDetails :: Interpreter (CardanoEras StandardCrypto) -> Either PastHorizonException SlotDetails
     evalSlotDetails interp =
-      interpretQuery interp (querySlotDetails (nleSystemStart env) slot)
+      interpretQuery interp (querySlotDetails (nleSystemStart nlEnv) slot)
 
     insertCurrentTime :: SlotDetails -> IO SlotDetails
     insertCurrentTime sd = do
@@ -117,7 +117,7 @@ getSlotDetailsNode env slot = do
 getHistoryInterpreter ::
   NoLedgerEnv ->
   IO CardanoInterpreter
-getHistoryInterpreter env = do
+getHistoryInterpreter nlEnv = do
   respVar <- newEmptyTMVarIO
   atomically $ putTMVar reqVar (BlockQuery $ QueryHardFork GetInterpreter, respVar)
   res <- atomically $ takeTMVar respVar
@@ -129,9 +129,9 @@ getHistoryInterpreter env = do
       atomically $ writeTVar interVar $ Strict.Just interp
       pure interp
   where
-    reqVar = unStateQueryTMVar $ nleQueryVar env
-    interVar = nleHistoryInterpreterVar env
-    tracer = nleTracer env
+    reqVar = unStateQueryTMVar $ nleQueryVar nlEnv
+    interVar = nleHistoryInterpreterVar nlEnv
+    tracer = nleTracer nlEnv
 
 -- This is called during the ChainSync setup and loops forever. Queries can be posted to
 -- it and responses retrieved via a TVar.
@@ -139,7 +139,7 @@ localStateQueryHandler ::
   forall a.
   NoLedgerEnv ->
   LocalStateQueryClient CardanoBlock (Point CardanoBlock) (Query CardanoBlock) IO a
-localStateQueryHandler env =
+localStateQueryHandler nlEnv =
   LocalStateQueryClient idleState
   where
     idleState :: IO (StateQuery.ClientStIdle CardanoBlock (Point CardanoBlock) (Query CardanoBlock) IO a)
@@ -160,4 +160,4 @@ localStateQueryHandler env =
               idleState
           }
 
-    reqVar = unStateQueryTMVar $ nleQueryVar env
+    reqVar = unStateQueryTMVar $ nleQueryVar nlEnv
