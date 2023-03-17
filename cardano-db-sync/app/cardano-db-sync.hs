@@ -28,15 +28,18 @@ main = do
         (Just _, True ) -> run params
         (Nothing, False ) -> run params
         (Just _, False ) -> Text.putStrLn $
-          "Error: Using `--dissable-ledger` doesn't require having a --state-dir. " <> moreDetails
+          "Error: Using `--dissable-ledger` doesn't require having a --state-dir. " <> moreDetailsDisableLedger
         (Nothing, True) -> Text.putStrLn $
-          "Error: If not using --state-dir then make sure to have --dissable-ledger. " <> moreDetails
+          "Error: If not using --state-dir then make sure to have --dissable-ledger. " <> moreDetailsStateDir
   where
     knownMigrationsPlain :: [(Text, Text)]
     knownMigrationsPlain = (\x -> (hash x, filepath x)) <$> knownMigrations
 
-    moreDetails :: Text
-    moreDetails = "For more details view https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/configuration.md#--disable-ledger"
+    moreDetailsDisableLedger :: Text
+    moreDetailsDisableLedger = "For more details view https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/configuration.md#--disable-ledger"
+
+    moreDetailsStateDir :: Text
+    moreDetailsStateDir = "For more details view https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/syncing-and-rollbacks.md#ledger-state"
 
     run :: SyncNodeParams -> IO ()
     run prms = do
