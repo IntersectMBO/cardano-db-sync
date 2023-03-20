@@ -101,9 +101,6 @@ data LedgerEnv where
   HasLedger :: HasLedgerEnv -> LedgerEnv
   NoLedger :: NoLedgerEnv -> LedgerEnv
 
--- topLevelConfig :: SyncEnv -> TopLevelConfig CardanoBlock
--- topLevelConfig = Consensus.pInfoConfig . envProtocolInfo
-
 type RunMigration = DB.MigrationToRun -> IO ()
 
 data ConsistentLevel = Consistent | DBAheadOfLedger | Unchecked
@@ -252,7 +249,6 @@ getDbTipBlockNo env =
 
 logDbState :: SyncEnv -> IO ()
 logDbState env = do
-  let tracer = getTrace env
   backend <- getBackend env
   mblk <- getDbLatestBlockInfo backend
   case mblk of
@@ -267,6 +263,9 @@ logDbState env = do
         , ", block "
         , DB.textShow (unBlockNo $ bBlockNo tipInfo)
         ]
+
+    tracer :: Trace IO Text
+    tracer = getTrace env
 
 getCurrentTipBlockNo :: SyncEnv -> IO (WithOrigin BlockNo)
 getCurrentTipBlockNo env = do
