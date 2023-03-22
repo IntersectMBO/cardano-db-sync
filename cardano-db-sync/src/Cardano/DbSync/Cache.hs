@@ -10,6 +10,7 @@
 module Cardano.DbSync.Cache (
   Cache,
   CacheNew (..),
+  CacheEpoch (..),
   newEmptyCache,
   uninitiatedCache,
   rollbackCache,
@@ -22,6 +23,8 @@ module Cardano.DbSync.Cache (
   queryMAWithCache,
   queryPrevBlockWithCache,
   insertBlockAndCache,
+  readCacheEpoch,
+  writeCacheEpoch,
 
   -- * CacheStatistics
   CacheStatistics,
@@ -77,6 +80,7 @@ data CacheInternal = CacheInternal
   , cMultiAssets :: !(StrictTVar IO (LRUCache (PolicyID StandardCrypto, AssetName) DB.MultiAssetId))
   , cPrevBlock :: !(StrictTVar IO (Maybe (DB.BlockId, ByteString)))
   , cStats :: !(StrictTVar IO CacheStatistics)
+  , cEpoch :: !(StrictTVar IO CacheEpoch)
   }
 
 data CacheStatistics = CacheStatistics
@@ -88,6 +92,11 @@ data CacheStatistics = CacheStatistics
   , multiAssetsQueries :: !Word64
   , prevBlockHits :: !Word64
   , prevBlockQueries :: !Word64
+  }
+
+data CacheEpoch = CacheEpoch
+  { ceEpoch :: !(Maybe DB.Epoch)
+  , ceLastKnownBlock :: !(Maybe DB.Block)
   }
 
 hitCreds :: StrictTVar IO CacheStatistics -> IO ()
@@ -130,6 +139,22 @@ getCacheStatistics cs =
   case cs of
     UninitiatedCache -> pure initCacheStatistics
     Cache ci -> readTVarIO (cStats ci)
+
+readCacheEpoch :: Cache -> IO CacheEpoch
+readCacheEpoch cache =
+  case cache of
+    UninitiatedCache -> pure $ CacheEpoch Nothing Nothing
+    Cache ci -> readTVarIO (cEpoch ci)
+
+writeCacheEpoch ::
+  MonadIO m =>
+  Cache ->
+  CacheEpoch ->
+  ReaderT SqlBackend m ()
+writeCacheEpoch cache cacheEpoch =
+  case cache of
+    UninitiatedCache -> pure ()
+    Cache ci -> liftIO $ atomically $ writeTVar (cEpoch ci) cacheEpoch
 
 textShowStats :: Cache -> IO Text
 textShowStats UninitiatedCache = pure "UninitiatedCache"
@@ -186,6 +211,9 @@ textShowStats (Cache ic) = do
 uninitiatedCache :: Cache
 uninitiatedCache = UninitiatedCache
 
+initCacheEpoch :: CacheEpoch
+initCacheEpoch = CacheEpoch Nothing Nothing
+
 newEmptyCache :: MonadIO m => Word64 -> m Cache
 newEmptyCache maCapacity =
   liftIO . fmap Cache $
@@ -195,6 +223,7 @@ newEmptyCache maCapacity =
       <*> newTVarIO (LRU.empty maCapacity)
       <*> newTVarIO Nothing
       <*> newTVarIO initCacheStatistics
+      <*> newTVarIO initCacheEpoch
 
 -- Rollbacks make everything harder and the same applies to caching.
 -- After a rollback db entries are deleted, so we need to clean the same
@@ -418,7 +447,7 @@ queryPrevBlockWithCache msg cache hsh =
               liftIO $ hitPBlock (cStats ci)
               pure cachedBlockId
             else queryFromDb ci
-        _ -> queryFromDb ci
+        Nothing -> queryFromDb ci
   where
     queryFromDb ::
       MonadIO m =>

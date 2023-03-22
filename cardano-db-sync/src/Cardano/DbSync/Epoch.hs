@@ -11,8 +11,9 @@ module Cardano.DbSync.Epoch (
 
 import Cardano.BM.Trace (Trace, logError, logInfo)
 import qualified Cardano.Chain.Block as Byron
-import Cardano.Db (EntityField (..), EpochId)
+import Cardano.Db (EntityField (..), Epoch (..), EpochId)
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Cache (Cache, CacheEpoch (..), readCacheEpoch, writeCacheEpoch)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
@@ -20,15 +21,14 @@ import Cardano.Prelude hiding (from, on, replace)
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Monad.Logger (LoggingT)
 import Control.Monad.Trans.Control (MonadBaseControl)
-import Data.IORef (IORef, atomicWriteIORef, newIORef, readIORef)
 import Database.Esqueleto.Experimental (
+  Entity (entityVal),
   SqlBackend,
   desc,
   from,
-  limit,
   orderBy,
   replace,
-  select,
+  selectOne,
   table,
   unValue,
   val,
@@ -38,7 +38,6 @@ import Database.Esqueleto.Experimental (
  )
 import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
-import System.IO.Unsafe (unsafePerformIO)
 
 -- Populating the Epoch table has two mode:
 --  * SyncLagging: when the node is far behind the chain tip and is just updating the DB. In this
@@ -47,21 +46,34 @@ import System.IO.Unsafe (unsafePerformIO)
 --    updated on each new block.
 --
 -- When in syncing mode, the row for the current epoch being synced may be incorrect.
-epochStartup :: Bool -> Trace IO Text -> SqlBackend -> IO ()
-epochStartup isExtended trce backend =
+epochStartup :: Cache -> Bool -> Trace IO Text -> SqlBackend -> IO ()
+epochStartup cache isExtended trce backend =
   when isExtended $ do
     DB.runDbIohkLogging backend trce $ do
       liftIO . logInfo trce $ "epochStartup: Checking"
-      mlbe <- queryLatestEpochNo
-      case mlbe of
+      mLatestEpoch <- queryLatestEpoch
+      case mLatestEpoch of
         Nothing ->
           pure ()
-        Just lbe -> do
-          let backOne = if lbe == 0 then 0 else lbe - 1
-          liftIO $ atomicWriteIORef latestCachedEpochVar (Just backOne)
+        Just latestEpoch -> do
+          let eNum = epochNo latestEpoch
+              backOne = if eNum == 0 then 0 else eNum - 1
+          mEpoch <- queryEpochFromNum backOne
+          -- putting the epoch into cache but not a blockId as we don't have that yet
+          writeCacheEpoch
+            cache
+            ( CacheEpoch
+                { ceEpoch = mEpoch
+                , ceLastKnownBlock = Nothing
+                }
+            )
 
-epochInsert :: Trace IO Text -> BlockDetails -> ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
-epochInsert trce (BlockDetails cblk details) = do
+epochInsert ::
+  Trace IO Text ->
+  Cache ->
+  BlockDetails ->
+  ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
+epochInsert trce cache (BlockDetails cblk details) = do
   case cblk of
     BlockByron bblk ->
       case byronBlockRaw bblk of
@@ -70,7 +82,7 @@ epochInsert trce (BlockDetails cblk details) = do
           -- the Ouroboros Classic era.
           pure $ Right ()
         Byron.ABOBBlock _blk ->
-          insertBlock trce details
+          insertEpoch trce cache details
     BlockShelley {} -> epochUpdate
     BlockAllegra {} -> epochUpdate
     BlockMary {} -> epochUpdate
@@ -84,75 +96,129 @@ epochInsert trce (BlockDetails cblk details) = do
         liftIO . logError trce $
           mconcat
             ["Slot time '", textShow (sdSlotTime details), "' is in the future"]
-      insertBlock trce details
+      insertEpoch trce cache details
 
 -- -------------------------------------------------------------------------------------------------
 
-insertBlock ::
+insertEpoch ::
   Trace IO Text ->
+  Cache ->
   SlotDetails ->
   ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
-insertBlock trce details = do
-  mLatestCachedEpoch <- liftIO $ readIORef latestCachedEpochVar
-  let lastCachedEpoch = fromMaybe 0 mLatestCachedEpoch
-      epochNum = unEpochNo (sdEpochNo details)
+insertEpoch trce cache details = do
+  -- read the chache Epoch
+  latestCachedEpoch <- liftIO $ readCacheEpoch cache
+  let maybeEpoch = ceEpoch latestCachedEpoch
+
+  -- if there isn't cache epock number default it to 0
+  let lastCachedEpochNo = maybe 0 epochNo maybeEpoch
+      slotEpochNum = unEpochNo (sdEpochNo details)
 
   -- These cases are listed from the least likey to occur to the most
   -- likley to keep the logic sane.
-
   if
-      | epochNum > 0 && isNothing mLatestCachedEpoch ->
-          updateEpochNum 0 trce
-      | epochNum >= lastCachedEpoch + 2 ->
-          updateEpochNum (lastCachedEpoch + 1) trce
+      | slotEpochNum > 0 && isNothing maybeEpoch ->
+        updateEpochNum cache 0 trce
+      | slotEpochNum >= lastCachedEpochNo + 2 ->
+        updateEpochNum cache (lastCachedEpochNo + 1) trce
       | getSyncStatus details == SyncFollowing ->
-          -- Following the chain very closely.
-          updateEpochNum epochNum trce
+        updateEpochNum cache slotEpochNum trce
       | otherwise ->
-          pure $ Right ()
+        pure $ Right ()
 
 -- -------------------------------------------------------------------------------------------------
 
-{-# NOINLINE latestCachedEpochVar #-}
-latestCachedEpochVar :: IORef (Maybe Word64)
-latestCachedEpochVar = unsafePerformIO $ newIORef Nothing -- Gets updated later.
+updateEpochNum ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  Cache ->
+  Word64 ->
+  Trace IO Text ->
+  ReaderT SqlBackend m (Either SyncNodeError ())
+updateEpochNum cache slotEpochNum trce = do
+  mid <- queryForEpochId slotEpochNum
+  maybe
+    (insertEpochDB cache trce slotEpochNum)
+    (updateEpochDB cache slotEpochNum)
+    mid
 
-updateEpochNum :: (MonadBaseControl IO m, MonadIO m) => Word64 -> Trace IO Text -> ReaderT SqlBackend m (Either SyncNodeError ())
-updateEpochNum epochNum trce = do
-  mid <- queryEpochId epochNum
-  res <- maybe insertEpoch updateEpoch mid
-  liftIO $ atomicWriteIORef latestCachedEpochVar (Just epochNum)
-  pure res
-  where
-    updateEpoch :: MonadIO m => EpochId -> ReaderT SqlBackend m (Either SyncNodeError ())
-    updateEpoch epochId = do
-      epoch <- DB.queryCalcEpochEntry epochNum
-      Right <$> replace epochId epoch
+-- expensive calculation try using cache to minimise query
+updateEpochDB ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  Cache ->
+  Word64 ->
+  EpochId ->
+  ReaderT SqlBackend m (Either SyncNodeError ())
+updateEpochDB cache slotEpochNum epochId = do
+  cachedEpoch <- liftIO $ readCacheEpoch cache
+  case ceEpoch cachedEpoch of
+    -- only call queryCalc if we don't already have an epoch in cache
+    Nothing -> queryCalc
+    Just _ ->
+    -- Just cacheEp ->
+      case ceLastKnownBlock cachedEpoch of
+        Nothing -> queryCalc
+        Just _ ->
+        -- Just lastKnowBlockId ->
+          -- if we have both a block and epoch then lets use them
+          -- to do a new less expensive query of updating the epoch
+          queryCalc
+    where
+      queryCalc ::
+        MonadIO m =>
+        ReaderT SqlBackend m (Either SyncNodeError ())
+      queryCalc = do
+        -- this is the expensive query which we should only call when
+        -- starting from epoch 0 or the first time we're in following mode
+        epoch <- DB.queryCalcEpochEntry slotEpochNum
+        -- I think this might need to be latest block in specific epoch?
+        lattestBlock <- DB.queryLatestBlock
+        -- update our epochChache
+        _ <- writeCacheEpoch cache
+              ( CacheEpoch
+                  { ceEpoch = Just epoch
+                  , ceLastKnownBlock = lattestBlock
+                  }
+              )
+        -- update the current epoch in the DB with our new one
+        Right <$> replace epochId epoch
 
-    insertEpoch :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either SyncNodeError ())
-    insertEpoch = do
-      epoch <- DB.queryCalcEpochEntry epochNum
-      liftIO . logInfo trce $ "epochPluginInsertBlockDetails: epoch " <> textShow epochNum
-      void $ DB.insertEpoch epoch
-      pure $ Right ()
+insertEpochDB ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  Cache ->
+  Trace IO Text ->
+  Word64 ->
+  ReaderT SqlBackend m (Either SyncNodeError ())
+insertEpochDB _ trce slotEpochNum = do
+  epoch <- DB.queryCalcEpochEntry slotEpochNum
+  liftIO . logInfo trce $ "epochPluginInsertBlockDetails: epoch " <> textShow slotEpochNum
+  void $ DB.insertEpoch epoch
+  pure $ Right ()
 
 -- -------------------------------------------------------------------------------------------------
 
 -- | Get the PostgreSQL row index (EpochId) that matches the given epoch number.
-queryEpochId :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe EpochId)
-queryEpochId epochNum = do
-  res <- select $ do
+queryForEpochId :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe EpochId)
+queryForEpochId epochNum = do
+  res <- selectOne $ do
     epoch <- from $ table @DB.Epoch
     where_ (epoch ^. DB.EpochNo ==. val epochNum)
     pure (epoch ^. EpochId)
-  pure $ unValue <$> listToMaybe res
+  pure $ unValue <$> res
 
--- | Get the epoch number of the most recent epoch in the Epoch table.
-queryLatestEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
-queryLatestEpochNo = do
-  res <- select $ do
+-- | Get an epoch given it's number.
+queryEpochFromNum :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe DB.Epoch)
+queryEpochFromNum epochNum = do
+  res <- selectOne $ do
+    epoch <- from $ table @DB.Epoch
+    where_ (epoch ^. DB.EpochNo ==. val epochNum)
+    pure epoch
+  pure $ entityVal <$> res
+
+-- | Get the most recent epoch in the Epoch table.
+queryLatestEpoch :: MonadIO m => ReaderT SqlBackend m (Maybe DB.Epoch)
+queryLatestEpoch = do
+  res <- selectOne $ do
     epoch <- from $ table @DB.Epoch
     orderBy [desc (epoch ^. DB.EpochNo)]
-    limit 1
-    pure (epoch ^. DB.EpochNo)
-  pure $ unValue <$> listToMaybe res
+    pure epoch
+  pure $ entityVal <$> res

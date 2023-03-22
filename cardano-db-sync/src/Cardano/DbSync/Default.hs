@@ -64,7 +64,9 @@ insertListBlocks env blocks = do
     tracer = getTrace env
 
 applyAndInsertBlockMaybe ::
-  SyncEnv -> CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
+  SyncEnv ->
+  CardanoBlock ->
+  ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 applyAndInsertBlockMaybe env cblk = do
   (!applyRes, !tookSnapshot) <- liftIO mkApplyResult
   bl <- liftIO $ isConsistent env
@@ -103,18 +105,18 @@ insertBlock ::
   Bool ->
   Bool ->
   ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
-insertBlock env cblk applyRes firstAfterRollback tookSnapshot = do
-  !epochEvents <- liftIO $ atomically $ generateNewEpochEvents env (apSlotDetails applyRes)
+insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
+  !epochEvents <- liftIO $ atomically $ generateNewEpochEvents syncEnv (apSlotDetails applyRes)
   let !applyResult = applyRes {apEvents = sort $ epochEvents <> apEvents applyRes}
   let !details = apSlotDetails applyResult
   let !withinTwoMin = isWithinTwoMin details
   let !withinHalfHour = isWithinHalfHour details
-  insertLedgerEvents env (sdEpochNo details) (apEvents applyResult)
+  insertLedgerEvents syncEnv (sdEpochNo details) (apEvents applyResult)
   let shouldLog = hasEpochStartEvent (apEvents applyResult) || firstAfterRollback
   let isMember poolId = Set.member poolId (apPoolsRegistered applyResult)
   let insertShelley blk =
         insertShelleyBlock
-          env
+          syncEnv
           shouldLog
           withinTwoMin
           withinHalfHour
@@ -126,7 +128,7 @@ insertBlock env cblk applyRes firstAfterRollback tookSnapshot = do
   case cblk of
     BlockByron blk ->
       newExceptT $
-        insertByronBlock env shouldLog blk details
+        insertByronBlock syncEnv shouldLog blk details
     BlockShelley blk ->
       newExceptT $
         insertShelley $
@@ -150,17 +152,17 @@ insertBlock env cblk applyRes firstAfterRollback tookSnapshot = do
   insertEpoch details
   lift $ commitOrIndexes withinTwoMin withinHalfHour
   where
-    tracer = getTrace env
+    tracer = getTrace syncEnv
 
     insertEpoch details =
-      when (soptExtended $ envOptions env)
+      when (soptExtended $ envOptions syncEnv)
         . newExceptT
-        $ epochInsert tracer (BlockDetails cblk details)
+        $ epochInsert tracer (envCache syncEnv) (BlockDetails cblk details)
 
     getPrices :: ApplyResult -> Maybe Ledger.Prices
     getPrices applyResult = case apPrices applyResult of
       Strict.Just pr -> Just pr
-      Strict.Nothing | hasLedgerState env -> Just $ Ledger.Prices minBound minBound
+      Strict.Nothing | hasLedgerState syncEnv -> Just $ Ledger.Prices minBound minBound
       Strict.Nothing -> Nothing
 
     commitOrIndexes :: Bool -> Bool -> ReaderT SqlBackend (LoggingT IO) ()
@@ -172,10 +174,10 @@ insertBlock env cblk applyRes firstAfterRollback tookSnapshot = do
             pure True
           else pure False
       when withinHalfHour $ do
-        ranIndexes <- liftIO $ getRanIndexes env
+        ranIndexes <- liftIO $ getRanIndexes syncEnv
         unless ranIndexes $ do
           unless commited DB.transactionCommit
-          liftIO $ runIndexMigrations env
+          liftIO $ runIndexMigrations syncEnv
 
     isWithinTwoMin :: SlotDetails -> Bool
     isWithinTwoMin sd = isSyncedWithinSeconds sd 120 == SyncFollowing
