@@ -64,7 +64,7 @@ epochStartup cache isExtended trce backend =
             cache
             ( CacheEpoch
                 { ceEpoch = mEpoch
-                , ceLastKnownBlock = Nothing
+                , ceLastKnownBlockId = Nothing
                 }
             )
 
@@ -141,7 +141,6 @@ updateEpochNum cache slotEpochNum trce = do
     (updateEpochDB cache slotEpochNum)
     mid
 
--- expensive calculation try using cache to minimise query
 updateEpochDB ::
   (MonadBaseControl IO m, MonadIO m) =>
   Cache ->
@@ -153,34 +152,54 @@ updateEpochDB cache slotEpochNum epochId = do
   case ceEpoch cachedEpoch of
     -- only call queryCalc if we don't already have an epoch in cache
     Nothing -> queryCalc
-    Just _ ->
-    -- Just cacheEp ->
-      case ceLastKnownBlock cachedEpoch of
+    Just cEpoch ->
+      case ceLastKnownBlockId cachedEpoch of
         Nothing -> queryCalc
-        Just _ ->
-        -- Just lastKnowBlockId ->
+        Just lastKnowBlockId -> do
           -- if we have both a block and epoch then lets use them
           -- to do a new less expensive query of updating the epoch
-          queryCalc
-    where
-      queryCalc ::
-        MonadIO m =>
-        ReaderT SqlBackend m (Either SyncNodeError ())
-      queryCalc = do
-        -- this is the expensive query which we should only call when
-        -- starting from epoch 0 or the first time we're in following mode
-        epoch <- DB.queryCalcEpochEntry slotEpochNum
-        -- I think this might need to be latest block in specific epoch?
-        lattestBlock <- DB.queryLatestBlock
-        -- update our epochChache
-        _ <- writeCacheEpoch cache
-              ( CacheEpoch
-                  { ceEpoch = Just epoch
-                  , ceLastKnownBlock = lattestBlock
+          calculatedEpoch <- DB.queryCalcEpochUsingLastBlockId lastKnowBlockId slotEpochNum
+
+          -- sum calculated epoch with cached epoch
+          let newEpochOutSum = epochOutSum calculatedEpoch + epochOutSum cEpoch
+              calcFee = fromIntegral $ DB.unDbLovelace $ epochFees calculatedEpoch
+              cacheFee = fromIntegral $ DB.unDbLovelace $ epochFees cEpoch
+              newEpochFees = DB.DbLovelace $ calcFee + cacheFee
+              newEpochTxCount = epochTxCount calculatedEpoch + epochTxCount cEpoch
+              newEpochBlkCount = epochBlkCount calculatedEpoch + epochBlkCount cEpoch
+              newEpoch =
+                Epoch
+                  { epochOutSum = newEpochOutSum
+                  , epochFees = newEpochFees
+                  , epochTxCount = newEpochTxCount
+                  , epochBlkCount = newEpochBlkCount
+                  , epochNo = epochNo calculatedEpoch
+                  , epochStartTime = epochStartTime cEpoch
+                  , epochEndTime = epochEndTime calculatedEpoch
                   }
-              )
-        -- update the current epoch in the DB with our new one
-        Right <$> replace epochId epoch
+          -- merge the returned epoch and the one in cache to give a new epoch
+          Right <$> replace epochId newEpoch
+  where
+    queryCalc ::
+      MonadIO m =>
+      ReaderT SqlBackend m (Either SyncNodeError ())
+    queryCalc = do
+      -- this is the expensive query which we should only call when
+      -- starting from epoch 0 or the first time we're in following mode
+      epoch <- DB.queryCalcEpochEntry slotEpochNum
+      -- I think this might need to be latest block in specific epoch?
+      lattestBlockId <- DB.queryLatestBlockId
+      -- update our epochChache
+      _ <-
+        writeCacheEpoch
+          cache
+          ( CacheEpoch
+              { ceEpoch = Just epoch
+              , ceLastKnownBlockId = lattestBlockId
+              }
+          )
+      -- replace the current epoch in the DB with our new one
+      Right <$> replace epochId epoch
 
 insertEpochDB ::
   (MonadBaseControl IO m, MonadIO m) =>

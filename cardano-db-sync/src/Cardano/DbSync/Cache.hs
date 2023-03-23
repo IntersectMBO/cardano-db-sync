@@ -96,7 +96,7 @@ data CacheStatistics = CacheStatistics
 
 data CacheEpoch = CacheEpoch
   { ceEpoch :: !(Maybe DB.Epoch)
-  , ceLastKnownBlock :: !(Maybe DB.Block)
+  , ceLastKnownBlockId :: !(Maybe DB.BlockId)
   }
 
 hitCreds :: StrictTVar IO CacheStatistics -> IO ()
