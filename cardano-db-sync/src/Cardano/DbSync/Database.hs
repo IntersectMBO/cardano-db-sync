@@ -85,8 +85,8 @@ runActions env actions = do
         ([], DbFinish : _) -> do
           pure Done
         ([], DbRollBackToPoint chainSyncPoint serverTip resultVar : ys) -> do
-          deletedAllBlocks <- newExceptT $ prepareRollback env chainSyncPoint serverTip
-          points <- lift $ rollbackLedger env chainSyncPoint
+          deletedAllBlocks <- newExceptT $ prepareRollback syncEnv chainSyncPoint serverTip
+          points <- lift $ rollbackLedger syncEnv chainSyncPoint
 
           -- Ledger state always rollbacks at least back to the 'point' given by the Node.
           -- It needs to rollback even further, if 'points' is not 'Nothing'.
