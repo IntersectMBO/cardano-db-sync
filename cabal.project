@@ -119,6 +119,9 @@ package cardano-smash-server
 package postgresql-libpq
    flags: +use-pkg-config
 
+package cardano-config
+  flag: -systemd
+
 package cryptonite
   -- Using RDRAND instead of /dev/urandom as an entropy source for key
   -- generation is dubious. Set the flag so we use /dev/urandom by default.
@@ -202,6 +205,14 @@ source-repository-package
 --   location: https://github.com/input-output-hk/cardano-config
 --   tag: e9de7a2cf70796f6ff26eac9f9540184ded0e4e6
 --   --sha256: 1wm1c99r5zvz22pdl8nhkp13falvqmj8dgkm8fxskwa9ydqz01ld
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/iohk-monitoring-framework
+  tag: 066f7002aac5a0efc20e49643fea45454f226caa
+  --sha256: 0s6x4in11k5ba7nl7la896g28sznf9185xlqg9c604jqz58vj9nj
+  subdir:
+    plugins/scribe-systemd
 
 -- Waiting for proper Windows ghc-9.2 release.
 source-repository-package

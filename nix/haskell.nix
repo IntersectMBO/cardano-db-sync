@@ -54,7 +54,10 @@ let
   project = haskell-nix.cabalProject' ({ pkgs, lib, config, ...}: {
     inherit inputMap;
     src = ../.;
+    # compiler-nix-name = lib.mkDefault "ghc924";
     compiler-nix-name = lib.mkDefault "ghc8107";
+    # extra-compilers
+    flake.variants = lib.genAttrs ["ghc925"] (x: {compiler-nix-name = x;});
     shell = {
       name = "cabal-dev-shell";
 
