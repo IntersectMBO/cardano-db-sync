@@ -149,7 +149,6 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
           Generic.fromBabbageBlock (getPrices applyResult) blk
   insertEpoch details
   lift $ commitOrIndexes withinTwoMin withinHalfHour
-
   where
     tracer = getTrace syncEnv
 

@@ -229,12 +229,12 @@ queryBlockNoAndEpoch blkNo = do
     pure (blk ^. BlockId, blk ^. BlockEpochNo)
   pure $ convert (listToMaybe res)
   where
-  convert :: Maybe (Value (Key Block), Value (Maybe Word64)) -> Maybe (BlockId, Word64)
-  convert mr =
-    case mr of
-      Nothing -> Nothing
-      Just (_, Value Nothing) -> Nothing -- Should not ever happen.
-      Just (Value blkid, Value (Just epoch)) -> Just (blkid, epoch)
+    convert :: Maybe (Value (Key Block), Value (Maybe Word64)) -> Maybe (BlockId, Word64)
+    convert mr =
+      case mr of
+        Nothing -> Nothing
+        Just (_, Value Nothing) -> Nothing -- Should not ever happen.
+        Just (Value blkid, Value (Just epoch)) -> Just (blkid, epoch)
 
 queryBlockSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe BlockId)
 queryBlockSlotNo slotNo = do

@@ -35,7 +35,7 @@ rollbackFromBlockNo syncEnv blkNo = do
   lift $ rollbackCache cache
   nBlocks <- lift $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
   mres <- lift $ DB.queryBlockNoAndEpoch (unBlockNo blkNo)
-  whenJust mres $ \ (blockId, epochNo) -> do
+  whenJust mres $ \(blockId, epochNo) -> do
     liftIO . logInfo trce $
       mconcat
         [ "Deleting "
