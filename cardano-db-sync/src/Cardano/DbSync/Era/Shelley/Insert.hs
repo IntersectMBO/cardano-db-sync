@@ -83,7 +83,7 @@ insertShelleyBlock ::
   Strict.Maybe Generic.NewEpoch ->
   Generic.StakeSliceRes ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-insertShelleyBlock env shouldLog withinTwoMins withinHalfHour blk details isMember mNewEpoch stakeSlice = do
+insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details isMember mNewEpoch stakeSlice = do
   runExceptT $ do
     pbid <- case Generic.blkPreviousHash blk of
       Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
@@ -113,7 +113,7 @@ insertShelleyBlock env shouldLog withinTwoMins withinHalfHour blk details isMemb
           }
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
-    let txInserter = insertTx tracer cache (leNetwork lenv) isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
+    let txInserter = insertTx tracer cache (getNetwork syncEnv) isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
     grouped <- foldM (\grouped (idx, tx) -> txInserter idx tx grouped) mempty zippedTx
     minIds <- insertBlockGroupedData tracer grouped
     when withinHalfHour $
@@ -151,13 +151,13 @@ insertShelleyBlock env shouldLog withinTwoMins withinHalfHour blk details isMemb
     whenStrictJust mNewEpoch $ \newEpoch -> do
       insertOnNewEpoch tracer blkId (Generic.blkSlotNo blk) (sdEpochNo details) newEpoch
 
-    insertStakeSlice env stakeSlice
+    insertStakeSlice syncEnv stakeSlice
 
     when (unBlockNo (Generic.blkBlockNo blk) `mod` offlineModBase == 0)
       . lift
       $ do
-        insertOfflineResults tracer (envOfflineResultQueue env)
-        loadOfflineWorkQueue tracer (envOfflineWorkQueue env)
+        insertOfflineResults tracer (envOfflineResultQueue syncEnv)
+        loadOfflineWorkQueue tracer (envOfflineWorkQueue syncEnv)
   where
     logger :: Trace IO a -> a -> IO ()
     logger
@@ -179,14 +179,11 @@ insertShelleyBlock env shouldLog withinTwoMins withinHalfHour blk details isMemb
     offlineModBase :: Word64
     offlineModBase = if withinTwoMins then 10 else 2000
 
-    lenv :: LedgerEnv
-    lenv = envLedger env
-
     tracer :: Trace IO Text
-    tracer = getTrace env
+    tracer = getTrace syncEnv
 
     cache :: Cache
-    cache = envCache env
+    cache = envCache syncEnv
 
 -- -----------------------------------------------------------------------------
 

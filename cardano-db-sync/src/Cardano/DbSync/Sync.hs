@@ -47,6 +47,7 @@ import Cardano.DbSync.Util
 import Cardano.Prelude hiding (Meta, Nat, option, (%))
 import Cardano.Slotting.Slot (EpochNo (..), WithOrigin (..))
 import qualified Codec.CBOR.Term as CBOR
+import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Except.Exit (orDie)
 import Control.Tracer (Tracer)
 import qualified Data.ByteString.Lazy as BSL
@@ -70,7 +71,6 @@ import Ouroboros.Consensus.Network.NodeToClient (
   cTxSubmissionCodec,
  )
 import Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
-import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Network.Block (
   BlockNo (..),
   Point (..),
@@ -137,43 +137,58 @@ runSyncNode ::
   RunMigration ->
   SyncNodeParams ->
   IO ()
-runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConnString ranAll runMigration enp = do
-  let configFile = enpConfigFile enp
-  enc <- readSyncNodeConfig configFile
+runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConnString ranAll runMigration syncNodeParams = do
+  let configFile = enpConfigFile syncNodeParams
+      maybeLedgerDir = enpMaybeLedgerStateDir syncNodeParams
+  syncNodeConfig <- readSyncNodeConfig configFile
+  whenJust maybeLedgerDir $
+    \enpLedgerStateDir -> do
+      createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
 
-  createDirectoryIfMissing True (unLedgerStateDir $ enpLedgerStateDir enp)
-
-  logInfo trce $ "Using byron genesis file from: " <> (show . unGenesisFile $ dncByronGenesisFile enc)
-  logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile enc)
-  logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile enc)
+  logInfo trce $ "Using byron genesis file from: " <> (show . unGenesisFile $ dncByronGenesisFile syncNodeConfig)
+  logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile syncNodeConfig)
+  logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfig)
 
   orDie renderSyncNodeError $ do
-    genCfg <- readCardanoGenesisConfig enc
+    genCfg <- readCardanoGenesisConfig syncNodeConfig
     logProtocolMagicId trce $ genesisProtocolMagicId genCfg
     syncEnv <-
       ExceptT $
         mkSyncEnvFromConfig
           trce
           dbConnString
-          (SyncOptions (enpExtended enp) aop (enpHasCache enp) (enpHasLedger enp) (enpSkipFix enp) (enpOnlyFix enp) snEveryFollowing snEveryLagging)
-          (enpLedgerStateDir enp)
+          ( SyncOptions
+              (enpExtended syncNodeParams)
+              aop
+              (enpHasCache syncNodeParams)
+              (enpSkipFix syncNodeParams)
+              (enpOnlyFix syncNodeParams)
+              snEveryFollowing
+              snEveryLagging
+          )
+          (enpMaybeLedgerStateDir syncNodeParams)
+          (enpShouldUseLedger syncNodeParams)
           genCfg
           ranAll
-          (enpForceIndexes enp)
+          (enpForceIndexes syncNodeParams)
           runMigration
+
 
     -- If the DB is empty it will be inserted, otherwise it will be validated (to make
     -- sure we are on the right chain).
-    lift $ Db.runIohkLogging trce $ withPostgresqlConn dbConnString $ \backend -> do
-      liftIO $ unless (enpHasLedger enp) $ do
-        logInfo trce "Migrating to a no ledger schema"
-        Db.noLedgerMigrations backend trce
-      lift $ orDie renderSyncNodeError $ insertValidateGenesisDist trce backend (dncNetworkName enc) genCfg (useShelleyInit enc)
-      liftIO $ epochStartup (envCache syncEnv) (enpExtended enp) trce backend
+    lift $
+      Db.runIohkLogging trce $
+        withPostgresqlConn dbConnString $ \backend -> do
+          liftIO $
+            unless (enpShouldUseLedger syncNodeParams) $ do
+              logInfo trce "Migrating to a no ledger schema"
+              Db.noLedgerMigrations backend trce
+          lift $ orDie renderSyncNodeError $ insertValidateGenesisDist trce backend (dncNetworkName syncNodeConfig) genCfg (useShelleyInit syncNodeConfig)
+          liftIO $ epochStartup (envCache syncEnv) (enpExtended syncNodeParams) trce backend
 
     case genCfg of
       GenesisCardano {} -> do
-        liftIO $ runSyncNodeClient metricsSetters syncEnv iomgr trce (enpSocketPath enp)
+        liftIO $ runSyncNodeClient metricsSetters syncEnv iomgr trce (enpSocketPath syncNodeParams)
   where
     useShelleyInit :: SyncNodeConfig -> Bool
     useShelleyInit cfg =
@@ -190,19 +205,19 @@ runSyncNodeClient ::
   Trace IO Text ->
   SocketPath ->
   IO ()
-runSyncNodeClient metricsSetters env iomgr trce (SocketPath socketPath) = do
+runSyncNodeClient metricsSetters syncEnv iomgr trce (SocketPath socketPath) = do
   logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
   void $
     subscribe
       (localSnocket iomgr)
       codecConfig
-      (envNetworkMagic env)
+      (envNetworkMagic syncEnv)
       networkSubscriptionTracers
       clientSubscriptionParams
-      (dbSyncProtocols trce env metricsSetters)
+      (dbSyncProtocols trce syncEnv metricsSetters)
   where
     codecConfig :: CodecConfig CardanoBlock
-    codecConfig = configCodec $ Consensus.pInfoConfig (leProtocolInfo $ envLedger env)
+    codecConfig = configCodec $ getTopLevelConfig syncEnv
 
     clientSubscriptionParams =
       ClientSubscriptionParams
@@ -245,7 +260,7 @@ dbSyncProtocols ::
   ClientCodecs CardanoBlock IO ->
   ConnectionId LocalAddress ->
   NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
+dbSyncProtocols trce syncEnv metricsSetters _version codecs _connectionId =
   NodeToClientProtocols
     { localChainSyncProtocol = localChainSyncPtcl
     , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -257,70 +272,75 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
     localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync CardanoBlock (Point CardanoBlock) (Tip CardanoBlock)))
     localChainSyncTracer = toLogObject $ appendName "ChainSync" trce
 
+    tracer :: Trace IO Text
+    tracer = getTrace syncEnv
+
     localChainSyncPtcl :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
-    localChainSyncPtcl = InitiatorProtocolOnly $ MuxPeerRaw $ \channel ->
-      liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
-        Db.runIohkLogging trce $ withPostgresqlConn (envConnString env) $ \backend -> liftIO $ do
-          replaceConnection env backend
-          setConsistentLevel env Unchecked
+    localChainSyncPtcl = InitiatorProtocolOnly $
+      MuxPeerRaw $ \channel ->
+        liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
+          Db.runIohkLogging trce $
+            withPostgresqlConn (envConnString syncEnv) $ \backend -> liftIO $ do
+              replaceConnection syncEnv backend
+              setConsistentLevel syncEnv Unchecked
 
-          isFixed <- getIsSyncFixed env
-          let skipFix = soptSkipFix $ envOptions env
-          let onlyFix = soptOnlyFix $ envOptions env
-          if onlyFix || (not isFixed && not skipFix)
-            then do
-              fd <- runDbIohkLogging backend (getTrace env) $ getWrongPlutusData (getTrace env)
-              unless (nullData fd) $
-                void $
-                  runPeer
-                    localChainSyncTracer
-                    (cChainSyncCodec codecs)
-                    channel
-                    ( Client.chainSyncClientPeer $
-                        chainSyncClientFix backend (getTrace env) fd
+              isFixed <- getIsSyncFixed syncEnv
+              let skipFix = soptSkipFix $ envOptions syncEnv
+              let onlyFix = soptOnlyFix $ envOptions syncEnv
+              if onlyFix || (not isFixed && not skipFix)
+                then do
+                  fd <- runDbIohkLogging backend tracer $ getWrongPlutusData tracer
+                  unless (nullData fd) $
+                    void $
+                      runPeer
+                        localChainSyncTracer
+                        (cChainSyncCodec codecs)
+                        channel
+                        ( Client.chainSyncClientPeer $
+                            chainSyncClientFix backend tracer fd
+                        )
+                  setIsFixedAndMigrate syncEnv
+                  when onlyFix $ panic "All Good! This error is only thrown to exit db-sync." -- TODO fix.
+                else do
+                  when skipFix $ setIsFixedAndMigrate syncEnv
+                  -- The Db thread is not forked at this point, so we can use
+                  -- the connection here. A connection cannot be used concurrently by many
+                  -- threads
+                  logInfo trce "Starting chainSyncClient"
+                  latestPoints <- getLatestPoints syncEnv
+                  let (inMemory, onDisk) = List.span snd latestPoints
+                  logInfo trce $
+                    mconcat
+                      [ "Suggesting intersection points from memory: "
+                      , textShow (fst <$> inMemory)
+                      , " and from disk: "
+                      , textShow (fst <$> onDisk)
+                      ]
+                  currentTip <- getCurrentTipBlockNo syncEnv
+                  logDbState syncEnv
+                  -- communication channel between datalayer thread and chainsync-client thread
+                  actionQueue <- newDbActionQueue
+
+                  race_
+                    ( race
+                        (runDbThread syncEnv metricsSetters actionQueue)
+                        (runOfflineFetchThread trce syncEnv)
                     )
-              setIsFixedAndMigrate env
-              when onlyFix $ panic "All Good! This error is only thrown to exit db-sync." -- TODO fix.
-            else do
-              when skipFix $ setIsFixedAndMigrate env
-              -- The Db thread is not forked at this point, so we can use
-              -- the connection here. A connection cannot be used concurrently by many
-              -- threads
-              logInfo trce "Starting chainSyncClient"
-              latestPoints <- getLatestPoints env
-              let (inMemory, onDisk) = List.span snd latestPoints
-              logInfo trce $
-                mconcat
-                  [ "Suggesting intersection points from memory: "
-                  , textShow (fst <$> inMemory)
-                  , " and from disk: "
-                  , textShow (fst <$> onDisk)
-                  ]
-              currentTip <- getCurrentTipBlockNo env
-              logDbState env
-              -- communication channel between datalayer thread and chainsync-client thread
-              actionQueue <- newDbActionQueue
-
-              race_
-                ( race
-                    (runDbThread env metricsSetters actionQueue)
-                    (runOfflineFetchThread trce env)
-                )
-                ( runPipelinedPeer
-                    localChainSyncTracer
-                    (cChainSyncCodec codecs)
-                    channel
-                    ( chainSyncClientPeerPipelined $
-                        chainSyncClient metricsSetters trce (fst <$> latestPoints) currentTip actionQueue
+                    ( runPipelinedPeer
+                        localChainSyncTracer
+                        (cChainSyncCodec codecs)
+                        channel
+                        ( chainSyncClientPeerPipelined $
+                            chainSyncClient metricsSetters trce (fst <$> latestPoints) currentTip actionQueue
+                        )
                     )
-                )
 
-              atomically $ writeDbActionQueue actionQueue DbFinish
-              -- We should return leftover bytes returned by 'runPipelinedPeer', but
-              -- client application do not care about them (it's only important if one
-              -- would like to restart a protocol on the same mux and thus bearer).
-              pure ()
-        pure ((), Nothing)
+                  atomically $ writeDbActionQueue actionQueue DbFinish
+                  -- We should return leftover bytes returned by 'runPipelinedPeer', but
+                  -- client application do not care about them (it's only important if one
+                  -- would like to restart a protocol on the same mux and thus bearer).
+                  pure ()
+          pure ((), Nothing)
 
     dummylocalTxSubmit :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
     dummylocalTxSubmit =
@@ -332,11 +352,20 @@ dbSyncProtocols trce env metricsSetters _version codecs _connectionId =
 
     localStateQuery :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
     localStateQuery =
-      InitiatorProtocolOnly $
-        MuxPeer
-          (if hasLedgerState env then Logging.nullTracer else contramap (Text.pack . show) . toLogObject $ appendName "local-state-query" trce)
-          (cStateQueryCodec codecs)
-          (if hasLedgerState env then localStateQueryPeerNull else localStateQueryClientPeer (localStateQueryHandler (envNoLedgerEnv env)))
+      case envLedgerEnv syncEnv of
+        HasLedger _ ->
+          InitiatorProtocolOnly $
+            MuxPeer
+              Logging.nullTracer
+              (cStateQueryCodec codecs)
+              localStateQueryPeerNull
+        NoLedger nle ->
+          InitiatorProtocolOnly $
+            MuxPeer
+              (contramap (Text.pack . show) . toLogObject $ appendName "local-state-query" trce)
+              (cStateQueryCodec codecs)
+              (localStateQueryClientPeer $ localStateQueryHandler nle)
+
 
 -- | 'ChainSyncClient' which traces received blocks and ignores when it
 -- receives a request to rollbackwar.  A real wallet client should:

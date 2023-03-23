@@ -15,6 +15,7 @@ import Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative as Opt
 import Paths_cardano_db_sync (version)
 import System.Info (arch, compilerName, compilerVersion, os)
+import GHC.Base (error)
 
 main :: IO ()
 main = do
@@ -22,13 +23,31 @@ main = do
   case cmd of
     CmdVersion -> runVersionCommand
     CmdRun params -> do
-      prometheusPort <- dncPrometheusPort <$> readSyncNodeConfig (enpConfigFile params)
-
-      withMetricSetters prometheusPort $ \metricsSetters ->
-        runDbSyncNode metricsSetters knownMigrationsPlain params
+      let maybeLedgerStateDir = enpMaybeLedgerStateDir params
+      case (maybeLedgerStateDir, enpShouldUseLedger params) of
+        (Just _, True ) -> run params
+        (Nothing, False ) -> run params
+        (Just _, False ) -> error disableLedgerErrorMsg
+        (Nothing, True) -> error stateDirErrorMsg
   where
     knownMigrationsPlain :: [(Text, Text)]
     knownMigrationsPlain = (\x -> (hash x, filepath x)) <$> knownMigrations
+
+    disableLedgerErrorMsg :: [Char]
+    disableLedgerErrorMsg =
+         "Error: Using `--disable-ledger` doesn't require having a --state-dir. "
+      <> "For more details view https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/configuration.md#--disable-ledger"
+
+    stateDirErrorMsg :: [Char]
+    stateDirErrorMsg =
+         "Error: If not using --state-dir then make sure to have --disable-ledger. "
+      <> "For more details view https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/syncing-and-rollbacks.md#ledger-state"
+
+    run :: SyncNodeParams -> IO ()
+    run prms = do
+      prometheusPort <- dncPrometheusPort <$> readSyncNodeConfig (enpConfigFile prms)
+      withMetricSetters prometheusPort $ \metricsSetters ->
+            runDbSyncNode metricsSetters knownMigrationsPlain prms
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -52,12 +71,12 @@ pRunDbSyncNode =
   SyncNodeParams
     <$> pConfigFile
     <*> pSocketPath
-    <*> pLedgerStateDir
+    <*> optional pLedgerStateDir
     <*> pMigrationDir
     <*> pPGPassSource
     <*> pExtended
     <*> pHasCache
-    <*> pHasLedger
+    <*> pUseLedger
     <*> pSkipFix
     <*> pOnlyFix
     <*> pForceIndexes
@@ -148,8 +167,8 @@ pHasCache =
         <> Opt.help "Disables the db-sync caches. Reduces memory usage but it takes longer to sync."
     )
 
-pHasLedger :: Parser Bool
-pHasLedger =
+pUseLedger :: Parser Bool
+pUseLedger =
   Opt.flag
     True
     False

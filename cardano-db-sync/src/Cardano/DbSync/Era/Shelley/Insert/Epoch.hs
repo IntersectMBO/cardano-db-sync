@@ -42,17 +42,17 @@ insertStakeSlice ::
   Generic.StakeSliceRes ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertStakeSlice _ Generic.NoSlices = pure ()
-insertStakeSlice env (Generic.Slice slice finalSlice) = do
-  insertEpochStake (envCache env) network (Generic.sliceEpochNo slice) (Map.toList $ Generic.sliceDistr slice)
+insertStakeSlice syncEnv (Generic.Slice slice finalSlice) = do
+  insertEpochStake (envCache syncEnv) network (Generic.sliceEpochNo slice) (Map.toList $ Generic.sliceDistr slice)
   when finalSlice $ do
     size <- lift $ DB.queryEpochStakeCount (unEpochNo $ Generic.sliceEpochNo slice)
     liftIO . logInfo tracer $ mconcat ["Inserted ", show size, " EpochStake for ", show (Generic.sliceEpochNo slice)]
   where
     tracer :: Trace IO Text
-    tracer = getTrace env
+    tracer = getTrace syncEnv
 
     network :: Network
-    network = leNetwork $ envLedger env
+    network = getNetwork syncEnv
 
 insertEpochStake ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -139,13 +139,13 @@ insertPoolDepositRefunds ::
   EpochNo ->
   Generic.Rewards ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolDepositRefunds env epochNo refunds = do
-  insertRewards nw epochNo epochNo (envCache env) (Map.toList rwds)
+insertPoolDepositRefunds syncEnv epochNo refunds = do
+  insertRewards nw epochNo epochNo (envCache syncEnv) (Map.toList rwds)
   liftIO . logInfo tracer $ "Inserted " <> show (Generic.rewardsCount refunds) <> " deposit refund rewards"
   where
-    tracer = getTrace env
+    tracer = getTrace syncEnv
     rwds = Generic.unRewards refunds
-    nw = leNetwork $ envLedger env
+    nw = getNetwork syncEnv
 
 sumRewardTotal :: Map StakeCred (Set Generic.Reward) -> Shelley.Coin
 sumRewardTotal =

@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -21,8 +22,10 @@ module Cardano.DbSync.Api (
   mkSyncEnvFromConfig,
   replaceConnection,
   verifySnapshotPoint,
-  getTrace,
   getBackend,
+  getTrace,
+  getTopLevelConfig,
+  getNetwork,
   hasLedgerState,
   getLatestPoints,
   getSlotHash,
@@ -67,10 +70,12 @@ import Database.Persist.Postgresql (ConnectionString)
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Block.Abstract (HeaderHash, Point (..), fromRawHash)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
+import Ouroboros.Consensus.Config (TopLevelConfig)
 import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import Ouroboros.Network.Block (BlockNo (..), Point (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
 import qualified Ouroboros.Network.Point as Point
+import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 
 data SyncEnv = SyncEnv
   { envProtocol :: !SyncProtocol
@@ -88,9 +93,13 @@ data SyncEnv = SyncEnv
   , envOfflineResultQueue :: !(StrictTBQueue IO FetchResult)
   , envEpochState :: !(StrictTVar IO EpochState)
   , envEpochSyncTime :: !(StrictTVar IO UTCTime)
-  , envNoLedgerEnv :: !NoLedgerStateEnv -- only used when configured without ledger state.
-  , envLedger :: !LedgerEnv
+  , envLedgerEnv :: !LedgerEnv
   }
+
+-- A representation of if we are using a ledger or not given CLI options
+data LedgerEnv where
+  HasLedger :: HasLedgerEnv -> LedgerEnv
+  NoLedger :: NoLedgerEnv -> LedgerEnv
 
 type RunMigration = DB.MigrationToRun -> IO ()
 
@@ -130,16 +139,13 @@ runIndexMigrations env = do
   haveRan <- readTVarIO $ envIndexes env
   unless haveRan $ do
     envRunDelayedMigration env DB.Indexes
-    logInfo trce "Indexes were created"
+    logInfo (getTrace env) "Indexes were created"
     atomically $ writeTVar (envIndexes env) True
-  where
-    trce = getTrace env
 
 data SyncOptions = SyncOptions
   { soptExtended :: !Bool
   , soptAbortOnInvalid :: !Bool
   , soptCache :: !Bool
-  , soptLedger :: !Bool
   , soptSkipFix :: !Bool
   , soptOnlyFix :: !Bool
   , snapshotEveryFollowing :: !Word64
@@ -187,8 +193,23 @@ generateNewEpochEvents env details = do
         , esEpochNo = Strict.Just currentEpochNo
         }
 
+getTopLevelConfig :: SyncEnv -> TopLevelConfig CardanoBlock
+getTopLevelConfig syncEnv =
+  case envLedgerEnv syncEnv of
+    HasLedger hasLedgerEnv -> Consensus.pInfoConfig $ leProtocolInfo hasLedgerEnv
+    NoLedger noLedgerEnv -> Consensus.pInfoConfig $ nleProtocolInfo noLedgerEnv
+
 getTrace :: SyncEnv -> Trace IO Text
-getTrace = leTrace . envLedger
+getTrace sEnv =
+  case envLedgerEnv sEnv of
+    HasLedger hasLedgerEnv -> leTrace hasLedgerEnv
+    NoLedger noLedgerEnv -> nleTracer noLedgerEnv
+
+getNetwork :: SyncEnv -> Ledger.Network
+getNetwork sEnv =
+  case envLedgerEnv sEnv of
+    HasLedger hasLedgerEnv -> leNetwork hasLedgerEnv
+    NoLedger noLedgerEnv -> nleNetwork noLedgerEnv
 
 getSlotHash :: SqlBackend -> SlotNo -> IO [(SlotNo, ByteString)]
 getSlotHash backend = DB.runDbIohkNoLogging backend . DB.querySlotHash
@@ -201,7 +222,10 @@ getBackend env = do
     Strict.Nothing -> panic "sql connection not initiated"
 
 hasLedgerState :: SyncEnv -> Bool
-hasLedgerState = soptLedger . envOptions
+hasLedgerState syncEnv =
+  case envLedgerEnv syncEnv of
+    HasLedger _ -> True
+    NoLedger _ -> False
 
 getDbLatestBlockInfo :: SqlBackend -> IO (Maybe TipInfo)
 getDbLatestBlockInfo backend = do
@@ -228,8 +252,8 @@ logDbState env = do
   backend <- getBackend env
   mblk <- getDbLatestBlockInfo backend
   case mblk of
-    Nothing -> logInfo (getTrace env) "Cardano.Db is empty"
-    Just tip -> logInfo (getTrace env) $ mconcat ["Cardano.Db tip is at ", showTip tip]
+    Nothing -> logInfo tracer "Cardano.Db is empty"
+    Just tip -> logInfo tracer $ mconcat ["Cardano.Db tip is at ", showTip tip]
   where
     showTip :: TipInfo -> Text
     showTip tipInfo =
@@ -239,6 +263,9 @@ logDbState env = do
         , ", block "
         , DB.textShow (unBlockNo $ bBlockNo tipInfo)
         ]
+
+    tracer :: Trace IO Text
+    tracer = getTrace env
 
 getCurrentTipBlockNo :: SyncEnv -> IO (WithOrigin BlockNo)
 getCurrentTipBlockNo env = do
@@ -256,22 +283,13 @@ mkSyncEnv ::
   Ledger.Network ->
   NetworkMagic ->
   SystemStart ->
-  LedgerStateDir ->
+  Maybe LedgerStateDir ->
+  Bool -> -- shouldUseLedger
   Bool ->
   Bool ->
   RunMigration ->
   IO SyncEnv
-mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir ranAll forcedIndexes runMigration = do
-  ledgerEnv <-
-    mkLedgerEnv
-      trce
-      protoInfo
-      dir
-      nw
-      systemStart
-      (soptAbortOnInvalid syncOptions)
-      (snapshotEveryFollowing syncOptions)
-      (snapshotEveryLagging syncOptions)
+mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart maybeLedgerDir shouldUseLedger ranAll forcedIndexes runMigration = do
   cache <- if soptCache syncOptions then newEmptyCache 250000 else pure uninitiatedCache
   backendVar <- newTVarIO Strict.Nothing
   consistentLevelVar <- newTVarIO Unchecked
@@ -281,7 +299,23 @@ mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir ranAll
   orq <- newTBQueueIO 100
   epochVar <- newTVarIO initEpochState
   epochSyncTime <- newTVarIO =<< getCurrentTime
-  noLegdState <- mkNoLedgerStateEnv trce systemStart
+  ledgerEnvType <-
+    case (maybeLedgerDir, shouldUseLedger) of
+      (Just dir, True) ->
+        HasLedger
+          <$> mkHasLedgerEnv
+            trce
+            protoInfo
+            dir
+            nw
+            systemStart
+            (soptAbortOnInvalid syncOptions)
+            (snapshotEveryFollowing syncOptions)
+            (snapshotEveryLagging syncOptions)
+      (_, False) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
+      -- This won't ever call because we error out this combination at parse time
+      (Nothing, True) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
+
   pure $
     SyncEnv
       { envProtocol = SyncProtocolCardano
@@ -299,62 +333,63 @@ mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart dir ranAll
       , envOfflineResultQueue = orq
       , envEpochState = epochVar
       , envEpochSyncTime = epochSyncTime
-      , envNoLedgerEnv = noLegdState
-      , envLedger = ledgerEnv
+      , envLedgerEnv = ledgerEnvType
       }
 
 mkSyncEnvFromConfig ::
   Trace IO Text ->
   ConnectionString ->
   SyncOptions ->
-  LedgerStateDir ->
+  Maybe LedgerStateDir ->
+  Bool -> -- shouldUseLedger
   GenesisConfig ->
   Bool ->
   Bool ->
   RunMigration ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce connSring syncOptions dir genCfg ranAll forcedIndexes runMigration =
+mkSyncEnvFromConfig trce connSring syncOptions maybeLedgerDir shouldUseLedger genCfg ranAll forcedIndexes runMigration =
   case genCfg of
     GenesisCardano _ bCfg sCfg _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
-          pure . Left . NECardanoConfig $
-            mconcat
-              [ "ProtocolMagicId "
-              , DB.textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
-              , " /= "
-              , DB.textShow (Shelley.sgNetworkMagic $ scConfig sCfg)
-              ]
+        pure . Left . NECardanoConfig $
+          mconcat
+            [ "ProtocolMagicId "
+            , DB.textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+            , " /= "
+            , DB.textShow (Shelley.sgNetworkMagic $ scConfig sCfg)
+            ]
       | Byron.gdStartTime (Byron.configGenesisData bCfg) /= Shelley.sgSystemStart (scConfig sCfg) ->
-          pure . Left . NECardanoConfig $
-            mconcat
-              [ "SystemStart "
-              , DB.textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
-              , " /= "
-              , DB.textShow (Shelley.sgSystemStart $ scConfig sCfg)
-              ]
+        pure . Left . NECardanoConfig $
+          mconcat
+            [ "SystemStart "
+            , DB.textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
+            , " /= "
+            , DB.textShow (Shelley.sgSystemStart $ scConfig sCfg)
+            ]
       | otherwise ->
-          Right
-            <$> mkSyncEnv
-              trce
-              connSring
-              syncOptions
-              (mkProtocolInfoCardano genCfg [])
-              (Shelley.sgNetworkId $ scConfig sCfg)
-              (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
-              (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
-              dir
-              ranAll
-              forcedIndexes
-              runMigration
+        Right
+          <$> mkSyncEnv
+            trce
+            connSring
+            syncOptions
+            (mkProtocolInfoCardano genCfg [])
+            (Shelley.sgNetworkId $ scConfig sCfg)
+            (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+            (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
+            maybeLedgerDir
+            shouldUseLedger
+            ranAll
+            forcedIndexes
+            runMigration
 
 -- | 'True' is for in memory points and 'False' for on disk
 getLatestPoints :: SyncEnv -> IO [(CardanoPoint, Bool)]
 getLatestPoints env = do
-  if hasLedgerState env
-    then do
-      snapshotPoints <- listKnownSnapshots $ envLedger env
+  case envLedgerEnv env of
+    HasLedger hasLedgerEnv -> do
+      snapshotPoints <- listKnownSnapshots hasLedgerEnv
       verifySnapshotPoint env snapshotPoints
-    else do
+    NoLedger _ -> do
       -- Brings the 5 latest.
       dbBackend <- getBackend env
       lastPoints <- DB.runDbIohkNoLogging dbBackend DB.queryLatestPoints

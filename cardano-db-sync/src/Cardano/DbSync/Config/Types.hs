@@ -56,12 +56,12 @@ data SyncCommand
 data SyncNodeParams = SyncNodeParams
   { enpConfigFile :: !ConfigFile
   , enpSocketPath :: !SocketPath
-  , enpLedgerStateDir :: !LedgerStateDir
+  , enpMaybeLedgerStateDir :: !(Maybe LedgerStateDir)
   , enpMigrationDir :: !MigrationDir
   , enpPGPassSource :: !PGPassSource
   , enpExtended :: !Bool
   , enpHasCache :: !Bool
-  , enpHasLedger :: !Bool
+  , enpShouldUseLedger :: !Bool
   , enpSkipFix :: !Bool
   , enpOnlyFix :: !Bool
   , enpForceIndexes :: !Bool

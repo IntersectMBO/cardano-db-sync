@@ -8,6 +8,7 @@ launch_*
 cabal.project.local
 gen/
 /.vscode
+.DS_Store
 
 cardano-chain-gen/test/testfiles/temp/
 /secp256k1/
