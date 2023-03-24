@@ -326,16 +326,16 @@ queryTxWithBlocks epochNum blockResult = do
     where_ (blk ^. BlockEpochNo ==. just (val epochNum))
     pure (sum_ (tx ^. TxOutSum), sum_ (tx ^. TxFee), count (tx ^. TxOutSum))
   case (listToMaybe blockResult, listToMaybe txRes) of
-    (Just blk, Just tx) -> pure $ convertAll epochNum (unValue3 blk) (unValue3 tx)
+    (Just blk, Just tx) -> pure $ parseAndCalulateNewEpoch epochNum (unValue3 blk) (unValue3 tx)
     (Just blk, Nothing) -> pure $ convertBlk epochNum (unValue3 blk)
     _otherwise -> pure $ emptyEpoch epochNum
 
-convertAll ::
+parseAndCalulateNewEpoch ::
   Word64 ->
   (Word64, Maybe UTCTime, Maybe UTCTime) ->
   (Maybe Rational, Maybe Rational, Word64) ->
   Epoch
-convertAll epochNum (blkCount, b, c) (d, e, txCount) =
+parseAndCalulateNewEpoch epochNum (blkCount, b, c) (d, e, txCount) =
   case (b, c, d, e) of
     (Just start, Just end, Just outSum, Just fees) ->
       Epoch

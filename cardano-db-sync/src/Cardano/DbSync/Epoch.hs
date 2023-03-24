@@ -177,29 +177,38 @@ updateEpochDB cache slotEpochNum epochId = do
                   , epochStartTime = epochStartTime cEpoch
                   , epochEndTime = epochEndTime calculatedEpoch
                   }
-          -- merge the returned epoch and the one in cache to give a new epoch
+          -- get the latest blockId
+          lattestBlockId <- DB.queryLatestBlockId
+          -- put the new results into cache and on the DB
+          void $
+            writeCacheEpoch
+              cache
+              ( CacheEpoch
+                  { ceEpoch = Just newEpoch
+                  , ceLastKnownBlockId = lattestBlockId
+                  }
+              )
           Right <$> replace epochId newEpoch
   where
     queryCalc ::
       MonadIO m =>
       ReaderT SqlBackend m (Either SyncNodeError ())
     queryCalc = do
-      -- this is the expensive query which we should only call when
+      -- this is an expensive query which we should only call when
       -- starting from epoch 0 or the first time we're in following mode
-      epoch <- DB.queryCalcEpochEntry slotEpochNum
-      -- I think this might need to be latest block in specific epoch?
+      newEpoch <- DB.queryCalcEpochEntry slotEpochNum
       lattestBlockId <- DB.queryLatestBlockId
-      -- update our epochChache
+      -- update our epochChache with new values
       _ <-
         writeCacheEpoch
           cache
           ( CacheEpoch
-              { ceEpoch = Just epoch
+              { ceEpoch = Just newEpoch
               , ceLastKnownBlockId = lattestBlockId
               }
           )
       -- replace the current epoch in the DB with our new one
-      Right <$> replace epochId epoch
+      Right <$> replace epochId newEpoch
 
 insertEpochDB ::
   (MonadBaseControl IO m, MonadIO m) =>
