@@ -149,7 +149,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
 
   where
     tracer = getTrace syncEnv
-    iopts = getInsertOptions env
+    iopts = getInsertOptions syncEnv
 
     insertEpoch details =
       when (soptExtended $ envOptions syncEnv)

@@ -113,7 +113,7 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
           }
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
-    let txInserter = insertTx tracer cache (getInsertOptions env) (getNetwork syncEnv) isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
+    let txInserter = insertTx tracer cache (getInsertOptions syncEnv) (getNetwork syncEnv) isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
     grouped <- foldM (\grouped (idx, tx) -> txInserter idx tx grouped) mempty zippedTx
     minIds <- insertBlockGroupedData tracer grouped
     when withinHalfHour $
@@ -159,7 +159,7 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
         insertOfflineResults tracer (envOfflineResultQueue syncEnv)
         loadOfflineWorkQueue tracer (envOfflineWorkQueue syncEnv)
   where
-    iopts = getInsertOptions env
+    iopts = getInsertOptions syncEnv
 
     logger :: Trace IO a -> a -> IO ()
     logger
