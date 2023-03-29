@@ -61,8 +61,6 @@ type StakeAddrCache = Map StakeCred DB.StakeAddressId
 
 type StakePoolCache = Map PoolKeyHash DB.PoolHashId
 
-type DatumCache = Map DataHash DB.DatumId
-
 -- The 'UninitiatedCache' makes it possible to call functions in this module
 -- without having actually initiated the cache yet. It is used by genesis
 -- insertions, where the cache has not been initiated yet.
@@ -79,7 +77,7 @@ data CacheNew
 data CacheInternal = CacheInternal
   { cStakeCreds :: !(StrictTVar IO StakeAddrCache)
   , cPools :: !(StrictTVar IO StakePoolCache)
-  , cDatum :: !(StrictTVar IO DatumCache)
+  , cDatum :: !(StrictTVar IO (LRUCache DataHash DB.DatumId))
   , cMultiAssets :: !(StrictTVar IO (LRUCache (PolicyID StandardCrypto, AssetName) DB.MultiAssetId))
   , cPrevBlock :: !(StrictTVar IO (Maybe (DB.BlockId, ByteString)))
   , cStats :: !(StrictTVar IO CacheStatistics)
@@ -201,8 +199,10 @@ textShowStats (Cache ic) = do
       , ", misses: "
       , DB.textShow (poolsQueries stats - poolsHits stats)
       , "\n  Datums: "
-      , "cache size: "
-      , DB.textShow (Map.size datums)
+      , "cache capacity: "
+      , DB.textShow (LRU.getCapacity datums)
+      , ", cache size: "
+      , DB.textShow (LRU.getSize datums)
       , if datumQueries stats == 0
           then ""
           else ", hit rate: " <> DB.textShow (100 * datumHits stats `div` datumQueries stats) <> "%"
@@ -235,16 +235,13 @@ textShowStats (Cache ic) = do
 uninitiatedCache :: Cache
 uninitiatedCache = UninitiatedCache
 
-initCacheEpoch :: CacheEpoch
-initCacheEpoch = CacheEpoch Nothing Nothing
-
-newEmptyCache :: MonadIO m => Word64 -> m Cache
-newEmptyCache maCapacity =
+newEmptyCache :: MonadIO m => Word64 -> Word64 -> m Cache
+newEmptyCache maCapacity daCapacity =
   liftIO . fmap Cache $
     CacheInternal
       <$> newTVarIO Map.empty
       <*> newTVarIO Map.empty
-      <*> newTVarIO Map.empty
+      <*> newTVarIO (LRU.empty daCapacity)
       <*> newTVarIO (LRU.empty maCapacity)
       <*> newTVarIO Nothing
       <*> newTVarIO initCacheStatistics
@@ -508,12 +505,14 @@ queryDatum cache hsh = do
     UninitiatedCache -> DB.queryDatum $ Generic.dataHashToBytes hsh
     Cache ci -> do
       mp <- liftIO $ readTVarIO (cDatum ci)
-      case Map.lookup hsh mp of
-        Just datumId -> do
+      case LRU.lookup hsh mp of
+        Just (datumId, mp') -> do
           liftIO $ hitDatum (cStats ci)
+          liftIO $ atomically $ writeTVar (cDatum ci) mp'
           pure $ Just datumId
         Nothing -> do
           liftIO $ missDatum (cStats ci)
+          -- miss. The lookup doesn't change the cache on a miss.
           DB.queryDatum $ Generic.dataHashToBytes hsh
 
 -- This assumes the entry is not cached.
@@ -531,5 +530,5 @@ insertDatumAndCache cache hsh dt = do
       liftIO $
         atomically $
           modifyTVar (cDatum ci) $
-            Map.insert hsh datumId
+            LRU.insert hsh datumId
       pure datumId

@@ -315,7 +315,7 @@ mkSyncEnv ::
   RunMigration ->
   IO SyncEnv
 mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart maybeLedgerDir shouldUseLedger ranAll forcedIndexes runMigration = do
-  cache <- if soptCache syncOptions then newEmptyCache 250000 else pure uninitiatedCache
+  cache <- if soptCache syncOptions then newEmptyCache 250000 50000 else pure uninitiatedCache
   backendVar <- newTVarIO Strict.Nothing
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO ranAll

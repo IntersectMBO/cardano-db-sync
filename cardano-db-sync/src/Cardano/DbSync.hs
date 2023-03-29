@@ -144,7 +144,6 @@ extractSyncOptions snp aop =
     { soptExtended = enpExtended snp
     , soptAbortOnInvalid = aop
     , soptCache = enpHasCache snp
-    , soptLedger = enpHasLedger snp
     , soptSkipFix = enpSkipFix snp
     , soptOnlyFix = enpOnlyFix snp
     , soptInsertOptions = iopts
