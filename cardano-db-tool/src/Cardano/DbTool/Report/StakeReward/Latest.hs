@@ -72,13 +72,13 @@ data EpochReward = EpochReward
 queryEpochStakeRewards :: MonadIO m => Word64 -> Text -> ReaderT SqlBackend m (Maybe EpochReward)
 queryEpochStakeRewards epochNum address = do
   mdel <- queryDelegation address epochNum
-  maybe (pure Nothing) ((fmap . fmap) Just (queryReward address)) mdel
+  maybe (pure Nothing) ((fmap . fmap) Just (queryReward epochNum address)) mdel
 
 queryLatestStakeRewards :: MonadIO m => Text -> ReaderT SqlBackend m (Maybe EpochReward)
 queryLatestStakeRewards address = do
   epochNum <- queryLatestMemberRewardEpochNo
   mdel <- queryDelegation address epochNum
-  maybe (pure Nothing) ((fmap . fmap) Just (queryReward address)) mdel
+  maybe (pure Nothing) ((fmap . fmap) Just (queryReward epochNum address)) mdel
   where
     -- Find the latest epoch where member rewards have been distributed.
     -- Can't use the Reward table for this because that table may have been partially
@@ -95,7 +95,7 @@ queryDelegation ::
   MonadIO m =>
   Text ->
   Word64 ->
-  ReaderT SqlBackend m (Maybe (StakeAddressId, Word64, UTCTime, DbLovelace, PoolHashId))
+  ReaderT SqlBackend m (Maybe (StakeAddressId, UTCTime, DbLovelace, PoolHashId))
 queryDelegation address epochNum = do
   res <- select $ do
     (ep :& es :& saddr) <-
@@ -112,19 +112,19 @@ queryDelegation address epochNum = do
     limit 1
     pure
       ( es ^. EpochStakeAddrId
-      , es ^. EpochStakeEpochNo
       , ep ^. EpochEndTime
       , es ^. EpochStakeAmount
       , es ^. EpochStakePoolId
       )
-  pure $ fmap unValue5 (listToMaybe res)
+  pure $ fmap unValue4 (listToMaybe res)
 
 queryReward ::
   MonadIO m =>
+  Word64 ->
   Text ->
-  (StakeAddressId, Word64, UTCTime, DbLovelace, PoolHashId) ->
+  (StakeAddressId, UTCTime, DbLovelace, PoolHashId) ->
   ReaderT SqlBackend m EpochReward
-queryReward address (saId, en, date, DbLovelace delegated, poolId) = do
+queryReward en address (saId, date, DbLovelace delegated, poolId) = do
   res <- select $ do
     (ep :& reward :& saddr) <-
       from
