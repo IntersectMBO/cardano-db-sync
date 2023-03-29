@@ -94,7 +94,9 @@ insertRewards ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertRewards nw earnedEpoch spendableEpoch cache rewardsChunk = do
   dbRewards <- concatMapM mkRewards rewardsChunk
-  lift $ DB.insertManyRewards dbRewards
+  let chunckDbRewards = splittRewardsEvery 100000 dbRewards
+  -- minimising the bulk inserts into hundred thousand chunks to improve performance
+  forM_ chunckDbRewards $ \rws -> lift $ DB.insertManyRewards rws
   where
     mkRewards ::
       (MonadBaseControl IO m, MonadIO m) =>
@@ -136,6 +138,14 @@ insertRewards nw earnedEpoch spendableEpoch cache rewardsChunk = do
     queryPool Strict.Nothing = pure Nothing
     queryPool (Strict.Just poolHash) =
       Just <$> liftLookupFail "insertRewards.queryPoolKeyWithCache" (queryPoolKeyWithCache cache CacheNew poolHash)
+
+splittRewardsEvery :: Int -> [a] -> [[a]]
+splittRewardsEvery val = go
+  where
+    go [] = []
+    go ys =
+      let (as, bs) = splitAt val ys
+       in as : go bs
 
 insertPoolDepositRefunds ::
   (MonadBaseControl IO m, MonadIO m) =>
