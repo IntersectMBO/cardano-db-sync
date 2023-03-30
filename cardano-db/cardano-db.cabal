@@ -37,6 +37,7 @@ library
                         Cardano.Db.Migration.Extra.CosnumedTxOut.Queries
                         Cardano.Db.Migration.Extra.CosnumedTxOut.Schema
                         Cardano.Db.Insert
+                        Cardano.Db.AlterTable
                         Cardano.Db.PGConfig
                         Cardano.Db.Migration
                         Cardano.Db.Migration.Haskell

@@ -1,8 +1,11 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -Wno-unused-matches #-}
 
 module Cardano.DbSync.Default (
   insertListBlocks,
@@ -41,6 +44,7 @@ import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
+import Database.Persist.Postgresql (ConstraintNameDB (..), FieldNameDB (..), PersistEntity (entityDef))
 import Database.Persist.SqlBackend.Internal
 import Database.Persist.SqlBackend.Internal.StatementCache
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
@@ -54,8 +58,7 @@ insertListBlocks ::
 insertListBlocks synEnv blocks = do
   DB.runDbIohkLogging (envBackend synEnv) tracer
     . runExceptT
-    $ do
-      traverse_ (applyAndInsertBlockMaybe synEnv) blocks
+    $ traverse_ (applyAndInsertBlockMaybe synEnv) blocks
   where
     tracer = getTrace synEnv
 
@@ -85,6 +88,20 @@ applyAndInsertBlockMaybe syncEnv cblk = do
           void $ migrateStakeDistr syncEnv (apOldLedger applyRes)
           insertBlock syncEnv cblk applyRes True tookSnapshot
           liftIO $ setConsistentLevel syncEnv Consistent
+          -- now that we have caught up with the tip of the chain
+        -- we can put the constraints on rewards table
+          let entity = entityDef $ Proxy @DB.Reward
+          lift $
+            DB.alterTable
+              entity
+              ( DB.AddUniqueConstraint
+                  (ConstraintNameDB "unique_reward")
+                  [ FieldNameDB "addr_id"
+                  , FieldNameDB "type"
+                  , FieldNameDB "earned_epoch"
+                  , FieldNameDB "pool_id"
+                  ]
+              )
         Right blockId | Just (adaPots, slotNo, epochNo) <- getAdaPots applyRes -> do
           replaced <- lift $ DB.replaceAdaPots blockId $ mkAdaPots blockId slotNo epochNo adaPots
           if replaced
@@ -256,7 +273,7 @@ insertLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
     handler ev =
       case ev of
         LedgerNewEpoch en ss -> do
-          lift $ do
+          lift $
             insertEpochSyncTime en (toSyncState ss) (envEpochSyncTime syncEnv)
           sqlBackend <- lift ask
           persistantCacheSize <- liftIO $ statementCacheSize $ connStmtMap sqlBackend
@@ -276,9 +293,9 @@ insertLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
         LedgerIncrementalRewards _ rwd -> do
           let rewards = Map.toList $ Generic.unRewards rwd
           insertRewards ntw (subFromCurrentEpoch 1) (EpochNo $ curEpoch + 1) cache rewards
-        LedgerRestrainedRewards e rwd creds -> do
+        LedgerRestrainedRewards e rwd creds ->
           lift $ adjustEpochRewards tracer ntw cache e rwd creds
-        LedgerTotalRewards _e rwd -> do
+        LedgerTotalRewards _e rwd ->
           lift $ validateEpochRewards tracer ntw (subFromCurrentEpoch 2) currentEpochNo rwd
         LedgerAdaPots _ ->
           pure () -- These are handled separately by insertBlock
@@ -287,7 +304,7 @@ insertLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
             let rewards = Map.toList rwd
             insertRewards ntw (subFromCurrentEpoch 1) currentEpochNo cache rewards
             liftIO . logInfo tracer $ "Inserted " <> show (length rewards) <> " Mir rewards"
-        LedgerPoolReap en drs -> do
+        LedgerPoolReap en drs ->
           unless (Map.null $ Generic.unRewards drs) $ do
             insertPoolDepositRefunds syncEnv en drs
         LedgerDeposits {} -> pure ()
