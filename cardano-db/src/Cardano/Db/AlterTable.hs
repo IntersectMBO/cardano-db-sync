@@ -41,19 +41,17 @@ alterTable ::
   AlterTable ->
   ReaderT SqlBackend m ()
 alterTable entity (AddUniqueConstraint cname cols) = do
-  -- TODO: might not be worth doing the check as the query would return an
-  -- error anyways if the fields aresn't present
-  -- would be nice to handle it back in applyAndInsertBlockMaybe
+  -- Check that input fields are indeed present
   if checkAllFieldsValid entity cols
     then handle alterTableExceptHandler (rawExecute query [])
-    else liftIO $ throwIO (DbAlterTableException "invalid field" sqlError)
+    else liftIO $ throwIO (DbAlterTableException "Constraint field does not exist" sqlError)
   where
     query :: T.Text
     query =
       T.concat
         [ "ALTER TABLE "
         , unEntityNameDB (entityDB entity)
-        , " ADD CONSTRAINT "
+        , " ADD CONSTRAINT IF NOT EXISTS "
         , unConstraintNameDB cname
         , " UNIQUE("
         , T.intercalate "," $ map escapeDBName' cols
@@ -69,7 +67,7 @@ alterTable entity (DropUniqueConstraint cname) =
       T.concat
         [ "ALTER TABLE "
         , unEntityNameDB (entityDB entity)
-        , " DROP CONSTRAINT "
+        , " DROP CONSTRAINT IF EXISTS "
         , unConstraintNameDB cname
         ]
 
