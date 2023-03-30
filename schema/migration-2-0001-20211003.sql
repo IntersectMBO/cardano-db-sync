@@ -88,7 +88,6 @@ BEGIN
     EXECUTE 'ALTER TABLE "tx_metadata" ADD CONSTRAINT "unique_tx_metadata" UNIQUE("key","tx_id")' ;
     EXECUTE 'ALTER TABLE "tx_metadata" ADD CONSTRAINT "tx_metadata_tx_id_fkey" FOREIGN KEY("tx_id") REFERENCES "tx"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
     EXECUTE 'CREATe TABLE "reward"("id" SERIAL8  PRIMARY KEY UNIQUE,"addr_id" INT8 NOT NULL,"type" rewardtype NOT NULL,"amount" lovelace NOT NULL,"earned_epoch" INT8 NOT NULL,"spendable_epoch" INT8 NOT NULL,"pool_id" INT8 NULL)' ;
-    EXECUTE 'ALTER TABLE "reward" ADD CONSTRAINT "unique_reward" UNIQUE("addr_id","type","earned_epoch","pool_id")' ;
     EXECUTE 'ALTER TABLE "reward" ADD CONSTRAINT "reward_addr_id_fkey" FOREIGN KEY("addr_id") REFERENCES "stake_address"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
     EXECUTE 'ALTER TABLE "reward" ADD CONSTRAINT "reward_pool_id_fkey" FOREIGN KEY("pool_id") REFERENCES "pool_hash"("id") ON DELETE CASCADE  ON UPDATE RESTRICT' ;
     EXECUTE 'CREATe TABLE "withdrawal"("id" SERIAL8  PRIMARY KEY UNIQUE,"addr_id" INT8 NOT NULL,"amount" lovelace NOT NULL,"redeemer_id" INT8 NULL,"tx_id" INT8 NOT NULL)' ;
