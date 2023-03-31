@@ -272,19 +272,23 @@ insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx 
 
       mapM_ (insertCollateralTxOut tracer cache iopts (txId, txHash)) (Generic.txCollateralOutputs tx)
 
-      txMetadata <- whenFalseMempty (ioMetadata iopts)
-        $ prepareTxMetadata tracer txId (Generic.txMetadata tx)
+      txMetadata <-
+        whenFalseMempty (ioMetadata iopts) $
+          prepareTxMetadata tracer txId (Generic.txMetadata tx)
 
       mapM_ (insertCertificate tracer cache isMember network blkId txId epochNo slotNo redeemers) $ Generic.txCertificates tx
       mapM_ (insertWithdrawals tracer cache txId redeemers) $ Generic.txWithdrawals tx
 
       mapM_ (insertParamProposal tracer blkId txId) $ Generic.txParamProposal tx
 
-      maTxMint <- whenFalseMempty (ioMetadata iopts)
-        $ prepareMaTxMint tracer cache txId $ Generic.txMint tx
+      maTxMint <-
+        whenFalseMempty (ioMetadata iopts) $
+          prepareMaTxMint tracer cache txId $
+            Generic.txMint tx
 
       when (ioPlutusExtra iopts) $
-        mapM_ (insertScript tracer txId) $ Generic.txScripts tx
+        mapM_ (insertScript tracer txId) $
+          Generic.txScripts tx
 
       mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
 
@@ -301,10 +305,14 @@ prepareTxOut ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
 prepareTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
   mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache txId addr
-  mDatumId <- whenFalseEmpty (ioPlutusExtra iopts) Nothing
-    $ Generic.whenInlineDatum dt $ insertDatum tracer cache txId
-  mScriptId <- whenFalseEmpty (ioPlutusExtra iopts) Nothing
-    $ whenMaybe mScript $ insertScript tracer txId
+  mDatumId <-
+    whenFalseEmpty (ioPlutusExtra iopts) Nothing $
+      Generic.whenInlineDatum dt $
+        insertDatum tracer cache txId
+  mScriptId <-
+    whenFalseEmpty (ioPlutusExtra iopts) Nothing $
+      whenMaybe mScript $
+        insertScript tracer txId
   let !txOut =
         DB.TxOut
           { DB.txOutTxId = txId
@@ -336,10 +344,14 @@ insertCollateralTxOut ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
   mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache txId addr
-  mDatumId <- whenFalseEmpty (ioPlutusExtra iopts) Nothing
-                $ Generic.whenInlineDatum dt $ insertDatum tracer cache txId
-  mScriptId <- whenFalseEmpty (ioPlutusExtra iopts) Nothing
-    $ whenMaybe mScript $ insertScript tracer txId
+  mDatumId <-
+    whenFalseEmpty (ioPlutusExtra iopts) Nothing $
+      Generic.whenInlineDatum dt $
+        insertDatum tracer cache txId
+  mScriptId <-
+    whenFalseEmpty (ioPlutusExtra iopts) Nothing $
+      whenMaybe mScript $
+        insertScript tracer txId
   _ <-
     lift . DB.insertCollateralTxOut $
       DB.CollateralTxOut
@@ -907,13 +919,14 @@ insertDatum tracer cache txId txd = do
     Just datumId -> pure datumId
     Nothing -> do
       value <- safeDecodeToJson tracer "insertDatum" $ Generic.txDataValue txd
-      lift $ insertDatumAndCache cache (Generic.txDataHash txd) $
-        DB.Datum
-          { DB.datumHash = Generic.dataHashToBytes $ Generic.txDataHash txd
-          , DB.datumTxId = txId
-          , DB.datumValue = value
-          , DB.datumBytes = Generic.txDataBytes txd
-          }
+      lift $
+        insertDatumAndCache cache (Generic.txDataHash txd) $
+          DB.Datum
+            { DB.datumHash = Generic.dataHashToBytes $ Generic.txDataHash txd
+            , DB.datumTxId = txId
+            , DB.datumValue = value
+            , DB.datumBytes = Generic.txDataBytes txd
+            }
 
 insertRedeemerData ::
   (MonadBaseControl IO m, MonadIO m) =>

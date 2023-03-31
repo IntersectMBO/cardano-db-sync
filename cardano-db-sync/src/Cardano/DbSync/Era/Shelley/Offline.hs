@@ -100,7 +100,6 @@ runOfflineFetchThread syncEnv = do
     queueInsert :: FetchResult -> IO ()
     queueInsert = atomically . writeTBQueue (envOfflineResultQueue syncEnv)
 
-
 -- -------------------------------------------------------------------------------------------------
 
 -- Blocks on an empty queue, but gets all elements in the queue if there is more than one.

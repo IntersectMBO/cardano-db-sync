@@ -20,14 +20,14 @@ import Network.HTTP.Simple (
   parseRequestThrow,
  )
 
--- |The possible errors for the http client.
+-- | The possible errors for the http client.
 data HttpClientError
   = HttpClientCannotParseEndpoint !Text
   | HttpClientInvalidClientBody
   | HttpClientCannotParseJSON !Text
   | HttpClientStatusNotOk
 
--- |Render the http client error.
+-- | Render the http client error.
 renderHttpClientError :: HttpClientError -> Text
 renderHttpClientError = \case
   HttpClientCannotParseEndpoint endpoint ->
@@ -47,7 +47,7 @@ renderHttpClientError = \case
   HttpClientStatusNotOk ->
     "Http client returned status not ok. Status should be 200."
 
--- |Fetch the remote SMASH server policies.
+-- | Fetch the remote SMASH server policies.
 httpClientFetchPolicies :: SmashURL -> IO (Either HttpClientError PolicyResult)
 httpClientFetchPolicies smashURL = runExceptT $ do
   -- https://smash.cardano-mainnet.iohk.io
@@ -82,7 +82,7 @@ httpClientFetchPolicies smashURL = runExceptT $ do
 
   pure policyResult
 
--- |A simple HTTP call for remote server.
+-- | A simple HTTP call for remote server.
 httpApiCall :: forall a. (FromJSON a) => Request -> ExceptT HttpClientError IO a
 httpApiCall request = do
   httpResult <- httpJSONEither request
@@ -99,7 +99,7 @@ httpApiCall request = do
     Left reason -> left $ HttpClientCannotParseJSON (toS reason)
     Right value -> right value
 
--- |When any exception occurs, we simply map it to an http client error.
+-- | When any exception occurs, we simply map it to an http client error.
 parseRequestEither :: Text -> ExceptT HttpClientError IO Request
 parseRequestEither requestEndpoint = do
   let parsedRequest = newExceptT (try $ parseRequestThrow (toS requestEndpoint) :: IO (Either SomeException Request))
