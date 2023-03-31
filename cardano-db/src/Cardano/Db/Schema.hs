@@ -308,11 +308,9 @@ share
     earnedEpoch         Word64
     spendableEpoch      Word64
     poolId              PoolHashId Maybe    noreference
-    -- Usually NULLables are not allowed in a uniqueness constraint. The semantics of how NULL
-    -- interacts with those constraints is non-trivial:  two NULL values are not considered equal
-    -- for the purposes of an uniqueness constraint.
-    -- Use of "!force" attribute on the end of the line disables this check.
-    UniqueReward        addrId type earnedEpoch poolId !force
+    -- Here used to lie a uniqye constraint which would slow down inserts when in syncing mode
+    -- Now the constraint is set manually inside of `applyAndInsertBlockMaybe` once the tip of
+    -- the chain has been reached.
     deriving Show
 
   Withdrawal
@@ -327,7 +325,8 @@ share
     poolId              PoolHashId          noreference
     amount              DbLovelace          sqltype=lovelace
     epochNo             Word64              sqltype=word31type
-    UniqueStake         epochNo addrId poolId
+    -- similar scenario as in Reward the constraint that was here is now set manually in
+    -- `applyAndInsertBlockMaybe` at a more optimal time.
 
   EpochStakeProgress
     epochNo             Word64              sqltype=word31type

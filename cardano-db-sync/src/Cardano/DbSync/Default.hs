@@ -6,6 +6,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -Wno-unused-matches #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Cardano.DbSync.Default (
   insertListBlocks,
@@ -89,19 +90,10 @@ applyAndInsertBlockMaybe syncEnv cblk = do
           insertBlock syncEnv cblk applyRes True tookSnapshot
           liftIO $ setConsistentLevel syncEnv Consistent
           -- now that we have caught up with the tip of the chain
-        -- we can put the constraints on rewards table
-          let entity = entityDef $ Proxy @DB.Reward
-          lift $
-            DB.alterTable
-              entity
-              ( DB.AddUniqueConstraint
-                  (ConstraintNameDB "unique_reward")
-                  [ FieldNameDB "addr_id"
-                  , FieldNameDB "type"
-                  , FieldNameDB "earned_epoch"
-                  , FieldNameDB "pool_id"
-                  ]
-              )
+          -- we can put the constraints on rewards table
+          lift addRewardTableConstraint
+          lift addEpochStakeTableConstraint
+
         Right blockId | Just (adaPots, slotNo, epochNo) <- getAdaPots applyRes -> do
           replaced <- lift $ DB.replaceAdaPots blockId $ mkAdaPots blockId slotNo epochNo adaPots
           if replaced
@@ -131,6 +123,34 @@ applyAndInsertBlockMaybe syncEnv cblk = do
     getNewEpoch :: ApplyResult -> Maybe EpochNo
     getNewEpoch appRes =
       Generic.neEpoch <$> maybeFromStrict (apNewEpoch appRes)
+
+addRewardTableConstraint ::
+  forall m. ( MonadBaseControl IO m , MonadIO m) => ReaderT SqlBackend m ()
+addRewardTableConstraint = do
+  let entityD = entityDef $ Proxy @DB.Reward
+  DB.alterTable
+    entityD
+    ( DB.AddUniqueConstraint
+        (ConstraintNameDB "unique_reward")
+        [ FieldNameDB "addr_id"
+        , FieldNameDB "type"
+        , FieldNameDB "earned_epoch"
+        , FieldNameDB "pool_id"
+        ]
+    )
+
+addEpochStakeTableConstraint ::
+  forall m. ( MonadBaseControl IO m , MonadIO m) => ReaderT SqlBackend m ()
+addEpochStakeTableConstraint = do
+  let entityD = entityDef $ Proxy @DB.EpochStake
+  DB.alterTable
+    entityD
+    ( DB.AddUniqueConstraint
+        (ConstraintNameDB "epoch_no")
+        [ FieldNameDB "addr_id"
+        , FieldNameDB "pool_id"
+        ]
+    )
 
 insertBlock ::
   SyncEnv ->
