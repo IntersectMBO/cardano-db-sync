@@ -163,7 +163,6 @@ runSyncNode metricsSetters trce iomgr dbConnString ranAll runMigration syncNodeP
           (enpForceIndexes syncNodeParams)
           runMigration
 
-
     -- If the DB is empty it will be inserted, otherwise it will be validated (to make
     -- sure we are on the right chain).
     lift $
@@ -353,7 +352,6 @@ dbSyncProtocols trce syncEnv metricsSetters _version codecs _connectionId =
               (contramap (Text.pack . show) . toLogObject $ appendName "local-state-query" trce)
               (cStateQueryCodec codecs)
               (localStateQueryClientPeer $ localStateQueryHandler nle)
-
 
 -- | 'ChainSyncClient' which traces received blocks and ignores when it
 -- receives a request to rollbackwar.  A real wallet client should:

@@ -14,6 +14,7 @@ import Cardano.BM.Trace (Trace, logInfo)
 import Cardano.Db (textShow)
 import Cardano.DbSync.StateQuery
 import Cardano.DbSync.Types
+import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Crypto (StandardCrypto)
 import Cardano.Prelude hiding (atomically, (.))
 import Cardano.Slotting.Slot (SlotNo (..))
@@ -42,6 +43,7 @@ import Ouroboros.Consensus.HardFork.History.Qry (
   interpretQuery,
  )
 import Ouroboros.Consensus.Ledger.Query (Query (..))
+import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Network.Block (Point (..))
 import Ouroboros.Network.Protocol.LocalStateQuery.Client (
   ClientStAcquired (..),
@@ -52,8 +54,6 @@ import Ouroboros.Network.Protocol.LocalStateQuery.Client (
  )
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as StateQuery
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
-import qualified Cardano.Ledger.BaseTypes as Ledger
-import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 
 data NoLedgerEnv = NoLedgerEnv
   { nleTracer :: Trace IO Text

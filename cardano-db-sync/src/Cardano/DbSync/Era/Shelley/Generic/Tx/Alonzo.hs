@@ -177,10 +177,12 @@ resolveRedeemers ::
   Core.Tx era ->
   (RedeemerMaps, [(Word64, TxRedeemer)])
 resolveRedeemers ioExtraPlutus mprices tx =
-  if not ioExtraPlutus then (initRedeemersMaps, [])
-  else mkRdmrAndUpdateRec (initRedeemersMaps, []) $
-    zip [0 ..] $
-      Map.toList (Alonzo.unRedeemers (tx ^. (Core.witsTxL . Alonzo.rdmrsWitsL)))
+  if not ioExtraPlutus
+    then (initRedeemersMaps, [])
+    else
+      mkRdmrAndUpdateRec (initRedeemersMaps, []) $
+        zip [0 ..] $
+          Map.toList (Alonzo.unRedeemers (tx ^. (Core.witsTxL . Alonzo.rdmrsWitsL)))
   where
     txBody = tx ^. Core.bodyTxL
 

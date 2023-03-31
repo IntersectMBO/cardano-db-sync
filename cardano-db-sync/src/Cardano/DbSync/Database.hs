@@ -114,23 +114,23 @@ rollbackLedger :: SyncEnv -> CardanoPoint -> IO (Maybe [CardanoPoint])
 rollbackLedger syncEnv point =
   case envLedgerEnv syncEnv of
     HasLedger hle -> do
-        mst <- loadLedgerAtPoint hle point
-        case mst of
-          Right st -> do
-            let statePoint = headerStatePoint $ headerState $ clsState st
-            -- This is an extra validation that should always succeed.
-            unless (point == statePoint) $
-              logAndPanic (getTrace syncEnv) $
-                mconcat
-                  [ "Ledger "
-                  , textShow statePoint
-                  , " and ChainSync "
-                  , textShow point
-                  , " don't match."
-                  ]
-            pure Nothing
-          Left lsfs ->
-            Just . fmap fst <$> verifySnapshotPoint syncEnv (OnDisk <$> lsfs)
+      mst <- loadLedgerAtPoint hle point
+      case mst of
+        Right st -> do
+          let statePoint = headerStatePoint $ headerState $ clsState st
+          -- This is an extra validation that should always succeed.
+          unless (point == statePoint) $
+            logAndPanic (getTrace syncEnv) $
+              mconcat
+                [ "Ledger "
+                , textShow statePoint
+                , " and ChainSync "
+                , textShow point
+                , " don't match."
+                ]
+          pure Nothing
+        Left lsfs ->
+          Just . fmap fst <$> verifySnapshotPoint syncEnv (OnDisk <$> lsfs)
     NoLedger _ -> pure Nothing
 
 -- | This not only checks that the ledger and ChainSync points are equal, but also that the
