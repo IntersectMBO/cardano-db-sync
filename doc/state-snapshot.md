@@ -56,3 +56,8 @@ PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh --restore-snapshot 
 
 Once the script has completed successfully, `db-sync` can be restarted and it should continue
 syncing from the block number listed in the state snapshot file name.
+
+# Mainnet Snapshots Location
+
+`Mainnet` snapshots can be found [here](https://update-cardano-mainnet.iohk.io/cardano-db-sync/index.html#).
+They are also linked from the `cardano-db-sync` [releases page](https://github.com/input-output-hk/cardano-db-sync/releases)
