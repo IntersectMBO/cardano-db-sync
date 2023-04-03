@@ -326,6 +326,7 @@ prepareTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr addrRaw
           , DB.txOutDataHash = Generic.dataHashToBytes <$> Generic.getTxOutDatumHash dt
           , DB.txOutInlineDatumId = mDatumId
           , DB.txOutReferenceScriptId = mScriptId
+          , DB.txOutConsumedByTxInId = Nothing
           }
   let !eutxo = ExtendedTxOut txHash txOut
   !maTxOuts <- whenFalseMempty (ioMultiAssets iopts) $ prepareMaTxOuts tracer cache maMap

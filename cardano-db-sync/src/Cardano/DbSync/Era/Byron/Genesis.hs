@@ -197,6 +197,7 @@ insertTxOuts blkId (address, value) = do
       , DB.txOutDataHash = Nothing
       , DB.txOutInlineDatumId = Nothing
       , DB.txOutReferenceScriptId = Nothing
+      , DB.txOutConsumedByTxInId = Nothing
       }
 
 -- -----------------------------------------------------------------------------

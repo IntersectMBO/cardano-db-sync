@@ -247,6 +247,7 @@ insertTxOuts trce blkId (ShelleyTx.TxIn txInId _, txOut) = do
       , DB.txOutDataHash = Nothing -- No output datum in Shelley Genesis
       , DB.txOutInlineDatumId = Nothing
       , DB.txOutReferenceScriptId = Nothing
+      , DB.txOutConsumedByTxInId = Nothing
       }
   where
     addr = txOut ^. Core.addrTxOutL

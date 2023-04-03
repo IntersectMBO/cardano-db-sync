@@ -248,6 +248,7 @@ insertTxOut _tracer txId index txout =
       , DB.txOutDataHash = Nothing
       , DB.txOutInlineDatumId = Nothing
       , DB.txOutReferenceScriptId = Nothing
+      , DB.txOutConsumedByTxInId = Nothing
       }
 
 insertTxIn ::
