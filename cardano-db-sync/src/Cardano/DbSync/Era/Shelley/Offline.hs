@@ -83,16 +83,20 @@ insertOfflineResults trce resultQueue = do
         ResultMetadata {} -> False
         ResultError {} -> True
 
-runOfflineFetchThread :: Trace IO Text -> SyncEnv -> IO ()
-runOfflineFetchThread trce syncEnv = do
-  logInfo trce "Running Offline fetch thread"
-  forever $ do
-    threadDelay 60_000_000 -- 60 second sleep
-    xs <- blockingFlushTBQueue (envOfflineWorkQueue syncEnv)
-    manager <- Http.newManager tlsManagerSettings
-    now <- liftIO Time.getPOSIXTime
-    mapM_ (queueInsert <=< fetchOfflineData trce manager now) xs
+runOfflineFetchThread :: SyncEnv -> IO ()
+runOfflineFetchThread syncEnv = do
+  when (ioOfflineData iopts) $ do
+    logInfo trce "Running Offline fetch thread"
+    forever $ do
+      threadDelay 60_000_000 -- 60 second sleep
+      xs <- blockingFlushTBQueue (envOfflineWorkQueue syncEnv)
+      manager <- Http.newManager tlsManagerSettings
+      now <- liftIO Time.getPOSIXTime
+      mapM_ (queueInsert <=< fetchOfflineData trce manager now) xs
   where
+    trce = getTrace syncEnv
+    iopts = getInsertOptions syncEnv
+
     queueInsert :: FetchResult -> IO ()
     queueInsert = atomically . writeTBQueue (envOfflineResultQueue syncEnv)
 

@@ -118,8 +118,8 @@ fromMaryBlock blk =
     , blkTxs = map fromMaryTx (blockTxs blk)
     }
 
-fromAlonzoBlock :: Maybe Prices -> ShelleyBlock TPraosStandard StandardAlonzo -> Block
-fromAlonzoBlock mprices blk =
+fromAlonzoBlock :: Bool -> Maybe Prices -> ShelleyBlock TPraosStandard StandardAlonzo -> Block
+fromAlonzoBlock iope mprices blk =
   Block
     { blkEra = Alonzo
     , blkHash = blockHash blk
@@ -132,11 +132,11 @@ fromAlonzoBlock mprices blk =
     , blkVrfKey = blockVrfKeyView $ blockVrfVkTPraos blk
     , blkOpCert = blockOpCertKeyTPraos blk
     , blkOpCertCounter = blockOpCertCounterTPraos blk
-    , blkTxs = map (fromAlonzoTx mprices) (alonzoBlockTxs blk)
+    , blkTxs = map (fromAlonzoTx iope mprices) (alonzoBlockTxs blk)
     }
 
-fromBabbageBlock :: Maybe Prices -> ShelleyBlock PraosStandard StandardBabbage -> Block
-fromBabbageBlock mprices blk =
+fromBabbageBlock :: Bool -> Maybe Prices -> ShelleyBlock PraosStandard StandardBabbage -> Block
+fromBabbageBlock iope mprices blk =
   Block
     { blkEra = Babbage
     , blkHash = blockHash blk
@@ -149,7 +149,7 @@ fromBabbageBlock mprices blk =
     , blkVrfKey = blockVrfKeyView $ blockVrfVkPraos blk
     , blkOpCert = blockOpCertKeyPraos blk
     , blkOpCertCounter = blockOpCertCounterPraos blk
-    , blkTxs = map (fromBabbageTx mprices) (babbageBlockTxs blk)
+    , blkTxs = map (fromBabbageTx iope mprices) (babbageBlockTxs blk)
     }
 
 -- -------------------------------------------------------------------------------------------------

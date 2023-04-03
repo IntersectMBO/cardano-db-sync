@@ -62,7 +62,7 @@ instance FromJSON PoolOfflineMetadata where
         <*> parseTicker o
         <*> fmap PoolHomepage (o .: "homepage")
 
--- |We presume the validation is not required the other way around?
+-- | We presume the validation is not required the other way around?
 instance ToJSON PoolOfflineMetadata where
   toJSON (PoolOfflineMetadata name' description' ticker' homepage') =
     object

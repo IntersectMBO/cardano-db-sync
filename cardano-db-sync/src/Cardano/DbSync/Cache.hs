@@ -25,7 +25,8 @@ module Cardano.DbSync.Cache (
   insertBlockAndCache,
   readCacheEpoch,
   writeCacheEpoch,
-
+  queryDatum,
+  insertDatumAndCache,
   -- * CacheStatistics
   CacheStatistics,
   getCacheStatistics,
@@ -77,6 +78,7 @@ data CacheNew
 data CacheInternal = CacheInternal
   { cStakeCreds :: !(StrictTVar IO StakeAddrCache)
   , cPools :: !(StrictTVar IO StakePoolCache)
+  , cDatum :: !(StrictTVar IO (LRUCache DataHash DB.DatumId))
   , cMultiAssets :: !(StrictTVar IO (LRUCache (PolicyID StandardCrypto, AssetName) DB.MultiAssetId))
   , cPrevBlock :: !(StrictTVar IO (Maybe (DB.BlockId, ByteString)))
   , cStats :: !(StrictTVar IO CacheStatistics)
@@ -88,6 +90,8 @@ data CacheStatistics = CacheStatistics
   , credsQueries :: !Word64
   , poolsHits :: !Word64
   , poolsQueries :: !Word64
+  , datumHits :: !Word64
+  , datumQueries :: !Word64
   , multiAssetsHits :: !Word64
   , multiAssetsQueries :: !Word64
   , prevBlockHits :: !Word64
@@ -115,6 +119,14 @@ missPools :: StrictTVar IO CacheStatistics -> IO ()
 missPools ref =
   atomically $ modifyTVar ref (\cs -> cs {poolsQueries = 1 + poolsQueries cs})
 
+hitDatum :: StrictTVar IO CacheStatistics -> IO ()
+hitDatum ref =
+  atomically $ modifyTVar ref (\cs -> cs {datumHits = 1 + datumHits cs, datumQueries = 1 + datumQueries cs})
+
+missDatum :: StrictTVar IO CacheStatistics -> IO ()
+missDatum ref =
+  atomically $ modifyTVar ref (\cs -> cs {datumQueries = 1 + datumQueries cs})
+
 hitMAssets :: StrictTVar IO CacheStatistics -> IO ()
 hitMAssets ref =
   atomically $ modifyTVar ref (\cs -> cs {multiAssetsHits = 1 + multiAssetsHits cs, multiAssetsQueries = 1 + multiAssetsQueries cs})
@@ -132,7 +144,7 @@ missPrevBlock ref =
   atomically $ modifyTVar ref (\cs -> cs {prevBlockQueries = 1 + prevBlockQueries cs})
 
 initCacheStatistics :: CacheStatistics
-initCacheStatistics = CacheStatistics 0 0 0 0 0 0 0 0
+initCacheStatistics = CacheStatistics 0 0 0 0 0 0 0 0 0 0
 
 getCacheStatistics :: Cache -> IO CacheStatistics
 getCacheStatistics cs =
@@ -162,6 +174,7 @@ textShowStats (Cache ic) = do
   stats <- readTVarIO $ cStats ic
   creds <- readTVarIO (cStakeCreds ic)
   pools <- readTVarIO (cPools ic)
+  datums <- readTVarIO (cDatum ic)
   mAssets <- readTVarIO (cMultiAssets ic)
   pure $
     mconcat
@@ -186,6 +199,18 @@ textShowStats (Cache ic) = do
       , DB.textShow (poolsHits stats)
       , ", misses: "
       , DB.textShow (poolsQueries stats - poolsHits stats)
+      , "\n  Datums: "
+      , "cache capacity: "
+      , DB.textShow (LRU.getCapacity datums)
+      , ", cache size: "
+      , DB.textShow (LRU.getSize datums)
+      , if datumQueries stats == 0
+          then ""
+          else ", hit rate: " <> DB.textShow (100 * datumHits stats `div` datumQueries stats) <> "%"
+      , ", hits: "
+      , DB.textShow (datumHits stats)
+      , ", misses: "
+      , DB.textShow (datumQueries stats - datumHits stats)
       , "\n  Multi Assets: "
       , "cache capacity: "
       , DB.textShow (LRU.getCapacity mAssets)
@@ -214,12 +239,13 @@ uninitiatedCache = UninitiatedCache
 initCacheEpoch :: CacheEpoch
 initCacheEpoch = CacheEpoch Nothing Nothing
 
-newEmptyCache :: MonadIO m => Word64 -> m Cache
-newEmptyCache maCapacity =
+newEmptyCache :: MonadIO m => Word64 -> Word64 -> m Cache
+newEmptyCache maCapacity daCapacity =
   liftIO . fmap Cache $
     CacheInternal
       <$> newTVarIO Map.empty
       <*> newTVarIO Map.empty
+      <*> newTVarIO (LRU.empty daCapacity)
       <*> newTVarIO (LRU.empty maCapacity)
       <*> newTVarIO Nothing
       <*> newTVarIO initCacheStatistics
@@ -245,6 +271,7 @@ rollbackCache UninitiatedCache = pure ()
 rollbackCache (Cache cache) = do
   liftIO $ do
     atomically $ writeTVar (cPrevBlock cache) Nothing
+    atomically $ modifyTVar (cDatum cache) LRU.cleanup
 
 queryRewardAccountWithCache ::
   forall m.
@@ -471,3 +498,41 @@ insertBlockAndCache cache block =
         missPrevBlock (cStats ci)
         atomically $ writeTVar (cPrevBlock ci) $ Just (bid, DB.blockHash block)
       pure bid
+
+queryDatum ::
+  MonadIO m =>
+  Cache ->
+  DataHash ->
+  ReaderT SqlBackend m (Maybe DB.DatumId)
+queryDatum cache hsh = do
+  case cache of
+    UninitiatedCache -> DB.queryDatum $ Generic.dataHashToBytes hsh
+    Cache ci -> do
+      mp <- liftIO $ readTVarIO (cDatum ci)
+      case LRU.lookup hsh mp of
+        Just (datumId, mp') -> do
+          liftIO $ hitDatum (cStats ci)
+          liftIO $ atomically $ writeTVar (cDatum ci) mp'
+          pure $ Just datumId
+        Nothing -> do
+          liftIO $ missDatum (cStats ci)
+          -- miss. The lookup doesn't change the cache on a miss.
+          DB.queryDatum $ Generic.dataHashToBytes hsh
+
+-- This assumes the entry is not cached.
+insertDatumAndCache ::
+  (MonadIO m, MonadBaseControl IO m) =>
+  Cache ->
+  DataHash ->
+  DB.Datum ->
+  ReaderT SqlBackend m DB.DatumId
+insertDatumAndCache cache hsh dt = do
+  datumId <- DB.insertDatum dt
+  case cache of
+    UninitiatedCache -> pure datumId
+    Cache ci -> do
+      liftIO $
+        atomically $
+          modifyTVar (cDatum ci) $
+            LRU.insert hsh datumId
+      pure datumId

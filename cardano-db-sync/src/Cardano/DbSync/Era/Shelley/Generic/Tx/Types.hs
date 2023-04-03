@@ -19,6 +19,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
 import Cardano.Api.Shelley (TxMetadataValue (..))
 import Cardano.Db (ScriptType (..))
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
+import Cardano.DbSync.Types
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.Alonzo.Scripts (Tag (..))
 import Cardano.Ledger.Coin (Coin (..))
@@ -107,23 +108,23 @@ data TxScript = TxScript
 -- Fields are intentionally left lazy, to avoid transformation if the entry already
 -- exists in db.
 data PlutusData = PlutusData
-  { txDataHash :: !ByteString
+  { txDataHash :: !DataHash
   , txDataValue :: ByteString -- we turn this into json later.
   , txDataBytes :: ByteString
   }
 
-data TxOutDatum = InlineDatum PlutusData | DatumHash ByteString | NoDatum
+data TxOutDatum = InlineDatum PlutusData | DatumHash DataHash | NoDatum
 
 whenInlineDatum :: Monad m => TxOutDatum -> (PlutusData -> m a) -> m (Maybe a)
 whenInlineDatum (InlineDatum pd) f = Just <$> f pd
 whenInlineDatum _ _ = pure Nothing
 
-getTxOutDatumHash :: TxOutDatum -> Maybe ByteString
+getTxOutDatumHash :: TxOutDatum -> Maybe DataHash
 getTxOutDatumHash (InlineDatum txDatum) = Just $ txDataHash txDatum
 getTxOutDatumHash (DatumHash hsh) = Just hsh
 getTxOutDatumHash NoDatum = Nothing
 
-getMaybeDatumHash :: Maybe ByteString -> TxOutDatum
+getMaybeDatumHash :: Maybe DataHash -> TxOutDatum
 getMaybeDatumHash Nothing = NoDatum
 getMaybeDatumHash (Just hsh) = DatumHash hsh
 

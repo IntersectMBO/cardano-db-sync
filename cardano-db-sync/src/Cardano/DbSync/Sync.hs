@@ -129,15 +129,13 @@ runSyncNode ::
   MetricSetters ->
   Trace IO Text ->
   IOManager ->
-  Bool ->
-  Word64 ->
-  Word64 ->
   ConnectionString ->
   Bool ->
   RunMigration ->
   SyncNodeParams ->
+  SyncOptions ->
   IO ()
-runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConnString ranAll runMigration syncNodeParams = do
+runSyncNode metricsSetters trce iomgr dbConnString ranAll runMigration syncNodeParams syncOptions = do
   let configFile = enpConfigFile syncNodeParams
       maybeLedgerDir = enpMaybeLedgerStateDir syncNodeParams
   syncNodeConfig <- readSyncNodeConfig configFile
@@ -157,22 +155,13 @@ runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConn
         mkSyncEnvFromConfig
           trce
           dbConnString
-          ( SyncOptions
-              (enpExtended syncNodeParams)
-              aop
-              (enpHasCache syncNodeParams)
-              (enpSkipFix syncNodeParams)
-              (enpOnlyFix syncNodeParams)
-              snEveryFollowing
-              snEveryLagging
-          )
+          syncOptions
           (enpMaybeLedgerStateDir syncNodeParams)
           (enpShouldUseLedger syncNodeParams)
           genCfg
           ranAll
           (enpForceIndexes syncNodeParams)
           runMigration
-
 
     -- If the DB is empty it will be inserted, otherwise it will be validated (to make
     -- sure we are on the right chain).
@@ -195,8 +184,6 @@ runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging dbConn
       case dncShelleyHardFork cfg of
         HardFork.TriggerHardForkAtEpoch (EpochNo 0) -> True
         _ -> False
-
--- -------------------------------------------------------------------------------------------------
 
 runSyncNodeClient ::
   MetricSetters ->
@@ -322,9 +309,9 @@ dbSyncProtocols trce syncEnv metricsSetters _version codecs _connectionId =
                   actionQueue <- newDbActionQueue
 
                   race_
-                    ( race
+                    ( concurrently
                         (runDbThread syncEnv metricsSetters actionQueue)
-                        (runOfflineFetchThread trce syncEnv)
+                        (runOfflineFetchThread syncEnv)
                     )
                     ( runPipelinedPeer
                         localChainSyncTracer
@@ -365,7 +352,6 @@ dbSyncProtocols trce syncEnv metricsSetters _version codecs _connectionId =
               (contramap (Text.pack . show) . toLogObject $ appendName "local-state-query" trce)
               (cStateQueryCodec codecs)
               (localStateQueryClientPeer $ localStateQueryHandler nle)
-
 
 -- | 'ChainSyncClient' which traces received blocks and ignores when it
 -- receives a request to rollbackwar.  A real wallet client should:

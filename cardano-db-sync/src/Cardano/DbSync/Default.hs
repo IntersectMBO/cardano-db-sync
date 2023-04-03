@@ -41,9 +41,6 @@ import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
-
--- import qualified Data.Text as Text
-
 import Database.Persist.SqlBackend.Internal
 import Database.Persist.SqlBackend.Internal.StatementCache
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
@@ -144,16 +141,16 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
     BlockAlonzo blk ->
       newExceptT $
         insertShelley $
-          Generic.fromAlonzoBlock (getPrices applyResult) blk
+          Generic.fromAlonzoBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
     BlockBabbage blk ->
       newExceptT $
         insertShelley $
-          Generic.fromBabbageBlock (getPrices applyResult) blk
+          Generic.fromBabbageBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
   insertEpoch details
   lift $ commitOrIndexes withinTwoMin withinHalfHour
-
   where
     tracer = getTrace syncEnv
+    iopts = getInsertOptions syncEnv
 
     insertEpoch details =
       when (soptExtended $ envOptions syncEnv)

@@ -29,6 +29,7 @@ module Cardano.DbSync (
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 import Cardano.Db (textShow)
 import qualified Cardano.Db as Db
+import Cardano.DbSync.Api
 import Cardano.DbSync.Config (configureLogging)
 import Cardano.DbSync.Config.Types (
   ConfigFile (..),
@@ -69,7 +70,7 @@ runDbSyncNode metricsSetters knownMigrations params =
     aop <- readAbortOnPanic
     startupReport trce aop params
 
-    runDbSync metricsSetters knownMigrations iomgr trce params aop 500 10000
+    runDbSync metricsSetters knownMigrations iomgr trce params aop
 
 runDbSync ::
   MetricSetters ->
@@ -78,10 +79,8 @@ runDbSync ::
   Trace IO Text ->
   SyncNodeParams ->
   Bool ->
-  Word64 ->
-  Word64 ->
   IO ()
-runDbSync metricsSetters knownMigrations iomgr trce params aop snEveryFollowing snEveryLagging = do
+runDbSync metricsSetters knownMigrations iomgr trce params aop = do
   -- Read the PG connection info
   pgConfig <- orDie Db.renderPGPassError $ newExceptT (Db.readPGPass $ enpPGPassSource params)
 
@@ -120,7 +119,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params aop snEveryFollowing 
   -- For testing and debugging.
   whenJust (enpMaybeRollback params) $ \slotNo ->
     void $ unsafeRollback trce pgConfig slotNo
-  runSyncNode metricsSetters trce iomgr aop snEveryFollowing snEveryLagging connectionString ranAll (void . runMigration) params
+  runSyncNode metricsSetters trce iomgr connectionString ranAll (void . runMigration) params syncOpts
   where
     dbMigrationDir :: Db.MigrationDir
     dbMigrationDir = enpMigrationDir params
@@ -135,7 +134,33 @@ runDbSync metricsSetters knownMigrations iomgr trce params aop snEveryFollowing 
         , " in the schema directory and restart it."
         ]
 
+    syncOpts = extractSyncOptions params aop
+
 -- -------------------------------------------------------------------------------------------------
+
+extractSyncOptions :: SyncNodeParams -> Bool -> SyncOptions
+extractSyncOptions snp aop =
+  SyncOptions
+    { soptExtended = enpExtended snp
+    , soptAbortOnInvalid = aop
+    , soptCache = enpHasCache snp
+    , soptSkipFix = enpSkipFix snp
+    , soptOnlyFix = enpOnlyFix snp
+    , soptInsertOptions = iopts
+    , snapshotEveryFollowing = enpSnEveryFollowing snp
+    , snapshotEveryLagging = enpSnEveryLagging snp
+    }
+  where
+    iopts
+      | enpFullMode snp = fullInsertOptions
+      | enpTurboMode snp = turboInsertOptions
+      | otherwise =
+          InsertOptions
+            { ioMultiAssets = enpHasMultiAssets snp
+            , ioMetadata = enpHasMetadata snp
+            , ioPlutusExtra = enpHasPlutusExtra snp
+            , ioOfflineData = enpHasOfflineData snp
+            }
 
 startupReport :: Trace IO Text -> Bool -> SyncNodeParams -> IO ()
 startupReport trce aop params = do
@@ -147,4 +172,10 @@ startupReport trce aop params = do
   logInfo trce $ mconcat ["Option skip-plutus-data-fix: ", textShow (enpSkipFix params)]
   logInfo trce $ mconcat ["Option only-plutus-data-fix: ", textShow (enpOnlyFix params)]
   logInfo trce $ mconcat ["Option force-indexes: ", textShow (enpForceIndexes params)]
+  logInfo trce $ mconcat ["Option disable-multiassets: ", textShow (not $ enpHasMultiAssets params)]
+  logInfo trce $ mconcat ["Option disable-metadata: ", textShow (not $ enpHasMetadata params)]
+  logInfo trce $ mconcat ["Option disable-plutus-extra: ", textShow (not $ enpHasPlutusExtra params)]
+  logInfo trce $ mconcat ["Option disable-offline-data: ", textShow (not $ enpHasOfflineData params)]
+  logInfo trce $ mconcat ["Option turbo: ", textShow (enpTurboMode params)]
+  logInfo trce $ mconcat ["Option full: ", textShow (enpFullMode params)]
   logInfo trce $ mconcat ["Enviroment variable DbSyncAbortOnPanic: ", textShow aop]

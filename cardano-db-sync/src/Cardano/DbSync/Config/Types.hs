@@ -65,6 +65,14 @@ data SyncNodeParams = SyncNodeParams
   , enpSkipFix :: !Bool
   , enpOnlyFix :: !Bool
   , enpForceIndexes :: !Bool
+  , enpHasMultiAssets :: !Bool
+  , enpHasMetadata :: !Bool
+  , enpHasPlutusExtra :: !Bool
+  , enpHasOfflineData :: !Bool
+  , enpTurboMode :: !Bool
+  , enpFullMode :: !Bool
+  , enpSnEveryFollowing :: !Word64
+  , enpSnEveryLagging :: !Word64
   , enpMaybeRollback :: !(Maybe SlotNo)
   }
 

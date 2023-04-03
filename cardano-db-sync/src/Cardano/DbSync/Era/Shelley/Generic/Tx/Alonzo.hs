@@ -31,6 +31,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Era.Shelley.Generic.Util
 import Cardano.DbSync.Era.Shelley.Generic.Witness
+import Cardano.DbSync.Types (DataHash)
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.Alonzo.Data (AlonzoAuxiliaryData (..))
 import qualified Cardano.Ledger.Alonzo.Language as Alonzo
@@ -45,7 +46,6 @@ import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.CompactAddress as Ledger
 import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Era as Ledger
-import qualified Cardano.Ledger.Hashes as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (MaryValue (..), policyID)
 import qualified Cardano.Ledger.SafeHash as Ledger
@@ -62,8 +62,8 @@ import qualified Data.Set as Set
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardCrypto)
 
-fromAlonzoTx :: Maybe Alonzo.Prices -> (Word64, Core.Tx StandardAlonzo) -> Tx
-fromAlonzoTx mprices (blkIndex, tx) =
+fromAlonzoTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardAlonzo) -> Tx
+fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
     , txBlockIndex = blkIndex
@@ -118,14 +118,14 @@ fromAlonzoTx mprices (blkIndex, tx) =
         , txOutAdaValue = Coin ada
         , txOutMaValue = maMap
         , txOutScript = Nothing
-        , txOutDatum = getMaybeDatumHash $ dataHashToBytes <$> strictMaybeToMaybe mDataHash
+        , txOutDatum = getMaybeDatumHash $ strictMaybeToMaybe mDataHash
         }
       where
         Ledger.UnsafeCompactAddr bs = txOut ^. Core.compactAddrTxOutL
         MaryValue ada maMap = txOut ^. Core.valueTxOutL
         mDataHash = txOut ^. Alonzo.dataHashTxOutL
 
-    (finalMaps, redeemers) = resolveRedeemers mprices tx
+    (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx
 
     -- This is true if second stage contract validation passes or there are no contracts.
     isValid2 :: Bool
@@ -172,13 +172,17 @@ resolveRedeemers ::
   , Shelley.ShelleyEraTxBody era
   , Core.EraTx era
   ) =>
+  Bool ->
   Maybe Alonzo.Prices ->
   Core.Tx era ->
   (RedeemerMaps, [(Word64, TxRedeemer)])
-resolveRedeemers mprices tx =
-  mkRdmrAndUpdateRec (initRedeemersMaps, []) $
-    zip [0 ..] $
-      Map.toList (Alonzo.unRedeemers (tx ^. (Core.witsTxL . Alonzo.rdmrsWitsL)))
+resolveRedeemers ioExtraPlutus mprices tx =
+  if not ioExtraPlutus
+    then (initRedeemersMaps, [])
+    else
+      mkRdmrAndUpdateRec (initRedeemersMaps, []) $
+        zip [0 ..] $
+          Map.toList (Alonzo.unRedeemers (tx ^. (Core.witsTxL . Alonzo.rdmrsWitsL)))
   where
     txBody = tx ^. Core.bodyTxL
 
@@ -323,8 +327,8 @@ txDataWitness ::
 txDataWitness tx =
   mkTxData <$> Map.toList (Alonzo.unTxDats $ Alonzo.txdats' (tx ^. Core.witsTxL))
 
-mkTxData :: (Ledger.DataHash StandardCrypto, Alonzo.Data era) -> PlutusData
-mkTxData (dataHash, dt) = PlutusData (dataHashToBytes dataHash) (jsonData dt) (Ledger.originalBytes dt)
+mkTxData :: (DataHash, Alonzo.Data era) -> PlutusData
+mkTxData (dataHash, dt) = PlutusData dataHash (jsonData dt) (Ledger.originalBytes dt)
   where
     jsonData :: Alonzo.Data era -> ByteString
     jsonData =
@@ -341,9 +345,6 @@ extraKeyWits txBody =
   Set.toList $
     Set.map (\(Ledger.KeyHash h) -> Crypto.hashToBytes h) $
       txBody ^. Alonzo.reqSignerHashesTxBodyL
-
-dataHashToBytes :: Ledger.DataHash crypto -> ByteString
-dataHashToBytes dataHash = Crypto.hashToBytes (Ledger.extractHash dataHash)
 
 scriptHashAcnt :: Shelley.RewardAcnt StandardCrypto -> Maybe ByteString
 scriptHashAcnt rewardAddr = getCredentialScriptHash $ Ledger.getRwdCred rewardAddr

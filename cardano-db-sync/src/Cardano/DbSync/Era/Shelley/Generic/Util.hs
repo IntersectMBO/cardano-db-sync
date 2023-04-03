@@ -27,12 +27,14 @@ module Cardano.DbSync.Era.Shelley.Generic.Util (
   unScriptHash,
   unTxHash,
   unAssetName,
+  dataHashToBytes,
 ) where
 
 import qualified Cardano.Api.Shelley as Api
 import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as Db
+import Cardano.DbSync.Types
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..), DeltaCoin)
@@ -140,3 +142,6 @@ unTxHash (TxId txid) = Crypto.hashToBytes $ Ledger.extractHash txid
 
 unAssetName :: AssetName -> ByteString
 unAssetName = SBS.fromShort . assetName
+
+dataHashToBytes :: DataHash -> ByteString
+dataHashToBytes dataHash = Crypto.hashToBytes (Ledger.extractHash dataHash)

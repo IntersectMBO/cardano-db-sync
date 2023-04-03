@@ -33,9 +33,6 @@ module Cardano.DbSync.LedgerState (
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
 import Cardano.Binary (Decoder, DecoderError, Encoding, FromCBOR (..), ToCBOR (..))
 import qualified Cardano.Binary as Serialize
-
--- import           Cardano.Ledger.Shelley.Constraints (UsesValue)
-
 import Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Cardano.Util as Cardano
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic

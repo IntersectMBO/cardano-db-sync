@@ -27,7 +27,7 @@ import Database.Persist.Sql (SqlBackend)
 -- | Group data within the same block, to insert them together in batches
 --
 -- important NOTE: Any queries (usually found in 'Cardano.DbSync.Era.Shelley.Query')
--- that touch these 3 tables (tx_out, tx_in, ma_tx_out) need to
+-- that touch these 5 tables (tx_out, tx_in, ma_tx_out, tx_metadata, ma_tx_mint) need to
 -- have a fallback using this in memory structure. This is because
 -- these tables are inserted in the db with a delay. 'resolveTxInputs' and
 -- 'resolveScriptHash' are examples that fallback to this structure.
@@ -38,6 +38,8 @@ import Database.Persist.Sql (SqlBackend)
 data BlockGroupedData = BlockGroupedData
   { groupedTxIn :: ![DB.TxIn]
   , groupedTxOut :: ![(ExtendedTxOut, [MissingMaTxOut])]
+  , groupedTxMetadata :: ![DB.TxMetadata]
+  , groupedTxMint :: ![DB.MaTxMint]
   }
 
 -- | While we collect data, we don't have access yet to the 'TxOutId', since
@@ -55,13 +57,15 @@ data ExtendedTxOut = ExtendedTxOut
   }
 
 instance Monoid BlockGroupedData where
-  mempty = BlockGroupedData [] []
+  mempty = BlockGroupedData [] [] [] []
 
 instance Semigroup BlockGroupedData where
   tgd1 <> tgd2 =
     BlockGroupedData
       (groupedTxIn tgd1 <> groupedTxIn tgd2)
       (groupedTxOut tgd1 <> groupedTxOut tgd2)
+      (groupedTxMetadata tgd1 <> groupedTxMetadata tgd2)
+      (groupedTxMint tgd1 <> groupedTxMint tgd2)
 
 insertBlockGroupedData ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -73,6 +77,8 @@ insertBlockGroupedData _tracer grouped = do
   let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> groupedTxOut grouped)
   maTxOutIds <- lift $ DB.insertManyMaTxOut maTxOuts
   txInId <- lift . DB.insertManyTxIn $ groupedTxIn grouped
+  void . lift . DB.insertManyTxMetadata $ groupedTxMetadata grouped
+  void . lift . DB.insertManyTxMint $ groupedTxMint grouped
   pure $ DB.MinIds (minimumMaybe txInId) (minimumMaybe txOutIds) (minimumMaybe maTxOutIds)
   where
     mkmaTxOuts :: (DB.TxOutId, [MissingMaTxOut]) -> [DB.MaTxOut]

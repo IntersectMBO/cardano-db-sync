@@ -10,8 +10,12 @@ module Cardano.DbSync.Api (
   SyncEnv (..),
   LedgerEnv (..),
   SyncOptions (..),
+  InsertOptions (..),
   ConsistentLevel (..),
   RunMigration,
+  fullInsertOptions,
+  defaultInsertOptions,
+  turboInsertOptions,
   setConsistentLevel,
   getConsistentLevel,
   isConsistent,
@@ -23,6 +27,7 @@ module Cardano.DbSync.Api (
   replaceConnection,
   verifySnapshotPoint,
   getBackend,
+  getInsertOptions,
   getTrace,
   getTopLevelConfig,
   getNetwork,
@@ -72,10 +77,10 @@ import Ouroboros.Consensus.Block.Abstract (HeaderHash, Point (..), fromRawHash)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Consensus.Config (TopLevelConfig)
 import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
+import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Network.Block (BlockNo (..), Point (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
 import qualified Ouroboros.Network.Point as Point
-import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 
 data SyncEnv = SyncEnv
   { envProtocol :: !SyncProtocol
@@ -148,9 +153,26 @@ data SyncOptions = SyncOptions
   , soptCache :: !Bool
   , soptSkipFix :: !Bool
   , soptOnlyFix :: !Bool
+  , soptInsertOptions :: !InsertOptions
   , snapshotEveryFollowing :: !Word64
   , snapshotEveryLagging :: !Word64
   }
+
+data InsertOptions = InsertOptions
+  { ioMultiAssets :: !Bool
+  , ioMetadata :: !Bool
+  , ioPlutusExtra :: !Bool
+  , ioOfflineData :: !Bool
+  }
+
+fullInsertOptions :: InsertOptions
+fullInsertOptions = InsertOptions True True True True
+
+defaultInsertOptions :: InsertOptions
+defaultInsertOptions = fullInsertOptions
+
+turboInsertOptions :: InsertOptions
+turboInsertOptions = InsertOptions False False False False
 
 replaceConnection :: SyncEnv -> SqlBackend -> IO ()
 replaceConnection env sqlBackend = do
@@ -210,6 +232,9 @@ getNetwork sEnv =
   case envLedgerEnv sEnv of
     HasLedger hasLedgerEnv -> leNetwork hasLedgerEnv
     NoLedger noLedgerEnv -> nleNetwork noLedgerEnv
+
+getInsertOptions :: SyncEnv -> InsertOptions
+getInsertOptions = soptInsertOptions . envOptions
 
 getSlotHash :: SqlBackend -> SlotNo -> IO [(SlotNo, ByteString)]
 getSlotHash backend = DB.runDbIohkNoLogging backend . DB.querySlotHash
@@ -290,7 +315,7 @@ mkSyncEnv ::
   RunMigration ->
   IO SyncEnv
 mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart maybeLedgerDir shouldUseLedger ranAll forcedIndexes runMigration = do
-  cache <- if soptCache syncOptions then newEmptyCache 250000 else pure uninitiatedCache
+  cache <- if soptCache syncOptions then newEmptyCache 250000 50000 else pure uninitiatedCache
   backendVar <- newTVarIO Strict.Nothing
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO ranAll
@@ -351,36 +376,36 @@ mkSyncEnvFromConfig trce connSring syncOptions maybeLedgerDir shouldUseLedger ge
   case genCfg of
     GenesisCardano _ bCfg sCfg _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
-        pure . Left . NECardanoConfig $
-          mconcat
-            [ "ProtocolMagicId "
-            , DB.textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
-            , " /= "
-            , DB.textShow (Shelley.sgNetworkMagic $ scConfig sCfg)
-            ]
+          pure . Left . NECardanoConfig $
+            mconcat
+              [ "ProtocolMagicId "
+              , DB.textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+              , " /= "
+              , DB.textShow (Shelley.sgNetworkMagic $ scConfig sCfg)
+              ]
       | Byron.gdStartTime (Byron.configGenesisData bCfg) /= Shelley.sgSystemStart (scConfig sCfg) ->
-        pure . Left . NECardanoConfig $
-          mconcat
-            [ "SystemStart "
-            , DB.textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
-            , " /= "
-            , DB.textShow (Shelley.sgSystemStart $ scConfig sCfg)
-            ]
+          pure . Left . NECardanoConfig $
+            mconcat
+              [ "SystemStart "
+              , DB.textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
+              , " /= "
+              , DB.textShow (Shelley.sgSystemStart $ scConfig sCfg)
+              ]
       | otherwise ->
-        Right
-          <$> mkSyncEnv
-            trce
-            connSring
-            syncOptions
-            (mkProtocolInfoCardano genCfg [])
-            (Shelley.sgNetworkId $ scConfig sCfg)
-            (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
-            (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
-            maybeLedgerDir
-            shouldUseLedger
-            ranAll
-            forcedIndexes
-            runMigration
+          Right
+            <$> mkSyncEnv
+              trce
+              connSring
+              syncOptions
+              (mkProtocolInfoCardano genCfg [])
+              (Shelley.sgNetworkId $ scConfig sCfg)
+              (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+              (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
+              maybeLedgerDir
+              shouldUseLedger
+              ranAll
+              forcedIndexes
+              runMigration
 
 -- | 'True' is for in memory points and 'False' for on disk
 getLatestPoints :: SyncEnv -> IO [(CardanoPoint, Bool)]

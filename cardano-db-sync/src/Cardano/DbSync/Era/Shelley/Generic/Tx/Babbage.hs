@@ -32,8 +32,8 @@ import qualified Data.Map.Strict as Map
 import Lens.Micro
 import Ouroboros.Consensus.Shelley.Eras (StandardBabbage, StandardCrypto)
 
-fromBabbageTx :: Maybe Alonzo.Prices -> (Word64, Core.Tx StandardBabbage) -> Tx
-fromBabbageTx mprices (blkIndex, tx) =
+fromBabbageTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardBabbage) -> Tx
+fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
     , txBlockIndex = blkIndex
@@ -114,7 +114,7 @@ fromBabbageTx mprices (blkIndex, tx) =
       case Alonzo.isValid tx of
         Alonzo.IsValid x -> x
 
-    (finalMaps, redeemers) = resolveRedeemers mprices tx
+    (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx
     (invalidBefore, invalidAfter) = getInterval $ Babbage.vldt' txBody
 
     collInputs = mkCollTxIn txBody
@@ -133,7 +133,7 @@ fromDatum :: (Ledger.Crypto era ~ StandardCrypto, Ledger.Era era) => Babbage.Dat
 fromDatum bdat =
   case bdat of
     Babbage.NoDatum -> NoDatum
-    Babbage.DatumHash hdh -> DatumHash $ dataHashToBytes hdh
+    Babbage.DatumHash hdh -> DatumHash hdh
     Babbage.Datum binaryData ->
       let plutusData = Alonzo.binaryDataToData binaryData
        in InlineDatum $ mkTxData (Alonzo.hashData plutusData, plutusData)
