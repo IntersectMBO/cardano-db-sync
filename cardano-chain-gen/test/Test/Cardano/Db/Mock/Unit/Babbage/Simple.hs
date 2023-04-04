@@ -28,7 +28,8 @@ forgeBlocks = do
     block2 <- forgeNext interpreter mockBlock2
     let blkNo = blockNo block2
     assertBool (show blkNo <> " /= " <> "3") $
-      blkNo == BlockNo 3
+      blkNo
+        == BlockNo 3
   where
     testLabel = "forgeBlocks"
 

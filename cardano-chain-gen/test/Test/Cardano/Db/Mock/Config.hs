@@ -33,6 +33,7 @@ module Test.Cardano.Db.Mock.Config (
   startDBSync,
   withDBSyncEnv,
   withFullConfig,
+  withFullConfigAndLogs,
   withCustomConfig,
   withCustomConfigAndLogs,
   withFullConfig',
@@ -299,6 +300,15 @@ withFullConfig ::
   [(Text, Text)] ->
   IO a
 withFullConfig = withFullConfig' True False initCommandLineArgs
+
+withFullConfigAndLogs ::
+  FilePath ->
+  FilePath ->
+  (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
+  IOManager ->
+  [(Text, Text)] ->
+  IO a
+withFullConfigAndLogs = withFullConfig' True True initCommandLineArgs
 
 withCustomConfig ::
   CommandLineArgs ->

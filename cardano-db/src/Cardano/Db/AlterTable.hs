@@ -6,8 +6,8 @@
 {-# OPTIONS_GHC -Wno-unused-local-binds #-}
 
 module Cardano.Db.AlterTable (
-  AlterTable(..),
-  DbAlterTableException(..),
+  AlterTable (..),
+  DbAlterTableException (..),
   alterTable,
 ) where
 
@@ -15,10 +15,10 @@ import Control.Exception.Lifted (Exception, handle, throwIO)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT)
-import qualified Data.Text as T
-import Database.Persist.Postgresql (ConstraintNameDB (..), EntityNameDB (..), FieldNameDB (..), SqlBackend, rawExecute, EntityDef, getEntityFields, fieldDB)
-import Database.PostgreSQL.Simple (SqlError (..), ExecStatus (..))
+import qualified Data.Text as Text
 import Database.Persist.EntityDef.Internal (entityDB)
+import Database.Persist.Postgresql (ConstraintNameDB (..), EntityDef, EntityNameDB (..), FieldNameDB (..), Single (..), SqlBackend, fieldDB, getEntityFields, rawExecute, rawSql)
+import Database.PostgreSQL.Simple (ExecStatus (..), SqlError (..))
 
 -- The ability to `ALTER TABLE` currently dealing with `CONSTRAINT` but can be extended
 data AlterTable
@@ -41,34 +41,62 @@ alterTable ::
   AlterTable ->
   ReaderT SqlBackend m ()
 alterTable entity (AddUniqueConstraint cname cols) = do
-  -- Check that input fields are indeed present
   if checkAllFieldsValid entity cols
-    then handle alterTableExceptHandler (rawExecute query [])
-    else liftIO $ throwIO (DbAlterTableException "Constraint field does not exist" sqlError)
+    then do
+      constraintRes <- queryHasConstraint cname
+      if constraintRes
+        then -- the constraint already exists so do nothing
+          pure ()
+        else -- if it doesn't exist then add a new constraint
+          handle alterTableExceptHandler (rawExecute queryAddConstraint [])
+    else throwErr "Some of the unique values which that are being added to the constraint don't correlate with what exists"
   where
-    query :: T.Text
-    query =
-      T.concat
+    queryAddConstraint :: Text.Text
+    queryAddConstraint =
+      Text.concat
         [ "ALTER TABLE "
         , unEntityNameDB (entityDB entity)
-        , " ADD CONSTRAINT IF NOT EXISTS "
+        , " ADD CONSTRAINT "
         , unConstraintNameDB cname
         , " UNIQUE("
-        , T.intercalate "," $ map escapeDBName' cols
+        , Text.intercalate "," $ map escapeDBName' cols
         , ")"
         ]
-    escapeDBName' :: FieldNameDB -> T.Text
-    escapeDBName' name = unFieldNameDB name
+
+    escapeDBName' :: FieldNameDB -> Text.Text
+    escapeDBName' = unFieldNameDB
+
+    throwErr :: forall m'. MonadIO m' => [Char] -> ReaderT SqlBackend m' ()
+    throwErr e = liftIO $ throwIO (DbAlterTableException e sqlError)
 alterTable entity (DropUniqueConstraint cname) =
   handle alterTableExceptHandler (rawExecute query [])
   where
-    query :: T.Text
+    query :: Text.Text
     query =
-      T.concat
+      Text.concat
         [ "ALTER TABLE "
         , unEntityNameDB (entityDB entity)
         , " DROP CONSTRAINT IF EXISTS "
         , unConstraintNameDB cname
+        ]
+
+-- check if a constraint is already present
+queryHasConstraint ::
+  MonadIO m =>
+  ConstraintNameDB ->
+  ReaderT SqlBackend m Bool
+queryHasConstraint cname = do
+  constraintRes :: [Single Int] <- rawSql queryCheckConstraint []
+  if constraintRes == [Single 1]
+    then pure True
+    else pure False
+  where
+    queryCheckConstraint :: Text.Text
+    queryCheckConstraint =
+      Text.concat
+        [ "SELECT COUNT(*) FROM pg_constraint WHERE conname ='"
+        , unConstraintNameDB cname
+        , "'"
         ]
 
 -- check to see that the field inputs exist
@@ -86,10 +114,11 @@ alterTableExceptHandler ::
 alterTableExceptHandler e = liftIO $ throwIO (DbAlterTableException "" e)
 
 sqlError :: SqlError
-sqlError = SqlError
-  { sqlState = ""
-  , sqlExecStatus = FatalError
-  , sqlErrorMsg = ""
-  , sqlErrorDetail = ""
-  , sqlErrorHint = ""
-  }
+sqlError =
+  SqlError
+    { sqlState = ""
+    , sqlExecStatus = FatalError
+    , sqlErrorMsg = ""
+    , sqlErrorDetail = ""
+    , sqlErrorHint = ""
+    }

@@ -1,12 +1,10 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 module Cardano.Db.Insert (
   insertAdaPots,
@@ -118,7 +116,7 @@ import Database.Persist.Sql (
   toPersistFields,
   toPersistValue,
   uniqueDBName,
-  uniqueFields, getEntityForeignDefs,
+  uniqueFields,
  )
 import qualified Database.Persist.Sql.Util as Util
 import Database.Persist.Types (
@@ -126,7 +124,6 @@ import Database.Persist.Types (
   Entity (..),
   EntityNameDB (..),
   FieldNameDB (..),
-  ForeignDef (..),
   PersistValue,
   entityKey,
  )
@@ -175,11 +172,11 @@ insertEpochSyncTime = insertReplace "EpochSyncTime"
 insertExtraKeyWitness :: (MonadBaseControl IO m, MonadIO m) => ExtraKeyWitness -> ReaderT SqlBackend m ExtraKeyWitnessId
 insertExtraKeyWitness = insertUnchecked "ExtraKeyWitness"
 
-insertManyEpochStakes :: (MonadBaseControl IO m, MonadIO m) => [EpochStake] -> ReaderT SqlBackend m ()
-insertManyEpochStakes = insertManyWithUnique "Many EpochStake"
+insertManyEpochStakes :: (MonadBaseControl IO m, MonadIO m) => ConstraintNameDB -> [EpochStake] -> ReaderT SqlBackend m ()
+insertManyEpochStakes = insertManyWithManualUnique "Many EpochStake"
 
-insertManyRewards :: (MonadBaseControl IO m, MonadIO m) => [Reward] -> ReaderT SqlBackend m ()
-insertManyRewards = insertManyWithUnique "Many Rewards"
+insertManyRewards :: (MonadBaseControl IO m, MonadIO m) => ConstraintNameDB -> [Reward] -> ReaderT SqlBackend m ()
+insertManyRewards = insertManyWithManualUnique "Many Rewards"
 
 insertManyTxIn :: (MonadBaseControl IO m, MonadIO m) => [TxIn] -> ReaderT SqlBackend m [TxInId]
 insertManyTxIn = insertMany' "Many TxIn"
@@ -307,7 +304,7 @@ insertExtraMigration token = void . insert $ ExtraMigrations (textShow token) (J
 
 insertEpochStakeProgress :: (MonadBaseControl IO m, MonadIO m) => [EpochStakeProgress] -> ReaderT SqlBackend m ()
 insertEpochStakeProgress =
-  insertManyWithUnique "Many EpochStakeProgress"
+  insertManyUncheckedUnique "Many EpochStakeProgress"
 
 updateSetComplete :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
 updateSetComplete epoch = do
@@ -382,23 +379,25 @@ insertMany' vtype records = handle exceptHandler (insertMany records)
     exceptHandler e =
       liftIO $ throwIO (DbInsertException vtype e)
 
-insertManyWithUnique ::
+insertManyWithManualUnique ::
   forall m record.
   ( MonadBaseControl IO m
   , MonadIO m
   , PersistRecordBackend record SqlBackend
   ) =>
   String ->
+  ConstraintNameDB ->
   [record] ->
   ReaderT SqlBackend m ()
-insertManyWithUnique vtype records = do
-  let foreingDefs = getEntityForeignDefs $ entityDef $ Proxy @record
-  unless (null records || null foreingDefs) $
-    handle exceptHandler (rawExecute (query foreingDefs) values)
+insertManyWithManualUnique vtype constraintName records = do
+  -- let foreingDefs = getEntityForeignDefs $ entityDef $ Proxy @record
+
+  unless (null records) $
+    handle exceptHandler (rawExecute query values)
   where
-    query :: [ForeignDef] -> Text
+    query :: Text
     -- the pattern is incomplete but the list will not be empty due to null check
-    query [ForeignDef {..}] =
+    query =
       Text.concat
         [ "INSERT INTO "
         , unEntityNameDB (entityDB . entityDef $ records)
@@ -411,7 +410,49 @@ insertManyWithUnique vtype records = do
             . Util.commaSeparated
             $ placeholders
         , " ON CONFLICT ON CONSTRAINT "
-        , unConstraintNameDB foreignConstraintNameDBName
+        , unConstraintNameDB constraintName
+        , " DO NOTHING"
+        ]
+
+    values :: [PersistValue]
+    values = concatMap (map toPersistValue . toPersistFields) records
+
+    fieldNames, placeholders :: [Text]
+    (fieldNames, placeholders) =
+      unzip (Util.mkInsertPlaceholders (entityDef (Proxy @record)) escapeFieldName)
+
+    exceptHandler :: SqlError -> ReaderT SqlBackend m a
+    exceptHandler e =
+      liftIO $ throwIO (DbInsertException vtype e)
+
+insertManyUncheckedUnique ::
+  forall m record.
+  ( MonadBaseControl IO m
+  , MonadIO m
+  , OnlyOneUniqueKey record
+  ) =>
+  String ->
+  [record] ->
+  ReaderT SqlBackend m ()
+insertManyUncheckedUnique vtype records =
+  unless (null records) $
+    handle exceptHandler (rawExecute query values)
+  where
+    query :: Text
+    query =
+      Text.concat
+        [ "INSERT INTO "
+        , unEntityNameDB (entityDB . entityDef $ records)
+        , " ("
+        , Util.commaSeparated fieldNames
+        , ") VALUES "
+        , Util.commaSeparated
+            . replicate (length records)
+            . Util.parenWrapped
+            . Util.commaSeparated
+            $ placeholders
+        , " ON CONFLICT ON CONSTRAINT "
+        , unConstraintNameDB (uniqueDBName $ onlyOneUniqueDef (Proxy @record))
         , " DO NOTHING"
         ]
 

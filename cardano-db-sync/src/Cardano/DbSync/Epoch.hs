@@ -62,10 +62,11 @@ epochHandler syncEnv trce cache isNewEpochEvent (BlockDetails cblk details) =
     -- What we do here is completely independent of Shelley/Allegra/Mary eras.
     epochSlotTimecheck :: ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
     epochSlotTimecheck = do
-      when (sdSlotTime details > sdCurrentTime details) $
-        liftIO . logError trce $
-          mconcat
-            ["Slot time '", textShow (sdSlotTime details), "' is in the future"]
+      when (sdSlotTime details > sdCurrentTime details)
+        $ liftIO
+          . logError trce
+        $ mconcat
+          ["Slot time '", textShow (sdSlotTime details), "' is in the future"]
       updateEpochStart syncEnv cache details isNewEpochEvent False
 
 updateEpochStart ::
