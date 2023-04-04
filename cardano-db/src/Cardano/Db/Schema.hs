@@ -169,6 +169,7 @@ share
     txOutId             TxId                noreference         -- The transaction where this was created as an output.
     txOutIndex          Word64              sqltype=txindex
     redeemerId          RedeemerId Maybe    noreference
+    deriving Show
 
   CollateralTxIn
     txInId              TxId                noreference     -- The transaction where this is used as an input.

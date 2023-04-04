@@ -569,7 +569,7 @@ queryTxId hash = do
   pure $ maybeToEither (DbLookupTxHash hash) entityKey (listToMaybe res)
 
 -- | Give a (tx hash, index) pair, return the TxOut value.
-queryTxOutValue :: MonadIO m => (ByteString, Word64) -> ReaderT SqlBackend m (Either LookupFail (TxId, DbLovelace))
+queryTxOutValue :: MonadIO m => (ByteString, Word64) -> ReaderT SqlBackend m (Either LookupFail (TxId, TxOutId, DbLovelace))
 queryTxOutValue (hash, index) = do
   res <- select $ do
     (tx :& txOut) <-
@@ -578,8 +578,8 @@ queryTxOutValue (hash, index) = do
           `innerJoin` table @TxOut
         `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. TxOutTxId)
     where_ (txOut ^. TxOutIndex ==. val index &&. tx ^. TxHash ==. val hash)
-    pure (txOut ^. TxOutTxId, txOut ^. TxOutValue)
-  pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
+    pure (txOut ^. TxOutTxId, txOut ^. TxOutId, txOut ^. TxOutValue)
+  pure $ maybeToEither (DbLookupTxHash hash) unValue3 (listToMaybe res)
 
 -- | Give a (tx hash, index) pair, return the TxOut Credentials.
 queryTxOutCredentials :: MonadIO m => (ByteString, Word64) -> ReaderT SqlBackend m (Either LookupFail (Maybe ByteString, Bool))
