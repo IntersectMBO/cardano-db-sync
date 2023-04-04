@@ -47,6 +47,7 @@ module Cardano.Db.Query (
   queryMinRefId,
   existsPoolHashId,
   existsPoolMetadataRefId,
+  getTxOutConsumedAfter,
   -- queries used in smash
   queryPoolOfflineData,
   queryPoolRegister,
@@ -635,6 +636,15 @@ existsPoolMetadataRefId pmrid = do
     limit 1
     pure (pmr ^. PoolMetadataRefId)
   pure $ not (null res)
+
+-- | This requires an index at TxOutConsumedByTxInId.
+getTxOutConsumedAfter :: MonadIO m => TxInId -> ReaderT SqlBackend m [TxOutId]
+getTxOutConsumedAfter txInId = do
+  res <- select $ do
+    txOut <- from $ table @TxOut
+    where_ (txOut ^. TxOutConsumedByTxInId >=. just (val txInId))
+    pure $ txOut ^. persistIdField
+  pure $ unValue <$> res
 
 {--------------------------------------------
   Queries use in SMASH
