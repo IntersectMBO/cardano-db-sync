@@ -3,10 +3,10 @@
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -Wno-unused-matches #-}
-{-# LANGUAGE RankNTypes #-}
 
 module Cardano.DbSync.Default (
   insertListBlocks,
@@ -34,6 +34,7 @@ import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Rollback
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import Cardano.DbSync.Util.Constraint (epochStakeConstraintName, rewardConstraintName)
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
 import Cardano.Ledger.Shelley.AdaPots as Shelley
 import Cardano.Prelude
@@ -45,7 +46,7 @@ import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
-import Database.Persist.Postgresql (ConstraintNameDB (..), FieldNameDB (..), PersistEntity (entityDef))
+import Database.Persist.Postgresql (FieldNameDB (..), PersistEntity (entityDef))
 import Database.Persist.SqlBackend.Internal
 import Database.Persist.SqlBackend.Internal.StatementCache
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
@@ -79,8 +80,9 @@ applyAndInsertBlockMaybe syncEnv cblk = do
       -- equal, insert the block and restore consistency between ledger and db.
       case eiBlockInDbAlreadyId of
         Left _ -> do
-          liftIO . logInfo tracer $
-            mconcat
+          liftIO
+            . logInfo tracer
+            $ mconcat
               [ "Received block which is not in the db with "
               , textShow (getHeaderFields cblk)
               , ". Time to restore consistency."
@@ -93,7 +95,6 @@ applyAndInsertBlockMaybe syncEnv cblk = do
           -- we can put the constraints on rewards table
           lift addRewardTableConstraint
           lift addEpochStakeTableConstraint
-
         Right blockId | Just (adaPots, slotNo, epochNo) <- getAdaPots applyRes -> do
           replaced <- lift $ DB.replaceAdaPots blockId $ mkAdaPots blockId slotNo epochNo adaPots
           if replaced
@@ -125,13 +126,13 @@ applyAndInsertBlockMaybe syncEnv cblk = do
       Generic.neEpoch <$> maybeFromStrict (apNewEpoch appRes)
 
 addRewardTableConstraint ::
-  forall m. ( MonadBaseControl IO m , MonadIO m) => ReaderT SqlBackend m ()
+  forall m. (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m ()
 addRewardTableConstraint = do
   let entityD = entityDef $ Proxy @DB.Reward
   DB.alterTable
     entityD
     ( DB.AddUniqueConstraint
-        (ConstraintNameDB "unique_reward")
+        rewardConstraintName
         [ FieldNameDB "addr_id"
         , FieldNameDB "type"
         , FieldNameDB "earned_epoch"
@@ -140,14 +141,15 @@ addRewardTableConstraint = do
     )
 
 addEpochStakeTableConstraint ::
-  forall m. ( MonadBaseControl IO m , MonadIO m) => ReaderT SqlBackend m ()
+  forall m. (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m ()
 addEpochStakeTableConstraint = do
   let entityD = entityDef $ Proxy @DB.EpochStake
   DB.alterTable
     entityD
     ( DB.AddUniqueConstraint
-        (ConstraintNameDB "epoch_no")
-        [ FieldNameDB "addr_id"
+        epochStakeConstraintName
+        [ FieldNameDB "epoch_no"
+        , FieldNameDB "addr_id"
         , FieldNameDB "pool_id"
         ]
     )
@@ -215,8 +217,9 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   -- update the epoch
   updateEpoch details isNewEpochEvent
   whenPruneTxOut syncEnv $
-    when (unBlockNo blkNo `mod` getPruneInterval syncEnv == 0) $ do
-      lift $ DB.deleteConsumedTxOut tracer (getSafeBlockNoDiff syncEnv)
+    when (unBlockNo blkNo `mod` getPruneInterval syncEnv == 0) $
+      do
+        lift $ DB.deleteConsumedTxOut tracer (getSafeBlockNoDiff syncEnv)
   lift $ commitOrIndexes withinTwoMin withinHalfHour
   where
     tracer = getTrace syncEnv
