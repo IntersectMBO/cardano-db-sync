@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -25,8 +26,11 @@ module Cardano.DbSync.Cache (
   insertBlockAndCache,
   readCacheEpoch,
   writeCacheEpoch,
+  writeBlockToCacheEpoch,
+  writeEpochToCacheEpoch,
   queryDatum,
   insertDatumAndCache,
+
   -- * CacheStatistics
   CacheStatistics,
   getCacheStatistics,
@@ -100,7 +104,7 @@ data CacheStatistics = CacheStatistics
 
 data CacheEpoch = CacheEpoch
   { ceEpoch :: !(Maybe DB.Epoch)
-  , ceLastKnownBlockId :: !(Maybe DB.BlockId)
+  , ceLastKnownBlock :: !(Maybe CardanoBlock)
   }
 
 hitCreds :: StrictTVar IO CacheStatistics -> IO ()
@@ -167,6 +171,46 @@ writeCacheEpoch cache cacheEpoch =
   case cache of
     UninitiatedCache -> pure ()
     Cache ci -> liftIO $ atomically $ writeTVar (cEpoch ci) cacheEpoch
+
+-- write a block into the cache
+writeBlockToCacheEpoch ::
+  MonadIO m =>
+  Cache ->
+  CardanoBlock ->
+  ReaderT SqlBackend m ()
+writeBlockToCacheEpoch cache block =
+  case cache of
+    UninitiatedCache -> pure ()
+    Cache ci -> do
+      CacheEpoch {..} <- liftIO $ readTVarIO (cEpoch ci)
+      liftIO $
+        atomically $
+          writeTVar
+            (cEpoch ci)
+            CacheEpoch
+              { ceEpoch = ceEpoch
+              , ceLastKnownBlock = Just block
+              }
+
+-- write a new epoch to the cache
+writeEpochToCacheEpoch ::
+  MonadIO m =>
+  Cache ->
+  DB.Epoch ->
+  ReaderT SqlBackend m ()
+writeEpochToCacheEpoch cache newEpoch =
+  case cache of
+    UninitiatedCache -> pure ()
+    Cache ci -> do
+      CacheEpoch {..} <- liftIO $ readTVarIO (cEpoch ci)
+      liftIO $
+        atomically $
+          writeTVar
+            (cEpoch ci)
+            CacheEpoch
+              { ceEpoch = Just newEpoch
+              , ceLastKnownBlock = ceLastKnownBlock
+              }
 
 textShowStats :: Cache -> IO Text
 textShowStats UninitiatedCache = pure "UninitiatedCache"

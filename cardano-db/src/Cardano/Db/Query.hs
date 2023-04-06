@@ -335,8 +335,8 @@ parseAndCalulateNewEpoch ::
   (Word64, Maybe UTCTime, Maybe UTCTime) ->
   (Maybe Rational, Maybe Rational, Word64) ->
   Epoch
-parseAndCalulateNewEpoch epochNum (blkCount, b, c) (d, e, txCount) =
-  case (b, c, d, e) of
+parseAndCalulateNewEpoch epochNum (blkCount, minBlockTime, maxBlockTime) (sumTxOut, sumTxFee, txCount) =
+  case (minBlockTime, maxBlockTime, sumTxOut, sumTxFee) of
     (Just start, Just end, Just outSum, Just fees) ->
       Epoch
         (fromIntegral $ numerator outSum)

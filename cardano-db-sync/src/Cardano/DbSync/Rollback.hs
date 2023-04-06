@@ -52,7 +52,7 @@ rollbackFromBlockNo syncEnv blkNo = do
           cache
           ( CacheEpoch
               { ceEpoch = Nothing
-              , ceLastKnownBlockId = Nothing
+              , ceLastKnownBlock = Nothing
               }
           )
 
