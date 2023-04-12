@@ -15,8 +15,7 @@ import qualified Cardano.Chain.Block as Byron
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache (Cache, CacheEpoch (..), readCacheEpoch, writeBlockToCacheEpoch, writeCacheEpoch, writeEpochToCacheEpoch)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import qualified Cardano.DbSync.Era.Shelley.Generic.Block as Generic
-import Cardano.DbSync.Era.Shelley.Insert.Grouped (BlockGroupedData (..), resolveTxInputs)
+import Cardano.DbSync.Era.Shelley.Query (queryResolveInput)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
@@ -60,7 +59,7 @@ epochStartup cache isExtended trce backend =
         Nothing ->
           pure ()
         Just latestEpoch -> do
-          let eNum = epochNo latestEpoch
+          let eNum = DB.epochNo latestEpoch
               backOne = if eNum == 0 then 0 else eNum - 1
           mEpoch <- queryEpochFromNum backOne
           -- putting the epoch into cache but not a blockId as we don't have that yet
@@ -119,7 +118,7 @@ insertEpoch trce cache slotDetails = do
   let maybeEpoch = ceEpoch latestCachedEpoch
 
   -- if there isn't cache epock number default it to 0
-  let lastCachedEpochNo = maybe 0 epochNo maybeEpoch
+  let lastCachedEpochNo = maybe 0 DB.epochNo maybeEpoch
       slotEpochNum = unEpochNo (sdEpochNo slotDetails)
 
   -- These cases are listed from the least likey to occur to the most
@@ -171,10 +170,14 @@ updateEpochDB cache slotEpochNum slotDetails epochId = do
         Nothing -> queryCalc
         Just clastKnowBlock -> do
           -- if we have both a block and epoch in cache let's use them to calculate the next epoch
-          let newCalculatedEpoch = calculateEpochUsingCache clastKnowBlock cEpoch slotDetails
-          -- put the new results into cache and on the DB
-          void $ writeEpochToCacheEpoch cache newCalculatedEpoch
-          Right <$> replace epochId newCalculatedEpoch
+          newCalculatedEpoch <- calculateEpochUsingCache clastKnowBlock cEpoch slotDetails
+          case newCalculatedEpoch of
+            -- TODO: report what went wrong? before running expensive query
+            Left _ -> queryCalc
+            Right ep -> do
+              -- put the new results into cache and on the DB
+              void $ writeEpochToCacheEpoch cache ep
+              Right <$> replace epochId ep
   where
     queryCalc ::
       MonadIO m =>
@@ -193,6 +196,7 @@ updateEpochDB cache slotEpochNum slotDetails epochId = do
       Right <$> replace epochId newEpoch
 
 calculateEpochUsingCache ::
+  (MonadBaseControl IO m, MonadIO m) =>
   CardanoBlock ->
   DB.Epoch ->
   SlotDetails ->
@@ -228,68 +232,50 @@ calculateEpochUsingCache cBlock cEpoch slotDetails = do
 
 -- Calculating a new epoch by taking the current block getting all the values we need from it.
 -- We then the epoch in cache and add these new values to it, thus giving us a new updated epoch.
-calculateEpochGeneric :: Generic.Block -> DB.Epoch -> SlotDetails -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.Epoch
+calculateEpochGeneric ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  Generic.Block ->
+  DB.Epoch ->
+  SlotDetails ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) DB.Epoch
 calculateEpochGeneric block cEpoch slotDetails = do
-  let newEpochTxCount = fromIntegral DB.epochTxCount cEpoch + length (Generic.blkTxs block)
-      newBlkCount = fromIntegral DB.epochBlkCount cEpoch + 1
+  let newEpochTxCount = fromIntegral (DB.epochTxCount cEpoch) + length (Generic.blkTxs block)
+      newBlkCount = fromIntegral $ DB.epochBlkCount cEpoch + 1
       txs = Generic.blkTxs block
-      outSum = sum $ map (unCoin . Generic.txOutSum) txs
+      outSum = sum $ map (fromIntegral . unCoin . Generic.txOutSum) txs
 
-  -- TODO: Vince- unable to work out how I get the `inSum` properlly, this is mostly coppied from
-  --       insertTx inside of Cardano.DbSync.Era.Shelley.Insert
-  newFees <- foldM (\gp transaction -> calNewFees transaction outSum gp) mempty (Generic.blkTxs block)
+  newFees <- mapM (`calNewFees` outSum) txs
+  let sumNewFees = sum newFees
 
-  pure DB.Epoch
-    { DB.epochOutSum = fromIntegral (outSum + fromIntegral DB.epochOutSum cEpoch)
-    , DB.epochFees = DB.DbLovelace $ fromIntegral DB.epochFees cEpoch -- + just need to add new fees of block
-    , DB.epochTxCount = fromIntegral newEpochTxCount
-    , DB.epochBlkCount = fromIntegral newBlkCount
-    , DB.epochNo = unEpochNo (sdEpochNo slotDetails)
-    , DB.epochStartTime = DB.epochStartTime cEpoch
-    , DB.epochEndTime = sdSlotTime slotDetails
-    }
+  pure
+    DB.Epoch
+      { DB.epochOutSum = fromIntegral (outSum + fromIntegral (DB.epochOutSum cEpoch))
+      , DB.epochFees = DB.DbLovelace (DB.unDbLovelace (DB.epochFees cEpoch) + sumNewFees)
+      , DB.epochTxCount = fromIntegral newEpochTxCount
+      , DB.epochBlkCount = fromIntegral newBlkCount
+      , DB.epochNo = unEpochNo (sdEpochNo slotDetails)
+      , DB.epochStartTime = DB.epochStartTime cEpoch
+      , DB.epochEndTime = sdSlotTime slotDetails
+      }
   where
-    calNewFees :: Generic.Tx -> Integer -> BlockGroupedData -> ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
-    calNewFees tx outS grouped = do
-      resolvedInputs <- mapM (resolveTxInputs (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
+    -- calculating the fees for current block using Tx's
+    calNewFees ::
+      (MonadBaseControl IO m, MonadIO m) =>
+      Generic.Tx ->
+      Word64 ->
+      ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
+    calNewFees tx outS = do
+      -- taking all the txInputs and getting their values from a DB lookup.
+      -- Errors are ignored but might actually need to handle this gracefully
+      qResInputRes <- lift $ mapM queryResolveInput (Generic.txInputs tx)
+
       let cacheFee = fromIntegral $ DB.unDbLovelace $ DB.epochFees cEpoch
-          otS = fromInteger outS
-          inSum = sum $ map (DB.unDbLovelace . thrd3) resolvedInputs
-          diffSum = if inSum >= otS then inSum - otS else 0
-          newFees = maybe diffSum (fromIntegral . unCoin) (Generic.txFees t)
+          -- get all of the values that returned and sum them up
+          inSum = sum [DB.unDbLovelace dbl | Right (_, dbl) <- qResInputRes]
+          diffSum = if inSum >= outS then inSum - outS else 0
+          -- not all fees are present so we handle the Nothings by using diffSum
+          newFees = maybe diffSum (fromIntegral . unCoin) (Generic.txFees tx)
       pure newFees
-
--- This is for one block only so we only care about end times
--- ( countRows
---   -- only need one time as it's just one block
--- , minBlockTime = sdSlotTime details
--- , maxBlockTime = sdSlotTime details
--- )
-
--- this ammount is a sum of all the txOutSum in TX
--- ( sumTxOut = sum [txOutSum Tx]
-
--- , sumTxFee = sum [txFees Tx]
--- , count = length [txOutSum Tx]
--- )
-
--- Epoch
---   sumTxOut ${1:Word128}
---   fee ${2:DbLovelace}
---   txCount ${3:Word64}
---   blkCount ${4:Word64}
---   no ${5:Word64}
---   startTime ${6:UTCTime}
---   endTime ${7:UTCTime}
-
--- outSum              Word128             sqltype=word128type
--- fees                DbLovelace          sqltype=lovelace
--- txCount             Word64              sqltype=word31type
--- blkCount            Word64              sqltype=word31type
--- no                  Word64              sqltype=word31type
--- startTime           UTCTime             sqltype=timestamp
--- endTime             UTCTime             sqltype=timestamp
--- UniqueEpoch         no
 
 insertEpochDB ::
   (MonadBaseControl IO m, MonadIO m) =>
