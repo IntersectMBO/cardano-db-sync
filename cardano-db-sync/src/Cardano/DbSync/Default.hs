@@ -153,7 +153,12 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
     insertEpoch details =
       when (soptExtended $ envOptions syncEnv)
         . newExceptT
-        $ epochInsert tracer (envCache syncEnv) (BlockDetails cblk details)
+        $ epochHandler
+           tracer
+           (EpochPlutusAndPrices (ioPlutusExtra iopts) (getPrices applyResult))
+           (BlockDetails cblk details)
+           (ioPlutusExtra iopts)
+           (getPrices applyResult)
 
     getPrices :: ApplyResult -> Maybe Ledger.Prices
     getPrices applyResult = case apPrices applyResult of

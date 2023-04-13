@@ -173,7 +173,7 @@ runSyncNode metricsSetters trce iomgr dbConnString ranAll runMigration syncNodeP
               logInfo trce "Migrating to a no ledger schema"
               Db.noLedgerMigrations backend trce
           lift $ orDie renderSyncNodeError $ insertValidateGenesisDist trce backend (dncNetworkName syncNodeConfig) genCfg (useShelleyInit syncNodeConfig)
-          liftIO $ epochStartup (enpExtended syncNodeParams) trce backend
+          -- liftIO $ epochStartup (envCache syncEnv) (enpExtended syncNodeParams) trce backend
 
     case genCfg of
       GenesisCardano {} -> do
