@@ -46,16 +46,6 @@ rollbackFromBlockNo syncEnv blkNo = do
     lift $ do
       DB.deleteBlocksBlockId trce blockId
       DB.deleteEpochRows epochNo
-      -- clear any Epoch related state in cache
-      void $
-        writeCacheEpoch
-          cache
-          ( CacheEpoch
-              { ceEpoch = Nothing
-              , ceLastKnownBlock = Nothing
-              }
-          )
-
     liftIO . logInfo trce $ "Blocks deleted"
   where
     trce = getTrace syncEnv

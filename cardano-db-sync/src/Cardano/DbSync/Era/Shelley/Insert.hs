@@ -66,6 +66,7 @@ import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text.Encoding as Text
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
+import Cardano.DbSync.Epoch (queryLatestEpoch)
 
 {- HLINT ignore "Reduce duplication" -}
 
@@ -114,8 +115,13 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
     let txInserter = insertTx tracer cache (getInsertOptions syncEnv) (getNetwork syncEnv) isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
-    grouped <- foldM (\gp (idx, tx) -> txInserter idx tx gp) mempty zippedTx
-    minIds <- insertBlockGroupedData tracer grouped
+    (blockGroupedData, txFees) <- foldM (\gp (idx, tx) -> txInserter idx tx gp) (mempty, 0) zippedTx
+    minIds <- insertBlockGroupedData tracer blockGroupedData
+
+    latestEpochFromDb <- lift queryLatestEpoch
+
+    lift $ writeCacheEpoch (envCache syncEnv) (CacheEpoch latestEpochFromDb (CardanoBlock blk) txFees)
+
     when withinHalfHour $
       insertReverseIndex blkId minIds
 
@@ -220,12 +226,13 @@ insertTx ::
   SlotNo ->
   Word64 ->
   Generic.Tx ->
-  BlockGroupedData ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) BlockGroupedData
-insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx grouped = do
+  -- | (_, Fees) keeping a sum of the fees
+  (BlockGroupedData, Word64) ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) (BlockGroupedData, Word64)
+insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx (blockGroupData, groupedFees) = do
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
       !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
-  !resolvedInputs <- mapM (resolveTxInputs (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
+  !resolvedInputs <- mapM (resolveTxInputs (fst <$> groupedTxOut blockGroupData)) (Generic.txInputs tx)
   let !inSum = sum $ map (unDbLovelace . thrd3) resolvedInputs
   let diffSum = if inSum >= outSum then inSum - outSum else 0
   let !fees = maybe diffSum (fromIntegral . unCoin) (Generic.txFees tx)
@@ -255,13 +262,13 @@ insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx 
       !txOutsGrouped <- mapM (prepareTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
 
       let !txIns = map (prepareTxIn txId Map.empty) resolvedInputs
-      pure $ grouped <> BlockGroupedData txIns txOutsGrouped [] []
+      pure (blockGroupData <> BlockGroupedData txIns txOutsGrouped [] [], groupedFees + fees)
     else do
       -- The following operations only happen if the script passes stage 2 validation (or the tx has
       -- no script).
       !txOutsGrouped <- mapM (prepareTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
 
-      !redeemers <- Map.fromList <$> mapM (insertRedeemer tracer (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx)
+      !redeemers <- Map.fromList <$> mapM (insertRedeemer tracer (fst <$> groupedTxOut blockGroupData) txId) (Generic.txRedeemer tx)
 
       when (ioPlutusExtra iopts) $
         mapM_ (insertDatum tracer cache txId) (Generic.txData tx)
@@ -293,7 +300,7 @@ insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx 
       mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
-      pure $ grouped <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint
+      pure (blockGroupData <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint, groupedFees + fees)
 
 prepareTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>

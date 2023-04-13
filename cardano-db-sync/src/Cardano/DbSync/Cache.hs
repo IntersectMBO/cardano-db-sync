@@ -86,7 +86,7 @@ data CacheInternal = CacheInternal
   , cMultiAssets :: !(StrictTVar IO (LRUCache (PolicyID StandardCrypto, AssetName) DB.MultiAssetId))
   , cPrevBlock :: !(StrictTVar IO (Maybe (DB.BlockId, ByteString)))
   , cStats :: !(StrictTVar IO CacheStatistics)
-  , cEpoch :: !(StrictTVar IO CacheEpoch)
+  , cEpoch :: !(StrictTVar IO (Maybe CacheEpoch))
   }
 
 data CacheStatistics = CacheStatistics
@@ -104,7 +104,8 @@ data CacheStatistics = CacheStatistics
 
 data CacheEpoch = CacheEpoch
   { ceEpoch :: !(Maybe DB.Epoch)
-  , ceLastKnownBlock :: !(Maybe CardanoBlock)
+  , ceBlock :: !CardanoBlock
+  , ceFees :: !Word64
   }
 
 hitCreds :: StrictTVar IO CacheStatistics -> IO ()
@@ -156,10 +157,10 @@ getCacheStatistics cs =
     UninitiatedCache -> pure initCacheStatistics
     Cache ci -> readTVarIO (cStats ci)
 
-readCacheEpoch :: Cache -> IO CacheEpoch
+readCacheEpoch :: Cache -> IO (Maybe CacheEpoch)
 readCacheEpoch cache =
   case cache of
-    UninitiatedCache -> pure $ CacheEpoch Nothing Nothing
+    UninitiatedCache -> pure Nothing
     Cache ci -> readTVarIO (cEpoch ci)
 
 writeCacheEpoch ::
@@ -170,7 +171,7 @@ writeCacheEpoch ::
 writeCacheEpoch cache cacheEpoch =
   case cache of
     UninitiatedCache -> pure ()
-    Cache ci -> liftIO $ atomically $ writeTVar (cEpoch ci) cacheEpoch
+    Cache ci -> liftIO $ atomically $ writeTVar (cEpoch ci) $ Just cacheEpoch
 
 -- write a block into the cache
 writeBlockToCacheEpoch ::
@@ -182,15 +183,10 @@ writeBlockToCacheEpoch cache block =
   case cache of
     UninitiatedCache -> pure ()
     Cache ci -> do
-      CacheEpoch {..} <- liftIO $ readTVarIO (cEpoch ci)
-      liftIO $
-        atomically $
-          writeTVar
-            (cEpoch ci)
-            CacheEpoch
-              { ceEpoch = ceEpoch
-              , ceLastKnownBlock = Just block
-              }
+      cachedEpoch <- liftIO $ readTVarIO (cEpoch ci)
+      case cachedEpoch of
+        Nothing -> pure ()
+        Just cacheE -> liftIO $ atomically $ writeTVar (cEpoch ci) (Just cacheE {ceBlock = block})
 
 -- write a new epoch to the cache
 writeEpochToCacheEpoch ::
@@ -202,15 +198,11 @@ writeEpochToCacheEpoch cache newEpoch =
   case cache of
     UninitiatedCache -> pure ()
     Cache ci -> do
-      CacheEpoch {..} <- liftIO $ readTVarIO (cEpoch ci)
-      liftIO $
-        atomically $
-          writeTVar
-            (cEpoch ci)
-            CacheEpoch
-              { ceEpoch = Just newEpoch
-              , ceLastKnownBlock = ceLastKnownBlock
-              }
+      cachedEpoch <- liftIO $ readTVarIO (cEpoch ci)
+      case cachedEpoch of
+        Nothing -> pure ()
+        Just cacheE ->
+          liftIO $ atomically $ writeTVar (cEpoch ci) (Just $ cacheE {ceEpoch = Just newEpoch})
 
 textShowStats :: Cache -> IO Text
 textShowStats UninitiatedCache = pure "UninitiatedCache"
@@ -280,9 +272,6 @@ textShowStats (Cache ic) = do
 uninitiatedCache :: Cache
 uninitiatedCache = UninitiatedCache
 
-initCacheEpoch :: CacheEpoch
-initCacheEpoch = CacheEpoch Nothing Nothing
-
 newEmptyCache :: MonadIO m => Word64 -> Word64 -> m Cache
 newEmptyCache maCapacity daCapacity =
   liftIO . fmap Cache $
@@ -293,7 +282,7 @@ newEmptyCache maCapacity daCapacity =
       <*> newTVarIO (LRU.empty maCapacity)
       <*> newTVarIO Nothing
       <*> newTVarIO initCacheStatistics
-      <*> newTVarIO initCacheEpoch
+      <*> newTVarIO Nothing
 
 -- Rollbacks make everything harder and the same applies to caching.
 -- After a rollback db entries are deleted, so we need to clean the same
@@ -316,6 +305,7 @@ rollbackCache (Cache cache) = do
   liftIO $ do
     atomically $ writeTVar (cPrevBlock cache) Nothing
     atomically $ modifyTVar (cDatum cache) LRU.cleanup
+    atomically $ writeTVar (cEpoch cache) Nothing
 
 queryRewardAccountWithCache ::
   forall m.
