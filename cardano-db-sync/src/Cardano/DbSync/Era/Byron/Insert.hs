@@ -29,8 +29,8 @@ import Cardano.DbSync.Cache
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
-import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import Cardano.DbSync.Types
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
 import Control.Monad.Trans.Control (MonadBaseControl)
@@ -40,6 +40,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
+import Cardano.DbSync.Epoch (queryLatestEpoch)
 
 -- Trivial local data type for use in place of a tuple.
 data ValueFee = ValueFee
@@ -50,15 +51,16 @@ data ValueFee = ValueFee
 insertByronBlock ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
+  CardanoBlock ->
   Bool ->
   ByronBlock ->
   SlotDetails ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-insertByronBlock syncEnv firstBlockOfEpoch blk details = do
+insertByronBlock syncEnv cBlk firstBlockOfEpoch blk details = do
   res <- runExceptT $
     case byronBlockRaw blk of
-      Byron.ABOBBlock ablk -> insertABlock tracer cache firstBlockOfEpoch ablk details
-      Byron.ABOBBoundary abblk -> insertABOBBoundary tracer cache abblk details
+      Byron.ABOBBlock ablk -> insertABlock tracer cache cBlk firstBlockOfEpoch ablk details
+      Byron.ABOBBoundary abblk -> insertABOBBoundary tracer cache cBlk abblk details
   -- Serializing things during syncing can drastically slow down full sync
   -- times (ie 10x or more).
   when
@@ -76,10 +78,11 @@ insertABOBBoundary ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   Cache ->
+  CardanoBlock ->
   Byron.ABoundaryBlock ByteString ->
   SlotDetails ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertABOBBoundary tracer cache blk details = do
+insertABOBBoundary tracer cache cBlk blk details = do
   -- Will not get called in the OBFT part of the Byron era.
   pbid <- queryPrevBlockWithCache "insertABOBBoundary" cache (Byron.ebbPrevHash blk)
   slid <-
@@ -111,6 +114,10 @@ insertABOBBoundary tracer cache blk details = do
       , DB.blockOpCertCounter = Nothing
       }
 
+  -- now that we've inserted all the txs for a Byron Block lets put what we need in the cach
+  latestEpochFromDb <- lift queryLatestEpoch
+  void $ lift $ writeCacheEpoch cache (CacheEpoch latestEpochFromDb cBlk 0)
+
   liftIO . logInfo tracer $
     Text.concat
       [ "insertABOBBoundary: epoch "
@@ -123,11 +130,12 @@ insertABlock ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   Cache ->
+  CardanoBlock ->
   Bool ->
   Byron.ABlock ByteString ->
   SlotDetails ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertABlock tracer cache firstBlockOfEpoch blk details = do
+insertABlock tracer cache cBlk firstBlockOfEpoch blk details = do
   pbid <- queryPrevBlockWithCache "insertABlock" cache (Byron.blockPreviousHash blk)
   slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
   blkId <-
@@ -151,7 +159,11 @@ insertABlock tracer cache firstBlockOfEpoch blk details = do
         , DB.blockOpCertCounter = Nothing
         }
 
-  zipWithM_ (insertTx tracer blkId) (Byron.blockPayload blk) [0 ..]
+  txFees <- zipWithM (insertByronTx tracer blkId) (Byron.blockPayload blk) [0 ..]
+
+  -- now that we've inserted all the txs for a Byron Block lets put what we need in the cache
+  latestEpochFromDb <- lift queryLatestEpoch
+  lift $ writeCacheEpoch cache (CacheEpoch latestEpochFromDb cBlk (sum txFees))
 
   liftIO $ do
     let epoch = unEpochNo (sdEpochNo details)
@@ -188,14 +200,14 @@ insertABlock tracer cache firstBlockOfEpoch blk details = do
       | Byron.blockNumber blk `mod` 1000 == 0 = logInfo
       | otherwise = logDebug
 
-insertTx ::
+insertByronTx ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   DB.BlockId ->
   Byron.TxAux ->
   Word64 ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertTx tracer blkId tx blockIndex = do
+  ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
+insertByronTx tracer blkId tx blockIndex = do
   resolvedInputs <- mapM resolveTxInputs (toList $ Byron.txInputs (Byron.taTx tx))
   valFee <- firstExceptT annotateTx $ ExceptT $ pure (calculateTxFee (Byron.taTx tx) resolvedInputs)
   txId <-
@@ -220,6 +232,8 @@ insertTx tracer blkId tx blockIndex = do
   -- references the output (not sure this can even happen).
   lift $ zipWithM_ (insertTxOut tracer txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
   mapMVExceptT (insertTxIn tracer txId) resolvedInputs
+  -- we are returning fees so we can sum them and use that to insert into the epoch
+  pure $ unDbLovelace $ vfFee valFee
   where
     annotateTx :: SyncNodeError -> SyncNodeError
     annotateTx ee =

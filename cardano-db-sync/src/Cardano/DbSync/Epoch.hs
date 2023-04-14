@@ -7,19 +7,23 @@
 {-# OPTIONS_GHC -Wno-unused-local-binds #-}
 
 module Cardano.DbSync.Epoch (
-  EpochPlutusAndPrices(..),
+  EpochPlutusAndPrices (..),
   epochHandler,
   queryLatestEpoch,
 ) where
 
 import Cardano.BM.Trace (Trace, logError, logInfo)
-import qualified Cardano.Chain.Block as Byron
+import qualified Cardano.Chain.Block as Byron hiding (blockHash)
+import qualified Cardano.Chain.Common as Byron
+import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache (Cache, CacheEpoch (..), readCacheEpoch, writeEpochToCacheEpoch)
+import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Prelude hiding (from, on, replace)
 import Cardano.Slotting.Slot (EpochNo (..))
@@ -42,31 +46,12 @@ import Database.Esqueleto.Experimental (
  )
 import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
-import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
 
 -- Populating the Epoch table has two mode:
 --  * SyncLagging: when the node is far behind the chain tip and is just updating the DB. In this
 --    mode, the row for an epoch is only calculated and inserted when at the end of the epoch.
 --  * Following: When the node is at or close to the chain tip, the row for a given epoch is
 --    updated on each new block.
-
--- When in syncing mode, the row for the current epoch being synced may be incorrect.
--- epochStartup :: Cache -> Bool -> Trace IO Text -> SqlBackend -> IO ()
--- epochStartup cache isExtended trce backend =
---   when isExtended $ do
---     DB.runDbIohkLogging backend trce $ do
---       liftIO . logInfo trce $ "epochStartup: Checking"
---       mLatestEpoch <- queryLatestEpoch
---       case mLatestEpoch of
---         Nothing ->
---           pure ()
---         Just latestEpoch -> do
---           let eNum = DB.epochNo latestEpoch
---               backOne = if eNum == 0 then 0 else eNum - 1
---           mEpoch <- queryEpochFromNum backOne
---           -- putting the correct epoch into cache as per comment above
---           writeCacheEpoch
---             cache Nothing
 
 data EpochPlutusAndPrices = EpochPlutusAndPrices
   { epochIsPlutusExtra :: !Bool
@@ -206,21 +191,12 @@ calculateEpochUsingCache ePlutusPrices cacheEpoch ceE slotDetails = do
   let eIsEplutus = epochIsPlutusExtra ePlutusPrices
       ePrices = epochPrices ePlutusPrices
   case ceBlock cacheEpoch of
-    -- TODO: Vince - this case isn't as straight forward need to understand how we deal with Byron
-    BlockByron blk -> case byronBlockRaw blk of
-      Byron.ABOBBlock aBlock ->
-        calculateEpochGeneric
-          undefined -- aBlock
-          ceE
-          cacheEpoch
-          slotDetails
-      Byron.ABOBBoundary aBoundaryBlock ->
-        calculateEpochGeneric
-          undefined -- aBoundaryBlock
-          ceE
-          cacheEpoch
-          slotDetails
-
+    BlockByron blk ->
+      calculateEpochByron
+        blk
+        ceE
+        cacheEpoch
+        slotDetails
     BlockShelley blk ->
       calculateEpochGeneric
         (Generic.fromShelleyBlock blk)
@@ -240,7 +216,7 @@ calculateEpochUsingCache ePlutusPrices cacheEpoch ceE slotDetails = do
         cacheEpoch
         slotDetails
     BlockAlonzo blk ->
-        calculateEpochGeneric
+      calculateEpochGeneric
         (Generic.fromAlonzoBlock eIsEplutus ePrices blk)
         ceE
         cacheEpoch
@@ -261,15 +237,51 @@ calculateEpochGeneric ::
   SlotDetails ->
   DB.Epoch
 calculateEpochGeneric block ceE cacheEpoch slotDetails = do
-  let cFees = ceFees cacheEpoch
-      newEpochTxCount = fromIntegral (DB.epochTxCount ceE) + length (Generic.blkTxs block)
-      newBlkCount = fromIntegral $ DB.epochBlkCount ceE + 1
-      txs = Generic.blkTxs block
+  let txs = Generic.blkTxs block
+      newEpochTxCount = length txs
       outSum = sum $ map (fromIntegral . unCoin . Generic.txOutSum) txs
+  convertToEpoch ceE cacheEpoch slotDetails newEpochTxCount outSum
+
+calculateEpochByron ::
+  ByronBlock ->
+  DB.Epoch ->
+  CacheEpoch ->
+  SlotDetails ->
+  DB.Epoch
+calculateEpochByron block ceE cacheEpoch slotDetails = do
+  -- we handle Tx differently with Byron blocks
+  let (newEpochTxCount, newOutSum) =
+        case byronBlockRaw block of
+          Byron.ABOBBlock aBlock -> do
+                -- the txs in the block
+            let txs = Byron.blockPayload aBlock
+                newTxCount = length txs
+                -- getting all the TxOut values in Lovelace
+                byronTxOutValues = concatMap (toList . (\tx -> map Byron.txOutValue (Byron.txOutputs $ Byron.taTx tx))) txs
+                -- sum the TxOut values
+                outSum = sum $ map Byron.lovelaceToInteger byronTxOutValues
+            (newTxCount, outSum)
+          Byron.ABOBBoundary _ ->
+            -- it doesn't seem like ABOBBoundary handles tx's?
+            (0, 0)
+  convertToEpoch ceE cacheEpoch slotDetails newEpochTxCount newOutSum
+
+convertToEpoch ::
+  DB.Epoch ->
+  CacheEpoch ->
+  SlotDetails ->
+  -- | tx count
+  Int ->
+  -- | sum of outTx values
+  Integer ->
+  DB.Epoch
+convertToEpoch ceE cacheEpoch slotDetails newEpochTxCount outSum = do
+  let cFees = ceFees cacheEpoch
+      newBlkCount = fromIntegral $ DB.epochBlkCount ceE + 1
   DB.Epoch
     { DB.epochOutSum = fromIntegral (outSum + fromIntegral (DB.epochOutSum ceE))
     , DB.epochFees = DB.DbLovelace (DB.unDbLovelace (DB.epochFees ceE) + cFees)
-    , DB.epochTxCount = fromIntegral newEpochTxCount
+    , DB.epochTxCount = fromIntegral (fromIntegral (DB.epochTxCount ceE) + newEpochTxCount)
     , DB.epochBlkCount = fromIntegral newBlkCount
     , DB.epochNo = unEpochNo (sdEpochNo slotDetails)
     , DB.epochStartTime = DB.epochStartTime ceE

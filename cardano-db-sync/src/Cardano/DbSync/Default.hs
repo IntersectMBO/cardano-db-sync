@@ -114,6 +114,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   let insertShelley blk =
         insertShelleyBlock
           syncEnv
+          cblk
           shouldLog
           withinTwoMin
           withinHalfHour
@@ -125,7 +126,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   case cblk of
     BlockByron blk ->
       newExceptT $
-        insertByronBlock syncEnv shouldLog blk details
+        insertByronBlock syncEnv cblk shouldLog blk details
     BlockShelley blk ->
       newExceptT $
         insertShelley $
@@ -146,21 +147,20 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
       newExceptT $
         insertShelley $
           Generic.fromBabbageBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
-  insertEpoch details
+  insertEpoch details applyResult
   lift $ commitOrIndexes withinTwoMin withinHalfHour
   where
     tracer = getTrace syncEnv
     iopts = getInsertOptions syncEnv
 
-    insertEpoch details =
+    insertEpoch details appRes =
       when (soptExtended $ envOptions syncEnv)
         . newExceptT
         $ epochHandler
            tracer
-           (EpochPlutusAndPrices (ioPlutusExtra iopts) (getPrices applyResult))
+           (envCache syncEnv)
+           (EpochPlutusAndPrices (ioPlutusExtra iopts) (getPrices appRes))
            (BlockDetails cblk details)
-           (ioPlutusExtra iopts)
-           (getPrices applyResult)
 
     getPrices :: ApplyResult -> Maybe Ledger.Prices
     getPrices applyResult = case apPrices applyResult of
