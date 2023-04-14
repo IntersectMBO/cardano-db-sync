@@ -7,6 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 
 module Cardano.DbSync.Era.Shelley.Insert (
   insertShelleyBlock,
@@ -75,6 +76,7 @@ type IsPoolMember = PoolKeyHash -> Bool
 insertShelleyBlock ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
+  CardanoBlock ->
   Bool ->
   Bool ->
   Bool ->
@@ -84,7 +86,7 @@ insertShelleyBlock ::
   Strict.Maybe Generic.NewEpoch ->
   Generic.StakeSliceRes ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details isMember mNewEpoch stakeSlice = do
+insertShelleyBlock syncEnv cBlk shouldLog withinTwoMins withinHalfHour blk details isMember mNewEpoch stakeSlice = do
   runExceptT $ do
     pbid <- case Generic.blkPreviousHash blk of
       Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
@@ -118,9 +120,9 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
     (blockGroupedData, txFees) <- foldM (\gp (idx, tx) -> txInserter idx tx gp) (mempty, 0) zippedTx
     minIds <- insertBlockGroupedData tracer blockGroupedData
 
+    -- now that we've inserted all the txs for a ShellyBlock lets put what we need in the cache
     latestEpochFromDb <- lift queryLatestEpoch
-
-    lift $ writeCacheEpoch (envCache syncEnv) (CacheEpoch latestEpochFromDb (CardanoBlock blk) txFees)
+    lift $ writeCacheEpoch (envCache syncEnv) (CacheEpoch latestEpochFromDb cBlk txFees)
 
     when withinHalfHour $
       insertReverseIndex blkId minIds
