@@ -62,7 +62,7 @@ A table for blocks on the chain.
 | `time` | timestamp | The block time (UTCTime). |
 | `tx_count` | integer (64) | The number of transactions in this block. |
 | `proto_major` | word31type | The block's major protocol number. |
-| `proto_minor` | word31type | The block's major protocol number. |
+| `proto_minor` | word31type | The block's minor protocol number. |
 | `vrf_key` | string | The VRF key of the creator of this block. |
 | `op_cert` | hash32type | The hash of the operational certificate of the block producer. |
 | `op_cert_counter` | word63type | The value of the counter used to produce the operational certificate. |
