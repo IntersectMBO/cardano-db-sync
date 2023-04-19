@@ -133,7 +133,7 @@ insertOrReplaceEpoch cache ePlutusPrices slotEpochNum trce slotDetails = do
   -- calculate and insert a new epoch otherwise we replace existing epoch.
   maybe
     (insertEpochIntoDB trce slotEpochNum)
-    (replaceEpoch cache ePlutusPrices slotEpochNum slotDetails)
+    (replaceEpoch trce cache ePlutusPrices slotEpochNum slotDetails)
     mEpochID
 
 insertEpochIntoDB ::
@@ -151,22 +151,28 @@ insertEpochIntoDB trce slotEpochNum = do
 --   to calculate our new epoch all from cache rather than querying the db which is expensive.
 replaceEpoch ::
   (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
   Cache ->
   EpochPlutusAndPrices ->
   Word64 ->
   SlotDetails ->
   DB.EpochId ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-replaceEpoch cache ePlutusPrices slotEpochNum slotDetails epochId = do
+replaceEpoch trce cache ePlutusPrices slotEpochNum slotDetails epochId = do
   cacheEpoch <- liftIO $ readCacheEpoch cache
   -- do we have a cacheEpoch
   case cacheEpoch of
-    Nothing -> calculateFromDbAndReplaceEpoch
+    Nothing -> do
+      liftIO . logInfo trce $ "replaceEpoch: using cacheEpoch Nothing "
+      calculateFromDbAndReplaceEpoch
     Just cEpoch -> do
       case ceEpoch cEpoch of
-        Nothing -> calculateFromDbAndReplaceEpoch
+        Nothing -> do
+          liftIO . logInfo trce $ "replaceEpoch: ceEpoch Nothing "
+          calculateFromDbAndReplaceEpoch
         Just ceE -> do
           let newCalculatedEpoch = calculateEpochUsingCache ePlutusPrices cEpoch ceE slotDetails
+          liftIO . logInfo trce $ "replaceEpoch: calculated epoch from cache: " <> textShow newCalculatedEpoch
           void $ writeEpochToCacheEpoch cache newCalculatedEpoch
           Right <$> replace epochId newCalculatedEpoch
   where
