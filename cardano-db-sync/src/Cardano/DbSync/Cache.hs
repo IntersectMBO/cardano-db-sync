@@ -26,7 +26,7 @@ module Cardano.DbSync.Cache (
   insertBlockAndCache,
   readCacheEpoch,
   writeCacheEpoch,
-  writeBlockToCacheEpoch,
+  writeBlockAndFeeToCacheEpoch,
   writeEpochToCacheEpoch,
   queryDatum,
   insertDatumAndCache,
@@ -174,19 +174,20 @@ writeCacheEpoch cache cacheEpoch =
     Cache ci -> liftIO $ atomically $ writeTVar (cEpoch ci) $ Just cacheEpoch
 
 -- write a block into the cache
-writeBlockToCacheEpoch ::
+writeBlockAndFeeToCacheEpoch ::
   MonadIO m =>
   Cache ->
   CardanoBlock ->
+  Word64 ->
   ReaderT SqlBackend m ()
-writeBlockToCacheEpoch cache block =
+writeBlockAndFeeToCacheEpoch cache block fees =
   case cache of
     UninitiatedCache -> pure ()
     Cache ci -> do
       cachedEpoch <- liftIO $ readTVarIO (cEpoch ci)
       case cachedEpoch of
         Nothing -> pure ()
-        Just cacheE -> liftIO $ atomically $ writeTVar (cEpoch ci) (Just cacheE {ceBlock = block})
+        Just cacheE -> liftIO $ atomically $ writeTVar (cEpoch ci) (Just cacheE {ceBlock = block, ceFees = fees})
 
 -- write a new epoch to the cache
 writeEpochToCacheEpoch ::
