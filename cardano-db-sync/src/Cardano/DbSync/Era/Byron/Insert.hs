@@ -40,7 +40,6 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
-import Cardano.DbSync.Epoch (queryLatestEpoch)
 
 -- Trivial local data type for use in place of a tuple.
 data ValueFee = ValueFee
@@ -114,9 +113,8 @@ insertABOBBoundary tracer cache cBlk blk details = do
       , DB.blockOpCertCounter = Nothing
       }
 
-  -- now that we've inserted all the txs for a Byron Block lets put what we need in the cach
-  latestEpochFromDb <- lift queryLatestEpoch
-  void $ lift $ writeCacheEpoch cache (CacheEpoch latestEpochFromDb cBlk 0)
+  -- now that we've inserted all the txs for a Byron Block lets put what we need in the cache
+  void $ lift $ writeBlockAndFeeToCacheEpoch cache cBlk 0
 
   liftIO . logInfo tracer $
     Text.concat
@@ -162,8 +160,7 @@ insertABlock tracer cache cBlk firstBlockOfEpoch blk details = do
   txFees <- zipWithM (insertByronTx tracer blkId) (Byron.blockPayload blk) [0 ..]
 
   -- now that we've inserted all the txs for a Byron Block lets put what we need in the cache
-  latestEpochFromDb <- lift queryLatestEpoch
-  lift $ writeCacheEpoch cache (CacheEpoch latestEpochFromDb cBlk (sum txFees))
+  lift $ writeBlockAndFeeToCacheEpoch cache cBlk (sum txFees)
 
   liftIO $ do
     let epoch = unEpochNo (sdEpochNo details)

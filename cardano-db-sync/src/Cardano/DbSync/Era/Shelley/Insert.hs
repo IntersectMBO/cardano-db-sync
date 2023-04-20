@@ -67,7 +67,6 @@ import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text.Encoding as Text
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
-import Cardano.DbSync.Epoch (queryLatestEpoch)
 
 {- HLINT ignore "Reduce duplication" -}
 
@@ -117,12 +116,11 @@ insertShelleyBlock syncEnv cBlk shouldLog withinTwoMins withinHalfHour blk detai
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
     let txInserter = insertTx tracer cache (getInsertOptions syncEnv) (getNetwork syncEnv) isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
-    (blockGroupedData, txFees) <- foldM (\gp (idx, tx) -> txInserter idx tx gp) (mempty, 0) zippedTx
+    blockGroupedData <- foldM (\gp (idx, tx) -> txInserter idx tx gp) mempty zippedTx
     minIds <- insertBlockGroupedData tracer blockGroupedData
 
     -- now that we've inserted all the txs for a ShellyBlock lets put what we need in the cache
-    latestEpochFromDb <- lift queryLatestEpoch
-    lift $ writeCacheEpoch (envCache syncEnv) (CacheEpoch latestEpochFromDb cBlk txFees)
+    lift $ writeBlockAndFeeToCacheEpoch cache cBlk (sum $ groupedTxFees blockGroupedData)
 
     when withinHalfHour $
       insertReverseIndex blkId minIds
@@ -229,9 +227,9 @@ insertTx ::
   Word64 ->
   Generic.Tx ->
   -- | (_, Fees) keeping a sum of the fees
-  (BlockGroupedData, Word64) ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) (BlockGroupedData, Word64)
-insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx (blockGroupData, groupedFees) = do
+  BlockGroupedData ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) BlockGroupedData
+insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx blockGroupData = do
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
       !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
   !resolvedInputs <- mapM (resolveTxInputs (fst <$> groupedTxOut blockGroupData)) (Generic.txInputs tx)
@@ -264,7 +262,7 @@ insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx 
       !txOutsGrouped <- mapM (prepareTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
 
       let !txIns = map (prepareTxIn txId Map.empty) resolvedInputs
-      pure (blockGroupData <> BlockGroupedData txIns txOutsGrouped [] [], groupedFees + fees)
+      pure (blockGroupData <> BlockGroupedData txIns txOutsGrouped [] [] [fees])
     else do
       -- The following operations only happen if the script passes stage 2 validation (or the tx has
       -- no script).
@@ -302,7 +300,7 @@ insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx 
       mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
-      pure (blockGroupData <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint, groupedFees + fees)
+      pure (blockGroupData <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint [fees])
 
 prepareTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
