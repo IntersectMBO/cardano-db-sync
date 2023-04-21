@@ -44,7 +44,10 @@ module Cardano.Db.Query (
   queryTxId,
   queryTxOutValue,
   queryTxOutCredentials,
+  queryEpochFromNum,
   queryEpochStakeCount,
+  queryForEpochId,
+  queryLatestEpoch,
   queryMinRefId,
   existsPoolHashId,
   existsPoolMetadataRefId,
@@ -168,7 +171,7 @@ import Database.Esqueleto.Experimental (
   (?.),
   (^.),
   (||.),
-  type (:&) ((:&)),
+  type (:&) ((:&)), selectOne,
  )
 import Database.Persist.Class.PersistQuery (selectList)
 import Database.Persist.Types (SelectOpt (Asc))
@@ -298,6 +301,32 @@ queryCalcEpochEntry epochNum = do
     pure (countRows, min_ (block ^. BlockTime), max_ (block ^. BlockTime))
   queryTxWithBlocks epochNum blockResult
 
+-- | Get the PostgreSQL row index (EpochId) that matches the given epoch number.
+queryForEpochId :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe EpochId)
+queryForEpochId epochNum = do
+  res <- selectOne $ do
+    epoch <- from $ table @Epoch
+    where_ (epoch ^. EpochNo ==. val epochNum)
+    pure (epoch ^. EpochId)
+  pure $ unValue <$> res
+
+-- | Get an epoch given it's number.
+queryEpochFromNum :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Epoch)
+queryEpochFromNum epochNum = do
+  res <- selectOne $ do
+    epoch <- from $ table @Epoch
+    where_ (epoch ^. EpochNo ==. val epochNum)
+    pure epoch
+  pure $ entityVal <$> res
+
+-- | Get the most recent epoch in the Epoch table.
+queryLatestEpoch :: MonadIO m => ReaderT SqlBackend m (Maybe Epoch)
+queryLatestEpoch = do
+  res <- selectOne $ do
+    epoch <- from $ table @Epoch
+    orderBy [desc (epoch ^. EpochNo)]
+    pure epoch
+  pure $ entityVal <$> res
 
 -- | Calculate the Epoch table entry from last known blockid taken from cache.
 -- When following the chain, this is called for each new block of the current epoch.
