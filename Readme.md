@@ -17,7 +17,7 @@ instance fully synced to a specific network is:
 * Look up the balance of any stake address for any Shelley or later epoch.
 * Look up the amount of ADA delegated to each pool for any Shelley or later epoch.
 
-Example SQL queries are available at [Example Queries][ExampleQueries].
+Example SQL queries are available at [Example Queries][ExampleQueries]. You can also find some [DB Sync best practices here](https://docs.cardano.org/cardano-components/cardano-db-sync/best-practices).
 
 ## Architecture
 
