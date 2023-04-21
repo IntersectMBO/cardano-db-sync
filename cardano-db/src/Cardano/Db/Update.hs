@@ -3,6 +3,7 @@
 module Cardano.Db.Update (
   setNullTxOut,
   updateTxOutConsumedByTxInId,
+  updateTxOutConsumedByTxInIdUnique,
   updateListTxOutConsumedByTxInId
 ) where
 
@@ -17,7 +18,7 @@ import Control.Monad.Trans.Reader (ReaderT)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Word (Word64)
-import Database.Persist ((=.))
+import Database.Persist (updateWhere, (=.), (==.))
 import Database.Persist.Class (update)
 import Database.Persist.Sql (SqlBackend)
 
@@ -27,6 +28,10 @@ updateListTxOutConsumedByTxInId = mapM_ (uncurry updateTxOutConsumedByTxInId)
 updateTxOutConsumedByTxInId :: MonadIO m => TxOutId -> TxInId -> ReaderT SqlBackend m ()
 updateTxOutConsumedByTxInId txOutId txInId =
     update txOutId [TxOutConsumedByTxInId =. Just txInId]
+
+updateTxOutConsumedByTxInIdUnique :: MonadIO m => TxId -> Word64 -> TxInId -> ReaderT SqlBackend m ()
+updateTxOutConsumedByTxInIdUnique txOutId index txInId =
+    updateWhere [TxOutTxId ==. txOutId, TxOutIndex ==. index] [TxOutConsumedByTxInId =. Just txInId]
 
 setNullTxOut :: MonadIO m => Trace IO Text -> MinIds -> Word64 -> ReaderT SqlBackend m ()
 setNullTxOut trce minIds txInDeleted = do

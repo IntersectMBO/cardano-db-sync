@@ -48,6 +48,9 @@ module Cardano.Db.Query (
   existsPoolHashId,
   existsPoolMetadataRefId,
   getTxOutConsumedAfter,
+  getInputPage,
+  countTxIn,
+  countConsumed,
   -- queries used in smash
   queryPoolOfflineData,
   queryPoolRegister,
@@ -149,6 +152,7 @@ import Database.Esqueleto.Experimental (
   min_,
   notExists,
   not_,
+  offset,
   on,
   orderBy,
   persistIdField,
@@ -645,6 +649,34 @@ getTxOutConsumedAfter txInId = do
     where_ (txOut ^. TxOutConsumedByTxInId >=. just (val txInId))
     pure $ txOut ^. persistIdField
   pure $ unValue <$> res
+
+getInputPage :: MonadIO m => Word64 -> Word64 -> ReaderT SqlBackend m [(TxInId, TxId, Word64)]
+getInputPage offs pageSize = do
+    res <- select $ do
+      txIn <- from $ table @TxIn
+      limit (fromIntegral pageSize)
+      offset (fromIntegral offs)
+      orderBy [asc (txIn ^. TxInId)]
+      pure txIn
+    pure $ convert <$> res
+  where
+    convert txIn =
+      (entityKey txIn, txInTxOutId (entityVal txIn), txInTxOutIndex (entityVal txIn))
+
+countTxIn :: MonadIO m => ReaderT SqlBackend m Word64
+countTxIn = do
+  res <- select $ do
+    _ <- from $ table @TxIn
+    pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
+
+countConsumed :: MonadIO m => ReaderT SqlBackend m Word64
+countConsumed = do
+  res <- select $ do
+    txOut <- from $ table @TxOut
+    where_ (isJust $ txOut ^. TxOutConsumedByTxInId)
+    pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
 
 {--------------------------------------------
   Queries use in SMASH

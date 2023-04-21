@@ -137,22 +137,25 @@ runMigrations pgconfig quiet migrationDir mLogfiledir mToRun = do
         mVersion <- runWithConnectionNoLogging (PGPassCached pgconfig) querySchemaVersion
         case mVersion of
           Just (SchemaVersion _ v _) | v == hardCoded3_0 -> do
-            pure (filter (not . filterFix) scripts, False)
+            pure (filter (not . filterFix3_0) scripts, False)
           _ -> pure (scripts, True)
       Initial -> do
         mVersion <- runWithConnectionNoLogging (PGPassCached pgconfig) querySchemaVersion
         case mVersion of
           Just (SchemaVersion _ v _) | v == hardCoded3_0 -> do
-            pure (filter (\m -> not $ filterFix m || filterIndexes m) scripts, False)
+            pure (filter (\m -> not $ filterFix3_0 m || filterIndexes m) scripts, False)
           _ -> pure (filter (not . filterIndexes) scripts, True)
-      Fix -> pure (filter filterFix scripts, False)
+      Fix -> pure (filter filterFix3_0 scripts, False)
       Indexes -> pure (filter filterIndexes scripts, False)
 
-    filterFix (mv, _) = mvStage mv == 2 && mvVersion mv > hardCoded3_0
+    filterFix3_0 (mv, _) = mvStage mv == 2 && mvVersion mv > hardCoded3_0
     filterIndexes (mv, _) = mvStage mv == 4
 
 hardCoded3_0 :: Int
 hardCoded3_0 = 19
+
+_hardCoded3_1 :: Int
+_hardCoded3_1 = 25
 
 -- Build hash for each file found in a directory.
 validateMigrations :: MigrationDir -> [(Text, Text)] -> IO (Maybe (MigrationValidateError, Bool))
