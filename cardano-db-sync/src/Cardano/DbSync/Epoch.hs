@@ -9,7 +9,6 @@
 module Cardano.DbSync.Epoch (
   EpochPlutusAndPrices (..),
   epochHandler,
-  queryLatestEpoch,
 ) where
 
 import Cardano.BM.Trace (Trace, logError, logInfo)
@@ -17,7 +16,8 @@ import qualified Cardano.Chain.Block as Byron hiding (blockHash)
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Cache (Cache, CacheEpoch (..), readCacheEpoch, writeEpochToCacheEpoch)
+import Cardano.DbSync.Cache.Epoch (readCacheEpoch, writeEpochToCacheEpoch, readEpochFromCacheEpoch)
+import Cardano.DbSync.Cache.Types (Cache (..), CacheEpoch (..))
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Error
@@ -29,21 +29,7 @@ import Cardano.Prelude hiding (from, on, replace)
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Monad.Logger (LoggingT)
 import Control.Monad.Trans.Control (MonadBaseControl)
-import Database.Esqueleto.Experimental (
-  Entity (entityVal),
-  SqlBackend,
-  desc,
-  from,
-  orderBy,
-  replace,
-  selectOne,
-  table,
-  unValue,
-  val,
-  where_,
-  (==.),
-  (^.),
- )
+import Database.Esqueleto.Experimental (SqlBackend, replace)
 import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 
@@ -57,6 +43,7 @@ data EpochPlutusAndPrices = EpochPlutusAndPrices
   { epochIsPlutusExtra :: !Bool
   , epochPrices :: !(Maybe Ledger.Prices)
   }
+
 epochHandler ::
   Trace IO Text ->
   Cache ->
@@ -100,20 +87,21 @@ checkSlotAndEpochNum ::
   ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
 checkSlotAndEpochNum trce cache ePlutusPrices slotDetails = do
   -- read the chached Epoch
-  (Just cacheEpoch) <- liftIO $ readCacheEpoch cache
+  mEpoch <- liftIO $ readEpochFromCacheEpoch cache
 
   -- if there isn't a cached epoch default it's number to 0 as this is the first block.
-  let mEpoch = ceEpoch cacheEpoch
-      epochNum = maybe 0 DB.epochNo mEpoch
-
+  let epochNum = maybe 0 DB.epochNo mEpoch
       slotEpochNum = unEpochNo (sdEpochNo slotDetails)
 
   -- These cases are listed from the least likey to occur to the most
   -- likley to keep the logic sane.
   if
-      | slotEpochNum > 0 && isNothing mEpoch -> insertOrReplaceEpoch cache ePlutusPrices 0 trce slotDetails
-      | slotEpochNum >= epochNum + 2 -> insertOrReplaceEpoch cache ePlutusPrices (epochNum + 1) trce slotDetails
-      | getSyncStatus slotDetails == SyncFollowing -> insertOrReplaceEpoch cache ePlutusPrices slotEpochNum trce slotDetails
+      | slotEpochNum > 0 && isNothing mEpoch ->
+          insertOrReplaceEpoch cache ePlutusPrices 0 trce slotDetails
+      | slotEpochNum >= epochNum + 2 ->
+          insertOrReplaceEpoch cache ePlutusPrices (epochNum + 1) trce slotDetails
+      | getSyncStatus slotDetails == SyncFollowing ->
+          insertOrReplaceEpoch cache ePlutusPrices slotEpochNum trce slotDetails
       | otherwise -> pure $ Right ()
 
 -- -------------------------------------------------------------------------------------------------
@@ -128,23 +116,37 @@ insertOrReplaceEpoch ::
   ReaderT SqlBackend m (Either SyncNodeError ())
 insertOrReplaceEpoch cache ePlutusPrices slotEpochNum trce slotDetails = do
   -- get the epoch id using a slot number
-  mEpochID <- queryForEpochId slotEpochNum
+  mEpochID <- DB.queryForEpochId slotEpochNum
   -- if the epoch id doesn't exist this means we don't have it yet so we
   -- calculate and insert a new epoch otherwise we replace existing epoch.
   maybe
-    (insertEpochIntoDB trce slotEpochNum)
+    (insertEpochIntoDB trce cache ePlutusPrices slotEpochNum slotDetails)
     (replaceEpoch trce cache ePlutusPrices slotEpochNum slotDetails)
     mEpochID
 
 insertEpochIntoDB ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  Cache ->
+  EpochPlutusAndPrices ->
   Word64 ->
+  SlotDetails ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-insertEpochIntoDB trce slotEpochNum = do
-  epoch <- DB.queryCalcEpochEntry slotEpochNum
-  liftIO . logInfo trce $ "epochPluginInsertBlockDetails: epoch " <> textShow slotEpochNum
-  void $ DB.insertEpoch epoch
+insertEpochIntoDB trce cache ePlutusPrices slotEpochNum slotDetails = do
+  epochCacheEpoch <- liftIO $ readEpochFromCacheEpoch cache
+  cacheEpoch <- liftIO $ readCacheEpoch cache
+
+  -- let's see if we can calculate the epoch from cache
+  newCalculatedEpoch <-
+    case (cacheEpoch, epochCacheEpoch) of
+      (Just cEpoch, Just ceE)  -> pure $ calculateEpochUsingCache ePlutusPrices cEpoch ceE slotDetails
+      (_, _) -> DB.queryCalcEpochEntry slotEpochNum
+
+  liftIO . logInfo trce $ "insertEpochIntoDB: epoch " <> textShow slotEpochNum
+  -- put new epoch indo the DB
+  void $ DB.insertEpoch newCalculatedEpoch
+  -- put new epoch into cache
+  void $ writeEpochToCacheEpoch cache newCalculatedEpoch
   pure $ Right ()
 
 -- | When replacing an epoch we have the opertunity to try and use the cacheEpoch values
@@ -162,30 +164,61 @@ replaceEpoch trce cache ePlutusPrices slotEpochNum slotDetails epochId = do
   cacheEpoch <- liftIO $ readCacheEpoch cache
   -- do we have a cacheEpoch
   case cacheEpoch of
+    -- Technically there will always be something in the cache once this function is called
+    -- but to be exhaustive this is here.
     Nothing -> do
-      liftIO . logInfo trce $ "replaceEpoch: using cacheEpoch Nothing "
-      calculateFromDbAndReplaceEpoch
+      liftIO . logInfo trce $ "replaceEpoch: CacheEpoch is Nothing so using DB to calculate epoch "
+      calculateEpochUsingDBQuery cache slotEpochNum epochId
     Just cEpoch -> do
       case ceEpoch cEpoch of
         Nothing -> do
-          liftIO . logInfo trce $ "replaceEpoch: ceEpoch Nothing "
-          calculateFromDbAndReplaceEpoch
+          liftIO . logInfo trce $ "replaceEpoch: ceEpoch in cache is Nothing "
+          tryWithEpochFromDB cache cEpoch ePlutusPrices slotEpochNum epochId slotDetails
+          -- calculateEpochUsingDBQuery cache slotEpochNum epochId
         Just ceE -> do
           let newCalculatedEpoch = calculateEpochUsingCache ePlutusPrices cEpoch ceE slotDetails
           liftIO . logInfo trce $ "replaceEpoch: calculated epoch from cache: " <> textShow newCalculatedEpoch
           void $ writeEpochToCacheEpoch cache newCalculatedEpoch
           Right <$> replace epochId newCalculatedEpoch
-  where
-    calculateFromDbAndReplaceEpoch ::
-      MonadIO m =>
-      ReaderT SqlBackend m (Either SyncNodeError ())
-    calculateFromDbAndReplaceEpoch = do
-      -- this query is expensive and what we are trying to avoid
-      newEpoch <- DB.queryCalcEpochEntry slotEpochNum
-      -- add the newly calculated epoch to cache.
-      void $ writeEpochToCacheEpoch cache newEpoch
-      -- replace the current epoch in the DB with our newly calculated epoch
-      Right <$> replace epochId newEpoch
+
+calculateEpochUsingDBQuery ::
+  MonadIO m =>
+  Cache ->
+  Word64 ->
+  DB.EpochId ->
+  ReaderT SqlBackend m (Either SyncNodeError ())
+calculateEpochUsingDBQuery cache slotEpochNum epochId = do
+  -- this query is an expensive lookup so should be rarely used
+  newEpoch <- DB.queryCalcEpochEntry slotEpochNum
+  -- add the newly calculated epoch to cache.
+  void $ writeEpochToCacheEpoch cache newEpoch
+  -- replace the current epoch in the DB with our newly calculated epoch
+  Right <$> replace epochId newEpoch
+
+tryWithEpochFromDB ::
+  MonadIO m =>
+  Cache ->
+  CacheEpoch ->
+  EpochPlutusAndPrices ->
+  Word64 ->
+  DB.EpochId ->
+  SlotDetails ->
+  ReaderT SqlBackend m (Either SyncNodeError ())
+tryWithEpochFromDB cache ceE ePlutusPrices slotEpochNum epochId slotDetails = do
+  -- get the last known epoch from DB as there isn't one is CacheEpoch
+
+  -- need to check if this is a rollback because getting the last epoch from DB would create incorrect information.
+  latestEpochFromDb <- DB.queryLatestEpoch
+  case latestEpochFromDb of
+    -- if there isn't one in the DB as well then this is going to be the first block
+    Nothing -> do
+      calculateEpochUsingDBQuery cache slotEpochNum epochId
+    Just ep -> do
+      let newCalculatedEpoch = calculateEpochUsingCache ePlutusPrices ceE ep slotDetails
+      void $ writeEpochToCacheEpoch cache newCalculatedEpoch
+      Right <$> replace epochId newCalculatedEpoch
+
+
 
 calculateEpochUsingCache ::
   EpochPlutusAndPrices ->
@@ -246,7 +279,7 @@ calculateEpochGeneric block ceE cacheEpoch slotDetails = do
   let txs = Generic.blkTxs block
       newEpochTxCount = length txs
       outSum = sum $ map (fromIntegral . unCoin . Generic.txOutSum) txs
-  convertToEpoch ceE cacheEpoch slotDetails newEpochTxCount outSum
+  parseToEpoch ceE cacheEpoch slotDetails newEpochTxCount outSum
 
 calculateEpochByron ::
   ByronBlock ->
@@ -259,7 +292,7 @@ calculateEpochByron block ceE cacheEpoch slotDetails = do
   let (newEpochTxCount, newOutSum) =
         case byronBlockRaw block of
           Byron.ABOBBlock aBlock -> do
-                -- the txs in the block
+            -- the txs in the block
             let txs = Byron.blockPayload aBlock
                 newTxCount = length txs
                 -- getting all the TxOut values in Lovelace
@@ -270,9 +303,9 @@ calculateEpochByron block ceE cacheEpoch slotDetails = do
           Byron.ABOBBoundary _ ->
             -- it doesn't seem like ABOBBoundary handles tx's?
             (0, 0)
-  convertToEpoch ceE cacheEpoch slotDetails newEpochTxCount newOutSum
+  parseToEpoch ceE cacheEpoch slotDetails newEpochTxCount newOutSum
 
-convertToEpoch ::
+parseToEpoch ::
   DB.Epoch ->
   CacheEpoch ->
   SlotDetails ->
@@ -281,7 +314,7 @@ convertToEpoch ::
   -- | sum of outTx values
   Integer ->
   DB.Epoch
-convertToEpoch ceE cacheEpoch slotDetails newEpochTxCount outSum = do
+parseToEpoch ceE cacheEpoch slotDetails newEpochTxCount outSum = do
   let cFees = ceFees cacheEpoch
       newBlkCount = fromIntegral $ DB.epochBlkCount ceE + 1
   DB.Epoch
@@ -295,30 +328,3 @@ convertToEpoch ceE cacheEpoch slotDetails newEpochTxCount outSum = do
     }
 
 -- -------------------------------------------------------------------------------------------------
-
--- | Get the PostgreSQL row index (EpochId) that matches the given epoch number.
-queryForEpochId :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe DB.EpochId)
-queryForEpochId epochNum = do
-  res <- selectOne $ do
-    epoch <- from $ table @DB.Epoch
-    where_ (epoch ^. DB.EpochNo ==. val epochNum)
-    pure (epoch ^. DB.EpochId)
-  pure $ unValue <$> res
-
--- -- | Get an epoch given it's number.
--- queryEpochFromNum :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe DB.Epoch)
--- queryEpochFromNum epochNum = do
---   res <- selectOne $ do
---     epoch <- from $ table @DB.Epoch
---     where_ (epoch ^. DB.EpochNo ==. val epochNum)
---     pure epoch
---   pure $ entityVal <$> res
-
--- | Get the most recent epoch in the Epoch table.
-queryLatestEpoch :: MonadIO m => ReaderT SqlBackend m (Maybe DB.Epoch)
-queryLatestEpoch = do
-  res <- selectOne $ do
-    epoch <- from $ table @DB.Epoch
-    orderBy [desc (epoch ^. DB.EpochNo)]
-    pure epoch
-  pure $ entityVal <$> res

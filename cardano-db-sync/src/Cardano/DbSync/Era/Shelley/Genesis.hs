@@ -13,7 +13,6 @@ module Cardano.DbSync.Era.Shelley.Genesis (
 
 import Cardano.BM.Trace (Trace, logError, logInfo)
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Cache
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Shelley.Insert
 import Cardano.DbSync.Era.Util (liftLookupFail)
@@ -48,6 +47,7 @@ import Ouroboros.Consensus.Shelley.Node (
   emptyGenesisStaking,
  )
 import Paths_cardano_db_sync (version)
+import Cardano.DbSync.Cache.Types (Cache(..), uninitiatedCache)
 
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.

@@ -11,8 +11,11 @@ module Cardano.DbSync.Default (
 import Cardano.BM.Trace (logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Cache
-import Cardano.DbSync.Epoch
+import Cardano.DbSync.Cache.Types (textShowStats)
+import Cardano.DbSync.Epoch (
+  EpochPlutusAndPrices (..),
+  epochHandler,
+ )
 import Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
 import Cardano.DbSync.Era.Shelley.Adjust (adjustEpochRewards)

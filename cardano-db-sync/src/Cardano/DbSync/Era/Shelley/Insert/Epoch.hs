@@ -18,7 +18,8 @@ module Cardano.DbSync.Era.Shelley.Insert.Epoch (
 import Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Cache
+import Cardano.DbSync.Cache (queryPoolKeyWithCache, queryStakeAddrWithCache)
+import Cardano.DbSync.Cache.Types (Cache, CacheNew (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error

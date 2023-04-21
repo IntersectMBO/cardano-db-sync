@@ -46,7 +46,7 @@ import Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Cache
+import Cardano.DbSync.Cache.Types (Cache, newEmptyCache, uninitiatedCache)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types

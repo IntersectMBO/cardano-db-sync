@@ -25,12 +25,17 @@ import qualified Cardano.Crypto as Crypto (serializeCborHash)
 import Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Cache
+import Cardano.DbSync.Cache (
+  insertBlockAndCache,
+  queryPrevBlockWithCache,
+ )
+import Cardano.DbSync.Cache.Epoch (writeBlockAndFeeToCacheEpoch)
+import Cardano.DbSync.Cache.Types (Cache (..))
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
-import Cardano.DbSync.Util
 import Cardano.DbSync.Types
+import Cardano.DbSync.Util
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
 import Control.Monad.Trans.Control (MonadBaseControl)

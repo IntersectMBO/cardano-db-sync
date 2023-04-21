@@ -30,7 +30,19 @@ import qualified Cardano.Crypto.Hashing as Crypto
 import Cardano.Db (DbLovelace (..), DbWord64 (..), PoolUrl (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
+import Cardano.DbSync.Cache.Types (Cache(..), CacheNew(..))
+import Cardano.DbSync.Cache.Epoch (writeBlockAndFeeToCacheEpoch)
 import Cardano.DbSync.Cache
+    ( insertBlockAndCache,
+      insertDatumAndCache,
+      insertPoolKeyWithCache,
+      queryDatum,
+      queryMAWithCache,
+      queryPoolKeyWithCache,
+      queryPrevBlockWithCache,
+      queryRewardAccountWithCache,
+      queryRewardAccountWithCacheRetBs,
+      queryStakeAddrWithCache )
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Era.Shelley.Insert.Epoch
