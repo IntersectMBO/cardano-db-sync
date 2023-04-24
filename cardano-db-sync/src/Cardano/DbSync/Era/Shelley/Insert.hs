@@ -103,13 +103,14 @@ insertShelleyBlock syncEnv cBlk shouldLog withinTwoMins withinHalfHour blk detai
       Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
       Just pHash -> queryPrevBlockWithCache (renderErrorMessage (Generic.blkEra blk)) cache pHash
     mPhid <- lift $ queryPoolKeyWithCache cache CacheNew $ coerceKeyRole $ Generic.blkSlotLeader blk
+    let epochNo = sdEpochNo details
 
     slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (Generic.unKeyHashRaw $ Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
     blkId <-
       lift . insertBlockAndCache cache $
         DB.Block
           { DB.blockHash = Generic.blkHash blk
-          , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
+          , DB.blockEpochNo = Just $ unEpochSlot blockEpochNo
           , DB.blockSlotNo = Just $ unSlotNo (Generic.blkSlotNo blk)
           , DB.blockEpochSlotNo = Just $ unEpochSlot (sdEpochSlot details)
           , DB.blockBlockNo = Just $ unBlockNo (Generic.blkBlockNo blk)
@@ -127,18 +128,18 @@ insertShelleyBlock syncEnv cBlk shouldLog withinTwoMins withinHalfHour blk detai
           }
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
-    let txInserter = insertTx tracer cache (getInsertOptions syncEnv) (getNetwork syncEnv) isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
+    let txInserter = insertTx tracer cache (getInsertOptions syncEnv) (getNetwork syncEnv) isMember blkId epochNo (Generic.blkSlotNo blk)
     blockGroupedData <- foldM (\gp (idx, tx) -> txInserter idx tx gp) mempty zippedTx
     minIds <- insertBlockGroupedData tracer blockGroupedData
 
     -- now that we've inserted all the txs for a ShellyBlock lets put what we need in the cache
-    lift $ writeBlockAndFeeToCacheEpoch cache cBlk (sum $ groupedTxFees blockGroupedData)
+    lift $ writeBlockAndFeeToCacheEpoch cache cBlk (sum $ groupedTxFees blockGroupedData) (Just epochNo)
 
     when withinHalfHour $
       insertReverseIndex blkId minIds
 
     liftIO $ do
-      let epoch = unEpochNo (sdEpochNo details)
+      let epoch = unEpochNo epochNo
           slotWithinEpoch = unEpochSlot (sdEpochSlot details)
 
       when (withinTwoMins && slotWithinEpoch /= 0 && unBlockNo (Generic.blkBlockNo blk) `mod` 20 == 0) $ do
@@ -157,7 +158,7 @@ insertShelleyBlock syncEnv cBlk shouldLog withinTwoMins withinHalfHour blk detai
         mconcat
           [ renderInsertName (Generic.blkEra blk)
           , ": epoch "
-          , textShow (unEpochNo $ sdEpochNo details)
+          , textShow (unEpochNo epochNo)
           , ", slot "
           , textShow (unSlotNo $ Generic.blkSlotNo blk)
           , ", block "
@@ -167,7 +168,7 @@ insertShelleyBlock syncEnv cBlk shouldLog withinTwoMins withinHalfHour blk detai
           ]
 
     whenStrictJust mNewEpoch $ \newEpoch -> do
-      insertOnNewEpoch tracer blkId (Generic.blkSlotNo blk) (sdEpochNo details) newEpoch
+      insertOnNewEpoch tracer blkId (Generic.blkSlotNo blk) epochNo newEpoch
 
     insertStakeSlice syncEnv stakeSlice
 
