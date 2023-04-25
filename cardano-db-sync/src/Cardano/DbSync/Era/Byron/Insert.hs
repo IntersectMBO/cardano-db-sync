@@ -89,6 +89,7 @@ insertABOBBoundary ::
 insertABOBBoundary tracer cache cBlk blk details = do
   -- Will not get called in the OBFT part of the Byron era.
   pbid <- queryPrevBlockWithCache "insertABOBBoundary" cache (Byron.ebbPrevHash blk)
+  let epochNo = sdEpochNo details
   slid <-
     lift . DB.insertSlotLeader $
       DB.SlotLeader
@@ -99,7 +100,7 @@ insertABOBBoundary tracer cache cBlk blk details = do
   void . lift . insertBlockAndCache cache $
     DB.Block
       { DB.blockHash = Byron.unHeaderHash $ Byron.boundaryHashAnnotated blk
-      , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
+      , DB.blockEpochNo = Just $ unEpochNo epochNo
       , -- No slotNo for a boundary block
         DB.blockSlotNo = Nothing
       , DB.blockEpochSlotNo = Nothing
@@ -119,7 +120,7 @@ insertABOBBoundary tracer cache cBlk blk details = do
       }
 
   -- now that we've inserted all the txs for a Byron Block lets put what we need in the cache
-  void $ lift $ writeBlockAndFeeToCacheEpoch cache cBlk 0
+  void $ lift $ writeBlockAndFeeToCacheEpoch cache cBlk 0 epochNo
 
   liftIO . logInfo tracer $
     Text.concat
@@ -141,6 +142,7 @@ insertABlock ::
 insertABlock tracer cache cBlk firstBlockOfEpoch blk details = do
   pbid <- queryPrevBlockWithCache "insertABlock" cache (Byron.blockPreviousHash blk)
   slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
+  let epochNo = sdEpochNo details
   blkId <-
     lift . insertBlockAndCache cache $
       DB.Block
@@ -165,7 +167,7 @@ insertABlock tracer cache cBlk firstBlockOfEpoch blk details = do
   txFees <- zipWithM (insertByronTx tracer blkId) (Byron.blockPayload blk) [0 ..]
 
   -- now that we've inserted all the txs for a Byron Block lets put what we need in the cache
-  lift $ writeBlockAndFeeToCacheEpoch cache cBlk (sum txFees)
+  lift $ writeBlockAndFeeToCacheEpoch cache cBlk (sum txFees) epochNo
 
   liftIO $ do
     let epoch = unEpochNo (sdEpochNo details)

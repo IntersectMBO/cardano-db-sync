@@ -110,7 +110,7 @@ insertShelleyBlock syncEnv cBlk shouldLog withinTwoMins withinHalfHour blk detai
       lift . insertBlockAndCache cache $
         DB.Block
           { DB.blockHash = Generic.blkHash blk
-          , DB.blockEpochNo = Just $ unEpochSlot blockEpochNo
+          , DB.blockEpochNo = Just $ unEpochNo epochNo
           , DB.blockSlotNo = Just $ unSlotNo (Generic.blkSlotNo blk)
           , DB.blockEpochSlotNo = Just $ unEpochSlot (sdEpochSlot details)
           , DB.blockBlockNo = Just $ unBlockNo (Generic.blkBlockNo blk)
@@ -133,7 +133,7 @@ insertShelleyBlock syncEnv cBlk shouldLog withinTwoMins withinHalfHour blk detai
     minIds <- insertBlockGroupedData tracer blockGroupedData
 
     -- now that we've inserted all the txs for a ShellyBlock lets put what we need in the cache
-    lift $ writeBlockAndFeeToCacheEpoch cache cBlk (sum $ groupedTxFees blockGroupedData) (Just epochNo)
+    lift $ writeBlockAndFeeToCacheEpoch cache cBlk (sum $ groupedTxFees blockGroupedData) epochNo
 
     when withinHalfHour $
       insertReverseIndex blkId minIds

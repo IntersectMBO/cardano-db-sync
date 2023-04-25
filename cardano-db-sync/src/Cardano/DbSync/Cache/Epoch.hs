@@ -8,7 +8,7 @@ module Cardano.DbSync.Cache.Epoch (
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache.Types (Cache (..), CacheEpoch (..), CacheInternal (..))
-import Cardano.DbSync.Types (CardanoBlock, EpochSlot (..))
+import Cardano.DbSync.Types (CardanoBlock)
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
@@ -57,14 +57,15 @@ writeBlockAndFeeToCacheEpoch cache block fees blockEpochNo =
       cachedEpoch <- liftIO $ readTVarIO (cEpoch ci)
       case cachedEpoch of
         Nothing -> do
-          -- If we don't have an CacheEpoch then this is either the first block (Syncing/Folowing)
-          -- So let's try and attempt to get the latest epoch from DB.
+          -- If we don't have an CacheEpoch then this is either the first block in Syncing mode,
+          -- let's try and attempt to get the last known epoch from the db.
           latestEpochFromDb <- DB.queryLatestEpoch
           case latestEpochFromDb of
-            -- We don't have any epochs on the DB do this is the first block
+            -- We don't have any epochs on the DB do this is our the first block
             Nothing -> writeToCacheWithEpoch ci Nothing
-            -- An Epoch is returned but we need to make sure it's in the same epoch as the current block.
-            -- If we're wanting to add it to cache.
+            -- An Epoch is returned but we need to make sure it's in the same epoch as the current block
+            -- if we're wanting to add it to cache. This is because when in a rollback the current epoch
+            -- has been removed from the DB thus we'd get back the previous epoch which is incorrect.
             Just ep ->
               if DB.epochNo ep == unEpochNo blockEpochNo
                 then writeToCacheWithEpoch ci (Just ep)
@@ -73,6 +74,8 @@ writeBlockAndFeeToCacheEpoch cache block fees blockEpochNo =
   where
     writeToCacheWithEpoch ci latestEpochFromDb =
       liftIO $ atomically $ writeTVar (cEpoch ci) (Just $ CacheEpoch latestEpochFromDb block fees)
+
+-- use cache or db
 
 writeEpochToCacheEpoch ::
   MonadIO m =>
