@@ -47,6 +47,7 @@ module Cardano.Db.Query (
   queryMinRefId,
   existsPoolHashId,
   existsPoolMetadataRefId,
+  queryAddress,
   -- queries used in smash
   queryPoolOfflineData,
   queryPoolRegister,
@@ -585,13 +586,15 @@ queryTxOutValue (hash, index) = do
 queryTxOutCredentials :: MonadIO m => (ByteString, Word64) -> ReaderT SqlBackend m (Either LookupFail (Maybe ByteString, Bool))
 queryTxOutCredentials (hash, index) = do
   res <- select $ do
-    (tx :& txOut) <-
+    (tx :& txOut :& address) <-
       from
         $ table @Tx
           `innerJoin` table @TxOut
         `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. TxOutTxId)
+          `innerJoin` table @Address
+        `on` (\(_ :& txOut :& address) -> txOut ^. TxOutAddressId ==. address ^. AddressId)
     where_ (txOut ^. TxOutIndex ==. val index &&. tx ^. TxHash ==. val hash)
-    pure (txOut ^. TxOutPaymentCred, txOut ^. TxOutAddressHasScript)
+    pure (address ^. AddressPaymentCred, address ^. AddressHasScript)
   pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
 
 queryEpochStakeCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
@@ -635,6 +638,14 @@ existsPoolMetadataRefId pmrid = do
     limit 1
     pure (pmr ^. PoolMetadataRefId)
   pure $ not (null res)
+
+queryAddress :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe AddressId)
+queryAddress addrRaw = do
+  res <- select $ do
+    addr <- from $ table @Address
+    where_ (addr ^. AddressAddressRaw ==. val addrRaw)
+    pure (addr ^. AddressId)
+  pure $ unValue <$> listToMaybe res
 
 {--------------------------------------------
   Queries use in SMASH
@@ -901,7 +912,7 @@ querySlotUtcTime slotNo = do
     pure (blk ^. BlockTime)
   pure $ maybe (Left $ DbLookupSlotNo slotNo) (Right . unValue) (listToMaybe le)
 
-queryUtxoAtBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m [(TxOut, ByteString)]
+queryUtxoAtBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m [(TxOut, Text, ByteString)]
 queryUtxoAtBlockNo blkNo = do
   eblkId <- select $ do
     blk <- from $ table @Block
@@ -909,7 +920,7 @@ queryUtxoAtBlockNo blkNo = do
     pure (blk ^. BlockId)
   maybe (pure []) (queryUtxoAtBlockId . unValue) (listToMaybe eblkId)
 
-queryUtxoAtSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m [(TxOut, ByteString)]
+queryUtxoAtSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m [(TxOut, Text, ByteString)]
 queryUtxoAtSlotNo slotNo = do
   eblkId <- select $ do
     blk <- from $ table @Block
@@ -942,34 +953,36 @@ queryAdaPots blkId = do
 -- | Get the UTxO set after the specified 'BlockId' has been applied to the chain.
 -- Not exported because 'BlockId' to 'BlockHash' relationship may not be the same
 -- across machines.
-queryUtxoAtBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m [(TxOut, ByteString)]
+queryUtxoAtBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m [(TxOut, Text, ByteString)]
 queryUtxoAtBlockId blkid = do
   outputs <- select $ do
-    (txout :& _txin :& _tx1 :& blk :& tx2) <-
+    (txout :& address :& _txin :& _tx1 :& blk :& tx2) <-
       from
         $ table @TxOut
+          `innerJoin` table @Address
+        `on` (\(txout :& address) -> txout ^. TxOutAddressId ==. address ^. AddressId)
           `leftJoin` table @TxIn
-        `on` ( \(txout :& txin) ->
+        `on` ( \(txout :& _ :& txin) ->
                 (just (txout ^. TxOutTxId) ==. txin ?. TxInTxOutId)
                   &&. (just (txout ^. TxOutIndex) ==. txin ?. TxInTxOutIndex)
              )
           `leftJoin` table @Tx
-        `on` (\(_txout :& txin :& tx1) -> txin ?. TxInTxInId ==. tx1 ?. TxId)
+        `on` (\(_txout :& _ :& txin :& tx1) -> txin ?. TxInTxInId ==. tx1 ?. TxId)
           `leftJoin` table @Block
-        `on` (\(_txout :& _txin :& tx1 :& blk) -> tx1 ?. TxBlockId ==. blk ?. BlockId)
+        `on` (\(_txout :& _ :& _txin :& tx1 :& blk) -> tx1 ?. TxBlockId ==. blk ?. BlockId)
           `leftJoin` table @Tx
-        `on` (\(txout :& _ :& _ :& _ :& tx2) -> just (txout ^. TxOutTxId) ==. tx2 ?. TxId)
+        `on` (\(txout :& _ :& _ :& _ :& _ :& tx2) -> just (txout ^. TxOutTxId) ==. tx2 ?. TxId)
 
     where_ $
       (txout ^. TxOutTxId `in_` txLessEqual blkid)
         &&. (isNothing (blk ?. BlockBlockNo) ||. (blk ?. BlockId >. just (val blkid)))
-    pure (txout, tx2 ?. TxHash)
+    pure (txout, address ^. AddressAddress, tx2 ?. TxHash)
   pure $ mapMaybe convert outputs
   where
-    convert :: (Entity TxOut, Value (Maybe ByteString)) -> Maybe (TxOut, ByteString)
+    convert :: (Entity TxOut, Value Text, Value (Maybe ByteString)) -> Maybe (TxOut, Text, ByteString)
     convert = \case
-      (out, Value (Just hash')) -> Just (entityVal out, hash')
-      (_, Value Nothing) -> Nothing
+      (out, addr, Value (Just hash')) -> Just (entityVal out, unValue addr, hash')
+      (_, _, Value Nothing) -> Nothing
 
 queryAddressBalanceAtSlot :: MonadIO m => Text -> Word64 -> ReaderT SqlBackend m Ada
 queryAddressBalanceAtSlot addr slotNo = do
@@ -984,21 +997,23 @@ queryAddressBalanceAtSlot addr slotNo = do
       -- tx1 refers to the tx of the input spending this output (if it is ever spent)
       -- tx2 refers to the tx of the output
       res <- select $ do
-        (txout :& _ :& _ :& blk :& _) <-
+        (txout :& address :& _ :& _ :& blk :& _) <-
           from
             $ table @TxOut
+              `innerJoin` table @Address
+            `on` (\(txout :& address) -> txout ^. TxOutAddressId ==. address ^. AddressId)
               `leftJoin` table @TxIn
-            `on` (\(txout :& txin) -> just (txout ^. TxOutTxId) ==. txin ?. TxInTxOutId)
+            `on` (\(txout :& _ :& txin) -> just (txout ^. TxOutTxId) ==. txin ?. TxInTxOutId)
               `leftJoin` table @Tx
-            `on` (\(_ :& txin :& tx1) -> txin ?. TxInTxInId ==. tx1 ?. TxId)
+            `on` (\(_ :& _ :& txin :& tx1) -> txin ?. TxInTxInId ==. tx1 ?. TxId)
               `leftJoin` table @Block
-            `on` (\(_ :& _ :& tx1 :& blk) -> tx1 ?. TxBlockId ==. blk ?. BlockId)
+            `on` (\(_ :& _ :& _ :&  tx1 :& blk) -> tx1 ?. TxBlockId ==. blk ?. BlockId)
               `leftJoin` table @Tx
-            `on` (\(txout :& _ :& _ :& _ :& tx2) -> just (txout ^. TxOutTxId) ==. tx2 ?. TxId)
+            `on` (\(txout :& _ :& _ :& _ :& _ :& tx2) -> just (txout ^. TxOutTxId) ==. tx2 ?. TxId)
         where_ $
           (txout ^. TxOutTxId `in_` txLessEqual blkid)
             &&. (isNothing (blk ?. BlockBlockNo) ||. (blk ?. BlockId >. just (val blkid)))
-        where_ (txout ^. TxOutAddress ==. val addr)
+        where_ (address ^. AddressAddress ==. val addr)
         pure $ sum_ (txout ^. TxOutValue)
       pure $ unValueSumAda (listToMaybe res)
 
@@ -1009,8 +1024,12 @@ queryAddressBalanceAtSlot addr slotNo = do
 queryAddressOutputs :: MonadIO m => ByteString -> ReaderT SqlBackend m DbLovelace
 queryAddressOutputs addr = do
   res <- select $ do
-    txout <- from $ table @TxOut
-    where_ (txout ^. TxOutAddressRaw ==. val addr)
+    (txout :& address) <-
+      from
+        $ table @TxOut
+          `innerJoin` table @Address
+        `on` (\(txout :& address) -> txout ^. TxOutAddressId ==. address ^. AddressId)
+    where_ (address ^. AddressAddressRaw ==. val addr)
     pure $ sum_ (txout ^. TxOutValue)
   pure $ convert (listToMaybe res)
   where
@@ -1055,8 +1074,13 @@ queryCostModel =
 queryScriptOutputs :: MonadIO m => ReaderT SqlBackend m [TxOut]
 queryScriptOutputs = do
   res <- select $ do
+    (_ :& address) <-
+      from
+        $ table @TxOut
+          `innerJoin` table @Address
+        `on` (\(txout :& address) -> txout ^. TxOutAddressId ==. address ^. AddressId)
     tx_out <- from $ table @TxOut
-    where_ (tx_out ^. TxOutAddressHasScript ==. val True)
+    where_ (address ^. AddressHasScript ==. val True)
     pure tx_out
   pure $ entityVal <$> res
 

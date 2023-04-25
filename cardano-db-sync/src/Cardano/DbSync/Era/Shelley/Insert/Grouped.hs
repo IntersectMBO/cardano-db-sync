@@ -54,6 +54,7 @@ data MissingMaTxOut = MissingMaTxOut
 data ExtendedTxOut = ExtendedTxOut
   { etoTxHash :: !ByteString
   , etoTxOut :: !DB.TxOut
+  , etoPaymentCred :: Maybe ByteString
   }
 
 instance Monoid BlockGroupedData where
@@ -137,7 +138,7 @@ resolveScriptHash groupedOutputs txIn =
       Left err ->
         case resolveInMemory txIn groupedOutputs of
           Nothing -> pure $ Left err
-          Just eutxo -> pure $ Right $ DB.txOutPaymentCred $ etoTxOut eutxo
+          Just eutxo -> pure $ Right $ etoPaymentCred eutxo
 
 resolveInMemory :: Generic.TxIn -> [ExtendedTxOut] -> Maybe ExtendedTxOut
 resolveInMemory txIn =

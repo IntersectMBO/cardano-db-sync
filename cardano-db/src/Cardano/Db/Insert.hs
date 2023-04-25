@@ -44,6 +44,7 @@ module Cardano.Db.Insert (
   insertTxOut,
   insertCollateralTxOut,
   insertManyTxOut,
+  insertAddress,
   insertWithdrawal,
   insertRedeemer,
   insertCostModel,
@@ -234,6 +235,9 @@ insertCollateralTxOut = insertUnchecked "CollateralTxOut"
 
 insertManyTxOut :: (MonadBaseControl IO m, MonadIO m) => [TxOut] -> ReaderT SqlBackend m [TxOutId]
 insertManyTxOut = insertMany' "TxOut"
+
+insertAddress :: (MonadBaseControl IO m, MonadIO m) => Address -> ReaderT SqlBackend m AddressId
+insertAddress = insertUnchecked "insertAddress"
 
 insertWithdrawal :: (MonadBaseControl IO m, MonadIO m) => Withdrawal -> ReaderT SqlBackend m WithdrawalId
 insertWithdrawal = insertUnchecked "Withdrawal"

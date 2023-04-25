@@ -6,10 +6,8 @@ module Cardano.DbTool.Validate.Util (
   greenText,
   redText,
   putStrF,
-  utxoSetSum,
 ) where
 
-import Cardano.Db
 import System.Console.ANSI (setSGRCode)
 import System.Console.ANSI.Types (
   Color (..),
@@ -39,7 +37,3 @@ redText s = codeRed ++ s ++ codeReset
 
 putStrF :: String -> IO ()
 putStrF s = putStr s >> hFlush stdout
-
-utxoSetSum :: [(TxOut, a)] -> Ada
-utxoSetSum xs =
-  word64ToAda . sum $ map (unDbLovelace . txOutValue . fst) xs
