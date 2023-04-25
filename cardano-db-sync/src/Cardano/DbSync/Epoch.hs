@@ -136,7 +136,8 @@ insertEpochIntoDB trce cache ePlutusPrices slotEpochNum slotDetails = do
   epochCacheEpoch <- liftIO $ readEpochFromCacheEpoch cache
   cacheEpoch <- liftIO $ readCacheEpoch cache
 
-  -- let's see if we can calculate the epoch from cache
+  -- If we have all the data needed to make a new epoch in cache let's try and use that instead of
+  -- calling the db.
   newCalculatedEpoch <-
     case (cacheEpoch, epochCacheEpoch) of
       (Just cEpoch, Just ceE)  -> pure $ calculateEpochUsingCache ePlutusPrices cEpoch ceE slotDetails
@@ -171,6 +172,8 @@ replaceEpoch trce cache ePlutusPrices slotEpochNum slotDetails epochId = do
       calculateEpochUsingDBQuery cache slotEpochNum epochId
     Just cEpoch -> do
       case ceEpoch cEpoch of
+        -- We don't have an epoch in cache this will be because it's the first block
+        -- or it's been deleted due to rollback
         Nothing -> do
           liftIO . logInfo trce $ "replaceEpoch: ceEpoch in cache is Nothing "
           tryWithEpochFromDB cache cEpoch ePlutusPrices slotEpochNum epochId slotDetails
@@ -180,6 +183,32 @@ replaceEpoch trce cache ePlutusPrices slotEpochNum slotDetails epochId = do
           liftIO . logInfo trce $ "replaceEpoch: calculated epoch from cache: " <> textShow newCalculatedEpoch
           void $ writeEpochToCacheEpoch cache newCalculatedEpoch
           Right <$> replace epochId newCalculatedEpoch
+
+--
+tryWithEpochFromDB ::
+  MonadIO m =>
+  Cache ->
+  CacheEpoch ->
+  EpochPlutusAndPrices ->
+  Word64 ->
+  DB.EpochId ->
+  SlotDetails ->
+  ReaderT SqlBackend m (Either SyncNodeError ())
+tryWithEpochFromDB cache ceE ePlutusPrices slotEpochNum epochId slotDetails = do
+  -- get the last known epoch from DB as there isn't one is CacheEpoch
+
+  -- need to check if this is a rollback because getting the last epoch from DB would create incorrect information.
+
+  -- TODO: Vincent we don't need to check here as it happens at insert level
+  latestEpochFromDb <- DB.queryLatestEpoch
+  case latestEpochFromDb of
+    -- if there isn't one in the DB as well then this is going to be the first block
+    Nothing -> do
+      calculateEpochUsingDBQuery cache slotEpochNum epochId
+    Just ep -> do
+      let newCalculatedEpoch = calculateEpochUsingCache ePlutusPrices ceE ep slotDetails
+      void $ writeEpochToCacheEpoch cache newCalculatedEpoch
+      Right <$> replace epochId newCalculatedEpoch
 
 calculateEpochUsingDBQuery ::
   MonadIO m =>
@@ -194,31 +223,6 @@ calculateEpochUsingDBQuery cache slotEpochNum epochId = do
   void $ writeEpochToCacheEpoch cache newEpoch
   -- replace the current epoch in the DB with our newly calculated epoch
   Right <$> replace epochId newEpoch
-
-tryWithEpochFromDB ::
-  MonadIO m =>
-  Cache ->
-  CacheEpoch ->
-  EpochPlutusAndPrices ->
-  Word64 ->
-  DB.EpochId ->
-  SlotDetails ->
-  ReaderT SqlBackend m (Either SyncNodeError ())
-tryWithEpochFromDB cache ceE ePlutusPrices slotEpochNum epochId slotDetails = do
-  -- get the last known epoch from DB as there isn't one is CacheEpoch
-
-  -- need to check if this is a rollback because getting the last epoch from DB would create incorrect information.
-  latestEpochFromDb <- DB.queryLatestEpoch
-  case latestEpochFromDb of
-    -- if there isn't one in the DB as well then this is going to be the first block
-    Nothing -> do
-      calculateEpochUsingDBQuery cache slotEpochNum epochId
-    Just ep -> do
-      let newCalculatedEpoch = calculateEpochUsingCache ePlutusPrices ceE ep slotDetails
-      void $ writeEpochToCacheEpoch cache newCalculatedEpoch
-      Right <$> replace epochId newCalculatedEpoch
-
-
 
 calculateEpochUsingCache ::
   EpochPlutusAndPrices ->
