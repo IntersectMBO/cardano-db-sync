@@ -1,11 +1,8 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Cache.Types (
@@ -13,6 +10,7 @@ module Cardano.DbSync.Cache.Types (
   CacheNew (..),
   CacheEpoch (..),
   CacheInternal (..),
+  EpochInternal (..),
   StakeAddrCache,
   StakePoolCache,
 
@@ -29,7 +27,7 @@ module Cardano.DbSync.Cache.Types (
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache.LRU (LRUCache)
 import qualified Cardano.DbSync.Cache.LRU as LRU
-import Cardano.DbSync.Types (CardanoBlock, DataHash, PoolKeyHash, StakeCred)
+import Cardano.DbSync.Types (DataHash, PoolKeyHash, StakeCred)
 import Cardano.Ledger.Mary.Value (AssetName, PolicyID)
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
@@ -38,6 +36,8 @@ import Control.Concurrent.Class.MonadSTM.Strict (
   readTVarIO,
  )
 import qualified Data.Map.Strict as Map
+import Data.Time.Clock (UTCTime)
+import Data.WideWord.Word128 (Word128)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 type StakeAddrCache = Map StakeCred DB.StakeAddressId
@@ -64,7 +64,7 @@ data CacheInternal = CacheInternal
   , cMultiAssets :: !(StrictTVar IO (LRUCache (PolicyID StandardCrypto, AssetName) DB.MultiAssetId))
   , cPrevBlock :: !(StrictTVar IO (Maybe (DB.BlockId, ByteString)))
   , cStats :: !(StrictTVar IO CacheStatistics)
-  , cEpoch :: !(StrictTVar IO (Maybe CacheEpoch))
+  , cEpoch :: !(StrictTVar IO CacheEpoch)
   }
 
 data CacheStatistics = CacheStatistics
@@ -80,10 +80,20 @@ data CacheStatistics = CacheStatistics
   , prevBlockQueries :: !Word64
   }
 
+-- When inserting Txs and Blocks we can also caculate the values for an DB.Epoch at the same time.
+-- So we use this type to represent the values we need to keep when we update the epoch in the datbase.
+data EpochInternal = EpochInternal
+  { epInternalFees :: !Word64
+  , epInternalOutSum :: !Word128
+  , epInternalTxCount :: !Word64
+  , epInternalNo :: !Word64
+  , epInteranlEndTime :: !UTCTime
+  }
+
 data CacheEpoch = CacheEpoch
-  { ceEpoch :: !(Maybe DB.Epoch)
-  , ceBlock :: !CardanoBlock
-  , ceFees :: !Word64
+  { -- this can be extended to be a (Map BlockId DB.Epoch) which would be benifitial when doing rollbacks.
+    ceLatestEpoch :: !(Maybe DB.Epoch)
+  , ceEpochInternal :: !(Maybe EpochInternal)
   }
 
 textShowStats :: Cache -> IO Text
@@ -164,7 +174,10 @@ newEmptyCache maCapacity daCapacity =
       <*> newTVarIO (LRU.empty maCapacity)
       <*> newTVarIO Nothing
       <*> newTVarIO initCacheStatistics
-      <*> newTVarIO Nothing
+      <*> newTVarIO initCacheEpoch
 
 initCacheStatistics :: CacheStatistics
 initCacheStatistics = CacheStatistics 0 0 0 0 0 0 0 0 0 0
+
+initCacheEpoch :: CacheEpoch
+initCacheEpoch = CacheEpoch Nothing Nothing
