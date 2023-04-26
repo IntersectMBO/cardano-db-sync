@@ -13,7 +13,6 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Cache.Types (textShowStats)
 import Cardano.DbSync.Epoch (
-  EpochPlutusAndPrices (..),
   epochHandler,
  )
 import Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
@@ -117,19 +116,20 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   let insertShelley blk =
         insertShelleyBlock
           syncEnv
-          cblk
           shouldLog
           withinTwoMin
           withinHalfHour
           blk
           details
           isMember
-          (apNewEpoch applyResult)
-          (apStakeSlice applyResult)
+          applyResult
+
+  -- Here we insert the block and it's txs, but in adition we also cache some values which we later
+  -- use when updating the Epoch, thus saving us having to recalulating them later.
   case cblk of
     BlockByron blk ->
       newExceptT $
-        insertByronBlock syncEnv cblk shouldLog blk details
+        insertByronBlock syncEnv shouldLog blk details
     BlockShelley blk ->
       newExceptT $
         insertShelley $
@@ -150,20 +150,20 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
       newExceptT $
         insertShelley $
           Generic.fromBabbageBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
-  insertEpoch details applyResult
+  -- update the epoch
+  updateEpoch details
   lift $ commitOrIndexes withinTwoMin withinHalfHour
   where
     tracer = getTrace syncEnv
     iopts = getInsertOptions syncEnv
 
-    insertEpoch details appRes =
+    updateEpoch details =
       when (soptExtended $ envOptions syncEnv)
         . newExceptT
         $ epochHandler
-           tracer
-           (envCache syncEnv)
-           (EpochPlutusAndPrices (ioPlutusExtra iopts) (getPrices appRes))
-           (BlockDetails cblk details)
+          tracer
+          (envCache syncEnv)
+          (BlockDetails cblk details)
 
     getPrices :: ApplyResult -> Maybe Ledger.Prices
     getPrices applyResult = case apPrices applyResult of

@@ -192,6 +192,7 @@ library
                       , typed-protocols
                       , unix
                       , vector
+                      , wide-word
                       , yaml
 
 executable cardano-db-sync

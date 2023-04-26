@@ -1,16 +1,15 @@
 module Cardano.DbSync.Cache.Epoch (
   readCacheEpoch,
-  readEpochFromCacheEpoch,
+  readEpochInternalFromCacheEpoch,
+  readLatestEpochFromCacheEpoch,
   writeCacheEpoch,
-  writeBlockAndFeeToCacheEpoch,
-  writeEpochToCacheEpoch,
+  writeEpochInternalToCache,
+  writeLatestEpochToCacheEpoch,
 ) where
 
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Cache.Types (Cache (..), CacheEpoch (..), CacheInternal (..))
-import Cardano.DbSync.Types (CardanoBlock)
+import Cardano.DbSync.Cache.Types (Cache (..), CacheEpoch (..), CacheInternal (..), EpochInternal (..))
 import Cardano.Prelude
-import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
 import Database.Persist.Postgresql (SqlBackend)
 
@@ -21,17 +20,27 @@ readCacheEpoch :: Cache -> IO (Maybe CacheEpoch)
 readCacheEpoch cache =
   case cache of
     UninitiatedCache -> pure Nothing
-    Cache ci -> readTVarIO (cEpoch ci)
+    Cache ci -> do
+      cacheEpoch <- readTVarIO (cEpoch ci)
+      pure $ Just cacheEpoch
 
-readEpochFromCacheEpoch :: Cache -> IO (Maybe DB.Epoch)
-readEpochFromCacheEpoch cache =
+readEpochInternalFromCacheEpoch :: Cache -> IO (Maybe EpochInternal)
+readEpochInternalFromCacheEpoch cache =
   case cache of
     UninitiatedCache -> pure Nothing
     Cache ci -> do
-      cachedEpoch <- readTVarIO (cEpoch ci)
-      case cachedEpoch of
-        Nothing -> pure Nothing
-        Just ce -> pure $ Just =<< ceEpoch ce
+      cE <- readTVarIO (cEpoch ci)
+      case (ceLatestEpoch cE, ceEpochInternal cE) of
+        (_, epochInternal) -> pure epochInternal
+
+readLatestEpochFromCacheEpoch :: Cache -> IO (Maybe DB.Epoch)
+readLatestEpochFromCacheEpoch cache =
+  case cache of
+    UninitiatedCache -> pure Nothing
+    Cache ci -> do
+      cE <- readTVarIO (cEpoch ci)
+      case (ceLatestEpoch cE, ceEpochInternal cE) of
+        (epochLatest, _) -> pure epochLatest
 
 writeCacheEpoch ::
   MonadIO m =>
@@ -41,53 +50,51 @@ writeCacheEpoch ::
 writeCacheEpoch cache cacheEpoch =
   case cache of
     UninitiatedCache -> pure ()
-    Cache ci -> liftIO $ atomically $ writeTVar (cEpoch ci) $ Just cacheEpoch
+    Cache ci -> liftIO $ atomically $ writeTVar (cEpoch ci) cacheEpoch
 
-writeBlockAndFeeToCacheEpoch ::
+writeEpochInternalToCache ::
   MonadIO m =>
   Cache ->
-  CardanoBlock ->
-  Word64 ->
-  EpochNo ->
+  EpochInternal ->
   ReaderT SqlBackend m ()
-writeBlockAndFeeToCacheEpoch cache block fees blockEpochNo =
+writeEpochInternalToCache cache epInternal =
   case cache of
     UninitiatedCache -> pure ()
     Cache ci -> do
-      cachedEpoch <- liftIO $ readTVarIO (cEpoch ci)
-      case cachedEpoch of
-        Nothing -> do
-          -- If we don't have an CacheEpoch then this is either the first block in Syncing mode,
-          -- let's try and attempt to get the last known epoch from the db.
-          latestEpochFromDb <- DB.queryLatestEpoch
-          case latestEpochFromDb of
-            -- We don't have any epochs on the DB do this is our the first block
-            Nothing -> writeToCacheWithEpoch ci Nothing
-            -- An Epoch is returned but we need to make sure it's in the same epoch as the current block
-            -- if we're wanting to add it to cache. This is because when in a rollback the current epoch
-            -- has been removed from the DB thus we'd get back the previous epoch which is incorrect.
-            Just ep ->
-              if DB.epochNo ep == unEpochNo blockEpochNo
-                then writeToCacheWithEpoch ci (Just ep)
-                else writeToCacheWithEpoch ci Nothing
-        Just cacheE -> liftIO $ atomically $ writeTVar (cEpoch ci) (Just cacheE {ceBlock = block, ceFees = fees})
-  where
-    writeToCacheWithEpoch ci latestEpochFromDb =
-      liftIO $ atomically $ writeTVar (cEpoch ci) (Just $ CacheEpoch latestEpochFromDb block fees)
+      cE <- liftIO $ readTVarIO (cEpoch ci)
+      case (ceLatestEpoch cE, ceEpochInternal cE) of
+        (epochLatest, _) -> writeToCache ci (CacheEpoch epochLatest (Just epInternal))
 
--- use cache or db
-
-writeEpochToCacheEpoch ::
+writeLatestEpochToCacheEpoch ::
   MonadIO m =>
   Cache ->
   DB.Epoch ->
   ReaderT SqlBackend m ()
-writeEpochToCacheEpoch cache newEpoch =
+writeLatestEpochToCacheEpoch cache latestEpoch =
   case cache of
     UninitiatedCache -> pure ()
     Cache ci -> do
-      cachedEpoch <- liftIO $ readTVarIO (cEpoch ci)
-      case cachedEpoch of
-        Nothing -> pure ()
-        Just cacheE ->
-          liftIO $ atomically $ writeTVar (cEpoch ci) (Just $ cacheE {ceEpoch = Just newEpoch})
+      cE <- liftIO $ readTVarIO (cEpoch ci)
+      case (ceLatestEpoch cE, ceEpochInternal cE) of
+        (_, epochInternal) -> writeToCache ci (CacheEpoch (Just latestEpoch) epochInternal)
+
+-- Helper --
+
+-- hasLatestEpoch :: Cache -> IO Bool
+-- hasLatestEpoch cache =
+--   case cache of
+--     UninitiatedCache -> pure False
+--     Cache ci -> do
+--       cE <- readTVarIO (cEpoch ci)
+--       pure $ isJust (ceLatestEpoch cE)
+
+-- hasInternalEpoch :: Cache -> IO Bool
+-- hasInternalEpoch cache =
+--   case cache of
+--     UninitiatedCache -> pure False
+--     Cache ci -> do
+--       cE <- readTVarIO (cEpoch ci)
+--       pure $ isJust (ceLatestEpoch cE)
+
+writeToCache :: MonadIO m => CacheInternal -> CacheEpoch -> m ()
+writeToCache ci val = liftIO $ atomically $ writeTVar (cEpoch ci) val

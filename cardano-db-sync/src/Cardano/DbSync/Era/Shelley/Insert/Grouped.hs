@@ -41,6 +41,7 @@ data BlockGroupedData = BlockGroupedData
   , groupedTxMetadata :: ![DB.TxMetadata]
   , groupedTxMint :: ![DB.MaTxMint]
   , groupedTxFees :: ![Word64]
+  , groupedTxOutSum :: ![Word64]
   }
 
 -- | While we collect data, we don't have access yet to the 'TxOutId', since
@@ -58,7 +59,7 @@ data ExtendedTxOut = ExtendedTxOut
   }
 
 instance Monoid BlockGroupedData where
-  mempty = BlockGroupedData [] [] [] [] []
+  mempty = BlockGroupedData [] [] [] [] [] []
 
 instance Semigroup BlockGroupedData where
   tgd1 <> tgd2 =
@@ -68,6 +69,7 @@ instance Semigroup BlockGroupedData where
       (groupedTxMetadata tgd1 <> groupedTxMetadata tgd2)
       (groupedTxMint tgd1 <> groupedTxMint tgd2)
       (groupedTxFees tgd1 <> groupedTxFees tgd2)
+      (groupedTxOutSum tgd1 <> groupedTxOutSum tgd2)
 
 insertBlockGroupedData ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -114,14 +116,15 @@ resolveTxInputs ::
   Generic.TxIn ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, DbLovelace)
 resolveTxInputs groupedOutputs txIn =
-  fmap convert $ liftLookupFail ("resolveTxInputs " <> textShow txIn <> " ") $ do
-    qres <- queryResolveInput txIn
-    case qres of
-      Right ret -> pure $ Right ret
-      Left err ->
-        case resolveInMemory txIn groupedOutputs of
-          Nothing -> pure $ Left err
-          Just eutxo -> pure $ Right (DB.txOutTxId (etoTxOut eutxo), DB.txOutValue (etoTxOut eutxo))
+  fmap convert $
+    liftLookupFail ("resolveTxInputs " <> textShow txIn <> " ") $ do
+      qres <- queryResolveInput txIn
+      case qres of
+        Right ret -> pure $ Right ret
+        Left err ->
+          case resolveInMemory txIn groupedOutputs of
+            Nothing -> pure $ Left err
+            Just eutxo -> pure $ Right (DB.txOutTxId (etoTxOut eutxo), DB.txOutValue (etoTxOut eutxo))
   where
     convert :: (DB.TxId, DbLovelace) -> (Generic.TxIn, DB.TxId, DbLovelace)
     convert (txId, lovelace) = (txIn, txId, lovelace)

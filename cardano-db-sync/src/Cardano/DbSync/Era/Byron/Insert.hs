@@ -29,8 +29,8 @@ import Cardano.DbSync.Cache (
   insertBlockAndCache,
   queryPrevBlockWithCache,
  )
-import Cardano.DbSync.Cache.Epoch (writeBlockAndFeeToCacheEpoch)
-import Cardano.DbSync.Cache.Types (Cache (..))
+import Cardano.DbSync.Cache.Epoch (writeEpochInternalToCache)
+import Cardano.DbSync.Cache.Types (Cache (..), EpochInternal (..))
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
@@ -55,16 +55,15 @@ data ValueFee = ValueFee
 insertByronBlock ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
-  CardanoBlock ->
   Bool ->
   ByronBlock ->
   SlotDetails ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-insertByronBlock syncEnv cBlk firstBlockOfEpoch blk details = do
+insertByronBlock syncEnv firstBlockOfEpoch blk details = do
   res <- runExceptT $
     case byronBlockRaw blk of
-      Byron.ABOBBlock ablk -> insertABlock tracer cache cBlk firstBlockOfEpoch ablk details
-      Byron.ABOBBoundary abblk -> insertABOBBoundary tracer cache cBlk abblk details
+      Byron.ABOBBlock ablk -> insertABlock tracer cache firstBlockOfEpoch ablk details
+      Byron.ABOBBoundary abblk -> insertABOBBoundary tracer cache abblk details
   -- Serializing things during syncing can drastically slow down full sync
   -- times (ie 10x or more).
   when
@@ -82,11 +81,10 @@ insertABOBBoundary ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   Cache ->
-  CardanoBlock ->
   Byron.ABoundaryBlock ByteString ->
   SlotDetails ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertABOBBoundary tracer cache cBlk blk details = do
+insertABOBBoundary tracer cache blk details = do
   -- Will not get called in the OBFT part of the Byron era.
   pbid <- queryPrevBlockWithCache "insertABOBBoundary" cache (Byron.ebbPrevHash blk)
   let epochNo = sdEpochNo details
@@ -119,8 +117,19 @@ insertABOBBoundary tracer cache cBlk blk details = do
       , DB.blockOpCertCounter = Nothing
       }
 
-  -- now that we've inserted all the txs for a Byron Block lets put what we need in the cache
-  void $ lift $ writeBlockAndFeeToCacheEpoch cache cBlk 0 epochNo
+  -- now that we've inserted the Block and all it's txs lets put what we need
+  -- for updating the epoch in the cache.
+  void $
+    lift $
+      writeEpochInternalToCache
+        cache
+        EpochInternal
+          { epInternalFees = 0
+          , epInternalOutSum = 0
+          , epInternalTxCount = 0
+          , epInternalNo = unEpochNo (sdEpochNo details)
+          , epInteranlEndTime = sdSlotTime details
+          }
 
   liftIO . logInfo tracer $
     Text.concat
@@ -134,15 +143,14 @@ insertABlock ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   Cache ->
-  CardanoBlock ->
   Bool ->
   Byron.ABlock ByteString ->
   SlotDetails ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertABlock tracer cache cBlk firstBlockOfEpoch blk details = do
+insertABlock tracer cache firstBlockOfEpoch blk details = do
   pbid <- queryPrevBlockWithCache "insertABlock" cache (Byron.blockPreviousHash blk)
   slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
-  let epochNo = sdEpochNo details
+  let txs = Byron.blockPayload blk
   blkId <-
     lift . insertBlockAndCache cache $
       DB.Block
@@ -155,7 +163,7 @@ insertABlock tracer cache cBlk firstBlockOfEpoch blk details = do
         , DB.blockSlotLeaderId = slid
         , DB.blockSize = fromIntegral $ Byron.blockLength blk
         , DB.blockTime = sdSlotTime details
-        , DB.blockTxCount = fromIntegral $ length (Byron.blockPayload blk)
+        , DB.blockTxCount = fromIntegral $ length txs
         , DB.blockProtoMajor = Byron.pvMajor (Byron.protocolVersion blk)
         , DB.blockProtoMinor = Byron.pvMinor (Byron.protocolVersion blk)
         , -- Shelley specific
@@ -165,9 +173,22 @@ insertABlock tracer cache cBlk firstBlockOfEpoch blk details = do
         }
 
   txFees <- zipWithM (insertByronTx tracer blkId) (Byron.blockPayload blk) [0 ..]
+  let byronTxOutValues = concatMap (toList . (\tx -> map Byron.txOutValue (Byron.txOutputs $ Byron.taTx tx))) txs
+      outSum = sum $ map Byron.lovelaceToInteger byronTxOutValues
 
-  -- now that we've inserted all the txs for a Byron Block lets put what we need in the cache
-  lift $ writeBlockAndFeeToCacheEpoch cache cBlk (sum txFees) epochNo
+  -- now that we've inserted the Block and all it's txs lets put what we need
+  -- for updating the epoch in the cache.
+  void $
+    lift $
+      writeEpochInternalToCache
+        cache
+        EpochInternal
+          { epInternalFees = sum txFees
+          , epInternalOutSum = fromIntegral outSum
+          , epInternalTxCount = fromIntegral $ length txs
+          , epInternalNo = unEpochNo (sdEpochNo details)
+          , epInteranlEndTime = sdSlotTime details
+          }
 
   liftIO $ do
     let epoch = unEpochNo (sdEpochNo details)

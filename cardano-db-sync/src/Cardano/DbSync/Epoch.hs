@@ -1,30 +1,22 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 {-# OPTIONS_GHC -Wno-unused-local-binds #-}
 
 module Cardano.DbSync.Epoch (
-  EpochPlutusAndPrices (..),
   epochHandler,
 ) where
 
 import Cardano.BM.Trace (Trace, logError, logInfo)
 import qualified Cardano.Chain.Block as Byron hiding (blockHash)
-import qualified Cardano.Chain.Common as Byron
-import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Cache.Epoch (readCacheEpoch, writeEpochToCacheEpoch, readEpochFromCacheEpoch)
-import Cardano.DbSync.Cache.Types (Cache (..), CacheEpoch (..))
-import qualified Cardano.DbSync.Era.Byron.Util as Byron
-import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
+import Cardano.DbSync.Cache.Epoch (readEpochInternalFromCacheEpoch, readLatestEpochFromCacheEpoch, writeLatestEpochToCacheEpoch)
+import Cardano.DbSync.Cache.Types (Cache (..), EpochInternal (..))
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
-import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
-import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Prelude hiding (from, on, replace)
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Monad.Logger (LoggingT)
@@ -39,20 +31,12 @@ import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 --  * Following: When the node is at or close to the chain tip, the row for a given epoch is
 --    updated on each new block.
 
-data EpochPlutusAndPrices = EpochPlutusAndPrices
-  { epochIsPlutusExtra :: !Bool
-  , epochPrices :: !(Maybe Ledger.Prices)
-  }
-
 epochHandler ::
   Trace IO Text ->
   Cache ->
-  EpochPlutusAndPrices ->
   BlockDetails ->
   ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
-epochHandler trce cache ePlutusPrices (BlockDetails cblk details) = do
-  -- Update cache with the current block, we use the block in downstream functions when calculating the new epoch.
-  -- void $ writeBlockToCacheEpoch cache cblk
+epochHandler trce cache (BlockDetails cblk details) =
   case cblk of
     BlockByron bblk ->
       case byronBlockRaw bblk of
@@ -61,7 +45,7 @@ epochHandler trce cache ePlutusPrices (BlockDetails cblk details) = do
           -- the Ouroboros Classic era.
           pure $ Right ()
         Byron.ABOBBlock _blk ->
-          checkSlotAndEpochNum trce cache ePlutusPrices details
+          checkSlotAndEpochNum trce cache details
     BlockShelley {} -> epochSlotTimecheck
     BlockAllegra {} -> epochSlotTimecheck
     BlockMary {} -> epochSlotTimecheck
@@ -75,33 +59,33 @@ epochHandler trce cache ePlutusPrices (BlockDetails cblk details) = do
         liftIO . logError trce $
           mconcat
             ["Slot time '", textShow (sdSlotTime details), "' is in the future"]
-      checkSlotAndEpochNum trce cache ePlutusPrices details
+      checkSlotAndEpochNum trce cache details
 
 -- -------------------------------------------------------------------------------------------------
 
 checkSlotAndEpochNum ::
   Trace IO Text ->
   Cache ->
-  EpochPlutusAndPrices ->
   SlotDetails ->
   ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
-checkSlotAndEpochNum trce cache ePlutusPrices slotDetails = do
+checkSlotAndEpochNum trce cache slotDetails = do
   -- read the chached Epoch
-  mEpoch <- liftIO $ readEpochFromCacheEpoch cache
+  latestEpochCache <- liftIO $ readLatestEpochFromCacheEpoch cache
+  internalEpochCache <- liftIO $ readEpochInternalFromCacheEpoch cache
 
   -- if there isn't a cached epoch default it's number to 0 as this is the first block.
-  let epochNum = maybe 0 DB.epochNo mEpoch
+  let epochNum = maybe 0 DB.epochNo latestEpochCache
       slotEpochNum = unEpochNo (sdEpochNo slotDetails)
 
   -- These cases are listed from the least likey to occur to the most
   -- likley to keep the logic sane.
   if
-      | slotEpochNum > 0 && isNothing mEpoch ->
-          insertOrReplaceEpoch cache ePlutusPrices 0 trce slotDetails
+      | slotEpochNum > 0 && isNothing latestEpochCache ->
+        insertOrReplaceEpoch cache 0 trce latestEpochCache internalEpochCache
       | slotEpochNum >= epochNum + 2 ->
-          insertOrReplaceEpoch cache ePlutusPrices (epochNum + 1) trce slotDetails
+        insertOrReplaceEpoch cache (epochNum + 1) trce latestEpochCache internalEpochCache
       | getSyncStatus slotDetails == SyncFollowing ->
-          insertOrReplaceEpoch cache ePlutusPrices slotEpochNum trce slotDetails
+        insertOrReplaceEpoch cache slotEpochNum trce latestEpochCache internalEpochCache
       | otherwise -> pure $ Right ()
 
 -- -------------------------------------------------------------------------------------------------
@@ -109,45 +93,41 @@ checkSlotAndEpochNum trce cache ePlutusPrices slotDetails = do
 insertOrReplaceEpoch ::
   (MonadBaseControl IO m, MonadIO m) =>
   Cache ->
-  EpochPlutusAndPrices ->
   Word64 ->
   Trace IO Text ->
-  SlotDetails ->
+  Maybe DB.Epoch ->
+  Maybe EpochInternal ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-insertOrReplaceEpoch cache ePlutusPrices slotEpochNum trce slotDetails = do
+insertOrReplaceEpoch cache slotEpochNum trce latestEpochCache internalEpochCache = do
   -- get the epoch id using a slot number
   mEpochID <- DB.queryForEpochId slotEpochNum
   -- if the epoch id doesn't exist this means we don't have it yet so we
   -- calculate and insert a new epoch otherwise we replace existing epoch.
   maybe
-    (insertEpochIntoDB trce cache ePlutusPrices slotEpochNum slotDetails)
-    (replaceEpoch trce cache ePlutusPrices slotEpochNum slotDetails)
+    (insertEpochIntoDB trce cache slotEpochNum latestEpochCache internalEpochCache)
+    (replaceEpoch trce cache slotEpochNum latestEpochCache internalEpochCache)
     mEpochID
 
 insertEpochIntoDB ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   Cache ->
-  EpochPlutusAndPrices ->
   Word64 ->
-  SlotDetails ->
+  Maybe DB.Epoch ->
+  Maybe EpochInternal ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-insertEpochIntoDB trce cache ePlutusPrices slotEpochNum slotDetails = do
-  epochCacheEpoch <- liftIO $ readEpochFromCacheEpoch cache
-  cacheEpoch <- liftIO $ readCacheEpoch cache
-
-  -- If we have all the data needed to make a new epoch in cache let's try and use that instead of
+insertEpochIntoDB trce cache slotEpochNum latestEpochCache internalEpochCache = do
+  -- If we have all the data needed to make a new epoch in cache let's use that instead of
   -- calling the db.
   newCalculatedEpoch <-
-    case (cacheEpoch, epochCacheEpoch) of
-      (Just cEpoch, Just ceE)  -> pure $ calculateEpochUsingCache ePlutusPrices cEpoch ceE slotDetails
+    case (latestEpochCache, internalEpochCache) of
+      (Just latestEpC, Just internalEpC) -> pure $ calculateNewEpoch latestEpC internalEpC
       (_, _) -> DB.queryCalcEpochEntry slotEpochNum
 
   liftIO . logInfo trce $ "insertEpochIntoDB: epoch " <> textShow slotEpochNum
-  -- put new epoch indo the DB
   void $ DB.insertEpoch newCalculatedEpoch
-  -- put new epoch into cache
-  void $ writeEpochToCacheEpoch cache newCalculatedEpoch
+  -- put newly inserted epoch into cache
+  void $ writeLatestEpochToCacheEpoch cache newCalculatedEpoch
   pure $ Right ()
 
 -- | When replacing an epoch we have the opertunity to try and use the cacheEpoch values
@@ -156,179 +136,86 @@ replaceEpoch ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   Cache ->
-  EpochPlutusAndPrices ->
   Word64 ->
-  SlotDetails ->
+  Maybe DB.Epoch ->
+  Maybe EpochInternal ->
   DB.EpochId ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-replaceEpoch trce cache ePlutusPrices slotEpochNum slotDetails epochId = do
-  cacheEpoch <- liftIO $ readCacheEpoch cache
-  -- do we have a cacheEpoch
-  case cacheEpoch of
-    -- Technically there will always be something in the cache once this function is called
-    -- but to be exhaustive this is here.
+replaceEpoch trce cache slotEpochNum latestEpochCache internalEpochCache epochId =
+  case latestEpochCache of
+    -- There is no latest epoch in cache so let's see if we can get it from the db,
+    -- otherwise we'll calculate the epoch from an expensive db query.
     Nothing -> do
-      liftIO . logInfo trce $ "replaceEpoch: CacheEpoch is Nothing so using DB to calculate epoch "
-      calculateEpochUsingDBQuery cache slotEpochNum epochId
-    Just cEpoch -> do
-      case ceEpoch cEpoch of
-        -- We don't have an epoch in cache this will be because it's the first block
-        -- or it's been deleted due to rollback
+      latestEpochFromDb <- DB.queryLatestEpoch
+      case latestEpochFromDb of
         Nothing -> do
-          liftIO . logInfo trce $ "replaceEpoch: ceEpoch in cache is Nothing "
-          tryWithEpochFromDB cache cEpoch ePlutusPrices slotEpochNum epochId slotDetails
-          -- calculateEpochUsingDBQuery cache slotEpochNum epochId
-        Just ceE -> do
-          let newCalculatedEpoch = calculateEpochUsingCache ePlutusPrices cEpoch ceE slotDetails
-          liftIO . logInfo trce $ "replaceEpoch: calculated epoch from cache: " <> textShow newCalculatedEpoch
-          void $ writeEpochToCacheEpoch cache newCalculatedEpoch
-          Right <$> replace epochId newCalculatedEpoch
+          replaceEpochUsingDBQuery trce cache slotEpochNum epochId
+        -- TODO: Vince would a rollback cause us to get the wrong latestEpFromDb?
+        Just latestEpFromDb -> do
+          case internalEpochCache of
+            -- There should never be no internal cache at this point in the process but just incase!
+            Nothing -> pure $ Left $ NEError "No internalEpochCache"
+            Just internalEpCache -> replaceEpochWithValues trce cache epochId latestEpFromDb internalEpCache
 
---
-tryWithEpochFromDB ::
+    -- There is a latestEpochCache so we can use it to work out our new Epoch
+    Just latestEpCache -> do
+      case internalEpochCache of
+        Nothing -> pure $ Left $ NEError "No internalEpochCache"
+        Just internalEpCache -> replaceEpochWithValues trce cache epochId latestEpCache internalEpCache
+
+-- calculate and replace the epoch
+replaceEpochWithValues ::
   MonadIO m =>
+  Trace IO Text ->
   Cache ->
-  CacheEpoch ->
-  EpochPlutusAndPrices ->
-  Word64 ->
   DB.EpochId ->
-  SlotDetails ->
+  DB.Epoch ->
+  EpochInternal ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-tryWithEpochFromDB cache ceE ePlutusPrices slotEpochNum epochId slotDetails = do
-  -- get the last known epoch from DB as there isn't one is CacheEpoch
+replaceEpochWithValues trce cache epochId latestEpCache internalEpCache = do
+  let newCalculatedEpoch = calculateNewEpoch latestEpCache internalEpCache
+  liftIO . logInfo trce $ "replaceEpoch: Calculated epoch using the cache: " <> textShow newCalculatedEpoch
+  -- write newly calculated epoch into cache
+  void $ writeLatestEpochToCacheEpoch cache newCalculatedEpoch
+  Right <$> replace epochId newCalculatedEpoch
 
-  -- need to check if this is a rollback because getting the last epoch from DB would create incorrect information.
-
-  -- TODO: Vincent we don't need to check here as it happens at insert level
-  latestEpochFromDb <- DB.queryLatestEpoch
-  case latestEpochFromDb of
-    -- if there isn't one in the DB as well then this is going to be the first block
-    Nothing -> do
-      calculateEpochUsingDBQuery cache slotEpochNum epochId
-    Just ep -> do
-      let newCalculatedEpoch = calculateEpochUsingCache ePlutusPrices ceE ep slotDetails
-      void $ writeEpochToCacheEpoch cache newCalculatedEpoch
-      Right <$> replace epochId newCalculatedEpoch
-
-calculateEpochUsingDBQuery ::
+-- This is an expensive query so we try to minimise it's use.
+replaceEpochUsingDBQuery ::
   MonadIO m =>
+  Trace IO Text ->
   Cache ->
   Word64 ->
   DB.EpochId ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-calculateEpochUsingDBQuery cache slotEpochNum epochId = do
+replaceEpochUsingDBQuery trce cache slotEpochNum epochId = do
   -- this query is an expensive lookup so should be rarely used
   newEpoch <- DB.queryCalcEpochEntry slotEpochNum
-  -- add the newly calculated epoch to cache.
-  void $ writeEpochToCacheEpoch cache newEpoch
-  -- replace the current epoch in the DB with our newly calculated epoch
+  liftIO . logInfo trce $ "replaceEpoch: There isn't a latestEpoch in cache or the db, using expensive function replaceEpochUsingDBQuery. "
+  -- write the newly calculated epoch to cache.
+  void $ writeLatestEpochToCacheEpoch cache newEpoch
   Right <$> replace epochId newEpoch
 
-calculateEpochUsingCache ::
-  EpochPlutusAndPrices ->
-  CacheEpoch ->
+calculateNewEpoch ::
   DB.Epoch ->
-  SlotDetails ->
+  EpochInternal ->
   DB.Epoch
-calculateEpochUsingCache ePlutusPrices cacheEpoch ceE slotDetails = do
-  let eIsEplutus = epochIsPlutusExtra ePlutusPrices
-      ePrices = epochPrices ePlutusPrices
-  case ceBlock cacheEpoch of
-    BlockByron blk ->
-      calculateEpochByron
-        blk
-        ceE
-        cacheEpoch
-        slotDetails
-    BlockShelley blk ->
-      calculateEpochGeneric
-        (Generic.fromShelleyBlock blk)
-        ceE
-        cacheEpoch
-        slotDetails
-    BlockAllegra blk ->
-      calculateEpochGeneric
-        (Generic.fromAllegraBlock blk)
-        ceE
-        cacheEpoch
-        slotDetails
-    BlockMary blk ->
-      calculateEpochGeneric
-        (Generic.fromMaryBlock blk)
-        ceE
-        cacheEpoch
-        slotDetails
-    BlockAlonzo blk ->
-      calculateEpochGeneric
-        (Generic.fromAlonzoBlock eIsEplutus ePrices blk)
-        ceE
-        cacheEpoch
-        slotDetails
-    BlockBabbage blk ->
-      calculateEpochGeneric
-        (Generic.fromBabbageBlock eIsEplutus ePrices blk)
-        ceE
-        cacheEpoch
-        slotDetails
+calculateNewEpoch latestEpoch epochInternal = do
+  let newBlkCount = fromIntegral $ DB.epochBlkCount latestEpoch + 1
+      newOutSum = fromIntegral (DB.epochOutSum latestEpoch) + epInternalOutSum epochInternal
+      newFees = DB.unDbLovelace (DB.epochFees latestEpoch) + epInternalFees epochInternal
+      newTxCount = fromIntegral (DB.epochTxCount latestEpoch) + epInternalTxCount epochInternal
+      newEpochNo = epInternalNo epochInternal
+      newStartTime = DB.epochStartTime latestEpoch
+      newEndTime = epInteranlEndTime epochInternal
 
--- Calculating a new epoch by taking the current block getting all the values we need from it.
--- We then the epoch in cache and add these new values to it, thus giving us a new updated epoch.
-calculateEpochGeneric ::
-  Generic.Block ->
-  DB.Epoch ->
-  CacheEpoch ->
-  SlotDetails ->
   DB.Epoch
-calculateEpochGeneric block ceE cacheEpoch slotDetails = do
-  let txs = Generic.blkTxs block
-      newEpochTxCount = length txs
-      outSum = sum $ map (fromIntegral . unCoin . Generic.txOutSum) txs
-  parseToEpoch ceE cacheEpoch slotDetails newEpochTxCount outSum
-
-calculateEpochByron ::
-  ByronBlock ->
-  DB.Epoch ->
-  CacheEpoch ->
-  SlotDetails ->
-  DB.Epoch
-calculateEpochByron block ceE cacheEpoch slotDetails = do
-  -- we handle Tx differently with Byron blocks
-  let (newEpochTxCount, newOutSum) =
-        case byronBlockRaw block of
-          Byron.ABOBBlock aBlock -> do
-            -- the txs in the block
-            let txs = Byron.blockPayload aBlock
-                newTxCount = length txs
-                -- getting all the TxOut values in Lovelace
-                byronTxOutValues = concatMap (toList . (\tx -> map Byron.txOutValue (Byron.txOutputs $ Byron.taTx tx))) txs
-                -- sum the TxOut values
-                outSum = sum $ map Byron.lovelaceToInteger byronTxOutValues
-            (newTxCount, outSum)
-          Byron.ABOBBoundary _ ->
-            -- it doesn't seem like ABOBBoundary handles tx's?
-            (0, 0)
-  parseToEpoch ceE cacheEpoch slotDetails newEpochTxCount newOutSum
-
-parseToEpoch ::
-  DB.Epoch ->
-  CacheEpoch ->
-  SlotDetails ->
-  -- | tx count
-  Int ->
-  -- | sum of outTx values
-  Integer ->
-  DB.Epoch
-parseToEpoch ceE cacheEpoch slotDetails newEpochTxCount outSum = do
-  let cFees = ceFees cacheEpoch
-      newBlkCount = fromIntegral $ DB.epochBlkCount ceE + 1
-  DB.Epoch
-    { DB.epochOutSum = fromIntegral (outSum + fromIntegral (DB.epochOutSum ceE))
-    , DB.epochFees = DB.DbLovelace (DB.unDbLovelace (DB.epochFees ceE) + cFees)
-    , DB.epochTxCount = fromIntegral (fromIntegral (DB.epochTxCount ceE) + newEpochTxCount)
+    { DB.epochOutSum = newOutSum
+    , DB.epochFees = DB.DbLovelace newFees
+    , DB.epochTxCount = fromIntegral newTxCount
     , DB.epochBlkCount = fromIntegral newBlkCount
-    , DB.epochNo = unEpochNo (sdEpochNo slotDetails)
-    , DB.epochStartTime = DB.epochStartTime ceE
-    , DB.epochEndTime = sdSlotTime slotDetails
+    , DB.epochNo = newEpochNo
+    , DB.epochStartTime = newStartTime
+    , DB.epochEndTime = newEndTime
     }
 
 -- -------------------------------------------------------------------------------------------------

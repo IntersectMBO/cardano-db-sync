@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -28,7 +27,7 @@ module Cardano.DbSync.Cache (
 
 import qualified Cardano.Db as DB
 import qualified Cardano.DbSync.Cache.LRU as LRU
-import Cardano.DbSync.Cache.Types (Cache (..), CacheInternal (..), CacheNew (..), CacheStatistics (..), StakeAddrCache, initCacheStatistics)
+import Cardano.DbSync.Cache.Types (Cache (..), CacheEpoch (..), CacheInternal (..), CacheNew (..), CacheStatistics (..), StakeAddrCache, initCacheStatistics)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util
@@ -71,7 +70,7 @@ rollbackCache (Cache cache) = do
   liftIO $ do
     atomically $ writeTVar (cPrevBlock cache) Nothing
     atomically $ modifyTVar (cDatum cache) LRU.cleanup
-    atomically $ writeTVar (cEpoch cache) Nothing
+    atomically $ writeTVar (cEpoch cache) $ CacheEpoch Nothing Nothing
 
 getCacheStatistics :: Cache -> IO CacheStatistics
 getCacheStatistics cs =
