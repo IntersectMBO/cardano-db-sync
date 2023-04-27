@@ -67,11 +67,13 @@ applyAndInsertBlockMaybe ::
 applyAndInsertBlockMaybe syncEnv cblk = do
   (!applyRes, !tookSnapshot) <- liftIO mkApplyResult
   bl <- liftIO $ isConsistent syncEnv
+  let blockN = blockNo cblk
   if bl
     then -- In the usual case it will be consistent so we don't need to do any queries. Just insert the block
       insertBlock syncEnv cblk applyRes False tookSnapshot
     else do
-      blockIsInDbAlready <- lift (isRight <$> DB.queryBlockId (SBS.fromShort . Consensus.getOneEraHash $ blockHash cblk))
+      let eitherBlockId = DB.queryBlockId (SBS.fromShort . Consensus.getOneEraHash $ blockHash cblk)
+      blockIsInDbAlready <- lift (isRight <$> eitherBlockId)
       -- If the block is already in db, do nothing. If not, delete all blocks with greater 'BlockNo' or
       -- equal, insert the block and restore consistency between ledger and db.
       unless blockIsInDbAlready $ do
@@ -81,7 +83,7 @@ applyAndInsertBlockMaybe syncEnv cblk = do
             , textShow (getHeaderFields cblk)
             , ". Time to restore consistency."
             ]
-        rollbackFromBlockNo syncEnv (blockNo cblk)
+        rollbackFromBlockNo syncEnv blockN
         insertBlock syncEnv cblk applyRes True tookSnapshot
         liftIO $ setConsistentLevel syncEnv Consistent
   where
@@ -99,7 +101,9 @@ insertBlock ::
   SyncEnv ->
   CardanoBlock ->
   ApplyResult ->
+  -- is first Block after rollback
   Bool ->
+  -- has snapshot been taken
   Bool ->
   ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do

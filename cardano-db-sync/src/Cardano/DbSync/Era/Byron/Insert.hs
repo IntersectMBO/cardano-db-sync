@@ -95,7 +95,7 @@ insertABOBBoundary tracer cache blk details = do
         , DB.slotLeaderPoolHashId = Nothing
         , DB.slotLeaderDescription = "Epoch boundary slot leader"
         }
-  void . lift . insertBlockAndCache cache $
+  blockId <- lift . insertBlockAndCache cache $
     DB.Block
       { DB.blockHash = Byron.unHeaderHash $ Byron.boundaryHashAnnotated blk
       , DB.blockEpochNo = Just $ unEpochNo epochNo
@@ -124,11 +124,12 @@ insertABOBBoundary tracer cache blk details = do
       writeEpochInternalToCache
         cache
         EpochInternal
-          { epInternalFees = 0
+          { epoInternalCurrentBlockId = blockId
+          , epInternalFees = 0
           , epInternalOutSum = 0
           , epInternalTxCount = 0
-          , epInternalNo = unEpochNo (sdEpochNo details)
-          , epInteranlEndTime = sdSlotTime details
+          , epInternalEpochNo = unEpochNo (sdEpochNo details)
+          , epInternalEndTime = sdSlotTime details
           }
 
   liftIO . logInfo tracer $
@@ -183,11 +184,12 @@ insertABlock tracer cache firstBlockOfEpoch blk details = do
       writeEpochInternalToCache
         cache
         EpochInternal
-          { epInternalFees = sum txFees
+          { epoInternalCurrentBlockId = blkId
+          , epInternalFees = sum txFees
           , epInternalOutSum = fromIntegral outSum
           , epInternalTxCount = fromIntegral $ length txs
-          , epInternalNo = unEpochNo (sdEpochNo details)
-          , epInteranlEndTime = sdSlotTime details
+          , epInternalEpochNo = unEpochNo (sdEpochNo details)
+          , epInternalEndTime = sdSlotTime details
           }
 
   liftIO $ do
