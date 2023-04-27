@@ -26,8 +26,9 @@ module Cardano.DbSync.Cache (
 ) where
 
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCacheEpoch)
 import qualified Cardano.DbSync.Cache.LRU as LRU
-import Cardano.DbSync.Cache.Types (Cache (..), CacheEpoch (..), CacheInternal (..), CacheNew (..), CacheStatistics (..), StakeAddrCache, initCacheStatistics)
+import Cardano.DbSync.Cache.Types (Cache (..), CacheInternal (..), CacheNew (..), CacheStatistics (..), StakeAddrCache, initCacheStatistics)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util
@@ -64,13 +65,13 @@ import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 -- NOTE: BlockId is cleaned up on rollbacks, since it may get reinserted on
 -- a different id.
 -- NOTE: Other tables are not cleaned up since they are not rollbacked.
-rollbackCache :: MonadIO m => Cache -> ReaderT SqlBackend m ()
-rollbackCache UninitiatedCache = pure ()
-rollbackCache (Cache cache) = do
+rollbackCache :: MonadIO m => Cache -> DB.BlockId -> ReaderT SqlBackend m ()
+rollbackCache UninitiatedCache _ = pure ()
+rollbackCache c@(Cache cache) blockId = do
   liftIO $ do
     atomically $ writeTVar (cPrevBlock cache) Nothing
     atomically $ modifyTVar (cDatum cache) LRU.cleanup
-    atomically $ writeTVar (cEpoch cache) $ CacheEpoch Nothing Nothing
+    void $ rollbackMapEpochInCacheEpoch c blockId
 
 getCacheStatistics :: Cache -> IO CacheStatistics
 getCacheStatistics cs =

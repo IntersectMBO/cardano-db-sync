@@ -12,7 +12,7 @@ module Cardano.DbSync.Epoch (
 import Cardano.BM.Trace (Trace, logError, logInfo)
 import qualified Cardano.Chain.Block as Byron hiding (blockHash)
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Cache.Epoch (readEpochInternalFromCacheEpoch, readLatestEpochFromCacheEpoch, writeLatestEpochToCacheEpoch)
+import Cardano.DbSync.Cache.Epoch (readEpochInternalFromCacheEpoch, writeLatestEpochToCacheEpoch, getHasMapEpochCache, readLastMapEpochFromCacheEpoch)
 import Cardano.DbSync.Cache.Types (Cache (..), EpochInternal (..))
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
@@ -70,22 +70,22 @@ checkSlotAndEpochNum ::
   ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
 checkSlotAndEpochNum trce cache slotDetails = do
   -- read the chached Epoch
-  latestEpochCache <- liftIO $ readLatestEpochFromCacheEpoch cache
-  internalEpochCache <- liftIO $ readEpochInternalFromCacheEpoch cache
+  hasMapEpochCache <- liftIO $ getHasMapEpochCache cache
+  latestEpochCache <- liftIO $ readLastMapEpochFromCacheEpoch cache
 
   -- if there isn't a cached epoch default it's number to 0 as this is the first block.
   let epochNum = maybe 0 DB.epochNo latestEpochCache
-      slotEpochNum = unEpochNo (sdEpochNo slotDetails)
+      slotEpochNum = unEpochNo $ sdEpochNo slotDetails
 
   -- These cases are listed from the least likey to occur to the most
   -- likley to keep the logic sane.
   if
-      | slotEpochNum > 0 && isNothing latestEpochCache ->
-        insertOrReplaceEpoch cache 0 trce latestEpochCache internalEpochCache
+      | slotEpochNum > 0 && hasMapEpochCache ->
+        insertOrReplaceEpoch cache 0 trce
       | slotEpochNum >= epochNum + 2 ->
-        insertOrReplaceEpoch cache (epochNum + 1) trce latestEpochCache internalEpochCache
+        insertOrReplaceEpoch cache (epochNum + 1) trce
       | getSyncStatus slotDetails == SyncFollowing ->
-        insertOrReplaceEpoch cache slotEpochNum trce latestEpochCache internalEpochCache
+        insertOrReplaceEpoch cache slotEpochNum trce
       | otherwise -> pure $ Right ()
 
 -- -------------------------------------------------------------------------------------------------
@@ -95,17 +95,15 @@ insertOrReplaceEpoch ::
   Cache ->
   Word64 ->
   Trace IO Text ->
-  Maybe DB.Epoch ->
-  Maybe EpochInternal ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-insertOrReplaceEpoch cache slotEpochNum trce latestEpochCache internalEpochCache = do
+insertOrReplaceEpoch cache slotEpochNum trce = do
   -- get the epoch id using a slot number
   mEpochID <- DB.queryForEpochId slotEpochNum
   -- if the epoch id doesn't exist this means we don't have it yet so we
   -- calculate and insert a new epoch otherwise we replace existing epoch.
   maybe
-    (insertEpochIntoDB trce cache slotEpochNum latestEpochCache internalEpochCache)
-    (replaceEpoch trce cache slotEpochNum latestEpochCache internalEpochCache)
+    (insertEpochIntoDB trce cache slotEpochNum)
+    (replaceEpoch trce cache slotEpochNum)
     mEpochID
 
 insertEpochIntoDB ::
@@ -113,10 +111,10 @@ insertEpochIntoDB ::
   Trace IO Text ->
   Cache ->
   Word64 ->
-  Maybe DB.Epoch ->
-  Maybe EpochInternal ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-insertEpochIntoDB trce cache slotEpochNum latestEpochCache internalEpochCache = do
+insertEpochIntoDB trce cache slotEpochNum = do
+  latestEpochCache <- liftIO $ readLastMapEpochFromCacheEpoch cache
+  internalEpochCache <- liftIO $ readEpochInternalFromCacheEpoch cache
   -- If we have all the data needed to make a new epoch in cache let's use that instead of
   -- calling the db.
   newCalculatedEpoch <-
@@ -137,11 +135,12 @@ replaceEpoch ::
   Trace IO Text ->
   Cache ->
   Word64 ->
-  Maybe DB.Epoch ->
-  Maybe EpochInternal ->
   DB.EpochId ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-replaceEpoch trce cache slotEpochNum latestEpochCache internalEpochCache epochId =
+replaceEpoch trce cache slotEpochNum epochId = do
+  latestEpochCache <- liftIO $ readLastMapEpochFromCacheEpoch cache
+  internalEpochCache <- liftIO $ readEpochInternalFromCacheEpoch cache
+
   case latestEpochCache of
     -- There is no latest epoch in cache so let's see if we can get it from the db,
     -- otherwise we'll calculate the epoch from an expensive db query.
@@ -154,13 +153,13 @@ replaceEpoch trce cache slotEpochNum latestEpochCache internalEpochCache epochId
         Just latestEpFromDb -> do
           case internalEpochCache of
             -- There should never be no internal cache at this point in the process but just incase!
-            Nothing -> pure $ Left $ NEError "No internalEpochCache"
+            Nothing -> pure $ Left $ NEError "replaceEpoch: No internalEpochCache"
             Just internalEpCache -> replaceEpochWithValues trce cache epochId latestEpFromDb internalEpCache
 
     -- There is a latestEpochCache so we can use it to work out our new Epoch
     Just latestEpCache -> do
       case internalEpochCache of
-        Nothing -> pure $ Left $ NEError "No internalEpochCache"
+        Nothing -> pure $ Left $ NEError "replaceEpoch: No internalEpochCache"
         Just internalEpCache -> replaceEpochWithValues trce cache epochId latestEpCache internalEpCache
 
 -- calculate and replace the epoch
@@ -174,7 +173,7 @@ replaceEpochWithValues ::
   ReaderT SqlBackend m (Either SyncNodeError ())
 replaceEpochWithValues trce cache epochId latestEpCache internalEpCache = do
   let newCalculatedEpoch = calculateNewEpoch latestEpCache internalEpCache
-  liftIO . logInfo trce $ "replaceEpoch: Calculated epoch using the cache: " <> textShow newCalculatedEpoch
+  liftIO . logInfo trce $ "replaceEpochWithValues: Calculated epoch using the cache: " <> textShow newCalculatedEpoch
   -- write newly calculated epoch into cache
   void $ writeLatestEpochToCacheEpoch cache newCalculatedEpoch
   Right <$> replace epochId newCalculatedEpoch
@@ -190,7 +189,7 @@ replaceEpochUsingDBQuery ::
 replaceEpochUsingDBQuery trce cache slotEpochNum epochId = do
   -- this query is an expensive lookup so should be rarely used
   newEpoch <- DB.queryCalcEpochEntry slotEpochNum
-  liftIO . logInfo trce $ "replaceEpoch: There isn't a latestEpoch in cache or the db, using expensive function replaceEpochUsingDBQuery. "
+  liftIO . logInfo trce $ "replaceEpochUsingDBQuery: There isn't a latestEpoch in cache or the db, using expensive function replaceEpochUsingDBQuery. "
   -- write the newly calculated epoch to cache.
   void $ writeLatestEpochToCacheEpoch cache newEpoch
   Right <$> replace epochId newEpoch
@@ -204,9 +203,9 @@ calculateNewEpoch latestEpoch epochInternal = do
       newOutSum = fromIntegral (DB.epochOutSum latestEpoch) + epInternalOutSum epochInternal
       newFees = DB.unDbLovelace (DB.epochFees latestEpoch) + epInternalFees epochInternal
       newTxCount = fromIntegral (DB.epochTxCount latestEpoch) + epInternalTxCount epochInternal
-      newEpochNo = epInternalNo epochInternal
+      newEpochNo = epInternalEpochNo epochInternal
       newStartTime = DB.epochStartTime latestEpoch
-      newEndTime = epInteranlEndTime epochInternal
+      newEndTime = epInternalEndTime epochInternal
 
   DB.Epoch
     { DB.epochOutSum = newOutSum
@@ -217,5 +216,3 @@ calculateNewEpoch latestEpoch epochInternal = do
     , DB.epochStartTime = newStartTime
     , DB.epochEndTime = newEndTime
     }
-
--- -------------------------------------------------------------------------------------------------

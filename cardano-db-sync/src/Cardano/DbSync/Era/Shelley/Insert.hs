@@ -7,7 +7,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 
 module Cardano.DbSync.Era.Shelley.Insert (
   insertShelleyBlock,
@@ -133,15 +132,16 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
 
     -- now that we've inserted the Block and all it's txs lets put what we need
     -- for updating the epoch in the cache.
-    lift $
+    void $ lift $
       writeEpochInternalToCache
         cache
         EpochInternal
-          { epInternalFees = sum $ groupedTxFees blockGroupedData
+          { epoInternalCurrentBlockId = blkId
+          , epInternalEndTime = sdSlotTime details
+          , epInternalFees = sum $ groupedTxFees blockGroupedData
+          , epInternalEpochNo = unEpochNo (sdEpochNo details)
           , epInternalOutSum = fromIntegral $ sum $ groupedTxOutSum blockGroupedData
           , epInternalTxCount = fromIntegral $ length (Generic.blkTxs blk)
-          , epInternalNo = unEpochNo (sdEpochNo details)
-          , epInteranlEndTime = sdSlotTime details
           }
 
     when withinHalfHour $

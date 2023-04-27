@@ -80,19 +80,26 @@ data CacheStatistics = CacheStatistics
   , prevBlockQueries :: !Word64
   }
 
--- When inserting Txs and Blocks we can also caculate the values for an DB.Epoch at the same time.
+-- When inserting Txs and Blocks we also caculate some values used for calculating a DB.Epoch,
 -- So we use this type to represent the values we need to keep when we update the epoch in the datbase.
 data EpochInternal = EpochInternal
-  { epInternalFees :: !Word64
+  { -- | we take the blockId of a newly inserted block, this is so we use it as the key
+    --   for ceMapEpoch which is utilised in rollback.
+    epoInternalCurrentBlockId :: !DB.BlockId
+    -- |
+  , epInternalFees :: !Word64
+    -- |
   , epInternalOutSum :: !Word128
+    -- |
   , epInternalTxCount :: !Word64
-  , epInternalNo :: !Word64
-  , epInteranlEndTime :: !UTCTime
+    -- |
+  , epInternalEpochNo :: !Word64
+    -- |
+  , epInternalEndTime :: !UTCTime
   }
 
 data CacheEpoch = CacheEpoch
-  { -- this can be extended to be a (Map BlockId DB.Epoch) which would be benifitial when doing rollbacks.
-    ceLatestEpoch :: !(Maybe DB.Epoch)
+  { ceMapEpoch :: !(Map DB.BlockId DB.Epoch)
   , ceEpochInternal :: !(Maybe EpochInternal)
   }
 
@@ -180,4 +187,4 @@ initCacheStatistics :: CacheStatistics
 initCacheStatistics = CacheStatistics 0 0 0 0 0 0 0 0 0 0
 
 initCacheEpoch :: CacheEpoch
-initCacheEpoch = CacheEpoch Nothing Nothing
+initCacheEpoch = CacheEpoch mempty Nothing
