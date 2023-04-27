@@ -165,6 +165,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
       when (soptExtended $ envOptions syncEnv)
         . newExceptT
         $ epochHandler
+          syncEnv
           tracer
           (envCache syncEnv)
           (BlockDetails cblk details)

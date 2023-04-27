@@ -21,6 +21,10 @@ import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
 import Data.Map.Strict (insert, lookup, split, lookupMax, size, deleteMin)
 import Database.Persist.Postgresql (SqlBackend)
 import Cardano.DbSync.Error (SyncNodeError(..))
+import Cardano.DbSync.Api (SyncEnv (..), LedgerEnv (..))
+import Cardano.DbSync.LedgerState (HasLedgerEnv(..))
+import Cardano.DbSync.Era.Shelley.Generic.StakeDist (getSecurityParameter)
+import Cardano.DbSync.LocalStateQuery (NoLedgerEnv(..))
 
 -------------------------------------------------------------------------------------
 -- Epoch Cache
@@ -98,10 +102,16 @@ writeEpochInternalToCache cache epInternal =
 --   which was generated when inserting the block into db and put into EpochInternal Cache.
 writeLatestEpochToCacheEpoch ::
   MonadIO m =>
+  SyncEnv ->
   Cache ->
   DB.Epoch ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-writeLatestEpochToCacheEpoch cache latestEpoch =
+writeLatestEpochToCacheEpoch syncEnv cache latestEpoch = do
+  -- this can also be tought of as max rollback number
+  let securityParam =
+        case envLedgerEnv syncEnv of
+          HasLedger hle -> getSecurityParameter $ leProtocolInfo hle
+          NoLedger nle -> getSecurityParameter $ nleProtocolInfo nle
   case cache of
     UninitiatedCache -> pure $ Left $ NEError "writeLatestEpochToCacheEpoch: Cache is UninitiatedCache"
     Cache ci -> do
@@ -116,7 +126,7 @@ writeLatestEpochToCacheEpoch cache latestEpoch =
               -- Making sure our mapEpoch doesn't get too large so we use something slightly bigger than K value "securityParam"
               -- and once the map gets above that we delete the last item ready for another to be inserted.
               scaledMapEpoch =
-                if size mapEpoch > 2500
+                if size mapEpoch > fromEnum securityParam
                   then deleteMin mapEpoch
                   else mapEpoch
           let insertedMapEpoch = insert blockId latestEpoch scaledMapEpoch
