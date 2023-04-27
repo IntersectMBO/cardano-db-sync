@@ -138,9 +138,9 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
         EpochInternal
           { epoInternalCurrentBlockId = blkId
           , epInternalEndTime = sdSlotTime details
-          , epInternalFees = sum $ groupedTxFees blockGroupedData
+          , epInternalFees = groupedTxFees blockGroupedData
           , epInternalEpochNo = unEpochNo (sdEpochNo details)
-          , epInternalOutSum = fromIntegral $ sum $ groupedTxOutSum blockGroupedData
+          , epInternalOutSum = fromIntegral $ groupedTxOutSum blockGroupedData
           , epInternalTxCount = fromIntegral $ length (Generic.blkTxs blk)
           }
 
@@ -284,7 +284,7 @@ insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx 
       !txOutsGrouped <- mapM (prepareTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
 
       let !txIns = map (prepareTxIn txId Map.empty) resolvedInputs
-      pure (blockGroupData <> BlockGroupedData txIns txOutsGrouped [] [] [fees] [outSum])
+      pure (blockGroupData <> BlockGroupedData txIns txOutsGrouped [] [] fees outSum)
     else do
       -- The following operations only happen if the script passes stage 2 validation (or the tx has
       -- no script).
@@ -322,7 +322,7 @@ insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx 
       mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
-      pure (blockGroupData <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint [fees] [outSum])
+      pure (blockGroupData <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint fees outSum)
 
 prepareTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
