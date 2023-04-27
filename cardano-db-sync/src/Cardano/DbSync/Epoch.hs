@@ -99,7 +99,7 @@ insertOrReplaceEpoch ::
   Trace IO Text ->
   ReaderT SqlBackend m (Either SyncNodeError ())
 insertOrReplaceEpoch syncEnv cache slotEpochNum trce = do
-  -- get the epoch id using a slot number
+  -- get the epoch id using the epoch number in slot
   mEpochID <- DB.queryForEpochId slotEpochNum
   -- if the epoch id doesn't exist this means we don't have it yet so we
   -- calculate and insert a new epoch otherwise we replace existing epoch.
