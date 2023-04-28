@@ -117,8 +117,8 @@ insertABOBBoundary tracer cache blk details = do
       , DB.blockOpCertCounter = Nothing
       }
 
-  -- now that we've inserted the Block and all it's txs lets put what we need
-  -- for updating the epoch in the cache.
+  -- now that we've inserted the Block and all it's txs lets put what we'll need
+  -- later when updating the epoch using cache.
   void $
     lift $
       writeEpochInternalToCache
@@ -177,8 +177,8 @@ insertABlock tracer cache firstBlockOfEpoch blk details = do
   let byronTxOutValues = concatMap (toList . (\tx -> map Byron.txOutValue (Byron.txOutputs $ Byron.taTx tx))) txs
       outSum = sum $ map Byron.lovelaceToInteger byronTxOutValues
 
-  -- now that we've inserted the Block and all it's txs lets put what we need
-  -- for updating the epoch in the cache.
+  -- now that we've inserted the Block and all it's txs lets put what we'll need
+  -- later when updating the epoch using cache.
   void $
     lift $
       writeEpochInternalToCache
@@ -259,7 +259,8 @@ insertByronTx tracer blkId tx blockIndex = do
   -- references the output (not sure this can even happen).
   lift $ zipWithM_ (insertTxOut tracer txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
   mapMVExceptT (insertTxIn tracer txId) resolvedInputs
-  -- we are returning fees so we can sum them and use that to insert into the epoch
+
+  -- fees are being returned so we can sum them and put them in cache to use when updating epochs
   pure $ unDbLovelace $ vfFee valFee
   where
     annotateTx :: SyncNodeError -> SyncNodeError
