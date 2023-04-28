@@ -319,7 +319,7 @@ queryEpochFromNum epochNum = do
     pure epoch
   pure $ entityVal <$> res
 
--- | Get the most recent epoch in the Epoch table.
+-- | Get the most recent epoch in the Epoch DB table.
 queryLatestEpoch :: MonadIO m => ReaderT SqlBackend m (Maybe Epoch)
 queryLatestEpoch = do
   res <- selectOne $ do
@@ -327,18 +327,6 @@ queryLatestEpoch = do
     orderBy [desc (epoch ^. EpochNo)]
     pure epoch
   pure $ entityVal <$> res
-
--- | Calculate the Epoch table entry from last known blockid taken from cache.
--- When following the chain, this is called for each new block of the current epoch.
--- Which is far more efficient than going through ALL the blocks in the epoch
-
-queryCalcEpochUsingLastBlockId :: MonadIO m => BlockId -> Word64 -> ReaderT SqlBackend m Epoch
-queryCalcEpochUsingLastBlockId blockId epochNum = do
-  blockResult <- select $ do
-    block <- from $ table @Block
-    where_ ((block ^. BlockEpochNo ==. just (val epochNum)) &&. (block ^. BlockId >. val blockId))
-    pure (countRows, min_ (block ^. BlockTime), max_ (block ^. BlockTime))
-  queryTxWithBlocks epochNum blockResult
 
 queryTxWithBlocks ::
   MonadIO m =>

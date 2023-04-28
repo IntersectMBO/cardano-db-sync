@@ -130,8 +130,8 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
     blockGroupedData <- foldM (\gp (idx, tx) -> txInserter idx tx gp) mempty zippedTx
     minIds <- insertBlockGroupedData tracer blockGroupedData
 
-    -- now that we've inserted the Block and all it's txs lets put what we need
-    -- for updating the epoch in the cache.
+    -- now that we've inserted the Block and all it's txs lets put what we'll need
+    -- later when updating the epoch using cache.
     void $ lift $
       writeEpochInternalToCache
         cache
@@ -248,7 +248,6 @@ insertTx ::
   SlotNo ->
   Word64 ->
   Generic.Tx ->
-  -- | (_, Fees) keeping a sum of the fees
   BlockGroupedData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) BlockGroupedData
 insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx blockGroupData = do
@@ -284,6 +283,8 @@ insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx 
       !txOutsGrouped <- mapM (prepareTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
 
       let !txIns = map (prepareTxIn txId Map.empty) resolvedInputs
+      -- There is a custom semigroup instance for BlockGroupedData which uses addition for the values `fees` and `outSum`.
+      -- Same happens bellow on last line of this function.
       pure (blockGroupData <> BlockGroupedData txIns txOutsGrouped [] [] fees outSum)
     else do
       -- The following operations only happen if the script passes stage 2 validation (or the tx has

@@ -72,10 +72,10 @@ checkSlotAndEpochNum ::
 checkSlotAndEpochNum syncEnv trce cache slotDetails = do
   -- read the chached Epoch
   hasMapEpochCache <- liftIO $ getHasMapEpochCache cache
-  latestEpochCache <- liftIO $ readLastMapEpochFromCacheEpoch cache
+  lastEpochFromCache <- liftIO $ readLastMapEpochFromCacheEpoch cache
 
   -- if there isn't a cached epoch default it's number to 0 as this is the first block.
-  let epochNum = maybe 0 DB.epochNo latestEpochCache
+  let epochNum = maybe 0 DB.epochNo lastEpochFromCache
       slotEpochNum = unEpochNo $ sdEpochNo slotDetails
 
   -- These cases are listed from the least likey to occur to the most
@@ -99,10 +99,10 @@ insertOrReplaceEpoch ::
   Trace IO Text ->
   ReaderT SqlBackend m (Either SyncNodeError ())
 insertOrReplaceEpoch syncEnv cache slotEpochNum trce = do
-  -- get the epoch id using the epoch number in slot
+  -- get the epoch id using the epoch number in the slot
   mEpochID <- DB.queryForEpochId slotEpochNum
-  -- if the epoch id doesn't exist this means we don't have it yet so we
-  -- calculate and insert a new epoch otherwise we replace existing epoch.
+  -- if the epoch id doesn't exist this means we don't have it yet. Therefore we
+  -- calculate and insert a new epoch, else we replace existing epoch.
   maybe
     (insertEpochIntoDB syncEnv trce cache slotEpochNum)
     (replaceEpoch syncEnv trce cache slotEpochNum)
@@ -116,16 +116,16 @@ insertEpochIntoDB ::
   Word64 ->
   ReaderT SqlBackend m (Either SyncNodeError ())
 insertEpochIntoDB syncEnv trce cache slotEpochNum = do
-  latestEpochCache <- liftIO $ readLastMapEpochFromCacheEpoch cache
+  lastEpochFromCache <- liftIO $ readLastMapEpochFromCacheEpoch cache
   internalEpochCache <- liftIO $ readEpochInternalFromCacheEpoch cache
   -- If we have all the data needed to make a new epoch in cache let's use that instead of
   -- calling the db.
   newCalculatedEpoch <-
-    case (latestEpochCache, internalEpochCache) of
-      (Just latestEpC, Just internalEpC) -> pure $ calculateNewEpoch latestEpC internalEpC
+    case (lastEpochFromCache, internalEpochCache) of
+      (Just lastEpC, Just internalEpC) -> pure $ calculateNewEpoch lastEpC internalEpC
       (_, _) -> DB.queryCalcEpochEntry slotEpochNum
 
-  liftIO . logInfo trce $ "insertEpochIntoDB: epoch " <> textShow slotEpochNum
+  liftIO . logInfo trce $ "insertEpochIntoDB: epoch values: " <> textShow slotEpochNum
   void $ DB.insertEpoch newCalculatedEpoch
   -- put newly inserted epoch into cache
   void $ writeLatestEpochToCacheEpoch syncEnv cache newCalculatedEpoch
@@ -142,29 +142,29 @@ replaceEpoch ::
   DB.EpochId ->
   ReaderT SqlBackend m (Either SyncNodeError ())
 replaceEpoch syncEnv trce cache slotEpochNum epochId = do
-  latestEpochCache <- liftIO $ readLastMapEpochFromCacheEpoch cache
+  lastEpochFromCache <- liftIO $ readLastMapEpochFromCacheEpoch cache
   internalEpochCache <- liftIO $ readEpochInternalFromCacheEpoch cache
 
-  case latestEpochCache of
-    -- There is no latest epoch in cache so let's see if we can get it from the db,
-    -- otherwise we'll calculate the epoch from an expensive db query.
+  case lastEpochFromCache of
+    -- There isn't an epoch in cache so let's see if we can get one from the db,
+    -- otherwise we'll calculate the epoch using the expensive db query.
     Nothing -> do
       latestEpochFromDb <- DB.queryLatestEpoch
       case latestEpochFromDb of
         Nothing -> do
           replaceEpochUsingDBQuery syncEnv trce cache slotEpochNum epochId
-        -- TODO: Vince would a rollback cause us to get the wrong latestEpFromDb?
         Just latestEpFromDb -> do
           case internalEpochCache of
-            -- There should never be no internal cache at this point in the process but just incase!
+            -- There should never be no internal cache at this point in the pipeline but just incase!
             Nothing -> pure $ Left $ NEError "replaceEpoch: No internalEpochCache"
+            -- Let's use both values aquired to calculate our new epoch.
             Just internalEpCache -> replaceEpochWithValues syncEnv trce cache epochId latestEpFromDb internalEpCache
 
-    -- There is a latestEpochCache so we can use it to work out our new Epoch
-    Just latestEpCache -> do
+    -- There is a latestEpochFromCache so we can use it to work out our new Epoch
+    Just lastEpCache -> do
       case internalEpochCache of
         Nothing -> pure $ Left $ NEError "replaceEpoch: No internalEpochCache"
-        Just internalEpCache -> replaceEpochWithValues syncEnv trce cache epochId latestEpCache internalEpCache
+        Just internalEpCache -> replaceEpochWithValues syncEnv trce cache epochId lastEpCache internalEpCache
 
 -- calculate and replace the epoch
 replaceEpochWithValues ::
@@ -176,14 +176,14 @@ replaceEpochWithValues ::
   DB.Epoch ->
   EpochInternal ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-replaceEpochWithValues syncEnv trce cache epochId latestEpCache internalEpCache = do
-  let newCalculatedEpoch = calculateNewEpoch latestEpCache internalEpCache
+replaceEpochWithValues syncEnv trce cache epochId lastEpCache internalEpCache = do
+  let newCalculatedEpoch = calculateNewEpoch lastEpCache internalEpCache
   liftIO . logInfo trce $ "replaceEpochWithValues: Calculated epoch using the cache: " <> textShow newCalculatedEpoch
   -- write newly calculated epoch into cache
   void $ writeLatestEpochToCacheEpoch syncEnv cache newCalculatedEpoch
   Right <$> replace epochId newCalculatedEpoch
 
--- This is an expensive query so we try to minimise it's use.
+-- This is an expensive DB query so we try to minimise it's use.
 replaceEpochUsingDBQuery ::
   MonadIO m =>
   SyncEnv ->
@@ -193,7 +193,6 @@ replaceEpochUsingDBQuery ::
   DB.EpochId ->
   ReaderT SqlBackend m (Either SyncNodeError ())
 replaceEpochUsingDBQuery syncEnv trce cache slotEpochNum epochId = do
-  -- this query is an expensive lookup so should be rarely used
   newEpoch <- DB.queryCalcEpochEntry slotEpochNum
   liftIO . logInfo trce $ "replaceEpochUsingDBQuery: There isn't a latestEpoch in cache or the db, using expensive function replaceEpochUsingDBQuery. "
   -- write the newly calculated epoch to cache.
