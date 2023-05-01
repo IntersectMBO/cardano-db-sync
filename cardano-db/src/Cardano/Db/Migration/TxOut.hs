@@ -1,11 +1,12 @@
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Db.Migration.TxOut (
   migrateTxOut,
-  isMigrated
-
+  deleteConsumedTxOut,
+  isMigrated,
 ) where
 
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
@@ -18,7 +19,9 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Text (Text)
 import Data.Word (Word64)
+import Database.Persist ((<=.))
 import Database.Persist.Sql (SqlBackend, rawExecuteCount)
+import Database.Persist.Sql (deleteWhereCount)
 
 migrateTxOut :: MonadIO m => ReaderT SqlBackend m ()
 migrateTxOut = migrateNextPage 0
@@ -78,3 +81,38 @@ _validateMigration trce = do
       , textShow consumedTxOut, " consumed TxOut"
       ]
     pure False
+
+deleteConsumedTxOut :: forall m. MonadIO m => Trace IO Text -> Word64 -> ReaderT SqlBackend m ()
+deleteConsumedTxOut trce blockNoDiff = do
+    mBlockHeight <- queryBlockHeight
+    maybe (logNoDelete "No blocks found") deleteConsumed mBlockHeight
+  where
+    logNoDelete txt = liftIO $ logInfo trce $ "No tx_out was deleted: " <> txt
+
+    deleteConsumed :: Word64 -> ReaderT SqlBackend m ()
+    deleteConsumed tipBlockNo = do
+      if tipBlockNo <= blockNoDiff
+      then logNoDelete $ "Tip blockNo is " <> textShow tipBlockNo
+      else do
+        mBlockId <- queryBlockNo $ tipBlockNo - blockNoDiff
+        maybe
+          (liftIO $ logError trce $ "BlockNo hole found at " <> textShow (tipBlockNo - blockNoDiff))
+          deleteConsumedBeforeBlock
+          mBlockId
+
+    deleteConsumedBeforeBlock :: BlockId -> ReaderT SqlBackend m ()
+    deleteConsumedBeforeBlock blockId = do
+      mTxId <- queryMaxRefId TxBlockId blockId False
+      case mTxId of
+        Nothing -> logNoDelete $ "No txs found before " <> textShow blockId
+        Just txId -> do
+          mTxInId <- queryMaxRefId TxInTxInId txId True
+          maybe
+            (logNoDelete $ "No tx_in found before or at " <> textShow txId)
+            deleteConsumedBeforeTxIn
+            mTxInId
+
+    deleteConsumedBeforeTxIn :: TxInId -> ReaderT SqlBackend m ()
+    deleteConsumedBeforeTxIn txInId = do
+      count <- deleteWhereCount [TxOutConsumedByTxInId <=. Just txInId]
+      liftIO $ logInfo trce $ "Deleted " <> textShow count <> " tx_in"

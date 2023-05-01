@@ -45,12 +45,14 @@ module Cardano.Db.Query (
   queryTxOutCredentials,
   queryEpochStakeCount,
   queryMinRefId,
+  queryMaxRefId,
   existsPoolHashId,
   existsPoolMetadataRefId,
   getTxOutConsumedAfter,
   getInputPage,
   countTxIn,
   countConsumed,
+  queryBlockHeight,
   -- queries used in smash
   queryPoolOfflineData,
   queryPoolRegister,
@@ -78,7 +80,6 @@ module Cardano.Db.Query (
   queryAddressBalanceAtSlot,
   -- queries used only in tests
   queryAddressOutputs,
-  queryBlockHeight,
   queryRewardCount,
   queryTxInCount,
   queryTxOutCount,
@@ -165,6 +166,7 @@ import Database.Esqueleto.Experimental (
   valList,
   where_,
   (&&.),
+  (<.),
   (<=.),
   (==.),
   (>.),
@@ -622,6 +624,24 @@ queryMinRefId txIdField txId = do
     pure $ rec ^. persistIdField
   pure $ unValue <$> listToMaybe res
 
+queryMaxRefId ::
+  forall m field record.
+  (MonadIO m, PersistEntity record, PersistField field) =>
+  EntityField record field ->
+  field ->
+  Bool ->
+  ReaderT SqlBackend m (Maybe (Key record))
+queryMaxRefId txIdField txId eq = do
+  res <- select $ do
+    rec <- from $ table @record
+    if eq
+      then where_ (rec ^. txIdField <=. val txId)
+      else where_ (rec ^. txIdField <. val txId)
+    orderBy [desc (rec ^. persistIdField)]
+    limit 1
+    pure $ rec ^. persistIdField
+  pure $ unValue <$> listToMaybe res
+
 existsPoolHashId :: MonadIO m => PoolHashId -> ReaderT SqlBackend m Bool
 existsPoolHashId phid = do
   res <- select $ do
@@ -677,6 +697,17 @@ countConsumed = do
     where_ (isJust $ txOut ^. TxOutConsumedByTxInId)
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
+
+-- | Get the current block height.
+queryBlockHeight :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
+queryBlockHeight = do
+  res <- select $ do
+    blk <- from $ table @Block
+    where_ (isJust $ blk ^. BlockBlockNo)
+    orderBy [desc (blk ^. BlockBlockNo)]
+    limit 1
+    pure (blk ^. BlockBlockNo)
+  pure $ unValue =<< listToMaybe res
 
 {--------------------------------------------
   Queries use in SMASH
@@ -1059,17 +1090,6 @@ queryAddressOutputs addr = do
     convert v = case unValue <$> v of
       Just (Just x) -> x
       _ -> DbLovelace 0
-
--- | Get the current block height.
-queryBlockHeight :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
-queryBlockHeight = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (isJust $ blk ^. BlockBlockNo)
-    orderBy [desc (blk ^. BlockBlockNo)]
-    limit 1
-    pure (blk ^. BlockBlockNo)
-  pure $ unValue =<< listToMaybe res
 
 queryRewardCount :: MonadIO m => ReaderT SqlBackend m Word64
 queryRewardCount = do
