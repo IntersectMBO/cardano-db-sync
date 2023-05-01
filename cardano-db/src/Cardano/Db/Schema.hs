@@ -71,6 +71,9 @@ share
     stageThree Int
     deriving Eq
 
+  SchemaExtra
+    log                 Text
+
   PoolHash
     hashRaw             ByteString          sqltype=hash28type
     view                Text
