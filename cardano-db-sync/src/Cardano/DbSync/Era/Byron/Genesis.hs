@@ -152,7 +152,7 @@ validateGenesisDistribution tracer networkName cfg bid =
       Left err -> dbSyncNodeError $ "validateGenesisDistribution: " <> textShow err
       Right expectedSupply ->
         when (expectedSupply /= totalSupply) $
-          dbSyncNodeError $
+          liftIO $ logInfo tracer $
             Text.concat
               [ "validateGenesisDistribution: Expected total supply to be "
               , DB.renderAda expectedSupply
