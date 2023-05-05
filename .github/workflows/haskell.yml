@@ -54,6 +54,7 @@ jobs:
       run: |
         brew install postgresql@14 libpq openssl@1.1 tree
         tree /usr/local/opt/postgresql@14/lib/
+        echo "PKG_CONFIG_PATH=/usr/local/opt/postgresql@14/lib/postgresql@14/pkgconfig:/usr/local/opt/openssl/lib/pkgconfig:$PKG_CONFIG_PAT" | tee $GITHUB_ENV
 
     - name: Debug pkg-config
       run: pkg-config --list-all
