@@ -18,7 +18,6 @@ module Cardano.Db.Query (
   queryMinIdsAfterReverseIndex,
   queryBlockTxCount,
   queryBlockId,
-  queryCalcEpochUsingLastBlockId,
   queryCalcEpochEntry,
   queryCurrentEpochNo,
   queryNormalEpochRewardCount,

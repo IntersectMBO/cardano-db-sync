@@ -86,15 +86,10 @@ data EpochInternal = EpochInternal
   { -- | we take the blockId of a newly inserted block, this is so we use it as the key
     --   for ceMapEpoch which is utilised in rollback.
     epoInternalCurrentBlockId :: !DB.BlockId
-    -- |
   , epInternalFees :: !Word64
-    -- |
   , epInternalOutSum :: !Word128
-    -- |
   , epInternalTxCount :: !Word64
-    -- |
   , epInternalEpochNo :: !Word64
-    -- |
   , epInternalEndTime :: !UTCTime
   }
   deriving (Show)
