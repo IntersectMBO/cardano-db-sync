@@ -234,21 +234,38 @@ insertTxOut ::
   Word32 ->
   Byron.TxOut ->
   ReaderT SqlBackend m ()
-insertTxOut _tracer txId index txout =
+insertTxOut _tracer txId index txout = do
+  addrId <- insertAddress
   void . DB.insertTxOut $
     DB.TxOut
       { DB.txOutTxId = txId
       , DB.txOutIndex = fromIntegral index
-      , DB.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
-      , DB.txOutAddressRaw = Binary.serialize' (Byron.txOutAddress txout)
-      , DB.txOutAddressHasScript = False
-      , DB.txOutPaymentCred = Nothing -- Byron does not have a payment credential.
+      , DB.txOutAddressId = addrId
       , DB.txOutStakeAddressId = Nothing -- Byron does not have a stake address.
       , DB.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
       , DB.txOutDataHash = Nothing
       , DB.txOutInlineDatumId = Nothing
       , DB.txOutReferenceScriptId = Nothing
       }
+  where
+    addrRaw :: ByteString
+    addrRaw = Binary.serialize' (Byron.txOutAddress txout)
+
+    insertAddress ::
+      (MonadBaseControl IO m, MonadIO m) =>
+      ReaderT SqlBackend m DB.AddressId
+    insertAddress = do
+      mAddrId <- DB.queryAddress addrRaw
+      case mAddrId of
+        Nothing ->
+          DB.insertAddress
+            DB.Address
+              { DB.addressAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
+              , DB.addressAddressRaw = addrRaw
+              , DB.addressHasScript = False
+              , DB.addressPaymentCred = Nothing
+              }
+        Just addrId -> pure addrId
 
 insertTxIn ::
   (MonadBaseControl IO m, MonadIO m) =>

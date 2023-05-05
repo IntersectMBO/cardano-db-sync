@@ -184,20 +184,38 @@ insertTxOuts blkId (address, value) = do
         , DB.txValidContract = True
         , DB.txScriptSize = 0
         }
+  addrId <- insertAddress address
   void . DB.insertTxOut $
     DB.TxOut
       { DB.txOutTxId = txId
       , DB.txOutIndex = 0
-      , DB.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 address
-      , DB.txOutAddressRaw = Binary.serialize' address
-      , DB.txOutAddressHasScript = False
-      , DB.txOutPaymentCred = Nothing
+      , DB.txOutAddressId = addrId
       , DB.txOutStakeAddressId = Nothing
       , DB.txOutValue = DB.DbLovelace (Byron.unsafeGetLovelace value)
       , DB.txOutDataHash = Nothing
       , DB.txOutInlineDatumId = Nothing
       , DB.txOutReferenceScriptId = Nothing
       }
+
+insertAddress ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  Byron.Address ->
+  ReaderT SqlBackend m DB.AddressId
+insertAddress address = do
+  mAddrId <- DB.queryAddress addrRaw
+  case mAddrId of
+    Nothing ->
+      DB.insertAddress
+        DB.Address
+          { DB.addressAddress = Text.decodeUtf8 $ Byron.addrToBase58 address
+          , DB.addressAddressRaw = addrRaw
+          , DB.addressHasScript = False
+          , DB.addressPaymentCred = Nothing
+          }
+    Just addrId -> pure addrId
+  where
+    addrRaw = Binary.serialize' address
+
 
 -- -----------------------------------------------------------------------------
 

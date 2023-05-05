@@ -41,7 +41,7 @@ import Data.Time.Clock (UTCTime (..))
 import qualified Data.Time.Clock as Time
 import Database.Persist.Sql (SqlBackend)
 import Lens.Micro
-import Ouroboros.Consensus.Cardano.Block (StandardShelley)
+import Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShelley)
 import Ouroboros.Consensus.Shelley.Node (
   ShelleyGenesis (..),
   ShelleyGenesisStaking (..),
@@ -234,14 +234,12 @@ insertTxOuts trce blkId (ShelleyTx.TxIn txInId _, txOut) = do
         , DB.txScriptSize = 0
         }
   _ <- insertStakeAddressRefIfMissing trce uninitiatedCache txId (txOut ^. Core.addrTxOutL)
+  addrId <- insertAddress addr
   void . DB.insertTxOut $
     DB.TxOut
       { DB.txOutTxId = txId
       , DB.txOutIndex = 0
-      , DB.txOutAddress = Generic.renderAddress addr
-      , DB.txOutAddressRaw = Ledger.serialiseAddr addr
-      , DB.txOutAddressHasScript = hasScript
-      , DB.txOutPaymentCred = Generic.maybePaymentCred addr
+      , DB.txOutAddressId = addrId
       , DB.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
       , DB.txOutValue = Generic.coinToDbLovelace (txOut ^. Core.valueTxOutL)
       , DB.txOutDataHash = Nothing -- No output datum in Shelley Genesis
@@ -251,7 +249,25 @@ insertTxOuts trce blkId (ShelleyTx.TxIn txInId _, txOut) = do
   where
     addr = txOut ^. Core.addrTxOutL
 
-    hasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
+insertAddress ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  Ledger.Addr StandardCrypto ->
+  ReaderT SqlBackend m DB.AddressId
+insertAddress addr = do
+  mAddrId <- DB.queryAddress addrRaw
+  case mAddrId of
+    Nothing ->
+      DB.insertAddress
+        DB.Address
+          { DB.addressAddress = Generic.renderAddress addr
+          , DB.addressAddressRaw = addrRaw
+          , DB.addressHasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
+          , DB.addressPaymentCred = Generic.maybePaymentCred addr
+          }
+    Just addrId -> pure addrId
+  where
+    addrRaw = Ledger.serialiseAddr addr
+
 
 -- Insert pools and delegations coming from Genesis.
 insertStaking ::

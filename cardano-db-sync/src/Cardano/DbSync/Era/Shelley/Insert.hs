@@ -304,6 +304,7 @@ prepareTxOut ::
   Generic.TxOut ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
 prepareTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
+  addrId <- lift insertAddress
   mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache txId addr
   mDatumId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
@@ -317,22 +318,38 @@ prepareTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr addrRaw
         DB.TxOut
           { DB.txOutTxId = txId
           , DB.txOutIndex = index
-          , DB.txOutAddress = Generic.renderAddress addr
-          , DB.txOutAddressRaw = addrRaw
-          , DB.txOutAddressHasScript = hasScript
-          , DB.txOutPaymentCred = Generic.maybePaymentCred addr
+          , DB.txOutAddressId = addrId
           , DB.txOutStakeAddressId = mSaId
           , DB.txOutValue = Generic.coinToDbLovelace value
           , DB.txOutDataHash = Generic.dataHashToBytes <$> Generic.getTxOutDatumHash dt
           , DB.txOutInlineDatumId = mDatumId
           , DB.txOutReferenceScriptId = mScriptId
           }
-  let !eutxo = ExtendedTxOut txHash txOut
+  let !eutxo = ExtendedTxOut txHash txOut (Generic.maybePaymentCred addr)
   !maTxOuts <- whenFalseMempty (ioMultiAssets iopts) $ prepareMaTxOuts tracer cache maMap
   pure (eutxo, maTxOuts)
   where
     hasScript :: Bool
     hasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
+
+    paymentCreds :: Maybe ByteString
+    paymentCreds = Generic.maybePaymentCred addr
+
+    insertAddress ::
+      (MonadBaseControl IO m, MonadIO m) =>
+      ReaderT SqlBackend m DB.AddressId
+    insertAddress = do
+      mAddrId <- DB.queryAddress addrRaw
+      case mAddrId of
+        Nothing ->
+          DB.insertAddress
+            DB.Address
+              { DB.addressAddress = Generic.renderAddress addr
+              , DB.addressAddressRaw = addrRaw
+              , DB.addressHasScript = hasScript
+              , DB.addressPaymentCred = paymentCreds
+              }
+        Just addrId -> pure addrId
 
 insertCollateralTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>

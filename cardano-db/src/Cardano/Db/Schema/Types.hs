@@ -2,7 +2,6 @@
 {-# LANGUAGE DerivingVia #-}
 
 module Cardano.Db.Schema.Types (
-  Address (..),
   AddressHash (..),
   PaymentAddrHash (..),
   PoolMetaHash (..),
@@ -13,11 +12,6 @@ import Data.ByteString.Char8 (ByteString)
 import Data.Text (Text)
 import GHC.Generics (Generic)
 import Quiet (Quiet (..))
-
-newtype Address -- Length of 28/56/94 bytes enforced by Postgres.
-  = Address {unAddress :: ByteString}
-  deriving (Generic)
-  deriving (Read, Show) via (Quiet Address)
 
 newtype AddressHash -- Length (28 bytes) enforced by Postgres
   = AddressHash {unAddressHash :: ByteString}

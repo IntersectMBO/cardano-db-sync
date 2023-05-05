@@ -138,16 +138,19 @@ share
   TxOut
     txId                TxId                noreference
     index               Word64              sqltype=txindex
-    address             Text
-    addressRaw          ByteString
-    addressHasScript    Bool
-    paymentCred         ByteString Maybe    sqltype=hash28type
+    addressId           AddressId
     stakeAddressId      StakeAddressId Maybe noreference
     value               DbLovelace          sqltype=lovelace
     dataHash            ByteString Maybe    sqltype=hash32type
     inlineDatumId       DatumId Maybe       noreference
     referenceScriptId   ScriptId Maybe      noreference
     UniqueTxout         txId index          -- The (tx_id, index) pair must be unique.
+
+  Address
+    address             Text
+    addressRaw          ByteString
+    hasScript           Bool
+    paymentCred         ByteString Maybe    sqltype=hash28type
 
   CollateralTxOut
     txId                TxId                noreference     -- This type is the primary key for the 'tx' table.
@@ -597,15 +600,19 @@ schemaDocs =
       "A table for transaction outputs."
       TxOutTxId # "The Tx table index of the transaction that contains this transaction output."
       TxOutIndex # "The index of this transaction output with the transaction."
-      TxOutAddress # "The human readable encoding of the output address. Will be Base58 for Byron era addresses and Bech32 for Shelley era."
-      TxOutAddressRaw # "The raw binary address."
-      TxOutAddressHasScript # "Flag which shows if this address is locked by a script."
-      TxOutPaymentCred # "The payment credential part of the Shelley address. (NULL for Byron addresses). For a script-locked address, this is the script hash."
+      TxOutAddressId # "The human readable encoding of the output address. Will be Base58 for Byron era addresses and Bech32 for Shelley era."
       TxOutStakeAddressId # "The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses)."
       TxOutValue # "The output value (in Lovelace) of the transaction output."
       TxOutDataHash # "The hash of the transaction output datum. (NULL for Txs without scripts)."
       TxOutInlineDatumId # "The inline datum of the output, if it has one. New in v13."
       TxOutReferenceScriptId # "The reference script of the output, if it has one. New in v13."
+
+    Address --^ do
+      "A table for addresses that appear in outputs."
+      AddressAddress # "The human readable encoding of the output address. Will be Base58 for Byron era addresses and Bech32 for Shelley era."
+      AddressAddressRaw # "The raw binary address."
+      AddressHasScript # "Flag which shows if this address is locked by a script."
+      AddressPaymentCred # "The payment credential part of the Shelley address. (NULL for Byron addresses). For a script-locked address, this is the script hash."
 
     CollateralTxOut --^ do
       "A table for transaction collateral outputs. New in v13."
