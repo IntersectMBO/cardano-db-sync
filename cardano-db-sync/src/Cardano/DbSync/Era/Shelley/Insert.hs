@@ -130,8 +130,6 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
     blockGroupedData <- foldM (\gp (idx, tx) -> txInserter idx tx gp) mempty zippedTx
     minIds <- insertBlockGroupedData tracer blockGroupedData
 
-    -- now that we've inserted the Block and all it's txs lets put what we'll need
-    -- later when updating the epoch using cache.
     void $ lift $
       writeEpochInternalToCache
         cache

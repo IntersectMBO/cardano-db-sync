@@ -11,7 +11,7 @@ import Cardano.BM.Trace (Trace, logError, logInfo)
 import qualified Cardano.Chain.Block as Byron hiding (blockHash)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api (SyncEnv)
-import Cardano.DbSync.Cache.Epoch (isMapEpochCacheNull, readEpochInternalFromCacheEpoch, readLastMapEpochFromCacheEpoch, writeLatestEpochToCacheEpoch, readCacheEpoch)
+import Cardano.DbSync.Cache.Epoch (readEpochInternalFromCacheEpoch, readLastMapEpochFromCacheEpoch, writeLatestEpochToCacheEpoch)
 import Cardano.DbSync.Cache.Types (Cache (..), EpochInternal (..))
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
@@ -169,7 +169,7 @@ insertEpochIntoDB syncEnv trce cache slotEpochNum = do
   -- liftIO . logInfo trce $ "\n newCalculatedEpoch: " <> textShow newCalculatedEpoch <> "\n \n"
   void $ DB.insertEpoch newCalculatedEpoch
   -- put newly inserted epoch into cache
-  void $ writeLatestEpochToCacheEpoch trce syncEnv cache newCalculatedEpoch
+  void $ writeLatestEpochToCacheEpoch syncEnv cache newCalculatedEpoch
   pure $ Right ()
 
 -- | When replacing an epoch we have the opertunity to try and use the cacheEpoch values
@@ -194,51 +194,49 @@ replaceEpoch syncEnv trce cache slotEpochNum epochId = do
       latestEpochFromDb <- DB.queryLatestEpoch
       case latestEpochFromDb of
         Nothing -> do
-          replaceEpochUsingDBQuery syncEnv trce cache slotEpochNum epochId
+          replaceEpochUsingDBQuery syncEnv cache slotEpochNum epochId
         Just latestEpFromDb -> do
           case internalEpochCache of
             -- There should never be no internal cache at this point in the pipeline but just incase!
             Nothing -> pure $ Left $ NEError "replaceEpoch: No internalEpochCache"
             -- Let's use both values aquired to calculate our new epoch.
-            Just internalEpCache -> replaceEpochWithValues syncEnv trce cache epochId latestEpFromDb internalEpCache
+            Just internalEpCache -> replaceEpochWithValues syncEnv cache epochId latestEpFromDb internalEpCache
 
     -- There is a latestEpochFromCache so we can use it to work out our new Epoch
     Just lastEpCache -> do
       case internalEpochCache of
         Nothing -> pure $ Left $ NEError "replaceEpoch: No internalEpochCache"
-        Just internalEpCache -> replaceEpochWithValues syncEnv trce cache epochId lastEpCache internalEpCache
+        Just internalEpCache -> replaceEpochWithValues syncEnv cache epochId lastEpCache internalEpCache
 
 -- calculate and replace the epoch
 replaceEpochWithValues ::
   MonadIO m =>
   SyncEnv ->
-  Trace IO Text ->
   Cache ->
   DB.EpochId ->
   DB.Epoch ->
   EpochInternal ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-replaceEpochWithValues syncEnv trce cache epochId lastEpCache internalEpCache = do
+replaceEpochWithValues syncEnv cache epochId lastEpCache internalEpCache = do
   let newCalculatedEpoch = calculateNewEpoch lastEpCache internalEpCache
   -- liftIO . logInfo trce $ "\n \n replaceEpochWithValues: \n newCalculatedEpoch: " <> textShow newCalculatedEpoch <> "\n \n"
   -- write newly calculated epoch into cache
-  void $ writeLatestEpochToCacheEpoch trce syncEnv cache newCalculatedEpoch
+  void $ writeLatestEpochToCacheEpoch syncEnv cache newCalculatedEpoch
   Right <$> replace epochId newCalculatedEpoch
 
 -- This is an expensive DB query so we try to minimise it's use.
 replaceEpochUsingDBQuery ::
   MonadIO m =>
   SyncEnv ->
-  Trace IO Text ->
   Cache ->
   Word64 ->
   DB.EpochId ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-replaceEpochUsingDBQuery syncEnv trce cache slotEpochNum epochId = do
+replaceEpochUsingDBQuery syncEnv cache slotEpochNum epochId = do
   newEpoch <- DB.queryCalcEpochEntry slotEpochNum
   -- liftIO . logInfo trce $ "replaceEpochUsingDBQuery: There isn't a latestEpoch in cache or the db, using expensive function replaceEpochUsingDBQuery. "
   -- write the newly calculated epoch to cache.
-  void $ writeLatestEpochToCacheEpoch trce syncEnv cache newEpoch
+  void $ writeLatestEpochToCacheEpoch syncEnv cache newEpoch
   Right <$> replace epochId newEpoch
 
 calculateNewEpoch ::

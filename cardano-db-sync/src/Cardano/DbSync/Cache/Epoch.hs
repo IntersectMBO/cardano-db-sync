@@ -11,7 +11,6 @@ module Cardano.DbSync.Cache.Epoch (
   writeEpochInternalToCache,
   writeLatestEpochToCacheEpoch,
   -- helpers
-  getHasMapEpochCache,
   isMapEpochCacheNull,
 ) where
 
@@ -130,15 +129,12 @@ writeLatestEpochToCacheEpoch syncEnv cache latestEpoch = do
                 if size mapEpoch > fromEnum securityParam
                   then deleteMin mapEpoch
                   else mapEpoch
-          let insertedMapEpoch = insert blockId latestEpoch scaledMapEpoch
-          writeToCache ci (CacheEpoch insertedMapEpoch (ceEpochInternal cE))
+
           let updatedMapEpoch = insert blockId latestEpoch scaledMapEpoch
           writeToCache ci (CacheEpoch updatedMapEpoch (ceEpochInternal cE))
 
 -- Helper --
 
-getHasMapEpochCache :: Cache -> IO Bool
-getHasMapEpochCache cache =
 isMapEpochCacheNull :: Cache -> IO Bool
 isMapEpochCacheNull cache =
   case cache of
@@ -148,8 +144,6 @@ isMapEpochCacheNull cache =
       pure $ null (ceMapEpoch cE)
 
 writeToCache :: MonadIO m => CacheInternal -> CacheEpoch -> m (Either SyncNodeError ())
-writeToCache ci val = do
-  void $ liftIO $ atomically $ writeTVar (cEpoch ci) val
 writeToCache ci newCacheEpoch = do
   void $ liftIO $ atomically $ writeTVar (cEpoch ci) newCacheEpoch
   pure $ Right ()
