@@ -6,6 +6,10 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
 
+    env:
+      # Modify this value to "invalidate" the cabal cache.
+      CABAL_CACHE_VERSION: "2023-05-05"
+
     defaults:
       run:
         shell: bash
@@ -97,20 +101,26 @@ jobs:
           flags: -external-libsodium-vrf
         EOF
 
-    - name: Build dry run
-      run: cabal build all --dry-run --minimize-conflict-set
-
-    - name: Build dependencies Linux
-      if: matrix.os == 'ubuntu-latest'
-      run: cabal build all --only-dependencies
-
-    - name: Build dependencies macOS
-      if: matrix.os == 'macos-latest'
+    - name: Record dependencies
+      id: record-deps
       run: |
-        cabal build all --only-dependencies
+        cabal build all --dry-run --minimize-conflict-set
+        cat dist-newstyle/cache/plan.json | jq -r '."install-plan"[].id' | sort | uniq > dependencies.txt
+
+    - name: Cache Cabal store
+      uses: actions/cache@v3
+      with:
+        path: |
+          ${{ steps.setup-haskell.outputs.cabal-store }}
+          dist-newstyle
+        key: cache-${{ env.CABAL_CACHE_VERSION }}-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('dependencies.txt') }}
+
+    - name: Build dependencies
+      if: matrix.os == 'ubuntu-latest'
+      run: cabal build all -j --ghc-option=-j4 --enable-tests --only-dependencies
 
     - name: Build
-      run: cabal build all
+      run: cabal build all -j --ghc-option=-j4 --enable-tests 
 
     - name: Set up database user (Linux)
       if: matrix.os == 'ubuntu-latest'
