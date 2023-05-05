@@ -12,6 +12,7 @@ module Cardano.DbSync.Cache.Epoch (
   writeLatestEpochToCacheEpoch,
   -- helpers
   getHasMapEpochCache,
+  isMapEpochCacheNull,
 ) where
 
 import qualified Cardano.Db as DB
@@ -131,11 +132,15 @@ writeLatestEpochToCacheEpoch syncEnv cache latestEpoch = do
                   else mapEpoch
           let insertedMapEpoch = insert blockId latestEpoch scaledMapEpoch
           writeToCache ci (CacheEpoch insertedMapEpoch (ceEpochInternal cE))
+          let updatedMapEpoch = insert blockId latestEpoch scaledMapEpoch
+          writeToCache ci (CacheEpoch updatedMapEpoch (ceEpochInternal cE))
 
 -- Helper --
 
 getHasMapEpochCache :: Cache -> IO Bool
 getHasMapEpochCache cache =
+isMapEpochCacheNull :: Cache -> IO Bool
+isMapEpochCacheNull cache =
   case cache of
     UninitiatedCache -> pure False
     Cache ci -> do
@@ -145,4 +150,6 @@ getHasMapEpochCache cache =
 writeToCache :: MonadIO m => CacheInternal -> CacheEpoch -> m (Either SyncNodeError ())
 writeToCache ci val = do
   void $ liftIO $ atomically $ writeTVar (cEpoch ci) val
+writeToCache ci newCacheEpoch = do
+  void $ liftIO $ atomically $ writeTVar (cEpoch ci) newCacheEpoch
   pure $ Right ()
