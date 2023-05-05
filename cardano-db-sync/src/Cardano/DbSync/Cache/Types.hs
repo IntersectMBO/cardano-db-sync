@@ -97,11 +97,13 @@ data EpochInternal = EpochInternal
     -- |
   , epInternalEndTime :: !UTCTime
   }
+  deriving (Show)
 
 data CacheEpoch = CacheEpoch
   { ceMapEpoch :: !(Map DB.BlockId DB.Epoch)
   , ceEpochInternal :: !(Maybe EpochInternal)
   }
+  deriving (Show)
 
 textShowStats :: Cache -> IO Text
 textShowStats UninitiatedCache = pure "UninitiatedCache"
