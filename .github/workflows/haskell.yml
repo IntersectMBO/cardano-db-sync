@@ -40,7 +40,7 @@ jobs:
     - name: Install Postgres support (macOS)
       if: matrix.os == 'macos-latest'
       run: |
-        brew install postgresql@14 libpq openssl@1.1
+        brew install postgresql@14 libpq openssl@1.1 tree
         brew services start postgresql
         sudo mkdir -p /var/run/postgresql/
         sudo ln -s /tmp/.s.PGSQL.5432 /var/run/postgresql/.s.PGSQL.5432
