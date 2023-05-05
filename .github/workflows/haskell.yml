@@ -44,6 +44,7 @@ jobs:
         brew services start postgresql
         sudo mkdir -p /var/run/postgresql/
         sudo ln -s /tmp/.s.PGSQL.5432 /var/run/postgresql/.s.PGSQL.5432
+        tree /usr/local/opt/postgresql@14/lib/
 
     - name: Check if postgres is running
       run: |
