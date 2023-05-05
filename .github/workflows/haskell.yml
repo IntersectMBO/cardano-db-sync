@@ -10,10 +10,6 @@ jobs:
       # Modify this value to "invalidate" the cabal cache.
       CABAL_CACHE_VERSION: "2023-05-05"
 
-    defaults:
-      run:
-        shell: bash
-
     strategy:
       fail-fast: false
       matrix:
