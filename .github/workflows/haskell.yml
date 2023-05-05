@@ -36,12 +36,23 @@ jobs:
       run: |
         echo "$HOME/.cabal/bin"                 >> $GITHUB_PATH
 
+    - name: Install SystemD (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get -y install libsystemd0 libsystemd-dev
+
     - name: Install Postgres (Linux)
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
         sudo apt-get install -y libpq-dev libpq5 net-tools postgresql
-        sudo pg_ctlcluster 14 main start
+    
+    - name: Post Install Cleanup (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get -y remove --purge software-properties-common
+        sudo apt-get -y autoremove
 
     - name: Install Postgres support (macOS)
       if: matrix.os == 'macos-latest'
@@ -50,15 +61,16 @@ jobs:
         tree /usr/local/opt/postgresql@14/lib/
         echo "PKG_CONFIG_PATH=/usr/local/opt/postgresql@14/lib/postgresql@14/pkgconfig:/usr/local/opt/openssl/lib/pkgconfig:$PKG_CONFIG_PATH" | tee $GITHUB_ENV
 
-    - name: Debug pkg-config
-      run: pkg-config --list-all
-
     - name: Start Postgresql service (macOS)
       if: matrix.os == 'macos-latest'
       run: |
         brew services start postgresql
         sudo mkdir -p /var/run/postgresql/
         sudo ln -s /tmp/.s.PGSQL.5432 /var/run/postgresql/.s.PGSQL.5432
+
+    - name: Start Postgres service (Linux)
+      if: matrix.os == 'macos-latest'
+      run: sudo pg_ctlcluster 14 main start
 
     - name: Check if postgres is running
       run: |
