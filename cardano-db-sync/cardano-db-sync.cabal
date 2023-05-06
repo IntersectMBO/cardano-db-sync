@@ -133,16 +133,20 @@ library
                       , cardano-crypto-wrapper
                       , cardano-data
                       , cardano-db
+                      , cardano-ledger-allegra
                       , cardano-ledger-alonzo
                       , cardano-ledger-babbage
                       , cardano-ledger-byron
                       , cardano-ledger-core
+                      , cardano-ledger-conway
+                      , cardano-ledger-binary
+                      , cardano-ledger-mary
                       , cardano-ledger-shelley
-                      , cardano-ledger-shelley-ma
                       , cardano-node
                       , cardano-prelude
                       , cardano-protocol-tpraos
                       , cardano-slotting
+                      , cardano-strict-containers
                       , cborg
                       , vector-map
                       , containers
@@ -166,12 +170,13 @@ library
                       , mtl
                       , network-mux
                       , ouroboros-consensus
-                      , ouroboros-consensus-byron
                       , ouroboros-consensus-cardano
+                      , ouroboros-consensus-diffusion
                       , ouroboros-consensus-protocol
-                      , ouroboros-consensus-shelley
                       , ouroboros-network
+                      , ouroboros-network-api
                       , ouroboros-network-framework
+                      , ouroboros-network-protocols
                       , persistent
                       , persistent-postgresql
                       , pretty-show
@@ -181,7 +186,7 @@ library
                       , small-steps
                       , stm
                       , strict
-                      , strict-stm ==0.2.0.0
+                      , strict-stm
                       , swagger2
                       , text
                       , time

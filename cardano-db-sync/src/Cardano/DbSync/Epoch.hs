@@ -76,6 +76,7 @@ epochInsert trce (BlockDetails cblk details) = do
     BlockMary {} -> epochUpdate
     BlockAlonzo {} -> epochUpdate
     BlockBabbage {} -> epochUpdate
+    BlockConway {} -> panic "TODO: Conway not supported yet"
   where
     -- What we do here is completely independent of Shelley/Allegra/Mary eras.
     epochUpdate :: ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())

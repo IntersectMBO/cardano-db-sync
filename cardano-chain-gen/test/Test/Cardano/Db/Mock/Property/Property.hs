@@ -24,7 +24,6 @@ import Control.Concurrent.Class.MonadSTM.Strict (MonadSTM (atomically))
 import Data.Foldable
 import Data.Maybe (isJust)
 import Data.Text (Text)
-import Data.TreeDiff (defaultExprViaShow)
 import GHC.Generics (Generic, Generic1)
 import Ouroboros.Network.Block hiding (RollBack)
 import Test.Cardano.Db.Mock.Config
@@ -87,9 +86,6 @@ instance ToExpr (Model Concrete)
 
 initModel :: Model r
 initModel = Model [] [] Nothing False False
-
-instance ToExpr BlockNo where
-  toExpr = defaultExprViaShow
 
 data Response r
   = NewBlockAdded (Reference (Opaque CardanoBlock) r)
@@ -272,7 +268,7 @@ sm interpreter mockServer dbSync =
 prop_empty_blocks :: IOManager -> [(Text, Text)] -> Property
 prop_empty_blocks iom knownMigrations = withMaxSuccess 20 $ noShrinking $ forAllCommands smSymbolic (Just 20) $ \cmds -> monadicIO $ do
   (hist, res) <- run $ runAction $ \interpreter mockServer dbSync -> do
-    (hist, _model, res) <- runCommands' (sm interpreter mockServer dbSync) cmds
+    (hist, _model, res) <- runCommands' (pure $ sm interpreter mockServer dbSync) cmds
     pure (hist, res)
   prettyCommands smSymbolic hist (checkCommandNames cmds (res === Ok))
   where

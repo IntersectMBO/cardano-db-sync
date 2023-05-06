@@ -31,13 +31,14 @@ import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential
 import Cardano.Ledger.Crypto (ADDRHASH)
-import Cardano.Ledger.Era (Crypto, Era (..))
+import Cardano.Ledger.Era (Era (..), EraCrypto)
 import Cardano.Ledger.Hashes (ScriptHash (ScriptHash))
 import Cardano.Ledger.Keys
 import Cardano.Ledger.Shelley.LedgerState hiding (LedgerState)
 import Cardano.Ledger.Shelley.TxBody
 import Cardano.Ledger.Shelley.UTxO
 import Cardano.Ledger.TxIn (TxIn (..))
+import qualified Cardano.Ledger.UMapCompact as UMap
 import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import Cardano.Mock.Forging.Types
 import Cardano.Prelude hiding (length, (.))
@@ -46,7 +47,6 @@ import Data.List (nub)
 import Data.List.Extra ((!?))
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-import qualified Data.UMap as UMap
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (LedgerState)
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
@@ -55,10 +55,10 @@ import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 
 resolveAddress ::
   forall era p.
-  (Crypto era ~ StandardCrypto, Core.EraTxOut era) =>
+  (EraCrypto era ~ StandardCrypto, Core.EraTxOut era) =>
   UTxOIndex era ->
   LedgerState (ShelleyBlock p era) ->
-  Either ForgingError (Addr (Crypto era))
+  Either ForgingError (Addr (EraCrypto era))
 resolveAddress index st = case index of
   UTxOAddressNew n -> Right $ Addr Testnet (unregisteredAddresses !! n) StakeRefNull
   UTxOAddressNewWithStake n stakeIndex -> do
@@ -71,10 +71,10 @@ resolveAddress index st = case index of
 
 resolveUTxOIndex ::
   forall era p.
-  (Crypto era ~ StandardCrypto, Core.EraTxOut era) =>
+  (EraCrypto era ~ StandardCrypto, Core.EraTxOut era) =>
   UTxOIndex era ->
   LedgerState (ShelleyBlock p era) ->
-  Either ForgingError ((TxIn (Crypto era), Core.TxOut era), UTxOIndex era)
+  Either ForgingError ((TxIn (EraCrypto era), Core.TxOut era), UTxOIndex era)
 resolveUTxOIndex index st = toLeft $ case index of
   UTxOIndex n -> utxoPairs !? n
   UTxOAddress addr -> find (hasAddr addr) utxoPairs
@@ -90,11 +90,11 @@ resolveUTxOIndex index st = toLeft $ case index of
     addr <- rightToMaybe $ resolveAddress index st
     find (hasAddr addr) utxoPairs
   where
-    utxoPairs :: [(TxIn (Crypto era), Core.TxOut era)]
+    utxoPairs :: [(TxIn (EraCrypto era), Core.TxOut era)]
     utxoPairs =
       Map.toList $
         unUTxO $
-          _utxo $
+          utxosUtxo $
             lsUTxOState $
               esLState $
                 nesEs $
@@ -103,12 +103,12 @@ resolveUTxOIndex index st = toLeft $ case index of
     hasAddr addr (_, txOut) = addr == txOut ^. Core.addrTxOutL
     hasInput inp (inp', _) = inp == inp'
 
-    toLeft :: Maybe (TxIn (Crypto era), Core.TxOut era) -> Either ForgingError ((TxIn (Crypto era), Core.TxOut era), UTxOIndex era)
+    toLeft :: Maybe (TxIn (EraCrypto era), Core.TxOut era) -> Either ForgingError ((TxIn (EraCrypto era), Core.TxOut era), UTxOIndex era)
     toLeft Nothing = Left CantFindUTxO
     toLeft (Just (txIn, txOut)) = Right ((txIn, txOut), UTxOInput txIn)
 
 resolveStakeCreds ::
-  (Crypto era ~ StandardCrypto) =>
+  (EraCrypto era ~ StandardCrypto) =>
   StakeIndex ->
   LedgerState (ShelleyBlock p era) ->
   Either ForgingError (StakeCredential StandardCrypto)
@@ -117,13 +117,13 @@ resolveStakeCreds indx st = case indx of
   StakeAddress addr -> Right addr
   StakeIndexNew n -> toEither $ unregisteredStakeCredentials !? n
   StakeIndexScript bl -> Right $ if bl then alwaysSucceedsScriptStake else alwaysFailsScriptStake
-  StakeIndexPoolLeader poolIndex -> Right $ getRwdCred $ _poolRAcnt $ findPoolParams poolIndex
+  StakeIndexPoolLeader poolIndex -> Right $ getRwdCred $ ppRewardAcnt $ findPoolParams poolIndex
   StakeIndexPoolMember n poolIndex -> Right $ resolvePoolMember n poolIndex
   where
     rewardAccs =
       Map.toList $
         UMap.rewView $
-          _unified $
+          dsUnified $
             dpsDState $
               lsDPState $
                 esLState $
@@ -131,14 +131,14 @@ resolveStakeCreds indx st = case indx of
                     Consensus.shelleyLedgerState st
 
     poolParams =
-      _pParams $
+      psStakePoolParams $
         dpsPState $
           lsDPState $
             esLState $
               nesEs $
                 Consensus.shelleyLedgerState st
 
-    delegs = UMap.delView $ _unified dstate
+    delegs = UMap.delView $ dsUnified dstate
 
     dstate =
       dpsDState $
@@ -148,7 +148,7 @@ resolveStakeCreds indx st = case indx of
               Consensus.shelleyLedgerState st
 
     resolvePoolMember n poolIndex =
-      let poolId = _poolId (findPoolParams poolIndex)
+      let poolId = ppId (findPoolParams poolIndex)
           poolMembers = Map.keys $ Map.filter (== poolId) delegs
        in poolMembers !! n
 
@@ -162,31 +162,31 @@ resolveStakeCreds indx st = case indx of
     toEither (Just a) = Right a
 
 resolvePool ::
-  (Crypto era ~ StandardCrypto) =>
+  (EraCrypto era ~ StandardCrypto) =>
   PoolIndex ->
   LedgerState (ShelleyBlock p era) ->
   KeyHash 'StakePool StandardCrypto
 resolvePool pix st = case pix of
   PoolIndexId key -> key
-  PoolIndex n -> _poolId $ poolParams !! n
+  PoolIndex n -> ppId $ poolParams !! n
   PoolIndexNew n -> unregisteredPools !! n
   where
     poolParams =
       Map.elems $
-        _pParams $
+        psStakePoolParams $
           dpsPState $
             lsDPState $
               esLState $
                 nesEs $
                   Consensus.shelleyLedgerState st
 
-allPoolStakeCert :: LedgerState (ShelleyBlock p era) -> [DCert (Crypto era)]
+allPoolStakeCert :: LedgerState (ShelleyBlock p era) -> [DCert (EraCrypto era)]
 allPoolStakeCert st =
   DCertDeleg . RegKey <$> nub creds
   where
     poolParms =
       Map.elems $
-        _pParams $
+        psStakePoolParams $
           dpsPState $
             lsDPState $
               esLState $
@@ -196,8 +196,8 @@ allPoolStakeCert st =
 
 getPoolStakeCreds :: PoolParams c -> [StakeCredential c]
 getPoolStakeCreds pparams =
-  getRwdCred (_poolRAcnt pparams)
-    : (KeyHashObj <$> Set.toList (_poolOwners pparams))
+  getRwdCred (ppRewardAcnt pparams)
+    : (KeyHashObj <$> Set.toList (ppOwners pparams))
 
 unregisteredStakeCredentials :: [StakeCredential StandardCrypto]
 unregisteredStakeCredentials =

@@ -42,10 +42,9 @@ import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
 import Cardano.Ledger.Alonzo.Scripts
-import qualified Cardano.Ledger.Babbage.PParams as Babbage
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Core as Core
-import Cardano.Ledger.Era (Crypto)
+import Cardano.Ledger.Era (EraCrypto)
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
 import Cardano.Ledger.Shelley.LedgerState (EpochState (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
@@ -81,6 +80,7 @@ import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import Data.Time.Clock (UTCTime, diffUTCTime, getCurrentTime)
+import Lens.Micro ((^.))
 import Ouroboros.Consensus.Block (
   CodecConfig,
   Point (..),
@@ -414,7 +414,7 @@ saveCurrentLedgerState env ledger mEpochNo = do
           -- TODO: write the builder directly.
           -- BB.writeFile file $ toBuilder $
           LBS.writeFile file $
-            Serialize.serializeEncoding $
+            Serialize.serialize $
               encodeCardanoLedgerState
                 ( Consensus.encodeExtLedgerState
                     (encodeDisk codecConfig)
@@ -438,7 +438,7 @@ saveCurrentLedgerState env ledger mEpochNo = do
 mkLedgerStateFilename :: LedgerStateDir -> ExtLedgerState CardanoBlock -> Maybe EpochNo -> WithOrigin FilePath
 mkLedgerStateFilename dir ledger mEpochNo =
   lsfFilePath . dbPointToFileName dir mEpochNo
-    <$> getPoint (ledgerTipPoint (Proxy @CardanoBlock) (ledgerState ledger))
+    <$> getPoint (ledgerTipPoint @CardanoBlock (ledgerState ledger))
 
 saveCleanupState :: HasLedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
 saveCleanupState env ledger mEpochNo = do
@@ -775,15 +775,16 @@ getRegisteredPools st =
     LedgerStateMary sts -> getRegisteredPoolShelley sts
     LedgerStateAlonzo ats -> getRegisteredPoolShelley ats
     LedgerStateBabbage bts -> getRegisteredPoolShelley bts
+    LedgerStateConway _stc -> panic "TODO: Conway 2"
 
 getRegisteredPoolShelley ::
   forall p era.
-  (Crypto era ~ StandardCrypto) =>
+  (EraCrypto era ~ StandardCrypto) =>
   LedgerState (ShelleyBlock p era) ->
   Set.Set PoolKeyHash
 getRegisteredPoolShelley lState =
   Map.keysSet $
-    Shelley._pParams $
+    Shelley.psStakePoolParams $
       Shelley.dpsPState $
         Shelley.lsDPState $
           Shelley.esLState $
@@ -801,6 +802,7 @@ getAdaPots st =
     LedgerStateMary stm -> Just $ totalAdaPots stm
     LedgerStateAlonzo sta -> Just $ totalAdaPots sta
     LedgerStateBabbage stb -> Just $ totalAdaPots stb
+    LedgerStateConway _stc -> panic "TODO: Conway 3"
 
 ledgerEpochNo :: HasLedgerEnv -> ExtLedgerState CardanoBlock -> EpochNo
 ledgerEpochNo env cls =
@@ -876,15 +878,19 @@ getSlotDetails env st time slot = do
 getPrices :: CardanoLedgerState -> Strict.Maybe Prices
 getPrices st = case ledgerState $ clsState st of
   LedgerStateAlonzo als ->
-    Strict.Just $
-      Alonzo._prices $
-        esPp $
-          Shelley.nesEs $
-            Consensus.shelleyLedgerState als
+    Strict.Just
+      ( esPp
+          ( Shelley.nesEs $
+              Consensus.shelleyLedgerState als
+          )
+          ^. Alonzo.ppPricesL
+      )
   LedgerStateBabbage bls ->
-    Strict.Just $
-      Babbage._prices $
-        esPp $
-          Shelley.nesEs $
-            Consensus.shelleyLedgerState bls
+    Strict.Just
+      ( esPp
+          ( Shelley.nesEs $
+              Consensus.shelleyLedgerState bls
+          )
+          ^. Alonzo.ppPricesL
+      )
   _ -> Strict.Nothing
