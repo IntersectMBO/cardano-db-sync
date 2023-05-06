@@ -536,7 +536,8 @@ queryCountSlotNosGreaterThan slotNo = do
 queryCountSlotNo :: MonadIO m => ReaderT SqlBackend m Word64
 queryCountSlotNo = do
   res <- select $ do
-    _ <- from $ table @Block
+    blk <- from $ table @Block
+    where_ (isJust $ blk ^. BlockSlotNo)
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
