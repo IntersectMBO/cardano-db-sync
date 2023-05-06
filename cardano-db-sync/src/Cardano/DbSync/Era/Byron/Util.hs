@@ -26,7 +26,7 @@ module Cardano.DbSync.Era.Byron.Util (
   unTxHash,
 ) where
 
-import Cardano.Binary (Raw)
+import Cardano.Crypto.Raw (Raw)
 
 -- Import all 'cardano-ledger' functions and data types qualified so they do not
 -- clash with the Cardano.Db functions and data types which are also imported

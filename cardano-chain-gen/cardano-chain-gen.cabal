@@ -1,4 +1,4 @@
-cabal-version:          2.4
+cabal-version:          3.0
 
 -- http://haskell.org/cabal/users-guide/
 
@@ -68,12 +68,14 @@ library
                       , cardano-crypto-praos
                       , cardano-crypto-wrapper
                       , cardano-data
+                      , cardano-ledger-allegra
                       , cardano-ledger-alonzo
                       , cardano-ledger-babbage
+                      , cardano-ledger-binary
                       , cardano-ledger-byron
                       , cardano-ledger-core
                       , cardano-ledger-shelley
-                      , cardano-ledger-shelley-ma
+                      , cardano-ledger-mary
                       , cardano-node
                       , cardano-prelude
                       , cardano-protocol-tpraos
@@ -101,16 +103,17 @@ library
                       , network-mux
                       , nothunks
                       , ouroboros-consensus
-                      , ouroboros-consensus-byron
                       , ouroboros-consensus-cardano
+                      , ouroboros-consensus-diffusion
                       , ouroboros-consensus-protocol
-                      , ouroboros-consensus-shelley
                       , ouroboros-network
+                      , ouroboros-network-api
                       , ouroboros-network-framework
+                      , ouroboros-network-protocols
                       , persistent
                       , persistent-postgresql
                       , plutus-core
-                      , plutus-ledger-api
+                      , plutus-ledger-api:{plutus-ledger-api, plutus-ledger-api-testlib}
                       , pretty-show
                       , prometheus
                       , random-shuffle
@@ -174,8 +177,8 @@ test-suite cardano-chain-gen
                       , cardano-chain-gen
                       , cardano-ledger-alonzo
                       , cardano-ledger-core
+                      , cardano-ledger-mary
                       , cardano-ledger-shelley
-                      , cardano-ledger-shelley-ma
                       , cardano-node
                       , cardano-prelude
                       , cardano-slotting
@@ -190,6 +193,7 @@ test-suite cardano-chain-gen
                       , io-classes
                       , optparse-applicative
                       , ouroboros-network
+                      , plutus-ledger-api
                       , silently
                       , stm
                       , strict-containers
@@ -205,8 +209,8 @@ test-suite cardano-chain-gen
                       , ouroboros-consensus
                       , ouroboros-consensus-cardano
                       , ouroboros-consensus-protocol
-                      , ouroboros-consensus-shelley
                       , ouroboros-network
+                      , ouroboros-network-api
                       , ouroboros-network-framework
                       , persistent
                       , persistent-postgresql

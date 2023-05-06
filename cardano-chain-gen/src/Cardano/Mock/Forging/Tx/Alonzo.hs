@@ -9,7 +9,6 @@
 
 module Cardano.Mock.Forging.Tx.Alonzo (
   consTxBody,
-  mkHFTx,
   addValidityInterval,
   consPaymentTxBody,
   consCertTxBody,
@@ -31,7 +30,6 @@ module Cardano.Mock.Forging.Tx.Alonzo (
   consPoolParamsTwoOwners,
   mkScriptTx,
   mkWitnesses,
-  addMetadata,
   mkUTxOAlonzo,
   emptyTxBody,
   emptyTx,
@@ -39,12 +37,11 @@ module Cardano.Mock.Forging.Tx.Alonzo (
 
 import Cardano.Crypto.VRF
 import Cardano.Ledger.Address
-import Cardano.Ledger.Alonzo.Data
-import Cardano.Ledger.Alonzo.PParams
+import Cardano.Ledger.Allegra.Scripts
 import Cardano.Ledger.Alonzo.Scripts
 import Cardano.Ledger.Alonzo.Tx
 import Cardano.Ledger.Alonzo.TxBody
-import Cardano.Ledger.Alonzo.TxWitness
+import Cardano.Ledger.Alonzo.TxWits
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Block (txid)
 import Cardano.Ledger.Coin
@@ -53,25 +50,19 @@ import Cardano.Ledger.Credential
 import Cardano.Ledger.Hashes
 import Cardano.Ledger.Keys
 import Cardano.Ledger.Mary.Value
-import Cardano.Ledger.Shelley.Metadata
-import Cardano.Ledger.Shelley.PParams hiding (emptyPParamsUpdate, _protocolVersion)
 import Cardano.Ledger.Shelley.TxBody (
   DCert (..),
   PoolCert (..),
   PoolMetadata (..),
   PoolParams (..),
   StakePoolRelay (..),
-  Wdrl (..),
  )
-import Cardano.Ledger.ShelleyMA.Timelocks
 import Cardano.Ledger.TxIn (TxIn (..))
 import Cardano.Mock.Forging.Crypto
 import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import Cardano.Mock.Forging.Tx.Generic
 import Cardano.Mock.Forging.Types
 import Cardano.Prelude hiding (sum, (.))
-import Cardano.Slotting.Slot
-import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromJust)
 import qualified Data.Maybe.Strict as Strict
@@ -92,9 +83,9 @@ consTxBody ::
   Set (TxIn StandardCrypto) ->
   StrictSeq (AlonzoTxOut StandardAlonzo) ->
   Coin ->
-  MaryValue StandardCrypto ->
+  MultiAsset StandardCrypto ->
   [DCert StandardCrypto] ->
-  Wdrl StandardCrypto ->
+  Withdrawals StandardCrypto ->
   AlonzoTxBody StandardAlonzo
 consTxBody ins cols outs fees minted certs wdrl =
   AlonzoTxBody
@@ -111,14 +102,6 @@ consTxBody ins cols outs fees minted certs wdrl =
     Strict.SNothing
     Strict.SNothing
     (Strict.SJust Testnet)
-
-mkHFTx :: AlonzoTx StandardAlonzo
-mkHFTx =
-  mkSimpleTx True $ AlonzoTxBody a b c d e f n (Strict.SJust upd) i j k l m
-  where
-    AlonzoTxBody a b c d e f n _ i j k l m = emptyTxBody
-    upd = Update (ProposedPPUpdates $ Map.singleton (List.head unregisteredGenesisKeys) pparams) (EpochNo 1)
-    pparams = emptyPParamsUpdate {_protocolVersion = Strict.SJust $ ProtVer 7 0}
 
 addValidityInterval ::
   SlotNo ->
@@ -137,11 +120,11 @@ consPaymentTxBody ::
   Set (TxIn StandardCrypto) ->
   StrictSeq (AlonzoTxOut StandardAlonzo) ->
   Coin ->
-  MaryValue StandardCrypto ->
+  MultiAsset StandardCrypto ->
   AlonzoTxBody StandardAlonzo
-consPaymentTxBody ins cols outs fees minted = consTxBody ins cols outs fees minted mempty (Wdrl mempty)
+consPaymentTxBody ins cols outs fees minted = consTxBody ins cols outs fees minted mempty (Withdrawals mempty)
 
-consCertTxBody :: [DCert StandardCrypto] -> Wdrl StandardCrypto -> AlonzoTxBody StandardAlonzo
+consCertTxBody :: [DCert StandardCrypto] -> Withdrawals StandardCrypto -> AlonzoTxBody StandardAlonzo
 consCertTxBody = consTxBody mempty mempty mempty (Coin 0) mempty
 
 mkPaymentTx ::
@@ -242,9 +225,9 @@ mkScriptInp (n, (_txIn, txOut))
     addr = txOut ^. Core.addrTxOutL
 
 mkScriptMint ::
-  MaryValue StandardCrypto ->
+  MultiAsset StandardCrypto ->
   [(RdmrPtr, (ScriptHash StandardCrypto, Core.Script StandardAlonzo))]
-mkScriptMint (MaryValue _ mp) = mapMaybe f $ zip [0 ..] (Map.keys mp)
+mkScriptMint (MultiAsset mp) = mapMaybe f $ zip [0 ..] (Map.keys mp)
   where
     f (n, policyId)
       | policyID policyId == alwaysFailsScriptHash =
@@ -260,7 +243,7 @@ mkMAssetsScriptTx ::
   [AlonzoUTxOIndex] ->
   AlonzoUTxOIndex ->
   [(AlonzoUTxOIndex, MaryValue StandardCrypto)] ->
-  MaryValue StandardCrypto ->
+  MultiAsset StandardCrypto ->
   Bool ->
   Integer ->
   AlonzoLedgerState ->
@@ -285,7 +268,7 @@ mkMAssetsScriptTx inputIndex colInputIndex outputIndex minted succeeds fees sta 
 
 mkDCertTx ::
   [DCert StandardCrypto] ->
-  Wdrl StandardCrypto ->
+  Withdrawals StandardCrypto ->
   Either ForgingError (AlonzoTx StandardAlonzo)
 mkDCertTx certs wdrl = Right $ mkSimpleTx True $ consCertTxBody certs wdrl
 
@@ -297,7 +280,7 @@ mkSimpleDCertTx consDert st = do
   dcerts <- forM consDert $ \(stakeIndex, mkDCert) -> do
     cred <- resolveStakeCreds stakeIndex st
     pure $ mkDCert cred
-  mkDCertTx dcerts (Wdrl mempty)
+  mkDCertTx dcerts (Withdrawals mempty)
 
 mkDCertPoolTx ::
   [ ( [StakeIndex]
@@ -312,7 +295,7 @@ mkDCertPoolTx consDert st = do
     stakeCreds <- forM stakeIxs $ \stix -> resolveStakeCreds stix st
     let poolId = resolvePool poolIx st
     pure $ mkDCert stakeCreds poolId
-  mkDCertTx dcerts (Wdrl mempty)
+  mkDCertTx dcerts (Withdrawals mempty)
 
 mkScriptDCertTx ::
   [(StakeIndex, Bool, StakeCredential StandardCrypto -> DCert StandardCrypto)] ->
@@ -325,7 +308,7 @@ mkScriptDCertTx consDert valid st = do
     pure $ mkDCert cred
   Right $
     mkScriptTx valid (mapMaybe prepareRedeemer $ zip [0 ..] consDert) $
-      consCertTxBody dcerts (Wdrl mempty)
+      consCertTxBody dcerts (Withdrawals mempty)
   where
     prepareRedeemer (n, (StakeIndexScript bl, addRedeemer, _)) =
       if not addRedeemer
@@ -348,12 +331,12 @@ mkDepositTxPools inputIndex deposit sta = do
   let input = Set.singleton $ fst inputPair
       AlonzoTxOut addr' (MaryValue inputValue _) _ = snd inputPair
       change = AlonzoTxOut addr' (valueFromList (fromIntegral $ fromIntegral inputValue - deposit) []) Strict.SNothing
-  Right $ mkSimpleTx True $ consTxBody input mempty (StrictSeq.fromList [change]) (Coin 0) mempty (allPoolStakeCert sta) (Wdrl mempty)
+  Right $ mkSimpleTx True $ consTxBody input mempty (StrictSeq.fromList [change]) (Coin 0) mempty (allPoolStakeCert sta) (Withdrawals mempty)
 
 mkDCertTxPools ::
   AlonzoLedgerState ->
   Either ForgingError (AlonzoTx StandardAlonzo)
-mkDCertTxPools sta = Right $ mkSimpleTx True $ consCertTxBody (allPoolStakeCert sta) (Wdrl mempty)
+mkDCertTxPools sta = Right $ mkSimpleTx True $ consCertTxBody (allPoolStakeCert sta) (Withdrawals mempty)
 
 mkSimpleTx :: Bool -> AlonzoTxBody StandardAlonzo -> AlonzoTx StandardAlonzo
 mkSimpleTx valid txBody =
@@ -371,15 +354,15 @@ consPoolParams ::
   PoolParams StandardCrypto
 consPoolParams poolId rwCred owners =
   PoolParams
-    { _poolId = poolId
-    , _poolVrf = hashVerKeyVRF . snd . mkVRFKeyPair $ RawSeed 0 0 0 0 0 -- undefined
-    , _poolPledge = Coin 1000
-    , _poolCost = Coin 10000
-    , _poolMargin = minBound
-    , _poolRAcnt = RewardAcnt Testnet rwCred
-    , _poolOwners = Set.fromList owners
-    , _poolRelays = StrictSeq.singleton $ SingleHostAddr Strict.SNothing Strict.SNothing Strict.SNothing
-    , _poolMD = Strict.SJust $ PoolMetadata (fromJust $ textToUrl "best.pool") "89237365492387654983275634298756"
+    { ppId = poolId
+    , ppVrf = hashVerKeyVRF . snd . mkVRFKeyPair $ RawSeed 0 0 0 0 0 -- undefined
+    , ppPledge = Coin 1000
+    , ppCost = Coin 10000
+    , ppMargin = minBound
+    , ppRewardAcnt = RewardAcnt Testnet rwCred
+    , ppOwners = Set.fromList owners
+    , ppRelays = StrictSeq.singleton $ SingleHostAddr Strict.SNothing Strict.SNothing Strict.SNothing
+    , ppMetadata = Strict.SJust $ PoolMetadata (fromJust $ textToUrl "best.pool") "89237365492387654983275634298756"
     }
 
 consPoolParamsTwoOwners ::
@@ -408,9 +391,9 @@ mkScriptTx valid rdmrs txBody =
 mkWitnesses ::
   [(RdmrPtr, (ScriptHash StandardCrypto, Core.Script StandardAlonzo))] ->
   [(DataHash StandardCrypto, Data StandardAlonzo)] ->
-  TxWitness StandardAlonzo
+  AlonzoTxWits StandardAlonzo
 mkWitnesses rdmrs datas =
-  TxWitness
+  AlonzoTxWits
     mempty
     mempty
     (Map.fromList $ snd <$> rdmrs)
@@ -421,14 +404,6 @@ mkWitnesses rdmrs datas =
       fmap
         (,(plutusDataList, ExUnits 100 100))
         (fst <$> rdmrs)
-
-addMetadata ::
-  AlonzoTx StandardAlonzo ->
-  Word64 ->
-  AlonzoTx StandardAlonzo
-addMetadata tx n = tx {auxiliaryData = Strict.SJust $ AlonzoAuxiliaryData mp mempty}
-  where
-    mp = Map.singleton n $ List []
 
 mkUTxOAlonzo :: AlonzoTx StandardAlonzo -> [(TxIn StandardCrypto, AlonzoTxOut StandardAlonzo)]
 mkUTxOAlonzo tx =
@@ -445,7 +420,7 @@ emptyTxBody =
     mempty
     mempty
     mempty
-    (Wdrl mempty)
+    (Withdrawals mempty)
     (Coin 0)
     (ValidityInterval Strict.SNothing Strict.SNothing)
     Strict.SNothing

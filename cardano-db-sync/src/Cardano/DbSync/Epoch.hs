@@ -48,12 +48,13 @@ epochHandler syncEnv trce cache (BlockDetails cblk details) =
           -- the Ouroboros Classic era.
           pure $ Right ()
         Byron.ABOBBlock _blk ->
-          updateEpochStart syncEnv trce cache details
-    BlockShelley {} -> epochSlotTimecheck
-    BlockAllegra {} -> epochSlotTimecheck
-    BlockMary {} -> epochSlotTimecheck
-    BlockAlonzo {} -> epochSlotTimecheck
-    BlockBabbage {} -> epochSlotTimecheck
+          insertBlock trce details
+        BlockShelley {} -> epochUpdate
+        BlockAllegra {} -> epochUpdate
+        BlockMary {} -> epochUpdate
+        BlockAlonzo {} -> epochUpdate
+        BlockBabbage {} -> epochUpdate
+        BlockConway {} -> panic "TODO: Conway not supported yet"
   where
     -- What we do here is completely independent of Shelley/Allegra/Mary eras.
     epochSlotTimecheck :: ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())

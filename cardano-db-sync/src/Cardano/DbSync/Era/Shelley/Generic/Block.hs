@@ -202,8 +202,8 @@ blockProtoVersionTPraos = TPraos.bprotver . TPraos.bhbody . blockHeader
 blockProtoVersionPraos :: ShelleyBlock PraosStandard era -> Ledger.ProtVer
 blockProtoVersionPraos = Praos.hbProtVer . getHeaderBodyPraos . blockHeader
 
-blockSize :: ShelleyBasedEra era => ShelleyBlock p era -> Word64
-blockSize = fromIntegral . Shelley.bBodySize . Ledger.bbody . Consensus.shelleyBlockRaw
+blockSize :: ProtocolHeaderSupportsEnvelope p => ShelleyBlock p era -> Word64
+blockSize = fromIntegral . pHeaderSize . blockHeader
 
 blockTxs ::
   ( ShelleyBasedEra era

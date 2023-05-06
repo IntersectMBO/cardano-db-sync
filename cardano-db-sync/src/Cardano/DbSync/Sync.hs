@@ -69,7 +69,7 @@ import Ouroboros.Consensus.Network.NodeToClient (
   cStateQueryCodec,
   cTxSubmissionCodec,
  )
-import Ouroboros.Consensus.Node.ErrorPolicy (consensusErrorPolicy)
+import Ouroboros.Consensus.Node.ErrorPolicy
 import Ouroboros.Network.Block (
   BlockNo (..),
   Point (..),

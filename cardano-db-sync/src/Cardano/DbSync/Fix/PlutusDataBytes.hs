@@ -19,13 +19,13 @@ import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Error (bsBase16Encode)
 import Cardano.DbSync.Types
-import qualified Cardano.Ledger.Alonzo.Data as Alonzo
+import qualified Cardano.Ledger.Alonzo.Scripts.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
-import qualified Cardano.Ledger.Alonzo.TxWitness as Alonzo
+import qualified Cardano.Ledger.Alonzo.TxWits as Alonzo
 import qualified Cardano.Ledger.Babbage.TxBody as Babbage
 import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Era as Ledger
-import Cardano.Prelude (mapMaybe)
+import Cardano.Prelude (mapMaybe, panic)
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad.Except
 import Control.Monad.Extra (mapMaybeM)
@@ -44,8 +44,7 @@ import Database.Persist (Entity (..))
 import Database.Persist.Sql (SqlBackend)
 import GHC.Records (HasField (getField))
 import Lens.Micro
-import Ouroboros.Consensus.Cardano.Block (HardForkBlock (BlockAllegra, BlockAlonzo, BlockBabbage, BlockByron, BlockMary, BlockShelley))
-import Ouroboros.Consensus.Shelley.Eras
+import Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
 
 data FixData = FixData
   { fdDatum :: [FixPlutusData]
@@ -242,6 +241,7 @@ fixPlutusData tracer cblk fds = do
 
 scrapDatumsBlock :: CardanoBlock -> Map ByteString ByteString
 scrapDatumsBlock cblk = case cblk of
+  BlockConway _blk -> panic "TODO: Conway 4"
   BlockBabbage blk -> Map.unions $ scrapDatumsTxBabbage . snd <$> babbageBlockTxs blk
   BlockAlonzo blk -> Map.unions $ scrapDatumsTxAlonzo . snd <$> alonzoBlockTxs blk
   BlockByron _ -> error "No Datums in Byron"
@@ -277,6 +277,7 @@ scrapDatumsTxAlonzo tx =
 
 scrapRedeemerDataBlock :: CardanoBlock -> Map ByteString ByteString
 scrapRedeemerDataBlock cblk = case cblk of
+  BlockConway _blk -> panic "TODO: Conway 5"
   BlockBabbage blk -> Map.unions $ scrapRedeemerDataTx . snd <$> babbageBlockTxs blk
   BlockAlonzo blk -> Map.unions $ scrapRedeemerDataTx . snd <$> alonzoBlockTxs blk
   BlockByron _ -> error "No RedeemerData in Byron"
@@ -286,14 +287,14 @@ scrapRedeemerDataBlock cblk = case cblk of
 
 scrapRedeemerDataTx ::
   forall era.
-  ( Ledger.Crypto era ~ StandardCrypto
-  , Alonzo.AlonzoEraWitnesses era
+  ( Ledger.EraCrypto era ~ StandardCrypto
+  , Alonzo.AlonzoEraTxWits era
   , Core.EraTx era
   ) =>
   Core.Tx era ->
   Map ByteString ByteString
 scrapRedeemerDataTx tx =
-  Map.fromList $ mkTuple . fst <$> Map.elems (Alonzo.unRedeemers (tx ^. (Core.witsTxL . Alonzo.rdmrsWitsL)))
+  Map.fromList $ mkTuple . fst <$> Map.elems (Alonzo.unRedeemers (tx ^. (Core.witsTxL . Alonzo.rdmrsTxWitsL)))
   where
     mkTuple dt = mkTuple' $ mkTxData (Alonzo.hashData dt, dt)
     mkTuple' pd = (dataHashToBytes $ txDataHash pd, txDataBytes pd)

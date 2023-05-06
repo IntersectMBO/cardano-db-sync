@@ -20,14 +20,13 @@ import Cardano.Chain.Common (
   unsafeGetLovelace,
  )
 import qualified Cardano.Chain.UTxO as Byron
-import Cardano.Ledger.Address (BootstrapAddress (..))
+import Cardano.Ledger.Address
 import Cardano.Ledger.Alonzo (AlonzoEra)
 import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
-import Cardano.Ledger.CompactAddress (CompactAddr, compactAddr)
 import Cardano.Ledger.Compactible
 import qualified Cardano.Ledger.Core as Ledger
-import Cardano.Ledger.Era (Crypto)
-import Cardano.Ledger.Shelley.API (Addr (..), Coin (..))
+import Cardano.Ledger.Era (EraCrypto)
+import Cardano.Ledger.Shelley.API (Coin (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import qualified Cardano.Ledger.Shelley.UTxO as Shelley
@@ -50,9 +49,10 @@ ledgerAddrBalance addr lsc =
     LedgerStateMary st -> getShelleyBalance addr $ getUTxO st
     LedgerStateAlonzo st -> getAlonzoBalance addr $ getUTxO st
     LedgerStateBabbage _st -> panic "undefined Babbage ledgerAddrBalance"
+    LedgerStateConway _st -> panic "undefined Conway ledgerAddrBalance"
   where
     getUTxO :: LedgerState (ShelleyBlock p era) -> Shelley.UTxO era
-    getUTxO = Shelley._utxo . Shelley.lsUTxOState . Shelley.esLState . Shelley.nesEs . shelleyLedgerState
+    getUTxO = Shelley.utxosUtxo . Shelley.lsUTxOState . Shelley.esLState . Shelley.nesEs . shelleyLedgerState
 
 getByronBalance :: Text -> Byron.UTxO -> Either Text Word64
 getByronBalance addrText utxo = do
@@ -68,7 +68,7 @@ getByronBalance addrText utxo = do
 
 getShelleyBalance ::
   forall era.
-  (Crypto era ~ StandardCrypto, Ledger.TxOut era ~ Shelley.ShelleyTxOut era) =>
+  (EraCrypto era ~ StandardCrypto, Ledger.TxOut era ~ Shelley.ShelleyTxOut era) =>
   Val (Ledger.Value era) =>
   Text ->
   Shelley.UTxO era ->
@@ -77,7 +77,7 @@ getShelleyBalance addrText utxo = do
   caddr <- covertToCompactAddress addrText
   Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue caddr) (Map.elems $ Shelley.unUTxO utxo)
   where
-    compactTxOutValue :: CompactAddr (Crypto era) -> Ledger.TxOut era -> Maybe Coin
+    compactTxOutValue :: CompactAddr (EraCrypto era) -> Ledger.TxOut era -> Maybe Coin
     compactTxOutValue caddr (Shelley.TxOutCompact scaddr v) =
       if caddr == scaddr
         then Just $ coin (fromCompact v)
@@ -89,7 +89,7 @@ getAlonzoBalance addrText utxo = do
   Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue caddr) (Map.elems $ Shelley.unUTxO utxo)
   where
     compactTxOutValue ::
-      CompactAddr (Crypto (AlonzoEra StandardCrypto)) -> Alonzo.AlonzoTxOut (AlonzoEra StandardCrypto) -> Maybe Coin
+      CompactAddr StandardCrypto -> Alonzo.AlonzoTxOut (AlonzoEra StandardCrypto) -> Maybe Coin
     compactTxOutValue caddr txOut =
       let (scaddr, val) = case txOut of
             Alonzo.TxOutCompact a v -> (a, v)

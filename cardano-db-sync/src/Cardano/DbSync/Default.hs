@@ -152,8 +152,8 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
       newExceptT $
         insertShelley $
           Generic.fromBabbageBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
-  -- update the epoch
-  updateEpoch details
+    BlockConway _blk -> panic "TODO: Conway 1"
+  insertEpoch details
   lift $ commitOrIndexes withinTwoMin withinHalfHour
   where
     tracer = getTrace syncEnv

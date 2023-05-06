@@ -19,14 +19,12 @@ import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Coin
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential
-import Cardano.Ledger.Era (Crypto)
 import Cardano.Ledger.Shelley.Tx hiding (ShelleyTx)
 import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
 import Cardano.Ledger.Shelley.TxBody
 import Cardano.Mock.Forging.Tx.Generic
 import Cardano.Mock.Forging.Types
 import Cardano.Prelude
-import Cardano.Slotting.Slot (SlotNo (..))
 import qualified Data.Maybe.Strict as Strict
 import Data.Sequence.Strict (StrictSeq)
 import qualified Data.Sequence.Strict as StrictSeq
@@ -65,7 +63,7 @@ mkPaymentTx inputIndex outputIndex amount fees st = do
   Right $ mkSimpleTx $ consPaymentTxBody input (StrictSeq.fromList [output, change]) (Coin fees)
 
 mkDCertTxPools :: ShelleyLedgerState -> Either ForgingError ShelleyTx
-mkDCertTxPools sta = Right $ mkSimpleTx $ consCertTxBody (allPoolStakeCert sta) (Wdrl mempty)
+mkDCertTxPools sta = Right $ mkSimpleTx $ consCertTxBody (allPoolStakeCert sta) (Withdrawals mempty)
 
 mkSimpleTx :: ShelleyTxBody (ShelleyEra StandardCrypto) -> ShelleyTx
 mkSimpleTx txBody =
@@ -74,7 +72,7 @@ mkSimpleTx txBody =
     mempty
     (maybeToStrictMaybe Nothing)
 
-mkDCertTx :: [DCert StandardCrypto] -> Wdrl StandardCrypto -> Either ForgingError ShelleyTx
+mkDCertTx :: [DCert StandardCrypto] -> Withdrawals StandardCrypto -> Either ForgingError ShelleyTx
 mkDCertTx certs wdrl = Right $ mkSimpleTx $ consCertTxBody certs wdrl
 
 mkSimpleDCertTx ::
@@ -85,24 +83,24 @@ mkSimpleDCertTx consDert st = do
   dcerts <- forM consDert $ \(stakeIndex, mkDCert) -> do
     cred <- resolveStakeCreds stakeIndex st
     pure $ mkDCert cred
-  mkDCertTx dcerts (Wdrl mempty)
+  mkDCertTx dcerts (Withdrawals mempty)
 
 consPaymentTxBody ::
-  Set (TxIn (Crypto (ShelleyEra StandardCrypto))) ->
+  Set (TxIn StandardCrypto) ->
   StrictSeq (ShelleyTxOut (ShelleyEra StandardCrypto)) ->
   Coin ->
   ShelleyTxBody (ShelleyEra StandardCrypto)
-consPaymentTxBody ins outs fees = consTxBody ins outs fees mempty (Wdrl mempty)
+consPaymentTxBody ins outs fees = consTxBody ins outs fees mempty (Withdrawals mempty)
 
-consCertTxBody :: [DCert StandardCrypto] -> Wdrl StandardCrypto -> ShelleyTxBody (ShelleyEra StandardCrypto)
+consCertTxBody :: [DCert StandardCrypto] -> Withdrawals StandardCrypto -> ShelleyTxBody (ShelleyEra StandardCrypto)
 consCertTxBody = consTxBody mempty mempty (Coin 0)
 
 consTxBody ::
-  Set (TxIn (Crypto (ShelleyEra StandardCrypto))) ->
+  Set (TxIn StandardCrypto) ->
   StrictSeq (ShelleyTxOut (ShelleyEra StandardCrypto)) ->
   Coin ->
   [DCert StandardCrypto] ->
-  Wdrl StandardCrypto ->
+  Withdrawals StandardCrypto ->
   ShelleyTxBody (ShelleyEra StandardCrypto)
 consTxBody ins outs fees certs wdrl =
   ShelleyTxBody

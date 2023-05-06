@@ -51,7 +51,7 @@ library
                       , cardano-db
                       , cardano-ledger-byron
                       , cardano-ledger-core
-                      , cardano-ledger-shelley-ma
+                      , cardano-ledger-mary
                       , persistent
                       , hedgehog
                       , text
