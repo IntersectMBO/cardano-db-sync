@@ -38,19 +38,10 @@ import Cardano.Prelude hiding (Meta)
 import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
 import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.POSIX (POSIXTime)
-import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import qualified Ouroboros.Consensus.Cardano.Block as Cardano
 import qualified Ouroboros.Consensus.HardFork.History as History
 import Ouroboros.Consensus.Protocol.Praos (Praos)
 import Ouroboros.Consensus.Protocol.TPraos (TPraos)
-import Ouroboros.Consensus.Shelley.Eras (
-  StandardAllegra,
-  StandardAlonzo,
-  StandardBabbage,
-  StandardMary,
-  StandardShelley,
- )
-import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import Ouroboros.Network.Block (BlockNo, Point)
 
 type TPraosStandard = TPraos StandardCrypto
@@ -60,14 +51,7 @@ type PraosStandard = Praos StandardCrypto
 type CardanoBlock = Cardano.CardanoBlock StandardCrypto
 
 type CardanoInterpreter =
-  History.Interpreter
-    '[ ByronBlock
-     , ShelleyBlock TPraosStandard StandardShelley
-     , ShelleyBlock TPraosStandard StandardAllegra
-     , ShelleyBlock TPraosStandard StandardMary
-     , ShelleyBlock TPraosStandard StandardAlonzo
-     , ShelleyBlock PraosStandard StandardBabbage
-     ]
+  History.Interpreter (Cardano.CardanoEras StandardCrypto)
 
 type CardanoPoint = Point CardanoBlock
 

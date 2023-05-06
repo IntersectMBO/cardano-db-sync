@@ -23,7 +23,7 @@ import Cardano.DbSync.Types
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.Alonzo.Scripts (Tag (..))
 import Cardano.Ledger.Coin (Coin (..))
-import Cardano.Ledger.Mary.Value (AssetName, MaryValue, PolicyID)
+import Cardano.Ledger.Mary.Value (AssetName, MultiAsset, PolicyID)
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
@@ -48,7 +48,7 @@ data Tx = Tx
   , txCertificates :: ![TxCertificate]
   , txWithdrawals :: ![TxWithdrawal]
   , txParamProposal :: ![ParamProposal]
-  , txMint :: !(MaryValue StandardCrypto)
+  , txMint :: !(MultiAsset StandardCrypto)
   , txRedeemer :: [(Word64, TxRedeemer)]
   , txData :: [PlutusData]
   , txScriptSizes :: [Word64] -- this contains only the sizes of plutus scripts in witnesses

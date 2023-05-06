@@ -16,12 +16,10 @@ module Cardano.DbSync.Era.Shelley.Generic.Metadata (
 ) where
 
 import Cardano.Api.Shelley (TxMetadataValue (..))
-import qualified Cardano.Ledger.Alonzo.Data as Alonzo
-import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
-import qualified Cardano.Ledger.Core as Core
+import qualified Cardano.Ledger.Allegra.TxAuxData as Allegra
+import qualified Cardano.Ledger.Alonzo.TxAuxData as Alonzo
 import Cardano.Ledger.Era (Era)
-import qualified Cardano.Ledger.Shelley.Metadata as Shelley
-import qualified Cardano.Ledger.ShelleyMA.AuxiliaryData as ShelleyMa
+import qualified Cardano.Ledger.Shelley.TxAuxData as Shelley
 import Cardano.Prelude
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson
@@ -33,27 +31,27 @@ import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Lazy as Text.Lazy
 import Data.Tuple.Extra (both)
 import qualified Data.Vector as Vector
-import Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardMary)
+import Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardMary, StandardShelley)
 
 -- This module should not even exist. The only reason it does is because functionality
 -- that was in cardano-node commit 0dc6efa467a0fdae7aba7c5bcd5c657e189c8f19 and being
 -- used here in db-sync was drastically changed and then the changed version was not
 -- exported.
 
-fromAllegraMetadata :: ShelleyMa.MAAuxiliaryData StandardAllegra -> Map Word64 TxMetadataValue
-fromAllegraMetadata (ShelleyMa.MAAuxiliaryData mdMap _scripts) =
+fromAllegraMetadata :: Allegra.AllegraTxAuxData StandardAllegra -> Map Word64 TxMetadataValue
+fromAllegraMetadata (Allegra.AllegraTxAuxData mdMap _scripts) =
   Map.map fromMetadatum mdMap
 
-fromAlonzoMetadata :: (Era era, Core.Script era ~ Alonzo.AlonzoScript era) => Alonzo.AlonzoAuxiliaryData era -> Map Word64 TxMetadataValue
+fromAlonzoMetadata :: Era era => Alonzo.AlonzoTxAuxData era -> Map Word64 TxMetadataValue
 fromAlonzoMetadata aux =
-  Map.map fromMetadatum $ Alonzo.txMD aux
+  Map.map fromMetadatum $ Alonzo.atadMetadata aux
 
-fromShelleyMetadata :: Shelley.Metadata era -> Map Word64 TxMetadataValue
-fromShelleyMetadata (Shelley.Metadata mdMap) =
+fromShelleyMetadata :: Shelley.ShelleyTxAuxData StandardShelley -> Map Word64 TxMetadataValue
+fromShelleyMetadata (Shelley.ShelleyTxAuxData mdMap) =
   Map.map fromMetadatum mdMap
 
-fromMaryMetadata :: ShelleyMa.MAAuxiliaryData StandardMary -> Map Word64 TxMetadataValue
-fromMaryMetadata (ShelleyMa.MAAuxiliaryData mdMap _scripts) =
+fromMaryMetadata :: Allegra.AllegraTxAuxData StandardMary -> Map Word64 TxMetadataValue
+fromMaryMetadata (Allegra.AllegraTxAuxData mdMap _scripts) =
   Map.map fromMetadatum mdMap
 
 metadataValueToJsonNoSchema :: TxMetadataValue -> Aeson.Value

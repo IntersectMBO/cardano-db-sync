@@ -23,7 +23,6 @@ import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.Coin as Ledger
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential (Credential (KeyHashObj))
-import Cardano.Ledger.Era (Crypto)
 import qualified Cardano.Ledger.Shelley.Genesis as Shelley
 import Cardano.Ledger.Shelley.Scripts ()
 import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
@@ -41,7 +40,7 @@ import Data.Time.Clock (UTCTime (..))
 import qualified Data.Time.Clock as Time
 import Database.Persist.Sql (SqlBackend)
 import Lens.Micro
-import Ouroboros.Consensus.Cardano.Block (StandardShelley)
+import Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShelley)
 import Ouroboros.Consensus.Shelley.Node (
   ShelleyGenesis (..),
   ShelleyGenesisStaking (..),
@@ -56,7 +55,7 @@ insertValidateGenesisDist ::
   SqlBackend ->
   Trace IO Text ->
   Text ->
-  ShelleyGenesis StandardShelley ->
+  ShelleyGenesis StandardCrypto ->
   Bool ->
   ExceptT SyncNodeError IO ()
 insertValidateGenesisDist backend tracer networkName cfg shelleyInitiation = do
@@ -157,7 +156,7 @@ validateGenesisDistribution ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   Text ->
-  ShelleyGenesis StandardShelley ->
+  ShelleyGenesis StandardCrypto ->
   DB.BlockId ->
   Word64 ->
   ReaderT SqlBackend m (Either SyncNodeError ())
@@ -213,7 +212,7 @@ insertTxOuts ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   DB.BlockId ->
-  (ShelleyTx.TxIn (Crypto StandardShelley), Shelley.ShelleyTxOut StandardShelley) ->
+  (ShelleyTx.TxIn StandardCrypto, Shelley.ShelleyTxOut StandardShelley) ->
   ReaderT SqlBackend m ()
 insertTxOuts trce blkId (ShelleyTx.TxIn txInId _, txOut) = do
   -- Each address/value pair of the initial coin distribution comes from an artifical transaction
@@ -259,7 +258,7 @@ insertStaking ::
   Trace IO Text ->
   Cache ->
   DB.BlockId ->
-  ShelleyGenesis StandardShelley ->
+  ShelleyGenesis StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertStaking tracer cache blkId genesis = do
   -- All Genesis staking comes from an artifical transaction
@@ -290,34 +289,34 @@ insertStaking tracer cache blkId genesis = do
 
 -- -----------------------------------------------------------------------------
 
-configGenesisHash :: ShelleyGenesis StandardShelley -> ByteString
+configGenesisHash :: ShelleyGenesis StandardCrypto -> ByteString
 configGenesisHash _ = BS.take 32 ("Shelley Genesis Block Hash " <> BS.replicate 32 '\0')
 
-genesisHashSlotLeader :: ShelleyGenesis StandardShelley -> ByteString
+genesisHashSlotLeader :: ShelleyGenesis StandardCrypto -> ByteString
 genesisHashSlotLeader _ = BS.take 28 ("Shelley Genesis SlotLeader Hash" <> BS.replicate 28 '\0')
 
 configGenesisStakingHash :: ByteString
 configGenesisStakingHash = BS.take 32 ("Shelley Genesis Staking Tx Hash " <> BS.replicate 32 '\0')
 
-configGenesisSupply :: ShelleyGenesis StandardShelley -> DB.Ada
+configGenesisSupply :: ShelleyGenesis StandardCrypto -> DB.Ada
 configGenesisSupply =
   DB.word64ToAda . fromIntegral . sum . map Ledger.unCoin . genesisTxoAssocList
 
-genesisUTxOSize :: ShelleyGenesis StandardShelley -> Int
+genesisUTxOSize :: ShelleyGenesis StandardCrypto -> Int
 genesisUTxOSize = length . genesisUtxOs
 
-genesisTxoAssocList :: ShelleyGenesis StandardShelley -> [Ledger.Coin]
+genesisTxoAssocList :: ShelleyGenesis StandardCrypto -> [Ledger.Coin]
 genesisTxoAssocList =
   map (unTxOut . snd) . genesisUtxOs
   where
     unTxOut :: Shelley.ShelleyTxOut StandardShelley -> Ledger.Coin
     unTxOut txOut = txOut ^. Core.valueTxOutL
 
-genesisUtxOs :: ShelleyGenesis StandardShelley -> [(ShelleyTx.TxIn (Crypto StandardShelley), Shelley.ShelleyTxOut StandardShelley)]
+genesisUtxOs :: ShelleyGenesis StandardCrypto -> [(ShelleyTx.TxIn StandardCrypto, Shelley.ShelleyTxOut StandardShelley)]
 genesisUtxOs =
   Map.toList . Shelley.unUTxO . Shelley.genesisUTxO
 
-configStartTime :: ShelleyGenesis StandardShelley -> UTCTime
+configStartTime :: ShelleyGenesis StandardCrypto -> UTCTime
 configStartTime = roundToMillseconds . Shelley.sgSystemStart
 
 roundToMillseconds :: UTCTime -> UTCTime
