@@ -104,16 +104,34 @@ insertReverseIndex blockId minIds =
       , DB.reverseIndexMinIds = minIdsToText minIds
       }
 
--- | If we can't resolve from the db, we fall back to the provided outputs
--- This happens the input consumes an output introduced in the same block.
 resolveTxInputs ::
   MonadIO m =>
   [ExtendedTxOut] ->
   Generic.TxIn ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, DbLovelace)
+  ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId)
 resolveTxInputs groupedOutputs txIn =
   fmap convert $ liftLookupFail ("resolveTxInputs " <> textShow txIn <> " ") $ do
     qres <- queryResolveInput txIn
+    case qres of
+      Right ret -> pure $ Right ret
+      Left err ->
+        case resolveInMemory txIn groupedOutputs of
+          Nothing -> pure $ Left err
+          Just eutxo -> pure $ Right $ DB.txOutTxId (etoTxOut eutxo)
+  where
+    convert :: DB.TxId -> (Generic.TxIn, DB.TxId)
+    convert txId = (txIn, txId)
+
+-- | If we can't resolve from the db, we fall back to the provided outputs
+-- This happens the input consumes an output introduced in the same block.
+resolveTxInputsFull ::
+  MonadIO m =>
+  [ExtendedTxOut] ->
+  Generic.TxIn ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, DbLovelace)
+resolveTxInputsFull groupedOutputs txIn =
+  fmap convert $ liftLookupFail ("resolveTxInputsFull " <> textShow txIn <> " ") $ do
+    qres <- queryResolveInputFull txIn
     case qres of
       Right ret -> pure $ Right ret
       Left err ->

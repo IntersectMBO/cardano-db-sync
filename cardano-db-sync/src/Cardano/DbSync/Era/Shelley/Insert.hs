@@ -80,10 +80,11 @@ insertShelleyBlock ::
   Generic.Block ->
   SlotDetails ->
   IsPoolMember ->
+  DepositsMap
   Strict.Maybe Generic.NewEpoch ->
   Generic.StakeSliceRes ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details isMember mNewEpoch stakeSlice = do
+insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details isMember deposits mNewEpoch stakeSlice = do
   runExceptT $ do
     pbid <- case Generic.blkPreviousHash blk of
       Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
@@ -113,7 +114,7 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
           }
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
-    let txInserter = insertTx tracer cache (getInsertOptions syncEnv) (getNetwork syncEnv) isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
+    let txInserter = insertTx tracer cache (getInsertOptions syncEnv) (getNetwork syncEnv) isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk) deposits
     grouped <- foldM (\grouped (idx, tx) -> txInserter idx tx grouped) mempty zippedTx
     minIds <- insertBlockGroupedData tracer grouped
     when withinHalfHour $
@@ -218,18 +219,29 @@ insertTx ::
   DB.BlockId ->
   EpochNo ->
   SlotNo ->
+  DepositsMap ->
   Word64 ->
   Generic.Tx ->
   BlockGroupedData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) BlockGroupedData
-insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx grouped = do
+insertTx tracer cache iopts network isMember blkId epochNo slotNo depositsMap blockIndex tx grouped = do
+  let !txHash = Generic.txHash tx
+  let !mdeposits = if not (Generic.txValidContract tx) then Just 0 else lookupDepositsMap txHash depositsMap
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
       !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
-  !resolvedInputs <- mapM (resolveTxInputs (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
-  let !inSum = sum $ map (unDbLovelace . thrd3) resolvedInputs
-  let diffSum = if inSum >= outSum then inSum - outSum else 0
-  let !fees = maybe diffSum (fromIntegral . unCoin) (Generic.txFees tx)
-  let !txHash = Generic.txHash tx
+  (resolvedInputs, fees, deposits)  <- case (mdeposits, Generic.txFees tx) of
+    (Just deposits, Just txFees) ->
+      (, txFees, deposits) <$> mapM (resolveTxInputs (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
+    (Nothing, Just fees) -> do
+      resolvedInsFull <- mapM (resolveTxInputsFull (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
+      let !inSum = sum $ map (unDbLovelace . thrd3) resolvedInputs
+      pure (resolvedInsFull, fees, fromIntegral (inSum + withdrawalSum) - fromIntegral (outSum + fees))
+    _ -> do
+      resolvedInsFull <- mapM (resolveTxInputsFull (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
+      let !inSum = sum $ map (unDbLovelace . thrd3) resolvedInputs
+          !diffSum = if inSum >= outSum then inSum - outSum else 0
+          !fees = maybe diffSum (fromIntegral . unCoin) (Generic.txFees tx)
+      pure (resolvedInsFull, fees, 0)
   -- Insert transaction and get txId from the DB.
   !txId <-
     lift . DB.insertTx $

@@ -16,6 +16,8 @@ module Cardano.DbSync.LedgerState (
   ApplyResult (..),
   LedgerStateFile (..),
   SnapshotPoint (..),
+  DepositsMap,
+  lookupDepositsMap,
   applyBlock,
   defaultApplyResult,
   mkHasLedgerEnv,
@@ -123,6 +125,7 @@ import System.Directory (doesFileExist, listDirectory, removeFile)
 import System.FilePath (dropExtension, takeExtension, (</>))
 import System.Mem (performMajorGC)
 import Prelude (String, fail, id)
+import Cardano.Ledger.Coin
 
 -- Note: The decision on whether a ledger-state is written to disk is based on the block number
 -- rather than the slot number because while the block number is fully populated (for every block
@@ -196,6 +199,14 @@ data LedgerStateFile = LedgerStateFile
   }
   deriving (Show)
 
+newtype DepositsMap = DepositsMap {unDepositsMap :: Map ByteString Coin}
+
+lookupDepositsMap :: ByteString -> DepositsMap  -> Maybe Coin
+lookupDepositsMap bs = Map.lookup bs . unDepositsMap
+
+emptyDepositsMap :: DepositsMap
+emptyDepositsMap = DepositsMap Map.empty
+
 -- The result of applying a new block. This includes all the data that insertions require.
 data ApplyResult = ApplyResult
   { apPrices :: !(Strict.Maybe Prices) -- prices after the block application
@@ -204,6 +215,7 @@ data ApplyResult = ApplyResult
   , apSlotDetails :: !SlotDetails
   , apStakeSlice :: !Generic.StakeSliceRes
   , apEvents :: ![LedgerEvent]
+  , apDepositsMap :: !DepositsMap
   }
 
 defaultApplyResult :: SlotDetails -> ApplyResult
@@ -215,6 +227,7 @@ defaultApplyResult slotDetails =
     , apSlotDetails = slotDetails
     , apStakeSlice = Generic.NoSlices
     , apEvents = []
+    , depositsMap = emptyDepositsMap
     }
 
 newtype LedgerDB = LedgerDB
@@ -306,7 +319,8 @@ applyBlock env blk = do
     !ledgerDB <- readStateUnsafe env
     let oldState = ledgerDbCurrent ledgerDB
     let !result = applyBlk (ExtLedgerCfg (getTopLevelconfigHasLedger env)) blk (clsState oldState)
-    let !ledgerEvents = mapMaybe convertAuxLedgerEvent (lrEvents result)
+    let !ledgerEventsFull = mapMaybe convertAuxLedgerEvent (lrEvents result)
+    let !(ledgerEvents, deposits) = splitDeposits ledgerEventsFull
     let !newLedgerState = lrResult result
     !details <- getSlotDetails env (ledgerState newLedgerState) time (cardanoBlockSlotNo blk)
     let !newEpoch = mkNewEpoch (clsState oldState) newLedgerState (findAdaPots ledgerEvents)
@@ -322,6 +336,7 @@ applyBlock env blk = do
             , apSlotDetails = details
             , apStakeSlice = stakeSlice newState details
             , apEvents = ledgerEvents
+            , depositsMap = DepositsMap deposits
             }
     pure (oldState, appResult)
   where

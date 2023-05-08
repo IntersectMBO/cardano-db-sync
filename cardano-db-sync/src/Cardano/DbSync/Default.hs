@@ -118,6 +118,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
           blk
           details
           isMember
+          (apDepositsMap applyResult)
           (apNewEpoch applyResult)
           (apStakeSlice applyResult)
   case cblk of
@@ -248,6 +249,7 @@ insertLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
         LedgerPoolReap en drs -> do
           unless (Map.null $ Generic.unRewards drs) $ do
             insertPoolDepositRefunds syncEnv en drs
+        LedgerDeposits {} -> pure ()
 
 hasEpochStartEvent :: [LedgerEvent] -> Bool
 hasEpochStartEvent = any isNewEpoch

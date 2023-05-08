@@ -14,6 +14,7 @@ module Cardano.DbSync.LedgerEvent (
   convertAuxLedgerEvent,
   convertPoolRewards,
   ledgerEventName,
+  splitDeposits,
 ) where
 
 import Cardano.Db hiding (AdaPots, EpochNo, SyncState, epochNo)
@@ -22,9 +23,6 @@ import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.Ledger.Coin (Coin (..), DeltaCoin (..))
 import qualified Cardano.Ledger.Core as Ledger
--- import Cardano.Ledger.Crypto (StandardCrypto)
--- import Cardano.Ledger.Era (Crypto)
--- import Cardano.Ledger.Shelley.AdaPots
 import Cardano.Ledger.Shelley.API (AdaPots, InstantaneousRewards (..))
 import Cardano.Ledger.Shelley.Rules (
   RupdEvent (RupdEvent),
@@ -33,7 +31,14 @@ import Cardano.Ledger.Shelley.Rules (
   ShelleyNewEpochEvent (..),
   ShelleyPoolreapEvent (..),
   ShelleyTickEvent (..),
+  ShelleyUtxowEvent (UtxoEvent),
+  ShelleyLedgerEvent (UtxowEvent),
+  ShelleyBbodyEvent (..),
+  ShelleyLedgersEvent (..),
  )
+import qualified Cardano.Ledger.Shelley.Rules as Shelley
+import Cardano.Ledger.Alonzo.Rules (AlonzoUtxoEvent (..), AlonzoUtxowEvent(..), AlonzoBbodyEvent (..))
+import qualified Cardano.Ledger.Alonzo.Rules as Alonzo
 import Cardano.Prelude hiding (All)
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.State.Transition (Event)
@@ -48,8 +53,12 @@ import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (
   getOneEraLedgerEvent,
  )
 import Ouroboros.Consensus.Ledger.Abstract (AuxLedgerEvent)
-import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock, ShelleyLedgerEvent (..))
+import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
+import qualified Ouroboros.Consensus.Shelley.Ledger as Consensus
 import Ouroboros.Consensus.TypeFamilyWrappers
+import Cardano.Ledger.SafeHash (SafeHash)
+import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
+import qualified Cardano.Ledger.Allegra.Rules as Allegra
 
 data LedgerEvent
   = LedgerMirDist !(Map StakeCred (Set Generic.Reward))
@@ -59,6 +68,7 @@ data LedgerEvent
   | LedgerRestrainedRewards !EpochNo !Generic.Rewards !(Set StakeCred)
   | LedgerTotalRewards !EpochNo !(Map StakeCred (Set (Ledger.Reward StandardCrypto)))
   | LedgerAdaPots !AdaPots
+  | LedgerDeposits (SafeHash StandardCrypto Ledger.EraIndependentTxBody) Coin
   | LedgerStartAtEpoch !EpochNo
   | LedgerNewEpoch !EpochNo !SyncState
   deriving (Eq)
@@ -75,8 +85,9 @@ toOrdering ev = case ev of
   LedgerRestrainedRewards {} -> 4
   LedgerTotalRewards {} -> 5
   LedgerAdaPots {} -> 6
-  LedgerStartAtEpoch {} -> 7
-  LedgerNewEpoch {} -> 8
+  LedgerDeposits {} -> 7
+  LedgerStartAtEpoch {} -> 8
+  LedgerNewEpoch {} -> 9
 
 convertAuxLedgerEvent :: OneEraLedgerEvent (CardanoEras StandardCrypto) -> Maybe LedgerEvent
 convertAuxLedgerEvent = toLedgerEvent . wrappedAuxLedgerEvent
@@ -91,6 +102,7 @@ ledgerEventName le =
     LedgerRestrainedRewards {} -> "LedgerRestrainedRewards"
     LedgerTotalRewards {} -> "LedgerTotalRewards"
     LedgerAdaPots {} -> "LedgerAdaPots"
+    LedgerDeposits {} -> "LedgerDeposits"
     LedgerStartAtEpoch {} -> "LedgerStartAtEpoch"
     LedgerNewEpoch {} -> "LedgerNewEpoch"
 
@@ -107,19 +119,34 @@ instance ConvertLedgerEvent ByronBlock where
   toLedgerEvent _ = Nothing
 
 instance ConvertLedgerEvent (ShelleyBlock protocol (ShelleyEra StandardCrypto)) where
-  toLedgerEvent = toLedgerEventShelley
-
-instance ConvertLedgerEvent (ShelleyBlock protocol (MaryEra StandardCrypto)) where
-  toLedgerEvent = toLedgerEventShelley
+  toLedgerEvent evt =
+    case unwrapLedgerEvent evt of
+      LEDepositShelley hsh coin -> Just $ LedgerDeposits hsh coin
+      _ -> toLedgerEventShelley evt
 
 instance ConvertLedgerEvent (ShelleyBlock protocol (AllegraEra StandardCrypto)) where
-  toLedgerEvent = toLedgerEventShelley
+  toLedgerEvent evt =
+    case unwrapLedgerEvent evt of
+      LEDepositAllegra hsh coin -> Just $ LedgerDeposits hsh coin
+      _ -> toLedgerEventShelley evt
+
+instance ConvertLedgerEvent (ShelleyBlock protocol (MaryEra StandardCrypto)) where
+  toLedgerEvent evt =
+    case unwrapLedgerEvent evt of
+      LEDepositAllegra hsh coin -> Just $ LedgerDeposits hsh coin
+      _ -> toLedgerEventShelley evt
 
 instance ConvertLedgerEvent (ShelleyBlock protocol (AlonzoEra StandardCrypto)) where
-  toLedgerEvent = toLedgerEventShelley
+  toLedgerEvent evt =
+    case unwrapLedgerEvent evt of
+      LEDepositsAlonzo hsh coin -> Just $ LedgerDeposits hsh coin
+      _ -> toLedgerEventShelley evt
 
 instance ConvertLedgerEvent (ShelleyBlock protocol (BabbageEra StandardCrypto)) where
-  toLedgerEvent = toLedgerEventShelley
+  toLedgerEvent evt =
+    case unwrapLedgerEvent evt of
+      LEDepositsAlonzo hsh coin -> Just $ LedgerDeposits hsh coin
+      _ -> toLedgerEventShelley evt
 
 instance ConvertLedgerEvent (ShelleyBlock protocol (ConwayEra StandardCrypto)) where
   toLedgerEvent _evt = Nothing -- TODO: Conway
@@ -147,8 +174,8 @@ toLedgerEventShelley evt =
     LEMirTransfer rp tp _rtt _ttr -> Just $ LedgerMirDist (convertMirRewards rp tp)
     LERetiredPools r _u en -> Just $ LedgerPoolReap en (convertPoolDepositRefunds r)
     LEAdaPots p -> Just $ LedgerAdaPots p
-    ShelleyLedgerEventBBODY {} -> Nothing
-    ShelleyLedgerEventTICK {} -> Nothing
+    Consensus.ShelleyLedgerEventBBODY {} -> Nothing
+    Consensus.ShelleyLedgerEventTICK {} -> Nothing
 
 instance All ConvertLedgerEvent xs => ConvertLedgerEvent (HardForkBlock xs) where
   toLedgerEvent =
@@ -224,7 +251,7 @@ pattern LERestraintRewards ::
   Set StakeCred ->
   AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
 pattern LERestraintRewards e m creds <-
-  ShelleyLedgerEventTICK
+  Consensus.ShelleyLedgerEventTICK
     (TickNewEpochEvent (RestrainedRewards e m creds))
 
 pattern LETotalRewards ::
@@ -236,7 +263,7 @@ pattern LETotalRewards ::
   Map StakeCred (Set (Ledger.Reward StandardCrypto)) ->
   AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
 pattern LETotalRewards e m <-
-  ShelleyLedgerEventTICK
+  Consensus.ShelleyLedgerEventTICK
     (TickNewEpochEvent (TotalRewardEvent e m))
 
 pattern LEDeltaReward ::
@@ -249,7 +276,7 @@ pattern LEDeltaReward ::
   Map StakeCred (Set (Ledger.Reward StandardCrypto)) ->
   AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
 pattern LEDeltaReward e m <-
-  ShelleyLedgerEventTICK
+  Consensus.ShelleyLedgerEventTICK
     (TickNewEpochEvent (DeltaRewardEvent (RupdEvent e m)))
 
 pattern LEIncrementalReward ::
@@ -261,7 +288,7 @@ pattern LEIncrementalReward ::
   Map StakeCred (Set (Ledger.Reward StandardCrypto)) ->
   AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
 pattern LEIncrementalReward e m <-
-  ShelleyLedgerEventTICK
+  Consensus.ShelleyLedgerEventTICK
     (TickRupdEvent (RupdEvent e m))
 
 pattern LEMirTransfer ::
@@ -276,7 +303,7 @@ pattern LEMirTransfer ::
   DeltaCoin ->
   AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
 pattern LEMirTransfer rp tp rtt ttr <-
-  ShelleyLedgerEventTICK
+  Consensus.ShelleyLedgerEventTICK
     ( TickNewEpochEvent
         ( MirEvent
             ( MirTransfer
@@ -297,7 +324,7 @@ pattern LERetiredPools ::
   EpochNo ->
   AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
 pattern LERetiredPools r u e <-
-  ShelleyLedgerEventTICK
+  Consensus.ShelleyLedgerEventTICK
     ( TickNewEpochEvent
         ( EpochEvent
             ( PoolReapEvent
@@ -315,7 +342,98 @@ pattern LEAdaPots ::
   AdaPots ->
   AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
 pattern LEAdaPots pots <-
-  ShelleyLedgerEventTICK
+  Consensus.ShelleyLedgerEventTICK
     ( TickNewEpochEvent
         (TotalAdaPotsEvent pots)
       )
+
+pattern LEDepositShelley ::
+  ( EraCrypto ledgerera ~ StandardCrypto,
+    Event (Ledger.EraRule "BBODY" ledgerera) ~ ShelleyBbodyEvent ledgerera,
+    Event (Ledger.EraRule "LEDGERS" ledgerera) ~ ShelleyLedgersEvent ledgerera,
+    Event (Ledger.EraRule "LEDGER" ledgerera) ~ ShelleyLedgerEvent ledgerera,
+    Event (Ledger.EraRule "UTXOW" ledgerera) ~ Shelley.ShelleyUtxowEvent ledgerera,
+    Event (Ledger.EraRule "UTXO" ledgerera) ~ Shelley.UtxoEvent ledgerera
+  ) =>
+  SafeHash StandardCrypto Ledger.EraIndependentTxBody ->
+  Coin ->
+  AuxLedgerEvent (LedgerState (ShelleyBlock protocol ledgerera))
+pattern LEDepositShelley hsh coin <-
+  Consensus.ShelleyLedgerEventBBODY
+    ( LedgersEvent
+        ( Shelley.LedgerEvent
+            ( UtxowEvent
+                ( UtxoEvent
+                        ( Shelley.TotalDeposits hsh coin
+                          )
+                  )
+              )
+          )
+      )
+
+pattern LEDepositAllegra ::
+  ( EraCrypto ledgerera ~ StandardCrypto,
+    Event (Ledger.EraRule "BBODY" ledgerera) ~ ShelleyBbodyEvent ledgerera,
+    Event (Ledger.EraRule "LEDGERS" ledgerera) ~ ShelleyLedgersEvent ledgerera,
+    Event (Ledger.EraRule "LEDGER" ledgerera) ~ ShelleyLedgerEvent ledgerera,
+    Event (Ledger.EraRule "UTXOW" ledgerera) ~ Shelley.ShelleyUtxowEvent ledgerera,
+    Event (Ledger.EraRule "UTXO" ledgerera) ~ Allegra.AllegraUtxoEvent ledgerera
+  ) =>
+  SafeHash StandardCrypto Ledger.EraIndependentTxBody ->
+  Coin ->
+  AuxLedgerEvent (LedgerState (ShelleyBlock protocol ledgerera))
+pattern LEDepositAllegra hsh coin <-
+  Consensus.ShelleyLedgerEventBBODY
+    ( LedgersEvent
+        ( Shelley.LedgerEvent
+            ( UtxowEvent
+                ( UtxoEvent
+                        ( Allegra.TotalDeposits hsh coin
+                          )
+                  )
+              )
+          )
+      )
+
+pattern LEDepositsAlonzo ::
+  ( EraCrypto ledgerera ~ StandardCrypto,
+    Event (Ledger.EraRule "BBODY" ledgerera) ~ Alonzo.AlonzoBbodyEvent ledgerera,
+    Event (Ledger.EraRule "LEDGERS" ledgerera) ~ ShelleyLedgersEvent ledgerera,
+    Event (Ledger.EraRule "LEDGER" ledgerera) ~ ShelleyLedgerEvent ledgerera,
+    Event (Ledger.EraRule "UTXOW" ledgerera) ~ AlonzoUtxowEvent ledgerera,
+    Event (Ledger.EraRule "UTXO" ledgerera) ~ AlonzoUtxoEvent ledgerera,
+    Event (Ledger.EraRule "UTXOS" ledgerera) ~ Alonzo.AlonzoUtxosEvent ledgerera
+  ) =>
+  SafeHash StandardCrypto Ledger.EraIndependentTxBody ->
+  Coin ->
+  AuxLedgerEvent (LedgerState (ShelleyBlock protocol ledgerera))
+pattern LEDepositsAlonzo hsh coin <-
+  Consensus.ShelleyLedgerEventBBODY
+    ( ShelleyInAlonzoEvent
+        ( LedgersEvent
+            ( Shelley.LedgerEvent
+                ( UtxowEvent
+                    ( WrappedShelleyEraEvent
+                        ( UtxoEvent
+                            ( UtxosEvent
+                                ( Alonzo.TotalDeposits hsh coin
+                                  )
+                              )
+                          )
+                      )
+                  )
+              )
+          )
+      )
+
+splitDeposits :: [LedgerEvent] -> ([LedgerEvent], Map ByteString Coin)
+splitDeposits les =
+    (les', Map.fromList deposits)
+  where
+    (deposits, les') = partitionEithers $ eitherDeposit <$> les
+
+    eitherDeposit :: LedgerEvent -> Either (ByteString, Coin) LedgerEvent
+    eitherDeposit le =
+      case le of
+        LedgerDeposits hsh coin -> Left (txHashFromSafe hsh, coin)
+        _ -> Right le

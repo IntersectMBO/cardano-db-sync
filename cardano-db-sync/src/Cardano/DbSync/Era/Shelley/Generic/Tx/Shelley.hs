@@ -19,6 +19,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (
   getTxMetadata,
   mkTxParamProposal,
   txHashId,
+  txHashFromSafe,
 ) where
 
 import qualified Cardano.Api.Shelley as Api
@@ -125,6 +126,9 @@ fromTxIn (ShelleyTx.TxIn (ShelleyTx.TxId txid) (TxIx w64)) =
 
 txHashId :: (EraCrypto era ~ StandardCrypto, Core.EraTx era) => Core.Tx era -> ByteString
 txHashId tx = Crypto.hashToBytes $ Ledger.extractHash $ Ledger.hashAnnotated (tx ^. Core.bodyTxL)
+
+txHashFromSafe :: Ledger.SafeHash StandardCrypto Core.EraIndependentTxBody -> ByteString
+txHashFromSafe = Crypto.hashToBytes . Ledger.extractHash
 
 getTxSize :: Core.EraTx era => Core.Tx era -> Word64
 getTxSize tx = fromIntegral $ tx ^. Core.sizeTxF
