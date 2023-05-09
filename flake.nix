@@ -149,6 +149,9 @@
               inherit ciJobs;
               nonRequiredPaths = map (r: p: builtins.match r p != null) nonRequiredPaths;
             } // ciJobs;
+
+        hydraJobs = ciJobs;
+
       } // tullia.fromSimple system (import ./nix/tullia.nix)) // {
 
         # allows precise paths (avoid fallbacks) with nix build/eval:
