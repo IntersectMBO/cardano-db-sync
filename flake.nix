@@ -6,14 +6,8 @@
     haskellNix.url = "github:input-output-hk/haskell.nix";
     utils.url = "github:numtide/flake-utils";
     iohkNix = {
-      url = "github:input-output-hk/iohk-nix";
+      url = "github:input-output-hk/iohk-nix?ref=angerman/remove-old-envs";
       inputs.nixpkgs.follows = "nixpkgs";
-    };
-    cardano-world = {
-      url = "github:input-output-hk/cardano-world";
-      inputs = {
-        cardano-db-sync.follows = "/";
-      };
     };
     flake-compat = {
       url = "github:input-output-hk/flake-compat/fixes";
@@ -35,7 +29,7 @@
     std.follows = "tullia/std";
   };
 
-  outputs = { self, iohkNix, cardano-world, haskellNix, CHaP, nixpkgs, utils, tullia, std, flake-compat, ... }@inputs:
+  outputs = { self, iohkNix, haskellNix, CHaP, nixpkgs, utils, tullia, std, flake-compat, ... }@inputs:
     let
       inherit (haskellNix) config;
       inherit (nixpkgs) lib;
@@ -55,16 +49,17 @@
         iohkNix.overlays.haskell-nix-extra
         iohkNix.overlays.crypto
         iohkNix.overlays.utils
+        iohkNix.overlays.cardano-lib
         (final: prev: {
           inherit flake-compat customConfig;
           gitrev = self.rev or "dirty";
           commonLib = lib // iohkNix.lib;
-          cardanoLib = rec {
-            inherit (cardano-world.${final.system}.cardano) environments;
-            forEnvironments = f: lib.mapAttrs
-              (name: env: f (env // { inherit name; }))
-              environments;
-          };
+          # cardanoLib = rec {
+          #   inherit (cardano-world.${final.system}.cardano) environments;
+          #   forEnvironments = f: lib.mapAttrs
+          #     (name: env: f (env // { inherit name; }))
+          #     environments;
+          # };
           schema = ./schema;
           ciJobs = self.ciJobs.${final.system};
         })
