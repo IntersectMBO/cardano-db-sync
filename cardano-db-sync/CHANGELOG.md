@@ -1,5 +1,13 @@
 # Revision history for cardano-db-sync
 
+## 13.1.1.0
+* Adds compatibility with the new format of the CostModel in Alonzo genesis file [#1403]
+* Adds compatibility with node-8.0.0 and in particular [#1403]
+* Adds Developmental ghc-9.2 compatibility [#1404]
+* Provided experimental options which turn off parts of the schema [#1379]
+* Fixed an issue where `epoch` table didn't rollback [#1370]
+* Fixed an issue with smash returning `InvalidUrlException` [#1353]
+
 ## 13.1.0.2
 * Upgrade dependencies and integrates a fix in ledger internal data structures.
 * Integrates Cardano Haskell Packages (CHaP)
