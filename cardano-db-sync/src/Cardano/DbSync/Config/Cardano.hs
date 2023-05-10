@@ -114,15 +114,15 @@ mkProtocolInfoCardano ge shelleyCred =
           , Consensus.maryMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
           }
         Consensus.ProtocolParamsAlonzo
-          { Consensus.alonzoProtVer = mkProtVer 6 0
+          { Consensus.alonzoProtVer = mkProtVer 7 0
           , Consensus.alonzoMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
           }
         Consensus.ProtocolParamsBabbage
-          { Consensus.babbageProtVer = mkProtVer 7 0
+          { Consensus.babbageProtVer = mkProtVer 9 0
           , Consensus.babbageMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
           }
         Consensus.ProtocolParamsConway
-          { Consensus.conwayProtVer = mkProtVer 8 0
+          { Consensus.conwayProtVer = mkProtVer 10 0
           , Consensus.conwayMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure -- TODO: Conway
           }
         (Consensus.ProtocolTransitionParamsShelleyBased emptyFromByronTranslationContext $ dncShelleyHardFork dnc) -- TODO: Conway Fix
