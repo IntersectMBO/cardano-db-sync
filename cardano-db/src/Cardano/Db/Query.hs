@@ -51,6 +51,7 @@ module Cardano.Db.Query (
   queryMinRefId,
   existsPoolHashId,
   existsPoolMetadataRefId,
+  queryAdaPotsId,
   -- queries used in smash
   queryPoolOfflineData,
   queryPoolRegister,
@@ -690,6 +691,14 @@ existsPoolMetadataRefId pmrid = do
     limit 1
     pure (pmr ^. PoolMetadataRefId)
   pure $ not (null res)
+
+queryAdaPotsId :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe (Entity AdaPots))
+queryAdaPotsId blkId = do
+  res <- select $ do
+    adaPots <- from $ table @AdaPots
+    where_ (adaPots ^. AdaPotsBlockId ==. val blkId)
+    pure adaPots
+  pure $ listToMaybe res
 
 {--------------------------------------------
   Queries use in SMASH

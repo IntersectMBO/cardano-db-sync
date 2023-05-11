@@ -13,6 +13,7 @@ module Cardano.Db.Delete (
   deleteBlocksBlockIdNotrace,
   deleteBlock,
   deleteEpochRows,
+  deleteAdaPots,
   -- for testing
   queryFirstAndDeleteAfter,
 ) where
@@ -180,3 +181,7 @@ deleteBlock block = do
 deleteEpochRows :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
 deleteEpochRows epochNum =
   deleteWhere [EpochNo >=. epochNum]
+
+deleteAdaPots :: MonadIO m => BlockId -> ReaderT SqlBackend m ()
+deleteAdaPots blkId = do
+  deleteWhere [AdaPotsBlockId ==. blkId]

@@ -15,6 +15,7 @@ module Cardano.DbSync.Era.Shelley.Insert (
   insertStakeRegistration,
   insertDelegation,
   insertStakeAddressRefIfMissing,
+  mkAdaPots,
 ) where
 
 import Cardano.Api (SerialiseAsCBOR (..))
@@ -1194,14 +1195,23 @@ insertPots ::
 insertPots blockId slotNo epochNo pots =
   void . lift $
     DB.insertAdaPots $
-      DB.AdaPots
-        { DB.adaPotsSlotNo = unSlotNo slotNo
-        , DB.adaPotsEpochNo = unEpochNo epochNo
-        , DB.adaPotsTreasury = Generic.coinToDbLovelace $ Shelley.treasuryAdaPot pots
-        , DB.adaPotsReserves = Generic.coinToDbLovelace $ Shelley.reservesAdaPot pots
-        , DB.adaPotsRewards = Generic.coinToDbLovelace $ Shelley.rewardsAdaPot pots
-        , DB.adaPotsUtxo = Generic.coinToDbLovelace $ Shelley.utxoAdaPot pots
-        , DB.adaPotsDeposits = Generic.coinToDbLovelace $ Shelley.depositsAdaPot pots
-        , DB.adaPotsFees = Generic.coinToDbLovelace $ Shelley.feesAdaPot pots
-        , DB.adaPotsBlockId = blockId
-        }
+      mkAdaPots blockId slotNo epochNo pots
+
+mkAdaPots ::
+  DB.BlockId ->
+  SlotNo ->
+  EpochNo ->
+  Shelley.AdaPots ->
+  DB.AdaPots
+mkAdaPots blockId slotNo epochNo pots =
+  DB.AdaPots
+    { DB.adaPotsSlotNo = unSlotNo slotNo
+    , DB.adaPotsEpochNo = unEpochNo epochNo
+    , DB.adaPotsTreasury = Generic.coinToDbLovelace $ Shelley.treasuryAdaPot pots
+    , DB.adaPotsReserves = Generic.coinToDbLovelace $ Shelley.reservesAdaPot pots
+    , DB.adaPotsRewards = Generic.coinToDbLovelace $ Shelley.rewardsAdaPot pots
+    , DB.adaPotsUtxo = Generic.coinToDbLovelace $ Shelley.utxoAdaPot pots
+    , DB.adaPotsDeposits = Generic.coinToDbLovelace $ Shelley.depositsAdaPot pots
+    , DB.adaPotsFees = Generic.coinToDbLovelace $ Shelley.feesAdaPot pots
+    , DB.adaPotsBlockId = blockId
+    }

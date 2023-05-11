@@ -54,6 +54,7 @@ module Cardano.Db.Insert (
   insertCheckPoolOfflineFetchError,
   insertReservedPoolTicker,
   insertDelistedPool,
+  replaceAdaPots,
   -- Export mainly for testing.
   insertBlockChecked,
 ) where
@@ -90,6 +91,7 @@ import Database.Persist.Sql (
   insertMany,
   rawExecute,
   rawSql,
+  replace,
   toPersistFields,
   toPersistValue,
   uniqueDBName,
@@ -98,6 +100,7 @@ import Database.Persist.Sql (
 import qualified Database.Persist.Sql.Util as Util
 import Database.Persist.Types (
   ConstraintNameDB (..),
+  Entity (..),
   EntityNameDB (..),
   FieldNameDB (..),
   PersistValue,
@@ -274,6 +277,18 @@ insertReservedPoolTicker ticker = do
 
 insertDelistedPool :: (MonadBaseControl IO m, MonadIO m) => DelistedPool -> ReaderT SqlBackend m DelistedPoolId
 insertDelistedPool = insertCheckUnique "DelistedPool"
+
+replaceAdaPots :: (MonadBaseControl IO m, MonadIO m) => BlockId -> AdaPots -> ReaderT SqlBackend m Bool
+replaceAdaPots blockId adapots = do
+  mAdaPotsId <- queryAdaPotsId blockId
+  case mAdaPotsId of
+    Nothing -> pure False
+    Just adaPotsDB
+      | entityVal adaPotsDB == adapots ->
+          pure False
+    Just adaPotsDB -> do
+      replace (entityKey adaPotsDB) adapots
+      pure True
 
 -- -----------------------------------------------------------------------------
 
