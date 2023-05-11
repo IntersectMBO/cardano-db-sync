@@ -22,9 +22,6 @@ import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.Ledger.Coin (Coin (..), DeltaCoin (..))
 import qualified Cardano.Ledger.Core as Ledger
--- import Cardano.Ledger.Crypto (StandardCrypto)
--- import Cardano.Ledger.Era (Crypto)
--- import Cardano.Ledger.Shelley.AdaPots
 import Cardano.Ledger.Shelley.API (AdaPots, InstantaneousRewards (..))
 import Cardano.Ledger.Shelley.Rules (
   RupdEvent (RupdEvent),
