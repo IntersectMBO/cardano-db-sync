@@ -1,30 +1,32 @@
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Cache.Epoch (
   readCacheEpoch,
-  readEpochInternalFromCacheEpoch,
+  readEpochCurrentFromCacheEpoch,
   readEpochFromCacheEpoch,
   readLastMapEpochFromCacheEpoch,
   rollbackMapEpochInCacheEpoch,
   writeCacheEpoch,
-  writeEpochInternalToCache,
+  writeEpochCurrentToCache,
   writeLatestEpochToCacheEpoch,
   -- helpers
   isMapEpochCacheNull,
+  calculateCurrentEpochNo,
+  calculatePreviousEpochNo,
 ) where
 
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Cache.Types (Cache (..), CacheEpoch (..), CacheInternal (..), EpochInternal (..))
+import Cardano.DbSync.Api (LedgerEnv (..), SyncEnv (..))
+import Cardano.DbSync.Cache.Types (Cache (..), CacheEpoch (..), CacheInternal (..), EpochCurrent (..))
+import Cardano.DbSync.Era.Shelley.Generic.StakeDist (getSecurityParameter)
+import Cardano.DbSync.Error (SyncNodeError (..))
+import Cardano.DbSync.LedgerState (HasLedgerEnv (..))
+import Cardano.DbSync.LocalStateQuery (NoLedgerEnv (..))
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
-import Data.Map.Strict (insert, lookup, split, lookupMax, size, deleteMin)
+import Data.Map.Strict (deleteMin, insert, lookup, lookupMax, size, split)
 import Database.Persist.Postgresql (SqlBackend)
-import Cardano.DbSync.Error (SyncNodeError(..))
-import Cardano.DbSync.Api (SyncEnv (..), LedgerEnv (..))
-import Cardano.DbSync.LedgerState (HasLedgerEnv(..))
-import Cardano.DbSync.Era.Shelley.Generic.StakeDist (getSecurityParameter)
-import Cardano.DbSync.LocalStateQuery (NoLedgerEnv(..))
 
 -------------------------------------------------------------------------------------
 -- Epoch Cache
@@ -37,13 +39,13 @@ readCacheEpoch cache =
       cacheEpoch <- liftIO $ readTVarIO (cEpoch ci)
       pure $ Just cacheEpoch
 
-readEpochInternalFromCacheEpoch :: MonadIO m => Cache -> m (Maybe EpochInternal)
-readEpochInternalFromCacheEpoch cache =
+readEpochCurrentFromCacheEpoch :: MonadIO m => Cache -> m (Maybe EpochCurrent)
+readEpochCurrentFromCacheEpoch cache =
   case cache of
     UninitiatedCache -> pure Nothing
     Cache ci -> do
       cE <- liftIO $ readTVarIO (cEpoch ci)
-      case (ceMapEpoch cE, ceEpochInternal cE) of
+      case (ceMapEpoch cE, ceEpochCurrent cE) of
         (_, epochInternal) -> pure epochInternal
 
 readLastMapEpochFromCacheEpoch :: Cache -> IO (Maybe DB.Epoch)
@@ -53,12 +55,9 @@ readLastMapEpochFromCacheEpoch cache =
     Cache ci -> do
       cE <- readTVarIO (cEpoch ci)
       let mapEpoch = ceMapEpoch cE
-      if null mapEpoch
-        then pure Nothing
-        else do
-          case lookupMax mapEpoch of
-            Nothing -> pure Nothing
-            Just (_, ep) -> pure $ Just ep
+      case lookupMax mapEpoch of
+        Nothing -> pure Nothing
+        Just (_, ep) -> pure $ Just ep
 
 readEpochFromCacheEpoch :: MonadIO m => Cache -> DB.BlockId -> m (Maybe DB.Epoch)
 readEpochFromCacheEpoch cache blockNo =
@@ -77,7 +76,7 @@ rollbackMapEpochInCacheEpoch cache blockId = do
       -- split the map and delete anything after blockId including it self as new blockId might be
       -- given when inserting the block again when doing rollbacks.
       let (newMapEpoch, _) = split blockId (ceMapEpoch cE)
-      writeToCache ci (CacheEpoch newMapEpoch (ceEpochInternal cE))
+      writeToCache ci (CacheEpoch newMapEpoch (ceEpochCurrent cE))
 
 writeCacheEpoch :: MonadIO m => Cache -> CacheEpoch -> m ()
 writeCacheEpoch cache cacheEpoch =
@@ -85,21 +84,21 @@ writeCacheEpoch cache cacheEpoch =
     UninitiatedCache -> pure ()
     Cache ci -> liftIO $ atomically $ writeTVar (cEpoch ci) cacheEpoch
 
-writeEpochInternalToCache ::
+writeEpochCurrentToCache ::
   MonadIO m =>
   Cache ->
-  EpochInternal ->
+  EpochCurrent ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-writeEpochInternalToCache cache epInternal =
+writeEpochCurrentToCache cache epCurrent =
   case cache of
-    UninitiatedCache -> pure $ Left $ NEError "writeEpochInternalToCache: Cache is UninitiatedCache"
+    UninitiatedCache -> pure $ Left $ NEError "writeEpochCurrentToCache: Cache is UninitiatedCache"
     Cache ci -> do
       cE <- liftIO $ readTVarIO (cEpoch ci)
-      case (ceMapEpoch cE, ceEpochInternal cE) of
-        (epochLatest, _) -> writeToCache ci (CacheEpoch epochLatest (Just epInternal))
+      case (ceMapEpoch cE, ceEpochCurrent cE) of
+        (epochLatest, _) -> writeToCache ci (CacheEpoch epochLatest (Just epCurrent))
 
 -- | put the latest calculated epoch into cache, we use the blockId as it's key
---   which was generated when inserting the block into db and put into EpochInternal Cache.
+--   which was generated when inserting the block into db and put into EpochCurrent Cache.
 writeLatestEpochToCacheEpoch ::
   MonadIO m =>
   SyncEnv ->
@@ -115,13 +114,13 @@ writeLatestEpochToCacheEpoch syncEnv cache latestEpoch = do
   case cache of
     UninitiatedCache -> pure $ Left $ NEError "writeLatestEpochToCacheEpoch: Cache is UninitiatedCache"
     Cache ci -> do
-      -- get EpochInternal so we can use the BlockId we stored when inserting blocks
-      epochInternalCE <- readEpochInternalFromCacheEpoch cache
+      -- get EpochCurrent so we can use the BlockId we stored when inserting blocks
+      epochInternalCE <- readEpochCurrentFromCacheEpoch cache
       case epochInternalCE of
         Nothing -> pure $ Left $ NEError "writeLatestEpochToCacheEpoch: No epochInternalEpochCache"
         Just ei -> do
           cE <- liftIO $ readTVarIO (cEpoch ci)
-          let blockId = epoInternalCurrentBlockId ei
+          let currentBlockId = epCurrentBlockId ei
               mapEpoch = ceMapEpoch cE
               -- Making sure our mapEpoch doesn't get too large so we use something slightly bigger than K value "securityParam"
               -- and once the map gets above that we delete the last item ready for another to be inserted.
@@ -130,10 +129,12 @@ writeLatestEpochToCacheEpoch syncEnv cache latestEpoch = do
                   then deleteMin mapEpoch
                   else mapEpoch
 
-          let updatedMapEpoch = insert blockId latestEpoch scaledMapEpoch
-          writeToCache ci (CacheEpoch updatedMapEpoch (ceEpochInternal cE))
+          let updatedMapEpoch = insert currentBlockId latestEpoch scaledMapEpoch
+          writeToCache ci (CacheEpoch updatedMapEpoch (ceEpochCurrent cE))
 
--- Helper --
+------------------------------------------------------------------
+-- Helpers
+------------------------------------------------------------------
 
 isMapEpochCacheNull :: Cache -> IO Bool
 isMapEpochCacheNull cache =
@@ -147,3 +148,30 @@ writeToCache :: MonadIO m => CacheInternal -> CacheEpoch -> m (Either SyncNodeEr
 writeToCache ci newCacheEpoch = do
   void $ liftIO $ atomically $ writeTVar (cEpoch ci) newCacheEpoch
   pure $ Right ()
+
+-- calculate the current epoch number using db query as backup
+-- the query returns 0 if we have not epochs on the db.
+calculateCurrentEpochNo ::
+  MonadIO m =>
+  Maybe EpochCurrent ->
+  ReaderT SqlBackend m Word64
+calculateCurrentEpochNo mEpochPrevious = do
+  case mEpochPrevious of
+    Nothing -> DB.queryLatestEpochNo
+    Just epCurrent -> pure $ epCurrentEpochNo epCurrent
+
+-- Calculate the previous epoch number, handling restarts and rollbacks.
+calculatePreviousEpochNo ::
+  MonadIO m =>
+  Cache ->
+  Maybe EpochCurrent ->
+  ReaderT SqlBackend m Word64
+calculatePreviousEpochNo cache mEpochPrevious =
+  case mEpochPrevious of
+    Nothing -> do
+      latestEpochNo <- DB.queryLatestEpochNo
+      mLastMapEpochFromCache <- liftIO $ readLastMapEpochFromCacheEpoch cache
+      -- the mapEpoch would be empty when restarting dbsync mid sync
+      let lEpoch = maybe latestEpochNo (\_ -> latestEpochNo - 1) mLastMapEpochFromCache
+      if latestEpochNo == 0 then pure 0 else pure lEpoch
+    Just epochCurrent -> pure $ epCurrentEpochNo epochCurrent

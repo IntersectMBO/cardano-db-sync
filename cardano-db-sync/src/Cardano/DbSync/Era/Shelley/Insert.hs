@@ -41,8 +41,8 @@ import Cardano.DbSync.Cache (
   queryRewardAccountWithCacheRetBs,
   queryStakeAddrWithCache,
  )
-import Cardano.DbSync.Cache.Epoch (writeEpochInternalToCache)
-import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..), EpochInternal (..))
+import Cardano.DbSync.Cache.Epoch (calculatePreviousEpochNo, readEpochCurrentFromCacheEpoch, writeEpochCurrentToCache)
+import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..), EpochCurrent (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Era.Shelley.Insert.Epoch
@@ -130,17 +130,24 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
     blockGroupedData <- foldM (\gp (idx, tx) -> txInserter idx tx gp) mempty zippedTx
     minIds <- insertBlockGroupedData tracer blockGroupedData
 
-    void $ lift $
-      writeEpochInternalToCache
-        cache
-        EpochInternal
-          { epoInternalCurrentBlockId = blkId
-          , epInternalEndTime = sdSlotTime details
-          , epInternalFees = groupedTxFees blockGroupedData
-          , epInternalEpochNo = unEpochNo (sdEpochNo details)
-          , epInternalOutSum = fromIntegral $ groupedTxOutSum blockGroupedData
-          , epInternalTxCount = fromIntegral $ length (Generic.blkTxs blk)
-          }
+    -- now that we've inserted the Block and all it's txs lets cache what we'll need
+    -- for updating the epoch using this cached data.
+    prevCurCacheEpoch <- readEpochCurrentFromCacheEpoch cache
+    prevEpoch <- lift $ calculatePreviousEpochNo cache prevCurCacheEpoch
+
+    void $
+      lift $
+        writeEpochCurrentToCache
+          cache
+          EpochCurrent
+            { epCurrentBlockId = blkId
+            , epCurrentBlockTime = sdSlotTime details
+            , epCurrentFees = groupedTxFees blockGroupedData
+            , epCurrentEpochNo = unEpochNo (sdEpochNo details)
+            , epPreviousEpochNo = prevEpoch
+            , epCurrentOutSum = fromIntegral $ groupedTxOutSum blockGroupedData
+            , epCurrentTxCount = fromIntegral $ length (Generic.blkTxs blk)
+            }
 
     when withinHalfHour $
       insertReverseIndex blkId minIds
