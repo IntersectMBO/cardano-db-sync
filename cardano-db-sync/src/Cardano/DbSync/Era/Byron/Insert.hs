@@ -29,8 +29,8 @@ import Cardano.DbSync.Cache (
   insertBlockAndCache,
   queryPrevBlockWithCache,
  )
-import Cardano.DbSync.Cache.Epoch (writeEpochInternalToCache)
-import Cardano.DbSync.Cache.Types (Cache (..), EpochInternal (..))
+import Cardano.DbSync.Cache.Epoch (calculatePreviousEpochNo, readEpochCurrentFromCacheEpoch, writeEpochCurrentToCache)
+import Cardano.DbSync.Cache.Types (Cache (..), EpochCurrent (..))
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
@@ -95,41 +95,46 @@ insertABOBBoundary tracer cache blk details = do
         , DB.slotLeaderPoolHashId = Nothing
         , DB.slotLeaderDescription = "Epoch boundary slot leader"
         }
-  blockId <- lift . insertBlockAndCache cache $
-    DB.Block
-      { DB.blockHash = Byron.unHeaderHash $ Byron.boundaryHashAnnotated blk
-      , DB.blockEpochNo = Just $ unEpochNo epochNo
-      , -- No slotNo for a boundary block
-        DB.blockSlotNo = Nothing
-      , DB.blockEpochSlotNo = Nothing
-      , DB.blockBlockNo = Nothing
-      , DB.blockPreviousId = Just pbid
-      , DB.blockSlotLeaderId = slid
-      , DB.blockSize = fromIntegral $ Byron.boundaryBlockLength blk
-      , DB.blockTime = sdSlotTime details
-      , DB.blockTxCount = 0
-      , -- EBBs do not seem to have protocol version fields, so set this to '0'.
-        DB.blockProtoMajor = 0
-      , DB.blockProtoMinor = 0
-      , -- Shelley specific
-        DB.blockVrfKey = Nothing
-      , DB.blockOpCert = Nothing
-      , DB.blockOpCertCounter = Nothing
-      }
+  blkId <-
+    lift . insertBlockAndCache cache $
+      DB.Block
+        { DB.blockHash = Byron.unHeaderHash $ Byron.boundaryHashAnnotated blk
+        , DB.blockEpochNo = Just $ unEpochNo epochNo
+        , -- No slotNo for a boundary block
+          DB.blockSlotNo = Nothing
+        , DB.blockEpochSlotNo = Nothing
+        , DB.blockBlockNo = Nothing
+        , DB.blockPreviousId = Just pbid
+        , DB.blockSlotLeaderId = slid
+        , DB.blockSize = fromIntegral $ Byron.boundaryBlockLength blk
+        , DB.blockTime = sdSlotTime details
+        , DB.blockTxCount = 0
+        , -- EBBs do not seem to have protocol version fields, so set this to '0'.
+          DB.blockProtoMajor = 0
+        , DB.blockProtoMinor = 0
+        , -- Shelley specific
+          DB.blockVrfKey = Nothing
+        , DB.blockOpCert = Nothing
+        , DB.blockOpCertCounter = Nothing
+        }
 
-  -- now that we've inserted the Block and all it's txs lets put what we'll need
-  -- later when updating the epoch using cache.
+  -- now that we've inserted the Block and all it's txs lets cache what we'll need
+  -- for updating the epoch using this cached data.
+  prevCurCacheEpoch <- readEpochCurrentFromCacheEpoch cache
+  prevEpoch <- lift $ calculatePreviousEpochNo cache prevCurCacheEpoch
+
   void $
     lift $
-      writeEpochInternalToCache
+      writeEpochCurrentToCache
         cache
-        EpochInternal
-          { epoInternalCurrentBlockId = blockId
-          , epInternalFees = 0
-          , epInternalOutSum = 0
-          , epInternalTxCount = 0
-          , epInternalEpochNo = unEpochNo (sdEpochNo details)
-          , epInternalEndTime = sdSlotTime details
+        EpochCurrent
+          { epCurrentBlockId = blkId
+          , epCurrentFees = 0
+          , epCurrentOutSum = 0
+          , epCurrentTxCount = 0
+          , epCurrentEpochNo = unEpochNo (sdEpochNo details)
+          , epPreviousEpochNo = prevEpoch
+          , epCurrentBlockTime = sdSlotTime details
           }
 
   liftIO . logInfo tracer $
@@ -177,19 +182,23 @@ insertABlock tracer cache firstBlockOfEpoch blk details = do
   let byronTxOutValues = concatMap (toList . (\tx -> map Byron.txOutValue (Byron.txOutputs $ Byron.taTx tx))) txs
       outSum = sum $ map Byron.lovelaceToInteger byronTxOutValues
 
-  -- now that we've inserted the Block and all it's txs lets put what we'll need
-  -- later when updating the epoch using cache.
+  -- now that we've inserted the Block and all it's txs lets cache what we'll need
+  -- for updating the epoch using this cached data.
+  prevCurCacheEpoch <- readEpochCurrentFromCacheEpoch cache
+  prevEpoch <- lift $ calculatePreviousEpochNo cache prevCurCacheEpoch
+
   void $
     lift $
-      writeEpochInternalToCache
+      writeEpochCurrentToCache
         cache
-        EpochInternal
-          { epoInternalCurrentBlockId = blkId
-          , epInternalFees = sum txFees
-          , epInternalOutSum = fromIntegral outSum
-          , epInternalTxCount = fromIntegral $ length txs
-          , epInternalEpochNo = unEpochNo (sdEpochNo details)
-          , epInternalEndTime = sdSlotTime details
+        EpochCurrent
+          { epCurrentBlockId = blkId
+          , epCurrentFees = sum txFees
+          , epCurrentOutSum = fromIntegral outSum
+          , epCurrentTxCount = fromIntegral $ length txs
+          , epCurrentEpochNo = unEpochNo (sdEpochNo details)
+          , epPreviousEpochNo = prevEpoch
+          , epCurrentBlockTime = sdSlotTime details
           }
 
   liftIO $ do
