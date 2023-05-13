@@ -54,7 +54,11 @@ let
   project = haskell-nix.cabalProject' ({ pkgs, lib, config, ...}: {
     inherit inputMap;
     src = ../.;
+    # our current release compiler is 8107
     compiler-nix-name = lib.mkDefault "ghc8107";
+    # but we also build for 927.
+    flake.variants = lib.genAttrs ["ghc927"] (x: {compiler-nix-name = x;});
+
     shell = {
       name = "cabal-dev-shell";
 
@@ -118,30 +122,10 @@ let
       }
       # Musl libc fully static build
       ({ pkgs, ... }:
-        lib.mkIf pkgs.stdenv.hostPlatform.isMusl (let
-          # Module options which adds GHC flags and libraries for a fully static build
-          fullyStaticOptions = {
-            enableShared = false;
-            enableStatic = true;
-            configureFlags = [
-              "--ghc-option=-optl=-lssl"
-              "--ghc-option=-optl=-lcrypto"
-              "--ghc-option=-optl=-lstdc++" # used by icu, but not referenced m(
-              "--ghc-option=-optl=-L${pkgs.openssl.out}/lib"
-              "--ghc-option=-optl=-L${(pkgs.icu.overrideAttrs (old: { configureFlags = old.configureFlags ++ [ "--enable-static" "--disable-shared" ]; })).out}/lib"
-            ];
-          };
-        in {
-          packages = lib.genAttrs projectPackagesNames (name: fullyStaticOptions // {
-            # We don't build / run tests for musl.
-            components.tests = lib.genAttrs (lib.attrNames projectPackages.${name}.components.tests) (_: {
-              buildable = lib.mkForce false;
-            });
-          });
-
+        lib.mkIf pkgs.stdenv.hostPlatform.isMusl {
           # Haddock not working and not needed for cross builds
           doHaddock = false;
-        }))
+        })
       ({ pkgs, ... }:
         lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
           # systemd can't be statically linked

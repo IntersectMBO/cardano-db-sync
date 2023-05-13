@@ -43,7 +43,7 @@ import Cardano.DbSync.Metrics
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
-import Cardano.Prelude hiding (Meta, Nat, option, (%))
+import Cardano.Prelude hiding (Meta, Nat, (%))
 import Cardano.Slotting.Slot (EpochNo (..), WithOrigin (..))
 import qualified Codec.CBOR.Term as CBOR
 import Control.Monad.Extra (whenJust)

@@ -191,7 +191,7 @@ import Database.Persist.Types (SelectOpt (Asc))
 queryBlockCount :: MonadIO m => ReaderT SqlBackend m Word
 queryBlockCount = do
   res <- select $ do
-    _blk <- from $ table @ Block
+    _blk <- from $ table @Block
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
@@ -199,7 +199,7 @@ queryBlockCount = do
 queryBlockCountAfterBlockNo :: MonadIO m => Word64 -> Bool -> ReaderT SqlBackend m Word
 queryBlockCountAfterBlockNo blockNo queryEq = do
   res <- select $ do
-    blk <- from $ table @ Block
+    blk <- from $ table @Block
     where_
       ( if queryEq
           then blk ^. BlockBlockNo >=. just (val (fromIntegral blockNo))
@@ -652,7 +652,7 @@ queryTxOutCredentials (hash, index) = do
 queryEpochStakeCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
 queryEpochStakeCount epoch = do
   res <- select $ do
-    epochStake <- from $ table @ EpochStake
+    epochStake <- from $ table @EpochStake
     where_ (epochStake ^. EpochStakeEpochNo ==. val epoch)
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
