@@ -168,7 +168,6 @@ resolveRedeemers ::
   forall era.
   ( EraCrypto era ~ StandardCrypto
   , Alonzo.AlonzoEraTxWits era
-  , Shelley.ShelleyEraTxBody era
   , Core.EraTx era
   , Alonzo.MaryEraTxBody era
   , Core.ProtVerAtMost era 8 -- TODO: Try to find a way to reuse for Conway

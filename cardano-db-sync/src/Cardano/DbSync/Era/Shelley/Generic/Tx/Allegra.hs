@@ -85,7 +85,7 @@ fromAllegraTx (blkIndex, tx) =
 
 getScripts ::
   forall era.
-  (EraCrypto era ~ StandardCrypto, Core.Tx era ~ ShelleyTx era, TxAuxData era ~ AllegraTxAuxData era, Script era ~ Timelock era, EraTxWits era, EraTx era) =>
+  (EraCrypto era ~ StandardCrypto, Core.Tx era ~ ShelleyTx era, TxAuxData era ~ AllegraTxAuxData era, Script era ~ Timelock era, EraTx era) =>
   ShelleyTx era ->
   [TxScript]
 getScripts tx =

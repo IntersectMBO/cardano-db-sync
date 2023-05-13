@@ -65,6 +65,16 @@
         })
         (import ./nix/pkgs.nix)
         self.overlay
+        # I _do not_ understand why we need it _here_, and having it haskell.nix
+        # does not work.
+        (final: prev: prev.lib.optionalAttrs prev.stdenv.hostPlatform.isMusl {
+          # this is needed because postgresql links against libicu
+          # which we build only statically (for musl), and that then
+          # needs -lstdc++ as well.
+          postgresql = prev.postgresql.overrideAttrs (old: {
+            NIX_LDFLAGS = "-lstdc++";
+          });
+        })
       ];
 
     in eachSystem supportedSystems (system:

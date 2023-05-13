@@ -47,7 +47,7 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import Data.Time.Clock (getCurrentTime)
-import Data.Time.Format (defaultTimeLocale, formatTime, iso8601DateFormat)
+import Data.Time.Format.ISO8601
 import Database.Persist.Sql (
   Single (..),
   SqlBackend,
@@ -124,10 +124,9 @@ runMigrations pgconfig quiet migrationDir mLogfiledir mToRun = do
     isUnofficialMigration (mv, _) = mvStage mv < 1 || mvStage mv > 4
 
     genLogFilename :: LogFileDir -> IO FilePath
-    genLogFilename (LogFileDir logdir) =
-      (logdir </>)
-        . formatTime defaultTimeLocale ("migrate-" ++ iso8601DateFormat (Just "%H%M%S") ++ ".log")
-        <$> getCurrentTime
+    genLogFilename (LogFileDir logdir) = do
+      tm <- getCurrentTime
+      pure $ logdir </> "migrate-" ++ iso8601Show tm ++ ".log"
 
     applyMigration' = applyMigration migrationDir quiet pgconfig
 
