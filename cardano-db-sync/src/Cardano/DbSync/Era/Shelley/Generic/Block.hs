@@ -163,9 +163,9 @@ alonzoBlockTxs = zip [0 ..] . toList . fromTxSeq @StandardAlonzo . Ledger.bbody 
 blockHeader :: ShelleyBlock p era -> ShelleyProtocolHeader p
 blockHeader = Ledger.bheader . Consensus.shelleyBlockRaw
 
-blockHash :: (ProtoCrypto p ~ StandardCrypto) => ShelleyBlock p era -> ByteString
+blockHash :: ShelleyBlock p era -> ByteString
 blockHash =
-  Crypto.hashToBytes -- . Protocol.unHashHeader
+  Crypto.hashToBytes
     . Consensus.unShelleyHash
     . Consensus.shelleyBlockHeaderHash
 
