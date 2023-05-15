@@ -28,6 +28,7 @@ module Cardano.Db.Query (
   queryLatestBlock,
   queryLatestPoints,
   queryLatestEpochNo,
+  queryEpochNoForLastTwoBlocks,
   queryLatestBlockId,
   queryLatestSlotNo,
   queryMeta,
@@ -493,6 +494,17 @@ queryLatestEpochNo = do
     limit 1
     pure (blk ^. BlockEpochNo)
   pure $ fromMaybe 0 (unValue =<< listToMaybe res)
+
+-- return the epochNo for last 2 blocks
+queryEpochNoForLastTwoBlocks :: MonadIO m => ReaderT SqlBackend m [Word64]
+queryEpochNoForLastTwoBlocks = do
+  res <- select $ do
+    blk <- from $ table @Block
+    where_ (isJust $ blk ^. BlockSlotNo)
+    orderBy [desc (blk ^. BlockEpochNo)]
+    limit 2
+    pure (blk ^. BlockEpochNo)
+  pure $ [fromMaybe 0 (unValue x) | x <- res]
 
 -- | Get 'BlockId' of the latest block.
 queryLatestBlockId :: MonadIO m => ReaderT SqlBackend m (Maybe BlockId)
