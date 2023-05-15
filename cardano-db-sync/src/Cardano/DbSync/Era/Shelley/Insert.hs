@@ -41,8 +41,8 @@ import Cardano.DbSync.Cache (
   queryRewardAccountWithCacheRetBs,
   queryStakeAddrWithCache,
  )
-import Cardano.DbSync.Cache.Epoch (calculatePreviousEpochNo, readEpochCurrentFromCacheEpoch, writeEpochCurrentToCache)
-import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..), EpochCurrent (..))
+import Cardano.DbSync.Cache.Epoch (calculatePreviousEpochNo, readCurrentEpochFromCacheEpoch, writeCurrentEpochToCache)
+import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..), CurrentEpoch (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Era.Shelley.Insert.Epoch
@@ -132,14 +132,14 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
 
     -- now that we've inserted the Block and all it's txs lets cache what we'll need
     -- for updating the epoch using this cached data.
-    prevCurCacheEpoch <- readEpochCurrentFromCacheEpoch cache
+    prevCurCacheEpoch <- readCurrentEpochFromCacheEpoch cache
     prevEpoch <- lift $ calculatePreviousEpochNo cache prevCurCacheEpoch
 
     void $
       lift $
-        writeEpochCurrentToCache
+        writeCurrentEpochToCache
           cache
-          EpochCurrent
+          CurrentEpoch
             { epCurrentBlockId = blkId
             , epCurrentBlockTime = sdSlotTime details
             , epCurrentFees = groupedTxFees blockGroupedData

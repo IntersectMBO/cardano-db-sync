@@ -29,8 +29,8 @@ import Cardano.DbSync.Cache (
   insertBlockAndCache,
   queryPrevBlockWithCache,
  )
-import Cardano.DbSync.Cache.Epoch (calculatePreviousEpochNo, readEpochCurrentFromCacheEpoch, writeEpochCurrentToCache)
-import Cardano.DbSync.Cache.Types (Cache (..), EpochCurrent (..))
+import Cardano.DbSync.Cache.Epoch (calculatePreviousEpochNo, readCurrentEpochFromCacheEpoch, writeCurrentEpochToCache)
+import Cardano.DbSync.Cache.Types (Cache (..), CurrentEpoch (..))
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
@@ -120,14 +120,14 @@ insertABOBBoundary tracer cache blk details = do
 
   -- now that we've inserted the Block and all it's txs lets cache what we'll need
   -- for updating the epoch using this cached data.
-  prevCurCacheEpoch <- readEpochCurrentFromCacheEpoch cache
+  prevCurCacheEpoch <- readCurrentEpochFromCacheEpoch cache
   prevEpoch <- lift $ calculatePreviousEpochNo cache prevCurCacheEpoch
 
   void $
     lift $
-      writeEpochCurrentToCache
+      writeCurrentEpochToCache
         cache
-        EpochCurrent
+        CurrentEpoch
           { epCurrentBlockId = blkId
           , epCurrentFees = 0
           , epCurrentOutSum = 0
@@ -184,14 +184,14 @@ insertABlock tracer cache firstBlockOfEpoch blk details = do
 
   -- now that we've inserted the Block and all it's txs lets cache what we'll need
   -- for updating the epoch using this cached data.
-  prevCurCacheEpoch <- readEpochCurrentFromCacheEpoch cache
+  prevCurCacheEpoch <- readCurrentEpochFromCacheEpoch cache
   prevEpoch <- lift $ calculatePreviousEpochNo cache prevCurCacheEpoch
 
   void $
     lift $
-      writeEpochCurrentToCache
+      writeCurrentEpochToCache
         cache
-        EpochCurrent
+        CurrentEpoch
           { epCurrentBlockId = blkId
           , epCurrentFees = sum txFees
           , epCurrentOutSum = fromIntegral outSum
