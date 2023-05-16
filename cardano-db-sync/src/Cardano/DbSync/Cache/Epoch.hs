@@ -161,23 +161,16 @@ calculateCurrentEpochNo mCurrentEpoch =
     Nothing -> DB.queryLatestEpochNo
     Just epCurrent -> pure $ epCurrentEpochNo epCurrent
 
--- Calculate the previous epoch number, handling restarts and rollbacks.
+-- Calculate the previous epoch number, using  handling restarts and rollbacks.
 calculatePreviousEpochNo ::
   MonadIO m =>
   Cache ->
-  Maybe CurrentEpoch ->
   ReaderT SqlBackend m Word64
-calculatePreviousEpochNo cache mCurrentEpoch =
+calculatePreviousEpochNo cache = do
+  -- we get our CurrentEpoch before updating it as source use of this function
+  mCurrentEpoch <- readCurrentEpochFromCacheEpoch cache
   case mCurrentEpoch of
-    -- CurrentEpoch is empty so we need to use db to work out our previous epochNo using the db.
-    Nothing -> do
-      mLastMapEpochFromCache <- liftIO $ readLastMapEpochFromCacheEpoch cache
-      case mLastMapEpochFromCache of
-        -- if Map Epoch is empty this is because the server was restarted so let's get the last two
-        -- inserted blocks and return the epochNo of the oldest.
-        Nothing -> do
-          epochNos <- DB.queryEpochNoForLastTwoBlocks
-          maybe (pure 0) pure (minimumMay epochNos)
-
-        Just lme -> pure $ DB.epochNo lme - 1
     Just epochCurrent -> pure $ epCurrentEpochNo epochCurrent
+    Nothing -> do
+      epochNos <- DB.queryEpochNoForLastTwoBlocks
+      maybe (pure 0) pure (minimumMay epochNos)

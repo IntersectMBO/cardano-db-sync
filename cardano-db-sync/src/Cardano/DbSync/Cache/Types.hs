@@ -80,7 +80,8 @@ data CacheStatistics = CacheStatistics
   , prevBlockQueries :: !Word64
   }
 
--- When inserting Txs and Blocks we also caculate values which can later be used for calculating a Epoch.
+-- When inserting Txs and Blocks we also caculate values which can later be used when calculating a Epochs.
+-- For this reason we store these values in cache.
 data CurrentEpoch = CurrentEpoch
   { -- | The blockId of the current block, this is used as the key for MapEpoch.
     epCurrentBlockId :: !DB.BlockId
