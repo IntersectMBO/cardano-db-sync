@@ -39,6 +39,7 @@ import Cardano.DbSync.Epoch
 import Cardano.DbSync.Era
 import Cardano.DbSync.Error
 import Cardano.DbSync.Fix.PlutusDataBytes
+import Cardano.DbSync.Fix.PlutusScripts
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Metrics
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
@@ -201,7 +202,7 @@ runSyncNodeClient metricsSetters syncEnv iomgr trce (SocketPath socketPath) = do
       (envNetworkMagic syncEnv)
       networkSubscriptionTracers
       clientSubscriptionParams
-      (dbSyncProtocols trce syncEnv metricsSetters)
+      (dbSyncProtocols syncEnv metricsSetters)
   where
     codecConfig :: CodecConfig CardanoBlock
     codecConfig = configCodec $ getTopLevelConfig syncEnv
@@ -240,14 +241,13 @@ runSyncNodeClient metricsSetters syncEnv iomgr trce (SocketPath socketPath) = do
     handshakeTracer = toLogObject $ appendName "Handshake" trce
 
 dbSyncProtocols ::
-  Trace IO Text ->
   SyncEnv ->
   MetricSetters ->
   Network.NodeToClientVersion ->
   ClientCodecs CardanoBlock IO ->
   ConnectionId LocalAddress ->
   NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols trce syncEnv metricsSetters _version codecs _connectionId =
+dbSyncProtocols syncEnv metricsSetters _version codecs _connectionId =
   NodeToClientProtocols
     { localChainSyncProtocol = localChainSyncPtcl
     , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -257,7 +257,7 @@ dbSyncProtocols trce syncEnv metricsSetters _version codecs _connectionId =
     }
   where
     localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync CardanoBlock (Point CardanoBlock) (Tip CardanoBlock)))
-    localChainSyncTracer = toLogObject $ appendName "ChainSync" trce
+    localChainSyncTracer = toLogObject $ appendName "ChainSync" tracer
 
     tracer :: Trace IO Text
     tracer = getTrace syncEnv
@@ -265,16 +265,16 @@ dbSyncProtocols trce syncEnv metricsSetters _version codecs _connectionId =
     localChainSyncPtcl :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
     localChainSyncPtcl = InitiatorProtocolOnly $
       MuxPeerRaw $ \channel ->
-        liftIO . logException trce "ChainSyncWithBlocksPtcl: " $ do
-          Db.runIohkLogging trce $
+        liftIO . logException tracer "ChainSyncWithBlocksPtcl: " $ do
+          Db.runIohkLogging tracer $
             withPostgresqlConn (envConnString syncEnv) $ \backend -> liftIO $ do
               replaceConnection syncEnv backend
               setConsistentLevel syncEnv Unchecked
 
-              isFixed <- getIsSyncFixed syncEnv
+              fr <- getIsSyncFixed syncEnv
               let skipFix = soptSkipFix $ envOptions syncEnv
               let onlyFix = soptOnlyFix $ envOptions syncEnv
-              if onlyFix || (not isFixed && not skipFix)
+              if noneFixed fr && (onlyFix || not skipFix)
                 then do
                   fd <- runDbIohkLogging backend tracer $ getWrongPlutusData tracer
                   unless (nullData fd) $
@@ -284,49 +284,65 @@ dbSyncProtocols trce syncEnv metricsSetters _version codecs _connectionId =
                         (cChainSyncCodec codecs)
                         channel
                         ( Client.chainSyncClientPeer $
-                            chainSyncClientFix backend tracer fd
+                            chainSyncClientFixData backend tracer fd
                         )
-                  setIsFixedAndMigrate syncEnv
-                  when onlyFix $ panic "All Good! This error is only thrown to exit db-sync." -- TODO fix.
-                else do
-                  when skipFix $ setIsFixedAndMigrate syncEnv
-                  -- The Db thread is not forked at this point, so we can use
-                  -- the connection here. A connection cannot be used concurrently by many
-                  -- threads
-                  logInfo trce "Starting chainSyncClient"
-                  latestPoints <- getLatestPoints syncEnv
-                  let (inMemory, onDisk) = List.span snd latestPoints
-                  logInfo trce $
-                    mconcat
-                      [ "Suggesting intersection points from memory: "
-                      , textShow (fst <$> inMemory)
-                      , " and from disk: "
-                      , textShow (fst <$> onDisk)
-                      ]
-                  currentTip <- getCurrentTipBlockNo syncEnv
-                  logDbState syncEnv
-                  -- communication channel between datalayer thread and chainsync-client thread
-                  actionQueue <- newDbActionQueue
-
-                  race_
-                    ( concurrently
-                        (runDbThread syncEnv metricsSetters actionQueue)
-                        (runOfflineFetchThread syncEnv)
-                    )
-                    ( runPipelinedPeer
+                  if onlyFix then do
+                    setIsFixed syncEnv DataFixRan
+                  else
+                    setIsFixedAndMigrate syncEnv DataFixRan
+              else if isDataFixed fr && (onlyFix || not skipFix)
+                then do
+                  ls <- runDbIohkLogging backend tracer $ getWrongPlutusScripts tracer
+                  unless (nullPlutusScripts ls) $
+                    void $
+                      runPeer
                         localChainSyncTracer
                         (cChainSyncCodec codecs)
                         channel
-                        ( chainSyncClientPeerPipelined $
-                            chainSyncClient metricsSetters trce (fst <$> latestPoints) currentTip actionQueue
+                        ( Client.chainSyncClientPeer $
+                              chainSyncClientFixScripts backend tracer ls
                         )
-                    )
+                  when onlyFix $ panic "All Good! This error is only thrown to exit db-sync" -- TODO fix.
+                  setIsFixed syncEnv AllFixRan
+              else do
+                when skipFix $ setIsFixedAndMigrate syncEnv AllFixRan
+                -- The Db thread is not forked at this point, so we can use
+                -- the connection here. A connection cannot be used concurrently by many
+                -- threads
+                logInfo tracer "Starting chainSyncClient"
+                latestPoints <- getLatestPoints syncEnv
+                let (inMemory, onDisk) = List.span snd latestPoints
+                logInfo tracer $
+                  mconcat
+                    [ "Suggesting intersection points from memory: "
+                    , textShow (fst <$> inMemory)
+                    , " and from disk: "
+                    , textShow (fst <$> onDisk)
+                    ]
+                currentTip <- getCurrentTipBlockNo syncEnv
+                logDbState syncEnv
+                -- communication channel between datalayer thread and chainsync-client thread
+                actionQueue <- newDbActionQueue
 
-                  atomically $ writeDbActionQueue actionQueue DbFinish
-                  -- We should return leftover bytes returned by 'runPipelinedPeer', but
-                  -- client application do not care about them (it's only important if one
-                  -- would like to restart a protocol on the same mux and thus bearer).
-                  pure ()
+                race_
+                  ( concurrently
+                      (runDbThread syncEnv metricsSetters actionQueue)
+                      (runOfflineFetchThread syncEnv)
+                  )
+                  ( runPipelinedPeer
+                      localChainSyncTracer
+                      (cChainSyncCodec codecs)
+                      channel
+                      ( chainSyncClientPeerPipelined $
+                            chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip actionQueue
+                      )
+                  )
+
+                atomically $ writeDbActionQueue actionQueue DbFinish
+                -- We should return leftover bytes returned by 'runPipelinedPeer', but
+                -- client application do not care about them (it's only important if one
+                -- would like to restart a protocol on the same mux and thus bearer).
+                pure ()
           pure ((), Nothing)
 
     dummylocalTxSubmit :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
@@ -349,7 +365,7 @@ dbSyncProtocols trce syncEnv metricsSetters _version codecs _connectionId =
         NoLedger nle ->
           InitiatorProtocolOnly $
             MuxPeer
-              (contramap (Text.pack . show) . toLogObject $ appendName "local-state-query" trce)
+              (contramap (Text.pack . show) . toLogObject $ appendName "local-state-query" tracer)
               (cStateQueryCodec codecs)
               (localStateQueryClientPeer $ localStateQueryHandler nle)
 
@@ -487,9 +503,9 @@ drainThePipe n0 client = go n0
               , recvMsgRollBackward = \_pt _tip -> pure $ go n'
               }
 
-chainSyncClientFix ::
+chainSyncClientFixData ::
   SqlBackend -> Trace IO Text -> FixData -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-chainSyncClientFix backend tracer fixData = Client.ChainSyncClient $ do
+chainSyncClientFixData backend tracer fixData = Client.ChainSyncClient $ do
   liftIO $ logInfo tracer "Starting chainsync to fix Plutus Data. This will update database values in tables datum and redeemer_data."
   clientStIdle True (sizeFixData fixData) fixData
   where
@@ -504,7 +520,7 @@ chainSyncClientFix backend tracer fixData = Client.ChainSyncClient $ do
 
     clientStIdle :: Bool -> Int -> FixData -> IO (Client.ClientStIdle CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ())
     clientStIdle shouldLog lastSize fds = do
-      case spanOnNextPoint fds of
+      case spanFDOnNextPoint fds of
         Nothing -> do
           liftIO $ logInfo tracer "Finished chainsync to fix Plutus Data."
           pure $ Client.SendMsgDone ()
@@ -545,4 +561,64 @@ chainSyncClientFix backend tracer fixData = Client.ChainSyncClient $ do
             Client.ChainSyncClient $
               pure $
                 Client.SendMsgRequestNext (clientStNext lastSize fdOnPoint fdRest) (pure $ clientStNext lastSize fdOnPoint fdRest)
+        }
+
+chainSyncClientFixScripts ::
+  SqlBackend -> Trace IO Text -> FixPlutusScripts -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+chainSyncClientFixScripts backend tracer fps = Client.ChainSyncClient $ do
+  liftIO $ logInfo tracer "Starting chainsync to fix Plutus Scripts. This will update database values in tables script."
+  clientStIdle True (sizeFixPlutusScripts fps) fps
+  where
+    updateSizeAndLog :: Int -> Int -> IO Int
+    updateSizeAndLog lastSize currentSize = do
+      let diffSize = lastSize - currentSize
+      if lastSize >= currentSize && diffSize >= 200_000
+        then do
+          liftIO $ logInfo tracer $ mconcat ["Fixed ", textShow (sizeFixPlutusScripts fps - currentSize), " Plutus Scripts"]
+          pure currentSize
+        else pure lastSize
+
+    clientStIdle :: Bool -> Int -> FixPlutusScripts -> IO (Client.ClientStIdle CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ())
+    clientStIdle shouldLog lastSize fps' = do
+      case spanFPSOnNextPoint fps' of
+        Nothing -> do
+          liftIO $ logInfo tracer "Finished chainsync to fix Plutus Scripts."
+          pure $ Client.SendMsgDone ()
+        Just (point, fpsOnPoint, fpsRest) -> do
+          when shouldLog $
+            liftIO $
+              logInfo tracer $
+                mconcat ["Starting fixing Plutus Scripts ", textShow point]
+          newLastSize <- liftIO $ updateSizeAndLog lastSize (sizeFixPlutusScripts fps')
+          let clientStIntersect =
+                Client.ClientStIntersect
+                  { Client.recvMsgIntersectFound = \_pnt _tip ->
+                      Client.ChainSyncClient $
+                        pure $
+                          Client.SendMsgRequestNext (clientStNext newLastSize fpsOnPoint fpsRest) (pure $ clientStNext newLastSize fpsOnPoint fpsRest)
+                  , Client.recvMsgIntersectNotFound = \tip -> Client.ChainSyncClient $ do
+                      liftIO $
+                        logWarning tracer $
+                          mconcat
+                            [ "Node can't find block "
+                            , textShow point
+                            , ". It's probably behind, at "
+                            , textShow tip
+                            , ". Sleeping for 3 mins and retrying.."
+                            ]
+                      threadDelay $ 180 * 1_000_000
+                      pure $ Client.SendMsgFindIntersect [point] clientStIntersect
+                  }
+          pure $ Client.SendMsgFindIntersect [point] clientStIntersect
+
+    clientStNext :: Int -> FixPlutusScripts -> FixPlutusScripts -> Client.ClientStNext CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+    clientStNext lastSize fpsOnPoint fpsRest =
+      Client.ClientStNext
+        { Client.recvMsgRollForward = \blk _tip -> Client.ChainSyncClient $ do
+            runDbIohkLogging backend tracer $ fixPlutusScripts tracer blk fpsOnPoint
+            clientStIdle False lastSize fpsRest
+        , Client.recvMsgRollBackward = \_point _tip ->
+            Client.ChainSyncClient $
+              pure $
+                Client.SendMsgRequestNext (clientStNext lastSize fpsOnPoint fpsRest) (pure $ clientStNext lastSize fpsOnPoint fpsRest)
         }
