@@ -27,7 +27,6 @@ module Cardano.DbSync.LedgerState (
   loadLedgerAtPoint,
   hashToAnnotation,
   getHeaderHash,
-  saveCleanupState,
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
@@ -290,10 +289,10 @@ readStateUnsafe env = do
     Strict.Nothing -> panic "LedgerState.readStateUnsafe: Ledger state is not found"
     Strict.Just st -> pure st
 
-applyBlockAndSnapshot :: HasLedgerEnv -> CardanoBlock -> IO (ApplyResult, Bool)
-applyBlockAndSnapshot ledgerEnv blk = do
+applyBlockAndSnapshot :: HasLedgerEnv -> CardanoBlock -> Bool -> IO (ApplyResult, Bool)
+applyBlockAndSnapshot ledgerEnv blk isCons = do
   (oldState, appResult) <- applyBlock ledgerEnv blk
-  tookSnapshot <- storeSnapshotAndCleanupMaybe ledgerEnv oldState appResult (blockNo blk) (isSyncedWithinSeconds (apSlotDetails appResult) 600)
+  tookSnapshot <- storeSnapshotAndCleanupMaybe ledgerEnv oldState appResult (blockNo blk) isCons (isSyncedWithinSeconds (apSlotDetails appResult) 600)
   pure (appResult, tookSnapshot)
 
 -- The function 'tickThenReapply' does zero validation, so add minimal validation ('blockPrevHash'
@@ -375,9 +374,10 @@ storeSnapshotAndCleanupMaybe ::
   CardanoLedgerState ->
   ApplyResult ->
   BlockNo ->
+  Bool ->
   SyncState ->
   IO Bool
-storeSnapshotAndCleanupMaybe env oldState appResult blkNo syncState =
+storeSnapshotAndCleanupMaybe env oldState appResult blkNo isCons syncState =
   case maybeFromStrict (apNewEpoch appResult) of
     Just newEpoch -> do
       let newEpochNo = Generic.neEpoch newEpoch
@@ -385,7 +385,7 @@ storeSnapshotAndCleanupMaybe env oldState appResult blkNo syncState =
       liftIO $ saveCleanupState env oldState (Just $ newEpochNo - 1)
       pure True
     Nothing ->
-      if timeToSnapshot syncState blkNo
+      if timeToSnapshot syncState blkNo && isCons
         then do
           liftIO $ saveCleanupState env oldState Nothing
           pure True
@@ -395,7 +395,7 @@ storeSnapshotAndCleanupMaybe env oldState appResult blkNo syncState =
     timeToSnapshot syncSt bNo =
       case (syncSt, unBlockNo bNo) of
         (SyncFollowing, bno) -> bno `mod` leSnapshotEveryFollowing env == 0
-        (SyncLagging, bno) -> bno `mod` leSnapshotEveryLagging env == 0
+        (SyncLagging, _) -> False
 
 saveCurrentLedgerState :: HasLedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
 saveCurrentLedgerState env ledger mEpochNo = do
@@ -511,7 +511,7 @@ cleanupLedgerStateFiles env slotNo = do
   -- Remove invalid (ie SlotNo >= current) ledger state files (occurs on rollback).
   deleteAndLogFiles env "invalid" invalid
   -- Remove all but 6 most recent state files.
-  deleteAndLogStateFile env "old" (List.drop 6 valid)
+  deleteAndLogStateFile env "old" (List.drop 3 valid)
   -- Remove all but 6 most recent epoch boundary state files.
   deleteAndLogStateFile env "old epoch boundary" (List.drop 6 epochBoundary)
   where
