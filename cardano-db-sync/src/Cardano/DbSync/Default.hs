@@ -64,8 +64,8 @@ insertListBlocks synEnv blocks = do
 applyAndInsertBlockMaybe ::
   SyncEnv -> CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 applyAndInsertBlockMaybe syncEnv cblk = do
-  (!applyRes, !tookSnapshot) <- liftIO mkApplyResult
   bl <- liftIO $ isConsistent syncEnv
+  (!applyRes, !tookSnapshot) <- liftIO (mkApplyResult bl)
   if bl
     then -- In the usual case it will be consistent so we don't need to do any queries. Just insert the block
       insertBlock syncEnv cblk applyRes False tookSnapshot
@@ -89,14 +89,16 @@ applyAndInsertBlockMaybe syncEnv cblk = do
           if replaced
             then liftIO $ logInfo tracer $ "Fixed AdaPots for " <> textShow epochNo
             else liftIO $ logInfo tracer $ "Reached " <> textShow epochNo
+        Right _ | Just epochNo <- getNewEpoch applyRes ->
+          liftIO $ logInfo tracer $ "Reached " <> textShow epochNo
         _ -> pure ()
   where
     tracer = getTrace syncEnv
 
-    mkApplyResult :: IO (ApplyResult, Bool)
-    mkApplyResult = do
+    mkApplyResult :: Bool -> IO (ApplyResult, Bool)
+    mkApplyResult isCons = do
       case envLedgerEnv syncEnv of
-        HasLedger hle -> applyBlockAndSnapshot hle cblk
+        HasLedger hle -> applyBlockAndSnapshot hle cblk isCons
         NoLedger nle -> do
           slotDetails <- getSlotDetailsNode nle (cardanoBlockSlotNo cblk)
           pure (defaultApplyResult slotDetails, False)
@@ -106,6 +108,10 @@ applyAndInsertBlockMaybe syncEnv cblk = do
       newEpoch <- maybeFromStrict $ apNewEpoch appRes
       adaPots <- maybeFromStrict $ Generic.neAdaPots newEpoch
       pure (adaPots, sdSlotNo $ apSlotDetails appRes, sdEpochNo $ apSlotDetails appRes)
+
+    getNewEpoch :: ApplyResult -> Maybe EpochNo
+    getNewEpoch appRes =
+      Generic.neEpoch <$> maybeFromStrict (apNewEpoch appRes)
 
 insertBlock ::
   SyncEnv ->
