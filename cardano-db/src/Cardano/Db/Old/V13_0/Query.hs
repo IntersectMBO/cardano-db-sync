@@ -13,11 +13,17 @@ module Cardano.Db.Old.V13_0.Query (
   queryRedeemerDataPage,
   queryRedeemerDataCount,
   queryRedeemerDataInfo,
+  queryScript,
+  queryScriptPage,
+  queryScriptCount,
+  queryScriptInfo,
   upateDatumBytes,
   upateRedeemerDataBytes,
+  updateScriptBytes,
 ) where
 
 import Cardano.Db.Old.V13_0.Schema
+import Cardano.Db.Types (ScriptType (..))
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.ByteString.Char8 (ByteString)
@@ -44,6 +50,7 @@ import Database.Esqueleto.Experimental (
   where_,
   (==.),
   (^.),
+  (||.),
   type (:&) ((:&)),
  )
 import Database.Persist ((=.))
@@ -131,11 +138,57 @@ queryRedeemerDataInfo rdmDataId = do
     pure (prevBlock ^. BlockHash, prevBlock ^. BlockSlotNo)
   pure $ unValue2 <$> listToMaybe res
 
+queryScriptCount :: MonadIO m => ReaderT SqlBackend m Word64
+queryScriptCount = do
+  xs <- select $ do
+    scr <- from $ table @Script
+    where_ (scr ^. ScriptType ==. val PlutusV1 ||. scr ^. ScriptType ==. val PlutusV2)
+    pure countRows
+  pure $ maybe 0 unValue (listToMaybe xs)
+
+queryScript :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe ScriptId)
+queryScript hsh = do
+  xs <- select $ do
+      scr <- from $ table @Script
+      where_ (scr ^. ScriptType ==. val PlutusV1 ||. scr ^. ScriptType ==. val PlutusV2)
+      where_ (scr ^. ScriptHash ==. val hsh)
+      pure (scr ^. ScriptId)
+  pure $ unValue <$> listToMaybe xs
+
+queryScriptPage :: MonadIO m => Int64 -> Int64 -> ReaderT SqlBackend m [Entity Script]
+queryScriptPage ofs lmt =
+  select $ do
+      scr <- from $ table @Script
+      where_ (scr ^. ScriptType ==. val PlutusV1 ||. scr ^. ScriptType ==. val PlutusV2)
+      orderBy [asc (scr ^. ScriptId)]
+      limit lmt
+      offset ofs
+      pure scr
+
+queryScriptInfo :: MonadIO m => ScriptId -> ReaderT SqlBackend m (Maybe (ByteString, Maybe Word64))
+queryScriptInfo scriptId = do
+  res <- select $ do
+    (_blk :& _tx :& scr :& prevBlock) <-
+      from $ table @Block
+      `innerJoin` table @Tx
+      `on` (\(blk :& tx) -> tx ^. TxBlockId ==. blk ^. BlockId)
+      `innerJoin` table @Script
+      `on` (\(_blk :& tx :& scr) -> scr ^. ScriptTxId ==. tx ^. TxId)
+      `innerJoin` table @Block
+      `on` (\(blk :& _tx :& _scr :& prevBlk) -> blk ^. BlockPreviousId ==. just (prevBlk ^. BlockId))
+    where_ (scr ^. ScriptType ==. val PlutusV1 ||. scr ^. ScriptType ==. val PlutusV2)
+    where_ (scr ^. ScriptId ==. val scriptId)
+    pure (prevBlock ^. BlockHash, prevBlock ^. BlockSlotNo)
+  pure $ unValue2 <$> listToMaybe res
+
 upateDatumBytes :: MonadIO m => DatumId -> ByteString -> ReaderT SqlBackend m ()
 upateDatumBytes datumId bytes = update datumId [DatumBytes =. bytes]
 
 upateRedeemerDataBytes :: MonadIO m => RedeemerDataId -> ByteString -> ReaderT SqlBackend m ()
 upateRedeemerDataBytes rdmDataId bytes = update rdmDataId [RedeemerDataBytes =. bytes]
+
+updateScriptBytes :: MonadIO m => ScriptId -> ByteString -> ReaderT SqlBackend m ()
+updateScriptBytes scriptId bytes = update scriptId [ScriptBytes =. Just bytes]
 
 unValue2 :: (Value a, Value b) -> (a, b)
 unValue2 (a, b) = (unValue a, unValue b)

@@ -7,6 +7,7 @@
 
 module Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage (
   fromBabbageTx,
+  fromScript,
 ) where
 
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
