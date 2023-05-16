@@ -18,7 +18,7 @@
 module Cardano.Db.Old.V13_0.Schema where
 
 import Cardano.Db.Schema.Orphans ()
-import Cardano.Db.Types (DbLovelace, DbWord64)
+import Cardano.Db.Types (DbLovelace, DbWord64, ScriptType)
 import Data.ByteString.Char8 (ByteString)
 import Data.Int (Int64)
 import Data.Text (Text)
@@ -95,4 +95,14 @@ share
     value               Text Maybe          sqltype=jsonb
     bytes               ByteString          sqltype=bytea
     UniqueRedeemerData  hash
+
+  Script
+    txId                TxId                noreference
+    hash                ByteString          sqltype=hash28type
+    type                ScriptType          sqltype=scripttype
+    json                Text Maybe          sqltype=jsonb
+    bytes               ByteString Maybe    sqltype=bytea
+    serialisedSize      Word64 Maybe        sqltype=word31type
+    UniqueScript        hash
+
   |]
