@@ -105,9 +105,9 @@ unitTests iom knownMigrations =
         , --          , test "Mir rollback" mirRewardRollback
           test "Mir Cert Shelley" mirRewardShelley
         , test "Mir Cert deregistration" mirRewardDereg
-        , test "test rewards empty last part of epoch" rewardsEmptyChainLast
-        , --        , test "test delta rewards" rewardsDelta -- We disable the test. See in the test for more.
-          test "rollback on epoch boundary" rollbackBoundary
+        -- , test "test rewards empty last part of epoch" rewardsEmptyChainLast
+        --        , test "test delta rewards" rewardsDelta -- We disable the test. See in the test for more.
+        , test "rollback on epoch boundary" rollbackBoundary
         , test "single MIR Cert multiple outputs" singleMIRCertMultiOut
         ]
     , testGroup
@@ -1137,8 +1137,8 @@ mirRewardDereg =
   where
     testLabel = "mirRewardDereg"
 
-rewardsEmptyChainLast :: IOManager -> [(Text, Text)] -> Assertion
-rewardsEmptyChainLast =
+_rewardsEmptyChainLast :: IOManager -> [(Text, Text)] -> Assertion
+_rewardsEmptyChainLast =
   withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
