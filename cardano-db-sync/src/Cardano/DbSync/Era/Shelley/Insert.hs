@@ -132,8 +132,7 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
 
     -- now that we've inserted the Block and all it's txs lets cache what we'll need
     -- for updating the epoch using this cached data.
-    prevCurCacheEpoch <- readCurrentEpochFromCacheEpoch cache
-    prevEpoch <- lift $ calculatePreviousEpochNo cache prevCurCacheEpoch
+    prevEpoch <- lift $ calculatePreviousEpochNo cache
 
     void $
       lift $

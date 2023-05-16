@@ -7,7 +7,6 @@ module Cardano.DbSync.Epoch (
   epochHandler,
 ) where
 
--- import Cardano.BM.Trace (Trace, logError, logInfo)
 import Cardano.BM.Trace (Trace, logError)
 import qualified Cardano.Chain.Block as Byron hiding (blockHash)
 import qualified Cardano.Db as DB
@@ -65,7 +64,6 @@ epochHandler syncEnv trce cache (BlockDetails cblk details) =
             ["Slot time '", textShow (sdSlotTime details), "' is in the future"]
       updateEpochStart syncEnv cache details
 
------------------------------------------------------------------------------------------------------
 updateEpochStart ::
   SyncEnv ->
   Cache ->
@@ -78,11 +76,11 @@ updateEpochStart syncEnv cache slotDetails = do
   let prevEpochNo = maybe 0 epPreviousEpochNo mCurrentEpochCache
 
   if
-      -- The tip has been reached and are now going to replace/update the epoch every block
+      -- The tip has been reached so now replace/update the epoch every block.
       | getSyncStatus slotDetails == SyncFollowing ->
         updateEpochWhenFollowing syncEnv cache mLastMapEpochFromCache mCurrentEpochCache curEpochNo
-      -- When syncing we check if equality we store when inserting the block as this means we hit the first new block in an epoch.
-      -- This is when we store the epoch onto the db.
+      -- When syncing we check for equality on epochNo for previous and current block.
+      -- If they differ this means we hit the first new block in an epoch so it's time to update the epoch.
       | prevEpochNo /= curEpochNo ->
         updateEpochWhenSyncing syncEnv cache mCurrentEpochCache mLastMapEpochFromCache
       -- we're syncing and the epochNo are the same so we just update the cache until above check passes.
@@ -90,39 +88,10 @@ updateEpochStart syncEnv cache slotDetails = do
         updateEpochCacheWhenSyncing syncEnv cache mLastMapEpochFromCache mCurrentEpochCache
 
 -----------------------------------------------------------------------------------------------------
--- This function is called once every epoch on the very first block of the new epoch.
--- At that point we can get the previously accumilated data from previous epoch and insert/update it into the db.
-updateEpochWhenSyncing ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  SyncEnv ->
-  Cache ->
-  Maybe CurrentEpoch ->
-  Maybe DB.Epoch ->
-  ReaderT SqlBackend m (Either SyncNodeError ())
-updateEpochWhenSyncing syncEnv cache mCurrentEpochCache mLastMapEpochFromCache = do
-  case mCurrentEpochCache of
-    -- theres should always be a mCurrentEpochCache at this point
-    Nothing -> pure $ Left $ NEError "updateEpochWhenSyncing: No mCurrentEpochCache"
-    Just currentEpochCache ->
-      case mLastMapEpochFromCache of
-        -- if there is no Map Epoch in cache at this point, then the server must have restarted and failed on the last
-        -- block of the previous epoch and the current block is the first in new Epoch.
-        -- We must now use a db query to calculate and insert previous epoch.
-        Nothing -> do
-          let calculatedEpoch = initCalculateNewEpoch currentEpochCache
-          _ <- writeEpochToCacheMapEpoch syncEnv cache calculatedEpoch
-          _ <- updateEpochWithDBQuery syncEnv cache $ epPreviousEpochNo currentEpochCache
-          pure $ Right ()
-        -- just use the cache to
-        Just lastMapEpochFromCache -> do
-          let calculatedEpoch = initCalculateNewEpoch currentEpochCache
-          _ <- writeEpochToCacheMapEpoch syncEnv cache calculatedEpoch
-          _ <- DB.insertEpoch lastMapEpochFromCache
-          pure $ Right ()
-
+-- When Following
 -----------------------------------------------------------------------------------------------------
 
--- When updating an epoch we have the opertunity to try and use the cacheEpoch values
+-- When updating an epoch whilst following we have the opertunity to try and use the cacheEpoch values
 -- to calculate our epoch rather than querying the db which is expensive.
 updateEpochWhenFollowing ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -176,28 +145,40 @@ updateEpochWithCacheWhenFollowing syncEnv cache lastMapEpCache currentEpCache ep
       _ <- writeEpochToCacheMapEpoch syncEnv cache calculatedEpoch
       Right <$> replace epochId calculatedEpoch
 
--- This is an expensive DB query so we minimise it's use to
--- server restarts when syncing or folloing and rollbacks
-updateEpochWithDBQuery ::
+-----------------------------------------------------------------------------------------------------
+-- When Syncing
+-----------------------------------------------------------------------------------------------------
+
+-- This function is called once every epoch on the very first block of the new epoch.
+-- At that point we can get the previously accumilated data from previous epoch and insert/update it into the db.
+-- Whilst at the same time store the current block data into epoch cache.
+updateEpochWhenSyncing ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   Cache ->
-  Word64 ->
+  Maybe CurrentEpoch ->
+  Maybe DB.Epoch ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-updateEpochWithDBQuery syncEnv cache epochNo = do
-  newEpoch <- DB.queryCalcEpochEntry epochNo
-  mEpochID <- DB.queryForEpochId epochNo
-  case mEpochID of
-    Nothing -> do
-      _ <- writeEpochToCacheMapEpoch syncEnv cache newEpoch
-      _ <- DB.insertEpoch newEpoch
-      pure $ Right ()
-    Just epochId -> do
-      -- write the newly calculated epoch to cache.
-      _ <- writeEpochToCacheMapEpoch syncEnv cache newEpoch
-      Right <$> replace epochId newEpoch
-
------------------------------------------------------------------------------------------------------
+updateEpochWhenSyncing syncEnv cache mCurrentEpochCache mLastMapEpochFromCache = do
+  case mCurrentEpochCache of
+    -- theres should always be a mCurrentEpochCache at this point
+    Nothing -> pure $ Left $ NEError "updateEpochWhenSyncing: No mCurrentEpochCache"
+    Just currentEpochCache ->
+      case mLastMapEpochFromCache of
+        -- if there is no Map Epoch in cache here, then the server must have restarted and failed on the last
+        -- block of the previous epoch and the current block is the first in new Epoch.
+        -- We must now use a db query to calculate and insert previous epoch as the cache for the epoch was lost.
+        Nothing -> do
+          let calculatedEpoch = initCalculateNewEpoch currentEpochCache
+          _ <- writeEpochToCacheMapEpoch syncEnv cache calculatedEpoch
+          _ <- updateEpochWithDBQuery syncEnv cache $ epPreviousEpochNo currentEpochCache
+          pure $ Right ()
+        -- simply use cache
+        Just lastMapEpochFromCache -> do
+          let calculatedEpoch = initCalculateNewEpoch currentEpochCache
+          _ <- writeEpochToCacheMapEpoch syncEnv cache calculatedEpoch
+          _ <- DB.insertEpoch lastMapEpochFromCache
+          pure $ Right ()
 
 -- When syncing, on every block we update the Map epoch in cache. Making sure to handle restarts
 updateEpochCacheWhenSyncing ::
@@ -221,6 +202,29 @@ updateEpochCacheWhenSyncing syncEnv cache newestEpochFromMap currentEpochCache =
     (_, _) -> pure $ Left $ NEError "updateEpochCacheWhenSyncing: No caches available to update cache"
 
 -----------------------------------------------------------------------------------------------------
+-- Helper functions
+-----------------------------------------------------------------------------------------------------
+
+-- This is an expensive DB query so we minimise it's use to
+-- server restarts when syncing or folloing and rollbacks
+updateEpochWithDBQuery ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
+  Cache ->
+  Word64 ->
+  ReaderT SqlBackend m (Either SyncNodeError ())
+updateEpochWithDBQuery syncEnv cache epochNo = do
+  newEpoch <- DB.queryCalcEpochEntry epochNo
+  mEpochID <- DB.queryForEpochId epochNo
+  case mEpochID of
+    Nothing -> do
+      _ <- writeEpochToCacheMapEpoch syncEnv cache newEpoch
+      _ <- DB.insertEpoch newEpoch
+      pure $ Right ()
+    Just epochId -> do
+      -- write the newly calculated epoch to cache.
+      _ <- writeEpochToCacheMapEpoch syncEnv cache newEpoch
+      Right <$> replace epochId newEpoch
 
 -- Because we store a Map of epochs, at every iteration we take the newest epoch and it's values
 -- We then add to it, the data we kept inside of CurrentEpoch when inserting the current block.
