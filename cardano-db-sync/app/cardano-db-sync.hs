@@ -144,7 +144,7 @@ pSkipFix =
   Opt.flag
     False
     True
-    ( Opt.long "skip-plutus-data-fix"
+    ( Opt.long "skip-fix"
         <> Opt.help "Disables the db-sync fix procedure for the wrong datum and redeemer_data bytes."
     )
 
@@ -162,8 +162,10 @@ pOnlyFix =
   Opt.flag
     False
     True
-    ( Opt.long "only-plutus-data-fix"
-        <> Opt.help "Runs only the db-sync fix procedure for the wrong datum and redeemer_data bytes and exits."
+    ( Opt.long "fix-only"
+        <> Opt.help "Runs only the db-sync fix procedure for the wrong datum, redeemer_data and plutus script bytes and exits. \
+            \This doesn't run any migrations. This can also be ran on previous schema, ie 13.0 13.1 to fix the issues without \
+            \bumping the schema version minor number."
     )
 
 pHasCache :: Parser Bool
