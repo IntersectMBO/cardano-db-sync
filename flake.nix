@@ -6,7 +6,7 @@
     haskellNix.url = "github:input-output-hk/haskell.nix";
     utils.url = "github:numtide/flake-utils";
     iohkNix = {
-      url = "github:input-output-hk/iohk-nix?ref=angerman/remove-old-envs";
+      url = "github:input-output-hk/iohk-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flake-compat = {
