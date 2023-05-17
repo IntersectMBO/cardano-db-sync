@@ -41,7 +41,7 @@ import Cardano.DbSync.Cache (
   queryRewardAccountWithCacheRetBs,
   queryStakeAddrWithCache,
  )
-import Cardano.DbSync.Cache.Epoch (calculatePreviousEpochNo, readCurrentEpochFromCacheEpoch, writeCurrentEpochToCache)
+import Cardano.DbSync.Cache.Epoch (calculatePreviousEpochNo, writeCurrentEpochToCache)
 import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..), CurrentEpoch (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal

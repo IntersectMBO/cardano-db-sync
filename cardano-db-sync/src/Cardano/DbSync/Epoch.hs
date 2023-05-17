@@ -48,7 +48,7 @@ epochHandler syncEnv trce cache (BlockDetails cblk details) =
           -- the Ouroboros Classic era.
           pure $ Right ()
         Byron.ABOBBlock _blk ->
-          updateEpochStart syncEnv cache details
+          updateEpochStart syncEnv trce cache details
     BlockShelley {} -> epochSlotTimecheck
     BlockAllegra {} -> epochSlotTimecheck
     BlockMary {} -> epochSlotTimecheck
@@ -62,30 +62,38 @@ epochHandler syncEnv trce cache (BlockDetails cblk details) =
         liftIO . logError trce $
           mconcat
             ["Slot time '", textShow (sdSlotTime details), "' is in the future"]
-      updateEpochStart syncEnv cache details
+      updateEpochStart syncEnv trce cache details
 
 updateEpochStart ::
   SyncEnv ->
+  Trace IO Text ->
   Cache ->
   SlotDetails ->
   ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
-updateEpochStart syncEnv cache slotDetails = do
+updateEpochStart syncEnv trce cache slotDetails = do
   mLastMapEpochFromCache <- liftIO $ readLastMapEpochFromCacheEpoch cache
   mCurrentEpochCache <- liftIO $ readCurrentEpochFromCacheEpoch cache
   curEpochNo <- calculateCurrentEpochNo mCurrentEpochCache
   let prevEpochNo = maybe 0 epPreviousEpochNo mCurrentEpochCache
+      message = "\n LastMap: \n" <> DB.textShow mLastMapEpochFromCache <>
+                "\n CurrentEpochCach: \n" <> DB.textShow mCurrentEpochCache <>
+                "\n CurrentEpochNo: \n" <> DB.textShow curEpochNo <> "\n \n"
 
   if
       -- The tip has been reached so now replace/update the epoch every block.
-      | getSyncStatus slotDetails == SyncFollowing ->
+      | getSyncStatus slotDetails == SyncFollowing -> do
+        liftIO . logError trce $ "\n \n 1: \n" <> message
         updateEpochWhenFollowing syncEnv cache mLastMapEpochFromCache mCurrentEpochCache curEpochNo
       -- When syncing we check for equality on epochNo for previous and current block.
       -- If they differ this means we hit the first new block in an epoch so it's time to update the epoch.
-      | prevEpochNo /= curEpochNo ->
-        updateEpochWhenSyncing syncEnv cache mCurrentEpochCache mLastMapEpochFromCache
+      | prevEpochNo /= curEpochNo -> do
+        liftIO . logError trce $ "\n \n 2: \n" <> message
+        updateEpochWhenSyncing syncEnv cache mCurrentEpochCache mLastMapEpochFromCache curEpochNo
       -- we're syncing and the epochNo are the same so we just update the cache until above check passes.
-      | otherwise ->
+      | otherwise -> do
+        liftIO . logError trce $ "\n \n 3: \n" <> message
         updateEpochCacheWhenSyncing syncEnv cache mLastMapEpochFromCache mCurrentEpochCache
+
 
 -----------------------------------------------------------------------------------------------------
 -- When Following
@@ -158,8 +166,9 @@ updateEpochWhenSyncing ::
   Cache ->
   Maybe CurrentEpoch ->
   Maybe DB.Epoch ->
+  Word64 ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-updateEpochWhenSyncing syncEnv cache mCurrentEpochCache mLastMapEpochFromCache = do
+updateEpochWhenSyncing syncEnv cache mCurrentEpochCache mLastMapEpochFromCache epochNo = do
   case mCurrentEpochCache of
     -- theres should always be a mCurrentEpochCache at this point
     Nothing -> pure $ Left $ NEError "updateEpochWhenSyncing: No mCurrentEpochCache"
@@ -177,8 +186,13 @@ updateEpochWhenSyncing syncEnv cache mCurrentEpochCache mLastMapEpochFromCache =
         Just lastMapEpochFromCache -> do
           let calculatedEpoch = initCalculateNewEpoch currentEpochCache
           _ <- writeEpochToCacheMapEpoch syncEnv cache calculatedEpoch
-          _ <- DB.insertEpoch lastMapEpochFromCache
-          pure $ Right ()
+
+          mEpochID <- DB.queryForEpochId epochNo
+          case mEpochID of
+            Nothing -> do
+              _ <- DB.insertEpoch lastMapEpochFromCache
+              pure $ Right ()
+            Just epochId -> Right <$> replace epochId calculatedEpoch
 
 -- When syncing, on every block we update the Map epoch in cache. Making sure to handle restarts
 updateEpochCacheWhenSyncing ::

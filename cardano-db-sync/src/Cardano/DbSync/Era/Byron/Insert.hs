@@ -29,7 +29,7 @@ import Cardano.DbSync.Cache (
   insertBlockAndCache,
   queryPrevBlockWithCache,
  )
-import Cardano.DbSync.Cache.Epoch (calculatePreviousEpochNo, readCurrentEpochFromCacheEpoch, writeCurrentEpochToCache)
+import Cardano.DbSync.Cache.Epoch (calculatePreviousEpochNo, writeCurrentEpochToCache)
 import Cardano.DbSync.Cache.Types (Cache (..), CurrentEpoch (..))
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Era.Util (liftLookupFail)
