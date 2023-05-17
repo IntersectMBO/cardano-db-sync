@@ -63,6 +63,11 @@ jobs:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: ${{ matrix.cabal }}
 
+    - name: Debug Pkgconfig
+      run: |
+        echo $PKG_CONFIG_PATH
+        pkg-config --list-all
+
     - name: Haskell versions
       run: |
         ghc --version
