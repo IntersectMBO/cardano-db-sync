@@ -45,9 +45,11 @@
         inputs.customConfig;
 
       overlays = [
+        # crypto needs to come before hasell.nix. 
+        # FIXME: _THIS_IS_BAD_
+        iohkNix.overlays.crypto
         haskellNix.overlay
         iohkNix.overlays.haskell-nix-extra
-        iohkNix.overlays.crypto
         iohkNix.overlays.utils
         iohkNix.overlays.cardano-lib
         (final: prev: {
