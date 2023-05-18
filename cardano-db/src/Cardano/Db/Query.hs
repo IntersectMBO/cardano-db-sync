@@ -51,6 +51,7 @@ module Cardano.Db.Query (
   queryMinRefId,
   existsPoolHashId,
   existsPoolMetadataRefId,
+  queryAdaPotsId,
   -- queries used in smash
   queryPoolOfflineData,
   queryPoolRegister,
@@ -191,7 +192,7 @@ import Database.Persist.Types (SelectOpt (Asc))
 queryBlockCount :: MonadIO m => ReaderT SqlBackend m Word
 queryBlockCount = do
   res <- select $ do
-    _blk <- from $ table @ Block
+    _blk <- from $ table @Block
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
@@ -199,7 +200,7 @@ queryBlockCount = do
 queryBlockCountAfterBlockNo :: MonadIO m => Word64 -> Bool -> ReaderT SqlBackend m Word
 queryBlockCountAfterBlockNo blockNo queryEq = do
   res <- select $ do
-    blk <- from $ table @ Block
+    blk <- from $ table @Block
     where_
       ( if queryEq
           then blk ^. BlockBlockNo >=. just (val (fromIntegral blockNo))
@@ -590,7 +591,8 @@ queryCountSlotNosGreaterThan slotNo = do
 queryCountSlotNo :: MonadIO m => ReaderT SqlBackend m Word64
 queryCountSlotNo = do
   res <- select $ do
-    _ <- from $ table @Block
+    blk <- from $ table @Block
+    where_ (isJust $ blk ^. BlockSlotNo)
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
@@ -651,7 +653,7 @@ queryTxOutCredentials (hash, index) = do
 queryEpochStakeCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
 queryEpochStakeCount epoch = do
   res <- select $ do
-    epochStake <- from $ table @ EpochStake
+    epochStake <- from $ table @EpochStake
     where_ (epochStake ^. EpochStakeEpochNo ==. val epoch)
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
@@ -689,6 +691,14 @@ existsPoolMetadataRefId pmrid = do
     limit 1
     pure (pmr ^. PoolMetadataRefId)
   pure $ not (null res)
+
+queryAdaPotsId :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe (Entity AdaPots))
+queryAdaPotsId blkId = do
+  res <- select $ do
+    adaPots <- from $ table @AdaPots
+    where_ (adaPots ^. AdaPotsBlockId ==. val blkId)
+    pure adaPots
+  pure $ listToMaybe res
 
 {--------------------------------------------
   Queries use in SMASH

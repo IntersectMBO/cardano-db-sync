@@ -1,5 +1,20 @@
 # Revision history for cardano-db-sync
 
+## 13.1.1.0
+* Adds compatibility with node-8.0.0 [#1403]
+* Adds compatibility with the new format of the CostModel in Alonzo genesis file [#1403]
+* Adds a procedure which fixes scripts with wrong cbor [Issue #1348]
+* Fixes an issue where the `ada_pots` didn't match exactly the epoch boundary [Issue #1258]
+* Adds Developmental ghc-9.2 compatibility [#1404]
+* Provided experimental options which turn off parts of the schema [#1379]
+* Fixed an issue where `epoch` table didn't rollback [#1370]
+* Fixed an issue with smash returning `InvalidUrlException` [#1353]
+* Takes less snapshots, since big rollbacks are now faster
+
+## 13.1.0.2
+* Upgrade dependencies and integrates a fix in ledger internal data structures.
+* Integrates Cardano Haskell Packages (CHaP)
+
 ## 13.1.0.0
 * Avoids rollbacks on restarts, making them way faster [#1190]
 * Syncing speed is increased
@@ -16,6 +31,7 @@
 * Snapshot creation no longer rollbacks to the ledger snapshot file, so it's faster
 * Columns `stake_address.tx_id`, `cost_model.block_id` are removed
 * Bump iohk-nix to fetch the correct config for preview and preprod respin
+* Added new flag `POSTGRES_ARGS` (wih reccomended default values) to `docker-compose.yml` for customization of database settings
 
 ## 13.0.5
 * Fixed an issue where `StakeAdress` cache was not cleaned up properly and could cause crashes [#1222]

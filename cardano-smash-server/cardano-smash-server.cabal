@@ -1,9 +1,7 @@
-cabal-version:          2.2
-
--- http://haskell.org/cabal/users-guide/
+cabal-version:          3.0
 
 name:                   cardano-smash-server
-version:                13.1.0.0
+version:                13.1.1.0
 synopsis:               The Cardano smash server
 description:            Please see the README on GitHub at
                         <https://github.com/input-output-hk/cardano-db-sync/cardano-smash-server/#readme>
@@ -13,7 +11,7 @@ license:                Apache-2.0
 license-file:           LICENSE
 author:                 IOHK Engineering Team
 maintainer:             operations@iohk.io
-copyright:              (c) 2019 IOHK
+copyright:              2020-2023 Input Output Global Inc (IOG).
 category:               Cryptocurrency
 build-type:             Custom
 extra-source-files:     CHANGELOG.md
@@ -60,7 +58,7 @@ library
 
   build-depends:
                         aeson
-                      , base                        >= 4.14         && < 4.16
+                      , base                        >= 4.14         && < 4.17
                       , base16-bytestring
                       , bytestring
                       , cardano-api
@@ -73,7 +71,6 @@ library
                       , persistent-postgresql
                       , quiet
                       , resource-pool
-                      , servant
                       , servant-server
                       , servant-swagger
                       , swagger2
@@ -110,7 +107,7 @@ executable cardano-smash-server
 
   other-modules:        Paths_cardano_smash_server
 
-  build-depends:        base                            >= 4.14         && < 4.16
+  build-depends:        base                            >= 4.14         && < 4.17
                       , cardano-db
                       , cardano-smash-server
                       , cardano-prelude

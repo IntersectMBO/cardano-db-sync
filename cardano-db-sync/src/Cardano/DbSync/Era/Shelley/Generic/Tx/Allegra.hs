@@ -9,23 +9,32 @@
 module Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (
   fromAllegraTx,
   getInterval,
-  mkTxScript,
+  getScripts,
 ) where
 
 import qualified Cardano.Api.Shelley as Api
 import Cardano.Db (ScriptType (..))
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
-import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
+import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (
+  calcWithdrawalSum,
+  getTxMetadata,
+  getTxSize,
+  mkTxCertificates,
+  mkTxIn,
+  mkTxOut,
+  mkTxParamProposal,
+  mkTxWithdrawals,
+  txHashId,
+ )
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Era.Shelley.Generic.Util
 import Cardano.DbSync.Era.Shelley.Generic.Witness
-import qualified Cardano.Ledger.Allegra as Allegra
+import Cardano.Ledger.Allegra.Core hiding (Tx, TxOut)
+import Cardano.Ledger.Allegra.Scripts
+import Cardano.Ledger.Allegra.TxAuxData
 import Cardano.Ledger.BaseTypes (StrictMaybe, strictMaybeToMaybe)
 import qualified Cardano.Ledger.Core as Core
-import Cardano.Ledger.Shelley.Scripts (ScriptHash)
-import Cardano.Ledger.ShelleyMA.AuxiliaryData (MAAuxiliaryData (AuxiliaryData'))
-import Cardano.Ledger.ShelleyMA.Timelocks (Timelock)
-import qualified Cardano.Ledger.ShelleyMA.TxBody as ShelleyMa
+import Cardano.Ledger.Shelley.Tx (ShelleyTx)
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
 import qualified Data.Aeson as Aeson
@@ -46,10 +55,10 @@ fromAllegraTx (blkIndex, tx) =
     , txReferenceInputs = [] -- Allegra does not have reference inputs
     , txOutputs = outputs
     , txCollateralOutputs = [] -- Allegra does not have collateral outputs
-    , txFees = Just $ ShelleyMa.txfee' txBody
+    , txFees = Just $ txBody ^. Core.feeTxBodyL
     , txOutSum = sumTxOutCoin outputs
-    , txInvalidBefore = invalidBefore
-    , txInvalidHereafter = invalidAfter
+    , txInvalidBefore = invBefore
+    , txInvalidHereafter = invAfter
     , txWithdrawalSum = calcWithdrawalSum txBody
     , txMetadata = fromAllegraMetadata <$> getTxMetadata tx
     , txCertificates = mkTxCertificates txBody
@@ -70,24 +79,36 @@ fromAllegraTx (blkIndex, tx) =
     outputs = mkTxOut txBody
 
     scripts :: [TxScript]
-    scripts =
-      mkTxScript
-        <$> ( Map.toList (tx ^. (Core.witsTxL . Core.scriptWitsL))
-                ++ getAuxScripts (tx ^. Core.auxDataTxL)
-            )
+    scripts = getScripts tx
 
-    (invalidBefore, invalidAfter) = getInterval $ ShelleyMa.vldt' txBody
+    (invBefore, invAfter) = getInterval txBody
+
+getScripts ::
+  forall era.
+  (EraCrypto era ~ StandardCrypto, Core.Tx era ~ ShelleyTx era, TxAuxData era ~ AllegraTxAuxData era, Script era ~ Timelock era, EraTx era) =>
+  ShelleyTx era ->
+  [TxScript]
+getScripts tx =
+  mkTxScript
+    <$> ( Map.toList (tx ^. (Core.witsTxL . Core.scriptTxWitsL))
+            ++ getAuxScripts (tx ^. Core.auxDataTxL)
+        )
 
 getAuxScripts ::
-  StrictMaybe (MAAuxiliaryData (Allegra.AllegraEra StandardCrypto)) ->
-  [(ScriptHash StandardCrypto, Timelock StandardCrypto)]
+  forall era.
+  (EraCrypto era ~ StandardCrypto, EraScript era, Script era ~ Timelock era) =>
+  StrictMaybe (AllegraTxAuxData era) ->
+  [(ScriptHash StandardCrypto, Timelock era)]
 getAuxScripts maux =
   case strictMaybeToMaybe maux of
     Nothing -> []
-    Just (AuxiliaryData' _ scrs) ->
-      map (\scr -> (Core.hashScript @(Allegra.AllegraEra StandardCrypto) scr, scr)) $ toList scrs
+    Just (AllegraTxAuxData _ scrs) ->
+      map (\scr -> (Core.hashScript @era scr, scr)) $ toList scrs
 
-mkTxScript :: (ScriptHash StandardCrypto, Timelock StandardCrypto) -> TxScript
+mkTxScript ::
+  (Era era, EraCrypto era ~ StandardCrypto) =>
+  (ScriptHash StandardCrypto, Timelock era) ->
+  TxScript
 mkTxScript (hsh, script) =
   TxScript
     { txScriptHash = unScriptHash hsh
@@ -95,13 +116,17 @@ mkTxScript (hsh, script) =
     , txScriptPlutusSize = Nothing
     , txScriptJson =
         Just . LBS.toStrict . Aeson.encode $
-          Api.fromAllegraTimelock Api.TimeLocksInSimpleScriptV2 script
+          Api.fromAllegraTimelock script
     , txScriptCBOR = Nothing
     }
 
 getInterval ::
-  ShelleyMa.ValidityInterval -> (Maybe SlotNo, Maybe SlotNo)
-getInterval interval =
-  ( strictMaybeToMaybe $ ShelleyMa.invalidBefore interval
-  , strictMaybeToMaybe $ ShelleyMa.invalidHereafter interval
+  AllegraEraTxBody era =>
+  TxBody era ->
+  (Maybe SlotNo, Maybe SlotNo)
+getInterval txBody =
+  ( strictMaybeToMaybe $ invalidBefore interval
+  , strictMaybeToMaybe $ invalidHereafter interval
   )
+  where
+    interval = txBody ^. vldtTxBodyL

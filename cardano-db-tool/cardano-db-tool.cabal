@@ -1,19 +1,17 @@
-cabal-version:          2.2
-
--- http://haskell.org/cabal/users-guide/
+cabal-version:          3.0
 
 name:                   cardano-db-tool
-version:                13.1.0.0
+version:                13.1.1.0
 synopsis:               Utilities to manage the cardano-db-sync databases.
 description:            Utilities and executable, used to manage and validate the
                         PostgreSQL db and the ledger database of the cardano-db-sync node
 homepage:               https://github.com/input-output-hk/cardano-db-sync
-bug-reports:		    https://github.com/input-output-hk/cardano-db-sync/issues
+bug-reports:		        https://github.com/input-output-hk/cardano-db-sync/issues
 license:                Apache-2.0
 license-file:           LICENSE
 author:                 IOHK Engineering Team
 maintainer:             operations@iohk.io
-copyright:              (c) 2019 IOHK
+copyright:              2020-2023 Input Output Global Inc (IOG).
 category:               Cryptocurrency
 build-type:             Simple
 
@@ -56,7 +54,7 @@ library
                         Cardano.DbTool.Validate.Withdrawal
                         Paths_cardano_db_tool
 
-  build-depends:        base                            >= 4.14         && < 4.16
+  build-depends:        base                            >= 4.14         && < 4.17
                       , base16-bytestring
                       , bytestring
                       , ansi-terminal
@@ -68,17 +66,14 @@ library
                       , cardano-ledger-core
                       , cardano-ledger-shelley
                       , cardano-prelude
-                      , cardano-slotting
                       , containers
                       , contra-tracer
                       , esqueleto
                       , extra
                       , ouroboros-consensus
-                      , ouroboros-consensus-byron
                       , ouroboros-consensus-cardano
-                      , ouroboros-consensus-shelley
                       , ouroboros-network
-                      , persistent
+                      , ouroboros-network-api
                       , random
                       , random-shuffle
                       , text
@@ -105,7 +100,7 @@ executable cardano-db-tool
 
   other-modules:        Paths_cardano_db_tool
 
-  build-depends:        base                            >= 4.14         && < 4.16
+  build-depends:        base                            >= 4.14         && < 4.17
                       , cardano-db
                       , cardano-db-sync
                       , cardano-db-tool

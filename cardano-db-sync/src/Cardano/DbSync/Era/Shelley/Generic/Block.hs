@@ -163,9 +163,9 @@ alonzoBlockTxs = zip [0 ..] . toList . fromTxSeq @StandardAlonzo . Ledger.bbody 
 blockHeader :: ShelleyBlock p era -> ShelleyProtocolHeader p
 blockHeader = Ledger.bheader . Consensus.shelleyBlockRaw
 
-blockHash :: (ProtoCrypto p ~ StandardCrypto) => ShelleyBlock p era -> ByteString
+blockHash :: ShelleyBlock p era -> ByteString
 blockHash =
-  Crypto.hashToBytes -- . Protocol.unHashHeader
+  Crypto.hashToBytes
     . Consensus.unShelleyHash
     . Consensus.shelleyBlockHeaderHash
 
@@ -202,8 +202,8 @@ blockProtoVersionTPraos = TPraos.bprotver . TPraos.bhbody . blockHeader
 blockProtoVersionPraos :: ShelleyBlock PraosStandard era -> Ledger.ProtVer
 blockProtoVersionPraos = Praos.hbProtVer . getHeaderBodyPraos . blockHeader
 
-blockSize :: ShelleyBasedEra era => ShelleyBlock p era -> Word64
-blockSize = fromIntegral . Shelley.bBodySize . Ledger.bbody . Consensus.shelleyBlockRaw
+blockSize :: ProtocolHeaderSupportsEnvelope p => ShelleyBlock p era -> Word64
+blockSize = fromIntegral . pHeaderSize . blockHeader
 
 blockTxs ::
   ( ShelleyBasedEra era

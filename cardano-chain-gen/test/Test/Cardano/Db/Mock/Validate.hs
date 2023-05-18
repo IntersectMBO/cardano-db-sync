@@ -162,9 +162,6 @@ migrationNotDoneYet :: Text -> Bool
 migrationNotDoneYet =
   Text.isPrefixOf "relation"
 
--- migrationNotDoneYet txt =
---     Text.isPrefixOf "relation" txt && Text.isSuffixOf "does not exist" txt
-
 assertCurrentEpoch :: DBSyncEnv -> Word64 -> IO ()
 assertCurrentEpoch env expected =
   assertEqBackoff env q (Just expected) defaultDelays "Unexpected epoch stake counts"
@@ -172,7 +169,7 @@ assertCurrentEpoch env expected =
     q = queryCurrentEpochNo
 
 assertAddrValues ::
-  (Crypto era ~ StandardCrypto, Core.EraTxOut era) =>
+  (EraCrypto era ~ StandardCrypto, Core.EraTxOut era) =>
   DBSyncEnv ->
   UTxOIndex era ->
   DbLovelace ->
@@ -211,7 +208,7 @@ assertCertCounts env expected =
       pure (registr - 5, deregistr, deleg - 5, withdrawal)
 
 assertRewardCounts ::
-  (Crypto era ~ StandardCrypto) =>
+  (EraCrypto era ~ StandardCrypto) =>
   DBSyncEnv ->
   LedgerState (ShelleyBlock p era) ->
   Bool ->
@@ -441,7 +438,7 @@ addPoolCounters :: Num a => (a, a, a, a, a, a) -> (a, a, a, a, a, a) -> (a, a, a
 addPoolCounters (a, b, c, d, e, f) (a', b', c', d', e', f') = (a + a', b + b', c + c', d + d', e + e', f + f')
 
 assertPoolLayerCounters ::
-  Crypto era ~ StandardCrypto =>
+  EraCrypto era ~ StandardCrypto =>
   DBSyncEnv ->
   (Word64, Word64) ->
   [(PoolIndex, (Either DBFail Bool, Bool, Bool))] ->

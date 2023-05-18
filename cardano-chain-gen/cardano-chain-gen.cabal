@@ -1,9 +1,7 @@
-cabal-version:          2.4
-
--- http://haskell.org/cabal/users-guide/
+cabal-version:          3.0
 
 name:                   cardano-chain-gen
-version:                13.1.0.0
+version:                13.1.1.0
 synopsis:               A fake chain generator for testing cardano DB sync.
 description:            A fake chain generator for testing cardano DB sync.
 homepage:               https://github.com/input-output-hk/cardano-db-sync
@@ -12,7 +10,7 @@ license:                Apache-2.0
 license-file:           LICENSE
 author:                 IOHK Engineering Team
 maintainer:             operations@iohk.io
-copyright:              (c) 2019 IOHK
+copyright:              2020-2023 Input Output Global Inc (IOG).
 category:               Cryptocurrency
 build-type:             Custom
 extra-source-files:     CHANGELOG.md
@@ -55,7 +53,7 @@ library
                         Cardano.Mock.Forging.Tx.Shelley
                         Cardano.Mock.Forging.Types
 
-  build-depends:        base                            >= 4.14         && < 4.16
+  build-depends:        base                            >= 4.14         && < 4.17
                       , async
                       , aeson
                       , binary
@@ -68,12 +66,14 @@ library
                       , cardano-crypto-praos
                       , cardano-crypto-wrapper
                       , cardano-data
+                      , cardano-ledger-allegra
                       , cardano-ledger-alonzo
                       , cardano-ledger-babbage
+                      , cardano-ledger-binary
                       , cardano-ledger-byron
                       , cardano-ledger-core
                       , cardano-ledger-shelley
-                      , cardano-ledger-shelley-ma
+                      , cardano-ledger-mary
                       , cardano-node
                       , cardano-prelude
                       , cardano-protocol-tpraos
@@ -101,16 +101,17 @@ library
                       , network-mux
                       , nothunks
                       , ouroboros-consensus
-                      , ouroboros-consensus-byron
                       , ouroboros-consensus-cardano
+                      , ouroboros-consensus-diffusion
                       , ouroboros-consensus-protocol
-                      , ouroboros-consensus-shelley
                       , ouroboros-network
+                      , ouroboros-network-api
                       , ouroboros-network-framework
+                      , ouroboros-network-protocols
                       , persistent
                       , persistent-postgresql
                       , plutus-core
-                      , plutus-ledger-api
+                      , plutus-ledger-api:{plutus-ledger-api, plutus-ledger-api-testlib}
                       , pretty-show
                       , prometheus
                       , random-shuffle
@@ -120,7 +121,6 @@ library
                       , split
                       , stm
                       , strict
---                      , strict-containers
                       , strict-stm
                       , swagger2
                       , text
@@ -163,19 +163,18 @@ test-suite cardano-chain-gen
                         Test.Cardano.Db.Mock.Validate
 
   build-depends:        async
-                      , base                            >= 4.12         && < 4.15
+                      , base                            >= 4.14         && < 4.17
                       , bytestring
                       , cardano-api
                       , cardano-cli
-                      , cardano-config
                       , cardano-crypto-class
                       , cardano-db
                       , cardano-db-sync
                       , cardano-chain-gen
                       , cardano-ledger-alonzo
                       , cardano-ledger-core
+                      , cardano-ledger-mary
                       , cardano-ledger-shelley
-                      , cardano-ledger-shelley-ma
                       , cardano-node
                       , cardano-prelude
                       , cardano-slotting
@@ -190,9 +189,9 @@ test-suite cardano-chain-gen
                       , io-classes
                       , optparse-applicative
                       , ouroboros-network
+                      , plutus-ledger-api
                       , silently
                       , stm
-                      , strict-containers
                       , strict-stm
                       , tasty
                       , tasty-quickcheck
@@ -205,8 +204,8 @@ test-suite cardano-chain-gen
                       , ouroboros-consensus
                       , ouroboros-consensus-cardano
                       , ouroboros-consensus-protocol
-                      , ouroboros-consensus-shelley
                       , ouroboros-network
+                      , ouroboros-network-api
                       , ouroboros-network-framework
                       , persistent
                       , persistent-postgresql

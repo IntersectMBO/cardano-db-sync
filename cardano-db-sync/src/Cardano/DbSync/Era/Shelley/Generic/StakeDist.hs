@@ -2,6 +2,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -17,9 +18,9 @@ import Cardano.DbSync.Types
 import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Compactible as Ledger
 import Cardano.Ledger.Credential (Credential)
-import Cardano.Ledger.Era (Crypto)
+import qualified Cardano.Ledger.EpochBoundary as Ledger
+import Cardano.Ledger.Era (EraCrypto)
 import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
-import qualified Cardano.Ledger.Shelley.EpochBoundary as Shelley
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Prelude
 import qualified Data.Map.Strict as Map
@@ -80,10 +81,11 @@ getStakeSlice pInfo epoch !sliceIndex !minSliceSize els =
     LedgerStateMary mls -> genericStakeSlice pInfo epoch sliceIndex minSliceSize mls
     LedgerStateAlonzo als -> genericStakeSlice pInfo epoch sliceIndex minSliceSize als
     LedgerStateBabbage bls -> genericStakeSlice pInfo epoch sliceIndex minSliceSize bls
+    LedgerStateConway _cls -> panic "TODO: Conway not supported yet"
 
 genericStakeSlice ::
   forall era c blk p.
-  (c ~ StandardCrypto, Crypto era ~ c, ConsensusProtocol (BlockProtocol blk)) =>
+  (c ~ StandardCrypto, EraCrypto era ~ c, ConsensusProtocol (BlockProtocol blk)) =>
   ProtocolInfo IO blk ->
   EpochNo ->
   Word64 ->
@@ -96,24 +98,24 @@ genericStakeSlice pInfo epoch sliceIndex minSliceSize lstate
   | index + epochSliceSize > delegationsLen = Slice (mkSlice (delegationsLen - index)) True
   | otherwise = Slice (mkSlice epochSliceSize) False
   where
-    -- We use '_pstakeSet' here instead of '_pstateMark' because the stake addresses for the
+    -- We use 'ssStakeSet' here instead of 'ssStateMark' because the stake addresses for the
     -- later may not have been added to the database yet. That means that when these values
     -- are added to the database, the epoch number where they become active is the current
     -- epoch plus one.
 
-    stakeSnapshot :: Shelley.SnapShot c
+    stakeSnapshot :: Ledger.SnapShot c
     stakeSnapshot =
-      Shelley._pstakeSet . Shelley.esSnapshots . Shelley.nesEs $
+      Ledger.ssStakeSet . Shelley.esSnapshots . Shelley.nesEs $
         Consensus.shelleyLedgerState lstate
 
     delegations :: VMap.KVVector VB VB (Credential 'Staking c, KeyHash 'StakePool c)
-    delegations = VMap.unVMap $ Shelley._delegations stakeSnapshot
+    delegations = VMap.unVMap $ Ledger.ssDelegations stakeSnapshot
 
     delegationsLen :: Word64
     delegationsLen = fromIntegral $ VG.length delegations
 
     stakes :: VMap VB VP (Credential 'Staking c) (Ledger.CompactForm Coin)
-    stakes = Shelley.unStake $ Shelley._stake stakeSnapshot
+    stakes = Ledger.unStake $ Ledger.ssStake stakeSnapshot
 
     lookupStake :: Credential 'Staking c -> Maybe Coin
     lookupStake cred = Ledger.fromCompact <$> VMap.lookup cred stakes

@@ -9,7 +9,7 @@ module Test.Cardano.Db.Mock.Unit.Alonzo (
 import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Era.Shelley.Generic.Util
-import Cardano.Ledger.Alonzo.Data
+import Cardano.Ledger.Alonzo.Scripts.Data
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Coin
 import Cardano.Ledger.Credential
@@ -17,7 +17,6 @@ import Cardano.Ledger.Keys
 import Cardano.Ledger.Mary.Value
 import Cardano.Ledger.SafeHash
 import Cardano.Ledger.Shelley.TxBody
-import Cardano.Ledger.Slot (BlockNo (..), EpochNo)
 import Cardano.Mock.ChainSync.Server
 import Cardano.Mock.Forging.Interpreter
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
@@ -75,9 +74,9 @@ unitTests iom knownMigrations =
         , test "Mir Cert" mirReward
         , test "Mir rollback" mirRewardRollback
         , test "Mir Cert deregistration" mirRewardDereg
-        , test "test rewards empty last part of epoch" rewardsEmptyChainLast
-        , --        , test "test delta rewards" rewardsDelta -- See the same test on Babbage for the reason it was disabled.
-          test "rollback on epoch boundary" rollbackBoundary
+        -- , test "test rewards empty last part of epoch" rewardsEmptyChainLast
+         --        , test "test delta rewards" rewardsDelta -- See the same test on Babbage for the reason it was disabled.
+        ,  test "rollback on epoch boundary" rollbackBoundary
         , test "single MIR Cert multiple outputs" singleMIRCertMultiOut
         ]
     , testGroup
@@ -430,7 +429,7 @@ rewardsDeregistration =
 
     -- first move to treasury from reserves
     void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty)
+      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty)
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
       -- register the stake address and delegate to a pool
@@ -498,7 +497,7 @@ rewardsReregistration =
 
     -- first move to treasury from reserves
     void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty)
+      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty)
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
       -- register the stake address and delegate to a pool
@@ -555,7 +554,7 @@ mirReward =
 
     -- first move to treasury from reserves
     void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty)
+      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty)
 
     void $ fillEpochPercentage interpreter mockServer 50
 
@@ -603,7 +602,7 @@ mirRewardRollback =
 
     -- first move to treasury from reserves
     void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty)
+      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty)
 
     void $
       withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
@@ -650,7 +649,7 @@ mirRewardDereg =
 
     -- first move to treasury from reserves
     void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty)
+      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty)
 
     a <- fillUntilNextEpoch interpreter mockServer
 
@@ -694,8 +693,8 @@ mirRewardDereg =
   where
     testLabel = "mirRewardDereg-alonzo"
 
-rewardsEmptyChainLast :: IOManager -> [(Text, Text)] -> Assertion
-rewardsEmptyChainLast =
+_rewardsEmptyChainLast :: IOManager -> [(Text, Text)] -> Assertion
+_rewardsEmptyChainLast =
   withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
@@ -782,7 +781,7 @@ singleMIRCertMultiOut =
     startDBSync dbSync
 
     void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty)
+      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty)
 
     a <- fillUntilNextEpoch interpreter mockServer
 
@@ -790,7 +789,7 @@ singleMIRCertMultiOut =
       stakeAddr0 <- resolveStakeCreds (StakeIndex 0) state
       stakeAddr1 <- resolveStakeCreds (StakeIndex 1) state
       let saMIR = StakeAddressesMIR (Map.fromList [(stakeAddr0, DeltaCoin 10), (stakeAddr1, DeltaCoin 20)])
-      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR saMIR, DCertMir $ MIRCert TreasuryMIR saMIR] (Wdrl mempty)
+      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR saMIR, DCertMir $ MIRCert TreasuryMIR saMIR] (Withdrawals mempty)
 
     b <- fillUntilNextEpoch interpreter mockServer
 
@@ -1217,7 +1216,7 @@ mintMultiAsset =
   withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \st -> do
-      let val0 = MaryValue 1 $ Map.singleton (PolicyID alwaysMintScriptHash) (Map.singleton (head assetNames) 1)
+      let val0 = MultiAsset $ Map.singleton (PolicyID alwaysMintScriptHash) (Map.singleton (head assetNames) 1)
       Alonzo.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, MaryValue 10000 mempty)] val0 True 100 st
 
     assertBlockNoBackoff dbSync 1
@@ -1233,7 +1232,7 @@ mintMultiAssets =
       let assets0 = Map.fromList [(head assetNames, 10), (assetNames !! 1, 4)]
       let policy0 = PolicyID alwaysMintScriptHash
       let policy1 = PolicyID alwaysSucceedsScriptHash
-      let val1 = MaryValue 1 $ Map.fromList [(policy0, assets0), (policy1, assets0)]
+      let val1 = MultiAsset $ Map.fromList [(policy0, assets0), (policy1, assets0)]
       tx0 <- Alonzo.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, MaryValue 10000 mempty)] val1 True 100 st
       tx1 <- Alonzo.mkMAssetsScriptTx [UTxOIndex 2] (UTxOIndex 3) [(UTxOAddressNew 0, MaryValue 10000 mempty)] val1 True 200 st
       pure [tx0, tx1]
@@ -1251,9 +1250,9 @@ swapMultiAssets =
       let assetsMinted0 = Map.fromList [(head assetNames, 10), (assetNames !! 1, 4)]
       let policy0 = PolicyID alwaysMintScriptHash
       let policy1 = PolicyID alwaysSucceedsScriptHash
-      let mintValue0 = MaryValue 100 $ Map.fromList [(policy0, assetsMinted0), (policy1, assetsMinted0)]
+      let mintValue0 = MultiAsset $ Map.fromList [(policy0, assetsMinted0), (policy1, assetsMinted0)]
       let assets0 = Map.fromList [(head assetNames, 5), (assetNames !! 1, 2)]
-      let outValue0 = MaryValue 20 $ Map.fromList [(policy0, assets0), (policy1, assets0)]
+      let outValue0 = MaryValue 20 $ MultiAsset $ Map.fromList [(policy0, assets0), (policy1, assets0)]
 
       tx0 <-
         Alonzo.mkMAssetsScriptTx

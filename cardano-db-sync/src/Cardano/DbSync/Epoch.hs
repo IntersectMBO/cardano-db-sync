@@ -54,6 +54,7 @@ epochHandler syncEnv trce cache (BlockDetails cblk details) =
     BlockMary {} -> epochSlotTimecheck
     BlockAlonzo {} -> epochSlotTimecheck
     BlockBabbage {} -> epochSlotTimecheck
+    BlockConway {} -> panic "TODO: Conway not supported yet"
   where
     -- What we do here is completely independent of Shelley/Allegra/Mary eras.
     epochSlotTimecheck :: ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())

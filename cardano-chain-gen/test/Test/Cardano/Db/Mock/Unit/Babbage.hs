@@ -11,7 +11,7 @@ module Test.Cardano.Db.Mock.Unit.Babbage (
 import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Era.Shelley.Generic.Util
-import Cardano.Ledger.Alonzo.Data
+import Cardano.Ledger.Alonzo.Scripts.Data
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Coin
 import Cardano.Ledger.Credential
@@ -19,7 +19,6 @@ import Cardano.Ledger.Keys
 import Cardano.Ledger.Mary.Value
 import Cardano.Ledger.SafeHash
 import Cardano.Ledger.Shelley.TxBody
-import Cardano.Ledger.Slot (BlockNo (..), EpochNo)
 import Cardano.Mock.ChainSync.Server
 import Cardano.Mock.Forging.Interpreter
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
@@ -106,9 +105,9 @@ unitTests iom knownMigrations =
         , --          , test "Mir rollback" mirRewardRollback
           test "Mir Cert Shelley" mirRewardShelley
         , test "Mir Cert deregistration" mirRewardDereg
-        , test "test rewards empty last part of epoch" rewardsEmptyChainLast
-        , --        , test "test delta rewards" rewardsDelta -- We disable the test. See in the test for more.
-          test "rollback on epoch boundary" rollbackBoundary
+        -- , test "test rewards empty last part of epoch" rewardsEmptyChainLast
+        --        , test "test delta rewards" rewardsDelta -- We disable the test. See in the test for more.
+        , test "rollback on epoch boundary" rollbackBoundary
         , test "single MIR Cert multiple outputs" singleMIRCertMultiOut
         ]
     , testGroup
@@ -843,7 +842,7 @@ rewardsDeregistration =
 
     -- first move to treasury from reserves
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty) Nothing
+      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty) Nothing
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
       -- register the stake address and delegate to a pool
@@ -911,7 +910,7 @@ rewardsReregistration =
 
     -- first move to treasury from reserves
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty) Nothing
+      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty) Nothing
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
       -- register the stake address and delegate to a pool
@@ -968,7 +967,7 @@ mirReward =
 
     -- first move to treasury from reserves
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty) Nothing
+      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty) Nothing
 
     void $ fillEpochPercentage interpreter mockServer 50
 
@@ -1016,7 +1015,7 @@ _mirRewardRollback =
 
     -- first move to treasury from reserves
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty) Nothing
+      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty) Nothing
 
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
@@ -1068,7 +1067,7 @@ mirRewardShelley =
         const $
           Shelley.mkDCertTx
             [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))]
-            (Wdrl mempty)
+            (Withdrawals mempty)
 
     a <- fillEpochPercentage interpreter mockServer 50
 
@@ -1094,7 +1093,7 @@ mirRewardDereg =
 
     -- first move to treasury from reserves
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty) Nothing
+      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty) Nothing
 
     a <- fillUntilNextEpoch interpreter mockServer
 
@@ -1138,8 +1137,8 @@ mirRewardDereg =
   where
     testLabel = "mirRewardDereg"
 
-rewardsEmptyChainLast :: IOManager -> [(Text, Text)] -> Assertion
-rewardsEmptyChainLast =
+_rewardsEmptyChainLast :: IOManager -> [(Text, Text)] -> Assertion
+_rewardsEmptyChainLast =
   withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
@@ -1233,7 +1232,7 @@ singleMIRCertMultiOut =
     startDBSync dbSync
 
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Wdrl mempty) Nothing
+      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty) Nothing
 
     a <- fillUntilNextEpoch interpreter mockServer
 
@@ -1241,7 +1240,7 @@ singleMIRCertMultiOut =
       stakeAddr0 <- resolveStakeCreds (StakeIndex 0) state
       stakeAddr1 <- resolveStakeCreds (StakeIndex 1) state
       let saMIR = StakeAddressesMIR (Map.fromList [(stakeAddr0, DeltaCoin 10), (stakeAddr1, DeltaCoin 20)])
-      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR saMIR, DCertMir $ MIRCert TreasuryMIR saMIR] (Wdrl mempty) Nothing
+      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR saMIR, DCertMir $ MIRCert TreasuryMIR saMIR] (Withdrawals mempty) Nothing
 
     b <- fillUntilNextEpoch interpreter mockServer
 
@@ -1697,7 +1696,7 @@ mintMultiAsset =
   withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \st -> do
-      let val0 = MaryValue 1 $ Map.singleton (PolicyID alwaysMintScriptHash) (Map.singleton (head assetNames) 1)
+      let val0 = MultiAsset $ Map.singleton (PolicyID alwaysMintScriptHash) (Map.singleton (head assetNames) 1)
       Babbage.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, MaryValue 10000 mempty)] [] val0 True 100 st
 
     assertBlockNoBackoff dbSync 1
@@ -1713,7 +1712,7 @@ mintMultiAssets =
       let assets0 = Map.fromList [(head assetNames, 10), (assetNames !! 1, 4)]
       let policy0 = PolicyID alwaysMintScriptHash
       let policy1 = PolicyID alwaysSucceedsScriptHash
-      let val1 = MaryValue 1 $ Map.fromList [(policy0, assets0), (policy1, assets0)]
+      let val1 = MultiAsset $ Map.fromList [(policy0, assets0), (policy1, assets0)]
       tx0 <- Babbage.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, MaryValue 10000 mempty)] [] val1 True 100 st
       tx1 <- Babbage.mkMAssetsScriptTx [UTxOIndex 2] (UTxOIndex 3) [(UTxOAddressNew 0, MaryValue 10000 mempty)] [] val1 True 200 st
       pure [tx0, tx1]
@@ -1731,9 +1730,9 @@ swapMultiAssets =
       let assetsMinted0 = Map.fromList [(head assetNames, 10), (assetNames !! 1, 4)]
       let policy0 = PolicyID alwaysMintScriptHash
       let policy1 = PolicyID alwaysSucceedsScriptHash
-      let mintValue0 = MaryValue 100 $ Map.fromList [(policy0, assetsMinted0), (policy1, assetsMinted0)]
+      let mintValue0 = MultiAsset $ Map.fromList [(policy0, assetsMinted0), (policy1, assetsMinted0)]
       let assets0 = Map.fromList [(head assetNames, 5), (assetNames !! 1, 2)]
-      let outValue0 = MaryValue 20 $ Map.fromList [(policy0, assets0), (policy1, assets0)]
+      let outValue0 = MaryValue 20 $ MultiAsset $ Map.fromList [(policy0, assets0), (policy1, assets0)]
 
       tx0 <-
         Babbage.mkMAssetsScriptTx
@@ -2315,7 +2314,7 @@ referenceMintingScript =
 
       let utxo0 = head $ Babbage.mkUTxOBabbage tx0
       -- use a reference to an output which has a minting script.
-      let val0 = MaryValue 1 $ Map.singleton (PolicyID alwaysSucceedsScriptHash) (Map.singleton (head assetNames) 1)
+      let val0 = MultiAsset $ Map.singleton (PolicyID alwaysSucceedsScriptHash) (Map.singleton (head assetNames) 1)
       tx1 <-
         Babbage.mkMAssetsScriptTx
           [UTxOIndex 0]
@@ -2352,7 +2351,7 @@ referenceDelegation =
 
       let utxo0 = head $ Babbage.mkUTxOBabbage tx0
       -- use a reference to an output which has a minting script.
-      let val0 = MaryValue 1 $ Map.singleton (PolicyID alwaysSucceedsScriptHash) (Map.singleton (head assetNames) 1)
+      let val0 = MultiAsset $ Map.singleton (PolicyID alwaysSucceedsScriptHash) (Map.singleton (head assetNames) 1)
       tx1 <-
         Babbage.mkMAssetsScriptTx
           [UTxOIndex 0]

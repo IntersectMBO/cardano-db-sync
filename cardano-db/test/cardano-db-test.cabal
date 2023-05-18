@@ -1,9 +1,7 @@
-cabal-version:          >= 1.10
-
--- http://haskell.org/cabal/users-guide/
+cabal-version:          3.0
 
 name:                   cardano-db-test
-version:                13.1.0.0
+version:                13.1.1.0
 synopsis:               Tests for the base functionality of the cardano-db library
 description:            Code for the Cardano DB Sync node that is shared between the
                         cardano-db-node and other components.
@@ -13,7 +11,7 @@ license:                Apache-2.0
 license-file:           LICENSE
 author:                 IOHK Engineering Team
 maintainer:             operations@iohk.io
-copyright:              (c) 2019 IOHK
+copyright:              2020-2023 Input Output Global Inc (IOG).
 category:               Cryptocurrency
 build-type:             Simple
 
@@ -31,7 +29,7 @@ library
                         Test.IO.Cardano.Db.Util
 
 
-  build-depends:        base                            >= 4.14         && < 4.16
+  build-depends:        base                            >= 4.14         && < 4.17
                       , aeson
                       , bytestring
                       , cardano-db
@@ -51,7 +49,7 @@ library
                       , cardano-db
                       , cardano-ledger-byron
                       , cardano-ledger-core
-                      , cardano-ledger-shelley-ma
+                      , cardano-ledger-mary
                       , persistent
                       , hedgehog
                       , text

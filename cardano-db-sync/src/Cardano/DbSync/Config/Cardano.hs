@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Cardano.DbSync.Config.Cardano (
@@ -15,6 +16,7 @@ module Cardano.DbSync.Config.Cardano (
 import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Crypto.Hash.Class as Crypto
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
+import Cardano.Db (textShow)
 import Cardano.DbSync.Config.Alonzo
 import Cardano.DbSync.Config.Byron
 import Cardano.DbSync.Config.Shelley
@@ -22,16 +24,22 @@ import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.Ledger.Alonzo.Genesis (AlonzoGenesis)
+import Cardano.Ledger.Binary.Version
+import Cardano.Ledger.Conway.Genesis
+import Cardano.Ledger.Keys
+import Cardano.Ledger.Shelley.Translation (emptyFromByronTranslationContext)
+import Cardano.Prelude (panic)
 import Control.Monad.Trans.Except (ExceptT)
+import Data.Word (Word64)
 import Ouroboros.Consensus.Cardano (Nonce (..), ProtVer (ProtVer))
 import qualified Ouroboros.Consensus.Cardano as Consensus
 import qualified Ouroboros.Consensus.Cardano.Node as Consensus
 import Ouroboros.Consensus.Config (TopLevelConfig (..))
 import Ouroboros.Consensus.Ledger.Basics (LedgerConfig)
-import qualified Ouroboros.Consensus.Mempool.TxLimits as TxLimits
+import qualified Ouroboros.Consensus.Mempool.Capacity as TxLimits
 import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
-import Ouroboros.Consensus.Shelley.Eras (StandardCrypto, StandardShelley)
+import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 import qualified Ouroboros.Consensus.Shelley.Node.Praos as Consensus
 
@@ -44,7 +52,7 @@ genesisProtocolMagicId ge =
   case ge of
     GenesisCardano _cfg _bCfg sCfg _aCfg -> shelleyProtocolMagicId (scConfig sCfg)
   where
-    shelleyProtocolMagicId :: ShelleyGenesis StandardShelley -> ProtocolMagicId
+    shelleyProtocolMagicId :: ShelleyGenesis StandardCrypto -> ProtocolMagicId
     shelleyProtocolMagicId sCfg = ProtocolMagicId (sgNetworkMagic sCfg)
 
 readCardanoGenesisConfig ::
@@ -94,30 +102,41 @@ mkProtocolInfoCardano ge shelleyCred =
           , Consensus.shelleyBasedLeaderCredentials = shelleyCred
           }
         Consensus.ProtocolParamsShelley
-          { Consensus.shelleyProtVer = ProtVer 3 0
+          { Consensus.shelleyProtVer = mkProtVer 3 0
           , Consensus.shelleyMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
           }
         Consensus.ProtocolParamsAllegra
-          { Consensus.allegraProtVer = ProtVer 4 0
+          { Consensus.allegraProtVer = mkProtVer 4 0
           , Consensus.allegraMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
           }
         Consensus.ProtocolParamsMary
-          { Consensus.maryProtVer = ProtVer 5 0
+          { Consensus.maryProtVer = mkProtVer 5 0
           , Consensus.maryMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
           }
         Consensus.ProtocolParamsAlonzo
-          { Consensus.alonzoProtVer = ProtVer 6 0
+          { Consensus.alonzoProtVer = mkProtVer 7 0
           , Consensus.alonzoMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
           }
         Consensus.ProtocolParamsBabbage
-          { Consensus.babbageProtVer = ProtVer 7 0
+          { Consensus.babbageProtVer = mkProtVer 9 0
           , Consensus.babbageMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
           }
-        (Consensus.ProtocolTransitionParamsShelleyBased () $ dncShelleyHardFork dnc)
+        Consensus.ProtocolParamsConway
+          { Consensus.conwayProtVer = mkProtVer 10 0
+          , Consensus.conwayMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure -- TODO: Conway
+          }
+        (Consensus.ProtocolTransitionParamsShelleyBased emptyFromByronTranslationContext $ dncShelleyHardFork dnc) -- TODO: Conway Fix
         (Consensus.ProtocolTransitionParamsShelleyBased () $ dncAllegraHardFork dnc)
         (Consensus.ProtocolTransitionParamsShelleyBased () $ dncMaryHardFork dnc)
         (Consensus.ProtocolTransitionParamsShelleyBased alonzoGenesis $ dncAlonzoHardFork dnc)
-        (Consensus.ProtocolTransitionParamsShelleyBased alonzoGenesis $ dncBabbageHardFork dnc)
+        (Consensus.ProtocolTransitionParamsShelleyBased () $ dncBabbageHardFork dnc)
+        (Consensus.ProtocolTransitionParamsShelleyBased (ConwayGenesis (GenDelegs mempty)) Consensus.TriggerHardForkNever) -- TODO: Conway Fix
 
 shelleyPraosNonce :: ShelleyConfig -> Nonce
 shelleyPraosNonce sCfg = Nonce (Crypto.castHash . unGenesisHashShelley $ scGenesisHash sCfg)
+
+mkProtVer :: Word64 -> Word64 -> ProtVer
+mkProtVer a b =
+  case mkVersion64 a of
+    Nothing -> panic $ "Impossible: Invalid version generated: " <> textShow a
+    Just v -> ProtVer v (fromIntegral b)

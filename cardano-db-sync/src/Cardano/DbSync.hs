@@ -53,7 +53,7 @@ import Cardano.DbSync.Sync (runSyncNode)
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util (readAbortOnPanic)
-import Cardano.Prelude hiding (Nat, option, (%))
+import Cardano.Prelude hiding (Nat, (%))
 import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Except.Exit (orDie)
 import Control.Monad.Trans.Except.Extra (newExceptT)
@@ -169,8 +169,8 @@ startupReport trce aop params = do
   logInfo trce $ mconcat ["Option disable-ledger: ", textShow (not $ enpShouldUseLedger params)]
   logInfo trce $ mconcat ["Option disable-cache: ", textShow (not $ enpHasCache params)]
   logInfo trce $ mconcat ["Option disable-epoch: ", textShow (not $ enpExtended params)]
-  logInfo trce $ mconcat ["Option skip-plutus-data-fix: ", textShow (enpSkipFix params)]
-  logInfo trce $ mconcat ["Option only-plutus-data-fix: ", textShow (enpOnlyFix params)]
+  logInfo trce $ mconcat ["Option skip-fix: ", textShow (enpSkipFix params)]
+  logInfo trce $ mconcat ["Option fix-only: ", textShow (enpOnlyFix params)]
   logInfo trce $ mconcat ["Option force-indexes: ", textShow (enpForceIndexes params)]
   logInfo trce $ mconcat ["Option disable-multiassets: ", textShow (not $ enpHasMultiAssets params)]
   logInfo trce $ mconcat ["Option disable-metadata: ", textShow (not $ enpHasMetadata params)]

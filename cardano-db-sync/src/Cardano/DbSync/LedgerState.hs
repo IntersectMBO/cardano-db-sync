@@ -27,7 +27,6 @@ module Cardano.DbSync.LedgerState (
   loadLedgerAtPoint,
   hashToAnnotation,
   getHeaderHash,
-  saveCleanupState,
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
@@ -42,11 +41,9 @@ import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
 import Cardano.Ledger.Alonzo.Scripts
-import qualified Cardano.Ledger.Babbage.PParams as Babbage
 import qualified Cardano.Ledger.BaseTypes as Ledger
-import qualified Cardano.Ledger.Core as Core
-import Cardano.Ledger.Era (Crypto)
-import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
+import Cardano.Ledger.Era (EraCrypto)
+import Cardano.Ledger.Shelley.AdaPots (AdaPots)
 import Cardano.Ledger.Shelley.LedgerState (EpochState (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Prelude hiding (atomically)
@@ -81,6 +78,7 @@ import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import Data.Time.Clock (UTCTime, diffUTCTime, getCurrentTime)
+import Lens.Micro ((^.))
 import Ouroboros.Consensus.Block (
   CodecConfig,
   Point (..),
@@ -291,10 +289,10 @@ readStateUnsafe env = do
     Strict.Nothing -> panic "LedgerState.readStateUnsafe: Ledger state is not found"
     Strict.Just st -> pure st
 
-applyBlockAndSnapshot :: HasLedgerEnv -> CardanoBlock -> IO (ApplyResult, Bool)
-applyBlockAndSnapshot ledgerEnv blk = do
+applyBlockAndSnapshot :: HasLedgerEnv -> CardanoBlock -> Bool -> IO (ApplyResult, Bool)
+applyBlockAndSnapshot ledgerEnv blk isCons = do
   (oldState, appResult) <- applyBlock ledgerEnv blk
-  tookSnapshot <- storeSnapshotAndCleanupMaybe ledgerEnv oldState appResult (blockNo blk) (isSyncedWithinSeconds (apSlotDetails appResult) 600)
+  tookSnapshot <- storeSnapshotAndCleanupMaybe ledgerEnv oldState appResult (blockNo blk) isCons (isSyncedWithinSeconds (apSlotDetails appResult) 600)
   pure (appResult, tookSnapshot)
 
 -- The function 'tickThenReapply' does zero validation, so add minimal validation ('blockPrevHash'
@@ -307,14 +305,14 @@ applyBlock env blk = do
     !ledgerDB <- readStateUnsafe env
     let oldState = ledgerDbCurrent ledgerDB
     let !result = applyBlk (ExtLedgerCfg (getTopLevelconfigHasLedger env)) blk (clsState oldState)
+    let !ledgerEvents = mapMaybe convertAuxLedgerEvent (lrEvents result)
     let !newLedgerState = lrResult result
     !details <- getSlotDetails env (ledgerState newLedgerState) time (cardanoBlockSlotNo blk)
-    let !newEpoch = mkNewEpoch (clsState oldState) newLedgerState
+    let !newEpoch = mkNewEpoch (clsState oldState) newLedgerState (findAdaPots ledgerEvents)
     let !newEpochBlockNo = applyToEpochBlockNo (isJust $ blockIsEBB blk) (isJust newEpoch) (clsEpochBlockNo oldState)
     let !newState = CardanoLedgerState newLedgerState newEpochBlockNo
     let !ledgerDB' = pushLedgerDB ledgerDB newState
     writeTVar (leStateVar env) (Strict.Just ledgerDB')
-    let !ledgerEvents = mapMaybe convertAuxLedgerEvent (lrEvents result)
     let !appResult =
           ApplyResult
             { apPrices = getPrices newState
@@ -336,8 +334,8 @@ applyBlock env blk = do
         Left err -> panic err
         Right result -> result
 
-    mkNewEpoch :: ExtLedgerState CardanoBlock -> ExtLedgerState CardanoBlock -> Maybe Generic.NewEpoch
-    mkNewEpoch oldState newState =
+    mkNewEpoch :: ExtLedgerState CardanoBlock -> ExtLedgerState CardanoBlock -> Maybe AdaPots -> Maybe Generic.NewEpoch
+    mkNewEpoch oldState newState mPots =
       if ledgerEpochNo env newState /= ledgerEpochNo env oldState + 1
         then Nothing
         else
@@ -345,7 +343,7 @@ applyBlock env blk = do
             Generic.NewEpoch
               { Generic.neEpoch = ledgerEpochNo env newState
               , Generic.neIsEBB = isJust $ blockIsEBB blk
-              , Generic.neAdaPots = maybeToStrict $ getAdaPots newState
+              , Generic.neAdaPots = maybeToStrict mPots
               , Generic.neEpochUpdate = Generic.epochUpdate newState
               }
 
@@ -376,9 +374,10 @@ storeSnapshotAndCleanupMaybe ::
   CardanoLedgerState ->
   ApplyResult ->
   BlockNo ->
+  Bool ->
   SyncState ->
   IO Bool
-storeSnapshotAndCleanupMaybe env oldState appResult blkNo syncState =
+storeSnapshotAndCleanupMaybe env oldState appResult blkNo isCons syncState =
   case maybeFromStrict (apNewEpoch appResult) of
     Just newEpoch -> do
       let newEpochNo = Generic.neEpoch newEpoch
@@ -386,7 +385,7 @@ storeSnapshotAndCleanupMaybe env oldState appResult blkNo syncState =
       liftIO $ saveCleanupState env oldState (Just $ newEpochNo - 1)
       pure True
     Nothing ->
-      if timeToSnapshot syncState blkNo
+      if timeToSnapshot syncState blkNo && isCons
         then do
           liftIO $ saveCleanupState env oldState Nothing
           pure True
@@ -396,7 +395,7 @@ storeSnapshotAndCleanupMaybe env oldState appResult blkNo syncState =
     timeToSnapshot syncSt bNo =
       case (syncSt, unBlockNo bNo) of
         (SyncFollowing, bno) -> bno `mod` leSnapshotEveryFollowing env == 0
-        (SyncLagging, bno) -> bno `mod` leSnapshotEveryLagging env == 0
+        (SyncLagging, _) -> False
 
 saveCurrentLedgerState :: HasLedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
 saveCurrentLedgerState env ledger mEpochNo = do
@@ -414,7 +413,7 @@ saveCurrentLedgerState env ledger mEpochNo = do
           -- TODO: write the builder directly.
           -- BB.writeFile file $ toBuilder $
           LBS.writeFile file $
-            Serialize.serializeEncoding $
+            Serialize.serialize $
               encodeCardanoLedgerState
                 ( Consensus.encodeExtLedgerState
                     (encodeDisk codecConfig)
@@ -438,7 +437,7 @@ saveCurrentLedgerState env ledger mEpochNo = do
 mkLedgerStateFilename :: LedgerStateDir -> ExtLedgerState CardanoBlock -> Maybe EpochNo -> WithOrigin FilePath
 mkLedgerStateFilename dir ledger mEpochNo =
   lsfFilePath . dbPointToFileName dir mEpochNo
-    <$> getPoint (ledgerTipPoint (Proxy @CardanoBlock) (ledgerState ledger))
+    <$> getPoint (ledgerTipPoint @CardanoBlock (ledgerState ledger))
 
 saveCleanupState :: HasLedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
 saveCleanupState env ledger mEpochNo = do
@@ -512,7 +511,7 @@ cleanupLedgerStateFiles env slotNo = do
   -- Remove invalid (ie SlotNo >= current) ledger state files (occurs on rollback).
   deleteAndLogFiles env "invalid" invalid
   -- Remove all but 6 most recent state files.
-  deleteAndLogStateFile env "old" (List.drop 6 valid)
+  deleteAndLogStateFile env "old" (List.drop 3 valid)
   -- Remove all but 6 most recent epoch boundary state files.
   deleteAndLogStateFile env "old epoch boundary" (List.drop 6 epochBoundary)
   where
@@ -775,32 +774,21 @@ getRegisteredPools st =
     LedgerStateMary sts -> getRegisteredPoolShelley sts
     LedgerStateAlonzo ats -> getRegisteredPoolShelley ats
     LedgerStateBabbage bts -> getRegisteredPoolShelley bts
+    LedgerStateConway _stc -> panic "TODO: Conway 2"
 
 getRegisteredPoolShelley ::
   forall p era.
-  (Crypto era ~ StandardCrypto) =>
+  (EraCrypto era ~ StandardCrypto) =>
   LedgerState (ShelleyBlock p era) ->
   Set.Set PoolKeyHash
 getRegisteredPoolShelley lState =
   Map.keysSet $
-    Shelley._pParams $
+    Shelley.psStakePoolParams $
       Shelley.dpsPState $
         Shelley.lsDPState $
           Shelley.esLState $
             Shelley.nesEs $
               Consensus.shelleyLedgerState lState
-
--- We only compute 'AdaPots' for later eras. This is a time consuming
--- function and we only want to run it on epoch boundaries.
-getAdaPots :: ExtLedgerState CardanoBlock -> Maybe Shelley.AdaPots
-getAdaPots st =
-  case ledgerState st of
-    LedgerStateByron _ -> Nothing
-    LedgerStateShelley sts -> Just $ totalAdaPots sts
-    LedgerStateAllegra sta -> Just $ totalAdaPots sta
-    LedgerStateMary stm -> Just $ totalAdaPots stm
-    LedgerStateAlonzo sta -> Just $ totalAdaPots sta
-    LedgerStateBabbage stb -> Just $ totalAdaPots stb
 
 ledgerEpochNo :: HasLedgerEnv -> ExtLedgerState CardanoBlock -> EpochNo
 ledgerEpochNo env cls =
@@ -838,13 +826,6 @@ tickThenReapplyCheckHash cfg block lsb =
           , "."
           ]
 
-totalAdaPots ::
-  forall p era.
-  Core.EraTxOut era =>
-  LedgerState (ShelleyBlock p era) ->
-  Shelley.AdaPots
-totalAdaPots = Shelley.totalAdaPotsES . Shelley.nesEs . Consensus.shelleyLedgerState
-
 getHeaderHash :: HeaderHash CardanoBlock -> ByteString
 getHeaderHash bh = SBS.fromShort (Consensus.getOneEraHash bh)
 
@@ -876,15 +857,26 @@ getSlotDetails env st time slot = do
 getPrices :: CardanoLedgerState -> Strict.Maybe Prices
 getPrices st = case ledgerState $ clsState st of
   LedgerStateAlonzo als ->
-    Strict.Just $
-      Alonzo._prices $
-        esPp $
-          Shelley.nesEs $
-            Consensus.shelleyLedgerState als
+    Strict.Just
+      ( esPp
+          ( Shelley.nesEs $
+              Consensus.shelleyLedgerState als
+          )
+          ^. Alonzo.ppPricesL
+      )
   LedgerStateBabbage bls ->
-    Strict.Just $
-      Babbage._prices $
-        esPp $
-          Shelley.nesEs $
-            Consensus.shelleyLedgerState bls
+    Strict.Just
+      ( esPp
+          ( Shelley.nesEs $
+              Consensus.shelleyLedgerState bls
+          )
+          ^. Alonzo.ppPricesL
+      )
   _ -> Strict.Nothing
+
+findAdaPots :: [LedgerEvent] -> Maybe AdaPots
+findAdaPots = go
+  where
+    go [] = Nothing
+    go (LedgerAdaPots p : _) = Just p
+    go (_ : rest) = go rest

@@ -1,19 +1,17 @@
-cabal-version:          2.2
-
--- http://haskell.org/cabal/users-guide/
+cabal-version:          3.0
 
 name:                   cardano-db
-version:                13.1.0.0
+version:                13.1.1.0
 synopsis:               A base PostgreSQL component for the cardano-db-sync node.
 description:            Code for the Cardano DB Sync node that is shared between the
                         cardano-db-node and other components.
 homepage:               https://github.com/input-output-hk/cardano-db-sync
-bug-reports:		https://github.com/input-output-hk/cardano-db-sync/issues
+bug-reports:		        https://github.com/input-output-hk/cardano-db-sync/issues
 license:                Apache-2.0
 license-file:           LICENSE
 author:                 IOHK Engineering Team
 maintainer:             operations@iohk.io
-copyright:              (c) 2019 IOHK
+copyright:              2020-2023 Input Output Global Inc (IOG).
 category:               Cryptocurrency
 build-type:             Simple
 extra-source-files:     CHANGELOG.md
@@ -55,7 +53,7 @@ library
                         Cardano.Db.Version
 
   build-depends:        aeson
-                      , base                            >= 4.14         && < 4.16
+                      , base                            >= 4.14         && < 4.17
                       , bech32
                       , base16-bytestring
                       , bytestring
@@ -64,7 +62,6 @@ library
                       , cardano-prelude
                       , cardano-slotting
                       , containers
-                      , conduit
                       , conduit-extra
                       , contra-tracer
                       , cryptonite
@@ -118,7 +115,7 @@ test-suite test
                         Test.Property.Upstream
 
 
-  build-depends:        base                            >= 4.14         && < 4.16
+  build-depends:        base                            >= 4.14         && < 4.17
                       , aeson
                       , base16-bytestring
                       , bytestring
@@ -126,7 +123,7 @@ test-suite test
                       , cardano-db
                       , cardano-ledger-byron
                       , cardano-ledger-core
-                      , cardano-ledger-shelley-ma
+                      , cardano-ledger-mary == 1.1.0.0
                       , persistent
                       , hedgehog
                       , text
@@ -155,7 +152,7 @@ test-suite test-db
                         -Wunused-imports
                         -Wunused-packages
 
-  build-depends:        base                            >= 4.14         && < 4.16
+  build-depends:        base                            >= 4.14         && < 4.17
                       , bytestring
                       , cardano-db
                       , cardano-slotting
@@ -192,7 +189,7 @@ executable gen-schema-docs
 
   other-modules:        Paths_cardano_db
 
-  build-depends:        base                            >= 4.14         && < 4.16
+  build-depends:        base                            >= 4.14         && < 4.17
                       , cardano-db
                       , persistent-documentation
                       , process
@@ -214,7 +211,7 @@ test-suite schema-rollback
                         -Wunused-imports
                         -Wunused-packages
 
-  build-depends:        base                            >= 4.14         && < 4.16
+  build-depends:        base                            >= 4.14         && < 4.17
                       , ansi-terminal
                       , bytestring
                       , cardano-db

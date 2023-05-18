@@ -9,12 +9,6 @@
       url = "github:input-output-hk/iohk-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    cardano-world = {
-      url = "github:input-output-hk/cardano-world";
-      inputs = {
-        cardano-db-sync.follows = "/";
-      };
-    };
     flake-compat = {
       url = "github:input-output-hk/flake-compat/fixes";
       flake = false;
@@ -35,7 +29,7 @@
     std.follows = "tullia/std";
   };
 
-  outputs = { self, iohkNix, cardano-world, haskellNix, CHaP, nixpkgs, utils, tullia, std, flake-compat, ... }@inputs:
+  outputs = { self, iohkNix, haskellNix, CHaP, nixpkgs, utils, tullia, std, flake-compat, ... }@inputs:
     let
       inherit (haskellNix) config;
       inherit (nixpkgs) lib;
@@ -51,25 +45,38 @@
         inputs.customConfig;
 
       overlays = [
+        # crypto needs to come before hasell.nix. 
+        # FIXME: _THIS_IS_BAD_
+        iohkNix.overlays.crypto
         haskellNix.overlay
         iohkNix.overlays.haskell-nix-extra
-        iohkNix.overlays.crypto
         iohkNix.overlays.utils
+        iohkNix.overlays.cardano-lib
         (final: prev: {
           inherit flake-compat customConfig;
           gitrev = self.rev or "dirty";
           commonLib = lib // iohkNix.lib;
-          cardanoLib = rec {
-            inherit (cardano-world.${final.system}.cardano) environments;
-            forEnvironments = f: lib.mapAttrs
-              (name: env: f (env // { inherit name; }))
-              environments;
-          };
+          # cardanoLib = rec {
+          #   inherit (cardano-world.${final.system}.cardano) environments;
+          #   forEnvironments = f: lib.mapAttrs
+          #     (name: env: f (env // { inherit name; }))
+          #     environments;
+          # };
           schema = ./schema;
           ciJobs = self.ciJobs.${final.system};
         })
         (import ./nix/pkgs.nix)
         self.overlay
+        # I _do not_ understand why we need it _here_, and having it haskell.nix
+        # does not work.
+        (final: prev: prev.lib.optionalAttrs prev.stdenv.hostPlatform.isMusl {
+          # this is needed because postgresql links against libicu
+          # which we build only statically (for musl), and that then
+          # needs -lstdc++ as well.
+          postgresql = prev.postgresql.overrideAttrs (old: {
+            NIX_LDFLAGS = "-lstdc++";
+          });
+        })
       ];
 
     in eachSystem supportedSystems (system:
@@ -154,6 +161,9 @@
               inherit ciJobs;
               nonRequiredPaths = map (r: p: builtins.match r p != null) nonRequiredPaths;
             } // ciJobs;
+
+        hydraJobs = ciJobs;
+
       } // tullia.fromSimple system (import ./nix/tullia.nix)) // {
 
         # allows precise paths (avoid fallbacks) with nix build/eval:

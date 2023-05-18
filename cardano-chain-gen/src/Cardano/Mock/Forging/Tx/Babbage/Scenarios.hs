@@ -18,7 +18,7 @@ delegateAndSendBlocks n interpreter = do
     blockTxs <- withBabbageLedgerState interpreter $ \_st ->
       forM (chunksOf 10 blockCreds) $ \txCreds ->
         -- 10 per tx
-        Babbage.mkDCertTx (fmap (DCertDeleg . RegKey) txCreds) (Wdrl mempty) Nothing
+        Babbage.mkDCertTx (fmap (DCertDeleg . RegKey) txCreds) (Withdrawals mempty) Nothing
     forgeNextFindLeader interpreter (TxBabbage <$> blockTxs)
 
   delegateBlocks <- forM (chunksOf 500 creds) $ \blockCreds -> do
@@ -30,7 +30,7 @@ delegateAndSendBlocks n interpreter = do
               (\(poolIx, cred) -> DCertDeleg $ Delegate $ Delegation cred (resolvePool (PoolIndex poolIx) st))
               (zip (cycle [0, 1, 2]) txCreds)
           )
-          (Wdrl mempty)
+          (Withdrawals mempty)
           Nothing
     forgeNextFindLeader interpreter (TxBabbage <$> blockTxs)
 

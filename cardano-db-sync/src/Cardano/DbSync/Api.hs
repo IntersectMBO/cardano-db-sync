@@ -13,13 +13,17 @@ module Cardano.DbSync.Api (
   InsertOptions (..),
   ConsistentLevel (..),
   RunMigration,
+  FixesRan (..),
   fullInsertOptions,
   defaultInsertOptions,
   turboInsertOptions,
   setConsistentLevel,
   getConsistentLevel,
   isConsistent,
+  noneFixed,
+  isDataFixed,
   getIsSyncFixed,
+  setIsFixed,
   setIsFixedAndMigrate,
   getRanIndexes,
   runIndexMigrations,
@@ -90,7 +94,7 @@ data SyncEnv = SyncEnv
   , envRunDelayedMigration :: RunMigration
   , envBackend :: !(StrictTVar IO (Strict.Maybe SqlBackend))
   , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)
-  , envIsFixed :: !(StrictTVar IO Bool)
+  , envIsFixed :: !(StrictTVar IO FixesRan)
   , envIndexes :: !(StrictTVar IO Bool)
   , envOptions :: !SyncOptions
   , envCache :: !Cache
@@ -107,6 +111,8 @@ data LedgerEnv where
   NoLedger :: NoLedgerEnv -> LedgerEnv
 
 type RunMigration = DB.MigrationToRun -> IO ()
+
+data FixesRan = NoneFixRan | DataFixRan | AllFixRan
 
 data ConsistentLevel = Consistent | DBAheadOfLedger | Unchecked
   deriving (Show, Eq)
@@ -127,13 +133,25 @@ isConsistent env = do
     Consistent -> pure True
     _ -> pure False
 
-getIsSyncFixed :: SyncEnv -> IO Bool
+noneFixed :: FixesRan -> Bool
+noneFixed NoneFixRan = True
+noneFixed _ = False
+
+isDataFixed :: FixesRan -> Bool
+isDataFixed DataFixRan = True
+isDataFixed _ = False
+
+getIsSyncFixed :: SyncEnv -> IO FixesRan
 getIsSyncFixed = readTVarIO . envIsFixed
 
-setIsFixedAndMigrate :: SyncEnv -> IO ()
-setIsFixedAndMigrate env = do
+setIsFixed :: SyncEnv -> FixesRan -> IO ()
+setIsFixed env fr = do
+  atomically $ writeTVar (envIsFixed env) fr
+
+setIsFixedAndMigrate :: SyncEnv -> FixesRan -> IO ()
+setIsFixedAndMigrate env fr = do
   envRunDelayedMigration env DB.Fix
-  atomically $ writeTVar (envIsFixed env) True
+  atomically $ writeTVar (envIsFixed env) fr
 
 getRanIndexes :: SyncEnv -> IO Bool
 getRanIndexes env = do
@@ -318,7 +336,7 @@ mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart maybeLedge
   cache <- if soptCache syncOptions then newEmptyCache 250000 50000 else pure uninitiatedCache
   backendVar <- newTVarIO Strict.Nothing
   consistentLevelVar <- newTVarIO Unchecked
-  fixDataVar <- newTVarIO ranAll
+  fixDataVar <- newTVarIO $ if ranAll then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO forcedIndexes
   owq <- newTBQueueIO 100
   orq <- newTBQueueIO 100

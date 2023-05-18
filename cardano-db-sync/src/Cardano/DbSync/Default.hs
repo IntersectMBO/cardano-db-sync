@@ -19,7 +19,7 @@ import Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
 import Cardano.DbSync.Era.Shelley.Adjust (adjustEpochRewards)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
+import Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock, mkAdaPots)
 import Cardano.DbSync.Era.Shelley.Insert.Epoch (insertPoolDepositRefunds, insertRewards)
 import Cardano.DbSync.Era.Shelley.Validate (validateEpochRewards)
 import Cardano.DbSync.Error
@@ -34,8 +34,9 @@ import Cardano.DbSync.Rollback
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
+import Cardano.Ledger.Shelley.AdaPots as Shelley
 import Cardano.Prelude
-import Cardano.Slotting.Slot (EpochNo (..))
+import Cardano.Slotting.Slot (EpochNo (..), SlotNo)
 import Control.Monad.Logger (LoggingT)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except.Extra (newExceptT)
@@ -67,37 +68,55 @@ applyAndInsertBlockMaybe ::
   CardanoBlock ->
   ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 applyAndInsertBlockMaybe syncEnv cblk = do
-  (!applyRes, !tookSnapshot) <- liftIO mkApplyResult
   bl <- liftIO $ isConsistent syncEnv
   let blockN = blockNo cblk
+  (!applyRes, !tookSnapshot) <- liftIO (mkApplyResult bl)
   if bl
     then -- In the usual case it will be consistent so we don't need to do any queries. Just insert the block
       insertBlock syncEnv cblk applyRes False tookSnapshot
     else do
-      let eitherBlockId = DB.queryBlockId (SBS.fromShort . Consensus.getOneEraHash $ blockHash cblk)
-      blockIsInDbAlready <- lift (isRight <$> eitherBlockId)
+      eiBlockInDbAlreadyId <- lift (DB.queryBlockId (SBS.fromShort . Consensus.getOneEraHash $ blockHash cblk))
       -- If the block is already in db, do nothing. If not, delete all blocks with greater 'BlockNo' or
       -- equal, insert the block and restore consistency between ledger and db.
-      unless blockIsInDbAlready $ do
-        liftIO . logInfo tracer $
-          mconcat
-            [ "Received block which is not in the db with "
-            , textShow (getHeaderFields cblk)
-            , ". Time to restore consistency."
-            ]
-        rollbackFromBlockNo syncEnv blockN
-        insertBlock syncEnv cblk applyRes True tookSnapshot
-        liftIO $ setConsistentLevel syncEnv Consistent
+      case eiBlockInDbAlreadyId of
+        Left _ -> do
+          liftIO . logInfo tracer $
+            mconcat
+              [ "Received block which is not in the db with "
+              , textShow (getHeaderFields cblk)
+              , ". Time to restore consistency."
+              ]
+          rollbackFromBlockNo syncEnv (blockNo cblk)
+          insertBlock syncEnv cblk applyRes True tookSnapshot
+          liftIO $ setConsistentLevel syncEnv Consistent
+        Right blockId | Just (adaPots, slotNo, epochNo) <- getAdaPots applyRes -> do
+          replaced <- lift $ DB.replaceAdaPots blockId $ mkAdaPots blockId slotNo epochNo adaPots
+          if replaced
+            then liftIO $ logInfo tracer $ "Fixed AdaPots for " <> textShow epochNo
+            else liftIO $ logInfo tracer $ "Reached " <> textShow epochNo
+        Right _ | Just epochNo <- getNewEpoch applyRes ->
+          liftIO $ logInfo tracer $ "Reached " <> textShow epochNo
+        _ -> pure ()
   where
     tracer = getTrace syncEnv
 
-    mkApplyResult :: IO (ApplyResult, Bool)
-    mkApplyResult = do
+    mkApplyResult :: Bool -> IO (ApplyResult, Bool)
+    mkApplyResult isCons = do
       case envLedgerEnv syncEnv of
-        HasLedger hle -> applyBlockAndSnapshot hle cblk
+        HasLedger hle -> applyBlockAndSnapshot hle cblk isCons
         NoLedger nle -> do
           slotDetails <- getSlotDetailsNode nle (cardanoBlockSlotNo cblk)
           pure (defaultApplyResult slotDetails, False)
+
+    getAdaPots :: ApplyResult -> Maybe (Shelley.AdaPots, SlotNo, EpochNo)
+    getAdaPots appRes = do
+      newEpoch <- maybeFromStrict $ apNewEpoch appRes
+      adaPots <- maybeFromStrict $ Generic.neAdaPots newEpoch
+      pure (adaPots, sdSlotNo $ apSlotDetails appRes, sdEpochNo $ apSlotDetails appRes)
+
+    getNewEpoch :: ApplyResult -> Maybe EpochNo
+    getNewEpoch appRes =
+      Generic.neEpoch <$> maybeFromStrict (apNewEpoch appRes)
 
 insertBlock ::
   SyncEnv ->
@@ -154,6 +173,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
       newExceptT $
         insertShelley $
           Generic.fromBabbageBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
+    BlockConway _blk -> panic "TODO: Conway 1"
   -- update the epoch
   updateEpoch details
   lift $ commitOrIndexes withinTwoMin withinHalfHour
@@ -252,6 +272,8 @@ insertLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
           lift $ adjustEpochRewards tracer ntw cache e rwd creds
         LedgerTotalRewards _e rwd -> do
           lift $ validateEpochRewards tracer ntw (subFromCurrentEpoch 2) currentEpochNo rwd
+        LedgerAdaPots _ ->
+          pure () -- These are handled separately by insertBlock
         LedgerMirDist rwd -> do
           unless (Map.null rwd) $ do
             let rewards = Map.toList rwd

@@ -9,11 +9,9 @@ repository cardano-haskell-packages
     c00aae8461a256275598500ea0e187588c35a5d5d7454fb57eac18d9edb86a56
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
--- repeating the index-state for hackage to work around hackage.nix parsing limitation
-index-state: 2022-11-11T00:00:00Z
 index-state:
-  , hackage.haskell.org 2022-11-11T00:00:00Z
-  , cardano-haskell-packages 2022-11-12T20:00:00Z
+  , hackage.haskell.org 2023-04-29T00:00:00Z
+  , cardano-haskell-packages 2023-04-30T00:28:07Z
 
 packages:
   cardano-db
@@ -23,19 +21,9 @@ packages:
   cardano-smash-server
   cardano-chain-gen
 
+
 constraints:
-    persistent-postgresql >= 2.11.0.1
-  , hedgehog >= 1.0
-  , bimap >= 0.4.0
-  , libsystemd-journal >= 1.4.4
-  , systemd >= 2.3.0
-    -- systemd-2.3.0 requires at least network 3.1.1.0 but it doesn't declare
-    -- that dependency
-  , network >= 3.1.1.0
-  , HSOpenSSL >= 0.11.7.2
-  , algebraic-graphs < 0.7
-  , protolude >= 0.3.2
-  , cardano-binary  == 1.5.0
+    persistent-postgresql >= 2.11.0.1,
 
 package cardano-db
   ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields -Wunused-imports -Wunused-packages
@@ -63,13 +51,11 @@ package cryptonite
 tests: True
 test-show-details: direct
 
-allow-newer:
-  ekg:aeson,
-  ekg-json:aeson,
-  threepenny-gui:aeson,
-  monoidal-containers:aeson,
-  size-based:template-haskell,
-  snap-server:attoparsec,
+-- Always write GHC env files, because they are needed for ghci.
+write-ghc-environment-files: always
+
+package snap-server
+  flags: +openssl
 
 -- ---------------------------------------------------------
 
@@ -81,8 +67,8 @@ allow-newer:
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: 7bd6944879b933d4389f6f2cb317016710c97245
-  --sha256: 1djw8xd8cn3jhvhgxqkmrimz4q61iwvaha179wf1v79mkdkcb53g
+  tag: 69a117b7be3db0f4ce6d9fc5cd4c16a2a409dcb8
+  --sha256: 1yaf3jk6rgmivgi730ljd8sjpdnzasncxnj8ypgzcdshyp1id25q
   subdir:
     cardano-api
     cardano-cli
@@ -91,48 +77,3 @@ source-repository-package
     trace-dispatcher
     trace-forward
     trace-resources
-
-source-repository-package
-  type: git
-  location: https://github.com/vshabanov/ekg-json
-  tag: 00ebe7211c981686e65730b7144fbf5350462608
-  --sha256: 1zvjm3pb38w0ijig5wk5mdkzcszpmlp5d4zxvks2jk1rkypi8gsm
-
-source-repository-package
-  type: git
-  location: https://github.com/denisshevchenko/threepenny-gui
-  tag: 4ec92ded05ccf59ba4a874be4b404ac1b6d666b6
-  --sha256: 00fvvaf4ir4hskq4a6gggbh2wmdvy8j8kn6s4m1p1vlh8m8mq514
-
--- And has the adjustments for the ledger refactor
-source-repository-package
-   type: git
-   location: https://github.com/input-output-hk/ouroboros-network
-   tag: 72863b0fc78abdc2b8e29f0dda96c06da3dd11d0
-   --sha256: 0qwvx04l9q3h7acb0a3b8iarqcn5bkqhwaplbga5pvryqp3lhn00
-   subdir:
-     monoidal-synchronisation
-     network-mux
-     ouroboros-consensus
-     ouroboros-consensus-byron
-     ouroboros-consensus-cardano
-     ouroboros-consensus-protocol
-     ouroboros-consensus-shelley
-     ouroboros-network
-     ouroboros-network-framework
-     ouroboros-network-testing
-     ouroboros-consensus-cardano-tools
-
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/cardano-config
-  tag: e9de7a2cf70796f6ff26eac9f9540184ded0e4e6
-  --sha256: 1wm1c99r5zvz22pdl8nhkp13falvqmj8dgkm8fxskwa9ydqz01ld
-
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/iohk-monitoring-framework
-  tag: 066f7002aac5a0efc20e49643fea45454f226caa
-  --sha256: 0s6x4in11k5ba7nl7la896g28sznf9185xlqg9c604jqz58vj9nj
-  subdir:
-    plugins/scribe-systemd

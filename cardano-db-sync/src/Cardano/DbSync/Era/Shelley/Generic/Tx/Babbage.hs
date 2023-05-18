@@ -7,6 +7,7 @@
 
 module Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage (
   fromBabbageTx,
+  fromScript,
 ) where
 
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
@@ -15,22 +16,22 @@ import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Era.Shelley.Generic.Witness
-import qualified Cardano.Ledger.Alonzo.Data as Alonzo
+import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
+import qualified Cardano.Ledger.Alonzo.Scripts.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import Cardano.Ledger.Babbage.TxBody (BabbageTxOut)
 import qualified Cardano.Ledger.Babbage.TxBody as Babbage
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Coin (Coin (..))
-import qualified Cardano.Ledger.CompactAddress as Ledger
 import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Era as Ledger
-import Cardano.Ledger.Mary.Value (MaryValue (..))
+import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..))
 import Cardano.Prelude
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import Lens.Micro
-import Ouroboros.Consensus.Shelley.Eras (StandardBabbage, StandardCrypto)
+import Ouroboros.Consensus.Shelley.Eras (EraCrypto, StandardBabbage, StandardCrypto)
 
 fromBabbageTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardBabbage) -> Tx
 fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
@@ -92,8 +93,8 @@ fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
         , txOutDatum = fromDatum datum
         }
       where
-        Ledger.UnsafeCompactAddr bs = txOut ^. Core.compactAddrTxOutL
-        MaryValue ada maMap = txOut ^. Core.valueTxOutL
+        bs = Ledger.unCompactAddr $ txOut ^. Core.compactAddrTxOutL
+        MaryValue ada (MultiAsset maMap) = txOut ^. Core.valueTxOutL
         datum = txOut ^. Babbage.datumTxOutL
         mScript = txOut ^. Babbage.referenceScriptTxOutL
 
@@ -115,13 +116,13 @@ fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
         Alonzo.IsValid x -> x
 
     (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx
-    (invalidBefore, invalidAfter) = getInterval $ Babbage.vldt' txBody
+    (invalidBefore, invalidAfter) = getInterval txBody
 
     collInputs = mkCollTxIn txBody
 
 fromScript ::
   forall era.
-  ( Ledger.Crypto era ~ StandardCrypto
+  ( EraCrypto era ~ StandardCrypto
   , Core.Script era ~ Alonzo.AlonzoScript era
   , Core.EraScript era
   ) =>
@@ -129,7 +130,7 @@ fromScript ::
   TxScript
 fromScript scr = mkTxScript (Core.hashScript @era scr, scr)
 
-fromDatum :: (Ledger.Crypto era ~ StandardCrypto, Ledger.Era era) => Babbage.Datum era -> TxOutDatum
+fromDatum :: (EraCrypto era ~ StandardCrypto, Ledger.Era era) => Babbage.Datum era -> TxOutDatum
 fromDatum bdat =
   case bdat of
     Babbage.NoDatum -> NoDatum
