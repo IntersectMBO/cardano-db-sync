@@ -189,7 +189,7 @@ function restore_snapshot {
 	  lstate_file=$(basename "${lstate_gz_file}" | sed 's/.gz$//')
 	  gunzip --to-stdout "${lstate_gz_file}" > "$2/${lstate_file}"
 	  drop_db
-	  pg_restore --jobs="${numcores}" --format=directory --dbname=cexplorer "${tmp_dir}/db/"
+	  pg_restore --jobs="${numcores}" --format=directory --dbname="${PGDATABASE}" "${tmp_dir}/db/"
 	else
 	  # Old snapshot format produced by this script
 	  db_file=$(find "${tmp_dir}/" -iname "*.sql")
