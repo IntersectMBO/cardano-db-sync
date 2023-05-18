@@ -1,4 +1,4 @@
-**Validated: 2022/08/20**
+**Validated: 2023/05/18**
 
 # Building and Running the Cardano DB Sync Node
 
@@ -34,6 +34,10 @@ cd cardano-node
 git checkout <latest-official-tag> -b tag-<latest-official-tag>
 nix run .#mainnet/node
 ```
+
+More detailed instructions on GHC, Cabal, libraries and `cardano-node` setup can be found here:
+- [Installing Cardano Node from source](https://github.com/input-output-hk/cardano-node/blob/master/doc/getting-started/install.md)
+- [Building Cardano Node with nix](https://github.com/input-output-hk/cardano-node/blob/master/doc/getting-started/building-the-node-using-nix.md)
 
 ### Set up and run the db-sync node
 
@@ -84,7 +88,7 @@ when running cabal build
 git clone https://github.com/input-output-hk/cardano-db-sync
 cd cardano-db-sync
 git checkout <latest-official-tag> -b tag-<latest-official-tag>
-nix-build -A cardano-db-sync -o db-sync-node
+nix build -v .#cardano-db-sync -o db-sync-node
 PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh --createdb
 PGPASSFILE=config/pgpass-mainnet db-sync-node/bin/cardano-db-sync \
     --config config/mainnet-config.yaml \
