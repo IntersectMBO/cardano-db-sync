@@ -67,16 +67,13 @@ readEpochFromCacheEpoch cache blockNo =
       cE <- liftIO $ readTVarIO (cEpoch ci)
       pure $ lookup blockNo (ceMapEpoch cE)
 
-rollbackMapEpochInCacheEpoch :: MonadIO m => Cache -> DB.BlockId -> m (Either SyncNodeError ())
-rollbackMapEpochInCacheEpoch cache blockId =
-  case cache of
-    UninitiatedCache -> pure $ Left $ NEError "rollbackMapEpochInCacheEpoch: Cache is UninitiatedCache"
-    Cache ci -> do
-      cE <- liftIO $ readTVarIO (cEpoch ci)
+rollbackMapEpochInCacheEpoch :: MonadIO m => CacheInternal -> DB.BlockId -> m (Either SyncNodeError ())
+rollbackMapEpochInCacheEpoch cache blockId = do
+      cE <- liftIO $ readTVarIO (cEpoch cache)
       -- split the map and delete anything after blockId including it self as new blockId might be
       -- given when inserting the block again when doing rollbacks.
       let (newMapEpoch, _) = split blockId (ceMapEpoch cE)
-      writeToCache ci (CacheEpoch newMapEpoch (ceCurrentEpoch cE))
+      writeToCache cache (CacheEpoch newMapEpoch (ceCurrentEpoch cE))
 
 writeCacheEpoch :: MonadIO m => Cache -> CacheEpoch -> m ()
 writeCacheEpoch cache cacheEpoch =

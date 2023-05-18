@@ -67,11 +67,11 @@ import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 -- NOTE: Other tables are not cleaned up since they are not rollbacked.
 rollbackCache :: MonadIO m => Cache -> DB.BlockId -> ReaderT SqlBackend m ()
 rollbackCache UninitiatedCache _ = pure ()
-rollbackCache c@(Cache cache) blockId = do
+rollbackCache (Cache cache) blockId = do
   liftIO $ do
     atomically $ writeTVar (cPrevBlock cache) Nothing
     atomically $ modifyTVar (cDatum cache) LRU.cleanup
-    void $ rollbackMapEpochInCacheEpoch c blockId
+    void $ rollbackMapEpochInCacheEpoch cache blockId
 
 getCacheStatistics :: Cache -> IO CacheStatistics
 getCacheStatistics cs =
