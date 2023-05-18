@@ -76,9 +76,9 @@ updateEpochStart syncEnv trce cache slotDetails = do
   mCurrentEpochCache <- liftIO $ readCurrentEpochFromCacheEpoch cache
   curEpochNo <- calculateCurrentEpochNo mCurrentEpochCache
   let prevEpochNo = maybe 0 epPreviousEpochNo mCurrentEpochCache
-      message = "\n LastMap: \n" <> DB.textShow mLastMapEpochFromCache <>
-                "\n CurrentEpochCach: \n" <> DB.textShow mCurrentEpochCache <>
-                "\n CurrentEpochNo: \n" <> DB.textShow curEpochNo <> "\n \n"
+      message = "LastMap: \n" <> DB.textShow mLastMapEpochFromCache <> "\n" <>
+                "CurrentEpochCach: \n" <> DB.textShow mCurrentEpochCache <> "\n" <>
+                "CurrentEpochNo: \n" <> DB.textShow curEpochNo <> "\n \n"
 
   if
       -- The tip has been reached so now replace/update the epoch every block.
