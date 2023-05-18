@@ -69,7 +69,6 @@ applyAndInsertBlockMaybe ::
   ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 applyAndInsertBlockMaybe syncEnv cblk = do
   bl <- liftIO $ isConsistent syncEnv
-  let blockN = blockNo cblk
   (!applyRes, !tookSnapshot) <- liftIO (mkApplyResult bl)
   if bl
     then -- In the usual case it will be consistent so we don't need to do any queries. Just insert the block
