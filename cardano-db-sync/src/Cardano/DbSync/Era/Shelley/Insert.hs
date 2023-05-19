@@ -132,7 +132,7 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
     minIds <- insertBlockGroupedData tracer blockGroupedData
 
     -- now that we've inserted the Block and all it's txs lets cache what we'll need
-    -- for updating the epoch using this cached data.
+    -- when we later update the epoch values.
     prevEpoch <- lift $ calculatePreviousEpochNo cache
 
     void $
