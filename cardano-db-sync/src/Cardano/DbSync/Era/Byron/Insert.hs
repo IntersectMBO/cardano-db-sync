@@ -119,7 +119,7 @@ insertABOBBoundary tracer cache blk details = do
         }
 
   -- now that we've inserted the Block and all it's txs lets cache what we'll need
-  -- for updating the epoch using this cached data.
+  -- when we later update the epoch values.
   prevEpoch <- lift $ calculatePreviousEpochNo cache
 
   void $
@@ -182,7 +182,7 @@ insertABlock tracer cache firstBlockOfEpoch blk details = do
       outSum = sum $ map Byron.lovelaceToInteger byronTxOutValues
 
   -- now that we've inserted the Block and all it's txs lets cache what we'll need
-  -- for updating the epoch using this cached data.
+  -- when we later update the epoch values.
   prevEpoch <- lift $ calculatePreviousEpochNo cache
 
   void $
