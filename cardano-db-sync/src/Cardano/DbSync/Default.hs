@@ -93,8 +93,9 @@ applyAndInsertBlockMaybe syncEnv cblk = do
           if replaced
             then liftIO $ logInfo tracer $ "Fixed AdaPots for " <> textShow epochNo
             else liftIO $ logInfo tracer $ "Reached " <> textShow epochNo
-        Right _ | Just epochNo <- getNewEpoch applyRes ->
-          liftIO $ logInfo tracer $ "Reached " <> textShow epochNo
+        Right _
+          | Just epochNo <- getNewEpoch applyRes ->
+              liftIO $ logInfo tracer $ "Reached " <> textShow epochNo
         _ -> pure ()
   where
     tracer = getTrace syncEnv
@@ -133,12 +134,13 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   let !withinTwoMin = isWithinTwoMin details
   let !withinHalfHour = isWithinHalfHour details
   insertLedgerEvents syncEnv (sdEpochNo details) (apEvents applyResult)
-  let shouldLog = hasEpochStartEvent (apEvents applyResult) || firstAfterRollback
+  let isEpochStartEvent = hasEpochStartEvent (apEvents applyResult)
+  let isStartEventOrRollback = isEpochStartEvent || firstAfterRollback
   let isMember poolId = Set.member poolId (apPoolsRegistered applyResult)
   let insertShelley blk =
         insertShelleyBlock
           syncEnv
-          shouldLog
+          isStartEventOrRollback
           withinTwoMin
           withinHalfHour
           blk
@@ -151,7 +153,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   case cblk of
     BlockByron blk ->
       newExceptT $
-        insertByronBlock syncEnv shouldLog blk details
+        insertByronBlock syncEnv isStartEventOrRollback blk details
     BlockShelley blk ->
       newExceptT $
         insertShelley $
@@ -174,19 +176,20 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
           Generic.fromBabbageBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
     BlockConway _blk -> panic "TODO: Conway 1"
   -- update the epoch
-  updateEpoch details
+  updateEpoch details isEpochStartEvent
   lift $ commitOrIndexes withinTwoMin withinHalfHour
   where
     tracer = getTrace syncEnv
     iopts = getInsertOptions syncEnv
 
-    updateEpoch details =
+    updateEpoch details isStartEvent =
       when (soptExtended $ envOptions syncEnv)
         . newExceptT
         $ epochHandler
           syncEnv
           tracer
           (envCache syncEnv)
+          isStartEvent
           (BlockDetails cblk details)
 
     getPrices :: ApplyResult -> Maybe Ledger.Prices
