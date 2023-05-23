@@ -26,7 +26,7 @@ module Cardano.DbSync.Cache (
 ) where
 
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCacheEpoch)
+import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
 import qualified Cardano.DbSync.Cache.LRU as LRU
 import Cardano.DbSync.Cache.Types (Cache (..), CacheInternal (..), CacheNew (..), CacheStatistics (..), StakeAddrCache, initCacheStatistics)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
@@ -71,7 +71,7 @@ rollbackCache (Cache cache) blockId = do
   liftIO $ do
     atomically $ writeTVar (cPrevBlock cache) Nothing
     atomically $ modifyTVar (cDatum cache) LRU.cleanup
-    void $ rollbackMapEpochInCacheEpoch cache blockId
+    void $ rollbackMapEpochInCache cache blockId
 
 getCacheStatistics :: Cache -> IO CacheStatistics
 getCacheStatistics cs =

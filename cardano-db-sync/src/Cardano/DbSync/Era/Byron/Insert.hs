@@ -29,8 +29,8 @@ import Cardano.DbSync.Cache (
   insertBlockAndCache,
   queryPrevBlockWithCache,
  )
-import Cardano.DbSync.Cache.Epoch (calculatePreviousEpochNo, writeCurrentEpochToCache)
-import Cardano.DbSync.Cache.Types (Cache (..), CurrentEpoch (..))
+import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
+import Cardano.DbSync.Cache.Types (Cache (..), EpochBlockDiff (..))
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
@@ -87,7 +87,7 @@ insertABOBBoundary ::
 insertABOBBoundary tracer cache blk details = do
   -- Will not get called in the OBFT part of the Byron era.
   pbid <- queryPrevBlockWithCache "insertABOBBoundary" cache (Byron.ebbPrevHash blk)
-  let epochNo = sdEpochNo details
+  let epochNo = unEpochNo $ sdEpochNo details
   slid <-
     lift . DB.insertSlotLeader $
       DB.SlotLeader
@@ -99,7 +99,7 @@ insertABOBBoundary tracer cache blk details = do
     lift . insertBlockAndCache cache $
       DB.Block
         { DB.blockHash = Byron.unHeaderHash $ Byron.boundaryHashAnnotated blk
-        , DB.blockEpochNo = Just $ unEpochNo epochNo
+        , DB.blockEpochNo = Just epochNo
         , -- No slotNo for a boundary block
           DB.blockSlotNo = Nothing
         , DB.blockEpochSlotNo = Nothing
@@ -120,20 +120,17 @@ insertABOBBoundary tracer cache blk details = do
 
   -- now that we've inserted the Block and all it's txs lets cache what we'll need
   -- when we later update the epoch values.
-  prevEpoch <- lift $ calculatePreviousEpochNo cache
-
   void $
     lift $
-      writeCurrentEpochToCache
+      writeEpochBlockDiffToCache
         cache
-        CurrentEpoch
-          { epCurrentBlockId = blkId
-          , epCurrentFees = 0
-          , epCurrentOutSum = 0
-          , epCurrentTxCount = 0
-          , epCurrentEpochNo = unEpochNo (sdEpochNo details)
-          , epPreviousEpochNo = prevEpoch
-          , epCurrentBlockTime = sdSlotTime details
+        EpochBlockDiff
+          { ebdBlockId = blkId
+          , ebdFees = 0
+          , ebdOutSum = 0
+          , ebdTxCount = 0
+          , ebdEpochNo = epochNo
+          , ebdTime = sdSlotTime details
           }
 
   liftIO . logInfo tracer $
@@ -183,20 +180,17 @@ insertABlock tracer cache firstBlockOfEpoch blk details = do
 
   -- now that we've inserted the Block and all it's txs lets cache what we'll need
   -- when we later update the epoch values.
-  prevEpoch <- lift $ calculatePreviousEpochNo cache
-
   void $
     lift $
-      writeCurrentEpochToCache
+      writeEpochBlockDiffToCache
         cache
-        CurrentEpoch
-          { epCurrentBlockId = blkId
-          , epCurrentFees = sum txFees
-          , epCurrentOutSum = fromIntegral outSum
-          , epCurrentTxCount = fromIntegral $ length txs
-          , epCurrentEpochNo = unEpochNo (sdEpochNo details)
-          , epPreviousEpochNo = prevEpoch
-          , epCurrentBlockTime = sdSlotTime details
+        EpochBlockDiff
+          { ebdBlockId = blkId
+          , ebdFees = sum txFees
+          , ebdOutSum = fromIntegral outSum
+          , ebdTxCount = fromIntegral $ length txs
+          , ebdEpochNo = unEpochNo (sdEpochNo details)
+          , ebdTime = sdSlotTime details
           }
 
   liftIO $ do

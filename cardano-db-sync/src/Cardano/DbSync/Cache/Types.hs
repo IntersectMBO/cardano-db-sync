@@ -10,7 +10,7 @@ module Cardano.DbSync.Cache.Types (
   CacheNew (..),
   CacheEpoch (..),
   CacheInternal (..),
-  CurrentEpoch (..),
+  EpochBlockDiff (..),
   StakeAddrCache,
   StakePoolCache,
 
@@ -82,23 +82,20 @@ data CacheStatistics = CacheStatistics
 
 -- When inserting Txs and Blocks we also caculate values which can later be used when calculating a Epochs.
 -- For this reason we store these values in cache.
-data CurrentEpoch = CurrentEpoch
+data EpochBlockDiff = EpochBlockDiff
   { -- | The blockId of the current block, this is used as the key for MapEpoch.
-    epCurrentBlockId :: !DB.BlockId
-  , epCurrentFees :: !Word64
-  , epCurrentOutSum :: !Word128
-  , epCurrentTxCount :: !Word64
-  , -- | The epochNo of current block
-    epCurrentEpochNo :: !Word64
-  , -- | The epochNo of previous block
-    epPreviousEpochNo :: !Word64
-  , epCurrentBlockTime :: !UTCTime
+    ebdBlockId :: !DB.BlockId
+  , ebdFees :: !Word64
+  , ebdOutSum :: !Word128
+  , ebdTxCount :: !Word64
+  , ebdEpochNo :: !Word64
+  , ebdTime :: !UTCTime
   }
   deriving (Show)
 
 data CacheEpoch = CacheEpoch
   { ceMapEpoch :: !(Map DB.BlockId DB.Epoch)
-  , ceCurrentEpoch :: !(Maybe CurrentEpoch)
+  , ceEpochBlockDiff :: !(Maybe EpochBlockDiff)
   }
   deriving (Show)
 
