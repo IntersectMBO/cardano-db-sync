@@ -132,8 +132,8 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   let !withinTwoMin = isWithinTwoMin details
   let !withinHalfHour = isWithinHalfHour details
   insertLedgerEvents syncEnv (sdEpochNo details) (apEvents applyResult)
-  let isEpochStartEvent = hasEpochStartEvent (apEvents applyResult)
-  let isStartEventOrRollback = isEpochStartEvent || firstAfterRollback
+  let isNewEpochEvent = hasNewEpochEvent (apEvents applyResult)
+  let isStartEventOrRollback = hasEpochStartEvent (apEvents applyResult) || firstAfterRollback
   let isMember poolId = Set.member poolId (apPoolsRegistered applyResult)
   let insertShelley blk =
         insertShelleyBlock
@@ -174,20 +174,20 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
           Generic.fromBabbageBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
     BlockConway _blk -> panic "TODO: Conway 1"
   -- update the epoch
-  updateEpoch details isEpochStartEvent
+  updateEpoch details isNewEpochEvent
   lift $ commitOrIndexes withinTwoMin withinHalfHour
   where
     tracer = getTrace syncEnv
     iopts = getInsertOptions syncEnv
 
-    updateEpoch details isStartEvent =
+    updateEpoch details isNewEpochEvent =
       when (soptExtended $ envOptions syncEnv)
         . newExceptT
         $ epochHandler
           syncEnv
           tracer
           (envCache syncEnv)
-          isStartEvent
+          isNewEpochEvent
           (BlockDetails cblk details)
 
     getPrices :: ApplyResult -> Maybe Ledger.Prices
@@ -291,4 +291,13 @@ hasEpochStartEvent = any isNewEpoch
       case le of
         LedgerNewEpoch {} -> True
         LedgerStartAtEpoch {} -> True
+        _otherwise -> False
+
+hasNewEpochEvent :: [LedgerEvent] -> Bool
+hasNewEpochEvent = any isNewEpoch
+  where
+    isNewEpoch :: LedgerEvent -> Bool
+    isNewEpoch le =
+      case le of
+        LedgerNewEpoch {} -> True
         _otherwise -> False

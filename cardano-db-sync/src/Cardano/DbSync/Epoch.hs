@@ -25,6 +25,8 @@ import Control.Monad.Logger (LoggingT)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Database.Esqueleto.Experimental (SqlBackend, replace)
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
+import qualified Cardano.Chain.Block as Byron
+import Ouroboros.Consensus.Byron.Ledger (ByronBlock(..))
 
 -- Populating the Epoch table has two mode:
 --  * SyncLagging: when the node is far behind the chain tip and is just updating the DB. In this
@@ -39,9 +41,18 @@ epochHandler ::
   Bool ->
   BlockDetails ->
   ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
-epochHandler syncEnv trce cache isStartEvent (BlockDetails cblk details) =
+epochHandler syncEnv trce cache isNewEpochEvent (BlockDetails cblk details) =
   case cblk of
-    BlockByron {} -> updateEpochStart syncEnv cache details isStartEvent
+    BlockByron bblk ->
+      case byronBlockRaw bblk of
+        Byron.ABOBBoundary {} -> do
+          -- For the OBFT era there are no boundary blocks so we ignore them even in
+          -- the Ouroboros Classic era.
+          updateEpochStart syncEnv cache details isNewEpochEvent True
+          -- pure $ Right ()
+        Byron.ABOBBlock _blk ->
+          updateEpochStart syncEnv cache details isNewEpochEvent False
+    -- BlockByron {} -> updateEpochStart syncEnv cache details isNewEpochEvent
     BlockShelley {} -> epochSlotTimecheck
     BlockAllegra {} -> epochSlotTimecheck
     BlockMary {} -> epochSlotTimecheck
@@ -56,15 +67,16 @@ epochHandler syncEnv trce cache isStartEvent (BlockDetails cblk details) =
         liftIO . logError trce $
           mconcat
             ["Slot time '", textShow (sdSlotTime details), "' is in the future"]
-      updateEpochStart syncEnv cache details isStartEvent
+      updateEpochStart syncEnv cache details isNewEpochEvent False
 
 updateEpochStart ::
   SyncEnv ->
   Cache ->
   SlotDetails ->
   Bool ->
+  Bool ->
   ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
-updateEpochStart syncEnv cache slotDetails isStartEvent = do
+updateEpochStart syncEnv cache slotDetails isNewEpochEvent isBoundaryBlock = do
   mLastMapEpochFromCache <- liftIO $ readLastMapEpochFromCache cache
   mEpochBlockDiff <- liftIO $ readEpochBlockDiffFromCache cache
   let curEpochNo = unEpochNo $ sdEpochNo slotDetails
@@ -75,11 +87,11 @@ updateEpochStart syncEnv cache slotDetails isStartEvent = do
           handleEpochWhenFollowing syncEnv cache mLastMapEpochFromCache mEpochBlockDiff curEpochNo
       -- When syncing we check if current block is the first block in an epoch.
       -- If so then it's time to put the previous epoch into the DB.
-      | isStartEvent ->
-          handleEpochWhenSyncing syncEnv cache mEpochBlockDiff mLastMapEpochFromCache curEpochNo
+      | isNewEpochEvent ->
+          updateEpochWhenSyncing syncEnv cache mEpochBlockDiff mLastMapEpochFromCache curEpochNo isBoundaryBlock
       -- we're syncing and the epochNo are the same so we just update the cache until above check passes.
       | otherwise ->
-          handleEpochCacheWhenSyncing
+          handleEpochCachingWhenSyncing
             syncEnv
             cache
             mLastMapEpochFromCache
@@ -99,12 +111,12 @@ handleEpochWhenFollowing ::
   Maybe EpochBlockDiff ->
   Word64 ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-handleEpochWhenFollowing syncEnv cache newestEpochFromMap currentEpochCache epochNo = do
+handleEpochWhenFollowing syncEnv cache newestEpochFromMap epochBlockDiffCache epochNo = do
   case newestEpochFromMap of
-    Just lastMapEpCache -> do
-      case currentEpochCache of
-        Nothing -> pure $ Left $ NEError "replaceEpoch: No currentEpochCache"
-        Just currentEpCache -> makeEpochWithCacheWhenFollowing syncEnv cache lastMapEpCache currentEpCache epochNo
+    Just newestEpochFromMapache -> do
+      case epochBlockDiffCache of
+        Nothing -> pure $ Left $ NEError "replaceEpoch: No epochBlockDiffCache"
+        Just currentEpCache -> makeEpochWithCacheWhenFollowing syncEnv cache newestEpochFromMapache currentEpCache epochNo
 
     -- If there isn't an epoch in cache, let's see if we can get one from the db. Otherwise
     -- calculate the epoch using the expensive db query.
@@ -113,11 +125,11 @@ handleEpochWhenFollowing syncEnv cache newestEpochFromMap currentEpochCache epoc
       case mNewestEpochFromDb of
         -- no latest epoch in db (very unlikely) so lets use expensive db query
         Nothing -> do
-          makeEpochWithDBQuery syncEnv cache epochNo
+          makeEpochWithDBQuery syncEnv cache Nothing epochNo "EPOCH FOLLOWING"
         Just newestEpochFromDb -> do
-          case currentEpochCache of
+          case epochBlockDiffCache of
             -- There should never be no EpochBlockDiff in cache at this point in the pipeline but just incase!
-            Nothing -> pure $ Left $ NEError "replaceEpoch: No currentEpochCache"
+            Nothing -> pure $ Left $ NEError "replaceEpoch: No epochBlockDiffCache"
             -- Let's use both values aquired to calculate our new epoch.
             Just currentEpCache -> makeEpochWithCacheWhenFollowing syncEnv cache newestEpochFromDb currentEpCache epochNo
 
@@ -131,19 +143,16 @@ makeEpochWithCacheWhenFollowing ::
   EpochBlockDiff ->
   Word64 ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-makeEpochWithCacheWhenFollowing syncEnv cache lastMapEpCache currentEpCache epochNo = do
-  let calculatedEpoch = calculateNewEpoch lastMapEpCache currentEpCache
-      trce = getTrace syncEnv
+makeEpochWithCacheWhenFollowing syncEnv cache newestEpochFromMapache currentEpCache epochNo = do
+  let calculatedEpoch = calculateNewEpoch newestEpochFromMapache currentEpCache
   -- if the epoch already exists then we update it otherwise create new entry.
   mEpochID <- DB.queryForEpochId epochNo
   case mEpochID of
     Nothing -> do
       _ <- writeToMapEpochCache syncEnv cache calculatedEpoch
-      liftIO . logInfo trce $ "makeEpochWithCacheWhenFollowing: Insert epoch " <> textShow epochNo
       (\_ -> Right ()) <$> DB.insertEpoch calculatedEpoch
     Just epochId -> do
       _ <- writeToMapEpochCache syncEnv cache calculatedEpoch
-      liftIO . logInfo trce $ "makeEpochWithCacheWhenFollowing: Replace epoch " <> textShow epochNo
       Right <$> replace epochId calculatedEpoch
 
 -----------------------------------------------------------------------------------------------------
@@ -153,55 +162,60 @@ makeEpochWithCacheWhenFollowing syncEnv cache lastMapEpCache currentEpCache epoc
 -- This function is called once every epoch on the very first block of the new epoch.
 -- At that point we can get the previously accumilated data from previous epoch and insert/update it into the db.
 -- Whilst at the same time store the current block data into epoch cache.
-handleEpochWhenSyncing ::
+updateEpochWhenSyncing ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   Cache ->
   Maybe EpochBlockDiff ->
   Maybe DB.Epoch ->
   Word64 ->
+  Bool ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-handleEpochWhenSyncing syncEnv cache mEpochBlockDiff mLastMapEpochFromCache epochNo = do
+updateEpochWhenSyncing syncEnv cache mEpochBlockDiff mLastMapEpochFromCache epochNo isBoundaryBlock = do
   let trce = getTrace syncEnv
   case mEpochBlockDiff of
     -- theres should always be a mEpochBlockDiff at this point
-    Nothing -> pure $ Left $ NEError "handleEpochWhenSyncing: No mEpochBlockDiff"
-    Just currentEpochCache ->
+    Nothing -> pure $ Left $ NEError "updateEpochWhenSyncing: No mEpochBlockDiff"
+    Just epochBlockDiffCache ->
       case mLastMapEpochFromCache of
         -- if there is no Map Epoch in cache here, then the server must have restarted and failed on the last
         -- block of the previous epoch and the current block is the first in new Epoch.
         -- We must now use a db query to calculate and insert previous epoch as the cache for the epoch was lost.
         Nothing -> do
-          let calculatedEpoch = initCalculateNewEpoch currentEpochCache
-          _ <- writeToMapEpochCache syncEnv cache calculatedEpoch
-          _ <- makeEpochWithDBQuery syncEnv cache $ ebdEpochNo currentEpochCache - 1
-          pure $ Right ()
+          let calcEpochFirstBlock = initCalculateNewEpoch epochBlockDiffCache
+          -- firt block in first epoch we ignore
+          if isBoundaryBlock && epochNo == 0
+            then pure $ Right ()
+            -- we need to use DB to create epoch
+            else do
+              _ <- makeEpochWithDBQuery syncEnv cache (Just calcEpochFirstBlock) epochNo "updateEpochWhenSyncing"
+              pure $ Right ()
         -- simply use cache
         Just lastMapEpochFromCache -> do
-          let calculatedEpoch = initCalculateNewEpoch currentEpochCache
-          _ <- writeToMapEpochCache syncEnv cache calculatedEpoch
+          let calculatedEpoch = initCalculateNewEpoch epochBlockDiffCache
+          unless isBoundaryBlock (void $ writeToMapEpochCache syncEnv cache calculatedEpoch)
           mEpochID <- DB.queryForEpochId epochNo
           case mEpochID of
             Nothing -> do
-              liftIO . logInfo trce $ epochSucessMsg "Inserted" "Cache" lastMapEpochFromCache
+              liftIO . logInfo trce $ epochSucessMsg "Inserted" "updateEpochWhenSyncing" "Cache" lastMapEpochFromCache
               _ <- DB.insertEpoch lastMapEpochFromCache
               pure $ Right ()
             Just epochId -> do
-              liftIO . logInfo trce $ epochSucessMsg "Replaced" "Cache" calculatedEpoch
+              liftIO . logInfo trce $ epochSucessMsg "Replaced" "updateEpochWhenSyncing" "Cache" calculatedEpoch
               Right <$> replace epochId calculatedEpoch
 
 -- When syncing, on every block we update the Map epoch in cache. Making sure to handle restarts
-handleEpochCacheWhenSyncing ::
+handleEpochCachingWhenSyncing ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   Cache ->
   Maybe DB.Epoch ->
   Maybe EpochBlockDiff ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-handleEpochCacheWhenSyncing syncEnv cache newestEpochFromMap currentEpochCache = do
-  case (newestEpochFromMap, currentEpochCache) of
-    (Just lastMapEpC, Just currentEpC) -> do
-      let calculatedEpoch = calculateNewEpoch lastMapEpC currentEpC
+handleEpochCachingWhenSyncing syncEnv cache newestEpochFromMap epochBlockDiffCache = do
+  case (newestEpochFromMap, epochBlockDiffCache) of
+    (Just newestEpMap, Just currentEpC) -> do
+      let calculatedEpoch = calculateNewEpoch newestEpMap currentEpC
       writeToMapEpochCache syncEnv cache calculatedEpoch
     -- when we don't have a newestEpochFromMap the server must have been restarted.
     -- so we need to replenish the cache using expensive db query.
@@ -209,7 +223,7 @@ handleEpochCacheWhenSyncing syncEnv cache newestEpochFromMap currentEpochCache =
       newEpoch <- DB.queryCalcEpochEntry $ ebdEpochNo currentEpC
       writeToMapEpochCache syncEnv cache newEpoch
     -- There will always be a EpochBlockDiff at this point in time
-    (_, _) -> pure $ Left $ NEError "handleEpochCacheWhenSyncing: No caches available to update cache"
+    (_, _) -> pure $ Left $ NEError "handleEpochCachingWhenSyncing: No caches available to update cache"
 
 -----------------------------------------------------------------------------------------------------
 -- Helper functions
@@ -221,23 +235,26 @@ makeEpochWithDBQuery ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   Cache ->
+  Maybe DB.Epoch ->
   Word64 ->
+  Text ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-makeEpochWithDBQuery syncEnv cache epochNo = do
+makeEpochWithDBQuery syncEnv cache mInitEpoch epochNo callSiteMsg = do
   let trce = getTrace syncEnv
-  newEpoch <- DB.queryCalcEpochEntry epochNo
+  calcEpoch <- DB.queryCalcEpochEntry epochNo
   mEpochID <- DB.queryForEpochId epochNo
+  let epochInitOrCalc = fromMaybe calcEpoch mInitEpoch
   case mEpochID of
     Nothing -> do
-      _ <- writeToMapEpochCache syncEnv cache newEpoch
-      _ <- DB.insertEpoch newEpoch
-      liftIO . logInfo trce $ epochSucessMsg "Inserted" "DB query" newEpoch
+      _ <- writeToMapEpochCache syncEnv cache epochInitOrCalc
+      _ <- DB.insertEpoch calcEpoch
+      liftIO . logInfo trce $ epochSucessMsg "Inserted " callSiteMsg "DB query" calcEpoch
       pure $ Right ()
     Just epochId -> do
       -- write the newly calculated epoch to cache.
-      _ <- writeToMapEpochCache syncEnv cache newEpoch
-      liftIO . logInfo trce $ epochSucessMsg "Replaced" "DB query" newEpoch
-      Right <$> replace epochId newEpoch
+      _ <- writeToMapEpochCache syncEnv cache epochInitOrCalc
+      liftIO . logInfo trce $ epochSucessMsg "Replaced " callSiteMsg "DB query" calcEpoch
+      Right <$> replace epochId calcEpoch
 
 -- Because we store a Map of epochs, at every iteration we take the newest epoch and it's values
 -- We then add those to the data we kept when inserting the txs & block inside the EpochBlockDiff cache.
@@ -245,18 +262,18 @@ calculateNewEpoch ::
   DB.Epoch ->
   EpochBlockDiff ->
   DB.Epoch
-calculateNewEpoch newestEpochMapCache currentEpochCache =
+calculateNewEpoch newestEpochMapCache epochBlockDiffCache =
   -- if the bellow doesn't equal, then it must be a the first block in new epoch thus we initiate the values.
   -- rather than adding them to the newest epoch we have in the Map Epoch.
-  if DB.epochNo newestEpochMapCache == ebdEpochNo currentEpochCache
+  if DB.epochNo newestEpochMapCache == ebdEpochNo epochBlockDiffCache
     then do
       let newBlkCount = DB.epochBlkCount newestEpochMapCache + 1
-          newOutSum = DB.epochOutSum newestEpochMapCache + ebdOutSum currentEpochCache
-          newFees = DB.unDbLovelace (DB.epochFees newestEpochMapCache) + ebdFees currentEpochCache
-          newTxCount = fromIntegral (DB.epochTxCount newestEpochMapCache) + ebdTxCount currentEpochCache
-          newEpochNo = ebdEpochNo currentEpochCache
+          newOutSum = DB.epochOutSum newestEpochMapCache + ebdOutSum epochBlockDiffCache
+          newFees = DB.unDbLovelace (DB.epochFees newestEpochMapCache) + ebdFees epochBlockDiffCache
+          newTxCount = fromIntegral (DB.epochTxCount newestEpochMapCache) + ebdTxCount epochBlockDiffCache
+          newEpochNo = ebdEpochNo epochBlockDiffCache
           newStartTime = DB.epochStartTime newestEpochMapCache
-          newEndTime = ebdTime currentEpochCache
+          newEndTime = ebdTime epochBlockDiffCache
       DB.Epoch
         { DB.epochOutSum = newOutSum
         , DB.epochFees = DB.DbLovelace newFees
@@ -266,28 +283,30 @@ calculateNewEpoch newestEpochMapCache currentEpochCache =
         , DB.epochStartTime = newStartTime
         , DB.epochEndTime = newEndTime
         }
-    else initCalculateNewEpoch currentEpochCache
+    else initCalculateNewEpoch epochBlockDiffCache
 
 initCalculateNewEpoch :: EpochBlockDiff -> DB.Epoch
-initCalculateNewEpoch currentEpochCache =
+initCalculateNewEpoch epochBlockDiffCache =
   DB.Epoch
-    { DB.epochOutSum = ebdOutSum currentEpochCache
-    , DB.epochFees = DB.DbLovelace $ ebdFees currentEpochCache
-    , DB.epochTxCount = ebdTxCount currentEpochCache
-    , DB.epochBlkCount = 1
-    , DB.epochNo = ebdEpochNo currentEpochCache
+    { DB.epochOutSum = ebdOutSum epochBlockDiffCache
+    , DB.epochFees = DB.DbLovelace $ ebdFees epochBlockDiffCache
+    , DB.epochTxCount = ebdTxCount epochBlockDiffCache
+    , DB.epochBlkCount = 2
+    , DB.epochNo = ebdEpochNo epochBlockDiffCache
     , -- as this is the first block in epoch the end time and start time are the same
-      DB.epochStartTime = ebdTime currentEpochCache
-    , DB.epochEndTime = ebdTime currentEpochCache
+      DB.epochStartTime = ebdTime epochBlockDiffCache
+    , DB.epochEndTime = ebdTime epochBlockDiffCache
     }
 
-epochSucessMsg :: Text -> Text -> DB.Epoch -> Text
-epochSucessMsg msg cacheOrDB newEpoch =
+epochSucessMsg :: Text -> Text -> Text -> DB.Epoch -> Text
+epochSucessMsg insertOrReplace callSite cacheOrDB newEpoch =
   mconcat
     [ "\n"
-    , msg
+    , insertOrReplace
     , " epoch "
     , DB.textShow $ DB.epochNo newEpoch
+    , " from "
+    , callSite
     , " with "
     , cacheOrDB
     , ". \n epoch: "
