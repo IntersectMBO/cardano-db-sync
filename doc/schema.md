@@ -1,7 +1,8 @@
+Resolving dependencies...
 Up to date
 # Schema Documentation for cardano-db-sync
 
-Schema version: 13.1.0.0 (from branch **kderme/migrations** which may not accurately reflect the version number)
+Schema version: 13.1.1.0 (from branch **kderme/conway-schema-design** which may not accurately reflect the version number)
 **Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema.hs by the command `cabal run -- gen-schema-docs doc/schema.md`. This document should only be updated during the release process and updated on the release branch.
 
 ### `schema_version`
@@ -19,7 +20,7 @@ The version of the database schema. Schema versioning is split into three stages
 
 ### `pool_hash`
 
-A table for every unique pool key hash. The `id` field of this table is used as foreign keys in other tables. The existance of an entry doesn't mean the pool is registered or in fact that is was ever registered.
+A table for every unique pool key hash. The existance of an entry doesn't mean the pool is registered or in fact that is was ever registered.
 
 * Primary Id: `id`
 
@@ -62,7 +63,7 @@ A table for blocks on the chain.
 | `time` | timestamp | The block time (UTCTime). |
 | `tx_count` | integer (64) | The number of transactions in this block. |
 | `proto_major` | word31type | The block's major protocol number. |
-| `proto_minor` | word31type | The block's minor protocol number. |
+| `proto_minor` | word31type | The block's major protocol number. |
 | `vrf_key` | string | The VRF key of the creator of this block. |
 | `op_cert` | hash32type | The hash of the operational certificate of the block producer. |
 | `op_cert_counter` | word63type | The value of the counter used to produce the operational certificate. |
@@ -256,7 +257,7 @@ An on-chain reference to off-chain pool metadata.
 |-|-|-|
 | `id` | integer (64) |  |
 | `pool_id` | integer (64) | The PoolHash table index of the pool for this reference. |
-| `url` | string | The URL for the location of the off-chain data. |
+| `url` | varchar | The URL for the location of the off-chain data. |
 | `hash` | hash32type | The expected hash for the off-chain data. |
 | `registered_tx_id` | integer (64) | The Tx table index of the transaction in which provided this metadata reference. |
 
@@ -367,6 +368,7 @@ A table containing delegations from a stake address to a stake pool.
 | `tx_id` | integer (64) | The Tx table index of the transaction that contained this delegation. |
 | `slot_no` | word63type | The slot number of the block that contained this delegation. |
 | `redeemer_id` | integer (64) | The Redeemer table index that is related with this certificate. |
+| `deposit` | lovelace | The deposit that may appear at the certificate. New in 13.2-Conway |
 
 ### `tx_metadata`
 
@@ -634,6 +636,27 @@ A table containing block chain parameter change proposals.
 | `max_val_size` | word64type | The maximum Val size. |
 | `collateral_percent` | word31type | The percentage of the txfee which must be provided as collateral when including non-native scripts. |
 | `max_collateral_inputs` | word31type | The maximum number of collateral inputs allowed in a transaction. |
+| `p1` | integer (64) | DRep Vote threshold for motion of no-confidence. New in 13.2-Conway. |
+| `p2a` | integer (64) | DRep Vote threshold for new committee/threshold (normal state). New in 13.2-Conway. |
+| `p2b` | integer (64) | DRep Vote threshold for new committee/threshold (state of no-confidence). New in 13.2-Conway. |
+| `p3` | integer (64) | DRep Vote threshold for update to the Constitution. New in 13.2-Conway. |
+| `p4` | integer (64) | DRep Vote threshold for hard-fork initiation. New in 13.2-Conway. |
+| `p5a` | integer (64) | DRep Vote threshold for protocol parameter changes, network group. New in 13.2-Conway. |
+| `p5b` | integer (64) | DRep Vote threshold for  protocol parameter changes, economic group. New in 13.2-Conway. |
+| `p5c` | integer (64) | DRep Vote threshold for protocol parameter changes, technical group. New in 13.2-Conway. |
+| `p5d` | integer (64) | DRep Vote threshold for protocol parameter changes, governance group. New in 13.2-Conway. |
+| `p6` | integer (64) | DRep Vote threshold for treasury withdrawal. New in 13.2-Conway. |
+| `p7` | integer (64) | DRep Vote threshold for info. New in 13.2-Conway. |
+| `q1` | integer (64) | Spo Vote threshold for motion of no-confidence. New in 13.2-Conway. |
+| `q2a` | integer (64) | Spo Vote threshold for new committee/threshold (normal state). New in 13.2-Conway. |
+| `q2b` | integer (64) | Spo Vote threshold for new committee/threshold (state of no-confidence). New in 13.2-Conway. |
+| `q4` | integer (64) | Spo Vote threshold for hard-fork initiation. New in 13.2-Conway. |
+| `min_c_c_size` | word64type | Minimal constitutional committee size. New in 13.2-Conway. |
+| `cc_term_limit` | word64type | Constitutional committee term limits. New in 13.2-Conway. |
+| `gov_expiration` | word64type | Governance action expiration. New in 13.2-Conway. |
+| `gov_deposit` | lovelace | Governance action deposit. New in 13.2-Conway. |
+| `drep_deposit` | lovelace | DRep deposit amount . New in 13.2-Conway. |
+| `drep_activity` | word64type | DRep activity period. New in 13.2-Conway. |
 | `registered_tx_id` | integer (64) | The Tx table index for the transaction that contains this parameter proposal. |
 
 ### `epoch_param`
@@ -676,6 +699,27 @@ The accepted protocol parameters for an epoch.
 | `max_val_size` | word64type | The maximum Val size. |
 | `collateral_percent` | word31type | The percentage of the txfee which must be provided as collateral when including non-native scripts. |
 | `max_collateral_inputs` | word31type | The maximum number of collateral inputs allowed in a transaction. |
+| `p1` | integer (64) | DRep Vote threshold for motion of no-confidence. New in 13.2-Conway. |
+| `p2a` | integer (64) | DRep Vote threshold for new committee/threshold (normal state). New in 13.2-Conway. |
+| `p2b` | integer (64) | DRep Vote threshold for new committee/threshold (state of no-confidence). New in 13.2-Conway. |
+| `p3` | integer (64) | DRep Vote threshold for update to the Constitution. New in 13.2-Conway. |
+| `p4` | integer (64) | DRep Vote threshold for hard-fork initiation. New in 13.2-Conway. |
+| `p5a` | integer (64) | DRep Vote threshold for protocol parameter changes, network group. New in 13.2-Conway. |
+| `p5b` | integer (64) | DRep Vote threshold for  protocol parameter changes, economic group. New in 13.2-Conway. |
+| `p5c` | integer (64) | DRep Vote threshold for protocol parameter changes, technical group. New in 13.2-Conway. |
+| `p5d` | integer (64) | DRep Vote threshold for protocol parameter changes, governance group. New in 13.2-Conway. |
+| `p6` | integer (64) | DRep Vote threshold for treasury withdrawal. New in 13.2-Conway. |
+| `p7` | integer (64) | DRep Vote threshold for info. New in 13.2-Conway. |
+| `q1` | integer (64) | Spo Vote threshold for motion of no-confidence. New in 13.2-Conway. |
+| `q2a` | integer (64) | Spo Vote threshold for new committee/threshold (normal state). New in 13.2-Conway. |
+| `q2b` | integer (64) | Spo Vote threshold for new committee/threshold (state of no-confidence). New in 13.2-Conway. |
+| `q4` | integer (64) | Spo Vote threshold for hard-fork initiation. New in 13.2-Conway. |
+| `min_c_c_size` | word64type | Minimal constitutional committee size. New in 13.2-Conway. |
+| `cc_term_limit` | word64type | Constitutional committee term limits. New in 13.2-Conway. |
+| `gov_expiration` | word64type | Governance action expiration. New in 13.2-Conway. |
+| `gov_deposit` | lovelace | Governance action deposit. New in 13.2-Conway. |
+| `drep_deposit` | lovelace | DRep deposit amount . New in 13.2-Conway. |
+| `drep_activity` | word64type | DRep activity period. New in 13.2-Conway. |
 | `block_id` | integer (64) | The Block table index for the first block where these parameters are valid. |
 
 ### `cost_model`
@@ -689,6 +733,227 @@ CostModel for EpochParam and ParamProposal.
 | `id` | integer (64) |  |
 | `hash` | hash32type | The hash of cost model. It ensures uniqueness of entries. New in v13. |
 | `costs` | jsonb | The actual costs formatted as json. |
+
+### `extra_migrations`
+
+Extra optional migrations. New in 13.2.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `description` | string | A description of the migration |
+
+### `drep_hash`
+
+A table for every unique drep key hash. The existance of an entry doesn't mean the DRep is registered or in fact that is was ever registered. New in 13.2-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `raw` | hash28type | The raw bytes of the DRep. |
+| `view` | string | The Bech32 encoding of the DRep hash. |
+| `has_script` | boolean | Flag which shows if this DRep credentials are a script hash |
+
+### `delegation_vote`
+
+A table containing delegations from a stake address to a stake pool. New in 13.2-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `addr_id` | integer (64) | The StakeAddress table index for the stake address. |
+| `cert_index` | integer (32) | The index of this delegation within the certificates of this transaction. |
+| `drep_hash_id` | integer (64) | The DrepHash table index for the pool being delegated to. |
+| `active_epoch_no` | integer (64) | The epoch number where this delegation becomes active. |
+| `tx_id` | integer (64) | The Tx table index of the transaction that contained this delegation. |
+| `redeemer_id` | integer (64) | The Redeemer table index that is related with this certificate. TODO: can vote redeemers index these delegations? |
+| `deposit` | lovelace | The deposits that may appear on the certificate |
+
+### `committee_registration`
+
+A table for every committee hot key registration. New in 13.2-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `tx_id` | integer (64) | The Tx table index of the tx that includes this certificate. |
+| `cert_index` | integer (32) | The index of this registration within the certificates of this transaction. |
+| `cold_key` | addr29type | The registered cold hey hash. TODO: should this reference DrepHashId or some separate hash table? |
+| `hot_key` | addr29type | The registered hot hey hash |
+
+### `committee_de_registration`
+
+A table for every committee key de-registration. New in 13.2-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `tx_id` | integer (64) | The Tx table index of the tx that includes this certificate. |
+| `cert_index` | integer (32) | The index of this deregistration within the certificates of this transaction. |
+| `hot_key` | addr29type | The deregistered hot hey hash |
+
+### `drep_registration`
+
+A table for every DRep registration. New in 13.2-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `tx_id` | integer (64) | The Tx table index of the tx that includes this certificate. |
+| `cert_index` | integer (32) | The index of this registration within the certificates of this transaction. |
+| `drep_hash_id` | integer (64) | The registered cold hey hash. TODO: should this reference DrepHashId or some separate hash table? |
+
+### `drep_de_registration`
+
+A table for every DRep de-registration. New in 13.2-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `tx_id` | integer (64) | The Tx table index of the tx that includes this certificate. |
+| `cert_index` | integer (32) | The index of this deregistration within the certificates of this transaction. |
+| `drep_hash_id` | integer (64) | The deregistered hot hey hash |
+
+### `voting_anchor`
+
+A table for every Anchor that appears on Governance Actions. These are pointers to offchain metadata. New in 13.2-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `tx_id` | integer (64) | The Tx table index of the tx that includes this anchor. This only exists to facilitate rollbacks |
+| `url` | varchar | A URL to a JSON payload of metadata |
+| `doc_hash` | blob | A hash of the contents of the metadata URL |
+
+### `proposal_procedure`
+
+A table for every proposal procedure, aka GovProposal. There is an 1-1 relation with a GovernanceAction. New in 13.2-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `tx_id` | integer (64) | The Tx table index of the tx that includes this certificate. |
+| `index` | integer (32) | The index of this proposal procedure within its transaction. |
+| `deposit` | lovelace | The deposit amount payed for this proposal. |
+| `return_address` | integer (64) | The StakeAddress index of the reward address to receive the deposit when it is repaid. |
+| `voting_anchor_id` | integer (64) | The Anchor table index related to this proposal. |
+
+### `governance_action`
+
+A proposed GovernanceAction, aka GovAction. At most one of the ratified/enacted/dropped/expired epoch field can be non-null, indicating the current state of the proposal. This table may be referenced by TreasuryWithdrawal or NewCommitteeMember (both are 1-n relations). New in 13.2-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `proposal_procedure_id` | integer (64) | The ProposalProcedure table index where this GovernanceAction was proposed. |
+| `type` | govactiontype | Can be one of ParameterChange, HardForkInitiation, TreasuryWithdrawals, NoConfidence, NewCommitteeMember, NewConstitution |
+| `description` | string | A Text describing the content of this GovernanceAction in a readable way. |
+| `param_proposal` | integer (64) | If this is a param proposal action, this has the index of the param_proposal table. |
+| `ratified_epoch` | word31type | If not null, then this proposal has been ratified at the specfied epoch. |
+| `enacted_epoch` | word31type | If not null, then this proposal has been enacted at the specfied epoch. |
+| `dropped_epoch` | word31type | If not null, then this proposal has been enacted at the specfied epoch. |
+| `expired_epoch` | word31type | If not null, then this proposal has been enacted at the specfied epoch. |
+
+### `treasury_withdrawal`
+
+A table for all treasury withdrawals proposed on a GovernanceAction. New in 13.2-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `governance_action_id` | integer (64) | The GovernanceAction table index for this withdrawal.Multiple TreasuryWithdrawal may reference the same GovernanceAction. |
+| `stake_address_id` | integer (64) | The address that benefits from this withdrawal. |
+| `amount` | lovelace | The amount for this withdrawl. |
+
+### `new_committee_member`
+
+A table for new committee proposed on a GovernanceAction. New in 13.2-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `governance_action_id` | integer (64) | The GovernanceAction table index for this withdrawal. Multiple NewCommitteeMember may reference the same GovernanceAction. |
+| `drep_hash_id` | integer (64) | The new committee key hash proposed. |
+
+### `voting_procedure`
+
+A table for voting procedures, aka GovVote. A Vote can be Yes No or Abstain. New in 13.2-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `tx_id` | integer (64) | The Tx table index of the tx that includes this VotingProcedure. |
+| `index` | integer (32) | The index of this VotingProcedure within this transaction. |
+| `governance_action_id` | integer (64) | The index of the GovernanceAction that this vote targets. |
+| `voter_role` | voterrole | The role of the voter. Can be one of ConstitutionalCommittee, DRep, SPO. |
+| `vote` | vote | The Vote. Can be one of Yes, No, Abstain. |
+| `voting_anchor_id` | integer (64) | The VotingAnchor table index associated with this VotingProcedure. |
+
+### `anchor_offline_data`
+
+The table with the off chain metadata related to Vote Anchors. New in 13.2-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `voting_anchor_id` | integer (64) | The VotingAnchor table index this offline data refers. |
+| `hash` | blob | The hash of the offline data. |
+| `json` | jsonb | The payload as JSON. |
+| `bytes` | bytea | The raw bytes of the payload. |
+
+### `anchor_offline_fetch_error`
+
+Errors while fetching or validating offline Voting Anchor metadata. New in 13.2-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `anchor_offline_data_id` | integer (64) | The VotingAnchor table index this offline fetch error refers. |
+| `fetch_error` | string | The text of the error. |
+| `retry_count` | word31type | The number of retries. |
+
+### `drep_distr`
+
+The table for the distribution of voting power per DRep per. Currently this has a single entry per DRep and doesn't show every delegator. This may change. New in 13.2-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `hash_id` | integer (64) | The DrepHash table index that this distribution entry has information about. |
+| `amount` | integer (64) | The total amount of voting power this DRep is delegated. |
+| `epoch_no` | word31type | The epoch no this distribution is about. |
 
 ### `pool_offline_data`
 

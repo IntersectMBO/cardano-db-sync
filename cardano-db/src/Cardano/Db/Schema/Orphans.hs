@@ -2,7 +2,7 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Cardano.Db.Schema.Orphans () where
-
+ 
 import Cardano.Db.Schema.Types (
   PoolUrl (..),
  )
@@ -14,6 +14,10 @@ import Cardano.Db.Types (
   ScriptPurpose,
   ScriptType (..),
   SyncState,
+  VoteUrl (..),
+  Vote (..),
+  VoterRole (..),
+  GovActionType (..),
   readDbInt65,
   readRewardSource,
   readScriptPurpose,
@@ -22,6 +26,12 @@ import Cardano.Db.Types (
   renderScriptPurpose,
   renderScriptType,
   renderSyncState,
+  renderVote,
+  readVote,
+  renderVoterRole,
+  readVoterRole,
+  renderGovActionType,
+  readGovActionType,
   showDbInt65,
   showRewardSource,
  )
@@ -116,3 +126,28 @@ instance PersistField Word128 where
       else Left $ mconcat ["Failed to parse Haskell type Word128: ", Text.pack (show x)]
   fromPersistValue x =
     Left $ mconcat ["Failed to parse Haskell type Word128: ", Text.pack (show x)]
+
+instance PersistField VoteUrl where
+  toPersistValue = PersistText . unVoteUrl
+  fromPersistValue (PersistText txt) = Right $ VoteUrl txt
+  fromPersistValue (PersistByteString bs) = Right $ VoteUrl (Text.decodeLatin1 bs)
+  fromPersistValue x =
+    Left $ mconcat ["Failed to parse Haskell type VoteUrl: ", Text.pack (show x)]
+
+instance PersistField Vote where
+  toPersistValue = PersistText . renderVote
+  fromPersistValue (PersistLiteral bs) = Right $ readVote (BS.unpack bs)
+  fromPersistValue x =
+    Left $ mconcat ["Failed to parse Haskell type Vote: ", Text.pack (show x)]
+
+instance PersistField VoterRole where
+  toPersistValue = PersistText . renderVoterRole
+  fromPersistValue (PersistLiteral bs) = Right $ readVoterRole (BS.unpack bs)
+  fromPersistValue x =
+    Left $ mconcat ["Failed to parse Haskell type VoterRole: ", Text.pack (show x)]
+
+instance PersistField GovActionType where
+  toPersistValue = PersistText . renderGovActionType
+  fromPersistValue (PersistLiteral bs) = Right $ readGovActionType (BS.unpack bs)
+  fromPersistValue x =
+    Left $ mconcat ["Failed to parse Haskell type GovActionType: ", Text.pack (show x)]
