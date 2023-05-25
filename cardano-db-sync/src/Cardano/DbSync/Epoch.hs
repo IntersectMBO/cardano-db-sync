@@ -8,6 +8,7 @@ module Cardano.DbSync.Epoch (
 ) where
 
 import Cardano.BM.Trace (Trace, logError, logInfo)
+import qualified Cardano.Chain.Block as Byron
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api (SyncEnv, getTrace)
 import Cardano.DbSync.Cache.Epoch (readEpochBlockDiffFromCache, readLastMapEpochFromCache, writeToMapEpochCache)
@@ -24,9 +25,8 @@ import Cardano.Slotting.Slot (unEpochNo)
 import Control.Monad.Logger (LoggingT)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Database.Esqueleto.Experimental (SqlBackend, replace)
+import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
-import qualified Cardano.Chain.Block as Byron
-import Ouroboros.Consensus.Byron.Ledger (ByronBlock(..))
 
 -- Populating the Epoch table has two mode:
 --  * SyncLagging: when the node is far behind the chain tip and is just updating the DB. In this
@@ -47,9 +47,8 @@ epochHandler syncEnv trce cache isNewEpochEvent (BlockDetails cblk details) =
       case byronBlockRaw bblk of
         Byron.ABOBBoundary {} -> do
           -- For the OBFT era there are no boundary blocks so we ignore them even in
-          -- the Ouroboros Classic era.
+          -- the Ouroboros Classic era but count
           updateEpochStart syncEnv cache details isNewEpochEvent True
-          -- pure $ Right ()
         Byron.ABOBBlock _blk ->
           updateEpochStart syncEnv cache details isNewEpochEvent False
     -- BlockByron {} -> updateEpochStart syncEnv cache details isNewEpochEvent
@@ -125,7 +124,7 @@ handleEpochWhenFollowing syncEnv cache newestEpochFromMap epochBlockDiffCache ep
       case mNewestEpochFromDb of
         -- no latest epoch in db (very unlikely) so lets use expensive db query
         Nothing -> do
-          makeEpochWithDBQuery syncEnv cache Nothing epochNo "EPOCH FOLLOWING"
+          makeEpochWithDBQuery syncEnv cache Nothing epochNo "handleEpochWhenFollowing"
         Just newestEpochFromDb -> do
           case epochBlockDiffCache of
             -- There should never be no EpochBlockDiff in cache at this point in the pipeline but just incase!
@@ -173,6 +172,11 @@ updateEpochWhenSyncing ::
   ReaderT SqlBackend m (Either SyncNodeError ())
 updateEpochWhenSyncing syncEnv cache mEpochBlockDiff mLastMapEpochFromCache epochNo isBoundaryBlock = do
   let trce = getTrace syncEnv
+      isFirstEpoch = epochNo == 0
+      --
+      additionalBlockCount =
+        if isBoundaryBlock && isFirstEpoch then 1 else 0
+
   case mEpochBlockDiff of
     -- theres should always be a mEpochBlockDiff at this point
     Nothing -> pure $ Left $ NEError "updateEpochWhenSyncing: No mEpochBlockDiff"
@@ -182,18 +186,13 @@ updateEpochWhenSyncing syncEnv cache mEpochBlockDiff mLastMapEpochFromCache epoc
         -- block of the previous epoch and the current block is the first in new Epoch.
         -- We must now use a db query to calculate and insert previous epoch as the cache for the epoch was lost.
         Nothing -> do
-          let calcEpochFirstBlock = initCalculateNewEpoch epochBlockDiffCache
-          -- firt block in first epoch we ignore
-          if isBoundaryBlock && epochNo == 0
-            then pure $ Right ()
-            -- we need to use DB to create epoch
-            else do
-              _ <- makeEpochWithDBQuery syncEnv cache (Just calcEpochFirstBlock) epochNo "updateEpochWhenSyncing"
-              pure $ Right ()
+          let calculatedEpoch = initCalculateNewEpoch epochBlockDiffCache additionalBlockCount
+          _ <- makeEpochWithDBQuery syncEnv cache (Just calculatedEpoch) epochNo "updateEpochWhenSyncing"
+          pure $ Right ()
         -- simply use cache
         Just lastMapEpochFromCache -> do
-          let calculatedEpoch = initCalculateNewEpoch epochBlockDiffCache
-          unless isBoundaryBlock (void $ writeToMapEpochCache syncEnv cache calculatedEpoch)
+          let calculatedEpoch = initCalculateNewEpoch epochBlockDiffCache additionalBlockCount
+          void $ writeToMapEpochCache syncEnv cache calculatedEpoch
           mEpochID <- DB.queryForEpochId epochNo
           case mEpochID of
             Nothing -> do
@@ -283,15 +282,15 @@ calculateNewEpoch newestEpochMapCache epochBlockDiffCache =
         , DB.epochStartTime = newStartTime
         , DB.epochEndTime = newEndTime
         }
-    else initCalculateNewEpoch epochBlockDiffCache
+    else initCalculateNewEpoch epochBlockDiffCache 0
 
-initCalculateNewEpoch :: EpochBlockDiff -> DB.Epoch
-initCalculateNewEpoch epochBlockDiffCache =
+initCalculateNewEpoch :: EpochBlockDiff -> Word64 -> DB.Epoch
+initCalculateNewEpoch epochBlockDiffCache boundaryBlockcount =
   DB.Epoch
     { DB.epochOutSum = ebdOutSum epochBlockDiffCache
     , DB.epochFees = DB.DbLovelace $ ebdFees epochBlockDiffCache
     , DB.epochTxCount = ebdTxCount epochBlockDiffCache
-    , DB.epochBlkCount = 2
+    , DB.epochBlkCount = 1 + boundaryBlockcount
     , DB.epochNo = ebdEpochNo epochBlockDiffCache
     , -- as this is the first block in epoch the end time and start time are the same
       DB.epochStartTime = ebdTime epochBlockDiffCache
