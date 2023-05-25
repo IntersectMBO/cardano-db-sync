@@ -27,16 +27,11 @@ main = do
       case (maybeLedgerStateDir, enpShouldUseLedger params) of
         (Just _, True) -> run params
         (Nothing, False) -> run params
-        (Just _, False) -> error disableLedgerErrorMsg
+        (Just _, False) -> run params
         (Nothing, True) -> error stateDirErrorMsg
   where
     knownMigrationsPlain :: [(Text, Text)]
     knownMigrationsPlain = (\x -> (hash x, filepath x)) <$> knownMigrations
-
-    disableLedgerErrorMsg :: [Char]
-    disableLedgerErrorMsg =
-      "Error: Using `--disable-ledger` doesn't require having a --state-dir. "
-        <> "For more details view https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/configuration.md#--disable-ledger"
 
     stateDirErrorMsg :: [Char]
     stateDirErrorMsg =
