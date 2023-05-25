@@ -46,7 +46,7 @@ module Cardano.DbSync.Api (
   convertToPoint,
 ) where
 
-import Cardano.BM.Trace (Trace, logInfo)
+import Cardano.BM.Trace (Trace, logInfo, logWarning)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Db as DB
@@ -355,7 +355,12 @@ mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart maybeLedge
             (soptAbortOnInvalid syncOptions)
             (snapshotEveryFollowing syncOptions)
             (snapshotEveryLagging syncOptions)
-      (_, False) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
+      (Nothing, False) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
+      (Just _, False) -> do
+        logWarning trce $
+          "Using `--disable-ledger` doesn't require having a --state-dir."
+          <> " For more details view https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/configuration.md#--disable-ledger"
+        NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
       -- This won't ever call because we error out this combination at parse time
       (Nothing, True) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
 
