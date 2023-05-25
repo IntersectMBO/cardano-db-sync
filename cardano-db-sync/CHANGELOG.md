@@ -10,6 +10,7 @@
 * Fixed an issue where `epoch` table didn't rollback [#1370]
 * Fixed an issue with smash returning `InvalidUrlException` [#1353]
 * Takes less snapshots, since big rollbacks are now faster
+* When `--disable-ledger` is enabled a `--state-dir` is no longer required
 
 ## 13.1.0.2
 * Upgrade dependencies and integrates a fix in ledger internal data structures.
