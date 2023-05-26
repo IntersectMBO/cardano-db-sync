@@ -127,8 +127,8 @@ getWrongPlutusData tracer = do
     getRedeemerDataBytes = DB_V_13_0.redeemerDataBytes . entityVal
 
     hashPlutusData a =
-      dataHashToBytes . Alonzo.hashBinaryData @StandardAlonzo <$>
-        Alonzo.makeBinaryData (SBS.toShort a)
+      dataHashToBytes . Alonzo.hashBinaryData @StandardAlonzo
+        <$> Alonzo.makeBinaryData (SBS.toShort a)
 
 findWrongPlutusData ::
   forall a m.

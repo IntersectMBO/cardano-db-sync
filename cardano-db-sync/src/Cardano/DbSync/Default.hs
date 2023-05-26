@@ -89,8 +89,9 @@ applyAndInsertBlockMaybe syncEnv cblk = do
           if replaced
             then liftIO $ logInfo tracer $ "Fixed AdaPots for " <> textShow epochNo
             else liftIO $ logInfo tracer $ "Reached " <> textShow epochNo
-        Right _ | Just epochNo <- getNewEpoch applyRes ->
-          liftIO $ logInfo tracer $ "Reached " <> textShow epochNo
+        Right _
+          | Just epochNo <- getNewEpoch applyRes ->
+              liftIO $ logInfo tracer $ "Reached " <> textShow epochNo
         _ -> pure ()
   where
     tracer = getTrace syncEnv
