@@ -284,63 +284,64 @@ dbSyncProtocols syncEnv metricsSetters _version codecs _connectionId =
                         ( Client.chainSyncClientPeer $
                             chainSyncClientFixData backend tracer fd
                         )
-                  if onlyFix then do
-                    setIsFixed syncEnv DataFixRan
-                  else
-                    setIsFixedAndMigrate syncEnv DataFixRan
-              else if isDataFixed fr && (onlyFix || not skipFix)
-                then do
-                  ls <- runDbIohkLogging backend tracer $ getWrongPlutusScripts tracer
-                  unless (nullPlutusScripts ls) $
-                    void $
-                      runPeer
-                        localChainSyncTracer
-                        (cChainSyncCodec codecs)
-                        channel
-                        ( Client.chainSyncClientPeer $
-                              chainSyncClientFixScripts backend tracer ls
+                  if onlyFix
+                    then do
+                      setIsFixed syncEnv DataFixRan
+                    else setIsFixedAndMigrate syncEnv DataFixRan
+                else
+                  if isDataFixed fr && (onlyFix || not skipFix)
+                    then do
+                      ls <- runDbIohkLogging backend tracer $ getWrongPlutusScripts tracer
+                      unless (nullPlutusScripts ls) $
+                        void $
+                          runPeer
+                            localChainSyncTracer
+                            (cChainSyncCodec codecs)
+                            channel
+                            ( Client.chainSyncClientPeer $
+                                chainSyncClientFixScripts backend tracer ls
+                            )
+                      when onlyFix $ panic "All Good! This error is only thrown to exit db-sync" -- TODO fix.
+                      setIsFixed syncEnv AllFixRan
+                    else do
+                      when skipFix $ setIsFixedAndMigrate syncEnv AllFixRan
+                      -- The Db thread is not forked at this point, so we can use
+                      -- the connection here. A connection cannot be used concurrently by many
+                      -- threads
+                      logInfo tracer "Starting chainSyncClient"
+                      latestPoints <- getLatestPoints syncEnv
+                      let (inMemory, onDisk) = List.span snd latestPoints
+                      logInfo tracer $
+                        mconcat
+                          [ "Suggesting intersection points from memory: "
+                          , textShow (fst <$> inMemory)
+                          , " and from disk: "
+                          , textShow (fst <$> onDisk)
+                          ]
+                      currentTip <- getCurrentTipBlockNo syncEnv
+                      logDbState syncEnv
+                      -- communication channel between datalayer thread and chainsync-client thread
+                      actionQueue <- newDbActionQueue
+
+                      race_
+                        ( concurrently
+                            (runDbThread syncEnv metricsSetters actionQueue)
+                            (runOfflineFetchThread syncEnv)
                         )
-                  when onlyFix $ panic "All Good! This error is only thrown to exit db-sync" -- TODO fix.
-                  setIsFixed syncEnv AllFixRan
-              else do
-                when skipFix $ setIsFixedAndMigrate syncEnv AllFixRan
-                -- The Db thread is not forked at this point, so we can use
-                -- the connection here. A connection cannot be used concurrently by many
-                -- threads
-                logInfo tracer "Starting chainSyncClient"
-                latestPoints <- getLatestPoints syncEnv
-                let (inMemory, onDisk) = List.span snd latestPoints
-                logInfo tracer $
-                  mconcat
-                    [ "Suggesting intersection points from memory: "
-                    , textShow (fst <$> inMemory)
-                    , " and from disk: "
-                    , textShow (fst <$> onDisk)
-                    ]
-                currentTip <- getCurrentTipBlockNo syncEnv
-                logDbState syncEnv
-                -- communication channel between datalayer thread and chainsync-client thread
-                actionQueue <- newDbActionQueue
+                        ( runPipelinedPeer
+                            localChainSyncTracer
+                            (cChainSyncCodec codecs)
+                            channel
+                            ( chainSyncClientPeerPipelined $
+                                chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip actionQueue
+                            )
+                        )
 
-                race_
-                  ( concurrently
-                      (runDbThread syncEnv metricsSetters actionQueue)
-                      (runOfflineFetchThread syncEnv)
-                  )
-                  ( runPipelinedPeer
-                      localChainSyncTracer
-                      (cChainSyncCodec codecs)
-                      channel
-                      ( chainSyncClientPeerPipelined $
-                            chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip actionQueue
-                      )
-                  )
-
-                atomically $ writeDbActionQueue actionQueue DbFinish
-                -- We should return leftover bytes returned by 'runPipelinedPeer', but
-                -- client application do not care about them (it's only important if one
-                -- would like to restart a protocol on the same mux and thus bearer).
-                pure ()
+                      atomically $ writeDbActionQueue actionQueue DbFinish
+                      -- We should return leftover bytes returned by 'runPipelinedPeer', but
+                      -- client application do not care about them (it's only important if one
+                      -- would like to restart a protocol on the same mux and thus bearer).
+                      pure ()
           pure ((), Nothing)
 
     dummylocalTxSubmit :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void

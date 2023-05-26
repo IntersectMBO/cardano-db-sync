@@ -359,7 +359,7 @@ mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart maybeLedge
       (Just _, False) -> do
         logWarning trce $
           "Using `--disable-ledger` doesn't require having a --state-dir."
-          <> " For more details view https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/configuration.md#--disable-ledger"
+            <> " For more details view https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/configuration.md#--disable-ledger"
         NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
       -- This won't ever call because we error out this combination at parse time
       (Nothing, True) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
