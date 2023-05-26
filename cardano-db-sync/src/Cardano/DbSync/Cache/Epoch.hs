@@ -25,7 +25,7 @@ import Database.Persist.Postgresql (SqlBackend)
 -------------------------------------------------------------------------------------
 -- Epoch Cache
 -------------------------------------------------------------------------------------
-readCacheEpoch :: MonadIO m => Cache -> m (Maybe CacheEpoch)
+readCacheEpoch :: (MonadIO m) => Cache -> m (Maybe CacheEpoch)
 readCacheEpoch cache =
   case cache of
     UninitiatedCache -> pure Nothing
@@ -33,7 +33,7 @@ readCacheEpoch cache =
       cacheEpoch <- liftIO $ readTVarIO (cEpoch ci)
       pure $ Just cacheEpoch
 
-readEpochBlockDiffFromCache :: MonadIO m => Cache -> m (Maybe EpochBlockDiff)
+readEpochBlockDiffFromCache :: (MonadIO m) => Cache -> m (Maybe EpochBlockDiff)
 readEpochBlockDiffFromCache cache =
   case cache of
     UninitiatedCache -> pure Nothing
@@ -52,21 +52,20 @@ readLastMapEpochFromCache cache =
       -- making sure db sync wasn't restarted on the last block in epoch
       if length mapEpoch == 1
         then pure Nothing
-        else
-          case lookupMax mapEpoch of
-            Nothing -> pure Nothing
-            Just (_, ep) -> pure $ Just ep
+        else case lookupMax mapEpoch of
+          Nothing -> pure Nothing
+          Just (_, ep) -> pure $ Just ep
 
-rollbackMapEpochInCache :: MonadIO m => CacheInternal -> DB.BlockId -> m (Either SyncNodeError ())
+rollbackMapEpochInCache :: (MonadIO m) => CacheInternal -> DB.BlockId -> m (Either SyncNodeError ())
 rollbackMapEpochInCache cache blockId = do
-      cE <- liftIO $ readTVarIO (cEpoch cache)
-      -- split the map and delete anything after blockId including it self as new blockId might be
-      -- given when inserting the block again when doing rollbacks.
-      let (newMapEpoch, _) = split blockId (ceMapEpoch cE)
-      writeToCache cache (CacheEpoch newMapEpoch (ceEpochBlockDiff cE))
+  cE <- liftIO $ readTVarIO (cEpoch cache)
+  -- split the map and delete anything after blockId including it self as new blockId might be
+  -- given when inserting the block again when doing rollbacks.
+  let (newMapEpoch, _) = split blockId (ceMapEpoch cE)
+  writeToCache cache (CacheEpoch newMapEpoch (ceEpochBlockDiff cE))
 
 writeEpochBlockDiffToCache ::
-  MonadIO m =>
+  (MonadIO m) =>
   Cache ->
   EpochBlockDiff ->
   ReaderT SqlBackend m (Either SyncNodeError ())
@@ -82,7 +81,7 @@ writeEpochBlockDiffToCache cache epCurrent =
 -- | into the db. This is so we have a historic representation of an epoch after every block is inserted.
 -- | This becomes usefull when syncing and doing rollbacks and saves on expensive db queries to calculte an epoch.
 writeToMapEpochCache ::
-  MonadIO m =>
+  (MonadIO m) =>
   SyncEnv ->
   Cache ->
   DB.Epoch ->
@@ -118,7 +117,7 @@ writeToMapEpochCache syncEnv cache latestEpoch = do
 -- Helpers
 ------------------------------------------------------------------
 
-writeToCache :: MonadIO m => CacheInternal -> CacheEpoch -> m (Either SyncNodeError ())
+writeToCache :: (MonadIO m) => CacheInternal -> CacheEpoch -> m (Either SyncNodeError ())
 writeToCache ci newCacheEpoch = do
   void $ liftIO $ atomically $ writeTVar (cEpoch ci) newCacheEpoch
   pure $ Right ()

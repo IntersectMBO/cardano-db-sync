@@ -27,7 +27,7 @@ import Ouroboros.Network.Point
 -- Rollbacks are done in an Era generic way based on the 'Point' we are
 -- rolling back to.
 rollbackFromBlockNo ::
-  MonadIO m =>
+  (MonadIO m) =>
   SyncEnv ->
   BlockNo ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
@@ -59,7 +59,7 @@ prepareRollback syncEnv point serverTip = do
   where
     trce = getTrace syncEnv
 
-    action :: MonadIO m => ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
+    action :: (MonadIO m) => ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
     action = do
       case getPoint point of
         Origin -> do

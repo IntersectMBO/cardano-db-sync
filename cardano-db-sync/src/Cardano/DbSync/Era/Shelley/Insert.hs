@@ -549,7 +549,7 @@ insertPoolRegister _tracer cache isMember network (EpochNo epoch) blkId txId idx
   mapM_ (insertPoolOwner cache network poolUpdateId txId) $ toList (Shelley.ppOwners params)
   mapM_ (insertPoolRelay poolUpdateId) $ toList (Shelley.ppRelays params)
   where
-    mkEpochActivationDelay :: MonadIO m => DB.PoolHashId -> ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
+    mkEpochActivationDelay :: (MonadIO m) => DB.PoolHashId -> ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
     mkEpochActivationDelay poolHashId =
       if isMember (Shelley.ppId params)
         then pure 3
@@ -1165,7 +1165,7 @@ insertScript tracer txId script = do
           , DB.scriptBytes = Generic.txScriptCBOR script
           }
   where
-    scriptConvert :: MonadIO m => Generic.TxScript -> m (Maybe Text)
+    scriptConvert :: (MonadIO m) => Generic.TxScript -> m (Maybe Text)
     scriptConvert s =
       maybe (pure Nothing) (safeDecodeToJson tracer "insertScript") (Generic.txScriptJson s)
 

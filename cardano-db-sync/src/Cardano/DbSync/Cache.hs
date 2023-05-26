@@ -65,7 +65,7 @@ import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 -- NOTE: BlockId is cleaned up on rollbacks, since it may get reinserted on
 -- a different id.
 -- NOTE: Other tables are not cleaned up since they are not rollbacked.
-rollbackCache :: MonadIO m => Cache -> DB.BlockId -> ReaderT SqlBackend m ()
+rollbackCache :: (MonadIO m) => Cache -> DB.BlockId -> ReaderT SqlBackend m ()
 rollbackCache UninitiatedCache _ = pure ()
 rollbackCache (Cache cache) blockId = do
   liftIO $ do
@@ -81,7 +81,7 @@ getCacheStatistics cs =
 
 queryRewardAccountWithCache ::
   forall m.
-  MonadIO m =>
+  (MonadIO m) =>
   Cache ->
   CacheNew ->
   Ledger.RewardAcnt StandardCrypto ->
@@ -91,7 +91,7 @@ queryRewardAccountWithCache cache cacheNew rwdAcc =
 
 queryRewardAccountWithCacheRetBs ::
   forall m.
-  MonadIO m =>
+  (MonadIO m) =>
   Cache ->
   CacheNew ->
   Ledger.RewardAcnt StandardCrypto ->
@@ -101,7 +101,7 @@ queryRewardAccountWithCacheRetBs cache cacheNew rwdAcc =
 
 queryStakeAddrWithCache ::
   forall m.
-  MonadIO m =>
+  (MonadIO m) =>
   Cache ->
   CacheNew ->
   Network ->
@@ -112,7 +112,7 @@ queryStakeAddrWithCache cache cacheNew nw cred =
 
 queryStakeAddrWithCacheRetBs ::
   forall m.
-  MonadIO m =>
+  (MonadIO m) =>
   Cache ->
   CacheNew ->
   Network ->
@@ -130,7 +130,7 @@ queryStakeAddrWithCacheRetBs cache cacheNew nw cred = do
       pure mAddrId
 
 queryStakeAddrAux ::
-  MonadIO m =>
+  (MonadIO m) =>
   CacheNew ->
   StakeAddrCache ->
   StrictTVar IO CacheStatistics ->
@@ -154,7 +154,7 @@ queryStakeAddrAux cacheNew mp sts nw cred =
         (err, _) -> pure (err, mp)
 
 queryPoolKeyWithCache ::
-  MonadIO m =>
+  (MonadIO m) =>
   Cache ->
   CacheNew ->
   PoolKeyHash ->
@@ -233,7 +233,7 @@ insertPoolKeyWithCache cache cacheNew pHash =
           pure phId
 
 queryMAWithCache ::
-  MonadIO m =>
+  (MonadIO m) =>
   Cache ->
   PolicyID StandardCrypto ->
   AssetName ->
@@ -262,7 +262,7 @@ queryMAWithCache cache policyId asset =
           pure maId
 
 queryPrevBlockWithCache ::
-  MonadIO m =>
+  (MonadIO m) =>
   Text ->
   Cache ->
   ByteString ->
@@ -283,7 +283,7 @@ queryPrevBlockWithCache msg cache hsh =
         Nothing -> queryFromDb ci
   where
     queryFromDb ::
-      MonadIO m =>
+      (MonadIO m) =>
       CacheInternal ->
       ExceptT SyncNodeError (ReaderT SqlBackend m) DB.BlockId
     queryFromDb ci = do
@@ -306,7 +306,7 @@ insertBlockAndCache cache block =
       pure bid
 
 queryDatum ::
-  MonadIO m =>
+  (MonadIO m) =>
   Cache ->
   DataHash ->
   ReaderT SqlBackend m (Maybe DB.DatumId)
