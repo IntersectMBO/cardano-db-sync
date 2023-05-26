@@ -1,6 +1,6 @@
 # Revision history for cardano-db-sync
 
-## 13.1.1.0
+## 13.1.1.1
 * Adds compatibility with node-8.0.0 [#1403]
 * Adds compatibility with the new format of the CostModel in Alonzo genesis file [#1403]
 * Adds a procedure which fixes scripts with wrong cbor [Issue #1348]
