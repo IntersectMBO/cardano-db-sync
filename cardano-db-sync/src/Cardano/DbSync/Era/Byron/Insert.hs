@@ -310,7 +310,7 @@ insertTxIn _tracer txInId (Byron.TxInUtxo _txHash inIndex, txOutId, _lovelace) =
 
 -- -----------------------------------------------------------------------------
 
-resolveTxInputs :: MonadIO m => Byron.TxIn -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Byron.TxIn, DB.TxId, DbLovelace)
+resolveTxInputs :: (MonadIO m) => Byron.TxIn -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Byron.TxIn, DB.TxId, DbLovelace)
 resolveTxInputs txIn@(Byron.TxInUtxo txHash index) = do
   res <- liftLookupFail "resolveInput" $ DB.queryTxOutValue (Byron.unTxHash txHash, fromIntegral index)
   pure $ convert res
@@ -335,7 +335,7 @@ calculateTxFee tx resolvedInputs = do
         <$> Byron.sumLovelace (map Byron.txOutValue $ Byron.txOutputs tx)
 
 -- | An 'ExceptT' version of 'mapM_' which will 'left' the first 'Left' it finds.
-mapMVExceptT :: Monad m => (a -> ExceptT e m ()) -> [a] -> ExceptT e m ()
+mapMVExceptT :: (Monad m) => (a -> ExceptT e m ()) -> [a] -> ExceptT e m ()
 mapMVExceptT action xs =
   case xs of
     [] -> pure ()

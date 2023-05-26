@@ -83,8 +83,8 @@ data CacheStatistics = CacheStatistics
 -- When inserting Txs and Blocks we also caculate values which can later be used when calculating a Epochs.
 -- For this reason we store these values in cache.
 data EpochBlockDiff = EpochBlockDiff
-  { -- | The blockId of the current block, this is used as the key for MapEpoch.
-    ebdBlockId :: !DB.BlockId
+  { ebdBlockId :: !DB.BlockId
+  -- ^ The blockId of the current block, this is used as the key for MapEpoch.
   , ebdFees :: !Word64
   , ebdOutSum :: !Word128
   , ebdTxCount :: !Word64
@@ -167,7 +167,7 @@ textShowStats (Cache ic) = do
 uninitiatedCache :: Cache
 uninitiatedCache = UninitiatedCache
 
-newEmptyCache :: MonadIO m => Word64 -> Word64 -> m Cache
+newEmptyCache :: (MonadIO m) => Word64 -> Word64 -> m Cache
 newEmptyCache maCapacity daCapacity =
   liftIO . fmap Cache $
     CacheInternal
