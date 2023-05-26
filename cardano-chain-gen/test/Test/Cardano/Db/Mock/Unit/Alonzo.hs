@@ -74,9 +74,9 @@ unitTests iom knownMigrations =
         , test "Mir Cert" mirReward
         , test "Mir rollback" mirRewardRollback
         , test "Mir Cert deregistration" mirRewardDereg
-        -- , test "test rewards empty last part of epoch" rewardsEmptyChainLast
-         --        , test "test delta rewards" rewardsDelta -- See the same test on Babbage for the reason it was disabled.
-        ,  test "rollback on epoch boundary" rollbackBoundary
+        , -- , test "test rewards empty last part of epoch" rewardsEmptyChainLast
+          --        , test "test delta rewards" rewardsDelta -- See the same test on Babbage for the reason it was disabled.
+          test "rollback on epoch boundary" rollbackBoundary
         , test "single MIR Cert multiple outputs" singleMIRCertMultiOut
         ]
     , testGroup
