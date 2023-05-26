@@ -6,11 +6,22 @@ like, but the scheme chosen allows for easy development, evolution and managemen
 The database schema is defined in three stages, each stage consisting of one or more SQL migrations.
 The stages are:
 
-1. Hand written SQL to set up custom SQL data types (using `DOMAIN` statements) and schema
-   versioning.
-2. SQL generated using the schema defined as Haskell data types (using the [Persistent][Persistent]
-   library) to create the database tables.
-3. Hand written SQL to create views into the tables defined in stage 2.
+- `stage 1`: introduces basic postgres types. These cannot be modified or extended.
+- `stage 2`: introduces basic tables and their constraints. `13.1.0.x` brings many
+changes here, as it removes foreign, unique keys and a few fields. These files cannot
+be modified or extended.
+- `stage 3`: introduces only the indexes necessary to db-sync. Having unecessary
+indexes during syncing slows down db-sync and so they are added later. Index
+creation is idempotent and the `schema_version.stage_tree` field is ignored.
+These files cannot be modified but they can be extended, in case users want to
+introduce their own indexes from the begining.
+- `stage 4`: introduces all the other indexes. By default these are the indexes
+that were created by previous db-sync versions. This stage is executed when
+db-sync has reached 30mins before the tip of the chain. It is advised to increase
+the `maintenance_work_mem` from Postgres config to 0.5GB - 1GB to speed this
+process (default is 64MB). Also use the default (2) or higher
+`max_parallel_maintenance_workers`. These files can be modified or extended
+by users.
 
 All of the schema migrations in these three stages are written to be idempotent (so that they
 "know" if they have already been applied).
