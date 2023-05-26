@@ -71,11 +71,17 @@ this was inefficient and slow.
 
 For `db-sync` version `9.0.0`, a newer version of the `Persistent` library was available that
 makes rollbacks much more efficient. In this version of `db-sync` and later tables that
-reference/index other tables are linked. This means that `db-sync` can issue a delete
-operation on a single object and then PostgreSQL will recursively delete all the objects that
+reference/index other tables are linked, with foreign keys. This means that `db-sync` can issue a
+delete operation on a single object and then PostgreSQL will recursively delete all the objects that
 reference the object to be deleted as well as the object itself. This leads to significantly
 improved rollback times. During development it is often useful to be able to rollback 10000
 or more blocks, even though that is guaranteed to be an invalid rollback according to the ledger
 rules. With this new version of `Persistent` a rollback of 10000 blocks could be done in
 minutes whereas previously it was several hours.
 
+For `db-sync` versions 13.1, we removed all foreign keys and switched back to perform rollbacks from
+Haskell, but in a much more effecient way. Instead of, for example, finding all transactions from
+all the blocks that needs deletion, we found only the oldest one and delete with a single query
+every transaction after it. We use the property that fields like `tx.block_id` are non-decreasing,
+meaning newer entries will have bigger values. So if we simply find the oldest transaction that
+needs to be deleted, it's easy to delete everything with a single query.
