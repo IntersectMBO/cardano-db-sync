@@ -32,7 +32,7 @@ instance Eq PGConfig where
 
 pgFileReadTest :: IO ()
 pgFileReadTest = do
-  let expected = PGConfig "/var/run/postgresql" "5432" "testnet" "" "*"
+  let expected = PGConfig "localhost" "5432" "testnet" "" "*"
 
   currentDir <- getCurrentDirectory
   setEnv "OTHER_PG_PASS_ENV_VARIABLE" (currentDir </> "../config/pgpass-testnet")
