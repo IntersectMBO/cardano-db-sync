@@ -255,8 +255,8 @@ insertTx ::
 insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx blockGroupData = do
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
       !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
-  !resolvedInputs <- mapM (resolveTxInputs (fst <$> groupedTxOut blockGroupData)) (Generic.txInputs tx)
-  let !inSum = sum $ map (unDbLovelace . thrd3) resolvedInputs
+  !resolvedInputs <- mapM (resolveTxInputs (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
+  let !inSum = sum $ map (unDbLovelace . forth4) resolvedInputs
   let diffSum = if inSum >= outSum then inSum - outSum else 0
   let !fees = maybe diffSum (fromIntegral . unCoin) (Generic.txFees tx)
   let !txHash = Generic.txHash tx
@@ -410,15 +410,20 @@ insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index ad
 prepareTxIn ::
   DB.TxId ->
   Map Word64 DB.RedeemerId ->
-  (Generic.TxIn, DB.TxId, DbLovelace) ->
-  DB.TxIn
-prepareTxIn txInId redeemers (txIn, txOutId, _lovelace) =
-  DB.TxIn
-    { DB.txInTxInId = txInId
-    , DB.txInTxOutId = txOutId
-    , DB.txInTxOutIndex = fromIntegral $ Generic.txInIndex txIn
-    , DB.txInRedeemerId = mlookup (Generic.txInRedeemerIndex txIn) redeemers
+  (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutId, DbLovelace) ->
+  ExtendedTxIn
+prepareTxIn txInId redeemers (txIn, txOutId, mTxOutId, _lovelace) =
+  ExtendedTxIn
+    { etiTxIn = txInDB
+    , etiTxOutId = mTxOutId
     }
+  where
+  txInDB = DB.TxIn
+           { DB.txInTxInId = txInId
+           , DB.txInTxOutId = txOutId
+           , DB.txInTxOutIndex = fromIntegral $ Generic.txInIndex txIn
+           , DB.txInRedeemerId = mlookup (Generic.txInRedeemerIndex txIn) redeemers
+           }
 
 insertCollateralTxIn ::
   (MonadBaseControl IO m, MonadIO m) =>
