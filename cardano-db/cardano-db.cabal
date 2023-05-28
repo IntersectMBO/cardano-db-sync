@@ -34,12 +34,15 @@ library
 
   other-modules:        Cardano.Db.Delete
                         Cardano.Db.Error
+                        Cardano.Db.Migration.Extra.CosnumedTxOut.Queries
+                        Cardano.Db.Migration.Extra.CosnumedTxOut.Schema
                         Cardano.Db.Insert
                         Cardano.Db.PGConfig
                         Cardano.Db.Migration
                         Cardano.Db.Migration.Haskell
                         Cardano.Db.Migration.Version
                         Cardano.Db.MinId
+                        Cardano.Db.Multiplex
                         Cardano.Db.Old.V13_0.Schema
                         Cardano.Db.Old.V13_0.Query
                         Cardano.Db.Query

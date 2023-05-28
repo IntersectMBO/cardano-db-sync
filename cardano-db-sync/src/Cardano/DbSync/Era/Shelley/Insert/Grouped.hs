@@ -73,7 +73,7 @@ insertBlockGroupedData ::
   BlockGroupedData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.MinIds
 insertBlockGroupedData _tracer grouped = do
-  txOutIds <- lift . DB.insertManyTxOut $ etoTxOut . fst <$> groupedTxOut grouped
+  txOutIds <- lift . DB.insertManyTxOutPlex False $ etoTxOut . fst <$> groupedTxOut grouped
   let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> groupedTxOut grouped)
   maTxOutIds <- lift $ DB.insertManyMaTxOut maTxOuts
   txInId <- lift . DB.insertManyTxIn $ groupedTxIn grouped

@@ -233,7 +233,7 @@ insertTxOuts trce blkId (ShelleyTx.TxIn txInId _, txOut) = do
         , DB.txScriptSize = 0
         }
   _ <- insertStakeAddressRefIfMissing trce uninitiatedCache txId (txOut ^. Core.addrTxOutL)
-  void . DB.insertTxOut $
+  void . DB.insertTxOutPlex False $
     DB.TxOut
       { DB.txOutTxId = txId
       , DB.txOutIndex = 0
