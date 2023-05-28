@@ -55,6 +55,8 @@ module Cardano.Db.Insert (
   insertReservedPoolTicker,
   insertDelistedPool,
   replaceAdaPots,
+  insertUnchecked,
+  insertMany',
   -- Export mainly for testing.
   insertBlockChecked,
 ) where

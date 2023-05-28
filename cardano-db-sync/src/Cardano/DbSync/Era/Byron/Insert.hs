@@ -235,7 +235,7 @@ insertTxOut ::
   Byron.TxOut ->
   ReaderT SqlBackend m ()
 insertTxOut _tracer txId index txout =
-  void . DB.insertTxOut $
+  void . DB.insertTxOutPlex False $
     DB.TxOut
       { DB.txOutTxId = txId
       , DB.txOutIndex = fromIntegral index

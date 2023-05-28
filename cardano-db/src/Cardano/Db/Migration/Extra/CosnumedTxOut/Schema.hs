@@ -15,7 +15,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Cardano.Db.Schema where
+module Cardano.Db.Migration.Extra.CosnumedTxOut.Schema where
 
 import Cardano.Db.Schema.Orphans ()
 import Cardano.Db.Schema.Types (
