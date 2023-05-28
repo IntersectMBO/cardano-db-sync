@@ -184,7 +184,7 @@ insertTxOuts blkId (address, value) = do
         , DB.txValidContract = True
         , DB.txScriptSize = 0
         }
-  void . DB.insertTxOut $
+  void . DB.insertTxOutPlex False $
     DB.TxOut
       { DB.txOutTxId = txId
       , DB.txOutIndex = 0
