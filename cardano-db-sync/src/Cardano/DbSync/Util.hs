@@ -26,6 +26,7 @@ module Cardano.DbSync.Util (
   textPrettyShow,
   textShow,
   thrd3,
+  forth4,
   traverseMEither,
   whenStrictJust,
   whenMaybe,
@@ -208,8 +209,11 @@ whenMaybe :: Monad m => Maybe a -> (a -> m b) -> m (Maybe b)
 whenMaybe (Just a) f = Just <$> f a
 whenMaybe Nothing _f = pure Nothing
 
-thrd3 :: (a, b, c) -> c
-thrd3 (_, _, c) = c
+thrd3 :: (a, b, c, d) -> c
+thrd3 (_, _, c, _) = c
+
+forth4 :: (a, b, c, d) -> d
+forth4 (_, _, _, d) = d
 
 mlookup :: Ord k => Maybe k -> Map k a -> Maybe a
 mlookup mKey mp = (`Map.lookup` mp) =<< mKey

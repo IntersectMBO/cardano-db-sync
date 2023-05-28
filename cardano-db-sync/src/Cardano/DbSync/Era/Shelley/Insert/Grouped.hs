@@ -5,6 +5,7 @@
 module Cardano.DbSync.Era.Shelley.Insert.Grouped (
   BlockGroupedData (..),
   MissingMaTxOut (..),
+  ExtendedTxIn (..),
   ExtendedTxOut (..),
   insertBlockGroupedData,
   insertReverseIndex,
@@ -12,7 +13,7 @@ module Cardano.DbSync.Era.Shelley.Insert.Grouped (
   resolveScriptHash,
 ) where
 
-import Cardano.BM.Trace (Trace)
+import Cardano.BM.Trace (Trace, logWarning)
 import Cardano.Db (DbLovelace (..), minIdsToText, textShow)
 import qualified Cardano.Db as DB
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -23,6 +24,7 @@ import Cardano.Prelude
 import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.List as List
 import Database.Persist.Sql (SqlBackend)
+import qualified Data.Text as Text
 
 -- | Group data within the same block, to insert them together in batches
 --
@@ -36,7 +38,7 @@ import Database.Persist.Sql (SqlBackend)
 -- other table references it in the future it has to be added here and delay its
 -- insertion.
 data BlockGroupedData = BlockGroupedData
-  { groupedTxIn :: ![DB.TxIn]
+  { groupedTxIn :: ![ExtendedTxIn]
   , groupedTxOut :: ![(ExtendedTxOut, [MissingMaTxOut])]
   , groupedTxMetadata :: ![DB.TxMetadata]
   , groupedTxMint :: ![DB.MaTxMint]
@@ -56,6 +58,11 @@ data ExtendedTxOut = ExtendedTxOut
   , etoTxOut :: !DB.TxOut
   }
 
+data ExtendedTxIn = ExtendedTxIn
+  { etiTxIn :: !DB.TxIn
+  , etiTxOutId :: !(Either Generic.TxIn DB.TxOutId)
+  } deriving Show
+
 instance Monoid BlockGroupedData where
   mempty = BlockGroupedData [] [] [] []
 
@@ -72,14 +79,18 @@ insertBlockGroupedData ::
   Trace IO Text ->
   BlockGroupedData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.MinIds
-insertBlockGroupedData _tracer grouped = do
+insertBlockGroupedData tracer grouped = do
   txOutIds <- lift . DB.insertManyTxOutPlex False $ etoTxOut . fst <$> groupedTxOut grouped
   let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> groupedTxOut grouped)
   maTxOutIds <- lift $ DB.insertManyMaTxOut maTxOuts
-  txInId <- lift . DB.insertManyTxIn $ groupedTxIn grouped
+  txInIds <- lift . DB.insertManyTxIn $ etiTxIn <$> groupedTxIn grouped
+  when False $ do
+    etis <- resolveRemainingInputs (groupedTxIn grouped) $ zip txOutIds (fst <$> groupedTxOut grouped)
+    updateTuples <- lift $ mapM (prepareUpdates tracer) (zip txInIds etis)
+    lift $ DB.updateListTxOutConsumedByTxInId $ catMaybes updateTuples
   void . lift . DB.insertManyTxMetadata $ groupedTxMetadata grouped
   void . lift . DB.insertManyTxMint $ groupedTxMint grouped
-  pure $ DB.MinIds (minimumMaybe txInId) (minimumMaybe txOutIds) (minimumMaybe maTxOutIds)
+  pure $ DB.MinIds (minimumMaybe txInIds) (minimumMaybe txOutIds) (minimumMaybe maTxOutIds)
   where
     mkmaTxOuts :: (DB.TxOutId, [MissingMaTxOut]) -> [DB.MaTxOut]
     mkmaTxOuts (txOutId, mmtos) = mkmaTxOut txOutId <$> mmtos
@@ -91,6 +102,17 @@ insertBlockGroupedData _tracer grouped = do
         , DB.maTxOutQuantity = mmtoQuantity missingMaTx
         , DB.maTxOutTxOutId = txOutId
         }
+
+prepareUpdates ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
+  (DB.TxInId, ExtendedTxIn) ->
+  m (Maybe (DB.TxOutId, DB.TxInId))
+prepareUpdates trce (txInId, eti) = case etiTxOutId eti of
+  Right txOutId -> pure $ Just (txOutId, txInId)
+  Left _ -> do
+    liftIO $ logWarning trce $ "Failed to find output for " <> Text.pack (show eti)
+    pure Nothing
 
 insertReverseIndex ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -106,23 +128,45 @@ insertReverseIndex blockId minIds =
 
 -- | If we can't resolve from the db, we fall back to the provided outputs
 -- This happens the input consumes an output introduced in the same block.
+-- In this case we also cannot find yet the 'TxOutId', so we return 'Nothing' for now
 resolveTxInputs ::
   MonadIO m =>
   [ExtendedTxOut] ->
   Generic.TxIn ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, DbLovelace)
+  ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutId, DbLovelace)
 resolveTxInputs groupedOutputs txIn =
-  fmap convert $ liftLookupFail ("resolveTxInputs " <> textShow txIn <> " ") $ do
-    qres <- queryResolveInput txIn
+  liftLookupFail ("resolveTxInputs " <> textShow txIn <> " ") $ do
+    qres <-
+      if True then
+       fmap convertnotFound <$> queryResolveInput txIn
+      else
+        fmap convertFound <$> queryResolveInput2 txIn
     case qres of
       Right ret -> pure $ Right ret
       Left err ->
         case resolveInMemory txIn groupedOutputs of
           Nothing -> pure $ Left err
-          Just eutxo -> pure $ Right (DB.txOutTxId (etoTxOut eutxo), DB.txOutValue (etoTxOut eutxo))
+          Just eutxo -> pure $ Right $ convertnotFound (DB.txOutTxId (etoTxOut eutxo), DB.txOutValue (etoTxOut eutxo))
   where
-    convert :: (DB.TxId, DbLovelace) -> (Generic.TxIn, DB.TxId, DbLovelace)
-    convert (txId, lovelace) = (txIn, txId, lovelace)
+    convertFound :: (DB.TxId, DB.TxOutId, DbLovelace) -> (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutId, DbLovelace)
+    convertFound (txId, txOutId, lovelace) = (txIn, txId, Right txOutId, lovelace)
+
+    convertnotFound :: (DB.TxId, DbLovelace) -> (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutId, DbLovelace)
+    convertnotFound (txId, lovelace) = (txIn, txId, Left txIn, lovelace)
+
+resolveRemainingInputs ::
+  MonadIO m =>
+  [ExtendedTxIn] ->
+  [(DB.TxOutId, ExtendedTxOut)] ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) [ExtendedTxIn]
+resolveRemainingInputs etis mp =
+  mapM f etis
+  where
+    f eti = case etiTxOutId eti of
+      Right _ -> pure eti
+      Left txIn | Just txOutId <- fst <$> find (matches txIn . snd) mp ->
+        pure eti {etiTxOutId = Right txOutId}
+      _ -> pure eti
 
 resolveScriptHash ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -141,12 +185,12 @@ resolveScriptHash groupedOutputs txIn =
 
 resolveInMemory :: Generic.TxIn -> [ExtendedTxOut] -> Maybe ExtendedTxOut
 resolveInMemory txIn =
-  List.find matches
-  where
-    matches :: ExtendedTxOut -> Bool
-    matches eutxo =
-      Generic.txInHash txIn == etoTxHash eutxo
-        && Generic.txInIndex txIn == DB.txOutIndex (etoTxOut eutxo)
+  List.find (matches txIn)
+
+matches :: Generic.TxIn -> ExtendedTxOut -> Bool
+matches txIn eutxo =
+  Generic.txInHash txIn == etoTxHash eutxo
+    && Generic.txInIndex txIn == DB.txOutIndex (etoTxOut eutxo)
 
 minimumMaybe :: (Ord a, Foldable f) => f a -> Maybe a
 minimumMaybe xs

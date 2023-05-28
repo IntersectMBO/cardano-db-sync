@@ -42,6 +42,7 @@ module Cardano.Db.Query (
   queryTxCount,
   queryTxId,
   queryTxOutValue,
+  queryTxOutValue2,
   queryTxOutCredentials,
   queryEpochStakeCount,
   queryMinRefId,
@@ -582,6 +583,19 @@ queryTxOutValue (hash, index) = do
     where_ (txOut ^. TxOutIndex ==. val index &&. tx ^. TxHash ==. val hash)
     pure (txOut ^. TxOutTxId, txOut ^. TxOutValue)
   pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
+
+-- | Like 'queryTxOutValue' but also return the 'TxOutId'
+queryTxOutValue2 :: MonadIO m => (ByteString, Word64) -> ReaderT SqlBackend m (Either LookupFail (TxId, TxOutId, DbLovelace))
+queryTxOutValue2 (hash, index) = do
+  res <- select $ do
+    (tx :& txOut) <-
+      from
+        $ table @Tx
+          `innerJoin` table @TxOut
+        `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. TxOutTxId)
+    where_ (txOut ^. TxOutIndex ==. val index &&. tx ^. TxHash ==. val hash)
+    pure (txOut ^. TxOutTxId, txOut ^. TxOutId, txOut ^. TxOutValue)
+  pure $ maybeToEither (DbLookupTxHash hash) unValue3 (listToMaybe res)
 
 -- | Give a (tx hash, index) pair, return the TxOut Credentials.
 queryTxOutCredentials :: MonadIO m => (ByteString, Word64) -> ReaderT SqlBackend m (Either LookupFail (Maybe ByteString, Bool))
