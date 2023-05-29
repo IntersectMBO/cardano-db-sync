@@ -40,6 +40,7 @@ data Command
   | CmdReport !Report
   | CmdRollback !SlotNo
   | CmdRunMigrations !MigrationDir !Bool !Bool !(Maybe LogFileDir)
+  | CmdTxOutMigration
   | CmdUtxoSetAtBlock !Word64
   | CmdPrepareSnapshot !PrepareSnapshotArgs
   | CmdValidateDb
@@ -64,6 +65,8 @@ runCommand cmd =
       when mockFix $
         void $
           runMigrations pgConfig False mdir mldir Fix
+    CmdTxOutMigration -> do
+      runWithConnectionNoLogging PGPassDefaultEnv migrateTxOut
     CmdUtxoSetAtBlock blkid -> utxoSetAtSlot blkid
     CmdPrepareSnapshot pargs -> runPrepareSnapshot pargs
     CmdValidateDb -> runDbValidation
@@ -128,6 +131,14 @@ pCommand =
                   , " By default this only runs the initial migrations that db-sync"
                   , " runs when it starts. You can force and mock other migrations"
                   , " but this is not advised in the general case."
+                  ]
+            )
+      , Opt.command "tx_out-migration" $
+          Opt.info
+            (pure CmdTxOutMigration)
+            ( Opt.progDesc $
+                mconcat
+                  [ "Runs the tx_out migration, which adds a new field"
                   ]
             )
       , Opt.command "utxo-set" $
