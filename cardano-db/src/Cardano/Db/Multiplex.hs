@@ -7,6 +7,7 @@ module Cardano.Db.Multiplex (
   insertTxOutPlex,
   insertManyTxOutPlex,
   updateListTxOutConsumedByTxInId,
+  setNullTxOut,
 ) where
 
 import Cardano.Db.Insert
@@ -17,6 +18,9 @@ import Control.Monad.Trans.Reader (ReaderT)
 import Database.Persist.Sql (SqlBackend, ToBackendKey (..))
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
+import Cardano.BM.Trace (Trace)
+import Data.Text (Text)
+import Data.Word (Word64)
 
 insertTxOutPlex ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -66,3 +70,7 @@ updateListTxOutConsumedByTxInId ls =
     updateListTxOutConsumedByTxInId (f <$> ls)
   where
     f (txOutId, txInId) = (changeKey txOutId, changeKey txInId)
+
+setNullTxOut :: MonadIO m => Trace IO Text -> Maybe TxInId -> Word64 -> ReaderT SqlBackend m ()
+setNullTxOut trce mMinTxInId =
+    ExtraCons.setNullTxOut trce (changeKey <$> mMinTxInId)
