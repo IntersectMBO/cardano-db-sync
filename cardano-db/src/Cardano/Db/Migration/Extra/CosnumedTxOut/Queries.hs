@@ -32,7 +32,8 @@ insertManyTxOutExtra :: (MonadBaseControl IO m, MonadIO m) => [TxOut] -> ReaderT
 insertManyTxOutExtra = insertMany' "TxOut"
 
 updateListTxOutConsumedByTxInId :: MonadIO m => [(TxOutId, TxInId)] -> ReaderT SqlBackend m ()
-updateListTxOutConsumedByTxInId = mapM_ (uncurry updateTxOutConsumedByTxInId)
+updateListTxOutConsumedByTxInId ls = do
+    mapM_ (uncurry updateTxOutConsumedByTxInId) ls
 
 updateTxOutConsumedByTxInId :: MonadIO m => TxOutId -> TxInId -> ReaderT SqlBackend m ()
 updateTxOutConsumedByTxInId txOutId txInId =
@@ -68,12 +69,15 @@ setNullTxOutConsumedAfterTxInId :: MonadIO m => TxOutId -> ReaderT SqlBackend m 
 setNullTxOutConsumedAfterTxInId txOutId = do
     update txOutId [TxOutConsumedByTxInId =. Nothing]
 
-migrateTxOut :: MonadIO m => ReaderT SqlBackend m ()
-migrateTxOut = migrateNextPage 0
+migrateTxOut :: MonadIO m => Maybe (Trace IO Text) -> ReaderT SqlBackend m ()
+migrateTxOut mTrace = do
+    createConsumedTxOut
+    migrateNextPage 0
   where
   migrateNextPage :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
   migrateNextPage offst = do
-    liftIO $ print offst -- TODO delete
+    whenJust mTrace $ \trce ->
+      liftIO $ logInfo trce $ "Handling input offset " <> textShow offst
     page <- getInputPage offst pageSize
     mapM_ migratePair page
     when (fromIntegral (length page) == pageSize) $
@@ -88,14 +92,27 @@ pageSize = 100_000
 
 isMigrated :: MonadIO m => ReaderT SqlBackend m Bool
 isMigrated = do
-  columntExists <- rawExecuteCount
+  columntExists :: [Text] <- fmap unSingle <$> rawSql
             ( mconcat
-                [ "SELECT column_name FROM information_schema.columns"
+                [ "SELECT column_name FROM information_schema.columns "
                 , "WHERE table_name='tx_out' and column_name='consumed_by_tx_in_id'"
                 ]
             )
             []
-  pure (columntExists >= 1)
+  pure (not $ null columntExists)
+
+createConsumedTxOut :: MonadIO m => ReaderT SqlBackend m ()
+createConsumedTxOut = do
+  rawExecute
+    "ALTER TABLE tx_out ADD COLUMN consumed_by_tx_in_id INT8 NULL"
+    []
+  rawExecute
+    "CREATE INDEX IF NOT EXISTS idx_tx_out_consumed_by_tx_in_id ON tx_out (consumed_by_tx_in_id)"
+    []
+  rawExecute
+    "ALTER TABLE ma_tx_out ADD CONSTRAINT ma_tx_out_tx_out_id_fkey FOREIGN KEY(tx_out_id) REFERENCES tx_out(id) ON DELETE CASCADE ON UPDATE RESTRICT"
+    []
+
 
 _validateMigration :: MonadIO m => Trace IO Text -> ReaderT SqlBackend m Bool
 _validateMigration trce = do
@@ -188,7 +205,7 @@ deleteConsumedTxOut trce blockNoDiff = do
     deleteConsumedBeforeTxIn :: TxInId -> ReaderT SqlBackend m ()
     deleteConsumedBeforeTxIn txInId = do
       countDeleted <- deleteWhereCount [TxOutConsumedByTxInId <=. Just txInId]
-      liftIO $ logInfo trce $ "Deleted " <> textShow countDeleted <> " tx_in"
+      liftIO $ logInfo trce $ "Deleted " <> textShow countDeleted <> " tx_out"
 
 queryBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe BlockId)
 queryBlockNo blkNo = do
