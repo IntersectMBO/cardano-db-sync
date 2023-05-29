@@ -116,7 +116,7 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
     let txInserter = insertTx tracer cache (getInsertOptions syncEnv) (getNetwork syncEnv) isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
     grouped <- foldM (\grouped (idx, tx) -> txInserter idx tx grouped) mempty zippedTx
-    minIds <- insertBlockGroupedData tracer grouped
+    minIds <- insertBlockGroupedData syncEnv grouped
     when withinHalfHour $
       insertReverseIndex blkId minIds
 

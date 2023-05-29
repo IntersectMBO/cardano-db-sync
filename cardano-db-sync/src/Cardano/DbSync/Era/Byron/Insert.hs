@@ -57,7 +57,7 @@ insertByronBlock ::
 insertByronBlock syncEnv firstBlockOfEpoch blk details = do
   res <- runExceptT $
     case byronBlockRaw blk of
-      Byron.ABOBBlock ablk -> insertABlock tracer cache firstBlockOfEpoch ablk details
+      Byron.ABOBBlock ablk -> insertABlock syncEnv firstBlockOfEpoch ablk details
       Byron.ABOBBoundary abblk -> insertABOBBoundary tracer cache abblk details
   -- Serializing things during syncing can drastically slow down full sync
   -- times (ie 10x or more).
@@ -121,13 +121,12 @@ insertABOBBoundary tracer cache blk details = do
 
 insertABlock ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
-  Cache ->
+  SyncEnv ->
   Bool ->
   Byron.ABlock ByteString ->
   SlotDetails ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertABlock tracer cache firstBlockOfEpoch blk details = do
+insertABlock syncEnv firstBlockOfEpoch blk details = do
   pbid <- queryPrevBlockWithCache "insertABlock" cache (Byron.blockPreviousHash blk)
   slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
   blkId <-
@@ -151,7 +150,7 @@ insertABlock tracer cache firstBlockOfEpoch blk details = do
         , DB.blockOpCertCounter = Nothing
         }
 
-  zipWithM_ (insertTx tracer blkId) (Byron.blockPayload blk) [0 ..]
+  zipWithM_ (insertTx syncEnv blkId) (Byron.blockPayload blk) [0 ..]
 
   liftIO $ do
     let epoch = unEpochNo (sdEpochNo details)
@@ -181,6 +180,12 @@ insertABlock tracer cache firstBlockOfEpoch blk details = do
         , renderByteArray (Byron.blockHash blk)
         ]
   where
+    tracer :: Trace IO Text
+    tracer = getTrace syncEnv
+
+    cache :: Cache
+    cache = envCache syncEnv
+
     logger :: Bool -> Trace IO a -> a -> IO ()
     logger followingClosely
       | firstBlockOfEpoch = logInfo
@@ -190,13 +195,14 @@ insertABlock tracer cache firstBlockOfEpoch blk details = do
 
 insertTx ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
+  SyncEnv ->
   DB.BlockId ->
   Byron.TxAux ->
   Word64 ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertTx tracer blkId tx blockIndex = do
+insertTx syncEnv blkId tx blockIndex = do
   resolvedInputs <- mapM resolveTxInputs (toList $ Byron.txInputs (Byron.taTx tx))
+  hasConsumed <- liftIO $ getHasConsumed syncEnv
   valFee <- firstExceptT annotateTx $ ExceptT $ pure (calculateTxFee (Byron.taTx tx) resolvedInputs)
   txId <-
     lift . DB.insertTx $
@@ -216,11 +222,14 @@ insertTx tracer blkId tx blockIndex = do
         , DB.txScriptSize = 0
         }
 
-  lift $ zipWithM_ (insertTxOut tracer txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
+  lift $ zipWithM_ (insertTxOut tracer hasConsumed txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
   txInIds <- mapM (insertTxIn tracer txId) resolvedInputs
-  when False $
+  whenConsumeTxOut syncEnv $
     lift $ DB.updateListTxOutConsumedByTxInId $ zip (thrd3 <$> resolvedInputs) txInIds
   where
+    tracer :: Trace IO Text
+    tracer = getTrace syncEnv
+
     annotateTx :: SyncNodeError -> SyncNodeError
     annotateTx ee =
       case ee of
@@ -230,12 +239,13 @@ insertTx tracer blkId tx blockIndex = do
 insertTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  Bool ->
   DB.TxId ->
   Word32 ->
   Byron.TxOut ->
   ReaderT SqlBackend m ()
-insertTxOut _tracer txId index txout =
-  void . DB.insertTxOutPlex False $
+insertTxOut _tracer hasConsumed txId index txout =
+  void . DB.insertTxOutPlex hasConsumed $
     DB.TxOut
       { DB.txOutTxId = txId
       , DB.txOutIndex = fromIntegral index

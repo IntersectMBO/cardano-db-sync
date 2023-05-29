@@ -162,6 +162,8 @@ runSyncNode metricsSetters trce iomgr dbConnString ranAll runMigration syncNodeP
           genCfg
           ranAll
           (enpForceIndexes syncNodeParams)
+          (enpMigrateConsumed syncNodeParams)
+          (enpPruneTxOut syncNodeParams)
           runMigration
 
     -- If the DB is empty it will be inserted, otherwise it will be validated (to make
@@ -169,11 +171,13 @@ runSyncNode metricsSetters trce iomgr dbConnString ranAll runMigration syncNodeP
     lift $
       Db.runIohkLogging trce $
         withPostgresqlConn dbConnString $ \backend -> do
+          liftIO $ replaceConnection syncEnv backend
+          liftIO $ runExtraMigrationsMaybe syncEnv
           liftIO $
             unless (enpShouldUseLedger syncNodeParams) $ do
               logInfo trce "Migrating to a no ledger schema"
               Db.noLedgerMigrations backend trce
-          lift $ orDie renderSyncNodeError $ insertValidateGenesisDist trce backend (dncNetworkName syncNodeConfig) genCfg (useShelleyInit syncNodeConfig)
+          lift $ orDie renderSyncNodeError $ insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfig) genCfg (useShelleyInit syncNodeConfig)
           liftIO $ epochStartup (enpExtended syncNodeParams) trce backend
 
     case genCfg of

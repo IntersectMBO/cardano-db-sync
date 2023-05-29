@@ -46,7 +46,7 @@ import Database.Persist.SqlBackend.Internal
 import Database.Persist.SqlBackend.Internal.StatementCache
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
-import Ouroboros.Network.Block (blockHash, blockNo, getHeaderFields)
+import Ouroboros.Network.Block (blockHash, blockNo, getHeaderFields, headerFieldBlockNo, unBlockNo)
 
 insertListBlocks ::
   SyncEnv ->
@@ -82,6 +82,7 @@ applyAndInsertBlockMaybe syncEnv cblk = do
               , ". Time to restore consistency."
               ]
           rollbackFromBlockNo syncEnv (blockNo cblk)
+          liftIO $ putStrLn ("block" :: Text)
           insertBlock syncEnv cblk applyRes True tookSnapshot
           liftIO $ setConsistentLevel syncEnv Consistent
         Right blockId | Just (adaPots, slotNo, epochNo) <- getAdaPots applyRes -> do
@@ -167,6 +168,9 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
           Generic.fromBabbageBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
     BlockConway _blk -> panic "TODO: Conway 1"
   insertEpoch details
+  whenPruneTxOut syncEnv $
+    when (unBlockNo blkNo `mod` getPruneInterval syncEnv == 0) $ do
+      lift $ DB.deleteConsumedTxOut tracer (getSafeBlockNoDiff syncEnv)
   lift $ commitOrIndexes withinTwoMin withinHalfHour
   where
     tracer = getTrace syncEnv
@@ -202,6 +206,8 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
 
     isWithinHalfHour :: SlotDetails -> Bool
     isWithinHalfHour sd = isSyncedWithinSeconds sd 1800 == SyncFollowing
+
+    blkNo = headerFieldBlockNo $ getHeaderFields cblk
 
 -- -------------------------------------------------------------------------------------------------
 

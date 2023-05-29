@@ -71,6 +71,8 @@ data SyncNodeParams = SyncNodeParams
   , enpHasOfflineData :: !Bool
   , enpTurboMode :: !Bool
   , enpFullMode :: !Bool
+  , enpMigrateConsumed :: !Bool
+  , enpPruneTxOut :: !Bool
   , enpSnEveryFollowing :: !Word64
   , enpSnEveryLagging :: !Word64
   , enpMaybeRollback :: !(Maybe SlotNo)
