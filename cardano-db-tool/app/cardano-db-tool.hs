@@ -66,7 +66,7 @@ runCommand cmd =
         void $
           runMigrations pgConfig False mdir mldir Fix
     CmdTxOutMigration -> do
-      runWithConnectionNoLogging PGPassDefaultEnv migrateTxOut
+      runWithConnectionNoLogging PGPassDefaultEnv $ migrateTxOut Nothing
     CmdUtxoSetAtBlock blkid -> utxoSetAtSlot blkid
     CmdPrepareSnapshot pargs -> runPrepareSnapshot pargs
     CmdValidateDb -> runDbValidation

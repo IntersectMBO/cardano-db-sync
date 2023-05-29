@@ -27,6 +27,13 @@ module Cardano.DbSync.Api (
   setIsFixedAndMigrate,
   getRanIndexes,
   runIndexMigrations,
+  runExtraMigrationsMaybe,
+  getSafeBlockNoDiff,
+  getPruneInterval,
+  whenConsumeTxOut,
+  whenPruneTxOut,
+  getHasConsumed,
+  getPrunes,
   mkSyncEnvFromConfig,
   replaceConnection,
   verifySnapshotPoint,
@@ -98,6 +105,7 @@ data SyncEnv = SyncEnv
   , envIndexes :: !(StrictTVar IO Bool)
   , envOptions :: !SyncOptions
   , envCache :: !Cache
+  , envExtraMigrations :: !(StrictTVar IO ExtraMigrations)
   , envOfflineWorkQueue :: !(StrictTBQueue IO PoolFetchRetry)
   , envOfflineResultQueue :: !(StrictTBQueue IO FetchResult)
   , envEpochState :: !(StrictTVar IO EpochState)
@@ -116,6 +124,12 @@ data FixesRan = NoneFixRan | DataFixRan | AllFixRan
 
 data ConsistentLevel = Consistent | DBAheadOfLedger | Unchecked
   deriving (Show, Eq)
+
+data ExtraMigrations = ExtraMigrations
+  { emRan :: Bool
+  , emConsume :: Bool
+  , emPrune :: Bool
+  } deriving Show
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
 setConsistentLevel env cst = do
@@ -164,6 +178,54 @@ runIndexMigrations env = do
     envRunDelayedMigration env DB.Indexes
     logInfo (getTrace env) "Indexes were created"
     atomically $ writeTVar (envIndexes env) True
+
+initExtraMigrations :: Bool -> Bool -> ExtraMigrations
+initExtraMigrations cons prne =
+  ExtraMigrations
+    { emRan = False
+    , emConsume = cons || prne
+    , emPrune = prne
+    }
+
+runExtraMigrationsMaybe :: SyncEnv -> IO ()
+runExtraMigrationsMaybe env = do
+  extraMigr <- liftIO $ readTVarIO $ envExtraMigrations env
+  logInfo (getTrace env) $ textShow extraMigr
+  unless (emRan extraMigr) $ do
+    backend <- getBackend env
+    DB.runDbIohkNoLogging backend $
+      DB.runExtraMigrations
+        (getTrace env)
+        (getSafeBlockNoDiff env)
+        (emConsume extraMigr)
+        (emPrune extraMigr)
+  liftIO $ atomically $ writeTVar (envExtraMigrations env) (extraMigr {emRan = True})
+
+getSafeBlockNoDiff :: SyncEnv -> Word64
+getSafeBlockNoDiff _ = 2 * 2160
+
+getPruneInterval :: SyncEnv -> Word64
+getPruneInterval _ = 10 * 2160
+
+whenConsumeTxOut :: MonadIO m => SyncEnv -> m () -> m ()
+whenConsumeTxOut env action = do
+  extraMigr <- liftIO $ readTVarIO $ envExtraMigrations env
+  when (emConsume extraMigr) action
+
+whenPruneTxOut :: MonadIO m => SyncEnv -> m () -> m ()
+whenPruneTxOut env action = do
+  extraMigr <- liftIO $ readTVarIO $ envExtraMigrations env
+  when (emPrune extraMigr) action
+
+getHasConsumed :: SyncEnv -> IO Bool
+getHasConsumed env = do
+  extraMigr <- liftIO $ readTVarIO $ envExtraMigrations env
+  pure $ emConsume extraMigr
+
+getPrunes :: SyncEnv -> IO Bool
+getPrunes env = do
+  extraMigr <- liftIO $ readTVarIO $ envExtraMigrations env
+  pure $ emPrune extraMigr
 
 data SyncOptions = SyncOptions
   { soptExtended :: !Bool
@@ -330,14 +392,17 @@ mkSyncEnv ::
   Bool -> -- shouldUseLedger
   Bool ->
   Bool ->
+  Bool ->
+  Bool ->
   RunMigration ->
   IO SyncEnv
-mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart maybeLedgerDir shouldUseLedger ranAll forcedIndexes runMigration = do
+mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart maybeLedgerDir shouldUseLedger ranAll forcedIndexes toConsume toPrune runMigration = do
   cache <- if soptCache syncOptions then newEmptyCache 250000 50000 else pure uninitiatedCache
   backendVar <- newTVarIO Strict.Nothing
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranAll then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO forcedIndexes
+  extraMigrVar <- newTVarIO $ initExtraMigrations toConsume toPrune
   owq <- newTBQueueIO 100
   orq <- newTBQueueIO 100
   epochVar <- newTVarIO initEpochState
@@ -377,6 +442,7 @@ mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart maybeLedge
       , envIsFixed = fixDataVar
       , envIndexes = indexesVar
       , envCache = cache
+      , envExtraMigrations = extraMigrVar
       , envOfflineWorkQueue = owq
       , envOfflineResultQueue = orq
       , envEpochState = epochVar
@@ -393,9 +459,11 @@ mkSyncEnvFromConfig ::
   GenesisConfig ->
   Bool ->
   Bool ->
+  Bool ->
+  Bool ->
   RunMigration ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce connSring syncOptions maybeLedgerDir shouldUseLedger genCfg ranAll forcedIndexes runMigration =
+mkSyncEnvFromConfig trce connSring syncOptions maybeLedgerDir shouldUseLedger genCfg ranAll forcedIndexes toConsume toPrune runMigration =
   case genCfg of
     GenesisCardano _ bCfg sCfg _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -428,6 +496,8 @@ mkSyncEnvFromConfig trce connSring syncOptions maybeLedgerDir shouldUseLedger ge
               shouldUseLedger
               ranAll
               forcedIndexes
+              toConsume
+              toPrune
               runMigration
 
 -- | 'True' is for in memory points and 'False' for on disk

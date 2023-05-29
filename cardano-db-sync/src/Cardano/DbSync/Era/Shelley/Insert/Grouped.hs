@@ -25,6 +25,7 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.List as List
 import Database.Persist.Sql (SqlBackend)
 import qualified Data.Text as Text
+import Cardano.DbSync.Api
 
 -- | Group data within the same block, to insert them together in batches
 --
@@ -80,15 +81,16 @@ instance Semigroup BlockGroupedData where
 
 insertBlockGroupedData ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
+  SyncEnv ->
   BlockGroupedData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.MinIds
-insertBlockGroupedData tracer grouped = do
-  txOutIds <- lift . DB.insertManyTxOutPlex False $ etoTxOut . fst <$> groupedTxOut grouped
+insertBlockGroupedData syncEnv grouped = do
+  hasConsumed <- liftIO $ getHasConsumed syncEnv
+  txOutIds <- lift . DB.insertManyTxOutPlex hasConsumed $ etoTxOut . fst <$> groupedTxOut grouped
   let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> groupedTxOut grouped)
   maTxOutIds <- lift $ DB.insertManyMaTxOut maTxOuts
   txInIds <- lift . DB.insertManyTxIn $ etiTxIn <$> groupedTxIn grouped
-  when False $ do
+  whenConsumeTxOut syncEnv $ do
     etis <- resolveRemainingInputs (groupedTxIn grouped) $ zip txOutIds (fst <$> groupedTxOut grouped)
     updateTuples <- lift $ mapM (prepareUpdates tracer) (zip txInIds etis)
     lift $ DB.updateListTxOutConsumedByTxInId $ catMaybes updateTuples
@@ -96,6 +98,8 @@ insertBlockGroupedData tracer grouped = do
   void . lift . DB.insertManyTxMint $ groupedTxMint grouped
   pure $ DB.MinIds (minimumMaybe txInIds) (minimumMaybe txOutIds) (minimumMaybe maTxOutIds)
   where
+    tracer = getTrace syncEnv
+
     mkmaTxOuts :: (DB.TxOutId, [MissingMaTxOut]) -> [DB.MaTxOut]
     mkmaTxOuts (txOutId, mmtos) = mkmaTxOut txOutId <$> mmtos
 

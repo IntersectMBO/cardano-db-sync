@@ -127,25 +127,9 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
           }
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
-    let txInserter = insertTx tracer cache (getInsertOptions syncEnv) (getNetwork syncEnv) isMember blkId epochNo (Generic.blkSlotNo blk)
-    blockGroupedData <- foldM (\gp (idx, tx) -> txInserter idx tx gp) mempty zippedTx
-    minIds <- insertBlockGroupedData tracer blockGroupedData
-
-    -- now that we've inserted the Block and all it's txs lets cache what we'll need
-    -- when we later update the epoch values.
-    void $
-      lift $
-        writeEpochBlockDiffToCache
-          cache
-          EpochBlockDiff
-            { ebdBlockId = blkId
-            , ebdTime = sdSlotTime details
-            , ebdFees = groupedTxFees blockGroupedData
-            , ebdEpochNo = unEpochNo (sdEpochNo details)
-            , ebdOutSum = fromIntegral $ groupedTxOutSum blockGroupedData
-            , ebdTxCount = fromIntegral $ length (Generic.blkTxs blk)
-            }
-
+    let txInserter = insertTx tracer cache (getInsertOptions syncEnv) (getNetwork syncEnv) isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
+    grouped <- foldM (\grouped (idx, tx) -> txInserter idx tx grouped) mempty zippedTx
+    minIds <- insertBlockGroupedData syncEnv grouped
     when withinHalfHour $
       insertReverseIndex blkId minIds
 
