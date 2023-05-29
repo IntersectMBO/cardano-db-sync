@@ -2,6 +2,8 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Db.Migration.Extra.CosnumedTxOut.Queries where
 
@@ -16,10 +18,12 @@ import Control.Monad.Trans.Reader (ReaderT)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Word (Word64)
-import Database.Persist ((=.), (==.))
+import Database.Persist ((=.), (==.), (<=.))
 import Database.Persist.Class (update)
-import Database.Esqueleto.Experimental hiding (update, (=.), (==.))
-import Cardano.Db.Query (isJust, listToMaybe)
+import Database.Esqueleto.Experimental hiding (update, (=.), (==.), (<=.))
+import qualified Database.Esqueleto.Experimental as Experimental
+import Cardano.Db.Query (isJust, listToMaybe, queryMaxRefId, queryBlockHeight)
+import Database.Persist.Sql (deleteWhereCount)
 
 insertTxOutExtra :: (MonadBaseControl IO m, MonadIO m) => TxOut -> ReaderT SqlBackend m TxOutId
 insertTxOutExtra = insertUnchecked "TxOutExtra"
@@ -150,3 +154,46 @@ countConsumed = do
     where_ (isJust $ txOut ^. TxOutConsumedByTxInId)
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
+
+deleteConsumedTxOut :: forall m. MonadIO m => Trace IO Text -> Word64 -> ReaderT SqlBackend m ()
+deleteConsumedTxOut trce blockNoDiff = do
+    mBlockHeight <- queryBlockHeight
+    maybe (logNoDelete "No blocks found") deleteConsumed mBlockHeight
+  where
+    logNoDelete txt = liftIO $ logInfo trce $ "No tx_out was deleted: " <> txt
+
+    deleteConsumed :: Word64 -> ReaderT SqlBackend m ()
+    deleteConsumed tipBlockNo = do
+      if tipBlockNo <= blockNoDiff
+      then logNoDelete $ "Tip blockNo is " <> textShow tipBlockNo
+      else do
+        mBlockId <- queryBlockNo $ tipBlockNo - blockNoDiff
+        maybe
+          (liftIO $ logError trce $ "BlockNo hole found at " <> textShow (tipBlockNo - blockNoDiff))
+          deleteConsumedBeforeBlock
+          mBlockId
+
+    deleteConsumedBeforeBlock :: BlockId -> ReaderT SqlBackend m ()
+    deleteConsumedBeforeBlock blockId = do
+      mTxId <- queryMaxRefId TxBlockId blockId False
+      case mTxId of
+        Nothing -> logNoDelete $ "No txs found before " <> textShow blockId
+        Just txId -> do
+          mTxInId <- queryMaxRefId TxInTxInId txId True
+          maybe
+            (logNoDelete $ "No tx_in found before or at " <> textShow txId)
+            deleteConsumedBeforeTxIn
+            mTxInId
+
+    deleteConsumedBeforeTxIn :: TxInId -> ReaderT SqlBackend m ()
+    deleteConsumedBeforeTxIn txInId = do
+      countDeleted <- deleteWhereCount [TxOutConsumedByTxInId <=. Just txInId]
+      liftIO $ logInfo trce $ "Deleted " <> textShow countDeleted <> " tx_in"
+
+queryBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe BlockId)
+queryBlockNo blkNo = do
+  res <- select $ do
+    blk <- from $ table @Block
+    where_ (blk ^. BlockBlockNo Experimental.==. just (val blkNo))
+    pure (blk ^. BlockId)
+  pure $ fmap unValue (listToMaybe res)
