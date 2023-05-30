@@ -277,7 +277,7 @@ pPruneTxOut =
     ( Opt.long "prune-tx-out"
         <> Opt.help "Prunes the consumed tx_out periodically. This assumes \
         \ consumed-tx-out is also set, even if it's not. If this is set once,\
-        \ then it must be always be set on following executions of db-sync."
+        \ then it must be always set on following executions of db-sync."
     )
 
 pVersionCommand :: Parser SyncCommand
