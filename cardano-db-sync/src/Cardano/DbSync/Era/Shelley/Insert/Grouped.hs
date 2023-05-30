@@ -140,13 +140,14 @@ insertReverseIndex blockId minIds =
 -- In this case we also cannot find yet the 'TxOutId', so we return 'Nothing' for now
 resolveTxInputs ::
   MonadIO m =>
+  Bool ->
   [ExtendedTxOut] ->
   Generic.TxIn ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutId, DbLovelace)
-resolveTxInputs groupedOutputs txIn =
+resolveTxInputs hasConsumed groupedOutputs txIn =
   liftLookupFail ("resolveTxInputs " <> textShow txIn <> " ") $ do
     qres <-
-      if True
+      if not hasConsumed
         then fmap convertnotFound <$> queryResolveInput txIn
         else fmap convertFound <$> queryResolveInput2 txIn
     case qres of
