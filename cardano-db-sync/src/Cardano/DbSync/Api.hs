@@ -5,6 +5,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Cardano.DbSync.Api (
   SyncEnv (..),
@@ -84,14 +85,15 @@ import qualified Data.Strict.Maybe as Strict
 import Data.Time.Clock (UTCTime, getCurrentTime)
 import Database.Persist.Postgresql (ConnectionString)
 import Database.Persist.Sql (SqlBackend)
-import Ouroboros.Consensus.Block.Abstract (HeaderHash, Point (..), fromRawHash)
+import Ouroboros.Consensus.Block.Abstract (HeaderHash, Point (..), fromRawHash, BlockProtocol)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
-import Ouroboros.Consensus.Config (TopLevelConfig)
-import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
+import Ouroboros.Consensus.Config (TopLevelConfig, SecurityParam (..), configSecurityParam)
+import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo (pInfoConfig))
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Network.Block (BlockNo (..), Point (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
 import qualified Ouroboros.Network.Point as Point
+import Ouroboros.Consensus.Protocol.Abstract (ConsensusProtocol)
 
 data SyncEnv = SyncEnv
   { envProtocol :: !SyncProtocol
@@ -203,10 +205,10 @@ runExtraMigrationsMaybe env = do
   liftIO $ atomically $ writeTVar (envExtraMigrations env) (extraMigr {emRan = True})
 
 getSafeBlockNoDiff :: SyncEnv -> Word64
-getSafeBlockNoDiff _ = 2 * 2160
+getSafeBlockNoDiff syncEnv = 2 * getSecurityParam syncEnv
 
 getPruneInterval :: SyncEnv -> Word64
-getPruneInterval _ = 10 * 2160
+getPruneInterval syncEnv = 10 * getSecurityParam syncEnv
 
 whenConsumeTxOut :: MonadIO m => SyncEnv -> m () -> m ()
 whenConsumeTxOut env action = do
@@ -549,3 +551,15 @@ convertToPoint slot hashBlob =
   where
     convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
     convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)
+
+getSecurityParam :: SyncEnv -> Word64
+getSecurityParam syncEnv =
+  case envLedgerEnv syncEnv of
+    HasLedger hle -> getMaxRollbacks $ leProtocolInfo hle
+    NoLedger nle -> getMaxRollbacks $ nleProtocolInfo nle
+
+getMaxRollbacks ::
+  ConsensusProtocol (BlockProtocol blk) =>
+  ProtocolInfo IO blk ->
+  Word64
+getMaxRollbacks = maxRollbacks . configSecurityParam . pInfoConfig
