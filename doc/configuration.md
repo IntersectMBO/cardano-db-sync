@@ -61,3 +61,18 @@ issues.
 
 With this option the epoch table is left empty. Mostly left for historical reasons, since it
 provides a negligible improvement in sync time.
+
+### --consumed-tx-out
+
+Adds a new field `tx_out (consumed_by_tx_in_id)` and populated it accordingly. This allows users to
+query the tx_out table for unspent outputs directly, without the need to join with the tx_in table.
+If this is set once, then it must be always be set on following executions of db-sync, unless
+`prune-tx-out` is used instead.
+
+### --prune-tx-out
+
+If `prune-tx-out` is set it's assumed that --consumed-tx-out is also set, even if it's not.
+This flag periodically prunes the consumed tx_out table. So it allows to query for utxo
+without having to maintain the whole tx_out table. Deletes to `tx_out` are propagated to `ma_tx_out`
+through foreign keys. If this is set once, then it must be always set on following executions of
+db-sync. Failure to do this can result in crashed and db-sync currently has no way to detect it.
