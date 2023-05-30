@@ -82,7 +82,6 @@ applyAndInsertBlockMaybe syncEnv cblk = do
               , ". Time to restore consistency."
               ]
           rollbackFromBlockNo syncEnv (blockNo cblk)
-          liftIO $ putStrLn ("block" :: Text)
           insertBlock syncEnv cblk applyRes True tookSnapshot
           liftIO $ setConsistentLevel syncEnv Consistent
         Right blockId | Just (adaPots, slotNo, epochNo) <- getAdaPots applyRes -> do
