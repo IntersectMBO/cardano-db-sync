@@ -114,7 +114,7 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
           }
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
-    let txInserter = insertTx tracer cache (getInsertOptions syncEnv) (getNetwork syncEnv) isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
+    let txInserter = insertTx syncEnv isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
     grouped <- foldM (\grouped (idx, tx) -> txInserter idx tx grouped) mempty zippedTx
     minIds <- insertBlockGroupedData syncEnv grouped
     when withinHalfHour $
@@ -211,10 +211,7 @@ insertOnNewEpoch tracer blkId slotNo epochNo newEpoch = do
 
 insertTx ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
-  Cache ->
-  InsertOptions ->
-  Ledger.Network ->
+  SyncEnv ->
   IsPoolMember ->
   DB.BlockId ->
   EpochNo ->
@@ -223,10 +220,11 @@ insertTx ::
   Generic.Tx ->
   BlockGroupedData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) BlockGroupedData
-insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx grouped = do
+insertTx syncEnv isMember blkId epochNo slotNo blockIndex tx grouped = do
+  hasConsumed <- liftIO $ getHasConsumed syncEnv
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
       !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
-  !resolvedInputs <- mapM (resolveTxInputs (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
+  !resolvedInputs <- mapM (resolveTxInputs hasConsumed (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
   let !inSum = sum $ map (unDbLovelace . forth4) resolvedInputs
   let diffSum = if inSum >= outSum then inSum - outSum else 0
   let !fees = maybe diffSum (fromIntegral . unCoin) (Generic.txFees tx)
@@ -295,6 +293,12 @@ insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx 
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
       pure $ grouped <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint
+  where
+    tracer = getTrace syncEnv
+    cache = envCache syncEnv
+    iopts = getInsertOptions syncEnv
+    network = getNetwork syncEnv
+
 
 prepareTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
