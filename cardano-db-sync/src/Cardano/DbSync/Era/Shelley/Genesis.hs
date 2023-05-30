@@ -13,6 +13,7 @@ module Cardano.DbSync.Era.Shelley.Genesis (
 
 import Cardano.BM.Trace (Trace, logError, logInfo)
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Api
 import Cardano.DbSync.Cache.Types (Cache (..), uninitiatedCache)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Shelley.Insert
@@ -52,22 +53,26 @@ import Paths_cardano_db_sync (version)
 -- If these transactions are already in the DB, they are validated.
 -- 'shelleyInitiation' is True for testnets that fork at 0 to Shelley.
 insertValidateGenesisDist ::
-  SqlBackend ->
-  Trace IO Text ->
+  SyncEnv ->
   Text ->
   ShelleyGenesis StandardCrypto ->
   Bool ->
   ExceptT SyncNodeError IO ()
-insertValidateGenesisDist backend tracer networkName cfg shelleyInitiation = do
+insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
+  backend <- liftIO $ getBackend syncEnv
+  hasConsumed <- liftIO $ getHasConsumed syncEnv
+  prunes <- liftIO $ getPrunes syncEnv
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise *way* too chatty.
   when (not shelleyInitiation && (hasInitialFunds || hasStakes)) $ do
     liftIO $ logError tracer $ renderSyncNodeError NEIgnoreShelleyInitiation
     throwError NEIgnoreShelleyInitiation
   if False
-    then newExceptT $ DB.runDbIohkLogging backend tracer insertAction
-    else newExceptT $ DB.runDbIohkNoLogging backend insertAction
+    then newExceptT $ DB.runDbIohkLogging backend tracer (insertAction hasConsumed prunes)
+    else newExceptT $ DB.runDbIohkNoLogging backend (insertAction hasConsumed prunes)
   where
+    tracer = getTrace syncEnv
+
     hasInitialFunds :: Bool
     hasInitialFunds = not $ null $ ListMap.unListMap $ sgInitialFunds cfg
 
@@ -77,11 +82,11 @@ insertValidateGenesisDist backend tracer networkName cfg shelleyInitiation = do
     expectedTxCount :: Word64
     expectedTxCount = fromIntegral $ genesisUTxOSize cfg + if hasStakes then 1 else 0
 
-    insertAction :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either SyncNodeError ())
-    insertAction = do
+    insertAction :: (MonadBaseControl IO m, MonadIO m) => Bool -> Bool -> ReaderT SqlBackend m (Either SyncNodeError ())
+    insertAction hasConsumed prunes = do
       ebid <- DB.queryBlockId (configGenesisHash cfg)
       case ebid of
-        Right bid -> validateGenesisDistribution tracer networkName cfg bid expectedTxCount
+        Right bid -> validateGenesisDistribution prunes tracer networkName cfg bid expectedTxCount
         Left _ ->
           runExceptT $ do
             liftIO $ logInfo tracer "Inserting Shelley Genesis distribution"
@@ -142,7 +147,7 @@ insertValidateGenesisDist backend tracer networkName cfg shelleyInitiation = do
                     , DB.blockOpCert = Nothing
                     , DB.blockOpCertCounter = Nothing
                     }
-              lift $ mapM_ (insertTxOuts tracer bid) $ genesisUtxOs cfg
+              lift $ mapM_ (insertTxOuts tracer hasConsumed bid) $ genesisUtxOs cfg
               liftIO . logInfo tracer $
                 "Initial genesis distribution populated. Hash "
                   <> renderByteArray (configGenesisHash cfg)
@@ -154,13 +159,14 @@ insertValidateGenesisDist backend tracer networkName cfg shelleyInitiation = do
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
 validateGenesisDistribution ::
   (MonadBaseControl IO m, MonadIO m) =>
+  Bool ->
   Trace IO Text ->
   Text ->
   ShelleyGenesis StandardCrypto ->
   DB.BlockId ->
   Word64 ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-validateGenesisDistribution tracer networkName cfg bid expectedTxCount =
+validateGenesisDistribution prunes tracer networkName cfg bid expectedTxCount =
   runExceptT $ do
     liftIO $ logInfo tracer "Validating Genesis distribution"
     meta <- liftLookupFail "Shelley.validateGenesisDistribution" DB.queryMeta
@@ -194,7 +200,7 @@ validateGenesisDistribution tracer networkName cfg bid expectedTxCount =
           ]
     totalSupply <- lift DB.queryShelleyGenesisSupply
     let expectedSupply = configGenesisSupply cfg
-    when (expectedSupply /= totalSupply) $
+    when (expectedSupply /= totalSupply && not prunes) $
       dbSyncNodeError $
         Text.concat
           [ "Shelley.validateGenesisDistribution: Expected total supply to be "
@@ -211,10 +217,11 @@ validateGenesisDistribution tracer networkName cfg bid expectedTxCount =
 insertTxOuts ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  Bool ->
   DB.BlockId ->
   (ShelleyTx.TxIn StandardCrypto, Shelley.ShelleyTxOut StandardShelley) ->
   ReaderT SqlBackend m ()
-insertTxOuts trce blkId (ShelleyTx.TxIn txInId _, txOut) = do
+insertTxOuts trce hasConsumed blkId (ShelleyTx.TxIn txInId _, txOut) = do
   -- Each address/value pair of the initial coin distribution comes from an artifical transaction
   -- with a hash generated by hashing the address.
   txId <-
@@ -233,7 +240,7 @@ insertTxOuts trce blkId (ShelleyTx.TxIn txInId _, txOut) = do
         , DB.txScriptSize = 0
         }
   _ <- insertStakeAddressRefIfMissing trce uninitiatedCache txId (txOut ^. Core.addrTxOutL)
-  void . DB.insertTxOut $
+  void . DB.insertTxOutPlex hasConsumed $
     DB.TxOut
       { DB.txOutTxId = txId
       , DB.txOutIndex = 0

@@ -48,7 +48,7 @@ import Database.Persist.SqlBackend.Internal
 import Database.Persist.SqlBackend.Internal.StatementCache
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
-import Ouroboros.Network.Block (blockHash, blockNo, getHeaderFields)
+import Ouroboros.Network.Block (blockHash, blockNo, getHeaderFields, headerFieldBlockNo, unBlockNo)
 
 insertListBlocks ::
   SyncEnv ->
@@ -177,6 +177,9 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
     BlockConway _blk -> panic "TODO: Conway 1"
   -- update the epoch
   updateEpoch details isNewEpochEvent
+  whenPruneTxOut syncEnv $
+    when (unBlockNo blkNo `mod` getPruneInterval syncEnv == 0) $ do
+      lift $ DB.deleteConsumedTxOut tracer (getSafeBlockNoDiff syncEnv)
   lift $ commitOrIndexes withinTwoMin withinHalfHour
   where
     tracer = getTrace syncEnv
@@ -217,6 +220,8 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
 
     isWithinHalfHour :: SlotDetails -> Bool
     isWithinHalfHour sd = isSyncedWithinSeconds sd 1800 == SyncFollowing
+
+    blkNo = headerFieldBlockNo $ getHeaderFields cblk
 
 -- -------------------------------------------------------------------------------------------------
 

@@ -149,33 +149,34 @@ queryScriptCount = do
 queryScript :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe ScriptId)
 queryScript hsh = do
   xs <- select $ do
-      scr <- from $ table @Script
-      where_ (scr ^. ScriptType ==. val PlutusV1 ||. scr ^. ScriptType ==. val PlutusV2)
-      where_ (scr ^. ScriptHash ==. val hsh)
-      pure (scr ^. ScriptId)
+    scr <- from $ table @Script
+    where_ (scr ^. ScriptType ==. val PlutusV1 ||. scr ^. ScriptType ==. val PlutusV2)
+    where_ (scr ^. ScriptHash ==. val hsh)
+    pure (scr ^. ScriptId)
   pure $ unValue <$> listToMaybe xs
 
 queryScriptPage :: MonadIO m => Int64 -> Int64 -> ReaderT SqlBackend m [Entity Script]
 queryScriptPage ofs lmt =
   select $ do
-      scr <- from $ table @Script
-      where_ (scr ^. ScriptType ==. val PlutusV1 ||. scr ^. ScriptType ==. val PlutusV2)
-      orderBy [asc (scr ^. ScriptId)]
-      limit lmt
-      offset ofs
-      pure scr
+    scr <- from $ table @Script
+    where_ (scr ^. ScriptType ==. val PlutusV1 ||. scr ^. ScriptType ==. val PlutusV2)
+    orderBy [asc (scr ^. ScriptId)]
+    limit lmt
+    offset ofs
+    pure scr
 
 queryScriptInfo :: MonadIO m => ScriptId -> ReaderT SqlBackend m (Maybe (ByteString, Maybe Word64))
 queryScriptInfo scriptId = do
   res <- select $ do
     (_blk :& _tx :& scr :& prevBlock) <-
-      from $ table @Block
-      `innerJoin` table @Tx
-      `on` (\(blk :& tx) -> tx ^. TxBlockId ==. blk ^. BlockId)
-      `innerJoin` table @Script
-      `on` (\(_blk :& tx :& scr) -> scr ^. ScriptTxId ==. tx ^. TxId)
-      `innerJoin` table @Block
-      `on` (\(blk :& _tx :& _scr :& prevBlk) -> blk ^. BlockPreviousId ==. just (prevBlk ^. BlockId))
+      from
+        $ table @Block
+          `innerJoin` table @Tx
+        `on` (\(blk :& tx) -> tx ^. TxBlockId ==. blk ^. BlockId)
+          `innerJoin` table @Script
+        `on` (\(_blk :& tx :& scr) -> scr ^. ScriptTxId ==. tx ^. TxId)
+          `innerJoin` table @Block
+        `on` (\(blk :& _tx :& _scr :& prevBlk) -> blk ^. BlockPreviousId ==. just (prevBlk ^. BlockId))
     where_ (scr ^. ScriptType ==. val PlutusV1 ||. scr ^. ScriptType ==. val PlutusV2)
     where_ (scr ^. ScriptId ==. val scriptId)
     pure (prevBlock ^. BlockHash, prevBlock ^. BlockSlotNo)

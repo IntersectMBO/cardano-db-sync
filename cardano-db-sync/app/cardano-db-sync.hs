@@ -27,16 +27,11 @@ main = do
       case (maybeLedgerStateDir, enpShouldUseLedger params) of
         (Just _, True) -> run params
         (Nothing, False) -> run params
-        (Just _, False) -> error disableLedgerErrorMsg
+        (Just _, False) -> run params
         (Nothing, True) -> error stateDirErrorMsg
   where
     knownMigrationsPlain :: [(Text, Text)]
     knownMigrationsPlain = (\x -> (hash x, filepath x)) <$> knownMigrations
-
-    disableLedgerErrorMsg :: [Char]
-    disableLedgerErrorMsg =
-      "Error: Using `--disable-ledger` doesn't require having a --state-dir. "
-        <> "For more details view https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/configuration.md#--disable-ledger"
 
     stateDirErrorMsg :: [Char]
     stateDirErrorMsg =
@@ -86,6 +81,8 @@ pRunDbSyncNode =
     <*> pHasOfflineData
     <*> pTurboMode
     <*> pFullMode
+    <*> pMigrateConsumed
+    <*> pPruneTxOut
     <*> pure 500
     <*> pure 10000
     <*> optional pSlotNo
@@ -163,9 +160,10 @@ pOnlyFix =
     False
     True
     ( Opt.long "fix-only"
-        <> Opt.help "Runs only the db-sync fix procedure for the wrong datum, redeemer_data and plutus script bytes and exits. \
-            \This doesn't run any migrations. This can also be ran on previous schema, ie 13.0 13.1 to fix the issues without \
-            \bumping the schema version minor number."
+        <> Opt.help
+          "Runs only the db-sync fix procedure for the wrong datum, redeemer_data and plutus script bytes and exits. \
+          \This doesn't run any migrations. This can also be ran on previous schema, ie 13.0 13.1 to fix the issues without \
+          \bumping the schema version minor number."
     )
 
 pHasCache :: Parser Bool
@@ -258,6 +256,30 @@ pFullMode =
     True
     ( Opt.long "full"
         <> Opt.help "Makes db-sync run with all possible functionalities."
+    )
+
+pMigrateConsumed :: Parser Bool
+pMigrateConsumed =
+  Opt.flag
+    False
+    True
+    ( Opt.long "consumed-tx-out"
+        <> Opt.help
+          "Runs the tx_out migration, which adds a new field.If this is set once,\
+          \ then it must be always be set on following executions of db-sync, unless prune-tx-out\
+          \ is used instead."
+    )
+
+pPruneTxOut :: Parser Bool
+pPruneTxOut =
+  Opt.flag
+    False
+    True
+    ( Opt.long "prune-tx-out"
+        <> Opt.help
+          "Prunes the consumed tx_out periodically. This assumes \
+          \ consumed-tx-out is also set, even if it's not. If this is set once,\
+          \ then it must be always set on following executions of db-sync."
     )
 
 pVersionCommand :: Parser SyncCommand

@@ -1,7 +1,7 @@
 cabal-version:          3.0
 
 name:                   cardano-db
-version:                13.1.1.0
+version:                13.1.1.2
 synopsis:               A base PostgreSQL component for the cardano-db-sync node.
 description:            Code for the Cardano DB Sync node that is shared between the
                         cardano-db-node and other components.
@@ -34,12 +34,15 @@ library
 
   other-modules:        Cardano.Db.Delete
                         Cardano.Db.Error
+                        Cardano.Db.Migration.Extra.CosnumedTxOut.Queries
+                        Cardano.Db.Migration.Extra.CosnumedTxOut.Schema
                         Cardano.Db.Insert
                         Cardano.Db.PGConfig
                         Cardano.Db.Migration
                         Cardano.Db.Migration.Haskell
                         Cardano.Db.Migration.Version
                         Cardano.Db.MinId
+                        Cardano.Db.Multiplex
                         Cardano.Db.Old.V13_0.Schema
                         Cardano.Db.Old.V13_0.Query
                         Cardano.Db.Query

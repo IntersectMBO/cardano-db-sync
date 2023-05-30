@@ -15,7 +15,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Cardano.Db.Schema where
+module Cardano.Db.Migration.Extra.CosnumedTxOut.Schema where
 
 import Cardano.Db.Schema.Orphans ()
 import Cardano.Db.Schema.Types (
@@ -147,6 +147,7 @@ share
     dataHash            ByteString Maybe    sqltype=hash32type
     inlineDatumId       DatumId Maybe       noreference
     referenceScriptId   ScriptId Maybe      noreference
+    consumedByTxInId    TxInId Maybe        noreference
     UniqueTxout         txId index          -- The (tx_id, index) pair must be unique.
 
   CollateralTxOut
@@ -168,7 +169,6 @@ share
     txOutId             TxId                noreference         -- The transaction where this was created as an output.
     txOutIndex          Word64              sqltype=txindex
     redeemerId          RedeemerId Maybe    noreference
-    deriving Show
 
   CollateralTxIn
     txInId              TxId                noreference     -- The transaction where this is used as an input.
@@ -364,7 +364,7 @@ share
   MaTxOut
     ident               MultiAssetId        noreference
     quantity            DbWord64            sqltype=word64type
-    txOutId             TxOutId             noreference
+    txOutId             TxOutId
 
   -- Unit step is in picosends, and `maxBound :: Int64` picoseconds is over 100 days, so using
   -- Word64/word63type is safe here. Similarly, `maxBound :: Int64` if unit step would be an

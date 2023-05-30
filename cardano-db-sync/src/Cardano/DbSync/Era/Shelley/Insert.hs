@@ -127,9 +127,9 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
           }
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
-    let txInserter = insertTx tracer cache (getInsertOptions syncEnv) (getNetwork syncEnv) isMember blkId epochNo (Generic.blkSlotNo blk)
+    let txInserter = insertTx syncEnv isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
     blockGroupedData <- foldM (\gp (idx, tx) -> txInserter idx tx gp) mempty zippedTx
-    minIds <- insertBlockGroupedData tracer blockGroupedData
+    minIds <- insertBlockGroupedData syncEnv blockGroupedData
 
     -- now that we've inserted the Block and all it's txs lets cache what we'll need
     -- when we later update the epoch values.
@@ -240,10 +240,7 @@ insertOnNewEpoch tracer blkId slotNo epochNo newEpoch = do
 
 insertTx ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
-  Cache ->
-  InsertOptions ->
-  Ledger.Network ->
+  SyncEnv ->
   IsPoolMember ->
   DB.BlockId ->
   EpochNo ->
@@ -252,11 +249,12 @@ insertTx ::
   Generic.Tx ->
   BlockGroupedData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) BlockGroupedData
-insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx blockGroupData = do
+insertTx syncEnv isMember blkId epochNo slotNo blockIndex tx blockGroupData = do
+  hasConsumed <- liftIO $ getHasConsumed syncEnv
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
       !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
-  !resolvedInputs <- mapM (resolveTxInputs (fst <$> groupedTxOut blockGroupData)) (Generic.txInputs tx)
-  let !inSum = sum $ map (unDbLovelace . thrd3) resolvedInputs
+  !resolvedInputs <- mapM (resolveTxInputs hasConsumed (fst <$> groupedTxOut blockGroupData)) (Generic.txInputs tx)
+  let !inSum = sum $ map (unDbLovelace . forth4) resolvedInputs
   let diffSum = if inSum >= outSum then inSum - outSum else 0
   let !fees = maybe diffSum (fromIntegral . unCoin) (Generic.txFees tx)
   let !txHash = Generic.txHash tx
@@ -326,6 +324,11 @@ insertTx tracer cache iopts network isMember blkId epochNo slotNo blockIndex tx 
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
       pure (blockGroupData <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint fees outSum)
+  where
+    tracer = getTrace syncEnv
+    cache = envCache syncEnv
+    iopts = getInsertOptions syncEnv
+    network = getNetwork syncEnv
 
 prepareTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -410,15 +413,21 @@ insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index ad
 prepareTxIn ::
   DB.TxId ->
   Map Word64 DB.RedeemerId ->
-  (Generic.TxIn, DB.TxId, DbLovelace) ->
-  DB.TxIn
-prepareTxIn txInId redeemers (txIn, txOutId, _lovelace) =
-  DB.TxIn
-    { DB.txInTxInId = txInId
-    , DB.txInTxOutId = txOutId
-    , DB.txInTxOutIndex = fromIntegral $ Generic.txInIndex txIn
-    , DB.txInRedeemerId = mlookup (Generic.txInRedeemerIndex txIn) redeemers
+  (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutId, DbLovelace) ->
+  ExtendedTxIn
+prepareTxIn txInId redeemers (txIn, txOutId, mTxOutId, _lovelace) =
+  ExtendedTxIn
+    { etiTxIn = txInDB
+    , etiTxOutId = mTxOutId
     }
+  where
+    txInDB =
+      DB.TxIn
+        { DB.txInTxInId = txInId
+        , DB.txInTxOutId = txOutId
+        , DB.txInTxOutIndex = fromIntegral $ Generic.txInIndex txIn
+        , DB.txInRedeemerId = mlookup (Generic.txInRedeemerIndex txIn) redeemers
+        }
 
 insertCollateralTxIn ::
   (MonadBaseControl IO m, MonadIO m) =>

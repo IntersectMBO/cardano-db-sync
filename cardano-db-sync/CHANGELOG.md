@@ -1,6 +1,6 @@
 # Revision history for cardano-db-sync
 
-## 13.1.1.0
+## 13.1.1.2
 * Adds compatibility with node-8.0.0 [#1403]
 * Adds compatibility with the new format of the CostModel in Alonzo genesis file [#1403]
 * Adds a procedure which fixes scripts with wrong cbor [Issue #1348]
@@ -10,6 +10,8 @@
 * Fixed an issue where `epoch` table didn't rollback [#1370]
 * Fixed an issue with smash returning `InvalidUrlException` [#1353]
 * Takes less snapshots, since big rollbacks are now faster
+* When `--disable-ledger` is enabled a `--state-dir` is no longer required
+* Added experimental extra migrations, controlled by `consumed-tx-out` and `prune-tx-out`
 
 ## 13.1.0.2
 * Upgrade dependencies and integrates a fix in ledger internal data structures.

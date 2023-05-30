@@ -62,7 +62,7 @@ insertByronBlock ::
 insertByronBlock syncEnv firstBlockOfEpoch blk details = do
   res <- runExceptT $
     case byronBlockRaw blk of
-      Byron.ABOBBlock ablk -> insertABlock tracer cache firstBlockOfEpoch ablk details
+      Byron.ABOBBlock ablk -> insertABlock syncEnv firstBlockOfEpoch ablk details
       Byron.ABOBBoundary abblk -> insertABOBBoundary tracer cache abblk details
   -- Serializing things during syncing can drastically slow down full sync
   -- times (ie 10x or more).
@@ -143,13 +143,12 @@ insertABOBBoundary tracer cache blk details = do
 
 insertABlock ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
-  Cache ->
+  SyncEnv ->
   Bool ->
   Byron.ABlock ByteString ->
   SlotDetails ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertABlock tracer cache firstBlockOfEpoch blk details = do
+insertABlock syncEnv firstBlockOfEpoch blk details = do
   pbid <- queryPrevBlockWithCache "insertABlock" cache (Byron.blockPreviousHash blk)
   slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
   let txs = Byron.blockPayload blk
@@ -174,7 +173,7 @@ insertABlock tracer cache firstBlockOfEpoch blk details = do
         , DB.blockOpCertCounter = Nothing
         }
 
-  txFees <- zipWithM (insertByronTx tracer blkId) (Byron.blockPayload blk) [0 ..]
+  txFees <- zipWithM (insertByronTx syncEnv blkId) (Byron.blockPayload blk) [0 ..]
   let byronTxOutValues = concatMap (toList . (\tx -> map Byron.txOutValue (Byron.txOutputs $ Byron.taTx tx))) txs
       outSum = sum $ map Byron.lovelaceToInteger byronTxOutValues
 
@@ -221,6 +220,12 @@ insertABlock tracer cache firstBlockOfEpoch blk details = do
         , renderByteArray (Byron.blockHash blk)
         ]
   where
+    tracer :: Trace IO Text
+    tracer = getTrace syncEnv
+
+    cache :: Cache
+    cache = envCache syncEnv
+
     logger :: Bool -> Trace IO a -> a -> IO ()
     logger followingClosely
       | firstBlockOfEpoch = logInfo
@@ -230,13 +235,14 @@ insertABlock tracer cache firstBlockOfEpoch blk details = do
 
 insertByronTx ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
+  SyncEnv ->
   DB.BlockId ->
   Byron.TxAux ->
   Word64 ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
-insertByronTx tracer blkId tx blockIndex = do
+insertByronTx syncEnv blkId tx blockIndex = do
   resolvedInputs <- mapM resolveTxInputs (toList $ Byron.txInputs (Byron.taTx tx))
+  hasConsumed <- liftIO $ getHasConsumed syncEnv
   valFee <- firstExceptT annotateTx $ ExceptT $ pure (calculateTxFee (Byron.taTx tx) resolvedInputs)
   txId <-
     lift . DB.insertTx $
@@ -258,12 +264,19 @@ insertByronTx tracer blkId tx blockIndex = do
 
   -- Insert outputs for a transaction before inputs in case the inputs for this transaction
   -- references the output (not sure this can even happen).
-  lift $ zipWithM_ (insertTxOut tracer txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
-  mapMVExceptT (insertTxIn tracer txId) resolvedInputs
-
+  lift $ zipWithM_ (insertTxOut tracer hasConsumed txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
+  txInIds <- mapM (insertTxIn tracer txId) resolvedInputs
+  whenConsumeTxOut syncEnv $
+    lift $
+      DB.updateListTxOutConsumedByTxInId $
+        zip (thrd3 <$> resolvedInputs) txInIds
   -- fees are being returned so we can sum them and put them in cache to use when updating epochs
   pure $ unDbLovelace $ vfFee valFee
+
   where
+    tracer :: Trace IO Text
+    tracer = getTrace syncEnv
+
     annotateTx :: SyncNodeError -> SyncNodeError
     annotateTx ee =
       case ee of
@@ -273,12 +286,13 @@ insertByronTx tracer blkId tx blockIndex = do
 insertTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  Bool ->
   DB.TxId ->
   Word32 ->
   Byron.TxOut ->
   ReaderT SqlBackend m ()
-insertTxOut _tracer txId index txout =
-  void . DB.insertTxOut $
+insertTxOut _tracer hasConsumed txId index txout =
+  void . DB.insertTxOutPlex hasConsumed $
     DB.TxOut
       { DB.txOutTxId = txId
       , DB.txOutIndex = fromIntegral index
@@ -297,34 +311,34 @@ insertTxIn ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   DB.TxId ->
-  (Byron.TxIn, DB.TxId, DbLovelace) ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertTxIn _tracer txInId (Byron.TxInUtxo _txHash inIndex, txOutId, _lovelace) = do
-  void . lift . DB.insertTxIn $
+  (Byron.TxIn, DB.TxId, DB.TxOutId, DbLovelace) ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) DB.TxInId
+insertTxIn _tracer txInId (Byron.TxInUtxo _txHash inIndex, txOutTxId, _, _) = do
+  lift . DB.insertTxIn $
     DB.TxIn
       { DB.txInTxInId = txInId
-      , DB.txInTxOutId = txOutId
+      , DB.txInTxOutId = txOutTxId
       , DB.txInTxOutIndex = fromIntegral inIndex
       , DB.txInRedeemerId = Nothing
       }
 
 -- -----------------------------------------------------------------------------
 
-resolveTxInputs :: (MonadIO m) => Byron.TxIn -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Byron.TxIn, DB.TxId, DbLovelace)
+resolveTxInputs :: MonadIO m => Byron.TxIn -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Byron.TxIn, DB.TxId, DB.TxOutId, DbLovelace)
 resolveTxInputs txIn@(Byron.TxInUtxo txHash index) = do
-  res <- liftLookupFail "resolveInput" $ DB.queryTxOutValue (Byron.unTxHash txHash, fromIntegral index)
+  res <- liftLookupFail "resolveInput" $ DB.queryTxOutValue2 (Byron.unTxHash txHash, fromIntegral index)
   pure $ convert res
   where
-    convert :: (DB.TxId, DbLovelace) -> (Byron.TxIn, DB.TxId, DbLovelace)
-    convert (txId, lovelace) = (txIn, txId, lovelace)
+    convert :: (DB.TxId, DB.TxOutId, DbLovelace) -> (Byron.TxIn, DB.TxId, DB.TxOutId, DbLovelace)
+    convert (txId, txOutId, lovelace) = (txIn, txId, txOutId, lovelace)
 
-calculateTxFee :: Byron.Tx -> [(Byron.TxIn, DB.TxId, DbLovelace)] -> Either SyncNodeError ValueFee
+calculateTxFee :: Byron.Tx -> [(Byron.TxIn, DB.TxId, DB.TxOutId, DbLovelace)] -> Either SyncNodeError ValueFee
 calculateTxFee tx resolvedInputs = do
   outval <- first (\e -> NEError $ "calculateTxFee: " <> textShow e) output
   when (null resolvedInputs) $
     Left $
       NEError "calculateTxFee: List of transaction inputs is zero."
-  let inval = sum $ map (unDbLovelace . thrd3) resolvedInputs
+  let inval = sum $ map (unDbLovelace . forth4) resolvedInputs
   if inval < outval
     then Left $ NEInvariant "calculateTxFee" $ EInvInOut inval outval
     else Right $ ValueFee (DbLovelace outval) (DbLovelace $ inval - outval)
@@ -333,10 +347,3 @@ calculateTxFee tx resolvedInputs = do
     output =
       Byron.unsafeGetLovelace
         <$> Byron.sumLovelace (map Byron.txOutValue $ Byron.txOutputs tx)
-
--- | An 'ExceptT' version of 'mapM_' which will 'left' the first 'Left' it finds.
-mapMVExceptT :: (Monad m) => (a -> ExceptT e m ()) -> [a] -> ExceptT e m ()
-mapMVExceptT action xs =
-  case xs of
-    [] -> pure ()
-    (y : ys) -> action y >> mapMVExceptT action ys

@@ -10,6 +10,7 @@ module Cardano.DbSync.Era.Shelley.Query (
   queryStakeAddress,
   queryStakeRefPtr,
   queryResolveInput,
+  queryResolveInput2,
   queryResolveInputCredentials,
   queryPoolUpdateByBlock,
 ) where
@@ -64,6 +65,10 @@ queryStakeAddress addr = do
 queryResolveInput :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (TxId, DbLovelace))
 queryResolveInput txIn =
   queryTxOutValue (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
+
+queryResolveInput2 :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (TxId, TxOutId, DbLovelace))
+queryResolveInput2 txIn =
+  queryTxOutValue2 (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
 
 queryResolveInputCredentials :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (Maybe ByteString, Bool))
 queryResolveInputCredentials txIn = do
