@@ -129,7 +129,8 @@ data ExtraMigrations = ExtraMigrations
   { emRan :: Bool
   , emConsume :: Bool
   , emPrune :: Bool
-  } deriving Show
+  }
+  deriving (Show)
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
 setConsistentLevel env cst = do

@@ -387,12 +387,13 @@ prepareTxIn txInId redeemers (txIn, txOutId, mTxOutId, _lovelace) =
     , etiTxOutId = mTxOutId
     }
   where
-  txInDB = DB.TxIn
-           { DB.txInTxInId = txInId
-           , DB.txInTxOutId = txOutId
-           , DB.txInTxOutIndex = fromIntegral $ Generic.txInIndex txIn
-           , DB.txInRedeemerId = mlookup (Generic.txInRedeemerIndex txIn) redeemers
-           }
+    txInDB =
+      DB.TxIn
+        { DB.txInTxInId = txInId
+        , DB.txInTxOutId = txOutId
+        , DB.txInTxOutIndex = fromIntegral $ Generic.txInIndex txIn
+        , DB.txInRedeemerId = mlookup (Generic.txInRedeemerIndex txIn) redeemers
+        }
 
 insertCollateralTxIn ::
   (MonadBaseControl IO m, MonadIO m) =>

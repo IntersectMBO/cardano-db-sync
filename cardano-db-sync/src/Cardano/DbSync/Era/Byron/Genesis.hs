@@ -17,6 +17,7 @@ import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Crypto as Crypto
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Api
 import Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Era.Util (liftLookupFail)
@@ -31,7 +32,6 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Database.Persist.Sql (SqlBackend)
 import Paths_cardano_db_sync (version)
-import Cardano.DbSync.Api
 
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.

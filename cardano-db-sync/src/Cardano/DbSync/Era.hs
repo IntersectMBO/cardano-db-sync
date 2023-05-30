@@ -8,13 +8,13 @@ module Cardano.DbSync.Era (
   insertValidateGenesisDist,
 ) where
 
+import Cardano.DbSync.Api
 import Cardano.DbSync.Config
 import qualified Cardano.DbSync.Era.Byron.Genesis as Byron
 import qualified Cardano.DbSync.Era.Shelley.Genesis as Shelley
 import Cardano.DbSync.Era.Shelley.Offline as X
 import Cardano.DbSync.Error
 import Cardano.Prelude
-import Cardano.DbSync.Api
 
 insertValidateGenesisDist ::
   SyncEnv ->
