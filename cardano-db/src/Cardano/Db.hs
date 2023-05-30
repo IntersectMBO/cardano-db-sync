@@ -14,6 +14,7 @@ import Cardano.Db.Delete as X
 import Cardano.Db.Error as X
 import Cardano.Db.Insert as X
 import Cardano.Db.Migration as X
+import Cardano.Db.Migration.Extra.CosnumedTxOut.Queries (migrateTxOut)
 import Cardano.Db.Migration.Version as X
 import Cardano.Db.MinId as X
 import Cardano.Db.Multiplex as X
@@ -25,4 +26,3 @@ import Cardano.Db.Schema.Types as X
 import Cardano.Db.Text as X
 import Cardano.Db.Types as X
 import Cardano.Db.Version (gitRev)
-import Cardano.Db.Migration.Extra.CosnumedTxOut.Queries (migrateTxOut)

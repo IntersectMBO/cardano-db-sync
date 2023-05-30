@@ -1,28 +1,28 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Cardano.Db.Migration.Extra.CosnumedTxOut.Queries where
 
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
+import Cardano.Db.Insert (insertMany', insertUnchecked)
+import Cardano.Db.Migration.Extra.CosnumedTxOut.Schema
+import Cardano.Db.Query (isJust, listToMaybe, queryBlockHeight, queryMaxRefId)
 import Cardano.Db.Text
 import Control.Monad.Extra (when, whenJust)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Cardano.Db.Insert (insertMany', insertUnchecked)
-import Cardano.Db.Migration.Extra.CosnumedTxOut.Schema
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Word (Word64)
-import Database.Persist ((=.), (==.), (<=.))
-import Database.Persist.Class (update)
-import Database.Esqueleto.Experimental hiding (update, (=.), (==.), (<=.))
+import Database.Esqueleto.Experimental hiding (update, (<=.), (=.), (==.))
 import qualified Database.Esqueleto.Experimental as Experimental
-import Cardano.Db.Query (isJust, listToMaybe, queryMaxRefId, queryBlockHeight)
+import Database.Persist ((<=.), (=.), (==.))
+import Database.Persist.Class (update)
 import Database.Persist.Sql (deleteWhereCount)
 
 insertTxOutExtra :: (MonadBaseControl IO m, MonadIO m) => TxOut -> ReaderT SqlBackend m TxOutId
@@ -33,11 +33,11 @@ insertManyTxOutExtra = insertMany' "TxOut"
 
 updateListTxOutConsumedByTxInId :: MonadIO m => [(TxOutId, TxInId)] -> ReaderT SqlBackend m ()
 updateListTxOutConsumedByTxInId ls = do
-    mapM_ (uncurry updateTxOutConsumedByTxInId) ls
+  mapM_ (uncurry updateTxOutConsumedByTxInId) ls
 
 updateTxOutConsumedByTxInId :: MonadIO m => TxOutId -> TxInId -> ReaderT SqlBackend m ()
 updateTxOutConsumedByTxInId txOutId txInId =
-    update txOutId [TxOutConsumedByTxInId =. Just txInId]
+  update txOutId [TxOutConsumedByTxInId =. Just txInId]
 
 setNullTxOut :: MonadIO m => Trace IO Text -> Maybe TxInId -> Word64 -> ReaderT SqlBackend m ()
 setNullTxOut trce mMinTxInId txInDeleted = do
@@ -46,14 +46,15 @@ setNullTxOut trce mMinTxInId txInDeleted = do
     mapM_ setNullTxOutConsumedAfterTxInId txOutIds
     let updatedEntries = fromIntegral (length txOutIds)
     when (updatedEntries /= txInDeleted) $
-      liftIO $ logError trce $
-        Text.concat
-          [ "Deleted "
-          , textShow txInDeleted
-          , " inputs, but set to null only "
-          , textShow updatedEntries
-          , "consumed outputs. Please file an issue at https://github.com/input-output-hk/cardano-db-sync/issues"
-          ]
+      liftIO $
+        logError trce $
+          Text.concat
+            [ "Deleted "
+            , textShow txInDeleted
+            , " inputs, but set to null only "
+            , textShow updatedEntries
+            , "consumed outputs. Please file an issue at https://github.com/input-output-hk/cardano-db-sync/issues"
+            ]
 
 -- | This requires an index at TxOutConsumedByTxInId.
 getTxOutConsumedAfter :: MonadIO m => TxInId -> ReaderT SqlBackend m [TxOutId]
@@ -67,38 +68,41 @@ getTxOutConsumedAfter txInId = do
 -- | This requires an index at TxOutConsumedByTxInId.
 setNullTxOutConsumedAfterTxInId :: MonadIO m => TxOutId -> ReaderT SqlBackend m ()
 setNullTxOutConsumedAfterTxInId txOutId = do
-    update txOutId [TxOutConsumedByTxInId =. Nothing]
+  update txOutId [TxOutConsumedByTxInId =. Nothing]
 
 migrateTxOut :: MonadIO m => Maybe (Trace IO Text) -> ReaderT SqlBackend m ()
 migrateTxOut mTrace = do
-    createConsumedTxOut
-    migrateNextPage 0
+  createConsumedTxOut
+  migrateNextPage 0
   where
-  migrateNextPage :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
-  migrateNextPage offst = do
-    whenJust mTrace $ \trce ->
-      liftIO $ logInfo trce $ "Handling input offset " <> textShow offst
-    page <- getInputPage offst pageSize
-    mapM_ migratePair page
-    when (fromIntegral (length page) == pageSize) $
-      migrateNextPage $! offst + pageSize
+    migrateNextPage :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
+    migrateNextPage offst = do
+      whenJust mTrace $ \trce ->
+        liftIO $ logInfo trce $ "Handling input offset " <> textShow offst
+      page <- getInputPage offst pageSize
+      mapM_ migratePair page
+      when (fromIntegral (length page) == pageSize) $
+        migrateNextPage $!
+          offst + pageSize
 
 migratePair :: MonadIO m => (TxInId, TxId, Word64) -> ReaderT SqlBackend m ()
 migratePair (txInId, txId, index) =
-    updateTxOutConsumedByTxInIdUnique txId index txInId
+  updateTxOutConsumedByTxInIdUnique txId index txInId
 
 pageSize :: Word64
 pageSize = 100_000
 
 isMigrated :: MonadIO m => ReaderT SqlBackend m Bool
 isMigrated = do
-  columntExists :: [Text] <- fmap unSingle <$> rawSql
-            ( mconcat
-                [ "SELECT column_name FROM information_schema.columns "
-                , "WHERE table_name='tx_out' and column_name='consumed_by_tx_in_id'"
-                ]
-            )
-            []
+  columntExists :: [Text] <-
+    fmap unSingle
+      <$> rawSql
+        ( mconcat
+            [ "SELECT column_name FROM information_schema.columns "
+            , "WHERE table_name='tx_out' and column_name='consumed_by_tx_in_id'"
+            ]
+        )
+        []
   pure (not $ null columntExists)
 
 createConsumedTxOut :: MonadIO m => ReaderT SqlBackend m ()
@@ -113,46 +117,54 @@ createConsumedTxOut = do
     "ALTER TABLE ma_tx_out ADD CONSTRAINT ma_tx_out_tx_out_id_fkey FOREIGN KEY(tx_out_id) REFERENCES tx_out(id) ON DELETE CASCADE ON UPDATE RESTRICT"
     []
 
-
 _validateMigration :: MonadIO m => Trace IO Text -> ReaderT SqlBackend m Bool
 _validateMigration trce = do
   _migrated <- isMigrated
---  unless migrated $ runMigration
+  --  unless migrated $ runMigration
   txInCount <- countTxIn
   consumedTxOut <- countConsumed
   if txInCount > consumedTxOut
-  then do
-    liftIO $ logWarning trce $ mconcat
-      ["Found incomplete TxOut migration. There are"
-      , textShow txInCount, " TxIn, but only"
-      , textShow consumedTxOut, " consumed TxOut"
-      ]
-    pure False
-  else if txInCount == consumedTxOut
-  then do
-    liftIO $ logInfo trce "Found complete TxOut migration"
-    pure True
-  else do
-    liftIO $ logError trce $ mconcat
-      [ "The impossible happened! There are"
-      , textShow txInCount, " TxIn, but "
-      , textShow consumedTxOut, " consumed TxOut"
-      ]
-    pure False
+    then do
+      liftIO $
+        logWarning trce $
+          mconcat
+            [ "Found incomplete TxOut migration. There are"
+            , textShow txInCount
+            , " TxIn, but only"
+            , textShow consumedTxOut
+            , " consumed TxOut"
+            ]
+      pure False
+    else
+      if txInCount == consumedTxOut
+        then do
+          liftIO $ logInfo trce "Found complete TxOut migration"
+          pure True
+        else do
+          liftIO $
+            logError trce $
+              mconcat
+                [ "The impossible happened! There are"
+                , textShow txInCount
+                , " TxIn, but "
+                , textShow consumedTxOut
+                , " consumed TxOut"
+                ]
+          pure False
 
 updateTxOutConsumedByTxInIdUnique :: MonadIO m => TxId -> Word64 -> TxInId -> ReaderT SqlBackend m ()
 updateTxOutConsumedByTxInIdUnique txOutId index txInId =
-    updateWhere [TxOutTxId ==. txOutId, TxOutIndex ==. index] [TxOutConsumedByTxInId =. Just txInId]
+  updateWhere [TxOutTxId ==. txOutId, TxOutIndex ==. index] [TxOutConsumedByTxInId =. Just txInId]
 
 getInputPage :: MonadIO m => Word64 -> Word64 -> ReaderT SqlBackend m [(TxInId, TxId, Word64)]
 getInputPage offs pgSize = do
-    res <- select $ do
-      txIn <- from $ table @TxIn
-      limit (fromIntegral pgSize)
-      offset (fromIntegral offs)
-      orderBy [asc (txIn ^. TxInId)]
-      pure txIn
-    pure $ convert <$> res
+  res <- select $ do
+    txIn <- from $ table @TxIn
+    limit (fromIntegral pgSize)
+    offset (fromIntegral offs)
+    orderBy [asc (txIn ^. TxInId)]
+    pure txIn
+  pure $ convert <$> res
   where
     convert txIn =
       (entityKey txIn, txInTxOutId (entityVal txIn), txInTxOutIndex (entityVal txIn))
@@ -174,21 +186,21 @@ countConsumed = do
 
 deleteConsumedTxOut :: forall m. MonadIO m => Trace IO Text -> Word64 -> ReaderT SqlBackend m ()
 deleteConsumedTxOut trce blockNoDiff = do
-    mBlockHeight <- queryBlockHeight
-    maybe (logNoDelete "No blocks found") deleteConsumed mBlockHeight
+  mBlockHeight <- queryBlockHeight
+  maybe (logNoDelete "No blocks found") deleteConsumed mBlockHeight
   where
     logNoDelete txt = liftIO $ logInfo trce $ "No tx_out was deleted: " <> txt
 
     deleteConsumed :: Word64 -> ReaderT SqlBackend m ()
     deleteConsumed tipBlockNo = do
       if tipBlockNo <= blockNoDiff
-      then logNoDelete $ "Tip blockNo is " <> textShow tipBlockNo
-      else do
-        mBlockId <- queryBlockNo $ tipBlockNo - blockNoDiff
-        maybe
-          (liftIO $ logError trce $ "BlockNo hole found at " <> textShow (tipBlockNo - blockNoDiff))
-          deleteConsumedBeforeBlock
-          mBlockId
+        then logNoDelete $ "Tip blockNo is " <> textShow tipBlockNo
+        else do
+          mBlockId <- queryBlockNo $ tipBlockNo - blockNoDiff
+          maybe
+            (liftIO $ logError trce $ "BlockNo hole found at " <> textShow (tipBlockNo - blockNoDiff))
+            deleteConsumedBeforeBlock
+            mBlockId
 
     deleteConsumedBeforeBlock :: BlockId -> ReaderT SqlBackend m ()
     deleteConsumedBeforeBlock blockId = do

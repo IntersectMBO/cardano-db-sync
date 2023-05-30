@@ -33,8 +33,15 @@ import Data.Text (Text)
 import Data.Word (Word64)
 import Database.Esqueleto.Experimental (PersistEntity, PersistField, persistIdField)
 import Database.Persist.Class.PersistQuery (deleteWhere)
-import Database.Persist.Sql (PersistEntityBackend, SqlBackend, delete, deleteWhereCount,
-         selectKeysList, (==.), (>=.))
+import Database.Persist.Sql (
+  PersistEntityBackend,
+  SqlBackend,
+  delete,
+  deleteWhereCount,
+  selectKeysList,
+  (==.),
+  (>=.),
+ )
 
 deleteBlocksSlotNoNoTrace :: MonadIO m => SlotNo -> ReaderT SqlBackend m Bool
 deleteBlocksSlotNoNoTrace = deleteBlocksSlotNo nullTracer

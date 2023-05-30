@@ -16,6 +16,7 @@ module Cardano.DbSync.Era.Shelley.Insert.Grouped (
 import Cardano.BM.Trace (Trace, logWarning)
 import Cardano.Db (DbLovelace (..), minIdsToText, textShow)
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Api
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util
@@ -23,9 +24,8 @@ import Cardano.DbSync.Error
 import Cardano.Prelude
 import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.List as List
-import Database.Persist.Sql (SqlBackend)
 import qualified Data.Text as Text
-import Cardano.DbSync.Api
+import Database.Persist.Sql (SqlBackend)
 
 -- | Group data within the same block, to insert them together in batches
 --
@@ -62,7 +62,8 @@ data ExtendedTxOut = ExtendedTxOut
 data ExtendedTxIn = ExtendedTxIn
   { etiTxIn :: !DB.TxIn
   , etiTxOutId :: !(Either Generic.TxIn DB.TxOutId)
-  } deriving Show
+  }
+  deriving (Show)
 
 instance Monoid BlockGroupedData where
   mempty = BlockGroupedData [] [] [] []
@@ -141,10 +142,9 @@ resolveTxInputs ::
 resolveTxInputs groupedOutputs txIn =
   liftLookupFail ("resolveTxInputs " <> textShow txIn <> " ") $ do
     qres <-
-      if True then
-       fmap convertnotFound <$> queryResolveInput txIn
-      else
-        fmap convertFound <$> queryResolveInput2 txIn
+      if True
+        then fmap convertnotFound <$> queryResolveInput txIn
+        else fmap convertFound <$> queryResolveInput2 txIn
     case qres of
       Right ret -> pure $ Right ret
       Left err ->
@@ -168,8 +168,9 @@ resolveRemainingInputs etis mp =
   where
     f eti = case etiTxOutId eti of
       Right _ -> pure eti
-      Left txIn | Just txOutId <- fst <$> find (matches txIn . snd) mp ->
-        pure eti {etiTxOutId = Right txOutId}
+      Left txIn
+        | Just txOutId <- fst <$> find (matches txIn . snd) mp ->
+            pure eti {etiTxOutId = Right txOutId}
       _ -> pure eti
 
 resolveScriptHash ::

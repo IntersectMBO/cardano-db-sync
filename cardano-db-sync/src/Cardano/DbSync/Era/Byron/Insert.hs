@@ -225,7 +225,9 @@ insertTx syncEnv blkId tx blockIndex = do
   lift $ zipWithM_ (insertTxOut tracer hasConsumed txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
   txInIds <- mapM (insertTxIn tracer txId) resolvedInputs
   whenConsumeTxOut syncEnv $
-    lift $ DB.updateListTxOutConsumedByTxInId $ zip (thrd3 <$> resolvedInputs) txInIds
+    lift $
+      DB.updateListTxOutConsumedByTxInId $
+        zip (thrd3 <$> resolvedInputs) txInIds
   where
     tracer :: Trace IO Text
     tracer = getTrace syncEnv
@@ -266,7 +268,7 @@ insertTxIn ::
   DB.TxId ->
   (Byron.TxIn, DB.TxId, DB.TxOutId, DbLovelace) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.TxInId
-insertTxIn _tracer txInId (Byron.TxInUtxo _txHash inIndex, txOutTxId, _,  _) = do
+insertTxIn _tracer txInId (Byron.TxInUtxo _txHash inIndex, txOutTxId, _, _) = do
   lift . DB.insertTxIn $
     DB.TxIn
       { DB.txInTxInId = txInId
