@@ -158,6 +158,8 @@ test-suite cardano-chain-gen
                         Test.Cardano.Db.Mock.Examples
                         Test.Cardano.Db.Mock.Property.Property
                         Test.Cardano.Db.Mock.Unit.Alonzo
+                        Test.Cardano.Db.Mock.Unit.Alonzo.Plutus
+                        Test.Cardano.Db.Mock.Unit.Alonzo.PoolAndSmash
                         Test.Cardano.Db.Mock.Unit.Alonzo.Reward
                         Test.Cardano.Db.Mock.Unit.Alonzo.Simple
                         Test.Cardano.Db.Mock.Unit.Alonzo.Stake
