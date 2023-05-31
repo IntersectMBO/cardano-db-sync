@@ -39,7 +39,7 @@ import Control.Monad (forM_, void)
 import qualified Data.Map as Map
 import Data.Text (Text)
 import Ouroboros.Network.Block (blockPoint)
-import Test.Cardano.Db.Mock.Config (babbageConfig, startDBSync, stopDBSync, withFullConfig)
+import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, stopDBSync, withFullConfig)
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillEpochPercentage,
   fillEpochs,
@@ -63,7 +63,7 @@ import Test.Tasty.HUnit (Assertion)
 
 simpleRewards :: IOManager -> [(Text, Text)] -> Assertion
 simpleRewards =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -160,7 +160,7 @@ rewardsShelley =
 
 rewardsDeregistration :: IOManager -> [(Text, Text)] -> Assertion
 rewardsDeregistration =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
@@ -228,7 +228,7 @@ rewardsDeregistration =
 -- on Babbage. See the same test on Alonzo.
 rewardsReregistration :: IOManager -> [(Text, Text)] -> Assertion
 rewardsReregistration =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
@@ -287,7 +287,7 @@ rewardsReregistration =
 
 mirReward :: IOManager -> [(Text, Text)] -> Assertion
 mirReward =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -335,7 +335,7 @@ mirReward =
 
 _mirRewardRollback :: IOManager -> [(Text, Text)] -> Assertion
 _mirRewardRollback =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -413,7 +413,7 @@ mirRewardShelley =
 
 mirRewardDereg :: IOManager -> [(Text, Text)] -> Assertion
 mirRewardDereg =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -465,7 +465,7 @@ mirRewardDereg =
 
 _rewardsEmptyChainLast :: IOManager -> [(Text, Text)] -> Assertion
 _rewardsEmptyChainLast =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -500,7 +500,7 @@ _rewardsEmptyChainLast =
 -- So we disable this test.
 _rewardsDelta :: IOManager -> [(Text, Text)] -> Assertion
 _rewardsDelta =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     -- These delegation push the computation of the 3 leader
     -- rewards toward the 8k/f slot, so it can be delayed even more
@@ -529,7 +529,7 @@ _rewardsDelta =
 
 rollbackBoundary :: IOManager -> [(Text, Text)] -> Assertion
 rollbackBoundary =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
     a <- fillEpochs interpreter mockServer 2
@@ -554,7 +554,7 @@ rollbackBoundary =
 
 singleMIRCertMultiOut :: IOManager -> [(Text, Text)] -> Assertion
 singleMIRCertMultiOut =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->

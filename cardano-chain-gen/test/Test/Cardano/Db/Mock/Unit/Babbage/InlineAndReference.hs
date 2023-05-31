@@ -37,7 +37,7 @@ import qualified Data.ByteString.Short as SBS
 import qualified Data.Map as Map
 import Data.Text (Text)
 import Ouroboros.Network.Block (blockPoint)
-import Test.Cardano.Db.Mock.Config (babbageConfig, startDBSync, withFullConfig)
+import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, withFullConfig)
 import Test.Cardano.Db.Mock.UnifiedApi (
   forgeNextAndSubmit,
   forgeNextFindLeaderAndSubmit,
@@ -50,7 +50,7 @@ import Test.Tasty.HUnit (Assertion)
 
 unlockDatumOutput :: IOManager -> [(Text, Text)] -> Assertion
 unlockDatumOutput =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -72,7 +72,7 @@ unlockDatumOutput =
 
 unlockDatumOutputSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 unlockDatumOutputSameBlock =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -108,7 +108,7 @@ unlockDatumOutputSameBlock =
 
 inlineDatumCBOR :: IOManager -> [(Text, Text)] -> Assertion
 inlineDatumCBOR =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -125,7 +125,7 @@ inlineDatumCBOR =
 
 spendRefScript :: IOManager -> [(Text, Text)] -> Assertion
 spendRefScript =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -147,7 +147,7 @@ spendRefScript =
 
 spendRefScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 spendRefScriptSameBlock =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -183,7 +183,7 @@ spendRefScriptSameBlock =
 
 spendCollateralOutput :: IOManager -> [(Text, Text)] -> Assertion
 spendCollateralOutput =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -213,7 +213,7 @@ spendCollateralOutput =
 
 spendCollateralOutputRollback :: IOManager -> [(Text, Text)] -> Assertion
 spendCollateralOutputRollback =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     blk0 <- registerAllStakeCreds interpreter mockServer
     action interpreter mockServer dbSync 0
@@ -247,7 +247,7 @@ spendCollateralOutputRollback =
 
 spendCollateralOutputSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 spendCollateralOutputSameBlock =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -269,7 +269,7 @@ spendCollateralOutputSameBlock =
 
 referenceInputUnspend :: IOManager -> [(Text, Text)] -> Assertion
 referenceInputUnspend =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -297,7 +297,7 @@ referenceInputUnspend =
 
 supplyScriptsTwoWays :: IOManager -> [(Text, Text)] -> Assertion
 supplyScriptsTwoWays =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -326,7 +326,7 @@ supplyScriptsTwoWays =
 
 supplyScriptsTwoWaysSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 supplyScriptsTwoWaysSameBlock =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -355,7 +355,7 @@ supplyScriptsTwoWaysSameBlock =
 
 referenceMintingScript :: IOManager -> [(Text, Text)] -> Assertion
 referenceMintingScript =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -392,7 +392,7 @@ referenceMintingScript =
 
 referenceDelegation :: IOManager -> [(Text, Text)] -> Assertion
 referenceDelegation =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 

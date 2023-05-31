@@ -31,7 +31,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (MonadSTM (..))
 import Control.Monad (forM_, replicateM_, void)
 import Data.Text (Text)
 import Ouroboros.Network.Block (blockSlot)
-import Test.Cardano.Db.Mock.Config (babbageConfig, startDBSync, withFullConfig)
+import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, withFullConfig)
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillEpochs,
   fillUntilNextEpoch,
@@ -57,7 +57,7 @@ import Test.Tasty.HUnit (Assertion)
 
 registrationTx :: IOManager -> [(Text, Text)] -> Assertion
 registrationTx =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $
@@ -92,7 +92,7 @@ registrationTx =
 
 registrationsSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 registrationsSameBlock =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -109,7 +109,7 @@ registrationsSameBlock =
 
 registrationsSameTx :: IOManager -> [(Text, Text)] -> Assertion
 registrationsSameTx =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $
@@ -128,7 +128,7 @@ registrationsSameTx =
 
 stakeAddressPtr :: IOManager -> [(Text, Text)] -> Assertion
 stakeAddressPtr =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     blk <-
@@ -148,7 +148,7 @@ stakeAddressPtr =
 
 stakeAddressPtrDereg :: IOManager -> [(Text, Text)] -> Assertion
 stakeAddressPtrDereg =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     blk <-
@@ -186,7 +186,7 @@ stakeAddressPtrDereg =
 
 stakeAddressPtrUseBefore :: IOManager -> [(Text, Text)] -> Assertion
 stakeAddressPtrUseBefore =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- first use this stake credential
@@ -215,7 +215,7 @@ stakeAddressPtrUseBefore =
 ----------------------------------------------------------------------------------------------------------
 stakeDistGenesis :: IOManager -> [(Text, Text)] -> Assertion
 stakeDistGenesis =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     a <- fillUntilNextEpoch interpreter mockServer
     assertBlockNoBackoff dbSync (fromIntegral $ length a)
@@ -226,7 +226,7 @@ stakeDistGenesis =
 
 delegations2000 :: IOManager -> [(Text, Text)] -> Assertion
 delegations2000 =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     a <- delegateAndSendBlocks 1995 interpreter
     forM_ a $ atomically . addBlock mockServer
@@ -245,7 +245,7 @@ delegations2000 =
 
 delegations2001 :: IOManager -> [(Text, Text)] -> Assertion
 delegations2001 =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     a <- delegateAndSendBlocks 1996 interpreter
     forM_ a $ atomically . addBlock mockServer
@@ -264,7 +264,7 @@ delegations2001 =
 
 delegations8000 :: IOManager -> [(Text, Text)] -> Assertion
 delegations8000 =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     a <- delegateAndSendBlocks 7995 interpreter
     forM_ a $ atomically . addBlock mockServer
@@ -289,7 +289,7 @@ delegations8000 =
 
 delegationsMany :: IOManager -> [(Text, Text)] -> Assertion
 delegationsMany =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     a <- delegateAndSendBlocks 40000 interpreter
     forM_ a $ atomically . addBlock mockServer
@@ -312,7 +312,7 @@ delegationsMany =
 
 delegationsManyNotDense :: IOManager -> [(Text, Text)] -> Assertion
 delegationsManyNotDense =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     a <- delegateAndSendBlocks 40000 interpreter
     forM_ a $ atomically . addBlock mockServer

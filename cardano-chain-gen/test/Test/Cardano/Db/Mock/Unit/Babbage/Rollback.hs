@@ -23,7 +23,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (atomically)
 import Control.Monad (forM, forM_, void)
 import Data.Text (Text)
 import Ouroboros.Network.Block (blockPoint)
-import Test.Cardano.Db.Mock.Config (babbageConfig, startDBSync, stopDBSync, withFullConfig)
+import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, stopDBSync, withFullConfig)
 import Test.Cardano.Db.Mock.Examples (mockBlock0, mockBlock1, mockBlock2)
 import Test.Cardano.Db.Mock.UnifiedApi (forgeAndSubmitBlocks, forgeNextAndSubmit, forgeNextFindLeaderAndSubmit, getBabbageLedgerState, rollbackTo, withBabbageFindLeaderAndSubmit, withBabbageFindLeaderAndSubmitTx)
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff, assertTxCount)
@@ -31,7 +31,7 @@ import Test.Tasty.HUnit (Assertion)
 
 simpleRollback :: IOManager -> [(Text, Text)] -> Assertion
 simpleRollback = do
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     blk0 <- forgeNext interpreter mockBlock0
     blk1 <- forgeNext interpreter mockBlock1
     blk2 <- forgeNext interpreter mockBlock2
@@ -48,7 +48,7 @@ simpleRollback = do
 
 bigChain :: IOManager -> [(Text, Text)] -> Assertion
 bigChain =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     forM_ (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
     startDBSync dbSync
     assertBlockNoBackoff dbSync 101
@@ -66,7 +66,7 @@ bigChain =
 
 restartAndRollback :: IOManager -> [(Text, Text)] -> Assertion
 restartAndRollback =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     forM_ (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
     startDBSync dbSync
     assertBlockNoBackoff dbSync 101
@@ -88,7 +88,7 @@ restartAndRollback =
 {-}
 rollbackFurther :: IOManager -> [(Text, Text)] -> Assertion
 rollbackFurther =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     blks <- replicateM 80 (forgeNextFindLeaderAndSubmit interpreter mockServer [])
     startDBSync dbSync
     assertBlockNoBackoff dbSync 80
@@ -126,7 +126,7 @@ rollbackFurther =
 
 lazyRollback :: IOManager -> [(Text, Text)] -> Assertion
 lazyRollback =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     lastBlk <- last <$> forgeAndSubmitBlocks interpreter mockServer 200
     void $ forgeAndSubmitBlocks interpreter mockServer 70
@@ -143,7 +143,7 @@ lazyRollback =
 
 lazyRollbackRestart :: IOManager -> [(Text, Text)] -> Assertion
 lazyRollbackRestart =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     lastBlk <- last <$> forgeAndSubmitBlocks interpreter mockServer 220
     void $ forgeAndSubmitBlocks interpreter mockServer 60
@@ -164,7 +164,7 @@ lazyRollbackRestart =
 
 doubleRollback :: IOManager -> [(Text, Text)] -> Assertion
 doubleRollback =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     lastBlk1 <- last <$> forgeAndSubmitBlocks interpreter mockServer 150
     lastBlk2 <- last <$> forgeAndSubmitBlocks interpreter mockServer 100
@@ -190,7 +190,7 @@ doubleRollback =
 
 stakeAddressRollback :: IOManager -> [(Text, Text)] -> Assertion
 stakeAddressRollback =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     blk <- forgeNextFindLeaderAndSubmit interpreter mockServer []
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -214,7 +214,7 @@ stakeAddressRollback =
 
 rollbackChangeTxOrder :: IOManager -> [(Text, Text)] -> Assertion
 rollbackChangeTxOrder =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     blk0 <- forgeNextFindLeaderAndSubmit interpreter mockServer []
     st <- getBabbageLedgerState interpreter
@@ -236,7 +236,7 @@ rollbackChangeTxOrder =
 
 rollbackFullTx :: IOManager -> [(Text, Text)] -> Assertion
 rollbackFullTx =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     blk0 <- forgeNextFindLeaderAndSubmit interpreter mockServer []
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do

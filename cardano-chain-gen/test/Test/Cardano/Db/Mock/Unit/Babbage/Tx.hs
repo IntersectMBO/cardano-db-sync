@@ -10,7 +10,7 @@ import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
 import Cardano.Mock.Forging.Types (UTxOIndex (..))
 import Control.Monad (void)
 import Data.Text (Text)
-import Test.Cardano.Db.Mock.Config (babbageConfig, startDBSync, withFullConfig)
+import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, withFullConfig)
 import Test.Cardano.Db.Mock.UnifiedApi (
   withBabbageFindLeaderAndSubmit,
   withBabbageFindLeaderAndSubmitTx,
@@ -21,7 +21,7 @@ import Test.Tasty.HUnit (Assertion)
 
 addSimpleTx :: IOManager -> [(Text, Text)] -> Assertion
 addSimpleTx =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- translate the block to a real Cardano block.
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
@@ -48,7 +48,7 @@ addSimpleTxShelley =
 
 consumeSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 consumeSameBlock =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do

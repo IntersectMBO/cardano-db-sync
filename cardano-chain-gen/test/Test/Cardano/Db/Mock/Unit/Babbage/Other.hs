@@ -43,7 +43,7 @@ import Control.Monad (forM_, void)
 import Data.Text (Text)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 import Ouroboros.Network.Block (blockPoint)
-import Test.Cardano.Db.Mock.Config (getPoolLayer, startDBSync, stopDBSync, withFullConfig, babbageConfig)
+import Test.Cardano.Db.Mock.Config (getPoolLayer, startDBSync, stopDBSync, withFullConfig, babbageConfigDir)
 import Test.Cardano.Db.Mock.Examples (mockBlock0)
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillEpochPercentage,
@@ -122,7 +122,7 @@ configNoStakes =
 
 poolReg :: IOManager -> [(Text, Text)] -> Assertion
 poolReg =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
@@ -150,7 +150,7 @@ poolReg =
 -- Issue https://github.com/input-output-hk/cardano-db-sync/issues/997
 nonexistantPoolQuery :: IOManager -> [(Text, Text)] -> Assertion
 nonexistantPoolQuery =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
@@ -163,7 +163,7 @@ nonexistantPoolQuery =
 
 poolDeReg :: IOManager -> [(Text, Text)] -> Assertion
 poolDeReg =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
@@ -203,7 +203,7 @@ poolDeReg =
 
 poolDeRegMany :: IOManager -> [(Text, Text)] -> Assertion
 poolDeRegMany =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
@@ -293,7 +293,7 @@ poolDeRegMany =
 
 poolDelist :: IOManager -> [(Text, Text)] -> Assertion
 poolDelist =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []

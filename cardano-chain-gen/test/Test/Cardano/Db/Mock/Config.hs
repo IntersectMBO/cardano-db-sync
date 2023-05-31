@@ -5,7 +5,8 @@
 module Test.Cardano.Db.Mock.Config (
   Config (..),
   DBSyncEnv (..),
-  babbageConfig,
+  babbageConfigDir,
+  alonzoConfigDir,
   emptyMetricsSetters,
   fingerprintRoot,
   getDBSyncPGPass,
@@ -88,8 +89,11 @@ data DBSyncEnv = DBSyncEnv
   , dbSyncThreadVar :: TMVar (Async ())
   }
 
-babbageConfig :: FilePath
-babbageConfig = "config"
+babbageConfigDir :: FilePath
+babbageConfigDir = "config"
+
+alonzoConfigDir :: FilePath
+alonzoConfigDir = "config-alonzo"
 
 rootTestDir :: FilePath
 rootTestDir = "test/testfiles"

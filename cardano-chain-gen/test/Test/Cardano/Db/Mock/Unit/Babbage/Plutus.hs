@@ -55,7 +55,7 @@ import qualified Data.Map as Map
 import Data.Text (Text)
 import Ouroboros.Consensus.Cardano.Block (StandardBabbage)
 import Ouroboros.Network.Block (genesisPoint)
-import Test.Cardano.Db.Mock.Config (babbageConfig, startDBSync, withFullConfig)
+import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, withFullConfig)
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillUntilNextEpoch,
   forgeNextAndSubmit,
@@ -80,7 +80,7 @@ import Test.Tasty.HUnit (Assertion)
 
 simpleScript :: IOManager -> [(Text, Text)] -> Assertion
 simpleScript =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -104,7 +104,7 @@ simpleScript =
 
 unlockScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 unlockScriptSameBlock =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -121,7 +121,7 @@ unlockScriptSameBlock =
 
 failedScript :: IOManager -> [(Text, Text)] -> Assertion
 failedScript =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     tx0 <- withBabbageLedgerState interpreter $ Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutNoInline False] 20000 20000
@@ -139,7 +139,7 @@ failedScript =
 
 failedScriptFees :: IOManager -> [(Text, Text)] -> Assertion
 failedScriptFees =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     tx0 <- withBabbageLedgerState interpreter $ Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutNoInline False] 20000 20000
@@ -158,7 +158,7 @@ failedScriptFees =
 
 failedScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 failedScriptSameBlock =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -175,7 +175,7 @@ failedScriptSameBlock =
 
 multipleScripts :: IOManager -> [(Text, Text)] -> Assertion
 multipleScripts =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     tx0 <- withBabbageLedgerState interpreter $ Babbage.mkLockByScriptTx (UTxOIndex 0) (Babbage.TxOutNoInline <$> [True, False, True]) 20000 20000
@@ -196,7 +196,7 @@ multipleScripts =
 
 multipleScriptsRollback :: IOManager -> [(Text, Text)] -> Assertion
 multipleScriptsRollback =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     tx0 <- withBabbageLedgerState interpreter $ Babbage.mkLockByScriptTx (UTxOIndex 0) (Babbage.TxOutNoInline <$> [True, False, True]) 20000 20000
@@ -226,7 +226,7 @@ multipleScriptsRollback =
 
 multipleScriptsSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 multipleScriptsSameBlock =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -244,7 +244,7 @@ multipleScriptsSameBlock =
 
 multipleScriptsFailed :: IOManager -> [(Text, Text)] -> Assertion
 multipleScriptsFailed =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     tx0 <- withBabbageLedgerState interpreter $ Babbage.mkLockByScriptTx (UTxOIndex 0) (Babbage.TxOutNoInline <$> [True, False, True]) 20000 20000
@@ -263,7 +263,7 @@ multipleScriptsFailed =
 
 multipleScriptsFailedSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 multipleScriptsFailedSameBlock =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -284,7 +284,7 @@ multipleScriptsFailedSameBlock =
 
 registrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
 registrationScriptTx =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $
@@ -297,7 +297,7 @@ registrationScriptTx =
 
 deregistrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
 deregistrationScriptTx =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -312,7 +312,7 @@ deregistrationScriptTx =
 
 deregistrationsScriptTxs :: IOManager -> [(Text, Text)] -> Assertion
 deregistrationsScriptTxs =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -330,7 +330,7 @@ deregistrationsScriptTxs =
 
 deregistrationsScriptTx :: IOManager -> [(Text, Text)] -> Assertion
 deregistrationsScriptTx =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -354,7 +354,7 @@ deregistrationsScriptTx =
 -- Like previous but missing a redeemer. This is a known ledger issue
 deregistrationsScriptTx' :: IOManager -> [(Text, Text)] -> Assertion
 deregistrationsScriptTx' =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -380,7 +380,7 @@ deregistrationsScriptTx' =
 -- Like previous but missing the other redeemer. This is a known ledger issue
 deregistrationsScriptTx'' :: IOManager -> [(Text, Text)] -> Assertion
 deregistrationsScriptTx'' =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -407,7 +407,7 @@ deregistrationsScriptTx'' =
 
 mintMultiAsset :: IOManager -> [(Text, Text)] -> Assertion
 mintMultiAsset =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \st -> do
       let val0 = MultiAsset $ Map.singleton (PolicyID alwaysMintScriptHash) (Map.singleton (head assetNames) 1)
@@ -420,7 +420,7 @@ mintMultiAsset =
 
 mintMultiAssets :: IOManager -> [(Text, Text)] -> Assertion
 mintMultiAssets =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
       let assets0 = Map.fromList [(head assetNames, 10), (assetNames !! 1, 4)]
@@ -438,7 +438,7 @@ mintMultiAssets =
 
 swapMultiAssets :: IOManager -> [(Text, Text)] -> Assertion
 swapMultiAssets =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
       let assetsMinted0 = Map.fromList [(head assetNames, 10), (assetNames !! 1, 4)]

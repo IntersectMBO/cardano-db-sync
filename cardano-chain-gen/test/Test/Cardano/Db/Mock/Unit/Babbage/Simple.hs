@@ -14,7 +14,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (atomically)
 import Control.Monad (void)
 import Data.Text (Text)
 import Ouroboros.Network.Block (blockNo)
-import Test.Cardano.Db.Mock.Config (babbageConfig, startDBSync, stopDBSync, withFullConfig)
+import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, stopDBSync, withFullConfig)
 import Test.Cardano.Db.Mock.Examples (mockBlock0, mockBlock1, mockBlock2)
 import Test.Cardano.Db.Mock.UnifiedApi (fillUntilNextEpoch, forgeAndSubmitBlocks, forgeNextAndSubmit)
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff)
@@ -22,7 +22,7 @@ import Test.Tasty.HUnit (Assertion, assertBool)
 
 forgeBlocks :: IOManager -> [(Text, Text)] -> Assertion
 forgeBlocks = do
-  withFullConfig babbageConfig testLabel $ \interpreter _mockServer _dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter _mockServer _dbSync -> do
     _block0 <- forgeNext interpreter mockBlock0
     _block1 <- forgeNext interpreter mockBlock1
     block2 <- forgeNext interpreter mockBlock2
@@ -34,7 +34,7 @@ forgeBlocks = do
 
 addSimple :: IOManager -> [(Text, Text)] -> Assertion
 addSimple =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Given a mock block, translate it into a real block and submit it to the
     -- chainsync server
     void $ forgeNextAndSubmit interpreter mockServer mockBlock0
@@ -46,7 +46,7 @@ addSimple =
 
 addSimpleChain :: IOManager -> [(Text, Text)] -> Assertion
 addSimpleChain =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- translate the blocks to real Cardano blocks.
     blk0 <- forgeNext interpreter mockBlock0
     blk1 <- forgeNext interpreter mockBlock1
@@ -63,7 +63,7 @@ addSimpleChain =
 
 restartDBSync :: IOManager -> [(Text, Text)] -> Assertion
 restartDBSync =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     void $ forgeNextAndSubmit interpreter mockServer mockBlock0
     -- start db-sync and let it sync
     startDBSync dbSync
@@ -78,7 +78,7 @@ restartDBSync =
 
 nodeRestart :: IOManager -> [(Text, Text)] -> Assertion
 nodeRestart =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ forgeAndSubmitBlocks interpreter mockServer 5
     assertBlockNoBackoff dbSync 5
@@ -92,7 +92,7 @@ nodeRestart =
 
 nodeRestartBoundary :: IOManager -> [(Text, Text)] -> Assertion
 nodeRestartBoundary =
-  withFullConfig babbageConfig testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     blks <- fillUntilNextEpoch interpreter mockServer
     assertBlockNoBackoff dbSync $ length blks
