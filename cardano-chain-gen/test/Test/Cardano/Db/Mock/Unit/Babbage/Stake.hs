@@ -6,14 +6,13 @@ module Test.Cardano.Db.Mock.Unit.Babbage.Stake (
   stakeAddressPtr,
   stakeAddressPtrDereg,
   stakeAddressPtrUseBefore,
-
   -- stake distribution
   stakeDistGenesis,
   delegations2000,
   delegations2001,
   delegations8000,
   delegationsMany,
-  delegationsManyNotDense
+  delegationsManyNotDense,
 )
 where
 
@@ -32,7 +31,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (MonadSTM (..))
 import Control.Monad (forM_, replicateM_, void)
 import Data.Text (Text)
 import Ouroboros.Network.Block (blockSlot)
-import Test.Cardano.Db.Mock.Config (startDBSync, withFullConfig)
+import Test.Cardano.Db.Mock.Config (babbageConfig, startDBSync, withFullConfig)
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillEpochs,
   fillUntilNextEpoch,
@@ -51,9 +50,6 @@ import Test.Cardano.Db.Mock.Validate (
   assertEpochStakeEpoch,
  )
 import Test.Tasty.HUnit (Assertion)
-
-babbageConfig :: FilePath
-babbageConfig = "config"
 
 ----------------------------------------------------------------------------------------------------------
 -- Stake Address

@@ -43,7 +43,7 @@ import Control.Monad (forM_, void)
 import Data.Text (Text)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 import Ouroboros.Network.Block (blockPoint)
-import Test.Cardano.Db.Mock.Config (getPoolLayer, startDBSync, stopDBSync, withFullConfig)
+import Test.Cardano.Db.Mock.Config (getPoolLayer, startDBSync, stopDBSync, withFullConfig, babbageConfig)
 import Test.Cardano.Db.Mock.Examples (mockBlock0)
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillEpochPercentage,
@@ -69,9 +69,6 @@ import Test.Cardano.Db.Mock.Validate (
 import Test.Tasty.HUnit (Assertion, assertEqual, assertFailure)
 
 {- HLINT ignore "Use underscore" -}
-
-babbageConfig :: FilePath
-babbageConfig = "config"
 
 ----------------------------------------------------------------------------------------------------------
 -- Different Configs

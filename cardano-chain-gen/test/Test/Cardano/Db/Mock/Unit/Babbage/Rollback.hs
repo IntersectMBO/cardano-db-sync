@@ -23,14 +23,11 @@ import Control.Concurrent.Class.MonadSTM.Strict (atomically)
 import Control.Monad (forM, forM_, void)
 import Data.Text (Text)
 import Ouroboros.Network.Block (blockPoint)
-import Test.Cardano.Db.Mock.Config (startDBSync, stopDBSync, withFullConfig)
+import Test.Cardano.Db.Mock.Config (babbageConfig, startDBSync, stopDBSync, withFullConfig)
 import Test.Cardano.Db.Mock.Examples (mockBlock0, mockBlock1, mockBlock2)
 import Test.Cardano.Db.Mock.UnifiedApi (forgeAndSubmitBlocks, forgeNextAndSubmit, forgeNextFindLeaderAndSubmit, getBabbageLedgerState, rollbackTo, withBabbageFindLeaderAndSubmit, withBabbageFindLeaderAndSubmitTx)
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff, assertTxCount)
 import Test.Tasty.HUnit (Assertion)
-
-babbageConfig :: FilePath
-babbageConfig = "config"
 
 simpleRollback :: IOManager -> [(Text, Text)] -> Assertion
 simpleRollback = do

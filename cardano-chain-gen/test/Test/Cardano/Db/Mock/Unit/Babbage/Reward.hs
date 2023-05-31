@@ -9,8 +9,8 @@ module Test.Cardano.Db.Mock.Unit.Babbage.Reward (
   mirRewardShelley,
   mirRewardDereg,
   rollbackBoundary,
-  singleMIRCertMultiOut
-  ) where
+  singleMIRCertMultiOut,
+) where
 
 import Cardano.Ledger.Coin (Coin (Coin), DeltaCoin (DeltaCoin))
 import Cardano.Ledger.Keys (KeyHash (KeyHash))
@@ -39,7 +39,7 @@ import Control.Monad (forM_, void)
 import qualified Data.Map as Map
 import Data.Text (Text)
 import Ouroboros.Network.Block (blockPoint)
-import Test.Cardano.Db.Mock.Config (startDBSync, stopDBSync, withFullConfig)
+import Test.Cardano.Db.Mock.Config (babbageConfig, startDBSync, stopDBSync, withFullConfig)
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillEpochPercentage,
   fillEpochs,
@@ -60,9 +60,6 @@ import Test.Cardano.Db.Mock.Validate (
   assertRewardCounts,
  )
 import Test.Tasty.HUnit (Assertion)
-
-babbageConfig :: FilePath
-babbageConfig = "config"
 
 simpleRewards :: IOManager -> [(Text, Text)] -> Assertion
 simpleRewards =

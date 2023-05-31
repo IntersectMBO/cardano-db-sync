@@ -14,14 +14,11 @@ import Control.Concurrent.Class.MonadSTM.Strict (atomically)
 import Control.Monad (void)
 import Data.Text (Text)
 import Ouroboros.Network.Block (blockNo)
-import Test.Cardano.Db.Mock.Config (startDBSync, withFullConfig, stopDBSync)
+import Test.Cardano.Db.Mock.Config (babbageConfig, startDBSync, stopDBSync, withFullConfig)
 import Test.Cardano.Db.Mock.Examples (mockBlock0, mockBlock1, mockBlock2)
-import Test.Cardano.Db.Mock.UnifiedApi (forgeNextAndSubmit, forgeAndSubmitBlocks, fillUntilNextEpoch)
+import Test.Cardano.Db.Mock.UnifiedApi (fillUntilNextEpoch, forgeAndSubmitBlocks, forgeNextAndSubmit)
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff)
 import Test.Tasty.HUnit (Assertion, assertBool)
-
-babbageConfig :: FilePath
-babbageConfig = "config"
 
 forgeBlocks :: IOManager -> [(Text, Text)] -> Assertion
 forgeBlocks = do

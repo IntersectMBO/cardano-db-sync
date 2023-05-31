@@ -37,7 +37,7 @@ import qualified Data.ByteString.Short as SBS
 import qualified Data.Map as Map
 import Data.Text (Text)
 import Ouroboros.Network.Block (blockPoint)
-import Test.Cardano.Db.Mock.Config (startDBSync, withFullConfig)
+import Test.Cardano.Db.Mock.Config (babbageConfig, startDBSync, withFullConfig)
 import Test.Cardano.Db.Mock.UnifiedApi (
   forgeNextAndSubmit,
   forgeNextFindLeaderAndSubmit,
@@ -47,9 +47,6 @@ import Test.Cardano.Db.Mock.UnifiedApi (
  )
 import Test.Cardano.Db.Mock.Validate (assertBabbageCounts, assertBlockNoBackoff, assertDatumCBOR)
 import Test.Tasty.HUnit (Assertion)
-
-babbageConfig :: FilePath
-babbageConfig = "config"
 
 unlockDatumOutput :: IOManager -> [(Text, Text)] -> Assertion
 unlockDatumOutput =

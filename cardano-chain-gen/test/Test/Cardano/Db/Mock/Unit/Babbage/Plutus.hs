@@ -12,7 +12,6 @@ module Test.Cardano.Db.Mock.Unit.Babbage.Plutus (
   multipleScriptsSameBlock,
   multipleScriptsFailed,
   multipleScriptsFailedSameBlock,
-
   -- plutus cert scripts
   registrationScriptTx,
   deregistrationsScriptTx,
@@ -20,12 +19,11 @@ module Test.Cardano.Db.Mock.Unit.Babbage.Plutus (
   deregistrationsScriptTxs,
   deregistrationsScriptTx',
   deregistrationsScriptTx'',
-
   -- plutus MultiAsset scripts
   mintMultiAsset,
   mintMultiAssets,
   swapMultiAssets,
-  ) where
+) where
 
 import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Db as DB
@@ -57,7 +55,7 @@ import qualified Data.Map as Map
 import Data.Text (Text)
 import Ouroboros.Consensus.Cardano.Block (StandardBabbage)
 import Ouroboros.Network.Block (genesisPoint)
-import Test.Cardano.Db.Mock.Config (startDBSync, withFullConfig)
+import Test.Cardano.Db.Mock.Config (babbageConfig, startDBSync, withFullConfig)
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillUntilNextEpoch,
   forgeNextAndSubmit,
@@ -75,9 +73,6 @@ import Test.Cardano.Db.Mock.Validate (
   assertScriptCert,
  )
 import Test.Tasty.HUnit (Assertion)
-
-babbageConfig :: FilePath
-babbageConfig = "config"
 
 ----------------------------------------------------------------------------------------------------------
 -- Plutus Spend Scripts

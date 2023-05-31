@@ -10,7 +10,7 @@ import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
 import Cardano.Mock.Forging.Types (UTxOIndex (..))
 import Control.Monad (void)
 import Data.Text (Text)
-import Test.Cardano.Db.Mock.Config (startDBSync, withFullConfig)
+import Test.Cardano.Db.Mock.Config (babbageConfig, startDBSync, withFullConfig)
 import Test.Cardano.Db.Mock.UnifiedApi (
   withBabbageFindLeaderAndSubmit,
   withBabbageFindLeaderAndSubmitTx,
@@ -18,9 +18,6 @@ import Test.Cardano.Db.Mock.UnifiedApi (
  )
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff)
 import Test.Tasty.HUnit (Assertion)
-
-babbageConfig :: FilePath
-babbageConfig = "config"
 
 addSimpleTx :: IOManager -> [(Text, Text)] -> Assertion
 addSimpleTx =
