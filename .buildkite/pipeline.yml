@@ -2,10 +2,12 @@ steps:
   - label: 'check-cabal-project'
     command: 'nix run .#checkCabalProject'
     agents:
+      queue: core-tech
       system: x86_64-linux
 
   - label: 'cardano-db-sync Docker image'
     command:
       - ".buildkite/release-docker-push.sh"
     agents:
+      queue: core-tech
       system: x86_64-linux
