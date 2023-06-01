@@ -9,6 +9,7 @@ module Test.Cardano.Db.Mock.Validate (
   assertBlocksCount,
   assertBlocksCountDetailed,
   assertTxCount,
+  assertUnspentTx,
   assertRewardCount,
   assertBlockNoBackoff,
   assertBlockNoBackoffTimes,
@@ -37,6 +38,7 @@ module Test.Cardano.Db.Mock.Validate (
 ) where
 
 import Cardano.Db
+import qualified Cardano.Db as DB
 import Cardano.DbSync.Era.Shelley.Generic.Util
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.BaseTypes
@@ -103,7 +105,14 @@ assertBlockNoBackoff = assertBlockNoBackoffTimes defaultDelays
 
 assertBlockNoBackoffTimes :: [Int] -> DBSyncEnv -> Int -> IO ()
 assertBlockNoBackoffTimes times env blockNo =
-  assertEqBackoff env queryBlockHeight (Just $ fromIntegral blockNo) times "Unexpected BlockNo"
+  assertEqBackoff env DB.queryBlockHeight (Just $ fromIntegral blockNo) times "Unexpected BlockNo"
+
+-- checking that unspent count matches from tx_in to tx_out
+assertUnspentTx :: DBSyncEnv -> IO ()
+assertUnspentTx syncEnv = do
+  unspentTxCount <- queryDBSync syncEnv DB.queryTxOutConsumedNullCount
+  consumedNullCount <- queryDBSync syncEnv DB.queryTxOutUnspentCount
+  assertEqual "Unexpected tx unspent count between tx-in & tx-out" unspentTxCount consumedNullCount
 
 defaultDelays :: [Int]
 defaultDelays = [1, 2, 4, 8, 16, 32, 64, 128, 256]

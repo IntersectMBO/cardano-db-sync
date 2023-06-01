@@ -5,11 +5,18 @@ module Test.Cardano.Db.Mock.Unit.Alonzo.Tx (
 
 import Cardano.Mock.ChainSync.Server (IOManager)
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
-import Cardano.Mock.Forging.Types (UTxOIndex (UTxOIndex, UTxOPair))
+import Cardano.Mock.Forging.Types (UTxOIndex (..))
 import Control.Monad (void)
 import Data.Text (Text)
-import Test.Cardano.Db.Mock.Config (alonzoConfigDir, startDBSync, withFullConfig)
-import Test.Cardano.Db.Mock.UnifiedApi (withAlonzoFindLeaderAndSubmit, withAlonzoFindLeaderAndSubmitTx)
+import Test.Cardano.Db.Mock.Config (
+  alonzoConfigDir,
+  startDBSync,
+  withFullConfig,
+ )
+import Test.Cardano.Db.Mock.UnifiedApi (
+  withAlonzoFindLeaderAndSubmit,
+  withAlonzoFindLeaderAndSubmitTx,
+ )
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff)
 import Test.Tasty.HUnit (Assertion)
 

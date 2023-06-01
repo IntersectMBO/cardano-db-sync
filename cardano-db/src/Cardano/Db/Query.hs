@@ -96,6 +96,7 @@ module Cardano.Db.Query (
   querySchemaVersion,
   queryPreviousSlotNo,
   queryMinBlock,
+  queryTxOutUnspentCount,
   -- utils
   entityPair,
   isJust,
@@ -877,8 +878,12 @@ queryPoolOfflineFetchError hash (Just fromTime) = do
           `innerJoin` table @PoolMetadataRef
         `on` (\(poolOfflineFetchError :& _poolHash :& poolMetadataRef) -> poolOfflineFetchError ^. PoolOfflineFetchErrorPmrId ==. poolMetadataRef ^. PoolMetadataRefId)
     where_
-      ( poolHash ^. PoolHashHashRaw ==. val hash
-          &&. poolOfflineFetchError ^. PoolOfflineFetchErrorFetchTime >=. val fromTime
+      ( poolHash
+          ^. PoolHashHashRaw
+          ==. val hash
+          &&. poolOfflineFetchError
+          ^. PoolOfflineFetchErrorFetchTime
+          >=. val fromTime
       )
     orderBy [desc (poolOfflineFetchError ^. PoolOfflineFetchErrorFetchTime)]
     limit 10
@@ -1239,6 +1244,14 @@ queryMinBlock = do
     pure $ blk ^. BlockId
   pure $ unValue <$> listToMaybe res
 
+queryTxOutUnspentCount :: MonadIO m => ReaderT SqlBackend m Word64
+queryTxOutUnspentCount = do
+  res <- select $ do
+    txOut <- from $ table @TxOut
+    txOutUnspentP txOut
+    pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
+
 -- -----------------------------------------------------------------------------
 -- SqlQuery predicates
 
@@ -1253,8 +1266,14 @@ txOutUnspentP txOut =
   where_ . notExists $
     from (table @TxIn) >>= \txIn ->
       where_
-        ( txOut ^. TxOutTxId ==. txIn ^. TxInTxOutId
-            &&. txOut ^. TxOutIndex ==. txIn ^. TxInTxOutIndex
+        ( txOut
+            ^. TxOutTxId
+            ==. txIn
+            ^. TxInTxOutId
+            &&. txOut
+            ^. TxOutIndex
+            ==. txIn
+            ^. TxInTxOutIndex
         )
 
 -- every tx made before or at the snapshot time

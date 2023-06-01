@@ -11,6 +11,7 @@ import Data.Text (Text)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (Assertion, testCase)
 
+import qualified Test.Cardano.Db.Mock.Unit.Babbage.Flag.ConsumedTxOut as FlagConsumedTxOut
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.InlineAndReference as BabInlineRef
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Other as BabOther
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Plutus as BabPlutus
@@ -32,6 +33,21 @@ unitTests iom knownMigrations =
         , test "restart db-sync" BabSimple.restartDBSync
         , test "node restart" BabSimple.nodeRestart
         , test "node restart boundary" BabSimple.nodeRestartBoundary
+        ]
+    , testGroup
+        "flags"
+        [ testGroup
+            "consumed-tx-out"
+                [ test "flag check" FlagConsumedTxOut.flagCheck
+                , test "basic prune" FlagConsumedTxOut.basicPrune
+                , test "prune with simple rollback" FlagConsumedTxOut.pruneWithSimpleRollback
+                , test "prune with full tx rollback" FlagConsumedTxOut.pruneWithFullTxRollback
+                , test "pruning should keep some tx" FlagConsumedTxOut.pruningShouldKeepSomeTx
+                , test "prune and rollback one block" FlagConsumedTxOut.pruneAndRollBackOneBlock
+                , test "no pruning and rollback" FlagConsumedTxOut.noPruneAndRollBack
+                , test "prune same block" FlagConsumedTxOut.pruneSameBlock
+                , test "no pruning same block" FlagConsumedTxOut.noPruneSameBlock
+                ]
         ]
     , testGroup
         "rollbacks"

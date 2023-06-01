@@ -31,16 +31,16 @@ insertTxOutExtra = insertUnchecked "TxOutExtra"
 insertManyTxOutExtra :: (MonadBaseControl IO m, MonadIO m) => [TxOut] -> ReaderT SqlBackend m [TxOutId]
 insertManyTxOutExtra = insertMany' "TxOut"
 
-updateListTxOutConsumedByTxInId :: MonadIO m => [(TxOutId, TxInId)] -> ReaderT SqlBackend m ()
-updateListTxOutConsumedByTxInId ls = do
+queryUpdateListTxOutConsumedByTxInId :: MonadIO m => [(TxOutId, TxInId)] -> ReaderT SqlBackend m ()
+queryUpdateListTxOutConsumedByTxInId ls = do
   mapM_ (uncurry updateTxOutConsumedByTxInId) ls
 
 updateTxOutConsumedByTxInId :: MonadIO m => TxOutId -> TxInId -> ReaderT SqlBackend m ()
 updateTxOutConsumedByTxInId txOutId txInId =
   update txOutId [TxOutConsumedByTxInId =. Just txInId]
 
-setNullTxOut :: MonadIO m => Trace IO Text -> Maybe TxInId -> Word64 -> ReaderT SqlBackend m ()
-setNullTxOut trce mMinTxInId txInDeleted = do
+querySetNullTxOut :: MonadIO m => Trace IO Text -> Maybe TxInId -> Word64 -> ReaderT SqlBackend m ()
+querySetNullTxOut trce mMinTxInId txInDeleted = do
   whenJust mMinTxInId $ \txInId -> do
     txOutIds <- getTxOutConsumedAfter txInId
     mapM_ setNullTxOutConsumedAfterTxInId txOutIds
@@ -104,6 +104,24 @@ isMigrated = do
         )
         []
   pure (not $ null columntExists)
+
+-- | This is a count of the null consumed_by_tx_in_id
+queryTxOutConsumedNullCount :: MonadIO m => ReaderT SqlBackend m Word64
+queryTxOutConsumedNullCount = do
+  res <- select $ do
+    txOut <- from $ table @TxOut
+    where_ (isNothing $ txOut ^. TxOutConsumedByTxInId)
+    pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
+
+queryTxOutConsumedCount :: MonadIO m => ReaderT SqlBackend m Word64
+queryTxOutConsumedCount = do
+  res <- select $ do
+    txOut <- from $ table @TxOut
+    where_ (not_ $ isNothing $ txOut ^. TxOutConsumedByTxInId)
+    pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
+
 
 createConsumedTxOut :: MonadIO m => ReaderT SqlBackend m ()
 createConsumedTxOut = do
