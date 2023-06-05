@@ -67,6 +67,7 @@ import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text.Encoding as Text
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
+import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 
 {- HLINT ignore "Reduce duplication" -}
 

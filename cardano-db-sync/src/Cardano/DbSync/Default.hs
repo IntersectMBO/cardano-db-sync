@@ -11,6 +11,7 @@ module Cardano.DbSync.Default (
 import Cardano.BM.Trace (logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Types (ConsistentLevel (..), InsertOptions (..), LedgerEnv (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Cache
 import Cardano.DbSync.Epoch
 import Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
@@ -21,7 +22,7 @@ import Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock, mkAdaPots)
 import Cardano.DbSync.Era.Shelley.Insert.Epoch (insertPoolDepositRefunds, insertRewards)
 import Cardano.DbSync.Era.Shelley.Validate (validateEpochRewards)
 import Cardano.DbSync.Error
-import Cardano.DbSync.LedgerState (
+import Cardano.DbSync.Ledger.State (
   ApplyResult (..),
   LedgerEvent (..),
   applyBlockAndSnapshot,

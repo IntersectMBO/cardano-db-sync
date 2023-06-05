@@ -18,7 +18,7 @@ import Cardano.DbSync.Api
 import Cardano.DbSync.DbAction
 import Cardano.DbSync.Default
 import Cardano.DbSync.Error
-import Cardano.DbSync.LedgerState
+import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Metrics
 import Cardano.DbSync.Rollback
 import Cardano.DbSync.Types
@@ -32,6 +32,7 @@ import Ouroboros.Consensus.HeaderValidation hiding (TipInfo)
 import Ouroboros.Consensus.Ledger.Extended
 import Ouroboros.Network.Block (Point (..))
 import Ouroboros.Network.Point (blockPointHash, blockPointSlot)
+import Cardano.DbSync.Api.Types (SyncEnv (..), LedgerEnv (..), ConsistentLevel (..))
 
 data NextState
   = Continue

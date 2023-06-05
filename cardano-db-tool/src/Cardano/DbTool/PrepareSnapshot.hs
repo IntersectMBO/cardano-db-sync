@@ -5,7 +5,7 @@ module Cardano.DbTool.PrepareSnapshot (
 
 import Cardano.Db
 import Cardano.DbSync.Config.Types hiding (LogFileDir)
-import Cardano.DbSync.LedgerState
+import Cardano.DbSync.Ledger.State
 import Cardano.Prelude (Word64, fromMaybe)
 import Control.Monad
 import qualified Data.ByteString.Base16 as Base16

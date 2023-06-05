@@ -23,6 +23,7 @@ import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (getOneEraHash)
 import Ouroboros.Network.Block
 import Ouroboros.Network.Point
+import Cardano.DbSync.Api.Types (SyncEnv (..))
 
 -- Rollbacks are done in an Era generic way based on the 'Point' we are
 -- rolling back to.

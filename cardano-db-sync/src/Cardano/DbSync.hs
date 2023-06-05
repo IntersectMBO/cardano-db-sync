@@ -30,6 +30,7 @@ import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 import Cardano.Db (textShow)
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Types (InsertOptions (..), SyncOptions (..))
 import Cardano.DbSync.Config (configureLogging)
 import Cardano.DbSync.Config.Types (
   ConfigFile (..),
@@ -101,12 +102,12 @@ runDbSync metricsSetters knownMigrations iomgr trce params aop = do
         logInfo trce msg
         when (mode `elem` [Db.Indexes, Db.Full]) $ logWarning trce indexesMsg
         Db.runMigrations pgConfig True dbMigrationDir (Just $ Db.LogFileDir "/tmp") mode
-  (ranAll, unofficial) <- if enpForceIndexes params then runMigration Db.Full else runMigration Db.Initial
+  (ranMigrations, unofficial) <- if enpForceIndexes params then runMigration Db.Full else runMigration Db.Initial
   unless (null unofficial) $
     logWarning trce $
       "Unofficial migration scripts found: " <> textShow unofficial
 
-  if ranAll
+  if ranMigrations
     then logInfo trce "All migrations were executed"
     else logInfo trce "Some migrations were not executed. They need to run when syncing has started."
 
@@ -119,7 +120,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params aop = do
   -- For testing and debugging.
   whenJust (enpMaybeRollback params) $ \slotNo ->
     void $ unsafeRollback trce pgConfig slotNo
-  runSyncNode metricsSetters trce iomgr connectionString ranAll (void . runMigration) params syncOpts
+  runSyncNode metricsSetters trce iomgr connectionString ranMigrations (void . runMigration) params syncOpts
   where
     dbMigrationDir :: Db.MigrationDir
     dbMigrationDir = enpMigrationDir params

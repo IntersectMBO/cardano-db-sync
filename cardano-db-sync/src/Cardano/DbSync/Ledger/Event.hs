@@ -9,7 +9,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.LedgerEvent (
+module Cardano.DbSync.Ledger.Event (
   LedgerEvent (..),
   convertAuxLedgerEvent,
   convertPoolRewards,

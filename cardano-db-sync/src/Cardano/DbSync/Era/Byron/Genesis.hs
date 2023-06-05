@@ -32,6 +32,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Database.Persist.Sql (SqlBackend)
 import Paths_cardano_db_sync (version)
+import Cardano.DbSync.Api.Types (SyncEnv)
 
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.
