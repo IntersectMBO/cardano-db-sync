@@ -32,6 +32,7 @@ import qualified Cardano.Crypto as Crypto
 import Cardano.Db (runDbIohkLogging)
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Types (ConsistentLevel (..), FixesRan (..), LedgerEnv (..), RunMigration, SyncEnv, SyncOptions (..), envConnString, envLedgerEnv, envNetworkMagic, envOptions)
 import Cardano.DbSync.Config
 import Cardano.DbSync.Database
 import Cardano.DbSync.DbAction
@@ -131,12 +132,14 @@ runSyncNode ::
   Trace IO Text ->
   IOManager ->
   ConnectionString ->
+  -- | migrations were ran on startup
   Bool ->
+  -- | run migration function
   RunMigration ->
   SyncNodeParams ->
   SyncOptions ->
   IO ()
-runSyncNode metricsSetters trce iomgr dbConnString ranAll runMigration syncNodeParams syncOptions = do
+runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc syncNodeParams syncOptions = do
   let configFile = enpConfigFile syncNodeParams
       maybeLedgerDir = enpMaybeLedgerStateDir syncNodeParams
   syncNodeConfig <- readSyncNodeConfig configFile
@@ -157,14 +160,10 @@ runSyncNode metricsSetters trce iomgr dbConnString ranAll runMigration syncNodeP
           trce
           dbConnString
           syncOptions
-          (enpMaybeLedgerStateDir syncNodeParams)
-          (enpShouldUseLedger syncNodeParams)
           genCfg
-          ranAll
-          (enpForceIndexes syncNodeParams)
-          (enpMigrateConsumed syncNodeParams)
-          (enpPruneTxOut syncNodeParams)
-          runMigration
+          syncNodeParams
+          ranMigrations
+          runMigrationFnc
 
     -- If the DB is empty it will be inserted, otherwise it will be validated (to make
     -- sure we are on the right chain).

@@ -13,7 +13,7 @@ import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 import Cardano.Db (DbLovelace, RewardSource)
 import qualified Cardano.Db as Db
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import Cardano.DbSync.LedgerEvent
+import Cardano.DbSync.Ledger.Event
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util (textShow)
 import Cardano.Ledger.Coin (Coin (..))

@@ -9,7 +9,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.LedgerState (
+module  Cardano.DbSync.Ledger.State (
   CardanoLedgerState (..),
   HasLedgerEnv (..),
   LedgerEvent (..),
@@ -30,12 +30,13 @@ module Cardano.DbSync.LedgerState (
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
-import Cardano.Binary (Decoder, DecoderError, Encoding, FromCBOR (..), ToCBOR (..))
+import Cardano.Binary (Decoder, DecoderError)
 import qualified Cardano.Binary as Serialize
 import Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Cardano.Util as Cardano
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import Cardano.DbSync.LedgerEvent
+import Cardano.DbSync.Ledger.Event
+import Cardano.DbSync.Ledger.Types
 import Cardano.DbSync.StateQuery
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
@@ -57,7 +58,6 @@ import Cardano.Slotting.Slot (
   fromWithOrigin,
  )
 import Control.Concurrent.Class.MonadSTM.Strict (
-  StrictTVar,
   atomically,
   newTVarIO,
   readTVar,
@@ -65,10 +65,8 @@ import Control.Concurrent.Class.MonadSTM.Strict (
  )
 import qualified Control.Exception as Exception
 
--- import           Codec.CBOR.Write (toBuilder)
 import qualified Data.ByteString.Base16 as Base16
 
--- import           Data.ByteString.Builder as BB
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
@@ -102,7 +100,6 @@ import qualified Ouroboros.Consensus.HardFork.History as History
 import Ouroboros.Consensus.Ledger.Abstract (
   LedgerResult (..),
   getTip,
-  getTipSlot,
   ledgerTipHash,
   ledgerTipPoint,
   ledgerTipSlot,
@@ -114,14 +111,15 @@ import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Ledger.Block
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 import Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), EncodeDisk (..))
-import Ouroboros.Network.AnchoredSeq (Anchorable (..), AnchoredSeq (..))
+import Ouroboros.Network.AnchoredSeq (AnchoredSeq (..))
 import qualified Ouroboros.Network.AnchoredSeq as AS
 import Ouroboros.Network.Block (HeaderHash, Point (..), blockNo)
 import qualified Ouroboros.Network.Point as Point
 import System.Directory (doesFileExist, listDirectory, removeFile)
 import System.FilePath (dropExtension, takeExtension, (</>))
 import System.Mem (performMajorGC)
-import Prelude (String, fail, id)
+import Prelude (String, id)
+import Cardano.DbSync.Api.Types (SyncOptions (..))
 
 -- Note: The decision on whether a ledger-state is written to disk is based on the block number
 -- rather than the slot number because while the block number is fully populated (for every block
@@ -132,93 +130,6 @@ import Prelude (String, fail, id)
 
 {- HLINT ignore "Reduce duplication" -}
 {- HLINT ignore "Use readTVarIO" -}
-
-data HasLedgerEnv = HasLedgerEnv
-  { leTrace :: Trace IO Text
-  , leProtocolInfo :: !(Consensus.ProtocolInfo IO CardanoBlock)
-  , leDir :: !LedgerStateDir
-  , leNetwork :: !Ledger.Network
-  , leSystemStart :: !SystemStart
-  , leAbortOnPanic :: !Bool
-  , leSnapshotEveryFollowing :: !Word64
-  , leSnapshotEveryLagging :: !Word64
-  , leInterpreter :: !(StrictTVar IO (Strict.Maybe CardanoInterpreter))
-  , leStateVar :: !(StrictTVar IO (Strict.Maybe LedgerDB))
-  }
-
-data CardanoLedgerState = CardanoLedgerState
-  { clsState :: !(ExtLedgerState CardanoBlock)
-  , clsEpochBlockNo :: !EpochBlockNo
-  }
-
--- The height of the block in the current Epoch. We maintain this
--- data next to the ledger state and store it in the same blob file.
-data EpochBlockNo
-  = GenesisEpochBlockNo
-  | EBBEpochBlockNo
-  | EpochBlockNo !Word64
-
-instance ToCBOR EpochBlockNo where
-  toCBOR GenesisEpochBlockNo = toCBOR (0 :: Word8)
-  toCBOR EBBEpochBlockNo = toCBOR (1 :: Word8)
-  toCBOR (EpochBlockNo n) =
-    toCBOR (2 :: Word8) <> toCBOR n
-
-instance FromCBOR EpochBlockNo where
-  fromCBOR = do
-    tag :: Word8 <- fromCBOR
-    case tag of
-      0 -> pure GenesisEpochBlockNo
-      1 -> pure EBBEpochBlockNo
-      2 -> EpochBlockNo <$> fromCBOR
-      n -> fail $ "unexpected EpochBlockNo value " <> show n
-
-encodeCardanoLedgerState :: (ExtLedgerState CardanoBlock -> Encoding) -> CardanoLedgerState -> Encoding
-encodeCardanoLedgerState encodeExt cls =
-  mconcat
-    [ encodeExt (clsState cls)
-    , toCBOR (clsEpochBlockNo cls)
-    ]
-
-decodeCardanoLedgerState ::
-  (forall s. Decoder s (ExtLedgerState CardanoBlock)) ->
-  (forall s. Decoder s CardanoLedgerState)
-decodeCardanoLedgerState decodeExt = do
-  ldgrState <- decodeExt
-  CardanoLedgerState ldgrState <$> fromCBOR
-
-data LedgerStateFile = LedgerStateFile
-  { lsfSlotNo :: !SlotNo
-  , lsfHash :: !ByteString
-  , lsNewEpoch :: !(Strict.Maybe EpochNo)
-  , lsfFilePath :: !FilePath
-  }
-  deriving (Show)
-
--- The result of applying a new block. This includes all the data that insertions require.
-data ApplyResult = ApplyResult
-  { apPrices :: !(Strict.Maybe Prices) -- prices after the block application
-  , apPoolsRegistered :: !(Set.Set PoolKeyHash) -- registered before the block application
-  , apNewEpoch :: !(Strict.Maybe Generic.NewEpoch) -- Only Just for a single block at the epoch boundary
-  , apSlotDetails :: !SlotDetails
-  , apStakeSlice :: !Generic.StakeSliceRes
-  , apEvents :: ![LedgerEvent]
-  }
-
-defaultApplyResult :: SlotDetails -> ApplyResult
-defaultApplyResult slotDetails =
-  ApplyResult
-    { apPrices = Strict.Nothing
-    , apPoolsRegistered = Set.empty
-    , apNewEpoch = Strict.Nothing
-    , apSlotDetails = slotDetails
-    , apStakeSlice = Generic.NoSlices
-    , apEvents = []
-    }
-
-newtype LedgerDB = LedgerDB
-  { ledgerDbCheckpoints :: AnchoredSeq (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState
-  }
 
 pushLedgerDB :: LedgerDB -> CardanoLedgerState -> LedgerDB
 pushLedgerDB db st =
@@ -235,9 +146,6 @@ pruneLedgerDb k db =
   db {ledgerDbCheckpoints = AS.anchorNewest k (ledgerDbCheckpoints db)}
 {-# INLINE pruneLedgerDb #-}
 
-instance Anchorable (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState where
-  asAnchor = id
-  getAnchorMeasure _ = getTipSlot . clsState
 
 -- | The ledger state at the tip of the chain
 ledgerDbCurrent :: LedgerDB -> CardanoLedgerState
@@ -249,11 +157,9 @@ mkHasLedgerEnv ::
   LedgerStateDir ->
   Ledger.Network ->
   SystemStart ->
-  Bool ->
-  Word64 ->
-  Word64 ->
+  SyncOptions ->
   IO HasLedgerEnv
-mkHasLedgerEnv trce protoInfo dir nw systemStart aop snapshotEveryFollowing snapshotEveryLagging = do
+mkHasLedgerEnv trce protoInfo dir nw systemStart syncOptions = do
   svar <- newTVarIO Strict.Nothing
   intervar <- newTVarIO Strict.Nothing
   pure
@@ -263,9 +169,9 @@ mkHasLedgerEnv trce protoInfo dir nw systemStart aop snapshotEveryFollowing snap
       , leDir = dir
       , leNetwork = nw
       , leSystemStart = systemStart
-      , leAbortOnPanic = aop
-      , leSnapshotEveryFollowing = snapshotEveryFollowing
-      , leSnapshotEveryLagging = snapshotEveryLagging
+      , leAbortOnPanic = soptAbortOnInvalid syncOptions
+      , leSnapshotEveryFollowing = snapshotEveryFollowing syncOptions
+      , leSnapshotEveryLagging = snapshotEveryLagging syncOptions
       , leInterpreter = intervar
       , leStateVar = svar
       }

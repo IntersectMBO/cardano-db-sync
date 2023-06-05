@@ -8,13 +8,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Cardano.DbSync.Api (
-  SyncEnv (..),
-  LedgerEnv (..),
-  SyncOptions (..),
-  InsertOptions (..),
-  ConsistentLevel (..),
-  RunMigration,
-  FixesRan (..),
   fullInsertOptions,
   defaultInsertOptions,
   turboInsertOptions,
@@ -58,12 +51,13 @@ import Cardano.BM.Trace (Trace, logInfo, logWarning)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Cache
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Error
-import Cardano.DbSync.LedgerState
+import Cardano.DbSync.Ledger.State (HasLedgerEnv (..), LedgerEvent (..), LedgerStateFile (..), SnapshotPoint (..), getHeaderHash, hashToAnnotation, listKnownSnapshots, mkHasLedgerEnv)
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
@@ -72,17 +66,15 @@ import qualified Cardano.Ledger.Shelley.Genesis as Shelley
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
 import Control.Concurrent.Class.MonadSTM.Strict (
-  StrictTVar,
   newTBQueueIO,
   newTVarIO,
   readTVar,
   readTVarIO,
   writeTVar,
  )
-import Control.Concurrent.Class.MonadSTM.Strict.TBQueue (StrictTBQueue)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import qualified Data.Strict.Maybe as Strict
-import Data.Time.Clock (UTCTime, getCurrentTime)
+import Data.Time.Clock (getCurrentTime)
 import Database.Persist.Postgresql (ConnectionString)
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Block.Abstract (HeaderHash, Point (..), fromRawHash, BlockProtocol)
@@ -94,45 +86,6 @@ import Ouroboros.Network.Block (BlockNo (..), Point (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
 import qualified Ouroboros.Network.Point as Point
 import Ouroboros.Consensus.Protocol.Abstract (ConsensusProtocol)
-
-data SyncEnv = SyncEnv
-  { envProtocol :: !SyncProtocol
-  , envNetworkMagic :: !NetworkMagic
-  , envSystemStart :: !SystemStart
-  , envConnString :: ConnectionString
-  , envRunDelayedMigration :: RunMigration
-  , envBackend :: !(StrictTVar IO (Strict.Maybe SqlBackend))
-  , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)
-  , envIsFixed :: !(StrictTVar IO FixesRan)
-  , envIndexes :: !(StrictTVar IO Bool)
-  , envOptions :: !SyncOptions
-  , envCache :: !Cache
-  , envExtraMigrations :: !(StrictTVar IO ExtraMigrations)
-  , envOfflineWorkQueue :: !(StrictTBQueue IO PoolFetchRetry)
-  , envOfflineResultQueue :: !(StrictTBQueue IO FetchResult)
-  , envEpochState :: !(StrictTVar IO EpochState)
-  , envEpochSyncTime :: !(StrictTVar IO UTCTime)
-  , envLedgerEnv :: !LedgerEnv
-  }
-
--- A representation of if we are using a ledger or not given CLI options
-data LedgerEnv where
-  HasLedger :: HasLedgerEnv -> LedgerEnv
-  NoLedger :: NoLedgerEnv -> LedgerEnv
-
-type RunMigration = DB.MigrationToRun -> IO ()
-
-data FixesRan = NoneFixRan | DataFixRan | AllFixRan
-
-data ConsistentLevel = Consistent | DBAheadOfLedger | Unchecked
-  deriving (Show, Eq)
-
-data ExtraMigrations = ExtraMigrations
-  { emRan :: Bool
-  , emConsume :: Bool
-  , emPrune :: Bool
-  }
-  deriving (Show)
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
 setConsistentLevel env cst = do
@@ -230,24 +183,6 @@ getPrunes env = do
   extraMigr <- liftIO $ readTVarIO $ envExtraMigrations env
   pure $ emPrune extraMigr
 
-data SyncOptions = SyncOptions
-  { soptExtended :: !Bool
-  , soptAbortOnInvalid :: !Bool
-  , soptCache :: !Bool
-  , soptSkipFix :: !Bool
-  , soptOnlyFix :: !Bool
-  , soptInsertOptions :: !InsertOptions
-  , snapshotEveryFollowing :: !Word64
-  , snapshotEveryLagging :: !Word64
-  }
-
-data InsertOptions = InsertOptions
-  { ioMultiAssets :: !Bool
-  , ioMetadata :: !Bool
-  , ioPlutusExtra :: !Bool
-  , ioOfflineData :: !Bool
-  }
-
 fullInsertOptions :: InsertOptions
 fullInsertOptions = InsertOptions True True True True
 
@@ -260,11 +195,6 @@ turboInsertOptions = InsertOptions False False False False
 replaceConnection :: SyncEnv -> SqlBackend -> IO ()
 replaceConnection env sqlBackend = do
   atomically $ writeTVar (envBackend env) $ Strict.Just sqlBackend
-
-data EpochState = EpochState
-  { esInitialized :: !Bool
-  , esEpochNo :: !(Strict.Maybe EpochNo)
-  }
 
 initEpochState :: EpochState
 initEpochState =
@@ -391,27 +321,23 @@ mkSyncEnv ::
   Ledger.Network ->
   NetworkMagic ->
   SystemStart ->
-  Maybe LedgerStateDir ->
-  Bool -> -- shouldUseLedger
-  Bool ->
-  Bool ->
-  Bool ->
+  SyncNodeParams ->
   Bool ->
   RunMigration ->
   IO SyncEnv
-mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart maybeLedgerDir shouldUseLedger ranAll forcedIndexes toConsume toPrune runMigration = do
+mkSyncEnv trce connString syncOptions protoInfo nw nwMagic systemStart syncNodeParams ranMigrations runMigrationFnc = do
   cache <- if soptCache syncOptions then newEmptyCache 250000 50000 else pure uninitiatedCache
   backendVar <- newTVarIO Strict.Nothing
   consistentLevelVar <- newTVarIO Unchecked
-  fixDataVar <- newTVarIO $ if ranAll then DataFixRan else NoneFixRan
-  indexesVar <- newTVarIO forcedIndexes
-  extraMigrVar <- newTVarIO $ initExtraMigrations toConsume toPrune
+  fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
+  indexesVar <- newTVarIO $ enpForceIndexes syncNodeParams
+  extraMigrVar <- newTVarIO $ initExtraMigrations (enpMigrateConsumed syncNodeParams) (enpPruneTxOut syncNodeParams)
   owq <- newTBQueueIO 100
   orq <- newTBQueueIO 100
   epochVar <- newTVarIO initEpochState
   epochSyncTime <- newTVarIO =<< getCurrentTime
   ledgerEnvType <-
-    case (maybeLedgerDir, shouldUseLedger) of
+    case (enpMaybeLedgerStateDir syncNodeParams, enpShouldUseLedger syncNodeParams) of
       (Just dir, True) ->
         HasLedger
           <$> mkHasLedgerEnv
@@ -420,9 +346,7 @@ mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart maybeLedge
             dir
             nw
             systemStart
-            (soptAbortOnInvalid syncOptions)
-            (snapshotEveryFollowing syncOptions)
-            (snapshotEveryLagging syncOptions)
+            syncOptions
       (Nothing, False) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
       (Just _, False) -> do
         logWarning trce $
@@ -437,8 +361,8 @@ mkSyncEnv trce connSring syncOptions protoInfo nw nwMagic systemStart maybeLedge
       { envProtocol = SyncProtocolCardano
       , envNetworkMagic = nwMagic
       , envSystemStart = systemStart
-      , envConnString = connSring
-      , envRunDelayedMigration = runMigration
+      , envConnString = connString
+      , envRunDelayedMigration = runMigrationFnc
       , envBackend = backendVar
       , envOptions = syncOptions
       , envConsistentLevel = consistentLevelVar
@@ -457,16 +381,14 @@ mkSyncEnvFromConfig ::
   Trace IO Text ->
   ConnectionString ->
   SyncOptions ->
-  Maybe LedgerStateDir ->
-  Bool -> -- shouldUseLedger
   GenesisConfig ->
+  SyncNodeParams ->
+  -- | migrations were ran on startup
   Bool ->
-  Bool ->
-  Bool ->
-  Bool ->
+  -- | run migration function
   RunMigration ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce connSring syncOptions maybeLedgerDir shouldUseLedger genCfg ranAll forcedIndexes toConsume toPrune runMigration =
+mkSyncEnvFromConfig trce connString syncOptions genCfg syncNodeParams ranMigration runMigrationFnc =
   case genCfg of
     GenesisCardano _ bCfg sCfg _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -489,19 +411,15 @@ mkSyncEnvFromConfig trce connSring syncOptions maybeLedgerDir shouldUseLedger ge
           Right
             <$> mkSyncEnv
               trce
-              connSring
+              connString
               syncOptions
               (mkProtocolInfoCardano genCfg [])
               (Shelley.sgNetworkId $ scConfig sCfg)
               (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
               (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
-              maybeLedgerDir
-              shouldUseLedger
-              ranAll
-              forcedIndexes
-              toConsume
-              toPrune
-              runMigration
+              syncNodeParams
+              ranMigration
+              runMigrationFnc
 
 -- | 'True' is for in memory points and 'False' for on disk
 getLatestPoints :: SyncEnv -> IO [(CardanoPoint, Bool)]

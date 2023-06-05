@@ -25,6 +25,7 @@ import qualified Cardano.Crypto as Crypto (serializeCborHash)
 import Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Types (SyncEnv (..))
 import Cardano.DbSync.Cache
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Era.Util (liftLookupFail)

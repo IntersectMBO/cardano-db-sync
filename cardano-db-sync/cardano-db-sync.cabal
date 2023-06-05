@@ -43,6 +43,7 @@ library
   exposed-modules:      Cardano.DbSync
 
                         Cardano.DbSync.Api
+                        Cardano.DbSync.Api.Types
                         Cardano.DbSync.Config
                         Cardano.DbSync.Config.Alonzo
                         Cardano.DbSync.Config.Byron
@@ -95,8 +96,9 @@ library
 
                         Cardano.DbSync.Era.Util
 
-                        Cardano.DbSync.LedgerEvent
-                        Cardano.DbSync.LedgerState
+                        Cardano.DbSync.Ledger.Event
+                        Cardano.DbSync.Ledger.State
+                        Cardano.DbSync.Ledger.Types
 
                         Cardano.DbSync.Metrics
 

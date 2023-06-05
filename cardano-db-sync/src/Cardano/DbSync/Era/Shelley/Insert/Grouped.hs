@@ -17,6 +17,7 @@ import Cardano.BM.Trace (Trace, logWarning)
 import Cardano.Db (DbLovelace (..), minIdsToText, textShow)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Types (SyncEnv)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util

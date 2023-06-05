@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Cardano.DbSync.Era (
@@ -8,7 +7,7 @@ module Cardano.DbSync.Era (
   insertValidateGenesisDist,
 ) where
 
-import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Types (SyncEnv)
 import Cardano.DbSync.Config
 import qualified Cardano.DbSync.Era.Byron.Genesis as Byron
 import qualified Cardano.DbSync.Era.Shelley.Genesis as Shelley

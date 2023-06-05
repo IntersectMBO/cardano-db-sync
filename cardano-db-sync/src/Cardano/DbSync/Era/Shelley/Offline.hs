@@ -15,6 +15,7 @@ import Cardano.BM.Trace (Trace, logInfo)
 import Cardano.Db
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv, envOfflineResultQueue, envOfflineWorkQueue)
 import Cardano.DbSync.Era.Shelley.Offline.Http
 import Cardano.DbSync.Era.Shelley.Offline.Query
 import Cardano.DbSync.Types
