@@ -126,11 +126,15 @@ handleEpochWhenFollowing syncEnv cache newestEpochFromMap epochBlockDiffCache ep
         Nothing -> do
           makeEpochWithDBQuery syncEnv cache Nothing epochNo "handleEpochWhenFollowing"
         Just newestEpochFromDb -> do
-          case epochBlockDiffCache of
-            -- There should never be no EpochBlockDiff in cache at this point in the pipeline but just incase!
-            Nothing -> pure $ Left $ NEError "replaceEpoch: No epochBlockDiffCache"
-            -- Let's use both values aquired to calculate our new epoch.
-            Just currentEpCache -> makeEpochWithCacheWhenFollowing syncEnv cache newestEpochFromDb currentEpCache epochNo
+          -- is the epoch from db different to current epochNo then we need to make expensive query
+          if DB.epochNo newestEpochFromDb /= epochNo
+            then makeEpochWithDBQuery syncEnv cache Nothing epochNo "handleEpochWhenFollowing"
+            else
+              case epochBlockDiffCache of
+                -- There should never be no EpochBlockDiff in cache at this point in the pipeline but just incase!
+                Nothing -> pure $ Left $ NEError "replaceEpoch: No epochBlockDiffCache"
+                -- Let's use both values aquired to calculate our new epoch.
+                Just currentEpCache -> makeEpochWithCacheWhenFollowing syncEnv cache newestEpochFromDb currentEpCache epochNo
 
 -- Update the epoch in cache and db, which could be either an update or insert
 -- dependent on if epoch already exists.
@@ -172,13 +176,12 @@ updateEpochWhenSyncing ::
   ReaderT SqlBackend m (Either SyncNodeError ())
 updateEpochWhenSyncing syncEnv cache mEpochBlockDiff mLastMapEpochFromCache epochNo isBoundaryBlock = do
   let trce = getTrace syncEnv
-      isFirstEpoch = epochNo == 0
-      --
-      additionalBlockCount =
-        if isBoundaryBlock && isFirstEpoch then 1 else 0
+      -- make sure to count block if it's a boundary block
+      additionalBlockCount = if isBoundaryBlock then 1 else 0
 
   case mEpochBlockDiff of
-    -- theres should always be a mEpochBlockDiff at this point
+    -- if the flag --disable-cahce is active then we won't have an EpochBlockDiff and instead want to
+    -- use expensive query to make the epoch.
     Nothing -> pure $ Left $ NEError "updateEpochWhenSyncing: No mEpochBlockDiff"
     Just epochBlockDiffCache ->
       case mLastMapEpochFromCache of
