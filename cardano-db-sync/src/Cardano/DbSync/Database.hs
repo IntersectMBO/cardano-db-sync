@@ -74,7 +74,7 @@ runActions ::
   SyncEnv ->
   [DbAction] ->
   ExceptT SyncNodeError IO NextState
-runActions env actions = do
+runActions syncEnv actions = do
   dbAction Continue actions
   where
     dbAction :: NextState -> [DbAction] -> ExceptT SyncNodeError IO NextState
@@ -93,15 +93,15 @@ runActions env actions = do
           -- The db may not rollback to the Node point.
           case (deletedAllBlocks, points) of
             (True, Nothing) -> do
-              liftIO $ setConsistentLevel env Consistent
-              liftIO $ validateConsistentLevel env chainSyncPoint
+              liftIO $ setConsistentLevel syncEnv Consistent
+              liftIO $ validateConsistentLevel syncEnv chainSyncPoint
             (False, Nothing) -> do
-              liftIO $ setConsistentLevel env DBAheadOfLedger
-              liftIO $ validateConsistentLevel env chainSyncPoint
-            _ ->
+              liftIO $ setConsistentLevel syncEnv DBAheadOfLedger
+              liftIO $ validateConsistentLevel syncEnv chainSyncPoint
+            _anyOtherOption ->
               -- No need to validate here
-              liftIO $ setConsistentLevel env DBAheadOfLedger
-          blockNo <- lift $ getDbTipBlockNo env
+              liftIO $ setConsistentLevel syncEnv DBAheadOfLedger
+          blockNo <- lift $ getDbTipBlockNo syncEnv
           lift $ atomically $ putTMVar resultVar (points, blockNo)
           dbAction Continue ys
         (ys, zs) -> do

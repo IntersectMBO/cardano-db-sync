@@ -173,7 +173,24 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
         , DB.blockOpCertCounter = Nothing
         }
 
-  zipWithM_ (insertTx syncEnv blkId) (Byron.blockPayload blk) [0 ..]
+  txFees <- zipWithM (insertByronTx syncEnv blkId) (Byron.blockPayload blk) [0 ..]
+  let byronTxOutValues = concatMap (toList . (\tx -> map Byron.txOutValue (Byron.txOutputs $ Byron.taTx tx))) txs
+      outSum = sum $ map Byron.lovelaceToInteger byronTxOutValues
+
+  -- now that we've inserted the Block and all it's txs lets cache what we'll need
+  -- when we later update the epoch values.
+  void $
+    lift $
+      writeEpochBlockDiffToCache
+        cache
+        EpochBlockDiff
+          { ebdBlockId = blkId
+          , ebdFees = sum txFees
+          , ebdOutSum = fromIntegral outSum
+          , ebdTxCount = fromIntegral $ length txs
+          , ebdEpochNo = unEpochNo (sdEpochNo details)
+          , ebdTime = sdSlotTime details
+          }
 
   liftIO $ do
     let epoch = unEpochNo (sdEpochNo details)
@@ -222,8 +239,8 @@ insertByronTx ::
   DB.BlockId ->
   Byron.TxAux ->
   Word64 ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertTx syncEnv blkId tx blockIndex = do
+  ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
+insertByronTx syncEnv blkId tx blockIndex = do
   resolvedInputs <- mapM resolveTxInputs (toList $ Byron.txInputs (Byron.taTx tx))
   hasConsumed <- liftIO $ getHasConsumed syncEnv
   valFee <- firstExceptT annotateTx $ ExceptT $ pure (calculateTxFee (Byron.taTx tx) resolvedInputs)
@@ -245,12 +262,17 @@ insertTx syncEnv blkId tx blockIndex = do
         , DB.txScriptSize = 0
         }
 
+  -- Insert outputs for a transaction before inputs in case the inputs for this transaction
+  -- references the output (not sure this can even happen).
   lift $ zipWithM_ (insertTxOut tracer hasConsumed txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
   txInIds <- mapM (insertTxIn tracer txId) resolvedInputs
   whenConsumeTxOut syncEnv $
     lift $
       DB.updateListTxOutConsumedByTxInId $
         zip (thrd3 <$> resolvedInputs) txInIds
+  -- fees are being returned so we can sum them and put them in cache to use when updating epochs
+  pure $ unDbLovelace $ vfFee valFee
+
   where
     tracer :: Trace IO Text
     tracer = getTrace syncEnv

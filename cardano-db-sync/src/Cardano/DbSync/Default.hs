@@ -64,7 +64,9 @@ insertListBlocks synEnv blocks = do
     tracer = getTrace synEnv
 
 applyAndInsertBlockMaybe ::
-  SyncEnv -> CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
+  SyncEnv ->
+  CardanoBlock ->
+  ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 applyAndInsertBlockMaybe syncEnv cblk = do
   bl <- liftIO $ isConsistent syncEnv
   (!applyRes, !tookSnapshot) <- liftIO (mkApplyResult bl)
@@ -173,7 +175,8 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
         insertShelley $
           Generic.fromBabbageBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
     BlockConway _blk -> panic "TODO: Conway 1"
-  insertEpoch details
+  -- update the epoch
+  updateEpoch details isNewEpochEvent
   whenPruneTxOut syncEnv $
     when (unBlockNo blkNo `mod` getPruneInterval syncEnv == 0) $ do
       lift $ DB.deleteConsumedTxOut tracer (getSafeBlockNoDiff syncEnv)

@@ -128,8 +128,24 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
     let txInserter = insertTx syncEnv isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
-    grouped <- foldM (\grouped (idx, tx) -> txInserter idx tx grouped) mempty zippedTx
-    minIds <- insertBlockGroupedData syncEnv grouped
+    blockGroupedData <- foldM (\gp (idx, tx) -> txInserter idx tx gp) mempty zippedTx
+    minIds <- insertBlockGroupedData syncEnv blockGroupedData
+
+    -- now that we've inserted the Block and all it's txs lets cache what we'll need
+    -- when we later update the epoch values.
+    void $
+      lift $
+        writeEpochBlockDiffToCache
+          cache
+          EpochBlockDiff
+            { ebdBlockId = blkId
+            , ebdTime = sdSlotTime details
+            , ebdFees = groupedTxFees blockGroupedData
+            , ebdEpochNo = unEpochNo (sdEpochNo details)
+            , ebdOutSum = fromIntegral $ groupedTxOutSum blockGroupedData
+            , ebdTxCount = fromIntegral $ length (Generic.blkTxs blk)
+            }
+
     when withinHalfHour $
       insertReverseIndex blkId minIds
 
@@ -233,11 +249,11 @@ insertTx ::
   Generic.Tx ->
   BlockGroupedData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) BlockGroupedData
-insertTx syncEnv isMember blkId epochNo slotNo blockIndex tx grouped = do
+insertTx syncEnv isMember blkId epochNo slotNo blockIndex tx blockGroupData = do
   hasConsumed <- liftIO $ getHasConsumed syncEnv
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
       !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
-  !resolvedInputs <- mapM (resolveTxInputs hasConsumed (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
+  !resolvedInputs <- mapM (resolveTxInputs hasConsumed (fst <$> groupedTxOut blockGroupData)) (Generic.txInputs tx)
   let !inSum = sum $ map (unDbLovelace . forth4) resolvedInputs
   let diffSum = if inSum >= outSum then inSum - outSum else 0
   let !fees = maybe diffSum (fromIntegral . unCoin) (Generic.txFees tx)
@@ -307,7 +323,7 @@ insertTx syncEnv isMember blkId epochNo slotNo blockIndex tx grouped = do
       mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
-      pure $ grouped <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint
+      pure (blockGroupData <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint fees outSum)
   where
     tracer = getTrace syncEnv
     cache = envCache syncEnv
