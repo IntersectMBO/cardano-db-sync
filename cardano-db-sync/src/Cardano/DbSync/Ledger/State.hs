@@ -10,14 +10,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module  Cardano.DbSync.Ledger.State (
-  CardanoLedgerState (..),
-  LedgerEnv (..),
-  HasLedgerEnv (..),
-  LedgerEvent (..),
-  ApplyResult (..),
-  LedgerStateFile (..),
-  SnapshotPoint (..),
+module Cardano.DbSync.Ledger.State (
   applyBlock,
   defaultApplyResult,
   mkHasLedgerEnv,
@@ -35,7 +28,6 @@ module  Cardano.DbSync.Ledger.State (
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
 import Cardano.Binary (Decoder, DecoderError)
 import qualified Cardano.Binary as Serialize
-import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Cardano.Util as Cardano
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -61,17 +53,18 @@ import Cardano.Slotting.Slot (
   at,
   fromWithOrigin,
  )
-import Control.Concurrent.STM.TBQueue (TBQueue, newTBQueueIO, readTBQueue, writeTBQueue)
 import Control.Concurrent.Class.MonadSTM.Strict (
   atomically,
   newTVarIO,
   readTVar,
   writeTVar,
  )
+import Control.Concurrent.STM.TBQueue (TBQueue, newTBQueueIO, readTBQueue, writeTBQueue)
 import qualified Control.Exception as Exception
 
 import qualified Data.ByteString.Base16 as Base16
 
+import Cardano.DbSync.Api.Types (LedgerEnv (..), SyncOptions (..))
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
@@ -149,7 +142,6 @@ pruneLedgerDb :: Word64 -> LedgerDB -> LedgerDB
 pruneLedgerDb k db =
   db {ledgerDbCheckpoints = AS.anchorNewest k (ledgerDbCheckpoints db)}
 {-# INLINE pruneLedgerDb #-}
-
 
 -- | The ledger state at the tip of the chain
 ledgerDbCurrent :: LedgerDB -> CardanoLedgerState
@@ -320,8 +312,7 @@ saveCurrentLedgerState env lState mEpochNo = do
           logInfo (leTrace env) $
             mconcat
               ["File ", Text.pack file, " exists"]
-        else
-          atomically $ writeTBQueue (leStateWriteQueue env) (file, lState)
+        else atomically $ writeTBQueue (leStateWriteQueue env) (file, lState)
 
 runLedgerStateWriteThread :: Trace IO Text -> LedgerEnv -> IO ()
 runLedgerStateWriteThread tracer lenv =
@@ -331,7 +322,7 @@ runLedgerStateWriteThread tracer lenv =
 
 ledgerStateWriteLoop :: Trace IO Text -> TBQueue (FilePath, CardanoLedgerState) -> CodecConfig CardanoBlock -> IO ()
 ledgerStateWriteLoop tracer swQueue codecConfig =
-    loop
+  loop
   where
     loop :: IO ()
     loop = do
@@ -339,29 +330,29 @@ ledgerStateWriteLoop tracer swQueue codecConfig =
       writeLedgerStateFile file ledger
       loop
 
-    writeLedgerStateFile :: FilePath -> CardanoLedgerState ->  IO ()
+    writeLedgerStateFile :: FilePath -> CardanoLedgerState -> IO ()
     writeLedgerStateFile file ledger = do
-          startTime <- getCurrentTime
-          -- TODO: write the builder directly.
-          -- BB.writeFile file $ toBuilder $
-          LBS.writeFile file $
-            Serialize.serialize $
-              encodeCardanoLedgerState
-                ( Consensus.encodeExtLedgerState
-                    (encodeDisk codecConfig)
-                    (encodeDisk codecConfig)
-                    (encodeDisk codecConfig)
-                )
-                ledger
-          endTime <- getCurrentTime
-          logInfo tracer $
-            mconcat
-              [ "Asynchronously wrote a ledger snapshot to "
-              , Text.pack file
-              , " in "
-              , textShow (diffUTCTime endTime startTime)
-              , "."
-              ]
+      startTime <- getCurrentTime
+      -- TODO: write the builder directly.
+      -- BB.writeFile file $ toBuilder $
+      LBS.writeFile file $
+        Serialize.serialize $
+          encodeCardanoLedgerState
+            ( Consensus.encodeExtLedgerState
+                (encodeDisk codecConfig)
+                (encodeDisk codecConfig)
+                (encodeDisk codecConfig)
+            )
+            ledger
+      endTime <- getCurrentTime
+      logInfo tracer $
+        mconcat
+          [ "Asynchronously wrote a ledger snapshot to "
+          , Text.pack file
+          , " in "
+          , textShow (diffUTCTime endTime startTime)
+          , "."
+          ]
 
 mkLedgerStateFilename :: LedgerStateDir -> ExtLedgerState CardanoBlock -> Maybe EpochNo -> WithOrigin FilePath
 mkLedgerStateFilename dir ledger mEpochNo =
@@ -643,8 +634,6 @@ loadLedgerStateFromFile tracer config delete point lsf = do
           (decodeDisk codecConfig)
           (decodeDisk codecConfig)
           (decodeDisk codecConfig)
-
-data SnapshotPoint = OnDisk LedgerStateFile | InMemory CardanoPoint
 
 getSlotNoSnapshot :: SnapshotPoint -> WithOrigin SlotNo
 getSlotNoSnapshot (OnDisk lsf) = at $ lsfSlotNo lsf

@@ -18,7 +18,7 @@ import Cardano.DbSync.Types (
   CardanoBlock,
   CardanoInterpreter,
   PoolKeyHash,
-  SlotDetails,
+  SlotDetails, CardanoPoint,
  )
 import Cardano.Ledger.Alonzo.Scripts (Prices)
 import qualified Cardano.Ledger.BaseTypes as Ledger
@@ -136,3 +136,5 @@ newtype LedgerDB = LedgerDB
 instance Anchorable (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState where
   asAnchor = id
   getAnchorMeasure _ = getTipSlot . clsState
+
+data SnapshotPoint = OnDisk LedgerStateFile | InMemory CardanoPoint

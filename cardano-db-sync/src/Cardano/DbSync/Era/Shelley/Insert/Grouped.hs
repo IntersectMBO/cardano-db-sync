@@ -44,6 +44,8 @@ data BlockGroupedData = BlockGroupedData
   , groupedTxOut :: ![(ExtendedTxOut, [MissingMaTxOut])]
   , groupedTxMetadata :: ![DB.TxMetadata]
   , groupedTxMint :: ![DB.MaTxMint]
+  , groupedTxFees :: !Word64
+  , groupedTxOutSum :: !Word64
   }
 
 -- | While we collect data, we don't have access yet to the 'TxOutId', since
@@ -67,7 +69,7 @@ data ExtendedTxIn = ExtendedTxIn
   deriving (Show)
 
 instance Monoid BlockGroupedData where
-  mempty = BlockGroupedData [] [] [] []
+  mempty = BlockGroupedData [] [] [] [] 0 0
 
 instance Semigroup BlockGroupedData where
   tgd1 <> tgd2 =
@@ -76,6 +78,8 @@ instance Semigroup BlockGroupedData where
       (groupedTxOut tgd1 <> groupedTxOut tgd2)
       (groupedTxMetadata tgd1 <> groupedTxMetadata tgd2)
       (groupedTxMint tgd1 <> groupedTxMint tgd2)
+      (groupedTxFees tgd1 + groupedTxFees tgd2)
+      (groupedTxOutSum tgd1 + groupedTxOutSum tgd2)
 
 insertBlockGroupedData ::
   (MonadBaseControl IO m, MonadIO m) =>

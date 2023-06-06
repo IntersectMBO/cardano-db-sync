@@ -80,6 +80,11 @@ jobs:
         ls -al /var/run/postgresql/.s.PGSQL.5432 || true
         ls -al || true
 
+    - name: Debug Pkgconfig
+      run: |
+        echo $PKG_CONFIG_PATH
+        pkg-config --list-all
+
     - name: Haskell versions
       run: |
         ghc --version

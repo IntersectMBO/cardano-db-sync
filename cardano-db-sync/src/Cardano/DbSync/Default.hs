@@ -11,9 +11,15 @@ module Cardano.DbSync.Default (
 import Cardano.BM.Trace (logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (ConsistentLevel (..), InsertOptions (..), LedgerEnv (..), SyncEnv (..), SyncOptions (..))
-import Cardano.DbSync.Cache
-import Cardano.DbSync.Epoch
+import Cardano.DbSync.Api.Types (
+  ConsistentLevel (..),
+  InsertOptions (..),
+  LedgerEnv (..),
+  SyncEnv (..),
+  SyncOptions (..),
+ )
+import Cardano.DbSync.Cache.Types (textShowStats)
+import Cardano.DbSync.Epoch (epochHandler)
 import Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
 import Cardano.DbSync.Era.Shelley.Adjust (adjustEpochRewards)
@@ -22,12 +28,9 @@ import Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock, mkAdaPots)
 import Cardano.DbSync.Era.Shelley.Insert.Epoch (insertPoolDepositRefunds, insertRewards)
 import Cardano.DbSync.Era.Shelley.Validate (validateEpochRewards)
 import Cardano.DbSync.Error
-import Cardano.DbSync.Ledger.State (
-  ApplyResult (..),
-  LedgerEvent (..),
-  applyBlockAndSnapshot,
-  defaultApplyResult,
- )
+import Cardano.DbSync.Ledger.Event (LedgerEvent (..))
+import Cardano.DbSync.Ledger.State (applyBlockAndSnapshot, defaultApplyResult)
+import Cardano.DbSync.Ledger.Types (ApplyResult (..))
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Rollback
 import Cardano.DbSync.Types
@@ -63,7 +66,9 @@ insertListBlocks synEnv blocks = do
     tracer = getTrace synEnv
 
 applyAndInsertBlockMaybe ::
-  SyncEnv -> CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
+  SyncEnv ->
+  CardanoBlock ->
+  ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 applyAndInsertBlockMaybe syncEnv cblk = do
   bl <- liftIO $ isConsistent syncEnv
   (!applyRes, !tookSnapshot) <- liftIO (mkApplyResult bl)
@@ -119,7 +124,9 @@ insertBlock ::
   SyncEnv ->
   CardanoBlock ->
   ApplyResult ->
+  -- is first Block after rollback
   Bool ->
+  -- has snapshot been taken
   Bool ->
   ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
@@ -129,23 +136,26 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   let !withinTwoMin = isWithinTwoMin details
   let !withinHalfHour = isWithinHalfHour details
   insertLedgerEvents syncEnv (sdEpochNo details) (apEvents applyResult)
-  let shouldLog = hasEpochStartEvent (apEvents applyResult) || firstAfterRollback
+  let isNewEpochEvent = hasNewEpochEvent (apEvents applyResult)
+  let isStartEventOrRollback = hasEpochStartEvent (apEvents applyResult) || firstAfterRollback
   let isMember poolId = Set.member poolId (apPoolsRegistered applyResult)
   let insertShelley blk =
         insertShelleyBlock
           syncEnv
-          shouldLog
+          isStartEventOrRollback
           withinTwoMin
           withinHalfHour
           blk
           details
           isMember
-          (apNewEpoch applyResult)
-          (apStakeSlice applyResult)
+          applyResult
+
+  -- Here we insert the block and it's txs, but in adition we also cache some values which we later
+  -- use when updating the Epoch, thus saving us having to recalulating them later.
   case cblk of
     BlockByron blk ->
       newExceptT $
-        insertByronBlock syncEnv shouldLog blk details
+        insertByronBlock syncEnv isStartEventOrRollback blk details
     BlockShelley blk ->
       newExceptT $
         insertShelley $
@@ -167,7 +177,8 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
         insertShelley $
           Generic.fromBabbageBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
     BlockConway _blk -> panic "TODO: Conway 1"
-  insertEpoch details
+  -- update the epoch
+  updateEpoch details isNewEpochEvent
   whenPruneTxOut syncEnv $
     when (unBlockNo blkNo `mod` getPruneInterval syncEnv == 0) $ do
       lift $ DB.deleteConsumedTxOut tracer (getSafeBlockNoDiff syncEnv)
@@ -176,10 +187,15 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
     tracer = getTrace syncEnv
     iopts = getInsertOptions syncEnv
 
-    insertEpoch details =
+    updateEpoch details isNewEpochEvent =
       when (soptExtended $ envOptions syncEnv)
         . newExceptT
-        $ epochInsert tracer (BlockDetails cblk details)
+        $ epochHandler
+          syncEnv
+          tracer
+          (envCache syncEnv)
+          isNewEpochEvent
+          (BlockDetails cblk details)
 
     getPrices :: ApplyResult -> Maybe Ledger.Prices
     getPrices applyResult = case apPrices applyResult of
@@ -284,4 +300,13 @@ hasEpochStartEvent = any isNewEpoch
       case le of
         LedgerNewEpoch {} -> True
         LedgerStartAtEpoch {} -> True
+        _otherwise -> False
+
+hasNewEpochEvent :: [LedgerEvent] -> Bool
+hasNewEpochEvent = any isNewEpoch
+  where
+    isNewEpoch :: LedgerEvent -> Bool
+    isNewEpoch le =
+      case le of
+        LedgerNewEpoch {} -> True
         _otherwise -> False

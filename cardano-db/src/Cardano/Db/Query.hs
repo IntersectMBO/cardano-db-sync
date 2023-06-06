@@ -28,6 +28,7 @@ module Cardano.Db.Query (
   queryLatestBlock,
   queryLatestPoints,
   queryLatestEpochNo,
+  queryEpochNoForLastTwoBlocks,
   queryLatestBlockId,
   queryLatestSlotNo,
   queryMeta,
@@ -44,7 +45,10 @@ module Cardano.Db.Query (
   queryTxOutValue,
   queryTxOutValue2,
   queryTxOutCredentials,
+  queryEpochFromNum,
   queryEpochStakeCount,
+  queryForEpochId,
+  queryLatestEpoch,
   queryMinRefId,
   queryMaxRefId,
   existsPoolHashId,
@@ -171,7 +175,7 @@ import Database.Esqueleto.Experimental (
   (?.),
   (^.),
   (||.),
-  type (:&) ((:&)),
+  type (:&) ((:&)), selectOne,
  )
 import Database.Persist.Class.PersistQuery (selectList)
 import Database.Persist.Types (SelectOpt (Asc))
@@ -288,16 +292,52 @@ queryBlockId hash = do
     pure $ blk ^. BlockId
   pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
 
+-----------------------------------------------------------------------------------------------
 -- | Calculate the Epoch table entry for the specified epoch.
 -- When syncing the chain or filling an empty table, this is called at each epoch boundary to
 -- calculate the Epoch entry for the last epoch.
--- When following the chain, this is called for each new block of the current epoch.
+
 queryCalcEpochEntry :: MonadIO m => Word64 -> ReaderT SqlBackend m Epoch
 queryCalcEpochEntry epochNum = do
-  blkRes <- select $ do
-    blk <- from $ table @Block
-    where_ (blk ^. BlockEpochNo ==. just (val epochNum))
-    pure (countRows, min_ (blk ^. BlockTime), max_ (blk ^. BlockTime))
+  blockResult <- select $ do
+    block <- from $ table @Block
+    where_ (block ^. BlockEpochNo ==. just (val epochNum))
+    pure (countRows, min_ (block ^. BlockTime), max_ (block ^. BlockTime))
+  queryTxWithBlocks epochNum blockResult
+
+-- | Get the PostgreSQL row index (EpochId) that matches the given epoch number.
+queryForEpochId :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe EpochId)
+queryForEpochId epochNum = do
+  res <- selectOne $ do
+    epoch <- from $ table @Epoch
+    where_ (epoch ^. EpochNo ==. val epochNum)
+    pure (epoch ^. EpochId)
+  pure $ unValue <$> res
+
+-- | Get an epoch given it's number.
+queryEpochFromNum :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Epoch)
+queryEpochFromNum epochNum = do
+  res <- selectOne $ do
+    epoch <- from $ table @Epoch
+    where_ (epoch ^. EpochNo ==. val epochNum)
+    pure epoch
+  pure $ entityVal <$> res
+
+-- | Get the most recent epoch in the Epoch DB table.
+queryLatestEpoch :: MonadIO m => ReaderT SqlBackend m (Maybe Epoch)
+queryLatestEpoch = do
+  res <- selectOne $ do
+    epoch <- from $ table @Epoch
+    orderBy [desc (epoch ^. EpochNo)]
+    pure epoch
+  pure $ entityVal <$> res
+
+queryTxWithBlocks ::
+  MonadIO m =>
+  Word64 ->
+  [(Value Word64, Value (Maybe UTCTime), Value (Maybe UTCTime))]
+  -> ReaderT SqlBackend m Epoch
+queryTxWithBlocks epochNum blockResult = do
   txRes <- select $ do
     (tx :& blk) <-
       from
@@ -306,52 +346,55 @@ queryCalcEpochEntry epochNum = do
         `on` (\(tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
     where_ (blk ^. BlockEpochNo ==. just (val epochNum))
     pure (sum_ (tx ^. TxOutSum), sum_ (tx ^. TxFee), count (tx ^. TxOutSum))
-  case (listToMaybe blkRes, listToMaybe txRes) of
-    (Just blk, Just tx) -> pure $ convertAll (unValue3 blk) (unValue3 tx)
-    (Just blk, Nothing) -> pure $ convertBlk (unValue3 blk)
-    _otherwise -> pure emptyEpoch
-  where
-    convertAll ::
-      (Word64, Maybe UTCTime, Maybe UTCTime) ->
-      (Maybe Rational, Maybe Rational, Word64) ->
+  case (listToMaybe blockResult, listToMaybe txRes) of
+    (Just blk, Just tx) -> pure $ parseAndCalulateNewEpoch epochNum (unValue3 blk) (unValue3 tx)
+    (Just blk, Nothing) -> pure $ convertBlk epochNum (unValue3 blk)
+    _otherwise -> pure $ emptyEpoch epochNum
+
+parseAndCalulateNewEpoch ::
+  Word64 ->
+  (Word64, Maybe UTCTime, Maybe UTCTime) ->
+  (Maybe Rational, Maybe Rational, Word64) ->
+  Epoch
+parseAndCalulateNewEpoch epochNum (blkCount, minBlockTime, maxBlockTime) (sumTxOut, sumTxFee, txCount) =
+  case (minBlockTime, maxBlockTime, sumTxOut, sumTxFee) of
+    (Just start, Just end, Just outSum, Just fees) ->
       Epoch
-    convertAll (blkCount, b, c) (d, e, txCount) =
-      case (b, c, d, e) of
-        (Just start, Just end, Just outSum, Just fees) ->
-          Epoch
-            (fromIntegral $ numerator outSum)
-            (DbLovelace . fromIntegral $ numerator fees)
-            txCount
-            blkCount
-            epochNum
-            start
-            end
-        (Just start, Just end, Nothing, Nothing) ->
-          Epoch 0 (DbLovelace 0) txCount blkCount epochNum start end
-        _otherwise ->
-          emptyEpoch
+        (fromIntegral $ numerator outSum)
+        (DbLovelace . fromIntegral $ numerator fees)
+        txCount
+        blkCount
+        epochNum
+        start
+        end
+    (Just start, Just end, Nothing, Nothing) ->
+      Epoch 0 (DbLovelace 0) txCount blkCount epochNum start end
+    _otherwise ->
+      emptyEpoch epochNum
 
-    convertBlk :: (Word64, Maybe UTCTime, Maybe UTCTime) -> Epoch
-    convertBlk (blkCount, b, c) =
-      case (b, c) of
-        (Just start, Just end) -> Epoch 0 (DbLovelace 0) 0 blkCount epochNum start end
-        _otherwise -> emptyEpoch
+convertBlk :: Word64 -> (Word64, Maybe UTCTime, Maybe UTCTime) -> Epoch
+convertBlk epochNum (blkCount, b, c) =
+  case (b, c) of
+    (Just start, Just end) -> Epoch 0 (DbLovelace 0) 0 blkCount epochNum start end
+    _otherwise -> emptyEpoch epochNum
 
-    -- We only return this when something has screwed up.
-    emptyEpoch :: Epoch
-    emptyEpoch =
-      Epoch
-        { epochOutSum = 0
-        , epochFees = DbLovelace 0
-        , epochTxCount = 0
-        , epochBlkCount = 0
-        , epochNo = epochNum
-        , epochStartTime = defaultUTCTime
-        , epochEndTime = defaultUTCTime
-        }
+-- We only return this when something has screwed up.
+emptyEpoch :: Word64 -> Epoch
+emptyEpoch epochNum =
+  Epoch
+    { epochOutSum = 0
+    , epochFees = DbLovelace 0
+    , epochTxCount = 0
+    , epochBlkCount = 0
+    , epochNo = epochNum
+    , epochStartTime = defaultUTCTime
+    , epochEndTime = defaultUTCTime
+    }
 
-    defaultUTCTime :: UTCTime
-    defaultUTCTime = read "2000-01-01 00:00:00.000000 UTC"
+defaultUTCTime :: UTCTime
+defaultUTCTime = read "2000-01-01 00:00:00.000000 UTC"
+
+-----------------------------------------------------------------------------------------------
 
 queryCurrentEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
 queryCurrentEpochNo = do
@@ -455,6 +498,17 @@ queryLatestEpochNo = do
     limit 1
     pure (blk ^. BlockEpochNo)
   pure $ fromMaybe 0 (unValue =<< listToMaybe res)
+
+-- return the epochNo for last 2 blocks
+queryEpochNoForLastTwoBlocks :: MonadIO m => ReaderT SqlBackend m [Word64]
+queryEpochNoForLastTwoBlocks = do
+  res <- select $ do
+    blk <- from $ table @Block
+    where_ (isJust $ blk ^. BlockSlotNo)
+    orderBy [desc (blk ^. BlockEpochNo)]
+    limit 2
+    pure (blk ^. BlockEpochNo)
+  pure $ [fromMaybe 0 (unValue x) | x <- res]
 
 -- | Get 'BlockId' of the latest block.
 queryLatestBlockId :: MonadIO m => ReaderT SqlBackend m (Maybe BlockId)
