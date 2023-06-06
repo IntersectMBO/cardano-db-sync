@@ -30,7 +30,20 @@ import qualified Cardano.Crypto.Hashing as Crypto
 import Cardano.Db (DbLovelace (..), DbWord64 (..), PoolUrl (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Cache
+import Cardano.DbSync.Cache (
+  insertBlockAndCache,
+  insertDatumAndCache,
+  insertPoolKeyWithCache,
+  queryDatum,
+  queryMAWithCache,
+  queryPoolKeyWithCache,
+  queryPrevBlockWithCache,
+  queryRewardAccountWithCache,
+  queryRewardAccountWithCacheRetBs,
+  queryStakeAddrWithCache,
+ )
+import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
+import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..), EpochBlockDiff (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Era.Shelley.Insert.Epoch
@@ -39,6 +52,7 @@ import Cardano.DbSync.Era.Shelley.Offline
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util (liftLookupFail, safeDecodeToJson)
 import Cardano.DbSync.Error
+import Cardano.DbSync.Ledger.Types (ApplyResult (..))
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import qualified Cardano.Ledger.Address as Ledger
@@ -63,7 +77,6 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import Data.Either.Extra (eitherToMaybe)
 import Data.Group (invert)
 import qualified Data.Map.Strict as Map
-import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text.Encoding as Text
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
@@ -82,22 +95,22 @@ insertShelleyBlock ::
   Generic.Block ->
   SlotDetails ->
   IsPoolMember ->
-  Strict.Maybe Generic.NewEpoch ->
-  Generic.StakeSliceRes ->
+  ApplyResult ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details isMember mNewEpoch stakeSlice = do
+insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details isMember applyResult = do
   runExceptT $ do
     pbid <- case Generic.blkPreviousHash blk of
       Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
       Just pHash -> queryPrevBlockWithCache (renderErrorMessage (Generic.blkEra blk)) cache pHash
     mPhid <- lift $ queryPoolKeyWithCache cache CacheNew $ coerceKeyRole $ Generic.blkSlotLeader blk
+    let epochNo = sdEpochNo details
 
     slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (Generic.unKeyHashRaw $ Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
     blkId <-
       lift . insertBlockAndCache cache $
         DB.Block
           { DB.blockHash = Generic.blkHash blk
-          , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
+          , DB.blockEpochNo = Just $ unEpochNo epochNo
           , DB.blockSlotNo = Just $ unSlotNo (Generic.blkSlotNo blk)
           , DB.blockEpochSlotNo = Just $ unEpochSlot (sdEpochSlot details)
           , DB.blockBlockNo = Just $ unBlockNo (Generic.blkBlockNo blk)
@@ -116,13 +129,29 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
     let txInserter = insertTx syncEnv isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
-    grouped <- foldM (\grouped (idx, tx) -> txInserter idx tx grouped) mempty zippedTx
-    minIds <- insertBlockGroupedData syncEnv grouped
+    blockGroupedData <- foldM (\gp (idx, tx) -> txInserter idx tx gp) mempty zippedTx
+    minIds <- insertBlockGroupedData syncEnv blockGroupedData
+
+    -- now that we've inserted the Block and all it's txs lets cache what we'll need
+    -- when we later update the epoch values.
+    void $
+      lift $
+        writeEpochBlockDiffToCache
+          cache
+          EpochBlockDiff
+            { ebdBlockId = blkId
+            , ebdTime = sdSlotTime details
+            , ebdFees = groupedTxFees blockGroupedData
+            , ebdEpochNo = unEpochNo (sdEpochNo details)
+            , ebdOutSum = fromIntegral $ groupedTxOutSum blockGroupedData
+            , ebdTxCount = fromIntegral $ length (Generic.blkTxs blk)
+            }
+
     when withinHalfHour $
       insertReverseIndex blkId minIds
 
     liftIO $ do
-      let epoch = unEpochNo (sdEpochNo details)
+      let epoch = unEpochNo epochNo
           slotWithinEpoch = unEpochSlot (sdEpochSlot details)
 
       when (withinTwoMins && slotWithinEpoch /= 0 && unBlockNo (Generic.blkBlockNo blk) `mod` 20 == 0) $ do
@@ -141,7 +170,7 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
         mconcat
           [ renderInsertName (Generic.blkEra blk)
           , ": epoch "
-          , textShow (unEpochNo $ sdEpochNo details)
+          , textShow (unEpochNo epochNo)
           , ", slot "
           , textShow (unSlotNo $ Generic.blkSlotNo blk)
           , ", block "
@@ -150,10 +179,10 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
           , renderByteArray (Generic.blkHash blk)
           ]
 
-    whenStrictJust mNewEpoch $ \newEpoch -> do
-      insertOnNewEpoch tracer blkId (Generic.blkSlotNo blk) (sdEpochNo details) newEpoch
+    whenStrictJust (apNewEpoch applyResult) $ \newEpoch -> do
+      insertOnNewEpoch tracer blkId (Generic.blkSlotNo blk) epochNo newEpoch
 
-    insertStakeSlice syncEnv stakeSlice
+    insertStakeSlice syncEnv $ apStakeSlice applyResult
 
     when (ioOfflineData iopts && unBlockNo (Generic.blkBlockNo blk) `mod` offlineModBase == 0)
       . lift
@@ -221,11 +250,11 @@ insertTx ::
   Generic.Tx ->
   BlockGroupedData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) BlockGroupedData
-insertTx syncEnv isMember blkId epochNo slotNo blockIndex tx grouped = do
+insertTx syncEnv isMember blkId epochNo slotNo blockIndex tx blockGroupData = do
   hasConsumed <- liftIO $ getHasConsumed syncEnv
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
       !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
-  !resolvedInputs <- mapM (resolveTxInputs hasConsumed (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
+  !resolvedInputs <- mapM (resolveTxInputs hasConsumed (fst <$> groupedTxOut blockGroupData)) (Generic.txInputs tx)
   let !inSum = sum $ map (unDbLovelace . forth4) resolvedInputs
   let diffSum = if inSum >= outSum then inSum - outSum else 0
   let !fees = maybe diffSum (fromIntegral . unCoin) (Generic.txFees tx)
@@ -255,13 +284,15 @@ insertTx syncEnv isMember blkId epochNo slotNo blockIndex tx grouped = do
       !txOutsGrouped <- mapM (prepareTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
 
       let !txIns = map (prepareTxIn txId Map.empty) resolvedInputs
-      pure $ grouped <> BlockGroupedData txIns txOutsGrouped [] []
+      -- There is a custom semigroup instance for BlockGroupedData which uses addition for the values `fees` and `outSum`.
+      -- Same happens bellow on last line of this function.
+      pure (blockGroupData <> BlockGroupedData txIns txOutsGrouped [] [] fees outSum)
     else do
       -- The following operations only happen if the script passes stage 2 validation (or the tx has
       -- no script).
       !txOutsGrouped <- mapM (prepareTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
 
-      !redeemers <- Map.fromList <$> mapM (insertRedeemer tracer (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx)
+      !redeemers <- Map.fromList <$> mapM (insertRedeemer tracer (fst <$> groupedTxOut blockGroupData) txId) (Generic.txRedeemer tx)
 
       when (ioPlutusExtra iopts) $
         mapM_ (insertDatum tracer cache txId) (Generic.txData tx)
@@ -293,13 +324,12 @@ insertTx syncEnv isMember blkId epochNo slotNo blockIndex tx grouped = do
       mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
-      pure $ grouped <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint
+      pure (blockGroupData <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint fees outSum)
   where
     tracer = getTrace syncEnv
     cache = envCache syncEnv
     iopts = getInsertOptions syncEnv
     network = getNetwork syncEnv
-
 
 prepareTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -529,7 +559,7 @@ insertPoolRegister _tracer cache isMember network (EpochNo epoch) blkId txId idx
   mapM_ (insertPoolOwner cache network poolUpdateId txId) $ toList (Shelley.ppOwners params)
   mapM_ (insertPoolRelay poolUpdateId) $ toList (Shelley.ppRelays params)
   where
-    mkEpochActivationDelay :: MonadIO m => DB.PoolHashId -> ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
+    mkEpochActivationDelay :: (MonadIO m) => DB.PoolHashId -> ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
     mkEpochActivationDelay poolHashId =
       if isMember (Shelley.ppId params)
         then pure 3
@@ -1145,7 +1175,7 @@ insertScript tracer txId script = do
           , DB.scriptBytes = Generic.txScriptCBOR script
           }
   where
-    scriptConvert :: MonadIO m => Generic.TxScript -> m (Maybe Text)
+    scriptConvert :: (MonadIO m) => Generic.TxScript -> m (Maybe Text)
     scriptConvert s =
       maybe (pure Nothing) (safeDecodeToJson tracer "insertScript") (Generic.txScriptJson s)
 

@@ -13,6 +13,7 @@ import Data.Version (makeVersion, showVersion, versionBranch)
 import Ouroboros.Network.Block hiding (blockHash)
 import Paths_cardano_db_tool (version)
 import System.Info (arch, os)
+import Cardano.DbSync.Ledger.Types (LedgerStateFile (..))
 
 newtype PrepareSnapshotArgs = PrepareSnapshotArgs
   { unPrepareSnapshotArgs :: LedgerStateDir

@@ -9,9 +9,13 @@ module Cardano.DbSync.Era.Shelley.Adjust (
 
 import Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Db as Db
-import Cardano.DbSync.Cache
+import Cardano.DbSync.Cache (
+  queryPoolKeyWithCache,
+  queryStakeAddrWithCache,
+ )
+import Cardano.DbSync.Cache.Types (Cache, CacheNew (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic.Rewards as Generic
-import Cardano.DbSync.Types
+import Cardano.DbSync.Types (StakeCred)
 import Cardano.Ledger.BaseTypes (Network)
 import Cardano.Prelude hiding (from, groupBy, on)
 import Cardano.Slotting.Slot (EpochNo (..))

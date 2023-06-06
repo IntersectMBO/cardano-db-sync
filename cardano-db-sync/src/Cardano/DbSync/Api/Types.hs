@@ -15,7 +15,7 @@ module Cardano.DbSync.Api.Types (
 ) where
 
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Cache (Cache)
+import Cardano.DbSync.Cache.Types (Cache)
 import Cardano.DbSync.Config.Types (SyncProtocol)
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv)
 import Cardano.DbSync.LocalStateQuery (NoLedgerEnv)

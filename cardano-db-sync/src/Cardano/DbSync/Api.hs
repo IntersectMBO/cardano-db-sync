@@ -5,7 +5,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE FlexibleContexts #-}
 
 module Cardano.DbSync.Api (
   fullInsertOptions,
@@ -52,12 +51,19 @@ import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types
-import Cardano.DbSync.Cache
+import Cardano.DbSync.Cache.Types (newEmptyCache, uninitiatedCache)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Error
-import Cardano.DbSync.Ledger.State (HasLedgerEnv (..), LedgerEvent (..), LedgerStateFile (..), SnapshotPoint (..), getHeaderHash, hashToAnnotation, listKnownSnapshots, mkHasLedgerEnv)
+import Cardano.DbSync.Ledger.Event (LedgerEvent (..))
+import Cardano.DbSync.Ledger.State (
+  getHeaderHash,
+  hashToAnnotation,
+  listKnownSnapshots,
+  mkHasLedgerEnv,
+ )
+import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..), LedgerStateFile (..), SnapshotPoint (..))
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
@@ -77,15 +83,14 @@ import qualified Data.Strict.Maybe as Strict
 import Data.Time.Clock (getCurrentTime)
 import Database.Persist.Postgresql (ConnectionString)
 import Database.Persist.Sql (SqlBackend)
-import Ouroboros.Consensus.Block.Abstract (HeaderHash, Point (..), fromRawHash, BlockProtocol)
+import Ouroboros.Consensus.Block.Abstract (HeaderHash, Point (..), fromRawHash)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
-import Ouroboros.Consensus.Config (TopLevelConfig, SecurityParam (..), configSecurityParam)
-import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo (pInfoConfig))
+import Ouroboros.Consensus.Config (TopLevelConfig)
+import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Network.Block (BlockNo (..), Point (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
 import qualified Ouroboros.Network.Point as Point
-import Ouroboros.Consensus.Protocol.Abstract (ConsensusProtocol)
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
 setConsistentLevel env cst = do
@@ -158,10 +163,10 @@ runExtraMigrationsMaybe env = do
   liftIO $ atomically $ writeTVar (envExtraMigrations env) (extraMigr {emRan = True})
 
 getSafeBlockNoDiff :: SyncEnv -> Word64
-getSafeBlockNoDiff syncEnv = 2 * getSecurityParam syncEnv
+getSafeBlockNoDiff _ = 2 * 2160
 
 getPruneInterval :: SyncEnv -> Word64
-getPruneInterval syncEnv = 10 * getSecurityParam syncEnv
+getPruneInterval _ = 10 * 2160
 
 whenConsumeTxOut :: MonadIO m => SyncEnv -> m () -> m ()
 whenConsumeTxOut env action = do
@@ -469,15 +474,3 @@ convertToPoint slot hashBlob =
   where
     convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
     convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)
-
-getSecurityParam :: SyncEnv -> Word64
-getSecurityParam syncEnv =
-  case envLedgerEnv syncEnv of
-    HasLedger hle -> getMaxRollbacks $ leProtocolInfo hle
-    NoLedger nle -> getMaxRollbacks $ nleProtocolInfo nle
-
-getMaxRollbacks ::
-  ConsensusProtocol (BlockProtocol blk) =>
-  ProtocolInfo IO blk ->
-  Word64
-getMaxRollbacks = maxRollbacks . configSecurityParam . pInfoConfig

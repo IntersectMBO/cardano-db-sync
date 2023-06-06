@@ -32,11 +32,10 @@ import qualified Cardano.Crypto as Crypto
 import Cardano.Db (runDbIohkLogging)
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (ConsistentLevel (..), FixesRan (..), RunMigration, SyncEnv, SyncOptions (..), envConnString, envLedgerEnv, envNetworkMagic, envOptions)
+import Cardano.DbSync.Api.Types (ConsistentLevel (..), FixesRan (..), RunMigration, SyncEnv, SyncOptions (..), envConnString, envLedgerEnv, envNetworkMagic, envOptions, LedgerEnv (..))
 import Cardano.DbSync.Config
 import Cardano.DbSync.Database
 import Cardano.DbSync.DbAction
-import Cardano.DbSync.Epoch
 import Cardano.DbSync.Era
 import Cardano.DbSync.Error
 import Cardano.DbSync.Fix.PlutusDataBytes
@@ -179,7 +178,6 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
               logInfo trce "Migrating to a no ledger schema"
               Db.noLedgerMigrations backend trce
           lift $ orDie renderSyncNodeError $ insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfig) genCfg (useShelleyInit syncNodeConfig)
-          liftIO $ epochStartup (enpExtended syncNodeParams) trce backend
 
     case genCfg of
       GenesisCardano {} -> do

@@ -8,6 +8,7 @@ import Cardano.DbSync.Config
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
+import Cardano.DbSync.Ledger.Types (CardanoLedgerState (..), LedgerStateFile (..))
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbTool.Validate.Balance (ledgerAddrBalance)
 import Cardano.DbTool.Validate.Util
