@@ -142,7 +142,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params aop = do
 extractSyncOptions :: SyncNodeParams -> Bool -> SyncOptions
 extractSyncOptions snp aop =
   SyncOptions
-    { soptExtended = enpExtended snp
+    { soptExtended = enpExtended snp && enpHasCache snp
     , soptAbortOnInvalid = aop
     , soptCache = enpHasCache snp
     , soptSkipFix = enpSkipFix snp
