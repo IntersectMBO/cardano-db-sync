@@ -183,7 +183,9 @@ updateEpochWhenSyncing syncEnv cache mEpochBlockDiff mLastMapEpochFromCache epoc
   case mEpochBlockDiff of
     -- if the flag --disable-cahce is active then we won't have an EpochBlockDiff and instead want to
     -- use expensive query to make the epoch.
-    Nothing -> pure $ Left $ NEError "updateEpochWhenSyncing: No mEpochBlockDiff"
+    Nothing -> do
+      newEpoch <- DB.queryCalcEpochEntry epochNo
+      writeToMapEpochCache syncEnv cache newEpoch
     Just epochBlockDiffCache ->
       case mLastMapEpochFromCache of
         -- if there is no Map Epoch in cache here, then the server must have restarted and failed on the last
