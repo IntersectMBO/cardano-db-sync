@@ -272,7 +272,6 @@ insertByronTx syncEnv blkId tx blockIndex = do
         zip (thrd3 <$> resolvedInputs) txInIds
   -- fees are being returned so we can sum them and put them in cache to use when updating epochs
   pure $ unDbLovelace $ vfFee valFee
-
   where
     tracer :: Trace IO Text
     tracer = getTrace syncEnv

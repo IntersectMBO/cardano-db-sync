@@ -51,7 +51,6 @@ epochHandler syncEnv trce cache isNewEpochEvent (BlockDetails cblk details) =
           updateEpochStart syncEnv cache details isNewEpochEvent True
         Byron.ABOBBlock _blk ->
           updateEpochStart syncEnv cache details isNewEpochEvent False
-    -- BlockByron {} -> updateEpochStart syncEnv cache details isNewEpochEvent
     BlockShelley {} -> epochSlotTimecheck
     BlockAllegra {} -> epochSlotTimecheck
     BlockMary {} -> epochSlotTimecheck

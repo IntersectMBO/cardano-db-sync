@@ -19,7 +19,11 @@ module Cardano.DbSync.Cache (
   queryRewardAccountWithCacheRetBs,
   queryStakeAddrWithCache,
   queryStakeAddrWithCacheRetBs,
-  rollbackCache,
+  queryMAWithCache,
+  queryPrevBlockWithCache,
+  insertBlockAndCache,
+  queryDatum,
+  insertDatumAndCache,
 
   -- * CacheStatistics
   getCacheStatistics,
@@ -50,6 +54,174 @@ import qualified Data.Map.Strict as Map
 import Database.Persist.Postgresql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
+type StakeAddrCache = Map StakeCred DB.StakeAddressId
+
+type StakePoolCache = Map PoolKeyHash DB.PoolHashId
+
+-- The 'UninitiatedCache' makes it possible to call functions in this module
+-- without having actually initiated the cache yet. It is used by genesis
+-- insertions, where the cache has not been initiated yet.
+data Cache
+  = UninitiatedCache
+  | Cache !CacheInternal
+
+data CacheNew
+  = CacheNew
+  | DontCacheNew
+  | EvictAndReturn
+  deriving (Eq)
+
+data CacheInternal = CacheInternal
+  { cStakeCreds :: !(StrictTVar IO StakeAddrCache)
+  , cPools :: !(StrictTVar IO StakePoolCache)
+  , cDatum :: !(StrictTVar IO (LRUCache DataHash DB.DatumId))
+  , cMultiAssets :: !(StrictTVar IO (LRUCache (PolicyID StandardCrypto, AssetName) DB.MultiAssetId))
+  , cPrevBlock :: !(StrictTVar IO (Maybe (DB.BlockId, ByteString)))
+  , cStats :: !(StrictTVar IO CacheStatistics)
+  }
+
+data CacheStatistics = CacheStatistics
+  { credsHits :: !Word64
+  , credsQueries :: !Word64
+  , poolsHits :: !Word64
+  , poolsQueries :: !Word64
+  , datumHits :: !Word64
+  , datumQueries :: !Word64
+  , multiAssetsHits :: !Word64
+  , multiAssetsQueries :: !Word64
+  , prevBlockHits :: !Word64
+  , prevBlockQueries :: !Word64
+  }
+
+hitCreds :: StrictTVar IO CacheStatistics -> IO ()
+hitCreds ref =
+  atomically $ modifyTVar ref (\cs -> cs {credsHits = 1 + credsHits cs, credsQueries = 1 + credsQueries cs})
+
+missCreds :: StrictTVar IO CacheStatistics -> IO ()
+missCreds ref =
+  atomically $ modifyTVar ref (\cs -> cs {credsQueries = 1 + credsQueries cs})
+
+hitPools :: StrictTVar IO CacheStatistics -> IO ()
+hitPools ref =
+  atomically $ modifyTVar ref (\cs -> cs {poolsHits = 1 + poolsHits cs, poolsQueries = 1 + poolsQueries cs})
+
+missPools :: StrictTVar IO CacheStatistics -> IO ()
+missPools ref =
+  atomically $ modifyTVar ref (\cs -> cs {poolsQueries = 1 + poolsQueries cs})
+
+hitDatum :: StrictTVar IO CacheStatistics -> IO ()
+hitDatum ref =
+  atomically $ modifyTVar ref (\cs -> cs {datumHits = 1 + datumHits cs, datumQueries = 1 + datumQueries cs})
+
+missDatum :: StrictTVar IO CacheStatistics -> IO ()
+missDatum ref =
+  atomically $ modifyTVar ref (\cs -> cs {datumQueries = 1 + datumQueries cs})
+
+hitMAssets :: StrictTVar IO CacheStatistics -> IO ()
+hitMAssets ref =
+  atomically $ modifyTVar ref (\cs -> cs {multiAssetsHits = 1 + multiAssetsHits cs, multiAssetsQueries = 1 + multiAssetsQueries cs})
+
+missMAssets :: StrictTVar IO CacheStatistics -> IO ()
+missMAssets ref =
+  atomically $ modifyTVar ref (\cs -> cs {multiAssetsQueries = 1 + multiAssetsQueries cs})
+
+hitPBlock :: StrictTVar IO CacheStatistics -> IO ()
+hitPBlock ref =
+  atomically $ modifyTVar ref (\cs -> cs {prevBlockHits = 1 + prevBlockHits cs, prevBlockQueries = 1 + prevBlockQueries cs})
+
+missPrevBlock :: StrictTVar IO CacheStatistics -> IO ()
+missPrevBlock ref =
+  atomically $ modifyTVar ref (\cs -> cs {prevBlockQueries = 1 + prevBlockQueries cs})
+
+initCacheStatistics :: CacheStatistics
+initCacheStatistics = CacheStatistics 0 0 0 0 0 0 0 0 0 0
+
+getCacheStatistics :: Cache -> IO CacheStatistics
+getCacheStatistics cs =
+  case cs of
+    UninitiatedCache -> pure initCacheStatistics
+    Cache ci -> readTVarIO (cStats ci)
+
+textShowStats :: Cache -> IO Text
+textShowStats UninitiatedCache = pure "UninitiatedCache"
+textShowStats (Cache ic) = do
+  stats <- readTVarIO $ cStats ic
+  creds <- readTVarIO (cStakeCreds ic)
+  pools <- readTVarIO (cPools ic)
+  datums <- readTVarIO (cDatum ic)
+  mAssets <- readTVarIO (cMultiAssets ic)
+  pure $
+    mconcat
+      [ "\nCache Statistics:"
+      , "\n  Stake Addresses: "
+      , "cache size: "
+      , DB.textShow (Map.size creds)
+      , if credsQueries stats == 0
+          then ""
+          else ", hit rate: " <> DB.textShow (100 * credsHits stats `div` credsQueries stats) <> "%"
+      , ", hits: "
+      , DB.textShow (credsHits stats)
+      , ", misses: "
+      , DB.textShow (credsQueries stats - credsHits stats)
+      , "\n  Pools: "
+      , "cache size: "
+      , DB.textShow (Map.size pools)
+      , if poolsQueries stats == 0
+          then ""
+          else ", hit rate: " <> DB.textShow (100 * poolsHits stats `div` poolsQueries stats) <> "%"
+      , ", hits: "
+      , DB.textShow (poolsHits stats)
+      , ", misses: "
+      , DB.textShow (poolsQueries stats - poolsHits stats)
+      , "\n  Datums: "
+      , "cache capacity: "
+      , DB.textShow (LRU.getCapacity datums)
+      , ", cache size: "
+      , DB.textShow (LRU.getSize datums)
+      , if datumQueries stats == 0
+          then ""
+          else ", hit rate: " <> DB.textShow (100 * datumHits stats `div` datumQueries stats) <> "%"
+      , ", hits: "
+      , DB.textShow (datumHits stats)
+      , ", misses: "
+      , DB.textShow (datumQueries stats - datumHits stats)
+      , "\n  Multi Assets: "
+      , "cache capacity: "
+      , DB.textShow (LRU.getCapacity mAssets)
+      , ", cache size: "
+      , DB.textShow (LRU.getSize mAssets)
+      , if multiAssetsQueries stats == 0
+          then ""
+          else ", hit rate: " <> DB.textShow (100 * multiAssetsHits stats `div` multiAssetsQueries stats) <> "%"
+      , ", hits: "
+      , DB.textShow (multiAssetsHits stats)
+      , ", misses: "
+      , DB.textShow (multiAssetsQueries stats - multiAssetsHits stats)
+      , "\n  Previous Block: "
+      , if prevBlockQueries stats == 0
+          then ""
+          else "hit rate: " <> DB.textShow (100 * prevBlockHits stats `div` prevBlockQueries stats) <> "%"
+      , ", hits: "
+      , DB.textShow (prevBlockHits stats)
+      , ", misses: "
+      , DB.textShow (prevBlockQueries stats - prevBlockHits stats)
+      ]
+
+uninitiatedCache :: Cache
+uninitiatedCache = UninitiatedCache
+
+newEmptyCache :: MonadIO m => Word64 -> Word64 -> m Cache
+newEmptyCache maCapacity daCapacity =
+  liftIO . fmap Cache $
+    CacheInternal
+      <$> newTVarIO Map.empty
+      <*> newTVarIO Map.empty
+      <*> newTVarIO (LRU.empty daCapacity)
+      <*> newTVarIO (LRU.empty maCapacity)
+      <*> newTVarIO Nothing
+      <*> newTVarIO initCacheStatistics
+
+>>>>>>> master
 -- Rollbacks make everything harder and the same applies to caching.
 -- After a rollback db entries are deleted, so we need to clean the same
 -- cached entries. Cleaning more cached entries is not an issue. Cleaning less
@@ -71,13 +243,6 @@ rollbackCache (Cache cache) blockId = do
   liftIO $ do
     atomically $ writeTVar (cPrevBlock cache) Nothing
     atomically $ modifyTVar (cDatum cache) LRU.cleanup
-    void $ rollbackMapEpochInCache cache blockId
-
-getCacheStatistics :: Cache -> IO CacheStatistics
-getCacheStatistics cs =
-  case cs of
-    UninitiatedCache -> pure initCacheStatistics
-    Cache ci -> readTVarIO (cStats ci)
 
 queryRewardAccountWithCache ::
   forall m.
@@ -306,7 +471,7 @@ insertBlockAndCache cache block =
       pure bid
 
 queryDatum ::
-  (MonadIO m) =>
+  MonadIO m =>
   Cache ->
   DataHash ->
   ReaderT SqlBackend m (Maybe DB.DatumId)
@@ -342,48 +507,3 @@ insertDatumAndCache cache hsh dt = do
           modifyTVar (cDatum ci) $
             LRU.insert hsh datumId
       pure datumId
-
--- Stakes
-hitCreds :: StrictTVar IO CacheStatistics -> IO ()
-hitCreds ref =
-  atomically $ modifyTVar ref (\cs -> cs {credsHits = 1 + credsHits cs, credsQueries = 1 + credsQueries cs})
-
-missCreds :: StrictTVar IO CacheStatistics -> IO ()
-missCreds ref =
-  atomically $ modifyTVar ref (\cs -> cs {credsQueries = 1 + credsQueries cs})
-
--- Pools
-hitPools :: StrictTVar IO CacheStatistics -> IO ()
-hitPools ref =
-  atomically $ modifyTVar ref (\cs -> cs {poolsHits = 1 + poolsHits cs, poolsQueries = 1 + poolsQueries cs})
-
-missPools :: StrictTVar IO CacheStatistics -> IO ()
-missPools ref =
-  atomically $ modifyTVar ref (\cs -> cs {poolsQueries = 1 + poolsQueries cs})
-
--- Datum
-hitDatum :: StrictTVar IO CacheStatistics -> IO ()
-hitDatum ref =
-  atomically $ modifyTVar ref (\cs -> cs {datumHits = 1 + datumHits cs, datumQueries = 1 + datumQueries cs})
-
-missDatum :: StrictTVar IO CacheStatistics -> IO ()
-missDatum ref =
-  atomically $ modifyTVar ref (\cs -> cs {datumQueries = 1 + datumQueries cs})
-
--- Assets
-hitMAssets :: StrictTVar IO CacheStatistics -> IO ()
-hitMAssets ref =
-  atomically $ modifyTVar ref (\cs -> cs {multiAssetsHits = 1 + multiAssetsHits cs, multiAssetsQueries = 1 + multiAssetsQueries cs})
-
-missMAssets :: StrictTVar IO CacheStatistics -> IO ()
-missMAssets ref =
-  atomically $ modifyTVar ref (\cs -> cs {multiAssetsQueries = 1 + multiAssetsQueries cs})
-
--- Blocks
-hitPBlock :: StrictTVar IO CacheStatistics -> IO ()
-hitPBlock ref =
-  atomically $ modifyTVar ref (\cs -> cs {prevBlockHits = 1 + prevBlockHits cs, prevBlockQueries = 1 + prevBlockQueries cs})
-
-missPrevBlock :: StrictTVar IO CacheStatistics -> IO ()
-missPrevBlock ref =
-  atomically $ modifyTVar ref (\cs -> cs {prevBlockQueries = 1 + prevBlockQueries cs})
