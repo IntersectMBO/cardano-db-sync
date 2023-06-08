@@ -177,8 +177,9 @@ updateEpochWhenSyncing ::
   ReaderT SqlBackend m (Either SyncNodeError ())
 updateEpochWhenSyncing syncEnv cache mEpochBlockDiff mLastMapEpochFromCache epochNo isBoundaryBlock = do
   let trce = getTrace syncEnv
-      -- make sure to count block if it's a boundary block
-      additionalBlockCount = if isBoundaryBlock then 1 else 0
+      isFirstEpoch = epochNo == 0
+      -- count boundary block in the first epoch
+      additionalBlockCount = if isBoundaryBlock && isFirstEpoch then 1 else 0
 
   case mEpochBlockDiff of
     -- if the flag --disable-cahce is active then we won't have an EpochBlockDiff and instead want to
