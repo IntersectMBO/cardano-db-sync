@@ -130,12 +130,11 @@ handleEpochWhenFollowing syncEnv cache newestEpochFromMap epochBlockDiffCache ep
           -- is the epoch from db different to current epochNo then we need to make expensive query
           if DB.epochNo newestEpochFromDb /= epochNo
             then makeEpochWithDBQuery syncEnv cache Nothing epochNo "handleEpochWhenFollowing"
-            else
-              case epochBlockDiffCache of
-                -- There should never be no EpochBlockDiff in cache at this point in the pipeline but just incase!
-                Nothing -> pure $ Left $ NEError "replaceEpoch: No epochBlockDiffCache"
-                -- Let's use both values aquired to calculate our new epoch.
-                Just currentEpCache -> makeEpochWithCacheWhenFollowing syncEnv cache newestEpochFromDb currentEpCache epochNo
+            else case epochBlockDiffCache of
+              -- There should never be no EpochBlockDiff in cache at this point in the pipeline but just incase!
+              Nothing -> pure $ Left $ NEError "replaceEpoch: No epochBlockDiffCache"
+              -- Let's use both values aquired to calculate our new epoch.
+              Just currentEpCache -> makeEpochWithCacheWhenFollowing syncEnv cache newestEpochFromDb currentEpCache epochNo
 
 -- Update the epoch in cache and db, which could be either an update or insert
 -- dependent on if epoch already exists.

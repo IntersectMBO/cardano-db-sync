@@ -11,13 +11,7 @@ module Cardano.DbSync.Default (
 import Cardano.BM.Trace (logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (
-  ConsistentLevel (..),
-  InsertOptions (..),
-  LedgerEnv (..),
-  SyncEnv (..),
-  SyncOptions (..),
- )
+import Cardano.DbSync.Api.Types (ConsistentLevel (..), InsertOptions (..), LedgerEnv (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Cache.Types (textShowStats)
 import Cardano.DbSync.Epoch (epochHandler)
 import Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
