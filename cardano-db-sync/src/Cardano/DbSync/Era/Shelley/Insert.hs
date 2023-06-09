@@ -30,6 +30,7 @@ import qualified Cardano.Crypto.Hashing as Crypto
 import Cardano.Db (DbLovelace (..), DbWord64 (..), PoolUrl (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 import Cardano.DbSync.Cache (
   insertBlockAndCache,
   insertDatumAndCache,
@@ -80,7 +81,6 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
-import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 
 {- HLINT ignore "Reduce duplication" -}
 

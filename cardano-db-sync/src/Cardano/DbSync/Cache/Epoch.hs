@@ -15,12 +15,12 @@ import Cardano.DbSync.Api.Types (LedgerEnv (..), SyncEnv (..))
 import Cardano.DbSync.Cache.Types (Cache (..), CacheEpoch (..), CacheInternal (..), EpochBlockDiff (..))
 import Cardano.DbSync.Era.Shelley.Generic.StakeDist (getSecurityParameter)
 import Cardano.DbSync.Error (SyncNodeError (..))
+import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..))
 import Cardano.DbSync.LocalStateQuery (NoLedgerEnv (..))
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
 import Data.Map.Strict (deleteMin, insert, lookupMax, size, split)
 import Database.Persist.Postgresql (SqlBackend)
-import Cardano.DbSync.Ledger.Types (HasLedgerEnv(..))
 
 -------------------------------------------------------------------------------------
 -- Epoch Cache
