@@ -126,6 +126,14 @@ in {
         type = lib.types.nullOr lib.types.str;
         default = "/var/lib/cexplorer";
       };
+      disableLedger = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Disables the leger state. Drastically reduces memory usage
+          and it syncs faster, but some data are missing.
+        '';
+      };
       dbSyncPkgs = lib.mkOption {
         type = lib.types.attrs;
         default = import ../. { };
@@ -177,6 +185,16 @@ in {
             (if (cfg.environment.nodeConfig.RequiresNetworkMagic == "RequiresNoMagic" )
               then "--mainnet"
               else "--testnet-magic $(jq '.networkMagic' ${cfg.environment.nodeConfig.ShelleyGenesisFile})");
+          dbSyncCommand = ''
+            exec ${exec} \
+                --config ${configFile} \
+                --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                --schema-dir ${self.schema} \
+                ${if cfg.disableLedger then
+                    "--disable-ledger"
+                  else
+                    "--state-dir ${cfg.stateDir}"}
+          '';
     in {
       pgpass = builtins.toFile "pgpass" "${cfg.postgres.socketdir}:${
           toString cfg.postgres.port
@@ -225,12 +243,7 @@ in {
         fi
 
         mkdir -p log-dir
-        exec ${exec} \
-          --config ${configFile} \
-          --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-          --schema-dir ${self.schema} \
-          --state-dir ${cfg.stateDir} \
-          ''${EXTRA_DB_SYNC_ARGS:-}'';
+        ${dbSyncCommand}'';
     };
     systemd.services.cardano-db-sync = {
       wantedBy = [ "multi-user.target" ];
