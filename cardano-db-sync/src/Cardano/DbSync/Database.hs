@@ -32,7 +32,7 @@ import Ouroboros.Consensus.HeaderValidation hiding (TipInfo)
 import Ouroboros.Consensus.Ledger.Extended
 import Ouroboros.Network.Block (Point (..))
 import Ouroboros.Network.Point (blockPointHash, blockPointSlot)
-import Cardano.DbSync.Api.Types (SyncEnv (..), LedgerEnv (..), ConsistentLevel (..))
+import Cardano.DbSync.Api.Types (SyncEnv (..), ConsistentLevel (..))
 
 data NextState
   = Continue
