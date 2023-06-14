@@ -136,6 +136,7 @@ data ScriptType
   | Timelock
   | PlutusV1
   | PlutusV2
+  | PlutusV3
   deriving (Eq, Generic, Show)
 
 data PoolCertAction
@@ -258,6 +259,7 @@ renderScriptType st =
     Timelock -> "timelock"
     PlutusV1 -> "plutusV1"
     PlutusV2 -> "plutusV2"
+    PlutusV3 -> "plutusV3"
 
 readScriptType :: String -> ScriptType
 readScriptType str =
@@ -266,6 +268,7 @@ readScriptType str =
     "timelock" -> Timelock
     "plutusV1" -> PlutusV1
     "plutusV2" -> PlutusV2
+    "plutusV3" -> PlutusV3
     _other -> error $ "readScriptType: Unknown ScriptType " ++ str
 
 word64ToAda :: Word64 -> Ada
