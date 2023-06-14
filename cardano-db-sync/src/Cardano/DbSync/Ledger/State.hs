@@ -702,8 +702,8 @@ getRegisteredPoolShelley ::
 getRegisteredPoolShelley lState =
   Map.keysSet $
     Shelley.psStakePoolParams $
-      Shelley.dpsPState $
-        Shelley.lsDPState $
+      Shelley.certPState $
+        Shelley.lsCertState $
           Shelley.esLState $
             Shelley.nesEs $
               Consensus.shelleyLedgerState lState

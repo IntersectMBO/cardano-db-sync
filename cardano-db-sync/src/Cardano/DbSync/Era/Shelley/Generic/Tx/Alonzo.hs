@@ -287,6 +287,7 @@ mkTxScript (hsh, script) =
         Alonzo.TimelockScript {} -> Timelock
         Alonzo.PlutusScript Alonzo.PlutusV1 _s -> PlutusV1
         Alonzo.PlutusScript Alonzo.PlutusV2 _s -> PlutusV2
+        Alonzo.PlutusScript Alonzo.PlutusV3 _s -> PlutusV3
 
     timelockJsonScript :: Maybe ByteString
     timelockJsonScript =

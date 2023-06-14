@@ -124,16 +124,16 @@ resolveStakeCreds indx st = case indx of
       Map.toList $
         UMap.rewView $
           dsUnified $
-            dpsDState $
-              lsDPState $
+            certDState $
+              lsCertState $
                 esLState $
                   nesEs $
                     Consensus.shelleyLedgerState st
 
     poolParams =
       psStakePoolParams $
-        dpsPState $
-          lsDPState $
+        certPState $
+          lsCertState $
             esLState $
               nesEs $
                 Consensus.shelleyLedgerState st
@@ -141,8 +141,8 @@ resolveStakeCreds indx st = case indx of
     delegs = UMap.delView $ dsUnified dstate
 
     dstate =
-      dpsDState $
-        lsDPState $
+      certDState $
+        lsCertState $
           esLState $
             nesEs $
               Consensus.shelleyLedgerState st
@@ -174,8 +174,8 @@ resolvePool pix st = case pix of
     poolParams =
       Map.elems $
         psStakePoolParams $
-          dpsPState $
-            lsDPState $
+          certPState $
+            lsCertState $
               esLState $
                 nesEs $
                   Consensus.shelleyLedgerState st
@@ -187,8 +187,8 @@ allPoolStakeCert st =
     poolParms =
       Map.elems $
         psStakePoolParams $
-          dpsPState $
-            lsDPState $
+          certPState $
+            lsCertState $
               esLState $
                 nesEs $
                   Consensus.shelleyLedgerState st

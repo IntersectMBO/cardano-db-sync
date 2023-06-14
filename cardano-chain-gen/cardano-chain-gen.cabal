@@ -180,7 +180,6 @@ test-suite cardano-chain-gen
                       , base                            >= 4.14         && < 4.17
                       , bytestring
                       , cardano-api
-                      , cardano-cli
                       , cardano-crypto-class
                       , cardano-db
                       , cardano-db-sync

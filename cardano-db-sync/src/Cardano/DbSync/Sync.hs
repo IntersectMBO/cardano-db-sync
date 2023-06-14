@@ -67,9 +67,9 @@ import Ouroboros.Consensus.Cardano.Node ()
 import Ouroboros.Consensus.Config (configCodec)
 import qualified Ouroboros.Consensus.HardFork.Simple as HardFork
 import Ouroboros.Consensus.Network.NodeToClient (
-  ClientCodecs,
   Codecs' (..),
   cChainSyncCodec,
+  clientCodecs,
   cStateQueryCodec,
   cTxSubmissionCodec,
  )
@@ -127,6 +127,7 @@ import Ouroboros.Network.Protocol.LocalStateQuery.Client (localStateQueryClientP
 import qualified Ouroboros.Network.Snocket as Snocket
 import Ouroboros.Network.Subscription (SubscriptionTrace)
 import System.Directory (createDirectoryIfMissing)
+import Ouroboros.Consensus.Node.NetworkProtocolVersion
 
 runSyncNode ::
   MetricSetters ->
@@ -201,11 +202,11 @@ runSyncNodeClient metricsSetters syncEnv iomgr trce (SocketPath socketPath) = do
   void $
     subscribe
       (localSnocket iomgr)
-      codecConfig
       (envNetworkMagic syncEnv)
+      (supportedNodeToClientVersions (Proxy @CardanoBlock))
       networkSubscriptionTracers
       clientSubscriptionParams
-      (dbSyncProtocols syncEnv metricsSetters)
+      (dbSyncProtocols syncEnv metricsSetters codecConfig)
   where
     codecConfig :: CodecConfig CardanoBlock
     codecConfig = configCodec $ getTopLevelConfig syncEnv
@@ -246,11 +247,12 @@ runSyncNodeClient metricsSetters syncEnv iomgr trce (SocketPath socketPath) = do
 dbSyncProtocols ::
   SyncEnv ->
   MetricSetters ->
+  CodecConfig CardanoBlock ->
   Network.NodeToClientVersion ->
-  ClientCodecs CardanoBlock IO ->
+  BlockNodeToClientVersion CardanoBlock ->
   ConnectionId LocalAddress ->
   NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols syncEnv metricsSetters _version codecs _connectionId =
+dbSyncProtocols syncEnv metricsSetters codecConfig version bversion _connectionId =
   NodeToClientProtocols
     { localChainSyncProtocol = localChainSyncPtcl
     , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -259,6 +261,8 @@ dbSyncProtocols syncEnv metricsSetters _version codecs _connectionId =
         InitiatorProtocolOnly $ MuxPeer Logging.nullTracer (cTxMonitorCodec codecs) localTxMonitorPeerNull
     }
   where
+    codecs = clientCodecs codecConfig bversion version
+
     localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync CardanoBlock (Point CardanoBlock) (Tip CardanoBlock)))
     localChainSyncTracer = toLogObject $ appendName "ChainSync" tracer
 

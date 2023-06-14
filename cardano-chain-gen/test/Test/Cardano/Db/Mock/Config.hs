@@ -23,7 +23,6 @@ module Test.Cardano.Db.Mock.Config (
   queryDBSync,
   recreateDir,
   rootTestDir,
-  setupTestsDir,
   stopDBSync,
   stopDBSyncIfRunning,
   startDBSync,
@@ -32,10 +31,7 @@ module Test.Cardano.Db.Mock.Config (
   withFullConfig',
 ) where
 
-import Cardano.Api (NetworkId (..), NetworkMagic (..))
-import Cardano.CLI.Shelley.Commands (GenesisCmd (..))
-import qualified Cardano.CLI.Shelley.Commands as CLI
-import qualified Cardano.CLI.Shelley.Run.Genesis as CLI
+import Cardano.Api (NetworkMagic (..))
 import qualified Cardano.Db as Db
 import Cardano.DbSync
 import Cardano.DbSync.Config
@@ -174,26 +170,6 @@ getPoolLayer env = do
     postgresqlPoolDataLayer
       nullTracer
       pool
-
-setupTestsDir :: FilePath -> IO ()
-setupTestsDir dir = do
-  eitherM (panic . textShow) pure $
-    runExceptT $
-      CLI.runGenesisCmd $
-        GenesisCreateStaked
-          (CLI.GenesisDir dir)
-          3
-          3
-          3
-          3
-          Nothing
-          (Just 3000000)
-          3000000
-          (Testnet $ NetworkMagic 42)
-          1
-          3
-          0
-          Nothing
 
 mkConfig :: FilePath -> FilePath -> IO Config
 mkConfig staticDir mutableDir = do
