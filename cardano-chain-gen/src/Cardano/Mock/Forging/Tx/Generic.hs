@@ -38,7 +38,7 @@ import Cardano.Ledger.Shelley.LedgerState hiding (LedgerState)
 import Cardano.Ledger.Shelley.TxBody
 import Cardano.Ledger.Shelley.UTxO
 import Cardano.Ledger.TxIn (TxIn (..))
-import qualified Cardano.Ledger.UMapCompact as UMap
+import qualified Cardano.Ledger.UMap as UMap
 import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import Cardano.Mock.Forging.Types
 import Cardano.Prelude hiding (length, (.))
@@ -124,16 +124,16 @@ resolveStakeCreds indx st = case indx of
       Map.toList $
         UMap.rewView $
           dsUnified $
-            dpsDState $
-              lsDPState $
+            certDState $
+              lsCertState $
                 esLState $
                   nesEs $
                     Consensus.shelleyLedgerState st
 
     poolParams =
       psStakePoolParams $
-        dpsPState $
-          lsDPState $
+        certPState $
+          lsCertState $
             esLState $
               nesEs $
                 Consensus.shelleyLedgerState st
@@ -141,8 +141,8 @@ resolveStakeCreds indx st = case indx of
     delegs = UMap.delView $ dsUnified dstate
 
     dstate =
-      dpsDState $
-        lsDPState $
+      certDState $
+        lsCertState $
           esLState $
             nesEs $
               Consensus.shelleyLedgerState st
@@ -174,8 +174,8 @@ resolvePool pix st = case pix of
     poolParams =
       Map.elems $
         psStakePoolParams $
-          dpsPState $
-            lsDPState $
+          certPState $
+            lsCertState $
               esLState $
                 nesEs $
                   Consensus.shelleyLedgerState st
@@ -187,8 +187,8 @@ allPoolStakeCert st =
     poolParms =
       Map.elems $
         psStakePoolParams $
-          dpsPState $
-            lsDPState $
+          certPState $
+            lsCertState $
               esLState $
                 nesEs $
                   Consensus.shelleyLedgerState st

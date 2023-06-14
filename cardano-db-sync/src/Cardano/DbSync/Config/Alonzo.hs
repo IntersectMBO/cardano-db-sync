@@ -7,7 +7,6 @@ module Cardano.DbSync.Config.Alonzo (
   readAlonzoGenesisConfig,
 ) where
 
-import Cardano.Api.Orphans ()
 import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Db (textShow)
 import Cardano.DbSync.Config.Types
