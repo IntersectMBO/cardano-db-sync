@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -11,6 +12,7 @@
 
 module  Cardano.DbSync.Ledger.State (
   CardanoLedgerState (..),
+  LedgerEnv (..),
   HasLedgerEnv (..),
   LedgerEvent (..),
   ApplyResult (..),
@@ -27,11 +29,13 @@ module  Cardano.DbSync.Ledger.State (
   loadLedgerAtPoint,
   hashToAnnotation,
   getHeaderHash,
+  runLedgerStateWriteThread,
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
 import Cardano.Binary (Decoder, DecoderError)
 import qualified Cardano.Binary as Serialize
+import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Cardano.Util as Cardano
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -57,6 +61,7 @@ import Cardano.Slotting.Slot (
   at,
   fromWithOrigin,
  )
+import Control.Concurrent.STM.TBQueue (TBQueue, newTBQueueIO, readTBQueue, writeTBQueue)
 import Control.Concurrent.Class.MonadSTM.Strict (
   atomically,
   newTVarIO,
@@ -119,7 +124,6 @@ import System.Directory (doesFileExist, listDirectory, removeFile)
 import System.FilePath (dropExtension, takeExtension, (</>))
 import System.Mem (performMajorGC)
 import Prelude (String, id)
-import Cardano.DbSync.Api.Types (SyncOptions (..))
 
 -- Note: The decision on whether a ledger-state is written to disk is based on the block number
 -- rather than the slot number because while the block number is fully populated (for every block
@@ -162,6 +166,7 @@ mkHasLedgerEnv ::
 mkHasLedgerEnv trce protoInfo dir nw systemStart syncOptions = do
   svar <- newTVarIO Strict.Nothing
   intervar <- newTVarIO Strict.Nothing
+  swQueue <- newTBQueueIO 5 -- Should be relatively shallow.
   pure
     HasLedgerEnv
       { leTrace = trce
@@ -174,6 +179,7 @@ mkHasLedgerEnv trce protoInfo dir nw systemStart syncOptions = do
       , leSnapshotEveryLagging = snapshotEveryLagging syncOptions
       , leInterpreter = intervar
       , leStateVar = svar
+      , leStateWriteQueue = swQueue
       }
 
 initCardanoLedgerState :: Consensus.ProtocolInfo IO CardanoBlock -> CardanoLedgerState
@@ -304,8 +310,8 @@ storeSnapshotAndCleanupMaybe env oldState appResult blkNo isCons syncState =
         (SyncLagging, _) -> False
 
 saveCurrentLedgerState :: HasLedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
-saveCurrentLedgerState env ledger mEpochNo = do
-  case mkLedgerStateFilename (leDir env) (clsState ledger) mEpochNo of
+saveCurrentLedgerState env lState mEpochNo = do
+  case mkLedgerStateFilename (leDir env) (clsState lState) mEpochNo of
     Origin -> pure () -- we don't store genesis
     At file -> do
       exists <- doesFileExist file
@@ -314,7 +320,27 @@ saveCurrentLedgerState env ledger mEpochNo = do
           logInfo (leTrace env) $
             mconcat
               ["File ", Text.pack file, " exists"]
-        else do
+        else
+          atomically $ writeTBQueue (leStateWriteQueue env) (file, lState)
+
+runLedgerStateWriteThread :: Trace IO Text -> LedgerEnv -> IO ()
+runLedgerStateWriteThread tracer lenv =
+  case lenv of
+    HasLedger le -> ledgerStateWriteLoop tracer (leStateWriteQueue le) (configCodec $ getTopLevelconfigHasLedger le)
+    NoLedger _ -> forever $ threadDelay 600000000 -- 10 minutes
+
+ledgerStateWriteLoop :: Trace IO Text -> TBQueue (FilePath, CardanoLedgerState) -> CodecConfig CardanoBlock -> IO ()
+ledgerStateWriteLoop tracer swQueue codecConfig =
+    loop
+  where
+    loop :: IO ()
+    loop = do
+      (file, ledger) <- atomically $ readTBQueue swQueue -- Blocks until the queue has elements.
+      writeLedgerStateFile file ledger
+      loop
+
+    writeLedgerStateFile :: FilePath -> CardanoLedgerState ->  IO ()
+    writeLedgerStateFile file ledger = do
           startTime <- getCurrentTime
           -- TODO: write the builder directly.
           -- BB.writeFile file $ toBuilder $
@@ -328,17 +354,14 @@ saveCurrentLedgerState env ledger mEpochNo = do
                 )
                 ledger
           endTime <- getCurrentTime
-          logInfo (leTrace env) $
+          logInfo tracer $
             mconcat
-              [ "Took a ledger snapshot at "
+              [ "Asynchronously wrote a ledger snapshot to "
               , Text.pack file
-              , ". It took "
+              , " in "
               , textShow (diffUTCTime endTime startTime)
               , "."
               ]
-  where
-    codecConfig :: CodecConfig CardanoBlock
-    codecConfig = configCodec (getTopLevelconfigHasLedger env)
 
 mkLedgerStateFilename :: LedgerStateDir -> ExtLedgerState CardanoBlock -> Maybe EpochNo -> WithOrigin FilePath
 mkLedgerStateFilename dir ledger mEpochNo =

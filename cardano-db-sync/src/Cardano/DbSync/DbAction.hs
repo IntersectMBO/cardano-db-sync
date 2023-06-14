@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.DbAction (
@@ -48,7 +47,9 @@ newDbActionQueue :: IO DbActionQueue
 newDbActionQueue =
   -- Use an odd number here so that the db_tip_height metric increments by this odd number
   -- when syncing, instead of incrementing by say 100.
-  DbActionQueue <$> TBQ.newTBQueueIO 117
+  -- The pipeline queue in the LocalChainSync machinery is 50 elements long
+  -- so we should not exceed that.
+  DbActionQueue <$> TBQ.newTBQueueIO 47
 
 writeDbActionQueue :: DbActionQueue -> DbAction -> STM ()
 writeDbActionQueue (DbActionQueue q) = TBQ.writeTBQueue q

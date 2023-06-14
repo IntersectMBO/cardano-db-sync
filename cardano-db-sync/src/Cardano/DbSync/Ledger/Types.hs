@@ -28,6 +28,7 @@ import Cardano.Slotting.Slot (
   SlotNo (..),
   WithOrigin (..),
  )
+import Control.Concurrent.STM.TBQueue (TBQueue)
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTVar,
  )
@@ -56,6 +57,7 @@ data HasLedgerEnv = HasLedgerEnv
   , leSnapshotEveryLagging :: !Word64
   , leInterpreter :: !(StrictTVar IO (Strict.Maybe CardanoInterpreter))
   , leStateVar :: !(StrictTVar IO (Strict.Maybe LedgerDB))
+  , leStateWriteQueue :: !(TBQueue (FilePath, CardanoLedgerState))
   }
 
 data CardanoLedgerState = CardanoLedgerState

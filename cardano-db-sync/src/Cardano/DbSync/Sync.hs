@@ -32,7 +32,7 @@ import qualified Cardano.Crypto as Crypto
 import Cardano.Db (runDbIohkLogging)
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (ConsistentLevel (..), FixesRan (..), LedgerEnv (..), RunMigration, SyncEnv, SyncOptions (..), envConnString, envLedgerEnv, envNetworkMagic, envOptions)
+import Cardano.DbSync.Api.Types (ConsistentLevel (..), FixesRan (..), RunMigration, SyncEnv, SyncOptions (..), envConnString, envLedgerEnv, envNetworkMagic, envOptions)
 import Cardano.DbSync.Config
 import Cardano.DbSync.Database
 import Cardano.DbSync.DbAction
@@ -41,6 +41,7 @@ import Cardano.DbSync.Era
 import Cardano.DbSync.Error
 import Cardano.DbSync.Fix.PlutusDataBytes
 import Cardano.DbSync.Fix.PlutusScripts
+import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Metrics
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
@@ -63,6 +64,7 @@ import Network.TypedProtocol.Pipelined (N (..), Nat (Succ, Zero))
 import Ouroboros.Consensus.Block.Abstract (CodecConfig)
 import Ouroboros.Consensus.Byron.Node ()
 import Ouroboros.Consensus.Cardano.Node ()
+
 import Ouroboros.Consensus.Config (configCodec)
 import qualified Ouroboros.Consensus.HardFork.Simple as HardFork
 import Ouroboros.Consensus.Network.NodeToClient (
@@ -333,13 +335,15 @@ dbSyncProtocols syncEnv metricsSetters _version codecs _connectionId =
                             (runDbThread syncEnv metricsSetters actionQueue)
                             (runOfflineFetchThread syncEnv)
                         )
-                        ( runPipelinedPeer
-                            localChainSyncTracer
-                            (cChainSyncCodec codecs)
-                            channel
-                            ( chainSyncClientPeerPipelined $
-                                chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip actionQueue
+                        ( race_
+                            (runPipelinedPeer
+                                localChainSyncTracer
+                                (cChainSyncCodec codecs)
+                                channel
+                                ( chainSyncClientPeerPipelined $
+                                      chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip actionQueue)
                             )
+                            (runLedgerStateWriteThread tracer (envLedgerEnv syncEnv))
                         )
 
                       atomically $ writeDbActionQueue actionQueue DbFinish
