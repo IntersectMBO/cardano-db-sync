@@ -126,7 +126,7 @@ test-suite test
                       , cardano-db
                       , cardano-ledger-byron
                       , cardano-ledger-core
-                      , cardano-ledger-mary == 1.1.0.0
+                      , cardano-ledger-mary
                       , persistent
                       , hedgehog
                       , text

@@ -223,7 +223,7 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState =
           blockVersion = fromJust $ Map.lookup version allVersions
        in simpleSingletonVersions
             version
-            (NodeToClientVersionData netMagic)
+            (NodeToClientVersionData netMagic False)
             (NTC.responder version $ mkApps state version blockVersion (NTC.defaultCodecs codecConfig blockVersion version))
 
     mkApps ::
