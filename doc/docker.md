@@ -150,10 +150,11 @@ for `docker` use `--workdir=`.
 
 Consult the configuration [docs](docs/configuration.md) for what these options mean, assuming you have read that
 they can be accessed via env variables passed to docker-compose. Leave out any that do not make sense, eg if
-you just want to disable the ledger use `EXTRA_DB_SYNC_ARGS=--disable-ledger docker-compose up`.
+you just want to disable the ledger use `DISABLE_LEDGER=Y docker-compose up`.
 
 ``` shell
-EXTRA_DB_SYNC_ARGS="--disable-ledger --disable-cache --disable-epoch" \
+DISABLE_LEDGER=Y \
+EXTRA_DB_SYNC_ARGS="--disable-cache --disable-epoch" \
 docker-compose up
 ```
 

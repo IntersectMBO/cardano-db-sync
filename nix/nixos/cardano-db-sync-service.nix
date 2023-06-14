@@ -186,14 +186,18 @@ in {
               then "--mainnet"
               else "--testnet-magic $(jq '.networkMagic' ${cfg.environment.nodeConfig.ShelleyGenesisFile})");
           dbSyncCommand = ''
+            if [[ "''${DISABLE_LEDGER:-N}" == "Y" ]]; then
+              LEDGER_OPTS="--disable-ledger"
+            else
+              LEDGER_OPTS="--state-dir ${cfg.stateDir}"
+            fi
+
             exec ${exec} \
                 --config ${configFile} \
                 --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                 --schema-dir ${self.schema} \
-                ${if cfg.disableLedger then
-                    "--disable-ledger"
-                  else
-                    "--state-dir ${cfg.stateDir}"}
+                ''${LEDGER_OPTS} \
+                ''${EXTRA_DB_SYNC_ARGS:-}
           '';
     in {
       pgpass = builtins.toFile "pgpass" "${cfg.postgres.socketdir}:${
@@ -215,6 +219,10 @@ in {
           chmod 0600 ./pgpass
           export PGPASSFILE=$(pwd)/pgpass
         ''}
+
+        ${if (cfg.disableLedger) then
+            "export DISABLE_LEDGER=Y"
+          else ""}
 
         ${cfg.restoreSnapshotScript}
 
