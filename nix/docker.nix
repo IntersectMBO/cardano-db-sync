@@ -136,9 +136,13 @@ let
         set -euo pipefail
         ${scripts.mainnet.db-sync.passthru.service.restoreSnapshotScript}
 
-        exec $DBSYNC \
-          --schema-dir ${../schema} \
-          --state-dir ${scripts.mainnet.db-sync.passthru.service.stateDir} $@
+        if [[ "''${DISABLE_LEDGER:-N}" == "Y" ]]; then
+          LEDGER_OPTS="--disable-ledger"
+        else
+          LEDGER_OPTS="--state-dir ${scripts.mainnet.db-sync.passthru.service.stateDir}"
+        fi
+
+        exec $DBSYNC --schema-dir ${../schema} ''${LEDGER_OPTS} $@
       ${clusterStatements}
       else
         echo "Managed configuration for network "$NETWORK" does not exist"

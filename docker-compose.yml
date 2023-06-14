@@ -55,6 +55,7 @@ services:
   cardano-db-sync:
     image: inputoutput/cardano-db-sync:13.1.1.2
     environment:
+      - DISABLE_LEDGER=${DISABLE_LEDGER}
       - NETWORK=${NETWORK:-mainnet}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
