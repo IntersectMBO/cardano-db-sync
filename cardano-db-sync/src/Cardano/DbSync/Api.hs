@@ -29,9 +29,7 @@ module Cardano.DbSync.Api (
   getHasConsumed,
   getPrunes,
   mkSyncEnvFromConfig,
-  replaceConnection,
   verifySnapshotPoint,
-  getBackend,
   getInsertOptions,
   getTrace,
   getTopLevelConfig,
@@ -155,8 +153,7 @@ runExtraMigrationsMaybe env = do
   extraMigr <- liftIO $ readTVarIO $ envExtraMigrations env
   logInfo (getTrace env) $ textShow extraMigr
   unless (emRan extraMigr) $ do
-    backend <- getBackend env
-    DB.runDbIohkNoLogging backend $
+    DB.runDbIohkNoLogging (envBackend env) $
       DB.runExtraMigrations
         (getTrace env)
         (getSafeBlockNoDiff env)
@@ -198,10 +195,6 @@ defaultInsertOptions = fullInsertOptions
 
 turboInsertOptions :: InsertOptions
 turboInsertOptions = InsertOptions False False False False
-
-replaceConnection :: SyncEnv -> SqlBackend -> IO ()
-replaceConnection env sqlBackend = do
-  atomically $ writeTVar (envBackend env) $ Strict.Just sqlBackend
 
 initEpochState :: EpochState
 initEpochState =
@@ -259,13 +252,6 @@ getInsertOptions = soptInsertOptions . envOptions
 getSlotHash :: SqlBackend -> SlotNo -> IO [(SlotNo, ByteString)]
 getSlotHash backend = DB.runDbIohkNoLogging backend . DB.querySlotHash
 
-getBackend :: SyncEnv -> IO SqlBackend
-getBackend env = do
-  mBackend <- readTVarIO $ envBackend env
-  case mBackend of
-    Strict.Just conn -> pure conn
-    Strict.Nothing -> panic "sql connection not initiated"
-
 hasLedgerState :: SyncEnv -> Bool
 hasLedgerState syncEnv =
   case envLedgerEnv syncEnv of
@@ -287,18 +273,16 @@ getDbLatestBlockInfo backend = do
         }
 
 getDbTipBlockNo :: SyncEnv -> IO (Point.WithOrigin BlockNo)
-getDbTipBlockNo env =
-  getBackend env
-    >>= getDbLatestBlockInfo
-    <&> maybe Point.Origin (Point.At . bBlockNo)
+getDbTipBlockNo env = do
+  mblk <- getDbLatestBlockInfo (envBackend env)
+  pure $ maybe Point.Origin (Point.At . bBlockNo) mblk
 
 logDbState :: SyncEnv -> IO ()
 logDbState env = do
-  backend <- getBackend env
-  mblk <- getDbLatestBlockInfo backend
+  mblk <- getDbLatestBlockInfo (envBackend env)
   case mblk of
-    Nothing -> logInfo tracer "Cardano.Db is empty"
-    Just tip -> logInfo tracer $ mconcat ["Cardano.Db tip is at ", showTip tip]
+    Nothing -> logInfo tracer "Database is empty"
+    Just tip -> logInfo tracer $ mconcat ["Database tip is at ", showTip tip]
   where
     showTip :: TipInfo -> Text
     showTip tipInfo =
@@ -314,8 +298,7 @@ logDbState env = do
 
 getCurrentTipBlockNo :: SyncEnv -> IO (WithOrigin BlockNo)
 getCurrentTipBlockNo env = do
-  backend <- getBackend env
-  maybeTip <- getDbLatestBlockInfo backend
+  maybeTip <- getDbLatestBlockInfo (envBackend env)
   case maybeTip of
     Just tip -> pure $ At (bBlockNo tip)
     Nothing -> pure Origin
@@ -323,6 +306,7 @@ getCurrentTipBlockNo env = do
 mkSyncEnv ::
   Trace IO Text ->
   ConnectionString ->
+  SqlBackend ->
   SyncOptions ->
   ProtocolInfo IO CardanoBlock ->
   Ledger.Network ->
@@ -332,9 +316,8 @@ mkSyncEnv ::
   Bool ->
   RunMigration ->
   IO SyncEnv
-mkSyncEnv trce connString syncOptions protoInfo nw nwMagic systemStart syncNodeParams ranMigrations runMigrationFnc = do
+mkSyncEnv trce connString backend syncOptions protoInfo nw nwMagic systemStart syncNodeParams ranMigrations runMigrationFnc = do
   cache <- if soptCache syncOptions then newEmptyCache 250000 50000 else pure uninitiatedCache
-  backendVar <- newTVarIO Strict.Nothing
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNodeParams
@@ -370,7 +353,7 @@ mkSyncEnv trce connString syncOptions protoInfo nw nwMagic systemStart syncNodeP
       , envSystemStart = systemStart
       , envConnString = connString
       , envRunDelayedMigration = runMigrationFnc
-      , envBackend = backendVar
+      , envBackend = backend
       , envOptions = syncOptions
       , envConsistentLevel = consistentLevelVar
       , envIsFixed = fixDataVar
@@ -387,6 +370,7 @@ mkSyncEnv trce connString syncOptions protoInfo nw nwMagic systemStart syncNodeP
 mkSyncEnvFromConfig ::
   Trace IO Text ->
   ConnectionString ->
+  SqlBackend ->
   SyncOptions ->
   GenesisConfig ->
   SyncNodeParams ->
@@ -395,7 +379,7 @@ mkSyncEnvFromConfig ::
   -- | run migration function
   RunMigration ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce connString syncOptions genCfg syncNodeParams ranMigration runMigrationFnc =
+mkSyncEnvFromConfig trce connString backend syncOptions genCfg syncNodeParams ranMigration runMigrationFnc =
   case genCfg of
     GenesisCardano _ bCfg sCfg _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -419,6 +403,7 @@ mkSyncEnvFromConfig trce connString syncOptions genCfg syncNodeParams ranMigrati
             <$> mkSyncEnv
               trce
               connString
+              backend
               syncOptions
               (mkProtocolInfoCardano genCfg [])
               (Shelley.sgNetworkId $ scConfig sCfg)
@@ -437,8 +422,7 @@ getLatestPoints env = do
       verifySnapshotPoint env snapshotPoints
     NoLedger _ -> do
       -- Brings the 5 latest.
-      dbBackend <- getBackend env
-      lastPoints <- DB.runDbIohkNoLogging dbBackend DB.queryLatestPoints
+      lastPoints <- DB.runDbIohkNoLogging (envBackend env) DB.queryLatestPoints
       pure $ mapMaybe convert lastPoints
   where
     convert (Nothing, _) = Nothing
@@ -450,8 +434,7 @@ verifySnapshotPoint env snapPoints =
   where
     validLedgerFileToPoint :: SnapshotPoint -> IO (Maybe (CardanoPoint, Bool))
     validLedgerFileToPoint (OnDisk lsf) = do
-      backend <- getBackend env
-      hashes <- getSlotHash backend (lsfSlotNo lsf)
+      hashes <- getSlotHash (envBackend env) (lsfSlotNo lsf)
       let valid = find (\(_, h) -> lsfHash lsf == hashToAnnotation h) hashes
       case valid of
         Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convertToDiskPoint slot hash
@@ -460,8 +443,7 @@ verifySnapshotPoint env snapPoints =
       case pnt of
         GenesisPoint -> pure Nothing
         BlockPoint slotNo hsh -> do
-          backend <- getBackend env
-          hashes <- getSlotHash backend slotNo
+          hashes <- getSlotHash (envBackend env) slotNo
           let valid = find (\(_, dbHash) -> getHeaderHash hsh == dbHash) hashes
           case valid of
             Just (dbSlotNo, _) | slotNo == dbSlotNo -> pure $ Just (pnt, True)
