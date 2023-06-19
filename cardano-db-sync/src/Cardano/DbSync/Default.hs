@@ -182,6 +182,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
     iopts = getInsertOptions syncEnv
 
     updateEpoch details isNewEpochEvent =
+      -- if have --dissable-epoch && --dissable-cache then no need to run this function
       when (soptExtended $ envOptions syncEnv)
         . newExceptT
         $ epochHandler

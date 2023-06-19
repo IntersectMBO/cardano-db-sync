@@ -114,7 +114,7 @@ handleEpochWhenFollowing syncEnv cache newestEpochFromMap epochBlockDiffCache ep
   case newestEpochFromMap of
     Just newestEpochFromMapache -> do
       case epochBlockDiffCache of
-        Nothing -> pure $ Left $ NEError "replaceEpoch: No epochBlockDiffCache"
+        Nothing -> noCacheUseDB
         Just currentEpCache -> makeEpochWithCacheWhenFollowing syncEnv cache newestEpochFromMapache currentEpCache epochNo
 
     -- If there isn't an epoch in cache, let's see if we can get one from the db. Otherwise
@@ -122,18 +122,18 @@ handleEpochWhenFollowing syncEnv cache newestEpochFromMap epochBlockDiffCache ep
     Nothing -> do
       mNewestEpochFromDb <- DB.queryLatestEpoch
       case mNewestEpochFromDb of
-        -- no latest epoch in db (very unlikely) so lets use expensive db query
-        Nothing -> do
-          makeEpochWithDBQuery syncEnv cache Nothing epochNo "handleEpochWhenFollowing"
+        Nothing -> noCacheUseDB
         Just newestEpochFromDb -> do
           -- is the epoch from db different to current epochNo then we need to make expensive query
           if DB.epochNo newestEpochFromDb /= epochNo
             then makeEpochWithDBQuery syncEnv cache Nothing epochNo "handleEpochWhenFollowing"
             else case epochBlockDiffCache of
-              -- There should never be no EpochBlockDiff in cache at this point in the pipeline but just incase!
-              Nothing -> pure $ Left $ NEError "replaceEpoch: No epochBlockDiffCache"
+              Nothing -> noCacheUseDB
               -- Let's use both values aquired to calculate our new epoch.
               Just currentEpCache -> makeEpochWithCacheWhenFollowing syncEnv cache newestEpochFromDb currentEpCache epochNo
+  where
+    -- this is used if we have no epoch in cache or --disable-cache flag is on
+    noCacheUseDB = makeEpochWithDBQuery syncEnv cache Nothing epochNo "handleEpochWhenFollowing no Cache"
 
 -- Update the epoch in cache and db, which could be either an update or insert
 -- dependent on if epoch already exists.
@@ -180,7 +180,7 @@ updateEpochWhenSyncing syncEnv cache mEpochBlockDiff mLastMapEpochFromCache epoc
       additionalBlockCount = if isBoundaryBlock && isFirstEpoch then 1 else 0
 
   case mEpochBlockDiff of
-    -- if the flag --disable-cahce is active then we won't have an EpochBlockDiff and instead want to
+    -- if the flag --disable-cache is active then we won't have an EpochBlockDiff and instead want to
     -- use expensive query to make the epoch.
     Nothing -> do
       newEpoch <- DB.queryCalcEpochEntry epochNo
