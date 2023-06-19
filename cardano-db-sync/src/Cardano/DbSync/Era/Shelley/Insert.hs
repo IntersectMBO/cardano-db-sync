@@ -30,7 +30,7 @@ import qualified Cardano.Crypto.Hashing as Crypto
 import Cardano.Db (DbLovelace (..), DbWord64 (..), PoolUrl (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
+import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Cache (
   insertBlockAndCache,
   insertDatumAndCache,
@@ -81,6 +81,7 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
+import Control.Monad.Trans.Except.Extra (newExceptT)
 
 {- HLINT ignore "Reduce duplication" -}
 
@@ -134,9 +135,10 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
 
     -- now that we've inserted the Block and all it's txs lets cache what we'll need
     -- when we later update the epoch values.
-    void $
-      lift $
-        writeEpochBlockDiffToCache
+    -- if have --dissable-epoch && --dissable-cache then no need to cache data.
+    when (soptExtended $ envOptions syncEnv)
+      . newExceptT
+      $ writeEpochBlockDiffToCache
           cache
           EpochBlockDiff
             { ebdBlockId = blkId

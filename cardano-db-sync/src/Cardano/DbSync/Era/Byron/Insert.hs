@@ -25,7 +25,7 @@ import qualified Cardano.Crypto as Crypto (serializeCborHash)
 import Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (SyncEnv (..))
+import Cardano.DbSync.Api.Types (SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Cache (
   insertBlockAndCache,
   queryPrevBlockWithCache,
@@ -40,7 +40,7 @@ import Cardano.DbSync.Util
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
 import Control.Monad.Trans.Control (MonadBaseControl)
-import Control.Monad.Trans.Except.Extra (firstExceptT)
+import Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -64,28 +64,23 @@ insertByronBlock syncEnv firstBlockOfEpoch blk details = do
   res <- runExceptT $
     case byronBlockRaw blk of
       Byron.ABOBBlock ablk -> insertABlock syncEnv firstBlockOfEpoch ablk details
-      Byron.ABOBBoundary abblk -> insertABOBBoundary tracer cache abblk details
+      Byron.ABOBBoundary abblk -> insertABOBBoundary syncEnv abblk details
   -- Serializing things during syncing can drastically slow down full sync
   -- times (ie 10x or more).
   when
     (getSyncStatus details == SyncFollowing)
     DB.transactionCommit
   pure res
-  where
-    tracer :: Trace IO Text
-    tracer = getTrace syncEnv
-
-    cache :: Cache
-    cache = envCache syncEnv
 
 insertABOBBoundary ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
-  Cache ->
+  SyncEnv ->
   Byron.ABoundaryBlock ByteString ->
   SlotDetails ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertABOBBoundary tracer cache blk details = do
+insertABOBBoundary syncEnv blk details = do
+  let tracer = getTrace syncEnv
+      cache = envCache syncEnv
   -- Will not get called in the OBFT part of the Byron era.
   pbid <- queryPrevBlockWithCache "insertABOBBoundary" cache (Byron.ebbPrevHash blk)
   let epochNo = unEpochNo $ sdEpochNo details
@@ -121,18 +116,19 @@ insertABOBBoundary tracer cache blk details = do
 
   -- now that we've inserted the Block and all it's txs lets cache what we'll need
   -- when we later update the epoch values.
-  void $
-    lift $
-      writeEpochBlockDiffToCache
-        cache
-        EpochBlockDiff
-          { ebdBlockId = blkId
-          , ebdFees = 0
-          , ebdOutSum = 0
-          , ebdTxCount = 0
-          , ebdEpochNo = epochNo
-          , ebdTime = sdSlotTime details
-          }
+  -- If have --dissable-epoch && --dissable-cache then no need to cache data.
+  when (soptExtended $ envOptions syncEnv)
+    . newExceptT
+    $ writeEpochBlockDiffToCache
+      cache
+      EpochBlockDiff
+        { ebdBlockId = blkId
+        , ebdFees = 0
+        , ebdOutSum = 0
+        , ebdTxCount = 0
+        , ebdEpochNo = epochNo
+        , ebdTime = sdSlotTime details
+        }
 
   liftIO . logInfo tracer $
     Text.concat
@@ -180,18 +176,19 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
 
   -- now that we've inserted the Block and all it's txs lets cache what we'll need
   -- when we later update the epoch values.
-  void $
-    lift $
-      writeEpochBlockDiffToCache
-        cache
-        EpochBlockDiff
-          { ebdBlockId = blkId
-          , ebdFees = sum txFees
-          , ebdOutSum = fromIntegral outSum
-          , ebdTxCount = fromIntegral $ length txs
-          , ebdEpochNo = unEpochNo (sdEpochNo details)
-          , ebdTime = sdSlotTime details
-          }
+  -- If have --dissable-epoch && --dissable-cache then no need to cache data.
+  when (soptExtended $ envOptions syncEnv)
+    . newExceptT
+    $ writeEpochBlockDiffToCache
+      cache
+      EpochBlockDiff
+        { ebdBlockId = blkId
+        , ebdFees = sum txFees
+        , ebdOutSum = fromIntegral outSum
+        , ebdTxCount = fromIntegral $ length txs
+        , ebdEpochNo = unEpochNo (sdEpochNo details)
+        , ebdTime = sdSlotTime details
+        }
 
   liftIO $ do
     let epoch = unEpochNo (sdEpochNo details)
