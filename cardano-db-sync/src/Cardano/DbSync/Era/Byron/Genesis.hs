@@ -18,7 +18,7 @@ import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Crypto as Crypto
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (SyncEnv)
+import Cardano.DbSync.Api.Types (SyncEnv (envBackend))
 import Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Era.Util (liftLookupFail)
@@ -44,12 +44,11 @@ insertValidateGenesisDist ::
 insertValidateGenesisDist syncEnv (NetworkName networkName) cfg = do
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise *way* too chatty.
-  backend <- liftIO $ getBackend syncEnv
   hasConsumed <- liftIO $ getHasConsumed syncEnv
   prunes <- liftIO $ getPrunes syncEnv
   if False
-    then newExceptT $ DB.runDbIohkLogging backend tracer (insertAction hasConsumed prunes)
-    else newExceptT $ DB.runDbIohkNoLogging backend (insertAction hasConsumed prunes)
+    then newExceptT $ DB.runDbIohkLogging (envBackend syncEnv) tracer (insertAction hasConsumed prunes)
+    else newExceptT $ DB.runDbIohkNoLogging (envBackend syncEnv) (insertAction hasConsumed prunes)
   where
     tracer = getTrace syncEnv
 

@@ -56,9 +56,8 @@ rollbackFromBlockNo syncEnv blkNo = do
     cache = envCache syncEnv
 
 prepareRollback :: SyncEnv -> CardanoPoint -> Tip CardanoBlock -> IO (Either SyncNodeError Bool)
-prepareRollback syncEnv point serverTip = do
-  backend <- getBackend syncEnv
-  DB.runDbIohkNoLogging backend $ runExceptT action
+prepareRollback syncEnv point serverTip =
+  DB.runDbIohkNoLogging (envBackend syncEnv) $ runExceptT action
   where
     trce = getTrace syncEnv
 

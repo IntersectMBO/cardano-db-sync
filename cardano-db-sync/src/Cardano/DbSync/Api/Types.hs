@@ -39,7 +39,7 @@ data SyncEnv = SyncEnv
   , envSystemStart :: !SystemStart
   , envConnString :: ConnectionString
   , envRunDelayedMigration :: RunMigration
-  , envBackend :: !(StrictTVar IO (Strict.Maybe SqlBackend))
+  , envBackend :: !SqlBackend
   , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)
   , envIsFixed :: !(StrictTVar IO FixesRan)
   , envIndexes :: !(StrictTVar IO Bool)

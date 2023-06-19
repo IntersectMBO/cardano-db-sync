@@ -95,13 +95,13 @@ httpGetPoolOfflineData manager request poolUrl mHash = do
                     ( "application/json"
                         `BS.isInfixOf` ct
                         || "text/plain"
-                          `BS.isInfixOf` ct
+                        `BS.isInfixOf` ct
                         || "binary/octet-stream"
-                          `BS.isInfixOf` ct
+                        `BS.isInfixOf` ct
                         || "application/octet-stream"
-                          `BS.isInfixOf` ct
+                        `BS.isInfixOf` ct
                         || "application/binary"
-                          `BS.isInfixOf` ct
+                        `BS.isInfixOf` ct
                     )
                     . left
                     $ FEBadContentType poolUrl (Text.decodeLatin1 ct)
