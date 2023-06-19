@@ -32,7 +32,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Database.Persist.Sql (SqlBackend)
 import Paths_cardano_db_sync (version)
-import Cardano.DbSync.Api.Types (SyncEnv)
+import Cardano.DbSync.Api.Types (SyncEnv (envBackend))
 
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.
@@ -44,12 +44,11 @@ insertValidateGenesisDist ::
 insertValidateGenesisDist syncEnv (NetworkName networkName) cfg = do
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise *way* too chatty.
-  backend <- liftIO $ getBackend syncEnv
   hasConsumed <- liftIO $ getHasConsumed syncEnv
   prunes <- liftIO $ getPrunes syncEnv
   if False
-    then newExceptT $ DB.runDbIohkLogging backend tracer (insertAction hasConsumed prunes)
-    else newExceptT $ DB.runDbIohkNoLogging backend (insertAction hasConsumed prunes)
+    then newExceptT $ DB.runDbIohkLogging (envBackend syncEnv) tracer (insertAction hasConsumed prunes)
+    else newExceptT $ DB.runDbIohkNoLogging (envBackend syncEnv) (insertAction hasConsumed prunes)
   where
     tracer = getTrace syncEnv
 

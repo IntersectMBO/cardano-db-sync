@@ -5,12 +5,10 @@
 
 module Cardano.DbSync.Database (
   DbAction (..),
-  DbActionQueue (..),
+  ThreadChannels,
   lengthDbActionQueue,
   mkDbApply,
-  newDbActionQueue,
   runDbThread,
-  writeDbActionQueue,
 ) where
 
 import Cardano.BM.Trace (logDebug, logError, logInfo)
@@ -30,7 +28,7 @@ import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Except.Extra (newExceptT)
 import Ouroboros.Consensus.HeaderValidation hiding (TipInfo)
 import Ouroboros.Consensus.Ledger.Extended
-import Ouroboros.Network.Block (Point (..))
+import Ouroboros.Network.Block (BlockNo, Point (..))
 import Ouroboros.Network.Point (blockPointHash, blockPointSlot)
 import Cardano.DbSync.Api.Types (SyncEnv (..), ConsistentLevel (..), LedgerEnv (..))
 import Cardano.DbSync.Ledger.Types (CardanoLedgerState(..), SnapshotPoint (..))
@@ -43,7 +41,7 @@ data NextState
 runDbThread ::
   SyncEnv ->
   MetricSetters ->
-  DbActionQueue ->
+  ThreadChannels ->
   IO ()
 runDbThread syncEnv metricsSetters queue = do
   logInfo trce "Running DB thread"
@@ -57,18 +55,28 @@ runDbThread syncEnv metricsSetters queue = do
       when (length xs > 1) $ do
         logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
 
-      eNextState <- runExceptT $ runActions syncEnv xs
+      case hasRestart xs of
+        Nothing -> do
+          eNextState <- runExceptT $ runActions syncEnv xs
 
-      backend <- getBackend syncEnv
-      mBlock <- getDbLatestBlockInfo backend
-      whenJust mBlock $ \block -> do
-        setDbBlockHeight metricsSetters $ bBlockNo block
-        setDbSlotHeight metricsSetters $ bSlotNo block
+          mBlock <- getDbLatestBlockInfo (envBackend syncEnv)
+          whenJust mBlock $ \block -> do
+            setDbBlockHeight metricsSetters $ bBlockNo block
+            setDbSlotHeight metricsSetters $ bSlotNo block
 
-      case eNextState of
-        Left err -> logError trce $ renderSyncNodeError err
-        Right Continue -> loop
-        Right Done -> pure ()
+          case eNextState of
+            Left err -> logError trce $ renderSyncNodeError err
+            Right Continue -> loop
+            Right Done -> pure ()
+        Just resultVar -> do
+          -- In this case the syncing thread has restarted, so ignore all blocks that are not
+          -- inserted yet.
+          logInfo trce "Chain Sync client thread has restarted"
+          latestPoints <- getLatestPoints syncEnv
+          currentTip <- getCurrentTipBlockNo syncEnv
+          logDbState syncEnv
+          atomically $ putTMVar resultVar (latestPoints, currentTip)
+          loop
 
 -- | Run the list of 'DbAction's. Block are applied in a single set (as a transaction)
 -- and other operations are applied one-by-one.
@@ -139,8 +147,7 @@ rollbackLedger syncEnv point =
 -- 'Consistent' Level is correct based on the db tip.
 validateConsistentLevel :: SyncEnv -> CardanoPoint -> IO ()
 validateConsistentLevel syncEnv stPoint = do
-  backend <- getBackend syncEnv
-  dbTipInfo <- getDbLatestBlockInfo backend
+  dbTipInfo <- getDbLatestBlockInfo (envBackend syncEnv)
   cLevel <- getConsistentLevel syncEnv
   compareTips stPoint dbTipInfo cLevel
   where
@@ -176,3 +183,10 @@ spanDbApply lst =
   case lst of
     (DbApplyBlock bt : xs) -> let (ys, zs) = spanDbApply xs in (bt : ys, zs)
     xs -> ([], xs)
+
+hasRestart :: [DbAction] -> Maybe (StrictTMVar IO ([(CardanoPoint, Bool)], WithOrigin BlockNo))
+hasRestart = go
+  where
+    go [] = Nothing
+    go (DbRestartState mvar : _) = Just mvar
+    go (_ : rest) = go rest

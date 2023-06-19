@@ -21,42 +21,35 @@ module Cardano.DbSync.Sync (
   nullMetricSetters,
   SyncEnv (..),
   configureLogging,
-  runSyncNode,
+  runSyncNodeClient,
 ) where
 
 import Cardano.BM.Data.Tracer (ToLogObject (..), ToObject)
 import Cardano.BM.Trace (Trace, appendName, logInfo, logWarning)
 import qualified Cardano.BM.Trace as Logging
 import Cardano.Client.Subscription (subscribe)
-import qualified Cardano.Crypto as Crypto
 import Cardano.Db (runDbIohkLogging)
-import qualified Cardano.Db as Db
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (ConsistentLevel (..), FixesRan (..), RunMigration, SyncEnv, SyncOptions (..), envConnString, envLedgerEnv, envNetworkMagic, envOptions, LedgerEnv (..))
+import Cardano.DbSync.Api.Types (ConsistentLevel (..), FixesRan (..), LedgerEnv (..), SyncEnv (..), SyncOptions (..), envConnString, envLedgerEnv, envNetworkMagic, envOptions)
 import Cardano.DbSync.Config
 import Cardano.DbSync.Database
 import Cardano.DbSync.DbAction
-import Cardano.DbSync.Era
-import Cardano.DbSync.Error
 import Cardano.DbSync.Fix.PlutusDataBytes
 import Cardano.DbSync.Fix.PlutusScripts
-import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Metrics
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.Prelude hiding (Meta, Nat, (%))
-import Cardano.Slotting.Slot (EpochNo (..), WithOrigin (..))
+import Cardano.Slotting.Slot (WithOrigin (..))
 import qualified Codec.CBOR.Term as CBOR
-import Control.Monad.Extra (whenJust)
-import Control.Monad.Trans.Except.Exit (orDie)
 import Control.Tracer (Tracer)
 import qualified Data.ByteString.Lazy as BSL
 import Data.Functor.Contravariant (contramap)
 import qualified Data.List as List
 import qualified Data.Text as Text
-import Database.Persist.Postgresql (ConnectionString, SqlBackend, withPostgresqlConn)
+import Database.Persist.Postgresql (SqlBackend)
 import Network.Mux (MuxTrace, WithMuxBearer)
 import Network.Mux.Types (MuxMode (..))
 import Network.TypedProtocol.Pipelined (N (..), Nat (Succ, Zero))
@@ -65,7 +58,6 @@ import Ouroboros.Consensus.Byron.Node ()
 import Ouroboros.Consensus.Cardano.Node ()
 
 import Ouroboros.Consensus.Config (configCodec)
-import qualified Ouroboros.Consensus.HardFork.Simple as HardFork
 import Ouroboros.Consensus.Network.NodeToClient (
   Codecs' (..),
   cChainSyncCodec,
@@ -126,79 +118,18 @@ import Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
 import Ouroboros.Network.Protocol.LocalStateQuery.Client (localStateQueryClientPeer)
 import qualified Ouroboros.Network.Snocket as Snocket
 import Ouroboros.Network.Subscription (SubscriptionTrace)
-import System.Directory (createDirectoryIfMissing)
 import Ouroboros.Consensus.Node.NetworkProtocolVersion
-
-runSyncNode ::
-  MetricSetters ->
-  Trace IO Text ->
-  IOManager ->
-  ConnectionString ->
-  -- | migrations were ran on startup
-  Bool ->
-  -- | run migration function
-  RunMigration ->
-  SyncNodeParams ->
-  SyncOptions ->
-  IO ()
-runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc syncNodeParams syncOptions = do
-  let configFile = enpConfigFile syncNodeParams
-      maybeLedgerDir = enpMaybeLedgerStateDir syncNodeParams
-  syncNodeConfig <- readSyncNodeConfig configFile
-  whenJust maybeLedgerDir $
-    \enpLedgerStateDir -> do
-      createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
-
-  logInfo trce $ "Using byron genesis file from: " <> (show . unGenesisFile $ dncByronGenesisFile syncNodeConfig)
-  logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile syncNodeConfig)
-  logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfig)
-
-  orDie renderSyncNodeError $ do
-    genCfg <- readCardanoGenesisConfig syncNodeConfig
-    logProtocolMagicId trce $ genesisProtocolMagicId genCfg
-    syncEnv <-
-      ExceptT $
-        mkSyncEnvFromConfig
-          trce
-          dbConnString
-          syncOptions
-          genCfg
-          syncNodeParams
-          ranMigrations
-          runMigrationFnc
-
-    -- If the DB is empty it will be inserted, otherwise it will be validated (to make
-    -- sure we are on the right chain).
-    lift $
-      Db.runIohkLogging trce $
-        withPostgresqlConn dbConnString $ \backend -> do
-          liftIO $ replaceConnection syncEnv backend
-          liftIO $ runExtraMigrationsMaybe syncEnv
-          liftIO $
-            unless (enpShouldUseLedger syncNodeParams) $ do
-              logInfo trce "Migrating to a no ledger schema"
-              Db.noLedgerMigrations backend trce
-          lift $ orDie renderSyncNodeError $ insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfig) genCfg (useShelleyInit syncNodeConfig)
-
-    case genCfg of
-      GenesisCardano {} -> do
-        liftIO $ runSyncNodeClient metricsSetters syncEnv iomgr trce (enpSocketPath syncNodeParams)
-  where
-    useShelleyInit :: SyncNodeConfig -> Bool
-    useShelleyInit cfg =
-      case dncShelleyHardFork cfg of
-        HardFork.TriggerHardForkAtEpoch (EpochNo 0) -> True
-        _ -> False
 
 runSyncNodeClient ::
   MetricSetters ->
   SyncEnv ->
   IOManager ->
   Trace IO Text ->
+  ThreadChannels ->
   SocketPath ->
   IO ()
-runSyncNodeClient metricsSetters syncEnv iomgr trce (SocketPath socketPath) = do
-  logInfo trce $ "localInitiatorNetworkApplication: connecting to node via " <> textShow socketPath
+runSyncNodeClient metricsSetters syncEnv iomgr trce tc (SocketPath socketPath) = do
+  logInfo trce $ "Connecting to node via " <> textShow socketPath
   void $
     subscribe
       (localSnocket iomgr)
@@ -206,7 +137,7 @@ runSyncNodeClient metricsSetters syncEnv iomgr trce (SocketPath socketPath) = do
       (supportedNodeToClientVersions (Proxy @CardanoBlock))
       networkSubscriptionTracers
       clientSubscriptionParams
-      (dbSyncProtocols syncEnv metricsSetters codecConfig)
+      (dbSyncProtocols syncEnv metricsSetters tc codecConfig)
   where
     codecConfig :: CodecConfig CardanoBlock
     codecConfig = configCodec $ getTopLevelConfig syncEnv
@@ -247,12 +178,13 @@ runSyncNodeClient metricsSetters syncEnv iomgr trce (SocketPath socketPath) = do
 dbSyncProtocols ::
   SyncEnv ->
   MetricSetters ->
+  ThreadChannels ->
   CodecConfig CardanoBlock ->
   Network.NodeToClientVersion ->
   BlockNodeToClientVersion CardanoBlock ->
   ConnectionId LocalAddress ->
   NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols syncEnv metricsSetters codecConfig version bversion _connectionId =
+dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion _connectionId =
   NodeToClientProtocols
     { localChainSyncProtocol = localChainSyncPtcl
     , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -269,90 +201,81 @@ dbSyncProtocols syncEnv metricsSetters codecConfig version bversion _connectionI
     tracer :: Trace IO Text
     tracer = getTrace syncEnv
 
+    backend :: SqlBackend
+    backend = envBackend syncEnv
+
+    initAction channel = do
+      fr <- getIsSyncFixed syncEnv
+      let skipFix = soptSkipFix $ envOptions syncEnv
+      let onlyFix = soptOnlyFix $ envOptions syncEnv
+      if noneFixed fr && (onlyFix || not skipFix)
+        then do
+          fd <- runDbIohkLogging backend tracer $ getWrongPlutusData tracer
+          unless (nullData fd) $
+            void $
+              runPeer
+                localChainSyncTracer
+                (cChainSyncCodec codecs)
+                channel
+                ( Client.chainSyncClientPeer $
+                    chainSyncClientFixData backend tracer fd
+                )
+          if onlyFix
+            then do
+              setIsFixed syncEnv DataFixRan
+            else setIsFixedAndMigrate syncEnv DataFixRan
+          pure False
+        else
+          if isDataFixed fr && (onlyFix || not skipFix)
+            then do
+              ls <- runDbIohkLogging backend tracer $ getWrongPlutusScripts tracer
+              unless (nullPlutusScripts ls) $
+                void $
+                  runPeer
+                    localChainSyncTracer
+                    (cChainSyncCodec codecs)
+                    channel
+                    ( Client.chainSyncClientPeer $
+                        chainSyncClientFixScripts backend tracer ls
+                    )
+              when onlyFix $ panic "All Good! This error is only thrown to exit db-sync" -- TODO fix.
+              setIsFixed syncEnv AllFixRan
+              pure False
+            else do
+              when skipFix $ setIsFixedAndMigrate syncEnv AllFixRan
+              pure True
+
     localChainSyncPtcl :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
     localChainSyncPtcl = InitiatorProtocolOnly $
       MuxPeerRaw $ \channel ->
         liftIO . logException tracer "ChainSyncWithBlocksPtcl: " $ do
-          Db.runIohkLogging tracer $
-            withPostgresqlConn (envConnString syncEnv) $ \backend -> liftIO $ do
-              replaceConnection syncEnv backend
-              setConsistentLevel syncEnv Unchecked
+          isInitComplete <- runAndSetDone tc $ initAction channel
+          when isInitComplete $ do
+            logInfo tracer "Starting ChainSync client"
+            setConsistentLevel syncEnv Unchecked
 
-              fr <- getIsSyncFixed syncEnv
-              let skipFix = soptSkipFix $ envOptions syncEnv
-              let onlyFix = soptOnlyFix $ envOptions syncEnv
-              if noneFixed fr && (onlyFix || not skipFix)
-                then do
-                  fd <- runDbIohkLogging backend tracer $ getWrongPlutusData tracer
-                  unless (nullData fd) $
-                    void $
-                      runPeer
-                        localChainSyncTracer
-                        (cChainSyncCodec codecs)
-                        channel
-                        ( Client.chainSyncClientPeer $
-                            chainSyncClientFixData backend tracer fd
-                        )
-                  if onlyFix
-                    then do
-                      setIsFixed syncEnv DataFixRan
-                    else setIsFixedAndMigrate syncEnv DataFixRan
-                else
-                  if isDataFixed fr && (onlyFix || not skipFix)
-                    then do
-                      ls <- runDbIohkLogging backend tracer $ getWrongPlutusScripts tracer
-                      unless (nullPlutusScripts ls) $
-                        void $
-                          runPeer
-                            localChainSyncTracer
-                            (cChainSyncCodec codecs)
-                            channel
-                            ( Client.chainSyncClientPeer $
-                                chainSyncClientFixScripts backend tracer ls
-                            )
-                      when onlyFix $ panic "All Good! This error is only thrown to exit db-sync" -- TODO fix.
-                      setIsFixed syncEnv AllFixRan
-                    else do
-                      when skipFix $ setIsFixedAndMigrate syncEnv AllFixRan
-                      -- The Db thread is not forked at this point, so we can use
-                      -- the connection here. A connection cannot be used concurrently by many
-                      -- threads
-                      logInfo tracer "Starting chainSyncClient"
-                      latestPoints <- getLatestPoints syncEnv
-                      let (inMemory, onDisk) = List.span snd latestPoints
-                      logInfo tracer $
-                        mconcat
-                          [ "Suggesting intersection points from memory: "
-                          , textShow (fst <$> inMemory)
-                          , " and from disk: "
-                          , textShow (fst <$> onDisk)
-                          ]
-                      currentTip <- getCurrentTipBlockNo syncEnv
-                      logDbState syncEnv
-                      -- communication channel between datalayer thread and chainsync-client thread
-                      actionQueue <- newDbActionQueue
-
-                      race_
-                        ( concurrently
-                            (runDbThread syncEnv metricsSetters actionQueue)
-                            (runOfflineFetchThread syncEnv)
-                        )
-                        ( race_
-                            (runPipelinedPeer
-                                localChainSyncTracer
-                                (cChainSyncCodec codecs)
-                                channel
-                                ( chainSyncClientPeerPipelined $
-                                      chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip actionQueue)
-                            )
-                            (runLedgerStateWriteThread tracer (envLedgerEnv syncEnv))
-                        )
-
-                      atomically $ writeDbActionQueue actionQueue DbFinish
-                      -- We should return leftover bytes returned by 'runPipelinedPeer', but
-                      -- client application do not care about them (it's only important if one
-                      -- would like to restart a protocol on the same mux and thus bearer).
-                      pure ()
+            (latestPoints, currentTip) <- waitRestartState tc
+            let (inMemory, onDisk) = List.span snd latestPoints
+            logInfo tracer $
+              mconcat
+                [ "Suggesting intersection points from memory: "
+                , textShow (fst <$> inMemory)
+                , " and from disk: "
+                , textShow (fst <$> onDisk)
+                ]
+            -- TODO move to DBthread
+            -- logDbState syncEnv
+            void $ runPipelinedPeer
+              localChainSyncTracer
+              (cChainSyncCodec codecs)
+              channel
+              ( chainSyncClientPeerPipelined $
+                  chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip tc)
+            atomically $ writeDbActionQueue tc DbFinish
+            -- We should return leftover bytes returned by 'runPipelinedPeer', but
+            -- client application do not care about them (it's only important if one
+            -- would like to restart a protocol on the same mux and thus bearer).
+            pure ()
           pure ((), Nothing)
 
     dummylocalTxSubmit :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
@@ -397,9 +320,9 @@ chainSyncClient ::
   Trace IO Text ->
   [Point CardanoBlock] ->
   WithOrigin BlockNo ->
-  DbActionQueue ->
+  ThreadChannels ->
   ChainSyncClientPipelined CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-chainSyncClient metricsSetters trce latestPoints currentTip actionQueue = do
+chainSyncClient metricsSetters trce latestPoints currentTip tc = do
   ChainSyncClientPipelined $ pure $ clientPipelinedStIdle currentTip latestPoints
   where
     clientPipelinedStIdle ::
@@ -471,8 +394,8 @@ chainSyncClient metricsSetters trce latestPoints currentTip actionQueue = do
               setNodeBlockHeight metricsSetters (getTipBlockNo tip)
 
               newSize <- atomically $ do
-                writeDbActionQueue actionQueue $ mkDbApply blk
-                lengthDbActionQueue actionQueue
+                writeDbActionQueue tc $ mkDbApply blk
+                lengthDbActionQueue tc
 
               setDbQueueLength metricsSetters newSize
 
@@ -481,17 +404,9 @@ chainSyncClient metricsSetters trce latestPoints currentTip actionQueue = do
             logException trce "recvMsgRollBackward: " $ do
               -- This will get the current tip rather than what we roll back to
               -- but will only be incorrect for a short time span.
-              (mPoints, newTip) <- waitRollback actionQueue point tip
+              (mPoints, newTip) <- waitRollback tc point tip
               pure $ finish newTip tip mPoints
         }
-
-logProtocolMagicId :: Trace IO Text -> Crypto.ProtocolMagicId -> ExceptT SyncNodeError IO ()
-logProtocolMagicId tracer pm =
-  liftIO . logInfo tracer $
-    mconcat
-      [ "NetworkMagic: "
-      , textShow (Crypto.unProtocolMagicId pm)
-      ]
 
 drainThePipe ::
   Nat n ->
