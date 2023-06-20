@@ -3,7 +3,10 @@
 ############################################################################
 { haskell-nix
   # Map from URLs to input, for custom hackage sources
-, inputMap }:
+, inputMap
+, defaultCompiler
+, extraCompilers ? []
+}:
 let
 
   inherit (haskell-nix) haskellLib;
@@ -54,10 +57,8 @@ let
   project = haskell-nix.cabalProject' ({ pkgs, lib, config, ...}: {
     inherit inputMap;
     src = ../.;
-    # our current release compiler is 8107
-    compiler-nix-name = lib.mkDefault "ghc8107";
-    # but we also build for 927.
-    flake.variants = lib.genAttrs ["ghc927"] (x: {compiler-nix-name = x;});
+    compiler-nix-name = lib.mkDefault defaultCompiler;
+    flake.variants = lib.genAttrs extraCompilers (x: {compiler-nix-name = x;});
 
     shell = {
       name = "cabal-dev-shell";
@@ -66,6 +67,7 @@ let
       nativeBuildInputs = with pkgs.pkgsBuildBuild; [
         haskell-nix.cabal-install.${config.compiler-nix-name}
         ghcid
+        haskell-language-server
         hlint
         nix
         pkgconfig
@@ -74,6 +76,9 @@ let
         git
       ] ++ (with haskellPackages; [
         weeder
+      ] ++ lib.optionals (config.compiler-nix-name != defaultCompiler) [
+        # Tool(s) that require GHC 9.2+
+        fourmolu
       ]);
 
       withHoogle = lib.mkDefault true;

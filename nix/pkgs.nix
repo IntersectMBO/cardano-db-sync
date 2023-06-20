@@ -10,6 +10,10 @@ in {
     modules = [{packages.cardano-smash-server.flags.disable-basic-auth = true;}];
   }).exes.cardano-smash-server;
 
+  haskell-language-server = haskell-nix.tool compiler "haskell-language-server" {
+    src = haskell-nix.sources."hls-1.10";
+  };
+
   hlint = haskell-nix.tool compiler "hlint" {
     version = "3.2.7";
   };
