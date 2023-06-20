@@ -1,0 +1,21 @@
+name: Check Fourmolu
+
+on:
+  push: {}
+  merge_group: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Run fourmolu
+        uses: haskell-actions/run-fourmolu@v9
+        with:
+          version: "0.10.1.0"
