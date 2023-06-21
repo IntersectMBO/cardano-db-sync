@@ -25,11 +25,13 @@
     #   };
     # };
     customConfig.url = "github:input-output-hk/empty-flake";
-    tullia.url = "github:input-output-hk/tullia";
-    std.follows = "tullia/std";
+    std = {
+      url = "github:divnix/std";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, iohkNix, haskellNix, CHaP, nixpkgs, utils, tullia, std, flake-compat, ... }@inputs:
+  outputs = { self, iohkNix, haskellNix, CHaP, nixpkgs, utils, std, flake-compat, ... }@inputs:
     let
       inherit (haskellNix) config;
       inherit (nixpkgs) lib;
@@ -150,7 +152,7 @@
 
         legacyPackages = pkgs;
 
-        ciJobs =
+        hydraJobs =
           let
             nonRequiredPaths = [
               ".*musl\\.devShells\\..*"
@@ -162,9 +164,7 @@
               nonRequiredPaths = map (r: p: builtins.match r p != null) nonRequiredPaths;
             } // ciJobs;
 
-        hydraJobs = ciJobs;
-
-      } // tullia.fromSimple system (import ./nix/tullia.nix)) // {
+      }) // {
 
         # allows precise paths (avoid fallbacks) with nix build/eval:
         outputs = self;
