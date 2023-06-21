@@ -43,7 +43,7 @@ import Control.Monad (forM_, void)
 import Data.Text (Text)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 import Ouroboros.Network.Block (blockPoint)
-import Test.Cardano.Db.Mock.Config (getPoolLayer, startDBSync, stopDBSync, withFullConfig, babbageConfigDir)
+import Test.Cardano.Db.Mock.Config (babbageConfigDir, getPoolLayer, startDBSync, stopDBSync, withFullConfig)
 import Test.Cardano.Db.Mock.Examples (mockBlock0)
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillEpochPercentage,

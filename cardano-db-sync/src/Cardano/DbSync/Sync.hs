@@ -32,7 +32,7 @@ import qualified Cardano.Crypto as Crypto
 import Cardano.Db (runDbIohkLogging)
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (ConsistentLevel (..), FixesRan (..), RunMigration, SyncEnv, SyncOptions (..), envConnString, envLedgerEnv, envNetworkMagic, envOptions, LedgerEnv (..))
+import Cardano.DbSync.Api.Types (ConsistentLevel (..), FixesRan (..), LedgerEnv (..), RunMigration, SyncEnv, SyncOptions (..), envConnString, envLedgerEnv, envNetworkMagic, envOptions)
 import Cardano.DbSync.Config
 import Cardano.DbSync.Database
 import Cardano.DbSync.DbAction
@@ -334,12 +334,13 @@ dbSyncProtocols syncEnv metricsSetters _version codecs _connectionId =
                             (runOfflineFetchThread syncEnv)
                         )
                         ( race_
-                            (runPipelinedPeer
+                            ( runPipelinedPeer
                                 localChainSyncTracer
                                 (cChainSyncCodec codecs)
                                 channel
                                 ( chainSyncClientPeerPipelined $
-                                      chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip actionQueue)
+                                    chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip actionQueue
+                                )
                             )
                             (runLedgerStateWriteThread tracer (envLedgerEnv syncEnv))
                         )

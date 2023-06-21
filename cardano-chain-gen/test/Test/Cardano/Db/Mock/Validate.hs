@@ -208,7 +208,7 @@ assertCertCounts env expected =
       pure (registr - 5, deregistr, deleg - 5, withdrawal)
 
 assertRewardCounts ::
-  (EraCrypto era ~ StandardCrypto) =>
+  EraCrypto era ~ StandardCrypto =>
   DBSyncEnv ->
   LedgerState (ShelleyBlock p era) ->
   Bool ->

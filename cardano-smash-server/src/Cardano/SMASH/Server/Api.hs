@@ -150,9 +150,9 @@ smashApi :: Proxy SmashAPI
 smashApi = Proxy
 
 -- For now, we just ignore the @Body@ definition.
-instance (HasSwagger api) => HasSwagger (Body name :> api) where
+instance HasSwagger api => HasSwagger (Body name :> api) where
   toSwagger _ = toSwagger (Proxy :: Proxy api)
 
 -- For now, we just ignore the @BasicAuth@ definition.
-instance (HasSwagger api) => HasSwagger (BasicAuth name typo :> api) where
+instance HasSwagger api => HasSwagger (BasicAuth name typo :> api) where
   toSwagger _ = toSwagger (Proxy :: Proxy api)

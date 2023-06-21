@@ -83,7 +83,7 @@ httpClientFetchPolicies smashURL = runExceptT $ do
   pure policyResult
 
 -- | A simple HTTP call for remote server.
-httpApiCall :: forall a. (FromJSON a) => Request -> ExceptT HttpClientError IO a
+httpApiCall :: forall a. FromJSON a => Request -> ExceptT HttpClientError IO a
 httpApiCall request = do
   httpResult <- httpJSONEither request
   let httpResponseBody = getResponseBody httpResult

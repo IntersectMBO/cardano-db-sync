@@ -11,6 +11,7 @@ module Cardano.DbSync.Rollback (
 import Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Types (SyncEnv (..))
 import Cardano.DbSync.Cache
 import Cardano.DbSync.Era.Util
 import Cardano.DbSync.Error
@@ -23,12 +24,11 @@ import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (getOneEraHash)
 import Ouroboros.Network.Block
 import Ouroboros.Network.Point
-import Cardano.DbSync.Api.Types (SyncEnv (..))
 
 -- Rollbacks are done in an Era generic way based on the 'Point' we are
 -- rolling back to.
 rollbackFromBlockNo ::
-  (MonadIO m) =>
+  MonadIO m =>
   SyncEnv ->
   BlockNo ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
@@ -62,7 +62,7 @@ prepareRollback syncEnv point serverTip = do
   where
     trce = getTrace syncEnv
 
-    action :: (MonadIO m) => ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
+    action :: MonadIO m => ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
     action = do
       case getPoint point of
         Origin -> do

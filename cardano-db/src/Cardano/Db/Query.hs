@@ -158,6 +158,7 @@ import Database.Esqueleto.Experimental (
   orderBy,
   persistIdField,
   select,
+  selectOne,
   subList_select,
   sum_,
   table,
@@ -174,7 +175,7 @@ import Database.Esqueleto.Experimental (
   (?.),
   (^.),
   (||.),
-  type (:&) ((:&)), selectOne,
+  type (:&) ((:&)),
  )
 import Database.Persist.Class.PersistQuery (selectList)
 import Database.Persist.Types (SelectOpt (Asc))
@@ -292,10 +293,10 @@ queryBlockId hash = do
   pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
 
 -----------------------------------------------------------------------------------------------
+
 -- | Calculate the Epoch table entry for the specified epoch.
 -- When syncing the chain or filling an empty table, this is called at each epoch boundary to
 -- calculate the Epoch entry for the last epoch.
-
 queryCalcEpochEntry :: MonadIO m => Word64 -> ReaderT SqlBackend m Epoch
 queryCalcEpochEntry epochNum = do
   blockResult <- select $ do
@@ -334,8 +335,8 @@ queryLatestEpoch = do
 queryTxWithBlocks ::
   MonadIO m =>
   Word64 ->
-  [(Value Word64, Value (Maybe UTCTime), Value (Maybe UTCTime))]
-  -> ReaderT SqlBackend m Epoch
+  [(Value Word64, Value (Maybe UTCTime), Value (Maybe UTCTime))] ->
+  ReaderT SqlBackend m Epoch
 queryTxWithBlocks epochNum blockResult = do
   txRes <- select $ do
     (tx :& blk) <-

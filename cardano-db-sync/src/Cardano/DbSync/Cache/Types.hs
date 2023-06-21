@@ -167,7 +167,7 @@ textShowStats (Cache ic) = do
 uninitiatedCache :: Cache
 uninitiatedCache = UninitiatedCache
 
-newEmptyCache :: (MonadIO m) => Word64 -> Word64 -> m Cache
+newEmptyCache :: MonadIO m => Word64 -> Word64 -> m Cache
 newEmptyCache maCapacity daCapacity =
   liftIO . fmap Cache $
     CacheInternal

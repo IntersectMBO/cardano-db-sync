@@ -73,6 +73,7 @@ import Cardano.Prelude
 import Cardano.Slotting.Block (BlockNo (..))
 import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
 import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Except.Extra (newExceptT)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import Data.Either.Extra (eitherToMaybe)
@@ -81,7 +82,6 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
-import Control.Monad.Trans.Except.Extra (newExceptT)
 
 {- HLINT ignore "Reduce duplication" -}
 
@@ -139,15 +139,15 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
     when (soptExtended $ envOptions syncEnv)
       . newExceptT
       $ writeEpochBlockDiffToCache
-          cache
-          EpochBlockDiff
-            { ebdBlockId = blkId
-            , ebdTime = sdSlotTime details
-            , ebdFees = groupedTxFees blockGroupedData
-            , ebdEpochNo = unEpochNo (sdEpochNo details)
-            , ebdOutSum = fromIntegral $ groupedTxOutSum blockGroupedData
-            , ebdTxCount = fromIntegral $ length (Generic.blkTxs blk)
-            }
+        cache
+        EpochBlockDiff
+          { ebdBlockId = blkId
+          , ebdTime = sdSlotTime details
+          , ebdFees = groupedTxFees blockGroupedData
+          , ebdEpochNo = unEpochNo (sdEpochNo details)
+          , ebdOutSum = fromIntegral $ groupedTxOutSum blockGroupedData
+          , ebdTxCount = fromIntegral $ length (Generic.blkTxs blk)
+          }
 
     when withinHalfHour $
       insertReverseIndex blkId minIds
@@ -561,7 +561,7 @@ insertPoolRegister _tracer cache isMember network (EpochNo epoch) blkId txId idx
   mapM_ (insertPoolOwner cache network poolUpdateId txId) $ toList (Shelley.ppOwners params)
   mapM_ (insertPoolRelay poolUpdateId) $ toList (Shelley.ppRelays params)
   where
-    mkEpochActivationDelay :: (MonadIO m) => DB.PoolHashId -> ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
+    mkEpochActivationDelay :: MonadIO m => DB.PoolHashId -> ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
     mkEpochActivationDelay poolHashId =
       if isMember (Shelley.ppId params)
         then pure 3
@@ -1177,7 +1177,7 @@ insertScript tracer txId script = do
           , DB.scriptBytes = Generic.txScriptCBOR script
           }
   where
-    scriptConvert :: (MonadIO m) => Generic.TxScript -> m (Maybe Text)
+    scriptConvert :: MonadIO m => Generic.TxScript -> m (Maybe Text)
     scriptConvert s =
       maybe (pure Nothing) (safeDecodeToJson tracer "insertScript") (Generic.txScriptJson s)
 

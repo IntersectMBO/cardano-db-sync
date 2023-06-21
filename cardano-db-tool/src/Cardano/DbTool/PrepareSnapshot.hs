@@ -6,6 +6,7 @@ module Cardano.DbTool.PrepareSnapshot (
 import Cardano.Db
 import Cardano.DbSync.Config.Types hiding (LogFileDir)
 import Cardano.DbSync.Ledger.State
+import Cardano.DbSync.Ledger.Types (LedgerStateFile (..))
 import Cardano.Prelude (Word64, fromMaybe)
 import Control.Monad
 import qualified Data.ByteString.Base16 as Base16
@@ -13,7 +14,6 @@ import Data.Version (makeVersion, showVersion, versionBranch)
 import Ouroboros.Network.Block hiding (blockHash)
 import Paths_cardano_db_tool (version)
 import System.Info (arch, os)
-import Cardano.DbSync.Ledger.Types (LedgerStateFile (..))
 
 newtype PrepareSnapshotArgs = PrepareSnapshotArgs
   { unPrepareSnapshotArgs :: LedgerStateDir
