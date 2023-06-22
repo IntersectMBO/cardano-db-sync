@@ -696,7 +696,7 @@ getRegisteredPools st =
 
 getRegisteredPoolShelley ::
   forall p era.
-  (EraCrypto era ~ StandardCrypto) =>
+  EraCrypto era ~ StandardCrypto =>
   LedgerState (ShelleyBlock p era) ->
   Set.Set PoolKeyHash
 getRegisteredPoolShelley lState =

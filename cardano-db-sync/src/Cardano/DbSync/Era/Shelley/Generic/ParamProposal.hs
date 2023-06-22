@@ -61,7 +61,7 @@ data ParamProposal = ParamProposal
   , pppMaxCollateralInputs :: !(Maybe Natural)
   }
 
-convertParamProposal :: (EraCrypto era ~ StandardCrypto) => Witness era -> Shelley.Update era -> [ParamProposal]
+convertParamProposal :: EraCrypto era ~ StandardCrypto => Witness era -> Shelley.Update era -> [ParamProposal]
 convertParamProposal witness (Shelley.Update pp epoch) =
   case witness of
     Shelley {} -> shelleyParamProposal epoch pp

@@ -108,7 +108,7 @@ resolveUTxOIndex index st = toLeft $ case index of
     toLeft (Just (txIn, txOut)) = Right ((txIn, txOut), UTxOInput txIn)
 
 resolveStakeCreds ::
-  (EraCrypto era ~ StandardCrypto) =>
+  EraCrypto era ~ StandardCrypto =>
   StakeIndex ->
   LedgerState (ShelleyBlock p era) ->
   Either ForgingError (StakeCredential StandardCrypto)
@@ -162,7 +162,7 @@ resolveStakeCreds indx st = case indx of
     toEither (Just a) = Right a
 
 resolvePool ::
-  (EraCrypto era ~ StandardCrypto) =>
+  EraCrypto era ~ StandardCrypto =>
   PoolIndex ->
   LedgerState (ShelleyBlock p era) ->
   KeyHash 'StakePool StandardCrypto

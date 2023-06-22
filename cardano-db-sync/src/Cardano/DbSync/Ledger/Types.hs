@@ -17,8 +17,9 @@ import Cardano.DbSync.Ledger.Event (LedgerEvent)
 import Cardano.DbSync.Types (
   CardanoBlock,
   CardanoInterpreter,
+  CardanoPoint,
   PoolKeyHash,
-  SlotDetails, CardanoPoint,
+  SlotDetails,
  )
 import Cardano.Ledger.Alonzo.Scripts (Prices)
 import qualified Cardano.Ledger.BaseTypes as Ledger
@@ -28,10 +29,10 @@ import Cardano.Slotting.Slot (
   SlotNo (..),
   WithOrigin (..),
  )
-import Control.Concurrent.STM.TBQueue (TBQueue)
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTVar,
  )
+import Control.Concurrent.STM.TBQueue (TBQueue)
 
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
