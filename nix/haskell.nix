@@ -139,6 +139,8 @@ let
         packages.cardano-chain-gen.package.extraSrcFiles =
           [ "../schema/*.sql" ];
         packages.cardano-db.package.extraSrcFiles = ["../config/pgpass-testnet"];
+        packages.cardano-db.components.tests.test-db.extraSrcFiles =
+          [ "../config/pgpass-mainnet" ];
         packages.cardano-db.components.tests.schema-rollback.extraSrcFiles = [ "src/Cardano/Db/Schema.hs" "src/Cardano/Db/Delete.hs" ];
       }
       ({ pkgs, ... }: {
