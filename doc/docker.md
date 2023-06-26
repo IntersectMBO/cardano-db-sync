@@ -33,7 +33,7 @@ reccomended default values for `maintenance_work_mem` and `max_parallel_maintena
 
 - default start
 ```sh
-docker compose up && docker-compose logs -f
+docker compose up -d && docker-compose logs -f
 
 docker ps | grep postgres
 CONTAINER ID   IMAGE                             COMMAND                  CREATED         STATUS                            PORTS                                       NAMES
@@ -63,7 +63,7 @@ To connect to different network (preprod or preview) use `NETWORK` environment v
 
 
 ```
-NETWORK=preprod docker-compose up && docker-compose logs -f
+NETWORK=preprod docker-compose up -d && docker-compose logs -f
 ```
 
 ### Take control
@@ -77,10 +77,10 @@ Using Docker run to demonstrate, but can be achieved using `docker-compose` too 
 `service.command`
 ```
 docker run \
-  -v $PWD/config/network/mainnet/cardano-db-sync:/config
-  -v $PWD/config/network/mainnet/genesis:/genesis
+  -v $PWD/config/network/mainnet/cardano-db-sync:/config \
+  -v $PWD/config/network/mainnet/genesis:/genesis \
   -v $PWD/node-ipc:/node-ipc \
-  inputoutput/cardano-db-sync \
+  ghcr.io/input-output-hk/cardano-db-sync:13.1.1.2 \
     run --config /config/config.yaml --socket-path /node-ipc/node.socket # command
 ```
 
@@ -113,7 +113,7 @@ For `docker-compose`:
 
 ```yaml
 cardano-db-sync:
-    image: inputoutput/cardano-db-sync:13.0.5
+    image: ghcr.io/input-output/cardano-db-sync:13.1.1.2
     ...
     working_dir: /var/lib/cexplorer
     volumes:
