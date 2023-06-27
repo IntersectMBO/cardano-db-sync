@@ -80,7 +80,7 @@ docker run \
   -v $PWD/config/network/mainnet/cardano-db-sync:/config \
   -v $PWD/config/network/mainnet/genesis:/genesis \
   -v $PWD/node-ipc:/node-ipc \
-  ghcr.io/input-output-hk/cardano-db-sync:13.1.1.2 \
+  ghcr.io/input-output-hk/cardano-db-sync:13.1.1.2-docker \
     run --config /config/config.yaml --socket-path /node-ipc/node.socket # command
 ```
 
@@ -113,7 +113,7 @@ For `docker-compose`:
 
 ```yaml
 cardano-db-sync:
-    image: ghcr.io/input-output/cardano-db-sync:13.1.1.2
+    image: ghcr.io/input-output/cardano-db-sync:13.1.1.2-docker
     ...
     working_dir: /var/lib/cexplorer
     volumes:
