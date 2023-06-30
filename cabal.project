@@ -77,3 +77,11 @@ source-repository-package
     trace-dispatcher
     trace-forward
     trace-resources
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/ouroboros-network
+  tag: 99ec282e32659aeeec5c9b5e64a99b48ea77a3a7
+  --sha256: 19hdlypq12wdm0z43g5xi3jhm0jrs54hpk6f8a5fvxqpb9ynbk18
+  subdir:
+    cardano-client
