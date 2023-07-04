@@ -222,7 +222,7 @@ blockProtoVersionPraos :: ShelleyBlock PraosStandard era -> Ledger.ProtVer
 blockProtoVersionPraos = Praos.hbProtVer . getHeaderBodyPraos . blockHeader
 
 blockSize :: ProtocolHeaderSupportsEnvelope p => ShelleyBlock p era -> Word64
-blockSize = fromIntegral . pHeaderSize . blockHeader
+blockSize = fromIntegral . pHeaderBlockSize . blockHeader
 
 blockVrfKeyView :: VerKeyVRF StandardCrypto -> Text
 blockVrfKeyView = Api.serialiseToBech32 . Api.VrfVerificationKey
