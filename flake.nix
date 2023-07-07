@@ -154,16 +154,24 @@
 
         hydraJobs =
           let
-            nonRequiredPaths = [
-              ".*musl\\.devShells\\..*"
+            # TODO: macOS builders are resource-constrained and cannot run the detabase
+            # integration tests. Add these back when we get beefier builders.
+            nonRequiredMacOSPaths = [
+              "checks.cardano-chain-gen:test:cardano-chain-gen"
+              "ghc927.checks.cardano-chain-gen:test:cardano-chain-gen"
             ];
+
+            nonRequiredPaths =
+              if hostPlatform.isMacOS then
+                nonRequiredMacOSPaths
+              else [];
+
           in
           pkgs.callPackages iohkNix.utils.ciJobsAggregates
             {
               inherit ciJobs;
-              nonRequiredPaths = map (r: p: builtins.match r p != null) nonRequiredPaths;
+              nonRequiredPaths = map lib.hasPrefix nonRequiredPaths;
             } // ciJobs;
-
       }) // {
 
         # allows precise paths (avoid fallbacks) with nix build/eval:
