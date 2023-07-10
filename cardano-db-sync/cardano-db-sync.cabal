@@ -44,6 +44,7 @@ library
 
                         Cardano.DbSync.Api
                         Cardano.DbSync.Api.Types
+                        Cardano.DbSync.CardanoUtil
                         Cardano.DbSync.Config
                         Cardano.DbSync.Config.Alonzo
                         Cardano.DbSync.Config.Byron

@@ -15,7 +15,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Metadata (
   metadataValueToJsonNoSchema,
 ) where
 
-import Cardano.Api.Shelley (TxMetadataValue (..))
+import Cardano.DbSync.CardanoUtil (TxMetadataValue (..))
 import qualified Cardano.Ledger.Allegra.TxAuxData as Allegra
 import qualified Cardano.Ledger.Alonzo.TxAuxData as Alonzo
 import Cardano.Ledger.Era (Era)

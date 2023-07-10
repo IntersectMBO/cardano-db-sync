@@ -36,10 +36,10 @@ module Cardano.DbSync.Era.Shelley.Generic.Util (
   toVoterRole,
 ) where
 
-import qualified Cardano.Api.Shelley as Api
 import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as Db
+import Cardano.DbSync.CardanoUtil
 import Cardano.DbSync.Types
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
@@ -125,10 +125,10 @@ partitionMIRTargets =
         Shelley.SendToOppositePotMIR y -> (xs, y : ys)
 
 renderAddress :: Ledger.Addr StandardCrypto -> Text
-renderAddress = Api.serialiseAddress . Api.fromShelleyAddrToAny
+renderAddress = serialiseAddress . fromShelleyAddrToAny
 
 renderRewardAcnt :: Ledger.RewardAcnt StandardCrypto -> Text
-renderRewardAcnt = Api.serialiseAddress . Api.fromShelleyStakeAddr
+renderRewardAcnt = serialiseAddress . fromShelleyStakeAddr
 
 stakingCredHash :: Ledger.Network -> Ledger.StakeCredential era -> ByteString
 stakingCredHash network = Ledger.serialiseRewardAcnt . annotateStakingCred network
@@ -145,7 +145,7 @@ unKeyHashRaw :: Ledger.KeyHash d era -> ByteString
 unKeyHashRaw (Ledger.KeyHash kh) = Crypto.hashToBytes kh
 
 unKeyHashView :: Ledger.KeyHash 'Ledger.StakePool StandardCrypto -> Text
-unKeyHashView = Api.serialiseToBech32 . Api.StakePoolKeyHash
+unKeyHashView = serialiseToBech32 . StakePoolKeyHash
 
 unScriptHash :: Shelley.ScriptHash StandardCrypto -> ByteString
 unScriptHash (Shelley.ScriptHash h) = Crypto.hashToBytes h

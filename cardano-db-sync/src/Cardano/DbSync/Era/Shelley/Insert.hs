@@ -19,12 +19,6 @@ module Cardano.DbSync.Era.Shelley.Insert (
   mkAdaPots,
 ) where
 
-import Cardano.Api (SerialiseAsCBOR (..))
-import Cardano.Api.Shelley (
-  TxMetadataValue (..),
-  makeTransactionMetadata,
-  metadataValueToJsonNoSchema,
- )
 import Cardano.BM.Trace (Trace, logDebug, logInfo, logWarning)
 import Cardano.Crypto.Hash (hashToBytes)
 import qualified Cardano.Crypto.Hashing as Crypto
@@ -46,6 +40,7 @@ import Cardano.DbSync.Cache (
  )
 import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
 import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..), EpochBlockDiff (..))
+import Cardano.DbSync.CardanoUtil
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Era.Shelley.Insert.Epoch
