@@ -273,4 +273,4 @@ prop_empty_blocks iom knownMigrations = withMaxSuccess 20 $ noShrinking $ forAll
   prettyCommands smSymbolic hist (checkCommandNames cmds (res === Ok))
   where
     smSymbolic = sm (error "inter") (error "mockServer") (error "dbSync")
-    runAction action = withFullConfig' False "config" "qsm" action iom knownMigrations
+    runAction action = withFullConfig' False Nothing "config" "qsm" action iom knownMigrations

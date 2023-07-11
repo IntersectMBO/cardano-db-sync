@@ -5,6 +5,7 @@
 module Test.Cardano.Db.Mock.Config (
   Config (..),
   DBSyncEnv (..),
+  TxOutParam(..),
   babbageConfigDir,
   alonzoConfigDir,
   emptyMetricsSetters,
@@ -29,6 +30,7 @@ module Test.Cardano.Db.Mock.Config (
   startDBSync,
   withDBSyncEnv,
   withFullConfig,
+  withTxOutParamConfig,
   withFullConfig',
 ) where
 
@@ -87,6 +89,12 @@ data DBSyncEnv = DBSyncEnv
   { dbSyncParams :: SyncNodeParams
   , dbSyncForkDB :: IO (Async ())
   , dbSyncThreadVar :: TMVar (Async ())
+  }
+
+-- used for testing of tx out pruning feature
+data TxOutParam = TxOutParam
+  { paramMigrateConsumed :: Bool,
+    paramPruneTxOut :: Bool
   }
 
 babbageConfigDir :: FilePath
@@ -195,14 +203,14 @@ setupTestsDir dir = do
           0
           Nothing
 
-mkConfig :: FilePath -> FilePath -> IO Config
-mkConfig staticDir mutableDir = do
+mkConfig :: FilePath -> FilePath -> Maybe TxOutParam -> IO Config
+mkConfig staticDir mutableDir mTxOutParam = do
   config <- readSyncNodeConfig $ ConfigFile (staticDir </> "test-db-sync-config.json")
   genCfg <- either (error . Text.unpack . renderSyncNodeError) id <$> runExceptT (readCardanoGenesisConfig config)
   let pInfoDbSync = mkProtocolInfoCardano genCfg []
   creds <- mkShelleyCredentials $ staticDir </> "pools" </> "bulk1.creds"
   let pInfoForger = mkProtocolInfoCardano genCfg creds
-  syncPars <- mkSyncNodeParams staticDir mutableDir
+  syncPars <- mkSyncNodeParams staticDir mutableDir mTxOutParam
   pure $ Config (Consensus.pInfoConfig pInfoDbSync) pInfoDbSync pInfoForger syncPars
 
 mkShelleyCredentials :: FilePath -> IO [ShelleyLeaderCredentials StandardCrypto]
@@ -220,8 +228,8 @@ mkShelleyCredentials bulkFile = do
         }
 
 -- | staticDir can be shared by tests running in parallel. mutableDir not.
-mkSyncNodeParams :: FilePath -> FilePath -> IO SyncNodeParams
-mkSyncNodeParams staticDir mutableDir = do
+mkSyncNodeParams :: FilePath -> FilePath -> Maybe TxOutParam -> IO SyncNodeParams
+mkSyncNodeParams staticDir mutableDir mTxOutParam = do
   pgconfig <- orDie Db.renderPGPassError $ newExceptT Db.readPGPassDefault
   pure $
     SyncNodeParams
@@ -242,8 +250,8 @@ mkSyncNodeParams staticDir mutableDir = do
       , enpHasOfflineData = True
       , enpTurboMode = False
       , enpFullMode = True
-      , enpMigrateConsumed = False
-      , enpPruneTxOut = False
+      , enpMigrateConsumed = maybe False paramMigrateConsumed mTxOutParam
+      , enpPruneTxOut = maybe False paramPruneTxOut mTxOutParam
       , enpSnEveryFollowing = 35
       , enpSnEveryLagging = 35
       , enpMaybeRollback = Nothing
@@ -265,19 +273,30 @@ withFullConfig ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfig = withFullConfig' True
+withFullConfig = withFullConfig' True Nothing
 
-withFullConfig' ::
-  Bool ->
+withTxOutParamConfig ::
+  TxOutParam ->
   FilePath ->
   FilePath ->
   (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfig' hasFingerprint config testLabel action iom migr = do
+withTxOutParamConfig txOutParam = withFullConfig' True (Just txOutParam)
+
+withFullConfig' ::
+  Bool ->
+  Maybe TxOutParam ->
+  FilePath ->
+  FilePath ->
+  (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
+  IOManager ->
+  [(Text, Text)] ->
+  IO a
+withFullConfig' hasFingerprint mTxOutParam config testLabel action iom migr = do
   recreateDir mutableDir
-  cfg <- mkConfig configDir mutableDir
+  cfg <- mkConfig configDir mutableDir mTxOutParam
   fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabel else pure Nothing
   let dbsyncParams = syncNodeParams cfg
   -- Set to True to disable logging, False to enable it.

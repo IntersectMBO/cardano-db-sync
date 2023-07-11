@@ -67,13 +67,13 @@ toExtraTxOut txOut =
 
 updateListTxOutConsumedByTxInId :: MonadIO m => [(TxOutId, TxInId)] -> ReaderT SqlBackend m ()
 updateListTxOutConsumedByTxInId ls = do
-  ExtraCons.updateListTxOutConsumedByTxInId (f <$> ls)
+  ExtraCons.queryUpdateListTxOutConsumedByTxInId (f <$> ls)
   where
     f (txOutId, txInId) = (changeKey txOutId, changeKey txInId)
 
 setNullTxOut :: MonadIO m => Trace IO Text -> Maybe TxInId -> Word64 -> ReaderT SqlBackend m ()
 setNullTxOut trce mMinTxInId =
-  ExtraCons.setNullTxOut trce (changeKey <$> mMinTxInId)
+  ExtraCons.querySetNullTxOut trce (changeKey <$> mMinTxInId)
 
 runExtraMigrations :: MonadIO m => Trace IO Text -> Word64 -> Bool -> Bool -> ReaderT SqlBackend m ()
 runExtraMigrations trce blockNoDiff consumed pruned = do
