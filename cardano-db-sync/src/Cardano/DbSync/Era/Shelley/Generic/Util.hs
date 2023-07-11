@@ -36,6 +36,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Util (
   toVoterRole,
 ) where
 
+import qualified Cardano.Api.Shelley as Api
 import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as Db
@@ -145,7 +146,7 @@ unKeyHashRaw :: Ledger.KeyHash d era -> ByteString
 unKeyHashRaw (Ledger.KeyHash kh) = Crypto.hashToBytes kh
 
 unKeyHashView :: Ledger.KeyHash 'Ledger.StakePool StandardCrypto -> Text
-unKeyHashView = serialiseToBech32 . StakePoolKeyHash
+unKeyHashView = Api.serialiseToBech32 . StakePoolKeyHash
 
 unScriptHash :: Shelley.ScriptHash StandardCrypto -> ByteString
 unScriptHash (Shelley.ScriptHash h) = Crypto.hashToBytes h

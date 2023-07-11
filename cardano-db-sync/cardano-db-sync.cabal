@@ -128,6 +128,7 @@ library
   build-depends:        base                            >= 4.14         && < 5
                       , aeson
                       , async
+                      , bech32
                       , binary
                       , bytestring
                       , base16-bytestring
@@ -298,3 +299,33 @@ executable test-http-get-json-metadata
                       , text
                       , transformers
                       , transformers-except
+
+test-suite test
+  default-language:     Haskell2010
+  type:                 exitcode-stdio-1.0
+  main-is:              Main.hs
+  hs-source-dirs:       test
+
+  ghc-options:          -Wall
+                        -Werror
+                        -Wcompat
+                        -Wredundant-constraints
+                        -Wincomplete-patterns
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+                        -Wunused-imports
+                        -Wunused-packages
+
+  other-modules:        Cardano.DbSync.CardanoUtilTest
+
+  build-depends:        base                            >= 4.14         && < 4.17
+                      , base16-bytestring
+                      , cardano-api
+                      , cardano-binary
+                      , cardano-crypto-class
+                      , cardano-crypto-praos
+                      , cardano-db-sync
+                      , cardano-ledger-core
+                      , cardano-prelude
+                      , hedgehog
+                      , text

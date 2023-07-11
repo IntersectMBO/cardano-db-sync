@@ -225,7 +225,7 @@ blockSize :: ProtocolHeaderSupportsEnvelope p => ShelleyBlock p era -> Word64
 blockSize = fromIntegral . pHeaderBlockSize . blockHeader
 
 blockVrfKeyView :: VerKeyVRF StandardCrypto -> Text
-blockVrfKeyView = serialiseToBech32 . VrfVerificationKey
+blockVrfKeyView = serialiseVerKeyVrfToBech32
 
 blockVrfVkTPraos :: ShelleyBlock TPraosStandard era -> VerKeyVRF StandardCrypto
 blockVrfVkTPraos = TPraos.bheaderVrfVk . TPraos.bhbody . blockHeader
