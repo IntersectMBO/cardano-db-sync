@@ -67,6 +67,17 @@ When building an application that will be querying the database, remember that f
 low latency disk access is far more important than high throughput (assuming the minimal IOPS
 above is met).
 
+## Installation
+
+Install db-sync with one of the following methods:
+
+ * [Static Binaries](https://github.com/input-output-hk/cardano-db-sync/releases/latest)
+ * [Installing with Nix][InstallingNix]
+ * [Installing from Source][Installing]
+ * [Docker][Docker]
+
+Once installed, start db-sync by following the [Running Guide][Running].
+
 ## Troubleshooting
 
 If you have any issues with this project, consult the [Troubleshooting][Troubleshooting] page for
@@ -84,8 +95,11 @@ possible solutions.
 * [StateSnapshot][StateSnapshot]: Document the creation and restoration of state snapshot files.
 * [Validation][Validation]: Explanation of validation done by the db-sync node and assumptions made.
 
+[InstallingNix]: doc/installing-with-nix.md
+[Installing]: doc/installing.md
 [BuildingRunning]: doc/building-running.md
 [Docker]: doc/docker.md
+[Running]: doc/running.md
 [ERD]: doc/ERD.png
 [ExampleQueries]: doc/interesting-queries.md
 [PostgresView]: https://www.postgresql.org/docs/current/sql-createview.html
