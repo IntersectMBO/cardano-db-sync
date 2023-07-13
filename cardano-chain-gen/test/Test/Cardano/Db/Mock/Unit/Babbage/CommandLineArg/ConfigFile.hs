@@ -5,33 +5,16 @@ where
 
 import Cardano.Mock.ChainSync.Server (IOManager)
 import Data.Text (Text)
-import Test.Cardano.Db.Mock.Config (CommandLineArgs (..), babbageConfigDir, withCustomConfigAndLogs)
+import Test.Cardano.Db.Mock.Config (CommandLineArgs (..), babbageConfigDir, initCommandLineArgs, withCustomConfigAndLogs)
 import Test.Tasty.HUnit (Assertion)
 
-mkCommandLineArgs :: Bool -> CommandLineArgs
-mkCommandLineArgs hasConfigFile =
-  CommandLineArgs
-    { claHasConfigFile = hasConfigFile
-    , claEpochDisabled = True
-    , claHasCache = True
-    , claShouldUseLedger = True
-    , claSkipFix = True
-    , claOnlyFix = False
-    , claForceIndexes = False
-    , claHasMultiAssets = True
-    , claHasMetadata = True
-    , claHasPlutusExtra = True
-    , claHasOfflineData = True
-    , claTurboMode = False
-    , claFullMode = True
-    , claMigrateConsumed = True
-    , claPruneTxOut = True
-    }
+commandLineArgs :: CommandLineArgs
+commandLineArgs = initCommandLineArgs {claHasConfigFile = False}
 
 -- this test fails as incorrect configuration file given
 checkConfigFileArg :: IOManager -> [(Text, Text)] -> Assertion
 checkConfigFileArg =
-  withCustomConfigAndLogs (mkCommandLineArgs False) babbageConfigDir testLabel $ \_ _ _ -> do
+  withCustomConfigAndLogs commandLineArgs babbageConfigDir testLabel $ \_ _ _ -> do
     pure ()
   where
     testLabel = "CLAcheckConfigFileArg"

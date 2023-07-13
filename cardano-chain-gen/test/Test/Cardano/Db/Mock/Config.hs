@@ -52,7 +52,7 @@ import Cardano.Mock.ChainSync.Server
 import Cardano.Mock.Forging.Interpreter
 import Cardano.Node.Protocol.Shelley (readLeaderCredentials)
 import Cardano.Node.Types (ProtocolFilepaths (..))
-import Cardano.Prelude (ReaderT, panic, stderr, fromMaybe)
+import Cardano.Prelude (ReaderT, panic, stderr)
 import Cardano.SMASH.Server.PoolDataLayer
 import Control.Concurrent.Async (Async, async, cancel, poll)
 import Control.Concurrent.STM (atomically)

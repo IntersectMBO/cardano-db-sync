@@ -38,7 +38,7 @@ unitTests iom knownMigrations =
         , test "node restart boundary" BabSimple.nodeRestartBoundary
         ]
     , testGroup
-        "Command Line Arguements"
+        "Command Line Arguments"
         [ testGroup
             "MigrateConsumed - PruneTxOut"
                 [ test "flag check" MigrateConsumedPruneTxOut.commandLineArgCheck

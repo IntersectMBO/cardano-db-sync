@@ -22,7 +22,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (atomically)
 import Control.Monad (void)
 import Data.Text (Text)
 import Ouroboros.Consensus.Block (blockPoint)
-import Test.Cardano.Db.Mock.Config (CommandLineArgs (..), TxOutParam (..), babbageConfigDir, startDBSync, withCustomConfig)
+import Test.Cardano.Db.Mock.Config (CommandLineArgs (..), TxOutParam (..), babbageConfigDir, startDBSync, withCustomConfig, initCommandLineArgs)
 import Test.Cardano.Db.Mock.Examples (mockBlock0, mockBlock1)
 import Test.Cardano.Db.Mock.UnifiedApi (
   forgeAndSubmitBlocks,
@@ -38,21 +38,8 @@ import Test.Tasty.HUnit (Assertion)
 -- defaults for
 mkCommandLineArgs :: TxOutParam -> CommandLineArgs
 mkCommandLineArgs TxOutParam {..} =
-  CommandLineArgs
-    { claHasConfigFile = True
-    , claEpochDisabled = True
-    , claHasCache = True
-    , claShouldUseLedger = True
-    , claSkipFix = True
-    , claOnlyFix = False
-    , claForceIndexes = False
-    , claHasMultiAssets = True
-    , claHasMetadata = True
-    , claHasPlutusExtra = True
-    , claHasOfflineData = True
-    , claTurboMode = False
-    , claFullMode = True
-    , claMigrateConsumed = paramMigrateConsumed
+  initCommandLineArgs
+    { claMigrateConsumed = paramMigrateConsumed
     , claPruneTxOut = paramPruneTxOut
     }
 

@@ -10,30 +10,13 @@ import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import Cardano.Mock.Forging.Types (UTxOIndex (..))
 import Control.Monad (void)
 import Data.Text (Text)
-import Test.Cardano.Db.Mock.Config (CommandLineArgs (..), babbageConfigDir, startDBSync, withCustomConfig)
+import Test.Cardano.Db.Mock.Config (CommandLineArgs (..), babbageConfigDir, startDBSync, withCustomConfig, initCommandLineArgs)
 import Test.Cardano.Db.Mock.UnifiedApi (forgeAndSubmitBlocks, withBabbageFindLeaderAndSubmitTx)
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff, assertEqQuery)
 import Test.Tasty.HUnit (Assertion)
 
 mkCommandLineArgs :: Bool -> CommandLineArgs
-mkCommandLineArgs epochDisabled =
-  CommandLineArgs
-    { claHasConfigFile = True
-    , claEpochDisabled = epochDisabled
-    , claHasCache = True
-    , claShouldUseLedger = True
-    , claSkipFix = True
-    , claOnlyFix = False
-    , claForceIndexes = False
-    , claHasMultiAssets = True
-    , claHasMetadata = True
-    , claHasPlutusExtra = True
-    , claHasOfflineData = True
-    , claTurboMode = False
-    , claFullMode = True
-    , claMigrateConsumed = True
-    , claPruneTxOut = True
-    }
+mkCommandLineArgs epochDisabled = initCommandLineArgs {claEpochDisabled = epochDisabled}
 
 -- this test fails as incorrect configuration file given
 checkEpochDisabledArg :: IOManager -> [(Text, Text)] -> Assertion
