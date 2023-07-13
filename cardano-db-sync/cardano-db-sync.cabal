@@ -112,6 +112,7 @@ library
 
                         Cardano.DbSync.Rollback
 
+                        Cardano.DbSync.Fix.EpochStake
                         Cardano.DbSync.Fix.PlutusDataBytes
                         Cardano.DbSync.Fix.PlutusScripts
                         Cardano.DbSync.LocalStateQuery

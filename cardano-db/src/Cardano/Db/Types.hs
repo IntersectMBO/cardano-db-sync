@@ -19,6 +19,9 @@ module Cardano.Db.Types (
   PoolCertAction (..),
   CertNo (..),
   PoolCert (..),
+  ExtraMigration (..),
+  isStakeDistrComplete,
+  extraDescription,
   deltaCoinToDbInt65,
   integerToDbInt65,
   lovelaceToAda,
@@ -159,6 +162,18 @@ data PoolCert = PoolCert
   , pcCertNo :: !CertNo
   }
   deriving (Eq, Show)
+
+data ExtraMigration =
+  StakeDistrEnded
+  deriving (Eq, Show, Read)
+
+isStakeDistrComplete :: [ExtraMigration] -> Bool
+isStakeDistrComplete = elem StakeDistrEnded
+
+extraDescription :: ExtraMigration -> Text
+extraDescription StakeDistrEnded =
+  "The epoch_stake table has been migrated. It is now populated earlier during the previous era. \
+  \Also the epoch_stake_progress table is introduced."
 
 instance Ord PoolCert where
   compare a b = compare (pcCertNo a) (pcCertNo b)

@@ -55,6 +55,8 @@ module Cardano.Db.Query (
   existsPoolMetadataRefId,
   queryAdaPotsId,
   queryBlockHeight,
+  queryAllExtraMigrations,
+  queryMinMaxEpochStake,
   -- queries used in smash
   queryPoolOfflineData,
   queryPoolRegister,
@@ -126,7 +128,7 @@ import Data.ByteString.Char8 (ByteString)
 import Data.Fixed (Micro)
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Data.Ratio (numerator)
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 import Data.Time.Clock (UTCTime (..))
 import Data.Tuple.Extra (uncurry3)
 import Data.Word (Word64)
@@ -754,6 +756,27 @@ queryBlockHeight = do
     limit 1
     pure (blk ^. BlockBlockNo)
   pure $ unValue =<< listToMaybe res
+
+queryAllExtraMigrations :: MonadIO m => ReaderT SqlBackend m [ExtraMigration]
+queryAllExtraMigrations = do
+  res <- select $ do
+    ems <- from $ table @ExtraMigrations
+    pure (ems ^. ExtraMigrationsToken)
+  pure $  read . unpack . unValue <$> res
+
+queryMinMaxEpochStake :: MonadIO m => ReaderT SqlBackend m (Maybe Word64, Maybe Word64)
+queryMinMaxEpochStake = do
+  maxEpoch <- select $ do
+    es <- from $ table @EpochStake
+    orderBy [desc (es ^. EpochStakeId)]
+    limit 1
+    pure (es ^. EpochStakeEpochNo)
+  minEpoch <- select $ do
+    es <- from $ table @EpochStake
+    orderBy [asc (es ^. EpochStakeId)]
+    limit 1
+    pure (es ^. EpochStakeEpochNo)
+  pure (unValue <$> listToMaybe minEpoch, unValue <$> listToMaybe maxEpoch)
 
 {--------------------------------------------
   Queries use in SMASH
