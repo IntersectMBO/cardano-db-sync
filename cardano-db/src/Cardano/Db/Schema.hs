@@ -323,6 +323,11 @@ share
     epochNo             Word64              sqltype=word31type
     UniqueStake         epochNo addrId poolId
 
+  EpochStakeProgress
+    epochNo             Word64              sqltype=word31type
+    completed           Bool
+    UniqueEpochStakeProgress epochNo
+
   Treasury
     addrId              StakeAddressId      noreference
     certIndex           Word16
@@ -483,6 +488,10 @@ share
     hash                ByteString          sqltype=hash32type
     costs               Text                sqltype=jsonb
     UniqueCostModel     hash
+
+  ExtraMigrations
+    token               Text
+    description         Text Maybe
 
   -- -----------------------------------------------------------------------------------------------
   -- Pool offline (ie not on the blockchain) data.

@@ -54,6 +54,9 @@ module Cardano.Db.Insert (
   insertCheckPoolOfflineFetchError,
   insertReservedPoolTicker,
   insertDelistedPool,
+  insertExtraMigration,
+  insertEpochStakeProgress,
+  updateSetComplete,
   replaceAdaPots,
   insertUnchecked,
   insertMany',
@@ -109,6 +112,10 @@ import Database.Persist.Types (
   entityKey,
  )
 import Database.PostgreSQL.Simple (SqlError)
+import Cardano.Db.Types
+import Cardano.Db.Text
+import Data.Word (Word64)
+import Database.Persist (updateWhere, (=.), (==.))
 
 -- The original naive way of inserting rows into Postgres was:
 --
@@ -279,6 +286,17 @@ insertReservedPoolTicker ticker = do
 
 insertDelistedPool :: (MonadBaseControl IO m, MonadIO m) => DelistedPool -> ReaderT SqlBackend m DelistedPoolId
 insertDelistedPool = insertCheckUnique "DelistedPool"
+
+insertExtraMigration :: (MonadBaseControl IO m, MonadIO m) => ExtraMigration -> ReaderT SqlBackend m ()
+insertExtraMigration token = void . insert $ ExtraMigrations (textShow token) (Just $ extraDescription token)
+
+insertEpochStakeProgress :: (MonadBaseControl IO m, MonadIO m) => [EpochStakeProgress] -> ReaderT SqlBackend m ()
+insertEpochStakeProgress =
+  insertManyUncheckedUnique "Many EpochStakeProgress"
+
+updateSetComplete :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
+updateSetComplete epoch = do
+  updateWhere [EpochStakeProgressEpochNo ==. epoch] [EpochStakeProgressCompleted =. True]
 
 replaceAdaPots :: (MonadBaseControl IO m, MonadIO m) => BlockId -> AdaPots -> ReaderT SqlBackend m Bool
 replaceAdaPots blockId adapots = do
