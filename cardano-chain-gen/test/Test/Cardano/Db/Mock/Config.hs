@@ -103,7 +103,7 @@ data TxOutParam = TxOutParam
 
 data CommandLineArgs = CommandLineArgs
   { claHasConfigFile :: Bool
-  , claExtended :: Bool
+  , claEpochDisabled :: Bool
   , claHasCache :: Bool
   , claShouldUseLedger :: Bool
   , claSkipFix :: Bool
@@ -260,7 +260,7 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs{..} = do
       , enpMaybeLedgerStateDir = Just $ LedgerStateDir $ mutableDir </> "ledger-states"
       , enpMigrationDir = MigrationDir "../schema"
       , enpPGPassSource = Db.PGPassCached pgconfig
-      , enpExtended = claExtended
+      , enpEpochDisabled = claEpochDisabled
       , enpHasCache = claHasCache
       , enpShouldUseLedger = claShouldUseLedger
       , enpSkipFix = claSkipFix
@@ -283,7 +283,7 @@ initCommandLineArgs :: CommandLineArgs
 initCommandLineArgs =
   CommandLineArgs
   { claHasConfigFile = True
-  , claExtended = True
+  , claEpochDisabled = True
   , claHasCache = True
   , claShouldUseLedger = True
   , claSkipFix = True
@@ -327,6 +327,7 @@ withCustomConfig ::
   IO a
 withCustomConfig = withFullConfig' True False
 
+-- when wanting to check for a failure in a test for some reason logging has to be enabled
 withCustomConfigAndLogs ::
   CommandLineArgs ->
   FilePath ->

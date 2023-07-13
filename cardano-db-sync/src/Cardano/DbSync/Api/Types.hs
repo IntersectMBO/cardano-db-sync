@@ -54,7 +54,7 @@ data SyncEnv = SyncEnv
   }
 
 data SyncOptions = SyncOptions
-  { soptExtended :: !Bool
+  { soptEpochAndCacheEnabled :: !Bool
   , soptAbortOnInvalid :: !Bool
   , soptCache :: !Bool
   , soptSkipFix :: !Bool

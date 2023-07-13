@@ -117,7 +117,7 @@ insertABOBBoundary syncEnv blk details = do
   -- now that we've inserted the Block and all it's txs lets cache what we'll need
   -- when we later update the epoch values.
   -- If have --dissable-epoch && --dissable-cache then no need to cache data.
-  when (soptExtended $ envOptions syncEnv)
+  when (soptEpochAndCacheEnabled $ envOptions syncEnv)
     . newExceptT
     $ writeEpochBlockDiffToCache
       cache
@@ -177,7 +177,7 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
   -- now that we've inserted the Block and all it's txs lets cache what we'll need
   -- when we later update the epoch values.
   -- If have --dissable-epoch && --dissable-cache then no need to cache data.
-  when (soptExtended $ envOptions syncEnv)
+  when (soptEpochAndCacheEnabled $ envOptions syncEnv)
     . newExceptT
     $ writeEpochBlockDiffToCache
       cache

@@ -40,7 +40,7 @@ mkCommandLineArgs :: TxOutParam -> CommandLineArgs
 mkCommandLineArgs TxOutParam {..} =
   CommandLineArgs
     { claHasConfigFile = True
-    , claExtended = True
+    , claEpochDisabled = True
     , claHasCache = True
     , claShouldUseLedger = True
     , claSkipFix = True

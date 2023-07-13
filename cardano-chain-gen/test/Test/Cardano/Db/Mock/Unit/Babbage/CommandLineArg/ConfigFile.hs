@@ -12,7 +12,7 @@ mkCommandLineArgs :: Bool -> CommandLineArgs
 mkCommandLineArgs hasConfigFile =
   CommandLineArgs
     { claHasConfigFile = hasConfigFile
-    , claExtended = True
+    , claEpochDisabled = True
     , claHasCache = True
     , claShouldUseLedger = True
     , claSkipFix = True

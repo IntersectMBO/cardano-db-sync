@@ -70,6 +70,7 @@ module Cardano.Db.Query (
   queryFeesUpToBlockNo,
   queryFeesUpToSlotNo,
   queryLatestCachedEpochNo,
+  queryTxOutCount,
   queryLatestBlockNo,
   querySlotNosGreaterThan,
   querySlotNos,
@@ -83,7 +84,7 @@ module Cardano.Db.Query (
   queryAddressOutputs,
   queryRewardCount,
   queryTxInCount,
-  queryTxOutCount,
+  queryEpochCount,
   queryCostModel,
   queryScriptOutputs,
   queryTxInRedeemer,
@@ -332,6 +333,12 @@ queryLatestEpoch = do
     orderBy [desc (epoch ^. EpochNo)]
     pure epoch
   pure $ entityVal <$> res
+
+-- | Count the number of epochs in Epoch table.
+queryEpochCount :: MonadIO m => ReaderT SqlBackend m Word
+queryEpochCount = do
+  res <- select $ from (table @Epoch) >> pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
 
 queryTxWithBlocks ::
   MonadIO m =>

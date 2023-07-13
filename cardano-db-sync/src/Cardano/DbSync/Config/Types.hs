@@ -59,7 +59,7 @@ data SyncNodeParams = SyncNodeParams
   , enpMaybeLedgerStateDir :: !(Maybe LedgerStateDir)
   , enpMigrationDir :: !MigrationDir
   , enpPGPassSource :: !PGPassSource
-  , enpExtended :: !Bool
+  , enpEpochDisabled :: !Bool
   , enpHasCache :: !Bool
   , enpShouldUseLedger :: !Bool
   , enpSkipFix :: !Bool

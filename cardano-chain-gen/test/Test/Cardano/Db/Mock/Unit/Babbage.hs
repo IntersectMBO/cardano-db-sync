@@ -13,6 +13,7 @@ import Test.Tasty.HUnit (Assertion, testCase)
 import Test.Tasty.ExpectedFailure (expectFail)
 
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
+import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.EpochDisabled as EpochDisabled
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.ConfigFile as ConfigFile
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.InlineAndReference as BabInlineRef
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Other as BabOther
@@ -52,7 +53,11 @@ unitTests iom knownMigrations =
                 ]
         , testGroup
             "ConfigFile"
-            [ expectFail $ test "fails if incorrect config file" ConfigFile.checkConfigFileArg
+            [ expectFail $ test "fails if incorrect or no config file given" ConfigFile.checkConfigFileArg ]
+        , testGroup
+            "EpochDisabled"
+            [ test "Epoch doesn't update when disabled" EpochDisabled.checkEpochDisabledArg
+            , test "Epoch updates when enabled" EpochDisabled.checkEpochEnabled
             ]
         ]
     , testGroup
