@@ -25,6 +25,8 @@ module Cardano.DbSync.Ledger.State (
   hashToAnnotation,
   getHeaderHash,
   runLedgerStateWriteThread,
+  getStakeSlice,
+  getSliceMeta,
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
@@ -230,8 +232,9 @@ applyBlock env blk = do
             { apPrices = getPrices newState
             , apPoolsRegistered = getRegisteredPools oldState
             , apNewEpoch = maybeToStrict newEpoch
+            , apOldLedger = Strict.Just oldState
             , apSlotDetails = details
-            , apStakeSlice = stakeSlice newState details
+            , apStakeSlice = getStakeSlice env newState False
             , apEvents = ledgerEvents
             , apDepositsMap = DepositsMap deposits
             }
@@ -265,20 +268,20 @@ applyBlock env blk = do
     applyToEpochBlockNo _ _ GenesisEpochBlockNo = EpochBlockNo 0
     applyToEpochBlockNo _ _ EBBEpochBlockNo = EpochBlockNo 0
 
-    stakeSliceMinSize :: Word64
-    stakeSliceMinSize = 2000
+getStakeSlice :: HasLedgerEnv -> CardanoLedgerState -> Bool -> Generic.StakeSliceRes
+getStakeSlice env cls isMigration =
+  case clsEpochBlockNo cls of
+    EpochBlockNo n ->
+      Generic.getStakeSlice
+        (leProtocolInfo env)
+        n
+        (clsState cls)
+        isMigration
+    _ -> Generic.NoSlices
 
-    stakeSlice :: CardanoLedgerState -> SlotDetails -> Generic.StakeSliceRes
-    stakeSlice cls details =
-      case clsEpochBlockNo cls of
-        EpochBlockNo n ->
-          Generic.getStakeSlice
-            (leProtocolInfo env)
-            (sdEpochNo details)
-            n
-            stakeSliceMinSize
-            (clsState cls)
-        _ -> Generic.NoSlices
+getSliceMeta :: Generic.StakeSliceRes -> Maybe (Bool, EpochNo)
+getSliceMeta (Generic.Slice (Generic.StakeSlice epochNo _) isFinal) = Just (isFinal, epochNo)
+getSliceMeta _ = Nothing
 
 storeSnapshotAndCleanupMaybe ::
   HasLedgerEnv ->
