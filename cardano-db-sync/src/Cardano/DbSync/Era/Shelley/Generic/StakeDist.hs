@@ -73,44 +73,50 @@ getSecurityParameter = maxRollbacks . configSecurityParam . pInfoConfig
 getStakeSlice ::
   ConsensusProtocol (BlockProtocol blk) =>
   ProtocolInfo blk ->
-  EpochNo ->
-  Word64 ->
   Word64 ->
   ExtLedgerState CardanoBlock ->
+  Bool ->
   StakeSliceRes
-getStakeSlice pInfo epoch !sliceIndex !minSliceSize els =
+getStakeSlice pInfo !epochBlockNo els isMigration =
   case ledgerState els of
     LedgerStateByron _ -> NoSlices
-    LedgerStateShelley sls -> genericStakeSlice pInfo epoch sliceIndex minSliceSize sls
-    LedgerStateAllegra als -> genericStakeSlice pInfo epoch sliceIndex minSliceSize als
-    LedgerStateMary mls -> genericStakeSlice pInfo epoch sliceIndex minSliceSize mls
-    LedgerStateAlonzo als -> genericStakeSlice pInfo epoch sliceIndex minSliceSize als
-    LedgerStateBabbage bls -> genericStakeSlice pInfo epoch sliceIndex minSliceSize bls
-    LedgerStateConway cls -> genericStakeSlice pInfo epoch sliceIndex minSliceSize cls
+    LedgerStateShelley sls -> genericStakeSlice pInfo epochBlockNo sls isMigration
+    LedgerStateAllegra als -> genericStakeSlice pInfo epochBlockNo als isMigration
+    LedgerStateMary mls -> genericStakeSlice pInfo epochBlockNo mls isMigration
+    LedgerStateAlonzo als -> genericStakeSlice pInfo epochBlockNo als isMigration
+    LedgerStateBabbage bls -> genericStakeSlice pInfo epochBlockNo bls isMigration
+    LedgerStateConway cls -> genericStakeSlice pInfo epochBlockNo cls isMigration
 
 genericStakeSlice ::
   forall era c blk p.
   (c ~ StandardCrypto, EraCrypto era ~ c, ConsensusProtocol (BlockProtocol blk)) =>
   ProtocolInfo blk ->
-  EpochNo ->
-  Word64 ->
   Word64 ->
   LedgerState (ShelleyBlock p era) ->
+  Bool ->
   StakeSliceRes
-genericStakeSlice pInfo epoch sliceIndex minSliceSize lstate
+genericStakeSlice pInfo epochBlockNo lstate isMigration
   | index > delegationsLen = NoSlices
   | index == delegationsLen = Slice (emptySlice epoch) True
-  | index + epochSliceSize > delegationsLen = Slice (mkSlice (delegationsLen - index)) True
-  | otherwise = Slice (mkSlice epochSliceSize) False
+  | index + size > delegationsLen = Slice (mkSlice (delegationsLen - index)) True
+  | otherwise = Slice (mkSlice size) False
   where
-    -- We use 'ssStakeSet' here instead of 'ssStateMark' because the stake addresses for the
-    -- later may not have been added to the database yet. That means that when these values
+    epoch :: EpochNo
+    epoch = 1 + Shelley.nesEL (Consensus.shelleyLedgerState lstate)
+
+    minSliceSize :: Word64
+    minSliceSize = 2000
+
+    -- On mainnet this is 2160
+    k :: Word64
+    k = getSecurityParameter pInfo
+
+    -- We use 'ssStakeMark' here. That means that when these values
     -- are added to the database, the epoch number where they become active is the current
     -- epoch plus one.
-
     stakeSnapshot :: Ledger.SnapShot c
     stakeSnapshot =
-      Ledger.ssStakeSet . Shelley.esSnapshots . Shelley.nesEs $
+      Ledger.ssStakeMark . Shelley.esSnapshots . Shelley.nesEs $
         Consensus.shelleyLedgerState lstate
 
     delegations :: VMap.KVVector VB VB (Credential 'Staking c, KeyHash 'StakePool c)
@@ -132,10 +138,6 @@ genericStakeSlice pInfo epoch sliceIndex minSliceSize lstate
     epochSliceSize =
       max minSliceSize defaultEpochSliceSize
       where
-        -- On mainnet this is 2160
-        k :: Word64
-        k = getSecurityParameter pInfo
-
         -- On mainnet this is 21600
         expectedBlocks :: Word64
         expectedBlocks = 10 * k
@@ -147,20 +149,29 @@ genericStakeSlice pInfo epoch sliceIndex minSliceSize lstate
 
     -- The starting index of the data in the delegation vector.
     index :: Word64
-    index = sliceIndex * epochSliceSize
+    index
+      | isMigration = 0
+      | epochBlockNo < k = delegationsLen + 1 -- so it creates the empty Slice.
+      | otherwise = (epochBlockNo - k) * epochSliceSize
+
+    size :: Word64
+    size
+      | isMigration , epochBlockNo + 1 < k = 0
+      | isMigration = (epochBlockNo + 1 - k) * epochSliceSize
+      | otherwise = epochSliceSize
 
     mkSlice :: Word64 -> StakeSlice
-    mkSlice size =
+    mkSlice actualSize =
       StakeSlice
         { sliceEpochNo = epoch
         , sliceDistr = distribution
         }
       where
         delegationsSliced :: VMap VB VB (Credential 'Staking c) (KeyHash 'StakePool c)
-        delegationsSliced = VMap $ VG.slice (fromIntegral index) (fromIntegral size) delegations
+        delegationsSliced = VMap $ VG.slice (fromIntegral index) (fromIntegral actualSize) delegations
 
         distribution :: Map StakeCred (Coin, PoolKeyHash)
         distribution =
           VMap.toMap $
             VMap.mapMaybe id $
-              VMap.mapWithKey (\k p -> (,p) <$> lookupStake k) delegationsSliced
+              VMap.mapWithKey (\a p -> (,p) <$> lookupStake a) delegationsSliced

@@ -45,6 +45,7 @@ import Database.Persist.SqlBackend.Internal.StatementCache
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
 import Ouroboros.Network.Block (blockHash, blockNo, getHeaderFields, headerFieldBlockNo, unBlockNo)
+import Cardano.DbSync.Fix.EpochStake
 
 insertListBlocks ::
   SyncEnv ->
@@ -81,6 +82,7 @@ applyAndInsertBlockMaybe syncEnv cblk = do
               , ". Time to restore consistency."
               ]
           rollbackFromBlockNo syncEnv (blockNo cblk)
+          void $ migrateStakeDistr syncEnv (apOldLedger applyRes)
           insertBlock syncEnv cblk applyRes True tookSnapshot
           liftIO $ setConsistentLevel syncEnv Consistent
         Right blockId | Just (adaPots, slotNo, epochNo) <- getAdaPots applyRes -> do

@@ -124,6 +124,7 @@ data ApplyResult = ApplyResult
   { apPrices :: !(Strict.Maybe Prices) -- prices after the block application
   , apPoolsRegistered :: !(Set.Set PoolKeyHash) -- registered before the block application
   , apNewEpoch :: !(Strict.Maybe Generic.NewEpoch) -- Only Just for a single block at the epoch boundary
+  , apOldLedger :: !(Strict.Maybe CardanoLedgerState)
   , apSlotDetails :: !SlotDetails
   , apStakeSlice :: !Generic.StakeSliceRes
   , apEvents :: ![LedgerEvent]
@@ -136,6 +137,7 @@ defaultApplyResult slotDetails =
     { apPrices = Strict.Nothing
     , apPoolsRegistered = Set.empty
     , apNewEpoch = Strict.Nothing
+    , apOldLedger = Strict.Nothing
     , apSlotDetails = slotDetails
     , apStakeSlice = Generic.NoSlices
     , apEvents = []
