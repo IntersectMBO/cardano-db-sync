@@ -26,7 +26,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (
 
 import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Db (ScriptType (..))
-import Cardano.DbSync.CardanoUtil (fromShelleyMultiSig)
+import Cardano.DbSync.Util.Cardano (fromShelleyMultiSig)
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types

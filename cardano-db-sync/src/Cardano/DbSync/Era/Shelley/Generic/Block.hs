@@ -25,9 +25,9 @@ module Cardano.DbSync.Era.Shelley.Generic.Block (
 
 import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Crypto.KES.Class as KES
-import Cardano.DbSync.CardanoUtil
 import Cardano.DbSync.Era.Shelley.Generic.Tx
 import Cardano.DbSync.Types
+import Cardano.DbSync.Util.Bech32 (serialiseVerKeyVrfToBech32)
 import Cardano.Ledger.Alonzo ()
 import Cardano.Ledger.Alonzo.Scripts (Prices)
 import qualified Cardano.Ledger.BaseTypes as Ledger

@@ -26,7 +26,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo (
 
 import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Db (ScriptType (..))
-import Cardano.DbSync.CardanoUtil
+import Cardano.DbSync.Util.Cardano
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley

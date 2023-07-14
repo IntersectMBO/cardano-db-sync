@@ -15,7 +15,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (
 ) where
 
 import Cardano.Db (ScriptType (..))
-import Cardano.DbSync.CardanoUtil (fromAllegraTimelock)
+import Cardano.DbSync.Util.Cardano (fromAllegraTimelock)
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (
   calcWithdrawalSum,

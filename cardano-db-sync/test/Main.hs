@@ -1,9 +1,9 @@
 module Main where
 
-import qualified Cardano.DbSync.CardanoUtilTest as CardanoUtils
+import qualified Cardano.DbSync.Util.Bech32Test as Bech32
 import Cardano.Prelude
 import Hedgehog.Main
 import Prelude ()
 
 main :: IO ()
-main = defaultMain [CardanoUtils.tests]
+main = defaultMain [Bech32.tests]

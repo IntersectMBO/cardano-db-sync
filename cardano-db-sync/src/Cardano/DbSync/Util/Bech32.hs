@@ -1,35 +1,15 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Cardano.DbSync.CardanoUtil (
-  Api.SerialiseAsCBOR (..),
-  Shelley.ScriptDataJsonSchema (..),
-  Shelley.Hash (StakePoolKeyHash),
-  Shelley.TxMetadataValue (..),
-  Shelley.VerificationKey (..),
-  Shelley.VrfKey (),
-  Shelley.fromAllegraTimelock,
-  Shelley.fromAlonzoData,
-  Shelley.fromShelleyAddrToAny,
-  Shelley.fromShelleyMultiSig,
-  Shelley.fromShelleyStakeAddr,
-  Shelley.makeTransactionMetadata,
-  Shelley.metadataValueToJsonNoSchema,
-  Shelley.proxyToAsType,
-  Shelley.serialiseAddress,
-  Shelley.scriptDataToJson,
-  Shelley.deserialiseFromBech32,
-  DecodeError (..),
+module Cardano.DbSync.Util.Bech32 (
   serialiseToBech32,
-  deserialiseFromBech32',
+  deserialiseFromBech32,
   serialiseVerKeyVrfToBech32,
   deserialiseVerKeyVrfFromBech32,
   serialiseStakePoolKeyHashToBech32,
   deserialiseStakePoolKeyHashFromBech32,
 ) where
 
-import qualified Cardano.Api as Api
-import qualified Cardano.Api.Shelley as Shelley
 import Cardano.Crypto.Hash.Class (hashFromBytes, hashToBytes)
 import Cardano.Crypto.VRF.Class (rawDeserialiseVerKeyVRF, rawSerialiseVerKeyVRF)
 import Cardano.Ledger.Crypto (StandardCrypto ())
@@ -40,9 +20,12 @@ import Prelude (id)
 
 -- | Wrap Bech32 deserialisation errors
 data DecodeError
-  = Bech32DecodingError !DecodingError
-  | DataPartToBytesError
-  | DecodeFromRawBytesError
+  = -- | Error decoding bech32 to text
+    Bech32DecodingError !DecodingError
+  | -- | Error extracting bytes from text
+    DataPartToBytesError
+  | -- | Error decoding raw bytes
+    DecodeFromRawBytesError
   deriving (Eq, Show)
 
 instance Exception DecodeError
@@ -57,8 +40,8 @@ serialiseToBech32 prefix bytes = encodeLenient humanReadablePart dataPart
     dataPart = dataPartFromBytes bytes
 
 -- | Deserialise a bech32 address to a ByteString
-deserialiseFromBech32' :: Text -> Either DecodeError ByteString
-deserialiseFromBech32' s = decodeLenient' s >>= dataPartToBytes'
+deserialiseFromBech32 :: Text -> Either DecodeError ByteString
+deserialiseFromBech32 s = decodeLenient' s >>= dataPartToBytes'
   where
     decodeLenient' = bimap Bech32DecodingError snd . decodeLenient
     dataPartToBytes' d = maybeToEither DataPartToBytesError $ dataPartToBytes d
@@ -71,7 +54,7 @@ serialiseVerKeyVrfToBech32 =
 -- | Deserialise a bech32 address to a Verification Key
 deserialiseVerKeyVrfFromBech32 :: Text -> Either DecodeError (VerKeyVRF StandardCrypto)
 deserialiseVerKeyVrfFromBech32 text =
-  deserialiseFromBech32' text >>= deserialiseFromRawBytes'
+  deserialiseFromBech32 text >>= deserialiseFromRawBytes'
   where
     deserialiseFromRawBytes' :: ByteString -> Either DecodeError (VerKeyVRF StandardCrypto)
     deserialiseFromRawBytes' =
@@ -87,7 +70,7 @@ deserialiseStakePoolKeyHashFromBech32 ::
   Text ->
   Either DecodeError (KeyHash 'StakePool StandardCrypto)
 deserialiseStakePoolKeyHashFromBech32 text =
-  deserialiseFromBech32' text >>= deserialiseFromRawBytes'
+  deserialiseFromBech32 text >>= deserialiseFromRawBytes'
   where
     deserialiseFromRawBytes' ::
       ByteString ->
