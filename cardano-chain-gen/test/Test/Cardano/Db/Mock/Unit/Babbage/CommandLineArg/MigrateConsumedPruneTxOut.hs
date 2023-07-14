@@ -103,7 +103,7 @@ pruneWithSimpleRollback = do
     assertEqQuery dbSyncEnv DB.queryTxOutCount 14 ""
     b1 <- forgeAndSubmitBlocks interpreter mockServer 96
     assertBlockNoBackoff dbSyncEnv (fullBlockSize b1)
-    assertEqQuery dbSyncEnv DB.queryTxOutCount 12 "there wasn't the correct "
+    assertEqQuery dbSyncEnv DB.queryTxOutCount 12 "the txOut count is incorrect"
     assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxInId count after prune"
     assertUnspentTx dbSyncEnv
 
