@@ -228,7 +228,7 @@ logProtocolMagicId tracer pm =
 extractSyncOptions :: SyncNodeParams -> Bool -> SyncOptions
 extractSyncOptions snp aop =
   SyncOptions
-    { soptExtended = enpExtended snp && enpHasCache snp
+    { soptEpochAndCacheEnabled = not $ enpEpochDisabled snp && enpHasCache snp
     , soptAbortOnInvalid = aop
     , soptCache = enpHasCache snp
     , soptSkipFix = enpSkipFix snp
@@ -255,7 +255,7 @@ startupReport trce aop params = do
   logInfo trce $ mconcat ["Git hash: ", Db.gitRev]
   logInfo trce $ mconcat ["Option disable-ledger: ", textShow (not $ enpShouldUseLedger params)]
   logInfo trce $ mconcat ["Option disable-cache: ", textShow (not $ enpHasCache params)]
-  logInfo trce $ mconcat ["Option disable-epoch: ", textShow (not $ enpExtended params)]
+  logInfo trce $ mconcat ["Option disable-epoch: ", textShow (enpEpochDisabled params)]
   logInfo trce $ mconcat ["Option skip-fix: ", textShow (enpSkipFix params)]
   logInfo trce $ mconcat ["Option fix-only: ", textShow (enpOnlyFix params)]
   logInfo trce $ mconcat ["Option force-indexes: ", textShow (enpForceIndexes params)]

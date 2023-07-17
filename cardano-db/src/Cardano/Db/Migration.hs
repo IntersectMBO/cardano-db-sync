@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.Db.Migration (
   MigrationDir (..),
@@ -18,6 +19,7 @@ module Cardano.Db.Migration (
   hashMigrations,
   renderMigrationValidateError,
   noLedgerMigrations,
+  queryPgIndexesCount,
 ) where
 
 import Cardano.BM.Trace (Trace)
@@ -31,7 +33,7 @@ import Cardano.Db.Schema
 import Cardano.Db.Text
 import Control.Exception (SomeException, handle)
 import Control.Monad.Extra
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (NoLoggingT)
 import Control.Monad.Trans.Reader (ReaderT)
 import Control.Monad.Trans.Resource (runResourceT)
@@ -58,6 +60,7 @@ import Database.Persist.Sql (
   rawSql,
   selectFirst,
  )
+import GHC.Word (Word64)
 import System.Directory (listDirectory)
 import System.Exit (ExitCode (..), exitFailure)
 import System.FilePath (takeExtension, takeFileName, (</>))
@@ -378,3 +381,15 @@ noLedgerMigrations backend trce = do
     rawExecute "delete from epoch_stake" []
     rawExecute "delete from ada_pots" []
     rawExecute "delete from epoch_param" []
+
+queryPgIndexesCount :: MonadIO m => ReaderT SqlBackend m Word64
+queryPgIndexesCount = do
+  indexesExists :: [Text] <-
+    fmap unSingle
+      <$> rawSql
+        ( mconcat
+            [ "SELECT indexname FROM pg_indexes WHERE schemaname = 'public'"
+            ]
+        )
+        []
+  pure $ fromIntegral (length indexesExists)

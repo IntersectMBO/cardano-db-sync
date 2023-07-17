@@ -9,9 +9,13 @@ module Test.Cardano.Db.Mock.Unit.Babbage (
 import Cardano.Mock.ChainSync.Server (IOManager)
 import Data.Text (Text)
 import Test.Tasty (TestTree, testGroup)
+import Test.Tasty.ExpectedFailure (expectFail)
 import Test.Tasty.HUnit (Assertion, testCase)
 
-import qualified Test.Cardano.Db.Mock.Unit.Babbage.Flag.ConsumedTxOut as FlagConsumedTxOut
+import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.ConfigFile as ConfigFile
+import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.EpochDisabled as EpochDisabled
+import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.ForceIndex as ForceIndex
+import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.InlineAndReference as BabInlineRef
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Other as BabOther
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Plutus as BabPlutus
@@ -35,19 +39,33 @@ unitTests iom knownMigrations =
         , test "node restart boundary" BabSimple.nodeRestartBoundary
         ]
     , testGroup
-        "flags"
+        "Command Line Arguments"
         [ testGroup
-            "consumed-tx-out"
-                [ test "flag check" FlagConsumedTxOut.flagCheck
-                , test "basic prune" FlagConsumedTxOut.basicPrune
-                , test "prune with simple rollback" FlagConsumedTxOut.pruneWithSimpleRollback
-                , test "prune with full tx rollback" FlagConsumedTxOut.pruneWithFullTxRollback
-                , test "pruning should keep some tx" FlagConsumedTxOut.pruningShouldKeepSomeTx
-                , test "prune and rollback one block" FlagConsumedTxOut.pruneAndRollBackOneBlock
-                , test "no pruning and rollback" FlagConsumedTxOut.noPruneAndRollBack
-                , test "prune same block" FlagConsumedTxOut.pruneSameBlock
-                , test "no pruning same block" FlagConsumedTxOut.noPruneSameBlock
-                ]
+            "consumed-tx-out + prune-tx-out"
+            [ test "flag check" MigrateConsumedPruneTxOut.commandLineArgCheck
+            , test "basic prune" MigrateConsumedPruneTxOut.basicPrune
+            , test "prune with simple rollback" MigrateConsumedPruneTxOut.pruneWithSimpleRollback
+            , test "prune with full tx rollback" MigrateConsumedPruneTxOut.pruneWithFullTxRollback
+            , test "pruning should keep some tx" MigrateConsumedPruneTxOut.pruningShouldKeepSomeTx
+            , test "prune and rollback one block" MigrateConsumedPruneTxOut.pruneAndRollBackOneBlock
+            , test "no pruning and rollback" MigrateConsumedPruneTxOut.noPruneAndRollBack
+            , test "prune same block" MigrateConsumedPruneTxOut.pruneSameBlock
+            , test "no pruning same block" MigrateConsumedPruneTxOut.noPruneSameBlock
+            ]
+        , testGroup
+            "config"
+            [ expectFail $ test "fails if incorrect or no config file given" ConfigFile.checkConfigFileArg
+            ]
+        , testGroup
+            "disable-epoch"
+            [ test "Epoch doesn't update when disabled" EpochDisabled.checkEpochDisabledArg
+            , test "Epoch updates when enabled" EpochDisabled.checkEpochEnabled
+            ]
+        , testGroup
+            "force-indexes"
+            [ test "check force-index adds indexes" ForceIndex.checkForceIndexesArg
+            , test "check no force-index doesn't add indexes" ForceIndex.checkNoForceIndexesArg
+            ]
         ]
     , testGroup
         "rollbacks"

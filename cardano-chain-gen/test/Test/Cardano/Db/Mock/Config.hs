@@ -1,11 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Test.Cardano.Db.Mock.Config (
   Config (..),
   DBSyncEnv (..),
-  TxOutParam(..),
+  CommandLineArgs(..),
+  TxOutParam (..),
+  initCommandLineArgs,
   babbageConfigDir,
   alonzoConfigDir,
   emptyMetricsSetters,
@@ -30,7 +33,8 @@ module Test.Cardano.Db.Mock.Config (
   startDBSync,
   withDBSyncEnv,
   withFullConfig,
-  withTxOutParamConfig,
+  withCustomConfig,
+  withCustomConfigAndLogs,
   withFullConfig',
 ) where
 
@@ -93,8 +97,26 @@ data DBSyncEnv = DBSyncEnv
 
 -- used for testing of tx out pruning feature
 data TxOutParam = TxOutParam
-  { paramMigrateConsumed :: Bool,
-    paramPruneTxOut :: Bool
+  { paramMigrateConsumed :: Bool
+  , paramPruneTxOut :: Bool
+  }
+
+data CommandLineArgs = CommandLineArgs
+  { claHasConfigFile :: Bool
+  , claEpochDisabled :: Bool
+  , claHasCache :: Bool
+  , claShouldUseLedger :: Bool
+  , claSkipFix :: Bool
+  , claOnlyFix :: Bool
+  , claForceIndexes :: Bool
+  , claHasMultiAssets :: Bool
+  , claHasMetadata :: Bool
+  , claHasPlutusExtra :: Bool
+  , claHasOfflineData :: Bool
+  , claTurboMode :: Bool
+  , claFullMode :: Bool
+  , claMigrateConsumed :: Bool
+  , claPruneTxOut :: Bool
   }
 
 babbageConfigDir :: FilePath
@@ -203,14 +225,14 @@ setupTestsDir dir = do
           0
           Nothing
 
-mkConfig :: FilePath -> FilePath -> Maybe TxOutParam -> IO Config
-mkConfig staticDir mutableDir mTxOutParam = do
+mkConfig :: FilePath -> FilePath -> CommandLineArgs -> IO Config
+mkConfig staticDir mutableDir cmdLineArgs = do
   config <- readSyncNodeConfig $ ConfigFile (staticDir </> "test-db-sync-config.json")
   genCfg <- either (error . Text.unpack . renderSyncNodeError) id <$> runExceptT (readCardanoGenesisConfig config)
   let pInfoDbSync = mkProtocolInfoCardano genCfg []
   creds <- mkShelleyCredentials $ staticDir </> "pools" </> "bulk1.creds"
   let pInfoForger = mkProtocolInfoCardano genCfg creds
-  syncPars <- mkSyncNodeParams staticDir mutableDir mTxOutParam
+  syncPars <- mkSyncNodeParams staticDir mutableDir cmdLineArgs
   pure $ Config (Consensus.pInfoConfig pInfoDbSync) pInfoDbSync pInfoForger syncPars
 
 mkShelleyCredentials :: FilePath -> IO [ShelleyLeaderCredentials StandardCrypto]
@@ -228,34 +250,54 @@ mkShelleyCredentials bulkFile = do
         }
 
 -- | staticDir can be shared by tests running in parallel. mutableDir not.
-mkSyncNodeParams :: FilePath -> FilePath -> Maybe TxOutParam -> IO SyncNodeParams
-mkSyncNodeParams staticDir mutableDir mTxOutParam = do
+mkSyncNodeParams :: FilePath -> FilePath -> CommandLineArgs -> IO SyncNodeParams
+mkSyncNodeParams staticDir mutableDir CommandLineArgs{..} = do
   pgconfig <- orDie Db.renderPGPassError $ newExceptT Db.readPGPassDefault
   pure $
     SyncNodeParams
-      { enpConfigFile = ConfigFile $ staticDir </> "test-db-sync-config.json"
+      { enpConfigFile = ConfigFile $ staticDir </> (if claHasConfigFile then "test-db-sync-config.json" else "")
       , enpSocketPath = SocketPath $ mutableDir </> ".socket"
       , enpMaybeLedgerStateDir = Just $ LedgerStateDir $ mutableDir </> "ledger-states"
       , enpMigrationDir = MigrationDir "../schema"
       , enpPGPassSource = Db.PGPassCached pgconfig
-      , enpExtended = True
-      , enpHasCache = True
-      , enpShouldUseLedger = True
-      , enpSkipFix = True
-      , enpOnlyFix = False
-      , enpForceIndexes = False
-      , enpHasMultiAssets = True
-      , enpHasMetadata = True
+      , enpEpochDisabled = claEpochDisabled
+      , enpHasCache = claHasCache
+      , enpShouldUseLedger = claShouldUseLedger
+      , enpSkipFix = claSkipFix
+      , enpOnlyFix = claOnlyFix
+      , enpForceIndexes = claForceIndexes
+      , enpHasMultiAssets = claHasMultiAssets
+      , enpHasMetadata = claHasMetadata
       , enpHasPlutusExtra = True
       , enpHasOfflineData = True
       , enpTurboMode = False
       , enpFullMode = True
-      , enpMigrateConsumed = maybe False paramMigrateConsumed mTxOutParam
-      , enpPruneTxOut = maybe False paramPruneTxOut mTxOutParam
+      , enpMigrateConsumed = claMigrateConsumed
+      , enpPruneTxOut = claPruneTxOut
       , enpSnEveryFollowing = 35
       , enpSnEveryLagging = 35
       , enpMaybeRollback = Nothing
       }
+
+initCommandLineArgs :: CommandLineArgs
+initCommandLineArgs =
+  CommandLineArgs
+  { claHasConfigFile = True
+  , claEpochDisabled = True
+  , claHasCache = True
+  , claShouldUseLedger = True
+  , claSkipFix = True
+  , claOnlyFix = False
+  , claForceIndexes = False
+  , claHasMultiAssets = True
+  , claHasMetadata = True
+  , claHasPlutusExtra = True
+  , claHasOfflineData = True
+  , claTurboMode = False
+  , claFullMode = True
+  , claMigrateConsumed = True
+  , claPruneTxOut = True
+  }
 
 emptyMetricsSetters :: MetricSetters
 emptyMetricsSetters =
@@ -273,37 +315,49 @@ withFullConfig ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfig = withFullConfig' True Nothing
+withFullConfig = withFullConfig' True False initCommandLineArgs
 
-withTxOutParamConfig ::
-  TxOutParam ->
+withCustomConfig ::
+  CommandLineArgs ->
   FilePath ->
   FilePath ->
   (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
   IOManager ->
   [(Text, Text)] ->
   IO a
-withTxOutParamConfig txOutParam = withFullConfig' True (Just txOutParam)
+withCustomConfig = withFullConfig' True False
+
+-- when wanting to check for a failure in a test for some reason logging has to be enabled
+withCustomConfigAndLogs ::
+  CommandLineArgs ->
+  FilePath ->
+  FilePath ->
+  (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
+  IOManager ->
+  [(Text, Text)] ->
+  IO a
+withCustomConfigAndLogs = withFullConfig' True True
 
 withFullConfig' ::
   Bool ->
-  Maybe TxOutParam ->
+  Bool ->
+  CommandLineArgs ->
   FilePath ->
   FilePath ->
   (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfig' hasFingerprint mTxOutParam config testLabel action iom migr = do
+withFullConfig' hasFingerprint shouldLog cmdLineArgs config testLabel action iom migr = do
   recreateDir mutableDir
-  cfg <- mkConfig configDir mutableDir mTxOutParam
+  cfg <- mkConfig configDir mutableDir cmdLineArgs
   fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabel else pure Nothing
   let dbsyncParams = syncNodeParams cfg
   -- Set to True to disable logging, False to enable it.
   trce <-
-    if True
-      then pure nullTracer
-      else configureLogging dbsyncParams "db-sync-node"
+    if shouldLog
+      then configureLogging dbsyncParams "db-sync-node"
+      else pure nullTracer
   let dbsyncRun = runDbSync emptyMetricsSetters migr iom trce dbsyncParams True
   let initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
   withInterpreter (protocolInfoForging cfg) nullTracer fingerFile $ \interpreter -> do
