@@ -58,7 +58,7 @@ data ProtoParams = ProtoParams
   , ppMaxCollateralInputs :: !(Maybe Natural)
   }
 
-epochProtoParams :: ExtLedgerState CardanoBlock -> Maybe ProtoParams
+epochProtoParams :: ExtLState CardanoBlock -> Maybe ProtoParams
 epochProtoParams lstate =
   case ledgerState lstate of
     LedgerStateByron _ -> Nothing
@@ -69,17 +69,17 @@ epochProtoParams lstate =
     LedgerStateBabbage bls -> Just $ babbageProtoParams bls
     LedgerStateConway _cls -> panic "TODO: Conway not supported yet"
 
-alonzoProtoParams :: LedgerState (ShelleyBlock p StandardAlonzo) -> ProtoParams
+alonzoProtoParams :: LState (ShelleyBlock p StandardAlonzo) -> ProtoParams
 alonzoProtoParams =
   fromAlonzoParams . Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState
 
-babbageProtoParams :: LedgerState (ShelleyBlock p StandardBabbage) -> ProtoParams
+babbageProtoParams :: LState (ShelleyBlock p StandardBabbage) -> ProtoParams
 babbageProtoParams =
   fromBabbageParams . Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState
 
 shelleyProtoParams ::
   (ProtVerAtMost era 6, ProtVerAtMost era 4, EraPParams era) =>
-  LedgerState (ShelleyBlock p era) ->
+  LState (ShelleyBlock p era) ->
   ProtoParams
 shelleyProtoParams =
   fromShelleyParams . Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState

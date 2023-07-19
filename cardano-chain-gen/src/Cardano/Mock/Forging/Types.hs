@@ -33,14 +33,15 @@ import Ouroboros.Consensus.Shelley.Eras (
   StandardShelley,
  )
 import Ouroboros.Network.Block (Point)
+import Legacy.Cardano.Block
 
 type TPraosStandard = TPraos StandardCrypto
 
 type PraosStandard = Praos StandardCrypto
 
-type CardanoBlock = Consensus.CardanoBlock StandardCrypto
+type CardanoBlock = LegacyCardanoBlock StandardCrypto
 
-type CardanoPoint = Point CardanoBlock
+type CardanoPoint = Point LegacyCardanoBlock
 
 data MockBlock = MockBlock
   { txs :: ![TxEra]

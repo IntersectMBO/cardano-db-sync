@@ -5,6 +5,8 @@ module Cardano.DbSync.Types (
   BlockDetails (..),
   BlockEra (..),
   CardanoBlock,
+  ExtLState,
+  LState,
   CardanoPoint,
   StakeCred,
   PoolKeyHash,
@@ -43,12 +45,17 @@ import qualified Ouroboros.Consensus.HardFork.History as History
 import Ouroboros.Consensus.Protocol.Praos (Praos)
 import Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import Ouroboros.Network.Block (BlockNo, Point)
+import Ouroboros.Consensus.Ledger.Tables
+import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
+import qualified Ouroboros.Consensus.Ledger.Basics as Consensus
 
 type TPraosStandard = TPraos StandardCrypto
 
 type PraosStandard = Praos StandardCrypto
 
 type CardanoBlock = Cardano.CardanoBlock StandardCrypto
+type ExtLState block = Consensus.ExtLedgerState block EmptyMK
+type LState block = Consensus.LedgerState block EmptyMK
 
 type CardanoInterpreter =
   History.Interpreter (Cardano.CardanoEras StandardCrypto)

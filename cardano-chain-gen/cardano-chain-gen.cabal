@@ -104,6 +104,7 @@ library
                       , ouroboros-consensus-cardano
                       , ouroboros-consensus-diffusion
                       , ouroboros-consensus-protocol
+                      , ouroboros-consensus-cardano-legacy-block
                       , ouroboros-network
                       , ouroboros-network-api
                       , ouroboros-network-framework

@@ -28,7 +28,7 @@ data Chain' block st
   | Chain' block st :> (block, st)
   deriving (Eq, Ord, Show, Functor)
 
-type State block = Consensus.ExtLedgerState block
+type State block = Consensus.ExtLedgerState block EmptyMK
 
 type Chain block = Chain' block (State block)
 

@@ -465,7 +465,7 @@ rollbackInterpreter interpreter pnt = do
 getCurrentInterpreterState :: Interpreter -> IO InterpreterState
 getCurrentInterpreterState = readMVar . interpState
 
-getCurrentLedgerState :: Interpreter -> IO (ExtLedgerState CardanoBlock)
+getCurrentLedgerState :: Interpreter -> IO (ExtLState CardanoBlock)
 getCurrentLedgerState = fmap (currentState . istChain) . getCurrentInterpreterState
 
 getNextBlockNo :: Interpreter -> IO BlockNo
@@ -582,7 +582,7 @@ mkValidated txe =
 
 mkForecast ::
   TopLevelConfig CardanoBlock ->
-  ExtLedgerState CardanoBlock ->
+  ExtLState CardanoBlock ->
   Forecast (LedgerView (BlockProtocol CardanoBlock))
 mkForecast cfg st = ledgerViewForecastAt (configLedger cfg) (ledgerState st)
 

@@ -18,6 +18,7 @@ import Cardano.DbSync.Types (
   CardanoBlock,
   CardanoInterpreter,
   CardanoPoint,
+  ExtLState,
   PoolKeyHash,
   SlotDetails,
  )
@@ -38,7 +39,6 @@ import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Consensus.Ledger.Abstract (getTipSlot)
-import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Network.AnchoredSeq (Anchorable (..), AnchoredSeq (..))
 import Prelude (fail, id)
@@ -62,7 +62,7 @@ data HasLedgerEnv = HasLedgerEnv
   }
 
 data CardanoLedgerState = CardanoLedgerState
-  { clsState :: !(ExtLedgerState CardanoBlock)
+  { clsState :: !(ExtLState CardanoBlock)
   , clsEpochBlockNo :: !EpochBlockNo
   }
 
@@ -87,7 +87,8 @@ instance FromCBOR EpochBlockNo where
       1 -> pure EBBEpochBlockNo
       2 -> EpochBlockNo <$> fromCBOR
       n -> fail $ "unexpected EpochBlockNo value " <> show n
-encodeCardanoLedgerState :: (ExtLedgerState CardanoBlock -> Encoding) -> CardanoLedgerState -> Encoding
+
+encodeCardanoLedgerState :: (ExtLState CardanoBlock -> Encoding) -> CardanoLedgerState -> Encoding
 encodeCardanoLedgerState encodeExt cls =
   mconcat
     [ encodeExt (clsState cls)
@@ -95,7 +96,7 @@ encodeCardanoLedgerState encodeExt cls =
     ]
 
 decodeCardanoLedgerState ::
-  (forall s. Decoder s (ExtLedgerState CardanoBlock)) ->
+  (forall s. Decoder s (ExtLState CardanoBlock)) ->
   (forall s. Decoder s CardanoLedgerState)
 decodeCardanoLedgerState decodeExt = do
   ldgrState <- decodeExt

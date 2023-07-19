@@ -40,7 +40,7 @@ import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import Ouroboros.Consensus.Shelley.Ledger.Ledger
 
 -- Given an address, return it's current UTxO balance.
-ledgerAddrBalance :: Text -> LedgerState (CardanoBlock StandardCrypto) -> Either Text Word64
+ledgerAddrBalance :: Text -> LState (CardanoBlock StandardCrypto) -> Either Text Word64
 ledgerAddrBalance addr lsc =
   case lsc of
     LedgerStateByron st -> getByronBalance addr $ Byron.cvsUtxo $ byronLedgerState st

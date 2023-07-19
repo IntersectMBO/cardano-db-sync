@@ -30,7 +30,6 @@ import qualified Data.Vector.Generic as VG
 import Ouroboros.Consensus.Block
 import Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
 import Ouroboros.Consensus.Config
-import Ouroboros.Consensus.HardFork.Combinator
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import Ouroboros.Consensus.Node.ProtocolInfo
 import Ouroboros.Consensus.Protocol.Abstract
@@ -71,7 +70,7 @@ getStakeSlice ::
   EpochNo ->
   Word64 ->
   Word64 ->
-  ExtLedgerState CardanoBlock ->
+  ExtLState CardanoBlock ->
   StakeSliceRes
 getStakeSlice pInfo epoch !sliceIndex !minSliceSize els =
   case ledgerState els of
@@ -90,7 +89,7 @@ genericStakeSlice ::
   EpochNo ->
   Word64 ->
   Word64 ->
-  LedgerState (ShelleyBlock p era) ->
+  LState (ShelleyBlock p era) ->
   StakeSliceRes
 genericStakeSlice pInfo epoch sliceIndex minSliceSize lstate
   | index > delegationsLen = NoSlices

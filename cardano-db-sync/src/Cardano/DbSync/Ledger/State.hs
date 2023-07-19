@@ -9,6 +9,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Cardano.DbSync.Ledger.State (
   applyBlock,
@@ -44,14 +45,10 @@ import Cardano.Ledger.Shelley.AdaPots (AdaPots)
 import Cardano.Ledger.Shelley.LedgerState (EpochState (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Prelude hiding (atomically)
-import Cardano.Slotting.Block (BlockNo (..))
 import Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
 import Cardano.Slotting.Slot (
-  EpochNo (..),
-  SlotNo (..),
   WithOrigin (..),
   at,
-  fromWithOrigin,
  )
 import Control.Concurrent.Class.MonadSTM.Strict (
   atomically,
@@ -75,34 +72,16 @@ import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import Data.Time.Clock (UTCTime, diffUTCTime, getCurrentTime)
 import Lens.Micro ((^.))
-import Ouroboros.Consensus.Block (
-  CodecConfig,
-  Point (..),
-  WithOrigin (..),
-  blockHash,
-  blockIsEBB,
-  blockPrevHash,
-  castPoint,
-  pointSlot,
- )
-import Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
+import Ouroboros.Consensus.Block.Abstract
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
-import Ouroboros.Consensus.Cardano.CanHardFork ()
+import Ouroboros.Consensus.Cardano.CanHardFork (CardanoHardForkConstraints)
 import Ouroboros.Consensus.Config (TopLevelConfig (..), configCodec, configLedger)
 import Ouroboros.Consensus.HardFork.Abstract
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
 import Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import Ouroboros.Consensus.HardFork.Combinator.State (epochInfoLedger)
 import qualified Ouroboros.Consensus.HardFork.History as History
-import Ouroboros.Consensus.Ledger.Abstract (
-  LedgerResult (..),
-  getTip,
-  ledgerTipHash,
-  ledgerTipPoint,
-  ledgerTipSlot,
-  tickThenReapplyLedgerResult,
- )
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerCfg (..), ExtLedgerState (..))
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
@@ -111,12 +90,19 @@ import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 import Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), EncodeDisk (..))
 import Ouroboros.Network.AnchoredSeq (AnchoredSeq (..))
 import qualified Ouroboros.Network.AnchoredSeq as AS
-import Ouroboros.Network.Block (HeaderHash, Point (..), blockNo)
+import Ouroboros.Network.Block (Point (..))
 import qualified Ouroboros.Network.Point as Point
 import System.Directory (doesFileExist, listDirectory, removeFile)
 import System.FilePath (dropExtension, takeExtension, (</>))
 import System.Mem (performMajorGC)
 import Prelude (String, id)
+import qualified Legacy.Convert as Legacy
+import Ouroboros.Consensus.Ledger.Abstract
+import Ouroboros.Consensus.Ledger.Tables.Utils ()
+import qualified Ouroboros.Consensus.HardFork.Combinator.Basics as HFC
+import Data.SOP.Strict (Compose, hcmap)
+import Data.SOP.Functors (Flip (..))
+-- import qualified Data.SOP.Telescope as Telescope
 
 -- Note: The decision on whether a ledger-state is written to disk is based on the block number
 -- rather than the slot number because while the block number is fully populated (for every block
@@ -174,12 +160,22 @@ mkHasLedgerEnv trce protoInfo dir nw systemStart syncOptions = do
       , leStateWriteQueue = swQueue
       }
 
-initCardanoLedgerState :: Consensus.ProtocolInfo IO CardanoBlock -> CardanoLedgerState
+initCardanoLedgerState ::
+     CardanoHardForkConstraints StandardCrypto
+  => Consensus.ProtocolInfo IO CardanoBlock -> CardanoLedgerState
 initCardanoLedgerState pInfo =
   CardanoLedgerState
-    { clsState = Consensus.pInfoInitLedger pInfo
+    { clsState = ExtLedgerState (stowLState lstate) hstate
     , clsEpochBlockNo = GenesisEpochBlockNo
     }
+  where
+    ExtLedgerState lstate hstate = Consensus.pInfoInitLedger pInfo
+    stowLState st =
+        HFC.HardForkLedgerState
+      $ hcmap
+          (Proxy @(Compose CanStowLedgerTables LedgerState))
+          (Flip . stowLedgerTables . unFlip)
+      $ HFC.hardForkLedgerStatePerEra st
 
 getTopLevelconfigHasLedger :: HasLedgerEnv -> TopLevelConfig CardanoBlock
 getTopLevelconfigHasLedger = Consensus.pInfoConfig . leProtocolInfo
@@ -231,14 +227,14 @@ applyBlock env blk = do
     applyBlk ::
       ExtLedgerCfg CardanoBlock ->
       CardanoBlock ->
-      ExtLedgerState CardanoBlock ->
-      LedgerResult (ExtLedgerState CardanoBlock) (ExtLedgerState CardanoBlock)
+      ExtLState CardanoBlock ->
+      LedgerResult (ExtLedgerState CardanoBlock) (ExtLState CardanoBlock)
     applyBlk cfg block lsb =
       case tickThenReapplyCheckHash cfg block lsb of
         Left err -> panic err
         Right result -> result
 
-    mkNewEpoch :: ExtLedgerState CardanoBlock -> ExtLedgerState CardanoBlock -> Maybe AdaPots -> Maybe Generic.NewEpoch
+    mkNewEpoch :: ExtLState CardanoBlock -> ExtLState CardanoBlock -> Maybe AdaPots -> Maybe Generic.NewEpoch
     mkNewEpoch oldState newState mPots =
       if ledgerEpochNo env newState /= ledgerEpochNo env oldState + 1
         then Nothing
@@ -354,7 +350,7 @@ ledgerStateWriteLoop tracer swQueue codecConfig =
           , "."
           ]
 
-mkLedgerStateFilename :: LedgerStateDir -> ExtLedgerState CardanoBlock -> Maybe EpochNo -> WithOrigin FilePath
+mkLedgerStateFilename :: LedgerStateDir -> ExtLState CardanoBlock -> Maybe EpochNo -> WithOrigin FilePath
 mkLedgerStateFilename dir ledger mEpochNo =
   lsfFilePath . dbPointToFileName dir mEpochNo
     <$> getPoint (ledgerTipPoint @CardanoBlock (ledgerState ledger))
@@ -697,7 +693,7 @@ getRegisteredPools st =
 getRegisteredPoolShelley ::
   forall p era.
   EraCrypto era ~ StandardCrypto =>
-  LedgerState (ShelleyBlock p era) ->
+  LState (ShelleyBlock p era) ->
   Set.Set PoolKeyHash
 getRegisteredPoolShelley lState =
   Map.keysSet $
@@ -708,7 +704,7 @@ getRegisteredPoolShelley lState =
             Shelley.nesEs $
               Consensus.shelleyLedgerState lState
 
-ledgerEpochNo :: HasLedgerEnv -> ExtLedgerState CardanoBlock -> EpochNo
+ledgerEpochNo :: HasLedgerEnv -> ExtLState CardanoBlock -> EpochNo
 ledgerEpochNo env cls =
   case ledgerTipSlot (ledgerState cls) of
     Origin -> 0 -- An empty chain is in epoch 0
@@ -725,11 +721,16 @@ ledgerEpochNo env cls =
 tickThenReapplyCheckHash ::
   ExtLedgerCfg CardanoBlock ->
   CardanoBlock ->
-  ExtLedgerState CardanoBlock ->
-  Either Text (LedgerResult (ExtLedgerState CardanoBlock) (ExtLedgerState CardanoBlock))
+  ExtLState CardanoBlock ->
+  Either Text (LedgerResult (ExtLedgerState CardanoBlock) (ExtLState CardanoBlock))
 tickThenReapplyCheckHash cfg block lsb =
   if blockPrevHash block == ledgerTipHash (ledgerState lsb)
-    then Right $ tickThenReapplyLedgerResult cfg block lsb
+    then Right $
+      Legacy.convertExtLedgerResult
+        $ tickThenReapplyLedgerResult
+            (Legacy.convertExtLedgerConfig cfg)
+            (Legacy.convertBlock block)
+            (convertMapKind . Legacy.convertExtLedgerState $ lsb)
     else
       Left $
         mconcat
@@ -747,7 +748,7 @@ tickThenReapplyCheckHash cfg block lsb =
 getHeaderHash :: HeaderHash CardanoBlock -> ByteString
 getHeaderHash bh = SBS.fromShort (Consensus.getOneEraHash bh)
 
-getSlotDetails :: HasLedgerEnv -> LedgerState CardanoBlock -> UTCTime -> SlotNo -> STM SlotDetails
+getSlotDetails :: HasLedgerEnv -> LState CardanoBlock -> UTCTime -> SlotNo -> STM SlotDetails
 getSlotDetails env st time slot = do
   minter <- readTVar $ leInterpreter env
   details <- case minter of

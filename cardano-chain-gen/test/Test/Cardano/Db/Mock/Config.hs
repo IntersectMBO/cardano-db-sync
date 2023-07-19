@@ -151,7 +151,7 @@ startDBSync env = do
   case thr of
     Just _a -> error "db-sync already running"
     Nothing -> do
-      a <- dbSyncForkDB env
+      a <- dbSyncForkDB env ()
       void . atomically $ tryPutTMVar (dbSyncThreadVar env) a
 
 pollDBSync :: DBSyncEnv -> IO (Maybe (Either SomeException ()))
