@@ -348,9 +348,9 @@ withFullConfig' hasFingerprint shouldLog cmdLineArgs config testLabel action iom
       (unSocketPath (enpSocketPath $ syncNodeParams cfg))
       $ \mockServer ->
         -- we dont fork dbsync here. Just prepare it as an action
-        withDBSyncEnv (mkDBSyncEnv dbsyncParams dbsyncRun) $ \dbSync -> do
-          void . hSilence [stderr] $ Db.recreateDB (getDBSyncPGPass dbSync)
-          action interpreter mockServer dbSync
+        withDBSyncEnv (mkDBSyncEnv dbsyncParams dbsyncRun) $ \dbSyncEnv -> do
+          void . hSilence [stderr] $ Db.recreateDB (getDBSyncPGPass dbSyncEnv)
+          action interpreter mockServer dbSyncEnv
   where
     configDir = mkConfigDir config
     mutableDir = mkMutableDir testLabel
