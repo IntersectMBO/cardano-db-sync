@@ -13,9 +13,8 @@ module Cardano.DbSync.Util.Cardano (
   Shelley.makeTransactionMetadata,
   Shelley.metadataValueToJsonNoSchema,
   Shelley.proxyToAsType,
-  Shelley.serialiseAddress,
   Shelley.scriptDataToJson,
-  Shelley.deserialiseFromBech32,
+  Shelley.serialiseAddress,
 ) where
 
 import qualified Cardano.Api as Api

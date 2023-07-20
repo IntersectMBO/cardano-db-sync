@@ -5,9 +5,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+
 -- Need this because both ghc-8.6.5 and ghc-8.10.2 incorrectly warns about a redundant constraint
 -- in the definition of renderAddress.
-{-# OPTIONS_GHC -Wno-redundant-constraints #-}
+-- {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 module Cardano.DbSync.Era.Shelley.Generic.Util (
   annotateStakingCred,
@@ -40,8 +41,8 @@ import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Types
+import Cardano.DbSync.Util.Address (serialiseAddress, serialiseRewardAcnt)
 import Cardano.DbSync.Util.Bech32 (serialiseStakePoolKeyHashToBech32)
-import Cardano.DbSync.Util.Cardano
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..), DeltaCoin)
@@ -126,10 +127,10 @@ partitionMIRTargets =
         Shelley.SendToOppositePotMIR y -> (xs, y : ys)
 
 renderAddress :: Ledger.Addr StandardCrypto -> Text
-renderAddress = serialiseAddress . fromShelleyAddrToAny
+renderAddress = serialiseAddress
 
 renderRewardAcnt :: Ledger.RewardAcnt StandardCrypto -> Text
-renderRewardAcnt = serialiseAddress . fromShelleyStakeAddr
+renderRewardAcnt = serialiseRewardAcnt
 
 stakingCredHash :: Ledger.Network -> Ledger.StakeCredential era -> ByteString
 stakingCredHash network = Ledger.serialiseRewardAcnt . annotateStakingCred network

@@ -23,7 +23,7 @@ tests :: IO Bool
 tests =
   checkParallel $
     Group
-      "Cardano.DbSync.CardanoUtil"
+      "Cardano.DbSync.Util.Bech32"
       [ ("serialiseVerKeyVrfToBech32 simple", prop_serialiseToBech32)
       , ("serialiseVerKeyVrfToBech32 roundtrip", prop_serialiseVerKeyVrfToBech32_roundtrip)
       , ("serialiseVerKeyVrfToBech32 A/B", prop_serialiseVerKeyVrfToBech32_api)
