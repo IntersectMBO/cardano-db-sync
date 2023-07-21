@@ -141,8 +141,8 @@ fixPlutusScripts tracer cblk fpss = do
 
 scrapScriptBlock :: CardanoBlock -> Map ByteString ByteString
 scrapScriptBlock cblk = case cblk of
-  BlockBabbage blk -> Map.unions $ scrapScriptTxBabbage . snd <$> babbageBlockTxs blk
-  BlockAlonzo blk -> Map.unions $ scrapScriptTxAlonzo . snd <$> alonzoBlockTxs blk
+  BlockBabbage blk -> Map.unions $ scrapScriptTxBabbage . snd <$> getTxs blk
+  BlockAlonzo blk -> Map.unions $ scrapScriptTxAlonzo . snd <$> getTxs blk
   BlockByron _ -> error "No Plutus Scripts in Byron"
   BlockShelley _ -> error "No Plutus Scripts in Shelley"
   BlockAllegra _ -> error "No Plutus Scripts in Allegra"

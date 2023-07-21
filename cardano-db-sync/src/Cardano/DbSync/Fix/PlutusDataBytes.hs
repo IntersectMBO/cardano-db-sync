@@ -252,8 +252,8 @@ fixPlutusData tracer cblk fds = do
 scrapDatumsBlock :: CardanoBlock -> Map ByteString ByteString
 scrapDatumsBlock cblk = case cblk of
   BlockConway _blk -> panic "TODO: Conway 4"
-  BlockBabbage blk -> Map.unions $ scrapDatumsTxBabbage . snd <$> babbageBlockTxs blk
-  BlockAlonzo blk -> Map.unions $ scrapDatumsTxAlonzo . snd <$> alonzoBlockTxs blk
+  BlockBabbage blk -> Map.unions $ scrapDatumsTxBabbage . snd <$> getTxs blk
+  BlockAlonzo blk -> Map.unions $ scrapDatumsTxAlonzo . snd <$> getTxs blk
   BlockByron _ -> error "No Datums in Byron"
   BlockShelley _ -> error "No Datums in Shelley"
   BlockAllegra _ -> error "No Datums in Allegra"
@@ -288,8 +288,8 @@ scrapDatumsTxAlonzo tx =
 scrapRedeemerDataBlock :: CardanoBlock -> Map ByteString ByteString
 scrapRedeemerDataBlock cblk = case cblk of
   BlockConway _blk -> panic "TODO: Conway 5"
-  BlockBabbage blk -> Map.unions $ scrapRedeemerDataTx . snd <$> babbageBlockTxs blk
-  BlockAlonzo blk -> Map.unions $ scrapRedeemerDataTx . snd <$> alonzoBlockTxs blk
+  BlockBabbage blk -> Map.unions $ scrapRedeemerDataTx . snd <$> getTxs blk
+  BlockAlonzo blk -> Map.unions $ scrapRedeemerDataTx . snd <$> getTxs blk
   BlockByron _ -> error "No RedeemerData in Byron"
   BlockShelley _ -> error "No RedeemerData in Shelley"
   BlockAllegra _ -> error "No RedeemerData in Allegra"
