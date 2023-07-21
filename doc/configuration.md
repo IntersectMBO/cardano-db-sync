@@ -62,6 +62,22 @@ issues.
 With this option the epoch table is left empty. Mostly left for historical reasons, since it
 provides a negligible improvement in sync time.
 
+### --disable-multiassets : Experimental
+
+Disables the multi assets tables and entries.
+
+### --disable-metadata : Experimental
+
+Disables the tx_metadata table.
+
+### --disable-plutus-extra : Experimental
+
+Disables most tables and entries related to plutus and scripts.
+
+### --disable-offline-data : Experimental
+
+Disables fetching pool offline metadata.
+
 ### --consumed-tx-out
 
 Adds a new field `tx_out (consumed_by_tx_in_id)` and populated it accordingly. This allows users to
