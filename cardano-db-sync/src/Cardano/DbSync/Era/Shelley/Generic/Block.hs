@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -14,10 +15,10 @@ module Cardano.DbSync.Era.Shelley.Generic.Block (
   fromMaryBlock,
   fromAlonzoBlock,
   fromBabbageBlock,
+  fromConwayBlock,
+  getTxs,
   blockHash,
   blockPrevHash,
-  alonzoBlockTxs,
-  babbageBlockTxs,
 ) where
 
 import qualified Cardano.Api.Shelley as Api
@@ -33,8 +34,6 @@ import qualified Cardano.Ledger.Core as Ledger
 import Cardano.Ledger.Crypto (Crypto, StandardCrypto)
 import Cardano.Ledger.Era (EraSegWits (..))
 import Cardano.Ledger.Keys (KeyHash, KeyRole (..), VerKeyVRF, hashKey)
-import qualified Cardano.Ledger.Shelley.BlockChain as Shelley
-import qualified Cardano.Ledger.Shelley.Tx as Shelley
 import Cardano.Prelude
 import qualified Cardano.Protocol.TPraos.BHeader as TPraos
 import qualified Cardano.Protocol.TPraos.OCert as TPraos
@@ -43,11 +42,12 @@ import Ouroboros.Consensus.Cardano.Block (
   StandardAllegra,
   StandardAlonzo,
   StandardBabbage,
+  StandardConway,
   StandardMary,
   StandardShelley,
  )
 import qualified Ouroboros.Consensus.Protocol.Praos.Header as Praos
-import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBasedEra, ShelleyBlock)
+import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
 import Ouroboros.Consensus.Shelley.Protocol.Abstract
 import Ouroboros.Network.Block (BlockNo (..))
@@ -81,7 +81,7 @@ fromAllegraBlock blk =
     , blkVrfKey = blockVrfKeyView $ blockVrfVkTPraos blk
     , blkOpCert = blockOpCertKeyTPraos blk
     , blkOpCertCounter = blockOpCertCounterTPraos blk
-    , blkTxs = map fromAllegraTx (blockTxs blk)
+    , blkTxs = map fromAllegraTx (getTxs blk)
     }
 
 fromShelleyBlock :: ShelleyBlock TPraosStandard StandardShelley -> Block
@@ -98,7 +98,7 @@ fromShelleyBlock blk =
     , blkVrfKey = blockVrfKeyView $ blockVrfVkTPraos blk
     , blkOpCert = blockOpCertKeyTPraos blk
     , blkOpCertCounter = blockOpCertCounterTPraos blk
-    , blkTxs = map fromShelleyTx (blockTxs blk)
+    , blkTxs = map fromShelleyTx (getTxs blk)
     }
 
 fromMaryBlock :: ShelleyBlock TPraosStandard StandardMary -> Block
@@ -115,7 +115,7 @@ fromMaryBlock blk =
     , blkVrfKey = blockVrfKeyView $ blockVrfVkTPraos blk
     , blkOpCert = blockOpCertKeyTPraos blk
     , blkOpCertCounter = blockOpCertCounterTPraos blk
-    , blkTxs = map fromMaryTx (blockTxs blk)
+    , blkTxs = map fromMaryTx (getTxs blk)
     }
 
 fromAlonzoBlock :: Bool -> Maybe Prices -> ShelleyBlock TPraosStandard StandardAlonzo -> Block
@@ -132,7 +132,7 @@ fromAlonzoBlock iope mprices blk =
     , blkVrfKey = blockVrfKeyView $ blockVrfVkTPraos blk
     , blkOpCert = blockOpCertKeyTPraos blk
     , blkOpCertCounter = blockOpCertCounterTPraos blk
-    , blkTxs = map (fromAlonzoTx iope mprices) (alonzoBlockTxs blk)
+    , blkTxs = map (fromAlonzoTx iope mprices) (getTxs blk)
     }
 
 fromBabbageBlock :: Bool -> Maybe Prices -> ShelleyBlock PraosStandard StandardBabbage -> Block
@@ -149,16 +149,30 @@ fromBabbageBlock iope mprices blk =
     , blkVrfKey = blockVrfKeyView $ blockVrfVkPraos blk
     , blkOpCert = blockOpCertKeyPraos blk
     , blkOpCertCounter = blockOpCertCounterPraos blk
-    , blkTxs = map (fromBabbageTx iope mprices) (babbageBlockTxs blk)
+    , blkTxs = map (fromBabbageTx iope mprices) (getTxs blk)
+    }
+
+fromConwayBlock :: Bool -> Maybe Prices -> ShelleyBlock PraosStandard StandardConway -> Block
+fromConwayBlock iope mprices blk =
+  Block
+    { blkEra = Babbage
+    , blkHash = blockHash blk
+    , blkPreviousHash = blockPrevHash blk
+    , blkSlotLeader = blockIssuer blk
+    , blkSlotNo = slotNumber blk
+    , blkBlockNo = blockNumber blk
+    , blkSize = blockSize blk
+    , blkProto = blockProtoVersionPraos blk
+    , blkVrfKey = blockVrfKeyView $ blockVrfVkPraos blk
+    , blkOpCert = blockOpCertKeyPraos blk
+    , blkOpCertCounter = blockOpCertCounterPraos blk
+    , blkTxs = map (fromConwayTx iope mprices) (getTxs blk)
     }
 
 -- -------------------------------------------------------------------------------------------------
 
-babbageBlockTxs :: ShelleyBlock p StandardBabbage -> [(Word64, Ledger.Tx StandardBabbage)]
-babbageBlockTxs = zip [0 ..] . toList . fromTxSeq @StandardBabbage . Ledger.bbody . Consensus.shelleyBlockRaw
-
-alonzoBlockTxs :: ShelleyBlock p StandardAlonzo -> [(Word64, Ledger.Tx StandardAlonzo)]
-alonzoBlockTxs = zip [0 ..] . toList . fromTxSeq @StandardAlonzo . Ledger.bbody . Consensus.shelleyBlockRaw
+getTxs :: forall p era. EraSegWits era => ShelleyBlock p era -> [(Word64, Ledger.Tx era)]
+getTxs = zip [0 ..] . toList . fromTxSeq @ era . Ledger.bbody . Consensus.shelleyBlockRaw
 
 blockHeader :: ShelleyBlock p era -> ShelleyProtocolHeader p
 blockHeader = Ledger.bheader . Consensus.shelleyBlockRaw
@@ -205,15 +219,6 @@ blockProtoVersionPraos = Praos.hbProtVer . getHeaderBodyPraos . blockHeader
 blockSize :: ProtocolHeaderSupportsEnvelope p => ShelleyBlock p era -> Word64
 blockSize = fromIntegral . pHeaderSize . blockHeader
 
-blockTxs ::
-  ( ShelleyBasedEra era
-  , Ledger.TxSeq era ~ Shelley.ShelleyTxSeq era
-  , Ledger.Tx era ~ Shelley.ShelleyTx era
-  ) =>
-  ShelleyBlock p era ->
-  [(Word64, Shelley.ShelleyTx era)]
-blockTxs = zip [0 ..] . unTxSeq . Ledger.bbody . Consensus.shelleyBlockRaw
-
 blockVrfKeyView :: VerKeyVRF StandardCrypto -> Text
 blockVrfKeyView = Api.serialiseToBech32 . Api.VrfVerificationKey
 
@@ -234,12 +239,3 @@ blockIssuer = hashKey . pHeaderIssuer . blockHeader
 
 slotNumber :: ShelleyProtocol p => ShelleyBlock p era -> SlotNo
 slotNumber = pHeaderSlot . blockHeader
-
-unTxSeq ::
-  ( ShelleyBasedEra era
-  , Ledger.TxSeq era ~ Shelley.ShelleyTxSeq era
-  , Ledger.Tx era ~ Shelley.ShelleyTx era
-  ) =>
-  Shelley.ShelleyTxSeq era ->
-  [Shelley.ShelleyTx era]
-unTxSeq = toList . Ledger.fromTxSeq

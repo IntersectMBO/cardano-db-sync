@@ -10,8 +10,8 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 index-state:
-  , hackage.haskell.org 2023-05-10T10:34:57Z
-  , cardano-haskell-packages 2023-06-06T08:18:38Z
+  , hackage.haskell.org 2023-07-10T14:55:34Z
+  , cardano-haskell-packages 2023-07-16T00:00:00Z
 
 packages:
   cardano-db
@@ -24,6 +24,8 @@ packages:
 
 constraints:
     persistent-postgresql >= 2.11.0.1,
+    optparse-applicative >= 0.16.0 && < 0.16.1,
+    cardano-api < 8.8.1
 
 package cardano-db
   ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields -Wunused-imports -Wunused-packages
