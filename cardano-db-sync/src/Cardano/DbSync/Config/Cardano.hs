@@ -42,6 +42,8 @@ import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 import qualified Ouroboros.Consensus.Shelley.Node.Praos as Consensus
+import Ouroboros.Consensus.Block.Forging
+import Cardano.Slotting.Slot
 
 -- Usually only one constructor, but may have two when we are preparing for a HFC event.
 data GenesisConfig
@@ -72,7 +74,7 @@ cardanoLedgerConfig :: GenesisConfig -> LedgerConfig CardanoBlock
 cardanoLedgerConfig = topLevelConfigLedger . mkTopLevelConfig
 
 mkTopLevelConfig :: GenesisConfig -> TopLevelConfig CardanoBlock
-mkTopLevelConfig cfg = Consensus.pInfoConfig $ mkProtocolInfoCardano cfg []
+mkTopLevelConfig cfg = Consensus.pInfoConfig $ fst $ mkProtocolInfoCardano cfg []
 
 -- Need a concrete type for 'm' ('IO') to make the type checker happy.
 
@@ -83,7 +85,7 @@ mkTopLevelConfig cfg = Consensus.pInfoConfig $ mkProtocolInfoCardano cfg []
 mkProtocolInfoCardano ::
   GenesisConfig ->
   [Consensus.ShelleyLeaderCredentials StandardCrypto] -> -- this is not empty only in tests
-  ProtocolInfo IO CardanoBlock
+  (ProtocolInfo CardanoBlock, IO [BlockForging IO CardanoBlock])
 mkProtocolInfoCardano ge shelleyCred =
   case ge of
     GenesisCardano dnc byronGenesis shelleyGenesis alonzoGenesis ->
@@ -130,7 +132,7 @@ mkProtocolInfoCardano ge shelleyCred =
         (Consensus.ProtocolTransitionParamsShelleyBased () $ dncMaryHardFork dnc)
         (Consensus.ProtocolTransitionParamsShelleyBased alonzoGenesis $ dncAlonzoHardFork dnc)
         (Consensus.ProtocolTransitionParamsShelleyBased () $ dncBabbageHardFork dnc)
-        (Consensus.ProtocolTransitionParamsShelleyBased (ConwayGenesis (GenDelegs mempty)) Consensus.TriggerHardForkNever) -- TODO: Conway Fix
+        (Consensus.ProtocolTransitionParamsShelleyBased (ConwayGenesis (GenDelegs mempty)) (Consensus.TriggerHardForkAtEpoch (EpochNo 34))) -- TODO: Conway Fix
 
 shelleyPraosNonce :: ShelleyConfig -> Nonce
 shelleyPraosNonce sCfg = Nonce (Crypto.castHash . unGenesisHashShelley $ scGenesisHash sCfg)

@@ -97,7 +97,6 @@ import Ouroboros.Consensus.Ledger.SupportsMempool (
 import Ouroboros.Consensus.Ledger.SupportsProtocol (ledgerViewForecastAt)
 import Ouroboros.Consensus.Node.ProtocolInfo (
   ProtocolInfo,
-  pInfoBlockForging,
   pInfoConfig,
   pInfoInitLedger,
  )
@@ -114,14 +113,22 @@ import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock, Ticked, shelleyLedgerSt
 import qualified Ouroboros.Consensus.Shelley.Ledger.Mempool as Consensus
 import Ouroboros.Consensus.Shelley.Ledger.SupportsProtocol ()
 import qualified Ouroboros.Consensus.TypeFamilyWrappers as Consensus
+import Control.Concurrent.Class.MonadSTM.Strict (
+  StrictTVar,
+  atomically,
+  newTVarIO,
+  readTVarIO,
+  modifyTVar,
+  swapTVar,
+ )
 import Ouroboros.Consensus.Util.IOLike (
   Exception,
   NoThunks,
-  StrictMVar,
-  modifyMVar,
-  newMVar,
-  readMVar,
-  swapMVar,
+--  StrictSVar,
+--  modifySVar,
+--  newMVar,
+--  readMVar,
+--  swapTVar,
  )
 import Ouroboros.Consensus.Util.Orphans ()
 import Ouroboros.Network.Block
@@ -129,7 +136,7 @@ import System.Directory (doesPathExist)
 
 data Interpreter = Interpreter
   { interpForging :: !(Map Int (BlockForging IO CardanoBlock))
-  , interpState :: !(StrictMVar IO InterpreterState)
+  , interpState :: !(StrictTVar IO InterpreterState)
   , interpTracerForge :: !(Tracer IO (ForgeStateInfo CardanoBlock))
   , interpTopLeverConfig :: !(TopLevelConfig CardanoBlock)
   , interpFingerMode :: !FingerprintMode
@@ -221,18 +228,18 @@ finalizeFingerprint inter = do
     _ -> pure ()
 
 initInterpreter ::
-  ProtocolInfo IO CardanoBlock ->
+  ProtocolInfo CardanoBlock ->
+  [BlockForging IO CardanoBlock] ->
   Tracer IO (ForgeStateInfo CardanoBlock) ->
   Maybe FilePath ->
   IO Interpreter
-initInterpreter pinfo traceForge mFingerprintFile = do
-  forging <- pInfoBlockForging pinfo
+initInterpreter pinfo forging traceForge mFingerprintFile = do
   let topLeverCfg = pInfoConfig pinfo
   let initSt = pInfoInitLedger pinfo
   let ledgerView = mkForecast topLeverCfg initSt
   (mode, fingerprint) <- mkFingerprint mFingerprintFile
   stvar <-
-    newMVar $
+    newTVarIO $
       InterpreterState
         { istChain = initChainDB topLeverCfg initSt
         , istForecast = ledgerView
@@ -252,13 +259,14 @@ initInterpreter pinfo traceForge mFingerprintFile = do
       }
 
 withInterpreter ::
-  ProtocolInfo IO CardanoBlock ->
+  ProtocolInfo CardanoBlock ->
+  [BlockForging IO CardanoBlock] ->
   Tracer IO (ForgeStateInfo CardanoBlock) ->
   Maybe FilePath ->
   (Interpreter -> IO a) ->
   IO a
-withInterpreter p t f action = do
-  interp <- initInterpreter p t f
+withInterpreter p f t mf action = do
+  interp <- initInterpreter p f t mf
   a <- action interp
   finalizeFingerprint interp
   pure a
@@ -296,8 +304,8 @@ forgeWithStakeCreds inter = do
 
 forgeNextAfter :: Interpreter -> Word64 -> [TxEra] -> IO CardanoBlock
 forgeNextAfter interpreter skipSlots txes = do
-  modifyMVar (interpState interpreter) $ \st ->
-    pure (st {istSlot = istSlot st + SlotNo skipSlots}, ())
+  atomically $ modifyTVar (interpState interpreter) $ \st ->
+    (st {istSlot = istSlot st + SlotNo skipSlots})
   forgeNextFindLeader interpreter txes
 
 forgeNextFindLeader :: Interpreter -> [TxEra] -> IO CardanoBlock
@@ -324,7 +332,7 @@ forgeNextLeaders interpreter txes possibleLeaders = do
           , istNextBlockNo = blockNo blk + 1
           , istFingerprint = fingerprint
           }
-  void $ swapMVar (interpState interpreter) newInterState
+  void $ atomically $ swapTVar (interpState interpreter) newInterState
   pure blk
   where
     cfg :: TopLevelConfig CardanoBlock
@@ -457,13 +465,13 @@ rollbackInterpreter interpreter pnt = do
           , istNextBlockNo = nextBlock
           , istFingerprint = istFingerprint interState
           }
-  void $ swapMVar (interpState interpreter) newInterState
+  void $ atomically $ swapTVar (interpState interpreter) newInterState
   where
     cfg :: TopLevelConfig CardanoBlock
     cfg = interpTopLeverConfig interpreter
 
 getCurrentInterpreterState :: Interpreter -> IO InterpreterState
-getCurrentInterpreterState = readMVar . interpState
+getCurrentInterpreterState = readTVarIO . interpState
 
 getCurrentLedgerState :: Interpreter -> IO (ExtLedgerState CardanoBlock)
 getCurrentLedgerState = fmap (currentState . istChain) . getCurrentInterpreterState
@@ -484,7 +492,7 @@ getCurrentEpoch inter = do
     _ -> throwIO UnexpectedEra
 
 getCurrentSlot :: Interpreter -> IO SlotNo
-getCurrentSlot interp = istSlot <$> readMVar (interpState interp)
+getCurrentSlot interp = istSlot <$> readTVarIO (interpState interp)
 
 withBabbageLedgerState ::
   Interpreter ->

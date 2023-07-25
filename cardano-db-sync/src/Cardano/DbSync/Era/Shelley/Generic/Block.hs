@@ -155,7 +155,7 @@ fromBabbageBlock iope mprices blk =
 fromConwayBlock :: Bool -> Maybe Prices -> ShelleyBlock PraosStandard StandardConway -> Block
 fromConwayBlock iope mprices blk =
   Block
-    { blkEra = Babbage
+    { blkEra = Conway
     , blkHash = blockHash blk
     , blkPreviousHash = blockPrevHash blk
     , blkSlotLeader = blockIssuer blk

@@ -82,6 +82,8 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
+import Cardano.Ledger.Shelley.TxCert
+import Cardano.Ledger.Conway.TxCert
 
 {- HLINT ignore "Reduce duplication" -}
 
@@ -477,12 +479,17 @@ insertCertificate ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertCertificate tracer cache isMember network blkId txId epochNo slotNo redeemers (Generic.TxCertificate ridx idx cert) =
   case cert of
-    Shelley.DCertDeleg deleg -> insertDelegCert tracer cache network txId idx mRedeemerId epochNo slotNo deleg
-    Shelley.DCertPool pool -> insertPoolCert tracer cache isMember network epochNo blkId txId idx pool
-    Shelley.DCertMir mir -> insertMirCert tracer cache network txId idx mir
-    Shelley.DCertGenesis _gen -> do
+    Left (ShelleyTxCertDelegCert deleg) -> insertDelegCert tracer cache network txId idx mRedeemerId epochNo slotNo deleg
+    Left (ShelleyTxCertPool pool) -> insertPoolCert tracer cache isMember network epochNo blkId txId idx pool
+    Left (ShelleyTxCertMir mir) -> insertMirCert tracer cache network txId idx mir
+    Left (ShelleyTxCertGenesisDeleg _gen) -> do
       -- TODO : Low priority
       liftIO $ logWarning tracer "insertCertificate: Unhandled DCertGenesis certificate"
+      pure ()
+    Right (ConwayTxCertDeleg deleg) -> insertConwayDelegCert tracer cache network txId idx mRedeemerId epochNo slotNo deleg
+    Right (ConwayTxCertPool pool) -> insertPoolCert tracer cache isMember network epochNo blkId txId idx pool
+    Right (ConwayTxCertCommittee _) -> do
+      liftIO $ logWarning tracer "insertCertificate: Unhandled ConwayTxCertCommittee certificate"
       pure ()
   where
     mRedeemerId = mlookup ridx redeemers
@@ -514,13 +521,41 @@ insertDelegCert ::
   Maybe DB.RedeemerId ->
   EpochNo ->
   SlotNo ->
-  Shelley.DelegCert StandardCrypto ->
+  ShelleyDelegCert StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertDelegCert _tracer cache network txId idx mRedeemerId epochNo slotNo dCert =
   case dCert of
-    Shelley.RegKey cred -> insertStakeRegistration epochNo txId idx $ Generic.annotateStakingCred network cred
-    Shelley.DeRegKey cred -> insertStakeDeregistration cache network epochNo txId idx mRedeemerId cred
-    Shelley.Delegate (Shelley.Delegation cred poolkh) -> insertDelegation cache network epochNo slotNo txId idx mRedeemerId cred poolkh
+    ShelleyRegCert cred -> insertStakeRegistration epochNo txId idx $ Generic.annotateStakingCred network cred
+    ShelleyUnRegCert cred -> insertStakeDeregistration cache network epochNo txId idx mRedeemerId cred
+    ShelleyDelegCert cred poolkh -> insertDelegation cache network epochNo slotNo txId idx mRedeemerId cred poolkh
+
+insertConwayDelegCert ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
+  Cache ->
+  Ledger.Network ->
+  DB.TxId ->
+  Word16 ->
+  Maybe DB.RedeemerId ->
+  EpochNo ->
+  SlotNo ->
+  ConwayDelegCert StandardCrypto ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+insertConwayDelegCert tracer cache network txId idx mRedeemerId epochNo slotNo dCert =
+  case dCert of
+    ConwayRegCert cred _dep -> insertStakeRegistration epochNo txId idx $ Generic.annotateStakingCred network cred
+    ConwayUnRegCert cred _dep -> insertStakeDeregistration cache network epochNo txId idx mRedeemerId cred
+    ConwayDelegCert cred delegatee ->
+      case delegatee of
+        DelegStake poolkh -> insertDelegation cache network epochNo slotNo txId idx mRedeemerId cred poolkh
+        _ ->
+          liftIO $ logWarning tracer "insertConwayDelegCert: Unhandled ConwayDelegCert certificate"
+    ConwayRegDelegCert cred delegatee _dep -> do
+      insertStakeRegistration epochNo txId idx $ Generic.annotateStakingCred network cred
+      case delegatee of
+        DelegStake poolkh -> insertDelegation cache network epochNo slotNo txId idx mRedeemerId cred poolkh
+        _ ->
+          liftIO $ logWarning tracer "insertConwayDelegCert: Unhandled ConwayRegDelegCert certificate"
 
 insertPoolRegister ::
   (MonadBaseControl IO m, MonadIO m) =>

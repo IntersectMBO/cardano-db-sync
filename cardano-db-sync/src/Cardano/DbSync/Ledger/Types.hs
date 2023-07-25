@@ -49,7 +49,7 @@ import Prelude (fail, id)
 
 data HasLedgerEnv = HasLedgerEnv
   { leTrace :: Trace IO Text
-  , leProtocolInfo :: !(Consensus.ProtocolInfo IO CardanoBlock)
+  , leProtocolInfo :: !(Consensus.ProtocolInfo CardanoBlock)
   , leDir :: !LedgerStateDir
   , leNetwork :: !Ledger.Network
   , leSystemStart :: !SystemStart

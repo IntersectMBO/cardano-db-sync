@@ -169,7 +169,10 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
       newExceptT $
         insertShelley $
           Generic.fromBabbageBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
-    BlockConway _blk -> panic "TODO: Conway 1"
+    BlockConway blk ->
+      newExceptT $
+        insertShelley $
+          Generic.fromConwayBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
   -- update the epoch
   updateEpoch details isNewEpochEvent
   whenPruneTxOut syncEnv $

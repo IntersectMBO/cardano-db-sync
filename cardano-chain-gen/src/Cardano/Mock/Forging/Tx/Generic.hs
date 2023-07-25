@@ -52,6 +52,7 @@ import Ouroboros.Consensus.Cardano.Block (LedgerState)
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
+import Cardano.Ledger.Shelley.TxCert
 
 resolveAddress ::
   forall era p.
@@ -122,7 +123,7 @@ resolveStakeCreds indx st = case indx of
   where
     rewardAccs =
       Map.toList $
-        UMap.rewView $
+        UMap.rewardMap $
           dsUnified $
             certDState $
               lsCertState $
@@ -138,7 +139,7 @@ resolveStakeCreds indx st = case indx of
               nesEs $
                 Consensus.shelleyLedgerState st
 
-    delegs = UMap.delView $ dsUnified dstate
+    delegs = UMap.sPoolMap $ dsUnified dstate
 
     dstate =
       certDState $
@@ -180,9 +181,9 @@ resolvePool pix st = case pix of
                 nesEs $
                   Consensus.shelleyLedgerState st
 
-allPoolStakeCert :: LedgerState (ShelleyBlock p era) -> [DCert (EraCrypto era)]
+allPoolStakeCert :: LedgerState (ShelleyBlock p era) -> [ShelleyTxCert era]
 allPoolStakeCert st =
-  DCertDeleg . RegKey <$> nub creds
+  ShelleyTxCertDelegCert . ShelleyRegCert <$> nub creds
   where
     poolParms =
       Map.elems $

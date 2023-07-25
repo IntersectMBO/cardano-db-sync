@@ -21,6 +21,7 @@ packages:
   cardano-smash-server
   cardano-chain-gen
 
+allow-newer: text
 
 constraints:
     persistent-postgresql >= 2.11.0.1,
@@ -69,7 +70,7 @@ package snap-server
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: 6f79e5c3ea109a70cd01910368e011635767305a
+  tag: 6f1dd12cfaff8aafdc5815c6ce9b64f13e5923f7
   --sha256: 1yaf3jk6rgmivgi730ljd8sjpdnzasncxnj8ypgzcdshyp1id25q
   subdir:
     cardano-git-rev

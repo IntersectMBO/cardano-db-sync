@@ -72,13 +72,6 @@ import Cardano.Ledger.Mary.Value
 import Cardano.Ledger.Shelley.PParams
 import Cardano.Ledger.Shelley.TxAuxData
 import Cardano.Ledger.Shelley.TxBody (
-  DCert (..),
-  DelegCert (..),
-  Delegation (..),
-  MIRCert (..),
-  MIRPot (..),
-  MIRTarget (..),
-  PoolCert (..),
   PoolMetadata (..),
   PoolParams (..),
   StakePoolRelay (..),
@@ -104,6 +97,7 @@ import Ouroboros.Consensus.Cardano.Block (LedgerState)
 import Ouroboros.Consensus.Shelley.Eras (StandardBabbage, StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 import qualified PlutusLedgerApi.Test.EvaluationContext as PV1
+import Cardano.Ledger.Shelley.TxCert
 
 type BabbageUTxOIndex = UTxOIndex StandardBabbage
 
@@ -130,7 +124,7 @@ consTxBody ::
   StrictMaybe (BabbageTxOut StandardBabbage) ->
   Coin ->
   MultiAsset StandardCrypto ->
-  [DCert StandardCrypto] ->
+  [ShelleyTxCert StandardBabbage] ->
   Withdrawals StandardCrypto ->
   BabbageTxBody StandardBabbage
 consTxBody ins cols ref outs collOut fees minted certs wdrl =
@@ -173,7 +167,7 @@ consPaymentTxBody ::
   BabbageTxBody StandardBabbage
 consPaymentTxBody ins cols ref outs colOut fees minted = consTxBody ins cols ref outs colOut fees minted mempty (Withdrawals mempty)
 
-consCertTxBody :: Maybe (TxIn StandardCrypto) -> [DCert StandardCrypto] -> Withdrawals StandardCrypto -> BabbageTxBody StandardBabbage
+consCertTxBody :: Maybe (TxIn StandardCrypto) -> [ShelleyTxCert StandardBabbage] -> Withdrawals StandardCrypto -> BabbageTxBody StandardBabbage
 consCertTxBody ref = consTxBody mempty mempty (toSet ref) mempty SNothing (Coin 0) mempty
   where
     toSet Nothing = mempty
@@ -389,14 +383,14 @@ mkMAssetsScriptTx inputIndex colInputIndex outputIndex refInput minted succeeds 
       Right $ BabbageTxOut addr vl (DatumHash (hashData @StandardBabbage plutusDataList)) SNothing
 
 mkDCertTx ::
-  [DCert StandardCrypto] ->
+  [ShelleyTxCert StandardBabbage] ->
   Withdrawals StandardCrypto ->
   Maybe (TxIn StandardCrypto) ->
   Either ForgingError (AlonzoTx StandardBabbage)
 mkDCertTx certs wdrl ref = Right $ mkSimpleTx True $ consCertTxBody ref certs wdrl
 
 mkSimpleDCertTx ::
-  [(StakeIndex, StakeCredential StandardCrypto -> DCert StandardCrypto)] ->
+  [(StakeIndex, StakeCredential StandardCrypto -> ShelleyTxCert StandardBabbage)] ->
   BabbageLedgerState ->
   Either ForgingError (AlonzoTx StandardBabbage)
 mkSimpleDCertTx consDert st = do
@@ -408,14 +402,14 @@ mkSimpleDCertTx consDert st = do
 mkDummyRegisterTx :: Int -> Int -> Either ForgingError (AlonzoTx StandardBabbage)
 mkDummyRegisterTx n m =
   mkDCertTx
-    (DCertDeleg . RegKey . KeyHashObj . KeyHash . mkDummyHash (Proxy @(ADDRHASH StandardCrypto)) . fromIntegral <$> [n, m])
+    (ShelleyTxCertDelegCert . ShelleyRegCert . KeyHashObj . KeyHash . mkDummyHash (Proxy @(ADDRHASH StandardCrypto)) . fromIntegral <$> [n, m])
     (Withdrawals mempty)
     Nothing
 
 mkDCertPoolTx ::
   [ ( [StakeIndex]
     , PoolIndex
-    , [StakeCredential StandardCrypto] -> KeyHash 'StakePool StandardCrypto -> DCert StandardCrypto
+    , [StakeCredential StandardCrypto] -> KeyHash 'StakePool StandardCrypto -> ShelleyTxCert StandardBabbage
     )
   ] ->
   BabbageLedgerState ->
@@ -428,7 +422,7 @@ mkDCertPoolTx consDert st = do
   mkDCertTx dcerts (Withdrawals mempty) Nothing
 
 mkScriptDCertTx ::
-  [(StakeIndex, Bool, StakeCredential StandardCrypto -> DCert StandardCrypto)] ->
+  [(StakeIndex, Bool, StakeCredential StandardCrypto -> ShelleyTxCert StandardBabbage)] ->
   Bool ->
   BabbageLedgerState ->
   Either ForgingError (AlonzoTx StandardBabbage)
@@ -498,9 +492,9 @@ consPoolParams poolId rwCred owners =
 consPoolParamsTwoOwners ::
   [StakeCredential StandardCrypto] ->
   KeyHash 'StakePool StandardCrypto ->
-  DCert StandardCrypto
+  ShelleyTxCert StandardBabbage
 consPoolParamsTwoOwners [rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId =
-  DCertPool $ RegPool $ consPoolParams poolId rwCred [owner0, owner1]
+  ShelleyTxCertPool $ RegPool $ consPoolParams poolId rwCred [owner0, owner1]
 consPoolParamsTwoOwners _ _ = panic "expected 2 pool owners"
 
 mkScriptTx ::
@@ -643,13 +637,13 @@ mkFullTx n m sta = do
         [unregisteredKeyHash !! 1, unregisteredKeyHash !! 2]
 
     certs =
-      [ DCertDeleg $ RegKey $ Prelude.head unregisteredStakeCredentials
-      , DCertPool $ RegPool poolParams0
-      , DCertPool $ RegPool poolParams1
-      , DCertPool $ RetirePool (Prelude.head unregisteredPools) (EpochNo 0)
-      , DCertDeleg $ DeRegKey $ unregisteredStakeCredentials !! 2
-      , DCertDeleg $ Delegate $ Delegation (unregisteredStakeCredentials !! 1) (unregisteredPools !! 2)
-      , DCertMir $
+      [ ShelleyTxCertDelegCert $ ShelleyRegCert $ Prelude.head unregisteredStakeCredentials
+      , ShelleyTxCertPool $ RegPool poolParams0
+      , ShelleyTxCertPool $ RegPool poolParams1
+      , ShelleyTxCertPool $ RetirePool (Prelude.head unregisteredPools) (EpochNo 0)
+      , ShelleyTxCertDelegCert $ ShelleyUnRegCert $ unregisteredStakeCredentials !! 2
+      , ShelleyTxCertDelegCert $ ShelleyDelegCert (unregisteredStakeCredentials !! 1) (unregisteredPools !! 2)
+      , ShelleyTxCertMir $
           MIRCert
             ReservesMIR
             ( StakeAddressesMIR $
@@ -658,7 +652,7 @@ mkFullTx n m sta = do
                   , (unregisteredStakeCredentials !! 2, DeltaCoin 200)
                   ]
             )
-      , DCertMir $
+      , ShelleyTxCertMir $
           MIRCert
             TreasuryMIR
             ( StakeAddressesMIR $
@@ -667,7 +661,7 @@ mkFullTx n m sta = do
                   , (unregisteredStakeCredentials !! 2, DeltaCoin 200)
                   ]
             )
-      , DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR $ Coin 300)
+      , ShelleyTxCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR $ Coin 300)
       ]
 
     wthdr =
