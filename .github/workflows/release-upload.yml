@@ -1,0 +1,45 @@
+name: Upload Prebuild Binaries to Release
+
+on:
+  release:
+    types:
+      - published
+  push:
+    tags:
+      - '**'
+
+jobs:
+  build:
+    name: "Upload artifacts to release"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Nix with good defaults
+        uses: input-output-hk/install-nix-action@v21
+        with:
+          extra_nix_config: |
+            trusted-public-keys = hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
+            substituters = https://cache.iog.io/ https://cache.nixos.org/
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Nix build
+        run: |
+          nix build \
+            --builders "" \
+            --max-jobs 0 \
+            .#hydraJobs.cardano-db-sync-linux.x86_64-linux
+
+          nix build \
+            --builders "" \
+            --max-jobs 0 \
+             hydraJobs.cardano-db-sync-macos.x86_64-darwin
+
+      - name: Upload artifacts
+        uses: input-output-hk/action-gh-release@v1
+        with:
+          draft: true
+          files: |
+            cardano-db-sync-*-macos.tar.gz
+            cardano-db-sync-*-linux.tar.gz
