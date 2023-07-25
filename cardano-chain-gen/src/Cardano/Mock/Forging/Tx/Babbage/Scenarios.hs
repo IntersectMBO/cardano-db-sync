@@ -10,6 +10,7 @@ import Cardano.Mock.Forging.Tx.Generic
 import Cardano.Mock.Forging.Types
 import Cardano.Prelude hiding (length, (.))
 import Data.List.Extra
+import Cardano.Ledger.Shelley.TxCert
 
 delegateAndSendBlocks :: Int -> Interpreter -> IO [CardanoBlock]
 delegateAndSendBlocks n interpreter = do
@@ -18,7 +19,7 @@ delegateAndSendBlocks n interpreter = do
     blockTxs <- withBabbageLedgerState interpreter $ \_st ->
       forM (chunksOf 10 blockCreds) $ \txCreds ->
         -- 10 per tx
-        Babbage.mkDCertTx (fmap (DCertDeleg . RegKey) txCreds) (Withdrawals mempty) Nothing
+        Babbage.mkDCertTx (fmap (ShelleyTxCertDelegCert . ShelleyRegCert) txCreds) (Withdrawals mempty) Nothing
     forgeNextFindLeader interpreter (TxBabbage <$> blockTxs)
 
   delegateBlocks <- forM (chunksOf 500 creds) $ \blockCreds -> do
@@ -27,7 +28,7 @@ delegateAndSendBlocks n interpreter = do
         -- do -- 10 per tx
         Babbage.mkDCertTx
           ( fmap
-              (\(poolIx, cred) -> DCertDeleg $ Delegate $ Delegation cred (resolvePool (PoolIndex poolIx) st))
+              (\(poolIx, cred) -> ShelleyTxCertDelegCert $ ShelleyDelegCert cred (resolvePool (PoolIndex poolIx) st))
               (zip (cycle [0, 1, 2]) txCreds)
           )
           (Withdrawals mempty)

@@ -13,7 +13,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Util (unKeyHashRaw)
 import Cardano.Ledger.BaseTypes (EpochNo)
 import Cardano.Ledger.Credential (StakeCredential)
 import Cardano.Ledger.Keys (KeyHash, KeyRole (StakePool))
-import Cardano.Ledger.Shelley.TxBody (DCert (..), PoolCert (..))
+import Cardano.Ledger.Shelley.TxCert
 import Cardano.Mock.ChainSync.Server (IOManager)
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
 import Cardano.Mock.Forging.Tx.Generic (resolvePool)
@@ -22,7 +22,7 @@ import Cardano.SMASH.Server.PoolDataLayer (PoolDataLayer (..), dbToServantPoolId
 import Cardano.SMASH.Server.Types (DBFail (RecordDoesNotExist))
 import Control.Monad (void)
 import Data.Text (Text)
-import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
+import Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardCrypto)
 import Test.Cardano.Db.Mock.Config (
   alonzoConfigDir,
   getPoolLayer,
@@ -105,7 +105,7 @@ poolDeReg =
             , PoolIndexNew 0
             , Alonzo.consPoolParamsTwoOwners
             )
-          , ([], PoolIndexNew 0, \_ poolId -> DCertPool $ RetirePool poolId 1)
+          , ([], PoolIndexNew 0, \_ poolId -> ShelleyTxCertPool $ RetirePool poolId 1)
           ]
 
     assertBlockNoBackoff dbSync 2
@@ -214,8 +214,8 @@ poolDeRegMany =
       EpochNo ->
       [StakeCredential StandardCrypto] ->
       KeyHash 'StakePool StandardCrypto ->
-      DCert StandardCrypto
-    mkPoolDereg epochNo _creds keyHash = DCertPool $ RetirePool keyHash epochNo
+      ShelleyTxCert StandardAlonzo
+    mkPoolDereg epochNo _creds keyHash = ShelleyTxCertPool $ RetirePool keyHash epochNo
 
 poolDelist :: IOManager -> [(Text, Text)] -> Assertion
 poolDelist =
@@ -254,7 +254,7 @@ poolDelist =
     void $
       withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
         Alonzo.mkDCertPoolTx
-          [([], PoolIndexNew 0, \_ poolHash -> DCertPool $ RetirePool poolHash 1)]
+          [([], PoolIndexNew 0, \_ poolHash -> ShelleyTxCertPool $ RetirePool poolHash 1)]
 
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
     assertBlockNoBackoff dbSync 5

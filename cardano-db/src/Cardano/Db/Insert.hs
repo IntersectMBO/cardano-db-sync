@@ -142,7 +142,7 @@ insertDelegation :: (MonadBaseControl IO m, MonadIO m) => Delegation -> ReaderT 
 insertDelegation = insertUnchecked "Delegation"
 
 insertEpoch :: (MonadBaseControl IO m, MonadIO m) => Epoch -> ReaderT SqlBackend m EpochId
-insertEpoch = insertUnchecked "Epoch"
+insertEpoch = insertCheckUnique "Epoch"
 
 insertEpochParam :: (MonadBaseControl IO m, MonadIO m) => EpochParam -> ReaderT SqlBackend m EpochParamId
 insertEpochParam = insertUnchecked "EpochParam"

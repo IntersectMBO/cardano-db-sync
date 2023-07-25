@@ -13,15 +13,8 @@ module Test.Cardano.Db.Mock.Unit.Alonzo.Reward (
 
 import Cardano.Ledger.Coin (Coin (Coin), DeltaCoin (DeltaCoin))
 import Cardano.Ledger.Keys (KeyHash (KeyHash))
-import Cardano.Ledger.Shelley.TxBody (
-  DCert (DCertDeleg, DCertMir),
-  DelegCert (DeRegKey, Delegate, RegKey),
-  Delegation (Delegation),
-  MIRCert (MIRCert),
-  MIRPot (ReservesMIR, TreasuryMIR),
-  MIRTarget (SendToOppositePotMIR, StakeAddressesMIR),
-  Withdrawals (Withdrawals),
- )
+import Cardano.Ledger.Shelley.TxCert
+import Cardano.Ledger.Shelley.TxBody (Withdrawals (Withdrawals))
 import Cardano.Mock.ChainSync.Server (IOManager, addBlock, rollback)
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
 import Cardano.Mock.Forging.Tx.Alonzo.Scenarios (delegateAndSendBlocks)
@@ -122,15 +115,15 @@ rewardsDeregistration =
 
     -- first move to treasury from reserves
     void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty)
+      Alonzo.mkDCertTx [ShelleyTxCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty)
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
       -- register the stake address and delegate to a pool
       let poolId = resolvePool (PoolIndex 0) st
       tx1 <-
         Alonzo.mkSimpleDCertTx
-          [ (StakeIndexNew 1, DCertDeleg . RegKey)
-          , (StakeIndexNew 1, \stCred -> DCertDeleg $ Delegate $ Delegation stCred poolId)
+          [ (StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)
+          , (StakeIndexNew 1, \stCred -> ShelleyTxCertDelegCert $ ShelleyDelegCert stCred poolId)
           ]
           st
       -- send some funds to the address so
@@ -162,7 +155,7 @@ rewardsDeregistration =
     e <- fillEpochPercentage interpreter mockServer 85
     void $
       withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
-        Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)]
+        Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyUnRegCert)]
 
     f <- fillUntilNextEpoch interpreter mockServer
 
@@ -190,15 +183,15 @@ rewardsReregistration =
 
     -- first move to treasury from reserves
     void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty)
+      Alonzo.mkDCertTx [ShelleyTxCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty)
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
       -- register the stake address and delegate to a pool
       let poolId = resolvePool (PoolIndex 0) st
       tx1 <-
         Alonzo.mkSimpleDCertTx
-          [ (StakeIndexNew 1, DCertDeleg . RegKey)
-          , (StakeIndexNew 1, \stCred -> DCertDeleg $ Delegate $ Delegation stCred poolId)
+          [ (StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)
+          , (StakeIndexNew 1, \stCred -> ShelleyTxCertDelegCert $ ShelleyDelegCert stCred poolId)
           ]
           st
       -- send some funds to the address so
@@ -226,12 +219,12 @@ rewardsReregistration =
     -- deregister before the 40% of the epoch
     void $
       withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
-        Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)]
+        Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyUnRegCert)]
     d <- fillEpochPercentage interpreter mockServer 60
     -- register after 40% and before epoch boundary.
     void $
       withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
-        Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)]
+        Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)]
     e <- fillUntilNextEpoch interpreter mockServer
     assertBlockNoBackoff dbSync (fromIntegral $ 7 + length (a <> b <> b' <> c <> d <> e))
     -- This is 2 in Babbage
@@ -247,7 +240,7 @@ mirReward =
 
     -- first move to treasury from reserves
     void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty)
+      Alonzo.mkDCertTx [ShelleyTxCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty)
 
     void $ fillEpochPercentage interpreter mockServer 50
 
@@ -257,7 +250,7 @@ mirReward =
         Alonzo.mkSimpleDCertTx
           [
             ( StakeIndex 1
-            , \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 100)))
+            , \cred -> ShelleyTxCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 100)))
             )
           ]
           st
@@ -265,7 +258,7 @@ mirReward =
         Alonzo.mkSimpleDCertTx
           [
             ( StakeIndex 1
-            , \cred -> DCertMir $ MIRCert ReservesMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 200)))
+            , \cred -> ShelleyTxCertMir $ MIRCert ReservesMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 200)))
             )
           ]
           st
@@ -273,7 +266,7 @@ mirReward =
         Alonzo.mkSimpleDCertTx
           [
             ( StakeIndex 1
-            , \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 300)))
+            , \cred -> ShelleyTxCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 300)))
             )
           ]
           st
@@ -295,11 +288,11 @@ mirRewardRollback =
 
     -- first move to treasury from reserves
     void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty)
+      Alonzo.mkDCertTx [ShelleyTxCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty)
 
     void $
       withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
-        Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)]
+        Alonzo.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)]
 
     a <- fillUntilNextEpoch interpreter mockServer
     b <- fillEpochPercentage interpreter mockServer 5
@@ -309,7 +302,7 @@ mirRewardRollback =
         Alonzo.mkSimpleDCertTx
           [
             ( StakeIndexNew 1
-            , \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 1000)))
+            , \cred -> ShelleyTxCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 1000)))
             )
           ]
     c <- fillEpochPercentage interpreter mockServer 50
@@ -342,7 +335,7 @@ mirRewardDereg =
 
     -- first move to treasury from reserves
     void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty)
+      Alonzo.mkDCertTx [ShelleyTxCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty)
 
     a <- fillUntilNextEpoch interpreter mockServer
 
@@ -352,7 +345,7 @@ mirRewardDereg =
         Alonzo.mkSimpleDCertTx
           [
             ( StakeIndex 1
-            , \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 100)))
+            , \cred -> ShelleyTxCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 100)))
             )
           ]
           st
@@ -360,7 +353,7 @@ mirRewardDereg =
         Alonzo.mkSimpleDCertTx
           [
             ( StakeIndex 1
-            , \cred -> DCertMir $ MIRCert ReservesMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 200)))
+            , \cred -> ShelleyTxCertMir $ MIRCert ReservesMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 200)))
             )
           ]
           st
@@ -368,7 +361,7 @@ mirRewardDereg =
         Alonzo.mkSimpleDCertTx
           [
             ( StakeIndex 1
-            , \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 300)))
+            , \cred -> ShelleyTxCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 300)))
             )
           ]
           st
@@ -377,7 +370,7 @@ mirRewardDereg =
     b <- fillEpochPercentage interpreter mockServer 20
     void $
       withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
-        Alonzo.mkSimpleDCertTx [(StakeIndex 1, DCertDeleg . DeRegKey)]
+        Alonzo.mkSimpleDCertTx [(StakeIndex 1, ShelleyTxCertDelegCert . ShelleyUnRegCert)]
 
     assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b))
     -- deregistration means empty rewards
@@ -474,7 +467,7 @@ singleMIRCertMultiOut =
     startDBSync dbSync
 
     void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty)
+      Alonzo.mkDCertTx [ShelleyTxCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty)
 
     a <- fillUntilNextEpoch interpreter mockServer
 
@@ -482,7 +475,7 @@ singleMIRCertMultiOut =
       stakeAddr0 <- resolveStakeCreds (StakeIndex 0) state
       stakeAddr1 <- resolveStakeCreds (StakeIndex 1) state
       let saMIR = StakeAddressesMIR (Map.fromList [(stakeAddr0, DeltaCoin 10), (stakeAddr1, DeltaCoin 20)])
-      Alonzo.mkDCertTx [DCertMir $ MIRCert ReservesMIR saMIR, DCertMir $ MIRCert TreasuryMIR saMIR] (Withdrawals mempty)
+      Alonzo.mkDCertTx [ShelleyTxCertMir $ MIRCert ReservesMIR saMIR, ShelleyTxCertMir $ MIRCert TreasuryMIR saMIR] (Withdrawals mempty)
 
     b <- fillUntilNextEpoch interpreter mockServer
 

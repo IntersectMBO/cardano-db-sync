@@ -13,8 +13,8 @@ module Test.Cardano.Db.Mock.Unit.Babbage.Rollback (
 )
 where
 
-import Cardano.Ledger.Shelley.API (DCert (..), DelegCert (..), Delegation (..))
 import Cardano.Mock.ChainSync.Server (IOManager, addBlock, rollback)
+import Cardano.Ledger.Shelley.TxCert
 import Cardano.Mock.Forging.Interpreter (forgeNext)
 import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import Cardano.Mock.Forging.Tx.Generic (resolvePool)
@@ -135,7 +135,7 @@ lazyRollback =
     -- Here we create the fork.
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)]
+        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)]
     void $ forgeAndSubmitBlocks interpreter mockServer 40
     assertBlockNoBackoff dbSync 241
   where
@@ -156,7 +156,7 @@ lazyRollbackRestart =
     -- Here we create the fork.
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)]
+        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)]
     void $ forgeAndSubmitBlocks interpreter mockServer 30
     assertBlockNoBackoff dbSync 251
   where
@@ -175,13 +175,13 @@ doubleRollback =
     -- Here we create the fork.
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)]
+        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)]
     void $ forgeAndSubmitBlocks interpreter mockServer 50
 
     rollbackTo interpreter mockServer (blockPoint lastBlk1)
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkSimpleDCertTx [(StakeIndexNew 0, DCertDeleg . RegKey)]
+        Babbage.mkSimpleDCertTx [(StakeIndexNew 0, ShelleyTxCertDelegCert . ShelleyRegCert)]
     void $ forgeAndSubmitBlocks interpreter mockServer 50
 
     assertBlockNoBackoff dbSync 201
@@ -197,8 +197,8 @@ stakeAddressRollback =
       let poolId = resolvePool (PoolIndex 0) st
       tx1 <-
         Babbage.mkSimpleDCertTx
-          [ (StakeIndexNew 1, DCertDeleg . RegKey)
-          , (StakeIndexNew 1, \stCred -> DCertDeleg $ Delegate $ Delegation stCred poolId)
+          [ (StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)
+          , (StakeIndexNew 1, \stCred -> ShelleyTxCertDelegCert $ ShelleyDelegCert stCred poolId)
           ]
           st
       Right [tx1]

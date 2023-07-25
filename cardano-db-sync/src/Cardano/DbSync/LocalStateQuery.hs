@@ -61,7 +61,7 @@ data NoLedgerEnv = NoLedgerEnv
   , nleQueryVar :: StateQueryTMVar CardanoBlock CardanoInterpreter
   , nleHistoryInterpreterVar :: StrictTVar IO (Strict.Maybe CardanoInterpreter)
   , nleNetwork :: !Ledger.Network
-  , nleProtocolInfo :: !(Consensus.ProtocolInfo IO CardanoBlock)
+  , nleProtocolInfo :: !(Consensus.ProtocolInfo CardanoBlock)
   }
 
 newtype StateQueryTMVar blk result = StateQueryTMVar
@@ -73,7 +73,7 @@ newtype StateQueryTMVar blk result = StateQueryTMVar
         )
   }
 
-mkNoLedgerEnv :: Trace IO Text -> Consensus.ProtocolInfo IO CardanoBlock -> Ledger.Network -> SystemStart -> IO NoLedgerEnv
+mkNoLedgerEnv :: Trace IO Text -> Consensus.ProtocolInfo CardanoBlock -> Ledger.Network -> SystemStart -> IO NoLedgerEnv
 mkNoLedgerEnv trce protoInfo network systemStart = do
   qVar <- newStateQueryTMVar
   interVar <- newTVarIO Strict.Nothing

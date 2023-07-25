@@ -51,8 +51,6 @@ import Cardano.Ledger.Hashes
 import Cardano.Ledger.Keys
 import Cardano.Ledger.Mary.Value
 import Cardano.Ledger.Shelley.TxBody (
-  DCert (..),
-  PoolCert (..),
   PoolMetadata (..),
   PoolParams (..),
   StakePoolRelay (..),
@@ -73,6 +71,7 @@ import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (LedgerState, StandardAlonzo)
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
+import Cardano.Ledger.Shelley.TxCert
 
 type AlonzoUTxOIndex = UTxOIndex StandardAlonzo
 
@@ -84,7 +83,7 @@ consTxBody ::
   StrictSeq (AlonzoTxOut StandardAlonzo) ->
   Coin ->
   MultiAsset StandardCrypto ->
-  [DCert StandardCrypto] ->
+  [ShelleyTxCert StandardAlonzo] ->
   Withdrawals StandardCrypto ->
   AlonzoTxBody StandardAlonzo
 consTxBody ins cols outs fees minted certs wdrl =
@@ -124,7 +123,7 @@ consPaymentTxBody ::
   AlonzoTxBody StandardAlonzo
 consPaymentTxBody ins cols outs fees minted = consTxBody ins cols outs fees minted mempty (Withdrawals mempty)
 
-consCertTxBody :: [DCert StandardCrypto] -> Withdrawals StandardCrypto -> AlonzoTxBody StandardAlonzo
+consCertTxBody :: [ShelleyTxCert StandardAlonzo] -> Withdrawals StandardCrypto -> AlonzoTxBody StandardAlonzo
 consCertTxBody = consTxBody mempty mempty mempty (Coin 0) mempty
 
 mkPaymentTx ::
@@ -267,13 +266,13 @@ mkMAssetsScriptTx inputIndex colInputIndex outputIndex minted succeeds fees sta 
       Right $ AlonzoTxOut addr vl (Strict.SJust (hashData @StandardAlonzo plutusDataList))
 
 mkDCertTx ::
-  [DCert StandardCrypto] ->
+  [ShelleyTxCert StandardAlonzo] ->
   Withdrawals StandardCrypto ->
   Either ForgingError (AlonzoTx StandardAlonzo)
 mkDCertTx certs wdrl = Right $ mkSimpleTx True $ consCertTxBody certs wdrl
 
 mkSimpleDCertTx ::
-  [(StakeIndex, StakeCredential StandardCrypto -> DCert StandardCrypto)] ->
+  [(StakeIndex, StakeCredential StandardCrypto -> ShelleyTxCert StandardAlonzo)] ->
   AlonzoLedgerState ->
   Either ForgingError (AlonzoTx StandardAlonzo)
 mkSimpleDCertTx consDert st = do
@@ -285,7 +284,7 @@ mkSimpleDCertTx consDert st = do
 mkDCertPoolTx ::
   [ ( [StakeIndex]
     , PoolIndex
-    , [StakeCredential StandardCrypto] -> KeyHash 'StakePool StandardCrypto -> DCert StandardCrypto
+    , [StakeCredential StandardCrypto] -> KeyHash 'StakePool StandardCrypto -> ShelleyTxCert StandardAlonzo
     )
   ] ->
   AlonzoLedgerState ->
@@ -298,7 +297,7 @@ mkDCertPoolTx consDert st = do
   mkDCertTx dcerts (Withdrawals mempty)
 
 mkScriptDCertTx ::
-  [(StakeIndex, Bool, StakeCredential StandardCrypto -> DCert StandardCrypto)] ->
+  [(StakeIndex, Bool, StakeCredential StandardCrypto -> ShelleyTxCert StandardAlonzo)] ->
   Bool ->
   AlonzoLedgerState ->
   Either ForgingError (AlonzoTx StandardAlonzo)
@@ -368,9 +367,9 @@ consPoolParams poolId rwCred owners =
 consPoolParamsTwoOwners ::
   [StakeCredential StandardCrypto] ->
   KeyHash 'StakePool StandardCrypto ->
-  DCert StandardCrypto
+  ShelleyTxCert StandardAlonzo
 consPoolParamsTwoOwners [rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId =
-  DCertPool $ RegPool $ consPoolParams poolId rwCred [owner0, owner1]
+  ShelleyTxCertPool $ RegPool $ consPoolParams poolId rwCred [owner0, owner1]
 consPoolParamsTwoOwners _ _ = panic "expected 2 pool owners"
 
 mkScriptTx ::

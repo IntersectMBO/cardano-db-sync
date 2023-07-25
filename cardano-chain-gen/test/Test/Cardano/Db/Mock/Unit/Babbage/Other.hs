@@ -22,7 +22,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Util (unKeyHashRaw)
 import Cardano.Ledger.BaseTypes (EpochNo)
 import Cardano.Ledger.Credential (StakeCredential)
 import Cardano.Ledger.Keys (KeyHash, KeyRole (StakePool))
-import Cardano.Ledger.Shelley.TxBody (DCert (..), PoolCert (..))
+import Cardano.Ledger.Shelley.TxCert
 import Cardano.Mock.ChainSync.Server (IOManager, addBlock, rollback)
 import Cardano.Mock.Forging.Interpreter (forgeNext)
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
@@ -41,7 +41,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (MonadSTM (atomically))
 import Control.Exception (try)
 import Control.Monad (forM_, void)
 import Data.Text (Text)
-import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
+import Ouroboros.Consensus.Cardano.Block (StandardBabbage, StandardCrypto)
 import Ouroboros.Network.Block (blockPoint)
 import Test.Cardano.Db.Mock.Config (babbageConfigDir, getPoolLayer, startDBSync, stopDBSync, withFullConfig)
 import Test.Cardano.Db.Mock.Examples (mockBlock0)
@@ -179,7 +179,7 @@ poolDeReg =
             , PoolIndexNew 0
             , Babbage.consPoolParamsTwoOwners
             )
-          , ([], PoolIndexNew 0, \_ poolId -> DCertPool $ RetirePool poolId 1)
+          , ([], PoolIndexNew 0, \_ poolId -> ShelleyTxCertPool $ RetirePool poolId 1)
           ]
 
     assertBlockNoBackoff dbSync 2
@@ -288,8 +288,8 @@ poolDeRegMany =
       EpochNo ->
       [StakeCredential StandardCrypto] ->
       KeyHash 'StakePool StandardCrypto ->
-      DCert StandardCrypto
-    mkPoolDereg epochNo _creds keyHash = DCertPool $ RetirePool keyHash epochNo
+      ShelleyTxCert StandardBabbage
+    mkPoolDereg epochNo _creds keyHash = ShelleyTxCertPool $ RetirePool keyHash epochNo
 
 poolDelist :: IOManager -> [(Text, Text)] -> Assertion
 poolDelist =
@@ -328,7 +328,7 @@ poolDelist =
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
         Babbage.mkDCertPoolTx
-          [([], PoolIndexNew 0, \_ poolHash -> DCertPool $ RetirePool poolHash 1)]
+          [([], PoolIndexNew 0, \_ poolHash -> ShelleyTxCertPool $ RetirePool poolHash 1)]
 
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
     assertBlockNoBackoff dbSync 5

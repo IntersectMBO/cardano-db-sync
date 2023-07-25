@@ -308,7 +308,7 @@ mkSyncEnv ::
   ConnectionString ->
   SqlBackend ->
   SyncOptions ->
-  ProtocolInfo IO CardanoBlock ->
+  ProtocolInfo CardanoBlock ->
   Ledger.Network ->
   NetworkMagic ->
   SystemStart ->
@@ -405,7 +405,7 @@ mkSyncEnvFromConfig trce connString backend syncOptions genCfg syncNodeParams ra
               connString
               backend
               syncOptions
-              (mkProtocolInfoCardano genCfg [])
+              (fst $ mkProtocolInfoCardano genCfg [])
               (Shelley.sgNetworkId $ scConfig sCfg)
               (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
               (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
@@ -467,6 +467,6 @@ getSecurityParam syncEnv =
 
 getMaxRollbacks ::
   ConsensusProtocol (BlockProtocol blk) =>
-  ProtocolInfo IO blk ->
+  ProtocolInfo blk ->
   Word64
 getMaxRollbacks = maxRollbacks . configSecurityParam . pInfoConfig
