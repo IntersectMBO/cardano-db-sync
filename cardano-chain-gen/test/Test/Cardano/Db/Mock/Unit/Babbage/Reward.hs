@@ -14,13 +14,8 @@ module Test.Cardano.Db.Mock.Unit.Babbage.Reward (
 
 import Cardano.Ledger.Coin (Coin (Coin), DeltaCoin (DeltaCoin))
 import Cardano.Ledger.Keys (KeyHash (KeyHash))
+import Cardano.Ledger.Shelley.TxCert
 import Cardano.Ledger.Shelley.TxBody (
-  DCert (..),
-  DelegCert (..),
-  Delegation (..),
-  MIRCert (..),
-  MIRPot (..),
-  MIRTarget (..),
   Withdrawals (..),
  )
 import Cardano.Mock.ChainSync.Server (IOManager, addBlock, rollback)
@@ -168,15 +163,15 @@ rewardsDeregistration =
 
     -- first move to treasury from reserves
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty) Nothing
+      Babbage.mkDCertTx [ShelleyTxCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty) Nothing
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
       -- register the stake address and delegate to a pool
       let poolId = resolvePool (PoolIndex 0) st
       tx1 <-
         Babbage.mkSimpleDCertTx
-          [ (StakeIndexNew 1, DCertDeleg . RegKey)
-          , (StakeIndexNew 1, \stCred -> DCertDeleg $ Delegate $ Delegation stCred poolId)
+          [ (StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)
+          , (StakeIndexNew 1, \stCred -> ShelleyTxCertDelegCert $ ShelleyDelegCert stCred poolId)
           ]
           st
       -- send some funds to the address so
@@ -208,7 +203,7 @@ rewardsDeregistration =
     e <- fillEpochPercentage interpreter mockServer 85
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)]
+        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyUnRegCert)]
 
     f <- fillUntilNextEpoch interpreter mockServer
 
@@ -236,15 +231,15 @@ rewardsReregistration =
 
     -- first move to treasury from reserves
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty) Nothing
+      Babbage.mkDCertTx [ShelleyTxCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty) Nothing
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
       -- register the stake address and delegate to a pool
       let poolId = resolvePool (PoolIndex 0) st
       tx1 <-
         Babbage.mkSimpleDCertTx
-          [ (StakeIndexNew 1, DCertDeleg . RegKey)
-          , (StakeIndexNew 1, \stCred -> DCertDeleg $ Delegate $ Delegation stCred poolId)
+          [ (StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)
+          , (StakeIndexNew 1, \stCred -> ShelleyTxCertDelegCert $ ShelleyDelegCert stCred poolId)
           ]
           st
       -- send some funds to the address so
@@ -272,12 +267,12 @@ rewardsReregistration =
     -- deregister before the 40% of the epoch
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)]
+        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyUnRegCert)]
     d <- fillEpochPercentage interpreter mockServer 60
     -- register after 40% and before epoch boundary.
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)]
+        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)]
     e <- fillUntilNextEpoch interpreter mockServer
     assertBlockNoBackoff dbSync (fromIntegral $ 7 + length (a <> b <> b' <> c <> d <> e))
     -- This is 1 in Alonzo
@@ -293,7 +288,7 @@ mirReward =
 
     -- first move to treasury from reserves
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty) Nothing
+      Babbage.mkDCertTx [ShelleyTxCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty) Nothing
 
     void $ fillEpochPercentage interpreter mockServer 50
 
@@ -303,7 +298,7 @@ mirReward =
         Babbage.mkSimpleDCertTx
           [
             ( StakeIndex 1
-            , \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 100)))
+            , \cred -> ShelleyTxCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 100)))
             )
           ]
           st
@@ -311,7 +306,7 @@ mirReward =
         Babbage.mkSimpleDCertTx
           [
             ( StakeIndex 1
-            , \cred -> DCertMir $ MIRCert ReservesMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 200)))
+            , \cred -> ShelleyTxCertMir $ MIRCert ReservesMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 200)))
             )
           ]
           st
@@ -319,7 +314,7 @@ mirReward =
         Babbage.mkSimpleDCertTx
           [
             ( StakeIndex 1
-            , \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 300)))
+            , \cred -> ShelleyTxCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 300)))
             )
           ]
           st
@@ -341,11 +336,11 @@ _mirRewardRollback =
 
     -- first move to treasury from reserves
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty) Nothing
+      Babbage.mkDCertTx [ShelleyTxCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty) Nothing
 
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)]
+        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)]
 
     a <- fillUntilNextEpoch interpreter mockServer
     b <- fillEpochPercentage interpreter mockServer 5
@@ -355,7 +350,7 @@ _mirRewardRollback =
         Babbage.mkSimpleDCertTx
           [
             ( StakeIndexNew 1
-            , \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 1000)))
+            , \cred -> ShelleyTxCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 1000)))
             )
           ]
     c <- fillEpochPercentage interpreter mockServer 50
@@ -392,7 +387,7 @@ mirRewardShelley =
       withShelleyFindLeaderAndSubmitTx interpreter mockServer $
         const $
           Shelley.mkDCertTx
-            [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))]
+            [ShelleyTxCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))]
             (Withdrawals mempty)
 
     a <- fillEpochPercentage interpreter mockServer 50
@@ -401,7 +396,7 @@ mirRewardShelley =
     void $
       withShelleyFindLeaderAndSubmitTx interpreter mockServer $
         Shelley.mkSimpleDCertTx
-          [(StakeIndex 1, \cred -> DCertMir $ MIRCert ReservesMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 100))))]
+          [(StakeIndex 1, \cred -> ShelleyTxCertMir $ MIRCert ReservesMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 100))))]
 
     b <- fillUntilNextEpoch interpreter mockServer
 
@@ -419,7 +414,7 @@ mirRewardDereg =
 
     -- first move to treasury from reserves
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty) Nothing
+      Babbage.mkDCertTx [ShelleyTxCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty) Nothing
 
     a <- fillUntilNextEpoch interpreter mockServer
 
@@ -429,7 +424,7 @@ mirRewardDereg =
         Babbage.mkSimpleDCertTx
           [
             ( StakeIndex 1
-            , \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 100)))
+            , \cred -> ShelleyTxCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 100)))
             )
           ]
           st
@@ -437,7 +432,7 @@ mirRewardDereg =
         Babbage.mkSimpleDCertTx
           [
             ( StakeIndex 1
-            , \cred -> DCertMir $ MIRCert ReservesMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 200)))
+            , \cred -> ShelleyTxCertMir $ MIRCert ReservesMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 200)))
             )
           ]
           st
@@ -445,7 +440,7 @@ mirRewardDereg =
         Babbage.mkSimpleDCertTx
           [
             ( StakeIndex 1
-            , \cred -> DCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 300)))
+            , \cred -> ShelleyTxCertMir $ MIRCert TreasuryMIR (StakeAddressesMIR (Map.singleton cred (DeltaCoin 300)))
             )
           ]
           st
@@ -454,7 +449,7 @@ mirRewardDereg =
     b <- fillEpochPercentage interpreter mockServer 20
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkSimpleDCertTx [(StakeIndex 1, DCertDeleg . DeRegKey)]
+        Babbage.mkSimpleDCertTx [(StakeIndex 1, ShelleyTxCertDelegCert . ShelleyUnRegCert)]
 
     assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b))
     -- deregistration means empty rewards
@@ -558,7 +553,7 @@ singleMIRCertMultiOut =
     startDBSync dbSync
 
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty) Nothing
+      Babbage.mkDCertTx [ShelleyTxCertMir $ MIRCert ReservesMIR (SendToOppositePotMIR (Coin 100000))] (Withdrawals mempty) Nothing
 
     a <- fillUntilNextEpoch interpreter mockServer
 
@@ -566,7 +561,7 @@ singleMIRCertMultiOut =
       stakeAddr0 <- resolveStakeCreds (StakeIndex 0) state
       stakeAddr1 <- resolveStakeCreds (StakeIndex 1) state
       let saMIR = StakeAddressesMIR (Map.fromList [(stakeAddr0, DeltaCoin 10), (stakeAddr1, DeltaCoin 20)])
-      Babbage.mkDCertTx [DCertMir $ MIRCert ReservesMIR saMIR, DCertMir $ MIRCert TreasuryMIR saMIR] (Withdrawals mempty) Nothing
+      Babbage.mkDCertTx [ShelleyTxCertMir $ MIRCert ReservesMIR saMIR, ShelleyTxCertMir $ MIRCert TreasuryMIR saMIR] (Withdrawals mempty) Nothing
 
     b <- fillUntilNextEpoch interpreter mockServer
 

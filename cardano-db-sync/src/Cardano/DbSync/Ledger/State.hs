@@ -149,7 +149,7 @@ ledgerDbCurrent = either id id . AS.head . ledgerDbCheckpoints
 
 mkHasLedgerEnv ::
   Trace IO Text ->
-  Consensus.ProtocolInfo IO CardanoBlock ->
+  Consensus.ProtocolInfo CardanoBlock ->
   LedgerStateDir ->
   Ledger.Network ->
   SystemStart ->
@@ -174,7 +174,7 @@ mkHasLedgerEnv trce protoInfo dir nw systemStart syncOptions = do
       , leStateWriteQueue = swQueue
       }
 
-initCardanoLedgerState :: Consensus.ProtocolInfo IO CardanoBlock -> CardanoLedgerState
+initCardanoLedgerState :: Consensus.ProtocolInfo CardanoBlock -> CardanoLedgerState
 initCardanoLedgerState pInfo =
   CardanoLedgerState
     { clsState = Consensus.pInfoInitLedger pInfo
@@ -692,7 +692,7 @@ getRegisteredPools st =
     LedgerStateMary sts -> getRegisteredPoolShelley sts
     LedgerStateAlonzo ats -> getRegisteredPoolShelley ats
     LedgerStateBabbage bts -> getRegisteredPoolShelley bts
-    LedgerStateConway _stc -> panic "TODO: Conway 2"
+    LedgerStateConway stc -> getRegisteredPoolShelley stc
 
 getRegisteredPoolShelley ::
   forall p era.

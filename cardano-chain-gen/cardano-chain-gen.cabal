@@ -216,7 +216,6 @@ test-suite cardano-chain-gen
                       , text
                       , transformers
                       , transformers-except
-                      , tree-diff
                       , tasty-hunit
                       , monad-logger
                       , ouroboros-consensus

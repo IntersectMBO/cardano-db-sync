@@ -31,7 +31,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
 import Cardano.Ledger.Alonzo.Scripts.Data (hashData)
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..))
 import Cardano.Ledger.SafeHash (extractHash)
-import Cardano.Ledger.Shelley.TxBody (DCert (..), DelegCert (..))
+import Cardano.Ledger.Shelley.TxCert
 import Cardano.Mock.ChainSync.Server (IOManager)
 import Cardano.Mock.Forging.Interpreter (withBabbageLedgerState)
 import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples (
@@ -289,7 +289,7 @@ registrationScriptTx =
 
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkSimpleDCertTx [(StakeIndexScript True, DCertDeleg . RegKey)]
+        Babbage.mkSimpleDCertTx [(StakeIndexScript True, ShelleyTxCertDelegCert . ShelleyRegCert)]
     assertBlockNoBackoff dbSync 1
     assertScriptCert dbSync (0, 0, 0, 1)
   where
@@ -301,8 +301,8 @@ deregistrationScriptTx =
     startDBSync dbSync
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
-      tx0 <- Babbage.mkSimpleDCertTx [(StakeIndexScript True, DCertDeleg . RegKey)] st
-      tx1 <- Babbage.mkScriptDCertTx [(StakeIndexScript True, True, DCertDeleg . DeRegKey)] True st
+      tx0 <- Babbage.mkSimpleDCertTx [(StakeIndexScript True, ShelleyTxCertDelegCert . ShelleyRegCert)] st
+      tx1 <- Babbage.mkScriptDCertTx [(StakeIndexScript True, True, ShelleyTxCertDelegCert . ShelleyUnRegCert)] True st
       pure [tx0, tx1]
 
     assertBlockNoBackoff dbSync 1
@@ -316,10 +316,10 @@ deregistrationsScriptTxs =
     startDBSync dbSync
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
-      tx0 <- Babbage.mkSimpleDCertTx [(StakeIndexScript True, DCertDeleg . RegKey)] st
-      tx1 <- Babbage.mkScriptDCertTx [(StakeIndexScript True, True, DCertDeleg . DeRegKey)] True st
-      tx2 <- Babbage.mkSimpleDCertTx [(StakeIndexScript True, DCertDeleg . RegKey)] st
-      tx3 <- Babbage.mkScriptDCertTx [(StakeIndexScript True, True, DCertDeleg . DeRegKey)] True st
+      tx0 <- Babbage.mkSimpleDCertTx [(StakeIndexScript True, ShelleyTxCertDelegCert . ShelleyRegCert)] st
+      tx1 <- Babbage.mkScriptDCertTx [(StakeIndexScript True, True, ShelleyTxCertDelegCert . ShelleyUnRegCert)] True st
+      tx2 <- Babbage.mkSimpleDCertTx [(StakeIndexScript True, ShelleyTxCertDelegCert . ShelleyRegCert)] st
+      tx3 <- Babbage.mkScriptDCertTx [(StakeIndexScript True, True, ShelleyTxCertDelegCert . ShelleyUnRegCert)] True st
       pure [tx0, tx1, Babbage.addValidityInterval 1000 tx2, Babbage.addValidityInterval 2000 tx3]
 
     assertBlockNoBackoff dbSync 1
@@ -334,12 +334,12 @@ deregistrationsScriptTx =
     startDBSync dbSync
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
-      tx0 <- Babbage.mkSimpleDCertTx [(StakeIndexScript True, DCertDeleg . RegKey)] st
+      tx0 <- Babbage.mkSimpleDCertTx [(StakeIndexScript True, ShelleyTxCertDelegCert . ShelleyRegCert)] st
       tx1 <-
         Babbage.mkScriptDCertTx
-          [ (StakeIndexScript True, True, DCertDeleg . DeRegKey)
-          , (StakeIndexScript True, False, DCertDeleg . RegKey)
-          , (StakeIndexScript True, True, DCertDeleg . DeRegKey)
+          [ (StakeIndexScript True, True, ShelleyTxCertDelegCert . ShelleyUnRegCert)
+          , (StakeIndexScript True, False, ShelleyTxCertDelegCert . ShelleyRegCert)
+          , (StakeIndexScript True, True, ShelleyTxCertDelegCert . ShelleyUnRegCert)
           ]
           True
           st
@@ -358,12 +358,12 @@ deregistrationsScriptTx' =
     startDBSync dbSync
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
-      tx0 <- Babbage.mkSimpleDCertTx [(StakeIndexScript True, DCertDeleg . RegKey)] st
+      tx0 <- Babbage.mkSimpleDCertTx [(StakeIndexScript True, ShelleyTxCertDelegCert . ShelleyRegCert)] st
       tx1 <-
         Babbage.mkScriptDCertTx
-          [ (StakeIndexScript True, False, DCertDeleg . DeRegKey)
-          , (StakeIndexScript True, False, DCertDeleg . RegKey)
-          , (StakeIndexScript True, True, DCertDeleg . DeRegKey)
+          [ (StakeIndexScript True, False, ShelleyTxCertDelegCert . ShelleyUnRegCert)
+          , (StakeIndexScript True, False, ShelleyTxCertDelegCert . ShelleyRegCert)
+          , (StakeIndexScript True, True, ShelleyTxCertDelegCert . ShelleyUnRegCert)
           ]
           True
           st
@@ -384,12 +384,12 @@ deregistrationsScriptTx'' =
     startDBSync dbSync
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
-      tx0 <- Babbage.mkSimpleDCertTx [(StakeIndexScript True, DCertDeleg . RegKey)] st
+      tx0 <- Babbage.mkSimpleDCertTx [(StakeIndexScript True, ShelleyTxCertDelegCert . ShelleyRegCert)] st
       tx1 <-
         Babbage.mkScriptDCertTx
-          [ (StakeIndexScript True, True, DCertDeleg . DeRegKey)
-          , (StakeIndexScript True, False, DCertDeleg . RegKey)
-          , (StakeIndexScript True, False, DCertDeleg . DeRegKey)
+          [ (StakeIndexScript True, True, ShelleyTxCertDelegCert . ShelleyUnRegCert)
+          , (StakeIndexScript True, False, ShelleyTxCertDelegCert . ShelleyRegCert)
+          , (StakeIndexScript True, False, ShelleyTxCertDelegCert . ShelleyUnRegCert)
           ]
           True
           st

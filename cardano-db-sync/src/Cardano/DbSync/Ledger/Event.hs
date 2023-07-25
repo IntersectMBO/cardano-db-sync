@@ -119,7 +119,7 @@ instance ConvertLedgerEvent (ShelleyBlock protocol (BabbageEra StandardCrypto)) 
   toLedgerEvent = toLedgerEventShelley
 
 instance ConvertLedgerEvent (ShelleyBlock protocol (ConwayEra StandardCrypto)) where
-  toLedgerEvent _evt = Nothing -- TODO: Conway
+  toLedgerEvent _ = Nothing -- TODO: Conway
 
 toLedgerEventShelley ::
   ( EraCrypto ledgerera ~ StandardCrypto

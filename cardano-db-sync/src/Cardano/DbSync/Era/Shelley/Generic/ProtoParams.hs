@@ -67,7 +67,7 @@ epochProtoParams lstate =
     LedgerStateMary mls -> Just $ shelleyProtoParams mls
     LedgerStateAlonzo als -> Just $ alonzoProtoParams als
     LedgerStateBabbage bls -> Just $ babbageProtoParams bls
-    LedgerStateConway _cls -> panic "TODO: Conway not supported yet"
+    LedgerStateConway _cls -> Nothing -- panic "TODO: Conway not supported yet"
 
 alonzoProtoParams :: LedgerState (ShelleyBlock p StandardAlonzo) -> ProtoParams
 alonzoProtoParams =

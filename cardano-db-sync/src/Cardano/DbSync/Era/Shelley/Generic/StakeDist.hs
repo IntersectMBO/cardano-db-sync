@@ -53,7 +53,7 @@ emptySlice epoch = StakeSlice epoch Map.empty
 
 getSecurityParameter ::
   ConsensusProtocol (BlockProtocol blk) =>
-  ProtocolInfo IO blk ->
+  ProtocolInfo blk ->
   Word64
 getSecurityParameter = maxRollbacks . configSecurityParam . pInfoConfig
 
@@ -67,7 +67,7 @@ getSecurityParameter = maxRollbacks . configSecurityParam . pInfoConfig
 -- will be adjusted.
 getStakeSlice ::
   ConsensusProtocol (BlockProtocol blk) =>
-  ProtocolInfo IO blk ->
+  ProtocolInfo blk ->
   EpochNo ->
   Word64 ->
   Word64 ->
@@ -81,12 +81,12 @@ getStakeSlice pInfo epoch !sliceIndex !minSliceSize els =
     LedgerStateMary mls -> genericStakeSlice pInfo epoch sliceIndex minSliceSize mls
     LedgerStateAlonzo als -> genericStakeSlice pInfo epoch sliceIndex minSliceSize als
     LedgerStateBabbage bls -> genericStakeSlice pInfo epoch sliceIndex minSliceSize bls
-    LedgerStateConway _cls -> panic "TODO: Conway not supported yet"
+    LedgerStateConway cls -> genericStakeSlice pInfo epoch sliceIndex minSliceSize cls
 
 genericStakeSlice ::
   forall era c blk p.
   (c ~ StandardCrypto, EraCrypto era ~ c, ConsensusProtocol (BlockProtocol blk)) =>
-  ProtocolInfo IO blk ->
+  ProtocolInfo blk ->
   EpochNo ->
   Word64 ->
   Word64 ->

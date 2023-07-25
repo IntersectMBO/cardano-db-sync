@@ -77,11 +77,13 @@ import Ouroboros.Consensus.Shelley.Node (ShelleyLeaderCredentials)
 import System.Directory (createDirectoryIfMissing, removePathForcibly)
 import System.FilePath.Posix ((</>))
 import System.IO.Silently (hSilence)
+import Ouroboros.Consensus.Block.Forging
 
 data Config = Config
   { topLevelConfig :: TopLevelConfig CardanoBlock
-  , protocolInfo :: Consensus.ProtocolInfo IO CardanoBlock
-  , protocolInfoForging :: Consensus.ProtocolInfo IO CardanoBlock
+  , protocolInfo :: Consensus.ProtocolInfo CardanoBlock
+  , protocolInfoForging :: Consensus.ProtocolInfo CardanoBlock
+  , protocolInfoForger :: [BlockForging IO CardanoBlock]
   , syncNodeParams :: SyncNodeParams
   }
 
@@ -205,11 +207,12 @@ mkConfig :: FilePath -> FilePath -> CommandLineArgs -> IO Config
 mkConfig staticDir mutableDir cmdLineArgs = do
   config <- readSyncNodeConfig $ ConfigFile (staticDir </> "test-db-sync-config.json")
   genCfg <- either (error . Text.unpack . renderSyncNodeError) id <$> runExceptT (readCardanoGenesisConfig config)
-  let pInfoDbSync = mkProtocolInfoCardano genCfg []
+  let (pInfoDbSync, _) = mkProtocolInfoCardano genCfg []
   creds <- mkShelleyCredentials $ staticDir </> "pools" </> "bulk1.creds"
-  let pInfoForger = mkProtocolInfoCardano genCfg creds
+  let (pInfoForger, forging) = mkProtocolInfoCardano genCfg creds
+  forging' <- forging
   syncPars <- mkSyncNodeParams staticDir mutableDir cmdLineArgs
-  pure $ Config (Consensus.pInfoConfig pInfoDbSync) pInfoDbSync pInfoForger syncPars
+  pure $ Config (Consensus.pInfoConfig pInfoDbSync) pInfoDbSync pInfoForger forging' syncPars
 
 mkShelleyCredentials :: FilePath -> IO [ShelleyLeaderCredentials StandardCrypto]
 mkShelleyCredentials bulkFile = do
@@ -336,7 +339,7 @@ withFullConfig' hasFingerprint shouldLog cmdLineArgs config testLabel action iom
       else pure nullTracer
   let dbsyncRun = runDbSync emptyMetricsSetters migr iom trce dbsyncParams True
   let initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
-  withInterpreter (protocolInfoForging cfg) nullTracer fingerFile $ \interpreter -> do
+  withInterpreter (protocolInfoForging cfg) (protocolInfoForger cfg) nullTracer fingerFile $ \interpreter -> do
     -- TODO: get 42 from config
     withServerHandle @CardanoBlock
       iom

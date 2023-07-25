@@ -14,6 +14,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (
   mkTxWithdrawals,
   mkTxWithdrawal,
   mkTxCertificates,
+  toShelleyCert,
   mkTxCertificate,
   calcWithdrawalSum,
   getTxMetadata,
@@ -45,6 +46,7 @@ import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShelley)
+import Cardano.Ledger.Shelley.TxCert
 
 fromShelleyTx :: (Word64, Core.Tx StandardShelley) -> Tx
 fromShelleyTx (blkIndex, tx) =
@@ -169,16 +171,26 @@ mkTxParamProposal witness txBody =
   maybe [] (convertParamProposal witness) $ strictMaybeToMaybe (txBody ^. Shelley.updateTxBodyL)
 
 mkTxCertificates ::
-  (Shelley.ShelleyEraTxBody era, EraCrypto era ~ StandardCrypto, Core.ProtVerAtMost era 8) =>
+  forall era.
+  (Shelley.ShelleyEraTxBody era
+  , TxCert era ~ ShelleyTxCert era
+  , EraCrypto era ~ StandardCrypto) =>
   Core.TxBody era ->
   [TxCertificate]
 mkTxCertificates bd =
-  zipWith mkTxCertificate [0 ..] $ toList $ bd ^. Shelley.certsTxBodyL
+  zipWith mkTxCertificate [0 ..] $ toShelleyCert <$> toList (bd ^. Core.certsTxBodyL)
 
-mkTxCertificate :: Word16 -> Shelley.DCert StandardCrypto -> TxCertificate
+toShelleyCert :: EraCrypto era ~ StandardCrypto => ShelleyTxCert era -> ShelleyCert
+toShelleyCert cert = case cert of
+  ShelleyTxCertDelegCert a -> ShelleyTxCertDelegCert a
+  ShelleyTxCertPool a -> ShelleyTxCertPool a
+  ShelleyTxCertGenesisDeleg a -> ShelleyTxCertGenesisDeleg a
+  ShelleyTxCertMir a -> ShelleyTxCertMir a
+
+mkTxCertificate :: Word16 -> ShelleyCert -> TxCertificate
 mkTxCertificate idx dcert =
   TxCertificate
     { txcRedeemerIndex = Nothing
     , txcIndex = idx
-    , txcCert = dcert
+    , txcCert = Left dcert
     }

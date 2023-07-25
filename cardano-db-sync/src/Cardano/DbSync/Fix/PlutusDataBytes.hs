@@ -25,7 +25,7 @@ import qualified Cardano.Ledger.Alonzo.TxWits as Alonzo
 import qualified Cardano.Ledger.Babbage.TxBody as Babbage
 import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Era as Ledger
-import Cardano.Prelude (mapMaybe, panic)
+import Cardano.Prelude (mapMaybe)
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad.Except
 import Control.Monad.Extra (mapMaybeM)
@@ -251,7 +251,7 @@ fixPlutusData tracer cblk fds = do
 
 scrapDatumsBlock :: CardanoBlock -> Map ByteString ByteString
 scrapDatumsBlock cblk = case cblk of
-  BlockConway _blk -> panic "TODO: Conway 4"
+  BlockConway _blk -> mempty -- TODO panic "TODO: Conway 4"
   BlockBabbage blk -> Map.unions $ scrapDatumsTxBabbage . snd <$> getTxs blk
   BlockAlonzo blk -> Map.unions $ scrapDatumsTxAlonzo . snd <$> getTxs blk
   BlockByron _ -> error "No Datums in Byron"
@@ -287,7 +287,7 @@ scrapDatumsTxAlonzo tx =
 
 scrapRedeemerDataBlock :: CardanoBlock -> Map ByteString ByteString
 scrapRedeemerDataBlock cblk = case cblk of
-  BlockConway _blk -> panic "TODO: Conway 5"
+  BlockConway _blk -> mempty -- panic "TODO: Conway 5"
   BlockBabbage blk -> Map.unions $ scrapRedeemerDataTx . snd <$> getTxs blk
   BlockAlonzo blk -> Map.unions $ scrapRedeemerDataTx . snd <$> getTxs blk
   BlockByron _ -> error "No RedeemerData in Byron"

@@ -19,10 +19,7 @@ where
 import qualified Cardano.Db as DB
 import Cardano.Ledger.BaseTypes (CertIx (CertIx), TxIx (TxIx))
 import Cardano.Ledger.Credential (Ptr (..))
-import Cardano.Ledger.Shelley.TxBody (
-  DCert (..),
-  DelegCert (..),
- )
+import Cardano.Ledger.Shelley.TxCert
 import Cardano.Mock.ChainSync.Server (IOManager, addBlock)
 import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import Cardano.Mock.Forging.Tx.Babbage.Scenarios (delegateAndSendBlocks)
@@ -62,11 +59,11 @@ registrationTx =
 
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)]
+        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)]
 
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)]
+        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyUnRegCert)]
 
     -- We add interval or else the txs would have the same id
     void $
@@ -74,7 +71,7 @@ registrationTx =
         interpreter
         mockServer
         ( fmap (Babbage.addValidityInterval 1000)
-            . Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)]
+            . Babbage.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)]
         )
 
     void $
@@ -82,7 +79,7 @@ registrationTx =
         interpreter
         mockServer
         ( fmap (Babbage.addValidityInterval 2000)
-            . Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)]
+            . Babbage.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyUnRegCert)]
         )
 
     assertBlockNoBackoff dbSync 4
@@ -96,10 +93,10 @@ registrationsSameBlock =
     startDBSync dbSync
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
-      tx0 <- Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)] st
-      tx1 <- Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)] st
-      tx2 <- Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)] st
-      tx3 <- Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . DeRegKey)] st
+      tx0 <- Babbage.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)] st
+      tx1 <- Babbage.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyUnRegCert)] st
+      tx2 <- Babbage.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)] st
+      tx3 <- Babbage.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyUnRegCert)] st
       Right [tx0, tx1, Babbage.addValidityInterval 1000 tx2, Babbage.addValidityInterval 2000 tx3]
 
     assertBlockNoBackoff dbSync 1
@@ -115,10 +112,10 @@ registrationsSameTx =
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
         Babbage.mkSimpleDCertTx
-          [ (StakeIndexNew 1, DCertDeleg . RegKey)
-          , (StakeIndexNew 1, DCertDeleg . DeRegKey)
-          , (StakeIndexNew 1, DCertDeleg . RegKey)
-          , (StakeIndexNew 1, DCertDeleg . DeRegKey)
+          [ (StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)
+          , (StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyUnRegCert)
+          , (StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)
+          , (StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyUnRegCert)
           ]
 
     assertBlockNoBackoff dbSync 1
@@ -133,7 +130,7 @@ stakeAddressPtr =
 
     blk <-
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)]
+        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)]
 
     let ptr = Ptr (blockSlot blk) (TxIx 0) (CertIx 0)
 
@@ -153,7 +150,7 @@ stakeAddressPtrDereg =
 
     blk <-
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkSimpleDCertTx [(StakeIndexNew 0, DCertDeleg . RegKey)]
+        Babbage.mkSimpleDCertTx [(StakeIndexNew 0, ShelleyTxCertDelegCert . ShelleyRegCert)]
 
     let ptr0 = Ptr (blockSlot blk) (TxIx 0) (CertIx 0)
 
@@ -161,8 +158,8 @@ stakeAddressPtrDereg =
       tx0 <- Babbage.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr0) 20000 20000 st
       tx1 <-
         Babbage.mkSimpleDCertTx
-          [ (StakeIndexNew 0, DCertDeleg . DeRegKey)
-          , (StakeIndexNew 0, DCertDeleg . RegKey)
+          [ (StakeIndexNew 0, ShelleyTxCertDelegCert . ShelleyUnRegCert)
+          , (StakeIndexNew 0, ShelleyTxCertDelegCert . ShelleyRegCert)
           ]
           st
       pure [tx0, tx1]
@@ -197,7 +194,7 @@ stakeAddressPtrUseBefore =
     -- and then register it
     blk <-
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, DCertDeleg . RegKey)]
+        Babbage.mkSimpleDCertTx [(StakeIndexNew 1, ShelleyTxCertDelegCert . ShelleyRegCert)]
 
     let ptr = Ptr (blockSlot blk) (TxIx 0) (CertIx 0)
 

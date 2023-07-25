@@ -2,6 +2,9 @@
 
 module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   Tx (..),
+  ShelleyCert,
+  ConwayCert,
+  Cert,
   TxCertificate (..),
   TxWithdrawal (..),
   TxIn (..),
@@ -10,6 +13,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   TxScript (..),
   PlutusData (..),
   TxOutDatum (..),
+  toTxCert,
   whenInlineDatum,
   getTxOutDatumHash,
   getMaybeDatumHash,
@@ -27,7 +31,9 @@ import Cardano.Ledger.Mary.Value (AssetName, MultiAsset, PolicyID)
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
-import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
+import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto, StandardShelley)
+import Cardano.Ledger.Shelley.TxCert
+import Cardano.Ledger.Conway.TxCert (ConwayTxCert)
 
 data Tx = Tx
   { txHash :: !ByteString
@@ -56,10 +62,14 @@ data Tx = Tx
   , txExtraKeyWitnesses :: ![ByteString]
   }
 
+type ShelleyCert = ShelleyTxCert StandardShelley
+type ConwayCert = ConwayTxCert StandardConway
+type Cert = Either ShelleyCert ConwayCert
+
 data TxCertificate = TxCertificate
   { txcRedeemerIndex :: !(Maybe Word64)
   , txcIndex :: !Word16
-  , txcCert :: !(Shelley.DCert StandardCrypto)
+  , txcCert :: !Cert
   }
 
 data TxWithdrawal = TxWithdrawal
@@ -114,6 +124,14 @@ data PlutusData = PlutusData
   }
 
 data TxOutDatum = InlineDatum PlutusData | DatumHash DataHash | NoDatum
+
+toTxCert ::  Word16 -> Cert -> TxCertificate
+toTxCert idx dcert =
+  TxCertificate
+    { txcRedeemerIndex = Nothing
+    , txcIndex = idx
+    , txcCert = dcert
+    }
 
 whenInlineDatum :: Monad m => TxOutDatum -> (PlutusData -> m a) -> m (Maybe a)
 whenInlineDatum (InlineDatum pd) f = Just <$> f pd

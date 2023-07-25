@@ -73,6 +73,7 @@ data BlockEra
   | Mary
   | Alonzo
   | Babbage
+  | Conway
   deriving (Eq, Show)
 
 -- | Slot within an Epoch.

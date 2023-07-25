@@ -147,7 +147,7 @@ scrapScriptBlock cblk = case cblk of
   BlockShelley _ -> error "No Plutus Scripts in Shelley"
   BlockAllegra _ -> error "No Plutus Scripts in Allegra"
   BlockMary _ -> error "No Plutus Scripts in Mary"
-  _ -> error "TODO: Conway not supported"
+  _ -> mempty -- error "TODO: Conway not supported"
 
 scrapScriptTxBabbage :: Ledger.Tx StandardBabbage -> Map ByteString ByteString
 scrapScriptTxBabbage tx = Map.union txMap txOutMap
