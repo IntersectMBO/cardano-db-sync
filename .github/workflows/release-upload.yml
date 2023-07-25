@@ -26,15 +26,8 @@ jobs:
 
       - name: Nix build
         run: |
-          nix build \
-            --builders "" \
-            --max-jobs 0 \
-            .#hydraJobs.cardano-db-sync-linux.x86_64-linux
-
-          nix build \
-            --builders "" \
-            --max-jobs 0 \
-             hydraJobs.cardano-db-sync-macos.x86_64-darwin
+          set -x
+          nix build .#hydraJobs.cardano-db-sync-linux.x86_64-linux -v
 
       - name: Upload artifacts
         uses: input-output-hk/action-gh-release@v1
