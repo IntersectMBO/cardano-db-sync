@@ -5,8 +5,6 @@ on:
     types:
       - published
   push:
-    tags:
-      - '**'
 
 jobs:
   build:
@@ -28,11 +26,3 @@ jobs:
         run: |
           set -x
           nix build .#hydraJobs.cardano-db-sync-linux.x86_64-linux -v
-
-      - name: Upload artifacts
-        uses: input-output-hk/action-gh-release@v1
-        with:
-          draft: true
-          files: |
-            cardano-db-sync-*-macos.tar.gz
-            cardano-db-sync-*-linux.tar.gz
