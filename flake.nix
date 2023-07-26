@@ -158,7 +158,9 @@
             # integration tests. Add these back when we get beefier builders.
             nonRequiredMacOSPaths = [
               "checks.cardano-chain-gen:test:cardano-chain-gen"
+              "checks.cardano-db:test:test-db"
               "ghc927.checks.cardano-chain-gen:test:cardano-chain-gen"
+              "ghc927.checks.cardano-db:test:test-db"
             ];
 
             nonRequiredPaths =
