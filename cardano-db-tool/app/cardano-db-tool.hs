@@ -54,7 +54,7 @@ runCommand cmd =
     CmdReport report -> runReport report
     CmdRollback slotNo -> runRollback slotNo
     CmdRunMigrations mdir forceIndexes mockFix mldir -> do
-      pgConfig <- orDie renderPGPassError $ newExceptT (readPGPass PGPassDefaultEnv)
+      pgConfig <- runOrThrowIO (readPGPass PGPassDefaultEnv)
       unofficial <- snd <$> runMigrations pgConfig False mdir mldir Initial
       unless (null unofficial) $
         putStrLn $

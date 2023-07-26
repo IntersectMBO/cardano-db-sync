@@ -368,11 +368,23 @@ data DBFail
   | TickerAlreadyReserved !TickerName
   | RecordDoesNotExist
   | DBFail LookupFail
-  deriving (Eq, Show)
+  deriving (Eq)
 
 instance ToSchema DBFail where
   declareNamedSchema _ =
     pure (NamedSchema (Just "DBFail") mempty)
+
+instance Show DBFail where
+  show =
+    \case
+      UnknownError err -> "Unknown error. Context: " <> show err
+      DbInsertError err ->
+        "The database got an error while trying to insert a record. Error: " <> show err
+      DbLookupPoolMetadataHash poolId poolMDHash ->
+        "The metadata with hash " <> show poolMDHash <> " for pool " <> show poolId <> " is missing from the DB."
+      TickerAlreadyReserved ticker -> "Ticker name " <> show (getTickerName ticker) <> " is already reserved"
+      RecordDoesNotExist -> "The requested record does not exist."
+      DBFail lookupFail -> show lookupFail
 
 {-
 
@@ -414,17 +426,17 @@ instance ToJSON DBFail where
   toJSON (DBFail err) =
     object
       [ "code" .= Aeson.String "DBFail"
-      , "description" .= Aeson.String (renderLookupFail err)
+      , "description" .= Aeson.String (show err)
       ]
 
-renderDBFail :: DBFail -> Text
-renderDBFail (UnknownError err) = "Unknown error. Context: " <> err
-renderDBFail (DbInsertError err) =
-  "The database got an error while trying to insert a record. Error: " <> err
-renderDBFail (DbLookupPoolMetadataHash poolId poolMDHash) =
-  "The metadata with hash " <> show poolMDHash <> " for pool " <> show poolId <> " is missing from the DB."
-renderDBFail (TickerAlreadyReserved ticker) =
-  "Ticker name " <> getTickerName ticker <> " is already reserved"
-renderDBFail RecordDoesNotExist =
-  "The requested record does not exist."
-renderDBFail (DBFail lookupFail) = renderLookupFail lookupFail
+-- renderDBFail :: DBFail -> Text
+-- renderDBFail (UnknownError err) = "Unknown error. Context: " <> err
+-- renderDBFail (DbInsertError err) =
+--   "The database got an error while trying to insert a record. Error: " <> err
+-- renderDBFail (DbLookupPoolMetadataHash poolId poolMDHash) =
+--   "The metadata with hash " <> show poolMDHash <> " for pool " <> show poolId <> " is missing from the DB."
+-- renderDBFail (TickerAlreadyReserved ticker) =
+--   "Ticker name " <> getTickerName ticker <> " is already reserved"
+-- renderDBFail RecordDoesNotExist =
+--   "The requested record does not exist."
+-- renderDBFail (DBFail lookupFail) = show lookupFail

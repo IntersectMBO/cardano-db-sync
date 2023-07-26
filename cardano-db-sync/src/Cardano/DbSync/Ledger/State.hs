@@ -190,7 +190,7 @@ readStateUnsafe :: HasLedgerEnv -> STM LedgerDB
 readStateUnsafe env = do
   mState <- readTVar $ leStateVar env
   case mState of
-    Strict.Nothing -> panic "LedgerState.readStateUnsafe: Ledger state is not found"
+    Strict.Nothing -> throwSTM $ userError "LedgerState.readStateUnsafe: Ledger state is not found"
     Strict.Just st -> pure st
 
 applyBlockAndSnapshot :: HasLedgerEnv -> CardanoBlock -> Bool -> IO (ApplyResult, Bool)

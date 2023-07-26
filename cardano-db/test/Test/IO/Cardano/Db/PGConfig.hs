@@ -39,7 +39,7 @@ pgFileReadTest = do
 
   let pg = PGPassEnv "OTHER_PG_PASS_ENV_VARIABLE"
 
-  result <- orDie renderPGPassError $ newExceptT $ readPGPass pg
+  result <- runOrThrowIO readPGPass pg
   unless (result == expected) $
     error $
       mconcat

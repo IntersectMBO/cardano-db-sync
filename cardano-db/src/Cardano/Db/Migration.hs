@@ -74,6 +74,8 @@ import System.IO (
   withFile,
  )
 import Text.Read (readMaybe)
+import Control.Exception (Exception)
+import Cardano.Prelude (Typeable)
 
 newtype MigrationDir
   = MigrationDir FilePath
@@ -92,7 +94,9 @@ data MigrationValidateError = UnknownMigrationsFound
   { missingMigrations :: [MigrationValidate]
   , extraMigrations :: [MigrationValidate]
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Typeable)
+
+instance Exception MigrationValidateError
 
 data MigrationToRun = Initial | Full | Fix | Indexes
   deriving (Show, Eq)

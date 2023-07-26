@@ -103,7 +103,6 @@ module Cardano.Db.Query (
   isJust,
   listToMaybe,
   maybeToEither,
-  renderLookupFail,
   unBlockId,
   unTxId,
   unTxInId,

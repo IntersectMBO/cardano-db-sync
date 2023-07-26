@@ -196,7 +196,7 @@ queryDBSync env = Db.runWithConnectionNoLogging (getDBSyncPGPass env)
 
 getPoolLayer :: DBSyncEnv -> IO PoolDataLayer
 getPoolLayer env = do
-  pgconfig <- orDie Db.renderPGPassError $ newExceptT $ Db.readPGPass (enpPGPassSource $ dbSyncParams env)
+  pgconfig <- runOrThrowIO $ Db.readPGPass (enpPGPassSource $ dbSyncParams env)
   pool <- runNoLoggingT $ createPostgresqlPool (Db.toConnectionString pgconfig) 1 -- Pool size of 1 for tests
   pure $
     postgresqlPoolDataLayer
@@ -230,8 +230,8 @@ mkShelleyCredentials bulkFile = do
 
 -- | staticDir can be shared by tests running in parallel. mutableDir not.
 mkSyncNodeParams :: FilePath -> FilePath -> CommandLineArgs -> IO SyncNodeParams
-mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
-  pgconfig <- orDie Db.renderPGPassError $ newExceptT Db.readPGPassDefault
+mkSyncNodeParams staticDir mutableDir CommandLineArgs{..} = do
+  pgconfig <- runOrThrowIO Db.readPGPassDefault
   pure $
     SyncNodeParams
       { enpConfigFile = ConfigFile $ staticDir </> (if claHasConfigFile then "test-db-sync-config.json" else "")

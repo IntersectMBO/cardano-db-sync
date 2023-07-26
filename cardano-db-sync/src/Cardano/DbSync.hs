@@ -55,7 +55,7 @@ import Cardano.DbSync.Era.Shelley.Offline.Http (
   renderFetchError,
   spodJson,
  )
-import Cardano.DbSync.Error
+import Cardano.DbSync.Error ( renderSyncNodeError, runOrThrowExcept, SyncNodeError )
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Rollback (unsafeRollback)
 import Cardano.DbSync.Sync (runSyncNodeClient)
@@ -66,8 +66,6 @@ import Cardano.Prelude hiding (Nat, (%))
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Async
 import Control.Monad.Extra (whenJust)
-import Control.Monad.Trans.Except.Exit (orDie)
-import Control.Monad.Trans.Except.Extra (newExceptT)
 import qualified Data.Text as Text
 import Data.Version (showVersion)
 import Database.Persist.Postgresql (ConnectionString, withPostgresqlConn)
@@ -87,6 +85,8 @@ runDbSyncNode metricsSetters knownMigrations params =
 
     runDbSync metricsSetters knownMigrations iomgr trce params aop
 
+
+
 runDbSync ::
   MetricSetters ->
   [(Text, Text)] ->
@@ -97,7 +97,7 @@ runDbSync ::
   IO ()
 runDbSync metricsSetters knownMigrations iomgr trce params aop = do
   -- Read the PG connection info
-  pgConfig <- orDie Db.renderPGPassError $ newExceptT (Db.readPGPass $ enpPGPassSource params)
+  pgConfig <- runOrThrowIO (Db.readPGPass $ enpPGPassSource params)
 
   mErrors <- liftIO $ Db.validateMigrations dbMigrationDir knownMigrations
   whenJust mErrors $ \(unknown, stage4orNewStage3) ->
@@ -106,7 +106,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params aop = do
       else do
         let msg = Db.renderMigrationValidateError unknown
         logError trce msg
-        panic msg
+        throwIO unknown
 
   logInfo trce "Schema migration files validated"
 

@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Cardano.DbSync.Error (
   SyncInvariant (..),
@@ -10,6 +11,7 @@ module Cardano.DbSync.Error (
   dbSyncInvariant,
   renderSyncInvariant,
   renderSyncNodeError,
+  runOrThrowIO
 ) where
 
 import qualified Cardano.Chain.Genesis as Byron
@@ -118,3 +120,10 @@ bsBase16Encode bs =
   case Text.decodeUtf8' (Base16.encode bs) of
     Left _ -> Text.pack $ "UTF-8 decode failed for " ++ show bs
     Right txt -> txt
+
+runOrThrowIO :: forall e a. Exception e => IO (Either e a) -> IO a
+runOrThrowIO ioEither = do
+  either <- ioEither
+  case either of
+    Left err -> throwIO err
+    Right a -> pure a
