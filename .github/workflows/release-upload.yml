@@ -25,4 +25,4 @@ jobs:
       - name: Nix build
         run: |
           set -x
-          nix build .#hydraJobs.cardano-db-sync-linux.x86_64-linux
+          nix build .#hydraJobs.cardano-db-sync-linux.x86_64-linux -v
