@@ -14,6 +14,7 @@ module Cardano.DbSync.Config.Cardano (
 ) where
 
 import qualified Cardano.Chain.Genesis as Byron
+import Cardano.Chain.Update (ApplicationName (..), SoftwareVersion (..))
 import qualified Cardano.Crypto.Hash.Class as Crypto
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import Cardano.Db (textShow)
@@ -92,7 +93,7 @@ mkProtocolInfoCardano ge shelleyCred =
           { Consensus.byronGenesis = byronGenesis
           , Consensus.byronPbftSignatureThreshold = Consensus.PBftSignatureThreshold <$> dncPBftSignatureThreshold dnc
           , Consensus.byronProtocolVersion = dncByronProtocolVersion dnc
-          , Consensus.byronSoftwareVersion = dncByronSoftwareVersion dnc
+          , Consensus.byronSoftwareVersion = mkByronSoftwareVersion
           , Consensus.byronLeaderCredentials = Nothing
           , Consensus.byronMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
           }
@@ -140,3 +141,10 @@ mkProtVer a b =
   case mkVersion64 a of
     Nothing -> panic $ "Impossible: Invalid version generated: " <> textShow a
     Just v -> ProtVer v (fromIntegral b)
+
+mkByronSoftwareVersion :: SoftwareVersion
+mkByronSoftwareVersion =
+  SoftwareVersion name ver
+  where
+    name = ApplicationName "cardano-sl"
+    ver = 1

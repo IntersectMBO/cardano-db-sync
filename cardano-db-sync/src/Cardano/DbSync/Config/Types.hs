@@ -99,7 +99,6 @@ data SyncNodeConfig = SyncNodeConfig
   , dncShelleyGenesisHash :: !GenesisHashShelley
   , dncAlonzoGenesisFile :: !GenesisFile
   , dncAlonzoGenesisHash :: !GenesisHashAlonzo
-  , dncByronSoftwareVersion :: !Byron.SoftwareVersion
   , dncByronProtocolVersion :: !Byron.ProtocolVersion
   , dncShelleyHardFork :: !TriggerHardFork
   , dncAllegraHardFork :: !TriggerHardFork

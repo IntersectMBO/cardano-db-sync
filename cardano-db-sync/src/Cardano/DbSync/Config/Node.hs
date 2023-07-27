@@ -34,7 +34,6 @@ data NodeConfig = NodeConfig
   , ncAlonzoGenesisFile :: !GenesisFile
   , ncAlonzoGenesisHash :: !GenesisHashAlonzo
   , ncRequiresNetworkMagic :: !RequiresNetworkMagic
-  , ncByronSotfwareVersion :: !Byron.SoftwareVersion
   , ncByronProtocolVersion :: !Byron.ProtocolVersion
   , -- Shelley hardfok parameters
     ncShelleyHardFork :: !Shelley.TriggerHardFork
@@ -72,7 +71,6 @@ instance FromJSON NodeConfig where
           <*> fmap GenesisFile (o .: "AlonzoGenesisFile")
           <*> fmap GenesisHashAlonzo (o .: "AlonzoGenesisHash")
           <*> o .: "RequiresNetworkMagic"
-          <*> parseByronSoftwareVersion o
           <*> parseByronProtocolVersion o
           <*> parseShelleyHardForkEpoch o
           <*> parseAllegraHardForkEpoch o
@@ -86,12 +84,6 @@ instance FromJSON NodeConfig where
           <$> o .: "LastKnownBlockVersion-Major"
           <*> o .: "LastKnownBlockVersion-Minor"
           <*> o .: "LastKnownBlockVersion-Alt"
-
-      parseByronSoftwareVersion :: Object -> Parser Byron.SoftwareVersion
-      parseByronSoftwareVersion o =
-        Byron.SoftwareVersion
-          <$> fmap Byron.ApplicationName (o .: "ApplicationName")
-          <*> o .: "ApplicationVersion"
 
       parseShelleyHardForkEpoch :: Object -> Parser Shelley.TriggerHardFork
       parseShelleyHardForkEpoch o =
