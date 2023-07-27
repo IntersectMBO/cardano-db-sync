@@ -5,6 +5,7 @@ on:
     types:
       - published
   push:
+    tags: ['**']
 
 jobs:
   build:
@@ -25,4 +26,4 @@ jobs:
       - name: Nix build
         run: |
           set -x
-          nix build .#hydraJobs.cardano-db-sync-linux.x86_64-linux -v
+          nix build --builders "" --max-jobs 0 .#hydraJobs.cardano-db-sync-linux.x86_64-linux
