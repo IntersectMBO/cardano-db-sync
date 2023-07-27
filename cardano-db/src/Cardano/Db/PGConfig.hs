@@ -152,25 +152,3 @@ instance Show PGPassError where
           ]
       FailedToParsePGPassConfig bs ->
         "Failed to parse config from " <> show bs
-
--- renderPGPassError :: PGPassError -> Text
--- renderPGPassError pge =
---   case pge of
---     EnvVarableNotSet str ->
---       mconcat ["Environment variable '", Text.pack str, " not set."]
---     UserFailed err ->
---       mconcat
---         [ "readPGPassFile: User in pgpass file was specified as '*' but "
---         , "getEffectiveUserName failed with "
---         , textShow err
---         ]
---     FailedToReadPGPassFile fpath err ->
---       mconcat
---         [ "Not able to read PGPassFile at "
---         , textShow fpath
---         , "."
---         , "Failed with "
---         , textShow err
---         ]
---     FailedToParsePGPassConfig bs ->
---       "Failed to parse config from " <> textShow bs

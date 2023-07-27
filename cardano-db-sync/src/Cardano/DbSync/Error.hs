@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Cardano.DbSync.Error (
   SyncInvariant (..),
@@ -10,7 +11,6 @@ module Cardano.DbSync.Error (
   dbSyncNodeError,
   dbSyncInvariant,
   renderSyncInvariant,
-  renderSyncNodeError,
   runOrThrowIO
 ) where
 
@@ -24,6 +24,8 @@ import Control.Monad.Trans.Except.Extra (left)
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
+import qualified GHC.Show as GShow
+import qualified Text.Show as Text
 
 data SyncInvariant
   = EInvInOut !Word64 !Word64
@@ -38,6 +40,55 @@ data SyncNodeError
   | NEShelleyConfig !FilePath !Text
   | NEAlonzoConfig !FilePath !Text
   | NECardanoConfig !Text
+
+instance Exception SyncNodeError
+
+instance Show SyncNodeError where
+  show =
+    \case
+      NEError t -> "Error: " <> Text.show t
+      NEInvariant loc i -> Text.show loc <> ": " <> Text.show (renderSyncInvariant i)
+      NEBlockMismatch blkNo hashDb hashBlk ->
+        mconcat
+          [ "Block mismatch for block number "
+          , show blkNo
+          , ", db has "
+          , Text.show $ bsBase16Encode hashDb
+          , " but chain provided "
+          , Text.show $ bsBase16Encode hashBlk
+          ]
+      NEIgnoreShelleyInitiation ->
+        mconcat
+          [ "Node configs that don't fork to Shelley directly and initiate"
+          , " funds or stakes in Shelley Genesis are not supported."
+          ]
+      NEByronConfig fp ce ->
+        mconcat
+          [ "Failed reading Byron genesis file "
+          , Text.show $ textShow fp
+          , ": "
+          , Text.show $ textShow ce
+          ]
+      NEShelleyConfig fp txt ->
+        mconcat
+          [ "Failed reading Shelley genesis file "
+          , Text.show $ textShow fp
+          , ": "
+          , show txt
+          ]
+      NEAlonzoConfig fp txt ->
+        mconcat
+          [ "Failed reading Alonzo genesis file "
+          , Text.show $ textShow fp
+          , ": "
+          , show txt
+          ]
+      NECardanoConfig err ->
+        mconcat
+          [ "With Cardano protocol, Byron/Shelley config mismatch:\n"
+          , "   "
+          , show err
+          ]
 
 annotateInvariantTx :: Byron.Tx -> SyncInvariant -> SyncInvariant
 annotateInvariantTx tx ei =
@@ -68,62 +119,15 @@ renderSyncInvariant ei =
         , textShow tx
         ]
 
-renderSyncNodeError :: SyncNodeError -> Text
-renderSyncNodeError ne =
-  case ne of
-    NEError t -> "Error: " <> t
-    NEInvariant loc i -> mconcat [loc, ": " <> renderSyncInvariant i]
-    NEBlockMismatch blkNo hashDb hashBlk ->
-      mconcat
-        [ "Block mismatch for block number "
-        , textShow blkNo
-        , ", db has "
-        , bsBase16Encode hashDb
-        , " but chain provided "
-        , bsBase16Encode hashBlk
-        ]
-    NEIgnoreShelleyInitiation ->
-      mconcat
-        [ "Node configs that don't fork to Shelley directly and initiate"
-        , " funds or stakes in Shelley Genesis are not supported."
-        ]
-    NEByronConfig fp ce ->
-      mconcat
-        [ "Failed reading Byron genesis file "
-        , textShow fp
-        , ": "
-        , textShow ce
-        ]
-    NEShelleyConfig fp txt ->
-      mconcat
-        [ "Failed reading Shelley genesis file "
-        , textShow fp
-        , ": "
-        , txt
-        ]
-    NEAlonzoConfig fp txt ->
-      mconcat
-        [ "Failed reading Alonzo genesis file "
-        , textShow fp
-        , ": "
-        , txt
-        ]
-    NECardanoConfig err ->
-      mconcat
-        [ "With Cardano protocol, Byron/Shelley config mismatch:\n"
-        , "   "
-        , err
-        ]
-
 bsBase16Encode :: ByteString -> Text
 bsBase16Encode bs =
   case Text.decodeUtf8' (Base16.encode bs) of
-    Left _ -> Text.pack $ "UTF-8 decode failed for " ++ show bs
+    Left _ -> Text.pack $ "UTF-8 decode failed for " ++ Text.show bs
     Right txt -> txt
 
 runOrThrowIO :: forall e a. Exception e => IO (Either e a) -> IO a
 runOrThrowIO ioEither = do
-  either <- ioEither
-  case either of
+  et <- ioEither
+  case et of
     Left err -> throwIO err
     Right a -> pure a

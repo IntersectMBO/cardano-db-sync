@@ -55,7 +55,7 @@ import Cardano.DbSync.Era.Shelley.Offline.Http (
   renderFetchError,
   spodJson,
  )
-import Cardano.DbSync.Error ( renderSyncNodeError, runOrThrowExcept, SyncNodeError )
+import Cardano.DbSync.Error (SyncNodeError, runOrThrowIO)
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Rollback (unsafeRollback)
 import Cardano.DbSync.Sync (runSyncNodeClient)
@@ -84,8 +84,6 @@ runDbSyncNode metricsSetters knownMigrations params =
     startupReport trce aop params
 
     runDbSync metricsSetters knownMigrations iomgr trce params aop
-
-
 
 runDbSync ::
   MetricSetters ->
@@ -174,7 +172,7 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
   logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfig)
   Db.runIohkLogging trce $
     withPostgresqlConn dbConnString $ \backend -> liftIO $ do
-      orDie renderSyncNodeError $ do
+      runOrThrowIO $ runExceptT $ do
         genCfg <- readCardanoGenesisConfig syncNodeConfig
         logProtocolMagicId trce $ genesisProtocolMagicId genCfg
 

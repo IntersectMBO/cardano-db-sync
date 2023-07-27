@@ -65,7 +65,7 @@ insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise *way* too chatty.
   when (not shelleyInitiation && (hasInitialFunds || hasStakes)) $ do
-    liftIO $ logError tracer $ renderSyncNodeError NEIgnoreShelleyInitiation
+    liftIO $ logError tracer $ show NEIgnoreShelleyInitiation
     throwError NEIgnoreShelleyInitiation
   if False
     then newExceptT $ DB.runDbIohkLogging (envBackend syncEnv) tracer (insertAction hasConsumed prunes)

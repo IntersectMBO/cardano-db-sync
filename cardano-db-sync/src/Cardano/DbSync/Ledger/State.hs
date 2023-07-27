@@ -74,6 +74,7 @@ import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import Data.Time.Clock (UTCTime, diffUTCTime, getCurrentTime)
+import GHC.IO.Exception (userError)
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Block (
   CodecConfig,

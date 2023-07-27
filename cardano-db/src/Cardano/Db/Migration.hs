@@ -31,7 +31,8 @@ import Cardano.Db.Query
 import Cardano.Db.Run
 import Cardano.Db.Schema
 import Cardano.Db.Text
-import Control.Exception (SomeException, handle)
+import Cardano.Prelude (Typeable)
+import Control.Exception (Exception, SomeException, handle)
 import Control.Monad.Extra
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (NoLoggingT)
@@ -74,8 +75,6 @@ import System.IO (
   withFile,
  )
 import Text.Read (readMaybe)
-import Control.Exception (Exception)
-import Cardano.Prelude (Typeable)
 
 newtype MigrationDir
   = MigrationDir FilePath

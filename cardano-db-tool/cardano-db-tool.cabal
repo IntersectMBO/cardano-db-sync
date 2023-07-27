@@ -107,4 +107,3 @@ executable cardano-db-tool
                       , cardano-slotting
                       , optparse-applicative
                       , text
-                      , transformers-except

@@ -65,7 +65,7 @@ runDbThread syncEnv metricsSetters queue = do
             setDbSlotHeight metricsSetters $ bSlotNo block
 
           case eNextState of
-            Left err -> logError trce $ renderSyncNodeError err
+            Left err -> logError trce $ show err
             Right Continue -> loop
             Right Done -> pure ()
         Just resultVar -> do

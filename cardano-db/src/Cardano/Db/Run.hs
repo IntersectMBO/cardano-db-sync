@@ -29,6 +29,7 @@ import Cardano.BM.Data.LogItem (
  )
 import Cardano.BM.Data.Severity (Severity (..))
 import Cardano.BM.Trace (Trace)
+import Cardano.Db.Error (runOrThrowIODb)
 import Cardano.Db.PGConfig
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (
@@ -75,12 +76,11 @@ import Database.PostgreSQL.Simple (connectPostgreSQL)
 import Language.Haskell.TH.Syntax (Loc)
 import System.IO (Handle, stdout)
 import System.Log.FastLogger (LogStr, fromLogStr)
-import Cardano.Db.Error (runOrThrowIO)
 
 -- | Run a DB action logging via the provided Handle.
 runDbHandleLogger :: Handle -> PGPassSource -> ReaderT SqlBackend (LoggingT IO) a -> IO a
 runDbHandleLogger logHandle source dbAction = do
-  pgconfig <- runOrThrowIO (readPGPass source)
+  pgconfig <- runOrThrowIODb (readPGPass source)
   runHandleLoggerT
     . withPostgresqlConn (toConnectionString pgconfig)
     $ \backend ->
@@ -107,7 +107,7 @@ runWithConnectionLogging dbConnString tracer dbAction = do
 runWithConnectionNoLogging ::
   PGPassSource -> ReaderT SqlBackend (NoLoggingT IO) a -> IO a
 runWithConnectionNoLogging source dbAction = do
-  pgconfig <- runOrThrowIO (readPGPass source)
+  pgconfig <- runOrThrowIODb (readPGPass source)
   runNoLoggingT
     . withPostgresqlConn (toConnectionString pgconfig)
     $ \backend ->
@@ -164,7 +164,7 @@ runDbNoLogging ::
   ReaderT SqlBackend (NoLoggingT m) a ->
   m a
 runDbNoLogging source action = do
-  pgconfig <- liftIO $ runOrThrowIO (readPGPass source)
+  pgconfig <- liftIO $ runOrThrowIODb (readPGPass source)
   runNoLoggingT
     . withPostgresqlConn (toConnectionString pgconfig)
     $ \backend ->
@@ -173,7 +173,7 @@ runDbNoLogging source action = do
 -- | Run a DB action with stdout logging. Mainly for debugging.
 runDbStdoutLogging :: PGPassSource -> ReaderT SqlBackend (LoggingT IO) b -> IO b
 runDbStdoutLogging source action = do
-  pgconfig <- runOrThrowIO (readPGPass source)
+  pgconfig <- runOrThrowIODb (readPGPass source)
   runStdoutLoggingT
     . withPostgresqlConn (toConnectionString pgconfig)
     $ \backend ->
@@ -181,13 +181,13 @@ runDbStdoutLogging source action = do
 
 getBackendGhci :: IO SqlBackend
 getBackendGhci = do
-  pgconfig <- runOrThrowIO (readPGPass PGPassDefaultEnv)
+  pgconfig <- runOrThrowIODb (readPGPass PGPassDefaultEnv)
   connection <- connectPostgreSQL (toConnectionString pgconfig)
   openSimpleConn (defaultOutput stdout) connection
 
 ghciDebugQuery :: SqlSelect a r => SqlQuery a -> IO ()
 ghciDebugQuery query = do
-  pgconfig <- runOrThrowIO (readPGPass PGPassDefaultEnv)
+  pgconfig <- runOrThrowIODb (readPGPass PGPassDefaultEnv)
   runStdoutLoggingT
     . withPostgresqlConn (toConnectionString pgconfig)
     $ \backend -> do
