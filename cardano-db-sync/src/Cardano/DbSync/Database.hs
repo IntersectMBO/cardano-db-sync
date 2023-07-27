@@ -130,7 +130,7 @@ rollbackLedger syncEnv point =
           let statePoint = headerStatePoint $ headerState $ clsState st
           -- This is an extra validation that should always succeed.
           unless (point == statePoint) $
-            logAndPanic (getTrace syncEnv) $
+            logAndThrowIO (getTrace syncEnv) $
               mconcat
                 [ "Ledger "
                 , textShow statePoint
@@ -152,7 +152,7 @@ validateConsistentLevel syncEnv stPoint = do
   compareTips stPoint dbTipInfo cLevel
   where
     compareTips _ dbTip Unchecked =
-      logAndPanic tracer $
+      logAndThrowIO tracer $
         "Found Unchecked Consistent Level. " <> showContext dbTip Unchecked
     compareTips (Point Origin) Nothing Consistent = pure ()
     compareTips (Point Origin) _ DBAheadOfLedger = pure ()
@@ -163,7 +163,7 @@ validateConsistentLevel syncEnv stPoint = do
     compareTips (Point (At blk)) (Just tip) DBAheadOfLedger
       | blockPointSlot blk <= bSlotNo tip = pure ()
     compareTips _ dbTip cLevel =
-      logAndPanic tracer $
+      logAndThrowIO tracer $
         "Unexpected Consistent Level. " <> showContext dbTip cLevel
 
     tracer = getTrace syncEnv

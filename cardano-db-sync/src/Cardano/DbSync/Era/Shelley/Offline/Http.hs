@@ -1,13 +1,13 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Cardano.DbSync.Era.Shelley.Offline.Http (
   FetchError (..),
   SimplifiedPoolOfflineData (..),
   httpGetPoolOfflineData,
   parsePoolUrl,
-  renderFetchError,
 ) where
 
 import qualified Cardano.Crypto.Hash.Blake2b as Crypto
@@ -31,6 +31,7 @@ import qualified Data.Text.Encoding as Text
 import Network.HTTP.Client (HttpException (..))
 import qualified Network.HTTP.Client as Http
 import qualified Network.HTTP.Types as Http
+import qualified GHC.Show as GHCS
 
 -- | Fetch error for the HTTP client fetching the pool offline metadata.
 data FetchError
@@ -46,6 +47,45 @@ data FetchError
   | FETimeout !PoolUrl !Text
   | FEConnectionFailure !PoolUrl
   deriving (Eq, Generic)
+
+instance Exception FetchError
+
+instance Show FetchError where
+  show =
+    \case
+      FEHashMismatch (PoolUrl url) xpt act ->
+        mconcat
+          [ "Hash mismatch from when fetching metadata from "
+          , show url
+          , ". Expected "
+          , show xpt
+          , " but got "
+          , show act
+          , "."
+          ]
+      FEDataTooLong (PoolUrl url) ->
+        mconcat
+          ["Offline pool data when fetching metadata from ", show url, " exceeded 512 bytes."]
+      FEUrlParseFail (PoolUrl url) err ->
+        mconcat
+          ["URL parse error for ", show url, " resulted in : ", show err]
+      FEJsonDecodeFail (PoolUrl url) err ->
+        mconcat
+          ["JSON decode error from when fetching metadata from ", show url, " resulted in : ", show err]
+      FEHttpException (PoolUrl url) err ->
+        mconcat ["HTTP Exception for ", show url, " resulted in : ", show err]
+      FEHttpResponse (PoolUrl url) sc msg ->
+        mconcat ["HTTP Response from ", show url, " resulted in HTTP status code : ", show sc, " ", show msg]
+      FEBadContentType (PoolUrl url) ct ->
+        mconcat ["HTTP Response from ", show url, ": expected JSON, but got : ", show ct]
+      FEBadContentTypeHtml (PoolUrl url) ct ->
+        mconcat ["HTTP Response from ", show url, ": expected JSON, but got : ", show ct]
+      FETimeout (PoolUrl url) ctx ->
+        mconcat ["Timeout when fetching metadata from ", show url, ": ", show ctx]
+      FEConnectionFailure (PoolUrl url) ->
+        mconcat
+          ["Connection failure when fetching metadata from ", show url, "'."]
+      FEIOException err -> "IO Exception: " <> show err
 
 data SimplifiedPoolOfflineData = SimplifiedPoolOfflineData
   { spodTickerName :: !Text
@@ -157,43 +197,6 @@ parsePoolUrl poolUrl =
 
     wrapHttpException :: HttpException -> FetchError
     wrapHttpException err = FEHttpException poolUrl (textShow err)
-
-renderFetchError :: FetchError -> Text
-renderFetchError fe =
-  case fe of
-    FEHashMismatch (PoolUrl url) xpt act ->
-      mconcat
-        [ "Hash mismatch from when fetching metadata from "
-        , url
-        , ". Expected "
-        , xpt
-        , " but got "
-        , act
-        , "."
-        ]
-    FEDataTooLong (PoolUrl url) ->
-      mconcat
-        ["Offline pool data when fetching metadata from ", url, " exceeded 512 bytes."]
-    FEUrlParseFail (PoolUrl url) err ->
-      mconcat
-        ["URL parse error for ", url, " resulted in : ", err]
-    FEJsonDecodeFail (PoolUrl url) err ->
-      mconcat
-        ["JSON decode error from when fetching metadata from ", url, " resulted in : ", err]
-    FEHttpException (PoolUrl url) err ->
-      mconcat ["HTTP Exception for ", url, " resulted in : ", err]
-    FEHttpResponse (PoolUrl url) sc msg ->
-      mconcat ["HTTP Response from ", url, " resulted in HTTP status code : ", textShow sc, " ", msg]
-    FEBadContentType (PoolUrl url) ct ->
-      mconcat ["HTTP Response from ", url, ": expected JSON, but got : ", ct]
-    FEBadContentTypeHtml (PoolUrl url) ct ->
-      mconcat ["HTTP Response from ", url, ": expected JSON, but got : ", ct]
-    FETimeout (PoolUrl url) ctx ->
-      mconcat ["Timeout when fetching metadata from ", url, ": ", ctx]
-    FEConnectionFailure (PoolUrl url) ->
-      mconcat
-        ["Connection failure when fetching metadata from ", url, "'."]
-    FEIOException err -> "IO Exception: " <> err
 
 -- -------------------------------------------------------------------------------------------------
 

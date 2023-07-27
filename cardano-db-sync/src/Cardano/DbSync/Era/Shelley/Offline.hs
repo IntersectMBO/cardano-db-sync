@@ -136,6 +136,6 @@ fetchOfflineData _tracer manager time pfr =
               { DB.poolOfflineFetchErrorPoolId = pfrPoolHashId pfr
               , DB.poolOfflineFetchErrorFetchTime = Time.posixSecondsToUTCTime time
               , DB.poolOfflineFetchErrorPmrId = pfrReferenceId pfr
-              , DB.poolOfflineFetchErrorFetchError = renderFetchError err
+              , DB.poolOfflineFetchErrorFetchError = show err
               , DB.poolOfflineFetchErrorRetryCount = retryCount (pfrRetry pfr)
               }

@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Cardano.Db.PGConfig (
   PGConfig (..),
@@ -132,8 +133,8 @@ data PGPassError
 instance Exception.Exception PGPassError
 
 instance Show PGPassError where
-  show e =
-    case e of
+  show =
+    \case
       EnvVarableNotSet str ->
         mconcat ["Environment variable '", show str, " not set."]
       UserFailed err ->
