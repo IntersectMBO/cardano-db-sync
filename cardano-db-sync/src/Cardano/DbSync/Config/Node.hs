@@ -15,7 +15,6 @@ module Cardano.DbSync.Config.Node (
 
 import qualified Cardano.Chain.Update as Byron
 import Cardano.Crypto (RequiresNetworkMagic (..))
-import Cardano.Db (textShow)
 import Cardano.DbSync.Config.Types
 import Cardano.Prelude
 import Data.Aeson (FromJSON (..), Object, (.:), (.:?))
@@ -23,6 +22,7 @@ import qualified Data.Aeson as Aeson
 import Data.Aeson.Types (Parser)
 import qualified Data.Yaml as Yaml
 import qualified Ouroboros.Consensus.Cardano.CanHardFork as Shelley
+import Data.String (String)
 
 data NodeConfig = NodeConfig
   { ncProtocol :: !SyncProtocol
@@ -49,11 +49,17 @@ data NodeConfig = NodeConfig
     ncConwayHardFork :: !Shelley.TriggerHardFork
   }
 
-parseNodeConfig :: ByteString -> NodeConfig
+newtype NodeConfigParseError =
+  NodeConfigParseError String
+  deriving (Show)
+
+instance Exception NodeConfigParseError
+
+parseNodeConfig :: ByteString -> IO (Either NodeConfigParseError NodeConfig)
 parseNodeConfig bs =
   case Yaml.decodeEither' bs of
-    Left err -> panic $ "Error parsing node config: " <> textShow err
-    Right nc -> nc
+    Left err -> pure $ Left $ NodeConfigParseError ("Error parsing node config: " <> show err)
+    Right nc -> pure $ Right nc
 
 -- -------------------------------------------------------------------------------------------------
 

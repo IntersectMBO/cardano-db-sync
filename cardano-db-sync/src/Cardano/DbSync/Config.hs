@@ -36,6 +36,7 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import qualified Data.Yaml as Yaml
 import System.FilePath (takeDirectory, (</>))
+import Cardano.DbSync.Error (runOrThrowIO)
 
 configureLogging :: SyncNodeParams -> Text -> IO (Trace IO Text)
 configureLogging params loggingName = do
@@ -49,7 +50,7 @@ configureLogging params loggingName = do
 readSyncNodeConfig :: ConfigFile -> IO SyncNodeConfig
 readSyncNodeConfig (ConfigFile fp) = do
   pcfg <- adjustNodeFilePath . parseSyncPreConfig <$> readByteString fp "DbSync"
-  ncfg <- parseNodeConfig <$> readByteString (pcNodeConfigFilePath pcfg) "node"
+  ncfg <- runOrThrowIO . parseNodeConfig =<< readByteString (pcNodeConfigFilePath pcfg) "node"
   coalesceConfig pcfg ncfg (mkAdjustPath pcfg)
   where
     parseSyncPreConfig :: ByteString -> SyncPreConfig
