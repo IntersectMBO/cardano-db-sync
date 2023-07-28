@@ -608,6 +608,24 @@ select distinct on(block.hash) block.hash as block_hash , epoch_no, tx_count, po
  stake1u9ylzsgxaa6xctf4juup682ar3juj85n8tx3hthnljg47zctvm3rc | pool1pu5jlj4q9w9jlxeu370a3c9myx47md5j5m2str0naunn2q3lkdy |                 210 |                                                          |                        |       1 | 2020-07-29 22:41:31
  stake1u8mt5gqclkq0swmvzx9lvq4jgwsnx9yh030yrxwqwllu0mq2m0l4n | pool1qqqqzyqf8mlm70883zht60n4q6uqxg4a8x266sewv8ad2grkztl |                 317 | pool1qqqz9vlskay2gv3ec5pyck8c2tq9ty7dpfm60x8shvapguhcemt |                    211 |       3 | 2020-08-06 20:00:11
 ```
+
+### Find all incorrect entries in `epoch` table
+
+In [issue #1457](https://github.com/input-output-hk/cardano-db-sync/issues/1457) it was pointed out
+that some entries in the epoch table were incorrect. These incorrect entries can be found using:
+```
+select b.epoch_no, e.epoch_blk_count, e.epoch_tx_count, b.block_block_count, b.block_tx_count
+  from
+    (select no, blk_count as epoch_blk_count, tx_count as epoch_tx_count from epoch) as e,
+    (select epoch_no, count (block_no) as block_block_count, sum (tx_count) as block_tx_count
+      from block group by epoch_no) as b
+    where e.no = b.epoch_no
+      and (e.epoch_blk_count != b.block_block_count or e.epoch_tx_count != b.block_tx_count)
+    order by b.epoch_no ;
+```
+There is a shell script in the above issue which finds all incorrect rows in that table and fixes
+them.
+
 ---
 
 
