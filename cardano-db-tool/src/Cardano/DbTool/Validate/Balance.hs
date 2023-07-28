@@ -4,6 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Cardano.DbTool.Validate.Balance (
   ledgerAddrBalance,
@@ -33,14 +34,40 @@ import qualified Cardano.Ledger.Shelley.UTxO as Shelley
 import Cardano.Ledger.Val
 import Cardano.Prelude
 import qualified Data.Map.Strict as Map
-import qualified Data.Text as Text
 import Ouroboros.Consensus.Byron.Ledger
 import Ouroboros.Consensus.Cardano.Block (CardanoBlock, LedgerState (..), StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import Ouroboros.Consensus.Shelley.Ledger.Ledger
+import qualified GHC.Show as S
+import Data.String (String)
+
+data ValidateBalanceError
+  = VBErrByron String
+  | VBErrShelley String
+  | VBErrAllegra String
+  | VBErrMary String
+  | VBErrAlonzo String
+  | VBErrBabbage String
+  | VBErrConway String
+
+instance Exception ValidateBalanceError
+
+instance Show ValidateBalanceError where
+  show =
+    \case
+       VBErrByron err -> vBErr <> "Byron: " <> err
+       VBErrShelley err -> vBErr <> "Shelley: " <> err
+       VBErrAllegra err -> vBErr <> "Allegra: " <> err
+       VBErrMary err -> vBErr <> "Mary: " <> err
+       VBErrAlonzo err -> vBErr <> "Alonzo: " <> err
+       VBErrBabbage err -> vBErr <> "Babbage: " <> err
+       VBErrConway err -> vBErr <> "Conway: " <> err
+
+vBErr :: String
+vBErr = "Validation Balance Error - "
 
 -- Given an address, return it's current UTxO balance.
-ledgerAddrBalance :: Text -> LedgerState (CardanoBlock StandardCrypto) -> Either Text Word64
+ledgerAddrBalance :: Text -> LedgerState (CardanoBlock StandardCrypto) -> Either ValidateBalanceError Word64
 ledgerAddrBalance addr lsc =
   case lsc of
     LedgerStateByron st -> getByronBalance addr $ Byron.cvsUtxo $ byronLedgerState st
@@ -48,17 +75,22 @@ ledgerAddrBalance addr lsc =
     LedgerStateAllegra st -> getShelleyBalance addr $ getUTxO st
     LedgerStateMary st -> getShelleyBalance addr $ getUTxO st
     LedgerStateAlonzo st -> getAlonzoBalance addr $ getUTxO st
-    LedgerStateBabbage _st -> panic "undefined Babbage ledgerAddrBalance"
-    LedgerStateConway _st -> panic "undefined Conway ledgerAddrBalance"
+    LedgerStateBabbage _st -> Left $ VBErrBabbage "undefined Babbage ledgerAddrBalance"
+    LedgerStateConway _st -> Left $ VBErrConway "undefined Conway ledgerAddrBalance"
   where
     getUTxO :: LedgerState (ShelleyBlock p era) -> Shelley.UTxO era
     getUTxO = Shelley.utxosUtxo . Shelley.lsUTxOState . Shelley.esLState . Shelley.nesEs . shelleyLedgerState
 
-getByronBalance :: Text -> Byron.UTxO -> Either Text Word64
+getByronBalance :: Text -> Byron.UTxO -> Either ValidateBalanceError Word64
 getByronBalance addrText utxo = do
   case toCompactAddress <$> decodeAddressBase58 addrText of
-    Left err -> Left $ textShow err
-    Right caddr -> bimap show unsafeGetLovelace . sumLovelace . mapMaybe (compactTxOutValue caddr) . Map.elems $ Byron.unUTxO utxo
+    Left err -> Left $ VBErrByron $ show err
+    Right caddr -> do
+      let utxos = Map.elems $ Byron.unUTxO utxo
+          lvlaces = mapMaybe (compactTxOutValue caddr) utxos
+      case sumLovelace lvlaces of
+        Left err -> Left $ VBErrByron $ show err
+        Right sLvlace -> Right $ unsafeGetLovelace sLvlace
   where
     compactTxOutValue :: CompactAddress -> Byron.CompactTxOut -> Maybe Lovelace
     compactTxOutValue caddr (Byron.CompactTxOut bcaddr lovelace) =
@@ -72,10 +104,11 @@ getShelleyBalance ::
   Val (Ledger.Value era) =>
   Text ->
   Shelley.UTxO era ->
-  Either Text Word64
+  Either ValidateBalanceError Word64
 getShelleyBalance addrText utxo = do
-  caddr <- covertToCompactAddress addrText
-  Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue caddr) (Map.elems $ Shelley.unUTxO utxo)
+  case covertToCompactAddress addrText of
+    Left err -> Left $ VBErrShelley err
+    Right cmpAddr -> Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue cmpAddr) (Map.elems $ Shelley.unUTxO utxo)
   where
     compactTxOutValue :: CompactAddr (EraCrypto era) -> Ledger.TxOut era -> Maybe Coin
     compactTxOutValue caddr (Shelley.TxOutCompact scaddr v) =
@@ -83,10 +116,11 @@ getShelleyBalance addrText utxo = do
         then Just $ coin (fromCompact v)
         else Nothing
 
-getAlonzoBalance :: Text -> Shelley.UTxO (AlonzoEra StandardCrypto) -> Either Text Word64
+getAlonzoBalance :: Text -> Shelley.UTxO (AlonzoEra StandardCrypto) -> Either ValidateBalanceError Word64
 getAlonzoBalance addrText utxo = do
-  caddr <- covertToCompactAddress addrText
-  Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue caddr) (Map.elems $ Shelley.unUTxO utxo)
+  case covertToCompactAddress addrText of
+    Left err -> Left $ VBErrAlonzo err
+    Right cmpAddr -> Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue cmpAddr) (Map.elems $ Shelley.unUTxO utxo)
   where
     compactTxOutValue ::
       CompactAddr StandardCrypto -> Alonzo.AlonzoTxOut (AlonzoEra StandardCrypto) -> Maybe Coin
@@ -98,15 +132,12 @@ getAlonzoBalance addrText utxo = do
             then Just $ coin (fromCompact val)
             else Nothing
 
-covertToCompactAddress :: Text -> Either Text (CompactAddr StandardCrypto)
+covertToCompactAddress :: Text -> Either String (CompactAddr StandardCrypto)
 covertToCompactAddress addrText =
   case Api.deserialiseAddress (Api.AsAddress Api.AsShelleyAddr) addrText of
     Nothing ->
       case decodeAddressBase58 addrText of
-        Left err -> Left $ textShow err
+        Left err -> Left $ show err
         Right badrr -> Right $ compactAddr (AddrBootstrap $ BootstrapAddress badrr)
     Just (Api.ShelleyAddress n p s) ->
       Right $ compactAddr (Addr n p s)
-
-textShow :: Show a => a -> Text
-textShow = Text.pack . show
