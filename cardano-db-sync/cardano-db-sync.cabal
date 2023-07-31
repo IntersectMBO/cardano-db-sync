@@ -125,6 +125,7 @@ library
                         Cardano.DbSync.Util.Address
                         Cardano.DbSync.Util.Bech32
                         Cardano.DbSync.Util.Cardano
+                        Cardano.DbSync.Util.Cbor
 
                         Paths_cardano_db_sync
 
@@ -321,9 +322,11 @@ test-suite test
 
   other-modules:        Cardano.DbSync.Util.AddressTest
                         Cardano.DbSync.Util.Bech32Test
+                        Cardano.DbSync.Util.CborTest
 
   build-depends:        base                            >= 4.14         && < 4.17
                       , base16-bytestring
+                      , bytestring
                       , cardano-api
                       , cardano-binary
                       , cardano-crypto-class
@@ -333,6 +336,7 @@ test-suite test
                       , cardano-db-sync
                       , cardano-ledger-core
                       , cardano-prelude
+                      , containers
                       , hedgehog
                       , hedgehog-quickcheck
                       , text
