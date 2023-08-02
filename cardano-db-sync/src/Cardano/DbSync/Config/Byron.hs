@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Cardano.DbSync.Config.Byron (
@@ -20,8 +19,8 @@ readByronGenesisConfig ::
 readByronGenesisConfig enc = do
   let file = unGenesisFile $ dncByronGenesisFile enc
   genHash <-
-    firstExceptT NEError
+    firstExceptT SNErrDefault
       . hoistEither
       $ decodeAbstractHash (unGenesisHashByron $ dncByronGenesisHash enc)
-  firstExceptT (NEByronConfig file) $
+  firstExceptT (SNErrByronConfig file) $
     Byron.mkConfigFromFile (dncRequiresNetworkMagic enc) file genHash

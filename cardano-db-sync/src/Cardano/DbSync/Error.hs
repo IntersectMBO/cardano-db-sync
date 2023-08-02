@@ -17,6 +17,7 @@ module Cardano.DbSync.Error (
   hasAbortOnPanicEnv,
 ) where
 
+import Cardano.BM.Trace (Trace, logError)
 import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
@@ -25,37 +26,38 @@ import Cardano.DbSync.Util
 import Cardano.Prelude
 import Control.Monad.Trans.Except.Extra (left)
 import qualified Data.ByteString.Base16 as Base16
+import Data.String (String)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
+import GHC.IO.Exception (userError)
 import qualified GHC.Show as GShow
-import qualified Text.Show as Text
 import System.Environment (lookupEnv)
 import System.Posix.Process (exitImmediately)
-import Cardano.BM.Trace (Trace, logError)
-import GHC.IO.Exception (userError)
+import qualified Text.Show as Text
 
 data SyncInvariant
   = EInvInOut !Word64 !Word64
   | EInvTxInOut !Byron.Tx !Word64 !Word64
 
 data SyncNodeError
-  = NEError !Text
-  | NEInvariant !Text !SyncInvariant
-  | NEBlockMismatch !Word64 !ByteString !ByteString
-  | NEIgnoreShelleyInitiation
-  | NEByronConfig !FilePath !Byron.ConfigurationError
-  | NEShelleyConfig !FilePath !Text
-  | NEAlonzoConfig !FilePath !Text
-  | NECardanoConfig !Text
+  = SNErrDefault !Text
+  | SNErrInvariant !Text !SyncInvariant
+  | SNEErrBlockMismatch !Word64 !ByteString !ByteString
+  | SNErrIgnoreShelleyInitiation
+  | SNErrByronConfig !FilePath !Byron.ConfigurationError
+  | SNErrShelleyConfig !FilePath !Text
+  | SNErrAlonzoConfig !FilePath !Text
+  | SNErrCardanoConfig !Text
+  | SNErrInsertGenesis !String
 
 instance Exception SyncNodeError
 
 instance Show SyncNodeError where
   show =
     \case
-      NEError t -> "Error: " <> Text.show t
-      NEInvariant loc i -> Text.show loc <> ": " <> Text.show (renderSyncInvariant i)
-      NEBlockMismatch blkNo hashDb hashBlk ->
+      SNErrDefault t -> "Error: " <> Text.show t
+      SNErrInvariant loc i -> Text.show loc <> ": " <> Text.show (renderSyncInvariant i)
+      SNEErrBlockMismatch blkNo hashDb hashBlk ->
         mconcat
           [ "Block mismatch for block number "
           , show blkNo
@@ -64,38 +66,39 @@ instance Show SyncNodeError where
           , " but chain provided "
           , Text.show $ bsBase16Encode hashBlk
           ]
-      NEIgnoreShelleyInitiation ->
+      SNErrIgnoreShelleyInitiation ->
         mconcat
           [ "Node configs that don't fork to Shelley directly and initiate"
           , " funds or stakes in Shelley Genesis are not supported."
           ]
-      NEByronConfig fp ce ->
+      SNErrByronConfig fp ce ->
         mconcat
           [ "Failed reading Byron genesis file "
           , Text.show $ textShow fp
           , ": "
           , Text.show $ textShow ce
           ]
-      NEShelleyConfig fp txt ->
+      SNErrShelleyConfig fp txt ->
         mconcat
           [ "Failed reading Shelley genesis file "
           , Text.show $ textShow fp
           , ": "
           , show txt
           ]
-      NEAlonzoConfig fp txt ->
+      SNErrAlonzoConfig fp txt ->
         mconcat
           [ "Failed reading Alonzo genesis file "
           , Text.show $ textShow fp
           , ": "
           , show txt
           ]
-      NECardanoConfig err ->
+      SNErrCardanoConfig err ->
         mconcat
           [ "With Cardano protocol, Byron/Shelley config mismatch:\n"
           , "   "
           , show err
           ]
+      SNErrInsertGenesis err -> "Error InsertGenesis: " <> err
 
 annotateInvariantTx :: Byron.Tx -> SyncInvariant -> SyncInvariant
 annotateInvariantTx tx ei =
@@ -104,10 +107,10 @@ annotateInvariantTx tx ei =
     _other -> ei
 
 dbSyncNodeError :: Monad m => Text -> ExceptT SyncNodeError m a
-dbSyncNodeError = left . NEError
+dbSyncNodeError = left . SNErrDefault
 
 dbSyncInvariant :: Monad m => Text -> SyncInvariant -> ExceptT SyncNodeError m a
-dbSyncInvariant loc = left . NEInvariant loc
+dbSyncInvariant loc = left . SNErrInvariant loc
 
 renderSyncInvariant :: SyncInvariant -> Text
 renderSyncInvariant ei =

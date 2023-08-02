@@ -71,7 +71,7 @@ writeEpochBlockDiffToCache ::
   ReaderT SqlBackend m (Either SyncNodeError ())
 writeEpochBlockDiffToCache cache epCurrent =
   case cache of
-    UninitiatedCache -> pure $ Left $ NEError "writeEpochBlockDiffToCache: Cache is UninitiatedCache"
+    UninitiatedCache -> pure $ Left $ SNErrDefault "writeEpochBlockDiffToCache: Cache is UninitiatedCache"
     Cache ci -> do
       cE <- liftIO $ readTVarIO (cEpoch ci)
       case (ceMapEpoch cE, ceEpochBlockDiff cE) of
@@ -93,12 +93,12 @@ writeToMapEpochCache syncEnv cache latestEpoch = do
           HasLedger hle -> getSecurityParameter $ leProtocolInfo hle
           NoLedger nle -> getSecurityParameter $ nleProtocolInfo nle
   case cache of
-    UninitiatedCache -> pure $ Left $ NEError "writeToMapEpochCache: Cache is UninitiatedCache"
+    UninitiatedCache -> pure $ Left $ SNErrDefault "writeToMapEpochCache: Cache is UninitiatedCache"
     Cache ci -> do
       -- get EpochBlockDiff so we can use the BlockId we stored when inserting blocks
       epochInternalCE <- readEpochBlockDiffFromCache cache
       case epochInternalCE of
-        Nothing -> pure $ Left $ NEError "writeToMapEpochCache: No epochInternalEpochCache"
+        Nothing -> pure $ Left $ SNErrDefault "writeToMapEpochCache: No epochInternalEpochCache"
         Just ei -> do
           cE <- liftIO $ readTVarIO (cEpoch ci)
           let currentBlockId = ebdBlockId ei

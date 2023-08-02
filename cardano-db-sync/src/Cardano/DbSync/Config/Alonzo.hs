@@ -26,7 +26,7 @@ readAlonzoGenesisConfig ::
   ExceptT SyncNodeError IO AlonzoGenesis
 readAlonzoGenesisConfig enc = do
   let file = unGenesisFile $ dncAlonzoGenesisFile enc
-  firstExceptT (NEAlonzoConfig file . renderAlonzoGenesisError) $
+  firstExceptT (SNErrAlonzoConfig file . renderAlonzoGenesisError) $
     readGenesis (GenesisFile file) Nothing
 
 data AlonzoGenesisError

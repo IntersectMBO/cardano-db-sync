@@ -383,7 +383,7 @@ mkSyncEnvFromConfig trce connString backend syncOptions genCfg syncNodeParams ra
   case genCfg of
     GenesisCardano _ bCfg sCfg _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
-          pure . Left . NECardanoConfig $
+          pure . Left . SNErrCardanoConfig $
             mconcat
               [ "ProtocolMagicId "
               , DB.textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
@@ -391,7 +391,7 @@ mkSyncEnvFromConfig trce connString backend syncOptions genCfg syncNodeParams ra
               , DB.textShow (Shelley.sgNetworkMagic $ scConfig sCfg)
               ]
       | Byron.gdStartTime (Byron.configGenesisData bCfg) /= Shelley.sgSystemStart (scConfig sCfg) ->
-          pure . Left . NECardanoConfig $
+          pure . Left . SNErrCardanoConfig $
             mconcat
               [ "SystemStart "
               , DB.textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
