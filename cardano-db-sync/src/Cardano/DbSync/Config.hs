@@ -30,13 +30,9 @@ import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Node
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
-import Cardano.DbSync.Util
-import Cardano.Prelude
-import qualified Data.ByteString.Char8 as BS
-import qualified Data.Text as Text
-import qualified Data.Yaml as Yaml
-import System.FilePath (takeDirectory, (</>))
 import Cardano.DbSync.Error (runOrThrowIO)
+import Cardano.Prelude
+import System.FilePath (takeDirectory, (</>))
 
 configureLogging :: SyncNodeParams -> Text -> IO (Trace IO Text)
 configureLogging params loggingName = do
@@ -49,16 +45,11 @@ configureLogging params loggingName = do
 
 readSyncNodeConfig :: ConfigFile -> IO SyncNodeConfig
 readSyncNodeConfig (ConfigFile fp) = do
-  pcfg <- adjustNodeFilePath . parseSyncPreConfig <$> readByteString fp "DbSync"
-  ncfg <- runOrThrowIO . parseNodeConfig =<< readByteString (pcNodeConfigFilePath pcfg) "node"
-  coalesceConfig pcfg ncfg (mkAdjustPath pcfg)
+  pcfg <- runOrThrowIO . parseSyncPreConfig =<< runOrThrowIO (readByteStringFromFile fp "DbSync")
+  let afp = adjustNodeFilePath pcfg
+  ncfg <- runOrThrowIO . parseNodeConfig =<< runOrThrowIO (readByteStringFromFile (pcNodeConfigFilePath afp) "node")
+  coalesceConfig afp ncfg (mkAdjustPath pcfg)
   where
-    parseSyncPreConfig :: ByteString -> SyncPreConfig
-    parseSyncPreConfig bs =
-      case Yaml.decodeEither' bs of
-        Left err -> panic $ "readSyncNodeConfig: Error parsing config: " <> textShow err
-        Right res -> res
-
     adjustNodeFilePath :: SyncPreConfig -> SyncPreConfig
     adjustNodeFilePath cfg =
       cfg {pcNodeConfigFile = adjustNodeConfigFilePath (takeDirectory fp </>) (pcNodeConfigFile cfg)}
@@ -98,8 +89,3 @@ coalesceConfig pcfg ncfg adjustGenesisPath = do
 
 mkAdjustPath :: SyncPreConfig -> (FilePath -> FilePath)
 mkAdjustPath cfg fp = takeDirectory (pcNodeConfigFilePath cfg) </> fp
-
-readByteString :: FilePath -> Text -> IO ByteString
-readByteString fp cfgType =
-  catch (BS.readFile fp) $ \(_ :: IOException) ->
-    panic $ mconcat ["Cannot find the ", cfgType, " configuration file at : ", Text.pack fp]

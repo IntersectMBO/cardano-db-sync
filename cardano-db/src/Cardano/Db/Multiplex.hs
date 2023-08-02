@@ -16,13 +16,13 @@ import Cardano.Db.Insert
 import qualified Cardano.Db.Migration.Extra.CosnumedTxOut.Queries as ExtraCons
 import qualified Cardano.Db.Migration.Extra.CosnumedTxOut.Schema as ExtraCons
 import Cardano.Db.Schema
-import Cardano.Prelude (panic)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Text (Text)
 import Data.Word (Word64)
 import Database.Persist.Sql (SqlBackend, ToBackendKey (..))
+import Control.Exception (throwIO)
 
 insertTxOutPlex ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -85,7 +85,7 @@ runExtraMigrations trce blockNoDiff consumed pruned = do
       liftIO $ logInfo trce "Extra migration consumed_tx_out already executed"
     (True, False, False) -> do
       liftIO $ logError trce migratedButNotSet
-      panic migratedButNotSet
+      liftIO $ throwIO $ userError (show migratedButNotSet)
     (False, True, False) -> do
       liftIO $ logInfo trce "Running extra migration consumed_tx_out"
       ExtraCons.migrateTxOut $ Just trce

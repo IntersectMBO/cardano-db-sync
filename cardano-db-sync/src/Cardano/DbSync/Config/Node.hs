@@ -8,6 +8,8 @@
 module Cardano.DbSync.Config.Node (
   NodeConfig (..),
   parseNodeConfig,
+  parseSyncPreConfig,
+  readByteStringFromFile,
 ) where
 
 -- Node really should export something like this, but doesn't and it actually seemed to
@@ -20,9 +22,10 @@ import Cardano.Prelude
 import Data.Aeson (FromJSON (..), Object, (.:), (.:?))
 import qualified Data.Aeson as Aeson
 import Data.Aeson.Types (Parser)
+import qualified Data.ByteString.Char8 as BS
+import Data.String (String)
 import qualified Data.Yaml as Yaml
 import qualified Ouroboros.Consensus.Cardano.CanHardFork as Shelley
-import Data.String (String)
 
 data NodeConfig = NodeConfig
   { ncProtocol :: !SyncProtocol
@@ -49,8 +52,10 @@ data NodeConfig = NodeConfig
     ncConwayHardFork :: !Shelley.TriggerHardFork
   }
 
-newtype NodeConfigParseError =
-  NodeConfigParseError String
+data NodeConfigParseError
+  = NodeConfigParseError String
+  | ParseSyncPreConfigError String
+  | ReadByteStringFromFileError String
   deriving (Show)
 
 instance Exception NodeConfigParseError
@@ -61,6 +66,19 @@ parseNodeConfig bs =
     Left err -> pure $ Left $ NodeConfigParseError ("Error parsing node config: " <> show err)
     Right nc -> pure $ Right nc
 
+parseSyncPreConfig :: ByteString -> IO (Either NodeConfigParseError SyncPreConfig)
+parseSyncPreConfig bs =
+  case Yaml.decodeEither' bs of
+    Left err -> pure $ Left $ ParseSyncPreConfigError ("Error parseSyncPreConfig: Error parsing config: " <> show err)
+    Right res -> pure $ Right res
+
+readByteStringFromFile :: FilePath -> Text -> IO (Either NodeConfigParseError ByteString)
+readByteStringFromFile fp cfgType = do
+  result <- try (BS.readFile fp) :: IO (Either SomeException BS.ByteString)
+  case result of
+    Left _ -> pure $ Left $ ReadByteStringFromFileError ("Error Cannot find the " <> show cfgType <> " configuration file at : " <> show fp)
+    Right res -> pure $ Right res
+
 -- -------------------------------------------------------------------------------------------------
 
 instance FromJSON NodeConfig where
@@ -70,15 +88,15 @@ instance FromJSON NodeConfig where
       parse :: Object -> Parser NodeConfig
       parse o =
         NodeConfig
-          <$> o .: "Protocol"
-          <*> o .:? "PBftSignatureThreshold"
+          <$> (o .: "Protocol")
+          <*> (o .:? "PBftSignatureThreshold")
           <*> fmap GenesisFile (o .: "ByronGenesisFile")
           <*> fmap GenesisHashByron (o .: "ByronGenesisHash")
           <*> fmap GenesisFile (o .: "ShelleyGenesisFile")
           <*> fmap GenesisHashShelley (o .: "ShelleyGenesisHash")
           <*> fmap GenesisFile (o .: "AlonzoGenesisFile")
           <*> fmap GenesisHashAlonzo (o .: "AlonzoGenesisHash")
-          <*> o .: "RequiresNetworkMagic"
+          <*> (o .: "RequiresNetworkMagic")
           <*> parseByronProtocolVersion o
           <*> parseShelleyHardForkEpoch o
           <*> parseAllegraHardForkEpoch o
@@ -90,9 +108,9 @@ instance FromJSON NodeConfig where
       parseByronProtocolVersion :: Object -> Parser Byron.ProtocolVersion
       parseByronProtocolVersion o =
         Byron.ProtocolVersion
-          <$> o .: "LastKnownBlockVersion-Major"
-          <*> o .: "LastKnownBlockVersion-Minor"
-          <*> o .: "LastKnownBlockVersion-Alt"
+          <$> (o .: "LastKnownBlockVersion-Major")
+          <*> (o .: "LastKnownBlockVersion-Minor")
+          <*> (o .: "LastKnownBlockVersion-Alt")
 
       parseShelleyHardForkEpoch :: Object -> Parser Shelley.TriggerHardFork
       parseShelleyHardForkEpoch o =
