@@ -47,7 +47,7 @@
         inputs.customConfig;
 
       overlays = [
-        # crypto needs to come before hasell.nix. 
+        # crypto needs to come before hasell.nix.
         # FIXME: _THIS_IS_BAD_
         iohkNix.overlays.crypto
         haskellNix.overlay
@@ -127,12 +127,21 @@
             inherit nixosTests;
             inherit hlint;
           };
-          cardano-db-sync-linux = import ./nix/binary-release.nix {
-            inherit pkgs project;
-            inherit (packages.default.identifier) version;
-            platform = "linux";
-            exes = lib.collect lib.isDerivation project.projectCross.musl64.exes;
-          };
+          musl =
+            let
+              muslProject = project.projectCross.musl64;
+              projectExes = lib.collect lib.isDerivation muslProject.exes;
+            in {
+              cardano-db-sync-linux = import ./nix/binary-release.nix {
+                inherit pkgs project;
+                inherit (packages.default.identifier) version;
+                platform = "linux";
+                exes = projectExes;
+              };
+
+              internal.roots.project = muslProject.roots;
+            };
+
         } // lib.optionalAttrs hostPlatform.isMacOS {
           cardano-db-sync-macos = import ./nix/binary-release.nix {
             inherit pkgs project;
