@@ -49,6 +49,7 @@ data SyncNodeError
   | SNErrAlonzoConfig !FilePath !Text
   | SNErrCardanoConfig !Text
   | SNErrInsertGenesis !String
+  | SNErrLedgerState !String
 
 instance Exception SyncNodeError
 
@@ -99,6 +100,7 @@ instance Show SyncNodeError where
           , show err
           ]
       SNErrInsertGenesis err -> "Error InsertGenesis: " <> err
+      SNErrLedgerState err -> "Error Ledger State: " <> err
 
 annotateInvariantTx :: Byron.Tx -> SyncInvariant -> SyncInvariant
 annotateInvariantTx tx ei =
