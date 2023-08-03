@@ -127,6 +127,14 @@
             inherit nixosTests;
             inherit hlint;
           };
+          native = packages // {
+            shells = devShells;
+            internal = {
+              roots.project = project.roots;
+              plan-nix.project = project.plan-nix;
+            };
+          };
+
           musl =
             let
               muslProject = project.projectCross.musl64;
