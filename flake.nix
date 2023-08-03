@@ -131,6 +131,7 @@
             shells = devShells;
             internal = {
               roots.project = project.roots;
+              roots.nix-tools = pkgs.buildPackages.haskell-nix.nix-tools."ghc8107";
               plan-nix.project = project.plan-nix;
             };
           };
