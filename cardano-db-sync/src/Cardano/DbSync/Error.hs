@@ -52,6 +52,7 @@ data SyncNodeError
   | SNErrInsertGenesis !String
   | SNErrLedgerState !String
   | SNErrNodeConfig NodeConfigError
+  | SNErrLocalStateQuery !String
 
 instance Exception SyncNodeError
 
@@ -110,11 +111,12 @@ instance Show SyncNodeError where
       SNErrInsertGenesis err -> "Error SNErrInsertGenesis: " <> err
       SNErrLedgerState err -> "Error SNErrLedgerState: " <> err
       SNErrNodeConfig err -> "Error SNErrNodeConfig: " <> show err
+      SNErrLocalStateQuery err -> "Error SNErrLocalStateQuery: " <> show err
 
 data NodeConfigError
-  = NodeConfigParseError String
-  | ParseSyncPreConfigError String
-  | ReadByteStringFromFileError String
+  = NodeConfigParseError !String
+  | ParseSyncPreConfigError !String
+  | ReadByteStringFromFileError !String
 
 instance Exception NodeConfigError
 

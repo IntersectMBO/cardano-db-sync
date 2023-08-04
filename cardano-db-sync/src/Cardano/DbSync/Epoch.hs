@@ -28,6 +28,7 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Database.Esqueleto.Experimental (SqlBackend, replace)
 import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
+import GHC.Err (error)
 
 -- Populating the Epoch table has two mode:
 --  * SyncLagging: when the node is far behind the chain tip and is just updating the DB. In this

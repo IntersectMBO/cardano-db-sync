@@ -44,6 +44,7 @@ import Database.Esqueleto.Experimental (
   (==.),
   (^.),
  )
+import GHC.Err (error)
 
 {- HLINT ignore "Fuse on/on" -}
 {- HLINT ignore "Reduce duplication" -}
@@ -126,7 +127,7 @@ queryRewardMap (EpochNo epochNo) = do
     collapse :: [(ByteString, (RewardSource, DbLovelace))] -> (ByteString, [(RewardSource, DbLovelace)])
     collapse xs =
       case xs of
-        [] -> panic "queryRewardMap.collapse: Unexpected empty list" -- Impossible
+        [] -> error "queryRewardMap.collapse: Unexpected empty list" -- Impossible
         x : _ -> (fst x, List.sort $ map snd xs)
 
 diffRewardMap ::
