@@ -59,7 +59,7 @@
         inputs.customConfig;
 
       overlays = [
-        # crypto needs to come before hasell.nix. 
+        # crypto needs to come before haskell.nix.
         # FIXME: _THIS_IS_BAD_
         iohkNix.overlays.crypto
         haskellNix.overlay
@@ -138,6 +138,8 @@
           crossPlatforms = p:
             lib.optional hostPlatform.isLinux p.musl64;
         }).ciJobs ({
+          inherit hlint fourmolu;
+
           packages = {
             inherit scripts;
             inherit (pkgs) cardano-node cardano-smash-server-no-basic-auth checkCabalProject;
@@ -146,7 +148,6 @@
           inherit (pkgs) dockerImage;
           checks = {
             inherit nixosTests;
-            inherit hlint;
           };
           cardano-db-sync-linux = import ./nix/binary-release.nix {
             inherit pkgs project;
