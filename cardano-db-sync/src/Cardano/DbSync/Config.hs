@@ -27,10 +27,9 @@ import qualified Cardano.BM.Setup as Logging
 import Cardano.BM.Trace (Trace)
 import qualified Cardano.BM.Trace as Logging
 import Cardano.DbSync.Config.Cardano
-import Cardano.DbSync.Config.Node
+import Cardano.DbSync.Config.Node (NodeConfig(..), parseSyncPreConfig, readByteStringFromFile, parseNodeConfig)
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
-import Cardano.DbSync.Error (runOrThrowIO)
 import Cardano.Prelude
 import System.FilePath (takeDirectory, (</>))
 
@@ -45,14 +44,14 @@ configureLogging params loggingName = do
 
 readSyncNodeConfig :: ConfigFile -> IO SyncNodeConfig
 readSyncNodeConfig (ConfigFile fp) = do
-  pcfg <- runOrThrowIO . parseSyncPreConfig =<< runOrThrowIO (readByteStringFromFile fp "DbSync")
-  let afp = adjustNodeFilePath pcfg
-  ncfg <- runOrThrowIO . parseNodeConfig =<< runOrThrowIO (readByteStringFromFile (pcNodeConfigFilePath afp) "node")
-  coalesceConfig afp ncfg (mkAdjustPath pcfg)
+  pcfg <- (adjustNodeFilePath . parseSyncPreConfig) =<< readByteStringFromFile fp "DbSync"
+  ncfg <- parseNodeConfig =<< readByteStringFromFile (pcNodeConfigFilePath pcfg) "node"
+  coalesceConfig pcfg ncfg (mkAdjustPath pcfg)
   where
-    adjustNodeFilePath :: SyncPreConfig -> SyncPreConfig
-    adjustNodeFilePath cfg =
-      cfg {pcNodeConfigFile = adjustNodeConfigFilePath (takeDirectory fp </>) (pcNodeConfigFile cfg)}
+    adjustNodeFilePath :: IO SyncPreConfig -> IO SyncPreConfig
+    adjustNodeFilePath spc = do
+      cfg <- spc
+      pure $ cfg {pcNodeConfigFile = adjustNodeConfigFilePath (takeDirectory fp </>) (pcNodeConfigFile cfg)}
 
 coalesceConfig ::
   SyncPreConfig ->

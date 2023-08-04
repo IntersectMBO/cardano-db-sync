@@ -6,6 +6,7 @@
 module Cardano.DbSync.Error (
   SyncInvariant (..),
   SyncNodeError (..),
+  NodeConfigError(..),
   annotateInvariantTx,
   bsBase16Encode,
   dbSyncNodeError,
@@ -50,17 +51,19 @@ data SyncNodeError
   | SNErrCardanoConfig !Text
   | SNErrInsertGenesis !String
   | SNErrLedgerState !String
+  | SNErrNodeConfig NodeConfigError
 
 instance Exception SyncNodeError
 
 instance Show SyncNodeError where
   show =
     \case
-      SNErrDefault t -> "Error: " <> Text.show t
-      SNErrInvariant loc i -> Text.show loc <> ": " <> Text.show (renderSyncInvariant i)
+      SNErrDefault t -> "Error SNErrDefault: " <> Text.show t
+      SNErrInvariant loc i -> "Error SNErrInvariant: " <> Text.show loc <> ": " <> Text.show (renderSyncInvariant i)
       SNEErrBlockMismatch blkNo hashDb hashBlk ->
         mconcat
-          [ "Block mismatch for block number "
+          [ "Error SNEErrBlockMismatch: "
+          , "Block mismatch for block number "
           , show blkNo
           , ", db has "
           , Text.show $ bsBase16Encode hashDb
@@ -69,38 +72,60 @@ instance Show SyncNodeError where
           ]
       SNErrIgnoreShelleyInitiation ->
         mconcat
-          [ "Node configs that don't fork to Shelley directly and initiate"
+          [ "Error SNErrIgnoreShelleyInitiation: "
+          , "Node configs that don't fork to Shelley directly and initiate"
           , " funds or stakes in Shelley Genesis are not supported."
           ]
       SNErrByronConfig fp ce ->
         mconcat
-          [ "Failed reading Byron genesis file "
+          [ "Error SNErrByronConfig: "
+          , "Failed reading Byron genesis file "
           , Text.show $ textShow fp
           , ": "
           , Text.show $ textShow ce
           ]
       SNErrShelleyConfig fp txt ->
         mconcat
-          [ "Failed reading Shelley genesis file "
+          [ "Error SNErrShelleyConfig: "
+          , "Failed reading Shelley genesis file "
           , Text.show $ textShow fp
           , ": "
           , show txt
           ]
       SNErrAlonzoConfig fp txt ->
         mconcat
-          [ "Failed reading Alonzo genesis file "
+          ["Error SNErrAlonzoConfig: "
+          , "Failed reading Alonzo genesis file "
           , Text.show $ textShow fp
           , ": "
           , show txt
           ]
       SNErrCardanoConfig err ->
         mconcat
-          [ "With Cardano protocol, Byron/Shelley config mismatch:\n"
+          [ "Error SNErrCardanoConfig: "
+          , "With Cardano protocol, Byron/Shelley config mismatch:\n"
           , "   "
           , show err
           ]
-      SNErrInsertGenesis err -> "Error InsertGenesis: " <> err
-      SNErrLedgerState err -> "Error Ledger State: " <> err
+      SNErrInsertGenesis err -> "Error SNErrInsertGenesis: " <> err
+      SNErrLedgerState err -> "Error SNErrLedgerState: " <> err
+      SNErrNodeConfig err -> "Error SNErrNodeConfig: " <> show err
+
+data NodeConfigError
+  = NodeConfigParseError String
+  | ParseSyncPreConfigError String
+  | ReadByteStringFromFileError String
+
+instance Exception NodeConfigError
+
+instance Show NodeConfigError where
+  show =
+    \case
+      NodeConfigParseError err -> "NodeConfigParseError - " <> err
+      ParseSyncPreConfigError err -> "ParseSyncPreConfigError - " <> err
+      ReadByteStringFromFileError err -> "ReadByteStringFromFileError - " <> err
+
+
 
 annotateInvariantTx :: Byron.Tx -> SyncInvariant -> SyncInvariant
 annotateInvariantTx tx ei =

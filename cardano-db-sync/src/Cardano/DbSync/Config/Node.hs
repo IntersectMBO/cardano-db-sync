@@ -18,12 +18,12 @@ module Cardano.DbSync.Config.Node (
 import qualified Cardano.Chain.Update as Byron
 import Cardano.Crypto (RequiresNetworkMagic (..))
 import Cardano.DbSync.Config.Types
+import Cardano.DbSync.Error (NodeConfigError (..), SyncNodeError (..))
 import Cardano.Prelude
 import Data.Aeson (FromJSON (..), Object, (.:), (.:?))
 import qualified Data.Aeson as Aeson
 import Data.Aeson.Types (Parser)
 import qualified Data.ByteString.Char8 as BS
-import Data.String (String)
 import qualified Data.Yaml as Yaml
 import qualified Ouroboros.Consensus.Cardano.CanHardFork as Shelley
 
@@ -52,32 +52,22 @@ data NodeConfig = NodeConfig
     ncConwayHardFork :: !Shelley.TriggerHardFork
   }
 
-data NodeConfigParseError
-  = NodeConfigParseError String
-  | ParseSyncPreConfigError String
-  | ReadByteStringFromFileError String
-  deriving (Show)
-
-instance Exception NodeConfigParseError
-
-parseNodeConfig :: ByteString -> IO (Either NodeConfigParseError NodeConfig)
+parseNodeConfig :: ByteString -> IO NodeConfig
 parseNodeConfig bs =
   case Yaml.decodeEither' bs of
-    Left err -> pure $ Left $ NodeConfigParseError ("Error parsing node config: " <> show err)
-    Right nc -> pure $ Right nc
+    Left err -> throwIO $ SNErrNodeConfig $ NodeConfigParseError (show err)
+    Right nc -> pure nc
 
-parseSyncPreConfig :: ByteString -> IO (Either NodeConfigParseError SyncPreConfig)
+parseSyncPreConfig :: ByteString -> IO SyncPreConfig
 parseSyncPreConfig bs =
-  case Yaml.decodeEither' bs of
-    Left err -> pure $ Left $ ParseSyncPreConfigError ("Error parseSyncPreConfig: Error parsing config: " <> show err)
-    Right res -> pure $ Right res
+    case Yaml.decodeEither' bs of
+        Left err -> throwIO $ SNErrNodeConfig $ ParseSyncPreConfigError ("Error parsing config: " <> show err)
+        Right res -> pure res
 
-readByteStringFromFile :: FilePath -> Text -> IO (Either NodeConfigParseError ByteString)
-readByteStringFromFile fp cfgType = do
-  result <- try (BS.readFile fp) :: IO (Either SomeException BS.ByteString)
-  case result of
-    Left _ -> pure $ Left $ ReadByteStringFromFileError ("Error Cannot find the " <> show cfgType <> " configuration file at : " <> show fp)
-    Right res -> pure $ Right res
+readByteStringFromFile :: FilePath -> Text -> IO ByteString
+readByteStringFromFile fp cfgType =
+  catch (BS.readFile fp) $ \(_ :: IOException) ->
+    throwIO $ SNErrNodeConfig $ NodeConfigParseError ("Cannot find the " <> show cfgType <> " configuration file at : " <> show fp)
 
 -- -------------------------------------------------------------------------------------------------
 
