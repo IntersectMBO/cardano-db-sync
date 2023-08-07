@@ -63,12 +63,14 @@ import Cardano.Ledger.BaseTypes (getVersion, strictMaybeToMaybe)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Coin as Ledger
+import Cardano.Ledger.Conway.TxCert
 import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.Keys
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (AssetName (..), MultiAsset (..), PolicyID (..))
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
+import Cardano.Ledger.Shelley.TxCert
 import Cardano.Prelude
 import Cardano.Slotting.Block (BlockNo (..))
 import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
@@ -82,8 +84,6 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
-import Cardano.Ledger.Shelley.TxCert
-import Cardano.Ledger.Conway.TxCert
 
 {- HLINT ignore "Reduce duplication" -}
 

@@ -61,11 +61,12 @@ import Ouroboros.Consensus.Config (configCodec)
 import Ouroboros.Consensus.Network.NodeToClient (
   Codecs' (..),
   cChainSyncCodec,
-  clientCodecs,
   cStateQueryCodec,
   cTxSubmissionCodec,
+  clientCodecs,
  )
 import Ouroboros.Consensus.Node.ErrorPolicy
+import Ouroboros.Consensus.Node.NetworkProtocolVersion (BlockNodeToClientVersion, supportedNodeToClientVersions)
 import Ouroboros.Network.Block (
   BlockNo (..),
   Point (..),
@@ -118,7 +119,6 @@ import Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
 import Ouroboros.Network.Protocol.LocalStateQuery.Client (localStateQueryClientPeer)
 import qualified Ouroboros.Network.Snocket as Snocket
 import Ouroboros.Network.Subscription (SubscriptionTrace)
-import Ouroboros.Consensus.Node.NetworkProtocolVersion (BlockNodeToClientVersion, supportedNodeToClientVersions)
 
 runSyncNodeClient ::
   MetricSetters ->
@@ -142,8 +142,8 @@ runSyncNodeClient metricsSetters syncEnv iomgr trce tc (SocketPath socketPath) =
     codecConfig :: CodecConfig CardanoBlock
     codecConfig = configCodec $ getTopLevelConfig syncEnv
 
---    nonExperimentalVersions =
---      filter (\a -> Just a <= snd (lastReleasedNodeVersion Proxy)) $ supportedNodeToClientVersions (Proxy @CardanoBlock)
+    --    nonExperimentalVersions =
+    --      filter (\a -> Just a <= snd (lastReleasedNodeVersion Proxy)) $ supportedNodeToClientVersions (Proxy @CardanoBlock)
 
     clientSubscriptionParams =
       ClientSubscriptionParams

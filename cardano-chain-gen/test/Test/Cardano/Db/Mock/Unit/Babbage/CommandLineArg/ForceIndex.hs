@@ -2,17 +2,17 @@
 
 module Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.ForceIndex (
   checkForceIndexesArg,
-  checkNoForceIndexesArg
+  checkNoForceIndexesArg,
 )
 where
 
+import qualified Cardano.Db as DB
 import Cardano.Mock.ChainSync.Server (IOManager)
 import Data.Text (Text)
-import Test.Cardano.Db.Mock.Config (CommandLineArgs (..), babbageConfigDir, initCommandLineArgs, withCustomConfig, startDBSync)
-import Test.Tasty.HUnit (Assertion)
-import qualified Cardano.Db as DB
-import Test.Cardano.Db.Mock.Validate (assertEqQuery)
 import GHC.Conc.IO (threadDelay)
+import Test.Cardano.Db.Mock.Config (CommandLineArgs (..), babbageConfigDir, initCommandLineArgs, startDBSync, withCustomConfig)
+import Test.Cardano.Db.Mock.Validate (assertEqQuery)
+import Test.Tasty.HUnit (Assertion)
 
 checkForceIndexesArg :: IOManager -> [(Text, Text)] -> Assertion
 checkForceIndexesArg =

@@ -27,13 +27,13 @@ import Cardano.DbSync.Types
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.Alonzo.Scripts (Tag (..))
 import Cardano.Ledger.Coin (Coin (..))
+import Cardano.Ledger.Conway.TxCert (ConwayTxCert)
 import Cardano.Ledger.Mary.Value (AssetName, MultiAsset, PolicyID)
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
+import Cardano.Ledger.Shelley.TxCert
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
 import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto, StandardShelley)
-import Cardano.Ledger.Shelley.TxCert
-import Cardano.Ledger.Conway.TxCert (ConwayTxCert)
 
 data Tx = Tx
   { txHash :: !ByteString
@@ -125,7 +125,7 @@ data PlutusData = PlutusData
 
 data TxOutDatum = InlineDatum PlutusData | DatumHash DataHash | NoDatum
 
-toTxCert ::  Word16 -> Cert -> TxCertificate
+toTxCert :: Word16 -> Cert -> TxCertificate
 toTxCert idx dcert =
   TxCertificate
     { txcRedeemerIndex = Nothing

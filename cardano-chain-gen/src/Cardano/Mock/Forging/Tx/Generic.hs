@@ -36,6 +36,7 @@ import Cardano.Ledger.Hashes (ScriptHash (ScriptHash))
 import Cardano.Ledger.Keys
 import Cardano.Ledger.Shelley.LedgerState hiding (LedgerState)
 import Cardano.Ledger.Shelley.TxBody
+import Cardano.Ledger.Shelley.TxCert
 import Cardano.Ledger.Shelley.UTxO
 import Cardano.Ledger.TxIn (TxIn (..))
 import qualified Cardano.Ledger.UMap as UMap
@@ -52,7 +53,6 @@ import Ouroboros.Consensus.Cardano.Block (LedgerState)
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
-import Cardano.Ledger.Shelley.TxCert
 
 resolveAddress ::
   forall era p.

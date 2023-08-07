@@ -22,6 +22,7 @@ import Cardano.Ledger.Credential
 import Cardano.Ledger.Shelley.Tx hiding (ShelleyTx)
 import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
 import Cardano.Ledger.Shelley.TxBody
+import Cardano.Ledger.Shelley.TxCert
 import Cardano.Mock.Forging.Tx.Generic
 import Cardano.Mock.Forging.Types
 import Cardano.Prelude
@@ -33,7 +34,6 @@ import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (LedgerState, StandardShelley)
 import Ouroboros.Consensus.Shelley.Eras (ShelleyEra, StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
-import Cardano.Ledger.Shelley.TxCert
 
 type ShelleyUTxOIndex = UTxOIndex (ShelleyEra StandardCrypto)
 

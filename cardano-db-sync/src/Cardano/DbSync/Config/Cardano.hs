@@ -30,8 +30,10 @@ import Cardano.Ledger.Conway.Genesis
 import Cardano.Ledger.Keys
 import Cardano.Ledger.Shelley.Translation (emptyFromByronTranslationContext)
 import Cardano.Prelude (panic)
+import Cardano.Slotting.Slot
 import Control.Monad.Trans.Except (ExceptT)
 import Data.Word (Word64)
+import Ouroboros.Consensus.Block.Forging
 import Ouroboros.Consensus.Cardano (Nonce (..), ProtVer (ProtVer))
 import qualified Ouroboros.Consensus.Cardano as Consensus
 import qualified Ouroboros.Consensus.Cardano.Node as Consensus
@@ -43,8 +45,6 @@ import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 import qualified Ouroboros.Consensus.Shelley.Node.Praos as Consensus
-import Ouroboros.Consensus.Block.Forging
-import Cardano.Slotting.Slot
 
 -- Usually only one constructor, but may have two when we are preparing for a HFC event.
 data GenesisConfig

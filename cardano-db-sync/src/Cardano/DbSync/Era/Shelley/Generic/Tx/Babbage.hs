@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE ExplicitForAll #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -22,6 +22,7 @@ import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import qualified Cardano.Ledger.Alonzo.Scripts.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
+import Cardano.Ledger.Babbage.Core as Core hiding (Tx, TxOut)
 import Cardano.Ledger.Babbage.TxBody (BabbageTxOut)
 import qualified Cardano.Ledger.Babbage.TxBody as Babbage
 import Cardano.Ledger.BaseTypes
@@ -34,7 +35,6 @@ import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import Lens.Micro
 import Ouroboros.Consensus.Shelley.Eras (StandardBabbage, StandardCrypto)
-import Cardano.Ledger.Babbage.Core as Core hiding (TxOut, Tx)
 
 fromBabbageTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardBabbage) -> Tx
 fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
@@ -113,7 +113,10 @@ fromTxOut ::
   , Core.Value era ~ MaryValue (EraCrypto era)
   , Core.TxOut era ~ BabbageTxOut era
   , Core.Script era ~ Alonzo.AlonzoScript era
-  ) => Word64 -> BabbageTxOut era -> TxOut
+  ) =>
+  Word64 ->
+  BabbageTxOut era ->
+  TxOut
 fromTxOut index txOut =
   TxOut
     { txOutIndex = index

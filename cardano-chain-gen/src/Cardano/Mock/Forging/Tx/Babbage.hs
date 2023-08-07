@@ -76,6 +76,7 @@ import Cardano.Ledger.Shelley.TxBody (
   PoolParams (..),
   StakePoolRelay (..),
  )
+import Cardano.Ledger.Shelley.TxCert
 import Cardano.Ledger.Shelley.UTxO
 import Cardano.Ledger.TxIn (TxId, TxIn (..))
 import Cardano.Ledger.Val
@@ -96,7 +97,6 @@ import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (LedgerState)
 import Ouroboros.Consensus.Shelley.Eras (StandardBabbage, StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
-import Cardano.Ledger.Shelley.TxCert
 
 type BabbageUTxOIndex = UTxOIndex StandardBabbage
 

@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE RecordWildCards #-}
 
 module Test.Cardano.Db.Mock.Config (
   Config (..),
   DBSyncEnv (..),
-  CommandLineArgs(..),
+  CommandLineArgs (..),
   TxOutParam (..),
   initCommandLineArgs,
   babbageConfigDir,
@@ -70,6 +70,7 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import Database.Persist.Postgresql (createPostgresqlPool)
 import Database.Persist.Sql (SqlBackend)
+import Ouroboros.Consensus.Block.Forging
 import Ouroboros.Consensus.Config (TopLevelConfig)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
@@ -77,7 +78,6 @@ import Ouroboros.Consensus.Shelley.Node (ShelleyLeaderCredentials)
 import System.Directory (createDirectoryIfMissing, removePathForcibly)
 import System.FilePath.Posix ((</>))
 import System.IO.Silently (hSilence)
-import Ouroboros.Consensus.Block.Forging
 
 data Config = Config
   { topLevelConfig :: TopLevelConfig CardanoBlock
@@ -230,7 +230,7 @@ mkShelleyCredentials bulkFile = do
 
 -- | staticDir can be shared by tests running in parallel. mutableDir not.
 mkSyncNodeParams :: FilePath -> FilePath -> CommandLineArgs -> IO SyncNodeParams
-mkSyncNodeParams staticDir mutableDir CommandLineArgs{..} = do
+mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
   pgconfig <- orDie Db.renderPGPassError $ newExceptT Db.readPGPassDefault
   pure $
     SyncNodeParams
@@ -261,22 +261,22 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs{..} = do
 initCommandLineArgs :: CommandLineArgs
 initCommandLineArgs =
   CommandLineArgs
-  { claHasConfigFile = True
-  , claEpochDisabled = True
-  , claHasCache = True
-  , claShouldUseLedger = True
-  , claSkipFix = True
-  , claOnlyFix = False
-  , claForceIndexes = False
-  , claHasMultiAssets = True
-  , claHasMetadata = True
-  , claHasPlutusExtra = True
-  , claHasOfflineData = True
-  , claTurboMode = False
-  , claFullMode = True
-  , claMigrateConsumed = True
-  , claPruneTxOut = True
-  }
+    { claHasConfigFile = True
+    , claEpochDisabled = True
+    , claHasCache = True
+    , claShouldUseLedger = True
+    , claSkipFix = True
+    , claOnlyFix = False
+    , claForceIndexes = False
+    , claHasMultiAssets = True
+    , claHasMetadata = True
+    , claHasPlutusExtra = True
+    , claHasOfflineData = True
+    , claTurboMode = False
+    , claFullMode = True
+    , claMigrateConsumed = True
+    , claPruneTxOut = True
+    }
 
 emptyMetricsSetters :: MetricSetters
 emptyMetricsSetters =

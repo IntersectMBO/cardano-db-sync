@@ -39,6 +39,7 @@ import qualified Cardano.Ledger.SafeHash as Ledger
 import Cardano.Ledger.Shelley.Scripts (MultiSig, ScriptHash)
 import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
+import Cardano.Ledger.Shelley.TxCert
 import Cardano.Prelude
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
@@ -46,7 +47,6 @@ import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShelley)
-import Cardano.Ledger.Shelley.TxCert
 
 fromShelleyTx :: (Word64, Core.Tx StandardShelley) -> Tx
 fromShelleyTx (blkIndex, tx) =
@@ -172,9 +172,10 @@ mkTxParamProposal witness txBody =
 
 mkTxCertificates ::
   forall era.
-  (Shelley.ShelleyEraTxBody era
+  ( Shelley.ShelleyEraTxBody era
   , TxCert era ~ ShelleyTxCert era
-  , EraCrypto era ~ StandardCrypto) =>
+  , EraCrypto era ~ StandardCrypto
+  ) =>
   Core.TxBody era ->
   [TxCertificate]
 mkTxCertificates bd =
