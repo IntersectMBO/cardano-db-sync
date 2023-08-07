@@ -22,6 +22,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import qualified Data.Yaml as Yaml
 import System.IO.Error
+import Cardano.SMASH.Server.Types (DBFail(..))
 
 -- | SMASH Server cli parameters
 data SmashServerParams = SmashServerParams
@@ -106,7 +107,7 @@ configureLogging :: FilePath -> Text -> IO (Trace IO Text)
 configureLogging fp loggingName = do
   bs <- readByteString fp "DbSync" -- only uses the db-sync config
   case Yaml.decodeEither' bs of
-    Left err -> panic $ "readSyncNodeConfig: Error parsing config: " <> textShow err
+    Left err -> throwIO $ ConfigError ("readSyncNodeConfig: Error parsing config: " <> textShow err)
     Right representation -> do
       -- Logging.Configuration
       logConfig <- Logging.setupFromRepresentation representation
@@ -115,4 +116,4 @@ configureLogging fp loggingName = do
 readByteString :: FilePath -> Text -> IO ByteString
 readByteString fp cfgType =
   catch (BS.readFile fp) $ \(_ :: IOException) ->
-    panic $ mconcat ["Cannot find the ", cfgType, " configuration file at : ", Text.pack fp]
+    throwIO $ ConfigError $ mconcat ["Cannot find the ", cfgType, " configuration file at : ", Text.pack fp]

@@ -127,8 +127,6 @@ instance Show NodeConfigError where
       ParseSyncPreConfigError err -> "ParseSyncPreConfigError - " <> err
       ReadByteStringFromFileError err -> "ReadByteStringFromFileError - " <> err
 
-
-
 annotateInvariantTx :: Byron.Tx -> SyncInvariant -> SyncInvariant
 annotateInvariantTx tx ei =
   case ei of

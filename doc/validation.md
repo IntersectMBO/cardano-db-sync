@@ -72,8 +72,6 @@ the fees associated with the transaction are recorded in the database.
 
 ## Runtime Reward Validations
 
--- TODO: Vince - probably too late unless we deprecate, but could this be a command line argument?
-
 Due to recent issues with reward related tables, extra validation was added. When that validation
 fails, there are now two options. `db-sync` can abort or continue running. The behaviour is
 specified by the presence or absence of the `DbSyncAbortOnPanic` environemnt variable. If the

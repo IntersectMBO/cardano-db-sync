@@ -370,11 +370,15 @@ data DBFail
   | TickerAlreadyReserved !TickerName
   | RecordDoesNotExist
   | DBFail LookupFail
+  | PoolDataLayerError !Text
+  | ConfigError !Text
   deriving (Eq)
 
 instance ToSchema DBFail where
   declareNamedSchema _ =
     pure (NamedSchema (Just "DBFail") mempty)
+
+instance Exception DBFail
 
 instance Show DBFail where
   show =
@@ -387,6 +391,8 @@ instance Show DBFail where
       TickerAlreadyReserved ticker -> "Ticker name " <> Text.show (getTickerName ticker) <> " is already reserved"
       RecordDoesNotExist -> "The requested record does not exist."
       DBFail lookupFail -> Text.show lookupFail
+      PoolDataLayerError err -> Text.show err
+      ConfigError err -> "Config Error: " <> Text.show err
 
 {-
 
@@ -428,6 +434,16 @@ instance ToJSON DBFail where
   toJSON (DBFail err) =
     object
       [ "code" .= Aeson.String "DBFail"
+      , "description" .= Aeson.String (Cardano.Prelude.show err)
+      ]
+  toJSON (PoolDataLayerError err) =
+    object
+      [ "code" .= Aeson.String "PoolDataLayerError"
+      , "description" .= Aeson.String (Cardano.Prelude.show err)
+      ]
+  toJSON (ConfigError err) =
+    object
+      [ "code" .= Aeson.String "ConfigError"
       , "description" .= Aeson.String (Cardano.Prelude.show err)
       ]
 

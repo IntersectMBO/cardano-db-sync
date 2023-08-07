@@ -21,6 +21,7 @@ import qualified Data.Text.Encoding as Text
 import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Database.Persist.Postgresql
+import GHC.Err (error)
 
 {- HLINT ignore "Reduce duplication" -}
 
@@ -52,7 +53,7 @@ postgresqlPoolDataLayer tracer conn =
         case mMeta of
           Just (tickerName, metadata) -> pure $ Right (TickerName tickerName, PoolMetadataRaw metadata)
           Nothing -> pure $ Left $ DbLookupPoolMetadataHash poolId poolMetadataHash
-    , dlAddPoolMetadata = panic "dlAddPoolMetadata not defined. Will be used only for testing."
+    , dlAddPoolMetadata = error "dlAddPoolMetadata not defined. Will be used only for testing."
     , dlGetReservedTickers = do
         tickers <- Db.runPoolDbIohkLogging conn tracer Db.queryReservedTickers
         pure $ fmap (\ticker -> (TickerName $ Db.reservedPoolTickerName ticker, dbToServantPoolId $ Db.reservedPoolTickerPoolHash ticker)) tickers
@@ -87,7 +88,7 @@ postgresqlPoolDataLayer tracer conn =
         if deleted
           then pure $ Right poolHash
           else pure $ Left RecordDoesNotExist
-    , dlAddRetiredPool = \_ _ -> panic "dlAddRetiredPool not defined. Will be used only for testing"
+    , dlAddRetiredPool = \_ _ -> throwIO $ PoolDataLayerError "dlAddRetiredPool not defined. Will be used only for testing"
     , dlCheckRetiredPool = \poolId -> do
         actions <- getCertActions tracer conn (Just poolId)
         pure $ not <$> isRegistered (servantToDbPoolId poolId) actions

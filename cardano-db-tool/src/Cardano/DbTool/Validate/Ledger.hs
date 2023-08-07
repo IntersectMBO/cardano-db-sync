@@ -55,7 +55,6 @@ validate params genCfg slotNo ledgerFiles =
           when logFailure . putStrLn $ redText "Ledger is newer than DB. Trying an older ledger."
           go rest False
 
--- TODO: Vince - Should this throwIO when there is an error as it just prints right now
 validateBalance :: SlotNo -> Text -> CardanoLedgerState -> IO ()
 validateBalance slotNo addr st = do
   balanceDB <- DB.runDbNoLoggingEnv $ DB.queryAddressBalanceAtSlot addr (unSlotNo slotNo)
