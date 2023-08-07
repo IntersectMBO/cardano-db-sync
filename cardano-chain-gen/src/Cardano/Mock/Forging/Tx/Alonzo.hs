@@ -55,6 +55,7 @@ import Cardano.Ledger.Shelley.TxBody (
   PoolParams (..),
   StakePoolRelay (..),
  )
+import Cardano.Ledger.Shelley.TxCert
 import Cardano.Ledger.TxIn (TxIn (..))
 import Cardano.Mock.Forging.Crypto
 import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
@@ -71,7 +72,6 @@ import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (LedgerState, StandardAlonzo)
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
-import Cardano.Ledger.Shelley.TxCert
 
 type AlonzoUTxOIndex = UTxOIndex StandardAlonzo
 

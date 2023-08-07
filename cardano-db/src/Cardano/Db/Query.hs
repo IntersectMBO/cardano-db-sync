@@ -889,8 +889,8 @@ queryPoolOfflineFetchError hash (Just fromTime) = do
           ^. PoolHashHashRaw
           ==. val hash
           &&. poolOfflineFetchError
-          ^. PoolOfflineFetchErrorFetchTime
-          >=. val fromTime
+            ^. PoolOfflineFetchErrorFetchTime
+            >=. val fromTime
       )
     orderBy [desc (poolOfflineFetchError ^. PoolOfflineFetchErrorFetchTime)]
     limit 10
@@ -1276,11 +1276,11 @@ txOutUnspentP txOut =
         ( txOut
             ^. TxOutTxId
             ==. txIn
-            ^. TxInTxOutId
+              ^. TxInTxOutId
             &&. txOut
-            ^. TxOutIndex
-            ==. txIn
-            ^. TxInTxOutIndex
+              ^. TxOutIndex
+              ==. txIn
+                ^. TxInTxOutIndex
         )
 
 -- every tx made before or at the snapshot time

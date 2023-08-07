@@ -22,7 +22,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (atomically)
 import Control.Monad (void)
 import Data.Text (Text)
 import Ouroboros.Consensus.Block (blockPoint)
-import Test.Cardano.Db.Mock.Config (CommandLineArgs (..), TxOutParam (..), babbageConfigDir, startDBSync, withCustomConfig, initCommandLineArgs)
+import Test.Cardano.Db.Mock.Config (CommandLineArgs (..), TxOutParam (..), babbageConfigDir, initCommandLineArgs, startDBSync, withCustomConfig)
 import Test.Cardano.Db.Mock.Examples (mockBlock0, mockBlock1)
 import Test.Cardano.Db.Mock.UnifiedApi (
   forgeAndSubmitBlocks,

@@ -16,7 +16,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo (
   extraKeyWits,
   getPlutusSizes,
   getScripts,
-txDataWitness,
+  txDataWitness,
   rmWdrl,
   rmCerts,
   rmInps,
@@ -51,6 +51,7 @@ import qualified Cardano.Ledger.SafeHash as Ledger
 import Cardano.Ledger.Shelley.Scripts (ScriptHash)
 import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
+import Cardano.Ledger.Shelley.TxCert as Shelley
 import Cardano.Prelude
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
@@ -59,7 +60,6 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (EraCrypto, StandardAlonzo, StandardCrypto)
-import Cardano.Ledger.Shelley.TxCert as Shelley
 
 fromAlonzoTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardAlonzo) -> Tx
 fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =

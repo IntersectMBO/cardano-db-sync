@@ -43,6 +43,14 @@ import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
 import Cardano.Mock.Forging.Types
 import Cardano.Prelude (bimap, throwIO)
+import Control.Concurrent.Class.MonadSTM.Strict (
+  StrictTVar,
+  atomically,
+  modifyTVar,
+  newTVarIO,
+  readTVarIO,
+  swapTVar,
+ )
 import Control.Monad (forM, void, when)
 import Control.Monad.Except (runExcept)
 import Control.Tracer (Tracer)
@@ -113,14 +121,6 @@ import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock, Ticked, shelleyLedgerSt
 import qualified Ouroboros.Consensus.Shelley.Ledger.Mempool as Consensus
 import Ouroboros.Consensus.Shelley.Ledger.SupportsProtocol ()
 import qualified Ouroboros.Consensus.TypeFamilyWrappers as Consensus
-import Control.Concurrent.Class.MonadSTM.Strict (
-  StrictTVar,
-  atomically,
-  newTVarIO,
-  readTVarIO,
-  modifyTVar,
-  swapTVar,
- )
 import Ouroboros.Consensus.Util.IOLike (
   Exception,
   NoThunks,

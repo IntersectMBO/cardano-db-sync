@@ -122,7 +122,6 @@ queryTxOutConsumedCount = do
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
-
 createConsumedTxOut :: MonadIO m => ReaderT SqlBackend m ()
 createConsumedTxOut = do
   rawExecute

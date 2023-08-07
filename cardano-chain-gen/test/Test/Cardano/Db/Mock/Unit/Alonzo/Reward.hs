@@ -13,8 +13,8 @@ module Test.Cardano.Db.Mock.Unit.Alonzo.Reward (
 
 import Cardano.Ledger.Coin (Coin (Coin), DeltaCoin (DeltaCoin))
 import Cardano.Ledger.Keys (KeyHash (KeyHash))
-import Cardano.Ledger.Shelley.TxCert
 import Cardano.Ledger.Shelley.TxBody (Withdrawals (Withdrawals))
+import Cardano.Ledger.Shelley.TxCert
 import Cardano.Mock.ChainSync.Server (IOManager, addBlock, rollback)
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
 import Cardano.Mock.Forging.Tx.Alonzo.Scenarios (delegateAndSendBlocks)

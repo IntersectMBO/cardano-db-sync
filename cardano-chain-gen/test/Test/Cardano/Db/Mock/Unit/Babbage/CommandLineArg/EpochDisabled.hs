@@ -10,7 +10,7 @@ import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import Cardano.Mock.Forging.Types (UTxOIndex (..))
 import Control.Monad (void)
 import Data.Text (Text)
-import Test.Cardano.Db.Mock.Config (CommandLineArgs (..), babbageConfigDir, startDBSync, withCustomConfig, initCommandLineArgs)
+import Test.Cardano.Db.Mock.Config (CommandLineArgs (..), babbageConfigDir, initCommandLineArgs, startDBSync, withCustomConfig)
 import Test.Cardano.Db.Mock.UnifiedApi (forgeAndSubmitBlocks, withBabbageFindLeaderAndSubmitTx)
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff, assertEqQuery)
 import Test.Tasty.HUnit (Assertion)

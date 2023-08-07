@@ -5,30 +5,29 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-
 module Cardano.DbSync.Era.Shelley.Generic.Tx.Conway (
   fromConwayTx,
 ) where
 
-import qualified Cardano.Ledger.Core as Core
-import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
-import Ouroboros.Consensus.Cardano.Block (StandardConway)
-import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
+import qualified Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage as Babbage
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
+import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
+import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
+import Cardano.Ledger.Babbage.Core as Core hiding (Tx, TxOut)
 import Cardano.Ledger.BaseTypes
+import qualified Cardano.Ledger.Core as Core
 import Cardano.Prelude
 import qualified Data.Map.Strict as Map
 import Lens.Micro
-import qualified Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage as Babbage
-import Cardano.Ledger.Babbage.Core as Core hiding (TxOut, Tx)
+import Ouroboros.Consensus.Cardano.Block (StandardConway)
 
 fromConwayTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardConway) -> Tx
 fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
-   Tx
+  Tx
     { txHash = txHashId tx
     , txBlockIndex = blkIndex
     , txSize = getTxSize tx

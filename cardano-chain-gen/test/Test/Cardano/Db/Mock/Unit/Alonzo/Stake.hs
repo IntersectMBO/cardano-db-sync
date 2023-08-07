@@ -17,8 +17,8 @@ module Test.Cardano.Db.Mock.Unit.Alonzo.Stake (
 
 import qualified Cardano.Db as DB
 import Cardano.Ledger.BaseTypes (CertIx (CertIx), TxIx (TxIx))
-import Cardano.Ledger.Shelley.TxCert
 import Cardano.Ledger.Shelley.TxBody (Ptr (..))
+import Cardano.Ledger.Shelley.TxCert
 import Cardano.Mock.ChainSync.Server (IOManager, addBlock)
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
 import Cardano.Mock.Forging.Tx.Alonzo.Scenarios (delegateAndSendBlocks)
