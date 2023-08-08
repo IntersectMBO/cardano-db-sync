@@ -30,7 +30,6 @@ import Cardano.Ledger.Conway.Genesis
 import Cardano.Ledger.Keys
 import Cardano.Ledger.Shelley.Translation (emptyFromByronTranslationContext)
 import Cardano.Prelude (panic)
-import Cardano.Slotting.Slot
 import Control.Monad.Trans.Except (ExceptT)
 import Data.Word (Word64)
 import Ouroboros.Consensus.Block.Forging
@@ -133,7 +132,7 @@ mkProtocolInfoCardano ge shelleyCred =
         (Consensus.ProtocolTransitionParamsShelleyBased () $ dncMaryHardFork dnc)
         (Consensus.ProtocolTransitionParamsShelleyBased alonzoGenesis $ dncAlonzoHardFork dnc)
         (Consensus.ProtocolTransitionParamsShelleyBased () $ dncBabbageHardFork dnc)
-        (Consensus.ProtocolTransitionParamsShelleyBased (ConwayGenesis (GenDelegs mempty)) (Consensus.TriggerHardForkAtEpoch (EpochNo 34))) -- TODO: Conway Fix
+        (Consensus.ProtocolTransitionParamsShelleyBased (ConwayGenesis (GenDelegs mempty)) $ dncConwayHardFork dnc) -- TODO: Conway Fix
 
 shelleyPraosNonce :: ShelleyConfig -> Nonce
 shelleyPraosNonce sCfg = Nonce (Crypto.castHash . unGenesisHashShelley $ scGenesisHash sCfg)
