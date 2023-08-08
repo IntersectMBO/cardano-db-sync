@@ -105,6 +105,7 @@ data SyncNodeConfig = SyncNodeConfig
   , dncMaryHardFork :: !TriggerHardFork
   , dncAlonzoHardFork :: !TriggerHardFork
   , dncBabbageHardFork :: !TriggerHardFork
+  , dncConwayHardFork :: !TriggerHardFork
   }
 
 data SyncPreConfig = SyncPreConfig
