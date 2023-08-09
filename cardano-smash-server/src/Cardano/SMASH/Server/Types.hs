@@ -446,15 +446,3 @@ instance ToJSON DBFail where
       [ "code" .= Aeson.String "ConfigError"
       , "description" .= Aeson.String (Cardano.Prelude.show err)
       ]
-
--- renderDBFail :: DBFail -> Text
--- renderDBFail (UnknownError err) = "Unknown error. Context: " <> err
--- renderDBFail (DbInsertError err) =
---   "The database got an error while trying to insert a record. Error: " <> err
--- renderDBFail (DbLookupPoolMetadataHash poolId poolMDHash) =
---   "The metadata with hash " <> show poolMDHash <> " for pool " <> show poolId <> " is missing from the DB."
--- renderDBFail (TickerAlreadyReserved ticker) =
---   "Ticker name " <> getTickerName ticker <> " is already reserved"
--- renderDBFail RecordDoesNotExist =
---   "The requested record does not exist."
--- renderDBFail (DBFail lookupFail) = show lookupFail

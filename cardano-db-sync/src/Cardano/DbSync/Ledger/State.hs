@@ -65,7 +65,7 @@ import qualified Control.Exception as Exception
 import qualified Data.ByteString.Base16 as Base16
 
 import Cardano.DbSync.Api.Types (LedgerEnv (..), SyncOptions (..))
-import Cardano.DbSync.Error (SyncNodeError (..))
+import Cardano.DbSync.Error (SyncNodeError (..), fromEitherSTM)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
@@ -119,7 +119,6 @@ import System.Directory (doesFileExist, listDirectory, removeFile)
 import System.FilePath (dropExtension, takeExtension, (</>))
 import System.Mem (performMajorGC)
 import Prelude (String, id)
-import GHC.Err (error)
 
 -- Note: The decision on whether a ledger-state is written to disk is based on the block number
 -- rather than the slot number because while the block number is fully populated (for every block
@@ -211,39 +210,26 @@ applyBlock env blk = do
   atomically $ do
     !ledgerDB <- readStateUnsafe env
     let oldState = ledgerDbCurrent ledgerDB
-    !result <- applyBlk (ExtLedgerCfg (getTopLevelconfigHasLedger env)) blk (clsState oldState)
+    !result <- fromEitherSTM $ tickThenReapplyCheckHash (ExtLedgerCfg (getTopLevelconfigHasLedger env)) blk (clsState oldState)
     let !ledgerEvents = mapMaybe convertAuxLedgerEvent (lrEvents result)
     let !newLedgerState = lrResult result
     !details <- getSlotDetails env (ledgerState newLedgerState) time (cardanoBlockSlotNo blk)
-    let !newEpochE = mkNewEpoch (clsState oldState) newLedgerState (findAdaPots ledgerEvents)
-    case newEpochE of
-      Left err -> throwSTM err
-      Right newEpoch -> do
-        let !newEpochBlockNo = applyToEpochBlockNo (isJust $ blockIsEBB blk) (isJust newEpoch) (clsEpochBlockNo oldState)
-        let !newState = CardanoLedgerState newLedgerState newEpochBlockNo
-        let !ledgerDB' = pushLedgerDB ledgerDB newState
-        writeTVar (leStateVar env) (Strict.Just ledgerDB')
-        let !appResult =
-              ApplyResult
-                { apPrices = getPrices newState
-                , apPoolsRegistered = getRegisteredPools oldState
-                , apNewEpoch = maybeToStrict newEpoch
-                , apSlotDetails = details
-                , apStakeSlice = stakeSlice newState details
-                , apEvents = ledgerEvents
-                }
-        pure (oldState, appResult)
+    !newEpoch <- fromEitherSTM $ mkNewEpoch (clsState oldState) newLedgerState (findAdaPots ledgerEvents)
+    let !newEpochBlockNo = applyToEpochBlockNo (isJust $ blockIsEBB blk) (isJust newEpoch) (clsEpochBlockNo oldState)
+    let !newState = CardanoLedgerState newLedgerState newEpochBlockNo
+    let !ledgerDB' = pushLedgerDB ledgerDB newState
+    writeTVar (leStateVar env) (Strict.Just ledgerDB')
+    let !appResult =
+          ApplyResult
+            { apPrices = getPrices newState
+            , apPoolsRegistered = getRegisteredPools oldState
+            , apNewEpoch = maybeToStrict newEpoch
+            , apSlotDetails = details
+            , apStakeSlice = stakeSlice newState details
+            , apEvents = ledgerEvents
+            }
+    pure (oldState, appResult)
   where
-    applyBlk ::
-      ExtLedgerCfg CardanoBlock ->
-      CardanoBlock ->
-      ExtLedgerState CardanoBlock ->
-      STM (LedgerResult (ExtLedgerState CardanoBlock) (ExtLedgerState CardanoBlock))
-    applyBlk cfg block lsb =
-      case tickThenReapplyCheckHash cfg block lsb of
-        Left err -> throwSTM err
-        Right result -> pure result
-
     mkNewEpoch :: ExtLedgerState CardanoBlock -> ExtLedgerState CardanoBlock -> Maybe AdaPots -> Either SyncNodeError (Maybe Generic.NewEpoch)
     mkNewEpoch oldState newState mPots = do
       let currEpochE = ledgerEpochNo env newState

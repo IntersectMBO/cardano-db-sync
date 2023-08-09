@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE LambdaCase #-}
 
 module Cardano.DbSync.Era.Shelley.Offline.Http (
   FetchError (..),
@@ -18,7 +18,7 @@ import Cardano.DbSync.Era.Shelley.Offline.Types (
   PoolTicker (..),
  )
 import Cardano.DbSync.Util (renderByteArray)
-import Cardano.Prelude
+import Cardano.Prelude hiding (show)
 import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Except.Extra (handleExceptT, hoistEither, left)
 import qualified Data.Aeson as Aeson
@@ -28,10 +28,10 @@ import qualified Data.CaseInsensitive as CI
 import qualified Data.List as List
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
+import GHC.Show (show)
 import Network.HTTP.Client (HttpException (..))
 import qualified Network.HTTP.Client as Http
 import qualified Network.HTTP.Types as Http
-import qualified GHC.Show as GHCS
 
 -- | Fetch error for the HTTP client fetching the pool offline metadata.
 data FetchError
@@ -210,7 +210,7 @@ convertHttpException url he =
         Http.ConnectionFailure {} -> FEConnectionFailure url
         Http.TooManyRedirects {} -> FEHttpException url "Too many redirects"
         Http.OverlongHeaders -> FEHttpException url "Overlong headers"
-        Http.StatusCodeException resp _ -> FEHttpException url ("Status code exception " <> show (Http.responseStatus resp))
+        Http.StatusCodeException resp _ -> FEHttpException url ("Status code exception " <> Text.pack (show $ Http.responseStatus resp))
         Http.InvalidStatusLine {} -> FEHttpException url "Invalid status line"
-        other -> FEHttpException url (Text.take 100 $ show other)
+        other -> FEHttpException url (Text.take 100 $ Text.pack $ show other)
     InvalidUrlException urlx err -> FEUrlParseFail (PoolUrl $ Text.pack urlx) (Text.pack err)

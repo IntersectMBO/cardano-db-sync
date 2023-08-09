@@ -50,7 +50,6 @@ import Data.Functor.Contravariant (contramap)
 import qualified Data.List as List
 import qualified Data.Text as Text
 import Database.Persist.Postgresql (SqlBackend)
-import GHC.Base (error)
 import Network.Mux (MuxTrace, WithMuxBearer)
 import Network.Mux.Types (MuxMode (..))
 import Network.TypedProtocol.Pipelined (N (..), Nat (Succ, Zero))
@@ -241,7 +240,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion _connecti
                     ( Client.chainSyncClientPeer $
                         chainSyncClientFixScripts backend tracer ls
                     )
-              when onlyFix $ error "All Good! This error is only thrown to exit db-sync"
+              when onlyFix $ panic "All Good! This error is only thrown to exit db-sync"
               setIsFixed syncEnv AllFixRan
               pure False
             else do

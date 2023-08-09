@@ -6,13 +6,14 @@
 module Cardano.DbSync.Error (
   SyncInvariant (..),
   SyncNodeError (..),
-  NodeConfigError(..),
+  NodeConfigError (..),
   annotateInvariantTx,
   bsBase16Encode,
   dbSyncNodeError,
   dbSyncInvariant,
   renderSyncInvariant,
   runOrThrowIO,
+  fromEitherSTM,
   logAndThrowIO,
   shouldAbortOnPanic,
   hasAbortOnPanicEnv,
@@ -31,10 +32,9 @@ import Data.String (String)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import GHC.IO.Exception (userError)
-import qualified GHC.Show as GShow
 import System.Environment (lookupEnv)
 import System.Posix.Process (exitImmediately)
-import qualified Text.Show as Text
+import qualified Text.Show as Show
 
 data SyncInvariant
   = EInvInOut !Word64 !Word64
@@ -53,23 +53,24 @@ data SyncNodeError
   | SNErrLedgerState !String
   | SNErrNodeConfig NodeConfigError
   | SNErrLocalStateQuery !String
+  | SNErrByronGenesis !String
 
 instance Exception SyncNodeError
 
 instance Show SyncNodeError where
   show =
     \case
-      SNErrDefault t -> "Error SNErrDefault: " <> Text.show t
-      SNErrInvariant loc i -> "Error SNErrInvariant: " <> Text.show loc <> ": " <> Text.show (renderSyncInvariant i)
+      SNErrDefault t -> "Error SNErrDefault: " <> show t
+      SNErrInvariant loc i -> "Error SNErrInvariant: " <> Show.show loc <> ": " <> show (renderSyncInvariant i)
       SNEErrBlockMismatch blkNo hashDb hashBlk ->
         mconcat
           [ "Error SNEErrBlockMismatch: "
           , "Block mismatch for block number "
           , show blkNo
           , ", db has "
-          , Text.show $ bsBase16Encode hashDb
+          , show $ bsBase16Encode hashDb
           , " but chain provided "
-          , Text.show $ bsBase16Encode hashBlk
+          , show $ bsBase16Encode hashBlk
           ]
       SNErrIgnoreShelleyInitiation ->
         mconcat
@@ -81,23 +82,23 @@ instance Show SyncNodeError where
         mconcat
           [ "Error SNErrByronConfig: "
           , "Failed reading Byron genesis file "
-          , Text.show $ textShow fp
+          , show fp
           , ": "
-          , Text.show $ textShow ce
+          , show ce
           ]
       SNErrShelleyConfig fp txt ->
         mconcat
           [ "Error SNErrShelleyConfig: "
           , "Failed reading Shelley genesis file "
-          , Text.show $ textShow fp
+          , show fp
           , ": "
           , show txt
           ]
       SNErrAlonzoConfig fp txt ->
         mconcat
-          ["Error SNErrAlonzoConfig: "
+          [ "Error SNErrAlonzoConfig: "
           , "Failed reading Alonzo genesis file "
-          , Text.show $ textShow fp
+          , show fp
           , ": "
           , show txt
           ]
@@ -112,6 +113,7 @@ instance Show SyncNodeError where
       SNErrLedgerState err -> "Error SNErrLedgerState: " <> err
       SNErrNodeConfig err -> "Error SNErrNodeConfig: " <> show err
       SNErrLocalStateQuery err -> "Error SNErrLocalStateQuery: " <> show err
+      SNErrByronGenesis err -> "Error SNErrByronGenesis:" <> show err
 
 data NodeConfigError
   = NodeConfigParseError !String
@@ -156,13 +158,16 @@ renderSyncInvariant ei =
         , textShow tx
         ]
 
+fromEitherSTM :: (Exception e) => Either e a -> STM a
+fromEitherSTM = either throwSTM return
+
 bsBase16Encode :: ByteString -> Text
 bsBase16Encode bs =
   case Text.decodeUtf8' (Base16.encode bs) of
-    Left _ -> Text.pack $ "UTF-8 decode failed for " ++ Text.show bs
+    Left _ -> Text.pack $ "UTF-8 decode failed for " ++ Show.show bs
     Right txt -> txt
 
-runOrThrowIO :: forall e a. Exception e => IO (Either e a) -> IO a
+runOrThrowIO :: forall e a m. (MonadIO m) => Exception e => m (Either e a) -> m a
 runOrThrowIO ioEither = do
   et <- ioEither
   case et of

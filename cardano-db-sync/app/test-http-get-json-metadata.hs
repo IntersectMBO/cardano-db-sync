@@ -63,7 +63,7 @@ main = do
         httpGetPoolOfflineData manager request poolUrl mHash
       case eres of
         Left err -> do
-          putStrLn $ show err
+          print err
           pure $ classifyFetchError accum err
         Right _ ->
           pure accum

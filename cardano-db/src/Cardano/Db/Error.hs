@@ -6,15 +6,18 @@
 module Cardano.Db.Error (
   LookupFail (..),
   runOrThrowIODb,
+  logAndThrowIO,
 ) where
 
-import Control.Exception (Exception, throwIO)
+import Control.Exception (Exception)
 import qualified Data.ByteString.Base16 as Base16
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.Text.Encoding as Text
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 import Data.Text (Text)
+import Cardano.BM.Trace (Trace, logError)
+import Cardano.Prelude (throwIO)
 
 data LookupFail
   = DbLookupBlockHash !ByteString
@@ -55,3 +58,8 @@ runOrThrowIODb ioEither = do
   case et of
     Left err -> throwIO err
     Right a -> pure a
+
+logAndThrowIO :: Trace IO Text -> Text -> IO ()
+logAndThrowIO tracer msg = do
+  logError tracer msg
+  throwIO $ userError $ show msg
