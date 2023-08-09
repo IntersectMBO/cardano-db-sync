@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Era.Shelley.Generic.EpochUpdate (
