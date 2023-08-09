@@ -5,7 +5,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -22,7 +21,7 @@ import Cardano.Db hiding (AdaPots, EpochNo, SyncState, epochNo)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
-import Cardano.Ledger.Coin (Coin (..), DeltaCoin (..))
+import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Core as Ledger
 import Cardano.Ledger.Shelley.API (AdaPots, InstantaneousRewards (..))
 import Cardano.Ledger.Shelley.Rules (
@@ -49,9 +48,10 @@ import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (
   OneEraLedgerEvent,
   getOneEraLedgerEvent,
  )
-import Ouroboros.Consensus.Ledger.Abstract (AuxLedgerEvent)
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock, ShelleyLedgerEvent (..))
 import Ouroboros.Consensus.TypeFamilyWrappers
+
+-- import Cardano.Ledger.Conway.Rules
 
 data LedgerEvent
   = LedgerMirDist !(Map StakeCred (Set Generic.Reward))
@@ -124,7 +124,7 @@ instance ConvertLedgerEvent (ShelleyBlock protocol (BabbageEra StandardCrypto)) 
   toLedgerEvent = toLedgerEventShelley
 
 instance ConvertLedgerEvent (ShelleyBlock protocol (ConwayEra StandardCrypto)) where
-  toLedgerEvent _ = Nothing -- TODO: Conway
+  toLedgerEvent _ = Nothing -- toLedgerEventConway -- TODO: Conway
 
 toLedgerEventShelley ::
   ( EraCrypto ledgerera ~ StandardCrypto
@@ -139,18 +139,36 @@ toLedgerEventShelley ::
   Maybe LedgerEvent
 toLedgerEventShelley evt =
   case unwrapLedgerEvent evt of
-    LETotalRewards e m -> Just $ LedgerTotalRewards e m
-    LERestraintRewards e m creds ->
+    ShelleyLedgerEventTICK (TickNewEpochEvent (TotalRewardEvent e m)) ->
+      Just $ LedgerTotalRewards e m
+    ShelleyLedgerEventTICK (TickNewEpochEvent (RestrainedRewards e m creds)) ->
       Just $ LedgerRestrainedRewards e (convertPoolRewards m) creds
-    LEDeltaReward e m ->
+    ShelleyLedgerEventTICK (TickNewEpochEvent (DeltaRewardEvent (RupdEvent e m))) ->
       Just $ LedgerDeltaRewards e (convertPoolRewards m)
-    LEIncrementalReward e m ->
+    ShelleyLedgerEventTICK (TickRupdEvent (RupdEvent e m)) ->
       Just $ LedgerIncrementalRewards e (convertPoolRewards m)
-    LEMirTransfer rp tp _rtt _ttr -> Just $ LedgerMirDist (convertMirRewards rp tp)
-    LERetiredPools r _u en -> Just $ LedgerPoolReap en (convertPoolDepositRefunds r)
-    LEAdaPots p -> Just $ LedgerAdaPots p
-    ShelleyLedgerEventBBODY {} -> Nothing
-    ShelleyLedgerEventTICK {} -> Nothing
+    ShelleyLedgerEventTICK
+      ( TickNewEpochEvent
+          ( MirEvent
+              ( MirTransfer
+                  (InstantaneousRewards rp tp _ _)
+                )
+            )
+        ) ->
+        Just $ LedgerMirDist (convertMirRewards rp tp)
+    ShelleyLedgerEventTICK
+      ( TickNewEpochEvent
+          ( EpochEvent
+              ( PoolReapEvent
+                  (RetiredPools r _u en)
+                )
+            )
+        ) -> Just $ LedgerPoolReap en (convertPoolDepositRefunds r)
+    ShelleyLedgerEventTICK
+      ( TickNewEpochEvent
+          (TotalAdaPotsEvent p)
+        ) -> Just $ LedgerAdaPots p
+    _ -> Nothing
 
 instance All ConvertLedgerEvent xs => ConvertLedgerEvent (HardForkBlock xs) where
   toLedgerEvent =
@@ -212,112 +230,3 @@ convertPoolRewards rmap =
         , Generic.rewardAmount = Ledger.rewardAmount sr
         , Generic.rewardPool = Strict.Just $ Ledger.rewardPool sr
         }
-
---------------------------------------------------------------------------------
--- Patterns for event access. Why aren't these in ledger-specs?
-
-pattern LERestraintRewards ::
-  ( EraCrypto ledgerera ~ StandardCrypto
-  , Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
-  , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ ShelleyNewEpochEvent ledgerera
-  ) =>
-  EpochNo ->
-  Map StakeCred (Set (Ledger.Reward StandardCrypto)) ->
-  Set StakeCred ->
-  AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
-pattern LERestraintRewards e m creds <-
-  ShelleyLedgerEventTICK
-    (TickNewEpochEvent (RestrainedRewards e m creds))
-
-pattern LETotalRewards ::
-  ( EraCrypto ledgerera ~ StandardCrypto
-  , Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
-  , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ ShelleyNewEpochEvent ledgerera
-  ) =>
-  EpochNo ->
-  Map StakeCred (Set (Ledger.Reward StandardCrypto)) ->
-  AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
-pattern LETotalRewards e m <-
-  ShelleyLedgerEventTICK
-    (TickNewEpochEvent (TotalRewardEvent e m))
-
-pattern LEDeltaReward ::
-  ( EraCrypto ledgerera ~ StandardCrypto
-  , Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
-  , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ ShelleyNewEpochEvent ledgerera
-  , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent (EraCrypto ledgerera)
-  ) =>
-  EpochNo ->
-  Map StakeCred (Set (Ledger.Reward StandardCrypto)) ->
-  AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
-pattern LEDeltaReward e m <-
-  ShelleyLedgerEventTICK
-    (TickNewEpochEvent (DeltaRewardEvent (RupdEvent e m)))
-
-pattern LEIncrementalReward ::
-  ( EraCrypto ledgerera ~ StandardCrypto
-  , Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
-  , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent (EraCrypto ledgerera)
-  ) =>
-  EpochNo ->
-  Map StakeCred (Set (Ledger.Reward StandardCrypto)) ->
-  AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
-pattern LEIncrementalReward e m <-
-  ShelleyLedgerEventTICK
-    (TickRupdEvent (RupdEvent e m))
-
-pattern LEMirTransfer ::
-  ( EraCrypto ledgerera ~ StandardCrypto
-  , Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
-  , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ ShelleyNewEpochEvent ledgerera
-  , Event (Ledger.EraRule "MIR" ledgerera) ~ ShelleyMirEvent ledgerera
-  ) =>
-  Map StakeCred Coin ->
-  Map StakeCred Coin ->
-  DeltaCoin ->
-  DeltaCoin ->
-  AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
-pattern LEMirTransfer rp tp rtt ttr <-
-  ShelleyLedgerEventTICK
-    ( TickNewEpochEvent
-        ( MirEvent
-            ( MirTransfer
-                (InstantaneousRewards rp tp rtt ttr)
-              )
-          )
-      )
-
-pattern LERetiredPools ::
-  ( EraCrypto ledgerera ~ StandardCrypto
-  , Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
-  , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ ShelleyNewEpochEvent ledgerera
-  , Event (Ledger.EraRule "EPOCH" ledgerera) ~ ShelleyEpochEvent ledgerera
-  , Event (Ledger.EraRule "POOLREAP" ledgerera) ~ ShelleyPoolreapEvent ledgerera
-  ) =>
-  Map StakeCred (Map PoolKeyHash Coin) ->
-  Map StakeCred (Map PoolKeyHash Coin) ->
-  EpochNo ->
-  AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
-pattern LERetiredPools r u e <-
-  ShelleyLedgerEventTICK
-    ( TickNewEpochEvent
-        ( EpochEvent
-            ( PoolReapEvent
-                (RetiredPools r u e)
-              )
-          )
-      )
-
-pattern LEAdaPots ::
-  ( EraCrypto ledgerera ~ StandardCrypto
-  , Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
-  , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ ShelleyNewEpochEvent ledgerera
-  , Event (Ledger.EraRule "MIR" ledgerera) ~ ShelleyMirEvent ledgerera
-  ) =>
-  AdaPots ->
-  AuxLedgerEvent (LedgerState (ShelleyBlock p ledgerera))
-pattern LEAdaPots pots <-
-  ShelleyLedgerEventTICK
-    ( TickNewEpochEvent
-        (TotalAdaPotsEvent pots)
-      )
