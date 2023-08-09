@@ -6,17 +6,22 @@
 module Cardano.DbSync.Era.Shelley.Generic.ScriptTest (tests) where
 
 import qualified Cardano.Api.Shelley as Shelley
-import Cardano.Binary (serialize')
 import Cardano.DbSync.Era.Shelley.Generic.Script
+import qualified Cardano.Ledger.Allegra.Scripts as Allegra
 import Cardano.Ledger.Api (Shelley ())
 import Cardano.Ledger.Binary.Decoding
-import Cardano.Ledger.Shelley.Scripts (MultiSig (..))
+import qualified Cardano.Ledger.Shelley.Scripts as Ledger
 import Cardano.Prelude
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Lazy as LByteString
+import Data.Sequence.Strict (fromList)
 import Hedgehog
 import qualified Hedgehog.Gen as Gen
+import Hedgehog.Gen.QuickCheck (arbitrary)
+import qualified Hedgehog.Range as Range
+import Test.Cardano.Ledger.Allegra.Arbitrary ()
+import Test.Cardano.Ledger.Shelley.Arbitrary ()
 import Prelude (String ())
 
 tests :: IO Bool
@@ -28,6 +33,10 @@ tests =
       , ("multisigToJSON negative", prop_multisigToJSON_bad)
       , ("multisigToJSON roundtrip", prop_multisigToJSON_roundtrip)
       , ("multisigToJSON A/B", prop_multisigToJSON_api)
+      , ("timelockToJSON simple", prop_timelockToJSON)
+      , ("timelockToJSON negative", prop_timelockToJSON_bad)
+      , ("timelockToJSON roundtrip", prop_timelockToJSON_roundtrip)
+      , ("timelockToJSON A/B", prop_timelockToJSON_api)
       ]
 
 prop_multisigToJSON :: Property
@@ -38,7 +47,7 @@ prop_multisigToJSON = property $ do
 
   Aeson.toJSON (fromMultiSig multiSig) === json
   where
-    decodeCbor :: Text -> Either DecoderError (MultiSig Shelley)
+    decodeCbor :: Text -> Either DecoderError (Ledger.MultiSig Shelley)
     decodeCbor cbor = do
       let bytes = LByteString.fromStrict $ deserialiseCborFromBase16 cbor
       Annotator ann <- decodeFull shelleyProtVer bytes
@@ -54,31 +63,51 @@ prop_multisigToJSON_bad = property $ do
 
 prop_multisigToJSON_roundtrip :: Property
 prop_multisigToJSON_roundtrip = property $ do
-  (cborHex, _) <- forAll $ Gen.element knownMultiSigs
-  multiSig <- evalEither $ decodeCbor cborHex
+  multiSig <- forAll genValidMultiSig
+  tripping multiSig Aeson.toJSON Aeson.fromJSON
 
-  tripping (fromMultiSig multiSig) Aeson.toJSON Aeson.fromJSON
+prop_multisigToJSON_api :: Property
+prop_multisigToJSON_api = property $ do
+  multiSig <- forAll genMultiSig
+  Aeson.toJSON (toSimpleScript multiSig) === Aeson.toJSON multiSig
   where
-    decodeCbor :: Text -> Either DecoderError (MultiSig Shelley)
+    toSimpleScript :: MultiSigScript -> Shelley.SimpleScript
+    toSimpleScript = Shelley.fromShelleyMultiSig . toMultiSig @Shelley
+
+prop_timelockToJSON :: Property
+prop_timelockToJSON = property $ do
+  (cborHex, jsonText) <- forAll $ Gen.element (knownMultiSigs <> knownTimelocks)
+  timelock <- evalEither $ decodeCbor cborHex
+  json <- evalEither $ Aeson.eitherDecodeStrict @Aeson.Value $ encodeUtf8 jsonText
+
+  Aeson.toJSON (fromTimelock timelock) === json
+  where
+    decodeCbor :: Text -> Either DecoderError (Allegra.Timelock Shelley)
     decodeCbor cbor = do
       let bytes = LByteString.fromStrict $ deserialiseCborFromBase16 cbor
       Annotator ann <- decodeFull shelleyProtVer bytes
       pure $ ann (Full bytes)
 
-prop_multisigToJSON_api :: Property
-prop_multisigToJSON_api = property $ do
-  (cborHex, jsonText) <- forAll $ Gen.element knownMultiSigs
-  multiSig <- decodeMultiSig $ encodeUtf8 jsonText
-
-  cborHex === serialiseCborToBase16 (serialize' multiSig)
+prop_timelockToJSON_bad :: Property
+prop_timelockToJSON_bad = property $ do
+  jsonText <- forAll $ Gen.element knownBadMultiSigs
+  assert $ isLeft (decodeJson jsonText)
   where
-    toMultiSig :: MonadTest m => Shelley.SimpleScript -> m (MultiSig Shelley)
-    toMultiSig = evalEither . Shelley.toShelleyMultiSig
+    decodeJson :: Text -> Either String TimelockScript
+    decodeJson jsonText = Aeson.eitherDecodeStrict $ encodeUtf8 jsonText
 
-    decodeMultiSig :: MonadTest m => ByteString -> m (MultiSig Shelley)
-    decodeMultiSig =
-      (evalEither . Aeson.eitherDecodeStrict @Shelley.SimpleScript)
-        >=> toMultiSig
+prop_timelockToJSON_roundtrip :: Property
+prop_timelockToJSON_roundtrip = property $ do
+  timelock <- forAll genValidTimelock
+  tripping timelock Aeson.toJSON Aeson.fromJSON
+
+prop_timelockToJSON_api :: Property
+prop_timelockToJSON_api = property $ do
+  timelock <- forAll genTimelock
+  Aeson.toJSON (toSimpleScript timelock) === Aeson.toJSON timelock
+  where
+    toSimpleScript :: TimelockScript -> Shelley.SimpleScript
+    toSimpleScript = Shelley.fromAllegraTimelock . toTimelock @Shelley
 
 knownMultiSigs :: [(Text, Text)]
 knownMultiSigs =
@@ -110,8 +139,89 @@ knownBadMultiSigs =
   , "{\"type\": \"atLeast\", \"required\": 2, \"scripts\": [{\"type\": \"sig\", \"keyHash\": \"58d2196589e3d007deb6871ac3e6b6f15ccf360467ce05c93067c219\"}]}"
   ]
 
-serialiseCborToBase16 :: ByteString -> Text
-serialiseCborToBase16 = decodeUtf8 . Base16.encode
+knownTimelocks :: [(Text, Text)]
+knownTimelocks =
+  [
+    ( "82051a0446e5b4"
+    , "{\"slot\": 71755188, \"type\": \"before\"}"
+    )
+  ,
+    ( "8204190230"
+    , "{\"slot\": 560, \"type\": \"after\"}"
+    )
+  ,
+    ( "82018282051a0446e5b48200581ccda9e29dde371bd2c4f58edb036477ec1cde527dd890f429199f938e"
+    , "{\"type\": \"all\", \"scripts\": [{ \"slot\": 71755188, \"type\": \"before\" }, {\"type\": \"sig\", \"keyHash\": \"cda9e29dde371bd2c4f58edb036477ec1cde527dd890f429199f938e\"}]}"
+    )
+  ,
+    ( "8202818204190230"
+    , "{\"type\": \"any\", \"scripts\": [{ \"slot\": 560, \"type\": \"after\" }]}"
+    )
+  ,
+    ( "830301818204190230"
+    , "{\"type\": \"atLeast\", \"required\": 1, \"scripts\": [{ \"slot\": 560, \"type\": \"after\" }]}"
+    )
+  ]
+
+genMultiSig :: Gen MultiSigScript
+genMultiSig = fromMultiSig @Shelley <$> arbitrary
+
+genValidMultiSig :: Gen MultiSigScript
+genValidMultiSig = fromMultiSig @Shelley <$> genValidLedgerMultiSigSized 5 10
+
+genValidLedgerMultiSigSized :: Int -> Size -> Gen (Ledger.MultiSig Shelley)
+genValidLedgerMultiSigSized _ 0 = Ledger.RequireSignature <$> arbitrary
+genValidLedgerMultiSigSized maxListLen maxDepth =
+  Gen.choice
+    [ Ledger.RequireSignature <$> arbitrary
+    , Ledger.RequireAllOf <$> genList 0 maxListLen
+    , Ledger.RequireAnyOf <$> genList 0 maxListLen
+    , genRequireMOf
+    ]
+  where
+    genList minLen maxLen =
+      genListSized
+        (Range.linear minLen maxLen)
+        maxDepth
+        (genValidLedgerMultiSigSized maxListLen)
+
+    genRequireMOf = do
+      req <- Gen.int (Range.linear 0 maxListLen)
+      Ledger.RequireMOf req <$> genList req maxListLen
+
+genTimelock :: Gen TimelockScript
+genTimelock = fromTimelock @Shelley <$> arbitrary
+
+genValidTimelock :: Gen TimelockScript
+genValidTimelock = fromTimelock @Shelley <$> genValidLedgerTimelockSized 5 10
+
+genValidLedgerTimelockSized :: Int -> Size -> Gen (Allegra.Timelock Shelley)
+genValidLedgerTimelockSized _ 0 = Allegra.RequireSignature <$> arbitrary
+genValidLedgerTimelockSized maxListLen maxDepth =
+  Gen.choice
+    [ Allegra.RequireSignature <$> arbitrary
+    , Allegra.RequireTimeExpire <$> arbitrary
+    , Allegra.RequireTimeStart <$> arbitrary
+    , Allegra.RequireAllOf <$> genList 0 maxListLen
+    , Allegra.RequireAnyOf <$> genList 0 maxListLen
+    , genRequireMOf
+    ]
+  where
+    genList minLen maxLen =
+      fromList
+        <$> genListSized
+          (Range.linear minLen maxLen)
+          maxDepth
+          (genValidLedgerTimelockSized maxListLen)
+
+    genRequireMOf = do
+      req <- Gen.int (Range.linear 0 maxListLen)
+      Allegra.RequireMOf req <$> genList req maxListLen
+
+genListSized :: Range Int -> Size -> (Size -> Gen a) -> Gen [a]
+genListSized listLen (Size size) f = Gen.list listLen (f size')
+  where
+    size' = Size (size - 1)
 
 deserialiseCborFromBase16 :: Text -> ByteString
 deserialiseCborFromBase16 = Base16.decodeLenient . encodeUtf8

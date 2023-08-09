@@ -15,8 +15,8 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (
 ) where
 
 import Cardano.Db (ScriptType (..))
-import Cardano.DbSync.Util.Cardano (fromAllegraTimelock)
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
+import Cardano.DbSync.Era.Shelley.Generic.Script (fromTimelock)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (
   calcWithdrawalSum,
   getTxMetadata,
@@ -123,7 +123,7 @@ mkTxScript (hsh, script) =
     , txScriptPlutusSize = Nothing
     , txScriptJson =
         Just . LBS.toStrict . Aeson.encode $
-          fromAllegraTimelock script
+          fromTimelock script
     , txScriptCBOR = Nothing
     }
 

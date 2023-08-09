@@ -3,10 +3,6 @@ module Cardano.DbSync.Util.Cardano (
   Shelley.ScriptDataJsonSchema (..),
   Shelley.scriptDataToJson,
   Shelley.fromAlonzoData,
-
-  -- * Script json
-  Shelley.fromAllegraTimelock,
-  Shelley.fromShelleyMultiSig,
 ) where
 
 import qualified Cardano.Api.Shelley as Shelley

@@ -26,8 +26,8 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo (
 
 import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Db (ScriptType (..))
-
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
+import Cardano.DbSync.Era.Shelley.Generic.Script (fromTimelock)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
@@ -36,7 +36,6 @@ import Cardano.DbSync.Era.Shelley.Generic.Witness
 import Cardano.DbSync.Types (DataHash)
 import Cardano.DbSync.Util.Cardano (
   ScriptDataJsonSchema (..),
-  fromAllegraTimelock,
   fromAlonzoData,
   scriptDataToJson,
  )
@@ -308,7 +307,7 @@ mkTxScript (hsh, script) =
     timelockJsonScript =
       case script of
         Alonzo.TimelockScript s ->
-          Just . LBS.toStrict . Aeson.encode $ fromAllegraTimelock s
+          Just . LBS.toStrict . Aeson.encode $ fromTimelock s
         Alonzo.PlutusScript {} -> Nothing
 
     plutusCborScript :: Maybe ByteString
