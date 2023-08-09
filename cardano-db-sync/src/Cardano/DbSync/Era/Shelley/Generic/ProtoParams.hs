@@ -62,29 +62,52 @@ epochProtoParams :: ExtLedgerState CardanoBlock -> Maybe ProtoParams
 epochProtoParams lstate =
   case ledgerState lstate of
     LedgerStateByron _ -> Nothing
-    LedgerStateShelley sls -> Just $ shelleyProtoParams sls
-    LedgerStateAllegra als -> Just $ shelleyProtoParams als
-    LedgerStateMary mls -> Just $ shelleyProtoParams mls
-    LedgerStateAlonzo als -> Just $ alonzoProtoParams als
-    LedgerStateBabbage bls -> Just $ babbageProtoParams bls
-    LedgerStateConway _cls -> Nothing -- panic "TODO: Conway not supported yet"
+    LedgerStateShelley st -> Just $ fromShelleyParams $ getProtoParams st
+    LedgerStateAllegra st -> Just $ fromShelleyParams $ getProtoParams st
+    LedgerStateMary st -> Just $ fromShelleyParams $ getProtoParams st
+    LedgerStateAlonzo st -> Just $ fromAlonzoParams $ getProtoParams st
+    LedgerStateBabbage st -> Just $ fromBabbageParams $ getProtoParams st
+    LedgerStateConway st -> Just $ fromConwayParams $ getProtoParams st
 
-alonzoProtoParams :: LedgerState (ShelleyBlock p StandardAlonzo) -> ProtoParams
-alonzoProtoParams =
-  fromAlonzoParams . Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState
-
-babbageProtoParams :: LedgerState (ShelleyBlock p StandardBabbage) -> ProtoParams
-babbageProtoParams =
-  fromBabbageParams . Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState
-
-shelleyProtoParams ::
-  (ProtVerAtMost era 6, ProtVerAtMost era 4, EraPParams era) =>
+getProtoParams ::
   LedgerState (ShelleyBlock p era) ->
-  ProtoParams
-shelleyProtoParams =
-  fromShelleyParams . Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState
+  PParams era
+getProtoParams = Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState
 
 -- -------------------------------------------------------------------------------------------------
+
+fromConwayParams :: PParams StandardConway -> ProtoParams
+fromConwayParams params =
+  ProtoParams
+    { ppMinfeeA = fromIntegral . unCoin $ params ^. ppMinFeeAL
+    , ppMinfeeB = fromIntegral . unCoin $ params ^. ppMinFeeBL
+    , ppMaxBBSize = params ^. ppMaxBBSizeL
+    , ppMaxTxSize = params ^. ppMaxTxSizeL
+    , ppMaxBHSize = params ^. ppMaxBHSizeL
+    , ppKeyDeposit = params ^. ppKeyDepositL
+    , ppPoolDeposit = params ^. ppPoolDepositL
+    , ppMaxEpoch = params ^. ppEMaxL
+    , ppOptialPoolCount = params ^. ppNOptL
+    , ppInfluence = Ledger.unboundRational $ params ^. ppA0L
+    , ppMonetaryExpandRate = params ^. ppRhoL
+    , ppTreasuryGrowthRate = params ^. ppTauL
+    , ppDecentralisation = minBound -- can't change in Babbage
+    , ppExtraEntropy = NeutralNonce -- no extra entropy in Babbage
+    , ppProtocolVersion = params ^. ppProtocolVersionL
+    , ppMinUTxOValue = Coin 0
+    , ppMinPoolCost = params ^. ppMinPoolCostL
+    , ppCoinsPerUtxo = Just $ unCoinPerByte (params ^. ppCoinsPerUTxOByteL)
+    , ppCostmdls = Just $ Alonzo.costModelsValid $ params ^. ppCostModelsL
+    , ppPriceMem = Just . Ledger.unboundRational $ Alonzo.prMem (params ^. ppPricesL)
+    , ppPriceStep = Just . Ledger.unboundRational $ Alonzo.prSteps (params ^. ppPricesL)
+    , ppMaxTxExMem = Just . fromIntegral $ Alonzo.exUnitsMem (params ^. ppMaxTxExUnitsL)
+    , ppMaxTxExSteps = Just . fromIntegral $ Alonzo.exUnitsSteps (params ^. ppMaxTxExUnitsL)
+    , ppMaxBlockExMem = Just . fromIntegral $ Alonzo.exUnitsMem (params ^. ppMaxBlockExUnitsL)
+    , ppMaxBlockExSteps = Just . fromIntegral $ Alonzo.exUnitsSteps (params ^. ppMaxBlockExUnitsL)
+    , ppMaxValSize = Just $ params ^. ppMaxValSizeL
+    , ppCollateralPercentage = Just $ params ^. ppCollateralPercentageL
+    , ppMaxCollateralInputs = Just $ params ^. ppMaxCollateralInputsL
+    }
 
 fromBabbageParams :: PParams StandardBabbage -> ProtoParams
 fromBabbageParams params =
