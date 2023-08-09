@@ -22,16 +22,18 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.Ledger.Coin (Coin (..))
+import Cardano.Ledger.Conway.Rules as Conway
 import qualified Cardano.Ledger.Core as Ledger
 import Cardano.Ledger.Shelley.API (AdaPots, InstantaneousRewards (..))
 import Cardano.Ledger.Shelley.Rules (
   RupdEvent (RupdEvent),
-  ShelleyEpochEvent (PoolReapEvent),
+  ShelleyEpochEvent,
   ShelleyMirEvent (..),
   ShelleyNewEpochEvent (..),
   ShelleyPoolreapEvent (..),
   ShelleyTickEvent (..),
  )
+import qualified Cardano.Ledger.Shelley.Rules as Shelley
 import Cardano.Prelude hiding (All)
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.State.Transition (Event)
@@ -50,8 +52,6 @@ import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (
  )
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock, ShelleyLedgerEvent (..))
 import Ouroboros.Consensus.TypeFamilyWrappers
-
--- import Cardano.Ledger.Conway.Rules
 
 data LedgerEvent
   = LedgerMirDist !(Map StakeCred (Set Generic.Reward))
@@ -124,7 +124,7 @@ instance ConvertLedgerEvent (ShelleyBlock protocol (BabbageEra StandardCrypto)) 
   toLedgerEvent = toLedgerEventShelley
 
 instance ConvertLedgerEvent (ShelleyBlock protocol (ConwayEra StandardCrypto)) where
-  toLedgerEvent _ = Nothing -- toLedgerEventConway -- TODO: Conway
+  toLedgerEvent = toLedgerEventConway
 
 toLedgerEventShelley ::
   ( EraCrypto ledgerera ~ StandardCrypto
@@ -139,11 +139,11 @@ toLedgerEventShelley ::
   Maybe LedgerEvent
 toLedgerEventShelley evt =
   case unwrapLedgerEvent evt of
-    ShelleyLedgerEventTICK (TickNewEpochEvent (TotalRewardEvent e m)) ->
+    ShelleyLedgerEventTICK (TickNewEpochEvent (Shelley.TotalRewardEvent e m)) ->
       Just $ LedgerTotalRewards e m
-    ShelleyLedgerEventTICK (TickNewEpochEvent (RestrainedRewards e m creds)) ->
+    ShelleyLedgerEventTICK (TickNewEpochEvent (Shelley.RestrainedRewards e m creds)) ->
       Just $ LedgerRestrainedRewards e (convertPoolRewards m) creds
-    ShelleyLedgerEventTICK (TickNewEpochEvent (DeltaRewardEvent (RupdEvent e m))) ->
+    ShelleyLedgerEventTICK (TickNewEpochEvent (Shelley.DeltaRewardEvent (RupdEvent e m))) ->
       Just $ LedgerDeltaRewards e (convertPoolRewards m)
     ShelleyLedgerEventTICK (TickRupdEvent (RupdEvent e m)) ->
       Just $ LedgerIncrementalRewards e (convertPoolRewards m)
@@ -158,15 +158,49 @@ toLedgerEventShelley evt =
         Just $ LedgerMirDist (convertMirRewards rp tp)
     ShelleyLedgerEventTICK
       ( TickNewEpochEvent
-          ( EpochEvent
-              ( PoolReapEvent
+          ( Shelley.EpochEvent
+              ( Shelley.PoolReapEvent
                   (RetiredPools r _u en)
                 )
             )
         ) -> Just $ LedgerPoolReap en (convertPoolDepositRefunds r)
     ShelleyLedgerEventTICK
       ( TickNewEpochEvent
-          (TotalAdaPotsEvent p)
+          (Shelley.TotalAdaPotsEvent p)
+        ) -> Just $ LedgerAdaPots p
+    _ -> Nothing
+
+toLedgerEventConway ::
+  ( EraCrypto ledgerera ~ StandardCrypto
+  , Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
+  , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ ConwayNewEpochEvent ledgerera
+  , Event (Ledger.EraRule "EPOCH" ledgerera) ~ ConwayEpochEvent ledgerera
+  , Event (Ledger.EraRule "POOLREAP" ledgerera) ~ ShelleyPoolreapEvent ledgerera
+  , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent (EraCrypto ledgerera)
+  ) =>
+  WrapLedgerEvent (ShelleyBlock protocol ledgerera) ->
+  Maybe LedgerEvent
+toLedgerEventConway evt =
+  case unwrapLedgerEvent evt of
+    ShelleyLedgerEventTICK (TickNewEpochEvent (Conway.TotalRewardEvent e m)) ->
+      Just $ LedgerTotalRewards e m
+    ShelleyLedgerEventTICK (TickNewEpochEvent (Conway.RestrainedRewards e m creds)) ->
+      Just $ LedgerRestrainedRewards e (convertPoolRewards m) creds
+    ShelleyLedgerEventTICK (TickNewEpochEvent (Conway.DeltaRewardEvent (RupdEvent e m))) ->
+      Just $ LedgerDeltaRewards e (convertPoolRewards m)
+    ShelleyLedgerEventTICK (TickRupdEvent (RupdEvent e m)) ->
+      Just $ LedgerIncrementalRewards e (convertPoolRewards m)
+    ShelleyLedgerEventTICK
+      ( TickNewEpochEvent
+          ( Conway.EpochEvent
+              ( Conway.PoolReapEvent
+                  (RetiredPools r _u en)
+                )
+            )
+        ) -> Just $ LedgerPoolReap en (convertPoolDepositRefunds r)
+    ShelleyLedgerEventTICK
+      ( TickNewEpochEvent
+          (Conway.TotalAdaPotsEvent p)
         ) -> Just $ LedgerAdaPots p
     _ -> Nothing
 
