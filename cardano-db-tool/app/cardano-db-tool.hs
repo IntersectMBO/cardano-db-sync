@@ -6,8 +6,6 @@ import Cardano.DbTool
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Applicative (optional)
 import Control.Monad (unless, void, when)
-import Control.Monad.Trans.Except.Exit (orDie)
-import Control.Monad.Trans.Except.Extra (newExceptT)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
@@ -54,7 +52,7 @@ runCommand cmd =
     CmdReport report -> runReport report
     CmdRollback slotNo -> runRollback slotNo
     CmdRunMigrations mdir forceIndexes mockFix mldir -> do
-      pgConfig <- orDie renderPGPassError $ newExceptT (readPGPass PGPassDefaultEnv)
+      pgConfig <- runOrThrowIODb (readPGPass PGPassDefaultEnv)
       unofficial <- snd <$> runMigrations pgConfig False mdir mldir Initial
       unless (null unofficial) $
         putStrLn $

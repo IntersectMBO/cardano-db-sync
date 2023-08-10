@@ -11,7 +11,7 @@ import Cardano.BM.Trace (Trace, logInfo)
 import Cardano.Db (
   PGPassSource (PGPassDefaultEnv),
   readPGPass,
-  renderPGPassError,
+  runOrThrowIODb,
   textShow,
   toConnectionString,
  )
@@ -22,8 +22,6 @@ import Cardano.SMASH.Server.Config
 import Cardano.SMASH.Server.Impl
 import Cardano.SMASH.Server.PoolDataLayer
 import Cardano.SMASH.Server.Types
-import Control.Monad.Trans.Except.Exit (orDie)
-import Control.Monad.Trans.Except.Extra (newExceptT)
 import Database.Persist.Postgresql (withPostgresqlPool)
 import Network.Wai.Handler.Warp (defaultSettings, runSettings, setBeforeMainLoop, setPort)
 import Servant (
@@ -44,7 +42,7 @@ runSmashServer config = do
             (logInfo trce $ "SMASH listening on port " <> textShow (sscSmashPort config))
             defaultSettings
 
-  pgconfig <- orDie renderPGPassError $ newExceptT (readPGPass PGPassDefaultEnv)
+  pgconfig <- runOrThrowIODb (readPGPass PGPassDefaultEnv)
   Db.runIohkLogging trce $ withPostgresqlPool (toConnectionString pgconfig) (sscSmashPort config) $ \pool -> do
     let poolDataLayer = postgresqlPoolDataLayer trce pool
     app <- liftIO $ mkApp (sscTrace config) poolDataLayer (sscAdmins config)

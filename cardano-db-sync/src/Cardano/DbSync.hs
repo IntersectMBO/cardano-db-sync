@@ -23,7 +23,6 @@ module Cardano.DbSync (
   SimplifiedPoolOfflineData (..),
   httpGetPoolOfflineData,
   parsePoolUrl,
-  renderFetchError,
 ) where
 
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
@@ -52,22 +51,18 @@ import Cardano.DbSync.Era.Shelley.Offline.Http (
   SimplifiedPoolOfflineData (..),
   httpGetPoolOfflineData,
   parsePoolUrl,
-  renderFetchError,
   spodJson,
  )
-import Cardano.DbSync.Error
+import Cardano.DbSync.Error (SyncNodeError, runOrThrowIO, hasAbortOnPanicEnv)
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Rollback (unsafeRollback)
 import Cardano.DbSync.Sync (runSyncNodeClient)
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbSync.Types
-import Cardano.DbSync.Util (readAbortOnPanic)
 import Cardano.Prelude hiding (Nat, (%))
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Async
 import Control.Monad.Extra (whenJust)
-import Control.Monad.Trans.Except.Exit (orDie)
-import Control.Monad.Trans.Except.Extra (newExceptT)
 import qualified Data.Text as Text
 import Data.Version (showVersion)
 import Database.Persist.Postgresql (ConnectionString, withPostgresqlConn)
@@ -82,7 +77,7 @@ runDbSyncNode metricsSetters knownMigrations params =
   withIOManager $ \iomgr -> do
     trce <- configureLogging params "db-sync-node"
 
-    aop <- readAbortOnPanic
+    aop <- hasAbortOnPanicEnv
     startupReport trce aop params
 
     runDbSync metricsSetters knownMigrations iomgr trce params aop
@@ -97,7 +92,7 @@ runDbSync ::
   IO ()
 runDbSync metricsSetters knownMigrations iomgr trce params aop = do
   -- Read the PG connection info
-  pgConfig <- orDie Db.renderPGPassError $ newExceptT (Db.readPGPass $ enpPGPassSource params)
+  pgConfig <- runOrThrowIO (Db.readPGPass $ enpPGPassSource params)
 
   mErrors <- liftIO $ Db.validateMigrations dbMigrationDir knownMigrations
   whenJust mErrors $ \(unknown, stage4orNewStage3) ->
@@ -106,7 +101,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params aop = do
       else do
         let msg = Db.renderMigrationValidateError unknown
         logError trce msg
-        panic msg
+        throwIO unknown
 
   logInfo trce "Schema migration files validated"
 
@@ -174,7 +169,7 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
   logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfig)
   Db.runIohkLogging trce $
     withPostgresqlConn dbConnString $ \backend -> liftIO $ do
-      orDie renderSyncNodeError $ do
+      runOrThrowIO $ runExceptT $ do
         genCfg <- readCardanoGenesisConfig syncNodeConfig
         logProtocolMagicId trce $ genesisProtocolMagicId genCfg
 

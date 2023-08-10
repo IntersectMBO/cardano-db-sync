@@ -42,7 +42,7 @@ import qualified Cardano.Db as Db
 import Cardano.DbSync
 import Cardano.DbSync.Config
 import Cardano.DbSync.Config.Cardano
-import Cardano.DbSync.Error
+import Cardano.DbSync.Error (runOrThrowIO)
 import Cardano.DbSync.Types (CardanoBlock, MetricSetters (..))
 import Cardano.Mock.ChainSync.Server
 import Cardano.Mock.Forging.Interpreter
@@ -63,8 +63,7 @@ import Control.Exception (SomeException, bracket)
 import Control.Monad (void)
 import Control.Monad.Extra (eitherM)
 import Control.Monad.Logger (NoLoggingT, runNoLoggingT)
-import Control.Monad.Trans.Except.Exit (orDie)
-import Control.Monad.Trans.Except.Extra (newExceptT, runExceptT)
+import Control.Monad.Trans.Except.Extra (runExceptT)
 import Control.Tracer (nullTracer)
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -196,7 +195,7 @@ queryDBSync env = Db.runWithConnectionNoLogging (getDBSyncPGPass env)
 
 getPoolLayer :: DBSyncEnv -> IO PoolDataLayer
 getPoolLayer env = do
-  pgconfig <- orDie Db.renderPGPassError $ newExceptT $ Db.readPGPass (enpPGPassSource $ dbSyncParams env)
+  pgconfig <- runOrThrowIO $ Db.readPGPass (enpPGPassSource $ dbSyncParams env)
   pool <- runNoLoggingT $ createPostgresqlPool (Db.toConnectionString pgconfig) 1 -- Pool size of 1 for tests
   pure $
     postgresqlPoolDataLayer
@@ -206,7 +205,7 @@ getPoolLayer env = do
 mkConfig :: FilePath -> FilePath -> CommandLineArgs -> IO Config
 mkConfig staticDir mutableDir cmdLineArgs = do
   config <- readSyncNodeConfig $ ConfigFile (staticDir </> "test-db-sync-config.json")
-  genCfg <- either (error . Text.unpack . renderSyncNodeError) id <$> runExceptT (readCardanoGenesisConfig config)
+  genCfg <- runOrThrowIO $ runExceptT (readCardanoGenesisConfig config)
   let (pInfoDbSync, _) = mkProtocolInfoCardano genCfg []
   creds <- mkShelleyCredentials $ staticDir </> "pools" </> "bulk1.creds"
   let (pInfoForger, forging) = mkProtocolInfoCardano genCfg creds
@@ -231,7 +230,7 @@ mkShelleyCredentials bulkFile = do
 -- | staticDir can be shared by tests running in parallel. mutableDir not.
 mkSyncNodeParams :: FilePath -> FilePath -> CommandLineArgs -> IO SyncNodeParams
 mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
-  pgconfig <- orDie Db.renderPGPassError $ newExceptT Db.readPGPassDefault
+  pgconfig <- runOrThrowIO Db.readPGPassDefault
   pure $
     SyncNodeParams
       { enpConfigFile = ConfigFile $ staticDir </> (if claHasConfigFile then "test-db-sync-config.json" else "")

@@ -11,12 +11,12 @@ module Cardano.Db.Multiplex (
   ExtraCons.deleteConsumedTxOut,
 ) where
 
-import Cardano.BM.Trace (Trace, logError, logInfo)
+import Cardano.BM.Trace (Trace, logInfo)
+import Cardano.Db.Error (logAndThrowIO)
 import Cardano.Db.Insert
 import qualified Cardano.Db.Migration.Extra.CosnumedTxOut.Queries as ExtraCons
 import qualified Cardano.Db.Migration.Extra.CosnumedTxOut.Schema as ExtraCons
 import Cardano.Db.Schema
-import Cardano.Prelude (panic)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT)
@@ -83,9 +83,7 @@ runExtraMigrations trce blockNoDiff consumed pruned = do
       liftIO $ logInfo trce "No extra migration specified"
     (True, True, False) -> do
       liftIO $ logInfo trce "Extra migration consumed_tx_out already executed"
-    (True, False, False) -> do
-      liftIO $ logError trce migratedButNotSet
-      panic migratedButNotSet
+    (True, False, False) -> liftIO $ logAndThrowIO trce migratedButNotSet
     (False, True, False) -> do
       liftIO $ logInfo trce "Running extra migration consumed_tx_out"
       ExtraCons.migrateTxOut $ Just trce

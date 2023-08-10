@@ -13,7 +13,7 @@ import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbTool.Validate.Balance (ledgerAddrBalance)
 import Cardano.DbTool.Validate.Util
 import Control.Monad (when)
-import Control.Monad.Trans.Except.Exit (orDie)
+import Control.Monad.Trans.Except (runExceptT)
 import Control.Tracer (nullTracer)
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -33,7 +33,7 @@ validateLedger :: LedgerValidationParams -> IO ()
 validateLedger params =
   withIOManager $ \_ -> do
     enc <- readSyncNodeConfig (vpConfigFile params)
-    genCfg <- orDie renderSyncNodeError $ readCardanoGenesisConfig enc
+    genCfg <- runOrThrowIO $ runExceptT $ readCardanoGenesisConfig enc
     ledgerFiles <- listLedgerStateFilesOrdered (vpLedgerStateDir params)
     slotNo <- SlotNo <$> DB.runDbNoLoggingEnv DB.queryLatestSlotNo
     validate params genCfg slotNo ledgerFiles
@@ -60,7 +60,7 @@ validateBalance slotNo addr st = do
   balanceDB <- DB.runDbNoLoggingEnv $ DB.queryAddressBalanceAtSlot addr (unSlotNo slotNo)
   let eiBalanceLedger = DB.word64ToAda <$> ledgerAddrBalance addr (ledgerState $ clsState st)
   case eiBalanceLedger of
-    Left str -> putStrLn $ redText (Text.unpack str)
+    Left str -> putStrLn $ redText $ show str
     Right balanceLedger ->
       if balanceDB == balanceLedger
         then

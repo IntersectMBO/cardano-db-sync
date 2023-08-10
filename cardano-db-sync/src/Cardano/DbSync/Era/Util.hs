@@ -20,7 +20,7 @@ import qualified Data.Text.Encoding.Error as Text
 
 liftLookupFail :: Monad m => Text -> m (Either DB.LookupFail a) -> ExceptT SyncNodeError m a
 liftLookupFail loc =
-  firstExceptT (\lf -> NEError $ mconcat [loc, " ", DB.renderLookupFail lf]) . newExceptT
+  firstExceptT (\lf -> SNErrDefault $ mconcat [loc, " ", show lf]) . newExceptT
 
 safeDecodeUtf8 :: ByteString -> IO (Either Text.UnicodeException Text)
 safeDecodeUtf8 bs

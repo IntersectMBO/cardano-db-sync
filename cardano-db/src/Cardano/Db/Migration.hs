@@ -31,7 +31,8 @@ import Cardano.Db.Query
 import Cardano.Db.Run
 import Cardano.Db.Schema
 import Cardano.Db.Text
-import Control.Exception (SomeException, handle)
+import Cardano.Prelude (Typeable)
+import Control.Exception (Exception, SomeException, handle)
 import Control.Monad.Extra
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (NoLoggingT)
@@ -92,7 +93,9 @@ data MigrationValidateError = UnknownMigrationsFound
   { missingMigrations :: [MigrationValidate]
   , extraMigrations :: [MigrationValidate]
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Typeable)
+
+instance Exception MigrationValidateError
 
 data MigrationToRun = Initial | Full | Fix | Indexes
   deriving (Show, Eq)

@@ -17,7 +17,6 @@ import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Chain.Update (ApplicationName (..), SoftwareVersion (..))
 import qualified Cardano.Crypto.Hash.Class as Crypto
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
-import Cardano.Db (textShow)
 import Cardano.DbSync.Config.Alonzo
 import Cardano.DbSync.Config.Byron
 import Cardano.DbSync.Config.Shelley
@@ -29,7 +28,6 @@ import Cardano.Ledger.Binary.Version
 import Cardano.Ledger.Conway.Genesis
 import Cardano.Ledger.Keys
 import Cardano.Ledger.Shelley.Translation (emptyFromByronTranslationContext)
-import Cardano.Prelude (panic)
 import Control.Monad.Trans.Except (ExceptT)
 import Data.Word (Word64)
 import Ouroboros.Consensus.Block.Forging
@@ -140,7 +138,7 @@ shelleyPraosNonce sCfg = Nonce (Crypto.castHash . unGenesisHashShelley $ scGenes
 mkProtVer :: Word64 -> Word64 -> ProtVer
 mkProtVer a b =
   case mkVersion64 a of
-    Nothing -> panic $ "Impossible: Invalid version generated: " <> textShow a
+    Nothing -> error $ "Impossible: Invalid version generated: " <> show a
     Just v -> ProtVer v (fromIntegral b)
 
 mkByronSoftwareVersion :: SoftwareVersion

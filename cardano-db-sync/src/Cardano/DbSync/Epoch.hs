@@ -227,7 +227,7 @@ handleEpochCachingWhenSyncing syncEnv cache newestEpochFromMap epochBlockDiffCac
       newEpoch <- DB.queryCalcEpochEntry $ ebdEpochNo currentEpC
       writeToMapEpochCache syncEnv cache newEpoch
     -- There will always be a EpochBlockDiff at this point in time
-    (_, _) -> pure $ Left $ NEError "handleEpochCachingWhenSyncing: No caches available to update cache"
+    (_, _) -> pure $ Left $ SNErrDefault "handleEpochCachingWhenSyncing: No caches available to update cache"
 
 -----------------------------------------------------------------------------------------------------
 -- Helper functions

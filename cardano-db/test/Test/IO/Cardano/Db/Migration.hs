@@ -15,14 +15,12 @@ import Cardano.Db (
   getMigrationScripts,
   querySchemaVersion,
   readPGPassDefault,
-  renderPGPassError,
   runDbNoLoggingEnv,
   runMigrations,
+  runOrThrowIODb,
   validateMigrations,
  )
 import Control.Monad (unless, when)
-import Control.Monad.Trans.Except.Exit (orDie)
-import Control.Monad.Trans.Except.Extra (newExceptT)
 import qualified Data.List as List
 import qualified Data.List.Extra as List
 import Data.Maybe (fromMaybe)
@@ -132,7 +130,7 @@ invalidHashMigrationValidate' = do
 migrationTest :: IO ()
 migrationTest = do
   let schemaDir = MigrationDir "../schema"
-  pgConfig <- orDie renderPGPassError $ newExceptT readPGPassDefault
+  pgConfig <- runOrThrowIODb readPGPassDefault
   _ <- runMigrations pgConfig True schemaDir (Just $ LogFileDir "/tmp") Initial
   expected <- readSchemaVersion schemaDir
   actual <- getDbSchemaVersion

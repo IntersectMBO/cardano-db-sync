@@ -2,6 +2,7 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -31,7 +32,7 @@ import Cardano.Api (
   serialiseToRawBytes,
  )
 import Cardano.Api.Shelley (StakePoolKey)
-import Cardano.Db (LookupFail (..), PoolMetaHash (..), renderLookupFail)
+import Cardano.Db (LookupFail (..), PoolMetaHash (..))
 import Cardano.Prelude
 import Control.Monad.Fail (fail)
 import Data.Aeson (FromJSON (..), ToJSON (..), object, withObject, (.:), (.=))
@@ -49,6 +50,7 @@ import Data.Time.Format (defaultTimeLocale, formatTime, parseTimeM)
 import Network.URI (URI, parseURI)
 import Quiet (Quiet (..))
 import Servant (FromHttpApiData (..), MimeUnrender (..), OctetStream)
+import qualified Text.Show as Text
 
 -- | The stake pool identifier. It is the hash of the stake pool operator's
 -- vkey.
@@ -368,11 +370,29 @@ data DBFail
   | TickerAlreadyReserved !TickerName
   | RecordDoesNotExist
   | DBFail LookupFail
-  deriving (Eq, Show)
+  | PoolDataLayerError !Text
+  | ConfigError !Text
+  deriving (Eq)
 
 instance ToSchema DBFail where
   declareNamedSchema _ =
     pure (NamedSchema (Just "DBFail") mempty)
+
+instance Exception DBFail
+
+instance Show DBFail where
+  show =
+    \case
+      UnknownError err -> "Unknown error. Context: " <> Text.show err
+      DbInsertError err ->
+        "The database got an error while trying to insert a record. Error: " <> Text.show err
+      DbLookupPoolMetadataHash poolId poolMDHash ->
+        "The metadata with hash " <> Text.show poolMDHash <> " for pool " <> Text.show poolId <> " is missing from the DB."
+      TickerAlreadyReserved ticker -> "Ticker name " <> Text.show (getTickerName ticker) <> " is already reserved"
+      RecordDoesNotExist -> "The requested record does not exist."
+      DBFail lookupFail -> Text.show lookupFail
+      PoolDataLayerError err -> Text.show err
+      ConfigError err -> "Config Error: " <> Text.show err
 
 {-
 
@@ -399,32 +419,30 @@ instance ToJSON DBFail where
   toJSON failure@DbLookupPoolMetadataHash {} =
     object
       [ "code" .= Aeson.String "DbLookupPoolMetadataHash"
-      , "description" .= Aeson.String (renderDBFail failure)
+      , "description" .= Aeson.String (show failure)
       ]
   toJSON failure@TickerAlreadyReserved {} =
     object
       [ "code" .= Aeson.String "TickerAlreadyReserved"
-      , "description" .= Aeson.String (renderDBFail failure)
+      , "description" .= Aeson.String (show failure)
       ]
   toJSON failure@RecordDoesNotExist =
     object
       [ "code" .= Aeson.String "RecordDoesNotExist"
-      , "description" .= Aeson.String (renderDBFail failure)
+      , "description" .= Aeson.String (Cardano.Prelude.show failure)
       ]
   toJSON (DBFail err) =
     object
       [ "code" .= Aeson.String "DBFail"
-      , "description" .= Aeson.String (renderLookupFail err)
+      , "description" .= Aeson.String (Cardano.Prelude.show err)
       ]
-
-renderDBFail :: DBFail -> Text
-renderDBFail (UnknownError err) = "Unknown error. Context: " <> err
-renderDBFail (DbInsertError err) =
-  "The database got an error while trying to insert a record. Error: " <> err
-renderDBFail (DbLookupPoolMetadataHash poolId poolMDHash) =
-  "The metadata with hash " <> show poolMDHash <> " for pool " <> show poolId <> " is missing from the DB."
-renderDBFail (TickerAlreadyReserved ticker) =
-  "Ticker name " <> getTickerName ticker <> " is already reserved"
-renderDBFail RecordDoesNotExist =
-  "The requested record does not exist."
-renderDBFail (DBFail lookupFail) = renderLookupFail lookupFail
+  toJSON (PoolDataLayerError err) =
+    object
+      [ "code" .= Aeson.String "PoolDataLayerError"
+      , "description" .= Aeson.String (Cardano.Prelude.show err)
+      ]
+  toJSON (ConfigError err) =
+    object
+      [ "code" .= Aeson.String "ConfigError"
+      , "description" .= Aeson.String (Cardano.Prelude.show err)
+      ]

@@ -17,7 +17,6 @@ import Cardano.DbSync.Era.Shelley.Offline.Http (
   FetchError (..),
   httpGetPoolOfflineData,
   parsePoolUrl,
-  renderFetchError,
  )
 import Control.Monad (foldM)
 import Control.Monad.IO.Class (MonadIO)
@@ -28,7 +27,6 @@ import qualified Data.List as List
 import qualified Data.List.Extra as List
 import Data.Ord (Down (..))
 import Data.Text (Text)
-import qualified Data.Text.IO as Text
 import Database.Esqueleto.Experimental (
   SqlBackend,
   from,
@@ -65,7 +63,7 @@ main = do
         httpGetPoolOfflineData manager request poolUrl mHash
       case eres of
         Left err -> do
-          Text.putStrLn $ renderFetchError err
+          print err
           pure $ classifyFetchError accum err
         Right _ ->
           pure accum

@@ -38,7 +38,7 @@ readShelleyGenesisConfig ::
   ExceptT SyncNodeError IO ShelleyConfig
 readShelleyGenesisConfig enc = do
   let file = unGenesisFile $ dncShelleyGenesisFile enc
-  firstExceptT (NEShelleyConfig file . renderShelleyGenesisError) $
+  firstExceptT (SNErrShelleyConfig file . renderShelleyGenesisError) $
     readGenesis (GenesisFile file) Nothing
 
 -- -------------------------------------------------------------------------------------------------

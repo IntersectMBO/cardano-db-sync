@@ -56,7 +56,6 @@ import Network.TypedProtocol.Pipelined (N (..), Nat (Succ, Zero))
 import Ouroboros.Consensus.Block.Abstract (CodecConfig)
 import Ouroboros.Consensus.Byron.Node ()
 import Ouroboros.Consensus.Cardano.Node ()
-
 import Ouroboros.Consensus.Config (configCodec)
 import Ouroboros.Consensus.Network.NodeToClient (
   Codecs' (..),
@@ -241,7 +240,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion _connecti
                     ( Client.chainSyncClientPeer $
                         chainSyncClientFixScripts backend tracer ls
                     )
-              when onlyFix $ panic "All Good! This error is only thrown to exit db-sync" -- TODO fix.
+              when onlyFix $ panic "All Good! This error is only thrown to exit db-sync"
               setIsFixed syncEnv AllFixRan
               pure False
             else do

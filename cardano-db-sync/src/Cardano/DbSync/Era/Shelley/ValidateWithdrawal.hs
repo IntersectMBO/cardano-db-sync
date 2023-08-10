@@ -9,6 +9,7 @@ module Cardano.DbSync.Era.Shelley.ValidateWithdrawal (
 import Cardano.BM.Trace (Trace, logError)
 import Cardano.Db (Ada (..))
 import qualified Cardano.Db as Db
+import Cardano.DbSync.Error (shouldAbortOnPanic)
 import Cardano.DbSync.Util
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -60,7 +61,7 @@ validateRewardWithdrawals trce (EpochNo epochNo) = do
         logError trce . mconcat $
           [textShow epochNo, ": ", textShow (length xs), " errors, eg\n"]
             ++ List.intersperse "\n" (map reportError xs)
-        panicAbort "Validation failure"
+        shouldAbortOnPanic "Validation failure"
 
 -- -----------------------------------------------------------------------------
 

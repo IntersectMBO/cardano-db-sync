@@ -5,10 +5,8 @@ module Test.IO.Cardano.Db.PGConfig (
   tests,
 ) where
 
-import Cardano.Db (PGConfig (..), PGPassSource (..), readPGPass, renderPGPassError)
+import Cardano.Db (PGConfig (..), PGPassSource (..), readPGPass, runOrThrowIODb)
 import Control.Monad (unless)
-import Control.Monad.Trans.Except.Exit (orDie)
-import Control.Monad.Trans.Except.Extra (newExceptT)
 import System.Directory (getCurrentDirectory)
 import System.Environment
 import System.FilePath ((</>))
@@ -39,7 +37,7 @@ pgFileReadTest = do
 
   let pg = PGPassEnv "OTHER_PG_PASS_ENV_VARIABLE"
 
-  result <- orDie renderPGPassError $ newExceptT $ readPGPass pg
+  result <- runOrThrowIODb $ readPGPass pg
   unless (result == expected) $
     error $
       mconcat

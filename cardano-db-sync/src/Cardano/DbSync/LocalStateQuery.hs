@@ -11,7 +11,6 @@ module Cardano.DbSync.LocalStateQuery (
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo)
-import Cardano.Db (textShow)
 import Cardano.DbSync.StateQuery
 import Cardano.DbSync.Types
 import qualified Cardano.Ledger.BaseTypes as Ledger
@@ -54,6 +53,7 @@ import Ouroboros.Network.Protocol.LocalStateQuery.Client (
  )
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as StateQuery
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
+import Cardano.DbSync.Error (SyncNodeError(..))
 
 data NoLedgerEnv = NoLedgerEnv
   { nleTracer :: Trace IO Text
@@ -96,7 +96,7 @@ getSlotDetailsNode nlEnv slot = do
     Left _ -> do
       einterp2 <- getHistoryInterpreter nlEnv
       case evalSlotDetails einterp2 of
-        Left err -> panic $ "getSlotDetailsNode: " <> textShow err
+        Left err -> throwIO $ SNErrLocalStateQuery $ "getSlotDetailsNode: " <> Prelude.show err
         Right sd -> insertCurrentTime sd
   where
     interVar = nleHistoryInterpreterVar nlEnv
@@ -123,7 +123,7 @@ getHistoryInterpreter nlEnv = do
   res <- atomically $ takeTMVar respVar
   case res of
     Left err ->
-      panic $ "getHistoryInterpreter: " <> textShow err
+      throwIO $ SNErrLocalStateQuery $ "getHistoryInterpreter: " <> Prelude.show err
     Right interp -> do
       logInfo tracer "getHistoryInterpreter: acquired"
       atomically $ writeTVar interVar $ Strict.Just interp
