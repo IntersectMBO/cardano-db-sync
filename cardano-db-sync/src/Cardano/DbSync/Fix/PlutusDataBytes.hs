@@ -7,6 +7,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Cardano.DbSync.Fix.PlutusDataBytes where
 
@@ -27,8 +28,9 @@ import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Era as Ledger
 import Cardano.Prelude (mapMaybe)
 import Cardano.Slotting.Slot (SlotNo (..))
-import Control.Monad.Except
+import Control.Monad (filterM, when)
 import Control.Monad.Extra (mapMaybeM)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.ByteString (ByteString)

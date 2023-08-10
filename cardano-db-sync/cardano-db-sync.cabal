@@ -123,7 +123,7 @@ library
 
                         Paths_cardano_db_sync
 
-  build-depends:        base                            >= 4.14         && < 4.17
+  build-depends:        base                            >= 4.14         && < 5
                       , aeson
                       , async
                       , binary
@@ -171,7 +171,6 @@ library
                       , microlens
                       , monad-control
                       , monad-logger
-                      , mtl
                       , network-mux
                       , ouroboros-consensus
                       , ouroboros-consensus-cardano
@@ -227,7 +226,7 @@ executable cardano-db-sync
   other-modules:        Paths_cardano_db_sync
                         MigrationValidations
 
-  build-depends:        base                            >= 4.14         && < 4.17
+  build-depends:        base
                       , cardano-db
                       , cardano-db-sync
                       , cardano-prelude

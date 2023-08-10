@@ -54,7 +54,7 @@ library
                         Cardano.DbTool.Validate.Withdrawal
                         Paths_cardano_db_tool
 
-  build-depends:        base                            >= 4.14         && < 4.17
+  build-depends:        base                            >= 4.14         && < 5
                       , base16-bytestring
                       , bytestring
                       , ansi-terminal
@@ -100,7 +100,7 @@ executable cardano-db-tool
 
   other-modules:        Paths_cardano_db_tool
 
-  build-depends:        base                            >= 4.14         && < 4.17
+  build-depends:        base
                       , cardano-db
                       , cardano-db-sync
                       , cardano-db-tool

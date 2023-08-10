@@ -10,7 +10,7 @@ module Cardano.DbSync.Fix.PlutusScripts where
 
 import Cardano.Prelude (mapMaybe)
 
-import Control.Monad.Except
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.ByteString (ByteString)

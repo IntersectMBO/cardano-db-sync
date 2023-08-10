@@ -56,7 +56,7 @@ library
                         Cardano.Db.Version
 
   build-depends:        aeson
-                      , base                            >= 4.14         && < 4.17
+                      , base                            >= 4.14         && < 5
                       , bech32
                       , base16-bytestring
                       , bytestring
@@ -117,7 +117,7 @@ test-suite test
                         Test.Property.Upstream
 
 
-  build-depends:        base                            >= 4.14         && < 4.17
+  build-depends:        base
                       , aeson
                       , base16-bytestring
                       , bytestring
@@ -154,7 +154,7 @@ test-suite test-db
                         -Wunused-imports
                         -Wunused-packages
 
-  build-depends:        base                            >= 4.14         && < 4.17
+  build-depends:        base
                       , bytestring
                       , cardano-db
                       , cardano-slotting
@@ -190,7 +190,7 @@ executable gen-schema-docs
 
   other-modules:        Paths_cardano_db
 
-  build-depends:        base                            >= 4.14         && < 4.17
+  build-depends:        base
                       , cardano-db
                       , persistent-documentation
                       , process
@@ -212,7 +212,7 @@ test-suite schema-rollback
                         -Wunused-imports
                         -Wunused-packages
 
-  build-depends:        base                            >= 4.14         && < 4.17
+  build-depends:        base
                       , ansi-terminal
                       , bytestring
                       , cardano-db
