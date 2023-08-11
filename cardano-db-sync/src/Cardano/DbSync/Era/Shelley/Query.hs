@@ -9,8 +9,10 @@ module Cardano.DbSync.Era.Shelley.Query (
   queryPoolHashId,
   queryStakeAddress,
   queryStakeRefPtr,
-  queryResolveInput,
-  queryResolveInput2,
+  resolveInputTxId,
+  resolveInputTxOutId,
+  resolveInputValue,
+  resolveInputTxOutIdValue,
   queryResolveInputCredentials,
   queryPoolUpdateByBlock,
 ) where
@@ -62,13 +64,20 @@ queryStakeAddress addr = do
     pure (saddr ^. StakeAddressId)
   pure $ maybeToEither (DbLookupMessage $ "StakeAddress " <> renderByteArray addr) unValue (listToMaybe res)
 
-queryResolveInput :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (TxId, DbLovelace))
-queryResolveInput txIn =
+resolveInputTxId :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail TxId)
+resolveInputTxId = queryTxId . Generic.txInHash
+
+resolveInputTxOutId :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (TxId, TxOutId))
+resolveInputTxOutId txIn =
+  queryTxOutId (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
+
+resolveInputValue :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (TxId, DbLovelace))
+resolveInputValue txIn =
   queryTxOutValue (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
 
-queryResolveInput2 :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (TxId, TxOutId, DbLovelace))
-queryResolveInput2 txIn =
-  queryTxOutValue2 (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
+resolveInputTxOutIdValue :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (TxId, TxOutId, DbLovelace))
+resolveInputTxOutIdValue txIn =
+  queryTxOutIdValue (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
 
 queryResolveInputCredentials :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (Maybe ByteString, Bool))
 queryResolveInputCredentials txIn = do

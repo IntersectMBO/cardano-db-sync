@@ -112,7 +112,7 @@ createAndInsertBlocks blockCount =
         if indx /= 0
           then pure mTxOutId
           else do
-            txId <- insertTx $ Tx (mkTxHash blkId 0) blkId 0 (DbLovelace 0) (DbLovelace 0) 0 12 Nothing Nothing True 0
+            txId <- insertTx $ Tx (mkTxHash blkId 0) blkId 0 (DbLovelace 0) (DbLovelace 0) (Just 0) 12 Nothing Nothing True 0
             void $ insertTxOut (mkTxOut blkId txId)
             pure $ Just txId
       case (indx, mTxOutId) of

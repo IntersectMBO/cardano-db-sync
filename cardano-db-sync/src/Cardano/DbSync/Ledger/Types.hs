@@ -33,7 +33,6 @@ import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTVar,
  )
 import Control.Concurrent.STM.TBQueue (TBQueue)
-
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
@@ -42,6 +41,8 @@ import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Network.AnchoredSeq (Anchorable (..), AnchoredSeq (..))
 import Prelude (fail, id)
+import qualified Data.Map.Strict as Map
+import Cardano.Ledger.Coin (Coin)
 
 --------------------------------------------------------------------------
 -- Ledger Types
@@ -87,6 +88,7 @@ instance FromCBOR EpochBlockNo where
       1 -> pure EBBEpochBlockNo
       2 -> EpochBlockNo <$> fromCBOR
       n -> fail $ "unexpected EpochBlockNo value " <> show n
+
 encodeCardanoLedgerState :: (ExtLedgerState CardanoBlock -> Encoding) -> CardanoLedgerState -> Encoding
 encodeCardanoLedgerState encodeExt cls =
   mconcat
@@ -109,6 +111,14 @@ data LedgerStateFile = LedgerStateFile
   }
   deriving (Show)
 
+newtype DepositsMap = DepositsMap {unDepositsMap :: Map ByteString Coin}
+
+lookupDepositsMap :: ByteString -> DepositsMap  -> Maybe Coin
+lookupDepositsMap bs = Map.lookup bs . unDepositsMap
+
+emptyDepositsMap :: DepositsMap
+emptyDepositsMap = DepositsMap Map.empty
+
 -- The result of applying a new block. This includes all the data that insertions require.
 data ApplyResult = ApplyResult
   { apPrices :: !(Strict.Maybe Prices) -- prices after the block application
@@ -117,6 +127,7 @@ data ApplyResult = ApplyResult
   , apSlotDetails :: !SlotDetails
   , apStakeSlice :: !Generic.StakeSliceRes
   , apEvents :: ![LedgerEvent]
+  , apDepositsMap :: !DepositsMap
   }
 
 defaultApplyResult :: SlotDetails -> ApplyResult
@@ -128,6 +139,7 @@ defaultApplyResult slotDetails =
     , apSlotDetails = slotDetails
     , apStakeSlice = Generic.NoSlices
     , apEvents = []
+    , apDepositsMap = emptyDepositsMap
     }
 
 newtype LedgerDB = LedgerDB

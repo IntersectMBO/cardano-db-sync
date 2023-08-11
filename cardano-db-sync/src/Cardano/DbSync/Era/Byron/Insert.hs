@@ -250,7 +250,7 @@ insertByronTx syncEnv blkId tx blockIndex = do
         , DB.txBlockIndex = blockIndex
         , DB.txOutSum = vfValue valFee
         , DB.txFee = vfFee valFee
-        , DB.txDeposit = 0 -- Byron does not have deposits/refunds
+        , DB.txDeposit = Just 0 -- Byron does not have deposits/refunds
         -- Would be really nice to have a way to get the transaction size
         -- without re-serializing it.
         , DB.txSize = fromIntegral $ BS.length (serialize' $ Byron.taTx tx)
@@ -323,7 +323,7 @@ insertTxIn _tracer txInId (Byron.TxInUtxo _txHash inIndex, txOutTxId, _, _) = do
 
 resolveTxInputs :: MonadIO m => Byron.TxIn -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Byron.TxIn, DB.TxId, DB.TxOutId, DbLovelace)
 resolveTxInputs txIn@(Byron.TxInUtxo txHash index) = do
-  res <- liftLookupFail "resolveInput" $ DB.queryTxOutValue2 (Byron.unTxHash txHash, fromIntegral index)
+  res <- liftLookupFail "resolveInput" $ DB.queryTxOutIdValue (Byron.unTxHash txHash, fromIntegral index)
   pure $ convert res
   where
     convert :: (DB.TxId, DB.TxOutId, DbLovelace) -> (Byron.TxIn, DB.TxId, DB.TxOutId, DbLovelace)
