@@ -288,6 +288,7 @@ insertLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
         LedgerPoolReap en drs -> do
           unless (Map.null $ Generic.unRewards drs) $ do
             insertPoolDepositRefunds syncEnv en drs
+        LedgerDeposits {} -> pure ()
 
 hasEpochStartEvent :: [LedgerEvent] -> Bool
 hasEpochStartEvent = any isNewEpoch

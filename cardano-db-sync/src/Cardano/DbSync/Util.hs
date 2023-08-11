@@ -22,8 +22,10 @@ module Cardano.DbSync.Util (
   rewardTypeToSource,
   textPrettyShow,
   textShow,
+  third,
   thrd3,
   forth4,
+  splitLast,
   traverseMEither,
   whenStrictJust,
   whenMaybe,
@@ -183,11 +185,17 @@ whenMaybe :: Monad m => Maybe a -> (a -> m b) -> m (Maybe b)
 whenMaybe (Just a) f = Just <$> f a
 whenMaybe Nothing _f = pure Nothing
 
+third :: (a, b, c) -> c
+third (_, _, c) = c
+
 thrd3 :: (a, b, c, d) -> c
 thrd3 (_, _, c, _) = c
 
 forth4 :: (a, b, c, d) -> d
 forth4 (_, _, _, d) = d
+
+splitLast :: [(a, b, c, d)] -> ([(a, b, c)], [d])
+splitLast = unzip . fmap (\(a, b, c, d) -> ((a, b, c), d))
 
 mlookup :: Ord k => Maybe k -> Map k a -> Maybe a
 mlookup mKey mp = (`Map.lookup` mp) =<< mKey

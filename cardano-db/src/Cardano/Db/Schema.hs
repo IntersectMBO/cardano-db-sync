@@ -114,7 +114,7 @@ share
     blockIndex          Word64              sqltype=word31type    -- The index of this transaction within the block.
     outSum              DbLovelace          sqltype=lovelace
     fee                 DbLovelace          sqltype=lovelace
-    deposit             Int64                                   -- Needs to allow negaitve values.
+    deposit             Int64 Maybe                             -- Needs to allow negaitve values.
     size                Word64              sqltype=word31type
 
     -- New for Allega

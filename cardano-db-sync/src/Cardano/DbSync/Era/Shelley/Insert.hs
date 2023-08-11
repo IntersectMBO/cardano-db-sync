@@ -53,7 +53,7 @@ import Cardano.DbSync.Era.Shelley.Offline
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util (liftLookupFail, safeDecodeToJson)
 import Cardano.DbSync.Error
-import Cardano.DbSync.Ledger.Types (ApplyResult (..))
+import Cardano.DbSync.Ledger.Types (ApplyResult (..), DepositsMap, lookupDepositsMap)
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import qualified Cardano.Ledger.Address as Ledger
@@ -131,7 +131,7 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
           }
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
-    let txInserter = insertTx syncEnv isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk)
+    let txInserter = insertTx syncEnv isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk) (apDepositsMap applyResult)
     blockGroupedData <- foldM (\gp (idx, tx) -> txInserter idx tx gp) mempty zippedTx
     minIds <- insertBlockGroupedData syncEnv blockGroupedData
 
@@ -250,19 +250,36 @@ insertTx ::
   DB.BlockId ->
   EpochNo ->
   SlotNo ->
+  DepositsMap ->
   Word64 ->
   Generic.Tx ->
   BlockGroupedData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) BlockGroupedData
-insertTx syncEnv isMember blkId epochNo slotNo blockIndex tx blockGroupData = do
-  hasConsumed <- liftIO $ getHasConsumed syncEnv
+insertTx syncEnv isMember blkId epochNo slotNo depositsMap blockIndex tx grouped = do
+  let !txHash = Generic.txHash tx
+  let !mdeposits = if not (Generic.txValidContract tx) then Just (Coin 0) else lookupDepositsMap txHash depositsMap
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
       !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
-  !resolvedInputs <- mapM (resolveTxInputs hasConsumed (fst <$> groupedTxOut blockGroupData)) (Generic.txInputs tx)
-  let !inSum = sum $ map (unDbLovelace . forth4) resolvedInputs
-  let diffSum = if inSum >= outSum then inSum - outSum else 0
-  let !fees = maybe diffSum (fromIntegral . unCoin) (Generic.txFees tx)
-  let !txHash = Generic.txHash tx
+  hasConsumed <- liftIO $ getHasConsumed syncEnv
+  (resolvedInputs, fees', deposits)  <- case (mdeposits, unCoin <$> Generic.txFees tx) of
+    (Just deposits, Just fees) -> do
+      (resolvedInputs, _) <- splitLast <$> mapM (resolveTxInputs hasConsumed False (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
+      pure (resolvedInputs, fees, Just (unCoin deposits))
+    (Nothing, Just fees) -> do
+      (resolvedInputs, amounts) <- splitLast <$> mapM (resolveTxInputs hasConsumed False (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
+      if any isNothing amounts
+        then pure (resolvedInputs, fees, Nothing)
+        else
+          let !inSum = sum $ map unDbLovelace $ catMaybes amounts
+          in pure (resolvedInputs, fees, Just $ fromIntegral (inSum + withdrawalSum) - fromIntegral outSum - fromIntegral fees)
+    (_, Nothing) -> do
+      -- Nothing in fees means a phase 2 failure
+      (resolvedInsFull, amounts) <- splitLast <$> mapM (resolveTxInputs hasConsumed True (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
+      let !inSum = sum $ map unDbLovelace $ catMaybes amounts
+          !diffSum = if inSum >= outSum then inSum - outSum else 0
+          !fees = maybe diffSum (fromIntegral . unCoin) (Generic.txFees tx)
+      pure (resolvedInsFull, fromIntegral fees, Just 0)
+  let fees = fromIntegral fees'
   -- Insert transaction and get txId from the DB.
   !txId <-
     lift . DB.insertTx $
@@ -271,11 +288,8 @@ insertTx syncEnv isMember blkId epochNo slotNo blockIndex tx blockGroupData = do
         , DB.txBlockId = blkId
         , DB.txBlockIndex = blockIndex
         , DB.txOutSum = DB.DbLovelace outSum
-        , DB.txFee = DB.DbLovelace $ fromIntegral fees
-        , DB.txDeposit =
-            if not (Generic.txValidContract tx)
-              then 0
-              else fromIntegral (inSum + withdrawalSum) - fromIntegral (outSum + fees)
+        , DB.txFee = DB.DbLovelace fees
+        , DB.txDeposit = fromIntegral <$> deposits
         , DB.txSize = Generic.txSize tx
         , DB.txInvalidBefore = DbWord64 . unSlotNo <$> Generic.txInvalidBefore tx
         , DB.txInvalidHereafter = DbWord64 . unSlotNo <$> Generic.txInvalidHereafter tx
@@ -290,13 +304,13 @@ insertTx syncEnv isMember blkId epochNo slotNo blockIndex tx blockGroupData = do
       let !txIns = map (prepareTxIn txId Map.empty) resolvedInputs
       -- There is a custom semigroup instance for BlockGroupedData which uses addition for the values `fees` and `outSum`.
       -- Same happens bellow on last line of this function.
-      pure (blockGroupData <> BlockGroupedData txIns txOutsGrouped [] [] fees outSum)
+      pure (grouped <> BlockGroupedData txIns txOutsGrouped [] [] fees outSum)
     else do
       -- The following operations only happen if the script passes stage 2 validation (or the tx has
       -- no script).
       !txOutsGrouped <- mapM (prepareTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
 
-      !redeemers <- Map.fromList <$> mapM (insertRedeemer tracer (fst <$> groupedTxOut blockGroupData) txId) (Generic.txRedeemer tx)
+      !redeemers <- Map.fromList <$> mapM (insertRedeemer tracer (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx)
 
       when (ioPlutusExtra iopts) $
         mapM_ (insertDatum tracer cache txId) (Generic.txData tx)
@@ -328,7 +342,7 @@ insertTx syncEnv isMember blkId epochNo slotNo blockIndex tx blockGroupData = do
       mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
-      pure (blockGroupData <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint fees outSum)
+      pure (grouped <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint fees outSum)
   where
     tracer = getTrace syncEnv
     cache = envCache syncEnv
@@ -418,9 +432,9 @@ insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index ad
 prepareTxIn ::
   DB.TxId ->
   Map Word64 DB.RedeemerId ->
-  (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutId, DbLovelace) ->
+  (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutId) ->
   ExtendedTxIn
-prepareTxIn txInId redeemers (txIn, txOutId, mTxOutId, _lovelace) =
+prepareTxIn txInId redeemers (txIn, txOutId, mTxOutId) =
   ExtendedTxIn
     { etiTxIn = txInDB
     , etiTxOutId = mTxOutId
