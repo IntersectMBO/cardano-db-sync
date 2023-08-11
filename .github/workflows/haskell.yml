@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         cabal: ["3.10.1.0"]
-        ghc: ["8.10.7", "9.2.7"]
+        ghc: ["8.10.7", "9.2.7", "9.6.2" ]
         os: [ubuntu-latest, macos-latest]
 
     steps:
@@ -48,7 +48,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y libpq-dev libpq5 net-tools postgresql
-    
+
     - name: Post Install Cleanup (Linux)
       if: matrix.os == 'ubuntu-latest'
       run: |
@@ -122,7 +122,7 @@ jobs:
       run: cabal build all -j --ghc-option=-j4 --enable-tests --only-dependencies
 
     - name: Build
-      run: cabal build all -j --ghc-option=-j4 --enable-tests 
+      run: cabal build all -j --ghc-option=-j4 --enable-tests
 
     - name: Set up database user (Linux)
       if: matrix.os == 'ubuntu-latest'

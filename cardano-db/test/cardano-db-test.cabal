@@ -29,7 +29,7 @@ library
                         Test.IO.Cardano.Db.Util
 
 
-  build-depends:        base                            >= 4.14         && < 4.17
+  build-depends:        base                            >= 4.14         && < 5
                       , aeson
                       , bytestring
                       , cardano-db

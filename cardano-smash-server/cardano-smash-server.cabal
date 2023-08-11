@@ -58,7 +58,7 @@ library
 
   build-depends:
                         aeson
-                      , base                        >= 4.14         && < 4.17
+                      , base                        >= 4.14         && < 5
                       , base16-bytestring
                       , bytestring
                       , cardano-api
@@ -107,7 +107,7 @@ executable cardano-smash-server
 
   other-modules:        Paths_cardano_smash_server
 
-  build-depends:        base                            >= 4.14         && < 4.17
+  build-depends:        base
                       , cardano-db
                       , cardano-smash-server
                       , cardano-prelude
