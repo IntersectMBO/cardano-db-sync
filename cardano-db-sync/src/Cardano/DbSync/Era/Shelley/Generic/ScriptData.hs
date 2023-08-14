@@ -40,7 +40,7 @@ instance Era era => Serialise (ScriptData era) where
   encode (ScriptData (Data d)) = encode d
   decode = ScriptData . Data <$> decode
 
-instance Era era => ToJSON (ScriptData era) where
+instance ToJSON (ScriptData era) where
   toJSON (ScriptData ds) = plutusDataToJSON $ getPlutusData ds
 
 instance Era era => FromJSON (ScriptData era) where

@@ -28,17 +28,13 @@ import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Db (ScriptType (..))
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
 import Cardano.DbSync.Era.Shelley.Generic.Script (fromTimelock)
+import Cardano.DbSync.Era.Shelley.Generic.ScriptData (ScriptData (..))
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Era.Shelley.Generic.Util
 import Cardano.DbSync.Era.Shelley.Generic.Witness
 import Cardano.DbSync.Types (DataHash)
-import Cardano.DbSync.Util.Cardano (
-  ScriptDataJsonSchema (..),
-  fromAlonzoData,
-  scriptDataToJson,
- )
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.Alonzo.Language as Alonzo
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..), txscriptfee)
@@ -350,8 +346,7 @@ mkTxData (dataHash, dt) = PlutusData dataHash (jsonData dt) (Ledger.originalByte
     jsonData =
       LBS.toStrict
         . Aeson.encode
-        . scriptDataToJson ScriptDataJsonDetailedSchema
-        . fromAlonzoData
+        . ScriptData
 
 extraKeyWits ::
   AlonzoEraTxBody era =>

@@ -126,7 +126,6 @@ library
                         Cardano.DbSync.Util
                         Cardano.DbSync.Util.Address
                         Cardano.DbSync.Util.Bech32
-                        Cardano.DbSync.Util.Cardano
                         Cardano.DbSync.Util.Cbor
 
                         Paths_cardano_db_sync
@@ -140,7 +139,6 @@ library
                       , base16-bytestring
                       , base58-bytestring
                       , case-insensitive
-                      , cardano-api
                       , cardano-binary
                       , cardano-client
                       , cardano-crypto
@@ -318,6 +316,7 @@ test-suite test
   hs-source-dirs:       test
 
   ghc-options:          -Wall
+                        -Werror
                         -Wcompat
                         -Wredundant-constraints
                         -Wincomplete-patterns
