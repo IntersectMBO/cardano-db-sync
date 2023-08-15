@@ -47,6 +47,7 @@ newtype LogFileDir = LogFileDir
 newtype ConfigFile = ConfigFile
   { unConfigFile :: FilePath
   }
+  deriving (Show)
 
 data SyncCommand
   = CmdRun !SyncNodeParams
@@ -77,6 +78,7 @@ data SyncNodeParams = SyncNodeParams
   , enpSnEveryLagging :: !Word64
   , enpMaybeRollback :: !(Maybe SlotNo)
   }
+  deriving (Show)
 
 -- May have other constructors when we are preparing for a HFC event.
 data SyncProtocol

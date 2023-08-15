@@ -29,6 +29,7 @@ data PGPassSource
   = PGPassDefaultEnv
   | PGPassEnv String
   | PGPassCached PGConfig
+  deriving (Show)
 
 -- | PGConfig as specified by https://www.postgresql.org/docs/11/libpq-pgpass.html
 -- However, this module expects the config data to be on the first line.
