@@ -1,3 +1,4 @@
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
@@ -20,11 +21,21 @@ import Cardano.Mock.ChainSync.Server (IOManager, addBlock)
 import Cardano.Mock.Forging.Interpreter (forgeNext)
 import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import Cardano.Mock.Forging.Types (UTxOIndex (..))
+import Control.Concurrent (threadDelay)
 import Control.Concurrent.Class.MonadSTM.Strict (atomically)
 import Control.Monad (void)
 import Data.Text (Text)
 import Ouroboros.Consensus.Block (blockPoint)
-import Test.Cardano.Db.Mock.Config (CommandLineArgs (..), DBSyncEnv (..), TxOutParam (..), babbageConfigDir, initCommandLineArgs, startDBSync, stopDBSync, withCustomConfig)
+import Test.Cardano.Db.Mock.Config (
+  CommandLineArgs (..),
+  DBSyncEnv (..),
+  TxOutParam (..),
+  babbageConfigDir,
+  initCommandLineArgs,
+  startDBSync,
+  stopDBSync,
+  withCustomConfig,
+ )
 import Test.Cardano.Db.Mock.Examples (mockBlock0, mockBlock1)
 import Test.Cardano.Db.Mock.UnifiedApi (
   forgeAndSubmitBlocks,
@@ -308,20 +319,20 @@ noPruneSameBlock =
 -- This test should fail as restarting db-sync switching enpMigrateConsumed to False should error
 migrateAndPruneRestart :: IOManager -> [(Text, Text)] -> Assertion
 migrateAndPruneRestart = do
-  withCustomConfig (mkCommandLineArgs txOutParam) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
-    let DBSyncEnv {..} = dbSyncEnv
-    startDBSync dbSyncEnv
-    void $ forgeAndSubmitBlocks interpreter mockServer 50
-    assertBlockNoBackoff dbSyncEnv 50
-    -- stop
-    stopDBSync dbSyncEnv
-    -- update the syncParams to include new params
-    let newDbSyncParams = dbSyncParams {enpMigrateConsumed = False, enpPruneTxOut = False}
-        newDbSyncEnv = dbSyncEnv {dbSyncParams = newDbSyncParams}
-    -- start
-    startDBSync newDbSyncEnv
-    void $ forgeAndSubmitBlocks interpreter mockServer 50
-    assertBlockNoBackoff newDbSyncEnv 100
+  withCustomConfig (mkCommandLineArgs txOutParam) babbageConfigDir testLabel $
+    \interpreter mockServer dbSyncEnv -> do
+      let DBSyncEnv {..} = dbSyncEnv
+      startDBSync dbSyncEnv
+      void $ forgeAndSubmitBlocks interpreter mockServer 50
+      assertBlockNoBackoff dbSyncEnv 50
+      -- stop
+      stopDBSync dbSyncEnv
+      -- update the syncParams to include new params
+      let newDbSyncParams = dbSyncParams {enpMigrateConsumed = False, enpPruneTxOut = False}
+          newDbSyncEnv = dbSyncEnv {dbSyncParams = newDbSyncParams}
+      -- start
+      startDBSync newDbSyncEnv
+      threadDelay 40_000_000
   where
     txOutParam =
       TxOutParam

@@ -88,7 +88,7 @@ data Config = Config
 
 data DBSyncEnv = DBSyncEnv
   { dbSyncParams :: SyncNodeParams
-  , dbSyncForkDB :: IO (Async ())
+  , partialRunDbSync :: SyncNodeParams -> IO ()
   , dbSyncThreadVar :: TMVar (Async ())
   }
 
@@ -137,13 +137,13 @@ fingerprintRoot = rootTestDir </> "fingerprint"
 mkFingerPrint :: FilePath -> FilePath
 mkFingerPrint testLabel = fingerprintRoot </> testLabel
 
-mkDBSyncEnv :: SyncNodeParams -> IO () -> IO DBSyncEnv
-mkDBSyncEnv params runDBSync = do
+mkDBSyncEnv :: SyncNodeParams -> (SyncNodeParams -> IO ()) -> IO DBSyncEnv
+mkDBSyncEnv params pRunDbSync = do
   runningVar <- newEmptyTMVarIO
   pure $
     DBSyncEnv
       { dbSyncParams = params
-      , dbSyncForkDB = async runDBSync
+      , partialRunDbSync = pRunDbSync
       , dbSyncThreadVar = runningVar
       }
 
@@ -152,8 +152,8 @@ stopDBSync env = do
   thr <- atomically $ tryReadTMVar (dbSyncThreadVar env)
   case thr of
     Nothing -> error "Could not cancel db-sync when it's not running"
-    Just a -> do
-      cancel a
+    Just tmVar -> do
+      cancel tmVar
       -- make it empty
       void . atomically $ takeTMVar (dbSyncThreadVar env)
       pure ()
@@ -163,8 +163,8 @@ stopDBSyncIfRunning env = do
   thr <- atomically $ tryReadTMVar (dbSyncThreadVar env)
   case thr of
     Nothing -> pure ()
-    Just a -> do
-      cancel a
+    Just tmVar -> do
+      cancel tmVar
       -- make it empty
       void . atomically $ takeTMVar (dbSyncThreadVar env)
 
@@ -174,8 +174,10 @@ startDBSync env = do
   case thr of
     Just _a -> error "db-sync already running"
     Nothing -> do
-      a <- dbSyncForkDB env
-      void . atomically $ tryPutTMVar (dbSyncThreadVar env) a
+      let appliedRunDbSync = partialRunDbSync env $ dbSyncParams env
+      -- we async the fully applied runDbSync here ad put it into the thread
+      aa <- async appliedRunDbSync
+      void . atomically $ tryPutTMVar (dbSyncThreadVar env) aa
 
 pollDBSync :: DBSyncEnv -> IO (Maybe (Either SomeException ()))
 pollDBSync env = do
@@ -287,8 +289,8 @@ emptyMetricsSetters =
     }
 
 withFullConfig ::
-  FilePath ->
-  FilePath ->
+  FilePath -> -- babage filepath
+  FilePath -> -- test label
   (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
   IOManager ->
   [(Text, Text)] ->
@@ -297,8 +299,8 @@ withFullConfig = withFullConfig' True False initCommandLineArgs
 
 withCustomConfig ::
   CommandLineArgs ->
-  FilePath ->
-  FilePath ->
+  FilePath -> -- babage filepath
+  FilePath -> -- test label
   (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
   IOManager ->
   [(Text, Text)] ->
@@ -308,8 +310,8 @@ withCustomConfig = withFullConfig' True False
 -- when wanting to check for a failure in a test for some reason logging has to be enabled
 withCustomConfigAndLogs ::
   CommandLineArgs ->
-  FilePath ->
-  FilePath ->
+  FilePath -> -- babage filepath
+  FilePath -> -- test label
   (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
   IOManager ->
   [(Text, Text)] ->
@@ -320,24 +322,26 @@ withFullConfig' ::
   Bool ->
   Bool ->
   CommandLineArgs ->
-  FilePath ->
-  FilePath ->
+  FilePath -> -- babage filepath
+  FilePath -> -- test label
   (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfig' hasFingerprint shouldLog cmdLineArgs config testLabel action iom migr = do
+withFullConfig' hasFingerprint shouldLog cmdLineArgs configFilePath testLabelFilePath action iom migr = do
   recreateDir mutableDir
   cfg <- mkConfig configDir mutableDir cmdLineArgs
-  fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabel else pure Nothing
+  fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabelFilePath else pure Nothing
   let dbsyncParams = syncNodeParams cfg
   -- Set to True to disable logging, False to enable it.
   trce <-
     if shouldLog
       then configureLogging dbsyncParams "db-sync-node"
       else pure nullTracer
-  let dbsyncRun = runDbSync emptyMetricsSetters migr iom trce dbsyncParams True
+  -- partially applied runDbSync do we can pass in syncNodearams at call site
+  let partialDbSyncRun params = runDbSync emptyMetricsSetters migr iom trce params True
   let initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
+
   withInterpreter (protocolInfoForging cfg) (protocolInfoForger cfg) nullTracer fingerFile $ \interpreter -> do
     -- TODO: get 42 from config
     withServerHandle @CardanoBlock
@@ -348,12 +352,12 @@ withFullConfig' hasFingerprint shouldLog cmdLineArgs config testLabel action iom
       (unSocketPath (enpSocketPath $ syncNodeParams cfg))
       $ \mockServer ->
         -- we dont fork dbsync here. Just prepare it as an action
-        withDBSyncEnv (mkDBSyncEnv dbsyncParams dbsyncRun) $ \dbSyncEnv -> do
+        withDBSyncEnv (mkDBSyncEnv dbsyncParams partialDbSyncRun) $ \dbSyncEnv -> do
           void . hSilence [stderr] $ Db.recreateDB (getDBSyncPGPass dbSyncEnv)
           action interpreter mockServer dbSyncEnv
   where
-    configDir = mkConfigDir config
-    mutableDir = mkMutableDir testLabel
+    configDir = mkConfigDir configFilePath
+    mutableDir = mkMutableDir testLabelFilePath
 
 prepareFingerprintFile :: FilePath -> IO FilePath
 prepareFingerprintFile testLabel = do
