@@ -11,6 +11,7 @@ module Cardano.DbSync.LocalStateQuery (
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo)
+import Cardano.DbSync.Error (SyncNodeError (..))
 import Cardano.DbSync.StateQuery
 import Cardano.DbSync.Types
 import qualified Cardano.Ledger.BaseTypes as Ledger
@@ -53,7 +54,6 @@ import Ouroboros.Network.Protocol.LocalStateQuery.Client (
  )
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as StateQuery
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
-import Cardano.DbSync.Error (SyncNodeError(..))
 
 data NoLedgerEnv = NoLedgerEnv
   { nleTracer :: Trace IO Text

@@ -172,7 +172,6 @@ resolveTxInputs hasConsumed needsValue groupedOutputs txIn =
     convertFoundAll :: (DB.TxId, DB.TxOutId, DbLovelace) -> (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutId, Maybe DbLovelace)
     convertFoundAll (txId, txOutId, lovelace) = (txIn, txId, Right txOutId, Just lovelace)
 
-
 resolveRemainingInputs ::
   MonadIO m =>
   [ExtendedTxIn] ->

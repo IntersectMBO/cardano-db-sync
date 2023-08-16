@@ -49,6 +49,8 @@ fromMaryTx (blkIndex, tx) =
     , txScriptSizes = [] -- Mary does not support plutus scripts
     , txScripts = getScripts tx
     , txExtraKeyWitnesses = []
+    , txVotingProcedure = []
+    , txProposalProcedure = []
     }
   where
     txBody :: Core.TxBody StandardMary

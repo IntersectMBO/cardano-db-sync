@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -22,12 +23,17 @@ module Cardano.DbSync.Era.Shelley.Generic.Util (
   renderRewardAcnt,
   stakingCredHash,
   unitIntervalToDouble,
+  unCredentialHash,
   unKeyHashRaw,
   unKeyHashView,
   unScriptHash,
   unTxHash,
   unAssetName,
   dataHashToBytes,
+  achorHashToBytes,
+  toGovAction,
+  toVote,
+  toVoterRole,
 ) where
 
 import qualified Cardano.Api.Shelley as Api
@@ -38,6 +44,8 @@ import Cardano.DbSync.Types
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..), DeltaCoin)
+import Cardano.Ledger.Conway.Governance
+import qualified Cardano.Ledger.Conway.Governance as Ledger
 import qualified Cardano.Ledger.Credential as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (AssetName (..))
@@ -53,7 +61,7 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
 import qualified Data.List as List
 import qualified Data.Text.Encoding as Text
-import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
+import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto)
 
 annotateStakingCred :: Ledger.Network -> Ledger.StakeCredential era -> Ledger.RewardAcnt era
 annotateStakingCred = Shelley.RewardAcnt
@@ -128,6 +136,11 @@ stakingCredHash network = Ledger.serialiseRewardAcnt . annotateStakingCred netwo
 unitIntervalToDouble :: Ledger.UnitInterval -> Double
 unitIntervalToDouble = fromRational . Ledger.unboundRational
 
+unCredentialHash :: Ledger.Credential kr StandardCrypto -> ByteString
+unCredentialHash = \case
+  Ledger.ScriptHashObj scriptHash -> unScriptHash scriptHash
+  Ledger.KeyHashObj keyHash -> unKeyHashRaw keyHash
+
 unKeyHashRaw :: Ledger.KeyHash d era -> ByteString
 unKeyHashRaw (Ledger.KeyHash kh) = Crypto.hashToBytes kh
 
@@ -144,4 +157,29 @@ unAssetName :: AssetName -> ByteString
 unAssetName = SBS.fromShort . assetName
 
 dataHashToBytes :: DataHash -> ByteString
-dataHashToBytes dataHash = Crypto.hashToBytes (Ledger.extractHash dataHash)
+dataHashToBytes = Crypto.hashToBytes . Ledger.extractHash
+
+achorHashToBytes :: Ledger.SafeHash StandardCrypto Ledger.AnchorDataHash -> ByteString
+achorHashToBytes = Crypto.hashToBytes . Ledger.extractHash
+
+toGovAction :: GovernanceAction StandardConway -> Db.GovActionType
+toGovAction = \case
+  ParameterChange {} -> Db.ParameterChange
+  HardForkInitiation {} -> Db.HardForkInitiation
+  TreasuryWithdrawals {} -> Db.TreasuryWithdrawals
+  NoConfidence {} -> Db.NoConfidence
+  NewCommittee {} -> Db.NewCommitteeType
+  NewConstitution {} -> Db.NewConstitution
+  InfoAction {} -> Db.InfoAction
+
+toVote :: Vote -> Db.Vote
+toVote = \case
+  VoteNo -> Db.VoteNo
+  VoteYes -> Db.VoteYes
+  Abstain -> Db.VoteAbstain
+
+toVoterRole :: Voter StandardCrypto -> Db.VoterRole
+toVoterRole = \case
+  CommitteeVoter {} -> Db.ConstitutionalCommittee
+  DRepVoter {} -> Db.DRep
+  StakePoolVoter {} -> Db.SPO

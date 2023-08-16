@@ -27,7 +27,7 @@ import qualified Cardano.BM.Setup as Logging
 import Cardano.BM.Trace (Trace)
 import qualified Cardano.BM.Trace as Logging
 import Cardano.DbSync.Config.Cardano
-import Cardano.DbSync.Config.Node (NodeConfig(..), parseSyncPreConfig, readByteStringFromFile, parseNodeConfig)
+import Cardano.DbSync.Config.Node (NodeConfig (..), parseNodeConfig, parseSyncPreConfig, readByteStringFromFile)
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
 import Cardano.Prelude

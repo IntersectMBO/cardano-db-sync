@@ -2,11 +2,11 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbTool.Validate.Balance (
   ledgerAddrBalance,
@@ -39,12 +39,12 @@ import qualified Data.Map.Strict as Map
 #if __GLASGOW_HASKELL__ >= 906
 import Data.Type.Equality (type (~))
 #endif
+import Data.String (String)
+import qualified GHC.Show as S
 import Ouroboros.Consensus.Byron.Ledger
 import Ouroboros.Consensus.Cardano.Block (CardanoBlock, LedgerState (..), StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import Ouroboros.Consensus.Shelley.Ledger.Ledger
-import qualified GHC.Show as S
-import Data.String (String)
 
 data ValidateBalanceError
   = VBErrByron String
@@ -60,13 +60,13 @@ instance Exception ValidateBalanceError
 instance Show ValidateBalanceError where
   show =
     \case
-       VBErrByron err -> vBErr <> "Byron: " <> err
-       VBErrShelley err -> vBErr <> "Shelley: " <> err
-       VBErrAllegra err -> vBErr <> "Allegra: " <> err
-       VBErrMary err -> vBErr <> "Mary: " <> err
-       VBErrAlonzo err -> vBErr <> "Alonzo: " <> err
-       VBErrBabbage err -> vBErr <> "Babbage: " <> err
-       VBErrConway err -> vBErr <> "Conway: " <> err
+      VBErrByron err -> vBErr <> "Byron: " <> err
+      VBErrShelley err -> vBErr <> "Shelley: " <> err
+      VBErrAllegra err -> vBErr <> "Allegra: " <> err
+      VBErrMary err -> vBErr <> "Mary: " <> err
+      VBErrAlonzo err -> vBErr <> "Alonzo: " <> err
+      VBErrBabbage err -> vBErr <> "Babbage: " <> err
+      VBErrConway err -> vBErr <> "Conway: " <> err
 
 vBErr :: String
 vBErr = "Validation Balance Error - "

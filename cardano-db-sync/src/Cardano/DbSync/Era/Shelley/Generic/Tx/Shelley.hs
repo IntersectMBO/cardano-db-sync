@@ -80,6 +80,8 @@ fromShelleyTx (blkIndex, tx) =
     , txScriptSizes = [] -- Shelley does not support plutus scripts
     , txScripts = scripts
     , txExtraKeyWitnesses = []
+    , txVotingProcedure = []
+    , txProposalProcedure = []
     }
   where
     txBody :: Core.TxBody StandardShelley

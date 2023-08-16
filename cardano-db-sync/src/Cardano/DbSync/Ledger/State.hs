@@ -1,16 +1,16 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Ledger.State (
   applyBlock,
@@ -741,18 +741,19 @@ tickThenReapplyCheckHash cfg block lsb =
   if blockPrevHash block == ledgerTipHash (ledgerState lsb)
     then Right $ tickThenReapplyLedgerResult cfg block lsb
     else
-      Left $ SNErrLedgerState $
-        mconcat
-          [ "Ledger state hash mismatch. Ledger head is slot "
-          , show (unSlotNo $ fromWithOrigin (SlotNo 0) (ledgerTipSlot $ ledgerState lsb))
-          , " hash "
-          , Text.unpack $ renderByteArray (Cardano.unChainHash (ledgerTipHash $ ledgerState lsb))
-          , " but block previous hash is "
-          , Text.unpack $ renderByteArray (Cardano.unChainHash $ blockPrevHash block)
-          , " and block current hash is "
-          , Text.unpack $ renderByteArray (SBS.fromShort . Consensus.getOneEraHash $ blockHash block)
-          , "."
-          ]
+      Left $
+        SNErrLedgerState $
+          mconcat
+            [ "Ledger state hash mismatch. Ledger head is slot "
+            , show (unSlotNo $ fromWithOrigin (SlotNo 0) (ledgerTipSlot $ ledgerState lsb))
+            , " hash "
+            , Text.unpack $ renderByteArray (Cardano.unChainHash (ledgerTipHash $ ledgerState lsb))
+            , " but block previous hash is "
+            , Text.unpack $ renderByteArray (Cardano.unChainHash $ blockPrevHash block)
+            , " and block current hash is "
+            , Text.unpack $ renderByteArray (SBS.fromShort . Consensus.getOneEraHash $ blockHash block)
+            , "."
+            ]
 
 getHeaderHash :: HeaderHash CardanoBlock -> ByteString
 getHeaderHash bh = SBS.fromShort (Consensus.getOneEraHash bh)
