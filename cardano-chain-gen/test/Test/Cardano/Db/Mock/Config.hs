@@ -7,7 +7,6 @@ module Test.Cardano.Db.Mock.Config (
   Config (..),
   DBSyncEnv (..),
   CommandLineArgs (..),
-  TxOutParam (..),
   initCommandLineArgs,
   babbageConfigDir,
   alonzoConfigDir,
@@ -92,12 +91,6 @@ data DBSyncEnv = DBSyncEnv
   , dbSyncThreadVar :: TMVar (Async ())
   }
 
--- used for testing of tx out pruning feature
-data TxOutParam = TxOutParam
-  { paramMigrateConsumed :: Bool
-  , paramPruneTxOut :: Bool
-  }
-
 data CommandLineArgs = CommandLineArgs
   { claHasConfigFile :: Bool
   , claEpochDisabled :: Bool
@@ -176,8 +169,8 @@ startDBSync env = do
     Nothing -> do
       let appliedRunDbSync = partialRunDbSync env $ dbSyncParams env
       -- we async the fully applied runDbSync here ad put it into the thread
-      aa <- async appliedRunDbSync
-      void . atomically $ tryPutTMVar (dbSyncThreadVar env) aa
+      asyncApplied <- async appliedRunDbSync
+      void . atomically $ tryPutTMVar (dbSyncThreadVar env) asyncApplied
 
 pollDBSync :: DBSyncEnv -> IO (Maybe (Either SomeException ()))
 pollDBSync env = do
@@ -275,8 +268,8 @@ initCommandLineArgs =
     , claHasOfflineData = True
     , claTurboMode = False
     , claFullMode = True
-    , claMigrateConsumed = True
-    , claPruneTxOut = True
+    , claMigrateConsumed = False
+    , claPruneTxOut = False
     }
 
 emptyMetricsSetters :: MetricSetters
@@ -333,14 +326,13 @@ withFullConfig' hasFingerprint shouldLog cmdLineArgs configFilePath testLabelFil
   cfg <- mkConfig configDir mutableDir cmdLineArgs
   fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabelFilePath else pure Nothing
   let dbsyncParams = syncNodeParams cfg
-  -- Set to True to disable logging, False to enable it.
   trce <-
     if shouldLog
       then configureLogging dbsyncParams "db-sync-node"
       else pure nullTracer
   -- partially applied runDbSync do we can pass in syncNodearams at call site
   let partialDbSyncRun params = runDbSync emptyMetricsSetters migr iom trce params True
-  let initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
+      initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
 
   withInterpreter (protocolInfoForging cfg) (protocolInfoForger cfg) nullTracer fingerFile $ \interpreter -> do
     -- TODO: get 42 from config

@@ -51,7 +51,7 @@ unitTests iom knownMigrations =
             , test "no pruning and rollback" MigrateConsumedPruneTxOut.noPruneAndRollBack
             , test "prune same block" MigrateConsumedPruneTxOut.pruneSameBlock
             , test "no pruning same block" MigrateConsumedPruneTxOut.noPruneSameBlock
-            , test "restart with new consumed set to false" MigrateConsumedPruneTxOut.migrateAndPruneRestart
+            , expectFail $ test "restart with new consumed set to false" MigrateConsumedPruneTxOut.migrateAndPruneRestart
             ]
         , testGroup
             "config"

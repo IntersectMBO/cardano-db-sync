@@ -254,6 +254,8 @@ startupReport trce aop params = do
   logInfo trce $ mconcat ["Option skip-fix: ", textShow (enpSkipFix params)]
   logInfo trce $ mconcat ["Option fix-only: ", textShow (enpOnlyFix params)]
   logInfo trce $ mconcat ["Option force-indexes: ", textShow (enpForceIndexes params)]
+  logInfo trce $ mconcat ["Option consumed-tx-out: ", textShow (enpMigrateConsumed params)]
+  logInfo trce $ mconcat ["Option prune-tx-out: ", textShow (enpPruneTxOut params)]
   logInfo trce $ mconcat ["Option disable-multiassets: ", textShow (not $ enpHasMultiAssets params)]
   logInfo trce $ mconcat ["Option disable-metadata: ", textShow (not $ enpHasMetadata params)]
   logInfo trce $ mconcat ["Option disable-plutus-extra: ", textShow (not $ enpHasPlutusExtra params)]
