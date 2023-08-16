@@ -131,13 +131,14 @@ rollbackLedger syncEnv point =
           -- This is an extra validation that should always succeed.
           unless (point == statePoint) $
             logAndThrowIO (getTrace syncEnv) $
-              mconcat
-                [ "Ledger "
-                , textShow statePoint
-                , " and ChainSync "
-                , textShow point
-                , " don't match."
-                ]
+              SNErrDatabaseRollBackLedger $
+                mconcat
+                  [ "Ledger "
+                  , show statePoint
+                  , " and ChainSync "
+                  , show point
+                  , " don't match."
+                  ]
           pure Nothing
         Left lsfs ->
           Just . fmap fst <$> verifySnapshotPoint syncEnv (OnDisk <$> lsfs)
@@ -152,7 +153,7 @@ validateConsistentLevel syncEnv stPoint = do
   compareTips stPoint dbTipInfo cLevel
   where
     compareTips _ dbTip Unchecked =
-      logAndThrowIO tracer $
+      logAndThrowIO tracer $ SNErrDatabaseValConstLevel $
         "Found Unchecked Consistent Level. " <> showContext dbTip Unchecked
     compareTips (Point Origin) Nothing Consistent = pure ()
     compareTips (Point Origin) _ DBAheadOfLedger = pure ()
@@ -163,18 +164,18 @@ validateConsistentLevel syncEnv stPoint = do
     compareTips (Point (At blk)) (Just tip) DBAheadOfLedger
       | blockPointSlot blk <= bSlotNo tip = pure ()
     compareTips _ dbTip cLevel =
-      logAndThrowIO tracer $
+      logAndThrowIO tracer $ SNErrDatabaseValConstLevel $
         "Unexpected Consistent Level. " <> showContext dbTip cLevel
 
     tracer = getTrace syncEnv
     showContext dbTip cLevel =
       mconcat
         [ "Ledger state point is "
-        , textShow stPoint
+        , show stPoint
         , ". DB Tip is "
-        , textShow dbTip
+        , show dbTip
         , ". Consistent Level is "
-        , textShow cLevel
+        , show cLevel
         ]
 
 -- | Split the DbAction list into a prefix containing blocks to apply and a postfix.
