@@ -10,18 +10,28 @@ import Cardano.Db.Types (
   DbInt65 (..),
   DbLovelace (..),
   DbWord64 (..),
+  GovActionType (..),
   RewardSource,
   ScriptPurpose,
   ScriptType (..),
   SyncState,
+  Vote (..),
+  VoteUrl (..),
+  VoterRole (..),
   readDbInt65,
+  readGovActionType,
   readRewardSource,
   readScriptPurpose,
   readScriptType,
   readSyncState,
+  readVote,
+  readVoterRole,
+  renderGovActionType,
   renderScriptPurpose,
   renderScriptType,
   renderSyncState,
+  renderVote,
+  renderVoterRole,
   showDbInt65,
   showRewardSource,
  )
@@ -116,3 +126,28 @@ instance PersistField Word128 where
       else Left $ mconcat ["Failed to parse Haskell type Word128: ", Text.pack (show x)]
   fromPersistValue x =
     Left $ mconcat ["Failed to parse Haskell type Word128: ", Text.pack (show x)]
+
+instance PersistField VoteUrl where
+  toPersistValue = PersistText . unVoteUrl
+  fromPersistValue (PersistText txt) = Right $ VoteUrl txt
+  fromPersistValue (PersistByteString bs) = Right $ VoteUrl (Text.decodeLatin1 bs)
+  fromPersistValue x =
+    Left $ mconcat ["Failed to parse Haskell type VoteUrl: ", Text.pack (show x)]
+
+instance PersistField Vote where
+  toPersistValue = PersistText . renderVote
+  fromPersistValue (PersistLiteral bs) = Right $ readVote (BS.unpack bs)
+  fromPersistValue x =
+    Left $ mconcat ["Failed to parse Haskell type Vote: ", Text.pack (show x)]
+
+instance PersistField VoterRole where
+  toPersistValue = PersistText . renderVoterRole
+  fromPersistValue (PersistLiteral bs) = Right $ readVoterRole (BS.unpack bs)
+  fromPersistValue x =
+    Left $ mconcat ["Failed to parse Haskell type VoterRole: ", Text.pack (show x)]
+
+instance PersistField GovActionType where
+  toPersistValue = PersistText . renderGovActionType
+  fromPersistValue (PersistLiteral bs) = Right $ readGovActionType (BS.unpack bs)
+  fromPersistValue x =
+    Left $ mconcat ["Failed to parse Haskell type GovActionType: ", Text.pack (show x)]

@@ -26,10 +26,14 @@ import Cardano.Db.Types (
   DbInt65,
   DbLovelace,
   DbWord64,
+  GovActionType,
   RewardSource,
   ScriptPurpose,
   ScriptType,
   SyncState,
+  Vote,
+  VoteUrl,
+  VoterRole,
  )
 import Data.ByteString.Char8 (ByteString)
 import Data.Int (Int64)
@@ -283,6 +287,7 @@ share
     txId                TxId                noreference
     slotNo              Word64              sqltype=word63type
     redeemerId          RedeemerId Maybe    noreference
+    deposit             DbLovelace Maybe    sqltype=lovelace
 
   TxMetadata
     key                 DbWord64            sqltype=word64type
@@ -413,8 +418,8 @@ share
     txId                TxId                noreference
 
   ParamProposal
-    epochNo             Word64              sqltype=word31type
-    key                 ByteString          sqltype=hash28type
+    epochNo             Word64 Maybe        sqltype=word31type
+    key                 ByteString Maybe    sqltype=hash28type
     minFeeA             Word64 Maybe        sqltype=word64type
     minFeeB             Word64 Maybe        sqltype=word64type
     maxBlockSize        Word64 Maybe        sqltype=word64type
@@ -494,6 +499,99 @@ share
     token               Text
     description         Text Maybe
 
+  DrepHash
+    raw                 ByteString Maybe    sqltype=hash28type
+    view                Text Maybe
+    hasScript           Bool
+    UniqueDrepHash      raw view !force
+
+  DelegationVote
+    addrId              StakeAddressId      noreference
+    certIndex           Word16
+    drepHashId          DrepHashId          noreference
+    activeEpochNo       Word64
+    txId                TxId                noreference
+    redeemerId          RedeemerId Maybe    noreference
+
+  CommitteeRegistration
+    txId                TxId                noreference
+    certIndex           Word16
+    coldKey             ByteString          sqltype=addr29type
+    hotKey              ByteString          sqltype=addr29type
+
+  CommitteeDeRegistration
+    txId                TxId                noreference
+    certIndex           Word16
+    hotKey              ByteString          sqltype=addr29type
+
+  DrepRegistration
+    txId                TxId                noreference
+    certIndex           Word16
+    deposit             DbLovelace          sqltype=lovelace
+    drepHashId          DrepHashId          noreference
+
+  DrepDeRegistration
+    txId                TxId                noreference
+    certIndex           Word16
+    deposit             DbLovelace          sqltype=lovelace
+    drepHashId          DrepHashId          noreference
+
+  VotingAnchor
+    txId                TxId                noreference
+    url                 VoteUrl             sqltype=varchar
+    dataHash            ByteString
+
+  GovernanceAction
+    txId               TxId                  noreference
+    index              Word64
+    deposit            DbLovelace            sqltype=lovelace
+    returnAddress      StakeAddressId        noreference
+    votingAnchorId     VotingAnchorId Maybe  noreference
+    type               GovActionType         sqltype=govactiontype
+    description        Text
+    paramProposal      ParamProposalId Maybe noreference
+    ratifiedEpoch      Word64 Maybe          sqltype=word31type
+    enactedEpoch       Word64 Maybe          sqltype=word31type
+    droppedEpoch       Word64 Maybe          sqltype=word31type
+    expiredEpoch       Word64 Maybe          sqltype=word31type
+
+  TreasuryWithdrawal
+    governanceActionId  GovernanceActionId  noreference
+    stakeAddressId      StakeAddressId      noreference
+    amount              DbLovelace          sqltype=lovelace
+
+  NewCommittee
+    governanceActionId  GovernanceActionId  noreference
+    quorum              Double
+    members             Text
+
+  VotingProcedure -- GovVote
+    txId                 TxId                 noreference
+    index                Word16
+    governanceActionId   GovernanceActionId   noreference
+    voterRole            VoterRole            sqltype=voterrole
+    comitteeVoter        ByteString Maybe
+    drepVoter            DrepHashId Maybe     noreference
+    poolVoter            PoolHashId Maybe     noreference
+    vote                 Vote                 sqltype=vote
+    votingAnchorId       VotingAnchorId Maybe noreference
+
+  AnchorOfflineData
+    votingAnchorId          VotingAnchorId      noreference
+    hash                    ByteString
+    json                    Text                sqltype=jsonb
+    bytes                   ByteString          sqltype=bytea
+
+  AnchorOfflineFetchError
+    votingAnchorId          VotingAnchorId      noreference
+    fetchError              Text
+    retryCount              Word                sqltype=word31type
+
+  DrepDistr
+    hashId                  DrepHashId          noreference
+    amount                  Word64
+    epochNo                 Word64              sqltype=word31type
+
   -- -----------------------------------------------------------------------------------------------
   -- Pool offline (ie not on the blockchain) data.
 
@@ -547,7 +645,7 @@ schemaDocs =
       SchemaVersionStageThree # "Set up database views, indices etc."
 
     PoolHash --^ do
-      "A table for every unique pool key hash. The `id` field of this table is used as foreign keys in other tables.\
+      "A table for every unique pool key hash.\
       \ The existance of an entry doesn't mean the pool is registered or in fact that is was ever registered."
       PoolHashHashRaw # "The raw bytes of the pool hash."
       PoolHashView # "The Bech32 encoding of the pool hash."
@@ -745,6 +843,7 @@ schemaDocs =
       DelegationTxId # "The Tx table index of the transaction that contained this delegation."
       DelegationSlotNo # "The slot number of the block that contained this delegation."
       DelegationRedeemerId # "The Redeemer table index that is related with this certificate."
+      DelegationDeposit # "The deposit that may appear at the certificate. New in 13.2-Conway"
 
     TxMetadata --^ do
       "A table for metadata attached to a transaction."
@@ -879,8 +978,12 @@ schemaDocs =
 
     ParamProposal --^ do
       "A table containing block chain parameter change proposals."
-      ParamProposalEpochNo # "The epoch for which this parameter proposal in intended to become active."
-      ParamProposalKey # "The hash of the crypto key used to sign this proposal."
+      ParamProposalEpochNo
+        # "The epoch for which this parameter proposal in intended to become active.\
+          \ Changed in 13.2-Conway to nullable is always null in Conway era."
+      ParamProposalKey
+        # "The hash of the crypto key used to sign this proposal.\
+          \ Changed in 13.2-Conway to nullable is always null in Conway era."
       ParamProposalMinFeeA # "The 'a' parameter to calculate the minimum transaction fee."
       ParamProposalMinFeeB # "The 'b' parameter to calculate the minimum transaction fee."
       ParamProposalMaxBlockSize # "The maximum block size (in bytes)."
@@ -951,6 +1054,119 @@ schemaDocs =
       "CostModel for EpochParam and ParamProposal."
       CostModelHash # "The hash of cost model. It ensures uniqueness of entries. New in v13."
       CostModelCosts # "The actual costs formatted as json."
+
+    ExtraMigrations --^ do
+      "Extra optional migrations. New in 13.2."
+      ExtraMigrationsDescription # "A description of the migration"
+
+    DrepHash --^ do
+      "A table for every unique drep key hash.\
+      \ The existance of an entry doesn't mean the DRep is registered or in fact that is was ever registered.\
+      \ New in 13.2-Conway."
+      DrepHashRaw # "The raw bytes of the DRep."
+      DrepHashView # "A description of the DRep hash. This only exists for AlwaysAbstain and AlwaysNoConfidence."
+      DrepHashHasScript # "Flag which shows if this DRep credentials are a script hash"
+
+    DelegationVote --^ do
+      "A table containing delegations from a stake address to a stake pool. New in 13.2-Conway."
+      DelegationVoteAddrId # "The StakeAddress table index for the stake address."
+      DelegationVoteCertIndex # "The index of this delegation within the certificates of this transaction."
+      DelegationVoteDrepHashId # "The DrepHash table index for the pool being delegated to."
+      DelegationVoteActiveEpochNo # "The epoch number where this delegation becomes active."
+      DelegationVoteTxId # "The Tx table index of the transaction that contained this delegation."
+      DelegationVoteRedeemerId # "The Redeemer table index that is related with this certificate. TODO: can vote redeemers index these delegations?"
+
+    CommitteeRegistration --^ do
+      "A table for every committee hot key registration. New in 13.2-Conway."
+      CommitteeRegistrationTxId # "The Tx table index of the tx that includes this certificate."
+      CommitteeRegistrationCertIndex # "The index of this registration within the certificates of this transaction."
+      CommitteeRegistrationColdKey # "The registered cold hey hash. TODO: should this reference DrepHashId or some separate hash table?"
+      CommitteeRegistrationHotKey # "The registered hot hey hash"
+
+    CommitteeDeRegistration --^ do
+      "A table for every committee key de-registration. New in 13.2-Conway."
+      CommitteeDeRegistrationTxId # "The Tx table index of the tx that includes this certificate."
+      CommitteeDeRegistrationCertIndex # "The index of this deregistration within the certificates of this transaction."
+      CommitteeDeRegistrationHotKey # "The deregistered hot hey hash"
+
+    DrepRegistration --^ do
+      "A table for every DRep registration. New in 13.2-Conway."
+      DrepRegistrationTxId # "The Tx table index of the tx that includes this certificate."
+      DrepRegistrationCertIndex # "The index of this registration within the certificates of this transaction."
+      DrepRegistrationDrepHashId # "The registered cold hey hash. TODO: should this reference DrepHashId or some separate hash table?"
+
+    DrepDeRegistration --^ do
+      "A table for every DRep de-registration. New in 13.2-Conway."
+      DrepDeRegistrationTxId # "The Tx table index of the tx that includes this certificate."
+      DrepDeRegistrationCertIndex # "The index of this deregistration within the certificates of this transaction."
+      DrepDeRegistrationDrepHashId # "The deregistered hot hey hash"
+
+    VotingAnchor --^ do
+      "A table for every Anchor that appears on Governance Actions. These are pointers to offchain metadata. New in 13.2-Conway."
+      VotingAnchorTxId # "The Tx table index of the tx that includes this anchor. This only exists to facilitate rollbacks"
+      VotingAnchorUrl # "A URL to a JSON payload of metadata"
+      VotingAnchorDataHash # "A hash of the contents of the metadata URL"
+
+    GovernanceAction --^ do
+      "A table for proposed GovernanceAction, aka ProposalProcedure, GovAction or GovProposal.\
+      \ At most one of the ratified/enacted/dropped/expired\
+      \ epoch field can be non-null, indicating the current state of the proposal. This table may be referenced\
+      \ by TreasuryWithdrawal or NewCommittee. New in 13.2-Conway."
+      GovernanceActionTxId # "The Tx table index of the tx that includes this certificate."
+      GovernanceActionIndex # "The index of this proposal procedure within its transaction."
+      GovernanceActionDeposit # "The deposit amount payed for this proposal."
+      GovernanceActionReturnAddress # "The StakeAddress index of the reward address to receive the deposit when it is repaid."
+      GovernanceActionVotingAnchorId # "The Anchor table index related to this proposal."
+      GovernanceActionType # "Can be one of ParameterChange, HardForkInitiation, TreasuryWithdrawals, NoConfidence, NewCommittee, NewConstitution, InfoAction"
+      GovernanceActionDescription # "A Text describing the content of this GovernanceAction in a readable way."
+      GovernanceActionParamProposal # "If this is a param proposal action, this has the index of the param_proposal table."
+      GovernanceActionRatifiedEpoch # "If not null, then this proposal has been ratified at the specfied epoch."
+      GovernanceActionEnactedEpoch # "If not null, then this proposal has been enacted at the specfied epoch."
+      GovernanceActionDroppedEpoch # "If not null, then this proposal has been enacted at the specfied epoch."
+      GovernanceActionExpiredEpoch # "If not null, then this proposal has been enacted at the specfied epoch."
+
+    TreasuryWithdrawal --^ do
+      "A table for all treasury withdrawals proposed on a GovernanceAction. New in 13.2-Conway."
+      TreasuryWithdrawalGovernanceActionId
+        # "The GovernanceAction table index for this withdrawal.\
+          \Multiple TreasuryWithdrawal may reference the same GovernanceAction."
+      TreasuryWithdrawalStakeAddressId # "The address that benefits from this withdrawal."
+      TreasuryWithdrawalAmount # "The amount for this withdrawl."
+
+    NewCommittee --^ do
+      "A table for new committee proposed on a GovernanceAction. New in 13.2-Conway."
+      NewCommitteeGovernanceActionId # "The GovernanceAction table index for this new committee."
+      NewCommitteeQuorum # "The proposed quorum."
+      NewCommitteeMembers # "The members of the committee. This is now given in a text as a description, but may change. TODO: Conway."
+
+    VotingProcedure --^ do
+      "A table for voting procedures, aka GovVote. A Vote can be Yes No or Abstain. New in 13.2-Conway."
+      VotingProcedureTxId # "The Tx table index of the tx that includes this VotingProcedure."
+      VotingProcedureIndex # "The index of this VotingProcedure within this transaction."
+      VotingProcedureGovernanceActionId # "The index of the GovernanceAction that this vote targets."
+      VotingProcedureVoterRole # "The role of the voter. Can be one of ConstitutionalCommittee, DRep, SPO."
+      VotingProcedureVote # "The Vote. Can be one of Yes, No, Abstain."
+      VotingProcedureVotingAnchorId # "The VotingAnchor table index associated with this VotingProcedure."
+
+    AnchorOfflineData --^ do
+      "The table with the off chain metadata related to Vote Anchors. New in 13.2-Conway."
+      AnchorOfflineDataVotingAnchorId # "The VotingAnchor table index this offline data refers."
+      AnchorOfflineDataHash # "The hash of the offline data."
+      AnchorOfflineDataJson # "The payload as JSON."
+      AnchorOfflineDataBytes # "The raw bytes of the payload."
+
+    AnchorOfflineFetchError --^ do
+      "Errors while fetching or validating offline Voting Anchor metadata. New in 13.2-Conway."
+      AnchorOfflineFetchErrorVotingAnchorId # "The VotingAnchor table index this offline fetch error refers."
+      AnchorOfflineFetchErrorFetchError # "The text of the error."
+      AnchorOfflineFetchErrorRetryCount # "The number of retries."
+
+    DrepDistr --^ do
+      "The table for the distribution of voting power per DRep per. Currently this has a single entry per DRep\
+      \ and doesn't show every delegator. This may change. New in 13.2-Conway."
+      DrepDistrHashId # "The DrepHash table index that this distribution entry has information about."
+      DrepDistrAmount # "The total amount of voting power this DRep is delegated."
+      DrepDistrEpochNo # "The epoch no this distribution is about."
 
     PoolOfflineData --^ do
       "The pool offline (ie not on chain) for a stake pool."
