@@ -31,6 +31,7 @@ import Test.Cardano.Db.Mock.Config (alonzoConfigDir, startDBSync, withFullConfig
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillEpochs,
   fillUntilNextEpoch,
+  forgeAndSubmitBlocks,
   forgeNextFindLeaderAndSubmit,
   forgeNextSkipSlotsFindLeaderAndSubmit,
   getAlonzoLedgerState,
@@ -228,7 +229,7 @@ delegations2000 =
     a <- delegateAndSendBlocks 1995 interpreter
     forM_ a $ atomically . addBlock mockServer
     b <- fillUntilNextEpoch interpreter mockServer
-    c <- fillUntilNextEpoch interpreter mockServer
+    c <- forgeAndSubmitBlocks interpreter mockServer 10
 
     assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + length c)
     -- There are exactly 2000 entries on the second epoch, 5 from genesis and 1995 manually added
@@ -247,14 +248,16 @@ delegations2001 =
     a <- delegateAndSendBlocks 1996 interpreter
     forM_ a $ atomically . addBlock mockServer
     b <- fillUntilNextEpoch interpreter mockServer
-    c <- fillUntilNextEpoch interpreter mockServer
+    c <- forgeAndSubmitBlocks interpreter mockServer 9
 
     assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + length c)
-    -- The first block of epoch inserts 2000 out of 2001 epoch distribution.
+    assertEpochStakeEpoch dbSync 2 0
+    void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
+    assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + length c + 1)
     assertEpochStakeEpoch dbSync 2 2000
     -- The remaining entry is inserted on the next block.
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
-    assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + length c + 1)
+    assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + length c + 2)
     assertEpochStakeEpoch dbSync 2 2001
   where
     testLabel = "delegations2001-alonzo"
@@ -265,9 +268,10 @@ delegations8000 =
     startDBSync dbSync
     a <- delegateAndSendBlocks 7995 interpreter
     forM_ a $ atomically . addBlock mockServer
-    b <- fillEpochs interpreter mockServer 3
+    b <- fillEpochs interpreter mockServer 2
+    c <- forgeAndSubmitBlocks interpreter mockServer 10
 
-    assertBlockNoBackoff dbSync (fromIntegral $ length a + length b)
+    assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + length c)
     assertEpochStakeEpoch dbSync 3 2000
 
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
@@ -290,10 +294,11 @@ delegationsMany =
     startDBSync dbSync
     a <- delegateAndSendBlocks 40000 interpreter
     forM_ a $ atomically . addBlock mockServer
-    b <- fillEpochs interpreter mockServer 5
+    b <- fillEpochs interpreter mockServer 4
+    c <- forgeAndSubmitBlocks interpreter mockServer 10
 
     -- too long. We cannot use default delays
-    assertBlockNoBackoffTimes (repeat 10) dbSync (fromIntegral $ length a + length b)
+    assertBlockNoBackoffTimes (repeat 10) dbSync (fromIntegral $ length a + length b + length c)
     -- The slice size here is
     -- 1 + div (delegationsLen * 5) expectedBlocks = 2001
     -- instead of 2000, because there are many delegations
@@ -313,10 +318,11 @@ delegationsManyNotDense =
     startDBSync dbSync
     a <- delegateAndSendBlocks 40000 interpreter
     forM_ a $ atomically . addBlock mockServer
-    b <- fillEpochs interpreter mockServer 5
+    b <- fillEpochs interpreter mockServer 4
+    c <- forgeAndSubmitBlocks interpreter mockServer 10
 
     -- too long. We cannot use default delays
-    assertBlockNoBackoffTimes (repeat 10) dbSync (fromIntegral $ length a + length b)
+    assertBlockNoBackoffTimes (repeat 10) dbSync (fromIntegral $ length a + length b + length c)
     -- The slice size here is
     -- 1 + div (delegationsLen * 5) expectedBlocks = 2001
     -- instead of 2000, because there are many delegations
