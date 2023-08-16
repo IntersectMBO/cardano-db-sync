@@ -136,6 +136,23 @@ deleteTablesAfterTxId mtxId mtxInId mtxOutId mmaTxOutId = do
     queryFirstAndDeleteAfter RedeemerDataTxId txId
     queryFirstAndDeleteAfter ExtraKeyWitnessTxId txId
     queryFirstAndDeleteAfter ParamProposalRegisteredTxId txId
+    queryFirstAndDeleteAfter VotingAnchorTxId txId
+    queryFirstAndDeleteAfter DelegationVoteTxId txId
+    queryFirstAndDeleteAfter CommitteeRegistrationTxId txId
+    queryFirstAndDeleteAfter CommitteeDeRegistrationTxId txId
+    queryFirstAndDeleteAfter DrepRegistrationTxId txId
+    queryFirstAndDeleteAfter DrepDeRegistrationTxId txId
+    queryFirstAndDeleteAfter VotingProcedureTxId txId
+    mgaId <- queryMinRefId GovernanceActionTxId txId
+    whenJust mgaId $ \gaId -> do
+      queryFirstAndDeleteAfter TreasuryWithdrawalGovernanceActionId gaId
+      queryFirstAndDeleteAfter NewCommitteeGovernanceActionId gaId
+      deleteWhere [GovernanceActionId >=. gaId]
+    mvaId <- queryMinRefId VotingAnchorTxId txId
+    whenJust mvaId $ \vaId -> do
+      queryFirstAndDeleteAfter AnchorOfflineDataVotingAnchorId vaId
+      queryFirstAndDeleteAfter AnchorOfflineFetchErrorVotingAnchorId vaId
+      deleteWhere [VotingAnchorId >=. vaId]
     minPmr <- queryMinRefId PoolMetadataRefRegisteredTxId txId
     whenJust minPmr $ \pmrId -> do
       queryFirstAndDeleteAfter PoolOfflineDataPmrId pmrId
