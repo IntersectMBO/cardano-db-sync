@@ -20,7 +20,7 @@ checkForceIndexesArg =
     startDBSync dbSyncEnv
     -- assertBlockNoBackoff dbSyncEnv 0
     threadDelay 3_000_000
-    assertEqQuery dbSyncEnv DB.queryPgIndexesCount 143 "there wasn't the correct number of indexes"
+    assertEqQuery dbSyncEnv DB.queryPgIndexesCount 161 "there wasn't the correct number of indexes"
   where
     testLabel = "CLAcheckForceIndexesArg"
     commandLineForceIndexArgs = initCommandLineArgs {claForceIndexes = True}
@@ -31,7 +31,7 @@ checkNoForceIndexesArg =
     startDBSync dbSyncEnv
     -- assertBlockNoBackoff dbSyncEnv 0
     threadDelay 3_000_000
-    assertEqQuery dbSyncEnv DB.queryPgIndexesCount 78 "there wasn't the correct number of indexes"
+    assertEqQuery dbSyncEnv DB.queryPgIndexesCount 96 "there wasn't the correct number of indexes"
   where
     testLabel = "CLAcheckNoForceIndexesArg"
     commandLineNoForceIndexArgs = initCommandLineArgs {claForceIndexes = False}
