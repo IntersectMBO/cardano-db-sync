@@ -1,5 +1,12 @@
 # Revision history for cardano-db-sync
 
+## 13.2.0.0
+* Uses the cache for the computation of `epoch` table when following
+* `epoch_stake` is now computed earlier, before the epoch is reached
+* Exception handling and concurrency improved.
+* When `--disable-ledger` is used, db-sync won't populate the `tx.deposit` field as it's too expensive
+* Support for Conway (see schema docs)
+
 ## 13.1.1.3
 * Adds compatibility with node-8.0.0 [#1403] and node-8.1.1 [#1455]
 * Adds compatibility with the new format of the CostModel in Alonzo genesis file [#1403]

@@ -27,6 +27,7 @@ When this flag is enabled, some features are missing and some DB tables are left
 - `epoch_stake` table is left empty
 - `ada_pots` table is left empty
 - `epoch_param` table is left empty
+- `tx.deposit` is left null (too expensive to calculate without the ledger)
 
 Warning: Running db-sync with this flag and then restarting it without the flag will cause crashes and should be avoided.
 

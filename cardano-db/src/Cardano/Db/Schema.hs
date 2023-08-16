@@ -1087,7 +1087,7 @@ schemaDocs =
       "A table for every committee key de-registration. New in 13.2-Conway."
       CommitteeDeRegistrationTxId # "The Tx table index of the tx that includes this certificate."
       CommitteeDeRegistrationCertIndex # "The index of this deregistration within the certificates of this transaction."
-      CommitteeDeRegistrationHotKey # "The deregistered hot hey hash"
+      CommitteeDeRegistrationHotKey # "The deregistered hot key hash"
 
     DrepRegistration --^ do
       "A table for every DRep registration. New in 13.2-Conway."
@@ -1099,7 +1099,7 @@ schemaDocs =
       "A table for every DRep de-registration. New in 13.2-Conway."
       DrepDeRegistrationTxId # "The Tx table index of the tx that includes this certificate."
       DrepDeRegistrationCertIndex # "The index of this deregistration within the certificates of this transaction."
-      DrepDeRegistrationDrepHashId # "The deregistered hot hey hash"
+      DrepDeRegistrationDrepHashId # "The deregistered drep hash"
 
     VotingAnchor --^ do
       "A table for every Anchor that appears on Governance Actions. These are pointers to offchain metadata. New in 13.2-Conway."
