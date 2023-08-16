@@ -2,11 +2,11 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (
   fromAllegraTx,
@@ -75,6 +75,8 @@ fromAllegraTx (blkIndex, tx) =
     , txScriptSizes = [] -- Allegra does not support plutus scripts
     , txScripts = scripts
     , txExtraKeyWitnesses = []
+    , txVotingProcedure = []
+    , txProposalProcedure = []
     }
   where
     txBody :: Core.TxBody StandardAllegra

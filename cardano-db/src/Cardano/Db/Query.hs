@@ -57,6 +57,7 @@ module Cardano.Db.Query (
   queryBlockHeight,
   queryAllExtraMigrations,
   queryMinMaxEpochStake,
+  queryGovernanceActionId,
   -- queries used in smash
   queryPoolOfflineData,
   queryPoolRegister,
@@ -762,7 +763,7 @@ queryAllExtraMigrations = do
   res <- select $ do
     ems <- from $ table @ExtraMigrations
     pure (ems ^. ExtraMigrationsToken)
-  pure $  read . unpack . unValue <$> res
+  pure $ read . unpack . unValue <$> res
 
 queryMinMaxEpochStake :: MonadIO m => ReaderT SqlBackend m (Maybe Word64, Maybe Word64)
 queryMinMaxEpochStake = do
@@ -777,6 +778,15 @@ queryMinMaxEpochStake = do
     limit 1
     pure (es ^. EpochStakeEpochNo)
   pure (unValue <$> listToMaybe minEpoch, unValue <$> listToMaybe maxEpoch)
+
+queryGovernanceActionId :: MonadIO m => TxId -> Word64 -> ReaderT SqlBackend m (Either LookupFail GovernanceActionId)
+queryGovernanceActionId txId index = do
+  res <- select $ do
+    ga <- from $ table @GovernanceAction
+    where_ (ga ^. GovernanceActionTxId ==. val txId)
+    where_ (ga ^. GovernanceActionIndex ==. val index)
+    pure ga
+  pure $ maybeToEither (DbLookupGovActionPair txId index) entityKey (listToMaybe res)
 
 {--------------------------------------------
   Queries use in SMASH

@@ -60,9 +60,9 @@ parseNodeConfig bs =
 
 parseSyncPreConfig :: ByteString -> IO SyncPreConfig
 parseSyncPreConfig bs =
-    case Yaml.decodeEither' bs of
-        Left err -> throwIO $ SNErrNodeConfig $ ParseSyncPreConfigError ("Error parsing config: " <> show err)
-        Right res -> pure res
+  case Yaml.decodeEither' bs of
+    Left err -> throwIO $ SNErrNodeConfig $ ParseSyncPreConfigError ("Error parsing config: " <> show err)
+    Right res -> pure res
 
 readByteStringFromFile :: FilePath -> Text -> IO ByteString
 readByteStringFromFile fp cfgType =

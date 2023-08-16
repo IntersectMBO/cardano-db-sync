@@ -53,7 +53,7 @@ import Cardano.DbSync.Era.Shelley.Offline.Http (
   parsePoolUrl,
   spodJson,
  )
-import Cardano.DbSync.Error (SyncNodeError, runOrThrowIO, hasAbortOnPanicEnv)
+import Cardano.DbSync.Error (SyncNodeError, hasAbortOnPanicEnv, runOrThrowIO)
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Rollback (unsafeRollback)
 import Cardano.DbSync.Sync (runSyncNodeClient)

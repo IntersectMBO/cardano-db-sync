@@ -16,6 +16,7 @@ import Control.Monad.Trans.Except.Extra (left, runExceptT)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Int (Int64)
 import qualified Data.List as List
+import Data.Maybe (fromMaybe)
 import Data.Word (Word64)
 import Database.Esqueleto.Experimental (
   Entity (entityVal),
@@ -36,7 +37,6 @@ import Database.Esqueleto.Experimental (
   type (:&) ((:&)),
  )
 import qualified System.Random as Random
-import Data.Maybe (fromMaybe)
 
 {- HLINT ignore "Fuse on/on" -}
 

@@ -1,13 +1,13 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Era.Shelley.Generic.StakeDist (
   StakeSliceRes (..),
@@ -156,7 +156,7 @@ genericStakeSlice pInfo epochBlockNo lstate isMigration
 
     size :: Word64
     size
-      | isMigration , epochBlockNo + 1 < k = 0
+      | isMigration, epochBlockNo + 1 < k = 0
       | isMigration = (epochBlockNo + 1 - k) * epochSliceSize
       | otherwise = epochSliceSize
 

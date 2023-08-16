@@ -23,6 +23,7 @@ import Cardano.DbSync.Types (
  )
 import Cardano.Ledger.Alonzo.Scripts (Prices)
 import qualified Cardano.Ledger.BaseTypes as Ledger
+import Cardano.Ledger.Coin (Coin)
 import Cardano.Prelude hiding (atomically)
 import Cardano.Slotting.Slot (
   EpochNo (..),
@@ -33,6 +34,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTVar,
  )
 import Control.Concurrent.STM.TBQueue (TBQueue)
+import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
@@ -41,8 +43,6 @@ import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Network.AnchoredSeq (Anchorable (..), AnchoredSeq (..))
 import Prelude (fail, id)
-import qualified Data.Map.Strict as Map
-import Cardano.Ledger.Coin (Coin)
 
 --------------------------------------------------------------------------
 -- Ledger Types
@@ -113,7 +113,7 @@ data LedgerStateFile = LedgerStateFile
 
 newtype DepositsMap = DepositsMap {unDepositsMap :: Map ByteString Coin}
 
-lookupDepositsMap :: ByteString -> DepositsMap  -> Maybe Coin
+lookupDepositsMap :: ByteString -> DepositsMap -> Maybe Coin
 lookupDepositsMap bs = Map.lookup bs . unDepositsMap
 
 emptyDepositsMap :: DepositsMap

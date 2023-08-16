@@ -7,6 +7,7 @@ import Cardano.DbSync (
   httpGetPoolOfflineData,
   parsePoolUrl,
  )
+import Cardano.DbSync.Error (runOrThrowIO)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import qualified Data.ByteString.Base16 as Base16
@@ -24,7 +25,6 @@ import System.Console.ANSI.Types (
  )
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitFailure)
-import Cardano.DbSync.Error (runOrThrowIO)
 
 main :: IO ()
 main = do

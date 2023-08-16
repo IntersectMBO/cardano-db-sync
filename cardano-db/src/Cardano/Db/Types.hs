@@ -20,6 +20,10 @@ module Cardano.Db.Types (
   CertNo (..),
   PoolCert (..),
   ExtraMigration (..),
+  VoteUrl (..),
+  Vote (..),
+  VoterRole (..),
+  GovActionType (..),
   isStakeDistrComplete,
   extraDescription,
   deltaCoinToDbInt65,
@@ -38,6 +42,12 @@ module Cardano.Db.Types (
   renderScriptType,
   renderSyncState,
   showRewardSource,
+  renderVote,
+  readVote,
+  renderVoterRole,
+  readVoterRole,
+  renderGovActionType,
+  readGovActionType,
   word64ToAda,
 ) where
 
@@ -163,8 +173,8 @@ data PoolCert = PoolCert
   }
   deriving (Eq, Show)
 
-data ExtraMigration =
-  StakeDistrEnded
+data ExtraMigration
+  = StakeDistrEnded
   deriving (Eq, Show, Read)
 
 isStakeDistrComplete :: [ExtraMigration] -> Bool
@@ -177,6 +187,30 @@ extraDescription StakeDistrEnded =
 
 instance Ord PoolCert where
   compare a b = compare (pcCertNo a) (pcCertNo b)
+
+-- | The vote url wrapper so we have some additional safety.
+newtype VoteUrl = VoteUrl {unVoteUrl :: Text}
+  deriving (Eq, Ord, Generic)
+  deriving (Show) via (Quiet VoteUrl)
+
+data Vote = VoteYes | VoteNo | VoteAbstain
+  deriving (Eq, Ord, Generic)
+  deriving (Show) via (Quiet Vote)
+
+data VoterRole = ConstitutionalCommittee | DRep | SPO
+  deriving (Eq, Ord, Generic)
+  deriving (Show) via (Quiet VoterRole)
+
+data GovActionType
+  = ParameterChange
+  | HardForkInitiation
+  | TreasuryWithdrawals
+  | NoConfidence
+  | NewCommitteeType
+  | NewConstitution
+  | InfoAction
+  deriving (Eq, Ord, Generic)
+  deriving (Show) via (Quiet GovActionType)
 
 deltaCoinToDbInt65 :: DeltaCoin -> DbInt65
 deltaCoinToDbInt65 (DeltaCoin dc) =
@@ -285,6 +319,58 @@ readScriptType str =
     "plutusV2" -> PlutusV2
     "plutusV3" -> PlutusV3
     _other -> error $ "readScriptType: Unknown ScriptType " ++ str
+
+renderVote :: Vote -> Text
+renderVote ss =
+  case ss of
+    VoteYes -> "Yes"
+    VoteNo -> "No"
+    VoteAbstain -> "Abstain"
+
+readVote :: String -> Vote
+readVote str =
+  case str of
+    "Yes" -> VoteYes
+    "No" -> VoteNo
+    "Abstain" -> VoteAbstain
+    _other -> error $ "readVote: Unknown Vote " ++ str
+
+renderVoterRole :: VoterRole -> Text
+renderVoterRole ss =
+  case ss of
+    ConstitutionalCommittee -> "ConstitutionalCommittee"
+    DRep -> "DRep"
+    SPO -> "SPO"
+
+readVoterRole :: String -> VoterRole
+readVoterRole str =
+  case str of
+    "ConstitutionalCommittee" -> ConstitutionalCommittee
+    "DRep" -> DRep
+    "SPO" -> SPO
+    _other -> error $ "readVoterRole: Unknown VoterRole " ++ str
+
+renderGovActionType :: GovActionType -> Text
+renderGovActionType gav =
+  case gav of
+    ParameterChange -> "ParameterChange"
+    HardForkInitiation -> "HardForkInitiation"
+    TreasuryWithdrawals -> "TreasuryWithdrawals"
+    NoConfidence -> "NoConfidence"
+    NewCommitteeType -> "NewCommittee"
+    NewConstitution -> "NewConstitution"
+    InfoAction -> "InfoAction"
+
+readGovActionType :: String -> GovActionType
+readGovActionType str =
+  case str of
+    "ParameterChange" -> ParameterChange
+    "HardForkInitiation" -> HardForkInitiation
+    "TreasuryWithdrawals" -> TreasuryWithdrawals
+    "NoConfidence" -> NoConfidence
+    "NewCommittee" -> NewCommitteeType
+    "NewConstitution" -> NewConstitution
+    _other -> error $ "readGovActionType: Unknown GovActionType " ++ str
 
 word64ToAda :: Word64 -> Ada
 word64ToAda w =

@@ -9,15 +9,16 @@ module Cardano.Db.Error (
   logAndThrowIO,
 ) where
 
+import Cardano.BM.Trace (Trace, logError)
+import Cardano.Db.Schema
+import Cardano.Prelude (throwIO)
 import Control.Exception (Exception)
 import qualified Data.ByteString.Base16 as Base16
 import Data.ByteString.Char8 (ByteString)
+import Data.Text (Text)
 import qualified Data.Text.Encoding as Text
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
-import Data.Text (Text)
-import Cardano.BM.Trace (Trace, logError)
-import Cardano.Prelude (throwIO)
 
 data LookupFail
   = DbLookupBlockHash !ByteString
@@ -27,6 +28,7 @@ data LookupFail
   | DbLookupTxOutPair !ByteString !Word16
   | DbLookupEpochNo !Word64
   | DbLookupSlotNo !Word64
+  | DbLookupGovActionPair !TxId !Word64
   | DbMetaEmpty
   | DbMetaMultipleRows
   | DBMultipleGenesis
@@ -44,6 +46,7 @@ instance Show LookupFail where
       DbLookupTxOutPair h i -> concat ["tx out pair (", show $ base16encode h, ", ", show i, ")"]
       DbLookupEpochNo e -> "epoch number " ++ show e
       DbLookupSlotNo s -> "slot number " ++ show s
+      DbLookupGovActionPair txId index -> concat ["missing GovAction (", show txId, ", ", show index, ")"]
       DbMetaEmpty -> "Meta table is empty"
       DbMetaMultipleRows -> "Multiple rows in Meta table which should only contain one"
       DBMultipleGenesis ->

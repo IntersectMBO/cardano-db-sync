@@ -16,13 +16,13 @@ import qualified Cardano.BM.Setup as Logging
 import Cardano.BM.Trace (Trace)
 import Cardano.Db (textShow)
 import Cardano.Prelude
+import Cardano.SMASH.Server.Types (DBFail (..))
 import Data.Aeson (FromJSON (..), ToJSON (..))
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import qualified Data.Yaml as Yaml
 import System.IO.Error
-import Cardano.SMASH.Server.Types (DBFail(..))
 
 -- | SMASH Server cli parameters
 data SmashServerParams = SmashServerParams
