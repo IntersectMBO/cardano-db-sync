@@ -264,6 +264,8 @@ insertTx syncEnv isMember blkId epochNo slotNo depositsMap blockIndex tx grouped
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
       !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
   hasConsumed <- liftIO $ getHasConsumed syncEnv
+  -- In some txs and with specific configuration we may be able to find necessary data within the tx body.
+  -- In these cases we can avoid expensive queries.
   (resolvedInputs, fees', deposits) <- case (mdeposits, unCoin <$> Generic.txFees tx) of
     (Just deposits, Just fees) -> do
       (resolvedInputs, _) <- splitLast <$> mapM (resolveTxInputs hasConsumed False (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
@@ -503,7 +505,7 @@ insertCertificate tracer cache isMember network blkId txId epochNo slotNo redeem
     Left (ShelleyTxCertMir mir) -> insertMirCert tracer cache network txId idx mir
     Left (ShelleyTxCertGenesisDeleg _gen) ->
       liftIO $ logWarning tracer "insertCertificate: Unhandled DCertGenesis certificate"
-    Right (ConwayTxCertDeleg deleg) -> insertConwayDelegCert tracer cache network txId idx mRedeemerId epochNo slotNo deleg
+    Right (ConwayTxCertDeleg deleg) -> insertConwayDelegCert cache network txId idx mRedeemerId epochNo slotNo deleg
     Right (ConwayTxCertPool pool) -> insertPoolCert tracer cache isMember network epochNo blkId txId idx pool
     Right (ConwayTxCertCommittee c) -> case c of
       ConwayRegDRep cred coin ->
@@ -618,7 +620,6 @@ insertDelegCert _tracer cache network txId idx mRedeemerId epochNo slotNo dCert 
 
 insertConwayDelegCert ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
   Cache ->
   Ledger.Network ->
   DB.TxId ->
@@ -628,7 +629,7 @@ insertConwayDelegCert ::
   SlotNo ->
   ConwayDelegCert StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertConwayDelegCert _tracer cache network txId idx mRedeemerId epochNo slotNo dCert =
+insertConwayDelegCert cache network txId idx mRedeemerId epochNo slotNo dCert =
   case dCert of
     ConwayRegCert cred _dep -> insertStakeRegistration epochNo txId idx $ Generic.annotateStakingCred network cred
     ConwayUnRegCert cred _dep -> insertStakeDeregistration cache network epochNo txId idx mRedeemerId cred

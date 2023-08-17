@@ -253,7 +253,7 @@ fixPlutusData tracer cblk fds = do
 
 scrapDatumsBlock :: CardanoBlock -> Map ByteString ByteString
 scrapDatumsBlock cblk = case cblk of
-  BlockConway _blk -> mempty -- This bug existed in a version that didn't support Conway
+  BlockConway _blk -> mempty -- This bug existed in a version that didn't support Conway or later eras
   BlockBabbage blk -> Map.unions $ scrapDatumsTxBabbage . snd <$> getTxs blk
   BlockAlonzo blk -> Map.unions $ scrapDatumsTxAlonzo . snd <$> getTxs blk
   BlockByron _ -> error "No Datums in Byron"
