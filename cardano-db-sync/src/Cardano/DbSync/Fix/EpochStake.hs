@@ -23,7 +23,7 @@ migrateStakeDistr env mcls =
   case (envLedgerEnv env, mcls) of
     (HasLedger lenv, Strict.Just cls) -> do
       ems <- lift DB.queryAllExtraMigrations
-      runWhen (DB.isStakeDistrComplete ems) $ do
+      runWhen (not $ DB.isStakeDistrComplete ems) $ do
         liftIO $ logInfo trce "Starting Stake Distribution migration on table epoch_stake"
         let stakeSlice = getStakeSlice lenv cls True
         case stakeSlice of
