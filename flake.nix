@@ -2,7 +2,7 @@
   description = "cardano-db-sync";
 
   inputs = {
-    nixpkgs.follows = "haskellNix/nixpkgs-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     hackageNix = {
       url = "github:input-output-hk/hackage.nix";
       flake = false;
