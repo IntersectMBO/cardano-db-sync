@@ -227,7 +227,7 @@
     },
     "fenix": {
       "inputs": {
-        "nixpkgs": "nixpkgs_3",
+        "nixpkgs": "nixpkgs_4",
         "rust-analyzer-src": "rust-analyzer-src"
       },
       "locked": {
@@ -421,7 +421,7 @@
     },
     "haumea": {
       "inputs": {
-        "nixpkgs": "nixpkgs_2"
+        "nixpkgs": "nixpkgs_3"
       },
       "locked": {
         "lastModified": 1685133229,
@@ -810,6 +810,22 @@
     },
     "nixpkgs_2": {
       "locked": {
+        "lastModified": 1692301034,
+        "narHash": "sha256-rO2R4mJoDX+RFy2YX76IJ4YSs46AmRuLQ5Uu52ouQE8=",
+        "owner": "sgillespie",
+        "repo": "nixpkgs",
+        "rev": "d116a787fdc4896373be7ac7934c20c74ffad376",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sgillespie",
+        "ref": "d116a787fdc4896373be7ac7934c20c74ffad376",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_3": {
+      "locked": {
         "lastModified": 1681001314,
         "narHash": "sha256-5sDnCLdrKZqxLPK4KA8+f4A3YKO/u6ElpMILvX0g72c=",
         "owner": "nix-community",
@@ -823,7 +839,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_3": {
+    "nixpkgs_4": {
       "locked": {
         "lastModified": 1677063315,
         "narHash": "sha256-qiB4ajTeAOVnVSAwCNEEkoybrAlA+cpeiBxLobHndE8=",
@@ -980,10 +996,7 @@
         "hackageNix": "hackageNix",
         "haskellNix": "haskellNix",
         "iohkNix": "iohkNix",
-        "nixpkgs": [
-          "haskellNix",
-          "nixpkgs-unstable"
-        ],
+        "nixpkgs": "nixpkgs_2",
         "std": "std",
         "utils": "utils"
       }
