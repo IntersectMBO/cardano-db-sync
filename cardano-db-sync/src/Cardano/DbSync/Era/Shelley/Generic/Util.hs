@@ -6,10 +6,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
--- Need this because both ghc-8.6.5 and ghc-8.10.2 incorrectly warns about a redundant constraint
--- in the definition of renderAddress.
--- {-# OPTIONS_GHC -Wno-redundant-constraints #-}
-
 module Cardano.DbSync.Era.Shelley.Generic.Util (
   annotateStakingCred,
   coinToDbLovelace,
