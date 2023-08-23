@@ -279,7 +279,7 @@ data RedeemerMaps = RedeemerMaps
   }
 
 mkTxScript ::
-  (EraCrypto era ~ StandardCrypto, Ledger.Era era) =>
+  (Ledger.Era era) =>
   (ScriptHash StandardCrypto, Alonzo.AlonzoScript era) ->
   TxScript
 mkTxScript (hsh, script) =

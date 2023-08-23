@@ -113,7 +113,7 @@ getAuxScripts maux =
       map (\scr -> (Core.hashScript @era scr, scr)) $ toList scrs
 
 mkTxScript ::
-  (Era era, EraCrypto era ~ StandardCrypto) =>
+  (Era era) =>
   (ScriptHash StandardCrypto, Timelock era) ->
   TxScript
 mkTxScript (hsh, script) =

@@ -8,7 +8,7 @@ module Cardano.DbSync.Era.Shelley.Generic.ScriptTest (tests) where
 import qualified Cardano.Api.Shelley as Shelley
 import Cardano.DbSync.Era.Shelley.Generic.Script
 import qualified Cardano.Ledger.Allegra.Scripts as Allegra
-import Cardano.Ledger.Api (Shelley ())
+import Cardano.Ledger.Api (Era (), Shelley ())
 import Cardano.Ledger.Binary.Decoding
 import qualified Cardano.Ledger.Shelley.Scripts as Ledger
 import Cardano.Prelude
@@ -58,7 +58,7 @@ prop_multisigToJSON_bad = property $ do
   jsonText <- forAll $ Gen.element knownBadMultiSigs
   assert $ isLeft (decodeJson jsonText)
   where
-    decodeJson :: Text -> Either String MultiSigScript
+    decodeJson :: Text -> Either String (MultiSigScript Shelley)
     decodeJson jsonText = Aeson.eitherDecodeStrict $ encodeUtf8 jsonText
 
 prop_multisigToJSON_roundtrip :: Property
@@ -71,8 +71,8 @@ prop_multisigToJSON_api = property $ do
   multiSig <- forAll genMultiSig
   Aeson.toJSON (toSimpleScript multiSig) === Aeson.toJSON multiSig
   where
-    toSimpleScript :: MultiSigScript -> Shelley.SimpleScript
-    toSimpleScript = Shelley.fromShelleyMultiSig . toMultiSig @Shelley
+    toSimpleScript :: MultiSigScript Shelley -> Shelley.SimpleScript
+    toSimpleScript = Shelley.fromShelleyMultiSig . toMultiSig
 
 prop_timelockToJSON :: Property
 prop_timelockToJSON = property $ do
@@ -93,20 +93,20 @@ prop_timelockToJSON_bad = property $ do
   jsonText <- forAll $ Gen.element knownBadMultiSigs
   assert $ isLeft (decodeJson jsonText)
   where
-    decodeJson :: Text -> Either String TimelockScript
+    decodeJson :: Text -> Either String (TimelockScript Shelley)
     decodeJson jsonText = Aeson.eitherDecodeStrict $ encodeUtf8 jsonText
 
 prop_timelockToJSON_roundtrip :: Property
 prop_timelockToJSON_roundtrip = property $ do
-  timelock <- forAll genValidTimelock
+  timelock <- forAll (genValidTimelock @Shelley)
   tripping timelock Aeson.toJSON Aeson.fromJSON
 
 prop_timelockToJSON_api :: Property
 prop_timelockToJSON_api = property $ do
-  timelock <- forAll genTimelock
+  timelock <- forAll (genTimelock @Shelley)
   Aeson.toJSON (toSimpleScript timelock) === Aeson.toJSON timelock
   where
-    toSimpleScript :: TimelockScript -> Shelley.SimpleScript
+    toSimpleScript :: TimelockScript Shelley -> Shelley.SimpleScript
     toSimpleScript = Shelley.fromAllegraTimelock . toTimelock @Shelley
 
 knownMultiSigs :: [(Text, Text)]
@@ -163,11 +163,11 @@ knownTimelocks =
     )
   ]
 
-genMultiSig :: Gen MultiSigScript
-genMultiSig = fromMultiSig @Shelley <$> arbitrary
+genMultiSig :: Gen (MultiSigScript Shelley)
+genMultiSig = fromMultiSig <$> arbitrary
 
-genValidMultiSig :: Gen MultiSigScript
-genValidMultiSig = fromMultiSig @Shelley <$> genValidLedgerMultiSigSized 5 10
+genValidMultiSig :: Gen (MultiSigScript Shelley)
+genValidMultiSig = fromMultiSig <$> genValidLedgerMultiSigSized 5 10
 
 genValidLedgerMultiSigSized :: Int -> Size -> Gen (Ledger.MultiSig Shelley)
 genValidLedgerMultiSigSized _ 0 = Ledger.RequireSignature <$> arbitrary
@@ -189,13 +189,13 @@ genValidLedgerMultiSigSized maxListLen maxDepth =
       req <- Gen.int (Range.linear 0 maxListLen)
       Ledger.RequireMOf req <$> genList req maxListLen
 
-genTimelock :: Gen TimelockScript
-genTimelock = fromTimelock @Shelley <$> arbitrary
+genTimelock :: Era era => Gen (TimelockScript era)
+genTimelock = fromTimelock <$> arbitrary
 
-genValidTimelock :: Gen TimelockScript
-genValidTimelock = fromTimelock @Shelley <$> genValidLedgerTimelockSized 5 10
+genValidTimelock :: Era era => Gen (TimelockScript era)
+genValidTimelock = fromTimelock <$> genValidLedgerTimelockSized 5 10
 
-genValidLedgerTimelockSized :: Int -> Size -> Gen (Allegra.Timelock Shelley)
+genValidLedgerTimelockSized :: Era era => Int -> Size -> Gen (Allegra.Timelock era)
 genValidLedgerTimelockSized _ 0 = Allegra.RequireSignature <$> arbitrary
 genValidLedgerTimelockSized maxListLen maxDepth =
   Gen.choice
