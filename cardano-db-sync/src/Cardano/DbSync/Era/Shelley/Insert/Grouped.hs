@@ -149,9 +149,9 @@ resolveTxInputs hasConsumed needsValue groupedOutputs txIn =
   liftLookupFail ("resolveTxInputs " <> textShow txIn <> " ") $ do
     qres <-
       case (hasConsumed, needsValue) of
+        (_, True) -> fmap convertFoundAll <$> resolveInputTxOutIdValue txIn
         (False, _) -> fmap convertnotFound <$> resolveInputTxId txIn
         (True, False) -> fmap convertFoundTxOutId <$> resolveInputTxOutId txIn
-        (True, True) -> fmap convertFoundAll <$> resolveInputTxOutIdValue txIn
     case qres of
       Right ret -> pure $ Right ret
       Left err ->
