@@ -1,11 +1,13 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Cardano.DbSync.Api (
   fullInsertOptions,
@@ -24,9 +26,9 @@ module Cardano.DbSync.Api (
   runExtraMigrationsMaybe,
   getSafeBlockNoDiff,
   getPruneInterval,
-  whenConsumeTxOut,
+  whenConsumeOrPruneTxOut,
   whenPruneTxOut,
-  getHasConsumed,
+  getHasConsumedOrPruneTxOut,
   getPrunes,
   mkSyncEnvFromConfig,
   verifySnapshotPoint,
@@ -140,26 +142,45 @@ runIndexMigrations env = do
     logInfo (getTrace env) "Indexes were created"
     atomically $ writeTVar (envIndexes env) True
 
-initExtraMigrations :: Bool -> Bool -> ExtraMigrations
-initExtraMigrations cons prne =
-  ExtraMigrations
-    { emRan = False
-    , emConsume = cons || prne
-    , emPrune = prne
-    }
+initPruneConsumeMigration :: Bool -> Bool -> PruneConsumeMigration
+initPruneConsumeMigration consumed pruneTxOut =
+  PruneConsumeMigration
+  { pcmRan = False
+  , pcmConsumeFlag = consumed
+  , pcmPruneTxOutFlag = pruneTxOut
+  , pcmConsumeOrPruneTxOut = consumed || pruneTxOut
+  }
 
 runExtraMigrationsMaybe :: SyncEnv -> IO ()
-runExtraMigrationsMaybe env = do
-  extraMigr <- liftIO $ readTVarIO $ envExtraMigrations env
-  logInfo (getTrace env) $ textShow extraMigr
-  unless (emRan extraMigr) $ do
-    DB.runDbIohkNoLogging (envBackend env) $
+runExtraMigrationsMaybe syncEnv = do
+  pcm@PruneConsumeMigration{..} <- liftIO $ readTVarIO $ envPruneConsumeMigration syncEnv
+  logInfo (getTrace syncEnv) $ textShow pcm
+  handlePruneFlag syncEnv $
+    DB.runDbIohkNoLogging (envBackend syncEnv) $
       DB.runExtraMigrations
-        (getTrace env)
-        (getSafeBlockNoDiff env)
-        (emConsume extraMigr)
-        (emPrune extraMigr)
-  liftIO $ atomically $ writeTVar (envExtraMigrations env) (extraMigr {emRan = True})
+        (getTrace syncEnv)
+        (getSafeBlockNoDiff syncEnv)
+        pcmConsumeOrPruneTxOut
+        pcmPruneTxOutFlag
+
+  liftIO $ atomically $ writeTVar (envPruneConsumeMigration syncEnv) (pcm {pcmRan = True})
+  -- mark the fact that
+  when pcmConsumeOrPruneTxOut $
+    liftIO $ DB.runDbIohkNoLogging (envBackend syncEnv) $ DB.insertExtraMigration DB.PruneTxOutFlagPreviouslySet
+
+-- if the prune flag has previously been used and current instance of dbsync's prune flag is missing then throw.
+handlePruneFlag :: MonadIO m => SyncEnv -> m a -> m a
+handlePruneFlag syncEnv migrate = do
+  let SyncEnv {..} = syncEnv
+  ems <- liftIO $ DB.runDbIohkNoLogging envBackend DB.queryAllExtraMigrations
+  pcm <- liftIO $ readTVarIO $ envPruneConsumeMigration
+  case (DB.isPruneTxOutFlagPreviouslySet ems, (pcmPruneTxOutFlag pcm)) of
+    (True, False) ->
+      throwIO $
+        SNErrExtraMigration
+          (  "If --prune-tx-out flag is enabled and then db-sync is stopped all future executions of db-sync "
+          <> "should still have this flag. Otherwise, it is considered bad usage and can cause crashes")
+    (_, _) -> migrate
 
 getSafeBlockNoDiff :: SyncEnv -> Word64
 getSafeBlockNoDiff syncEnv = 2 * getSecurityParam syncEnv
@@ -167,25 +188,25 @@ getSafeBlockNoDiff syncEnv = 2 * getSecurityParam syncEnv
 getPruneInterval :: SyncEnv -> Word64
 getPruneInterval syncEnv = 10 * getSecurityParam syncEnv
 
-whenConsumeTxOut :: MonadIO m => SyncEnv -> m () -> m ()
-whenConsumeTxOut env action = do
-  extraMigr <- liftIO $ readTVarIO $ envExtraMigrations env
-  when (emConsume extraMigr) action
+whenConsumeOrPruneTxOut :: MonadIO m => SyncEnv -> m () -> m ()
+whenConsumeOrPruneTxOut env action = do
+  extraMigr <- liftIO $ readTVarIO $ envPruneConsumeMigration env
+  when (pcmConsumeOrPruneTxOut extraMigr) action
 
 whenPruneTxOut :: MonadIO m => SyncEnv -> m () -> m ()
 whenPruneTxOut env action = do
-  extraMigr <- liftIO $ readTVarIO $ envExtraMigrations env
-  when (emPrune extraMigr) action
+  extraMigr <- liftIO $ readTVarIO $ envPruneConsumeMigration env
+  when (pcmPruneTxOutFlag extraMigr) action
 
-getHasConsumed :: SyncEnv -> IO Bool
-getHasConsumed env = do
-  extraMigr <- liftIO $ readTVarIO $ envExtraMigrations env
-  pure $ emConsume extraMigr
+getHasConsumedOrPruneTxOut :: SyncEnv -> IO Bool
+getHasConsumedOrPruneTxOut env = do
+  extraMigr <- liftIO $ readTVarIO $ envPruneConsumeMigration env
+  pure $ pcmConsumeOrPruneTxOut extraMigr
 
 getPrunes :: SyncEnv -> IO Bool
 getPrunes env = do
-  extraMigr <- liftIO $ readTVarIO $ envExtraMigrations env
-  pure $ emPrune extraMigr
+  extraMigr <- liftIO $ readTVarIO $ envPruneConsumeMigration env
+  pure $ pcmPruneTxOutFlag extraMigr
 
 fullInsertOptions :: InsertOptions
 fullInsertOptions = InsertOptions True True True True
@@ -321,7 +342,7 @@ mkSyncEnv trce connString backend syncOptions protoInfo nw nwMagic systemStart s
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNodeParams
-  extraMigrVar <- newTVarIO $ initExtraMigrations (enpMigrateConsumed syncNodeParams) (enpPruneTxOut syncNodeParams)
+  pcmVar <- newTVarIO $ initPruneConsumeMigration (enpMigrateConsumed syncNodeParams) (enpPruneTxOut syncNodeParams)
   owq <- newTBQueueIO 100
   orq <- newTBQueueIO 100
   epochVar <- newTVarIO initEpochState
@@ -348,23 +369,23 @@ mkSyncEnv trce connString backend syncOptions protoInfo nw nwMagic systemStart s
 
   pure $
     SyncEnv
-      { envProtocol = SyncProtocolCardano
-      , envNetworkMagic = nwMagic
-      , envSystemStart = systemStart
-      , envConnString = connString
-      , envRunDelayedMigration = runMigrationFnc
-      , envBackend = backend
-      , envOptions = syncOptions
-      , envConsistentLevel = consistentLevelVar
-      , envIsFixed = fixDataVar
-      , envIndexes = indexesVar
+      { envBackend = backend
       , envCache = cache
-      , envExtraMigrations = extraMigrVar
-      , envOfflineWorkQueue = owq
-      , envOfflineResultQueue = orq
+      , envConnString = connString
+      , envConsistentLevel = consistentLevelVar
       , envEpochState = epochVar
       , envEpochSyncTime = epochSyncTime
+      , envIndexes = indexesVar
+      , envIsFixed = fixDataVar
       , envLedgerEnv = ledgerEnvType
+      , envNetworkMagic = nwMagic
+      , envOfflineResultQueue = orq
+      , envOfflineWorkQueue = owq
+      , envOptions = syncOptions
+      , envProtocol = SyncProtocolCardano
+      , envPruneConsumeMigration = pcmVar
+      , envRunDelayedMigration = runMigrationFnc
+      , envSystemStart = systemStart
       }
 
 mkSyncEnvFromConfig ::

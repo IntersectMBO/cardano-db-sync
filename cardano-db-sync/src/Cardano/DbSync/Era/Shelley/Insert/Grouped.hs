@@ -87,12 +87,12 @@ insertBlockGroupedData ::
   BlockGroupedData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.MinIds
 insertBlockGroupedData syncEnv grouped = do
-  hasConsumed <- liftIO $ getHasConsumed syncEnv
+  hasConsumed <- liftIO $ getHasConsumedOrPruneTxOut syncEnv
   txOutIds <- lift . DB.insertManyTxOutPlex hasConsumed $ etoTxOut . fst <$> groupedTxOut grouped
   let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> groupedTxOut grouped)
   maTxOutIds <- lift $ DB.insertManyMaTxOut maTxOuts
   txInIds <- lift . DB.insertManyTxIn $ etiTxIn <$> groupedTxIn grouped
-  whenConsumeTxOut syncEnv $ do
+  whenConsumeOrPruneTxOut syncEnv $ do
     etis <- resolveRemainingInputs (groupedTxIn grouped) $ zip txOutIds (fst <$> groupedTxOut grouped)
     updateTuples <- lift $ mapM (prepareUpdates tracer) (zip txInIds etis)
     lift $ DB.updateListTxOutConsumedByTxInId $ catMaybes updateTuples

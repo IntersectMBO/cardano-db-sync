@@ -45,7 +45,7 @@ rollbackFromBlockNo syncEnv blkNo = do
         ]
     lift $ do
       (minIds, txInDeleted) <- DB.deleteBlocksBlockId trce blockId
-      whenConsumeTxOut syncEnv $
+      whenConsumeOrPruneTxOut syncEnv $
         DB.setNullTxOut trce (DB.minTxInId minIds) txInDeleted
       DB.deleteEpochRows epochNo
     lift $ rollbackCache cache blockId

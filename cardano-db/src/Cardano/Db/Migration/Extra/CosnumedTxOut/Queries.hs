@@ -8,10 +8,11 @@
 module Cardano.Db.Migration.Extra.CosnumedTxOut.Queries where
 
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
-import Cardano.Db.Insert (insertMany', insertUnchecked)
+import Cardano.Db.Insert (insertExtraMigration, insertMany', insertUnchecked)
 import Cardano.Db.Migration.Extra.CosnumedTxOut.Schema
 import Cardano.Db.Query (isJust, listToMaybe, queryBlockHeight, queryMaxRefId)
 import Cardano.Db.Text
+import Cardano.Db.Types (ExtraMigration (..))
 import Control.Monad.Extra (when, whenJust)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
@@ -70,10 +71,11 @@ setNullTxOutConsumedAfterTxInId :: MonadIO m => TxOutId -> ReaderT SqlBackend m 
 setNullTxOutConsumedAfterTxInId txOutId = do
   update txOutId [TxOutConsumedByTxInId =. Nothing]
 
-migrateTxOut :: MonadIO m => Maybe (Trace IO Text) -> ReaderT SqlBackend m ()
+migrateTxOut :: (MonadBaseControl IO m, MonadIO m) => Maybe (Trace IO Text) -> ReaderT SqlBackend m ()
 migrateTxOut mTrace = do
   createConsumedTxOut
   migrateNextPage 0
+  insertExtraMigration PruneTxOutFlagPreviouslySet
   where
     migrateNextPage :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
     migrateNextPage offst = do
@@ -92,8 +94,8 @@ migratePair (txInId, txId, index) =
 pageSize :: Word64
 pageSize = 100_000
 
-isMigrated :: MonadIO m => ReaderT SqlBackend m Bool
-isMigrated = do
+queryTxConsumedColumnExists :: MonadIO m => ReaderT SqlBackend m Bool
+queryTxConsumedColumnExists = do
   columntExists :: [Text] <-
     fmap unSingle
       <$> rawSql
@@ -136,7 +138,7 @@ createConsumedTxOut = do
 
 _validateMigration :: MonadIO m => Trace IO Text -> ReaderT SqlBackend m Bool
 _validateMigration trce = do
-  _migrated <- isMigrated
+  _migrated <- queryTxConsumedColumnExists
   --  unless migrated $ runMigration
   txInCount <- countTxIn
   consumedTxOut <- countConsumed
