@@ -12,11 +12,11 @@ module Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.MigrateConsumedPruneTxOu
   pruneSameBlock,
   noPruneSameBlock,
   migrateAndPruneRestart,
-  incorrectMigrationPath,
+  pruneRestartMissingFlag,
 ) where
 
 import qualified Cardano.Db as DB
-import Cardano.DbSync (SyncNodeParams (..), MigrationDir (..))
+import Cardano.DbSync (SyncNodeParams (..))
 import Cardano.Mock.ChainSync.Server (IOManager, addBlock)
 import Cardano.Mock.Forging.Interpreter (forgeNext)
 import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
@@ -56,7 +56,7 @@ commandLineArgCheck = do
 
     startDBSync dbSyncEnv
     assertBlockNoBackoff dbSyncEnv 1
-    assertEqQuery dbSyncEnv DB.isMigrated True "missing consumed_by_tx_in_id column when flag --consumed-tx-out active"
+    assertEqQuery dbSyncEnv DB.queryTxConsumedColumnExists True "missing consumed_by_tx_in_id column when flag --consumed-tx-out active"
   where
     cmdLineArgs =
       initCommandLineArgs
@@ -310,11 +310,7 @@ migrateAndPruneRestart :: IOManager -> [(Text, Text)] -> Assertion
 migrateAndPruneRestart = do
   withCustomConfig cmdLineArgs babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     let DBSyncEnv {..} = dbSyncEnv
-    -- set dbSync params with custom
-    let initParams = dbSyncParams {enpMigrateConsumed = True, enpPruneTxOut = True}
-        initDbSyncEnv = dbSyncEnv {dbSyncParams = initParams}
-
-    startDBSync initDbSyncEnv
+    startDBSync dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 50
     assertBlockNoBackoff dbSyncEnv 50
     -- stop
@@ -334,3 +330,29 @@ migrateAndPruneRestart = do
         , claPruneTxOut = False
         }
     testLabel = "CLAMigrateAndPruneRestart"
+
+pruneRestartMissingFlag :: IOManager -> [(Text, Text)] -> Assertion
+pruneRestartMissingFlag = do
+  withCustomConfig cmdLineArgs babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+    let DBSyncEnv {..} = dbSyncEnv
+
+    startDBSync dbSyncEnv
+    void $ forgeAndSubmitBlocks interpreter mockServer 50
+    assertBlockNoBackoff dbSyncEnv 50
+    -- stop
+    stopDBSync dbSyncEnv
+    -- update the syncParams to include new params
+    let newDbSyncParams = dbSyncParams {enpMigrateConsumed = False, enpPruneTxOut = False}
+        newDbSyncEnv = dbSyncEnv {dbSyncParams = newDbSyncParams}
+    startDBSync newDbSyncEnv
+    -- there is a slight delay before flag is checked
+    threadDelay 2000000
+    -- we use this function so we can tell that runDbSync has thrown and pass the exception along
+    checkStillRuns dbSyncEnv
+  where
+    cmdLineArgs =
+      initCommandLineArgs
+        { claMigrateConsumed = False
+        , claPruneTxOut = True
+        }
+    testLabel = "CLApruneRestartMissingFlag"

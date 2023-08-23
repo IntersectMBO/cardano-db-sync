@@ -75,10 +75,10 @@ setNullTxOut :: MonadIO m => Trace IO Text -> Maybe TxInId -> Word64 -> ReaderT 
 setNullTxOut trce mMinTxInId =
   ExtraCons.querySetNullTxOut trce (changeKey <$> mMinTxInId)
 
-runExtraMigrations :: MonadIO m => Trace IO Text -> Word64 -> Bool -> Bool -> ReaderT SqlBackend m ()
-runExtraMigrations trce blockNoDiff consumed pruned = do
-  hasConsumedField <- ExtraCons.isMigrated
-  case (hasConsumedField, consumed, pruned) of
+runExtraMigrations :: (MonadBaseControl IO m, MonadIO m) => Trace IO Text -> Word64 -> Bool -> Bool -> ReaderT SqlBackend m ()
+runExtraMigrations trce blockNoDiff pcmConsumeOrPruneTxOut pcmPruneTxOutFlag = do
+  hasConsumedField <- ExtraCons.queryTxConsumedColumnExists
+  case (hasConsumedField, pcmConsumeOrPruneTxOut, pcmPruneTxOutFlag) of
     (False, False, False) -> do
       liftIO $ logInfo trce "No extra migration specified"
     (True, True, False) -> do

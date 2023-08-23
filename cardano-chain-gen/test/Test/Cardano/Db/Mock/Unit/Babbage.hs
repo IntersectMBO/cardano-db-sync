@@ -52,6 +52,7 @@ unitTests iom knownMigrations =
             , test "prune same block" MigrateConsumedPruneTxOut.pruneSameBlock
             , test "no pruning same block" MigrateConsumedPruneTxOut.noPruneSameBlock
             , expectFail $ test "restart with new consumed set to false" MigrateConsumedPruneTxOut.migrateAndPruneRestart
+            , expectFail $ test "set prune flag, restart missing prune flag" MigrateConsumedPruneTxOut.pruneRestartMissingFlag
             ]
         , testGroup
             "config"

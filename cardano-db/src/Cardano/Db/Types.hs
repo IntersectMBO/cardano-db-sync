@@ -5,6 +5,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Cardano.Db.Types (
   Ada (..),
@@ -25,6 +26,7 @@ module Cardano.Db.Types (
   VoterRole (..),
   GovActionType (..),
   isStakeDistrComplete,
+  isPruneTxOutFlagPreviouslySet,
   extraDescription,
   deltaCoinToDbInt65,
   integerToDbInt65,
@@ -175,15 +177,22 @@ data PoolCert = PoolCert
 
 data ExtraMigration
   = StakeDistrEnded
+  | PruneTxOutFlagPreviouslySet
   deriving (Eq, Show, Read)
 
 isStakeDistrComplete :: [ExtraMigration] -> Bool
 isStakeDistrComplete = elem StakeDistrEnded
 
+isPruneTxOutFlagPreviouslySet :: [ExtraMigration] -> Bool
+isPruneTxOutFlagPreviouslySet = elem PruneTxOutFlagPreviouslySet
+
 extraDescription :: ExtraMigration -> Text
-extraDescription StakeDistrEnded =
-  "The epoch_stake table has been migrated. It is now populated earlier during the previous era. \
-  \Also the epoch_stake_progress table is introduced."
+extraDescription = \ case
+  StakeDistrEnded ->
+    "The epoch_stake table has been migrated. It is now populated earlier during the previous era. \
+    \Also the epoch_stake_progress table is introduced."
+  PruneTxOutFlagPreviouslySet ->
+    "The --prune-tx-out flag has previously been enabled, now db-sync can't be run without the flag enabled"
 
 instance Ord PoolCert where
   compare a b = compare (pcCertNo a) (pcCertNo b)
