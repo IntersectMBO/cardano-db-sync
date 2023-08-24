@@ -321,7 +321,7 @@ migrateAndPruneRestart = do
     startDBSync newDbSyncEnv
     -- there is a slight delay before flag is checked
     threadDelay 2000000
-    -- we use this function so we can tell that runDbSync has thrown and pass the exception along
+    -- checkStillRuns uses `poll` due to this being inside Async and passes along our thrown exception
     checkStillRuns dbSyncEnv
   where
     cmdLineArgs =
@@ -347,7 +347,7 @@ pruneRestartMissingFlag = do
     startDBSync newDbSyncEnv
     -- there is a slight delay before flag is checked
     threadDelay 2000000
-    -- we use this function so we can tell that runDbSync has thrown and pass the exception along
+    -- checkStillRuns uses `poll` due to this being inside Async and passes along our thrown exception
     checkStillRuns dbSyncEnv
   where
     cmdLineArgs =
