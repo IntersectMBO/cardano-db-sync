@@ -3,8 +3,6 @@
 
 module Cardano.DbSync.Util.AddressTest (tests) where
 
-import qualified Cardano.Api.Byron as Byron
-import qualified Cardano.Api.Shelley as Shelley
 import Cardano.Binary (FromCBOR (..), unsafeDeserialize')
 import Cardano.DbSync.Util.Address
 import Cardano.Ledger.Address (Addr (..), BootstrapAddress (..), RewardAcnt (..))
@@ -26,13 +24,10 @@ tests =
       "Cardano.DbSync.Util.Address"
       [ ("serialiseAddress byron simple", prop_serialiseAddress_byron)
       , ("serialiseAddress byron roundtrip", prop_serialiseAddress_byron_roundtrip)
-      , ("serialiseAddress byron A/B", prop_serialiseAddress_byron_api)
       , ("serialiseAddress shelley simple", prop_serialiseAddress_shelley)
       , ("serialiseAddress shelley roundtrip", prop_serialiseAddress_shelley_roundtrip)
-      , ("serialiseAddress shelley A/B", prop_serialiseAddress_shelley_api)
       , ("serialiseRewardAcnt simple", prop_serialiseRewardAcnt)
       , ("serialiseRewardAcnt roundtrip", prop_serialiseRewardAcnt_roundtrip)
-      , ("serialiseRewardAcnt A/B", prop_serialiseRewardAcnt_api)
       ]
 
 prop_serialiseAddress_byron :: Property
@@ -46,16 +41,6 @@ prop_serialiseAddress_byron_roundtrip :: Property
 prop_serialiseAddress_byron_roundtrip = property $ do
   addr <- AddrBootstrap <$> forAll genByronAddress
   tripping addr serialiseAddress deserialiseByronAddress
-
-prop_serialiseAddress_byron_api :: Property
-prop_serialiseAddress_byron_api = property $ do
-  addr <- AddrBootstrap <$> forAll genByronAddress
-  Just (serialiseAddress addr) === apiSerialiseAddress addr
-  where
-    apiSerialiseAddress addr = Byron.serialiseAddress . Byron.ByronAddress <$> getByronAddress addr
-
-    getByronAddress (AddrBootstrap (BootstrapAddress addr)) = Just addr
-    getByronAddress _ = Nothing
 
 prop_serialiseAddress_shelley :: Property
 prop_serialiseAddress_shelley = property $ do
@@ -72,19 +57,6 @@ prop_serialiseAddress_shelley_roundtrip = property $ do
 
   tripping addr serialiseAddress deserialiseShelleyAddress
 
-prop_serialiseAddress_shelley_api :: Property
-prop_serialiseAddress_shelley_api = property $ do
-  addr <- forAll genShelleyAddress
-  cover 10 "mainnet" $ getNetwork addr == Mainnet
-  cover 10 "testnet" $ getNetwork addr == Testnet
-
-  Just (serialiseAddress addr) === apiSerialiseAddress addr
-  where
-    apiSerialiseAddress = (Shelley.serialiseAddress <$>) . toApiAddress
-
-    toApiAddress (Addr net payCred stakeRef) = Just $ Shelley.ShelleyAddress net payCred stakeRef
-    toApiAddress _ = Nothing
-
 prop_serialiseRewardAcnt :: Property
 prop_serialiseRewardAcnt = property $ do
   (cborHex, expected) <- forAll $ Gen.element knownStakeAddresses
@@ -99,16 +71,6 @@ prop_serialiseRewardAcnt_roundtrip = property $ do
   cover 10 "testnet" $ getRwdNetwork acnt == Testnet
 
   tripping acnt serialiseRewardAcnt deserialiseRewardAcnt
-
-prop_serialiseRewardAcnt_api :: Property
-prop_serialiseRewardAcnt_api = property $ do
-  acnt <- forAll genRewardAcnt
-  cover 10 "mainnet" $ getRwdNetwork acnt == Mainnet
-  cover 10 "testnet" $ getRwdNetwork acnt == Testnet
-
-  Shelley.serialiseToBech32 (toApiAddress acnt) === serialiseRewardAcnt acnt
-  where
-    toApiAddress (RewardAcnt net stakeCred) = Shelley.StakeAddress net stakeCred
 
 knownByronAddresses :: [(Text, Text)]
 knownByronAddresses =

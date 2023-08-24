@@ -4,7 +4,6 @@
 
 module Cardano.DbSync.Util.Bech32Test (tests) where
 
-import qualified Cardano.Api.Shelley as Shelley
 import Cardano.Binary (FromCBOR (..), ToCBOR (..), serialize', unsafeDeserialize')
 import Cardano.Crypto.Hash.Blake2b (Blake2b_224 ())
 import Cardano.Crypto.Hash.Class (HashAlgorithm (..), hashFromBytes)
@@ -26,10 +25,8 @@ tests =
       "Cardano.DbSync.Util.Bech32"
       [ ("serialiseVerKeyVrfToBech32 simple", prop_serialiseToBech32)
       , ("serialiseVerKeyVrfToBech32 roundtrip", prop_serialiseVerKeyVrfToBech32_roundtrip)
-      , ("serialiseVerKeyVrfToBech32 A/B", prop_serialiseVerKeyVrfToBech32_api)
       , ("serialiseStakePoolHashKeyToBech32 simple", prop_serialiseStakePoolHashKeyToBech32)
       , ("serialiseStakePoolKeyHashToBech32 roundtrip", prop_serialiseStakePoolKeyHashToBech32_roundtrip)
-      , ("serialiseStakePoolKeyHashToBech32 A/B", prop_serialiseStakePoolKeyHashToBech32_api)
       ]
 
 prop_serialiseToBech32 :: Property
@@ -38,14 +35,6 @@ prop_serialiseToBech32 = property $ do
   bech32 cborHex === expected
   where
     bech32 = serialiseVerKeyVrfToBech32 . serialiseBase16
-
-prop_serialiseVerKeyVrfToBech32_api :: Property
-prop_serialiseVerKeyVrfToBech32_api = property $ do
-  cborHex <- forAll $ Gen.element (map fst knownVrfKeys)
-  bech32 cborHex === apiBech32 cborHex
-  where
-    bech32 = serialiseVerKeyVrfToBech32 . serialiseBase16
-    apiBech32 = Shelley.serialiseToBech32 . Shelley.VrfVerificationKey . serialiseBase16
 
 prop_serialiseVerKeyVrfToBech32_roundtrip :: Property
 prop_serialiseVerKeyVrfToBech32_roundtrip = property $ do
@@ -63,14 +52,6 @@ prop_serialiseStakePoolHashKeyToBech32 = property $ do
   bech32 cborHex === expected
   where
     bech32 = serialiseStakePoolKeyHashToBech32 . serialiseBase16
-
-prop_serialiseStakePoolKeyHashToBech32_api :: Property
-prop_serialiseStakePoolKeyHashToBech32_api = property $ do
-  cborHex <- forAll $ Gen.element (map fst knownHashKeys)
-  bech32 cborHex === apiBech32 cborHex
-  where
-    bech32 = serialiseStakePoolKeyHashToBech32 . serialiseBase16
-    apiBech32 = Shelley.serialiseToBech32 . Shelley.StakePoolKeyHash . serialiseBase16
 
 prop_serialiseStakePoolKeyHashToBech32_roundtrip :: Property
 prop_serialiseStakePoolKeyHashToBech32_roundtrip = property $ do

@@ -3,7 +3,6 @@
 
 module Cardano.DbSync.Era.Shelley.Generic.ScriptDataTest (tests) where
 
-import qualified Cardano.Api.Shelley as Api
 import Cardano.DbSync.Era.Shelley.Generic.ScriptData
 import Cardano.Ledger.Alonzo.Scripts.Data (Data (..))
 import qualified Cardano.Ledger.Alonzo.Scripts.Data as Ledger
@@ -17,7 +16,7 @@ import Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Gen.QuickCheck as Gen
 import Test.Cardano.Ledger.Alonzo.Arbitrary ()
-import Prelude ()
+import Prelude (String ())
 
 tests :: IO Bool
 tests =
@@ -27,7 +26,6 @@ tests =
       [ ("scriptDataToJSON simple", prop_scriptDataToJSON)
       , ("scriptDataToJSON negative", prop_scriptDataToJSON_bad)
       , ("scriptDataToJSON roundtrip", prop_scriptDataToJSON_roundtrip)
-      , ("scriptDataToJSON A/B", prop_scriptDataToJSON_api)
       ]
 
 prop_scriptDataToJSON :: Property
@@ -41,28 +39,15 @@ prop_scriptDataToJSON = property $ do
 prop_scriptDataToJSON_bad :: Property
 prop_scriptDataToJSON_bad = property $ do
   jsonText <- forAll $ Gen.element knownBadScriptData
-  json <-
-    evalEither . Aeson.eitherDecode . LByteString.fromStrict . encodeUtf8 $
-      jsonText
-
-  assert $
-    isLeft $
-      Api.scriptDataFromJson Api.ScriptDataJsonDetailedSchema json
+  assert $ isLeft (decodeJson jsonText)
+  where
+    decodeJson :: Text -> Either String (ScriptData Shelley)
+    decodeJson = Aeson.eitherDecodeStrict . encodeUtf8
 
 prop_scriptDataToJSON_roundtrip :: Property
 prop_scriptDataToJSON_roundtrip = property $ do
   scriptData <- forAll genScriptData
   tripping scriptData Aeson.toJSON Aeson.fromJSON
-
-prop_scriptDataToJSON_api :: Property
-prop_scriptDataToJSON_api = property $ do
-  scriptData <- forAll genScriptData
-  Aeson.toJSON scriptData === apiScriptDataToJson scriptData
-  where
-    apiScriptDataToJson =
-      Api.scriptDataToJson Api.ScriptDataJsonDetailedSchema
-        . Api.fromAlonzoData
-        . unScriptData
 
 knownScriptData :: [(Text, Text)]
 knownScriptData =

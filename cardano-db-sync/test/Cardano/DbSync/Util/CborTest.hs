@@ -3,8 +3,7 @@
 
 module Cardano.DbSync.Util.CborTest (tests) where
 
-import qualified Cardano.Api.Shelley as Shelley
-import Cardano.DbSync.Era.Shelley.Generic.Metadata (TxMetadataValue (..), toMetadatum)
+import Cardano.DbSync.Era.Shelley.Generic.Metadata (TxMetadataValue (..))
 import Cardano.DbSync.Util.Cbor
 import Cardano.Prelude
 import qualified Data.ByteString as SByteString
@@ -23,7 +22,6 @@ tests =
       "Cardano.DbSync.Util.CborTest"
       [ ("serialiseTxMetadataToCbor simple", prop_serialiseTxMetadataToCbor)
       , ("serialiseTxMetadataToCbor roundtrip", prop_serialiseTxMetadataToCbor_roundtrip)
-      , ("serialiseTxMetadataToCbor A/B", prop_serialiseTxMetadataToCbor_api)
       ]
 
 prop_serialiseTxMetadataToCbor :: Property
@@ -44,25 +42,6 @@ prop_serialiseTxMetadataToCbor_roundtrip = property $ do
   cover 10 "map" (any isMap txData)
 
   tripping txData serialiseTxMetadataToCbor deserialiseTxMetadataFromCbor
-
-prop_serialiseTxMetadataToCbor_api :: Property
-prop_serialiseTxMetadataToCbor_api = property $ do
-  txData <- forAll genTxMetadata
-
-  cover 10 "number" (any isNumber txData)
-  cover 10 "bytes" (any isBytes txData)
-  cover 10 "text" (any isText txData)
-  cover 10 "list" (any isList txData)
-  cover 10 "map" (any isMap txData)
-
-  apiSerialiseTxMetadata txData === serialiseTxMetadataToCbor' txData
-  where
-    apiSerialiseTxMetadata =
-      serialiseCborToBase16 . Shelley.serialiseToCBOR . toApiMeta
-    serialiseTxMetadataToCbor' = serialiseCborToBase16 . serialiseTxMetadataToCbor
-
-    toApiMeta :: Map Word64 TxMetadataValue -> Shelley.TxMetadata
-    toApiMeta = Shelley.TxMetadata . Shelley.fromShelleyMetadata . map toMetadatum
 
 knownTxMetadata :: [(Map Word64 TxMetadataValue, Text)]
 knownTxMetadata =

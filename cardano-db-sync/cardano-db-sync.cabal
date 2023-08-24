@@ -335,7 +335,6 @@ test-suite test
                       , aeson
                       , base16-bytestring
                       , bytestring
-                      , cardano-api
                       , cardano-binary
                       , cardano-crypto-class
                       , cardano-crypto-praos
