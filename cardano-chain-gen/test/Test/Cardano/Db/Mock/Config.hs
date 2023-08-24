@@ -330,7 +330,7 @@ withFullConfig' hasFingerprint shouldLog cmdLineArgs configFilePath testLabelFil
     if shouldLog
       then configureLogging dbsyncParams "db-sync-node"
       else pure nullTracer
-  -- partially applied runDbSync do we can pass in syncNodearams at call site
+  -- runDbSync is partially applied so we can pass in syncNodeParams at call site / within tests
   let partialDbSyncRun params = runDbSync emptyMetricsSetters migr iom trce params True
       initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
 

@@ -26,7 +26,7 @@ module Cardano.Db.Types (
   VoterRole (..),
   GovActionType (..),
   isStakeDistrComplete,
-  isPruneTxOutFlagPreviouslySet,
+  wasPruneTxOutFlagPreviouslySet,
   extraDescription,
   deltaCoinToDbInt65,
   integerToDbInt65,
@@ -183,8 +183,8 @@ data ExtraMigration
 isStakeDistrComplete :: [ExtraMigration] -> Bool
 isStakeDistrComplete = elem StakeDistrEnded
 
-isPruneTxOutFlagPreviouslySet :: [ExtraMigration] -> Bool
-isPruneTxOutFlagPreviouslySet = elem PruneTxOutFlagPreviouslySet
+wasPruneTxOutFlagPreviouslySet :: [ExtraMigration] -> Bool
+wasPruneTxOutFlagPreviouslySet = elem PruneTxOutFlagPreviouslySet
 
 extraDescription :: ExtraMigration -> Text
 extraDescription = \ case

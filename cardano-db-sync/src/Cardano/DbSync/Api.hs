@@ -168,19 +168,23 @@ runExtraMigrationsMaybe syncEnv = do
   when pcmConsumeOrPruneTxOut $
     liftIO $ DB.runDbIohkNoLogging (envBackend syncEnv) $ DB.insertExtraMigration DB.PruneTxOutFlagPreviouslySet
 
--- if the prune flag has previously been used and current instance of dbsync's prune flag is missing then throw.
+-- check if prunetxout flag was previously set, if so it's always required
 handlePruneFlag :: MonadIO m => SyncEnv -> m a -> m a
-handlePruneFlag syncEnv migrate = do
+handlePruneFlag syncEnv extraMigrations = do
   let SyncEnv {..} = syncEnv
+  -- get values from extramigrations table to check if flag was set
   ems <- liftIO $ DB.runDbIohkNoLogging envBackend DB.queryAllExtraMigrations
-  pcm <- liftIO $ readTVarIO $ envPruneConsumeMigration
-  case (DB.isPruneTxOutFlagPreviouslySet ems, (pcmPruneTxOutFlag pcm)) of
+  pcm <- liftIO $ readTVarIO envPruneConsumeMigration
+  -- was flag previously set and is it currently set
+  case (DB.wasPruneTxOutFlagPreviouslySet ems, pcmPruneTxOutFlag pcm) of
+    -- it was set but isn't currently set so we need to throw
     (True, False) ->
       throwIO $
         SNErrExtraMigration
           (  "If --prune-tx-out flag is enabled and then db-sync is stopped all future executions of db-sync "
           <> "should still have this flag. Otherwise, it is considered bad usage and can cause crashes")
-    (_, _) -> migrate
+    -- continue with migration
+    (_, _) -> extraMigrations
 
 getSafeBlockNoDiff :: SyncEnv -> Word64
 getSafeBlockNoDiff syncEnv = 2 * getSecurityParam syncEnv
