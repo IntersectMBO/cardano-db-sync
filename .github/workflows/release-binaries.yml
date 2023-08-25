@@ -1,0 +1,25 @@
+name: Dowload binary distribution
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  linux:
+    name: "Download binary distribution (Linux)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Nix with good defaults
+        uses: input-output-hk/install-nix-action@v21
+        with:
+          extra_nix_config: |
+            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
+            substituters = https://cache.iog.io/ https://cache.nixos.org/
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Download image from cache
+        run: |
+          nix build --builders "" --max-jobs 0 .#cardano-db-sync-linux
+          nix build --builders "" --max-jobs 0 .#packages.x86_64-darwin.cardano-db-sync-macos

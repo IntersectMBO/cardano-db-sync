@@ -3,15 +3,15 @@
 
   inputs = {
     nixpkgs.follows = "haskellNix/nixpkgs-unstable";
-    hackageNix = {
-      url = "github:input-output-hk/hackage.nix";
-      flake = false;
-    };
+    utils.url = "github:numtide/flake-utils";
     haskellNix = {
       url = "github:input-output-hk/haskell.nix";
       inputs.hackage.follows = "hackageNix";
     };
-    utils.url = "github:numtide/flake-utils";
+    hackageNix = {
+      url = "github:input-output-hk/hackage.nix";
+      flake = false;
+    };
     iohkNix = {
       url = "github:input-output-hk/iohk-nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -24,211 +24,282 @@
       url = "github:input-output-hk/cardano-haskell-packages?ref=repo";
       flake = false;
     };
-    # Custom user config (default: empty), eg.:
-    # { outputs = {...}: {
-    #   # Cutomize listeming port of node scripts:
-    #   nixosModules.cardano-node = {
-    #     services.cardano-node.port = 3002;
-    #   };
-    # };
-    customConfig.url = "github:input-output-hk/empty-flake";
-    std = {
-      url = "github:divnix/std";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
-  outputs = { self, iohkNix, haskellNix, CHaP, nixpkgs, utils, std, flake-compat, ... }@inputs:
+  outputs = { self, ... }@inputs:
     let
-      inherit (haskellNix) config;
-      inherit (nixpkgs) lib;
-      inherit (utils.lib) eachSystem flattenTree;
-      inherit (iohkNix.lib) prefixNamesWith;
-
-      # our current release compiler is 8107
-      defaultCompiler = "ghc8107";
-      # but we also build for 927.
-      extraCompilers = ["ghc927"];
-
-      supportedSystems = import ./supported-systems.nix;
-
-      inputMap = { "https://input-output-hk.github.io/cardano-haskell-packages" = CHaP; };
-
-      customConfig =
-        lib.recursiveUpdate (import ./nix/custom-config.nix customConfig)
-        inputs.customConfig;
-
-      overlays = [
-        # crypto needs to come before haskell.nix.
-        # FIXME: _THIS_IS_BAD_
-        iohkNix.overlays.crypto
-        haskellNix.overlay
-        iohkNix.overlays.haskell-nix-extra
-        iohkNix.overlays.haskell-nix-crypto
-        iohkNix.overlays.utils
-        iohkNix.overlays.cardano-lib
-        (final: prev: {
-          inherit flake-compat customConfig;
-          gitrev = self.rev or "dirty";
-          commonLib = lib // iohkNix.lib;
-          # cardanoLib = rec {
-          #   inherit (cardano-world.${final.system}.cardano) environments;
-          #   forEnvironments = f: lib.mapAttrs
-          #     (name: env: f (env // { inherit name; }))
-          #     environments;
-          # };
-          schema = ./schema;
-          ciJobs = self.ciJobs.${final.system};
-        })
-        (import ./nix/pkgs.nix)
-        (final: prev: {
-          fourmolu = final.haskell-nix.tool "ghc927" "fourmolu" {
-            version = "0.10.1.0";
-          };
-        })
-        self.overlay
-        # I _do not_ understand why we need it _here_, and having it haskell.nix
-        # does not work.
-        (final: prev: prev.lib.optionalAttrs prev.stdenv.hostPlatform.isMusl {
-          # this is needed because postgresql links against libicu
-          # which we build only statically (for musl), and that then
-          # needs -lstdc++ as well.
-          postgresql = prev.postgresql.overrideAttrs (old: {
-            NIX_LDFLAGS = "-lstdc++";
-          });
-        })
+      supportedSystems = [
+        "x86_64-linux"
+        "x86_64-darwin"
       ];
+    in
+      inputs.utils.lib.eachSystem supportedSystems (system:
+        let
+          nixpkgs = import inputs.nixpkgs {
+            inherit system;
+            inherit (inputs.haskellNix) config;
 
-    in eachSystem supportedSystems (system:
-      let
-        pkgs = import nixpkgs { inherit system overlays config; };
+            overlays =
+              builtins.attrValues inputs.iohkNix.overlays ++
+              [ inputs.haskellNix.overlay
 
-        inherit (pkgs.stdenv) hostPlatform;
+                (final: prev: with final; {
+                  # Required in order to build postgresql for musl
+                  postgresql = (final.postgresql_11
+                    .overrideAttrs (_: lib.optionalAttrs (stdenv.hostPlatform.isMusl) {
+                      dontDisableStatic = true;
+                      NIX_LDFLAGS = "--push-state --as-needed -lstdc++ --pop-state";
+                      # without this collate.icu.utf8, and foreign_data will fail.
+                      LC_CTYPE = "C";
+                    }))
+                    .override {
+                      enableSystemd = stdenv.hostPlatform.isLinux && !stdenv.hostPlatform.isMusl;
+                      gssSupport = stdenv.hostPlatform.isLinux && !stdenv.hostPlatform.isMusl;
+                    };
+                })
 
-        project = pkgs.cardanoDbSyncProject;
+                (_: cardanoNodeOverlay)
 
-        hlint = pkgs.callPackage pkgs.hlintCheck {
-          inherit (project.args) src;
-        };
-
-        fourmolu = pkgs.callPackage pkgs.fourmoluCheck {
-          inherit (project.args) src;
-        };
-
-        shellcheck = pkgs.callPackage pkgs.shellCheck {
-          inherit (project.args) src;
-        };
-
-        nixosTests = import ./nix/nixos/tests {
-          inherit pkgs;
-        };
-
-        checks = project.flake'.checks // {
-          inherit hlint fourmolu shellcheck;
-        } // lib.optionalAttrs hostPlatform.isLinux (prefixNamesWith "nixosTests/" nixosTests);
-
-        # This is used by `nix develop` to open a devShell
-        devShells.default = project.shell;
-
-        scripts = flattenTree pkgs.scripts;
-
-        packages = project.exes // scripts // {
-          # Built by `nix build .`
-          default = project.exes.cardano-db-sync;
-          inherit (pkgs) dockerImage cardano-node cardano-cli cardano-smash-server-no-basic-auth;
-        } # Add checks to be able to build them individually:
-        // (prefixNamesWith "checks/" checks);
-
-        ciJobs = lib.recursiveUpdate (project.flake {
-          crossPlatforms = p:
-            lib.optional hostPlatform.isLinux p.musl64;
-        }).ciJobs ({
-          inherit hlint fourmolu shellcheck;
-
-          packages = {
-            inherit scripts;
-            inherit (pkgs) cardano-node cardano-smash-server-no-basic-auth checkCabalProject;
+                (final: prev: {
+                  # The NixOS module expects these to be here
+                  inherit (project.exes) cardano-db-sync;
+                  schema = ./schema;
+                })
+              ];
           };
-        } // lib.optionalAttrs hostPlatform.isLinux {
-          inherit (pkgs) dockerImage;
-          checks = {
-            inherit nixosTests;
-          };
-          cardano-db-sync-linux = import ./nix/binary-release.nix {
-            inherit pkgs project;
-            inherit (packages.default.identifier) version;
-            platform = "linux";
-            exes = lib.collect lib.isDerivation project.projectCross.musl64.exes;
-          };
-        } // lib.optionalAttrs hostPlatform.isMacOS {
-          cardano-db-sync-macos = import ./nix/binary-release.nix {
-            inherit pkgs project;
-            inherit (packages.default.identifier) version;
-            platform = "macos";
-            exes = lib.collect lib.isDerivation project.exes;
-          };
-        });
 
-      in {
+          # This is an ugly trick that uses flake-compat to evaluate the cardano-node flake,
+          # and get its packages
+          cardanoNodeOverlay = pkgs:
+            let
+              nodeFlakeCompat = import inputs.flake-compat {
+                inherit (project.hsPkgs.cardano-node) src;
+                inherit pkgs;
+              };
+            in {
+              inherit (nodeFlakeCompat.defaultNix.packages.${system})
+                cardano-cli cardano-node;
+            };
 
-        inherit checks devShells packages;
+          # Set up and start Postgres before running database tests
+          preCheck = ''
+            echo pre-check
+            initdb --encoding=UTF8 --locale=en_US.UTF-8 --username=postgres $NIX_BUILD_TOP/db-dir
+            postgres -D $NIX_BUILD_TOP/db-dir -c listen_addresses="" -k $TMP &
+            PSQL_PID=$!
+            echo $PSQL_PID > postgres.pid
+            sleep 10
+            if (echo '\q' | psql -h $TMP postgres postgres); then
+              echo "PostgreSQL server is verified to be started."
+            else
+              echo "Failed to connect to local PostgreSQL server."
+              exit 2
+            fi
+            ls -ltrh $NIX_BUILD_TOP
+            DBUSER=$(whoami)
+            DBNAME=$DBUSER
+            export PGPASSFILE=$NIX_BUILD_TOP/pgpass
+            echo "$TMP:5432:$DBUSER:$DBUSER:*" > $PGPASSFILE
+            cp -vir ${./schema} ../schema
+            chmod 600 $PGPASSFILE
+            psql -h $TMP postgres postgres <<EOF
+              create role $DBUSER with createdb login password '$DBPASS';
+              alter user $DBUSER with superuser;
+              create database $DBNAME with owner = $DBUSER;
+              \\connect $DBNAME
+              ALTER SCHEMA public   OWNER TO $DBUSER;
+            EOF
+          '';
 
-        apps = {
-          checkCabalProject = { type = "app"; program = "${pkgs.checkCabalProject}"; };
-        };
+          # Clean up Postgres after running database tests
+          postCheck = ''
+            echo post-check
+            DBNAME=$(whoami)
+            NAME=db_schema.sql
+            mkdir -p $out/nix-support
+            echo "Dumping schema to db_schema.sql"
+            pg_dump -h $TMP -s $DBNAME > $out/$NAME
+            kill $(cat postgres.pid)
+            echo "Adding to build products..."
+            echo "file binary-dist $out/$NAME" > $out/nix-support/hydra-build-products
+          '';
 
-        legacyPackages = pkgs;
+          project = (nixpkgs.haskell-nix.cabalProject' rec {
+            src = ./.;
+            name = "cardano-db-sync";
+            compiler-nix-name = "ghc8107";
 
-        hydraJobs =
-          let
-            # TODO: macOS builders are resource-constrained and cannot run the detabase
-            # integration tests. Add these back when we get beefier builders.
-            nonRequiredMacOSPaths = [
-              "checks.cardano-chain-gen:test:cardano-chain-gen"
-              "checks.cardano-db:test:test-db"
-              "ghc927.checks.cardano-chain-gen:test:cardano-chain-gen"
-              "ghc927.checks.cardano-db:test:test-db"
+            inputMap = {
+              "https://input-output-hk.github.io/cardano-haskell-packages" = inputs.CHaP;
+            };
+
+            shell.tools = {
+              cabal = "3.10.1.0";
+              ghcid = "0.8.8";
+              hlint = "3.2.7";
+              weeder = "2.2.0";
+              haskell-language-server = {
+                src = nixpkgs.haskell-nix.sources."hls-1.10";
+              };
+            };
+
+            shell.buildInputs = with nixpkgs.pkgsBuildBuild; [
+              haskell-language-server
+              gitAndTools.git
             ];
+            shell.withHoogle = true;
 
-            nonRequiredPaths =
-              if hostPlatform.isMacOS then
-                nonRequiredMacOSPaths
-              else [];
+            modules = [
+              ({ pkgs, ... }: with pkgs; {
+                # Ignore version bounds
+                packages.katip.doExactConfig = true;
+                # Split data to reduce closure size
+                packages.ekg.components.library.enableSeparateDataOutput = true;
+                # Use our libsodium, secp256k1 forks
+                packages.cardano-crypto-praos.components.library.pkgconfig =
+                  lib.mkForce [[ libsodium-vrf ]];
+                packages.cardano-crypto-class.components.library.pkgconfig =
+                  lib.mkForce [[ libsodium-vrf secp256k1 ]];
+                # Systemd can't be statically linked
+                packages.cardano-node.flags.systemd =
+                  !pkgs.stdenv.hostPlatform.isMusl;
+              })
 
-          in
-          pkgs.callPackages iohkNix.utils.ciJobsAggregates
-            {
-              inherit ciJobs;
-              nonRequiredPaths = map lib.hasPrefix nonRequiredPaths;
-            } // ciJobs;
-      }) // {
+              ({ pkgs, ... }: {
+                # Override extra-source-files
+                packages.cardano-db-sync.package.extraSrcFiles =
+                  [ "../schema/*.sql" ];
+                packages.cardano-db.package.extraSrcFiles =
+                  ["../config/pgpass-testnet"];
+                packages.cardano-db.components.tests.test-db.extraSrcFiles =
+                  [ "../config/pgpass-mainnet" ];
+                packages.cardano-chain-gen.package.extraSrcFiles =
+                  [ "../schema/*.sql" ];
 
-        # allows precise paths (avoid fallbacks) with nix build/eval:
-        outputs = self;
+              })
 
-        overlay = final: prev:
-            {
-              cardanoDbSyncProject = (import ./nix/haskell.nix {
-                inherit (final) haskell-nix;
-                inherit inputMap defaultCompiler extraCompilers;
-              }).appendModule customConfig.haskellNix;
-            inherit ((import flake-compat {
-          pkgs = final;
-          inherit (final.cardanoDbSyncProject.hsPkgs.cardano-node) src;
-        }).defaultNix.packages.${final.system}) cardano-node cardano-cli;
-            inherit (final.cardanoDbSyncProject.exes) cardano-db-sync cardano-smash-server cardano-db-tool;
-          };
-        nixosModules = {
-          cardano-db-sync = { pkgs, lib, ... }: {
-            imports = [ ./nix/nixos/cardano-db-sync-service.nix ];
-            services.cardano-db-sync.dbSyncPkgs =
-              lib.mkDefault self.legacyPackages.${pkgs.system};
-          };
-        };
-      };
+              ({ pkgs, ... }:
+                # Database tests
+                let
+                  postgresTest = {
+                    build-tools = [ pkgs.pkgsBuildHost.postgresql_12 ];
+                    inherit preCheck;
+                    inherit postCheck;
+                  };
+                in {
+                  packages.cardano-db.components.tests.test-db = postgresTest;
+                  packages.cardano-chain-gen.components.tests.cardano-chain-gen =
+                    postgresTest;
+                })
+            ];
+          }).appendOverlays [
+            # Collect local package `exe`s
+            nixpkgs.haskell-nix.haskellLib.projectOverlays.projectComponents
+          ];
+
+          staticChecks =
+            let
+              inherit (project.args) src compiler-nix-name;
+            in
+              with nixpkgs; {
+                hlint = callPackage hlintCheck {
+                  inherit src;
+
+                  hlint = haskell-nix.tool compiler-nix-name "hlint" {
+                    version = "3.2.7";
+                  };
+                };
+
+                fourmolu = callPackage fourmoluCheck {
+                  inherit src;
+
+                  # Fourmolu 0.10.x requires GHC >= 9.0 && < 9.6
+                  fourmolu = haskell-nix.tool "ghc928" "fourmolu" {
+                    version = "0.10.1.0";
+                  };
+                };
+
+                shellcheck = callPackage shellCheck {
+                  inherit src;
+                };
+              };
+
+          flake = project.flake (
+            nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
+              crossPlatforms = p: [p.musl64];
+            }
+          );
+        in with nixpkgs; lib.recursiveUpdate flake (
+          let
+            mkDist = platform: project:
+              let
+                exes = lib.collect lib.isDerivation project.exes;
+                name = "cardano-db-sync-${version}-${platform}";
+                version = project.exes.cardano-db-sync.identifier.version;
+                env = {
+                  nativeBuildInputs = with nixpkgs; [ haskellBuildUtils bintools ];
+                };
+              in
+                nixpkgs.runCommand name env
+                  ''
+                    mkdir -p $out release
+                    cd release
+
+                    # Copy exes to intermediate dir
+                    cp \
+                      --no-clobber \
+                      --remove-destination \
+                      --verbose \
+                      ${lib.concatMapStringsSep " " (exe: "${exe}/bin/*") exes} \
+                       ./
+
+                    # Rewrite libs on macos (from iohk-utils)
+                    ${lib.optionalString
+                       (platform == "macos")
+                       (lib.concatMapStrings
+                         (exe: "rewrite-libs . ${exe}/bin/*")
+                         exes)}
+
+                    # Package distribution
+                    dist_file=${name}.tar.gz
+                    tar -czf $out/$dist_file .
+
+                    # Write summary file
+                    mkdir $out/nix-support
+                    echo "file binary-dist $out/$dist_file" > $out/nix-support/hydra-build-products
+                  '';
+
+            cardano-db-sync-linux = mkDist "linux" project.projectCross.musl64;
+            cardano-db-sync-macos = mkDist "macos" project;
+            cardano-db-sync-docker = callPackage ./nix/docker.nix {
+              inherit (inputs.iohkNix.lib) evalService;
+            };
+
+          in rec {
+            hydraJobs = callPackages inputs.iohkNix.utils.ciJobsAggregates {
+              ciJobs = flake.hydraJobs;
+            } // lib.optionalAttrs (system == "x86_64-linux") {
+              inherit cardano-db-sync-linux cardano-db-sync-docker;
+            } // lib.optionalAttrs (system == "x86_64-darwin") {
+              inherit cardano-db-sync-macos;
+            } // {
+              checks = staticChecks;
+            };
+
+            checks = staticChecks;
+
+            packages = lib.optionalAttrs (system == "x86_64-linux") {
+              inherit cardano-db-sync-linux cardano-db-sync-docker;
+
+              default = flake.packages."cardano-db-sync:exe:cardano-db-sync";
+            } // lib.optionalAttrs (system == "x86_64-darwin") {
+              inherit cardano-db-sync-macos;
+            };
+          }));
 
   nixConfig = {
     extra-substituters = [ "https://cache.iog.io" ];
     extra-trusted-public-keys = [ "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" ];
+    allow-import-from-derivation = true;
   };
 }
