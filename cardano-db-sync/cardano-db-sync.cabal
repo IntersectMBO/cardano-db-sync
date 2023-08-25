@@ -67,6 +67,8 @@ library
                         Cardano.DbSync.Era.Shelley.Generic.EpochUpdate
                         Cardano.DbSync.Era.Shelley.Generic.ProtoParams
                         Cardano.DbSync.Era.Shelley.Generic.Rewards
+                        Cardano.DbSync.Era.Shelley.Generic.Script
+                        Cardano.DbSync.Era.Shelley.Generic.ScriptData
                         Cardano.DbSync.Era.Shelley.Generic.StakeDist
                         Cardano.DbSync.Era.Shelley.Generic.Metadata
                         Cardano.DbSync.Era.Shelley.Generic.ParamProposal
@@ -120,18 +122,23 @@ library
                         Cardano.DbSync.Sync
                         Cardano.DbSync.Tracing.ToObjectOrphans
                         Cardano.DbSync.Types
+
                         Cardano.DbSync.Util
+                        Cardano.DbSync.Util.Address
+                        Cardano.DbSync.Util.Bech32
+                        Cardano.DbSync.Util.Cbor
 
                         Paths_cardano_db_sync
 
   build-depends:        base                            >= 4.14         && < 5
                       , aeson
                       , async
+                      , bech32
                       , binary
                       , bytestring
                       , base16-bytestring
+                      , base58-bytestring
                       , case-insensitive
-                      , cardano-api
                       , cardano-binary
                       , cardano-client
                       , cardano-crypto
@@ -153,6 +160,7 @@ library
                       , cardano-prelude
                       , cardano-protocol-tpraos
                       , cardano-slotting
+                      , cardano-strict-containers
                       , cborg
                       , vector-map
                       , containers
@@ -183,10 +191,13 @@ library
                       , ouroboros-network-protocols
                       , persistent
                       , persistent-postgresql
+                      , plutus-ledger-api
                       , pretty-show
                       , prometheus
                       , psqueues
                       , random-shuffle
+                      , scientific
+                      , serialise
                       , small-steps
                       , stm
                       , strict
@@ -297,3 +308,47 @@ executable test-http-get-json-metadata
                       , text
                       , transformers
                       , transformers-except
+
+test-suite test
+  default-language:     Haskell2010
+  type:                 exitcode-stdio-1.0
+  main-is:              Main.hs
+  hs-source-dirs:       test
+
+  ghc-options:          -Wall
+                        -Werror
+                        -Wcompat
+                        -Wredundant-constraints
+                        -Wincomplete-patterns
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+                        -Wunused-imports
+                        -Wunused-packages
+
+  other-modules:        Cardano.DbSync.Era.Shelley.Generic.ScriptDataTest
+                        Cardano.DbSync.Era.Shelley.Generic.ScriptTest
+                        Cardano.DbSync.Util.AddressTest
+                        Cardano.DbSync.Util.Bech32Test
+                        Cardano.DbSync.Util.CborTest
+
+  build-depends:        base                            >= 4.14         && < 4.17
+                      , aeson
+                      , base16-bytestring
+                      , bytestring
+                      , cardano-binary
+                      , cardano-crypto-class
+                      , cardano-crypto-praos
+                      , cardano-ledger-api
+                      , cardano-ledger-binary
+                      , cardano-ledger-core:testlib
+                      , cardano-ledger-allegra:{cardano-ledger-allegra,testlib}
+                      , cardano-ledger-alonzo:{cardano-ledger-alonzo,testlib}
+                      , cardano-ledger-shelley:{cardano-ledger-shelley,testlib}
+                      , cardano-db-sync
+                      , cardano-ledger-core
+                      , cardano-prelude
+                      , cardano-strict-containers
+                      , containers
+                      , hedgehog
+                      , hedgehog-quickcheck
+                      , text

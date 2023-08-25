@@ -24,11 +24,11 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (
   txHashFromSafe,
 ) where
 
-import qualified Cardano.Api.Shelley as Api
 import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Db (ScriptType (..))
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
+import Cardano.DbSync.Era.Shelley.Generic.Script (fromMultiSig)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Era.Shelley.Generic.Util
 import Cardano.DbSync.Era.Shelley.Generic.Witness
@@ -100,7 +100,7 @@ fromShelleyTx (blkIndex, tx) =
         { txScriptHash = unScriptHash hsh
         , txScriptType = MultiSig
         , txScriptPlutusSize = Nothing
-        , txScriptJson = Just . LBS.toStrict . Aeson.encode $ Api.fromShelleyMultiSig script
+        , txScriptJson = Just . LBS.toStrict . Aeson.encode $ fromMultiSig script
         , txScriptCBOR = Nothing
         }
 

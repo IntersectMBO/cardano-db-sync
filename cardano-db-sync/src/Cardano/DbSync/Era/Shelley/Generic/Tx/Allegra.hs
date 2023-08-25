@@ -14,9 +14,9 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (
   getScripts,
 ) where
 
-import qualified Cardano.Api.Shelley as Api
 import Cardano.Db (ScriptType (..))
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
+import Cardano.DbSync.Era.Shelley.Generic.Script (fromTimelock)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (
   calcWithdrawalSum,
   getTxMetadata,
@@ -113,7 +113,7 @@ getAuxScripts maux =
       map (\scr -> (Core.hashScript @era scr, scr)) $ toList scrs
 
 mkTxScript ::
-  (Era era, EraCrypto era ~ StandardCrypto) =>
+  (Era era) =>
   (ScriptHash StandardCrypto, Timelock era) ->
   TxScript
 mkTxScript (hsh, script) =
@@ -123,7 +123,7 @@ mkTxScript (hsh, script) =
     , txScriptPlutusSize = Nothing
     , txScriptJson =
         Just . LBS.toStrict . Aeson.encode $
-          Api.fromAllegraTimelock script
+          fromTimelock script
     , txScriptCBOR = Nothing
     }
 

@@ -20,8 +20,8 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   sumTxOutCoin,
 ) where
 
-import Cardano.Api.Shelley (TxMetadataValue (..))
 import Cardano.Db (ScriptType (..))
+import Cardano.DbSync.Era.Shelley.Generic.Metadata (TxMetadataValue (..))
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Types
 import qualified Cardano.Ledger.Address as Ledger

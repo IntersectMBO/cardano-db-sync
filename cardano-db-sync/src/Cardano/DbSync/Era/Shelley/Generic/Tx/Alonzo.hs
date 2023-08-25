@@ -24,10 +24,11 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo (
   rmInps,
 ) where
 
-import qualified Cardano.Api.Shelley as Api
 import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Db (ScriptType (..))
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
+import Cardano.DbSync.Era.Shelley.Generic.Script (fromTimelock)
+import Cardano.DbSync.Era.Shelley.Generic.ScriptData (ScriptData (..))
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
@@ -278,7 +279,7 @@ data RedeemerMaps = RedeemerMaps
   }
 
 mkTxScript ::
-  (EraCrypto era ~ StandardCrypto, Ledger.Era era) =>
+  (Ledger.Era era) =>
   (ScriptHash StandardCrypto, Alonzo.AlonzoScript era) ->
   TxScript
 mkTxScript (hsh, script) =
@@ -302,7 +303,7 @@ mkTxScript (hsh, script) =
     timelockJsonScript =
       case script of
         Alonzo.TimelockScript s ->
-          Just . LBS.toStrict . Aeson.encode $ Api.fromAllegraTimelock s
+          Just . LBS.toStrict . Aeson.encode $ fromTimelock s
         Alonzo.PlutusScript {} -> Nothing
 
     plutusCborScript :: Maybe ByteString
@@ -345,8 +346,7 @@ mkTxData (dataHash, dt) = PlutusData dataHash (jsonData dt) (Ledger.originalByte
     jsonData =
       LBS.toStrict
         . Aeson.encode
-        . Api.scriptDataToJson Api.ScriptDataJsonDetailedSchema
-        . Api.fromAlonzoData
+        . ScriptData
 
 extraKeyWits ::
   AlonzoEraTxBody era =>

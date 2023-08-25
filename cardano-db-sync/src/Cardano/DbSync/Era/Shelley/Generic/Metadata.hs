@@ -1,6 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -8,14 +9,16 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Era.Shelley.Generic.Metadata (
+  TxMetadataValue (..),
   fromAllegraMetadata,
   fromAlonzoMetadata,
   fromShelleyMetadata,
   fromMaryMetadata,
   metadataValueToJsonNoSchema,
+  fromMetadatum,
+  toMetadatum,
 ) where
 
-import Cardano.Api.Shelley (TxMetadataValue (..))
 import qualified Cardano.Ledger.Allegra.TxAuxData as Allegra
 import qualified Cardano.Ledger.Alonzo.TxAuxData as Alonzo
 import Cardano.Ledger.Era (Era)
@@ -33,10 +36,13 @@ import Data.Tuple.Extra (both)
 import qualified Data.Vector as Vector
 import Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardMary, StandardShelley)
 
--- This module should not even exist. The only reason it does is because functionality
--- that was in cardano-node commit 0dc6efa467a0fdae7aba7c5bcd5c657e189c8f19 and being
--- used here in db-sync was drastically changed and then the changed version was not
--- exported.
+data TxMetadataValue
+  = TxMetaMap ![(TxMetadataValue, TxMetadataValue)]
+  | TxMetaList ![TxMetadataValue]
+  | TxMetaNumber !Integer -- -2^64 .. 2^64-1
+  | TxMetaBytes !ByteString
+  | TxMetaText !Text
+  deriving (Eq, Ord, Show)
 
 fromAllegraMetadata :: Allegra.AllegraTxAuxData StandardAllegra -> Map Word64 TxMetadataValue
 fromAllegraMetadata (Allegra.AllegraTxAuxData mdMap _scripts) =
@@ -94,10 +100,17 @@ bytesPrefix :: Text
 bytesPrefix = "0x"
 
 fromMetadatum :: Shelley.Metadatum -> TxMetadataValue
-fromMetadatum smd =
-  case smd of
-    Shelley.I x -> TxMetaNumber x
-    Shelley.B x -> TxMetaBytes x
-    Shelley.S x -> TxMetaText x
-    Shelley.List xs -> TxMetaList $ map fromMetadatum xs
-    Shelley.Map xs -> TxMetaMap $ map (both fromMetadatum) xs
+fromMetadatum = \case
+  Shelley.I x -> TxMetaNumber x
+  Shelley.B x -> TxMetaBytes x
+  Shelley.S x -> TxMetaText x
+  Shelley.List xs -> TxMetaList $ map fromMetadatum xs
+  Shelley.Map xs -> TxMetaMap $ map (both fromMetadatum) xs
+
+toMetadatum :: TxMetadataValue -> Shelley.Metadatum
+toMetadatum = \case
+  TxMetaNumber n -> Shelley.I n
+  TxMetaBytes b -> Shelley.B b
+  TxMetaText s -> Shelley.S s
+  TxMetaList xs -> Shelley.List $ map toMetadatum xs
+  TxMetaMap ms -> Shelley.Map $ map (both toMetadatum) ms

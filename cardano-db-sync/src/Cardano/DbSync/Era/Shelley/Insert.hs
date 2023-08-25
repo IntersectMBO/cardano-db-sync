@@ -19,12 +19,6 @@ module Cardano.DbSync.Era.Shelley.Insert (
   mkAdaPots,
 ) where
 
-import Cardano.Api (SerialiseAsCBOR (..))
-import Cardano.Api.Shelley (
-  TxMetadataValue (..),
-  makeTransactionMetadata,
-  metadataValueToJsonNoSchema,
- )
 import Cardano.BM.Trace (Trace, logDebug, logInfo, logWarning)
 import Cardano.Crypto.Hash (hashToBytes)
 import qualified Cardano.Crypto.Hashing as Crypto
@@ -46,7 +40,12 @@ import Cardano.DbSync.Cache (
  )
 import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
 import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..), EpochBlockDiff (..))
+
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
+import Cardano.DbSync.Era.Shelley.Generic.Metadata (
+  TxMetadataValue (..),
+  metadataValueToJsonNoSchema,
+ )
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Era.Shelley.Insert.Epoch
 import Cardano.DbSync.Era.Shelley.Insert.Grouped
@@ -57,6 +56,7 @@ import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Types (ApplyResult (..), DepositsMap, lookupDepositsMap)
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import Cardano.DbSync.Util.Cbor (serialiseTxMetadataToCbor)
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.Alonzo.Language (Language)
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
@@ -1154,7 +1154,7 @@ prepareTxMetadata tracer txId mmetadata =
       ExceptT SyncNodeError (ReaderT SqlBackend m) DB.TxMetadata
     prepare (key, md) = do
       let jsonbs = LBS.toStrict $ Aeson.encode (metadataValueToJsonNoSchema md)
-          singleKeyCBORMetadata = serialiseToCBOR $ makeTransactionMetadata (Map.singleton key md)
+          singleKeyCBORMetadata = serialiseTxMetadataToCbor $ Map.singleton key md
       mjson <- safeDecodeToJson tracer "prepareTxMetadata" jsonbs
       pure
         DB.TxMetadata

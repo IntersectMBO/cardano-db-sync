@@ -23,11 +23,11 @@ module Cardano.DbSync.Era.Shelley.Generic.Block (
   blockPrevHash,
 ) where
 
-import qualified Cardano.Api.Shelley as Api
 import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Crypto.KES.Class as KES
 import Cardano.DbSync.Era.Shelley.Generic.Tx
 import Cardano.DbSync.Types
+import Cardano.DbSync.Util.Bech32 (serialiseVerKeyVrfToBech32)
 import Cardano.Ledger.Alonzo ()
 import Cardano.Ledger.Alonzo.Scripts (Prices)
 import qualified Cardano.Ledger.BaseTypes as Ledger
@@ -225,7 +225,7 @@ blockSize :: ProtocolHeaderSupportsEnvelope p => ShelleyBlock p era -> Word64
 blockSize = fromIntegral . pHeaderBlockSize . blockHeader
 
 blockVrfKeyView :: VerKeyVRF StandardCrypto -> Text
-blockVrfKeyView = Api.serialiseToBech32 . Api.VrfVerificationKey
+blockVrfKeyView = serialiseVerKeyVrfToBech32
 
 blockVrfVkTPraos :: ShelleyBlock TPraosStandard era -> VerKeyVRF StandardCrypto
 blockVrfVkTPraos = TPraos.bheaderVrfVk . TPraos.bhbody . blockHeader
