@@ -102,14 +102,16 @@ let
       }
       {
         packages.cardano-db.components.tests.test-db = {
-            build-tools = [ pkgs.pkgsBuildBuild.postgresql ];
+            # Postgres 12+ won't build with musl
+            build-tools = [ pkgs.pkgsBuildHost.postgresql_12 ];
             inherit preCheck;
             inherit postCheck;
           };
       }
       {
         packages.cardano-chain-gen.components.tests.cardano-chain-gen = {
-            build-tools = [ pkgs.pkgsBuildBuild.postgresql ];
+            # Postgres 12+ won't build with musl
+            build-tools = [ pkgs.pkgsBuildHost.postgresql_12 ];
             inherit preCheck;
             inherit postCheck;
           };
