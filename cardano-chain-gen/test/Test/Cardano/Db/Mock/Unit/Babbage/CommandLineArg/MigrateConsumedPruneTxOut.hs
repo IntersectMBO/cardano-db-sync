@@ -320,7 +320,7 @@ migrateAndPruneRestart = do
         newDbSyncEnv = dbSyncEnv {dbSyncParams = newDbSyncParams}
     startDBSync newDbSyncEnv
     -- there is a slight delay before flag is checked
-    threadDelay 2000000
+    threadDelay 6000000
     -- checkStillRuns uses `poll` due to this being inside Async and passes along our thrown exception
     checkStillRuns dbSyncEnv
   where
@@ -346,7 +346,7 @@ pruneRestartMissingFlag = do
         newDbSyncEnv = dbSyncEnv {dbSyncParams = newDbSyncParams}
     startDBSync newDbSyncEnv
     -- there is a slight delay before flag is checked
-    threadDelay 2000000
+    threadDelay 6000000
     -- checkStillRuns uses `poll` due to this being inside Async and passes along our thrown exception
     checkStillRuns dbSyncEnv
   where
