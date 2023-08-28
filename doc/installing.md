@@ -60,12 +60,19 @@ Enter a working directory for your builds:
 cd ~/src
 ```
 
+Take note of the latest revision from [iohk-nix](https://github.com/input-output-hk/iohk-nix):
+
+```bash
+REV=$(curl -L https://github.com/input-output-hk/iohk-nix/releases/latest/download/INFO \
+  | awk '$1 == "debian.libsodium-vrf.deb" { rev = gensub(/.*-(.*)\.deb/, "\\1", "g", $2); print rev }')
+```
+
 Checkout libsodium:
 
 ```bash
 git clone https://github.com/input-output-hk/libsodium
 cd libsodium
-git checkout dbb48cc
+git checkout $REV
 ```
 
 Build and install it:
@@ -95,12 +102,19 @@ Enter the working directory for your builds:
 cd ~/src
 ```
 
+Take note of the latest revision from [iohk-nix](https://github.com/input-output-hk/iohk-nix):
+
+```bash
+REV=$(curl -L https://github.com/input-output-hk/iohk-nix/releases/latest/download/INFO \
+  | awk '$1 == "debian.libsecp256k1.deb" { rev = gensub(/.*-(.*)\.deb/, "\\1", "g", $2); print rev }')
+```
+
 Checkout libsecp256k1:
 
 ```bash
 git clone https://github.com/bitcoin-core/secp256k1
 cd secp256k1
-git checkout ac83be33
+git checkout $REV
 ```
 
 Build and install it:
