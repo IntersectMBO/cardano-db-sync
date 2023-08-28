@@ -852,14 +852,14 @@ schemaDocs =
     Datum --^ do
       "A table containing Plutus Datum, found in witnesses or inlined in outputs"
       DatumHash # "The Hash of the Datum"
-      DatumTxId # "The Tx table index for the transaction where this script first became available."
+      DatumTxId # "The Tx table index for the transaction where this datum was first observed."
       DatumValue # "The actual data in JSON format (detailed schema)"
       DatumBytes # "The actual data in CBOR format"
 
     RedeemerData --^ do
       "A table containing Plutus Redeemer Data. These are always referenced by at least one redeemer. New in v13: split from datum table."
       RedeemerDataHash # "The Hash of the Plutus Data"
-      RedeemerDataTxId # "The Tx table index for the transaction where this script first became available."
+      RedeemerDataTxId # "The Tx table index for the transaction where this redeemer data was first used."
       RedeemerDataValue # "The actual data in JSON format (detailed schema)"
       RedeemerDataBytes # "The actual data in CBOR format"
 
