@@ -45,6 +45,11 @@
       inherit (utils.lib) eachSystem flattenTree;
       inherit (iohkNix.lib) prefixNamesWith;
 
+      # our current release compiler is 8107
+      defaultCompiler = "ghc8107";
+      # but we also build for 927.
+      extraCompilers = ["ghc927"];
+
       supportedSystems = import ./supported-systems.nix;
 
       inputMap = { "https://input-output-hk.github.io/cardano-haskell-packages" = CHaP; };
@@ -54,7 +59,7 @@
         inputs.customConfig;
 
       overlays = [
-        # crypto needs to come before hasell.nix. 
+        # crypto needs to come before haskell.nix.
         # FIXME: _THIS_IS_BAD_
         iohkNix.overlays.crypto
         haskellNix.overlay
@@ -75,6 +80,11 @@
           ciJobs = self.ciJobs.${final.system};
         })
         (import ./nix/pkgs.nix)
+        (final: prev: {
+          fourmolu = final.haskell-nix.tool "ghc927" "fourmolu" {
+            version = "0.10.1.0";
+          };
+        })
         self.overlay
         # I _do not_ understand why we need it _here_, and having it haskell.nix
         # does not work.
@@ -100,12 +110,16 @@
           inherit (project.args) src;
         };
 
+        fourmolu = pkgs.callPackage pkgs.fourmoluCheck {
+          inherit (project.args) src;
+        };
+
         nixosTests = import ./nix/nixos/tests {
           inherit pkgs;
         };
 
         checks = project.flake'.checks // {
-          inherit hlint;
+          inherit hlint fourmolu;
         } // lib.optionalAttrs hostPlatform.isLinux (prefixNamesWith "nixosTests/" nixosTests);
 
         # This is used by `nix develop` to open a devShell
@@ -124,6 +138,8 @@
           crossPlatforms = p:
             lib.optional hostPlatform.isLinux p.musl64;
         }).ciJobs ({
+          inherit hlint fourmolu;
+
           packages = {
             inherit scripts;
             inherit (pkgs) cardano-node cardano-smash-server-no-basic-auth checkCabalProject;
@@ -132,7 +148,6 @@
           inherit (pkgs) dockerImage;
           checks = {
             inherit nixosTests;
-            inherit hlint;
           };
           cardano-db-sync-linux = import ./nix/binary-release.nix {
             inherit pkgs project;
@@ -190,7 +205,7 @@
             {
               cardanoDbSyncProject = (import ./nix/haskell.nix {
                 inherit (final) haskell-nix;
-                inherit inputMap;
+                inherit inputMap defaultCompiler extraCompilers;
               }).appendModule customConfig.haskellNix;
             inherit ((import flake-compat {
           pkgs = final;
