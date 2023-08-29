@@ -331,7 +331,7 @@ test-suite test
                         Cardano.DbSync.Util.Bech32Test
                         Cardano.DbSync.Util.CborTest
 
-  build-depends:        base                            >= 4.14         && < 4.17
+  build-depends:        base
                       , aeson
                       , base16-bytestring
                       , bytestring
