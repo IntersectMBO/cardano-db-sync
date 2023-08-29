@@ -8,11 +8,10 @@
 module Cardano.Db.Migration.Extra.CosnumedTxOut.Queries where
 
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
-import Cardano.Db.Insert (insertExtraMigration, insertMany', insertUnchecked)
+import Cardano.Db.Insert (insertMany', insertUnchecked)
 import Cardano.Db.Migration.Extra.CosnumedTxOut.Schema
 import Cardano.Db.Query (isJust, listToMaybe, queryBlockHeight, queryMaxRefId)
 import Cardano.Db.Text
-import Cardano.Db.Types (ExtraMigration (..))
 import Control.Monad.Extra (when, whenJust)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
@@ -46,16 +45,16 @@ querySetNullTxOut trce mMinTxInId txInDeleted = do
     txOutIds <- getTxOutConsumedAfter txInId
     mapM_ setNullTxOutConsumedAfterTxInId txOutIds
     let updatedEntries = fromIntegral (length txOutIds)
-    when (updatedEntries /= txInDeleted) $
-      liftIO $
-        logError trce $
-          Text.concat
-            [ "Deleted "
-            , textShow txInDeleted
-            , " inputs, but set to null only "
-            , textShow updatedEntries
-            , "consumed outputs. Please file an issue at https://github.com/input-output-hk/cardano-db-sync/issues"
-            ]
+    when (updatedEntries /= txInDeleted)
+      $ liftIO
+      $ logError trce
+      $ Text.concat
+        [ "Deleted "
+        , textShow txInDeleted
+        , " inputs, but set to null only "
+        , textShow updatedEntries
+        , "consumed outputs. Please file an issue at https://github.com/input-output-hk/cardano-db-sync/issues"
+        ]
 
 -- | This requires an index at TxOutConsumedByTxInId.
 getTxOutConsumedAfter :: MonadIO m => TxInId -> ReaderT SqlBackend m [TxOutId]
@@ -71,11 +70,10 @@ setNullTxOutConsumedAfterTxInId :: MonadIO m => TxOutId -> ReaderT SqlBackend m 
 setNullTxOutConsumedAfterTxInId txOutId = do
   update txOutId [TxOutConsumedByTxInId =. Nothing]
 
-migrateTxOut :: (MonadBaseControl IO m, MonadIO m) => Maybe (Trace IO Text) -> ReaderT SqlBackend m ()
+migrateTxOut :: MonadIO m => Maybe (Trace IO Text) -> ReaderT SqlBackend m ()
 migrateTxOut mTrace = do
   createConsumedTxOut
   migrateNextPage 0
-  insertExtraMigration PruneTxOutFlagPreviouslySet
   where
     migrateNextPage :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
     migrateNextPage offst = do
@@ -83,9 +81,10 @@ migrateTxOut mTrace = do
         liftIO $ logInfo trce $ "Handling input offset " <> textShow offst
       page <- getInputPage offst pageSize
       mapM_ migratePair page
-      when (fromIntegral (length page) == pageSize) $
-        migrateNextPage $!
-          offst + pageSize
+      when (fromIntegral (length page) == pageSize)
+        $ migrateNextPage
+        $! offst
+        + pageSize
 
 migratePair :: MonadIO m => (TxInId, TxId, Word64) -> ReaderT SqlBackend m ()
 migratePair (txInId, txId, index) =
@@ -144,15 +143,15 @@ _validateMigration trce = do
   consumedTxOut <- countConsumed
   if txInCount > consumedTxOut
     then do
-      liftIO $
-        logWarning trce $
-          mconcat
-            [ "Found incomplete TxOut migration. There are"
-            , textShow txInCount
-            , " TxIn, but only"
-            , textShow consumedTxOut
-            , " consumed TxOut"
-            ]
+      liftIO
+        $ logWarning trce
+        $ mconcat
+          [ "Found incomplete TxOut migration. There are"
+          , textShow txInCount
+          , " TxIn, but only"
+          , textShow consumedTxOut
+          , " consumed TxOut"
+          ]
       pure False
     else
       if txInCount == consumedTxOut
@@ -160,15 +159,15 @@ _validateMigration trce = do
           liftIO $ logInfo trce "Found complete TxOut migration"
           pure True
         else do
-          liftIO $
-            logError trce $
-              mconcat
-                [ "The impossible happened! There are"
-                , textShow txInCount
-                , " TxIn, but "
-                , textShow consumedTxOut
-                , " consumed TxOut"
-                ]
+          liftIO
+            $ logError trce
+            $ mconcat
+              [ "The impossible happened! There are"
+              , textShow txInCount
+              , " TxIn, but "
+              , textShow consumedTxOut
+              , " consumed TxOut"
+              ]
           pure False
 
 updateTxOutConsumedByTxInIdUnique :: MonadIO m => TxId -> Word64 -> TxInId -> ReaderT SqlBackend m ()

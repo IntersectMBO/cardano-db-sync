@@ -2,10 +2,10 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE LambdaCase #-}
 
 module Cardano.Db.Types (
   Ada (..),
@@ -26,7 +26,7 @@ module Cardano.Db.Types (
   VoterRole (..),
   GovActionType (..),
   isStakeDistrComplete,
-  wasPruneTxOutFlagPreviouslySet,
+  wasPruneTxOutPreviouslySet,
   extraDescription,
   deltaCoinToDbInt65,
   integerToDbInt65,
@@ -85,9 +85,10 @@ instance ToJSON Ada where
   -- toJSON (Ada ada) = Data.Aeson.Types.Number $ fromRational $ toRational ada
   -- `Number` results in it becoming `7.3112484749601107e10` while the old explorer is returning `73112484749.601107`
   toEncoding (Ada ada) =
-    unsafeToEncoding $ -- convert ByteString to Aeson's Encoding
-      Builder.string8 $ -- convert String to ByteString using Latin1 encoding
-        showFixed True ada -- convert Micro to String chopping off trailing zeros
+    unsafeToEncoding
+      $ Builder.string8 -- convert ByteString to Aeson's Encoding
+      $ showFixed True ada -- convert String to ByteString using Latin1 encoding
+      -- convert Micro to String chopping off trailing zeros
 
   toJSON = error "Ada.toJSON not supported due to numeric issues. Use toEncoding instead."
 
@@ -101,13 +102,16 @@ newtype AssetFingerprint = AssetFingerprint
 
 mkAssetFingerprint :: ByteString -> ByteString -> AssetFingerprint
 mkAssetFingerprint policyBs assetNameBs =
-  AssetFingerprint . Bech32.encodeLenient hrp . Bech32.dataPartFromBytes . ByteArray.convert $
-    Crypto.Hash.hash @_ @Blake2b_160 (policyBs <> assetNameBs)
+  AssetFingerprint
+    . Bech32.encodeLenient hrp
+    . Bech32.dataPartFromBytes
+    . ByteArray.convert
+    $ Crypto.Hash.hash @_ @Blake2b_160 (policyBs <> assetNameBs)
   where
     hrp :: Bech32.HumanReadablePart
     hrp =
-      fromRight (error "mkAssetFingerprint: Bad human readable part") $ -- Should never happen
-        Bech32.humanReadablePartFromText "asset"
+      fromRight (error "mkAssetFingerprint: Bad human readable part")
+        $ Bech32.humanReadablePartFromText "asset" -- Should never happen
 
 -- This is horrible. Need a 'Word64' with an extra sign bit.
 data DbInt65
@@ -183,11 +187,11 @@ data ExtraMigration
 isStakeDistrComplete :: [ExtraMigration] -> Bool
 isStakeDistrComplete = elem StakeDistrEnded
 
-wasPruneTxOutFlagPreviouslySet :: [ExtraMigration] -> Bool
-wasPruneTxOutFlagPreviouslySet = elem PruneTxOutFlagPreviouslySet
+wasPruneTxOutPreviouslySet :: [ExtraMigration] -> Bool
+wasPruneTxOutPreviouslySet = elem PruneTxOutFlagPreviouslySet
 
 extraDescription :: ExtraMigration -> Text
-extraDescription = \ case
+extraDescription = \case
   StakeDistrEnded ->
     "The epoch_stake table has been migrated. It is now populated earlier during the previous era. \
     \Also the epoch_stake_progress table is introduced."

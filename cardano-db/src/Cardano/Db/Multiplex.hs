@@ -17,6 +17,8 @@ import Cardano.Db.Insert
 import qualified Cardano.Db.Migration.Extra.CosnumedTxOut.Queries as ExtraCons
 import qualified Cardano.Db.Migration.Extra.CosnumedTxOut.Schema as ExtraCons
 import Cardano.Db.Schema
+import Cardano.Db.Types (ExtraMigration (..))
+import Cardano.Prelude (when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT)
@@ -76,9 +78,9 @@ setNullTxOut trce mMinTxInId =
   ExtraCons.querySetNullTxOut trce (changeKey <$> mMinTxInId)
 
 runExtraMigrations :: (MonadBaseControl IO m, MonadIO m) => Trace IO Text -> Word64 -> Bool -> Bool -> ReaderT SqlBackend m ()
-runExtraMigrations trce blockNoDiff pcmConsumeOrPruneTxOut pcmPruneTxOutFlag = do
+runExtraMigrations trce blockNoDiff pcmConsumeOrPruneTxOut pcmPruneTxOut = do
   hasConsumedField <- ExtraCons.queryTxConsumedColumnExists
-  case (hasConsumedField, pcmConsumeOrPruneTxOut, pcmPruneTxOutFlag) of
+  case (hasConsumedField, pcmConsumeOrPruneTxOut, pcmPruneTxOut) of
     (False, False, False) -> do
       liftIO $ logInfo trce "No extra migration specified"
     (True, True, False) -> do
@@ -86,11 +88,13 @@ runExtraMigrations trce blockNoDiff pcmConsumeOrPruneTxOut pcmPruneTxOutFlag = d
     (True, False, False) -> liftIO $ logAndThrowIO trce migratedButNotSet
     (False, True, False) -> do
       liftIO $ logInfo trce "Running extra migration consumed_tx_out"
-      ExtraCons.migrateTxOut $ Just trce
+      ExtraCons.migrateTxOut (Just trce)
     (False, _, True) -> do
       liftIO $ logInfo trce "Running extra migrations consumed_tx_out and prune tx_out"
-      ExtraCons.migrateTxOut $ Just trce
+      ExtraCons.migrateTxOut (Just trce)
       liftIO $ logInfo trce "Now Running extra migration prune tx_out"
+      -- we want to mark a migration was started with prune tx_out flag
+      when pcmPruneTxOut $ insertExtraMigration PruneTxOutFlagPreviouslySet
       ExtraCons.deleteConsumedTxOut trce blockNoDiff
     (True, _, True) -> do
       liftIO $ logInfo trce "Running extra migration prune tx_out"
