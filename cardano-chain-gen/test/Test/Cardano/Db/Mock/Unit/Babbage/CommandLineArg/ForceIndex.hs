@@ -18,15 +18,12 @@ checkForceIndexesArg :: IOManager -> [(Text, Text)] -> Assertion
 checkForceIndexesArg =
   withCustomConfig commandLineForceIndexArgs babbageConfigDir testLabel $ \_ _ dbSyncEnv -> do
     startDBSync dbSyncEnv
-    -- assertBlockNoBackoff dbSyncEnv 0
     threadDelay 3_000_000
-    assertEqQuery dbSyncEnv DB.queryPgIndexesCount 161 "there wasn't the correct number of indexes"
+    assertEqQuery dbSyncEnv DB.queryPgIndexesCount 160 "there wasn't the correct number of indexes"
   where
     testLabel = "CLAcheckForceIndexesArg"
     commandLineForceIndexArgs = initCommandLineArgs
        { claForceIndexes = True
-       , claMigrateConsumed = True
-       , claPruneTxOut = True
        }
 
 
@@ -34,14 +31,11 @@ checkNoForceIndexesArg :: IOManager -> [(Text, Text)] -> Assertion
 checkNoForceIndexesArg =
   withCustomConfig commandLineNoForceIndexArgs babbageConfigDir testLabel $ \_ _ dbSyncEnv -> do
     startDBSync dbSyncEnv
-    -- assertBlockNoBackoff dbSyncEnv 0
     threadDelay 3_000_000
-    assertEqQuery dbSyncEnv DB.queryPgIndexesCount 96 "there wasn't the correct number of indexes"
+    assertEqQuery dbSyncEnv DB.queryPgIndexesCount 95 "there wasn't the correct number of indexes"
   where
     testLabel = "CLAcheckNoForceIndexesArg"
     commandLineNoForceIndexArgs =
       initCommandLineArgs
        { claForceIndexes = False
-       , claMigrateConsumed = True
-       , claPruneTxOut = True
        }

@@ -84,9 +84,8 @@ data ConsistentLevel = Consistent | DBAheadOfLedger | Unchecked
   deriving (Show, Eq)
 
 data PruneConsumeMigration = PruneConsumeMigration
-  { pcmRan :: Bool
-  , pcmConsumeFlag :: Bool
-  , pcmPruneTxOutFlag :: Bool
+  { pcmConsume :: Bool
+  , pcmPruneTxOut :: Bool
   -- we make the assumption that if the user is using prune flag
   -- they will also want consume automatically set for them.
   , pcmConsumeOrPruneTxOut :: Bool

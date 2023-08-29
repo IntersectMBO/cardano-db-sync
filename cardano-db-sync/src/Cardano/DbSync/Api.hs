@@ -144,9 +144,8 @@ runIndexMigrations env = do
 initPruneConsumeMigration :: Bool -> Bool -> PruneConsumeMigration
 initPruneConsumeMigration consumed pruneTxOut =
   PruneConsumeMigration
-  { pcmRan = False
-  , pcmConsumeFlag = consumed
-  , pcmPruneTxOutFlag = pruneTxOut
+  { pcmConsume = consumed
+  , pcmPruneTxOut = pruneTxOut
   , pcmConsumeOrPruneTxOut = consumed || pruneTxOut
   }
 
@@ -160,9 +159,8 @@ runExtraMigrationsMaybe syncEnv = do
         (getTrace syncEnv)
         (getSafeBlockNoDiff syncEnv)
         pcmConsumeOrPruneTxOut
-        pcmPruneTxOutFlag
+        pcmPruneTxOut
 
-  liftIO $ atomically $ writeTVar (envPruneConsumeMigration syncEnv) (pcm {pcmRan = True})
   -- mark the fact that
   when pcmConsumeOrPruneTxOut $
     liftIO $ DB.runDbIohkNoLogging (envBackend syncEnv) $ DB.insertExtraMigration DB.PruneTxOutFlagPreviouslySet
@@ -175,7 +173,7 @@ handlePruneFlag syncEnv extraMigrations = do
   ems <- liftIO $ DB.runDbIohkNoLogging envBackend DB.queryAllExtraMigrations
   pcm <- liftIO $ readTVarIO envPruneConsumeMigration
   -- was flag previously set and is it currently set
-  case (DB.wasPruneTxOutFlagPreviouslySet ems, pcmPruneTxOutFlag pcm) of
+  case (DB.wasPruneTxOutPreviouslySet ems, pcmPruneTxOut pcm) of
     -- it was set but isn't currently set so we need to throw
     (True, False) ->
       throwIO $
@@ -199,7 +197,7 @@ whenConsumeOrPruneTxOut env action = do
 whenPruneTxOut :: MonadIO m => SyncEnv -> m () -> m ()
 whenPruneTxOut env action = do
   extraMigr <- liftIO $ readTVarIO $ envPruneConsumeMigration env
-  when (pcmPruneTxOutFlag extraMigr) action
+  when (pcmPruneTxOut extraMigr) action
 
 getHasConsumedOrPruneTxOut :: SyncEnv -> IO Bool
 getHasConsumedOrPruneTxOut env = do
@@ -209,7 +207,7 @@ getHasConsumedOrPruneTxOut env = do
 getPrunes :: SyncEnv -> IO Bool
 getPrunes env = do
   extraMigr <- liftIO $ readTVarIO $ envPruneConsumeMigration env
-  pure $ pcmPruneTxOutFlag extraMigr
+  pure $ pcmPruneTxOut extraMigr
 
 fullInsertOptions :: InsertOptions
 fullInsertOptions = InsertOptions True True True True
