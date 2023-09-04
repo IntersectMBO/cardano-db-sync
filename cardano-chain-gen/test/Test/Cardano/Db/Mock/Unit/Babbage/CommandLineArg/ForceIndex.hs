@@ -22,10 +22,10 @@ checkForceIndexesArg =
     assertEqQuery dbSyncEnv DB.queryPgIndexesCount 160 "there wasn't the correct number of indexes"
   where
     testLabel = "CLAcheckForceIndexesArg"
-    commandLineForceIndexArgs = initCommandLineArgs
-       { claForceIndexes = True
-       }
-
+    commandLineForceIndexArgs =
+      initCommandLineArgs
+        { claForceIndexes = True
+        }
 
 checkNoForceIndexesArg :: IOManager -> [(Text, Text)] -> Assertion
 checkNoForceIndexesArg =
@@ -37,5 +37,5 @@ checkNoForceIndexesArg =
     testLabel = "CLAcheckNoForceIndexesArg"
     commandLineNoForceIndexArgs =
       initCommandLineArgs
-       { claForceIndexes = False
-       }
+        { claForceIndexes = False
+        }

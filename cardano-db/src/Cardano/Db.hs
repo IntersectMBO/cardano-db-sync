@@ -17,7 +17,7 @@ import Cardano.Db.Delete as X
 import Cardano.Db.Error as X
 import Cardano.Db.Insert as X
 import Cardano.Db.Migration as X
-import Cardano.Db.Migration.Extra.CosnumedTxOut.Queries (queryTxConsumedColumnExists, migrateTxOut, queryTxOutConsumedCount, queryTxOutConsumedNullCount)
+import Cardano.Db.Migration.Extra.CosnumedTxOut.Queries (migrateTxOut, queryTxConsumedColumnExists, queryTxOutConsumedCount, queryTxOutConsumedNullCount)
 import Cardano.Db.Migration.Version as X
 import Cardano.Db.MinId as X
 import Cardano.Db.Multiplex as X

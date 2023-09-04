@@ -18,6 +18,7 @@ module Cardano.Db.Types (
   ScriptPurpose (..),
   ScriptType (..),
   PoolCertAction (..),
+  PruneConsumeMigration (..),
   CertNo (..),
   PoolCert (..),
   ExtraMigration (..),
@@ -85,10 +86,10 @@ instance ToJSON Ada where
   -- toJSON (Ada ada) = Data.Aeson.Types.Number $ fromRational $ toRational ada
   -- `Number` results in it becoming `7.3112484749601107e10` while the old explorer is returning `73112484749.601107`
   toEncoding (Ada ada) =
-    unsafeToEncoding
-      $ Builder.string8 -- convert ByteString to Aeson's Encoding
-      $ showFixed True ada -- convert String to ByteString using Latin1 encoding
-      -- convert Micro to String chopping off trailing zeros
+    unsafeToEncoding $
+      Builder.string8 $ -- convert ByteString to Aeson's Encoding
+        showFixed True ada -- convert String to ByteString using Latin1 encoding
+        -- convert Micro to String chopping off trailing zeros
 
   toJSON = error "Ada.toJSON not supported due to numeric issues. Use toEncoding instead."
 
@@ -110,8 +111,8 @@ mkAssetFingerprint policyBs assetNameBs =
   where
     hrp :: Bech32.HumanReadablePart
     hrp =
-      fromRight (error "mkAssetFingerprint: Bad human readable part")
-        $ Bech32.humanReadablePartFromText "asset" -- Should never happen
+      fromRight (error "mkAssetFingerprint: Bad human readable part") $
+        Bech32.humanReadablePartFromText "asset" -- Should never happen
 
 -- This is horrible. Need a 'Word64' with an extra sign bit.
 data DbInt65
@@ -189,6 +190,15 @@ isStakeDistrComplete = elem StakeDistrEnded
 
 wasPruneTxOutPreviouslySet :: [ExtraMigration] -> Bool
 wasPruneTxOutPreviouslySet = elem PruneTxOutFlagPreviouslySet
+
+data PruneConsumeMigration = PruneConsumeMigration
+  { pcmConsume :: Bool
+  , pcmPruneTxOut :: Bool
+  , -- we make the assumption that if the user is using prune flag
+    -- they will also want consume automatically set for them.
+    pcmConsumeOrPruneTxOut :: Bool
+  }
+  deriving (Show)
 
 extraDescription :: ExtraMigration -> Text
 extraDescription = \case

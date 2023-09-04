@@ -32,6 +32,7 @@ data LookupFail
   | DbMetaEmpty
   | DbMetaMultipleRows
   | DBMultipleGenesis
+  | DBExtraMigration !String
   deriving (Eq, Generic)
 
 instance Exception LookupFail
@@ -49,8 +50,8 @@ instance Show LookupFail where
       DbLookupGovActionPair txId index -> concat ["missing GovAction (", show txId, ", ", show index, ")"]
       DbMetaEmpty -> "Meta table is empty"
       DbMetaMultipleRows -> "Multiple rows in Meta table which should only contain one"
-      DBMultipleGenesis ->
-        "Multiple Genesis blocks found. These are blocks without an EpochNo"
+      DBMultipleGenesis -> "Multiple Genesis blocks found. These are blocks without an EpochNo"
+      DBExtraMigration e -> "DBExtraMigration : " <> e
 
 base16encode :: ByteString -> Text
 base16encode = Text.decodeUtf8 . Base16.encode
