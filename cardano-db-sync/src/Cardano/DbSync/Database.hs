@@ -153,8 +153,9 @@ validateConsistentLevel syncEnv stPoint = do
   compareTips stPoint dbTipInfo cLevel
   where
     compareTips _ dbTip Unchecked =
-      logAndThrowIO tracer $ SNErrDatabaseValConstLevel $
-        "Found Unchecked Consistent Level. " <> showContext dbTip Unchecked
+      logAndThrowIO tracer $
+        SNErrDatabaseValConstLevel $
+          "Found Unchecked Consistent Level. " <> showContext dbTip Unchecked
     compareTips (Point Origin) Nothing Consistent = pure ()
     compareTips (Point Origin) _ DBAheadOfLedger = pure ()
     compareTips (Point (At blk)) (Just tip) Consistent
@@ -164,8 +165,9 @@ validateConsistentLevel syncEnv stPoint = do
     compareTips (Point (At blk)) (Just tip) DBAheadOfLedger
       | blockPointSlot blk <= bSlotNo tip = pure ()
     compareTips _ dbTip cLevel =
-      logAndThrowIO tracer $ SNErrDatabaseValConstLevel $
-        "Unexpected Consistent Level. " <> showContext dbTip cLevel
+      logAndThrowIO tracer $
+        SNErrDatabaseValConstLevel $
+          "Unexpected Consistent Level. " <> showContext dbTip cLevel
 
     tracer = getTrace syncEnv
     showContext dbTip cLevel =

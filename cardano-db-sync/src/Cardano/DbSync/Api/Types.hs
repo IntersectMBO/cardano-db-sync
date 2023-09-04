@@ -10,7 +10,6 @@ module Cardano.DbSync.Api.Types (
   RunMigration,
   FixesRan (..),
   ConsistentLevel (..),
-  PruneConsumeMigration (..),
   EpochState (..),
 ) where
 
@@ -48,7 +47,7 @@ data SyncEnv = SyncEnv
   , envOfflineWorkQueue :: !(StrictTBQueue IO PoolFetchRetry)
   , envOptions :: !SyncOptions
   , envProtocol :: !SyncProtocol
-  , envPruneConsumeMigration :: !(StrictTVar IO PruneConsumeMigration)
+  , envPruneConsumeMigration :: !(StrictTVar IO DB.PruneConsumeMigration)
   , envRunDelayedMigration :: RunMigration
   , envSystemStart :: !SystemStart
   }
@@ -82,15 +81,6 @@ data FixesRan = NoneFixRan | DataFixRan | AllFixRan
 
 data ConsistentLevel = Consistent | DBAheadOfLedger | Unchecked
   deriving (Show, Eq)
-
-data PruneConsumeMigration = PruneConsumeMigration
-  { pcmConsume :: Bool
-  , pcmPruneTxOut :: Bool
-  -- we make the assumption that if the user is using prune flag
-  -- they will also want consume automatically set for them.
-  , pcmConsumeOrPruneTxOut :: Bool
-  }
-  deriving (Show)
 
 data EpochState = EpochState
   { esInitialized :: !Bool

@@ -6,7 +6,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE RecordWildCards #-}
 
 module Cardano.DbSync.Api (
   fullInsertOptions,
@@ -141,47 +140,23 @@ runIndexMigrations env = do
     logInfo (getTrace env) "Indexes were created"
     atomically $ writeTVar (envIndexes env) True
 
-initPruneConsumeMigration :: Bool -> Bool -> PruneConsumeMigration
+initPruneConsumeMigration :: Bool -> Bool -> DB.PruneConsumeMigration
 initPruneConsumeMigration consumed pruneTxOut =
-  PruneConsumeMigration
-  { pcmConsume = consumed
-  , pcmPruneTxOut = pruneTxOut
-  , pcmConsumeOrPruneTxOut = consumed || pruneTxOut
-  }
+  DB.PruneConsumeMigration
+    { DB.pcmConsume = consumed
+    , DB.pcmPruneTxOut = pruneTxOut
+    , DB.pcmConsumeOrPruneTxOut = consumed || pruneTxOut
+    }
 
 runExtraMigrationsMaybe :: SyncEnv -> IO ()
 runExtraMigrationsMaybe syncEnv = do
-  pcm@PruneConsumeMigration{..} <- liftIO $ readTVarIO $ envPruneConsumeMigration syncEnv
+  pcm <- liftIO $ readTVarIO $ envPruneConsumeMigration syncEnv
   logInfo (getTrace syncEnv) $ textShow pcm
-  handlePruneFlag syncEnv $
-    DB.runDbIohkNoLogging (envBackend syncEnv) $
-      DB.runExtraMigrations
-        (getTrace syncEnv)
-        (getSafeBlockNoDiff syncEnv)
-        pcmConsumeOrPruneTxOut
-        pcmPruneTxOut
-
-  -- mark the fact that
-  when pcmConsumeOrPruneTxOut $
-    liftIO $ DB.runDbIohkNoLogging (envBackend syncEnv) $ DB.insertExtraMigration DB.PruneTxOutFlagPreviouslySet
-
--- check if prunetxout flag was previously set, if so it's always required
-handlePruneFlag :: MonadIO m => SyncEnv -> m a -> m a
-handlePruneFlag syncEnv extraMigrations = do
-  let SyncEnv {..} = syncEnv
-  -- get values from extramigrations table to check if flag was set
-  ems <- liftIO $ DB.runDbIohkNoLogging envBackend DB.queryAllExtraMigrations
-  pcm <- liftIO $ readTVarIO envPruneConsumeMigration
-  -- was flag previously set and is it currently set
-  case (DB.wasPruneTxOutPreviouslySet ems, pcmPruneTxOut pcm) of
-    -- it was set but isn't currently set so we need to throw
-    (True, False) ->
-      throwIO $
-        SNErrExtraMigration
-          (  "If --prune-tx-out flag is enabled and then db-sync is stopped all future executions of db-sync "
-          <> "should still have this flag. Otherwise, it is considered bad usage and can cause crashes")
-    -- continue with migration
-    (_, _) -> extraMigrations
+  DB.runDbIohkNoLogging (envBackend syncEnv) $
+    DB.runExtraMigrations
+      (getTrace syncEnv)
+      (getSafeBlockNoDiff syncEnv)
+      pcm
 
 getSafeBlockNoDiff :: SyncEnv -> Word64
 getSafeBlockNoDiff syncEnv = 2 * getSecurityParam syncEnv
@@ -192,22 +167,22 @@ getPruneInterval syncEnv = 10 * getSecurityParam syncEnv
 whenConsumeOrPruneTxOut :: MonadIO m => SyncEnv -> m () -> m ()
 whenConsumeOrPruneTxOut env action = do
   extraMigr <- liftIO $ readTVarIO $ envPruneConsumeMigration env
-  when (pcmConsumeOrPruneTxOut extraMigr) action
+  when (DB.pcmConsumeOrPruneTxOut extraMigr) action
 
 whenPruneTxOut :: MonadIO m => SyncEnv -> m () -> m ()
 whenPruneTxOut env action = do
   extraMigr <- liftIO $ readTVarIO $ envPruneConsumeMigration env
-  when (pcmPruneTxOut extraMigr) action
+  when (DB.pcmPruneTxOut extraMigr) action
 
 getHasConsumedOrPruneTxOut :: SyncEnv -> IO Bool
 getHasConsumedOrPruneTxOut env = do
   extraMigr <- liftIO $ readTVarIO $ envPruneConsumeMigration env
-  pure $ pcmConsumeOrPruneTxOut extraMigr
+  pure $ DB.pcmConsumeOrPruneTxOut extraMigr
 
 getPrunes :: SyncEnv -> IO Bool
 getPrunes env = do
   extraMigr <- liftIO $ readTVarIO $ envPruneConsumeMigration env
-  pure $ pcmPruneTxOut extraMigr
+  pure $ DB.pcmPruneTxOut extraMigr
 
 fullInsertOptions :: InsertOptions
 fullInsertOptions = InsertOptions True True True True

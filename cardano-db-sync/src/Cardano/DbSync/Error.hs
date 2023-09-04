@@ -120,7 +120,6 @@ instance Show SyncNodeError where
       SNErrDatabaseRollBackLedger err -> "Error SNErrDatabase Rollback Ledger: " <> show err
       SNErrDatabaseValConstLevel err -> "Error SNErrDatabase Validate Consistent Level: " <> show err
 
-
 data NodeConfigError
   = NodeConfigParseError !String
   | ParseSyncPreConfigError !String

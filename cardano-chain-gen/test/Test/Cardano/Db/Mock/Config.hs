@@ -133,8 +133,8 @@ mkFingerPrint testLabel = fingerprintRoot </> testLabel
 mkDBSyncEnv :: SyncNodeParams -> (SyncNodeParams -> IO ()) -> IO DBSyncEnv
 mkDBSyncEnv params pRunDbSync = do
   runningVar <- newEmptyTMVarIO
-  pure
-    $ DBSyncEnv
+  pure $
+    DBSyncEnv
       { dbSyncParams = params
       , partialRunDbSync = pRunDbSync
       , dbSyncThreadVar = runningVar
@@ -192,8 +192,8 @@ getPoolLayer :: DBSyncEnv -> IO PoolDataLayer
 getPoolLayer env = do
   pgconfig <- runOrThrowIO $ Db.readPGPass (enpPGPassSource $ dbSyncParams env)
   pool <- runNoLoggingT $ createPostgresqlPool (Db.toConnectionString pgconfig) 1 -- Pool size of 1 for tests
-  pure
-    $ postgresqlPoolDataLayer
+  pure $
+    postgresqlPoolDataLayer
       nullTracer
       pool
 
@@ -226,8 +226,8 @@ mkShelleyCredentials bulkFile = do
 mkSyncNodeParams :: FilePath -> FilePath -> CommandLineArgs -> IO SyncNodeParams
 mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
   pgconfig <- runOrThrowIO Db.readPGPassDefault
-  pure
-    $ SyncNodeParams
+  pure $
+    SyncNodeParams
       { enpConfigFile = ConfigFile $ staticDir </> (if claHasConfigFile then "test-db-sync-config.json" else "")
       , enpSocketPath = SocketPath $ mutableDir </> ".socket"
       , enpMaybeLedgerStateDir = Just $ LedgerStateDir $ mutableDir </> "ledger-states"
