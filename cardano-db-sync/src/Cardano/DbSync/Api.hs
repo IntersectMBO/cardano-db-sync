@@ -143,14 +143,13 @@ runIndexMigrations env = do
 initPruneConsumeMigration :: Bool -> Bool -> DB.PruneConsumeMigration
 initPruneConsumeMigration consumed pruneTxOut =
   DB.PruneConsumeMigration
-    { DB.pcmConsume = consumed
-    , DB.pcmPruneTxOut = pruneTxOut
+    { DB.pcmPruneTxOut = pruneTxOut
     , DB.pcmConsumeOrPruneTxOut = consumed || pruneTxOut
     }
 
 runExtraMigrationsMaybe :: SyncEnv -> IO ()
 runExtraMigrationsMaybe syncEnv = do
-  pcm <- liftIO $ readTVarIO $ envPruneConsumeMigration syncEnv
+  let pcm = envPruneConsumeMigration syncEnv
   logInfo (getTrace syncEnv) $ textShow pcm
   DB.runDbIohkNoLogging (envBackend syncEnv) $
     DB.runExtraMigrations
@@ -166,23 +165,23 @@ getPruneInterval syncEnv = 10 * getSecurityParam syncEnv
 
 whenConsumeOrPruneTxOut :: MonadIO m => SyncEnv -> m () -> m ()
 whenConsumeOrPruneTxOut env action = do
-  extraMigr <- liftIO $ readTVarIO $ envPruneConsumeMigration env
+  let extraMigr = envPruneConsumeMigration env
   when (DB.pcmConsumeOrPruneTxOut extraMigr) action
 
 whenPruneTxOut :: MonadIO m => SyncEnv -> m () -> m ()
 whenPruneTxOut env action = do
-  extraMigr <- liftIO $ readTVarIO $ envPruneConsumeMigration env
+  let extraMigr = envPruneConsumeMigration env
   when (DB.pcmPruneTxOut extraMigr) action
 
-getHasConsumedOrPruneTxOut :: SyncEnv -> IO Bool
+getHasConsumedOrPruneTxOut :: SyncEnv -> Bool
 getHasConsumedOrPruneTxOut env = do
-  extraMigr <- liftIO $ readTVarIO $ envPruneConsumeMigration env
-  pure $ DB.pcmConsumeOrPruneTxOut extraMigr
+  let extraMigr = envPruneConsumeMigration env
+  DB.pcmConsumeOrPruneTxOut extraMigr
 
-getPrunes :: SyncEnv -> IO Bool
+getPrunes :: SyncEnv -> Bool
 getPrunes env = do
-  extraMigr <- liftIO $ readTVarIO $ envPruneConsumeMigration env
-  pure $ DB.pcmPruneTxOut extraMigr
+  let extraMigr = envPruneConsumeMigration env
+  DB.pcmPruneTxOut extraMigr
 
 fullInsertOptions :: InsertOptions
 fullInsertOptions = InsertOptions True True True True
@@ -318,7 +317,7 @@ mkSyncEnv trce connString backend syncOptions protoInfo nw nwMagic systemStart s
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNodeParams
-  pcmVar <- newTVarIO $ initPruneConsumeMigration (enpMigrateConsumed syncNodeParams) (enpPruneTxOut syncNodeParams)
+  let pcm = initPruneConsumeMigration (enpMigrateConsumed syncNodeParams) (enpPruneTxOut syncNodeParams)
   owq <- newTBQueueIO 100
   orq <- newTBQueueIO 100
   epochVar <- newTVarIO initEpochState
@@ -359,7 +358,7 @@ mkSyncEnv trce connString backend syncOptions protoInfo nw nwMagic systemStart s
       , envOfflineWorkQueue = owq
       , envOptions = syncOptions
       , envProtocol = SyncProtocolCardano
-      , envPruneConsumeMigration = pcmVar
+      , envPruneConsumeMigration = pcm
       , envRunDelayedMigration = runMigrationFnc
       , envSystemStart = systemStart
       }
@@ -380,16 +379,20 @@ mkSyncEnvFromConfig trce connString backend syncOptions genCfg syncNodeParams ra
   case genCfg of
     GenesisCardano _ bCfg sCfg _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
-          pure . Left . SNErrCardanoConfig $
-            mconcat
+          pure
+            . Left
+            . SNErrCardanoConfig
+            $ mconcat
               [ "ProtocolMagicId "
               , DB.textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
               , " /= "
               , DB.textShow (Shelley.sgNetworkMagic $ scConfig sCfg)
               ]
       | Byron.gdStartTime (Byron.configGenesisData bCfg) /= Shelley.sgSystemStart (scConfig sCfg) ->
-          pure . Left . SNErrCardanoConfig $
-            mconcat
+          pure
+            . Left
+            . SNErrCardanoConfig
+            $ mconcat
               [ "SystemStart "
               , DB.textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
               , " /= "
