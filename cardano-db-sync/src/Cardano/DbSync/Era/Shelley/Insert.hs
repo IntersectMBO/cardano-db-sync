@@ -263,7 +263,7 @@ insertTx syncEnv isMember blkId epochNo slotNo depositsMap blockIndex tx grouped
   let !mdeposits = if not (Generic.txValidContract tx) then Just (Coin 0) else lookupDepositsMap txHash depositsMap
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
       !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
-  hasConsumed <- liftIO $ getHasConsumedOrPruneTxOut syncEnv
+      hasConsumed = getHasConsumedOrPruneTxOut syncEnv
   -- In some txs and with specific configuration we may be able to find necessary data within the tx body.
   -- In these cases we can avoid expensive queries.
   (resolvedInputs, fees', deposits) <- case (mdeposits, unCoin <$> Generic.txFees tx) of

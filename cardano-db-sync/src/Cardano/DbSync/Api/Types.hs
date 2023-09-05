@@ -47,7 +47,7 @@ data SyncEnv = SyncEnv
   , envOfflineWorkQueue :: !(StrictTBQueue IO PoolFetchRetry)
   , envOptions :: !SyncOptions
   , envProtocol :: !SyncProtocol
-  , envPruneConsumeMigration :: !(StrictTVar IO DB.PruneConsumeMigration)
+  , envPruneConsumeMigration :: !DB.PruneConsumeMigration
   , envRunDelayedMigration :: RunMigration
   , envSystemStart :: !SystemStart
   }

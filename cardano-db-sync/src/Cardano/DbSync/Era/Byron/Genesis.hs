@@ -44,8 +44,8 @@ insertValidateGenesisDist ::
 insertValidateGenesisDist syncEnv (NetworkName networkName) cfg = do
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise *way* too chatty.
-  hasConsumed <- liftIO $ getHasConsumedOrPruneTxOut syncEnv
-  prunes <- liftIO $ getPrunes syncEnv
+  let hasConsumed = getHasConsumedOrPruneTxOut syncEnv
+      prunes = getPrunes syncEnv
   if False
     then newExceptT $ DB.runDbIohkLogging (envBackend syncEnv) tracer (insertAction hasConsumed prunes)
     else newExceptT $ DB.runDbIohkNoLogging (envBackend syncEnv) (insertAction hasConsumed prunes)

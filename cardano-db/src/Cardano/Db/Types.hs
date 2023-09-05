@@ -192,8 +192,7 @@ wasPruneTxOutPreviouslySet :: [ExtraMigration] -> Bool
 wasPruneTxOutPreviouslySet = elem PruneTxOutFlagPreviouslySet
 
 data PruneConsumeMigration = PruneConsumeMigration
-  { pcmConsume :: Bool
-  , pcmPruneTxOut :: Bool
+  { pcmPruneTxOut :: Bool
   , -- we make the assumption that if the user is using prune flag
     -- they will also want consume automatically set for them.
     pcmConsumeOrPruneTxOut :: Bool

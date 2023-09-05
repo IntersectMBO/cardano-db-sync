@@ -60,8 +60,8 @@ insertValidateGenesisDist ::
   Bool ->
   ExceptT SyncNodeError IO ()
 insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
-  hasConsumed <- liftIO $ getHasConsumedOrPruneTxOut syncEnv
-  prunes <- liftIO $ getPrunes syncEnv
+  let hasConsumed = getHasConsumedOrPruneTxOut syncEnv
+      prunes = getPrunes syncEnv
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise *way* too chatty.
   when (not shelleyInitiation && (hasInitialFunds || hasStakes)) $ do
