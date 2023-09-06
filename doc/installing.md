@@ -7,13 +7,15 @@ This guide assumes you have the following tools:
  * [Git](https://git-scm.com/download)
  * [Cardano Node](https://github.com/input-output-hk/cardano-node/blob/master/doc/getting-started/install.md)
  * [Postgres Development Libraries (libpq)](https://www.postgresql.org/download/)
+ * [pkg-config](https://www.freedesktop.org/wiki/Software/pkg-config/)
  
-In addition, Cardano DB Sync requires the following software (instructions below:
+In addition, Cardano DB Sync requires the following software (instructions below):
 
  * [GHC](https://www.haskell.org/ghcup/install/) >= 8.10.7
  * [Cabal](https://www.haskell.org/ghcup/install/) >= 3.10.1.0
  * [libsodium-vrf](https://github.com/input-output-hk/libsodium)
  * [secp256k1](https://github.com/bitcoin-core/secp256k1)
+ * [blst](https://github.com/supranational/blst)
 
 Create a working directory for your builds:
 
@@ -125,6 +127,60 @@ Build and install it:
 make
 make check
 sudo make install
+```
+
+### Installing blst
+
+Enter the working directory for your builds:
+
+```bash
+cd ~/src
+```
+
+Take note of the latest revision from [iohk-nix](https://github.com/input-output-hk/iohk-nix):
+
+```bash
+REV=$(curl -L https://github.com/input-output-hk/iohk-nix/releases/latest/download/INFO \
+  | awk '$1 == "debian.libblst.deb" { rev = gensub(/.*-(.*)\.deb/, "\\1", "g", $2); print rev }')
+```
+
+Checkout blst:
+
+```bash
+git clone https://github.com/supranational/blst
+cd blst
+git checkout $REV
+```
+
+Build it:
+
+```bash
+./build.sh
+```
+
+Install it:
+
+```bash
+cat > libblst.pc << EOF
+prefix=/usr/local
+exec_prefix=\${prefix}
+libdir=\${exec_prefix}/lib
+includedir=\${prefix}/include
+
+Name: libblst
+Description: Multilingual BLS12-381 signature library
+URL: https://github.com/supranational/blst
+Version: 0.3.10
+Cflags: -I\${includedir}
+Libs: -L\${libdir} -lblst
+EOF
+
+sudo cp libblst.pc /usr/local/lib/pkgconfig/
+sudo cp bindings/blst_aux.h bindings/blst.h bindings/blst.hpp  /usr/local/include/
+sudo cp libblst.a /usr/local/lib
+sudo chmod 644 \
+  /usr/local/lib/libblst.* \
+  /usr/local/include/{blst.*,blst_aux.h}
 ```
 
 ## Install Cardano DB Sync
