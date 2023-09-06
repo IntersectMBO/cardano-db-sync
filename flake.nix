@@ -64,6 +64,7 @@
         iohkNix.overlays.crypto
         haskellNix.overlay
         iohkNix.overlays.haskell-nix-extra
+        iohkNix.overlays.haskell-nix-crypto
         iohkNix.overlays.utils
         iohkNix.overlays.cardano-lib
         (final: prev: {
