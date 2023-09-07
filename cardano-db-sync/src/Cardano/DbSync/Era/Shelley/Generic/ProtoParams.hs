@@ -70,9 +70,10 @@ epochProtoParams lstate =
     LedgerStateConway st -> Just $ fromConwayParams $ getProtoParams st
 
 getProtoParams ::
+  EraGov era =>
   LedgerState (ShelleyBlock p era) ->
   PParams era
-getProtoParams = Shelley.esPp . Shelley.nesEs . Consensus.shelleyLedgerState
+getProtoParams st = Shelley.nesEs (Consensus.shelleyLedgerState st) ^. Shelley.curPParamsEpochStateL
 
 -- -------------------------------------------------------------------------------------------------
 

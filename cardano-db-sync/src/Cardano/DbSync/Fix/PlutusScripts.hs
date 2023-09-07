@@ -49,6 +49,7 @@ import Ouroboros.Consensus.Cardano.Block (HardForkBlock (BlockAllegra, BlockAlon
 import Ouroboros.Consensus.Shelley.Eras
 
 import Cardano.DbSync.Fix.PlutusDataBytes
+import Cardano.Ledger.Language (Plutus (..))
 
 newtype FixPlutusScripts = FixPlutusScripts {scriptsInfo :: [FixPlutusInfo]}
 
@@ -109,7 +110,7 @@ findWrongPlutusScripts tracer =
     hashPlutusScript dbScript = do
       lang <- getLang
       bytes <- maybeToEither "No bytes found for plutus script" id $ DB_V_13_0.scriptBytes dbScript
-      let script :: AlonzoScript StandardAlonzo = PlutusScript lang (SBS.toShort bytes)
+      let script :: AlonzoScript StandardAlonzo = PlutusScript (Plutus lang (BinaryPlutus $ SBS.toShort bytes))
       let hsh :: Ledger.ScriptHash StandardCrypto = Ledger.hashScript @StandardAlonzo script
       Right $ Generic.unScriptHash hsh
       where

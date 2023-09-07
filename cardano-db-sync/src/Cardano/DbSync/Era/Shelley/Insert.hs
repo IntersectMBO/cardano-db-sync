@@ -207,12 +207,12 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
       | otherwise = logDebug
 
     renderInsertName :: Generic.BlockEra -> Text
-    renderInsertName eraName =
-      mconcat ["Insert ", textShow eraName, " Block"]
+    renderInsertName eraText =
+      mconcat ["Insert ", textShow eraText, " Block"]
 
     renderErrorMessage :: Generic.BlockEra -> Text
-    renderErrorMessage eraName =
-      case eraName of
+    renderErrorMessage eraText =
+      case eraText of
         Generic.Shelley -> "insertShelleyBlock"
         other -> mconcat ["insertShelleyBlock(", textShow other, ")"]
 
@@ -346,7 +346,7 @@ insertTx syncEnv isMember blkId epochNo slotNo depositsMap blockIndex tx grouped
 
       mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
       mapM_ (lift . insertGovernanceAction cache network blkId txId) $ zip [0 ..] (Generic.txProposalProcedure tx)
-      mapM_ (insertVotingProcedure cache txId) $ zip [0 ..] (Generic.txVotingProcedure tx)
+      mapM_ (insertVotingProcedures cache txId) (Generic.txVotingProcedure tx)
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
       pure (grouped <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint fees outSum)
@@ -507,8 +507,9 @@ insertCertificate tracer cache isMember network blkId txId epochNo slotNo redeem
       liftIO $ logWarning tracer "insertCertificate: Unhandled DCertGenesis certificate"
     Right (ConwayTxCertDeleg deleg) -> insertConwayDelegCert cache network txId idx mRedeemerId epochNo slotNo deleg
     Right (ConwayTxCertPool pool) -> insertPoolCert tracer cache isMember network epochNo blkId txId idx pool
-    Right (ConwayTxCertCommittee c) -> case c of
-      ConwayRegDRep cred coin ->
+    Right (ConwayTxCertGov c) -> case c of
+      ConwayRegDRep cred coin _anchor ->
+        -- TODO: Conway handle anchor
         lift $ insertDrepRegistration txId idx cred coin
       ConwayUnRegDRep cred coin ->
         lift $ insertDrepDeRegistration txId idx cred coin
@@ -516,6 +517,8 @@ insertCertificate tracer cache isMember network blkId txId epochNo slotNo redeem
         lift $ insertCommitteeRegistration txId idx khCold khHot
       ConwayResignCommitteeColdKey khCold ->
         lift $ insertCommitteeDeRegistration txId idx khCold
+      ConwayUpdateDRep {} ->
+        liftIO $ logWarning tracer "insertCertificate: Unhandled ConwayUpdateDRep certificate"
   where
     mRedeemerId = mlookup ridx redeemers
 
@@ -523,37 +526,37 @@ insertCommitteeRegistration ::
   (MonadBaseControl IO m, MonadIO m) =>
   DB.TxId ->
   Word16 ->
-  KeyHash 'CommitteeColdKey c ->
-  KeyHash 'CommitteeHotKey c ->
+  Ledger.Credential 'ColdCommitteeRole StandardCrypto ->
+  Ledger.Credential 'HotCommitteeRole StandardCrypto ->
   ReaderT SqlBackend m ()
 insertCommitteeRegistration txId idx khCold khHot = do
   void . DB.insertCommitteeRegistration $
     DB.CommitteeRegistration
       { DB.committeeRegistrationTxId = txId
       , DB.committeeRegistrationCertIndex = idx
-      , DB.committeeRegistrationColdKey = Generic.unKeyHashRaw khCold
-      , DB.committeeRegistrationHotKey = Generic.unKeyHashRaw khHot
+      , DB.committeeRegistrationColdKey = Generic.unCredentialHash khCold
+      , DB.committeeRegistrationHotKey = Generic.unCredentialHash khHot
       }
 
 insertCommitteeDeRegistration ::
   (MonadBaseControl IO m, MonadIO m) =>
   DB.TxId ->
   Word16 ->
-  KeyHash 'CommitteeColdKey c ->
+  Ledger.Credential 'ColdCommitteeRole StandardCrypto ->
   ReaderT SqlBackend m ()
 insertCommitteeDeRegistration txId idx khCold = do
   void . DB.insertCommitteeDeRegistration $
     DB.CommitteeDeRegistration
       { DB.committeeDeRegistrationTxId = txId
       , DB.committeeDeRegistrationCertIndex = idx
-      , DB.committeeDeRegistrationHotKey = Generic.unKeyHashRaw khCold
+      , DB.committeeDeRegistrationHotKey = Generic.unCredentialHash khCold
       }
 
 insertDrepRegistration ::
   (MonadBaseControl IO m, MonadIO m) =>
   DB.TxId ->
   Word16 ->
-  Ledger.Credential 'Voting StandardCrypto ->
+  Ledger.Credential 'DRepRole StandardCrypto ->
   Coin ->
   ReaderT SqlBackend m ()
 insertDrepRegistration txId idx cred coin = do
@@ -570,7 +573,7 @@ insertDrepDeRegistration ::
   (MonadBaseControl IO m, MonadIO m) =>
   DB.TxId ->
   Word16 ->
-  Ledger.Credential 'Voting StandardCrypto ->
+  Ledger.Credential 'DRepRole StandardCrypto ->
   Coin ->
   ReaderT SqlBackend m ()
 insertDrepDeRegistration txId idx cred coin = do
@@ -1378,14 +1381,13 @@ insertGovernanceAction ::
   DB.TxId ->
   (Word64, ProposalProcedure StandardConway) ->
   ReaderT SqlBackend m ()
-insertGovernanceAction cache network blkId txId (index, pp) = do
+insertGovernanceAction cache _network blkId txId (index, pp) = do
   addrId <-
-    insertStakeAddressWithCache cache CacheNew txId $
-      Generic.annotateStakingCred network (Ledger.KeyHashObj $ pProcReturnAddr pp)
-  votingAnchorId <- whenMaybe (strictMaybeToMaybe $ pProcAnchor pp) $ insertAnchor txId
+    insertStakeAddressWithCache cache CacheNew txId $ pProcReturnAddr pp
+  votingAnchorId <- insertAnchor txId $ pProcAnchor pp
   mParamProposalId <-
-    case pProcGovernanceAction pp of
-      ParameterChange pparams ->
+    case pProcGovAction pp of
+      ParameterChange _ pparams ->
         Just <$> insertParamProposal blkId txId (convertConwayParamProposal pparams)
       _ -> pure Nothing
   governanceAction <-
@@ -1395,24 +1397,23 @@ insertGovernanceAction cache network blkId txId (index, pp) = do
         , DB.governanceActionIndex = index
         , DB.governanceActionDeposit = Generic.coinToDbLovelace $ pProcDeposit pp
         , DB.governanceActionReturnAddress = addrId
-        , DB.governanceActionVotingAnchorId = votingAnchorId
-        , DB.governanceActionType = Generic.toGovAction $ pProcGovernanceAction pp
-        , DB.governanceActionDescription = textShow $ pProcGovernanceAction pp
+        , DB.governanceActionVotingAnchorId = Just votingAnchorId
+        , DB.governanceActionType = Generic.toGovAction $ pProcGovAction pp
+        , DB.governanceActionDescription = textShow $ pProcGovAction pp
         , DB.governanceActionParamProposal = mParamProposalId
         , DB.governanceActionRatifiedEpoch = Nothing
         , DB.governanceActionEnactedEpoch = Nothing
         , DB.governanceActionDroppedEpoch = Nothing
         , DB.governanceActionExpiredEpoch = Nothing
         }
-  case pProcGovernanceAction pp of
+  case pProcGovAction pp of
     TreasuryWithdrawals mp -> mapM_ (insertTreasuryWithdrawal governanceAction) (Map.toList mp)
-    NewCommittee st quorum -> insertNewCommittee governanceAction st quorum
+    NewCommittee _ st committee -> insertNewCommittee governanceAction st committee
     _ -> pure ()
   where
     insertTreasuryWithdrawal gaId (cred, coin) = do
       addrId <-
-        insertStakeAddressWithCache cache CacheNew txId $
-          Generic.annotateStakingCred network cred
+        insertStakeAddressWithCache cache CacheNew txId cred
       DB.insertTreasuryWithdrawal $
         DB.TreasuryWithdrawal
           { DB.treasuryWithdrawalGovernanceActionId = gaId
@@ -1420,11 +1421,11 @@ insertGovernanceAction cache network blkId txId (index, pp) = do
           , DB.treasuryWithdrawalAmount = Generic.coinToDbLovelace coin
           }
 
-    insertNewCommittee gaId st quorum = do
+    insertNewCommittee gaId st committee = do
       void . DB.insertNewCommittee $
         DB.NewCommittee
           { DB.newCommitteeGovernanceActionId = gaId
-          , DB.newCommitteeQuorum = realToFrac quorum
+          , DB.newCommitteeQuorum = Generic.unitIntervalToDouble $ committeeQuorum committee
           , DB.newCommitteeMembers = textShow st
           }
 
@@ -1437,16 +1438,26 @@ insertAnchor txId anchor =
       , DB.votingAnchorDataHash = Generic.achorHashToBytes $ anchorDataHash anchor
       }
 
+insertVotingProcedures ::
+  (MonadIO m, MonadBaseControl IO m) =>
+  Cache ->
+  DB.TxId ->
+  (Voter StandardCrypto, [(GovActionId StandardCrypto, VotingProcedure StandardConway)]) ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+insertVotingProcedures cache txId (voter, actions) =
+  mapM_ (insertVotingProcedure cache txId voter) (zip [0 ..] actions)
+
 insertVotingProcedure ::
   (MonadIO m, MonadBaseControl IO m) =>
   Cache ->
   DB.TxId ->
-  (Word16, VotingProcedure StandardConway) ->
+  Voter StandardCrypto ->
+  (Word16, (GovActionId StandardCrypto, VotingProcedure StandardConway)) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertVotingProcedure cache txId (index, vp) = do
-  govActionId <- resolveGovernanceAction (vProcGovActionId vp)
+insertVotingProcedure cache txId voter (index, (gaId, vp)) = do
+  govActionId <- resolveGovernanceAction gaId
   votingAnchorId <- whenMaybe (strictMaybeToMaybe $ vProcAnchor vp) $ lift . insertAnchor txId
-  (mComitteeVoter, mDRepVoter, mStakePoolVoter) <- case vProcVoter vp of
+  (mComitteeVoter, mDRepVoter, mStakePoolVoter) <- case voter of
     CommitteeVoter cred ->
       pure (Just $ Generic.unCredentialHash cred, Nothing, Nothing)
     DRepVoter cred -> do
@@ -1463,14 +1474,14 @@ insertVotingProcedure cache txId (index, vp) = do
       , DB.votingProcedureComitteeVoter = mComitteeVoter
       , DB.votingProcedureDrepVoter = mDRepVoter
       , DB.votingProcedurePoolVoter = mStakePoolVoter
-      , DB.votingProcedureVoterRole = Generic.toVoterRole $ vProcVoter vp
+      , DB.votingProcedureVoterRole = Generic.toVoterRole voter
       , DB.votingProcedureVote = Generic.toVote $ vProcVote vp
       , DB.votingProcedureVotingAnchorId = votingAnchorId
       }
 
 resolveGovernanceAction ::
   MonadIO m =>
-  GovernanceActionId StandardCrypto ->
+  GovActionId StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.GovernanceActionId
 resolveGovernanceAction gaId = do
   gaTxId <-
@@ -1478,9 +1489,9 @@ resolveGovernanceAction gaId = do
       DB.queryTxId $
         Generic.unTxHash $
           gaidTxId gaId
-  let (GovernanceActionIx index) = gaidGovActionIx gaId
+  let (GovActionIx index) = gaidGovActionIx gaId
   liftLookupFail "resolveGovernanceAction.queryGovernanceActionId" $
-    DB.queryGovernanceActionId gaTxId index
+    DB.queryGovernanceActionId gaTxId (fromIntegral index) -- TODO: Use Word32?
 
 insertDrep :: (MonadBaseControl IO m, MonadIO m) => DRep StandardCrypto -> ReaderT SqlBackend m DB.DrepHashId
 insertDrep = \case
@@ -1500,7 +1511,7 @@ insertDrep = \case
         , DB.drepHashHasScript = False
         }
 
-insertCredDrepHash :: (MonadBaseControl IO m, MonadIO m) => Ledger.Credential 'Voting StandardCrypto -> ReaderT SqlBackend m DB.DrepHashId
+insertCredDrepHash :: (MonadBaseControl IO m, MonadIO m) => Ledger.Credential 'DRepRole StandardCrypto -> ReaderT SqlBackend m DB.DrepHashId
 insertCredDrepHash cred = do
   DB.insertDrepHash
     DB.DrepHash

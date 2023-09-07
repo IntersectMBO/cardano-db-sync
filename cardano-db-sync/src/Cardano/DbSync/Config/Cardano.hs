@@ -26,14 +26,14 @@ import Cardano.DbSync.Types
 import Cardano.Ledger.Alonzo.Genesis (AlonzoGenesis)
 import Cardano.Ledger.Binary.Version
 import Cardano.Ledger.Conway.Genesis
-import Cardano.Ledger.Keys
 import Cardano.Ledger.Shelley.Translation (emptyFromByronTranslationContext)
 import Control.Monad.Trans.Except (ExceptT)
+import Data.Default.Class (Default (def))
 import Data.Word (Word64)
 import Ouroboros.Consensus.Block.Forging
 import Ouroboros.Consensus.Cardano (Nonce (..), ProtVer (ProtVer))
 import qualified Ouroboros.Consensus.Cardano as Consensus
-import qualified Ouroboros.Consensus.Cardano.Node as Consensus
+import Ouroboros.Consensus.Cardano.Node
 import Ouroboros.Consensus.Config (TopLevelConfig (..))
 import Ouroboros.Consensus.Ledger.Basics (LedgerConfig)
 import qualified Ouroboros.Consensus.Mempool.Capacity as TxLimits
@@ -41,7 +41,6 @@ import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
-import qualified Ouroboros.Consensus.Shelley.Node.Praos as Consensus
 
 -- Usually only one constructor, but may have two when we are preparing for a HFC event.
 data GenesisConfig
@@ -84,53 +83,67 @@ mkProtocolInfoCardano ::
   GenesisConfig ->
   [Consensus.ShelleyLeaderCredentials StandardCrypto] -> -- this is not empty only in tests
   (ProtocolInfo CardanoBlock, IO [BlockForging IO CardanoBlock])
-mkProtocolInfoCardano ge shelleyCred =
-  case ge of
-    GenesisCardano dnc byronGenesis shelleyGenesis alonzoGenesis ->
-      Consensus.protocolInfoCardano
-        Consensus.ProtocolParamsByron
-          { Consensus.byronGenesis = byronGenesis
-          , Consensus.byronPbftSignatureThreshold = Consensus.PBftSignatureThreshold <$> dncPBftSignatureThreshold dnc
-          , Consensus.byronProtocolVersion = dncByronProtocolVersion dnc
-          , Consensus.byronSoftwareVersion = mkByronSoftwareVersion
-          , Consensus.byronLeaderCredentials = Nothing
-          , Consensus.byronMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
-          }
-        Consensus.ProtocolParamsShelleyBased
-          { Consensus.shelleyBasedGenesis = scConfig shelleyGenesis
-          , Consensus.shelleyBasedInitialNonce = shelleyPraosNonce shelleyGenesis
-          , Consensus.shelleyBasedLeaderCredentials = shelleyCred
-          }
-        Consensus.ProtocolParamsShelley
-          { Consensus.shelleyProtVer = mkProtVer 3 0
-          , Consensus.shelleyMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
-          }
-        Consensus.ProtocolParamsAllegra
-          { Consensus.allegraProtVer = mkProtVer 4 0
-          , Consensus.allegraMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
-          }
-        Consensus.ProtocolParamsMary
-          { Consensus.maryProtVer = mkProtVer 5 0
-          , Consensus.maryMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
-          }
-        Consensus.ProtocolParamsAlonzo
-          { Consensus.alonzoProtVer = mkProtVer 7 0
-          , Consensus.alonzoMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
-          }
-        Consensus.ProtocolParamsBabbage
-          { Consensus.babbageProtVer = mkProtVer 9 0
-          , Consensus.babbageMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
-          }
-        Consensus.ProtocolParamsConway
-          { Consensus.conwayProtVer = mkProtVer 10 0
-          , Consensus.conwayMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure -- TODO: Conway
-          }
-        (Consensus.ProtocolTransitionParamsShelleyBased emptyFromByronTranslationContext $ dncShelleyHardFork dnc) -- TODO: Conway Fix
-        (Consensus.ProtocolTransitionParamsShelleyBased () $ dncAllegraHardFork dnc)
-        (Consensus.ProtocolTransitionParamsShelleyBased () $ dncMaryHardFork dnc)
-        (Consensus.ProtocolTransitionParamsShelleyBased alonzoGenesis $ dncAlonzoHardFork dnc)
-        (Consensus.ProtocolTransitionParamsShelleyBased () $ dncBabbageHardFork dnc)
-        (Consensus.ProtocolTransitionParamsShelleyBased (ConwayGenesis (GenDelegs mempty)) $ dncConwayHardFork dnc) -- TODO: Conway Fix
+mkProtocolInfoCardano (GenesisCardano dnc bGenesis shelleyGenesis alonzoGenesis) shelleyCred =
+  protocolInfoCardano $
+    CardanoProtocolParams
+      { paramsByron =
+          Consensus.ProtocolParamsByron
+            { Consensus.byronGenesis = bGenesis
+            , Consensus.byronPbftSignatureThreshold = Consensus.PBftSignatureThreshold <$> dncPBftSignatureThreshold dnc
+            , Consensus.byronProtocolVersion = dncByronProtocolVersion dnc
+            , Consensus.byronSoftwareVersion = mkByronSoftwareVersion
+            , Consensus.byronLeaderCredentials = Nothing
+            , Consensus.byronMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
+            }
+      , paramsShelleyBased =
+          Consensus.ProtocolParamsShelleyBased
+            { Consensus.shelleyBasedGenesis = scConfig shelleyGenesis
+            , Consensus.shelleyBasedInitialNonce = shelleyPraosNonce shelleyGenesis
+            , Consensus.shelleyBasedLeaderCredentials = shelleyCred
+            }
+      , paramsShelley =
+          Consensus.ProtocolParamsShelley
+            { Consensus.shelleyProtVer = mkProtVer 3 0
+            , Consensus.shelleyMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
+            }
+      , paramsAllegra =
+          Consensus.ProtocolParamsAllegra
+            { Consensus.allegraProtVer = mkProtVer 4 0
+            , Consensus.allegraMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
+            }
+      , paramsMary =
+          Consensus.ProtocolParamsMary
+            { Consensus.maryProtVer = mkProtVer 5 0
+            , Consensus.maryMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
+            }
+      , paramsAlonzo =
+          Consensus.ProtocolParamsAlonzo
+            { Consensus.alonzoProtVer = mkProtVer 7 0
+            , Consensus.alonzoMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
+            }
+      , paramsBabbage =
+          Consensus.ProtocolParamsBabbage
+            { Consensus.babbageProtVer = mkProtVer 9 0
+            , Consensus.babbageMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
+            }
+      , paramsConway =
+          Consensus.ProtocolParamsConway
+            { Consensus.conwayProtVer = mkProtVer 10 0
+            , Consensus.conwayMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure -- TODO: Conway
+            }
+      , transitionParamsByronToShelley =
+          Consensus.ProtocolTransitionParamsByronToShelley emptyFromByronTranslationContext (dncShelleyHardFork dnc) -- TODO: Conway Fix
+      , transitionParamsShelleyToAllegra =
+          Consensus.ProtocolTransitionParamsIntraShelley () (dncAllegraHardFork dnc)
+      , transitionParamsAllegraToMary =
+          Consensus.ProtocolTransitionParamsIntraShelley () (dncMaryHardFork dnc)
+      , transitionParamsMaryToAlonzo =
+          Consensus.ProtocolTransitionParamsIntraShelley alonzoGenesis (dncAlonzoHardFork dnc)
+      , transitionParamsAlonzoToBabbage =
+          Consensus.ProtocolTransitionParamsIntraShelley () (dncBabbageHardFork dnc)
+      , transitionParamsBabbageToConway =
+          Consensus.ProtocolTransitionParamsIntraShelley (ConwayGenesis def) (dncConwayHardFork dnc) -- TODO: Conway Fix
+      }
 
 shelleyPraosNonce :: ShelleyConfig -> Nonce
 shelleyPraosNonce sCfg = Nonce (Crypto.castHash . unGenesisHashShelley $ scGenesisHash sCfg)

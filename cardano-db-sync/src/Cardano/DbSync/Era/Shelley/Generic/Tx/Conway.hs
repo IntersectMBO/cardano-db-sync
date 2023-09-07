@@ -18,6 +18,7 @@ import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import Cardano.Ledger.Babbage.Core as Core hiding (Tx, TxOut)
 import Cardano.Ledger.BaseTypes
+import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Conway.TxBody
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Prelude
@@ -65,7 +66,7 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
     , txScriptSizes = getPlutusSizes tx
     , txScripts = getScripts tx
     , txExtraKeyWitnesses = extraKeyWits txBody
-    , txVotingProcedure = toList $ ctbVotingProcedures txBody
+    , txVotingProcedure = Map.toList $ fmap Map.toList (unVotingProcedures $ ctbVotingProcedures txBody)
     , txProposalProcedure = toList $ ctbProposalProcedures txBody
     }
   where

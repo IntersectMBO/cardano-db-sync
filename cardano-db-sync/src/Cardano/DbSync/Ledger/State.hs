@@ -45,7 +45,6 @@ import Cardano.Ledger.Alonzo.Scripts
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Era (EraCrypto)
 import Cardano.Ledger.Shelley.AdaPots (AdaPots)
-import Cardano.Ledger.Shelley.LedgerState (EpochState (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Prelude hiding (atomically)
 import Cardano.Slotting.Block (BlockNo (..))
@@ -787,19 +786,15 @@ getPrices :: CardanoLedgerState -> Strict.Maybe Prices
 getPrices st = case ledgerState $ clsState st of
   LedgerStateAlonzo als ->
     Strict.Just
-      ( esPp
-          ( Shelley.nesEs $
-              Consensus.shelleyLedgerState als
-          )
-          ^. Alonzo.ppPricesL
+      ( Shelley.nesEs (Consensus.shelleyLedgerState als)
+          ^. Shelley.curPParamsEpochStateL
+          . Alonzo.ppPricesL
       )
   LedgerStateBabbage bls ->
     Strict.Just
-      ( esPp
-          ( Shelley.nesEs $
-              Consensus.shelleyLedgerState bls
-          )
-          ^. Alonzo.ppPricesL
+      ( Shelley.nesEs (Consensus.shelleyLedgerState bls)
+          ^. Shelley.curPParamsEpochStateL
+          . Alonzo.ppPricesL
       )
   _ -> Strict.Nothing
 

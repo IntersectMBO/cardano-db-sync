@@ -43,7 +43,6 @@ import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..), DeltaCoin)
 import Cardano.Ledger.Conway.Governance
-import qualified Cardano.Ledger.Conway.Governance as Ledger
 import qualified Cardano.Ledger.Credential as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (AssetName (..))
@@ -157,10 +156,10 @@ unAssetName = SBS.fromShort . assetName
 dataHashToBytes :: DataHash -> ByteString
 dataHashToBytes = Crypto.hashToBytes . Ledger.extractHash
 
-achorHashToBytes :: Ledger.SafeHash StandardCrypto Ledger.AnchorDataHash -> ByteString
+achorHashToBytes :: Ledger.SafeHash StandardCrypto Ledger.AnchorData -> ByteString
 achorHashToBytes = Crypto.hashToBytes . Ledger.extractHash
 
-toGovAction :: GovernanceAction StandardConway -> Db.GovActionType
+toGovAction :: GovAction StandardConway -> Db.GovActionType
 toGovAction = \case
   ParameterChange {} -> Db.ParameterChange
   HardForkInitiation {} -> Db.HardForkInitiation

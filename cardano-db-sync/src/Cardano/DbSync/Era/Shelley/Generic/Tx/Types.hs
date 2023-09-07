@@ -61,7 +61,7 @@ data Tx = Tx
   , txScriptSizes :: [Word64] -- this contains only the sizes of plutus scripts in witnesses
   , txScripts :: [TxScript]
   , txExtraKeyWitnesses :: ![ByteString]
-  , txVotingProcedure :: ![VotingProcedure StandardConway]
+  , txVotingProcedure :: ![(Voter StandardCrypto, [(GovActionId StandardCrypto, VotingProcedure StandardConway)])]
   , txProposalProcedure :: ![ProposalProcedure StandardConway]
   }
 
