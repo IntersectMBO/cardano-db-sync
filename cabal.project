@@ -11,7 +11,7 @@ repository cardano-haskell-packages
 
 index-state:
   , hackage.haskell.org 2023-08-09T22:19:16Z
-  , cardano-haskell-packages 2023-09-01T20:45:06Z
+  , cardano-haskell-packages 2023-09-07T13:00:00Z
 
 packages:
   cardano-db
@@ -62,18 +62,6 @@ package snap-server
 -- when using the "cabal" wrapper script provided by nix-shell.
 -- --------------------------- 8< --------------------------
 -- Please do not put any `source-repository-package` clause above this line.
-
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/cardano-node
-  tag: 6639b2e742f41ca04b04d8c2436beb86d4e5b770
-  --sha256: sha256-7HpDtM7FszNLBLFNmIY3EnieCCtQFex3BIWterLXg64=
-  subdir:
-    cardano-git-rev
-    cardano-node
-    trace-dispatcher
-    trace-forward
-    trace-resources
 
 source-repository-package
   type: git
