@@ -37,7 +37,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Witness
 import Cardano.DbSync.Types (DataHash)
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.Alonzo.Language as Alonzo
-import Cardano.Ledger.Alonzo.Scripts (ExUnits (..), txscriptfee)
+import Cardano.Ledger.Alonzo.Scripts (ExUnits (..), txscriptfee, unBinaryPlutus)
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..), getAlonzoTxAuxDataScripts)
@@ -64,6 +64,7 @@ import qualified Data.Set as Set
 #if __GLASGOW_HASKELL__ >= 906
 import Data.Type.Equality (type (~))
 #endif
+import Cardano.Ledger.Language (Plutus (..))
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (EraCrypto, StandardAlonzo, StandardCrypto)
 
@@ -295,9 +296,9 @@ mkTxScript (hsh, script) =
     getScriptType =
       case script of
         Alonzo.TimelockScript {} -> Timelock
-        Alonzo.PlutusScript Alonzo.PlutusV1 _s -> PlutusV1
-        Alonzo.PlutusScript Alonzo.PlutusV2 _s -> PlutusV2
-        Alonzo.PlutusScript Alonzo.PlutusV3 _s -> PlutusV3
+        Alonzo.PlutusScript (Plutus Alonzo.PlutusV1 _s) -> PlutusV1
+        Alonzo.PlutusScript (Plutus Alonzo.PlutusV2 _s) -> PlutusV2
+        Alonzo.PlutusScript (Plutus Alonzo.PlutusV3 _s) -> PlutusV3
 
     timelockJsonScript :: Maybe ByteString
     timelockJsonScript =
@@ -310,7 +311,7 @@ mkTxScript (hsh, script) =
     plutusCborScript =
       case script of
         Alonzo.TimelockScript {} -> Nothing
-        plutusScript -> Just $ Ledger.originalBytes plutusScript
+        plScript -> Just $ Ledger.originalBytes plScript
 
 getPlutusSizes ::
   forall era.
@@ -330,7 +331,7 @@ getPlutusScriptSize :: Alonzo.AlonzoScript era -> Maybe Word64
 getPlutusScriptSize script =
   case script of
     Alonzo.TimelockScript {} -> Nothing
-    Alonzo.PlutusScript _lang sbs -> Just $ fromIntegral (SBS.length sbs)
+    Alonzo.PlutusScript (Plutus _lang sbs) -> Just $ fromIntegral (SBS.length $ unBinaryPlutus sbs)
 
 txDataWitness ::
   (Core.TxWits era ~ Alonzo.AlonzoTxWits era, Core.EraTx era, EraCrypto era ~ StandardCrypto) =>
