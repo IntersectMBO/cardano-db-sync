@@ -49,7 +49,7 @@ import qualified PlutusCore.Data as Plutus
 import qualified PlutusLedgerApi.Test.Examples as Plutus
 
 alwaysSucceedsScript :: forall era. AlonzoScript era
-alwaysSucceedsScript = PlutusScript PlutusV1 (Plutus.alwaysSucceedingNAryFunction 0)
+alwaysSucceedsScript = PlutusScript $ Plutus PlutusV1 (BinaryPlutus $ Plutus.alwaysSucceedingNAryFunction 0)
 
 alwaysSucceedsScriptHash :: ScriptHash StandardCrypto
 alwaysSucceedsScriptHash = scriptHash @StandardAlonzo alwaysSucceedsScript
@@ -61,7 +61,7 @@ alwaysSucceedsScriptStake :: StakeCredential StandardCrypto
 alwaysSucceedsScriptStake = ScriptHashObj alwaysSucceedsScriptHash
 
 alwaysFailsScript :: forall era. AlonzoScript era
-alwaysFailsScript = PlutusScript PlutusV1 (Plutus.alwaysFailingNAryFunction 0)
+alwaysFailsScript = PlutusScript $ Plutus PlutusV1 (BinaryPlutus $ Plutus.alwaysFailingNAryFunction 0)
 
 alwaysFailsScriptHash :: ScriptHash StandardCrypto
 alwaysFailsScriptHash = scriptHash @StandardAlonzo alwaysFailsScript
@@ -77,7 +77,7 @@ plutusDataList :: forall era. Era era => Data era
 plutusDataList = Data $ Plutus.List []
 
 alwaysMintScript :: forall era. AlonzoScript era
-alwaysMintScript = PlutusScript PlutusV1 (Plutus.alwaysFailingNAryFunction 1)
+alwaysMintScript = PlutusScript $ Plutus PlutusV1 (BinaryPlutus $ Plutus.alwaysFailingNAryFunction 1)
 
 alwaysMintScriptHash :: ScriptHash StandardCrypto
 alwaysMintScriptHash = scriptHash @StandardAlonzo alwaysMintScript
@@ -117,4 +117,4 @@ plutusDataEncIndef = toShort $ toStrictByteString $ encodeList plutusData2
 toBinaryPlutus :: AlonzoScript era -> BinaryPlutus
 toBinaryPlutus as = case as of
   TimelockScript _ -> panic "expected Alonzo script"
-  PlutusScript _ sbs -> BinaryPlutus sbs
+  PlutusScript (Plutus _ sbs) -> sbs
