@@ -48,6 +48,7 @@ library
                         Cardano.DbSync.Config.Alonzo
                         Cardano.DbSync.Config.Byron
                         Cardano.DbSync.Config.Cardano
+                        Cardano.DbSync.Config.Conway
                         Cardano.DbSync.Config.Node
                         Cardano.DbSync.Config.Shelley
                         Cardano.DbSync.Config.Types
@@ -326,11 +327,13 @@ test-suite test
                         -Wunused-imports
                         -Wunused-packages
 
-  other-modules:        Cardano.DbSync.Era.Shelley.Generic.ScriptDataTest
+  other-modules:        Cardano.DbSync.Config.CardanoTest
+                        Cardano.DbSync.Era.Shelley.Generic.ScriptDataTest
                         Cardano.DbSync.Era.Shelley.Generic.ScriptTest
                         Cardano.DbSync.Util.AddressTest
                         Cardano.DbSync.Util.Bech32Test
                         Cardano.DbSync.Util.CborTest
+
 
   build-depends:        base
                       , aeson
@@ -344,12 +347,14 @@ test-suite test
                       , cardano-ledger-core:testlib
                       , cardano-ledger-allegra:{cardano-ledger-allegra,testlib}
                       , cardano-ledger-alonzo:{cardano-ledger-alonzo,testlib}
+                      , cardano-ledger-conway:{cardano-ledger-conway}
                       , cardano-ledger-shelley:{cardano-ledger-shelley,testlib}
                       , cardano-db-sync
                       , cardano-ledger-core
                       , cardano-prelude
                       , cardano-strict-containers
                       , containers
+                      , data-default-class
                       , hedgehog
                       , hedgehog-quickcheck
                       , text
