@@ -47,6 +47,7 @@ data SyncNodeError
   | SNErrByronConfig !FilePath !Byron.ConfigurationError
   | SNErrShelleyConfig !FilePath !Text
   | SNErrAlonzoConfig !FilePath !Text
+  | SNErrConwayConfig !FilePath !Text
   | SNErrCardanoConfig !Text
   | SNErrInsertGenesis !String
   | SNErrLedgerState !String
@@ -104,6 +105,14 @@ instance Show SyncNodeError where
           , ": "
           , show txt
           ]
+      SNErrConwayConfig fp txt ->
+        mconcat
+          [ "Error SNErrConwayConfig: "
+          , "Failed reading Conway genesis file "
+          , show fp
+          , ": "
+          , show txt
+          ]
       SNErrCardanoConfig err ->
         mconcat
           [ "Error SNErrCardanoConfig: "
@@ -140,10 +149,10 @@ annotateInvariantTx tx ei =
     EInvInOut inval outval -> EInvTxInOut tx inval outval
     _other -> ei
 
-dbSyncNodeError :: Monad m => Text -> ExceptT SyncNodeError m a
+dbSyncNodeError :: (Monad m) => Text -> ExceptT SyncNodeError m a
 dbSyncNodeError = left . SNErrDefault
 
-dbSyncInvariant :: Monad m => Text -> SyncInvariant -> ExceptT SyncNodeError m a
+dbSyncInvariant :: (Monad m) => Text -> SyncInvariant -> ExceptT SyncNodeError m a
 dbSyncInvariant loc = left . SNErrInvariant loc
 
 renderSyncInvariant :: SyncInvariant -> Text
@@ -172,7 +181,7 @@ bsBase16Encode bs =
     Left _ -> Text.pack $ "UTF-8 decode failed for " ++ Show.show bs
     Right txt -> txt
 
-runOrThrowIO :: forall e a m. (MonadIO m) => Exception e => m (Either e a) -> m a
+runOrThrowIO :: forall e a m. (MonadIO m) => (Exception e) => m (Either e a) -> m a
 runOrThrowIO ioEither = do
   et <- ioEither
   case et of
