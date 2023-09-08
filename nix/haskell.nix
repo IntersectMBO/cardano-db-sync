@@ -98,7 +98,12 @@ let
         # split data output for ekg to reduce closure size
         packages.ekg.components.library.enableSeparateDataOutput = true;
 
+        # TODO: Enable these for GHC 9.x
         packages.plutus-ledger.doHaddock = false;
+        packages.cardano-ledger-alonzo.doHaddock = false;
+        packages.cardano-ledger-babbage.doHaddock = false;
+        packages.cardano-ledger-conway.doHaddock = false;
+        packages.cardano-protocol-tpraos.doHaddock = false;
       }
       {
         packages = lib.genAttrs projectPackagesNames (name: {
