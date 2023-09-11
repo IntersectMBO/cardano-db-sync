@@ -9,6 +9,7 @@ module Cardano.Db.AlterTable (
   AlterTable (..),
   DbAlterTableException (..),
   alterTable,
+  queryHasConstraint,
 ) where
 
 import Control.Exception.Lifted (Exception, handle, throwIO)
