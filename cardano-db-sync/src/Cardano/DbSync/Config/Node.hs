@@ -36,6 +36,8 @@ data NodeConfig = NodeConfig
   , ncShelleyGenesisHash :: !GenesisHashShelley
   , ncAlonzoGenesisFile :: !GenesisFile
   , ncAlonzoGenesisHash :: !GenesisHashAlonzo
+  , ncConwayGenesisFile :: !GenesisFile
+  , ncConwayGenesisHash :: !GenesisHashConway
   , ncRequiresNetworkMagic :: !RequiresNetworkMagic
   , ncByronProtocolVersion :: !Byron.ProtocolVersion
   , -- Shelley hardfok parameters
@@ -86,6 +88,8 @@ instance FromJSON NodeConfig where
           <*> fmap GenesisHashShelley (o .: "ShelleyGenesisHash")
           <*> fmap GenesisFile (o .: "AlonzoGenesisFile")
           <*> fmap GenesisHashAlonzo (o .: "AlonzoGenesisHash")
+          <*> fmap GenesisFile (o .: "ConwayGenesisFile")
+          <*> fmap GenesisHashConway (o .: "ConwayGenesisHash")
           <*> (o .: "RequiresNetworkMagic")
           <*> parseByronProtocolVersion o
           <*> parseShelleyHardForkEpoch o
