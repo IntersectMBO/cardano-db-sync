@@ -128,6 +128,7 @@ import Database.Persist.Types (
   entityKey,
  )
 import Database.PostgreSQL.Simple (SqlError)
+import Cardano.Db.AlterTable (queryHasConstraint)
 
 -- The original naive way of inserting rows into Postgres was:
 --
@@ -308,7 +309,7 @@ insertEpochStakeProgress =
 
 updateSetComplete :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
 updateSetComplete epoch = do
-  updateWhere [EpochStakeProgressEpochNo ==. epoch] [EpochStakeProgressCompleted =. True]
+  Database.Persist.updateWhere [EpochStakeProgressEpochNo Database.Persist.==. epoch] [EpochStakeProgressCompleted Database.Persist.=. True]
 
 replaceAdaPots :: (MonadBaseControl IO m, MonadIO m) => BlockId -> AdaPots -> ReaderT SqlBackend m Bool
 replaceAdaPots blockId adapots = do
@@ -379,6 +380,57 @@ insertMany' vtype records = handle exceptHandler (insertMany records)
     exceptHandler e =
       liftIO $ throwIO (DbInsertException vtype e)
 
+--
+insertManyUnique ::
+  forall m record.
+  ( MonadBaseControl IO m
+  , MonadIO m
+  , PersistEntity record
+  ) =>
+  String ->
+  ConstraintNameDB ->
+  [record] ->
+  ReaderT SqlBackend m ()
+insertManyUnique vtype constraintName records = do
+  constraintExists <- queryHasConstraint constraintName
+  unless (null records)
+    $ handle exceptHandler (rawExecute (query constraintExists) values)
+  where
+    query :: Bool -> Text
+    query constraintExists =
+      Text.concat
+        [ "INSERT INTO "
+        , unEntityNameDB (entityDB . entityDef $ records)
+        , " ("
+        , Util.commaSeparated fieldNames
+        , ") VALUES "
+        , Util.commaSeparated
+            . replicate (length records)
+            . Util.parenWrapped
+            . Util.commaSeparated
+            $ placeholders
+        , conflictQuery constraintExists
+        ]
+
+    values :: [PersistValue]
+    values = concatMap (map toPersistValue . toPersistFields) records
+
+    conflictQuery :: Bool -> Text
+    conflictQuery constraintExists =
+      if constraintExists
+      then Text.concat [" ON CONFLICT ON CONSTRAINT "
+                       , unConstraintNameDB constraintName
+                       , " DO NOTHING"]
+      else ""
+
+    fieldNames, placeholders :: [Text]
+    (fieldNames, placeholders) =
+      unzip (Util.mkInsertPlaceholders (entityDef (Proxy @record)) escapeFieldName)
+
+    exceptHandler :: SqlError -> ReaderT SqlBackend m a
+    exceptHandler e =
+      liftIO $ throwIO (DbInsertException vtype e)
+
 insertManyWithManualUnique ::
   forall m record.
   ( MonadBaseControl IO m
@@ -389,41 +441,7 @@ insertManyWithManualUnique ::
   ConstraintNameDB ->
   [record] ->
   ReaderT SqlBackend m ()
-insertManyWithManualUnique vtype constraintName records = do
-  -- let foreingDefs = getEntityForeignDefs $ entityDef $ Proxy @record
-
-  unless (null records) $
-    handle exceptHandler (rawExecute query values)
-  where
-    query :: Text
-    -- the pattern is incomplete but the list will not be empty due to null check
-    query =
-      Text.concat
-        [ "INSERT INTO "
-        , unEntityNameDB (entityDB . entityDef $ records)
-        , " ("
-        , Util.commaSeparated fieldNames
-        , ") VALUES "
-        , Util.commaSeparated
-            . replicate (length records)
-            . Util.parenWrapped
-            . Util.commaSeparated
-            $ placeholders
-        , " ON CONFLICT ON CONSTRAINT "
-        , unConstraintNameDB constraintName
-        , " DO NOTHING"
-        ]
-
-    values :: [PersistValue]
-    values = concatMap (map toPersistValue . toPersistFields) records
-
-    fieldNames, placeholders :: [Text]
-    (fieldNames, placeholders) =
-      unzip (Util.mkInsertPlaceholders (entityDef (Proxy @record)) escapeFieldName)
-
-    exceptHandler :: SqlError -> ReaderT SqlBackend m a
-    exceptHandler e =
-      liftIO $ throwIO (DbInsertException vtype e)
+insertManyWithManualUnique = insertManyUnique
 
 insertManyUncheckedUnique ::
   forall m record.
@@ -434,38 +452,10 @@ insertManyUncheckedUnique ::
   String ->
   [record] ->
   ReaderT SqlBackend m ()
-insertManyUncheckedUnique vtype records =
-  unless (null records) $
-    handle exceptHandler (rawExecute query values)
-  where
-    query :: Text
-    query =
-      Text.concat
-        [ "INSERT INTO "
-        , unEntityNameDB (entityDB . entityDef $ records)
-        , " ("
-        , Util.commaSeparated fieldNames
-        , ") VALUES "
-        , Util.commaSeparated
-            . replicate (length records)
-            . Util.parenWrapped
-            . Util.commaSeparated
-            $ placeholders
-        , " ON CONFLICT ON CONSTRAINT "
-        , unConstraintNameDB (uniqueDBName $ onlyOneUniqueDef (Proxy @record))
-        , " DO NOTHING"
-        ]
+insertManyUncheckedUnique vtype records = do
+  let constraintName = uniqueDBName $ onlyOneUniqueDef (Proxy @record)
+  insertManyUnique vtype constraintName records
 
-    values :: [PersistValue]
-    values = concatMap (map toPersistValue . toPersistFields) records
-
-    fieldNames, placeholders :: [Text]
-    (fieldNames, placeholders) =
-      unzip (Util.mkInsertPlaceholders (entityDef (Proxy @record)) escapeFieldName)
-
-    exceptHandler :: SqlError -> ReaderT SqlBackend m a
-    exceptHandler e =
-      liftIO $ throwIO (DbInsertException vtype e)
 
 -- Insert, getting PostgreSQL to check the uniqueness constaint. If it is violated,
 -- simply returns the Key, without changing anything.
