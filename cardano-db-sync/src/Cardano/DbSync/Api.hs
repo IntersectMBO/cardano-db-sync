@@ -163,12 +163,12 @@ getSafeBlockNoDiff syncEnv = 2 * getSecurityParam syncEnv
 getPruneInterval :: SyncEnv -> Word64
 getPruneInterval syncEnv = 10 * getSecurityParam syncEnv
 
-whenConsumeOrPruneTxOut :: MonadIO m => SyncEnv -> m () -> m ()
+whenConsumeOrPruneTxOut :: (MonadIO m) => SyncEnv -> m () -> m ()
 whenConsumeOrPruneTxOut env action = do
   let extraMigr = envPruneConsumeMigration env
   when (DB.pcmConsumeOrPruneTxOut extraMigr) action
 
-whenPruneTxOut :: MonadIO m => SyncEnv -> m () -> m ()
+whenPruneTxOut :: (MonadIO m) => SyncEnv -> m () -> m ()
 whenPruneTxOut env action = do
   let extraMigr = envPruneConsumeMigration env
   when (DB.pcmPruneTxOut extraMigr) action
@@ -377,7 +377,7 @@ mkSyncEnvFromConfig ::
   IO (Either SyncNodeError SyncEnv)
 mkSyncEnvFromConfig trce connString backend syncOptions genCfg syncNodeParams ranMigration runMigrationFnc =
   case genCfg of
-    GenesisCardano _ bCfg sCfg _
+    GenesisCardano _ bCfg sCfg _ _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
           pure
             . Left
@@ -466,7 +466,7 @@ getSecurityParam syncEnv =
     NoLedger nle -> getMaxRollbacks $ nleProtocolInfo nle
 
 getMaxRollbacks ::
-  ConsensusProtocol (BlockProtocol blk) =>
+  (ConsensusProtocol (BlockProtocol blk)) =>
   ProtocolInfo blk ->
   Word64
 getMaxRollbacks = maxRollbacks . configSecurityParam . pInfoConfig

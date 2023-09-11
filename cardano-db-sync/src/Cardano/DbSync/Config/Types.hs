@@ -15,6 +15,7 @@ module Cardano.DbSync.Config.Types (
   GenesisHashShelley (..),
   GenesisHashByron (..),
   GenesisHashAlonzo (..),
+  GenesisHashConway (..),
   SyncNodeConfig (..),
   SyncPreConfig (..),
   LedgerStateDir (..),
@@ -101,6 +102,8 @@ data SyncNodeConfig = SyncNodeConfig
   , dncShelleyGenesisHash :: !GenesisHashShelley
   , dncAlonzoGenesisFile :: !GenesisFile
   , dncAlonzoGenesisHash :: !GenesisHashAlonzo
+  , dncConwayGenesisFile :: !GenesisFile
+  , dncConwayGenesisHash :: !GenesisHashConway
   , dncByronProtocolVersion :: !Byron.ProtocolVersion
   , dncShelleyHardFork :: !TriggerHardFork
   , dncAllegraHardFork :: !TriggerHardFork
@@ -137,6 +140,10 @@ newtype GenesisHashShelley = GenesisHashShelley
 newtype GenesisHashAlonzo = GenesisHashAlonzo
   { unGenesisHashAlonzo :: Crypto.Hash Crypto.Blake2b_256 ByteString
   }
+  deriving newtype (Eq, Show)
+
+newtype GenesisHashConway = GenesisHashConway
+  {unGenesisHashConway :: Crypto.Hash Crypto.Blake2b_256 ByteString}
   deriving newtype (Eq, Show)
 
 newtype LedgerStateDir = LedgerStateDir

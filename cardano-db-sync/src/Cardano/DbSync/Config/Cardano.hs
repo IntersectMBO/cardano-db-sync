@@ -19,6 +19,7 @@ import qualified Cardano.Crypto.Hash.Class as Crypto
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import Cardano.DbSync.Config.Alonzo
 import Cardano.DbSync.Config.Byron
+import Cardano.DbSync.Config.Conway (readConwayGenesisConfig)
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Error
@@ -44,12 +45,17 @@ import Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 
 -- Usually only one constructor, but may have two when we are preparing for a HFC event.
 data GenesisConfig
-  = GenesisCardano !SyncNodeConfig !Byron.Config !ShelleyConfig !AlonzoGenesis
+  = GenesisCardano
+      !SyncNodeConfig
+      !Byron.Config
+      !ShelleyConfig
+      !AlonzoGenesis
+      !(ConwayGenesis StandardCrypto)
 
 genesisProtocolMagicId :: GenesisConfig -> ProtocolMagicId
 genesisProtocolMagicId ge =
   case ge of
-    GenesisCardano _cfg _bCfg sCfg _aCfg -> shelleyProtocolMagicId (scConfig sCfg)
+    GenesisCardano _cfg _bCfg sCfg _aCfg _cCfg -> shelleyProtocolMagicId (scConfig sCfg)
   where
     shelleyProtocolMagicId :: ShelleyGenesis StandardCrypto -> ProtocolMagicId
     shelleyProtocolMagicId sCfg = ProtocolMagicId (sgNetworkMagic sCfg)
@@ -64,6 +70,7 @@ readCardanoGenesisConfig enc =
         <$> readByronGenesisConfig enc
         <*> readShelleyGenesisConfig enc
         <*> readAlonzoGenesisConfig enc
+        <*> readConwayGenesisConfig enc
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -83,7 +90,7 @@ mkProtocolInfoCardano ::
   GenesisConfig ->
   [Consensus.ShelleyLeaderCredentials StandardCrypto] -> -- this is not empty only in tests
   (ProtocolInfo CardanoBlock, IO [BlockForging IO CardanoBlock])
-mkProtocolInfoCardano (GenesisCardano dnc bGenesis shelleyGenesis alonzoGenesis) shelleyCred =
+mkProtocolInfoCardano genesisConfig shelleyCred =
   protocolInfoCardano $
     CardanoProtocolParams
       { paramsByron =
@@ -144,6 +151,13 @@ mkProtocolInfoCardano (GenesisCardano dnc bGenesis shelleyGenesis alonzoGenesis)
       , transitionParamsBabbageToConway =
           Consensus.ProtocolTransitionParamsIntraShelley (ConwayGenesis def) (dncConwayHardFork dnc) -- TODO: Conway Fix
       }
+  where
+    GenesisCardano
+      dnc
+      bGenesis
+      shelleyGenesis
+      alonzoGenesis
+      _conwayGenesis = genesisConfig
 
 shelleyPraosNonce :: ShelleyConfig -> Nonce
 shelleyPraosNonce sCfg = Nonce (Crypto.castHash . unGenesisHashShelley $ scGenesisHash sCfg)
