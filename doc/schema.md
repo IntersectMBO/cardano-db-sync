@@ -2,7 +2,7 @@ Resolving dependencies...
 Up to date
 # Schema Documentation for cardano-db-sync
 
-Schema version: 13.1.1.3 (from branch **kderme/stake-dist-master** which may not accurately reflect the version number)
+Schema version: 13.2.0.0 (from branch **kderme/stake-dist-master** which may not accurately reflect the version number)
 **Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema.hs by the command `cabal run -- gen-schema-docs doc/schema.md`. This document should only be updated during the release process and updated on the release branch.
 
 ### `schema_version`

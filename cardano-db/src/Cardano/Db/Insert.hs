@@ -76,6 +76,7 @@ module Cardano.Db.Insert (
   insertBlockChecked,
 ) where
 
+import Cardano.Db.AlterTable (queryHasConstraint)
 import Cardano.Db.Query
 import Cardano.Db.Schema
 import Cardano.Db.Text
@@ -128,7 +129,6 @@ import Database.Persist.Types (
   entityKey,
  )
 import Database.PostgreSQL.Simple (SqlError)
-import Cardano.Db.AlterTable (queryHasConstraint)
 
 -- The original naive way of inserting rows into Postgres was:
 --
@@ -393,8 +393,8 @@ insertManyUnique ::
   ReaderT SqlBackend m ()
 insertManyUnique vtype constraintName records = do
   constraintExists <- queryHasConstraint constraintName
-  unless (null records)
-    $ handle exceptHandler (rawExecute (query constraintExists) values)
+  unless (null records) $
+    handle exceptHandler (rawExecute (query constraintExists) values)
   where
     query :: Bool -> Text
     query constraintExists =
@@ -418,10 +418,13 @@ insertManyUnique vtype constraintName records = do
     conflictQuery :: Bool -> Text
     conflictQuery constraintExists =
       if constraintExists
-      then Text.concat [" ON CONFLICT ON CONSTRAINT "
-                       , unConstraintNameDB constraintName
-                       , " DO NOTHING"]
-      else ""
+        then
+          Text.concat
+            [ " ON CONFLICT ON CONSTRAINT "
+            , unConstraintNameDB constraintName
+            , " DO NOTHING"
+            ]
+        else ""
 
     fieldNames, placeholders :: [Text]
     (fieldNames, placeholders) =
@@ -455,7 +458,6 @@ insertManyUncheckedUnique ::
 insertManyUncheckedUnique vtype records = do
   let constraintName = uniqueDBName $ onlyOneUniqueDef (Proxy @record)
   insertManyUnique vtype constraintName records
-
 
 -- Insert, getting PostgreSQL to check the uniqueness constaint. If it is violated,
 -- simply returns the Key, without changing anything.
