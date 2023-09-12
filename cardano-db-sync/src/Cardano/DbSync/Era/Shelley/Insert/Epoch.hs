@@ -25,7 +25,7 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
-import Cardano.DbSync.Util.Constraint (epochStakeConstraintName, rewardConstraintName)
+import Cardano.DbSync.Util.Constraint (constraintNameEpochStake, constraintNameReward)
 import Cardano.Ledger.BaseTypes (Network)
 import qualified Cardano.Ledger.Coin as Shelley
 import Cardano.Prelude
@@ -70,7 +70,7 @@ insertEpochStake ::
 insertEpochStake syncEnv nw epochNo stakeChunk = do
   let cache = envCache syncEnv
   dbStakes <- mapM (mkStake cache) stakeChunk
-  lift $ DB.insertManyEpochStakes epochStakeConstraintName dbStakes
+  lift $ DB.insertManyEpochStakes constraintNameEpochStake dbStakes
   where
     mkStake ::
       (MonadBaseControl IO m, MonadIO m) =>
@@ -100,7 +100,7 @@ insertRewards nw earnedEpoch spendableEpoch cache rewardsChunk = do
   dbRewards <- concatMapM mkRewards rewardsChunk
   let chunckDbRewards = splittRewardsEvery 100000 dbRewards
   -- minimising the bulk inserts into hundred thousand chunks to improve performance
-  forM_ chunckDbRewards $ \rws -> lift $ DB.insertManyRewards rewardConstraintName rws
+  forM_ chunckDbRewards $ \rws -> lift $ DB.insertManyRewards constraintNameReward rws
   where
     mkRewards ::
       (MonadBaseControl IO m, MonadIO m) =>

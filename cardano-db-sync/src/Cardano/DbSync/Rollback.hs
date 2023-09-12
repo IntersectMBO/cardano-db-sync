@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -17,27 +18,33 @@ import Cardano.DbSync.Era.Util
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import Cardano.DbSync.Util.Constraint (addEpochStakeTableConstraint, addRewardTableConstraint)
 import Cardano.Prelude
+import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
 import Control.Monad.Extra (whenJust)
+import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.ByteString.Short as SBS
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (getOneEraHash)
 import Ouroboros.Network.Block
 import Ouroboros.Network.Point
+import Cardano.Db (ManualDbConstraints(..))
 
 -- Rollbacks are done in an Era generic way based on the 'Point' we are
 -- rolling back to.
 rollbackFromBlockNo ::
-  MonadIO m =>
+  (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   BlockNo ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 rollbackFromBlockNo syncEnv blkNo = do
+  dbConstraints <- liftIO $ readTVarIO $ envDbConstraints syncEnv
   nBlocks <- lift $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
   mres <- lift $ DB.queryBlockNoAndEpoch (unBlockNo blkNo)
   whenJust mres $ \(blockId, epochNo) -> do
-    liftIO . logInfo trce $
-      mconcat
+    liftIO
+      . logInfo trce
+      $ mconcat
         [ "Deleting "
         , textShow nBlocks
         , " numbered equal to or greater than "
@@ -51,6 +58,12 @@ rollbackFromBlockNo syncEnv blkNo = do
     lift $ rollbackCache cache blockId
 
     liftIO . logInfo trce $ "Blocks deleted"
+    -- We use custom constraints to improve input speeds when syncing.
+    -- If they don't already exists we add them here as once a rollback has happened
+    -- we always need a the constraints.
+    when (dbConstraintRewards dbConstraints && dbConstraintEpochStake dbConstraints) $ do
+      lift addRewardTableConstraint
+      lift addEpochStakeTableConstraint
   where
     trce = getTrace syncEnv
     cache = envCache syncEnv
@@ -70,8 +83,9 @@ prepareRollback syncEnv point serverTip =
             then do
               liftIO . logInfo trce $ "Starting from Genesis"
             else do
-              liftIO . logInfo trce $
-                mconcat
+              liftIO
+                . logInfo trce
+                $ mconcat
                   [ "Delaying delete of "
                   , textShow nBlocks
                   , " while rolling back to genesis."
@@ -84,8 +98,9 @@ prepareRollback syncEnv point serverTip =
           mBlockNo <-
             liftLookupFail "Rollback.prepareRollback" $
               DB.queryBlockHashBlockNo (SBS.fromShort . getOneEraHash $ blockPointHash blk)
-          liftIO . logInfo trce $
-            mconcat
+          liftIO
+            . logInfo trce
+            $ mconcat
               [ "Delaying delete of "
               , textShow nBlocks
               , " blocks after "

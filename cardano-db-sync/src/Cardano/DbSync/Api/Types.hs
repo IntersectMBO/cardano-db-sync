@@ -37,6 +37,7 @@ data SyncEnv = SyncEnv
   , envCache :: !Cache
   , envConnString :: ConnectionString
   , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)
+  , envDbConstraints :: !(StrictTVar IO DB.ManualDbConstraints)
   , envEpochState :: !(StrictTVar IO EpochState)
   , envEpochSyncTime :: !(StrictTVar IO UTCTime)
   , envIndexes :: !(StrictTVar IO Bool)
