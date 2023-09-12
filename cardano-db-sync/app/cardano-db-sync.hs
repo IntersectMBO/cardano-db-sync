@@ -305,8 +305,9 @@ command' c descr p =
 
 runVersionCommand :: IO ()
 runVersionCommand = do
-  liftIO . putTextLn $
-    mconcat
+  liftIO
+    . putTextLn
+    $ mconcat
       [ "cardano-db-sync "
       , renderVersion version
       , " - "

@@ -66,6 +66,7 @@ import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..), LedgerStateFile (..), Sna
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import Cardano.DbSync.Util.Constraint (dbConstraintNamesExists)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Shelley.Genesis as Shelley
 import Cardano.Prelude
@@ -312,18 +313,19 @@ mkSyncEnv ::
   Bool ->
   RunMigration ->
   IO SyncEnv
-mkSyncEnv trce connString backend syncOptions protoInfo nw nwMagic systemStart syncNodeParams ranMigrations runMigrationFnc = do
+mkSyncEnv trce connString backend syncOptions protoInfo nw nwMagic systemStart syncNP ranMigrations runMigrationFnc = do
+  dbCNamesVar <- newTVarIO =<< dbConstraintNamesExists backend
   cache <- if soptCache syncOptions then newEmptyCache 250000 50000 else pure uninitiatedCache
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
-  indexesVar <- newTVarIO $ enpForceIndexes syncNodeParams
-  let pcm = initPruneConsumeMigration (enpMigrateConsumed syncNodeParams) (enpPruneTxOut syncNodeParams)
+  indexesVar <- newTVarIO $ enpForceIndexes syncNP
+  let pcm = initPruneConsumeMigration (enpMigrateConsumed syncNP) (enpPruneTxOut syncNP)
   owq <- newTBQueueIO 100
   orq <- newTBQueueIO 100
   epochVar <- newTVarIO initEpochState
   epochSyncTime <- newTVarIO =<< getCurrentTime
   ledgerEnvType <-
-    case (enpMaybeLedgerStateDir syncNodeParams, enpShouldUseLedger syncNodeParams) of
+    case (enpMaybeLedgerStateDir syncNP, enpShouldUseLedger syncNP) of
       (Just dir, True) ->
         HasLedger
           <$> mkHasLedgerEnv
@@ -348,6 +350,7 @@ mkSyncEnv trce connString backend syncOptions protoInfo nw nwMagic systemStart s
       , envCache = cache
       , envConnString = connString
       , envConsistentLevel = consistentLevelVar
+      , envDbConstraints = dbCNamesVar
       , envEpochState = epochVar
       , envEpochSyncTime = epochSyncTime
       , envIndexes = indexesVar

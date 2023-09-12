@@ -8,6 +8,7 @@
 module Cardano.Db.AlterTable (
   AlterTable (..),
   DbAlterTableException (..),
+  ManualDbConstraints (..),
   alterTable,
   queryHasConstraint,
 ) where
@@ -33,6 +34,12 @@ data DbAlterTableException
 
 instance Exception DbAlterTableException
 
+data ManualDbConstraints = ManualDbConstraints
+  { dbConstraintRewards :: !Bool
+  , dbConstraintEpochStake :: !Bool
+  }
+
+-- this allows us to add and drop unique constraints to tables
 alterTable ::
   forall m.
   ( MonadBaseControl IO m
@@ -41,15 +48,23 @@ alterTable ::
   EntityDef ->
   AlterTable ->
   ReaderT SqlBackend m ()
-alterTable entity (AddUniqueConstraint cname cols) = do
+alterTable entity (AddUniqueConstraint cname cols) =
+  alterTableAddUniqueConstraint entity cname cols
+alterTable entity (DropUniqueConstraint cname) =
+  alterTableDropUniqueConstraint entity cname
+
+alterTableAddUniqueConstraint ::
+  forall m.
+  ( MonadBaseControl IO m
+  , MonadIO m
+  ) =>
+  EntityDef ->
+  ConstraintNameDB ->
+  [FieldNameDB] ->
+  ReaderT SqlBackend m ()
+alterTableAddUniqueConstraint entity cname cols = do
   if checkAllFieldsValid entity cols
-    then do
-      constraintRes <- queryHasConstraint cname
-      if constraintRes
-        then -- the constraint already exists so do nothing
-          pure ()
-        else -- if it doesn't exist then add a new constraint
-          handle alterTableExceptHandler (rawExecute queryAddConstraint [])
+    then handle alterTableExceptHandler (rawExecute queryAddConstraint [])
     else throwErr "Some of the unique values which that are being added to the constraint don't correlate with what exists"
   where
     queryAddConstraint :: Text.Text
@@ -60,16 +75,22 @@ alterTable entity (AddUniqueConstraint cname cols) = do
         , " ADD CONSTRAINT "
         , unConstraintNameDB cname
         , " UNIQUE("
-        , Text.intercalate "," $ map escapeDBName' cols
+        , Text.intercalate "," $ map unFieldNameDB cols
         , ")"
         ]
 
-    escapeDBName' :: FieldNameDB -> Text.Text
-    escapeDBName' = unFieldNameDB
-
     throwErr :: forall m'. MonadIO m' => [Char] -> ReaderT SqlBackend m' ()
     throwErr e = liftIO $ throwIO (DbAlterTableException e sqlError)
-alterTable entity (DropUniqueConstraint cname) =
+
+alterTableDropUniqueConstraint ::
+  forall m.
+  ( MonadBaseControl IO m
+  , MonadIO m
+  ) =>
+  EntityDef ->
+  ConstraintNameDB ->
+  ReaderT SqlBackend m ()
+alterTableDropUniqueConstraint entity cname =
   handle alterTableExceptHandler (rawExecute query [])
   where
     query :: Text.Text

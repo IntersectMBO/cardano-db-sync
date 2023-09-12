@@ -34,7 +34,6 @@ import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Rollback
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
-import Cardano.DbSync.Util.Constraint (epochStakeConstraintName, rewardConstraintName)
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
 import Cardano.Ledger.Shelley.AdaPots as Shelley
 import Cardano.Prelude
@@ -46,7 +45,6 @@ import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
-import Database.Persist.Postgresql (FieldNameDB (..), PersistEntity (entityDef))
 import Database.Persist.SqlBackend.Internal
 import Database.Persist.SqlBackend.Internal.StatementCache
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
@@ -91,10 +89,6 @@ applyAndInsertBlockMaybe syncEnv cblk = do
           void $ migrateStakeDistr syncEnv (apOldLedger applyRes)
           insertBlock syncEnv cblk applyRes True tookSnapshot
           liftIO $ setConsistentLevel syncEnv Consistent
-          -- now that we have caught up with the tip of the chain
-          -- we can put the constraints on rewards table
-          lift addRewardTableConstraint
-          lift addEpochStakeTableConstraint
         Right blockId | Just (adaPots, slotNo, epochNo) <- getAdaPots applyRes -> do
           replaced <- lift $ DB.replaceAdaPots blockId $ mkAdaPots blockId slotNo epochNo adaPots
           if replaced
@@ -124,35 +118,6 @@ applyAndInsertBlockMaybe syncEnv cblk = do
     getNewEpoch :: ApplyResult -> Maybe EpochNo
     getNewEpoch appRes =
       Generic.neEpoch <$> maybeFromStrict (apNewEpoch appRes)
-
-addRewardTableConstraint ::
-  forall m. (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m ()
-addRewardTableConstraint = do
-  let entityD = entityDef $ Proxy @DB.Reward
-  DB.alterTable
-    entityD
-    ( DB.AddUniqueConstraint
-        rewardConstraintName
-        [ FieldNameDB "addr_id"
-        , FieldNameDB "type"
-        , FieldNameDB "earned_epoch"
-        , FieldNameDB "pool_id"
-        ]
-    )
-
-addEpochStakeTableConstraint ::
-  forall m. (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m ()
-addEpochStakeTableConstraint = do
-  let entityD = entityDef $ Proxy @DB.EpochStake
-  DB.alterTable
-    entityD
-    ( DB.AddUniqueConstraint
-        epochStakeConstraintName
-        [ FieldNameDB "epoch_no"
-        , FieldNameDB "addr_id"
-        , FieldNameDB "pool_id"
-        ]
-    )
 
 insertBlock ::
   SyncEnv ->
