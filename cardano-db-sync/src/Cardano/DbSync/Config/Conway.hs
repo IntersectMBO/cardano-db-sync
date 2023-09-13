@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Cardano.DbSync.Config.Conway (
   ConwayGenesisError (..),
@@ -17,6 +18,7 @@ import Control.Monad.Trans.Except.Extra (firstExceptT, handleIOExceptT, hoistEit
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as ByteString
 import Data.ByteString.Base16 as Base16
+import Data.Default.Class (def)
 import qualified Data.Text as Text
 import Prelude ()
 
@@ -24,22 +26,25 @@ type ExceptIO e = ExceptT e IO
 
 data ConwayGenesisError
   = GenesisReadError !FilePath !Text
-  | GenesisHashMismatch !GenesisHashShelley !GenesisHashShelley -- actual, expected
+  | GenesisHashMismatch !GenesisHashConway !GenesisHashConway -- actual, expected
   | GenesisDecodeError !FilePath !Text
   deriving (Eq, Show)
 
 readConwayGenesisConfig ::
   SyncNodeConfig ->
   ExceptIO SyncNodeError (ConwayGenesis StandardCrypto)
-readConwayGenesisConfig enc =
-  firstExceptT (SNErrConwayConfig file . renderConwayGenesisError) $
-    readGenesis (GenesisFile file) Nothing
+readConwayGenesisConfig SyncNodeConfig {..} =
+  case dncConwayGenesisFile of
+    Just file -> readConwayGenesisConfig' file dncConwayGenesisHash
+    Nothing -> pure (ConwayGenesis def)
   where
-    file = unGenesisFile $ dncConwayGenesisFile enc
+    readConwayGenesisConfig' file hash =
+      firstExceptT (SNErrConwayConfig (unGenesisFile file) . renderConwayGenesisError) $
+        readGenesis file hash
 
 readGenesis ::
   GenesisFile ->
-  Maybe GenesisHashShelley ->
+  Maybe GenesisHashConway ->
   ExceptIO ConwayGenesisError (ConwayGenesis StandardCrypto)
 readGenesis (GenesisFile file) expectedHash = do
   content <- readFile' file
@@ -59,7 +64,7 @@ decodeGenesis f =
     . Aeson.eitherDecodeStrict'
 
 checkExpectedGenesisHash ::
-  Maybe GenesisHashShelley ->
+  Maybe GenesisHashConway ->
   ByteString ->
   ExceptIO ConwayGenesisError ()
 checkExpectedGenesisHash Nothing _ = pure ()
@@ -67,7 +72,7 @@ checkExpectedGenesisHash (Just expected) content
   | actualHash == expected = pure ()
   | otherwise = left (GenesisHashMismatch actualHash expected)
   where
-    actualHash = GenesisHashShelley $ hashWith identity content
+    actualHash = GenesisHashConway $ hashWith identity content
 
 renderConwayGenesisError :: ConwayGenesisError -> Text
 renderConwayGenesisError = \case
@@ -95,5 +100,5 @@ renderConwayGenesisError = \case
       , err
       ]
 
-renderHash :: GenesisHashShelley -> Text
-renderHash (GenesisHashShelley h) = decodeUtf8 $ Base16.encode (hashToBytes h)
+renderHash :: GenesisHashConway -> Text
+renderHash = decodeUtf8 . Base16.encode . hashToBytes . unGenesisHashConway

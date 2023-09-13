@@ -36,7 +36,7 @@ import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Db (MigrationDir, PGPassSource (..))
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
-import Data.Aeson (FromJSON (..), Object, Value (..), (.:), (.:?))
+import Data.Aeson (FromJSON (..), Object, ToJSON (..), Value (..), (.:), (.:?))
 import qualified Data.Aeson as Aeson
 import Data.Aeson.Types (Parser, typeMismatch)
 import Ouroboros.Consensus.Cardano.CanHardFork (TriggerHardFork (..))
@@ -102,8 +102,8 @@ data SyncNodeConfig = SyncNodeConfig
   , dncShelleyGenesisHash :: !GenesisHashShelley
   , dncAlonzoGenesisFile :: !GenesisFile
   , dncAlonzoGenesisHash :: !GenesisHashAlonzo
-  , dncConwayGenesisFile :: !GenesisFile
-  , dncConwayGenesisHash :: !GenesisHashConway
+  , dncConwayGenesisFile :: !(Maybe GenesisFile)
+  , dncConwayGenesisHash :: !(Maybe GenesisHashConway)
   , dncByronProtocolVersion :: !Byron.ProtocolVersion
   , dncShelleyHardFork :: !TriggerHardFork
   , dncAllegraHardFork :: !TriggerHardFork
@@ -126,25 +126,26 @@ newtype GenesisFile = GenesisFile
   { unGenesisFile :: FilePath
   }
   deriving (Show)
+  deriving newtype (FromJSON, ToJSON)
 
 newtype GenesisHashByron = GenesisHashByron
   { unGenesisHashByron :: Text
   }
-  deriving newtype (Eq, Show)
+  deriving newtype (Eq, Show, ToJSON, FromJSON)
 
 newtype GenesisHashShelley = GenesisHashShelley
   { unGenesisHashShelley :: Crypto.Hash Crypto.Blake2b_256 ByteString
   }
-  deriving newtype (Eq, Show)
+  deriving newtype (Eq, Show, ToJSON, FromJSON)
 
 newtype GenesisHashAlonzo = GenesisHashAlonzo
   { unGenesisHashAlonzo :: Crypto.Hash Crypto.Blake2b_256 ByteString
   }
-  deriving newtype (Eq, Show)
+  deriving newtype (Eq, Show, ToJSON, FromJSON)
 
 newtype GenesisHashConway = GenesisHashConway
   {unGenesisHashConway :: Crypto.Hash Crypto.Blake2b_256 ByteString}
-  deriving newtype (Eq, Show)
+  deriving newtype (Eq, Show, ToJSON, FromJSON)
 
 newtype LedgerStateDir = LedgerStateDir
   { unLedgerStateDir :: FilePath

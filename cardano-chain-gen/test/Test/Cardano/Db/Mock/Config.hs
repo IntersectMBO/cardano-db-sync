@@ -9,12 +9,14 @@ module Test.Cardano.Db.Mock.Config (
   CommandLineArgs (..),
   initCommandLineArgs,
   babbageConfigDir,
+  conwayConfigDir,
   alonzoConfigDir,
   emptyMetricsSetters,
   fingerprintRoot,
   getDBSyncPGPass,
   getPoolLayer,
   mkConfig,
+  mkSyncNodeConfig,
   mkConfigDir,
   mkFingerPrint,
   mkMutableDir,
@@ -112,6 +114,9 @@ data CommandLineArgs = CommandLineArgs
 babbageConfigDir :: FilePath
 babbageConfigDir = "config"
 
+conwayConfigDir :: FilePath
+conwayConfigDir = "config-conway"
+
 alonzoConfigDir :: FilePath
 alonzoConfigDir = "config-alonzo"
 
@@ -197,9 +202,8 @@ getPoolLayer env = do
       nullTracer
       pool
 
-mkConfig :: FilePath -> FilePath -> CommandLineArgs -> IO Config
-mkConfig staticDir mutableDir cmdLineArgs = do
-  config <- readSyncNodeConfig $ ConfigFile (staticDir </> "test-db-sync-config.json")
+mkConfig :: FilePath -> FilePath -> CommandLineArgs -> SyncNodeConfig -> IO Config
+mkConfig staticDir mutableDir cmdLineArgs config = do
   genCfg <- runOrThrowIO $ runExceptT (readCardanoGenesisConfig config)
   let (pInfoDbSync, _) = mkProtocolInfoCardano genCfg []
   creds <- mkShelleyCredentials $ staticDir </> "pools" </> "bulk1.creds"
@@ -207,6 +211,10 @@ mkConfig staticDir mutableDir cmdLineArgs = do
   forging' <- forging
   syncPars <- mkSyncNodeParams staticDir mutableDir cmdLineArgs
   pure $ Config (Consensus.pInfoConfig pInfoDbSync) pInfoDbSync pInfoForger forging' syncPars
+
+mkSyncNodeConfig :: FilePath -> IO SyncNodeConfig
+mkSyncNodeConfig staticDir =
+  readSyncNodeConfig $ ConfigFile (staticDir </> "test-db-sync-config.json")
 
 mkShelleyCredentials :: FilePath -> IO [ShelleyLeaderCredentials StandardCrypto]
 mkShelleyCredentials bulkFile = do
@@ -333,7 +341,7 @@ withFullConfig' ::
   IO a
 withFullConfig' hasFingerprint shouldLog cmdLineArgs configFilePath testLabelFilePath action iom migr = do
   recreateDir mutableDir
-  cfg <- mkConfig configDir mutableDir cmdLineArgs
+  cfg <- mkConfig configDir mutableDir cmdLineArgs =<< mkSyncNodeConfig configDir
   fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabelFilePath else pure Nothing
   let dbsyncParams = syncNodeParams cfg
   trce <-
@@ -373,5 +381,5 @@ recreateDir path = do
   removePathForcibly path
   createDirectoryIfMissing True path
 
-textShow :: Show a => a -> Text
+textShow :: (Show a) => a -> Text
 textShow = Text.pack . show
