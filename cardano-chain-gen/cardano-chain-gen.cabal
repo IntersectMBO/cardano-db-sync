@@ -142,10 +142,13 @@ test-suite cardano-chain-gen
                         Test.Cardano.Db.Mock.Unit.Babbage.Simple
                         Test.Cardano.Db.Mock.Unit.Babbage.Stake
                         Test.Cardano.Db.Mock.Unit.Babbage.Tx
+                        Test.Cardano.Db.Mock.Unit.Conway
+                        Test.Cardano.Db.Mock.Unit.Conway.Config
                         Test.Cardano.Db.Mock.UnifiedApi
                         Test.Cardano.Db.Mock.Validate
 
-  build-depends:        async
+  build-depends:        aeson
+                      , async
                       , base
                       , bytestring
                       , cardano-api
