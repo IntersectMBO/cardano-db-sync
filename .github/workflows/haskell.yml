@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        compiler-nix-name: [ghc8107]
+        compiler-nix-name: [ghc8107, ghc928, ghc962]
 
     steps:
       - name: Checkout code
