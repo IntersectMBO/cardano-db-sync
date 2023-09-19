@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -30,6 +31,7 @@ import Cardano.Ledger.BaseTypes (Network)
 import qualified Cardano.Ledger.Coin as Shelley
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
+import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
 import Control.Monad.Extra (mapMaybeM)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Map.Strict as Map
@@ -69,8 +71,11 @@ insertEpochStake ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertEpochStake syncEnv nw epochNo stakeChunk = do
   let cache = envCache syncEnv
+  DB.ManualDbConstraints {..} <- liftIO $ readTVarIO $ envDbConstraints syncEnv
   dbStakes <- mapM (mkStake cache) stakeChunk
-  lift $ DB.insertManyEpochStakes constraintNameEpochStake dbStakes
+  let chunckDbStakes = splittRecordsEvery 100000 dbStakes
+  -- minimising the bulk inserts into hundred thousand chunks to improve performance
+  forM_ chunckDbStakes $ \dbs -> lift $ DB.insertManyEpochStakes dbConstraintEpochStake constraintNameEpochStake dbs
   where
     mkStake ::
       (MonadBaseControl IO m, MonadIO m) =>
@@ -90,17 +95,19 @@ insertEpochStake syncEnv nw epochNo stakeChunk = do
 
 insertRewards ::
   (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
   Network ->
   EpochNo ->
   EpochNo ->
   Cache ->
   [(StakeCred, Set Generic.Reward)] ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertRewards nw earnedEpoch spendableEpoch cache rewardsChunk = do
+insertRewards syncEnv nw earnedEpoch spendableEpoch cache rewardsChunk = do
+  DB.ManualDbConstraints {..} <- liftIO $ readTVarIO $ envDbConstraints syncEnv
   dbRewards <- concatMapM mkRewards rewardsChunk
-  let chunckDbRewards = splittRewardsEvery 100000 dbRewards
+  let chunckDbRewards = splittRecordsEvery 100000 dbRewards
   -- minimising the bulk inserts into hundred thousand chunks to improve performance
-  forM_ chunckDbRewards $ \rws -> lift $ DB.insertManyRewards constraintNameReward rws
+  forM_ chunckDbRewards $ \rws -> lift $ DB.insertManyRewards dbConstraintRewards constraintNameReward rws
   where
     mkRewards ::
       (MonadBaseControl IO m, MonadIO m) =>
@@ -143,8 +150,8 @@ insertRewards nw earnedEpoch spendableEpoch cache rewardsChunk = do
     queryPool (Strict.Just poolHash) =
       Just <$> liftLookupFail "insertRewards.queryPoolKeyWithCache" (queryPoolKeyWithCache cache CacheNew poolHash)
 
-splittRewardsEvery :: Int -> [a] -> [[a]]
-splittRewardsEvery val = go
+splittRecordsEvery :: Int -> [a] -> [[a]]
+splittRecordsEvery val = go
   where
     go [] = []
     go ys =
@@ -158,7 +165,7 @@ insertPoolDepositRefunds ::
   Generic.Rewards ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolDepositRefunds syncEnv epochNo refunds = do
-  insertRewards nw epochNo epochNo (envCache syncEnv) (Map.toList rwds)
+  insertRewards syncEnv nw epochNo epochNo (envCache syncEnv) (Map.toList rwds)
   liftIO . logInfo tracer $ "Inserted " <> show (Generic.rewardsCount refunds) <> " deposit refund rewards"
   where
     tracer = getTrace syncEnv

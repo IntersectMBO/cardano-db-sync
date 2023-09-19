@@ -76,7 +76,6 @@ module Cardano.Db.Insert (
   insertBlockChecked,
 ) where
 
-import Cardano.Db.AlterTable (queryHasConstraint)
 import Cardano.Db.Query
 import Cardano.Db.Schema
 import Cardano.Db.Text
@@ -173,10 +172,22 @@ insertEpochSyncTime = insertReplace "EpochSyncTime"
 insertExtraKeyWitness :: (MonadBaseControl IO m, MonadIO m) => ExtraKeyWitness -> ReaderT SqlBackend m ExtraKeyWitnessId
 insertExtraKeyWitness = insertUnchecked "ExtraKeyWitness"
 
-insertManyEpochStakes :: (MonadBaseControl IO m, MonadIO m) => ConstraintNameDB -> [EpochStake] -> ReaderT SqlBackend m ()
+insertManyEpochStakes ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  -- | Does constraint already exists
+  Bool ->
+  ConstraintNameDB ->
+  [EpochStake] ->
+  ReaderT SqlBackend m ()
 insertManyEpochStakes = insertManyWithManualUnique "Many EpochStake"
 
-insertManyRewards :: (MonadBaseControl IO m, MonadIO m) => ConstraintNameDB -> [Reward] -> ReaderT SqlBackend m ()
+insertManyRewards ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  -- | Does constraint already exists
+  Bool ->
+  ConstraintNameDB ->
+  [Reward] ->
+  ReaderT SqlBackend m ()
 insertManyRewards = insertManyWithManualUnique "Many Rewards"
 
 insertManyTxIn :: (MonadBaseControl IO m, MonadIO m) => [TxIn] -> ReaderT SqlBackend m [TxInId]
@@ -388,16 +399,17 @@ insertManyUnique ::
   , PersistEntity record
   ) =>
   String ->
+  -- | Does constraint already exists
+  Bool ->
   ConstraintNameDB ->
   [record] ->
   ReaderT SqlBackend m ()
-insertManyUnique vtype constraintName records = do
-  constraintExists <- queryHasConstraint constraintName
+insertManyUnique vtype constraintExists constraintName records = do
   unless (null records) $
-    handle exceptHandler (rawExecute (query constraintExists) values)
+    handle exceptHandler (rawExecute query values)
   where
-    query :: Bool -> Text
-    query constraintExists =
+    query :: Text
+    query =
       Text.concat
         [ "INSERT INTO "
         , unEntityNameDB (entityDB . entityDef $ records)
@@ -409,14 +421,14 @@ insertManyUnique vtype constraintName records = do
             . Util.parenWrapped
             . Util.commaSeparated
             $ placeholders
-        , conflictQuery constraintExists
+        , conflictQuery
         ]
 
     values :: [PersistValue]
     values = concatMap (map toPersistValue . toPersistFields) records
 
-    conflictQuery :: Bool -> Text
-    conflictQuery constraintExists =
+    conflictQuery :: Text
+    conflictQuery =
       if constraintExists
         then
           Text.concat
@@ -441,6 +453,8 @@ insertManyWithManualUnique ::
   , PersistRecordBackend record SqlBackend
   ) =>
   String ->
+  -- | Does constraint already exists
+  Bool ->
   ConstraintNameDB ->
   [record] ->
   ReaderT SqlBackend m ()
@@ -457,7 +471,7 @@ insertManyUncheckedUnique ::
   ReaderT SqlBackend m ()
 insertManyUncheckedUnique vtype records = do
   let constraintName = uniqueDBName $ onlyOneUniqueDef (Proxy @record)
-  insertManyUnique vtype constraintName records
+  insertManyUnique vtype True constraintName records
 
 -- Insert, getting PostgreSQL to check the uniqueness constaint. If it is violated,
 -- simply returns the Key, without changing anything.

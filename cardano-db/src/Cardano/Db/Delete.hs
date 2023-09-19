@@ -23,6 +23,7 @@ import Cardano.BM.Trace (Trace, logWarning, nullTracer)
 import Cardano.Db.MinId
 import Cardano.Db.Query hiding (isJust)
 import Cardano.Db.Schema
+import Cardano.Prelude (Int64)
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad (void)
 import Control.Monad.Extra (whenJust)
@@ -62,14 +63,14 @@ deleteBlocksBlockIdNotrace :: MonadIO m => BlockId -> ReaderT SqlBackend m ()
 deleteBlocksBlockIdNotrace = void . deleteBlocksBlockId nullTracer
 
 -- | Delete starting from a 'BlockId'.
-deleteBlocksBlockId :: MonadIO m => Trace IO Text -> BlockId -> ReaderT SqlBackend m (MinIds, Word64)
+deleteBlocksBlockId :: MonadIO m => Trace IO Text -> BlockId -> ReaderT SqlBackend m (MinIds, Word64, Int64)
 deleteBlocksBlockId trce blockId = do
   mMinIds <- fmap (textToMinId =<<) <$> queryReverseIndexBlockId blockId
   (cminIds, completed) <- findMinIdsRec mMinIds mempty
   mTxId <- queryMinRefId TxBlockId blockId
   minIds <- if completed then pure cminIds else completeMinId mTxId cminIds
-  txInDeleted <- deleteTablesAfterBlockId blockId mTxId minIds
-  pure (minIds, txInDeleted)
+  (txInDeleted, blockCountInt) <- deleteTablesAfterBlockId blockId mTxId minIds
+  pure (minIds, txInDeleted, blockCountInt)
   where
     findMinIdsRec :: MonadIO m => [Maybe MinIds] -> MinIds -> ReaderT SqlBackend m (MinIds, Bool)
     findMinIdsRec [] minIds = pure (minIds, True)
@@ -101,14 +102,14 @@ completeMinId mTxId minIds = do
         Just txOutId -> whenNothingQueryMinRefId (minMaTxOutId minIds) MaTxOutTxOutId txOutId
       pure $ MinIds mTxInId mTxOutId mMaTxOutId
 
-deleteTablesAfterBlockId :: MonadIO m => BlockId -> Maybe TxId -> MinIds -> ReaderT SqlBackend m Word64
+deleteTablesAfterBlockId :: MonadIO m => BlockId -> Maybe TxId -> MinIds -> ReaderT SqlBackend m (Word64, Int64)
 deleteTablesAfterBlockId blkId mtxId minIds = do
   deleteWhere [AdaPotsBlockId >=. blkId]
   deleteWhere [ReverseIndexBlockId >=. blkId]
   deleteWhere [EpochParamBlockId >=. blkId]
   txInDeleted <- deleteTablesAfterTxId mtxId (minTxInId minIds) (minTxOutId minIds) (minMaTxOutId minIds)
-  deleteWhere [BlockId >=. blkId]
-  pure txInDeleted
+  blockCountNum <- deleteWhereCount [BlockId >=. blkId]
+  pure (txInDeleted, blockCountNum)
 
 deleteTablesAfterTxId :: MonadIO m => Maybe TxId -> Maybe TxInId -> Maybe TxOutId -> Maybe MaTxOutId -> ReaderT SqlBackend m Word64
 deleteTablesAfterTxId mtxId mtxInId mtxOutId mmaTxOutId = do

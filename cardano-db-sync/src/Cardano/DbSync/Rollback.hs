@@ -10,6 +10,7 @@ module Cardano.DbSync.Rollback (
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo)
+import Cardano.Db (ManualDbConstraints (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (SyncEnv (..))
@@ -20,7 +21,7 @@ import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Constraint (addEpochStakeTableConstraint, addRewardTableConstraint)
 import Cardano.Prelude
-import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
+import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
 import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.ByteString.Short as SBS
@@ -28,7 +29,6 @@ import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (getOneEraHash)
 import Ouroboros.Network.Block
 import Ouroboros.Network.Point
-import Cardano.Db (ManualDbConstraints(..))
 
 -- Rollbacks are done in an Era generic way based on the 'Point' we are
 -- rolling back to.
@@ -51,19 +51,21 @@ rollbackFromBlockNo syncEnv blkNo = do
         , textShow blkNo
         ]
     lift $ do
-      (minIds, txInDeleted) <- DB.deleteBlocksBlockId trce blockId
+      (minIds, txInDeleted, deletedBlockCount) <- DB.deleteBlocksBlockId trce blockId
       whenConsumeOrPruneTxOut syncEnv $
         DB.setNullTxOut trce (DB.minTxInId minIds) txInDeleted
       DB.deleteEpochRows epochNo
+      when (deletedBlockCount > 0) $ do
+        -- We use custom constraints to improve input speeds when syncing.
+        -- If they don't already exists we add them here as once a rollback has happened
+        -- we always need a the constraints.
+        unless (dbConstraintRewards dbConstraints) addRewardTableConstraint
+        unless (dbConstraintEpochStake dbConstraints) addEpochStakeTableConstraint
+        liftIO $ atomically $ writeTVar (envDbConstraints syncEnv) (DB.ManualDbConstraints True True)
+
     lift $ rollbackCache cache blockId
 
     liftIO . logInfo trce $ "Blocks deleted"
-    -- We use custom constraints to improve input speeds when syncing.
-    -- If they don't already exists we add them here as once a rollback has happened
-    -- we always need a the constraints.
-    when (dbConstraintRewards dbConstraints && dbConstraintEpochStake dbConstraints) $ do
-      lift addRewardTableConstraint
-      lift addEpochStakeTableConstraint
   where
     trce = getTrace syncEnv
     cache = envCache syncEnv
