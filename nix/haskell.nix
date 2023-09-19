@@ -72,6 +72,7 @@ let
         nix
         pkgconfig
         sqlite-interactive
+        shellcheck
         tmux
         git
       ] ++ (with haskellPackages; [
