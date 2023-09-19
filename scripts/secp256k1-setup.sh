@@ -6,11 +6,11 @@
 
 # Unofficial bash strict mode.
 # See: http://redsymbol.net/articles/unofficial-bash-strict-mode/
-set -u
+set -eu
 set -o pipefail
 
 if [[ $# -ne 1 ]]; then
-    echo 'Usage: $0 SECP256K1_REF' >&2
+    echo "Usage: $0 SECP256K1_REF" >&2
     exit 2
 fi
 
@@ -31,12 +31,15 @@ esac
 if [ ! -d "secp256k1" ]; then
     git clone https://github.com/bitcoin-core/secp256k1.git secp256k1
 fi 
-pushd secp256k1
-git reset --hard $SECP256K1_REF
+
+pushd secp256k1 || exit 1
+
+git reset --hard "$SECP256K1_REF"
 ./autogen.sh
 ./configure $PREFIX --enable-module-schnorrsig --enable-experimental
 make
 make check
 $INSTAL_CMD
-popd
+
+popd || exit 2
 
