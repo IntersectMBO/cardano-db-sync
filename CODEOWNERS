@@ -12,7 +12,7 @@ CONTRIBUTING.rst             @input-output-hk/docs-access @input-output-hk/core-
 # DevOps
 .buildkite                   @input-output-hk/core-tech-devx @input-output-hk/core-tech-release
 .github                      @input-output-hk/core-tech-devx @input-output-hk/core-tech-release
-config                       @input-output-hk/core-tech-devx @input-output-hk/core-tech-release
+/config                      @input-output-hk/core-tech-devx @input-output-hk/core-tech-release
 nix                          @input-output-hk/core-tech-devx @input-output-hk/core-tech-release
 *.nix                        @input-output-hk/core-tech-devx @input-output-hk/core-tech-release
 flake.lock                   @input-output-hk/core-tech-devx @input-output-hk/core-tech-release
