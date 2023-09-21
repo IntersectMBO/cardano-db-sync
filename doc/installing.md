@@ -16,6 +16,10 @@ In addition, Cardano DB Sync requires the following software (instructions below
  * [libsodium-vrf](https://github.com/input-output-hk/libsodium)
  * [secp256k1](https://github.com/bitcoin-core/secp256k1)
  * [blst](https://github.com/supranational/blst)
+ 
+ macOS:
+ 
+* [x-code](https://developer.apple.com/xcode/resources/)
 
 Create a working directory for your builds:
 
@@ -157,7 +161,6 @@ Build it:
 ```bash
 ./build.sh
 ```
-
 Install it:
 
 ```bash
@@ -182,6 +185,29 @@ sudo chmod 644 \
   /usr/local/lib/libblst.* \
   /usr/local/include/{blst.*,blst_aux.h}
 ```
+
+#### MACOS:
+
+If you hit the following error on macOS:
+```bash
++ cc -O2 -fno-builtin -fPIC -Wall -Wextra -Werror -c ./src/server.c
+In file included from ./src/server.c:7:
+In file included from ./src/keygen.c:7:
+In file included from ./src/consts.h:8:
+./src/vect.h:402:11: fatal error: 'stdlib.h' file not found
+# include <stdlib.h>
+```
+
+check you have x-code command line tools installed or try install them by running:
+```bash
+xcode-select --install
+```
+
+if the error still arrises copy the content that x-code installs into `/usr/local/include/` making sure the folder is also on you `$PATH`:
+```bash
+sudo cp -R -a /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/* /usr/local/include/
+```
+
 
 ## Install Cardano DB Sync
 
