@@ -41,7 +41,7 @@ We believe there is a way to get the query performance of <span style="color:gre
 
 ## Technical details about the benchmarks
 
-The benchmarks were executed on a pc with CPU i7-12700K, Gen4 NVMe with enough space and memory. The queries and the plots were done by a pythong script that can be found at TODO
+The benchmarks were executed on a pc with CPU i7-12700K, Gen4 NVMe with enough space and memory. The queries and the plots were done by a pythong script that can be found https://github.com/input-output-hk/cardano-db-sync/blob/blog/blog/plots.py
 
 ## Conclusion
 
