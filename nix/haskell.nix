@@ -8,46 +8,37 @@
 , extraCompilers ? []
 }:
 let
-
   inherit (haskell-nix) haskellLib;
 
   preCheck = ''
-    echo pre-check
-    initdb --encoding=UTF8 --locale=en_US.UTF-8 --username=postgres $NIX_BUILD_TOP/db-dir
-    postgres -D $NIX_BUILD_TOP/db-dir -c listen_addresses="" -k $TMP &
-    PSQL_PID=$!
-    echo $PSQL_PID > postgres.pid
-    sleep 10
-    if (echo '\q' | psql -h $TMP postgres postgres); then
-      echo "PostgreSQL server is verified to be started."
-    else
-      echo "Failed to connect to local PostgreSQL server."
-      exit 2
-    fi
-    ls -ltrh $NIX_BUILD_TOP
     DBUSER=$(whoami)
-    DBNAME=$DBUSER
+
+    cp -vir ${../schema} ../schema
+    cp -vir ${../scripts} ../scripts
+
+    # Create pgpass file
     export PGPASSFILE=$NIX_BUILD_TOP/pgpass
     echo "$TMP:5432:$DBUSER:$DBUSER:*" > $PGPASSFILE
-    cp -vir ${../schema} ../schema
-    chmod 600 $PGPASSFILE
-    psql -h $TMP postgres postgres <<EOF
-      create role $DBUSER with createdb login password '$DBPASS';
-      alter user $DBUSER with superuser;
-      create database $DBNAME with owner = $DBUSER;
-      \\connect $DBNAME
-      ALTER SCHEMA public   OWNER TO $DBUSER;
-    EOF
+
+    # Start postgresql
+    bash ../scripts/postgresql-test.sh \
+      -d "$NIX_BUILD_TOP/db-dir" \
+      -s "$TMP" \
+      -u "$DBUSER" \
+      start
   '';
 
   postCheck = ''
-    echo post-check
     DBNAME=$(whoami)
     NAME=db_schema.sql
     mkdir -p $out/nix-support
+
     echo "Dumping schema to db_schema.sql"
     pg_dump -h $TMP -s $DBNAME > $out/$NAME
-    kill $(cat postgres.pid)
+
+    # Stop postgres
+    bash ../scripts/postgresql-test.sh -d "$NIX_BUILD_TOP/db-dir" stop
+
     echo "Adding to build products..."
     echo "file binary-dist $out/$NAME" > $out/nix-support/hydra-build-products
   '';

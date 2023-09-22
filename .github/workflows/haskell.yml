@@ -1,143 +1,83 @@
 name: Haskell CI
 
-on: [push]
+on:
+  push:
+  pull_request:
+  schedule:
+    # Everyday at 4:00 AM UTC
+    - cron: "0 4 * * *"
 
 jobs:
   build:
+    name: build
+    defaults:
+      run:
+        shell: devx {0}
     runs-on: ${{ matrix.os }}
-
-
-    env:
-      # Modify this value to "invalidate" the cabal cache.
-      CABAL_CACHE_VERSION: "2023-05-05"
 
     strategy:
       fail-fast: false
       matrix:
-        cabal: ["3.10.1.0"]
-        ghc: ["8.10.7", "9.2.7", "9.6.2" ]
         os: [ubuntu-latest, macos-latest]
+        compiler-nix-name: [ghc8107, ghc928, ghc962]
 
     steps:
-    - name: Install Haskell
-      uses: input-output-hk/actions/haskell@latest
-      id: setup-haskell
-      with:
-        ghc-version: ${{ matrix.ghc }}
-        cabal-version: ${{ matrix.cabal }}
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Install GHC and Cabal
+        uses: input-output-hk/actions/devx@latest
+        with:
+          platform: ${{ matrix.os == 'ubuntu-latest' && 'x86_64-linux' || 'x86_64-darwin' }}
+          target-platform: ""
+          compiler-nix-name: ${{ matrix.compiler-nix-name }}
+          minimal: false
+          # enable IOG flavour to bring in all the crypto libraries we need.
+          iog: true
+      - name: cabal update
+        run: cabal update
+      - name: cache cabal
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cabal-devx/packages
+            ~/.cabal-devx/store
+          key: ${{ runner.os }}-${{ matrix.compiler-nix-name }}-${{ hashFiles('**/*.cabal', '**/cabal.project', '**/cabal.project.freeze') }}
+          restore-keys: ${{ runner.os }}-${{ matrix.compiler-nix-name }}-
+      - name: cabal build dependencies
+        run: cabal build all -j --enable-tests --only-dependencies
+      - name: cabal build
+        run: cabal build all -j --enable-tests
+      - name: postgres init
+        working-directory: 
+        run: |
+          # Set up environment
+          PG_DIR="$(mktemp -d)"
+          DB_DIR="${PG_DIR}/db"
+          DBUSER=$(whoami)
+          DBNAME=$DBUSER
 
-    - name: Install system dependencies
-      uses: input-output-hk/actions/base@latest
-      with:
-        use-sodium-vrf: false # default is true
+          # Pass environment to subsequent steps
+          echo "PG_DIR=${PG_DIR}" >> "$GITHUB_ENV"
+          echo "DB_DIR=${DB_DIR}" >> "$GITHUB_ENV"
+          echo "DBUSER=${DBUSER}" >> "$GITHUB_ENV"
 
-    - uses: actions/checkout@v3
+          # Start postgres
+          ./scripts/postgresql-test.sh \
+            -s "$PG_DIR" \
+            -d "$DB_DIR" \
+            -u "$DBUSER" \
+            -n "$DBNAME" \
+            start
+      - name: cabal test
+        run: |
+          # Create pgpass file
+          export PGPASSFILE="${PG_DIR}/pgpass-testing"
+          echo "${PG_DIR}:5432:$DBUSER:$DBUSER:*" > $PGPASSFILE
+          chmod 600 $PGPASSFILE
 
-    - name: Select build directory
-      run: |
-        echo "$HOME/.cabal/bin"                 >> $GITHUB_PATH
-
-    - name: Install SystemD (Linux)
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        sudo apt-get update
-        sudo apt-get -y install libsystemd0 libsystemd-dev
-
-    - name: Install Postgres (Linux)
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libpq-dev libpq5 net-tools postgresql
-
-    - name: Post Install Cleanup (Linux)
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        sudo apt-get -y remove --purge software-properties-common
-        sudo apt-get -y autoremove
-
-    - name: Install Postgres support (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        brew install postgresql@14 libpq openssl@1.1 tree
-        tree /usr/local/opt/postgresql@14/lib/
-        echo "PKG_CONFIG_PATH=/usr/local/opt/icu4c/lib/pkgconfig:/usr/local/opt/postgresql@14/lib/postgresql@14/pkgconfig:/usr/local/opt/openssl/lib/pkgconfig:$PKG_CONFIG_PATH" | tee $GITHUB_ENV
-
-    - name: Start Postgresql service (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        brew services start postgresql
-        sudo mkdir -p /var/run/postgresql/
-        sudo ln -s /tmp/.s.PGSQL.5432 /var/run/postgresql/.s.PGSQL.5432
-
-    - name: Start Postgres service (Linux)
-      if: matrix.os == 'ubuntu-latest'
-      run: sudo pg_ctlcluster 14 main start
-
-    - name: Check if postgres is running
-      run: |
-        sleep 20
-        netstat -an
-        ls -al /var/run/postgresql/.s.PGSQL.5432 || true
-        ls -al || true
-
-    - name: Debug Pkgconfig
-      run: |
-        echo $PKG_CONFIG_PATH
-        pkg-config --list-all
-
-    - name: Haskell versions
-      run: |
-        ghc --version
-        cabal --version
-
-    - name: Cabal update
-      run: cabal update
-
-    - name: Cabal Configure
-      run: cabal configure --enable-tests --write-ghc-environment-files=always
-
-    - name: Configure to use libsodium
-      run: |
-        cat >> cabal.project.local <<EOF
-        package cardano-crypto-praos
-          flags: -external-libsodium-vrf
-        EOF
-
-    - name: Record dependencies
-      id: record-deps
-      run: |
-        cabal build all --dry-run --minimize-conflict-set
-        cat dist-newstyle/cache/plan.json | jq -r '."install-plan"[].id' | sort | uniq > dependencies.txt
-
-    - name: Cache Cabal store
-      uses: actions/cache@v3
-      with:
-        path: |
-          ${{ steps.setup-haskell.outputs.cabal-store }}
-          dist-newstyle
-        key: cache-${{ env.CABAL_CACHE_VERSION }}-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('dependencies.txt') }}
-
-    - name: Build dependencies
-      if: matrix.os == 'ubuntu-latest'
-      run: cabal build all -j --ghc-option=-j4 --enable-tests --only-dependencies
-
-    - name: Build
-      run: cabal build all -j --ghc-option=-j4 --enable-tests
-
-    - name: Set up database user (Linux)
-      if: matrix.os == 'ubuntu-latest'
-      run: sudo -u postgres createuser --createdb --superuser runner
-
-    - name: Set up database
-      run: |
-        cardano_db_sync_exe="$(cat dist-newstyle/cache/plan.json | jq -r '."install-plan"[] | select(."component-name" == "exe:cardano-db-sync") | ."bin-file"' | head)"
-
-        echo "Executable found at: $cardano_db_sync_exe"
-        chmod 600 config/pgpass-mainnet
-        chmod 600 cardano-chain-gen/test/testfiles/pgpass-testing
-
-        PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh --createdb
-        PGPASSFILE=cardano-chain-gen/test/testfiles/pgpass-testing scripts/postgresql-setup.sh --createdb
-
-    - name: Run tests
-      run: cabal test all -j1
+          # Run tests
+          cabal test all -j1
+      - name: postgres shutdown
+        if: ${{ always() }}
+        run: |
+          ./scripts/postgresql-test.sh -d "$DB_DIR" stop
