@@ -26,7 +26,7 @@ curl --remote-name-all --output-dir mainnet \
     https://book.world.dev.cardano.org/environments/mainnet/config.json \
     https://book.world.dev.cardano.org/environments/mainnet/db-sync-config.json \
     https://book.world.dev.cardano.org/environments/mainnet/submit-api-config.json \
-    https://book.world.dev.cardano.org/environments/mainnet/topology.json
+    https://book.world.dev.cardano.org/environments/mainnet/topology.json \
     https://book.world.dev.cardano.org/environments/mainnet/byron-genesis.json \
     https://book.world.dev.cardano.org/environments/mainnet/shelley-genesis.json \
     https://book.world.dev.cardano.org/environments/mainnet/alonzo-genesis.json \
