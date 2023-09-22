@@ -93,6 +93,7 @@ possible solutions.
 * [Schema Documentation][Schema Documentation]: The database schema documentation.
 * [Schema Management][Schema Management]: How the database schema is managed and modified.
 * [StateSnapshot][StateSnapshot]: Document the creation and restoration of state snapshot files.
+* [Upgrading PostgreSQL][UpgradingPostgres]
 * [Validation][Validation]: Explanation of validation done by the db-sync node and assumptions made.
 
 [InstallingNix]: doc/installing-with-nix.md
@@ -108,4 +109,5 @@ possible solutions.
 [Schema Management]: doc/schema-management.md
 [StateSnapshot]: doc/state-snapshot.md
 [Troubleshooting]: doc/troubleshooting.md
+[UpgradingPostgres]: doc/upgrading-postgresql.md
 [Validation]: doc/validation.md
