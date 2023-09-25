@@ -8,16 +8,22 @@ module Cardano.DbSync.Util.Constraint (
   constraintNameEpochStake,
   constraintNameReward,
   dbConstraintNamesExists,
-  alterConstraints,
+  addConstraintsIfNotExist,
   addRewardTableConstraint,
   addEpochStakeTableConstraint,
 ) where
 
+import Cardano.BM.Data.Trace (Trace)
+import Cardano.BM.Trace (logInfo)
 import Cardano.Db (ManualDbConstraints (..))
 import qualified Cardano.Db as DB
-import Cardano.Prelude (MonadIO, Proxy (..), ReaderT (runReaderT))
-import Control.Monad (when)
+import Cardano.DbSync.Api.Types (SyncEnv (..))
+import Cardano.Prelude (MonadIO (..), Proxy (..), ReaderT (runReaderT), atomically)
+import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
+import Control.Monad (unless)
 import Control.Monad.Trans.Control (MonadBaseControl)
+import Data.Text (Text, pack)
+import Database.Persist.EntityDef.Internal (EntityDef (..))
 import Database.Persist.Names (ConstraintNameDB (..), FieldNameDB (..))
 import Database.Persist.Postgresql (PersistEntity (..), SqlBackend)
 
@@ -45,18 +51,26 @@ queryRewardAndEpochStakeConstraints = do
       , dbConstraintEpochStake = resEpochStake
       }
 
-alterConstraints ::
+addConstraintsIfNotExist ::
   forall m.
   (MonadBaseControl IO m, MonadIO m) =>
-  ManualDbConstraints ->
+  SyncEnv ->
+  Trace IO Text ->
   ReaderT SqlBackend m ()
-alterConstraints ManualDbConstraints {..} = do
-  when dbConstraintRewards addRewardTableConstraint
-  when dbConstraintEpochStake addEpochStakeTableConstraint
+addConstraintsIfNotExist syncEnv trce = do
+  ManualDbConstraints {..} <- liftIO . readTVarIO $ envDbConstraints syncEnv
+  unless dbConstraintRewards (addRewardTableConstraint trce)
+  unless dbConstraintEpochStake (addEpochStakeTableConstraint trce)
+  liftIO
+    . atomically
+    $ writeTVar (envDbConstraints syncEnv) (DB.ManualDbConstraints True True)
 
 addRewardTableConstraint ::
-  forall m. (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m ()
-addRewardTableConstraint = do
+  forall m.
+  (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
+  ReaderT SqlBackend m ()
+addRewardTableConstraint trce = do
   let entityD = entityDef $ Proxy @DB.Reward
   DB.alterTable
     entityD
@@ -68,10 +82,14 @@ addRewardTableConstraint = do
         , FieldNameDB "pool_id"
         ]
     )
+  liftIO $ logNewConstraint trce entityD (unConstraintNameDB constraintNameReward)
 
 addEpochStakeTableConstraint ::
-  forall m. (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m ()
-addEpochStakeTableConstraint = do
+  forall m.
+  (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
+  ReaderT SqlBackend m ()
+addEpochStakeTableConstraint trce = do
   let entityD = entityDef $ Proxy @DB.EpochStake
   DB.alterTable
     entityD
@@ -82,3 +100,16 @@ addEpochStakeTableConstraint = do
         , FieldNameDB "pool_id"
         ]
     )
+  liftIO $ logNewConstraint trce entityD (unConstraintNameDB constraintNameEpochStake)
+
+logNewConstraint ::
+  Trace IO Text ->
+  EntityDef ->
+  Text ->
+  IO ()
+logNewConstraint trce tableName constraintName =
+  logInfo trce $
+    "The table "
+      <> pack (show tableName)
+      <> " was given a new unique constraint called "
+      <> constraintName
