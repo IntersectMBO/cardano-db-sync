@@ -206,8 +206,8 @@ countConsumed = do
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
-deleteAndUpdateConsumedTxOut :: MonadIO m => Trace IO Text -> Word64 -> ReaderT SqlBackend m ()
-deleteAndUpdateConsumedTxOut trce blockNoDiff = do
+deleteAndUpdateConsumedTxOut :: MonadIO m => Trace IO Text -> Bool -> Word64 -> ReaderT SqlBackend m ()
+deleteAndUpdateConsumedTxOut trce hasConsumedField blockNoDiff = do
   maxTxInId <- findMaxTxInId blockNoDiff
   case maxTxInId of
     Left errMsg -> liftIO $ logInfo trce $ "No tx_out was deleted: " <> errMsg
@@ -217,19 +217,18 @@ deleteAndUpdateConsumedTxOut trce blockNoDiff = do
     migrateNextPage :: MonadIO m => TxInId -> Word64 -> ReaderT SqlBackend m ()
     migrateNextPage mxTxInId offst = do
       page <- getInputPage offst pageSize
-      -- before page txinId delete after create extra collumn and update
-      mapM_ (handlePage mxTxInId) page
+      mapM_ (handlePageEntry mxTxInId) page
       when (fromIntegral (length page) == pageSize) $
         migrateNextPage mxTxInId $!
           offst
             + pageSize
 
-handlePage :: MonadIO m => TxInId -> (TxInId, TxId, Word64) -> ReaderT SqlBackend m ()
-handlePage maxTxInId (txInId, txId, index)
-  | txInId <= maxTxInId = deleteTxOutConsumed txId index
-  | otherwise = do
-      createConsumedTxOut
-      updateTxOutConsumedByTxInIdUnique txId index txInId
+    handlePageEntry :: MonadIO m => TxInId -> (TxInId, TxId, Word64) -> ReaderT SqlBackend m ()
+    handlePageEntry maxTxInId (txInId, txId, index)
+      | txInId <= maxTxInId = deleteTxOutConsumed txId index
+      | otherwise = do
+          when hasConsumedField createConsumedTxOut
+          updateTxOutConsumedByTxInIdUnique txId index txInId
 
 deleteConsumedTxOut :: forall m. MonadIO m => Trace IO Text -> Word64 -> ReaderT SqlBackend m ()
 deleteConsumedTxOut trce blockNoDiff = do
@@ -241,7 +240,7 @@ deleteConsumedTxOut trce blockNoDiff = do
 findMaxTxInId :: forall m. MonadIO m => Word64 -> ReaderT SqlBackend m (Either Text TxInId)
 findMaxTxInId blockNoDiff = do
   mBlockHeight <- queryBlockHeight
-  maybe (pure $ Left $ "No blocks found") deleteConsumed mBlockHeight
+  maybe (pure $ Left "No blocks found") deleteConsumed mBlockHeight
   where
     deleteConsumed :: Word64 -> ReaderT SqlBackend m (Either Text TxInId)
     deleteConsumed tipBlockNo = do

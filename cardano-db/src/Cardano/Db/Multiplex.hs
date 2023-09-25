@@ -106,10 +106,7 @@ runExtraMigrations trce blockNoDiff PruneConsumeMigration {..} = do
         (False, _, True) -> do
           shouldInsertToMigrationTable
           liftIO $ logInfo trce "Now Running extra migration prune tx_out"
-          ExtraCons.deleteAndUpdateConsumedTxOut trce blockNoDiff
-
-          liftIO $ logInfo trce "Running extra migrations consumed_tx_out and prune tx_out"
-          ExtraCons.migrateTxOut (Just trce)
+          ExtraCons.deleteAndUpdateConsumedTxOut trce hasConsumedField blockNoDiff
         (True, _, True) -> do
           shouldInsertToMigrationTable
           liftIO $ logInfo trce "Running extra migration prune tx_out"
