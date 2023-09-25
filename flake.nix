@@ -115,12 +115,16 @@
           inherit (project.args) src;
         };
 
+        shellcheck = pkgs.callPackage pkgs.shellCheck {
+          inherit (project.args) src;
+        };
+
         nixosTests = import ./nix/nixos/tests {
           inherit pkgs;
         };
 
         checks = project.flake'.checks // {
-          inherit hlint fourmolu;
+          inherit hlint fourmolu shellcheck;
         } // lib.optionalAttrs hostPlatform.isLinux (prefixNamesWith "nixosTests/" nixosTests);
 
         # This is used by `nix develop` to open a devShell
@@ -139,7 +143,7 @@
           crossPlatforms = p:
             lib.optional hostPlatform.isLinux p.musl64;
         }).ciJobs ({
-          inherit hlint fourmolu;
+          inherit hlint fourmolu shellcheck;
 
           packages = {
             inherit scripts;

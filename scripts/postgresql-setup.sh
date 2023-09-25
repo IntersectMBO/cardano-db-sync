@@ -52,13 +52,18 @@ function check_pgpass_file {
     exit 1
     fi
 
-	export PGHOST=$(cut -d ":" -f 1 "${PGPASSFILE}")
-	export PGPORT=$(cut -d ":" -f 2 "${PGPASSFILE}")
-	export PGDATABASE=$(cut -d ":" -f 3 "${PGPASSFILE}")
-	user=$(cut -d ":" -f 4 "${PGPASSFILE}")
-	if [ "$user" != "*" ]; then
-		export PGUSER=$user
-	fi;
+  PGHOST=$(cut -d ":" -f 1 "${PGPASSFILE}")
+  PGPORT=$(cut -d ":" -f 2 "${PGPASSFILE}")
+  PGDATABASE=$(cut -d ":" -f 3 "${PGPASSFILE}")
+  user=$(cut -d ":" -f 4 "${PGPASSFILE}")
+  if [ "$user" != "*" ]; then
+      PGUSER=$user
+      export PGUSER
+  fi;
+
+  export PGHOST
+  export PGPORT
+  export PGDATABASE
 }
 
 function check_for_psql {
@@ -308,7 +313,7 @@ case "${1:-""}" in
 		check_pgpass_file
 		check_for_psql
 		check_psql_superuser
-		if [ ${RESTORE_RECREATE_DB:-"Y"} == "Y" ]; then
+		if [ "${RESTORE_RECREATE_DB:-Y}" == "Y" ]; then
 			drop_db
 			create_db
 		fi
