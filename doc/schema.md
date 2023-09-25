@@ -394,7 +394,7 @@ A table for earned rewards. It includes 5 types of rewards. The rewards are inse
 |-|-|-|
 | `id` | integer (64) |  |
 | `addr_id` | integer (64) | The StakeAddress table index for the stake address that earned the reward. |
-| `type` | rewardtype | The source of the rewards; pool `member`, pool `leader`, `treasury` or `reserves` payment and pool deposits `refunds` |
+| `type` | rewardtype | The source of the rewards; pool `member`, pool `leader`, `treasury` or `reserves` payment and pool deposits `refund` |
 | `amount` | lovelace | The reward amount (in Lovelace). |
 | `earned_epoch` | integer (64) | The epoch in which the reward was earned. For `pool` and `leader` rewards spendable in epoch `N`, this will be `N - 2`, for `treasury` and `reserves` `N - 1` and for `refund` N. |
 | `spendable_epoch` | integer (64) | The epoch in which the reward is actually distributed and can be spent. |
