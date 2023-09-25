@@ -174,6 +174,10 @@ updateTxOutConsumedByTxInIdUnique :: MonadIO m => TxId -> Word64 -> TxInId -> Re
 updateTxOutConsumedByTxInIdUnique txOutId index txInId =
   updateWhere [TxOutTxId ==. txOutId, TxOutIndex ==. index] [TxOutConsumedByTxInId =. Just txInId]
 
+deleteTxOutConsumed :: MonadIO m => TxId -> Word64 -> ReaderT SqlBackend m ()
+deleteTxOutConsumed txOutId index =
+  deleteWhere [TxOutTxId ==. txOutId, TxOutIndex ==. index]
+
 getInputPage :: MonadIO m => Word64 -> Word64 -> ReaderT SqlBackend m [(TxInId, TxId, Word64)]
 getInputPage offs pgSize = do
   res <- select $ do
@@ -202,40 +206,67 @@ countConsumed = do
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
+deleteAndUpdateConsumedTxOut :: MonadIO m => Trace IO Text -> Word64 -> ReaderT SqlBackend m ()
+deleteAndUpdateConsumedTxOut trce blockNoDiff = do
+  maxTxInId <- findMaxTxInId blockNoDiff
+  case maxTxInId of
+    Left errMsg -> liftIO $ logInfo trce $ "No tx_out was deleted: " <> errMsg
+    Right mxtxid -> do
+      migrateNextPage mxtxid 0
+  where
+    migrateNextPage :: MonadIO m => TxInId -> Word64 -> ReaderT SqlBackend m ()
+    migrateNextPage mxTxInId offst = do
+      page <- getInputPage offst pageSize
+      -- before page txinId delete after create extra collumn and update
+      mapM_ (handlePage mxTxInId) page
+      when (fromIntegral (length page) == pageSize) $
+        migrateNextPage mxTxInId $!
+          offst
+            + pageSize
+
+handlePage :: MonadIO m => TxInId -> (TxInId, TxId, Word64) -> ReaderT SqlBackend m ()
+handlePage maxTxInId (txInId, txId, index)
+  | txInId <= maxTxInId = deleteTxOutConsumed txId index
+  | otherwise = do
+      createConsumedTxOut
+      updateTxOutConsumedByTxInIdUnique txId index txInId
+
 deleteConsumedTxOut :: forall m. MonadIO m => Trace IO Text -> Word64 -> ReaderT SqlBackend m ()
 deleteConsumedTxOut trce blockNoDiff = do
-  mBlockHeight <- queryBlockHeight
-  maybe (logNoDelete "No blocks found") deleteConsumed mBlockHeight
-  where
-    logNoDelete txt = liftIO $ logInfo trce $ "No tx_out was deleted: " <> txt
+  maxTxInId <- findMaxTxInId blockNoDiff
+  case maxTxInId of
+    Left errMsg -> liftIO $ logInfo trce $ "No tx_out was deleted: " <> errMsg
+    Right mxtid -> deleteConsumedBeforeTxIn trce mxtid
 
-    deleteConsumed :: Word64 -> ReaderT SqlBackend m ()
+findMaxTxInId :: forall m. MonadIO m => Word64 -> ReaderT SqlBackend m (Either Text TxInId)
+findMaxTxInId blockNoDiff = do
+  mBlockHeight <- queryBlockHeight
+  maybe (pure $ Left $ "No blocks found") deleteConsumed mBlockHeight
+  where
+    deleteConsumed :: Word64 -> ReaderT SqlBackend m (Either Text TxInId)
     deleteConsumed tipBlockNo = do
       if tipBlockNo <= blockNoDiff
-        then logNoDelete $ "Tip blockNo is " <> textShow tipBlockNo
+        then pure $ Left $ "Tip blockNo is " <> textShow tipBlockNo
         else do
           mBlockId <- queryBlockNo $ tipBlockNo - blockNoDiff
           maybe
-            (liftIO $ logError trce $ "BlockNo hole found at " <> textShow (tipBlockNo - blockNoDiff))
+            (pure $ Left $ "BlockNo hole found at " <> textShow (tipBlockNo - blockNoDiff))
             deleteConsumedBeforeBlock
             mBlockId
 
-    deleteConsumedBeforeBlock :: BlockId -> ReaderT SqlBackend m ()
+    deleteConsumedBeforeBlock :: BlockId -> ReaderT SqlBackend m (Either Text TxInId)
     deleteConsumedBeforeBlock blockId = do
       mTxId <- queryMaxRefId TxBlockId blockId False
       case mTxId of
-        Nothing -> logNoDelete $ "No txs found before " <> textShow blockId
+        Nothing -> pure $ Left $ "No txs found before " <> textShow blockId
         Just txId -> do
           mTxInId <- queryMaxRefId TxInTxInId txId True
-          maybe
-            (logNoDelete $ "No tx_in found before or at " <> textShow txId)
-            deleteConsumedBeforeTxIn
-            mTxInId
+          pure $ maybe (Left $ "No tx_in found before or at " <> textShow txId) Right mTxInId
 
-    deleteConsumedBeforeTxIn :: TxInId -> ReaderT SqlBackend m ()
-    deleteConsumedBeforeTxIn txInId = do
-      countDeleted <- deleteWhereCount [TxOutConsumedByTxInId <=. Just txInId]
-      liftIO $ logInfo trce $ "Deleted " <> textShow countDeleted <> " tx_out"
+deleteConsumedBeforeTxIn :: MonadIO m => Trace IO Text -> TxInId -> ReaderT SqlBackend m ()
+deleteConsumedBeforeTxIn trce txInId = do
+  countDeleted <- deleteWhereCount [TxOutConsumedByTxInId <=. Just txInId]
+  liftIO $ logInfo trce $ "Deleted " <> textShow countDeleted <> " tx_out"
 
 queryBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe BlockId)
 queryBlockNo blkNo = do
