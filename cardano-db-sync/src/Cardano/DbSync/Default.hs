@@ -33,6 +33,7 @@ import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Rollback
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
 import Cardano.Ledger.Shelley.AdaPots as Shelley
 import Cardano.Prelude
@@ -216,6 +217,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
           else pure False
       when withinHalfHour $ do
         ranIndexes <- liftIO $ getRanIndexes syncEnv
+        addConstraintsIfNotExist syncEnv tracer
         unless ranIndexes $ do
           unless commited DB.transactionCommit
           liftIO $ runIndexMigrations syncEnv

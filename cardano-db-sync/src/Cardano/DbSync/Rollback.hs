@@ -10,7 +10,6 @@ module Cardano.DbSync.Rollback (
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo)
-import Cardano.Db (ManualDbConstraints (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (SyncEnv (..))
@@ -19,9 +18,8 @@ import Cardano.DbSync.Era.Util
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
-import Cardano.DbSync.Util.Constraint (addEpochStakeTableConstraint, addRewardTableConstraint)
+import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
 import Cardano.Prelude
-import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
 import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.ByteString.Short as SBS
@@ -38,7 +36,6 @@ rollbackFromBlockNo ::
   BlockNo ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 rollbackFromBlockNo syncEnv blkNo = do
-  dbConstraints <- liftIO $ readTVarIO $ envDbConstraints syncEnv
   nBlocks <- lift $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
   mres <- lift $ DB.queryBlockNoAndEpoch (unBlockNo blkNo)
   whenJust mres $ \(blockId, epochNo) -> do
@@ -59,9 +56,7 @@ rollbackFromBlockNo syncEnv blkNo = do
         -- We use custom constraints to improve input speeds when syncing.
         -- If they don't already exists we add them here as once a rollback has happened
         -- we always need a the constraints.
-        unless (dbConstraintRewards dbConstraints) addRewardTableConstraint
-        unless (dbConstraintEpochStake dbConstraints) addEpochStakeTableConstraint
-        liftIO $ atomically $ writeTVar (envDbConstraints syncEnv) (DB.ManualDbConstraints True True)
+        addConstraintsIfNotExist syncEnv trce
 
     lift $ rollbackCache cache blockId
 
