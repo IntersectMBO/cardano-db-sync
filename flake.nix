@@ -124,10 +124,11 @@
             echo "file binary-dist $out/$NAME" > $out/nix-support/hydra-build-products
           '';
 
-          project = (nixpkgs.haskell-nix.cabalProject' rec {
+          project = (nixpkgs.haskell-nix.cabalProject' ({ lib, ... }: rec {
             src = ./.;
             name = "cardano-db-sync";
-            compiler-nix-name = "ghc8107";
+            compiler-nix-name = lib.mkDefault "ghc8107";
+
 
             inputMap = {
               "https://input-output-hk.github.io/cardano-haskell-packages" = inputs.CHaP;
@@ -150,22 +151,22 @@
             shell.withHoogle = true;
 
             modules = [
-              ({ pkgs, ... }: with pkgs; {
+              ({ lib, pkgs, ... }: {
                 # Ignore version bounds
                 packages.katip.doExactConfig = true;
                 # Split data to reduce closure size
                 packages.ekg.components.library.enableSeparateDataOutput = true;
-                # Use our libsodium, secp256k1 forks
+                # Use our libsodium, secp256k1, libblst forks
                 packages.cardano-crypto-praos.components.library.pkgconfig =
-                  lib.mkForce [[ libsodium-vrf ]];
+                  lib.mkForce [[ pkgs.libsodium-vrf ]];
                 packages.cardano-crypto-class.components.library.pkgconfig =
-                  lib.mkForce [[ libsodium-vrf secp256k1 libblst ]];
+                  with pkgs; lib.mkForce [[ libsodium-vrf secp256k1 libblst ]];
                 # Systemd can't be statically linked
                 packages.cardano-node.flags.systemd =
                   !pkgs.stdenv.hostPlatform.isMusl;
               })
 
-              ({ pkgs, ... }: {
+              ({
                 # Override extra-source-files
                 packages.cardano-db-sync.package.extraSrcFiles =
                   [ "../schema/*.sql" ];
@@ -175,8 +176,17 @@
                   [ "../config/pgpass-mainnet" ];
                 packages.cardano-chain-gen.package.extraSrcFiles =
                   [ "../schema/*.sql" ];
-
               })
+
+              ({ lib, config, ... }:
+                # Disable haddock on 8.x
+                lib.mkIf (lib.versionOlder config.compiler.version "9") {
+                  packages.cardano-ledger-alonzo.doHaddock = false;
+                  packages.cardano-ledger-babbage.doHaddock = false;
+                  packages.cardano-ledger-conway.doHaddock = false;
+                  packages.cardano-protocol-tpraos.doHaddock = false;
+                  packages.ouroboros-network-framework.doHaddock = false;
+                })
 
               ({ pkgs, ... }:
                 # Database tests
@@ -192,7 +202,7 @@
                     postgresTest;
                 })
             ];
-          }).appendOverlays [
+          })).appendOverlays [
             # Collect local package `exe`s
             nixpkgs.haskell-nix.haskellLib.projectOverlays.projectComponents
           ];
