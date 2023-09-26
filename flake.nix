@@ -159,7 +159,7 @@
                 packages.cardano-crypto-praos.components.library.pkgconfig =
                   lib.mkForce [[ libsodium-vrf ]];
                 packages.cardano-crypto-class.components.library.pkgconfig =
-                  lib.mkForce [[ libsodium-vrf secp256k1 ]];
+                  lib.mkForce [[ libsodium-vrf secp256k1 libblst ]];
                 # Systemd can't be statically linked
                 packages.cardano-node.flags.systemd =
                   !pkgs.stdenv.hostPlatform.isMusl;
