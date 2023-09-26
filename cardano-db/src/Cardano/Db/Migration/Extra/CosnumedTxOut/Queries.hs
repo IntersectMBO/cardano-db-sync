@@ -12,7 +12,7 @@ import Cardano.Db.Insert (insertMany', insertUnchecked)
 import Cardano.Db.Migration.Extra.CosnumedTxOut.Schema
 import Cardano.Db.Query (isJust, listToMaybe, queryBlockHeight, queryMaxRefId)
 import Cardano.Db.Text
-import Control.Monad.Extra (when, whenJust)
+import Control.Monad.Extra (foldM, unless, when, whenJust)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT)
@@ -206,29 +206,33 @@ countConsumed = do
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
-deleteAndUpdateConsumedTxOut :: MonadIO m => Trace IO Text -> Bool -> Word64 -> ReaderT SqlBackend m ()
-deleteAndUpdateConsumedTxOut trce hasConsumedField blockNoDiff = do
+deleteAndUpdateConsumedTxOut :: MonadIO m => Trace IO Text -> Word64 -> ReaderT SqlBackend m ()
+deleteAndUpdateConsumedTxOut trce blockNoDiff = do
   maxTxInId <- findMaxTxInId blockNoDiff
   case maxTxInId of
-    Left errMsg -> liftIO $ logInfo trce $ "No tx_out was deleted: " <> errMsg
+    Left errMsg -> liftIO $ logInfo trce $ "No tx_out were deleted: " <> errMsg
     Right mxtxid -> do
-      migrateNextPage mxtxid 0
+      migrateNextPage mxtxid False 0
   where
-    migrateNextPage :: MonadIO m => TxInId -> Word64 -> ReaderT SqlBackend m ()
-    migrateNextPage mxTxInId offst = do
+    migrateNextPage :: MonadIO m => TxInId -> Bool -> Word64 -> ReaderT SqlBackend m ()
+    migrateNextPage mxTxInId ranCreateConsumed offst = do
       page <- getInputPage offst pageSize
-      mapM_ (handlePageEntry mxTxInId) page
+      res <- foldM (handlePageEntry mxTxInId) ranCreateConsumed page
       when (fromIntegral (length page) == pageSize) $
-        migrateNextPage mxTxInId $!
+        migrateNextPage mxTxInId res $!
           offst
             + pageSize
 
-    handlePageEntry :: MonadIO m => TxInId -> (TxInId, TxId, Word64) -> ReaderT SqlBackend m ()
-    handlePageEntry maxTxInId (txInId, txId, index)
-      | txInId <= maxTxInId = deleteTxOutConsumed txId index
+    handlePageEntry :: MonadIO m => TxInId -> Bool -> (TxInId, TxId, Word64) -> ReaderT SqlBackend m Bool
+    handlePageEntry maxTxInId rcc (txInId, txId, index)
+      | txInId <= maxTxInId = do
+          deleteTxOutConsumed txId index
+          pure False
       | otherwise = do
-          when hasConsumedField createConsumedTxOut
+          -- we want to call createConsumedTxOut only once
+          unless rcc createConsumedTxOut
           updateTxOutConsumedByTxInIdUnique txId index txInId
+          pure True
 
 deleteConsumedTxOut :: forall m. MonadIO m => Trace IO Text -> Word64 -> ReaderT SqlBackend m ()
 deleteConsumedTxOut trce blockNoDiff = do
