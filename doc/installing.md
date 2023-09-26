@@ -203,11 +203,10 @@ check you have x-code command line tools installed or try install them by runnin
 xcode-select --install
 ```
 
-if the error still arrises copy the content that x-code installs into `/usr/local/include/` making sure the folder is also on you `$PATH`:
+If you are using homebrew you might need to unistall `llvm@13` as this clashes with x-code:
 ```bash
-sudo cp -R -a /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/* /usr/local/include/
+brew uninstall llvm@13
 ```
-
 
 ## Install Cardano DB Sync
 
