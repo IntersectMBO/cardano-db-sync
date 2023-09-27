@@ -124,11 +124,14 @@
             echo "file binary-dist $out/$NAME" > $out/nix-support/hydra-build-products
           '';
 
-          project = (nixpkgs.haskell-nix.cabalProject' ({ lib, ... }: rec {
+          project = (nixpkgs.haskell-nix.cabalProject' ({ config, lib, ... }: rec {
             src = ./.;
             name = "cardano-db-sync";
             compiler-nix-name = lib.mkDefault "ghc8107";
-
+            flake.variants =
+              lib.genAttrs
+                ["ghc963"]
+                (compiler-nix-name: { inherit compiler-nix-name; });
 
             inputMap = {
               "https://input-output-hk.github.io/cardano-haskell-packages" = inputs.CHaP;
@@ -143,9 +146,10 @@
                 src = nixpkgs.haskell-nix.sources."hls-1.10";
               };
             };
-
+            # Now we use pkgsBuildBuild, to make sure that even in the cross
+            # compilation setting, we don't run into issues where we pick tools
+            # for the target.
             shell.buildInputs = with nixpkgs.pkgsBuildBuild; [
-              haskell-language-server
               gitAndTools.git
             ];
             shell.withHoogle = true;
@@ -186,6 +190,14 @@
                   packages.cardano-ledger-conway.doHaddock = false;
                   packages.cardano-protocol-tpraos.doHaddock = false;
                   packages.ouroboros-network-framework.doHaddock = false;
+                })
+
+              ({ lib, pkgs, config, ... }:
+                lib.mkIf (lib.versionAtLeast config.compiler.version "9.4") {
+                  # lib:ghc is a bit annoying in that it comes with it's own build-type:Custom, and then tries
+                  # to call out to all kinds of silly tools that GHC doesn't really provide.
+                  # For this reason, we try to get away without re-installing lib:ghc for now.
+                  reinstallableLibGhc = false;
                 })
 
               ({ pkgs, ... }:
