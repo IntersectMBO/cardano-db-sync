@@ -86,7 +86,7 @@ import Ouroboros.Network.Driver.Simple (runPeer)
 import Ouroboros.Network.IOManager (IOManager)
 import qualified Ouroboros.Network.IOManager as IOManager
 import Ouroboros.Network.Magic (NetworkMagic)
-import Ouroboros.Network.Mux (MuxMode (..), OuroborosApplication)
+import Ouroboros.Network.Mux (MuxMode (..), OuroborosApplicationWithMinimalCtx)
 import Ouroboros.Network.NodeToClient (NodeToClientVersionData (..))
 import qualified Ouroboros.Network.NodeToClient as NodeToClient
 import Ouroboros.Network.NodeToNode (Versions)
@@ -216,7 +216,7 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState =
       Versions
         NodeToClientVersion
         NodeToClientVersionData
-        (OuroborosApplication 'ResponderMode LocalAddress ByteString IO Void ())
+        (OuroborosApplicationWithMinimalCtx 'ResponderMode LocalAddress ByteString IO Void ())
     versions state =
       let version = fromJust $ snd $ latestReleasedNodeVersion (Proxy @blk)
           allVersions = supportedNodeToClientVersions (Proxy @blk)
