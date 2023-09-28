@@ -204,6 +204,8 @@ library
                       , small-steps
                       , stm
                       , strict
+                      , sop-core
+                      , strict-sop-core
                       , strict-stm
                       , swagger2
                       , text

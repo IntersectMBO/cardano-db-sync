@@ -90,6 +90,7 @@ library
                       , plutus-core
                       , plutus-ledger-api:{plutus-ledger-api-testlib}
                       , serialise
+                      , strict-sop-core
                       , strict-stm
                       , text
                       , typed-protocols

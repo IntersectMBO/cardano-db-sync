@@ -76,7 +76,7 @@ import Ouroboros.Network.Block (
  )
 import Ouroboros.Network.Driver (runPeer)
 import Ouroboros.Network.Driver.Simple (runPipelinedPeer)
-import Ouroboros.Network.Mux (MuxPeer (..), RunMiniProtocol (..))
+import Ouroboros.Network.Mux (MiniProtocolCb (..), RunMiniProtocol (..), RunMiniProtocolWithMinimalCtx, mkMiniProtocolCbFromPeer)
 import Ouroboros.Network.NodeToClient (
   ClientSubscriptionParams (..),
   ConnectionId,
@@ -184,15 +184,18 @@ dbSyncProtocols ::
   CodecConfig CardanoBlock ->
   Network.NodeToClientVersion ->
   BlockNodeToClientVersion CardanoBlock ->
-  ConnectionId LocalAddress ->
-  NodeToClientProtocols 'InitiatorMode BSL.ByteString IO () Void
-dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion _connectionId =
+  --  ConnectionId LocalAddress ->
+  NodeToClientProtocols 'InitiatorMode LocalAddress BSL.ByteString IO () Void
+dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
   NodeToClientProtocols
     { localChainSyncProtocol = localChainSyncPtcl
     , localTxSubmissionProtocol = dummylocalTxSubmit
     , localStateQueryProtocol = localStateQuery
     , localTxMonitorProtocol =
-        InitiatorProtocolOnly $ MuxPeer Logging.nullTracer (cTxMonitorCodec codecs) localTxMonitorPeerNull
+        InitiatorProtocolOnly $
+          mkMiniProtocolCbFromPeer $
+            const
+              (Logging.nullTracer, cTxMonitorCodec codecs, localTxMonitorPeerNull)
     }
   where
     codecs = clientCodecs codecConfig bversion version
@@ -247,9 +250,9 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion _connecti
               when skipFix $ setIsFixedAndMigrate syncEnv AllFixRan
               pure True
 
-    localChainSyncPtcl :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
+    localChainSyncPtcl :: RunMiniProtocolWithMinimalCtx 'InitiatorMode LocalAddress BSL.ByteString IO () Void
     localChainSyncPtcl = InitiatorProtocolOnly $
-      MuxPeerRaw $ \channel ->
+      MiniProtocolCb $ \_ctx channel ->
         liftIO . logException tracer "ChainSyncWithBlocksPtcl: " $ do
           isInitComplete <- runAndSetDone tc $ initAction channel
           when isInitComplete $ do
@@ -280,29 +283,35 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion _connecti
             pure ()
           pure ((), Nothing)
 
-    dummylocalTxSubmit :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
+    dummylocalTxSubmit :: RunMiniProtocolWithMinimalCtx 'InitiatorMode LocalAddress BSL.ByteString IO () Void
     dummylocalTxSubmit =
       InitiatorProtocolOnly $
-        MuxPeer
-          Logging.nullTracer
-          (cTxSubmissionCodec codecs)
-          localTxSubmissionPeerNull
+        mkMiniProtocolCbFromPeer $
+          const
+            ( Logging.nullTracer
+            , cTxSubmissionCodec codecs
+            , localTxSubmissionPeerNull
+            )
 
-    localStateQuery :: RunMiniProtocol 'InitiatorMode BSL.ByteString IO () Void
+    localStateQuery :: RunMiniProtocolWithMinimalCtx 'InitiatorMode LocalAddress BSL.ByteString IO () Void
     localStateQuery =
       case envLedgerEnv syncEnv of
         HasLedger _ ->
           InitiatorProtocolOnly $
-            MuxPeer
-              Logging.nullTracer
-              (cStateQueryCodec codecs)
-              localStateQueryPeerNull
+            mkMiniProtocolCbFromPeer $
+              const
+                ( Logging.nullTracer
+                , cStateQueryCodec codecs
+                , localStateQueryPeerNull
+                )
         NoLedger nle ->
           InitiatorProtocolOnly $
-            MuxPeer
-              (contramap (Text.pack . show) . toLogObject $ appendName "local-state-query" tracer)
-              (cStateQueryCodec codecs)
-              (localStateQueryClientPeer $ localStateQueryHandler nle)
+            mkMiniProtocolCbFromPeer $
+              const
+                ( contramap (Text.pack . show) . toLogObject $ appendName "local-state-query" tracer
+                , cStateQueryCodec codecs
+                , localStateQueryClientPeer $ localStateQueryHandler nle
+                )
 
 -- | 'ChainSyncClient' which traces received blocks and ignores when it
 -- receives a request to rollbackwar.  A real wallet client should:
