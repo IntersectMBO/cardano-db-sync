@@ -56,6 +56,7 @@ import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Types (ApplyResult (..), DepositsMap, lookupDepositsMap)
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import Cardano.DbSync.Util.Bech32
 import Cardano.DbSync.Util.Cbor (serialiseTxMetadataToCbor)
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.Alonzo.Language (Language)
@@ -64,6 +65,7 @@ import Cardano.Ledger.BaseTypes (getVersion, strictMaybeToMaybe)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Coin as Ledger
+import Cardano.Ledger.Conway.Core (DRepVotingThresholds (..), PoolVotingThresholds (..))
 import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Conway.TxCert
 import Cardano.Ledger.Core
@@ -80,6 +82,7 @@ import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except.Extra (newExceptT)
 import qualified Data.Aeson as Aeson
+import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import Data.Either.Extra (eitherToMaybe)
 import Data.Group (invert)
@@ -1034,16 +1037,15 @@ insertParamProposal blkId txId pp = do
       , DB.paramProposalMaxEpoch = unEpochNo <$> pppMaxEpoch pp
       , DB.paramProposalOptimalPoolCount = fromIntegral <$> pppOptimalPoolCount pp
       , DB.paramProposalInfluence = fromRational <$> pppInfluence pp
-      , DB.paramProposalMonetaryExpandRate = Generic.unitIntervalToDouble <$> pppMonetaryExpandRate pp
-      , DB.paramProposalTreasuryGrowthRate = Generic.unitIntervalToDouble <$> pppTreasuryGrowthRate pp
-      , DB.paramProposalDecentralisation = Generic.unitIntervalToDouble <$> pppDecentralisation pp
+      , DB.paramProposalMonetaryExpandRate = toDouble <$> pppMonetaryExpandRate pp
+      , DB.paramProposalTreasuryGrowthRate = toDouble <$> pppTreasuryGrowthRate pp
+      , DB.paramProposalDecentralisation = toDouble <$> pppDecentralisation pp
       , DB.paramProposalEntropy = Generic.nonceToBytes =<< pppEntropy pp
       , DB.paramProposalProtocolMajor = getVersion . Ledger.pvMajor <$> pppProtocolVersion pp
       , DB.paramProposalProtocolMinor = fromIntegral . Ledger.pvMinor <$> pppProtocolVersion pp
       , DB.paramProposalMinUtxoValue = Generic.coinToDbLovelace <$> pppMinUtxoValue pp
       , DB.paramProposalMinPoolCost = Generic.coinToDbLovelace <$> pppMinPoolCost pp
       , -- New for Alonzo
-
         DB.paramProposalCoinsPerUtxoSize = Generic.coinToDbLovelace <$> pppCoinsPerUtxo pp
       , DB.paramProposalCostModelId = cmId
       , DB.paramProposalPriceMem = realToFrac <$> pppPriceMem pp
@@ -1055,7 +1057,31 @@ insertParamProposal blkId txId pp = do
       , DB.paramProposalMaxValSize = DbWord64 . fromIntegral <$> pppMaxValSize pp
       , DB.paramProposalCollateralPercent = fromIntegral <$> pppCollateralPercentage pp
       , DB.paramProposalMaxCollateralInputs = fromIntegral <$> pppMaxCollateralInputs pp
+      , -- New for Conway
+        DB.paramProposalPvtMotionNoConfidence = toDouble . pvtMotionNoConfidence <$> pppPoolVotingThresholds pp
+      , DB.paramProposalPvtCommitteeNormal = toDouble . pvtCommitteeNormal <$> pppPoolVotingThresholds pp
+      , DB.paramProposalPvtCommitteeNoConfidence = toDouble . pvtCommitteeNoConfidence <$> pppPoolVotingThresholds pp
+      , DB.paramProposalPvtHardForkInitiation = toDouble . pvtHardForkInitiation <$> pppPoolVotingThresholds pp
+      , DB.paramProposalDvtMotionNoConfidence = toDouble . dvtMotionNoConfidence <$> pppDRepVotingThresholds pp
+      , DB.paramProposalDvtCommitteeNormal = toDouble . dvtCommitteeNormal <$> pppDRepVotingThresholds pp
+      , DB.paramProposalDvtCommitteeNoConfidence = toDouble . dvtCommitteeNoConfidence <$> pppDRepVotingThresholds pp
+      , DB.paramProposalDvtUpdateToConstitution = toDouble . dvtUpdateToConstitution <$> pppDRepVotingThresholds pp
+      , DB.paramProposalDvtHardForkInitiation = toDouble . dvtHardForkInitiation <$> pppDRepVotingThresholds pp
+      , DB.paramProposalDvtPPNetworkGroup = toDouble . dvtPPNetworkGroup <$> pppDRepVotingThresholds pp
+      , DB.paramProposalDvtPPEconomicGroup = toDouble . dvtPPEconomicGroup <$> pppDRepVotingThresholds pp
+      , DB.paramProposalDvtPPTechnicalGroup = toDouble . dvtPPTechnicalGroup <$> pppDRepVotingThresholds pp
+      , DB.paramProposalDvtPPGovGroup = toDouble . dvtPPGovGroup <$> pppDRepVotingThresholds pp
+      , DB.paramProposalDvtTreasuryWithdrawal = toDouble . dvtTreasuryWithdrawal <$> pppDRepVotingThresholds pp
+      , DB.paramProposalMinCommitteeSize = DbWord64 . fromIntegral <$> pppMinCommitteeSize pp
+      , DB.paramProposalCommitteeTermLimit = DbWord64 . fromIntegral <$> pppCommitteeTermLimit pp
+      , DB.paramProposalGovActionExpiration = unEpochNo <$> pppGovActionExpiration pp
+      , DB.paramProposalGovActionDeposit = DbWord64 . fromIntegral <$> pppGovActionDeposit pp
+      , DB.paramProposalDRepDeposit = DbWord64 . fromIntegral <$> pppDRepDeposit pp
+      , DB.paramProposalDRepActivity = unEpochNo <$> pppDRepActivity pp
       }
+
+toDouble :: Ledger.UnitInterval -> Double
+toDouble = Generic.unitIntervalToDouble
 
 insertRedeemer ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -1202,9 +1228,9 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce = do
       , DB.epochParamMaxEpoch = unEpochNo (Generic.ppMaxEpoch params)
       , DB.epochParamOptimalPoolCount = fromIntegral (Generic.ppOptialPoolCount params)
       , DB.epochParamInfluence = fromRational (Generic.ppInfluence params)
-      , DB.epochParamMonetaryExpandRate = Generic.unitIntervalToDouble (Generic.ppMonetaryExpandRate params)
-      , DB.epochParamTreasuryGrowthRate = Generic.unitIntervalToDouble (Generic.ppTreasuryGrowthRate params)
-      , DB.epochParamDecentralisation = Generic.unitIntervalToDouble (Generic.ppDecentralisation params)
+      , DB.epochParamMonetaryExpandRate = toDouble (Generic.ppMonetaryExpandRate params)
+      , DB.epochParamTreasuryGrowthRate = toDouble (Generic.ppTreasuryGrowthRate params)
+      , DB.epochParamDecentralisation = toDouble (Generic.ppDecentralisation params)
       , DB.epochParamExtraEntropy = Generic.nonceToBytes $ Generic.ppExtraEntropy params
       , DB.epochParamProtocolMajor = getVersion $ Ledger.pvMajor (Generic.ppProtocolVersion params)
       , DB.epochParamProtocolMinor = fromIntegral $ Ledger.pvMinor (Generic.ppProtocolVersion params)
@@ -1222,6 +1248,26 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce = do
       , DB.epochParamMaxValSize = DbWord64 . fromIntegral <$> Generic.ppMaxValSize params
       , DB.epochParamCollateralPercent = fromIntegral <$> Generic.ppCollateralPercentage params
       , DB.epochParamMaxCollateralInputs = fromIntegral <$> Generic.ppMaxCollateralInputs params
+      , DB.epochParamPvtMotionNoConfidence = toDouble . pvtMotionNoConfidence <$> Generic.ppPoolVotingThresholds params
+      , DB.epochParamPvtCommitteeNormal = toDouble . pvtCommitteeNormal <$> Generic.ppPoolVotingThresholds params
+      , DB.epochParamPvtCommitteeNoConfidence = toDouble . pvtCommitteeNoConfidence <$> Generic.ppPoolVotingThresholds params
+      , DB.epochParamPvtHardForkInitiation = toDouble . pvtHardForkInitiation <$> Generic.ppPoolVotingThresholds params
+      , DB.epochParamDvtMotionNoConfidence = toDouble . dvtMotionNoConfidence <$> Generic.ppDRepVotingThresholds params
+      , DB.epochParamDvtCommitteeNormal = toDouble . dvtCommitteeNormal <$> Generic.ppDRepVotingThresholds params
+      , DB.epochParamDvtCommitteeNoConfidence = toDouble . dvtCommitteeNoConfidence <$> Generic.ppDRepVotingThresholds params
+      , DB.epochParamDvtUpdateToConstitution = toDouble . dvtUpdateToConstitution <$> Generic.ppDRepVotingThresholds params
+      , DB.epochParamDvtHardForkInitiation = toDouble . dvtHardForkInitiation <$> Generic.ppDRepVotingThresholds params
+      , DB.epochParamDvtPPNetworkGroup = toDouble . dvtPPNetworkGroup <$> Generic.ppDRepVotingThresholds params
+      , DB.epochParamDvtPPEconomicGroup = toDouble . dvtPPEconomicGroup <$> Generic.ppDRepVotingThresholds params
+      , DB.epochParamDvtPPTechnicalGroup = toDouble . dvtPPTechnicalGroup <$> Generic.ppDRepVotingThresholds params
+      , DB.epochParamDvtPPGovGroup = toDouble . dvtPPGovGroup <$> Generic.ppDRepVotingThresholds params
+      , DB.epochParamDvtTreasuryWithdrawal = toDouble . dvtTreasuryWithdrawal <$> Generic.ppDRepVotingThresholds params
+      , DB.epochParamMinCommitteeSize = DbWord64 . fromIntegral <$> Generic.ppMinCommitteeSize params
+      , DB.epochParamCommitteeTermLimit = DbWord64 . fromIntegral <$> Generic.ppCommitteeTermLimit params
+      , DB.epochParamGovActionExpiration = unEpochNo <$> Generic.ppGovActionExpiration params
+      , DB.epochParamGovActionDeposit = DbWord64 . fromIntegral <$> Generic.ppGovActionDeposit params
+      , DB.epochParamDRepDeposit = DbWord64 . fromIntegral <$> Generic.ppDRepDeposit params
+      , DB.epochParamDRepActivity = unEpochNo <$> Generic.ppDRepActivity params
       , DB.epochParamBlockId = blkId
       }
 
@@ -1425,7 +1471,7 @@ insertGovernanceAction cache _network blkId txId (index, pp) = do
       void . DB.insertNewCommittee $
         DB.NewCommittee
           { DB.newCommitteeGovernanceActionId = gaId
-          , DB.newCommitteeQuorum = Generic.unitIntervalToDouble $ committeeQuorum committee
+          , DB.newCommitteeQuorum = toDouble $ committeeQuorum committee
           , DB.newCommitteeMembers = textShow st
           }
 
@@ -1499,15 +1545,15 @@ insertDrep = \case
   DRepAlwaysAbstain ->
     DB.insertDrepHash
       DB.DrepHash
-        { DB.drepHashRaw = Nothing
-        , DB.drepHashView = Just "AlwaysAbstain"
+        { DB.drepHashRaw = BS.replicate 28 '\0'
+        , DB.drepHashView = "drep_always_abstain"
         , DB.drepHashHasScript = False
         }
   DRepAlwaysNoConfidence ->
     DB.insertDrepHash
       DB.DrepHash
-        { DB.drepHashRaw = Nothing
-        , DB.drepHashView = Just "AlwaysNoConfidence"
+        { DB.drepHashRaw = BS.replicate 28 '\0'
+        , DB.drepHashView = "drep_always_no_confidence"
         , DB.drepHashHasScript = False
         }
 
@@ -1515,7 +1561,9 @@ insertCredDrepHash :: (MonadBaseControl IO m, MonadIO m) => Ledger.Credential 'D
 insertCredDrepHash cred = do
   DB.insertDrepHash
     DB.DrepHash
-      { DB.drepHashRaw = Just $ Generic.unCredentialHash cred
-      , DB.drepHashView = Nothing
+      { DB.drepHashRaw = bs
+      , DB.drepHashView = serialiseDrepToBech32 bs
       , DB.drepHashHasScript = Generic.hasCredScript cred
       }
+  where
+    bs = Generic.unCredentialHash cred
