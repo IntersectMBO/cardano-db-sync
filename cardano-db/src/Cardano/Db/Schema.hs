@@ -450,6 +450,28 @@ share
     collateralPercent   Word16 Maybe        sqltype=word31type
     maxCollateralInputs Word16 Maybe        sqltype=word31type
 
+    pvtMotionNoConfidence    Double Maybe   -- sqltype=rational
+    pvtCommitteeNormal       Double Maybe   -- sqltype=rational
+    pvtCommitteeNoConfidence Double Maybe   -- sqltype=rational
+    pvtHardForkInitiation    Double Maybe   -- sqltype=rational
+    dvtMotionNoConfidence    Double Maybe   -- sqltype=rational
+    dvtCommitteeNormal       Double Maybe   -- sqltype=rational
+    dvtCommitteeNoConfidence Double Maybe   -- sqltype=rational
+    dvtUpdateToConstitution  Double Maybe   -- sqltype=rational
+    dvtHardForkInitiation    Double Maybe   -- sqltype=rational
+    dvtPPNetworkGroup        Double Maybe   -- sqltype=rational
+    dvtPPEconomicGroup       Double Maybe   -- sqltype=rational
+    dvtPPTechnicalGroup      Double Maybe   -- sqltype=rational
+    dvtPPGovGroup            Double Maybe   -- sqltype=rational
+    dvtTreasuryWithdrawal    Double Maybe   -- sqltype=rational
+
+    minCommitteeSize         DbWord64 Maybe sqltype=word64type
+    committeeTermLimit       DbWord64 Maybe sqltype=word64type
+    govActionExpiration      Word64 Maybe   sqltype=word64type
+    govActionDeposit         DbWord64 Maybe sqltype=word64type
+    dRepDeposit              DbWord64 Maybe sqltype=word64type
+    dRepActivity             Word64 Maybe sqltype=word64type
+
     registeredTxId      TxId                noreference
 
   EpochParam
@@ -487,6 +509,28 @@ share
     collateralPercent   Word16 Maybe        sqltype=word31type
     maxCollateralInputs Word16 Maybe        sqltype=word31type
 
+    pvtMotionNoConfidence    Double Maybe   -- sqltype=rational
+    pvtCommitteeNormal       Double Maybe   -- sqltype=rational
+    pvtCommitteeNoConfidence Double Maybe   -- sqltype=rational
+    pvtHardForkInitiation    Double Maybe   -- sqltype=rational
+    dvtMotionNoConfidence    Double Maybe   -- sqltype=rational
+    dvtCommitteeNormal       Double Maybe   -- sqltype=rational
+    dvtCommitteeNoConfidence Double Maybe   -- sqltype=rational
+    dvtUpdateToConstitution  Double Maybe   -- sqltype=rational
+    dvtHardForkInitiation    Double Maybe   -- sqltype=rational
+    dvtPPNetworkGroup        Double Maybe   -- sqltype=rational
+    dvtPPEconomicGroup       Double Maybe   -- sqltype=rational
+    dvtPPTechnicalGroup      Double Maybe   -- sqltype=rational
+    dvtPPGovGroup            Double Maybe   -- sqltype=rational
+    dvtTreasuryWithdrawal    Double Maybe   -- sqltype=rational
+
+    minCommitteeSize         DbWord64 Maybe sqltype=word64type
+    committeeTermLimit       DbWord64 Maybe sqltype=word64type
+    govActionExpiration      Word64 Maybe   sqltype=word64type
+    govActionDeposit         DbWord64 Maybe sqltype=word64type
+    dRepDeposit              DbWord64 Maybe sqltype=word64type
+    dRepActivity             Word64 Maybe sqltype=word64type
+
     blockId             BlockId             noreference      -- The first block where these parameters are valid.
 
   CostModel
@@ -499,10 +543,10 @@ share
     description         Text Maybe
 
   DrepHash
-    raw                 ByteString Maybe    sqltype=hash28type
-    view                Text Maybe
+    raw                 ByteString         sqltype=hash28type
+    view                Text
     hasScript           Bool
-    UniqueDrepHash      raw view !force
+    UniqueDrepHash      raw view
 
   DelegationVote
     addrId              StakeAddressId      noreference
@@ -1013,6 +1057,26 @@ schemaDocs =
       ParamProposalCollateralPercent # "The percentage of the txfee which must be provided as collateral when including non-native scripts."
       ParamProposalMaxCollateralInputs # "The maximum number of collateral inputs allowed in a transaction."
       ParamProposalRegisteredTxId # "The Tx table index for the transaction that contains this parameter proposal."
+      ParamProposalPvtMotionNoConfidence # "Pool Voting threshold for motion of no-confidence. New in 13.2-Conway."
+      ParamProposalPvtCommitteeNormal # "Pool Voting threshold for new committee/threshold (normal state). New in 13.2-Conway."
+      ParamProposalPvtCommitteeNoConfidence # "Pool Voting threshold for new committee/threshold (state of no-confidence). New in 13.2-Conway."
+      ParamProposalPvtHardForkInitiation # "Pool Voting threshold for hard-fork initiation. New in 13.2-Conway."
+      ParamProposalDvtMotionNoConfidence # "DRep Vote threshold for motion of no-confidence. New in 13.2-Conway."
+      ParamProposalDvtCommitteeNormal # "DRep Vote threshold for new committee/threshold (normal state). New in 13.2-Conway."
+      ParamProposalDvtCommitteeNoConfidence # "DRep Vote threshold for new committee/threshold (state of no-confidence). New in 13.2-Conway."
+      ParamProposalDvtUpdateToConstitution # "DRep Vote threshold for update to the Constitution. New in 13.2-Conway."
+      ParamProposalDvtHardForkInitiation # "DRep Vote threshold for hard-fork initiation. New in 13.2-Conway."
+      ParamProposalDvtPPNetworkGroup # "DRep Vote threshold for protocol parameter changes, network group. New in 13.2-Conway."
+      ParamProposalDvtPPEconomicGroup # "DRep Vote threshold for protocol parameter changes, economic group. New in 13.2-Conway."
+      ParamProposalDvtPPTechnicalGroup # "DRep Vote threshold for protocol parameter changes, technical group. New in 13.2-Conway."
+      ParamProposalDvtPPGovGroup # "DRep Vote threshold for protocol parameter changes, governance group. New in 13.2-Conway."
+      ParamProposalDvtTreasuryWithdrawal # "DRep Vote threshold for treasury withdrawal. New in 13.2-Conway."
+      ParamProposalMinCommitteeSize # "Minimal constitutional committee size. New in 13.2-Conway."
+      ParamProposalCommitteeTermLimit # "Constitutional committee term limits. New in 13.2-Conway."
+      ParamProposalGovActionExpiration # "Governance action expiration. New in 13.2-Conway."
+      ParamProposalGovActionDeposit # "Governance action deposit. New in 13.2-Conway."
+      ParamProposalDRepDeposit # "DRep deposit amount. New in 13.2-Conway."
+      ParamProposalDRepActivity # "DRep activity period. New in 13.2-Conway."
 
     EpochParam --^ do
       "The accepted protocol parameters for an epoch."
@@ -1048,6 +1112,26 @@ schemaDocs =
       EpochParamCollateralPercent # "The percentage of the txfee which must be provided as collateral when including non-native scripts."
       EpochParamMaxCollateralInputs # "The maximum number of collateral inputs allowed in a transaction."
       EpochParamBlockId # "The Block table index for the first block where these parameters are valid."
+      EpochParamPvtMotionNoConfidence # "Pool Voting threshold for motion of no-confidence. New in 13.2-Conway."
+      EpochParamPvtCommitteeNormal # "Pool Voting threshold for new committee/threshold (normal state). New in 13.2-Conway."
+      EpochParamPvtCommitteeNoConfidence # "Pool Voting threshold for new committee/threshold (state of no-confidence). New in 13.2-Conway."
+      EpochParamPvtHardForkInitiation # "Pool Voting threshold for hard-fork initiation. New in 13.2-Conway."
+      EpochParamDvtMotionNoConfidence # "DRep Vote threshold for motion of no-confidence. New in 13.2-Conway."
+      EpochParamDvtCommitteeNormal # "DRep Vote threshold for new committee/threshold (normal state). New in 13.2-Conway."
+      EpochParamDvtCommitteeNoConfidence # "DRep Vote threshold for new committee/threshold (state of no-confidence). New in 13.2-Conway."
+      EpochParamDvtUpdateToConstitution # "DRep Vote threshold for update to the Constitution. New in 13.2-Conway."
+      EpochParamDvtHardForkInitiation # "DRep Vote threshold for hard-fork initiation. New in 13.2-Conway."
+      EpochParamDvtPPNetworkGroup # "DRep Vote threshold for protocol parameter changes, network group. New in 13.2-Conway."
+      EpochParamDvtPPEconomicGroup # "DRep Vote threshold for protocol parameter changes, economic group. New in 13.2-Conway."
+      EpochParamDvtPPTechnicalGroup # "DRep Vote threshold for protocol parameter changes, technical group. New in 13.2-Conway."
+      EpochParamDvtPPGovGroup # "DRep Vote threshold for protocol parameter changes, governance group. New in 13.2-Conway."
+      EpochParamDvtTreasuryWithdrawal # "DRep Vote threshold for treasury withdrawal. New in 13.2-Conway."
+      EpochParamMinCommitteeSize # "Minimal constitutional committee size. New in 13.2-Conway."
+      EpochParamCommitteeTermLimit # "Constitutional committee term limits. New in 13.2-Conway."
+      EpochParamGovActionExpiration # "Governance action expiration. New in 13.2-Conway."
+      EpochParamGovActionDeposit # "Governance action deposit. New in 13.2-Conway."
+      EpochParamDRepDeposit # "DRep deposit amount. New in 13.2-Conway."
+      EpochParamDRepActivity # "DRep activity period. New in 13.2-Conway."
 
     CostModel --^ do
       "CostModel for EpochParam and ParamProposal."
@@ -1063,7 +1147,7 @@ schemaDocs =
       \ The existance of an entry doesn't mean the DRep is registered or in fact that is was ever registered.\
       \ New in 13.2-Conway."
       DrepHashRaw # "The raw bytes of the DRep."
-      DrepHashView # "A description of the DRep hash. This only exists for AlwaysAbstain and AlwaysNoConfidence."
+      DrepHashView # "The human readable encoding of the Drep."
       DrepHashHasScript # "Flag which shows if this DRep credentials are a script hash"
 
     DelegationVote --^ do

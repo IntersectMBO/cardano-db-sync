@@ -8,6 +8,7 @@ module Cardano.DbSync.Util.Bech32 (
   deserialiseVerKeyVrfFromBech32,
   serialiseStakePoolKeyHashToBech32,
   deserialiseStakePoolKeyHashFromBech32,
+  serialiseDrepToBech32,
 ) where
 
 import Cardano.Crypto.Hash.Class (hashFromBytes, hashToBytes)
@@ -79,3 +80,7 @@ deserialiseStakePoolKeyHashFromBech32 text =
 
     hashFromBytes' :: ByteString -> Maybe (KeyHash 'StakePool StandardCrypto)
     hashFromBytes' bytes = KeyHash <$> hashFromBytes bytes
+
+-- | Serialise drep bech32 address
+serialiseDrepToBech32 :: ByteString -> Text
+serialiseDrepToBech32 = serialiseToBech32 "drep"

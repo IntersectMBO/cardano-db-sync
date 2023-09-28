@@ -12,10 +12,10 @@ import Cardano.DbSync.Types
 import Cardano.Ledger.Alonzo.Core
 import Cardano.Ledger.Alonzo.Language (Language)
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
-import Cardano.Ledger.Babbage.Core (ppCoinsPerUTxOByteL, unCoinPerByte)
 import Cardano.Ledger.BaseTypes (UnitInterval)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..))
+import Cardano.Ledger.Conway.Core
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
@@ -56,6 +56,15 @@ data ProtoParams = ProtoParams
   , ppMaxValSize :: !(Maybe Natural)
   , ppCollateralPercentage :: !(Maybe Natural)
   , ppMaxCollateralInputs :: !(Maybe Natural)
+  , -- New for Conway.
+    ppPoolVotingThresholds :: !(Maybe PoolVotingThresholds)
+  , ppDRepVotingThresholds :: !(Maybe DRepVotingThresholds)
+  , ppMinCommitteeSize :: !(Maybe Natural)
+  , ppCommitteeTermLimit :: !(Maybe Natural)
+  , ppGovActionExpiration :: !(Maybe EpochNo)
+  , ppGovActionDeposit :: !(Maybe Natural)
+  , ppDRepDeposit :: !(Maybe Natural)
+  , ppDRepActivity :: !(Maybe EpochNo)
   }
 
 epochProtoParams :: ExtLedgerState CardanoBlock -> Maybe ProtoParams
@@ -108,6 +117,14 @@ fromConwayParams params =
     , ppMaxValSize = Just $ params ^. ppMaxValSizeL
     , ppCollateralPercentage = Just $ params ^. ppCollateralPercentageL
     , ppMaxCollateralInputs = Just $ params ^. ppMaxCollateralInputsL
+    , ppPoolVotingThresholds = Just $ params ^. ppPoolVotingThresholdsL
+    , ppDRepVotingThresholds = Just $ params ^. ppDRepVotingThresholdsL
+    , ppMinCommitteeSize = Just $ params ^. ppMinCommitteeSizeL
+    , ppCommitteeTermLimit = Just $ params ^. ppCommitteeTermLimitL
+    , ppGovActionExpiration = Just $ params ^. ppGovActionExpirationL
+    , ppGovActionDeposit = Just . fromIntegral . unCoin $ params ^. ppGovActionDepositL
+    , ppDRepDeposit = Just . fromIntegral . unCoin $ params ^. ppDRepDepositL
+    , ppDRepActivity = Just $ params ^. ppDRepActivityL
     }
 
 fromBabbageParams :: PParams StandardBabbage -> ProtoParams
@@ -141,6 +158,14 @@ fromBabbageParams params =
     , ppMaxValSize = Just $ params ^. ppMaxValSizeL
     , ppCollateralPercentage = Just $ params ^. ppCollateralPercentageL
     , ppMaxCollateralInputs = Just $ params ^. ppMaxCollateralInputsL
+    , ppPoolVotingThresholds = Nothing
+    , ppDRepVotingThresholds = Nothing
+    , ppMinCommitteeSize = Nothing
+    , ppCommitteeTermLimit = Nothing
+    , ppGovActionExpiration = Nothing
+    , ppGovActionDeposit = Nothing
+    , ppDRepDeposit = Nothing
+    , ppDRepActivity = Nothing
     }
 
 fromAlonzoParams :: PParams StandardAlonzo -> ProtoParams
@@ -174,6 +199,14 @@ fromAlonzoParams params =
     , ppMaxValSize = Just $ params ^. ppMaxValSizeL
     , ppCollateralPercentage = Just $ params ^. ppCollateralPercentageL
     , ppMaxCollateralInputs = Just $ params ^. ppMaxCollateralInputsL
+    , ppPoolVotingThresholds = Nothing
+    , ppDRepVotingThresholds = Nothing
+    , ppMinCommitteeSize = Nothing
+    , ppCommitteeTermLimit = Nothing
+    , ppGovActionExpiration = Nothing
+    , ppGovActionDeposit = Nothing
+    , ppDRepDeposit = Nothing
+    , ppDRepActivity = Nothing
     }
 
 fromShelleyParams :: (ProtVerAtMost era 6, ProtVerAtMost era 4, EraPParams era) => PParams era -> ProtoParams
@@ -207,4 +240,12 @@ fromShelleyParams params =
     , ppMaxValSize = Nothing
     , ppCollateralPercentage = Nothing
     , ppMaxCollateralInputs = Nothing
+    , ppPoolVotingThresholds = Nothing
+    , ppDRepVotingThresholds = Nothing
+    , ppMinCommitteeSize = Nothing
+    , ppCommitteeTermLimit = Nothing
+    , ppGovActionExpiration = Nothing
+    , ppGovActionDeposit = Nothing
+    , ppDRepDeposit = Nothing
+    , ppDRepActivity = Nothing
     }
