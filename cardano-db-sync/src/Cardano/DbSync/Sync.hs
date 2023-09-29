@@ -66,6 +66,7 @@ import Ouroboros.Consensus.Network.NodeToClient (
  )
 import Ouroboros.Consensus.Node.ErrorPolicy
 import Ouroboros.Consensus.Node.NetworkProtocolVersion (BlockNodeToClientVersion, supportedNodeToClientVersions)
+import Ouroboros.Consensus.Protocol.Praos.Translate ()
 import Ouroboros.Network.Block (
   BlockNo (..),
   Point (..),
