@@ -44,6 +44,11 @@ package cryptonite
   -- generation is dubious. Set the flag so we use /dev/urandom by default.
   flags: -support_rdrand
 
+-- concurrent-output is incompatible with our haskell.nix version due to
+-- arch(wasm32).
+-- TODO[sgillespie]: Upgrade haskell.nix
+constraints: concurrent-output < 1.10.19
+
 -- ---------------------------------------------------------
 -- Enable tests
 
