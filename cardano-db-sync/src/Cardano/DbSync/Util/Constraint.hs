@@ -22,9 +22,9 @@ import Cardano.Prelude (MonadIO (..), Proxy (..), ReaderT (runReaderT), atomical
 import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
 import Control.Monad (unless)
 import Control.Monad.Trans.Control (MonadBaseControl)
-import Data.Text (Text, pack)
+import Data.Text (Text)
 import Database.Persist.EntityDef.Internal (EntityDef (..))
-import Database.Persist.Names (ConstraintNameDB (..), FieldNameDB (..))
+import Database.Persist.Names (ConstraintNameDB (..), EntityNameDB (..), FieldNameDB (..))
 import Database.Persist.Postgresql (PersistEntity (..), SqlBackend)
 
 constraintNameEpochStake :: ConstraintNameDB
@@ -107,9 +107,9 @@ logNewConstraint ::
   EntityDef ->
   Text ->
   IO ()
-logNewConstraint trce tableName constraintName =
+logNewConstraint trce table constraintName =
   logInfo trce $
     "The table "
-      <> pack (show tableName)
+      <> unEntityNameDB (entityDB table)
       <> " was given a new unique constraint called "
       <> constraintName
