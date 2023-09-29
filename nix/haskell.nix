@@ -96,6 +96,7 @@ let
         packages.cardano-ledger-babbage.doHaddock = false;
         packages.cardano-ledger-conway.doHaddock = false;
         packages.cardano-protocol-tpraos.doHaddock = false;
+        packages.ouroboros-network-framework.doHaddock = false;
       }
       {
         packages = lib.genAttrs projectPackagesNames (name: {
