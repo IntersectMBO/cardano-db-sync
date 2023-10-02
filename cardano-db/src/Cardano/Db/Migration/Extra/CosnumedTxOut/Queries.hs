@@ -30,78 +30,15 @@ import Database.Persist.Class (update)
 import Database.Persist.Sql (deleteWhereCount)
 import Database.PostgreSQL.Simple (SqlError)
 
-insertTxOutExtra :: (MonadBaseControl IO m, MonadIO m) => TxOut -> ReaderT SqlBackend m TxOutId
-insertTxOutExtra = insertUnchecked "TxOutExtra"
+pageSize :: Word64
+pageSize = 100_000
 
-insertManyTxOutExtra :: (MonadBaseControl IO m, MonadIO m) => [TxOut] -> ReaderT SqlBackend m [TxOutId]
-insertManyTxOutExtra = insertMany' "TxOut"
-
+--------------------------------------------------------------------------------------------------
+-- Queries
+--------------------------------------------------------------------------------------------------
 queryUpdateListTxOutConsumedByTxInId :: MonadIO m => [(TxOutId, TxInId)] -> ReaderT SqlBackend m ()
 queryUpdateListTxOutConsumedByTxInId ls = do
   mapM_ (uncurry updateTxOutConsumedByTxInId) ls
-
-updateTxOutConsumedByTxInId :: MonadIO m => TxOutId -> TxInId -> ReaderT SqlBackend m ()
-updateTxOutConsumedByTxInId txOutId txInId =
-  update txOutId [TxOutConsumedByTxInId =. Just txInId]
-
-querySetNullTxOut :: MonadIO m => Trace IO Text -> Maybe TxInId -> Word64 -> ReaderT SqlBackend m ()
-querySetNullTxOut trce mMinTxInId txInDeleted = do
-  whenJust mMinTxInId $ \txInId -> do
-    txOutIds <- getTxOutConsumedAfter txInId
-    mapM_ setNullTxOutConsumedAfterTxInId txOutIds
-    let updatedEntries = fromIntegral (length txOutIds)
-    when (updatedEntries /= txInDeleted) $
-      liftIO $
-        logError trce $
-          Text.concat
-            [ "Deleted "
-            , textShow txInDeleted
-            , " inputs, but set to null only "
-            , textShow updatedEntries
-            , "consumed outputs. Please file an issue at https://github.com/input-output-hk/cardano-db-sync/issues"
-            ]
-
--- | This requires an index at TxOutConsumedByTxInId.
-getTxOutConsumedAfter :: MonadIO m => TxInId -> ReaderT SqlBackend m [TxOutId]
-getTxOutConsumedAfter txInId = do
-  res <- select $ do
-    txOut <- from $ table @TxOut
-    where_ (txOut ^. TxOutConsumedByTxInId >=. just (val txInId))
-    pure $ txOut ^. persistIdField
-  pure $ unValue <$> res
-
--- | This requires an index at TxOutConsumedByTxInId.
-setNullTxOutConsumedAfterTxInId :: MonadIO m => TxOutId -> ReaderT SqlBackend m ()
-setNullTxOutConsumedAfterTxInId txOutId = do
-  update txOutId [TxOutConsumedByTxInId =. Nothing]
-
-migrateTxOut ::
-  ( MonadBaseControl IO m
-  , MonadIO m
-  ) =>
-  Maybe (Trace IO Text) ->
-  ReaderT SqlBackend m ()
-migrateTxOut mTrace = do
-  _ <- createConsumedTxOut
-  migrateNextPage 0
-  where
-    migrateNextPage :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
-    migrateNextPage offst = do
-      whenJust mTrace $ \trce ->
-        liftIO $ logInfo trce $ "Handling input offset " <> textShow offst
-      page <- getInputPage offst pageSize
-      mapM_ migratePair page
-      when (fromIntegral (length page) == pageSize) $
-        migrateNextPage $!
-          offst
-            + pageSize
-
-migratePair :: MonadIO m => (TxInId, TxId, Word64) -> ReaderT SqlBackend m ()
-migratePair (txInId, txId, index) =
-  updateTxOutConsumedByTxInIdUnique txId index txInId
-
-pageSize :: Word64
-pageSize = 100_000
 
 queryTxConsumedColumnExists :: MonadIO m => ReaderT SqlBackend m Bool
 queryTxConsumedColumnExists = do
@@ -132,6 +69,23 @@ queryTxOutConsumedCount = do
     where_ (not_ $ isNothing $ txOut ^. TxOutConsumedByTxInId)
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
+
+querySetNullTxOut :: MonadIO m => Trace IO Text -> Maybe TxInId -> Word64 -> ReaderT SqlBackend m ()
+querySetNullTxOut trce mMinTxInId txInDeleted = do
+  whenJust mMinTxInId $ \txInId -> do
+    txOutIds <- getTxOutConsumedAfter txInId
+    mapM_ setNullTxOutConsumedAfterTxInId txOutIds
+    let updatedEntries = fromIntegral (length txOutIds)
+    when (updatedEntries /= txInDeleted) $
+      liftIO $
+        logError trce $
+          Text.concat
+            [ "Deleted "
+            , textShow txInDeleted
+            , " inputs, but set to null only "
+            , textShow updatedEntries
+            , "consumed outputs. Please file an issue at https://github.com/input-output-hk/cardano-db-sync/issues"
+            ]
 
 createConsumedTxOut ::
   forall m.
@@ -192,9 +146,207 @@ _validateMigration trce = do
                 ]
           pure False
 
+--------------------------------------------------------------------------------------------------
+-- Inserts
+--------------------------------------------------------------------------------------------------
+insertTxOutExtra :: (MonadBaseControl IO m, MonadIO m) => TxOut -> ReaderT SqlBackend m TxOutId
+insertTxOutExtra = insertUnchecked "TxOutExtra"
+
+insertManyTxOutExtra :: (MonadBaseControl IO m, MonadIO m) => [TxOut] -> ReaderT SqlBackend m [TxOutId]
+insertManyTxOutExtra = insertMany' "TxOut"
+
+--------------------------------------------------------------------------------------------------
+-- Updates
+--------------------------------------------------------------------------------------------------
+updateTxOutConsumedByTxInId :: MonadIO m => TxOutId -> TxInId -> ReaderT SqlBackend m ()
+updateTxOutConsumedByTxInId txOutId txInId =
+  update txOutId [TxOutConsumedByTxInId =. Just txInId]
+
+-- | This requires an index at TxOutConsumedByTxInId.
+getTxOutConsumedAfter :: MonadIO m => TxInId -> ReaderT SqlBackend m [TxOutId]
+getTxOutConsumedAfter txInId = do
+  res <- select $ do
+    txOut <- from $ table @TxOut
+    where_ (txOut ^. TxOutConsumedByTxInId >=. just (val txInId))
+    pure $ txOut ^. persistIdField
+  pure $ unValue <$> res
+
+-- | This requires an index at TxOutConsumedByTxInId.
+setNullTxOutConsumedAfterTxInId :: MonadIO m => TxOutId -> ReaderT SqlBackend m ()
+setNullTxOutConsumedAfterTxInId txOutId = do
+  update txOutId [TxOutConsumedByTxInId =. Nothing]
+
+migrateTxOut ::
+  ( MonadBaseControl IO m
+  , MonadIO m
+  ) =>
+  Maybe (Trace IO Text) ->
+  ReaderT SqlBackend m ()
+migrateTxOut mTrace = do
+  _ <- createConsumedTxOut
+  migrateNextPage 0
+  where
+    migrateNextPage :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
+    migrateNextPage offst = do
+      whenJust mTrace $ \trce ->
+        liftIO $ logInfo trce $ "Handling input offset " <> textShow offst
+      page <- getInputPage offst pageSize
+      mapM_ migratePair page
+      when (fromIntegral (length page) == pageSize) $
+        migrateNextPage $!
+          offst
+            + pageSize
+
+migratePair :: MonadIO m => (TxInId, TxId, Word64) -> ReaderT SqlBackend m ()
+migratePair (txInId, txId, index) =
+  updateTxOutConsumedByTxInIdUnique txId index txInId
+
+--------------------------------------------------------------------------------------------------
+-- Delete + Update
+--------------------------------------------------------------------------------------------------
+deleteAndUpdateConsumedTxOut ::
+  forall m.
+  (MonadIO m, MonadBaseControl IO m) =>
+  Trace IO Text ->
+  Word64 ->
+  ReaderT SqlBackend m ()
+deleteAndUpdateConsumedTxOut trce blockNoDiff = do
+  maxTxInId <- findMaxTxInId blockNoDiff
+  case maxTxInId of
+    Left errMsg -> do
+      liftIO $ logInfo trce $ "No tx_out were deleted as no blocks found: " <> errMsg
+      liftIO $ logInfo trce "Now Running extra migration prune tx_out"
+      migrateTxOut (Just trce)
+    Right mTxIdIn -> do
+      migrateNextPage mTxIdIn False 0
+  where
+    migrateNextPage :: TxInId -> Bool -> Word64 -> ReaderT SqlBackend m ()
+    migrateNextPage maxTxInId ranCreateConsumedTxOut offst = do
+      pageEntries <- getInputPage offst pageSize
+      resPageEntries <- splitAndProcessPageEntries trce ranCreateConsumedTxOut maxTxInId pageEntries
+      when (fromIntegral (length pageEntries) == pageSize) $
+        migrateNextPage maxTxInId resPageEntries $!
+          offst
+            + pageSize
+
+-- Split the page entries by maxTxInId and process
+splitAndProcessPageEntries ::
+  forall m.
+  (MonadIO m, MonadBaseControl IO m) =>
+  Trace IO Text ->
+  Bool ->
+  TxInId ->
+  [(TxInId, TxId, Word64)] ->
+  ReaderT SqlBackend m Bool
+splitAndProcessPageEntries trce ranCreateConsumedTxOut maxTxInId pageEntries = do
+  let entriesSplit = span (\(txInId, _, _) -> txInId <= maxTxInId) pageEntries
+  case entriesSplit of
+    -- empty lists just return
+    ([], []) -> pure True
+    -- the whole list is less that maxTxInId
+    (xs, []) -> do
+      deletePageEntries xs
+      pure False
+    -- the whole list is greater that maxTxInId
+    ([], ys) -> do
+      shouldCreateConsumedTxOut trce ranCreateConsumedTxOut
+      updatePageEntries ys
+      pure True
+    -- the list has both bellow and above maxTxInId
+    (xs, ys) -> do
+      deletePageEntries xs
+      shouldCreateConsumedTxOut trce ranCreateConsumedTxOut
+      updatePageEntries ys
+      pure True
+
+-- | Update
+updatePageEntries ::
+  MonadIO m =>
+  [(TxInId, TxId, Word64)] ->
+  ReaderT SqlBackend m ()
+updatePageEntries = mapM_ (\(txInId, txId, index) -> updateTxOutConsumedByTxInIdUnique txId index txInId)
+
 updateTxOutConsumedByTxInIdUnique :: MonadIO m => TxId -> Word64 -> TxInId -> ReaderT SqlBackend m ()
 updateTxOutConsumedByTxInIdUnique txOutId index txInId =
   updateWhere [TxOutTxId ==. txOutId, TxOutIndex ==. index] [TxOutConsumedByTxInId =. Just txInId]
+
+-- | Delete
+-- this builds up a single delete query using the pageEntries list
+deletePageEntries ::
+  MonadIO m =>
+  [(TxInId, TxId, Word64)] ->
+  ReaderT SqlBackend m ()
+deletePageEntries = mapM_ (\(_, txId, index) -> deleteTxOutConsumed txId index)
+
+deleteTxOutConsumed :: MonadIO m => TxId -> Word64 -> ReaderT SqlBackend m ()
+deleteTxOutConsumed txOutId index =
+  deleteWhere [TxOutTxId ==. txOutId, TxOutIndex ==. index]
+
+shouldCreateConsumedTxOut ::
+  (MonadIO m, MonadBaseControl IO m) =>
+  Trace IO Text ->
+  Bool ->
+  ReaderT SqlBackend m ()
+shouldCreateConsumedTxOut trce rcc =
+  unless rcc $ do
+    liftIO $ logInfo trce "Created ConsumedTxOut when handling page entries."
+    createConsumedTxOut
+
+--------------------------------------------------------------------------------------------------
+-- Delete
+--------------------------------------------------------------------------------------------------
+deleteConsumedTxOut ::
+  forall m.
+  MonadIO m =>
+  Trace IO Text ->
+  Word64 ->
+  ReaderT SqlBackend m ()
+deleteConsumedTxOut trce blockNoDiff = do
+  maxTxInId <- findMaxTxInId blockNoDiff
+  case maxTxInId of
+    Left errMsg -> liftIO $ logInfo trce $ "No tx_out was deleted: " <> errMsg
+    Right mxtid -> deleteConsumedBeforeTxIn trce mxtid
+
+deleteConsumedBeforeTxIn :: MonadIO m => Trace IO Text -> TxInId -> ReaderT SqlBackend m ()
+deleteConsumedBeforeTxIn trce txInId = do
+  countDeleted <- deleteWhereCount [TxOutConsumedByTxInId <=. Just txInId]
+  liftIO $ logInfo trce $ "Deleted " <> textShow countDeleted <> " tx_out"
+
+--------------------------------------------------------------------------------------------------
+-- Helpers
+--------------------------------------------------------------------------------------------------
+findMaxTxInId :: forall m. MonadIO m => Word64 -> ReaderT SqlBackend m (Either Text TxInId)
+findMaxTxInId blockNoDiff = do
+  mBlockHeight <- queryBlockHeight
+  maybe (pure $ Left "No blocks found") findConsumed mBlockHeight
+  where
+    findConsumed :: Word64 -> ReaderT SqlBackend m (Either Text TxInId)
+    findConsumed tipBlockNo = do
+      if tipBlockNo <= blockNoDiff
+        then pure $ Left $ "Tip blockNo is " <> textShow tipBlockNo
+        else do
+          mBlockId <- queryBlockNo $ tipBlockNo - blockNoDiff
+          maybe
+            (pure $ Left $ "BlockNo hole found at " <> textShow (tipBlockNo - blockNoDiff))
+            findConsumedBeforeBlock
+            mBlockId
+
+    findConsumedBeforeBlock :: BlockId -> ReaderT SqlBackend m (Either Text TxInId)
+    findConsumedBeforeBlock blockId = do
+      mTxId <- queryMaxRefId TxBlockId blockId False
+      case mTxId of
+        Nothing -> pure $ Left $ "No txs found before " <> textShow blockId
+        Just txId -> do
+          mTxInId <- queryMaxRefId TxInTxInId txId True
+          pure $ maybe (Left $ "No tx_in found before or at " <> textShow txId) Right mTxInId
+
+queryBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe BlockId)
+queryBlockNo blkNo = do
+  res <- select $ do
+    blk <- from $ table @Block
+    where_ (blk ^. BlockBlockNo E.==. just (val blkNo))
+    pure (blk ^. BlockId)
+  pure $ fmap unValue (listToMaybe res)
 
 getInputPage :: MonadIO m => Word64 -> Word64 -> ReaderT SqlBackend m [(TxInId, TxId, Word64)]
 getInputPage offs pgSize = do
@@ -223,164 +375,3 @@ countConsumed = do
     where_ (isJust $ txOut ^. TxOutConsumedByTxInId)
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
-
-deleteAndUpdateConsumedTxOut ::
-  forall m.
-  (MonadIO m, MonadBaseControl IO m) =>
-  Trace IO Text ->
-  Word64 ->
-  ReaderT SqlBackend m ()
-deleteAndUpdateConsumedTxOut trce blockNoDiff = do
-  maxTxInId <- findMaxTxInId blockNoDiff
-  case maxTxInId of
-    Left errMsg -> do
-      liftIO $ logInfo trce $ "No tx_out was deleted: " <> errMsg
-      migrateNextPage Nothing False 0
-    Right mTxIdIn ->
-      migrateNextPage (Just mTxIdIn) False 0
-  where
-    migrateNextPage :: Maybe TxInId -> Bool -> Word64 -> ReaderT SqlBackend m ()
-    migrateNextPage maxTxInId ranCreateConsumedTxOut offst = do
-      case maxTxInId of
-        -- If there is no maxTxInId then don't need to deleteEntries so on first itteration we createConsumedTxOut.
-        -- Then we itterate over the rest of the pages entries in chunks of `pageSize`.
-        Nothing -> do
-          shouldCreateConsumedTxOut trce ranCreateConsumedTxOut
-          pageEntries <- getInputPage offst pageSize
-          updatePageEntries pageEntries
-          when (fromIntegral (length pageEntries) == pageSize) $
-            migrateNextPage Nothing True $!
-              offst
-                + pageSize
-        -- we do have a maxTxInId which allows us to delete then update and iterating using `pageSize`
-        Just mxTxInId -> do
-          pageEntries <- getInputPage offst pageSize
-          resPageEntries <- splitAndProcessPageEntries trce ranCreateConsumedTxOut mxTxInId pageEntries
-          when (fromIntegral (length pageEntries) == pageSize) $
-            migrateNextPage (Just mxTxInId) resPageEntries $!
-              offst
-                + pageSize
-
--- Split the page entries by maxTxInId and process
-splitAndProcessPageEntries ::
-  forall m.
-  (MonadIO m, MonadBaseControl IO m) =>
-  Trace IO Text ->
-  Bool ->
-  TxInId ->
-  [(TxInId, TxId, Word64)] ->
-  ReaderT SqlBackend m Bool
-splitAndProcessPageEntries trce ranCreateConsumedTxOut maxTxInId pageEntries = do
-  let entriesSplit = span (\(txInId, _, _) -> txInId <= maxTxInId) pageEntries
-  case entriesSplit of
-    -- empty lists just return
-    ([], []) -> pure True
-    -- the whole list is less that maxTxInId
-    (xs, []) -> do
-      deleteEntries xs
-      pure False
-    -- the whole list is greater that maxTxInId
-    ([], ys) -> do
-      shouldCreateConsumedTxOut trce ranCreateConsumedTxOut
-      updateEntries ys
-      pure True
-    -- the list has both bellow and above maxTxInId
-    (xs, ys) -> do
-      deleteEntries xs
-      shouldCreateConsumedTxOut trce ranCreateConsumedTxOut
-      updateEntries ys
-      pure True
-  where
-    deleteEntries = deletePageEntries
-    -- this is deleting one entry at a time to check in benchmarking
-    -- deleteEntries = mapM_ (\(_, txId, index) -> deleteTxOutConsumed txId index)
-    updateEntries = updatePageEntries
-
-shouldCreateConsumedTxOut ::
-  (MonadIO m, MonadBaseControl IO m) =>
-  Trace IO Text ->
-  Bool ->
-  ReaderT SqlBackend m ()
-shouldCreateConsumedTxOut trce rcc =
-  unless rcc $ do
-    liftIO $ logInfo trce "Created ConsumedTxOut when handling page entries."
-    createConsumedTxOut
-
-updatePageEntries ::
-  MonadIO m =>
-  [(TxInId, TxId, Word64)] ->
-  ReaderT SqlBackend m ()
-updatePageEntries = mapM_ (\(txInId, txId, index) -> updateTxOutConsumedByTxInIdUnique txId index txInId)
-
--- this builds up a single delete query using the pageEntries list
-deletePageEntries ::
-  MonadIO m =>
-  [(TxInId, TxId, Word64)] ->
-  ReaderT SqlBackend m ()
-deletePageEntries transactionEntries = do
-  delete $ do
-    txOut <- from $ table @TxOut
-    where_
-      ( foldl1
-          (||.)
-          ( map
-              ( \(_, txId, index) ->
-                  txOut E.^. TxOutTxId E.==. val txId E.&&. txOut E.^. TxOutIndex E.==. val index
-              )
-              transactionEntries
-          )
-      )
-
-deleteTxOutConsumed :: MonadIO m => TxId -> Word64 -> ReaderT SqlBackend m ()
-deleteTxOutConsumed txOutId index =
-  deleteWhere [TxOutTxId ==. txOutId, TxOutIndex ==. index]
-
-deleteConsumedTxOut ::
-  forall m.
-  MonadIO m =>
-  Trace IO Text ->
-  Word64 ->
-  ReaderT SqlBackend m ()
-deleteConsumedTxOut trce blockNoDiff = do
-  maxTxInId <- findMaxTxInId blockNoDiff
-  case maxTxInId of
-    Left errMsg -> liftIO $ logInfo trce $ "No tx_out was deleted: " <> errMsg
-    Right mxtid -> deleteConsumedBeforeTxIn trce mxtid
-
-findMaxTxInId :: forall m. MonadIO m => Word64 -> ReaderT SqlBackend m (Either Text TxInId)
-findMaxTxInId blockNoDiff = do
-  mBlockHeight <- queryBlockHeight
-  maybe (pure $ Left "No blocks found") findConsumed mBlockHeight
-  where
-    findConsumed :: Word64 -> ReaderT SqlBackend m (Either Text TxInId)
-    findConsumed tipBlockNo = do
-      if tipBlockNo <= blockNoDiff
-        then pure $ Left $ "Tip blockNo is " <> textShow tipBlockNo
-        else do
-          mBlockId <- queryBlockNo $ tipBlockNo - blockNoDiff
-          maybe
-            (pure $ Left $ "BlockNo hole found at " <> textShow (tipBlockNo - blockNoDiff))
-            findConsumedBeforeBlock
-            mBlockId
-
-    findConsumedBeforeBlock :: BlockId -> ReaderT SqlBackend m (Either Text TxInId)
-    findConsumedBeforeBlock blockId = do
-      mTxId <- queryMaxRefId TxBlockId blockId False
-      case mTxId of
-        Nothing -> pure $ Left $ "No txs found before " <> textShow blockId
-        Just txId -> do
-          mTxInId <- queryMaxRefId TxInTxInId txId True
-          pure $ maybe (Left $ "No tx_in found before or at " <> textShow txId) Right mTxInId
-
-deleteConsumedBeforeTxIn :: MonadIO m => Trace IO Text -> TxInId -> ReaderT SqlBackend m ()
-deleteConsumedBeforeTxIn trce txInId = do
-  countDeleted <- deleteWhereCount [TxOutConsumedByTxInId <=. Just txInId]
-  liftIO $ logInfo trce $ "Deleted " <> textShow countDeleted <> " tx_out"
-
-queryBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe BlockId)
-queryBlockNo blkNo = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (blk ^. BlockBlockNo E.==. just (val blkNo))
-    pure (blk ^. BlockId)
-  pure $ fmap unValue (listToMaybe res)
