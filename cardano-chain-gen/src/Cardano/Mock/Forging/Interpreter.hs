@@ -484,6 +484,7 @@ getCurrentEpoch inter = do
     LedgerStateMary st -> pure $ nesEL $ shelleyLedgerState st
     LedgerStateAlonzo st -> pure $ nesEL $ shelleyLedgerState st
     LedgerStateBabbage st -> pure $ nesEL $ shelleyLedgerState st
+    LedgerStateConway st -> pure $ nesEL $ shelleyLedgerState st
     _ -> throwIO UnexpectedEra
 
 getCurrentSlot :: Interpreter -> IO SlotNo
