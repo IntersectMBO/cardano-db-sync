@@ -570,7 +570,8 @@ share
   DrepRegistration
     txId                TxId                noreference
     certIndex           Word16
-    deposit             DbLovelace          sqltype=lovelace
+    deposit             DbLovelace Maybe    sqltype=lovelace
+    votingAnchorId      VotingAnchorId Maybe  noreference
     drepHashId          DrepHashId          noreference
 
   DrepDeRegistration
@@ -581,8 +582,9 @@ share
 
   VotingAnchor
     txId                TxId                noreference
-    url                 VoteUrl             sqltype=varchar
     dataHash            ByteString
+    url                 VoteUrl             sqltype=varchar
+    UniqueVotingAnchor  dataHash url
 
   GovernanceAction
     txId               TxId                  noreference
@@ -634,6 +636,7 @@ share
     hashId                  DrepHashId          noreference
     amount                  Word64
     epochNo                 Word64              sqltype=word31type
+    UniqueDrepDistr hashId epochNo
 
   -- -----------------------------------------------------------------------------------------------
   -- Pool offline (ie not on the blockchain) data.
@@ -1173,10 +1176,11 @@ schemaDocs =
       CommitteeDeRegistrationHotKey # "The deregistered hot key hash"
 
     DrepRegistration --^ do
-      "A table for every DRep registration. New in 13.2-Conway."
+      "A table for DRep registrations or updates. Updates will have a null deposits. New in 13.2-Conway."
       DrepRegistrationTxId # "The Tx table index of the tx that includes this certificate."
       DrepRegistrationCertIndex # "The index of this registration within the certificates of this transaction."
-      DrepRegistrationDrepHashId # "The registered cold hey hash. TODO: should this reference DrepHashId or some separate hash table?"
+      DrepRegistrationDeposit # "The deposits payed if this is an initial registration."
+      DrepRegistrationDrepHashId # "The Drep hash index of this registration."
 
     DrepDeRegistration --^ do
       "A table for every DRep de-registration. New in 13.2-Conway."
@@ -1185,10 +1189,11 @@ schemaDocs =
       DrepDeRegistrationDrepHashId # "The deregistered drep hash"
 
     VotingAnchor --^ do
-      "A table for every Anchor that appears on Governance Actions. These are pointers to offchain metadata. New in 13.2-Conway."
+      "A table for every Anchor that appears on Governance Actions. These are pointers to offchain metadata. \
+      \ The tuple of url and hash is unique. New in 13.2-Conway."
       VotingAnchorTxId # "The Tx table index of the tx that includes this anchor. This only exists to facilitate rollbacks"
-      VotingAnchorUrl # "A URL to a JSON payload of metadata"
       VotingAnchorDataHash # "A hash of the contents of the metadata URL"
+      VotingAnchorUrl # "A URL to a JSON payload of metadata"
 
     GovernanceAction --^ do
       "A table for proposed GovernanceAction, aka ProposalProcedure, GovAction or GovProposal.\

@@ -65,11 +65,13 @@ import Cardano.Ledger.BaseTypes (getVersion, strictMaybeToMaybe)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Coin as Ledger
+import Cardano.Ledger.Compactible (fromCompact)
 import Cardano.Ledger.Conway.Core (DRepVotingThresholds (..), PoolVotingThresholds (..))
 import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Conway.TxCert
 import Cardano.Ledger.Core
 import qualified Cardano.Ledger.Credential as Ledger
+import Cardano.Ledger.DRepDistr (extractDRepDistr)
 import Cardano.Ledger.Keys
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (AssetName (..), MultiAsset (..), PolicyID (..))
@@ -79,6 +81,7 @@ import Cardano.Ledger.Shelley.TxCert
 import Cardano.Prelude
 import Cardano.Slotting.Block (BlockNo (..))
 import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
+import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except.Extra (newExceptT)
 import qualified Data.Aeson as Aeson
@@ -89,6 +92,7 @@ import Data.Group (invert)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 import Database.Persist.Sql (SqlBackend)
+import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto)
 
 {- HLINT ignore "Reduce duplication" -}
@@ -243,6 +247,10 @@ insertOnNewEpoch tracer blkId slotNo epochNo newEpoch = do
     lift $ insertEpochParam tracer blkId epochNo params (Generic.euNonce epochUpdate)
   whenStrictJust (Generic.neAdaPots newEpoch) $ \pots ->
     insertPots blkId slotNo epochNo pots
+  whenStrictJust (Generic.neDRepDistr newEpoch) $ \dreps ->
+    lift $ insertDrepDistr epochNo $ extractDRepDistr dreps
+  whenStrictJust (Generic.neEnacted newEpoch) $ \enactedSt ->
+    updateEnacted epochNo enactedSt
   where
     epochUpdate :: Generic.EpochUpdate
     epochUpdate = Generic.neEpochUpdate newEpoch
@@ -511,17 +519,16 @@ insertCertificate tracer cache isMember network blkId txId epochNo slotNo redeem
     Right (ConwayTxCertDeleg deleg) -> insertConwayDelegCert cache network txId idx mRedeemerId epochNo slotNo deleg
     Right (ConwayTxCertPool pool) -> insertPoolCert tracer cache isMember network epochNo blkId txId idx pool
     Right (ConwayTxCertGov c) -> case c of
-      ConwayRegDRep cred coin _anchor ->
-        -- TODO: Conway handle anchor
-        lift $ insertDrepRegistration txId idx cred coin
+      ConwayRegDRep cred coin anchor ->
+        lift $ insertDrepRegistration txId idx cred (Just coin) (strictMaybeToMaybe anchor)
       ConwayUnRegDRep cred coin ->
         lift $ insertDrepDeRegistration txId idx cred coin
       ConwayAuthCommitteeHotKey khCold khHot ->
         lift $ insertCommitteeRegistration txId idx khCold khHot
       ConwayResignCommitteeColdKey khCold ->
         lift $ insertCommitteeDeRegistration txId idx khCold
-      ConwayUpdateDRep {} ->
-        liftIO $ logWarning tracer "insertCertificate: Unhandled ConwayUpdateDRep certificate"
+      ConwayUpdateDRep cred anchor ->
+        lift $ insertDrepRegistration txId idx cred Nothing (strictMaybeToMaybe anchor)
   where
     mRedeemerId = mlookup ridx redeemers
 
@@ -560,15 +567,18 @@ insertDrepRegistration ::
   DB.TxId ->
   Word16 ->
   Ledger.Credential 'DRepRole StandardCrypto ->
-  Coin ->
+  Maybe Coin ->
+  Maybe (Anchor StandardCrypto) ->
   ReaderT SqlBackend m ()
-insertDrepRegistration txId idx cred coin = do
+insertDrepRegistration txId idx cred mcoin mAnchor = do
   drepId <- insertCredDrepHash cred
+  votingAnchorId <- whenMaybe mAnchor $ insertAnchor txId
   void . DB.insertDrepRegistration $
     DB.DrepRegistration
       { DB.drepRegistrationTxId = txId
       , DB.drepRegistrationCertIndex = idx
-      , DB.drepRegistrationDeposit = Generic.coinToDbLovelace coin
+      , DB.drepRegistrationDeposit = Generic.coinToDbLovelace <$> mcoin
+      , DB.drepRegistrationVotingAnchorId = votingAnchorId
       , DB.drepRegistrationDrepHashId = drepId
       }
 
@@ -1480,7 +1490,7 @@ insertAnchor txId anchor =
   DB.insertAnchor $
     DB.VotingAnchor
       { DB.votingAnchorTxId = txId
-      , DB.votingAnchorUrl = DB.VoteUrl $ Ledger.urlToText $ anchorUrl anchor
+      , DB.votingAnchorUrl = DB.VoteUrl $ Ledger.urlToText $ anchorUrl anchor -- TODO: Conway check unicode and size of URL
       , DB.votingAnchorDataHash = Generic.achorHashToBytes $ anchorDataHash anchor
       }
 
@@ -1567,3 +1577,26 @@ insertCredDrepHash cred = do
       }
   where
     bs = Generic.unCredentialHash cred
+
+insertDrepDistr :: forall m. (MonadBaseControl IO m, MonadIO m) => EpochNo -> Map (DRep StandardCrypto) (Ledger.CompactForm Coin) -> ReaderT SqlBackend m ()
+insertDrepDistr e dreps = do
+  drepsDB <- mapM mkEntry (Map.toList dreps)
+  DB.insertManyDrepDistr drepsDB
+  where
+    mkEntry :: (DRep StandardCrypto, Ledger.CompactForm Coin) -> ReaderT SqlBackend m DB.DrepDistr
+    mkEntry (drep, coin) = do
+      drepId <- insertDrep drep
+      pure $
+        DB.DrepDistr
+          { DB.drepDistrHashId = drepId
+          , DB.drepDistrAmount = fromIntegral $ unCoin $ fromCompact coin
+          , DB.drepDistrEpochNo = unEpochNo e
+          }
+
+updateEnacted :: forall m. (MonadBaseControl IO m, MonadIO m) => EpochNo -> EnactState StandardConway -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+updateEnacted epochNo enactedState = do
+  whenJust (strictMaybeToMaybe (enactedState ^. ensPrevPParamUpdateL)) $ \prevId -> do
+    gaId <- resolveGovernanceAction $ getPrevId prevId
+    lift $ DB.updateGovAction gaId (unEpochNo epochNo)
+  where
+    getPrevId (PrevGovActionId gai) = gai
