@@ -64,7 +64,7 @@ simpleRewards =
 
     -- Pools are not registered yet, this takes 2 epochs. So fees of this tx
     -- should not create any rewards.
-    void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ Babbage.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
+    void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ Babbage.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 1000 1000
 
     a <- fillEpochs interpreter mockServer 3
     assertBlockNoBackoff dbSync (fromIntegral $ 2 + length a)
