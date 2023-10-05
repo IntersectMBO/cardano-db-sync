@@ -10,7 +10,7 @@ import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import Cardano.Mock.Forging.Types (UTxOIndex (..))
 import Control.Monad (void)
 import Data.Text (Text)
-import Test.Cardano.Db.Mock.Config (CommandLineArgs (..), babbageConfigDir, initCommandLineArgs, startDBSync, withCustomConfig)
+import Test.Cardano.Db.Mock.Config (CommandLineArgs (..), babbageConfigDir, initCommandLineArgs, startDBSync, withCustomConfig, withCustomConfigAndDropDB)
 import Test.Cardano.Db.Mock.UnifiedApi (forgeAndSubmitBlocks, withBabbageFindLeaderAndSubmitTx)
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff, assertEqQuery)
 import Test.Tasty.HUnit (Assertion)
@@ -21,7 +21,7 @@ mkCommandLineArgs epochDisabled = initCommandLineArgs {claEpochDisabled = epochD
 -- this test fails as incorrect configuration file given
 checkEpochDisabledArg :: IOManager -> [(Text, Text)] -> Assertion
 checkEpochDisabledArg =
-  withCustomConfig (mkCommandLineArgs True) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfigAndDropDB (mkCommandLineArgs True) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     b1 <- forgeAndSubmitBlocks interpreter mockServer 50
     -- add 2 blocks with tx

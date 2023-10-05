@@ -7,6 +7,7 @@ module Test.Cardano.Db.Mock.Config (
   Config (..),
   DBSyncEnv (..),
   CommandLineArgs (..),
+  WithConfigArgs (..),
   initCommandLineArgs,
   babbageConfigDir,
   conwayConfigDir,
@@ -33,8 +34,10 @@ module Test.Cardano.Db.Mock.Config (
   startDBSync,
   withDBSyncEnv,
   withFullConfig,
+  withFullConfigAndDropDB,
   withFullConfigAndLogs,
   withCustomConfig,
+  withCustomConfigAndDropDB,
   withCustomConfigAndLogs,
   withFullConfig',
 ) where
@@ -110,6 +113,12 @@ data CommandLineArgs = CommandLineArgs
   , claFullMode :: Bool
   , claMigrateConsumed :: Bool
   , claPruneTxOut :: Bool
+  }
+
+data WithConfigArgs = WithConfigArgs
+  { hasFingerprint :: Bool
+  , shouldLog :: Bool
+  , shouldDropDB :: Bool
   }
 
 babbageConfigDir :: FilePath
@@ -299,7 +308,19 @@ withFullConfig ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfig = withFullConfig' True False initCommandLineArgs
+withFullConfig = withFullConfig' (WithConfigArgs True False False) initCommandLineArgs
+
+-- this function needs to be used where the schema needs to be rebuilt
+withFullConfigAndDropDB ::
+  -- | config filepath
+  FilePath ->
+  -- | test label
+  FilePath ->
+  (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
+  IOManager ->
+  [(Text, Text)] ->
+  IO a
+withFullConfigAndDropDB = withFullConfig' (WithConfigArgs True False True) initCommandLineArgs
 
 withFullConfigAndLogs ::
   FilePath ->
@@ -308,7 +329,7 @@ withFullConfigAndLogs ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfigAndLogs = withFullConfig' True True initCommandLineArgs
+withFullConfigAndLogs = withFullConfig' (WithConfigArgs True True False) initCommandLineArgs
 
 withCustomConfig ::
   CommandLineArgs ->
@@ -320,7 +341,19 @@ withCustomConfig ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withCustomConfig = withFullConfig' True False
+withCustomConfig = withFullConfig' (WithConfigArgs True False False)
+
+withCustomConfigAndDropDB ::
+  CommandLineArgs ->
+  -- | config filepath
+  FilePath ->
+  -- | test label
+  FilePath ->
+  (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
+  IOManager ->
+  [(Text, Text)] ->
+  IO a
+withCustomConfigAndDropDB = withFullConfig' (WithConfigArgs True False True)
 
 -- This is a usefull function to be able to see logs from DBSync when writing/debuging tests
 withCustomConfigAndLogs ::
@@ -333,13 +366,10 @@ withCustomConfigAndLogs ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withCustomConfigAndLogs = withFullConfig' True True
+withCustomConfigAndLogs = withFullConfig' (WithConfigArgs True True False)
 
 withFullConfig' ::
-  -- | has fingerprint
-  Bool ->
-  -- | should log
-  Bool ->
+  WithConfigArgs ->
   CommandLineArgs ->
   -- | config filepath
   FilePath ->
@@ -349,7 +379,7 @@ withFullConfig' ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfig' hasFingerprint shouldLog cmdLineArgs configFilePath testLabelFilePath action iom migr = do
+withFullConfig' WithConfigArgs {..} cmdLineArgs configFilePath testLabelFilePath action iom migr = do
   recreateDir mutableDir
   cfg <- mkConfig configDir mutableDir cmdLineArgs =<< mkSyncNodeConfig configDir
   fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabelFilePath else pure Nothing
@@ -373,7 +403,13 @@ withFullConfig' hasFingerprint shouldLog cmdLineArgs configFilePath testLabelFil
       $ \mockServer ->
         -- we dont fork dbsync here. Just prepare it as an action
         withDBSyncEnv (mkDBSyncEnv dbsyncParams partialDbSyncRun) $ \dbSyncEnv -> do
-          void . hSilence [stderr] $ Db.recreateDB (getDBSyncPGPass dbSyncEnv)
+          let pgPass = getDBSyncPGPass dbSyncEnv
+          tableNames <- Db.getAllTablleNames pgPass
+          -- We only want to create the table schema once for the tests so here we check
+          -- if there are any table names.
+          if null tableNames || shouldDropDB
+            then void . hSilence [stderr] $ Db.recreateDB pgPass
+            else void . hSilence [stderr] $ Db.truncateTables pgPass tableNames
           action interpreter mockServer dbSyncEnv
   where
     configDir = mkConfigDir configFilePath

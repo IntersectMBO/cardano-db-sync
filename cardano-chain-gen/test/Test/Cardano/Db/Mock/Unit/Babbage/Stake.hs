@@ -28,7 +28,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (MonadSTM (..))
 import Control.Monad (forM_, replicateM_, void)
 import Data.Text (Text)
 import Ouroboros.Network.Block (blockSlot)
-import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, withFullConfig)
+import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, withFullConfig, withFullConfigAndDropDB)
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillEpochs,
   fillUntilNextEpoch,
@@ -55,7 +55,7 @@ import Test.Tasty.HUnit (Assertion)
 
 registrationTx :: IOManager -> [(Text, Text)] -> Assertion
 registrationTx =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigAndDropDB babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $
@@ -213,7 +213,7 @@ stakeAddressPtrUseBefore =
 ----------------------------------------------------------------------------------------------------------
 stakeDistGenesis :: IOManager -> [(Text, Text)] -> Assertion
 stakeDistGenesis =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigAndDropDB babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     a <- fillUntilNextEpoch interpreter mockServer
     assertBlockNoBackoff dbSync (fromIntegral $ length a)

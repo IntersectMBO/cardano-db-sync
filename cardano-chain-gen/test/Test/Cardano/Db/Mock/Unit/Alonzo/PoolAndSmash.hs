@@ -28,6 +28,7 @@ import Test.Cardano.Db.Mock.Config (
   getPoolLayer,
   startDBSync,
   withFullConfig,
+  withFullConfigAndDropDB,
  )
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillUntilNextEpoch,
@@ -48,7 +49,7 @@ import Test.Tasty.HUnit (Assertion, assertEqual)
 
 poolReg :: IOManager -> [(Text, Text)] -> Assertion
 poolReg =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigAndDropDB alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
