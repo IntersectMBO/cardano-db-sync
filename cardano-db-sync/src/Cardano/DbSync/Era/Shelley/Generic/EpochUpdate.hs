@@ -10,13 +10,15 @@ import Cardano.DbSync.Era.Shelley.Generic.ProtoParams
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import qualified Cardano.Ledger.BaseTypes as Ledger
+import Cardano.Ledger.Conway.Governance (EnactState)
+import Cardano.Ledger.DRepDistr
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
 import Cardano.Prelude hiding (Maybe (..), fromMaybe)
 import qualified Cardano.Protocol.TPraos.API as Shelley
 import qualified Cardano.Protocol.TPraos.Rules.Tickn as Shelley
 import Cardano.Slotting.Slot (EpochNo (..))
 import Data.Strict.Maybe (Maybe (..))
-import Ouroboros.Consensus.Cardano.Block (HardForkState (..))
+import Ouroboros.Consensus.Cardano.Block (HardForkState (..), StandardConway, StandardCrypto)
 import Ouroboros.Consensus.Cardano.CanHardFork ()
 import qualified Ouroboros.Consensus.HeaderValidation as Consensus
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
@@ -27,6 +29,8 @@ data NewEpoch = NewEpoch
   { neEpoch :: !EpochNo
   , neIsEBB :: !Bool
   , neAdaPots :: !(Maybe Shelley.AdaPots)
+  , neDRepDistr :: !(Maybe (DRepDistr StandardCrypto))
+  , neEnacted :: !(Maybe (EnactState StandardConway))
   , neEpochUpdate :: !EpochUpdate
   }
 
