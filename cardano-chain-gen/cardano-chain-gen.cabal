@@ -51,6 +51,7 @@ library
                         Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
                         Cardano.Mock.Forging.Tx.Babbage
                         Cardano.Mock.Forging.Tx.Babbage.Scenarios
+                        Cardano.Mock.Forging.Tx.Conway
                         Cardano.Mock.Forging.Tx.Generic
                         Cardano.Mock.Forging.Tx.Shelley
                         Cardano.Mock.Forging.Types
@@ -64,6 +65,7 @@ library
                       , cardano-ledger-allegra
                       , cardano-ledger-alonzo
                       , cardano-ledger-babbage
+                      , cardano-ledger-conway
                       , cardano-ledger-binary
                       , cardano-ledger-core
                       , cardano-ledger-shelley
