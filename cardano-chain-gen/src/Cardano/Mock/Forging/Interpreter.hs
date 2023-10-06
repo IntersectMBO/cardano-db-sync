@@ -26,6 +26,7 @@ module Cardano.Mock.Forging.Interpreter (
   getCurrentSlot,
   forgeWithStakeCreds,
   withBabbageLedgerState,
+  withConwayLedgerState,
   withAlonzoLedgerState,
   withShelleyLedgerState,
   mkTxId,
@@ -79,6 +80,7 @@ import Ouroboros.Consensus.Cardano.Block (
   LedgerState (..),
   StandardAlonzo,
   StandardBabbage,
+  StandardConway,
   StandardShelley,
  )
 import Ouroboros.Consensus.Cardano.CanHardFork ()
@@ -502,6 +504,18 @@ withBabbageLedgerState inter mk = do
       Left err -> throwIO err
     _ -> throwIO ExpectedBabbageState
 
+withConwayLedgerState ::
+  Interpreter ->
+  (LedgerState (ShelleyBlock PraosStandard StandardConway) -> Either ForgingError a) ->
+  IO a
+withConwayLedgerState inter mk = do
+  st <- getCurrentLedgerState inter
+  case ledgerState st of
+    LedgerStateConway sta -> case mk sta of
+      Right a -> pure a
+      Left err -> throwIO err
+    _ -> throwIO ExpectedConwayState
+
 withAlonzoLedgerState ::
   Interpreter ->
   (LedgerState (ShelleyBlock TPraosStandard StandardAlonzo) -> Either ForgingError a) ->
@@ -531,6 +545,7 @@ mkTxId txe =
   case txe of
     TxAlonzo tx -> txid @StandardAlonzo (tx ^. Core.bodyTxL)
     TxBabbage tx -> txid @StandardBabbage (tx ^. Core.bodyTxL)
+    TxConway tx -> txid @StandardConway (tx ^. Core.bodyTxL)
     TxShelley tx -> txid @StandardShelley (tx ^. Core.bodyTxL)
 
 mkValidated :: TxEra -> Validated (Consensus.GenTx CardanoBlock)
@@ -575,6 +590,27 @@ mkValidated txe =
                                 ( Z
                                     ( Consensus.WrapValidatedGenTx
                                         (Consensus.mkShelleyValidatedTx $ Ledger.unsafeMakeValidated tx)
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+    TxConway tx ->
+      Consensus.HardForkValidatedGenTx
+        ( Consensus.OneEraValidatedGenTx
+            ( S
+                ( S
+                    ( S
+                        ( S
+                            ( S
+                                ( S
+                                    ( Z
+                                        ( Consensus.WrapValidatedGenTx
+                                            (Consensus.mkShelleyValidatedTx $ Ledger.unsafeMakeValidated tx)
+                                        )
                                     )
                                 )
                             )

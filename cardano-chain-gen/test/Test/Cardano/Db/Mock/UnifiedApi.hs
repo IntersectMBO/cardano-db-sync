@@ -5,12 +5,15 @@ module Test.Cardano.Db.Mock.UnifiedApi (
   forgeAndSubmitBlocks,
   withAlonzoFindLeaderAndSubmit,
   withBabbageFindLeaderAndSubmit,
+  withConwayFindLeaderAndSubmit,
   withAlonzoFindLeaderAndSubmitTx,
   withBabbageFindLeaderAndSubmitTx,
+  withConwayFindLeaderAndSubmitTx,
   withShelleyFindLeaderAndSubmit,
   withShelleyFindLeaderAndSubmitTx,
   getAlonzoLedgerState,
   getBabbageLedgerState,
+  getConwayLedgerState,
   skipUntilNextEpoch,
   fillUntilNextEpoch,
   fillEpochs,
@@ -32,6 +35,7 @@ import Ouroboros.Consensus.Cardano.Block (
   ShelleyEra,
   StandardAlonzo,
   StandardBabbage,
+  StandardConway,
   StandardCrypto,
  )
 import Ouroboros.Consensus.Ledger.Basics (LedgerState)
@@ -79,6 +83,15 @@ withBabbageFindLeaderAndSubmit interpreter mockServer mkTxs = do
   alTxs <- withBabbageLedgerState interpreter mkTxs
   forgeNextFindLeaderAndSubmit interpreter mockServer (TxBabbage <$> alTxs)
 
+withConwayFindLeaderAndSubmit ::
+  Interpreter ->
+  ServerHandle IO CardanoBlock ->
+  (LedgerState (ShelleyBlock PraosStandard StandardConway) -> Either ForgingError [Core.Tx StandardConway]) ->
+  IO CardanoBlock
+withConwayFindLeaderAndSubmit interpreter mockServer mkTxs = do
+  txs' <- withConwayLedgerState interpreter mkTxs
+  forgeNextFindLeaderAndSubmit interpreter mockServer (TxConway <$> txs')
+
 withAlonzoFindLeaderAndSubmitTx ::
   Interpreter ->
   ServerHandle IO CardanoBlock ->
@@ -99,6 +112,16 @@ withBabbageFindLeaderAndSubmitTx ::
 withBabbageFindLeaderAndSubmitTx interpreter mockServer mkTxs = do
   withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
     tx <- mkTxs st
+    pure [tx]
+
+withConwayFindLeaderAndSubmitTx ::
+  Interpreter ->
+  ServerHandle IO CardanoBlock ->
+  (LedgerState (ShelleyBlock PraosStandard StandardConway) -> Either ForgingError (Core.Tx StandardConway)) ->
+  IO CardanoBlock
+withConwayFindLeaderAndSubmitTx interpreter mockServer mkTx =
+  withConwayFindLeaderAndSubmit interpreter mockServer $ \st -> do
+    tx <- mkTx st
     pure [tx]
 
 withShelleyFindLeaderAndSubmit ::
@@ -129,6 +152,9 @@ getAlonzoLedgerState interpreter = withAlonzoLedgerState interpreter Right
 
 getBabbageLedgerState :: Interpreter -> IO (LedgerState (ShelleyBlock PraosStandard StandardBabbage))
 getBabbageLedgerState interpreter = withBabbageLedgerState interpreter Right
+
+getConwayLedgerState :: Interpreter -> IO (LedgerState (ShelleyBlock PraosStandard StandardConway))
+getConwayLedgerState interpreter = withConwayLedgerState interpreter Right
 
 skipUntilNextEpoch :: Interpreter -> ServerHandle IO CardanoBlock -> [TxEra] -> IO CardanoBlock
 skipUntilNextEpoch interpreter mockServer txsEra = do

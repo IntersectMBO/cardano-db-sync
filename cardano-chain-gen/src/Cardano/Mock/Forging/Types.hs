@@ -29,6 +29,7 @@ import Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import Ouroboros.Consensus.Shelley.Eras (
   StandardAlonzo,
   StandardBabbage,
+  StandardConway,
   StandardCrypto,
   StandardShelley,
  )
@@ -50,6 +51,7 @@ data MockBlock = MockBlock
 data TxEra
   = TxAlonzo !(Core.Tx StandardAlonzo)
   | TxBabbage !(Core.Tx StandardBabbage)
+  | TxConway !(Core.Tx StandardConway)
   | TxShelley !(Core.Tx StandardShelley)
 
 newtype NodeId = NodeId {unNodeId :: Int}
@@ -62,6 +64,7 @@ data ForgingError
   | CantFindUTxO
   | CantFindStake
   | ExpectedBabbageState
+  | ExpectedConwayState
   | ExpectedAlonzoState
   | ExpectedShelleyState
   | UnexpectedEra
