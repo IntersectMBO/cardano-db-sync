@@ -146,6 +146,10 @@ test-suite cardano-chain-gen
                         Test.Cardano.Db.Mock.Unit.Babbage.Stake
                         Test.Cardano.Db.Mock.Unit.Babbage.Tx
                         Test.Cardano.Db.Mock.Unit.Conway
+                        Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ConfigFile
+                        Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.EpochDisabled
+                        Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ForceIndex
+                        Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.MigrateConsumedPruneTxOut
                         Test.Cardano.Db.Mock.Unit.Conway.Config
                         Test.Cardano.Db.Mock.Unit.Conway.Simple
                         Test.Cardano.Db.Mock.UnifiedApi
