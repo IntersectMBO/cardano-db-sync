@@ -33,6 +33,7 @@ data LookupFail
   | DbMetaMultipleRows
   | DBMultipleGenesis
   | DBExtraMigration !String
+  | DBPruneConsumed !String
   deriving (Eq, Generic)
 
 instance Exception LookupFail
@@ -52,6 +53,7 @@ instance Show LookupFail where
       DbMetaMultipleRows -> "Multiple rows in Meta table which should only contain one"
       DBMultipleGenesis -> "Multiple Genesis blocks found. These are blocks without an EpochNo"
       DBExtraMigration e -> "DBExtraMigration : " <> e
+      DBPruneConsumed e -> "DBExtraMigration" <> e
 
 base16encode :: ByteString -> Text
 base16encode = Text.decodeUtf8 . Base16.encode
