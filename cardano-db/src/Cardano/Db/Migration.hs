@@ -11,6 +11,8 @@ module Cardano.Db.Migration (
   getMigrationScripts,
   runMigrations,
   recreateDB,
+  getAllTablleNames,
+  truncateTables,
   dropTables,
   getMaintenancePsqlConf,
   MigrationValidate (..),
@@ -46,7 +48,7 @@ import Data.Either (partitionEithers)
 import Data.List ((\\))
 import qualified Data.List as List
 import Data.Maybe (fromMaybe)
-import Data.Text (Text)
+import Data.Text (Text, intercalate, pack)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import Data.Time.Clock (getCurrentTime)
@@ -285,6 +287,16 @@ recreateDB pgpass = do
   runWithConnectionNoLogging pgpass $ do
     rawExecute "drop schema if exists public cascade" []
     rawExecute "create schema public" []
+
+getAllTablleNames :: PGPassSource -> IO [Text]
+getAllTablleNames pgpass = do
+  runWithConnectionNoLogging pgpass $ do
+    fmap unSingle <$> rawSql "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = current_schema()" []
+
+truncateTables :: PGPassSource -> [Text] -> IO ()
+truncateTables pgpass tables =
+  runWithConnectionNoLogging pgpass $ do
+    rawExecute ("TRUNCATE " <> intercalate (pack ", ") tables <> " CASCADE") []
 
 getMaintenancePsqlConf :: PGConfig -> IO Text
 getMaintenancePsqlConf pgconfig = runWithConnectionNoLogging (PGPassCached pgconfig) $ do

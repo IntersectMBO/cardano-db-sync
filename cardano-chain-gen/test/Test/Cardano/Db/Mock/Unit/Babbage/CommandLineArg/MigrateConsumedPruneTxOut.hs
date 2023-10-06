@@ -34,6 +34,7 @@ import Test.Cardano.Db.Mock.Config (
   startDBSync,
   stopDBSync,
   withCustomConfig,
+  withCustomConfigAndDropDB,
  )
 import Test.Cardano.Db.Mock.Examples (mockBlock0, mockBlock1)
 import Test.Cardano.Db.Mock.UnifiedApi (
@@ -49,7 +50,7 @@ import Test.Tasty.HUnit (Assertion)
 
 commandLineArgCheck :: IOManager -> [(Text, Text)] -> Assertion
 commandLineArgCheck = do
-  withCustomConfig cmdLineArgs babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfigAndDropDB cmdLineArgs babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
         Babbage.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 500

@@ -10,7 +10,7 @@ import qualified Cardano.Db as DB
 import Cardano.Mock.ChainSync.Server (IOManager)
 import Data.Text (Text)
 import GHC.Conc.IO (threadDelay)
-import Test.Cardano.Db.Mock.Config (CommandLineArgs (..), babbageConfigDir, initCommandLineArgs, startDBSync, withCustomConfig)
+import Test.Cardano.Db.Mock.Config (CommandLineArgs (..), babbageConfigDir, initCommandLineArgs, startDBSync, withCustomConfig, withCustomConfigAndDropDB)
 import Test.Cardano.Db.Mock.Validate (assertEqQuery)
 import Test.Tasty.HUnit (Assertion)
 
@@ -29,7 +29,7 @@ checkForceIndexesArg =
 
 checkNoForceIndexesArg :: IOManager -> [(Text, Text)] -> Assertion
 checkNoForceIndexesArg =
-  withCustomConfig commandLineNoForceIndexArgs babbageConfigDir testLabel $ \_ _ dbSyncEnv -> do
+  withCustomConfigAndDropDB commandLineNoForceIndexArgs babbageConfigDir testLabel $ \_ _ dbSyncEnv -> do
     startDBSync dbSyncEnv
     threadDelay 3_000_000
     assertEqQuery dbSyncEnv DB.queryPgIndexesCount 93 "there wasn't the correct number of indexes"

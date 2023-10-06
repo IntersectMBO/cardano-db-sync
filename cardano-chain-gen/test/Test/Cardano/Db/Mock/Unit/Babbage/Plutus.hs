@@ -55,7 +55,7 @@ import qualified Data.Map as Map
 import Data.Text (Text)
 import Ouroboros.Consensus.Cardano.Block (StandardBabbage)
 import Ouroboros.Network.Block (genesisPoint)
-import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, withFullConfig)
+import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, withFullConfig, withFullConfigAndDropDB)
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillUntilNextEpoch,
   forgeNextAndSubmit,
@@ -80,7 +80,7 @@ import Test.Tasty.HUnit (Assertion)
 
 simpleScript :: IOManager -> [(Text, Text)] -> Assertion
 simpleScript =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigAndDropDB babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -284,7 +284,7 @@ multipleScriptsFailedSameBlock =
 
 registrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
 registrationScriptTx =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigAndDropDB babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $
@@ -407,7 +407,7 @@ deregistrationsScriptTx'' =
 
 mintMultiAsset :: IOManager -> [(Text, Text)] -> Assertion
 mintMultiAsset =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigAndDropDB babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \st -> do
       let val0 = MultiAsset $ Map.singleton (PolicyID alwaysMintScriptHash) (Map.singleton (head assetNames) 1)

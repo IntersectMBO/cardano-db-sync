@@ -9,6 +9,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Test.Cardano.Db.Mock.Property.Property (
@@ -273,4 +274,4 @@ prop_empty_blocks iom knownMigrations = withMaxSuccess 20 $ noShrinking $ forAll
   prettyCommands smSymbolic hist (checkCommandNames cmds (res === Ok))
   where
     smSymbolic = sm (error "inter") (error "mockServer") (error "dbSync")
-    runAction action = withFullConfig' False False initCommandLineArgs "config" "qsm" action iom knownMigrations
+    runAction action = withFullConfig' (WithConfigArgs False False False) initCommandLineArgs "config" "qsm" action iom knownMigrations

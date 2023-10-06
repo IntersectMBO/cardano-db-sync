@@ -12,6 +12,7 @@ import Test.Cardano.Db.Mock.Config (
   alonzoConfigDir,
   startDBSync,
   withFullConfig,
+  withFullConfigAndDropDB,
  )
 import Test.Cardano.Db.Mock.UnifiedApi (
   withAlonzoFindLeaderAndSubmit,
@@ -22,7 +23,7 @@ import Test.Tasty.HUnit (Assertion)
 
 addSimpleTx :: IOManager -> [(Text, Text)] -> Assertion
 addSimpleTx =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigAndDropDB alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- translate the block to a real Cardano block.
     void $
       withAlonzoFindLeaderAndSubmitTx interpreter mockServer $

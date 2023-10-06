@@ -43,7 +43,7 @@ import Control.Monad (forM_, void)
 import Data.Text (Text)
 import Ouroboros.Consensus.Cardano.Block (StandardBabbage, StandardCrypto)
 import Ouroboros.Network.Block (blockPoint)
-import Test.Cardano.Db.Mock.Config (babbageConfigDir, getPoolLayer, startDBSync, stopDBSync, withFullConfig)
+import Test.Cardano.Db.Mock.Config (babbageConfigDir, getPoolLayer, startDBSync, stopDBSync, withFullConfig, withFullConfigAndDropDB)
 import Test.Cardano.Db.Mock.Examples (mockBlock0)
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillEpochPercentage,
@@ -122,7 +122,7 @@ configNoStakes =
 
 poolReg :: IOManager -> [(Text, Text)] -> Assertion
 poolReg =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigAndDropDB babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
@@ -350,7 +350,7 @@ poolDelist =
 
 forkFixedEpoch :: IOManager -> [(Text, Text)] -> Assertion
 forkFixedEpoch =
-  withFullConfig "config-hf-epoch1" testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigAndDropDB "config-hf-epoch1" testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $
       withAlonzoFindLeaderAndSubmitTx interpreter mockServer $

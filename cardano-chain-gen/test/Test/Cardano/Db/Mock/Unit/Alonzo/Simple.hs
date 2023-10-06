@@ -12,7 +12,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (MonadSTM (atomically))
 import Control.Monad (void)
 import Data.Text (Text)
 import Ouroboros.Network.Block (blockNo)
-import Test.Cardano.Db.Mock.Config (alonzoConfigDir, startDBSync, stopDBSync, withFullConfig)
+import Test.Cardano.Db.Mock.Config (alonzoConfigDir, startDBSync, stopDBSync, withFullConfig, withFullConfigAndDropDB)
 import Test.Cardano.Db.Mock.Examples (mockBlock0, mockBlock1, mockBlock2)
 import Test.Cardano.Db.Mock.UnifiedApi (forgeNextAndSubmit)
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff)
@@ -20,7 +20,7 @@ import Test.Tasty.HUnit (Assertion, assertBool)
 
 forgeBlocks :: IOManager -> [(Text, Text)] -> Assertion
 forgeBlocks = do
-  withFullConfig alonzoConfigDir testLabel $ \interpreter _mockServer _dbSync -> do
+  withFullConfigAndDropDB alonzoConfigDir testLabel $ \interpreter _mockServer _dbSync -> do
     _block0 <- forgeNext interpreter mockBlock0
     _block1 <- forgeNext interpreter mockBlock1
     block2 <- forgeNext interpreter mockBlock2

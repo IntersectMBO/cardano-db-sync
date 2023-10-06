@@ -39,6 +39,7 @@ import Test.Cardano.Db.Mock.Config (
   startDBSync,
   stopDBSync,
   withFullConfig,
+  withFullConfigAndDropDB,
  )
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillEpochPercentage,
@@ -56,7 +57,7 @@ import Test.Tasty.HUnit (Assertion)
 
 simpleRewards :: IOManager -> [(Text, Text)] -> Assertion
 simpleRewards =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigAndDropDB alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
