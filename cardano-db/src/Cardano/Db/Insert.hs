@@ -72,7 +72,6 @@ module Cardano.Db.Insert (
   insertCommitteeRegistration,
   insertCommitteeDeRegistration,
   insertDrepRegistration,
-  insertDrepDeRegistration,
   insertUnchecked,
   insertMany',
   -- Export mainly for testing.
@@ -380,9 +379,6 @@ insertCommitteeDeRegistration = insertUnchecked "CommitteeDeRegistration"
 
 insertDrepRegistration :: (MonadBaseControl IO m, MonadIO m) => DrepRegistration -> ReaderT SqlBackend m DrepRegistrationId
 insertDrepRegistration = insertUnchecked "DrepRegistration"
-
-insertDrepDeRegistration :: (MonadBaseControl IO m, MonadIO m) => DrepDeRegistration -> ReaderT SqlBackend m DrepDeRegistrationId
-insertDrepDeRegistration = insertUnchecked "DrepDeRegistration"
 
 -- -----------------------------------------------------------------------------
 

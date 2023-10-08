@@ -287,7 +287,6 @@ share
     txId                TxId                noreference
     slotNo              Word64              sqltype=word63type
     redeemerId          RedeemerId Maybe    noreference
-    deposit             DbLovelace Maybe    sqltype=lovelace
 
   TxMetadata
     key                 DbWord64            sqltype=word64type
@@ -552,7 +551,6 @@ share
     addrId              StakeAddressId      noreference
     certIndex           Word16
     drepHashId          DrepHashId          noreference
-    activeEpochNo       Word64
     txId                TxId                noreference
     redeemerId          RedeemerId Maybe    noreference
 
@@ -570,14 +568,8 @@ share
   DrepRegistration
     txId                TxId                noreference
     certIndex           Word16
-    deposit             DbLovelace Maybe    sqltype=lovelace
+    deposit             Int64 Maybe                             -- Needs to allow negaitve values.
     votingAnchorId      VotingAnchorId Maybe  noreference
-    drepHashId          DrepHashId          noreference
-
-  DrepDeRegistration
-    txId                TxId                noreference
-    certIndex           Word16
-    deposit             DbLovelace          sqltype=lovelace
     drepHashId          DrepHashId          noreference
 
   VotingAnchor
@@ -591,6 +583,7 @@ share
     index              Word64
     deposit            DbLovelace            sqltype=lovelace
     returnAddress      StakeAddressId        noreference
+    expiration         Word64 Maybe          sqltype=word31type
     votingAnchorId     VotingAnchorId Maybe  noreference
     type               GovActionType         sqltype=govactiontype
     description        Text
@@ -636,6 +629,7 @@ share
     hashId                  DrepHashId          noreference
     amount                  Word64
     epochNo                 Word64              sqltype=word31type
+    activeUntil             Word64 Maybe        sqltype=word31type
     UniqueDrepDistr hashId epochNo
 
   -- -----------------------------------------------------------------------------------------------
@@ -889,7 +883,6 @@ schemaDocs =
       DelegationTxId # "The Tx table index of the transaction that contained this delegation."
       DelegationSlotNo # "The slot number of the block that contained this delegation."
       DelegationRedeemerId # "The Redeemer table index that is related with this certificate."
-      DelegationDeposit # "The deposit that may appear at the certificate. New in 13.2-Conway"
 
     TxMetadata --^ do
       "A table for metadata attached to a transaction."
@@ -1158,7 +1151,6 @@ schemaDocs =
       DelegationVoteAddrId # "The StakeAddress table index for the stake address."
       DelegationVoteCertIndex # "The index of this delegation within the certificates of this transaction."
       DelegationVoteDrepHashId # "The DrepHash table index for the pool being delegated to."
-      DelegationVoteActiveEpochNo # "The epoch number where this delegation becomes active."
       DelegationVoteTxId # "The Tx table index of the transaction that contained this delegation."
       DelegationVoteRedeemerId # "The Redeemer table index that is related with this certificate. TODO: can vote redeemers index these delegations?"
 
@@ -1176,17 +1168,12 @@ schemaDocs =
       CommitteeDeRegistrationHotKey # "The deregistered hot key hash"
 
     DrepRegistration --^ do
-      "A table for DRep registrations or updates. Updates will have a null deposits. New in 13.2-Conway."
+      "A table for DRep registrations, deregistrations or updates. Registration have positive deposit values, deregistrations have negative and\
+      \ updates have null. Based on this distinction, for a specific DRep, getting the latest entry gives its registration state. New in 13.2-Conway."
       DrepRegistrationTxId # "The Tx table index of the tx that includes this certificate."
       DrepRegistrationCertIndex # "The index of this registration within the certificates of this transaction."
       DrepRegistrationDeposit # "The deposits payed if this is an initial registration."
       DrepRegistrationDrepHashId # "The Drep hash index of this registration."
-
-    DrepDeRegistration --^ do
-      "A table for every DRep de-registration. New in 13.2-Conway."
-      DrepDeRegistrationTxId # "The Tx table index of the tx that includes this certificate."
-      DrepDeRegistrationCertIndex # "The index of this deregistration within the certificates of this transaction."
-      DrepDeRegistrationDrepHashId # "The deregistered drep hash"
 
     VotingAnchor --^ do
       "A table for every Anchor that appears on Governance Actions. These are pointers to offchain metadata. \
@@ -1255,6 +1242,7 @@ schemaDocs =
       DrepDistrHashId # "The DrepHash table index that this distribution entry has information about."
       DrepDistrAmount # "The total amount of voting power this DRep is delegated."
       DrepDistrEpochNo # "The epoch no this distribution is about."
+      DrepDistrActiveUntil # "The epoch until which this drep is active. TODO: This currently remains null always. "
 
     PoolOfflineData --^ do
       "The pool offline (ie not on chain) for a stake pool."

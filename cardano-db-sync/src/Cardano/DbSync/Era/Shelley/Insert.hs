@@ -53,7 +53,7 @@ import Cardano.DbSync.Era.Shelley.Offline
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util (liftLookupFail, safeDecodeToJson)
 import Cardano.DbSync.Error
-import Cardano.DbSync.Ledger.Types (ApplyResult (..), DepositsMap, lookupDepositsMap)
+import Cardano.DbSync.Ledger.Types (ApplyResult (..), getGovExpiresAt, lookupDepositsMap)
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Bech32
@@ -141,7 +141,7 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
           }
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
-    let txInserter = insertTx syncEnv isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk) (apDepositsMap applyResult)
+    let txInserter = insertTx syncEnv isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk) applyResult
     blockGroupedData <- foldM (\gp (idx, tx) -> txInserter idx tx gp) mempty zippedTx
     minIds <- insertBlockGroupedData syncEnv blockGroupedData
 
@@ -264,14 +264,14 @@ insertTx ::
   DB.BlockId ->
   EpochNo ->
   SlotNo ->
-  DepositsMap ->
+  ApplyResult ->
   Word64 ->
   Generic.Tx ->
   BlockGroupedData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) BlockGroupedData
-insertTx syncEnv isMember blkId epochNo slotNo depositsMap blockIndex tx grouped = do
+insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped = do
   let !txHash = Generic.txHash tx
-  let !mdeposits = if not (Generic.txValidContract tx) then Just (Coin 0) else lookupDepositsMap txHash depositsMap
+  let !mdeposits = if not (Generic.txValidContract tx) then Just (Coin 0) else lookupDepositsMap txHash (apDepositsMap applyResult)
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
       !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
       hasConsumed = getHasConsumedOrPruneTxOut syncEnv
@@ -356,7 +356,7 @@ insertTx syncEnv isMember blkId epochNo slotNo depositsMap blockIndex tx grouped
           Generic.txScripts tx
 
       mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
-      mapM_ (lift . insertGovernanceAction cache network blkId txId) $ zip [0 ..] (Generic.txProposalProcedure tx)
+      mapM_ (lift . insertGovernanceAction cache network blkId txId (getGovExpiresAt applyResult epochNo)) $ zip [0 ..] (Generic.txProposalProcedure tx)
       mapM_ (insertVotingProcedures cache txId) (Generic.txVotingProcedure tx)
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
@@ -577,7 +577,7 @@ insertDrepRegistration txId idx cred mcoin mAnchor = do
     DB.DrepRegistration
       { DB.drepRegistrationTxId = txId
       , DB.drepRegistrationCertIndex = idx
-      , DB.drepRegistrationDeposit = Generic.coinToDbLovelace <$> mcoin
+      , DB.drepRegistrationDeposit = fromIntegral . unCoin <$> mcoin
       , DB.drepRegistrationVotingAnchorId = votingAnchorId
       , DB.drepRegistrationDrepHashId = drepId
       }
@@ -591,12 +591,13 @@ insertDrepDeRegistration ::
   ReaderT SqlBackend m ()
 insertDrepDeRegistration txId idx cred coin = do
   drepId <- insertCredDrepHash cred
-  void . DB.insertDrepDeRegistration $
-    DB.DrepDeRegistration
-      { DB.drepDeRegistrationTxId = txId
-      , DB.drepDeRegistrationCertIndex = idx
-      , DB.drepDeRegistrationDeposit = Generic.coinToDbLovelace coin
-      , DB.drepDeRegistrationDrepHashId = drepId
+  void . DB.insertDrepRegistration $
+    DB.DrepRegistration
+      { DB.drepRegistrationTxId = txId
+      , DB.drepRegistrationCertIndex = idx
+      , DB.drepRegistrationDeposit = Just (- (fromIntegral $ unCoin coin))
+      , DB.drepRegistrationVotingAnchorId = Nothing
+      , DB.drepRegistrationDrepHashId = drepId
       }
 
 insertPoolCert ::
@@ -881,7 +882,6 @@ insertDelegation cache network (EpochNo epoch) slotNo txId idx mRedeemerId cred 
       , DB.delegationTxId = txId
       , DB.delegationSlotNo = unSlotNo slotNo
       , DB.delegationRedeemerId = mRedeemerId
-      , DB.delegationDeposit = Nothing
       }
 
 insertDelegationVote ::
@@ -901,7 +901,6 @@ insertDelegationVote cache network txId idx cred drep = do
       { DB.delegationVoteAddrId = addrId
       , DB.delegationVoteCertIndex = idx
       , DB.delegationVoteDrepHashId = drepId
-      , DB.delegationVoteActiveEpochNo = 0 -- TODO: Conway
       , DB.delegationVoteTxId = txId
       , DB.delegationVoteRedeemerId = Nothing
       }
@@ -1435,9 +1434,10 @@ insertGovernanceAction ::
   Ledger.Network ->
   DB.BlockId ->
   DB.TxId ->
+  Maybe EpochNo ->
   (Word64, ProposalProcedure StandardConway) ->
   ReaderT SqlBackend m ()
-insertGovernanceAction cache _network blkId txId (index, pp) = do
+insertGovernanceAction cache _network blkId txId govExpiresAt (index, pp) = do
   addrId <-
     insertStakeAddressWithCache cache CacheNew txId $ pProcReturnAddr pp
   votingAnchorId <- insertAnchor txId $ pProcAnchor pp
@@ -1453,6 +1453,7 @@ insertGovernanceAction cache _network blkId txId (index, pp) = do
         , DB.governanceActionIndex = index
         , DB.governanceActionDeposit = Generic.coinToDbLovelace $ pProcDeposit pp
         , DB.governanceActionReturnAddress = addrId
+        , DB.governanceActionExpiration = unEpochNo <$> govExpiresAt
         , DB.governanceActionVotingAnchorId = Just votingAnchorId
         , DB.governanceActionType = Generic.toGovAction $ pProcGovAction pp
         , DB.governanceActionDescription = textShow $ pProcGovAction pp
@@ -1591,6 +1592,7 @@ insertDrepDistr e dreps = do
           { DB.drepDistrHashId = drepId
           , DB.drepDistrAmount = fromIntegral $ unCoin $ fromCompact coin
           , DB.drepDistrEpochNo = unEpochNo e
+          , DB.drepDistrActiveUntil = Nothing
           }
 
 updateEnacted :: forall m. (MonadBaseControl IO m, MonadIO m) => EpochNo -> EnactState StandardConway -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
