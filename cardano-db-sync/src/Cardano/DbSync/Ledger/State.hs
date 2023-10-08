@@ -15,6 +15,7 @@
 module Cardano.DbSync.Ledger.State (
   applyBlock,
   defaultApplyResult,
+  getGovExpiresAt,
   mkHasLedgerEnv,
   applyBlockAndSnapshot,
   listLedgerStateFilesOrdered,
@@ -43,7 +44,6 @@ import Cardano.DbSync.Util
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
 import Cardano.Ledger.Alonzo.Scripts
 import qualified Cardano.Ledger.BaseTypes as Ledger
-import Cardano.Ledger.Era (EraCrypto)
 import Cardano.Ledger.Shelley.AdaPots (AdaPots)
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Prelude hiding (atomically)
@@ -127,6 +127,7 @@ import System.Directory (doesFileExist, listDirectory, removeFile)
 import System.FilePath (dropExtension, takeExtension, (</>))
 import System.Mem (performMajorGC)
 import Prelude (String, id)
+import Cardano.Ledger.Conway.Core as Shelley
 
 -- Note: The decision on whether a ledger-state is written to disk is based on the block number
 -- rather than the slot number because while the block number is fully populated (for every block
@@ -231,6 +232,7 @@ applyBlock env blk = do
     let !appResult =
           ApplyResult
             { apPrices = getPrices newState
+            , apGovExpiresAfter = getGovExpiration newState
             , apPoolsRegistered = getRegisteredPools oldState
             , apNewEpoch = maybeToStrict newEpoch
             , apOldLedger = Strict.Just oldState
@@ -812,6 +814,19 @@ getPrices st = case ledgerState $ clsState st of
           ^. Shelley.curPParamsEpochStateL
           . Alonzo.ppPricesL
       )
+  LedgerStateConway bls ->
+    Strict.Just
+      ( Shelley.nesEs (Consensus.shelleyLedgerState bls)
+          ^. Shelley.curPParamsEpochStateL
+          . Alonzo.ppPricesL
+      )
+  _ -> Strict.Nothing
+
+getGovExpiration :: CardanoLedgerState -> Strict.Maybe EpochNo
+getGovExpiration st = case ledgerState $ clsState st of
+  LedgerStateConway bls ->
+    Strict.Just $ Shelley.nesEs (Consensus.shelleyLedgerState bls)
+      ^. (Shelley.curPParamsEpochStateL . Shelley.ppGovActionExpirationL)
   _ -> Strict.Nothing
 
 findAdaPots :: [LedgerEvent] -> Maybe AdaPots

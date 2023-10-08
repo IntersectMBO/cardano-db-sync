@@ -142,7 +142,6 @@ deleteTablesAfterTxId mtxId mtxInId mtxOutId mmaTxOutId = do
     queryFirstAndDeleteAfter CommitteeRegistrationTxId txId
     queryFirstAndDeleteAfter CommitteeDeRegistrationTxId txId
     queryFirstAndDeleteAfter DrepRegistrationTxId txId
-    queryFirstAndDeleteAfter DrepDeRegistrationTxId txId
     queryFirstAndDeleteAfter VotingProcedureTxId txId
     mgaId <- queryMinRefId GovernanceActionTxId txId
     whenJust mgaId $ \gaId -> do
