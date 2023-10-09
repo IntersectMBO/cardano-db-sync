@@ -7,7 +7,6 @@ BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
   IF next_version = 27 THEN
     EXECUTE 'ALTER TABLE "reverse_index" ALTER COLUMN "min_ids" SET NOT NULL' ;
-    EXECUTE 'ALTER TABLE "delegation" ADD COLUMN "deposit" lovelace NULL' ;
     EXECUTE 'ALTER TABLE "param_proposal" ALTER COLUMN "epoch_no" DROP NOT NULL' ;
     EXECUTE 'ALTER TABLE "param_proposal" ALTER COLUMN "key" DROP NOT NULL' ;
     EXECUTE 'CREATe TABLE "drep_hash"("id" SERIAL8  PRIMARY KEY UNIQUE,"raw" hash28type NULL,"view" VARCHAR NULL,"has_script" BOOLEAN NOT NULL)' ;
@@ -16,7 +15,6 @@ BEGIN
     EXECUTE 'CREATe TABLE "committee_registration"("id" SERIAL8  PRIMARY KEY UNIQUE,"tx_id" INT8 NOT NULL,"cert_index" INT4 NOT NULL,"cold_key" addr29type NOT NULL,"hot_key" addr29type NOT NULL)' ;
     EXECUTE 'CREATe TABLE "committee_de_registration"("id" SERIAL8  PRIMARY KEY UNIQUE,"tx_id" INT8 NOT NULL,"cert_index" INT4 NOT NULL,"hot_key" addr29type NOT NULL)' ;
     EXECUTE 'CREATe TABLE "drep_registration"("id" SERIAL8  PRIMARY KEY UNIQUE,"tx_id" INT8 NOT NULL,"cert_index" INT4 NOT NULL,"deposit" lovelace NOT NULL,"drep_hash_id" INT8 NOT NULL)' ;
-    EXECUTE 'CREATe TABLE "drep_de_registration"("id" SERIAL8  PRIMARY KEY UNIQUE,"tx_id" INT8 NOT NULL,"cert_index" INT4 NOT NULL,"deposit" lovelace NOT NULL,"drep_hash_id" INT8 NOT NULL)' ;
     EXECUTE 'CREATe TABLE "voting_anchor"("id" SERIAL8  PRIMARY KEY UNIQUE,"tx_id" INT8 NOT NULL,"url" varchar NOT NULL,"data_hash" BYTEA NOT NULL)' ;
     EXECUTE 'CREATe TABLE "governance_action"("id" SERIAL8  PRIMARY KEY UNIQUE,"tx_id" INT8 NOT NULL,"index" INT8 NOT NULL,"deposit" lovelace NOT NULL,"return_address" INT8 NOT NULL,"voting_anchor_id" INT8 NULL,"type" govactiontype NOT NULL,"description" VARCHAR NOT NULL,"param_proposal" INT8 NULL,"ratified_epoch" word31type NULL,"enacted_epoch" word31type NULL,"dropped_epoch" word31type NULL,"expired_epoch" word31type NULL)' ;
     EXECUTE 'CREATe TABLE "treasury_withdrawal"("id" SERIAL8  PRIMARY KEY UNIQUE,"governance_action_id" INT8 NOT NULL,"stake_address_id" INT8 NOT NULL,"amount" lovelace NOT NULL)' ;
