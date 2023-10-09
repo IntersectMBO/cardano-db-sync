@@ -29,6 +29,7 @@ import qualified Data.Map.Strict as Map
 import Data.Type.Equality (type (~))
 #endif
 import Cardano.Ledger.Conway.Core
+import Cardano.Ledger.Conway.PParams
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardBabbage, StandardConway)
 
@@ -67,9 +68,9 @@ data ParamProposal = ParamProposal
   , -- New for Conway.
     pppPoolVotingThresholds :: !(Maybe PoolVotingThresholds)
   , pppDRepVotingThresholds :: !(Maybe DRepVotingThresholds)
-  , pppMinCommitteeSize :: !(Maybe Natural)
-  , pppCommitteeTermLimit :: !(Maybe Natural)
-  , pppGovActionExpiration :: !(Maybe EpochNo)
+  , pppCommitteeMinSize :: !(Maybe Natural)
+  , pppCommitteeMaxTermLength :: !(Maybe Natural)
+  , pppGovActionLifetime :: !(Maybe EpochNo)
   , pppGovActionDeposit :: !(Maybe Natural)
   , pppDRepDeposit :: !(Maybe Natural)
   , pppDRepActivity :: !(Maybe EpochNo)
@@ -136,9 +137,9 @@ convertConwayParamProposal pmap =
     , -- New for Conway.
       pppPoolVotingThresholds = strictMaybeToMaybe (pmap ^. ppuPoolVotingThresholdsL)
     , pppDRepVotingThresholds = strictMaybeToMaybe (pmap ^. ppuDRepVotingThresholdsL)
-    , pppMinCommitteeSize = strictMaybeToMaybe (pmap ^. ppuMinCommitteeSizeL)
-    , pppCommitteeTermLimit = strictMaybeToMaybe (pmap ^. ppuCommitteeTermLimitL)
-    , pppGovActionExpiration = strictMaybeToMaybe (pmap ^. ppuGovActionExpirationL)
+    , pppCommitteeMinSize = strictMaybeToMaybe (pmap ^. ppuCommitteeMinSizeL)
+    , pppCommitteeMaxTermLength = strictMaybeToMaybe (pmap ^. ppuCommitteeMaxTermLengthL)
+    , pppGovActionLifetime = strictMaybeToMaybe (pmap ^. ppuGovActionLifetimeL)
     , pppGovActionDeposit = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuGovActionDepositL)
     , pppDRepDeposit = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuDRepDepositL)
     , pppDRepActivity = strictMaybeToMaybe (pmap ^. ppuDRepActivityL)
@@ -179,9 +180,9 @@ convertBabbageParamProposal epochNo (key, pmap) =
     , pppMaxCollateralInputs = strictMaybeToMaybe (pmap ^. ppuMaxCollateralInputsL)
     , pppPoolVotingThresholds = Nothing
     , pppDRepVotingThresholds = Nothing
-    , pppMinCommitteeSize = Nothing
-    , pppCommitteeTermLimit = Nothing
-    , pppGovActionExpiration = Nothing
+    , pppCommitteeMinSize = Nothing
+    , pppCommitteeMaxTermLength = Nothing
+    , pppGovActionLifetime = Nothing
     , pppGovActionDeposit = Nothing
     , pppDRepDeposit = Nothing
     , pppDRepActivity = Nothing
@@ -223,9 +224,9 @@ convertAlonzoParamProposal epochNo (key, pmap) =
     , pppMaxCollateralInputs = strictMaybeToMaybe (pmap ^. ppuMaxCollateralInputsL)
     , pppPoolVotingThresholds = Nothing
     , pppDRepVotingThresholds = Nothing
-    , pppMinCommitteeSize = Nothing
-    , pppCommitteeTermLimit = Nothing
-    , pppGovActionExpiration = Nothing
+    , pppCommitteeMinSize = Nothing
+    , pppCommitteeMaxTermLength = Nothing
+    , pppGovActionLifetime = Nothing
     , pppGovActionDeposit = Nothing
     , pppDRepDeposit = Nothing
     , pppDRepActivity = Nothing
@@ -268,9 +269,9 @@ convertShelleyParamProposal epochNo (key, pmap) =
     , pppMaxCollateralInputs = Nothing
     , pppPoolVotingThresholds = Nothing
     , pppDRepVotingThresholds = Nothing
-    , pppMinCommitteeSize = Nothing
-    , pppCommitteeTermLimit = Nothing
-    , pppGovActionExpiration = Nothing
+    , pppCommitteeMinSize = Nothing
+    , pppCommitteeMaxTermLength = Nothing
+    , pppGovActionLifetime = Nothing
     , pppGovActionDeposit = Nothing
     , pppDRepDeposit = Nothing
     , pppDRepActivity = Nothing

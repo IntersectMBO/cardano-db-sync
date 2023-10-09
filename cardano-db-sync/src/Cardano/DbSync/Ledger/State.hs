@@ -72,7 +72,10 @@ import Data.Type.Equality (type (~))
 
 import Cardano.DbSync.Api.Types (LedgerEnv (..), SyncOptions (..))
 import Cardano.DbSync.Error (SyncNodeError (..), fromEitherSTM)
+import Cardano.Ledger.Conway.Core as Shelley
 import Cardano.Ledger.Conway.Governance
+import qualified Cardano.Ledger.Conway.Governance as Shelley
+import qualified Cardano.Ledger.Conway.PParams as Shelley
 import Cardano.Ledger.DRepDistr
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
@@ -127,7 +130,6 @@ import System.Directory (doesFileExist, listDirectory, removeFile)
 import System.FilePath (dropExtension, takeExtension, (</>))
 import System.Mem (performMajorGC)
 import Prelude (String, id)
-import Cardano.Ledger.Conway.Core as Shelley
 
 -- Note: The decision on whether a ledger-state is written to disk is based on the block number
 -- rather than the slot number because while the block number is fully populated (for every block
@@ -825,8 +827,9 @@ getPrices st = case ledgerState $ clsState st of
 getGovExpiration :: CardanoLedgerState -> Strict.Maybe EpochNo
 getGovExpiration st = case ledgerState $ clsState st of
   LedgerStateConway bls ->
-    Strict.Just $ Shelley.nesEs (Consensus.shelleyLedgerState bls)
-      ^. (Shelley.curPParamsEpochStateL . Shelley.ppGovActionExpirationL)
+    Strict.Just $
+      Shelley.nesEs (Consensus.shelleyLedgerState bls)
+        ^. (Shelley.curPParamsEpochStateL . Shelley.ppGovActionLifetimeL)
   _ -> Strict.Nothing
 
 findAdaPots :: [LedgerEvent] -> Maybe AdaPots

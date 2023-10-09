@@ -16,6 +16,7 @@ import Cardano.Ledger.BaseTypes (UnitInterval)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Core
+import Cardano.Ledger.Conway.PParams hiding (params)
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
@@ -59,9 +60,9 @@ data ProtoParams = ProtoParams
   , -- New for Conway.
     ppPoolVotingThresholds :: !(Maybe PoolVotingThresholds)
   , ppDRepVotingThresholds :: !(Maybe DRepVotingThresholds)
-  , ppMinCommitteeSize :: !(Maybe Natural)
-  , ppCommitteeTermLimit :: !(Maybe Natural)
-  , ppGovActionExpiration :: !(Maybe EpochNo)
+  , ppCommitteeMinSize :: !(Maybe Natural)
+  , ppCommitteeMaxTermLength :: !(Maybe Natural)
+  , ppGovActionLifetime :: !(Maybe EpochNo)
   , ppGovActionDeposit :: !(Maybe Natural)
   , ppDRepDeposit :: !(Maybe Natural)
   , ppDRepActivity :: !(Maybe EpochNo)
@@ -119,9 +120,9 @@ fromConwayParams params =
     , ppMaxCollateralInputs = Just $ params ^. ppMaxCollateralInputsL
     , ppPoolVotingThresholds = Just $ params ^. ppPoolVotingThresholdsL
     , ppDRepVotingThresholds = Just $ params ^. ppDRepVotingThresholdsL
-    , ppMinCommitteeSize = Just $ params ^. ppMinCommitteeSizeL
-    , ppCommitteeTermLimit = Just $ params ^. ppCommitteeTermLimitL
-    , ppGovActionExpiration = Just $ params ^. ppGovActionExpirationL
+    , ppCommitteeMinSize = Just $ params ^. ppCommitteeMinSizeL
+    , ppCommitteeMaxTermLength = Just $ params ^. ppCommitteeMaxTermLengthL
+    , ppGovActionLifetime = Just $ params ^. ppGovActionLifetimeL
     , ppGovActionDeposit = Just . fromIntegral . unCoin $ params ^. ppGovActionDepositL
     , ppDRepDeposit = Just . fromIntegral . unCoin $ params ^. ppDRepDepositL
     , ppDRepActivity = Just $ params ^. ppDRepActivityL
@@ -160,9 +161,9 @@ fromBabbageParams params =
     , ppMaxCollateralInputs = Just $ params ^. ppMaxCollateralInputsL
     , ppPoolVotingThresholds = Nothing
     , ppDRepVotingThresholds = Nothing
-    , ppMinCommitteeSize = Nothing
-    , ppCommitteeTermLimit = Nothing
-    , ppGovActionExpiration = Nothing
+    , ppCommitteeMinSize = Nothing
+    , ppCommitteeMaxTermLength = Nothing
+    , ppGovActionLifetime = Nothing
     , ppGovActionDeposit = Nothing
     , ppDRepDeposit = Nothing
     , ppDRepActivity = Nothing
@@ -201,9 +202,9 @@ fromAlonzoParams params =
     , ppMaxCollateralInputs = Just $ params ^. ppMaxCollateralInputsL
     , ppPoolVotingThresholds = Nothing
     , ppDRepVotingThresholds = Nothing
-    , ppMinCommitteeSize = Nothing
-    , ppCommitteeTermLimit = Nothing
-    , ppGovActionExpiration = Nothing
+    , ppCommitteeMinSize = Nothing
+    , ppCommitteeMaxTermLength = Nothing
+    , ppGovActionLifetime = Nothing
     , ppGovActionDeposit = Nothing
     , ppDRepDeposit = Nothing
     , ppDRepActivity = Nothing
@@ -242,9 +243,9 @@ fromShelleyParams params =
     , ppMaxCollateralInputs = Nothing
     , ppPoolVotingThresholds = Nothing
     , ppDRepVotingThresholds = Nothing
-    , ppMinCommitteeSize = Nothing
-    , ppCommitteeTermLimit = Nothing
-    , ppGovActionExpiration = Nothing
+    , ppCommitteeMinSize = Nothing
+    , ppCommitteeMaxTermLength = Nothing
+    , ppGovActionLifetime = Nothing
     , ppGovActionDeposit = Nothing
     , ppDRepDeposit = Nothing
     , ppDRepActivity = Nothing

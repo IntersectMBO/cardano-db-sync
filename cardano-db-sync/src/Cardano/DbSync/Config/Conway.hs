@@ -36,7 +36,7 @@ readConwayGenesisConfig ::
 readConwayGenesisConfig SyncNodeConfig {..} =
   case dncConwayGenesisFile of
     Just file -> readConwayGenesisConfig' file dncConwayGenesisHash
-    Nothing -> pure (ConwayGenesis def)
+    Nothing -> pure (ConwayGenesis def def def)
   where
     readConwayGenesisConfig' file hash =
       firstExceptT (SNErrConwayConfig (unGenesisFile file) . renderConwayGenesisError) $

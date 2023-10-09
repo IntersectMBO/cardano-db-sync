@@ -25,11 +25,10 @@ import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.Ledger.Alonzo.Genesis (AlonzoGenesis)
+import qualified Cardano.Ledger.Api.Transition as Ledger
 import Cardano.Ledger.Binary.Version
 import Cardano.Ledger.Conway.Genesis
-import Cardano.Ledger.Shelley.Translation (emptyFromByronTranslationContext)
 import Control.Monad.Trans.Except (ExceptT)
-import Data.Default.Class (Default (def))
 import Data.Word (Word64)
 import Ouroboros.Consensus.Block.Forging
 import Ouroboros.Consensus.Cardano (Nonce (..), ProtVer (ProtVer))
@@ -104,8 +103,7 @@ mkProtocolInfoCardano genesisConfig shelleyCred =
             }
       , paramsShelleyBased =
           Consensus.ProtocolParamsShelleyBased
-            { Consensus.shelleyBasedGenesis = scConfig shelleyGenesis
-            , Consensus.shelleyBasedInitialNonce = shelleyPraosNonce shelleyGenesis
+            { Consensus.shelleyBasedInitialNonce = shelleyPraosNonce genesisHash
             , Consensus.shelleyBasedLeaderCredentials = shelleyCred
             }
       , paramsShelley =
@@ -138,29 +136,31 @@ mkProtocolInfoCardano genesisConfig shelleyCred =
             { Consensus.conwayProtVer = mkProtVer 10 0
             , Consensus.conwayMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure -- TODO: Conway
             }
-      , transitionParamsByronToShelley =
-          Consensus.ProtocolTransitionParamsByronToShelley emptyFromByronTranslationContext (dncShelleyHardFork dnc) -- TODO: Conway Fix
-      , transitionParamsShelleyToAllegra =
-          Consensus.ProtocolTransitionParamsIntraShelley () (dncAllegraHardFork dnc)
-      , transitionParamsAllegraToMary =
-          Consensus.ProtocolTransitionParamsIntraShelley () (dncMaryHardFork dnc)
-      , transitionParamsMaryToAlonzo =
-          Consensus.ProtocolTransitionParamsIntraShelley alonzoGenesis (dncAlonzoHardFork dnc)
-      , transitionParamsAlonzoToBabbage =
-          Consensus.ProtocolTransitionParamsIntraShelley () (dncBabbageHardFork dnc)
-      , transitionParamsBabbageToConway =
-          Consensus.ProtocolTransitionParamsIntraShelley (ConwayGenesis def) (dncConwayHardFork dnc) -- TODO: Conway Fix
+      , ledgerTransitionConfig =
+          Ledger.mkLatestTransitionConfig
+            shelleyGenesis
+            alonzoGenesis
+            conwayGenesis
+      , hardForkTriggers =
+          Consensus.CardanoHardForkTriggers'
+            { triggerHardForkShelley = dncShelleyHardFork dnc
+            , triggerHardForkAllegra = dncAllegraHardFork dnc
+            , triggerHardForkMary = dncMaryHardFork dnc
+            , triggerHardForkAlonzo = dncAlonzoHardFork dnc
+            , triggerHardForkBabbage = dncBabbageHardFork dnc
+            , triggerHardForkConway = dncConwayHardFork dnc
+            }
       }
   where
     GenesisCardano
       dnc
       bGenesis
-      shelleyGenesis
+      (ShelleyConfig shelleyGenesis genesisHash)
       alonzoGenesis
-      _conwayGenesis = genesisConfig
+      conwayGenesis = genesisConfig
 
-shelleyPraosNonce :: ShelleyConfig -> Nonce
-shelleyPraosNonce sCfg = Nonce (Crypto.castHash . unGenesisHashShelley $ scGenesisHash sCfg)
+shelleyPraosNonce :: GenesisHashShelley -> Nonce
+shelleyPraosNonce hsh = Nonce (Crypto.castHash . unGenesisHashShelley $ hsh)
 
 mkProtVer :: Word64 -> Word64 -> ProtVer
 mkProtVer a b =
