@@ -33,8 +33,6 @@ jobs:
           minimal: false
           # enable IOG flavour to bring in all the crypto libraries we need.
           iog: true
-      - name: cabal update
-        run: cabal update
       - name: cache cabal
         uses: actions/cache@v3
         with:
@@ -43,6 +41,8 @@ jobs:
             ~/.cabal-devx/store
           key: ${{ runner.os }}-${{ matrix.compiler-nix-name }}-${{ hashFiles('**/*.cabal', '**/cabal.project', '**/cabal.project.freeze') }}
           restore-keys: ${{ runner.os }}-${{ matrix.compiler-nix-name }}-
+      - name: cabal update
+        run: cabal update
       - name: cabal build dependencies
         run: cabal build all -j --enable-tests --only-dependencies
       - name: cabal build
