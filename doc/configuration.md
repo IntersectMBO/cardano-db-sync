@@ -28,6 +28,9 @@ When this flag is enabled, some features are missing and some DB tables are left
 - `ada_pots` table is left empty
 - `epoch_param` table is left empty
 - `tx.deposit` is left null (too expensive to calculate without the ledger)
+- `drep_distr` is left empty
+- `governance_action.x_epoch` is left null
+- `governance_action.expiration` is left null
 
 Warning: Running db-sync with this flag and then restarting it without the flag will cause crashes and should be avoided.
 
