@@ -595,7 +595,7 @@ insertDrepDeRegistration txId idx cred coin = do
     DB.DrepRegistration
       { DB.drepRegistrationTxId = txId
       , DB.drepRegistrationCertIndex = idx
-      , DB.drepRegistrationDeposit = Just (- (fromIntegral $ unCoin coin))
+      , DB.drepRegistrationDeposit = Just (-(fromIntegral $ unCoin coin))
       , DB.drepRegistrationVotingAnchorId = Nothing
       , DB.drepRegistrationDrepHashId = drepId
       }
@@ -1081,12 +1081,12 @@ insertParamProposal blkId txId pp = do
       , DB.paramProposalDvtPPTechnicalGroup = toDouble . dvtPPTechnicalGroup <$> pppDRepVotingThresholds pp
       , DB.paramProposalDvtPPGovGroup = toDouble . dvtPPGovGroup <$> pppDRepVotingThresholds pp
       , DB.paramProposalDvtTreasuryWithdrawal = toDouble . dvtTreasuryWithdrawal <$> pppDRepVotingThresholds pp
-      , DB.paramProposalMinCommitteeSize = DbWord64 . fromIntegral <$> pppMinCommitteeSize pp
-      , DB.paramProposalCommitteeTermLimit = DbWord64 . fromIntegral <$> pppCommitteeTermLimit pp
-      , DB.paramProposalGovActionExpiration = unEpochNo <$> pppGovActionExpiration pp
+      , DB.paramProposalCommitteeMinSize = DbWord64 . fromIntegral <$> pppCommitteeMinSize pp
+      , DB.paramProposalCommitteeMaxTermLength = DbWord64 . fromIntegral <$> pppCommitteeMaxTermLength pp
+      , DB.paramProposalGovActionLifetime = unEpochNo <$> pppGovActionLifetime pp
       , DB.paramProposalGovActionDeposit = DbWord64 . fromIntegral <$> pppGovActionDeposit pp
-      , DB.paramProposalDRepDeposit = DbWord64 . fromIntegral <$> pppDRepDeposit pp
-      , DB.paramProposalDRepActivity = unEpochNo <$> pppDRepActivity pp
+      , DB.paramProposalDrepDeposit = DbWord64 . fromIntegral <$> pppDRepDeposit pp
+      , DB.paramProposalDrepActivity = unEpochNo <$> pppDRepActivity pp
       }
 
 toDouble :: Ledger.UnitInterval -> Double
@@ -1271,12 +1271,12 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce = do
       , DB.epochParamDvtPPTechnicalGroup = toDouble . dvtPPTechnicalGroup <$> Generic.ppDRepVotingThresholds params
       , DB.epochParamDvtPPGovGroup = toDouble . dvtPPGovGroup <$> Generic.ppDRepVotingThresholds params
       , DB.epochParamDvtTreasuryWithdrawal = toDouble . dvtTreasuryWithdrawal <$> Generic.ppDRepVotingThresholds params
-      , DB.epochParamMinCommitteeSize = DbWord64 . fromIntegral <$> Generic.ppMinCommitteeSize params
-      , DB.epochParamCommitteeTermLimit = DbWord64 . fromIntegral <$> Generic.ppCommitteeTermLimit params
-      , DB.epochParamGovActionExpiration = unEpochNo <$> Generic.ppGovActionExpiration params
+      , DB.epochParamCommitteeMinSize = DbWord64 . fromIntegral <$> Generic.ppCommitteeMinSize params
+      , DB.epochParamCommitteeMaxTermLength = DbWord64 . fromIntegral <$> Generic.ppCommitteeMaxTermLength params
+      , DB.epochParamGovActionLifetime = unEpochNo <$> Generic.ppGovActionLifetime params
       , DB.epochParamGovActionDeposit = DbWord64 . fromIntegral <$> Generic.ppGovActionDeposit params
-      , DB.epochParamDRepDeposit = DbWord64 . fromIntegral <$> Generic.ppDRepDeposit params
-      , DB.epochParamDRepActivity = unEpochNo <$> Generic.ppDRepActivity params
+      , DB.epochParamDrepDeposit = DbWord64 . fromIntegral <$> Generic.ppDRepDeposit params
+      , DB.epochParamDrepActivity = unEpochNo <$> Generic.ppDRepActivity params
       , DB.epochParamBlockId = blkId
       }
 
@@ -1465,7 +1465,7 @@ insertGovernanceAction cache _network blkId txId govExpiresAt (index, pp) = do
         }
   case pProcGovAction pp of
     TreasuryWithdrawals mp -> mapM_ (insertTreasuryWithdrawal governanceAction) (Map.toList mp)
-    NewCommittee _ st committee -> insertNewCommittee governanceAction st committee
+    UpdateCommittee _ removed added q -> insertNewCommittee governanceAction removed added q
     _ -> pure ()
   where
     insertTreasuryWithdrawal gaId (cred, coin) = do
@@ -1478,12 +1478,13 @@ insertGovernanceAction cache _network blkId txId govExpiresAt (index, pp) = do
           , DB.treasuryWithdrawalAmount = Generic.coinToDbLovelace coin
           }
 
-    insertNewCommittee gaId st committee = do
+    insertNewCommittee gaId removed added q = do
       void . DB.insertNewCommittee $
         DB.NewCommittee
           { DB.newCommitteeGovernanceActionId = gaId
-          , DB.newCommitteeQuorum = toDouble $ committeeQuorum committee
-          , DB.newCommitteeMembers = textShow st
+          , DB.newCommitteeQuorum = toDouble q
+          , DB.newCommitteeDeletedMembers = textShow removed
+          , DB.newCommitteeAddedMembers = textShow added
           }
 
 insertAnchor :: (MonadIO m, MonadBaseControl IO m) => DB.TxId -> Anchor StandardCrypto -> ReaderT SqlBackend m DB.VotingAnchorId

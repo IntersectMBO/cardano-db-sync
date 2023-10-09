@@ -165,7 +165,7 @@ toGovAction = \case
   HardForkInitiation {} -> Db.HardForkInitiation
   TreasuryWithdrawals {} -> Db.TreasuryWithdrawals
   NoConfidence {} -> Db.NoConfidence
-  NewCommittee {} -> Db.NewCommitteeType
+  UpdateCommittee {} -> Db.NewCommitteeType
   NewConstitution {} -> Db.NewConstitution
   InfoAction {} -> Db.InfoAction
 

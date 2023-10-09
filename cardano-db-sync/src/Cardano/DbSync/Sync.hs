@@ -184,7 +184,6 @@ dbSyncProtocols ::
   CodecConfig CardanoBlock ->
   Network.NodeToClientVersion ->
   BlockNodeToClientVersion CardanoBlock ->
-  --  ConnectionId LocalAddress ->
   NodeToClientProtocols 'InitiatorMode LocalAddress BSL.ByteString IO () Void
 dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
   NodeToClientProtocols

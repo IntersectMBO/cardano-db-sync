@@ -150,6 +150,7 @@ library
                       , cardano-db
                       , cardano-ledger-allegra
                       , cardano-ledger-alonzo
+                      , cardano-ledger-api
                       , cardano-ledger-babbage
                       , cardano-ledger-binary
                       , cardano-ledger-byron

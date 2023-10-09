@@ -464,12 +464,12 @@ share
     dvtPPGovGroup            Double Maybe   -- sqltype=rational
     dvtTreasuryWithdrawal    Double Maybe   -- sqltype=rational
 
-    minCommitteeSize         DbWord64 Maybe sqltype=word64type
-    committeeTermLimit       DbWord64 Maybe sqltype=word64type
-    govActionExpiration      Word64 Maybe   sqltype=word64type
+    committeeMinSize         DbWord64 Maybe sqltype=word64type
+    committeeMaxTermLength   DbWord64 Maybe sqltype=word64type
+    govActionLifetime        Word64 Maybe   sqltype=word64type
     govActionDeposit         DbWord64 Maybe sqltype=word64type
-    dRepDeposit              DbWord64 Maybe sqltype=word64type
-    dRepActivity             Word64 Maybe sqltype=word64type
+    drepDeposit              DbWord64 Maybe sqltype=word64type
+    drepActivity             Word64 Maybe sqltype=word64type
 
     registeredTxId      TxId                noreference
 
@@ -523,12 +523,12 @@ share
     dvtPPGovGroup            Double Maybe   -- sqltype=rational
     dvtTreasuryWithdrawal    Double Maybe   -- sqltype=rational
 
-    minCommitteeSize         DbWord64 Maybe sqltype=word64type
-    committeeTermLimit       DbWord64 Maybe sqltype=word64type
-    govActionExpiration      Word64 Maybe   sqltype=word64type
+    committeeMinSize         DbWord64 Maybe sqltype=word64type
+    committeeMaxTermLength   DbWord64 Maybe sqltype=word64type
+    govActionLifetime        Word64 Maybe   sqltype=word64type
     govActionDeposit         DbWord64 Maybe sqltype=word64type
-    dRepDeposit              DbWord64 Maybe sqltype=word64type
-    dRepActivity             Word64 Maybe sqltype=word64type
+    drepDeposit              DbWord64 Maybe sqltype=word64type
+    drepActivity             Word64 Maybe sqltype=word64type
 
     blockId             BlockId             noreference      -- The first block where these parameters are valid.
 
@@ -601,7 +601,8 @@ share
   NewCommittee
     governanceActionId  GovernanceActionId  noreference
     quorum              Double
-    members             Text
+    deletedMembers      Text
+    addedMembers        Text
 
   VotingProcedure -- GovVote
     txId                 TxId                 noreference
@@ -1067,12 +1068,12 @@ schemaDocs =
       ParamProposalDvtPPTechnicalGroup # "DRep Vote threshold for protocol parameter changes, technical group. New in 13.2-Conway."
       ParamProposalDvtPPGovGroup # "DRep Vote threshold for protocol parameter changes, governance group. New in 13.2-Conway."
       ParamProposalDvtTreasuryWithdrawal # "DRep Vote threshold for treasury withdrawal. New in 13.2-Conway."
-      ParamProposalMinCommitteeSize # "Minimal constitutional committee size. New in 13.2-Conway."
-      ParamProposalCommitteeTermLimit # "Constitutional committee term limits. New in 13.2-Conway."
-      ParamProposalGovActionExpiration # "Governance action expiration. New in 13.2-Conway."
+      ParamProposalCommitteeMinSize # "Minimal constitutional committee size. New in 13.2-Conway."
+      ParamProposalCommitteeMaxTermLength # "Constitutional committee term limits. New in 13.2-Conway."
+      ParamProposalGovActionLifetime # "Governance action expiration. New in 13.2-Conway."
       ParamProposalGovActionDeposit # "Governance action deposit. New in 13.2-Conway."
-      ParamProposalDRepDeposit # "DRep deposit amount. New in 13.2-Conway."
-      ParamProposalDRepActivity # "DRep activity period. New in 13.2-Conway."
+      ParamProposalDrepDeposit # "DRep deposit amount. New in 13.2-Conway."
+      ParamProposalDrepActivity # "DRep activity period. New in 13.2-Conway."
 
     EpochParam --^ do
       "The accepted protocol parameters for an epoch."
@@ -1122,12 +1123,12 @@ schemaDocs =
       EpochParamDvtPPTechnicalGroup # "DRep Vote threshold for protocol parameter changes, technical group. New in 13.2-Conway."
       EpochParamDvtPPGovGroup # "DRep Vote threshold for protocol parameter changes, governance group. New in 13.2-Conway."
       EpochParamDvtTreasuryWithdrawal # "DRep Vote threshold for treasury withdrawal. New in 13.2-Conway."
-      EpochParamMinCommitteeSize # "Minimal constitutional committee size. New in 13.2-Conway."
-      EpochParamCommitteeTermLimit # "Constitutional committee term limits. New in 13.2-Conway."
-      EpochParamGovActionExpiration # "Governance action expiration. New in 13.2-Conway."
+      EpochParamCommitteeMinSize # "Minimal constitutional committee size. New in 13.2-Conway."
+      EpochParamCommitteeMaxTermLength # "Constitutional committee term limits. New in 13.2-Conway."
+      EpochParamGovActionLifetime # "Governance action expiration. New in 13.2-Conway."
       EpochParamGovActionDeposit # "Governance action deposit. New in 13.2-Conway."
-      EpochParamDRepDeposit # "DRep deposit amount. New in 13.2-Conway."
-      EpochParamDRepActivity # "DRep activity period. New in 13.2-Conway."
+      EpochParamDrepDeposit # "DRep deposit amount. New in 13.2-Conway."
+      EpochParamDrepActivity # "DRep activity period. New in 13.2-Conway."
 
     CostModel --^ do
       "CostModel for EpochParam and ParamProposal."
@@ -1195,10 +1196,11 @@ schemaDocs =
       GovernanceActionType # "Can be one of ParameterChange, HardForkInitiation, TreasuryWithdrawals, NoConfidence, NewCommittee, NewConstitution, InfoAction"
       GovernanceActionDescription # "A Text describing the content of this GovernanceAction in a readable way."
       GovernanceActionParamProposal # "If this is a param proposal action, this has the index of the param_proposal table."
-      GovernanceActionRatifiedEpoch # "If not null, then this proposal has been ratified at the specfied epoch."
+      GovernanceActionRatifiedEpoch # "If not null, then this proposal has been ratified at the specfied epoch. TODO: This is currently always null."
       GovernanceActionEnactedEpoch # "If not null, then this proposal has been enacted at the specfied epoch."
-      GovernanceActionDroppedEpoch # "If not null, then this proposal has been enacted at the specfied epoch."
-      GovernanceActionExpiredEpoch # "If not null, then this proposal has been enacted at the specfied epoch."
+      GovernanceActionDroppedEpoch # "If not null, then this proposal has been enacted at the specfied epoch. TODO: This is currently always null."
+      GovernanceActionExpiredEpoch # "If not null, then this proposal has been enacted at the specfied epoch. TODO: This is currently always null."
+      GovernanceActionExpiration # "Shows the epoch at which this governance action will expire."
 
     TreasuryWithdrawal --^ do
       "A table for all treasury withdrawals proposed on a GovernanceAction. New in 13.2-Conway."
@@ -1212,7 +1214,8 @@ schemaDocs =
       "A table for new committee proposed on a GovernanceAction. New in 13.2-Conway."
       NewCommitteeGovernanceActionId # "The GovernanceAction table index for this new committee."
       NewCommitteeQuorum # "The proposed quorum."
-      NewCommitteeMembers # "The members of the committee. This is now given in a text as a description, but may change. TODO: Conway."
+      NewCommitteeDeletedMembers # "The removed members of the committee. This is now given in a text as a description, but may change. TODO: Conway."
+      NewCommitteeAddedMembers # "The new members of the committee. This is now given in a text as a description, but may change. TODO: Conway."
 
     VotingProcedure --^ do
       "A table for voting procedures, aka GovVote. A Vote can be Yes No or Abstain. New in 13.2-Conway."
