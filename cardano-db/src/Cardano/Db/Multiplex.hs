@@ -6,7 +6,7 @@
 module Cardano.Db.Multiplex (
   insertTxOutPlex,
   insertManyTxOutPlex,
-  updateListTxOutConsumedByTxInId,
+  updateListTxOutConsumedByTxId,
   setNullTxOut,
   runExtraMigrations,
   ExtraCons.deleteConsumedTxOut,
@@ -67,12 +67,12 @@ toExtraTxOut txOut =
     , ExtraCons.txOutDataHash = txOutDataHash txOut
     , ExtraCons.txOutInlineDatumId = changeKey <$> txOutInlineDatumId txOut
     , ExtraCons.txOutReferenceScriptId = changeKey <$> txOutReferenceScriptId txOut
-    , ExtraCons.txOutConsumedByTxInId = Nothing
+    , ExtraCons.txOutConsumedByTxId = Nothing
     }
 
-updateListTxOutConsumedByTxInId :: MonadIO m => [(TxOutId, TxInId)] -> ReaderT SqlBackend m ()
-updateListTxOutConsumedByTxInId ls = do
-  ExtraCons.queryUpdateListTxOutConsumedByTxInId (f <$> ls)
+updateListTxOutConsumedByTxId :: MonadIO m => [(TxOutId, TxId)] -> ReaderT SqlBackend m ()
+updateListTxOutConsumedByTxId ls = do
+  ExtraCons.queryUpdateListTxOutConsumedByTxId (f <$> ls)
   where
     f (txOutId, txInId) = (changeKey txOutId, changeKey txInId)
 

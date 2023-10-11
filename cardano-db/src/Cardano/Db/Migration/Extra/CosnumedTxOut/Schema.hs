@@ -148,7 +148,7 @@ share
     dataHash            ByteString Maybe    sqltype=hash32type
     inlineDatumId       DatumId Maybe       noreference
     referenceScriptId   ScriptId Maybe      noreference
-    consumedByTxInId    TxInId Maybe        noreference
+    consumedByTxId      TxId Maybe        noreference
     UniqueTxout         txId index          -- The (tx_id, index) pair must be unique.
 
   CollateralTxOut

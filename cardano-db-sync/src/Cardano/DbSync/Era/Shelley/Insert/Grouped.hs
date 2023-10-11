@@ -94,8 +94,8 @@ insertBlockGroupedData syncEnv grouped = do
   txInIds <- lift . DB.insertManyTxIn $ etiTxIn <$> groupedTxIn grouped
   whenConsumeOrPruneTxOut syncEnv $ do
     etis <- resolveRemainingInputs (groupedTxIn grouped) $ zip txOutIds (fst <$> groupedTxOut grouped)
-    updateTuples <- lift $ mapM (prepareUpdates tracer) (zip txInIds etis)
-    lift $ DB.updateListTxOutConsumedByTxInId $ catMaybes updateTuples
+    updateTuples <- lift $ mapM (prepareUpdates tracer) etis
+    lift $ DB.updateListTxOutConsumedByTxId $ catMaybes updateTuples
   void . lift . DB.insertManyTxMetadata $ groupedTxMetadata grouped
   void . lift . DB.insertManyTxMint $ groupedTxMint grouped
   pure $ DB.MinIds (minimumMaybe txInIds) (minimumMaybe txOutIds) (minimumMaybe maTxOutIds)
@@ -116,10 +116,10 @@ insertBlockGroupedData syncEnv grouped = do
 prepareUpdates ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
-  (DB.TxInId, ExtendedTxIn) ->
-  m (Maybe (DB.TxOutId, DB.TxInId))
-prepareUpdates trce (txInId, eti) = case etiTxOutId eti of
-  Right txOutId -> pure $ Just (txOutId, txInId)
+  ExtendedTxIn ->
+  m (Maybe (DB.TxOutId, DB.TxId))
+prepareUpdates trce eti = case etiTxOutId eti of
+  Right txOutId -> pure $ Just (txOutId, DB.txInTxInId (etiTxIn eti))
   Left _ -> do
     liftIO $ logWarning trce $ "Failed to find output for " <> Text.pack (show eti)
     pure Nothing

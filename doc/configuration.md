@@ -85,7 +85,7 @@ Disables fetching pool offchain metadata.
 
 ### --consumed-tx-out
 
-Adds a new field `tx_out (consumed_by_tx_in_id)` and populated it accordingly. This allows users to
+Adds a new field `tx_out (consumed_by_tx_id)` and populated it accordingly. This allows users to
 query the tx_out table for unspent outputs directly, without the need to join with the tx_in table.
 If this is set once, then it must be always be set on following executions of db-sync, unless
 `prune-tx-out` is used instead.
