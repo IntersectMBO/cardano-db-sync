@@ -263,11 +263,10 @@ insertByronTx syncEnv blkId tx blockIndex = do
   -- Insert outputs for a transaction before inputs in case the inputs for this transaction
   -- references the output (not sure this can even happen).
   lift $ zipWithM_ (insertTxOut tracer hasConsumed txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
-  txInIds <- mapM (insertTxIn tracer txId) resolvedInputs
+  mapM_ (insertTxIn tracer txId) resolvedInputs
   whenConsumeOrPruneTxOut syncEnv $
     lift $
-      DB.updateListTxOutConsumedByTxInId $
-        zip (thrd3 <$> resolvedInputs) txInIds
+      DB.updateListTxOutConsumedByTxId (prepUpdate <$> resolvedInputs)
   -- fees are being returned so we can sum them and put them in cache to use when updating epochs
   pure $ unDbLovelace $ vfFee valFee
   where
@@ -279,6 +278,8 @@ insertByronTx syncEnv blkId tx blockIndex = do
       case ee of
         SNErrInvariant loc ei -> SNErrInvariant loc (annotateInvariantTx (Byron.taTx tx) ei)
         _other -> ee
+
+    prepUpdate (_, txId, txOutId, _) = (txOutId, txId)
 
 insertTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -310,10 +311,10 @@ insertTxIn ::
   DB.TxId ->
   (Byron.TxIn, DB.TxId, DB.TxOutId, DbLovelace) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.TxInId
-insertTxIn _tracer txInId (Byron.TxInUtxo _txHash inIndex, txOutTxId, _, _) = do
+insertTxIn _tracer txInTxId (Byron.TxInUtxo _txHash inIndex, txOutTxId, _, _) = do
   lift . DB.insertTxIn $
     DB.TxIn
-      { DB.txInTxInId = txInId
+      { DB.txInTxInId = txInTxId
       , DB.txInTxOutId = txOutTxId
       , DB.txInTxOutIndex = fromIntegral inIndex
       , DB.txInRedeemerId = Nothing
