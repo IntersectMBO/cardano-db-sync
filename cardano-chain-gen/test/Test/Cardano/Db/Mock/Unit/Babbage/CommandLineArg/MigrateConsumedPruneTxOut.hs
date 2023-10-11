@@ -57,7 +57,7 @@ commandLineArgCheck = do
 
     startDBSync dbSyncEnv
     assertBlockNoBackoff dbSyncEnv 1
-    assertEqQuery dbSyncEnv DB.queryTxConsumedColumnExists True "missing consumed_by_tx_in_id column when flag --consumed-tx-out active"
+    assertEqQuery dbSyncEnv DB.queryTxConsumedColumnExists True "missing consumed_by_tx_id column when flag --consumed-tx-out active"
   where
     cmdLineArgs =
       initCommandLineArgs
@@ -108,11 +108,11 @@ pruneWithSimpleRollback = do
     b1 <- forgeAndSubmitBlocks interpreter mockServer 96
     assertBlockNoBackoff dbSyncEnv (fullBlockSize b1)
     assertEqQuery dbSyncEnv DB.queryTxOutCount 12 "the txOut count is incorrect"
-    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxInId count after prune"
+    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxId count after prune"
     assertUnspentTx dbSyncEnv
 
     rollbackTo interpreter mockServer (blockPoint blk1)
-    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxInId cout after rollback"
+    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxId cout after rollback"
     assertBlockNoBackoff dbSyncEnv $ fullBlockSize b1
   where
     fullBlockSize b = fromIntegral $ length b + 4
@@ -166,13 +166,13 @@ pruningShouldKeepSomeTx = do
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ Babbage.mkPaymentTx (UTxOIndex 2) (UTxOIndex 3) 10000 10000
     b2 <- forgeAndSubmitBlocks interpreter mockServer 18
     assertBlockNoBackoff dbSyncEnv (fromIntegral $ length (b1 <> b2) + 2)
-    -- the two marked TxOutConsumedByTxInId should not be pruned
-    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 2 "Unexpected TxOutConsumedByTxInId count after prune"
+    -- the two marked TxOutConsumedByTxId should not be pruned
+    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 2 "Unexpected TxOutConsumedByTxId count after prune"
     -- add more blocks to instantiate another prune
     b3 <- forgeAndSubmitBlocks interpreter mockServer 110
     assertBlockNoBackoff dbSyncEnv (fromIntegral $ length (b1 <> b2 <> b3) + 2)
     -- the prune should have removed all
-    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxInId count after prune"
+    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxId count after prune"
   where
     cmdLineArgs =
       initCommandLineArgs
@@ -197,18 +197,18 @@ pruneAndRollBackOneBlock = do
       Right [tx1]
     assertBlockNoBackoff dbSyncEnv 101
     -- the 2 tx have been marked but not pruned as they are withing the last 20 blocks
-    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 2 "Unexpected TxOutConsumedByTxInId count before rollback"
+    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 2 "Unexpected TxOutConsumedByTxId count before rollback"
     rollbackTo interpreter mockServer $ blockPoint blk100
     -- add an empty block
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
     assertBlockNoBackoff dbSyncEnv 101
     -- there should only be 1 tx marked now as the other was deleted in rollback
-    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 1 "Unexpected TxOutConsumedByTxInId count after rollback"
+    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 1 "Unexpected TxOutConsumedByTxId count after rollback"
     -- cause another prune
     void $ forgeAndSubmitBlocks interpreter mockServer 102
     assertBlockNoBackoff dbSyncEnv 203
     -- everything should be pruned
-    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxInId count after rollback"
+    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxId count after rollback"
   where
     cmdLineArgs =
       initCommandLineArgs
@@ -233,18 +233,18 @@ noPruneAndRollBack = do
       Right [tx1]
     assertBlockNoBackoff dbSyncEnv 101
     -- the 2 tx have been marked but not pruned as they are withing the last 20 blocks
-    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 2 "Unexpected TxOutConsumedByTxInId count before rollback"
+    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 2 "Unexpected TxOutConsumedByTxId count before rollback"
     rollbackTo interpreter mockServer $ blockPoint blk100
     -- add an empty block
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
     assertBlockNoBackoff dbSyncEnv 101
     -- there should only be 1 tx marked now as the other was deleted in rollback
-    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 1 "Unexpected TxOutConsumedByTxInId count after rollback"
+    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 1 "Unexpected TxOutConsumedByTxId count after rollback"
     -- cause another prune
     void $ forgeAndSubmitBlocks interpreter mockServer 102
     assertBlockNoBackoff dbSyncEnv 203
     -- everything should be pruned
-    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 1 "Unexpected TxOutConsumedByTxInId count after rollback"
+    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 1 "Unexpected TxOutConsumedByTxId count after rollback"
   where
     cmdLineArgs =
       initCommandLineArgs
@@ -265,14 +265,14 @@ pruneSameBlock =
       tx1 <- Babbage.mkPaymentTx (UTxOPair utxo0) (UTxOIndex 2) 10000 500 st
       pure [tx0, tx1]
     assertBlockNoBackoff dbSyncEnv 78
-    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 2 "Unexpected TxOutConsumedByTxInId before rollback"
+    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 2 "Unexpected TxOutConsumedByTxId before rollback"
     void $ forgeAndSubmitBlocks interpreter mockServer 22
     assertBlockNoBackoff dbSyncEnv 100
-    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxInId after prune"
+    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxId after prune"
     rollbackTo interpreter mockServer (blockPoint blk77)
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
     assertBlockNoBackoff dbSyncEnv 78
-    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxInId after rollback"
+    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxId after rollback"
   where
     cmdLineArgs =
       initCommandLineArgs
@@ -298,7 +298,7 @@ noPruneSameBlock =
     assertBlockNoBackoff dbSyncEnv 100
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
     assertBlockNoBackoff dbSyncEnv 98
-    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxInId after rollback"
+    assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxId after rollback"
   where
     cmdLineArgs =
       initCommandLineArgs
