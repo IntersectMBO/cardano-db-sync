@@ -357,8 +357,8 @@ mkSyncEnv trce connString backend syncOptions protoInfo nw nwMagic systemStart s
       , envIsFixed = fixDataVar
       , envLedgerEnv = ledgerEnvType
       , envNetworkMagic = nwMagic
-      , envOfflineResultQueue = orq
-      , envOfflineWorkQueue = owq
+      , envOffChainPoolResultQueue = orq
+      , envOffChainPoolWorkQueue = owq
       , envOptions = syncOptions
       , envProtocol = SyncProtocolCardano
       , envPruneConsumeMigration = pcm

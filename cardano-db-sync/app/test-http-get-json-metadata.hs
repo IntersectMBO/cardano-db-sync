@@ -4,18 +4,18 @@
 
 import Cardano.Db (
   EntityField (..),
+  OffChainPoolData,
   PoolHashId,
   PoolMetaHash (..),
   PoolMetadataRef,
-  PoolOfflineData,
   PoolRetire,
   PoolUrl (..),
   runDbNoLoggingEnv,
   unValue4,
  )
-import Cardano.DbSync.Era.Shelley.Offline.Http (
+import Cardano.DbSync.Era.Shelley.OffChain.Http (
   FetchError (..),
-  httpGetPoolOfflineData,
+  httpGetOffChainPoolData,
   parsePoolUrl,
  )
 import Control.Monad (foldM)
@@ -49,18 +49,18 @@ import Network.HTTP.Client.TLS (tlsManagerSettings)
 main :: IO ()
 main = do
   manager <- Http.newManager tlsManagerSettings
-  xs <- runDbNoLoggingEnv queryTestOfflineData
-  putStrLn $ "testOfflineDataFetch: " ++ show (length xs) ++ " tests to run."
+  xs <- runDbNoLoggingEnv queryTestOffChainData
+  putStrLn $ "testOffChainPoolDataFetch: " ++ show (length xs) ++ " tests to run."
   tfs <- foldM (testOne manager) emptyTestFailure xs
   reportTestFailures tfs
   where
-    testOne :: Http.Manager -> TestFailure -> TestOffline -> IO TestFailure
-    testOne manager !accum testOffline = do
-      let poolUrl = toUrl testOffline
-          mHash = Just $ toHash testOffline
+    testOne :: Http.Manager -> TestFailure -> TestOffChain -> IO TestFailure
+    testOne manager !accum testPoolOffChain = do
+      let poolUrl = toUrl testPoolOffChain
+          mHash = Just $ toHash testPoolOffChain
       eres <- runExceptT $ do
         request <- parsePoolUrl poolUrl
-        httpGetPoolOfflineData manager request poolUrl mHash
+        httpGetOffChainPoolData manager request poolUrl mHash
       case eres of
         Left err -> do
           print err
@@ -70,7 +70,7 @@ main = do
 
 -- -------------------------------------------------------------------------------------------------
 
-data TestOffline = TestOffline
+data TestOffChain = TestOffChain
   { toTicker :: !Text
   , toUrl :: !PoolUrl
   , toHash :: !PoolMetaHash
@@ -125,35 +125,35 @@ reportTestFailures tf = do
     , "  ConnectionFailure : " ++ show (tfConnectionFailure tf)
     ]
 
--- reportTestOffline :: TestOffline -> IO ()
--- reportTestOffline tof = Text.putStrLn $ mconcat [ toTicker tof, " ", unPoolUrl (toUrl tof) ]
+-- reportTestOffChain :: TestOffChain -> IO ()
+-- reportTestOffChain tof = Text.putStrLn $ mconcat [ toTicker tof, " ", unPoolUrl (toUrl tof) ]
 
-queryTestOfflineData :: MonadIO m => ReaderT SqlBackend m [TestOffline]
-queryTestOfflineData = do
+queryTestOffChainData :: MonadIO m => ReaderT SqlBackend m [TestOffChain]
+queryTestOffChainData = do
   res <- select $ do
     (pod :& pmr) <-
       from
-        $ table @PoolOfflineData
+        $ table @OffChainPoolData
           `innerJoin` table @PoolMetadataRef
-        `on` (\(pod :& pmr) -> pod ^. PoolOfflineDataPmrId ==. pmr ^. PoolMetadataRefId)
-    where_ $ notExists (from (table @PoolRetire) >>= \pr -> where_ (pod ^. PoolOfflineDataPoolId ==. pr ^. PoolRetireHashId))
+        `on` (\(pod :& pmr) -> pod ^. OffChainPoolDataPmrId ==. pmr ^. PoolMetadataRefId)
+    where_ $ notExists (from (table @PoolRetire) >>= \pr -> where_ (pod ^. OffChainPoolDataPoolId ==. pr ^. PoolRetireHashId))
     pure
-      ( pod ^. PoolOfflineDataTickerName
+      ( pod ^. OffChainPoolDataTickerName
       , pmr ^. PoolMetadataRefUrl
       , pmr ^. PoolMetadataRefHash
-      , pod ^. PoolOfflineDataPoolId
+      , pod ^. OffChainPoolDataPoolId
       )
   pure . organise $ map (convert . unValue4) res
   where
-    convert :: (Text, PoolUrl, ByteString, PoolHashId) -> (PoolHashId, TestOffline)
+    convert :: (Text, PoolUrl, ByteString, PoolHashId) -> (PoolHashId, TestOffChain)
     convert (tname, url, hash, poolId) =
       ( poolId
-      , TestOffline
+      , TestOffChain
           { toTicker = tname
           , toUrl = url
           , toHash = PoolMetaHash hash
           }
       )
 
-    organise :: [(PoolHashId, TestOffline)] -> [TestOffline]
+    organise :: [(PoolHashId, TestOffChain)] -> [TestOffChain]
     organise = map (List.head . map snd . List.sortOn (Down . fst)) . List.groupOn fst

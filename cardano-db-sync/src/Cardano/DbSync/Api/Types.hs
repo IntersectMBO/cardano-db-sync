@@ -18,7 +18,7 @@ import Cardano.DbSync.Cache.Types (Cache)
 import Cardano.DbSync.Config.Types (SyncProtocol)
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv)
 import Cardano.DbSync.LocalStateQuery (NoLedgerEnv)
-import Cardano.DbSync.Types (FetchResult, PoolFetchRetry)
+import Cardano.DbSync.Types (OffChainPoolFetchRetry, OffChainPoolResult)
 import Cardano.Prelude (Bool, Eq, IO, Show, Word64)
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Class.MonadSTM.Strict (
@@ -44,8 +44,8 @@ data SyncEnv = SyncEnv
   , envIsFixed :: !(StrictTVar IO FixesRan)
   , envLedgerEnv :: !LedgerEnv
   , envNetworkMagic :: !NetworkMagic
-  , envOfflineResultQueue :: !(StrictTBQueue IO FetchResult)
-  , envOfflineWorkQueue :: !(StrictTBQueue IO PoolFetchRetry)
+  , envOffChainPoolResultQueue :: !(StrictTBQueue IO OffChainPoolResult)
+  , envOffChainPoolWorkQueue :: !(StrictTBQueue IO OffChainPoolFetchRetry)
   , envOptions :: !SyncOptions
   , envProtocol :: !SyncProtocol
   , envPruneConsumeMigration :: !DB.PruneConsumeMigration
@@ -68,7 +68,7 @@ data InsertOptions = InsertOptions
   { ioMultiAssets :: !Bool
   , ioMetadata :: !Bool
   , ioPlutusExtra :: !Bool
-  , ioOfflineData :: !Bool
+  , ioOffChainPoolData :: !Bool
   }
 
 -- A representation of if we are using a ledger or not given CLI options

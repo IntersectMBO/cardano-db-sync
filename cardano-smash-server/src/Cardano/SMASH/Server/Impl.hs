@@ -32,7 +32,7 @@ data ServerEnv = ServerEnv
 server :: ServerEnv -> Server API
 server serverEnv =
   pure todoSwagger
-    :<|> getPoolOfflineMetadata serverEnv
+    :<|> getOffChainPoolMetadata serverEnv
     :<|> getHealthStatus
     :<|> getReservedTickers serverEnv
     :<|> getDelistedPools serverEnv
@@ -78,12 +78,12 @@ todoSwagger =
 -- 403 if it is delisted
 -- 404 if it is not available (e.g. it could not be downloaded, or was invalid)
 -- 200 with the JSON content. Note that this must be the original content with the expected hash, not a re-rendering of the original.
-getPoolOfflineMetadata ::
+getOffChainPoolMetadata ::
   ServerEnv ->
   PoolId ->
   PoolMetadataHash ->
   Handler (ApiResult DBFail PoolMetadataRaw)
-getPoolOfflineMetadata (ServerEnv trce dataLayer) poolId poolMetaHash =
+getOffChainPoolMetadata (ServerEnv trce dataLayer) poolId poolMetaHash =
   convertIOToHandler $ do
     isDelisted <- dlCheckDelistedPool dataLayer poolId
 

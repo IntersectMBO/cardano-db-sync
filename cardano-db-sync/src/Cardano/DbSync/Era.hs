@@ -11,7 +11,7 @@ import Cardano.DbSync.Api.Types (SyncEnv)
 import Cardano.DbSync.Config
 import qualified Cardano.DbSync.Era.Byron.Genesis as Byron
 import qualified Cardano.DbSync.Era.Shelley.Genesis as Shelley
-import Cardano.DbSync.Era.Shelley.Offline as X
+import Cardano.DbSync.Era.Shelley.OffChain as X
 import Cardano.DbSync.Error
 import Cardano.Prelude
 

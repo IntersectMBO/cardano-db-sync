@@ -37,8 +37,8 @@ insert blocking until an element is removed from the other end. The main queues 
 are:
 
 * The `DbAction` queue.
-* The pool offline metadata request queue.
-* The pool offline metadata response queue.
+* The pool offchain metadata request queue.
+* The pool offchain metadata response queue.
 
 Due to limitations of PostgreSQL itself, all database operations are done in a single thread.
 If database operations are attempted from more than one thread PostgreSQL returns "failure
@@ -47,7 +47,7 @@ to acquire lock" error messages.
 The main threads are:
 
 * The database insert thread. This thread retrieves data from the `DbAction` and pool
-  offline metadata response queue and inserts the data into the database.
+  offchain metadata response queue and inserts the data into the database.
 
 * The `node` communication thread which retrieves blocks from the `node` and places them in
   the `DbAction` queue.

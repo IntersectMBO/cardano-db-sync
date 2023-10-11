@@ -120,11 +120,11 @@ queryHistoryStakeRewards address = do
         pure (rwd ^. RewardAmount)
 
       mtn <- select $ do
-        pod <- from $ table @PoolOfflineData
-        where_ (pod ^. PoolOfflineDataPoolId ==. val poolId)
+        pod <- from $ table @OffChainPoolData
+        where_ (pod ^. OffChainPoolDataPoolId ==. val poolId)
         -- Use the `id` column as a proxy for time where larger `id` means later time.
-        orderBy [desc (pod ^. PoolOfflineDataId)]
-        pure (pod ^. PoolOfflineDataTickerName)
+        orderBy [desc (pod ^. OffChainPoolDataId)]
+        pure (pod ^. OffChainPoolDataTickerName)
 
       let reward = maybe 0 (unDbLovelace . unValue) (listToMaybe res)
       pure $

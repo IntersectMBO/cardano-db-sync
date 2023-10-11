@@ -83,7 +83,7 @@ type ApiRes verb a = verb '[JSON] (ApiResult DBFail a)
 type BasicAuthURL = BasicAuth "smash" User
 
 -- GET api/v1/metadata/{hash}
-type OfflineMetadataAPI = "api" :> APIVersion :> "metadata" :> Capture "id" PoolId :> Capture "hash" PoolMetadataHash :> ApiRes Get PoolMetadataRaw
+type OffChainPoolMetadataAPI = "api" :> APIVersion :> "metadata" :> Capture "id" PoolId :> Capture "hash" PoolMetadataHash :> ApiRes Get PoolMetadataRaw
 
 -- GET api/v1/status
 type HealthStatusAPI = "api" :> APIVersion :> "status" :> ApiRes Get HealthStatus
@@ -124,7 +124,7 @@ type CheckPoolAPI = "api" :> APIVersion :> "exists" :> Capture "poolId" PoolId :
 
 -- The full API.
 type SmashAPI =
-  OfflineMetadataAPI
+  OffChainPoolMetadataAPI
     :<|> HealthStatusAPI
     :<|> ReservedTickersAPI
     :<|> DelistedPoolsAPI

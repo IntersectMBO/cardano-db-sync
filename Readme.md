@@ -89,7 +89,7 @@ possible solutions.
 * [Docker][Docker]: Instruction for docker-compose, and building the images using nix.
 * [ERD][ERD]: The entity relationship diagram.
 * [Example SQL queries][ExampleQueries]: Some example SQL and Haskell/Esqueleto queries.
-* [PoolOfflineData][PoolOfflineData]: Explanation of how stake pool offline data is retried.
+* [OffChainPoolData][OffChainPoolData]: Explanation of how stake pool offchain data is retried.
 * [Schema Documentation][Schema Documentation]: The database schema documentation.
 * [Schema Management][Schema Management]: How the database schema is managed and modified.
 * [StateSnapshot][StateSnapshot]: Document the creation and restoration of state snapshot files.
@@ -103,7 +103,7 @@ possible solutions.
 [ERD]: doc/ERD.png
 [ExampleQueries]: doc/interesting-queries.md
 [PostgresView]: https://www.postgresql.org/docs/current/sql-createview.html
-[PoolOfflineData]: doc/pool-offline-data.md
+[OffChainPoolData]: doc/pool-offchain-data.md
 [Schema Documentation]: doc/schema.md
 [Schema Management]: doc/schema-management.md
 [StateSnapshot]: doc/state-snapshot.md

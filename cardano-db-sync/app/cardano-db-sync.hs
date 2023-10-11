@@ -78,7 +78,7 @@ pRunDbSyncNode =
     <*> pHasMultiAssets
     <*> pHasMetadata
     <*> pHasPlutusExtra
-    <*> pHasOfflineData
+    <*> pHasOffChainPoolData
     <*> pTurboMode
     <*> pFullMode
     <*> pMigrateConsumed
@@ -231,13 +231,13 @@ pHasPlutusExtra =
         <> Opt.help "Disables most tables and entries related to plutus and scripts."
     )
 
-pHasOfflineData :: Parser Bool
-pHasOfflineData =
+pHasOffChainPoolData :: Parser Bool
+pHasOffChainPoolData =
   Opt.flag
     True
     False
-    ( Opt.long "disable-offline-data"
-        <> Opt.help "Disables fetching pool offline metadata."
+    ( Opt.long "disable-offchain-pool-data"
+        <> Opt.help "Disables fetching pool offchain metadata."
     )
 
 pTurboMode :: Parser Bool

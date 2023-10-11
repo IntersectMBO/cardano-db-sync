@@ -2,10 +2,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Offline.Types (
+module Cardano.DbSync.Era.Shelley.OffChain.Types (
   PoolDescription (..),
   PoolHomepage (..),
-  PoolOfflineMetadata (..),
+  PoolOffChainMetadata (..),
   PoolName (..),
   PoolTicker (..),
 ) where
@@ -31,7 +31,7 @@ newtype PoolHomepage = PoolHomepage
 instance ToSchema PoolHomepage
 
 -- | The bit of the pool data off the chain.
-data PoolOfflineMetadata = PoolOfflineMetadata
+data PoolOffChainMetadata = PoolOffChainMetadata
   { pomName :: !PoolName
   , pomDescription :: !PoolDescription
   , pomTicker :: !PoolTicker
@@ -53,18 +53,18 @@ newtype PoolTicker = PoolTicker
 
 instance ToSchema PoolTicker
 
-instance FromJSON PoolOfflineMetadata where
+instance FromJSON PoolOffChainMetadata where
   parseJSON =
-    withObject "poolOfflineMetadata" $ \o ->
-      PoolOfflineMetadata
+    withObject "poolOffChainMetadata" $ \o ->
+      PoolOffChainMetadata
         <$> parseName o
         <*> parseDescription o
         <*> parseTicker o
         <*> fmap PoolHomepage (o .: "homepage")
 
 -- | We presume the validation is not required the other way around?
-instance ToJSON PoolOfflineMetadata where
-  toJSON (PoolOfflineMetadata name' description' ticker' homepage') =
+instance ToJSON PoolOffChainMetadata where
+  toJSON (PoolOffChainMetadata name' description' ticker' homepage') =
     object
       [ "name" .= unPoolName name'
       , "description" .= unPoolDescription description'
@@ -72,7 +72,7 @@ instance ToJSON PoolOfflineMetadata where
       , "homepage" .= unPoolHomepage homepage'
       ]
 
-instance ToSchema PoolOfflineMetadata
+instance ToSchema PoolOffChainMetadata
 
 -- -------------------------------------------------------------------------------------------------
 

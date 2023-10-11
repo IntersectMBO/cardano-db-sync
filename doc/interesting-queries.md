@@ -550,12 +550,12 @@ select redeemer.tx_id as tx_id, redeemer.unit_mem, redeemer.unit_steps, redeemer
 ### Get blocks with 0 transactions and the pools that forged it
 ```sql
 select distinct on(block.hash) block.hash as block_hash , epoch_no, tx_count, pool_hash.hash_raw as pool_hash,
-                               pool_update.pledge, pool_update.active_epoch_no, pool_metadata_ref.url, pool_offline_data.ticker_name
+                               pool_update.pledge, pool_update.active_epoch_no, pool_metadata_ref.url, offchain_pool_data.ticker_name
   from block join slot_leader on block.slot_leader_id = slot_leader.id
     join pool_hash on slot_leader.pool_hash_id = pool_hash.id
     join pool_update on pool_update.hash_id = pool_hash.id
     left join pool_metadata_ref on pool_update.meta_id = pool_metadata_ref.id
-    left join pool_offline_data on pool_offline_data.pmr_id = pool_metadata_ref.id
+    left join offchain_pool_data on offchain_pool_data.pmr_id = pool_metadata_ref.id
   where tx_count = 0 and epoch_no > 150
   order by block.hash, pool_update.active_epoch_no desc;
 

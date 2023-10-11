@@ -49,7 +49,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Metadata (
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Era.Shelley.Insert.Epoch
 import Cardano.DbSync.Era.Shelley.Insert.Grouped
-import Cardano.DbSync.Era.Shelley.Offline
+import Cardano.DbSync.Era.Shelley.OffChain
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util (liftLookupFail, safeDecodeToJson)
 import Cardano.DbSync.Error
@@ -198,11 +198,11 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
 
     insertStakeSlice syncEnv $ apStakeSlice applyResult
 
-    when (ioOfflineData iopts && unBlockNo (Generic.blkBlockNo blk) `mod` offlineModBase == 0)
+    when (ioOffChainPoolData iopts && unBlockNo (Generic.blkBlockNo blk) `mod` offChainModBase == 0)
       . lift
       $ do
-        insertOfflineResults tracer (envOfflineResultQueue syncEnv)
-        loadOfflineWorkQueue tracer (envOfflineWorkQueue syncEnv)
+        insertOffChainResults tracer (envOffChainPoolResultQueue syncEnv)
+        loadOffChainWorkQueue tracer (envOffChainPoolWorkQueue syncEnv)
   where
     iopts = getInsertOptions syncEnv
 
@@ -223,8 +223,8 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
         Generic.Shelley -> "insertShelleyBlock"
         other -> mconcat ["insertShelleyBlock(", textShow other, ")"]
 
-    offlineModBase :: Word64
-    offlineModBase = if withinTwoMins then 10 else 2000
+    offChainModBase :: Word64
+    offChainModBase = if withinTwoMins then 10 else 2000
 
     tracer :: Trace IO Text
     tracer = getTrace syncEnv

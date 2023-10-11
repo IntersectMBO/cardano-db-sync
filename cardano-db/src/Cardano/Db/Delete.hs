@@ -150,13 +150,13 @@ deleteTablesAfterTxId mtxId mtxInId mtxOutId mmaTxOutId = do
       deleteWhere [GovernanceActionId >=. gaId]
     mvaId <- queryMinRefId VotingAnchorTxId txId
     whenJust mvaId $ \vaId -> do
-      queryFirstAndDeleteAfter AnchorOfflineDataVotingAnchorId vaId
-      queryFirstAndDeleteAfter AnchorOfflineFetchErrorVotingAnchorId vaId
+      queryFirstAndDeleteAfter OffChainAnchorDataVotingAnchorId vaId
+      queryFirstAndDeleteAfter OffChainAnchorFetchErrorVotingAnchorId vaId
       deleteWhere [VotingAnchorId >=. vaId]
     minPmr <- queryMinRefId PoolMetadataRefRegisteredTxId txId
     whenJust minPmr $ \pmrId -> do
-      queryFirstAndDeleteAfter PoolOfflineDataPmrId pmrId
-      queryFirstAndDeleteAfter PoolOfflineFetchErrorPmrId pmrId
+      queryFirstAndDeleteAfter OffChainPoolDataPmrId pmrId
+      queryFirstAndDeleteAfter OffChainPoolFetchErrorPmrId pmrId
       deleteWhere [PoolMetadataRefId >=. pmrId]
     minPoolUpdate <- queryMinRefId PoolUpdateRegisteredTxId txId
     whenJust minPoolUpdate $ \puid -> do

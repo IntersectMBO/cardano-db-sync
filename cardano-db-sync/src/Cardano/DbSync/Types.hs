@@ -11,23 +11,23 @@ module Cardano.DbSync.Types (
   DataHash,
   CardanoInterpreter,
   EpochSlot (..),
-  FetchResult (..),
+  OffChainPoolResult (..),
   SlotDetails (..),
   TipInfo (..),
   SyncState (..),
   TPraosStandard,
   MetricSetters (..),
-  PoolFetchRetry (..),
+  OffChainPoolFetchRetry (..),
   PraosStandard,
   Retry (..),
 ) where
 
 import Cardano.Db (
+  OffChainPoolData,
+  OffChainPoolFetchError,
   PoolHashId,
   PoolMetaHash,
   PoolMetadataRefId,
-  PoolOfflineData,
-  PoolOfflineFetchError,
   PoolUrl,
  )
 import qualified Cardano.Ledger.Credential as Ledger
@@ -84,9 +84,9 @@ newtype EpochSlot = EpochSlot
   }
   deriving (Eq, Ord, Show)
 
-data FetchResult
-  = ResultMetadata !PoolOfflineData
-  | ResultError !PoolOfflineFetchError
+data OffChainPoolResult
+  = OffChainPoolResultMetadata !OffChainPoolData
+  | OffChainPoolResultError !OffChainPoolFetchError
   deriving (Show)
 
 data SlotDetails = SlotDetails
@@ -123,12 +123,12 @@ data MetricSetters = MetricSetters
 data SyncState = SyncLagging | SyncFollowing
   deriving (Eq, Show)
 
-data PoolFetchRetry = PoolFetchRetry
-  { pfrPoolHashId :: !PoolHashId
-  , pfrReferenceId :: !PoolMetadataRefId
-  , pfrPoolUrl :: !PoolUrl
-  , pfrPoolMDHash :: !(Maybe PoolMetaHash)
-  , pfrRetry :: !Retry
+data OffChainPoolFetchRetry = OffChainPoolFetchRetry
+  { opfrPoolHashId :: !PoolHashId
+  , opfrReferenceId :: !PoolMetadataRefId
+  , opfrPoolUrl :: !PoolUrl
+  , opfrPoolMDHash :: !(Maybe PoolMetaHash)
+  , opfrRetry :: !Retry
   }
   deriving (Show)
 

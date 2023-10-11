@@ -235,7 +235,7 @@ The returned list consists of objects that contain:
 - poolId - the pool id of the pool
 - poolHash - the hash of the pool metadata
 - cause - what is the cause of the error and why is it failing
-- retryCount - the number of times we retried to fetch the offline metadata
+- retryCount - the number of times we retried to fetch the offchain metadata
 
 ## Pool unregistrations
 

@@ -87,11 +87,11 @@ library
                         Cardano.DbSync.Era.Shelley.Insert
                         Cardano.DbSync.Era.Shelley.Insert.Epoch
                         Cardano.DbSync.Era.Shelley.Insert.Grouped
-                        Cardano.DbSync.Era.Shelley.Offline
-                        Cardano.DbSync.Era.Shelley.Offline.FetchQueue
-                        Cardano.DbSync.Era.Shelley.Offline.Http
-                        Cardano.DbSync.Era.Shelley.Offline.Query
-                        Cardano.DbSync.Era.Shelley.Offline.Types
+                        Cardano.DbSync.Era.Shelley.OffChain
+                        Cardano.DbSync.Era.Shelley.OffChain.FetchQueue
+                        Cardano.DbSync.Era.Shelley.OffChain.Http
+                        Cardano.DbSync.Era.Shelley.OffChain.Query
+                        Cardano.DbSync.Era.Shelley.OffChain.Types
                         Cardano.DbSync.Era.Shelley.Query
                         Cardano.DbSync.Era.Shelley.Validate
 

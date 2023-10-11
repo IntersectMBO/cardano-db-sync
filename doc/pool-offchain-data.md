@@ -1,27 +1,29 @@
-# Pool Offline Data
+# Pool OffChain Data
+
+_(as of 13.2.0.0 Offline was renamed to OffChain)__
 
 When a stake pool is registered, a transaction is added to the chain containing the URL of the
-pool's offline data.
+pool's offchain data.
 
-The data in the transaction specifying the location of the offline data is inserted into the
+The data in the transaction specifying the location of the offchain data is inserted into the
 `PoolMetadataRef` table. `db-sync` then fetches the specified data and inserts it into the
-`PoolOfflineData` table.
+`OffChainPoolData` table.
 
 The basic operation is a follows:
 
 * When the pool registration is found in a tx it is inserted into the `PoolMetadataRef` table.
 * Another thread periodically queries the database for `PoolMetadataRef` entries which have either
   not been retrieved or have errored and tries to fetch the data.
-* If the new fetch is successful, the result goes in the `PoolOfflineData` table.
-* If the fetch fails, an error is recorded in `PoolOfflineFetchError table` to be retried later.
+* If the new fetch is successful, the result goes in the `OffChainPoolData` table.
+* If the fetch fails, an error is recorded in `PoolOffChainFetchError table` to be retried later.
 * The retries on fetch fail start at 60 seconds and are progressively longer and eventually plateau
   at a retry every 24 hours.
 
 ### http-get-json-metadata
 
-This is an testing/debugging program. It uses *the same code* to fetch the offline metadata as
+This is an testing/debugging program. It uses *the same code* to fetch the offchain metadata as
 `cardano-db-sync`. It is not code copy, this application calls the function in `db-sync` that does
-the actual fetch (the function is named `httpGetPoolOfflineData`).
+the actual fetch (the function is named `httpGetOffChainPoolData`).
 
 On success, this program will print "Success" and then print the retrieved JSON.
 
@@ -56,7 +58,7 @@ Success
 "homepage":"https://cardano.afterschoollabs.io","name":"After School Labs","ticker":"ASLAB"}
 ```
 
-**Note:** Up until now (2022/09/30) the code to fetch the pool offline metadata did not check the
+**Note:** Up until now (2022/09/30) the code to fetch the pool offchain metadata did not check the
 "content-type" field in the response headers, but now it does. The rules for how this field is
 handled is as follows:
 

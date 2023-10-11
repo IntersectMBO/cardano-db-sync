@@ -909,7 +909,7 @@ A table for voting procedures, aka GovVote. A Vote can be Yes No or Abstain. New
 | `vote` | vote | The Vote. Can be one of Yes, No, Abstain. |
 | `voting_anchor_id` | integer (64) | The VotingAnchor table index associated with this VotingProcedure. |
 
-### `anchor_offline_data`
+### `anchor_offchain_data`
 
 The table with the off chain metadata related to Vote Anchors. New in 13.2-Conway.
 
@@ -918,21 +918,21 @@ The table with the off chain metadata related to Vote Anchors. New in 13.2-Conwa
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `voting_anchor_id` | integer (64) | The VotingAnchor table index this offline data refers. |
-| `hash` | blob | The hash of the offline data. |
+| `voting_anchor_id` | integer (64) | The VotingAnchor table index this offchain data refers. |
+| `hash` | blob | The hash of the offchain data. |
 | `json` | jsonb | The payload as JSON. |
 | `bytes` | bytea | The raw bytes of the payload. |
 
-### `anchor_offline_fetch_error`
+### `anchor_offchain_fetch_error`
 
-Errors while fetching or validating offline Voting Anchor metadata. New in 13.2-Conway.
+Errors while fetching or validating offchain Voting Anchor metadata. New in 13.2-Conway.
 
 * Primary Id: `id`
 
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `voting_anchor_id` | integer (64) | The VotingAnchor table index this offline fetch error refers. |
+| `voting_anchor_id` | integer (64) | The VotingAnchor table index this offchain fetch error refers. |
 | `fetch_error` | string | The text of the error. |
 | `retry_count` | word31type | The number of retries. |
 
@@ -950,34 +950,34 @@ The table for the distribution of voting power per DRep per. Currently this has 
 | `epoch_no` | word31type | The epoch no this distribution is about. |
 | `active_until` | word31type | The epoch until which this drep is active. TODO: This currently remains null always. |
 
-### `pool_offline_data`
+### `offchain_pool_data`
 
-The pool offline (ie not on chain) for a stake pool.
+The pool offchain (ie not on chain) for a stake pool.
 
 * Primary Id: `id`
 
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `pool_id` | integer (64) | The PoolHash table index for the pool this offline data refers. |
+| `pool_id` | integer (64) | The PoolHash table index for the pool this offchain data refers. |
 | `ticker_name` | string | The pool's ticker name (as many as 5 characters). |
-| `hash` | hash32type | The hash of the offline data. |
+| `hash` | hash32type | The hash of the offchain data. |
 | `json` | jsonb | The payload as JSON. |
 | `bytes` | bytea | The raw bytes of the payload. |
-| `pmr_id` | integer (64) | The PoolMetadataRef table index for this offline data. |
+| `pmr_id` | integer (64) | The PoolMetadataRef table index for this offchain data. |
 
-### `pool_offline_fetch_error`
+### `offchain_pool_fetch_error`
 
-A table containing pool offline data fetch errors.
+A table containing pool offchain data fetch errors.
 
 * Primary Id: `id`
 
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `pool_id` | integer (64) | The PoolHash table index for the pool this offline fetch error refers. |
+| `pool_id` | integer (64) | The PoolHash table index for the pool this offchain fetch error refers. |
 | `fetch_time` | timestamp | The UTC time stamp of the error. |
-| `pmr_id` | integer (64) | The PoolMetadataRef table index for this offline data. |
+| `pmr_id` | integer (64) | The PoolMetadataRef table index for this offchain data. |
 | `fetch_error` | string | The text of the error. |
 | `retry_count` | word31type | The number of retries. |
 
