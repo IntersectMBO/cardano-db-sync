@@ -15,10 +15,11 @@ function wait_for_postgres {
 
 function start_postgres {
     mkdir -p "${PG_DIR}"
-    
+
     # Initialise database
     initdb --encoding=UTF8 --username=postgres "${DB_DIR}"
-    postgres -D "${DB_DIR}" -c listen_addresses="" -k "${PG_DIR}" &
+    postgres -D "${DB_DIR}" -c listen_addresses="" -k "${PG_DIR}" \
+        > "${PG_DIR}/postgres.log" 2>&1 &
 
     # Verify Postgres is running
     if wait_for_postgres; then
