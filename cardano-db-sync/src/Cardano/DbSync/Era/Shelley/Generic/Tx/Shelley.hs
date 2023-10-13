@@ -127,13 +127,13 @@ mkTxOut txBody = zipWith fromTxOut [0 ..] $ toList (txBody ^. Core.outputsTxBody
 fromTxIn :: ShelleyTx.TxIn StandardCrypto -> TxIn
 fromTxIn (ShelleyTx.TxIn (ShelleyTx.TxId txid) (TxIx w64)) =
   TxIn
-    { txInHash = Crypto.hashToBytes $ Ledger.extractHash txid
+    { txInHash = safeHashToByteString txid
     , txInIndex = w64
     , txInRedeemerIndex = Nothing
     }
 
 txHashId :: (EraCrypto era ~ StandardCrypto, Core.EraTx era) => Core.Tx era -> ByteString
-txHashId tx = Crypto.hashToBytes $ Ledger.extractHash $ Ledger.hashAnnotated (tx ^. Core.bodyTxL)
+txHashId tx = safeHashToByteString $ Ledger.hashAnnotated (tx ^. Core.bodyTxL)
 
 txHashFromSafe :: Ledger.SafeHash StandardCrypto Core.EraIndependentTxBody -> ByteString
 txHashFromSafe = Crypto.hashToBytes . Ledger.extractHash

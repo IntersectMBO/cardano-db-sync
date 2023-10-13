@@ -17,6 +17,7 @@ module Cardano.DbSync.Era.Shelley.Insert (
   insertDelegation,
   insertStakeAddressRefIfMissing,
   mkAdaPots,
+  prepareTxOut,
 ) where
 
 import Cardano.BM.Trace (Trace, logDebug, logInfo, logWarning)
@@ -1513,7 +1514,7 @@ insertAnchor txId anchor =
     DB.VotingAnchor
       { DB.votingAnchorTxId = txId
       , DB.votingAnchorUrl = DB.VoteUrl $ Ledger.urlToText $ anchorUrl anchor -- TODO: Conway check unicode and size of URL
-      , DB.votingAnchorDataHash = Generic.achorHashToBytes $ anchorDataHash anchor
+      , DB.votingAnchorDataHash = Generic.safeHashToByteString $ anchorDataHash anchor
       }
 
 insertVotingProcedures ::

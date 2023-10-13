@@ -27,7 +27,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Util (
   unTxHash,
   unAssetName,
   dataHashToBytes,
-  achorHashToBytes,
+  safeHashToByteString,
   toGovAction,
   toVote,
   toVoterRole,
@@ -156,8 +156,8 @@ unAssetName = SBS.fromShort . assetName
 dataHashToBytes :: DataHash -> ByteString
 dataHashToBytes = Crypto.hashToBytes . Ledger.extractHash
 
-achorHashToBytes :: Ledger.SafeHash StandardCrypto Ledger.AnchorData -> ByteString
-achorHashToBytes = Crypto.hashToBytes . Ledger.extractHash
+safeHashToByteString :: Ledger.SafeHash StandardCrypto c -> ByteString
+safeHashToByteString = Crypto.hashToBytes . Ledger.extractHash
 
 toGovAction :: GovAction StandardConway -> Db.GovActionType
 toGovAction = \case
