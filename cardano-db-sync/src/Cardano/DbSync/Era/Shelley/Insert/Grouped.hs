@@ -11,6 +11,7 @@ module Cardano.DbSync.Era.Shelley.Insert.Grouped (
   insertReverseIndex,
   resolveTxInputs,
   resolveScriptHash,
+  mkmaTxOuts,
 ) where
 
 import Cardano.BM.Trace (Trace, logWarning)
@@ -102,11 +103,11 @@ insertBlockGroupedData syncEnv grouped = do
   where
     tracer = getTrace syncEnv
 
-    mkmaTxOuts :: (DB.TxOutId, [MissingMaTxOut]) -> [DB.MaTxOut]
-    mkmaTxOuts (txOutId, mmtos) = mkmaTxOut txOutId <$> mmtos
-
-    mkmaTxOut :: DB.TxOutId -> MissingMaTxOut -> DB.MaTxOut
-    mkmaTxOut txOutId missingMaTx =
+mkmaTxOuts :: (DB.TxOutId, [MissingMaTxOut]) -> [DB.MaTxOut]
+mkmaTxOuts (txOutId, mmtos) = mkmaTxOut <$> mmtos
+  where
+    mkmaTxOut :: MissingMaTxOut -> DB.MaTxOut
+    mkmaTxOut missingMaTx =
       DB.MaTxOut
         { DB.maTxOutIdent = mmtoIdent missingMaTx
         , DB.maTxOutQuantity = mmtoQuantity missingMaTx

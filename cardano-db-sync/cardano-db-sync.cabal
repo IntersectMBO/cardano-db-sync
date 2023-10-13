@@ -43,6 +43,7 @@ library
   exposed-modules:      Cardano.DbSync
 
                         Cardano.DbSync.Api
+                        Cardano.DbSync.Api.Ledger
                         Cardano.DbSync.Api.Types
                         Cardano.DbSync.Config
                         Cardano.DbSync.Config.Alonzo
