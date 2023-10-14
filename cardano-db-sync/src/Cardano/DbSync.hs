@@ -177,7 +177,6 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
           ExceptT $
             mkSyncEnvFromConfig
               trce
-              dbConnString
               backend
               syncOptions
               genCfg
@@ -228,6 +227,7 @@ extractSyncOptions snp aop =
     , soptCache = enpHasCache snp
     , soptSkipFix = enpSkipFix snp
     , soptOnlyFix = enpOnlyFix snp
+    , soptPruneConsumeMigration = initPruneConsumeMigration (enpMigrateConsumed snp) (enpPruneTxOut snp)
     , soptInsertOptions = iopts
     , snapshotEveryFollowing = enpSnEveryFollowing snp
     , snapshotEveryLagging = enpSnEveryLagging snp

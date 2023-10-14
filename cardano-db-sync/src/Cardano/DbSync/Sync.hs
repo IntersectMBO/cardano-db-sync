@@ -30,7 +30,7 @@ import qualified Cardano.BM.Trace as Logging
 import Cardano.Client.Subscription (subscribe)
 import Cardano.Db (runDbIohkLogging)
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (ConsistentLevel (..), FixesRan (..), LedgerEnv (..), SyncEnv (..), SyncOptions (..), envConnString, envLedgerEnv, envNetworkMagic, envOptions)
+import Cardano.DbSync.Api.Types (ConsistentLevel (..), FixesRan (..), LedgerEnv (..), SyncEnv (..), SyncOptions (..), envLedgerEnv, envNetworkMagic, envOptions)
 import Cardano.DbSync.Config
 import Cardano.DbSync.Database
 import Cardano.DbSync.DbAction
