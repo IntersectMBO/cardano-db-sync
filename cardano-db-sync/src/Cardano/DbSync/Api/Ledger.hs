@@ -39,8 +39,25 @@ import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState, ledgerState)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
+import Cardano.DbSync.Ledger.State
 
 newtype TxCache = TxCache {txIdCache :: Map ByteString DB.TxId}
+
+emptyTxCache :: TxCache
+emptyTxCache = TxCache mempty
+
+migrateBootstrapUTxO
+  :: (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
+  TxCache ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+migrateBootstrapUTxO syncEnv txCache = do
+  case envLedgerEnv syncEnv of
+    HasLedger lenv -> do
+      cls <- liftIO $ readCurrentStateUnsafe lenv
+      storeUTxOFromLedger syncEnv txCache cls
+    NoLedger _ -> pure ()
+
 
 storeUTxOFromLedger :: (MonadBaseControl IO m, MonadIO m) => SyncEnv -> TxCache -> ExtLedgerState CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 storeUTxOFromLedger env txCache st = case ledgerState st of
