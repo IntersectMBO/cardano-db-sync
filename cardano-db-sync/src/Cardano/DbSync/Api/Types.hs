@@ -15,7 +15,6 @@ module Cardano.DbSync.Api.Types (
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache.Types (Cache)
-import Cardano.DbSync.Config.Types (SyncProtocol)
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv)
 import Cardano.DbSync.LocalStateQuery (NoLedgerEnv)
 import Cardano.DbSync.Types (OffChainPoolFetchRetry, OffChainPoolResult)
@@ -27,7 +26,6 @@ import Control.Concurrent.Class.MonadSTM.Strict (
 import Control.Concurrent.Class.MonadSTM.Strict.TBQueue (StrictTBQueue)
 import qualified Data.Strict.Maybe as Strict
 import Data.Time.Clock (UTCTime)
-import Database.Persist.Postgresql (ConnectionString)
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
@@ -35,7 +33,6 @@ import Ouroboros.Network.Magic (NetworkMagic (..))
 data SyncEnv = SyncEnv
   { envBackend :: !SqlBackend
   , envCache :: !Cache
-  , envConnString :: ConnectionString
   , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)
   , envDbConstraints :: !(StrictTVar IO DB.ManualDbConstraints)
   , envEpochState :: !(StrictTVar IO EpochState)
@@ -47,8 +44,6 @@ data SyncEnv = SyncEnv
   , envOffChainPoolResultQueue :: !(StrictTBQueue IO OffChainPoolResult)
   , envOffChainPoolWorkQueue :: !(StrictTBQueue IO OffChainPoolFetchRetry)
   , envOptions :: !SyncOptions
-  , envProtocol :: !SyncProtocol
-  , envPruneConsumeMigration :: !DB.PruneConsumeMigration
   , envRunDelayedMigration :: RunMigration
   , envSystemStart :: !SystemStart
   }
@@ -59,6 +54,7 @@ data SyncOptions = SyncOptions
   , soptCache :: !Bool
   , soptSkipFix :: !Bool
   , soptOnlyFix :: !Bool
+  , soptPruneConsumeMigration :: !DB.PruneConsumeMigration
   , soptInsertOptions :: !InsertOptions
   , snapshotEveryFollowing :: !Word64
   , snapshotEveryLagging :: !Word64
