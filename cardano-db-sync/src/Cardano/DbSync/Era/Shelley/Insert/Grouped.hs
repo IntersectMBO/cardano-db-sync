@@ -92,7 +92,10 @@ insertBlockGroupedData syncEnv grouped = do
   txOutIds <- lift . DB.insertManyTxOutPlex hasConsumed $ etoTxOut . fst <$> groupedTxOut grouped
   let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> groupedTxOut grouped)
   maTxOutIds <- lift $ DB.insertManyMaTxOut maTxOuts
-  txInIds <- lift . DB.insertManyTxIn $ etiTxIn <$> groupedTxIn grouped
+  txInIds <-
+    if hasConsumed
+      then pure []
+      else lift . DB.insertManyTxIn $ etiTxIn <$> groupedTxIn grouped
   whenConsumeOrPruneTxOut syncEnv $ do
     etis <- resolveRemainingInputs (groupedTxIn grouped) $ zip txOutIds (fst <$> groupedTxOut grouped)
     updateTuples <- lift $ mapM (prepareUpdates tracer) etis
