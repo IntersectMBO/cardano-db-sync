@@ -263,7 +263,8 @@ insertByronTx syncEnv blkId tx blockIndex = do
   -- Insert outputs for a transaction before inputs in case the inputs for this transaction
   -- references the output (not sure this can even happen).
   lift $ zipWithM_ (insertTxOut tracer hasConsumed txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
-  mapM_ (insertTxIn tracer txId) resolvedInputs
+  unless hasConsumed $
+    mapM_ (insertTxIn tracer txId) resolvedInputs
   whenConsumeOrPruneTxOut syncEnv $
     lift $
       DB.updateListTxOutConsumedByTxId (prepUpdate <$> resolvedInputs)
