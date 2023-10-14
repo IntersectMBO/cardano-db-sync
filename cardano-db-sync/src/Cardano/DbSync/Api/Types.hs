@@ -39,6 +39,7 @@ data SyncEnv = SyncEnv
   , envEpochSyncTime :: !(StrictTVar IO UTCTime)
   , envIndexes :: !(StrictTVar IO Bool)
   , envIsFixed :: !(StrictTVar IO FixesRan)
+  , envBootstrap :: !(StrictTVar IO Bool)
   , envLedgerEnv :: !LedgerEnv
   , envNetworkMagic :: !NetworkMagic
   , envOffChainPoolResultQueue :: !(StrictTBQueue IO OffChainPoolResult)

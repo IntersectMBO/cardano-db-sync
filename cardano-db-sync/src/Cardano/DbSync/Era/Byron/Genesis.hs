@@ -104,7 +104,8 @@ insertValidateGenesisDist syncEnv (NetworkName networkName) cfg = do
                   , DB.blockOpCert = Nothing
                   , DB.blockOpCertCounter = Nothing
                   }
-            mapM_ (insertTxOuts hasConsumed bid) $ genesisTxos cfg
+            bts <- liftIO $ getBootstrapState syncEnv
+            mapM_ (insertTxOuts hasConsumed bts bid) $ genesisTxos cfg
             liftIO . logInfo tracer $
               "Initial genesis distribution populated. Hash "
                 <> renderByteArray (configGenesisHash cfg)
@@ -174,10 +175,11 @@ validateGenesisDistribution prunes tracer networkName cfg bid =
 insertTxOuts ::
   (MonadBaseControl IO m, MonadIO m) =>
   Bool ->
+  Bool ->
   DB.BlockId ->
   (Byron.Address, Byron.Lovelace) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertTxOuts hasConsumed blkId (address, value) = do
+insertTxOuts hasConsumed bts blkId (address, value) = do
   case txHashOfAddress address of
     Left err -> throwError err
     Right val -> do
@@ -200,21 +202,20 @@ insertTxOuts hasConsumed blkId (address, value) = do
               , DB.txScriptSize = 0
               }
       lift $
-        void $
-          DB.insertTxOutPlex hasConsumed $
-            DB.TxOut
-              { DB.txOutTxId = txId
-              , DB.txOutIndex = 0
-              , DB.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 address
-              , DB.txOutAddressRaw = Binary.serialize' address
-              , DB.txOutAddressHasScript = False
-              , DB.txOutPaymentCred = Nothing
-              , DB.txOutStakeAddressId = Nothing
-              , DB.txOutValue = DB.DbLovelace (Byron.unsafeGetLovelace value)
-              , DB.txOutDataHash = Nothing
-              , DB.txOutInlineDatumId = Nothing
-              , DB.txOutReferenceScriptId = Nothing
-              }
+        DB.insertTxOutPlex hasConsumed bts $
+          DB.TxOut
+            { DB.txOutTxId = txId
+            , DB.txOutIndex = 0
+            , DB.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 address
+            , DB.txOutAddressRaw = Binary.serialize' address
+            , DB.txOutAddressHasScript = False
+            , DB.txOutPaymentCred = Nothing
+            , DB.txOutStakeAddressId = Nothing
+            , DB.txOutValue = DB.DbLovelace (Byron.unsafeGetLovelace value)
+            , DB.txOutDataHash = Nothing
+            , DB.txOutInlineDatumId = Nothing
+            , DB.txOutReferenceScriptId = Nothing
+            }
 
 -- -----------------------------------------------------------------------------
 

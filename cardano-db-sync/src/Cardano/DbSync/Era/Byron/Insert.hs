@@ -262,7 +262,8 @@ insertByronTx syncEnv blkId tx blockIndex = do
 
   -- Insert outputs for a transaction before inputs in case the inputs for this transaction
   -- references the output (not sure this can even happen).
-  lift $ zipWithM_ (insertTxOut tracer hasConsumed txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
+  bts <- liftIO $ getBootstrapState syncEnv
+  lift $ zipWithM_ (insertTxOut tracer hasConsumed bts txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
   unless hasConsumed $
     mapM_ (insertTxIn tracer txId) resolvedInputs
   whenConsumeOrPruneTxOut syncEnv $
@@ -286,12 +287,13 @@ insertTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   Bool ->
+  Bool ->
   DB.TxId ->
   Word32 ->
   Byron.TxOut ->
   ReaderT SqlBackend m ()
-insertTxOut _tracer hasConsumed txId index txout =
-  void . DB.insertTxOutPlex hasConsumed $
+insertTxOut _tracer hasConsumed bootStrap txId index txout =
+  DB.insertTxOutPlex hasConsumed bootStrap $
     DB.TxOut
       { DB.txOutTxId = txId
       , DB.txOutIndex = fromIntegral index
