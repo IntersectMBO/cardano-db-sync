@@ -15,6 +15,7 @@
 module Cardano.DbSync.Ledger.State (
   applyBlock,
   defaultApplyResult,
+  readCurrentStateUnsafe,
   getGovExpiresAt,
   mkHasLedgerEnv,
   applyBlockAndSnapshot,
@@ -195,6 +196,9 @@ initCardanoLedgerState pInfo =
 
 getTopLevelconfigHasLedger :: HasLedgerEnv -> TopLevelConfig CardanoBlock
 getTopLevelconfigHasLedger = Consensus.pInfoConfig . leProtocolInfo
+
+readCurrentStateUnsafe :: HasLedgerEnv -> IO (ExtLedgerState CardanoBlock)
+readCurrentStateUnsafe hle = atomically (clsState . ledgerDbCurrent <$> readStateUnsafe hle)
 
 -- TODO make this type safe. We make the assumption here that the first message of
 -- the chainsync protocol is 'RollbackTo'.
