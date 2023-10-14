@@ -19,6 +19,7 @@ module Cardano.DbSync.Api (
   getIsSyncFixed,
   setIsFixed,
   setIsFixedAndMigrate,
+  getBootstrapState,
   getRanIndexes,
   runIndexMigrations,
   initPruneConsumeMigration,
@@ -128,6 +129,9 @@ setIsFixedAndMigrate :: SyncEnv -> FixesRan -> IO ()
 setIsFixedAndMigrate env fr = do
   envRunDelayedMigration env DB.Fix
   atomically $ writeTVar (envIsFixed env) fr
+
+getBootstrapState :: SyncEnv -> IO Bool
+getBootstrapState = readTVarIO . envBootstrap
 
 getRanIndexes :: SyncEnv -> IO Bool
 getRanIndexes env = do
@@ -317,6 +321,7 @@ mkSyncEnv trce backend syncOptions protoInfo nw nwMagic systemStart syncNP ranMi
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNP
+  bootstrapVar <- newTVarIO False
   owq <- newTBQueueIO 100
   orq <- newTBQueueIO 100
   epochVar <- newTVarIO initEpochState
@@ -351,6 +356,7 @@ mkSyncEnv trce backend syncOptions protoInfo nw nwMagic systemStart syncNP ranMi
       , envEpochSyncTime = epochSyncTime
       , envIndexes = indexesVar
       , envIsFixed = fixDataVar
+      , envBootstrap = bootstrapVar
       , envLedgerEnv = ledgerEnvType
       , envNetworkMagic = nwMagic
       , envOffChainPoolResultQueue = orq

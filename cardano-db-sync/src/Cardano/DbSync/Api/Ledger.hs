@@ -85,11 +85,9 @@ storePage ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 storePage syncEnv cache ls = do
   txOuts <- mapM (prepareTxOut syncEnv cache) ls
-  txOutIds <- lift . DB.insertManyTxOutPlex hasConsumed $ etoTxOut . fst <$> txOuts
+  txOutIds <- lift . DB.insertManyTxOutPlex True False $ etoTxOut . fst <$> txOuts
   let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> txOuts)
   void . lift $ DB.insertManyMaTxOut maTxOuts
-  where
-    hasConsumed = getHasConsumedOrPruneTxOut syncEnv
 
 prepareTxOut ::
   ( EraCrypto era ~ StandardCrypto
