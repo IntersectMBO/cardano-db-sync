@@ -1227,7 +1227,7 @@ schemaDocs =
       VotingProcedureVotingAnchorId # "The VotingAnchor table index associated with this VotingProcedure."
 
     OffChainAnchorData --^ do
-      "The table with the off chain metadata related to Vote Anchors. New in 13.2-Conway."
+      "The table with the offchain metadata related to Vote Anchors. New in 13.2-Conway."
       OffChainAnchorDataVotingAnchorId # "The VotingAnchor table index this offchain data refers."
       OffChainAnchorDataHash # "The hash of the offchain data."
       OffChainAnchorDataJson # "The payload as JSON."
