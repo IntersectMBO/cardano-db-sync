@@ -160,11 +160,6 @@
                 packages.katip.doExactConfig = true;
                 # Split data to reduce closure size
                 packages.ekg.components.library.enableSeparateDataOutput = true;
-                # Use our libsodium, secp256k1, libblst forks
-                packages.cardano-crypto-praos.components.library.pkgconfig =
-                  lib.mkForce [[ pkgs.libsodium-vrf ]];
-                packages.cardano-crypto-class.components.library.pkgconfig =
-                  with pkgs; lib.mkForce [[ libsodium-vrf secp256k1 libblst ]];
                 # Systemd can't be statically linked
                 packages.cardano-node.flags.systemd =
                   !pkgs.stdenv.hostPlatform.isMusl;
