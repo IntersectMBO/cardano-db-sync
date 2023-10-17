@@ -45,14 +45,6 @@ export PGPASSFILE=config/pgpass-mainnet
 cabal run cardano-db-tool -- run-migrations --mdir schema/
 ```
 
-Once this has completed it's good practice to rebuild `cardano-db-sync` due to how it caches schema files when built, this can be done using the following documentation [Build and Install](./installing.md#build-and-install)
-
-**Note:**  It is usually best to run the test suite which tests the migrations then generate the migration, this is achieved by doing:
-```
-cd ./cardano-chain-gen
-cabal run test:cardano-chain-gen
-```
-
 Next it's time to generated the new migration file by running:
 ```
 export PGPASSFILE=config/pgpass-mainnet
@@ -60,4 +52,10 @@ cabal run cardano-db-tool -- create-migration --mdir schema/
 ```
 This will generate a migration if one is needed. 
 
-Lastly run the migration again with the `run-migrations` flag so the db is updated, rebuild and run the test to double check all is still working.
+Once this has completed it's good practice to rebuild `cardano-db-sync` due to how it caches schema files when built, this can be done using the following documentation [Build and Install](./installing.md#build-and-install)
+
+**Note:**  For extra reassurance one can run the test suite to check that the new migration hasn't broken any tests:
+```
+cd ./cardano-chain-gen
+cabal run test:cardano-chain-gen
+```
