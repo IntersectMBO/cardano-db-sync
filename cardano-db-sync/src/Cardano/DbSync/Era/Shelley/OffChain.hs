@@ -5,19 +5,18 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Offline (
-  insertOfflineResults,
-  loadOfflineWorkQueue,
-  runOfflineFetchThread,
+module Cardano.DbSync.Era.Shelley.OffChain (
+  insertOffChainResults,
+  loadOffChainWorkQueue,
+  runOffChainFetchThread,
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo)
-import Cardano.Db
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv, envOfflineResultQueue, envOfflineWorkQueue)
-import Cardano.DbSync.Era.Shelley.Offline.Http
-import Cardano.DbSync.Era.Shelley.Offline.Query
+import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv, envOffChainPoolResultQueue, envOffChainPoolWorkQueue)
+import Cardano.DbSync.Era.Shelley.OffChain.Http
+import Cardano.DbSync.Era.Shelley.OffChain.Query
 import Cardano.DbSync.Types
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
@@ -34,72 +33,72 @@ import Database.Persist.Sql (SqlBackend)
 import qualified Network.HTTP.Client as Http
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 
-loadOfflineWorkQueue ::
+loadOffChainWorkQueue ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
-  StrictTBQueue IO PoolFetchRetry ->
+  StrictTBQueue IO OffChainPoolFetchRetry ->
   ReaderT SqlBackend m ()
-loadOfflineWorkQueue _trce workQueue =
+loadOffChainWorkQueue _trce workQueue =
   -- If we try to write the to queue when it is full it will block. Therefore only add more to
   -- the queue if it is empty.
   whenM (liftIO $ atomically (isEmptyTBQueue workQueue)) $ do
     now <- liftIO Time.getPOSIXTime
-    runnablePools <- filter (isRunnable now) <$> queryOfflinePoolData now 100
+    runnablePools <- filter (isRunnable now) <$> aquireOffChainPoolData now 100
     liftIO $ mapM_ queueInsert runnablePools
   where
-    isRunnable :: POSIXTime -> PoolFetchRetry -> Bool
-    isRunnable now pfr = retryRetryTime (pfrRetry pfr) <= now
+    isRunnable :: POSIXTime -> OffChainPoolFetchRetry -> Bool
+    isRunnable now pfr = retryRetryTime (opfrRetry pfr) <= now
 
-    queueInsert :: PoolFetchRetry -> IO ()
+    queueInsert :: OffChainPoolFetchRetry -> IO ()
     queueInsert = atomically . writeTBQueue workQueue
 
-insertOfflineResults ::
+insertOffChainResults ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
-  StrictTBQueue IO FetchResult ->
+  StrictTBQueue IO OffChainPoolResult ->
   ReaderT SqlBackend m ()
-insertOfflineResults trce resultQueue = do
+insertOffChainResults trce resultQueue = do
   res <- liftIO . atomically $ flushTBQueue resultQueue
-  let fetchErrors = length $ filter isFetchError res
+  let fetchErrorsLength = length $ filter isFetchError res
   unless (null res) $
     liftIO . logInfo trce $
       mconcat
-        [ "Offline pool metadata fetch: "
-        , textShow (length res - fetchErrors)
+        [ "Offchain pool metadata fetch: "
+        , DB.textShow (length res - fetchErrorsLength)
         , " results, "
-        , textShow fetchErrors
+        , DB.textShow fetchErrorsLength
         , " fetch errors"
         ]
   mapM_ insert res
   where
-    insert :: (MonadBaseControl IO m, MonadIO m) => FetchResult -> ReaderT SqlBackend m ()
-    insert fr =
-      case fr of
-        ResultMetadata md -> void $ DB.insertCheckPoolOfflineData md
-        ResultError fe -> void $ DB.insertCheckPoolOfflineFetchError fe
+    insert :: (MonadBaseControl IO m, MonadIO m) => OffChainPoolResult -> ReaderT SqlBackend m ()
+    insert ofr =
+      case ofr of
+        OffChainPoolResultMetadata md -> void $ DB.insertCheckOffChainPoolData md
+        OffChainPoolResultError fe -> void $ DB.insertCheckOffChainPoolFetchError fe
 
-    isFetchError :: FetchResult -> Bool
+    isFetchError :: OffChainPoolResult -> Bool
     isFetchError fe =
       case fe of
-        ResultMetadata {} -> False
-        ResultError {} -> True
+        OffChainPoolResultMetadata {} -> False
+        OffChainPoolResultError {} -> True
 
-runOfflineFetchThread :: SyncEnv -> IO ()
-runOfflineFetchThread syncEnv = do
-  when (ioOfflineData iopts) $ do
-    logInfo trce "Running Offline fetch thread"
+runOffChainFetchThread :: SyncEnv -> IO ()
+runOffChainFetchThread syncEnv = do
+  when (ioOffChainPoolData iopts) $ do
+    logInfo trce "Running Offchain fetch thread"
     forever $ do
       threadDelay 60_000_000 -- 60 second sleep
-      xs <- blockingFlushTBQueue (envOfflineWorkQueue syncEnv)
+      xs <- blockingFlushTBQueue (envOffChainPoolWorkQueue syncEnv)
       manager <- Http.newManager tlsManagerSettings
       now <- liftIO Time.getPOSIXTime
-      mapM_ (queueInsert <=< fetchOfflineData trce manager now) xs
+      mapM_ (queueInsert <=< fetchOffChainData trce manager now) xs
   where
     trce = getTrace syncEnv
     iopts = getInsertOptions syncEnv
 
-    queueInsert :: FetchResult -> IO ()
-    queueInsert = atomically . writeTBQueue (envOfflineResultQueue syncEnv)
+    queueInsert :: OffChainPoolResult -> IO ()
+    queueInsert = atomically . writeTBQueue (envOffChainPoolResultQueue syncEnv)
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -111,31 +110,31 @@ blockingFlushTBQueue queue = do
     xs <- flushTBQueue queue
     pure $ x : xs
 
-fetchOfflineData :: Trace IO Text -> Http.Manager -> Time.POSIXTime -> PoolFetchRetry -> IO FetchResult
-fetchOfflineData _tracer manager time pfr =
+fetchOffChainData :: Trace IO Text -> Http.Manager -> Time.POSIXTime -> OffChainPoolFetchRetry -> IO OffChainPoolResult
+fetchOffChainData _tracer manager time pfr =
   convert <<$>> runExceptT $ do
-    request <- parsePoolUrl $ pfrPoolUrl pfr
-    httpGetPoolOfflineData manager request (pfrPoolUrl pfr) (pfrPoolMDHash pfr)
+    request <- parsePoolUrl $ opfrPoolUrl pfr
+    httpGetOffChainPoolData manager request (opfrPoolUrl pfr) (opfrPoolMDHash pfr)
   where
-    convert :: Either FetchError SimplifiedPoolOfflineData -> FetchResult
+    convert :: Either FetchError SimplifiedOffChainPoolData -> OffChainPoolResult
     convert eres =
       case eres of
         Right smd ->
-          ResultMetadata $
-            DB.PoolOfflineData
-              { DB.poolOfflineDataPoolId = pfrPoolHashId pfr
-              , DB.poolOfflineDataTickerName = spodTickerName smd
-              , DB.poolOfflineDataHash = spodHash smd
-              , DB.poolOfflineDataBytes = spodBytes smd
-              , DB.poolOfflineDataJson = spodJson smd
-              , DB.poolOfflineDataPmrId = pfrReferenceId pfr
+          OffChainPoolResultMetadata $
+            DB.OffChainPoolData
+              { DB.offChainPoolDataPoolId = opfrPoolHashId pfr
+              , DB.offChainPoolDataTickerName = spodTickerName smd
+              , DB.offChainPoolDataHash = spodHash smd
+              , DB.offChainPoolDataBytes = spodBytes smd
+              , DB.offChainPoolDataJson = spodJson smd
+              , DB.offChainPoolDataPmrId = opfrReferenceId pfr
               }
         Left err ->
-          ResultError $
-            DB.PoolOfflineFetchError
-              { DB.poolOfflineFetchErrorPoolId = pfrPoolHashId pfr
-              , DB.poolOfflineFetchErrorFetchTime = Time.posixSecondsToUTCTime time
-              , DB.poolOfflineFetchErrorPmrId = pfrReferenceId pfr
-              , DB.poolOfflineFetchErrorFetchError = show err
-              , DB.poolOfflineFetchErrorRetryCount = retryCount (pfrRetry pfr)
+          OffChainPoolResultError $
+            DB.OffChainPoolFetchError
+              { DB.offChainPoolFetchErrorPoolId = opfrPoolHashId pfr
+              , DB.offChainPoolFetchErrorFetchTime = Time.posixSecondsToUTCTime time
+              , DB.offChainPoolFetchErrorPmrId = opfrReferenceId pfr
+              , DB.offChainPoolFetchErrorFetchError = show err
+              , DB.offChainPoolFetchErrorRetryCount = retryCount (opfrRetry pfr)
               }
