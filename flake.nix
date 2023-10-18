@@ -24,6 +24,10 @@
       url = "github:input-output-hk/cardano-haskell-packages?ref=repo";
       flake = false;
     };
+    cardano-parts = {
+      url = "github:input-output-hk/cardano-parts";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = { self, ... }@inputs:
@@ -58,28 +62,24 @@
                     };
                 })
 
-                (_: cardanoNodeOverlay)
+                # cardano-cli, cardano-node, and friends
+                (_: cardanoNodePkgs)
 
                 (final: prev: {
-                  # The NixOS module expects these to be here
+                  # The cardano-db-sync NixOS module expects these to be here
                   inherit (project.exes) cardano-db-sync;
                   schema = ./schema;
                 })
               ];
           };
 
-          # This is an ugly trick that uses flake-compat to evaluate the cardano-node flake,
-          # and get its packages
-          cardanoNodeOverlay = pkgs:
+          # Get cardano-node-pkgs from cardano-parts
+          cardanoNodePkgs = pkgs: with pkgs;
             let
-              nodeFlakeCompat = import inputs.flake-compat {
-                inherit (project.hsPkgs.cardano-node) src;
-                inherit pkgs;
-              };
-            in {
-              inherit (nodeFlakeCompat.defaultNix.packages.${system})
-                cardano-cli cardano-node;
-            };
+              inherit (inputs.cardano-parts.cardano-parts.pkgs.special) cardano-node-pkgs;
+            in
+              # cardano-parts currently only supports x86_64-linux
+              lib.optionalAttrs (system == "x86_64-linux") (cardano-node-pkgs system);
 
           # Set up and start Postgres before running database tests
           preCheck = ''
@@ -318,5 +318,6 @@
     extra-substituters = [ "https://cache.iog.io" ];
     extra-trusted-public-keys = [ "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" ];
     allow-import-from-derivation = true;
+    experimental-features = [ "nix-command" "flakes" "fetch-closure" ];
   };
 }
