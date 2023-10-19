@@ -3,7 +3,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -42,13 +41,11 @@ module Cardano.Mock.Forging.Tx.Babbage (
   mkWitnesses,
   mkUTxOBabbage,
   mkUTxOCollBabbage,
-  mkTxHash,
   mkFullTx,
   emptyTxBody,
   emptyTx,
 ) where
 
-import Cardano.Crypto.VRF
 import Cardano.Ledger.Address
 import Cardano.Ledger.Allegra.Scripts
 import Cardano.Ledger.Alonzo.Core
@@ -62,7 +59,6 @@ import Cardano.Ledger.Babbage.Tx
 import Cardano.Ledger.Babbage.TxBody
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Binary
-import Cardano.Ledger.Block (txid)
 import Cardano.Ledger.Coin
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential
@@ -71,16 +67,11 @@ import Cardano.Ledger.Keys
 import Cardano.Ledger.Mary.Value
 import Cardano.Ledger.Shelley.PParams
 import Cardano.Ledger.Shelley.TxAuxData
-import Cardano.Ledger.Shelley.TxBody (
-  PoolMetadata (..),
-  PoolParams (..),
-  StakePoolRelay (..),
- )
 import Cardano.Ledger.Shelley.TxCert
 import Cardano.Ledger.Shelley.UTxO
-import Cardano.Ledger.TxIn (TxId, TxIn (..))
+import Cardano.Ledger.TxIn (TxIn (..))
 import Cardano.Ledger.Val
-import Cardano.Mock.Forging.Crypto
+import Cardano.Mock.Forging.Tx.Alonzo (mkUTxOAlonzo, mkWitnesses)
 import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import Cardano.Mock.Forging.Tx.Generic
 import Cardano.Mock.Forging.Types
@@ -88,7 +79,6 @@ import Cardano.Prelude hiding (sum, (.))
 import Data.ByteString.Short (ShortByteString)
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromJust)
 import qualified Data.Maybe.Strict as Strict
 import Data.Sequence.Strict (StrictSeq)
 import qualified Data.Sequence.Strict as StrictSeq
@@ -317,8 +307,9 @@ mkUnlockScriptTxBabbage inputIndex colInputIndex outputIndex refInput compl succ
         else Just $ TxOutNoInline True
 
 mkScriptInp ::
-  (Word64, (TxIn StandardCrypto, Core.TxOut StandardBabbage)) ->
-  Maybe (RdmrPtr, Maybe (ScriptHash StandardCrypto, Core.Script StandardBabbage))
+  (BabbageEraTxOut era, EraCrypto era ~ StandardCrypto) =>
+  (Word64, (TxIn StandardCrypto, Core.TxOut era)) ->
+  Maybe (RdmrPtr, Maybe (ScriptHash StandardCrypto, AlonzoScript era))
 mkScriptInp (n, (_txIn, txOut)) =
   case mscr of
     SNothing
@@ -470,24 +461,6 @@ mkSimpleTx valid txBody =
     , auxiliaryData = maybeToStrictMaybe Nothing
     }
 
-consPoolParams ::
-  KeyHash 'StakePool StandardCrypto ->
-  StakeCredential StandardCrypto ->
-  [KeyHash 'Staking StandardCrypto] ->
-  PoolParams StandardCrypto
-consPoolParams poolId rwCred owners =
-  PoolParams
-    { ppId = poolId
-    , ppVrf = hashVerKeyVRF . snd . mkVRFKeyPair $ RawSeed 0 0 0 0 0 -- undefined
-    , ppPledge = Coin 1000
-    , ppCost = Coin 10000
-    , ppMargin = minBound
-    , ppRewardAcnt = RewardAcnt Testnet rwCred
-    , ppOwners = Set.fromList owners
-    , ppRelays = StrictSeq.singleton $ SingleHostAddr SNothing SNothing SNothing
-    , ppMetadata = SJust $ PoolMetadata (fromJust $ textToUrl "best.pool") "89237365492387654983275634298756"
-    }
-
 consPoolParamsTwoOwners ::
   [StakeCredential StandardCrypto] ->
   KeyHash 'StakePool StandardCrypto ->
@@ -511,34 +484,11 @@ mkScriptTx valid rdmrs txBody =
   where
     witnesses = mkWitnesses rdmrs [(hashData @StandardBabbage plutusDataList, plutusDataList)]
 
-mkWitnesses ::
-  [(RdmrPtr, Maybe (ScriptHash StandardCrypto, Core.Script StandardBabbage))] ->
-  [(DataHash StandardCrypto, Data StandardBabbage)] ->
-  AlonzoTxWits StandardBabbage
-mkWitnesses rdmrs datas =
-  AlonzoTxWits
-    mempty
-    mempty
-    (Map.fromList $ mapMaybe snd rdmrs)
-    (TxDats $ Map.fromList datas)
-    (Redeemers $ Map.fromList redeemers)
-  where
-    redeemers =
-      fmap
-        (,(plutusDataList, ExUnits 100 100))
-        (fst <$> rdmrs)
-
 mkUTxOBabbage :: AlonzoTx StandardBabbage -> [(TxIn StandardCrypto, BabbageTxOut StandardBabbage)]
-mkUTxOBabbage tx =
-  [ (TxIn (mkTxHash tx) idx, out)
-  | (out, idx) <- zip (toList (outputs' $ tx ^. Core.bodyTxL)) (TxIx <$> [0 ..])
-  ]
+mkUTxOBabbage = mkUTxOAlonzo
 
 mkUTxOCollBabbage :: AlonzoTx StandardBabbage -> [(TxIn StandardCrypto, BabbageTxOut StandardBabbage)]
 mkUTxOCollBabbage tx = Map.toList $ unUTxO $ collOuts $ getField @"body" tx
-
-mkTxHash :: AlonzoTx StandardBabbage -> TxId StandardCrypto
-mkTxHash = txid . getField @"body"
 
 emptyTxBody :: BabbageTxBody StandardBabbage
 emptyTxBody =

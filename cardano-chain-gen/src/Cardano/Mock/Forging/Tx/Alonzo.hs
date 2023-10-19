@@ -35,7 +35,6 @@ module Cardano.Mock.Forging.Tx.Alonzo (
   emptyTx,
 ) where
 
-import Cardano.Crypto.VRF
 import Cardano.Ledger.Address
 import Cardano.Ledger.Allegra.Scripts
 import Cardano.Ledger.Alonzo.Scripts
@@ -50,20 +49,13 @@ import Cardano.Ledger.Credential
 import Cardano.Ledger.Hashes
 import Cardano.Ledger.Keys
 import Cardano.Ledger.Mary.Value
-import Cardano.Ledger.Shelley.TxBody (
-  PoolMetadata (..),
-  PoolParams (..),
-  StakePoolRelay (..),
- )
 import Cardano.Ledger.Shelley.TxCert
 import Cardano.Ledger.TxIn (TxIn (..))
-import Cardano.Mock.Forging.Crypto
 import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import Cardano.Mock.Forging.Tx.Generic
 import Cardano.Mock.Forging.Types
 import Cardano.Prelude hiding (sum, (.))
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromJust)
 import qualified Data.Maybe.Strict as Strict
 import Data.Sequence.Strict (StrictSeq)
 import qualified Data.Sequence.Strict as StrictSeq
@@ -72,6 +64,7 @@ import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (LedgerState, StandardAlonzo)
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
+import Prelude hiding (map)
 
 type AlonzoUTxOIndex = UTxOIndex StandardAlonzo
 
@@ -346,24 +339,6 @@ mkSimpleTx valid txBody =
     , auxiliaryData = maybeToStrictMaybe Nothing
     }
 
-consPoolParams ::
-  KeyHash 'StakePool StandardCrypto ->
-  StakeCredential StandardCrypto ->
-  [KeyHash 'Staking StandardCrypto] ->
-  PoolParams StandardCrypto
-consPoolParams poolId rwCred owners =
-  PoolParams
-    { ppId = poolId
-    , ppVrf = hashVerKeyVRF . snd . mkVRFKeyPair $ RawSeed 0 0 0 0 0 -- undefined
-    , ppPledge = Coin 1000
-    , ppCost = Coin 10000
-    , ppMargin = minBound
-    , ppRewardAcnt = RewardAcnt Testnet rwCred
-    , ppOwners = Set.fromList owners
-    , ppRelays = StrictSeq.singleton $ SingleHostAddr Strict.SNothing Strict.SNothing Strict.SNothing
-    , ppMetadata = Strict.SJust $ PoolMetadata (fromJust $ textToUrl "best.pool") "89237365492387654983275634298756"
-    }
-
 consPoolParamsTwoOwners ::
   [StakeCredential StandardCrypto] ->
   KeyHash 'StakePool StandardCrypto ->
@@ -385,17 +360,21 @@ mkScriptTx valid rdmrs txBody =
     , auxiliaryData = maybeToStrictMaybe Nothing
     }
   where
-    witnesses = mkWitnesses rdmrs [(hashData @StandardAlonzo plutusDataList, plutusDataList)]
+    witnesses =
+      mkWitnesses
+        (map (second Just) rdmrs)
+        [(hashData @StandardAlonzo plutusDataList, plutusDataList)]
 
 mkWitnesses ::
-  [(RdmrPtr, (ScriptHash StandardCrypto, Core.Script StandardAlonzo))] ->
-  [(DataHash StandardCrypto, Data StandardAlonzo)] ->
-  AlonzoTxWits StandardAlonzo
+  (Core.Era era, Core.EraCrypto era ~ StandardCrypto, Script era ~ AlonzoScript era) =>
+  [(RdmrPtr, Maybe (ScriptHash StandardCrypto, Core.Script era))] ->
+  [(DataHash StandardCrypto, Data era)] ->
+  AlonzoTxWits era
 mkWitnesses rdmrs datas =
   AlonzoTxWits
     mempty
     mempty
-    (Map.fromList $ snd <$> rdmrs)
+    (Map.fromList $ mapMaybe snd rdmrs)
     (TxDats $ Map.fromList datas)
     (Redeemers $ Map.fromList redeemers)
   where
@@ -404,13 +383,17 @@ mkWitnesses rdmrs datas =
         (,(plutusDataList, ExUnits 100 100))
         (fst <$> rdmrs)
 
-mkUTxOAlonzo :: AlonzoTx StandardAlonzo -> [(TxIn StandardCrypto, AlonzoTxOut StandardAlonzo)]
+mkUTxOAlonzo ::
+  (Core.EraTx era, Core.EraCrypto era ~ StandardCrypto, Core.Tx era ~ AlonzoTx era) =>
+  AlonzoTx era ->
+  [(TxIn StandardCrypto, Core.TxOut era)]
 mkUTxOAlonzo tx =
   [ (TxIn transId idx, out)
-  | (out, idx) <- zip (toList (outputs' $ tx ^. Core.bodyTxL)) (TxIx <$> [0 ..])
+  | (out, idx) <- zip (toList (tx ^. outputsL)) (TxIx <$> [0 ..])
   ]
   where
     transId = txid $ getField @"body" tx
+    outputsL = Core.bodyTxL . Core.outputsTxBodyL
 
 emptyTxBody :: AlonzoTxBody StandardAlonzo
 emptyTxBody =
