@@ -302,7 +302,7 @@ pruneSameBlock =
     -- Add a block with transactions
     void $ withConwayFindLeaderAndSubmit interpreter mockServer $ \state' -> do
       tx0 <- Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 20_000 20_000 state'
-      let utxo0 = Prelude.head (Conway.mkUTxO tx0)
+      let utxo0 = Prelude.head (Conway.mkUTxOConway tx0)
       tx1 <- Conway.mkPaymentTx (UTxOPair utxo0) (UTxOIndex 2) 10_000 500 state'
       pure [tx0, tx1]
     -- Verify the transactions weren't pruned
@@ -341,7 +341,7 @@ noPruneSameBlock =
     -- Add a block with transactions
     void $ withConwayFindLeaderAndSubmit interpreter mockServer $ \state' -> do
       tx0 <- Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 20_000 20_000 state'
-      let utxo0 = Prelude.head (Conway.mkUTxO tx0)
+      let utxo0 = Prelude.head (Conway.mkUTxOConway tx0)
       tx1 <- Conway.mkPaymentTx (UTxOPair utxo0) (UTxOIndex 2) 10_000 500 state'
       pure [tx0, tx1]
     -- Add some more empty blocks

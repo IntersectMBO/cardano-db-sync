@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Cardano.Mock.Forging.Tx.Conway (
   consTxBody,
@@ -9,49 +9,42 @@ module Cardano.Mock.Forging.Tx.Conway (
   mkSimpleTx,
   mkFullTx,
   consPoolParams,
-  mkScriptInput,
+  mkScriptInp,
   mkWitnesses,
-  mkUTxO,
-  mkTxHash,
+  mkUTxOConway,
 ) where
 
 import Cardano.Ledger.Address (Addr (..), RewardAcnt (..), Withdrawals (..))
 import Cardano.Ledger.Allegra.Scripts (ValidityInterval (..))
-import Cardano.Ledger.Alonzo.Scripts (ExUnits (..), Tag (..))
-import Cardano.Ledger.Alonzo.Scripts.Data (Data (), DataHash (), Datum (..), hashData)
+import Cardano.Ledger.Alonzo.Scripts.Data (Datum (..), hashData)
 import Cardano.Ledger.Alonzo.Tx (IsValid (..))
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
-import Cardano.Ledger.Alonzo.TxWits (AlonzoTxWits (..), RdmrPtr (..), Redeemers (..), TxDats (..))
-import Cardano.Ledger.BaseTypes (EpochNo (..), Network (..), TxIx (..), textToUrl)
+import Cardano.Ledger.BaseTypes (EpochNo (..), Network (..))
 import Cardano.Ledger.Binary (Sized (..))
-import Cardano.Ledger.Block (txid)
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Governance (VotingProcedures (..))
 import Cardano.Ledger.Conway.Tx (AlonzoTx (..))
 import Cardano.Ledger.Conway.TxBody (ConwayTxBody (..))
 import Cardano.Ledger.Conway.TxCert
-import Cardano.Ledger.Conway.TxOut (BabbageTxOut (..), referenceScriptTxOutL)
+import Cardano.Ledger.Conway.TxOut (BabbageTxOut (..))
 import qualified Cardano.Ledger.Core as Core
-import Cardano.Ledger.Credential (Credential (..), StakeCredential (), StakeReference (..))
-import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..), hashVerKeyVRF)
+import Cardano.Ledger.Credential (Credential (..), StakeReference (..))
 import Cardano.Ledger.Language (Language (..))
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..), valueFromList)
 import Cardano.Ledger.Shelley.TxAuxData (Metadatum (..))
-import Cardano.Ledger.Shelley.TxBody (PoolMetadata (..), PoolParams (..), StakePoolRelay (..))
-import Cardano.Ledger.TxIn (TxId (..), TxIn (..))
-import Cardano.Mock.Forging.Crypto (RawSeed (..), mkVRFKeyPair)
+import Cardano.Ledger.TxIn (TxIn (..))
+import Cardano.Mock.Forging.Tx.Alonzo (mkUTxOAlonzo, mkWitnesses)
 import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
+import Cardano.Mock.Forging.Tx.Babbage (mkScriptInp)
 import Cardano.Mock.Forging.Tx.Generic
 import Cardano.Mock.Forging.Types
 import Cardano.Prelude
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map as Map
-import Data.Maybe (fromJust)
 import Data.Maybe.Strict (StrictMaybe (..), maybeToStrictMaybe)
 import Data.Sequence.Strict (StrictSeq ())
 import qualified Data.Sequence.Strict as StrictSeq
 import qualified Data.Set as Set
-import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (LedgerState ())
 import Ouroboros.Consensus.Shelley.Eras (StandardConway (), StandardCrypto ())
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
@@ -138,7 +131,7 @@ mkFullTx ::
   Either ForgingError (AlonzoTx StandardConway)
 mkFullTx n m state' = do
   inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` state') inputs
-  let redeemers = mapMaybe mkScriptInput $ zip [0 ..] inputPairs
+  let redeemers = mapMaybe mkScriptInp $ zip [0 ..] inputPairs
       witnesses =
         mkWitnesses
           redeemers
@@ -270,76 +263,6 @@ mkFullTx n m state' = do
     auxiliaryDataMap = Map.fromList [(1, List []), (2, List [])]
     auxiliaryDataScripts = NonEmpty.fromList [toBinaryPlutus alwaysFailsScript]
 
--- TODO[sgillespie]: This is the same as Babbage.consPoolParams
-consPoolParams ::
-  KeyHash 'StakePool StandardCrypto ->
-  StakeCredential StandardCrypto ->
-  [KeyHash 'Staking StandardCrypto] ->
-  PoolParams StandardCrypto
-consPoolParams poolId rwCred owners =
-  PoolParams
-    { ppId = poolId
-    , ppVrf = hashVerKeyVRF . snd . mkVRFKeyPair $ RawSeed 0 0 0 0 0 -- undefined
-    , ppPledge = Coin 1000
-    , ppCost = Coin 10000
-    , ppMargin = minBound
-    , ppRewardAcnt = RewardAcnt Testnet rwCred
-    , ppOwners = Set.fromList owners
-    , ppRelays = StrictSeq.singleton $ SingleHostAddr SNothing SNothing SNothing
-    , ppMetadata = SJust $ PoolMetadata (fromJust $ textToUrl "best.pool") "89237365492387654983275634298756"
-    }
-
--- TODO[sgillespie]: This is the same as Babbage.consPoolParams
-mkScriptInput ::
-  (Word64, (TxIn StandardCrypto, Core.TxOut StandardConway)) ->
-  Maybe (RdmrPtr, Maybe (Core.ScriptHash StandardCrypto, Core.Script StandardConway))
-mkScriptInput (n, (_txIn, txOut)) =
-  case mscr of
-    SNothing
-      | addr == alwaysFailsScriptAddr ->
-          Just (RdmrPtr Spend n, Just (alwaysFailsScriptHash, alwaysFailsScript))
-      | addr == alwaysSucceedsScriptAddr ->
-          Just (RdmrPtr Spend n, Just (alwaysSucceedsScriptHash, alwaysSucceedsScript))
-      | addr == alwaysMintScriptAddr ->
-          Just (RdmrPtr Spend n, Just (alwaysMintScriptHash, alwaysMintScript))
-    SJust _ ->
-      Just (RdmrPtr Spend n, Nothing)
-    _ -> Nothing
-  where
-    addr = txOut ^. Core.addrTxOutL
-    mscr = txOut ^. referenceScriptTxOutL
-
-mkWitnesses ::
-  [(RdmrPtr, Maybe (Core.ScriptHash StandardCrypto, Core.Script StandardConway))] ->
-  [(DataHash StandardCrypto, Data StandardConway)] ->
-  AlonzoTxWits StandardConway
-mkWitnesses rdmrs datas =
-  AlonzoTxWits
-    { txwitsVKey = mempty
-    , txwitsBoot = mempty
-    , txscripts = Map.fromList $ mapMaybe snd rdmrs
-    , txdats = TxDats $ Map.fromList datas
-    , txrdmrs = Redeemers $ Map.fromList redeemers
-    }
-  where
-    redeemers =
-      fmap
-        (,(plutusDataList, ExUnits 100 100))
-        (fst <$> rdmrs)
-
--- TODO[sgillespe]: No difference here either
-mkUTxO :: AlonzoTx StandardConway -> [(TxIn StandardCrypto, Core.TxOut StandardConway)]
-mkUTxO tx =
-  [ (TxIn (mkTxHash tx) idx, out)
-  | (out, idx) <- zip (toList (tx ^. outputsL)) (TxIx <$> [0 ..])
-  ]
-  where
-    outputsL = Core.bodyTxL . Core.outputsTxBodyL
-
--- TODO[sgillespie]: And this one
-mkTxHash :: AlonzoTx StandardConway -> TxId StandardCrypto
-mkTxHash = txid . getField @"body"
-
 consPaymentTxBody ::
   Set (TxIn StandardCrypto) ->
   Set (TxIn StandardCrypto) ->
@@ -351,3 +274,8 @@ consPaymentTxBody ::
   ConwayTxBody StandardConway
 consPaymentTxBody ins cols ref outs colOut fees minted =
   consTxBody ins cols ref outs colOut fees minted mempty (Withdrawals mempty)
+
+mkUTxOConway ::
+  AlonzoTx StandardConway ->
+  [(TxIn StandardCrypto, BabbageTxOut StandardConway)]
+mkUTxOConway = mkUTxOAlonzo

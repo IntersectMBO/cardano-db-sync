@@ -22,6 +22,7 @@ module Cardano.Mock.Forging.Tx.Generic (
   unregisteredAddresses,
   unregisteredStakeCredentials,
   unregisteredPools,
+  consPoolParams,
 ) where
 
 import Cardano.Binary (ToCBOR (..))
@@ -29,6 +30,7 @@ import Cardano.Crypto.Hash (HashAlgorithm)
 import qualified Cardano.Crypto.Hash as Hash
 import Cardano.Ledger.Address
 import Cardano.Ledger.BaseTypes
+import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential
 import Cardano.Ledger.Crypto (ADDRHASH)
@@ -41,6 +43,7 @@ import Cardano.Ledger.Shelley.TxCert
 import Cardano.Ledger.Shelley.UTxO
 import Cardano.Ledger.TxIn (TxIn (..))
 import qualified Cardano.Ledger.UMap as UMap
+import Cardano.Mock.Forging.Crypto
 import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import Cardano.Mock.Forging.Types
 import Cardano.Prelude hiding (length, (.))
@@ -48,6 +51,8 @@ import Data.Coerce (coerce)
 import Data.List (nub)
 import Data.List.Extra ((!?))
 import qualified Data.Map.Strict as Map
+import Data.Maybe (fromJust)
+import qualified Data.Sequence.Strict as StrictSeq
 import qualified Data.Set as Set
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (LedgerState)
@@ -258,3 +263,21 @@ mkDummyScriptHash n = ScriptHash $ mkDummyHash (Proxy @(ADDRHASH StandardCrypto)
 
 mkDummyHash :: forall h a. HashAlgorithm h => Proxy h -> Int -> Hash.Hash h a
 mkDummyHash _ = coerce . hashWithSerialiser @h toCBOR
+
+consPoolParams ::
+  KeyHash 'StakePool StandardCrypto ->
+  StakeCredential StandardCrypto ->
+  [KeyHash 'Staking StandardCrypto] ->
+  PoolParams StandardCrypto
+consPoolParams poolId rwCred owners =
+  PoolParams
+    { ppId = poolId
+    , ppVrf = hashVerKeyVRF . snd . mkVRFKeyPair $ RawSeed 0 0 0 0 0 -- undefined
+    , ppPledge = Coin 1000
+    , ppCost = Coin 10000
+    , ppMargin = minBound
+    , ppRewardAcnt = RewardAcnt Testnet rwCred
+    , ppOwners = Set.fromList owners
+    , ppRelays = StrictSeq.singleton $ SingleHostAddr SNothing SNothing SNothing
+    , ppMetadata = SJust $ PoolMetadata (fromJust $ textToUrl "best.pool") "89237365492387654983275634298756"
+    }
