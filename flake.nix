@@ -71,6 +71,23 @@
                   inherit (project.exes) cardano-db-sync;
                   schema = ./schema;
                 })
+
+                (final: prev: {
+                  # HLint 3.2.x requires GHC >= 8.10 && < 9.0
+                  hlint = final.haskell-nix.tool "ghc8107" "hlint" {
+                    version = "3.2.7";
+                  };
+
+                  # Fourmolu 0.10.x requires GHC >= 9.0 && < 9.6
+                  fourmolu = final.haskell-nix.tool "ghc928" "fourmolu" {
+                    version = "0.10.1.0";
+                  };
+
+                  # Weeder 2.2.0 requires GHC >= 8.10 && < 9.0
+                  weeder = final.haskell-nix.tool "ghc8107" "weeder" {
+                    version = "2.2.0";
+                  };
+                })
               ];
           };
 
@@ -141,8 +158,6 @@
             shell.tools = {
               cabal = "3.10.1.0";
               ghcid = "0.8.8";
-              hlint = "3.2.7";
-              weeder = "2.2.0";
               haskell-language-server = {
                 src = nixpkgs.haskell-nix.sources."hls-1.10";
               };
@@ -152,6 +167,11 @@
             # for the target.
             shell.buildInputs = with nixpkgs.pkgsBuildBuild; [
               gitAndTools.git
+              fourmolu
+              hlint
+            ] ++ lib.optionals (config.compiler-nix-name == "ghc8107") [
+              # Weeder requires the GHC version to match HIE files
+              weeder
             ];
             shell.withHoogle = true;
 
@@ -220,26 +240,9 @@
               inherit (project.args) src compiler-nix-name;
             in
               with nixpkgs; {
-                hlint = callPackage hlintCheck {
-                  inherit src;
-
-                  hlint = haskell-nix.tool compiler-nix-name "hlint" {
-                    version = "3.2.7";
-                  };
-                };
-
-                fourmolu = callPackage fourmoluCheck {
-                  inherit src;
-
-                  # Fourmolu 0.10.x requires GHC >= 9.0 && < 9.6
-                  fourmolu = haskell-nix.tool "ghc928" "fourmolu" {
-                    version = "0.10.1.0";
-                  };
-                };
-
-                shellcheck = callPackage shellCheck {
-                  inherit src;
-                };
+                hlint = callPackage hlintCheck { inherit src hlint; };
+                fourmolu = callPackage fourmoluCheck { inherit src fourmolu; };
+                shellcheck = callPackage shellCheck { inherit src; };
               };
 
           flake = project.flake (
