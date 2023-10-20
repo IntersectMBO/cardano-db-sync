@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
@@ -5,6 +6,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Cardano.Mock.Forging.Tx.Alonzo (

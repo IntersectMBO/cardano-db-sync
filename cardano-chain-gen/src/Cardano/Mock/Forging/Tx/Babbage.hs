@@ -1,9 +1,11 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Cardano.Mock.Forging.Tx.Babbage (
