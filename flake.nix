@@ -66,7 +66,8 @@
                 (_: cardanoNodePkgs)
 
                 (final: prev: {
-                  # The cardano-db-sync NixOS module expects these to be here
+                  # The cardano-db-sync NixOS module (nix/nixos/cardano-db-sync-service.nix)
+                  # expects these to be here
                   inherit (project.exes) cardano-db-sync;
                   schema = ./schema;
                 })
