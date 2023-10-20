@@ -15,6 +15,7 @@ module Cardano.Db.Delete (
   deleteBlock,
   deleteEpochRows,
   deleteAdaPots,
+  deleteTxOut,
   -- for testing
   queryFirstAndDeleteAfter,
 ) where
@@ -36,6 +37,7 @@ import Data.Word (Word64)
 import Database.Esqueleto.Experimental (PersistEntity, PersistField, persistIdField)
 import Database.Persist.Class.PersistQuery (deleteWhere)
 import Database.Persist.Sql (
+  Filter,
   PersistEntityBackend,
   SqlBackend,
   delete,
@@ -215,3 +217,6 @@ deleteEpochRows epochNum =
 deleteAdaPots :: MonadIO m => BlockId -> ReaderT SqlBackend m ()
 deleteAdaPots blkId = do
   deleteWhere [AdaPotsBlockId ==. blkId]
+
+deleteTxOut :: MonadIO m => ReaderT SqlBackend m Int64
+deleteTxOut = deleteWhereCount ([] :: [Filter Block])

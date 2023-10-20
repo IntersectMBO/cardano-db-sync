@@ -265,6 +265,7 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
       , enpFullMode = True
       , enpMigrateConsumed = claMigrateConsumed
       , enpPruneTxOut = claPruneTxOut
+      , enpBootrstrap = False
       , enpSnEveryFollowing = 35
       , enpSnEveryLagging = 35
       , enpMaybeRollback = Nothing
