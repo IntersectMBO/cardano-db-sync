@@ -321,7 +321,7 @@ mkSyncEnv trce backend syncOptions protoInfo nw nwMagic systemStart syncNP ranMi
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNP
-  bts <- getBootstrapInProgress trce False backend -- TODO: hardcoded False
+  bts <- getBootstrapInProgress trce (enpBootrstrap syncNP) backend
   bootstrapVar <- newTVarIO bts
   owq <- newTBQueueIO 100
   orq <- newTBQueueIO 100

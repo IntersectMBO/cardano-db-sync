@@ -90,6 +90,7 @@ pRunDbSyncNode =
     <*> pFullMode
     <*> pMigrateConsumed
     <*> pPruneTxOut
+    <*> bootstrap
     <*> pure 500
     <*> pure 10000
     <*> optional pSlotNo
@@ -287,6 +288,18 @@ pPruneTxOut =
           "Prunes the consumed tx_out periodically. This assumes \
           \ consumed-tx-out is also set, even if it's not. If this is set once,\
           \ then it must be always set on following executions of db-sync."
+    )
+
+bootstrap :: Parser Bool
+bootstrap =
+  Opt.flag
+    False
+    True
+    ( Opt.long "bootstrap-tx-out"
+        <> Opt.help
+          "This syncs without populating the tx_out table. It eventually gets populated\
+          \ by migrating the ledger state. It assumes the --consumed-tx-out and\
+          \ not having the --disable-ledger-state"
     )
 
 pVersionCommand :: Parser SyncCommand

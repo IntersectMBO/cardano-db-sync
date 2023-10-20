@@ -4,7 +4,7 @@
 
 module Cardano.DbSync.Api.Ledger where
 
-import Cardano.BM.Trace (logError, logInfo)
+import Cardano.BM.Trace (logError, logInfo, logWarning)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types
@@ -71,9 +71,15 @@ migrateBootstrapUTxO syncEnv txCache = do
     HasLedger lenv -> do
       liftIO $ logInfo trce "Starting UTxO bootstrap migration"
       cls <- liftIO $ readCurrentStateUnsafe lenv
+      count <- lift DB.deleteTxOut
+      when (count > 0) $
+        liftIO $
+          logWarning trce $
+            "Found and deleted " <> DB.textShow count <> " tx_out."
       storeUTxOFromLedger syncEnv txCache cls
       liftIO $ logInfo trce "UTxO bootstrap migration done"
-    NoLedger _ -> pure ()
+    NoLedger _ ->
+      liftIO $ logWarning trce "Tried to bootstrap, but ledger state is not enabled. Please stop db-sync and restart with --ledger-state"
   where
     trce = getTrace syncEnv
 
