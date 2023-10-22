@@ -516,7 +516,7 @@ insertCertificate tracer cache isMember network blkId txId epochNo slotNo redeem
     Left (ShelleyTxCertMir mir) -> insertMirCert tracer cache network txId idx mir
     Left (ShelleyTxCertGenesisDeleg _gen) ->
       liftIO $ logWarning tracer "insertCertificate: Unhandled DCertGenesis certificate"
-    Right (ConwayTxCertDeleg deleg) -> insertConwayDelegCert cache network txId idx mRedeemerId epochNo slotNo deleg
+    Right (ConwayTxCertDeleg deleg) -> insertConwayDelegCert tracer cache network txId idx mRedeemerId epochNo slotNo deleg
     Right (ConwayTxCertPool pool) -> insertPoolCert tracer cache isMember network epochNo blkId txId idx pool
     Right (ConwayTxCertGov c) -> case c of
       ConwayRegDRep cred coin anchor ->
@@ -629,14 +629,15 @@ insertDelegCert ::
   SlotNo ->
   ShelleyDelegCert StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertDelegCert _tracer cache network txId idx mRedeemerId epochNo slotNo dCert =
+insertDelegCert tracer cache network txId idx mRedeemerId epochNo slotNo dCert =
   case dCert of
     ShelleyRegCert cred -> insertStakeRegistration epochNo txId idx $ Generic.annotateStakingCred network cred
     ShelleyUnRegCert cred -> insertStakeDeregistration cache network epochNo txId idx mRedeemerId cred
-    ShelleyDelegCert cred poolkh -> insertDelegation cache network epochNo slotNo txId idx mRedeemerId cred poolkh
+    ShelleyDelegCert cred poolkh -> insertDelegation tracer cache network epochNo slotNo txId idx mRedeemerId cred poolkh
 
 insertConwayDelegCert ::
   (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
   Cache ->
   Ledger.Network ->
   DB.TxId ->
@@ -646,7 +647,7 @@ insertConwayDelegCert ::
   SlotNo ->
   ConwayDelegCert StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertConwayDelegCert cache network txId idx mRedeemerId epochNo slotNo dCert =
+insertConwayDelegCert trce cache network txId idx mRedeemerId epochNo slotNo dCert =
   case dCert of
     ConwayRegCert cred _dep -> insertStakeRegistration epochNo txId idx $ Generic.annotateStakingCred network cred
     ConwayUnRegCert cred _dep -> insertStakeDeregistration cache network epochNo txId idx mRedeemerId cred
@@ -656,10 +657,10 @@ insertConwayDelegCert cache network txId idx mRedeemerId epochNo slotNo dCert =
       insertDeleg cred delegatee
   where
     insertDeleg cred = \case
-      DelegStake poolkh -> insertDelegation cache network epochNo slotNo txId idx mRedeemerId cred poolkh
+      DelegStake poolkh -> insertDelegation trce cache network epochNo slotNo txId idx mRedeemerId cred poolkh
       DelegVote drep -> insertDelegationVote cache network txId idx cred drep
       DelegStakeVote poolkh drep -> do
-        insertDelegation cache network epochNo slotNo txId idx mRedeemerId cred poolkh
+        insertDelegation trce cache network epochNo slotNo txId idx mRedeemerId cred poolkh
         insertDelegationVote cache network txId idx cred drep
 
 insertPoolRegister ::
@@ -860,6 +861,7 @@ insertStakeDeregistration cache network epochNo txId idx mRedeemerId cred = do
 
 insertDelegation ::
   (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
   Cache ->
   Ledger.Network ->
   EpochNo ->
@@ -870,9 +872,23 @@ insertDelegation ::
   StakeCred ->
   Ledger.KeyHash 'Ledger.StakePool StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertDelegation cache network (EpochNo epoch) slotNo txId idx mRedeemerId cred poolkh = do
+insertDelegation trce cache network (EpochNo epoch) slotNo txId idx mRedeemerId cred poolkh = do
   addrId <- liftLookupFail "insertDelegation" $ queryStakeAddrWithCache cache CacheNew network cred
-  poolHashId <- liftLookupFail "insertDelegation" $ queryPoolKeyWithCache cache CacheNew poolkh
+  --  poolHashId <- liftLookupFail "insertDelegation" $ queryPoolKeyWithCache cache CacheNew poolkh
+  poolHashId <- do
+    mpoolHashId <- lift $ queryPoolKeyWithCache cache CacheNew poolkh
+    case mpoolHashId of
+      Left _err -> do
+        liftIO $
+          logWarning trce $
+            mconcat
+              [ "insertDelegation to an unregistered pool "
+              , textShow poolkh
+              , ". We will assume that the pool exists and move on."
+              , " See issue https://github.com/input-output-hk/cardano-ledger/issues/3802"
+              ]
+        lift $ insertPoolKeyWithCache cache CacheNew poolkh
+      Right poolHashId -> pure poolHashId
   void . lift . DB.insertDelegation $
     DB.Delegation
       { DB.delegationAddrId = addrId
