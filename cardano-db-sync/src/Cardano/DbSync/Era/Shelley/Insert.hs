@@ -894,7 +894,7 @@ insertDelegationVote ::
   DRep StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertDelegationVote cache network txId idx cred drep = do
-  addrId <- liftLookupFail "insertDelegation" $ queryStakeAddrWithCache cache CacheNew network cred
+  addrId <- liftLookupFail "insertDelegationVote" $ queryStakeAddrWithCache cache CacheNew network cred
   drepId <- lift $ insertDrep drep
   void . lift . DB.insertDelegationVote $
     DB.DelegationVote
