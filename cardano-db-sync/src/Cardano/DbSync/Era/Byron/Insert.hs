@@ -239,6 +239,36 @@ insertByronTx ::
   Word64 ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
 insertByronTx syncEnv blkId tx blockIndex = do
+  bts <- liftIO $ getBootstrapState syncEnv
+  if bts
+    then do
+      void . lift . DB.insertTx $
+        DB.Tx
+          { DB.txHash = Byron.unTxHash $ Crypto.serializeCborHash (Byron.taTx tx)
+          , DB.txBlockId = blkId
+          , DB.txBlockIndex = blockIndex
+          , DB.txOutSum = DbLovelace 0
+          , DB.txFee = DbLovelace 0
+          , DB.txDeposit = Just 0 -- Byron does not have deposits/refunds
+          -- Would be really nice to have a way to get the transaction size
+          -- without re-serializing it.
+          , DB.txSize = fromIntegral $ BS.length (serialize' $ Byron.taTx tx)
+          , DB.txInvalidHereafter = Nothing
+          , DB.txInvalidBefore = Nothing
+          , DB.txValidContract = True
+          , DB.txScriptSize = 0
+          }
+      pure 0
+    else insertByronTx' syncEnv blkId tx blockIndex
+
+insertByronTx' ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
+  DB.BlockId ->
+  Byron.TxAux ->
+  Word64 ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
+insertByronTx' syncEnv blkId tx blockIndex = do
   resolvedInputs <- mapM resolveTxInputs (toList $ Byron.txInputs (Byron.taTx tx))
   let hasConsumed = getHasConsumedOrPruneTxOut syncEnv
   valFee <- firstExceptT annotateTx $ ExceptT $ pure (calculateTxFee (Byron.taTx tx) resolvedInputs)

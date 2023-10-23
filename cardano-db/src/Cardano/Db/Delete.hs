@@ -65,14 +65,14 @@ deleteBlocksBlockIdNotrace :: MonadIO m => BlockId -> ReaderT SqlBackend m ()
 deleteBlocksBlockIdNotrace = void . deleteBlocksBlockId nullTracer
 
 -- | Delete starting from a 'BlockId'.
-deleteBlocksBlockId :: MonadIO m => Trace IO Text -> BlockId -> ReaderT SqlBackend m (MinIds, Word64, Int64)
+deleteBlocksBlockId :: MonadIO m => Trace IO Text -> BlockId -> ReaderT SqlBackend m (Maybe TxId, Word64, Int64)
 deleteBlocksBlockId trce blockId = do
   mMinIds <- fmap (textToMinId =<<) <$> queryReverseIndexBlockId blockId
   (cminIds, completed) <- findMinIdsRec mMinIds mempty
   mTxId <- queryMinRefId TxBlockId blockId
   minIds <- if completed then pure cminIds else completeMinId mTxId cminIds
   (txInDeleted, blockCountInt) <- deleteTablesAfterBlockId blockId mTxId minIds
-  pure (minIds, txInDeleted, blockCountInt)
+  pure (mTxId, txInDeleted, blockCountInt)
   where
     findMinIdsRec :: MonadIO m => [Maybe MinIds] -> MinIds -> ReaderT SqlBackend m (MinIds, Bool)
     findMinIdsRec [] minIds = pure (minIds, True)
@@ -219,4 +219,4 @@ deleteAdaPots blkId = do
   deleteWhere [AdaPotsBlockId ==. blkId]
 
 deleteTxOut :: MonadIO m => ReaderT SqlBackend m Int64
-deleteTxOut = deleteWhereCount ([] :: [Filter Block])
+deleteTxOut = deleteWhereCount ([] :: [Filter TxOut])

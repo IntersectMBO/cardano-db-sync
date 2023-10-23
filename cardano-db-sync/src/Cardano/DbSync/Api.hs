@@ -494,7 +494,7 @@ getBootstrapInProgress trce bootstrapFlag sqlBackend = do
         liftIO $
           logInfo trce $
             mconcat
-              [ "Syncing with bootstrap."
+              [ "Syncing with bootstrap. "
               , "This won't populate tx_out until the tip of the chain."
               ]
         DB.insertExtraMigration DB.BootstrapStarted
