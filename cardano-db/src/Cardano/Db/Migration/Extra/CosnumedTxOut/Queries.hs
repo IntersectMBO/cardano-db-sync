@@ -107,7 +107,7 @@ createConsumedTxOut = do
       []
   handle exceptHandler $
     rawExecute
-      "CREATE INDEX IF NOT EXISTS idx_tx_out_consumed_by_tx_id ON tx_out (consumed_by_in_id)"
+      "CREATE INDEX IF NOT EXISTS idx_tx_out_consumed_by_tx_id ON tx_out (consumed_by_tx_id)"
       []
   handle exceptHandler $
     rawExecute
@@ -245,8 +245,9 @@ splitAndProcessPageEntries ::
 splitAndProcessPageEntries trce ranCreateConsumedTxOut maxTxId pageEntries = do
   let entriesSplit = span (\tr -> ctTxInTxId tr <= maxTxId) pageEntries
   case entriesSplit of
-    -- empty lists just return
-    ([], []) -> pure True
+    ([], []) -> do
+      shouldCreateConsumedTxOut trce ranCreateConsumedTxOut
+      pure True
     -- the whole list is less that maxTxInId
     (xs, []) -> do
       deletePageEntries xs

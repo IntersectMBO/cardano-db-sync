@@ -217,12 +217,12 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
             pure True
           else pure False
       when withinHalfHour $ do
+        bootStrapMaybe syncEnv
         ranIndexes <- liftIO $ getRanIndexes syncEnv
         lift $ addConstraintsIfNotExist syncEnv tracer
         unless ranIndexes $ do
           lift $ unless commited DB.transactionCommit
           liftIO $ runIndexMigrations syncEnv
-        bootStrapMaybe syncEnv
 
     isWithinTwoMin :: SlotDetails -> Bool
     isWithinTwoMin sd = isSyncedWithinSeconds sd 120 == SyncFollowing

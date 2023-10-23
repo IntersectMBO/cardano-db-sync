@@ -49,12 +49,8 @@ bootStrapMaybe ::
 bootStrapMaybe syncEnv = do
   bts <- liftIO $ readTVarIO (envBootstrap syncEnv)
   when bts $ do
-    liftIO $ logInfo trce "Starting UTxO bootstrap migration"
     migrateBootstrapUTxO syncEnv emptyTxCache -- TODO: hardcoded to empty
     liftIO $ atomically $ writeTVar (envBootstrap syncEnv) False
-    liftIO $ logInfo trce "UTxO bootstrap migration done"
-  where
-    trce = getTrace syncEnv
 
 newtype TxCache = TxCache {txIdCache :: Map ByteString DB.TxId}
 
@@ -77,6 +73,7 @@ migrateBootstrapUTxO syncEnv txCache = do
           logWarning trce $
             "Found and deleted " <> DB.textShow count <> " tx_out."
       storeUTxOFromLedger syncEnv txCache cls
+      lift $ DB.insertExtraMigration DB.BootstrapFinished
       liftIO $ logInfo trce "UTxO bootstrap migration done"
     NoLedger _ ->
       liftIO $ logWarning trce "Tried to bootstrap, but ledger state is not enabled. Please stop db-sync and restart with --ledger-state"

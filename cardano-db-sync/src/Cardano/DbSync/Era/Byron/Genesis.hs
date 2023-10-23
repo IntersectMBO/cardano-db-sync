@@ -44,24 +44,25 @@ insertValidateGenesisDist ::
 insertValidateGenesisDist syncEnv (NetworkName networkName) cfg = do
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise *way* too chatty.
+  bts <- liftIO $ getBootstrapState syncEnv
   let hasConsumed = getHasConsumedOrPruneTxOut syncEnv
       prunes = getPrunes syncEnv
   if False
-    then newExceptT $ DB.runDbIohkLogging (envBackend syncEnv) tracer (insertAction hasConsumed prunes)
-    else newExceptT $ DB.runDbIohkNoLogging (envBackend syncEnv) (insertAction hasConsumed prunes)
+    then newExceptT $ DB.runDbIohkLogging (envBackend syncEnv) tracer (insertAction hasConsumed prunes bts)
+    else newExceptT $ DB.runDbIohkNoLogging (envBackend syncEnv) (insertAction hasConsumed prunes bts)
   where
     tracer = getTrace syncEnv
 
-    insertAction :: Bool -> Bool -> (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either SyncNodeError ())
-    insertAction hasConsumed prunes = do
+    insertAction :: Bool -> Bool -> Bool -> (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either SyncNodeError ())
+    insertAction hasConsumed prunes bootstrap = do
       ebid <- DB.queryBlockId (configGenesisHash cfg)
       case ebid of
-        Right bid -> validateGenesisDistribution prunes tracer networkName cfg bid
+        Right bid -> validateGenesisDistribution prunes bootstrap tracer networkName cfg bid
         Left _ ->
           runExceptT $ do
             liftIO $ logInfo tracer "Inserting Byron Genesis distribution"
             count <- lift DB.queryBlockCount
-            when (count > 0) $
+            when (not bootstrap && count > 0) $
               dbSyncNodeError "insertValidateGenesisDist: Genesis data mismatch."
             void . lift $
               DB.insertMeta $
@@ -117,12 +118,13 @@ insertValidateGenesisDist syncEnv (NetworkName networkName) cfg = do
 validateGenesisDistribution ::
   (MonadBaseControl IO m, MonadIO m) =>
   Bool ->
+  Bool ->
   Trace IO Text ->
   Text ->
   Byron.Config ->
   DB.BlockId ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-validateGenesisDistribution prunes tracer networkName cfg bid =
+validateGenesisDistribution prunes bts tracer networkName cfg bid =
   runExceptT $ do
     meta <- liftLookupFail "validateGenesisDistribution" DB.queryMeta
 
@@ -154,21 +156,22 @@ validateGenesisDistribution prunes tracer networkName cfg bid =
           , " but got "
           , textShow txCount
           ]
-    totalSupply <- lift DB.queryGenesisSupply
-    case DB.word64ToAda <$> configGenesisSupply cfg of
-      Left err -> dbSyncNodeError $ "validateGenesisDistribution: " <> textShow err
-      Right expectedSupply ->
-        when (expectedSupply /= totalSupply && not prunes) $
-          dbSyncNodeError $
-            Text.concat
-              [ "validateGenesisDistribution: Expected total supply to be "
-              , DB.renderAda expectedSupply
-              , " but got "
-              , DB.renderAda totalSupply
-              ]
-    liftIO $ do
-      logInfo tracer "Initial genesis distribution present and correct"
-      logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda totalSupply)
+    unless bts $ do
+      totalSupply <- lift DB.queryGenesisSupply
+      case DB.word64ToAda <$> configGenesisSupply cfg of
+        Left err -> dbSyncNodeError $ "validateGenesisDistribution: " <> textShow err
+        Right expectedSupply ->
+          when (expectedSupply /= totalSupply && not prunes) $
+            dbSyncNodeError $
+              Text.concat
+                [ "validateGenesisDistribution: Expected total supply to be "
+                , DB.renderAda expectedSupply
+                , " but got "
+                , DB.renderAda totalSupply
+                ]
+      liftIO $ do
+        logInfo tracer "Initial genesis distribution present and correct"
+        logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda totalSupply)
 
 -- -----------------------------------------------------------------------------
 
