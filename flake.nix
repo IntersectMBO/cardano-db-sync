@@ -233,6 +233,15 @@
           })).appendOverlays [
             # Collect local package `exe`s
             nixpkgs.haskell-nix.haskellLib.projectOverlays.projectComponents
+
+            # Add git revision to `exe`s
+            (final: prev: {
+              hsPkgs = final.pkgs.setGitRevForPaths (self.rev or "dirty") [
+                "cardano-db-sync.components.exes.cardano-db-sync"
+                "cardano-smash-server.components.exes.cardano-smash-server"
+                "cardano-db-tool.components.exes.cardano-db-tool"
+              ] prev.hsPkgs;
+            })
           ];
 
           staticChecks =
