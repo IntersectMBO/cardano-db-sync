@@ -1,11 +1,14 @@
-name: Dowload binary distribution
+name: Add binary distribution
 
 on:
+  release:
+    types:
+      - published
   workflow_dispatch: {}
 
 jobs:
   linux:
-    name: "Download binary distribution (Linux)"
+    name: "Add binary distribution"
     runs-on: ubuntu-latest
     steps:
       - name: Install Nix with good defaults
@@ -25,7 +28,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Download image from cache
+      - name: Download archive from cache
         run: |
-          nix build --builders "" --max-jobs 0 .#cardano-db-sync-linux
-          nix build --builders "" --max-jobs 0 .#packages.x86_64-darwin.cardano-db-sync-macos
+          nix build \
+            --builders "" \
+            --max-jobs 0 \
+            --out-link result-linux \
+            .#cardano-db-sync-linux
+          nix build \
+            --builders "" \
+            --max-jobs 0 \
+            --out-link result-macos \
+            .#packages.x86_64-darwin.cardano-db-sync-macos
+
+      - name: Release
+        uses: input-output-hk/action-gh-release@v1
+        with:
+          draft: true
+          files: |
+            result-linux/cardano-db-sync-*-linux.tar.gz
+            result-macos/cardano-db-sync-*-macos.tar.gz
