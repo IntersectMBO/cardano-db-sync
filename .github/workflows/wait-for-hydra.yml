@@ -1,0 +1,17 @@
+name: Wait for hydra
+on:
+  push: {}
+  pull_request_target: {}
+
+jobs:
+  wait-for-hydra-eval:
+    if: github.repository_owner == 'input-output-hk'
+    env:
+      HYDRA_JOB: ci/hydra-build:required.x86_64-linux
+      GH_TOKEN: ${{ github.token }}
+    name: "Wait for hydra status"
+    runs-on: ubuntu-latest
+    steps:
+    - uses: sgillespie/actions/wait-for-hydra@latest
+      with:
+        check: ci/hydra-build:required.x86_64-linux
