@@ -503,7 +503,7 @@ getBootstrapInProgress trce bootstrapFlag sqlBackend = do
         liftIO $
           logInfo trce $
             mconcat
-              [ "Syncing with bootstrap is in progress."
+              [ "Syncing with bootstrap is in progress. "
               , "This won't populate tx_out until the tip of the chain."
               ]
         pure True
@@ -512,6 +512,6 @@ getBootstrapInProgress trce bootstrapFlag sqlBackend = do
           logWarning trce $
             mconcat
               [ "Bootstrap flag is set, but it will be ignored, "
-              , "since bootstrap is already done. ."
+              , "since bootstrap is already done."
               ]
         pure False

@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Cardano.DbSync.Api.Ledger where
 
@@ -36,8 +37,10 @@ import Data.ByteString (ByteString)
 import Data.List.Extra
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
+import qualified Data.Text as Text
 import Database.Persist.Sql (SqlBackend)
 import Lens.Micro
+import Numeric
 import Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState, ledgerState)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
@@ -106,7 +109,21 @@ storeUTxO ::
   TxCache ->
   Map (TxIn StandardCrypto) (BabbageTxOut era) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-storeUTxO env txCache = mapM_ (storePage env txCache) . chunksOf pageSize . Map.toList
+storeUTxO env txCache mp = do
+  liftIO $
+    logInfo trce $
+      mconcat
+        [ "Inserting "
+        , DB.textShow size
+        , " tx_out as pages of "
+        , DB.textShow pageSize
+        ]
+  mapM_ (storePage env txCache pagePerc) . zip [0 ..] . chunksOf pageSize . Map.toList $ mp
+  where
+    trce = getTrace env
+    npages = size `div` pageSize
+    pagePerc :: Float = 100.0 / fromIntegral npages
+    size = Map.size mp
 
 storePage ::
   ( EraCrypto era ~ StandardCrypto
@@ -119,13 +136,18 @@ storePage ::
   ) =>
   SyncEnv ->
   TxCache ->
-  [(TxIn StandardCrypto, BabbageTxOut era)] ->
+  Float ->
+  (Int, [(TxIn StandardCrypto, BabbageTxOut era)]) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-storePage syncEnv cache ls = do
+storePage syncEnv cache percQuantum (n, ls) = do
+  when (n `mod` 10 == 0) $ liftIO $ logInfo trce $ "Bootstrap done " <> prc <> "%"
   txOuts <- mapM (prepareTxOut syncEnv cache) ls
   txOutIds <- lift . DB.insertManyTxOutPlex True False $ etoTxOut . fst <$> txOuts
   let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> txOuts)
   void . lift $ DB.insertManyMaTxOut maTxOuts
+  where
+    trce = getTrace syncEnv
+    prc = Text.pack $ showGFloat (Just 1) (min 100.0 (fromIntegral n * percQuantum)) ""
 
 prepareTxOut ::
   ( EraCrypto era ~ StandardCrypto
