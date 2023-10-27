@@ -14,6 +14,7 @@ module Cardano.DbSync.Default (
 import Cardano.BM.Trace (logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Ledger
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), InsertOptions (..), LedgerEnv (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Cache.Types (textShowStats)
 import Cardano.DbSync.Epoch (epochHandler)
@@ -185,7 +186,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
     when (unBlockNo blkNo `mod` getPruneInterval syncEnv == 0) $
       do
         lift $ DB.deleteConsumedTxOut tracer (getSafeBlockNoDiff syncEnv)
-  lift $ commitOrIndexes withinTwoMin withinHalfHour
+  commitOrIndexes withinTwoMin withinHalfHour
   where
     tracer = getTrace syncEnv
     iopts = getInsertOptions syncEnv
@@ -207,20 +208,21 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
       Strict.Nothing | hasLedgerState syncEnv -> Just $ Ledger.Prices minBound minBound
       Strict.Nothing -> Nothing
 
-    commitOrIndexes :: Bool -> Bool -> ReaderT SqlBackend (LoggingT IO) ()
+    commitOrIndexes :: Bool -> Bool -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
     commitOrIndexes withinTwoMin withinHalfHour = do
       commited <-
         if withinTwoMin || tookSnapshot
           then do
-            DB.transactionCommit
+            lift DB.transactionCommit
             pure True
           else pure False
       when withinHalfHour $ do
         ranIndexes <- liftIO $ getRanIndexes syncEnv
-        addConstraintsIfNotExist syncEnv tracer
+        lift $ addConstraintsIfNotExist syncEnv tracer
         unless ranIndexes $ do
-          unless commited DB.transactionCommit
+          lift $ unless commited DB.transactionCommit
           liftIO $ runIndexMigrations syncEnv
+        bootStrapMaybe syncEnv
 
     isWithinTwoMin :: SlotDetails -> Bool
     isWithinTwoMin sd = isSyncedWithinSeconds sd 120 == SyncFollowing

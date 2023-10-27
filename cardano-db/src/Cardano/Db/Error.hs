@@ -65,7 +65,7 @@ runOrThrowIODb ioEither = do
     Left err -> throwIO err
     Right a -> pure a
 
-logAndThrowIO :: Trace IO Text -> Text -> IO ()
+logAndThrowIO :: Trace IO Text -> Text -> IO a
 logAndThrowIO tracer msg = do
   logError tracer msg
   throwIO $ userError $ show msg
