@@ -4,7 +4,7 @@
 
 module Cardano.DbSync.Api.Ledger where
 
-import Cardano.BM.Trace (logError)
+import Cardano.BM.Trace (logError, logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types
@@ -14,6 +14,7 @@ import qualified Cardano.DbSync.Era.Shelley.Insert as Insert
 import Cardano.DbSync.Era.Shelley.Insert.Grouped
 import Cardano.DbSync.Era.Util
 import Cardano.DbSync.Error
+import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Types
 import Cardano.Ledger.Alonzo.Scripts
 import Cardano.Ledger.Babbage.Core
@@ -25,6 +26,7 @@ import Cardano.Ledger.Shelley.LedgerState
 import Cardano.Ledger.TxIn
 import Cardano.Ledger.UTxO (UTxO (..))
 import Cardano.Prelude (lift)
+import Control.Concurrent.Class.MonadSTM.Strict (atomically, readTVarIO, writeTVar)
 import Control.Monad.Extra
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
@@ -39,25 +41,41 @@ import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState, ledgerState)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
-import Cardano.DbSync.Ledger.State
+
+bootStrapMaybe ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+bootStrapMaybe syncEnv = do
+  bts <- liftIO $ readTVarIO (envBootstrap syncEnv)
+  when bts $ do
+    liftIO $ logInfo trce "Starting UTxO bootstrap migration"
+    migrateBootstrapUTxO syncEnv emptyTxCache -- TODO: hardcoded to empty
+    liftIO $ atomically $ writeTVar (envBootstrap syncEnv) False
+    liftIO $ logInfo trce "UTxO bootstrap migration done"
+  where
+    trce = getTrace syncEnv
 
 newtype TxCache = TxCache {txIdCache :: Map ByteString DB.TxId}
 
 emptyTxCache :: TxCache
 emptyTxCache = TxCache mempty
 
-migrateBootstrapUTxO
-  :: (MonadBaseControl IO m, MonadIO m) =>
+migrateBootstrapUTxO ::
+  (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   TxCache ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 migrateBootstrapUTxO syncEnv txCache = do
   case envLedgerEnv syncEnv of
     HasLedger lenv -> do
+      liftIO $ logInfo trce "Starting UTxO bootstrap migration"
       cls <- liftIO $ readCurrentStateUnsafe lenv
       storeUTxOFromLedger syncEnv txCache cls
+      liftIO $ logInfo trce "UTxO bootstrap migration done"
     NoLedger _ -> pure ()
-
+  where
+    trce = getTrace syncEnv
 
 storeUTxOFromLedger :: (MonadBaseControl IO m, MonadIO m) => SyncEnv -> TxCache -> ExtLedgerState CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 storeUTxOFromLedger env txCache st = case ledgerState st of

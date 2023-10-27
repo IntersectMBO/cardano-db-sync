@@ -321,7 +321,8 @@ mkSyncEnv trce backend syncOptions protoInfo nw nwMagic systemStart syncNP ranMi
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNP
-  bootstrapVar <- newTVarIO False
+  bts <- getBootstrapInProgress trce False backend -- TODO: hardcoded False
+  bootstrapVar <- newTVarIO bts
   owq <- newTBQueueIO 100
   orq <- newTBQueueIO 100
   epochVar <- newTVarIO initEpochState
@@ -471,3 +472,46 @@ getMaxRollbacks ::
   ProtocolInfo blk ->
   Word64
 getMaxRollbacks = maxRollbacks . configSecurityParam . pInfoConfig
+
+getBootstrapInProgress ::
+  Trace IO Text ->
+  Bool ->
+  SqlBackend ->
+  IO Bool
+getBootstrapInProgress trce bootstrapFlag sqlBackend = do
+  DB.runDbIohkNoLogging sqlBackend $ do
+    ems <- DB.queryAllExtraMigrations
+    let btsState = DB.bootstrapState ems
+    case (bootstrapFlag, btsState) of
+      (False, DB.BootstrapNotStarted) ->
+        pure False
+      (False, DB.BootstrapDone) ->
+        -- Bootsrap was previously finalised so it's not needed.
+        pure False
+      (False, DB.BootstrapInProgress) -> do
+        liftIO $ DB.logAndThrowIO trce "Bootstrap flag not set, but still in progress"
+      (True, DB.BootstrapNotStarted) -> do
+        liftIO $
+          logInfo trce $
+            mconcat
+              [ "Syncing with bootstrap."
+              , "This won't populate tx_out until the tip of the chain."
+              ]
+        DB.insertExtraMigration DB.BootstrapStarted
+        pure True
+      (True, DB.BootstrapInProgress) -> do
+        liftIO $
+          logInfo trce $
+            mconcat
+              [ "Syncing with bootstrap is in progress."
+              , "This won't populate tx_out until the tip of the chain."
+              ]
+        pure True
+      (True, DB.BootstrapDone) -> do
+        liftIO $
+          logWarning trce $
+            mconcat
+              [ "Bootstrap flag is set, but it will be ignored, "
+              , "since bootstrap is already done. ."
+              ]
+        pure False
