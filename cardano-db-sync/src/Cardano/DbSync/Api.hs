@@ -29,6 +29,7 @@ module Cardano.DbSync.Api (
   whenConsumeOrPruneTxOut,
   whenPruneTxOut,
   getHasConsumedOrPruneTxOut,
+  getSkipTxIn,
   getPrunes,
   mkSyncEnvFromConfig,
   verifySnapshotPoint,
@@ -145,11 +146,12 @@ runIndexMigrations env = do
     logInfo (getTrace env) "Indexes were created"
     atomically $ writeTVar (envIndexes env) True
 
-initPruneConsumeMigration :: Bool -> Bool -> DB.PruneConsumeMigration
-initPruneConsumeMigration consumed pruneTxOut =
+initPruneConsumeMigration :: Bool -> Bool -> Bool -> DB.PruneConsumeMigration
+initPruneConsumeMigration consumed pruneTxOut forceTxIn =
   DB.PruneConsumeMigration
     { DB.pcmPruneTxOut = pruneTxOut
     , DB.pcmConsumeOrPruneTxOut = consumed || pruneTxOut
+    , DB.pcmSkipTxIn = not forceTxIn && (consumed || pruneTxOut)
     }
 
 getPruneConsume :: SyncEnv -> DB.PruneConsumeMigration
@@ -182,6 +184,10 @@ whenPruneTxOut env =
 getHasConsumedOrPruneTxOut :: SyncEnv -> Bool
 getHasConsumedOrPruneTxOut =
   DB.pcmConsumeOrPruneTxOut . getPruneConsume
+
+getSkipTxIn :: SyncEnv -> Bool
+getSkipTxIn =
+  DB.pcmSkipTxIn . getPruneConsume
 
 getPrunes :: SyncEnv -> Bool
 getPrunes = do

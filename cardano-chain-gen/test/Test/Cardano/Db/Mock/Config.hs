@@ -261,6 +261,7 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
       , enpHasMetadata = claHasMetadata
       , enpHasPlutusExtra = True
       , enpHasOffChainPoolData = True
+      , enpForceTxIn = True
       , enpTurboMode = False
       , enpFullMode = True
       , enpMigrateConsumed = claMigrateConsumed

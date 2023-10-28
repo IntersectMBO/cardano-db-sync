@@ -71,6 +71,7 @@ data SyncNodeParams = SyncNodeParams
   , enpHasMetadata :: !Bool
   , enpHasPlutusExtra :: !Bool
   , enpHasOffChainPoolData :: !Bool
+  , enpForceTxIn :: !Bool
   , enpTurboMode :: !Bool
   , enpFullMode :: !Bool
   , enpMigrateConsumed :: !Bool
