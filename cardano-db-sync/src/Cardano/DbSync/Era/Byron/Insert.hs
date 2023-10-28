@@ -270,7 +270,6 @@ insertByronTx' ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
 insertByronTx' syncEnv blkId tx blockIndex = do
   resolvedInputs <- mapM resolveTxInputs (toList $ Byron.txInputs (Byron.taTx tx))
-  let hasConsumed = getHasConsumedOrPruneTxOut syncEnv
   valFee <- firstExceptT annotateTx $ ExceptT $ pure (calculateTxFee (Byron.taTx tx) resolvedInputs)
   txId <-
     lift . DB.insertTx $
@@ -293,8 +292,8 @@ insertByronTx' syncEnv blkId tx blockIndex = do
   -- Insert outputs for a transaction before inputs in case the inputs for this transaction
   -- references the output (not sure this can even happen).
   bts <- liftIO $ getBootstrapState syncEnv
-  lift $ zipWithM_ (insertTxOut tracer hasConsumed bts txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
-  unless hasConsumed $
+  lift $ zipWithM_ (insertTxOut tracer (getHasConsumedOrPruneTxOut syncEnv) bts txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
+  unless (getSkipTxIn syncEnv) $
     mapM_ (insertTxIn tracer txId) resolvedInputs
   whenConsumeOrPruneTxOut syncEnv $
     lift $

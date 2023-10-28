@@ -86,6 +86,7 @@ pRunDbSyncNode =
     <*> pHasMetadata
     <*> pHasPlutusExtra
     <*> pHasOffChainPoolData
+    <*> pForceTxIn
     <*> pTurboMode
     <*> pFullMode
     <*> pMigrateConsumed
@@ -246,6 +247,15 @@ pHasOffChainPoolData =
     False
     ( Opt.long "disable-offchain-pool-data"
         <> Opt.help "Disables fetching pool offchain metadata."
+    )
+
+pForceTxIn :: Parser Bool
+pForceTxIn =
+  Opt.flag
+    False
+    True
+    ( Opt.long "force-tx-in"
+        <> Opt.help "Force populating the tx_in table even if --consumed-tx-out is enabled"
     )
 
 pTurboMode :: Parser Bool
