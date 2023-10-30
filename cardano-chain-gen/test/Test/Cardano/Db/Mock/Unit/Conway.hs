@@ -7,11 +7,15 @@ import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.EpochDisabled a
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ForceIndex as ForceIndex
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config as ConConfig
+import qualified Test.Cardano.Db.Mock.Unit.Conway.Rollback as Rollback
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Simple as Simple
 import Test.Tasty (TestTree (), testGroup)
-import Test.Tasty.ExpectedFailure (expectFail)
+import Test.Tasty.ExpectedFailure (expectFail, ignoreTestBecause)
 import Test.Tasty.HUnit (Assertion (), testCase)
 import Prelude (String ())
+
+unimplemented :: TestTree -> TestTree
+unimplemented = ignoreTestBecause "Not implemented!"
 
 unitTests :: IOManager -> [(Text, Text)] -> TestTree
 unitTests iom knownMigrations =
@@ -77,6 +81,18 @@ unitTests iom knownMigrations =
             [ test "check force-index adds indexes" ForceIndex.checkForceIndexesArg
             , test "check no force-index doesn't add indexes" ForceIndex.checkNoForceIndexesArg
             ]
+        ]
+    , testGroup
+        "rollbacks"
+        [ test "simple rollback" Rollback.simpleRollback
+        , test "sync bigger chain" Rollback.bigChain
+        , test "rollback while db-sync is off" Rollback.restartAndRollback
+        , test "big rollback executed lazily" Rollback.lazyRollback
+        , test "lazy rollback on restart" Rollback.lazyRollbackRestart
+        , test "rollback while rollbacking" Rollback.doubleRollback
+        , test "rollback stake address cache" Rollback.stakeAddressRollback
+        , test "rollback change order of txs" Rollback.rollbackChangeTxOrder
+        , test "rollback full tx" Rollback.rollbackFullTx
         ]
     ]
   where

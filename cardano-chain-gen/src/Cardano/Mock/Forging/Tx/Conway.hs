@@ -5,10 +5,14 @@
 
 module Cardano.Mock.Forging.Tx.Conway (
   consTxBody,
+  consCertTxBody,
+  consPoolParams,
   mkPaymentTx,
   mkSimpleTx,
+  mkDCertTx,
+  mkSimpleDCertTx,
+  mkDummyRegisterTx,
   mkFullTx,
-  consPoolParams,
   mkScriptInp,
   mkWitnesses,
   mkUTxOConway,
@@ -28,7 +32,9 @@ import Cardano.Ledger.Conway.TxBody (ConwayTxBody (..))
 import Cardano.Ledger.Conway.TxCert
 import Cardano.Ledger.Conway.TxOut (BabbageTxOut (..))
 import qualified Cardano.Ledger.Core as Core
-import Cardano.Ledger.Credential (Credential (..), StakeReference (..))
+import Cardano.Ledger.Credential (Credential (..), StakeCredential, StakeReference (..))
+import Cardano.Ledger.Crypto (ADDRHASH ())
+import Cardano.Ledger.Keys (KeyHash (..))
 import Cardano.Ledger.Language (Language (..))
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..), valueFromList)
 import Cardano.Ledger.Shelley.TxAuxData (Metadatum (..))
@@ -88,6 +94,16 @@ consTxBody ins cols ref outs colOut fees minted certs withdrawals =
     , ctbTreasuryDonation = Coin 0
     }
 
+consCertTxBody ::
+  Maybe (TxIn StandardCrypto) ->
+  [ConwayTxCert StandardConway] ->
+  Withdrawals StandardCrypto ->
+  ConwayTxBody StandardConway
+consCertTxBody ref = consTxBody mempty mempty (toSet ref) mempty SNothing (Coin 0) mempty
+  where
+    toSet Nothing = mempty
+    toSet (Just a) = Set.singleton a
+
 mkPaymentTx ::
   ConwayUTxOIndex ->
   ConwayUTxOIndex ->
@@ -115,6 +131,13 @@ mkPaymentTx inputIndex outputIndex amount fees state' = do
         (Coin fees)
         mempty
 
+mkDCertTx ::
+  [ConwayTxCert StandardConway] ->
+  Withdrawals StandardCrypto ->
+  Maybe (TxIn StandardCrypto) ->
+  Either ForgingError (AlonzoTx StandardConway)
+mkDCertTx certs wdrl ref = Right (mkSimpleTx True $ consCertTxBody ref certs wdrl)
+
 mkSimpleTx :: Bool -> ConwayTxBody StandardConway -> AlonzoTx StandardConway
 mkSimpleTx isValid' txBody =
   AlonzoTx
@@ -123,6 +146,28 @@ mkSimpleTx isValid' txBody =
     , isValid = IsValid isValid'
     , auxiliaryData = maybeToStrictMaybe Nothing
     }
+
+mkSimpleDCertTx ::
+  [(StakeIndex, StakeCredential StandardCrypto -> ConwayTxCert StandardConway)] ->
+  ConwayLedgerState ->
+  Either ForgingError (AlonzoTx StandardConway)
+mkSimpleDCertTx consDCert st = do
+  dcerts <- forM consDCert $ \(stakeIndex, mkDCert) -> do
+    cred <- resolveStakeCreds stakeIndex st
+    pure (mkDCert cred)
+  mkDCertTx dcerts (Withdrawals mempty) Nothing
+
+mkDummyRegisterTx :: Int -> Int -> Either ForgingError (AlonzoTx StandardConway)
+mkDummyRegisterTx n m = mkDCertTx consDelegCert (Withdrawals mempty) Nothing
+  where
+    consDelegCert =
+      ConwayTxCertDeleg
+        . flip ConwayRegCert SNothing
+        . KeyHashObj
+        . KeyHash
+        . mkDummyHash (Proxy @(ADDRHASH StandardCrypto))
+        . fromIntegral
+        <$> [n, m]
 
 mkFullTx ::
   Int ->
