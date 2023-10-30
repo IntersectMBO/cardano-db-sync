@@ -7,15 +7,13 @@ import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.EpochDisabled a
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ForceIndex as ForceIndex
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config as ConConfig
+import qualified Test.Cardano.Db.Mock.Unit.Conway.Other as Other
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Rollback as Rollback
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Simple as Simple
 import Test.Tasty (TestTree (), testGroup)
-import Test.Tasty.ExpectedFailure (expectFail, ignoreTestBecause)
+import Test.Tasty.ExpectedFailure (expectFail)
 import Test.Tasty.HUnit (Assertion (), testCase)
 import Prelude (String ())
-
-unimplemented :: TestTree -> TestTree
-unimplemented = ignoreTestBecause "Not implemented!"
 
 unitTests :: IOManager -> [(Text, Text)] -> TestTree
 unitTests iom knownMigrations =
@@ -93,6 +91,11 @@ unitTests iom knownMigrations =
         , test "rollback stake address cache" Rollback.stakeAddressRollback
         , test "rollback change order of txs" Rollback.rollbackChangeTxOrder
         , test "rollback full tx" Rollback.rollbackFullTx
+        ]
+    , testGroup
+        "different configs"
+        [ test "genesis config without pool" Other.configNoPools
+        , test "genesis config without stakes" Other.configNoStakes
         ]
     ]
   where
