@@ -10,6 +10,7 @@ import qualified Test.Cardano.Db.Mock.Unit.Conway.Config as ConConfig
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Other as Other
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Rollback as Rollback
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Simple as Simple
+import qualified Test.Cardano.Db.Mock.Unit.Conway.Tx as Tx
 import Test.Tasty (TestTree (), testGroup)
 import Test.Tasty.ExpectedFailure (expectFail)
 import Test.Tasty.HUnit (Assertion (), testCase)
@@ -96,6 +97,12 @@ unitTests iom knownMigrations =
         "different configs"
         [ test "genesis config without pool" Other.configNoPools
         , test "genesis config without stakes" Other.configNoStakes
+        ]
+    , testGroup
+        "blocks with txs"
+        [ test "simple tx" Tx.addSimpleTx
+        , test "simple tx in Shelley era" Tx.addSimpleTxShelley
+        , test "consume utxo same block" Tx.consumeSameBlock
         ]
     ]
   where

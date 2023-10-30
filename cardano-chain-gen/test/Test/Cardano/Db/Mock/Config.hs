@@ -12,6 +12,7 @@ module Test.Cardano.Db.Mock.Config (
   babbageConfigDir,
   conwayConfigDir,
   alonzoConfigDir,
+  shelleyConfigDir,
   emptyMetricsSetters,
   fingerprintRoot,
   getDBSyncPGPass,
@@ -131,6 +132,9 @@ conwayConfigDir = "config-conway"
 
 alonzoConfigDir :: FilePath
 alonzoConfigDir = "config-alonzo"
+
+shelleyConfigDir :: FilePath
+shelleyConfigDir = "config-shelley"
 
 rootTestDir :: FilePath
 rootTestDir = "test/testfiles"
