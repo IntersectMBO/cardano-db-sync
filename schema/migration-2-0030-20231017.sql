@@ -5,7 +5,7 @@ DECLARE
   next_version int ;
 BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
-  IF next_version = 29 THEN
+  IF next_version = 30 THEN
     EXECUTE 'ALTER TABLE "pool_offline_data" RENAME TO "off_chain_pool_data"' ;
     EXECUTE 'ALTER TABLE "off_chain_pool_data" RENAME CONSTRAINT "unique_pool_offline_data" TO "unique_off_chain_pool_data"' ;
     EXECUTE 'ALTER TABLE "off_chain_pool_data" RENAME CONSTRAINT "pool_offline_data_pkey" TO "off_chain_pool_data_pkey"' ;
