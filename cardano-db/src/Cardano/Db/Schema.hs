@@ -564,6 +564,7 @@ share
     txId                TxId                noreference
     certIndex           Word16
     hotKey              ByteString          sqltype=bytea
+    votingAnchorId      VotingAnchorId Maybe  noreference
 
   DrepRegistration
     txId                TxId                noreference
@@ -609,7 +610,7 @@ share
     index                Word16
     governanceActionId   GovernanceActionId   noreference
     voterRole            VoterRole            sqltype=voterrole
-    comitteeVoter        ByteString Maybe
+    committeeVoter       ByteString Maybe
     drepVoter            DrepHashId Maybe     noreference
     poolVoter            PoolHashId Maybe     noreference
     vote                 Vote                 sqltype=vote
@@ -1167,6 +1168,7 @@ schemaDocs =
       CommitteeDeRegistrationTxId # "The Tx table index of the tx that includes this certificate."
       CommitteeDeRegistrationCertIndex # "The index of this deregistration within the certificates of this transaction."
       CommitteeDeRegistrationHotKey # "The deregistered hot key hash"
+      CommitteeDeRegistrationVotingAnchorId # "The Voting anchor reference id"
 
     DrepRegistration --^ do
       "A table for DRep registrations, deregistrations or updates. Registration have positive deposit values, deregistrations have negative and\
@@ -1223,6 +1225,7 @@ schemaDocs =
       VotingProcedureIndex # "The index of this VotingProcedure within this transaction."
       VotingProcedureGovernanceActionId # "The index of the GovernanceAction that this vote targets."
       VotingProcedureVoterRole # "The role of the voter. Can be one of ConstitutionalCommittee, DRep, SPO."
+      VotingProcedureCommitteeVoter # ""
       VotingProcedureVote # "The Vote. Can be one of Yes, No, Abstain."
       VotingProcedureVotingAnchorId # "The VotingAnchor table index associated with this VotingProcedure."
 

@@ -403,7 +403,7 @@ tryAllForging interpreter interState currentSlot xs = do
 
       -- We require the ticked ledger view in order to construct the ticked 'ChainDepState'.
       ledgerView <- case runExcept (forecastFor (istForecast interState) currentSlot) of
-        Right lv -> pure (lv :: Ticked (LedgerView (BlockProtocol CardanoBlock)))
+        Right lv -> pure (lv :: (LedgerView (BlockProtocol CardanoBlock)))
         -- Left can only happen if we cross an epoch boundary
         Left err -> throwIO $ ForecastError currentSlot err
 

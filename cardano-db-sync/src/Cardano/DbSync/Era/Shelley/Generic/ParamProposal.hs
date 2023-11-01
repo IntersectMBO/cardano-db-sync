@@ -87,7 +87,7 @@ convertParamProposal witness (Shelley.Update pp epoch) =
 
 -- -------------------------------------------------------------------------------------------------
 
-shelleyParamProposal :: (EraPParams era, ProtVerAtMost era 4, ProtVerAtMost era 6) => EpochNo -> Shelley.ProposedPPUpdates era -> [ParamProposal]
+shelleyParamProposal :: (EraPParams era, ProtVerAtMost era 4, ProtVerAtMost era 6, ProtVerAtMost era 8) => EpochNo -> Shelley.ProposedPPUpdates era -> [ParamProposal]
 shelleyParamProposal epochNo (Shelley.ProposedPPUpdates umap) =
   map (convertShelleyParamProposal epochNo) $ Map.toList umap
 
@@ -120,7 +120,7 @@ convertConwayParamProposal pmap =
     , pppTreasuryGrowthRate = strictMaybeToMaybe (pmap ^. ppuTauL)
     , pppDecentralisation = Nothing -- Removed in Babbage
     , pppEntropy = Nothing -- Removed in Babbage
-    , pppProtocolVersion = strictMaybeToMaybe (pmap ^. ppuProtocolVersionL)
+    , pppProtocolVersion = Nothing -- Removed in Conway
     , pppMinUtxoValue = Nothing -- Removed in Alonzo
     , pppMinPoolCost = strictMaybeToMaybe (pmap ^. ppuMinPoolCostL)
     , pppCoinsPerUtxo = unCoinPerByte <$> strictMaybeToMaybe (pmap ^. ppuCoinsPerUTxOByteL)
@@ -233,7 +233,7 @@ convertAlonzoParamProposal epochNo (key, pmap) =
     }
 
 -- | This works fine from Shelley to Mary. Not for Alonzo since 'ppuMinUTxOValueL' was removed
-convertShelleyParamProposal :: (EraPParams era, ProtVerAtMost era 4, ProtVerAtMost era 6) => EpochNo -> (Ledger.KeyHash genesis crypto, PParamsUpdate era) -> ParamProposal
+convertShelleyParamProposal :: (EraPParams era, ProtVerAtMost era 4, ProtVerAtMost era 6, ProtVerAtMost era 8) => EpochNo -> (Ledger.KeyHash genesis crypto, PParamsUpdate era) -> ParamProposal
 convertShelleyParamProposal epochNo (key, pmap) =
   ParamProposal
     { pppEpochNo = Just epochNo
