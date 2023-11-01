@@ -11,7 +11,7 @@ repository cardano-haskell-packages
 
 index-state:
   , hackage.haskell.org 2023-09-01T22:19:16Z
-  , cardano-haskell-packages 2023-10-05T21:00:00Z
+  , cardano-haskell-packages 2023-10-31T17:10:09Z
 
 packages:
   cardano-db
@@ -71,8 +71,8 @@ package snap-server
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: f1ce770834bf7150ca29cb647065c9e62d39be1a
-  --sha256: sha256-ONCnN1fLtYJB9kXDlUbF6nIjTnlqvI7kfppftrOOWAY=
+  tag: 735e6c97740c8def5d6e462bf5a29cbe6d323cfe
+  --sha256: sha256-Q4lhD+m5nvNu+dIHWB8WYVsWqi4/wmPPm+O/W6+HFJo=
   subdir:
     cardano-git-rev
     cardano-node
