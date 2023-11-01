@@ -69,9 +69,8 @@ import Cardano.Ledger.Compactible (fromCompact)
 import Cardano.Ledger.Conway.Core (DRepVotingThresholds (..), PoolVotingThresholds (..))
 import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Conway.TxCert
-import Cardano.Ledger.Core
 import qualified Cardano.Ledger.Credential as Ledger
-import Cardano.Ledger.DRepDistr (extractDRepDistr)
+import Cardano.Ledger.DRep
 import Cardano.Ledger.Keys
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (AssetName (..), MultiAsset (..), PolicyID (..))
@@ -248,7 +247,7 @@ insertOnNewEpoch tracer blkId slotNo epochNo newEpoch = do
   whenStrictJust (Generic.neAdaPots newEpoch) $ \pots ->
     insertPots blkId slotNo epochNo pots
   whenStrictJust (Generic.neDRepDistr newEpoch) $ \dreps ->
-    lift $ insertDrepDistr epochNo $ extractDRepDistr dreps
+    lift $ insertDrepDistr epochNo $ finishDRepPulser dreps
   whenStrictJust (Generic.neEnacted newEpoch) $ \enactedSt ->
     updateEnacted epochNo enactedSt
   where
@@ -525,8 +524,8 @@ insertCertificate tracer cache isMember network blkId txId epochNo slotNo redeem
         lift $ insertDrepDeRegistration txId idx cred coin
       ConwayAuthCommitteeHotKey khCold khHot ->
         lift $ insertCommitteeRegistration txId idx khCold khHot
-      ConwayResignCommitteeColdKey khCold ->
-        lift $ insertCommitteeDeRegistration txId idx khCold
+      ConwayResignCommitteeColdKey khCold anchor ->
+        lift $ insertCommitteeDeRegistration txId idx khCold (strictMaybeToMaybe anchor)
       ConwayUpdateDRep cred anchor ->
         lift $ insertDrepRegistration txId idx cred Nothing (strictMaybeToMaybe anchor)
   where
@@ -553,13 +552,16 @@ insertCommitteeDeRegistration ::
   DB.TxId ->
   Word16 ->
   Ledger.Credential 'ColdCommitteeRole StandardCrypto ->
+  Maybe (Anchor StandardCrypto) ->
   ReaderT SqlBackend m ()
-insertCommitteeDeRegistration txId idx khCold = do
+insertCommitteeDeRegistration txId idx khCold mAnchor = do
+  votingAnchorId <- whenMaybe mAnchor $ insertAnchor txId
   void . DB.insertCommitteeDeRegistration $
     DB.CommitteeDeRegistration
       { DB.committeeDeRegistrationTxId = txId
       , DB.committeeDeRegistrationCertIndex = idx
       , DB.committeeDeRegistrationHotKey = Generic.unCredentialHash khCold
+      , DB.committeeDeRegistrationVotingAnchorId = votingAnchorId
       }
 
 insertDrepRegistration ::
@@ -1531,7 +1533,7 @@ insertVotingProcedure ::
 insertVotingProcedure cache txId voter (index, (gaId, vp)) = do
   govActionId <- resolveGovernanceAction gaId
   votingAnchorId <- whenMaybe (strictMaybeToMaybe $ vProcAnchor vp) $ lift . insertAnchor txId
-  (mComitteeVoter, mDRepVoter, mStakePoolVoter) <- case voter of
+  (mCommitteeVoter, mDRepVoter, mStakePoolVoter) <- case voter of
     CommitteeVoter cred ->
       pure (Just $ Generic.unCredentialHash cred, Nothing, Nothing)
     DRepVoter cred -> do
@@ -1545,7 +1547,7 @@ insertVotingProcedure cache txId voter (index, (gaId, vp)) = do
       { DB.votingProcedureTxId = txId
       , DB.votingProcedureIndex = index
       , DB.votingProcedureGovernanceActionId = govActionId
-      , DB.votingProcedureComitteeVoter = mComitteeVoter
+      , DB.votingProcedureCommitteeVoter = mCommitteeVoter
       , DB.votingProcedureDrepVoter = mDRepVoter
       , DB.votingProcedurePoolVoter = mStakePoolVoter
       , DB.votingProcedureVoterRole = Generic.toVoterRole voter
@@ -1596,9 +1598,9 @@ insertCredDrepHash cred = do
   where
     bs = Generic.unCredentialHash cred
 
-insertDrepDistr :: forall m. (MonadBaseControl IO m, MonadIO m) => EpochNo -> Map (DRep StandardCrypto) (Ledger.CompactForm Coin) -> ReaderT SqlBackend m ()
-insertDrepDistr e dreps = do
-  drepsDB <- mapM mkEntry (Map.toList dreps)
+insertDrepDistr :: forall m. (MonadBaseControl IO m, MonadIO m) => EpochNo -> (PulsingSnapshot StandardConway, RatifyState StandardConway) -> ReaderT SqlBackend m ()
+insertDrepDistr e (pSnapshot, _) = do
+  drepsDB <- mapM mkEntry (Map.toList $ psDRepDistr pSnapshot)
   DB.insertManyDrepDistr drepsDB
   where
     mkEntry :: (DRep StandardCrypto, Ledger.CompactForm Coin) -> ReaderT SqlBackend m DB.DrepDistr
@@ -1609,8 +1611,14 @@ insertDrepDistr e dreps = do
           { DB.drepDistrHashId = drepId
           , DB.drepDistrAmount = fromIntegral $ unCoin $ fromCompact coin
           , DB.drepDistrEpochNo = unEpochNo e
-          , DB.drepDistrActiveUntil = Nothing
+          , DB.drepDistrActiveUntil = unEpochNo <$> isActiveEpochNo drep
           }
+
+    isActiveEpochNo :: DRep StandardCrypto -> Maybe EpochNo
+    isActiveEpochNo = \case
+      DRepAlwaysAbstain -> Nothing
+      DRepAlwaysNoConfidence -> Nothing
+      DRepCredential cred -> drepExpiry <$> Map.lookup cred (psDRepState pSnapshot)
 
 updateEnacted :: forall m. (MonadBaseControl IO m, MonadIO m) => EpochNo -> EnactState StandardConway -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 updateEnacted epochNo enactedState = do
