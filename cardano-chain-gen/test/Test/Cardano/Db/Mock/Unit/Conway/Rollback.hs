@@ -13,8 +13,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Rollback (
 ) where
 
 import Cardano.Ledger.Coin (Coin (..))
-import Cardano.Ledger.Conway.TxCert (ConwayDelegCert (..), ConwayTxCert (..), Delegatee (..))
-import Cardano.Ledger.Credential (StakeCredential ())
+import Cardano.Ledger.Conway.TxCert (ConwayDelegCert (..), Delegatee (..))
 import Cardano.Ledger.Crypto ()
 import Cardano.Mock.ChainSync.Server (IOManager (), addBlock, rollback)
 import Cardano.Mock.Forging.Interpreter (forgeNext)
@@ -23,7 +22,6 @@ import Cardano.Mock.Forging.Tx.Generic (resolvePool)
 import Cardano.Mock.Forging.Types (PoolIndex (..), StakeIndex (..), UTxOIndex (..))
 import Cardano.Prelude
 import Data.Maybe.Strict (StrictMaybe (..))
-import Ouroboros.Consensus.Shelley.Eras (StandardConway (), StandardCrypto ())
 import Ouroboros.Network.Block (blockPoint)
 import Test.Cardano.Db.Mock.Config
 import Test.Cardano.Db.Mock.Examples (mockBlock0, mockBlock1, mockBlock2)
@@ -127,7 +125,7 @@ lazyRollback =
     -- Here we create the fork
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkSimpleDCertTx [(StakeIndexNew 1, consDelegCert SNothing)]
+        Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
     -- Add some more blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 40
     -- Verify the new block count
@@ -155,7 +153,7 @@ lazyRollbackRestart =
     -- Here we create the fork
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkSimpleDCertTx [(StakeIndexNew 1, consDelegCert SNothing)]
+        Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
     -- Add some more blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 30
     -- Verify the new block count
@@ -181,7 +179,7 @@ doubleRollback =
     -- Here we create a fork
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkSimpleDCertTx [(StakeIndexNew 1, consDelegCert SNothing)]
+        Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
     -- Add some more blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 50
 
@@ -190,7 +188,7 @@ doubleRollback =
     -- Create another fork
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkSimpleDCertTx [(StakeIndexNew 0, consDelegCert $ SJust (Coin 100))]
+        Conway.mkSimpleDCertTx [(StakeIndexNew 0, Conway.mkRegTxCert $ SJust (Coin 100))]
     -- Add some more blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 50
     -- Wait for it to sync
@@ -210,8 +208,8 @@ stakeAddressRollback =
       let poolId = resolvePool (PoolIndex 0) st
       tx <-
         Conway.mkSimpleDCertTx
-          [ (StakeIndexNew 1, consDelegCert SNothing)
-          , (StakeIndexNew 1, \cred -> ConwayTxCertDeleg $ ConwayDelegCert cred (DelegStake poolId))
+          [ (StakeIndexNew 1, Conway.mkRegTxCert SNothing)
+          , (StakeIndexNew 1, Conway.mkTxDelegCert (`ConwayDelegCert` DelegStake poolId))
           ]
           st
       pure [tx]
@@ -294,9 +292,3 @@ rollbackFullTx =
     assertTxCount dbSync 14
   where
     testLabel = "conwayRollbackFullTx"
-
-consDelegCert ::
-  StrictMaybe Coin ->
-  StakeCredential StandardCrypto ->
-  ConwayTxCert StandardConway
-consDelegCert coin = ConwayTxCertDeleg . flip ConwayRegCert coin

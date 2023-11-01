@@ -98,16 +98,15 @@ consTxBody ins cols outs fees minted certs wdrl =
     (Strict.SJust Testnet)
 
 addValidityInterval ::
+  AlonzoEraTxBody era =>
   SlotNo ->
-  AlonzoTx StandardAlonzo ->
-  AlonzoTx StandardAlonzo
+  AlonzoTx era ->
+  AlonzoTx era
 addValidityInterval slotNo tx =
   tx {body = txBody'}
   where
     interval = ValidityInterval Strict.SNothing (Strict.SJust slotNo)
-    -- TxBody has a restricted export via pattern synonyms, there is no better way to do this.
-    AlonzoTxBody a b c d e f _ h i j k l m = body tx
-    txBody' = AlonzoTxBody a b c d e f interval h i j k l m
+    txBody' = set vldtTxBodyL interval (body tx)
 
 consPaymentTxBody ::
   Set (TxIn StandardCrypto) ->

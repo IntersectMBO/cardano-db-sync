@@ -10,6 +10,7 @@ import qualified Test.Cardano.Db.Mock.Unit.Conway.Config as ConConfig
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Other as Other
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Rollback as Rollback
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Simple as Simple
+import qualified Test.Cardano.Db.Mock.Unit.Conway.Stake as Stake
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Tx as Tx
 import Test.Tasty (TestTree (), testGroup)
 import Test.Tasty.ExpectedFailure (expectFail)
@@ -103,6 +104,15 @@ unitTests iom knownMigrations =
         [ test "simple tx" Tx.addSimpleTx
         , test "simple tx in Shelley era" Tx.addSimpleTxShelley
         , test "consume utxo same block" Tx.consumeSameBlock
+        ]
+    , testGroup
+        "stake addresses"
+        [ test "(de)registrations" Stake.registrationTx
+        , test "(de)registrations in same block" Stake.registrationsSameBlock
+        , test "(de)registrations in same tx" Stake.registrationsSameTx
+        , test "stake address pointers" Stake.stakeAddressPtr
+        , test "stake address pointers deregistration" Stake.stakeAddressPtrDereg
+        , test "stake address pointers. Use before registering." Stake.stakeAddressPtrUseBefore
         ]
     ]
   where

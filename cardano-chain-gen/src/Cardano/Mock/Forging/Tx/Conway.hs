@@ -12,10 +12,14 @@ module Cardano.Mock.Forging.Tx.Conway (
   mkDCertTx,
   mkSimpleDCertTx,
   mkDummyRegisterTx,
+  mkTxDelegCert,
+  mkRegTxCert,
+  mkUnRegTxCert,
   mkFullTx,
   mkScriptInp,
   mkWitnesses,
   mkUTxOConway,
+  addValidityInterval,
 ) where
 
 import Cardano.Ledger.Address (Addr (..), RewardAcnt (..), Withdrawals (..))
@@ -39,7 +43,7 @@ import Cardano.Ledger.Language (Language (..))
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..), valueFromList)
 import Cardano.Ledger.Shelley.TxAuxData (Metadatum (..))
 import Cardano.Ledger.TxIn (TxIn (..))
-import Cardano.Mock.Forging.Tx.Alonzo (mkUTxOAlonzo, mkWitnesses)
+import Cardano.Mock.Forging.Tx.Alonzo (addValidityInterval, mkUTxOAlonzo, mkWitnesses)
 import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import Cardano.Mock.Forging.Tx.Babbage (mkScriptInp)
 import Cardano.Mock.Forging.Tx.Generic
@@ -161,13 +165,30 @@ mkDummyRegisterTx :: Int -> Int -> Either ForgingError (AlonzoTx StandardConway)
 mkDummyRegisterTx n m = mkDCertTx consDelegCert (Withdrawals mempty) Nothing
   where
     consDelegCert =
-      ConwayTxCertDeleg
-        . flip ConwayRegCert SNothing
+      mkRegTxCert SNothing
         . KeyHashObj
         . KeyHash
         . mkDummyHash (Proxy @(ADDRHASH StandardCrypto))
         . fromIntegral
         <$> [n, m]
+
+mkRegTxCert ::
+  StrictMaybe Coin ->
+  StakeCredential StandardCrypto ->
+  ConwayTxCert StandardConway
+mkRegTxCert coin = mkTxDelegCert (`ConwayRegCert` coin)
+
+mkUnRegTxCert ::
+  StrictMaybe Coin ->
+  StakeCredential StandardCrypto ->
+  ConwayTxCert StandardConway
+mkUnRegTxCert coin = mkTxDelegCert (`ConwayUnRegCert` coin)
+
+mkTxDelegCert ::
+  (StakeCredential StandardCrypto -> ConwayDelegCert StandardCrypto) ->
+  StakeCredential StandardCrypto ->
+  ConwayTxCert StandardConway
+mkTxDelegCert = (ConwayTxCertDeleg .)
 
 mkFullTx ::
   Int ->
