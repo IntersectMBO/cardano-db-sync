@@ -1,8 +1,5 @@
 # Schema Documentation for cardano-db-sync
 
-Schema version: 13.2.0.0 (from branch **1532-rename-offline-to-offchain** which may not accurately reflect the version number)
-**Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema.hs by the command `cabal run -- gen-schema-docs doc/schema.md`. This document should only be updated during the release process and updated on the release branch.
-
 ### `schema_version`
 
 The version of the database schema. Schema versioning is split into three stages as detailed below. This table should only ever have a single row.
@@ -790,8 +787,8 @@ A table for every committee hot key registration. New in 13.2-Conway.
 | `id` | integer (64) |  |
 | `tx_id` | integer (64) | The Tx table index of the tx that includes this certificate. |
 | `cert_index` | integer (32) | The index of this registration within the certificates of this transaction. |
-| `cold_key` | addr29type | The registered cold hey hash. TODO: should this reference DrepHashId or some separate hash table? |
-| `hot_key` | addr29type | The registered hot hey hash |
+| `cold_key` | bytea | The registered cold hey hash. TODO: should this reference DrepHashId or some separate hash table? |
+| `hot_key` | bytea | The registered hot hey hash |
 
 ### `committee_de_registration`
 
@@ -804,7 +801,8 @@ A table for every committee key de-registration. New in 13.2-Conway.
 | `id` | integer (64) |  |
 | `tx_id` | integer (64) | The Tx table index of the tx that includes this certificate. |
 | `cert_index` | integer (32) | The index of this deregistration within the certificates of this transaction. |
-| `hot_key` | addr29type | The deregistered hot key hash |
+| `hot_key` | bytea | The deregistered hot key hash |
+| `voting_anchor_id` | integer (64) | The Voting anchor reference id |
 
 ### `drep_registration`
 
@@ -897,7 +895,7 @@ A table for voting procedures, aka GovVote. A Vote can be Yes No or Abstain. New
 | `index` | integer (32) | The index of this VotingProcedure within this transaction. |
 | `governance_action_id` | integer (64) | The index of the GovernanceAction that this vote targets. |
 | `voter_role` | voterrole | The role of the voter. Can be one of ConstitutionalCommittee, DRep, SPO. |
-| `comittee_voter` | blob |  |
+| `committee_voter` | blob |  |
 | `drep_voter` | integer (64) |  |
 | `pool_voter` | integer (64) |  |
 | `vote` | vote | The Vote. Can be one of Yes, No, Abstain. |
