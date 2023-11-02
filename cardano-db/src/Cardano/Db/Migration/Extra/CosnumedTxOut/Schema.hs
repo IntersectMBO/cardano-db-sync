@@ -486,28 +486,28 @@ share
     UniqueCostModel     hash
 
   -- -----------------------------------------------------------------------------------------------
-  -- Pool offline (ie not on the blockchain) data.
+  -- Pool offchain (ie not on the blockchain) data.
 
-  PoolOfflineData
+  OffChainPoolData
     poolId              PoolHashId          noreference
     tickerName          Text
     hash                ByteString          sqltype=hash32type
     json                Text                sqltype=jsonb
     bytes               ByteString          sqltype=bytea
     pmrId               PoolMetadataRefId   noreference
-    UniquePoolOfflineData  poolId hash
+    UniqueOffChainPoolData  poolId hash
     deriving Show
 
   -- The pool metadata fetch error. We duplicate the poolId for easy access.
   -- TODO(KS): Debatable whether we need to persist this between migrations!
 
-  PoolOfflineFetchError
+  OffChainPoolFetchError
     poolId              PoolHashId          noreference
     fetchTime           UTCTime             sqltype=timestamp
     pmrId               PoolMetadataRefId   noreference
     fetchError          Text
     retryCount          Word                sqltype=word31type
-    UniquePoolOfflineFetchError poolId fetchTime retryCount
+    UniqueOffChainPoolFetchError poolId fetchTime retryCount
     deriving Show
 
   --------------------------------------------------------------------------
@@ -943,22 +943,22 @@ schemaDocs =
       CostModelHash # "The hash of cost model. It ensures uniqueness of entries. New in v13."
       CostModelCosts # "The actual costs formatted as json."
 
-    PoolOfflineData --^ do
-      "The pool offline (ie not on chain) for a stake pool."
-      PoolOfflineDataPoolId # "The PoolHash table index for the pool this offline data refers."
-      PoolOfflineDataTickerName # "The pool's ticker name (as many as 5 characters)."
-      PoolOfflineDataHash # "The hash of the offline data."
-      PoolOfflineDataJson # "The payload as JSON."
-      PoolOfflineDataBytes # "The raw bytes of the payload."
-      PoolOfflineDataPmrId # "The PoolMetadataRef table index for this offline data."
+    OffChainPoolData --^ do
+      "The pool offchain (ie not on chain) for a stake pool."
+      OffChainPoolDataPoolId # "The PoolHash table index for the pool this offchain data refers."
+      OffChainPoolDataTickerName # "The pool's ticker name (as many as 5 characters)."
+      OffChainPoolDataHash # "The hash of the offchain data."
+      OffChainPoolDataJson # "The payload as JSON."
+      OffChainPoolDataBytes # "The raw bytes of the payload."
+      OffChainPoolDataPmrId # "The PoolMetadataRef table index for this offchain data."
 
-    PoolOfflineFetchError --^ do
-      "A table containing pool offline data fetch errors."
-      PoolOfflineFetchErrorPoolId # "The PoolHash table index for the pool this offline fetch error refers."
-      PoolOfflineFetchErrorFetchTime # "The UTC time stamp of the error."
-      PoolOfflineFetchErrorPmrId # "The PoolMetadataRef table index for this offline data."
-      PoolOfflineFetchErrorFetchError # "The text of the error."
-      PoolOfflineFetchErrorRetryCount # "The number of retries."
+    OffChainPoolFetchError --^ do
+      "A table containing pool offchain data fetch errors."
+      OffChainPoolFetchErrorPoolId # "The PoolHash table index for the pool this offchain fetch error refers."
+      OffChainPoolFetchErrorFetchTime # "The UTC time stamp of the error."
+      OffChainPoolFetchErrorPmrId # "The PoolMetadataRef table index for this offchain data."
+      OffChainPoolFetchErrorFetchError # "The text of the error."
+      OffChainPoolFetchErrorRetryCount # "The number of retries."
 
     ReservedPoolTicker --^ do
       "A table containing a managed list of reserved ticker names."

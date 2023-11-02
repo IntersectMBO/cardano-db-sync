@@ -78,9 +78,10 @@ Disables the tx_metadata table.
 
 Disables most tables and entries related to plutus and scripts.
 
-### --disable-offline-data : Experimental
+### --disable-offchain-pool-data : Experimental
+_(previousle called --disable-offline-data)__
 
-Disables fetching pool offline metadata.
+Disables fetching pool offchain metadata.
 
 ### --consumed-tx-out
 

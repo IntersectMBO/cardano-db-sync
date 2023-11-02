@@ -108,7 +108,7 @@ data CommandLineArgs = CommandLineArgs
   , claHasMultiAssets :: Bool
   , claHasMetadata :: Bool
   , claHasPlutusExtra :: Bool
-  , claHasOfflineData :: Bool
+  , claHasOffChainData :: Bool
   , claTurboMode :: Bool
   , claFullMode :: Bool
   , claMigrateConsumed :: Bool
@@ -260,7 +260,7 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
       , enpHasMultiAssets = claHasMultiAssets
       , enpHasMetadata = claHasMetadata
       , enpHasPlutusExtra = True
-      , enpHasOfflineData = True
+      , enpHasOffChainPoolData = True
       , enpTurboMode = False
       , enpFullMode = True
       , enpMigrateConsumed = claMigrateConsumed
@@ -283,7 +283,7 @@ initCommandLineArgs =
     , claHasMultiAssets = True
     , claHasMetadata = True
     , claHasPlutusExtra = True
-    , claHasOfflineData = True
+    , claHasOffChainData = True
     , claTurboMode = False
     , claFullMode = True
     , claMigrateConsumed = False

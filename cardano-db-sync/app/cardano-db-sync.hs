@@ -49,7 +49,7 @@ main = do
 opts :: ParserInfo SyncCommand
 opts =
   Opt.info
-    (pCommandLine <**> Opt.helper)
+    (depricated <*> pCommandLine <**> Opt.helper)
     ( Opt.fullDesc
         <> Opt.progDesc "Cardano PostgreSQL sync node."
     )
@@ -60,6 +60,13 @@ pCommandLine =
     [ pVersionCommand
     , CmdRun <$> pRunDbSyncNode
     ]
+
+depricated :: Parser (a -> a)
+depricated =
+  Opt.abortOption (Opt.InfoMsg "Error: disable-offline-data has been depricated, please use disable-offchain-pool-data instead") $
+    Opt.long "disable-offline-data"
+      <> Opt.help "disable-offline-data is depricated"
+      <> Opt.hidden
 
 pRunDbSyncNode :: Parser SyncNodeParams
 pRunDbSyncNode =
@@ -78,7 +85,7 @@ pRunDbSyncNode =
     <*> pHasMultiAssets
     <*> pHasMetadata
     <*> pHasPlutusExtra
-    <*> pHasOfflineData
+    <*> pHasOffChainPoolData
     <*> pTurboMode
     <*> pFullMode
     <*> pMigrateConsumed
@@ -231,13 +238,13 @@ pHasPlutusExtra =
         <> Opt.help "Disables most tables and entries related to plutus and scripts."
     )
 
-pHasOfflineData :: Parser Bool
-pHasOfflineData =
+pHasOffChainPoolData :: Parser Bool
+pHasOffChainPoolData =
   Opt.flag
     True
     False
-    ( Opt.long "disable-offline-data"
-        <> Opt.help "Disables fetching pool offline metadata."
+    ( Opt.long "disable-offchain-pool-data"
+        <> Opt.help "Disables fetching pool offchain metadata."
     )
 
 pTurboMode :: Parser Bool

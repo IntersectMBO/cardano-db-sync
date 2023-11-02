@@ -49,7 +49,7 @@ postgresqlPoolDataLayer tracer conn =
     { dlGetPoolMetadata = \poolId poolMetadataHash -> do
         let poolHash = servantToDbPoolId poolId
         let metaHash = servantToDbPoolMetaHash poolMetadataHash
-        mMeta <- Db.runPoolDbIohkLogging conn tracer $ Db.queryPoolOfflineData poolHash metaHash
+        mMeta <- Db.runPoolDbIohkLogging conn tracer $ Db.queryOffChainPoolData poolHash metaHash
         case mMeta of
           Just (tickerName, metadata) -> pure $ Right (TickerName tickerName, PoolMetadataRaw metadata)
           Nothing -> pure $ Left $ DbLookupPoolMetadataHash poolId poolMetadataHash
@@ -98,7 +98,7 @@ postgresqlPoolDataLayer tracer conn =
     , dlGetFetchErrors = \poolId mTimeFrom -> do
         fetchErrors <-
           Db.runPoolDbIohkLogging conn tracer $
-            Db.queryPoolOfflineFetchError (servantToDbPoolId poolId) mTimeFrom
+            Db.queryOffChainPoolFetchError (servantToDbPoolId poolId) mTimeFrom
         pure $ Right $ dbToServantFetchError poolId <$> fetchErrors
     , dlGetPool = \poolId -> do
         isActive <- isPoolActive tracer conn poolId
@@ -107,14 +107,14 @@ postgresqlPoolDataLayer tracer conn =
           else pure $ Left RecordDoesNotExist
     }
 
-dbToServantFetchError :: PoolId -> (Db.PoolOfflineFetchError, ByteString) -> PoolFetchError
+dbToServantFetchError :: PoolId -> (Db.OffChainPoolFetchError, ByteString) -> PoolFetchError
 dbToServantFetchError poolId (fetchError, metaHash) =
   PoolFetchError
-    (utcTimeToPOSIXSeconds $ Db.poolOfflineFetchErrorFetchTime fetchError)
+    (utcTimeToPOSIXSeconds $ Db.offChainPoolFetchErrorFetchTime fetchError)
     poolId
     (dbToServantMetaHash metaHash)
-    (Db.poolOfflineFetchErrorFetchError fetchError)
-    (Db.poolOfflineFetchErrorRetryCount fetchError)
+    (Db.offChainPoolFetchErrorFetchError fetchError)
+    (Db.offChainPoolFetchErrorRetryCount fetchError)
 
 -- For each pool return the latest certificate action. Also return the
 -- current epoch.

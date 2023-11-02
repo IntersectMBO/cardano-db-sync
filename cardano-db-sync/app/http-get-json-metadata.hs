@@ -3,8 +3,8 @@
 import Cardano.Db (PoolMetaHash (..), PoolUrl (..))
 import Cardano.DbSync (
   FetchError (..),
-  SimplifiedPoolOfflineData (..),
-  httpGetPoolOfflineData,
+  SimplifiedOffChainPoolData (..),
+  httpGetOffChainPoolData,
   parsePoolUrl,
  )
 import Cardano.DbSync.Error (runOrThrowIO)
@@ -51,7 +51,7 @@ usageExit = do
     , "    " ++ name ++ "<pool metadata utl>"
     , "    " ++ name ++ "<pool metadata utl> <metadata hash in hex>"
     , ""
-    , "A debug/test program to debug the pool offline metadata fetch mechanism.\n"
+    , "A debug/test program to debug the pool offchain metadata fetch mechanism.\n"
     ]
   exitFailure
 
@@ -61,13 +61,13 @@ runHttpGet :: PoolUrl -> Maybe PoolMetaHash -> IO ()
 runHttpGet poolUrl mHash =
   reportSuccess =<< runOrThrowIO (runExceptT httpGet)
   where
-    httpGet :: ExceptT FetchError IO SimplifiedPoolOfflineData
+    httpGet :: ExceptT FetchError IO SimplifiedOffChainPoolData
     httpGet = do
       request <- parsePoolUrl poolUrl
       manager <- liftIO $ Http.newManager tlsManagerSettings
-      httpGetPoolOfflineData manager request poolUrl mHash
+      httpGetOffChainPoolData manager request poolUrl mHash
 
-    reportSuccess :: SimplifiedPoolOfflineData -> IO ()
+    reportSuccess :: SimplifiedOffChainPoolData -> IO ()
     reportSuccess spod = do
       case spodContentType spod of
         Nothing -> putStrLn $ orangeText "Warning: No HTTP content-type returned in HTTP response (this should be fixed)."

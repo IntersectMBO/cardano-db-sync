@@ -1,7 +1,7 @@
 cabal-version:          3.0
 
 name:                   cardano-db-sync
-version:                13.1.1.3
+version:                13.2.0.0
 synopsis:               The Cardano DB Sync node
 description:            A Cardano node that follows the Cardano chain and inserts data from the
                         chain into a PostgresQL database.
@@ -87,11 +87,11 @@ library
                         Cardano.DbSync.Era.Shelley.Insert
                         Cardano.DbSync.Era.Shelley.Insert.Epoch
                         Cardano.DbSync.Era.Shelley.Insert.Grouped
-                        Cardano.DbSync.Era.Shelley.Offline
-                        Cardano.DbSync.Era.Shelley.Offline.FetchQueue
-                        Cardano.DbSync.Era.Shelley.Offline.Http
-                        Cardano.DbSync.Era.Shelley.Offline.Query
-                        Cardano.DbSync.Era.Shelley.Offline.Types
+                        Cardano.DbSync.Era.Shelley.OffChain
+                        Cardano.DbSync.Era.Shelley.OffChain.FetchQueue
+                        Cardano.DbSync.Era.Shelley.OffChain.Http
+                        Cardano.DbSync.Era.Shelley.OffChain.Query
+                        Cardano.DbSync.Era.Shelley.OffChain.Types
                         Cardano.DbSync.Era.Shelley.Query
                         Cardano.DbSync.Era.Shelley.Validate
 

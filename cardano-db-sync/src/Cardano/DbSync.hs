@@ -20,8 +20,8 @@ module Cardano.DbSync (
   runDbSync,
   -- For testing and debugging
   FetchError (..),
-  SimplifiedPoolOfflineData (..),
-  httpGetPoolOfflineData,
+  SimplifiedOffChainPoolData (..),
+  httpGetOffChainPoolData,
   parsePoolUrl,
 ) where
 
@@ -46,10 +46,10 @@ import Cardano.DbSync.Config.Types (
 import Cardano.DbSync.Database
 import Cardano.DbSync.DbAction
 import Cardano.DbSync.Era
-import Cardano.DbSync.Era.Shelley.Offline.Http (
+import Cardano.DbSync.Era.Shelley.OffChain.Http (
   FetchError (..),
-  SimplifiedPoolOfflineData (..),
-  httpGetPoolOfflineData,
+  SimplifiedOffChainPoolData (..),
+  httpGetOffChainPoolData,
   parsePoolUrl,
   spodJson,
  )
@@ -197,7 +197,7 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
             id
             [ runDbThread syncEnv metricsSetters threadChannels
             , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
-            , runOfflineFetchThread syncEnv
+            , runOffChainFetchThread syncEnv
             , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
             ]
   where
@@ -241,7 +241,7 @@ extractSyncOptions snp aop =
             { ioMultiAssets = enpHasMultiAssets snp
             , ioMetadata = enpHasMetadata snp
             , ioPlutusExtra = enpHasPlutusExtra snp
-            , ioOfflineData = enpHasOfflineData snp
+            , ioOffChainPoolData = enpHasOffChainPoolData snp
             }
 
 startupReport :: Trace IO Text -> Bool -> SyncNodeParams -> IO ()
@@ -259,7 +259,7 @@ startupReport trce aop params = do
   logInfo trce $ mconcat ["Option disable-multiassets: ", textShow (not $ enpHasMultiAssets params)]
   logInfo trce $ mconcat ["Option disable-metadata: ", textShow (not $ enpHasMetadata params)]
   logInfo trce $ mconcat ["Option disable-plutus-extra: ", textShow (not $ enpHasPlutusExtra params)]
-  logInfo trce $ mconcat ["Option disable-offline-data: ", textShow (not $ enpHasOfflineData params)]
+  logInfo trce $ mconcat ["Option disable-offchain-pool-data: ", textShow (not $ enpHasOffChainPoolData params)]
   logInfo trce $ mconcat ["Option turbo: ", textShow (enpTurboMode params)]
   logInfo trce $ mconcat ["Option full: ", textShow (enpFullMode params)]
   logInfo trce $ mconcat ["Enviroment variable DbSyncAbortOnPanic: ", textShow aop]

@@ -77,27 +77,27 @@ insertForeignKeyMissing = do
     txid <- insertTx (txZero bid)
     phid <- insertPoolHash poolHash0
     pmrid <- insertPoolMetadataRef $ poolMetadataRef txid phid
-    let fe = poolOfflineFetchError phid pmrid time
-    insertCheckPoolOfflineFetchError fe
+    let fe = offChainPoolFetchError phid pmrid time
+    insertCheckOffChainPoolFetchError fe
 
-    count0 <- poolOfflineFetchErrorCount
+    count0 <- offChainPoolFetchErrorCount
     assertBool (show count0 ++ "/= 1") (count0 == 1)
 
-    -- Delete all OfflineFetchErrorCount after pmrid
-    queryFirstAndDeleteAfter PoolOfflineFetchErrorPmrId pmrid
+    -- Delete all OffChainFetchErrorCount after pmrid
+    queryFirstAndDeleteAfter OffChainPoolFetchErrorPmrId pmrid
     deleteWhere [PoolMetadataRefId >=. pmrid]
-    count1 <- poolOfflineFetchErrorCount
+    count1 <- offChainPoolFetchErrorCount
     assertBool (show count1 ++ "/= 0") (count1 == 0)
 
     -- The references check will fail below will fail, so the insertion
     -- will not be attempted
-    insertCheckPoolOfflineFetchError fe
+    insertCheckOffChainPoolFetchError fe
 
-    count2 <- poolOfflineFetchErrorCount
+    count2 <- offChainPoolFetchErrorCount
     assertBool (show count2 ++ "/= 0") (count2 == 0)
   where
-    poolOfflineFetchErrorCount = do
-      ls :: [Entity PoolOfflineFetchError] <- selectList [] []
+    offChainPoolFetchErrorCount = do
+      ls :: [Entity OffChainPoolFetchError] <- selectList [] []
       pure $ length ls
 
 blockZero :: SlotLeaderId -> Block
@@ -186,14 +186,14 @@ poolMetadataRef txid phid =
     , poolMetadataRefRegisteredTxId = txid
     }
 
-poolOfflineFetchError :: PoolHashId -> PoolMetadataRefId -> UTCTime -> PoolOfflineFetchError
-poolOfflineFetchError phid pmrid time =
-  PoolOfflineFetchError
-    { poolOfflineFetchErrorPoolId = phid
-    , poolOfflineFetchErrorFetchTime = time
-    , poolOfflineFetchErrorPmrId = pmrid
-    , poolOfflineFetchErrorFetchError = "too good"
-    , poolOfflineFetchErrorRetryCount = 5
+offChainPoolFetchError :: PoolHashId -> PoolMetadataRefId -> UTCTime -> OffChainPoolFetchError
+offChainPoolFetchError phid pmrid time =
+  OffChainPoolFetchError
+    { offChainPoolFetchErrorPoolId = phid
+    , offChainPoolFetchErrorFetchTime = time
+    , offChainPoolFetchErrorPmrId = pmrid
+    , offChainPoolFetchErrorFetchError = "too good"
+    , offChainPoolFetchErrorRetryCount = 5
     }
 
 mkHash :: Int -> Char -> ByteString

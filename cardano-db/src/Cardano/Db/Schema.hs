@@ -615,17 +615,6 @@ share
     vote                 Vote                 sqltype=vote
     votingAnchorId       VotingAnchorId Maybe noreference
 
-  AnchorOfflineData
-    votingAnchorId          VotingAnchorId      noreference
-    hash                    ByteString
-    json                    Text                sqltype=jsonb
-    bytes                   ByteString          sqltype=bytea
-
-  AnchorOfflineFetchError
-    votingAnchorId          VotingAnchorId      noreference
-    fetchError              Text
-    retryCount              Word                sqltype=word31type
-
   DrepDistr
     hashId                  DrepHashId          noreference
     amount                  Word64
@@ -634,29 +623,40 @@ share
     UniqueDrepDistr hashId epochNo
 
   -- -----------------------------------------------------------------------------------------------
-  -- Pool offline (ie not on the blockchain) data.
+  -- OffChain (ie not on the blockchain) data.
 
-  PoolOfflineData
+  OffChainPoolData
     poolId              PoolHashId          noreference
     tickerName          Text
     hash                ByteString          sqltype=hash32type
     json                Text                sqltype=jsonb
     bytes               ByteString          sqltype=bytea
     pmrId               PoolMetadataRefId   noreference
-    UniquePoolOfflineData  poolId hash
+    UniqueOffChainPoolData  poolId hash
     deriving Show
 
   -- The pool metadata fetch error. We duplicate the poolId for easy access.
   -- TODO(KS): Debatable whether we need to persist this between migrations!
 
-  PoolOfflineFetchError
+  OffChainPoolFetchError
     poolId              PoolHashId          noreference
     fetchTime           UTCTime             sqltype=timestamp
     pmrId               PoolMetadataRefId   noreference
     fetchError          Text
     retryCount          Word                sqltype=word31type
-    UniquePoolOfflineFetchError poolId fetchTime retryCount
+    UniqueOffChainPoolFetchError poolId fetchTime retryCount
     deriving Show
+
+  OffChainAnchorData
+    votingAnchorId          VotingAnchorId      noreference
+    hash                    ByteString
+    json                    Text                sqltype=jsonb
+    bytes                   ByteString          sqltype=bytea
+
+  OffChainAnchorFetchError
+    votingAnchorId          VotingAnchorId      noreference
+    fetchError              Text
+    retryCount              Word                sqltype=word31type
 
   --------------------------------------------------------------------------
   -- A table containing a managed list of reserved ticker names.
@@ -1226,18 +1226,18 @@ schemaDocs =
       VotingProcedureVote # "The Vote. Can be one of Yes, No, Abstain."
       VotingProcedureVotingAnchorId # "The VotingAnchor table index associated with this VotingProcedure."
 
-    AnchorOfflineData --^ do
-      "The table with the off chain metadata related to Vote Anchors. New in 13.2-Conway."
-      AnchorOfflineDataVotingAnchorId # "The VotingAnchor table index this offline data refers."
-      AnchorOfflineDataHash # "The hash of the offline data."
-      AnchorOfflineDataJson # "The payload as JSON."
-      AnchorOfflineDataBytes # "The raw bytes of the payload."
+    OffChainAnchorData --^ do
+      "The table with the offchain metadata related to Vote Anchors. New in 13.2-Conway."
+      OffChainAnchorDataVotingAnchorId # "The VotingAnchor table index this offchain data refers."
+      OffChainAnchorDataHash # "The hash of the offchain data."
+      OffChainAnchorDataJson # "The payload as JSON."
+      OffChainAnchorDataBytes # "The raw bytes of the payload."
 
-    AnchorOfflineFetchError --^ do
-      "Errors while fetching or validating offline Voting Anchor metadata. New in 13.2-Conway."
-      AnchorOfflineFetchErrorVotingAnchorId # "The VotingAnchor table index this offline fetch error refers."
-      AnchorOfflineFetchErrorFetchError # "The text of the error."
-      AnchorOfflineFetchErrorRetryCount # "The number of retries."
+    OffChainAnchorFetchError --^ do
+      "Errors while fetching or validating offchain Voting Anchor metadata. New in 13.2-Conway."
+      OffChainAnchorFetchErrorVotingAnchorId # "The VotingAnchor table index this offchain fetch error refers."
+      OffChainAnchorFetchErrorFetchError # "The text of the error."
+      OffChainAnchorFetchErrorRetryCount # "The number of retries."
 
     DrepDistr --^ do
       "The table for the distribution of voting power per DRep per. Currently this has a single entry per DRep\
@@ -1247,22 +1247,22 @@ schemaDocs =
       DrepDistrEpochNo # "The epoch no this distribution is about."
       DrepDistrActiveUntil # "The epoch until which this drep is active. TODO: This currently remains null always. "
 
-    PoolOfflineData --^ do
-      "The pool offline (ie not on chain) for a stake pool."
-      PoolOfflineDataPoolId # "The PoolHash table index for the pool this offline data refers."
-      PoolOfflineDataTickerName # "The pool's ticker name (as many as 5 characters)."
-      PoolOfflineDataHash # "The hash of the offline data."
-      PoolOfflineDataJson # "The payload as JSON."
-      PoolOfflineDataBytes # "The raw bytes of the payload."
-      PoolOfflineDataPmrId # "The PoolMetadataRef table index for this offline data."
+    OffChainPoolData --^ do
+      "The pool offchain (ie not on chain) for a stake pool."
+      OffChainPoolDataPoolId # "The PoolHash table index for the pool this offchain data refers."
+      OffChainPoolDataTickerName # "The pool's ticker name (as many as 5 characters)."
+      OffChainPoolDataHash # "The hash of the offchain data."
+      OffChainPoolDataJson # "The payload as JSON."
+      OffChainPoolDataBytes # "The raw bytes of the payload."
+      OffChainPoolDataPmrId # "The PoolMetadataRef table index for this offchain data."
 
-    PoolOfflineFetchError --^ do
-      "A table containing pool offline data fetch errors."
-      PoolOfflineFetchErrorPoolId # "The PoolHash table index for the pool this offline fetch error refers."
-      PoolOfflineFetchErrorFetchTime # "The UTC time stamp of the error."
-      PoolOfflineFetchErrorPmrId # "The PoolMetadataRef table index for this offline data."
-      PoolOfflineFetchErrorFetchError # "The text of the error."
-      PoolOfflineFetchErrorRetryCount # "The number of retries."
+    OffChainPoolFetchError --^ do
+      "A table containing pool offchain data fetch errors."
+      OffChainPoolFetchErrorPoolId # "The PoolHash table index for the pool this offchain fetch error refers."
+      OffChainPoolFetchErrorFetchTime # "The UTC time stamp of the error."
+      OffChainPoolFetchErrorPmrId # "The PoolMetadataRef table index for this offchain data."
+      OffChainPoolFetchErrorFetchError # "The text of the error."
+      OffChainPoolFetchErrorRetryCount # "The number of retries."
 
     ReservedPoolTicker --^ do
       "A table containing a managed list of reserved ticker names."

@@ -59,14 +59,14 @@ module Cardano.Db.Query (
   queryMinMaxEpochStake,
   queryGovernanceActionId,
   -- queries used in smash
-  queryPoolOfflineData,
+  queryOffChainPoolData,
   queryPoolRegister,
   queryRetiredPools,
   queryUsedTicker,
   queryReservedTicker,
   queryReservedTickers,
   queryDelistedPools,
-  queryPoolOfflineFetchError,
+  queryOffChainPoolFetchError,
   existsDelistedPool,
   -- queries used in tools
   queryDepositUpToBlockNo,
@@ -792,18 +792,18 @@ queryGovernanceActionId txId index = do
   Queries use in SMASH
 ----------------------------------------------}
 
-queryPoolOfflineData :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe (Text, ByteString))
-queryPoolOfflineData poolHash poolMetadataHash = do
+queryOffChainPoolData :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe (Text, ByteString))
+queryOffChainPoolData poolHash poolMetadataHash = do
   res <- select $ do
     (pod :& ph) <-
       from
-        $ table @PoolOfflineData
+        $ table @OffChainPoolData
           `innerJoin` table @PoolHash
-        `on` (\(pod :& ph) -> pod ^. PoolOfflineDataPoolId ==. ph ^. PoolHashId)
+        `on` (\(pod :& ph) -> pod ^. OffChainPoolDataPoolId ==. ph ^. PoolHashId)
     where_ (ph ^. PoolHashHashRaw ==. val poolHash)
-    where_ (pod ^. PoolOfflineDataHash ==. val poolMetadataHash)
+    where_ (pod ^. OffChainPoolDataHash ==. val poolMetadataHash)
     limit 1
-    pure (pod ^. PoolOfflineDataTickerName, pod ^. PoolOfflineDataBytes)
+    pure (pod ^. OffChainPoolDataTickerName, pod ^. OffChainPoolDataBytes)
   pure $ unValue2 <$> listToMaybe res
 
 queryPoolRegister :: MonadIO m => Maybe ByteString -> ReaderT SqlBackend m [PoolCert]
@@ -874,12 +874,12 @@ queryUsedTicker poolHash metaHash = do
   res <- select $ do
     (pod :& ph) <-
       from
-        $ table @PoolOfflineData
+        $ table @OffChainPoolData
           `innerJoin` table @PoolHash
-        `on` (\(pod :& ph) -> ph ^. PoolHashId ==. pod ^. PoolOfflineDataPoolId)
+        `on` (\(pod :& ph) -> ph ^. PoolHashId ==. pod ^. OffChainPoolDataPoolId)
     where_ (ph ^. PoolHashHashRaw ==. val poolHash)
-    where_ (pod ^. PoolOfflineDataHash ==. val metaHash)
-    pure $ pod ^. PoolOfflineDataTickerName
+    where_ (pod ^. OffChainPoolDataHash ==. val metaHash)
+    pure $ pod ^. OffChainPoolDataTickerName
   pure $ unValue <$> listToMaybe res
 
 queryReservedTicker :: MonadIO m => Text -> ReaderT SqlBackend m (Maybe ByteString)
@@ -903,44 +903,44 @@ queryDelistedPools = do
   pure $ unValue <$> res
 
 -- Returns also the metadata hash
-queryPoolOfflineFetchError :: MonadIO m => ByteString -> Maybe UTCTime -> ReaderT SqlBackend m [(PoolOfflineFetchError, ByteString)]
-queryPoolOfflineFetchError hash Nothing = do
+queryOffChainPoolFetchError :: MonadIO m => ByteString -> Maybe UTCTime -> ReaderT SqlBackend m [(OffChainPoolFetchError, ByteString)]
+queryOffChainPoolFetchError hash Nothing = do
   res <- select $ do
-    (poolOfflineFetchError :& poolHash :& poolMetadataRef) <-
+    (offChainPoolFetchError :& poolHash :& poolMetadataRef) <-
       from
-        $ table @PoolOfflineFetchError
+        $ table @OffChainPoolFetchError
           `innerJoin` table @PoolHash
-        `on` (\(poolOfflineFetchError :& poolHash) -> poolOfflineFetchError ^. PoolOfflineFetchErrorPoolId ==. poolHash ^. PoolHashId)
+        `on` (\(offChainPoolFetchError :& poolHash) -> offChainPoolFetchError ^. OffChainPoolFetchErrorPoolId ==. poolHash ^. PoolHashId)
           `innerJoin` table @PoolMetadataRef
-        `on` (\(poolOfflineFetchError :& _ :& poolMetadataRef) -> poolOfflineFetchError ^. PoolOfflineFetchErrorPmrId ==. poolMetadataRef ^. PoolMetadataRefId)
+        `on` (\(offChainPoolFetchError :& _ :& poolMetadataRef) -> offChainPoolFetchError ^. OffChainPoolFetchErrorPmrId ==. poolMetadataRef ^. PoolMetadataRefId)
 
     where_ (poolHash ^. PoolHashHashRaw ==. val hash)
-    orderBy [desc (poolOfflineFetchError ^. PoolOfflineFetchErrorFetchTime)]
+    orderBy [desc (offChainPoolFetchError ^. OffChainPoolFetchErrorFetchTime)]
     limit 10
-    pure (poolOfflineFetchError, poolMetadataRef ^. PoolMetadataRefHash)
+    pure (offChainPoolFetchError, poolMetadataRef ^. PoolMetadataRefHash)
   pure $ fmap extract res
   where
     extract (fetchErr, metadataHash) = (entityVal fetchErr, unValue metadataHash)
-queryPoolOfflineFetchError hash (Just fromTime) = do
+queryOffChainPoolFetchError hash (Just fromTime) = do
   res <- select $ do
-    (poolOfflineFetchError :& poolHash :& poolMetadataRef) <-
+    (offChainPoolFetchError :& poolHash :& poolMetadataRef) <-
       from
-        $ table @PoolOfflineFetchError
+        $ table @OffChainPoolFetchError
           `innerJoin` table @PoolHash
-        `on` (\(poolOfflineFetchError :& poolHash) -> poolOfflineFetchError ^. PoolOfflineFetchErrorPoolId ==. poolHash ^. PoolHashId)
+        `on` (\(offChainPoolFetchError :& poolHash) -> offChainPoolFetchError ^. OffChainPoolFetchErrorPoolId ==. poolHash ^. PoolHashId)
           `innerJoin` table @PoolMetadataRef
-        `on` (\(poolOfflineFetchError :& _poolHash :& poolMetadataRef) -> poolOfflineFetchError ^. PoolOfflineFetchErrorPmrId ==. poolMetadataRef ^. PoolMetadataRefId)
+        `on` (\(offChainPoolFetchError :& _poolHash :& poolMetadataRef) -> offChainPoolFetchError ^. OffChainPoolFetchErrorPmrId ==. poolMetadataRef ^. PoolMetadataRefId)
     where_
       ( poolHash
           ^. PoolHashHashRaw
           ==. val hash
-          &&. poolOfflineFetchError
-            ^. PoolOfflineFetchErrorFetchTime
+          &&. offChainPoolFetchError
+            ^. OffChainPoolFetchErrorFetchTime
             >=. val fromTime
       )
-    orderBy [desc (poolOfflineFetchError ^. PoolOfflineFetchErrorFetchTime)]
+    orderBy [desc (offChainPoolFetchError ^. OffChainPoolFetchErrorFetchTime)]
     limit 10
-    pure (poolOfflineFetchError, poolMetadataRef ^. PoolMetadataRefHash)
+    pure (offChainPoolFetchError, poolMetadataRef ^. PoolMetadataRefHash)
   pure $ fmap extract res
   where
     extract (fetchErr, metadataHash) = (entityVal fetchErr, unValue metadataHash)

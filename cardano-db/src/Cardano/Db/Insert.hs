@@ -52,8 +52,8 @@ module Cardano.Db.Insert (
   insertDatum,
   insertRedeemerData,
   insertReverseIndex,
-  insertCheckPoolOfflineData,
-  insertCheckPoolOfflineFetchError,
+  insertCheckOffChainPoolData,
+  insertCheckOffChainPoolFetchError,
   insertReservedPoolTicker,
   insertDelistedPool,
   insertExtraMigration,
@@ -297,17 +297,17 @@ insertRedeemerData = insertCheckUnique "RedeemerData"
 insertReverseIndex :: (MonadBaseControl IO m, MonadIO m) => ReverseIndex -> ReaderT SqlBackend m ReverseIndexId
 insertReverseIndex = insertUnchecked "ReverseIndex"
 
-insertCheckPoolOfflineData :: (MonadBaseControl IO m, MonadIO m) => PoolOfflineData -> ReaderT SqlBackend m ()
-insertCheckPoolOfflineData pod = do
-  foundPool <- existsPoolHashId (poolOfflineDataPoolId pod)
-  foundMeta <- existsPoolMetadataRefId (poolOfflineDataPmrId pod)
-  when (foundPool && foundMeta) . void $ insertCheckUnique "PoolOfflineData" pod
+insertCheckOffChainPoolData :: (MonadBaseControl IO m, MonadIO m) => OffChainPoolData -> ReaderT SqlBackend m ()
+insertCheckOffChainPoolData pod = do
+  foundPool <- existsPoolHashId (offChainPoolDataPoolId pod)
+  foundMeta <- existsPoolMetadataRefId (offChainPoolDataPmrId pod)
+  when (foundPool && foundMeta) . void $ insertCheckUnique "OffChainPoolData" pod
 
-insertCheckPoolOfflineFetchError :: (MonadBaseControl IO m, MonadIO m) => PoolOfflineFetchError -> ReaderT SqlBackend m ()
-insertCheckPoolOfflineFetchError pofe = do
-  foundPool <- existsPoolHashId (poolOfflineFetchErrorPoolId pofe)
-  foundMeta <- existsPoolMetadataRefId (poolOfflineFetchErrorPmrId pofe)
-  when (foundPool && foundMeta) . void $ insertCheckUnique "PoolOfflineFetchError" pofe
+insertCheckOffChainPoolFetchError :: (MonadBaseControl IO m, MonadIO m) => OffChainPoolFetchError -> ReaderT SqlBackend m ()
+insertCheckOffChainPoolFetchError pofe = do
+  foundPool <- existsPoolHashId (offChainPoolFetchErrorPoolId pofe)
+  foundMeta <- existsPoolMetadataRefId (offChainPoolFetchErrorPmrId pofe)
+  when (foundPool && foundMeta) . void $ insertCheckUnique "OffChainPoolFetchError" pofe
 
 insertReservedPoolTicker :: (MonadBaseControl IO m, MonadIO m) => ReservedPoolTicker -> ReaderT SqlBackend m (Maybe ReservedPoolTickerId)
 insertReservedPoolTicker ticker = do

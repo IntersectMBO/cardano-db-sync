@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Offline.FetchQueue (
+module Cardano.DbSync.Era.Shelley.OffChain.FetchQueue (
   newRetry,
   retryAgain,
   showRetryTimes,

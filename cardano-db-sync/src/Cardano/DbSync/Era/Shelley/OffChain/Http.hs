@@ -3,18 +3,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Offline.Http (
+module Cardano.DbSync.Era.Shelley.OffChain.Http (
   FetchError (..),
-  SimplifiedPoolOfflineData (..),
-  httpGetPoolOfflineData,
+  SimplifiedOffChainPoolData (..),
+  httpGetOffChainPoolData,
   parsePoolUrl,
 ) where
 
 import qualified Cardano.Crypto.Hash.Blake2b as Crypto
 import qualified Cardano.Crypto.Hash.Class as Crypto
 import Cardano.Db (PoolMetaHash (..), PoolUrl (..), textShow)
-import Cardano.DbSync.Era.Shelley.Offline.Types (
-  PoolOfflineMetadata (..),
+import Cardano.DbSync.Era.Shelley.OffChain.Types (
+  PoolOffChainMetadata (..),
   PoolTicker (..),
  )
 import Cardano.DbSync.Util (renderByteArray)
@@ -33,7 +33,7 @@ import Network.HTTP.Client (HttpException (..))
 import qualified Network.HTTP.Client as Http
 import qualified Network.HTTP.Types as Http
 
--- | Fetch error for the HTTP client fetching the pool offline metadata.
+-- | Fetch error for the HTTP client fetching the pool offchain metadata.
 data FetchError
   = FEHashMismatch !PoolUrl !Text !Text
   | FEDataTooLong !PoolUrl
@@ -65,7 +65,7 @@ instance Show FetchError where
           ]
       FEDataTooLong (PoolUrl url) ->
         mconcat
-          ["Offline pool data when fetching metadata from ", show url, " exceeded 512 bytes."]
+          ["Offchain pool data when fetching metadata from ", show url, " exceeded 512 bytes."]
       FEUrlParseFail (PoolUrl url) err ->
         mconcat
           ["URL parse error for ", show url, " resulted in : ", show err]
@@ -87,7 +87,7 @@ instance Show FetchError where
           ["Connection failure when fetching metadata from ", show url, "'."]
       FEIOException err -> "IO Exception: " <> show err
 
-data SimplifiedPoolOfflineData = SimplifiedPoolOfflineData
+data SimplifiedOffChainPoolData = SimplifiedOffChainPoolData
   { spodTickerName :: !Text
   , spodHash :: !ByteString
   , spodBytes :: !ByteString
@@ -95,17 +95,17 @@ data SimplifiedPoolOfflineData = SimplifiedPoolOfflineData
   , spodContentType :: !(Maybe ByteString)
   }
 
-httpGetPoolOfflineData ::
+httpGetOffChainPoolData ::
   Http.Manager ->
   Http.Request ->
   PoolUrl ->
   Maybe PoolMetaHash ->
-  ExceptT FetchError IO SimplifiedPoolOfflineData
-httpGetPoolOfflineData manager request poolUrl mHash = do
+  ExceptT FetchError IO SimplifiedOffChainPoolData
+httpGetOffChainPoolData manager request poolUrl mHash = do
   res <- handleExceptT (convertHttpException poolUrl) httpGet
   hoistEither res
   where
-    httpGet :: IO (Either FetchError SimplifiedPoolOfflineData)
+    httpGet :: IO (Either FetchError SimplifiedOffChainPoolData)
     httpGet =
       Http.withResponse request manager $ \responseBR -> do
         runExceptT $ do
@@ -163,7 +163,7 @@ httpGetPoolOfflineData manager request poolUrl mHash = do
               Right res -> pure res
 
           pure $
-            SimplifiedPoolOfflineData
+            SimplifiedOffChainPoolData
               { spodTickerName = unPoolTicker $ pomTicker decodedMetadata
               , spodHash = metadataHash
               , spodBytes = respBS
