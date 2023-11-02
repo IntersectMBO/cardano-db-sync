@@ -53,6 +53,7 @@ rollbackFromBlockNo syncEnv blkNo = do
         DB.setNullTxOut trce (DB.minTxInId minIds) txInDeleted
       DB.deleteEpochRows epochNo
       DB.setNullEnacted epochNo
+      DB.setNullRatified epochNo
       when (deletedBlockCount > 0) $ do
         -- We use custom constraints to improve input speeds when syncing.
         -- If they don't already exists we add them here as once a rollback has happened

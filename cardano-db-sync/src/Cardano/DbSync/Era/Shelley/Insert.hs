@@ -246,10 +246,12 @@ insertOnNewEpoch tracer blkId slotNo epochNo newEpoch = do
     lift $ insertEpochParam tracer blkId epochNo params (Generic.euNonce epochUpdate)
   whenStrictJust (Generic.neAdaPots newEpoch) $ \pots ->
     insertPots blkId slotNo epochNo pots
-  whenStrictJust (Generic.neDRepDistr newEpoch) $ \dreps ->
-    lift $ insertDrepDistr epochNo $ finishDRepPulser dreps
+  whenStrictJust (Generic.neDRepState newEpoch) $ \dreps -> do
+    let (drepSnapshot, ratifyState) = finishDRepPulser dreps
+    lift $ insertDrepDistr epochNo drepSnapshot
+    updateEnacted False epochNo (rsEnactState ratifyState)
   whenStrictJust (Generic.neEnacted newEpoch) $ \enactedSt ->
-    updateEnacted epochNo enactedSt
+    updateEnacted True epochNo enactedSt
   where
     epochUpdate :: Generic.EpochUpdate
     epochUpdate = Generic.neEpochUpdate newEpoch
@@ -1598,8 +1600,8 @@ insertCredDrepHash cred = do
   where
     bs = Generic.unCredentialHash cred
 
-insertDrepDistr :: forall m. (MonadBaseControl IO m, MonadIO m) => EpochNo -> (PulsingSnapshot StandardConway, RatifyState StandardConway) -> ReaderT SqlBackend m ()
-insertDrepDistr e (pSnapshot, _) = do
+insertDrepDistr :: forall m. (MonadBaseControl IO m, MonadIO m) => EpochNo -> PulsingSnapshot StandardConway -> ReaderT SqlBackend m ()
+insertDrepDistr e pSnapshot = do
   drepsDB <- mapM mkEntry (Map.toList $ psDRepDistr pSnapshot)
   DB.insertManyDrepDistr drepsDB
   where
@@ -1620,10 +1622,12 @@ insertDrepDistr e (pSnapshot, _) = do
       DRepAlwaysNoConfidence -> Nothing
       DRepCredential cred -> drepExpiry <$> Map.lookup cred (psDRepState pSnapshot)
 
-updateEnacted :: forall m. (MonadBaseControl IO m, MonadIO m) => EpochNo -> EnactState StandardConway -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-updateEnacted epochNo enactedState = do
+updateEnacted :: forall m. (MonadBaseControl IO m, MonadIO m) => Bool -> EpochNo -> EnactState StandardConway -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+updateEnacted isEnacted epochNo enactedState = do
   whenJust (strictMaybeToMaybe (enactedState ^. ensPrevPParamUpdateL)) $ \prevId -> do
     gaId <- resolveGovernanceAction $ getPrevId prevId
-    lift $ DB.updateGovAction gaId (unEpochNo epochNo)
+    if isEnacted
+      then lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
+      else lift $ DB.updateGovActionRatified gaId (unEpochNo epochNo)
   where
     getPrevId (PrevGovActionId gai) = gai
