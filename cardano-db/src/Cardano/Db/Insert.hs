@@ -59,8 +59,10 @@ module Cardano.Db.Insert (
   insertExtraMigration,
   insertEpochStakeProgress,
   updateSetComplete,
-  updateGovAction,
+  updateGovActionEnacted,
+  updateGovActionRatified,
   setNullEnacted,
+  setNullRatified,
   replaceAdaPots,
   insertAnchor,
   insertGovernanceAction,
@@ -330,13 +332,21 @@ updateSetComplete :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
 updateSetComplete epoch = do
   updateWhere [EpochStakeProgressEpochNo Database.Persist.==. epoch] [EpochStakeProgressCompleted Database.Persist.=. True]
 
-updateGovAction :: MonadIO m => GovernanceActionId -> Word64 -> ReaderT SqlBackend m ()
-updateGovAction gaid eNo =
+updateGovActionEnacted :: MonadIO m => GovernanceActionId -> Word64 -> ReaderT SqlBackend m ()
+updateGovActionEnacted gaid eNo =
   updateWhere [GovernanceActionId ==. gaid, GovernanceActionEnactedEpoch ==. Nothing] [GovernanceActionEnactedEpoch =. Just eNo]
+
+updateGovActionRatified :: MonadIO m => GovernanceActionId -> Word64 -> ReaderT SqlBackend m ()
+updateGovActionRatified gaid eNo =
+  updateWhere [GovernanceActionId ==. gaid, GovernanceActionRatifiedEpoch ==. Nothing] [GovernanceActionRatifiedEpoch =. Just eNo]
 
 setNullEnacted :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
 setNullEnacted eNo =
   updateWhere [GovernanceActionEnactedEpoch !=. Nothing, GovernanceActionEnactedEpoch >. Just eNo] [GovernanceActionEnactedEpoch =. Nothing]
+
+setNullRatified :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
+setNullRatified eNo =
+  updateWhere [GovernanceActionRatifiedEpoch !=. Nothing, GovernanceActionRatifiedEpoch >. Just eNo] [GovernanceActionRatifiedEpoch =. Nothing]
 
 replaceAdaPots :: (MonadBaseControl IO m, MonadIO m) => BlockId -> AdaPots -> ReaderT SqlBackend m Bool
 replaceAdaPots blockId adapots = do
