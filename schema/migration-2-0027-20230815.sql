@@ -19,9 +19,9 @@ BEGIN
     EXECUTE 'CREATe TABLE "governance_action"("id" SERIAL8  PRIMARY KEY UNIQUE,"tx_id" INT8 NOT NULL,"index" INT8 NOT NULL,"deposit" lovelace NOT NULL,"return_address" INT8 NOT NULL,"voting_anchor_id" INT8 NULL,"type" govactiontype NOT NULL,"description" VARCHAR NOT NULL,"param_proposal" INT8 NULL,"ratified_epoch" word31type NULL,"enacted_epoch" word31type NULL,"dropped_epoch" word31type NULL,"expired_epoch" word31type NULL)' ;
     EXECUTE 'CREATe TABLE "treasury_withdrawal"("id" SERIAL8  PRIMARY KEY UNIQUE,"governance_action_id" INT8 NOT NULL,"stake_address_id" INT8 NOT NULL,"amount" lovelace NOT NULL)' ;
     EXECUTE 'CREATe TABLE "new_committee"("id" SERIAL8  PRIMARY KEY UNIQUE,"governance_action_id" INT8 NOT NULL,"quorum" DOUBLE PRECISION NOT NULL,"members" VARCHAR NOT NULL)' ;
-    EXECUTE 'CREATe TABLE "voting_procedure"("id" SERIAL8  PRIMARY KEY UNIQUE,"tx_id" INT8 NOT NULL,"index" INT4 NOT NULL,"governance_action_id" INT8 NOT NULL,"voter_role" voterrole NOT NULL,"comittee_voter" BYTEA NULL,"drep_voter" INT8 NULL,"pool_voter" INT8 NULL,"vote" vote NOT NULL,"voting_anchor_id" INT8 NULL)' ;
-    EXECUTE 'CREATe TABLE "off_chain_anchor_data"("id" SERIAL8  PRIMARY KEY UNIQUE,"voting_anchor_id" INT8 NOT NULL,"hash" BYTEA NOT NULL,"json" jsonb NOT NULL,"bytes" bytea NOT NULL)' ;
-    EXECUTE 'CREATe TABLE "off_chain_anchor_fetch_error"("id" SERIAL8  PRIMARY KEY UNIQUE,"voting_anchor_id" INT8 NOT NULL,"fetch_error" VARCHAR NOT NULL,"retry_count" word31type NOT NULL)' ;
+    EXECUTE 'CREATe TABLE "voting_procedure"("id" SERIAL8 PRIMARY KEY UNIQUE,"tx_id" INT8 NOT NULL,"index" INT4 NOT NULL,"governance_action_id" INT8 NOT NULL,"voter_role" voterrole NOT NULL,"committee_voter" BYTEA NULL,"drep_voter" INT8 NULL,"pool_voter" INT8 NULL,"vote" vote NOT NULL,"voting_anchor_id" INT8 NULL)' ;
+    EXECUTE 'CREATe TABLE "anchor_offline_data"("id" SERIAL8  PRIMARY KEY UNIQUE,"voting_anchor_id" INT8 NOT NULL,"hash" BYTEA NOT NULL,"json" jsonb NOT NULL,"bytes" bytea NOT NULL)' ;
+    EXECUTE 'CREATe TABLE "anchor_offline_fetch_error"("id" SERIAL8  PRIMARY KEY UNIQUE,"voting_anchor_id" INT8 NOT NULL,"fetch_error" VARCHAR NOT NULL,"retry_count" word31type NOT NULL)' ;
     EXECUTE 'CREATe TABLE "drep_distr"("id" SERIAL8  PRIMARY KEY UNIQUE,"hash_id" INT8 NOT NULL,"amount" INT8 NOT NULL,"epoch_no" word31type NOT NULL)' ;
     -- Hand written SQL statements can be added here.
     UPDATE schema_version SET stage_two = next_version ;
