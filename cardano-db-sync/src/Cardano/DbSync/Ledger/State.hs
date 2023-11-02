@@ -263,7 +263,7 @@ applyBlock env blk = do
                     , Generic.neIsEBB = isJust $ blockIsEBB blk
                     , Generic.neAdaPots = maybeToStrict mPots
                     , Generic.neEpochUpdate = Generic.epochUpdate newState
-                    , Generic.neDRepDistr = maybeToStrict $ getDrepDistr newState
+                    , Generic.neDRepState = maybeToStrict $ getDrepDistr newState
                     , Generic.neEnacted = maybeToStrict $ getEnacted newState
                     }
 

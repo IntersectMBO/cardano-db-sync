@@ -28,7 +28,7 @@ data NewEpoch = NewEpoch
   { neEpoch :: !EpochNo
   , neIsEBB :: !Bool
   , neAdaPots :: !(Maybe Shelley.AdaPots)
-  , neDRepDistr :: !(Maybe (DRepPulsingState StandardConway))
+  , neDRepState :: !(Maybe (DRepPulsingState StandardConway))
   , neEnacted :: !(Maybe (EnactState StandardConway))
   , neEpochUpdate :: !EpochUpdate
   }
