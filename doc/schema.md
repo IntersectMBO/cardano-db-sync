@@ -1,13 +1,4 @@
-In order, the following will be built (use -v for more details):
- - cardano-db-13.1.1.3 (exe:gen-schema-docs) (file /home/kostas/programming/cardano-db-sync/dist-newstyle/build/x86_64-linux/ghc-8.10.7/cardano-db-13.1.1.3/cache/build changed)
-Preprocessing executable 'gen-schema-docs' for cardano-db-13.1.1.3..
-Building executable 'gen-schema-docs' for cardano-db-13.1.1.3..
-[2 of 2] Compiling Main             ( app/gen-schema-docs.hs, /home/kostas/programming/cardano-db-sync/dist-newstyle/build/x86_64-linux/ghc-8.10.7/cardano-db-13.1.1.3/x/gen-schema-docs/build/gen-schema-docs/gen-schema-docs-tmp/Main.o ) [Cardano.Db.Schema changed]
-Linking /home/kostas/programming/cardano-db-sync/dist-newstyle/build/x86_64-linux/ghc-8.10.7/cardano-db-13.1.1.3/x/gen-schema-docs/build/gen-schema-docs/gen-schema-docs ...
 # Schema Documentation for cardano-db-sync
-
-Schema version: 13.1.1.3 (from branch **kderme/update-deps-8.4-pre** which may not accurately reflect the version number)
-**Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema.hs by the command `cabal run -- gen-schema-docs doc/schema.md`. This document should only be updated during the release process and updated on the release branch.
 
 ### `schema_version`
 
@@ -796,8 +787,8 @@ A table for every committee hot key registration. New in 13.2-Conway.
 | `id` | integer (64) |  |
 | `tx_id` | integer (64) | The Tx table index of the tx that includes this certificate. |
 | `cert_index` | integer (32) | The index of this registration within the certificates of this transaction. |
-| `cold_key` | addr29type | The registered cold hey hash. TODO: should this reference DrepHashId or some separate hash table? |
-| `hot_key` | addr29type | The registered hot hey hash |
+| `cold_key` | bytea | The registered cold hey hash. TODO: should this reference DrepHashId or some separate hash table? |
+| `hot_key` | bytea | The registered hot hey hash |
 
 ### `committee_de_registration`
 
@@ -810,7 +801,8 @@ A table for every committee key de-registration. New in 13.2-Conway.
 | `id` | integer (64) |  |
 | `tx_id` | integer (64) | The Tx table index of the tx that includes this certificate. |
 | `cert_index` | integer (32) | The index of this deregistration within the certificates of this transaction. |
-| `hot_key` | addr29type | The deregistered hot key hash |
+| `hot_key` | bytea | The deregistered hot key hash |
+| `voting_anchor_id` | integer (64) | The Voting anchor reference id |
 
 ### `drep_registration`
 
@@ -903,7 +895,7 @@ A table for voting procedures, aka GovVote. A Vote can be Yes No or Abstain. New
 | `index` | integer (32) | The index of this VotingProcedure within this transaction. |
 | `governance_action_id` | integer (64) | The index of the GovernanceAction that this vote targets. |
 | `voter_role` | voterrole | The role of the voter. Can be one of ConstitutionalCommittee, DRep, SPO. |
-| `comittee_voter` | blob |  |
+| `committee_voter` | blob |  |
 | `drep_voter` | integer (64) |  |
 | `pool_voter` | integer (64) |  |
 | `vote` | vote | The Vote. Can be one of Yes, No, Abstain. |
