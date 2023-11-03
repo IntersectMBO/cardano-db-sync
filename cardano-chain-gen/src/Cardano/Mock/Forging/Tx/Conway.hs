@@ -8,6 +8,7 @@ module Cardano.Mock.Forging.Tx.Conway (
   consCertTxBody,
   consPoolParams,
   mkPaymentTx,
+  mkPaymentTx',
   mkSimpleTx,
   mkDCertTx,
   mkSimpleDCertTx,
@@ -15,6 +16,7 @@ module Cardano.Mock.Forging.Tx.Conway (
   mkTxDelegCert,
   mkRegTxCert,
   mkUnRegTxCert,
+  mkDelegTxCert,
   mkFullTx,
   mkScriptInp,
   mkWitnesses,
@@ -33,7 +35,7 @@ import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Governance (VotingProcedures (..))
 import Cardano.Ledger.Conway.Tx (AlonzoTx (..))
 import Cardano.Ledger.Conway.TxBody (ConwayTxBody (..))
-import Cardano.Ledger.Conway.TxCert
+import Cardano.Ledger.Conway.TxCert hiding (mkDelegTxCert)
 import Cardano.Ledger.Conway.TxOut (BabbageTxOut (..))
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential (Credential (..), StakeCredential, StakeReference (..))
@@ -43,6 +45,7 @@ import Cardano.Ledger.Language (Language (..))
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..), valueFromList)
 import Cardano.Ledger.Shelley.TxAuxData (Metadatum (..))
 import Cardano.Ledger.TxIn (TxIn (..))
+import Cardano.Ledger.Val (coin)
 import Cardano.Mock.Forging.Tx.Alonzo (addValidityInterval, mkUTxOAlonzo, mkWitnesses)
 import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import Cardano.Mock.Forging.Tx.Babbage (mkScriptInp)
@@ -115,25 +118,44 @@ mkPaymentTx ::
   Integer ->
   ConwayLedgerState ->
   Either ForgingError (AlonzoTx StandardConway)
-mkPaymentTx inputIndex outputIndex amount fees state' = do
-  (inputPair, _) <- resolveUTxOIndex inputIndex state'
-  addr <- resolveAddress outputIndex state'
+mkPaymentTx inputIndex outputIndex amount = mkPaymentTx' inputIndex outputIndices
+  where
+    outputIndices = [(outputIndex, valueFromList amount [])]
 
-  let input = Set.singleton $ fst inputPair
-      output = BabbageTxOut addr (valueFromList (fromIntegral amount) []) NoDatum SNothing
+mkPaymentTx' ::
+  ConwayUTxOIndex ->
+  [(ConwayUTxOIndex, MaryValue StandardCrypto)] ->
+  Integer ->
+  ConwayLedgerState ->
+  Either ForgingError (AlonzoTx StandardConway)
+mkPaymentTx' inputIndex outputIndices fees state' = do
+  (inputPair, _) <- resolveUTxOIndex inputIndex state'
+  outputs <- mapM mkOutputs outputIndices
+
+  let inputs = Set.singleton (fst inputPair)
+      outValue = sum $ map (unCoin . coin . snd) outputIndices
       BabbageTxOut addr' (MaryValue inputValue _) _ _ = snd inputPair
-      change = BabbageTxOut addr' (valueFromList (fromIntegral $ fromInteger inputValue - amount - fees) []) NoDatum SNothing
+      change =
+        BabbageTxOut
+          addr'
+          (valueFromList (fromIntegral $ fromIntegral inputValue - outValue - fees) [])
+          NoDatum
+          SNothing
 
   pure $
     mkSimpleTx True $
       consPaymentTxBody
-        input
+        inputs
         mempty
         mempty
-        (StrictSeq.fromList [output, change])
+        (StrictSeq.fromList $ outputs <> [change])
         SNothing
         (Coin fees)
         mempty
+  where
+    mkOutputs (outIx, val) = do
+      addr <- resolveAddress outIx state'
+      pure (BabbageTxOut addr val NoDatum SNothing)
 
 mkDCertTx ::
   [ConwayTxCert StandardConway] ->
@@ -176,13 +198,19 @@ mkRegTxCert ::
   StrictMaybe Coin ->
   StakeCredential StandardCrypto ->
   ConwayTxCert StandardConway
-mkRegTxCert coin = mkTxDelegCert (`ConwayRegCert` coin)
+mkRegTxCert coin' = mkTxDelegCert (`ConwayRegCert` coin')
 
 mkUnRegTxCert ::
   StrictMaybe Coin ->
   StakeCredential StandardCrypto ->
   ConwayTxCert StandardConway
-mkUnRegTxCert coin = mkTxDelegCert (`ConwayUnRegCert` coin)
+mkUnRegTxCert coin' = mkTxDelegCert (`ConwayUnRegCert` coin')
+
+mkDelegTxCert ::
+  Delegatee StandardCrypto ->
+  StakeCredential StandardCrypto ->
+  ConwayTxCert StandardConway
+mkDelegTxCert delegatee = mkTxDelegCert (`ConwayDelegCert` delegatee)
 
 mkTxDelegCert ::
   (StakeCredential StandardCrypto -> ConwayDelegCert StandardCrypto) ->

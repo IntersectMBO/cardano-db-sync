@@ -114,6 +114,15 @@ unitTests iom knownMigrations =
         , test "stake address pointers deregistration" Stake.stakeAddressPtrDereg
         , test "stake address pointers. Use before registering." Stake.stakeAddressPtrUseBefore
         ]
+    , testGroup
+        "stake distribution"
+        [ test "stake distribution from genesis" Stake.stakeDistGenesis
+        , test "2000 delegations" Stake.delegations2000
+        , test "2001 delegations" Stake.delegations2001
+        , test "8000 delegations" Stake.delegations8000
+        , test "many delegations" Stake.delegationsMany
+        , test "many delegations, sparse chain" Stake.delegationsManyNotDense
+        ]
     ]
   where
     test :: String -> (IOManager -> [(Text, Text)] -> Assertion) -> TestTree

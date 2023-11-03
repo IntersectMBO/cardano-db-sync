@@ -52,6 +52,7 @@ library
                         Cardano.Mock.Forging.Tx.Babbage
                         Cardano.Mock.Forging.Tx.Babbage.Scenarios
                         Cardano.Mock.Forging.Tx.Conway
+                        Cardano.Mock.Forging.Tx.Conway.Scenarios
                         Cardano.Mock.Forging.Tx.Generic
                         Cardano.Mock.Forging.Tx.Shelley
                         Cardano.Mock.Forging.Types
