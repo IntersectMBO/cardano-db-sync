@@ -5,7 +5,7 @@ DECLARE
   next_version int ;
 BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
-  IF next_version = 30 THEN
+  IF next_version = 31 THEN
     EXECUTE 'ALTER TABLE "committee_de_registration" ADD COLUMN "voting_anchor_id" INT8 NULL' ;
     -- Hand written SQL statements can be added here.
     UPDATE schema_version SET stage_two = next_version ;
