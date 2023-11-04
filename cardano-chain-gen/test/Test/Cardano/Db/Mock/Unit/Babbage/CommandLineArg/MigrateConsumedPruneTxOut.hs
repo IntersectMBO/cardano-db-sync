@@ -13,6 +13,7 @@ module Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.MigrateConsumedPruneTxOu
   noPruneSameBlock,
   migrateAndPruneRestart,
   pruneRestartMissingFlag,
+  bootstrapRestartMissingFlag,
 ) where
 
 import qualified Cardano.Db as DB
@@ -45,7 +46,7 @@ import Test.Cardano.Db.Mock.UnifiedApi (
   withBabbageFindLeaderAndSubmit,
   withBabbageFindLeaderAndSubmitTx,
  )
-import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff, assertEqQuery, assertTxCount, assertUnspentTx, checkStillRuns)
+import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff, assertEqQuery, assertTxCount, assertTxInCount, assertTxOutCount, assertUnspentTx, checkStillRuns)
 import Test.Tasty.HUnit (Assertion)
 
 commandLineArgCheck :: IOManager -> [(Text, Text)] -> Assertion
@@ -91,6 +92,7 @@ basicPrune = do
       initCommandLineArgs
         { claMigrateConsumed = True
         , claPruneTxOut = True
+        , claForceTxIn = True
         }
     testLabel = "CLAPrune"
 
@@ -120,6 +122,7 @@ pruneWithSimpleRollback = do
       initCommandLineArgs
         { claMigrateConsumed = True
         , claPruneTxOut = True
+        , claForceTxIn = True
         }
     testLabel = "CLAPruneSimpleRollback"
 
@@ -151,6 +154,7 @@ pruneWithFullTxRollback = do
       initCommandLineArgs
         { claMigrateConsumed = True
         , claPruneTxOut = True
+        , claForceTxIn = True
         }
     testLabel = "CLAPruneOnFullRollback"
 
@@ -172,6 +176,7 @@ pruningShouldKeepSomeTx = do
     b3 <- forgeAndSubmitBlocks interpreter mockServer 110
     assertBlockNoBackoff dbSyncEnv (fromIntegral $ length (b1 <> b2 <> b3) + 2)
     -- the prune should have removed all
+    assertTxInCount dbSyncEnv 0
     assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxId count after prune"
   where
     cmdLineArgs =
@@ -272,6 +277,7 @@ pruneSameBlock =
     rollbackTo interpreter mockServer (blockPoint blk77)
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
     assertBlockNoBackoff dbSyncEnv 78
+    assertTxInCount dbSyncEnv 0
     assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxId after rollback"
   where
     cmdLineArgs =
@@ -357,3 +363,30 @@ pruneRestartMissingFlag = do
         , claPruneTxOut = True
         }
     testLabel = "CLApruneRestartMissingFlag"
+
+bootstrapRestartMissingFlag :: IOManager -> [(Text, Text)] -> Assertion
+bootstrapRestartMissingFlag = do
+  withCustomConfig cmdLineArgs babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+    let DBSyncEnv {..} = dbSyncEnv
+    startDBSync dbSyncEnv
+    void $ forgeAndSubmitBlocks interpreter mockServer 50
+    assertBlockNoBackoff dbSyncEnv 50
+    assertTxOutCount dbSyncEnv 0
+    -- stop
+    stopDBSync dbSyncEnv
+    -- update the syncParams to include new params
+    let newDbSyncParams = dbSyncParams {enpBootstrap = False}
+        newDbSyncEnv = dbSyncEnv {dbSyncParams = newDbSyncParams}
+    startDBSync newDbSyncEnv
+    -- there is a slight delay before flag is checked
+    threadDelay 6000000
+    -- checkStillRuns uses `poll` due to this being inside Async and passes along our thrown exception
+    checkStillRuns dbSyncEnv
+  where
+    cmdLineArgs =
+      initCommandLineArgs
+        { claMigrateConsumed = False
+        , claPruneTxOut = False
+        , claBootstrap = True
+        }
+    testLabel = "CLABootstrapRestartMissingFlag"
