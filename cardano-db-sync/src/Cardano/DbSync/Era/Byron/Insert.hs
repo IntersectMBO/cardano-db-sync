@@ -249,7 +249,7 @@ insertByronTx syncEnv blkId tx blockIndex = do
           , DB.txBlockIndex = blockIndex
           , DB.txOutSum = DbLovelace 0
           , DB.txFee = DbLovelace 0
-          , DB.txDeposit = Just 0 -- Byron does not have deposits/refunds
+          , DB.txDeposit = Nothing -- Byron does not have deposits/refunds
           -- Would be really nice to have a way to get the transaction size
           -- without re-serializing it.
           , DB.txSize = fromIntegral $ BS.length (serialize' $ Byron.taTx tx)
