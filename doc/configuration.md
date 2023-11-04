@@ -97,3 +97,17 @@ This flag periodically prunes the consumed tx_out table. So it allows to query f
 without having to maintain the whole tx_out table. Deletes to `tx_out` are propagated to `ma_tx_out`
 through foreign keys. If this is set once, then it must be always set on following executions of
 db-sync. Failure to do this can result in crashed and db-sync currently has no way to detect it.
+
+### --bootstrap-tx-out
+
+This flag results in a similar db schema as using `--prune-tx-out`, except it syncs faster. The difference is that instead of inserting/updating/deleting outputs, it delays the insertion of
+UTxO until the tip of the chain. By doing so, it avoid costly db operations for the majority of
+outputs, that are eventually consumed and as a result deleted. UTxO are eventually
+inserted in bulk from the ledger state.
+The initial implementation of the feautures assumes using `--prune-tx-out` and not using `--disable-ledger`, since the ledger state is used. The networks needs to be in Babbage or Conway era for this to work.
+Some field are left empty when using this flag, like
+- `tx.fee` has a wrong value 0
+- `tx.deoposit` is left Null
+- `redeemer.script_hash` is left Null
+
+Until the ledger state migration happens any restart requires reusing the `--bootstrap` flag. After it's completed the flag can be omitted on restarts.
