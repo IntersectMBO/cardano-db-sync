@@ -41,7 +41,7 @@ unitTests iom knownMigrations =
     , testGroup
         "Command Line Arguments"
         [ testGroup
-            "consumed-tx-out + prune-tx-out"
+            "consumed-tx-out and prune-tx-out"
             [ test "flag check" MigrateConsumedPruneTxOut.commandLineArgCheck
             , test "basic prune" MigrateConsumedPruneTxOut.basicPrune
             , test "prune with simple rollback" MigrateConsumedPruneTxOut.pruneWithSimpleRollback
@@ -53,6 +53,7 @@ unitTests iom knownMigrations =
             , test "no pruning same block" MigrateConsumedPruneTxOut.noPruneSameBlock
             , expectFail $ test "restart with new consumed set to false" MigrateConsumedPruneTxOut.migrateAndPruneRestart
             , expectFail $ test "set prune flag, restart missing prune flag" MigrateConsumedPruneTxOut.pruneRestartMissingFlag
+            , expectFail $ test "set bootstrap flag, restart missing bootstrap flag" MigrateConsumedPruneTxOut.bootstrapRestartMissingFlag
             ]
         , testGroup
             "config"

@@ -10,6 +10,8 @@ module Test.Cardano.Db.Mock.Validate (
   assertBlocksCount,
   assertBlocksCountDetailed,
   assertTxCount,
+  assertTxOutCount,
+  assertTxInCount,
   assertUnspentTx,
   assertRewardCount,
   assertBlockNoBackoff,
@@ -96,6 +98,14 @@ assertBlocksCountDetailed env n delays = do
 assertTxCount :: DBSyncEnv -> Word -> IO ()
 assertTxCount env n = do
   assertEqBackoff env queryTxCount n defaultDelays "Unexpected tx count"
+
+assertTxOutCount :: DBSyncEnv -> Word -> IO ()
+assertTxOutCount env n = do
+  assertEqBackoff env queryTxOutCount n defaultDelays "Unexpected txOut count"
+
+assertTxInCount :: DBSyncEnv -> Word -> IO ()
+assertTxInCount env n = do
+  assertEqBackoff env queryTxInCount n defaultDelays "Unexpected txIn count"
 
 assertRewardCount :: DBSyncEnv -> Word64 -> IO ()
 assertRewardCount env n =
