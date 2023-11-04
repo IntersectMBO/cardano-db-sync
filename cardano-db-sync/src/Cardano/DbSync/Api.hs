@@ -146,12 +146,12 @@ runIndexMigrations env = do
     logInfo (getTrace env) "Indexes were created"
     atomically $ writeTVar (envIndexes env) True
 
-initPruneConsumeMigration :: Bool -> Bool -> Bool -> DB.PruneConsumeMigration
-initPruneConsumeMigration consumed pruneTxOut forceTxIn =
+initPruneConsumeMigration :: Bool -> Bool -> Bool -> Bool -> DB.PruneConsumeMigration
+initPruneConsumeMigration consumed pruneTxOut bootstrap forceTxIn =
   DB.PruneConsumeMigration
-    { DB.pcmPruneTxOut = pruneTxOut
-    , DB.pcmConsumeOrPruneTxOut = consumed || pruneTxOut
-    , DB.pcmSkipTxIn = not forceTxIn && (consumed || pruneTxOut)
+    { DB.pcmPruneTxOut = pruneTxOut || bootstrap
+    , DB.pcmConsumeOrPruneTxOut = consumed || pruneTxOut || bootstrap
+    , DB.pcmSkipTxIn = not forceTxIn && (consumed || pruneTxOut || bootstrap)
     }
 
 getPruneConsume :: SyncEnv -> DB.PruneConsumeMigration
@@ -327,7 +327,7 @@ mkSyncEnv trce backend syncOptions protoInfo nw nwMagic systemStart syncNP ranMi
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNP
-  bts <- getBootstrapInProgress trce (enpBootrstrap syncNP) backend
+  bts <- getBootstrapInProgress trce (enpBootstrap syncNP) backend
   bootstrapVar <- newTVarIO bts
   owq <- newTBQueueIO 100
   orq <- newTBQueueIO 100
