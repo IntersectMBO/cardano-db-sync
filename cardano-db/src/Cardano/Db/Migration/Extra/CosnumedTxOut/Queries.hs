@@ -20,7 +20,6 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Text (Text)
-import qualified Data.Text as Text
 import Data.Word (Word64)
 
 -- import Database.Esqueleto.Experimental hiding (update, (<=.), (=.), (==.))
@@ -77,22 +76,13 @@ queryTxOutConsumedCount = do
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
-querySetNullTxOut :: MonadIO m => Trace IO Text -> Maybe TxId -> Word64 -> ReaderT SqlBackend m ()
-querySetNullTxOut trce mMinTxId txInDeleted = do
+querySetNullTxOut :: MonadIO m => Trace IO Text -> Maybe TxId -> ReaderT SqlBackend m ()
+querySetNullTxOut trce mMinTxId = do
   whenJust mMinTxId $ \txId -> do
     txOutIds <- getTxOutConsumedAfter txId
     mapM_ setNullTxOutConsumedAfter txOutIds
-    let updatedEntries = fromIntegral (length txOutIds)
-    when (updatedEntries /= txInDeleted) $
-      liftIO $
-        logError trce $
-          Text.concat
-            [ "Deleted "
-            , textShow txInDeleted
-            , " inputs, but set to null only "
-            , textShow updatedEntries
-            , "consumed outputs. Please file an issue at https://github.com/input-output-hk/cardano-db-sync/issues"
-            ]
+    let updatedEntries = length txOutIds
+    liftIO $ logInfo trce $ "Set to null " <> textShow updatedEntries <> " tx_out.consumed_by_tx_id"
 
 createConsumedTxOut ::
   forall m.

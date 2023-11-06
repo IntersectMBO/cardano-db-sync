@@ -83,7 +83,7 @@ updateListTxOutConsumedByTxId ls = do
   where
     f (txOutId, txInId) = (changeKey txOutId, changeKey txInId)
 
-setNullTxOut :: MonadIO m => Trace IO Text -> Maybe TxId -> Word64 -> ReaderT SqlBackend m ()
+setNullTxOut :: MonadIO m => Trace IO Text -> Maybe TxId -> ReaderT SqlBackend m ()
 setNullTxOut trce mMinTxInId =
   ExtraCons.querySetNullTxOut trce (changeKey <$> mMinTxInId)
 
