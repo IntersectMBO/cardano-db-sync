@@ -48,9 +48,9 @@ rollbackFromBlockNo syncEnv blkNo = do
         , textShow blkNo
         ]
     lift $ do
-      (mTxId, txInDeleted, deletedBlockCount) <- DB.deleteBlocksBlockId trce blockId
+      (mTxId, deletedBlockCount) <- DB.deleteBlocksBlockId trce blockId
       whenConsumeOrPruneTxOut syncEnv $
-        DB.setNullTxOut trce mTxId txInDeleted
+        DB.setNullTxOut trce mTxId
       DB.deleteEpochRows epochNo
       DB.setNullEnacted epochNo
       DB.setNullRatified epochNo
