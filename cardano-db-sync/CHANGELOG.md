@@ -58,6 +58,13 @@ It's very early stage and is missing all Conway specific feautures and some Shel
 * Exception handling and concurrency improved.
 * When `--disable-ledger` is used, db-sync won't populate the `tx.deposit` field as it's too expensive
 * Support for Conway (see schema docs)
+* Added a `--bootstrap` flag. Read more at `doc/configuration.md`.
+* When `--consumed-tx-out` is enabled, db-sync won't populate the `tx_in` table
+* Added flags `--force-tx-in` which bypasses the default behaviour mentioned above
+* Migrations from consume to prune are now much faster
+* References to `offline` for pool metadata are replaced by `offchain`
+* Added a new table `extra_migrations`
+* DBSync no longer does any query to the `tx_out` table during syncing
 
 ## 13.1.1.3
 * Adds compatibility with node-8.0.0 [#1403] and node-8.1.1 [#1455]
