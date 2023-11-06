@@ -24,26 +24,26 @@ let
     copyToRoot = buildEnv {
       name = "base-image-env";
       paths = [
-        bashInteractive
-        cacert
-        coreutils
-        curl
+        bashInteractive # Provide the BASH shell
+        cacert # X.509 certificates of public CAs
+        coreutils # Basic utilities expected in GNU OSs
+        curl # CLI tool for transferring files via URLs
         env-shim # Make /usr/bin/env available
-        findutils
+        findutils # GNU find
         getconf # get num cpus
-        glibcLocales
-        gnutar
-        gzip
-        jq
+        glibcLocales # Locale information for the GNU C Library
+        gnutar # GNU tar
+        gzip # Gnuzip
+        jq # JSON processor
         iana-etc # IANA protocol and port number assignments
-        iproute
-        iputils
-        libidn
-        libpqxx
-        postgresql
-        socat
-        utillinux
-        cardano-cli
+        iproute # Utilities for controlling TCP/IP networking
+        iputils # Useful utilities for Linux networking
+        libidn # Library for internationalized domain names
+        libpqxx # A C++ library to access PostgreSQL databases
+        postgresql # A powerful, open source object-relational database system
+        socat # Utility for bidirectional data transfer
+        utillinux # System utilities for Linux
+        cardano-cli # tool for interacting with cardano-node
       ];
     };
 
