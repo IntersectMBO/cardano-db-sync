@@ -2,6 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Cardano.DbSync.Api.Ledger where
 
@@ -53,7 +54,6 @@ bootStrapMaybe syncEnv = do
   bts <- liftIO $ readTVarIO (envBootstrap syncEnv)
   when bts $ do
     migrateBootstrapUTxO syncEnv emptyTxCache -- TODO: hardcoded to empty
-    liftIO $ atomically $ writeTVar (envBootstrap syncEnv) False
 
 newtype TxCache = TxCache {txIdCache :: Map ByteString DB.TxId}
 
@@ -78,8 +78,9 @@ migrateBootstrapUTxO syncEnv txCache = do
       storeUTxOFromLedger syncEnv txCache cls
       lift $ DB.insertExtraMigration DB.BootstrapFinished
       liftIO $ logInfo trce "UTxO bootstrap migration done"
+      liftIO $ atomically $ writeTVar (envBootstrap syncEnv) False
     NoLedger _ ->
-      liftIO $ logWarning trce "Tried to bootstrap, but ledger state is not enabled. Please stop db-sync and restart with --ledger-state"
+      liftIO $ logWarning trce "Tried to bootstrap, but ledger state is not enabled. Please stop db-sync and restart without --disable-ledger-state"
   where
     trce = getTrace syncEnv
 
@@ -122,7 +123,7 @@ storeUTxO env txCache mp = do
   where
     trce = getTrace env
     npages = size `div` pageSize
-    pagePerc :: Float = 100.0 / fromIntegral npages
+    pagePerc :: Float = if npages == 0 then 100.0 else 100.0 / fromIntegral npages
     size = Map.size mp
 
 storePage ::
@@ -140,14 +141,14 @@ storePage ::
   (Int, [(TxIn StandardCrypto, BabbageTxOut era)]) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 storePage syncEnv cache percQuantum (n, ls) = do
-  when (n `mod` 10 == 0) $ liftIO $ logInfo trce $ "Bootstrap done " <> prc <> "%"
+  when (n `mod` 10 == 0) $ liftIO $ logInfo trce $ "Bootstrap in progress " <> prc <> "%"
   txOuts <- mapM (prepareTxOut syncEnv cache) ls
   txOutIds <- lift . DB.insertManyTxOutPlex True False $ etoTxOut . fst <$> txOuts
   let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> txOuts)
   void . lift $ DB.insertManyMaTxOut maTxOuts
   where
     trce = getTrace syncEnv
-    prc = Text.pack $ showGFloat (Just 1) (min 100.0 (fromIntegral n * percQuantum)) ""
+    prc = Text.pack $ showGFloat (Just 1) (max 0 $ min 100.0 (fromIntegral n * percQuantum)) ""
 
 prepareTxOut ::
   ( EraCrypto era ~ StandardCrypto
