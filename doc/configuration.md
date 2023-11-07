@@ -140,4 +140,4 @@ Some field are left empty when using this flag, like
 - `tx.fee` has a wrong value 0
 - `redeemer.script_hash` is left Null
 
-Until the ledger state migration happens any restart requires reusing the `--bootstrap` flag. After it's completed the flag can be omitted on restarts.
+Until the ledger state migration happens any restart requires reusing the `--bootstrap-tx-out` flag. After it's completed the flag can be omitted on restarts.
