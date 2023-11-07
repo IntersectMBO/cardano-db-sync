@@ -20,6 +20,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Stake (
 
 import qualified Cardano.Db as DB
 import Cardano.Ledger.BaseTypes (CertIx (..), TxIx (..))
+import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Credential (Ptr (..))
 import Cardano.Mock.ChainSync.Server (IOManager (), addBlock)
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
@@ -102,8 +103,9 @@ registrationsSameTx =
         Conway.mkSimpleDCertTx
           [ (StakeIndexNew 1, Conway.mkRegTxCert SNothing)
           , (StakeIndexNew 1, Conway.mkUnRegTxCert SNothing)
-          , (StakeIndexNew 1, Conway.mkRegTxCert SNothing)
-          , (StakeIndexNew 1, Conway.mkUnRegTxCert SNothing)
+          , -- The certificates need to be unique, otherwise they'll be deduplicated
+            (StakeIndexNew 1, Conway.mkRegTxCert (SJust $ Coin 0))
+          , (StakeIndexNew 1, Conway.mkUnRegTxCert (SJust $ Coin 0))
           ]
 
     -- Wait for it to sync and verify counts
