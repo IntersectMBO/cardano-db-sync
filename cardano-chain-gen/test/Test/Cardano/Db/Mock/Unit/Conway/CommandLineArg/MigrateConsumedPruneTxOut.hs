@@ -13,6 +13,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.MigrateConsumedPruneTxOut
   noPruneSameBlock,
   migrateAndPruneRestart,
   pruneRestartMissingFlag,
+  bootstrapRestartMissingFlag,
 ) where
 
 import qualified Cardano.Db as DB
@@ -44,7 +45,7 @@ commandLineArgCheck =
       dbSync
       DB.queryTxConsumedColumnExists
       True
-      "missing consumed_by_tx_in_id column when flag --consumed-tx-out active"
+      "missing consumed_by_tx_id column when flag --consumed-tx-out active"
   where
     cmdLineArgs =
       initCommandLineArgs
@@ -85,7 +86,8 @@ basicPrune =
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
+        { claForceTxIn = True
+        , claMigrateConsumed = True
         , claPruneTxOut = True
         }
     testLabel = "conwayCLAPrune"
@@ -115,17 +117,18 @@ pruneWithSimpleRollback =
     blks <- forgeAndSubmitBlocks interpreter mockServer 96
     assertBlockNoBackoff dbSync (fullBlockSize blks)
     assertEqQuery dbSync DB.queryTxOutCount 12 "the txOut count is incorrect"
-    assertEqQuery dbSync DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxInId count after prune"
+    assertEqQuery dbSync DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxId count after prune"
     assertUnspentTx dbSync
 
     -- Rollback
     rollbackTo interpreter mockServer (blockPoint blk1)
-    assertEqQuery dbSync DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxInId count after rollback"
+    assertEqQuery dbSync DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxId count after rollback"
     assertBlockNoBackoff dbSync (fullBlockSize blks)
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
+        { claForceTxIn = True
+        , claMigrateConsumed = True
         , claPruneTxOut = True
         }
     testLabel = "conwayCLAPruneSimpleRollback"
@@ -166,7 +169,8 @@ pruneWithFullTxRollback =
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
+        { claForceTxIn = True
+        , claMigrateConsumed = True
         , claPruneTxOut = False
         }
     testLabel = "conwayPruneOnFullRollback"
@@ -190,13 +194,14 @@ pruningShouldKeepSomeTx =
     blk2 <- forgeAndSubmitBlocks interpreter mockServer 18
     -- Verify the two transactions above weren't pruned
     assertBlockNoBackoff dbSync (fromIntegral $ length (blk1 <> blk2) + 2)
-    assertEqQuery dbSync DB.queryTxOutConsumedCount 2 "Unexpected TxOutConsumedByTxInId count after prune"
+    assertEqQuery dbSync DB.queryTxOutConsumedCount 2 "Unexpected TxOutConsumedByTxId count after prune"
 
     -- Add more blocks
     blk3 <- forgeAndSubmitBlocks interpreter mockServer 110
     -- Verify everything has been pruned
     assertBlockNoBackoff dbSync (fromIntegral $ length (blk1 <> blk2 <> blk3) + 2)
-    assertEqQuery dbSync DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxInId count after prune"
+    assertTxInCount dbSync 0
+    assertEqQuery dbSync DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxId count after prune"
   where
     cmdLineArgs =
       initCommandLineArgs
@@ -225,7 +230,7 @@ pruneAndRollBackOneBlock =
     void $ withConwayFindLeaderAndSubmit interpreter mockServer (\_ -> sequence [tx1])
     -- Verify the last 2 transactions weren't pruned
     assertBlockNoBackoff dbSync 101
-    assertEqQuery dbSync DB.queryTxOutConsumedCount 2 "Unexpected TxOutConsumedByTxInId count before rollback"
+    assertEqQuery dbSync DB.queryTxOutConsumedCount 2 "Unexpected TxOutConsumedByTxId count before rollback"
 
     rollbackTo interpreter mockServer (blockPoint blk100)
 
@@ -233,13 +238,13 @@ pruneAndRollBackOneBlock =
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
     -- Verify the transactions were removed in the rollback
     assertBlockNoBackoff dbSync 101
-    assertEqQuery dbSync DB.queryTxOutConsumedCount 1 "Unexpected TxOutConsumedByTxInId count after rollback"
+    assertEqQuery dbSync DB.queryTxOutConsumedCount 1 "Unexpected TxOutConsumedByTxId count after rollback"
 
     -- Trigger a prune
     void $ forgeAndSubmitBlocks interpreter mockServer 102
     -- Verify everything was pruned
     assertBlockNoBackoff dbSync 203
-    assertEqQuery dbSync DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxInId count after rollback"
+    assertEqQuery dbSync DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxId count after rollback"
   where
     cmdLineArgs =
       initCommandLineArgs
@@ -268,7 +273,7 @@ noPruneAndRollBack =
 
     -- Verify the transactions weren't pruned
     assertBlockNoBackoff dbSync 101
-    assertEqQuery dbSync DB.queryTxOutConsumedCount 2 "Unexpected TxOutConsumedByTxInId count before rollback"
+    assertEqQuery dbSync DB.queryTxOutConsumedCount 2 "Unexpected TxOutConsumedByTxId count before rollback"
 
     rollbackTo interpreter mockServer (blockPoint blk100)
 
@@ -276,13 +281,13 @@ noPruneAndRollBack =
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
     -- Verify transactions were removed
     assertBlockNoBackoff dbSync 101
-    assertEqQuery dbSync DB.queryTxOutConsumedCount 1 "Unexpected TxOutConsumedByTxInId count after rollback"
+    assertEqQuery dbSync DB.queryTxOutConsumedCount 1 "Unexpected TxOutConsumedByTxId count after rollback"
 
     -- Add some more blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 102
     -- Verify nothing has been pruned
     assertBlockNoBackoff dbSync 203
-    assertEqQuery dbSync DB.queryTxOutConsumedCount 1 "Unexpected TxOutConsumedByTxInId count after rollback"
+    assertEqQuery dbSync DB.queryTxOutConsumedCount 1 "Unexpected TxOutConsumedByTxId count after rollback"
   where
     cmdLineArgs =
       initCommandLineArgs
@@ -307,13 +312,13 @@ pruneSameBlock =
       pure [tx0, tx1]
     -- Verify the transactions weren't pruned
     assertBlockNoBackoff dbSync 78
-    assertEqQuery dbSync DB.queryTxOutConsumedCount 2 "Unexpected TxOutConsumedByTxInId before rollback"
+    assertEqQuery dbSync DB.queryTxOutConsumedCount 2 "Unexpected TxOutConsumedByTxId before rollback"
 
     -- Trigger a prune
     void $ forgeAndSubmitBlocks interpreter mockServer 22
     -- Verify the transactions were pruned
     assertBlockNoBackoff dbSync 100
-    assertEqQuery dbSync DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxInId after prune"
+    assertEqQuery dbSync DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxId after prune"
 
     rollbackTo interpreter mockServer (blockPoint blk77)
 
@@ -321,7 +326,8 @@ pruneSameBlock =
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
     -- Verify the transactions were pruned again
     assertBlockNoBackoff dbSync 78
-    assertEqQuery dbSync DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxInId after rollback"
+    assertTxInCount dbSync 0
+    assertEqQuery dbSync DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxId after rollback"
   where
     cmdLineArgs =
       initCommandLineArgs
@@ -357,7 +363,7 @@ noPruneSameBlock =
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
     -- Verify everything was pruned
     assertBlockNoBackoff dbSync 98
-    assertEqQuery dbSync DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxInId after rollback"
+    assertEqQuery dbSync DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxId after rollback"
   where
     cmdLineArgs =
       initCommandLineArgs
@@ -423,3 +429,33 @@ pruneRestartMissingFlag =
         , claPruneTxOut = True
         }
     testLabel = "conwayCLAPruneRestartMissingFlag"
+
+bootstrapRestartMissingFlag :: IOManager -> [(Text, Text)] -> Assertion
+bootstrapRestartMissingFlag =
+  withCustomConfig cmdLineArgs conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- Forge some blocks
+    void $ forgeAndSubmitBlocks interpreter mockServer 50
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync 50
+    assertTxOutCount dbSync 0
+
+    stopDBSync dbSync
+    -- Start without bootstrap flag
+    let DBSyncEnv {..} = dbSync
+        newParams = dbSyncParams {enpBootstrap = False}
+        newEnv = dbSync {dbSyncParams = newParams}
+    startDBSync newEnv
+    -- There is a slight delay befor the flag is checked
+    threadDelay 3_000_000
+    -- Expected to fail
+    checkStillRuns dbSync
+  where
+    cmdLineArgs =
+      initCommandLineArgs
+        { claMigrateConsumed = False
+        , claPruneTxOut = False
+        , claBootstrap = True
+        }
+    testLabel = "conwayBootstrapRestartMissingFlag"
