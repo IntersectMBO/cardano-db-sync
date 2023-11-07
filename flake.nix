@@ -308,9 +308,24 @@
               inherit (inputs.iohkNix.lib) evalService;
             };
 
+            # TODO: macOS builders are resource-constrained and cannot run the detabase
+            # integration tests. Add these back when we get beefier builders.
+            nonRequiredMacOSPaths = [
+              "checks.cardano-chain-gen:test:cardano-chain-gen"
+              "checks.cardano-db:test:test-db"
+              "ghc963.checks.cardano-chain-gen:test:cardano-chain-gen"
+              "ghc963.checks.cardano-db:test:test-db"
+            ];
+
+            nonRequiredPaths =
+              if hostPlatform.isMacOS then
+                nonRequiredMacOSPaths
+              else [];
+
           in rec {
             hydraJobs = callPackages inputs.iohkNix.utils.ciJobsAggregates {
               ciJobs = flake.hydraJobs;
+              nonRequiredPaths = map lib.hasPrefix nonRequiredPaths;
             } // lib.optionalAttrs (system == "x86_64-linux") {
               inherit cardano-db-sync-linux cardano-db-sync-docker;
             } // lib.optionalAttrs (system == "x86_64-darwin") {
