@@ -563,7 +563,7 @@ share
   CommitteeDeRegistration
     txId                TxId                noreference
     certIndex           Word16
-    hotKey              ByteString          sqltype=bytea
+    coldKey             ByteString          sqltype=bytea
     votingAnchorId      VotingAnchorId Maybe  noreference
 
   DrepRegistration
@@ -1167,7 +1167,7 @@ schemaDocs =
       "A table for every committee key de-registration. New in 13.2-Conway."
       CommitteeDeRegistrationTxId # "The Tx table index of the tx that includes this certificate."
       CommitteeDeRegistrationCertIndex # "The index of this deregistration within the certificates of this transaction."
-      CommitteeDeRegistrationHotKey # "The deregistered hot key hash"
+      CommitteeDeRegistrationColdKey # "The deregistered cold key hash"
       CommitteeDeRegistrationVotingAnchorId # "The Voting anchor reference id"
 
     DrepRegistration --^ do

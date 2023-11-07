@@ -565,7 +565,7 @@ insertCommitteeDeRegistration txId idx khCold mAnchor = do
     DB.CommitteeDeRegistration
       { DB.committeeDeRegistrationTxId = txId
       , DB.committeeDeRegistrationCertIndex = idx
-      , DB.committeeDeRegistrationHotKey = Generic.unCredentialHash khCold
+      , DB.committeeDeRegistrationColdKey = Generic.unCredentialHash khCold
       , DB.committeeDeRegistrationVotingAnchorId = votingAnchorId
       }
 
