@@ -1,0 +1,50 @@
+name: Add binary distribution
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch: {}
+
+jobs:
+  linux:
+    name: "Add binary distribution"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Nix with good defaults
+        uses: input-output-hk/install-nix-action@v21
+        with:
+          extra_nix_config: |
+            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
+            substituters = https://cache.iog.io/ https://cache.nixos.org/
+            experimental-features = nix-command flakes fetch-closure
+            allow-import-from-derivation = true
+            accept-flake-config = true
+          nix_path: nixpkgs=channel:nixos-unstable
+          # cardano-parts requires nix >= 2.17.0; We can remove this after the next release
+          # to install-nix-action (v23)
+          install_url: https://releases.nixos.org/nix/nix-2.17.0/install
+
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Download archive from cache
+        run: |
+          nix build \
+            --builders "" \
+            --max-jobs 0 \
+            --out-link result-linux \
+            .#cardano-db-sync-linux
+          nix build \
+            --builders "" \
+            --max-jobs 0 \
+            --out-link result-macos \
+            .#packages.x86_64-darwin.cardano-db-sync-macos
+
+      - name: Release
+        uses: input-output-hk/action-gh-release@v1
+        with:
+          draft: true
+          files: |
+            result-linux/cardano-db-sync-*-linux.tar.gz
+            result-macos/cardano-db-sync-*-macos.tar.gz

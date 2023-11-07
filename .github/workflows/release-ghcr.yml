@@ -7,6 +7,7 @@ on:
   push:
     tags:
       - '**'
+  workflow_dispatch: {}
 
 env:
   REGISTRY: ghcr.io
@@ -22,14 +23,20 @@ jobs:
           extra_nix_config: |
             trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
             substituters = https://cache.iog.io/ https://cache.nixos.org/
+            experimental-features = nix-command flakes fetch-closure
+            allow-import-from-derivation = true
+            accept-flake-config = true
           nix_path: nixpkgs=channel:nixos-unstable
+          # cardano-parts requires nix >= 2.17.0; We can remove this after the next release
+          # to install-nix-action (v23)
+          install_url: https://releases.nixos.org/nix/nix-2.17.0/install
 
       - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Download image from cache
         run:
-          nix build --builders "" --max-jobs 0 .#dockerImage -o dockerImage
+          nix build --builders "" --max-jobs 0 .#cardano-db-sync-docker
 
       - name: Log in to ghcr.io
         uses: docker/login-action@v2.1.0
@@ -40,8 +47,12 @@ jobs:
 
       - name: Upload to ghcr.io
         run: |
-          docker load < dockerImage
+          docker load < result
           docker image tag \
-            inputoutput/cardano-db-sync:$GITHUB_SHA  \
+            cardano-db-sync:latest  \
             ghcr.io/${{ github.repository_owner }}/cardano-db-sync:$GITHUB_REF_NAME
+          docker image tag \
+            cardano-db-sync:latest  \
+            ghcr.io/${{ github.repository_owner }}/cardano-db-sync:latest
           docker push ghcr.io/${{ github.repository_owner }}/cardano-db-sync:$GITHUB_REF_NAME
+          docker push ghcr.io/${{ github.repository_owner }}/cardano-db-sync:latest
