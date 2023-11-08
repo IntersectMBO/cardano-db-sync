@@ -307,6 +307,9 @@
             cardano-db-sync-docker = callPackage ./nix/docker.nix {
               inherit (inputs.iohkNix.lib) evalService;
             };
+            cardano-smash-server-no-basic-auth = (project.appendModule {
+              modules = [{packages.cardano-smash-server.flags.disable-basic-auth = true;}];
+            }).exes.cardano-smash-server;
 
             # TODO: macOS builders are resource-constrained and cannot run the detabase
             # integration tests. Add these back when we get beefier builders.
@@ -331,6 +334,7 @@
             } // lib.optionalAttrs (system == "x86_64-darwin") {
               inherit cardano-db-sync-macos;
             } // {
+              inherit cardano-smash-server-no-basic-auth;
               checks = staticChecks;
             };
 
@@ -338,10 +342,11 @@
 
             packages = lib.optionalAttrs (system == "x86_64-linux") {
               inherit cardano-db-sync-linux cardano-db-sync-docker;
-
               default = flake.packages."cardano-db-sync:exe:cardano-db-sync";
             } // lib.optionalAttrs (system == "x86_64-darwin") {
               inherit cardano-db-sync-macos;
+            } // {
+              inherit cardano-smash-server-no-basic-auth;
             };
           }));
 
