@@ -60,6 +60,7 @@ data SyncOptions = SyncOptions
   , snapshotEveryFollowing :: !Word64
   , snapshotEveryLagging :: !Word64
   }
+  deriving (Show)
 
 data InsertOptions = InsertOptions
   { ioMultiAssets :: !Bool
@@ -68,6 +69,7 @@ data InsertOptions = InsertOptions
   , ioOffChainPoolData :: !Bool
   , ioGov :: !Bool
   }
+  deriving (Show)
 
 -- A representation of if we are using a ledger or not given CLI options
 data LedgerEnv where
