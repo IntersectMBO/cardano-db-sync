@@ -82,6 +82,7 @@ pRunDbSyncNode =
     <*> pSkipFix
     <*> pOnlyFix
     <*> pForceIndexes
+    <*> pHasShelley
     <*> pHasMultiAssets
     <*> pHasMetadata
     <*> pHasPlutusExtra
@@ -213,6 +214,15 @@ pSlotNo =
           <> Opt.help "Force a rollback to the specified slot (mainly for testing and debugging)."
           <> Opt.metavar "WORD"
       )
+
+pHasShelley :: Parser Bool
+pHasShelley =
+  Opt.flag
+    True
+    False
+    ( Opt.long "disable-shelley"
+        <> Opt.help "Disables the certs and Shelley related data"
+    )
 
 pHasMultiAssets :: Parser Bool
 pHasMultiAssets =

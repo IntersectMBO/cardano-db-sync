@@ -259,6 +259,7 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
       , enpSkipFix = claSkipFix
       , enpOnlyFix = claOnlyFix
       , enpForceIndexes = claForceIndexes
+      , enpHasShelley = True
       , enpHasMultiAssets = claHasMultiAssets
       , enpHasMetadata = claHasMetadata
       , enpHasPlutusExtra = True
