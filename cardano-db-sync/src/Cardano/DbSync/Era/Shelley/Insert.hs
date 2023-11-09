@@ -33,6 +33,7 @@ import Cardano.DbSync.Cache (
   insertPoolKeyWithCache,
   queryDatum,
   queryMAWithCache,
+  queryPoolKeyOrInsert,
   queryPoolKeyWithCache,
   queryPrevBlockWithCache,
   queryRewardAccountWithCache,
@@ -118,7 +119,7 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
     mPhid <- lift $ queryPoolKeyWithCache cache CacheNew $ coerceKeyRole $ Generic.blkSlotLeader blk
     let epochNo = sdEpochNo details
 
-    slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (Generic.unKeyHashRaw $ Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
+    slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (ioShelley iopts) (Generic.unKeyHashRaw $ Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
     blkId <-
       lift . insertBlockAndCache cache $
         DB.Block
@@ -371,7 +372,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
 
       when (ioGov iopts) $ do
         mapM_ (lift . insertGovernanceAction cache network blkId txId (getGovExpiresAt applyResult epochNo)) $ zip [0 ..] (Generic.txProposalProcedure tx)
-        mapM_ (insertVotingProcedures cache txId) (Generic.txVotingProcedure tx)
+        mapM_ (insertVotingProcedures tracer cache txId) (Generic.txVotingProcedure tx)
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
       pure (grouped <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint fees outSum)
@@ -635,7 +636,7 @@ insertPoolCert ::
 insertPoolCert tracer cache isMember network epoch blkId txId idx pCert =
   case pCert of
     Shelley.RegPool pParams -> insertPoolRegister tracer cache isMember network epoch blkId txId idx pParams
-    Shelley.RetirePool keyHash epochNum -> insertPoolRetire txId cache epochNum idx keyHash
+    Shelley.RetirePool keyHash epochNum -> insertPoolRetire tracer txId cache epochNum idx keyHash
 
 insertDelegCert ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -746,14 +747,15 @@ insertPoolRegister _tracer cache isMember network (EpochNo epoch) blkId txId idx
 
 insertPoolRetire ::
   (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
   DB.TxId ->
   Cache ->
   EpochNo ->
   Word16 ->
   Ledger.KeyHash 'Ledger.StakePool StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolRetire txId cache epochNum idx keyHash = do
-  poolId <- liftLookupFail "insertPoolRetire" $ queryPoolKeyWithCache cache CacheNew keyHash
+insertPoolRetire trce txId cache epochNum idx keyHash = do
+  poolId <- lift $ queryPoolKeyOrInsert "insertPoolRetire" trce cache CacheNew keyHash
   void . lift . DB.insertPoolRetire $
     DB.PoolRetire
       { DB.poolRetireHashId = poolId
@@ -900,21 +902,7 @@ insertDelegation ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertDelegation trce cache network (EpochNo epoch) slotNo txId idx mRedeemerId cred poolkh = do
   addrId <- liftLookupFail "insertDelegation" $ queryStakeAddrWithCache cache CacheNew network cred
-  --  poolHashId <- liftLookupFail "insertDelegation" $ queryPoolKeyWithCache cache CacheNew poolkh
-  poolHashId <- do
-    mpoolHashId <- lift $ queryPoolKeyWithCache cache CacheNew poolkh
-    case mpoolHashId of
-      Left _err -> do
-        liftIO $
-          logWarning trce $
-            mconcat
-              [ "insertDelegation to an unregistered pool "
-              , textShow poolkh
-              , ". We will assume that the pool exists and move on."
-              , " See issue https://github.com/input-output-hk/cardano-ledger/issues/3802"
-              ]
-        lift $ insertPoolKeyWithCache cache CacheNew poolkh
-      Right poolHashId -> pure poolHashId
+  poolHashId <- lift $ queryPoolKeyOrInsert "insertDelegation" trce cache CacheNew poolkh
   void . lift . DB.insertDelegation $
     DB.Delegation
       { DB.delegationAddrId = addrId
@@ -1542,21 +1530,23 @@ insertAnchor txId anchor =
 
 insertVotingProcedures ::
   (MonadIO m, MonadBaseControl IO m) =>
+  Trace IO Text ->
   Cache ->
   DB.TxId ->
   (Voter StandardCrypto, [(GovActionId StandardCrypto, VotingProcedure StandardConway)]) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertVotingProcedures cache txId (voter, actions) =
-  mapM_ (insertVotingProcedure cache txId voter) (zip [0 ..] actions)
+insertVotingProcedures trce cache txId (voter, actions) =
+  mapM_ (insertVotingProcedure trce cache txId voter) (zip [0 ..] actions)
 
 insertVotingProcedure ::
   (MonadIO m, MonadBaseControl IO m) =>
+  Trace IO Text ->
   Cache ->
   DB.TxId ->
   Voter StandardCrypto ->
   (Word16, (GovActionId StandardCrypto, VotingProcedure StandardConway)) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertVotingProcedure cache txId voter (index, (gaId, vp)) = do
+insertVotingProcedure trce cache txId voter (index, (gaId, vp)) = do
   govActionId <- resolveGovernanceAction gaId
   votingAnchorId <- whenMaybe (strictMaybeToMaybe $ vProcAnchor vp) $ lift . insertAnchor txId
   (mCommitteeVoter, mDRepVoter, mStakePoolVoter) <- case voter of
@@ -1566,7 +1556,7 @@ insertVotingProcedure cache txId voter (index, (gaId, vp)) = do
       drep <- lift $ insertCredDrepHash cred
       pure (Nothing, Just drep, Nothing)
     StakePoolVoter poolkh -> do
-      poolHashId <- liftLookupFail "insertVotingProcedure" $ queryPoolKeyWithCache cache CacheNew poolkh
+      poolHashId <- lift $ queryPoolKeyOrInsert "insertVotingProcedure" trce cache CacheNew poolkh
       pure (Nothing, Nothing, Just poolHashId)
   void . lift . DB.insertVotingProcedure $
     DB.VotingProcedure
