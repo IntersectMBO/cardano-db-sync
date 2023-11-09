@@ -66,6 +66,7 @@ data InsertOptions = InsertOptions
   , ioMetadata :: !Bool
   , ioPlutusExtra :: !Bool
   , ioOffChainPoolData :: !Bool
+  , ioGov :: !Bool
   }
 
 -- A representation of if we are using a ledger or not given CLI options

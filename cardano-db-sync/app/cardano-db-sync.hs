@@ -85,6 +85,7 @@ pRunDbSyncNode =
     <*> pHasMultiAssets
     <*> pHasMetadata
     <*> pHasPlutusExtra
+    <*> pHasGov
     <*> pHasOffChainPoolData
     <*> pForceTxIn
     <*> pTurboMode
@@ -238,6 +239,15 @@ pHasPlutusExtra =
     False
     ( Opt.long "disable-plutus-extra"
         <> Opt.help "Disables most tables and entries related to plutus and scripts."
+    )
+
+pHasGov :: Parser Bool
+pHasGov =
+  Opt.flag
+    True
+    False
+    ( Opt.long "disable-gov"
+        <> Opt.help "Disables the governance related data"
     )
 
 pHasOffChainPoolData :: Parser Bool

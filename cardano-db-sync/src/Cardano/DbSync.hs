@@ -242,6 +242,7 @@ extractSyncOptions snp aop =
             , ioMetadata = enpHasMetadata snp
             , ioPlutusExtra = enpHasPlutusExtra snp
             , ioOffChainPoolData = enpHasOffChainPoolData snp
+            , ioGov = enpHasGov snp
             }
 
 startupReport :: Trace IO Text -> Bool -> SyncNodeParams -> IO ()
