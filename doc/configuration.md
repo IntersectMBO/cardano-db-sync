@@ -83,6 +83,10 @@ _(previousle called --disable-offline-data)__
 
 Disables fetching pool offchain metadata.
 
+### --disable-gov
+
+Disables all data related to governance
+
 ### --consumed-tx-out
 
 Adds a new field `tx_out (consumed_by_tx_id)` and populated it accordingly. This allows users to
