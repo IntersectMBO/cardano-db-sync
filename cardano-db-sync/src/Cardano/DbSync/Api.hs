@@ -194,13 +194,13 @@ getPrunes = do
   DB.pcmPruneTxOut . getPruneConsume
 
 fullInsertOptions :: InsertOptions
-fullInsertOptions = InsertOptions True True True True True
+fullInsertOptions = InsertOptions True True True True True True
 
 defaultInsertOptions :: InsertOptions
 defaultInsertOptions = fullInsertOptions
 
 turboInsertOptions :: InsertOptions
-turboInsertOptions = InsertOptions False False False False False
+turboInsertOptions = InsertOptions False False False False False False
 
 initEpochState :: EpochState
 initEpochState =
