@@ -332,8 +332,11 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
       -- no script).
       !txOutsGrouped <- mapM (prepareTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
 
-      !redeemers <- Map.fromList <$> whenFalseMempty (ioPlutusExtra iopts)
-          (mapM (insertRedeemer tracer bts (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx))
+      !redeemers <-
+        Map.fromList
+          <$> whenFalseMempty
+            (ioPlutusExtra iopts)
+            (mapM (insertRedeemer tracer bts (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx))
 
       when (ioPlutusExtra iopts) $ do
         mapM_ (insertDatum tracer cache txId) (Generic.txData tx)
@@ -348,10 +351,10 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         whenFalseMempty (ioMetadata iopts) $
           prepareTxMetadata tracer txId (Generic.txMetadata tx)
 
-      mapM_ (insertCertificate syncEnv isMember blkId txId epochNo slotNo redeemers) $ Generic.txCertificates tx
-      mapM_ (insertWithdrawals tracer cache txId redeemers) $ Generic.txWithdrawals tx
-
-      mapM_ (lift . insertParamProposal blkId txId) $ Generic.txParamProposal tx
+      when (ioShelley iopts) $ do
+        mapM_ (insertCertificate syncEnv isMember blkId txId epochNo slotNo redeemers) $ Generic.txCertificates tx
+        mapM_ (insertWithdrawals tracer cache txId redeemers) $ Generic.txWithdrawals tx
+        mapM_ (lift . insertParamProposal blkId txId) $ Generic.txParamProposal tx
 
       maTxMint <-
         whenFalseMempty (ioMetadata iopts) $
@@ -363,7 +366,8 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
           Generic.txScripts tx
 
       when (ioPlutusExtra iopts) $
-        mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
+        mapM_ (insertExtraKeyWitness tracer txId) $
+          Generic.txExtraKeyWitnesses tx
 
       when (ioGov iopts) $ do
         mapM_ (lift . insertGovernanceAction cache network blkId txId (getGovExpiresAt applyResult epochNo)) $ zip [0 ..] (Generic.txProposalProcedure tx)
