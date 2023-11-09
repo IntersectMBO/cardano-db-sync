@@ -332,16 +332,17 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
       -- no script).
       !txOutsGrouped <- mapM (prepareTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
 
-      !redeemers <- Map.fromList <$> mapM (insertRedeemer tracer bts (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx)
+      !redeemers <- Map.fromList <$> whenFalseMempty (ioPlutusExtra iopts)
+          (mapM (insertRedeemer tracer bts (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx))
 
-      when (ioPlutusExtra iopts) $
+      when (ioPlutusExtra iopts) $ do
         mapM_ (insertDatum tracer cache txId) (Generic.txData tx)
 
-      mapM_ (insertCollateralTxIn tracer txId) (Generic.txCollateralInputs tx)
+        mapM_ (insertCollateralTxIn tracer txId) (Generic.txCollateralInputs tx)
 
-      mapM_ (insertReferenceTxIn tracer txId) (Generic.txReferenceInputs tx)
+        mapM_ (insertReferenceTxIn tracer txId) (Generic.txReferenceInputs tx)
 
-      mapM_ (insertCollateralTxOut tracer cache iopts (txId, txHash)) (Generic.txCollateralOutputs tx)
+        mapM_ (insertCollateralTxOut tracer cache iopts (txId, txHash)) (Generic.txCollateralOutputs tx)
 
       txMetadata <-
         whenFalseMempty (ioMetadata iopts) $
@@ -361,7 +362,8 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         mapM_ (insertScript tracer txId) $
           Generic.txScripts tx
 
-      mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
+      when (ioPlutusExtra iopts) $
+        mapM_ (insertExtraKeyWitness tracer txId) $ Generic.txExtraKeyWitnesses tx
 
       when (ioGov iopts) $ do
         mapM_ (lift . insertGovernanceAction cache network blkId txId (getGovExpiresAt applyResult epochNo)) $ zip [0 ..] (Generic.txProposalProcedure tx)
