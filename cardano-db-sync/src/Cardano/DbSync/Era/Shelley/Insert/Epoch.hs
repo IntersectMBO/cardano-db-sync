@@ -20,7 +20,7 @@ import Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (SyncEnv (..))
-import Cardano.DbSync.Cache (queryPoolKeyWithCache, queryStakeAddrWithCache)
+import Cardano.DbSync.Cache (queryStakeAddrWithCache, queryPoolKeyOrInsert)
 import Cardano.DbSync.Cache.Types (Cache, CacheNew (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Util (liftLookupFail)
@@ -84,7 +84,7 @@ insertEpochStake syncEnv nw epochNo stakeChunk = do
       ExceptT SyncNodeError (ReaderT SqlBackend m) DB.EpochStake
     mkStake cache (saddr, (coin, pool)) = do
       saId <- liftLookupFail "insertEpochStake.queryStakeAddrWithCache" $ queryStakeAddrWithCache cache CacheNew nw saddr
-      poolId <- liftLookupFail "insertEpochStake.queryPoolKeyWithCache" $ queryPoolKeyWithCache cache CacheNew pool
+      poolId <- lift $ queryPoolKeyOrInsert "insertEpochStake" trce cache CacheNew pool
       pure $
         DB.EpochStake
           { DB.epochStakeAddrId = saId
@@ -92,6 +92,8 @@ insertEpochStake syncEnv nw epochNo stakeChunk = do
           , DB.epochStakeAmount = Generic.coinToDbLovelace coin
           , DB.epochStakeEpochNo = unEpochNo epochNo -- The epoch where this delegation becomes valid.
           }
+
+    trce = getTrace syncEnv
 
 insertRewards ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -148,7 +150,9 @@ insertRewards syncEnv nw earnedEpoch spendableEpoch cache rewardsChunk = do
       ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe DB.PoolHashId)
     queryPool Strict.Nothing = pure Nothing
     queryPool (Strict.Just poolHash) =
-      Just <$> liftLookupFail "insertRewards.queryPoolKeyWithCache" (queryPoolKeyWithCache cache CacheNew poolHash)
+      Just <$> lift (queryPoolKeyOrInsert "insertRewards" trce cache CacheNew poolHash)
+
+    trce = getTrace syncEnv
 
 splittRecordsEvery :: Int -> [a] -> [[a]]
 splittRecordsEvery val = go

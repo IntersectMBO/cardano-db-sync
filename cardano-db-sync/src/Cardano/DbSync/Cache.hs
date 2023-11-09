@@ -13,6 +13,7 @@ module Cardano.DbSync.Cache (
   insertPoolKeyWithCache,
   queryDatum,
   queryMAWithCache,
+  queryPoolKeyOrInsert,
   queryPoolKeyWithCache,
   queryPrevBlockWithCache,
   queryRewardAccountWithCache,
@@ -49,6 +50,7 @@ import Data.Either.Combinators
 import qualified Data.Map.Strict as Map
 import Database.Persist.Postgresql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
+import Cardano.BM.Trace
 
 -- Rollbacks make everything harder and the same applies to caching.
 -- After a rollback db entries are deleted, so we need to clean the same
@@ -231,6 +233,32 @@ insertPoolKeyWithCache cache cacheNew pHash =
                 modifyTVar (cPools ci) $
                   Map.insert pHash phId
           pure phId
+
+queryPoolKeyOrInsert ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  Text ->
+  Trace IO Text ->
+  Cache ->
+  CacheNew ->
+  PoolKeyHash ->
+  ReaderT SqlBackend m DB.PoolHashId
+queryPoolKeyOrInsert txt trce cache cacheNew hsh = do
+  pk <- queryPoolKeyWithCache cache cacheNew hsh
+  case pk of
+    Right poolHashId -> pure poolHashId
+    Left err -> do
+      liftIO $
+        logWarning trce $
+          mconcat
+            [ "Failed with"
+            , DB.textShow err
+            , " while trying to find pool "
+            , DB.textShow hsh
+            , " for "
+            , txt
+            , ". We will assume that the pool exists and move on."
+            ]
+      insertPoolKeyWithCache cache cacheNew hsh
 
 queryMAWithCache ::
   MonadIO m =>

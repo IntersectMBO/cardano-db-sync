@@ -92,12 +92,13 @@ getCredentialScriptHash pc =
     Ledger.ScriptHashObj hash -> Just $ unScriptHash hash
     Ledger.KeyHashObj {} -> Nothing
 
-mkSlotLeader :: ByteString -> Maybe Db.PoolHashId -> Db.SlotLeader
-mkSlotLeader slHash mPoolId =
+mkSlotLeader :: Bool -> ByteString -> Maybe Db.PoolHashId -> Db.SlotLeader
+mkSlotLeader hashShelley slHash mPoolId =
   let short = Text.decodeUtf8 (Base16.encode $ BS.take 8 slHash)
       slName = case mPoolId of
-        Nothing -> "ShelleyGenesisKey-" <> short
-        Just _ -> "Pool-" <> short
+        Nothing | hashShelley -> "ShelleyGenesisKey-" <> short
+        _ | hashShelley -> "Pool-" <> short
+        _ -> "disable-shelley flag used"
    in Db.SlotLeader slHash mPoolId slName
 
 nonceToBytes :: Ledger.Nonce -> Maybe ByteString
